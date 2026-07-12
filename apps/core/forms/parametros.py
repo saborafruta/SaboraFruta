@@ -46,8 +46,7 @@ class FilialIdentidadeForm(forms.ModelForm):
                 choices=[('', 'Usar padrao da empresa')] + list(Empresa.RegimeTributario.choices),
             ),
             'codigo_regime_tributario': forms.Select(choices=REGIME_CODIGO_CHOICES),
-            'focusnfe_token': forms.PasswordInput(
-                render_value=True,
+            'focusnfe_token': forms.TextInput(
                 attrs={'autocomplete': 'off', 'placeholder': 'Token da filial na Focus'},
             ),
             'focusnfe_ambiente': forms.Select(choices=Filial.AmbienteNFe.choices),
@@ -93,8 +92,7 @@ class ParametrosSistemaForm(forms.ModelForm):
                 attrs={'autocomplete': 'off', 'placeholder': 'Senha do certificado A1'},
             ),
             'nfce_csc_id': forms.TextInput(attrs={'placeholder': 'Ex.: 000001'}),
-            'nfce_csc_token': forms.PasswordInput(
-                render_value=True,
+            'nfce_csc_token': forms.TextInput(
                 attrs={'autocomplete': 'off', 'placeholder': 'CSC/token NFC-e'},
             ),
             'email_resposta': forms.EmailInput(attrs={'placeholder': 'fiscal@empresa.com.br'}),
