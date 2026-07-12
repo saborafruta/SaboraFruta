@@ -294,7 +294,7 @@
             </td>
             <td class="py-3 px-4 text-xs hidden md:table-cell"
                 :style="temaClaro ? 'color:#6b7280;' : 'color:#9ca3af;'">
-              {{ mov.usuario.get_full_name|default:mov.usuario.username|truncatechars:20 }}
+              {{ mov.usuario.nome|truncatechars:20 }}
             </td>
           </tr>
           {% endfor %}
