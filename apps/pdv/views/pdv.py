@@ -797,6 +797,72 @@ def api_historico(request):
     return JsonResponse({"vendas": vendas})
 
 
+@requer_permissao('pdv', 'ver')
+@require_GET
+def api_historico_cliente(request, cliente_id):
+    vendas = (
+        VendaPDV.objects.for_filial(request.filial_ativa)
+        .filter(cliente_id=cliente_id, status="finalizada")
+        .prefetch_related("itens__produto__linha_producao")
+        .order_by("-data_venda")[:12]
+    )
+
+    compras = []
+    for v in vendas:
+        itens = []
+        for item in v.itens.select_related("produto__linha_producao").order_by("numero_item"):
+            p = item.produto
+            itens.append({
+                "descricao": p.descricao_pdv or p.descricao,
+                "icone": p.linha_producao.icone if p.linha_producao else "📦",
+                "cor": p.linha_producao.cor_identificacao if p.linha_producao else None,
+                "quantidade": float(item.quantidade),
+                "unidade_medida": item.unidade_medida or "UN",
+                "valor_unitario": float(item.valor_unitario),
+                "valor_total": float(item.valor_total),
+            })
+        compras.append({
+            "id": v.id,
+            "numero_venda": v.numero_venda,
+            "data_venda": v.data_venda.strftime("%d/%m/%Y"),
+            "valor_total": float(v.valor_total),
+            "qtd_itens": len(itens),
+            "itens": itens,
+        })
+
+    from django.db.models import Count as DCount
+    top = (
+        ItemVendaPDV.objects
+        .filter(
+            venda_pdv__filial=request.filial_ativa,
+            venda_pdv__cliente_id=cliente_id,
+            venda_pdv__status="finalizada",
+        )
+        .values("produto__descricao", "produto__descricao_pdv")
+        .annotate(qtd_total=Sum("quantidade"), qtd_pedidos=DCount("venda_pdv", distinct=True))
+        .order_by("-qtd_pedidos", "-qtd_total")[:8]
+    )
+
+    produtos_frequentes = [
+        {
+            "descricao": r["produto__descricao_pdv"] or r["produto__descricao"],
+            "qtd_total": float(r["qtd_total"]),
+            "qtd_pedidos": r["qtd_pedidos"],
+        }
+        for r in top
+    ]
+
+    total = VendaPDV.objects.for_filial(request.filial_ativa).filter(
+        cliente_id=cliente_id, status="finalizada"
+    ).count()
+
+    return JsonResponse({
+        "compras": compras,
+        "produtos_frequentes": produtos_frequentes,
+        "total_compras": total,
+    })
+
+
 # ---------------------------------------------------------------------------
 # API — Formas de Pagamento (gestão rápida no PDV)
 # ---------------------------------------------------------------------------
