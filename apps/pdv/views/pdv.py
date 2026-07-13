@@ -864,6 +864,67 @@ def api_historico_cliente(request, cliente_id):
 
 
 # ---------------------------------------------------------------------------
+# API — Detalhe e cancelamento de venda finalizada
+# ---------------------------------------------------------------------------
+
+@requer_permissao('pdv', 'ver')
+@require_GET
+def api_venda_detalhe(request, pk):
+    try:
+        venda = (
+            VendaPDV.objects
+            .for_filial(request.filial_ativa)
+            .prefetch_related("itens__produto__linha_producao")
+            .select_related("cliente")
+            .get(pk=pk, status__in=["finalizada", "cancelada"])
+        )
+    except VendaPDV.DoesNotExist:
+        return JsonResponse({"erro": "Venda não encontrada."}, status=404)
+
+    itens = []
+    for item in venda.itens.select_related("produto__linha_producao"):
+        p = item.produto
+        itens.append({
+            "produto_id": p.pk,
+            "descricao": p.descricao_pdv or p.descricao,
+            "codigo_barras": p.codigo_barras or "",
+            "icone": p.linha_producao.icone if p.linha_producao else "📦",
+            "cor": p.linha_producao.cor_identificacao if p.linha_producao else None,
+            "linha": p.linha_producao.nome if p.linha_producao else None,
+            "quantidade": float(item.quantidade),
+            "valor_unitario": float(item.valor_unitario),
+            "valor_total": float(item.valor_total),
+            "desconto_percentual": float(item.desconto_percentual or 0),
+            "unidade_medida": item.unidade_medida or "UN",
+        })
+
+    return JsonResponse({
+        "ok": True,
+        "venda_id": venda.pk,
+        "numero_venda": venda.numero_venda,
+        "cliente_id": venda.cliente_id,
+        "cliente_nome": venda.cliente.razao_social if venda.cliente else "Consumidor Final",
+        "cliente_cpf_cnpj": venda.cliente.cpf_cnpj if venda.cliente else "",
+        "desconto": float(venda.valor_desconto or 0),
+        "acrescimo": float(venda.valor_acrescimo or 0),
+        "itens": itens,
+    })
+
+
+@requer_permissao('pdv', 'ver')
+@require_POST
+def api_venda_cancelar(request, pk):
+    try:
+        venda = VendaPDV.objects.for_filial(request.filial_ativa).get(pk=pk, status="finalizada")
+    except VendaPDV.DoesNotExist:
+        return JsonResponse({"erro": "Venda não encontrada ou já cancelada."}, status=404)
+
+    venda.status = "cancelada"
+    venda.save(update_fields=["status"])
+    return JsonResponse({"ok": True})
+
+
+# ---------------------------------------------------------------------------
 # API — Formas de Pagamento (gestão rápida no PDV)
 # ---------------------------------------------------------------------------
 

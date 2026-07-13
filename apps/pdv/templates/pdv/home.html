@@ -937,6 +937,19 @@
                               Orçamento
                             </button>
                           </div>
+                          <!-- Botões editar / cancelar -->
+                          <div style="display:flex;gap:8px;padding:0 14px 10px;">
+                            <button @click.stop="editarVendaHistorico(c)"
+                                    style="flex:1;display:flex;align-items:center;justify-content:center;gap:5px;padding:7px 10px;background:#0d0d16;border:1px solid #2a3a1a;border-radius:8px;color:#4ade80;font-size:11px;font-weight:600;cursor:pointer;">
+                              <svg width="12" height="12" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/></svg>
+                              Editar
+                            </button>
+                            <button @click.stop="cancelarVendaHistorico(c)"
+                                    style="flex:1;display:flex;align-items:center;justify-content:center;gap:5px;padding:7px 10px;background:#0d0d16;border:1px solid #3a1a1a;border-radius:8px;color:#f87171;font-size:11px;font-weight:600;cursor:pointer;">
+                              <svg width="12" height="12" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636"/></svg>
+                              Cancelar
+                            </button>
+                          </div>
                         </div>
                       </div>
                     </template>
@@ -2632,6 +2645,52 @@ function pdv() {
       const w = window.open('', '_blank', 'width=820,height=700,scrollbars=yes');
       if (!w) { this.toast_('Permita popups para imprimir.','erro'); return; }
       w.document.write(html); w.document.close(); w.focus(); setTimeout(() => w.print(), 400);
+    },
+
+    async editarVendaHistorico(c) {
+      try {
+        const r = await fetch('/pdv/api/venda/'+c.id+'/detalhe/');
+        const d = await r.json();
+        if (!d.ok) { this.toast_('Erro ao carregar venda: '+(d.erro||''), 'erro'); return; }
+        this.novaVenda();
+        for (const item of d.itens) {
+          this.venda.itens.push({
+            _id: Date.now()+Math.random(),
+            produto_id: item.produto_id,
+            descricao: item.descricao,
+            codigo_barras: item.codigo_barras||'',
+            icone: item.icone||'📦',
+            cor: item.cor||null,
+            linha: item.linha||null,
+            quantidade: item.quantidade,
+            valor_unitario: item.valor_unitario,
+            desconto_percentual: item.desconto_percentual||0,
+            valor_total: item.valor_total,
+            unidade_medida: item.unidade_medida||'UN',
+            obs: '', _showObs: false,
+          });
+        }
+        if (d.cliente_id) {
+          this.venda.cliente = { id: d.cliente_id, nome: d.cliente_nome, cpf_cnpj: d.cliente_cpf_cnpj };
+        }
+        this.venda.desconto = d.desconto || 0;
+        this.venda.acrescimo = d.acrescimo || 0;
+        this.recalcularTotais();
+        this.toast_('Venda #'+String(c.numero_venda).padStart(6,'0')+' carregada — edite e finalize', 'ok');
+      } catch { this.toast_('Erro ao carregar venda para edição', 'erro'); }
+    },
+
+    async cancelarVendaHistorico(c) {
+      if (!confirm('Cancelar a venda #'+String(c.numero_venda).padStart(6,'0')+'? Esta ação não pode ser desfeita.')) return;
+      try {
+        const r = await fetch('/pdv/api/venda/'+c.id+'/cancelar/', {
+          method: 'POST', headers: {'X-CSRFToken': csrf()}
+        });
+        const d = await r.json();
+        if (!d.ok) { this.toast_('Erro: '+(d.erro||''), 'erro'); return; }
+        this.historicoCliente = this.historicoCliente.filter(v => v.id !== c.id);
+        this.toast_('Venda #'+String(c.numero_venda).padStart(6,'0')+' cancelada', 'ok');
+      } catch { this.toast_('Erro ao cancelar venda', 'erro'); }
     },
 
     async imprimirRelatorioCaixaData() {

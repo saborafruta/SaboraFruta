@@ -42,6 +42,9 @@ urlpatterns = [
     path("delivery/", pdv.delivery_kanban, name="delivery"),
     path("delivery/<int:pk>/mover/", pdv.delivery_mover, name="delivery_mover"),
     path("delivery/<int:pk>/atualizar/", pdv.delivery_atualizar, name="delivery_atualizar"),
+    # Venda finalizada — detalhe e cancelamento
+    path("api/venda/<int:pk>/detalhe/", pdv.api_venda_detalhe, name="api_venda_detalhe"),
+    path("api/venda/<int:pk>/cancelar/", pdv.api_venda_cancelar, name="api_venda_cancelar"),
     # Fiscal — NFC-e / NF-e
     path("api/venda/<int:pk>/emitir-nfce/", pdv.api_emitir_nfce, name="api_emitir_nfce"),
     path("api/venda/<int:pk>/preview-nfce/", pdv.api_preview_nfce, name="api_preview_nfce"),
