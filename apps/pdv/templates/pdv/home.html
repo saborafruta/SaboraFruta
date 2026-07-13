@@ -1,4 +1,4 @@
-{% extends "pdv_base.html" %}
+﻿{% extends "pdv_base.html" %}
 {% block title %}PDV{% endblock %}
 
 {% block extra_head %}
@@ -93,8 +93,8 @@
                font-size:11px; font-weight:700; color: var(--pdv-t3); width:100%; text-align:center;
                letter-spacing:.01em; min-height:78px; }
   .forma-btn:hover { background: var(--pdv-hover); border-color: var(--pdv-bd); color: var(--pdv-t7); }
-  .forma-btn.selected { border-color:#6366f1; background:rgba(99,102,241,.12);
-                        color: var(--pdv-t1); box-shadow:0 0 0 1px rgba(99,102,241,.25),0 4px 16px rgba(99,102,241,.15); }
+  .forma-btn.selected { border-color:#f15a24; background:rgba(241,90,36,.12);
+                        color: var(--pdv-t1); box-shadow:0 0 0 1px rgba(241,90,36,.25),0 4px 16px rgba(241,90,36,.15); }
   .forma-icon { width:38px; height:38px; border-radius:11px; display:flex; align-items:center; justify-content:center; flex-shrink:0; font-size:18px; transition:.2s; }
   .btn-action { display:flex; align-items:center; gap:6px; padding:6px 12px; border-radius:8px;
                 border:1px solid var(--pdv-bd); background:transparent; color: var(--pdv-t2);
@@ -107,7 +107,7 @@
   .qty-ctrl button:hover { background: var(--pdv-bd); }
   .qty-ctrl input { width:50px; text-align:center; background: var(--pdv-bg); border:none; color: var(--pdv-t1);
                     font-size:13px; font-weight:600; outline:none; padding:0; height:30px; }
-  .btn-venda-main { background: linear-gradient(135deg,#4f46e5,#6366f1); }
+  .btn-venda-main { background: linear-gradient(135deg,#f15a24,#f97316); }
   .btn-orcamento-main { background: linear-gradient(135deg,#a16207,#ca8a04); }
   .btn-delivery-main { background: linear-gradient(135deg,#ea580c,#f97316); }
   .btn-fim { width:100%; padding:15px 12px; border:none; border-radius:12px; color:#fff;
@@ -118,9 +118,9 @@
                 cursor:pointer; transition:.15s; display:flex; align-items:center;
                 justify-content:center; gap:5px; }
   .input-pdv { width:100%;padding:9px 12px;background:var(--pdv-bg);border:1px solid var(--pdv-bd);border-radius:8px;color:var(--pdv-t1);font-size:13px;outline:none;transition:.15s; }
-  .input-pdv:focus { border-color:#4f46e5; }
+  .input-pdv:focus { border-color:#f15a24; }
   .tipo-pill { flex:1;padding:7px 0;border:1px solid var(--pdv-bd);border-radius:7px;font-size:12px;font-weight:700;cursor:pointer;transition:.15s;background:transparent;color:var(--pdv-tmuted); }
-  .tipo-pill.active { background:#4f46e5;color:#fff;border-color:#4f46e5; }
+  .tipo-pill.active { background:#f15a24;color:#fff;border-color:#f15a24; }
 
   /* Seletor de modo no header */
   .mode-seg { display:flex; gap:4px; flex-shrink:0; background:var(--pdv-card); border:1px solid var(--pdv-bd4); border-radius:11px; padding:4px; }
@@ -128,7 +128,7 @@
               font-size:13px; font-weight:600; cursor:pointer; border:none; background:transparent;
               color:var(--pdv-t4); white-space:nowrap; flex-shrink:0; transition:.15s; }
   .mode-btn:hover { background:var(--pdv-hover4); color:var(--pdv-t5); }
-  .mode-btn.act-venda { background:linear-gradient(135deg,#4f46e5,#6366f1); color:#fff; box-shadow:0 2px 10px rgba(79,70,229,.45); }
+  .mode-btn.act-venda { background:linear-gradient(135deg,#f15a24,#f97316); color:#fff; box-shadow:0 2px 10px rgba(241,90,36,.45); }
   .mode-btn.act-delivery { background:linear-gradient(135deg,#ea580c,#f97316); color:#fff; box-shadow:0 2px 10px rgba(234,88,12,.45); }
   .mode-btn.act-orcamento { background:linear-gradient(135deg,#a16207,#ca8a04); color:#fff; box-shadow:0 2px 10px rgba(161,98,7,.45); }
 
@@ -181,7 +181,7 @@
   .print-menu { position:fixed; top:50%; left:50%; transform:translate(-50%,-50%);
                 width:min(360px, calc(100vw - 32px)); min-width:0; z-index:9050;
                 background:var(--pdv-pop); border:1px solid var(--pdv-bd); border-radius:14px; padding:8px;
-                box-shadow:0 22px 70px rgba(0,0,0,.3), 0 0 0 1px rgba(99,102,241,.08); }
+                box-shadow:0 22px 70px rgba(0,0,0,.3), 0 0 0 1px rgba(241,90,36,.08); }
   .print-backdrop { position:fixed; inset:0; z-index:9040; background:rgba(0,0,0,.48);
                     backdrop-filter:blur(2px); }
   .print-mi { display:flex; align-items:center; gap:10px; width:100%; padding:9px 11px;
@@ -198,7 +198,7 @@
     border-radius: 18px;
     padding: 0;
     overflow: hidden;
-    box-shadow: 0 32px 80px rgba(0,0,0,.3), 0 0 0 1px rgba(79,70,229,.08);
+    box-shadow: 0 32px 80px rgba(0,0,0,.3), 0 0 0 1px rgba(241,90,36,.08);
   }
   .cli-modal-header {
     display: flex; align-items: center; justify-content: space-between;
@@ -207,7 +207,7 @@
   .cli-modal-title { display:flex; align-items:center; gap:10px; }
   .cli-modal-icon {
     width: 36px; height: 36px; border-radius: 10px; flex-shrink:0;
-    background: linear-gradient(135deg,#4f46e5,#7c3aed);
+    background: linear-gradient(135deg,#f15a24,#ea580c);
     display: flex; align-items:center; justify-content:center;
   }
   .cli-modal-icon svg { width:18px; height:18px; color:#fff; }
@@ -225,7 +225,7 @@
     color:var(--pdv-t1); font-size:13px; outline:none; font-family:inherit;
     transition:.15s;
   }
-  .cli-search-input:focus { border-color:#4f46e5; box-shadow:0 0 0 3px rgba(79,70,229,.1); }
+  .cli-search-input:focus { border-color:#f15a24; box-shadow:0 0 0 3px rgba(241,90,36,.1); }
   .cli-search-input::placeholder { color:var(--pdv-tdim); }
   .cli-search-icon {
     position:absolute; left:32px; top:50%; transform:translateY(-50%);
@@ -241,7 +241,7 @@
   .cli-search-clear:hover { color:var(--pdv-t2); background:var(--pdv-bd2); }
   .cli-spinner {
     position:absolute; right:30px; top:50%; transform:translateY(-50%);
-    width:14px; height:14px; border:2px solid #4f46e5;
+    width:14px; height:14px; border:2px solid #f15a24;
     border-top-color:transparent; border-radius:50%;
     animation: spin .6s linear infinite;
   }
@@ -268,7 +268,7 @@
   .cli-row:hover, .cli-row.foco {
     background:var(--pdv-divider); border-color:var(--pdv-bd);
   }
-  .cli-row.foco { border-color:#4f46e5; box-shadow:0 0 0 1px rgba(79,70,229,.2); }
+  .cli-row.foco { border-color:#f15a24; box-shadow:0 0 0 1px rgba(241,90,36,.2); }
   .cli-avatar {
     width:34px; height:34px; border-radius:50%; flex-shrink:0;
     display:flex; align-items:center; justify-content:center;
@@ -284,8 +284,8 @@
   .cli-nome-anon { color:var(--pdv-tanon); }
   .cli-sub { font-size:11px; color:var(--pdv-tdim); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; margin-top:1px; }
   .cli-kbd-hint {
-    font-size:10px; color:#4f46e5; background:rgba(79,70,229,.1);
-    border:1px solid rgba(79,70,229,.25); border-radius:4px;
+    font-size:10px; color:#f15a24; background:rgba(241,90,36,.1);
+    border:1px solid rgba(241,90,36,.25); border-radius:4px;
     padding:2px 6px; flex-shrink:0; font-family:inherit;
   }
   .cli-empty { text-align:center; padding:24px 12px; }
@@ -475,7 +475,7 @@
 
     <button @click="abrirPendentes()"
             style="display:flex;align-items:center;gap:6px;font-size:13px;font-weight:600;cursor:pointer;background:#13131e;border:1px solid #2a2a3e;color:#a0a0b8;padding:7px 12px;border-radius:9px;transition:.15s;flex-shrink:0;white-space:nowrap;"
-            onmouseover="this.style.borderColor='#4f46e5';this.style.color='#e5e5f0'" onmouseout="this.style.borderColor='#2a2a3e';this.style.color='#a0a0b8'">
+            onmouseover="this.style.borderColor='#f15a24';this.style.color='#e5e5f0'" onmouseout="this.style.borderColor='#2a2a3e';this.style.color='#a0a0b8'">
       <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24" style="flex-shrink:0;"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
       Pendentes
       <span x-show="pendentes.length>0" x-cloak style="display:inline-flex;align-items:center;justify-content:center;min-width:18px;height:18px;background:#ef4444;border-radius:9px;font-size:10px;font-weight:700;color:#fff;padding:0 5px;" x-text="pendentes.length"></span>
@@ -492,7 +492,7 @@
     <!-- Caixa (dropdown) -->
     <div style="position:relative;flex-shrink:0;" @click.outside="showCaixaMenu=false">
       <button @click="showCaixaMenu=!showCaixaMenu"
-              :style="showCaixaMenu ? 'border-color:#4f46e5;color:#e5e5f0;' : ''"
+              :style="showCaixaMenu ? 'border-color:#f15a24;color:#e5e5f0;' : ''"
               style="display:flex;align-items:center;gap:6px;font-size:13px;font-weight:600;cursor:pointer;background:#13131e;border:1px solid #2a2a3e;color:#a0a0b8;padding:7px 12px;border-radius:9px;transition:.15s;white-space:nowrap;">
         <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24" style="flex-shrink:0;"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z"/></svg>
         Caixa
@@ -511,7 +511,7 @@
         </button>
         <!-- Fechamento -->
         <button class="caixa-mi" :disabled="!sessao" @click="caixaMenuAcao('fechar')">
-          <svg width="15" height="15" fill="none" stroke="#818cf8" viewBox="0 0 24 24" style="flex-shrink:0;"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+          <svg width="15" height="15" fill="none" stroke="#f97316" viewBox="0 0 24 24" style="flex-shrink:0;"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
           Fechamento / Relatório
         </button>
         <div style="height:1px;background:#232336;margin:4px 6px;"></div>
@@ -533,7 +533,7 @@
 
     <!-- Usuário -->
     <div style="display:flex;align-items:center;gap:8px;padding:6px 12px;background:#13131e;border:1px solid #1e1e30;border-radius:8px;">
-      <div style="width:24px;height:24px;border-radius:50%;background:linear-gradient(135deg,#4f46e5,#8b5cf6);display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;color:#fff;" x-text="nomeUsuario.charAt(0).toUpperCase()"></div>
+      <div style="width:24px;height:24px;border-radius:50%;background:linear-gradient(135deg,#f15a24,#ea580c);display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;color:#fff;" x-text="nomeUsuario.charAt(0).toUpperCase()"></div>
       <span style="font-size:12px;font-weight:500;color:#a0a0b8;" x-text="nomeUsuario"></span>
     </div>
 
@@ -562,12 +562,12 @@
           <span style="font-size:10px;font-weight:800;color:#63637f;text-transform:uppercase;letter-spacing:.09em;">Imprimir</span>
         </div>
         <button class="print-mi" @click="showImprimirMenu=false; imprimirOrcamento()">
-          <svg width="15" height="15" fill="none" stroke="#818cf8" viewBox="0 0 24 24" style="flex-shrink:0;"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+          <svg width="15" height="15" fill="none" stroke="#f97316" viewBox="0 0 24 24" style="flex-shrink:0;"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
           <div style="flex:1;min-width:0;">
             <div style="font-size:12.5px;font-weight:700;">Orcamento</div>
             <div style="font-size:10px;color:#6f6f8c;margin-top:1px;">Imprime os itens atuais do carrinho</div>
           </div>
-          <span class="badge" style="background:#312e81;color:#a5b4fc;">PDV</span>
+          <span class="badge" style="background:#c2410c;color:#fed7aa;">PDV</span>
         </button>
         <div style="height:1px;background:#232336;margin:5px 6px;"></div>
         <div style="padding:8px 12px 6px;display:flex;align-items:center;gap:8px;">
@@ -613,7 +613,7 @@
       <div style="padding:11px 12px 7px;border-bottom:1px solid #1a1a28;">
         <div style="position:relative;display:flex;align-items:center;">
           <div style="position:absolute;left:7px;width:26px;height:26px;border-radius:6px;background:#1a1a30;border:1px solid #2a2a4e;display:flex;align-items:center;justify-content:center;pointer-events:none;">
-            <svg width="14" height="14" fill="none" stroke="#6366f1" stroke-width="1.5" viewBox="0 0 24 24"><path d="M3 5h2M7 5h1M3 9h1M7 9h2M3 13h1M7 13h1M3 17h2M7 17h1M13 5h1M17 5h2M13 9h2M17 9h1M13 13h1M17 13h2M13 17h1M17 17h2M11 5v14M21 5v14"/></svg>
+            <svg width="14" height="14" fill="none" stroke="#f15a24" stroke-width="1.5" viewBox="0 0 24 24"><path d="M3 5h2M7 5h1M3 9h1M7 9h2M3 13h1M7 13h1M3 17h2M7 17h1M13 5h1M17 5h2M13 9h2M17 9h1M13 13h1M17 13h2M13 17h1M17 17h2M11 5v14M21 5v14"/></svg>
           </div>
           <input x-ref="barcodeInput" id="barcode-input" type="text" x-model="barcodeQuery"
                  @keydown.enter.prevent="lerCodigoBarras()"
@@ -621,8 +621,8 @@
                  placeholder="Ler Código de Barras"
                  autocomplete="off" inputmode="numeric"
                  style="width:100%;padding:9px 46px 9px 42px;background:#13131e;border:1px solid #2a2a42;border-radius:9px;color:#e5e5f0;font-size:13px;font-weight:600;outline:none;transition:.15s;letter-spacing:.03em;"
-                 onfocus="this.style.borderColor='#4f46e5'" onblur="this.style.borderColor='#2a2a42'">
-          <kbd style="position:absolute;right:8px;font-size:10px;font-family:ui-monospace,monospace;padding:3px 7px;background:#0a0a12;border:1px solid #2a2a42;border-bottom:2px solid #2a2a42;border-radius:5px;color:#6366f1;font-weight:700;letter-spacing:.05em;pointer-events:none;">F2</kbd>
+                 onfocus="this.style.borderColor='#f15a24'" onblur="this.style.borderColor='#2a2a42'">
+          <kbd style="position:absolute;right:8px;font-size:10px;font-family:ui-monospace,monospace;padding:3px 7px;background:#0a0a12;border:1px solid #2a2a42;border-bottom:2px solid #2a2a42;border-radius:5px;color:#f15a24;font-weight:700;letter-spacing:.05em;pointer-events:none;">F2</kbd>
         </div>
       </div>
 
@@ -637,7 +637,7 @@
                  placeholder="Buscar produto ou serviço..."
                  autocomplete="off"
                  style="width:100%;padding:8px 10px 8px 32px;background:#13131e;border:1px solid #1e1e30;border-radius:8px;color:#e5e5f0;font-size:13px;outline:none;transition:.15s;"
-                 onfocus="this.style.borderColor='#4f46e5'" onblur="this.style.borderColor='#1e1e30'">
+                 onfocus="this.style.borderColor='#f15a24'" onblur="this.style.borderColor='#1e1e30'">
         </div>
       </div>
 
@@ -664,13 +664,13 @@
             <template x-for="p in produtos" :key="p.id">
               <button @click="adicionarItem(p)"
                       style="display:flex;align-items:center;gap:10px;padding:10px 12px;background:#13131e;border:1px solid #1e1e30;border-radius:10px;text-align:left;cursor:pointer;width:100%;transition:.15s;"
-                      onmouseover="this.style.borderColor='#4f46e5';this.style.background='#16162a'" onmouseout="this.style.borderColor='#1e1e30';this.style.background='#13131e'">
+                      onmouseover="this.style.borderColor='#f15a24';this.style.background='#16162a'" onmouseout="this.style.borderColor='#1e1e30';this.style.background='#13131e'">
                 <div style="width:34px;height:34px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0;"
                      :style="p.cor ? `background:${p.cor}22;border:1px solid ${p.cor}44` : 'background:#1e1e2a;border:1px solid #2a2a3e;'"
                      x-text="p.icone || '📦'"></div>
                 <div style="flex:1;min-width:0;">
                   <div style="font-size:13px;font-weight:500;color:#e5e5f0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;" x-text="p.descricao"></div>
-                  <div style="font-size:13px;font-weight:700;color:#4f8ef7;margin-top:2px;" x-text="'R$ ' + fmt(p.preco)"></div>
+                  <div style="font-size:13px;font-weight:700;color:#f97316;margin-top:2px;" x-text="'R$ ' + fmt(p.preco)"></div>
                 </div>
               </button>
             </template>
@@ -690,13 +690,13 @@
             <template x-for="p in topProdutos" :key="p.id">
               <button @click="adicionarItem(p)"
                       style="display:flex;align-items:center;gap:10px;padding:10px 12px;background:#13131e;border:1px solid #1e1e30;border-radius:10px;text-align:left;cursor:pointer;width:100%;margin-bottom:4px;transition:.15s;"
-                      onmouseover="this.style.borderColor='#4f46e5';this.style.background='#16162a'" onmouseout="this.style.borderColor='#1e1e30';this.style.background='#13131e'">
+                      onmouseover="this.style.borderColor='#f15a24';this.style.background='#16162a'" onmouseout="this.style.borderColor='#1e1e30';this.style.background='#13131e'">
                 <div style="width:34px;height:34px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0;"
                      :style="p.cor ? `background:${p.cor}22;border:1px solid ${p.cor}44` : 'background:#1e1e2a;border:1px solid #2a2a3e;'"
                      x-text="p.icone || '📦'"></div>
                 <div style="flex:1;min-width:0;">
                   <div style="font-size:13px;font-weight:500;color:#c0c0d8;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;" x-text="p.descricao"></div>
-                  <div style="font-size:13px;font-weight:700;color:#4f8ef7;margin-top:2px;" x-text="'R$ ' + fmt(p.preco)"></div>
+                  <div style="font-size:13px;font-weight:700;color:#f97316;margin-top:2px;" x-text="'R$ ' + fmt(p.preco)"></div>
                 </div>
               </button>
             </template>
@@ -705,7 +705,7 @@
 
         <!-- Buscando -->
         <div x-show="buscandoProdutos" style="display:flex;justify-content:center;padding:32px;">
-          <div style="width:18px;height:18px;border:2px solid #4f46e5;border-top-color:transparent;border-radius:50%;animation:spin 0.6s linear infinite;"></div>
+          <div style="width:18px;height:18px;border:2px solid #f15a24;border-top-color:transparent;border-radius:50%;animation:spin 0.6s linear infinite;"></div>
         </div>
         <style>@keyframes spin{to{transform:rotate(360deg)}}</style>
       </div>
@@ -732,7 +732,7 @@
 
       <!-- Barra de cliente -->
       <div style="display:flex;align-items:center;gap:12px;padding:10px 20px;border-bottom:1px solid #1a1a28;flex-shrink:0;">
-        <div style="width:38px;height:38px;border-radius:50%;background:linear-gradient(135deg,#4f46e5,#8b5cf6);display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;color:#fff;flex-shrink:0;"
+        <div style="width:38px;height:38px;border-radius:50%;background:linear-gradient(135deg,#f15a24,#ea580c);display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;color:#fff;flex-shrink:0;"
              x-text="venda.cliente.nome.substring(0,2).toUpperCase()"></div>
         <div style="flex:1;min-width:0;">
           <div style="font-size:14px;font-weight:600;color:#e5e5f0;" x-text="venda.cliente.nome"></div>
@@ -746,7 +746,7 @@
           <svg width="13" height="13" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
           Novo Cliente
         </button>
-        <button @click="clienteQuery='';clienteFoco=-1;showModalCliente=true;$nextTick(()=>{$refs.inputCliente?.focus();buscarClientes('');})" class="btn-action" style="color:#4f8ef7;border-color:#4f46e540;">
+        <button @click="clienteQuery='';clienteFoco=-1;showModalCliente=true;$nextTick(()=>{$refs.inputCliente?.focus();buscarClientes('');})" class="btn-action" style="color:#f97316;border-color:#f15a2440;">
           <svg width="13" height="13" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4"/></svg>
           Trocar Cliente (F4)
         </button>
@@ -754,7 +754,7 @@
 
       <!-- Cabeçalho carrinho -->
       <div style="display:flex;align-items:center;padding:10px 20px;border-bottom:1px solid #1a1a28;flex-shrink:0;gap:10px;">
-        <svg width="16" height="16" fill="none" stroke="#4f8ef7" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z"/></svg>
+        <svg width="16" height="16" fill="none" stroke="#f97316" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z"/></svg>
         <span style="font-size:14px;font-weight:600;color:#e5e5f0;">Carrinho</span>
         <span style="font-size:12px;padding:2px 8px;background:#1e1e2a;border-radius:12px;color:#888;border:1px solid #2a2a3e;"
               x-text="venda.itens.length + ' ' + (venda.itens.length===1?'item':'itens')"></span>
@@ -791,7 +791,7 @@
             <!-- Carregando -->
             <template x-if="historicoClienteCarregando">
               <div style="display:flex;align-items:center;justify-content:center;height:100%;gap:10px;">
-                <div style="width:18px;height:18px;border:2px solid #2a2a3e;border-top-color:#6366f1;border-radius:50%;animation:spin 1s linear infinite;"></div>
+                <div style="width:18px;height:18px;border:2px solid #2a2a3e;border-top-color:#f15a24;border-radius:50%;animation:spin 1s linear infinite;"></div>
                 <span style="font-size:13px;color:#555;">Carregando histórico...</span>
               </div>
             </template>
@@ -802,8 +802,8 @@
                 <!-- Cabeçalho histórico -->
                 <div style="padding:12px 20px 8px;border-bottom:1px solid #1a1a28;display:flex;align-items:center;justify-content:space-between;">
                   <div style="display:flex;align-items:center;gap:8px;">
-                    <svg width="14" height="14" fill="none" stroke="#6366f1" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
-                    <span style="font-size:11px;font-weight:700;color:#6366f1;text-transform:uppercase;letter-spacing:.08em;">Histórico de Compras</span>
+                    <svg width="14" height="14" fill="none" stroke="#f15a24" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                    <span style="font-size:11px;font-weight:700;color:#f15a24;text-transform:uppercase;letter-spacing:.08em;">Histórico de Compras</span>
                   </div>
                   <span x-show="historicoClienteTotal>0" style="font-size:11px;color:#3a3a52;" x-text="historicoClienteTotal+' compra(s) no total'"></span>
                 </div>
@@ -816,7 +816,7 @@
                       <template x-for="p in produtosFrequentes" :key="p.descricao">
                         <div style="padding:3px 10px;background:#13131e;border:1px solid #2a2a3e;border-radius:20px;font-size:11px;color:#a0a0b8;white-space:nowrap;display:flex;align-items:center;gap:5px;">
                           <span x-text="p.descricao"></span>
-                          <span style="color:#6366f1;font-weight:700;" x-text="'×'+p.qtd_pedidos"></span>
+                          <span style="color:#f15a24;font-weight:700;" x-text="'×'+p.qtd_pedidos"></span>
                         </div>
                       </template>
                     </div>
@@ -840,7 +840,7 @@
                         <button @click="historicoClienteAberto = historicoClienteAberto===c.id ? null : c.id"
                                 style="width:100%;display:flex;align-items:center;gap:10px;padding:10px 14px;background:none;border:none;cursor:pointer;text-align:left;">
                           <div style="width:30px;height:30px;border-radius:8px;background:#0d0d16;border:1px solid #2a2a3e;display:flex;align-items:center;justify-content:center;flex-shrink:0;">
-                            <svg width="13" height="13" fill="none" stroke="#6366f1" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/></svg>
+                            <svg width="13" height="13" fill="none" stroke="#f15a24" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/></svg>
                           </div>
                           <div style="flex:1;min-width:0;">
                             <div style="display:flex;align-items:center;gap:7px;">
@@ -952,8 +952,8 @@
       <!-- Título Forma de Pagamento -->
       <div style="display:flex;align-items:center;justify-content:space-between;padding:12px 16px;border-bottom:1px solid #1a1a28;flex-shrink:0;margin-top:8px;">
         <div style="display:flex;align-items:center;gap:8px;">
-          <div style="width:28px;height:28px;border-radius:8px;background:rgba(99,102,241,.15);border:1px solid rgba(99,102,241,.25);display:flex;align-items:center;justify-content:center;">
-            <svg width="14" height="14" fill="none" stroke="#818cf8" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z"/></svg>
+          <div style="width:28px;height:28px;border-radius:8px;background:rgba(241,90,36,.15);border:1px solid rgba(241,90,36,.25);display:flex;align-items:center;justify-content:center;">
+            <svg width="14" height="14" fill="none" stroke="#f97316" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z"/></svg>
           </div>
           <span style="font-size:13px;font-weight:700;color:#e5e5f0;">Forma de Pagamento</span>
         </div>
@@ -985,12 +985,12 @@
             <div style="font-size:11px;font-weight:600;color:#666;margin-bottom:8px;text-transform:uppercase;letter-spacing:.07em;" x-text="'Valor — ' + formaPgtoSelecionada.descricao"></div>
             <div style="display:flex;gap:6px;align-items:center;">
               <div style="position:relative;flex:1;">
-                <span style="position:absolute;left:10px;top:50%;transform:translateY(-50%);color:#4f46e5;font-size:13px;font-weight:800;">R$</span>
+                <span style="position:absolute;left:10px;top:50%;transform:translateY(-50%);color:#f15a24;font-size:13px;font-weight:800;">R$</span>
                 <input type="number" x-model="valorPgto"
                        @keydown.enter="confirmarPagamento()"
                        @keydown.escape="formaPgtoSelecionada=null"
                        x-ref="inputValorPgto"
-                       style="width:100%;padding:11px 10px 11px 34px;background:#13131e;border:2px solid #4f46e5;border-radius:10px;color:#fff;font-size:16px;font-weight:800;outline:none;letter-spacing:.02em;"
+                       style="width:100%;padding:11px 10px 11px 34px;background:#13131e;border:2px solid #f15a24;border-radius:10px;color:#fff;font-size:16px;font-weight:800;outline:none;letter-spacing:.02em;"
                        min="0" step="0.01" placeholder="0,00">
               </div>
               <button @click="confirmarPagamento()"
@@ -1003,7 +1003,7 @@
               <template x-for="v in [50,100,200]" :key="v">
                 <button @click="valorPgto=String(v)"
                         style="flex:1;padding:7px 4px;background:#13131e;border:1px solid #2a2a3e;border-radius:8px;color:#888;font-size:11px;font-weight:700;cursor:pointer;transition:.15s;"
-                        onmouseover="this.style.borderColor='#4f46e5';this.style.color='#e5e5f0'" onmouseout="this.style.borderColor='#2a2a3e';this.style.color='#888'"
+                        onmouseover="this.style.borderColor='#f15a24';this.style.color='#e5e5f0'" onmouseout="this.style.borderColor='#2a2a3e';this.style.color='#888'"
                         x-text="v"></button>
               </template>
             </div>
@@ -1169,7 +1169,7 @@
                     style="flex:1;padding:10px;background:#1e1e2a;border:none;border-radius:8px;color:#666;font-size:13px;cursor:pointer;">Cancelar</button>
             <button @click="abrirCaixa()" :disabled="!caixaSelecionada"
                     :style="!caixaSelecionada?'opacity:.4;cursor:not-allowed;':''"
-                    style="flex:1;padding:10px;background:linear-gradient(135deg,#4f46e5,#6366f1);border:none;border-radius:8px;color:#fff;font-size:13px;font-weight:700;cursor:pointer;">Abrir Caixa</button>
+                    style="flex:1;padding:10px;background:linear-gradient(135deg,#f15a24,#f97316);border:none;border-radius:8px;color:#fff;font-size:13px;font-weight:700;cursor:pointer;">Abrir Caixa</button>
           </div>
         </div>
       </template>
@@ -1493,7 +1493,7 @@
         <template x-for="p in pendentes" :key="p.id">
           <button @click="retomarPendente(p)"
                   style="display:flex;align-items:center;justify-content:space-between;padding:12px 16px;background:#1e1e2a;border:1px solid #2a2a3e;border-radius:10px;cursor:pointer;text-align:left;width:100%;transition:.15s;"
-                  onmouseover="this.style.borderColor='#4f46e5'" onmouseout="this.style.borderColor='#2a2a3e'">
+                  onmouseover="this.style.borderColor='#f15a24'" onmouseout="this.style.borderColor='#2a2a3e'">
             <div>
               <div style="font-size:13px;font-weight:600;color:#e5e5f0;" x-text="'#'+String(p.numero_venda).padStart(6,'0')+' — '+p.cliente"></div>
               <div style="font-size:11px;color:#555;margin-top:2px;" x-text="new Date(p.data_venda).toLocaleString('pt-BR',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'})"></div>
@@ -1564,7 +1564,7 @@
       </div>
       <div style="display:flex;gap:10px;">
         <button @click="showModalConfirmacao=false" style="flex:1;padding:11px;background:#1e1e2a;border:none;border-radius:8px;color:#666;font-size:13px;cursor:pointer;">Voltar</button>
-        <button @click="finalizarVenda()" style="flex:1;padding:11px;background:linear-gradient(135deg,#4f46e5,#6366f1);border:none;border-radius:8px;color:#fff;font-size:13px;font-weight:700;cursor:pointer;">✓ Confirmar</button>
+        <button @click="finalizarVenda()" style="flex:1;padding:11px;background:linear-gradient(135deg,#f15a24,#f97316);border:none;border-radius:8px;color:#fff;font-size:13px;font-weight:700;cursor:pointer;">✓ Confirmar</button>
       </div>
     </div>
   </div>
@@ -1637,7 +1637,7 @@
         <!-- Endereço (expansível) -->
         <div>
           <button @click="novoCliente._showEndereco=!novoCliente._showEndereco"
-                  style="display:flex;align-items:center;gap:6px;background:none;border:none;color:#6366f1;font-size:12px;font-weight:600;cursor:pointer;padding:0;">
+                  style="display:flex;align-items:center;gap:6px;background:none;border:none;color:#f15a24;font-size:12px;font-weight:600;cursor:pointer;padding:0;">
             <svg width="12" height="12" fill="none" stroke="currentColor" viewBox="0 0 24 24"
                  :style="novoCliente._showEndereco?'transform:rotate(90deg);transition:.2s;':'transition:.2s;'">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
@@ -1723,7 +1723,7 @@
       <!-- Header -->
       <div style="display:flex;align-items:center;justify-content:space-between;padding:18px 22px;border-bottom:1px solid #1e1e30;flex-shrink:0;">
         <div style="display:flex;align-items:center;gap:12px;">
-          <div style="width:36px;height:36px;border-radius:9px;background:rgba(79,70,229,.15);border:1px solid rgba(79,70,229,.3);display:flex;align-items:center;justify-content:center;font-size:18px;">🧾</div>
+          <div style="width:36px;height:36px;border-radius:9px;background:rgba(241,90,36,.15);border:1px solid rgba(241,90,36,.3);display:flex;align-items:center;justify-content:center;font-size:18px;">🧾</div>
           <div>
             <h2 style="font-size:15px;font-weight:700;color:#fff;margin:0;">Fechamento de Caixa</h2>
             <p style="font-size:11px;color:#555;margin:3px 0 0;" x-show="caixaRel">
@@ -1746,8 +1746,8 @@
             <div style="font-size:20px;font-weight:800;color:#fff;margin-top:6px;" x-text="'R$ '+fmt(caixaRel?.resumo.total_geral||0)"></div>
             <div style="font-size:11px;color:#555;margin-top:2px;" x-text="(caixaRel?.resumo.qtd_vendas||0)+' venda(s) · '+(caixaRel?.resumo.qtd_itens||0)+' itens'"></div>
           </div>
-          <div style="background:rgba(79,70,229,.08);border:1px solid rgba(79,70,229,.25);border-radius:12px;padding:14px;">
-            <div style="display:flex;align-items:center;gap:5px;font-size:10px;font-weight:700;color:#818cf8;text-transform:uppercase;letter-spacing:.08em;">🏪 Balcão</div>
+          <div style="background:rgba(241,90,36,.08);border:1px solid rgba(241,90,36,.25);border-radius:12px;padding:14px;">
+            <div style="display:flex;align-items:center;gap:5px;font-size:10px;font-weight:700;color:#f97316;text-transform:uppercase;letter-spacing:.08em;">🏪 Balcão</div>
             <div style="font-size:20px;font-weight:800;color:#fff;margin-top:6px;" x-text="'R$ '+fmt(caixaRel?.resumo.total_balcao||0)"></div>
             <div style="font-size:11px;color:#666;margin-top:2px;" x-text="(caixaRel?.resumo.qtd_balcao||0)+' venda(s)'"></div>
           </div>
@@ -1827,12 +1827,12 @@
           <div style="background:#0a0a12;border:1px solid #2a2a3e;border-radius:12px;padding:16px;display:flex;flex-direction:column;gap:12px;">
             <div style="display:flex;align-items:center;justify-content:space-between;">
               <span style="font-size:13px;color:#888;">Esperado na gaveta (dinheiro)</span>
-              <span style="font-size:16px;font-weight:800;color:#818cf8;" x-text="'R$ '+fmt(caixaRel?.caixa.esperado_dinheiro||0)"></span>
+              <span style="font-size:16px;font-weight:800;color:#f97316;" x-text="'R$ '+fmt(caixaRel?.caixa.esperado_dinheiro||0)"></span>
             </div>
             <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;">
               <label style="font-size:13px;color:#e5e5f0;font-weight:600;white-space:nowrap;">Valor contado *</label>
               <input type="number" x-model="valorContado" placeholder="0,00" min="0" step="0.01"
-                     style="flex:1;max-width:180px;padding:10px 12px;background:#13131e;border:1px solid #4f46e5;border-radius:8px;color:#fff;font-size:15px;font-weight:700;text-align:right;outline:none;">
+                     style="flex:1;max-width:180px;padding:10px 12px;background:#13131e;border:1px solid #f15a24;border-radius:8px;color:#fff;font-size:15px;font-weight:700;text-align:right;outline:none;">
             </div>
             <div style="display:flex;align-items:center;justify-content:space-between;border-top:1px solid #1e1e30;padding-top:12px;">
               <span style="font-size:13px;font-weight:600;color:#888;">Diferença</span>
@@ -1847,7 +1847,7 @@
         <!-- Vendas da sessão -->
         <div>
           <button @click="mostrarVendasCaixa=!mostrarVendasCaixa"
-                  style="display:flex;align-items:center;gap:6px;background:none;border:none;color:#6366f1;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;cursor:pointer;padding:0;margin-bottom:8px;">
+                  style="display:flex;align-items:center;gap:6px;background:none;border:none;color:#f15a24;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;cursor:pointer;padding:0;margin-bottom:8px;">
             <svg width="12" height="12" fill="none" stroke="currentColor" viewBox="0 0 24 24" :style="mostrarVendasCaixa?'transform:rotate(90deg);transition:.2s;':'transition:.2s;'"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
             <span x-text="'Vendas da Sessão ('+(caixaRel?.vendas.length||0)+')'"></span>
           </button>
@@ -1859,7 +1859,7 @@
               <div style="display:flex;align-items:center;gap:10px;padding:9px 14px;" :style="idx>0?'border-top:1px solid #13131e;':''">
                 <span style="font-size:12px;font-weight:700;color:#666;min-width:48px;" x-text="'#'+String(v.numero_venda).padStart(6,'0')"></span>
                 <span style="font-size:10px;font-weight:700;padding:2px 7px;border-radius:5px;"
-                      :style="v.delivery?'background:rgba(249,115,22,.15);color:#fb923c;':'background:rgba(79,70,229,.15);color:#818cf8;'"
+                      :style="v.delivery?'background:rgba(249,115,22,.15);color:#fb923c;':'background:rgba(241,90,36,.15);color:#f97316;'"
                       x-text="v.tipo"></span>
                 <span style="flex:1;font-size:12px;color:#c0c0d8;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" x-text="v.cliente"></span>
                 <span style="font-size:11px;color:#555;" x-text="v.qtd_itens+' itens'"></span>
@@ -1894,7 +1894,7 @@
       <!-- Header -->
       <div style="display:flex;align-items:center;justify-content:space-between;padding:18px 22px;border-bottom:1px solid #1e1e30;">
         <div style="display:flex;align-items:center;gap:12px;">
-          <div style="width:36px;height:36px;border-radius:9px;background:rgba(99,102,241,.15);border:1px solid rgba(99,102,241,.3);display:flex;align-items:center;justify-content:center;font-size:17px;">💳</div>
+          <div style="width:36px;height:36px;border-radius:9px;background:rgba(241,90,36,.15);border:1px solid rgba(241,90,36,.3);display:flex;align-items:center;justify-content:center;font-size:17px;">💳</div>
           <div>
             <h2 style="font-size:15px;font-weight:700;color:#fff;margin:0;">Formas de Pagamento</h2>
             <p style="font-size:11px;color:#555;margin:3px 0 0;">Cadastro rápido para esta filial</p>
@@ -1905,12 +1905,12 @@
 
       <!-- Formulário nova forma -->
       <div style="padding:16px 22px;border-bottom:1px solid #1e1e30;">
-        <p style="font-size:11px;font-weight:700;color:#6366f1;text-transform:uppercase;letter-spacing:.07em;margin:0 0 10px;">Nova forma de pagamento</p>
+        <p style="font-size:11px;font-weight:700;color:#f15a24;text-transform:uppercase;letter-spacing:.07em;margin:0 0 10px;">Nova forma de pagamento</p>
         <div style="display:flex;gap:8px;flex-wrap:wrap;">
           <input x-model="configNovaDesc" type="text" placeholder="Descrição (ex: Crédito Visa)"
                  @keydown.enter.prevent="configSalvarForma()"
                  style="flex:1;min-width:160px;padding:9px 12px;background:#0d0d16;border:1px solid #2a2a3e;border-radius:8px;color:#e5e5f0;font-size:13px;outline:none;"
-                 onfocus="this.style.borderColor='#6366f1'" onblur="this.style.borderColor='#2a2a3e'">
+                 onfocus="this.style.borderColor='#f15a24'" onblur="this.style.borderColor='#2a2a3e'">
           <select x-model="configNovoTipo"
                   style="padding:9px 10px;background:#0d0d16;border:1px solid #2a2a3e;border-radius:8px;color:#e5e5f0;font-size:13px;outline:none;min-width:140px;">
             <template x-for="t in configTipos" :key="t.valor">
@@ -1918,13 +1918,13 @@
             </template>
           </select>
           <button @click="configSalvarForma()" :disabled="configSalvando"
-                  style="padding:9px 18px;background:#6366f1;border:none;border-radius:8px;color:#fff;font-size:13px;font-weight:700;cursor:pointer;white-space:nowrap;">
+                  style="padding:9px 18px;background:#f15a24;border:none;border-radius:8px;color:#fff;font-size:13px;font-weight:700;cursor:pointer;white-space:nowrap;">
             <span x-show="!configSalvando">+ Adicionar</span>
             <span x-show="configSalvando">Salvando…</span>
           </button>
         </div>
         <p x-show="configErro" x-text="configErro" style="font-size:11px;color:#f87171;margin:6px 0 0;"></p>
-        <p style="font-size:11px;color:#444;margin:6px 0 0;">Para editar taxas e parcelas, acesse <a href="/financeiro/formas-pagamento/" style="color:#6366f1;text-decoration:underline;" target="_blank">Financeiro → Formas de Pagamento</a>.</p>
+        <p style="font-size:11px;color:#444;margin:6px 0 0;">Para editar taxas e parcelas, acesse <a href="/financeiro/formas-pagamento/" style="color:#f15a24;text-decoration:underline;" target="_blank">Financeiro → Formas de Pagamento</a>.</p>
       </div>
 
       <!-- Lista -->
@@ -1960,7 +1960,7 @@
     <div style="width:100%;max-width:560px;max-height:88vh;background:#13131e;border:1px solid #2a2a3e;border-radius:16px;overflow:hidden;display:flex;flex-direction:column;">
       <div style="display:flex;align-items:center;justify-content:space-between;padding:18px 22px;border-bottom:1px solid #1e1e30;flex-shrink:0;">
         <div style="display:flex;align-items:center;gap:12px;">
-          <div style="width:36px;height:36px;border-radius:9px;background:rgba(79,70,229,.15);border:1px solid rgba(79,70,229,.3);display:flex;align-items:center;justify-content:center;font-size:17px;">🕘</div>
+          <div style="width:36px;height:36px;border-radius:9px;background:rgba(241,90,36,.15);border:1px solid rgba(241,90,36,.3);display:flex;align-items:center;justify-content:center;font-size:17px;">🕘</div>
           <div>
             <h2 style="font-size:15px;font-weight:700;color:#fff;margin:0;">Histórico de Compras</h2>
             <p style="font-size:11px;color:#555;margin:3px 0 0;">Últimas vendas finalizadas</p>
@@ -1979,7 +1979,7 @@
           <div style="display:flex;align-items:center;gap:12px;padding:11px 14px;background:#0a0a12;border:1px solid #1e1e30;border-radius:10px;">
             <span style="font-size:13px;font-weight:700;color:#666;min-width:54px;" x-text="'#'+String(v.numero_venda).padStart(6,'0')"></span>
             <span style="font-size:10px;font-weight:700;padding:2px 7px;border-radius:5px;flex-shrink:0;"
-                  :style="v.delivery?'background:rgba(249,115,22,.15);color:#fb923c;':'background:rgba(79,70,229,.15);color:#818cf8;'"
+                  :style="v.delivery?'background:rgba(249,115,22,.15);color:#fb923c;':'background:rgba(241,90,36,.15);color:#f97316;'"
                   x-text="v.delivery?'Delivery':'Balcão'"></span>
             <div style="flex:1;min-width:0;">
               <div style="font-size:13px;font-weight:600;color:#e5e5f0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" x-text="v.cliente"></div>
@@ -2095,7 +2095,7 @@
       <!-- Opcoes -->
       <div style="padding:0 12px;display:flex;flex-direction:column;gap:4px;">
         <button class="impr-opt" @click="emitirDocumento('nfce', vendaFinalizadaData.id); fecharModalImpressao()">
-          <div class="impr-opt-icon" style="background:linear-gradient(135deg,#312e81,#4f46e5);">
+          <div class="impr-opt-icon" style="background:linear-gradient(135deg,#c2410c,#f15a24);">
             <svg fill="none" stroke="#fff" viewBox="0 0 24 24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
               <path d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
             </svg>
@@ -2104,7 +2104,7 @@
             <div style="font-size:13.5px;font-weight:700;color:#e8e8f8;">NFC-e</div>
             <div style="font-size:11px;color:#3a3a52;margin-top:2px;">Nota Fiscal ao Consumidor Eletronica</div>
           </div>
-          <span class="impr-badge" style="background:#312e81;color:#818cf8;">Fiscal</span>
+          <span class="impr-badge" style="background:#c2410c;color:#f97316;">Fiscal</span>
         </button>
 
         <button class="impr-opt" @click="emitirDocumento('nfe', vendaFinalizadaData.id); fecharModalImpressao()">
