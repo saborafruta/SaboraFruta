@@ -132,6 +132,22 @@
   .mode-btn.act-delivery { background:linear-gradient(135deg,#ea580c,#f97316); color:#fff; box-shadow:0 2px 10px rgba(234,88,12,.45); }
   .mode-btn.act-orcamento { background:linear-gradient(135deg,#a16207,#ca8a04); color:#fff; box-shadow:0 2px 10px rgba(161,98,7,.45); }
 
+  /* Botões utilitários do topbar */
+  .topbar-btn {
+    display:flex;align-items:center;gap:6px;font-size:13px;font-weight:600;
+    cursor:pointer;background:var(--pdv-card);border:1px solid var(--pdv-bd);
+    color:var(--pdv-t2);padding:7px 12px;border-radius:9px;transition:.15s;
+    flex-shrink:0;white-space:nowrap;
+  }
+  .topbar-btn:hover { border-color:#f15a24; color:var(--pdv-t1); }
+
+  /* Barra de totais (TOTAL/PAGO/RESTANTE) */
+  .totais-bar { display:grid;grid-template-columns:1fr 1fr 1fr;background:var(--pdv-surface);border-bottom:1px solid var(--pdv-bd2); }
+  .totais-bar-cell { display:flex;flex-direction:column;align-items:center;padding:10px 4px;border-right:1px solid var(--pdv-bd2); }
+  .totais-bar-cell:last-child { border-right:none; }
+  .totais-bar-label { font-size:9px;font-weight:700;color:var(--pdv-t3);text-transform:uppercase;letter-spacing:.1em;margin-bottom:3px; }
+  .totais-bar-total { font-size:14px;font-weight:800;color:var(--pdv-t1); }
+
   /* Cards de produto no catálogo */
   .prod-card {
     display:flex;align-items:center;gap:10px;padding:10px 12px;
@@ -484,18 +500,14 @@
       </button>
     </div>
 
-    <button @click="abrirPendentes()"
-            style="display:flex;align-items:center;gap:6px;font-size:13px;font-weight:600;cursor:pointer;background:#13131e;border:1px solid #2a2a3e;color:#a0a0b8;padding:7px 12px;border-radius:9px;transition:.15s;flex-shrink:0;white-space:nowrap;"
-            onmouseover="this.style.borderColor='#f15a24';this.style.color='#e5e5f0'" onmouseout="this.style.borderColor='#2a2a3e';this.style.color='#a0a0b8'">
+    <button @click="abrirPendentes()" class="topbar-btn">
       <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24" style="flex-shrink:0;"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
       Pendentes
       <span x-show="pendentes.length>0" x-cloak style="display:inline-flex;align-items:center;justify-content:center;min-width:18px;height:18px;background:#ef4444;border-radius:9px;font-size:10px;font-weight:700;color:#fff;padding:0 5px;" x-text="pendentes.length"></span>
     </button>
 
     <!-- Botão Ver Orçamentos Salvos -->
-    <button @click="abrirOrcamentos()"
-       style="display:flex;align-items:center;gap:6px;font-size:13px;font-weight:600;cursor:pointer;background:#13131e;border:1px solid #2a2a3e;color:#a0a0b8;padding:7px 12px;border-radius:9px;transition:.15s;flex-shrink:0;white-space:nowrap;text-decoration:none;"
-       onmouseover="this.style.borderColor='#ca8a04';this.style.color='#fbbf24'" onmouseout="this.style.borderColor='#2a2a3e';this.style.color='#a0a0b8'">
+    <button @click="abrirOrcamentos()" class="topbar-btn" style="text-decoration:none;">
       <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24" style="flex-shrink:0;"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
       Orçamentos
       <span x-show="orcamentos.length>0" x-cloak style="display:inline-flex;align-items:center;justify-content:center;min-width:18px;height:18px;background:#f59e0b;border-radius:9px;font-size:10px;font-weight:700;color:#111827;padding:0 5px;" x-text="orcamentos.length"></span>
@@ -503,8 +515,8 @@
     <!-- Caixa (dropdown) -->
     <div style="position:relative;flex-shrink:0;" @click.outside="showCaixaMenu=false">
       <button @click="showCaixaMenu=!showCaixaMenu"
-              :style="showCaixaMenu ? 'border-color:#f15a24;color:#e5e5f0;' : ''"
-              style="display:flex;align-items:center;gap:6px;font-size:13px;font-weight:600;cursor:pointer;background:#13131e;border:1px solid #2a2a3e;color:#a0a0b8;padding:7px 12px;border-radius:9px;transition:.15s;white-space:nowrap;">
+              :style="showCaixaMenu ? 'border-color:#f15a24;' : ''"
+              class="topbar-btn">
         <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24" style="flex-shrink:0;"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z"/></svg>
         Caixa
         <svg width="11" height="11" fill="none" stroke="currentColor" viewBox="0 0 24 24" style="flex-shrink:0;" :style="showCaixaMenu?'transform:rotate(180deg);transition:.2s;':'transition:.2s;'"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M19 9l-7 7-7-7"/></svg>
@@ -1047,11 +1059,11 @@
       </div>
 
       <!-- Rodapé -->
-      <div style="flex-shrink:0;border-top:1px solid #1a1a28;">
+      <div style="flex-shrink:0;border-top:1px solid var(--pdv-bd2);">
 
         <!-- + Opções -->
-        <div style="display:flex;align-items:center;justify-content:space-between;padding:10px 16px;border-bottom:1px solid #13131e;cursor:pointer;color:#666;font-size:13px;"
-             onmouseover="this.style.background='#13131e'" onmouseout="this.style.background='transparent'">
+        <div style="display:flex;align-items:center;justify-content:space-between;padding:10px 16px;border-bottom:1px solid var(--pdv-bd2);cursor:pointer;color:var(--pdv-tmid);font-size:13px;"
+             onmouseover="this.style.background='var(--pdv-hover)'" onmouseout="this.style.background='transparent'">
           <div style="display:flex;align-items:center;gap:6px;">
             <svg width="13" height="13" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h7"/></svg>
             + Opções
@@ -1060,10 +1072,10 @@
         </div>
 
         <!-- Subtotal -->
-        <div style="padding:10px 16px;border-bottom:1px solid #13131e;">
-          <div style="display:flex;justify-content:space-between;font-size:14px;color:#888;">
+        <div style="padding:10px 16px;border-bottom:1px solid var(--pdv-bd2);">
+          <div style="display:flex;justify-content:space-between;font-size:14px;color:var(--pdv-tmid);">
             <span>Subtotal:</span>
-            <span style="font-weight:600;color:#e5e5f0;" x-text="'R$ ' + fmt(venda.subtotal)"></span>
+            <span style="font-weight:600;color:var(--pdv-t1);" x-text="'R$ ' + fmt(venda.subtotal)"></span>
           </div>
           <template x-if="venda.desconto>0">
             <div style="display:flex;justify-content:space-between;font-size:12px;color:#4ade80;margin-top:4px;">
@@ -1073,7 +1085,7 @@
           </template>
           <!-- Troco destaque -->
           <template x-if="trocoTotal>0">
-            <div style="display:flex;justify-content:space-between;font-size:13px;font-weight:700;color:#f59e0b;margin-top:6px;padding-top:6px;border-top:1px solid #13131e;">
+            <div style="display:flex;justify-content:space-between;font-size:13px;font-weight:700;color:#f59e0b;margin-top:6px;padding-top:6px;border-top:1px solid var(--pdv-bd2);">
               <span>💰 Troco:</span>
               <span x-text="'R$ ' + fmt(trocoTotal)"></span>
             </div>
@@ -1081,17 +1093,17 @@
         </div>
 
         <!-- TOTAL / PAGO / RESTANTE -->
-        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;border-bottom:1px solid #13131e;background:#0a0a0f;">
-          <div style="display:flex;flex-direction:column;align-items:center;padding:10px 4px;border-right:1px solid #13131e;">
-            <span style="font-size:9px;font-weight:700;color:#3a3a55;text-transform:uppercase;letter-spacing:.1em;margin-bottom:3px;">TOTAL</span>
-            <span style="font-size:14px;font-weight:800;color:#c0c0e0;" x-text="'R$ ' + fmt(venda.total)"></span>
+        <div class="totais-bar">
+          <div class="totais-bar-cell">
+            <span class="totais-bar-label">TOTAL</span>
+            <span class="totais-bar-total" x-text="'R$ ' + fmt(venda.total)"></span>
           </div>
-          <div style="display:flex;flex-direction:column;align-items:center;padding:10px 4px;border-right:1px solid #13131e;">
-            <span style="font-size:9px;font-weight:700;color:#3a3a55;text-transform:uppercase;letter-spacing:.1em;margin-bottom:3px;">PAGO</span>
+          <div class="totais-bar-cell">
+            <span class="totais-bar-label">PAGO</span>
             <span style="font-size:14px;font-weight:800;color:#22c55e;" x-text="'R$ ' + fmt(venda.valor_pago)"></span>
           </div>
-          <div style="display:flex;flex-direction:column;align-items:center;padding:10px 4px;">
-            <span style="font-size:9px;font-weight:700;color:#3a3a55;text-transform:uppercase;letter-spacing:.1em;margin-bottom:3px;">RESTANTE</span>
+          <div class="totais-bar-cell">
+            <span class="totais-bar-label">RESTANTE</span>
             <span style="font-size:14px;font-weight:800;"
                   :style="venda.restante>0.001?'color:#facc15;':'color:#22c55e;'"
                   x-text="'R$ ' + fmt(venda.restante)"></span>
