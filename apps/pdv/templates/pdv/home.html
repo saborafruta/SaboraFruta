@@ -924,6 +924,19 @@
                                    x-text="'R$ '+item.valor_total.toFixed(2).replace('.',',')"></div>
                             </div>
                           </template>
+                          <!-- Botões reimprimir -->
+                          <div style="display:flex;gap:8px;padding:8px 14px;border-top:1px solid #1a1a28;">
+                            <button @click.stop="reimprimirPedido(c)"
+                                    style="flex:1;display:flex;align-items:center;justify-content:center;gap:5px;padding:7px 10px;background:#0d0d16;border:1px solid #2a2a3e;border-radius:8px;color:#c0c0d8;font-size:11px;font-weight:600;cursor:pointer;">
+                              <svg width="12" height="12" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"/></svg>
+                              Comprovante
+                            </button>
+                            <button @click.stop="reimprimirOrcamento(c)"
+                                    style="flex:1;display:flex;align-items:center;justify-content:center;gap:5px;padding:7px 10px;background:#0d0d16;border:1px solid #2a2a3e;border-radius:8px;color:#c0c0d8;font-size:11px;font-weight:600;cursor:pointer;">
+                              <svg width="12" height="12" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+                              Orçamento
+                            </button>
+                          </div>
                         </div>
                       </div>
                     </template>
@@ -2749,6 +2762,144 @@ ${pgtoHtml ? `<hr class="sep">${pgtoHtml}` : ''}
       w.document.close();
       w.focus();
       setTimeout(() => { w.print(); }, 400);
+    },
+
+    reimprimirPedido(c) {
+      const filial = '{{ filial_ativa.nome_fantasia|default:filial_ativa.razao_social|escapejs }}';
+      const filialEndereco = '{{ filial_ativa.endereco|escapejs }}';
+      const filialNumero = '{{ filial_ativa.numero|escapejs }}';
+      const filialBairro = '{{ filial_ativa.bairro|escapejs }}';
+      const filialCidade = '{{ filial_ativa.cidade|escapejs }}';
+      const filialUf = '{{ filial_ativa.uf|escapejs }}';
+      const filialTelefone = '{{ filial_ativa.telefone|escapejs }}';
+      {% if parametros_sistema and parametros_sistema.logo_url %}
+      const logoUrlRP = '{{ parametros_sistema.logo_url|escapejs }}';
+      {% elif parametros_sistema and parametros_sistema.logo %}
+      const logoUrlRP = '{{ request.scheme }}://{{ request.get_host }}{{ parametros_sistema.logo.url }}';
+      {% elif filial_ativa and filial_ativa.imagem %}
+      const logoUrlRP = '{{ request.scheme }}://{{ request.get_host }}{{ filial_ativa.imagem.url }}';
+      {% elif empresa_logo_url %}
+      const logoUrlRP = '{{ empresa_logo_url|escapejs }}';
+      {% else %}
+      const logoUrlRP = '';
+      {% endif %}
+      const fmt = n => parseFloat(n||0).toFixed(2).replace('.',',');
+      const clienteNome = this.venda.cliente ? this.venda.cliente.nome : 'Consumidor Final';
+      const numero = '#'+String(c.numero_venda).padStart(6,'0');
+      const dataVenda = c.data_venda;
+
+      let itensHtml = '';
+      if (c.itens && c.itens.length) {
+        c.itens.forEach(item => {
+          const desc = item.descricao || '';
+          const qtd = parseFloat(item.quantidade||1);
+          const uni = parseFloat(item.valor_unitario||0);
+          const tot = parseFloat(item.valor_total||0);
+          const un = item.unidade_medida || 'un';
+          itensHtml += `<tr>
+            <td style="padding:4px 0;font-size:12px;word-break:break-word;">${desc}</td>
+            <td style="padding:4px 6px;font-size:12px;text-align:center;">${qtd} ${un}</td>
+            <td style="padding:4px 0;font-size:12px;text-align:right;">R$&nbsp;${fmt(uni)}</td>
+            <td style="padding:4px 0 4px 8px;font-size:12px;text-align:right;font-weight:700;">R$&nbsp;${fmt(tot)}</td>
+          </tr>`;
+        });
+      }
+
+      const html = `<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<title>Cupom PDV</title>
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body { font-family: 'Courier New', monospace; font-size:12px; color:#000; background:#fff; width:80mm; padding:8px; }
+  h1 { font-size:15px; font-weight:800; text-align:center; margin-bottom:2px; }
+  .sub { font-size:11px; text-align:center; color:#111; margin-bottom:8px; }
+  .sep { border:none; border-top:1px dashed #555; margin:8px 0; }
+  table { width:100%; border-collapse:collapse; }
+  th { font-size:10px; text-transform:uppercase; color:#111; padding-bottom:4px; border-bottom:1px solid #888; font-weight:800; }
+  td { color:#000; }
+  .total-row { font-size:14px; font-weight:800; }
+  .footer { text-align:center; margin-top:10px; font-size:10px; color:#333; }
+  @media print { body { margin:0; } }
+</style>
+</head>
+<body>
+${logoUrlRP ? `<div style="text-align:center;margin-bottom:10px;"><img src="${logoUrlRP}" style="max-height:130px;max-width:260px;object-fit:contain;" /></div>` : ''}
+<h1>${filial}</h1>
+${filialEndereco ? `<div class="sub">${filialEndereco}${filialNumero ? ', '+filialNumero : ''}${filialBairro ? ' - '+filialBairro : ''}</div>` : ''}
+${filialCidade ? `<div class="sub">${filialCidade}${filialUf ? ' - '+filialUf : ''}</div>` : ''}
+${filialTelefone ? `<div class="sub">Tel: ${filialTelefone}</div>` : ''}
+<div class="sub">${dataVenda} &bull; ${numero}</div>
+<div class="sub">Cliente: <strong>${clienteNome}</strong></div>
+<hr class="sep">
+<table>
+  <thead><tr>
+    <th style="text-align:left;">Produto</th>
+    <th style="text-align:center;">Qtd</th>
+    <th style="text-align:right;">Unit.</th>
+    <th style="text-align:right;padding-left:8px;">Total</th>
+  </tr></thead>
+  <tbody>${itensHtml}</tbody>
+</table>
+<hr class="sep">
+<div style="display:flex;justify-content:space-between;" class="total-row">
+  <span>TOTAL</span><span>R$&nbsp;${fmt(c.valor_total)}</span>
+</div>
+<hr class="sep">
+<div class="footer">Obrigado pela preferência!<br>Este não é um documento fiscal.</div>
+</body></html>`;
+
+      const w = window.open('', '_blank', 'width=340,height=600,scrollbars=yes');
+      if (!w) { this.toast_('Permita popups para imprimir.','erro'); return; }
+      w.document.write(html); w.document.close(); w.focus(); setTimeout(() => { w.print(); }, 400);
+    },
+
+    reimprimirOrcamento(c) {
+      const filial = '{{ filial_ativa.nome_fantasia|default:filial_ativa.razao_social|escapejs }}';
+      const filialEndereco = '{{ filial_ativa.endereco|escapejs }}';
+      const filialNumero = '{{ filial_ativa.numero|escapejs }}';
+      const filialBairro = '{{ filial_ativa.bairro|escapejs }}';
+      const filialCidade = '{{ filial_ativa.cidade|escapejs }}';
+      const filialUf = '{{ filial_ativa.uf|escapejs }}';
+      const filialTelefone = '{{ filial_ativa.telefone|escapejs }}';
+      {% if parametros_sistema and parametros_sistema.logo_url %}
+      const logoUrlRO = '{{ parametros_sistema.logo_url|escapejs }}';
+      {% elif parametros_sistema and parametros_sistema.logo %}
+      const logoUrlRO = '{{ request.scheme }}://{{ request.get_host }}{{ parametros_sistema.logo.url }}';
+      {% elif filial_ativa and filial_ativa.imagem %}
+      const logoUrlRO = '{{ request.scheme }}://{{ request.get_host }}{{ filial_ativa.imagem.url }}';
+      {% elif empresa_logo_url %}
+      const logoUrlRO = '{{ empresa_logo_url|escapejs }}';
+      {% else %}
+      const logoUrlRO = '';
+      {% endif %}
+      const fmt = n => parseFloat(n||0).toFixed(2).replace('.',',');
+      const clienteNome = this.venda.cliente ? this.venda.cliente.nome : 'Consumidor Final';
+      const numero = '#'+String(c.numero_venda).padStart(6,'0');
+      const dataVenda = c.data_venda;
+
+      const endParts = [filialEndereco, filialNumero].filter(Boolean).join(', ');
+      const endLinha2 = [filialBairro, filialCidade && filialUf ? `${filialCidade}/${filialUf}` : (filialCidade||filialUf)].filter(Boolean).join(' – ');
+      const enderecoHtml = [endParts, endLinha2, filialTelefone ? `Tel: ${filialTelefone}` : ''].filter(Boolean).map(l => `<div>${l}</div>`).join('');
+
+      const logoHtml = logoUrlRO ? `<img src="${logoUrlRO}" style="max-height:130px;max-width:260px;object-fit:contain;display:block;margin:0 auto 12px;" onerror="this.style.display='none'">` : '';
+
+      const itensHtml = c.itens.map(item => {
+        const desc = item.descricao || '';
+        const qtd = parseFloat(item.quantidade||1);
+        const uni = parseFloat(item.valor_unitario||0);
+        const tot = parseFloat(item.valor_total||0);
+        const un = item.unidade_medida || 'un';
+        return `<tr><td>${desc}</td><td class="c">${qtd} ${un}</td><td class="r">R$ ${fmt(uni)}</td><td class="r b">R$ ${fmt(tot)}</td></tr>`;
+      }).join('');
+
+      const html = `<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8"><title>Orcamento PDV</title><style>
+        body{font-family:Arial,sans-serif;color:#000;background:#fff;margin:28px;} .header{text-align:center;border-bottom:2px solid #888;padding-bottom:14px;margin-bottom:14px;} .header h1{font-size:22px;margin:6px 0 4px;color:#000;} .header .addr{font-size:12px;color:#111;line-height:1.6;} table{width:100%;border-collapse:collapse;margin-top:18px;} th,td{border-bottom:1px solid #999;padding:8px;font-size:13px;text-align:left;color:#000;} th{background:#e8e8e8;text-transform:uppercase;font-size:11px;color:#000;font-weight:800;} .r{text-align:right}.c{text-align:center}.b{font-weight:700}.tot{margin-top:18px;display:flex;justify-content:flex-end;font-size:18px;font-weight:800;color:#000;}.box{border:1px solid #999;border-radius:10px;padding:12px;margin-top:14px}.muted{color:#222;font-size:12px;text-align:center;margin-top:4px;}.foot{margin-top:24px;font-size:11px;color:#333;text-align:center}@media print{body{margin:18px}}
+      </style></head><body><div class="header">${logoHtml}<h1>Orcamento</h1><div class="addr">${enderecoHtml}</div><div class="muted">${dataVenda} &bull; ${numero}</div></div><div class="box"><strong>Cliente:</strong> ${clienteNome}</div><table><thead><tr><th>Produto</th><th>Qtd</th><th>Unitario</th><th>Total</th></tr></thead><tbody>${itensHtml}</tbody></table><div class="tot">Total: R$ ${fmt(c.valor_total)}</div><div class="foot">Orcamento sem valor fiscal. Valores sujeitos a alteracao.</div></body></html>`;
+      const w = window.open('', '_blank', 'width=820,height=700,scrollbars=yes');
+      if (!w) { this.toast_('Permita popups para imprimir.','erro'); return; }
+      w.document.write(html); w.document.close(); w.focus(); setTimeout(() => w.print(), 400);
     },
 
     async emitirDocumento(tipo, vendaIdOverride = null) {
