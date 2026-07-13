@@ -132,6 +132,47 @@
   .mode-btn.act-delivery { background:linear-gradient(135deg,#ea580c,#f97316); color:#fff; box-shadow:0 2px 10px rgba(234,88,12,.45); }
   .mode-btn.act-orcamento { background:linear-gradient(135deg,#a16207,#ca8a04); color:#fff; box-shadow:0 2px 10px rgba(161,98,7,.45); }
 
+  /* Botões de ação do rodapé do catálogo */
+  .cat-action-btn {
+    display:flex;align-items:center;gap:8px;padding:11px 16px;
+    width:100%;background:transparent;border:none;color:var(--pdv-tmid);
+    font-size:12px;font-weight:500;cursor:pointer;transition:.15s;
+  }
+  .cat-action-btn:hover { background:var(--pdv-hover); color:var(--pdv-t2); }
+
+  /* Input de código de barras */
+  .barcode-icon-wrap {
+    position:absolute;left:7px;width:26px;height:26px;border-radius:6px;
+    background:var(--pdv-hover2);border:1px solid var(--pdv-bd);
+    display:flex;align-items:center;justify-content:center;pointer-events:none;
+  }
+  .barcode-input {
+    width:100%;padding:9px 46px 9px 42px;
+    background:var(--pdv-card);border:1px solid var(--pdv-bd);
+    border-radius:9px;color:var(--pdv-t1);font-size:13px;font-weight:600;
+    outline:none;transition:.15s;letter-spacing:.03em;font-family:inherit;
+  }
+  .barcode-input:focus { border-color:#f15a24; }
+
+  /* Chips do topbar (usuário e filial) */
+  .topbar-chip {
+    display:flex;align-items:center;gap:8px;padding:6px 12px;
+    background:var(--pdv-card);border:1px solid var(--pdv-bd2);border-radius:8px;
+  }
+
+  /* Botões ícone do topbar */
+  .topbar-icon-btn {
+    width:32px;height:32px;border-radius:8px;background:transparent;
+    border:none;color:var(--pdv-tmuted);cursor:pointer;
+    display:flex;align-items:center;justify-content:center;transition:.15s;
+  }
+  .topbar-icon-btn:hover,
+  .topbar-icon-btn--active { background:var(--pdv-hover2); color:var(--pdv-t2); }
+
+  /* Botão secundário do rodapé (Salvar Pendente) */
+  .btn-rodape-secondary { background:var(--pdv-card); border:1px solid var(--pdv-bd); color:var(--pdv-t2); }
+  .btn-rodape-secondary:hover { background:var(--pdv-hover); color:var(--pdv-t1); }
+
   /* Botões utilitários do topbar */
   .topbar-btn {
     display:flex;align-items:center;gap:6px;font-size:13px;font-weight:600;
@@ -469,7 +510,7 @@
   <header style="height:54px;background:#0d0d16;border-bottom:1px solid #1a1a28;display:flex;align-items:center;padding:0 12px;gap:9px;flex-shrink:0;">
 
     <!-- Voltar + Logo + Info -->
-    <a href="/" style="display:flex;align-items:center;justify-content:center;width:32px;height:32px;border-radius:8px;color:#666;text-decoration:none;transition:.15s;" onmouseover="this.style.background='#1e1e2a'" onmouseout="this.style.background='transparent'">
+    <a href="/" class="topbar-icon-btn" style="text-decoration:none;">
       <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/></svg>
     </a>
     <div style="width:36px;height:36px;border-radius:50%;background:#0a0a12;border:2px solid #2a2a3e;display:flex;align-items:center;justify-content:center;">
@@ -555,28 +596,25 @@
     <div style="flex:1;"></div>
 
     <!-- Usuário -->
-    <div style="display:flex;align-items:center;gap:8px;padding:6px 12px;background:#13131e;border:1px solid #1e1e30;border-radius:8px;">
+    <div class="topbar-chip">
       <div style="width:24px;height:24px;border-radius:50%;background:linear-gradient(135deg,#f15a24,#ea580c);display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;color:#fff;" x-text="nomeUsuario.charAt(0).toUpperCase()"></div>
-      <span style="font-size:12px;font-weight:500;color:#a0a0b8;" x-text="nomeUsuario"></span>
+      <span style="font-size:12px;font-weight:500;color:var(--pdv-t2);" x-text="nomeUsuario"></span>
     </div>
 
     <!-- Ícones de ação -->
-    <button title="Atalhos de teclado" style="width:32px;height:32px;border-radius:8px;background:transparent;border:none;color:#555;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:.15s;" onmouseover="this.style.background='#1e1e2a';this.style.color='#a0a0b8'" onmouseout="this.style.background='transparent';this.style.color='#555'">
+    <button title="Atalhos de teclado" class="topbar-icon-btn">
       <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24"><rect x="2" y="6" width="20" height="12" rx="2" stroke-width="1.5"/><path stroke-linecap="round" stroke-width="1.5" d="M6 10h.01M10 10h.01M14 10h.01M18 10h.01M8 14h8"/></svg>
     </button>
-    <button @click="abrirCaixaRelatorio()" title="Sangria / Caixa" style="width:32px;height:32px;border-radius:8px;background:transparent;border:none;color:#555;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:.15s;" onmouseover="this.style.background='#1e1e2a';this.style.color='#a0a0b8'" onmouseout="this.style.background='transparent';this.style.color='#555'">
+    <button @click="abrirCaixaRelatorio()" title="Sangria / Caixa" class="topbar-icon-btn">
       <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M14.121 14.121L19 19m-7-7l7-7m-7 7l-2.879 2.879M12 12L9.121 9.121m0 5.758a3 3 0 10-4.243 4.243 3 3 0 004.243-4.243zm0-5.758a3 3 0 10-4.243-4.243 3 3 0 004.243 4.243z"/></svg>
     </button>
-    <button title="Tela cheia" @click="if(document.fullscreenElement){document.exitFullscreen()}else{document.documentElement.requestFullscreen()}" style="width:32px;height:32px;border-radius:8px;background:transparent;border:none;color:#555;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:.15s;" onmouseover="this.style.background='#1e1e2a';this.style.color='#a0a0b8'" onmouseout="this.style.background='transparent';this.style.color='#555'">
+    <button title="Tela cheia" @click="if(document.fullscreenElement){document.exitFullscreen()}else{document.documentElement.requestFullscreen()}" class="topbar-icon-btn">
       <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4"/></svg>
     </button>
     <!-- Imprimir (dropdown) -->
     <div style="position:relative;flex-shrink:0;" @click.outside="showImprimirMenu=false">
       <button title="Imprimir" @click="showImprimirMenu=!showImprimirMenu"
-              :style="showImprimirMenu ? 'background:#1e1e2a;color:#a0a0b8;' : 'background:transparent;color:#555;'"
-              style="width:32px;height:32px;border-radius:8px;border:none;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:.15s;"
-              @mouseenter="if(!showImprimirMenu) $el.style.cssText+=';background:#1e1e2a;color:#a0a0b8;'"
-              @mouseleave="if(!showImprimirMenu) $el.style.cssText+=';background:transparent;color:#555;'">
+              :class="showImprimirMenu ? 'topbar-icon-btn topbar-icon-btn--active' : 'topbar-icon-btn'">
         <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"/></svg>
       </button>
       <div x-show="showImprimirMenu" x-cloak x-transition.opacity.duration.120ms class="print-backdrop" @click="showImprimirMenu=false"></div>
@@ -614,9 +652,9 @@
     <div style="width:1px;height:28px;background:#1e1e30;margin:0 4px;"></div>
 
     <!-- Filial -->
-    <div style="display:flex;align-items:center;gap:6px;padding:6px 12px;background:#13131e;border:1px solid #1e1e30;border-radius:8px;cursor:pointer;">
-      <span style="font-size:12px;font-weight:500;color:#a0a0b8;max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">{{ filial_ativa.nome_fantasia|default:filial_ativa.razao_social }}</span>
-      <svg width="12" height="12" fill="none" stroke="#555" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
+    <div class="topbar-chip" style="cursor:pointer;">
+      <span style="font-size:12px;font-weight:500;color:var(--pdv-t2);max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">{{ filial_ativa.nome_fantasia|default:filial_ativa.razao_social }}</span>
+      <svg width="12" height="12" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
     </div>
 
     <!-- Theme toggle -->
@@ -635,7 +673,7 @@
       <!-- Ler código de barras -->
       <div style="padding:11px 12px 7px;border-bottom:1px solid #1a1a28;">
         <div style="position:relative;display:flex;align-items:center;">
-          <div style="position:absolute;left:7px;width:26px;height:26px;border-radius:6px;background:#1a1a30;border:1px solid #2a2a4e;display:flex;align-items:center;justify-content:center;pointer-events:none;">
+          <div class="barcode-icon-wrap">
             <svg width="14" height="14" fill="none" stroke="#f15a24" stroke-width="1.5" viewBox="0 0 24 24"><path d="M3 5h2M7 5h1M3 9h1M7 9h2M3 13h1M7 13h1M3 17h2M7 17h1M13 5h1M17 5h2M13 9h2M17 9h1M13 13h1M17 13h2M13 17h1M17 17h2M11 5v14M21 5v14"/></svg>
           </div>
           <input x-ref="barcodeInput" id="barcode-input" type="text" x-model="barcodeQuery"
@@ -643,8 +681,7 @@
                  @keydown.escape="barcodeQuery=''"
                  placeholder="Ler Código de Barras"
                  autocomplete="off" inputmode="numeric"
-                 style="width:100%;padding:9px 46px 9px 42px;background:#13131e;border:1px solid #2a2a42;border-radius:9px;color:#e5e5f0;font-size:13px;font-weight:600;outline:none;transition:.15s;letter-spacing:.03em;"
-                 onfocus="this.style.borderColor='#f15a24'" onblur="this.style.borderColor='#2a2a42'">
+                 class="barcode-input">
           <kbd style="position:absolute;right:8px;font-size:10px;font-family:ui-monospace,monospace;padding:3px 7px;background:#0a0a12;border:1px solid #2a2a42;border-bottom:2px solid #2a2a42;border-radius:5px;color:#f15a24;font-weight:700;letter-spacing:.05em;pointer-events:none;">F2</kbd>
         </div>
       </div>
@@ -659,8 +696,7 @@
                  @keydown.escape="buscaQuery='';produtos=[];"
                  placeholder="Buscar produto ou serviço..."
                  autocomplete="off"
-                 style="width:100%;padding:8px 10px 8px 32px;background:#13131e;border:1px solid #1e1e30;border-radius:8px;color:#e5e5f0;font-size:13px;outline:none;transition:.15s;"
-                 onfocus="this.style.borderColor='#f15a24'" onblur="this.style.borderColor='#1e1e30'">
+                 class="input-pdv" style="padding:8px 10px 8px 32px;">
         </div>
       </div>
 
@@ -731,15 +767,11 @@
 
       <!-- Ações inferiores -->
       <div style="border-top:1px solid #1a1a28;">
-        <button @click="buscaAvancada()"
-                style="display:flex;align-items:center;gap:8px;padding:11px 16px;width:100%;background:transparent;border:none;color:#666;font-size:12px;font-weight:500;cursor:pointer;transition:.15s;border-bottom:1px solid #1a1a28;"
-                onmouseover="this.style.background='#13131e';this.style.color='#a0a0b8'" onmouseout="this.style.background='transparent';this.style.color='#666'">
+        <button @click="buscaAvancada()" class="cat-action-btn" style="border-bottom:1px solid var(--pdv-bd2);">
           <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
           Busca Avançada (Shift + F2)
         </button>
-        <button @click="abrirHistorico()"
-                style="display:flex;align-items:center;gap:8px;padding:11px 16px;width:100%;background:transparent;border:none;color:#666;font-size:12px;font-weight:500;cursor:pointer;transition:.15s;"
-                onmouseover="this.style.background='#13131e';this.style.color='#a0a0b8'" onmouseout="this.style.background='transparent';this.style.color='#666'">
+        <button @click="abrirHistorico()" class="cat-action-btn">
           <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
           Histórico de compras (F7)
         </button>
@@ -1127,9 +1159,7 @@
           </button>
           <div style="display:flex;gap:8px;">
             <button @click="salvarPendente()" x-show="modo!=='orcamento'"
-                    class="btn-rodape"
-                    style="background:#13131e;border:1px solid #2a2a3e;color:#a0a0b8;"
-                    onmouseover="this.style.background='#1a1a28';this.style.color='#e5e5f0'" onmouseout="this.style.background='#13131e';this.style.color='#a0a0b8'">
+                    class="btn-rodape btn-rodape-secondary">
               <svg width="13" height="13" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7M5 19h14"/></svg>
               Salvar Pendente (F8)
             </button>
