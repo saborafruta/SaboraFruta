@@ -132,6 +132,17 @@
   .mode-btn.act-delivery { background:linear-gradient(135deg,#ea580c,#f97316); color:#fff; box-shadow:0 2px 10px rgba(234,88,12,.45); }
   .mode-btn.act-orcamento { background:linear-gradient(135deg,#a16207,#ca8a04); color:#fff; box-shadow:0 2px 10px rgba(161,98,7,.45); }
 
+  /* Cards de produto no catálogo */
+  .prod-card {
+    display:flex;align-items:center;gap:10px;padding:10px 12px;
+    background:var(--pdv-card);border:1px solid var(--pdv-bd2);
+    border-radius:10px;text-align:left;cursor:pointer;width:100%;
+    transition:.15s;margin-bottom:4px;
+  }
+  .prod-card:hover { border-color:#f15a24; background:var(--pdv-hover); }
+  .prod-card-nome { font-size:13px;font-weight:500;color:var(--pdv-t5);white-space:nowrap;overflow:hidden;text-overflow:ellipsis; }
+  .prod-card-preco { font-size:13px;font-weight:700;color:#f97316;margin-top:2px; }
+
   /* Tabs do catálogo */
   .cat-tabs { display:flex; gap:3px; background:var(--pdv-bg); border:1px solid var(--pdv-hover); border-radius:10px; padding:4px; }
   .cat-tab { flex:1 1 0; min-width:0; padding:7px 4px; border-radius:7px; font-size:11.5px;
@@ -662,15 +673,13 @@
         <template x-if="produtos.length > 0">
           <div style="display:flex;flex-direction:column;gap:4px;padding-bottom:8px;">
             <template x-for="p in produtos" :key="p.id">
-              <button @click="adicionarItem(p)"
-                      style="display:flex;align-items:center;gap:10px;padding:10px 12px;background:#13131e;border:1px solid #1e1e30;border-radius:10px;text-align:left;cursor:pointer;width:100%;transition:.15s;"
-                      onmouseover="this.style.borderColor='#f15a24';this.style.background='#16162a'" onmouseout="this.style.borderColor='#1e1e30';this.style.background='#13131e'">
+              <button @click="adicionarItem(p)" class="prod-card">
                 <div style="width:34px;height:34px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0;"
                      :style="p.cor ? `background:${p.cor}22;border:1px solid ${p.cor}44` : 'background:#1e1e2a;border:1px solid #2a2a3e;'"
                      x-text="p.icone || '📦'"></div>
                 <div style="flex:1;min-width:0;">
-                  <div style="font-size:13px;font-weight:500;color:#e5e5f0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;" x-text="p.descricao"></div>
-                  <div style="font-size:13px;font-weight:700;color:#f97316;margin-top:2px;" x-text="'R$ ' + fmt(p.preco)"></div>
+                  <div class="prod-card-nome" x-text="p.descricao"></div>
+                  <div class="prod-card-preco" x-text="'R$ ' + fmt(p.preco)"></div>
                 </div>
               </button>
             </template>
@@ -688,15 +697,13 @@
               <p style="color:#333;font-size:12px;text-align:center;padding:24px 0;">Nenhum produto cadastrado</p>
             </template>
             <template x-for="p in topProdutos" :key="p.id">
-              <button @click="adicionarItem(p)"
-                      style="display:flex;align-items:center;gap:10px;padding:10px 12px;background:#13131e;border:1px solid #1e1e30;border-radius:10px;text-align:left;cursor:pointer;width:100%;margin-bottom:4px;transition:.15s;"
-                      onmouseover="this.style.borderColor='#f15a24';this.style.background='#16162a'" onmouseout="this.style.borderColor='#1e1e30';this.style.background='#13131e'">
+              <button @click="adicionarItem(p)" class="prod-card">
                 <div style="width:34px;height:34px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0;"
                      :style="p.cor ? `background:${p.cor}22;border:1px solid ${p.cor}44` : 'background:#1e1e2a;border:1px solid #2a2a3e;'"
                      x-text="p.icone || '📦'"></div>
                 <div style="flex:1;min-width:0;">
-                  <div style="font-size:13px;font-weight:500;color:#c0c0d8;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;" x-text="p.descricao"></div>
-                  <div style="font-size:13px;font-weight:700;color:#f97316;margin-top:2px;" x-text="'R$ ' + fmt(p.preco)"></div>
+                  <div class="prod-card-nome" x-text="p.descricao"></div>
+                  <div class="prod-card-preco" x-text="'R$ ' + fmt(p.preco)"></div>
                 </div>
               </button>
             </template>
