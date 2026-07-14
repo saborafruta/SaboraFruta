@@ -2,6 +2,13 @@
 Construtor de payload NFC-e / NF-e para Focus NFe — Fase 2 (PDV).
 
 Constrói o dicionário JSON pronto para envio via FocusNFeService.emitir().
+Formato baseado na API v2 Focus NFe (https://doc.focusnfe.com.br/reference/emitir_nfce.md).
+
+Campos-chave da v2 NFC-e:
+  - cnpj_emitente  → topo (não aninhado em emitente:{})
+  - formas_pagamento → (não pagamentos!)
+  - local_destino   → obrigatório
+  - destinatário    → campos individuais no topo
 
 Regra GTIN (SEFAZ NT 2011/004):
   - Produto COM código de barras  → codigo_ean / codigo_ean_tributavel = EAN
@@ -54,12 +61,8 @@ def _codigo_ean(produto) -> str:
 
 def _cfop_item(produto, filial) -> str:
     """Resolve CFOP de venda. Prioriza dado do produto; fallback para 5102/5405."""
-    filial_uf = (filial.uf or "").upper()
-    produto_uf = ""
-    # Tenta ler UF da filial do produto (campo direto não existe, usa filial)
     cfop = produto.cfop_venda_interna or ""
     if not cfop:
-        # fallback genérico — venda interna de mercadoria
         cfop = "5102"
     return cfop
 
@@ -78,80 +81,26 @@ def _regime_tributario_cod(filial) -> int:
     return 1  # default: Simples Nacional
 
 
-def _cst_icms_efetivo(produto, filial) -> str:
-    """CST ICMS/CSOSN efetivo para o item."""
-    # Se tem cst_csosn no produto, usa ele
-    cst = (produto.cst_csosn or "").strip()
-    if cst:
-        return cst
-    regime = _regime_tributario_cod(filial)
-    if regime == 1:
-        return "102"   # SN - tributado sem permissão de crédito (venda)
-    return "00"        # Normal tributado integralmente
-
-
-def _montar_icms_sn(produto, filial, valor_total: Decimal) -> dict:
-    """ICMS Simples Nacional (CSOSN 102/400/etc.)."""
-    csosn = _cst_icms_efetivo(produto, filial)
-    return {
-        "csosn_icms": csosn,
-        "origem_mercadoria": str(int(getattr(produto, "origem_produto", 0))),
-    }
-
-
-def _montar_icms_normal(produto, filial, valor_total: Decimal) -> dict:
-    """ICMS regime normal."""
-    cst = _cst_icms_efetivo(produto, filial)
-    return {
-        "cst_icms": cst,
-        "origem_mercadoria": str(int(getattr(produto, "origem_produto", 0))),
-        "modalidade_determinacao_bc_icms": "3",   # valor da operação
-        "valor_base_calculo_icms": float(valor_total),
-        "aliquota_icms": float(getattr(produto, "aliquota_icms", 0) or 0),
-        "valor_icms": 0.00,
-    }
-
-
-def _montar_pis(produto, valor_total: Decimal) -> dict:
-    cst_pis = (getattr(produto, "cst_pis", "") or "07").strip() or "07"
-    return {
-        "cst_pis": cst_pis,
-        "valor_base_calculo_pis": 0.00,
-        "aliquota_pis_percentual": 0.00,
-        "valor_pis": 0.00,
-    }
-
-
-def _montar_cofins(produto, valor_total: Decimal) -> dict:
-    cst_cofins = (getattr(produto, "cst_cofins", "") or "07").strip() or "07"
-    return {
-        "cst_cofins": cst_cofins,
-        "valor_base_calculo_cofins": 0.00,
-        "aliquota_cofins_percentual": 0.00,
-        "valor_cofins": 0.00,
-    }
-
-
 def _montar_item(numero: int, item_venda, filial) -> dict:
-    """Monta o dicionário de um item no payload FocusNFe."""
+    """
+    Monta o dicionário de um item no payload FocusNFe (formato v2, campos flat).
+
+    ICMS Simples Nacional: icms_csosn + icms_origem (flat, sem objeto aninhado)
+    ICMS Normal:           icms_cst + icms_origem + campos de base/alíquota/valor
+    PIS/COFINS:            campos flat icms_situacao_tributaria / cofins_*
+    """
     produto = item_venda.produto
     quantidade = float(item_venda.quantidade)
     valor_unitario = float(item_venda.valor_unitario)
     valor_bruto = float(item_venda.quantidade * item_venda.valor_unitario)
-    valor_total = item_venda.valor_total
+    valor_total = float(item_venda.valor_total)
     unidade = item_venda.unidade_medida or (
         produto.unidade_medida.sigla if produto.unidade_medida_id else "UN"
     )
     descricao = (produto.descricao_pdv or produto.descricao or "")[:120]
     ncm = (produto.ncm or "").replace(".", "").strip()
     cfop = _cfop_item(produto, filial)
-    ean = _codigo_ean(produto)  # ← "SEM GTIN" quando sem código de barras
-
-    regime = _regime_tributario_cod(filial)
-    if regime == 1:
-        icms_bloco = _montar_icms_sn(produto, filial, valor_total)
-    else:
-        icms_bloco = _montar_icms_normal(produto, filial, valor_total)
+    ean = _codigo_ean(produto)
 
     item: Dict[str, Any] = {
         "numero_item": numero,
@@ -163,19 +112,47 @@ def _montar_item(numero: int, item_venda, filial) -> dict:
         "quantidade_comercial": quantidade,
         "valor_unitario_comercial": valor_unitario,
         "valor_bruto": valor_bruto,
-        "valor_total": float(valor_total),
-        # ─── GTIN (cEAN / cEANTrib) ───────────────────────────────────────
+        "valor_total": valor_total,
+        # ─── GTIN (cEAN / cEANTrib) ─────────────────────────────────────────
         "codigo_ean": ean,
         "codigo_ean_tributavel": ean,
-        # ──────────────────────────────────────────────────────────────────
+        # ────────────────────────────────────────────────────────────────────
         "unidade_tributavel": unidade,
         "quantidade_tributavel": quantidade,
         "valor_unitario_tributavel": valor_unitario,
         "inclui_no_total": "1",
-        "icms": icms_bloco,
-        "pis": _montar_pis(produto, valor_total),
-        "cofins": _montar_cofins(produto, valor_total),
     }
+
+    origem = str(int(getattr(produto, "origem_produto", 0) or 0))
+
+    regime = _regime_tributario_cod(filial)
+    if regime == 1:
+        # Simples Nacional — campos flat
+        csosn = (getattr(produto, "cst_csosn", "") or "").strip() or "400"
+        item["icms_csosn"] = csosn
+        item["icms_origem"] = origem
+    else:
+        # Regime Normal — campos flat
+        cst = (getattr(produto, "cst_csosn", "") or "00").strip()
+        item["icms_cst"] = cst
+        item["icms_origem"] = origem
+        item["icms_modalidade_base_calculo"] = "3"
+        item["icms_base_calculo"] = valor_total
+        item["icms_aliquota"] = float(getattr(produto, "aliquota_icms", 0) or 0)
+        item["icms_valor"] = 0.0
+
+    # PIS / COFINS (flat)
+    cst_pis = (getattr(produto, "cst_pis", "") or "07").strip() or "07"
+    item["pis_situacao_tributaria"] = cst_pis
+    item["pis_base_calculo"] = 0.0
+    item["pis_aliquota_percentual"] = 0.0
+    item["pis_valor"] = 0.0
+
+    cst_cofins = (getattr(produto, "cst_cofins", "") or "07").strip() or "07"
+    item["cofins_situacao_tributaria"] = cst_cofins
+    item["cofins_base_calculo"] = 0.0
+    item["cofins_aliquota_percentual"] = 0.0
+    item["cofins_valor"] = 0.0
 
     # CEST — campo opcional
     cest = (getattr(produto, "cest", "") or "").strip()
@@ -185,72 +162,34 @@ def _montar_item(numero: int, item_venda, filial) -> dict:
     return item
 
 
-def _montar_pagamentos(pagamentos_qs) -> list:
-    """Converte os pagamentos da venda no formato FocusNFe."""
+def _montar_formas_pagamento(pagamentos_qs) -> list:
+    """Converte os pagamentos da venda no formato FocusNFe v2 (array formas_pagamento)."""
     pgtos = []
     for pgto in pagamentos_qs:
-        # FormaPagamento.tipo usa os values de TipoFormaPagamento (ex: "dinheiro", "pix")
         tipo = (pgto.forma_pagamento.tipo or "").lower().strip()
         codigo = _FORMA_PGTO_FOCO.get(tipo, "99")
         pgtos.append({
             "forma_pagamento": codigo,
             "valor_pagamento": float(pgto.valor),
         })
-    return pgtos or [{"forma_pagamento": "99", "valor_pagamento": 0.00}]
-
-
-def _montar_emitente(filial) -> dict:
-    return {
-        "cnpj": filial.cnpj,
-        "nome": filial.razao_social,
-        "nome_fantasia": filial.nome_fantasia or filial.razao_social,
-        "logradouro": filial.endereco or "",
-        "numero": filial.numero or "S/N",
-        "complemento": filial.complemento or "",
-        "bairro": filial.bairro or "",
-        "municipio": filial.cidade or "",
-        "uf": filial.uf or "",
-        "cep": filial.cep or "",
-        "codigo_pais": "1058",
-        "pais": "Brasil",
-        "telefone": (filial.telefone or "").replace(" ", "").replace("-", "").replace("(", "").replace(")", ""),
-        "ie": filial.inscricao_estadual or "",
-        "regime_tributario": str(_regime_tributario_cod(filial)),
-    }
-
-
-def _montar_destinatario(cliente) -> Optional[dict]:
-    """Destinatário. Retorna None para Consumidor Final sem identificação."""
-    if not cliente:
-        return None
-    cpf_cnpj = (cliente.cpf_cnpj or "").replace(".", "").replace("-", "").replace("/", "").strip()
-    if not cpf_cnpj:
-        return None
-    dest: Dict[str, Any] = {
-        "nome": cliente.razao_social or "Consumidor Final",
-        "email": cliente.email or "",
-        "telefone": (cliente.celular or cliente.telefone or "").replace(" ", "").replace("-", "").replace("(", "").replace(")", ""),
-    }
-    if len(cpf_cnpj) == 11:
-        dest["cpf"] = cpf_cnpj
-    elif len(cpf_cnpj) == 14:
-        dest["cnpj"] = cpf_cnpj
-    return dest
+    return pgtos or [{"forma_pagamento": "99", "valor_pagamento": 0.0}]
 
 
 class NfcePayloadBuilder:
     """
     Constrói o payload JSON de NFC-e (Nota Fiscal de Consumidor Eletrônica)
-    para envio via Focus NFe a partir de uma VendaPDV finalizada.
+    para envio via Focus NFe v2 a partir de uma VendaPDV finalizada.
+
+    Formato v2:
+    - cnpj_emitente no topo (não aninhado)
+    - formas_pagamento (não pagamentos)
+    - local_destino obrigatório
+    - destinatario: campos no topo (nome_destinatario, cpf_destinatario, cnpj_destinatario)
+    - itens: campos ICMS/PIS/COFINS flat (sem objetos aninhados)
     """
 
     @classmethod
     def build(cls, venda: VendaPDV) -> Dict[str, Any]:
-        """
-        Retorna o dicionário pronto para FocusNFeService.emitir().
-
-        Produtos SEM codigo_barras → codigo_ean = "SEM GTIN" (exigência SEFAZ).
-        """
         filial = venda.filial
         cliente = venda.cliente
 
@@ -271,36 +210,38 @@ class NfcePayloadBuilder:
             for idx, item in enumerate(itens_qs)
         ]
 
-        from apps.core.models.parametros import ParametrosSistema
-        params = ParametrosSistema.objects.filter(filial=filial).first()
+        cnpj = (filial.cnpj or "").replace(".", "").replace("/", "").replace("-", "")
 
         payload: Dict[str, Any] = {
-            "natureza_operacao": "Venda ao Consumidor",
-            "forma_pagamento": 0,          # 0=à vista
+            # ── Identificação do emitente (topo, formato v2) ────────────────
+            "cnpj_emitente": cnpj,
+            # ── Dados da nota ───────────────────────────────────────────────
+            "natureza_operacao": "VENDA AO CONSUMIDOR",
             "numero": venda.numero_venda,
             "serie": str(filial.serie_nfce or 1),
             "data_emissao": data_emissao,
-            "data_entrada_saida": data_emissao,
-            "tipo_documento": 1,           # 1=saída
-            "finalidade_emissao": 1,       # 1=NF-e normal
-            "consumidor_final": 1,
-            "presenca_comprador": 1,       # 1=operação presencial
-            "emitente": _montar_emitente(filial),
+            # ── Campos obrigatórios NFC-e v2 ────────────────────────────────
+            "local_destino": "1",         # 1=operação interna (sempre para PDV)
+            "presenca_comprador": "1",    # 1=presencial
+            "modalidade_frete": "9",      # 9=sem frete
+            # ── Itens e pagamentos ──────────────────────────────────────────
             "items": items,
-            "pagamentos": _montar_pagamentos(pagamentos_qs),
+            "formas_pagamento": _montar_formas_pagamento(pagamentos_qs),
+            # ── Totais ──────────────────────────────────────────────────────
             "valor_produtos": float(venda.valor_subtotal or 0),
             "valor_desconto": float(venda.valor_desconto or 0),
             "valor_total": float(venda.valor_total),
-            "modalidade_frete": 9,         # 9=sem frete
         }
 
-        if params and params.nfce_csc_id and params.nfce_csc_token:
-            payload["csc_id"] = params.nfce_csc_id
-            payload["csc_token"] = params.nfce_csc_token
-
-        destinatario = _montar_destinatario(cliente)
-        if destinatario:
-            payload["destinatario"] = destinatario
+        # Destinatário: campos no topo (formato v2)
+        if cliente:
+            cpf_cnpj = (cliente.cpf_cnpj or "").replace(".", "").replace("-", "").replace("/", "").strip()
+            if cpf_cnpj:
+                payload["nome_destinatario"] = cliente.razao_social or "Consumidor Final"
+                if len(cpf_cnpj) == 11:
+                    payload["cpf_destinatario"] = cpf_cnpj
+                elif len(cpf_cnpj) == 14:
+                    payload["cnpj_destinatario"] = cpf_cnpj
 
         return payload
 
@@ -309,8 +250,6 @@ class NfePayloadBuilder:
     """
     Constrói o payload JSON de NF-e (Nota Fiscal Eletrônica)
     para envio via Focus NFe a partir de uma VendaPDV finalizada.
-
-    Produtos SEM codigo_barras → codigo_ean = "SEM GTIN" (exigência SEFAZ).
     """
 
     @classmethod
@@ -335,29 +274,36 @@ class NfePayloadBuilder:
             for idx, item in enumerate(itens_qs)
         ]
 
+        cnpj = (filial.cnpj or "").replace(".", "").replace("/", "").replace("-", "")
+
         payload: Dict[str, Any] = {
-            "natureza_operacao": "Venda de mercadorias",
-            "forma_pagamento": 0,
+            "cnpj_emitente": cnpj,
+            "natureza_operacao": "VENDA DE MERCADORIAS",
             "numero": numero_nfe,
             "serie": str(serie_nfe),
             "data_emissao": data_emissao,
             "data_entrada_saida": data_emissao,
-            "tipo_documento": 1,
-            "finalidade_emissao": 1,
-            "consumidor_final": 1,
-            "presenca_comprador": 1,
-            "emitente": _montar_emitente(filial),
+            "tipo_documento": "1",
+            "finalidade_emissao": "1",
+            "consumidor_final": "1",
+            "presenca_comprador": "1",
+            "local_destino": "1",
+            "modalidade_frete": "9",
             "items": items,
-            "pagamentos": _montar_pagamentos(pagamentos_qs),
+            "formas_pagamento": _montar_formas_pagamento(pagamentos_qs),
             "valor_produtos": float(venda.valor_subtotal or 0),
             "valor_desconto": float(venda.valor_desconto or 0),
             "valor_total": float(venda.valor_total),
-            "modalidade_frete": 9,
         }
 
-        destinatario = _montar_destinatario(cliente)
-        if destinatario:
-            payload["destinatario"] = destinatario
+        if cliente:
+            cpf_cnpj = (cliente.cpf_cnpj or "").replace(".", "").replace("-", "").replace("/", "").strip()
+            if cpf_cnpj:
+                payload["nome_destinatario"] = cliente.razao_social or "Consumidor Final"
+                if len(cpf_cnpj) == 11:
+                    payload["cpf_destinatario"] = cpf_cnpj
+                elif len(cpf_cnpj) == 14:
+                    payload["cnpj_destinatario"] = cpf_cnpj
 
         return payload
 
@@ -367,6 +313,8 @@ def emitir_nfce_para_venda(venda: VendaPDV, usuario) -> DocumentoFiscal:
     """
     Wrapper de alto nível: constrói payload NFC-e, cria DocumentoFiscal e dispara emissão.
     Retorna o DocumentoFiscal criado/atualizado.
+
+    NFC-e é SÍNCRONA na Focus NFe: o retorno já tem o status final (autorizado/erro).
     """
     from apps.fiscal.services.focusnfe_service import FocusNFeService
     from apps.fiscal.integrations.focusnfe import FocusNFeClient

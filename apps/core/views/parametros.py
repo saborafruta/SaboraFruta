@@ -1,6 +1,11 @@
 """System parameters screen: identity, contacts and fiscal setup."""
+import json
+
 from django.contrib import messages
+from django.http import JsonResponse
 from django.shortcuts import redirect, render
+from django.views.decorators.csrf import csrf_exempt
+from django.views.decorators.http import require_POST
 
 from apps.core.forms.parametros import FilialIdentidadeForm, ParametrosSistemaForm
 from apps.core.models.parametros import ParametroDocumentoFiscal, ParametrosSistema
@@ -220,3 +225,30 @@ def parametros_sistema(request):
         'modalidade_frete_choices': MODALIDADE_FRETE_CHOICES,
         'prontidao': _prontidao_fiscal(filial, params, documentos),
     })
+
+
+@admin_area_required
+@require_POST
+def api_sincronizar_focus(request):
+    """
+    POST /gestao/parametros/sincronizar-focus/
+    Envia os dados da empresa (certificado A1, CSC, regime) para a Focus NFe.
+    Retorna JSON: {"ok": true} ou {"ok": false, "erro": "..."}
+    """
+    filial = getattr(request, 'filial_ativa', None)
+    if filial is None:
+        return JsonResponse({"ok": False, "erro": "Nenhuma filial ativa selecionada."}, status=400)
+
+    params, _ = ParametrosSistema.objects.get_or_create(filial=filial)
+
+    try:
+        from apps.fiscal.services.focusnfe_service import FocusNFeService
+        service = FocusNFeService()
+        retorno = service.sincronizar_empresa(filial, params)
+        return JsonResponse({"ok": True, "retorno": retorno or {}})
+    except ValueError as exc:
+        return JsonResponse({"ok": False, "erro": str(exc)}, status=400)
+    except Exception as exc:
+        import logging
+        logging.getLogger(__name__).exception("Erro ao sincronizar empresa Focus NFe")
+        return JsonResponse({"ok": False, "erro": str(exc)}, status=500)

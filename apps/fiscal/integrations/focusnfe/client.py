@@ -36,6 +36,7 @@ from .resources.consultas import (
     CNPJResource,
     MunicipiosResource,
 )
+from .resources.empresas import EmpresasResource
 
 
 class _ConsultasNamespace:
@@ -113,6 +114,9 @@ class FocusNFeClient:
         self.cnaes = CNAEResource(self.http)
         self.cnpjs = CNPJResource(self.http)
         self.municipios = MunicipiosResource(self.http)
+
+        # Gestão de empresas Focus (certificado, CSC, regime, etc.)
+        self.empresas = EmpresasResource(self.http)
 
         # Namespace agrupado
         self.consultas = _ConsultasNamespace(self.http)

@@ -297,3 +297,102 @@ class FocusNFeService:
         if not hasattr(resource, "baixar_xml"):
             raise ValueError(f"{documento.tipo_documento} não suporta download de XML.")
         return resource.baixar_xml(gerar_ref(documento))
+
+    # ----------------------------------------- cadastro de empresa na Focus
+    def sincronizar_empresa(self, filial, params) -> Dict[str, Any]:
+        """
+        Envia/atualiza os dados da empresa (filial) na Focus NFe, incluindo:
+          - certificado digital A1 (base64)
+          - senha do certificado
+          - CSC NFC-e (produção e homologação)
+          - regime tributário e endereço
+
+        `filial` — instância de Filial (com cnpj, nome, endereço, regime, token)
+        `params` — instância de ParametrosSistema (com certificado, senha, csc)
+
+        Faz upsert: cria se não existir, atualiza se já cadastrado.
+        Retorna o dict retornado pela Focus.
+        """
+        import base64
+        import os
+
+        cnpj = (filial.cnpj or "").replace(".", "").replace("/", "").replace("-", "").strip()
+        if not cnpj or len(cnpj) != 14:
+            raise ValueError("CNPJ da filial inválido ou não preenchido.")
+
+        if not filial.focusnfe_token:
+            raise ValueError("Token Focus não configurado para esta filial.")
+
+        # --- Certificado digital -------------------------------------------
+        cert_b64: Optional[str] = None
+        if params.certificado_digital and params.certificado_digital.name:
+            try:
+                params.certificado_digital.open("rb")
+                cert_bytes = params.certificado_digital.read()
+                params.certificado_digital.close()
+                cert_b64 = base64.b64encode(cert_bytes).decode("ascii")
+            except Exception as exc:
+                raise ValueError(f"Não foi possível ler o certificado digital: {exc}") from exc
+
+        # --- Monta payload base -------------------------------------------
+        payload: Dict[str, Any] = {
+            "cnpj": cnpj,
+            "nome": filial.razao_social or filial.nome_fantasia or cnpj,
+            "inscricao_estadual": (filial.inscricao_estadual or "").strip() or "ISENTO",
+            "habilita_nfce": True,
+            "habilita_nfe": True,
+        }
+
+        # Regime tributário (1=SN, 2=SN excesso, 3=Normal)
+        regime = (
+            filial.codigo_regime_tributario
+            or getattr(getattr(filial, "empresa", None), "codigo_regime_tributario", None)
+        )
+        if regime:
+            try:
+                payload["regime_tributario"] = int(regime)
+            except (TypeError, ValueError):
+                pass
+
+        # Endereço
+        if filial.endereco:
+            payload["logradouro"] = filial.endereco
+        if filial.numero:
+            payload["numero"] = filial.numero
+        if filial.complemento:
+            payload["complemento"] = filial.complemento
+        if filial.bairro:
+            payload["bairro"] = filial.bairro
+        if filial.cep:
+            payload["cep"] = (filial.cep or "").replace("-", "").strip()
+        if filial.cidade:
+            payload["municipio"] = filial.cidade
+        if filial.uf:
+            payload["uf"] = filial.uf
+
+        # Certificado
+        if cert_b64:
+            payload["arquivo_certificado_base64"] = cert_b64
+        senha = (params.senha_certificado or "").strip()
+        if senha:
+            payload["senha_certificado"] = senha
+
+        # CSC (Código de Segurança do Contribuinte) — necessário para NFC-e
+        ambiente = getattr(filial, "focusnfe_ambiente", 2)  # 1=prod, 2=homolog
+        csc_token = (params.nfce_csc_token or "").strip()
+        csc_id = (params.nfce_csc_id or "").strip()
+        if csc_token and csc_id:
+            if ambiente == 1:
+                payload["csc_nfce_producao"] = csc_token
+                payload["id_token_nfce_producao"] = csc_id
+            else:
+                payload["csc_nfce_homologacao"] = csc_token
+                payload["id_token_nfce_homologacao"] = csc_id
+
+        # Usa o token específico da filial
+        from apps.fiscal.integrations.focusnfe import FocusNFeClient
+        from apps.fiscal.integrations.focusnfe.config import FocusNFeConfig
+        config = FocusNFeConfig.from_env(token=filial.focusnfe_token, ambiente=ambiente)
+        client = FocusNFeClient(config=config)
+
+        return client.empresas.upsert(cnpj, payload)
