@@ -70,7 +70,8 @@ def historico_vendas(request):
         VendaPDV.objects
         .for_filial(request.filial_ativa)
         .filter(status__in=['finalizada', 'cancelada'])
-        .select_related('cliente', 'documento_fiscal')
+        .select_related('cliente', 'documento_fiscal', 'filial')
+        .prefetch_related('pagamentos__forma_pagamento')
         .order_by('-data_venda')
     )
 

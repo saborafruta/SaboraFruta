@@ -1928,3 +1928,89 @@ def api_orcamento_retomar(request, pk):
         "acrescimo": float(venda.valor_acrescimo or 0),
         "itens": itens,
     })
+
+
+# ---------------------------------------------------------------------------
+# API — Enviar NFC-e por e-mail
+# ---------------------------------------------------------------------------
+
+@requer_permissao('pdv', 'ver')
+@require_POST
+def api_email_nfce(request, pk):
+    """Envia o documento fiscal (NFC-e/NF-e) por e-mail via Focus NFe."""
+    import json as _json
+    try:
+        body = _json.loads(request.body)
+    except Exception:
+        body = {}
+
+    emails = body.get('emails', [])
+    if not emails:
+        return JsonResponse({"erro": "Informe ao menos um e-mail."}, status=400)
+
+    try:
+        venda = (
+            VendaPDV.objects.for_filial(request.filial_ativa)
+            .select_related('documento_fiscal')
+            .get(pk=pk)
+        )
+    except VendaPDV.DoesNotExist:
+        return JsonResponse({"erro": "Venda não encontrada."}, status=404)
+
+    doc = venda.documento_fiscal
+    if not doc:
+        return JsonResponse({"erro": "Esta venda não possui documento fiscal."}, status=400)
+    if doc.status != "autorizada":
+        return JsonResponse({"erro": "Só é possível enviar e-mail de documentos autorizados."}, status=400)
+
+    try:
+        from apps.fiscal.services.focusnfe_service import FocusNFeService, gerar_ref
+        from apps.fiscal.integrations.focusnfe import FocusNFeClient
+        from apps.fiscal.integrations.focusnfe.config import FocusNFeConfig
+
+        filial = venda.filial_ativa if hasattr(venda, 'filial_ativa') else request.filial_ativa
+        filial_token = getattr(filial, 'focusnfe_token', '') or ''
+        filial_ambiente = getattr(filial, 'focusnfe_ambiente', None)
+        if filial_token:
+            config = FocusNFeConfig.from_env(token=filial_token, ambiente=filial_ambiente)
+            client = FocusNFeClient(config=config)
+        else:
+            client = FocusNFeClient()
+
+        resource_map = {"nfce": client.nfce, "nfe": client.nfe}
+        resource = resource_map.get(doc.tipo_documento)
+        if not resource:
+            return JsonResponse({"erro": f"Tipo de documento '{doc.tipo_documento}' não suportado."}, status=400)
+
+        ref = gerar_ref(doc)
+        resource.enviar_email(ref, emails)
+        return JsonResponse({"ok": True})
+    except Exception as exc:
+        return JsonResponse({"erro": str(exc)}, status=500)
+
+# ---------------------------------------------------------------------------
+# API — Download XML NFC-e/NF-e
+# ---------------------------------------------------------------------------
+
+from django.http import HttpResponse as _HttpResponse
+
+@requer_permissao('pdv', 'ver')
+def api_xml_nfce(request, pk):
+    """Retorna o XML assinado da NFC-e/NF-e para download."""
+    try:
+        venda = (
+            VendaPDV.objects.for_filial(request.filial_ativa)
+            .select_related('documento_fiscal')
+            .get(pk=pk)
+        )
+    except VendaPDV.DoesNotExist:
+        return JsonResponse({"erro": "Venda não encontrada."}, status=404)
+
+    doc = venda.documento_fiscal
+    if not doc or not doc.xml_assinado:
+        return JsonResponse({"erro": "XML não disponível para esta venda."}, status=404)
+
+    resp = _HttpResponse(doc.xml_assinado, content_type='application/xml; charset=utf-8')
+    fname = f"{doc.tipo_documento.upper()}_{doc.numero:09d}_{doc.serie}.xml"
+    resp['Content-Disposition'] = f'attachment; filename="{fname}"'
+    return resp

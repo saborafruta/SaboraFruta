@@ -68,56 +68,57 @@ body.tema-claro .hv-th { background:#f9fafb;color:#6b7280;border-color:#e5e7eb; 
 .hv-tr:last-child { border-bottom:none; }
 .hv-tr:hover { background:#0f0f1a; }
 body.tema-claro .hv-tr:hover { background:#f9fafb; }
-.hv-tr.cancelada { opacity:.6; }
+.hv-tr.cancelada { opacity:.65; }
 
 .hv-td { padding:10px 14px;font-size:13px;color:#c0c0d8;vertical-align:middle;background:#13131e; }
 body.tema-claro .hv-td { color:#374151;background:#fff; }
 .hv-tr.cancelada .hv-td { background:#100808; }
 body.tema-claro .hv-tr.cancelada .hv-td { background:#fef2f2; }
 
-/* ── Badges ── */
-.hv-badge {
-  display:inline-flex;align-items:center;gap:4px;
-  font-size:10px;font-weight:700;padding:3px 8px;border-radius:999px;
-  text-transform:uppercase;letter-spacing:.06em;white-space:nowrap;
+/* ── Situação NFC-e ── */
+.hv-sit {
+  display:inline-flex;flex-direction:column;gap:2px;
+  font-size:11px;font-weight:600;
 }
-.hv-badge-ok      { background:#052e16;color:#4ade80;border:1px solid #166534; }
-.hv-badge-pend    { background:#1c1107;color:#fbbf24;border:1px solid #78350f; }
-.hv-badge-err     { background:#2d0808;color:#f87171;border:1px solid #991b1b; }
-.hv-badge-gray    { background:#1a1a2a;color:#6b6b88;border:1px solid #2a2a3e; }
-.hv-badge-blue    { background:#0c1a2e;color:#60a5fa;border:1px solid #1d4ed8; }
-body.tema-claro .hv-badge-ok   { background:#dcfce7;color:#15803d;border-color:#86efac; }
-body.tema-claro .hv-badge-pend { background:#fef3c7;color:#b45309;border-color:#fcd34d; }
-body.tema-claro .hv-badge-err  { background:#fee2e2;color:#dc2626;border-color:#fca5a5; }
-body.tema-claro .hv-badge-gray { background:#f3f4f6;color:#6b7280;border-color:#d1d5db; }
-body.tema-claro .hv-badge-blue { background:#eff6ff;color:#2563eb;border-color:#bfdbfe; }
+.hv-sit-ok   { color:#4ade80; }
+.hv-sit-err  { color:#f87171; }
+.hv-sit-warn { color:#fbbf24; }
+.hv-sit-gray { color:#6b6b88; }
+.hv-sit-msg  { font-size:10px;font-weight:400;color:#9090a0;max-width:200px;white-space:normal;line-height:1.3; }
+body.tema-claro .hv-sit-ok   { color:#15803d; }
+body.tema-claro .hv-sit-err  { color:#dc2626; }
+body.tema-claro .hv-sit-warn { color:#b45309; }
+body.tema-claro .hv-sit-gray { color:#9ca3af; }
+body.tema-claro .hv-sit-msg  { color:#6b7280; }
 
-/* ── Botões de ação ── */
-.hv-act {
-  display:inline-flex;align-items:center;gap:4px;padding:4px 9px;
-  border-radius:6px;font-size:11px;font-weight:600;cursor:pointer;
-  border:1px solid;transition:.12s;white-space:nowrap;background:transparent;
+/* ── Botões de ação numerados ── */
+.hv-acts { display:flex;gap:3px;flex-wrap:wrap;align-items:center; }
+.hv-ab {
+  width:26px;height:26px;border-radius:6px;border:1px solid;
+  display:inline-flex;align-items:center;justify-content:center;
+  font-size:11px;font-weight:800;cursor:pointer;transition:.12s;
+  background:transparent;text-decoration:none;line-height:1;
+  position:relative;
 }
-.hv-act-orange { border-color:#f15a24;color:#f15a24; }
-.hv-act-orange:hover { background:#f15a24;color:#fff; }
-.hv-act-red { border-color:#ef4444;color:#ef4444; }
-.hv-act-red:hover { background:#ef4444;color:#fff; }
-.hv-act-blue { border-color:#3b82f6;color:#3b82f6; }
-.hv-act-blue:hover { background:#3b82f6;color:#fff; }
-.hv-act-gray { border-color:#4b5563;color:#9ca3af; }
-.hv-act-gray:hover { border-color:#9ca3af;color:#e5e7eb; }
+.hv-ab:hover .hv-ab-tip { display:block; }
+.hv-ab-tip {
+  display:none;position:absolute;bottom:calc(100% + 5px);left:50%;transform:translateX(-50%);
+  background:#1e1e30;color:#e5e5f0;font-size:10px;font-weight:500;
+  padding:4px 8px;border-radius:5px;white-space:nowrap;z-index:99;pointer-events:none;
+  border:1px solid #2a2a3e;
+}
+body.tema-claro .hv-ab-tip { background:#1f2937;color:#f9fafb; }
 
-/* ── Summary chips ── */
-.hv-summary { display:flex;flex-wrap:wrap;gap:8px;margin-bottom:16px; }
-.hv-chip {
-  display:flex;align-items:center;gap:6px;padding:6px 14px;border-radius:8px;
-  font-size:12px;font-weight:600;background:#13131e;border:1px solid #1e1e30;
-}
-body.tema-claro .hv-chip { background:#f9fafb;border-color:#e5e7eb; }
-.hv-chip-val { font-size:16px;font-weight:800;color:#e5e5f0; }
-body.tema-claro .hv-chip-val { color:#111827; }
-.hv-chip-lbl { font-size:11px;color:#6b6b88; }
-body.tema-claro .hv-chip-lbl { color:#6b7280; }
+.hv-ab-red  { border-color:#ef4444;color:#ef4444; }
+.hv-ab-red:hover  { background:#ef4444;color:#fff; }
+.hv-ab-blue { border-color:#3b82f6;color:#3b82f6; }
+.hv-ab-blue:hover { background:#3b82f6;color:#fff; }
+.hv-ab-ora  { border-color:#f97316;color:#f97316; }
+.hv-ab-ora:hover  { background:#f97316;color:#fff; }
+.hv-ab-grn  { border-color:#22c55e;color:#22c55e; }
+.hv-ab-grn:hover  { background:#22c55e;color:#fff; }
+.hv-ab-gray { border-color:#4b5563;color:#9ca3af; }
+.hv-ab-gray:hover { border-color:#9ca3af;color:#e5e7eb; }
 
 /* ── Modal ── */
 .hv-overlay {
@@ -134,6 +135,12 @@ body.tema-claro .hv-modal { background:#fff;border-color:#e5e7eb; }
 body.tema-claro .hv-modal-title { color:#111827; }
 .hv-modal-sub { font-size:12px;color:#6b6b88;margin-bottom:16px; }
 body.tema-claro .hv-modal-sub { color:#6b7280; }
+.hv-modal-textarea {
+  width:100%;padding:10px 12px;border-radius:8px;font-size:13px;resize:vertical;
+  min-height:80px;background:#0d0d16;border:1px solid #2a2a3e;
+  color:#e5e5f0;outline:none;font-family:inherit;box-sizing:border-box;
+}
+body.tema-claro .hv-modal-textarea { background:#f9fafb;border-color:#d1d5db;color:#111827; }
 
 /* ── Paginação ── */
 .hv-page { display:flex;align-items:center;gap:6px;justify-content:center;margin-top:20px; }
@@ -208,18 +215,18 @@ body.tema-claro .hv-page a, body.tema-claro .hv-page span { border-color:#d1d5db
 
   <!-- Tabela -->
   {% if page_obj %}
-  <div class="hv-table-wrap">
+  <div class="hv-table-wrap" style="overflow-x:auto;">
     <table class="hv-table">
       <thead>
         <tr>
           <th class="hv-th">Pedido</th>
-          <th class="hv-th">Data</th>
-          <th class="hv-th">Cliente</th>
-          <th class="hv-th">CPF/CNPJ</th>
+          <th class="hv-th">Data/Hora</th>
+          <th class="hv-th">Cliente / CPF</th>
+          <th class="hv-th">Pagamento</th>
           <th class="hv-th" style="text-align:right;">Total</th>
-          <th class="hv-th" style="text-align:center;">NFC-e</th>
-          <th class="hv-th" style="text-align:center;">NF-e</th>
-          <th class="hv-th" style="text-align:center;">Não Fiscal</th>
+          <th class="hv-th">Situação NFC-e</th>
+          <th class="hv-th" style="text-align:center;">nNF</th>
+          <th class="hv-th" style="text-align:center;">Ações</th>
         </tr>
       </thead>
       <tbody>
@@ -232,7 +239,9 @@ body.tema-claro .hv-page a, body.tema-claro .hv-page span { border-color:#d1d5db
           <td class="hv-td">
             <span style="font-weight:700;color:#f97316;">#{{ venda.numero_venda|stringformat:"06d" }}</span>
             {% if venda.status == 'cancelada' %}
-            <span class="hv-badge hv-badge-err" style="margin-left:6px;">Cancelada</span>
+            <div style="margin-top:2px;">
+              <span style="font-size:10px;font-weight:700;color:#f87171;background:#2d0808;border:1px solid #991b1b;border-radius:4px;padding:1px 5px;">Cancelada</span>
+            </div>
             {% endif %}
           </td>
 
@@ -242,18 +251,23 @@ body.tema-claro .hv-page a, body.tema-claro .hv-page span { border-color:#d1d5db
             <span style="font-size:11px;">{{ venda.data_venda|date:"H:i" }}</span>
           </td>
 
-          <!-- Cliente -->
+          <!-- Cliente / CPF -->
           <td class="hv-td">
             {% if venda.cliente %}
-              <span style="font-weight:600;">{{ venda.cliente.razao_social }}</span>
+              <span style="font-weight:600;display:block;">{{ venda.cliente.razao_social }}</span>
+              <span style="font-size:11px;color:#9090a0;">{{ venda.cliente.cpf_cnpj|default:"" }}</span>
             {% else %}
               <span style="color:#6b6b88;">Consumidor Final</span>
             {% endif %}
           </td>
 
-          <!-- CPF/CNPJ -->
-          <td class="hv-td" style="color:#9090a0;font-size:12px;">
-            {% if venda.cliente %}{{ venda.cliente.cpf_cnpj|default:"—" }}{% else %}—{% endif %}
+          <!-- Pagamento -->
+          <td class="hv-td" style="font-size:12px;color:#9090a0;">
+            {% for pag in venda.pagamentos.all %}
+              <span style="display:block;white-space:nowrap;">{{ pag.forma_pagamento.descricao }}</span>
+            {% empty %}
+              —
+            {% endfor %}
           </td>
 
           <!-- Total -->
@@ -261,88 +275,148 @@ body.tema-claro .hv-page a, body.tema-claro .hv-page span { border-color:#d1d5db
             R$ {{ venda.valor_total|floatformat:2 }}
           </td>
 
-          <!-- NFC-e -->
-          <td class="hv-td" style="text-align:center;">
+          <!-- Situação NFC-e -->
+          <td class="hv-td">
             {% if doc and doc.tipo_documento == 'nfce' %}
               {% if doc.status == 'autorizada' %}
-                <div style="display:flex;flex-direction:column;align-items:center;gap:4px;">
-                  <span class="hv-badge hv-badge-ok">
-                    <svg width="8" height="8" fill="currentColor" viewBox="0 0 8 8"><circle cx="4" cy="4" r="4"/></svg>
-                    Autorizada
-                  </span>
-                  <div style="display:flex;gap:4px;margin-top:2px;">
-                    {% if doc.pdf_danfe_url %}
-                    <a href="{{ doc.pdf_danfe_url }}" target="_blank" class="hv-act hv-act-blue" title="Ver DANFE">
-                      <svg width="10" height="10" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/></svg>
-                      DANFE
-                    </a>
-                    {% endif %}
-                    {% if venda.status != 'cancelada' %}
-                    <button class="hv-act hv-act-red" onclick="hvApp_instance.abrirCancelar({{ venda.pk }}, '{{ venda.numero_venda|stringformat:'06d' }}', 'nfce')" title="Cancelar NFC-e">
-                      <svg width="10" height="10" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
-                      Cancelar
-                    </button>
-                    {% endif %}
-                  </div>
+                <div class="hv-sit hv-sit-ok">
+                  <span>✓ {{ doc.codigo_status_sefaz|default:"100" }} – Autorizada</span>
                 </div>
               {% elif doc.status == 'cancelada' %}
-                <span class="hv-badge hv-badge-err">Cancelada</span>
-              {% elif doc.status == 'rejeitada' %}
-                <div style="display:flex;flex-direction:column;align-items:center;gap:4px;">
-                  <span class="hv-badge hv-badge-err">Rejeitada</span>
-                  <span style="font-size:10px;color:#9090a0;">{{ doc.codigo_status_sefaz }} – {{ doc.mensagem_sefaz|truncatechars:30 }}</span>
-                  <button class="hv-act hv-act-orange" onclick="hvApp_instance.emitirNfce({{ venda.pk }})">
-                    <svg width="10" height="10" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
-                    Re-emitir
-                  </button>
+                <div class="hv-sit hv-sit-err">
+                  <span>✗ 101 – Cancelada</span>
                 </div>
-              {% elif doc.status == 'processando' %}
-                <span class="hv-badge hv-badge-pend">Processando…</span>
-              {% else %}
-                <span class="hv-badge hv-badge-gray">{{ doc.status|capfirst }}</span>
-              {% endif %}
-            {% elif venda.status != 'cancelada' %}
-              <button class="hv-act hv-act-orange" onclick="hvApp_instance.emitirNfce({{ venda.pk }})">
-                <svg width="10" height="10" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
-                Emitir
-              </button>
-            {% else %}
-              <span style="color:#3a3a52;font-size:12px;">—</span>
-            {% endif %}
-          </td>
-
-          <!-- NF-e -->
-          <td class="hv-td" style="text-align:center;">
-            {% if doc and doc.tipo_documento == 'nfe' %}
-              {% if doc.status == 'autorizada' %}
-                <div style="display:flex;flex-direction:column;align-items:center;gap:4px;">
-                  <span class="hv-badge hv-badge-ok">Autorizada</span>
-                  {% if doc.pdf_danfe_url %}
-                  <a href="{{ doc.pdf_danfe_url }}" target="_blank" class="hv-act hv-act-blue">
-                    <svg width="10" height="10" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/></svg>
-                    DANFE
-                  </a>
+              {% elif doc.status == 'rejeitada' %}
+                <div class="hv-sit hv-sit-err">
+                  <span>✗ {{ doc.codigo_status_sefaz }} – Rejeitada</span>
+                  {% if doc.mensagem_sefaz %}
+                  <span class="hv-sit-msg">{{ doc.mensagem_sefaz }}</span>
                   {% endif %}
                 </div>
-              {% elif doc.status == 'cancelada' %}
-                <span class="hv-badge hv-badge-err">Cancelada</span>
-              {% elif doc.status == 'rejeitada' %}
-                <span class="hv-badge hv-badge-err">Rejeitada</span>
+              {% elif doc.status == 'processando' %}
+                <div class="hv-sit hv-sit-warn">
+                  <span>⏳ Processando…</span>
+                </div>
               {% else %}
-                <span class="hv-badge hv-badge-gray">{{ doc.status|capfirst }}</span>
+                <div class="hv-sit hv-sit-gray">
+                  <span>{{ doc.status|capfirst }}</span>
+                </div>
+              {% endif %}
+            {% elif doc and doc.tipo_documento == 'nfe' %}
+              {% if doc.status == 'autorizada' %}
+                <div class="hv-sit hv-sit-ok"><span>✓ NF-e Autorizada</span></div>
+              {% elif doc.status == 'cancelada' %}
+                <div class="hv-sit hv-sit-err"><span>✗ NF-e Cancelada</span></div>
+              {% elif doc.status == 'rejeitada' %}
+                <div class="hv-sit hv-sit-err">
+                  <span>✗ NF-e {{ doc.codigo_status_sefaz }}</span>
+                  {% if doc.mensagem_sefaz %}<span class="hv-sit-msg">{{ doc.mensagem_sefaz }}</span>{% endif %}
+                </div>
+              {% else %}
+                <div class="hv-sit hv-sit-gray"><span>NF-e {{ doc.status|capfirst }}</span></div>
               {% endif %}
             {% else %}
-              <span style="color:#3a3a52;font-size:12px;">—</span>
+              <div class="hv-sit hv-sit-gray"><span>Nota ainda não emitida.</span></div>
             {% endif %}
           </td>
 
-          <!-- Não Fiscal -->
-          <td class="hv-td" style="text-align:center;">
-            <button class="hv-act hv-act-gray"
-                    onclick="hvApp_instance.imprimirNaoFiscal({{ venda.pk }}, '{{ venda.numero_venda|stringformat:'06d' }}', '{{ venda.data_venda|date:'d/m/Y' }}', '{{ venda.cliente.razao_social|default:'Consumidor Final'|escapejs }}', '{{ venda.valor_total|floatformat:2 }}')">
-              <svg width="10" height="10" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"/></svg>
-              Imprimir
-            </button>
+          <!-- nNF -->
+          <td class="hv-td" style="text-align:center;font-weight:700;color:#e5e5f0;">
+            {% if doc and doc.tipo_documento == 'nfce' %}
+              {{ doc.numero }}
+            {% elif doc and doc.tipo_documento == 'nfe' %}
+              {{ doc.numero }}
+            {% else %}
+              <span style="color:#3a3a52;">—</span>
+            {% endif %}
+          </td>
+
+          <!-- Ações -->
+          <td class="hv-td">
+            <div class="hv-acts">
+
+              {# 1 — Cancelar NFC-e (apenas se autorizada e venda não cancelada) #}
+              {% if doc and doc.tipo_documento == 'nfce' and doc.status == 'autorizada' and venda.status != 'cancelada' %}
+              <button class="hv-ab hv-ab-red"
+                      onclick="hvApp_instance.abrirCancelar({{ venda.pk }}, '{{ venda.numero_venda|stringformat:'06d' }}', 'nfce')"
+                      title="Cancelar NFC-e">
+                <span class="hv-ab-tip">1 – Cancelar NFC-e</span>
+                1
+              </button>
+              {% endif %}
+
+              {# 2 — Enviar por e-mail (se autorizada) #}
+              {% if doc and doc.status == 'autorizada' %}
+              <button class="hv-ab hv-ab-blue"
+                      onclick="hvApp_instance.abrirEmail({{ venda.pk }}, '{{ venda.numero_venda|stringformat:'06d' }}', '{{ venda.cliente.email_nfe|default:venda.cliente.email|default:''|escapejs }}')"
+                      title="Enviar por e-mail">
+                <span class="hv-ab-tip">2 – Enviar por e-mail</span>
+                2
+              </button>
+              {% endif %}
+
+              {# 3 — Imprimir DANFE / cupom não fiscal #}
+              {% if doc and doc.pdf_danfe_url %}
+              <a class="hv-ab hv-ab-ora"
+                 href="{{ doc.pdf_danfe_url }}" target="_blank"
+                 title="Imprimir DANFE">
+                <span class="hv-ab-tip">3 – Imprimir DANFE</span>
+                3
+              </a>
+              {% else %}
+              <button class="hv-ab hv-ab-gray"
+                      onclick="hvApp_instance.imprimirNaoFiscal({{ venda.pk }}, '{{ venda.numero_venda|stringformat:'06d' }}', '{{ venda.data_venda|date:'d/m/Y' }}', '{{ venda.cliente.razao_social|default:'Consumidor Final'|escapejs }}', '{{ venda.valor_total|floatformat:2 }}')"
+                      title="Imprimir cupom (não fiscal)">
+                <span class="hv-ab-tip">3 – Cupom não fiscal</span>
+                3
+              </button>
+              {% endif %}
+
+              {# 4 — Download XML (se disponível) #}
+              {% if doc and doc.xml_assinado %}
+              <a class="hv-ab hv-ab-grn"
+                 href="/pdv/api/venda/{{ venda.pk }}/xml-nfce/"
+                 title="Download XML">
+                <span class="hv-ab-tip">4 – Download XML</span>
+                4
+              </a>
+              {% endif %}
+
+              {# 5 — Emitir NFC-e (se não emitida ou rejeitada, e venda não cancelada) #}
+              {% if venda.status != 'cancelada' %}
+                {% if not doc %}
+                <button class="hv-ab hv-ab-ora"
+                        onclick="hvApp_instance.emitirNfce({{ venda.pk }})"
+                        title="Emitir NFC-e">
+                  <span class="hv-ab-tip">5 – Emitir NFC-e</span>
+                  5
+                </button>
+                {% elif doc.tipo_documento == 'nfce' and doc.status == 'rejeitada' %}
+                <button class="hv-ab hv-ab-ora"
+                        onclick="hvApp_instance.emitirNfce({{ venda.pk }})"
+                        title="Re-emitir NFC-e">
+                  <span class="hv-ab-tip">5 – Re-emitir NFC-e</span>
+                  5
+                </button>
+                {% elif doc.tipo_documento == 'nfce' and doc.status == 'pendente' %}
+                <button class="hv-ab hv-ab-ora"
+                        onclick="hvApp_instance.emitirNfce({{ venda.pk }})"
+                        title="Emitir NFC-e">
+                  <span class="hv-ab-tip">5 – Emitir NFC-e</span>
+                  5
+                </button>
+                {% endif %}
+              {% endif %}
+
+              {# 6 — Consultar venda #}
+              <button class="hv-ab hv-ab-gray"
+                      onclick="hvApp_instance.consultarVenda({{ venda.pk }}, {% if doc and doc.pdf_danfe_url %}'{{ doc.pdf_danfe_url|escapejs }}'{% else %}null{% endif %})"
+                      title="Consultar venda">
+                <span class="hv-ab-tip">6 – Consultar venda</span>
+                6
+              </button>
+
+            </div>
           </td>
 
         </tr>
@@ -415,9 +489,7 @@ body.tema-claro .hv-page a, body.tema-claro .hv-page span { border-color:#d1d5db
       <div style="margin-bottom:14px;">
         <label class="hv-filter-label" style="display:block;margin-bottom:4px;">Justificativa (mín. 15 caracteres)</label>
         <textarea x-model="modalInut.justificativa" placeholder="Motivo da inutilização da faixa..."
-                  style="width:100%;padding:10px 12px;border-radius:8px;font-size:13px;resize:vertical;min-height:72px;
-                         background:#0d0d16;border:1px solid #2a2a3e;color:#e5e5f0;outline:none;font-family:inherit;
-                         box-sizing:border-box;"
+                  class="hv-modal-textarea" style="min-height:72px;"
                   @focus="$el.style.borderColor='#fbbf24'" @blur="$el.style.borderColor='#2a2a3e'"></textarea>
         <div style="font-size:11px;color:#6b6b88;margin-top:3px;" x-text="modalInut.justificativa.length + ' / 15 mínimo'"></div>
       </div>
@@ -438,12 +510,10 @@ body.tema-claro .hv-page a, body.tema-claro .hv-page span { border-color:#d1d5db
   <!-- Modal Cancelar NFC-e -->
   <div class="hv-overlay" x-show="modal.show" x-cloak @keydown.escape.window="modal.show=false" style="display:none;">
     <div class="hv-modal">
-      <h3 class="hv-modal-title">Cancelar {{ modal.tipo|upper }}</h3>
+      <h3 class="hv-modal-title">Cancelar <span x-text="modal.tipo.toUpperCase()"></span></h3>
       <p class="hv-modal-sub">Venda #<strong x-text="modal.numero"></strong> — A justificativa deve ter ao menos 15 caracteres.</p>
       <textarea x-model="modal.justificativa" placeholder="Motivo do cancelamento..."
-                style="width:100%;padding:10px 12px;border-radius:8px;font-size:13px;resize:vertical;min-height:80px;
-                       background:#0d0d16;border:1px solid #2a2a3e;color:#e5e5f0;outline:none;font-family:inherit;
-                       box-sizing:border-box;"
+                class="hv-modal-textarea"
                 @focus="$el.style.borderColor='#f15a24'" @blur="$el.style.borderColor='#2a2a3e'"></textarea>
       <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:14px;">
         <button class="hv-btn-clear" @click="modal.show=false" style="padding:8px 18px;">Voltar</button>
@@ -458,6 +528,27 @@ body.tema-claro .hv-page a, body.tema-claro .hv-page span { border-color:#d1d5db
     </div>
   </div>
 
+  <!-- Modal Enviar E-mail -->
+  <div class="hv-overlay" x-show="modalEmail.show" x-cloak @keydown.escape.window="modalEmail.show=false" style="display:none;">
+    <div class="hv-modal">
+      <h3 class="hv-modal-title">Enviar por E-mail</h3>
+      <p class="hv-modal-sub">Venda #<strong x-text="modalEmail.numero"></strong> — Informe o(s) e-mail(s) separados por vírgula.</p>
+      <input x-model="modalEmail.emails" type="email" placeholder="email@exemplo.com"
+             class="hv-input" style="width:100%;box-sizing:border-box;"
+             @keydown.enter.prevent="confirmarEmail()">
+      <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:14px;">
+        <button class="hv-btn-clear" @click="modalEmail.show=false" style="padding:8px 18px;">Voltar</button>
+        <button @click="confirmarEmail()" :disabled="modalEmail.loading"
+                style="padding:8px 20px;border-radius:8px;font-size:13px;font-weight:700;
+                       background:#2563eb;border:none;color:#fff;cursor:pointer;"
+                :style="modalEmail.loading ? 'opacity:.6;cursor:not-allowed;' : ''">
+          <span x-show="!modalEmail.loading">Enviar</span>
+          <span x-show="modalEmail.loading">Enviando…</span>
+        </button>
+      </div>
+    </div>
+  </div>
+
   <!-- Toast container -->
   <div id="hv-toast"></div>
 
@@ -466,8 +557,9 @@ body.tema-claro .hv-page a, body.tema-claro .hv-page span { border-color:#d1d5db
 <script>
 function hvApp() {
   return {
-    modal: { show:false, vendaId:null, numero:'', tipo:'nfce', justificativa:'', loading:false },
-    modalInut: { show:false, tipo:'nfce', serie:1, numero_ini:'', numero_fim:'', justificativa:'', loading:false },
+    modal:      { show:false, vendaId:null, numero:'', tipo:'nfce', justificativa:'', loading:false },
+    modalInut:  { show:false, tipo:'nfce', serie:1, numero_ini:'', numero_fim:'', justificativa:'', loading:false },
+    modalEmail: { show:false, vendaId:null, numero:'', emails:'', loading:false },
 
     init() {
       window.hvApp_instance = this;
@@ -529,6 +621,45 @@ function hvApp() {
         this.toast('Erro de comunicação ao cancelar.', 'err');
       } finally {
         this.modal.loading = false;
+      }
+    },
+
+    abrirEmail(vendaId, numero, emailSugerido) {
+      this.modalEmail = { show:true, vendaId, numero, emails: emailSugerido || '', loading:false };
+    },
+
+    async confirmarEmail() {
+      const emailsStr = this.modalEmail.emails.trim();
+      if (!emailsStr) {
+        this.toast('Informe ao menos um e-mail.', 'err'); return;
+      }
+      const emails = emailsStr.split(',').map(e => e.trim()).filter(Boolean);
+      this.modalEmail.loading = true;
+      try {
+        const r = await fetch(`/pdv/api/venda/${this.modalEmail.vendaId}/email-nfce/`, {
+          method:'POST',
+          headers:{'Content-Type':'application/json','X-CSRFToken':this.csrf()},
+          body: JSON.stringify({ emails }),
+        });
+        const d = await r.json();
+        if (d.ok) {
+          this.modalEmail.show = false;
+          this.toast('E-mail enviado com sucesso!', 'ok');
+        } else {
+          this.toast(d.erro || 'Erro ao enviar e-mail.', 'err');
+        }
+      } catch(e) {
+        this.toast('Erro de comunicação ao enviar e-mail.', 'err');
+      } finally {
+        this.modalEmail.loading = false;
+      }
+    },
+
+    consultarVenda(vendaId, danfeUrl) {
+      if (danfeUrl) {
+        window.open(danfeUrl, '_blank');
+      } else {
+        this.toast('DANFE não disponível para esta venda.', 'err');
       }
     },
 
