@@ -2,6 +2,7 @@ from django.contrib import messages
 from django.conf import settings
 from django.core.exceptions import PermissionDenied
 from django.core.paginator import Paginator
+from django.db import transaction
 from django.http import JsonResponse
 from django.views.decorators.http import require_POST
 from django.db.models import Q
@@ -759,3 +760,68 @@ def perfil_duplicar(request, pk):
     if request.user.is_superuser and request.GET.get('central_filial') and filial:
         url = f'{url}?central_filial={filial.pk}'
     return redirect(url)
+
+
+# ---------------------------------------------------------------------------
+# MANUTENCAO TEMPORARIA — remover apos uso
+# ---------------------------------------------------------------------------
+from apps.core.views._admin import superuser_required
+
+
+@superuser_required
+def limpar_documentos_fiscais(request):
+    """
+    GET  → mostra contagens (dry-run)
+    POST → apaga DocumentoFiscal NFC-e/NF-e, LogIntegracaoFiscal,
+           reseta proximo_numero_nfce para 1.
+
+    Protegido por superuser_required. Remover apos uso.
+    """
+    from apps.financeiro.models.fiscal import DocumentoFiscal, LogIntegracaoFiscal
+    from apps.core.models.empresa import Filial
+
+    docs_qs = DocumentoFiscal.objects.filter(tipo_documento__in=["nfce", "nfe"])
+    logs_qs = LogIntegracaoFiscal.objects.all()
+    filiais_qs = Filial.objects.filter(proximo_numero_nfce__gt=1)
+
+    n_docs = docs_qs.count()
+    n_logs = logs_qs.count()
+    n_filiais = filiais_qs.count()
+
+    if request.method == "POST":
+        with transaction.atomic():
+            log_del, _ = logs_qs.delete()
+            doc_del, _ = docs_qs.delete()
+            for f in filiais_qs:
+                f.proximo_numero_nfce = 1
+                f.save(update_fields=["proximo_numero_nfce"])
+        return JsonResponse({
+            "ok": True,
+            "documentos_apagados": doc_del,
+            "logs_apagados": log_del,
+            "filiais_resetadas": n_filiais,
+        })
+
+    # GET — exibe contagens
+    from django.http import HttpResponse
+    from django.middleware.csrf import get_token
+    csrf = get_token(request)
+    html = f"""
+    <html><body style="font-family:sans-serif;padding:2rem">
+    <h2>Limpeza de Documentos Fiscais</h2>
+    <p>Esta acao e <strong>irreversivel</strong>.</p>
+    <ul>
+      <li>DocumentoFiscal (NFC-e / NF-e): <strong>{n_docs}</strong></li>
+      <li>LogIntegracaoFiscal: <strong>{n_logs}</strong></li>
+      <li>Filiais com numero &gt; 1: <strong>{n_filiais}</strong></li>
+    </ul>
+    <form method="POST">
+      <input type="hidden" name="csrfmiddlewaretoken" value="{csrf}">
+      <button type="submit"
+        style="background:red;color:white;padding:1rem 2rem;font-size:1.1rem;border:none;cursor:pointer;border-radius:6px">
+        CONFIRMAR — Apagar tudo e resetar numeracao
+      </button>
+    </form>
+    </body></html>
+    """
+    return HttpResponse(html)
