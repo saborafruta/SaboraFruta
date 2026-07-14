@@ -2527,7 +2527,11 @@ function pdv() {
         const r = await fetch('/pdv/api/venda/finalizar/',{method:'POST',headers:{'Content-Type':'application/json','X-CSRFToken':csrf()},body:JSON.stringify(payload)});
         let d;
         try { d = await r.json(); } catch(jsonErr) {
-          this.toast_('Erro HTTP '+r.status+' (resposta inválida do servidor)','erro');
+          if (r.redirected || r.status === 200) {
+            this.toast_('Sessão expirada. Recarregue a página e faça login novamente.','erro');
+          } else {
+            this.toast_('Erro HTTP '+r.status+' ao finalizar venda.','erro');
+          }
           this._finalizando = false; return;
         }
         if (d.ok) {

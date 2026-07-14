@@ -1,0 +1,516 @@
+{% extends "_base.html" %}
+{% block title %}Histórico de Vendas{% endblock %}
+
+{% block extra_head %}
+<style>
+/* ── Toast ── */
+#hv-toast {
+  position:fixed;bottom:24px;left:50%;transform:translateX(-50%);
+  z-index:9999;pointer-events:none;display:flex;flex-direction:column;gap:8px;align-items:center;
+}
+.hv-toast-msg {
+  padding:10px 20px;border-radius:10px;font-size:13px;font-weight:600;
+  box-shadow:0 4px 20px rgba(0,0,0,.35);white-space:nowrap;pointer-events:auto;
+  animation:hv-fadein .2s ease;
+}
+.hv-toast-ok  { background:#166534;color:#bbf7d0;border:1px solid #15803d; }
+.hv-toast-err { background:#7f1d1d;color:#fecaca;border:1px solid #991b1b; }
+@keyframes hv-fadein { from{opacity:0;transform:translateY(8px)} to{opacity:1;transform:translateY(0)} }
+
+/* ── Filtro ── */
+.hv-filter-bar {
+  display:flex;flex-wrap:wrap;gap:10px;align-items:flex-end;
+  padding:16px 20px;border-radius:14px;margin-bottom:20px;
+  background:var(--surface,#13131e);border:1px solid var(--bd,#1e1e30);
+}
+body.tema-claro .hv-filter-bar { background:#fff;border-color:#e5e7eb; }
+
+.hv-filter-group { display:flex;flex-direction:column;gap:4px;min-width:130px; }
+.hv-filter-label { font-size:11px;font-weight:600;color:#6b6b88;text-transform:uppercase;letter-spacing:.07em; }
+body.tema-claro .hv-filter-label { color:#6b7280; }
+
+.hv-input {
+  padding:8px 12px;border-radius:8px;font-size:13px;outline:none;
+  background:#0d0d16;border:1px solid #2a2a3e;color:#e5e5f0;
+  transition:.15s;font-family:inherit;
+}
+.hv-input:focus { border-color:#f15a24; }
+body.tema-claro .hv-input { background:#f9fafb;border-color:#d1d5db;color:#111827; }
+body.tema-claro .hv-input:focus { border-color:#f15a24; }
+
+.hv-btn-filter {
+  padding:8px 20px;border-radius:8px;font-size:13px;font-weight:700;
+  background:linear-gradient(135deg,#f15a24,#f97316);border:none;
+  color:#fff;cursor:pointer;transition:.15s;white-space:nowrap;
+}
+.hv-btn-filter:hover { opacity:.88; }
+.hv-btn-clear {
+  padding:8px 16px;border-radius:8px;font-size:13px;font-weight:600;
+  background:transparent;border:1px solid #2a2a3e;color:#6b6b88;
+  cursor:pointer;transition:.15s;text-decoration:none;display:inline-flex;align-items:center;
+}
+body.tema-claro .hv-btn-clear { border-color:#d1d5db;color:#6b7280; }
+.hv-btn-clear:hover { border-color:#f15a24;color:#f15a24; }
+
+/* ── Tabela ── */
+.hv-table-wrap { border-radius:14px;overflow:hidden;border:1px solid #1e1e30; }
+body.tema-claro .hv-table-wrap { border-color:#e5e7eb; }
+
+.hv-table { width:100%;border-collapse:collapse; }
+.hv-th {
+  padding:11px 14px;font-size:11px;font-weight:700;color:#6b6b88;
+  text-transform:uppercase;letter-spacing:.08em;text-align:left;
+  background:#0d0d16;border-bottom:1px solid #1e1e30;white-space:nowrap;
+}
+body.tema-claro .hv-th { background:#f9fafb;color:#6b7280;border-color:#e5e7eb; }
+
+.hv-tr { border-bottom:1px solid #13131e;transition:.12s; }
+.hv-tr:last-child { border-bottom:none; }
+.hv-tr:hover { background:#0f0f1a; }
+body.tema-claro .hv-tr:hover { background:#f9fafb; }
+.hv-tr.cancelada { opacity:.6; }
+
+.hv-td { padding:10px 14px;font-size:13px;color:#c0c0d8;vertical-align:middle;background:#13131e; }
+body.tema-claro .hv-td { color:#374151;background:#fff; }
+.hv-tr.cancelada .hv-td { background:#100808; }
+body.tema-claro .hv-tr.cancelada .hv-td { background:#fef2f2; }
+
+/* ── Badges ── */
+.hv-badge {
+  display:inline-flex;align-items:center;gap:4px;
+  font-size:10px;font-weight:700;padding:3px 8px;border-radius:999px;
+  text-transform:uppercase;letter-spacing:.06em;white-space:nowrap;
+}
+.hv-badge-ok      { background:#052e16;color:#4ade80;border:1px solid #166534; }
+.hv-badge-pend    { background:#1c1107;color:#fbbf24;border:1px solid #78350f; }
+.hv-badge-err     { background:#2d0808;color:#f87171;border:1px solid #991b1b; }
+.hv-badge-gray    { background:#1a1a2a;color:#6b6b88;border:1px solid #2a2a3e; }
+.hv-badge-blue    { background:#0c1a2e;color:#60a5fa;border:1px solid #1d4ed8; }
+body.tema-claro .hv-badge-ok   { background:#dcfce7;color:#15803d;border-color:#86efac; }
+body.tema-claro .hv-badge-pend { background:#fef3c7;color:#b45309;border-color:#fcd34d; }
+body.tema-claro .hv-badge-err  { background:#fee2e2;color:#dc2626;border-color:#fca5a5; }
+body.tema-claro .hv-badge-gray { background:#f3f4f6;color:#6b7280;border-color:#d1d5db; }
+body.tema-claro .hv-badge-blue { background:#eff6ff;color:#2563eb;border-color:#bfdbfe; }
+
+/* ── Botões de ação ── */
+.hv-act {
+  display:inline-flex;align-items:center;gap:4px;padding:4px 9px;
+  border-radius:6px;font-size:11px;font-weight:600;cursor:pointer;
+  border:1px solid;transition:.12s;white-space:nowrap;background:transparent;
+}
+.hv-act-orange { border-color:#f15a24;color:#f15a24; }
+.hv-act-orange:hover { background:#f15a24;color:#fff; }
+.hv-act-red { border-color:#ef4444;color:#ef4444; }
+.hv-act-red:hover { background:#ef4444;color:#fff; }
+.hv-act-blue { border-color:#3b82f6;color:#3b82f6; }
+.hv-act-blue:hover { background:#3b82f6;color:#fff; }
+.hv-act-gray { border-color:#4b5563;color:#9ca3af; }
+.hv-act-gray:hover { border-color:#9ca3af;color:#e5e7eb; }
+
+/* ── Summary chips ── */
+.hv-summary { display:flex;flex-wrap:wrap;gap:8px;margin-bottom:16px; }
+.hv-chip {
+  display:flex;align-items:center;gap:6px;padding:6px 14px;border-radius:8px;
+  font-size:12px;font-weight:600;background:#13131e;border:1px solid #1e1e30;
+}
+body.tema-claro .hv-chip { background:#f9fafb;border-color:#e5e7eb; }
+.hv-chip-val { font-size:16px;font-weight:800;color:#e5e5f0; }
+body.tema-claro .hv-chip-val { color:#111827; }
+.hv-chip-lbl { font-size:11px;color:#6b6b88; }
+body.tema-claro .hv-chip-lbl { color:#6b7280; }
+
+/* ── Modal ── */
+.hv-overlay {
+  position:fixed;inset:0;background:rgba(0,0,0,.75);z-index:500;
+  display:flex;align-items:center;justify-content:center;
+}
+.hv-modal {
+  width:100%;max-width:420px;border-radius:16px;padding:24px;
+  background:#13131e;border:1px solid #2a2a3e;
+  box-shadow:0 24px 64px rgba(0,0,0,.55);
+}
+body.tema-claro .hv-modal { background:#fff;border-color:#e5e7eb; }
+.hv-modal-title { font-size:15px;font-weight:700;color:#e5e5f0;margin:0 0 6px; }
+body.tema-claro .hv-modal-title { color:#111827; }
+.hv-modal-sub { font-size:12px;color:#6b6b88;margin-bottom:16px; }
+body.tema-claro .hv-modal-sub { color:#6b7280; }
+
+/* ── Paginação ── */
+.hv-page { display:flex;align-items:center;gap:6px;justify-content:center;margin-top:20px; }
+.hv-page a, .hv-page span {
+  padding:6px 12px;border-radius:7px;font-size:13px;font-weight:600;
+  text-decoration:none;border:1px solid #2a2a3e;color:#9090a0;transition:.12s;
+}
+body.tema-claro .hv-page a, body.tema-claro .hv-page span { border-color:#d1d5db;color:#6b7280; }
+.hv-page a:hover { border-color:#f15a24;color:#f15a24; }
+.hv-page .current { background:#f15a24;color:#fff;border-color:#f15a24; }
+</style>
+{% endblock %}
+
+{% block content %}
+{% load i18n %}
+<div x-data="hvApp()" x-init="init()">
+
+  <!-- Cabeçalho -->
+  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;flex-wrap:wrap;gap:12px;">
+    <div>
+      <h1 style="font-size:20px;font-weight:800;color:var(--t1,#e5e5f0);margin:0 0 2px;">Histórico de Vendas</h1>
+      <p style="font-size:13px;color:#6b6b88;margin:0;">
+        {{ total }} registro{{ total|pluralize }} encontrado{{ total|pluralize }}
+      </p>
+    </div>
+  </div>
+
+  <!-- Filtros -->
+  <form method="get" class="hv-filter-bar">
+    <div class="hv-filter-group">
+      <label class="hv-filter-label">Pedido</label>
+      <input class="hv-input" name="pedido" value="{{ filtros.pedido }}" placeholder="Nº" style="width:90px;">
+    </div>
+    <div class="hv-filter-group" style="flex:1;min-width:180px;">
+      <label class="hv-filter-label">Cliente / CPF</label>
+      <input class="hv-input" name="cliente" value="{{ filtros.cliente }}" placeholder="Nome ou CPF/CNPJ" style="width:100%;">
+    </div>
+    <div class="hv-filter-group">
+      <label class="hv-filter-label">Data início</label>
+      <input class="hv-input" type="date" name="data_ini" value="{{ filtros.data_ini }}" style="width:140px;">
+    </div>
+    <div class="hv-filter-group">
+      <label class="hv-filter-label">Data fim</label>
+      <input class="hv-input" type="date" name="data_fim" value="{{ filtros.data_fim }}" style="width:140px;">
+    </div>
+    <div class="hv-filter-group">
+      <label class="hv-filter-label">Tipo Fiscal</label>
+      <select class="hv-input" name="tipo_fiscal" style="width:140px;">
+        <option value="">Todos</option>
+        <option value="nfce" {% if filtros.tipo_fiscal == 'nfce' %}selected{% endif %}>NFC-e</option>
+        <option value="nfe"  {% if filtros.tipo_fiscal == 'nfe'  %}selected{% endif %}>NF-e</option>
+        <option value="nao_fiscal" {% if filtros.tipo_fiscal == 'nao_fiscal' %}selected{% endif %}>Não Fiscal</option>
+        <option value="cancelada"  {% if filtros.tipo_fiscal == 'cancelada'  %}selected{% endif %}>Canceladas</option>
+      </select>
+    </div>
+    <div style="display:flex;gap:8px;align-items:flex-end;">
+      <button type="submit" class="hv-btn-filter">Filtrar</button>
+      <a href="{% url 'analytics:vendas' %}" class="hv-btn-clear">Limpar</a>
+    </div>
+  </form>
+
+  <!-- Tabela -->
+  {% if page_obj %}
+  <div class="hv-table-wrap">
+    <table class="hv-table">
+      <thead>
+        <tr>
+          <th class="hv-th">Pedido</th>
+          <th class="hv-th">Data</th>
+          <th class="hv-th">Cliente</th>
+          <th class="hv-th">CPF/CNPJ</th>
+          <th class="hv-th" style="text-align:right;">Total</th>
+          <th class="hv-th" style="text-align:center;">NFC-e</th>
+          <th class="hv-th" style="text-align:center;">NF-e</th>
+          <th class="hv-th" style="text-align:center;">Não Fiscal</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for venda in page_obj %}
+        {% with doc=venda.documento_fiscal %}
+        <tr class="hv-tr {% if venda.status == 'cancelada' %}cancelada{% endif %}"
+            id="row-{{ venda.pk }}">
+
+          <!-- Pedido -->
+          <td class="hv-td">
+            <span style="font-weight:700;color:#f97316;">#{{ venda.numero_venda|stringformat:"06d" }}</span>
+            {% if venda.status == 'cancelada' %}
+            <span class="hv-badge hv-badge-err" style="margin-left:6px;">Cancelada</span>
+            {% endif %}
+          </td>
+
+          <!-- Data -->
+          <td class="hv-td" style="white-space:nowrap;color:#9090a0;">
+            {{ venda.data_venda|date:"d/m/Y" }}<br>
+            <span style="font-size:11px;">{{ venda.data_venda|date:"H:i" }}</span>
+          </td>
+
+          <!-- Cliente -->
+          <td class="hv-td">
+            {% if venda.cliente %}
+              <span style="font-weight:600;">{{ venda.cliente.razao_social }}</span>
+            {% else %}
+              <span style="color:#6b6b88;">Consumidor Final</span>
+            {% endif %}
+          </td>
+
+          <!-- CPF/CNPJ -->
+          <td class="hv-td" style="color:#9090a0;font-size:12px;">
+            {% if venda.cliente %}{{ venda.cliente.cpf_cnpj|default:"—" }}{% else %}—{% endif %}
+          </td>
+
+          <!-- Total -->
+          <td class="hv-td" style="text-align:right;font-weight:700;color:#4ade80;white-space:nowrap;">
+            R$ {{ venda.valor_total|floatformat:2 }}
+          </td>
+
+          <!-- NFC-e -->
+          <td class="hv-td" style="text-align:center;">
+            {% if doc and doc.tipo_documento == 'nfce' %}
+              {% if doc.status == 'autorizada' %}
+                <div style="display:flex;flex-direction:column;align-items:center;gap:4px;">
+                  <span class="hv-badge hv-badge-ok">
+                    <svg width="8" height="8" fill="currentColor" viewBox="0 0 8 8"><circle cx="4" cy="4" r="4"/></svg>
+                    Autorizada
+                  </span>
+                  <div style="display:flex;gap:4px;margin-top:2px;">
+                    {% if doc.pdf_danfe_url %}
+                    <a href="{{ doc.pdf_danfe_url }}" target="_blank" class="hv-act hv-act-blue" title="Ver DANFE">
+                      <svg width="10" height="10" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/></svg>
+                      DANFE
+                    </a>
+                    {% endif %}
+                    {% if venda.status != 'cancelada' %}
+                    <button class="hv-act hv-act-red" onclick="hvApp_instance.abrirCancelar({{ venda.pk }}, '{{ venda.numero_venda|stringformat:'06d' }}', 'nfce')" title="Cancelar NFC-e">
+                      <svg width="10" height="10" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+                      Cancelar
+                    </button>
+                    {% endif %}
+                  </div>
+                </div>
+              {% elif doc.status == 'cancelada' %}
+                <span class="hv-badge hv-badge-err">Cancelada</span>
+              {% elif doc.status == 'rejeitada' %}
+                <div style="display:flex;flex-direction:column;align-items:center;gap:4px;">
+                  <span class="hv-badge hv-badge-err">Rejeitada</span>
+                  <span style="font-size:10px;color:#9090a0;">{{ doc.codigo_status_sefaz }} – {{ doc.mensagem_sefaz|truncatechars:30 }}</span>
+                  <button class="hv-act hv-act-orange" onclick="hvApp_instance.emitirNfce({{ venda.pk }})">
+                    <svg width="10" height="10" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
+                    Re-emitir
+                  </button>
+                </div>
+              {% elif doc.status == 'processando' %}
+                <span class="hv-badge hv-badge-pend">Processando…</span>
+              {% else %}
+                <span class="hv-badge hv-badge-gray">{{ doc.status|capfirst }}</span>
+              {% endif %}
+            {% elif venda.status != 'cancelada' %}
+              <button class="hv-act hv-act-orange" onclick="hvApp_instance.emitirNfce({{ venda.pk }})">
+                <svg width="10" height="10" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
+                Emitir
+              </button>
+            {% else %}
+              <span style="color:#3a3a52;font-size:12px;">—</span>
+            {% endif %}
+          </td>
+
+          <!-- NF-e -->
+          <td class="hv-td" style="text-align:center;">
+            {% if doc and doc.tipo_documento == 'nfe' %}
+              {% if doc.status == 'autorizada' %}
+                <div style="display:flex;flex-direction:column;align-items:center;gap:4px;">
+                  <span class="hv-badge hv-badge-ok">Autorizada</span>
+                  {% if doc.pdf_danfe_url %}
+                  <a href="{{ doc.pdf_danfe_url }}" target="_blank" class="hv-act hv-act-blue">
+                    <svg width="10" height="10" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/></svg>
+                    DANFE
+                  </a>
+                  {% endif %}
+                </div>
+              {% elif doc.status == 'cancelada' %}
+                <span class="hv-badge hv-badge-err">Cancelada</span>
+              {% elif doc.status == 'rejeitada' %}
+                <span class="hv-badge hv-badge-err">Rejeitada</span>
+              {% else %}
+                <span class="hv-badge hv-badge-gray">{{ doc.status|capfirst }}</span>
+              {% endif %}
+            {% else %}
+              <span style="color:#3a3a52;font-size:12px;">—</span>
+            {% endif %}
+          </td>
+
+          <!-- Não Fiscal -->
+          <td class="hv-td" style="text-align:center;">
+            <button class="hv-act hv-act-gray"
+                    onclick="hvApp_instance.imprimirNaoFiscal({{ venda.pk }}, '{{ venda.numero_venda|stringformat:'06d' }}', '{{ venda.data_venda|date:'d/m/Y' }}', '{{ venda.cliente.razao_social|default:'Consumidor Final'|escapejs }}', '{{ venda.valor_total|floatformat:2 }}')">
+              <svg width="10" height="10" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"/></svg>
+              Imprimir
+            </button>
+          </td>
+
+        </tr>
+        {% endwith %}
+        {% empty %}
+        <tr>
+          <td colspan="8" style="padding:48px;text-align:center;color:#3a3a52;font-size:14px;background:#0d0d16;">
+            <svg width="40" height="40" fill="none" stroke="currentColor" viewBox="0 0 24 24" style="margin:0 auto 12px;display:block;opacity:.3;"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/></svg>
+            Nenhuma venda encontrada com os filtros aplicados.
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  <!-- Paginação -->
+  {% if page_obj.has_other_pages %}
+  <nav class="hv-page">
+    {% if page_obj.has_previous %}
+    <a href="?{% for k,v in request.GET.items %}{% if k != 'page' %}{{ k }}={{ v }}&{% endif %}{% endfor %}page={{ page_obj.previous_page_number }}">← Anterior</a>
+    {% endif %}
+
+    {% for num in page_obj.paginator.page_range %}
+      {% if page_obj.number == num %}
+        <span class="current">{{ num }}</span>
+      {% elif num > page_obj.number|add:'-3' and num < page_obj.number|add:'3' %}
+        <a href="?{% for k,v in request.GET.items %}{% if k != 'page' %}{{ k }}={{ v }}&{% endif %}{% endfor %}page={{ num }}">{{ num }}</a>
+      {% endif %}
+    {% endfor %}
+
+    {% if page_obj.has_next %}
+    <a href="?{% for k,v in request.GET.items %}{% if k != 'page' %}{{ k }}={{ v }}&{% endif %}{% endfor %}page={{ page_obj.next_page_number }}">Próximo →</a>
+    {% endif %}
+  </nav>
+  {% endif %}
+  {% endif %}
+
+  <!-- Modal Cancelar NFC-e -->
+  <div class="hv-overlay" x-show="modal.show" x-cloak @keydown.escape.window="modal.show=false" style="display:none;">
+    <div class="hv-modal">
+      <h3 class="hv-modal-title">Cancelar {{ modal.tipo|upper }}</h3>
+      <p class="hv-modal-sub">Venda #<strong x-text="modal.numero"></strong> — A justificativa deve ter ao menos 15 caracteres.</p>
+      <textarea x-model="modal.justificativa" placeholder="Motivo do cancelamento..."
+                style="width:100%;padding:10px 12px;border-radius:8px;font-size:13px;resize:vertical;min-height:80px;
+                       background:#0d0d16;border:1px solid #2a2a3e;color:#e5e5f0;outline:none;font-family:inherit;
+                       box-sizing:border-box;"
+                @focus="$el.style.borderColor='#f15a24'" @blur="$el.style.borderColor='#2a2a3e'"></textarea>
+      <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:14px;">
+        <button class="hv-btn-clear" @click="modal.show=false" style="padding:8px 18px;">Voltar</button>
+        <button @click="confirmarCancelar()" :disabled="modal.loading"
+                style="padding:8px 20px;border-radius:8px;font-size:13px;font-weight:700;
+                       background:#dc2626;border:none;color:#fff;cursor:pointer;"
+                :style="modal.loading ? 'opacity:.6;cursor:not-allowed;' : ''">
+          <span x-show="!modal.loading">Confirmar cancelamento</span>
+          <span x-show="modal.loading">Cancelando…</span>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Toast container -->
+  <div id="hv-toast"></div>
+
+</div><!-- /x-data -->
+
+<script>
+function hvApp() {
+  return {
+    modal: { show:false, vendaId:null, numero:'', tipo:'nfce', justificativa:'', loading:false },
+
+    init() {
+      window.hvApp_instance = this;
+    },
+
+    toast(msg, tipo='ok') {
+      const el = document.createElement('div');
+      el.className = 'hv-toast-msg ' + (tipo==='ok' ? 'hv-toast-ok' : 'hv-toast-err');
+      el.textContent = msg;
+      document.getElementById('hv-toast').appendChild(el);
+      setTimeout(() => el.remove(), 3500);
+    },
+
+    csrf() {
+      return document.cookie.split(';').map(c=>c.trim()).find(c=>c.startsWith('csrftoken='))?.split('=')[1] || '';
+    },
+
+    async emitirNfce(vendaId) {
+      try {
+        const r = await fetch(`/pdv/api/venda/${vendaId}/emitir-nfce/`, {
+          method:'POST', headers:{'X-CSRFToken':this.csrf()}
+        });
+        const d = await r.json();
+        if (d.ok) {
+          this.toast('NFC-e emitida com sucesso!', 'ok');
+          setTimeout(() => location.reload(), 1200);
+        } else {
+          this.toast(d.erro || 'Erro ao emitir NFC-e.', 'err');
+        }
+      } catch(e) {
+        this.toast('Erro de comunicação ao emitir NFC-e.', 'err');
+      }
+    },
+
+    abrirCancelar(vendaId, numero, tipo) {
+      this.modal = { show:true, vendaId, numero, tipo, justificativa:'', loading:false };
+    },
+
+    async confirmarCancelar() {
+      if (this.modal.justificativa.trim().length < 15) {
+        this.toast('Justificativa deve ter ao menos 15 caracteres.', 'err'); return;
+      }
+      this.modal.loading = true;
+      try {
+        const r = await fetch(`/pdv/api/venda/${this.modal.vendaId}/cancelar-nfce/`, {
+          method:'POST',
+          headers:{'Content-Type':'application/json','X-CSRFToken':this.csrf()},
+          body: JSON.stringify({ justificativa: this.modal.justificativa }),
+        });
+        const d = await r.json();
+        if (d.ok) {
+          this.modal.show = false;
+          this.toast('Documento cancelado com sucesso.', 'ok');
+          setTimeout(() => location.reload(), 1200);
+        } else {
+          this.toast(d.erro || 'Erro ao cancelar.', 'err');
+        }
+      } catch(e) {
+        this.toast('Erro de comunicação ao cancelar.', 'err');
+      } finally {
+        this.modal.loading = false;
+      }
+    },
+
+    imprimirNaoFiscal(vendaId, numero, data, cliente, total) {
+      const filial = '{{ filial_ativa.nome_fantasia|default:filial_ativa.razao_social|escapejs }}';
+      const filialEndereco = '{{ filial_ativa.endereco|escapejs }}';
+      const filialNumero = '{{ filial_ativa.numero|escapejs }}';
+      const filialBairro = '{{ filial_ativa.bairro|escapejs }}';
+      const filialCidade = '{{ filial_ativa.cidade|escapejs }}';
+      const filialUf = '{{ filial_ativa.uf|escapejs }}';
+      const filialTelefone = '{{ filial_ativa.telefone|escapejs }}';
+      {% if parametros_sistema and parametros_sistema.logo_url %}
+      const logoUrl = '{{ parametros_sistema.logo_url|escapejs }}';
+      {% elif filial_ativa and filial_ativa.imagem %}
+      const logoUrl = '{{ request.scheme }}://{{ request.get_host }}{{ filial_ativa.imagem.url }}';
+      {% else %}
+      const logoUrl = '';
+      {% endif %}
+
+      const html = `<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8"><title>Comprovante</title>
+<style>*{margin:0;padding:0;box-sizing:border-box;}
+body{font-family:'Courier New',monospace;font-size:12px;color:#000;background:#fff;width:80mm;padding:8px;}
+h1{font-size:15px;font-weight:800;text-align:center;margin-bottom:2px;}
+.sub{font-size:11px;text-align:center;color:#000;font-weight:700;margin-bottom:8px;}
+.sep{border:none;border-top:1px dashed #000;margin:8px 0;}
+.total-row{font-size:14px;font-weight:800;display:flex;justify-content:space-between;}
+.footer{text-align:center;margin-top:10px;font-size:10px;color:#000;font-weight:700;}
+@media print{body{margin:0;}}</style></head><body>
+${logoUrl ? `<div style="text-align:center;margin-bottom:10px;"><img src="${logoUrl}" style="max-height:130px;max-width:260px;object-fit:contain;"></div>` : ''}
+<h1>${filial}</h1>
+${filialEndereco ? `<div class="sub">${filialEndereco}${filialNumero ? ', '+filialNumero : ''}${filialBairro ? ' – '+filialBairro : ''}</div>` : ''}
+${filialCidade ? `<div class="sub">${filialCidade}${filialUf ? ' – '+filialUf : ''}</div>` : ''}
+${filialTelefone ? `<div class="sub">Tel: ${filialTelefone}</div>` : ''}
+<hr class="sep">
+<div class="sub">${data} • #${numero}</div>
+<div class="sub">Cliente: <strong>${cliente}</strong></div>
+<hr class="sep">
+<div class="total-row"><span>TOTAL</span><span>R$ ${total}</span></div>
+<hr class="sep">
+<div class="footer">Obrigado pela preferência!<br>Este não é um documento fiscal.</div>
+</body></html>`;
+
+      const w = window.open('','_blank','width=340,height=400,scrollbars=yes');
+      if (!w) { this.toast('Permita popups para imprimir.','err'); return; }
+      w.document.write(html); w.document.close(); w.focus();
+      setTimeout(() => w.print(), 400);
+    },
+  };
+}
+</script>
+{% endblock %}

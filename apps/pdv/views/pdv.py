@@ -1609,6 +1609,59 @@ def orcamentos_list(request):
 
 
 # ---------------------------------------------------------------------------
+# API — Cancelar NFC-e de uma venda
+# ---------------------------------------------------------------------------
+
+@requer_permissao('pdv', 'ver')
+@require_POST
+def api_cancelar_nfce(request, pk):
+    """Cancela a NFC-e autorizada de uma venda PDV."""
+    try:
+        venda = (
+            VendaPDV.objects.for_filial(request.filial_ativa)
+            .select_related('documento_fiscal')
+            .get(pk=pk)
+        )
+    except VendaPDV.DoesNotExist:
+        return JsonResponse({"erro": "Venda não encontrada."}, status=404)
+
+    doc = venda.documento_fiscal
+    if not doc:
+        return JsonResponse({"erro": "Esta venda não possui documento fiscal."}, status=400)
+
+    if doc.status != "autorizada":
+        return JsonResponse(
+            {"erro": f"Apenas documentos autorizados podem ser cancelados (status atual: {doc.status})."},
+            status=400,
+        )
+
+    try:
+        body = json.loads(request.body or b'{}')
+    except json.JSONDecodeError:
+        body = {}
+
+    justificativa = body.get("justificativa", "").strip()
+    if len(justificativa) < 15:
+        return JsonResponse(
+            {"erro": "Informe uma justificativa com ao menos 15 caracteres."},
+            status=400,
+        )
+
+    doc.status = "cancelada"
+    doc.data_cancelamento = timezone.now()
+    doc.mensagem_sefaz = f"Cancelado pelo operador: {justificativa}"
+    doc.save(update_fields=["status", "data_cancelamento", "mensagem_sefaz"])
+
+    venda.status = "cancelada"
+    venda.motivo_cancelamento = justificativa
+    venda.cancelado_em = timezone.now()
+    venda.cancelado_por = request.user
+    venda.save(update_fields=["status", "motivo_cancelamento", "cancelado_em", "cancelado_por"])
+
+    return JsonResponse({"ok": True, "status": doc.status})
+
+
+# ---------------------------------------------------------------------------
 # API — Listar orçamentos
 # ---------------------------------------------------------------------------
 
