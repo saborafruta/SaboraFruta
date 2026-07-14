@@ -388,3 +388,69 @@ def emitir_nfce_para_venda(venda: VendaPDV, usuario) -> DocumentoFiscal:
         service = FocusNFeService()
 
     return service.emitir(doc, payload)
+
+
+@transaction.atomic
+def emitir_nfe_para_venda(venda: VendaPDV, usuario) -> DocumentoFiscal:
+    """
+    Wrapper de alto nível: constrói payload NF-e, cria DocumentoFiscal e dispara emissão.
+    Retorna o DocumentoFiscal criado/atualizado.
+    """
+    from apps.fiscal.services.focusnfe_service import FocusNFeService
+    from apps.fiscal.integrations.focusnfe import FocusNFeClient
+    from apps.fiscal.integrations.focusnfe.config import FocusNFeConfig
+
+    filial = venda.filial
+
+    existente = DocumentoFiscal.objects.filter(
+        origem_tipo="venda_pdv",
+        origem_id=venda.pk,
+        tipo_documento="nfe",
+    ).exclude(status=StatusDocumentoFiscal.CANCELADA).first()
+    if existente and existente.status == StatusDocumentoFiscal.AUTORIZADA:
+        return existente
+
+    # Reserva número de forma atômica com SELECT FOR UPDATE
+    from apps.core.models.empresa import Filial as _Filial
+    filial_lock = _Filial.objects.select_for_update().get(pk=filial.pk)
+    numero_nfe = filial_lock.proximo_numero_nfe
+    filial_lock.proximo_numero_nfe = numero_nfe + 1
+    filial_lock.save(update_fields=["proximo_numero_nfe"])
+
+    payload = NfePayloadBuilder.build(venda, numero_nfe=numero_nfe, serie_nfe=filial.serie_nfe or 1)
+
+    doc = DocumentoFiscal.objects.create(
+        filial=filial,
+        tipo_documento="nfe",
+        origem_tipo="venda_pdv",
+        origem_id=venda.pk,
+        numero=numero_nfe,
+        serie=filial.serie_nfe or 1,
+        emitente_cnpj=filial.cnpj,
+        destinatario_tipo="cliente" if venda.cliente_id else "consumidor",
+        destinatario_id=venda.cliente_id,
+        destinatario_snapshot=(
+            {
+                "nome": venda.cliente.razao_social,
+                "cpf_cnpj": venda.cliente.cpf_cnpj or "",
+            }
+            if venda.cliente else {"nome": "Consumidor Final"}
+        ),
+        valor_produtos=venda.valor_subtotal or 0,
+        valor_desconto=venda.valor_desconto or 0,
+        valor_total=venda.valor_total,
+        status=StatusDocumentoFiscal.PENDENTE,
+        data_emissao=venda.data_venda or timezone.now(),
+        usuario=usuario,
+    )
+
+    filial_token = getattr(filial, "focusnfe_token", "") or ""
+    filial_ambiente = getattr(filial, "focusnfe_ambiente", None)
+    if filial_token:
+        config = FocusNFeConfig.from_env(token=filial_token, ambiente=filial_ambiente)
+        client = FocusNFeClient(config=config)
+        service = FocusNFeService(client=client)
+    else:
+        service = FocusNFeService()
+
+    return service.emitir(doc, payload)

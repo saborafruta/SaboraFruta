@@ -2014,3 +2014,73 @@ def api_xml_nfce(request, pk):
     fname = f"{doc.tipo_documento.upper()}_{doc.numero:09d}_{doc.serie}.xml"
     resp['Content-Disposition'] = f'attachment; filename="{fname}"'
     return resp
+
+# ---------------------------------------------------------------------------
+# API — Emitir NF-e para uma venda finalizada
+# ---------------------------------------------------------------------------
+
+@requer_permissao('pdv', 'ver')
+@require_POST
+def api_emitir_nfe(request, pk):
+    """Emite a NF-e para uma venda PDV."""
+    try:
+        venda = (
+            VendaPDV.objects.for_filial(request.filial_ativa)
+            .prefetch_related("itens__produto__unidade_medida", "pagamentos__forma_pagamento")
+            .select_related("cliente", "filial")
+            .get(pk=pk)
+        )
+    except VendaPDV.DoesNotExist:
+        return JsonResponse({"erro": "Venda não encontrada."}, status=404)
+
+    if venda.status not in ("finalizada", "orcamento"):
+        return JsonResponse(
+            {"erro": f"Não é possível emitir NF-e para venda com status '{venda.status}'."},
+            status=400,
+        )
+
+    try:
+        from apps.pdv.services.nfce_payload_builder import emitir_nfe_para_venda
+        documento = emitir_nfe_para_venda(venda, request.user)
+    except DadosInvalidosError as exc:
+        return JsonResponse({"erro": str(exc)}, status=400)
+    except Exception as exc:
+        return JsonResponse({"erro": f"Erro ao emitir NF-e: {exc}"}, status=500)
+
+    return JsonResponse({
+        "ok": True,
+        "documento_id": documento.pk,
+        "status": documento.status,
+        "chave": documento.chave or "",
+        "pdf_danfe_url": documento.pdf_danfe_url or "",
+        "mensagem": documento.mensagem_sefaz or "",
+    })
+
+
+# ---------------------------------------------------------------------------
+# API — Cancelar venda (sem fiscal, apenas o registro da venda)
+# ---------------------------------------------------------------------------
+
+@requer_permissao('pdv', 'ver')
+@require_POST
+def api_cancelar_venda_historico(request, pk):
+    """Cancela uma venda finalizada que ainda não possui documento fiscal autorizado."""
+    try:
+        venda = (
+            VendaPDV.objects.for_filial(request.filial_ativa)
+            .select_related('documento_fiscal')
+            .get(pk=pk, status='finalizada')
+        )
+    except VendaPDV.DoesNotExist:
+        return JsonResponse({"erro": "Venda não encontrada ou já cancelada."}, status=404)
+
+    doc = getattr(venda, 'documento_fiscal', None)
+    if doc and doc.status == 'autorizada':
+        return JsonResponse(
+            {"erro": "Esta venda possui NFC-e/NF-e autorizada. Cancele o documento fiscal primeiro (botão 1)."},
+            status=400,
+        )
+
+    venda.status = "cancelada"
+    venda.save(update_fields=["status"])
+    return JsonResponse({"ok": True})

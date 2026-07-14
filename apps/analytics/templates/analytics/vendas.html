@@ -335,14 +335,23 @@ body.tema-claro .hv-page a, body.tema-claro .hv-page span { border-color:#d1d5db
           <td class="hv-td">
             <div class="hv-acts">
 
-              {# 1 — Cancelar NFC-e (apenas se autorizada e venda não cancelada) #}
-              {% if doc and doc.tipo_documento == 'nfce' and doc.status == 'autorizada' and venda.status != 'cancelada' %}
-              <button class="hv-ab hv-ab-red"
-                      onclick="hvApp_instance.abrirCancelar({{ venda.pk }}, '{{ venda.numero_venda|stringformat:'06d' }}', 'nfce')"
-                      title="Cancelar NFC-e">
-                <span class="hv-ab-tip">1 – Cancelar NFC-e</span>
-                1
-              </button>
+              {# 1 — Cancelar NFC-e (se autorizada) ou Cancelar Venda (se sem fiscal) #}
+              {% if venda.status == 'finalizada' %}
+                {% if doc and doc.tipo_documento == 'nfce' and doc.status == 'autorizada' %}
+                <button class="hv-ab hv-ab-red"
+                        onclick="hvApp_instance.abrirCancelar({{ venda.pk }}, '{{ venda.numero_venda|stringformat:'06d' }}', 'nfce')"
+                        title="Cancelar NFC-e">
+                  <span class="hv-ab-tip">1 – Cancelar NFC-e</span>
+                  1
+                </button>
+                {% elif not doc or doc.status != 'autorizada' %}
+                <button class="hv-ab hv-ab-red"
+                        onclick="hvApp_instance.abrirCancelarVenda({{ venda.pk }}, '{{ venda.numero_venda|stringformat:'06d' }}')"
+                        title="Cancelar venda">
+                  <span class="hv-ab-tip">1 – Cancelar cupom</span>
+                  1
+                </button>
+                {% endif %}
               {% endif %}
 
               {# 2 — Enviar por e-mail (se autorizada) #}
@@ -382,7 +391,7 @@ body.tema-claro .hv-page a, body.tema-claro .hv-page span { border-color:#d1d5db
               </a>
               {% endif %}
 
-              {# 5 — Emitir NFC-e (se não emitida ou rejeitada, e venda não cancelada) #}
+              {# 5 — Emitir NFC-e / NF-e (se não emitida ou rejeitada, e venda não cancelada) #}
               {% if venda.status != 'cancelada' %}
                 {% if not doc %}
                 <button class="hv-ab hv-ab-ora"
@@ -391,6 +400,13 @@ body.tema-claro .hv-page a, body.tema-claro .hv-page span { border-color:#d1d5db
                   <span class="hv-ab-tip">5 – Emitir NFC-e</span>
                   5
                 </button>
+                <button class="hv-ab hv-ab-blue"
+                        onclick="hvApp_instance.emitirNfe({{ venda.pk }})"
+                        title="Emitir NF-e"
+                        style="font-size:9px;width:32px;">
+                  <span class="hv-ab-tip">5 – Emitir NF-e</span>
+                  NF-e
+                </button>
                 {% elif doc.tipo_documento == 'nfce' and doc.status == 'rejeitada' %}
                 <button class="hv-ab hv-ab-ora"
                         onclick="hvApp_instance.emitirNfce({{ venda.pk }})"
@@ -398,12 +414,27 @@ body.tema-claro .hv-page a, body.tema-claro .hv-page span { border-color:#d1d5db
                   <span class="hv-ab-tip">5 – Re-emitir NFC-e</span>
                   5
                 </button>
+                <button class="hv-ab hv-ab-blue"
+                        onclick="hvApp_instance.emitirNfe({{ venda.pk }})"
+                        title="Emitir NF-e"
+                        style="font-size:9px;width:32px;">
+                  <span class="hv-ab-tip">Emitir NF-e</span>
+                  NF-e
+                </button>
                 {% elif doc.tipo_documento == 'nfce' and doc.status == 'pendente' %}
                 <button class="hv-ab hv-ab-ora"
                         onclick="hvApp_instance.emitirNfce({{ venda.pk }})"
                         title="Emitir NFC-e">
                   <span class="hv-ab-tip">5 – Emitir NFC-e</span>
                   5
+                </button>
+                {% elif doc.tipo_documento == 'nfe' and doc.status == 'rejeitada' %}
+                <button class="hv-ab hv-ab-blue"
+                        onclick="hvApp_instance.emitirNfe({{ venda.pk }})"
+                        title="Re-emitir NF-e"
+                        style="font-size:9px;width:32px;">
+                  <span class="hv-ab-tip">5 – Re-emitir NF-e</span>
+                  NF-e
                 </button>
                 {% endif %}
               {% endif %}
@@ -528,6 +559,24 @@ body.tema-claro .hv-page a, body.tema-claro .hv-page span { border-color:#d1d5db
     </div>
   </div>
 
+  <!-- Modal Cancelar Venda -->
+  <div class="hv-overlay" x-show="modalCancelV.show" x-cloak @keydown.escape.window="modalCancelV.show=false" style="display:none;">
+    <div class="hv-modal">
+      <h3 class="hv-modal-title">Cancelar Venda</h3>
+      <p class="hv-modal-sub">Venda #<strong x-text="modalCancelV.numero"></strong> — Esta ação cancela o cupom no sistema. Não pode ser desfeita.</p>
+      <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:14px;">
+        <button class="hv-btn-clear" @click="modalCancelV.show=false" style="padding:8px 18px;">Voltar</button>
+        <button @click="confirmarCancelarVenda()" :disabled="modalCancelV.loading"
+                style="padding:8px 20px;border-radius:8px;font-size:13px;font-weight:700;
+                       background:#dc2626;border:none;color:#fff;cursor:pointer;"
+                :style="modalCancelV.loading ? 'opacity:.6;cursor:not-allowed;' : ''">
+          <span x-show="!modalCancelV.loading">Confirmar cancelamento</span>
+          <span x-show="modalCancelV.loading">Cancelando…</span>
+        </button>
+      </div>
+    </div>
+  </div>
+
   <!-- Modal Enviar E-mail -->
   <div class="hv-overlay" x-show="modalEmail.show" x-cloak @keydown.escape.window="modalEmail.show=false" style="display:none;">
     <div class="hv-modal">
@@ -557,9 +606,10 @@ body.tema-claro .hv-page a, body.tema-claro .hv-page span { border-color:#d1d5db
 <script>
 function hvApp() {
   return {
-    modal:      { show:false, vendaId:null, numero:'', tipo:'nfce', justificativa:'', loading:false },
-    modalInut:  { show:false, tipo:'nfce', serie:1, numero_ini:'', numero_fim:'', justificativa:'', loading:false },
-    modalEmail: { show:false, vendaId:null, numero:'', emails:'', loading:false },
+    modal:        { show:false, vendaId:null, numero:'', tipo:'nfce', justificativa:'', loading:false },
+    modalInut:    { show:false, tipo:'nfce', serie:1, numero_ini:'', numero_fim:'', justificativa:'', loading:false },
+    modalEmail:   { show:false, vendaId:null, numero:'', emails:'', loading:false },
+    modalCancelV: { show:false, vendaId:null, numero:'', loading:false },
 
     init() {
       window.hvApp_instance = this;
@@ -591,6 +641,48 @@ function hvApp() {
         }
       } catch(e) {
         this.toast('Erro de comunicação ao emitir NFC-e.', 'err');
+      }
+    },
+
+    async emitirNfe(vendaId) {
+      try {
+        const r = await fetch(`/pdv/api/venda/${vendaId}/emitir-nfe/`, {
+          method:'POST', headers:{'X-CSRFToken':this.csrf()}
+        });
+        const d = await r.json();
+        if (d.ok) {
+          this.toast('NF-e emitida com sucesso!', 'ok');
+          setTimeout(() => location.reload(), 1200);
+        } else {
+          this.toast(d.erro || 'Erro ao emitir NF-e.', 'err');
+        }
+      } catch(e) {
+        this.toast('Erro de comunicação ao emitir NF-e.', 'err');
+      }
+    },
+
+    abrirCancelarVenda(vendaId, numero) {
+      this.modalCancelV = { show:true, vendaId, numero, loading:false };
+    },
+
+    async confirmarCancelarVenda() {
+      this.modalCancelV.loading = true;
+      try {
+        const r = await fetch(`/pdv/api/venda/${this.modalCancelV.vendaId}/cancelar-venda/`, {
+          method:'POST', headers:{'X-CSRFToken':this.csrf()}
+        });
+        const d = await r.json();
+        if (d.ok) {
+          this.modalCancelV.show = false;
+          this.toast('Venda cancelada com sucesso.', 'ok');
+          setTimeout(() => location.reload(), 1200);
+        } else {
+          this.toast(d.erro || 'Erro ao cancelar venda.', 'err');
+        }
+      } catch(e) {
+        this.toast('Erro de comunicação ao cancelar venda.', 'err');
+      } finally {
+        this.modalCancelV.loading = false;
       }
     },
 
