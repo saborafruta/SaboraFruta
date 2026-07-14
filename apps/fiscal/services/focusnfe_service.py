@@ -324,15 +324,31 @@ class FocusNFeService:
             raise ValueError("Token Focus não configurado para esta filial.")
 
         # --- Certificado digital -------------------------------------------
+        # Prefere base64 salvo no banco (persiste entre redeploys no Railway).
+        # Tenta ler o arquivo somente como fallback.
         cert_b64: Optional[str] = None
-        if params.certificado_digital and params.certificado_digital.name:
+        db_b64 = (getattr(params, "certificado_base64", "") or "").strip()
+        if db_b64:
+            cert_b64 = db_b64
+        elif params.certificado_digital and params.certificado_digital.name:
             try:
                 params.certificado_digital.open("rb")
                 cert_bytes = params.certificado_digital.read()
                 params.certificado_digital.close()
                 cert_b64 = base64.b64encode(cert_bytes).decode("ascii")
-            except Exception as exc:
-                raise ValueError(f"Não foi possível ler o certificado digital: {exc}") from exc
+                # Persiste no banco para sobreviver a redeploys
+                params.certificado_base64 = cert_b64
+                params.save(update_fields=["certificado_base64"])
+            except OSError:
+                # Arquivo não existe no disco (filesystem efêmero do Railway).
+                # O base64 estará vazio — o certificado não será enviado agora.
+                # O usuário deve fazer um novo upload na tela de parâmetros.
+                logger.warning(
+                    "Certificado digital não encontrado em disco (%s). "
+                    "Sincronizando apenas CSC e dados da empresa.",
+                    params.certificado_digital.name,
+                )
+                cert_b64 = None
 
         # --- Monta payload base -------------------------------------------
         payload: Dict[str, Any] = {
@@ -370,6 +386,8 @@ class FocusNFeService:
         if filial.uf:
             payload["uf"] = filial.uf
 
+        sem_certificado = cert_b64 is None
+
         # Certificado
         if cert_b64:
             payload["arquivo_certificado_base64"] = cert_b64
@@ -395,4 +413,11 @@ class FocusNFeService:
         config = FocusNFeConfig.from_env(token=filial.focusnfe_token, ambiente=ambiente)
         client = FocusNFeClient(config=config)
 
-        return client.empresas.upsert(cnpj, payload)
+        retorno = client.empresas.upsert(cnpj, payload)
+        if sem_certificado:
+            if isinstance(retorno, dict):
+                retorno["_aviso_certificado"] = (
+                    "Certificado não enviado (arquivo não encontrado no servidor). "
+                    "Faça upload novamente na tela de Parâmetros e salve para registrá-lo."
+                )
+        return retorno

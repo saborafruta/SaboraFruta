@@ -1,10 +1,10 @@
 """System parameters screen: identity, contacts and fiscal setup."""
+import base64
 import json
 
 from django.contrib import messages
 from django.http import JsonResponse
 from django.shortcuts import redirect, render
-from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_POST
 
 from apps.core.forms.parametros import FilialIdentidadeForm, ParametrosSistemaForm
@@ -200,6 +200,16 @@ def parametros_sistema(request):
                     return redirect('core:admin_parametros')
             filial_salva.save()
             params_salvos = form_params.save(commit=False)
+            # Se um novo certificado foi enviado, salva também em base64
+            # para persistir entre redeploys no Railway (filesystem efêmero)
+            cert_file = request.FILES.get('certificado_digital')
+            if cert_file:
+                try:
+                    cert_bytes = cert_file.read()
+                    cert_file.seek(0)  # rebobina para o Django salvar o arquivo
+                    params_salvos.certificado_base64 = base64.b64encode(cert_bytes).decode('ascii')
+                except Exception:
+                    pass
             params_salvos.save()
             _salvar_documentos(request, documentos)
             messages.success(request, 'Parametros do sistema salvos com sucesso.')
@@ -245,7 +255,8 @@ def api_sincronizar_focus(request):
         from apps.fiscal.services.focusnfe_service import FocusNFeService
         service = FocusNFeService()
         retorno = service.sincronizar_empresa(filial, params)
-        return JsonResponse({"ok": True, "retorno": retorno or {}})
+        aviso = (retorno or {}).pop("_aviso_certificado", None) if isinstance(retorno, dict) else None
+        return JsonResponse({"ok": True, "retorno": retorno or {}, "aviso": aviso})
     except ValueError as exc:
         return JsonResponse({"ok": False, "erro": str(exc)}, status=400)
     except Exception as exc:

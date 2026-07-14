@@ -42,6 +42,13 @@ class ParametrosSistema(TimestampedModel):
         blank=True,
         help_text='Senha do certificado digital. Use apenas em ambiente controlado.',
     )
+    certificado_base64 = models.TextField(
+        blank=True,
+        default='',
+        help_text='Conteúdo do certificado A1 codificado em base64. '
+                  'Preenchido automaticamente ao fazer upload. '
+                  'Persiste entre redeploys (diferente do FileField).',
+    )
     nfce_csc_id = models.CharField(max_length=20, blank=True)
     nfce_csc_token = models.CharField(max_length=120, blank=True)
     email_envio_automatico = models.BooleanField(default=False)

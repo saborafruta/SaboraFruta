@@ -609,7 +609,9 @@ function syncFocus() {
         const d = await r.json();
         if (d.ok) {
           this.ok = true;
-          this.msg = 'Empresa sincronizada com sucesso!';
+          this.msg = d.aviso
+            ? 'Sincronizado (sem certificado: ' + d.aviso + ')'
+            : 'Empresa sincronizada com sucesso!';
         } else {
           this.ok = false;
           this.msg = d.erro || 'Erro ao sincronizar.';
