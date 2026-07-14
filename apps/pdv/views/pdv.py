@@ -1600,6 +1600,106 @@ def api_preview_nfce(request, pk):
 
 
 # ---------------------------------------------------------------------------
+# API — Inutilizar faixa de numeração NFC-e / NF-e
+# ---------------------------------------------------------------------------
+
+@requer_permissao('pdv', 'ver')
+@require_POST
+def api_inutilizar_faixa(request):
+    """
+    Inutiliza uma faixa de numeração junto à SEFAZ via Focus NF-e.
+
+    Body JSON:
+        tipo_documento  : "nfce" | "nfe"
+        serie           : int
+        numero_inicial  : int
+        numero_final    : int
+        justificativa   : str (mín. 15 chars)
+    """
+    import json as _json
+    from apps.fiscal.integrations.focusnfe import FocusNFeClient
+    from apps.fiscal.integrations.focusnfe.config import FocusNFeConfig
+    from apps.financeiro.constants.enums import StatusDocumentoFiscal
+    from apps.financeiro.models.fiscal import DocumentoFiscal
+
+    try:
+        body = _json.loads(request.body)
+    except Exception:
+        return JsonResponse({"erro": "JSON inválido."}, status=400)
+
+    tipo_documento = body.get("tipo_documento", "nfce")
+    if tipo_documento not in ("nfce", "nfe"):
+        return JsonResponse({"erro": "tipo_documento deve ser 'nfce' ou 'nfe'."}, status=400)
+
+    justificativa = (body.get("justificativa") or "").strip()
+    if len(justificativa) < 15:
+        return JsonResponse({"erro": "Justificativa deve ter ao menos 15 caracteres."}, status=400)
+
+    try:
+        serie = int(body.get("serie", 1))
+        numero_inicial = int(body.get("numero_inicial"))
+        numero_final = int(body.get("numero_final"))
+    except (TypeError, ValueError):
+        return JsonResponse({"erro": "serie, numero_inicial e numero_final devem ser inteiros."}, status=400)
+
+    if numero_final < numero_inicial:
+        return JsonResponse({"erro": "numero_final deve ser >= numero_inicial."}, status=400)
+
+    filial = request.filial_ativa
+    cnpj = (filial.cnpj or "").replace(".", "").replace("/", "").replace("-", "")
+    if not cnpj:
+        return JsonResponse({"erro": "Filial sem CNPJ cadastrado."}, status=400)
+
+    try:
+        filial_token = getattr(filial, "focusnfe_token", "") or ""
+        filial_ambiente = getattr(filial, "focusnfe_ambiente", None)
+        if filial_token:
+            config = FocusNFeConfig.from_env(token=filial_token, ambiente=filial_ambiente)
+            client = FocusNFeClient(config=config)
+        else:
+            client = FocusNFeClient()
+
+        resource = getattr(client, tipo_documento)
+        resposta = resource.inutilizar(
+            cnpj=cnpj,
+            serie=serie,
+            numero_inicial=numero_inicial,
+            numero_final=numero_final,
+            justificativa=justificativa,
+        )
+    except ValueError as exc:
+        return JsonResponse({"erro": str(exc)}, status=400)
+    except Exception as exc:
+        return JsonResponse({"erro": f"Erro ao inutilizar: {exc}"}, status=500)
+
+    # Registra DocumentoFiscal para cada número inutilizado
+    for num in range(numero_inicial, numero_final + 1):
+        DocumentoFiscal.objects.get_or_create(
+            filial=filial,
+            tipo_documento=tipo_documento,
+            numero=num,
+            serie=serie,
+            defaults={
+                "origem_tipo": "inutilizacao",
+                "origem_id": 0,
+                "emitente_cnpj": cnpj,
+                "status": StatusDocumentoFiscal.INUTILIZADA,
+                "valor_total": 0,
+                "usuario": request.user,
+            },
+        )
+
+    return JsonResponse({
+        "ok": True,
+        "tipo_documento": tipo_documento,
+        "serie": serie,
+        "numero_inicial": numero_inicial,
+        "numero_final": numero_final,
+        "resposta_sefaz": resposta,
+    })
+
+
+# ---------------------------------------------------------------------------
 # Orçamentos — Página de listagem
 # ---------------------------------------------------------------------------
 

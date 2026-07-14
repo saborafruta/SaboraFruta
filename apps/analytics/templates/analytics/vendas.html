@@ -159,6 +159,17 @@ body.tema-claro .hv-page a, body.tema-claro .hv-page span { border-color:#d1d5db
         {{ total }} registro{{ total|pluralize }} encontrado{{ total|pluralize }}
       </p>
     </div>
+    <button @click="modalInut.show=true"
+            style="display:flex;align-items:center;gap:6px;padding:9px 18px;border-radius:9px;
+                   font-size:13px;font-weight:700;cursor:pointer;border:1px solid #78350f;
+                   background:#1c1107;color:#fbbf24;transition:.15s;"
+            onmouseover="this.style.background='#292108';this.style.borderColor='#fbbf24';"
+            onmouseout="this.style.background='#1c1107';this.style.borderColor='#78350f';">
+      <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636"/>
+      </svg>
+      Inutilizar Faixa
+    </button>
   </div>
 
   <!-- Filtros -->
@@ -370,6 +381,60 @@ body.tema-claro .hv-page a, body.tema-claro .hv-page span { border-color:#d1d5db
   {% endif %}
   {% endif %}
 
+  <!-- Modal Inutilizar Faixa -->
+  <div class="hv-overlay" x-show="modalInut.show" x-cloak @keydown.escape.window="modalInut.show=false" style="display:none;">
+    <div class="hv-modal" style="max-width:460px;">
+      <h3 class="hv-modal-title" style="display:flex;align-items:center;gap:8px;">
+        <svg width="16" height="16" fill="none" stroke="#fbbf24" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636"/></svg>
+        Inutilizar Faixa de Numeração
+      </h3>
+      <p class="hv-modal-sub">Informa à SEFAZ que os números dessa faixa não foram utilizados e nunca serão emitidos.</p>
+
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px;">
+        <div>
+          <label class="hv-filter-label" style="display:block;margin-bottom:4px;">Tipo de documento</label>
+          <select x-model="modalInut.tipo" class="hv-input" style="width:100%;">
+            <option value="nfce">NFC-e (modelo 65)</option>
+            <option value="nfe">NF-e (modelo 55)</option>
+          </select>
+        </div>
+        <div>
+          <label class="hv-filter-label" style="display:block;margin-bottom:4px;">Série</label>
+          <input type="number" x-model="modalInut.serie" min="1" class="hv-input" style="width:100%;" placeholder="1">
+        </div>
+        <div>
+          <label class="hv-filter-label" style="display:block;margin-bottom:4px;">Número inicial</label>
+          <input type="number" x-model="modalInut.numero_ini" min="1" class="hv-input" style="width:100%;" placeholder="Ex: 100">
+        </div>
+        <div>
+          <label class="hv-filter-label" style="display:block;margin-bottom:4px;">Número final</label>
+          <input type="number" x-model="modalInut.numero_fim" min="1" class="hv-input" style="width:100%;" placeholder="Ex: 105">
+        </div>
+      </div>
+
+      <div style="margin-bottom:14px;">
+        <label class="hv-filter-label" style="display:block;margin-bottom:4px;">Justificativa (mín. 15 caracteres)</label>
+        <textarea x-model="modalInut.justificativa" placeholder="Motivo da inutilização da faixa..."
+                  style="width:100%;padding:10px 12px;border-radius:8px;font-size:13px;resize:vertical;min-height:72px;
+                         background:#0d0d16;border:1px solid #2a2a3e;color:#e5e5f0;outline:none;font-family:inherit;
+                         box-sizing:border-box;"
+                  @focus="$el.style.borderColor='#fbbf24'" @blur="$el.style.borderColor='#2a2a3e'"></textarea>
+        <div style="font-size:11px;color:#6b6b88;margin-top:3px;" x-text="modalInut.justificativa.length + ' / 15 mínimo'"></div>
+      </div>
+
+      <div style="display:flex;gap:8px;justify-content:flex-end;">
+        <button class="hv-btn-clear" @click="modalInut.show=false" style="padding:8px 18px;">Cancelar</button>
+        <button @click="confirmarInutilizar()" :disabled="modalInut.loading"
+                style="padding:8px 20px;border-radius:8px;font-size:13px;font-weight:700;
+                       background:#b45309;border:none;color:#fff;cursor:pointer;"
+                :style="modalInut.loading ? 'opacity:.6;cursor:not-allowed;' : ''">
+          <span x-show="!modalInut.loading">Confirmar Inutilização</span>
+          <span x-show="modalInut.loading">Inutilizando…</span>
+        </button>
+      </div>
+    </div>
+  </div>
+
   <!-- Modal Cancelar NFC-e -->
   <div class="hv-overlay" x-show="modal.show" x-cloak @keydown.escape.window="modal.show=false" style="display:none;">
     <div class="hv-modal">
@@ -402,6 +467,7 @@ body.tema-claro .hv-page a, body.tema-claro .hv-page span { border-color:#d1d5db
 function hvApp() {
   return {
     modal: { show:false, vendaId:null, numero:'', tipo:'nfce', justificativa:'', loading:false },
+    modalInut: { show:false, tipo:'nfce', serie:1, numero_ini:'', numero_fim:'', justificativa:'', loading:false },
 
     init() {
       window.hvApp_instance = this;
@@ -463,6 +529,43 @@ function hvApp() {
         this.toast('Erro de comunicação ao cancelar.', 'err');
       } finally {
         this.modal.loading = false;
+      }
+    },
+
+    async confirmarInutilizar() {
+      if (this.modalInut.justificativa.trim().length < 15) {
+        this.toast('Justificativa deve ter ao menos 15 caracteres.', 'err'); return;
+      }
+      const ini = parseInt(this.modalInut.numero_ini);
+      const fim = parseInt(this.modalInut.numero_fim);
+      if (!ini || !fim || fim < ini) {
+        this.toast('Verifique os números inicial e final.', 'err'); return;
+      }
+      this.modalInut.loading = true;
+      try {
+        const r = await fetch('/pdv/api/inutilizar-faixa/', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'X-CSRFToken': this.csrf() },
+          body: JSON.stringify({
+            tipo_documento: this.modalInut.tipo,
+            serie: parseInt(this.modalInut.serie) || 1,
+            numero_inicial: ini,
+            numero_final: fim,
+            justificativa: this.modalInut.justificativa,
+          }),
+        });
+        const d = await r.json();
+        if (d.ok) {
+          this.modalInut.show = false;
+          this.modalInut = { show:false, tipo:'nfce', serie:1, numero_ini:'', numero_fim:'', justificativa:'', loading:false };
+          this.toast(`Faixa ${ini}–${fim} inutilizada com sucesso.`, 'ok');
+        } else {
+          this.toast(d.erro || 'Erro ao inutilizar.', 'err');
+        }
+      } catch(e) {
+        this.toast('Erro de comunicação ao inutilizar.', 'err');
+      } finally {
+        this.modalInut.loading = false;
       }
     },
 

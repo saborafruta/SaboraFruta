@@ -55,6 +55,32 @@ class AuthorizedDocResource(ResourceBase):
             json_body={"emails": list(emails)},
         )
 
+    # ----------------------------------------------------- inutilização
+    def inutilizar(
+        self,
+        cnpj: str,
+        serie: int,
+        numero_inicial: int,
+        numero_final: int,
+        justificativa: str,
+        ano: Optional[int] = None,
+    ) -> Dict[str, Any]:
+        """Inutiliza uma faixa de numeração (NF-e, NFC-e). Mín. 15 chars na justificativa."""
+        if not self.supports_inutilizacao:
+            raise NotImplementedError(f"{self.endpoint} não suporta inutilização.")
+        if not justificativa or len(justificativa) < 15:
+            raise ValueError("Justificativa de inutilização exige no mínimo 15 caracteres.")
+        body: Dict[str, Any] = {
+            "cnpj": cnpj,
+            "serie": serie,
+            "numero_inicial": numero_inicial,
+            "numero_final": numero_final,
+            "justificativa": justificativa,
+        }
+        if ano is not None:
+            body["ano"] = ano
+        return self._http.post(f"/v2/{self.endpoint}_inutilizacao", json_body=body)
+
     # ----------------------------------------------------- carta de correção
     def carta_correcao(self, ref: str, correcao: str) -> Dict[str, Any]:
         """Envia carta de correção (se suportado pelo documento)."""

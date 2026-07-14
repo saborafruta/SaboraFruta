@@ -46,6 +46,7 @@ urlpatterns = [
     path("api/venda/<int:pk>/detalhe/", pdv.api_venda_detalhe, name="api_venda_detalhe"),
     path("api/venda/<int:pk>/cancelar/", pdv.api_venda_cancelar, name="api_venda_cancelar"),
     # Fiscal — NFC-e / NF-e
+    path("api/inutilizar-faixa/", pdv.api_inutilizar_faixa, name="api_inutilizar_faixa"),
     path("api/venda/<int:pk>/emitir-nfce/", pdv.api_emitir_nfce, name="api_emitir_nfce"),
     path("api/venda/<int:pk>/cancelar-nfce/", pdv.api_cancelar_nfce, name="api_cancelar_nfce"),
     path("api/venda/<int:pk>/preview-nfce/", pdv.api_preview_nfce, name="api_preview_nfce"),
