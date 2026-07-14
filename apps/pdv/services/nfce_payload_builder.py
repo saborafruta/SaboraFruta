@@ -19,10 +19,29 @@ from __future__ import annotations
 from decimal import Decimal
 from typing import Any, Dict, Optional
 
+from zoneinfo import ZoneInfo
+
 from django.db import transaction
 from django.utils import timezone
 
 from apps.core.services.exceptions import DadosInvalidosError
+
+_BRT = ZoneInfo("America/Sao_Paulo")
+
+
+def _data_emissao_brt(dt=None) -> str:
+    """
+    Converte dt (UTC) para BRT (America/Sao_Paulo) e retorna ISO 8601 com offset.
+    Ex.: "2026-07-14T10:49:10-03:00"
+
+    Critério SEFAZ: dhEmi deve refletir o fuso local da NFC-e,
+    nunca UTC com offset -03:00 colado na mão (causaria rejeição 703).
+    """
+    if dt is None:
+        dt = timezone.now()
+    if timezone.is_naive(dt):
+        dt = timezone.make_aware(dt, timezone.utc)
+    return dt.astimezone(_BRT).isoformat(timespec="seconds")
 from apps.financeiro.models import DocumentoFiscal
 from apps.financeiro.constants.enums import TipoDocumentoFiscal, StatusDocumentoFiscal
 from apps.pdv.models import VendaPDV
@@ -203,7 +222,7 @@ class NfcePayloadBuilder:
         if not itens_qs:
             raise DadosInvalidosError("Venda sem itens — não é possível emitir NFC-e.")
 
-        data_emissao = (venda.data_venda or timezone.now()).strftime("%Y-%m-%dT%H:%M:%S-03:00")
+        data_emissao = _data_emissao_brt(venda.data_venda)
 
         items = [
             _montar_item(idx + 1, item, filial)
@@ -267,7 +286,7 @@ class NfePayloadBuilder:
         if not itens_qs:
             raise DadosInvalidosError("Venda sem itens — não é possível emitir NF-e.")
 
-        data_emissao = (venda.data_venda or timezone.now()).strftime("%Y-%m-%dT%H:%M:%S-03:00")
+        data_emissao = _data_emissao_brt(venda.data_venda)
 
         items = [
             _montar_item(idx + 1, item, filial)
