@@ -208,7 +208,7 @@ class NfcePayloadBuilder:
     """
 
     @classmethod
-    def build(cls, venda: VendaPDV) -> Dict[str, Any]:
+    def build(cls, venda: VendaPDV, numero: int = None, serie: int = None) -> Dict[str, Any]:
         filial = venda.filial
         cliente = venda.cliente
 
@@ -231,13 +231,16 @@ class NfcePayloadBuilder:
 
         cnpj = (filial.cnpj or "").replace(".", "").replace("/", "").replace("-", "")
 
+        numero_nfce = numero if numero is not None else venda.numero_venda
+        serie_nfce = serie if serie is not None else (filial.serie_nfce or 1)
+
         payload: Dict[str, Any] = {
             # ── Identificação do emitente (topo, formato v2) ────────────────
             "cnpj_emitente": cnpj,
             # ── Dados da nota ───────────────────────────────────────────────
             "natureza_operacao": "VENDA AO CONSUMIDOR",
-            "numero": venda.numero_venda,
-            "serie": str(filial.serie_nfce or 1),
+            "numero": numero_nfce,
+            "serie": str(serie_nfce),
             "data_emissao": data_emissao,
             # ── Campos obrigatórios NFC-e v2 ────────────────────────────────
             "local_destino": "1",         # 1=operação interna (sempre para PDV)
@@ -333,11 +336,13 @@ def emitir_nfce_para_venda(venda: VendaPDV, usuario) -> DocumentoFiscal:
     Wrapper de alto nível: constrói payload NFC-e, cria DocumentoFiscal e dispara emissão.
     Retorna o DocumentoFiscal criado/atualizado.
 
+    Usa ParametroDocumentoFiscal para série e número (reserva atômica).
     NFC-e é SÍNCRONA na Focus NFe: o retorno já tem o status final (autorizado/erro).
     """
     from apps.fiscal.services.focusnfe_service import FocusNFeService
     from apps.fiscal.integrations.focusnfe import FocusNFeClient
     from apps.fiscal.integrations.focusnfe.config import FocusNFeConfig
+    from apps.core.models.parametros import ParametroDocumentoFiscal, ParametrosSistema
 
     filial = venda.filial
 
@@ -350,15 +355,33 @@ def emitir_nfce_para_venda(venda: VendaPDV, usuario) -> DocumentoFiscal:
     if existente and existente.status == StatusDocumentoFiscal.AUTORIZADA:
         return existente
 
-    payload = NfcePayloadBuilder.build(venda)
+    # Reserva número atômico via ParametroDocumentoFiscal
+    params, _ = ParametrosSistema.objects.get_or_create(filial=filial)
+    doc_params = (
+        ParametroDocumentoFiscal.objects
+        .select_for_update()
+        .filter(parametros=params, tipo_documento="nfce")
+        .first()
+    )
+    if doc_params:
+        numero_nfce = doc_params.proximo_numero
+        serie_nfce = doc_params.serie or 1
+        doc_params.proximo_numero = numero_nfce + 1
+        doc_params.save(update_fields=["proximo_numero"])
+    else:
+        # Fallback se ainda não configurado
+        numero_nfce = venda.numero_venda
+        serie_nfce = filial.serie_nfce or 1
+
+    payload = NfcePayloadBuilder.build(venda, numero=numero_nfce, serie=serie_nfce)
 
     doc = DocumentoFiscal.objects.create(
         filial=filial,
         tipo_documento="nfce",
         origem_tipo="venda_pdv",
         origem_id=venda.pk,
-        numero=venda.numero_venda,
-        serie=filial.serie_nfce or 1,
+        numero=numero_nfce,
+        serie=serie_nfce,
         emitente_cnpj=filial.cnpj,
         destinatario_tipo="cliente" if venda.cliente_id else "consumidor",
         destinatario_id=venda.cliente_id,
@@ -394,11 +417,12 @@ def emitir_nfce_para_venda(venda: VendaPDV, usuario) -> DocumentoFiscal:
 def emitir_nfe_para_venda(venda: VendaPDV, usuario) -> DocumentoFiscal:
     """
     Wrapper de alto nível: constrói payload NF-e, cria DocumentoFiscal e dispara emissão.
-    Retorna o DocumentoFiscal criado/atualizado.
+    Usa ParametroDocumentoFiscal para série e número (reserva atômica).
     """
     from apps.fiscal.services.focusnfe_service import FocusNFeService
     from apps.fiscal.integrations.focusnfe import FocusNFeClient
     from apps.fiscal.integrations.focusnfe.config import FocusNFeConfig
+    from apps.core.models.parametros import ParametroDocumentoFiscal, ParametrosSistema
 
     filial = venda.filial
 
@@ -410,14 +434,29 @@ def emitir_nfe_para_venda(venda: VendaPDV, usuario) -> DocumentoFiscal:
     if existente and existente.status == StatusDocumentoFiscal.AUTORIZADA:
         return existente
 
-    # Reserva número de forma atômica com SELECT FOR UPDATE
-    from apps.core.models.empresa import Filial as _Filial
-    filial_lock = _Filial.objects.select_for_update().get(pk=filial.pk)
-    numero_nfe = filial_lock.proximo_numero_nfe
-    filial_lock.proximo_numero_nfe = numero_nfe + 1
-    filial_lock.save(update_fields=["proximo_numero_nfe"])
+    # Reserva número atômico via ParametroDocumentoFiscal
+    params, _ = ParametrosSistema.objects.get_or_create(filial=filial)
+    doc_params = (
+        ParametroDocumentoFiscal.objects
+        .select_for_update()
+        .filter(parametros=params, tipo_documento="nfe")
+        .first()
+    )
+    if doc_params:
+        numero_nfe = doc_params.proximo_numero
+        serie_nfe = doc_params.serie or 1
+        doc_params.proximo_numero = numero_nfe + 1
+        doc_params.save(update_fields=["proximo_numero"])
+    else:
+        # Fallback se ainda não configurado
+        from apps.core.models.empresa import Filial as _Filial
+        filial_lock = _Filial.objects.select_for_update().get(pk=filial.pk)
+        numero_nfe = filial_lock.proximo_numero_nfe
+        serie_nfe = filial_lock.serie_nfe or 1
+        filial_lock.proximo_numero_nfe = numero_nfe + 1
+        filial_lock.save(update_fields=["proximo_numero_nfe"])
 
-    payload = NfePayloadBuilder.build(venda, numero_nfe=numero_nfe, serie_nfe=filial.serie_nfe or 1)
+    payload = NfePayloadBuilder.build(venda, numero_nfe=numero_nfe, serie_nfe=serie_nfe)
 
     doc = DocumentoFiscal.objects.create(
         filial=filial,
@@ -425,7 +464,7 @@ def emitir_nfe_para_venda(venda: VendaPDV, usuario) -> DocumentoFiscal:
         origem_tipo="venda_pdv",
         origem_id=venda.pk,
         numero=numero_nfe,
-        serie=filial.serie_nfe or 1,
+        serie=serie_nfe,
         emitente_cnpj=filial.cnpj,
         destinatario_tipo="cliente" if venda.cliente_id else "consumidor",
         destinatario_id=venda.cliente_id,
