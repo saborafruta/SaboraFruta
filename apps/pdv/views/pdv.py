@@ -527,6 +527,7 @@ def api_venda_finalizar(request):
     acrescimo = Decimal(str(body.get("acrescimo", "0")))
     delivery = bool(body.get("delivery", False))
     endereco_entrega = body.get("endereco_entrega", {})
+    credito_valor = Decimal(str(body.get("credito_valor", "0")))
     forcar_estoque_negativo = True
 
     try:
@@ -542,6 +543,7 @@ def api_venda_finalizar(request):
             delivery=delivery,
             endereco_entrega=endereco_entrega,
             forcar_estoque_negativo=forcar_estoque_negativo,
+            credito_valor=credito_valor,
         )
     except EstoqueInsuficienteError as exc:
         return JsonResponse({"erro": str(exc), "tipo": "estoque_insuficiente"}, status=400)
@@ -582,6 +584,7 @@ def api_venda_finalizar_forcado(request):
     acrescimo = Decimal(str(body.get("acrescimo", "0")))
     delivery = bool(body.get("delivery", False))
     endereco_entrega = body.get("endereco_entrega", {})
+    credito_valor = Decimal(str(body.get("credito_valor", "0")))
 
     try:
         venda = VendaPDVService.finalizar_venda(
@@ -595,7 +598,8 @@ def api_venda_finalizar_forcado(request):
             acrescimo=acrescimo,
             delivery=delivery,
             endereco_entrega=endereco_entrega,
-            forcar_estoque_negativo=True,  # sempre True neste endpoint
+            forcar_estoque_negativo=True,
+            credito_valor=credito_valor,
         )
     except DadosInvalidosError as exc:
         return JsonResponse({"erro": str(exc)}, status=400)
@@ -1851,6 +1855,30 @@ def api_cancelar_nfce(request, pk):
 # ---------------------------------------------------------------------------
 # API — Listar orçamentos
 # ---------------------------------------------------------------------------
+
+@requer_permissao('pdv', 'ver')
+@require_GET
+def api_credito_cliente(request):
+    """Retorna saldo de crédito disponível para um cliente."""
+    from apps.financeiro.models.credito_cliente import CreditoCliente
+    cliente_id = request.GET.get('cliente_id')
+    if not cliente_id:
+        return JsonResponse({'saldo': '0.00', 'creditos': []})
+    filial = request.filial_ativa
+    creditos = CreditoCliente.objects.filter(
+        filial=filial,
+        cliente_id=cliente_id,
+        status=CreditoCliente.Status.DISPONIVEL,
+    ).order_by('created_at')
+    saldo_total = Decimal('0')
+    lista = []
+    for c in creditos:
+        saldo = c.valor_saldo
+        if saldo > 0:
+            saldo_total += saldo
+            lista.append({'id': c.pk, 'saldo': float(saldo), 'motivo': c.motivo})
+    return JsonResponse({'saldo': float(saldo_total), 'creditos': lista})
+
 
 @requer_permissao('pdv', 'ver')
 @require_GET

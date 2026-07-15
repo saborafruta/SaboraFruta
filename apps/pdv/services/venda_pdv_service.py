@@ -38,12 +38,14 @@ class VendaPDVService:
         delivery: bool = False,
         endereco_entrega: dict | None = None,
         forcar_estoque_negativo: bool = True,
+        credito_valor: Decimal = Decimal("0"),
     ) -> VendaPDV:
         if not sessao:
             raise DadosInvalidosError("Nenhuma sessao de caixa aberta.")
         if not itens:
             raise DadosInvalidosError("Carrinho vazio.")
-        if not pagamentos:
+        credito_valor = cls._decimal(credito_valor, cls.MONEY)
+        if not pagamentos and credito_valor <= 0:
             raise DadosInvalidosError("Informe ao menos uma forma de pagamento.")
 
         desconto = cls._decimal(desconto, cls.MONEY)
@@ -101,7 +103,11 @@ class VendaPDVService:
             filial=filial,
             pagamentos=pagamentos,
             valor_total=valor_total,
+            credito_valor=credito_valor,
         )
+
+        if credito_valor > 0 and cliente_id:
+            cls._aplicar_credito_cliente(filial, cliente_id, credito_valor)
 
         venda.valor_subtotal = subtotal
         venda.valor_total = valor_total
@@ -397,6 +403,29 @@ class VendaPDVService:
         total = PrecoService.aplicar_regra_desconto(subtotal, tipo, valor or Decimal("0"))
         return cls._decimal(total, cls.MONEY)
 
+    @staticmethod
+    def _aplicar_credito_cliente(filial, cliente_id, credito_valor: Decimal):
+        """Debita credito_valor dos créditos disponíveis do cliente (FIFO)."""
+        from apps.financeiro.models.credito_cliente import CreditoCliente
+        restante = credito_valor
+        creditos = CreditoCliente.objects.filter(
+            filial=filial,
+            cliente_id=cliente_id,
+            status=CreditoCliente.Status.DISPONIVEL,
+        ).order_by('created_at')
+        for credito in creditos:
+            if restante <= 0:
+                break
+            saldo = credito.valor_saldo
+            if saldo <= 0:
+                continue
+            debitar = min(saldo, restante)
+            credito.valor_utilizado += debitar
+            restante -= debitar
+            if credito.valor_saldo <= 0:
+                credito.status = CreditoCliente.Status.UTILIZADO
+            credito.save(update_fields=['valor_utilizado', 'status', 'updated_at'])
+
     @classmethod
     def _registrar_pagamentos(
         cls,
@@ -405,8 +434,9 @@ class VendaPDVService:
         filial,
         pagamentos: list[dict],
         valor_total: Decimal,
+        credito_valor: Decimal = Decimal("0"),
     ) -> tuple[Decimal, Decimal]:
-        valor_pago = Decimal("0.00")
+        valor_pago = credito_valor  # crédito conta como pré-pago
         troco_total = Decimal("0.00")
         for pgto in pagamentos:
             forma_id = int(pgto["forma_id"])

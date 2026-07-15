@@ -35,6 +35,8 @@ urlpatterns = [
     path("api/historico/cliente/<int:cliente_id>/", pdv.api_historico_cliente, name="api_historico_cliente"),
     # Configurações / Formas de Pagamento
     path("api/formas-pagamento/", pdv.api_formas_pagamento, name="api_formas_pagamento"),
+    # Crédito de cliente
+    path("api/credito-cliente/", pdv.api_credito_cliente, name="api_credito_cliente"),
     # Clientes
     path("api/cliente/criar/", pdv.api_cliente_criar, name="api_cliente_criar"),
     path("api/clientes/debug/", pdv.api_clientes_debug, name="api_clientes_debug"),

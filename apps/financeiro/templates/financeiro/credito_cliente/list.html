@@ -1,0 +1,234 @@
+{% extends "_base.html" %}
+
+{% block title %}Créditos de Clientes{% endblock %}
+{% block page_title %}Créditos de Clientes{% endblock %}
+
+{% block content %}
+<div class="space-y-5">
+
+  <!-- Cabeçalho -->
+  <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+    <div>
+      <h2 class="text-2xl font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
+        Créditos de Clientes
+      </h2>
+      <p class="text-sm mt-0.5" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+        Gerencie créditos gerados por devoluções e ajustes. Créditos disponíveis podem ser usados no PDV.
+      </p>
+    </div>
+    {% if pode_criar %}
+      <a href="{% url 'financeiro:credito_criar' %}" class="btn-primary flex-shrink-0">
+        + Novo Crédito
+      </a>
+    {% endif %}
+  </div>
+
+  <!-- KPI Cards -->
+  <div class="grid grid-cols-2 lg:grid-cols-4 gap-4">
+
+    <div class="card p-4 flex items-start gap-3">
+      <div class="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0"
+           :style="temaClaro ? 'background:#dcfce7;' : 'background:rgba(34,197,94,0.12);'">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"
+             :style="temaClaro ? 'color:#15803d;' : 'color:#4ade80;'">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8"
+                d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+        </svg>
+      </div>
+      <div>
+        <p class="text-xs font-medium uppercase tracking-wide" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Saldo Disponível</p>
+        <p class="text-lg font-bold mt-0.5" :style="temaClaro ? 'color:#15803d;' : 'color:#4ade80;'">
+          R$ {{ kpi_saldo_disponivel|floatformat:2 }}
+        </p>
+        <p class="text-xs mt-0.5" :style="temaClaro ? 'color:#94a3b8;' : 'color:#64748b;'">
+          {{ kpi_qtd_disponivel }} crédito{{ kpi_qtd_disponivel|pluralize }}
+        </p>
+      </div>
+    </div>
+
+    <div class="card p-4 flex items-start gap-3">
+      <div class="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0"
+           :style="temaClaro ? 'background:#dbeafe;' : 'background:rgba(59,130,246,0.12);'">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"
+             :style="temaClaro ? 'color:#1d4ed8;' : 'color:#93c5fd;'">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8"
+                d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+        </svg>
+      </div>
+      <div>
+        <p class="text-xs font-medium uppercase tracking-wide" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Total Utilizado</p>
+        <p class="text-lg font-bold mt-0.5" :style="temaClaro ? 'color:#1d4ed8;' : 'color:#93c5fd;'">
+          R$ {{ kpi_total_utilizado|floatformat:2 }}
+        </p>
+        <p class="text-xs mt-0.5" :style="temaClaro ? 'color:#94a3b8;' : 'color:#64748b;'">em compras</p>
+      </div>
+    </div>
+
+    <div class="card p-4 flex items-start gap-3">
+      <div class="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0"
+           :style="temaClaro ? 'background:#f3f4f6;' : 'background:rgba(107,114,128,0.12);'">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"
+             :style="temaClaro ? 'color:#374151;' : 'color:#d1d5db;'">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8"
+                d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/>
+        </svg>
+      </div>
+      <div>
+        <p class="text-xs font-medium uppercase tracking-wide" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Total de Registros</p>
+        <p class="text-lg font-bold mt-0.5" :style="temaClaro ? 'color:#374151;' : 'color:#d1d5db;'">
+          {{ kpi_qtd_total }}
+        </p>
+        <p class="text-xs mt-0.5" :style="temaClaro ? 'color:#94a3b8;' : 'color:#64748b;'">todos os status</p>
+      </div>
+    </div>
+
+    <div class="card p-4 flex items-start gap-3">
+      <div class="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0"
+           :style="temaClaro ? 'background:#fef9c3;' : 'background:rgba(234,179,8,0.12);'">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"
+             :style="temaClaro ? 'color:#a16207;' : 'color:#fde047;'">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8"
+                d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+        </svg>
+      </div>
+      <div>
+        <p class="text-xs font-medium uppercase tracking-wide" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Como Usar</p>
+        <p class="text-sm font-medium mt-0.5" :style="temaClaro ? 'color:#a16207;' : 'color:#fde047;'">No PDV</p>
+        <p class="text-xs mt-0.5" :style="temaClaro ? 'color:#94a3b8;' : 'color:#64748b;'">selecione o cliente</p>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- Filtros -->
+  <div class="card p-4">
+    <form method="get" class="flex flex-col sm:flex-row gap-3">
+      <input type="text" name="q" value="{{ q }}"
+             placeholder="Buscar por cliente, CPF/CNPJ ou documento..."
+             class="form-input flex-1">
+      <select name="status" class="form-input sm:w-48">
+        <option value="">Todos os status</option>
+        {% for val, label in status_choices %}
+          <option value="{{ val }}" {% if status_filtro == val %}selected{% endif %}>{{ label }}</option>
+        {% endfor %}
+      </select>
+      <button type="submit" class="btn-primary">Filtrar</button>
+      {% if q or status_filtro %}
+        <a href="{% url 'financeiro:credito_list' %}" class="btn-secondary">Limpar</a>
+      {% endif %}
+    </form>
+  </div>
+
+  <!-- Tabela -->
+  <div class="card overflow-hidden">
+    {% if page_obj.object_list %}
+      <div class="overflow-x-auto">
+        <table class="w-full text-sm">
+          <thead>
+            <tr :style="temaClaro ? 'background:#f9fafb; border-bottom:1px solid #e5e7eb;' : 'background:#1e293b; border-bottom:1px solid #374151;'">
+              <th class="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wider" :style="temaClaro ? 'color:#6b7280;' : 'color:#9ca3af;'">#</th>
+              <th class="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wider" :style="temaClaro ? 'color:#6b7280;' : 'color:#9ca3af;'">Cliente</th>
+              <th class="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wider" :style="temaClaro ? 'color:#6b7280;' : 'color:#9ca3af;'">Motivo</th>
+              <th class="text-right px-4 py-3 text-xs font-semibold uppercase tracking-wider" :style="temaClaro ? 'color:#6b7280;' : 'color:#9ca3af;'">Valor</th>
+              <th class="text-right px-4 py-3 text-xs font-semibold uppercase tracking-wider" :style="temaClaro ? 'color:#6b7280;' : 'color:#9ca3af;'">Saldo</th>
+              <th class="text-center px-4 py-3 text-xs font-semibold uppercase tracking-wider" :style="temaClaro ? 'color:#6b7280;' : 'color:#9ca3af;'">Status</th>
+              <th class="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wider" :style="temaClaro ? 'color:#6b7280;' : 'color:#9ca3af;'">Data</th>
+              <th class="px-4 py-3"></th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for credito in page_obj %}
+              <tr class="border-t transition-colors"
+                  :style="temaClaro ? 'border-color:#e5e7eb;' : 'border-color:#374151;'"
+                  onmouseover="this.style.background=temaClaro?'#f9fafb':'#1e293b';"
+                  onmouseout="this.style.background='';">
+                <td class="px-4 py-3 font-mono text-xs" :style="temaClaro ? 'color:#9ca3af;' : 'color:#6b7280;'">#{{ credito.pk }}</td>
+                <td class="px-4 py-3">
+                  <p class="font-medium text-sm" :style="temaClaro ? 'color:#111827;' : 'color:#f1f5f9;'">
+                    {{ credito.cliente.nome_fantasia|default:credito.cliente.razao_social }}
+                  </p>
+                  {% if credito.cliente.cpf_cnpj %}
+                    <p class="text-xs font-mono mt-0.5" :style="temaClaro ? 'color:#9ca3af;' : 'color:#6b7280;'">{{ credito.cliente.cpf_cnpj }}</p>
+                  {% endif %}
+                </td>
+                <td class="px-4 py-3 text-sm" :style="temaClaro ? 'color:#374151;' : 'color:#d1d5db;'">
+                  {{ credito.motivo|capfirst }}
+                  {% if credito.documento_numero %}
+                    <span class="text-xs font-mono ml-1" :style="temaClaro ? 'color:#9ca3af;' : 'color:#6b7280;'">({{ credito.documento_numero }})</span>
+                  {% endif %}
+                </td>
+                <td class="px-4 py-3 text-right font-mono font-medium" :style="temaClaro ? 'color:#111827;' : 'color:#f1f5f9;'">
+                  R$ {{ credito.valor|floatformat:2 }}
+                </td>
+                <td class="px-4 py-3 text-right font-mono font-bold"
+                    :style="temaClaro ? 'color:#15803d;' : 'color:#4ade80;'">
+                  R$ {{ credito.valor_saldo|floatformat:2 }}
+                </td>
+                <td class="px-4 py-3 text-center">
+                  {% if credito.status == 'disponivel' %}
+                    <span class="px-2 py-0.5 rounded-full text-xs font-medium" style="background:#dcfce7; color:#15803d;">Disponível</span>
+                  {% elif credito.status == 'utilizado' %}
+                    <span class="px-2 py-0.5 rounded-full text-xs font-medium" style="background:#dbeafe; color:#1d4ed8;">Utilizado</span>
+                  {% else %}
+                    <span class="px-2 py-0.5 rounded-full text-xs font-medium" style="background:#f3f4f6; color:#6b7280;">Cancelado</span>
+                  {% endif %}
+                </td>
+                <td class="px-4 py-3 text-xs" :style="temaClaro ? 'color:#6b7280;' : 'color:#94a3b8;'">
+                  {{ credito.created_at|date:"d/m/Y" }}
+                </td>
+                <td class="px-4 py-3 text-right">
+                  <a href="{% url 'financeiro:credito_detail' credito.pk %}"
+                     class="text-xs font-medium"
+                     :style="temaClaro ? 'color:#3b82f6;' : 'color:#60a5fa;'">
+                    Ver
+                  </a>
+                </td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+
+      <!-- Paginação -->
+      {% if page_obj.has_other_pages %}
+        <div class="px-4 py-3 border-t flex items-center justify-between"
+             :style="temaClaro ? 'border-color:#e5e7eb;' : 'border-color:#374151;'">
+          <p class="text-xs" :style="temaClaro ? 'color:#6b7280;' : 'color:#94a3b8;'">
+            {{ page_obj.start_index }}–{{ page_obj.end_index }} de {{ page_obj.paginator.count }}
+          </p>
+          <div class="flex gap-1">
+            {% if page_obj.has_previous %}
+              <a href="?page={{ page_obj.previous_page_number }}&q={{ q }}&status={{ status_filtro }}"
+                 class="px-3 py-1 rounded text-xs font-medium"
+                 :style="temaClaro ? 'background:#f3f4f6; color:#374151;' : 'background:#374151; color:#d1d5db;'">←</a>
+            {% endif %}
+            {% if page_obj.has_next %}
+              <a href="?page={{ page_obj.next_page_number }}&q={{ q }}&status={{ status_filtro }}"
+                 class="px-3 py-1 rounded text-xs font-medium"
+                 :style="temaClaro ? 'background:#f3f4f6; color:#374151;' : 'background:#374151; color:#d1d5db;'">→</a>
+            {% endif %}
+          </div>
+        </div>
+      {% endif %}
+
+    {% else %}
+      <div class="p-12 text-center">
+        <svg class="w-12 h-12 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"
+             :style="temaClaro ? 'color:#d1d5db;' : 'color:#374151;'">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"
+                d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+        </svg>
+        <p class="font-medium" :style="temaClaro ? 'color:#374151;' : 'color:#d1d5db;'">Nenhum crédito encontrado</p>
+        <p class="text-sm mt-1" :style="temaClaro ? 'color:#9ca3af;' : 'color:#6b7280;'">
+          {% if q or status_filtro %}
+            Tente outros filtros.
+          {% else %}
+            Créditos são gerados automaticamente nas devoluções de cliente.
+          {% endif %}
+        </p>
+      </div>
+    {% endif %}
+  </div>
+
+</div>
+{% endblock %}

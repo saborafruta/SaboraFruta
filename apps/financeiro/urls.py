@@ -4,6 +4,7 @@ from apps.financeiro.views import financeiro
 from apps.financeiro.views import receber as receber_views
 from apps.financeiro.views import pagar as pagar_views
 from apps.financeiro.views import plano_contas as pc_views
+from apps.financeiro.views import credito_cliente as cc_views
 
 app_name = "financeiro"
 
@@ -27,6 +28,12 @@ urlpatterns = [
     path("plano-contas/novo/",                  pc_views.PlanoContasCreateView.as_view(),      name="plano_contas_criar"),
     path("plano-contas/<int:pk>/editar/",       pc_views.PlanoContasEditView.as_view(),        name="plano_contas_editar"),
     path("plano-contas/<int:pk>/toggle-ativo/", pc_views.PlanoContasToggleAtivoView.as_view(), name="plano_contas_toggle"),
+
+    # ── Créditos de Clientes ──────────────────────────────────────────────────
+    path("creditos/",              cc_views.CreditoClienteListView.as_view(),   name="credito_list"),
+    path("creditos/novo/",         cc_views.CreditoClienteCreateView.as_view(), name="credito_criar"),
+    path("creditos/<int:pk>/",     cc_views.CreditoClienteDetailView.as_view(), name="credito_detail"),
+    path("api/credito-saldo/",     cc_views.api_credito_saldo,                  name="api_credito_saldo"),
 
     # ── Outros ───────────────────────────────────────────────────────────────
     path("documentos/",       financeiro.documentos_fiscais_list, name="documentos"),

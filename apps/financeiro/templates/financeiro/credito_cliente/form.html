@@ -1,0 +1,175 @@
+{% extends "_base.html" %}
+
+{% block title %}{{ title }}{% endblock %}
+{% block page_title %}{{ title }}{% endblock %}
+
+{% block content %}
+<div class="space-y-5 max-w-2xl"
+     x-data="creditoForm()"
+     x-init="init()">
+
+  <div>
+    <p class="text-sm mb-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+      <a href="{% url 'financeiro:credito_list' %}" :style="temaClaro ? 'color:#3b82f6;' : 'color:#60a5fa;'">Créditos de Clientes</a>
+      <span class="mx-1">›</span> Novo Crédito
+    </p>
+    <h2 class="text-2xl font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">Novo Crédito Manual</h2>
+    <p class="text-sm mt-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+      Use para ajustes comerciais, cortesias ou outras situações não geradas por devolução.
+    </p>
+  </div>
+
+  <form method="post" novalidate>
+    {% csrf_token %}
+
+    <div class="space-y-5">
+
+      <div class="card p-6 space-y-5">
+        <h3 class="text-xs font-semibold uppercase tracking-widest pb-2 border-b"
+            :style="temaClaro ? 'color:#6b7280; border-color:#e5e7eb;' : 'color:#6b7280; border-color:#374151;'">
+          Cliente
+        </h3>
+
+        <div>
+          <label class="block text-sm font-medium mb-1.5" :style="temaClaro ? 'color:#374151;' : 'color:#d1d5db;'">
+            Cliente <span class="text-red-500">*</span>
+          </label>
+          <div class="relative">
+            <div class="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none">
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"
+                   :style="temaClaro ? 'color:#9ca3af;' : 'color:#6b7280;'">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
+              </svg>
+            </div>
+            <input type="text"
+                   x-model="clienteQuery"
+                   @input.debounce.300ms="buscarCliente()"
+                   @focus="clienteAberto = true"
+                   @keydown.escape="clienteAberto = false"
+                   @keydown.arrow-down.prevent="clienteFocus = Math.min(clienteFocus + 1, clienteResultados.length - 1)"
+                   @keydown.arrow-up.prevent="clienteFocus = Math.max(clienteFocus - 1, 0)"
+                   @keydown.enter.prevent="selecionarCliente(clienteResultados[clienteFocus])"
+                   placeholder="Digite o nome, fantasia ou CPF/CNPJ..."
+                   autocomplete="off"
+                   class="form-input w-full pl-9"
+                   :class="clienteId ? (temaClaro ? 'border-green-400' : 'border-green-600') : ''">
+            <template x-if="clienteId">
+              <button type="button" @click="limparCliente()"
+                      class="absolute inset-y-0 right-0 flex items-center pr-3" title="Limpar">
+                <svg class="w-4 h-4 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
+                </svg>
+              </button>
+            </template>
+            <div x-show="clienteAberto && (clienteResultados.length > 0 || clienteCarregando)"
+                 @click.outside="clienteAberto = false"
+                 class="absolute z-50 w-full mt-1 rounded-lg shadow-xl border overflow-hidden"
+                 :style="temaClaro ? 'background:#fff; border-color:#e5e7eb;' : 'background:#1e293b; border-color:#374151;'">
+              <div x-show="clienteCarregando" class="px-4 py-3 text-sm"
+                   :style="temaClaro ? 'color:#6b7280;' : 'color:#9ca3af;'">
+                <span class="inline-block w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin mr-2 align-middle"></span>
+                Buscando...
+              </div>
+              <template x-for="(item, idx) in clienteResultados" :key="item.id">
+                <button type="button" @click="selecionarCliente(item)" @mouseenter="clienteFocus = idx"
+                        class="w-full text-left px-4 py-2.5 flex items-start gap-3 transition-colors"
+                        :style="clienteFocus === idx ? (temaClaro ? 'background:#eff6ff;' : 'background:#1e3a5f;') : ''">
+                  <div class="w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 text-xs font-bold"
+                       style="background:#dcfce7; color:#15803d;" x-text="item.label.charAt(0).toUpperCase()"></div>
+                  <div class="min-w-0 flex-1">
+                    <p class="text-sm font-medium truncate" :style="temaClaro ? 'color:#111827;' : 'color:#f1f5f9;'" x-text="item.label"></p>
+                    <p class="text-xs truncate" :style="temaClaro ? 'color:#6b7280;' : 'color:#94a3b8;'" x-text="item.cpf_cnpj || item.detalhe || ''"></p>
+                  </div>
+                </button>
+              </template>
+            </div>
+          </div>
+          <p x-show="clienteId" class="text-xs mt-1 text-green-500" x-text="'✓ ' + clienteNome"></p>
+          <input type="hidden" name="cliente_id" :value="clienteId">
+        </div>
+      </div>
+
+      <div class="card p-6 space-y-5">
+        <h3 class="text-xs font-semibold uppercase tracking-widest pb-2 border-b"
+            :style="temaClaro ? 'color:#6b7280; border-color:#e5e7eb;' : 'color:#6b7280; border-color:#374151;'">
+          Crédito
+        </h3>
+
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-5">
+          <div>
+            <label class="block text-sm font-medium mb-1.5" :style="temaClaro ? 'color:#374151;' : 'color:#d1d5db;'">
+              Valor (R$) <span class="text-red-500">*</span>
+            </label>
+            <input type="number" name="valor" step="0.01" min="0.01"
+                   value="{{ form_data.valor|default:'' }}"
+                   placeholder="0,00" class="form-input w-full" required>
+          </div>
+          <div>
+            <label class="block text-sm font-medium mb-1.5" :style="temaClaro ? 'color:#374151;' : 'color:#d1d5db;'">
+              Motivo <span class="text-red-500">*</span>
+            </label>
+            <select name="motivo" class="form-input w-full">
+              {% for val, label in motivo_choices %}
+                <option value="{{ val }}" {% if form_data.motivo == val %}selected{% endif %}>{{ label }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div>
+            <label class="block text-sm font-medium mb-1.5" :style="temaClaro ? 'color:#374151;' : 'color:#d1d5db;'">
+              Nº Documento (opcional)
+            </label>
+            <input type="text" name="documento_numero"
+                   value="{{ form_data.documento_numero|default:'' }}"
+                   placeholder="NF, pedido, etc." class="form-input w-full">
+          </div>
+        </div>
+
+        <div>
+          <label class="block text-sm font-medium mb-1.5" :style="temaClaro ? 'color:#374151;' : 'color:#d1d5db;'">
+            Observação <span class="text-red-500">*</span>
+          </label>
+          <textarea name="observacao" rows="3"
+                    placeholder="Descreva o motivo do crédito..."
+                    class="form-input w-full">{{ form_data.observacao|default:'' }}</textarea>
+        </div>
+      </div>
+
+      <div class="flex gap-3 justify-end">
+        <a href="{% url 'financeiro:credito_list' %}" class="btn-secondary">Cancelar</a>
+        <button type="submit" :disabled="!clienteId" class="btn-primary">
+          Criar Crédito
+        </button>
+      </div>
+    </div>
+  </form>
+</div>
+
+<script>
+function creditoForm() {
+  return {
+    clienteQuery: '', clienteId: null, clienteNome: '',
+    clienteResultados: [], clienteAberto: false, clienteCarregando: false, clienteFocus: 0,
+    init() {},
+    async buscarCliente() {
+      if (this.clienteId) return;
+      const q = this.clienteQuery.trim();
+      if (q.length < 2) { this.clienteResultados = []; this.clienteAberto = false; return; }
+      this.clienteCarregando = true; this.clienteAberto = true; this.clienteFocus = 0;
+      try {
+        const res = await fetch(`{% url 'estoque:cliente-search-json' %}?q=${encodeURIComponent(q)}`);
+        this.clienteResultados = (await res.json()).results || [];
+      } catch { this.clienteResultados = []; }
+      finally { this.clienteCarregando = false; }
+    },
+    selecionarCliente(item) {
+      if (!item) return;
+      this.clienteId = item.id; this.clienteNome = item.label;
+      this.clienteQuery = item.label; this.clienteResultados = []; this.clienteAberto = false;
+    },
+    limparCliente() {
+      this.clienteId = null; this.clienteNome = ''; this.clienteQuery = ''; this.clienteResultados = [];
+    },
+  };
+}
+</script>
+{% endblock %}

@@ -1,0 +1,174 @@
+{% extends "_base.html" %}
+
+{% block title %}{{ title }}{% endblock %}
+{% block page_title %}{{ title }}{% endblock %}
+
+{% block content %}
+<div class="space-y-5 max-w-3xl">
+
+  <!-- Breadcrumb -->
+  <div>
+    <p class="text-sm mb-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+      <a href="{% url 'financeiro:credito_list' %}" :style="temaClaro ? 'color:#3b82f6;' : 'color:#60a5fa;'">Créditos de Clientes</a>
+      <span class="mx-1">›</span> Crédito #{{ credito.pk }}
+    </p>
+  </div>
+
+  <!-- Status banner -->
+  {% if credito.status == 'disponivel' %}
+    <div class="card px-4 py-3 border-l-4 flex items-center gap-3" style="border-left-color:#22c55e;">
+      <svg class="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"
+           :style="temaClaro ? 'color:#16a34a;' : 'color:#4ade80;'">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+      </svg>
+      <p class="text-sm font-medium" :style="temaClaro ? 'color:#15803d;' : 'color:#4ade80;'">
+        Crédito disponível — saldo de <strong>R$ {{ credito.valor_saldo|floatformat:2 }}</strong> pode ser usado no PDV.
+      </p>
+    </div>
+  {% elif credito.status == 'utilizado' %}
+    <div class="card px-4 py-3 border-l-4 flex items-center gap-3" style="border-left-color:#3b82f6;">
+      <svg class="w-5 h-5 flex-shrink-0 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
+      </svg>
+      <p class="text-sm font-medium" :style="temaClaro ? 'color:#1d4ed8;' : 'color:#93c5fd;'">
+        Crédito totalmente utilizado.
+      </p>
+    </div>
+  {% else %}
+    <div class="card px-4 py-3 border-l-4 flex items-center gap-3" style="border-left-color:#6b7280;">
+      <svg class="w-5 h-5 flex-shrink-0 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636"/>
+      </svg>
+      <p class="text-sm font-medium" :style="temaClaro ? 'color:#6b7280;' : 'color:#9ca3af;'">
+        Crédito cancelado.
+      </p>
+    </div>
+  {% endif %}
+
+  <div class="grid grid-cols-1 lg:grid-cols-3 gap-5">
+
+    <!-- Dados principais -->
+    <div class="lg:col-span-2 space-y-5">
+
+      <div class="card p-6 space-y-5">
+        <h3 class="text-xs font-semibold uppercase tracking-widest pb-2 border-b"
+            :style="temaClaro ? 'color:#6b7280; border-color:#e5e7eb;' : 'color:#6b7280; border-color:#374151;'">
+          Dados do Crédito
+        </h3>
+
+        <div class="grid grid-cols-2 gap-4">
+          <div>
+            <p class="text-xs font-medium uppercase tracking-wide mb-1" :style="temaClaro ? 'color:#9ca3af;' : 'color:#6b7280;'">Cliente</p>
+            <p class="font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f1f5f9;'">
+              {{ credito.cliente.nome_fantasia|default:credito.cliente.razao_social }}
+            </p>
+            {% if credito.cliente.cpf_cnpj %}
+              <p class="text-xs font-mono mt-0.5" :style="temaClaro ? 'color:#6b7280;' : 'color:#94a3b8;'">{{ credito.cliente.cpf_cnpj }}</p>
+            {% endif %}
+          </div>
+          <div>
+            <p class="text-xs font-medium uppercase tracking-wide mb-1" :style="temaClaro ? 'color:#9ca3af;' : 'color:#6b7280;'">Motivo</p>
+            <p class="font-medium" :style="temaClaro ? 'color:#374151;' : 'color:#d1d5db;'">{{ credito.motivo|capfirst }}</p>
+          </div>
+          <div>
+            <p class="text-xs font-medium uppercase tracking-wide mb-1" :style="temaClaro ? 'color:#9ca3af;' : 'color:#6b7280;'">Valor Total</p>
+            <p class="text-xl font-bold" :style="temaClaro ? 'color:#111827;' : 'color:#f1f5f9;'">R$ {{ credito.valor|floatformat:2 }}</p>
+          </div>
+          <div>
+            <p class="text-xs font-medium uppercase tracking-wide mb-1" :style="temaClaro ? 'color:#9ca3af;' : 'color:#6b7280;'">Saldo Atual</p>
+            <p class="text-xl font-bold" :style="temaClaro ? 'color:#15803d;' : 'color:#4ade80;'">R$ {{ credito.valor_saldo|floatformat:2 }}</p>
+          </div>
+          <div>
+            <p class="text-xs font-medium uppercase tracking-wide mb-1" :style="temaClaro ? 'color:#9ca3af;' : 'color:#6b7280;'">Utilizado</p>
+            <p class="font-medium" :style="temaClaro ? 'color:#374151;' : 'color:#d1d5db;'">R$ {{ credito.valor_utilizado|floatformat:2 }}</p>
+          </div>
+          <div>
+            <p class="text-xs font-medium uppercase tracking-wide mb-1" :style="temaClaro ? 'color:#9ca3af;' : 'color:#6b7280;'">Status</p>
+            {% if credito.status == 'disponivel' %}
+              <span class="px-2 py-0.5 rounded-full text-xs font-medium" style="background:#dcfce7; color:#15803d;">Disponível</span>
+            {% elif credito.status == 'utilizado' %}
+              <span class="px-2 py-0.5 rounded-full text-xs font-medium" style="background:#dbeafe; color:#1d4ed8;">Utilizado</span>
+            {% else %}
+              <span class="px-2 py-0.5 rounded-full text-xs font-medium" style="background:#f3f4f6; color:#6b7280;">Cancelado</span>
+            {% endif %}
+          </div>
+          {% if credito.documento_numero %}
+            <div>
+              <p class="text-xs font-medium uppercase tracking-wide mb-1" :style="temaClaro ? 'color:#9ca3af;' : 'color:#6b7280;'">Documento / NF</p>
+              <p class="font-mono text-sm" :style="temaClaro ? 'color:#374151;' : 'color:#d1d5db;'">{{ credito.documento_numero }}</p>
+            </div>
+          {% endif %}
+          {% if credito.cfop %}
+            <div>
+              <p class="text-xs font-medium uppercase tracking-wide mb-1" :style="temaClaro ? 'color:#9ca3af;' : 'color:#6b7280;'">CFOP</p>
+              <p class="font-mono text-sm" :style="temaClaro ? 'color:#374151;' : 'color:#d1d5db;'">{{ credito.cfop }}</p>
+            </div>
+          {% endif %}
+        </div>
+
+        {% if credito.observacao %}
+          <div>
+            <p class="text-xs font-medium uppercase tracking-wide mb-1" :style="temaClaro ? 'color:#9ca3af;' : 'color:#6b7280;'">Observação</p>
+            <p class="text-sm" :style="temaClaro ? 'color:#374151;' : 'color:#d1d5db;'">{{ credito.observacao }}</p>
+          </div>
+        {% endif %}
+      </div>
+
+      <div class="card p-6">
+        <h3 class="text-xs font-semibold uppercase tracking-widest pb-2 border-b mb-4"
+            :style="temaClaro ? 'color:#6b7280; border-color:#e5e7eb;' : 'color:#6b7280; border-color:#374151;'">
+          Informações do Registro
+        </h3>
+        <div class="grid grid-cols-2 gap-4 text-sm">
+          <div>
+            <p class="text-xs" :style="temaClaro ? 'color:#9ca3af;' : 'color:#6b7280;'">Criado em</p>
+            <p :style="temaClaro ? 'color:#374151;' : 'color:#d1d5db;'">{{ credito.created_at|date:"d/m/Y H:i" }}</p>
+          </div>
+          <div>
+            <p class="text-xs" :style="temaClaro ? 'color:#9ca3af;' : 'color:#6b7280;'">Operador</p>
+            <p :style="temaClaro ? 'color:#374151;' : 'color:#d1d5db;'">{{ credito.usuario|default:"—" }}</p>
+          </div>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- Ações -->
+    <div class="space-y-5">
+      <div class="card p-5 space-y-3">
+        <h3 class="text-xs font-semibold uppercase tracking-widest"
+            :style="temaClaro ? 'color:#6b7280;' : 'color:#9ca3af;'">Ações</h3>
+
+        {% if credito.status == 'disponivel' %}
+          <div class="p-3 rounded-lg text-sm" :style="temaClaro ? 'background:#eff6ff;' : 'background:rgba(59,130,246,0.1);'">
+            <p class="font-medium" :style="temaClaro ? 'color:#1d4ed8;' : 'color:#93c5fd;'">💡 Usar no PDV</p>
+            <p class="text-xs mt-1" :style="temaClaro ? 'color:#3b82f6;' : 'color:#60a5fa;'">
+              Selecione o cliente <strong>{{ credito.cliente.nome_fantasia|default:credito.cliente.razao_social }}</strong>
+              no PDV. O botão "Crédito" aparecerá automaticamente.
+            </p>
+          </div>
+
+          <form method="post" onsubmit="return confirm('Cancelar este crédito? Esta ação não pode ser desfeita.');">
+            {% csrf_token %}
+            <input type="hidden" name="acao" value="cancelar">
+            <button type="submit" class="w-full btn-secondary flex items-center justify-center gap-2 text-red-500">
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+              </svg>
+              Cancelar Crédito
+            </button>
+          </form>
+        {% endif %}
+
+        <a href="{% url 'financeiro:credito_list' %}" class="btn-secondary w-full flex items-center justify-center gap-2">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"/>
+          </svg>
+          Voltar à lista
+        </a>
+      </div>
+    </div>
+
+  </div>
+</div>
+{% endblock %}
