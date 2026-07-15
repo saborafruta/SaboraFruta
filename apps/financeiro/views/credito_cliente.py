@@ -21,6 +21,10 @@ def _filial(request):
     return request.filial_ativa
 
 
+def _is_admin(request):
+    return request.user.is_superuser or request.user.perfil.is_admin
+
+
 def _kpis(qs_base):
     disponivel = qs_base.filter(status=CreditoCliente.Status.DISPONIVEL).aggregate(
         total=Sum('valor'), utilizado=Sum('valor_utilizado')
@@ -86,10 +90,15 @@ class CreditoClienteDetailView(PermissaoRequiredMixin, View):
         return render(request, 'financeiro/credito_cliente/detail.html', {
             'title': f'Crédito #{credito.pk}',
             'credito': credito,
+            'user_is_admin': _is_admin(request),
         })
 
     @transaction.atomic
     def post(self, request, pk):
+        if not _is_admin(request):
+            messages.error(request, 'Apenas administradores podem cancelar créditos.')
+            return redirect(reverse('financeiro:credito_detail', args=[pk]))
+
         filial = _filial(request)
         credito = get_object_or_404(CreditoCliente, pk=pk, filial=filial)
         acao = request.POST.get('acao')
@@ -176,6 +185,89 @@ class CreditoClienteCreateView(PermissaoRequiredMixin, View):
         )
         messages.success(request, f'Crédito de R$ {valor:.2f} criado para {cliente}.')
         return redirect(reverse('financeiro:credito_detail', args=[credito.pk]))
+
+
+_MOTIVO_CHOICES = [
+    ('ajuste_comercial', 'Ajuste Comercial'),
+    ('cortesia', 'Cortesia'),
+    ('devolucao', 'Devolução'),
+    ('outro', 'Outro'),
+]
+
+
+class CreditoClienteEditView(PermissaoRequiredMixin, View):
+    permissao_modulo = 'financeiro'
+    permissao_acao = 'editar'
+
+    def dispatch(self, request, *args, **kwargs):
+        if request.user.is_authenticated and not _is_admin(request):
+            messages.error(request, 'Apenas administradores podem alterar créditos.')
+            pk = kwargs.get('pk')
+            return redirect(reverse('financeiro:credito_detail', args=[pk]))
+        return super().dispatch(request, *args, **kwargs)
+
+    def get(self, request, pk):
+        filial = _filial(request)
+        credito = get_object_or_404(CreditoCliente, pk=pk, filial=filial)
+        if credito.status == CreditoCliente.Status.CANCELADO:
+            messages.error(request, 'Créditos cancelados não podem ser alterados.')
+            return redirect(reverse('financeiro:credito_detail', args=[pk]))
+        return render(request, 'financeiro/credito_cliente/edit.html', {
+            'title': f'Alterar Crédito #{pk}',
+            'credito': credito,
+            'motivo_choices': _MOTIVO_CHOICES,
+        })
+
+    @transaction.atomic
+    def post(self, request, pk):
+        filial = _filial(request)
+        credito = get_object_or_404(CreditoCliente, pk=pk, filial=filial)
+
+        if credito.status == CreditoCliente.Status.CANCELADO:
+            messages.error(request, 'Créditos cancelados não podem ser alterados.')
+            return redirect(reverse('financeiro:credito_detail', args=[pk]))
+
+        motivo = request.POST.get('motivo', credito.motivo)
+        documento_numero = request.POST.get('documento_numero', '').strip()
+        observacao = request.POST.get('observacao', '').strip()
+        valor_raw = request.POST.get('valor', '').replace(',', '.')
+
+        erros = []
+        novo_valor = credito.valor
+        if valor_raw:
+            try:
+                novo_valor = Decimal(valor_raw)
+                if novo_valor <= 0:
+                    erros.append('O valor deve ser maior que zero.')
+                elif credito.valor_utilizado > 0 and novo_valor < credito.valor_utilizado:
+                    erros.append(
+                        f'O novo valor não pode ser menor que o valor já utilizado '
+                        f'(R$ {credito.valor_utilizado:.2f}).'
+                    )
+            except Exception:
+                erros.append('Valor inválido.')
+
+        if erros:
+            for e in erros:
+                messages.error(request, e)
+            return render(request, 'financeiro/credito_cliente/edit.html', {
+                'title': f'Alterar Crédito #{pk}',
+                'credito': credito,
+                'motivo_choices': _MOTIVO_CHOICES,
+                'form_data': request.POST,
+            })
+
+        credito.valor = novo_valor
+        credito.motivo = motivo
+        credito.documento_numero = documento_numero
+        credito.observacao = observacao
+        if credito.valor_saldo <= 0 and credito.valor_utilizado > 0:
+            credito.status = CreditoCliente.Status.UTILIZADO
+        elif credito.valor_saldo > 0:
+            credito.status = CreditoCliente.Status.DISPONIVEL
+        credito.save(update_fields=['valor', 'motivo', 'documento_numero', 'observacao', 'status', 'updated_at'])
+        messages.success(request, f'Crédito #{pk} atualizado com sucesso.')
+        return redirect(reverse('financeiro:credito_detail', args=[pk]))
 
 
 # ── JSON API para PDV ──────────────────────────────────────────────────────────

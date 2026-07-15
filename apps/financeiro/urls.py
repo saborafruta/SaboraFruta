@@ -32,7 +32,8 @@ urlpatterns = [
     # ── Créditos de Clientes ──────────────────────────────────────────────────
     path("creditos/",              cc_views.CreditoClienteListView.as_view(),   name="credito_list"),
     path("creditos/novo/",         cc_views.CreditoClienteCreateView.as_view(), name="credito_criar"),
-    path("creditos/<int:pk>/",     cc_views.CreditoClienteDetailView.as_view(), name="credito_detail"),
+    path("creditos/<int:pk>/",        cc_views.CreditoClienteDetailView.as_view(), name="credito_detail"),
+    path("creditos/<int:pk>/editar/", cc_views.CreditoClienteEditView.as_view(),   name="credito_editar"),
     path("api/credito-saldo/",     cc_views.api_credito_saldo,                  name="api_credito_saldo"),
 
     # ── Outros ───────────────────────────────────────────────────────────────

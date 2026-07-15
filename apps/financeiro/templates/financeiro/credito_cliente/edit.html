@@ -1,0 +1,123 @@
+{% extends "_base.html" %}
+
+{% block title %}{{ title }}{% endblock %}
+{% block page_title %}{{ title }}{% endblock %}
+
+{% block content %}
+<div class="space-y-5 max-w-2xl">
+
+  <div>
+    <p class="text-sm mb-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+      <a href="{% url 'financeiro:credito_list' %}" :style="temaClaro ? 'color:#3b82f6;' : 'color:#60a5fa;'">Créditos de Clientes</a>
+      <span class="mx-1">›</span>
+      <a href="{% url 'financeiro:credito_detail' credito.pk %}" :style="temaClaro ? 'color:#3b82f6;' : 'color:#60a5fa;'">Crédito #{{ credito.pk }}</a>
+      <span class="mx-1">›</span> Alterar
+    </p>
+    <h2 class="text-2xl font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">Alterar Crédito #{{ credito.pk }}</h2>
+    <p class="text-sm mt-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+      Apenas administradores podem alterar créditos.
+    </p>
+  </div>
+
+  <!-- Cliente (somente leitura) -->
+  <div class="card p-6">
+    <h3 class="text-xs font-semibold uppercase tracking-widest pb-2 border-b mb-4"
+        :style="temaClaro ? 'color:#6b7280; border-color:#e5e7eb;' : 'color:#6b7280; border-color:#374151;'">
+      Cliente
+    </h3>
+    <div class="flex items-center gap-3">
+      <div class="w-9 h-9 rounded-full flex items-center justify-center text-sm font-bold flex-shrink-0"
+           style="background:#dcfce7; color:#15803d;">
+        {{ credito.cliente.nome_fantasia|default:credito.cliente.razao_social|first|upper }}
+      </div>
+      <div>
+        <p class="font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f1f5f9;'">
+          {{ credito.cliente.nome_fantasia|default:credito.cliente.razao_social }}
+        </p>
+        {% if credito.cliente.cpf_cnpj %}
+          <p class="text-xs font-mono" :style="temaClaro ? 'color:#6b7280;' : 'color:#94a3b8;'">{{ credito.cliente.cpf_cnpj }}</p>
+        {% endif %}
+      </div>
+    </div>
+    <p class="text-xs mt-3 px-3 py-2 rounded-lg"
+       :style="temaClaro ? 'background:#f9fafb; color:#6b7280;' : 'background:#1e293b; color:#94a3b8;'">
+      O cliente não pode ser alterado após a criação do crédito.
+    </p>
+  </div>
+
+  <form method="post" novalidate>
+    {% csrf_token %}
+
+    <div class="space-y-5">
+
+      <div class="card p-6 space-y-5">
+        <h3 class="text-xs font-semibold uppercase tracking-widest pb-2 border-b"
+            :style="temaClaro ? 'color:#6b7280; border-color:#e5e7eb;' : 'color:#6b7280; border-color:#374151;'">
+          Dados do Crédito
+        </h3>
+
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-5">
+          <div>
+            <label class="block text-sm font-medium mb-1.5" :style="temaClaro ? 'color:#374151;' : 'color:#d1d5db;'">
+              Valor (R$) <span class="text-red-500">*</span>
+            </label>
+            {% if credito.valor_utilizado > 0 %}
+              <input type="number" name="valor" step="0.01"
+                     min="{{ credito.valor_utilizado }}"
+                     value="{{ form_data.valor|default:credito.valor }}"
+                     class="form-input w-full" required>
+              <p class="text-xs mt-1" :style="temaClaro ? 'color:#d97706;' : 'color:#fbbf24;'">
+                Mínimo R$ {{ credito.valor_utilizado|floatformat:2 }} (já utilizado).
+              </p>
+            {% else %}
+              <input type="number" name="valor" step="0.01" min="0.01"
+                     value="{{ form_data.valor|default:credito.valor }}"
+                     class="form-input w-full" required>
+            {% endif %}
+          </div>
+          <div>
+            <label class="block text-sm font-medium mb-1.5" :style="temaClaru ? 'color:#374151;' : 'color:#d1d5db;'">
+              Motivo <span class="text-red-500">*</span>
+            </label>
+            <select name="motivo" class="form-input w-full">
+              {% for val, label in motivo_choices %}
+                <option value="{{ val }}"
+                  {% if form_data.motivo == val or not form_data and credito.motivo == val %}selected{% endif %}>
+                  {{ label }}
+                </option>
+              {% endfor %}
+            </select>
+          </div>
+          <div>
+            <label class="block text-sm font-medium mb-1.5" :style="temaClaro ? 'color:#374151;' : 'color:#d1d5db;'">
+              Nº Documento (opcional)
+            </label>
+            <input type="text" name="documento_numero"
+                   value="{{ form_data.documento_numero|default:credito.documento_numero }}"
+                   placeholder="NF, pedido, etc." class="form-input w-full">
+          </div>
+        </div>
+
+        <div>
+          <label class="block text-sm font-medium mb-1.5" :style="temaClaro ? 'color:#374151;' : 'color:#d1d5db;'">
+            Observação
+          </label>
+          <textarea name="observacao" rows="3"
+                    placeholder="Observação sobre o crédito..."
+                    class="form-input w-full">{{ form_data.observacao|default:credito.observacao }}</textarea>
+        </div>
+      </div>
+
+      <div class="flex gap-3 justify-end">
+        <a href="{% url 'financeiro:credito_detail' credito.pk %}" class="btn-secondary">Cancelar</a>
+        <button type="submit" class="btn-primary flex items-center gap-2">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
+          </svg>
+          Salvar Alterações
+        </button>
+      </div>
+    </div>
+  </form>
+</div>
+{% endblock %}
