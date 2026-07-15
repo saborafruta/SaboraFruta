@@ -1158,14 +1158,7 @@
 
       <!-- Pagamentos registrados -->
       <div style="flex:1;overflow-y:auto;padding:8px 0 0;">
-        <template x-if="venda.pagamentos.length===0 && creditoAplicado <= 0">
-          <div style="display:flex;flex-direction:column;align-items:center;gap:8px;padding:20px 16px;">
-            <div style="width:44px;height:44px;border-radius:12px;background:#13131e;border:1px solid #1e1e30;display:flex;align-items:center;justify-content:center;">
-              <svg width="20" height="20" fill="none" stroke="#2a2a3e" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z"/></svg>
-            </div>
-            <p style="text-align:center;color:#2a2a42;font-size:12px;font-weight:500;margin:0;">Nenhum pagamento registrado</p>
-          </div>
-        </template>
+
         <template x-for="pgto in venda.pagamentos" :key="pgto._id">
           <div style="display:flex;align-items:center;gap:10px;padding:10px 14px;margin:0 10px 6px;background:#13131e;border:1px solid #1e1e30;border-radius:10px;">
             <div class="forma-icon" :style="corFormaPgtoIconNovo({tipo:pgto.forma_tipo})" style="width:32px;height:32px;border-radius:8px;font-size:14px;">
