@@ -2800,7 +2800,7 @@ ${filialTelefone ? `<div class="sub">Tel: ${filialTelefone}</div>` : ''}
 <div class="sub">${agora} &bull; ${numero}</div>
 <div class="sub">Cliente: <strong>${v.cliente ? v.cliente.nome : 'Consumidor Final'}</strong></div>
 ${v.cliente && v.cliente.cpf_cnpj ? `<div class="sub">CPF/CNPJ: ${v.cliente.cpf_cnpj}</div>` : ''}
-${(() => { const e = v.delivery ? (v.endereco_entrega || {}) : (v.cliente?.endereco_entrega || {}); if (!e || !e.rua) return ''; const linha1 = e.rua + (e.numero ? ', ' + e.numero : '') + (e.complemento ? ' - ' + e.complemento : ''); const linha2 = [e.bairro, e.cidade].filter(Boolean).join(' - '); return `<div class="sub">${v.delivery ? 'Entrega: ' : 'End: '}${linha1}</div>${linha2 ? `<div class="sub">${linha2}</div>` : ''}`; })()}
+${(() => { const e = v.delivery ? (v.endereco_entrega || {}) : (v.cliente?.endereco_entrega || {}); if (!e || !e.rua) return ''; const l1 = e.rua + (e.numero ? ', '+e.numero : '') + (e.complemento ? ' - '+e.complemento : ''); const l2 = [e.bairro, e.cidade].filter(Boolean).join(' - '); const obs = e.observacao || ''; return '<div class="sub">'+(v.delivery ? 'Entrega: ' : 'End: ')+l1+'</div>'+(l2 ? '<div class="sub">'+l2+'</div>' : '')+(obs ? '<div class="sub">Obs: '+obs+'</div>' : ''); })()}
 <hr class="sep">
 <table>
   <thead><tr>
@@ -2897,7 +2897,8 @@ ${pgtoHtml ? `<hr class="sep">${pgtoHtml}` : ''}
         if (!e || !e.rua) return '';
         const l1 = e.rua + (e.numero ? ', '+e.numero : '') + (e.complemento ? ' - '+e.complemento : '');
         const l2 = [e.bairro, e.cidade].filter(Boolean).join(' - ');
-        return '<div class="sub">'+(isDelivery ? 'Entrega: ' : 'End: ')+l1+'</div>'+(l2 ? '<div class="sub">'+l2+'</div>' : '');
+        const obs = e.observacao || '';
+        return '<div class="sub">'+(isDelivery ? 'Entrega: ' : 'End: ')+l1+'</div>'+(l2 ? '<div class="sub">'+l2+'</div>' : '')+(obs ? '<div class="sub">Obs: '+obs+'</div>' : '');
       })();
 
       const html = `<!DOCTYPE html>
