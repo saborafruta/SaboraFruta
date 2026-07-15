@@ -2748,8 +2748,8 @@ function pdv() {
           const tot = parseFloat(item.valor_total||0);
           const un = item.unidade_medida || 'un';
           itensHtml += `<tr>
-            <td style="padding:4px 0;font-size:12px;word-break:break-word;">${desc}</td>
-            <td style="padding:4px 6px;font-size:12px;text-align:center;">${qtd} ${un}</td>
+            <td style="padding:4px 6px 4px 0;font-size:12px;text-align:left;white-space:nowrap;">${qtd} ${un}</td>
+            <td style="padding:4px 6px;font-size:12px;word-break:break-word;">${desc}</td>
             <td style="padding:4px 0;font-size:12px;text-align:right;">R$&nbsp;${fmt(uni)}</td>
             <td style="padding:4px 0 4px 8px;font-size:12px;text-align:right;font-weight:700;">R$&nbsp;${fmt(tot)}</td>
           </tr>`;
@@ -2757,6 +2757,7 @@ function pdv() {
       } else {
         itensHtml = '<tr><td colspan="4" style="text-align:center;color:#888;padding:8px;font-size:12px;">Carrinho vazio</td></tr>';
       }
+      const totalItens = v.itens ? v.itens.reduce((s, i) => s + parseFloat(i.quantidade||0), 0) : 0;
 
       let pgtoHtml = '';
       if (v.pagamentos && v.pagamentos.length) {
@@ -2804,14 +2805,17 @@ ${(() => { const e = v.delivery ? (v.endereco_entrega || {}) : (v.cliente?.ender
 <hr class="sep">
 <table>
   <thead><tr>
+    <th style="text-align:left;">Qtd</th>
     <th style="text-align:left;">Produto</th>
-    <th style="text-align:center;">Qtd</th>
     <th style="text-align:right;">Unit.</th>
     <th style="text-align:right;padding-left:8px;">Total</th>
   </tr></thead>
   <tbody>${itensHtml}</tbody>
 </table>
 <hr class="sep">
+<div style="display:flex;justify-content:space-between;font-size:11px;color:#555;margin-bottom:4px;">
+  <span>Qtd total de itens</span><span>${totalItens % 1 === 0 ? totalItens : totalItens.toFixed(3).replace('.',',')} un</span>
+</div>
 <div style="display:flex;justify-content:space-between;font-size:13px;margin-bottom:3px;">
   <span>Subtotal</span><span>R$&nbsp;${fmt(v.subtotal)}</span>
 </div>
@@ -2872,13 +2876,14 @@ ${pgtoHtml ? `<hr class="sep">${pgtoHtml}` : ''}
           const tot = parseFloat(item.valor_total||0);
           const un = item.unidade_medida || 'un';
           itensHtml += `<tr>
-            <td style="padding:4px 0;font-size:12px;word-break:break-word;">${desc}</td>
-            <td style="padding:4px 6px;font-size:12px;text-align:center;">${qtd} ${un}</td>
+            <td style="padding:4px 6px 4px 0;font-size:12px;text-align:left;white-space:nowrap;">${qtd} ${un}</td>
+            <td style="padding:4px 6px;font-size:12px;word-break:break-word;">${desc}</td>
             <td style="padding:4px 0;font-size:12px;text-align:right;">R$&nbsp;${fmt(uni)}</td>
             <td style="padding:4px 0 4px 8px;font-size:12px;text-align:right;font-weight:700;">R$&nbsp;${fmt(tot)}</td>
           </tr>`;
         });
       }
+      const totalItensRP = (c.itens || []).reduce((s, i) => s + parseFloat(i.quantidade||0), 0);
 
       let pgtoHtml = '';
       pagamentos.forEach(p => {
@@ -2933,14 +2938,17 @@ ${enderecoHtml}
 <hr class="sep">
 <table>
   <thead><tr>
+    <th style="text-align:left;">Qtd</th>
     <th style="text-align:left;">Produto</th>
-    <th style="text-align:center;">Qtd</th>
     <th style="text-align:right;">Unit.</th>
     <th style="text-align:right;padding-left:8px;">Total</th>
   </tr></thead>
   <tbody>${itensHtml}</tbody>
 </table>
 <hr class="sep">
+<div style="display:flex;justify-content:space-between;font-size:11px;color:#555;margin-bottom:4px;">
+  <span>Qtd total de itens</span><span>${totalItensRP % 1 === 0 ? totalItensRP : totalItensRP.toFixed(3).replace('.',',')} un</span>
+</div>
 <div style="display:flex;justify-content:space-between;" class="total-row">
   <span>TOTAL</span><span>R$&nbsp;${fmt(c.valor_total)}</span>
 </div>
