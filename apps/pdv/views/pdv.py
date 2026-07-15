@@ -803,7 +803,8 @@ def api_historico_cliente(request, cliente_id):
     vendas = (
         VendaPDV.objects.for_filial(request.filial_ativa)
         .filter(cliente_id=cliente_id, status="finalizada")
-        .prefetch_related("itens__produto__linha_producao")
+        .prefetch_related("itens__produto__linha_producao", "pagamentos__forma_pagamento")
+        .select_related("cliente")
         .order_by("-data_venda")[:12]
     )
 
@@ -821,13 +822,32 @@ def api_historico_cliente(request, cliente_id):
                 "valor_unitario": float(item.valor_unitario),
                 "valor_total": float(item.valor_total),
             })
+        pagamentos = [
+            {
+                "forma_descricao": pg.forma_pagamento.descricao,
+                "valor": float(pg.valor),
+                "troco": float(pg.troco or 0),
+            }
+            for pg in v.pagamentos.all()
+        ]
         compras.append({
             "id": v.id,
             "numero_venda": v.numero_venda,
             "data_venda": v.data_venda.strftime("%d/%m/%Y"),
             "valor_total": float(v.valor_total),
             "qtd_itens": len(itens),
+            "delivery": v.delivery,
+            "endereco_entrega": v.endereco_entrega or {},
+            "cliente_cpf_cnpj": v.cliente.cpf_cnpj if v.cliente else "",
+            "cliente_endereco": {
+                "rua": v.cliente.endereco or "",
+                "numero": v.cliente.numero or "",
+                "bairro": v.cliente.bairro or "",
+                "complemento": v.cliente.complemento or "",
+                "cidade": v.cliente.cidade or "",
+            } if v.cliente else {},
             "itens": itens,
+            "pagamentos": pagamentos,
         })
 
     from django.db.models import Count as DCount
@@ -898,6 +918,15 @@ def api_venda_detalhe(request, pk):
             "unidade_medida": item.unidade_medida or "UN",
         })
 
+    pagamentos = [
+        {
+            "forma_descricao": pg.forma_pagamento.descricao,
+            "valor": float(pg.valor),
+            "troco": float(pg.troco or 0),
+        }
+        for pg in venda.pagamentos.select_related("forma_pagamento").order_by("id")
+    ]
+
     return JsonResponse({
         "ok": True,
         "venda_id": venda.pk,
@@ -905,9 +934,20 @@ def api_venda_detalhe(request, pk):
         "cliente_id": venda.cliente_id,
         "cliente_nome": venda.cliente.razao_social if venda.cliente else "Consumidor Final",
         "cliente_cpf_cnpj": venda.cliente.cpf_cnpj if venda.cliente else "",
+        "cliente_endereco": {
+            "rua": venda.cliente.endereco or "" if venda.cliente else "",
+            "numero": venda.cliente.numero or "" if venda.cliente else "",
+            "bairro": venda.cliente.bairro or "" if venda.cliente else "",
+            "complemento": venda.cliente.complemento or "" if venda.cliente else "",
+            "cidade": venda.cliente.cidade or "" if venda.cliente else "",
+        } if venda.cliente else {},
+        "delivery": venda.delivery,
+        "endereco_entrega": venda.endereco_entrega or {},
         "desconto": float(venda.valor_desconto or 0),
         "acrescimo": float(venda.valor_acrescimo or 0),
+        "valor_total": float(venda.valor_total),
         "itens": itens,
+        "pagamentos": pagamentos,
     })
 
 

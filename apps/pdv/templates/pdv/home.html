@@ -2762,8 +2762,13 @@ function pdv() {
       if (v.pagamentos && v.pagamentos.length) {
         v.pagamentos.forEach(p => {
           pgtoHtml += `<div style="display:flex;justify-content:space-between;font-size:12px;margin-top:4px;">
-            <span>${p.forma_nome||p.forma||'Pagamento'}</span><span>R$&nbsp;${fmt(p.valor)}</span>
+            <span>${p.forma_descricao||p.forma_nome||p.forma||'Pagamento'}</span><span>R$&nbsp;${fmt(p.valor)}</span>
           </div>`;
+          if (parseFloat(p.troco||0) > 0) {
+            pgtoHtml += `<div style="display:flex;justify-content:space-between;font-size:12px;margin-top:2px;color:#555;">
+              <span>Troco</span><span>R$&nbsp;${fmt(p.troco)}</span>
+            </div>`;
+          }
         });
       }
 
@@ -2795,6 +2800,7 @@ ${filialTelefone ? `<div class="sub">Tel: ${filialTelefone}</div>` : ''}
 <div class="sub">${agora} &bull; ${numero}</div>
 <div class="sub">Cliente: <strong>${v.cliente ? v.cliente.nome : 'Consumidor Final'}</strong></div>
 ${v.cliente && v.cliente.cpf_cnpj ? `<div class="sub">CPF/CNPJ: ${v.cliente.cpf_cnpj}</div>` : ''}
+${(() => { const e = v.delivery ? (v.endereco_entrega || {}) : (v.cliente?.endereco_entrega || {}); if (!e || !e.rua) return ''; const linha1 = e.rua + (e.numero ? ', ' + e.numero : '') + (e.complemento ? ' - ' + e.complemento : ''); const linha2 = [e.bairro, e.cidade].filter(Boolean).join(' - '); return `<div class="sub">${v.delivery ? 'Entrega: ' : 'End: '}${linha1}</div>${linha2 ? `<div class="sub">${linha2}</div>` : ''}`; })()}
 <hr class="sep">
 <table>
   <thead><tr>
@@ -2847,7 +2853,13 @@ ${pgtoHtml ? `<hr class="sep">${pgtoHtml}` : ''}
       const logoUrlRP = '';
       {% endif %}
       const fmt = n => parseFloat(n||0).toFixed(2).replace('.',',');
+
       const clienteNome = this.venda.cliente ? this.venda.cliente.nome : 'Consumidor Final';
+      const clienteCpf = c.cliente_cpf_cnpj || (this.venda.cliente && this.venda.cliente.cpf_cnpj) || '';
+      const isDelivery = !!c.delivery;
+      const endEntrega = c.endereco_entrega || {};
+      const endCliente = c.cliente_endereco || {};
+      const pagamentos = c.pagamentos || [];
       const numero = '#'+String(c.numero_venda).padStart(6,'0');
       const dataVenda = c.data_venda;
 
@@ -2867,6 +2879,26 @@ ${pgtoHtml ? `<hr class="sep">${pgtoHtml}` : ''}
           </tr>`;
         });
       }
+
+      let pgtoHtml = '';
+      pagamentos.forEach(p => {
+        pgtoHtml += `<div style="display:flex;justify-content:space-between;font-size:12px;margin-top:4px;">
+          <span>${p.forma_descricao||'Pagamento'}</span><span>R$&nbsp;${fmt(p.valor)}</span>
+        </div>`;
+        if (parseFloat(p.troco||0) > 0) {
+          pgtoHtml += `<div style="display:flex;justify-content:space-between;font-size:12px;margin-top:2px;color:#555;">
+            <span>Troco</span><span>R$&nbsp;${fmt(p.troco)}</span>
+          </div>`;
+        }
+      });
+
+      const enderecoHtml = (() => {
+        const e = isDelivery ? endEntrega : endCliente;
+        if (!e || !e.rua) return '';
+        const l1 = e.rua + (e.numero ? ', '+e.numero : '') + (e.complemento ? ' - '+e.complemento : '');
+        const l2 = [e.bairro, e.cidade].filter(Boolean).join(' - ');
+        return '<div class="sub">'+(isDelivery ? 'Entrega: ' : 'End: ')+l1+'</div>'+(l2 ? '<div class="sub">'+l2+'</div>' : '');
+      })();
 
       const html = `<!DOCTYPE html>
 <html lang="pt-BR">
@@ -2895,6 +2927,8 @@ ${filialCidade ? `<div class="sub">${filialCidade}${filialUf ? ' - '+filialUf : 
 ${filialTelefone ? `<div class="sub">Tel: ${filialTelefone}</div>` : ''}
 <div class="sub">${dataVenda} &bull; ${numero}</div>
 <div class="sub">Cliente: <strong>${clienteNome}</strong></div>
+${clienteCpf ? `<div class="sub">CPF/CNPJ: ${clienteCpf}</div>` : ''}
+${enderecoHtml}
 <hr class="sep">
 <table>
   <thead><tr>
@@ -2909,6 +2943,7 @@ ${filialTelefone ? `<div class="sub">Tel: ${filialTelefone}</div>` : ''}
 <div style="display:flex;justify-content:space-between;" class="total-row">
   <span>TOTAL</span><span>R$&nbsp;${fmt(c.valor_total)}</span>
 </div>
+${pgtoHtml ? `<hr class="sep">${pgtoHtml}` : ''}
 <hr class="sep">
 <div class="footer">Obrigado pela preferência!<br>Este não é um documento fiscal.</div>
 </body></html>`;
