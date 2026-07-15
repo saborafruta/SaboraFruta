@@ -173,12 +173,20 @@
 
               <div class="flex items-center justify-between">
                 <span class="kcard-num">#{{ pedido.numero_venda }}</span>
-                <span class="text-xs" :style="temaClaro ? 'color:#9ca3af;' : 'color:#6b7280;'">
-                  {{ pedido.data_venda|date:"H:i" }}
-                </span>
+                <div class="flex items-center gap-2">
+                  <span class="text-xs" :style="temaClaro ? 'color:#9ca3af;' : 'color:#6b7280;'">
+                    {{ pedido.data_venda|date:"H:i" }}
+                  </span>
+                  <button onclick="event.stopPropagation(); imprimirDelivery('{{ pedido.pk }}')"
+                          title="Imprimir comprovante"
+                          style="padding:2px 4px;border-radius:4px;border:none;background:transparent;cursor:pointer;opacity:0.6;display:flex;align-items:center;"
+                          onmouseover="this.style.opacity='1'" onmouseout="this.style.opacity='0.6'">
+                    <svg xmlns="http://www.w3.org/2000/svg" style="width:13px;height:13px;" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"/></svg>
+                  </button>
+                </div>
               </div>
 
-              <div class="kcard-cliente">{{ pedido.cliente.nome_completo|default:"Cliente não informado" }}</div>
+              <div class="kcard-cliente">{{ pedido.cliente.nome_fantasia|default:pedido.cliente.razao_social|default:"Consumidor Final" }}</div>
 
               <div class="kcard-meta">
                 <span class="kcard-valor">R$ {{ pedido.valor_total|floatformat:2 }}</span>
@@ -443,5 +451,119 @@
 
   // Auto-refresh a cada 60 segundos
   setTimeout(() => location.reload(), 60000);
+
+  // ── Dados para impressão ────────────────────────────────────────────────────
+  window.deliveryData = {{ pedidos_json|safe }};
+  window.filialData   = {{ filial_json|safe }};
+
+  function imprimirDelivery(pk) {
+    const d = window.deliveryData[String(pk)];
+    const f = window.filialData || {};
+    if (!d) { alert('Dados do pedido não encontrados'); return; }
+
+    const fmt = n => parseFloat(n || 0).toFixed(2).replace('.', ',');
+
+    let itensHtml = '';
+    (d.itens || []).forEach(item => {
+      const qtd = parseFloat(item.quantidade || 0);
+      const un  = item.unidade_medida || 'UN';
+      const qtdFmt = qtd % 1 === 0 ? qtd : qtd.toFixed(3).replace('.', ',');
+      itensHtml += `<tr>
+        <td style="padding:4px 6px 4px 0;font-size:12px;text-align:left;white-space:nowrap;">${qtdFmt} ${un}</td>
+        <td style="padding:4px 6px;font-size:12px;word-break:break-word;">${item.descricao || ''}</td>
+        <td style="padding:4px 0;font-size:12px;text-align:right;">R$&nbsp;${fmt(item.valor_unitario)}</td>
+        <td style="padding:4px 0 4px 8px;font-size:12px;text-align:right;font-weight:700;">R$&nbsp;${fmt(item.valor_total)}</td>
+      </tr>`;
+    });
+
+    const totalItens = (d.itens || []).reduce((s, i) => s + parseFloat(i.quantidade || 0), 0);
+    const totalItensStr = totalItens % 1 === 0 ? totalItens : totalItens.toFixed(3).replace('.', ',');
+
+    let pgtoHtml = '';
+    (d.pagamentos || []).forEach(p => {
+      pgtoHtml += `<div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:2px;">
+        <span>${p.forma_descricao || 'Pagamento'}</span><span>R$&nbsp;${fmt(p.valor)}</span></div>`;
+      if (parseFloat(p.troco || 0) > 0) {
+        pgtoHtml += `<div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:2px;">
+          <span>Troco</span><span>R$&nbsp;${fmt(p.troco)}</span></div>`;
+      }
+    });
+
+    const enderecoHtml = (() => {
+      const e = d.endereco_entrega || {};
+      if (!e || !e.rua) return '';
+      const l1 = e.rua + (e.numero ? ', ' + e.numero : '') + (e.complemento ? ' - ' + e.complemento : '');
+      const l2 = [e.bairro, e.cidade].filter(Boolean).join(' - ');
+      const obs = d.observacao_delivery || '';
+      return '<div style="font-size:11px;color:#555;margin-bottom:2px;">Entrega: ' + l1 + '</div>'
+        + (l2 ? '<div style="font-size:11px;color:#555;margin-bottom:2px;">' + l2 + '</div>' : '')
+        + (obs ? '<div style="font-size:11px;color:#555;margin-bottom:2px;">Obs: ' + obs + '</div>' : '');
+    })();
+
+    const cnpjRaw = (f.cnpj || '').replace(/\D/g, '');
+    const cnpjFmt = cnpjRaw.length === 14
+      ? cnpjRaw.replace(/^(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})$/, '$1.$2.$3/$4-$5')
+      : f.cnpj || '';
+    const filialEnd = [f.endereco, f.numero].filter(Boolean).join(', ')
+      + (f.bairro ? ' — ' + f.bairro : '')
+      + (f.cidade ? ' — ' + f.cidade + '/' + f.uf : '');
+
+    const html = `<!DOCTYPE html><html><head><meta charset="UTF-8">
+      <title>Comprovante #${d.numero_venda}</title>
+      <style>
+        * { margin:0; padding:0; box-sizing:border-box; }
+        body { font-family:monospace; font-size:12px; width:302px; padding:12px; }
+        .center { text-align:center; }
+        .hr { border-top:1px dashed #333; margin:8px 0; }
+        .sub { font-size:11px; color:#555; }
+        @media print { @page { margin:0; } body { padding:4px; } }
+      </style>
+    </head><body>
+      <div class="center" style="font-size:14px;font-weight:700;margin-bottom:2px;">${f.nome || ''}</div>
+      ${cnpjFmt ? '<div class="center sub">CNPJ: ' + cnpjFmt + '</div>' : ''}
+      ${filialEnd.trim() ? '<div class="center sub">' + filialEnd.trim() + '</div>' : ''}
+      <div class="hr"></div>
+      <div class="center" style="font-size:13px;font-weight:700;margin-bottom:4px;">COMPROVANTE NÃO FISCAL</div>
+      <div class="center sub">DELIVERY #${d.numero_venda}</div>
+      <div class="center sub">${d.data_venda || ''}</div>
+      <div class="hr"></div>
+      <div style="margin-bottom:4px;">
+        <div style="font-size:12px;font-weight:600;">${d.cliente_nome || 'Consumidor Final'}</div>
+        ${d.cliente_cpf_cnpj ? '<div class="sub">CPF/CNPJ: ' + d.cliente_cpf_cnpj + '</div>' : ''}
+        ${enderecoHtml}
+      </div>
+      <div class="hr"></div>
+      <table style="width:100%;border-collapse:collapse;">
+        <thead>
+          <tr style="border-bottom:1px solid #ccc;">
+            <th style="padding:4px 6px 4px 0;font-size:11px;text-align:left;">QTD</th>
+            <th style="padding:4px 6px;font-size:11px;text-align:left;">PRODUTO</th>
+            <th style="padding:4px 0;font-size:11px;text-align:right;">UNIT</th>
+            <th style="padding:4px 0 4px 8px;font-size:11px;text-align:right;">TOTAL</th>
+          </tr>
+        </thead>
+        <tbody>${itensHtml}</tbody>
+      </table>
+      <div class="hr"></div>
+      <div style="display:flex;justify-content:space-between;font-size:11px;color:#555;margin-bottom:4px;">
+        <span>Qtd total de itens</span><span>${totalItensStr} un</span>
+      </div>
+      <div style="display:flex;justify-content:space-between;font-size:14px;font-weight:700;margin-bottom:8px;">
+        <span>TOTAL</span><span>R$&nbsp;${fmt(d.valor_total)}</span>
+      </div>
+      <div class="hr"></div>
+      ${pgtoHtml}
+      <div class="hr"></div>
+      <div class="center sub" style="margin-top:4px;">Obrigado pela preferência!</div>
+    </body></html>`;
+
+    const w = window.open('', '_blank', 'width=340,height=620,toolbar=0,menubar=0,scrollbars=1');
+    if (!w) { alert('Popup bloqueado. Permita popups para este site e tente novamente.'); return; }
+    w.document.open();
+    w.document.write(html);
+    w.document.close();
+    w.focus();
+    setTimeout(() => { try { w.print(); } catch(e) {} }, 400);
+  }
 </script>
 {% endblock %}

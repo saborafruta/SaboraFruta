@@ -1478,7 +1478,7 @@ def delivery_kanban(request):
         .exclude(status='cancelada')
         .exclude(status_delivery='cancelado')
         .select_related('cliente', 'usuario')
-        .prefetch_related('itens__produto')
+        .prefetch_related('itens__produto', 'pagamentos__forma_pagamento')
         .order_by('data_venda')
     )
 
@@ -1492,9 +1492,55 @@ def delivery_kanban(request):
             'pedidos': pedidos,
         })
 
+    pedidos_data = {}
+    for v in qs:
+        pagamentos = [
+            {
+                'forma_descricao': pg.forma_pagamento.descricao if pg.forma_pagamento else 'Pagamento',
+                'valor': float(pg.valor),
+                'troco': float(pg.troco or 0),
+            }
+            for pg in v.pagamentos.all()
+        ]
+        itens = [
+            {
+                'descricao': item.produto.descricao if item.produto else '',
+                'quantidade': float(item.quantidade),
+                'unidade_medida': item.unidade_medida or 'UN',
+                'valor_unitario': float(item.valor_unitario),
+                'valor_total': float(item.valor_total),
+            }
+            for item in v.itens.all()
+        ]
+        pedidos_data[str(v.pk)] = {
+            'numero_venda': v.numero_venda,
+            'data_venda': v.data_venda.strftime('%d/%m/%Y %H:%M'),
+            'cliente_nome': (v.cliente.nome_fantasia or v.cliente.razao_social) if v.cliente else 'Consumidor Final',
+            'cliente_cpf_cnpj': v.cliente.cpf_cnpj if v.cliente else '',
+            'endereco_entrega': v.endereco_entrega or {},
+            'observacao_delivery': v.observacao_delivery or '',
+            'valor_total': float(v.valor_total),
+            'itens': itens,
+            'pagamentos': pagamentos,
+        }
+
+    filial = request.filial_ativa
+    filial_info = {
+        'nome': filial.nome_fantasia or filial.razao_social,
+        'cnpj': filial.cnpj,
+        'endereco': filial.endereco,
+        'numero': filial.numero,
+        'bairro': filial.bairro,
+        'cidade': filial.cidade,
+        'uf': filial.uf,
+        'telefone': filial.telefone,
+    }
+
     return render(request, 'pdv/delivery_kanban.html', {
         'colunas': colunas,
         'total': qs.count(),
+        'pedidos_json': json.dumps(pedidos_data, ensure_ascii=False),
+        'filial_json': json.dumps(filial_info, ensure_ascii=False),
     })
 
 
