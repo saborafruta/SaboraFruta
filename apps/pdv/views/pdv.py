@@ -1863,6 +1863,9 @@ def api_orcamentos(request):
         .prefetch_related("itens")
         .order_by("-data_venda")
     )
+    cliente_id = request.GET.get("cliente_id")
+    if cliente_id:
+        qs = qs.filter(cliente_id=cliente_id)
     if q:
         qs = qs.filter(
             Q(numero_venda__icontains=q)

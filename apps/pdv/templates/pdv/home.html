@@ -863,6 +863,29 @@
                   <span x-show="historicoClienteTotal>0" style="font-size:11px;color:#3a3a52;" x-text="historicoClienteTotal+' compra(s) no total'"></span>
                 </div>
 
+                <!-- Orçamentos pendentes deste cliente -->
+                <template x-if="orcamentosCliente.length>0">
+                  <div style="padding:10px 20px 4px;">
+                    <div style="font-size:10px;font-weight:700;color:#ca8a04;text-transform:uppercase;letter-spacing:.08em;margin-bottom:6px;display:flex;align-items:center;gap:6px;">
+                      <svg width="11" height="11" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+                      Orçamentos Pendentes
+                    </div>
+                    <template x-for="o in orcamentosCliente" :key="o.id">
+                      <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;background:#1a1500;border:1px solid rgba(202,138,4,.25);border-radius:8px;padding:8px 12px;margin-bottom:6px;">
+                        <div style="min-width:0;">
+                          <div style="font-size:11px;font-weight:700;color:#f59e0b;" x-text="'#'+String(o.numero_venda).padStart(6,'0')+' · '+o.data_venda"></div>
+                          <div style="font-size:10px;color:#78716c;" x-text="o.qtd_itens+' item(s) · R$ '+o.valor_total.toFixed(2).replace('.',',')"></div>
+                        </div>
+                        <button @click="retomarOrcamento(o)"
+                                style="display:flex;align-items:center;gap:4px;padding:5px 10px;background:#ca8a04;border:none;border-radius:6px;color:#000;font-size:11px;font-weight:700;cursor:pointer;white-space:nowrap;flex-shrink:0;">
+                          <svg width="11" height="11" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"/></svg>
+                          Retomar
+                        </button>
+                      </div>
+                    </template>
+                  </div>
+                </template>
+
                 <!-- Produtos mais comprados -->
                 <template x-if="produtosFrequentes.length>0">
                   <div style="padding:10px 20px;border-bottom:1px solid #1a1a28;">
@@ -2277,7 +2300,7 @@ function pdv() {
     historicoCliente: [], produtosFrequentes: [], historicoClienteTotal: 0, historicoClienteCarregando: false, historicoClienteAberto: null,
     showModalConfig: false, configFormas: [], configTipos: [], configNovaDesc: '', configNovoTipo: 'dinheiro', configSalvando: false, configErro: '',
     itemEditando: null, descontoItemManual: '', descontoGeralManual: '',
-    pendentes: [], orcamentos: [], clienteQuery: '', clientesResultados: [], clienteBuscando: false, clienteFoco: -1,
+    pendentes: [], orcamentos: [], orcamentosCliente: [], clienteQuery: '', clientesResultados: [], clienteBuscando: false, clienteFoco: -1,
     deliveryAguardandoCliente: false,
     modalPreco: { show: false, produto: null, precos: [], descricao: '' },
 
@@ -3119,11 +3142,13 @@ ${pgtoHtml ? `<hr class="sep">${pgtoHtml}` : ''}
       };
       this.showModalCliente=false; this.clienteQuery=''; this.clientesResultados=[]; this.clienteFoco=-1;
       this.carregarHistoricoCliente(c.id);
+      this.carregarOrcamentosCliente(c.id);
       if (this.deliveryAguardandoCliente) this.prepararDeliveryClienteSelecionado();
     },
     selecionarClienteBalcao() {
       this.venda.cliente={id:null,nome:'Consumidor Final',cpf_cnpj:'',endereco_entrega:{},tem_endereco:false};
       this.historicoCliente=[]; this.produtosFrequentes=[]; this.historicoClienteTotal=0; this.historicoClienteAberto=null;
+      this.orcamentosCliente=[];
       this.showModalCliente=false; this.clienteQuery=''; this.clientesResultados=[]; this.clienteFoco=-1;
       if (this.deliveryAguardandoCliente) {
         this.deliveryAguardandoCliente=false;
@@ -3290,6 +3315,11 @@ ${pgtoHtml ? `<hr class="sep">${pgtoHtml}` : ''}
     async carregarOrcamentos() {
       try { this.orcamentos=(await (await fetch('/pdv/api/orcamentos/')).json()).orcamentos||[]; }
       catch { this.orcamentos=[]; }
+    },
+
+    async carregarOrcamentosCliente(clienteId) {
+      try { this.orcamentosCliente=(await (await fetch('/pdv/api/orcamentos/?cliente_id='+clienteId)).json()).orcamentos||[]; }
+      catch { this.orcamentosCliente=[]; }
     },
 
     async atualizarListasTopo() {
