@@ -789,7 +789,7 @@
           <div style="font-size:14px;font-weight:600;color:#e5e5f0;"
                :style="venda.cliente.id ? 'cursor:pointer;text-decoration:underline;text-underline-offset:3px;text-decoration-color:rgba(229,229,240,0.35);' : ''"
                :title="venda.cliente.id ? 'Ver / editar cadastro' : ''"
-               @click="venda.cliente.id && window.open('/cadastros/clientes/'+venda.cliente.id+'/', '_blank')"
+               @click="venda.cliente.id && window.open('/cadastros/clientes/'+venda.cliente.id+'/?next=/pdv/', '_blank')"
                x-text="venda.cliente.nome"></div>
           <div style="font-size:11px;color:#555;" x-text="venda.cliente.id ? venda.cliente.cpf_cnpj : 'Clique para selecionar'"></div>
         </div>

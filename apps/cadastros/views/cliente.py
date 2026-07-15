@@ -10,6 +10,7 @@ from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse_lazy
 from django.utils import timezone
 from django.utils.dateparse import parse_date
+from django.utils.http import url_has_allowed_host_and_scheme
 from django.views import View
 from reportlab.lib import colors
 from reportlab.lib.pagesizes import A4, landscape
@@ -337,25 +338,34 @@ class ClienteUpdateView(PermissaoRequiredMixin, View):
             Cliente.objects.for_filial(request.filial_ativa), pk=pk,
         )
 
+    def _next_url(self, request):
+        next_url = request.POST.get('next') or request.GET.get('next', '')
+        if next_url and url_has_allowed_host_and_scheme(next_url, allowed_hosts={request.get_host()}):
+            return next_url
+        return None
+
     def get(self, request, pk):
         cliente = self.get_object(request, pk)
+        next_url = self._next_url(request)
         return render(request, self.template_name, {
             'form': ClienteForm(instance=cliente),
             'cliente': cliente,
             'cadastro_log_pk': cliente.pk,
             **cadastro_log_context(cliente, 'clientes', 'Cliente', request.user),
             'title': f'Editar Cliente — {cliente.nome_display}',
-            'cancel_url': reverse_lazy('cadastros:cliente-list'),
+            'cancel_url': next_url or reverse_lazy('cadastros:cliente-list'),
+            'next_url': next_url or '',
         })
 
     def post(self, request, pk):
         cliente = self.get_object(request, pk)
         form = ClienteForm(request.POST, instance=cliente)
+        next_url = self._next_url(request)
         if form.is_valid():
             try:
                 ClienteService.atualizar(cliente, form.cleaned_data)
                 messages.success(request, 'Cliente atualizado.')
-                return redirect('cadastros:cliente-list')
+                return redirect(next_url or 'cadastros:cliente-list')
             except DomainError as e:
                 messages.error(request, str(e))
         return render(request, self.template_name, {
@@ -364,7 +374,8 @@ class ClienteUpdateView(PermissaoRequiredMixin, View):
             'cadastro_log_pk': cliente.pk,
             **cadastro_log_context(cliente, 'clientes', 'Cliente', request.user),
             'title': f'Editar Cliente — {cliente.nome_display}',
-            'cancel_url': reverse_lazy('cadastros:cliente-list'),
+            'cancel_url': next_url or reverse_lazy('cadastros:cliente-list'),
+            'next_url': next_url or '',
         })
 
 
