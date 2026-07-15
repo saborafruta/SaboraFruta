@@ -786,7 +786,11 @@
         <div style="width:38px;height:38px;border-radius:50%;background:linear-gradient(135deg,#f15a24,#ea580c);display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;color:#fff;flex-shrink:0;"
              x-text="venda.cliente.nome.substring(0,2).toUpperCase()"></div>
         <div style="flex:1;min-width:0;">
-          <div style="font-size:14px;font-weight:600;color:#e5e5f0;" x-text="venda.cliente.nome"></div>
+          <div style="font-size:14px;font-weight:600;color:#e5e5f0;"
+               :style="venda.cliente.id ? 'cursor:pointer;text-decoration:underline;text-underline-offset:3px;text-decoration-color:rgba(229,229,240,0.35);' : ''"
+               :title="venda.cliente.id ? 'Ver / editar cadastro' : ''"
+               @click="venda.cliente.id && window.open('/cadastros/clientes/'+venda.cliente.id+'/', '_blank')"
+               x-text="venda.cliente.nome"></div>
           <div style="font-size:11px;color:#555;" x-text="venda.cliente.id ? venda.cliente.cpf_cnpj : 'Clique para selecionar'"></div>
         </div>
         <button @click="selecionarClienteBalcao()" class="btn-action">
