@@ -52,4 +52,7 @@ urlpatterns = [
     # Endpoints JSON para typeahead
     path('api/fornecedores/buscar/', views.FornecedorSearchJsonView.as_view(), name='fornecedor-search-json'),
     path('api/produtos/buscar/', views.ProdutoEstoqueSearchJsonView.as_view(), name='produto-estoque-search-json'),
+    path('api/clientes/buscar/', views.ClienteSearchJsonView.as_view(), name='cliente-search-json'),
+    path('api/lotes/buscar/', views.LoteSearchJsonView.as_view(), name='lote-search-json'),
+    path('outras-movimentacoes/devolucao/api/', views.DevolucaoClienteApiView.as_view(), name='devolucao-cliente-api'),
 ]

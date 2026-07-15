@@ -1,6 +1,7 @@
 """Views do módulo Outras Movimentações de Estoque."""
 from __future__ import annotations
 
+import json as _json
 from decimal import Decimal
 
 from django.contrib import messages
@@ -11,11 +12,11 @@ from django.shortcuts import redirect, render
 from django.urls import reverse
 from django.views import View
 
-from apps.cadastros.models import Fornecedor
+from apps.cadastros.models import Cliente, Fornecedor
 from apps.core.services.exceptions import DomainError
 from apps.core.services.permissions import PERMISSION_DENIED_MESSAGE, PermissaoRequiredMixin
 from apps.estoque.forms.outras_movimentacoes import DevolucaoClienteForm, DevolucaoFornecedorForm, SaidaEspecialForm
-from apps.estoque.models import MovimentacaoEstoque
+from apps.estoque.models import LoteProduto, MovimentacaoEstoque
 from apps.estoque.services.movimentacao_service import MovimentacaoService
 from apps.estoque.views.permissoes import permissoes_estoque
 from apps.produtos.models import Produto
@@ -375,3 +376,180 @@ class ProdutoEstoqueSearchJsonView(PermissaoRequiredMixin, View):
             for p in qs.select_related('unidade').order_by('descricao')[:25]
         ]
         return JsonResponse({'results': resultados})
+
+
+# ────────────────────────────────────────────────────────────
+# Endpoints JSON para busca typeahead (devolucao cliente)
+# ────────────────────────────────────────────────────────────
+
+class ClienteSearchJsonView(PermissaoRequiredMixin, View):
+    """Retorna clientes ativos que correspondem ao termo de busca (JSON)."""
+
+    permissao_modulo = 'estoque'
+
+    def get(self, request):
+        q = request.GET.get('q', '').strip()
+        filial = request.filial_ativa
+        qs = Cliente.objects.for_filial(filial).filter(ativo=True)
+        if len(q) >= 2:
+            qs = qs.filter(
+                db_models.Q(razao_social__icontains=q)
+                | db_models.Q(nome_fantasia__icontains=q)
+                | db_models.Q(cpf_cnpj__icontains=q)
+            )
+        else:
+            qs = qs.none()
+        resultados = [
+            {
+                'id': c.pk,
+                'label': c.nome_fantasia or c.razao_social,
+                'detalhe': c.razao_social if c.nome_fantasia else '',
+                'cpf_cnpj': c.cpf_cnpj or '',
+            }
+            for c in qs.order_by('razao_social')[:20]
+        ]
+        return JsonResponse({'results': resultados})
+
+
+class LoteSearchJsonView(PermissaoRequiredMixin, View):
+    """Retorna lotes ativos de um produto (JSON)."""
+
+    permissao_modulo = 'estoque'
+
+    def get(self, request):
+        produto_id = request.GET.get('produto_id')
+        filial = request.filial_ativa
+        if not produto_id:
+            return JsonResponse({'results': []})
+        qs = LoteProduto.objects.filter(
+            filial=filial,
+            produto_id=produto_id,
+            status=LoteProduto.Status.ATIVO,
+        ).order_by('data_validade', 'numero_lote')
+        resultados = [
+            {
+                'id': l.pk,
+                'label': l.numero_lote + (
+                    f' — Val: {l.data_validade.strftime("%d/%m/%Y")}' if l.data_validade else ''
+                ),
+                'quantidade_atual': float(l.quantidade_atual),
+            }
+            for l in qs[:30]
+        ]
+        return JsonResponse({'results': resultados})
+
+
+class DevolucaoClienteApiView(PermissaoRequiredMixin, View):
+    """API JSON: registra devolução de cliente com múltiplos produtos."""
+
+    permissao_modulo = 'estoque'
+    permissao_acao = 'criar'
+
+    @transaction.atomic
+    def post(self, request):
+        try:
+            body = _json.loads(request.body)
+        except (ValueError, TypeError):
+            return JsonResponse({'erro': 'JSON inválido.'}, status=400)
+
+        cliente_id = body.get('cliente_id')
+        cfop = body.get('cfop', '1202')
+        documento_numero = body.get('documento_numero', '')
+        gerar_credito = bool(body.get('gerar_credito', True))
+        observacao = (body.get('observacao') or '').strip()
+        itens = body.get('itens', [])
+
+        if not cliente_id:
+            return JsonResponse({'erro': 'Selecione um cliente.'}, status=400)
+        if not itens:
+            return JsonResponse({'erro': 'Adicione ao menos um produto.'}, status=400)
+        if not observacao:
+            return JsonResponse({'erro': 'Informe a observação.'}, status=400)
+
+        filial = request.filial_ativa
+        try:
+            cliente = Cliente.objects.for_filial(filial).get(pk=cliente_id, ativo=True)
+        except Cliente.DoesNotExist:
+            return JsonResponse({'erro': 'Cliente não encontrado.'}, status=400)
+
+        movs = []
+        credito_total = Decimal('0')
+
+        for i, item_data in enumerate(itens, 1):
+            produto_id = item_data.get('produto_id')
+            lote_id = item_data.get('lote_id')
+            try:
+                quantidade = Decimal(str(item_data.get('quantidade', 0)))
+            except Exception:
+                return JsonResponse({'erro': f'Quantidade inválida no item {i}.'}, status=400)
+
+            valor_unitario_raw = item_data.get('valor_unitario')
+            valor_unitario = Decimal(str(valor_unitario_raw)) if valor_unitario_raw else None
+
+            if not produto_id:
+                return JsonResponse({'erro': f'Produto inválido no item {i}.'}, status=400)
+            if quantidade <= 0:
+                return JsonResponse({'erro': f'Quantidade deve ser maior que zero (item {i}).'}, status=400)
+
+            if hasattr(Produto.objects, 'for_filial'):
+                produto_qs = Produto.objects.for_filial(filial)
+            else:
+                produto_qs = Produto.objects
+            try:
+                produto = produto_qs.get(pk=produto_id, ativo=True)
+            except Produto.DoesNotExist:
+                return JsonResponse({'erro': f'Produto não encontrado (item {i}).'}, status=400)
+
+            if produto.controla_lote and not lote_id:
+                return JsonResponse(
+                    {'erro': f'Informe o lote para "{produto.descricao}" (item {i}).'},
+                    status=400,
+                )
+
+            lote = None
+            if lote_id:
+                try:
+                    lote = LoteProduto.objects.get(pk=lote_id, produto=produto, filial=filial)
+                except LoteProduto.DoesNotExist:
+                    return JsonResponse({'erro': f'Lote inválido (item {i}).'}, status=400)
+
+            try:
+                mov = MovimentacaoService.registrar_movimentacao(
+                    produto_id=produto.pk,
+                    filial_id=filial.pk,
+                    tipo_operacao=MovimentacaoEstoque.TipoOperacao.DEVOLUCAO_CLIENTE,
+                    quantidade=quantidade,
+                    usuario_id=request.user.pk,
+                    lote_id=lote.pk if lote else None,
+                    valor_unitario=valor_unitario,
+                    documento_tipo=MovimentacaoEstoque.DocumentoTipo.OUTRAS,
+                    documento_numero=documento_numero,
+                    observacao=observacao,
+                )
+                movs.append(mov)
+            except DomainError as exc:
+                return JsonResponse({'erro': str(exc)}, status=400)
+
+            if gerar_credito and valor_unitario:
+                credito_total += valor_unitario * quantidade
+
+        if gerar_credito and credito_total > 0:
+            from apps.financeiro.models.credito_cliente import CreditoCliente
+            CreditoCliente.objects.create(
+                filial=filial,
+                cliente=cliente,
+                valor=credito_total,
+                valor_utilizado=Decimal('0'),
+                motivo='devolucao',
+                documento_numero=documento_numero,
+                cfop=cfop,
+                observacao=observacao,
+                usuario=request.user,
+                status=CreditoCliente.Status.DISPONIVEL,
+            )
+
+        msg = f'{len(movs)} item(s) registrado(s) com sucesso.'
+        if gerar_credito and credito_total > 0:
+            msg += f' Crédito de R$ {credito_total:.2f} gerado para {cliente}.'
+
+        return JsonResponse({'ok': True, 'message': msg})

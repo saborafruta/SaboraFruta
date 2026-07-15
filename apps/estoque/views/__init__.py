@@ -14,6 +14,7 @@ from .sugestao_compras import SugestaoComprasView
 from .outras_movimentacoes import (
     OutrasMovimentacoesHubView, DevolucaoClienteView, DevolucaoFornecedorView, SaidaEspecialView,
     FornecedorSearchJsonView, ProdutoEstoqueSearchJsonView,
+    ClienteSearchJsonView, LoteSearchJsonView, DevolucaoClienteApiView,
 )
 
 __all__ = [
@@ -28,4 +29,5 @@ __all__ = [
     'SugestaoComprasView',
     'OutrasMovimentacoesHubView', 'DevolucaoClienteView', 'DevolucaoFornecedorView', 'SaidaEspecialView',
     'FornecedorSearchJsonView', 'ProdutoEstoqueSearchJsonView',
+    'ClienteSearchJsonView', 'LoteSearchJsonView', 'DevolucaoClienteApiView',
 ]
