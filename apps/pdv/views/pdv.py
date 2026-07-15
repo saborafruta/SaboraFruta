@@ -1534,6 +1534,7 @@ def delivery_kanban(request):
         'cidade': filial.cidade,
         'uf': filial.uf,
         'telefone': filial.telefone,
+        'logo_url': request.build_absolute_uri(filial.imagem.url) if filial.imagem else '',
     }
 
     return render(request, 'pdv/delivery_kanban.html', {

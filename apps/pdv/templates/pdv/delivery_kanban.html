@@ -519,6 +519,7 @@
         @media print { @page { margin:0; } body { padding:4px; } }
       </style>
     </head><body>
+      ${f.logo_url ? '<div class="center" style="margin-bottom:6px;"><img src="' + f.logo_url + '" style="max-height:64px;max-width:180px;object-fit:contain;" /></div>' : ''}
       <div class="center" style="font-size:14px;font-weight:700;margin-bottom:2px;">${f.nome || ''}</div>
       ${cnpjFmt ? '<div class="center sub">CNPJ: ' + cnpjFmt + '</div>' : ''}
       ${filialEnd.trim() ? '<div class="center sub">' + filialEnd.trim() + '</div>' : ''}
