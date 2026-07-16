@@ -1568,12 +1568,12 @@
       <div style="display:flex;gap:6px;">
         <div style="position:relative;flex:1;">
           <span style="position:absolute;left:10px;top:50%;transform:translateY(-50%);color:#f15a24;font-size:12px;font-weight:700;">R$</span>
-          <input type="text" inputmode="decimal" x-model="descontoItemManual" x-ref="inputDescontoValor"
+          <input type="text" inputmode="decimal" x-ref="inputDescontoValor"
                  placeholder="0,00"
-                 @keydown.enter.prevent="aplicarDescontoItem(itemEditando,descontoItemManual)"
+                 @keydown.enter.prevent="aplicarDescontoItem(itemEditando,$refs.inputDescontoValor.value)"
                  style="width:100%;padding:8px 10px 8px 28px;background:#0a0a12;border:1px solid #2a2a3e;border-radius:8px;color:#fff;font-size:13px;outline:none;">
         </div>
-        <button @click="aplicarDescontoItem(itemEditando,descontoItemManual)"
+        <button @click="aplicarDescontoItem(itemEditando,$refs.inputDescontoValor.value)"
                 style="padding:8px 16px;background:#22c55e;border:none;border-radius:8px;color:#fff;font-size:13px;font-weight:700;cursor:pointer;">OK</button>
       </div>
     </div>
@@ -2505,7 +2505,7 @@ function pdv() {
       this.venda.restante = r > 0 ? r : 0;
     },
 
-    abrirDescontoItem(item) { this.itemEditando=item; this.descontoItemManual=item.desconto_valor>0?String(item.desconto_valor):''; this.showModalDescontoItem=true; this.$nextTick(()=>{ try{this.$refs.inputDescontoValor?.focus();}catch(e){} }); },
+    abrirDescontoItem(item) { this.itemEditando=item; this.showModalDescontoItem=true; this.$nextTick(()=>{ try{ const el=this.$refs.inputDescontoValor; if(el){ el.value=item.desconto_valor>0?String(item.desconto_valor).replace('.',','):''; el.focus(); } }catch(e){} }); },
     aplicarDescontoItem(item,val) { if(!item)return; item.desconto_valor=Math.max(0,parseFloat(String(val).replace(',','.'))||0); this.recalcularItem(item); this.showModalDescontoItem=false; },
     aplicarDescontoItemPct(item,pct) {
       if(!item)return;
