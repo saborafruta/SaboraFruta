@@ -1547,20 +1547,27 @@
          ? 'position:fixed;inset:0;z-index:50;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,.8);'
          : 'display:none;'"
        @keydown.escape.window="showModalDescontoItem=false">
-    <div style="width:100%;max-width:320px;background:#13131e;border:1px solid #2a2a3e;border-radius:16px;padding:24px;">
+    <div :style="temaClaro
+           ? 'width:100%;max-width:320px;background:#ffffff;border:1px solid #e5e7eb;border-radius:16px;padding:24px;'
+           : 'width:100%;max-width:320px;background:#13131e;border:1px solid #2a2a3e;border-radius:16px;padding:24px;'">
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px;">
-        <h2 style="font-size:14px;font-weight:700;color:#fff;margin:0;">Desconto no Item</h2>
-        <button @click="showModalDescontoItem=false" style="background:none;border:none;color:#555;cursor:pointer;font-size:18px;">✕</button>
+        <h2 :style="temaClaro?'font-size:14px;font-weight:700;color:#111827;margin:0;':'font-size:14px;font-weight:700;color:#fff;margin:0;'">Desconto no Item</h2>
+        <button @click="showModalDescontoItem=false" style="background:none;border:none;color:#9ca3af;cursor:pointer;font-size:18px;">✕</button>
       </div>
-      <p x-show="itemEditando" x-text="itemEditando?.descricao" style="font-size:12px;color:#555;margin:0 0 4px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;"></p>
-      <p x-show="itemEditando" style="font-size:11px;color:#3a3a52;margin:0 0 14px;"
+      <p x-show="itemEditando" x-text="itemEditando?.descricao"
+         :style="temaClaro?'font-size:12px;color:#374151;margin:0 0 4px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;':'font-size:12px;color:#a0a0b8;margin:0 0 4px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;'"></p>
+      <p x-show="itemEditando"
+         :style="temaClaro?'font-size:11px;color:#6b7280;margin:0 0 14px;':'font-size:11px;color:#6b7280;margin:0 0 14px;'"
          x-text="'Total: R$ ' + fmt(parseFloat(itemEditando?.quantidade||1)*parseFloat(itemEditando?.valor_unitario||0))"></p>
       <!-- Atalhos por porcentagem -->
       <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-bottom:12px;">
         <template x-for="pct in [5,10,15,20,25,30,50,0]" :key="pct">
           <button @click="aplicarDescontoItemPct(itemEditando,pct)"
-                  :style="(pct===0&&itemEditando?.desconto_valor===0)||(pct>0&&Math.abs(itemEditando?.desconto_percentual-pct)<0.1)?'border-color:#22c55e;color:#4ade80;background:#0a2e1a;':''"
-                  style="padding:8px 4px;background:#1e1e2a;border:1px solid #2a2a3e;border-radius:8px;color:#a0a0b8;font-size:12px;font-weight:700;cursor:pointer;"
+                  :style="(pct===0&&itemEditando?.desconto_valor===0)||(pct>0&&Math.abs(itemEditando?.desconto_percentual-pct)<0.1)
+                    ? 'padding:8px 4px;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;border:1px solid #22c55e;color:#16a34a;background:#dcfce7;'
+                    : (temaClaro
+                        ? 'padding:8px 4px;background:#f3f4f6;border:1px solid #d1d5db;border-radius:8px;color:#374151;font-size:12px;font-weight:700;cursor:pointer;'
+                        : 'padding:8px 4px;background:#1e1e2a;border:1px solid #2a2a3e;border-radius:8px;color:#a0a0b8;font-size:12px;font-weight:700;cursor:pointer;')"
                   x-text="pct===0?'Sem desc.':pct+'%'"></button>
         </template>
       </div>
@@ -1571,7 +1578,9 @@
           <input type="text" inputmode="decimal" x-ref="inputDescontoValor"
                  placeholder="0,00"
                  @keydown.enter.prevent="aplicarDescontoItem(itemEditando,$refs.inputDescontoValor.value)"
-                 style="width:100%;padding:8px 10px 8px 28px;background:#0a0a12;border:1px solid #2a2a3e;border-radius:8px;color:#fff;font-size:13px;outline:none;">
+                 :style="temaClaro
+                   ? 'width:100%;padding:8px 10px 8px 28px;background:#f9fafb;border:1px solid #d1d5db;border-radius:8px;color:#111827;font-size:13px;outline:none;'
+                   : 'width:100%;padding:8px 10px 8px 28px;background:#0a0a12;border:1px solid #2a2a3e;border-radius:8px;color:#fff;font-size:13px;outline:none;'">
         </div>
         <button @click="aplicarDescontoItem(itemEditando,$refs.inputDescontoValor.value)"
                 style="padding:8px 16px;background:#22c55e;border:none;border-radius:8px;color:#fff;font-size:13px;font-weight:700;cursor:pointer;">OK</button>
