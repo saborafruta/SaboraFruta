@@ -717,46 +717,40 @@
       <!-- Lista de produtos -->
       <div style="flex:1;overflow-y:auto;padding:0 8px;">
 
-        <!-- Resultados busca -->
-        <template x-if="produtos.length > 0">
-          <div style="display:flex;flex-direction:column;gap:4px;padding-bottom:8px;">
-            <template x-for="p in produtos" :key="p.id">
-              <button @click="adicionarItem(p)" class="prod-card">
-                <div style="width:34px;height:34px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0;"
-                     :style="p.cor ? `background:${p.cor}22;border:1px solid ${p.cor}44` : 'background:#1e1e2a;border:1px solid #2a2a3e;'"
-                     x-text="p.icone || '📦'"></div>
-                <div style="flex:1;min-width:0;">
-                  <div class="prod-card-nome" x-text="p.descricao"></div>
-                  <div class="prod-card-preco" x-text="'R$ ' + fmt(p.preco)"></div>
-                </div>
-              </button>
-            </template>
-          </div>
-        </template>
-
-        <!-- Top 10 -->
-        <template x-if="produtos.length === 0 && !buscandoProdutos">
-          <div style="padding-bottom:8px;">
-            <div style="display:flex;align-items:center;gap:6px;padding:8px 4px 6px;font-size:11px;font-weight:600;color:#444;text-transform:uppercase;letter-spacing:.08em;">
+        <!-- Label -->
+        <div x-show="!buscandoProdutos" style="display:flex;align-items:center;gap:6px;padding:8px 4px 6px;font-size:11px;font-weight:600;color:#444;text-transform:uppercase;letter-spacing:.08em;">
+          <template x-if="!buscaQuery.trim()">
+            <span style="display:flex;align-items:center;gap:6px;">
               <svg width="12" height="12" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6"/></svg>
               Top 10 Mais Vendidos
-            </div>
-            <template x-if="topProdutos.length === 0">
-              <p style="color:#333;font-size:12px;text-align:center;padding:24px 0;">Nenhum produto cadastrado</p>
-            </template>
-            <template x-for="p in topProdutos" :key="p.id">
-              <button @click="adicionarItem(p)" class="prod-card">
-                <div style="width:34px;height:34px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0;"
-                     :style="p.cor ? `background:${p.cor}22;border:1px solid ${p.cor}44` : 'background:#1e1e2a;border:1px solid #2a2a3e;'"
-                     x-text="p.icone || '📦'"></div>
-                <div style="flex:1;min-width:0;">
-                  <div class="prod-card-nome" x-text="p.descricao"></div>
-                  <div class="prod-card-preco" x-text="'R$ ' + fmt(p.preco)"></div>
-                </div>
-              </button>
-            </template>
-          </div>
-        </template>
+            </span>
+          </template>
+          <template x-if="buscaQuery.trim()">
+            <span style="display:flex;align-items:center;gap:6px;">
+              <svg width="12" height="12" fill="none" stroke="#f15a24" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
+              <span style="color:#f15a24;" x-text="produtosVisiveis.length + ' resultado(s) para \'' + buscaQuery.trim() + '\''"></span>
+            </span>
+          </template>
+        </div>
+
+        <!-- Lista unificada -->
+        <div x-show="!buscandoProdutos" style="display:flex;flex-direction:column;gap:4px;padding-bottom:8px;">
+          <template x-if="produtosVisiveis.length === 0">
+            <p style="color:#444;font-size:12px;text-align:center;padding:24px 0;"
+               x-text="buscaQuery.trim() ? 'Nenhum produto encontrado para \'' + buscaQuery.trim() + '\'' : 'Nenhum produto cadastrado'"></p>
+          </template>
+          <template x-for="p in produtosVisiveis" :key="p.id">
+            <button @click="adicionarItem(p)" class="prod-card">
+              <div style="width:34px;height:34px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0;"
+                   :style="p.cor ? `background:${p.cor}22;border:1px solid ${p.cor}44` : 'background:#1e1e2a;border:1px solid #2a2a3e;'"
+                   x-text="p.icone || '📦'"></div>
+              <div style="flex:1;min-width:0;">
+                <div class="prod-card-nome" x-text="p.descricao"></div>
+                <div class="prod-card-preco" x-text="'R$ ' + fmt(p.preco)"></div>
+              </div>
+            </button>
+          </template>
+        </div>
 
         <!-- Buscando -->
         <div x-show="buscandoProdutos" style="display:flex;justify-content:center;padding:32px;">
@@ -2347,6 +2341,12 @@ function pdv() {
     get totalUnidades() { return this.venda.itens.reduce((s,i)=>s+parseFloat(i.quantidade||0),0); },
     get podeFinalizar() { return this.sessao && this.venda.itens.length>0 && parseFloat(this.venda.restante)<=0.001; },
     get formasPagamentoVisiveis() { return this.mostrarMaisFormas ? this.formasPagamento : this.formasPagamento.slice(0,6); },
+    get produtosVisiveis() {
+      if (this.produtos.length > 0) return this.produtos;
+      const q = (this.buscaQuery || '').trim().toLowerCase();
+      if (!q) return this.topProdutos;
+      return this.topProdutos.filter(p => (p.descricao || '').toLowerCase().includes(q));
+    },
     get trocoTotal() { return this.venda.pagamentos.reduce((s,p)=>s+parseFloat(p.troco||0),0); },
     get diferencaCaixa() {
       const esperado = parseFloat(this.caixaRel?.caixa.esperado_dinheiro||0);
