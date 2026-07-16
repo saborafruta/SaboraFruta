@@ -1568,8 +1568,10 @@
       <div style="display:flex;gap:6px;">
         <div style="position:relative;flex:1;">
           <span style="position:absolute;left:10px;top:50%;transform:translateY(-50%);color:#f15a24;font-size:12px;font-weight:700;">R$</span>
-          <input type="number" x-model.number="descontoItemManual" placeholder="0,00" min="0" step="0.01"
+          <input type="number" x-model="descontoItemManual" x-ref="inputDescontoValor"
+                 placeholder="0,00" min="0" step="0.01"
                  :max="parseFloat(itemEditando?.quantidade||1)*parseFloat(itemEditando?.valor_unitario||0)"
+                 @keydown.enter="aplicarDescontoItem(itemEditando,descontoItemManual)"
                  style="width:100%;padding:8px 10px 8px 28px;background:#0a0a12;border:1px solid #2a2a3e;border-radius:8px;color:#fff;font-size:13px;outline:none;">
         </div>
         <button @click="aplicarDescontoItem(itemEditando,descontoItemManual)"
@@ -2504,8 +2506,8 @@ function pdv() {
       this.venda.restante = r > 0 ? r : 0;
     },
 
-    abrirDescontoItem(item) { this.itemEditando=item; this.descontoItemManual=item.desconto_valor>0?item.desconto_valor:''; this.showModalDescontoItem=true; },
-    aplicarDescontoItem(item,val) { if(!item)return; item.desconto_valor=Math.max(0,parseFloat(val)||0); this.recalcularItem(item); this.showModalDescontoItem=false; },
+    abrirDescontoItem(item) { this.itemEditando=item; this.descontoItemManual=item.desconto_valor>0?String(item.desconto_valor):''; this.showModalDescontoItem=true; this.$nextTick(()=>{ try{this.$refs.inputDescontoValor?.focus();}catch(e){} }); },
+    aplicarDescontoItem(item,val) { if(!item)return; item.desconto_valor=Math.max(0,parseFloat(String(val).replace(',','.'))||0); this.recalcularItem(item); this.showModalDescontoItem=false; },
     aplicarDescontoItemPct(item,pct) {
       if(!item)return;
       const bruto=parseFloat(item.quantidade)*parseFloat(item.valor_unitario);
