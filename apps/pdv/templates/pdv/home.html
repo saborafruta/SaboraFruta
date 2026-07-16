@@ -1568,10 +1568,9 @@
       <div style="display:flex;gap:6px;">
         <div style="position:relative;flex:1;">
           <span style="position:absolute;left:10px;top:50%;transform:translateY(-50%);color:#f15a24;font-size:12px;font-weight:700;">R$</span>
-          <input type="number" x-model="descontoItemManual" x-ref="inputDescontoValor"
-                 placeholder="0,00" min="0" step="0.01"
-                 :max="parseFloat(itemEditando?.quantidade||1)*parseFloat(itemEditando?.valor_unitario||0)"
-                 @keydown.enter="aplicarDescontoItem(itemEditando,descontoItemManual)"
+          <input type="text" inputmode="decimal" x-model="descontoItemManual" x-ref="inputDescontoValor"
+                 placeholder="0,00"
+                 @keydown.enter.prevent="aplicarDescontoItem(itemEditando,descontoItemManual)"
                  style="width:100%;padding:8px 10px 8px 28px;background:#0a0a12;border:1px solid #2a2a3e;border-radius:8px;color:#fff;font-size:13px;outline:none;">
         </div>
         <button @click="aplicarDescontoItem(itemEditando,descontoItemManual)"
