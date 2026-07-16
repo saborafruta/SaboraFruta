@@ -1555,16 +1555,16 @@
       <p x-show="itemEditando" x-text="itemEditando?.descricao" style="font-size:12px;color:#555;margin:0 0 4px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;"></p>
       <p x-show="itemEditando" style="font-size:11px;color:#3a3a52;margin:0 0 14px;"
          x-text="'Total: R$ ' + fmt(parseFloat(itemEditando?.quantidade||1)*parseFloat(itemEditando?.valor_unitario||0))"></p>
-      <!-- Atalhos de valor -->
-      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-bottom:12px;">
-        <template x-for="v in [0.50,1.00,2.00,5.00,10.00,0]" :key="v">
-          <button @click="aplicarDescontoItem(itemEditando,v)"
-                  :style="itemEditando?.desconto_valor===v?'border-color:#22c55e;color:#4ade80;background:#0a2e1a;':''"
-                  style="padding:9px 4px;background:#1e1e2a;border:1px solid #2a2a3e;border-radius:8px;color:#a0a0b8;font-size:12px;font-weight:700;cursor:pointer;"
-                  x-text="v===0?'Sem desc.':'R$ '+v.toFixed(2).replace('.',',')"></button>
+      <!-- Atalhos por porcentagem -->
+      <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-bottom:12px;">
+        <template x-for="pct in [5,10,15,20,25,30,50,0]" :key="pct">
+          <button @click="aplicarDescontoItemPct(itemEditando,pct)"
+                  :style="(pct===0&&itemEditando?.desconto_valor===0)||(pct>0&&Math.abs(itemEditando?.desconto_percentual-pct)<0.1)?'border-color:#22c55e;color:#4ade80;background:#0a2e1a;':''"
+                  style="padding:8px 4px;background:#1e1e2a;border:1px solid #2a2a3e;border-radius:8px;color:#a0a0b8;font-size:12px;font-weight:700;cursor:pointer;"
+                  x-text="pct===0?'Sem desc.':pct+'%'"></button>
         </template>
       </div>
-      <!-- Valor manual -->
+      <!-- Valor manual em R$ -->
       <div style="display:flex;gap:6px;">
         <div style="position:relative;flex:1;">
           <span style="position:absolute;left:10px;top:50%;transform:translateY(-50%);color:#f15a24;font-size:12px;font-weight:700;">R$</span>
@@ -2504,8 +2504,14 @@ function pdv() {
       this.venda.restante = r > 0 ? r : 0;
     },
 
-    abrirDescontoItem(item) { this.itemEditando=item; this.descontoItemManual=item.desconto_valor||''; this.showModalDescontoItem=true; },
-    aplicarDescontoItem(item,val) { if(!item)return; item.desconto_valor=parseFloat(val)||0; this.recalcularItem(item); this.showModalDescontoItem=false; },
+    abrirDescontoItem(item) { this.itemEditando=item; this.descontoItemManual=item.desconto_valor>0?item.desconto_valor:''; this.showModalDescontoItem=true; },
+    aplicarDescontoItem(item,val) { if(!item)return; item.desconto_valor=Math.max(0,parseFloat(val)||0); this.recalcularItem(item); this.showModalDescontoItem=false; },
+    aplicarDescontoItemPct(item,pct) {
+      if(!item)return;
+      const bruto=parseFloat(item.quantidade)*parseFloat(item.valor_unitario);
+      item.desconto_valor=pct===0?0:Math.min(bruto*(pct/100),bruto);
+      this.recalcularItem(item); this.showModalDescontoItem=false;
+    },
     aplicarDescontoGeral(pct) { this.venda.desconto=pct===0?0:this.venda.subtotal*(pct/100); this.recalcularTotais(); this.showModalDesconto=false; },
     aplicarDescontoGeralValor() { this.venda.desconto=Math.min(parseFloat(this.descontoGeralManual)||0,this.venda.subtotal); this.recalcularTotais(); this.showModalDesconto=false; },
 
