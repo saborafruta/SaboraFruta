@@ -993,9 +993,9 @@
                 <div style="font-size:13px;font-weight:600;color:#e5e5f0;text-transform:uppercase;letter-spacing:.02em;line-height:1.2;" x-text="item.descricao"></div>
                 <div style="display:flex;align-items:center;gap:8px;margin-top:4px;">
                   <span style="font-size:12px;color:#555;" x-text="'R$ ' + fmt(item.valor_unitario) + ' / un.'"></span>
-                  <template x-if="item.desconto_percentual>0">
+                  <template x-if="item.desconto_valor>0">
                     <span style="font-size:11px;padding:1px 6px;background:rgba(34,197,94,.15);color:#4ade80;border-radius:4px;font-weight:600;"
-                          x-text="item.desconto_percentual+'% desc.'"></span>
+                          x-text="'− R$ ' + fmt(item.desconto_valor)"></span>
                   </template>
                 </div>
                 <div style="display:flex;align-items:center;gap:8px;margin-top:8px;">
@@ -1005,8 +1005,8 @@
                     <button @click="alterarQuantidade(item,1)">+</button>
                   </div>
                   <button @click="abrirDescontoItem(item)" class="btn-action" style="font-size:11px;padding:4px 8px;"
-                          :style="item.desconto_percentual>0?'color:#4ade80;border-color:rgba(34,197,94,.3);':''">
-                    % <span x-show="item.desconto_percentual>0" x-text="item.desconto_percentual+'%'" x-cloak></span>
+                          :style="item.desconto_valor>0?'color:#4ade80;border-color:rgba(34,197,94,.3);':''">
+                    desc <span x-show="item.desconto_valor>0" x-text="'R$'+fmt(item.desconto_valor)" x-cloak></span>
                   </button>
                   <button @click="item._showObs=!item._showObs" class="btn-action" style="font-size:11px;padding:4px 8px;"
                           :style="item.obs?'color:#f59e0b;border-color:rgba(245,158,11,.3);':''">💬</button>
@@ -1549,21 +1549,29 @@
        @keydown.escape.window="showModalDescontoItem=false">
     <div style="width:100%;max-width:320px;background:#13131e;border:1px solid #2a2a3e;border-radius:16px;padding:24px;">
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px;">
-        <h2 style="font-size:14px;font-weight:700;color:#fff;margin:0;">% Desconto no Item</h2>
+        <h2 style="font-size:14px;font-weight:700;color:#fff;margin:0;">Desconto no Item</h2>
         <button @click="showModalDescontoItem=false" style="background:none;border:none;color:#555;cursor:pointer;font-size:18px;">✕</button>
       </div>
-      <p x-show="itemEditando" x-text="itemEditando?.descricao" style="font-size:12px;color:#555;margin:0 0 16px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;"></p>
-      <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-bottom:12px;">
-        <template x-for="pct in [5,10,15,20,25,30,50,0]" :key="pct">
-          <button @click="aplicarDescontoItem(itemEditando,pct)"
-                  :style="itemEditando?.desconto_percentual===pct?'border-color:#22c55e;color:#4ade80;background:#0a2e1a;':''"
-                  style="padding:8px 4px;background:#1e1e2a;border:1px solid #2a2a3e;border-radius:8px;color:#a0a0b8;font-size:12px;font-weight:700;cursor:pointer;"
-                  x-text="pct===0?'Sem desc.':pct+'%'"></button>
+      <p x-show="itemEditando" x-text="itemEditando?.descricao" style="font-size:12px;color:#555;margin:0 0 4px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;"></p>
+      <p x-show="itemEditando" style="font-size:11px;color:#3a3a52;margin:0 0 14px;"
+         x-text="'Total: R$ ' + fmt(parseFloat(itemEditando?.quantidade||1)*parseFloat(itemEditando?.valor_unitario||0))"></p>
+      <!-- Atalhos de valor -->
+      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-bottom:12px;">
+        <template x-for="v in [0.50,1.00,2.00,5.00,10.00,0]" :key="v">
+          <button @click="aplicarDescontoItem(itemEditando,v)"
+                  :style="itemEditando?.desconto_valor===v?'border-color:#22c55e;color:#4ade80;background:#0a2e1a;':''"
+                  style="padding:9px 4px;background:#1e1e2a;border:1px solid #2a2a3e;border-radius:8px;color:#a0a0b8;font-size:12px;font-weight:700;cursor:pointer;"
+                  x-text="v===0?'Sem desc.':'R$ '+v.toFixed(2).replace('.',',')"></button>
         </template>
       </div>
+      <!-- Valor manual -->
       <div style="display:flex;gap:6px;">
-        <input type="number" x-model.number="descontoItemManual" placeholder="% manual" min="0" max="100"
-               style="flex:1;padding:8px 12px;background:#0a0a12;border:1px solid #2a2a3e;border-radius:8px;color:#fff;font-size:13px;outline:none;">
+        <div style="position:relative;flex:1;">
+          <span style="position:absolute;left:10px;top:50%;transform:translateY(-50%);color:#f15a24;font-size:12px;font-weight:700;">R$</span>
+          <input type="number" x-model.number="descontoItemManual" placeholder="0,00" min="0" step="0.01"
+                 :max="parseFloat(itemEditando?.quantidade||1)*parseFloat(itemEditando?.valor_unitario||0)"
+                 style="width:100%;padding:8px 10px 8px 28px;background:#0a0a12;border:1px solid #2a2a3e;border-radius:8px;color:#fff;font-size:13px;outline:none;">
+        </div>
         <button @click="aplicarDescontoItem(itemEditando,descontoItemManual)"
                 style="padding:8px 16px;background:#22c55e;border:none;border-radius:8px;color:#fff;font-size:13px;font-weight:700;cursor:pointer;">OK</button>
       </div>
@@ -2453,7 +2461,7 @@ function pdv() {
         icone: produto.icone||'📦', cor: produto.cor||null, linha: produto.linha||null,
         estoque_disponivel: parseFloat(produto.estoque_disponivel == null ? 0 : produto.estoque_disponivel),
         quantidade: 1, valor_unitario: preco,
-        desconto_percentual: 0, valor_total: preco,
+        desconto_percentual: 0, desconto_valor: 0, valor_total: preco,
         obs: '', _showObs: false,
       });
       this.recalcularTotais();
@@ -2475,7 +2483,9 @@ function pdv() {
 
     recalcularItem(item) {
       const bruto = parseFloat(item.quantidade)*parseFloat(item.valor_unitario);
-      item.valor_total = bruto - bruto*(parseFloat(item.desconto_percentual||0)/100);
+      const desc = Math.min(Math.max(0, parseFloat(item.desconto_valor||0)), bruto);
+      item.valor_total = bruto - desc;
+      item.desconto_percentual = bruto > 0 ? (desc/bruto)*100 : 0;
       this.recalcularTotais();
     },
 
@@ -2494,8 +2504,8 @@ function pdv() {
       this.venda.restante = r > 0 ? r : 0;
     },
 
-    abrirDescontoItem(item) { this.itemEditando=item; this.descontoItemManual=item.desconto_percentual||''; this.showModalDescontoItem=true; },
-    aplicarDescontoItem(item,pct) { if(!item)return; item.desconto_percentual=parseFloat(pct)||0; this.recalcularItem(item); this.showModalDescontoItem=false; },
+    abrirDescontoItem(item) { this.itemEditando=item; this.descontoItemManual=item.desconto_valor||''; this.showModalDescontoItem=true; },
+    aplicarDescontoItem(item,val) { if(!item)return; item.desconto_valor=parseFloat(val)||0; this.recalcularItem(item); this.showModalDescontoItem=false; },
     aplicarDescontoGeral(pct) { this.venda.desconto=pct===0?0:this.venda.subtotal*(pct/100); this.recalcularTotais(); this.showModalDesconto=false; },
     aplicarDescontoGeralValor() { this.venda.desconto=Math.min(parseFloat(this.descontoGeralManual)||0,this.venda.subtotal); this.recalcularTotais(); this.showModalDesconto=false; },
 
@@ -2714,6 +2724,8 @@ function pdv() {
         if (!d.ok) { this.toast_('Erro ao carregar venda: '+(d.erro||''), 'erro'); return; }
         this.novaVenda();
         for (const item of d.itens) {
+          const bruto = parseFloat(item.quantidade)*parseFloat(item.valor_unitario);
+          const pct = parseFloat(item.desconto_percentual||0);
           this.venda.itens.push({
             _id: Date.now()+Math.random(),
             produto_id: item.produto_id,
@@ -2724,7 +2736,8 @@ function pdv() {
             linha: item.linha||null,
             quantidade: item.quantidade,
             valor_unitario: item.valor_unitario,
-            desconto_percentual: item.desconto_percentual||0,
+            desconto_percentual: pct,
+            desconto_valor: bruto*(pct/100),
             valor_total: item.valor_total,
             unidade_medida: item.unidade_medida||'UN',
             obs: '', _showObs: false,
@@ -3414,6 +3427,8 @@ ${pgtoHtml ? `<hr class="sep">${pgtoHtml}` : ''}
         // Carrega itens no carrinho atual
         this.novaVenda();
         for (const item of d.itens) {
+          const bruto = parseFloat(item.quantidade)*parseFloat(item.valor_unitario);
+          const pct = parseFloat(item.desconto_percentual||0);
           this.venda.itens.push({
             _id: Date.now()+Math.random(),
             produto_id: item.produto_id,
@@ -3424,7 +3439,8 @@ ${pgtoHtml ? `<hr class="sep">${pgtoHtml}` : ''}
             linha: item.linha||null,
             quantidade: item.quantidade,
             valor_unitario: item.valor_unitario,
-            desconto_percentual: item.desconto_percentual||0,
+            desconto_percentual: pct,
+            desconto_valor: bruto*(pct/100),
             valor_total: item.valor_total,
             obs: '', _showObs: false,
           });
