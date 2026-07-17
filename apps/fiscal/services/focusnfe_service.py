@@ -47,6 +47,8 @@ STATUS_FOCUS_PARA_ERP: Dict[str, str] = {
     "processando_autorizacao": StatusDocumentoFiscal.PROCESSANDO,
     "erro_autorizacao": StatusDocumentoFiscal.REJEITADA,
     "nao_autorizado": StatusDocumentoFiscal.REJEITADA,
+    "rejeitado": StatusDocumentoFiscal.REJEITADA,
+    "rejeitada": StatusDocumentoFiscal.REJEITADA,
     "denegado": StatusDocumentoFiscal.DENEGADA,
 }
 

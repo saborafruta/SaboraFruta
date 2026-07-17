@@ -246,7 +246,13 @@ def _endereco_preferencial_cliente(cliente) -> dict:
     return endereco
 
 
-def _aplicar_destinatario(payload: Dict[str, Any], cliente, *, exigir_endereco: bool = False) -> None:
+def _aplicar_destinatario(
+    payload: Dict[str, Any],
+    cliente,
+    *,
+    exigir_endereco: bool = False,
+    incluir_contato: bool = True,
+) -> None:
     if not cliente:
         if exigir_endereco:
             raise DadosInvalidosError("Informe um cliente com CPF/CNPJ e endereco completo para emitir NF-e.")
@@ -279,12 +285,13 @@ def _aplicar_destinatario(payload: Dict[str, Any], cliente, *, exigir_endereco: 
     else:
         payload["indicador_inscricao_estadual_destinatario"] = "9"
 
-    telefone = _somente_digitos(getattr(cliente, "celular", "") or getattr(cliente, "telefone", ""))
-    if telefone:
-        payload["telefone_destinatario"] = telefone[:20]
-    email = (getattr(cliente, "email_nfe", "") or getattr(cliente, "email", "") or "").strip()
-    if email:
-        payload["email_destinatario"] = email[:80]
+    if incluir_contato:
+        telefone = _somente_digitos(getattr(cliente, "celular", "") or getattr(cliente, "telefone", ""))
+        if telefone:
+            payload["telefone_destinatario"] = telefone[:20]
+        email = (getattr(cliente, "email_nfe", "") or getattr(cliente, "email", "") or "").strip()
+        if email:
+            payload["email_destinatario"] = email[:80]
 
     if not exigir_endereco:
         return
@@ -388,7 +395,7 @@ class NfcePayloadBuilder:
         }
 
         # Destinatario: campos no topo (formato v2)
-        _aplicar_destinatario(payload, cliente, exigir_endereco=False)
+        _aplicar_destinatario(payload, cliente, exigir_endereco=False, incluir_contato=False)
 
         return payload
 

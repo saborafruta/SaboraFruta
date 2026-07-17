@@ -12,7 +12,11 @@ from apps.financeiro.models import FormaPagamento
 from apps.financeiro.models.fiscal import DocumentoFiscal
 from apps.fiscal.services.focusnfe_service import FocusNFeService
 from apps.pdv.models import ItemVendaPDV, PagamentoVendaPDV, VendaPDV
-from apps.pdv.services.nfce_payload_builder import NfePayloadBuilder, _validar_configuracao_nfce
+from apps.pdv.services.nfce_payload_builder import (
+    NfcePayloadBuilder,
+    NfePayloadBuilder,
+    _validar_configuracao_nfce,
+)
 from apps.produtos.models import Produto, ProdutoFilial, UnidadeMedida, UnidadeMedidaFilial
 
 
@@ -150,8 +154,25 @@ class NfePayloadBuilderTests(TestCase):
         self.assertEqual(payload["cep_destinatario"], "69073178")
         self.assertEqual(payload["codigo_municipio_destinatario"], "1302603")
         self.assertEqual(payload["indicador_inscricao_estadual_destinatario"], "9")
+        self.assertEqual(payload["telefone_destinatario"], "84999998888")
+        self.assertEqual(payload["email_destinatario"], "cliente@example.com")
         self.assertEqual(item["icms_situacao_tributaria"], "102")
         self.assertNotIn("icms_csosn", item)
+
+    def test_nfce_nao_envia_contato_destinatario_sem_endereco(self):
+        cliente = self.criar_cliente(
+            celular="84994227150",
+            email_nfe="cliente@example.com",
+        )
+        venda = self.criar_venda(cliente)
+
+        payload = NfcePayloadBuilder.build(venda, numero=1, serie=1)
+
+        self.assertEqual(payload["cpf_destinatario"], "04651988482")
+        self.assertEqual(payload["nome_destinatario"], "THIAGO BATISTA")
+        self.assertEqual(payload["indicador_inscricao_estadual_destinatario"], "9")
+        self.assertNotIn("telefone_destinatario", payload)
+        self.assertNotIn("email_destinatario", payload)
 
     def test_nfce_exige_token_focus_e_csc_configurados(self):
         from apps.core.models.parametros import ParametrosSistema
@@ -192,3 +213,26 @@ class NfePayloadBuilderTests(TestCase):
         self.assertEqual(documento.status, StatusDocumentoFiscal.REJEITADA)
         self.assertIn("CSC Token", documento.mensagem_sefaz)
         self.assertIn("nao envia CSC", documento.mensagem_sefaz)
+
+    def test_status_focus_rejeitado_vira_rejeitada_no_erp(self):
+        documento = DocumentoFiscal.objects.create(
+            filial=self.filial,
+            tipo_documento=TipoDocumentoFiscal.NFCE,
+            origem_tipo="venda_pdv",
+            origem_id=1,
+            numero=1,
+            serie=1,
+            emitente_cnpj=self.filial.cnpj,
+            status=StatusDocumentoFiscal.PROCESSANDO,
+            valor_total=Decimal("4.00"),
+            usuario=self.usuario,
+        )
+
+        FocusNFeService().aplicar_retorno(documento, {
+            "status": "rejeitado",
+            "status_sefaz": "999",
+            "mensagem_sefaz": "Rejeicao fiscal de teste",
+        })
+
+        documento.refresh_from_db()
+        self.assertEqual(documento.status, StatusDocumentoFiscal.REJEITADA)
