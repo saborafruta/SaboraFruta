@@ -19,7 +19,7 @@
         Outras Movimentações
       </h2>
       <p class="text-sm mt-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
-        Devoluções de clientes, bonificações e baixas especiais de estoque com CFOP fiscal.
+        Devoluções, transferências entre lojas, bonificações e baixas especiais de estoque.
       </p>
     </div>
     <a href="{% url 'estoque:movimentacao-list' %}" class="btn-secondary self-start sm:self-auto">
@@ -195,6 +195,33 @@
       </div>
     </a>
 
+    <!-- Transferência entre Lojas -->
+    <a href="{% url 'estoque:transferencia' %}"
+       class="card p-5 flex items-start gap-4"
+       style="transition:.15s;"
+       onmouseover="this.style.transform='translateY(-2px)'" onmouseout="this.style.transform='translateY(0)'"
+       :class="!pode_criar ? 'pointer-events-none opacity-50' : ''">
+      <div class="flex-shrink-0 w-11 h-11 rounded-xl flex items-center justify-center"
+           :style="temaClaro ? 'background:#e0f2fe;' : 'background:rgba(14,165,233,0.15);'">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"
+             :style="temaClaro ? 'color:#0369a1;' : 'color:#7dd3fc;'">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4"/>
+        </svg>
+      </div>
+      <div class="flex-1 min-w-0">
+        <div class="font-semibold text-sm mb-1" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
+          Transferência entre Lojas
+        </div>
+        <p class="text-xs leading-relaxed" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+          Movimentação de estoque entre matriz e filial.
+        </p>
+        <div class="flex items-center gap-2 mt-2">
+          <span class="soft-pill is-blue">Saída / Entrada</span>
+        </div>
+      </div>
+    </a>
+
     <!-- Deterioração -->
     <a href="{% url 'estoque:saida-especial' %}?tipo=deterioracao"
        class="card p-5 flex items-start gap-4"
@@ -273,6 +300,11 @@
                 <span class="soft-pill is-red">{{ mov.get_tipo_operacao_display }}</span>
               {% elif mov.tipo_operacao == 'perda' %}
                 <span class="soft-pill is-amber">{{ mov.get_tipo_operacao_display }}</span>
+              {% elif mov.tipo_operacao == 'transferencia_saida' or mov.tipo_operacao == 'transferencia_entrada' %}
+                <span class="soft-pill is-blue">{{ mov.get_tipo_operacao_display }}</span>
+                {% if mov.filial_destino %}
+                  <span class="text-xs" :style="temaClaro?'color:#6b7280;':'color:#9ca3af;'">→ {{ mov.filial_destino.nome_fantasia|default:mov.filial_destino.razao_social }}</span>
+                {% endif %}
               {% else %}
                 <span class="soft-pill is-purple">{{ mov.get_tipo_operacao_display }}</span>
               {% endif %}

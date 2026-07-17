@@ -36,6 +36,8 @@ TIPOS_OUTRAS = {
     MovimentacaoEstoque.TipoOperacao.ROUBO,
     MovimentacaoEstoque.TipoOperacao.PERDA,
     MovimentacaoEstoque.TipoOperacao.DETERIORACAO,
+    MovimentacaoEstoque.TipoOperacao.TRANSFERENCIA_SAIDA,
+    MovimentacaoEstoque.TipoOperacao.TRANSFERENCIA_ENTRADA,
 }
 
 
@@ -52,7 +54,7 @@ class OutrasMovimentacoesHubView(PermissaoRequiredMixin, View):
         historico = (
             MovimentacaoEstoque.objects
             .filter(filial=filial, tipo_operacao__in=TIPOS_OUTRAS)
-            .select_related('produto', 'usuario', 'lote')
+            .select_related('produto', 'usuario', 'lote', 'filial_destino')
             .order_by('-data_movimentacao')[:20]
         )
 
