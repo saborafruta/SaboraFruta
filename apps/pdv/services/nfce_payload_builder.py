@@ -381,6 +381,9 @@ class NfcePayloadBuilder:
             "numero": numero_nfce,
             "serie": str(serie_nfce),
             "data_emissao": data_emissao,
+            # A Focus usa indFinal para calcular automaticamente o vTotTrib
+            # pela tabela IBPT vigente do NCM.
+            "consumidor_final": 1,
             # ── Campos obrigatórios NFC-e v2 ────────────────────────────────
             "local_destino": "1",         # 1=operação interna (sempre para PDV)
             "presenca_comprador": "1",    # 1=presencial
@@ -439,7 +442,9 @@ class NfePayloadBuilder:
             "data_entrada_saida": data_emissao,
             "tipo_documento": "1",
             "finalidade_emissao": "1",
-            "consumidor_final": "1",
+            # Inteiro intencional: gera indFinal=1 e habilita o calculo
+            # automatico de vTotTrib/IBPT na Focus.
+            "consumidor_final": 1,
             "presenca_comprador": "1",
             "local_destino": "1",
             "modalidade_frete": "9",
@@ -537,7 +542,10 @@ def emitir_nfce_para_venda(venda: VendaPDV, usuario) -> DocumentoFiscal:
     else:
         service = FocusNFeService()
 
-    return service.emitir(doc, payload)
+    documento = service.emitir(doc, payload)
+    venda.documento_fiscal = documento
+    venda.save(update_fields=["documento_fiscal"])
+    return documento
 
 
 @transaction.atomic
@@ -619,4 +627,7 @@ def emitir_nfe_para_venda(venda: VendaPDV, usuario) -> DocumentoFiscal:
     else:
         service = FocusNFeService()
 
-    return service.emitir(doc, payload)
+    documento = service.emitir(doc, payload)
+    venda.documento_fiscal = documento
+    venda.save(update_fields=["documento_fiscal"])
+    return documento

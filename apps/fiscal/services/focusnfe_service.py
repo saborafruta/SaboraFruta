@@ -22,7 +22,11 @@ from apps.financeiro.constants.enums import StatusDocumentoFiscal
 from apps.financeiro.models.fiscal import DocumentoFiscal, LogIntegracaoFiscal
 from apps.fiscal.integrations.focusnfe import FocusNFeClient
 from apps.fiscal.integrations.focusnfe.config import HOMOLOGACAO, PRODUCAO, URLS
-from apps.fiscal.integrations.focusnfe.exceptions import FocusNFeAuthError, FocusNFeError
+from apps.fiscal.integrations.focusnfe.exceptions import (
+    FocusNFeAuthError,
+    FocusNFeError,
+    FocusNFeProcessingError,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -44,6 +48,7 @@ RESOURCE_POR_TIPO: Dict[str, str] = {
 STATUS_FOCUS_PARA_ERP: Dict[str, str] = {
     "autorizado": StatusDocumentoFiscal.AUTORIZADA,
     "cancelado": StatusDocumentoFiscal.CANCELADA,
+    "cancelada": StatusDocumentoFiscal.CANCELADA,
     "processando_autorizacao": StatusDocumentoFiscal.PROCESSANDO,
     "erro_autorizacao": StatusDocumentoFiscal.REJEITADA,
     "nao_autorizado": StatusDocumentoFiscal.REJEITADA,
@@ -296,16 +301,24 @@ class FocusNFeService:
             )
             raise
         ms = int((time.monotonic() - t0) * 1000)
+        status_focus = str((retorno or {}).get("status") or "").lower()
+        if status_focus not in ("cancelado", "cancelada"):
+            mensagem = str(
+                (retorno or {}).get("mensagem_sefaz")
+                or (retorno or {}).get("mensagem")
+                or "A Focus nao confirmou o cancelamento do documento."
+            )
+            self._registrar_log(
+                documento, "cancelar", request={"justificativa": justificativa},
+                response=retorno, sucesso=False, ms=ms,
+            )
+            raise FocusNFeProcessingError(mensagem, response_json=retorno)
+
         self._registrar_log(
             documento, "cancelar", request={"justificativa": justificativa},
             response=retorno, sucesso=True, ms=ms,
         )
-        documento.status = StatusDocumentoFiscal.CANCELADA
-        documento.data_cancelamento = timezone.now()
-        if isinstance(retorno, dict) and retorno.get("mensagem_sefaz"):
-            documento.mensagem_sefaz = str(retorno["mensagem_sefaz"])
-        documento.save()
-        return documento
+        return self.aplicar_retorno(documento, retorno or {})
 
     # -------------------------------------------------------------- arquivos
     def baixar_pdf(self, documento: DocumentoFiscal) -> bytes:

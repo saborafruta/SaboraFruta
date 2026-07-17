@@ -968,7 +968,9 @@
                             <button @click.stop="cancelarVendaHistorico(c)"
                                     style="flex:1;display:flex;align-items:center;justify-content:center;gap:5px;padding:7px 10px;background:#0d0d16;border:1px solid #3a1a1a;border-radius:8px;color:#f87171;font-size:11px;font-weight:600;cursor:pointer;">
                               <svg width="12" height="12" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636"/></svg>
-                              Cancelar
+                              <span x-text="c.documento_fiscal_status==='autorizada'
+                                ? 'Cancelar '+(c.documento_fiscal_tipo==='nfe'?'NF-e':'NFC-e')+' e venda'
+                                : 'Cancelar venda'"></span>
                             </button>
                           </div>
                         </div>
@@ -2798,15 +2800,29 @@ function pdv() {
     },
 
     async cancelarVendaHistorico(c) {
-      if (!confirm('Cancelar a venda #'+String(c.numero_venda).padStart(6,'0')+'? Esta ação não pode ser desfeita.')) return;
+      const temNota = c.documento_fiscal_status === 'autorizada';
+      const documento = c.documento_fiscal_tipo === 'nfe' ? 'NF-e' : 'NFC-e';
+      const aviso = temNota
+        ? `A ${documento} sera cancelada na SEFAZ antes da venda. Para NFC-e, faca isso dentro do prazo de 30 minutos.`
+        : 'A venda sera cancelada no sistema.';
+      const justificativa = prompt(
+        `Cancelar a venda #${String(c.numero_venda).padStart(6,'0')}?\n\n${aviso}\n\nInforme o motivo (minimo 15 caracteres):`
+      );
+      if (justificativa === null) return;
+      if (justificativa.trim().length < 15) {
+        this.toast_('Informe um motivo com pelo menos 15 caracteres.', 'erro');
+        return;
+      }
       try {
         const r = await fetch('/pdv/api/venda/'+c.id+'/cancelar/', {
-          method: 'POST', headers: {'X-CSRFToken': csrf()}
+          method: 'POST',
+          headers: {'Content-Type':'application/json','X-CSRFToken': csrf()},
+          body: JSON.stringify({justificativa: justificativa.trim()})
         });
         const d = await r.json();
         if (!d.ok) { this.toast_('Erro: '+(d.erro||''), 'erro'); return; }
         this.historicoCliente = this.historicoCliente.filter(v => v.id !== c.id);
-        this.toast_('Venda #'+String(c.numero_venda).padStart(6,'0')+' cancelada', 'ok');
+        this.toast_(temNota ? `${documento} e venda canceladas` : 'Venda cancelada', 'ok');
       } catch { this.toast_('Erro ao cancelar venda', 'erro'); }
     },
 

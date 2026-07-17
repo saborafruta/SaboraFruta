@@ -19,6 +19,10 @@ from apps.pdv.models import (
 )
 from apps.pdv.services.produto_vendavel_service import ProdutoVendavelService
 from apps.pdv.services.venda_pdv_service import VendaPDVService
+from apps.pdv.services.cancelamento_fiscal_service import (
+    cancelar_venda_e_documento,
+    obter_documento_fiscal,
+)
 from apps.produtos.models import LinhaProducao, Produto
 
 
@@ -783,7 +787,7 @@ def api_historico(request):
     qs = (
         VendaPDV.objects.for_filial(request.filial_ativa)
         .filter(status="finalizada")
-        .select_related("cliente")
+        .select_related("cliente", "documento_fiscal", "filial")
         .prefetch_related("itens")
         .order_by("-data_venda")[:30]
     )
@@ -808,12 +812,13 @@ def api_historico_cliente(request, cliente_id):
         VendaPDV.objects.for_filial(request.filial_ativa)
         .filter(cliente_id=cliente_id, status="finalizada")
         .prefetch_related("itens__produto__linha_producao", "pagamentos__forma_pagamento")
-        .select_related("cliente")
+        .select_related("cliente", "documento_fiscal", "filial")
         .order_by("-data_venda")[:12]
     )
 
     compras = []
     for v in vendas:
+        documento = obter_documento_fiscal(v)
         itens = []
         for item in v.itens.select_related("produto__linha_producao").order_by("numero_item"):
             p = item.produto
@@ -852,6 +857,8 @@ def api_historico_cliente(request, cliente_id):
             } if v.cliente else {},
             "itens": itens,
             "pagamentos": pagamentos,
+            "documento_fiscal_status": documento.status if documento else "",
+            "documento_fiscal_tipo": documento.tipo_documento if documento else "",
         })
 
     from django.db.models import Count as DCount
@@ -959,13 +966,34 @@ def api_venda_detalhe(request, pk):
 @require_POST
 def api_venda_cancelar(request, pk):
     try:
-        venda = VendaPDV.objects.for_filial(request.filial_ativa).get(pk=pk, status="finalizada")
+        venda = (
+            VendaPDV.objects.for_filial(request.filial_ativa)
+            .select_related("documento_fiscal", "filial")
+            .get(pk=pk, status="finalizada")
+        )
     except VendaPDV.DoesNotExist:
         return JsonResponse({"erro": "Venda não encontrada ou já cancelada."}, status=404)
 
-    venda.status = "cancelada"
-    venda.save(update_fields=["status"])
-    return JsonResponse({"ok": True})
+    try:
+        body = json.loads(request.body or b"{}")
+    except json.JSONDecodeError:
+        body = {}
+
+    try:
+        documento = cancelar_venda_e_documento(
+            venda, request.user, body.get("justificativa", "")
+        )
+    except DadosInvalidosError as exc:
+        return JsonResponse({"erro": str(exc)}, status=400)
+    except Exception as exc:
+        return JsonResponse(
+            {"erro": f"Cancelamento fiscal nao confirmado: {exc}"}, status=502
+        )
+
+    return JsonResponse({
+        "ok": True,
+        "documento_status": documento.status if documento else "sem_documento",
+    })
 
 
 # ---------------------------------------------------------------------------
@@ -1800,13 +1828,13 @@ def orcamentos_list(request):
 
 
 # ---------------------------------------------------------------------------
-# API — Cancelar NFC-e de uma venda
+# API — Cancelar NF-e/NFC-e de uma venda
 # ---------------------------------------------------------------------------
 
 @requer_permissao('pdv', 'ver')
 @require_POST
 def api_cancelar_nfce(request, pk):
-    """Cancela a NFC-e autorizada de uma venda PDV."""
+    """Cancela a NF-e/NFC-e na Focus e somente depois cancela a venda."""
     try:
         venda = (
             VendaPDV.objects.for_filial(request.filial_ativa)
@@ -1816,7 +1844,7 @@ def api_cancelar_nfce(request, pk):
     except VendaPDV.DoesNotExist:
         return JsonResponse({"erro": "Venda não encontrada."}, status=404)
 
-    doc = venda.documento_fiscal
+    doc = obter_documento_fiscal(venda)
     if not doc:
         return JsonResponse({"erro": "Esta venda não possui documento fiscal."}, status=400)
 
@@ -1838,16 +1866,14 @@ def api_cancelar_nfce(request, pk):
             status=400,
         )
 
-    doc.status = "cancelada"
-    doc.data_cancelamento = timezone.now()
-    doc.mensagem_sefaz = f"Cancelado pelo operador: {justificativa}"
-    doc.save(update_fields=["status", "data_cancelamento", "mensagem_sefaz"])
-
-    venda.status = "cancelada"
-    venda.motivo_cancelamento = justificativa
-    venda.cancelado_em = timezone.now()
-    venda.cancelado_por = request.user
-    venda.save(update_fields=["status", "motivo_cancelamento", "cancelado_em", "cancelado_por"])
+    try:
+        doc = cancelar_venda_e_documento(venda, request.user, justificativa)
+    except DadosInvalidosError as exc:
+        return JsonResponse({"erro": str(exc)}, status=400)
+    except Exception as exc:
+        return JsonResponse(
+            {"erro": f"Cancelamento fiscal nao confirmado: {exc}"}, status=502
+        )
 
     return JsonResponse({"ok": True, "status": doc.status})
 
@@ -2176,13 +2202,13 @@ def api_emitir_nfe(request, pk):
 
 
 # ---------------------------------------------------------------------------
-# API — Cancelar venda (sem fiscal, apenas o registro da venda)
+# API — Cancelar venda e documento fiscal
 # ---------------------------------------------------------------------------
 
 @requer_permissao('pdv', 'ver')
 @require_POST
 def api_cancelar_venda_historico(request, pk):
-    """Cancela uma venda finalizada que ainda não possui documento fiscal autorizado."""
+    """Rota legada que usa o mesmo fluxo fiscal seguro do PDV."""
     try:
         venda = (
             VendaPDV.objects.for_filial(request.filial_ativa)
@@ -2192,13 +2218,21 @@ def api_cancelar_venda_historico(request, pk):
     except VendaPDV.DoesNotExist:
         return JsonResponse({"erro": "Venda não encontrada ou já cancelada."}, status=404)
 
-    doc = getattr(venda, 'documento_fiscal', None)
-    if doc and doc.status == 'autorizada':
-        return JsonResponse(
-            {"erro": "Esta venda possui NFC-e/NF-e autorizada. Cancele o documento fiscal primeiro (botão 1)."},
-            status=400,
+    try:
+        body = json.loads(request.body or b"{}")
+    except json.JSONDecodeError:
+        body = {}
+    try:
+        documento = cancelar_venda_e_documento(
+            venda, request.user, body.get("justificativa", "")
         )
-
-    venda.status = "cancelada"
-    venda.save(update_fields=["status"])
-    return JsonResponse({"ok": True})
+    except DadosInvalidosError as exc:
+        return JsonResponse({"erro": str(exc)}, status=400)
+    except Exception as exc:
+        return JsonResponse(
+            {"erro": f"Cancelamento fiscal nao confirmado: {exc}"}, status=502
+        )
+    return JsonResponse({
+        "ok": True,
+        "status": documento.status if documento else "sem_documento",
+    })

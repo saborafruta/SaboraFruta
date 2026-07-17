@@ -1,4 +1,5 @@
 from decimal import Decimal
+from unittest.mock import Mock, patch
 
 from django.test import TestCase
 from django.utils import timezone
@@ -17,6 +18,7 @@ from apps.pdv.services.nfce_payload_builder import (
     NfePayloadBuilder,
     _validar_configuracao_nfce,
 )
+from apps.pdv.services.cancelamento_fiscal_service import cancelar_venda_e_documento
 from apps.produtos.models import Produto, ProdutoFilial, UnidadeMedida, UnidadeMedidaFilial
 
 
@@ -158,6 +160,85 @@ class NfePayloadBuilderTests(TestCase):
         self.assertEqual(payload["email_destinatario"], "cliente@example.com")
         self.assertEqual(item["icms_situacao_tributaria"], "102")
         self.assertNotIn("icms_csosn", item)
+        self.assertEqual(payload["consumidor_final"], 1)
+        self.assertNotIn("valor_total_tributos", payload)
+        self.assertNotIn("valor_total_tributos", item)
+
+    def test_nfce_habilita_calculo_ibpt_automatico_da_focus(self):
+        venda = self.criar_venda(self.criar_cliente())
+
+        payload = NfcePayloadBuilder.build(venda, numero=1, serie=1)
+
+        self.assertEqual(payload["consumidor_final"], 1)
+        self.assertNotIn("valor_total_tributos", payload)
+        self.assertNotIn("valor_total_tributos", payload["items"][0])
+
+    def test_cancelamento_fiscal_acontece_antes_de_cancelar_venda(self):
+        venda = self.criar_venda(self.criar_cliente())
+        documento = DocumentoFiscal.objects.create(
+            filial=self.filial,
+            tipo_documento=TipoDocumentoFiscal.NFCE,
+            origem_tipo="venda_pdv",
+            origem_id=venda.pk,
+            numero=1,
+            serie=1,
+            emitente_cnpj=self.filial.cnpj,
+            status=StatusDocumentoFiscal.AUTORIZADA,
+            valor_total=Decimal("4.00"),
+            usuario=self.usuario,
+        )
+        focus = Mock()
+
+        def confirmar_cancelamento(doc, justificativa):
+            doc.status = StatusDocumentoFiscal.CANCELADA
+            doc.save(update_fields=["status"])
+            return doc
+
+        focus.cancelar.side_effect = confirmar_cancelamento
+        with patch(
+            "apps.pdv.services.cancelamento_fiscal_service._focus_service_para_filial",
+            return_value=focus,
+        ):
+            cancelar_venda_e_documento(
+                venda, self.usuario, "Erro de digitacao no produto"
+            )
+
+        venda.refresh_from_db()
+        documento.refresh_from_db()
+        focus.cancelar.assert_called_once()
+        self.assertEqual(documento.status, StatusDocumentoFiscal.CANCELADA)
+        self.assertEqual(venda.status, "cancelada")
+        self.assertEqual(venda.documento_fiscal_id, documento.pk)
+
+    def test_falha_fiscal_nao_cancela_venda(self):
+        venda = self.criar_venda(self.criar_cliente())
+        documento = DocumentoFiscal.objects.create(
+            filial=self.filial,
+            tipo_documento=TipoDocumentoFiscal.NFE,
+            origem_tipo="venda_pdv",
+            origem_id=venda.pk,
+            numero=1,
+            serie=1,
+            emitente_cnpj=self.filial.cnpj,
+            status=StatusDocumentoFiscal.AUTORIZADA,
+            valor_total=Decimal("4.00"),
+            usuario=self.usuario,
+        )
+        focus = Mock()
+        focus.cancelar.side_effect = RuntimeError("prazo expirado")
+
+        with patch(
+            "apps.pdv.services.cancelamento_fiscal_service._focus_service_para_filial",
+            return_value=focus,
+        ):
+            with self.assertRaisesMessage(RuntimeError, "prazo expirado"):
+                cancelar_venda_e_documento(
+                    venda, self.usuario, "Erro de digitacao no produto"
+                )
+
+        venda.refresh_from_db()
+        self.assertEqual(venda.status, "finalizada")
+        self.assertIsNone(venda.documento_fiscal_id)
 
     def test_nfce_nao_envia_contato_destinatario_sem_endereco(self):
         cliente = self.criar_cliente(
