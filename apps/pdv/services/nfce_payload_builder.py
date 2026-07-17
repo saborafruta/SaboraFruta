@@ -610,6 +610,17 @@ def _aplicar_totais_fiscais(payload: dict, venda, items: list[dict]) -> None:
         )
 
 
+def _aplicar_informacoes_adicionais(payload: dict, texto: str) -> None:
+    """Preserva a mensagem IBPT e acrescenta a observacao informada pelo operador."""
+    texto = " ".join(str(texto or "").split()).strip()
+    existente = (payload.get("informacoes_adicionais_contribuinte") or "").strip()
+    if texto and existente:
+        texto = texto[:max(0, 5000 - len(existente) - 3)].rstrip()
+    partes = [parte for parte in (texto, existente) if parte]
+    if partes:
+        payload["informacoes_adicionais_contribuinte"] = " | ".join(partes)[:5000]
+
+
 def _aplicar_destinatario(
     payload: Dict[str, Any],
     cliente,
@@ -711,7 +722,10 @@ class NfcePayloadBuilder:
     """
 
     @classmethod
-    def build(cls, venda: VendaPDV, numero: int = None, serie: int = None) -> Dict[str, Any]:
+    def build(
+        cls, venda: VendaPDV, numero: int = None, serie: int = None,
+        informacoes_adicionais: str = "",
+    ) -> Dict[str, Any]:
         filial = venda.filial
         cliente = venda.cliente
 
@@ -760,6 +774,7 @@ class NfcePayloadBuilder:
             payload["valor_troco"] = _float_dinheiro(valor_troco)
 
         _aplicar_totais_fiscais(payload, venda, items)
+        _aplicar_informacoes_adicionais(payload, informacoes_adicionais)
 
         _validar_regras_mei(filial, items, modelo=65, local_destino=local_destino)
 
@@ -776,7 +791,10 @@ class NfePayloadBuilder:
     """
 
     @classmethod
-    def build(cls, venda: VendaPDV, numero_nfe: int, serie_nfe: int = 1) -> Dict[str, Any]:
+    def build(
+        cls, venda: VendaPDV, numero_nfe: int, serie_nfe: int = 1,
+        informacoes_adicionais: str = "",
+    ) -> Dict[str, Any]:
         filial = venda.filial
         cliente = venda.cliente
 
@@ -819,6 +837,7 @@ class NfePayloadBuilder:
             payload["valor_troco"] = _float_dinheiro(valor_troco)
 
         _aplicar_totais_fiscais(payload, venda, items)
+        _aplicar_informacoes_adicionais(payload, informacoes_adicionais)
 
         _validar_regras_mei(filial, items, modelo=55, local_destino=local_destino)
 
@@ -828,7 +847,10 @@ class NfePayloadBuilder:
 
 
 @transaction.atomic
-def emitir_nfce_para_venda(venda: VendaPDV, usuario, *, contingencia: bool = False) -> DocumentoFiscal:
+def emitir_nfce_para_venda(
+    venda: VendaPDV, usuario, *, contingencia: bool = False,
+    informacoes_adicionais: str = "",
+) -> DocumentoFiscal:
     """
     Wrapper de alto nível: constrói payload NFC-e, cria DocumentoFiscal e dispara emissão.
     Retorna o DocumentoFiscal criado/atualizado.
@@ -872,7 +894,18 @@ def emitir_nfce_para_venda(venda: VendaPDV, usuario, *, contingencia: bool = Fal
         numero_nfce = venda.numero_venda
         serie_nfce = filial.serie_nfce or 1
 
-    payload = NfcePayloadBuilder.build(venda, numero=numero_nfce, serie=serie_nfce)
+    informacoes_adicionais = " | ".join(filter(None, [
+        informacoes_adicionais.strip(),
+        (getattr(doc_params, "informacoes_complementares", "") or "").strip(),
+        (params.informacoes_complementares_padrao or "").strip(),
+    ]))
+
+    payload = NfcePayloadBuilder.build(
+        venda,
+        numero=numero_nfce,
+        serie=serie_nfce,
+        informacoes_adicionais=informacoes_adicionais,
+    )
     if contingencia:
         payload["codigo_unico"] = f"{secrets.randbelow(100_000_000):08d}"
 
@@ -918,7 +951,7 @@ def emitir_nfce_para_venda(venda: VendaPDV, usuario, *, contingencia: bool = Fal
 
 
 @transaction.atomic
-def emitir_nfe_para_venda(venda: VendaPDV, usuario) -> DocumentoFiscal:
+def emitir_nfe_para_venda(venda: VendaPDV, usuario, *, informacoes_adicionais: str = "") -> DocumentoFiscal:
     """
     Wrapper de alto nível: constrói payload NF-e, cria DocumentoFiscal e dispara emissão.
     Usa ParametroDocumentoFiscal para série e número (reserva atômica).
@@ -960,7 +993,18 @@ def emitir_nfe_para_venda(venda: VendaPDV, usuario) -> DocumentoFiscal:
         filial_lock.proximo_numero_nfe = numero_nfe + 1
         filial_lock.save(update_fields=["proximo_numero_nfe"])
 
-    payload = NfePayloadBuilder.build(venda, numero_nfe=numero_nfe, serie_nfe=serie_nfe)
+    informacoes_adicionais = " | ".join(filter(None, [
+        informacoes_adicionais.strip(),
+        (getattr(doc_params, "informacoes_complementares", "") or "").strip(),
+        (params.informacoes_complementares_padrao or "").strip(),
+    ]))
+
+    payload = NfePayloadBuilder.build(
+        venda,
+        numero_nfe=numero_nfe,
+        serie_nfe=serie_nfe,
+        informacoes_adicionais=informacoes_adicionais,
+    )
 
     doc = DocumentoFiscal.objects.create(
         filial=filial,

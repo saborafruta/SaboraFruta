@@ -48,6 +48,17 @@ def _proximo_numero_venda(filial):
     return (ultimo_num or 0) + 1
 
 
+def _informacoes_adicionais_request(request):
+    try:
+        body = json.loads(request.body or b'{}')
+    except (json.JSONDecodeError, TypeError):
+        body = {}
+    texto = str(body.get("informacoes_adicionais") or "").strip()
+    if len(texto) > 5000:
+        raise DadosInvalidosError("As informacoes adicionais podem ter no maximo 5.000 caracteres.")
+    return texto
+
+
 # ---------------------------------------------------------------------------
 # Tela principal
 # ---------------------------------------------------------------------------
@@ -1696,7 +1707,11 @@ def api_emitir_nfce(request, pk):
             NfcePayloadBuilder,
             emitir_nfce_para_venda,
         )
-        documento = emitir_nfce_para_venda(venda, request.user)
+        documento = emitir_nfce_para_venda(
+            venda,
+            request.user,
+            informacoes_adicionais=_informacoes_adicionais_request(request),
+        )
     except DadosInvalidosError as exc:
         return JsonResponse({"erro": str(exc)}, status=400)
     except Exception as exc:
@@ -1733,7 +1748,12 @@ def api_emitir_nfce_contingencia(request, pk):
         return JsonResponse(prontidao, status=422)
     try:
         from apps.pdv.services.nfce_payload_builder import emitir_nfce_para_venda
-        documento = emitir_nfce_para_venda(venda, request.user, contingencia=True)
+        documento = emitir_nfce_para_venda(
+            venda,
+            request.user,
+            contingencia=True,
+            informacoes_adicionais=_informacoes_adicionais_request(request),
+        )
     except DadosInvalidosError as exc:
         return JsonResponse({"erro": str(exc)}, status=400)
     except Exception as exc:
@@ -2247,7 +2267,11 @@ def api_emitir_nfe(request, pk):
 
     try:
         from apps.pdv.services.nfce_payload_builder import emitir_nfe_para_venda
-        documento = emitir_nfe_para_venda(venda, request.user)
+        documento = emitir_nfe_para_venda(
+            venda,
+            request.user,
+            informacoes_adicionais=_informacoes_adicionais_request(request),
+        )
     except DadosInvalidosError as exc:
         return JsonResponse({"erro": str(exc)}, status=400)
     except Exception as exc:

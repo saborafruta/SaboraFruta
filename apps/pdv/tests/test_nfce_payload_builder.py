@@ -299,10 +299,16 @@ class NfePayloadBuilderTests(TestCase):
         )
         venda = self.criar_venda(self.criar_cliente())
 
-        payload = NfcePayloadBuilder.build(venda, numero=1, serie=1)
+        payload = NfcePayloadBuilder.build(
+            venda,
+            numero=1,
+            serie=1,
+            informacoes_adicionais='Pedido 456 - entregar na recepcao',
+        )
 
         self.assertEqual(payload['items'][0]['valor_total_tributos'], 1.34)
         self.assertEqual(payload['valor_total_tributos'], 1.34)
+        self.assertIn('Pedido 456 - entregar na recepcao', payload['informacoes_adicionais_contribuinte'])
         self.assertIn('IBPT/empresometro.com.br 26.1.L', payload['informacoes_adicionais_contribuinte'])
 
     def test_pis_cofins_em_branco_geram_grupos_nao_tributados_completos(self):

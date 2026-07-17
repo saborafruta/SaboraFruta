@@ -2264,7 +2264,7 @@
 
       <!-- Opcoes -->
       <div style="padding:0 12px;display:flex;flex-direction:column;gap:4px;">
-        <button class="impr-opt" @click="emitirDocumento('nfce', vendaFinalizadaData.id)">
+        <button class="impr-opt" @click="prepararEmissao('nfce', vendaFinalizadaData.id)">
           <div class="impr-opt-icon" style="background:linear-gradient(135deg,#c2410c,#f15a24);">
             <svg fill="none" stroke="#fff" viewBox="0 0 24 24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
               <path d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
@@ -2277,7 +2277,7 @@
           <span class="impr-badge" style="background:#c2410c;color:#f97316;">Fiscal</span>
         </button>
 
-        <button class="impr-opt" @click="emitirDocumento('nfe', vendaFinalizadaData.id)">
+        <button class="impr-opt" @click="prepararEmissao('nfe', vendaFinalizadaData.id)">
           <div class="impr-opt-icon" style="background:linear-gradient(135deg,#064e3b,#059669);">
             <svg fill="none" stroke="#fff" viewBox="0 0 24 24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
               <path d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2zm7-16v4a1 1 0 001 1h4"/>
@@ -2327,6 +2327,31 @@
         </button>
       </div>
 
+    </div>
+  </div>
+
+  <!-- Informacoes adicionais antes da emissao -->
+  <div x-cloak
+       :style="modalInformacaoFiscal.show ? 'position:fixed;inset:0;z-index:9250;display:flex;align-items:center;justify-content:center;padding:16px;background:rgba(0,0,0,.84);backdrop-filter:blur(4px);' : 'display:none;'">
+    <div style="width:min(560px,100%);background:#101018;border:1px solid #29293a;border-radius:8px;box-shadow:0 24px 80px rgba(0,0,0,.55);">
+      <div style="padding:22px 24px 14px;border-bottom:1px solid #222232;display:flex;align-items:flex-start;gap:12px;">
+        <div style="flex:1;">
+          <h3 style="margin:0;color:#f4f4fb;font-size:17px;" x-text="'Emitir ' + (modalInformacaoFiscal.tipo === 'nfce' ? 'NFC-e' : 'NF-e')"></h3>
+          <p style="margin:5px 0 0;color:#9292aa;font-size:12.5px;line-height:1.5;">O texto informado aparecerá nas informações adicionais da nota e na impressão.</p>
+        </div>
+        <button @click="modalInformacaoFiscal.show=false" title="Fechar" style="border:0;background:transparent;color:#77778d;font-size:22px;cursor:pointer;line-height:1;">&times;</button>
+      </div>
+      <div style="padding:18px 24px;">
+        <label style="display:block;color:#d8d8e5;font-size:12.5px;font-weight:700;margin-bottom:7px;">Informações adicionais <span style="color:#73738a;font-weight:500;">(opcional)</span></label>
+        <textarea x-model="informacaoFiscal" maxlength="5000" rows="5"
+                  placeholder="Ex.: número do pedido, observação de entrega ou informação solicitada pelo cliente"
+                  style="width:100%;resize:vertical;min-height:112px;padding:12px;border:1px solid #303044;border-radius:6px;background:#0a0a11;color:#f1f1f8;font:13px/1.5 inherit;outline:none;"></textarea>
+        <div style="margin-top:5px;text-align:right;color:#6f6f85;font-size:11px;" x-text="informacaoFiscal.length + '/5000'"></div>
+      </div>
+      <div style="padding:0 24px 22px;display:flex;justify-content:flex-end;gap:10px;">
+        <button @click="modalInformacaoFiscal.show=false" style="padding:10px 15px;border:1px solid #303044;border-radius:6px;background:transparent;color:#aaaabd;font-weight:650;cursor:pointer;">Voltar</button>
+        <button @click="confirmarInformacaoFiscal()" style="padding:10px 15px;border:0;border-radius:6px;background:#f15a24;color:#fff;font-weight:750;cursor:pointer;">Continuar emissão</button>
+      </div>
     </div>
   </div>
 
@@ -2431,6 +2456,8 @@ function pdv() {
     modo: 'venda', horaAtual: '', toast: { show:false, msg:'', tipo:'ok' }, _tt: null,
     modalEstoque: { show: false, msg: '', itens: [] },
     modalFiscal: { show:false, tipo:'', vendaId:null, carregando:false, pendencias:[], avisos:[], erro:'', permiteContingencia:false },
+    modalInformacaoFiscal: { show:false, tipo:'', vendaId:null },
+    informacaoFiscal: '',
 
     get totalUnidades() { return this.venda.itens.reduce((s,i)=>s+parseFloat(i.quantidade||0),0); },
     get podeFinalizar() { return this.sessao && this.venda.itens.length>0 && parseFloat(this.venda.restante)<=0.001; },
@@ -3184,6 +3211,17 @@ ${pgtoHtml ? `<hr class="sep">${pgtoHtml}` : ''}
       w.document.write(html); w.document.close(); w.focus(); setTimeout(() => w.print(), 400);
     },
 
+    prepararEmissao(tipo, vendaId) {
+      this.informacaoFiscal = '';
+      this.modalInformacaoFiscal = { show:true, tipo, vendaId };
+    },
+
+    confirmarInformacaoFiscal() {
+      const { tipo, vendaId } = this.modalInformacaoFiscal;
+      this.modalInformacaoFiscal.show = false;
+      this.emitirDocumento(tipo, vendaId);
+    },
+
     async emitirDocumento(tipo, vendaIdOverride = null) {
       const vendaId = vendaIdOverride || this.venda.id;
       const labels = { nfce: 'NFC-e', nfe: 'NF-e', nfse: 'NFS-e' };
@@ -3213,7 +3251,8 @@ ${pgtoHtml ? `<hr class="sep">${pgtoHtml}` : ''}
           const endpoint = tipo === 'nfce' ? 'emitir-nfce' : 'emitir-nfe';
           const r = await fetch(`/pdv/api/venda/${vendaId}/${endpoint}/`, {
             method: 'POST',
-            headers: { 'X-CSRFToken': csrf() },
+            headers: { 'Content-Type':'application/json', 'X-CSRFToken': csrf() },
+            body: JSON.stringify({ informacoes_adicionais: this.informacaoFiscal }),
           });
           const d = await r.json();
           if (!r.ok || d.erro) {
@@ -3244,7 +3283,8 @@ ${pgtoHtml ? `<hr class="sep">${pgtoHtml}` : ''}
       this.modalFiscal.carregando = true;
       try {
         const r = await fetch(`/pdv/api/venda/${vendaId}/emitir-nfce-contingencia/`, {
-          method:'POST', headers:{'X-CSRFToken':csrf()}
+          method:'POST', headers:{'Content-Type':'application/json','X-CSRFToken':csrf()},
+          body:JSON.stringify({ informacoes_adicionais:this.informacaoFiscal })
         });
         const d = await r.json();
         if (!r.ok || d.erro) {

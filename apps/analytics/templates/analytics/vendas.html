@@ -395,13 +395,13 @@ body.tema-claro .hv-page a, body.tema-claro .hv-page span { border-color:#d1d5db
               {% if venda.status != 'cancelada' %}
                 {% if not doc %}
                 <button class="hv-ab hv-ab-ora"
-                        onclick="hvApp_instance.emitirNfce({{ venda.pk }})"
+                        onclick="hvApp_instance.prepararEmissao('nfce', {{ venda.pk }})"
                         title="Emitir NFC-e">
                   <span class="hv-ab-tip">5 – Emitir NFC-e</span>
                   5
                 </button>
                 <button class="hv-ab hv-ab-blue"
-                        onclick="hvApp_instance.emitirNfe({{ venda.pk }})"
+                        onclick="hvApp_instance.prepararEmissao('nfe', {{ venda.pk }})"
                         title="Emitir NF-e"
                         style="font-size:9px;width:32px;">
                   <span class="hv-ab-tip">5 – Emitir NF-e</span>
@@ -409,13 +409,13 @@ body.tema-claro .hv-page a, body.tema-claro .hv-page span { border-color:#d1d5db
                 </button>
                 {% elif doc.tipo_documento == 'nfce' and doc.status == 'rejeitada' %}
                 <button class="hv-ab hv-ab-ora"
-                        onclick="hvApp_instance.emitirNfce({{ venda.pk }})"
+                        onclick="hvApp_instance.prepararEmissao('nfce', {{ venda.pk }})"
                         title="Re-emitir NFC-e">
                   <span class="hv-ab-tip">5 – Re-emitir NFC-e</span>
                   5
                 </button>
                 <button class="hv-ab hv-ab-blue"
-                        onclick="hvApp_instance.emitirNfe({{ venda.pk }})"
+                        onclick="hvApp_instance.prepararEmissao('nfe', {{ venda.pk }})"
                         title="Emitir NF-e"
                         style="font-size:9px;width:32px;">
                   <span class="hv-ab-tip">Emitir NF-e</span>
@@ -423,14 +423,14 @@ body.tema-claro .hv-page a, body.tema-claro .hv-page span { border-color:#d1d5db
                 </button>
                 {% elif doc.tipo_documento == 'nfce' and doc.status == 'pendente' %}
                 <button class="hv-ab hv-ab-ora"
-                        onclick="hvApp_instance.emitirNfce({{ venda.pk }})"
+                        onclick="hvApp_instance.prepararEmissao('nfce', {{ venda.pk }})"
                         title="Emitir NFC-e">
                   <span class="hv-ab-tip">5 – Emitir NFC-e</span>
                   5
                 </button>
                 {% elif doc.tipo_documento == 'nfe' and doc.status == 'rejeitada' %}
                 <button class="hv-ab hv-ab-blue"
-                        onclick="hvApp_instance.emitirNfe({{ venda.pk }})"
+                        onclick="hvApp_instance.prepararEmissao('nfe', {{ venda.pk }})"
                         title="Re-emitir NF-e"
                         style="font-size:9px;width:32px;">
                   <span class="hv-ab-tip">5 – Re-emitir NF-e</span>
@@ -485,6 +485,52 @@ body.tema-claro .hv-page a, body.tema-claro .hv-page span { border-color:#d1d5db
   </nav>
   {% endif %}
   {% endif %}
+
+  <!-- Modal de emissao fiscal -->
+  <div class="hv-overlay" x-show="modalFiscal.show" x-cloak @keydown.escape.window="modalFiscal.show=false" style="display:none;">
+    <div class="hv-modal" style="max-width:560px;max-height:88vh;overflow:auto;">
+      <h3 class="hv-modal-title">Emitir <span x-text="modalFiscal.tipo === 'nfe' ? 'NF-e' : 'NFC-e'"></span></h3>
+      <p class="hv-modal-sub">Inclua uma observação para aparecer na nota e na impressão, se necessário.</p>
+
+      <template x-if="modalFiscal.pendencias.length === 0">
+        <div>
+          <label class="hv-filter-label" style="display:block;margin-bottom:5px;">Informações adicionais (opcional)</label>
+          <textarea x-model="modalFiscal.informacoes" maxlength="5000"
+                    placeholder="Ex.: número do pedido, observação de entrega ou informação solicitada pelo cliente"
+                    class="hv-modal-textarea" style="min-height:110px;"></textarea>
+          <div style="margin-top:4px;text-align:right;font-size:11px;color:#6b6b88;"
+               x-text="modalFiscal.informacoes.length + '/5000'"></div>
+        </div>
+      </template>
+
+      <template x-if="modalFiscal.pendencias.length > 0">
+        <div>
+          <p style="margin:0 0 10px;color:#fbbf24;font-size:13px;font-weight:700;">Complete estes dados antes de emitir:</p>
+          <template x-for="item in modalFiscal.pendencias" :key="item.code">
+            <div style="padding:12px 0;border-bottom:1px solid #2a2a3e;display:flex;align-items:center;gap:12px;">
+              <div style="flex:1;min-width:0;">
+                <div x-text="item.title" style="font-size:13px;font-weight:700;color:#e5e5f0;"></div>
+                <div x-text="item.message" style="font-size:12px;color:#8d8da3;line-height:1.45;margin-top:3px;"></div>
+              </div>
+              <a :href="item.action_url" target="_blank" rel="noopener" x-text="item.action_label"
+                 style="flex:none;padding:8px 10px;border:1px solid #f15a24;border-radius:7px;color:#ff8a55;text-decoration:none;font-size:11px;font-weight:700;white-space:nowrap;"></a>
+            </div>
+          </template>
+          <p style="margin:12px 0 0;color:#8d8da3;font-size:12px;">Depois de corrigir na nova guia, volte aqui e verifique novamente.</p>
+        </div>
+      </template>
+
+      <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:16px;">
+        <button class="hv-btn-clear" @click="modalFiscal.show=false" style="padding:8px 18px;">Voltar</button>
+        <button @click="confirmarEmissaoFiscal()" :disabled="modalFiscal.loading"
+                style="padding:8px 20px;border-radius:8px;font-size:13px;font-weight:700;background:#f15a24;border:none;color:#fff;cursor:pointer;"
+                :style="modalFiscal.loading ? 'opacity:.6;cursor:not-allowed;' : ''">
+          <span x-show="!modalFiscal.loading" x-text="modalFiscal.pendencias.length ? 'Verificar novamente' : 'Continuar emissão'"></span>
+          <span x-show="modalFiscal.loading">Verificando...</span>
+        </button>
+      </div>
+    </div>
+  </div>
 
   <!-- Modal Inutilizar Faixa -->
   <div class="hv-overlay" x-show="modalInut.show" x-cloak @keydown.escape.window="modalInut.show=false" style="display:none;">
@@ -619,6 +665,7 @@ function hvApp() {
     modalInut:    { show:false, tipo:'nfce', serie:1, numero_ini:'', numero_fim:'', justificativa:'', loading:false },
     modalEmail:   { show:false, vendaId:null, numero:'', emails:'', loading:false },
     modalCancelV: { show:false, vendaId:null, numero:'', justificativa:'', loading:false },
+    modalFiscal:  { show:false, tipo:'nfce', vendaId:null, informacoes:'', pendencias:[], loading:false },
 
     init() {
       window.hvApp_instance = this;
@@ -636,10 +683,40 @@ function hvApp() {
       return document.cookie.split(';').map(c=>c.trim()).find(c=>c.startsWith('csrftoken='))?.split('=')[1] || '';
     },
 
-    async emitirNfce(vendaId) {
+    prepararEmissao(tipo, vendaId) {
+      this.modalFiscal = { show:true, tipo, vendaId, informacoes:'', pendencias:[], loading:false };
+    },
+
+    async confirmarEmissaoFiscal() {
+      const modal = this.modalFiscal;
+      modal.loading = true;
+      try {
+        const check = await fetch(`/pdv/api/venda/${modal.vendaId}/prontidao-fiscal/?tipo=${modal.tipo}`);
+        const readiness = await check.json();
+        if (!check.ok && readiness.erro) throw new Error(readiness.erro);
+        if (!readiness.ok) {
+          modal.pendencias = readiness.pendencias || [];
+          return;
+        }
+        modal.pendencias = [];
+        if (modal.tipo === 'nfe') {
+          await this.emitirNfe(modal.vendaId, modal.informacoes);
+        } else {
+          await this.emitirNfce(modal.vendaId, modal.informacoes);
+        }
+      } catch(e) {
+        this.toast(e.message || 'Não foi possível verificar os dados fiscais.', 'err');
+      } finally {
+        modal.loading = false;
+      }
+    },
+
+    async emitirNfce(vendaId, informacoes='') {
       try {
         const r = await fetch(`/pdv/api/venda/${vendaId}/emitir-nfce/`, {
-          method:'POST', headers:{'X-CSRFToken':this.csrf()}
+          method:'POST',
+          headers:{'Content-Type':'application/json','X-CSRFToken':this.csrf()},
+          body:JSON.stringify({ informacoes_adicionais: informacoes }),
         });
         const d = await r.json();
         if (d.ok) {
@@ -653,10 +730,12 @@ function hvApp() {
       }
     },
 
-    async emitirNfe(vendaId) {
+    async emitirNfe(vendaId, informacoes='') {
       try {
         const r = await fetch(`/pdv/api/venda/${vendaId}/emitir-nfe/`, {
-          method:'POST', headers:{'X-CSRFToken':this.csrf()}
+          method:'POST',
+          headers:{'Content-Type':'application/json','X-CSRFToken':this.csrf()},
+          body:JSON.stringify({ informacoes_adicionais: informacoes }),
         });
         const d = await r.json();
         if (d.ok) {
