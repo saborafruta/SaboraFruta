@@ -105,12 +105,19 @@ body.tema-claro .hv-tr:nth-child(even):not(.cancelada) .hv-td { background:#edf2
 .hv-tr.cancelada .hv-td { background:#100808; }
 body.tema-claro .hv-tr.cancelada { opacity:1; }
 body.tema-claro .hv-tr.cancelada .hv-td { background:#fee2e2;color:#3f1515; }
-.hv-total-row td { padding:13px 14px;background:#0b0b13;border-top:2px solid #2a2a3e; }
-.hv-total-label { text-align:right;color:#a0a0b5;font-size:11px;font-weight:700;text-transform:uppercase; }
-.hv-total-value { text-align:right;color:#4ade80;font-size:15px;font-weight:850;white-space:nowrap; }
-body.tema-claro .hv-total-row td { background:#dce3ec;border-color:#94a3b8; }
-body.tema-claro .hv-total-label { color:#334155; }
-body.tema-claro .hv-total-value { color:#166534; }
+.hv-header-actions { display:flex;align-items:center;justify-content:flex-end;gap:10px;flex-wrap:wrap; }
+.hv-total-top {
+  min-width:205px;padding:10px 14px;border:1px solid #285a43;border-left:4px solid #22c55e;
+  border-radius:8px;background:#0d1d17;display:grid;grid-template-columns:1fr auto;
+  align-items:center;column-gap:14px;box-shadow:0 4px 14px rgba(0,0,0,.18);
+}
+.hv-total-top-label { color:#91a99e;font-size:10px;font-weight:750;text-transform:uppercase; }
+.hv-total-top-value { grid-row:1 / span 2;grid-column:2;color:#4ade80;font-size:19px;font-weight:850;white-space:nowrap; }
+.hv-total-top-count { color:#c3d3cb;font-size:11px;margin-top:2px; }
+body.tema-claro .hv-total-top { background:#e7f4ec;border-color:#82ad94;border-left-color:#15803d;box-shadow:0 3px 10px rgba(15,23,42,.1); }
+body.tema-claro .hv-total-top-label { color:#365c48; }
+body.tema-claro .hv-total-top-value { color:#14532d; }
+body.tema-claro .hv-total-top-count { color:#334e40; }
 
 /* ── Situação NFC-e ── */
 .hv-sit {
@@ -214,7 +221,15 @@ body.tema-claro .hv-page a, body.tema-claro .hv-page span { background:#eef2f7;b
         {{ total }} registro{{ total|pluralize }} encontrado{{ total|pluralize }}
       </p>
     </div>
-    <button @click="modalInut.show=true"
+    <div class="hv-header-actions">
+      {% if exibir_totalizador %}
+      <div class="hv-total-top" aria-label="Total das vendas filtradas">
+        <span class="hv-total-top-label">Total filtrado</span>
+        <strong class="hv-total-top-value">R$ {{ valor_totalizador|floatformat:2 }}</strong>
+        <span class="hv-total-top-count">{{ quantidade_totalizador }} venda{{ quantidade_totalizador|pluralize }} considerada{{ quantidade_totalizador|pluralize }}</span>
+      </div>
+      {% endif %}
+      <button @click="modalInut.show=true"
             style="display:flex;align-items:center;gap:6px;padding:9px 18px;border-radius:9px;
                    font-size:13px;font-weight:700;cursor:pointer;border:1px solid #78350f;
                    background:#1c1107;color:#fbbf24;transition:.15s;"
@@ -224,7 +239,8 @@ body.tema-claro .hv-page a, body.tema-claro .hv-page span { background:#eef2f7;b
         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636"/>
       </svg>
       Inutilizar Faixa
-    </button>
+      </button>
+    </div>
   </div>
 
   <!-- Atalhos de visualizacao -->
@@ -543,15 +559,6 @@ body.tema-claro .hv-page a, body.tema-claro .hv-page span { background:#eef2f7;b
         </tr>
         {% endfor %}
       </tbody>
-      {% if exibir_totalizador %}
-      <tfoot>
-        <tr class="hv-total-row">
-          <td colspan="4" class="hv-total-label">Total de {{ quantidade_totalizador }} venda{{ quantidade_totalizador|pluralize }} válida{{ quantidade_totalizador|pluralize }}</td>
-          <td class="hv-total-value">R$ {{ valor_totalizador|floatformat:2 }}</td>
-          <td colspan="3"></td>
-        </tr>
-      </tfoot>
-      {% endif %}
     </table>
   </div>
 
