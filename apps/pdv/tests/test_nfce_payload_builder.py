@@ -295,7 +295,8 @@ class NfePayloadBuilderTests(TestCase):
 
         self.assertEqual(item["ibs_uf_valor"], 0.0)
         self.assertEqual(item["cbs_valor"], 0.04)
-        self.assertEqual(item["is_valor"], 0.0)
+        self.assertEqual(item["is_aliquota"], "0.0000")
+        self.assertEqual(item["is_valor"], "0.00")
         self.assertEqual(item["valor_total_item"], 4.0)
         self.assertEqual(payload["ibs_cbs_is_valor_total"], 4.0)
 
