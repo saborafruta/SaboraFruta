@@ -52,6 +52,27 @@ body.tema-claro .hv-input:focus { border-color:#f15a24; }
 body.tema-claro .hv-btn-clear { border-color:#d1d5db;color:#6b7280; }
 .hv-btn-clear:hover { border-color:#f15a24;color:#f15a24; }
 
+.hv-view-tabs {
+  display:flex;gap:8px;align-items:center;overflow-x:auto;padding:2px 1px 10px;
+  margin:-2px 0 10px;scrollbar-width:thin;
+}
+.hv-view-tab {
+  min-height:38px;padding:8px 13px;border:1px solid #2a2a3e;border-radius:8px;
+  display:inline-flex;align-items:center;gap:8px;flex:none;text-decoration:none;
+  background:#13131e;color:#a0a0b5;font-size:12.5px;font-weight:700;transition:.15s;
+}
+.hv-view-tab:hover { border-color:#f15a24;color:#ff8a55; }
+.hv-view-tab.active { background:#f15a24;border-color:#f15a24;color:#fff; }
+.hv-view-count {
+  min-width:22px;height:20px;padding:0 6px;border-radius:8px;display:inline-flex;
+  align-items:center;justify-content:center;background:#252538;color:#b8b8ca;font-size:10.5px;
+}
+.hv-view-tab.active .hv-view-count { background:rgba(255,255,255,.2);color:#fff; }
+body.tema-claro .hv-view-tab { background:#fff;border-color:#d1d5db;color:#4b5563; }
+body.tema-claro .hv-view-tab.active { background:#f15a24;border-color:#f15a24;color:#fff; }
+body.tema-claro .hv-view-count { background:#f3f4f6;color:#6b7280; }
+body.tema-claro .hv-view-tab.active .hv-view-count { background:rgba(255,255,255,.25);color:#fff; }
+
 /* ── Tabela ── */
 .hv-table-wrap { border-radius:14px;overflow:hidden;border:1px solid #1e1e30; }
 body.tema-claro .hv-table-wrap { border-color:#e5e7eb; }
@@ -179,6 +200,17 @@ body.tema-claro .hv-page a, body.tema-claro .hv-page span { border-color:#d1d5db
     </button>
   </div>
 
+  <!-- Atalhos de visualizacao -->
+  <nav class="hv-view-tabs" aria-label="Visualizações do histórico de vendas">
+    {% for atalho in atalhos %}
+    <a href="{{ atalho.url }}" class="hv-view-tab{% if atalho.ativo %} active{% endif %}"
+       {% if atalho.ativo %}aria-current="page"{% endif %}>
+      <span>{{ atalho.rotulo }}</span>
+      <span class="hv-view-count">{{ atalho.quantidade }}</span>
+    </a>
+    {% endfor %}
+  </nav>
+
   <!-- Filtros -->
   <form method="get" class="hv-filter-bar">
     <div class="hv-filter-group">
@@ -201,8 +233,9 @@ body.tema-claro .hv-page a, body.tema-claro .hv-page span { border-color:#d1d5db
       <label class="hv-filter-label">Tipo Fiscal</label>
       <select class="hv-input" name="tipo_fiscal" style="width:140px;">
         <option value="">Todos</option>
-        <option value="nfce" {% if filtros.tipo_fiscal == 'nfce' %}selected{% endif %}>NFC-e</option>
-        <option value="nfe"  {% if filtros.tipo_fiscal == 'nfe'  %}selected{% endif %}>NF-e</option>
+        <option value="emitidas" {% if filtros.tipo_fiscal == 'emitidas' %}selected{% endif %}>Emitidas (NF-e e NFC-e)</option>
+        <option value="nfce" {% if filtros.tipo_fiscal == 'nfce' %}selected{% endif %}>NFC-e emitidas</option>
+        <option value="nfe"  {% if filtros.tipo_fiscal == 'nfe'  %}selected{% endif %}>NF-e emitidas</option>
         <option value="nao_fiscal" {% if filtros.tipo_fiscal == 'nao_fiscal' %}selected{% endif %}>Não Fiscal</option>
         <option value="cancelada"  {% if filtros.tipo_fiscal == 'cancelada'  %}selected{% endif %}>Canceladas</option>
       </select>

@@ -64,7 +64,7 @@ def historico_vendas(request):
     cliente_q  = request.GET.get('cliente', '').strip()
     data_ini   = request.GET.get('data_ini', '')
     data_fim   = request.GET.get('data_fim', '')
-    tipo_fiscal = request.GET.get('tipo_fiscal', '')  # nfce | nfe | nao_fiscal | cancelada
+    tipo_fiscal = request.GET.get('tipo_fiscal', '')  # emitidas | nfce | nfe | nao_fiscal | cancelada
 
     qs = (
         VendaPDV.objects
@@ -92,10 +92,38 @@ def historico_vendas(request):
     if data_fim:
         qs = qs.filter(data_venda__date__lte=data_fim)
 
-    if tipo_fiscal == 'nfce':
-        qs = qs.filter(documento_fiscal__tipo_documento='nfce')
+    contadores = {
+        '': qs.count(),
+        'emitidas': qs.filter(
+            status='finalizada', documento_fiscal__status='autorizada',
+            documento_fiscal__tipo_documento__in=['nfe', 'nfce'],
+        ).count(),
+        'nfe': qs.filter(
+            status='finalizada', documento_fiscal__status='autorizada',
+            documento_fiscal__tipo_documento='nfe',
+        ).count(),
+        'nfce': qs.filter(
+            status='finalizada', documento_fiscal__status='autorizada',
+            documento_fiscal__tipo_documento='nfce',
+        ).count(),
+        'cancelada': qs.filter(status='cancelada').count(),
+    }
+
+    if tipo_fiscal == 'emitidas':
+        qs = qs.filter(
+            status='finalizada', documento_fiscal__status='autorizada',
+            documento_fiscal__tipo_documento__in=['nfe', 'nfce'],
+        )
+    elif tipo_fiscal == 'nfce':
+        qs = qs.filter(
+            status='finalizada', documento_fiscal__status='autorizada',
+            documento_fiscal__tipo_documento='nfce',
+        )
     elif tipo_fiscal == 'nfe':
-        qs = qs.filter(documento_fiscal__tipo_documento='nfe')
+        qs = qs.filter(
+            status='finalizada', documento_fiscal__status='autorizada',
+            documento_fiscal__tipo_documento='nfe',
+        )
     elif tipo_fiscal == 'nao_fiscal':
         qs = qs.filter(documento_fiscal__isnull=True, status='finalizada')
     elif tipo_fiscal == 'cancelada':
@@ -105,10 +133,33 @@ def historico_vendas(request):
     paginator = Paginator(qs, 25)
     page_obj = paginator.get_page(request.GET.get('page', 1))
 
+    query_base = request.GET.copy()
+    query_base.pop('page', None)
+    query_base.pop('tipo_fiscal', None)
+    atalhos = []
+    for valor, rotulo in [
+        ('', 'Todas'),
+        ('emitidas', 'Emitidas'),
+        ('nfe', 'NF-e'),
+        ('nfce', 'NFC-e'),
+        ('cancelada', 'Vendas canceladas'),
+    ]:
+        query = query_base.copy()
+        if valor:
+            query['tipo_fiscal'] = valor
+        atalhos.append({
+            'valor': valor,
+            'rotulo': rotulo,
+            'quantidade': contadores[valor],
+            'url': '?' + query.urlencode() if query else request.path,
+            'ativo': tipo_fiscal == valor,
+        })
+
     return render(request, 'analytics/vendas.html', {
         'title': 'Histórico de Vendas',
         'page_obj': page_obj,
         'total': total,
+        'atalhos': atalhos,
         'filtros': {
             'pedido': pedido_q,
             'cliente': cliente_q,
