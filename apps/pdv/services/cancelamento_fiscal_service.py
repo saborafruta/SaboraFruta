@@ -53,9 +53,10 @@ def cancelar_venda_e_documento(venda, usuario, justificativa: str):
             "Informe uma justificativa com ao menos 15 caracteres."
         )
 
-    venda = type(venda).objects.select_for_update().select_related(
-        "documento_fiscal", "filial"
-    ).get(pk=venda.pk)
+    # Trave somente a venda. No PostgreSQL, combinar FOR UPDATE com
+    # select_related em uma FK opcional tenta bloquear o lado anulavel do
+    # OUTER JOIN e aborta o cancelamento antes mesmo da chamada a Focus.
+    venda = type(venda).objects.select_for_update().get(pk=venda.pk)
     documento = obter_documento_fiscal(venda)
 
     if documento and documento.status == StatusDocumentoFiscal.AUTORIZADA:
