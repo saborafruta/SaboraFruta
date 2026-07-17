@@ -200,6 +200,10 @@ def _aplicar_pis_cofins(item: dict, produto, base: Decimal) -> None:
         aliquota = _decimal(getattr(produto, aliquota_nome, 0))
         item[f"{prefixo}_situacao_tributaria"] = cst
         if cst in nao_tributados:
+            # A Focus precisa de um valor fiscal para materializar PISNT/COFINSNT;
+            # somente o CST pode resultar em grupos XML vazios (<PIS/>/<COFINS/>).
+            item[f"{prefixo}_base_calculo"] = 0.0
+            item[f"{prefixo}_valor"] = 0.0
             continue
         item[f"{prefixo}_base_calculo"] = _float_dinheiro(base)
         item[f"{prefixo}_aliquota_porcentual"] = float(aliquota)

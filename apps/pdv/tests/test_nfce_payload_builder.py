@@ -175,6 +175,22 @@ class NfePayloadBuilderTests(TestCase):
         self.assertNotIn("valor_total_tributos", payload)
         self.assertNotIn("valor_total_tributos", payload["items"][0])
 
+    def test_pis_cofins_em_branco_geram_grupos_nao_tributados_completos(self):
+        venda = self.criar_venda(self.criar_cliente())
+        produto = venda.itens.get().produto
+        produto.cst_pis = ""
+        produto.cst_cofins = ""
+        produto.save(update_fields=["cst_pis", "cst_cofins"])
+
+        item = NfcePayloadBuilder.build(venda, numero=1, serie=1)["items"][0]
+
+        self.assertEqual(item["pis_situacao_tributaria"], "07")
+        self.assertEqual(item["pis_base_calculo"], 0.0)
+        self.assertEqual(item["pis_valor"], 0.0)
+        self.assertEqual(item["cofins_situacao_tributaria"], "07")
+        self.assertEqual(item["cofins_base_calculo"], 0.0)
+        self.assertEqual(item["cofins_valor"], 0.0)
+
     def test_calcula_icms_pis_cofins_e_ipi_com_decimal(self):
         cliente = self.criar_cliente()
         venda = self.criar_venda(cliente)
