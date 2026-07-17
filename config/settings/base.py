@@ -170,6 +170,7 @@ IBPT_API_BASE_URL = env(
     default='https://api-ibpt.seunegocionanuvem.com.br',
 )
 IBPT_AUTO_SYNC = env.bool('IBPT_AUTO_SYNC', default=False)
+IBPT_INTERNAL_SCHEDULER = env.bool('IBPT_INTERNAL_SCHEDULER', default=False)
 
 # Email
 EMAIL_BACKEND = env('EMAIL_BACKEND', default='django.core.mail.backends.console.EmailBackend')

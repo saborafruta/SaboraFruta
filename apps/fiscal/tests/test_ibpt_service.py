@@ -1,13 +1,23 @@
-from datetime import date
+from datetime import date, datetime
 from decimal import Decimal
 from unittest.mock import Mock, patch
 
 from django.test import TestCase, override_settings
+from django.utils import timezone
 
 from apps.fiscal.services.ibpt_service import obter_aliquota_ibpt
+from apps.fiscal.services.ibpt_scheduler import proxima_execucao
 
 
 class IBPTServiceTests(TestCase):
+    def test_agendador_programa_execucao_para_0310(self):
+        agora = timezone.make_aware(datetime(2026, 7, 17, 4, 0))
+
+        proxima = proxima_execucao(agora)
+
+        self.assertEqual(proxima.date(), date(2026, 7, 18))
+        self.assertEqual((proxima.hour, proxima.minute), (3, 10))
+
     @override_settings(IBPT_AUTO_SYNC=True)
     @patch('apps.fiscal.services.ibpt_service.requests.get')
     def test_consulta_e_armazena_aliquota_vigente(self, get):

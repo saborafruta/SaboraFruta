@@ -44,3 +44,4 @@ CSRF_COOKIE_SECURE = True
 # Em producao, atualiza o NCM sob demanda caso a carga noturna ainda nao tenha
 # sido executada ou uma nova vigencia tenha comecado.
 IBPT_AUTO_SYNC = env.bool('IBPT_AUTO_SYNC', default=True)
+IBPT_INTERNAL_SCHEDULER = env.bool('IBPT_INTERNAL_SCHEDULER', default=True)
