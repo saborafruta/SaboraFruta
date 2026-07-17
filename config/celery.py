@@ -23,6 +23,10 @@ app.conf.beat_schedule = {
         'task': 'apps.estoque.tasks.alertas.verificar_estoque_minimo',
         'schedule': crontab(hour=8, minute=0),
     },
+    'sincronizar-ibpt-rn': {
+        'task': 'apps.fiscal.tasks.sincronizar_ibpt_rn',
+        'schedule': crontab(hour=3, minute=10),
+    },
 }
 
 

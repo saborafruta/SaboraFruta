@@ -16,6 +16,7 @@ Regra GTIN (SEFAZ NT 2011/004):
 """
 from __future__ import annotations
 
+from datetime import date
 from decimal import Decimal, ROUND_HALF_UP
 from typing import Any, Dict, Optional
 
@@ -25,6 +26,7 @@ from django.db import transaction
 from django.utils import timezone
 
 from apps.core.services.exceptions import DadosInvalidosError
+from apps.fiscal.services.ibpt_service import obter_aliquota_ibpt
 
 _BRT = ZoneInfo("America/Sao_Paulo")
 _MONEY = Decimal("0.01")
@@ -223,6 +225,32 @@ def _aplicar_ipi(item: dict, produto, base: Decimal) -> None:
         item["ipi_valor"] = _float_dinheiro(_percentual(base, aliquota))
 
 
+def _aplicar_ibpt(
+    item: dict, produto, filial, base: Decimal, data_emissao: date
+) -> None:
+    aliquota = obter_aliquota_ibpt(
+        getattr(produto, 'ncm', ''), getattr(filial, 'uf', ''), data_emissao
+    )
+    if aliquota is None:
+        return
+
+    origem = int(getattr(produto, 'origem_produto', 0) or 0)
+    federal = (
+        aliquota.federal_importado
+        if origem in {1, 2, 6, 7}
+        else aliquota.federal_nacional
+    )
+    # A tabela separa as cargas por esfera. Arredondar cada componente antes
+    # da soma reproduz o valor apresentado ao consumidor pela metodologia IBPT.
+    valor = (
+        _percentual(base, federal)
+        + _percentual(base, aliquota.estadual)
+        + _percentual(base, aliquota.municipal)
+    )
+    item['valor_total_tributos'] = _float_dinheiro(valor)
+    item['_ibpt_fonte'] = f'{aliquota.fonte} {aliquota.versao}'.strip()
+
+
 def _aplicar_reforma_tributaria(
     item: dict, produto, base: Decimal, ano_emissao: int
 ) -> None:
@@ -296,7 +324,7 @@ def _montar_item_fiscal(
     item_venda,
     filial,
     local_destino: str,
-    ano_emissao: int,
+    data_emissao: date,
     desconto_rateado: Decimal,
     acrescimo_rateado: Decimal,
 ) -> dict:
@@ -342,7 +370,8 @@ def _montar_item_fiscal(
     _aplicar_icms(item, produto, _regime_tributario_cod(filial), base)
     _aplicar_pis_cofins(item, produto, base)
     _aplicar_ipi(item, produto, base)
-    _aplicar_reforma_tributaria(item, produto, base, ano_emissao)
+    _aplicar_reforma_tributaria(item, produto, base, data_emissao.year)
+    _aplicar_ibpt(item, produto, filial, base, data_emissao)
     return item
 
 
@@ -368,14 +397,14 @@ def _montar_itens(venda, itens: list, local_destino: str) -> list[dict]:
     acrescimos_proprios = sum((_decimal(i.acrescimo_valor) for i in itens), Decimal("0"))
     descontos = _ratear(max(_decimal(venda.valor_desconto) - descontos_proprios, Decimal("0")), itens)
     acrescimos = _ratear(max(_decimal(venda.valor_acrescimo) - acrescimos_proprios, Decimal("0")), itens)
-    ano_emissao = int(_data_emissao_brt(venda.data_venda)[:4])
+    data_emissao = date.fromisoformat(_data_emissao_brt(venda.data_venda)[:10])
     return [
         _montar_item_fiscal(
             i + 1,
             item,
             venda.filial,
             local_destino,
-            ano_emissao,
+            data_emissao,
             descontos[i],
             acrescimos[i],
         )
@@ -460,6 +489,9 @@ def _local_destino(filial, cliente) -> str:
 
 
 def _aplicar_totais_fiscais(payload: dict, venda, items: list[dict]) -> None:
+    fontes_ibpt = {
+        item.pop('_ibpt_fonte') for item in items if item.get('_ibpt_fonte')
+    }
     payload["valor_produtos"] = _float_dinheiro(
         sum((_decimal(item["valor_bruto"]) for item in items), Decimal("0"))
     )
@@ -484,6 +516,18 @@ def _aplicar_totais_fiscais(payload: dict, venda, items: list[dict]) -> None:
             "Revise a formacao do preco antes de emitir."
         )
     payload["valor_total"] = _float_dinheiro(valor_total)
+
+    if any('valor_total_tributos' in item for item in items):
+        payload['valor_total_tributos'] = _float_dinheiro(
+            sum(
+                (_decimal(item.get('valor_total_tributos', 0)) for item in items),
+                Decimal('0'),
+            )
+        )
+        payload['informacoes_adicionais_contribuinte'] = (
+            'Valor aproximado dos tributos conforme Lei 12.741/2012. Fonte: '
+            + ', '.join(sorted(fontes_ibpt))
+        )[:5000]
 
     if any("ibs_cbs_situacao_tributaria" in item for item in items):
         for item in items:
@@ -627,8 +671,7 @@ class NfcePayloadBuilder:
             "numero": numero_nfce,
             "serie": str(serie_nfce),
             "data_emissao": data_emissao,
-            # A Focus usa indFinal para calcular automaticamente o vTotTrib
-            # pela tabela IBPT vigente do NCM.
+            # Consumidor final tambem habilita a transparencia tributaria.
             "consumidor_final": 1,
             # ── Campos obrigatórios NFC-e v2 ────────────────────────────────
             "local_destino": local_destino,
@@ -684,8 +727,7 @@ class NfePayloadBuilder:
             "data_entrada_saida": data_emissao,
             "tipo_documento": "1",
             "finalidade_emissao": "1",
-            # Inteiro intencional: gera indFinal=1 e habilita o calculo
-            # automatico de vTotTrib/IBPT na Focus.
+            # Inteiro intencional: gera indFinal=1.
             "consumidor_final": 1,
             "presenca_comprador": "1",
             "local_destino": local_destino,

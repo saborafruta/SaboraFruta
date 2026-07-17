@@ -78,3 +78,39 @@ class RegraFiscalUF(TimestampedModel):
     def __str__(self):
         alvo = self.ncm or self.cest or self.cfop or 'regra geral'
         return f'{self.uf} - {alvo}'
+
+
+class AliquotaIBPT(TimestampedModel):
+    """Carga tributaria aproximada por NCM, UF, versao e vigencia."""
+
+    ncm = models.CharField(max_length=8, db_index=True)
+    uf = models.CharField(max_length=2, choices=UF.choices, db_index=True)
+    descricao = models.CharField(max_length=500, blank=True)
+    federal_nacional = models.DecimalField(max_digits=7, decimal_places=4)
+    federal_importado = models.DecimalField(max_digits=7, decimal_places=4)
+    estadual = models.DecimalField(max_digits=7, decimal_places=4)
+    municipal = models.DecimalField(max_digits=7, decimal_places=4)
+    fonte = models.CharField(max_length=120)
+    versao = models.CharField(max_length=20)
+    vigencia_inicio = models.DateField(db_index=True)
+    vigencia_fim = models.DateField(db_index=True)
+
+    class Meta:
+        db_table = 'aliquotas_ibpt'
+        ordering = ['uf', 'ncm', '-vigencia_inicio']
+        constraints = [
+            models.UniqueConstraint(
+                fields=['uf', 'ncm', 'versao'], name='uq_ibpt_uf_ncm_versao'
+            ),
+        ]
+        indexes = [
+            models.Index(
+                fields=['uf', 'ncm', 'vigencia_inicio', 'vigencia_fim'],
+                name='ibpt_uf_ncm_vigencia_idx',
+            ),
+        ]
+        verbose_name = 'Aliquota IBPT'
+        verbose_name_plural = 'Aliquotas IBPT'
+
+    def __str__(self):
+        return f'{self.ncm}/{self.uf} - {self.versao}'

@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timedelta
 from decimal import Decimal
 from unittest.mock import Mock, patch
 
@@ -13,6 +13,7 @@ from apps.financeiro.constants.enums import StatusDocumentoFiscal, TipoDocumento
 from apps.financeiro.models import FormaPagamento
 from apps.financeiro.models.fiscal import DocumentoFiscal
 from apps.fiscal.services.focusnfe_service import FocusNFeService
+from apps.fiscal.models import AliquotaIBPT
 from apps.pdv.models import ItemVendaPDV, PagamentoVendaPDV, VendaPDV
 from apps.pdv.services.nfce_payload_builder import (
     NfcePayloadBuilder,
@@ -167,7 +168,7 @@ class NfePayloadBuilderTests(TestCase):
         self.assertNotIn("valor_total_tributos", payload)
         self.assertNotIn("valor_total_tributos", item)
 
-    def test_nfce_habilita_calculo_ibpt_automatico_da_focus(self):
+    def test_nfce_sem_tabela_local_nao_inventa_vtottrib(self):
         venda = self.criar_venda(self.criar_cliente())
 
         payload = NfcePayloadBuilder.build(venda, numero=1, serie=1)
@@ -175,6 +176,29 @@ class NfePayloadBuilderTests(TestCase):
         self.assertEqual(payload["consumidor_final"], 1)
         self.assertNotIn("valor_total_tributos", payload)
         self.assertNotIn("valor_total_tributos", payload["items"][0])
+
+    def test_nfce_envia_vtottrib_calculado_pela_tabela_ibpt(self):
+        hoje = timezone.localdate()
+        AliquotaIBPT.objects.create(
+            ncm='07141000',
+            uf='RN',
+            descricao='Produto nacional de teste',
+            federal_nacional=Decimal('13.45'),
+            federal_importado=Decimal('21.46'),
+            estadual=Decimal('20.00'),
+            municipal=Decimal('0.00'),
+            fonte='IBPT/empresometro.com.br',
+            versao='26.1.L',
+            vigencia_inicio=hoje - timedelta(days=10),
+            vigencia_fim=hoje + timedelta(days=10),
+        )
+        venda = self.criar_venda(self.criar_cliente())
+
+        payload = NfcePayloadBuilder.build(venda, numero=1, serie=1)
+
+        self.assertEqual(payload['items'][0]['valor_total_tributos'], 1.34)
+        self.assertEqual(payload['valor_total_tributos'], 1.34)
+        self.assertIn('IBPT/empresometro.com.br 26.1.L', payload['informacoes_adicionais_contribuinte'])
 
     def test_pis_cofins_em_branco_geram_grupos_nao_tributados_completos(self):
         venda = self.criar_venda(self.criar_cliente())

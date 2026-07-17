@@ -27,6 +27,7 @@ LOCAL_APP_LABELS = [
     'financeiro',
     'fiscal',
     'lotes',
+    'logistica',
     'pdv',
     'producao',
     'produtos',

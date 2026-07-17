@@ -40,3 +40,7 @@ if not MEDIA_URL.endswith('/'):
 SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
 SESSION_COOKIE_SECURE = True
 CSRF_COOKIE_SECURE = True
+
+# Em producao, atualiza o NCM sob demanda caso a carga noturna ainda nao tenha
+# sido executada ou uma nova vigencia tenha comecado.
+IBPT_AUTO_SYNC = env.bool('IBPT_AUTO_SYNC', default=True)

@@ -164,6 +164,13 @@ CELERY_RESULT_SERIALIZER = 'json'
 CELERY_TIMEZONE = TIME_ZONE
 CELERY_BEAT_SCHEDULER = 'django_celery_beat.schedulers:DatabaseScheduler'
 
+# Transparencia tributaria (Lei 12.741/2012 / tabela IBPT).
+IBPT_API_BASE_URL = env(
+    'IBPT_API_BASE_URL',
+    default='https://api-ibpt.seunegocionanuvem.com.br',
+)
+IBPT_AUTO_SYNC = env.bool('IBPT_AUTO_SYNC', default=False)
+
 # Email
 EMAIL_BACKEND = env('EMAIL_BACKEND', default='django.core.mail.backends.console.EmailBackend')
 DEFAULT_FROM_EMAIL = env('DEFAULT_FROM_EMAIL', default='noreply@inoovated.com.br')
