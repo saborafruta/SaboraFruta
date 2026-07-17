@@ -13,6 +13,7 @@ from django.urls import reverse
 from django.views import View
 
 from apps.cadastros.models import Cliente, Fornecedor
+from apps.core.models import Filial
 from apps.core.services.exceptions import DomainError
 from apps.core.services.permissions import PERMISSION_DENIED_MESSAGE, PermissaoRequiredMixin
 from apps.estoque.forms.outras_movimentacoes import DevolucaoClienteForm, DevolucaoFornecedorForm, SaidaEspecialForm
@@ -555,3 +556,111 @@ class DevolucaoClienteApiView(PermissaoRequiredMixin, View):
             msg += f' Crédito de R$ {credito_total:.2f} gerado para {cliente}.'
 
         return JsonResponse({'ok': True, 'message': msg})
+
+
+# ────────────────────────────────────────────────────────────
+# Transferência entre lojas (multi-produto)
+# ────────────────────────────────────────────────────────────
+
+class TransferenciaLojaView(PermissaoRequiredMixin, View):
+    """Tela de transferência entre lojas com suporte a múltiplos produtos."""
+
+    permissao_modulo = 'estoque'
+    permissao_acao = 'criar'
+
+    def get(self, request):
+        filial = request.filial_ativa
+        empresa = request.user.empresa
+
+        filiais_qs = Filial.objects.filter(
+            empresa=empresa, ativo=True,
+        ).exclude(pk=filial.pk).order_by('-is_matriz', 'nome_fantasia', 'razao_social')
+
+        filiais_json = _json.dumps([
+            {
+                'id': f.pk,
+                'label': (f.nome_fantasia or f.razao_social) + (' (Matriz)' if f.is_matriz else ' (Filial)'),
+                'is_matriz': f.is_matriz,
+            }
+            for f in filiais_qs
+        ])
+
+        return render(request, 'estoque/outras_movimentacoes/transferencia_lojas.html', {
+            'title': 'Transferência entre Lojas',
+            'filiais_json': filiais_json,
+            'filial_nome': filial.nome_fantasia or filial.razao_social,
+            'filial_is_matriz': filial.is_matriz,
+            'cancel_url': reverse('estoque:outras-mov-hub'),
+        })
+
+
+class TransferenciaLojaApiView(PermissaoRequiredMixin, View):
+    """API JSON: transferência entre lojas com múltiplos produtos."""
+
+    permissao_modulo = 'estoque'
+    permissao_acao = 'criar'
+
+    @transaction.atomic
+    def post(self, request):
+        try:
+            body = _json.loads(request.body)
+        except (ValueError, TypeError):
+            return JsonResponse({'erro': 'JSON inválido.'}, status=400)
+
+        filial_destino_id = body.get('filial_destino_id')
+        observacao = (body.get('observacao') or '').strip()
+        itens = body.get('itens', [])
+
+        if not filial_destino_id:
+            return JsonResponse({'erro': 'Selecione a loja de destino.'}, status=400)
+        if not itens:
+            return JsonResponse({'erro': 'Adicione ao menos um produto.'}, status=400)
+        if not observacao:
+            return JsonResponse({'erro': 'Informe a justificativa.'}, status=400)
+
+        filial = request.filial_ativa
+        empresa = request.user.empresa
+
+        if filial_destino_id == filial.pk:
+            return JsonResponse({'erro': 'Loja de destino deve ser diferente da origem.'}, status=400)
+
+        try:
+            filial_destino = Filial.objects.get(pk=filial_destino_id, empresa=empresa, ativo=True)
+        except Filial.DoesNotExist:
+            return JsonResponse({'erro': 'Loja de destino inválida.'}, status=400)
+
+        resultados = []
+        for i, item_data in enumerate(itens, 1):
+            produto_id = item_data.get('produto_id')
+            lote_id = item_data.get('lote_id') or None
+
+            try:
+                quantidade = Decimal(str(item_data.get('quantidade', 0)))
+            except Exception:
+                return JsonResponse({'erro': f'Quantidade inválida no item {i}.'}, status=400)
+
+            if not produto_id:
+                return JsonResponse({'erro': f'Produto inválido no item {i}.'}, status=400)
+            if quantidade <= 0:
+                return JsonResponse({'erro': f'Quantidade deve ser maior que zero (item {i}).'}, status=400)
+
+            try:
+                mov_saida, mov_entrada = MovimentacaoService.transferir_entre_filiais(
+                    produto_id=produto_id,
+                    filial_origem_id=filial.pk,
+                    filial_destino_id=filial_destino.pk,
+                    quantidade=quantidade,
+                    usuario_id=request.user.pk,
+                    lote_id=lote_id,
+                    observacao=observacao,
+                )
+                resultados.append({'saida': mov_saida.pk, 'entrada': mov_entrada.pk})
+            except DomainError as exc:
+                return JsonResponse({'erro': str(exc)}, status=400)
+
+        return JsonResponse({
+            'ok': True,
+            'message': f'{len(resultados)} produto(s) transferido(s) de '
+                       f'"{filial.nome_fantasia or filial.razao_social}" para '
+                       f'"{filial_destino.nome_fantasia or filial_destino.razao_social}".',
+        })

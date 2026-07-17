@@ -17,12 +17,17 @@ urlpatterns = [
 
     # Operacoes
     path('movimentacoes/nova/', views.MovimentacaoManualView.as_view(), name='movimentacao-create'),
+    path('ajuste/', views.AjusteEstoqueView.as_view(), name='ajuste'),
+    path('transferencia/', views.TransferenciaView.as_view(), name='transferencia'),
+
+    # Outras Movimentacoes
     path('outras-movimentacoes/', views.OutrasMovimentacoesHubView.as_view(), name='outras-mov-hub'),
     path('outras-movimentacoes/devolucao/', views.DevolucaoClienteView.as_view(), name='devolucao-cliente'),
     path('outras-movimentacoes/devolucao-fornecedor/', views.DevolucaoFornecedorView.as_view(), name='devolucao-fornecedor'),
     path('outras-movimentacoes/saida-especial/', views.SaidaEspecialView.as_view(), name='saida-especial'),
-    path('ajuste/', views.AjusteEstoqueView.as_view(), name='ajuste'),
-    path('transferencia/', views.TransferenciaView.as_view(), name='transferencia'),
+    path('outras-movimentacoes/transferencia-lojas/', views.TransferenciaLojaView.as_view(), name='transferencia-lojas'),
+    path('outras-movimentacoes/transferencia-lojas/api/', views.TransferenciaLojaApiView.as_view(), name='transferencia-lojas-api'),
+    path('outras-movimentacoes/devolucao/api/', views.DevolucaoClienteApiView.as_view(), name='devolucao-cliente-api'),
 
     # Inventario
     path('inventarios/', views.InventarioListView.as_view(), name='inventario-list'),
@@ -40,19 +45,9 @@ urlpatterns = [
     # Alertas
     path('alertas/', views.AlertaListView.as_view(), name='alerta-list'),
 
-    # Sugestao de Compras
-    path('sugestao-compras/', views.SugestaoComprasView.as_view(), name='sugestao-compras'),
-
-    # Outras Movimentacoes
-    path('outras-movimentacoes/', views.OutrasMovimentacoesHubView.as_view(), name='outras-mov-hub'),
-    path('outras-movimentacoes/devolucao/', views.DevolucaoClienteView.as_view(), name='devolucao-cliente'),
-    path('outras-movimentacoes/devolucao-fornecedor/', views.DevolucaoFornecedorView.as_view(), name='devolucao-fornecedor'),
-    path('outras-movimentacoes/saida-especial/', views.SaidaEspecialView.as_view(), name='saida-especial'),
-
     # Endpoints JSON para typeahead
     path('api/fornecedores/buscar/', views.FornecedorSearchJsonView.as_view(), name='fornecedor-search-json'),
     path('api/produtos/buscar/', views.ProdutoEstoqueSearchJsonView.as_view(), name='produto-estoque-search-json'),
     path('api/clientes/buscar/', views.ClienteSearchJsonView.as_view(), name='cliente-search-json'),
     path('api/lotes/buscar/', views.LoteSearchJsonView.as_view(), name='lote-search-json'),
-    path('outras-movimentacoes/devolucao/api/', views.DevolucaoClienteApiView.as_view(), name='devolucao-cliente-api'),
 ]
