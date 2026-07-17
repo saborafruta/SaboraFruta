@@ -271,13 +271,14 @@ def _aplicar_reforma_tributaria(item: dict, produto, base: Decimal) -> None:
         if not cst_is or not classe_is:
             raise DadosInvalidosError("Informe CST e classificacao tributaria do Imposto Seletivo.")
         aliq_is = _decimal(getattr(produto, "aliquota_is", 0))
-        item["is_situacao_tributaria"] = cst_is
-        item["is_classificacao_tributaria"] = classe_is
-        item["is_base_calculo"] = _float_dinheiro(base)
-        # A Focus descarta zeros numéricos neste grupo e gera <IS> sem pIS/vIS.
-        # Strings decimais preservam as tags obrigatórias sem alterar o tributo.
-        item["is_aliquota"] = f"{aliq_is:.4f}"
-        item["is_valor"] = f"{_percentual(base, aliq_is):.2f}"
+        # O grupo IS é opcional. A Focus omite pIS/vIS quando a alíquota é zero,
+        # produzindo um XML inválido; nesse caso o grupo não deve ser enviado.
+        if aliq_is > 0:
+            item["is_situacao_tributaria"] = cst_is
+            item["is_classificacao_tributaria"] = classe_is
+            item["is_base_calculo"] = _float_dinheiro(base)
+            item["is_aliquota"] = float(aliq_is)
+            item["is_valor"] = _float_dinheiro(_percentual(base, aliq_is))
 
 
 def _montar_item_fiscal(

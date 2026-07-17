@@ -287,7 +287,7 @@ class NfePayloadBuilderTests(TestCase):
         produto.aliquota_cbs = Decimal("0.9000")
         produto.cst_is = "000"
         produto.classificacao_tributaria_is = "000001"
-        produto.aliquota_is = Decimal("0")
+        produto.aliquota_is = Decimal("1")
         produto.save()
 
         payload = NfcePayloadBuilder.build(venda, numero=1, serie=1)
@@ -295,10 +295,28 @@ class NfePayloadBuilderTests(TestCase):
 
         self.assertEqual(item["ibs_uf_valor"], 0.0)
         self.assertEqual(item["cbs_valor"], 0.04)
-        self.assertEqual(item["is_aliquota"], "0.0000")
-        self.assertEqual(item["is_valor"], "0.00")
+        self.assertEqual(item["is_aliquota"], 1.0)
+        self.assertEqual(item["is_valor"], 0.04)
         self.assertEqual(item["valor_total_item"], 4.0)
         self.assertEqual(payload["ibs_cbs_is_valor_total"], 4.0)
+
+    def test_omite_grupo_is_quando_aliquota_for_zero(self):
+        venda = self.criar_venda(self.criar_cliente())
+        produto = venda.itens.get().produto
+        produto.cst_ibs = produto.cst_cbs = "000"
+        produto.classificacao_tributaria_ibs = produto.classificacao_tributaria_cbs = "000001"
+        produto.cst_is = "000"
+        produto.classificacao_tributaria_is = "000001"
+        produto.aliquota_is = Decimal("0")
+        produto.save()
+
+        item = NfcePayloadBuilder.build(venda, numero=1, serie=1)["items"][0]
+
+        self.assertNotIn("is_situacao_tributaria", item)
+        self.assertNotIn("is_classificacao_tributaria", item)
+        self.assertNotIn("is_base_calculo", item)
+        self.assertNotIn("is_aliquota", item)
+        self.assertNotIn("is_valor", item)
 
     def test_bloqueia_cst_ibs_cbs_incompativeis(self):
         venda = self.criar_venda(self.criar_cliente())
