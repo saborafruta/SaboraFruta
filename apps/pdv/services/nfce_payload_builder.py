@@ -223,7 +223,9 @@ def _aplicar_ipi(item: dict, produto, base: Decimal) -> None:
         item["ipi_valor"] = _float_dinheiro(_percentual(base, aliquota))
 
 
-def _aplicar_reforma_tributaria(item: dict, produto, base: Decimal) -> None:
+def _aplicar_reforma_tributaria(
+    item: dict, produto, base: Decimal, ano_emissao: int
+) -> None:
     cst_cbs = (getattr(produto, "cst_cbs", "") or "").strip()
     cst_ibs = (getattr(produto, "cst_ibs", "") or "").strip()
     classe_cbs = (getattr(produto, "classificacao_tributaria_cbs", "") or "").strip()
@@ -239,8 +241,12 @@ def _aplicar_reforma_tributaria(item: dict, produto, base: Decimal) -> None:
     item["ibs_cbs_classificacao_tributaria"] = classe_ibs
     item["ibs_cbs_base_calculo"] = _float_dinheiro(base)
     reducao_ibs = _decimal(getattr(produto, "reducao_ibs", 0))
-    aliq_uf = _decimal(getattr(produto, "aliquota_ibs_uf", 0))
-    aliq_mun = _decimal(getattr(produto, "aliquota_ibs_municipal", 0))
+    if ano_emissao == 2026:
+        aliq_uf = Decimal("0.1")
+        aliq_mun = Decimal("0")
+    else:
+        aliq_uf = _decimal(getattr(produto, "aliquota_ibs_uf", 0))
+        aliq_mun = _decimal(getattr(produto, "aliquota_ibs_municipal", 0))
     efetiva_uf = aliq_uf * (Decimal("1") - reducao_ibs / Decimal("100"))
     efetiva_mun = aliq_mun * (Decimal("1") - reducao_ibs / Decimal("100"))
     item["ibs_uf_aliquota"] = float(aliq_uf)
@@ -257,7 +263,11 @@ def _aplicar_reforma_tributaria(item: dict, produto, base: Decimal) -> None:
     item["ibs_valor_total"] = _float_dinheiro(valor_ibs_uf + valor_ibs_mun)
 
     reducao_cbs = _decimal(getattr(produto, "reducao_cbs", 0))
-    aliq_cbs = _decimal(getattr(produto, "aliquota_cbs", 0))
+    aliq_cbs = (
+        Decimal("0.9")
+        if ano_emissao == 2026
+        else _decimal(getattr(produto, "aliquota_cbs", 0))
+    )
     efetiva_cbs = aliq_cbs * (Decimal("1") - reducao_cbs / Decimal("100"))
     item["cbs_aliquota"] = float(aliq_cbs)
     if reducao_cbs > 0:
@@ -286,6 +296,7 @@ def _montar_item_fiscal(
     item_venda,
     filial,
     local_destino: str,
+    ano_emissao: int,
     desconto_rateado: Decimal,
     acrescimo_rateado: Decimal,
 ) -> dict:
@@ -331,7 +342,7 @@ def _montar_item_fiscal(
     _aplicar_icms(item, produto, _regime_tributario_cod(filial), base)
     _aplicar_pis_cofins(item, produto, base)
     _aplicar_ipi(item, produto, base)
-    _aplicar_reforma_tributaria(item, produto, base)
+    _aplicar_reforma_tributaria(item, produto, base, ano_emissao)
     return item
 
 
@@ -357,8 +368,17 @@ def _montar_itens(venda, itens: list, local_destino: str) -> list[dict]:
     acrescimos_proprios = sum((_decimal(i.acrescimo_valor) for i in itens), Decimal("0"))
     descontos = _ratear(max(_decimal(venda.valor_desconto) - descontos_proprios, Decimal("0")), itens)
     acrescimos = _ratear(max(_decimal(venda.valor_acrescimo) - acrescimos_proprios, Decimal("0")), itens)
+    ano_emissao = int(_data_emissao_brt(venda.data_venda)[:4])
     return [
-        _montar_item_fiscal(i + 1, item, venda.filial, local_destino, descontos[i], acrescimos[i])
+        _montar_item_fiscal(
+            i + 1,
+            item,
+            venda.filial,
+            local_destino,
+            ano_emissao,
+            descontos[i],
+            acrescimos[i],
+        )
         for i, item in enumerate(itens)
     ]
 

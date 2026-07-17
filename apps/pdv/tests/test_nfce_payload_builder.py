@@ -1,3 +1,4 @@
+from datetime import datetime
 from decimal import Decimal
 from unittest.mock import Mock, patch
 
@@ -317,6 +318,24 @@ class NfePayloadBuilderTests(TestCase):
         self.assertNotIn("is_base_calculo", item)
         self.assertNotIn("is_aliquota", item)
         self.assertNotIn("is_valor", item)
+
+    def test_aplica_aliquotas_de_transicao_ibs_cbs_em_2026(self):
+        venda = self.criar_venda(self.criar_cliente())
+        venda.data_venda = datetime(2026, 7, 17, 10, tzinfo=timezone.get_current_timezone())
+        venda.save(update_fields=["data_venda"])
+        produto = venda.itens.get().produto
+        produto.cst_ibs = produto.cst_cbs = "000"
+        produto.classificacao_tributaria_ibs = produto.classificacao_tributaria_cbs = "000001"
+        produto.aliquota_ibs_uf = Decimal("0")
+        produto.aliquota_ibs_municipal = Decimal("0")
+        produto.aliquota_cbs = Decimal("0")
+        produto.save()
+
+        item = NfcePayloadBuilder.build(venda, numero=2, serie=1)["items"][0]
+
+        self.assertEqual(item["ibs_uf_aliquota"], 0.1)
+        self.assertEqual(item["ibs_mun_aliquota"], 0.0)
+        self.assertEqual(item["cbs_aliquota"], 0.9)
 
     def test_bloqueia_cst_ibs_cbs_incompativeis(self):
         venda = self.criar_venda(self.criar_cliente())
