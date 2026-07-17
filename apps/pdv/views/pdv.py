@@ -919,7 +919,7 @@ def api_venda_detalhe(request, pk):
             VendaPDV.objects
             .for_filial(request.filial_ativa)
             .prefetch_related("itens__produto__linha_producao")
-            .select_related("cliente")
+            .select_related("cliente", "usuario", "cancelado_por", "documento_fiscal")
             .get(pk=pk, status__in=["finalizada", "cancelada"])
         )
     except VendaPDV.DoesNotExist:
@@ -955,6 +955,9 @@ def api_venda_detalhe(request, pk):
         "ok": True,
         "venda_id": venda.pk,
         "numero_venda": venda.numero_venda,
+        "status": venda.status,
+        "data_venda": timezone.localtime(venda.data_venda).strftime("%d/%m/%Y %H:%M"),
+        "operador": venda.usuario.nome if venda.usuario_id else "",
         "cliente_id": venda.cliente_id,
         "cliente_nome": venda.cliente.razao_social if venda.cliente else "Consumidor Final",
         "cliente_cpf_cnpj": venda.cliente.cpf_cnpj if venda.cliente else "",
@@ -972,6 +975,25 @@ def api_venda_detalhe(request, pk):
         "valor_total": float(venda.valor_total),
         "itens": itens,
         "pagamentos": pagamentos,
+        "documento_fiscal": (
+            {
+                "tipo": venda.documento_fiscal.tipo_documento.upper(),
+                "numero": venda.documento_fiscal.numero,
+                "status": venda.documento_fiscal.status,
+            }
+            if venda.documento_fiscal_id else None
+        ),
+        "cancelamento": (
+            {
+                "motivo": venda.motivo_cancelamento or "Motivo não informado.",
+                "usuario": venda.cancelado_por.nome if venda.cancelado_por_id else "Usuário não identificado",
+                "data_hora": (
+                    timezone.localtime(venda.cancelado_em).strftime("%d/%m/%Y %H:%M")
+                    if venda.cancelado_em else "Data não informada"
+                ),
+            }
+            if venda.status == "cancelada" else None
+        ),
     })
 
 

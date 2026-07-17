@@ -140,6 +140,8 @@ body.tema-claro .hv-ab-tip { background:#1f2937;color:#f9fafb; }
 .hv-ab-grn:hover  { background:#22c55e;color:#fff; }
 .hv-ab-gray { border-color:#4b5563;color:#9ca3af; }
 .hv-ab-gray:hover { border-color:#9ca3af;color:#e5e7eb; }
+.hv-ab-eye { border-color:#8b5cf6;color:#a78bfa; }
+.hv-ab-eye:hover { background:#7c3aed;border-color:#7c3aed;color:#fff; }
 
 /* ── Modal ── */
 .hv-overlay {
@@ -367,6 +369,18 @@ body.tema-claro .hv-page a, body.tema-claro .hv-page span { border-color:#d1d5db
           <!-- Ações -->
           <td class="hv-td">
             <div class="hv-acts">
+
+              {# Visualizar comprovante não fiscal completo #}
+              <button class="hv-ab hv-ab-eye"
+                      onclick="hvApp_instance.visualizarComprovante({{ venda.pk }})"
+                      title="Visualizar comprovante não fiscal"
+                      aria-label="Visualizar comprovante não fiscal da venda {{ venda.numero_venda }}">
+                <span class="hv-ab-tip">Visualizar comprovante</span>
+                <svg width="15" height="15" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.25 12s3.5-6 9.75-6 9.75 6 9.75 6-3.5 6-9.75 6S2.25 12 2.25 12z"/>
+                  <circle cx="12" cy="12" r="2.75" stroke-width="2"/>
+                </svg>
+              </button>
 
               {# 1 — Cancelar documento fiscal (se autorizado) ou Cancelar Venda (se sem fiscal) #}
               {% if venda.status == 'finalizada' %}
@@ -919,7 +933,33 @@ function hvApp() {
       }
     },
 
-    imprimirNaoFiscal(vendaId, numero, data, cliente, total) {
+    escapeHtml(valor) {
+      return String(valor ?? '').replace(/[&<>'"]/g, c => ({
+        '&':'&amp;', '<':'&lt;', '>':'&gt;', "'":'&#39;', '"':'&quot;'
+      })[c]);
+    },
+
+    dinheiro(valor) {
+      return Number(valor || 0).toLocaleString('pt-BR', { minimumFractionDigits:2, maximumFractionDigits:2 });
+    },
+
+    async visualizarComprovante(vendaId) {
+      const w = window.open('', '_blank', 'width=760,height=820,scrollbars=yes');
+      if (!w) { this.toast('Permita popups para visualizar o comprovante.', 'err'); return; }
+      w.document.write('<!doctype html><html><body style="font:14px Arial;padding:30px">Carregando comprovante...</body></html>');
+
+      try {
+        const resposta = await fetch(`/pdv/api/venda/${vendaId}/detalhe/`);
+        const venda = await resposta.json();
+        if (!resposta.ok || !venda.ok) throw new Error(venda.erro || 'Venda não encontrada.');
+        this.renderizarComprovante(w, venda);
+      } catch (erro) {
+        w.close();
+        this.toast(erro.message || 'Não foi possível abrir o comprovante.', 'err');
+      }
+    },
+
+    renderizarComprovante(w, venda) {
       const filial = '{{ filial_ativa.nome_fantasia|default:filial_ativa.razao_social|escapejs }}';
       const filialEndereco = '{{ filial_ativa.endereco|escapejs }}';
       const filialNumero = '{{ filial_ativa.numero|escapejs }}';
@@ -935,33 +975,55 @@ function hvApp() {
       const logoUrl = '';
       {% endif %}
 
-      const html = `<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8"><title>Comprovante</title>
-<style>*{margin:0;padding:0;box-sizing:border-box;}
-body{font-family:'Courier New',monospace;font-size:12px;color:#000;background:#fff;width:80mm;padding:8px;}
-h1{font-size:15px;font-weight:800;text-align:center;margin-bottom:2px;}
-.sub{font-size:11px;text-align:center;color:#000;font-weight:700;margin-bottom:8px;}
-.sep{border:none;border-top:1px dashed #000;margin:8px 0;}
-.total-row{font-size:14px;font-weight:800;display:flex;justify-content:space-between;}
-.footer{text-align:center;margin-top:10px;font-size:10px;color:#000;font-weight:700;}
-@media print{body{margin:0;}}</style></head><body>
-${logoUrl ? `<div style="text-align:center;margin-bottom:10px;"><img src="${logoUrl}" style="max-height:130px;max-width:260px;object-fit:contain;"></div>` : ''}
-<h1>${filial}</h1>
-${filialEndereco ? `<div class="sub">${filialEndereco}${filialNumero ? ', '+filialNumero : ''}${filialBairro ? ' – '+filialBairro : ''}</div>` : ''}
-${filialCidade ? `<div class="sub">${filialCidade}${filialUf ? ' – '+filialUf : ''}</div>` : ''}
-${filialTelefone ? `<div class="sub">Tel: ${filialTelefone}</div>` : ''}
-<hr class="sep">
-<div class="sub">${data} • #${numero}</div>
-<div class="sub">Cliente: <strong>${cliente}</strong></div>
-<hr class="sep">
-<div class="total-row"><span>TOTAL</span><span>R$ ${total}</span></div>
-<hr class="sep">
-<div class="footer">Obrigado pela preferência!<br>Este não é um documento fiscal.</div>
-</body></html>`;
+      const esc = valor => this.escapeHtml(valor);
+      const itens = (venda.itens || []).map(item => `
+        <tr>
+          <td><strong>${esc(item.descricao)}</strong><div class="muted">${esc(item.quantidade)} ${esc(item.unidade_medida)} x R$ ${this.dinheiro(item.valor_unitario)}</div></td>
+          <td class="right">R$ ${this.dinheiro(item.valor_total)}</td>
+        </tr>`).join('');
+      const pagamentos = (venda.pagamentos || []).map(pag => `
+        <div class="line"><span>${esc(pag.forma_descricao)}</span><strong>R$ ${this.dinheiro(Number(pag.valor) - Number(pag.troco || 0))}</strong></div>`).join('');
+      const documento = venda.documento_fiscal
+        ? `<div class="line"><span>Documento vinculado</span><strong>${esc(venda.documento_fiscal.tipo)} nº ${esc(venda.documento_fiscal.numero)} - ${esc(venda.documento_fiscal.status)}</strong></div>`
+        : '';
+      const cancelamento = venda.cancelamento ? `
+        <section class="cancelamento">
+          <div class="cancel-title">VENDA CANCELADA</div>
+          <div><strong>Motivo:</strong> ${esc(venda.cancelamento.motivo)}</div>
+          <div><strong>Cancelada por:</strong> ${esc(venda.cancelamento.usuario)}</div>
+          <div><strong>Data e hora:</strong> ${esc(venda.cancelamento.data_hora)}</div>
+        </section>` : '';
 
-      const w = window.open('','_blank','width=340,height=400,scrollbars=yes');
-      if (!w) { this.toast('Permita popups para imprimir.','err'); return; }
-      w.document.write(html); w.document.close(); w.focus();
-      setTimeout(() => w.print(), 400);
+      const html = `<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8"><title>Comprovante</title>
+<style>
+*{box-sizing:border-box}body{margin:0;background:#eef0f4;color:#171717;font:13px/1.45 Arial,sans-serif}.actions{position:sticky;top:0;padding:12px;display:flex;justify-content:center;gap:8px;background:#19191f}.actions button{padding:9px 14px;border:0;border-radius:6px;background:#f15a24;color:#fff;font-weight:700;cursor:pointer}.actions .secondary{background:#3f3f46}.receipt{width:80mm;min-height:120mm;margin:24px auto;padding:9mm 7mm;background:#fff;box-shadow:0 10px 35px #0002;font-family:'Courier New',monospace}.logo{text-align:center;margin-bottom:8px}.logo img{max-height:90px;max-width:230px;object-fit:contain}h1{font-size:16px;text-align:center;margin:0 0 3px}.sub{text-align:center;font-size:10.5px;margin:2px 0}.sep{border:0;border-top:1px dashed #333;margin:10px 0}.line{display:flex;justify-content:space-between;gap:12px;margin:4px 0}.right{text-align:right;white-space:nowrap}.muted{font-size:10.5px;color:#444;margin-top:2px}table{width:100%;border-collapse:collapse}td{padding:6px 0;border-bottom:1px dotted #aaa;vertical-align:top}.total{font-size:16px;font-weight:800}.cancelamento{margin:12px 0;padding:10px;border:2px solid #b91c1c;background:#fff1f2;line-height:1.55}.cancel-title{text-align:center;color:#b91c1c;font-weight:900;margin-bottom:6px}.footer{text-align:center;font-size:10px;font-weight:700;margin-top:12px}@media print{body{background:#fff}.actions{display:none}.receipt{margin:0;box-shadow:none;width:80mm;padding:5mm}}
+</style></head><body>
+<div class="actions"><button onclick="window.print()">Imprimir / salvar PDF</button><button class="secondary" onclick="window.close()">Fechar</button></div>
+<main class="receipt">
+${logoUrl ? `<div class="logo"><img src="${esc(logoUrl)}"></div>` : ''}
+<h1>${esc(filial)}</h1>
+${filialEndereco ? `<div class="sub">${esc(filialEndereco)}${filialNumero ? ', '+esc(filialNumero) : ''}${filialBairro ? ' - '+esc(filialBairro) : ''}</div>` : ''}
+${filialCidade ? `<div class="sub">${esc(filialCidade)}${filialUf ? ' - '+esc(filialUf) : ''}</div>` : ''}
+${filialTelefone ? `<div class="sub">Tel: ${esc(filialTelefone)}</div>` : ''}
+<hr class="sep"><div class="line"><span>Venda</span><strong>#${String(venda.numero_venda).padStart(6,'0')}</strong></div>
+<div class="line"><span>Data</span><strong>${esc(venda.data_venda)}</strong></div>
+<div class="line"><span>Operador</span><strong>${esc(venda.operador)}</strong></div>
+<div class="line"><span>Cliente</span><strong>${esc(venda.cliente_nome)}</strong></div>
+${venda.cliente_cpf_cnpj ? `<div class="line"><span>CPF/CNPJ</span><strong>${esc(venda.cliente_cpf_cnpj)}</strong></div>` : ''}
+${documento}<hr class="sep"><table><tbody>${itens}</tbody></table><hr class="sep">
+<div class="line"><span>Subtotal</span><strong>R$ ${this.dinheiro(Number(venda.valor_total) + Number(venda.desconto) - Number(venda.acrescimo))}</strong></div>
+${Number(venda.desconto) ? `<div class="line"><span>Desconto</span><strong>- R$ ${this.dinheiro(venda.desconto)}</strong></div>` : ''}
+${Number(venda.acrescimo) ? `<div class="line"><span>Acréscimo</span><strong>R$ ${this.dinheiro(venda.acrescimo)}</strong></div>` : ''}
+<div class="line total"><span>TOTAL</span><span>R$ ${this.dinheiro(venda.valor_total)}</span></div>
+<hr class="sep">${pagamentos}${cancelamento}
+<div class="footer">Este comprovante não é um documento fiscal.</div>
+</main></body></html>`;
+
+      w.document.open(); w.document.write(html); w.document.close(); w.focus();
+    },
+
+    imprimirNaoFiscal(vendaId) {
+      this.visualizarComprovante(vendaId);
     },
   };
 }
