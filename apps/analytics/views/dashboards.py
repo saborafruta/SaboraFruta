@@ -65,13 +65,12 @@ def historico_vendas(request):
     data_ini   = request.GET.get('data_ini', '')
     data_fim   = request.GET.get('data_fim', '')
     tipo_fiscal = request.GET.get('tipo_fiscal', '')  # emitidas | nfce | nfe | nao_fiscal | cancelada
+    desconsiderar_canceladas = request.GET.get('desconsiderar_canceladas', '1') != '0'
 
     if not data_ini and not data_fim and not tipo_fiscal:
         hoje = date.today()
-        inicio_semana = hoje - timedelta(days=hoje.weekday())
-        fim_semana = inicio_semana + timedelta(days=6)
-        data_ini = inicio_semana.isoformat()
-        data_fim = fim_semana.isoformat()
+        data_ini = hoje.isoformat()
+        data_fim = hoje.isoformat()
 
     qs = (
         VendaPDV.objects
@@ -100,7 +99,7 @@ def historico_vendas(request):
         qs = qs.filter(data_venda__date__lte=data_fim)
 
     contadores = {
-        '': qs.count(),
+        '': qs.exclude(status='cancelada').count() if desconsiderar_canceladas else qs.count(),
         'emitidas': qs.filter(
             status='finalizada', documento_fiscal__status='autorizada',
             documento_fiscal__tipo_documento__in=['nfe', 'nfce'],
@@ -135,6 +134,8 @@ def historico_vendas(request):
         qs = qs.filter(documento_fiscal__isnull=True, status='finalizada')
     elif tipo_fiscal == 'cancelada':
         qs = qs.filter(status='cancelada')
+    elif desconsiderar_canceladas:
+        qs = qs.exclude(status='cancelada')
 
     exibir_totalizador = tipo_fiscal != 'cancelada'
     qs_totalizador = qs.exclude(status='cancelada')
@@ -155,6 +156,7 @@ def historico_vendas(request):
         query_base['data_ini'] = data_ini
     if data_fim:
         query_base['data_fim'] = data_fim
+    query_base['desconsiderar_canceladas'] = '1' if desconsiderar_canceladas else '0'
     atalhos = []
     for valor, rotulo in [
         ('', 'Todas'),
@@ -188,5 +190,6 @@ def historico_vendas(request):
             'data_ini': data_ini,
             'data_fim': data_fim,
             'tipo_fiscal': tipo_fiscal,
+            'desconsiderar_canceladas': desconsiderar_canceladas,
         },
     })

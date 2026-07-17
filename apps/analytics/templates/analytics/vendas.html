@@ -51,6 +51,12 @@ body.tema-claro .hv-input:focus { border-color:#f15a24; }
 }
 body.tema-claro .hv-btn-clear { background:#fff;border-color:#94a3b8;color:#334155; }
 .hv-btn-clear:hover { border-color:#f15a24;color:#f15a24; }
+.hv-check-filter {
+  min-height:34px;padding:7px 10px;border:1px solid #2a2a3e;border-radius:8px;
+  display:flex;align-items:center;gap:8px;color:#a0a0b5;font-size:12px;font-weight:650;cursor:pointer;
+}
+.hv-check-filter input { width:16px;height:16px;margin:0;accent-color:#f15a24;cursor:pointer; }
+body.tema-claro .hv-check-filter { background:#fff;border-color:#94a3b8;color:#1e293b; }
 
 .hv-view-tabs {
   display:flex;gap:8px;align-items:center;overflow-x:auto;padding:2px 1px 10px;
@@ -94,6 +100,7 @@ body.tema-claro .hv-tr:hover .hv-td { background:#dfe7f0; }
 
 .hv-td { padding:10px 14px;font-size:13px;color:#c0c0d8;vertical-align:middle;background:#13131e; }
 body.tema-claro .hv-td { color:#111827;background:#f8fafc; }
+body.tema-claro .hv-table .hv-td { font-weight:500; }
 body.tema-claro .hv-tr:nth-child(even):not(.cancelada) .hv-td { background:#edf2f7; }
 .hv-tr.cancelada .hv-td { background:#100808; }
 body.tema-claro .hv-tr.cancelada { opacity:1; }
@@ -123,6 +130,8 @@ body.tema-claro .hv-sit-msg  { color:#334155; }
 body.tema-claro .hv-muted { color:#475569 !important; }
 body.tema-claro .hv-money { color:#166534 !important; }
 body.tema-claro .hv-number { color:#1e293b !important; }
+body.tema-claro .hv-empty { background:#e7edf4 !important;color:#334155 !important; }
+body.tema-claro .hv-empty svg { opacity:.75 !important; }
 
 /* ── Botões de ação numerados ── */
 .hv-acts { display:flex;gap:3px;flex-wrap:wrap;align-items:center; }
@@ -178,6 +187,8 @@ body.tema-claro .hv-modal-sub { color:#475569; }
   color:#e5e5f0;outline:none;font-family:inherit;box-sizing:border-box;
 }
 body.tema-claro .hv-modal-textarea { background:#fff;border-color:#94a3b8;color:#111827; }
+body.tema-claro .hv-modal-item-title { color:#111827 !important; }
+body.tema-claro .hv-modal-item-message { color:#475569 !important; }
 
 /* ── Paginação ── */
 .hv-page { display:flex;align-items:center;gap:6px;justify-content:center;margin-top:20px; }
@@ -256,6 +267,16 @@ body.tema-claro .hv-page a, body.tema-claro .hv-page span { background:#eef2f7;b
         <option value="cancelada"  {% if filtros.tipo_fiscal == 'cancelada'  %}selected{% endif %}>Canceladas</option>
       </select>
     </div>
+    {% if not filtros.tipo_fiscal %}
+    <div class="hv-filter-group">
+      <label class="hv-filter-label">Exibição</label>
+      <input type="hidden" name="desconsiderar_canceladas" value="0">
+      <label class="hv-check-filter">
+        <input type="checkbox" name="desconsiderar_canceladas" value="1" {% if filtros.desconsiderar_canceladas %}checked{% endif %}>
+        <span>Desconsiderar canceladas</span>
+      </label>
+    </div>
+    {% endif %}
     <div style="display:flex;gap:8px;align-items:flex-end;">
       <button type="submit" class="hv-btn-filter">Filtrar</button>
       <a href="{% url 'analytics:vendas' %}" class="hv-btn-clear">Limpar</a>
@@ -515,7 +536,7 @@ body.tema-claro .hv-page a, body.tema-claro .hv-page span { background:#eef2f7;b
         {% endwith %}
         {% empty %}
         <tr>
-          <td colspan="8" style="padding:48px;text-align:center;color:#3a3a52;font-size:14px;background:#0d0d16;">
+          <td colspan="8" class="hv-empty" style="padding:48px;text-align:center;color:#3a3a52;font-size:14px;background:#0d0d16;">
             <svg width="40" height="40" fill="none" stroke="currentColor" viewBox="0 0 24 24" style="margin:0 auto 12px;display:block;opacity:.3;"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/></svg>
             Nenhuma venda encontrada com os filtros aplicados.
           </td>
@@ -568,7 +589,7 @@ body.tema-claro .hv-page a, body.tema-claro .hv-page span { background:#eef2f7;b
           <textarea x-model="modalFiscal.informacoes" maxlength="5000"
                     placeholder="Ex.: número do pedido, observação de entrega ou informação solicitada pelo cliente"
                     class="hv-modal-textarea" style="min-height:110px;"></textarea>
-          <div style="margin-top:4px;text-align:right;font-size:11px;color:#6b6b88;"
+          <div class="hv-muted" style="margin-top:4px;text-align:right;font-size:11px;color:#6b6b88;"
                x-text="modalFiscal.informacoes.length + '/5000'"></div>
         </div>
       </template>
@@ -579,14 +600,14 @@ body.tema-claro .hv-page a, body.tema-claro .hv-page span { background:#eef2f7;b
           <template x-for="item in modalFiscal.pendencias" :key="item.code">
             <div style="padding:12px 0;border-bottom:1px solid #2a2a3e;display:flex;align-items:center;gap:12px;">
               <div style="flex:1;min-width:0;">
-                <div x-text="item.title" style="font-size:13px;font-weight:700;color:#e5e5f0;"></div>
-                <div x-text="item.message" style="font-size:12px;color:#8d8da3;line-height:1.45;margin-top:3px;"></div>
+                <div class="hv-modal-item-title" x-text="item.title" style="font-size:13px;font-weight:700;color:#e5e5f0;"></div>
+                <div class="hv-modal-item-message" x-text="item.message" style="font-size:12px;color:#8d8da3;line-height:1.45;margin-top:3px;"></div>
               </div>
               <a :href="item.action_url" target="_blank" rel="noopener" x-text="item.action_label"
                  style="flex:none;padding:8px 10px;border:1px solid #f15a24;border-radius:7px;color:#ff8a55;text-decoration:none;font-size:11px;font-weight:700;white-space:nowrap;"></a>
             </div>
           </template>
-          <p style="margin:12px 0 0;color:#8d8da3;font-size:12px;">Depois de corrigir na nova guia, volte aqui e verifique novamente.</p>
+          <p class="hv-muted" style="margin:12px 0 0;color:#8d8da3;font-size:12px;">Depois de corrigir na nova guia, volte aqui e verifique novamente.</p>
         </div>
       </template>
 
@@ -638,7 +659,7 @@ body.tema-claro .hv-page a, body.tema-claro .hv-page span { background:#eef2f7;b
         <textarea x-model="modalInut.justificativa" placeholder="Motivo da inutilização da faixa..."
                   class="hv-modal-textarea" style="min-height:72px;"
                   @focus="$el.style.borderColor='#fbbf24'" @blur="$el.style.borderColor='#2a2a3e'"></textarea>
-        <div style="font-size:11px;color:#6b6b88;margin-top:3px;" x-text="modalInut.justificativa.length + ' / 15 mínimo'"></div>
+        <div class="hv-muted" style="font-size:11px;color:#6b6b88;margin-top:3px;" x-text="modalInut.justificativa.length + ' / 15 mínimo'"></div>
       </div>
 
       <div style="display:flex;gap:8px;justify-content:flex-end;">
@@ -662,7 +683,7 @@ body.tema-claro .hv-page a, body.tema-claro .hv-page span { background:#eef2f7;b
       <textarea x-model="modal.justificativa" placeholder="Motivo do cancelamento..."
                 class="hv-modal-textarea" maxlength="255"
                 @focus="$el.style.borderColor='#f15a24'" @blur="$el.style.borderColor='#2a2a3e'"></textarea>
-      <div style="margin-top:5px;text-align:right;font-size:11px;color:#8d8da3;">
+      <div class="hv-muted" style="margin-top:5px;text-align:right;font-size:11px;color:#8d8da3;">
         <span x-text="modal.justificativa.trim().length"></span>/255 caracteres
       </div>
       <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:14px;">
@@ -686,7 +707,7 @@ body.tema-claro .hv-page a, body.tema-claro .hv-page span { background:#eef2f7;b
       <textarea x-model="modalCancelV.justificativa" placeholder="Motivo do cancelamento..."
                 class="hv-modal-textarea" maxlength="255"
                 @focus="$el.style.borderColor='#f15a24'" @blur="$el.style.borderColor='#2a2a3e'"></textarea>
-      <div style="margin-top:5px;text-align:right;font-size:11px;color:#8d8da3;">
+      <div class="hv-muted" style="margin-top:5px;text-align:right;font-size:11px;color:#8d8da3;">
         <span x-text="modalCancelV.justificativa.trim().length"></span>/255 caracteres
       </div>
       <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:14px;">
@@ -1019,7 +1040,7 @@ function hvApp() {
 
       const html = `<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8"><title>Comprovante</title>
 <style>
-*{box-sizing:border-box}body{margin:0;background:#eef0f4;color:#171717;font:13px/1.45 Arial,sans-serif}.actions{position:sticky;top:0;padding:12px;display:flex;justify-content:center;gap:8px;background:#19191f}.actions button{padding:9px 14px;border:0;border-radius:6px;background:#f15a24;color:#fff;font-weight:700;cursor:pointer}.actions .secondary{background:#3f3f46}.receipt{width:80mm;min-height:120mm;margin:24px auto;padding:9mm 7mm;background:#fff;box-shadow:0 10px 35px #0002;font-family:'Courier New',monospace}.logo{text-align:center;margin-bottom:8px}.logo img{max-height:90px;max-width:230px;object-fit:contain}h1{font-size:16px;text-align:center;margin:0 0 3px}.sub{text-align:center;font-size:10.5px;margin:2px 0}.sep{border:0;border-top:1px dashed #333;margin:10px 0}.line{display:flex;justify-content:space-between;gap:12px;margin:4px 0}.right{text-align:right;white-space:nowrap}.muted{font-size:10.5px;color:#444;margin-top:2px}table{width:100%;border-collapse:collapse}td{padding:6px 0;border-bottom:1px dotted #aaa;vertical-align:top}.total{font-size:16px;font-weight:800}.cancelamento{margin:12px 0;padding:10px;border:2px solid #b91c1c;background:#fff1f2;line-height:1.55}.cancel-title{text-align:center;color:#b91c1c;font-weight:900;margin-bottom:6px}.footer{text-align:center;font-size:10px;font-weight:700;margin-top:12px}@page{size:A4 portrait;margin:12mm}@media print{html,body{width:100%;background:#fff}.actions{display:none}.receipt{width:76mm;min-height:0;margin:0 auto;padding:3mm 4mm;box-shadow:none;font-size:9px;line-height:1.3}.logo{margin-bottom:4px}.logo img{max-height:42px;max-width:170px}h1{font-size:12px}.sub,.muted{font-size:8px}.sub{margin:1px 0}.sep{margin:5px 0}.line{margin:2px 0}.receipt td{padding:3px 0}.total{font-size:12px}.cancelamento{margin:6px 0;padding:6px;line-height:1.35;break-inside:avoid}.cancel-title{margin-bottom:3px}.footer{font-size:8px;margin-top:6px}}
+*{box-sizing:border-box}body{margin:0;background:#eef0f4;color:#171717;font:13px/1.45 Arial,sans-serif}.actions{position:sticky;top:0;padding:12px;display:flex;justify-content:center;gap:8px;background:#19191f}.actions button{padding:9px 14px;border:0;border-radius:6px;background:#f15a24;color:#fff;font-weight:700;cursor:pointer}.actions .secondary{background:#3f3f46}.receipt{width:80mm;min-height:120mm;margin:24px auto;padding:9mm 7mm;background:#fff;box-shadow:0 10px 35px #0002;font-family:'Courier New',monospace}.logo{text-align:center;margin-bottom:8px}.logo img{max-height:90px;max-width:230px;object-fit:contain}h1{font-size:16px;text-align:center;margin:0 0 3px}.sub{text-align:center;font-size:10.5px;margin:2px 0}.sep{border:0;border-top:1px dashed #333;margin:10px 0}.line{display:flex;justify-content:space-between;gap:12px;margin:4px 0}.right{text-align:right;white-space:nowrap}.muted{font-size:10.5px;color:#444;margin-top:2px}table{width:100%;border-collapse:collapse}td{padding:6px 0;border-bottom:1px dotted #aaa;vertical-align:top}.total{font-size:16px;font-weight:800}.cancelamento{margin:12px 0;padding:10px;border:2px solid #b91c1c;background:#fff1f2;line-height:1.55}.cancel-title{text-align:center;color:#b91c1c;font-weight:900;margin-bottom:6px}.footer{text-align:center;font-size:10px;font-weight:700;margin-top:12px}@page{size:A4 portrait;margin:12mm}@media print{html,body{width:100%;background:#fff}.actions{display:none}.receipt{width:86mm;min-height:0;margin:0 auto;padding:4mm 5mm;box-shadow:none;font-size:10.5px;line-height:1.35}.logo{margin-bottom:5px}.logo img{max-height:56px;max-width:190px}h1{font-size:14px}.sub,.muted{font-size:9px}.sub{margin:1.5px 0}.sep{margin:6px 0}.line{margin:3px 0}.receipt td{padding:4px 0}.total{font-size:14px}.cancelamento{margin:7px 0;padding:7px;line-height:1.4;break-inside:avoid}.cancel-title{margin-bottom:4px}.footer{font-size:9px;margin-top:7px}}
 </style></head><body>
 <div class="actions"><button onclick="window.print()">Imprimir / salvar PDF</button><button class="secondary" onclick="window.close()">Fechar</button></div>
 <main class="receipt">
