@@ -149,8 +149,8 @@
               </button>
             </template>
 
-            <div x-show="itemProdutoAberto && (itemProdutoResultados.length > 0 || itemProdutoCarregando)"
-                 @click.outside="itemProdutoAberto = false"
+            <div x-show="itemProdutoAberto && (itemProdutoResultados.length > 0 || itemProdutoCarregando || itemProdutoBuscou)"
+                 @click.outside="itemProdutoAberto = false; itemProdutoBuscou = false"
                  class="absolute z-50 w-full mt-1 rounded-lg shadow-xl border overflow-hidden"
                  :style="temaClaro ? 'background:#fff; border-color:#e5e7eb;' : 'background:#1e293b; border-color:#374151;'"
                  x-transition:enter="transition ease-out duration-100"
@@ -161,6 +161,12 @@
                    :style="temaClaro ? 'color:#6b7280;' : 'color:#9ca3af;'">
                 <span class="inline-block w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin mr-2 align-middle"></span>
                 Buscando...
+              </div>
+
+              <div x-show="!itemProdutoCarregando && itemProdutoBuscou && itemProdutoResultados.length === 0"
+                   class="px-4 py-3 text-sm"
+                   :style="temaClaro ? 'color:#9ca3af;' : 'color:#6b7280;'">
+                Nenhum produto encontrado.
               </div>
 
               <template x-for="(item, idx) in itemProdutoResultados" :key="item.id">
@@ -420,6 +426,7 @@ function transferenciaLojaApp(filiais) {
     itemProdutoAberto: false,
     itemProdutoCarregando: false,
     itemProdutoFocus: 0,
+    itemProdutoBuscou: false,
     itemLoteId: '',
     itemLotes: [],
     itemLotesCarregando: false,
@@ -441,11 +448,13 @@ function transferenciaLojaApp(filiais) {
       if (q.length < 2 && !q.match(/^\d+$/)) {
         this.itemProdutoResultados = [];
         this.itemProdutoAberto = false;
+        this.itemProdutoBuscou = false;
         return;
       }
       this.itemProdutoCarregando = true;
       this.itemProdutoAberto = true;
       this.itemProdutoFocus = 0;
+      this.itemProdutoBuscou = false;
       try {
         const res = await fetch(`{% url 'estoque:produto-estoque-search-json' %}?q=${encodeURIComponent(q)}`);
         const data = await res.json();
@@ -454,6 +463,7 @@ function transferenciaLojaApp(filiais) {
         this.itemProdutoResultados = [];
       } finally {
         this.itemProdutoCarregando = false;
+        this.itemProdutoBuscou = true;
       }
     },
 
@@ -476,6 +486,8 @@ function transferenciaLojaApp(filiais) {
       this.itemProdutoQuery = '';
       this.itemProdutoControlaLote = false;
       this.itemProdutoResultados = [];
+      this.itemProdutoAberto = false;
+      this.itemProdutoBuscou = false;
       this.itemLoteId = '';
       this.itemLotes = [];
     },
