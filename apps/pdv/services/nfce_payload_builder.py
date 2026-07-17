@@ -11,12 +11,12 @@ Campos-chave da v2 NFC-e:
   - destinatário    → campos individuais no topo
 
 Regra GTIN (SEFAZ NT 2011/004):
-  - Produto COM código de barras  → codigo_ean / codigo_ean_tributavel = EAN
-  - Produto SEM código de barras  → codigo_ean / codigo_ean_tributavel = "SEM GTIN"
+  - Produto COM código de barras  → codigo_barras_comercial / tributavel = EAN
+  - Produto SEM código de barras  → campos de barras = "SEM GTIN"
 """
 from __future__ import annotations
 
-from decimal import Decimal
+from decimal import Decimal, ROUND_HALF_UP
 from typing import Any, Dict, Optional
 
 from zoneinfo import ZoneInfo
@@ -27,6 +27,23 @@ from django.utils import timezone
 from apps.core.services.exceptions import DadosInvalidosError
 
 _BRT = ZoneInfo("America/Sao_Paulo")
+_MONEY = Decimal("0.01")
+
+
+def _decimal(valor: Any) -> Decimal:
+    return Decimal(str(valor or 0))
+
+
+def _dinheiro(valor: Any) -> Decimal:
+    return _decimal(valor).quantize(_MONEY, rounding=ROUND_HALF_UP)
+
+
+def _percentual(base: Decimal, aliquota: Any) -> Decimal:
+    return _dinheiro(base * _decimal(aliquota) / Decimal("100"))
+
+
+def _float_dinheiro(valor: Any) -> float:
+    return float(_dinheiro(valor))
 
 
 def _data_emissao_brt(dt=None) -> str:
@@ -82,14 +99,6 @@ def _somente_digitos(valor: Any) -> str:
     return "".join(ch for ch in str(valor or "") if ch.isdigit())
 
 
-def _cfop_item(produto, filial) -> str:
-    """Resolve CFOP de venda. Prioriza dado do produto; fallback para 5102/5405."""
-    cfop = produto.cfop_venda_interna or ""
-    if not cfop:
-        cfop = "5102"
-    return cfop
-
-
 def _regime_tributario_cod(filial) -> int:
     """
     Retorna o código do regime tributário da filial.
@@ -104,83 +113,247 @@ def _regime_tributario_cod(filial) -> int:
     return 1  # default: Simples Nacional
 
 
-def _montar_item(numero: int, item_venda, filial) -> dict:
-    """
-    Monta o dicionário de um item no payload FocusNFe (formato v2, campos flat).
+def _cfop_item_destino(produto, local_destino: str) -> str:
+    if local_destino == "3":
+        return (produto.cfop_venda_exportacao or "").strip() or "7102"
+    if local_destino == "2":
+        return (produto.cfop_venda_interestadual or "").strip() or "6102"
+    return (produto.cfop_venda_interna or "").strip() or "5102"
 
-    ICMS/PIS/COFINS: campos flat aceitos pela Focus NFe.
-    """
+
+def _base_reduzida(base: Decimal, reducao: Any) -> Decimal:
+    percentual = min(max(_decimal(reducao), Decimal("0")), Decimal("100"))
+    return _dinheiro(base * (Decimal("1") - percentual / Decimal("100")))
+
+
+def _aplicar_icms(item: dict, produto, regime: int, base: Decimal) -> None:
+    origem = str(int(getattr(produto, "origem_produto", 0) or 0))
+    situacao = (getattr(produto, "cst_csosn", "") or ("400" if regime == 1 else "00")).strip()
+    aliquota = _decimal(getattr(produto, "aliquota_icms", 0))
+    reducao = _decimal(getattr(produto, "reducao_bc_icms", 0))
+    item["icms_situacao_tributaria"] = situacao
+    item["icms_origem"] = origem
+
+    beneficio = (getattr(produto, "codigo_beneficio_fiscal_icms", "") or "").strip()
+    if beneficio:
+        item["codigo_beneficio_fiscal"] = beneficio
+
+    if regime == 1:
+        if situacao in {"101", "201"} and aliquota > 0:
+            item["icms_aliquota_credito_simples"] = float(aliquota)
+            item["icms_valor_credito_simples"] = _float_dinheiro(_percentual(base, aliquota))
+        elif situacao == "900" and aliquota > 0:
+            base_icms = _base_reduzida(base, reducao)
+            item["icms_modalidade_base_calculo"] = getattr(produto, "modalidade_bc_icms", "") or "3"
+            if reducao > 0:
+                item["icms_reducao_base_calculo"] = float(reducao)
+            item["icms_base_calculo"] = _float_dinheiro(base_icms)
+            item["icms_aliquota"] = float(aliquota)
+            item["icms_valor"] = _float_dinheiro(_percentual(base_icms, aliquota))
+    elif situacao in {"00", "10", "20", "51", "70", "90"}:
+        base_icms = _base_reduzida(base, reducao)
+        item["icms_modalidade_base_calculo"] = getattr(produto, "modalidade_bc_icms", "") or "3"
+        if reducao > 0:
+            item["icms_reducao_base_calculo"] = float(reducao)
+        item["icms_base_calculo"] = _float_dinheiro(base_icms)
+        item["icms_aliquota"] = float(aliquota)
+        item["icms_valor"] = _float_dinheiro(_percentual(base_icms, aliquota))
+
+    aliquota_fcp = _decimal(getattr(produto, "aliquota_fcp", 0))
+    if aliquota_fcp > 0 and situacao not in {"30", "40", "41", "50", "102", "103", "300", "400"}:
+        base_fcp = _base_reduzida(base, reducao)
+        item["fcp_base_calculo"] = _float_dinheiro(base_fcp)
+        item["fcp_percentual"] = float(aliquota_fcp)
+        item["fcp_valor"] = _float_dinheiro(_percentual(base_fcp, aliquota_fcp))
+
+    aliquota_st = _decimal(getattr(produto, "aliquota_icms_st", 0))
+    if situacao in {"10", "30", "70", "90", "201", "202", "203", "900"} and aliquota_st > 0:
+        mva = _decimal(getattr(produto, "mva_icms_st", 0))
+        base_st = _dinheiro(base * (Decimal("1") + mva / Decimal("100")))
+        reducao_st = _decimal(getattr(produto, "reducao_bc_icms_st", 0))
+        base_st = _base_reduzida(base_st, reducao_st)
+        item["icms_modalidade_base_calculo_st"] = getattr(produto, "modalidade_bc_icms_st", "") or "4"
+        if mva > 0:
+            item["icms_margem_valor_adicionado_st"] = float(mva)
+        if reducao_st > 0:
+            item["icms_reducao_base_calculo_st"] = float(reducao_st)
+        item["icms_base_calculo_st"] = _float_dinheiro(base_st)
+        item["icms_aliquota_st"] = float(aliquota_st)
+        icms_proprio = _decimal(item.get("icms_valor", 0)) if regime != 1 else Decimal("0")
+        item["icms_valor_st"] = _float_dinheiro(
+            max(_percentual(base_st, aliquota_st) - icms_proprio, Decimal("0"))
+        )
+        aliquota_fcp_st = _decimal(getattr(produto, "aliquota_fcp_st", 0))
+        if aliquota_fcp_st > 0:
+            item["fcp_base_calculo_st"] = _float_dinheiro(base_st)
+            item["fcp_percentual_st"] = float(aliquota_fcp_st)
+            item["fcp_valor_st"] = _float_dinheiro(_percentual(base_st, aliquota_fcp_st))
+
+
+def _aplicar_pis_cofins(item: dict, produto, base: Decimal) -> None:
+    nao_tributados = {"04", "05", "06", "07", "08", "09"}
+    for prefixo, cst_nome, aliquota_nome in (
+        ("pis", "cst_pis", "aliquota_pis"),
+        ("cofins", "cst_cofins", "aliquota_cofins"),
+    ):
+        cst = (getattr(produto, cst_nome, "") or "07").strip() or "07"
+        aliquota = _decimal(getattr(produto, aliquota_nome, 0))
+        item[f"{prefixo}_situacao_tributaria"] = cst
+        if cst in nao_tributados:
+            continue
+        item[f"{prefixo}_base_calculo"] = _float_dinheiro(base)
+        item[f"{prefixo}_aliquota_porcentual"] = float(aliquota)
+        item[f"{prefixo}_valor"] = _float_dinheiro(_percentual(base, aliquota))
+
+
+def _aplicar_ipi(item: dict, produto, base: Decimal) -> None:
+    cst = (getattr(produto, "cst_ipi", "") or "").strip()
+    if not cst:
+        return
+    aliquota = _decimal(getattr(produto, "aliquota_ipi", 0))
+    item["ipi_situacao_tributaria"] = cst
+    item["ipi_codigo_enquadramento_legal"] = getattr(produto, "codigo_enquadramento_ipi", "") or "999"
+    if cst in {"00", "49", "50", "99"}:
+        item["ipi_base_calculo"] = _float_dinheiro(base)
+        item["ipi_aliquota"] = float(aliquota)
+        item["ipi_valor"] = _float_dinheiro(_percentual(base, aliquota))
+
+
+def _aplicar_reforma_tributaria(item: dict, produto, base: Decimal) -> None:
+    cst_cbs = (getattr(produto, "cst_cbs", "") or "").strip()
+    cst_ibs = (getattr(produto, "cst_ibs", "") or "").strip()
+    classe_cbs = (getattr(produto, "classificacao_tributaria_cbs", "") or "").strip()
+    classe_ibs = (getattr(produto, "classificacao_tributaria_ibs", "") or "").strip()
+    if not any((cst_cbs, cst_ibs, classe_cbs, classe_ibs)):
+        return
+    if not all((cst_cbs, cst_ibs, classe_cbs, classe_ibs)):
+        raise DadosInvalidosError("Informe CST e classificacao tributaria de IBS e CBS no produto.")
+    if cst_cbs != cst_ibs or classe_cbs != classe_ibs:
+        raise DadosInvalidosError("A Focus exige um unico CST e uma unica classificacao para o grupo IBS/CBS.")
+
+    item["ibs_cbs_situacao_tributaria"] = cst_ibs
+    item["ibs_cbs_classificacao_tributaria"] = classe_ibs
+    item["ibs_cbs_base_calculo"] = _float_dinheiro(base)
+    reducao_ibs = _decimal(getattr(produto, "reducao_ibs", 0))
+    aliq_uf = _decimal(getattr(produto, "aliquota_ibs_uf", 0))
+    aliq_mun = _decimal(getattr(produto, "aliquota_ibs_municipal", 0))
+    efetiva_uf = aliq_uf * (Decimal("1") - reducao_ibs / Decimal("100"))
+    efetiva_mun = aliq_mun * (Decimal("1") - reducao_ibs / Decimal("100"))
+    item["ibs_uf_aliquota"] = float(aliq_uf)
+    item["ibs_mun_aliquota"] = float(aliq_mun)
+    if reducao_ibs > 0:
+        item["ibs_uf_percentual_reducao_aliquota"] = float(reducao_ibs)
+        item["ibs_uf_aliquota_efetiva"] = float(efetiva_uf)
+        item["ibs_mun_percentual_reducao_aliquota"] = float(reducao_ibs)
+        item["ibs_mun_aliquota_efetiva"] = float(efetiva_mun)
+    valor_ibs_uf = _percentual(base, efetiva_uf)
+    valor_ibs_mun = _percentual(base, efetiva_mun)
+    item["ibs_uf_valor"] = _float_dinheiro(valor_ibs_uf)
+    item["ibs_mun_valor"] = _float_dinheiro(valor_ibs_mun)
+    item["ibs_valor_total"] = _float_dinheiro(valor_ibs_uf + valor_ibs_mun)
+
+    reducao_cbs = _decimal(getattr(produto, "reducao_cbs", 0))
+    aliq_cbs = _decimal(getattr(produto, "aliquota_cbs", 0))
+    efetiva_cbs = aliq_cbs * (Decimal("1") - reducao_cbs / Decimal("100"))
+    item["cbs_aliquota"] = float(aliq_cbs)
+    if reducao_cbs > 0:
+        item["cbs_percentual_reducao_aliquota"] = float(reducao_cbs)
+        item["cbs_aliquota_efetiva"] = float(efetiva_cbs)
+    item["cbs_valor"] = _float_dinheiro(_percentual(base, efetiva_cbs))
+
+    cst_is = (getattr(produto, "cst_is", "") or "").strip()
+    classe_is = (getattr(produto, "classificacao_tributaria_is", "") or "").strip()
+    if cst_is or classe_is:
+        if not cst_is or not classe_is:
+            raise DadosInvalidosError("Informe CST e classificacao tributaria do Imposto Seletivo.")
+        aliq_is = _decimal(getattr(produto, "aliquota_is", 0))
+        item["is_situacao_tributaria"] = cst_is
+        item["is_classificacao_tributaria"] = classe_is
+        item["is_base_calculo"] = _float_dinheiro(base)
+        item["is_aliquota"] = float(aliq_is)
+        item["is_valor"] = _float_dinheiro(_percentual(base, aliq_is))
+
+
+def _montar_item_fiscal(
+    numero: int,
+    item_venda,
+    filial,
+    local_destino: str,
+    desconto_rateado: Decimal,
+    acrescimo_rateado: Decimal,
+) -> dict:
     produto = item_venda.produto
-    quantidade = float(item_venda.quantidade)
-    valor_unitario = float(item_venda.valor_unitario)
-    valor_bruto = float(item_venda.quantidade * item_venda.valor_unitario)
-    valor_total = float(item_venda.valor_total)
+    quantidade = _decimal(item_venda.quantidade)
+    valor_unitario = _decimal(item_venda.valor_unitario)
+    valor_bruto = _dinheiro(quantidade * valor_unitario)
+    desconto = _dinheiro(_decimal(item_venda.desconto_valor) + desconto_rateado)
+    acrescimo = _dinheiro(_decimal(item_venda.acrescimo_valor) + acrescimo_rateado)
+    base = _dinheiro(valor_bruto - desconto + acrescimo)
     unidade = item_venda.unidade_medida or (
         produto.unidade_medida.sigla if produto.unidade_medida_id else "UN"
     )
-    descricao = (produto.descricao_pdv or produto.descricao or "")[:120]
-    ncm = (produto.ncm or "").replace(".", "").strip()
-    cfop = _cfop_item(produto, filial)
     ean = _codigo_ean(produto)
-
     item: Dict[str, Any] = {
         "numero_item": numero,
         "codigo_produto": produto.codigo or str(produto.pk),
-        "descricao": descricao,
-        "codigo_ncm": ncm,
-        "cfop": cfop,
+        "descricao": (produto.descricao_pdv or produto.descricao or "")[:120],
+        "codigo_ncm": (produto.ncm or "").replace(".", "").strip(),
+        "cfop": _cfop_item_destino(produto, local_destino),
         "unidade_comercial": unidade,
-        "quantidade_comercial": quantidade,
-        "valor_unitario_comercial": valor_unitario,
-        "valor_bruto": valor_bruto,
-        "valor_total": valor_total,
-        # ─── GTIN (cEAN / cEANTrib) ─────────────────────────────────────────
-        "codigo_ean": ean,
-        "codigo_ean_tributavel": ean,
-        # ────────────────────────────────────────────────────────────────────
+        "quantidade_comercial": float(quantidade),
+        "valor_unitario_comercial": float(valor_unitario),
+        "valor_bruto": _float_dinheiro(valor_bruto),
+        "valor_total": _float_dinheiro(base),
+        "codigo_barras_comercial": ean,
+        "codigo_barras_tributavel": ean,
         "unidade_tributavel": unidade,
-        "quantidade_tributavel": quantidade,
-        "valor_unitario_tributavel": valor_unitario,
+        "quantidade_tributavel": float(quantidade),
+        "valor_unitario_tributavel": float(valor_unitario),
         "inclui_no_total": "1",
     }
-
-    origem = str(int(getattr(produto, "origem_produto", 0) or 0))
-
-    regime = _regime_tributario_cod(filial)
-    if regime == 1:
-        # Simples Nacional — a Focus usa icms_situacao_tributaria para CST/CSOSN.
-        csosn = (getattr(produto, "cst_csosn", "") or "").strip() or "400"
-        item["icms_situacao_tributaria"] = csosn
-        item["icms_origem"] = origem
-    else:
-        # Regime Normal — campos flat
-        cst = (getattr(produto, "cst_csosn", "") or "00").strip()
-        item["icms_situacao_tributaria"] = cst
-        item["icms_origem"] = origem
-        item["icms_modalidade_base_calculo"] = "3"
-        item["icms_base_calculo"] = valor_total
-        item["icms_aliquota"] = float(getattr(produto, "aliquota_icms", 0) or 0)
-        item["icms_valor"] = 0.0
-
-    # PIS / COFINS (flat)
-    cst_pis = (getattr(produto, "cst_pis", "") or "07").strip() or "07"
-    item["pis_situacao_tributaria"] = cst_pis
-    item["pis_base_calculo"] = 0.0
-    item["pis_aliquota_percentual"] = 0.0
-    item["pis_valor"] = 0.0
-
-    cst_cofins = (getattr(produto, "cst_cofins", "") or "07").strip() or "07"
-    item["cofins_situacao_tributaria"] = cst_cofins
-    item["cofins_base_calculo"] = 0.0
-    item["cofins_aliquota_percentual"] = 0.0
-    item["cofins_valor"] = 0.0
-
-    # CEST — campo opcional
+    if desconto > 0:
+        item["valor_desconto"] = _float_dinheiro(desconto)
+    if acrescimo > 0:
+        item["valor_outras_despesas"] = _float_dinheiro(acrescimo)
     cest = (getattr(produto, "cest", "") or "").strip()
     if cest:
-        item["codigo_cest"] = cest
-
+        item["cest"] = cest
+    ex_tipi = (getattr(produto, "ex_tipi", "") or "").strip()
+    if ex_tipi:
+        item["codigo_ex_tipi"] = ex_tipi
+    _aplicar_icms(item, produto, _regime_tributario_cod(filial), base)
+    _aplicar_pis_cofins(item, produto, base)
+    _aplicar_ipi(item, produto, base)
+    _aplicar_reforma_tributaria(item, produto, base)
     return item
+
+
+def _ratear(valor: Any, itens: list) -> list[Decimal]:
+    total = _dinheiro(valor)
+    if total == 0 or not itens:
+        return [Decimal("0") for _ in itens]
+    bases = [_dinheiro(_decimal(i.quantidade) * _decimal(i.valor_unitario)) for i in itens]
+    soma_bases = sum(bases, Decimal("0"))
+    if soma_bases <= 0:
+        raise DadosInvalidosError("Nao foi possivel ratear os totais fiscais entre os itens.")
+    resultado = []
+    acumulado = Decimal("0")
+    for indice, base in enumerate(bases):
+        parcela = total - acumulado if indice == len(bases) - 1 else _dinheiro(total * base / soma_bases)
+        resultado.append(parcela)
+        acumulado += parcela
+    return resultado
+
+
+def _montar_itens(venda, itens: list, local_destino: str) -> list[dict]:
+    descontos_proprios = sum((_decimal(i.desconto_valor) for i in itens), Decimal("0"))
+    acrescimos_proprios = sum((_decimal(i.acrescimo_valor) for i in itens), Decimal("0"))
+    descontos = _ratear(max(_decimal(venda.valor_desconto) - descontos_proprios, Decimal("0")), itens)
+    acrescimos = _ratear(max(_decimal(venda.valor_acrescimo) - acrescimos_proprios, Decimal("0")), itens)
+    return [
+        _montar_item_fiscal(i + 1, item, venda.filial, local_destino, descontos[i], acrescimos[i])
+        for i, item in enumerate(itens)
+    ]
 
 
 def _montar_formas_pagamento(pagamentos_qs) -> list:
@@ -244,6 +417,53 @@ def _endereco_preferencial_cliente(cliente) -> dict:
             "codigo_pais": extra.codigo_pais_bacen or endereco["codigo_pais"],
         })
     return endereco
+
+
+def _local_destino(filial, cliente) -> str:
+    if not cliente:
+        return "1"
+    endereco = _endereco_preferencial_cliente(cliente)
+    codigo_pais = _somente_digitos(endereco.get("codigo_pais")) or "1058"
+    pais = (endereco.get("pais") or "Brasil").strip().lower()
+    if codigo_pais != "1058" or pais not in {"brasil", "brazil"}:
+        return "3"
+    uf_destino = (endereco.get("uf") or "").strip().upper()
+    uf_emitente = (getattr(filial, "uf", "") or "").strip().upper()
+    return "2" if uf_destino and uf_emitente and uf_destino != uf_emitente else "1"
+
+
+def _aplicar_totais_fiscais(payload: dict, venda, items: list[dict]) -> None:
+    payload["valor_produtos"] = _float_dinheiro(
+        sum((_decimal(item["valor_bruto"]) for item in items), Decimal("0"))
+    )
+    payload["valor_desconto"] = _float_dinheiro(
+        sum((_decimal(item.get("valor_desconto", 0)) for item in items), Decimal("0"))
+    )
+    payload["valor_outras_despesas"] = _float_dinheiro(
+        sum((_decimal(item.get("valor_outras_despesas", 0)) for item in items), Decimal("0"))
+    )
+    valor_st = sum((_decimal(item.get("icms_valor_st", 0)) for item in items), Decimal("0"))
+    valor_ipi = sum((_decimal(item.get("ipi_valor", 0)) for item in items), Decimal("0"))
+    valor_total = _dinheiro(
+        _decimal(payload["valor_produtos"])
+        - _decimal(payload["valor_desconto"])
+        + _decimal(payload["valor_outras_despesas"])
+        + valor_st
+        + valor_ipi
+    )
+    if valor_total != _dinheiro(venda.valor_total):
+        raise DadosInvalidosError(
+            "O total fiscal com IPI/ICMS-ST difere do total cobrado na venda. "
+            "Revise a formacao do preco antes de emitir."
+        )
+    payload["valor_total"] = _float_dinheiro(valor_total)
+
+    if any("ibs_cbs_situacao_tributaria" in item for item in items):
+        for item in items:
+            item["valor_total_item"] = _float_dinheiro(item["valor_total"])
+        payload["ibs_cbs_is_valor_total"] = _float_dinheiro(
+            sum((_decimal(item["valor_total_item"]) for item in items), Decimal("0"))
+        )
 
 
 def _aplicar_destinatario(
@@ -363,10 +583,9 @@ class NfcePayloadBuilder:
 
         data_emissao = _data_emissao_brt(venda.data_venda)
 
-        items = [
-            _montar_item(idx + 1, item, filial)
-            for idx, item in enumerate(itens_qs)
-        ]
+        # NFC-e do PDV representa venda presencial no estabelecimento.
+        local_destino = "1"
+        items = _montar_itens(venda, itens_qs, local_destino)
 
         cnpj = (filial.cnpj or "").replace(".", "").replace("/", "").replace("-", "")
 
@@ -385,17 +604,15 @@ class NfcePayloadBuilder:
             # pela tabela IBPT vigente do NCM.
             "consumidor_final": 1,
             # ── Campos obrigatórios NFC-e v2 ────────────────────────────────
-            "local_destino": "1",         # 1=operação interna (sempre para PDV)
+            "local_destino": local_destino,
             "presenca_comprador": "1",    # 1=presencial
             "modalidade_frete": "9",      # 9=sem frete
             # ── Itens e pagamentos ──────────────────────────────────────────
             "items": items,
             "formas_pagamento": _montar_formas_pagamento(pagamentos_qs),
-            # ── Totais ──────────────────────────────────────────────────────
-            "valor_produtos": float(venda.valor_subtotal or 0),
-            "valor_desconto": float(venda.valor_desconto or 0),
-            "valor_total": float(venda.valor_total),
         }
+
+        _aplicar_totais_fiscais(payload, venda, items)
 
         # Destinatario: campos no topo (formato v2)
         _aplicar_destinatario(payload, cliente, exigir_endereco=False, incluir_contato=False)
@@ -426,10 +643,8 @@ class NfePayloadBuilder:
 
         data_emissao = _data_emissao_brt(venda.data_venda)
 
-        items = [
-            _montar_item(idx + 1, item, filial)
-            for idx, item in enumerate(itens_qs)
-        ]
+        local_destino = _local_destino(filial, cliente)
+        items = _montar_itens(venda, itens_qs, local_destino)
 
         cnpj = (filial.cnpj or "").replace(".", "").replace("/", "").replace("-", "")
 
@@ -446,14 +661,13 @@ class NfePayloadBuilder:
             # automatico de vTotTrib/IBPT na Focus.
             "consumidor_final": 1,
             "presenca_comprador": "1",
-            "local_destino": "1",
+            "local_destino": local_destino,
             "modalidade_frete": "9",
             "items": items,
             "formas_pagamento": _montar_formas_pagamento(pagamentos_qs),
-            "valor_produtos": float(venda.valor_subtotal or 0),
-            "valor_desconto": float(venda.valor_desconto or 0),
-            "valor_total": float(venda.valor_total),
         }
+
+        _aplicar_totais_fiscais(payload, venda, items)
 
         _aplicar_destinatario(payload, cliente, exigir_endereco=True)
 
@@ -524,9 +738,9 @@ def emitir_nfce_para_venda(venda: VendaPDV, usuario) -> DocumentoFiscal:
             }
             if venda.cliente else {"nome": "Consumidor Final"}
         ),
-        valor_produtos=venda.valor_subtotal or 0,
-        valor_desconto=venda.valor_desconto or 0,
-        valor_total=venda.valor_total,
+        valor_produtos=payload["valor_produtos"],
+        valor_desconto=payload["valor_desconto"],
+        valor_total=payload["valor_total"],
         status=StatusDocumentoFiscal.PENDENTE,
         data_emissao=venda.data_venda or timezone.now(),
         usuario=usuario,
@@ -610,9 +824,9 @@ def emitir_nfe_para_venda(venda: VendaPDV, usuario) -> DocumentoFiscal:
             }
             if venda.cliente else {"nome": "Consumidor Final"}
         ),
-        valor_produtos=venda.valor_subtotal or 0,
-        valor_desconto=venda.valor_desconto or 0,
-        valor_total=venda.valor_total,
+        valor_produtos=payload["valor_produtos"],
+        valor_desconto=payload["valor_desconto"],
+        valor_total=payload["valor_total"],
         status=StatusDocumentoFiscal.PENDENTE,
         data_emissao=venda.data_venda or timezone.now(),
         usuario=usuario,

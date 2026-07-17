@@ -160,6 +160,8 @@ class NfePayloadBuilderTests(TestCase):
         self.assertEqual(payload["email_destinatario"], "cliente@example.com")
         self.assertEqual(item["icms_situacao_tributaria"], "102")
         self.assertNotIn("icms_csosn", item)
+        self.assertEqual(payload["local_destino"], "2")
+        self.assertEqual(item["cfop"], "6102")
         self.assertEqual(payload["consumidor_final"], 1)
         self.assertNotIn("valor_total_tributos", payload)
         self.assertNotIn("valor_total_tributos", item)
@@ -172,6 +174,126 @@ class NfePayloadBuilderTests(TestCase):
         self.assertEqual(payload["consumidor_final"], 1)
         self.assertNotIn("valor_total_tributos", payload)
         self.assertNotIn("valor_total_tributos", payload["items"][0])
+
+    def test_calcula_icms_pis_cofins_e_ipi_com_decimal(self):
+        cliente = self.criar_cliente()
+        venda = self.criar_venda(cliente)
+        produto = venda.itens.get().produto
+        self.filial.codigo_regime_tributario = 3
+        self.filial.save(update_fields=["codigo_regime_tributario"])
+        produto.cst_csosn = "00"
+        produto.aliquota_icms = Decimal("18.0000")
+        produto.cst_pis = "01"
+        produto.aliquota_pis = Decimal("1.6500")
+        produto.cst_cofins = "01"
+        produto.aliquota_cofins = Decimal("7.6000")
+        produto.cst_ipi = "50"
+        produto.aliquota_ipi = Decimal("5.00")
+        produto.codigo_enquadramento_ipi = "999"
+        produto.save()
+        item_venda = venda.itens.get()
+        item_venda.quantidade = Decimal("1")
+        item_venda.valor_unitario = Decimal("100")
+        item_venda.valor_total = Decimal("100")
+        item_venda.save()
+        venda.valor_subtotal = Decimal("100")
+        venda.valor_total = Decimal("105")
+        venda.save(update_fields=["valor_subtotal", "valor_total"])
+
+        payload = NfcePayloadBuilder.build(venda, numero=1, serie=1)
+        item = payload["items"][0]
+
+        self.assertEqual(item["icms_base_calculo"], 100.0)
+        self.assertEqual(item["icms_valor"], 18.0)
+        self.assertEqual(item["pis_aliquota_porcentual"], 1.65)
+        self.assertEqual(item["pis_valor"], 1.65)
+        self.assertEqual(item["cofins_aliquota_porcentual"], 7.6)
+        self.assertEqual(item["cofins_valor"], 7.6)
+        self.assertEqual(item["ipi_valor"], 5.0)
+        self.assertEqual(payload["valor_total"], 105.0)
+
+    def test_rateia_desconto_e_acrescimo_na_base_dos_impostos(self):
+        venda = self.criar_venda(self.criar_cliente())
+        item_venda = venda.itens.get()
+        item_venda.valor_unitario = Decimal("100")
+        item_venda.valor_total = Decimal("100")
+        item_venda.save()
+        venda.valor_subtotal = Decimal("100")
+        venda.valor_desconto = Decimal("10")
+        venda.valor_acrescimo = Decimal("5")
+        venda.valor_total = Decimal("95")
+        venda.save()
+
+        payload = NfcePayloadBuilder.build(venda, numero=1, serie=1)
+        item = payload["items"][0]
+
+        self.assertEqual(item["valor_desconto"], 10.0)
+        self.assertEqual(item["valor_outras_despesas"], 5.0)
+        self.assertEqual(item["valor_total"], 95.0)
+        self.assertEqual(payload["valor_outras_despesas"], 5.0)
+        self.assertEqual(payload["valor_total"], 95.0)
+
+    def test_calcula_icms_st_e_fcp(self):
+        venda = self.criar_venda(self.criar_cliente())
+        produto = venda.itens.get().produto
+        self.filial.codigo_regime_tributario = 3
+        self.filial.save(update_fields=["codigo_regime_tributario"])
+        produto.cst_csosn = "10"
+        produto.aliquota_icms = Decimal("18")
+        produto.aliquota_fcp = Decimal("2")
+        produto.mva_icms_st = Decimal("40")
+        produto.aliquota_icms_st = Decimal("18")
+        produto.aliquota_fcp_st = Decimal("2")
+        produto.save()
+        item_venda = venda.itens.get()
+        item_venda.valor_unitario = Decimal("100")
+        item_venda.valor_total = Decimal("100")
+        item_venda.save()
+        venda.valor_subtotal = Decimal("100")
+        venda.valor_total = Decimal("107.20")
+        venda.save(update_fields=["valor_subtotal", "valor_total"])
+
+        item = NfcePayloadBuilder.build(venda, numero=1, serie=1)["items"][0]
+
+        self.assertEqual(item["icms_valor"], 18.0)
+        self.assertEqual(item["fcp_valor"], 2.0)
+        self.assertEqual(item["icms_base_calculo_st"], 140.0)
+        self.assertEqual(item["icms_valor_st"], 7.2)
+        self.assertEqual(item["fcp_valor_st"], 2.8)
+
+    def test_monta_ibs_cbs_is_e_total_da_reforma(self):
+        venda = self.criar_venda(self.criar_cliente())
+        produto = venda.itens.get().produto
+        produto.cst_ibs = produto.cst_cbs = "000"
+        produto.classificacao_tributaria_ibs = produto.classificacao_tributaria_cbs = "000001"
+        produto.aliquota_ibs_uf = Decimal("0.1000")
+        produto.aliquota_ibs_municipal = Decimal("0")
+        produto.aliquota_cbs = Decimal("0.9000")
+        produto.cst_is = "000"
+        produto.classificacao_tributaria_is = "000001"
+        produto.aliquota_is = Decimal("0")
+        produto.save()
+
+        payload = NfcePayloadBuilder.build(venda, numero=1, serie=1)
+        item = payload["items"][0]
+
+        self.assertEqual(item["ibs_uf_valor"], 0.0)
+        self.assertEqual(item["cbs_valor"], 0.04)
+        self.assertEqual(item["is_valor"], 0.0)
+        self.assertEqual(item["valor_total_item"], 4.0)
+        self.assertEqual(payload["ibs_cbs_is_valor_total"], 4.0)
+
+    def test_bloqueia_cst_ibs_cbs_incompativeis(self):
+        venda = self.criar_venda(self.criar_cliente())
+        produto = venda.itens.get().produto
+        produto.cst_ibs = "000"
+        produto.cst_cbs = "200"
+        produto.classificacao_tributaria_ibs = "000001"
+        produto.classificacao_tributaria_cbs = "000001"
+        produto.save()
+
+        with self.assertRaisesMessage(DadosInvalidosError, "unico CST"):
+            NfcePayloadBuilder.build(venda, numero=1, serie=1)
 
     def test_cancelamento_fiscal_acontece_antes_de_cancelar_venda(self):
         venda = self.criar_venda(self.criar_cliente())
