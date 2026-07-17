@@ -112,7 +112,12 @@ def _prontidao_fiscal(filial, params, documentos):
         {
             'label': 'Token Focus',
             'ok': bool(filial.focusnfe_token),
-            'detail': 'Chave de integracao da filial com a Focus.',
+            'detail': 'Token de producao ou homologacao usado para emitir.',
+        },
+        {
+            'label': 'Token Principal Focus',
+            'ok': bool(params.focusnfe_token_principal),
+            'detail': 'Usado somente para sincronizar certificado e CSC.',
         },
         {
             'label': 'Documento habilitado',

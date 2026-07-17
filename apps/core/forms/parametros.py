@@ -92,6 +92,7 @@ class ParametrosSistemaForm(forms.ModelForm):
             'email_secundario',
             'logo_url',
             'certificado_digital', 'senha_certificado',
+            'focusnfe_token_principal',
             'nfce_csc_id', 'nfce_csc_token',
             'email_envio_automatico', 'email_resposta',
             'texto_padrao_email', 'informacoes_complementares_padrao',
@@ -104,6 +105,13 @@ class ParametrosSistemaForm(forms.ModelForm):
                 attrs={
                     'autocomplete': 'new-password',
                     'placeholder': 'Configurada; deixe em branco para manter',
+                },
+            ),
+            'focusnfe_token_principal': forms.PasswordInput(
+                render_value=False,
+                attrs={
+                    'autocomplete': 'new-password',
+                    'placeholder': 'Configurado; deixe em branco para manter',
                 },
             ),
             'nfce_csc_id': forms.TextInput(attrs={'placeholder': 'Ex.: 000001'}),
@@ -139,6 +147,9 @@ class ParametrosSistemaForm(forms.ModelForm):
 
     def clean_senha_certificado(self):
         return self._segredo_ou_atual('senha_certificado')
+
+    def clean_focusnfe_token_principal(self):
+        return self._segredo_ou_atual('focusnfe_token_principal')
 
     def clean_nfce_csc_token(self):
         return self._segredo_ou_atual('nfce_csc_token')

@@ -496,9 +496,14 @@
           {{ form_filial.focusnfe_ambiente }}
         </div>
         <div>
-          <label class="param-label">Token Focus</label>
+          <label class="param-label">Token de emissao Focus</label>
           {{ form_filial.focusnfe_token }}
-          <p class="param-card-sub mt-1">Para sincronizar a empresa, use o Token Principal de Producao.</p>
+          <p class="param-card-sub mt-1">Use Token Producao ou Homologacao conforme o ambiente.</p>
+        </div>
+        <div>
+          <label class="param-label">Token Principal Focus</label>
+          {{ form_params.focusnfe_token_principal }}
+          <p class="param-card-sub mt-1">Usado somente para sincronizar certificado e CSC.</p>
         </div>
         <div>
           <label class="param-label">Certificado A1 (.pfx/.p12)</label>

@@ -1,3 +1,4 @@
+from types import SimpleNamespace
 from unittest.mock import patch
 
 from django.core.exceptions import PermissionDenied
@@ -8,6 +9,7 @@ from apps.core.forms.parametros import FilialIdentidadeForm, ParametrosSistemaFo
 from apps.core.models import Empresa, Filial, PerfilAcesso, Usuario
 from apps.core.models.parametros import ParametrosSistema
 from apps.core.views.parametros import parametros_sistema
+from apps.fiscal.services.focusnfe_service import FocusNFeService
 
 
 class ParametrosSistemaAccessTests(TestCase):
@@ -81,6 +83,7 @@ class ParametrosSistemaAccessTests(TestCase):
         params = ParametrosSistema.objects.create(
             filial=self.filial,
             senha_certificado='senha-certificado',
+            focusnfe_token_principal='token-principal-secreto',
             nfce_csc_token='csc-secreto',
         )
 
@@ -89,6 +92,7 @@ class ParametrosSistemaAccessTests(TestCase):
 
         self.assertNotIn('token-focus-secreto', form_filial.as_p())
         self.assertNotIn('senha-certificado', form_params.as_p())
+        self.assertNotIn('token-principal-secreto', form_params.as_p())
         self.assertNotIn('csc-secreto', form_params.as_p())
 
         filial_data = {
@@ -106,8 +110,57 @@ class ParametrosSistemaAccessTests(TestCase):
             for field in form_params.fields
             if field != 'certificado_digital'
         }
-        params_data.update({'senha_certificado': '', 'nfce_csc_token': ''})
+        params_data.update({
+            'senha_certificado': '',
+            'focusnfe_token_principal': '',
+            'nfce_csc_token': '',
+        })
         params_post = ParametrosSistemaForm(params_data, instance=params)
         self.assertTrue(params_post.is_valid(), params_post.errors)
         self.assertEqual(params_post.cleaned_data['senha_certificado'], 'senha-certificado')
+        self.assertEqual(
+            params_post.cleaned_data['focusnfe_token_principal'],
+            'token-principal-secreto',
+        )
         self.assertEqual(params_post.cleaned_data['nfce_csc_token'], 'csc-secreto')
+
+    @patch('apps.fiscal.integrations.focusnfe.FocusNFeClient')
+    @patch('apps.fiscal.integrations.focusnfe.config.FocusNFeConfig.from_env')
+    def test_sincronizacao_usa_token_principal_no_endpoint_producao(
+        self,
+        config_mock,
+        client_mock,
+    ):
+        config_mock.return_value = object()
+        client_mock.return_value.empresas.upsert.return_value = {'id': 'empresa-focus'}
+        filial = SimpleNamespace(
+            cnpj='14004764000240',
+            razao_social='SaboraFruta',
+            nome_fantasia='SaboraFruta',
+            inscricao_estadual='207184704',
+            codigo_regime_tributario=1,
+            empresa=None,
+            endereco='Avenida Teste',
+            numero='100',
+            complemento='',
+            bairro='Centro',
+            cep='59000000',
+            cidade='Natal',
+            uf='RN',
+            focusnfe_ambiente=1,
+        )
+        params = SimpleNamespace(
+            focusnfe_token_principal='token-principal',
+            certificado_base64='',
+            certificado_digital=None,
+            senha_certificado='',
+            nfce_csc_token='csc-producao',
+            nfce_csc_id='2',
+        )
+
+        FocusNFeService().sincronizar_empresa(filial, params)
+
+        config_mock.assert_called_once_with(token='token-principal', ambiente=1)
+        payload = client_mock.return_value.empresas.upsert.call_args.args[1]
+        self.assertEqual(payload['csc_nfce_producao'], 'csc-producao')
+        self.assertEqual(payload['id_token_nfce_producao'], '2')

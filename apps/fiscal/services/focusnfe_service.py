@@ -21,8 +21,8 @@ from django.utils import timezone
 from apps.financeiro.constants.enums import StatusDocumentoFiscal
 from apps.financeiro.models.fiscal import DocumentoFiscal, LogIntegracaoFiscal
 from apps.fiscal.integrations.focusnfe import FocusNFeClient
-from apps.fiscal.integrations.focusnfe.config import HOMOLOGACAO, URLS
-from apps.fiscal.integrations.focusnfe.exceptions import FocusNFeError
+from apps.fiscal.integrations.focusnfe.config import HOMOLOGACAO, PRODUCAO, URLS
+from apps.fiscal.integrations.focusnfe.exceptions import FocusNFeAuthError, FocusNFeError
 
 logger = logging.getLogger(__name__)
 
@@ -344,8 +344,12 @@ class FocusNFeService:
         if not cnpj or len(cnpj) != 14:
             raise ValueError("CNPJ da filial inválido ou não preenchido.")
 
-        if not filial.focusnfe_token:
-            raise ValueError("Token Focus não configurado para esta filial.")
+        token_principal = (getattr(params, "focusnfe_token_principal", "") or "").strip()
+        if not token_principal:
+            raise ValueError(
+                "Token Principal Focus nao configurado. Copie o Token principal producao "
+                "do Painel API da Focus."
+            )
 
         # --- Certificado digital -------------------------------------------
         # Prefere base64 salvo no banco (persiste entre redeploys no Railway).
@@ -431,13 +435,20 @@ class FocusNFeService:
                 payload["csc_nfce_homologacao"] = csc_token
                 payload["id_token_nfce_homologacao"] = csc_id
 
-        # Usa o token específico da filial
+        # A API de empresas exige o Token Principal no endpoint de producao.
+        # O token e o ambiente da filial ficam reservados para emitir documentos.
         from apps.fiscal.integrations.focusnfe import FocusNFeClient
         from apps.fiscal.integrations.focusnfe.config import FocusNFeConfig
-        config = FocusNFeConfig.from_env(token=filial.focusnfe_token, ambiente=ambiente)
+        config = FocusNFeConfig.from_env(token=token_principal, ambiente=PRODUCAO)
         client = FocusNFeClient(config=config)
 
-        retorno = client.empresas.upsert(cnpj, payload)
+        try:
+            retorno = client.empresas.upsert(cnpj, payload)
+        except FocusNFeAuthError as exc:
+            raise ValueError(
+                "Token Principal Focus invalido. Nao use o Token Producao da empresa "
+                "neste campo."
+            ) from exc
         if sem_certificado:
             if isinstance(retorno, dict):
                 retorno["_aviso_certificado"] = (

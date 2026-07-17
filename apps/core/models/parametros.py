@@ -49,6 +49,11 @@ class ParametrosSistema(TimestampedModel):
                   'Preenchido automaticamente ao fazer upload. '
                   'Persiste entre redeploys (diferente do FileField).',
     )
+    focusnfe_token_principal = models.CharField(
+        max_length=255,
+        blank=True,
+        help_text='Token Principal de Producao usado somente para gerenciar a empresa na Focus.',
+    )
     nfce_csc_id = models.CharField(max_length=20, blank=True)
     nfce_csc_token = models.CharField(max_length=120, blank=True)
     email_envio_automatico = models.BooleanField(default=False)
