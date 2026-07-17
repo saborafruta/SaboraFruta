@@ -78,6 +78,10 @@ def _codigo_ean(produto) -> str:
     return "SEM GTIN"
 
 
+def _somente_digitos(valor: Any) -> str:
+    return "".join(ch for ch in str(valor or "") if ch.isdigit())
+
+
 def _cfop_item(produto, filial) -> str:
     """Resolve CFOP de venda. Prioriza dado do produto; fallback para 5102/5405."""
     cfop = produto.cfop_venda_interna or ""
@@ -104,9 +108,7 @@ def _montar_item(numero: int, item_venda, filial) -> dict:
     """
     Monta o dicionário de um item no payload FocusNFe (formato v2, campos flat).
 
-    ICMS Simples Nacional: icms_csosn + icms_origem (flat, sem objeto aninhado)
-    ICMS Normal:           icms_cst + icms_origem + campos de base/alíquota/valor
-    PIS/COFINS:            campos flat icms_situacao_tributaria / cofins_*
+    ICMS/PIS/COFINS: campos flat aceitos pela Focus NFe.
     """
     produto = item_venda.produto
     quantidade = float(item_venda.quantidade)
@@ -146,14 +148,14 @@ def _montar_item(numero: int, item_venda, filial) -> dict:
 
     regime = _regime_tributario_cod(filial)
     if regime == 1:
-        # Simples Nacional — campos flat
+        # Simples Nacional — a Focus usa icms_situacao_tributaria para CST/CSOSN.
         csosn = (getattr(produto, "cst_csosn", "") or "").strip() or "400"
-        item["icms_csosn"] = csosn
+        item["icms_situacao_tributaria"] = csosn
         item["icms_origem"] = origem
     else:
         # Regime Normal — campos flat
         cst = (getattr(produto, "cst_csosn", "") or "00").strip()
-        item["icms_cst"] = cst
+        item["icms_situacao_tributaria"] = cst
         item["icms_origem"] = origem
         item["icms_modalidade_base_calculo"] = "3"
         item["icms_base_calculo"] = valor_total
@@ -192,6 +194,120 @@ def _montar_formas_pagamento(pagamentos_qs) -> list:
             "valor_pagamento": float(pgto.valor),
         })
     return pgtos or [{"forma_pagamento": "99", "valor_pagamento": 0.0}]
+
+
+def _endereco_preferencial_cliente(cliente) -> dict:
+    """Retorna o endereco fiscal preferencial do cliente, sem inventar dados."""
+    endereco = {
+        "logradouro": getattr(cliente, "endereco", "") or "",
+        "numero": getattr(cliente, "numero", "") or "",
+        "complemento": getattr(cliente, "complemento", "") or "",
+        "bairro": getattr(cliente, "bairro", "") or "",
+        "municipio": getattr(cliente, "cidade", "") or "",
+        "uf": getattr(cliente, "uf", "") or "",
+        "cep": getattr(cliente, "cep", "") or "",
+        "codigo_municipio": getattr(cliente, "codigo_municipio_ibge", "") or "",
+        "pais": getattr(cliente, "pais", "") or "Brasil",
+        "codigo_pais": getattr(cliente, "codigo_pais_bacen", "") or "1058",
+    }
+    try:
+        extra = cliente.enderecos.filter(ativo=True).order_by("-padrao", "id").first()
+    except Exception:
+        extra = None
+    if extra:
+        endereco.update({
+            "logradouro": extra.endereco or endereco["logradouro"],
+            "numero": extra.numero or endereco["numero"],
+            "complemento": extra.complemento or endereco["complemento"],
+            "bairro": extra.bairro or endereco["bairro"],
+            "municipio": extra.cidade or endereco["municipio"],
+            "uf": extra.uf or endereco["uf"],
+            "cep": extra.cep or endereco["cep"],
+            "codigo_municipio": extra.codigo_municipio_ibge or endereco["codigo_municipio"],
+            "pais": extra.pais or endereco["pais"],
+            "codigo_pais": extra.codigo_pais_bacen or endereco["codigo_pais"],
+        })
+    return endereco
+
+
+def _aplicar_destinatario(payload: Dict[str, Any], cliente, *, exigir_endereco: bool = False) -> None:
+    if not cliente:
+        if exigir_endereco:
+            raise DadosInvalidosError("Informe um cliente com CPF/CNPJ e endereco completo para emitir NF-e.")
+        return
+
+    cpf_cnpj = _somente_digitos(getattr(cliente, "cpf_cnpj", ""))
+    if not cpf_cnpj:
+        if not exigir_endereco:
+            return
+        raise DadosInvalidosError("Cliente sem CPF/CNPJ informado.")
+
+    if len(cpf_cnpj) == 11:
+        payload["nome_destinatario"] = getattr(cliente, "razao_social", "") or "Consumidor Final"
+        payload["cpf_destinatario"] = cpf_cnpj
+    elif len(cpf_cnpj) == 14:
+        payload["nome_destinatario"] = getattr(cliente, "razao_social", "") or "Consumidor Final"
+        payload["cnpj_destinatario"] = cpf_cnpj
+    else:
+        if not exigir_endereco:
+            return
+        raise DadosInvalidosError("CPF/CNPJ do cliente invalido para emissao fiscal.")
+
+    ie = (getattr(cliente, "inscricao_estadual", "") or getattr(cliente, "rg_ie", "") or "").strip()
+    if ie:
+        payload["inscricao_estadual_destinatario"] = ie
+    if getattr(cliente, "contribuinte_icms", False) and ie and ie.upper() != "ISENTO":
+        payload["indicador_inscricao_estadual_destinatario"] = "1"
+    elif ie.upper() == "ISENTO":
+        payload["indicador_inscricao_estadual_destinatario"] = "2"
+    else:
+        payload["indicador_inscricao_estadual_destinatario"] = "9"
+
+    telefone = _somente_digitos(getattr(cliente, "celular", "") or getattr(cliente, "telefone", ""))
+    if telefone:
+        payload["telefone_destinatario"] = telefone[:20]
+    email = (getattr(cliente, "email_nfe", "") or getattr(cliente, "email", "") or "").strip()
+    if email:
+        payload["email_destinatario"] = email[:80]
+
+    if not exigir_endereco:
+        return
+
+    endereco = _endereco_preferencial_cliente(cliente)
+    faltando = []
+    obrigatorios = {
+        "logradouro": "logradouro",
+        "numero": "numero",
+        "bairro": "bairro",
+        "municipio": "municipio",
+        "uf": "UF",
+    }
+    for campo, label in obrigatorios.items():
+        if not (endereco.get(campo) or "").strip():
+            faltando.append(label)
+    if faltando:
+        raise DadosInvalidosError(
+            "NF-e modelo 55 exige endereco completo do destinatario. "
+            f"Complete no cadastro do cliente: {', '.join(faltando)}."
+        )
+
+    payload["logradouro_destinatario"] = endereco["logradouro"][:60]
+    payload["numero_destinatario"] = (endereco["numero"] or "SN")[:60]
+    if endereco["complemento"]:
+        payload["complemento_destinatario"] = endereco["complemento"][:60]
+    payload["bairro_destinatario"] = endereco["bairro"][:60]
+    payload["municipio_destinatario"] = endereco["municipio"][:60]
+    payload["uf_destinatario"] = endereco["uf"][:2].upper()
+    cep = _somente_digitos(endereco["cep"])
+    if cep:
+        payload["cep_destinatario"] = cep[:8]
+    codigo_municipio = _somente_digitos(endereco["codigo_municipio"])
+    if len(codigo_municipio) == 7:
+        payload["codigo_municipio_destinatario"] = codigo_municipio
+    payload["pais_destinatario"] = endereco["pais"] or "Brasil"
+    codigo_pais = _somente_digitos(endereco["codigo_pais"])
+    if codigo_pais:
+        payload["codigo_pais_destinatario"] = codigo_pais
 
 
 class NfcePayloadBuilder:
@@ -255,15 +371,8 @@ class NfcePayloadBuilder:
             "valor_total": float(venda.valor_total),
         }
 
-        # Destinatário: campos no topo (formato v2)
-        if cliente:
-            cpf_cnpj = (cliente.cpf_cnpj or "").replace(".", "").replace("-", "").replace("/", "").strip()
-            if cpf_cnpj:
-                payload["nome_destinatario"] = cliente.razao_social or "Consumidor Final"
-                if len(cpf_cnpj) == 11:
-                    payload["cpf_destinatario"] = cpf_cnpj
-                elif len(cpf_cnpj) == 14:
-                    payload["cnpj_destinatario"] = cpf_cnpj
+        # Destinatario: campos no topo (formato v2)
+        _aplicar_destinatario(payload, cliente, exigir_endereco=False)
 
         return payload
 
@@ -318,14 +427,7 @@ class NfePayloadBuilder:
             "valor_total": float(venda.valor_total),
         }
 
-        if cliente:
-            cpf_cnpj = (cliente.cpf_cnpj or "").replace(".", "").replace("-", "").replace("/", "").strip()
-            if cpf_cnpj:
-                payload["nome_destinatario"] = cliente.razao_social or "Consumidor Final"
-                if len(cpf_cnpj) == 11:
-                    payload["cpf_destinatario"] = cpf_cnpj
-                elif len(cpf_cnpj) == 14:
-                    payload["cnpj_destinatario"] = cpf_cnpj
+        _aplicar_destinatario(payload, cliente, exigir_endereco=True)
 
         return payload
 
