@@ -14,6 +14,7 @@ from apps.core.services.exceptions import DadosInvalidosError, EstoqueInsuficien
 from apps.core.services.permissions import requer_permissao
 from apps.financeiro.models import FormaPagamento, TaxaParcelamento
 from apps.financeiro.constants.enums import TipoFormaPagamento
+from apps.fiscal.integrations.focusnfe.exceptions import FocusNFeNetworkError, FocusNFeServerError
 from apps.pdv.models import (
     Caixa, ItemVendaPDV, MovimentacaoCaixa, PagamentoVendaPDV, SessaoPDV, VendaPDV,
 )
@@ -23,6 +24,7 @@ from apps.pdv.services.cancelamento_fiscal_service import (
     cancelar_venda_e_documento,
     obter_documento_fiscal,
 )
+from apps.pdv.services.fiscal_readiness_service import verificar_prontidao_fiscal
 from apps.produtos.models import LinhaProducao, Produto
 
 
@@ -1645,6 +1647,22 @@ def delivery_atualizar(request, pk):
 # ---------------------------------------------------------------------------
 
 @requer_permissao('pdv', 'ver')
+@require_GET
+def api_prontidao_fiscal(request, pk):
+    """Explica o que precisa ser ajustado antes da NF-e/NFC-e."""
+    tipo = (request.GET.get("tipo") or "nfce").lower()
+    try:
+        venda = (
+            VendaPDV.objects.for_filial(request.filial_ativa)
+            .select_related("cliente", "filial__empresa")
+            .get(pk=pk)
+        )
+    except VendaPDV.DoesNotExist:
+        return JsonResponse({"erro": "Venda nao encontrada."}, status=404)
+    return JsonResponse(verificar_prontidao_fiscal(venda, tipo))
+
+
+@requer_permissao('pdv', 'ver')
 @require_POST
 def api_emitir_nfce(request, pk):
     """
@@ -1669,6 +1687,10 @@ def api_emitir_nfce(request, pk):
             status=400,
         )
 
+    prontidao = verificar_prontidao_fiscal(venda, "nfce")
+    if not prontidao["ok"]:
+        return JsonResponse(prontidao, status=422)
+
     try:
         from apps.pdv.services.nfce_payload_builder import (
             NfcePayloadBuilder,
@@ -1678,7 +1700,11 @@ def api_emitir_nfce(request, pk):
     except DadosInvalidosError as exc:
         return JsonResponse({"erro": str(exc)}, status=400)
     except Exception as exc:
-        return JsonResponse({"erro": f"Erro ao emitir NFC-e: {exc}"}, status=500)
+        permite_contingencia = isinstance(exc, (FocusNFeNetworkError, FocusNFeServerError))
+        return JsonResponse({
+            "erro": f"Erro ao emitir NFC-e: {exc}",
+            "permite_contingencia": permite_contingencia,
+        }, status=502)
 
     return JsonResponse({
         "ok": True,
@@ -1687,6 +1713,38 @@ def api_emitir_nfce(request, pk):
         "chave": documento.chave or "",
         "pdf_danfe_url": documento.pdf_danfe_url or "",
         "mensagem": documento.mensagem_sefaz or "",
+    })
+
+
+@requer_permissao('pdv', 'ver')
+@require_POST
+def api_emitir_nfce_contingencia(request, pk):
+    """Emite NFC-e em contingencia quando a autorizacao normal estiver indisponivel."""
+    try:
+        venda = (
+            VendaPDV.objects.for_filial(request.filial_ativa)
+            .select_related("cliente", "filial__empresa")
+            .get(pk=pk)
+        )
+    except VendaPDV.DoesNotExist:
+        return JsonResponse({"erro": "Venda nao encontrada."}, status=404)
+    prontidao = verificar_prontidao_fiscal(venda, "nfce")
+    if not prontidao["ok"]:
+        return JsonResponse(prontidao, status=422)
+    try:
+        from apps.pdv.services.nfce_payload_builder import emitir_nfce_para_venda
+        documento = emitir_nfce_para_venda(venda, request.user, contingencia=True)
+    except DadosInvalidosError as exc:
+        return JsonResponse({"erro": str(exc)}, status=400)
+    except Exception as exc:
+        return JsonResponse({"erro": f"Nao foi possivel emitir em contingencia: {exc}"}, status=502)
+    return JsonResponse({
+        "ok": True,
+        "documento_id": documento.pk,
+        "status": documento.status,
+        "chave": documento.chave or "",
+        "pdf_danfe_url": documento.pdf_danfe_url or "",
+        "mensagem": documento.mensagem_sefaz or "NFC-e emitida em contingencia; acompanhe a autorizacao.",
     })
 
 
@@ -2182,6 +2240,10 @@ def api_emitir_nfe(request, pk):
             {"erro": f"Não é possível emitir NF-e para venda com status '{venda.status}'."},
             status=400,
         )
+
+    prontidao = verificar_prontidao_fiscal(venda, "nfe")
+    if not prontidao["ok"]:
+        return JsonResponse(prontidao, status=422)
 
     try:
         from apps.pdv.services.nfce_payload_builder import emitir_nfe_para_venda

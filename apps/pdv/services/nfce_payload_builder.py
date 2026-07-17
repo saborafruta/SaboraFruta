@@ -16,8 +16,9 @@ Regra GTIN (SEFAZ NT 2011/004):
 """
 from __future__ import annotations
 
-from datetime import date
+from datetime import date, timedelta
 from decimal import Decimal, ROUND_HALF_UP
+import secrets
 from typing import Any, Dict, Optional
 
 from zoneinfo import ZoneInfo
@@ -61,6 +62,15 @@ def _data_emissao_brt(dt=None) -> str:
     if timezone.is_naive(dt):
         dt = timezone.make_aware(dt, timezone.utc)
     return dt.astimezone(_BRT).isoformat(timespec="seconds")
+
+
+def _momento_emissao(venda):
+    """Mantem a hora da venda quando recente e evita rejeicao ao emitir pelo historico."""
+    agora = timezone.now()
+    data_venda = getattr(venda, "data_venda", None)
+    if data_venda and abs(agora - data_venda) <= timedelta(minutes=4):
+        return data_venda
+    return agora
 from apps.financeiro.models import DocumentoFiscal
 from apps.financeiro.constants.enums import TipoDocumentoFiscal, StatusDocumentoFiscal
 from apps.pdv.models import VendaPDV
@@ -82,6 +92,12 @@ _FORMA_PGTO_FOCO = {
     "boleto":         "15",
     "ted":            "16",
     "doc":            "16",
+}
+
+_BANDEIRA_CARTAO_FOCUS = {
+    "visa": "01", "mastercard": "02", "master": "02", "american express": "03",
+    "amex": "03", "sorocred": "04", "diners": "05", "elo": "06",
+    "hipercard": "07", "aura": "08", "cabal": "09", "hiper": "17",
 }
 
 
@@ -398,7 +414,7 @@ def _montar_itens(venda, itens: list, local_destino: str) -> list[dict]:
     acrescimos_proprios = sum((_decimal(i.acrescimo_valor) for i in itens), Decimal("0"))
     descontos = _ratear(max(_decimal(venda.valor_desconto) - descontos_proprios, Decimal("0")), itens)
     acrescimos = _ratear(max(_decimal(venda.valor_acrescimo) - acrescimos_proprios, Decimal("0")), itens)
-    data_emissao = date.fromisoformat(_data_emissao_brt(venda.data_venda)[:10])
+    data_emissao = date.fromisoformat(_data_emissao_brt(_momento_emissao(venda))[:10])
     return [
         _montar_item_fiscal(
             i + 1,
@@ -418,11 +434,23 @@ def _montar_formas_pagamento(pagamentos_qs) -> list:
     pgtos = []
     for pgto in pagamentos_qs:
         tipo = (pgto.forma_pagamento.tipo or "").lower().strip()
-        codigo = _FORMA_PGTO_FOCO.get(tipo, "99")
-        pgtos.append({
+        codigo = (pgto.forma_pagamento.codigo_sefaz or "").strip() or _FORMA_PGTO_FOCO.get(tipo, "99")
+        forma = {
             "forma_pagamento": codigo,
             "valor_pagamento": float(pgto.valor),
-        })
+        }
+        if tipo in {"cartao_credito", "cartao_debito"}:
+            tef = getattr(pgto, "tef_transacao", None)
+            autorizacao = (pgto.autorizacao or getattr(tef, "autorizacao", "") or "").strip()
+            bandeira = (pgto.bandeira or getattr(tef, "bandeira", "") or "").strip().lower()
+            # O ERP ainda nao armazena o CNPJ da credenciadora por transacao.
+            # Sem esse dado, a declaracao fiscal correta e POS nao integrado.
+            forma["tipo_integracao"] = "2"
+            if autorizacao:
+                forma["numero_autorizacao"] = autorizacao[:20]
+            if bandeira:
+                forma["bandeira_operadora"] = _BANDEIRA_CARTAO_FOCUS.get(bandeira, "99")
+        pgtos.append(forma)
     return pgtos or [{"forma_pagamento": "99", "valor_pagamento": 0.0}]
 
 
@@ -697,7 +725,7 @@ class NfcePayloadBuilder:
         if not itens_qs:
             raise DadosInvalidosError("Venda sem itens — não é possível emitir NFC-e.")
 
-        data_emissao = _data_emissao_brt(venda.data_venda)
+        data_emissao = _data_emissao_brt(_momento_emissao(venda))
 
         # NFC-e do PDV representa venda presencial no estabelecimento.
         local_destino = "1"
@@ -720,12 +748,16 @@ class NfcePayloadBuilder:
             "consumidor_final": 1,
             # ── Campos obrigatórios NFC-e v2 ────────────────────────────────
             "local_destino": local_destino,
-            "presenca_comprador": "1",    # 1=presencial
+            "presenca_comprador": "4" if venda.delivery else "1",
             "modalidade_frete": "9",      # 9=sem frete
             # ── Itens e pagamentos ──────────────────────────────────────────
             "items": items,
             "formas_pagamento": _montar_formas_pagamento(pagamentos_qs),
         }
+
+        valor_troco = sum((_decimal(pgto.troco) for pgto in pagamentos_qs), Decimal("0"))
+        if valor_troco > 0:
+            payload["valor_troco"] = _float_dinheiro(valor_troco)
 
         _aplicar_totais_fiscais(payload, venda, items)
 
@@ -758,7 +790,7 @@ class NfePayloadBuilder:
         if not itens_qs:
             raise DadosInvalidosError("Venda sem itens — não é possível emitir NF-e.")
 
-        data_emissao = _data_emissao_brt(venda.data_venda)
+        data_emissao = _data_emissao_brt(_momento_emissao(venda))
 
         local_destino = _local_destino(filial, cliente)
         items = _montar_itens(venda, itens_qs, local_destino)
@@ -775,12 +807,16 @@ class NfePayloadBuilder:
             "tipo_documento": "1",
             "finalidade_emissao": "1",
             "consumidor_final": _indicador_consumidor_final(cliente),
-            "presenca_comprador": "1",
+            "presenca_comprador": "4" if venda.delivery else "1",
             "local_destino": local_destino,
             "modalidade_frete": "9",
             "items": items,
             "formas_pagamento": _montar_formas_pagamento(pagamentos_qs),
         }
+
+        valor_troco = sum((_decimal(pgto.troco) for pgto in pagamentos_qs), Decimal("0"))
+        if valor_troco > 0:
+            payload["valor_troco"] = _float_dinheiro(valor_troco)
 
         _aplicar_totais_fiscais(payload, venda, items)
 
@@ -792,7 +828,7 @@ class NfePayloadBuilder:
 
 
 @transaction.atomic
-def emitir_nfce_para_venda(venda: VendaPDV, usuario) -> DocumentoFiscal:
+def emitir_nfce_para_venda(venda: VendaPDV, usuario, *, contingencia: bool = False) -> DocumentoFiscal:
     """
     Wrapper de alto nível: constrói payload NFC-e, cria DocumentoFiscal e dispara emissão.
     Retorna o DocumentoFiscal criado/atualizado.
@@ -837,6 +873,8 @@ def emitir_nfce_para_venda(venda: VendaPDV, usuario) -> DocumentoFiscal:
         serie_nfce = filial.serie_nfce or 1
 
     payload = NfcePayloadBuilder.build(venda, numero=numero_nfce, serie=serie_nfce)
+    if contingencia:
+        payload["codigo_unico"] = f"{secrets.randbelow(100_000_000):08d}"
 
     doc = DocumentoFiscal.objects.create(
         filial=filial,
@@ -859,7 +897,7 @@ def emitir_nfce_para_venda(venda: VendaPDV, usuario) -> DocumentoFiscal:
         valor_desconto=payload["valor_desconto"],
         valor_total=payload["valor_total"],
         status=StatusDocumentoFiscal.PENDENTE,
-        data_emissao=venda.data_venda or timezone.now(),
+        data_emissao=_momento_emissao(venda),
         usuario=usuario,
     )
 
@@ -873,7 +911,7 @@ def emitir_nfce_para_venda(venda: VendaPDV, usuario) -> DocumentoFiscal:
     else:
         service = FocusNFeService()
 
-    documento = service.emitir(doc, payload)
+    documento = service.emitir(doc, payload, contingencia=contingencia)
     venda.documento_fiscal = documento
     venda.save(update_fields=["documento_fiscal"])
     return documento
@@ -945,7 +983,7 @@ def emitir_nfe_para_venda(venda: VendaPDV, usuario) -> DocumentoFiscal:
         valor_desconto=payload["valor_desconto"],
         valor_total=payload["valor_total"],
         status=StatusDocumentoFiscal.PENDENTE,
-        data_emissao=venda.data_venda or timezone.now(),
+        data_emissao=_momento_emissao(venda),
         usuario=usuario,
     )
 

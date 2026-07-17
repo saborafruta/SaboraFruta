@@ -14,7 +14,7 @@ from .sugestao_compras import SugestaoComprasView
 from .outras_movimentacoes import (
     OutrasMovimentacoesHubView, DevolucaoClienteView, DevolucaoFornecedorView, SaidaEspecialView,
     FornecedorSearchJsonView, ProdutoEstoqueSearchJsonView,
-    ClienteSearchJsonView, LoteSearchJsonView, DevolucaoClienteApiView,
+    ClienteSearchJsonView, LoteSearchJsonView, VendaDevolucaoJsonView, DevolucaoClienteApiView,
     TransferenciaLojaView, TransferenciaLojaApiView,
 )
 
@@ -30,6 +30,6 @@ __all__ = [
     'SugestaoComprasView',
     'OutrasMovimentacoesHubView', 'DevolucaoClienteView', 'DevolucaoFornecedorView', 'SaidaEspecialView',
     'FornecedorSearchJsonView', 'ProdutoEstoqueSearchJsonView',
-    'ClienteSearchJsonView', 'LoteSearchJsonView', 'DevolucaoClienteApiView',
+    'ClienteSearchJsonView', 'LoteSearchJsonView', 'VendaDevolucaoJsonView', 'DevolucaoClienteApiView',
     'TransferenciaLojaView', 'TransferenciaLojaApiView',
 ]

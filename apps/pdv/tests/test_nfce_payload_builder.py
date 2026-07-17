@@ -168,6 +168,42 @@ class NfePayloadBuilderTests(TestCase):
         self.assertNotIn("valor_total_tributos", payload)
         self.assertNotIn("valor_total_tributos", item)
 
+    def test_nfce_informa_troco_e_delivery(self):
+        venda = self.criar_venda(None)
+        venda.delivery = True
+        venda.save(update_fields=["delivery"])
+        pagamento = venda.pagamentos.get()
+        pagamento.valor = Decimal("5.00")
+        pagamento.troco = Decimal("1.00")
+        pagamento.save(update_fields=["valor", "troco"])
+
+        payload = NfcePayloadBuilder.build(venda, numero=1, serie=1)
+
+        self.assertEqual(payload["presenca_comprador"], "4")
+        self.assertEqual(payload["valor_troco"], 1.0)
+        self.assertEqual(payload["formas_pagamento"][0]["valor_pagamento"], 5.0)
+
+    def test_nfce_detalha_cartao_nao_integrado(self):
+        venda = self.criar_venda(None)
+        pagamento = venda.pagamentos.get()
+        forma_cartao = FormaPagamento.objects.create(
+            empresa=self.empresa,
+            filial=self.filial,
+            descricao="Credito",
+            tipo=TipoFormaPagamento.CARTAO_CREDITO,
+            codigo_sefaz="03",
+        )
+        pagamento.forma_pagamento = forma_cartao
+        pagamento.autorizacao = "ABC123"
+        pagamento.bandeira = "Visa"
+        pagamento.save(update_fields=["forma_pagamento", "autorizacao", "bandeira"])
+
+        forma = NfcePayloadBuilder.build(venda, numero=1, serie=1)["formas_pagamento"][0]
+
+        self.assertEqual(forma["tipo_integracao"], "2")
+        self.assertEqual(forma["numero_autorizacao"], "ABC123")
+        self.assertEqual(forma["bandeira_operadora"], "01")
+
     def test_nfe_cnpj_nao_consumidor_final_respeita_cadastro(self):
         cliente = self.criar_cliente(
             tipo_pessoa=TipoPessoa.JURIDICA,

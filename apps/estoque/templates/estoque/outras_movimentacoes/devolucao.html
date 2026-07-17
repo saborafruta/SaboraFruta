@@ -75,6 +75,21 @@
 
         <div>
           <label class="block text-sm font-medium mb-1.5" :style="temaClaro ? 'color:#374151;' : 'color:#d1d5db;'">
+            Venda original <span class="text-red-500">*</span>
+          </label>
+          <div class="flex gap-2">
+            <input type="text" x-model="vendaNumero" @keydown.enter.prevent="carregarVendaOriginal()"
+                   placeholder="Numero da venda" class="form-input flex-1">
+            <button type="button" @click="carregarVendaOriginal()" :disabled="carregandoVenda"
+                    class="btn-secondary px-4" x-text="carregandoVenda ? 'Buscando...' : 'Carregar venda'"></button>
+          </div>
+          <p class="text-xs mt-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+            Ao carregar a venda, o sistema traz o cliente, os produtos e os valores originais.
+          </p>
+        </div>
+
+        <div>
+          <label class="block text-sm font-medium mb-1.5" :style="temaClaro ? 'color:#374151;' : 'color:#d1d5db;'">
             Cliente <span class="text-red-500">*</span>
           </label>
 
@@ -502,7 +517,7 @@
       <div class="card p-5 space-y-3">
         <button type="button"
                 @click="submitForm()"
-                :disabled="submitting || itens.length === 0 || !clienteId"
+                :disabled="submitting || itens.length === 0 || !clienteId || !vendaId"
                 class="btn-primary w-full flex items-center justify-center gap-2">
           <svg x-show="submitting" class="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
             <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
@@ -533,6 +548,9 @@
 <script>
 function devolucaoCliente() {
   return {
+    vendaId: null,
+    vendaNumero: '',
+    carregandoVenda: false,
     // Cliente
     clienteQuery: '',
     clienteId: null,
@@ -571,6 +589,32 @@ function devolucaoCliente() {
     erroGeral: '',
 
     init() {},
+
+    async carregarVendaOriginal() {
+      this.erroGeral = '';
+      if (!this.vendaNumero.trim()) { this.erroGeral = 'Informe o numero da venda original.'; return; }
+      this.carregandoVenda = true;
+      try {
+        const res = await fetch(`{% url 'estoque:devolucao-venda-json' %}?numero=${encodeURIComponent(this.vendaNumero)}`);
+        const data = await res.json();
+        if (!res.ok || data.erro) { this.erroGeral = data.erro || 'Venda nao encontrada.'; return; }
+        if (!data.cliente_id) { this.erroGeral = 'A venda original nao possui cliente identificado. Vincule um cliente antes da devolucao.'; return; }
+        this.vendaId = data.venda_id;
+        this.clienteId = data.cliente_id;
+        this.clienteNome = data.cliente_nome;
+        this.clienteQuery = data.cliente_nome;
+        this.documentoNumero = data.chave_fiscal || data.documento_numero || String(data.numero_venda);
+        this.itens = (data.itens || []).map(i => ({
+          item_venda_id:i.item_venda_id, produto_id:i.produto_id, produto_nome:i.produto_nome,
+          lote_id:i.lote_id, lote_nome:'', quantidade:i.quantidade,
+          quantidade_maxima:i.quantidade_maxima, valor_unitario:i.valor_unitario,
+          subtotal:i.quantidade * i.valor_unitario,
+        }));
+        if (!this.itens.length) this.erroGeral = 'Todos os itens desta venda ja foram devolvidos.';
+      } catch (e) {
+        this.erroGeral = 'Nao foi possivel carregar a venda original.';
+      } finally { this.carregandoVenda = false; }
+    },
 
     get totalGeral() {
       return this.itens.reduce((s, i) => s + (i.subtotal != null ? i.subtotal : 0), 0);
@@ -716,6 +760,7 @@ function devolucaoCliente() {
     // ── Submit ───────────────────────────────────────────────
     async submitForm() {
       this.erroGeral = '';
+      if (!this.vendaId) { this.erroGeral = 'Carregue a venda original antes de confirmar.'; return; }
       if (!this.clienteId) { this.erroGeral = 'Selecione um cliente.'; return; }
       if (this.itens.length === 0) { this.erroGeral = 'Adicione ao menos um produto.'; return; }
       if (!this.observacao.trim()) { this.erroGeral = 'Informe a observação.'; return; }
@@ -723,12 +768,14 @@ function devolucaoCliente() {
       this.submitting = true;
       const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]').value;
       const payload = {
+        venda_id: this.vendaId,
         cliente_id: this.clienteId,
         cfop: this.cfop,
         documento_numero: this.documentoNumero,
         gerar_credito: this.gerarCredito,
         observacao: this.observacao,
         itens: this.itens.map(i => ({
+          item_venda_id: i.item_venda_id || null,
           produto_id: i.produto_id,
           lote_id: i.lote_id,
           quantidade: i.quantidade,

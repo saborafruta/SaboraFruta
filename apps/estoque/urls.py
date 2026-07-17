@@ -28,6 +28,7 @@ urlpatterns = [
     path('outras-movimentacoes/transferencia-lojas/', views.TransferenciaLojaView.as_view(), name='transferencia-lojas'),
     path('outras-movimentacoes/transferencia-lojas/api/', views.TransferenciaLojaApiView.as_view(), name='transferencia-lojas-api'),
     path('outras-movimentacoes/devolucao/api/', views.DevolucaoClienteApiView.as_view(), name='devolucao-cliente-api'),
+    path('outras-movimentacoes/devolucao/venda/', views.VendaDevolucaoJsonView.as_view(), name='devolucao-venda-json'),
 
     # Inventario
     path('inventarios/', views.InventarioListView.as_view(), name='inventario-list'),

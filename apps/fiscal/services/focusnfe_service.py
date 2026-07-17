@@ -50,6 +50,8 @@ STATUS_FOCUS_PARA_ERP: Dict[str, str] = {
     "cancelado": StatusDocumentoFiscal.CANCELADA,
     "cancelada": StatusDocumentoFiscal.CANCELADA,
     "processando_autorizacao": StatusDocumentoFiscal.PROCESSANDO,
+    "contingencia_offline": StatusDocumentoFiscal.PROCESSANDO,
+    "autorizado_contingencia": StatusDocumentoFiscal.PROCESSANDO,
     "erro_autorizacao": StatusDocumentoFiscal.REJEITADA,
     "nao_autorizado": StatusDocumentoFiscal.REJEITADA,
     "rejeitado": StatusDocumentoFiscal.REJEITADA,
@@ -223,7 +225,7 @@ class FocusNFeService:
         return documento
 
     # -------------------------------------------------------------- emissão
-    def emitir(self, documento: DocumentoFiscal, payload: Dict[str, Any]) -> DocumentoFiscal:
+    def emitir(self, documento: DocumentoFiscal, payload: Dict[str, Any], *, contingencia: bool = False) -> DocumentoFiscal:
         """
         Envia o documento para autorização na SEFAZ via Focus NFe.
 
@@ -241,7 +243,12 @@ class FocusNFeService:
         documento.tentativas_envio = (documento.tentativas_envio or 0) + 1
         t0 = time.monotonic()
         try:
-            retorno = resource.autorizar(ref, payload)
+            if contingencia:
+                if documento.tipo_documento != "nfce" or not hasattr(resource, "autorizar_offline"):
+                    raise ValueError("Contingencia offline disponivel somente para NFC-e.")
+                retorno = resource.autorizar_offline(ref, payload)
+            else:
+                retorno = resource.autorizar(ref, payload)
         except FocusNFeError as exc:
             ms = int((time.monotonic() - t0) * 1000)
             self._registrar_log(
@@ -398,6 +405,8 @@ class FocusNFeService:
             "inscricao_estadual": (filial.inscricao_estadual or "").strip() or "ISENTO",
             "habilita_nfce": True,
             "habilita_nfe": True,
+            "habilita_contingencia_offline_nfce": True,
+            "reaproveita_numero_nfce_contingencia": True,
         }
 
         # Regime tributário (1=SN, 2=SN excesso, 3=Normal)

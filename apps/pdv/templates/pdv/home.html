@@ -2264,7 +2264,7 @@
 
       <!-- Opcoes -->
       <div style="padding:0 12px;display:flex;flex-direction:column;gap:4px;">
-        <button class="impr-opt" @click="emitirDocumento('nfce', vendaFinalizadaData.id); fecharModalImpressao()">
+        <button class="impr-opt" @click="emitirDocumento('nfce', vendaFinalizadaData.id)">
           <div class="impr-opt-icon" style="background:linear-gradient(135deg,#c2410c,#f15a24);">
             <svg fill="none" stroke="#fff" viewBox="0 0 24 24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
               <path d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
@@ -2277,7 +2277,7 @@
           <span class="impr-badge" style="background:#c2410c;color:#f97316;">Fiscal</span>
         </button>
 
-        <button class="impr-opt" @click="emitirDocumento('nfe', vendaFinalizadaData.id); fecharModalImpressao()">
+        <button class="impr-opt" @click="emitirDocumento('nfe', vendaFinalizadaData.id)">
           <div class="impr-opt-icon" style="background:linear-gradient(135deg,#064e3b,#059669);">
             <svg fill="none" stroke="#fff" viewBox="0 0 24 24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
               <path d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2zm7-16v4a1 1 0 001 1h4"/>
@@ -2327,6 +2327,51 @@
         </button>
       </div>
 
+    </div>
+  </div>
+
+  <!-- Modal de prontidao fiscal -->
+  <div x-cloak
+       :style="modalFiscal.show ? 'position:fixed;inset:0;z-index:9300;display:flex;align-items:center;justify-content:center;padding:16px;background:rgba(0,0,0,.84);backdrop-filter:blur(4px);' : 'display:none;'">
+    <div style="width:min(620px,100%);max-height:88vh;overflow:auto;background:#101018;border:1px solid #29293a;border-radius:8px;box-shadow:0 24px 80px rgba(0,0,0,.55);">
+      <div style="padding:22px 24px 16px;border-bottom:1px solid #222232;display:flex;gap:14px;align-items:flex-start;">
+        <div style="width:38px;height:38px;flex:none;border-radius:8px;background:#3b2a08;color:#fbbf24;display:flex;align-items:center;justify-content:center;font-size:22px;font-weight:800;">!</div>
+        <div style="flex:1;min-width:0;">
+          <h3 style="margin:0;color:#f4f4fb;font-size:17px;">Vamos completar alguns dados</h3>
+          <p style="margin:5px 0 0;color:#9292aa;font-size:13px;line-height:1.5;">Corrija os itens abaixo e depois clique em verificar novamente. A venda permanece salva.</p>
+        </div>
+        <button @click="modalFiscal.show=false" title="Fechar" style="border:0;background:transparent;color:#77778d;font-size:22px;cursor:pointer;line-height:1;">&times;</button>
+      </div>
+
+      <div style="padding:16px 24px;display:flex;flex-direction:column;gap:10px;">
+        <template x-for="item in modalFiscal.pendencias" :key="item.code">
+          <div style="padding:14px 0;border-bottom:1px solid #222232;display:flex;gap:14px;align-items:center;">
+            <div style="flex:1;min-width:0;">
+              <div x-text="item.title" style="font-size:13.5px;font-weight:750;color:#f1f1f8;"></div>
+              <div x-text="item.message" style="font-size:12px;color:#8f8fa6;line-height:1.5;margin-top:3px;"></div>
+            </div>
+            <a :href="item.action_url" target="_blank" rel="noopener" x-text="item.action_label"
+               style="flex:none;padding:9px 11px;border:1px solid #f15a24;border-radius:6px;color:#ff8a55;text-decoration:none;font-size:11.5px;font-weight:700;white-space:nowrap;"></a>
+          </div>
+        </template>
+        <p x-show="modalFiscal.erro" x-text="modalFiscal.erro" style="margin:4px 0;color:#f87171;font-size:12px;"></p>
+        <div x-show="modalFiscal.permiteContingencia" style="padding:13px;border-left:3px solid #f59e0b;background:#261d0c;color:#d5b56e;font-size:12px;line-height:1.5;">
+          A SEFAZ pode estar indisponivel. A contingencia permite concluir o atendimento e acompanhar a autorizacao depois.
+        </div>
+      </div>
+
+      <div style="padding:16px 24px 22px;display:flex;justify-content:flex-end;gap:10px;">
+        <button @click="modalFiscal.show=false" style="padding:10px 15px;border:1px solid #303044;border-radius:6px;background:transparent;color:#aaaabd;font-weight:650;cursor:pointer;">Fechar</button>
+        <button @click="emitirDocumento(modalFiscal.tipo, modalFiscal.vendaId)" :disabled="modalFiscal.carregando"
+                x-show="!modalFiscal.permiteContingencia"
+                style="padding:10px 15px;border:0;border-radius:6px;background:#f15a24;color:#fff;font-weight:750;cursor:pointer;">
+          <span x-text="modalFiscal.carregando ? 'Verificando...' : 'Verificar novamente'"></span>
+        </button>
+        <button @click="emitirNfceContingencia()" :disabled="modalFiscal.carregando" x-show="modalFiscal.permiteContingencia"
+                style="padding:10px 15px;border:0;border-radius:6px;background:#d97706;color:#fff;font-weight:750;cursor:pointer;">
+          Emitir em contingencia
+        </button>
+      </div>
     </div>
   </div>
 
@@ -2385,6 +2430,7 @@ function pdv() {
 
     modo: 'venda', horaAtual: '', toast: { show:false, msg:'', tipo:'ok' }, _tt: null,
     modalEstoque: { show: false, msg: '', itens: [] },
+    modalFiscal: { show:false, tipo:'', vendaId:null, carregando:false, pendencias:[], avisos:[], erro:'', permiteContingencia:false },
 
     get totalUnidades() { return this.venda.itens.reduce((s,i)=>s+parseFloat(i.quantidade||0),0); },
     get podeFinalizar() { return this.sessao && this.venda.itens.length>0 && parseFloat(this.venda.restante)<=0.001; },
@@ -3147,6 +3193,21 @@ ${pgtoHtml ? `<hr class="sep">${pgtoHtml}` : ''}
         return;
       }
       if (tipo === 'nfce' || tipo === 'nfe') {
+        this.modalFiscal.carregando = true;
+        this.modalFiscal.erro = '';
+        try {
+          const check = await fetch(`/pdv/api/venda/${vendaId}/prontidao-fiscal/?tipo=${tipo}`);
+          const readiness = await check.json();
+          if (!check.ok && readiness.erro) throw new Error(readiness.erro);
+          if (!readiness.ok) {
+            this.modalFiscal = { show:true, tipo, vendaId, carregando:false, pendencias:readiness.pendencias||[], avisos:readiness.avisos||[], erro:'', permiteContingencia:false };
+            return;
+          }
+        } catch (e) {
+          this.modalFiscal.carregando = false;
+          this.toast_(`Nao foi possivel verificar os dados da ${label}: ${e.message || 'tente novamente'}`, 'erro');
+          return;
+        }
         this.toast_(`Emitindo ${label}…`, 'ok');
         try {
           const endpoint = tipo === 'nfce' ? 'emitir-nfce' : 'emitir-nfe';
@@ -3156,15 +3217,48 @@ ${pgtoHtml ? `<hr class="sep">${pgtoHtml}` : ''}
           });
           const d = await r.json();
           if (!r.ok || d.erro) {
-            this.toast_(`Erro ${label}: ${d.erro || d.mensagem || 'Falha na emissão'}`, 'erro');
+            if (d.pendencias?.length) {
+              this.modalFiscal = { show:true, tipo, vendaId, carregando:false, pendencias:d.pendencias, avisos:d.avisos||[], erro:'', permiteContingencia:false };
+            } else if (d.permite_contingencia && tipo === 'nfce') {
+              this.modalFiscal = { show:true, tipo, vendaId, carregando:false, pendencias:[], avisos:[], erro:d.erro||'', permiteContingencia:true };
+            } else {
+              this.toast_(`Erro ${label}: ${d.erro || d.mensagem || 'Falha na emissão'}`, 'erro');
+            }
           } else {
             const detalhe = d.mensagem ? ` - ${d.mensagem}` : '';
             this.toast_(`${label} enviada! Status: ${d.status}${detalhe}`, 'ok');
             if (d.pdf_danfe_url) window.open(d.pdf_danfe_url, '_blank');
+            this.modalFiscal.show = false;
+            this.fecharModalImpressao();
           }
         } catch { this.toast_(`Erro ao emitir ${label}`, 'erro'); }
+        finally { this.modalFiscal.carregando = false; }
       } else if (tipo === 'nfse') {
         this.toast_(`Emissão de ${label} ainda não implementada neste PDV.`, 'erro');
+      }
+    },
+
+    async emitirNfceContingencia() {
+      const vendaId = this.modalFiscal.vendaId;
+      if (!vendaId) return;
+      this.modalFiscal.carregando = true;
+      try {
+        const r = await fetch(`/pdv/api/venda/${vendaId}/emitir-nfce-contingencia/`, {
+          method:'POST', headers:{'X-CSRFToken':csrf()}
+        });
+        const d = await r.json();
+        if (!r.ok || d.erro) {
+          this.modalFiscal.erro = d.erro || 'Nao foi possivel emitir em contingencia.';
+          return;
+        }
+        this.toast_(d.mensagem || 'NFC-e emitida em contingencia.', 'ok');
+        if (d.pdf_danfe_url) window.open(d.pdf_danfe_url, '_blank');
+        this.modalFiscal.show = false;
+        this.fecharModalImpressao();
+      } catch {
+        this.modalFiscal.erro = 'Sem comunicacao com o servico fiscal. Tente novamente quando a internet voltar.';
+      } finally {
+        this.modalFiscal.carregando = false;
       }
     },
 

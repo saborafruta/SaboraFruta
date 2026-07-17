@@ -21,6 +21,7 @@ from apps.estoque.models import LoteProduto, MovimentacaoEstoque
 from apps.estoque.services.movimentacao_service import MovimentacaoService
 from apps.estoque.views.permissoes import permissoes_estoque
 from apps.produtos.models import Produto
+from apps.pdv.models import DevolucaoPDV, ItemDevolucaoPDV, VendaPDV
 
 # CFOP fixos por tipo de operação
 CFOP_MAP = {
@@ -442,6 +443,51 @@ class LoteSearchJsonView(PermissaoRequiredMixin, View):
         return JsonResponse({'results': resultados})
 
 
+class VendaDevolucaoJsonView(PermissaoRequiredMixin, View):
+    """Localiza a venda original e devolve somente itens ainda devolviveis."""
+
+    permissao_modulo = 'estoque'
+
+    def get(self, request):
+        numero = str(request.GET.get('numero') or '').strip().lstrip('#0') or '0'
+        try:
+            venda = (
+                VendaPDV.objects.for_filial(request.filial_ativa)
+                .select_related('cliente', 'documento_fiscal')
+                .prefetch_related('itens__produto')
+                .get(numero_venda=int(numero), status='finalizada')
+            )
+        except (ValueError, VendaPDV.DoesNotExist):
+            return JsonResponse({'erro': 'Venda finalizada nao encontrada.'}, status=404)
+
+        itens = []
+        for item in venda.itens.all():
+            devolvido = ItemDevolucaoPDV.objects.filter(item_venda=item).aggregate(
+                total=db_models.Sum('quantidade_devolvida')
+            )['total'] or Decimal('0')
+            disponivel = item.quantidade - devolvido
+            if disponivel > 0:
+                itens.append({
+                    'item_venda_id': item.pk,
+                    'produto_id': item.produto_id,
+                    'produto_nome': item.produto.descricao,
+                    'lote_id': item.lote_id,
+                    'quantidade': float(disponivel),
+                    'quantidade_maxima': float(disponivel),
+                    'valor_unitario': float(item.valor_unitario),
+                })
+        return JsonResponse({
+            'ok': True,
+            'venda_id': venda.pk,
+            'numero_venda': venda.numero_venda,
+            'cliente_id': venda.cliente_id,
+            'cliente_nome': venda.cliente.nome_display if venda.cliente else 'Consumidor Final',
+            'documento_numero': str(venda.documento_fiscal.numero) if venda.documento_fiscal_id else '',
+            'chave_fiscal': venda.documento_fiscal.chave if venda.documento_fiscal_id else '',
+            'itens': itens,
+        })
+
+
 class DevolucaoClienteApiView(PermissaoRequiredMixin, View):
     """API JSON: registra devolução de cliente com múltiplos produtos."""
 
@@ -461,6 +507,7 @@ class DevolucaoClienteApiView(PermissaoRequiredMixin, View):
         gerar_credito = bool(body.get('gerar_credito', True))
         observacao = (body.get('observacao') or '').strip()
         itens = body.get('itens', [])
+        venda_id = body.get('venda_id')
 
         if not cliente_id:
             return JsonResponse({'erro': 'Selecione um cliente.'}, status=400)
@@ -474,6 +521,30 @@ class DevolucaoClienteApiView(PermissaoRequiredMixin, View):
             cliente = Cliente.objects.for_filial(filial).get(pk=cliente_id, ativo=True)
         except Cliente.DoesNotExist:
             return JsonResponse({'erro': 'Cliente não encontrado.'}, status=400)
+
+        venda_original = None
+        itens_originais = {}
+        if venda_id:
+            try:
+                venda_original = (
+                    VendaPDV.objects.for_filial(filial)
+                    .prefetch_related('itens')
+                    .get(pk=venda_id, status='finalizada', cliente=cliente)
+                )
+            except VendaPDV.DoesNotExist:
+                return JsonResponse({'erro': 'A venda original nao corresponde a este cliente.'}, status=400)
+            itens_originais = {item.pk: item for item in venda_original.itens.all()}
+            for i, item_data in enumerate(itens, 1):
+                original = itens_originais.get(item_data.get('item_venda_id'))
+                if not original or original.produto_id != item_data.get('produto_id'):
+                    return JsonResponse({'erro': f'O item {i} nao pertence a venda original.'}, status=400)
+                quantidade = Decimal(str(item_data.get('quantidade', 0)))
+                devolvido = ItemDevolucaoPDV.objects.filter(item_venda=original).aggregate(
+                    total=db_models.Sum('quantidade_devolvida')
+                )['total'] or Decimal('0')
+                if quantidade <= 0 or quantidade + devolvido > original.quantidade:
+                    restante = original.quantidade - devolvido
+                    return JsonResponse({'erro': f'Quantidade do item {i} supera o saldo devolvivel ({restante}).'}, status=400)
 
         movs = []
         credito_total = Decimal('0')
@@ -550,6 +621,29 @@ class DevolucaoClienteApiView(PermissaoRequiredMixin, View):
                 usuario=request.user,
                 status=CreditoCliente.Status.DISPONIVEL,
             )
+
+        if venda_original:
+            devolucao = DevolucaoPDV.objects.create(
+                venda_pdv=venda_original,
+                filial=filial,
+                motivo=observacao,
+                tipo_estorno='credito' if gerar_credito else 'sem_credito',
+                valor_estorno=credito_total,
+                usuario=request.user,
+            )
+            for item_data in itens:
+                original = itens_originais[item_data['item_venda_id']]
+                quantidade = Decimal(str(item_data['quantidade']))
+                valor_unitario = Decimal(str(item_data.get('valor_unitario') or original.valor_unitario))
+                ItemDevolucaoPDV.objects.create(
+                    devolucao=devolucao,
+                    item_venda=original,
+                    produto=original.produto,
+                    quantidade_devolvida=quantidade,
+                    valor_unitario=valor_unitario,
+                    valor_total=quantidade * valor_unitario,
+                    motivo_item=observacao,
+                )
 
         msg = f'{len(movs)} item(s) registrado(s) com sucesso.'
         if gerar_credito and credito_total > 0:
