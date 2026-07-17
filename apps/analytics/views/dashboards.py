@@ -66,6 +66,13 @@ def historico_vendas(request):
     data_fim   = request.GET.get('data_fim', '')
     tipo_fiscal = request.GET.get('tipo_fiscal', '')  # emitidas | nfce | nfe | nao_fiscal | cancelada
 
+    if not data_ini and not data_fim and not tipo_fiscal:
+        hoje = date.today()
+        inicio_semana = hoje - timedelta(days=hoje.weekday())
+        fim_semana = inicio_semana + timedelta(days=6)
+        data_ini = inicio_semana.isoformat()
+        data_fim = fim_semana.isoformat()
+
     qs = (
         VendaPDV.objects
         .for_filial(request.filial_ativa)
@@ -129,6 +136,14 @@ def historico_vendas(request):
     elif tipo_fiscal == 'cancelada':
         qs = qs.filter(status='cancelada')
 
+    exibir_totalizador = tipo_fiscal != 'cancelada'
+    qs_totalizador = qs.exclude(status='cancelada')
+    valor_totalizador = (
+        qs_totalizador.aggregate(total=Sum('valor_total'))['total'] or 0
+        if exibir_totalizador else None
+    )
+    quantidade_totalizador = qs_totalizador.count() if exibir_totalizador else 0
+
     total = qs.count()
     paginator = Paginator(qs, 25)
     page_obj = paginator.get_page(request.GET.get('page', 1))
@@ -136,6 +151,10 @@ def historico_vendas(request):
     query_base = request.GET.copy()
     query_base.pop('page', None)
     query_base.pop('tipo_fiscal', None)
+    if data_ini:
+        query_base['data_ini'] = data_ini
+    if data_fim:
+        query_base['data_fim'] = data_fim
     atalhos = []
     for valor, rotulo in [
         ('', 'Todas'),
@@ -160,6 +179,9 @@ def historico_vendas(request):
         'page_obj': page_obj,
         'total': total,
         'atalhos': atalhos,
+        'exibir_totalizador': exibir_totalizador,
+        'valor_totalizador': valor_totalizador,
+        'quantidade_totalizador': quantidade_totalizador,
         'filtros': {
             'pedido': pedido_q,
             'cliente': cliente_q,

@@ -23,11 +23,11 @@
   padding:16px 20px;border-radius:14px;margin-bottom:20px;
   background:var(--surface,#13131e);border:1px solid var(--bd,#1e1e30);
 }
-body.tema-claro .hv-filter-bar { background:#fff;border-color:#e5e7eb; }
+body.tema-claro .hv-filter-bar { background:#eef2f7;border-color:#aeb9c7;box-shadow:0 2px 8px rgba(15,23,42,.08); }
 
 .hv-filter-group { display:flex;flex-direction:column;gap:4px;min-width:130px; }
 .hv-filter-label { font-size:11px;font-weight:600;color:#6b6b88;text-transform:uppercase;letter-spacing:.07em; }
-body.tema-claro .hv-filter-label { color:#6b7280; }
+body.tema-claro .hv-filter-label { color:#334155; }
 
 .hv-input {
   padding:8px 12px;border-radius:8px;font-size:13px;outline:none;
@@ -35,7 +35,7 @@ body.tema-claro .hv-filter-label { color:#6b7280; }
   transition:.15s;font-family:inherit;
 }
 .hv-input:focus { border-color:#f15a24; }
-body.tema-claro .hv-input { background:#f9fafb;border-color:#d1d5db;color:#111827; }
+body.tema-claro .hv-input { background:#fff;border-color:#94a3b8;color:#0f172a;font-weight:600; }
 body.tema-claro .hv-input:focus { border-color:#f15a24; }
 
 .hv-btn-filter {
@@ -49,7 +49,7 @@ body.tema-claro .hv-input:focus { border-color:#f15a24; }
   background:transparent;border:1px solid #2a2a3e;color:#6b6b88;
   cursor:pointer;transition:.15s;text-decoration:none;display:inline-flex;align-items:center;
 }
-body.tema-claro .hv-btn-clear { border-color:#d1d5db;color:#6b7280; }
+body.tema-claro .hv-btn-clear { background:#fff;border-color:#94a3b8;color:#334155; }
 .hv-btn-clear:hover { border-color:#f15a24;color:#f15a24; }
 
 .hv-view-tabs {
@@ -68,14 +68,14 @@ body.tema-claro .hv-btn-clear { border-color:#d1d5db;color:#6b7280; }
   align-items:center;justify-content:center;background:#252538;color:#b8b8ca;font-size:10.5px;
 }
 .hv-view-tab.active .hv-view-count { background:rgba(255,255,255,.2);color:#fff; }
-body.tema-claro .hv-view-tab { background:#fff;border-color:#d1d5db;color:#4b5563; }
+body.tema-claro .hv-view-tab { background:#eef2f7;border-color:#aeb9c7;color:#1e293b;box-shadow:0 1px 3px rgba(15,23,42,.06); }
 body.tema-claro .hv-view-tab.active { background:#f15a24;border-color:#f15a24;color:#fff; }
-body.tema-claro .hv-view-count { background:#f3f4f6;color:#6b7280; }
+body.tema-claro .hv-view-count { background:#d9e0e9;color:#334155; }
 body.tema-claro .hv-view-tab.active .hv-view-count { background:rgba(255,255,255,.25);color:#fff; }
 
 /* ── Tabela ── */
 .hv-table-wrap { border-radius:14px;overflow:hidden;border:1px solid #1e1e30; }
-body.tema-claro .hv-table-wrap { border-color:#e5e7eb; }
+body.tema-claro .hv-table-wrap { border-color:#9eabbc;box-shadow:0 3px 12px rgba(15,23,42,.1); }
 
 .hv-table { width:100%;border-collapse:collapse; }
 .hv-th {
@@ -83,18 +83,27 @@ body.tema-claro .hv-table-wrap { border-color:#e5e7eb; }
   text-transform:uppercase;letter-spacing:.08em;text-align:left;
   background:#0d0d16;border-bottom:1px solid #1e1e30;white-space:nowrap;
 }
-body.tema-claro .hv-th { background:#f9fafb;color:#6b7280;border-color:#e5e7eb; }
+body.tema-claro .hv-th { background:#dce3ec;color:#1e293b;border-color:#9eabbc; }
 
 .hv-tr { border-bottom:1px solid #13131e;transition:.12s; }
 .hv-tr:last-child { border-bottom:none; }
 .hv-tr:hover { background:#0f0f1a; }
-body.tema-claro .hv-tr:hover { background:#f9fafb; }
+body.tema-claro .hv-tr { border-color:#c4cdd9; }
+body.tema-claro .hv-tr:hover .hv-td { background:#dfe7f0; }
 .hv-tr.cancelada { opacity:.65; }
 
 .hv-td { padding:10px 14px;font-size:13px;color:#c0c0d8;vertical-align:middle;background:#13131e; }
-body.tema-claro .hv-td { color:#374151;background:#fff; }
+body.tema-claro .hv-td { color:#111827;background:#f8fafc; }
+body.tema-claro .hv-tr:nth-child(even):not(.cancelada) .hv-td { background:#edf2f7; }
 .hv-tr.cancelada .hv-td { background:#100808; }
-body.tema-claro .hv-tr.cancelada .hv-td { background:#fef2f2; }
+body.tema-claro .hv-tr.cancelada { opacity:1; }
+body.tema-claro .hv-tr.cancelada .hv-td { background:#fee2e2;color:#3f1515; }
+.hv-total-row td { padding:13px 14px;background:#0b0b13;border-top:2px solid #2a2a3e; }
+.hv-total-label { text-align:right;color:#a0a0b5;font-size:11px;font-weight:700;text-transform:uppercase; }
+.hv-total-value { text-align:right;color:#4ade80;font-size:15px;font-weight:850;white-space:nowrap; }
+body.tema-claro .hv-total-row td { background:#dce3ec;border-color:#94a3b8; }
+body.tema-claro .hv-total-label { color:#334155; }
+body.tema-claro .hv-total-value { color:#166534; }
 
 /* ── Situação NFC-e ── */
 .hv-sit {
@@ -109,8 +118,11 @@ body.tema-claro .hv-tr.cancelada .hv-td { background:#fef2f2; }
 body.tema-claro .hv-sit-ok   { color:#15803d; }
 body.tema-claro .hv-sit-err  { color:#dc2626; }
 body.tema-claro .hv-sit-warn { color:#b45309; }
-body.tema-claro .hv-sit-gray { color:#9ca3af; }
-body.tema-claro .hv-sit-msg  { color:#6b7280; }
+body.tema-claro .hv-sit-gray { color:#475569; }
+body.tema-claro .hv-sit-msg  { color:#334155; }
+body.tema-claro .hv-muted { color:#475569 !important; }
+body.tema-claro .hv-money { color:#166534 !important; }
+body.tema-claro .hv-number { color:#1e293b !important; }
 
 /* ── Botões de ação numerados ── */
 .hv-acts { display:flex;gap:3px;flex-wrap:wrap;align-items:center; }
@@ -142,6 +154,8 @@ body.tema-claro .hv-ab-tip { background:#1f2937;color:#f9fafb; }
 .hv-ab-gray:hover { border-color:#9ca3af;color:#e5e7eb; }
 .hv-ab-eye { border-color:#8b5cf6;color:#a78bfa; }
 .hv-ab-eye:hover { background:#7c3aed;border-color:#7c3aed;color:#fff; }
+body.tema-claro .hv-ab-gray { border-color:#64748b;color:#475569; }
+body.tema-claro .hv-ab-eye { border-color:#6d28d9;color:#6d28d9; }
 
 /* ── Modal ── */
 .hv-overlay {
@@ -153,17 +167,17 @@ body.tema-claro .hv-ab-tip { background:#1f2937;color:#f9fafb; }
   background:#13131e;border:1px solid #2a2a3e;
   box-shadow:0 24px 64px rgba(0,0,0,.55);
 }
-body.tema-claro .hv-modal { background:#fff;border-color:#e5e7eb; }
+body.tema-claro .hv-modal { background:#eef2f7;border-color:#94a3b8; }
 .hv-modal-title { font-size:15px;font-weight:700;color:#e5e5f0;margin:0 0 6px; }
 body.tema-claro .hv-modal-title { color:#111827; }
 .hv-modal-sub { font-size:12px;color:#6b6b88;margin-bottom:16px; }
-body.tema-claro .hv-modal-sub { color:#6b7280; }
+body.tema-claro .hv-modal-sub { color:#475569; }
 .hv-modal-textarea {
   width:100%;padding:10px 12px;border-radius:8px;font-size:13px;resize:vertical;
   min-height:80px;background:#0d0d16;border:1px solid #2a2a3e;
   color:#e5e5f0;outline:none;font-family:inherit;box-sizing:border-box;
 }
-body.tema-claro .hv-modal-textarea { background:#f9fafb;border-color:#d1d5db;color:#111827; }
+body.tema-claro .hv-modal-textarea { background:#fff;border-color:#94a3b8;color:#111827; }
 
 /* ── Paginação ── */
 .hv-page { display:flex;align-items:center;gap:6px;justify-content:center;margin-top:20px; }
@@ -171,7 +185,7 @@ body.tema-claro .hv-modal-textarea { background:#f9fafb;border-color:#d1d5db;col
   padding:6px 12px;border-radius:7px;font-size:13px;font-weight:600;
   text-decoration:none;border:1px solid #2a2a3e;color:#9090a0;transition:.12s;
 }
-body.tema-claro .hv-page a, body.tema-claro .hv-page span { border-color:#d1d5db;color:#6b7280; }
+body.tema-claro .hv-page a, body.tema-claro .hv-page span { background:#eef2f7;border-color:#94a3b8;color:#334155; }
 .hv-page a:hover { border-color:#f15a24;color:#f15a24; }
 .hv-page .current { background:#f15a24;color:#fff;border-color:#f15a24; }
 </style>
@@ -185,7 +199,7 @@ body.tema-claro .hv-page a, body.tema-claro .hv-page span { border-color:#d1d5db
   <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;flex-wrap:wrap;gap:12px;">
     <div>
       <h1 style="font-size:20px;font-weight:800;color:var(--t1,#e5e5f0);margin:0 0 2px;">Histórico de Vendas</h1>
-      <p style="font-size:13px;color:#6b6b88;margin:0;">
+      <p class="hv-muted" style="font-size:13px;color:#6b6b88;margin:0;">
         {{ total }} registro{{ total|pluralize }} encontrado{{ total|pluralize }}
       </p>
     </div>
@@ -281,7 +295,7 @@ body.tema-claro .hv-page a, body.tema-claro .hv-page span { border-color:#d1d5db
           </td>
 
           <!-- Data -->
-          <td class="hv-td" style="white-space:nowrap;color:#9090a0;">
+          <td class="hv-td hv-muted" style="white-space:nowrap;color:#9090a0;">
             {{ venda.data_venda|date:"d/m/Y" }}<br>
             <span style="font-size:11px;">{{ venda.data_venda|date:"H:i" }}</span>
           </td>
@@ -290,14 +304,14 @@ body.tema-claro .hv-page a, body.tema-claro .hv-page span { border-color:#d1d5db
           <td class="hv-td">
             {% if venda.cliente %}
               <span style="font-weight:600;display:block;">{{ venda.cliente.razao_social }}</span>
-              <span style="font-size:11px;color:#9090a0;">{{ venda.cliente.cpf_cnpj|default:"" }}</span>
+              <span class="hv-muted" style="font-size:11px;color:#9090a0;">{{ venda.cliente.cpf_cnpj|default:"" }}</span>
             {% else %}
-              <span style="color:#6b6b88;">Consumidor Final</span>
+              <span class="hv-muted" style="color:#6b6b88;">Consumidor Final</span>
             {% endif %}
           </td>
 
           <!-- Pagamento -->
-          <td class="hv-td" style="font-size:12px;color:#9090a0;">
+          <td class="hv-td hv-muted" style="font-size:12px;color:#9090a0;">
             {% for pag in venda.pagamentos.all %}
               <span style="display:block;white-space:nowrap;">{{ pag.forma_pagamento.descricao }}</span>
             {% empty %}
@@ -306,7 +320,7 @@ body.tema-claro .hv-page a, body.tema-claro .hv-page span { border-color:#d1d5db
           </td>
 
           <!-- Total -->
-          <td class="hv-td" style="text-align:right;font-weight:700;color:#4ade80;white-space:nowrap;">
+          <td class="hv-td hv-money" style="text-align:right;font-weight:700;color:#4ade80;white-space:nowrap;">
             R$ {{ venda.valor_total|floatformat:2 }}
           </td>
 
@@ -356,7 +370,7 @@ body.tema-claro .hv-page a, body.tema-claro .hv-page span { border-color:#d1d5db
           </td>
 
           <!-- nNF -->
-          <td class="hv-td" style="text-align:center;font-weight:700;color:#e5e5f0;">
+          <td class="hv-td hv-number" style="text-align:center;font-weight:700;color:#e5e5f0;">
             {% if doc and doc.tipo_documento == 'nfce' %}
               {{ doc.numero }}
             {% elif doc and doc.tipo_documento == 'nfe' %}
@@ -508,6 +522,15 @@ body.tema-claro .hv-page a, body.tema-claro .hv-page span { border-color:#d1d5db
         </tr>
         {% endfor %}
       </tbody>
+      {% if exibir_totalizador %}
+      <tfoot>
+        <tr class="hv-total-row">
+          <td colspan="4" class="hv-total-label">Total de {{ quantidade_totalizador }} venda{{ quantidade_totalizador|pluralize }} válida{{ quantidade_totalizador|pluralize }}</td>
+          <td class="hv-total-value">R$ {{ valor_totalizador|floatformat:2 }}</td>
+          <td colspan="3"></td>
+        </tr>
+      </tfoot>
+      {% endif %}
     </table>
   </div>
 
@@ -996,7 +1019,7 @@ function hvApp() {
 
       const html = `<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8"><title>Comprovante</title>
 <style>
-*{box-sizing:border-box}body{margin:0;background:#eef0f4;color:#171717;font:13px/1.45 Arial,sans-serif}.actions{position:sticky;top:0;padding:12px;display:flex;justify-content:center;gap:8px;background:#19191f}.actions button{padding:9px 14px;border:0;border-radius:6px;background:#f15a24;color:#fff;font-weight:700;cursor:pointer}.actions .secondary{background:#3f3f46}.receipt{width:80mm;min-height:120mm;margin:24px auto;padding:9mm 7mm;background:#fff;box-shadow:0 10px 35px #0002;font-family:'Courier New',monospace}.logo{text-align:center;margin-bottom:8px}.logo img{max-height:90px;max-width:230px;object-fit:contain}h1{font-size:16px;text-align:center;margin:0 0 3px}.sub{text-align:center;font-size:10.5px;margin:2px 0}.sep{border:0;border-top:1px dashed #333;margin:10px 0}.line{display:flex;justify-content:space-between;gap:12px;margin:4px 0}.right{text-align:right;white-space:nowrap}.muted{font-size:10.5px;color:#444;margin-top:2px}table{width:100%;border-collapse:collapse}td{padding:6px 0;border-bottom:1px dotted #aaa;vertical-align:top}.total{font-size:16px;font-weight:800}.cancelamento{margin:12px 0;padding:10px;border:2px solid #b91c1c;background:#fff1f2;line-height:1.55}.cancel-title{text-align:center;color:#b91c1c;font-weight:900;margin-bottom:6px}.footer{text-align:center;font-size:10px;font-weight:700;margin-top:12px}@media print{body{background:#fff}.actions{display:none}.receipt{margin:0;box-shadow:none;width:80mm;padding:5mm}}
+*{box-sizing:border-box}body{margin:0;background:#eef0f4;color:#171717;font:13px/1.45 Arial,sans-serif}.actions{position:sticky;top:0;padding:12px;display:flex;justify-content:center;gap:8px;background:#19191f}.actions button{padding:9px 14px;border:0;border-radius:6px;background:#f15a24;color:#fff;font-weight:700;cursor:pointer}.actions .secondary{background:#3f3f46}.receipt{width:80mm;min-height:120mm;margin:24px auto;padding:9mm 7mm;background:#fff;box-shadow:0 10px 35px #0002;font-family:'Courier New',monospace}.logo{text-align:center;margin-bottom:8px}.logo img{max-height:90px;max-width:230px;object-fit:contain}h1{font-size:16px;text-align:center;margin:0 0 3px}.sub{text-align:center;font-size:10.5px;margin:2px 0}.sep{border:0;border-top:1px dashed #333;margin:10px 0}.line{display:flex;justify-content:space-between;gap:12px;margin:4px 0}.right{text-align:right;white-space:nowrap}.muted{font-size:10.5px;color:#444;margin-top:2px}table{width:100%;border-collapse:collapse}td{padding:6px 0;border-bottom:1px dotted #aaa;vertical-align:top}.total{font-size:16px;font-weight:800}.cancelamento{margin:12px 0;padding:10px;border:2px solid #b91c1c;background:#fff1f2;line-height:1.55}.cancel-title{text-align:center;color:#b91c1c;font-weight:900;margin-bottom:6px}.footer{text-align:center;font-size:10px;font-weight:700;margin-top:12px}@page{size:A4 portrait;margin:12mm}@media print{html,body{width:100%;background:#fff}.actions{display:none}.receipt{width:76mm;min-height:0;margin:0 auto;padding:3mm 4mm;box-shadow:none;font-size:9px;line-height:1.3}.logo{margin-bottom:4px}.logo img{max-height:42px;max-width:170px}h1{font-size:12px}.sub,.muted{font-size:8px}.sub{margin:1px 0}.sep{margin:5px 0}.line{margin:2px 0}.receipt td{padding:3px 0}.total{font-size:12px}.cancelamento{margin:6px 0;padding:6px;line-height:1.35;break-inside:avoid}.cancel-title{margin-bottom:3px}.footer{font-size:8px;margin-top:6px}}
 </style></head><body>
 <div class="actions"><button onclick="window.print()">Imprimir / salvar PDF</button><button class="secondary" onclick="window.close()">Fechar</button></div>
 <main class="receipt">
