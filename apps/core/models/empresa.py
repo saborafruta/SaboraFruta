@@ -21,6 +21,12 @@ class Empresa(TimestampedModel):
         LUCRO_REAL = 'lucro_real', 'Lucro Real'
         MEI = 'mei', 'MEI'
 
+    class CodigoRegimeTributario(models.IntegerChoices):
+        SIMPLES_NACIONAL = 1, '1 - Simples Nacional'
+        SIMPLES_EXCESSO_SUBLIMITE = 2, '2 - Simples Nacional com excesso de sublimite'
+        REGIME_NORMAL = 3, '3 - Regime Normal'
+        MEI = 4, '4 - Simples Nacional - MEI'
+
     class AmbienteNFe(models.IntegerChoices):
         PRODUCAO = 1, 'Produção'
         HOMOLOGACAO = 2, 'Homologação'
@@ -33,7 +39,8 @@ class Empresa(TimestampedModel):
 
     regime_tributario = models.CharField(max_length=20, choices=RegimeTributario.choices)
     codigo_regime_tributario = models.SmallIntegerField(
-        help_text='1=SN 2=SN_excesso 3=Normal',
+        choices=CodigoRegimeTributario.choices,
+        help_text='CRT do emitente: 1=SN, 2=SN excesso, 3=Normal, 4=MEI.',
     )
 
     # Endereço
@@ -115,7 +122,8 @@ class Filial(TimestampedModel):
     codigo_regime_tributario = models.SmallIntegerField(
         null=True,
         blank=True,
-        help_text='1=SN 2=SN_excesso 3=Normal. Se vazio, usa o codigo da empresa.',
+        choices=Empresa.CodigoRegimeTributario.choices,
+        help_text='CRT do emitente. Se vazio, usa o codigo da empresa.',
     )
     ambiente_nfe = models.SmallIntegerField(
         choices=AmbienteNFe.choices, default=AmbienteNFe.HOMOLOGACAO,

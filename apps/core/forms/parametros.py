@@ -8,10 +8,7 @@ from apps.core.models.parametros import ParametrosSistema
 
 REGIME_CODIGO_CHOICES = [
     ('', 'Usar padrao da empresa'),
-    (1, '1 - Simples Nacional'),
-    (2, '2 - Simples Nacional com excesso de sublimite'),
-    (3, '3 - Regime Normal'),
-]
+] + list(Empresa.CodigoRegimeTributario.choices)
 
 
 def _aplicar_estilo(form):

@@ -104,7 +104,8 @@ def _somente_digitos(valor: Any) -> str:
 def _regime_tributario_cod(filial) -> int:
     """
     Retorna o código do regime tributário da filial.
-    1=Simples Nacional, 2=SN excesso, 3=Normal/Lucro Real/Presumido
+    1=Simples Nacional, 2=SN excesso, 3=Normal/Lucro Real/Presumido,
+    4=Simples Nacional - MEI.
     """
     cod = getattr(filial, "codigo_regime_tributario", None)
     if cod:
@@ -140,7 +141,7 @@ def _aplicar_icms(item: dict, produto, regime: int, base: Decimal) -> None:
     if beneficio:
         item["codigo_beneficio_fiscal"] = beneficio
 
-    if regime == 1:
+    if regime in {1, 4}:
         if situacao in {"101", "201"} and aliquota > 0:
             item["icms_aliquota_credito_simples"] = float(aliquota)
             item["icms_valor_credito_simples"] = _float_dinheiro(_percentual(base, aliquota))
@@ -488,6 +489,50 @@ def _local_destino(filial, cliente) -> str:
     return "2" if uf_destino and uf_emitente and uf_destino != uf_emitente else "1"
 
 
+def _indicador_consumidor_final(cliente) -> int:
+    """CPF e sempre consumidor final; para CNPJ respeita o cadastro fiscal."""
+    cpf_cnpj = _somente_digitos(getattr(cliente, "cpf_cnpj", ""))
+    if len(cpf_cnpj) == 11:
+        return 1
+    return 1 if getattr(cliente, "consumidor_final", True) else 0
+
+
+def _validar_regras_mei(filial, items: list[dict], modelo: int, local_destino: str) -> None:
+    """Antecipa as validacoes N12a-80/81/90/91 da NT 2024.001."""
+    if _regime_tributario_cod(filial) != 4 or local_destino == "3":
+        return
+
+    csosn_permitidos = {"102", "300"} if modelo == 65 else {"102", "300", "400", "900"}
+    cfops_csosn_900 = {
+        "1202", "1904", "2202", "2904", "5202", "5904", "6202", "6904",
+        "1501", "1503", "1504", "1505", "1506", "1553", "2501", "2503",
+        "2504", "2505", "2506", "2553", "5501", "5502", "5504", "5505",
+        "5551", "5933", "6501", "6502", "6504", "6505", "6551", "6933",
+    }
+    for item in items:
+        numero = item.get("numero_item")
+        csosn = str(item.get("icms_situacao_tributaria") or "")
+        cfop = str(item.get("cfop") or "")
+        if csosn not in csosn_permitidos:
+            permitidos = ", ".join(sorted(csosn_permitidos))
+            raise DadosInvalidosError(
+                f"Item {numero}: emitente MEI (CRT 4) aceita CSOSN {permitidos} "
+                f"na NF-{'C' if modelo == 65 else ''}e."
+            )
+        if modelo == 65 and cfop != "5102":
+            raise DadosInvalidosError(
+                f"Item {numero}: NFC-e de emitente MEI aceita somente CFOP 5102."
+            )
+        if modelo == 55 and csosn == "102" and cfop not in {"5102", "6102"}:
+            raise DadosInvalidosError(
+                f"Item {numero}: NF-e de emitente MEI com CSOSN 102 aceita CFOP 5102 ou 6102."
+            )
+        if modelo == 55 and csosn == "900" and cfop not in cfops_csosn_900:
+            raise DadosInvalidosError(
+                f"Item {numero}: CFOP {cfop} nao e permitido para emitente MEI com CSOSN 900."
+            )
+
+
 def _aplicar_totais_fiscais(payload: dict, venda, items: list[dict]) -> None:
     fontes_ibpt = {
         item.pop('_ibpt_fonte') for item in items if item.get('_ibpt_fonte')
@@ -684,6 +729,8 @@ class NfcePayloadBuilder:
 
         _aplicar_totais_fiscais(payload, venda, items)
 
+        _validar_regras_mei(filial, items, modelo=65, local_destino=local_destino)
+
         # Destinatario: campos no topo (formato v2)
         _aplicar_destinatario(payload, cliente, exigir_endereco=False, incluir_contato=False)
 
@@ -727,8 +774,7 @@ class NfePayloadBuilder:
             "data_entrada_saida": data_emissao,
             "tipo_documento": "1",
             "finalidade_emissao": "1",
-            # Inteiro intencional: gera indFinal=1.
-            "consumidor_final": 1,
+            "consumidor_final": _indicador_consumidor_final(cliente),
             "presenca_comprador": "1",
             "local_destino": local_destino,
             "modalidade_frete": "9",
@@ -737,6 +783,8 @@ class NfePayloadBuilder:
         }
 
         _aplicar_totais_fiscais(payload, venda, items)
+
+        _validar_regras_mei(filial, items, modelo=55, local_destino=local_destino)
 
         _aplicar_destinatario(payload, cliente, exigir_endereco=True)
 

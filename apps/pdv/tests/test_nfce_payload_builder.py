@@ -168,6 +168,75 @@ class NfePayloadBuilderTests(TestCase):
         self.assertNotIn("valor_total_tributos", payload)
         self.assertNotIn("valor_total_tributos", item)
 
+    def test_nfe_cnpj_nao_consumidor_final_respeita_cadastro(self):
+        cliente = self.criar_cliente(
+            tipo_pessoa=TipoPessoa.JURIDICA,
+            razao_social="REVENDA LTDA",
+            cpf_cnpj="52819813000101",
+            consumidor_final=False,
+            contribuinte_icms=True,
+            inscricao_estadual="206474385",
+            endereco="Rua das Perdizes",
+            numero="50",
+            bairro="Pitimbu",
+            cidade="Natal",
+            uf="RN",
+            cep="59067480",
+            codigo_municipio_ibge="2408102",
+        )
+        venda = self.criar_venda(cliente)
+
+        payload = NfePayloadBuilder.build(venda, numero_nfe=7, serie_nfe=1)
+
+        self.assertEqual(payload["consumidor_final"], 0)
+        self.assertEqual(payload["indicador_inscricao_estadual_destinatario"], "1")
+
+    def test_nfe_cpf_e_sempre_consumidor_final(self):
+        cliente = self.criar_cliente(
+            consumidor_final=False,
+            endereco="Rua Teste",
+            numero="10",
+            bairro="Centro",
+            cidade="Natal",
+            uf="RN",
+            cep="59000000",
+            codigo_municipio_ibge="2408102",
+        )
+        venda = self.criar_venda(cliente)
+
+        payload = NfePayloadBuilder.build(venda, numero_nfe=8, serie_nfe=1)
+
+        self.assertEqual(payload["consumidor_final"], 1)
+
+    def test_mei_permite_nfe_venda_com_csosn_102(self):
+        cliente = self.criar_cliente(
+            endereco="Rua Teste",
+            numero="10",
+            bairro="Centro",
+            cidade="Natal",
+            uf="RN",
+            cep="59000000",
+            codigo_municipio_ibge="2408102",
+        )
+        venda = self.criar_venda(cliente)
+        self.filial.codigo_regime_tributario = 4
+        self.filial.save(update_fields=["codigo_regime_tributario"])
+
+        payload = NfePayloadBuilder.build(venda, numero_nfe=9, serie_nfe=1)
+
+        self.assertEqual(payload["items"][0]["icms_situacao_tributaria"], "102")
+
+    def test_mei_bloqueia_csosn_invalido_antes_do_envio(self):
+        venda = self.criar_venda(self.criar_cliente())
+        self.filial.codigo_regime_tributario = 4
+        self.filial.save(update_fields=["codigo_regime_tributario"])
+        produto = venda.itens.get().produto
+        produto.cst_csosn = "400"
+        produto.save(update_fields=["cst_csosn"])
+
+        with self.assertRaisesMessage(DadosInvalidosError, "aceita CSOSN 102, 300"):
+            NfcePayloadBuilder.build(venda, numero=1, serie=1)
+
     def test_nfce_sem_tabela_local_nao_inventa_vtottrib(self):
         venda = self.criar_venda(self.criar_cliente())
 
