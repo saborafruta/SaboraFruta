@@ -46,8 +46,12 @@ class FilialIdentidadeForm(forms.ModelForm):
                 choices=[('', 'Usar padrao da empresa')] + list(Empresa.RegimeTributario.choices),
             ),
             'codigo_regime_tributario': forms.Select(choices=REGIME_CODIGO_CHOICES),
-            'focusnfe_token': forms.TextInput(
-                attrs={'autocomplete': 'off', 'placeholder': 'Token da filial na Focus'},
+            'focusnfe_token': forms.PasswordInput(
+                render_value=False,
+                attrs={
+                    'autocomplete': 'new-password',
+                    'placeholder': 'Configurado; deixe em branco para manter',
+                },
             ),
             'focusnfe_ambiente': forms.Select(choices=Filial.AmbienteNFe.choices),
         }
@@ -70,6 +74,14 @@ class FilialIdentidadeForm(forms.ModelForm):
             raise forms.ValidationError('CEP deve conter 8 digitos.')
         return cep
 
+    def clean_focusnfe_token(self):
+        token = (self.cleaned_data.get('focusnfe_token') or '').strip()
+        if token:
+            return token
+        if self.instance and self.instance.pk:
+            return self.instance.focusnfe_token
+        return ''
+
 
 class ParametrosSistemaForm(forms.ModelForm):
     """General parameters that belong to the current branch."""
@@ -88,12 +100,19 @@ class ParametrosSistemaForm(forms.ModelForm):
             'email_secundario': forms.EmailInput(attrs={'placeholder': 'contato@empresa.com.br'}),
             'logo_url': forms.URLInput(attrs={'placeholder': 'https://... (URL pública da logo)'}),
             'senha_certificado': forms.PasswordInput(
-                render_value=True,
-                attrs={'autocomplete': 'off', 'placeholder': 'Senha do certificado A1'},
+                render_value=False,
+                attrs={
+                    'autocomplete': 'new-password',
+                    'placeholder': 'Configurada; deixe em branco para manter',
+                },
             ),
             'nfce_csc_id': forms.TextInput(attrs={'placeholder': 'Ex.: 000001'}),
-            'nfce_csc_token': forms.TextInput(
-                attrs={'autocomplete': 'off', 'placeholder': 'CSC/token NFC-e'},
+            'nfce_csc_token': forms.PasswordInput(
+                render_value=False,
+                attrs={
+                    'autocomplete': 'new-password',
+                    'placeholder': 'Configurado; deixe em branco para manter',
+                },
             ),
             'email_resposta': forms.EmailInput(attrs={'placeholder': 'fiscal@empresa.com.br'}),
             'texto_padrao_email': forms.Textarea(attrs={
@@ -109,3 +128,17 @@ class ParametrosSistemaForm(forms.ModelForm):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         _aplicar_estilo(self)
+
+    def _segredo_ou_atual(self, campo):
+        valor = (self.cleaned_data.get(campo) or '').strip()
+        if valor:
+            return valor
+        if self.instance and self.instance.pk:
+            return getattr(self.instance, campo, '')
+        return ''
+
+    def clean_senha_certificado(self):
+        return self._segredo_ou_atual('senha_certificado')
+
+    def clean_nfce_csc_token(self):
+        return self._segredo_ou_atual('nfce_csc_token')

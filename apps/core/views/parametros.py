@@ -212,7 +212,30 @@ def parametros_sistema(request):
                     pass
             params_salvos.save()
             _salvar_documentos(request, documentos)
-            messages.success(request, 'Parametros do sistema salvos com sucesso.')
+            if request.POST.get('acao') == 'salvar_sincronizar_focus':
+                try:
+                    from apps.fiscal.services.focusnfe_service import FocusNFeService
+                    retorno = FocusNFeService().sincronizar_empresa(filial_salva, params_salvos)
+                    aviso = (
+                        (retorno or {}).get('_aviso_certificado')
+                        if isinstance(retorno, dict)
+                        else None
+                    )
+                    mensagem = 'Parametros salvos e empresa sincronizada com a Focus.'
+                    if aviso:
+                        mensagem += f' Aviso: {aviso}'
+                    messages.success(request, mensagem)
+                except Exception as exc:
+                    import logging
+                    logging.getLogger(__name__).exception(
+                        'Parametros salvos, mas a sincronizacao com a Focus falhou'
+                    )
+                    messages.error(
+                        request,
+                        f'Parametros salvos, mas a sincronizacao com a Focus falhou: {exc}',
+                    )
+            else:
+                messages.success(request, 'Parametros do sistema salvos com sucesso.')
             return redirect('core:admin_parametros')
         messages.error(request, 'Verifique os campos destacados e tente novamente.')
     else:

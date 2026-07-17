@@ -4,7 +4,9 @@ from django.core.exceptions import PermissionDenied
 from django.http import HttpResponse
 from django.test import RequestFactory, TestCase
 
+from apps.core.forms.parametros import FilialIdentidadeForm, ParametrosSistemaForm
 from apps.core.models import Empresa, Filial, PerfilAcesso, Usuario
+from apps.core.models.parametros import ParametrosSistema
 from apps.core.views.parametros import parametros_sistema
 
 
@@ -72,3 +74,40 @@ class ParametrosSistemaAccessTests(TestCase):
 
         with self.assertRaises(PermissionDenied):
             parametros_sistema(request)
+
+    def test_formulario_nao_expoe_segredos_e_preserva_campos_vazios(self):
+        self.filial.focusnfe_token = 'token-focus-secreto'
+        self.filial.save(update_fields=['focusnfe_token'])
+        params = ParametrosSistema.objects.create(
+            filial=self.filial,
+            senha_certificado='senha-certificado',
+            nfce_csc_token='csc-secreto',
+        )
+
+        form_filial = FilialIdentidadeForm(instance=self.filial)
+        form_params = ParametrosSistemaForm(instance=params)
+
+        self.assertNotIn('token-focus-secreto', form_filial.as_p())
+        self.assertNotIn('senha-certificado', form_params.as_p())
+        self.assertNotIn('csc-secreto', form_params.as_p())
+
+        filial_data = {
+            field: form_filial.initial.get(field, '')
+            for field in form_filial.fields
+        }
+        filial_data['focusnfe_token'] = ''
+        filial_data['cnpj'] = self.filial.cnpj
+        filial_post = FilialIdentidadeForm(filial_data, instance=self.filial)
+        self.assertTrue(filial_post.is_valid(), filial_post.errors)
+        self.assertEqual(filial_post.cleaned_data['focusnfe_token'], 'token-focus-secreto')
+
+        params_data = {
+            field: form_params.initial.get(field, '')
+            for field in form_params.fields
+            if field != 'certificado_digital'
+        }
+        params_data.update({'senha_certificado': '', 'nfce_csc_token': ''})
+        params_post = ParametrosSistemaForm(params_data, instance=params)
+        self.assertTrue(params_post.is_valid(), params_post.errors)
+        self.assertEqual(params_post.cleaned_data['senha_certificado'], 'senha-certificado')
+        self.assertEqual(params_post.cleaned_data['nfce_csc_token'], 'csc-secreto')

@@ -498,6 +498,7 @@
         <div>
           <label class="param-label">Token Focus</label>
           {{ form_filial.focusnfe_token }}
+          <p class="param-card-sub mt-1">Para sincronizar a empresa, use o Token Principal de Producao.</p>
         </div>
         <div>
           <label class="param-label">Certificado A1 (.pfx/.p12)</label>
@@ -522,24 +523,14 @@
         </div>
       </div>
 
-      <!-- Botao Sincronizar com Focus -->
-      <div class="mt-5 flex items-center gap-3" x-data="syncFocus()">
-        <button type="button" @click="sincronizar()"
-          :disabled="loading"
-          class="inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all"
-          :class="loading ? 'opacity-50 cursor-not-allowed bg-blue-500 text-white' : 'bg-blue-600 hover:bg-blue-700 text-white'">
-          <svg x-show="!loading" xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+      <div class="mt-5 flex items-center gap-3">
+        <button type="submit" name="acao" value="salvar_sincronizar_focus"
+          class="inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all bg-blue-600 hover:bg-blue-700 text-white">
+          <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
             <path stroke-linecap="round" stroke-linejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
           </svg>
-          <svg x-show="loading" class="w-4 h-4 animate-spin" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
-            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
-          </svg>
-          <span x-text="loading ? 'Sincronizando...' : 'Sincronizar com Focus'"></span>
+          <span>Salvar e sincronizar com Focus</span>
         </button>
-        <span x-show="msg" x-text="msg"
-          :class="ok ? 'text-green-600' : 'text-red-600'"
-          class="text-sm font-medium" x-cloak></span>
       </div>
     </div>
 
@@ -586,45 +577,9 @@
 
     <div class="param-actions flex justify-end gap-3 pb-4">
       <a href="{% url 'core:admin_central' %}" class="btn-secondary">Cancelar</a>
-      <button type="submit" class="param-btn-salvar">Salvar parametros</button>
+      <button type="submit" name="acao" value="salvar" class="param-btn-salvar">Salvar parametros</button>
     </div>
   </form>
 </div>
 
-<script>
-function syncFocus() {
-  return {
-    loading: false,
-    ok: false,
-    msg: '',
-    async sincronizar() {
-      this.loading = true;
-      this.msg = '';
-      try {
-        const csrf = document.cookie.match(/csrftoken=([^;]+)/)?.[1] || '';
-        const r = await fetch('{% url "core:admin_parametros_sincronizar_focus" %}', {
-          method: 'POST',
-          headers: { 'X-CSRFToken': csrf, 'Content-Type': 'application/json' },
-        });
-        const d = await r.json();
-        if (d.ok) {
-          this.ok = true;
-          this.msg = d.aviso
-            ? 'Sincronizado (sem certificado: ' + d.aviso + ')'
-            : 'Empresa sincronizada com sucesso!';
-        } else {
-          this.ok = false;
-          this.msg = d.erro || 'Erro ao sincronizar.';
-        }
-      } catch (e) {
-        this.ok = false;
-        this.msg = 'Erro de comunicacao.';
-      } finally {
-        this.loading = false;
-        setTimeout(() => { this.msg = ''; }, 6000);
-      }
-    },
-  };
-}
-</script>
 {% endblock %}
