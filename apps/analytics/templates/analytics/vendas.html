@@ -335,13 +335,13 @@ body.tema-claro .hv-page a, body.tema-claro .hv-page span { border-color:#d1d5db
           <td class="hv-td">
             <div class="hv-acts">
 
-              {# 1 — Cancelar NFC-e (se autorizada) ou Cancelar Venda (se sem fiscal) #}
+              {# 1 — Cancelar documento fiscal (se autorizado) ou Cancelar Venda (se sem fiscal) #}
               {% if venda.status == 'finalizada' %}
-                {% if doc and doc.tipo_documento == 'nfce' and doc.status == 'autorizada' %}
+                {% if doc and doc.status == 'autorizada' %}
                 <button class="hv-ab hv-ab-red"
-                        onclick="hvApp_instance.abrirCancelar({{ venda.pk }}, '{{ venda.numero_venda|stringformat:'06d' }}', 'nfce')"
-                        title="Cancelar NFC-e">
-                  <span class="hv-ab-tip">1 – Cancelar NFC-e</span>
+                        onclick="hvApp_instance.abrirCancelar({{ venda.pk }}, '{{ venda.numero_venda|stringformat:'06d' }}', '{{ doc.tipo_documento }}')"
+                        title="Cancelar {{ doc.tipo_documento|upper }}">
+                  <span class="hv-ab-tip">1 – Cancelar {{ doc.tipo_documento|upper }}</span>
                   1
                 </button>
                 {% elif not doc or doc.status != 'autorizada' %}
@@ -544,14 +544,17 @@ body.tema-claro .hv-page a, body.tema-claro .hv-page span { border-color:#d1d5db
       <h3 class="hv-modal-title">Cancelar <span x-text="modal.tipo.toUpperCase()"></span></h3>
       <p class="hv-modal-sub">Venda #<strong x-text="modal.numero"></strong> — A justificativa deve ter ao menos 15 caracteres.</p>
       <textarea x-model="modal.justificativa" placeholder="Motivo do cancelamento..."
-                class="hv-modal-textarea"
+                class="hv-modal-textarea" maxlength="255"
                 @focus="$el.style.borderColor='#f15a24'" @blur="$el.style.borderColor='#2a2a3e'"></textarea>
+      <div style="margin-top:5px;text-align:right;font-size:11px;color:#8d8da3;">
+        <span x-text="modal.justificativa.trim().length"></span>/255 caracteres
+      </div>
       <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:14px;">
         <button class="hv-btn-clear" @click="modal.show=false" style="padding:8px 18px;">Voltar</button>
-        <button @click="confirmarCancelar()" :disabled="modal.loading"
+        <button @click="confirmarCancelar()" :disabled="modal.loading || modal.justificativa.trim().length < 15"
                 style="padding:8px 20px;border-radius:8px;font-size:13px;font-weight:700;
                        background:#dc2626;border:none;color:#fff;cursor:pointer;"
-                :style="modal.loading ? 'opacity:.6;cursor:not-allowed;' : ''">
+                :style="(modal.loading || modal.justificativa.trim().length < 15) ? 'opacity:.6;cursor:not-allowed;' : ''">
           <span x-show="!modal.loading">Confirmar cancelamento</span>
           <span x-show="modal.loading">Cancelando…</span>
         </button>
@@ -563,13 +566,19 @@ body.tema-claro .hv-page a, body.tema-claro .hv-page span { border-color:#d1d5db
   <div class="hv-overlay" x-show="modalCancelV.show" x-cloak @keydown.escape.window="modalCancelV.show=false" style="display:none;">
     <div class="hv-modal">
       <h3 class="hv-modal-title">Cancelar Venda</h3>
-      <p class="hv-modal-sub">Venda #<strong x-text="modalCancelV.numero"></strong> — Esta ação cancela o cupom no sistema. Não pode ser desfeita.</p>
+      <p class="hv-modal-sub">Venda #<strong x-text="modalCancelV.numero"></strong> — Informe o motivo com ao menos 15 caracteres. Se houver nota autorizada, ela será cancelada antes da venda.</p>
+      <textarea x-model="modalCancelV.justificativa" placeholder="Motivo do cancelamento..."
+                class="hv-modal-textarea" maxlength="255"
+                @focus="$el.style.borderColor='#f15a24'" @blur="$el.style.borderColor='#2a2a3e'"></textarea>
+      <div style="margin-top:5px;text-align:right;font-size:11px;color:#8d8da3;">
+        <span x-text="modalCancelV.justificativa.trim().length"></span>/255 caracteres
+      </div>
       <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:14px;">
         <button class="hv-btn-clear" @click="modalCancelV.show=false" style="padding:8px 18px;">Voltar</button>
-        <button @click="confirmarCancelarVenda()" :disabled="modalCancelV.loading"
+        <button @click="confirmarCancelarVenda()" :disabled="modalCancelV.loading || modalCancelV.justificativa.trim().length < 15"
                 style="padding:8px 20px;border-radius:8px;font-size:13px;font-weight:700;
                        background:#dc2626;border:none;color:#fff;cursor:pointer;"
-                :style="modalCancelV.loading ? 'opacity:.6;cursor:not-allowed;' : ''">
+                :style="(modalCancelV.loading || modalCancelV.justificativa.trim().length < 15) ? 'opacity:.6;cursor:not-allowed;' : ''">
           <span x-show="!modalCancelV.loading">Confirmar cancelamento</span>
           <span x-show="modalCancelV.loading">Cancelando…</span>
         </button>
@@ -609,7 +618,7 @@ function hvApp() {
     modal:        { show:false, vendaId:null, numero:'', tipo:'nfce', justificativa:'', loading:false },
     modalInut:    { show:false, tipo:'nfce', serie:1, numero_ini:'', numero_fim:'', justificativa:'', loading:false },
     modalEmail:   { show:false, vendaId:null, numero:'', emails:'', loading:false },
-    modalCancelV: { show:false, vendaId:null, numero:'', loading:false },
+    modalCancelV: { show:false, vendaId:null, numero:'', justificativa:'', loading:false },
 
     init() {
       window.hvApp_instance = this;
@@ -662,14 +671,20 @@ function hvApp() {
     },
 
     abrirCancelarVenda(vendaId, numero) {
-      this.modalCancelV = { show:true, vendaId, numero, loading:false };
+      this.modalCancelV = { show:true, vendaId, numero, justificativa:'', loading:false };
     },
 
     async confirmarCancelarVenda() {
+      const justificativa = this.modalCancelV.justificativa.trim();
+      if (justificativa.length < 15) {
+        this.toast('Justificativa deve ter ao menos 15 caracteres.', 'err'); return;
+      }
       this.modalCancelV.loading = true;
       try {
         const r = await fetch(`/pdv/api/venda/${this.modalCancelV.vendaId}/cancelar-venda/`, {
-          method:'POST', headers:{'X-CSRFToken':this.csrf()}
+          method:'POST',
+          headers:{'Content-Type':'application/json','X-CSRFToken':this.csrf()},
+          body: JSON.stringify({ justificativa }),
         });
         const d = await r.json();
         if (d.ok) {
