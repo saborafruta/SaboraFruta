@@ -7,10 +7,12 @@ from apps.cadastros.models import Cliente
 from apps.core.constants.choices import TipoPessoa
 from apps.core.models import Empresa, Filial, PerfilAcesso, Usuario
 from apps.core.services.exceptions import DadosInvalidosError
-from apps.financeiro.constants.enums import TipoFormaPagamento
+from apps.financeiro.constants.enums import StatusDocumentoFiscal, TipoDocumentoFiscal, TipoFormaPagamento
 from apps.financeiro.models import FormaPagamento
+from apps.financeiro.models.fiscal import DocumentoFiscal
+from apps.fiscal.services.focusnfe_service import FocusNFeService
 from apps.pdv.models import ItemVendaPDV, PagamentoVendaPDV, VendaPDV
-from apps.pdv.services.nfce_payload_builder import NfePayloadBuilder
+from apps.pdv.services.nfce_payload_builder import NfePayloadBuilder, _validar_configuracao_nfce
 from apps.produtos.models import Produto, ProdutoFilial, UnidadeMedida, UnidadeMedidaFilial
 
 
@@ -150,3 +152,43 @@ class NfePayloadBuilderTests(TestCase):
         self.assertEqual(payload["indicador_inscricao_estadual_destinatario"], "9")
         self.assertEqual(item["icms_situacao_tributaria"], "102")
         self.assertNotIn("icms_csosn", item)
+
+    def test_nfce_exige_token_focus_e_csc_configurados(self):
+        from apps.core.models.parametros import ParametrosSistema
+
+        params = ParametrosSistema.objects.create(filial=self.filial)
+
+        with self.assertRaisesMessage(DadosInvalidosError, "Token Focus"):
+            _validar_configuracao_nfce(self.filial, params)
+
+        self.filial.focusnfe_token = "focus-token"
+        self.filial.focusnfe_ambiente = 1
+        self.filial.save(update_fields=["focusnfe_token", "focusnfe_ambiente"])
+
+        with self.assertRaisesMessage(DadosInvalidosError, "CSC ID"):
+            _validar_configuracao_nfce(self.filial, params)
+
+    def test_rejeicao_hash_qrcode_traz_diagnostico_csc(self):
+        documento = DocumentoFiscal.objects.create(
+            filial=self.filial,
+            tipo_documento=TipoDocumentoFiscal.NFCE,
+            origem_tipo="venda_pdv",
+            origem_id=1,
+            numero=2,
+            serie=1,
+            emitente_cnpj=self.filial.cnpj,
+            status=StatusDocumentoFiscal.PROCESSANDO,
+            valor_total=Decimal("4.00"),
+            usuario=self.usuario,
+        )
+
+        FocusNFeService().aplicar_retorno(documento, {
+            "status": "erro_autorizacao",
+            "status_sefaz": "464",
+            "mensagem_sefaz": "Rejeicao: Codigo de Hash no QR-Code difere do calculado",
+        })
+
+        documento.refresh_from_db()
+        self.assertEqual(documento.status, StatusDocumentoFiscal.REJEITADA)
+        self.assertIn("CSC Token", documento.mensagem_sefaz)
+        self.assertIn("nao envia CSC", documento.mensagem_sefaz)

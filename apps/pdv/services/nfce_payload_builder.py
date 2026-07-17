@@ -196,6 +196,22 @@ def _montar_formas_pagamento(pagamentos_qs) -> list:
     return pgtos or [{"forma_pagamento": "99", "valor_pagamento": 0.0}]
 
 
+def _validar_configuracao_nfce(filial, params) -> None:
+    token = (getattr(filial, "focusnfe_token", "") or "").strip()
+    if not token:
+        raise DadosInvalidosError("Configure o Token Focus NFe da filial antes de emitir NFC-e.")
+
+    csc_id = (getattr(params, "nfce_csc_id", "") or "").strip()
+    csc_token = (getattr(params, "nfce_csc_token", "") or "").strip()
+    if not csc_id or not csc_token:
+        ambiente = int(getattr(filial, "focusnfe_ambiente", 2) or 2)
+        nome_ambiente = "producao" if ambiente == 1 else "homologacao"
+        raise DadosInvalidosError(
+            "Configure o CSC ID e o CSC Token NFC-e nos Parametros do Sistema "
+            f"antes de emitir NFC-e em {nome_ambiente}."
+        )
+
+
 def _endereco_preferencial_cliente(cliente) -> dict:
     """Retorna o endereco fiscal preferencial do cliente, sem inventar dados."""
     endereco = {
@@ -459,6 +475,8 @@ def emitir_nfce_para_venda(venda: VendaPDV, usuario) -> DocumentoFiscal:
 
     # Reserva número atômico via ParametroDocumentoFiscal
     params, _ = ParametrosSistema.objects.get_or_create(filial=filial)
+    _validar_configuracao_nfce(filial, params)
+
     doc_params = (
         ParametroDocumentoFiscal.objects
         .select_for_update()

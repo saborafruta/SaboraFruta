@@ -57,6 +57,20 @@ _PDF_KEYS = ("caminho_danfe", "caminho_dacte", "caminho_damdfe", "caminho_pdf", 
 _XML_KEYS = ("caminho_xml_nota_fiscal", "caminho_xml", "caminho_xml_cte", "caminho_xml_mdfe")
 
 
+def _mensagem_sefaz_diagnostica(codigo: str, mensagem: str) -> str:
+    codigo = str(codigo or "").strip()
+    mensagem = str(mensagem or "").strip()
+    if codigo == "464" or "hash no qr-code" in mensagem.lower():
+        detalhe = (
+            " Verifique o CSC Token e o CSC ID NFC-e cadastrados na Focus/SEFAZ "
+            "para o mesmo ambiente da filial. A emissao da nota nao envia CSC; "
+            "esse dado e usado pela Focus para montar o hash do QR-Code."
+        )
+        if "CSC Token" not in mensagem:
+            return f"{mensagem}{detalhe}" if mensagem else detalhe.strip()
+    return mensagem
+
+
 def gerar_ref(documento: DocumentoFiscal) -> str:
     """Referência única enviada à Focus NFe. Reconstrói o vínculo no webhook."""
     return f"df-{documento.pk}"
@@ -177,7 +191,10 @@ class FocusNFeService:
         if retorno.get("status_sefaz"):
             documento.codigo_status_sefaz = str(retorno["status_sefaz"])[:3]
         if retorno.get("mensagem_sefaz"):
-            documento.mensagem_sefaz = str(retorno["mensagem_sefaz"])
+            documento.mensagem_sefaz = _mensagem_sefaz_diagnostica(
+                documento.codigo_status_sefaz,
+                str(retorno["mensagem_sefaz"]),
+            )
 
         for k in _PDF_KEYS:
             if retorno.get(k):
@@ -225,7 +242,12 @@ class FocusNFeService:
                 response=exc.response_json, http=exc.status_code, sucesso=False, ms=ms,
             )
             documento.status = StatusDocumentoFiscal.REJEITADA
-            documento.mensagem_sefaz = str(exc)
+            resposta = exc.response_json if isinstance(exc.response_json, dict) else {}
+            codigo = str(resposta.get("status_sefaz") or resposta.get("codigo_status_sefaz") or "")
+            mensagem = str(resposta.get("mensagem_sefaz") or resposta.get("mensagem") or exc)
+            if codigo:
+                documento.codigo_status_sefaz = codigo[:3]
+            documento.mensagem_sefaz = _mensagem_sefaz_diagnostica(codigo, mensagem)
             documento.save()
             raise
 
