@@ -2857,6 +2857,19 @@ function pdv() {
       const fmt = n => parseFloat(n||0).toFixed(2).replace('.',',');
       const clienteNome = v.cliente ? v.cliente.nome : 'Consumidor Final';
 
+      const cli = v.cliente || {};
+      const cliTel = cli.celular || cli.telefone || '';
+      const ce = cli.endereco_entrega || {};
+      let cliEndL1 = [ce.rua, ce.numero].filter(Boolean).join(', ');
+      if (ce.complemento) cliEndL1 = cliEndL1 ? cliEndL1 + ' - ' + ce.complemento : ce.complemento;
+      const cliEndL2 = [ce.bairro, (ce.cidade && ce.uf) ? `${ce.cidade}/${ce.uf}` : (ce.cidade || ce.uf), ce.cep].filter(Boolean).join(' - ');
+      let clienteBox = `<div class="box"><div class="cli-nome"><strong>Cliente:</strong> ${clienteNome}</div>`;
+      if (cli.cpf_cnpj) clienteBox += `<div class="cli-line">CPF/CNPJ: ${cli.cpf_cnpj}</div>`;
+      if (cliTel) clienteBox += `<div class="cli-line">Tel: ${cliTel}</div>`;
+      if (cliEndL1.trim()) clienteBox += `<div class="cli-line">${cliEndL1}</div>`;
+      if (cliEndL2.trim()) clienteBox += `<div class="cli-line">${cliEndL2}</div>`;
+      clienteBox += `</div>`;
+
       const endParts = [filialEndereco, filialNumero].filter(Boolean).join(', ');
       const endLinha2 = [filialBairro, filialCidade && filialUf ? `${filialCidade}/${filialUf}` : (filialCidade||filialUf)].filter(Boolean).join(' – ');
       const enderecoHtml = [endParts, endLinha2, filialTelefone ? `Tel: ${filialTelefone}` : ''].filter(Boolean).map(l => `<div>${l}</div>`).join('');
@@ -2873,8 +2886,8 @@ function pdv() {
       }).join('');
 
       const html = `<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8"><title>Orcamento PDV</title><style>
-        body{font-family:Arial,sans-serif;color:#000;background:#fff;margin:28px;} .header{text-align:center;border-bottom:2px solid #888;padding-bottom:14px;margin-bottom:14px;} .header h1{font-size:22px;margin:6px 0 4px;color:#000;} .header .addr{font-size:12px;color:#111;line-height:1.6;} table{width:100%;border-collapse:collapse;margin-top:18px;} th,td{border-bottom:1px solid #999;padding:8px;font-size:13px;text-align:left;color:#000;} th{background:#e8e8e8;text-transform:uppercase;font-size:11px;color:#000;font-weight:800;} .r{text-align:right}.c{text-align:center}.b{font-weight:700}.tot{margin-top:18px;display:flex;justify-content:flex-end;font-size:18px;font-weight:800;color:#000;}.box{border:1px solid #999;border-radius:10px;padding:12px;margin-top:14px}.muted{color:#222;font-size:12px;text-align:center;margin-top:4px;}.foot{margin-top:24px;font-size:11px;color:#333;text-align:center}@media print{body{margin:18px}}
-      </style></head><body><div class="header">${logoHtml}<h1>Orcamento</h1><div class="addr">${enderecoHtml}</div><div class="muted">${agora}</div></div><div class="box"><strong>Cliente:</strong> ${clienteNome}</div><table><thead><tr><th>Produto</th><th>Qtd</th><th>Unitario</th><th>Total</th></tr></thead><tbody>${itensHtml}</tbody></table><div class="tot">Total: R$ ${fmt(v.total)}</div><div class="foot">Orcamento sem valor fiscal. Valores sujeitos a alteracao.</div></body></html>`;
+        body{font-family:Arial,sans-serif;color:#000;background:#fff;margin:28px;} .header{text-align:center;border-bottom:2px solid #888;padding-bottom:14px;margin-bottom:14px;} .header h1{font-size:22px;margin:6px 0 4px;color:#000;} .header .addr{font-size:12px;color:#111;line-height:1.6;} table{width:100%;border-collapse:collapse;margin-top:18px;} th,td{border-bottom:1px solid #999;padding:8px;font-size:13px;text-align:left;color:#000;} th{background:#e8e8e8;text-transform:uppercase;font-size:11px;color:#000;font-weight:800;} .r{text-align:right}.c{text-align:center}.b{font-weight:700}.tot{margin-top:18px;display:flex;justify-content:flex-end;font-size:18px;font-weight:800;color:#000;}.box{border:1px solid #999;border-radius:10px;padding:12px 14px;margin-top:14px}.cli-nome{font-size:16px}.cli-line{font-size:12.5px;color:#222;margin-top:4px}.muted{color:#222;font-size:12px;text-align:center;margin-top:4px;}.foot{margin-top:24px;font-size:11px;color:#333;text-align:center}@media print{body{margin:18px}}
+      </style></head><body><div class="header">${logoHtml}<h1>Orcamento</h1><div class="addr">${enderecoHtml}</div><div class="muted">${agora}</div></div>${clienteBox}<table><thead><tr><th>Produto</th><th>Qtd</th><th>Unitario</th><th>Total</th></tr></thead><tbody>${itensHtml}</tbody></table><div class="tot">Total: R$ ${fmt(v.total)}</div><div class="foot">Orcamento sem valor fiscal. Valores sujeitos a alteracao.</div></body></html>`;
       const w = window.open('', '_blank', 'width=820,height=700,scrollbars=yes');
       if (!w) { this.toast_('Permita popups para imprimir.','erro'); return; }
       w.document.write(html); w.document.close(); w.focus(); setTimeout(() => w.print(), 400);
@@ -3232,6 +3245,19 @@ ${pgtoHtml ? `<hr class="sep">${pgtoHtml}` : ''}
       const numero = '#'+String(c.numero_venda).padStart(6,'0');
       const dataVenda = c.data_venda;
 
+      const cli = this.venda.cliente || {};
+      const cliTel = cli.celular || cli.telefone || '';
+      const ce = cli.endereco_entrega || {};
+      let cliEndL1 = [ce.rua, ce.numero].filter(Boolean).join(', ');
+      if (ce.complemento) cliEndL1 = cliEndL1 ? cliEndL1 + ' - ' + ce.complemento : ce.complemento;
+      const cliEndL2 = [ce.bairro, (ce.cidade && ce.uf) ? `${ce.cidade}/${ce.uf}` : (ce.cidade || ce.uf), ce.cep].filter(Boolean).join(' - ');
+      let clienteBox = `<div class="box"><div class="cli-nome"><strong>Cliente:</strong> ${clienteNome}</div>`;
+      if (cli.cpf_cnpj) clienteBox += `<div class="cli-line">CPF/CNPJ: ${cli.cpf_cnpj}</div>`;
+      if (cliTel) clienteBox += `<div class="cli-line">Tel: ${cliTel}</div>`;
+      if (cliEndL1.trim()) clienteBox += `<div class="cli-line">${cliEndL1}</div>`;
+      if (cliEndL2.trim()) clienteBox += `<div class="cli-line">${cliEndL2}</div>`;
+      clienteBox += `</div>`;
+
       const endParts = [filialEndereco, filialNumero].filter(Boolean).join(', ');
       const endLinha2 = [filialBairro, filialCidade && filialUf ? `${filialCidade}/${filialUf}` : (filialCidade||filialUf)].filter(Boolean).join(' – ');
       const enderecoHtml = [endParts, endLinha2, filialTelefone ? `Tel: ${filialTelefone}` : ''].filter(Boolean).map(l => `<div>${l}</div>`).join('');
@@ -3248,8 +3274,8 @@ ${pgtoHtml ? `<hr class="sep">${pgtoHtml}` : ''}
       }).join('');
 
       const html = `<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8"><title>Orcamento PDV</title><style>
-        body{font-family:Arial,sans-serif;color:#000;background:#fff;margin:28px;} .header{text-align:center;border-bottom:2px solid #888;padding-bottom:14px;margin-bottom:14px;} .header h1{font-size:22px;margin:6px 0 4px;color:#000;} .header .addr{font-size:12px;color:#111;line-height:1.6;} table{width:100%;border-collapse:collapse;margin-top:18px;} th,td{border-bottom:1px solid #999;padding:8px;font-size:13px;text-align:left;color:#000;} th{background:#e8e8e8;text-transform:uppercase;font-size:11px;color:#000;font-weight:800;} .r{text-align:right}.c{text-align:center}.b{font-weight:700}.tot{margin-top:18px;display:flex;justify-content:flex-end;font-size:18px;font-weight:800;color:#000;}.box{border:1px solid #999;border-radius:10px;padding:12px;margin-top:14px}.muted{color:#222;font-size:12px;text-align:center;margin-top:4px;}.foot{margin-top:24px;font-size:11px;color:#333;text-align:center}@media print{body{margin:18px}}
-      </style></head><body><div class="header">${logoHtml}<h1>Orcamento</h1><div class="addr">${enderecoHtml}</div><div class="muted">${dataVenda} &bull; ${numero}</div></div><div class="box"><strong>Cliente:</strong> ${clienteNome}</div><table><thead><tr><th>Produto</th><th>Qtd</th><th>Unitario</th><th>Total</th></tr></thead><tbody>${itensHtml}</tbody></table><div class="tot">Total: R$ ${fmt(c.valor_total)}</div><div class="foot">Orcamento sem valor fiscal. Valores sujeitos a alteracao.</div></body></html>`;
+        body{font-family:Arial,sans-serif;color:#000;background:#fff;margin:28px;} .header{text-align:center;border-bottom:2px solid #888;padding-bottom:14px;margin-bottom:14px;} .header h1{font-size:22px;margin:6px 0 4px;color:#000;} .header .addr{font-size:12px;color:#111;line-height:1.6;} table{width:100%;border-collapse:collapse;margin-top:18px;} th,td{border-bottom:1px solid #999;padding:8px;font-size:13px;text-align:left;color:#000;} th{background:#e8e8e8;text-transform:uppercase;font-size:11px;color:#000;font-weight:800;} .r{text-align:right}.c{text-align:center}.b{font-weight:700}.tot{margin-top:18px;display:flex;justify-content:flex-end;font-size:18px;font-weight:800;color:#000;}.box{border:1px solid #999;border-radius:10px;padding:12px 14px;margin-top:14px}.cli-nome{font-size:16px}.cli-line{font-size:12.5px;color:#222;margin-top:4px}.muted{color:#222;font-size:12px;text-align:center;margin-top:4px;}.foot{margin-top:24px;font-size:11px;color:#333;text-align:center}@media print{body{margin:18px}}
+      </style></head><body><div class="header">${logoHtml}<h1>Orcamento</h1><div class="addr">${enderecoHtml}</div><div class="muted">${dataVenda} &bull; ${numero}</div></div>${clienteBox}<table><thead><tr><th>Produto</th><th>Qtd</th><th>Unitario</th><th>Total</th></tr></thead><tbody>${itensHtml}</tbody></table><div class="tot">Total: R$ ${fmt(c.valor_total)}</div><div class="foot">Orcamento sem valor fiscal. Valores sujeitos a alteracao.</div></body></html>`;
       const w = window.open('', '_blank', 'width=820,height=700,scrollbars=yes');
       if (!w) { this.toast_('Permita popups para imprimir.','erro'); return; }
       w.document.write(html); w.document.close(); w.focus(); setTimeout(() => w.print(), 400);
@@ -3442,6 +3468,8 @@ ${pgtoHtml ? `<hr class="sep">${pgtoHtml}` : ''}
         id:c.id,
         nome:c.nome_fantasia||c.razao_social,
         cpf_cnpj:c.cpf_cnpj,
+        celular:c.celular||'',
+        telefone:c.telefone||'',
         endereco_entrega:c.endereco_entrega || {},
         tem_endereco:!!c.tem_endereco,
       };
