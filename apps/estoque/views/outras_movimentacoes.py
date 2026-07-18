@@ -382,9 +382,10 @@ class ProdutoEstoqueSearchJsonView(PermissaoRequiredMixin, View):
                 'id': p.pk,
                 'label': p.descricao,
                 'detalhe': p.codigo or '',
-                'unidade': str(p.unidade) if hasattr(p, 'unidade') and p.unidade else '',
+                'unidade': str(p.unidade_medida) if p.unidade_medida_id else '',
+                'controla_lote': p.controla_lote,
             }
-            for p in qs.select_related('unidade').order_by('descricao')[:25]
+            for p in qs.select_related('unidade_medida').order_by('descricao')[:25]
         ]
         return JsonResponse({'results': resultados})
 
