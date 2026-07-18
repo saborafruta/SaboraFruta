@@ -116,6 +116,7 @@ class MovimentacaoService:
         observacao: str = '',
         filial_destino_id: int | None = None,
         forcar_estoque_negativo: bool = False,
+        permitir_sem_lote: bool = False,
     ) -> MovimentacaoEstoque:
         """
         Registra UMA movimentação de estoque atomicamente.
@@ -129,7 +130,12 @@ class MovimentacaoService:
         if quantidade <= 0:
             raise DadosInvalidosError('Quantidade deve ser positiva.')
 
-        if cls._produto_controla_lote(produto_id) and not lote_id and not forcar_estoque_negativo:
+        if (
+            cls._produto_controla_lote(produto_id)
+            and not lote_id
+            and not forcar_estoque_negativo
+            and not permitir_sem_lote
+        ):
             raise DadosInvalidosError(
                 'Produto controla lote; informe o lote para movimentar estoque.'
             )
@@ -328,6 +334,7 @@ class MovimentacaoService:
         usuario_id: int,
         lote_id: int | None = None,
         observacao: str = '',
+        permitir_sem_lote: bool = False,
     ) -> tuple[MovimentacaoEstoque, MovimentacaoEstoque]:
         """
         Cria DUAS movimentações (saída na origem + entrada no destino).
@@ -365,6 +372,7 @@ class MovimentacaoService:
             documento_tipo=MovimentacaoEstoque.DocumentoTipo.TRANSFERENCIA,
             observacao=observacao or f'Transferência para filial {filial_destino_id}',
             filial_destino_id=filial_destino_id,
+            permitir_sem_lote=permitir_sem_lote,
         )
         documento_numero = f'TRF-{mov_saida.pk:06d}'
 
@@ -400,6 +408,7 @@ class MovimentacaoService:
             documento_id=mov_saida.pk,
             documento_numero=documento_numero,
             observacao=f'Recebido de filial {filial_origem_id} — mov. saída #{mov_saida.pk}',
+            permitir_sem_lote=permitir_sem_lote,
         )
 
         mov_saida.documento_id = mov_entrada.pk

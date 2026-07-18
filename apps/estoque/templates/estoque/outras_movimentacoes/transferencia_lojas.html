@@ -207,7 +207,7 @@
           <div>
             <label class="block text-sm font-medium mb-1.5" :style="temaClaro ? 'color:#374151;' : 'color:#d1d5db;'">
               Lote
-              <span x-show="itemProdutoControlaLote" class="text-red-500">*</span>
+              <span class="text-xs font-normal" :style="temaClaro ? 'color:#9ca3af;' : 'color:#6b7280;'">(opcional)</span>
             </label>
             <select x-model="itemLoteId"
                     :disabled="!itemProdutoId || itemLotesCarregando"
@@ -510,10 +510,6 @@ function transferenciaLojaApp(filiais) {
       this.erroGeral = '';
       if (!this.itemProdutoId) {
         this.erroGeral = 'Selecione um produto.';
-        return;
-      }
-      if (this.itemProdutoControlaLote && !this.itemLoteId) {
-        this.erroGeral = `O produto "${this.itemProdutoNome}" exige lote.`;
         return;
       }
       const qtd = parseFloat(this.itemQuantidade);
