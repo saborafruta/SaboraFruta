@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from datetime import timedelta
 from decimal import Decimal, ROUND_HALF_UP
 
 from django.db import transaction
@@ -8,7 +9,8 @@ from django.utils import timezone
 from apps.core.services.exceptions import DadosInvalidosError, EstoqueInsuficienteError
 from apps.estoque.models import MovimentacaoEstoque
 from apps.estoque.services.movimentacao_service import MovimentacaoService
-from apps.financeiro.models import FormaPagamento
+from apps.financeiro.constants.enums import StatusContaReceber
+from apps.financeiro.models import ContaReceber, FormaPagamento
 from apps.pdv.models import ItemVendaPDV, PagamentoVendaPDV, VendaPDV
 from apps.pdv.services.produto_vendavel_service import ProdutoVendavelService
 from apps.produtos.models import Produto
@@ -459,12 +461,53 @@ class VendaPDVService:
                 valor=valor_pgto,
                 troco=troco,
             )
+
+            # Boleto e Vale sao recebimentos a prazo: geram conta a receber.
+            if (forma.tipo or "").strip().lower() in ("boleto", "vale"):
+                cls._gerar_conta_receber(
+                    venda=venda,
+                    filial=filial,
+                    forma=forma,
+                    valor=valor_pgto - troco,
+                )
+
             valor_pago += valor_pgto
             troco_total += troco
 
         if valor_pago < valor_total:
             raise DadosInvalidosError("Valor pago menor que o total da venda.")
         return valor_pago, troco_total
+
+    @classmethod
+    def _gerar_conta_receber(cls, *, venda: VendaPDV, filial, forma, valor: Decimal) -> None:
+        """Cria uma conta a receber em aberto para pagamentos a prazo (boleto/vale)."""
+        valor = cls._decimal(valor, cls.MONEY)
+        if valor <= 0:
+            return
+        if not venda.cliente_id:
+            raise DadosInvalidosError(
+                f"Vendas no {forma.get_tipo_display()} exigem um cliente selecionado "
+                "para gerar a conta a receber. Selecione o cliente antes de finalizar."
+            )
+
+        hoje = timezone.localdate()
+        vencimento = hoje + timedelta(days=int(forma.prazo_liquidacao_dias or 0))
+        ContaReceber.objects.create(
+            filial=filial,
+            cliente_id=venda.cliente_id,
+            documento_tipo="venda_pdv",
+            documento_id=venda.pk,
+            documento_numero=str(venda.numero_venda),
+            valor_original=valor,
+            valor_final=valor,
+            valor_saldo=valor,
+            data_emissao=hoje,
+            data_vencimento=vencimento,
+            forma_pagamento=forma,
+            status=StatusContaReceber.ABERTO,
+            observacao=f"Gerada automaticamente da venda #{venda.numero_venda} ({forma.descricao}).",
+            usuario=venda.usuario,
+        )
 
     @staticmethod
     def _proximo_numero_venda(filial) -> int:
