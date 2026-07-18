@@ -340,7 +340,11 @@ body.tema-claro .hv-page a, body.tema-claro .hv-page span { background:#eef2f7;b
           <!-- Cliente / CPF -->
           <td class="hv-td">
             {% if venda.cliente %}
-              <span style="font-weight:600;display:block;">{{ venda.cliente.razao_social }}</span>
+              <a href="{% url 'cadastros:cliente-update' venda.cliente.pk %}" target="_blank" rel="noopener"
+                 title="Abrir cadastro do cliente em nova guia"
+                 style="font-weight:700;display:inline-block;color:inherit;text-decoration:underline;text-decoration-color:#f15a24;text-underline-offset:3px;">
+                {{ venda.cliente.razao_social }}
+              </a>
               <span class="hv-muted" style="font-size:11px;color:#9090a0;">{{ venda.cliente.cpf_cnpj|default:"" }}</span>
             {% else %}
               <span class="hv-muted" style="color:#6b6b88;">Consumidor Final</span>
