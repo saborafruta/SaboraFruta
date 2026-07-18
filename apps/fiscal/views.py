@@ -86,6 +86,7 @@ class ManifestoFiscalConfigView(PermissaoRequiredMixin, View):
         return {
             'config': config,
             'prontidao': avaliar_prontidao_dfe(config),
+            'producao_liberada': bool(getattr(settings, 'FISCAL_ALLOW_PRODUCTION_ENVIRONMENT', False)),
         }
 
     def get(self, request):
