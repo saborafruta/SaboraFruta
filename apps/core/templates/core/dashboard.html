@@ -319,22 +319,52 @@
     {% if vendas_dow.erro %}
       <p class="m-5 text-xs px-3 py-2 rounded" style="background:rgba(239,68,68,0.1);color:#f87171;">{{ vendas_dow.erro }}</p>
     {% else %}
-      <div class="px-5 py-4">
-        <div class="text-sm mb-5" style="color:#4ade80;">
-          Faturamento total: <span class="font-semibold">R$ <span x-text="fmt(atual().total)"></span></span>
+      <div class="px-5 pt-4 pb-5">
+        <!-- Faturamento total + destaque do melhor dia -->
+        <div class="flex flex-wrap items-baseline justify-between gap-2 mb-6">
+          <div class="text-sm" :style="temaClaro ? 'color:#4b5563;' : 'color:#9ca3af;'">
+            Faturamento total:
+            <span class="text-lg font-bold ml-1" style="color:#22c55e;">R$ <span x-text="fmt(atual().total)"></span></span>
+          </div>
+          <div class="text-xs" :style="temaClaro ? 'color:#6b7280;' : 'color:#6b7280;'"
+               x-show="melhorDia().valor > 0">
+            Melhor dia: <span class="font-semibold" :style="temaClaro ? 'color:#374151;' : 'color:#d4d4d4;'"
+              x-text="melhorDia().dia + ' (R$ ' + fmt(melhorDia().valor) + ')'"></span>
+          </div>
         </div>
-        <div class="flex items-end gap-2 sm:gap-4" style="height:190px;">
-          <template x-for="d in atual().dias" :key="d.dia">
-            <div class="flex-1 flex flex-col items-center justify-end gap-2" style="height:100%; min-width:0;">
-              <span class="text-[10px] sm:text-xs whitespace-nowrap" style="color:#888;"
-                    x-text="d.valor > 0 ? 'R$ ' + fmt(d.valor) : ''"></span>
-              <div class="w-full rounded-t"
-                   style="background:linear-gradient(180deg,#4ade80,#16a34a); transition:height .3s ease; min-height:2px;"
-                   :style="'height:' + barH(d.valor) + '%'"
-                   :title="d.dia + ': R$ ' + fmt(d.valor)"></div>
-              <span class="text-xs font-medium" :style="temaClaro ? 'color:#333;' : 'color:#d4d4d4;'" x-text="d.dia"></span>
-            </div>
-          </template>
+
+        <!-- Estado vazio -->
+        <div x-show="atual().total <= 0" class="flex flex-col items-center justify-center py-8 text-center">
+          <div class="text-2xl mb-1">📊</div>
+          <p class="text-sm" style="color:#6b7280;">Sem vendas neste período</p>
+        </div>
+
+        <!-- Gráfico de barras -->
+        <div x-show="atual().total > 0">
+          <div class="flex items-end gap-2 sm:gap-3" style="height:170px;">
+            <template x-for="d in atual().dias" :key="d.dia">
+              <div class="flex-1 flex flex-col items-center justify-end" style="height:100%; min-width:0;">
+                <span class="text-[10px] sm:text-xs whitespace-nowrap mb-1 font-medium"
+                      :style="temaClaro ? 'color:#4b5563;' : 'color:#9ca3af;'"
+                      x-show="d.valor > 0"
+                      x-text="'R$ ' + fmtCurto(d.valor)"></span>
+                <div class="w-full rounded-t-md group relative"
+                     :style="'height:' + barPx(d.valor) + 'px; background:' + (ehMelhor(d) ? 'linear-gradient(180deg,#34d399,#059669)' : 'linear-gradient(180deg,#4ade80,#22c55e)') + '; transition:height .35s cubic-bezier(.2,.7,.3,1), filter .15s; box-shadow:0 1px 6px rgba(34,197,94,0.25);'"
+                     onmouseover="this.style.filter='brightness(1.15)'" onmouseout="this.style.filter='none'"
+                     :title="d.dia + ': R$ ' + fmt(d.valor)"></div>
+              </div>
+            </template>
+          </div>
+          <!-- Linha de base -->
+          <div class="mt-0" :style="temaClaro ? 'border-top:1px solid #e5e7eb;' : 'border-top:1px solid #2a2a2e;'"></div>
+          <!-- Rótulos dos dias -->
+          <div class="flex gap-2 sm:gap-3 mt-2">
+            <template x-for="d in atual().dias" :key="'lbl-' + d.dia">
+              <div class="flex-1 text-center text-xs font-semibold" style="min-width:0;"
+                   :style="ehMelhor(d) ? 'color:#22c55e;' : (temaClaro ? 'color:#374151;' : 'color:#d4d4d4;')"
+                   x-text="d.dia"></div>
+            </template>
+          </div>
         </div>
       </div>
     {% endif %}
@@ -822,13 +852,29 @@
       atual() {
         return this.dados[this.periodo] || { dias: [], total: 0, maximo: 0 };
       },
-      barH(valor) {
+      barPx(valor) {
         const m = this.atual().maximo || 0;
-        if (m <= 0) return 2;
-        return Math.max(2, Math.round((Number(valor) / m) * 100));
+        const alturaMax = 130;
+        if (m <= 0 || !valor) return 0;
+        return Math.max(6, Math.round((Number(valor) / m) * alturaMax));
+      },
+      melhorDia() {
+        return (this.atual().dias || []).reduce(
+          (melhor, d) => (d.valor > (melhor.valor || 0) ? d : melhor),
+          { dia: '', valor: 0 }
+        );
+      },
+      ehMelhor(d) {
+        const md = this.melhorDia();
+        return md.valor > 0 && d.dia === md.dia && d.valor === md.valor;
       },
       fmt(valor) {
         return Number(valor || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+      },
+      fmtCurto(valor) {
+        const n = Number(valor || 0);
+        if (n >= 1000) return (n / 1000).toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 }) + 'k';
+        return n.toLocaleString('pt-BR', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
       },
       baixarCsv() {
         const p = this.atual();

@@ -567,6 +567,18 @@ class DashboardView(LoginRequiredMixin, TemplateView):
     # Vendas por dia da semana
     # ------------------------------------------------------------------
 
+    @staticmethod
+    def _menos_meses(d, n):
+        """Retorna a data `n` meses antes de `d`, ajustando o dia ao fim do mês."""
+        import calendar
+        mes = d.month - n
+        ano = d.year
+        while mes <= 0:
+            mes += 12
+            ano -= 1
+        dia = min(d.day, calendar.monthrange(ano, mes)[1])
+        return d.replace(year=ano, month=mes, day=dia)
+
     def _vendas_por_dia_semana(self, filial):
         """
         Faturamento agregado por dia da semana (Seg..Dom) em vários períodos.
@@ -589,8 +601,9 @@ class DashboardView(LoginRequiredMixin, TemplateView):
             periodos_def = {
                 'mes_atual': ('Mês atual', primeiro_mes, hoje),
                 'mes_anterior': ('Mês anterior', inicio_mes_anterior, fim_mes_anterior),
-                'ultimos_30': ('Últimos 30 dias', hoje - datetime.timedelta(days=29), hoje),
-                'ano_atual': ('Ano atual', hoje.replace(month=1, day=1), hoje),
+                'ultimos_3_meses': ('Últimos 3 meses', self._menos_meses(hoje, 3), hoje),
+                'ultimos_6_meses': ('Últimos 6 meses', self._menos_meses(hoje, 6), hoje),
+                'ultimo_ano': ('Último ano', self._menos_meses(hoje, 12), hoje),
             }
 
             status_validos = [
