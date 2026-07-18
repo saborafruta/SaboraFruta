@@ -692,8 +692,10 @@
           <svg style="position:absolute;left:10px;top:50%;transform:translateY(-50%);pointer-events:none;" width="14" height="14" fill="none" stroke="#555" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
           <input x-ref="buscaInput" id="busca-produto" type="text" x-model="buscaQuery"
                  @input.debounce.200ms="buscarProdutos($event.target.value)"
-                 @keydown.enter.prevent="selecionarPrimeiroProduto()"
-                 @keydown.escape="buscaQuery='';produtos=[];"
+                 @keydown.arrow-down.prevent="moverFocoProduto(1)"
+                 @keydown.arrow-up.prevent="moverFocoProduto(-1)"
+                 @keydown.enter.prevent="selecionarProdutoFocado()"
+                 @keydown.escape="buscaQuery='';produtos=[];produtoFoco=-1;"
                  placeholder="Buscar produto ou serviço..."
                  autocomplete="off"
                  class="input-pdv" style="padding:8px 10px 8px 32px;">
@@ -739,8 +741,10 @@
             <p style="color:#444;font-size:12px;text-align:center;padding:24px 0;"
                x-text="buscaQuery.trim() ? 'Nenhum produto encontrado para \'' + buscaQuery.trim() + '\'' : 'Nenhum produto cadastrado'"></p>
           </template>
-          <template x-for="p in produtosVisiveis" :key="p.id">
-            <button @click="adicionarItem(p)" class="prod-card">
+          <template x-for="(p, idx) in produtosVisiveis" :key="p.id">
+            <button @click="adicionarItem(p)" @mouseenter="produtoFoco = idx"
+                    class="prod-card" :id="'prodcard-' + idx"
+                    :style="produtoFoco === idx ? 'outline:2px solid #f15a24;outline-offset:-1px;background:rgba(241,90,36,0.10);' : ''">
               <div style="width:34px;height:34px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0;"
                    :style="p.cor ? `background:${p.cor}22;border:1px solid ${p.cor}44` : 'background:#1e1e2a;border:1px solid #2a2a3e;'"
                    x-text="p.icone || '📦'"></div>
@@ -2423,7 +2427,7 @@ function pdv() {
       delivery: false, endereco_entrega: {},
     },
 
-    produtos: [], topProdutos: [], buscaQuery: '', buscandoProdutos: false,
+    produtos: [], topProdutos: [], buscaQuery: '', buscandoProdutos: false, produtoFoco: -1,
     barcodeQuery: '',
     tabAtiva: 'todos', linhaAtiva: null,
 
@@ -2503,6 +2507,7 @@ function pdv() {
     },
 
     async buscarProdutos(q) {
+      this.produtoFoco = -1;
       if (!q||!q.trim()) { this.produtos=[]; this.buscandoProdutos=false; return; }
       this.buscandoProdutos = true;
       try {
@@ -2515,6 +2520,23 @@ function pdv() {
         }
       } catch { this.produtos=[]; }
       finally { this.buscandoProdutos=false; }
+    },
+
+    moverFocoProduto(dir) {
+      const n = this.produtosVisiveis.length;
+      if (n === 0) return;
+      let f = this.produtoFoco + dir;
+      if (f < 0) f = 0;
+      if (f > n - 1) f = n - 1;
+      this.produtoFoco = f;
+      this.$nextTick(() => document.getElementById('prodcard-' + f)?.scrollIntoView({ block: 'nearest' }));
+    },
+
+    selecionarProdutoFocado() {
+      const lista = this.produtosVisiveis;
+      if (lista.length === 0) return;
+      const p = (this.produtoFoco >= 0 && lista[this.produtoFoco]) ? lista[this.produtoFoco] : lista[0];
+      if (p) { this.adicionarItem(p); this.buscaQuery=''; this.produtos=[]; this.produtoFoco=-1; }
     },
 
     async lerCodigoBarras() {
