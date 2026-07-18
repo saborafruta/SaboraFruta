@@ -287,6 +287,60 @@
   </div>
 
   <!-- ================================================================
+       VENDAS POR DIA DA SEMANA
+       ================================================================ -->
+  {{ vendas_dow.periodos|json_script:"vendas-dow-data" }}
+  <div class="card" style="border-radius:12px; overflow:hidden;" x-data="vendasDowWidget()">
+    <div class="dashboard-section-head px-5 py-4 flex items-center gap-2">
+      <svg class="w-4 h-4 flex-shrink-0" fill="none" stroke="#4ade80" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"
+              d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/>
+      </svg>
+      <h3 class="text-sm font-medium" :style="temaClaro ? 'color:#1a1a1a;' : 'color:#f0f0f0;'">Vendas por dia da semana</h3>
+      <div class="ml-auto flex items-center gap-2">
+        <select x-model="periodo"
+                class="text-xs rounded px-2 py-1 border"
+                :style="temaClaro ? 'background:#fff;color:#333;border-color:#d1d5db;' : 'background:#1e1e22;color:#d4d4d4;border-color:#3a3a3e;'">
+          <template x-for="(p, k) in dados" :key="k">
+            <option :value="k" x-text="p.label"></option>
+          </template>
+        </select>
+        <button type="button" @click="baixarCsv()" title="Baixar CSV"
+                class="p-1 rounded transition-colors"
+                :style="temaClaro ? 'color:#6b7280;' : 'color:#9ca3af;'">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8"
+                  d="M4 16v2a2 2 0 002 2h12a2 2 0 002-2v-2M7 10l5 5 5-5M12 15V3"/>
+          </svg>
+        </button>
+      </div>
+    </div>
+
+    {% if vendas_dow.erro %}
+      <p class="m-5 text-xs px-3 py-2 rounded" style="background:rgba(239,68,68,0.1);color:#f87171;">{{ vendas_dow.erro }}</p>
+    {% else %}
+      <div class="px-5 py-4">
+        <div class="text-sm mb-5" style="color:#4ade80;">
+          Faturamento total: <span class="font-semibold">R$ <span x-text="fmt(atual().total)"></span></span>
+        </div>
+        <div class="flex items-end gap-2 sm:gap-4" style="height:190px;">
+          <template x-for="d in atual().dias" :key="d.dia">
+            <div class="flex-1 flex flex-col items-center justify-end gap-2" style="height:100%; min-width:0;">
+              <span class="text-[10px] sm:text-xs whitespace-nowrap" style="color:#888;"
+                    x-text="d.valor > 0 ? 'R$ ' + fmt(d.valor) : ''"></span>
+              <div class="w-full rounded-t"
+                   style="background:linear-gradient(180deg,#4ade80,#16a34a); transition:height .3s ease; min-height:2px;"
+                   :style="'height:' + barH(d.valor) + '%'"
+                   :title="d.dia + ': R$ ' + fmt(d.valor)"></div>
+              <span class="text-xs font-medium" :style="temaClaro ? 'color:#333;' : 'color:#d4d4d4;'" x-text="d.dia"></span>
+            </div>
+          </template>
+        </div>
+      </div>
+    {% endif %}
+  </div>
+
+  <!-- ================================================================
        ESTOQUE POR FILIAL / MATRIZ
        ================================================================ -->
   {% if estoque_filiais %}
@@ -753,4 +807,41 @@
   {% endif %}
 
 </div>
+
+<script>
+  function vendasDowWidget() {
+    return {
+      dados: JSON.parse(document.getElementById('vendas-dow-data').textContent),
+      periodo: 'mes_atual',
+      init() {
+        if (!this.dados[this.periodo]) {
+          const chaves = Object.keys(this.dados);
+          if (chaves.length) this.periodo = chaves[0];
+        }
+      },
+      atual() {
+        return this.dados[this.periodo] || { dias: [], total: 0, maximo: 0 };
+      },
+      barH(valor) {
+        const m = this.atual().maximo || 0;
+        if (m <= 0) return 2;
+        return Math.max(2, Math.round((Number(valor) / m) * 100));
+      },
+      fmt(valor) {
+        return Number(valor || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+      },
+      baixarCsv() {
+        const p = this.atual();
+        let csv = 'Dia;Faturamento\n';
+        (p.dias || []).forEach(d => { csv += d.dia + ';' + String(d.valor).replace('.', ',') + '\n'; });
+        csv += 'Total;' + String(p.total).replace('.', ',') + '\n';
+        const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8;' });
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(blob);
+        a.download = 'vendas_dia_semana_' + this.periodo + '.csv';
+        document.body.appendChild(a); a.click(); a.remove();
+      },
+    };
+  }
+</script>
 {% endblock %}

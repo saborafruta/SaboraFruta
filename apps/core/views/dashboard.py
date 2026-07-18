@@ -24,6 +24,7 @@ class DashboardView(LoginRequiredMixin, TemplateView):
         ctx['vendas_dia'] = self._vendas_periodo(filial, 'dia')
         ctx['vendas_mes'] = self._vendas_periodo(filial, 'mes')
         ctx['vendas_acumuladas'] = self._vendas_acumuladas_mes(filial)
+        ctx['vendas_dow'] = self._vendas_por_dia_semana(filial)
         return ctx
 
     # ------------------------------------------------------------------
@@ -563,6 +564,92 @@ class DashboardView(LoginRequiredMixin, TemplateView):
             return {**vazio, 'erro': str(exc)}
 
     # ------------------------------------------------------------------
+    # Vendas por dia da semana
+    # ------------------------------------------------------------------
+
+    def _vendas_por_dia_semana(self, filial):
+        """
+        Faturamento agregado por dia da semana (Seg..Dom) em vários períodos.
+        Combina PedidoVenda (B2B) + VendaPDV. Retorna dados prontos para o
+        seletor de período no dashboard.
+        """
+        if not filial:
+            return {'periodos': {}, 'erro': None}
+
+        try:
+            from django.db.models.functions import ExtractIsoWeekDay
+            from apps.vendas.models import PedidoVenda
+            from apps.pdv.models import VendaPDV
+
+            hoje = timezone.localdate()
+            primeiro_mes = hoje.replace(day=1)
+            fim_mes_anterior = primeiro_mes - datetime.timedelta(days=1)
+            inicio_mes_anterior = fim_mes_anterior.replace(day=1)
+
+            periodos_def = {
+                'mes_atual': ('Mês atual', primeiro_mes, hoje),
+                'mes_anterior': ('Mês anterior', inicio_mes_anterior, fim_mes_anterior),
+                'ultimos_30': ('Últimos 30 dias', hoje - datetime.timedelta(days=29), hoje),
+                'ano_atual': ('Ano atual', hoje.replace(month=1, day=1), hoje),
+            }
+
+            status_validos = [
+                PedidoVenda.Status.CONFIRMADO,
+                PedidoVenda.Status.EM_SEPARACAO,
+                PedidoVenda.Status.FATURADO,
+                PedidoVenda.Status.PARCIALMENTE_FATURADO,
+                PedidoVenda.Status.ENTREGUE,
+            ]
+            pedido_base = (
+                PedidoVenda.objects.filter(filial__empresa=filial.empresa)
+                if filial.is_matriz
+                else PedidoVenda.objects.filter(filial=filial)
+            ).filter(status__in=status_validos)
+            pdv_base = (
+                VendaPDV.objects.filter(filial__empresa=filial.empresa)
+                if filial.is_matriz
+                else VendaPDV.objects.filter(filial=filial)
+            ).filter(status='finalizada')
+
+            labels = ['Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb', 'Dom']
+
+            def _buckets(qs, data_field, inicio, fim):
+                filtro = {f'{data_field}__date__gte': inicio, f'{data_field}__date__lte': fim}
+                rows = (
+                    qs.filter(**filtro)
+                    .annotate(dow=ExtractIsoWeekDay(data_field))
+                    .values('dow')
+                    .annotate(total=Sum('valor_total'))
+                )
+                acc = {i: 0.0 for i in range(1, 8)}
+                for r in rows:
+                    if r['dow']:
+                        acc[int(r['dow'])] += float(r['total'] or 0)
+                return acc
+
+            periodos = {}
+            for chave, (label, inicio, fim) in periodos_def.items():
+                b = _buckets(pedido_base, 'data_emissao', inicio, fim)
+                p = _buckets(pdv_base, 'data_venda', inicio, fim)
+                dias = []
+                total = 0.0
+                for i in range(1, 8):
+                    valor = round(b[i] + p[i], 2)
+                    total += valor
+                    dias.append({'dia': labels[i - 1], 'valor': valor})
+                maximo = max((d['valor'] for d in dias), default=0.0)
+                periodos[chave] = {
+                    'label': label,
+                    'dias': dias,
+                    'total': round(total, 2),
+                    'maximo': maximo,
+                }
+
+            return {'periodos': periodos, 'erro': None}
+        except Exception as exc:
+            return {'periodos': {}, 'erro': str(exc)}
+
+    # ------------------------------------------------------------------
     # Curva ABC — helpers comuns
     # ------------------------------------------------------------------
 
@@ -629,7 +716,7 @@ class DashboardView(LoginRequiredMixin, TemplateView):
     # Curva ABC — Clientes
     # ------------------------------------------------------------------
 
-    def _curva_abc_clientes(self, filial, top=20):
+    def _curva_abc_clientes(self, filial, top=12):
         if not filial:
             return {'itens': [], 'resumo': {}, 'sem_dados': True, 'erro': None}
 
@@ -695,7 +782,7 @@ class DashboardView(LoginRequiredMixin, TemplateView):
     # Curva ABC — Produtos
     # ------------------------------------------------------------------
 
-    def _curva_abc_produtos(self, filial, top=20):
+    def _curva_abc_produtos(self, filial, top=12):
         if not filial:
             return {'itens': [], 'resumo': {}, 'sem_dados': True, 'erro': None}
 
