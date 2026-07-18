@@ -756,6 +756,7 @@ class TransferenciaLojaApiView(PermissaoRequiredMixin, View):
                     lote_id=lote_id,
                     observacao=observacao,
                     permitir_sem_lote=True,
+                    vincular_destino=True,
                 )
                 resultados.append({'saida': mov_saida.pk, 'entrada': mov_entrada.pk})
             except DomainError as exc:

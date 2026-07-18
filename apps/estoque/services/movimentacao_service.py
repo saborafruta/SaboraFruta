@@ -335,6 +335,7 @@ class MovimentacaoService:
         lote_id: int | None = None,
         observacao: str = '',
         permitir_sem_lote: bool = False,
+        vincular_destino: bool = False,
     ) -> tuple[MovimentacaoEstoque, MovimentacaoEstoque]:
         """
         Cria DUAS movimentações (saída na origem + entrada no destino).
@@ -343,7 +344,10 @@ class MovimentacaoService:
         if filial_origem_id == filial_destino_id:
             raise DadosInvalidosError('Filial de origem e destino não podem ser iguais.')
 
-        cls._validar_produto_transferivel(produto_id, filial_origem_id, filial_destino_id)
+        cls._validar_produto_transferivel(
+            produto_id, filial_origem_id, filial_destino_id,
+            vincular_destino=vincular_destino,
+        )
 
         custo_unitario = None
         lote_origem = None
@@ -729,6 +733,7 @@ class MovimentacaoService:
         produto_id: int,
         filial_origem_id: int,
         filial_destino_id: int,
+        vincular_destino: bool = False,
     ) -> None:
         from apps.produtos.models import Produto, ProdutoFilial
 
@@ -749,6 +754,19 @@ class MovimentacaoService:
             ativo=True,
         ).exists()
         if not produto_vinculado_destino:
+            if vincular_destino:
+                # Vincula (ou reativa) o produto na filial de destino, pois a
+                # transferência de estoque físico implica que o destino passa
+                # a operar o produto em seu catálogo.
+                vinculo, created = ProdutoFilial.objects.get_or_create(
+                    produto_id=produto_id,
+                    filial_id=filial_destino_id,
+                    defaults={'ativo': True},
+                )
+                if not created and not vinculo.ativo:
+                    vinculo.ativo = True
+                    vinculo.save(update_fields=['ativo', 'updated_at'])
+                return
             raise DadosInvalidosError(
                 'Produto nao esta ativo/vinculado a filial de destino. '
                 'Vincule o produto antes de transferir estoque.'
