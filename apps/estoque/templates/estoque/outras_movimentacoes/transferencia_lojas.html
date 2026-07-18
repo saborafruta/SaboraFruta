@@ -456,7 +456,7 @@ function transferenciaLojaApp(filiais) {
       this.itemProdutoFocus = 0;
       this.itemProdutoBuscou = false;
       try {
-        const res = await fetch(`{% url 'estoque:produto-estoque-search-json' %}?q=${encodeURIComponent(q)}`);
+        const res = await fetch(`{% url 'estoque:produto-estoque-search-json' %}?scope=empresa&q=${encodeURIComponent(q)}`);
         const data = await res.json();
         this.itemProdutoResultados = data.results || [];
       } catch (e) {

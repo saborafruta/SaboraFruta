@@ -353,8 +353,15 @@ class ProdutoEstoqueSearchJsonView(PermissaoRequiredMixin, View):
 
     def get(self, request):
         q = request.GET.get('q', '').strip()
+        scope = request.GET.get('scope', 'filial')
         filial = request.filial_ativa
-        if hasattr(Produto.objects, 'for_filial'):
+        if scope == 'empresa':
+            empresa = request.user.empresa
+            if hasattr(Produto.objects, 'for_empresa'):
+                qs = Produto.objects.for_empresa(empresa).filter(ativo=True)
+            else:
+                qs = Produto.objects.filter(ativo=True)
+        elif hasattr(Produto.objects, 'for_filial'):
             qs = Produto.objects.for_filial(filial).filter(ativo=True)
         else:
             qs = Produto.objects.filter(ativo=True)
