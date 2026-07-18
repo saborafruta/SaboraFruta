@@ -174,12 +174,16 @@ class FiscalReadinessService:
                 vigencia_fim__gte=data_emissao,
             ).exists()
             if not tem_ibpt:
+                # A estimativa IBPT (Lei 12.741/2012 — valor aproximado dos
+                # tributos) NAO e obrigatoria para a SEFAZ autorizar a nota.
+                # Fica como aviso para nao bloquear a emissao.
                 self.add(
                     f"ibpt_{produto.pk}",
                     f"Atualize os tributos de {produto.descricao}",
                     "A estimativa tributaria vigente deste NCM ainda nao esta disponivel. Isso evita emitir sem o valor aproximado dos impostos.",
                     "Revisar produto",
                     reverse("produtos:produto-update", args=[produto.pk]) + "?step=3",
+                    severity="aviso",
                 )
 
     def _pagamentos(self):
