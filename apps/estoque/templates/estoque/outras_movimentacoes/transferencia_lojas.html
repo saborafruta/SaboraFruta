@@ -373,7 +373,7 @@
       <!-- Ações -->
       <div class="card p-5 space-y-3">
         <button type="button"
-                @click="submitForm()"
+                @click="abrirConfirmacao()"
                 :disabled="submitting || itens.length === 0 || !filialDestinoId || !observacao.trim()"
                 class="btn-primary w-full flex items-center justify-center gap-2">
           <svg x-show="submitting" class="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
@@ -404,6 +404,79 @@
         </p>
       </div>
 
+    </div>
+  </div>
+
+  <!-- ════ MODAL: gerar nota fiscal? ════ -->
+  <div x-show="showModalNota"
+       x-cloak
+       class="fixed inset-0 z-[100] flex items-center justify-center p-4"
+       style="background:rgba(0,0,0,0.55);"
+       x-transition:enter="transition ease-out duration-150"
+       x-transition:enter-start="opacity-0"
+       x-transition:enter-end="opacity-100"
+       @keydown.escape.window="showModalNota = false">
+    <div class="w-full max-w-md rounded-2xl shadow-2xl overflow-hidden"
+         :style="temaClaro ? 'background:#ffffff;' : 'background:#0f172a; border:1px solid #1e293b;'"
+         @click.outside="showModalNota = false"
+         x-transition:enter="transition ease-out duration-150"
+         x-transition:enter-start="opacity-0 scale-95"
+         x-transition:enter-end="opacity-100 scale-100">
+
+      <div style="height:4px;background:linear-gradient(90deg,#0ea5e9,#38bdf8);"></div>
+
+      <div class="p-6 space-y-4">
+        <div class="flex items-start gap-3">
+          <div class="w-11 h-11 rounded-xl flex items-center justify-center flex-shrink-0"
+               style="background:#e0f2fe;color:#0369a1;">
+            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                    d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+            </svg>
+          </div>
+          <div>
+            <h3 class="text-lg font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
+              Gerar nota fiscal?
+            </h3>
+            <p class="text-sm mt-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+              Deseja emitir a <strong>NF-e de transferência</strong> (modelo 55) para esta
+              movimentação? A nota será enviada para autorização na SEFAZ.
+            </p>
+          </div>
+        </div>
+
+        <div class="rounded-lg px-4 py-3 text-xs"
+             :style="temaClaro ? 'background:#f8fafc;color:#475569;' : 'background:#1e293b;color:#94a3b8;'">
+          <span x-text="filiais.find(f => f.id == filialDestinoId)?.label || ''"></span> ·
+          <span x-text="itens.length + ' produto(s)'"></span>
+        </div>
+
+        <div class="flex flex-col gap-2 pt-1">
+          <button type="button"
+                  @click="submitForm(true)"
+                  :disabled="submitting"
+                  class="btn-primary w-full flex items-center justify-center gap-2">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                    d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+            </svg>
+            Sim, gerar nota
+          </button>
+          <button type="button"
+                  @click="submitForm(false)"
+                  :disabled="submitting"
+                  class="btn-secondary w-full flex items-center justify-center gap-2">
+            Não, apenas transferir
+          </button>
+          <button type="button"
+                  @click="showModalNota = false"
+                  :disabled="submitting"
+                  class="w-full text-center text-sm py-2"
+                  :style="temaClaro ? 'color:#94a3b8;' : 'color:#64748b;'">
+            Cancelar
+          </button>
+        </div>
+      </div>
     </div>
   </div>
 
@@ -438,8 +511,17 @@ function transferenciaLojaApp(filiais) {
     observacao: '',
     submitting: false,
     erroGeral: '',
+    showModalNota: false,
 
     init() {},
+
+    abrirConfirmacao() {
+      this.erroGeral = '';
+      if (!this.filialDestinoId) { this.erroGeral = 'Selecione a loja de destino.'; return; }
+      if (this.itens.length === 0) { this.erroGeral = 'Adicione ao menos um produto.'; return; }
+      if (!this.observacao.trim()) { this.erroGeral = 'Informe a observação.'; return; }
+      this.showModalNota = true;
+    },
 
     // ── Produto ──────────────────────────────────────────────
     async buscarProduto() {
@@ -537,7 +619,7 @@ function transferenciaLojaApp(filiais) {
     },
 
     // ── Submit ───────────────────────────────────────────────
-    async submitForm() {
+    async submitForm(gerarNota) {
       this.erroGeral = '';
       if (!this.filialDestinoId) { this.erroGeral = 'Selecione a loja de destino.'; return; }
       if (this.itens.length === 0) { this.erroGeral = 'Adicione ao menos um produto.'; return; }
@@ -548,6 +630,7 @@ function transferenciaLojaApp(filiais) {
       const payload = {
         filial_destino_id: this.filialDestinoId,
         observacao: this.observacao,
+        gerar_nota: !!gerarNota,
         itens: this.itens.map(i => ({
           produto_id: i.produto_id,
           lote_id: i.lote_id,
@@ -566,12 +649,18 @@ function transferenciaLojaApp(filiais) {
         });
         const data = await res.json();
         if (data.ok) {
+          if (data.nota_erro) {
+            alert('Transferência concluída, mas a NF-e NÃO foi emitida:\n\n' + data.nota_erro +
+                  '\n\nO estoque já foi movimentado. Você pode reemitir a nota depois.');
+          }
           window.location.href = '{% url "estoque:outras-mov-hub" %}';
         } else {
+          this.showModalNota = false;
           this.erroGeral = data.erro || 'Erro ao registrar transferência.';
           this.submitting = false;
         }
       } catch (e) {
+        this.showModalNota = false;
         this.erroGeral = 'Erro de comunicação com o servidor.';
         this.submitting = false;
       }
