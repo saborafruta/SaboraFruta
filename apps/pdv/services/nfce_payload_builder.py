@@ -245,9 +245,17 @@ def _aplicar_ipi(item: dict, produto, base: Decimal) -> None:
 def _aplicar_ibpt(
     item: dict, produto, filial, base: Decimal, data_emissao: date
 ) -> None:
-    aliquota = obter_aliquota_ibpt(
-        getattr(produto, 'ncm', ''), getattr(filial, 'uf', ''), data_emissao
-    )
+    # IBPT (Lei 12.741/2012 — valor aproximado dos tributos) e apenas
+    # informativo: NAO e exigido pela SEFAZ para autorizar a nota. Se a
+    # tabela nao estiver disponivel para o NCM (falha de rede, NCM sem
+    # dados etc.), a nota deve seguir sem esse campo em vez de travar
+    # a emissao inteira.
+    try:
+        aliquota = obter_aliquota_ibpt(
+            getattr(produto, 'ncm', ''), getattr(filial, 'uf', ''), data_emissao
+        )
+    except DadosInvalidosError:
+        return
     if aliquota is None:
         return
 
