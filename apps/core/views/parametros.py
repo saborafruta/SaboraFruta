@@ -265,6 +265,36 @@ def parametros_sistema(request):
     })
 
 
+CAMPOS_SEGREDO_FILIAL = {'focusnfe_token'}
+CAMPOS_SEGREDO_PARAMS = {'focusnfe_token_principal', 'nfce_csc_token'}
+
+
+@admin_area_required
+@require_POST
+def api_revelar_segredo(request):
+    """
+    POST /gestao/parametros/revelar-segredo/
+    Retorna o valor atual de um campo sensivel (token/senha) para exibicao
+    sob demanda. Esses campos usam PasswordInput(render_value=False) e por
+    isso nunca chegam ao navegador junto com a pagina — so quando o
+    operador clica no botao de revelar.
+    """
+    campo = request.POST.get('campo', '')
+    filial = getattr(request, 'filial_ativa', None)
+    if filial is None:
+        return JsonResponse({'ok': False, 'erro': 'Nenhuma filial ativa selecionada.'}, status=400)
+
+    if campo in CAMPOS_SEGREDO_FILIAL:
+        valor = getattr(filial, campo, '') or ''
+    elif campo in CAMPOS_SEGREDO_PARAMS:
+        params, _ = ParametrosSistema.objects.get_or_create(filial=filial)
+        valor = getattr(params, campo, '') or ''
+    else:
+        return JsonResponse({'ok': False, 'erro': 'Campo nao permitido.'}, status=400)
+
+    return JsonResponse({'ok': True, 'valor': valor})
+
+
 @admin_area_required
 @require_POST
 def api_sincronizar_focus(request):

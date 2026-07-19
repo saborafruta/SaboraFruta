@@ -23,6 +23,20 @@
                  border:1px solid; outline:none; transition:border-color .15s, box-shadow .15s; }
   body.tema-claro .param-input { background:#fff; color:#111827; border-color:#d1d5db; }
   body:not(.tema-claro) .param-input { background:#161618; color:#f0f0f0; border-color:#2f2f33; }
+
+  .param-secret-wrap { position:relative; }
+  .param-secret-wrap .param-input { padding-right:36px; }
+  .param-eye-btn { position:absolute; top:0; right:0; height:100%; width:34px;
+                    display:flex; align-items:center; justify-content:center;
+                    background:transparent; border:none; cursor:pointer; padding:0; }
+  .param-eye-btn svg { width:16px; height:16px; }
+  body.tema-claro .param-eye-btn svg { color:#6b7280; }
+  body:not(.tema-claro) .param-eye-btn svg { color:#9ca3af; }
+  .param-eye-btn:hover svg { color:#f97316; }
+  .param-secret-popover { margin-top:6px; padding:8px 10px; border-radius:8px; font-size:12px;
+                           font-family: ui-monospace, monospace; word-break:break-all; }
+  body.tema-claro .param-secret-popover { background:#f3f4f6; color:#111827; border:1px solid #e5e7eb; }
+  body:not(.tema-claro) .param-secret-popover { background:#0f0f11; color:#f0f0f0; border:1px solid #2f2f33; }
   body.tema-claro .param-input:focus { border-color:#f15a24; box-shadow:0 0 0 3px rgba(241,90,36,.12); }
   body:not(.tema-claro) .param-input:focus { border-color:#2563eb; box-shadow:0 0 0 3px rgba(37,99,235,.18); }
   .param-erro { font-size:11px; color:#ef4444; margin-top:3px; }
@@ -497,12 +511,24 @@
         </div>
         <div>
           <label class="param-label">Token de emissao Focus</label>
-          {{ form_filial.focusnfe_token }}
+          <div class="param-secret-wrap">
+            {{ form_filial.focusnfe_token }}
+            <button type="button" class="param-eye-btn" onclick="revelarSegredoParam(this,'focusnfe_token')" title="Mostrar valor atual">
+              <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M2.036 12.322a1.012 1.012 0 010-.639C3.423 7.51 7.36 4.5 12 4.5c4.638 0 8.573 3.007 9.963 7.178.07.207.07.431 0 .639C20.577 16.49 16.64 19.5 12 19.5c-4.638 0-8.573-3.007-9.963-7.178z"/><path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
+            </button>
+            <div class="param-secret-popover" style="display:none;"></div>
+          </div>
           <p class="param-card-sub mt-1">Use Token Producao ou Homologacao conforme o ambiente.</p>
         </div>
         <div>
           <label class="param-label">Token Principal Focus</label>
-          {{ form_params.focusnfe_token_principal }}
+          <div class="param-secret-wrap">
+            {{ form_params.focusnfe_token_principal }}
+            <button type="button" class="param-eye-btn" onclick="revelarSegredoParam(this,'focusnfe_token_principal')" title="Mostrar valor atual">
+              <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M2.036 12.322a1.012 1.012 0 010-.639C3.423 7.51 7.36 4.5 12 4.5c4.638 0 8.573 3.007 9.963 7.178.07.207.07.431 0 .639C20.577 16.49 16.64 19.5 12 19.5c-4.638 0-8.573-3.007-9.963-7.178z"/><path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
+            </button>
+            <div class="param-secret-popover" style="display:none;"></div>
+          </div>
           <p class="param-card-sub mt-1">Usado somente para sincronizar certificado e CSC.</p>
         </div>
         <div>
@@ -524,7 +550,13 @@
         </div>
         <div>
           <label class="param-label">CSC Token NFC-e</label>
-          {{ form_params.nfce_csc_token }}
+          <div class="param-secret-wrap">
+            {{ form_params.nfce_csc_token }}
+            <button type="button" class="param-eye-btn" onclick="revelarSegredoParam(this,'nfce_csc_token')" title="Mostrar valor atual">
+              <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M2.036 12.322a1.012 1.012 0 010-.639C3.423 7.51 7.36 4.5 12 4.5c4.638 0 8.573 3.007 9.963 7.178.07.207.07.431 0 .639C20.577 16.49 16.64 19.5 12 19.5c-4.638 0-8.573-3.007-9.963-7.178z"/><path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
+            </button>
+            <div class="param-secret-popover" style="display:none;"></div>
+          </div>
         </div>
       </div>
 
@@ -587,4 +619,34 @@
   </form>
 </div>
 
+<script>
+async function revelarSegredoParam(btn, campo) {
+  const wrap = btn.closest('.param-secret-wrap');
+  const popover = wrap.querySelector('.param-secret-popover');
+
+  if (popover.dataset.shown === '1') {
+    popover.style.display = 'none';
+    popover.dataset.shown = '0';
+    return;
+  }
+
+  btn.disabled = true;
+  try {
+    const csrf = document.querySelector('[name=csrfmiddlewaretoken]').value;
+    const res = await fetch('{% url "core:admin_parametros_revelar_segredo" %}', {
+      method: 'POST',
+      headers: { 'X-CSRFToken': csrf, 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: 'campo=' + encodeURIComponent(campo),
+    });
+    const data = await res.json();
+    popover.textContent = data.ok ? (data.valor || '(vazio)') : (data.erro || 'Erro ao buscar valor.');
+  } catch (e) {
+    popover.textContent = 'Erro de conexao.';
+  } finally {
+    popover.style.display = 'block';
+    popover.dataset.shown = '1';
+    btn.disabled = false;
+  }
+}
+</script>
 {% endblock %}
