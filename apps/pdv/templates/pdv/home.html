@@ -2918,8 +2918,7 @@ function pdv() {
         const qtd = parseFloat(item.quantidade||1);
         const uni = parseFloat(item.valor_unitario||0);
         const tot = parseFloat(item.valor_total||0);
-        const un = item.unidade_medida || 'un';
-        return `<tr><td>${desc}</td><td class="c">${qtd} ${un}</td><td class="r">R$ ${fmt(uni)}</td><td class="r b">R$ ${fmt(tot)}</td></tr>`;
+        return `<tr><td>${desc}</td><td class="c">${qtd}</td><td class="r">R$ ${fmt(uni)}</td><td class="r b">R$ ${fmt(tot)}</td></tr>`;
       }).join('');
 
       const html = `<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8"><title>Orcamento PDV</title><style>
@@ -3042,9 +3041,8 @@ function pdv() {
           const qtd = parseFloat(item.quantidade||1);
           const uni = parseFloat(item.valor_unitario||0);
           const tot = parseFloat(item.valor_total||0);
-          const un = item.unidade_medida || 'un';
           itensHtml += `<tr>
-            <td style="padding:4px 6px 4px 0;font-size:12px;text-align:left;white-space:nowrap;">${qtd} ${un}</td>
+            <td style="padding:4px 6px 4px 0;font-size:12px;text-align:left;white-space:nowrap;">${qtd}</td>
             <td style="padding:4px 6px;font-size:12px;word-break:break-word;">${desc}</td>
             <td style="padding:4px 0;font-size:12px;text-align:right;">R$&nbsp;${fmt(uni)}</td>
             <td style="padding:4px 0 4px 8px;font-size:12px;text-align:right;font-weight:700;">R$&nbsp;${fmt(tot)}</td>
@@ -3110,7 +3108,7 @@ ${(() => { const e = v.delivery ? (v.endereco_entrega || {}) : (v.cliente?.ender
 </table>
 <hr class="sep">
 <div style="display:flex;justify-content:space-between;font-size:11px;color:#555;margin-bottom:4px;">
-  <span>Qtd total de itens</span><span>${totalItens % 1 === 0 ? totalItens : totalItens.toFixed(3).replace('.',',')} un</span>
+  <span>Qtd total de itens</span><span>${totalItens % 1 === 0 ? totalItens : totalItens.toFixed(3).replace('.',',')}</span>
 </div>
 <div style="display:flex;justify-content:space-between;font-size:13px;margin-bottom:3px;">
   <span>Subtotal</span><span>R$&nbsp;${fmt(v.subtotal)}</span>
@@ -3170,9 +3168,8 @@ ${pgtoHtml ? `<hr class="sep">${pgtoHtml}` : ''}
           const qtd = parseFloat(item.quantidade||1);
           const uni = parseFloat(item.valor_unitario||0);
           const tot = parseFloat(item.valor_total||0);
-          const un = item.unidade_medida || 'un';
           itensHtml += `<tr>
-            <td style="padding:4px 6px 4px 0;font-size:12px;text-align:left;white-space:nowrap;">${qtd} ${un}</td>
+            <td style="padding:4px 6px 4px 0;font-size:12px;text-align:left;white-space:nowrap;">${qtd}</td>
             <td style="padding:4px 6px;font-size:12px;word-break:break-word;">${desc}</td>
             <td style="padding:4px 0;font-size:12px;text-align:right;">R$&nbsp;${fmt(uni)}</td>
             <td style="padding:4px 0 4px 8px;font-size:12px;text-align:right;font-weight:700;">R$&nbsp;${fmt(tot)}</td>
@@ -3243,7 +3240,7 @@ ${enderecoHtml}
 </table>
 <hr class="sep">
 <div style="display:flex;justify-content:space-between;font-size:11px;color:#555;margin-bottom:4px;">
-  <span>Qtd total de itens</span><span>${totalItensRP % 1 === 0 ? totalItensRP : totalItensRP.toFixed(3).replace('.',',')} un</span>
+  <span>Qtd total de itens</span><span>${totalItensRP % 1 === 0 ? totalItensRP : totalItensRP.toFixed(3).replace('.',',')}</span>
 </div>
 <div style="display:flex;justify-content:space-between;" class="total-row">
   <span>TOTAL</span><span>R$&nbsp;${fmt(c.valor_total)}</span>
@@ -3306,8 +3303,7 @@ ${pgtoHtml ? `<hr class="sep">${pgtoHtml}` : ''}
         const qtd = parseFloat(item.quantidade||1);
         const uni = parseFloat(item.valor_unitario||0);
         const tot = parseFloat(item.valor_total||0);
-        const un = item.unidade_medida || 'un';
-        return `<tr><td>${desc}</td><td class="c">${qtd} ${un}</td><td class="r">R$ ${fmt(uni)}</td><td class="r b">R$ ${fmt(tot)}</td></tr>`;
+        return `<tr><td>${desc}</td><td class="c">${qtd}</td><td class="r">R$ ${fmt(uni)}</td><td class="r b">R$ ${fmt(tot)}</td></tr>`;
       }).join('');
 
       const html = `<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8"><title>Orcamento PDV</title><style>
