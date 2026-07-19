@@ -738,6 +738,9 @@ class DashboardView(LoginRequiredMixin, TemplateView):
                 'receber': _resumo(base_receber, 'cliente', 'Cliente não informado'),
                 'pagar': _resumo(base_pagar, 'fornecedor', 'Fornecedor não informado'),
                 'erro': None,
+                'hoje_iso': hoje.isoformat(),
+                'amanha_iso': (hoje + datetime.timedelta(days=1)).isoformat(),
+                'limite_iso': limite.isoformat(),
             }
             resultado['tem_alerta_hoje'] = bool(
                 resultado['receber'].get('hoje_qtd') or resultado['pagar'].get('hoje_qtd')

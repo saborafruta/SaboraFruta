@@ -155,21 +155,26 @@
           <a href="{% url 'financeiro:receber_list' %}" class="text-xs" :style="temaClaro ? 'color:#3b82f6;' : 'color:#60a5fa;'">Ver todas →</a>
         </div>
         <div class="grid grid-cols-3 gap-3 p-4">
-          <div class="p-3 rounded-lg" style="background:rgba(239,68,68,0.08);">
+          <a href="{% url 'financeiro:receber_list' %}?status=vencido" class="p-3 rounded-lg block transition-transform"
+             style="background:rgba(239,68,68,0.08);" onmouseover="this.style.filter='brightness(1.25)'" onmouseout="this.style.filter='none'">
             <div class="text-[10px] uppercase font-semibold" style="color:#f87171;">Vencidas</div>
             <div class="text-lg font-bold mt-1" style="color:#f87171;">R$ {{ financeiro_contas.receber.vencidas_total|floatformat:2 }}</div>
             <div class="text-xs mt-0.5" style="color:#888;">{{ financeiro_contas.receber.vencidas_qtd }} conta{{ financeiro_contas.receber.vencidas_qtd|pluralize }}</div>
-          </div>
-          <div class="p-3 rounded-lg" style="background:rgba(59,130,246,0.10);">
+          </a>
+          <a href="{% url 'financeiro:receber_list' %}?status=aberto&data_ini={{ financeiro_contas.hoje_iso }}&data_fim={{ financeiro_contas.hoje_iso }}"
+             class="p-3 rounded-lg block transition-transform"
+             style="background:rgba(59,130,246,0.10);" onmouseover="this.style.filter='brightness(1.25)'" onmouseout="this.style.filter='none'">
             <div class="text-[10px] uppercase font-semibold" style="color:#60a5fa;">Vence hoje</div>
             <div class="text-lg font-bold mt-1" style="color:#60a5fa;">R$ {{ financeiro_contas.receber.hoje_total|floatformat:2 }}</div>
             <div class="text-xs mt-0.5" style="color:#888;">{{ financeiro_contas.receber.hoje_qtd }} conta{{ financeiro_contas.receber.hoje_qtd|pluralize }}</div>
-          </div>
-          <div class="p-3 rounded-lg" style="background:rgba(251,191,36,0.08);">
+          </a>
+          <a href="{% url 'financeiro:receber_list' %}?status=aberto&data_ini={{ financeiro_contas.amanha_iso }}&data_fim={{ financeiro_contas.limite_iso }}"
+             class="p-3 rounded-lg block transition-transform"
+             style="background:rgba(251,191,36,0.08);" onmouseover="this.style.filter='brightness(1.25)'" onmouseout="this.style.filter='none'">
             <div class="text-[10px] uppercase font-semibold" style="color:#d97706;">A vencer (7d)</div>
             <div class="text-lg font-bold mt-1" style="color:#d97706;">R$ {{ financeiro_contas.receber.a_vencer_total|floatformat:2 }}</div>
             <div class="text-xs mt-0.5" style="color:#888;">{{ financeiro_contas.receber.a_vencer_qtd }} conta{{ financeiro_contas.receber.a_vencer_qtd|pluralize }}</div>
-          </div>
+          </a>
         </div>
         {% if financeiro_contas.receber.itens %}
         <div class="px-4 pb-4 space-y-1.5">
@@ -197,21 +202,26 @@
           <a href="{% url 'financeiro:pagar_list' %}" class="text-xs" :style="temaClaro ? 'color:#3b82f6;' : 'color:#60a5fa;'">Ver todas →</a>
         </div>
         <div class="grid grid-cols-3 gap-3 p-4">
-          <div class="p-3 rounded-lg" style="background:rgba(239,68,68,0.08);">
+          <a href="{% url 'financeiro:pagar_list' %}?status=vencido" class="p-3 rounded-lg block transition-transform"
+             style="background:rgba(239,68,68,0.08);" onmouseover="this.style.filter='brightness(1.25)'" onmouseout="this.style.filter='none'">
             <div class="text-[10px] uppercase font-semibold" style="color:#f87171;">Vencidas</div>
             <div class="text-lg font-bold mt-1" style="color:#f87171;">R$ {{ financeiro_contas.pagar.vencidas_total|floatformat:2 }}</div>
             <div class="text-xs mt-0.5" style="color:#888;">{{ financeiro_contas.pagar.vencidas_qtd }} conta{{ financeiro_contas.pagar.vencidas_qtd|pluralize }}</div>
-          </div>
-          <div class="p-3 rounded-lg" style="background:rgba(59,130,246,0.10);">
+          </a>
+          <a href="{% url 'financeiro:pagar_list' %}?status=aberto&data_ini={{ financeiro_contas.hoje_iso }}&data_fim={{ financeiro_contas.hoje_iso }}"
+             class="p-3 rounded-lg block transition-transform"
+             style="background:rgba(59,130,246,0.10);" onmouseover="this.style.filter='brightness(1.25)'" onmouseout="this.style.filter='none'">
             <div class="text-[10px] uppercase font-semibold" style="color:#60a5fa;">Vence hoje</div>
             <div class="text-lg font-bold mt-1" style="color:#60a5fa;">R$ {{ financeiro_contas.pagar.hoje_total|floatformat:2 }}</div>
             <div class="text-xs mt-0.5" style="color:#888;">{{ financeiro_contas.pagar.hoje_qtd }} conta{{ financeiro_contas.pagar.hoje_qtd|pluralize }}</div>
-          </div>
-          <div class="p-3 rounded-lg" style="background:rgba(251,191,36,0.08);">
+          </a>
+          <a href="{% url 'financeiro:pagar_list' %}?status=aberto&data_ini={{ financeiro_contas.amanha_iso }}&data_fim={{ financeiro_contas.limite_iso }}"
+             class="p-3 rounded-lg block transition-transform"
+             style="background:rgba(251,191,36,0.08);" onmouseover="this.style.filter='brightness(1.25)'" onmouseout="this.style.filter='none'">
             <div class="text-[10px] uppercase font-semibold" style="color:#d97706;">A vencer (7d)</div>
             <div class="text-lg font-bold mt-1" style="color:#d97706;">R$ {{ financeiro_contas.pagar.a_vencer_total|floatformat:2 }}</div>
             <div class="text-xs mt-0.5" style="color:#888;">{{ financeiro_contas.pagar.a_vencer_qtd }} conta{{ financeiro_contas.pagar.a_vencer_qtd|pluralize }}</div>
-          </div>
+          </a>
         </div>
         {% if financeiro_contas.pagar.itens %}
         <div class="px-4 pb-4 space-y-1.5">
