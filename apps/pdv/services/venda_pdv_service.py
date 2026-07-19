@@ -188,6 +188,21 @@ class VendaPDVService:
         )
         preco_info = cls.resolver_preco_produto(produto, filial, quantidade)
         valor_unitario = preco_info["preco"]
+        preco_origem_tipo = preco_info["tipo"]
+        preco_origem_detalhe = preco_info["detalhe"] or preco_info["origem"]
+
+        preco_manual = item_dados.get("preco_manual")
+        if preco_manual not in (None, ""):
+            valor_manual = cls._decimal(preco_manual, cls.UNIT)
+            if valor_manual <= 0:
+                raise DadosInvalidosError("Preco manual deve ser maior que zero.")
+            valor_unitario = valor_manual
+            preco_origem_tipo = "manual"
+            preco_origem_detalhe = (
+                f"Preco alterado manualmente pelo operador "
+                f"(tabela: R$ {produto.preco_venda})."
+            )
+
         valor_total_item = cls._decimal(quantidade * valor_unitario, cls.MONEY)
         unidade = produto.unidade_medida.sigla if produto.unidade_medida_id else "UN"
         custo_snapshot = contrato["custo_atual"]
@@ -202,8 +217,8 @@ class VendaPDVService:
             valor_unitario=valor_unitario,
             valor_unitario_tabela=produto.preco_venda,
             custo_unitario_snapshot=custo_snapshot,
-            preco_origem=preco_info["tipo"],
-            preco_origem_detalhe=preco_info["detalhe"] or preco_info["origem"],
+            preco_origem=preco_origem_tipo,
+            preco_origem_detalhe=preco_origem_detalhe,
             valor_total=valor_total_item,
         )
 

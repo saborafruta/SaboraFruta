@@ -997,19 +997,31 @@
                    x-text="item.icone||'📦'"></div>
               <div style="flex:1;min-width:0;">
                 <div style="font-size:13px;font-weight:600;color:#e5e5f0;text-transform:uppercase;letter-spacing:.02em;line-height:1.2;" x-text="item.descricao"></div>
-                <div style="display:flex;align-items:center;gap:8px;margin-top:4px;">
-                  <span style="font-size:12px;color:#555;" x-text="'R$ ' + fmt(item.valor_unitario) + ' / un.'"></span>
+                <div style="display:flex;align-items:center;gap:8px;margin-top:4px;flex-wrap:wrap;">
+                  <template x-if="item._precoManual">
+                    <span style="font-size:12px;color:#555;">
+                      <s style="opacity:.55;" x-text="'R$ ' + fmt(item._precoOriginal)"></s>
+                      → <span style="color:#60a5fa;font-weight:700;" x-text="'R$ ' + fmt(item.valor_unitario)"></span> / un.
+                    </span>
+                  </template>
+                  <template x-if="!item._precoManual">
+                    <span style="font-size:12px;color:#555;" x-text="'R$ ' + fmt(item.valor_unitario) + ' / un.'"></span>
+                  </template>
                   <template x-if="item.desconto_valor>0">
                     <span style="font-size:11px;padding:1px 6px;background:rgba(34,197,94,.15);color:#4ade80;border-radius:4px;font-weight:600;"
                           x-text="'− R$ ' + fmt(item.desconto_valor)"></span>
                   </template>
                 </div>
-                <div style="display:flex;align-items:center;gap:8px;margin-top:8px;">
+                <div style="display:flex;align-items:center;gap:8px;margin-top:8px;flex-wrap:wrap;">
                   <div class="qty-ctrl">
                     <button @click="alterarQuantidade(item,-1)">−</button>
                     <input type="number" x-model.number="item.quantidade" @change="recalcularItem(item)" min="0.001" step="0.001">
                     <button @click="alterarQuantidade(item,1)">+</button>
                   </div>
+                  <button @click="abrirPrecoItem(item)" class="btn-action" style="font-size:11px;padding:4px 8px;"
+                          :style="item._precoManual?'color:#60a5fa;border-color:rgba(59,130,246,.35);':''">
+                    preço <span x-show="item._precoManual" x-cloak>✎</span>
+                  </button>
                   <button @click="abrirDescontoItem(item)" class="btn-action" style="font-size:11px;padding:4px 8px;"
                           :style="item.desconto_valor>0?'color:#4ade80;border-color:rgba(34,197,94,.3);':''">
                     desc <span x-show="item.desconto_valor>0" x-text="'R$'+fmt(item.desconto_valor)" x-cloak></span>
@@ -1665,6 +1677,57 @@
           </div>
           <button class="dic-ok" @click="aplicarDescontoItem(itemEditando,$refs.inputDescontoValor.value)">OK</button>
         </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Alterar Preço do Item -->
+  <div x-cloak class="dic-overlay"
+       :style="showModalPrecoItem ? '' : 'display:none;'"
+       @keydown.escape.window="showModalPrecoItem=false">
+    <div class="dic-box">
+      <div class="dic-bar" style="background:linear-gradient(90deg,#2563eb,#60a5fa);"></div>
+
+      <!-- Header -->
+      <div class="dic-head">
+        <div class="dic-ico" style="background:linear-gradient(135deg,#2563eb,#3b82f6);">
+          <svg fill="none" stroke="currentColor" stroke-width="2.1" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M9 7h6m-6 4h6m-6 4h4M5 3h14a2 2 0 012 2v14a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2z"/></svg>
+        </div>
+        <div style="min-width:0;flex:1;">
+          <span class="dic-kicker" style="color:#60a5fa;">Alterar preço</span>
+          <p class="dic-title" x-show="itemEditandoPreco" x-text="itemEditandoPreco?.descricao"></p>
+        </div>
+        <button class="dic-close" @click="showModalPrecoItem=false">✕</button>
+      </div>
+
+      <div class="dic-body">
+        <!-- Resumo -->
+        <div class="dic-summary" x-show="itemEditandoPreco">
+          <div class="dic-row">
+            <span class="dic-row-lbl">Preço de tabela</span>
+            <span class="dic-row-val" x-text="'R$ ' + fmt(itemEditandoPreco?._precoOriginal||0)"></span>
+          </div>
+          <div class="dic-row total">
+            <span class="dic-row-lbl">Preço atual</span>
+            <span class="dic-row-val" style="color:#60a5fa;" x-text="'R$ ' + fmt(itemEditandoPreco?.valor_unitario||0)"></span>
+          </div>
+        </div>
+
+        <!-- Valor manual -->
+        <p class="dic-seclabel">Novo preço unitário (R$)</p>
+        <div class="dic-manual">
+          <div class="dic-field" style="border-color:var(--pdv-bd);">
+            <span style="color:#2563eb;">R$</span>
+            <input type="text" inputmode="decimal" x-ref="inputPrecoValor" placeholder="0,00"
+                   @keydown.enter.prevent="aplicarPrecoItem(itemEditandoPreco,$refs.inputPrecoValor.value)">
+          </div>
+          <button class="dic-ok" style="background:#2563eb;box-shadow:0 6px 16px rgba(37,99,235,.28);"
+                  @click="aplicarPrecoItem(itemEditandoPreco,$refs.inputPrecoValor.value)">OK</button>
+        </div>
+
+        <button x-show="itemEditandoPreco?._precoManual" x-cloak
+                class="dic-chip" style="width:100%;margin-top:10px;"
+                @click="restaurarPrecoItem(itemEditandoPreco)">↺ Restaurar preço de tabela</button>
       </div>
     </div>
   </div>
@@ -2482,13 +2545,13 @@ function pdv() {
 
     showModalCaixa: false, showModalCliente: false, showModalDelivery: false,
     showModalPendentes: false, showModalOrcamentos: false, showModalConfirmacao: false,
-    showModalDescontoItem: false, showModalDesconto: false,
+    showModalDescontoItem: false, showModalDesconto: false, showModalPrecoItem: false,
     showModalNovoCliente: false, showModalCaixaRel: false, showCaixaMenu: false, showImprimirMenu: false,
     showModalImpressao: false, vendaFinalizadaData: { id: null, numero: null }, _finalizando: false,
     showModalHistorico: false, historicoVendas: [],
     historicoCliente: [], produtosFrequentes: [], historicoClienteTotal: 0, historicoClienteCarregando: false, historicoClienteAberto: null,
     showModalConfig: false, configFormas: [], configTipos: [], configNovaDesc: '', configNovoTipo: 'dinheiro', configSalvando: false, configErro: '',
-    itemEditando: null, descontoItemManual: '', descontoGeralManual: '',
+    itemEditando: null, descontoItemManual: '', descontoGeralManual: '', itemEditandoPreco: null,
     pendentes: [], orcamentos: [], orcamentosCliente: [], clienteQuery: '', clientesResultados: [], clienteBuscando: false, clienteFoco: -1,
     deliveryAguardandoCliente: false,
     creditoDisponivel: 0, creditoAplicado: 0,
@@ -2642,7 +2705,7 @@ function pdv() {
         descricao: produto.descricao, codigo_barras: produto.codigo_barras||'',
         icone: produto.icone||'📦', cor: produto.cor||null, linha: produto.linha||null,
         estoque_disponivel: parseFloat(produto.estoque_disponivel == null ? 0 : produto.estoque_disponivel),
-        quantidade: 1, valor_unitario: preco,
+        quantidade: 1, valor_unitario: preco, _precoOriginal: preco, _precoManual: false,
         desconto_percentual: 0, desconto_valor: 0, valor_total: preco,
         obs: '', _showObs: false,
       });
@@ -2696,6 +2759,25 @@ function pdv() {
     },
     aplicarDescontoGeral(pct) { this.venda.desconto=pct===0?0:this.venda.subtotal*(pct/100); this.recalcularTotais(); this.showModalDesconto=false; },
     aplicarDescontoGeralValor() { this.venda.desconto=Math.min(parseFloat(this.descontoGeralManual)||0,this.venda.subtotal); this.recalcularTotais(); this.showModalDesconto=false; },
+
+    abrirPrecoItem(item) {
+      this.itemEditandoPreco=item; this.showModalPrecoItem=true;
+      this.$nextTick(()=>{ try{ const el=this.$refs.inputPrecoValor; if(el){ el.value=String(item.valor_unitario).replace('.',','); el.focus(); el.select(); } }catch(e){} });
+    },
+    aplicarPrecoItem(item,val) {
+      if(!item)return;
+      const novo=parseFloat(String(val).replace(',','.'));
+      if(!novo||novo<=0){ this.toast_('Informe um preço válido.','erro'); return; }
+      item.valor_unitario=novo;
+      item._precoManual=Math.abs(novo-item._precoOriginal)>0.0001;
+      item.preco_manual=item._precoManual?novo:null;
+      this.recalcularItem(item); this.showModalPrecoItem=false;
+    },
+    restaurarPrecoItem(item) {
+      if(!item)return;
+      item.valor_unitario=item._precoOriginal; item._precoManual=false; item.preco_manual=null;
+      this.recalcularItem(item); this.showModalPrecoItem=false;
+    },
 
     ehFormaAPrazo(forma) {
       const t = (forma?.tipo||'').toLowerCase();
@@ -3845,6 +3927,7 @@ ${pgtoHtml ? `<hr class="sep">${pgtoHtml}` : ''}
         if (e.key==='Escape') {
           this.showModalCliente=this.showModalDelivery=this.showModalPendentes=this.showModalOrcamentos=false;
           this.showModalConfirmacao=this.showModalDescontoItem=this.showModalDesconto=false;
+          this.showModalPrecoItem=false;
           this.showModalNovoCliente=false; this.showCaixaMenu=false; this.showModalHistorico=false;
           this.formaPgtoSelecionada=null;
         }
