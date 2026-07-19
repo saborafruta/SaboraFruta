@@ -697,8 +697,10 @@ class DashboardView(LoginRequiredMixin, TemplateView):
 
             def _resumo(qs, nome_attr, fallback_nome):
                 vencidas = qs.filter(data_vencimento__lt=hoje)
-                a_vencer = qs.filter(data_vencimento__gte=hoje, data_vencimento__lte=limite)
+                vence_hoje = qs.filter(data_vencimento=hoje)
+                a_vencer = qs.filter(data_vencimento__gt=hoje, data_vencimento__lte=limite)
                 agg_v = vencidas.aggregate(qtd=Count('id'), total=Sum('valor_saldo'))
+                agg_h = vence_hoje.aggregate(qtd=Count('id'), total=Sum('valor_saldo'))
                 agg_a = a_vencer.aggregate(qtd=Count('id'), total=Sum('valor_saldo'))
 
                 urgentes = list(qs.filter(data_vencimento__lte=limite).order_by('data_vencimento')[:5])
@@ -718,22 +720,29 @@ class DashboardView(LoginRequiredMixin, TemplateView):
                         'valor': float(c.valor_saldo or 0),
                         'dias': dias,
                         'vencida': dias < 0,
+                        'hoje': dias == 0,
                         'label': label,
                     })
 
                 return {
                     'vencidas_qtd': agg_v['qtd'] or 0,
                     'vencidas_total': float(agg_v['total'] or 0),
+                    'hoje_qtd': agg_h['qtd'] or 0,
+                    'hoje_total': float(agg_h['total'] or 0),
                     'a_vencer_qtd': agg_a['qtd'] or 0,
                     'a_vencer_total': float(agg_a['total'] or 0),
                     'itens': itens,
                 }
 
-            return {
+            resultado = {
                 'receber': _resumo(base_receber, 'cliente', 'Cliente não informado'),
                 'pagar': _resumo(base_pagar, 'fornecedor', 'Fornecedor não informado'),
                 'erro': None,
             }
+            resultado['tem_alerta_hoje'] = bool(
+                resultado['receber'].get('hoje_qtd') or resultado['pagar'].get('hoje_qtd')
+            )
+            return resultado
         except Exception as exc:
             return {'receber': {}, 'pagar': {}, 'erro': str(exc)}
 

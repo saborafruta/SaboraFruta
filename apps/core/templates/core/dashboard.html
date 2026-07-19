@@ -127,6 +127,25 @@
     {% if financeiro_contas.erro %}
       <p class="m-5 text-xs px-3 py-2 rounded" style="background:rgba(239,68,68,0.1);color:#f87171;">{{ financeiro_contas.erro }}</p>
     {% else %}
+
+    {% if financeiro_contas.tem_alerta_hoje %}
+    <div class="mx-5 mt-4 px-4 py-3 rounded-lg flex items-start gap-3" style="background:rgba(59,130,246,0.10); border:1px solid rgba(59,130,246,0.25);">
+      <svg class="w-5 h-5 flex-shrink-0 mt-0.5" fill="none" stroke="#60a5fa" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
+      </svg>
+      <div class="text-xs" style="color:#93c5fd;">
+        <strong>Vencem hoje:</strong>
+        {% if financeiro_contas.receber.hoje_qtd %}
+          {{ financeiro_contas.receber.hoje_qtd }} conta{{ financeiro_contas.receber.hoje_qtd|pluralize }} a receber (R$ {{ financeiro_contas.receber.hoje_total|floatformat:2 }})
+        {% endif %}
+        {% if financeiro_contas.receber.hoje_qtd and financeiro_contas.pagar.hoje_qtd %} · {% endif %}
+        {% if financeiro_contas.pagar.hoje_qtd %}
+          {{ financeiro_contas.pagar.hoje_qtd }} conta{{ financeiro_contas.pagar.hoje_qtd|pluralize }} a pagar (R$ {{ financeiro_contas.pagar.hoje_total|floatformat:2 }})
+        {% endif %}
+      </div>
+    </div>
+    {% endif %}
+
     <div class="grid grid-cols-1 xl:grid-cols-2 gap-0">
 
       <!-- A Receber -->
@@ -135,11 +154,16 @@
           <span class="text-xs font-medium uppercase tracking-widest" style="color:#888; letter-spacing:0.08em;">A Receber</span>
           <a href="{% url 'financeiro:receber_list' %}" class="text-xs" :style="temaClaro ? 'color:#3b82f6;' : 'color:#60a5fa;'">Ver todas →</a>
         </div>
-        <div class="grid grid-cols-2 gap-3 p-4">
+        <div class="grid grid-cols-3 gap-3 p-4">
           <div class="p-3 rounded-lg" style="background:rgba(239,68,68,0.08);">
             <div class="text-[10px] uppercase font-semibold" style="color:#f87171;">Vencidas</div>
             <div class="text-lg font-bold mt-1" style="color:#f87171;">R$ {{ financeiro_contas.receber.vencidas_total|floatformat:2 }}</div>
             <div class="text-xs mt-0.5" style="color:#888;">{{ financeiro_contas.receber.vencidas_qtd }} conta{{ financeiro_contas.receber.vencidas_qtd|pluralize }}</div>
+          </div>
+          <div class="p-3 rounded-lg" style="background:rgba(59,130,246,0.10);">
+            <div class="text-[10px] uppercase font-semibold" style="color:#60a5fa;">Vence hoje</div>
+            <div class="text-lg font-bold mt-1" style="color:#60a5fa;">R$ {{ financeiro_contas.receber.hoje_total|floatformat:2 }}</div>
+            <div class="text-xs mt-0.5" style="color:#888;">{{ financeiro_contas.receber.hoje_qtd }} conta{{ financeiro_contas.receber.hoje_qtd|pluralize }}</div>
           </div>
           <div class="p-3 rounded-lg" style="background:rgba(251,191,36,0.08);">
             <div class="text-[10px] uppercase font-semibold" style="color:#d97706;">A vencer (7d)</div>
@@ -157,7 +181,7 @@
              onmouseout="this.style.background='rgba(255,255,255,0.02)'">
             <span class="truncate flex-1" :style="temaClaro ? 'color:#333;' : 'color:#d4d4d4;'">{{ it.nome }}</span>
             <span class="font-mono flex-shrink-0" :style="temaClaro ? 'color:#333;' : 'color:#d4d4d4;'">R$ {{ it.valor|floatformat:2 }}</span>
-            <span class="font-semibold flex-shrink-0" style="{% if it.vencida %}color:#f87171;{% else %}color:#d97706;{% endif %}">{{ it.label }}</span>
+            <span class="font-semibold flex-shrink-0" style="{% if it.vencida %}color:#f87171;{% elif it.hoje %}color:#60a5fa;{% else %}color:#d97706;{% endif %}">{{ it.label }}</span>
           </a>
           {% endfor %}
         </div>
@@ -172,11 +196,16 @@
           <span class="text-xs font-medium uppercase tracking-widest" style="color:#888; letter-spacing:0.08em;">A Pagar</span>
           <a href="{% url 'financeiro:pagar_list' %}" class="text-xs" :style="temaClaro ? 'color:#3b82f6;' : 'color:#60a5fa;'">Ver todas →</a>
         </div>
-        <div class="grid grid-cols-2 gap-3 p-4">
+        <div class="grid grid-cols-3 gap-3 p-4">
           <div class="p-3 rounded-lg" style="background:rgba(239,68,68,0.08);">
             <div class="text-[10px] uppercase font-semibold" style="color:#f87171;">Vencidas</div>
             <div class="text-lg font-bold mt-1" style="color:#f87171;">R$ {{ financeiro_contas.pagar.vencidas_total|floatformat:2 }}</div>
             <div class="text-xs mt-0.5" style="color:#888;">{{ financeiro_contas.pagar.vencidas_qtd }} conta{{ financeiro_contas.pagar.vencidas_qtd|pluralize }}</div>
+          </div>
+          <div class="p-3 rounded-lg" style="background:rgba(59,130,246,0.10);">
+            <div class="text-[10px] uppercase font-semibold" style="color:#60a5fa;">Vence hoje</div>
+            <div class="text-lg font-bold mt-1" style="color:#60a5fa;">R$ {{ financeiro_contas.pagar.hoje_total|floatformat:2 }}</div>
+            <div class="text-xs mt-0.5" style="color:#888;">{{ financeiro_contas.pagar.hoje_qtd }} conta{{ financeiro_contas.pagar.hoje_qtd|pluralize }}</div>
           </div>
           <div class="p-3 rounded-lg" style="background:rgba(251,191,36,0.08);">
             <div class="text-[10px] uppercase font-semibold" style="color:#d97706;">A vencer (7d)</div>
@@ -194,7 +223,7 @@
              onmouseout="this.style.background='rgba(255,255,255,0.02)'">
             <span class="truncate flex-1" :style="temaClaro ? 'color:#333;' : 'color:#d4d4d4;'">{{ it.nome }}</span>
             <span class="font-mono flex-shrink-0" :style="temaClaro ? 'color:#333;' : 'color:#d4d4d4;'">R$ {{ it.valor|floatformat:2 }}</span>
-            <span class="font-semibold flex-shrink-0" style="{% if it.vencida %}color:#f87171;{% else %}color:#d97706;{% endif %}">{{ it.label }}</span>
+            <span class="font-semibold flex-shrink-0" style="{% if it.vencida %}color:#f87171;{% elif it.hoje %}color:#60a5fa;{% else %}color:#d97706;{% endif %}">{{ it.label }}</span>
           </a>
           {% endfor %}
         </div>
