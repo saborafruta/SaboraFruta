@@ -105,6 +105,109 @@
   </div>
 
   <!-- ================================================================
+       CONTAS A RECEBER / PAGAR
+       ================================================================ -->
+  <div class="card" style="border-radius:12px; overflow:hidden;">
+    <div class="dashboard-section-head px-5 py-4 flex items-center gap-2">
+      <svg class="w-4 h-4 flex-shrink-0" fill="none" stroke="#f472b6" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z"/>
+      </svg>
+      <h3 class="text-sm font-medium" :style="temaClaro ? 'color:#1a1a1a;' : 'color:#f0f0f0;'">Contas a Receber / Pagar</h3>
+      {% with total_venc=financeiro_contas.receber.vencidas_qtd|add:financeiro_contas.pagar.vencidas_qtd %}
+      {% if total_venc %}
+        <span class="text-xs px-2 py-0.5 rounded-full ml-auto font-semibold" style="background:rgba(239,68,68,0.15);color:#f87171;">
+          {{ total_venc }} vencida{{ total_venc|pluralize }}
+        </span>
+      {% else %}
+        <span class="text-xs ml-auto" style="color:#4ade80;">Tudo em dia ✓</span>
+      {% endif %}
+      {% endwith %}
+    </div>
+
+    {% if financeiro_contas.erro %}
+      <p class="m-5 text-xs px-3 py-2 rounded" style="background:rgba(239,68,68,0.1);color:#f87171;">{{ financeiro_contas.erro }}</p>
+    {% else %}
+    <div class="grid grid-cols-1 xl:grid-cols-2 gap-0">
+
+      <!-- A Receber -->
+      <div style="border-right:1px solid #2a2a2e;">
+        <div class="px-5 py-3 flex items-center justify-between" style="border-bottom:1px solid #2a2a2e;">
+          <span class="text-xs font-medium uppercase tracking-widest" style="color:#888; letter-spacing:0.08em;">A Receber</span>
+          <a href="{% url 'financeiro:receber_list' %}" class="text-xs" :style="temaClaro ? 'color:#3b82f6;' : 'color:#60a5fa;'">Ver todas →</a>
+        </div>
+        <div class="grid grid-cols-2 gap-3 p-4">
+          <div class="p-3 rounded-lg" style="background:rgba(239,68,68,0.08);">
+            <div class="text-[10px] uppercase font-semibold" style="color:#f87171;">Vencidas</div>
+            <div class="text-lg font-bold mt-1" style="color:#f87171;">R$ {{ financeiro_contas.receber.vencidas_total|floatformat:2 }}</div>
+            <div class="text-xs mt-0.5" style="color:#888;">{{ financeiro_contas.receber.vencidas_qtd }} conta{{ financeiro_contas.receber.vencidas_qtd|pluralize }}</div>
+          </div>
+          <div class="p-3 rounded-lg" style="background:rgba(251,191,36,0.08);">
+            <div class="text-[10px] uppercase font-semibold" style="color:#d97706;">A vencer (7d)</div>
+            <div class="text-lg font-bold mt-1" style="color:#d97706;">R$ {{ financeiro_contas.receber.a_vencer_total|floatformat:2 }}</div>
+            <div class="text-xs mt-0.5" style="color:#888;">{{ financeiro_contas.receber.a_vencer_qtd }} conta{{ financeiro_contas.receber.a_vencer_qtd|pluralize }}</div>
+          </div>
+        </div>
+        {% if financeiro_contas.receber.itens %}
+        <div class="px-4 pb-4 space-y-1.5">
+          {% for it in financeiro_contas.receber.itens %}
+          <a href="{% url 'financeiro:receber_detail' it.id %}"
+             class="flex items-center justify-between gap-2 px-3 py-2 rounded-lg text-xs transition-colors"
+             style="background:rgba(255,255,255,0.02);"
+             onmouseover="this.style.background=temaClaro?'#f8fafc':'rgba(255,255,255,0.05)'"
+             onmouseout="this.style.background='rgba(255,255,255,0.02)'">
+            <span class="truncate flex-1" :style="temaClaro ? 'color:#333;' : 'color:#d4d4d4;'">{{ it.nome }}</span>
+            <span class="font-mono flex-shrink-0" :style="temaClaro ? 'color:#333;' : 'color:#d4d4d4;'">R$ {{ it.valor|floatformat:2 }}</span>
+            <span class="font-semibold flex-shrink-0" style="{% if it.vencida %}color:#f87171;{% else %}color:#d97706;{% endif %}">{{ it.label }}</span>
+          </a>
+          {% endfor %}
+        </div>
+        {% else %}
+        <div class="px-5 py-6 text-center text-xs" style="color:#6b7280;">Nenhuma conta a receber vencendo em breve.</div>
+        {% endif %}
+      </div>
+
+      <!-- A Pagar -->
+      <div>
+        <div class="px-5 py-3 flex items-center justify-between" style="border-bottom:1px solid #2a2a2e;">
+          <span class="text-xs font-medium uppercase tracking-widest" style="color:#888; letter-spacing:0.08em;">A Pagar</span>
+          <a href="{% url 'financeiro:pagar_list' %}" class="text-xs" :style="temaClaro ? 'color:#3b82f6;' : 'color:#60a5fa;'">Ver todas →</a>
+        </div>
+        <div class="grid grid-cols-2 gap-3 p-4">
+          <div class="p-3 rounded-lg" style="background:rgba(239,68,68,0.08);">
+            <div class="text-[10px] uppercase font-semibold" style="color:#f87171;">Vencidas</div>
+            <div class="text-lg font-bold mt-1" style="color:#f87171;">R$ {{ financeiro_contas.pagar.vencidas_total|floatformat:2 }}</div>
+            <div class="text-xs mt-0.5" style="color:#888;">{{ financeiro_contas.pagar.vencidas_qtd }} conta{{ financeiro_contas.pagar.vencidas_qtd|pluralize }}</div>
+          </div>
+          <div class="p-3 rounded-lg" style="background:rgba(251,191,36,0.08);">
+            <div class="text-[10px] uppercase font-semibold" style="color:#d97706;">A vencer (7d)</div>
+            <div class="text-lg font-bold mt-1" style="color:#d97706;">R$ {{ financeiro_contas.pagar.a_vencer_total|floatformat:2 }}</div>
+            <div class="text-xs mt-0.5" style="color:#888;">{{ financeiro_contas.pagar.a_vencer_qtd }} conta{{ financeiro_contas.pagar.a_vencer_qtd|pluralize }}</div>
+          </div>
+        </div>
+        {% if financeiro_contas.pagar.itens %}
+        <div class="px-4 pb-4 space-y-1.5">
+          {% for it in financeiro_contas.pagar.itens %}
+          <a href="{% url 'financeiro:pagar_detail' it.id %}"
+             class="flex items-center justify-between gap-2 px-3 py-2 rounded-lg text-xs transition-colors"
+             style="background:rgba(255,255,255,0.02);"
+             onmouseover="this.style.background=temaClaro?'#f8fafc':'rgba(255,255,255,0.05)'"
+             onmouseout="this.style.background='rgba(255,255,255,0.02)'">
+            <span class="truncate flex-1" :style="temaClaro ? 'color:#333;' : 'color:#d4d4d4;'">{{ it.nome }}</span>
+            <span class="font-mono flex-shrink-0" :style="temaClaro ? 'color:#333;' : 'color:#d4d4d4;'">R$ {{ it.valor|floatformat:2 }}</span>
+            <span class="font-semibold flex-shrink-0" style="{% if it.vencida %}color:#f87171;{% else %}color:#d97706;{% endif %}">{{ it.label }}</span>
+          </a>
+          {% endfor %}
+        </div>
+        {% else %}
+        <div class="px-5 py-6 text-center text-xs" style="color:#6b7280;">Nenhuma conta a pagar vencendo em breve.</div>
+        {% endif %}
+      </div>
+
+    </div>
+    {% endif %}
+  </div>
+
+  <!-- ================================================================
        INFORMAÇÕES DO DIA E DO MÊS
        ================================================================ -->
   {% with d=vendas_dia m=vendas_mes %}

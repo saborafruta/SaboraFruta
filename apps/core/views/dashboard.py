@@ -25,6 +25,7 @@ class DashboardView(LoginRequiredMixin, TemplateView):
         ctx['vendas_mes'] = self._vendas_periodo(filial, 'mes')
         ctx['vendas_acumuladas'] = self._vendas_acumuladas_mes(filial)
         ctx['vendas_dow'] = self._vendas_por_dia_semana(filial)
+        ctx['financeiro_contas'] = self._contas_financeiro(filial)
         return ctx
 
     # ------------------------------------------------------------------
@@ -661,6 +662,80 @@ class DashboardView(LoginRequiredMixin, TemplateView):
             return {'periodos': periodos, 'erro': None}
         except Exception as exc:
             return {'periodos': {}, 'erro': str(exc)}
+
+    # ------------------------------------------------------------------
+    # Contas a Receber / Pagar — aviso no dashboard
+    # ------------------------------------------------------------------
+
+    def _contas_financeiro(self, filial):
+        vazio = {'receber': {}, 'pagar': {}, 'erro': None}
+        if not filial:
+            return vazio
+
+        try:
+            from apps.financeiro.models import ContaPagar, ContaReceber
+            from apps.financeiro.constants.enums import StatusContaPagar, StatusContaReceber
+
+            hoje = timezone.now().date()
+            limite = hoje + datetime.timedelta(days=7)
+
+            base_receber = (
+                ContaReceber.objects.filter(filial__empresa=filial.empresa)
+                if filial.is_matriz
+                else ContaReceber.objects.filter(filial=filial)
+            ).filter(
+                status__in=[StatusContaReceber.ABERTO, StatusContaReceber.VENCIDO],
+            ).select_related('cliente')
+
+            base_pagar = (
+                ContaPagar.objects.filter(filial__empresa=filial.empresa)
+                if filial.is_matriz
+                else ContaPagar.objects.filter(filial=filial)
+            ).filter(
+                status__in=[StatusContaPagar.ABERTO, StatusContaPagar.VENCIDO, StatusContaPagar.AGENDADO],
+            ).select_related('fornecedor')
+
+            def _resumo(qs, nome_attr, fallback_nome):
+                vencidas = qs.filter(data_vencimento__lt=hoje)
+                a_vencer = qs.filter(data_vencimento__gte=hoje, data_vencimento__lte=limite)
+                agg_v = vencidas.aggregate(qtd=Count('id'), total=Sum('valor_saldo'))
+                agg_a = a_vencer.aggregate(qtd=Count('id'), total=Sum('valor_saldo'))
+
+                urgentes = list(qs.filter(data_vencimento__lte=limite).order_by('data_vencimento')[:5])
+                itens = []
+                for c in urgentes:
+                    entidade = getattr(c, nome_attr, None)
+                    dias = (c.data_vencimento - hoje).days
+                    if dias < 0:
+                        label = f'venceu há {abs(dias)}d'
+                    elif dias == 0:
+                        label = 'vence hoje'
+                    else:
+                        label = f'vence em {dias}d'
+                    itens.append({
+                        'id': c.pk,
+                        'nome': str(entidade) if entidade else fallback_nome,
+                        'valor': float(c.valor_saldo or 0),
+                        'dias': dias,
+                        'vencida': dias < 0,
+                        'label': label,
+                    })
+
+                return {
+                    'vencidas_qtd': agg_v['qtd'] or 0,
+                    'vencidas_total': float(agg_v['total'] or 0),
+                    'a_vencer_qtd': agg_a['qtd'] or 0,
+                    'a_vencer_total': float(agg_a['total'] or 0),
+                    'itens': itens,
+                }
+
+            return {
+                'receber': _resumo(base_receber, 'cliente', 'Cliente não informado'),
+                'pagar': _resumo(base_pagar, 'fornecedor', 'Fornecedor não informado'),
+                'erro': None,
+            }
+        except Exception as exc:
+            return {'receber': {}, 'pagar': {}, 'erro': str(exc)}
 
     # ------------------------------------------------------------------
     # Curva ABC — helpers comuns
