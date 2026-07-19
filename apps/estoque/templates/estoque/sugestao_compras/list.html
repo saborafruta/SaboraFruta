@@ -359,7 +359,7 @@
                   {% else %}
                     <span class="text-sm" :style="temaClaro ? 'color:#d1d5db;' : 'color:#333;'">—</span>
                   {% endif %}
-                  <span class="text-[10px] uppercase tracking-wide" :style="temaClaro ? 'color:#9ca3af;' : 'color:#555;'">
+                  <span class="uppercase tracking-wide" :style="temaClaro ? 'color:#9ca3af;font-size:10px;' : 'color:#555;font-size:10px;'">
                     Markup {% if l.markup > 0 %}{{ l.markup|floatformat:0 }}%{% else %}—{% endif %}
                   </span>
                 </div>
@@ -442,7 +442,8 @@
        x-transition:enter-start="opacity-0"
        x-transition:enter-end="opacity-100"
        @keydown.escape.window="fecharKardex()">
-    <div class="w-full max-w-3xl max-h-[88vh] flex flex-col rounded-2xl overflow-hidden"
+    <div class="w-full max-w-3xl flex flex-col rounded-2xl overflow-hidden"
+         style="max-height:88vh;"
          :style="temaClaro ? 'background:#fff; box-shadow:0 30px 90px rgba(0,0,0,.22);' : 'background:#1a1a1e; border:1px solid #2a2a2e; box-shadow:0 30px 90px rgba(0,0,0,.7);'"
          @click.outside="fecharKardex()"
          x-transition:enter="transition ease-out duration-150"
@@ -454,7 +455,7 @@
       <!-- Header -->
       <div class="flex items-start justify-between gap-3 px-5 py-4 flex-shrink-0" style="border-bottom:1px solid;" :style="temaClaro ? 'border-color:#e5e7eb;' : 'border-color:#2a2a2e;'">
         <div class="min-w-0">
-          <span class="text-[10px] font-bold uppercase tracking-widest" :style="temaClaro ? 'color:#6366f1;' : 'color:#818cf8;'">Extrato / Kardex</span>
+          <span class="font-bold uppercase tracking-widest" :style="temaClaro ? 'color:#6366f1;font-size:10px;' : 'color:#818cf8;font-size:10px;'">Extrato / Kardex</span>
           <p class="text-lg font-semibold truncate" :style="temaClaro ? 'color:#111827;' : 'color:#f1f5f9;'" x-text="kardexData ? kardexData.produto.descricao : 'Carregando...'"></p>
           <p class="text-xs mt-0.5" :style="temaClaro ? 'color:#9ca3af;' : 'color:#6b7280;'" x-show="kardexData" x-text="(kardexData?.produto.codigo && kardexData.produto.codigo !== '-' ? 'Código: ' + kardexData.produto.codigo + ' · ' : '') + (kardexData?.produto.categoria || '')"></p>
         </div>
@@ -482,27 +483,27 @@
             <!-- Cards resumo do estoque -->
             <div class="grid grid-cols-2 sm:grid-cols-3 gap-3">
               <div class="card p-3" :style="kardexData.estoque.abaixo_minimo ? 'border-left:3px solid #ef4444;' : 'border-left:3px solid #22c55e;'">
-                <div class="text-[10px] uppercase tracking-wide font-semibold" :style="temaClaro ? 'color:#9ca3af;' : 'color:#6b7280;'">Disponível</div>
+                <div class="uppercase tracking-wide font-semibold" :style="temaClaro ? 'color:#9ca3af;font-size:10px;' : 'color:#6b7280;font-size:10px;'">Disponível</div>
                 <div class="text-lg font-bold mt-0.5" :style="temaClaro ? 'color:#111827;' : 'color:#f1f5f9;'" x-text="kardexData.estoque.disponivel + ' ' + kardexData.produto.unidade"></div>
               </div>
               <div class="card p-3">
-                <div class="text-[10px] uppercase tracking-wide font-semibold" :style="temaClaro ? 'color:#9ca3af;' : 'color:#6b7280;'">Atual</div>
+                <div class="uppercase tracking-wide font-semibold" :style="temaClaro ? 'color:#9ca3af;font-size:10px;' : 'color:#6b7280;font-size:10px;'">Atual</div>
                 <div class="text-lg font-bold mt-0.5" :style="temaClaro ? 'color:#111827;' : 'color:#f1f5f9;'" x-text="kardexData.estoque.atual + ' ' + kardexData.produto.unidade"></div>
               </div>
               <div class="card p-3">
-                <div class="text-[10px] uppercase tracking-wide font-semibold" :style="temaClaro ? 'color:#9ca3af;' : 'color:#6b7280;'">Reservado</div>
+                <div class="uppercase tracking-wide font-semibold" :style="temaClaro ? 'color:#9ca3af;font-size:10px;' : 'color:#6b7280;font-size:10px;'">Reservado</div>
                 <div class="text-lg font-bold mt-0.5" :style="temaClaro ? 'color:#111827;' : 'color:#f1f5f9;'" x-text="kardexData.estoque.reservado + ' ' + kardexData.produto.unidade"></div>
               </div>
               <div class="card p-3">
-                <div class="text-[10px] uppercase tracking-wide font-semibold" :style="temaClaro ? 'color:#9ca3af;' : 'color:#6b7280;'">Mínimo</div>
+                <div class="uppercase tracking-wide font-semibold" :style="temaClaro ? 'color:#9ca3af;font-size:10px;' : 'color:#6b7280;font-size:10px;'">Mínimo</div>
                 <div class="text-lg font-bold mt-0.5" :style="temaClaro ? 'color:#111827;' : 'color:#f1f5f9;'" x-text="kardexData.estoque.minimo + ' ' + kardexData.produto.unidade"></div>
               </div>
               <div class="card p-3">
-                <div class="text-[10px] uppercase tracking-wide font-semibold" :style="temaClaro ? 'color:#9ca3af;' : 'color:#6b7280;'">Custo Unitário</div>
+                <div class="uppercase tracking-wide font-semibold" :style="temaClaro ? 'color:#9ca3af;font-size:10px;' : 'color:#6b7280;font-size:10px;'">Custo Unitário</div>
                 <div class="text-lg font-bold mt-0.5" :style="temaClaro ? 'color:#111827;' : 'color:#f1f5f9;'" x-text="kardexData.estoque.custo_unitario"></div>
               </div>
               <div class="card p-3">
-                <div class="text-[10px] uppercase tracking-wide font-semibold" :style="temaClaro ? 'color:#9ca3af;' : 'color:#6b7280;'">Preço Venda</div>
+                <div class="uppercase tracking-wide font-semibold" :style="temaClaro ? 'color:#9ca3af;font-size:10px;' : 'color:#6b7280;font-size:10px;'">Preço Venda</div>
                 <div class="text-lg font-bold mt-0.5" style="color:#22c55e;" x-text="kardexData.estoque.preco_venda"></div>
               </div>
             </div>
@@ -517,11 +518,11 @@
             <!-- Giro e cobertura -->
             <div class="card p-4 flex flex-wrap items-center gap-x-8 gap-y-2">
               <div>
-                <div class="text-[10px] uppercase tracking-wide font-semibold" :style="temaClaro ? 'color:#9ca3af;' : 'color:#6b7280;'">Giro Mensal</div>
+                <div class="uppercase tracking-wide font-semibold" :style="temaClaro ? 'color:#9ca3af;font-size:10px;' : 'color:#6b7280;font-size:10px;'">Giro Mensal</div>
                 <div class="text-sm font-semibold mt-0.5" :style="temaClaro ? 'color:#111827;' : 'color:#f1f5f9;'" x-text="kardexData.giro.giro_mensal_label"></div>
               </div>
               <div>
-                <div class="text-[10px] uppercase tracking-wide font-semibold" :style="temaClaro ? 'color:#9ca3af;' : 'color:#6b7280;'">Cobertura</div>
+                <div class="uppercase tracking-wide font-semibold" :style="temaClaro ? 'color:#9ca3af;font-size:10px;' : 'color:#6b7280;font-size:10px;'">Cobertura</div>
                 <span class="soft-pill" :class="kardexData.giro.status === 'critico' ? 'is-red' : (kardexData.giro.status === 'baixo' ? 'is-amber' : 'is-green')" x-text="kardexData.giro.cobertura_label"></span>
               </div>
             </div>
