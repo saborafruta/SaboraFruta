@@ -55,8 +55,7 @@ INSTRUCOES_*.txt
 .DS_Store
 Thumbs.db
 
-# Tailwind source (só o built é necessário)
-tailwind.config.js
-package.json
-package-lock.json
-static/css/tailwind-input.css
+# Nota: os fontes do Tailwind (tailwind.config.js, package.json,
+# package-lock.json, static/css/tailwind-input.css) SÃO necessários no
+# contexto de build — o Dockerfile reconstrói o tailwind-built.css a
+# partir dos templates atuais num stage Node. Não exclua-os aqui.
