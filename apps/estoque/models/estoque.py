@@ -101,6 +101,11 @@ class MovimentacaoEstoque(FilialScopedModel):
     documento_tipo = models.CharField(max_length=30, choices=DocumentoTipo.choices, blank=True)
     documento_id = models.BigIntegerField(null=True, blank=True)
     documento_numero = models.CharField(max_length=20, blank=True)
+    documento_fiscal = models.ForeignKey(
+        'financeiro.DocumentoFiscal', on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='movimentacoes_estoque',
+        help_text='NF-e vinculada (ex.: transferência entre lojas).',
+    )
 
     quantidade = models.DecimalField(max_digits=12, decimal_places=3)
     quantidade_anterior = models.DecimalField(

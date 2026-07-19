@@ -27,6 +27,8 @@ urlpatterns = [
     path('outras-movimentacoes/saida-especial/', views.SaidaEspecialView.as_view(), name='saida-especial'),
     path('outras-movimentacoes/transferencia-lojas/', views.TransferenciaLojaView.as_view(), name='transferencia-lojas'),
     path('outras-movimentacoes/transferencia-lojas/api/', views.TransferenciaLojaApiView.as_view(), name='transferencia-lojas-api'),
+    path('outras-movimentacoes/transferencia-lojas/pendentes-nfe/', views.TransferenciasPendentesNFeView.as_view(), name='transferencia-lojas-pendentes-nfe'),
+    path('outras-movimentacoes/transferencia-lojas/reemitir-nfe/', views.TransferenciaReemitirNFeApiView.as_view(), name='transferencia-lojas-reemitir-nfe'),
     path('outras-movimentacoes/devolucao/api/', views.DevolucaoClienteApiView.as_view(), name='devolucao-cliente-api'),
     path('outras-movimentacoes/devolucao/venda/', views.VendaDevolucaoJsonView.as_view(), name='devolucao-venda-json'),
 

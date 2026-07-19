@@ -10,6 +10,7 @@ from django.db import transaction
 from django.http import JsonResponse
 from django.shortcuts import redirect, render
 from django.urls import reverse
+from django.utils import timezone
 from django.views import View
 
 from apps.cadastros.models import Cliente, Fornecedor
@@ -696,6 +697,58 @@ class TransferenciaLojaView(PermissaoRequiredMixin, View):
         })
 
 
+def _gerar_documento_numero_transferencia(filial_id):
+    import secrets
+    agora = timezone.now()
+    return f'TRF-{agora:%y%m%d%H%M%S}{secrets.token_hex(1)}'
+
+
+def _emitir_nfe_transferencia_e_vincular(
+    *, filial_origem, filial_destino, itens_nota, usuario, observacao, mov_ids,
+):
+    """
+    Emite a NF-e de transferência e, se bem sucedida, vincula todas as
+    movimentações informadas (saída + entrada) ao DocumentoFiscal criado —
+    para que deixem de aparecer como "pendentes de nota".
+
+    Retorna (doc_info_dict_ou_None, erro_ou_None).
+    """
+    from apps.estoque.services.transferencia_nfe import emitir_nfe_transferencia
+
+    try:
+        doc = emitir_nfe_transferencia(
+            filial_origem=filial_origem,
+            filial_destino=filial_destino,
+            itens=itens_nota,
+            usuario=usuario,
+            origem_id=mov_ids[0] if mov_ids else None,
+            observacao=observacao,
+        )
+    except DomainError as exc:
+        return None, str(exc)
+    except Exception as exc:  # noqa: BLE001 — falha de integração não reverte o estoque
+        return None, f'Falha ao emitir a NF-e: {exc}'
+
+    if mov_ids:
+        MovimentacaoEstoque.objects.filter(pk__in=mov_ids).update(documento_fiscal=doc)
+
+    return {
+        'numero': doc.numero,
+        'serie': doc.serie,
+        'status': doc.get_status_display(),
+    }, None
+
+
+def _custo_unitario_produto(produto, filial):
+    custo = (
+        Estoque.objects.filter(produto_id=produto.pk, filial=filial)
+        .values_list('custo_medio', flat=True).first()
+    )
+    if not custo:
+        custo = produto.preco_custo_medio or produto.preco_custo or Decimal('0')
+    return custo
+
+
 class TransferenciaLojaApiView(PermissaoRequiredMixin, View):
     """API JSON: transferência entre lojas com múltiplos produtos."""
 
@@ -747,6 +800,7 @@ class TransferenciaLojaApiView(PermissaoRequiredMixin, View):
             itens_norm.append({'produto_id': produto_id, 'lote_id': lote_id, 'quantidade': quantidade})
 
         # ── Transferência de estoque (atômica entre os itens) ───────
+        documento_numero = _gerar_documento_numero_transferencia(filial.pk)
         try:
             with transaction.atomic():
                 resultados = []
@@ -761,6 +815,7 @@ class TransferenciaLojaApiView(PermissaoRequiredMixin, View):
                         observacao=observacao,
                         permitir_sem_lote=True,
                         vincular_destino=True,
+                        documento_numero=documento_numero,
                     )
                     resultados.append({'saida': mov_saida.pk, 'entrada': mov_entrada.pk})
         except DomainError as exc:
@@ -776,43 +831,169 @@ class TransferenciaLojaApiView(PermissaoRequiredMixin, View):
         # ── Emissão da NF-e de transferência (fora da transação de
         #    estoque: se a nota falhar, o estoque já movido é mantido) ─
         if gerar_nota:
-            from apps.estoque.services.transferencia_nfe import emitir_nfe_transferencia
-
             itens_nota = []
             for item in itens_norm:
                 produto = Produto.objects.filter(pk=item['produto_id']).first()
                 if not produto:
                     continue
-                custo = (
-                    Estoque.objects.filter(produto_id=item['produto_id'], filial=filial)
-                    .values_list('custo_medio', flat=True).first()
-                )
-                if not custo:
-                    custo = produto.preco_custo_medio or produto.preco_custo or Decimal('0')
                 itens_nota.append({
                     'produto': produto,
                     'quantidade': item['quantidade'],
-                    'custo_unitario': custo,
+                    'custo_unitario': _custo_unitario_produto(produto, filial),
                 })
 
-            try:
-                doc = emitir_nfe_transferencia(
-                    filial_origem=filial,
-                    filial_destino=filial_destino,
-                    itens=itens_nota,
-                    usuario=request.user,
-                    origem_id=resultados[0]['saida'] if resultados else None,
-                    observacao=observacao,
-                )
-                resposta['nota'] = {
-                    'numero': doc.numero,
-                    'serie': doc.serie,
-                    'status': doc.get_status_display(),
-                }
-                resposta['message'] += f' NF-e nº {doc.numero} enviada para autorização.'
-            except DomainError as exc:
-                resposta['nota_erro'] = str(exc)
-            except Exception as exc:  # noqa: BLE001 — falha de integração não reverte o estoque
-                resposta['nota_erro'] = f'Falha ao emitir a NF-e: {exc}'
+            mov_ids = [r['saida'] for r in resultados] + [r['entrada'] for r in resultados]
+            nota_info, nota_erro = _emitir_nfe_transferencia_e_vincular(
+                filial_origem=filial,
+                filial_destino=filial_destino,
+                itens_nota=itens_nota,
+                usuario=request.user,
+                observacao=observacao,
+                mov_ids=mov_ids,
+            )
+            if nota_info:
+                resposta['nota'] = nota_info
+                resposta['message'] += f' NF-e nº {nota_info["numero"]} enviada para autorização.'
+            else:
+                resposta['nota_erro'] = nota_erro
 
         return JsonResponse(resposta)
+
+
+class TransferenciasPendentesNFeView(PermissaoRequiredMixin, View):
+    """Lista transferências já concluídas (saídas) sem NF-e vinculada."""
+
+    permissao_modulo = 'estoque'
+    permissao_acao = 'criar'
+
+    def get(self, request):
+        filial = request.filial_ativa
+
+        movs = (
+            MovimentacaoEstoque.objects
+            .filter(
+                filial=filial,
+                tipo_operacao=MovimentacaoEstoque.TipoOperacao.TRANSFERENCIA_SAIDA,
+            )
+            .filter(
+                db_models.Q(documento_fiscal__isnull=True)
+                | db_models.Q(documento_fiscal__status='rejeitada')
+            )
+            .select_related('produto', 'filial_destino', 'lote', 'documento_fiscal')
+            .order_by('-data_movimentacao')[:200]
+        )
+
+        grupos = {}
+        ordem = []
+        for mov in movs:
+            chave = mov.documento_numero or f'MOV-{mov.pk}'
+            if chave not in grupos:
+                grupos[chave] = {
+                    'chave': chave,
+                    'filial_destino_id': mov.filial_destino_id,
+                    'filial_destino_nome': (
+                        mov.filial_destino.nome_fantasia or mov.filial_destino.razao_social
+                    ) if mov.filial_destino else '—',
+                    'data': mov.data_movimentacao,
+                    'observacao': mov.observacao,
+                    'erro_anterior': (
+                        mov.documento_fiscal.mensagem_sefaz
+                        if mov.documento_fiscal_id and mov.documento_fiscal.status == 'rejeitada'
+                        else ''
+                    ),
+                    'itens': [],
+                }
+                ordem.append(chave)
+            grupos[chave]['itens'].append({
+                'mov_saida_id': mov.pk,
+                'produto_id': mov.produto_id,
+                'produto_nome': mov.produto.descricao,
+                'lote_id': mov.lote_id,
+                'lote_nome': mov.lote.numero_lote if mov.lote_id else '',
+                'quantidade': str(mov.quantidade),
+                'custo_unitario': str(mov.valor_unitario or 0),
+            })
+
+        pendentes = [grupos[c] for c in ordem]
+
+        return JsonResponse({
+            'ok': True,
+            'pendentes': [
+                {
+                    **g,
+                    'data': timezone.localtime(g['data']).strftime('%d/%m/%Y %H:%M'),
+                }
+                for g in pendentes
+            ],
+        })
+
+
+class TransferenciaReemitirNFeApiView(PermissaoRequiredMixin, View):
+    """Emite a NF-e para uma transferência já concluída (sem nota ou rejeitada)."""
+
+    permissao_modulo = 'estoque'
+    permissao_acao = 'criar'
+
+    def post(self, request):
+        try:
+            body = _json.loads(request.body)
+        except (ValueError, TypeError):
+            return JsonResponse({'erro': 'JSON inválido.'}, status=400)
+
+        mov_ids_saida = body.get('mov_saida_ids') or []
+        if not mov_ids_saida:
+            return JsonResponse({'erro': 'Nenhuma movimentação informada.'}, status=400)
+
+        filial = request.filial_ativa
+
+        movs = list(
+            MovimentacaoEstoque.objects
+            .filter(
+                pk__in=mov_ids_saida,
+                filial=filial,
+                tipo_operacao=MovimentacaoEstoque.TipoOperacao.TRANSFERENCIA_SAIDA,
+            )
+            .select_related('produto', 'filial_destino')
+        )
+        if not movs:
+            return JsonResponse({'erro': 'Movimentações não encontradas para esta filial.'}, status=404)
+
+        filial_destino = movs[0].filial_destino
+        if not filial_destino:
+            return JsonResponse({'erro': 'Filial de destino não identificada nesta movimentação.'}, status=400)
+        if any(m.filial_destino_id != filial_destino.pk for m in movs):
+            return JsonResponse({'erro': 'As movimentações selecionadas têm filiais de destino diferentes.'}, status=400)
+
+        # Vincula também as respectivas movimentações de entrada (mesmo documento_numero).
+        documento_numero = movs[0].documento_numero
+        mov_ids_entrada = list(
+            MovimentacaoEstoque.objects.filter(
+                filial=filial_destino,
+                tipo_operacao=MovimentacaoEstoque.TipoOperacao.TRANSFERENCIA_ENTRADA,
+                documento_numero=documento_numero,
+            ).values_list('pk', flat=True)
+        ) if documento_numero else []
+
+        itens_nota = [
+            {
+                'produto': m.produto,
+                'quantidade': m.quantidade,
+                'custo_unitario': m.valor_unitario or _custo_unitario_produto(m.produto, filial),
+            }
+            for m in movs
+        ]
+        observacao = movs[0].observacao or 'Transferência entre filiais.'
+
+        mov_ids = [m.pk for m in movs] + mov_ids_entrada
+        nota_info, nota_erro = _emitir_nfe_transferencia_e_vincular(
+            filial_origem=filial,
+            filial_destino=filial_destino,
+            itens_nota=itens_nota,
+            usuario=request.user,
+            observacao=observacao,
+            mov_ids=mov_ids,
+        )
+        if not nota_info:
+            return JsonResponse({'erro': nota_erro}, status=400)
+
+        return JsonResponse({'ok': True, 'nota': nota_info})

@@ -336,10 +336,16 @@ class MovimentacaoService:
         observacao: str = '',
         permitir_sem_lote: bool = False,
         vincular_destino: bool = False,
+        documento_numero: str | None = None,
     ) -> tuple[MovimentacaoEstoque, MovimentacaoEstoque]:
         """
         Cria DUAS movimentações (saída na origem + entrada no destino).
         Ambas em uma única transação — se uma falhar, a outra é revertida.
+
+        `documento_numero`, se informado, é usado como referência
+        compartilhada entre várias chamadas (ex.: transferência de vários
+        produtos numa mesma operação), permitindo agrupá-las depois
+        (ex.: para emitir uma única NF-e cobrindo todos os itens).
         """
         if filial_origem_id == filial_destino_id:
             raise DadosInvalidosError('Filial de origem e destino não podem ser iguais.')
@@ -378,7 +384,9 @@ class MovimentacaoService:
             filial_destino_id=filial_destino_id,
             permitir_sem_lote=permitir_sem_lote,
         )
-        documento_numero = f'TRF-{mov_saida.pk:06d}'
+        documento_numero = documento_numero or f'TRF-{mov_saida.pk:06d}'
+        mov_saida.documento_numero = documento_numero
+        mov_saida.save(update_fields=['documento_numero'])
 
         # Entrada no destino
         # O lote precisa ser clonado ou transportado para a filial destino.

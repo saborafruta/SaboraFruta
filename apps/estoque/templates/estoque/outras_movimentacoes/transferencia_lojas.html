@@ -407,6 +407,57 @@
     </div>
   </div>
 
+  <!-- ════ Transferências sem nota fiscal ════ -->
+  <div class="card p-5 space-y-4" x-show="pendentesNota.length > 0" x-cloak>
+    <div class="flex items-center gap-2">
+      <svg class="w-5 h-5 flex-shrink-0" fill="none" stroke="#f59e0b" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+              d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
+      </svg>
+      <h3 class="text-base font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">Transferências sem nota fiscal</h3>
+      <span class="soft-pill is-amber" x-text="pendentesNota.length"></span>
+    </div>
+    <p class="text-sm" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+      Transferências já concluídas (estoque movimentado) desta loja que ainda não têm NF-e emitida, ou tiveram a emissão rejeitada.
+    </p>
+    <div class="space-y-3">
+      <template x-for="grupo in pendentesNota" :key="grupo.chave">
+        <div class="rounded-lg border p-4" :style="temaClaro ? 'border-color:#e5e7eb;' : 'border-color:#1e293b;'">
+          <div class="flex flex-wrap items-start justify-between gap-3">
+            <div class="min-w-0">
+              <div class="text-sm font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f1f5f9;'">
+                → <span x-text="grupo.filial_destino_nome"></span>
+              </div>
+              <div class="text-xs mt-0.5" :style="temaClaro ? 'color:#9ca3af;' : 'color:#64748b;'" x-text="grupo.data"></div>
+              <div class="text-xs mt-1" :style="temaClaro ? 'color:#6b7280;' : 'color:#94a3b8;'">
+                <template x-for="(it, idx) in grupo.itens" :key="it.mov_saida_id">
+                  <span x-text="it.produto_nome + ' (' + it.quantidade + ')' + (idx < grupo.itens.length - 1 ? ', ' : '')"></span>
+                </template>
+              </div>
+              <div x-show="grupo.erro_anterior" class="text-xs mt-1" style="color:#dc2626;"
+                   x-text="'Rejeitada anteriormente: ' + grupo.erro_anterior"></div>
+              <div x-show="grupo._erro" class="text-xs mt-1 font-semibold" style="color:#dc2626;" x-text="grupo._erro"></div>
+            </div>
+            <button type="button"
+                    @click="emitirNotaPendente(grupo)"
+                    :disabled="grupo._emitindo"
+                    class="btn-primary flex items-center gap-2 flex-shrink-0">
+              <svg x-show="!grupo._emitindo" class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                      d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+              </svg>
+              <svg x-show="grupo._emitindo" class="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
+                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
+              </svg>
+              <span x-text="grupo._emitindo ? 'Emitindo...' : 'Emitir NF-e'"></span>
+            </button>
+          </div>
+        </div>
+      </template>
+    </div>
+  </div>
+
   <!-- ════ MODAL: gerar nota fiscal? ════ -->
   <div x-show="showModalNota"
        x-cloak
@@ -513,7 +564,46 @@ function transferenciaLojaApp(filiais) {
     erroGeral: '',
     showModalNota: false,
 
-    init() {},
+    // Transferências sem NF-e
+    pendentesNota: [],
+    pendentesErro: '',
+
+    init() {
+      this.carregarPendentesNota();
+    },
+
+    async carregarPendentesNota() {
+      try {
+        const res = await fetch('{% url "estoque:transferencia-lojas-pendentes-nfe" %}');
+        const data = await res.json();
+        this.pendentesNota = (data.pendentes || []).map(g => ({ ...g, _emitindo: false, _erro: '' }));
+      } catch (e) {
+        this.pendentesNota = [];
+      }
+    },
+
+    async emitirNotaPendente(grupo) {
+      grupo._emitindo = true;
+      grupo._erro = '';
+      try {
+        const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]').value;
+        const res = await fetch('{% url "estoque:transferencia-lojas-reemitir-nfe" %}', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken },
+          body: JSON.stringify({ mov_saida_ids: grupo.itens.map(it => it.mov_saida_id) }),
+        });
+        const data = await res.json();
+        if (data.ok) {
+          this.pendentesNota = this.pendentesNota.filter(g => g.chave !== grupo.chave);
+        } else {
+          grupo._erro = data.erro || 'Erro ao emitir a NF-e.';
+        }
+      } catch (e) {
+        grupo._erro = 'Erro de comunicação com o servidor.';
+      } finally {
+        grupo._emitindo = false;
+      }
+    },
 
     abrirConfirmacao() {
       this.erroGeral = '';
