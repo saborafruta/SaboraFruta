@@ -38,40 +38,50 @@
   <!-- ── KPIs (só após busca) ── -->
   {% if busca_realizada %}
   <div class="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-5 gap-3">
-    <div class="card p-4" style="border-left:3px solid #6366f1;">
-      <div class="flex items-center gap-1.5 text-xs uppercase tracking-wide font-semibold" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
-        <svg class="w-3.5 h-3.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/></svg>
-        Itens analisados
+    <div class="card p-4 flex items-center gap-3">
+      <div class="flex-shrink-0 w-10 h-10 rounded-xl flex items-center justify-center" :style="temaClaro ? 'background:#eef2ff;' : 'background:rgba(99,102,241,0.15);'">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" :style="temaClaro ? 'color:#6366f1;' : 'color:#a5b4fc;'" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/></svg>
       </div>
-      <div class="mt-1.5 text-2xl font-bold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">{{ resumo.total }}</div>
+      <div class="min-w-0">
+        <div class="text-xs uppercase tracking-wide font-semibold truncate" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Itens analisados</div>
+        <div class="mt-0.5 text-2xl font-bold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">{{ resumo.total }}</div>
+      </div>
     </div>
-    <div class="card p-4" style="border-left:3px solid #ef4444;">
-      <div class="flex items-center gap-1.5 text-xs uppercase tracking-wide font-semibold" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
-        <svg class="w-3.5 h-3.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/></svg>
-        Críticos
+    <div class="card p-4 flex items-center gap-3">
+      <div class="flex-shrink-0 w-10 h-10 rounded-xl flex items-center justify-center" :style="temaClaro ? 'background:#fee2e2;' : 'background:rgba(239,68,68,0.15);'">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" :style="temaClaro ? 'color:#dc2626;' : 'color:#fca5a5;'" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/></svg>
       </div>
-      <div class="mt-1.5 text-2xl font-bold" :style="temaClaro ? 'color:#b91c1c;' : 'color:#fca5a5;'">{{ resumo.criticos }}</div>
+      <div class="min-w-0">
+        <div class="text-xs uppercase tracking-wide font-semibold truncate" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Críticos</div>
+        <div class="mt-0.5 text-2xl font-bold" :style="temaClaro ? 'color:#b91c1c;' : 'color:#fca5a5;'">{{ resumo.criticos }}</div>
+      </div>
     </div>
-    <div class="card p-4" style="border-left:3px solid #f59e0b;">
-      <div class="flex items-center gap-1.5 text-xs uppercase tracking-wide font-semibold" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
-        <svg class="w-3.5 h-3.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 17h8m0 0V9m0 8l-8-8-4 4-6-6"/></svg>
-        Status Baixo
+    <div class="card p-4 flex items-center gap-3">
+      <div class="flex-shrink-0 w-10 h-10 rounded-xl flex items-center justify-center" :style="temaClaro ? 'background:#fef3c7;' : 'background:rgba(245,158,11,0.15);'">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" :style="temaClaro ? 'color:#b45309;' : 'color:#fcd34d;'" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 17h8m0 0V9m0 8l-8-8-4 4-6-6"/></svg>
       </div>
-      <div class="mt-1.5 text-2xl font-bold" :style="temaClaro ? 'color:#b45309;' : 'color:#fcd34d;'">{{ resumo.baixos }}</div>
+      <div class="min-w-0">
+        <div class="text-xs uppercase tracking-wide font-semibold truncate" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Status Baixo</div>
+        <div class="mt-0.5 text-2xl font-bold" :style="temaClaro ? 'color:#b45309;' : 'color:#fcd34d;'">{{ resumo.baixos }}</div>
+      </div>
     </div>
-    <div class="card p-4" style="border-left:3px solid #f97316;">
-      <div class="flex items-center gap-1.5 text-xs uppercase tracking-wide font-semibold" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
-        <svg class="w-3.5 h-3.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
-        Alerta Validade
+    <div class="card p-4 flex items-center gap-3">
+      <div class="flex-shrink-0 w-10 h-10 rounded-xl flex items-center justify-center" :style="temaClaro ? 'background:#ffedd5;' : 'background:rgba(249,115,22,0.15);'">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" :style="temaClaro ? 'color:#c2410c;' : 'color:#fdba74;'" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
       </div>
-      <div class="mt-1.5 text-2xl font-bold" :style="temaClaro ? 'color:#c2410c;' : 'color:#fdba74;'">{{ resumo.vencimentos }}</div>
+      <div class="min-w-0">
+        <div class="text-xs uppercase tracking-wide font-semibold truncate" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Alerta Validade</div>
+        <div class="mt-0.5 text-2xl font-bold" :style="temaClaro ? 'color:#c2410c;' : 'color:#fdba74;'">{{ resumo.vencimentos }}</div>
+      </div>
     </div>
-    <div class="card p-4" style="border-left:3px solid #3b82f6;">
-      <div class="flex items-center gap-1.5 text-xs uppercase tracking-wide font-semibold" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
-        <svg class="w-3.5 h-3.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z"/></svg>
-        Un. para comprar
+    <div class="card p-4 flex items-center gap-3">
+      <div class="flex-shrink-0 w-10 h-10 rounded-xl flex items-center justify-center" :style="temaClaro ? 'background:#dbeafe;' : 'background:rgba(59,130,246,0.15);'">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" :style="temaClaro ? 'color:#1d4ed8;' : 'color:#93c5fd;'" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z"/></svg>
       </div>
-      <div class="mt-1.5 text-2xl font-bold" :style="temaClaro ? 'color:#1d4ed8;' : 'color:#93c5fd;'">{{ resumo.sugestao_total|floatformat:0 }}</div>
+      <div class="min-w-0">
+        <div class="text-xs uppercase tracking-wide font-semibold truncate" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Un. para comprar</div>
+        <div class="mt-0.5 text-2xl font-bold" :style="temaClaro ? 'color:#1d4ed8;' : 'color:#93c5fd;'">{{ resumo.sugestao_total|floatformat:0 }}</div>
+      </div>
     </div>
   </div>
   {% endif %}
@@ -363,7 +373,7 @@
                       <span class="inline-flex items-center justify-center w-6 h-6 rounded-md cursor-default"
                             :style="temaClaro ? 'background:#dbeafe; color:#1d4ed8;' : 'background:rgba(59,130,246,0.16); color:#93c5fd;'"
                             title="Disponível em outras filiais">
-                        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7h12m0 0l-4-4m4 4l-4 4M16 17H4m0 0l4 4m-4-4l4-4"/></svg>
+                        <svg width="14" height="14" class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7h12m0 0l-4-4m4 4l-4 4M16 17H4m0 0l4 4m-4-4l4-4"/></svg>
                       </span>
                       <div class="absolute bottom-full mb-2 right-0 hidden group-hover:block z-20 min-w-max rounded-lg shadow-lg text-xs p-3 space-y-1"
                            :style="temaClaro ? 'background:#fff; border:1px solid #e5e7eb; color:#374151;' : 'background:#1e1e20; border:1px solid #2a2a2e; color:#d1d5db;'">
@@ -376,7 +386,7 @@
                   {% endif %}
                   {% if l.alerta_vencimento %}
                     <span class="inline-flex items-center justify-center w-6 h-6 rounded-md" style="background:#fee2e2; color:#dc2626;" title="Lote com vencimento em menos de 30 dias">
-                      <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/></svg>
+                      <svg width="14" height="14" class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/></svg>
                     </span>
                   {% endif %}
                   {% if not l.transferencias and not l.alerta_vencimento %}
