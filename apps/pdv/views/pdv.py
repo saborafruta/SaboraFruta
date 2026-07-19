@@ -395,7 +395,7 @@ def api_estado(request):
         formas = list(
             FormaPagamento.objects.filter(
                 empresa=request.filial_ativa.empresa, ativo=True
-            ).values('id', 'descricao', 'tipo', 'requer_tef')
+            ).values('id', 'descricao', 'tipo', 'requer_tef', 'prazo_liquidacao_dias')
         )
     except Exception:
         formas = []

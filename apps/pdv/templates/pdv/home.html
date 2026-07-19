@@ -1111,6 +1111,31 @@
                         x-text="v"></button>
               </template>
             </div>
+
+            <!-- Prazo em dias — só para Boleto/Vale -->
+            <template x-if="ehFormaAPrazo(formaPgtoSelecionada)">
+              <div style="margin-top:10px;padding-top:10px;border-top:1px solid #1e1e30;">
+                <div style="font-size:11px;font-weight:600;color:#f59e0b;margin-bottom:8px;text-transform:uppercase;letter-spacing:.07em;display:flex;align-items:center;gap:6px;">
+                  <svg width="13" height="13" fill="none" stroke="#f59e0b" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                  Prazo para recebimento (dias)
+                </div>
+                <div style="display:flex;gap:6px;align-items:center;">
+                  <input type="number" x-model="prazoDiasPgto"
+                         @keydown.enter="confirmarPagamento()"
+                         style="width:90px;padding:9px 10px;background:#13131e;border:2px solid #f59e0b;border-radius:10px;color:#fff;font-size:15px;font-weight:800;outline:none;text-align:center;"
+                         min="0" step="1" placeholder="30">
+                  <span style="font-size:11px;color:#888;flex:1;" x-text="prazoDiasPgto!=='' && !isNaN(parseInt(prazoDiasPgto)) ? 'Vencimento: ' + new Date(Date.now()+parseInt(prazoDiasPgto)*86400000).toLocaleDateString('pt-BR') : 'Informe os dias'"></span>
+                </div>
+                <div style="display:flex;gap:5px;margin-top:8px;">
+                  <template x-for="d in [7,15,30,60]" :key="d">
+                    <button @click="prazoDiasPgto=String(d)"
+                            style="flex:1;padding:6px 4px;background:#13131e;border:1px solid #2a2a3e;border-radius:8px;color:#888;font-size:11px;font-weight:700;cursor:pointer;transition:.15s;"
+                            onmouseover="this.style.borderColor='#f59e0b';this.style.color='#e5e5f0'" onmouseout="this.style.borderColor='#2a2a3e';this.style.color='#888'"
+                            x-text="d+'d'"></button>
+                  </template>
+                </div>
+              </div>
+            </template>
           </div>
         </template>
 
@@ -2453,7 +2478,7 @@ function pdv() {
     barcodeQuery: '',
     tabAtiva: 'todos', linhaAtiva: null,
 
-    formasPagamento: [], mostrarMaisFormas: false, formaPgtoSelecionada: null, valorPgto: '',
+    formasPagamento: [], mostrarMaisFormas: false, formaPgtoSelecionada: null, valorPgto: '', prazoDiasPgto: '',
 
     showModalCaixa: false, showModalCliente: false, showModalDelivery: false,
     showModalPendentes: false, showModalOrcamentos: false, showModalConfirmacao: false,
@@ -2672,10 +2697,16 @@ function pdv() {
     aplicarDescontoGeral(pct) { this.venda.desconto=pct===0?0:this.venda.subtotal*(pct/100); this.recalcularTotais(); this.showModalDesconto=false; },
     aplicarDescontoGeralValor() { this.venda.desconto=Math.min(parseFloat(this.descontoGeralManual)||0,this.venda.subtotal); this.recalcularTotais(); this.showModalDesconto=false; },
 
+    ehFormaAPrazo(forma) {
+      const t = (forma?.tipo||'').toLowerCase();
+      return t==='boleto' || t==='vale';
+    },
+
     selecionarFormaPgto(forma) {
       if (this.formaPgtoSelecionada?.id===forma.id) { this.formaPgtoSelecionada=null; return; }
       this.formaPgtoSelecionada=forma;
       this.valorPgto=this.venda.restante>0.001?this.fmt2(this.venda.restante):'';
+      this.prazoDiasPgto=this.ehFormaAPrazo(forma) ? String(forma.prazo_liquidacao_dias||30) : '';
       this.$nextTick(()=>this.$refs.inputValorPgto?.select());
     },
 
@@ -2683,10 +2714,16 @@ function pdv() {
       if (!this.formaPgtoSelecionada) return;
       const valor = parseFloat(this.valorPgto)||parseFloat(this.venda.restante)||0;
       if (valor<=0) return;
+      const aPrazo = this.ehFormaAPrazo(this.formaPgtoSelecionada);
+      if (aPrazo) {
+        if (!this.venda.cliente.id) { this.toast_('Selecione um cliente para vendas no '+this.formaPgtoSelecionada.descricao+'.','erro'); return; }
+        if (this.prazoDiasPgto==='' || parseInt(this.prazoDiasPgto)<0 || isNaN(parseInt(this.prazoDiasPgto))) { this.toast_('Informe o prazo em dias.','erro'); return; }
+      }
       const troco = Math.max(0, valor-parseFloat(this.venda.restante));
       this.venda.pagamentos.push({ _id:Date.now()+Math.random(), forma_id:this.formaPgtoSelecionada.id,
-        forma_descricao:this.formaPgtoSelecionada.descricao, forma_tipo:this.formaPgtoSelecionada.tipo, valor, troco });
-      this.formaPgtoSelecionada=null; this.valorPgto=''; this.recalcularTotais();
+        forma_descricao:this.formaPgtoSelecionada.descricao, forma_tipo:this.formaPgtoSelecionada.tipo, valor, troco,
+        prazo_dias: aPrazo ? parseInt(this.prazoDiasPgto) : null });
+      this.formaPgtoSelecionada=null; this.valorPgto=''; this.prazoDiasPgto=''; this.recalcularTotais();
     },
 
     removerPagamento(pgto) { this.venda.pagamentos=this.venda.pagamentos.filter(p=>p._id!==pgto._id); this.recalcularTotais(); },

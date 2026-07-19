@@ -464,11 +464,13 @@ class VendaPDVService:
 
             # Boleto e Vale sao recebimentos a prazo: geram conta a receber.
             if (forma.tipo or "").strip().lower() in ("boleto", "vale"):
+                prazo_dias = pgto.get("prazo_dias")
                 cls._gerar_conta_receber(
                     venda=venda,
                     filial=filial,
                     forma=forma,
                     valor=valor_pgto - troco,
+                    prazo_dias=int(prazo_dias) if prazo_dias not in (None, "") else None,
                 )
 
             valor_pago += valor_pgto
@@ -479,7 +481,7 @@ class VendaPDVService:
         return valor_pago, troco_total
 
     @classmethod
-    def _gerar_conta_receber(cls, *, venda: VendaPDV, filial, forma, valor: Decimal) -> None:
+    def _gerar_conta_receber(cls, *, venda: VendaPDV, filial, forma, valor: Decimal, prazo_dias: int | None = None) -> None:
         """Cria uma conta a receber em aberto para pagamentos a prazo (boleto/vale)."""
         valor = cls._decimal(valor, cls.MONEY)
         if valor <= 0:
@@ -490,8 +492,12 @@ class VendaPDVService:
                 "para gerar a conta a receber. Selecione o cliente antes de finalizar."
             )
 
+        dias = prazo_dias if prazo_dias is not None else int(forma.prazo_liquidacao_dias or 0)
+        if dias < 0:
+            raise DadosInvalidosError("O prazo informado nao pode ser negativo.")
+
         hoje = timezone.localdate()
-        vencimento = hoje + timedelta(days=int(forma.prazo_liquidacao_dias or 0))
+        vencimento = hoje + timedelta(days=dias)
         ContaReceber.objects.create(
             filial=filial,
             cliente_id=venda.cliente_id,
