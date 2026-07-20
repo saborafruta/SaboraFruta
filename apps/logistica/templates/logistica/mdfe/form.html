@@ -131,14 +131,22 @@
     <!-- Percurso -->
     <div class="card p-6 space-y-4">
       <h3 class="text-xs font-semibold uppercase tracking-wide" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Percurso</h3>
-      <div class="grid gap-4 md:grid-cols-4">
-        <label class="space-y-1.5">
+      <div class="grid gap-4 md:grid-cols-4" x-data="municipioAutocomplete('municipio_carregamento')">
+        <label class="space-y-1.5" @input.debounce.300ms="onUf($event.target.value)">
           <span class="text-xs font-semibold uppercase tracking-wide" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">UF Carregamento</span>
           {{ form.uf_carregamento }}
         </label>
-        <label class="space-y-1.5 md:col-span-3">
+        <label class="space-y-1.5 md:col-span-3 relative" @input.debounce.150ms="onMunicipio($event.target.value)" @focus.capture="onFocus($event.target.value)" @click.outside="sugestoes = []">
           <span class="text-xs font-semibold uppercase tracking-wide" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Municipio de Carregamento</span>
           {{ form.municipio_carregamento }}
+          <template x-if="sugestoes.length">
+            <ul class="absolute z-20 mt-0.5 w-full rounded-lg border shadow-lg text-sm overflow-hidden"
+                :style="temaClaro ? 'background:#fff; border-color:#e5e7eb;' : 'background:#18181b; border-color:#3f3f46;'">
+              <template x-for="m in sugestoes" :key="m.codigo_ibge">
+                <li @click="selecionar(m)" class="px-3 py-2 cursor-pointer hover:bg-blue-50" x-text="m.nome"></li>
+              </template>
+            </ul>
+          </template>
         </label>
       </div>
       <label class="block space-y-1.5">
@@ -146,14 +154,22 @@
         {{ form.percurso_ufs }}
         <p class="text-xs mt-0.5" :style="temaClaro ? 'color:#94a3b8;' : 'color:#64748b;'">Informe as UFs percorridas separadas por virgula. Ex: SP, RJ, MG, ES</p>
       </label>
-      <div class="grid gap-4 md:grid-cols-4">
-        <label class="space-y-1.5">
+      <div class="grid gap-4 md:grid-cols-4" x-data="municipioAutocomplete('municipio_descarregamento')">
+        <label class="space-y-1.5" @input.debounce.300ms="onUf($event.target.value)">
           <span class="text-xs font-semibold uppercase tracking-wide" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">UF Descarregamento</span>
           {{ form.uf_descarregamento }}
         </label>
-        <label class="space-y-1.5 md:col-span-3">
+        <label class="space-y-1.5 md:col-span-3 relative" @input.debounce.150ms="onMunicipio($event.target.value)" @focus.capture="onFocus($event.target.value)" @click.outside="sugestoes = []">
           <span class="text-xs font-semibold uppercase tracking-wide" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Municipio de Descarregamento</span>
           {{ form.municipio_descarregamento }}
+          <template x-if="sugestoes.length">
+            <ul class="absolute z-20 mt-0.5 w-full rounded-lg border shadow-lg text-sm overflow-hidden"
+                :style="temaClaro ? 'background:#fff; border-color:#e5e7eb;' : 'background:#18181b; border-color:#3f3f46;'">
+              <template x-for="m in sugestoes" :key="m.codigo_ibge">
+                <li @click="selecionar(m)" class="px-3 py-2 cursor-pointer hover:bg-blue-50" x-text="m.nome"></li>
+              </template>
+            </ul>
+          </template>
         </label>
       </div>
     </div>
@@ -188,6 +204,39 @@
 <script type="application/json" id="motoristas-data">{{ motoristas_json|safe }}</script>
 <script type="application/json" id="veiculos-data">{{ veiculos_json|safe }}</script>
 <script>
+function municipioAutocomplete(nomeCampoMunicipio) {
+  return {
+    _lista: [],
+    sugestoes: [],
+    async onUf(val) {
+      const uf = (val || '').trim().toUpperCase();
+      this.sugestoes = [];
+      this._lista = [];
+      if (uf.length !== 2) return;
+      try {
+        const res = await fetch(`{% url 'logistica:mdfe-municipios' %}?uf=${uf}`);
+        const data = await res.json();
+        this._lista = data.results || [];
+        this.sugestoes = this._lista.slice(0, 8);
+      } catch (e) {
+        this._lista = [];
+      }
+    },
+    onMunicipio(val) {
+      const q = (val || '').trim().toLowerCase();
+      if (!this._lista.length) { this.sugestoes = []; return; }
+      this.sugestoes = (q ? this._lista.filter(m => m.nome.toLowerCase().includes(q)) : this._lista).slice(0, 8);
+    },
+    onFocus(val) {
+      this.onMunicipio(val);
+    },
+    selecionar(m) {
+      const campo = document.querySelector(`[name="${nomeCampoMunicipio}"]`);
+      if (campo) campo.value = m.nome;
+      this.sugestoes = [];
+    },
+  };
+}
 function buscaNFe(inicial) {
   return {
     query: inicial ? (inicial.label || '') : '',
