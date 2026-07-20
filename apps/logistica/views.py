@@ -1310,17 +1310,21 @@ class MDFeNFeSearchView(PermissaoRequiredMixin, View):
 
     def get(self, request):
         filial = _filial(request)
-        q = request.GET.get("q", "").strip()
-        if len(q) < 2:
+        q_raw = request.GET.get("q", "").strip()
+        q_digits = "".join(ch for ch in q_raw if ch.isdigit())
+        if len(q_raw) < 2:
             return JsonResponse({"results": []})
 
         qs = DocumentoFiscal.objects.filter(
             filial=filial, tipo_documento__in=["nfe", "nfce"], status="autorizada",
         )
-        if q.isdigit():
-            qs = qs.filter(numero__icontains=q)
+        if q_digits and len(q_digits) >= 8:
+            # Provavelmente uma chave de acesso (44 digitos, com ou sem espacos).
+            qs = qs.filter(chave__icontains=q_digits)
+        elif q_digits:
+            qs = qs.filter(numero__icontains=q_digits)
         else:
-            qs = qs.filter(chave__icontains=q)
+            qs = qs.filter(chave__icontains=q_raw)
         results = [
             {
                 "id": doc.pk,
