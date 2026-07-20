@@ -27,7 +27,11 @@ def _documento_estorno(documento_numero: str) -> str:
 
 
 def _movs_saida_transferencia(documento_numero: str, filial_origem):
-    return list(
+    # Nota: select_for_update() não pode ser combinado com select_related()
+    # em FKs anuláveis (lote, filial_destino, documento_fiscal) — o Postgres
+    # rejeita "FOR UPDATE" no lado nulo de um LEFT OUTER JOIN. Por isso o
+    # lock é feito só pela PK, e os relacionamentos são carregados à parte.
+    ids = list(
         MovimentacaoEstoque.objects
         .select_for_update()
         .filter(
@@ -35,6 +39,11 @@ def _movs_saida_transferencia(documento_numero: str, filial_origem):
             tipo_operacao=MovimentacaoEstoque.TipoOperacao.TRANSFERENCIA_SAIDA,
             documento_numero=documento_numero,
         )
+        .values_list('pk', flat=True)
+    )
+    return list(
+        MovimentacaoEstoque.objects
+        .filter(pk__in=ids)
         .select_related('lote', 'filial_destino', 'documento_fiscal', 'produto')
     )
 

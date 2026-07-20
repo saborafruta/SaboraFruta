@@ -872,7 +872,8 @@ class TransferenciasPendentesNFeView(PermissaoRequiredMixin, View):
     def get(self, request):
         filial = request.filial_ativa
         usuario = request.user
-        is_admin = bool(usuario.is_superuser or usuario.perfil.is_admin)
+        perfil = getattr(usuario, '_perfil_ativo', None) or usuario.perfil
+        is_admin = bool(usuario.is_superuser or perfil.is_admin)
 
         movs = (
             MovimentacaoEstoque.objects
@@ -1103,7 +1104,8 @@ class TransferenciaExcluirApiView(PermissaoRequiredMixin, View):
         from apps.estoque.services.transferencia_cancelamento import excluir_transferencia
 
         usuario = request.user
-        is_admin = bool(usuario.is_superuser or usuario.perfil.is_admin)
+        perfil = getattr(usuario, '_perfil_ativo', None) or usuario.perfil
+        is_admin = bool(usuario.is_superuser or perfil.is_admin)
         if not is_admin:
             return JsonResponse(
                 {'erro': 'Somente administradores podem excluir transferências.'}, status=403,
