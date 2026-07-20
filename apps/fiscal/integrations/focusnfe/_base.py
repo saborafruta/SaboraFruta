@@ -180,12 +180,39 @@ class BaseAPIClient:
     @staticmethod
     def _error_message(body_json: Any, fallback_text: str) -> str:
         if isinstance(body_json, dict):
+            base = ""
             for key in ("mensagem", "message", "erro", "error", "mensagem_sefaz"):
                 if key in body_json and body_json[key]:
-                    return str(body_json[key])
-            if "erros" in body_json and body_json["erros"]:
-                return "; ".join(str(e) for e in body_json["erros"])
+                    base = str(body_json[key])
+                    break
+            # Erros de schema (422) trazem o detalhamento campo a campo em
+            # "erros" — sem isso, a mensagem fica so no generico
+            # "Erro na validacao do Schema XML, verifique o detalhamento".
+            detalhes = BaseAPIClient._formatar_erros_detalhados(body_json.get("erros"))
+            if base and detalhes:
+                return f"{base} — {detalhes}"
+            return base or detalhes or (fallback_text or "Erro Focus NFe (sem mensagem)")
         return fallback_text or "Erro Focus NFe (sem mensagem)"
+
+    @staticmethod
+    def _formatar_erros_detalhados(erros: Any) -> str:
+        """Achata o array `erros` da Focus em texto legivel (campo: mensagem)."""
+        if not erros:
+            return ""
+        if isinstance(erros, dict):
+            erros = [erros]
+        partes = []
+        for e in erros:
+            if isinstance(e, dict):
+                campo = e.get("campo") or e.get("field") or e.get("path") or ""
+                msg = e.get("mensagem") or e.get("message") or e.get("erro") or e.get("descricao") or ""
+                if campo and msg:
+                    partes.append(f"{campo}: {msg}")
+                else:
+                    partes.append(str(msg or campo or e))
+            else:
+                partes.append(str(e))
+        return "; ".join(p for p in partes if p)
 
 
 class ResourceBase:

@@ -258,7 +258,10 @@ class FocusNFeService:
             documento.status = StatusDocumentoFiscal.REJEITADA
             resposta = exc.response_json if isinstance(exc.response_json, dict) else {}
             codigo = str(resposta.get("status_sefaz") or resposta.get("codigo_status_sefaz") or "")
-            mensagem = str(resposta.get("mensagem_sefaz") or resposta.get("mensagem") or exc)
+            # str(exc) ja traz a mensagem base + o detalhamento campo a campo
+            # do array "erros" (ex.: erros de Schema XML 422). So caimos para
+            # mensagem_sefaz especifica da SEFAZ quando ela existir.
+            mensagem = str(resposta.get("mensagem_sefaz") or exc)
             if codigo:
                 documento.codigo_status_sefaz = codigo[:3]
             documento.mensagem_sefaz = _mensagem_sefaz_diagnostica(codigo, mensagem)
