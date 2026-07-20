@@ -1,5 +1,4 @@
 import json
-import logging
 
 from django.contrib import messages
 from django.core.paginator import Paginator
@@ -41,8 +40,6 @@ from apps.logistica.models import (
     PedidoExpedicao,
     RomaneioCarga,
 )
-
-logger = logging.getLogger(__name__)
 
 
 def _filial(request):
@@ -1304,37 +1301,6 @@ class MDFeCreateView(PermissaoRequiredMixin, View):
             "motoristas_json": motoristas_json,
             "veiculos_json": veiculos_json,
         })
-
-
-class MDFeMunicipiosView(PermissaoRequiredMixin, View):
-    """Lista os municipios (com codigo IBGE) de uma UF, para autocompletar
-    os campos de carregamento/descarregamento do MDF-e."""
-
-    permissao_modulo = "logistica"
-
-    def get(self, request):
-        from apps.fiscal.integrations.focusnfe import FocusNFeClient
-
-        uf = request.GET.get("uf", "").strip().upper()
-        if len(uf) != 2:
-            return JsonResponse({"results": []})
-
-        try:
-            retorno = FocusNFeClient().municipios.listar(uf=uf)
-        except Exception as exc:
-            logger.warning("Falha ao consultar municipios da UF %s: %s", uf, exc)
-            return JsonResponse({"results": [], "erro": str(exc)})
-
-        itens = retorno if isinstance(retorno, list) else retorno.get("municipios", []) if isinstance(retorno, dict) else []
-        results = [
-            {
-                "nome": item.get("nome") or item.get("municipio") or "",
-                "codigo_ibge": str(item.get("codigo_ibge") or item.get("codigo") or item.get("id") or ""),
-            }
-            for item in itens
-            if isinstance(item, dict)
-        ]
-        return JsonResponse({"results": results})
 
 
 class MDFeNFeSearchView(PermissaoRequiredMixin, View):

@@ -47,7 +47,6 @@ urlpatterns = [
     path("mdfe/", views.MDFeListView.as_view(), name="mdfe-list"),
     path("mdfe/novo/", views.MDFeCreateView.as_view(), name="mdfe-create"),
     path("mdfe/buscar-nfe/", views.MDFeNFeSearchView.as_view(), name="mdfe-buscar-nfe"),
-    path("mdfe/municipios/", views.MDFeMunicipiosView.as_view(), name="mdfe-municipios"),
     path("mdfe/<int:pk>/", views.MDFeDetailView.as_view(), name="mdfe-detail"),
     path("mdfe/<int:pk>/editar/", views.MDFeUpdateView.as_view(), name="mdfe-update"),
     path("mdfe/<int:pk>/alterar-status/", views.MDFeAlterarStatusView.as_view(), name="mdfe-alterar-status"),

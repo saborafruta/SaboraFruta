@@ -204,20 +204,34 @@
 <script type="application/json" id="motoristas-data">{{ motoristas_json|safe }}</script>
 <script type="application/json" id="veiculos-data">{{ veiculos_json|safe }}</script>
 <script>
+// Cache de municipios por UF (evita rebuscar a mesma UF na mesma pagina).
+window._municipiosPorUf = window._municipiosPorUf || {};
 function municipioAutocomplete(nomeCampoMunicipio) {
   return {
     _lista: [],
+    _ufAtual: '',
     sugestoes: [],
     async onUf(val) {
       const uf = (val || '').trim().toUpperCase();
       this.sugestoes = [];
       this._lista = [];
+      this._ufAtual = uf;
       if (uf.length !== 2) return;
-      try {
-        const res = await fetch(`{% url 'logistica:mdfe-municipios' %}?uf=${uf}`);
-        const data = await res.json();
-        this._lista = data.results || [];
+
+      if (window._municipiosPorUf[uf]) {
+        this._lista = window._municipiosPorUf[uf];
         this.sugestoes = this._lista.slice(0, 8);
+        return;
+      }
+      try {
+        // API publica do IBGE — sem autenticacao, mesma abordagem do
+        // cadastro de clientes (BrasilAPI/ViaCEP).
+        const res = await fetch(`https://servicodados.ibge.gov.br/api/v1/localidades/estados/${uf}/municipios`);
+        const data = await res.json();
+        const lista = (data || []).map(m => ({ nome: m.nome, codigo_ibge: String(m.id) }));
+        window._municipiosPorUf[uf] = lista;
+        this._lista = lista;
+        this.sugestoes = lista.slice(0, 8);
       } catch (e) {
         this._lista = [];
       }
