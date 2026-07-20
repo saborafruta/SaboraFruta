@@ -136,14 +136,24 @@
           <span class="text-xs font-semibold uppercase tracking-wide" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">UF Carregamento</span>
           {{ form.uf_carregamento }}
         </label>
-        <label class="space-y-1.5 md:col-span-3 relative" @input.debounce.150ms="onMunicipio($event.target.value)" @focus.capture="onFocus($event.target.value)" @click.outside="sugestoes = []">
+        <label class="space-y-1.5 md:col-span-3 relative"
+               @input.debounce.150ms="onMunicipio($event.target.value)"
+               @focus.capture="onFocus($event.target.value)"
+               @keydown.arrow-down.prevent="mover(1)"
+               @keydown.arrow-up.prevent="mover(-1)"
+               @keydown.enter.prevent="escolherFoco()"
+               @keydown.escape="sugestoes = []"
+               @click.outside="sugestoes = []">
           <span class="text-xs font-semibold uppercase tracking-wide" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Municipio de Carregamento</span>
           {{ form.municipio_carregamento }}
           <template x-if="sugestoes.length">
-            <ul class="absolute z-20 mt-0.5 w-full rounded-lg border shadow-lg text-sm overflow-hidden"
+            <ul class="absolute z-20 mt-0.5 w-full rounded-lg border shadow-lg text-sm overflow-y-auto max-h-64"
                 :style="temaClaro ? 'background:#fff; border-color:#e5e7eb;' : 'background:#18181b; border-color:#3f3f46;'">
-              <template x-for="m in sugestoes" :key="m.codigo_ibge">
-                <li @click="selecionar(m)" class="px-3 py-2 cursor-pointer hover:bg-blue-50" x-text="m.nome"></li>
+              <template x-for="(m, idx) in sugestoes" :key="m.codigo_ibge">
+                <li @click="selecionar(m)" @mouseenter="foco = idx"
+                    class="px-3 py-2 cursor-pointer"
+                    :style="foco === idx ? (temaClaro ? 'background:#eff6ff;' : 'background:#1e3a5f;') : ''"
+                    x-text="m.nome"></li>
               </template>
             </ul>
           </template>
@@ -159,14 +169,24 @@
           <span class="text-xs font-semibold uppercase tracking-wide" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">UF Descarregamento</span>
           {{ form.uf_descarregamento }}
         </label>
-        <label class="space-y-1.5 md:col-span-3 relative" @input.debounce.150ms="onMunicipio($event.target.value)" @focus.capture="onFocus($event.target.value)" @click.outside="sugestoes = []">
+        <label class="space-y-1.5 md:col-span-3 relative"
+               @input.debounce.150ms="onMunicipio($event.target.value)"
+               @focus.capture="onFocus($event.target.value)"
+               @keydown.arrow-down.prevent="mover(1)"
+               @keydown.arrow-up.prevent="mover(-1)"
+               @keydown.enter.prevent="escolherFoco()"
+               @keydown.escape="sugestoes = []"
+               @click.outside="sugestoes = []">
           <span class="text-xs font-semibold uppercase tracking-wide" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Municipio de Descarregamento</span>
           {{ form.municipio_descarregamento }}
           <template x-if="sugestoes.length">
-            <ul class="absolute z-20 mt-0.5 w-full rounded-lg border shadow-lg text-sm overflow-hidden"
+            <ul class="absolute z-20 mt-0.5 w-full rounded-lg border shadow-lg text-sm overflow-y-auto max-h-64"
                 :style="temaClaro ? 'background:#fff; border-color:#e5e7eb;' : 'background:#18181b; border-color:#3f3f46;'">
-              <template x-for="m in sugestoes" :key="m.codigo_ibge">
-                <li @click="selecionar(m)" class="px-3 py-2 cursor-pointer hover:bg-blue-50" x-text="m.nome"></li>
+              <template x-for="(m, idx) in sugestoes" :key="m.codigo_ibge">
+                <li @click="selecionar(m)" @mouseenter="foco = idx"
+                    class="px-3 py-2 cursor-pointer"
+                    :style="foco === idx ? (temaClaro ? 'background:#eff6ff;' : 'background:#1e3a5f;') : ''"
+                    x-text="m.nome"></li>
               </template>
             </ul>
           </template>
@@ -211,16 +231,18 @@ function municipioAutocomplete(nomeCampoMunicipio) {
     _lista: [],
     _ufAtual: '',
     sugestoes: [],
+    foco: -1,
     async onUf(val) {
       const uf = (val || '').trim().toUpperCase();
       this.sugestoes = [];
       this._lista = [];
+      this.foco = -1;
       this._ufAtual = uf;
       if (uf.length !== 2) return;
 
       if (window._municipiosPorUf[uf]) {
         this._lista = window._municipiosPorUf[uf];
-        this.sugestoes = this._lista.slice(0, 8);
+        this.onMunicipio(this._valorCampo());
         return;
       }
       try {
@@ -231,23 +253,45 @@ function municipioAutocomplete(nomeCampoMunicipio) {
         const lista = (data || []).map(m => ({ nome: m.nome, codigo_ibge: String(m.id) }));
         window._municipiosPorUf[uf] = lista;
         this._lista = lista;
-        this.sugestoes = lista.slice(0, 8);
+        this.onMunicipio(this._valorCampo());
       } catch (e) {
         this._lista = [];
       }
     },
+    _valorCampo() {
+      const campo = document.querySelector(`[name="${nomeCampoMunicipio}"]`);
+      return campo ? campo.value : '';
+    },
     onMunicipio(val) {
       const q = (val || '').trim().toLowerCase();
+      this.foco = -1;
       if (!this._lista.length) { this.sugestoes = []; return; }
-      this.sugestoes = (q ? this._lista.filter(m => m.nome.toLowerCase().includes(q)) : this._lista).slice(0, 8);
+      this.sugestoes = (q ? this._lista.filter(m => m.nome.toLowerCase().includes(q)) : this._lista).slice(0, 30);
     },
     onFocus(val) {
       this.onMunicipio(val);
+    },
+    mover(delta) {
+      if (!this.sugestoes.length) return;
+      this.foco = (this.foco + delta + this.sugestoes.length) % this.sugestoes.length;
+      this.$nextTick(() => {
+        const itens = this.$el.querySelectorAll('ul li');
+        const el = itens[this.foco];
+        if (el && el.scrollIntoView) el.scrollIntoView({ block: 'nearest' });
+      });
+    },
+    escolherFoco() {
+      if (this.foco >= 0 && this.foco < this.sugestoes.length) {
+        this.selecionar(this.sugestoes[this.foco]);
+      } else {
+        this.sugestoes = [];
+      }
     },
     selecionar(m) {
       const campo = document.querySelector(`[name="${nomeCampoMunicipio}"]`);
       if (campo) campo.value = m.nome;
       this.sugestoes = [];
+      this.foco = -1;
     },
   };
 }
