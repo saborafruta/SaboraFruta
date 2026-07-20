@@ -146,6 +146,14 @@ class MovimentacaoEstoque(FilialScopedModel):
     observacao = models.TextField(blank=True)
     data_movimentacao = models.DateTimeField(db_index=True)
 
+    # Cancelamento (estorno de transferências)
+    transferencia_cancelada = models.BooleanField(default=False, db_index=True)
+    transferencia_cancelada_em = models.DateTimeField(null=True, blank=True)
+    transferencia_cancelada_por = models.ForeignKey(
+        'core.Usuario', on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='+',
+    )
+
     class Meta:
         db_table = 'movimentacoes_estoque'
         ordering = ['-data_movimentacao']

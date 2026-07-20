@@ -407,26 +407,31 @@
     </div>
   </div>
 
-  <!-- ════ Transferências sem nota fiscal ════ -->
+  <!-- ════ Transferências recentes ════ -->
   <div class="card p-5 space-y-4" x-show="pendentesNota.length > 0" x-cloak>
     <div class="flex items-center gap-2">
       <svg class="w-5 h-5 flex-shrink-0" fill="none" stroke="#f59e0b" viewBox="0 0 24 24">
         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
               d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
       </svg>
-      <h3 class="text-base font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">Transferências sem nota fiscal</h3>
+      <h3 class="text-base font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">Transferências recentes</h3>
       <span class="soft-pill is-amber" x-text="pendentesNota.length"></span>
     </div>
     <p class="text-sm" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
-      Transferências já concluídas (estoque movimentado) desta loja que ainda não têm NF-e emitida, ou tiveram a emissão rejeitada.
+      Transferências desta loja: emita, cancele a nota fiscal, cancele (estorne) a transferência ou exclua-a.
     </p>
     <div class="space-y-3">
       <template x-for="grupo in pendentesNota" :key="grupo.chave">
         <div class="rounded-lg border p-4" :style="temaClaro ? 'border-color:#e5e7eb;' : 'border-color:#1e293b;'">
           <div class="flex flex-wrap items-start justify-between gap-3">
             <div class="min-w-0">
-              <div class="text-sm font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f1f5f9;'">
+              <div class="text-sm font-semibold flex items-center gap-2" :style="temaClaro ? 'color:#111827;' : 'color:#f1f5f9;'">
                 → <span x-text="grupo.filial_destino_nome"></span>
+                <span x-show="grupo.cancelada" class="soft-pill" style="background:#f1f5f9;color:#64748b;">Cancelada</span>
+                <span x-show="!grupo.cancelada && grupo.nota && grupo.nota.status === 'autorizada'" class="soft-pill is-green">NF-e autorizada</span>
+                <span x-show="!grupo.cancelada && grupo.nota && grupo.nota.status === 'processando'" class="soft-pill is-amber">NF-e processando</span>
+                <span x-show="!grupo.cancelada && grupo.nota && grupo.nota.status === 'rejeitada'" class="soft-pill" style="background:#fef2f2;color:#dc2626;">NF-e rejeitada</span>
+                <span x-show="!grupo.cancelada && grupo.nota && grupo.nota.status === 'cancelada'" class="soft-pill" style="background:#f1f5f9;color:#64748b;">NF-e cancelada</span>
               </div>
               <div class="text-xs mt-0.5" :style="temaClaro ? 'color:#9ca3af;' : 'color:#64748b;'" x-text="grupo.data"></div>
               <div class="text-xs mt-1" :style="temaClaro ? 'color:#6b7280;' : 'color:#94a3b8;'">
@@ -434,24 +439,52 @@
                   <span x-text="it.produto_nome + ' (' + it.quantidade + ')' + (idx < grupo.itens.length - 1 ? ', ' : '')"></span>
                 </template>
               </div>
-              <div x-show="grupo.erro_anterior" class="text-xs mt-1" style="color:#dc2626;"
-                   x-text="'Rejeitada anteriormente: ' + grupo.erro_anterior"></div>
+              <div x-show="grupo.nota && grupo.nota.mensagem_sefaz" class="text-xs mt-1" style="color:#dc2626;"
+                   x-text="'Rejeitada: ' + (grupo.nota ? grupo.nota.mensagem_sefaz : '')"></div>
               <div x-show="grupo._erro" class="text-xs mt-1 font-semibold" style="color:#dc2626;" x-text="grupo._erro"></div>
             </div>
-            <button type="button"
-                    @click="emitirNotaPendente(grupo)"
-                    :disabled="grupo._emitindo"
-                    class="btn-primary flex items-center gap-2 flex-shrink-0">
-              <svg x-show="!grupo._emitindo" class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                      d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
-              </svg>
-              <svg x-show="grupo._emitindo" class="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
-                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
-                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
-              </svg>
-              <span x-text="grupo._emitindo ? 'Emitindo...' : 'Emitir NF-e'"></span>
-            </button>
+            <div class="flex flex-wrap items-center gap-2 flex-shrink-0">
+              <button type="button"
+                      x-show="grupo.pode_emitir_nota"
+                      @click="emitirNotaPendente(grupo)"
+                      :disabled="grupo._processando"
+                      class="btn-primary flex items-center gap-2">
+                <svg x-show="grupo._processando !== 'emitir'" class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                        d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+                </svg>
+                <svg x-show="grupo._processando === 'emitir'" class="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
+                  <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                  <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
+                </svg>
+                <span x-text="grupo._processando === 'emitir' ? 'Emitindo...' : (grupo.nota ? 'Reemitir NF-e' : 'Emitir NF-e')"></span>
+              </button>
+
+              <button type="button"
+                      x-show="grupo.pode_cancelar_nota"
+                      @click="cancelarNotaPendente(grupo)"
+                      :disabled="grupo._processando"
+                      class="btn-secondary flex items-center gap-2">
+                <span x-text="grupo._processando === 'cancelar_nota' ? 'Cancelando...' : 'Cancelar NF-e'"></span>
+              </button>
+
+              <button type="button"
+                      x-show="grupo.pode_cancelar_transferencia"
+                      @click="cancelarTransferenciaPendente(grupo)"
+                      :disabled="grupo._processando"
+                      class="btn-secondary flex items-center gap-2">
+                <span x-text="grupo._processando === 'cancelar_transferencia' ? 'Cancelando...' : 'Cancelar transferência'"></span>
+              </button>
+
+              <button type="button"
+                      x-show="grupo.pode_excluir"
+                      @click="excluirTransferenciaPendente(grupo)"
+                      :disabled="grupo._processando"
+                      class="flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm font-medium border border-red-400 text-red-500 hover:bg-red-50 transition-colors"
+                      :style="temaClaro ? '' : 'background:rgba(239,68,68,0.08);'">
+                <span x-text="grupo._processando === 'excluir' ? 'Excluindo...' : 'Excluir'"></span>
+              </button>
+            </div>
           </div>
         </div>
       </template>
@@ -564,9 +597,10 @@ function transferenciaLojaApp(filiais) {
     erroGeral: '',
     showModalNota: false,
 
-    // Transferências sem NF-e
+    // Transferências recentes
     pendentesNota: [],
     pendentesErro: '',
+    isAdmin: false,
 
     init() {
       this.carregarPendentesNota();
@@ -576,14 +610,15 @@ function transferenciaLojaApp(filiais) {
       try {
         const res = await fetch('{% url "estoque:transferencia-lojas-pendentes-nfe" %}');
         const data = await res.json();
-        this.pendentesNota = (data.pendentes || []).map(g => ({ ...g, _emitindo: false, _erro: '' }));
+        this.isAdmin = !!data.is_admin;
+        this.pendentesNota = (data.pendentes || []).map(g => ({ ...g, _processando: false, _erro: '' }));
       } catch (e) {
         this.pendentesNota = [];
       }
     },
 
     async emitirNotaPendente(grupo) {
-      grupo._emitindo = true;
+      grupo._processando = 'emitir';
       grupo._erro = '';
       try {
         const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]').value;
@@ -594,14 +629,91 @@ function transferenciaLojaApp(filiais) {
         });
         const data = await res.json();
         if (data.ok) {
-          this.pendentesNota = this.pendentesNota.filter(g => g.chave !== grupo.chave);
+          await this.carregarPendentesNota();
         } else {
           grupo._erro = data.erro || 'Erro ao emitir a NF-e.';
         }
       } catch (e) {
         grupo._erro = 'Erro de comunicação com o servidor.';
       } finally {
-        grupo._emitindo = false;
+        grupo._processando = false;
+      }
+    },
+
+    async cancelarNotaPendente(grupo) {
+      const justificativa = prompt('Justificativa do cancelamento da NF-e (mínimo 15 caracteres):');
+      if (justificativa === null) return;
+      if (justificativa.trim().length < 15) {
+        grupo._erro = 'A justificativa deve ter ao menos 15 caracteres.';
+        return;
+      }
+      grupo._processando = 'cancelar_nota';
+      grupo._erro = '';
+      try {
+        const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]').value;
+        const res = await fetch('{% url "estoque:transferencia-lojas-cancelar-nfe" %}', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken },
+          body: JSON.stringify({ documento_numero: grupo.chave, justificativa }),
+        });
+        const data = await res.json();
+        if (data.ok) {
+          await this.carregarPendentesNota();
+        } else {
+          grupo._erro = data.erro || 'Erro ao cancelar a NF-e.';
+        }
+      } catch (e) {
+        grupo._erro = 'Erro de comunicação com o servidor.';
+      } finally {
+        grupo._processando = false;
+      }
+    },
+
+    async cancelarTransferenciaPendente(grupo) {
+      if (!confirm('Cancelar esta transferência? O estoque será estornado (devolvido à origem).')) return;
+      grupo._processando = 'cancelar_transferencia';
+      grupo._erro = '';
+      try {
+        const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]').value;
+        const res = await fetch('{% url "estoque:transferencia-lojas-cancelar" %}', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken },
+          body: JSON.stringify({ documento_numero: grupo.chave }),
+        });
+        const data = await res.json();
+        if (data.ok) {
+          await this.carregarPendentesNota();
+        } else {
+          grupo._erro = data.erro || 'Erro ao cancelar a transferência.';
+        }
+      } catch (e) {
+        grupo._erro = 'Erro de comunicação com o servidor.';
+      } finally {
+        grupo._processando = false;
+      }
+    },
+
+    async excluirTransferenciaPendente(grupo) {
+      if (!confirm('Excluir definitivamente esta transferência? Esta ação não pode ser desfeita.')) return;
+      grupo._processando = 'excluir';
+      grupo._erro = '';
+      try {
+        const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]').value;
+        const res = await fetch('{% url "estoque:transferencia-lojas-excluir" %}', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken },
+          body: JSON.stringify({ documento_numero: grupo.chave }),
+        });
+        const data = await res.json();
+        if (data.ok) {
+          this.pendentesNota = this.pendentesNota.filter(g => g.chave !== grupo.chave);
+        } else {
+          grupo._erro = data.erro || 'Erro ao excluir a transferência.';
+        }
+      } catch (e) {
+        grupo._erro = 'Erro de comunicação com o servidor.';
+      } finally {
+        grupo._processando = false;
       }
     },
 

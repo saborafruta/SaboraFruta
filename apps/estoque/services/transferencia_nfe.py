@@ -298,3 +298,38 @@ def emitir_nfe_transferencia(
     service = FocusNFeService(client=client)
 
     return service.emitir(doc, payload)
+
+
+def cancelar_nfe_transferencia(documento_fiscal, justificativa: str) -> DocumentoFiscal:
+    """
+    Cancela (via Focus/SEFAZ) uma NF-e de transferência já autorizada.
+    Só é possível cancelar documentos com status "autorizada" — a Focus
+    rejeita a tentativa caso contrário.
+    """
+    from apps.fiscal.integrations.focusnfe import FocusNFeClient
+    from apps.fiscal.integrations.focusnfe.config import FocusNFeConfig
+    from apps.fiscal.services.focusnfe_service import FocusNFeService
+
+    justificativa = (justificativa or "").strip()
+    if len(justificativa) < 15:
+        raise DadosInvalidosError(
+            "A justificativa de cancelamento deve ter ao menos 15 caracteres."
+        )
+    if documento_fiscal.status != StatusDocumentoFiscal.AUTORIZADA:
+        raise DadosInvalidosError(
+            "Somente uma NF-e autorizada pode ser cancelada."
+        )
+
+    filial = documento_fiscal.filial
+    token = (getattr(filial, "focusnfe_token", "") or "").strip()
+    if not token:
+        raise DadosInvalidosError(
+            "Configure o Token Focus NFe da filial antes de cancelar a nota."
+        )
+
+    ambiente = getattr(filial, "focusnfe_ambiente", None)
+    config = FocusNFeConfig.from_env(token=token, ambiente=ambiente)
+    client = FocusNFeClient(config=config)
+    service = FocusNFeService(client=client)
+
+    return service.cancelar(documento_fiscal, justificativa)

@@ -21,6 +21,7 @@ from apps.estoque.forms.outras_movimentacoes import DevolucaoClienteForm, Devolu
 from apps.estoque.models import Estoque, LoteProduto, MovimentacaoEstoque
 from apps.estoque.services.movimentacao_service import MovimentacaoService
 from apps.estoque.views.permissoes import permissoes_estoque
+from apps.financeiro.constants.enums import StatusDocumentoFiscal
 from apps.produtos.models import Produto
 from apps.pdv.models import DevolucaoPDV, ItemDevolucaoPDV, VendaPDV
 
@@ -861,13 +862,17 @@ class TransferenciaLojaApiView(PermissaoRequiredMixin, View):
 
 
 class TransferenciasPendentesNFeView(PermissaoRequiredMixin, View):
-    """Lista transferências já concluídas (saídas) sem NF-e vinculada."""
+    """Lista as transferências recentes desta filial (origem) com seu status
+    de NF-e e cancelamento, para permitir emitir/reemitir nota, cancelar a
+    emissão, cancelar a transferência ou excluí-la."""
 
     permissao_modulo = 'estoque'
     permissao_acao = 'criar'
 
     def get(self, request):
         filial = request.filial_ativa
+        usuario = request.user
+        is_admin = bool(usuario.is_superuser or usuario.perfil.is_admin)
 
         movs = (
             MovimentacaoEstoque.objects
@@ -875,10 +880,7 @@ class TransferenciasPendentesNFeView(PermissaoRequiredMixin, View):
                 filial=filial,
                 tipo_operacao=MovimentacaoEstoque.TipoOperacao.TRANSFERENCIA_SAIDA,
             )
-            .filter(
-                db_models.Q(documento_fiscal__isnull=True)
-                | db_models.Q(documento_fiscal__status='rejeitada')
-            )
+            .exclude(documento_numero__startswith='EST-')
             .select_related('produto', 'filial_destino', 'lote', 'documento_fiscal')
             .order_by('-data_movimentacao')[:200]
         )
@@ -888,6 +890,17 @@ class TransferenciasPendentesNFeView(PermissaoRequiredMixin, View):
         for mov in movs:
             chave = mov.documento_numero or f'MOV-{mov.pk}'
             if chave not in grupos:
+                doc = mov.documento_fiscal
+                nota = None
+                if doc:
+                    nota = {
+                        'numero': doc.numero,
+                        'status': doc.status,
+                        'status_label': doc.get_status_display(),
+                        'mensagem_sefaz': doc.mensagem_sefaz if doc.status == StatusDocumentoFiscal.REJEITADA else '',
+                    }
+                nota_ativa = bool(nota and nota['status'] == StatusDocumentoFiscal.AUTORIZADA)
+                pode_emitir_nota = not nota_ativa and not (nota and nota['status'] == StatusDocumentoFiscal.PROCESSANDO)
                 grupos[chave] = {
                     'chave': chave,
                     'filial_destino_id': mov.filial_destino_id,
@@ -896,11 +909,12 @@ class TransferenciasPendentesNFeView(PermissaoRequiredMixin, View):
                     ) if mov.filial_destino else '—',
                     'data': mov.data_movimentacao,
                     'observacao': mov.observacao,
-                    'erro_anterior': (
-                        mov.documento_fiscal.mensagem_sefaz
-                        if mov.documento_fiscal_id and mov.documento_fiscal.status == 'rejeitada'
-                        else ''
-                    ),
+                    'cancelada': mov.transferencia_cancelada,
+                    'nota': nota,
+                    'pode_emitir_nota': pode_emitir_nota,
+                    'pode_cancelar_nota': nota_ativa,
+                    'pode_cancelar_transferencia': not mov.transferencia_cancelada and not nota_ativa,
+                    'pode_excluir': is_admin and not nota_ativa,
                     'itens': [],
                 }
                 ordem.append(chave)
@@ -918,6 +932,7 @@ class TransferenciasPendentesNFeView(PermissaoRequiredMixin, View):
 
         return JsonResponse({
             'ok': True,
+            'is_admin': is_admin,
             'pendentes': [
                 {
                     **g,
@@ -997,3 +1012,117 @@ class TransferenciaReemitirNFeApiView(PermissaoRequiredMixin, View):
             return JsonResponse({'erro': nota_erro}, status=400)
 
         return JsonResponse({'ok': True, 'nota': nota_info})
+
+
+class TransferenciaCancelarNFeApiView(PermissaoRequiredMixin, View):
+    """Cancela (via Focus/SEFAZ) a NF-e autorizada de uma transferência."""
+
+    permissao_modulo = 'estoque'
+    permissao_acao = 'cancelar'
+
+    def post(self, request):
+        from apps.estoque.services.transferencia_nfe import cancelar_nfe_transferencia
+
+        try:
+            body = _json.loads(request.body)
+        except (ValueError, TypeError):
+            return JsonResponse({'erro': 'JSON inválido.'}, status=400)
+
+        documento_numero = (body.get('documento_numero') or '').strip()
+        justificativa = (body.get('justificativa') or '').strip()
+        if not documento_numero:
+            return JsonResponse({'erro': 'Transferência não informada.'}, status=400)
+
+        filial = request.filial_ativa
+        mov = (
+            MovimentacaoEstoque.objects
+            .filter(
+                filial=filial,
+                tipo_operacao=MovimentacaoEstoque.TipoOperacao.TRANSFERENCIA_SAIDA,
+                documento_numero=documento_numero,
+                documento_fiscal__isnull=False,
+            )
+            .select_related('documento_fiscal')
+            .first()
+        )
+        if not mov or not mov.documento_fiscal_id:
+            return JsonResponse({'erro': 'Nenhuma NF-e vinculada a esta transferência.'}, status=404)
+
+        try:
+            doc = cancelar_nfe_transferencia(mov.documento_fiscal, justificativa)
+        except DomainError as exc:
+            return JsonResponse({'erro': str(exc)}, status=400)
+        except Exception as exc:  # noqa: BLE001
+            return JsonResponse({'erro': f'Falha ao cancelar a NF-e: {exc}'}, status=400)
+
+        return JsonResponse({
+            'ok': True,
+            'nota': {
+                'numero': doc.numero,
+                'status': doc.status,
+                'status_label': doc.get_status_display(),
+            },
+        })
+
+
+class TransferenciaCancelarApiView(PermissaoRequiredMixin, View):
+    """Cancela (estorna) uma transferência entre lojas já concluída."""
+
+    permissao_modulo = 'estoque'
+    permissao_acao = 'cancelar'
+
+    def post(self, request):
+        from apps.estoque.services.transferencia_cancelamento import cancelar_transferencia
+
+        try:
+            body = _json.loads(request.body)
+        except (ValueError, TypeError):
+            return JsonResponse({'erro': 'JSON inválido.'}, status=400)
+
+        documento_numero = (body.get('documento_numero') or '').strip()
+        if not documento_numero:
+            return JsonResponse({'erro': 'Transferência não informada.'}, status=400)
+
+        filial = request.filial_ativa
+
+        try:
+            cancelar_transferencia(documento_numero, filial, request.user)
+        except DomainError as exc:
+            return JsonResponse({'erro': str(exc)}, status=400)
+
+        return JsonResponse({'ok': True})
+
+
+class TransferenciaExcluirApiView(PermissaoRequiredMixin, View):
+    """Exclui definitivamente uma transferência. Restrito a administradores."""
+
+    permissao_modulo = 'estoque'
+    permissao_acao = 'cancelar'
+
+    def post(self, request):
+        from apps.estoque.services.transferencia_cancelamento import excluir_transferencia
+
+        usuario = request.user
+        is_admin = bool(usuario.is_superuser or usuario.perfil.is_admin)
+        if not is_admin:
+            return JsonResponse(
+                {'erro': 'Somente administradores podem excluir transferências.'}, status=403,
+            )
+
+        try:
+            body = _json.loads(request.body)
+        except (ValueError, TypeError):
+            return JsonResponse({'erro': 'JSON inválido.'}, status=400)
+
+        documento_numero = (body.get('documento_numero') or '').strip()
+        if not documento_numero:
+            return JsonResponse({'erro': 'Transferência não informada.'}, status=400)
+
+        filial = request.filial_ativa
+
+        try:
+            excluir_transferencia(documento_numero, filial, usuario)
+        except DomainError as exc:
+            return JsonResponse({'erro': str(exc)}, status=400)
+
+        return JsonResponse({'ok': True})
