@@ -250,7 +250,9 @@ function municipioAutocomplete(nomeCampoMunicipio) {
         // cadastro de clientes (BrasilAPI/ViaCEP).
         const res = await fetch(`https://servicodados.ibge.gov.br/api/v1/localidades/estados/${uf}/municipios`);
         const data = await res.json();
-        const lista = (data || []).map(m => ({ nome: m.nome, codigo_ibge: String(m.id) }));
+        const lista = (data || [])
+          .map(m => ({ nome: m.nome, codigo_ibge: String(m.id) }))
+          .sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR'));
         window._municipiosPorUf[uf] = lista;
         this._lista = lista;
         this.onMunicipio(this._valorCampo());
@@ -262,11 +264,18 @@ function municipioAutocomplete(nomeCampoMunicipio) {
       const campo = document.querySelector(`[name="${nomeCampoMunicipio}"]`);
       return campo ? campo.value : '';
     },
+    _norm(s) {
+      return (s || '').toString().normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().trim();
+    },
     onMunicipio(val) {
-      const q = (val || '').trim().toLowerCase();
+      const q = this._norm(val);
       this.foco = -1;
       if (!this._lista.length) { this.sugestoes = []; return; }
-      this.sugestoes = (q ? this._lista.filter(m => m.nome.toLowerCase().includes(q)) : this._lista).slice(0, 30);
+      // Sem texto: mostra todas (a lista tem rolagem). Com texto: filtra
+      // ignorando acentos, para "sao" encontrar "São ...".
+      this.sugestoes = q
+        ? this._lista.filter(m => this._norm(m.nome).includes(q))
+        : this._lista;
     },
     onFocus(val) {
       this.onMunicipio(val);
