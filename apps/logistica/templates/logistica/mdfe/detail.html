@@ -131,9 +131,9 @@
       </div>
       <div class="flex flex-wrap gap-2">
         {% if mdfe.status == 'rascunho' %}
-          <form method="post" action="{% url 'logistica:mdfe-alterar-status' mdfe.pk %}">
-            {% csrf_token %}<input type="hidden" name="status" value="autorizado">
-            <button type="submit" class="btn-primary gap-1.5" onclick="return confirm('Marcar MDF-e como Autorizado?')">Marcar Autorizado</button>
+          <form method="post" action="{% url 'logistica:mdfe-emitir' mdfe.pk %}">
+            {% csrf_token %}
+            <button type="submit" class="btn-primary gap-1.5" onclick="return confirm('Emitir este MDF-e na SEFAZ (via Focus NFe)?')">Emitir MDF-e</button>
           </form>
           <form method="post" action="{% url 'logistica:mdfe-alterar-status' mdfe.pk %}">
             {% csrf_token %}<input type="hidden" name="status" value="cancelado">
@@ -142,16 +142,17 @@
                     onclick="return confirm('Cancelar este MDF-e?')">Cancelar MDF-e</button>
           </form>
         {% elif mdfe.status == 'autorizado' %}
-          <form method="post" action="{% url 'logistica:mdfe-alterar-status' mdfe.pk %}">
-            {% csrf_token %}<input type="hidden" name="status" value="encerrado">
-            <button type="submit" class="btn-primary gap-1.5" onclick="return confirm('Encerrar este MDF-e?')">Encerrar MDF-e</button>
+          <form method="post" action="{% url 'logistica:mdfe-consultar' mdfe.pk %}">
+            {% csrf_token %}
+            <button type="submit" class="btn-secondary gap-1.5">Consultar status</button>
           </form>
-          <form method="post" action="{% url 'logistica:mdfe-alterar-status' mdfe.pk %}">
-            {% csrf_token %}<input type="hidden" name="status" value="cancelado">
-            <button type="submit" class="btn-secondary gap-1.5"
-                    :style="temaClaro ? 'color:#dc2626; border-color:#fca5a5;' : 'color:#fca5a5; border-color:#7f1d1d;'"
-                    onclick="return confirm('Cancelar este MDF-e?')">Cancelar MDF-e</button>
-          </form>
+          <a href="{% url 'logistica:mdfe-damdfe' mdfe.pk %}" target="_blank" class="btn-secondary gap-1.5">Baixar DAMDFE</a>
+          <button type="button" class="btn-primary gap-1.5" onclick="document.getElementById('modal-encerrar-mdfe').classList.remove('hidden')">Encerrar MDF-e</button>
+          <button type="button" class="btn-secondary gap-1.5"
+                  :style="temaClaro ? 'color:#dc2626; border-color:#fca5a5;' : 'color:#fca5a5; border-color:#7f1d1d;'"
+                  onclick="document.getElementById('modal-cancelar-mdfe').classList.remove('hidden')">Cancelar MDF-e</button>
+        {% elif mdfe.status == 'encerrado' %}
+          <a href="{% url 'logistica:mdfe-damdfe' mdfe.pk %}" target="_blank" class="btn-secondary gap-1.5">Baixar DAMDFE</a>
         {% elif mdfe.status == 'cancelado' %}
           <form method="post" action="{% url 'logistica:mdfe-alterar-status' mdfe.pk %}">
             {% csrf_token %}<input type="hidden" name="status" value="rascunho">
@@ -307,6 +308,46 @@
       <label class="block space-y-1.5"><span class="text-xs font-semibold uppercase tracking-wide" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Observacao</span>{{ documento_form.observacao }}</label>
       <button type="submit" class="btn-primary w-full justify-center">Vincular documento</button>
     </form>
+  </div>
+
+  <!-- Modal: Encerrar MDF-e -->
+  <div id="modal-encerrar-mdfe" class="hidden fixed inset-0 z-[100] flex items-center justify-center p-4 no-print" style="background:rgba(0,0,0,0.55);">
+    <div class="w-full max-w-md rounded-2xl shadow-2xl p-6 space-y-4" :style="temaClaro ? 'background:#fff;' : 'background:#0f172a; border:1px solid #1e293b;'">
+      <h3 class="text-lg font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">Encerrar MDF-e</h3>
+      <p class="text-sm" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Informe o municipio onde o transporte foi encerrado (chegada ao destino).</p>
+      <form method="post" action="{% url 'logistica:mdfe-encerrar' mdfe.pk %}" class="space-y-3">
+        {% csrf_token %}
+        <label class="block space-y-1.5">
+          <span class="text-xs font-semibold uppercase tracking-wide" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Codigo IBGE do Municipio</span>
+          <input type="text" name="codigo_municipio" required class="form-input w-full" placeholder="Ex: 3550308">
+        </label>
+        <label class="block space-y-1.5">
+          <span class="text-xs font-semibold uppercase tracking-wide" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">UF</span>
+          <input type="text" name="uf" maxlength="2" class="form-input w-full" value="{{ mdfe.uf_descarregamento }}" placeholder="Ex: SP">
+        </label>
+        <div class="flex gap-2 pt-1">
+          <button type="button" class="btn-secondary flex-1" onclick="document.getElementById('modal-encerrar-mdfe').classList.add('hidden')">Cancelar</button>
+          <button type="submit" class="btn-primary flex-1">Confirmar Encerramento</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Modal: Cancelar MDF-e -->
+  <div id="modal-cancelar-mdfe" class="hidden fixed inset-0 z-[100] flex items-center justify-center p-4 no-print" style="background:rgba(0,0,0,0.55);">
+    <div class="w-full max-w-md rounded-2xl shadow-2xl p-6 space-y-4" :style="temaClaro ? 'background:#fff;' : 'background:#0f172a; border:1px solid #1e293b;'">
+      <h3 class="text-lg font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">Cancelar MDF-e</h3>
+      <p class="text-sm" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Informe a justificativa do cancelamento (minimo 15 caracteres).</p>
+      <form method="post" action="{% url 'logistica:mdfe-cancelar-focus' mdfe.pk %}" class="space-y-3">
+        {% csrf_token %}
+        <textarea name="justificativa" required minlength="15" rows="3" class="form-input w-full" placeholder="Motivo do cancelamento..."></textarea>
+        <div class="flex gap-2 pt-1">
+          <button type="button" class="btn-secondary flex-1" onclick="document.getElementById('modal-cancelar-mdfe').classList.add('hidden')">Voltar</button>
+          <button type="submit" class="btn-primary flex-1"
+                  :style="temaClaro ? 'background:#dc2626;' : 'background:#dc2626;'">Confirmar Cancelamento</button>
+        </div>
+      </form>
+    </div>
   </div>
 
 </div>

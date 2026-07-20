@@ -19,6 +19,31 @@
       <div class="rounded-lg border border-red-500/30 bg-red-500/10 p-3 text-sm text-red-500">{{ form.non_field_errors }}</div>
     {% endif %}
 
+    {% if not mdfe %}
+    <!-- Vincular NF-e (gerar MDF-e a partir de uma NF-e autorizada) -->
+    <div class="card p-6 space-y-3" x-data="buscaNFe({{ nfe_documento_inicial_json|default:'null'|safe }})">
+      <h3 class="text-xs font-semibold uppercase tracking-wide" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Vincular NF-e (opcional)</h3>
+      <p class="text-sm" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Busque uma NF-e ja autorizada para gerar o MDF-e a partir dela (transportador de carga propria).</p>
+      <input type="hidden" name="nfe_documento_id" :value="selecionada ? selecionada.id : ''">
+      <div class="relative">
+        <input type="text" x-model="query" @input.debounce.300ms="buscar()"
+               placeholder="Numero ou chave de acesso da NF-e..."
+               class="form-input w-full"
+               :class="selecionada ? (temaClaro ? 'border-green-400' : 'border-green-600') : ''">
+        <template x-if="resultados.length">
+          <ul class="absolute z-20 mt-1 w-full rounded-lg border shadow-lg text-sm overflow-hidden"
+              :style="temaClaro ? 'background:#fff; border-color:#e5e7eb;' : 'background:#18181b; border-color:#3f3f46;'">
+            <template x-for="r in resultados" :key="r.id">
+              <li @click="selecionar(r)" class="px-3 py-2 cursor-pointer hover:bg-blue-50"
+                  x-text="r.label + (r.destinatario ? ' — ' + r.destinatario : '') + ' (R$ ' + r.valor_total + ')'"></li>
+            </template>
+          </ul>
+        </template>
+      </div>
+      <p x-show="selecionada" class="text-xs text-green-500" x-text="selecionada ? ('✓ ' + selecionada.label + ' vinculada') : ''"></p>
+    </div>
+    {% endif %}
+
     <!-- Identificacao -->
     <div class="card p-6 space-y-4">
       <h3 class="text-xs font-semibold uppercase tracking-wide" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Identificacao</h3>
@@ -163,6 +188,30 @@
 <script type="application/json" id="motoristas-data">{{ motoristas_json|safe }}</script>
 <script type="application/json" id="veiculos-data">{{ veiculos_json|safe }}</script>
 <script>
+function buscaNFe(inicial) {
+  return {
+    query: inicial ? (inicial.label || '') : '',
+    resultados: [],
+    selecionada: inicial || null,
+    async buscar() {
+      if (this.selecionada) { this.selecionada = null; }
+      const q = this.query.trim();
+      if (q.length < 2) { this.resultados = []; return; }
+      try {
+        const res = await fetch(`{% url 'logistica:mdfe-buscar-nfe' %}?q=${encodeURIComponent(q)}`);
+        const data = await res.json();
+        this.resultados = data.results || [];
+      } catch (e) {
+        this.resultados = [];
+      }
+    },
+    selecionar(r) {
+      this.selecionada = r;
+      this.query = r.label;
+      this.resultados = [];
+    },
+  };
+}
 function autoMotorista() {
   const todos = JSON.parse(document.getElementById('motoristas-data').textContent || '[]');
   return {

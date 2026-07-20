@@ -46,9 +46,15 @@ urlpatterns = [
     # MDF-e
     path("mdfe/", views.MDFeListView.as_view(), name="mdfe-list"),
     path("mdfe/novo/", views.MDFeCreateView.as_view(), name="mdfe-create"),
+    path("mdfe/buscar-nfe/", views.MDFeNFeSearchView.as_view(), name="mdfe-buscar-nfe"),
     path("mdfe/<int:pk>/", views.MDFeDetailView.as_view(), name="mdfe-detail"),
     path("mdfe/<int:pk>/editar/", views.MDFeUpdateView.as_view(), name="mdfe-update"),
     path("mdfe/<int:pk>/alterar-status/", views.MDFeAlterarStatusView.as_view(), name="mdfe-alterar-status"),
+    path("mdfe/<int:pk>/emitir/", views.MDFeEmitirView.as_view(), name="mdfe-emitir"),
+    path("mdfe/<int:pk>/consultar/", views.MDFeConsultarView.as_view(), name="mdfe-consultar"),
+    path("mdfe/<int:pk>/cancelar-focus/", views.MDFeCancelarFocusView.as_view(), name="mdfe-cancelar-focus"),
+    path("mdfe/<int:pk>/encerrar/", views.MDFeEncerrarView.as_view(), name="mdfe-encerrar"),
+    path("mdfe/<int:pk>/damdfe/", views.MDFeDamdfeView.as_view(), name="mdfe-damdfe"),
     path("mdfe/<int:pk>/documentos/novo/", views.DocumentoMDFeCreateView.as_view(), name="mdfe-documento-create"),
     path("mdfe/<int:pk>/documentos/<int:documento_pk>/remover/", views.DocumentoMDFeDeleteView.as_view(), name="mdfe-documento-delete"),
 ]

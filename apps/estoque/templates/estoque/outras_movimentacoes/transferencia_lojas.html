@@ -460,6 +460,13 @@
                 <span x-text="grupo._processando === 'emitir' ? 'Emitindo...' : (grupo.nota ? 'Reemitir NF-e' : 'Emitir NF-e')"></span>
               </button>
 
+              <a x-show="grupo.nota && grupo.nota.status === 'autorizada'"
+                 :href="'{% url 'logistica:mdfe-create' %}?nfe_documento_id=' + (grupo.nota ? grupo.nota.id : '')"
+                 target="_blank"
+                 class="btn-secondary flex items-center gap-2">
+                Gerar MDF-e
+              </a>
+
               <button type="button"
                       x-show="grupo.pode_cancelar_nota"
                       @click="cancelarNotaPendente(grupo)"

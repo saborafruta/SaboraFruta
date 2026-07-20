@@ -895,6 +895,7 @@ class TransferenciasPendentesNFeView(PermissaoRequiredMixin, View):
                 nota = None
                 if doc:
                     nota = {
+                        'id': doc.pk,
                         'numero': doc.numero,
                         'status': doc.status,
                         'status_label': doc.get_status_display(),

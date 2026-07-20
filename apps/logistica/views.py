@@ -1224,10 +1224,28 @@ class MDFeCreateView(PermissaoRequiredMixin, View):
 
     def get(self, request):
         filial = _filial(request)
-        form = MDFeForm(filial=filial, initial={
+        nfe_documento_id = request.GET.get("nfe_documento_id", "").strip()
+        nfe_documento = None
+        if nfe_documento_id:
+            nfe_documento = DocumentoFiscal.objects.filter(
+                pk=nfe_documento_id, filial=filial,
+                tipo_documento__in=["nfe", "nfce"], status="autorizada",
+            ).first()
+        initial = {
             "numero": _proximo_numero_mdfe(filial),
             "data_emissao": timezone.localdate(),
-        })
+        }
+        nfe_documento_inicial_json = "null"
+        if nfe_documento:
+            initial["uf_carregamento"] = filial.uf
+            initial["municipio_carregamento"] = filial.cidade
+            nfe_documento_inicial_json = json.dumps({
+                "id": nfe_documento.pk,
+                "label": f"{nfe_documento.get_tipo_documento_display()} {nfe_documento.numero}/{nfe_documento.serie}",
+                "valor_total": str(nfe_documento.valor_total),
+                "destinatario": (nfe_documento.destinatario_snapshot or {}).get("nome", ""),
+            })
+        form = MDFeForm(filial=filial, initial=initial)
         motoristas_json, veiculos_json = _motoristas_veiculos_json(filial)
         return render(request, self.template_name, {
             "title": "Novo MDF-e",
@@ -1235,6 +1253,7 @@ class MDFeCreateView(PermissaoRequiredMixin, View):
             "cancel_url": reverse("logistica:mdfe-list"),
             "motoristas_json": motoristas_json,
             "veiculos_json": veiculos_json,
+            "nfe_documento_inicial_json": nfe_documento_inicial_json,
         })
 
     def post(self, request):
@@ -1245,6 +1264,33 @@ class MDFeCreateView(PermissaoRequiredMixin, View):
             mdfe.filial = filial
             mdfe.responsavel = request.user
             mdfe.save()
+
+            nfe_documento_id = request.POST.get("nfe_documento_id", "").strip()
+            if nfe_documento_id:
+                nfe_documento = DocumentoFiscal.objects.filter(
+                    pk=nfe_documento_id, filial=filial,
+                    tipo_documento__in=["nfe", "nfce"], status="autorizada",
+                ).first()
+                if nfe_documento:
+                    destinatario = nfe_documento.destinatario_snapshot or {}
+                    DocumentoMDFe.objects.create(
+                        mdfe=mdfe,
+                        tipo_documento=(
+                            DocumentoMDFe.TipoDocumento.NFCE
+                            if nfe_documento.tipo_documento == "nfce"
+                            else DocumentoMDFe.TipoDocumento.NFE
+                        ),
+                        chave_acesso=nfe_documento.chave or "",
+                        numero_documento=str(nfe_documento.numero),
+                        serie=str(nfe_documento.serie),
+                        emitente_nome=filial.razao_social or "",
+                        emitente_documento=filial.cnpj or "",
+                        municipio_descarga=destinatario.get("cidade", ""),
+                        uf_descarga=destinatario.get("uf", ""),
+                        valor=nfe_documento.valor_total or 0,
+                    )
+                    mdfe.recalcular_totais()
+
             messages.success(request, f"MDF-e #{mdfe.numero:06d} criado.")
             return redirect("logistica:mdfe-detail", pk=mdfe.pk)
         motoristas_json, veiculos_json = _motoristas_veiculos_json(filial)
@@ -1255,6 +1301,122 @@ class MDFeCreateView(PermissaoRequiredMixin, View):
             "motoristas_json": motoristas_json,
             "veiculos_json": veiculos_json,
         })
+
+
+class MDFeNFeSearchView(PermissaoRequiredMixin, View):
+    """Busca NF-e/NFC-e autorizadas da filial para vincular a um novo MDF-e."""
+
+    permissao_modulo = "logistica"
+
+    def get(self, request):
+        filial = _filial(request)
+        q = request.GET.get("q", "").strip()
+        if len(q) < 2:
+            return JsonResponse({"results": []})
+
+        qs = DocumentoFiscal.objects.filter(
+            filial=filial, tipo_documento__in=["nfe", "nfce"], status="autorizada",
+        )
+        if q.isdigit():
+            qs = qs.filter(numero__icontains=q)
+        else:
+            qs = qs.filter(chave__icontains=q)
+        results = [
+            {
+                "id": doc.pk,
+                "label": f"{doc.get_tipo_documento_display()} {doc.numero}/{doc.serie}",
+                "chave": doc.chave or "",
+                "valor_total": str(doc.valor_total),
+                "destinatario": (doc.destinatario_snapshot or {}).get("nome", ""),
+            }
+            for doc in qs.order_by("-data_emissao")[:15]
+        ]
+        return JsonResponse({"results": results})
+
+
+class MDFeEmitirView(PermissaoRequiredMixin, View):
+    permissao_modulo = "logistica"
+    permissao_acao = "editar"
+
+    def post(self, request, pk):
+        from apps.logistica.services.mdfe_focusnfe import emitir_mdfe
+        mdfe = get_object_or_404(MDFe.objects.for_filial(_filial(request)), pk=pk)
+        doc, erro = emitir_mdfe(mdfe, request.user)
+        if erro:
+            messages.error(request, f"Erro ao emitir MDF-e: {erro}")
+        else:
+            messages.success(request, "MDF-e enviado para autorizacao na SEFAZ.")
+        return redirect("logistica:mdfe-detail", pk=mdfe.pk)
+
+
+class MDFeConsultarView(PermissaoRequiredMixin, View):
+    permissao_modulo = "logistica"
+    permissao_acao = "editar"
+
+    def post(self, request, pk):
+        from apps.logistica.services.mdfe_focusnfe import consultar_mdfe
+        mdfe = get_object_or_404(MDFe.objects.for_filial(_filial(request)), pk=pk)
+        doc, erro = consultar_mdfe(mdfe)
+        if erro:
+            messages.error(request, f"Erro ao consultar MDF-e: {erro}")
+        else:
+            messages.success(request, f"Status atualizado: {doc.get_status_display() if doc else ''}.")
+        return redirect("logistica:mdfe-detail", pk=mdfe.pk)
+
+
+class MDFeCancelarFocusView(PermissaoRequiredMixin, View):
+    permissao_modulo = "logistica"
+    permissao_acao = "editar"
+
+    def post(self, request, pk):
+        from apps.logistica.services.mdfe_focusnfe import cancelar_mdfe
+        mdfe = get_object_or_404(MDFe.objects.for_filial(_filial(request)), pk=pk)
+        justificativa = request.POST.get("justificativa", "").strip()
+        if len(justificativa) < 15:
+            messages.error(request, "Justificativa deve ter no minimo 15 caracteres.")
+            return redirect("logistica:mdfe-detail", pk=mdfe.pk)
+        doc, erro = cancelar_mdfe(mdfe, justificativa)
+        if erro:
+            messages.error(request, f"Erro ao cancelar MDF-e: {erro}")
+        else:
+            messages.success(request, "MDF-e cancelado com sucesso.")
+        return redirect("logistica:mdfe-detail", pk=mdfe.pk)
+
+
+class MDFeEncerrarView(PermissaoRequiredMixin, View):
+    permissao_modulo = "logistica"
+    permissao_acao = "editar"
+
+    def post(self, request, pk):
+        from apps.logistica.services.mdfe_focusnfe import encerrar_mdfe
+        mdfe = get_object_or_404(MDFe.objects.for_filial(_filial(request)), pk=pk)
+        codigo_municipio = request.POST.get("codigo_municipio", "").strip()
+        uf = request.POST.get("uf", "").strip() or mdfe.uf_descarregamento
+        if not codigo_municipio:
+            messages.error(request, "Informe o codigo IBGE do municipio de encerramento.")
+            return redirect("logistica:mdfe-detail", pk=mdfe.pk)
+        doc, erro = encerrar_mdfe(mdfe, codigo_municipio, uf)
+        if erro:
+            messages.error(request, f"Erro ao encerrar MDF-e: {erro}")
+        else:
+            messages.success(request, "MDF-e encerrado com sucesso.")
+        return redirect("logistica:mdfe-detail", pk=mdfe.pk)
+
+
+class MDFeDamdfeView(PermissaoRequiredMixin, View):
+    permissao_modulo = "logistica"
+
+    def get(self, request, pk):
+        from apps.logistica.services.mdfe_focusnfe import damdfe_pdf
+        mdfe = get_object_or_404(MDFe.objects.for_filial(_filial(request)), pk=pk)
+        try:
+            pdf_bytes = damdfe_pdf(mdfe)
+        except Exception as exc:
+            messages.error(request, f"Erro ao baixar DAMDFE: {exc}")
+            return redirect("logistica:mdfe-detail", pk=mdfe.pk)
+        resp = HttpResponse(pdf_bytes, content_type="application/pdf")
+        resp["Content-Disposition"] = f'inline; filename="damdfe-{mdfe.numero:06d}.pdf"'
+        return resp
 
 
 class MDFeUpdateView(PermissaoRequiredMixin, View):
@@ -1349,9 +1511,12 @@ class MDFeAlterarStatusView(PermissaoRequiredMixin, View):
     permissao_modulo = "logistica"
     permissao_acao = "editar"
 
+    # "autorizado" e "encerrado" só são atingidos via emissão/encerramento
+    # real na Focus NFe (MDFeEmitirView / MDFeEncerrarView) — aqui só
+    # cabem transições manuais que não envolvem a SEFAZ.
     TRANSICOES_VALIDAS = {
-        "rascunho": ["autorizado", "cancelado"],
-        "autorizado": ["encerrado", "cancelado"],
+        "rascunho": ["cancelado"],
+        "autorizado": [],
         "encerrado": [],
         "cancelado": ["rascunho"],
     }

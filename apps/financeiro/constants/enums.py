@@ -37,6 +37,7 @@ class TipoDocumentoFiscal(models.TextChoices):
     NFCE = "nfce", "NFC-e"
     NFSE = "nfse", "NFS-e"
     CTE = "cte", "CT-e"
+    MDFE = "mdfe", "MDF-e"
 
 
 class StatusDocumentoFiscal(models.TextChoices):
