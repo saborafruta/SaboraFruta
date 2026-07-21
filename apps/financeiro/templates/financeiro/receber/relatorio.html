@@ -25,23 +25,36 @@
 
   <!-- Cabeçalho -->
   <div class="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
-    <div>
-      <p class="text-sm mb-1 no-print" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
-        <a href="{% url 'financeiro:receber_list' %}" :style="temaClaro ? 'color:#3b82f6;' : 'color:#60a5fa;'">Contas a Receber</a>
-        <span class="mx-1">›</span> Relatório
-      </p>
-      <h2 class="text-2xl font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">Relatório de Contas a Receber</h2>
-      <p class="text-sm mt-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
-        {{ filial.nome_fantasia|default:filial.razao_social }} ·
-        Situação: <strong>{{ status_label }}</strong>
-        {% if q %} · Cliente/Doc.: <strong>{{ q }}</strong>{% endif %}
-        {% if data_ini or data_fim %} · Vencimento:
-          {% if data_ini %}{{ data_ini }}{% else %}…{% endif %} a {% if data_fim %}{{ data_fim }}{% else %}…{% endif %}
-        {% endif %}
-      </p>
-      <p class="text-xs mt-0.5" :style="temaClaro ? 'color:#94a3b8;' : 'color:#64748b;'">
-        Gerado em {{ gerado_em|date:"d/m/Y H:i" }} · {{ total_titulos }} título{{ total_titulos|pluralize }} · {{ clientes|length }} cliente{{ clientes|length|pluralize }}
-      </p>
+    <div class="flex items-start gap-4">
+      {% if filial.imagem %}
+        <img src="{{ filial.imagem.url }}"
+             alt="{{ filial.nome_fantasia|default:filial.razao_social }}"
+             style="max-height:64px; max-width:180px; object-fit:contain;"
+             {% if empresa_logo_url %}onerror="this.onerror=null;this.src='{{ empresa_logo_url }}';"{% else %}onerror="this.style.display='none';"{% endif %}>
+      {% elif empresa_logo_url %}
+        <img src="{{ empresa_logo_url }}"
+             alt="{{ filial.nome_fantasia|default:filial.razao_social }}"
+             style="max-height:64px; max-width:180px; object-fit:contain;"
+             onerror="this.style.display='none';">
+      {% endif %}
+      <div>
+        <p class="text-sm mb-1 no-print" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+          <a href="{% url 'financeiro:receber_list' %}" :style="temaClaro ? 'color:#3b82f6;' : 'color:#60a5fa;'">Contas a Receber</a>
+          <span class="mx-1">›</span> Relatório
+        </p>
+        <h2 class="text-2xl font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">Relatório de Contas a Receber</h2>
+        <p class="text-sm mt-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+          {{ filial.nome_fantasia|default:filial.razao_social }} ·
+          Situação: <strong>{{ status_label }}</strong>
+          {% if q %} · Cliente/Doc.: <strong>{{ q }}</strong>{% endif %}
+          {% if data_ini or data_fim %} · Vencimento:
+            {% if data_ini %}{{ data_ini }}{% else %}…{% endif %} a {% if data_fim %}{{ data_fim }}{% else %}…{% endif %}
+          {% endif %}
+        </p>
+        <p class="text-xs mt-0.5" :style="temaClaro ? 'color:#94a3b8;' : 'color:#64748b;'">
+          Gerado em {{ gerado_em|date:"d/m/Y H:i" }} · {{ total_titulos }} título{{ total_titulos|pluralize }} · {{ clientes|length }} cliente{{ clientes|length|pluralize }}
+        </p>
+      </div>
     </div>
     <div class="flex gap-2 no-print">
       <button type="button" onclick="window.print()" class="btn-secondary flex items-center gap-2">
@@ -56,22 +69,6 @@
         </svg>
         Exportar PDF
       </button>
-    </div>
-  </div>
-
-  <!-- Resumo geral -->
-  <div class="card p-4 grid grid-cols-2 sm:grid-cols-3 gap-4">
-    <div>
-      <p class="text-xs font-medium uppercase tracking-wide" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Saldo em aberto</p>
-      <p class="text-lg font-bold mt-0.5" :style="temaClaro ? 'color:#b45309;' : 'color:#fcd34d;'">R$ {{ total_geral_saldo|floatformat:2 }}</p>
-    </div>
-    <div>
-      <p class="text-xs font-medium uppercase tracking-wide" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Valor total dos títulos</p>
-      <p class="text-lg font-bold mt-0.5" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">R$ {{ total_geral_valor|floatformat:2 }}</p>
-    </div>
-    <div>
-      <p class="text-xs font-medium uppercase tracking-wide" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Clientes</p>
-      <p class="text-lg font-bold mt-0.5" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">{{ clientes|length }}</p>
     </div>
   </div>
 
