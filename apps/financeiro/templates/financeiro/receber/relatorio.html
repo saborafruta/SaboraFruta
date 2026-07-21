@@ -99,8 +99,13 @@
             <span :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
               · Parc. {{ row.titulo.parcela }}/{{ row.titulo.total_parcelas }}
               · Venc. {{ row.titulo.data_vencimento|date:"d/m/Y" }}
-              {% if row.venda %} · {{ row.venda.data_venda|date:"d/m/Y" }}{% endif %}
             </span>
+          </div>
+          <div class="text-center">
+            <span :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Compra:</span>
+            <strong :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
+              {% if row.venda %}{{ row.venda.data_venda|date:"d/m/Y" }}{% else %}{{ row.titulo.data_emissao|date:"d/m/Y" }}{% endif %}
+            </strong>
           </div>
           <div class="text-right">
             <span :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Saldo:</span>
