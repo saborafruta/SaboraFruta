@@ -38,6 +38,40 @@ def _sessao_aberta(request):
     ).first()
 
 
+def _usuario_e_admin(request) -> bool:
+    usuario = request.user
+    perfil = getattr(usuario, "_perfil_ativo", None) or getattr(usuario, "perfil", None)
+    return bool(usuario.is_superuser or (perfil and perfil.is_admin))
+
+
+def _data_venda_retroativa(request, body):
+    """
+    Lê e valida a data retroativa da venda enviada pelo frontend.
+
+    Retorna um datetime aware (na data escolhida, com a hora atual) ou None
+    quando não há data retroativa. Só administradores podem retroagir a data.
+    """
+    valor = (body.get("data_venda") or "").strip()
+    if not valor:
+        return None
+    if not _usuario_e_admin(request):
+        raise DadosInvalidosError("Apenas administradores podem lançar vendas com data retroativa.")
+    try:
+        dia = datetime.date.fromisoformat(valor[:10])
+    except ValueError:
+        raise DadosInvalidosError("Data da venda inválida.")
+
+    hoje = timezone.localdate()
+    if dia > hoje:
+        raise DadosInvalidosError("A data da venda não pode ser futura.")
+
+    agora = timezone.localtime()
+    dt = datetime.datetime.combine(dia, agora.timetz())
+    if timezone.is_naive(dt):
+        dt = timezone.make_aware(dt, agora.tzinfo)
+    return dt
+
+
 def _proximo_numero_venda(filial):
     ultimo_num = (
         VendaPDV.objects.filter(filial=filial)
@@ -78,6 +112,7 @@ def pdv_home(request):
         "title": "PDV",
         "caixas_json": json.dumps(caixas),
         "linhas_json": json.dumps(linhas),
+        "usuario_e_admin": _usuario_e_admin(request),
     })
 
 
@@ -557,6 +592,11 @@ def api_venda_finalizar(request):
     forcar_estoque_negativo = True
 
     try:
+        data_venda = _data_venda_retroativa(request, body)
+    except DadosInvalidosError as exc:
+        return JsonResponse({"erro": str(exc)}, status=400)
+
+    try:
         venda = VendaPDVService.finalizar_venda(
             sessao=sessao,
             filial=request.filial_ativa,
@@ -570,6 +610,7 @@ def api_venda_finalizar(request):
             endereco_entrega=endereco_entrega,
             forcar_estoque_negativo=forcar_estoque_negativo,
             credito_valor=credito_valor,
+            data_venda=data_venda,
         )
     except EstoqueInsuficienteError as exc:
         return JsonResponse({"erro": str(exc), "tipo": "estoque_insuficiente"}, status=400)
@@ -613,6 +654,11 @@ def api_venda_finalizar_forcado(request):
     credito_valor = Decimal(str(body.get("credito_valor", "0")))
 
     try:
+        data_venda = _data_venda_retroativa(request, body)
+    except DadosInvalidosError as exc:
+        return JsonResponse({"erro": str(exc)}, status=400)
+
+    try:
         venda = VendaPDVService.finalizar_venda(
             sessao=sessao,
             filial=request.filial_ativa,
@@ -626,6 +672,7 @@ def api_venda_finalizar_forcado(request):
             endereco_entrega=endereco_entrega,
             forcar_estoque_negativo=True,
             credito_valor=credito_valor,
+            data_venda=data_venda,
         )
     except DadosInvalidosError as exc:
         return JsonResponse({"erro": str(exc)}, status=400)

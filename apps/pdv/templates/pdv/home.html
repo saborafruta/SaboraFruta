@@ -1846,6 +1846,18 @@
           <div style="display:flex;justify-content:space-between;font-size:13px;font-weight:700;margin-top:8px;color:#f59e0b;"><span>Troco</span><span x-text="'R$ '+fmt(trocoTotal)"></span></div>
         </template>
       </div>
+      <template x-if="usuarioEhAdmin">
+        <div style="background:#0a0a12;border:1px solid #1e1e30;border-radius:10px;padding:12px;margin-bottom:16px;">
+          <label style="display:block;font-size:11px;color:#888;margin-bottom:6px;">Data da venda <span style="color:#555;">(retroativa — opcional)</span></label>
+          <div style="display:flex;gap:8px;">
+            <input type="date" x-model="dataVendaRetroativa" :max="hojeISO"
+                   style="flex:1;padding:8px;background:#13131e;border:1px solid #2a2a3e;border-radius:8px;color:#e5e5f0;font-size:13px;">
+            <button type="button" x-show="dataVendaRetroativa" @click="dataVendaRetroativa=''"
+                    style="padding:8px 10px;background:#1e1e2a;border:none;border-radius:8px;color:#888;font-size:12px;cursor:pointer;">Hoje</button>
+          </div>
+          <p x-show="dataVendaRetroativa" style="font-size:10px;color:#fbbf24;margin:6px 0 0;">A venda será lançada com a data escolhida (sem emissão de nota fiscal).</p>
+        </div>
+      </template>
       <div style="display:flex;gap:10px;">
         <button @click="showModalConfirmacao=false" style="flex:1;padding:11px;background:#1e1e2a;border:none;border-radius:8px;color:#666;font-size:13px;cursor:pointer;">Voltar</button>
         <button @click="finalizarVenda()" style="flex:1;padding:11px;background:linear-gradient(135deg,#f15a24,#f97316);border:none;border-radius:8px;color:#fff;font-size:13px;font-weight:700;cursor:pointer;">✓ Confirmar</button>
@@ -2524,6 +2536,9 @@ function pdv() {
     nomeUsuario: '{{ request.user.nome|default:request.user.email }}',
     caixasDisponiveis: {{ caixas_json|safe }},
     linhas: {{ linhas_json|safe }},
+    usuarioEhAdmin: {{ usuario_e_admin|yesno:"true,false" }},
+    dataVendaRetroativa: '',
+    get hojeISO() { return new Date().toISOString().slice(0,10); },
 
     sessao: null, erroCaixa: '', caixaSelecionada: '', valorAberturaCaixa: '0',
     criandoCaixa: false, novoCaixaDescricao: '', criandoCaixaLoading: false,
@@ -2869,6 +2884,7 @@ function pdv() {
           delivery: this.venda.delivery,
           endereco_entrega: this.venda.endereco_entrega,
           credito_valor: this.creditoAplicado || 0,
+          data_venda: (this.usuarioEhAdmin && this.dataVendaRetroativa) ? this.dataVendaRetroativa : null,
         };
         payload.forcar_estoque_negativo = true;
         const r = await fetch('/pdv/api/venda/finalizar/',{method:'POST',headers:{'Content-Type':'application/json','X-CSRFToken':csrf()},body:JSON.stringify(payload)});
@@ -2911,6 +2927,7 @@ function pdv() {
           delivery: this.venda.delivery,
           endereco_entrega: this.venda.endereco_entrega,
           credito_valor: this.creditoAplicado || 0,
+          data_venda: (this.usuarioEhAdmin && this.dataVendaRetroativa) ? this.dataVendaRetroativa : null,
         };
         // Endpoint dedicado que sempre ignora verificação de estoque
         const r = await fetch('/pdv/api/venda/finalizar/forcado/', {
@@ -3497,6 +3514,7 @@ ${pgtoHtml ? `<hr class="sep">${pgtoHtml}` : ''}
         itens:[],pagamentos:[],subtotal:0,desconto:0,acrescimo:0,total:0,valor_pago:0,restante:0,delivery:false,endereco_entrega:{}};
       this.creditoDisponivel=0; this.creditoAplicado=0;
       this.buscaQuery=''; this.produtos=[]; this.formaPgtoSelecionada=null;
+      this.dataVendaRetroativa='';
       this.historicoCliente=[]; this.produtosFrequentes=[]; this.historicoClienteTotal=0; this.historicoClienteAberto=null;
       this.$nextTick(()=>document.getElementById('busca-produto')?.focus());
     },

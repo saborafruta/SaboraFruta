@@ -41,6 +41,7 @@ class VendaPDVService:
         endereco_entrega: dict | None = None,
         forcar_estoque_negativo: bool = True,
         credito_valor: Decimal = Decimal("0"),
+        data_venda=None,
     ) -> VendaPDV:
         if not sessao:
             raise DadosInvalidosError("Nenhuma sessao de caixa aberta.")
@@ -53,6 +54,10 @@ class VendaPDVService:
         desconto = cls._decimal(desconto, cls.MONEY)
         acrescimo = cls._decimal(acrescimo, cls.MONEY)
         numero = cls._proximo_numero_venda(filial)
+        # data_venda retroativa (lançamento de venda antiga) quando informada;
+        # caso contrário, carimba o momento atual. A validação de permissão
+        # (somente administrador) é feita na view.
+        data_venda_efetiva = data_venda or timezone.now()
         venda = VendaPDV.objects.create(
             sessao_pdv=sessao,
             filial=filial,
@@ -64,7 +69,7 @@ class VendaPDVService:
             valor_desconto=desconto,
             valor_acrescimo=acrescimo,
             usuario=usuario,
-            data_venda=timezone.now(),
+            data_venda=data_venda_efetiva,
         )
 
         subtotal = Decimal("0.00")
@@ -511,7 +516,8 @@ class VendaPDVService:
         if dias < 0:
             raise DadosInvalidosError("O prazo informado nao pode ser negativo.")
 
-        hoje = timezone.localdate()
+        # Emissão baseada na data da venda (respeita lançamento retroativo).
+        hoje = timezone.localtime(venda.data_venda).date() if venda.data_venda else timezone.localdate()
         vencimento = hoje + timedelta(days=dias)
         ContaReceber.objects.create(
             filial=filial,
