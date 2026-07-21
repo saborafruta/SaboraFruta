@@ -109,7 +109,16 @@ def buscar_produto(request):
     filial = request.filial_ativa
     qs = Produto.objects.for_filial(filial).filter(ativo=True)
     if q:
-        filtro = Q(descricao__icontains=q) | Q(codigo__icontains=q) | Q(codigo_barras__icontains=q)
+        # Casa pelo NOME QUE O VENDEDOR VE (descricao_pdv quando preenchido;
+        # senao descricao). Buscar sempre em `descricao` traria falsos
+        # positivos quando esse campo tem texto generico/poluido de
+        # importacao, exibindo produtos com nome diferente do buscado.
+        filtro = (
+            Q(descricao_pdv__icontains=q)
+            | (Q(descricao_pdv="") & Q(descricao__icontains=q))
+            | Q(codigo__icontains=q)
+            | Q(codigo_barras__icontains=q)
+        )
         if q.isdigit():
             filtro |= Q(pk=int(q))
         qs = qs.filter(filtro)
