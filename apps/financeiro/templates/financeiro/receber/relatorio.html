@@ -1,0 +1,156 @@
+{% extends "_base.html" %}
+{% load erp_extras %}
+
+{% block title %}{{ title }}{% endblock %}
+{% block page_title %}{{ title }}{% endblock %}
+
+{% block extra_head %}
+<style>
+  #relatorio-cr { color:#111827; }
+  #relatorio-cr .cli-card { border:1px solid #e5e7eb; border-radius:12px; overflow:hidden; break-inside:avoid; }
+  #relatorio-cr table { width:100%; border-collapse:collapse; font-size:13px; }
+  #relatorio-cr th, #relatorio-cr td { padding:6px 10px; }
+  @media print {
+    nav, header, aside, .no-print { display:none !important; }
+    body { background:#fff !important; }
+    #relatorio-cr { color:#000 !important; }
+    #relatorio-cr .cli-card { border-color:#ccc !important; box-shadow:none !important; }
+    * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="space-y-5" id="relatorio-cr">
+
+  <!-- Cabeçalho -->
+  <div class="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
+    <div>
+      <p class="text-sm mb-1 no-print" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+        <a href="{% url 'financeiro:receber_list' %}" :style="temaClaro ? 'color:#3b82f6;' : 'color:#60a5fa;'">Contas a Receber</a>
+        <span class="mx-1">›</span> Relatório
+      </p>
+      <h2 class="text-2xl font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">Relatório de Contas a Receber</h2>
+      <p class="text-sm mt-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+        {{ filial.nome_fantasia|default:filial.razao_social }} ·
+        Situação: <strong>{{ status_label }}</strong>
+        {% if q %} · Cliente/Doc.: <strong>{{ q }}</strong>{% endif %}
+        {% if data_ini or data_fim %} · Vencimento:
+          {% if data_ini %}{{ data_ini }}{% else %}…{% endif %} a {% if data_fim %}{{ data_fim }}{% else %}…{% endif %}
+        {% endif %}
+      </p>
+      <p class="text-xs mt-0.5" :style="temaClaro ? 'color:#94a3b8;' : 'color:#64748b;'">
+        Gerado em {{ gerado_em|date:"d/m/Y H:i" }} · {{ total_titulos }} título{{ total_titulos|pluralize }} · {{ clientes|length }} cliente{{ clientes|length|pluralize }}
+      </p>
+    </div>
+    <div class="flex gap-2 no-print">
+      <button type="button" onclick="window.print()" class="btn-primary flex items-center gap-2">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"/>
+        </svg>
+        Imprimir
+      </button>
+    </div>
+  </div>
+
+  <!-- Resumo geral -->
+  <div class="card p-4 grid grid-cols-2 sm:grid-cols-3 gap-4">
+    <div>
+      <p class="text-xs font-medium uppercase tracking-wide" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Saldo em aberto</p>
+      <p class="text-lg font-bold mt-0.5" :style="temaClaro ? 'color:#b45309;' : 'color:#fcd34d;'">R$ {{ total_geral_saldo|floatformat:2 }}</p>
+    </div>
+    <div>
+      <p class="text-xs font-medium uppercase tracking-wide" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Valor total dos títulos</p>
+      <p class="text-lg font-bold mt-0.5" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">R$ {{ total_geral_valor|floatformat:2 }}</p>
+    </div>
+    <div>
+      <p class="text-xs font-medium uppercase tracking-wide" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Clientes</p>
+      <p class="text-lg font-bold mt-0.5" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">{{ clientes|length }}</p>
+    </div>
+  </div>
+
+  <!-- Um bloco por cliente -->
+  {% for g in clientes %}
+  <div class="cli-card card p-0">
+    <div class="px-4 py-3 border-b flex flex-wrap items-center justify-between gap-2"
+         :style="temaClaro ? 'border-color:#e5e7eb; background:#f8fafc;' : 'border-color:#2a2a2e; background:#1e1e20;'">
+      <div>
+        <div class="font-semibold text-base" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">{{ g.cliente.razao_social }}</div>
+        {% if g.cliente.cpf_cnpj %}<div class="text-xs font-mono" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">{{ g.cliente.cpf_cnpj }}</div>{% endif %}
+      </div>
+      <div class="text-right text-sm">
+        <span :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Saldo em aberto:</span>
+        <strong :style="temaClaro ? 'color:#b45309;' : 'color:#fcd34d;'">R$ {{ g.total_saldo|floatformat:2 }}</strong>
+        <span class="mx-1">·</span>
+        <span :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">{{ g.titulos|length }} título{{ g.titulos|length|pluralize }}</span>
+      </div>
+    </div>
+
+    <div class="p-4 space-y-4">
+      {% for row in g.titulos %}
+      <div class="rounded-lg border" :style="temaClaro ? 'border-color:#eef2f7;' : 'border-color:#2a2a2e;'">
+        <!-- Cabeçalho do título -->
+        <div class="px-3 py-2 flex flex-wrap items-center justify-between gap-2 text-sm border-b"
+             :style="temaClaro ? 'border-color:#eef2f7;' : 'border-color:#2a2a2e;'">
+          <div>
+            <strong :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
+              {% if row.venda %}Venda #{{ row.venda.numero_venda }}{% elif row.titulo.documento_numero %}Doc. {{ row.titulo.documento_numero }}{% else %}Título #{{ row.titulo.pk }}{% endif %}
+            </strong>
+            <span :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+              · Parc. {{ row.titulo.parcela }}/{{ row.titulo.total_parcelas }}
+              · Venc. {{ row.titulo.data_vencimento|date:"d/m/Y" }}
+              {% if row.venda %} · {{ row.venda.data_venda|date:"d/m/Y" }}{% endif %}
+            </span>
+          </div>
+          <div class="text-right">
+            <span :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Saldo:</span>
+            <strong :style="temaClaro ? 'color:#b45309;' : 'color:#fcd34d;'">R$ {{ row.titulo.valor_saldo|floatformat:2 }}</strong>
+          </div>
+        </div>
+
+        <!-- Itens da venda -->
+        {% if row.itens %}
+        <table>
+          <thead>
+            <tr :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'" style="text-align:left; font-size:11px; text-transform:uppercase; letter-spacing:.04em;">
+              <th>Produto</th>
+              <th style="text-align:right; width:90px;">Qtd</th>
+              <th style="text-align:right; width:110px;">Vl. Unit.</th>
+              <th style="text-align:right; width:120px;">Total</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for it in row.itens %}
+            <tr :style="temaClaro ? 'border-top:1px solid #f1f5f9;' : 'border-top:1px solid #2a2a2e;'">
+              <td :style="temaClaro ? 'color:#111827;' : 'color:#e5e7eb;'">{{ it.produto }}</td>
+              <td style="text-align:right;" :style="temaClaro ? 'color:#374151;' : 'color:#cbd5e1;'">{{ it.quantidade|floatformat:3 }} {{ it.unidade }}</td>
+              <td style="text-align:right;" :style="temaClaro ? 'color:#374151;' : 'color:#cbd5e1;'">R$ {{ it.valor_unitario|floatformat:2 }}</td>
+              <td style="text-align:right; font-weight:600;" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">R$ {{ it.valor_total|floatformat:2 }}</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+          <tfoot>
+            <tr :style="temaClaro ? 'border-top:1px solid #e5e7eb;' : 'border-top:1px solid #2a2a2e;'">
+              <td colspan="3" style="text-align:right; font-weight:600;" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Total da venda</td>
+              <td style="text-align:right; font-weight:700;" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">R$ {{ row.venda.valor_total|floatformat:2 }}</td>
+            </tr>
+          </tfoot>
+        </table>
+        {% else %}
+        <div class="px-3 py-2 text-xs" :style="temaClaro ? 'color:#94a3b8;' : 'color:#64748b;'">
+          {% if row.titulo.documento_tipo == 'venda_pdv' %}Itens da venda não disponíveis.{% else %}Título avulso (sem venda vinculada).{% endif %}
+          {% if row.titulo.observacao %} — {{ row.titulo.observacao }}{% endif %}
+        </div>
+        {% endif %}
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+  {% empty %}
+  <div class="card p-8 text-center" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+    Nenhum título encontrado para os filtros selecionados.
+  </div>
+  {% endfor %}
+
+</div>
+{% endblock %}

@@ -2,12 +2,14 @@
 from __future__ import annotations
 
 from datetime import date
+from decimal import Decimal
 
 from django.contrib import messages
 from django.core.paginator import Paginator
 from django.db.models import Count, Q, Sum
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
+from django.utils import timezone
 from django.views import View
 
 from apps.core.services.exceptions import DomainError
@@ -138,6 +140,119 @@ class ContaReceberListView(PermissaoRequiredMixin, View):
             'pode_editar': pode_editar,
             'today': date.today(),
             **kpis,
+        })
+
+
+class ContaReceberRelatorioView(PermissaoRequiredMixin, View):
+    """Relatório imprimível: agrupa os títulos (por padrão em aberto) por
+    cliente e detalha as vendas e os itens comprados de cada título."""
+
+    permissao_modulo = 'financeiro'
+    permissao_acao = 'ver'
+
+    def get(self, request):
+        from apps.pdv.models import VendaPDV
+
+        filial = _filial(request)
+
+        status = request.GET.get('status', '')
+        q = request.GET.get('q', '').strip()
+        data_ini = request.GET.get('data_ini', '')
+        data_fim = request.GET.get('data_fim', '')
+
+        qs = (
+            ContaReceber.objects.for_filial(filial)
+            .select_related('cliente')
+            .order_by('cliente__razao_social', 'data_vencimento')
+        )
+        if status:
+            qs = qs.filter(status=status)
+        else:
+            # Sem status escolhido, o relatório foca nos títulos em aberto.
+            qs = qs.filter(status__in=[
+                StatusContaReceber.ABERTO,
+                StatusContaReceber.VENCIDO,
+                StatusContaReceber.NEGOCIADO,
+            ])
+        if q:
+            qs = qs.filter(
+                Q(cliente__razao_social__icontains=q)
+                | Q(documento_numero__icontains=q)
+            )
+        if data_ini:
+            qs = qs.filter(data_vencimento__gte=data_ini)
+        if data_fim:
+            qs = qs.filter(data_vencimento__lte=data_fim)
+
+        titulos = list(qs)
+
+        # Carrega as vendas PDV vinculadas (documento_tipo="venda_pdv") + itens.
+        venda_ids = [
+            t.documento_id for t in titulos
+            if t.documento_tipo == 'venda_pdv' and t.documento_id
+        ]
+        vendas = {}
+        if venda_ids:
+            vendas = {
+                v.pk: v for v in (
+                    VendaPDV.objects.filter(pk__in=venda_ids)
+                    .prefetch_related('itens__produto')
+                )
+            }
+
+        grupos: dict = {}
+        for t in titulos:
+            g = grupos.get(t.cliente_id)
+            if g is None:
+                g = {
+                    'cliente': t.cliente,
+                    'titulos': [],
+                    'total_saldo': Decimal('0'),
+                    'total_valor': Decimal('0'),
+                }
+                grupos[t.cliente_id] = g
+
+            venda = vendas.get(t.documento_id) if t.documento_tipo == 'venda_pdv' else None
+            itens = []
+            if venda:
+                for it in venda.itens.all():
+                    nome = '—'
+                    if it.produto_id:
+                        nome = it.produto.descricao_pdv or it.produto.descricao
+                    itens.append({
+                        'produto': nome,
+                        'quantidade': it.quantidade,
+                        'unidade': it.unidade_medida,
+                        'valor_unitario': it.valor_unitario,
+                        'valor_total': it.valor_total,
+                    })
+
+            g['titulos'].append({'titulo': t, 'venda': venda, 'itens': itens})
+            g['total_saldo'] += t.valor_saldo or Decimal('0')
+            g['total_valor'] += t.valor_final or Decimal('0')
+
+        clientes = sorted(
+            grupos.values(),
+            key=lambda x: (x['cliente'].razao_social or '').lower(),
+        )
+
+        total_geral_saldo = sum((g['total_saldo'] for g in clientes), Decimal('0'))
+        total_geral_valor = sum((g['total_valor'] for g in clientes), Decimal('0'))
+
+        status_label = dict(STATUS_CHOICES).get(status) if status else 'Em aberto'
+
+        return render(request, 'financeiro/receber/relatorio.html', {
+            'title': 'Relatório de Contas a Receber',
+            'clientes': clientes,
+            'filial': filial,
+            'q': q,
+            'status_label': status_label,
+            'data_ini': data_ini,
+            'data_fim': data_fim,
+            'total_geral_saldo': total_geral_saldo,
+            'total_geral_valor': total_geral_valor,
+            'total_titulos': len(titulos),
+            'gerado_em': timezone.localtime(),
         })
 
 
