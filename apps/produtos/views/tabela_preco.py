@@ -48,7 +48,7 @@ def _criar_itens_staged(request, tabela) -> int:
         produto_id = it.get('produto_id') or it.get('produto')
         if not produto_id:
             continue
-        produto = Produto.objects.filter(pk=produto_id, filial=request.filial_ativa).first()
+        produto = Produto.objects.for_filial(request.filial_ativa).filter(pk=produto_id).first()
         if not produto:
             continue
         qtd_min = _dec(it.get('quantidade_minima'), '0')
@@ -142,7 +142,8 @@ class TabelaPrecoUpdateView(PermissaoRequiredMixin, View):
         if q_produto:
             produtos_busca = (
                 Produto.objects
-                .filter(filial=request.filial_ativa, ativo=True)
+                .for_filial(request.filial_ativa)
+                .filter(ativo=True)
                 .filter(Q(descricao__icontains=q_produto) | Q(codigo__icontains=q_produto))
                 .exclude(pk__in=itens.values('produto_id').filter(quantidade_minima=0))
                 [:20]
@@ -206,7 +207,9 @@ class ItemTabelaPrecoCreateView(PermissaoRequiredMixin, View):
             messages.error(request, 'Produto e preço são obrigatórios.')
             return redirect('produtos:tabela-update', pk=tabela_pk)
 
-        produto = get_object_or_404(Produto, pk=produto_id, filial=request.filial_ativa)
+        produto = get_object_or_404(
+            Produto.objects.for_filial(request.filial_ativa), pk=produto_id,
+        )
         nome_prod = produto.descricao_pdv or produto.descricao
         item, criado = ItemTabelaPreco.objects.get_or_create(
             tabela=tabela,
@@ -254,7 +257,8 @@ class ProdutoSearchParaTabelaView(PermissaoRequiredMixin, View):
         if len(q) >= 2:
             produtos = (
                 Produto.objects
-                .filter(filial=request.filial_ativa, ativo=True)
+                .for_filial(request.filial_ativa)
+                .filter(ativo=True)
                 .filter(
                     Q(descricao__icontains=q) | Q(descricao_pdv__icontains=q)
                     | Q(codigo__icontains=q) | Q(codigo_barras__icontains=q)
@@ -284,7 +288,8 @@ class ProdutoSearchTabelaNovaView(PermissaoRequiredMixin, View):
         if len(q) >= 2:
             produtos = (
                 Produto.objects
-                .filter(filial=request.filial_ativa, ativo=True)
+                .for_filial(request.filial_ativa)
+                .filter(ativo=True)
                 .filter(
                     Q(descricao__icontains=q) | Q(descricao_pdv__icontains=q)
                     | Q(codigo__icontains=q) | Q(codigo_barras__icontains=q)
