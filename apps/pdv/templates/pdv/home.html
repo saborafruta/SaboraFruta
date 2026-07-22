@@ -1217,7 +1217,21 @@
       <!-- Rodapé -->
       <div style="flex-shrink:0;border-top:1px solid var(--pdv-bd2);">
 
-
+        <!-- Observação da venda -->
+        <div x-show="venda.itens.length>0" x-cloak style="padding:10px 16px;border-bottom:1px solid var(--pdv-bd2);">
+          <input type="text" x-model="venda.observacao" maxlength="500"
+                 placeholder="📝 Observação da venda (ex.: entregar após meio-dia)"
+                 style="width:100%;padding:9px 11px;background:var(--pdv-bg2,#0a0a12);border:1px solid var(--pdv-bd2);border-radius:8px;color:var(--pdv-t1,#e5e5f0);font-size:12.5px;font-family:inherit;">
+          <template x-if="usuarioEhAdmin">
+            <div style="display:flex;align-items:center;gap:8px;margin-top:8px;">
+              <span style="font-size:11px;color:#888;white-space:nowrap;">Data retroativa:</span>
+              <input type="date" x-model="dataVendaRetroativa" :max="hojeISO"
+                     style="flex:1;padding:7px 9px;background:var(--pdv-bg2,#0a0a12);border:1px solid var(--pdv-bd2);border-radius:8px;color:var(--pdv-t1,#e5e5f0);font-size:12px;font-family:inherit;">
+              <button type="button" x-show="dataVendaRetroativa" @click="dataVendaRetroativa=''"
+                      style="padding:7px 10px;background:#1e1e2a;border:none;border-radius:8px;color:#888;font-size:11px;cursor:pointer;">Hoje</button>
+            </div>
+          </template>
+        </div>
 
         <!-- Subtotal -->
         <div style="padding:10px 16px;border-bottom:1px solid var(--pdv-bd2);">
@@ -1846,22 +1860,16 @@
           <div style="display:flex;justify-content:space-between;font-size:13px;font-weight:700;margin-top:8px;color:#f59e0b;"><span>Troco</span><span x-text="'R$ '+fmt(trocoTotal)"></span></div>
         </template>
       </div>
-      <div style="margin-bottom:16px;">
-        <label style="display:block;font-size:11px;color:#888;margin-bottom:6px;">Observação da venda <span style="color:#555;">(opcional)</span></label>
-        <textarea x-model="venda.observacao" rows="2" maxlength="500"
-                  placeholder="Ex.: entregar após meio-dia"
-                  style="width:100%;padding:9px;background:#0a0a12;border:1px solid #1e1e30;border-radius:8px;color:#e5e5f0;font-size:13px;resize:vertical;font-family:inherit;"></textarea>
-      </div>
-      <template x-if="usuarioEhAdmin">
-        <div style="background:#0a0a12;border:1px solid #1e1e30;border-radius:10px;padding:12px;margin-bottom:16px;">
-          <label style="display:block;font-size:11px;color:#888;margin-bottom:6px;">Data da venda <span style="color:#555;">(retroativa — opcional)</span></label>
-          <div style="display:flex;gap:8px;">
-            <input type="date" x-model="dataVendaRetroativa" :max="hojeISO"
-                   style="flex:1;padding:8px;background:#13131e;border:1px solid #2a2a3e;border-radius:8px;color:#e5e5f0;font-size:13px;">
-            <button type="button" x-show="dataVendaRetroativa" @click="dataVendaRetroativa=''"
-                    style="padding:8px 10px;background:#1e1e2a;border:none;border-radius:8px;color:#888;font-size:12px;cursor:pointer;">Hoje</button>
-          </div>
-          <p x-show="dataVendaRetroativa" style="font-size:10px;color:#fbbf24;margin:6px 0 0;">A venda será lançada com a data escolhida (sem emissão de nota fiscal).</p>
+      <template x-if="venda.observacao && venda.observacao.trim()">
+        <div style="background:#0a0a12;border:1px solid #1e1e30;border-radius:10px;padding:10px 12px;margin-bottom:16px;">
+          <div style="font-size:11px;color:#888;margin-bottom:2px;">Observação</div>
+          <div style="font-size:13px;color:#e5e5f0;" x-text="venda.observacao"></div>
+        </div>
+      </template>
+      <template x-if="usuarioEhAdmin && dataVendaRetroativa">
+        <div style="background:#0a0a12;border:1px solid #1e1e30;border-radius:10px;padding:10px 12px;margin-bottom:16px;">
+          <div style="font-size:11px;color:#888;margin-bottom:2px;">Data da venda (retroativa)</div>
+          <div style="font-size:13px;color:#fbbf24;font-weight:600;" x-text="dataVendaRetroativa"></div>
         </div>
       </template>
       <div style="display:flex;gap:10px;">
