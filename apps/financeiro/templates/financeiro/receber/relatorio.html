@@ -8,8 +8,6 @@
 <style>
   #relatorio-cr { color:#111827; }
   #relatorio-cr .cli-card { border:1px solid #e5e7eb; border-radius:12px; overflow:hidden; break-inside:avoid; }
-  #relatorio-cr table { width:100%; border-collapse:collapse; font-size:13px; }
-  #relatorio-cr th, #relatorio-cr td { padding:6px 10px; }
   @media print {
     nav, header, aside, .no-print { display:none !important; }
     body { background:#fff !important; }
@@ -115,41 +113,6 @@
             <strong :style="temaClaro ? 'color:#b45309;' : 'color:#fcd34d;'">R$ {{ row.titulo.valor_saldo|floatformat:2 }}</strong>
           </div>
         </div>
-
-        <!-- Itens da venda -->
-        {% if row.itens %}
-        <table>
-          <thead>
-            <tr :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'" style="text-align:left; font-size:11px; text-transform:uppercase; letter-spacing:.04em;">
-              <th>Produto</th>
-              <th style="text-align:right; width:90px;">Qtd</th>
-              <th style="text-align:right; width:110px;">Vl. Unit.</th>
-              <th style="text-align:right; width:120px;">Total</th>
-            </tr>
-          </thead>
-          <tbody>
-            {% for it in row.itens %}
-            <tr :style="temaClaro ? 'border-top:1px solid #f1f5f9;' : 'border-top:1px solid #2a2a2e;'">
-              <td :style="temaClaro ? 'color:#111827;' : 'color:#e5e7eb;'">{{ it.produto }}</td>
-              <td style="text-align:right;" :style="temaClaro ? 'color:#374151;' : 'color:#cbd5e1;'">{{ it.quantidade|floatformat:3 }} {{ it.unidade }}</td>
-              <td style="text-align:right;" :style="temaClaro ? 'color:#374151;' : 'color:#cbd5e1;'">R$ {{ it.valor_unitario|floatformat:2 }}</td>
-              <td style="text-align:right; font-weight:600;" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">R$ {{ it.valor_total|floatformat:2 }}</td>
-            </tr>
-            {% endfor %}
-          </tbody>
-          <tfoot>
-            <tr :style="temaClaro ? 'border-top:1px solid #e5e7eb;' : 'border-top:1px solid #2a2a2e;'">
-              <td colspan="3" style="text-align:right; font-weight:600;" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Total da venda</td>
-              <td style="text-align:right; font-weight:700;" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">R$ {{ row.venda.valor_total|floatformat:2 }}</td>
-            </tr>
-          </tfoot>
-        </table>
-        {% else %}
-        <div class="px-3 py-2 text-xs" :style="temaClaro ? 'color:#94a3b8;' : 'color:#64748b;'">
-          {% if row.titulo.documento_tipo == 'venda_pdv' %}Itens da venda não disponíveis.{% else %}Título avulso (sem venda vinculada).{% endif %}
-          {% if row.titulo.observacao %} — {{ row.titulo.observacao }}{% endif %}
-        </div>
-        {% endif %}
       </div>
       {% endfor %}
     </div>

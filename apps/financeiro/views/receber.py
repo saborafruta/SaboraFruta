@@ -145,7 +145,7 @@ class ContaReceberListView(PermissaoRequiredMixin, View):
 
 class ContaReceberRelatorioView(PermissaoRequiredMixin, View):
     """Relatório imprimível: agrupa os títulos (por padrão em aberto) por
-    cliente e detalha as vendas e os itens comprados de cada título."""
+    cliente, com a venda vinculada de cada título."""
 
     permissao_modulo = 'financeiro'
     permissao_acao = 'ver'
@@ -186,7 +186,8 @@ class ContaReceberRelatorioView(PermissaoRequiredMixin, View):
 
         titulos = list(qs)
 
-        # Carrega as vendas PDV vinculadas (documento_tipo="venda_pdv") + itens.
+        # Carrega as vendas PDV vinculadas (documento_tipo="venda_pdv") só
+        # para exibir número/data da compra no cabeçalho de cada título.
         venda_ids = [
             t.documento_id for t in titulos
             if t.documento_tipo == 'venda_pdv' and t.documento_id
@@ -194,10 +195,7 @@ class ContaReceberRelatorioView(PermissaoRequiredMixin, View):
         vendas = {}
         if venda_ids:
             vendas = {
-                v.pk: v for v in (
-                    VendaPDV.objects.filter(pk__in=venda_ids)
-                    .prefetch_related('itens__produto')
-                )
+                v.pk: v for v in VendaPDV.objects.filter(pk__in=venda_ids)
             }
 
         grupos: dict = {}
@@ -213,21 +211,7 @@ class ContaReceberRelatorioView(PermissaoRequiredMixin, View):
                 grupos[t.cliente_id] = g
 
             venda = vendas.get(t.documento_id) if t.documento_tipo == 'venda_pdv' else None
-            itens = []
-            if venda:
-                for it in venda.itens.all():
-                    nome = '—'
-                    if it.produto_id:
-                        nome = it.produto.descricao_pdv or it.produto.descricao
-                    itens.append({
-                        'produto': nome,
-                        'quantidade': it.quantidade,
-                        'unidade': it.unidade_medida,
-                        'valor_unitario': it.valor_unitario,
-                        'valor_total': it.valor_total,
-                    })
-
-            g['titulos'].append({'titulo': t, 'venda': venda, 'itens': itens})
+            g['titulos'].append({'titulo': t, 'venda': venda})
             g['total_saldo'] += t.valor_saldo or Decimal('0')
             g['total_valor'] += t.valor_final or Decimal('0')
 
