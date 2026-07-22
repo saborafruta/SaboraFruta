@@ -80,6 +80,10 @@ class ItemTabelaPreco(TimestampedModel):
     produto = models.ForeignKey(Produto, on_delete=models.CASCADE, related_name='precos_tabela')
     preco_unitario = models.DecimalField(max_digits=14, decimal_places=4)
     desconto_maximo = models.DecimalField(max_digits=5, decimal_places=2, default=0)
+    desconto_valor = models.DecimalField(
+        max_digits=14, decimal_places=2, default=0,
+        help_text='Desconto máximo em R$ (valor), alternativo ao percentual.',
+    )
     quantidade_minima = models.DecimalField(
         max_digits=12, decimal_places=3, default=0,
         help_text='Preço escalonado: a partir de X unidades',

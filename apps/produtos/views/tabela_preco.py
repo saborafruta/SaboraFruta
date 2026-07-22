@@ -59,6 +59,7 @@ def _criar_itens_staged(request, tabela) -> int:
             defaults={
                 'preco_unitario': _dec(it.get('preco_unitario'), '0'),
                 'desconto_maximo': _dec(it.get('desconto_maximo'), '0'),
+                'desconto_valor': _dec(it.get('desconto_valor'), '0'),
             },
         )
         if criado:
@@ -135,14 +136,14 @@ class TabelaPrecoUpdateView(PermissaoRequiredMixin, View):
     template_name = 'produtos/tabela_preco/form.html'
 
     def _get_context(self, request, obj):
-        itens = obj.itens.select_related('produto').order_by('produto__nome', 'quantidade_minima')
+        itens = obj.itens.select_related('produto').order_by('produto__descricao', 'quantidade_minima')
         q_produto = request.GET.get('q_produto', '').strip()
         produtos_busca = []
         if q_produto:
             produtos_busca = (
                 Produto.objects
                 .filter(filial=request.filial_ativa, ativo=True)
-                .filter(Q(nome__icontains=q_produto) | Q(codigo__icontains=q_produto))
+                .filter(Q(descricao__icontains=q_produto) | Q(codigo__icontains=q_produto))
                 .exclude(pk__in=itens.values('produto_id').filter(quantidade_minima=0))
                 [:20]
             )
@@ -197,14 +198,16 @@ class ItemTabelaPrecoCreateView(PermissaoRequiredMixin, View):
         tabela = get_object_or_404(TabelaPreco.objects.for_filial(request.filial_ativa), pk=tabela_pk)
         produto_id = request.POST.get('produto')
         preco_unitario = request.POST.get('preco_unitario')
-        desconto_maximo = request.POST.get('desconto_maximo', 0)
-        quantidade_minima = request.POST.get('quantidade_minima', 0)
+        desconto_maximo = request.POST.get('desconto_maximo') or 0
+        desconto_valor = request.POST.get('desconto_valor') or 0
+        quantidade_minima = request.POST.get('quantidade_minima') or 0
 
         if not produto_id or not preco_unitario:
             messages.error(request, 'Produto e preço são obrigatórios.')
             return redirect('produtos:tabela-update', pk=tabela_pk)
 
         produto = get_object_or_404(Produto, pk=produto_id, filial=request.filial_ativa)
+        nome_prod = produto.descricao_pdv or produto.descricao
         item, criado = ItemTabelaPreco.objects.get_or_create(
             tabela=tabela,
             produto=produto,
@@ -212,15 +215,17 @@ class ItemTabelaPrecoCreateView(PermissaoRequiredMixin, View):
             defaults={
                 'preco_unitario': preco_unitario,
                 'desconto_maximo': desconto_maximo,
+                'desconto_valor': desconto_valor,
             }
         )
         if not criado:
             item.preco_unitario = preco_unitario
             item.desconto_maximo = desconto_maximo
-            item.save(update_fields=['preco_unitario', 'desconto_maximo'])
-            messages.success(request, f'Preço de "{produto.nome}" atualizado.')
+            item.desconto_valor = desconto_valor
+            item.save(update_fields=['preco_unitario', 'desconto_maximo', 'desconto_valor'])
+            messages.success(request, f'Preço de "{nome_prod}" atualizado.')
         else:
-            messages.success(request, f'"{produto.nome}" adicionado à tabela.')
+            messages.success(request, f'"{nome_prod}" adicionado à tabela.')
         return redirect('produtos:tabela-update', pk=tabela_pk)
 
 
@@ -232,7 +237,7 @@ class ItemTabelaPrecoDeleteView(PermissaoRequiredMixin, View):
     def post(self, request, tabela_pk, item_pk):
         tabela = get_object_or_404(TabelaPreco.objects.for_filial(request.filial_ativa), pk=tabela_pk)
         item = get_object_or_404(ItemTabelaPreco, pk=item_pk, tabela=tabela)
-        nome = item.produto.nome
+        nome = item.produto.descricao_pdv or item.produto.descricao
         item.delete()
         messages.success(request, f'"{nome}" removido da tabela.')
         return redirect('produtos:tabela-update', pk=tabela_pk)
@@ -250,14 +255,17 @@ class ProdutoSearchParaTabelaView(PermissaoRequiredMixin, View):
             produtos = (
                 Produto.objects
                 .filter(filial=request.filial_ativa, ativo=True)
-                .filter(Q(nome__icontains=q) | Q(codigo__icontains=q))
+                .filter(
+                    Q(descricao__icontains=q) | Q(descricao_pdv__icontains=q)
+                    | Q(codigo__icontains=q) | Q(codigo_barras__icontains=q)
+                )
                 [:15]
             )
             for p in produtos:
                 item_existente = ItemTabelaPreco.objects.filter(tabela=tabela, produto=p, quantidade_minima=0).first()
                 resultados.append({
                     'id': p.pk,
-                    'nome': p.nome,
+                    'nome': p.descricao_pdv or p.descricao,
                     'codigo': p.codigo or '',
                     'preco_atual': str(item_existente.preco_unitario) if item_existente else '',
                     'ja_na_tabela': item_existente is not None,
@@ -277,13 +285,16 @@ class ProdutoSearchTabelaNovaView(PermissaoRequiredMixin, View):
             produtos = (
                 Produto.objects
                 .filter(filial=request.filial_ativa, ativo=True)
-                .filter(Q(nome__icontains=q) | Q(codigo__icontains=q))
+                .filter(
+                    Q(descricao__icontains=q) | Q(descricao_pdv__icontains=q)
+                    | Q(codigo__icontains=q) | Q(codigo_barras__icontains=q)
+                )
                 [:15]
             )
             for p in produtos:
                 resultados.append({
                     'id': p.pk,
-                    'nome': p.nome,
+                    'nome': p.descricao_pdv or p.descricao,
                     'codigo': p.codigo or '',
                     'preco_atual': str(p.preco_venda or ''),
                     'ja_na_tabela': False,

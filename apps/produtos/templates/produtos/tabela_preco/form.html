@@ -164,6 +164,7 @@ html.tema-escuro body { background: var(--tp-bg) !important; }
   produtoSel: null,
   preco: '',
   desconto: '0',
+  descValor: '0',
   qtdMin: '0',
   staged: [],
   searchUrl: '{% if tabela %}{% url 'produtos:tabela-produto-search' tabela.pk %}{% else %}{% url 'produtos:tabela-nova-produto-search' %}{% endif %}',
@@ -192,12 +193,13 @@ html.tema-escuro body { background: var(--tp-bg) !important; }
       codigo: this.produtoSel.codigo || '',
       preco_unitario: this.preco,
       desconto_maximo: this.desconto || '0',
+      desconto_valor: this.descValor || '0',
       quantidade_minima: this.qtdMin || '0',
     });
     this.limpar();
   },
   removerStaged(idx) { this.staged.splice(idx, 1); },
-  limpar() { this.produtoSel = null; this.busca = ''; this.preco = ''; this.desconto = '0'; this.qtdMin = '0'; }
+  limpar() { this.produtoSel = null; this.busca = ''; this.preco = ''; this.desconto = '0'; this.descValor = '0'; this.qtdMin = '0'; }
 }">
 
   <div class="tp-form-body">
@@ -466,13 +468,23 @@ html.tema-escuro body { background: var(--tp-bg) !important; }
                      placeholder="0,0000">
             </div>
 
-            <!-- Desconto máx -->
+            <!-- Desconto máx % -->
             <div class="tp-field">
               <label>Desconto máximo %</label>
               <input type="number" name="desconto_maximo"
                      x-model="desconto"
                      step="0.01" min="0" max="100"
                      placeholder="0">
+            </div>
+
+            <!-- Desconto máx R$ -->
+            <div class="tp-field">
+              <label>Desconto máximo R$</label>
+              <input type="number" name="desconto_valor"
+                     x-model="descValor"
+                     step="0.01" min="0"
+                     placeholder="0,00">
+              <span class="tp-help">Desconto em valor (opcional)</span>
             </div>
 
             <!-- Qtd mínima -->
@@ -517,6 +529,7 @@ html.tema-escuro body { background: var(--tp-bg) !important; }
                   <th>Código</th>
                   <th style="text-align:right;">Preço unit.</th>
                   <th style="text-align:center;">Desc. máx %</th>
+                  <th style="text-align:center;">Desc. R$</th>
                   <th style="text-align:center;">Qtd mínima</th>
                   <th style="text-align:right;">Ação</th>
                 </tr>
@@ -524,7 +537,7 @@ html.tema-escuro body { background: var(--tp-bg) !important; }
               <tbody>
                 {% for item in itens %}
                 <tr>
-                  <td style="font-weight:600;">{{ item.produto.nome }}</td>
+                  <td style="font-weight:600;">{{ item.produto.descricao_pdv|default:item.produto.descricao }}</td>
                   <td style="font-family:monospace; font-size:12px; color:var(--tp-muted);">{{ item.produto.codigo|default:"—" }}</td>
                   <td style="text-align:right; font-family:monospace; font-weight:700;">
                     R$ {{ item.preco_unitario|floatformat:4 }}
@@ -536,12 +549,19 @@ html.tema-escuro body { background: var(--tp-bg) !important; }
                       <span style="color:var(--tp-muted);">—</span>
                     {% endif %}
                   </td>
+                  <td style="text-align:center;">
+                    {% if item.desconto_valor > 0 %}
+                      <span style="color:#10b981; font-weight:700;">R$ {{ item.desconto_valor|floatformat:2 }}</span>
+                    {% else %}
+                      <span style="color:var(--tp-muted);">—</span>
+                    {% endif %}
+                  </td>
                   <td style="text-align:center; color:var(--tp-muted);">
                     {% if item.quantidade_minima > 0 %}{{ item.quantidade_minima|floatformat:0 }}{% else %}—{% endif %}
                   </td>
                   <td style="text-align:right;">
                     <form method="post" action="{% url 'produtos:tabela-item-delete' tabela.pk item.pk %}"
-                          onsubmit="return confirm('Remover {{ item.produto.nome }} desta tabela?')">
+                          onsubmit="return confirm('Remover {{ item.produto.descricao_pdv|default:item.produto.descricao }} desta tabela?')">
                       {% csrf_token %}
                       <button type="submit" class="tp-btn-remove" title="Remover produto">
                         <svg width="15" height="15" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -620,10 +640,17 @@ html.tema-escuro body { background: var(--tp-bg) !important; }
             <span class="tp-help">Valor do produto nesta tabela</span>
           </div>
 
-          <!-- Desconto máx -->
+          <!-- Desconto máx % -->
           <div class="tp-field">
             <label>Desconto máximo %</label>
             <input type="number" x-model="desconto" step="0.01" min="0" max="100" placeholder="0">
+          </div>
+
+          <!-- Desconto máx R$ -->
+          <div class="tp-field">
+            <label>Desconto máximo R$</label>
+            <input type="number" x-model="descValor" step="0.01" min="0" placeholder="0,00">
+            <span class="tp-help">Desconto em valor (opcional)</span>
           </div>
 
           <!-- Qtd mínima -->
@@ -659,6 +686,7 @@ html.tema-escuro body { background: var(--tp-bg) !important; }
                   <th>Código</th>
                   <th style="text-align:right;">Preço unit.</th>
                   <th style="text-align:center;">Desc. máx %</th>
+                  <th style="text-align:center;">Desc. R$</th>
                   <th style="text-align:center;">Qtd mínima</th>
                   <th style="text-align:right;">Ação</th>
                 </tr>
@@ -670,6 +698,7 @@ html.tema-escuro body { background: var(--tp-bg) !important; }
                     <td style="font-family:monospace; font-size:12px; color:var(--tp-muted);" x-text="it.codigo || '—'"></td>
                     <td style="text-align:right; font-family:monospace; font-weight:700;" x-text="'R$ ' + it.preco_unitario"></td>
                     <td style="text-align:center;" x-text="(Number(it.desconto_maximo)>0 ? it.desconto_maximo + '%' : '—')"></td>
+                    <td style="text-align:center;" x-text="(Number(it.desconto_valor)>0 ? 'R$ ' + it.desconto_valor : '—')"></td>
                     <td style="text-align:center; color:var(--tp-muted);" x-text="(Number(it.quantidade_minima)>0 ? it.quantidade_minima : '—')"></td>
                     <td style="text-align:right;">
                       <button type="button" @click="removerStaged(idx)" class="tp-btn-remove" title="Remover">
