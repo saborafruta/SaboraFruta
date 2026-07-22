@@ -165,15 +165,15 @@ html.tema-escuro body { background: var(--tp-bg) !important; }
   preco: '',
   desconto: '0',
   qtdMin: '0',
+  staged: [],
+  searchUrl: '{% if tabela %}{% url 'produtos:tabela-produto-search' tabela.pk %}{% else %}{% url 'produtos:tabela-nova-produto-search' %}{% endif %}',
   buscarProdutos() {
     if (this.busca.length < 2) { this.resultado = []; return; }
     this.carregando = true;
-    {% if tabela %}
-    fetch('{% url 'produtos:tabela-produto-search' tabela.pk %}?q=' + encodeURIComponent(this.busca))
+    fetch(this.searchUrl + '?q=' + encodeURIComponent(this.busca))
       .then(r => r.json())
       .then(d => { this.resultado = d.resultados; this.carregando = false; })
       .catch(() => { this.carregando = false; });
-    {% endif %}
   },
   selecionarProduto(p) {
     this.produtoSel = p;
@@ -181,6 +181,22 @@ html.tema-escuro body { background: var(--tp-bg) !important; }
     this.preco = p.preco_atual || '';
     this.resultado = [];
   },
+  adicionarStaged() {
+    if (!this.produtoSel || !this.preco) return;
+    if (this.staged.some(i => i.produto_id === this.produtoSel.id && String(i.quantidade_minima) === String(this.qtdMin||'0'))) {
+      this.limpar(); return;
+    }
+    this.staged.push({
+      produto_id: this.produtoSel.id,
+      nome: this.produtoSel.nome,
+      codigo: this.produtoSel.codigo || '',
+      preco_unitario: this.preco,
+      desconto_maximo: this.desconto || '0',
+      quantidade_minima: this.qtdMin || '0',
+    });
+    this.limpar();
+  },
+  removerStaged(idx) { this.staged.splice(idx, 1); },
   limpar() { this.produtoSel = null; this.busca = ''; this.preco = ''; this.desconto = '0'; this.qtdMin = '0'; }
 }">
 
@@ -365,6 +381,11 @@ html.tema-escuro body { background: var(--tp-bg) !important; }
           </div>
         </div>
       </div>
+
+      {% if not tabela %}
+      <!-- Produtos adicionados no cadastro (enviados junto ao criar) -->
+      <input type="hidden" name="itens_json" :value="JSON.stringify(staged)">
+      {% endif %}
 
       <!-- ── Botões ── -->
       <div class="tp-form-actions">
@@ -551,17 +572,121 @@ html.tema-escuro body { background: var(--tp-bg) !important; }
     </div>
 
     {% else %}
-    <!-- Info antes de criar -->
-    <div style="border:1px solid var(--tp-border); border-radius:14px; padding:18px 20px; background:var(--tp-panel);">
-      <p style="font-size:13px; font-weight:700; color:var(--tp-muted); margin-bottom:8px;">
-        💡 Após criar a tabela você poderá:
-      </p>
-      <ul style="font-size:13px; color:var(--tp-muted); list-style:disc; padding-left:18px; line-height:1.8;">
-        <li>Adicionar produtos com preços específicos por tabela</li>
-        <li>Definir desconto máximo por produto individualmente</li>
-        <li>Configurar preço escalonado por quantidade mínima</li>
-        <li>Ativar/desativar sem perder os dados</li>
-      </ul>
+    <!-- ── Card: Produtos da Tabela (modo criação — staging) ── -->
+    <div class="tp-section">
+      <div class="tp-section-head" style="cursor:default;">
+        <div class="tp-section-head-left">
+          <div class="tp-dot"></div>
+          <span class="tp-section-title">Produtos da Tabela</span>
+          <span class="tp-badge" style="background:var(--tp-primary-soft); color:var(--tp-primary); border:1px solid var(--tp-primary-border);">
+            <span x-text="staged.length"></span> produto(s)
+          </span>
+        </div>
+      </div>
+      <div class="tp-section-body open">
+
+        <p style="font-size:13px; font-weight:700; color:var(--tp-muted); margin-bottom:6px; text-transform:uppercase; letter-spacing:.05em;">Adicionar produto</p>
+        <p style="font-size:12px; color:var(--tp-muted); margin-bottom:14px;">Busque um produto, defina o preço (valor que pode alterar) e adicione. Todos serão salvos junto com a tabela.</p>
+
+        <div class="tp-grid tp-g3" style="margin-bottom:12px;">
+
+          <!-- Busca produto -->
+          <div class="tp-field tp-span3" style="position:relative;">
+            <label>Produto <span class="req">*</span></label>
+            <input type="text"
+                   x-model="busca"
+                   @input.debounce.300="buscarProdutos()"
+                   @keydown.escape="resultado = []"
+                   placeholder="Digite o nome ou código do produto..."
+                   autocomplete="off">
+            <div class="tp-produto-dropdown" x-show="resultado.length > 0 || carregando" x-cloak>
+              <div x-show="carregando" style="padding:10px 14px; font-size:12px; color:var(--tp-muted); text-align:center;">Buscando...</div>
+              <template x-for="p in resultado" :key="p.id">
+                <div class="tp-produto-item" @click="selecionarProduto(p)">
+                  <div>
+                    <span x-text="p.nome" style="font-weight:600;"></span>
+                    <span x-show="p.codigo" x-text="' · ' + p.codigo" style="font-size:12px; color:var(--tp-muted);"></span>
+                  </div>
+                  <span x-show="p.preco_atual" x-text="'R$ ' + p.preco_atual" style="font-size:12px; font-family:monospace; color:var(--tp-muted);"></span>
+                </div>
+              </template>
+            </div>
+          </div>
+
+          <!-- Preço unitário (valor que pode alterar) -->
+          <div class="tp-field">
+            <label>Preço unitário <span class="req">*</span></label>
+            <input type="number" x-model="preco" step="0.0001" min="0" placeholder="0,0000">
+            <span class="tp-help">Valor do produto nesta tabela</span>
+          </div>
+
+          <!-- Desconto máx -->
+          <div class="tp-field">
+            <label>Desconto máximo %</label>
+            <input type="number" x-model="desconto" step="0.01" min="0" max="100" placeholder="0">
+          </div>
+
+          <!-- Qtd mínima -->
+          <div class="tp-field">
+            <label>Qtd mínima (escalonado)</label>
+            <input type="number" x-model="qtdMin" step="0.001" min="0" placeholder="0">
+            <span class="tp-help">0 = sem quantidade mínima</span>
+          </div>
+
+        </div>
+
+        <div style="display:flex; gap:10px;">
+          <button type="button" @click="adicionarStaged()" :disabled="!produtoSel || !preco"
+                  class="tp-btn-save" style="font-size:13px; padding:9px 18px;">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
+            </svg>
+            Adicionar produto
+          </button>
+          <button type="button" @click="limpar()" class="tp-btn-cancel" style="font-size:13px; padding:9px 16px;">Limpar</button>
+        </div>
+
+        <!-- Lista de produtos adicionados -->
+        <div x-show="staged.length > 0" x-cloak style="margin-top:24px; border-top:1px solid var(--tp-border); padding-top:20px;">
+          <p style="font-size:13px; font-weight:700; color:var(--tp-muted); margin-bottom:14px; text-transform:uppercase; letter-spacing:.05em;">
+            Produtos a incluir (<span x-text="staged.length"></span>)
+          </p>
+          <div style="border-radius:10px; border:1px solid var(--tp-border); overflow:hidden;">
+            <table class="tp-itens-table">
+              <thead>
+                <tr>
+                  <th>Produto</th>
+                  <th>Código</th>
+                  <th style="text-align:right;">Preço unit.</th>
+                  <th style="text-align:center;">Desc. máx %</th>
+                  <th style="text-align:center;">Qtd mínima</th>
+                  <th style="text-align:right;">Ação</th>
+                </tr>
+              </thead>
+              <tbody>
+                <template x-for="(it, idx) in staged" :key="idx">
+                  <tr>
+                    <td style="font-weight:600;" x-text="it.nome"></td>
+                    <td style="font-family:monospace; font-size:12px; color:var(--tp-muted);" x-text="it.codigo || '—'"></td>
+                    <td style="text-align:right; font-family:monospace; font-weight:700;" x-text="'R$ ' + it.preco_unitario"></td>
+                    <td style="text-align:center;" x-text="(Number(it.desconto_maximo)>0 ? it.desconto_maximo + '%' : '—')"></td>
+                    <td style="text-align:center; color:var(--tp-muted);" x-text="(Number(it.quantidade_minima)>0 ? it.quantidade_minima : '—')"></td>
+                    <td style="text-align:right;">
+                      <button type="button" @click="removerStaged(idx)" class="tp-btn-remove" title="Remover">
+                        <svg width="15" height="15" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
+                        </svg>
+                      </button>
+                    </td>
+                  </tr>
+                </template>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+      </div>
     </div>
     {% endif %}
 

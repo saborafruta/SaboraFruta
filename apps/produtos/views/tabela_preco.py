@@ -17,6 +17,55 @@ from apps.produtos.models.tabela_preco import ItemTabelaPreco
 from apps.produtos.services.replicacao_service import ReplicacaoProdutoService
 
 
+def _criar_itens_staged(request, tabela) -> int:
+    """
+    Cria os itens (produtos) enviados pela tela de criação da tabela via
+    campo oculto ``itens_json`` (lista de {produto_id, preco_unitario,
+    desconto_maximo, quantidade_minima}). Retorna quantos foram criados.
+    """
+    raw = request.POST.get('itens_json', '').strip()
+    if not raw:
+        return 0
+    try:
+        itens = json.loads(raw)
+    except (ValueError, TypeError):
+        return 0
+    if not isinstance(itens, list):
+        return 0
+
+    from decimal import Decimal, InvalidOperation
+
+    def _dec(v, default='0'):
+        try:
+            return Decimal(str(v if v not in (None, '') else default))
+        except (InvalidOperation, ValueError, TypeError):
+            return Decimal(default)
+
+    criados = 0
+    for it in itens:
+        if not isinstance(it, dict):
+            continue
+        produto_id = it.get('produto_id') or it.get('produto')
+        if not produto_id:
+            continue
+        produto = Produto.objects.filter(pk=produto_id, filial=request.filial_ativa).first()
+        if not produto:
+            continue
+        qtd_min = _dec(it.get('quantidade_minima'), '0')
+        _, criado = ItemTabelaPreco.objects.get_or_create(
+            tabela=tabela,
+            produto=produto,
+            quantidade_minima=qtd_min,
+            defaults={
+                'preco_unitario': _dec(it.get('preco_unitario'), '0'),
+                'desconto_maximo': _dec(it.get('desconto_maximo'), '0'),
+            },
+        )
+        if criado:
+            criados += 1
+    return criados
+
+
 class TabelaPrecoListView(PermissaoRequiredMixin, View):
     permissao_modulo = 'produtos'
     template_name = 'produtos/tabela_preco/list.html'
@@ -67,7 +116,11 @@ class TabelaPrecoCreateView(PermissaoRequiredMixin, View):
             obj.save()
             ReplicacaoProdutoService._vincular_tabela_preco(obj, obj.filial)
             ReplicacaoProdutoService.sincronizar_tabela_preco(obj)
-            messages.success(request, 'Tabela de preço criada com sucesso.')
+            n_itens = _criar_itens_staged(request, obj)
+            if n_itens:
+                messages.success(request, f'Tabela criada com {n_itens} produto(s).')
+            else:
+                messages.success(request, 'Tabela de preço criada com sucesso.')
             return redirect('produtos:tabela-update', pk=obj.pk)
         return render(request, self.template_name, {
             'form': form,
@@ -208,5 +261,31 @@ class ProdutoSearchParaTabelaView(PermissaoRequiredMixin, View):
                     'codigo': p.codigo or '',
                     'preco_atual': str(item_existente.preco_unitario) if item_existente else '',
                     'ja_na_tabela': item_existente is not None,
+                })
+        return JsonResponse({'resultados': resultados})
+
+
+class ProdutoSearchTabelaNovaView(PermissaoRequiredMixin, View):
+    """Busca AJAX de produtos para a tela de CRIAÇÃO da tabela (sem tabela
+    existente ainda). Sugere o preço de venda do produto como valor inicial."""
+    permissao_modulo = 'produtos'
+
+    def get(self, request):
+        q = request.GET.get('q', '').strip()
+        resultados = []
+        if len(q) >= 2:
+            produtos = (
+                Produto.objects
+                .filter(filial=request.filial_ativa, ativo=True)
+                .filter(Q(nome__icontains=q) | Q(codigo__icontains=q))
+                [:15]
+            )
+            for p in produtos:
+                resultados.append({
+                    'id': p.pk,
+                    'nome': p.nome,
+                    'codigo': p.codigo or '',
+                    'preco_atual': str(p.preco_venda or ''),
+                    'ja_na_tabela': False,
                 })
         return JsonResponse({'resultados': resultados})
