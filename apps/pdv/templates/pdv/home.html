@@ -1846,6 +1846,12 @@
           <div style="display:flex;justify-content:space-between;font-size:13px;font-weight:700;margin-top:8px;color:#f59e0b;"><span>Troco</span><span x-text="'R$ '+fmt(trocoTotal)"></span></div>
         </template>
       </div>
+      <div style="margin-bottom:16px;">
+        <label style="display:block;font-size:11px;color:#888;margin-bottom:6px;">Observação da venda <span style="color:#555;">(opcional)</span></label>
+        <textarea x-model="venda.observacao" rows="2" maxlength="500"
+                  placeholder="Ex.: entregar após meio-dia"
+                  style="width:100%;padding:9px;background:#0a0a12;border:1px solid #1e1e30;border-radius:8px;color:#e5e5f0;font-size:13px;resize:vertical;font-family:inherit;"></textarea>
+      </div>
       <template x-if="usuarioEhAdmin">
         <div style="background:#0a0a12;border:1px solid #1e1e30;border-radius:10px;padding:12px;margin-bottom:16px;">
           <label style="display:block;font-size:11px;color:#888;margin-bottom:6px;">Data da venda <span style="color:#555;">(retroativa — opcional)</span></label>
@@ -2550,6 +2556,7 @@ function pdv() {
       subtotal: 0, desconto: 0, acrescimo: 0,
       total: 0, valor_pago: 0, restante: 0,
       delivery: false, endereco_entrega: {},
+      observacao: '',
     },
 
     produtos: [], topProdutos: [], buscaQuery: '', buscandoProdutos: false, produtoFoco: -1,
@@ -2885,6 +2892,7 @@ function pdv() {
           endereco_entrega: this.venda.endereco_entrega,
           credito_valor: this.creditoAplicado || 0,
           data_venda: (this.usuarioEhAdmin && this.dataVendaRetroativa) ? this.dataVendaRetroativa : null,
+          observacao: this.venda.observacao || '',
         };
         payload.forcar_estoque_negativo = true;
         const r = await fetch('/pdv/api/venda/finalizar/',{method:'POST',headers:{'Content-Type':'application/json','X-CSRFToken':csrf()},body:JSON.stringify(payload)});
@@ -2928,6 +2936,7 @@ function pdv() {
           endereco_entrega: this.venda.endereco_entrega,
           credito_valor: this.creditoAplicado || 0,
           data_venda: (this.usuarioEhAdmin && this.dataVendaRetroativa) ? this.dataVendaRetroativa : null,
+          observacao: this.venda.observacao || '',
         };
         // Endpoint dedicado que sempre ignora verificação de estoque
         const r = await fetch('/pdv/api/venda/finalizar/forcado/', {
@@ -3511,7 +3520,7 @@ ${pgtoHtml ? `<hr class="sep">${pgtoHtml}` : ''}
 
     novaVenda() {
       this.venda={id:null,numero:null,cliente:{id:null,nome:'Consumidor Final',cpf_cnpj:''},
-        itens:[],pagamentos:[],subtotal:0,desconto:0,acrescimo:0,total:0,valor_pago:0,restante:0,delivery:false,endereco_entrega:{}};
+        itens:[],pagamentos:[],subtotal:0,desconto:0,acrescimo:0,total:0,valor_pago:0,restante:0,delivery:false,endereco_entrega:{},observacao:''};
       this.creditoDisponivel=0; this.creditoAplicado=0;
       this.buscaQuery=''; this.produtos=[]; this.formaPgtoSelecionada=null;
       this.dataVendaRetroativa='';

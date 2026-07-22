@@ -42,6 +42,7 @@ class VendaPDVService:
         forcar_estoque_negativo: bool = True,
         credito_valor: Decimal = Decimal("0"),
         data_venda=None,
+        observacao: str = "",
     ) -> VendaPDV:
         if not sessao:
             raise DadosInvalidosError("Nenhuma sessao de caixa aberta.")
@@ -70,6 +71,7 @@ class VendaPDVService:
             valor_acrescimo=acrescimo,
             usuario=usuario,
             data_venda=data_venda_efetiva,
+            observacao=(observacao or "").strip(),
         )
 
         subtotal = Decimal("0.00")

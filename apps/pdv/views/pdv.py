@@ -611,6 +611,7 @@ def api_venda_finalizar(request):
             forcar_estoque_negativo=forcar_estoque_negativo,
             credito_valor=credito_valor,
             data_venda=data_venda,
+            observacao=body.get("observacao", ""),
         )
     except EstoqueInsuficienteError as exc:
         return JsonResponse({"erro": str(exc), "tipo": "estoque_insuficiente"}, status=400)
@@ -673,6 +674,7 @@ def api_venda_finalizar_forcado(request):
             forcar_estoque_negativo=True,
             credito_valor=credito_valor,
             data_venda=data_venda,
+            observacao=body.get("observacao", ""),
         )
     except DadosInvalidosError as exc:
         return JsonResponse({"erro": str(exc)}, status=400)
@@ -1026,6 +1028,7 @@ def api_venda_detalhe(request, pk):
         } if venda.cliente else {},
         "delivery": venda.delivery,
         "endereco_entrega": venda.endereco_entrega or {},
+        "observacao": venda.observacao or "",
         "desconto": float(venda.valor_desconto or 0),
         "acrescimo": float(venda.valor_acrescimo or 0),
         "valor_total": float(venda.valor_total),

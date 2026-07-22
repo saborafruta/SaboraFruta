@@ -36,6 +36,7 @@ class VendaPDV(TimestampedModel):
     )
     observacao_delivery = models.TextField(blank=True)
     entregador = models.CharField(max_length=100, blank=True)
+    observacao = models.TextField(blank=True, help_text='Observação geral da venda (ex.: entregar após meio-dia).')
 
     valor_subtotal = models.DecimalField(max_digits=14, decimal_places=2, default=0)
     valor_desconto = models.DecimalField(max_digits=14, decimal_places=2, default=0)
