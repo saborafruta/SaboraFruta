@@ -165,8 +165,19 @@ html.tema-escuro body { background: var(--tp-bg) !important; }
   preco: '',
   desconto: '0',
   descValor: '0',
+  valorFinal: '',
   qtdMin: '0',
   staged: [],
+  // A partir do "valor final" desejado, calcula o desconto em R$ e em %
+  // tomando o preço unitário como base.
+  calcDoValorFinal() {
+    const p = parseFloat(this.preco);
+    const f = parseFloat(this.valorFinal);
+    if (!p || p <= 0 || isNaN(f)) return;
+    const desc = p - f;
+    this.descValor = (desc > 0 ? desc : 0).toFixed(2);
+    this.desconto = (desc > 0 ? (desc / p * 100) : 0).toFixed(2);
+  },
   searchUrl: '{% if tabela %}{% url 'produtos:tabela-produto-search' tabela.pk %}{% else %}{% url 'produtos:tabela-nova-produto-search' %}{% endif %}',
   buscarProdutos() {
     if (this.busca.length < 2) { this.resultado = []; return; }
@@ -199,7 +210,7 @@ html.tema-escuro body { background: var(--tp-bg) !important; }
     this.limpar();
   },
   removerStaged(idx) { this.staged.splice(idx, 1); },
-  limpar() { this.produtoSel = null; this.busca = ''; this.preco = ''; this.desconto = '0'; this.descValor = '0'; this.qtdMin = '0'; }
+  limpar() { this.produtoSel = null; this.busca = ''; this.preco = ''; this.desconto = '0'; this.descValor = '0'; this.valorFinal = ''; this.qtdMin = '0'; }
 }">
 
   <div class="tp-form-body">
@@ -487,6 +498,14 @@ html.tema-escuro body { background: var(--tp-bg) !important; }
               <span class="tp-help">Desconto em valor (opcional)</span>
             </div>
 
+            <!-- Valor final (calcula desconto) -->
+            <div class="tp-field">
+              <label>Valor final</label>
+              <input type="number" x-model="valorFinal" @input.debounce.200="calcDoValorFinal()"
+                     step="0.01" min="0" placeholder="0,00">
+              <span class="tp-help">Preenche o desconto % e R$ automaticamente</span>
+            </div>
+
             <!-- Qtd mínima -->
             <div class="tp-field">
               <label>Qtd mínima (escalonado)</label>
@@ -651,6 +670,14 @@ html.tema-escuro body { background: var(--tp-bg) !important; }
             <label>Desconto máximo R$</label>
             <input type="number" x-model="descValor" step="0.01" min="0" placeholder="0,00">
             <span class="tp-help">Desconto em valor (opcional)</span>
+          </div>
+
+          <!-- Valor final (calcula desconto) -->
+          <div class="tp-field">
+            <label>Valor final</label>
+            <input type="number" x-model="valorFinal" @input.debounce.200="calcDoValorFinal()"
+                   step="0.01" min="0" placeholder="0,00">
+            <span class="tp-help">Preencha e o desconto % e R$ são calculados</span>
           </div>
 
           <!-- Qtd mínima -->
