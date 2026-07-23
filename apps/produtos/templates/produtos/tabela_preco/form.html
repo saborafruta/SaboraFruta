@@ -250,7 +250,7 @@ html.tema-escuro body { background: var(--tp-bg) !important; }
     </div>
     {% endif %}
 
-    <form method="post" id="tp-form">
+    <form method="post" id="tp-form" x-data="{ loading: false }" @submit="loading = true">
       {% csrf_token %}
 
       <!-- ── SEÇÃO: Identificação ── -->
@@ -403,10 +403,7 @@ html.tema-escuro body { background: var(--tp-bg) !important; }
       <!-- ── Botões ── -->
       <div class="tp-form-actions">
         <a href="{% url 'produtos:tabela-list' %}" class="tp-btn-cancel">Cancelar</a>
-        <button type="submit" class="tp-btn-save"
-                x-data="{ loading: false }"
-                @click="loading = true"
-                :disabled="loading">
+        <button type="submit" class="tp-btn-save">
           <svg x-show="loading" class="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
             <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
             <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
