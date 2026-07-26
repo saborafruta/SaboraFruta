@@ -19,6 +19,14 @@ class FormaPagamento(ActiveModel):
     codigo_sefaz = models.CharField(max_length=2, blank=True)
     requer_tef = models.BooleanField(default=False)
     gera_parcelas = models.BooleanField(default=False)
+    movimenta_caixa = models.BooleanField(
+        default=True,
+        help_text=(
+            "Desmarque para formas como Doação/Permuta: a venda continua dando "
+            "baixa no estoque normalmente, mas o valor não entra no total do "
+            "caixa nem no financeiro."
+        ),
+    )
     prazo_liquidacao_dias = models.PositiveSmallIntegerField(default=0)
     taxa_administrativa = models.DecimalField(max_digits=5, decimal_places=2, default=0)
     created_at = models.DateTimeField(auto_now_add=True)

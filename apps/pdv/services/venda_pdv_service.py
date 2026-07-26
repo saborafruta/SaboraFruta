@@ -107,7 +107,7 @@ class VendaPDVService:
         if valor_total < 0:
             raise DadosInvalidosError("Total da venda nao pode ficar negativo.")
 
-        valor_pago, troco_total = cls._registrar_pagamentos(
+        valor_pago, troco_total, valor_nao_contabilizado = cls._registrar_pagamentos(
             venda=venda,
             filial=filial,
             pagamentos=pagamentos,
@@ -130,7 +130,9 @@ class VendaPDVService:
             "updated_at",
         ])
 
-        sessao.total_vendas = (sessao.total_vendas or Decimal("0")) + valor_total
+        # Doação/Permuta (movimenta_caixa=False) nao contam no total do caixa.
+        valor_para_caixa = max(Decimal("0.00"), valor_total - valor_nao_contabilizado)
+        sessao.total_vendas = (sessao.total_vendas or Decimal("0")) + valor_para_caixa
         sessao.save(update_fields=["total_vendas"])
         return venda
 
@@ -459,9 +461,10 @@ class VendaPDVService:
         pagamentos: list[dict],
         valor_total: Decimal,
         credito_valor: Decimal = Decimal("0"),
-    ) -> tuple[Decimal, Decimal]:
+    ) -> tuple[Decimal, Decimal, Decimal]:
         valor_pago = credito_valor  # crédito conta como pré-pago
         troco_total = Decimal("0.00")
+        valor_nao_contabilizado = Decimal("0.00")
         for pgto in pagamentos:
             forma_id = int(pgto["forma_id"])
             valor_pgto = cls._decimal(pgto.get("valor", "0"), cls.MONEY)
@@ -495,12 +498,17 @@ class VendaPDVService:
                     prazo_dias=int(prazo_dias) if prazo_dias not in (None, "") else None,
                 )
 
+            # Formas como Doação/Permuta dao baixa no estoque normalmente,
+            # mas nao devem contar no caixa nem no financeiro.
+            if not forma.movimenta_caixa:
+                valor_nao_contabilizado += valor_pgto - troco
+
             valor_pago += valor_pgto
             troco_total += troco
 
         if valor_pago < valor_total:
             raise DadosInvalidosError("Valor pago menor que o total da venda.")
-        return valor_pago, troco_total
+        return valor_pago, troco_total, valor_nao_contabilizado
 
     @classmethod
     def _gerar_conta_receber(cls, *, venda: VendaPDV, filial, forma, valor: Decimal, prazo_dias: int | None = None) -> None:

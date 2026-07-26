@@ -81,8 +81,15 @@ def estornar_venda_para_edicao(venda: VendaPDV, usuario) -> None:
         conta.save(update_fields=["status", "observacao", "updated_at"])
 
     if venda.sessao_pdv_id:
+        # Doação/Permuta (movimenta_caixa=False) nunca entraram no total do
+        # caixa — só descontamos a parte que de fato foi contabilizada.
+        valor_nao_contabilizado = sum(
+            (pg.valor - pg.troco) for pg in venda.pagamentos.select_related("forma_pagamento")
+            if not pg.forma_pagamento.movimenta_caixa
+        ) or 0
+        valor_contabilizado = max(0, (venda.valor_total or 0) - valor_nao_contabilizado)
         sessao = venda.sessao_pdv
-        novo_total = (sessao.total_vendas or 0) - (venda.valor_total or 0)
+        novo_total = (sessao.total_vendas or 0) - valor_contabilizado
         sessao.total_vendas = novo_total if novo_total > 0 else 0
         sessao.save(update_fields=["total_vendas"])
 

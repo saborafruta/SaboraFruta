@@ -440,7 +440,7 @@ def api_estado(request):
         formas = list(
             FormaPagamento.objects.filter(
                 empresa=request.filial_ativa.empresa, ativo=True
-            ).values('id', 'descricao', 'tipo', 'requer_tef', 'prazo_liquidacao_dias')
+            ).values('id', 'descricao', 'tipo', 'requer_tef', 'prazo_liquidacao_dias', 'movimenta_caixa')
         )
     except Exception:
         formas = []
@@ -1334,16 +1334,28 @@ def _resumo_sessao(sessao):
     desconto_total = Decimal("0")
     troco_dinheiro = Decimal("0")
     dinheiro_bruto = Decimal("0")
+    total_nao_contabilizado = Decimal("0")
 
-    formas_acc = {}   # forma_id -> {descricao, tipo, valor, qtd}
+    formas_acc = {}   # forma_id -> {descricao, tipo, valor, qtd, movimenta_caixa}
     vendas_list = []
 
     for v in vendas:
+        # Formas como Doação/Permuta (movimenta_caixa=False) dão baixa no
+        # estoque normalmente, mas não devem contar no total do caixa.
+        valor_nao_contabilizado_venda = sum(
+            (pg.valor - pg.troco) for pg in v.pagamentos.all()
+            if not pg.forma_pagamento.movimenta_caixa
+        ) or Decimal("0")
+        valor_contabilizado_venda = max(
+            Decimal("0"), (v.valor_total or Decimal("0")) - valor_nao_contabilizado_venda
+        )
+        total_nao_contabilizado += valor_nao_contabilizado_venda
+
         if v.delivery:
-            total_delivery += v.valor_total
+            total_delivery += valor_contabilizado_venda
             qtd_delivery += 1
         else:
-            total_balcao += v.valor_total
+            total_balcao += valor_contabilizado_venda
             qtd_balcao += 1
         desconto_total += v.valor_desconto or Decimal("0")
 
@@ -1355,6 +1367,7 @@ def _resumo_sessao(sessao):
             acc = formas_acc.setdefault(fp.id, {
                 "descricao": fp.descricao, "tipo": fp.tipo,
                 "valor": Decimal("0"), "qtd": 0,
+                "movimenta_caixa": fp.movimenta_caixa,
             })
             acc["valor"] += pg.valor
             acc["qtd"] += 1
@@ -1411,10 +1424,12 @@ def _resumo_sessao(sessao):
             "qtd_balcao": qtd_balcao,
             "total_delivery": float(total_delivery),
             "qtd_delivery": qtd_delivery,
+            "total_nao_contabilizado": float(total_nao_contabilizado),
         },
         "formas_pagamento": sorted([
             {"descricao": f["descricao"], "tipo": f["tipo"],
-             "valor": float(f["valor"]), "qtd": f["qtd"]}
+             "valor": float(f["valor"]), "qtd": f["qtd"],
+             "movimenta_caixa": f["movimenta_caixa"]}
             for f in formas_acc.values()
         ], key=lambda x: -x["valor"]),
         "caixa": {
@@ -1445,7 +1460,7 @@ def _combinar_resumos_caixa(sessoes):
         "resumo": {
             "total_geral": 0, "qtd_vendas": 0, "qtd_itens": 0,
             "desconto_total": 0, "total_balcao": 0, "qtd_balcao": 0,
-            "total_delivery": 0, "qtd_delivery": 0,
+            "total_delivery": 0, "qtd_delivery": 0, "total_nao_contabilizado": 0,
         },
         "formas_pagamento": [],
         "caixa": {
@@ -1468,6 +1483,7 @@ def _combinar_resumos_caixa(sessoes):
             acc = formas.setdefault(forma["descricao"], {
                 "descricao": forma["descricao"], "tipo": forma.get("tipo", ""),
                 "valor": 0, "qtd": 0,
+                "movimenta_caixa": forma.get("movimenta_caixa", True),
             })
             acc["valor"] += forma.get("valor") or 0
             acc["qtd"] += forma.get("qtd") or 0

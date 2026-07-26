@@ -42,6 +42,12 @@
         <label class="inline-flex items-center gap-2 text-sm">{{ form.gera_parcelas }} Gera parcelas</label>
         <label class="inline-flex items-center gap-2 text-sm">{{ form.ativo }} Ativo</label>
       </div>
+      <label class="inline-flex items-start gap-2 text-sm pt-1">
+        {{ form.movimenta_caixa }}
+        <span>Movimenta o caixa
+          <span class="block text-xs text-gray-500 mt-0.5">Desmarque para Doação/Permuta: dá baixa no estoque, mas não conta no caixa/financeiro.</span>
+        </span>
+      </label>
 
       <div class="flex gap-2 pt-1">
         <button type="submit" class="btn-primary justify-center flex-1">Salvar</button>
@@ -161,6 +167,7 @@
               <th class="px-4 py-3">SEFAZ</th>
               <th class="px-4 py-3">TEF</th>
               <th class="px-4 py-3">Parcelas</th>
+              <th class="px-4 py-3">Movimenta caixa</th>
               <th class="px-4 py-3">Status</th>
               <th class="px-4 py-3 text-right">Ações</th>
             </tr>
@@ -173,6 +180,7 @@
                 <td class="px-4 py-3 font-mono text-xs">{{ forma.codigo_sefaz|default:"-" }}</td>
                 <td class="px-4 py-3">{% if forma.requer_tef %}<span class="soft-pill is-blue">Sim</span>{% else %}<span class="soft-pill">Não</span>{% endif %}</td>
                 <td class="px-4 py-3">{% if forma.gera_parcelas %}<span class="soft-pill is-blue">Sim</span>{% else %}<span class="soft-pill">Não</span>{% endif %}</td>
+                <td class="px-4 py-3">{% if forma.movimenta_caixa %}<span class="soft-pill is-blue">Sim</span>{% else %}<span class="soft-pill is-amber">Não</span>{% endif %}</td>
                 <td class="px-4 py-3">{% if forma.ativo %}<span class="soft-pill is-green">Ativo</span>{% else %}<span class="soft-pill is-amber">Inativo</span>{% endif %}</td>
                 <td class="px-4 py-3 text-right">
                   <div class="inline-flex flex-wrap justify-end gap-2">
@@ -209,7 +217,7 @@
                 </td>
               </tr>
             {% empty %}
-              <tr><td colspan="7" class="px-4 py-8 text-center text-gray-500">Nenhuma forma de pagamento cadastrada nesta filial.</td></tr>
+              <tr><td colspan="8" class="px-4 py-8 text-center text-gray-500">Nenhuma forma de pagamento cadastrada nesta filial.</td></tr>
             {% endfor %}
           </tbody>
         </table>
