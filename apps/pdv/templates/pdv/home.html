@@ -1106,7 +1106,8 @@
                        @keydown.enter="confirmarPagamento()"
                        @keydown.escape="formaPgtoSelecionada=null"
                        x-ref="inputValorPgto"
-                       style="width:100%;padding:11px 10px 11px 34px;background:#13131e;border:2px solid #f15a24;border-radius:10px;color:#fff;font-size:16px;font-weight:800;outline:none;letter-spacing:.02em;"
+                       autocomplete="off"
+                       style="width:100%;padding:11px 10px 11px 34px;background:#13131e!important;border:2px solid #f15a24;border-radius:10px;color:#fff!important;-webkit-text-fill-color:#fff;caret-color:#fff;font-size:16px;font-weight:800;outline:none;letter-spacing:.02em;color-scheme:dark;"
                        min="0" step="0.01" placeholder="0,00">
               </div>
               <button @click="confirmarPagamento()"
