@@ -1217,6 +1217,16 @@
       <!-- Rodapé -->
       <div style="flex-shrink:0;border-top:1px solid var(--pdv-bd2);">
 
+        <!-- Aviso de edição de venda -->
+        <div x-show="vendaEdicaoOrigemId" x-cloak
+             style="padding:8px 16px;background:rgba(245,158,11,.1);border-bottom:1px solid rgba(245,158,11,.25);display:flex;align-items:center;justify-content:space-between;gap:8px;">
+          <span style="font-size:11.5px;color:#fbbf24;">
+            ✏️ Editando venda #<span x-text="String(vendaEdicaoOrigemNumero||0).padStart(6,'0')"></span> — a original será cancelada ao confirmar
+          </span>
+          <button type="button" @click="novaVenda()"
+                  style="flex-shrink:0;padding:3px 8px;background:none;border:1px solid rgba(245,158,11,.4);border-radius:6px;color:#fbbf24;font-size:10.5px;cursor:pointer;">Cancelar edição</button>
+        </div>
+
         <!-- Observação da venda -->
         <div x-show="venda.itens.length>0" x-cloak style="padding:10px 16px;border-bottom:1px solid var(--pdv-bd2);">
           <input type="text" x-model="venda.observacao" maxlength="500"
@@ -2552,6 +2562,7 @@ function pdv() {
     linhas: {{ linhas_json|safe }},
     usuarioEhAdmin: {{ usuario_e_admin|yesno:"true,false" }},
     dataVendaRetroativa: '',
+    vendaEdicaoOrigemId: null, vendaEdicaoOrigemNumero: null,
     get hojeISO() { return new Date().toISOString().slice(0,10); },
 
     sessao: null, erroCaixa: '', caixaSelecionada: '', valorAberturaCaixa: '0',
@@ -2901,6 +2912,7 @@ function pdv() {
           credito_valor: this.creditoAplicado || 0,
           data_venda: (this.usuarioEhAdmin && this.dataVendaRetroativa) ? this.dataVendaRetroativa : null,
           observacao: this.venda.observacao || '',
+          venda_edicao_origem_id: this.vendaEdicaoOrigemId || null,
         };
         payload.forcar_estoque_negativo = true;
         const r = await fetch('/pdv/api/venda/finalizar/',{method:'POST',headers:{'Content-Type':'application/json','X-CSRFToken':csrf()},body:JSON.stringify(payload)});
@@ -2945,6 +2957,7 @@ function pdv() {
           credito_valor: this.creditoAplicado || 0,
           data_venda: (this.usuarioEhAdmin && this.dataVendaRetroativa) ? this.dataVendaRetroativa : null,
           observacao: this.venda.observacao || '',
+          venda_edicao_origem_id: this.vendaEdicaoOrigemId || null,
         };
         // Endpoint dedicado que sempre ignora verificação de estoque
         const r = await fetch('/pdv/api/venda/finalizar/forcado/', {
@@ -3076,8 +3089,11 @@ function pdv() {
         }
         this.venda.desconto = d.desconto || 0;
         this.venda.acrescimo = d.acrescimo || 0;
+        this.venda.observacao = d.observacao || '';
+        this.vendaEdicaoOrigemId = c.id;
+        this.vendaEdicaoOrigemNumero = c.numero_venda;
         this.recalcularTotais();
-        this.toast_('Venda #'+String(c.numero_venda).padStart(6,'0')+' carregada — edite e finalize', 'ok');
+        this.toast_('Venda #'+String(c.numero_venda).padStart(6,'0')+' carregada — edite e finalize. A original será cancelada ao confirmar.', 'ok');
       } catch { this.toast_('Erro ao carregar venda para edição', 'erro'); }
     },
 
@@ -3534,6 +3550,7 @@ ${pgtoHtml ? `<hr class="sep">${pgtoHtml}` : ''}
       this.creditoDisponivel=0; this.creditoAplicado=0;
       this.buscaQuery=''; this.produtos=[]; this.formaPgtoSelecionada=null;
       this.dataVendaRetroativa='';
+      this.vendaEdicaoOrigemId=null; this.vendaEdicaoOrigemNumero=null;
       this.historicoCliente=[]; this.produtosFrequentes=[]; this.historicoClienteTotal=0; this.historicoClienteAberto=null;
       this.$nextTick(()=>document.getElementById('busca-produto')?.focus());
     },

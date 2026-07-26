@@ -24,6 +24,7 @@ from apps.pdv.services.cancelamento_fiscal_service import (
     cancelar_venda_e_documento,
     obter_documento_fiscal,
 )
+from apps.pdv.services.edicao_venda_service import estornar_venda_para_edicao, validar_venda_editavel
 from apps.pdv.services.fiscal_readiness_service import verificar_prontidao_fiscal
 from apps.produtos.models import LinhaProducao, Produto
 
@@ -564,6 +565,23 @@ def api_caixa_criar(request):
 # API — Finalizar venda
 # ---------------------------------------------------------------------------
 
+def _resolver_venda_edicao_origem(request, body):
+    """
+    Se o body trouxer venda_edicao_origem_id (venda antiga recarregada no
+    carrinho para edição), valida que ela pode ser editada e a retorna —
+    ela será estornada antes da nova venda ser criada, para não duplicar.
+    """
+    origem_id = body.get("venda_edicao_origem_id")
+    if not origem_id:
+        return None
+    try:
+        venda_antiga = VendaPDV.objects.for_filial(request.filial_ativa).get(pk=origem_id)
+    except VendaPDV.DoesNotExist:
+        raise DadosInvalidosError("Venda original (em edição) não encontrada.")
+    validar_venda_editavel(venda_antiga)
+    return venda_antiga
+
+
 @requer_permissao('pdv', 'ver')
 @require_POST
 def api_venda_finalizar(request):
@@ -593,26 +611,30 @@ def api_venda_finalizar(request):
 
     try:
         data_venda = _data_venda_retroativa(request, body)
+        venda_edicao_origem = _resolver_venda_edicao_origem(request, body)
     except DadosInvalidosError as exc:
         return JsonResponse({"erro": str(exc)}, status=400)
 
     try:
-        venda = VendaPDVService.finalizar_venda(
-            sessao=sessao,
-            filial=request.filial_ativa,
-            usuario=request.user,
-            itens=itens,
-            pagamentos=pagamentos,
-            cliente_id=cliente_id,
-            desconto=desconto,
-            acrescimo=acrescimo,
-            delivery=delivery,
-            endereco_entrega=endereco_entrega,
-            forcar_estoque_negativo=forcar_estoque_negativo,
-            credito_valor=credito_valor,
-            data_venda=data_venda,
-            observacao=body.get("observacao", ""),
-        )
+        with transaction.atomic():
+            if venda_edicao_origem:
+                estornar_venda_para_edicao(venda_edicao_origem, request.user)
+            venda = VendaPDVService.finalizar_venda(
+                sessao=sessao,
+                filial=request.filial_ativa,
+                usuario=request.user,
+                itens=itens,
+                pagamentos=pagamentos,
+                cliente_id=cliente_id,
+                desconto=desconto,
+                acrescimo=acrescimo,
+                delivery=delivery,
+                endereco_entrega=endereco_entrega,
+                forcar_estoque_negativo=forcar_estoque_negativo,
+                credito_valor=credito_valor,
+                data_venda=data_venda,
+                observacao=body.get("observacao", ""),
+            )
     except EstoqueInsuficienteError as exc:
         return JsonResponse({"erro": str(exc), "tipo": "estoque_insuficiente"}, status=400)
     except DadosInvalidosError as exc:
@@ -656,26 +678,30 @@ def api_venda_finalizar_forcado(request):
 
     try:
         data_venda = _data_venda_retroativa(request, body)
+        venda_edicao_origem = _resolver_venda_edicao_origem(request, body)
     except DadosInvalidosError as exc:
         return JsonResponse({"erro": str(exc)}, status=400)
 
     try:
-        venda = VendaPDVService.finalizar_venda(
-            sessao=sessao,
-            filial=request.filial_ativa,
-            usuario=request.user,
-            itens=itens,
-            pagamentos=pagamentos,
-            cliente_id=cliente_id,
-            desconto=desconto,
-            acrescimo=acrescimo,
-            delivery=delivery,
-            endereco_entrega=endereco_entrega,
-            forcar_estoque_negativo=True,
-            credito_valor=credito_valor,
-            data_venda=data_venda,
-            observacao=body.get("observacao", ""),
-        )
+        with transaction.atomic():
+            if venda_edicao_origem:
+                estornar_venda_para_edicao(venda_edicao_origem, request.user)
+            venda = VendaPDVService.finalizar_venda(
+                sessao=sessao,
+                filial=request.filial_ativa,
+                usuario=request.user,
+                itens=itens,
+                pagamentos=pagamentos,
+                cliente_id=cliente_id,
+                desconto=desconto,
+                acrescimo=acrescimo,
+                delivery=delivery,
+                endereco_entrega=endereco_entrega,
+                forcar_estoque_negativo=True,
+                credito_valor=credito_valor,
+                data_venda=data_venda,
+                observacao=body.get("observacao", ""),
+            )
     except DadosInvalidosError as exc:
         return JsonResponse({"erro": str(exc)}, status=400)
     except Exception as exc:
