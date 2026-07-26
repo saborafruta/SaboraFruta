@@ -1247,12 +1247,12 @@
         <div x-show="venda.itens.length>0" x-cloak style="padding:10px 16px;border-bottom:1px solid var(--pdv-bd2);">
           <input type="text" x-model="venda.observacao" maxlength="500"
                  placeholder="📝 Observação da venda (ex.: entregar após meio-dia)"
-                 style="width:100%;padding:9px 11px;background:var(--pdv-bg2,#0a0a12);border:1px solid var(--pdv-bd2);border-radius:8px;color:var(--pdv-t1,#e5e5f0);font-size:12.5px;font-family:inherit;">
+                 style="width:100%;padding:9px 11px;background:var(--pdv-bg);border:1px solid var(--pdv-bd2);border-radius:8px;color:var(--pdv-t1);font-size:12.5px;font-family:inherit;">
           <template x-if="usuarioEhAdmin">
             <div style="display:flex;align-items:center;gap:8px;margin-top:8px;">
-              <span style="font-size:11px;color:#888;white-space:nowrap;">Data retroativa:</span>
+              <span style="font-size:11px;color:var(--pdv-t3);white-space:nowrap;">Data retroativa:</span>
               <input type="date" x-model="dataVendaRetroativa" :max="hojeISO"
-                     style="flex:1;padding:7px 9px;background:var(--pdv-bg2,#0a0a12);border:1px solid var(--pdv-bd2);border-radius:8px;color:var(--pdv-t1,#e5e5f0);font-size:12px;font-family:inherit;">
+                     style="flex:1;padding:7px 9px;background:var(--pdv-bg);border:1px solid var(--pdv-bd2);border-radius:8px;color:var(--pdv-t1);font-size:12px;font-family:inherit;">
               <button type="button" x-show="dataVendaRetroativa" @click="dataVendaRetroativa=''"
                       style="padding:7px 10px;background:#1e1e2a;border:none;border-radius:8px;color:#888;font-size:11px;cursor:pointer;">Hoje</button>
             </div>
