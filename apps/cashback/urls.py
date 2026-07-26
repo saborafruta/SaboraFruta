@@ -8,6 +8,7 @@ urlpatterns = [
     path("configuracao/", views.ConfiguracaoCashbackView.as_view(), name="configuracao"),
 
     path("regras/", views.RegrasCashbackView.as_view(), name="regras"),
+    path("regras/buscar-alvo/", views.RegraCashbackBuscaAlvoView.as_view(), name="regra-buscar-alvo"),
     path("regras/<str:nivel>/<int:pk>/excluir/", views.RegraCashbackDeleteView.as_view(), name="regra-excluir"),
 
     path("campanhas/", views.CampanhaCashbackListView.as_view(), name="campanha-list"),

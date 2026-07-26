@@ -5,6 +5,7 @@ from decimal import Decimal, InvalidOperation
 
 from django.contrib import messages
 from django.db.models import Q
+from django.http import JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.views import View
@@ -39,21 +40,6 @@ class RegrasCashbackView(PermissaoRequiredMixin, View):
         if nivel not in _MODELOS:
             nivel = "produto"
 
-        q = request.GET.get("q", "").strip()
-        produtos_busca, categorias_busca = [], []
-        if nivel == "produto" and q:
-            produtos_busca = list(
-                Produto.objects.for_filial(filial)
-                .filter(Q(descricao__icontains=q) | Q(codigo__icontains=q))
-                .exclude(regra_cashback__isnull=False)[:15]
-            )
-        elif nivel == "categoria" and q:
-            categorias_busca = list(
-                CategoriaProduto.objects.for_filial(filial)
-                .filter(nome__icontains=q)
-                .exclude(regra_cashback__isnull=False)[:15]
-            )
-
         regras_produto = RegraCashbackProduto.objects.select_related("produto").order_by("produto__descricao")
         regras_categoria = RegraCashbackCategoria.objects.select_related("categoria").order_by("categoria__nome")
         regras_filial = RegraCashbackFilial.objects.select_related("filial").filter(
@@ -66,10 +52,7 @@ class RegrasCashbackView(PermissaoRequiredMixin, View):
         return render(request, self.template_name, {
             "title": "Regras de Cashback",
             "nivel": nivel,
-            "q": q,
             "empresa_id": filial.empresa_id,
-            "produtos_busca": produtos_busca,
-            "categorias_busca": categorias_busca,
             "filiais": Filial.objects.filter(empresa=filial.empresa),
             "regras_produto": regras_produto,
             "regras_categoria": regras_categoria,
@@ -117,6 +100,43 @@ class RegrasCashbackView(PermissaoRequiredMixin, View):
         modelo.objects.update_or_create(**filtro_alvo, defaults=dados)
         messages.success(request, "Regra de cashback salva.")
         return redirect(f"{reverse('cashback:regras')}?nivel={nivel}")
+
+
+class RegraCashbackBuscaAlvoView(PermissaoRequiredMixin, View):
+    """Busca AJAX de produto/categoria para a aba correspondente de Regras de Cashback."""
+    permissao_modulo = "cashback"
+    permissao_acao = "ver"
+
+    def get(self, request):
+        filial = request.filial_ativa
+        nivel = request.GET.get("nivel", "produto")
+        q = request.GET.get("q", "").strip()
+        resultados = []
+        if len(q) < 2:
+            return JsonResponse({"resultados": resultados})
+
+        if nivel == "produto":
+            produtos = (
+                Produto.objects.for_filial(filial)
+                .filter(Q(descricao__icontains=q) | Q(codigo__icontains=q))
+                .exclude(regra_cashback__isnull=False)[:15]
+            )
+            resultados = [
+                {"id": p.pk, "nome": p.descricao, "codigo": p.codigo or ""}
+                for p in produtos
+            ]
+        elif nivel == "categoria":
+            categorias = (
+                CategoriaProduto.objects.for_filial(filial)
+                .filter(nome__icontains=q)
+                .exclude(regra_cashback__isnull=False)[:15]
+            )
+            resultados = [
+                {"id": c.pk, "nome": c.full_path()}
+                for c in categorias
+            ]
+
+        return JsonResponse({"resultados": resultados})
 
 
 class RegraCashbackDeleteView(PermissaoRequiredMixin, View):

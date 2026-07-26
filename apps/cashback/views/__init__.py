@@ -6,7 +6,7 @@ from .campanhas import (
 )
 from .carteira import CarteiraCashbackBuscaView, CarteiraCashbackDetailView
 from .configuracao import ConfiguracaoCashbackView
-from .regras import RegraCashbackDeleteView, RegrasCashbackView
+from .regras import RegraCashbackBuscaAlvoView, RegraCashbackDeleteView, RegrasCashbackView
 
 __all__ = [
     "CampanhaCashbackCreateView",
@@ -16,6 +16,7 @@ __all__ = [
     "CarteiraCashbackBuscaView",
     "CarteiraCashbackDetailView",
     "ConfiguracaoCashbackView",
+    "RegraCashbackBuscaAlvoView",
     "RegraCashbackDeleteView",
     "RegrasCashbackView",
 ]
