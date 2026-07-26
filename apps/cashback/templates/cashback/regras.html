@@ -13,23 +13,40 @@
       </p>
     </div>
     <div class="flex gap-2">
-      <a href="{% url 'cashback:configuracao' %}" class="btn-secondary">Configuração</a>
-      <a href="{% url 'cashback:campanha-list' %}" class="btn-secondary">Campanhas</a>
-      <a href="{% url 'cashback:carteira-busca' %}" class="btn-secondary">Carteiras</a>
+      <a href="{% url 'cashback:configuracao' %}" class="btn-secondary"
+         title="Parâmetros gerais do cashback: percentual padrão, valor mínimo de compra para gerar/usar, limite máximo de uso por venda, dias de validade e o que fazer quando um cliente cancela uma venda que já usou o cashback.">Configuração</a>
+      <a href="{% url 'cashback:campanha-list' %}" class="btn-secondary"
+         title="Campanhas promocionais de cashback com data de início/fim, prioridade e restrição a produtos, categorias ou filiais específicos (ex.: Black Friday, Dobro de Cashback aos sábados).">Campanhas</a>
+      <a href="{% url 'cashback:carteira-busca' %}" class="btn-secondary"
+         title="Busca um cliente pelo CPF/CNPJ e mostra o saldo disponível, pendente, utilizado e expirado, além do extrato completo de movimentações da carteira dele.">Carteiras</a>
     </div>
   </div>
 
   <!-- Abas -->
   <div class="flex gap-2 border-b" :style="temaClaro ? 'border-color:#e5e7eb;' : 'border-color:#2a2a2e;'">
     <a href="?nivel=produto" class="px-4 py-2 text-sm font-semibold {% if nivel == 'produto' %}border-b-2{% endif %}"
+       title="Regra específica para 1 produto. É o nível mais forte de prioridade — vence categoria, campanha, filial e empresa."
        :style="{% if nivel == 'produto' %}temaClaro ? 'color:#2563eb;border-color:#2563eb;' : 'color:#60a5fa;border-color:#60a5fa;'{% else %}temaClaro ? 'color:#6b7280;' : 'color:#94a3b8;'{% endif %}">Produto</a>
     <a href="?nivel=categoria" class="px-4 py-2 text-sm font-semibold {% if nivel == 'categoria' %}border-b-2{% endif %}"
+       title="Regra para todos os produtos de uma categoria (sobe a hierarquia de subcategorias). Vale para quem não tiver regra própria por produto."
        :style="{% if nivel == 'categoria' %}temaClaro ? 'color:#2563eb;border-color:#2563eb;' : 'color:#60a5fa;border-color:#60a5fa;'{% else %}temaClaro ? 'color:#6b7280;' : 'color:#94a3b8;'{% endif %}">Categoria</a>
     <a href="?nivel=filial" class="px-4 py-2 text-sm font-semibold {% if nivel == 'filial' %}border-b-2{% endif %}"
+       title="Regra padrão para todas as vendas de uma filial específica, usada quando produto/categoria/campanha não tiverem regra."
        :style="{% if nivel == 'filial' %}temaClaro ? 'color:#2563eb;border-color:#2563eb;' : 'color:#60a5fa;border-color:#60a5fa;'{% else %}temaClaro ? 'color:#6b7280;' : 'color:#94a3b8;'{% endif %}">Filial</a>
     <a href="?nivel=empresa" class="px-4 py-2 text-sm font-semibold {% if nivel == 'empresa' %}border-b-2{% endif %}"
+       title="Regra padrão para toda a empresa (todas as filiais). É o penúltimo nível, só perde para a Configuração global."
        :style="{% if nivel == 'empresa' %}temaClaro ? 'color:#2563eb;border-color:#2563eb;' : 'color:#60a5fa;border-color:#60a5fa;'{% else %}temaClaro ? 'color:#6b7280;' : 'color:#94a3b8;'{% endif %}">Empresa</a>
   </div>
+
+  {% if nivel == "produto" %}
+  <p class="text-sm" style="color:#dc2626;font-weight:700;">Regra por Produto: define um percentual ou valor fixo de cashback só para este item. É o nível mais específico — sempre vence categoria, campanha, filial e empresa quando configurado.</p>
+  {% elif nivel == "categoria" %}
+  <p class="text-sm" style="color:#dc2626;font-weight:700;">Regra por Categoria: aplica o mesmo percentual/valor fixo a todos os produtos da categoria (e subcategorias) que não tenham regra própria por produto.</p>
+  {% elif nivel == "filial" %}
+  <p class="text-sm" style="color:#dc2626;font-weight:700;">Regra por Filial: percentual/valor fixo padrão para todas as vendas dessa filial, usado quando não há regra de produto, categoria ou campanha vigente.</p>
+  {% elif nivel == "empresa" %}
+  <p class="text-sm" style="color:#dc2626;font-weight:700;">Regra por Empresa: percentual/valor fixo padrão para toda a empresa (todas as filiais), usado quando nenhum nível mais específico se aplica.</p>
+  {% endif %}
 
   {% if nivel == "produto" %}
   <div class="card p-6 space-y-4" x-data="{

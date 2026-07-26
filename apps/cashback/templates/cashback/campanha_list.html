@@ -17,6 +17,12 @@
     <a href="{% url 'cashback:campanha-create' %}" class="btn-primary">+ Nova campanha</a>
   </div>
 
+  <p class="text-sm" style="color:#dc2626;font-weight:700;">
+    Campanhas dão um cashback promocional temporário (data de início/fim), que pode ser restrito a produtos, categorias
+    ou filiais específicas e valer só em certos dias da semana. Quando mais de uma campanha se aplica na mesma venda,
+    vence a de maior prioridade. Uma campanha vigente entra na cascata entre a regra de Categoria e a de Filial.
+  </p>
+
   <div class="card overflow-hidden">
     <table class="w-full text-sm">
       <thead>

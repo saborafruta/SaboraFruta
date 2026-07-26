@@ -14,6 +14,12 @@
     <p class="text-sm mt-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Busque um cliente para ver saldo e extrato.</p>
   </div>
 
+  <p class="text-sm" style="color:#dc2626;font-weight:700;">
+    Cada cliente com CPF/CNPJ tem uma carteira própria com saldo disponível, pendente, utilizado, expirado e cancelado.
+    Busque pelo nome, razão social ou CPF/CNPJ para abrir a carteira, ver o extrato completo de movimentações
+    (crédito por venda, débito por uso, estorno, cancelamento, expiração) e lançar um ajuste manual, se precisar.
+  </p>
+
   <form method="get" class="card p-5 flex gap-2">
     <input type="text" name="q" value="{{ q }}" placeholder="Nome, razão social ou CPF/CNPJ..." class="form-input flex-1">
     <button type="submit" class="btn-primary">Buscar</button>

@@ -11,10 +11,14 @@
       <span class="mx-1">›</span> Configuração
     </p>
     <h2 class="text-2xl font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">Configuração de Cashback</h2>
-    <p class="text-sm mt-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
-      Parâmetros padrão aplicados quando nenhuma regra mais específica (produto/categoria/campanha) existir.
-    </p>
   </div>
+
+  <p class="text-sm" style="color:#dc2626;font-weight:700;">
+    Aqui você define os parâmetros gerais do cashback: percentual padrão, valor mínimo de compra para gerar e para usar,
+    limite máximo de uso por venda, dias de validade do crédito e o que fazer quando uma venda que já usou cashback é
+    cancelada. Esses valores só valem quando nenhuma regra mais específica (Produto, Categoria, Campanha, Filial ou
+    Empresa) existir.
+  </p>
 
   <!-- Configuração da filial atual -->
   <form method="post" class="card p-6 space-y-4">
