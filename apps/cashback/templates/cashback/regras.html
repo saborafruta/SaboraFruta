@@ -146,48 +146,17 @@
   {% endif %}
 
   {% if nivel == "categoria" %}
-  <div class="card p-6 space-y-4" x-data="{
-        busca: '', resultado: [], carregando: false, alvoSel: null,
-        buscar() {
-          if (this.busca.length < 2) { this.resultado = []; return; }
-          this.carregando = true;
-          fetch('{% url "cashback:regra-buscar-alvo" %}?nivel=categoria&q=' + encodeURIComponent(this.busca))
-            .then(r => r.json())
-            .then(d => { this.resultado = d.resultados; this.carregando = false; })
-            .catch(() => { this.carregando = false; });
-        },
-        selecionar(item) {
-          this.alvoSel = item;
-          this.busca = item.nome;
-          this.resultado = [];
-        }
-      }">
+  <div class="card p-6 space-y-4">
     <h3 class="font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">Nova regra por categoria</h3>
-    <div style="position:relative;">
-      <input type="text" x-model="busca" @input.debounce.300="buscar()" @keydown.escape="resultado=[]"
-             placeholder="Buscar categoria..." class="form-input w-full" autocomplete="off">
-      <div x-show="resultado.length>0 || carregando" x-cloak
-           class="card"
-           style="position:absolute;z-index:10;top:100%;left:0;right:0;margin-top:4px;max-height:260px;overflow-y:auto;">
-        <div x-show="carregando" class="px-4 py-3 text-xs" :style="temaClaro ? 'color:#94a3b8;' : 'color:#64748b;'">Buscando...</div>
-        <template x-for="c in resultado" :key="c.id">
-          <div @click="selecionar(c)" class="px-4 py-2 text-sm" style="cursor:pointer;"
-               onmouseover="this.style.background=(document.documentElement.classList.contains('tema-claro')?'#f3f4f6':'#1e1e2a')"
-               onmouseout="this.style.background='transparent'">
-            <span x-text="c.nome" style="font-weight:600;" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'"></span>
-          </div>
-        </template>
-      </div>
-    </div>
-
-    <form method="post" x-show="alvoSel" x-cloak class="grid grid-cols-1 sm:grid-cols-4 gap-3 items-end">
+    <form method="post" class="grid grid-cols-1 sm:grid-cols-4 gap-3 items-end">
       {% csrf_token %}
       <input type="hidden" name="nivel" value="categoria">
-      <input type="hidden" name="alvo_id" :value="alvoSel ? alvoSel.id : ''">
-      <div class="block text-sm sm:col-span-2">
-        <span class="block text-xs font-semibold mb-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Categoria selecionada</span>
-        <div class="form-input w-full" x-text="alvoSel ? alvoSel.nome : ''" style="opacity:.85;"></div>
-      </div>
+      <label class="block text-sm sm:col-span-2">
+        <span class="block text-xs font-semibold mb-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Categoria</span>
+        <select name="alvo_id" class="form-input w-full">
+          {% for c in categorias %}<option value="{{ c.pk }}">{{ c.full_path }}</option>{% empty %}<option value="">Nenhuma categoria disponível</option>{% endfor %}
+        </select>
+      </label>
       <label class="block text-sm">
         <span class="block text-xs font-semibold mb-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Percentual %</span>
         <input type="number" name="percentual" step="0.01" min="0" max="100" class="form-input w-full" value="0">

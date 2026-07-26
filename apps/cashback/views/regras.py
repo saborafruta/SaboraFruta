@@ -49,11 +49,19 @@ class RegrasCashbackView(PermissaoRequiredMixin, View):
             empresa=filial.empresa,
         )
 
+        categorias = []
+        if nivel == "categoria":
+            categorias = sorted(
+                CategoriaProduto.objects.for_filial(filial).exclude(regra_cashback__isnull=False),
+                key=lambda c: c.full_path(),
+            )
+
         return render(request, self.template_name, {
             "title": "Regras de Cashback",
             "nivel": nivel,
             "empresa_id": filial.empresa_id,
             "filiais": Filial.objects.filter(empresa=filial.empresa),
+            "categorias": categorias,
             "regras_produto": regras_produto,
             "regras_categoria": regras_categoria,
             "regras_filial": regras_filial,
