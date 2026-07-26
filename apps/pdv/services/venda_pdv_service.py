@@ -9,7 +9,7 @@ from django.utils import timezone
 from apps.core.services.exceptions import DadosInvalidosError, EstoqueInsuficienteError
 from apps.estoque.models import MovimentacaoEstoque
 from apps.estoque.services.movimentacao_service import MovimentacaoService
-from apps.financeiro.constants.enums import StatusContaReceber
+from apps.financeiro.constants.enums import StatusContaReceber, TipoFormaPagamento
 from apps.financeiro.models import ContaReceber, FormaPagamento
 from apps.pdv.models import ItemVendaPDV, PagamentoVendaPDV, VendaPDV
 from apps.pdv.services.produto_vendavel_service import ProdutoVendavelService
@@ -43,6 +43,7 @@ class VendaPDVService:
         credito_valor: Decimal = Decimal("0"),
         data_venda=None,
         observacao: str = "",
+        request=None,
     ) -> VendaPDV:
         if not sessao:
             raise DadosInvalidosError("Nenhuma sessao de caixa aberta.")
@@ -113,6 +114,8 @@ class VendaPDVService:
             pagamentos=pagamentos,
             valor_total=valor_total,
             credito_valor=credito_valor,
+            usuario=usuario,
+            request=request,
         )
 
         if credito_valor > 0 and cliente_id:
@@ -134,6 +137,10 @@ class VendaPDVService:
         valor_para_caixa = max(Decimal("0.00"), valor_total - valor_nao_contabilizado)
         sessao.total_vendas = (sessao.total_vendas or Decimal("0")) + valor_para_caixa
         sessao.save(update_fields=["total_vendas"])
+
+        from apps.cashback.services.checkout_integration import creditar_pos_venda
+        creditar_pos_venda(venda, usuario=usuario, request=request)
+
         return venda
 
     @classmethod
@@ -461,6 +468,8 @@ class VendaPDVService:
         pagamentos: list[dict],
         valor_total: Decimal,
         credito_valor: Decimal = Decimal("0"),
+        usuario=None,
+        request=None,
     ) -> tuple[Decimal, Decimal, Decimal]:
         valor_pago = credito_valor  # crédito conta como pré-pago
         troco_total = Decimal("0.00")
@@ -496,6 +505,19 @@ class VendaPDVService:
                     forma=forma,
                     valor=valor_pgto - troco,
                     prazo_dias=int(prazo_dias) if prazo_dias not in (None, "") else None,
+                )
+
+            # Cashback: debita da carteira do cliente em vez de gerar
+            # conta a receber. Erros aqui propagam (nao ha saldo = nao
+            # pode pagar), abortando a venda inteira via transaction.atomic.
+            if forma.tipo == TipoFormaPagamento.CASHBACK:
+                if not venda.cliente_id:
+                    raise DadosInvalidosError(
+                        "Selecione um cliente identificado (CPF/CNPJ) para pagar com cashback."
+                    )
+                from apps.cashback.services.checkout_integration import debitar_no_checkout
+                debitar_no_checkout(
+                    venda=venda, valor=valor_pgto - troco, usuario=usuario, request=request,
                 )
 
             # Formas como Doação/Permuta dao baixa no estoque normalmente,

@@ -13,6 +13,7 @@ class TipoFormaPagamento(models.TextChoices):
     VALE = "vale", "Vale"
     CONVENIO = "convenio", "Convênio"
     CREDIARIO = "crediario", "Crediário"
+    CASHBACK = "cashback", "Cashback"
 
 
 class StatusContaReceber(models.TextChoices):

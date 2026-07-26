@@ -1148,6 +1148,21 @@
                 </div>
               </div>
             </template>
+
+            <!-- Saldo de cashback — só para forma Cashback -->
+            <template x-if="ehFormaCashback(formaPgtoSelecionada)">
+              <div style="margin-top:10px;padding-top:10px;border-top:1px solid #1e1e30;">
+                <template x-if="!venda.cliente.id">
+                  <div style="font-size:11px;color:#f87171;">Selecione um cliente identificado (CPF/CNPJ) para pagar com cashback.</div>
+                </template>
+                <template x-if="venda.cliente.id">
+                  <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;">
+                    <span style="font-size:11px;color:#4ade80;font-weight:700;">Saldo disponível</span>
+                    <span style="font-size:14px;color:#22c55e;font-weight:800;" x-text="'R$ '+fmt(cashbackDisponivel)"></span>
+                  </div>
+                </template>
+              </div>
+            </template>
           </div>
         </template>
 
@@ -2597,6 +2612,7 @@ function pdv() {
     pendentes: [], orcamentos: [], orcamentosCliente: [], clienteQuery: '', clientesResultados: [], clienteBuscando: false, clienteFoco: -1,
     deliveryAguardandoCliente: false,
     creditoDisponivel: 0, creditoAplicado: 0,
+    cashbackDisponivel: 0,
     modalPreco: { show: false, produto: null, precos: [], descricao: '' },
 
     caixaRel: null, valorContado: '', obsFechamento: '', dataRelatorioCaixa: new Date().toISOString().slice(0,10),
@@ -2842,6 +2858,10 @@ function pdv() {
       if (aPrazo) {
         if (!this.venda.cliente.id) { this.toast_('Selecione um cliente para vendas no '+this.formaPgtoSelecionada.descricao+'.','erro'); return; }
         if (this.prazoDiasPgto==='' || parseInt(this.prazoDiasPgto)<0 || isNaN(parseInt(this.prazoDiasPgto))) { this.toast_('Informe o prazo em dias.','erro'); return; }
+      }
+      if (this.ehFormaCashback(this.formaPgtoSelecionada)) {
+        if (!this.venda.cliente.id) { this.toast_('Selecione um cliente identificado para pagar com cashback.','erro'); return; }
+        if (valor > parseFloat(this.cashbackDisponivel||0) + 0.001) { this.toast_('Valor maior que o saldo de cashback disponível.','erro'); return; }
       }
       const troco = Math.max(0, valor-parseFloat(this.venda.restante));
       this.venda.pagamentos.push({ _id:Date.now()+Math.random(), forma_id:this.formaPgtoSelecionada.id,
@@ -3548,7 +3568,7 @@ ${pgtoHtml ? `<hr class="sep">${pgtoHtml}` : ''}
     novaVenda() {
       this.venda={id:null,numero:null,cliente:{id:null,nome:'Consumidor Final',cpf_cnpj:''},
         itens:[],pagamentos:[],subtotal:0,desconto:0,acrescimo:0,total:0,valor_pago:0,restante:0,delivery:false,endereco_entrega:{},observacao:''};
-      this.creditoDisponivel=0; this.creditoAplicado=0;
+      this.creditoDisponivel=0; this.creditoAplicado=0; this.cashbackDisponivel=0;
       this.buscaQuery=''; this.produtos=[]; this.formaPgtoSelecionada=null;
       this.dataVendaRetroativa='';
       this.vendaEdicaoOrigemId=null; this.vendaEdicaoOrigemNumero=null;
@@ -3621,6 +3641,20 @@ ${pgtoHtml ? `<hr class="sep">${pgtoHtml}` : ''}
       } catch {}
     },
 
+    async carregarCashbackSaldo(clienteId) {
+      this.cashbackDisponivel = 0;
+      if (!clienteId) return;
+      try {
+        const r = await fetch(`/pdv/api/cashback-saldo/?cliente_id=${clienteId}`, {headers:{'X-CSRFToken':csrf()}});
+        const d = await r.json();
+        if (d.saldo !== undefined) this.cashbackDisponivel = parseFloat(d.saldo) || 0;
+      } catch {}
+    },
+
+    ehFormaCashback(forma) {
+      return (forma?.tipo || '').toLowerCase() === 'cashback';
+    },
+
     usarCredito() {
       const disponivel = parseFloat(this.creditoDisponivel) || 0;
       const restante = this.venda.total - this.venda.pagamentos.reduce((s,p)=>s+parseFloat(p.valor||0),0);
@@ -3647,12 +3681,13 @@ ${pgtoHtml ? `<hr class="sep">${pgtoHtml}` : ''}
       this.carregarHistoricoCliente(c.id);
       this.carregarOrcamentosCliente(c.id);
       this.carregarCreditoCliente(c.id);
+      this.carregarCashbackSaldo(c.id);
       if (this.deliveryAguardandoCliente) this.prepararDeliveryClienteSelecionado();
     },
     selecionarClienteBalcao() {
       this.venda.cliente={id:null,nome:'Consumidor Final',cpf_cnpj:'',endereco_entrega:{},tem_endereco:false};
       this.historicoCliente=[]; this.produtosFrequentes=[]; this.historicoClienteTotal=0; this.historicoClienteAberto=null;
-      this.orcamentosCliente=[]; this.creditoDisponivel=0; this.creditoAplicado=0;
+      this.orcamentosCliente=[]; this.creditoDisponivel=0; this.creditoAplicado=0; this.cashbackDisponivel=0;
       this.showModalCliente=false; this.clienteQuery=''; this.clientesResultados=[]; this.clienteFoco=-1;
       if (this.deliveryAguardandoCliente) {
         this.deliveryAguardandoCliente=false;

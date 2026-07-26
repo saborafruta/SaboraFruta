@@ -1,0 +1,115 @@
+{% extends "_base.html" %}
+{% block title %}{{ title }}{% endblock %}
+{% block page_title %}{{ title }}{% endblock %}
+
+{% block content %}
+<div class="max-w-5xl mx-auto space-y-5">
+
+  <div>
+    <p class="text-sm mb-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+      <a href="{% url 'cashback:carteira-busca' %}" :style="temaClaro ? 'color:#3b82f6;' : 'color:#60a5fa;'">Carteiras</a>
+      <span class="mx-1">›</span> {{ cliente }}
+    </p>
+    <h2 class="text-2xl font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">{{ cliente }}</h2>
+    <p class="text-sm mt-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">{{ cliente.cpf_cnpj|default:"Sem CPF/CNPJ cadastrado" }}</p>
+  </div>
+
+  {% if not cliente.cpf_cnpj %}
+  <div class="card px-4 py-3 border-l-4" style="border-left-color:#f59e0b;">
+    <p class="text-sm" style="color:#b45309;">Este cliente não tem CPF/CNPJ cadastrado — nenhuma venda gera cashback automaticamente para ele.</p>
+  </div>
+  {% endif %}
+
+  <!-- Saldos -->
+  <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+    <div class="card p-4">
+      <p class="text-xs font-medium uppercase" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Disponível</p>
+      <p class="text-lg font-bold mt-1" style="color:#22c55e;">R$ {{ carteira.saldo_disponivel|default:"0,00"|floatformat:2 }}</p>
+    </div>
+    <div class="card p-4">
+      <p class="text-xs font-medium uppercase" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Pendente</p>
+      <p class="text-lg font-bold mt-1" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">R$ {{ carteira.saldo_pendente|default:"0,00"|floatformat:2 }}</p>
+    </div>
+    <div class="card p-4">
+      <p class="text-xs font-medium uppercase" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Utilizado</p>
+      <p class="text-lg font-bold mt-1" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">R$ {{ carteira.saldo_utilizado|default:"0,00"|floatformat:2 }}</p>
+    </div>
+    <div class="card p-4">
+      <p class="text-xs font-medium uppercase" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Expirado</p>
+      <p class="text-lg font-bold mt-1" style="color:#f59e0b;">R$ {{ carteira.saldo_expirado|default:"0,00"|floatformat:2 }}</p>
+    </div>
+    <div class="card p-4">
+      <p class="text-xs font-medium uppercase" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Cancelado</p>
+      <p class="text-lg font-bold mt-1" style="color:#dc2626;">R$ {{ carteira.saldo_cancelado|default:"0,00"|floatformat:2 }}</p>
+    </div>
+    <div class="card p-4">
+      <p class="text-xs font-medium uppercase" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Total gerado</p>
+      <p class="text-lg font-bold mt-1" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">R$ {{ carteira.saldo_total_gerado|default:"0,00"|floatformat:2 }}</p>
+    </div>
+  </div>
+
+  <!-- Ajuste manual -->
+  <form method="post" class="card p-5 flex flex-col sm:flex-row gap-3 sm:items-end">
+    {% csrf_token %}
+    <label class="block text-sm font-medium space-y-1.5">
+      <span :style="temaClaro ? 'color:#374151;' : 'color:#d1d5db;'">Ajuste manual (R$)</span>
+      <input type="number" name="valor" step="0.01" min="0.01" class="form-input w-40" placeholder="0,00">
+    </label>
+    <label class="block text-sm font-medium space-y-1.5 flex-1">
+      <span :style="temaClaro ? 'color:#374151;' : 'color:#d1d5db;'">Observação *</span>
+      <input type="text" name="observacao" class="form-input w-full" placeholder="Ex.: cortesia por atraso na entrega">
+    </label>
+    <button type="submit" class="btn-secondary">Lançar ajuste</button>
+  </form>
+
+  <!-- Extrato -->
+  <div class="card overflow-hidden">
+    <div class="px-4 py-3 border-b" :style="temaClaro ? 'border-color:#e5e7eb;' : 'border-color:#2a2a2e;'">
+      <h3 class="font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">Extrato</h3>
+    </div>
+    <div class="overflow-x-auto">
+      <table class="w-full text-sm">
+        <thead>
+          <tr class="text-left text-xs uppercase tracking-wide" :style="temaClaro ? 'color:#6b7280;background:#f9fafb;' : 'color:#9ca3af;background:#1e1e20;'">
+            <th class="px-4 py-3">Data</th>
+            <th class="px-4 py-3">Tipo</th>
+            <th class="px-4 py-3">Venda</th>
+            <th class="px-4 py-3">Origem</th>
+            <th class="px-4 py-3">Operador</th>
+            <th class="px-4 py-3 text-right">Valor</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y">
+          {% for m in page_obj %}
+          <tr>
+            <td class="px-4 py-3 text-xs">{{ m.created_at|date:"d/m/Y H:i" }}</td>
+            <td class="px-4 py-3">
+              {% if m.eh_credito %}<span class="soft-pill is-green">{{ m.get_tipo_display }}</span>
+              {% else %}<span class="soft-pill is-amber">{{ m.get_tipo_display }}</span>{% endif %}
+            </td>
+            <td class="px-4 py-3 text-xs">{% if m.venda %}#{{ m.venda.numero_venda|stringformat:"06d" }}{% else %}—{% endif %}</td>
+            <td class="px-4 py-3 text-xs">{{ m.get_origem_display }}</td>
+            <td class="px-4 py-3 text-xs">{{ m.usuario|default:"—" }}</td>
+            <td class="px-4 py-3 text-right font-mono font-semibold" :style="m.eh_credito|yesno:'color:#16a34a;,color:#dc2626;'">
+              {% if m.eh_credito %}+{% else %}−{% endif %} R$ {{ m.valor|floatformat:2 }}
+            </td>
+          </tr>
+          {% empty %}
+          <tr><td colspan="6" class="px-4 py-8 text-center" :style="temaClaro ? 'color:#94a3b8;' : 'color:#64748b;'">Nenhuma movimentação ainda.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% if page_obj.paginator.num_pages > 1 %}
+    <div class="flex items-center justify-between px-4 py-3 border-t text-sm" :style="temaClaro ? 'border-color:#e5e7eb;' : 'border-color:#2a2a2e;'">
+      <span :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Página {{ page_obj.number }} de {{ page_obj.paginator.num_pages }}</span>
+      <div class="flex gap-2">
+        {% if page_obj.has_previous %}<a href="?page={{ page_obj.previous_page_number }}" class="btn-secondary">← Anterior</a>{% endif %}
+        {% if page_obj.has_next %}<a href="?page={{ page_obj.next_page_number }}" class="btn-secondary">Próxima →</a>{% endif %}
+      </div>
+    </div>
+    {% endif %}
+  </div>
+
+</div>
+{% endblock %}

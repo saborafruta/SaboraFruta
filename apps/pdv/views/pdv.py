@@ -634,6 +634,7 @@ def api_venda_finalizar(request):
                 credito_valor=credito_valor,
                 data_venda=data_venda,
                 observacao=body.get("observacao", ""),
+                request=request,
             )
     except EstoqueInsuficienteError as exc:
         return JsonResponse({"erro": str(exc), "tipo": "estoque_insuficiente"}, status=400)
@@ -701,6 +702,7 @@ def api_venda_finalizar_forcado(request):
                 credito_valor=credito_valor,
                 data_venda=data_venda,
                 observacao=body.get("observacao", ""),
+                request=request,
             )
     except DadosInvalidosError as exc:
         return JsonResponse({"erro": str(exc)}, status=400)
@@ -2105,6 +2107,25 @@ def api_credito_cliente(request):
             saldo_total += saldo
             lista.append({'id': c.pk, 'saldo': float(saldo), 'motivo': c.motivo})
     return JsonResponse({'saldo': float(saldo_total), 'creditos': lista})
+
+
+@requer_permissao('pdv', 'ver')
+@require_GET
+def api_cashback_saldo(request):
+    """Retorna saldo de cashback disponível para um cliente (para uso no PDV)."""
+    from apps.cashback.services.wallet_service import CashbackWalletService
+    from apps.cadastros.models import Cliente
+
+    cliente_id = request.GET.get('cliente_id')
+    if not cliente_id:
+        return JsonResponse({'saldo': '0.00'})
+    cliente = Cliente.objects.filter(pk=cliente_id).first()
+    if not cliente or not (cliente.cpf_cnpj or '').strip():
+        return JsonResponse({'saldo': '0.00'})
+    saldo = CashbackWalletService.saldo_disponivel(
+        empresa=request.filial_ativa.empresa, cliente=cliente,
+    )
+    return JsonResponse({'saldo': float(saldo)})
 
 
 @requer_permissao('pdv', 'ver')

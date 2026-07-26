@@ -1,0 +1,120 @@
+{% extends "_base.html" %}
+{% block title %}Configuração de Cashback{% endblock %}
+{% block page_title %}Configuração de Cashback{% endblock %}
+
+{% block content %}
+<div class="max-w-4xl mx-auto space-y-5">
+
+  <div>
+    <p class="text-sm mb-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+      <a href="{% url 'cashback:regras' %}" :style="temaClaro ? 'color:#3b82f6;' : 'color:#60a5fa;'">Cashback</a>
+      <span class="mx-1">›</span> Configuração
+    </p>
+    <h2 class="text-2xl font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">Configuração de Cashback</h2>
+    <p class="text-sm mt-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+      Parâmetros padrão aplicados quando nenhuma regra mais específica (produto/categoria/campanha) existir.
+    </p>
+  </div>
+
+  <!-- Configuração da filial atual -->
+  <form method="post" class="card p-6 space-y-4">
+    {% csrf_token %}
+    <input type="hidden" name="escopo" value="filial">
+    <h3 class="font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
+      {{ filial.nome_fantasia|default:filial.razao_social }} <span class="text-xs font-normal" :style="temaClaro ? 'color:#94a3b8;' : 'color:#64748b;'">(filial atual)</span>
+    </h3>
+    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+      <label class="block text-sm font-medium space-y-1.5">
+        <span :style="temaClaro ? 'color:#374151;' : 'color:#d1d5db;'">Percentual padrão (%)</span>
+        <input type="number" name="percentual_global" step="0.01" min="0" max="100" class="form-input w-full"
+               value="{{ config.percentual_global|default:'0' }}">
+      </label>
+      <label class="block text-sm font-medium space-y-1.5">
+        <span :style="temaClaro ? 'color:#374151;' : 'color:#d1d5db;'">Dias de validade</span>
+        <input type="number" name="dias_validade" step="1" min="1" class="form-input w-full"
+               value="{{ config.dias_validade|default:'90' }}">
+      </label>
+      <label class="block text-sm font-medium space-y-1.5">
+        <span :style="temaClaro ? 'color:#374151;' : 'color:#d1d5db;'">Valor mínimo da compra para gerar cashback (R$)</span>
+        <input type="number" name="valor_minimo_gerar" step="0.01" min="0" class="form-input w-full"
+               value="{{ config.valor_minimo_gerar|default:'0' }}">
+      </label>
+      <label class="block text-sm font-medium space-y-1.5">
+        <span :style="temaClaro ? 'color:#374151;' : 'color:#d1d5db;'">Valor mínimo da compra para usar cashback (R$)</span>
+        <input type="number" name="valor_minimo_usar" step="0.01" min="0" class="form-input w-full"
+               value="{{ config.valor_minimo_usar|default:'0' }}">
+      </label>
+      <label class="block text-sm font-medium space-y-1.5">
+        <span :style="temaClaro ? 'color:#374151;' : 'color:#d1d5db;'">Percentual máximo da venda pago com cashback (%)</span>
+        <input type="number" name="percentual_maximo_uso_venda" step="0.01" min="0" max="100" class="form-input w-full"
+               value="{{ config.percentual_maximo_uso_venda|default:'100' }}">
+      </label>
+      <label class="block text-sm font-medium space-y-1.5">
+        <span :style="temaClaro ? 'color:#374151;' : 'color:#d1d5db;'">Se cashback já usado for cancelado</span>
+        <select name="modo_estorno_usado" class="form-input w-full">
+          <option value="conta_a_receber" {% if config.modo_estorno_usado == "conta_a_receber" or not config %}selected{% endif %}>Gerar conta a receber do cliente</option>
+          <option value="negativo" {% if config.modo_estorno_usado == "negativo" %}selected{% endif %}>Permitir saldo negativo na carteira</option>
+        </select>
+      </label>
+    </div>
+    <label class="inline-flex items-center gap-2 text-sm">
+      <input type="checkbox" name="ativo" {% if not config or config.ativo %}checked{% endif %}>
+      <span :style="temaClaro ? 'color:#374151;' : 'color:#d1d5db;'">Ativo nesta filial</span>
+    </label>
+    <div class="flex justify-end">
+      <button type="submit" class="btn-primary">Salvar configuração da filial</button>
+    </div>
+  </form>
+
+  <!-- Configuração global (fallback da empresa) -->
+  <form method="post" class="card p-6 space-y-4">
+    {% csrf_token %}
+    <input type="hidden" name="escopo" value="global">
+    <h3 class="font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
+      Padrão da empresa <span class="text-xs font-normal" :style="temaClaro ? 'color:#94a3b8;' : 'color:#64748b;'">(usado quando a filial não tiver configuração própria)</span>
+    </h3>
+    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+      <label class="block text-sm font-medium space-y-1.5">
+        <span :style="temaClaro ? 'color:#374151;' : 'color:#d1d5db;'">Percentual padrão (%)</span>
+        <input type="number" name="percentual_global" step="0.01" min="0" max="100" class="form-input w-full"
+               value="{{ config_global.percentual_global|default:'0' }}">
+      </label>
+      <label class="block text-sm font-medium space-y-1.5">
+        <span :style="temaClaro ? 'color:#374151;' : 'color:#d1d5db;'">Dias de validade</span>
+        <input type="number" name="dias_validade" step="1" min="1" class="form-input w-full"
+               value="{{ config_global.dias_validade|default:'90' }}">
+      </label>
+      <label class="block text-sm font-medium space-y-1.5">
+        <span :style="temaClaro ? 'color:#374151;' : 'color:#d1d5db;'">Valor mínimo para gerar (R$)</span>
+        <input type="number" name="valor_minimo_gerar" step="0.01" min="0" class="form-input w-full"
+               value="{{ config_global.valor_minimo_gerar|default:'0' }}">
+      </label>
+      <label class="block text-sm font-medium space-y-1.5">
+        <span :style="temaClaro ? 'color:#374151;' : 'color:#d1d5db;'">Valor mínimo para usar (R$)</span>
+        <input type="number" name="valor_minimo_usar" step="0.01" min="0" class="form-input w-full"
+               value="{{ config_global.valor_minimo_usar|default:'0' }}">
+      </label>
+      <label class="block text-sm font-medium space-y-1.5">
+        <span :style="temaClaro ? 'color:#374151;' : 'color:#d1d5db;'">Percentual máximo de uso (%)</span>
+        <input type="number" name="percentual_maximo_uso_venda" step="0.01" min="0" max="100" class="form-input w-full"
+               value="{{ config_global.percentual_maximo_uso_venda|default:'100' }}">
+      </label>
+      <label class="block text-sm font-medium space-y-1.5">
+        <span :style="temaClaro ? 'color:#374151;' : 'color:#d1d5db;'">Se cashback já usado for cancelado</span>
+        <select name="modo_estorno_usado" class="form-input w-full">
+          <option value="conta_a_receber" {% if config_global.modo_estorno_usado == "conta_a_receber" or not config_global %}selected{% endif %}>Gerar conta a receber do cliente</option>
+          <option value="negativo" {% if config_global.modo_estorno_usado == "negativo" %}selected{% endif %}>Permitir saldo negativo na carteira</option>
+        </select>
+      </label>
+    </div>
+    <label class="inline-flex items-center gap-2 text-sm">
+      <input type="checkbox" name="ativo" {% if not config_global or config_global.ativo %}checked{% endif %}>
+      <span :style="temaClaro ? 'color:#374151;' : 'color:#d1d5db;'">Ativo</span>
+    </label>
+    <div class="flex justify-end">
+      <button type="submit" class="btn-secondary">Salvar configuração global</button>
+    </div>
+  </form>
+
+</div>
+{% endblock %}

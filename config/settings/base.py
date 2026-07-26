@@ -53,6 +53,7 @@ LOCAL_APPS = [
     'apps.qualidade',
     'apps.analytics',
     'apps.lotes',
+    'apps.cashback',
 ]
 
 INSTALLED_APPS = DJANGO_APPS + THIRD_PARTY_APPS + LOCAL_APPS

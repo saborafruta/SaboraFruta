@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import logging
+
 from django.db import transaction
 from django.db.models import Case, IntegerField, Value, When
 from django.utils import timezone
@@ -10,6 +12,8 @@ from apps.financeiro.models.fiscal import DocumentoFiscal
 from apps.fiscal.integrations.focusnfe import FocusNFeClient
 from apps.fiscal.integrations.focusnfe.config import FocusNFeConfig
 from apps.fiscal.services.focusnfe_service import FocusNFeService
+
+logger = logging.getLogger(__name__)
 
 
 def obter_documento_fiscal(venda):
@@ -70,6 +74,12 @@ def cancelar_venda_e_documento(venda, usuario, justificativa: str):
 
     if documento and venda.documento_fiscal_id != documento.pk:
         venda.documento_fiscal = documento
+
+    try:
+        from apps.cashback.services.wallet_service import CashbackWalletService
+        CashbackWalletService.estornar_venda(venda, usuario, justificativa)
+    except Exception:
+        logger.exception("Falha ao estornar cashback da venda #%s no cancelamento", venda.pk)
 
     venda.status = "cancelada"
     venda.motivo_cancelamento = justificativa

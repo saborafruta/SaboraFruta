@@ -70,6 +70,7 @@ class Permissao(models.Model):
         CADASTROS = 'cadastros', 'Cadastros'
         PRODUTOS = 'produtos', 'Produtos'
         LOGISTICA = 'logistica', 'Logistica'
+        CASHBACK = 'cashback', 'Cashback'
 
     perfil = models.ForeignKey(
         PerfilAcesso, on_delete=models.CASCADE, related_name='permissoes',

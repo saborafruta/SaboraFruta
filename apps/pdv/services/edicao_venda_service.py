@@ -9,8 +9,12 @@ não duplicar valores no caixa e nos recebimentos.
 """
 from __future__ import annotations
 
+import logging
+
 from django.db import transaction
 from django.utils import timezone
+
+logger = logging.getLogger(__name__)
 
 from apps.core.services.exceptions import DadosInvalidosError
 from apps.estoque.models import MovimentacaoEstoque
@@ -92,6 +96,14 @@ def estornar_venda_para_edicao(venda: VendaPDV, usuario) -> None:
         novo_total = (sessao.total_vendas or 0) - valor_contabilizado
         sessao.total_vendas = novo_total if novo_total > 0 else 0
         sessao.save(update_fields=["total_vendas"])
+
+    try:
+        from apps.cashback.services.wallet_service import CashbackWalletService
+        CashbackWalletService.estornar_venda(
+            venda, usuario, "Venda editada pelo operador (substituída por uma nova versão)."
+        )
+    except Exception:
+        logger.exception("Falha ao estornar cashback da venda #%s na edição", venda.pk)
 
     venda.status = "cancelada"
     venda.motivo_cancelamento = "Venda editada pelo operador (substituída por uma nova versão)."

@@ -1,0 +1,125 @@
+{% extends "_base.html" %}
+{% block title %}{{ title }}{% endblock %}
+{% block page_title %}{{ title }}{% endblock %}
+
+{% block content %}
+<div class="max-w-3xl mx-auto space-y-5">
+
+  <div>
+    <p class="text-sm mb-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+      <a href="{% url 'cashback:campanha-list' %}" :style="temaClaro ? 'color:#3b82f6;' : 'color:#60a5fa;'">Campanhas</a>
+      <span class="mx-1">›</span> {{ title }}
+    </p>
+    <h2 class="text-2xl font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">{{ title }}</h2>
+  </div>
+
+  <form method="post" class="card p-6 space-y-4">
+    {% csrf_token %}
+
+    <label class="block text-sm font-medium space-y-1.5">
+      <span :style="temaClaro ? 'color:#374151;' : 'color:#d1d5db;'">Nome *</span>
+      <input type="text" name="nome" required class="form-input w-full" value="{{ campanha.nome|default:'' }}" placeholder="Ex.: Black Friday">
+    </label>
+
+    <label class="block text-sm font-medium space-y-1.5">
+      <span :style="temaClaro ? 'color:#374151;' : 'color:#d1d5db;'">Descrição</span>
+      <textarea name="descricao" rows="2" class="form-input w-full">{{ campanha.descricao|default:'' }}</textarea>
+    </label>
+
+    <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+      <label class="block text-sm font-medium space-y-1.5">
+        <span :style="temaClaro ? 'color:#374151;' : 'color:#d1d5db;'">Percentual (%) *</span>
+        <input type="number" name="percentual" step="0.01" min="0" max="100" required class="form-input w-full" value="{{ campanha.percentual|default:'0' }}">
+      </label>
+      <label class="block text-sm font-medium space-y-1.5">
+        <span :style="temaClaro ? 'color:#374151;' : 'color:#d1d5db;'">Data início *</span>
+        <input type="date" name="data_inicio" required class="form-input w-full" value="{{ campanha.data_inicio|date:'Y-m-d'|default:'' }}">
+      </label>
+      <label class="block text-sm font-medium space-y-1.5">
+        <span :style="temaClaro ? 'color:#374151;' : 'color:#d1d5db;'">Data fim *</span>
+        <input type="date" name="data_fim" required class="form-input w-full" value="{{ campanha.data_fim|date:'Y-m-d'|default:'' }}">
+      </label>
+    </div>
+
+    <label class="block text-sm font-medium space-y-1.5 max-w-xs">
+      <span :style="temaClaro ? 'color:#374151;' : 'color:#d1d5db;'">Prioridade</span>
+      <input type="number" name="prioridade" step="1" min="0" class="form-input w-full" value="{{ campanha.prioridade|default:'0' }}">
+      <span class="text-xs" :style="temaClaro ? 'color:#94a3b8;' : 'color:#64748b;'">Se duas campanhas valerem no mesmo dia, vence a de maior prioridade.</span>
+    </label>
+
+    <div>
+      <span class="block text-sm font-medium mb-1.5" :style="temaClaro ? 'color:#374151;' : 'color:#d1d5db;'">Dias da semana</span>
+      <div class="flex flex-wrap gap-3">
+        <label class="inline-flex items-center gap-1.5 text-sm">
+          <input type="checkbox" name="dias_semana" value="0" {% if 0 in campanha.dias_semana %}checked{% endif %}>
+          <span :style="temaClaro ? 'color:#374151;' : 'color:#d1d5db;'">Segunda</span>
+        </label>
+        <label class="inline-flex items-center gap-1.5 text-sm">
+          <input type="checkbox" name="dias_semana" value="1" {% if 1 in campanha.dias_semana %}checked{% endif %}>
+          <span :style="temaClaro ? 'color:#374151;' : 'color:#d1d5db;'">Terça</span>
+        </label>
+        <label class="inline-flex items-center gap-1.5 text-sm">
+          <input type="checkbox" name="dias_semana" value="2" {% if 2 in campanha.dias_semana %}checked{% endif %}>
+          <span :style="temaClaro ? 'color:#374151;' : 'color:#d1d5db;'">Quarta</span>
+        </label>
+        <label class="inline-flex items-center gap-1.5 text-sm">
+          <input type="checkbox" name="dias_semana" value="3" {% if 3 in campanha.dias_semana %}checked{% endif %}>
+          <span :style="temaClaro ? 'color:#374151;' : 'color:#d1d5db;'">Quinta</span>
+        </label>
+        <label class="inline-flex items-center gap-1.5 text-sm">
+          <input type="checkbox" name="dias_semana" value="4" {% if 4 in campanha.dias_semana %}checked{% endif %}>
+          <span :style="temaClaro ? 'color:#374151;' : 'color:#d1d5db;'">Sexta</span>
+        </label>
+        <label class="inline-flex items-center gap-1.5 text-sm">
+          <input type="checkbox" name="dias_semana" value="5" {% if 5 in campanha.dias_semana %}checked{% endif %}>
+          <span :style="temaClaro ? 'color:#374151;' : 'color:#d1d5db;'">Sábado</span>
+        </label>
+        <label class="inline-flex items-center gap-1.5 text-sm">
+          <input type="checkbox" name="dias_semana" value="6" {% if 6 in campanha.dias_semana %}checked{% endif %}>
+          <span :style="temaClaro ? 'color:#374151;' : 'color:#d1d5db;'">Domingo</span>
+        </label>
+      </div>
+      <span class="text-xs" :style="temaClaro ? 'color:#94a3b8;' : 'color:#64748b;'">Nenhum marcado = vale todos os dias.</span>
+    </div>
+
+    <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+      <div>
+        <span class="block text-sm font-medium mb-1.5" :style="temaClaro ? 'color:#374151;' : 'color:#d1d5db;'">Produtos (opcional)</span>
+        <select name="produtos" multiple class="form-input w-full" size="6">
+          {% for p in produtos %}
+            <option value="{{ p.pk }}" {% if p in campanha.produtos.all %}selected{% endif %}>{{ p.descricao }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div>
+        <span class="block text-sm font-medium mb-1.5" :style="temaClaro ? 'color:#374151;' : 'color:#d1d5db;'">Categorias (opcional)</span>
+        <select name="categorias" multiple class="form-input w-full" size="6">
+          {% for c in categorias %}
+            <option value="{{ c.pk }}" {% if c in campanha.categorias.all %}selected{% endif %}>{{ c.nome }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div>
+        <span class="block text-sm font-medium mb-1.5" :style="temaClaro ? 'color:#374151;' : 'color:#d1d5db;'">Filiais (opcional)</span>
+        <select name="filiais" multiple class="form-input w-full" size="6">
+          {% for f in filiais %}
+            <option value="{{ f.pk }}" {% if f in campanha.filiais.all %}selected{% endif %}>{{ f.nome_fantasia|default:f.razao_social }}</option>
+          {% endfor %}
+        </select>
+      </div>
+    </div>
+    <p class="text-xs" :style="temaClaro ? 'color:#94a3b8;' : 'color:#64748b;'">Vazio em qualquer campo acima = sem restrição (vale para todos).</p>
+
+    <label class="inline-flex items-center gap-2 text-sm">
+      <input type="checkbox" name="ativo" {% if not campanha or campanha.ativo %}checked{% endif %}>
+      <span :style="temaClaro ? 'color:#374151;' : 'color:#d1d5db;'">Ativa</span>
+    </label>
+
+    <div class="flex justify-end gap-3 pt-2">
+      <a href="{{ cancel_url }}" class="btn-secondary">Cancelar</a>
+      <button type="submit" class="btn-primary">{% if campanha %}Salvar alterações{% else %}Criar campanha{% endif %}</button>
+    </div>
+  </form>
+
+</div>
+{% endblock %}
