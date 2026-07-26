@@ -20,23 +20,23 @@ class ConfiguracaoCashbackAdmin(admin.ModelAdmin):
 
 @admin.register(RegraCashbackProduto)
 class RegraCashbackProdutoAdmin(admin.ModelAdmin):
-    list_display = ("produto", "percentual", "gera_cashback", "ativo")
+    list_display = ("produto", "percentual", "valor_fixo_unidade", "gera_cashback", "ativo")
     search_fields = ("produto__descricao", "produto__codigo")
 
 
 @admin.register(RegraCashbackCategoria)
 class RegraCashbackCategoriaAdmin(admin.ModelAdmin):
-    list_display = ("categoria", "percentual", "gera_cashback", "ativo")
+    list_display = ("categoria", "percentual", "valor_fixo_unidade", "gera_cashback", "ativo")
 
 
 @admin.register(RegraCashbackFilial)
 class RegraCashbackFilialAdmin(admin.ModelAdmin):
-    list_display = ("filial", "percentual", "ativo")
+    list_display = ("filial", "percentual", "valor_fixo_unidade", "ativo")
 
 
 @admin.register(RegraCashbackEmpresa)
 class RegraCashbackEmpresaAdmin(admin.ModelAdmin):
-    list_display = ("empresa", "percentual", "ativo")
+    list_display = ("empresa", "percentual", "valor_fixo_unidade", "ativo")
 
 
 @admin.register(CampanhaCashback)

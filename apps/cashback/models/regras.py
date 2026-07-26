@@ -17,6 +17,10 @@ class RegraCashbackProduto(TimestampedModel, ActiveModel):
         "produtos.Produto", on_delete=models.CASCADE, related_name="regra_cashback",
     )
     percentual = models.DecimalField(max_digits=5, decimal_places=2, default=0)
+    valor_fixo_unidade = models.DecimalField(
+        max_digits=10, decimal_places=2, null=True, blank=True,
+        help_text="Valor fixo de cashback por unidade vendida (R$). Se informado, tem prioridade sobre o percentual.",
+    )
     valor_minimo_gerar = models.DecimalField(
         max_digits=14, decimal_places=2, null=True, blank=True,
         help_text="Substitui o mínimo padrão da configuração, se informado.",
@@ -40,6 +44,10 @@ class RegraCashbackCategoria(TimestampedModel, ActiveModel):
         "produtos.CategoriaProduto", on_delete=models.CASCADE, related_name="regra_cashback",
     )
     percentual = models.DecimalField(max_digits=5, decimal_places=2, default=0)
+    valor_fixo_unidade = models.DecimalField(
+        max_digits=10, decimal_places=2, null=True, blank=True,
+        help_text="Valor fixo de cashback por unidade vendida (R$). Se informado, tem prioridade sobre o percentual.",
+    )
     valor_minimo_gerar = models.DecimalField(
         max_digits=14, decimal_places=2, null=True, blank=True,
     )
@@ -62,6 +70,10 @@ class RegraCashbackFilial(TimestampedModel, ActiveModel):
         "core.Filial", on_delete=models.CASCADE, related_name="regra_cashback",
     )
     percentual = models.DecimalField(max_digits=5, decimal_places=2, default=0)
+    valor_fixo_unidade = models.DecimalField(
+        max_digits=10, decimal_places=2, null=True, blank=True,
+        help_text="Valor fixo de cashback por unidade vendida (R$). Se informado, tem prioridade sobre o percentual.",
+    )
     valor_minimo_gerar = models.DecimalField(
         max_digits=14, decimal_places=2, null=True, blank=True,
     )
@@ -80,6 +92,10 @@ class RegraCashbackEmpresa(TimestampedModel, ActiveModel):
         "core.Empresa", on_delete=models.CASCADE, related_name="regra_cashback",
     )
     percentual = models.DecimalField(max_digits=5, decimal_places=2, default=0)
+    valor_fixo_unidade = models.DecimalField(
+        max_digits=10, decimal_places=2, null=True, blank=True,
+        help_text="Valor fixo de cashback por unidade vendida (R$). Se informado, tem prioridade sobre o percentual.",
+    )
     valor_minimo_gerar = models.DecimalField(
         max_digits=14, decimal_places=2, null=True, blank=True,
     )

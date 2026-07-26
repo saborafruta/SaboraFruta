@@ -14,6 +14,7 @@ from __future__ import annotations
 
 from datetime import timedelta
 from decimal import ROUND_HALF_UP, Decimal
+from typing import Optional
 
 from django.db import transaction
 from django.db.models import Q, Sum
@@ -88,20 +89,22 @@ class CashbackWalletService:
         if not itens:
             return []
 
-        grupos: dict[tuple[Decimal, str], dict] = {}
+        grupos: dict[tuple[Decimal, Optional[Decimal], str], dict] = {}
         for item in itens:
             if not item.produto_id:
                 continue
             resultado = resolver_percentual(produto=item.produto, filial=filial)
             if not resultado.gera_cashback:
                 continue
-            chave_grupo = (resultado.percentual, resultado.origem)
+            chave_grupo = (resultado.percentual, resultado.valor_fixo_unidade, resultado.origem)
             grupo = grupos.setdefault(chave_grupo, {
                 "subtotal": Decimal("0"),
+                "quantidade": Decimal("0"),
                 "valor_minimo": resultado.valor_minimo_gerar,
                 "item_ref": item,
             })
             grupo["subtotal"] += item.valor_total
+            grupo["quantidade"] += item.quantidade
 
         if not grupos:
             return []
@@ -110,13 +113,20 @@ class CashbackWalletService:
         hoje = timezone.localdate()
         movimentos = []
 
-        for idx, ((percentual, origem), dados) in enumerate(grupos.items()):
+        for idx, ((percentual, valor_fixo_unidade, origem), dados) in enumerate(grupos.items()):
             minimo = dados["valor_minimo"] if dados["valor_minimo"] is not None else valor_minimo_padrao
             if dados["subtotal"] < minimo:
                 continue
-            valor_cashback = (dados["subtotal"] * percentual / Decimal("100")).quantize(
-                Decimal("0.01"), rounding=ROUND_HALF_UP,
-            )
+            if valor_fixo_unidade:
+                valor_cashback = (dados["quantidade"] * valor_fixo_unidade).quantize(
+                    Decimal("0.01"), rounding=ROUND_HALF_UP,
+                )
+                observacao = f"Cashback R$ {valor_fixo_unidade}/un. ({origem}) x {dados['quantidade']} un."
+            else:
+                valor_cashback = (dados["subtotal"] * percentual / Decimal("100")).quantize(
+                    Decimal("0.01"), rounding=ROUND_HALF_UP,
+                )
+                observacao = f"Cashback {percentual}% ({origem}) sobre R$ {dados['subtotal']}."
             if valor_cashback <= 0:
                 continue
             mov = MovimentoCashback.objects.create(
@@ -130,7 +140,7 @@ class CashbackWalletService:
                 tipo=MovimentoCashback.Tipo.CREDITO_VENDA,
                 valor=valor_cashback,
                 data_validade=hoje + timedelta(days=dias_validade),
-                observacao=f"Cashback {percentual}% ({origem}) sobre R$ {dados['subtotal']}.",
+                observacao=observacao,
                 origem=MovimentoCashback.Origem.PDV,
                 ip_origem=ip_origem,
                 dispositivo=dispositivo,

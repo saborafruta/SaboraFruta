@@ -80,6 +80,10 @@
         <input type="number" name="percentual" step="0.01" min="0" max="100" class="form-input w-full" value="0">
       </label>
       <label class="block text-sm">
+        <span class="block text-xs font-semibold mb-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Valor fixo por un. (R$)</span>
+        <input type="number" name="valor_fixo_unidade" step="0.01" min="0" class="form-input w-full" placeholder="ex.: 0,50">
+      </label>
+      <label class="block text-sm">
         <span class="block text-xs font-semibold mb-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Mín. p/ gerar (R$)</span>
         <input type="number" name="valor_minimo_gerar" step="0.01" min="0" class="form-input w-full" placeholder="usa padrão">
       </label>
@@ -89,6 +93,7 @@
       </label>
       <button type="submit" class="btn-primary">Salvar regra</button>
     </form>
+    <p class="text-xs" :style="temaClaro ? 'color:#94a3b8;' : 'color:#64748b;'">Preenchendo o valor fixo por unidade, ele vale no lugar do percentual.</p>
   </div>
 
   <div class="card overflow-hidden">
@@ -97,6 +102,7 @@
         <tr class="text-left text-xs uppercase tracking-wide" :style="temaClaro ? 'color:#6b7280;background:#f9fafb;' : 'color:#9ca3af;background:#1e1e20;'">
           <th class="px-4 py-3">Produto</th>
           <th class="px-4 py-3">Percentual</th>
+          <th class="px-4 py-3">Valor fixo/un.</th>
           <th class="px-4 py-3">Gera cashback</th>
           <th class="px-4 py-3 text-right">Ações</th>
         </tr>
@@ -106,6 +112,7 @@
         <tr>
           <td class="px-4 py-3">{{ r.produto.descricao }}</td>
           <td class="px-4 py-3 font-mono">{{ r.percentual }}%</td>
+          <td class="px-4 py-3 font-mono">{% if r.valor_fixo_unidade %}R$ {{ r.valor_fixo_unidade }}{% else %}—{% endif %}</td>
           <td class="px-4 py-3">{% if r.gera_cashback %}<span class="soft-pill is-green">Sim</span>{% else %}<span class="soft-pill is-amber">Não</span>{% endif %}</td>
           <td class="px-4 py-3 text-right">
             <form method="post" action="{% url 'cashback:regra-excluir' 'produto' r.pk %}" onsubmit="return confirm('Remover esta regra?')">
@@ -114,7 +121,7 @@
           </td>
         </tr>
         {% empty %}
-        <tr><td colspan="4" class="px-4 py-8 text-center" :style="temaClaro ? 'color:#94a3b8;' : 'color:#64748b;'">Nenhuma regra por produto cadastrada.</td></tr>
+        <tr><td colspan="5" class="px-4 py-8 text-center" :style="temaClaro ? 'color:#94a3b8;' : 'color:#64748b;'">Nenhuma regra por produto cadastrada.</td></tr>
         {% endfor %}
       </tbody>
     </table>
@@ -169,6 +176,10 @@
         <input type="number" name="percentual" step="0.01" min="0" max="100" class="form-input w-full" value="0">
       </label>
       <label class="block text-sm">
+        <span class="block text-xs font-semibold mb-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Valor fixo por un. (R$)</span>
+        <input type="number" name="valor_fixo_unidade" step="0.01" min="0" class="form-input w-full" placeholder="ex.: 0,50">
+      </label>
+      <label class="block text-sm">
         <span class="block text-xs font-semibold mb-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Mín. p/ gerar (R$)</span>
         <input type="number" name="valor_minimo_gerar" step="0.01" min="0" class="form-input w-full" placeholder="usa padrão">
       </label>
@@ -178,6 +189,7 @@
       </label>
       <button type="submit" class="btn-primary">Salvar regra</button>
     </form>
+    <p class="text-xs" :style="temaClaro ? 'color:#94a3b8;' : 'color:#64748b;'">Preenchendo o valor fixo por unidade, ele vale no lugar do percentual.</p>
   </div>
 
   <div class="card overflow-hidden">
@@ -186,6 +198,7 @@
         <tr class="text-left text-xs uppercase tracking-wide" :style="temaClaro ? 'color:#6b7280;background:#f9fafb;' : 'color:#9ca3af;background:#1e1e20;'">
           <th class="px-4 py-3">Categoria</th>
           <th class="px-4 py-3">Percentual</th>
+          <th class="px-4 py-3">Valor fixo/un.</th>
           <th class="px-4 py-3">Gera cashback</th>
           <th class="px-4 py-3 text-right">Ações</th>
         </tr>
@@ -195,6 +208,7 @@
         <tr>
           <td class="px-4 py-3">{{ r.categoria.nome }}</td>
           <td class="px-4 py-3 font-mono">{{ r.percentual }}%</td>
+          <td class="px-4 py-3 font-mono">{% if r.valor_fixo_unidade %}R$ {{ r.valor_fixo_unidade }}{% else %}—{% endif %}</td>
           <td class="px-4 py-3">{% if r.gera_cashback %}<span class="soft-pill is-green">Sim</span>{% else %}<span class="soft-pill is-amber">Não</span>{% endif %}</td>
           <td class="px-4 py-3 text-right">
             <form method="post" action="{% url 'cashback:regra-excluir' 'categoria' r.pk %}" onsubmit="return confirm('Remover esta regra?')">
@@ -203,7 +217,7 @@
           </td>
         </tr>
         {% empty %}
-        <tr><td colspan="4" class="px-4 py-8 text-center" :style="temaClaro ? 'color:#94a3b8;' : 'color:#64748b;'">Nenhuma regra por categoria cadastrada.</td></tr>
+        <tr><td colspan="5" class="px-4 py-8 text-center" :style="temaClaro ? 'color:#94a3b8;' : 'color:#64748b;'">Nenhuma regra por categoria cadastrada.</td></tr>
         {% endfor %}
       </tbody>
     </table>
@@ -227,11 +241,16 @@
         <input type="number" name="percentual" step="0.01" min="0" max="100" class="form-input w-full" value="0">
       </label>
       <label class="block text-sm">
+        <span class="block text-xs font-semibold mb-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Valor fixo por un. (R$)</span>
+        <input type="number" name="valor_fixo_unidade" step="0.01" min="0" class="form-input w-full" placeholder="ex.: 0,50">
+      </label>
+      <label class="block text-sm">
         <span class="block text-xs font-semibold mb-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Mín. p/ gerar (R$)</span>
         <input type="number" name="valor_minimo_gerar" step="0.01" min="0" class="form-input w-full" placeholder="usa padrão">
       </label>
       <button type="submit" class="btn-primary sm:col-span-4 justify-self-end w-auto">Salvar regra</button>
     </form>
+    <p class="text-xs" :style="temaClaro ? 'color:#94a3b8;' : 'color:#64748b;'">Preenchendo o valor fixo por unidade, ele vale no lugar do percentual.</p>
   </div>
 
   <div class="card overflow-hidden">
@@ -240,6 +259,7 @@
         <tr class="text-left text-xs uppercase tracking-wide" :style="temaClaro ? 'color:#6b7280;background:#f9fafb;' : 'color:#9ca3af;background:#1e1e20;'">
           <th class="px-4 py-3">Filial</th>
           <th class="px-4 py-3">Percentual</th>
+          <th class="px-4 py-3">Valor fixo/un.</th>
           <th class="px-4 py-3 text-right">Ações</th>
         </tr>
       </thead>
@@ -248,6 +268,7 @@
         <tr>
           <td class="px-4 py-3">{{ r.filial.nome_fantasia|default:r.filial.razao_social }}</td>
           <td class="px-4 py-3 font-mono">{{ r.percentual }}%</td>
+          <td class="px-4 py-3 font-mono">{% if r.valor_fixo_unidade %}R$ {{ r.valor_fixo_unidade }}{% else %}—{% endif %}</td>
           <td class="px-4 py-3 text-right">
             <form method="post" action="{% url 'cashback:regra-excluir' 'filial' r.pk %}" onsubmit="return confirm('Remover esta regra?')">
               {% csrf_token %}<button class="text-xs font-semibold" style="color:#dc2626;">Remover</button>
@@ -255,7 +276,7 @@
           </td>
         </tr>
         {% empty %}
-        <tr><td colspan="3" class="px-4 py-8 text-center" :style="temaClaro ? 'color:#94a3b8;' : 'color:#64748b;'">Nenhuma regra por filial cadastrada.</td></tr>
+        <tr><td colspan="4" class="px-4 py-8 text-center" :style="temaClaro ? 'color:#94a3b8;' : 'color:#64748b;'">Nenhuma regra por filial cadastrada.</td></tr>
         {% endfor %}
       </tbody>
     </table>
@@ -275,12 +296,18 @@
                value="{{ regras_empresa.0.percentual|default:'0' }}">
       </label>
       <label class="block text-sm">
+        <span class="block text-xs font-semibold mb-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Valor fixo por un. (R$)</span>
+        <input type="number" name="valor_fixo_unidade" step="0.01" min="0" class="form-input w-full"
+               value="{{ regras_empresa.0.valor_fixo_unidade|default:'' }}" placeholder="ex.: 0,50">
+      </label>
+      <label class="block text-sm">
         <span class="block text-xs font-semibold mb-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Mín. p/ gerar (R$)</span>
         <input type="number" name="valor_minimo_gerar" step="0.01" min="0" class="form-input w-full"
                value="{{ regras_empresa.0.valor_minimo_gerar|default:'' }}" placeholder="usa padrão">
       </label>
       <button type="submit" class="btn-primary">Salvar</button>
     </form>
+    <p class="text-xs" :style="temaClaro ? 'color:#94a3b8;' : 'color:#64748b;'">Preenchendo o valor fixo por unidade, ele vale no lugar do percentual.</p>
   </div>
   {% endif %}
 

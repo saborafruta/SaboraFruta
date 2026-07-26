@@ -84,6 +84,15 @@ class RegrasCashbackView(PermissaoRequiredMixin, View):
                 messages.error(request, "Valor mínimo inválido.")
                 return redirect(f"{reverse('cashback:regras')}?nivel={nivel}")
 
+        valor_fixo_raw = request.POST.get("valor_fixo_unidade", "").strip()
+        valor_fixo_unidade = None
+        if valor_fixo_raw:
+            try:
+                valor_fixo_unidade = Decimal(valor_fixo_raw.replace(",", "."))
+            except InvalidOperation:
+                messages.error(request, "Valor fixo por unidade inválido.")
+                return redirect(f"{reverse('cashback:regras')}?nivel={nivel}")
+
         gera_cashback = request.POST.get("gera_cashback", "on") == "on"
         ativo = request.POST.get("ativo", "on") == "on"
 
@@ -92,7 +101,12 @@ class RegrasCashbackView(PermissaoRequiredMixin, View):
             messages.error(request, "Selecione o alvo da regra.")
             return redirect(f"{reverse('cashback:regras')}?nivel={nivel}")
 
-        dados = {"percentual": percentual, "valor_minimo_gerar": valor_minimo_gerar, "ativo": ativo}
+        dados = {
+            "percentual": percentual,
+            "valor_fixo_unidade": valor_fixo_unidade,
+            "valor_minimo_gerar": valor_minimo_gerar,
+            "ativo": ativo,
+        }
         if nivel in ("produto", "categoria"):
             dados["gera_cashback"] = gera_cashback
 
