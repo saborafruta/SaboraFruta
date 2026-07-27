@@ -1210,7 +1210,8 @@
       </div>
 
       <!-- Pagamentos registrados -->
-      <div style="flex:1;overflow-y:auto;padding:8px 0 0;">
+      <div x-show="venda.pagamentos.length>0" x-cloak
+           style="flex-shrink:0;max-height:170px;overflow-y:auto;padding:8px 0 0;">
 
         <template x-for="pgto in venda.pagamentos" :key="pgto._id">
           <div style="display:flex;align-items:center;gap:10px;padding:10px 14px;margin:0 10px 6px;background:#13131e;border:1px solid #1e1e30;border-radius:10px;">
