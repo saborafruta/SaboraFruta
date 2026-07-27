@@ -462,14 +462,13 @@ class MDFeForm(forms.ModelForm):
         model = MDFe
         fields = [
             "numero", "serie", "data_emissao", "data_encerramento",
-            "status", "modal",
+            "modal",
             "transportadora", "romaneio",
             "motorista_nome", "motorista_cpf", "motorista_cnh",
             "veiculo_placa", "veiculo_rntrc", "veiculo_descricao",
-            "uf_carregamento", "municipio_carregamento",
+            "uf_carregamento", "municipio_carregamento", "codigo_municipio_carregamento",
             "percurso_ufs",
-            "uf_descarregamento", "municipio_descarregamento",
-            "chave_acesso", "protocolo_autorizacao",
+            "uf_descarregamento", "municipio_descarregamento", "codigo_municipio_descarregamento",
             "observacao",
         ]
         widgets = {
@@ -477,6 +476,8 @@ class MDFeForm(forms.ModelForm):
             "data_encerramento": forms.DateInput(attrs={"type": "date"}),
             "observacao": forms.Textarea(attrs={"rows": 3}),
             "percurso_ufs": forms.TextInput(attrs={"placeholder": "SP, RJ, MG, ES..."}),
+            "codigo_municipio_carregamento": forms.HiddenInput(),
+            "codigo_municipio_descarregamento": forms.HiddenInput(),
         }
 
     def __init__(self, *args, filial=None, **kwargs):
@@ -486,8 +487,7 @@ class MDFeForm(forms.ModelForm):
             self.fields["romaneio"].queryset = RomaneioCarga.objects.for_filial(filial).exclude(
                 status__in=[RomaneioCarga.Status.CANCELADO]
             )
-        for nome in ("transportadora", "romaneio", "data_encerramento",
-                     "chave_acesso", "protocolo_autorizacao"):
+        for nome in ("transportadora", "romaneio", "data_encerramento"):
             self.fields[nome].required = False
         for field in self.fields.values():
             field.widget.attrs["class"] = BASE_INPUT_CLASS

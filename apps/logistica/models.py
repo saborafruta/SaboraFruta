@@ -604,7 +604,10 @@ class MDFe(FilialScopedModel):
 
     class Status(models.TextChoices):
         RASCUNHO = "rascunho", "Rascunho"
+        AGUARDANDO_NFE = "aguardando_nfe", "Aguardando autorização da NF-e"
+        PROCESSANDO = "processando", "Processando autorização"
         AUTORIZADO = "autorizado", "Autorizado"
+        REJEITADO = "rejeitado", "Rejeitado"
         ENCERRADO = "encerrado", "Encerrado"
         CANCELADO = "cancelado", "Cancelado"
 
@@ -667,6 +670,19 @@ class MDFe(FilialScopedModel):
     # Autorização
     protocolo_autorizacao = models.CharField(max_length=60, blank=True)
     data_autorizacao = models.DateTimeField(null=True, blank=True)
+    data_cancelamento = models.DateTimeField(null=True, blank=True)
+    mensagem_sefaz = models.TextField(blank=True)
+    justificativa_cancelamento = models.TextField(blank=True)
+    codigo_municipio_carregamento = models.CharField(max_length=7, blank=True)
+    codigo_municipio_descarregamento = models.CharField(max_length=7, blank=True)
+    transporte_metadados = models.JSONField(default=dict, blank=True)
+    documento_fiscal = models.OneToOneField(
+        "financeiro.DocumentoFiscal",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="mdfe_logistico",
+    )
     observacao = models.TextField(blank=True)
 
     class Meta:
@@ -705,6 +721,13 @@ class DocumentoMDFe(TimestampedModel):
         OUTRO = "outro", "Outro"
 
     mdfe = models.ForeignKey(MDFe, on_delete=models.CASCADE, related_name="documentos")
+    documento_fiscal = models.ForeignKey(
+        "financeiro.DocumentoFiscal",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="vinculos_mdfe",
+    )
     tipo_documento = models.CharField(max_length=20, choices=TipoDocumento.choices, default=TipoDocumento.CTE)
     chave_acesso = models.CharField(max_length=44, blank=True, db_index=True)
     numero_documento = models.CharField(max_length=60, blank=True)

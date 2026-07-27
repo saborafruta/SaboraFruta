@@ -295,6 +295,13 @@ def webhook_focusnfe(request):
 
     try:
         FocusNFeService().aplicar_retorno(documento, body)
+        from apps.logistica.services.mdfe_focusnfe import (
+            processar_nfe_transferencia_autorizada,
+            sincronizar_mdfe_por_documento,
+        )
+
+        sincronizar_mdfe_por_documento(documento)
+        processar_nfe_transferencia_autorizada(documento)
     except Exception:
         logger.exception('Erro ao processar webhook Focus NFe (ref=%s)', ref)
         return JsonResponse({'erro': 'falha ao processar'}, status=500)

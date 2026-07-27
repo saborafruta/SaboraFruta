@@ -51,11 +51,22 @@ class _ItemTransfAdapter:
         )
 
 
-def _cfop_transferencia(uf_origem: str, uf_destino: str) -> str:
-    """5152 = transferência interna; 6152 = transferência interestadual."""
+def _cfop_transferencia(
+    uf_origem: str,
+    uf_destino: str,
+    origem_mercadoria: str = "producao_propria",
+) -> str:
+    """Define o CFOP pela UF e pela origem comercial da mercadoria."""
     uo = (uf_origem or "").strip().upper()
     ud = (uf_destino or "").strip().upper()
-    return "6152" if uo and ud and uo != ud else "5152"
+    interestadual = bool(uo and ud and uo != ud)
+    if origem_mercadoria == "producao_propria":
+        return "6151" if interestadual else "5151"
+    if origem_mercadoria == "terceiros":
+        return "6152" if interestadual else "5152"
+    raise DadosInvalidosError(
+        "Informe se os produtos são de produção própria ou adquiridos de terceiros."
+    )
 
 
 def _local_destino_transferencia(uf_origem: str, uf_destino: str) -> str:
@@ -129,6 +140,7 @@ def construir_payload_transferencia(
     numero_nfe: int,
     serie_nfe: int,
     observacao: str = "",
+    origem_mercadoria: str = "producao_propria",
 ) -> Dict[str, Any]:
     if not itens:
         raise DadosInvalidosError("Nenhum item para emitir a NF-e de transferência.")
@@ -138,7 +150,7 @@ def construir_payload_transferencia(
 
     uf_origem = (filial_origem.uf or "").strip().upper()
     uf_destino = (filial_destino.uf or "").strip().upper()
-    cfop = _cfop_transferencia(uf_origem, uf_destino)
+    cfop = _cfop_transferencia(uf_origem, uf_destino, origem_mercadoria)
     local_destino = _local_destino_transferencia(uf_origem, uf_destino)
 
     items: List[dict] = []
@@ -170,7 +182,7 @@ def construir_payload_transferencia(
         "consumidor_final": 0,
         "presenca_comprador": "9",      # 9 = operação não presencial (outros)
         "local_destino": local_destino,
-        "modalidade_frete": "9",        # 9 = sem frete
+        "modalidade_frete": "0",        # 0 = por conta do emitente
         "items": items,
         # 90 = Sem pagamento (transferência não tem cobrança financeira)
         "formas_pagamento": [{"forma_pagamento": "90", "valor_pagamento": 0.0}],
@@ -195,7 +207,10 @@ def construir_payload_transferencia(
     payload["valor_total"] = _float_dinheiro(valor_total)
 
     obs = " ".join(str(observacao or "").split()).strip()
-    info = f"Transferencia de mercadoria entre estabelecimentos do mesmo titular."
+    info = (
+        "Transferencia de mercadoria entre estabelecimentos do mesmo titular. "
+        "Transporte de carga propria por conta do emitente."
+    )
     if obs:
         info = f"{info} {obs}"
     payload["informacoes_adicionais_contribuinte"] = info[:5000]
@@ -214,6 +229,7 @@ def emitir_nfe_transferencia(
     *,
     origem_id: int | None = None,
     observacao: str = "",
+    origem_mercadoria: str = "producao_propria",
 ) -> DocumentoFiscal:
     """
     Reserva número/série, cria o DocumentoFiscal e dispara a emissão na SEFAZ.
@@ -231,6 +247,15 @@ def emitir_nfe_transferencia(
         raise DadosInvalidosError(
             "Configure o Token Focus NFe da filial de origem antes de emitir a "
             "NF-e de transferência."
+        )
+
+    cnpj_origem = _somente_digitos(filial_origem.cnpj)
+    cnpj_destino = _somente_digitos(filial_destino.cnpj)
+    if len(cnpj_origem) != 14 or len(cnpj_destino) != 14:
+        raise DadosInvalidosError("Origem e destino precisam ter CNPJ válido.")
+    if cnpj_origem[:8] != cnpj_destino[:8]:
+        raise DadosInvalidosError(
+            "A NF-e de transferência só pode ser emitida entre matriz e filial do mesmo titular."
         )
 
     adapters = [
@@ -264,7 +289,13 @@ def emitir_nfe_transferencia(
         filial_lock.save(update_fields=["proximo_numero_nfe"])
 
     payload = construir_payload_transferencia(
-        filial_origem, filial_destino, adapters, numero_nfe, serie_nfe, observacao,
+        filial_origem,
+        filial_destino,
+        adapters,
+        numero_nfe,
+        serie_nfe,
+        observacao,
+        origem_mercadoria,
     )
 
     doc = DocumentoFiscal.objects.create(
@@ -277,6 +308,7 @@ def emitir_nfe_transferencia(
         natureza_operacao_descricao="Transferencia de mercadoria",
         tipo_operacao="1",
         finalidade_nfe=1,
+        modalidade_frete=0,
         emitente_cnpj=filial_origem.cnpj,
         destinatario_tipo="filial",
         destinatario_id=filial_destino.pk,

@@ -13,7 +13,7 @@ from django.urls import reverse
 from django.utils import timezone
 from django.views import View
 
-from apps.cadastros.models import Cliente, Fornecedor
+from apps.cadastros.models import Cliente, Fornecedor, Motorista, Veiculo
 from apps.core.models import Filial
 from apps.core.services.exceptions import DomainError
 from apps.core.services.permissions import PERMISSION_DENIED_MESSAGE, PermissaoRequiredMixin
@@ -688,12 +688,25 @@ class TransferenciaLojaView(PermissaoRequiredMixin, View):
             }
             for f in filiais_qs
         ])
+        motoristas_json = _json.dumps(list(
+            Motorista.objects.for_filial(filial).filter(ativo=True)
+            .values("id", "nome", "cpf", "cnh").order_by("nome")
+        ))
+        veiculos_json = _json.dumps(list(
+            Veiculo.objects.for_filial(filial).filter(ativo=True)
+            .values(
+                "id", "placa", "descricao", "marca", "modelo", "tara",
+                "capacidade_kg", "uf_placa", "tipo_rodado", "tipo_carroceria",
+            ).order_by("placa")
+        ), default=str)
 
         return render(request, 'estoque/outras_movimentacoes/transferencia_lojas.html', {
             'title': 'Transferência entre Lojas',
             'filiais_json': filiais_json,
             'filial_nome': filial.nome_fantasia or filial.razao_social,
             'filial_is_matriz': filial.is_matriz,
+            'motoristas_json': motoristas_json,
+            'veiculos_json': veiculos_json,
             'cancel_url': reverse('estoque:outras-mov-hub'),
         })
 
@@ -706,13 +719,14 @@ def _gerar_documento_numero_transferencia(filial_id):
 
 def _emitir_nfe_transferencia_e_vincular(
     *, filial_origem, filial_destino, itens_nota, usuario, observacao, mov_ids,
+    origem_mercadoria="producao_propria",
 ):
     """
     Emite a NF-e de transferência e, se bem sucedida, vincula todas as
     movimentações informadas (saída + entrada) ao DocumentoFiscal criado —
     para que deixem de aparecer como "pendentes de nota".
 
-    Retorna (doc_info_dict_ou_None, erro_ou_None).
+    Retorna (doc_info_dict_ou_None, erro_ou_None, documento_ou_None).
     """
     from apps.estoque.services.transferencia_nfe import emitir_nfe_transferencia
 
@@ -724,11 +738,12 @@ def _emitir_nfe_transferencia_e_vincular(
             usuario=usuario,
             origem_id=mov_ids[0] if mov_ids else None,
             observacao=observacao,
+            origem_mercadoria=origem_mercadoria,
         )
     except DomainError as exc:
-        return None, str(exc)
+        return None, str(exc), None
     except Exception as exc:  # noqa: BLE001 — falha de integração não reverte o estoque
-        return None, f'Falha ao emitir a NF-e: {exc}'
+        return None, f'Falha ao emitir a NF-e: {exc}', None
 
     if mov_ids:
         MovimentacaoEstoque.objects.filter(pk__in=mov_ids).update(documento_fiscal=doc)
@@ -737,7 +752,7 @@ def _emitir_nfe_transferencia_e_vincular(
         'numero': doc.numero,
         'serie': doc.serie,
         'status': doc.get_status_display(),
-    }, None
+    }, None, doc
 
 
 def _custo_unitario_produto(produto, filial):
@@ -766,6 +781,8 @@ class TransferenciaLojaApiView(PermissaoRequiredMixin, View):
         observacao = (body.get('observacao') or '').strip()
         itens = body.get('itens', [])
         gerar_nota = bool(body.get('gerar_nota'))
+        gerar_mdfe = gerar_nota and bool(body.get('gerar_mdfe', True))
+        origem_mercadoria = body.get('origem_mercadoria') or 'producao_propria'
 
         if not filial_destino_id:
             return JsonResponse({'erro': 'Selecione a loja de destino.'}, status=400)
@@ -784,6 +801,57 @@ class TransferenciaLojaApiView(PermissaoRequiredMixin, View):
             filial_destino = Filial.objects.get(pk=filial_destino_id, empresa=empresa, ativo=True)
         except Filial.DoesNotExist:
             return JsonResponse({'erro': 'Loja de destino inválida.'}, status=400)
+
+        motorista = None
+        veiculo = None
+        peso_bruto = Decimal("0")
+        if gerar_nota:
+            cnpj_origem = "".join(filter(str.isdigit, filial.cnpj or ""))
+            cnpj_destino = "".join(filter(str.isdigit, filial_destino.cnpj or ""))
+            if len(cnpj_origem) != 14 or len(cnpj_destino) != 14:
+                return JsonResponse(
+                    {'erro': 'Origem e destino precisam ter CNPJ válido.'}, status=400,
+                )
+            if cnpj_origem[:8] != cnpj_destino[:8]:
+                return JsonResponse({
+                    'erro': (
+                        'A nota de transferência só pode ser emitida entre matriz '
+                        'e filial do mesmo titular.'
+                    ),
+                }, status=400)
+            if origem_mercadoria not in {'producao_propria', 'terceiros'}:
+                return JsonResponse(
+                    {'erro': 'Informe a origem fiscal dos produtos.'}, status=400,
+                )
+
+        if gerar_mdfe:
+            try:
+                peso_bruto = Decimal(str(body.get('peso_bruto') or 0))
+            except Exception:
+                return JsonResponse({'erro': 'Informe um peso bruto válido.'}, status=400)
+            motorista = Motorista.objects.for_filial(filial).filter(
+                pk=body.get('motorista_id'), ativo=True,
+            ).first()
+            veiculo = Veiculo.objects.for_filial(filial).filter(
+                pk=body.get('veiculo_id'), ativo=True,
+            ).first()
+            if not motorista or not veiculo or peso_bruto <= 0:
+                return JsonResponse({
+                    'erro': (
+                        'Para emitir o MDF-e, selecione motorista, veículo '
+                        'e informe o peso bruto da carga.'
+                    ),
+                }, status=400)
+            from apps.logistica.services.mdfe_focusnfe import (
+                _validar_filial_mdfe,
+                _validar_transporte,
+            )
+            try:
+                _validar_filial_mdfe(filial)
+                _validar_filial_mdfe(filial_destino, destino=True)
+                _validar_transporte(motorista, veiculo, peso_bruto)
+            except DomainError as exc:
+                return JsonResponse({'erro': str(exc)}, status=400)
 
         # ── Validação prévia dos itens ──────────────────────────────
         itens_norm = []
@@ -844,17 +912,44 @@ class TransferenciaLojaApiView(PermissaoRequiredMixin, View):
                 })
 
             mov_ids = [r['saida'] for r in resultados] + [r['entrada'] for r in resultados]
-            nota_info, nota_erro = _emitir_nfe_transferencia_e_vincular(
+            nota_info, nota_erro, documento_nfe = _emitir_nfe_transferencia_e_vincular(
                 filial_origem=filial,
                 filial_destino=filial_destino,
                 itens_nota=itens_nota,
                 usuario=request.user,
                 observacao=observacao,
                 mov_ids=mov_ids,
+                origem_mercadoria=origem_mercadoria,
             )
             if nota_info:
                 resposta['nota'] = nota_info
                 resposta['message'] += f' NF-e nº {nota_info["numero"]} enviada para autorização.'
+                if gerar_mdfe:
+                    try:
+                        from apps.logistica.services.mdfe_focusnfe import criar_mdfe_transferencia
+
+                        mdfe = criar_mdfe_transferencia(
+                            nfe=documento_nfe,
+                            filial_destino=filial_destino,
+                            motorista=motorista,
+                            veiculo=veiculo,
+                            peso_bruto=peso_bruto,
+                            usuario=request.user,
+                            observacao=observacao,
+                        )
+                        resposta['mdfe'] = {
+                            'id': mdfe.pk,
+                            'numero': mdfe.numero,
+                            'status': mdfe.get_status_display(),
+                            'url': reverse('logistica:mdfe-detail', kwargs={'pk': mdfe.pk}),
+                        }
+                        resposta['message'] += (
+                            f' MDF-e nº {mdfe.numero} preparado e vinculado à NF-e.'
+                        )
+                    except Exception as exc:  # noqa: BLE001
+                        resposta['mdfe_erro'] = (
+                            f'A NF-e foi enviada, mas o MDF-e não foi preparado: {exc}'
+                        )
             else:
                 resposta['nota_erro'] = nota_erro
 
@@ -1002,7 +1097,7 @@ class TransferenciaReemitirNFeApiView(PermissaoRequiredMixin, View):
         observacao = movs[0].observacao or 'Transferência entre filiais.'
 
         mov_ids = [m.pk for m in movs] + mov_ids_entrada
-        nota_info, nota_erro = _emitir_nfe_transferencia_e_vincular(
+        nota_info, nota_erro, _ = _emitir_nfe_transferencia_e_vincular(
             filial_origem=filial,
             filial_destino=filial_destino,
             itens_nota=itens_nota,

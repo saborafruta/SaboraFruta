@@ -1,318 +1,502 @@
-"""
-Servico de emissao MDF-e (Manifesto Eletronico de Documentos Fiscais, modelo
-58) via Focus NFe.
-
-Constroi o payload JSON a partir do modelo MDFe e orquestra emissao,
-consulta, cancelamento, encerramento e download do DAMDFE.
-
-Alguns campos exigidos pela SEFAZ (RENAVAM, tara, capacidade do veiculo,
-codigo IBGE do municipio de descarregamento) nao existem hoje no modelo
-`MDFe` e recebem valores neutros — complete-os manualmente se a Focus
-rejeitar a emissao por um desses campos.
-"""
+"""Emissão e eventos de MDF-e rodoviário pela Focus NFe."""
 from __future__ import annotations
 
-import logging
 from decimal import Decimal
-from typing import Any, Dict, Optional, Tuple
+from typing import Any
 
+from django.db import transaction
 from django.utils import timezone
 
+from apps.core.services.exceptions import DadosInvalidosError
 from apps.financeiro.constants.enums import StatusDocumentoFiscal, TipoDocumentoFiscal
-from apps.financeiro.models.fiscal import DocumentoFiscal
-from apps.fiscal.integrations.focusnfe.exceptions import FocusNFeError
+from apps.financeiro.models import DocumentoFiscal
+from apps.fiscal.integrations.focusnfe import FocusNFeClient
+from apps.fiscal.integrations.focusnfe.config import FocusNFeConfig
+from apps.fiscal.integrations.focusnfe.exceptions import FocusNFeProcessingError
 from apps.fiscal.services.focusnfe_service import FocusNFeService, gerar_ref
-from apps.logistica.models import MDFe
-
-logger = logging.getLogger(__name__)
+from apps.logistica.models import DocumentoMDFe, MDFe
 
 
-_MODAL_MAP = {
-    MDFe.Modal.RODOVIARIO: "1",
-    MDFe.Modal.AEREO: "2",
-    MDFe.Modal.AQUAVIARIO: "3",
-    MDFe.Modal.FERROVIARIO: "4",
+RODADO_FOCUS = {
+    "Truck": "01",
+    "Toco": "02",
+    "Carreta": "03",
+    "Van": "04",
+    "VUC": "05",
+    "Furgão": "05",
+    "Carro": "05",
+    "Moto": "06",
+}
+
+CARROCERIA_FOCUS = {
+    "Aberta": "01",
+    "Fechada": "02",
+    "Baú": "02",
+    "Graneleira": "03",
+    "Porta-container": "04",
+    "Sider": "05",
+    "Cegonha": "00",
 }
 
 
-def _doc_cnpj_cpf(documento: str) -> Dict[str, str]:
-    doc = (documento or "").replace(".", "").replace("-", "").replace("/", "").strip()
-    if len(doc) == 14:
-        return {"cnpj": doc}
-    if len(doc) == 11:
-        return {"cpf": doc}
-    return {}
+def _digitos(valor: Any) -> str:
+    return "".join(ch for ch in str(valor or "") if ch.isdigit())
 
 
-def _fmt_valor(v) -> str:
-    if v is None:
-        return "0.00"
-    return f"{Decimal(str(v)):.2f}"
+def _texto(valor: Any) -> str:
+    return " ".join(str(valor or "").split()).strip()
 
 
-def _percurso(mdfe: MDFe) -> list:
-    return [
-        uf.strip().upper()
-        for uf in (mdfe.percurso_ufs or "").split(",")
-        if uf.strip()
-    ]
+def _cliente_focus(filial) -> FocusNFeClient:
+    token = _texto(getattr(filial, "focusnfe_token", ""))
+    if not token:
+        raise DadosInvalidosError(
+            "Configure o Token de emissão Focus na filial de origem antes de emitir o MDF-e."
+        )
+    ambiente = getattr(filial, "focusnfe_ambiente", None)
+    return FocusNFeClient(config=FocusNFeConfig.from_env(token=token, ambiente=ambiente))
 
 
-def _documentos_por_municipio(mdfe: MDFe) -> list:
-    """
-    Agrupa os DocumentoMDFe por municipio de descarga — formato exigido
-    pela Focus NFe (`municipios_descarregamento`).
-    """
-    grupos: Dict[Tuple[str, str], Dict[str, Any]] = {}
-    for doc in mdfe.documentos.all():
-        municipio = (doc.municipio_descarga or mdfe.municipio_descarregamento or "").strip()
-        uf = (doc.uf_descarga or mdfe.uf_descarregamento or "").strip().upper()
-        chave = (municipio, uf)
-        if chave not in grupos:
-            grupos[chave] = {
-                "municipio_descarregamento": municipio,
-                "uf_descarregamento": uf,
-                "nfe": [],
-                "cte": [],
-            }
-        if doc.chave_acesso:
-            if doc.tipo_documento == "cte":
-                grupos[chave]["cte"].append({"chave_cte": doc.chave_acesso})
-            else:
-                grupos[chave]["nfe"].append({"chave_nfe": doc.chave_acesso})
-    return list(grupos.values())
-
-
-def construir_payload_mdfe(mdfe: MDFe) -> Dict[str, Any]:
-    """Monta o payload JSON para a API Focus NFe (MDF-e)."""
-    filial = mdfe.filial
-    filial_cnpj = (filial.cnpj or "").strip()
-
-    data_emissao_iso = f"{mdfe.data_emissao.isoformat()}T08:00:00-03:00" if mdfe.data_emissao else ""
-
-    payload: Dict[str, Any] = {
-        "numero": mdfe.numero,
-        "serie": int(mdfe.serie or 1),
-        "data_emissao": data_emissao_iso,
-        "modal": _MODAL_MAP.get(mdfe.modal, "1"),
-        "tipo_emitente": "2",       # 2 = Transportador de Carga Propria (TAC)
-        "tipo_transportador": "1",  # 1 = ETC (equiparado)
-        "cnpj_emitente": _doc_cnpj_cpf(filial_cnpj).get("cnpj", ""),
-        "uf_ini": (mdfe.uf_carregamento or "").strip().upper(),
-        "uf_fim": (mdfe.uf_descarregamento or "").strip().upper(),
-        "municipio_carregamento": [
-            {
-                "codigo_municipio": (filial.codigo_municipio_ibge or "").strip(),
-                "nome_municipio": (mdfe.municipio_carregamento or filial.cidade or "").strip(),
-            }
-        ],
-        "percurso": _percurso(mdfe),
-        "municipios_descarregamento": _documentos_por_municipio(mdfe),
-        "valor_total_carga": _float_or_zero(mdfe.valor_total),
-        "peso_bruto_total": _float_or_zero(mdfe.peso_total_kg),
-        "unidade_medida": "01",  # 01 = KG
-        "produto_predominante": "Produtos diversos",
+def _validar_filial_mdfe(filial, *, destino=False) -> None:
+    campos = {
+        "CNPJ": _digitos(filial.cnpj),
+        "razão social": _texto(filial.razao_social),
+        "inscrição estadual": _texto(filial.inscricao_estadual),
+        "logradouro": _texto(filial.endereco),
+        "número": _texto(filial.numero),
+        "bairro": _texto(filial.bairro),
+        "município": _texto(filial.cidade),
+        "código IBGE do município": _digitos(filial.codigo_municipio_ibge),
+        "UF": _texto(filial.uf),
     }
+    obrigatorios = (
+        ("CNPJ", 14),
+        ("código IBGE do município", 7),
+    )
+    invalidos = [nome for nome, tamanho in obrigatorios if len(campos[nome]) != tamanho]
+    invalidos += [
+        nome
+        for nome in ("razão social", "município", "UF")
+        if not campos[nome]
+    ]
+    if not destino:
+        invalidos += [
+            nome
+            for nome in ("inscrição estadual", "logradouro", "número", "bairro")
+            if not campos[nome]
+        ]
+    if invalidos:
+        alvo = "destino" if destino else "origem"
+        raise DadosInvalidosError(
+            f"Complete o cadastro da filial de {alvo} para emitir o MDF-e: "
+            + ", ".join(dict.fromkeys(invalidos))
+            + "."
+        )
 
-    if mdfe.modal == MDFe.Modal.RODOVIARIO:
-        placa = (mdfe.veiculo_placa or "").upper().replace("-", "")
-        payload["veiculo_tracao"] = {
-            "placa": placa,
-            "renavam": "",
-            "tara": "0",
-            "capacidade_kg": "0",
-            "capacidade_m3": "0",
-            "tipo_rodado": "01",
-            "tipo_carroceria": "00",
-            "uf": (mdfe.uf_carregamento or "").strip().upper(),
-            "rntrc": (mdfe.veiculo_rntrc or "00000000").strip() or "00000000",
-            "condutores": (
-                [{
-                    "nome": mdfe.motorista_nome,
-                    **_doc_cnpj_cpf(mdfe.motorista_cpf),
-                }] if mdfe.motorista_nome else []
+
+def _validar_transporte(motorista, veiculo, peso_bruto: Decimal) -> None:
+    erros = []
+    if len(_digitos(motorista.cpf)) != 11:
+        erros.append("CPF do motorista")
+    if len(_texto(veiculo.placa).replace("-", "")) != 7:
+        erros.append("placa do veículo")
+    if not veiculo.tara or veiculo.tara <= 0:
+        erros.append("tara do veículo")
+    if not veiculo.uf_placa:
+        erros.append("UF de licenciamento do veículo")
+    if not veiculo.tipo_carroceria:
+        erros.append("tipo de carroceria do veículo")
+    if peso_bruto <= 0:
+        erros.append("peso bruto da carga")
+    if erros:
+        raise DadosInvalidosError(
+            "Antes de emitir o MDF-e, informe: " + ", ".join(erros) + "."
+        )
+
+
+def construir_payload_mdfe(mdfe: MDFe) -> dict[str, Any]:
+    filial = mdfe.filial
+    _validar_filial_mdfe(filial)
+
+    documentos = list(
+        mdfe.documentos.select_related("documento_fiscal").filter(tipo_documento="nfe")
+    )
+    if not documentos:
+        raise DadosInvalidosError("Adicione ao MDF-e ao menos uma NF-e autorizada.")
+    chaves = []
+    for vinculo in documentos:
+        documento = vinculo.documento_fiscal
+        chave = _digitos(
+            documento.chave if documento else vinculo.chave_acesso
+        )
+        if documento and documento.status != StatusDocumentoFiscal.AUTORIZADA:
+            raise DadosInvalidosError(
+                f"A NF-e nº {documento.numero} ainda não foi autorizada."
+            )
+        if len(chave) != 44:
+            raise DadosInvalidosError(
+                "A NF-e vinculada ainda não possui chave de acesso autorizada."
+            )
+        chaves.append(chave)
+
+    cnpj = _digitos(filial.cnpj)
+    placa = _texto(mdfe.veiculo_placa).replace("-", "").upper()
+    cpf = _digitos(mdfe.motorista_cpf)
+    tara = int(Decimal(str(getattr(mdfe, "_veiculo_tara", 0) or 0)))
+    uf_placa = _texto(getattr(mdfe, "_veiculo_uf", ""))
+    tipo_rodado = _texto(getattr(mdfe, "_veiculo_tipo_rodado", ""))
+    tipo_carroceria = _texto(getattr(mdfe, "_veiculo_tipo_carroceria", ""))
+
+    # Instâncias recarregadas usam os dados persistidos no campo de observação técnica.
+    metadados = mdfe.transporte_metadados or {}
+    if not metadados and placa:
+        from apps.cadastros.models import Veiculo
+
+        veiculo = next(
+            (
+                item
+                for item in Veiculo.objects.for_filial(filial).filter(ativo=True)
+                if _texto(item.placa).replace("-", "").upper() == placa
             ),
-        }
+            None,
+        )
+        if veiculo:
+            metadados = {
+                "tara": str(veiculo.tara or ""),
+                "capacidade_kg": str(veiculo.capacidade_kg or ""),
+                "renavam": veiculo.renavam,
+                "uf_placa": veiculo.uf_placa,
+                "tipo_rodado": veiculo.tipo_rodado,
+                "tipo_carroceria": veiculo.tipo_carroceria,
+            }
+    tara = tara or int(Decimal(str(metadados.get("tara") or 0)))
+    uf_placa = uf_placa or _texto(metadados.get("uf_placa"))
+    tipo_rodado = tipo_rodado or _texto(metadados.get("tipo_rodado"))
+    tipo_carroceria = tipo_carroceria or _texto(metadados.get("tipo_carroceria"))
 
+    if len(cpf) != 11 or len(placa) != 7 or tara <= 0 or not uf_placa:
+        raise DadosInvalidosError(
+            "Revise motorista e veículo do MDF-e: CPF, placa, tara e UF são obrigatórios."
+        )
+
+    veiculo_tracao = {
+        "codigo_veiculo": placa,
+        "placa_veiculo": placa,
+        "tara_veiculo": tara,
+        "condutores": [{"nome": _texto(mdfe.motorista_nome)[:60], "cpf": cpf}],
+        "tipo_rodado_veiculo": RODADO_FOCUS.get(tipo_rodado, "06"),
+        "tipo_carroceria_veiculo": CARROCERIA_FOCUS.get(tipo_carroceria, "00"),
+        "uf_licenciamento_veiculo": uf_placa[:2].upper(),
+    }
+    renavam = _digitos(metadados.get("renavam"))
+    if 9 <= len(renavam) <= 11:
+        veiculo_tracao["renavam_veiculo"] = renavam
+    capacidade = int(Decimal(str(metadados.get("capacidade_kg") or 0)))
+    if capacidade > 0:
+        veiculo_tracao["capacidade_kg_veiculo"] = capacidade
+
+    codigo_carregamento = _digitos(
+        mdfe.codigo_municipio_carregamento or filial.codigo_municipio_ibge
+    )
+    codigo_descarregamento = _digitos(mdfe.codigo_municipio_descarregamento)
+    if len(codigo_carregamento) != 7 or len(codigo_descarregamento) != 7:
+        raise DadosInvalidosError(
+            "Selecione os municípios de carregamento e descarregamento para "
+            "preencher os códigos IBGE do MDF-e."
+        )
+
+    data_emissao = timezone.localtime().replace(microsecond=0).isoformat()
+    payload = {
+        "data_emissao": data_emissao,
+        "emitente": "2",
+        "serie": int(mdfe.serie or 1),
+        "numero": mdfe.numero,
+        "uf_inicio": mdfe.uf_carregamento,
+        "uf_fim": mdfe.uf_descarregamento,
+        "municipios_carregamento": [{
+            "codigo": int(codigo_carregamento),
+            "nome": mdfe.municipio_carregamento,
+        }],
+        "cnpj_emitente": cnpj,
+        "inscricao_estadual_emitente": _digitos(filial.inscricao_estadual),
+        "nome_emitente": _texto(filial.razao_social)[:60],
+        "nome_fantasia_emitente": _texto(filial.nome_fantasia)[:60],
+        "logradouro_emitente": _texto(filial.endereco)[:60],
+        "numero_emitente": _texto(filial.numero)[:60],
+        "bairro_emitente": _texto(filial.bairro)[:60],
+        "codigo_municipio_emitente": int(_digitos(filial.codigo_municipio_ibge)),
+        "municipio_emitente": _texto(filial.cidade)[:60],
+        "uf_emitente": _texto(filial.uf)[:2].upper(),
+        "municipios_descarregamento": [{
+            "codigo": int(codigo_descarregamento),
+            "nome": mdfe.municipio_descarregamento,
+            "notas_fiscais": [{"chave_nfe": chave} for chave in chaves],
+        }],
+        "seguros_carga": [{"responsavel_seguro": "1"}],
+        "veiculo_tracao": veiculo_tracao,
+        "quantidade_total_nfe": len(chaves),
+        "valor_total_carga": float(mdfe.valor_total),
+        "codigo_unidade_medida_peso_bruto": "01",
+        "peso_bruto": f"{mdfe.peso_total_kg:.4f}",
+        "tipo_carga": "03",
+        "descricao_produto": "Polpas e produtos alimentícios",
+        "informacao_complementar": _texto(mdfe.observacao)[:5000],
+    }
+    cep = _digitos(filial.cep)
+    if len(cep) == 8:
+        payload["cep_emitente"] = cep
+    complemento = _texto(filial.complemento)
+    if complemento:
+        payload["complemento_emitente"] = complemento[:60]
+    percursos = [
+        uf.strip().upper()
+        for uf in (getattr(mdfe, "percurso_ufs", "") or "").split(",")
+        if len(uf.strip()) == 2
+    ]
+    if percursos:
+        payload["percursos"] = [{"uf_percurso": uf} for uf in percursos]
     return payload
 
 
-def _float_or_zero(v) -> float:
-    try:
-        return float(v or 0)
-    except (TypeError, ValueError):
-        return 0.0
+def _sincronizar_status(mdfe: MDFe) -> MDFe:
+    documento = mdfe.documento_fiscal
+    if not documento:
+        return mdfe
+    mapa = {
+        StatusDocumentoFiscal.PENDENTE: MDFe.Status.RASCUNHO,
+        StatusDocumentoFiscal.PROCESSANDO: MDFe.Status.PROCESSANDO,
+        StatusDocumentoFiscal.AUTORIZADA: MDFe.Status.AUTORIZADO,
+        StatusDocumentoFiscal.REJEITADA: MDFe.Status.REJEITADO,
+        StatusDocumentoFiscal.DENEGADA: MDFe.Status.REJEITADO,
+        StatusDocumentoFiscal.CANCELADA: MDFe.Status.CANCELADO,
+    }
+    mdfe.status = mapa.get(documento.status, mdfe.status)
+    mdfe.chave_acesso = documento.chave or mdfe.chave_acesso
+    mdfe.protocolo_autorizacao = documento.protocolo or mdfe.protocolo_autorizacao
+    mdfe.data_autorizacao = documento.data_autorizacao
+    mdfe.data_cancelamento = documento.data_cancelamento
+    mdfe.mensagem_sefaz = documento.mensagem_sefaz
+    mdfe.save()
+    return mdfe
 
 
-def obter_ou_criar_documento_fiscal(mdfe: MDFe, usuario) -> DocumentoFiscal:
-    """Retorna o DocumentoFiscal vinculado ao MDF-e, criando um novo se necessario."""
-    doc = DocumentoFiscal.objects.filter(origem_tipo="mdfe", origem_id=mdfe.pk).first()
-    if doc:
-        return doc
+def sincronizar_mdfe_por_documento(documento: DocumentoFiscal) -> None:
+    mdfe = getattr(documento, "mdfe_logistico", None)
+    if mdfe:
+        _sincronizar_status(mdfe)
 
-    filial = mdfe.filial
-    dt_emissao = timezone.now()
-    if mdfe.data_emissao:
-        dt_emissao = timezone.make_aware(
-            timezone.datetime.combine(mdfe.data_emissao, timezone.datetime.min.time())
+
+@transaction.atomic
+def criar_mdfe_transferencia(
+    *,
+    nfe: DocumentoFiscal,
+    filial_destino,
+    motorista,
+    veiculo,
+    peso_bruto: Decimal,
+    usuario,
+    observacao: str = "",
+) -> MDFe:
+    from apps.core.models.parametros import ParametroDocumentoFiscal, ParametrosSistema
+
+    _validar_filial_mdfe(nfe.filial)
+    _validar_filial_mdfe(filial_destino, destino=True)
+    _validar_transporte(motorista, veiculo, peso_bruto)
+
+    params, _ = ParametrosSistema.objects.get_or_create(filial=nfe.filial)
+    doc_params, _ = ParametroDocumentoFiscal.objects.select_for_update().get_or_create(
+        parametros=params,
+        tipo_documento="mdfe",
+        defaults={"habilitado": True, "serie": 1, "proximo_numero": 1},
+    )
+    if not doc_params.habilitado:
+        raise DadosInvalidosError(
+            "Habilite a emissão de MDF-e nos parâmetros fiscais da filial de origem."
         )
+    numero = doc_params.proximo_numero
+    serie = doc_params.serie or 1
+    doc_params.proximo_numero = numero + 1
+    doc_params.save(update_fields=["proximo_numero"])
 
-    doc = DocumentoFiscal.objects.create(
-        filial=filial,
+    documento_mdfe = DocumentoFiscal.objects.create(
+        filial=nfe.filial,
         tipo_documento=TipoDocumentoFiscal.MDFE,
-        origem_tipo="mdfe",
-        origem_id=mdfe.pk,
-        numero=mdfe.numero,
-        serie=int(mdfe.serie or 1),
-        emitente_cnpj=filial.cnpj or "",
-        destinatario_snapshot={},
-        valor_total=mdfe.valor_total or Decimal("0"),
-        data_emissao=dt_emissao,
+        origem_tipo="transferencia_estoque",
+        origem_id=nfe.origem_id,
+        numero=numero,
+        serie=serie,
+        natureza_operacao_descricao="Manifesto de transferência entre filiais",
+        tipo_operacao="1",
+        emitente_cnpj=_digitos(nfe.filial.cnpj),
+        destinatario_tipo="filial",
+        destinatario_id=filial_destino.pk,
+        destinatario_snapshot={
+            "nome": filial_destino.razao_social,
+            "cpf_cnpj": _digitos(filial_destino.cnpj),
+        },
+        valor_produtos=nfe.valor_produtos,
+        valor_total=nfe.valor_total,
         status=StatusDocumentoFiscal.PENDENTE,
+        data_emissao=timezone.now(),
         usuario=usuario,
     )
-    return doc
+    metadados = {
+        "tara": str(veiculo.tara),
+        "capacidade_kg": str(veiculo.capacidade_kg or ""),
+        "renavam": veiculo.renavam,
+        "uf_placa": veiculo.uf_placa,
+        "tipo_rodado": veiculo.tipo_rodado,
+        "tipo_carroceria": veiculo.tipo_carroceria,
+    }
+    obs = _texto(observacao)
+    mdfe = MDFe.objects.create(
+        filial=nfe.filial,
+        documento_fiscal=documento_mdfe,
+        numero=numero,
+        serie=str(serie),
+        status=(
+            MDFe.Status.RASCUNHO
+            if nfe.status == StatusDocumentoFiscal.AUTORIZADA
+            else MDFe.Status.AGUARDANDO_NFE
+        ),
+        responsavel=usuario,
+        motorista_nome=motorista.nome,
+        motorista_cpf=_digitos(motorista.cpf),
+        motorista_cnh=motorista.cnh,
+        veiculo_placa=_texto(veiculo.placa).replace("-", "").upper(),
+        veiculo_descricao=_texto(veiculo.descricao or f"{veiculo.marca} {veiculo.modelo}"),
+        uf_carregamento=_texto(nfe.filial.uf).upper(),
+        municipio_carregamento=_texto(nfe.filial.cidade),
+        codigo_municipio_carregamento=_digitos(nfe.filial.codigo_municipio_ibge),
+        uf_descarregamento=_texto(filial_destino.uf).upper(),
+        municipio_descarregamento=_texto(filial_destino.cidade),
+        codigo_municipio_descarregamento=_digitos(filial_destino.codigo_municipio_ibge),
+        qtd_nfes=1,
+        peso_total_kg=peso_bruto,
+        valor_total=nfe.valor_total,
+        transporte_metadados=metadados,
+        observacao=obs[:5000],
+    )
+    mdfe._transporte_metadados = metadados
+    DocumentoMDFe.objects.create(
+        mdfe=mdfe,
+        documento_fiscal=nfe,
+        tipo_documento=DocumentoMDFe.TipoDocumento.NFE,
+        chave_acesso=nfe.chave or "",
+        numero_documento=str(nfe.numero),
+        serie=str(nfe.serie),
+        emitente_nome=nfe.filial.razao_social,
+        emitente_documento=_digitos(nfe.filial.cnpj),
+        municipio_descarga=filial_destino.cidade,
+        uf_descarga=filial_destino.uf,
+        peso_kg=peso_bruto,
+        valor=nfe.valor_total,
+    )
+    if nfe.status == StatusDocumentoFiscal.AUTORIZADA:
+        return emitir_mdfe(mdfe)
+    return mdfe
 
 
-def _sincronizar_status_mdfe(mdfe: MDFe, doc: DocumentoFiscal) -> None:
-    """Sincroniza o status do DocumentoFiscal de volta ao MDFe."""
-    campos = ["updated_at"]
-
-    if doc.status == StatusDocumentoFiscal.AUTORIZADA:
-        mdfe.status = MDFe.Status.AUTORIZADO
-        campos.append("status")
-        if doc.chave:
-            mdfe.chave_acesso = doc.chave
-            campos.append("chave_acesso")
-        if doc.protocolo:
-            mdfe.protocolo_autorizacao = doc.protocolo
-            campos.append("protocolo_autorizacao")
-        if doc.data_autorizacao:
-            mdfe.data_autorizacao = doc.data_autorizacao
-            campos.append("data_autorizacao")
-
-    elif doc.status == StatusDocumentoFiscal.CANCELADA:
-        mdfe.status = MDFe.Status.CANCELADO
-        campos.append("status")
-
-    mdfe.save(update_fields=list(set(campos)))
-
-
-# --------------------------------------------------------------------------
-# Operacoes principais
-# --------------------------------------------------------------------------
-
-def emitir_mdfe(mdfe: MDFe, usuario) -> Tuple[DocumentoFiscal, str]:
-    """
-    Emite o MDF-e via Focus NFe.
-    Retorna (documento_fiscal, mensagem_erro). mensagem_erro vazio = sucesso.
-    """
-    if mdfe.status == MDFe.Status.AUTORIZADO:
-        doc = DocumentoFiscal.objects.filter(origem_tipo="mdfe", origem_id=mdfe.pk).first()
-        return doc, "MDF-e ja autorizado."
-
-    if not mdfe.documentos.exists():
-        return None, "Vincule ao menos um documento (NF-e/CT-e) antes de emitir o MDF-e."
-
-    doc = obter_ou_criar_documento_fiscal(mdfe, usuario)
-    payload = construir_payload_mdfe(mdfe)
-    service = FocusNFeService()
-
-    try:
-        doc = service.emitir(doc, payload)
-    except FocusNFeError as exc:
-        return doc, str(exc)
-    except Exception as exc:
-        logger.exception("Erro inesperado ao emitir MDF-e %s", mdfe.pk)
-        return doc, str(exc)
-
-    _sincronizar_status_mdfe(mdfe, doc)
-    return doc, ""
-
-
-def consultar_mdfe(mdfe: MDFe) -> Tuple[Optional[DocumentoFiscal], str]:
-    """Consulta o status do MDF-e na Focus NFe e sincroniza o modelo."""
-    doc = DocumentoFiscal.objects.filter(origem_tipo="mdfe", origem_id=mdfe.pk).first()
-    if not doc:
-        return None, "MDF-e ainda nao foi enviado para emissao."
-
-    service = FocusNFeService()
-    try:
-        doc = service.consultar(doc)
-    except FocusNFeError as exc:
-        return doc, str(exc)
-    except Exception as exc:
-        logger.exception("Erro ao consultar MDF-e %s", mdfe.pk)
-        return doc, str(exc)
-
-    _sincronizar_status_mdfe(mdfe, doc)
-    return doc, ""
-
-
-def cancelar_mdfe(mdfe: MDFe, justificativa: str) -> Tuple[Optional[DocumentoFiscal], str]:
-    """Cancela o MDF-e autorizado."""
-    doc = DocumentoFiscal.objects.filter(origem_tipo="mdfe", origem_id=mdfe.pk).first()
-    if not doc:
-        return None, "MDF-e ainda nao foi enviado para emissao."
-
-    service = FocusNFeService()
-    try:
-        doc = service.cancelar(doc, justificativa)
-    except FocusNFeError as exc:
-        return doc, str(exc)
-    except Exception as exc:
-        logger.exception("Erro ao cancelar MDF-e %s", mdfe.pk)
-        return doc, str(exc)
-
-    mdfe.status = MDFe.Status.CANCELADO
-    mdfe.save(update_fields=["status", "updated_at"])
-    return doc, ""
-
-
-def encerrar_mdfe(mdfe: MDFe, codigo_municipio: str, uf: str) -> Tuple[Optional[DocumentoFiscal], str]:
-    """
-    Encerra o MDF-e (transporte chegou ao destino). Diferente de
-    emitir/cancelar, o encerramento nao muda o status do DocumentoFiscal
-    (o documento continua "autorizada") — apenas o MDFe.status avanca
-    para "encerrado".
-    """
-    doc = DocumentoFiscal.objects.filter(origem_tipo="mdfe", origem_id=mdfe.pk).first()
-    if not doc:
-        return None, "MDF-e ainda nao foi enviado para emissao."
-    if mdfe.status != MDFe.Status.AUTORIZADO:
-        return doc, "Somente um MDF-e autorizado pode ser encerrado."
-
-    service = FocusNFeService()
-    try:
-        retorno = service.client.mdfe.encerrar(
-            gerar_ref(doc), codigo_municipio=codigo_municipio, uf=uf,
+def _obter_ou_criar_documento_mdfe(mdfe: MDFe, usuario=None) -> DocumentoFiscal:
+    if mdfe.documento_fiscal:
+        return mdfe.documento_fiscal
+    documento = DocumentoFiscal.objects.filter(
+        origem_tipo="mdfe",
+        origem_id=mdfe.pk,
+    ).first()
+    if not documento:
+        documento = DocumentoFiscal.objects.create(
+            filial=mdfe.filial,
+            tipo_documento=TipoDocumentoFiscal.MDFE,
+            origem_tipo="mdfe",
+            origem_id=mdfe.pk,
+            numero=mdfe.numero,
+            serie=int(mdfe.serie or 1),
+            natureza_operacao_descricao="Manifesto de documentos fiscais",
+            tipo_operacao="1",
+            emitente_cnpj=_digitos(mdfe.filial.cnpj),
+            valor_total=mdfe.valor_total,
+            status=StatusDocumentoFiscal.PENDENTE,
+            data_emissao=timezone.now(),
+            usuario=usuario or mdfe.responsavel,
         )
-    except FocusNFeError as exc:
-        return doc, str(exc)
-    except Exception as exc:
-        logger.exception("Erro ao encerrar MDF-e %s", mdfe.pk)
-        return doc, str(exc)
+    mdfe.documento_fiscal = documento
+    mdfe.save(update_fields=["documento_fiscal", "updated_at"])
+    return documento
 
-    status_focus = str((retorno or {}).get("status") or "").lower()
-    if status_focus not in ("encerrado", "encerrada"):
-        mensagem = str(
+
+def emitir_mdfe(mdfe: MDFe, usuario=None) -> MDFe:
+    if mdfe.status in (MDFe.Status.PROCESSANDO, MDFe.Status.AUTORIZADO, MDFe.Status.ENCERRADO):
+        return mdfe
+    _obter_ou_criar_documento_mdfe(mdfe, usuario)
+    payload = construir_payload_mdfe(mdfe)
+    service = FocusNFeService(client=_cliente_focus(mdfe.filial))
+    service.emitir(mdfe.documento_fiscal, payload)
+    return _sincronizar_status(mdfe)
+
+
+def consultar_mdfe(mdfe: MDFe) -> MDFe:
+    if not mdfe.documento_fiscal:
+        raise DadosInvalidosError("Este MDF-e não possui documento fiscal vinculado.")
+    FocusNFeService(client=_cliente_focus(mdfe.filial)).consultar(mdfe.documento_fiscal)
+    return _sincronizar_status(mdfe)
+
+
+def cancelar_mdfe(mdfe: MDFe, justificativa: str) -> MDFe:
+    if not mdfe.documento_fiscal:
+        raise DadosInvalidosError("Este MDF-e não possui documento fiscal vinculado.")
+    justificativa = _texto(justificativa)
+    if not 15 <= len(justificativa) <= 255:
+        raise DadosInvalidosError("A justificativa deve ter entre 15 e 255 caracteres.")
+    FocusNFeService(client=_cliente_focus(mdfe.filial)).cancelar(
+        mdfe.documento_fiscal, justificativa
+    )
+    mdfe.justificativa_cancelamento = justificativa
+    mdfe.save(update_fields=["justificativa_cancelamento", "updated_at"])
+    return _sincronizar_status(mdfe)
+
+
+def encerrar_mdfe(mdfe: MDFe) -> MDFe:
+    if mdfe.status != MDFe.Status.AUTORIZADO:
+        raise DadosInvalidosError("Somente um MDF-e autorizado pode ser encerrado.")
+    retorno = _cliente_focus(mdfe.filial).mdfe.encerrar(
+        gerar_ref(mdfe.documento_fiscal),
+        data=timezone.localdate().isoformat(),
+        sigla_uf=mdfe.uf_descarregamento,
+        nome_municipio=mdfe.municipio_descarregamento,
+    )
+    status = _texto((retorno or {}).get("status")).lower()
+    if status not in {"encerrado", "autorizado"}:
+        raise FocusNFeProcessingError(
             (retorno or {}).get("mensagem_sefaz")
             or (retorno or {}).get("mensagem")
-            or "A Focus nao confirmou o encerramento do MDF-e."
+            or "A Focus não confirmou o encerramento do MDF-e.",
+            response_json=retorno,
         )
-        return doc, mensagem
-
     mdfe.status = MDFe.Status.ENCERRADO
     mdfe.data_encerramento = timezone.localdate()
     mdfe.save(update_fields=["status", "data_encerramento", "updated_at"])
-    return doc, ""
+    return mdfe
 
 
 def damdfe_pdf(mdfe: MDFe) -> bytes:
-    """Baixa o DAMDFE em PDF."""
-    doc = DocumentoFiscal.objects.filter(origem_tipo="mdfe", origem_id=mdfe.pk).first()
-    if not doc:
-        raise ValueError("MDF-e ainda nao foi enviado para emissao.")
+    if not mdfe.documento_fiscal:
+        raise DadosInvalidosError("Este MDF-e ainda não foi enviado para emissão.")
+    return FocusNFeService(
+        client=_cliente_focus(mdfe.filial)
+    ).baixar_pdf(mdfe.documento_fiscal)
 
-    service = FocusNFeService()
-    return service.baixar_pdf(doc)
+
+def processar_nfe_transferencia_autorizada(nfe: DocumentoFiscal) -> None:
+    if nfe.tipo_documento != TipoDocumentoFiscal.NFE:
+        return
+    if nfe.status != StatusDocumentoFiscal.AUTORIZADA:
+        return
+    vinculos = DocumentoMDFe.objects.select_related("mdfe__documento_fiscal").filter(
+        documento_fiscal=nfe,
+        mdfe__status=MDFe.Status.AGUARDANDO_NFE,
+    )
+    for vinculo in vinculos:
+        vinculo.chave_acesso = nfe.chave or ""
+        vinculo.save(update_fields=["chave_acesso", "updated_at"])
+        emitir_mdfe(vinculo.mdfe)

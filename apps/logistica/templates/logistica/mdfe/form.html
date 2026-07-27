@@ -47,7 +47,7 @@
     <!-- Identificacao -->
     <div class="card p-6 space-y-4">
       <h3 class="text-xs font-semibold uppercase tracking-wide" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Identificacao</h3>
-      <div class="grid gap-4 md:grid-cols-6">
+      <div class="grid gap-4 md:grid-cols-5">
         <label class="space-y-1.5">
           <span class="text-xs font-semibold uppercase tracking-wide" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">N. Interno</span>
           {{ form.numero }}{% if form.numero.errors %}<p class="text-xs text-red-500 mt-0.5">{{ form.numero.errors.0 }}</p>{% endif %}
@@ -63,10 +63,6 @@
         <label class="space-y-1.5">
           <span class="text-xs font-semibold uppercase tracking-wide" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Encerramento</span>
           {{ form.data_encerramento }}
-        </label>
-        <label class="space-y-1.5">
-          <span class="text-xs font-semibold uppercase tracking-wide" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Status</span>
-          {{ form.status }}
         </label>
         <label class="space-y-1.5">
           <span class="text-xs font-semibold uppercase tracking-wide" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Modal</span>
@@ -132,6 +128,7 @@
     <div class="card p-6 space-y-4">
       <h3 class="text-xs font-semibold uppercase tracking-wide" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Percurso</h3>
       <div class="grid gap-4 md:grid-cols-4" x-data="municipioAutocomplete('municipio_carregamento')">
+        {{ form.codigo_municipio_carregamento }}
         <label class="space-y-1.5" @input.debounce.300ms="onUf($event.target.value)">
           <span class="text-xs font-semibold uppercase tracking-wide" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">UF Carregamento</span>
           {{ form.uf_carregamento }}
@@ -165,6 +162,7 @@
         <p class="text-xs mt-0.5" :style="temaClaro ? 'color:#94a3b8;' : 'color:#64748b;'">Informe as UFs percorridas separadas por virgula. Ex: SP, RJ, MG, ES</p>
       </label>
       <div class="grid gap-4 md:grid-cols-4" x-data="municipioAutocomplete('municipio_descarregamento')">
+        {{ form.codigo_municipio_descarregamento }}
         <label class="space-y-1.5" @input.debounce.300ms="onUf($event.target.value)">
           <span class="text-xs font-semibold uppercase tracking-wide" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">UF Descarregamento</span>
           {{ form.uf_descarregamento }}
@@ -194,19 +192,9 @@
       </div>
     </div>
 
-    <!-- Dados Fiscais -->
+    <!-- Observações -->
     <div class="card p-6 space-y-4">
-      <h3 class="text-xs font-semibold uppercase tracking-wide" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Dados Fiscais</h3>
-      <label class="block space-y-1.5">
-        <span class="text-xs font-semibold uppercase tracking-wide" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Chave de Acesso (44 digitos)</span>
-        {{ form.chave_acesso }}
-      </label>
-      <div class="grid gap-4 md:grid-cols-2">
-        <label class="space-y-1.5">
-          <span class="text-xs font-semibold uppercase tracking-wide" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Protocolo de Autorizacao</span>
-          {{ form.protocolo_autorizacao }}
-        </label>
-      </div>
+      <h3 class="text-xs font-semibold uppercase tracking-wide" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Observações</h3>
       <label class="block space-y-1.5">
         <span class="text-xs font-semibold uppercase tracking-wide" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Observacao</span>
         {{ form.observacao }}
@@ -299,6 +287,9 @@ function municipioAutocomplete(nomeCampoMunicipio) {
     selecionar(m) {
       const campo = document.querySelector(`[name="${nomeCampoMunicipio}"]`);
       if (campo) campo.value = m.nome;
+      const sufixo = nomeCampoMunicipio.replace('municipio_', '');
+      const campoCodigo = document.querySelector(`[name="codigo_municipio_${sufixo}"]`);
+      if (campoCodigo) campoCodigo.value = m.codigo_ibge || '';
       this.sugestoes = [];
       this.foco = -1;
     },
