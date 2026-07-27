@@ -2845,6 +2845,10 @@ function pdv() {
 
     selecionarFormaPgto(forma) {
       if (this.formaPgtoSelecionada?.id===forma.id) { this.formaPgtoSelecionada=null; return; }
+      if (this.venda.pagamentos.length>0 && this.venda.restante<=0.001) {
+        this.toast_('Venda já está totalmente paga. Remova o pagamento lançado (X) antes de trocar a forma.','erro');
+        return;
+      }
       this.formaPgtoSelecionada=forma;
       this.valorPgto=this.venda.restante>0.001?this.fmt2(this.venda.restante):'';
       this.prazoDiasPgto=this.ehFormaAPrazo(forma) ? String(forma.prazo_liquidacao_dias||30) : '';
