@@ -70,6 +70,14 @@ class RecompraCliente(FilialScopedModel):
         help_text='0-1. Quão regular é o cliente (baixo desvio = alta confiança).',
     )
 
+    definido_manualmente = models.BooleanField(
+        default=False, db_index=True,
+        help_text=(
+            'Padrão informado à mão pelo usuário. O recálculo automático não '
+            'sobrescreve estes registros.'
+        ),
+    )
+
     ultima_atualizacao = models.DateTimeField(auto_now=True, db_index=True)
 
     class Meta:

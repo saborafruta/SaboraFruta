@@ -23,6 +23,7 @@ from decimal import Decimal
 from django.db import transaction
 from django.utils import timezone
 
+from apps.core.services.exceptions import DadosInvalidosError
 from apps.crm import constants as c
 from apps.crm.models import RecompraCliente, RecompraControle
 
@@ -246,8 +247,19 @@ class RecompraService:
         hoje = timezone.localdate()
         teto_valor = cls._teto_valor(filial, historico, parcial=bool(cliente_ids))
 
+        # Padrões informados à mão têm precedência: o usuário sabe do
+        # combinado com o cliente o que o histórico ainda não mostra.
+        manuais = set(
+            RecompraCliente.objects
+            .filter(definido_manualmente=True)
+            .values_list('cliente_id', 'filial_id')
+        )
+
         registros = []
         for (cliente_id, filial_id), reg in historico.items():
+            if (cliente_id, filial_id) in manuais:
+                continue
+
             compras = cls._consolidar_por_dia(reg['compras'])[-c.MAX_COMPRAS_CONSIDERADAS:]
             if not compras:
                 continue
@@ -332,6 +344,93 @@ class RecompraService:
             batch_size=500,
         )
         return len(registros)
+
+    # ---------------------------------------------------- definição manual
+    @classmethod
+    @transaction.atomic
+    def definir_manual(cls, *, filial, cliente, intervalo_dias: int):
+        """
+        Define à mão de quantos em quantos dias o cliente compra.
+
+        Serve para quem ainda não tem histórico suficiente (o cálculo exige
+        4 compras) mas cuja recorrência já é conhecida. A base da previsão é
+        a última compra real; sem nenhuma compra registrada, conta a partir
+        de hoje. O registro fica marcado como manual e o recálculo em lote
+        passa a ignorá-lo.
+        """
+        if intervalo_dias < 1:
+            raise DadosInvalidosError('O intervalo deve ser de pelo menos 1 dia.')
+
+        hoje = timezone.localdate()
+        historico = cls._coletar_historico(filial, cliente_ids=[cliente.pk])
+
+        # Pode haver histórico em mais de uma filial do escopo; usa o da
+        # filial ativa se existir, senão o mais recente que encontrar.
+        compras = []
+        for (cliente_id, filial_id), reg in historico.items():
+            if cliente_id != cliente.pk:
+                continue
+            if filial_id == filial.pk or not compras:
+                compras = cls._consolidar_por_dia(reg['compras'])
+
+        if compras:
+            datas = [d for d, _ in compras]
+            valores = [Decimal(v) for _, v in compras]
+            primeira, ultima = datas[0], datas[-1]
+            qtd = len(compras)
+            valor_total = sum(valores, Decimal('0'))
+            valor_medio = (valor_total / qtd).quantize(Decimal('0.01'))
+        else:
+            primeira = ultima = hoje
+            qtd = 0
+            valor_total = valor_medio = Decimal('0')
+
+        prevista = ultima + timedelta(days=intervalo_dias)
+        dias_restantes = (prevista - hoje).days
+
+        registro, _ = RecompraCliente.objects.update_or_create(
+            cliente=cliente,
+            filial=filial,
+            defaults={
+                'media_intervalo_dias': Decimal(str(intervalo_dias)),
+                # Sem série de intervalos para medir variação; como é um
+                # combinado explícito, tratamos como totalmente regular.
+                'desvio_padrao_dias': Decimal('0'),
+                'qtd_compras': qtd,
+                'frequencia': cls._classificar(float(intervalo_dias)),
+                'primeira_compra': primeira,
+                'ultima_compra': ultima,
+                'proxima_compra_prevista': prevista,
+                'dias_restantes': dias_restantes,
+                'status': cls._status_por_dias(dias_restantes),
+                'valor_medio': valor_medio,
+                'valor_total_periodo': valor_total,
+                'nivel_confianca': Decimal('1'),
+                'definido_manualmente': True,
+                'score': cls._calcular_score(
+                    dias_restantes=dias_restantes,
+                    media=float(intervalo_dias),
+                    desvio=0.0,
+                    qtd_compras=qtd,
+                    valor_medio=valor_medio,
+                    dias_relacionamento=(hoje - primeira).days,
+                    teto_valor=cls._teto_valor(filial, {}, parcial=True),
+                ),
+            },
+        )
+        return registro
+
+    @classmethod
+    def remover_manual(cls, *, filial, cliente) -> None:
+        """
+        Devolve o cliente ao cálculo automático. Se ele tiver histórico
+        suficiente, o registro é refeito na hora; senão, some dos cards
+        (volta a ser "padrão insuficiente").
+        """
+        RecompraCliente.objects.filter(
+            cliente=cliente, filial=filial, definido_manualmente=True,
+        ).delete()
+        cls.recalcular(filial, cliente_ids=[cliente.pk])
 
     @classmethod
     def recalcular_se_obsoleto(cls, filial, horas: int = c.HORAS_ATE_OBSOLETO) -> bool:

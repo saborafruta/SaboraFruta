@@ -226,6 +226,100 @@ class RecompraFaixasSalvarView(PermissaoRequiredMixin, View):
         return redirect(reverse('crm:recompra'))
 
 
+class RecompraBuscarClienteView(PermissaoRequiredMixin, View):
+    """Busca AJAX de clientes para a inclusão manual no padrão de recompra."""
+
+    permissao_modulo = 'crm'
+    permissao_acao = 'ver'
+
+    def get(self, request):
+        from django.http import JsonResponse
+
+        from apps.cadastros.models import Cliente
+
+        q = request.GET.get('q', '').strip()
+        if len(q) < 2:
+            return JsonResponse({'resultados': []})
+
+        clientes = (
+            Cliente.objects.for_filial(request.filial_ativa)
+            .filter(
+                Q(razao_social__icontains=q)
+                | Q(nome_fantasia__icontains=q)
+                | Q(cpf_cnpj__icontains=q),
+                ativo=True,
+            )[:15]
+        )
+        return JsonResponse({'resultados': [
+            {
+                'id': cl.pk,
+                'nome': cl.nome_display,
+                'cpf_cnpj': cl.cpf_cnpj or '',
+            }
+            for cl in clientes
+        ]})
+
+
+class RecompraDefinirManualView(PermissaoRequiredMixin, View):
+    """Inclui/atualiza à mão o padrão de recompra de um cliente."""
+
+    permissao_modulo = 'crm'
+    permissao_acao = 'editar'
+
+    def post(self, request):
+        from apps.cadastros.models import Cliente
+        from apps.core.services.exceptions import DomainError
+
+        cliente_id = request.POST.get('cliente_id', '').strip()
+        intervalo = request.POST.get('intervalo_dias', '').strip()
+
+        if not cliente_id:
+            messages.error(request, 'Selecione um cliente.')
+            return redirect(reverse('crm:recompra'))
+        try:
+            intervalo_dias = int(intervalo)
+        except ValueError:
+            messages.error(request, 'Informe o intervalo em dias (número inteiro).')
+            return redirect(reverse('crm:recompra'))
+
+        cliente = Cliente.objects.for_filial(request.filial_ativa).filter(pk=cliente_id).first()
+        if not cliente:
+            messages.error(request, 'Cliente não encontrado nesta filial.')
+            return redirect(reverse('crm:recompra'))
+
+        try:
+            RecompraService.definir_manual(
+                filial=request.filial_ativa, cliente=cliente, intervalo_dias=intervalo_dias,
+            )
+        except DomainError as exc:
+            messages.error(request, str(exc))
+            return redirect(reverse('crm:recompra'))
+
+        messages.success(
+            request, f'{cliente.nome_display} definido como compra a cada {intervalo_dias} dias.',
+        )
+        return redirect(reverse('crm:recompra'))
+
+
+class RecompraRemoverManualView(PermissaoRequiredMixin, View):
+    """Devolve o cliente ao cálculo automático."""
+
+    permissao_modulo = 'crm'
+    permissao_acao = 'editar'
+
+    def post(self, request, cliente_id):
+        from apps.cadastros.models import Cliente
+
+        cliente = Cliente.objects.for_filial(request.filial_ativa).filter(pk=cliente_id).first()
+        if not cliente:
+            messages.error(request, 'Cliente não encontrado nesta filial.')
+            return redirect(reverse('crm:recompra'))
+
+        RecompraService.remover_manual(filial=request.filial_ativa, cliente=cliente)
+        messages.success(request, f'{cliente.nome_display} voltou ao cálculo automático.')
+        return redirect(reverse('crm:recompra'))
+
+
 class RecompraRecalcularView(PermissaoRequiredMixin, View):
     """Força o recálculo agora, sem esperar a janela de obsolescência."""
 

@@ -58,10 +58,67 @@
   </div>
 
   <!-- Cards por padrão de recompra -->
-  <div>
-    <div class="flex items-baseline justify-between gap-3 mb-2">
+  <div x-data="{
+        addAberto: false, busca: '', resultado: [], carregando: false, sel: null,
+        buscar() {
+          if (this.busca.length < 2) { this.resultado = []; return; }
+          this.carregando = true;
+          fetch('{% url "crm:recompra-buscar-cliente" %}?q=' + encodeURIComponent(this.busca))
+            .then(r => r.json())
+            .then(d => { this.resultado = d.resultados; this.carregando = false; })
+            .catch(() => { this.carregando = false; });
+        },
+        escolher(c) { this.sel = c; this.busca = c.nome; this.resultado = []; }
+      }">
+    <div class="flex items-baseline justify-between gap-3 mb-2 flex-wrap">
       <h3 class="text-sm font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">Padrão de recompra</h3>
-      <span class="text-xs" :style="temaClaro ? 'color:#94a3b8;' : 'color:#64748b;'">Clique num card para ver os clientes</span>
+      <div class="flex items-center gap-3">
+        <span class="text-xs" :style="temaClaro ? 'color:#94a3b8;' : 'color:#64748b;'">Clique num card para ver os clientes</span>
+        <button type="button" @click="addAberto = !addAberto" class="btn-secondary text-xs">
+          + Adicionar cliente
+        </button>
+      </div>
+    </div>
+
+    <!-- Inclusão manual: para quem ainda não tem 4 compras e por isso não
+         entra no cálculo automático. -->
+    <div x-show="addAberto" x-cloak x-transition class="card p-4 mb-3">
+      <form method="post" action="{% url 'crm:recompra-manual' %}" class="flex flex-wrap items-end gap-3">
+        {% csrf_token %}
+        <input type="hidden" name="cliente_id" :value="sel ? sel.id : ''">
+
+        <div style="position:relative;min-width:260px;flex:1;">
+          <label class="block text-xs font-semibold mb-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Cliente</label>
+          <input type="text" x-model="busca" @input.debounce.300="buscar()" @keydown.escape="resultado=[]"
+                 placeholder="Nome, razão social ou CPF/CNPJ..." class="form-input w-full" autocomplete="off">
+          <div x-show="resultado.length>0 || carregando" x-cloak class="card"
+               style="position:absolute;z-index:20;top:100%;left:0;right:0;margin-top:4px;max-height:240px;overflow-y:auto;">
+            <div x-show="carregando" class="px-4 py-3 text-xs" :style="temaClaro ? 'color:#94a3b8;' : 'color:#64748b;'">Buscando...</div>
+            <template x-for="c in resultado" :key="c.id">
+              <div @click="escolher(c)" class="px-4 py-2 text-sm" style="cursor:pointer;"
+                   onmouseover="this.style.background=(document.documentElement.classList.contains('tema-claro')?'#f3f4f6':'#1e1e2a')"
+                   onmouseout="this.style.background='transparent'">
+                <span x-text="c.nome" style="font-weight:600;" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'"></span>
+                <span x-show="c.cpf_cnpj" x-text="' · ' + c.cpf_cnpj" class="text-xs" :style="temaClaro ? 'color:#94a3b8;' : 'color:#64748b;'"></span>
+              </div>
+            </template>
+          </div>
+        </div>
+
+        <label class="block">
+          <span class="block text-xs font-semibold mb-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Compra a cada (dias)</span>
+          <input type="number" name="intervalo_dias" min="1" max="3650" required placeholder="Ex.: 15"
+                 class="form-input" style="width:130px;">
+        </label>
+
+        <button type="submit" class="btn-primary" :disabled="!sel">Salvar</button>
+        <button type="button" class="btn-secondary" @click="addAberto=false; sel=null; busca=''; resultado=[]">Cancelar</button>
+      </form>
+      <p class="text-xs mt-2" :style="temaClaro ? 'color:#94a3b8;' : 'color:#64748b;'">
+        Use para clientes cuja recorrência você já conhece mas que ainda não têm 4 compras registradas.
+        A previsão sai da última compra dele; se não houver nenhuma, conta a partir de hoje.
+        O cálculo automático não sobrescreve o que for definido aqui.
+      </p>
     </div>
 
     <form method="post" action="{% url 'crm:recompra-faixas' %}" id="form-faixas">
@@ -278,6 +335,11 @@
               {% if r.tem_padrao %}
                 {{ r.get_frequencia_display }}
                 <div :style="temaClaro ? 'color:#94a3b8;' : 'color:#64748b;'">~{{ r.media_intervalo_dias|floatformat:0 }} dias</div>
+                {% if r.definido_manualmente %}
+                  <span class="inline-block mt-1 text-[10px] font-bold px-2 py-0.5 rounded-full"
+                        style="background:rgba(96,165,250,.12);color:#60a5fa;border:1px solid rgba(96,165,250,.3);"
+                        title="Padrão definido manualmente — o cálculo automático não altera este cliente.">manual</span>
+                {% endif %}
               {% else %}
                 <span :style="temaClaro ? 'color:#94a3b8;' : 'color:#64748b;'">Padrão insuficiente</span>
               {% endif %}
@@ -306,6 +368,14 @@
                 {% if r.telefone_whatsapp %}
                   <a href="https://wa.me/{{ r.telefone_whatsapp }}?text=Ol%C3%A1%2C%20{{ r.cliente.nome_display|urlencode }}%21%20Tudo%20bem%3F" target="_blank" rel="noopener"
                      class="text-xs font-semibold" style="color:#22c55e;" title="Enviar WhatsApp">WhatsApp</a>
+                {% endif %}
+                {% if r.definido_manualmente %}
+                  <form method="post" action="{% url 'crm:recompra-manual-remover' r.cliente_id %}"
+                        onsubmit="return confirm('Voltar {{ r.cliente.nome_display|escapejs }} para o cálculo automático?')">
+                    {% csrf_token %}
+                    <button class="text-xs font-semibold" style="color:#dc2626;"
+                            title="Remover o padrão manual e voltar ao cálculo automático">Auto</button>
+                  </form>
                 {% endif %}
               </div>
             </td>
