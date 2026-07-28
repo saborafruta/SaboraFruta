@@ -71,6 +71,7 @@ class Permissao(models.Model):
         PRODUTOS = 'produtos', 'Produtos'
         LOGISTICA = 'logistica', 'Logistica'
         CASHBACK = 'cashback', 'Cashback'
+        CRM = 'crm', 'CRM'
 
     perfil = models.ForeignKey(
         PerfilAcesso, on_delete=models.CASCADE, related_name='permissoes',

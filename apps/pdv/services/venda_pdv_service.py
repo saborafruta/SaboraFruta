@@ -141,6 +141,12 @@ class VendaPDVService:
         from apps.cashback.services.checkout_integration import creditar_pos_venda
         creditar_pos_venda(venda, usuario=usuario, request=request)
 
+        # Atualiza o padrão de recompra do cliente (CRM). Só faz sentido em
+        # venda identificada; falhas são engolidas pelo próprio serviço.
+        if venda.cliente_id:
+            from apps.crm.services import RecompraService
+            RecompraService.recalcular_cliente_da_venda(filial, venda.cliente_id)
+
         return venda
 
     @classmethod

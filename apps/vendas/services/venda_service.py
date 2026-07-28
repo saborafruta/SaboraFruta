@@ -313,6 +313,12 @@ class VendaService:
 
         pedido.status = PedidoVenda.Status.FATURADO
         pedido.save(update_fields=['status', 'updated_at'])
+
+        # Atualiza o padrão de recompra do cliente (CRM). Falha aqui nunca
+        # pode derrubar o faturamento — o serviço já engole a exceção.
+        from apps.crm.services import RecompraService
+        RecompraService.recalcular_cliente_da_venda(pedido.filial, pedido.cliente_id)
+
         return pedido
 
     @classmethod

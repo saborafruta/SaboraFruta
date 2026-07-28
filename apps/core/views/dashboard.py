@@ -27,7 +27,41 @@ class DashboardView(LoginRequiredMixin, TemplateView):
         ctx['vendas_acumuladas'] = self._vendas_acumuladas_mes(filial)
         ctx['vendas_dow'] = self._vendas_por_dia_semana(filial)
         ctx['financeiro_contas'] = self._contas_financeiro(filial)
+        ctx['clientes_recompra'] = self._clientes_recompra(filial)
         return ctx
+
+    # ------------------------------------------------------------------
+    # CRM — clientes para contato hoje
+    # ------------------------------------------------------------------
+
+    def _clientes_recompra(self, filial, limite=5):
+        """Clientes com recompra atrasada ou vencendo, por ordem de prioridade."""
+        if not filial:
+            return {'itens': [], 'total_atraso': 0, 'erro': None}
+
+        try:
+            from apps.core.models import Filial
+            from apps.crm.models import RecompraCliente
+            from apps.crm.services import RecompraService
+
+            RecompraService.recalcular_se_obsoleto(filial)
+
+            filiais = (
+                Filial.objects.filter(empresa=filial.empresa)
+                if filial.is_matriz
+                else Filial.objects.filter(pk=filial.pk)
+            )
+            base = RecompraCliente.objects.filter(
+                filial__in=filiais,
+                status__in=[RecompraCliente.Status.VERMELHO, RecompraCliente.Status.AMARELO],
+            )
+            itens = list(
+                base.select_related('cliente').order_by('-score')[:limite]
+            )
+            total_atraso = base.filter(status=RecompraCliente.Status.VERMELHO).count()
+            return {'itens': itens, 'total_atraso': total_atraso, 'erro': None}
+        except Exception as exc:
+            return {'itens': [], 'total_atraso': 0, 'erro': str(exc)}
 
     # ------------------------------------------------------------------
     # KPIs básicos

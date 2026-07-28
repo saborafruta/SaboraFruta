@@ -1,0 +1,231 @@
+{% extends "_base.html" %}
+{% block title %}Alertas de Recompra{% endblock %}
+{% block page_title %}Alertas de Recompra{% endblock %}
+
+{% block content %}
+<div class="max-w-7xl mx-auto space-y-5">
+
+  <!-- Cabeçalho -->
+  <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+    <div>
+      <h2 class="text-2xl font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">Alertas de Recompra</h2>
+      <p class="text-sm mt-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+        {{ total_resultados }} cliente{{ total_resultados|pluralize }} · ordenados por prioridade de contato
+      </p>
+    </div>
+    <form method="post" action="{% url 'crm:recompra-recalcular' %}">
+      {% csrf_token %}
+      <button type="submit" class="btn-secondary text-sm">Recalcular agora</button>
+    </form>
+  </div>
+
+  <p class="text-sm" style="color:#dc2626;font-weight:700;">
+    O sistema analisa o histórico de compras concluídas de cada cliente (pedidos faturados e vendas de PDV),
+    calcula de quanto em quanto tempo ele costuma comprar e avisa quando a data prevista da próxima compra
+    está chegando ou já passou. Clientes com menos de 4 compras aparecem como "Padrão insuficiente".
+  </p>
+
+  <!-- KPIs -->
+  <div class="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-3">
+    <div class="card p-4">
+      <p class="text-xs font-medium uppercase" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Semanais</p>
+      <p class="text-lg font-bold mt-1" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">{{ kpis.semanais }}</p>
+    </div>
+    <div class="card p-4">
+      <p class="text-xs font-medium uppercase" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Quinzenais</p>
+      <p class="text-lg font-bold mt-1" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">{{ kpis.quinzenais }}</p>
+    </div>
+    <div class="card p-4">
+      <p class="text-xs font-medium uppercase" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Mensais</p>
+      <p class="text-lg font-bold mt-1" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">{{ kpis.mensais }}</p>
+    </div>
+    <div class="card p-4">
+      <p class="text-xs font-medium uppercase" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Em atraso</p>
+      <p class="text-lg font-bold mt-1" style="color:#dc2626;">{{ kpis.em_atraso }}</p>
+    </div>
+    <div class="card p-4">
+      <p class="text-xs font-medium uppercase" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Próximos</p>
+      <p class="text-lg font-bold mt-1" style="color:#f59e0b;">{{ kpis.proximos }}</p>
+    </div>
+    <div class="card p-4">
+      <p class="text-xs font-medium uppercase" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Sem padrão</p>
+      <p class="text-lg font-bold mt-1" :style="temaClaro ? 'color:#94a3b8;' : 'color:#64748b;'">{{ kpis.sem_padrao }}</p>
+    </div>
+    <div class="card p-4">
+      <p class="text-xs font-medium uppercase" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Potencial em atraso</p>
+      <p class="text-lg font-bold mt-1" style="color:#22c55e;">R$ {{ kpis.valor_potencial|floatformat:2 }}</p>
+    </div>
+  </div>
+
+  <!-- Filtros -->
+  <form method="get" class="card p-5 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 items-end">
+    <label class="block text-sm lg:col-span-2">
+      <span class="block text-xs font-semibold mb-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Buscar cliente</span>
+      <input type="text" name="q" value="{{ filtros.q }}" placeholder="Nome, razão social ou CPF/CNPJ..." class="form-input w-full">
+    </label>
+    <label class="block text-sm">
+      <span class="block text-xs font-semibold mb-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Status</span>
+      <select name="status" class="form-input w-full">
+        <option value="">Todos</option>
+        {% for valor, rotulo in status_choices %}
+          <option value="{{ valor }}" {% if filtros.status == valor %}selected{% endif %}>{{ rotulo }}</option>
+        {% endfor %}
+      </select>
+    </label>
+    <label class="block text-sm">
+      <span class="block text-xs font-semibold mb-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Frequência</span>
+      <select name="frequencia" class="form-input w-full">
+        <option value="">Todas</option>
+        {% for valor, rotulo in frequencias %}
+          <option value="{{ valor }}" {% if filtros.frequencia == valor %}selected{% endif %}>{{ rotulo }}</option>
+        {% endfor %}
+      </select>
+    </label>
+    <label class="block text-sm">
+      <span class="block text-xs font-semibold mb-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Representante</span>
+      <select name="representante" class="form-input w-full">
+        <option value="">Todos</option>
+        {% for r in representantes %}
+          <option value="{{ r.pk }}" {% if filtros.representante == r.pk|stringformat:"s" %}selected{% endif %}>{{ r.nome }}</option>
+        {% endfor %}
+      </select>
+    </label>
+    <label class="block text-sm">
+      <span class="block text-xs font-semibold mb-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Cidade</span>
+      <select name="cidade" class="form-input w-full">
+        <option value="">Todas</option>
+        {% for cidade in cidades %}
+          <option value="{{ cidade }}" {% if filtros.cidade == cidade %}selected{% endif %}>{{ cidade }}</option>
+        {% endfor %}
+      </select>
+    </label>
+    <label class="block text-sm">
+      <span class="block text-xs font-semibold mb-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">UF</span>
+      <select name="uf" class="form-input w-full">
+        <option value="">Todas</option>
+        {% for uf in ufs %}
+          <option value="{{ uf }}" {% if filtros.uf == uf %}selected{% endif %}>{{ uf }}</option>
+        {% endfor %}
+      </select>
+    </label>
+    <label class="block text-sm">
+      <span class="block text-xs font-semibold mb-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Grupo</span>
+      <select name="grupo" class="form-input w-full">
+        <option value="">Todos</option>
+        {% for grupo in grupos %}
+          <option value="{{ grupo }}" {% if filtros.grupo == grupo %}selected{% endif %}>{{ grupo }}</option>
+        {% endfor %}
+      </select>
+    </label>
+    <label class="block text-sm">
+      <span class="block text-xs font-semibold mb-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Filial</span>
+      <select name="filial" class="form-input w-full">
+        <option value="">Todas</option>
+        {% for fl in filiais %}
+          <option value="{{ fl.pk }}" {% if filtros.filial == fl.pk|stringformat:"s" %}selected{% endif %}>{{ fl.nome_fantasia|default:fl.razao_social }}</option>
+        {% endfor %}
+      </select>
+    </label>
+    <div class="flex gap-2 lg:col-span-2">
+      <button type="submit" class="btn-primary">Filtrar</button>
+      <a href="{% url 'crm:recompra' %}" class="btn-secondary">Limpar</a>
+    </div>
+  </form>
+
+  <!-- Tabela -->
+  <div class="card overflow-hidden">
+    <div class="overflow-x-auto">
+      <table class="w-full text-sm">
+        <thead>
+          <tr class="text-left text-xs uppercase tracking-wide" :style="temaClaro ? 'color:#6b7280;background:#f9fafb;' : 'color:#9ca3af;background:#1e1e20;'">
+            <th class="px-4 py-3">Cliente</th>
+            <th class="px-4 py-3">Telefone</th>
+            <th class="px-4 py-3">Representante</th>
+            <th class="px-4 py-3">Última compra</th>
+            <th class="px-4 py-3">Frequência</th>
+            <th class="px-4 py-3">Próxima compra</th>
+            <th class="px-4 py-3">Situação</th>
+            <th class="px-4 py-3 text-right">Valor médio</th>
+            <th class="px-4 py-3 text-right">Score</th>
+            <th class="px-4 py-3 text-right">Ações</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y">
+          {% for r in page_obj %}
+          <tr>
+            <td class="px-4 py-3">
+              <div class="font-medium" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">{{ r.cliente.nome_display }}</div>
+              <div class="text-xs" :style="temaClaro ? 'color:#94a3b8;' : 'color:#64748b;'">{{ r.cliente.cidade }}{% if r.cliente.uf %}/{{ r.cliente.uf }}{% endif %}</div>
+            </td>
+            <td class="px-4 py-3 text-xs font-mono">{{ r.cliente.celular|default:r.cliente.telefone|default:"—" }}</td>
+            <td class="px-4 py-3 text-xs">{{ r.representante.nome|default:"—" }}</td>
+            <td class="px-4 py-3 text-xs">
+              {% if r.ultima_compra %}
+                {{ r.ultima_compra|date:"d/m/Y" }}
+                <div :style="temaClaro ? 'color:#94a3b8;' : 'color:#64748b;'">há {{ r.dias_desde_ultima_compra }} dia{{ r.dias_desde_ultima_compra|pluralize }}</div>
+              {% else %}—{% endif %}
+            </td>
+            <td class="px-4 py-3 text-xs">
+              {% if r.tem_padrao %}
+                {{ r.get_frequencia_display }}
+                <div :style="temaClaro ? 'color:#94a3b8;' : 'color:#64748b;'">~{{ r.media_intervalo_dias|floatformat:0 }} dias</div>
+              {% else %}
+                <span :style="temaClaro ? 'color:#94a3b8;' : 'color:#64748b;'">Padrão insuficiente</span>
+              {% endif %}
+            </td>
+            <td class="px-4 py-3 text-xs">{{ r.proxima_compra_prevista|date:"d/m/Y"|default:"—" }}</td>
+            <td class="px-4 py-3">
+              {% if r.status == 'vermelho' %}
+                <span class="soft-pill is-red">{{ r.dias_atraso }} dia{{ r.dias_atraso|pluralize }} de atraso</span>
+              {% elif r.status == 'amarelo' %}
+                <span class="soft-pill is-amber">{% if r.dias_restantes == 0 %}Vence hoje{% else %}Faltam {{ r.dias_restantes }} dia{{ r.dias_restantes|pluralize }}{% endif %}</span>
+              {% elif r.status == 'verde' %}
+                <span class="soft-pill is-green">Faltam {{ r.dias_restantes }} dias</span>
+              {% else %}
+                <span class="soft-pill is-slate">Sem previsão</span>
+              {% endif %}
+            </td>
+            <td class="px-4 py-3 text-right font-mono">R$ {{ r.valor_medio|floatformat:2 }}</td>
+            <td class="px-4 py-3 text-right font-mono font-bold"
+                {% if r.score >= 70 %}style="color:#dc2626;"{% elif r.score >= 40 %}style="color:#f59e0b;"{% else %}:style="temaClaro ? 'color:#6b7280;' : 'color:#9ca3af;'"{% endif %}>{{ r.score }}</td>
+            <td class="px-4 py-3 text-right">
+              <div class="inline-flex gap-2 whitespace-nowrap">
+                <a href="{% url 'cadastros:cliente-update' r.cliente_id %}" class="text-xs font-semibold"
+                   :style="temaClaro ? 'color:#2563eb;' : 'color:#60a5fa;'" title="Ver cliente">Ver</a>
+                <a href="{% url 'pdv:home' %}" class="text-xs font-semibold"
+                   :style="temaClaro ? 'color:#2563eb;' : 'color:#60a5fa;'" title="Nova venda">Vender</a>
+                {% if r.telefone_whatsapp %}
+                  <a href="https://wa.me/{{ r.telefone_whatsapp }}?text=Ol%C3%A1%2C%20{{ r.cliente.nome_display|urlencode }}%21%20Tudo%20bem%3F" target="_blank" rel="noopener"
+                     class="text-xs font-semibold" style="color:#22c55e;" title="Enviar WhatsApp">WhatsApp</a>
+                {% endif %}
+              </div>
+            </td>
+          </tr>
+          {% empty %}
+          <tr>
+            <td colspan="10" class="px-4 py-10 text-center" :style="temaClaro ? 'color:#94a3b8;' : 'color:#64748b;'">
+              Nenhum cliente encontrado. Se a lista nunca foi gerada, clique em "Recalcular agora".
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+
+    {% if page_obj.paginator.num_pages > 1 %}
+    <div class="flex items-center justify-between px-4 py-3 border-t text-sm" :style="temaClaro ? 'border-color:#e5e7eb;' : 'border-color:#2a2a2e;'">
+      <span :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Página {{ page_obj.number }} de {{ page_obj.paginator.num_pages }}</span>
+      <div class="flex gap-2">
+        {% if page_obj.has_previous %}
+          <a href="?page={{ page_obj.previous_page_number }}{% if querystring %}&{{ querystring }}{% endif %}" class="btn-secondary">← Anterior</a>
+        {% endif %}
+        {% if page_obj.has_next %}
+          <a href="?page={{ page_obj.next_page_number }}{% if querystring %}&{{ querystring }}{% endif %}" class="btn-secondary">Próxima →</a>
+        {% endif %}
+      </div>
+    </div>
+    {% endif %}
+  </div>
+
+</div>
+{% endblock %}

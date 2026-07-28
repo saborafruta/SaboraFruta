@@ -26,6 +26,7 @@ urlpatterns = [
     path('analytics/', include('apps.analytics.urls', namespace='analytics')),
     path('lotes/', include('apps.lotes.urls', namespace='lotes')),
     path('cashback/', include('apps.cashback.urls', namespace='cashback')),
+    path('crm/', include('apps.crm.urls', namespace='crm')),
 ]
 
 handler403 = 'apps.core.views.errors.permission_denied'
