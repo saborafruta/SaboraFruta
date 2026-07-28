@@ -3,6 +3,8 @@ from __future__ import annotations
 
 import csv
 import io
+import re
+import unicodedata
 from dataclasses import dataclass, field
 from typing import List
 
@@ -17,6 +19,27 @@ TIPOS_VALIDOS = {t.value for t in Cliente.Tipo}
 TIPOS_PESSOA_VALIDOS = {t.value for t in TipoPessoa}
 UFS_VALIDAS = {u.value for u in UF}
 COLUNAS_OBRIGATORIAS = {'tipo_pessoa', 'razao_social'}
+ALIASES_COLUNAS = {
+    'tipo_pessoa': 'tipo_pessoa',
+    'tipo_de_pessoa': 'tipo_pessoa',
+    'razao_social': 'razao_social',
+    'nome_razao_social': 'razao_social',
+    'nome_fantasia': 'nome_fantasia',
+    'cpf_cnpj': 'cpf_cnpj',
+    'cpf_ou_cnpj': 'cpf_cnpj',
+    'endereco': 'endereco',
+    'logradouro': 'endereco',
+    'rua': 'endereco',
+    'numero': 'numero',
+    'nro': 'numero',
+    'complemento': 'complemento',
+    'bairro': 'bairro',
+    'cidade': 'cidade',
+    'municipio': 'cidade',
+    'uf': 'uf',
+    'estado': 'uf',
+    'cep': 'cep',
+}
 
 
 @dataclass
@@ -50,7 +73,10 @@ class ClienteImportService:
         if not reader.fieldnames:
             raise DomainError('Arquivo CSV vazio ou sem cabeçalho.')
 
-        colunas = {c.strip() for c in reader.fieldnames if c}
+        colunas = {
+            ClienteImportService._normalizar_cabecalho(c)
+            for c in reader.fieldnames if c
+        }
         faltando = COLUNAS_OBRIGATORIAS - colunas
         if faltando:
             raise DomainError(f'Colunas obrigatórias ausentes: {", ".join(sorted(faltando))}')
@@ -58,7 +84,14 @@ class ClienteImportService:
         resultado = ResultadoImportacao()
 
         for num_linha, row in enumerate(reader, start=2):
-            row_limpo = {k.strip(): (v or '').strip() for k, v in row.items() if k}
+            row_limpo = {}
+            for chave, valor in row.items():
+                if not chave:
+                    continue
+                chave_normalizada = ClienteImportService._normalizar_cabecalho(chave)
+                valor_limpo = (valor or '').strip()
+                if chave_normalizada not in row_limpo or valor_limpo:
+                    row_limpo[chave_normalizada] = valor_limpo
 
             # Linha completamente vazia → ignora sem contar erro
             if not any(row_limpo.values()):
@@ -87,6 +120,13 @@ class ClienteImportService:
     # ------------------------------------------------------------------
     # Helpers privados
     # ------------------------------------------------------------------
+
+    @staticmethod
+    def _normalizar_cabecalho(valor: str) -> str:
+        texto = unicodedata.normalize('NFKD', (valor or '').strip())
+        texto = ''.join(c for c in texto if not unicodedata.combining(c)).lower()
+        texto = re.sub(r'[^a-z0-9]+', '_', texto).strip('_')
+        return ALIASES_COLUNAS.get(texto, texto)
 
     @staticmethod
     def _decodificar(conteudo: bytes) -> str:

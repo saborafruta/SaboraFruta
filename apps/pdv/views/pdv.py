@@ -40,6 +40,37 @@ def _sessao_aberta(request):
     ).first()
 
 
+def _cliente_endereco_preferencial(cliente):
+    """Serializa o endereco principal, completando-o com o endereco adicional padrao."""
+    if not cliente:
+        return {}
+
+    endereco = {
+        "rua": cliente.endereco or "",
+        "numero": cliente.numero or "",
+        "bairro": cliente.bairro or "",
+        "complemento": cliente.complemento or "",
+        "cidade": cliente.cidade or "",
+        "uf": cliente.uf or "",
+        "cep": cliente.cep or "",
+    }
+    try:
+        extra = cliente.enderecos.filter(ativo=True).order_by("-padrao", "id").first()
+    except Exception:
+        extra = None
+    if extra:
+        endereco.update({
+            "rua": extra.endereco or endereco["rua"],
+            "numero": extra.numero or endereco["numero"],
+            "bairro": extra.bairro or endereco["bairro"],
+            "complemento": extra.complemento or endereco["complemento"],
+            "cidade": extra.cidade or endereco["cidade"],
+            "uf": extra.uf or endereco["uf"],
+            "cep": extra.cep or endereco["cep"],
+        })
+    return endereco
+
+
 def _usuario_e_admin(request) -> bool:
     usuario = request.user
     perfil = getattr(usuario, "_perfil_ativo", None) or getattr(usuario, "perfil", None)
@@ -305,29 +336,7 @@ def buscar_cliente(request):
     filial = request.filial_ativa
 
     def _serializar(c):
-        endereco_entrega = {
-            "rua": c.endereco or "",
-            "numero": c.numero or "",
-            "bairro": c.bairro or "",
-            "complemento": c.complemento or "",
-            "cidade": c.cidade or "",
-            "uf": c.uf or "",
-            "cep": c.cep or "",
-        }
-        try:
-            endereco_extra = c.enderecos.filter(ativo=True).order_by("-padrao", "id").first()
-            if endereco_extra:
-                endereco_entrega = {
-                    "rua": endereco_extra.endereco or endereco_entrega["rua"],
-                    "numero": endereco_extra.numero or endereco_entrega["numero"],
-                    "bairro": endereco_extra.bairro or endereco_entrega["bairro"],
-                    "complemento": endereco_extra.complemento or endereco_entrega["complemento"],
-                    "cidade": endereco_extra.cidade or endereco_entrega["cidade"],
-                    "uf": endereco_extra.uf or endereco_entrega["uf"],
-                    "cep": endereco_extra.cep or endereco_entrega["cep"],
-                }
-        except Exception:
-            pass
+        endereco_entrega = _cliente_endereco_preferencial(c)
 
         return {
             "id": c.id,
@@ -972,13 +981,7 @@ def api_historico_cliente(request, cliente_id):
             "delivery": v.delivery,
             "endereco_entrega": v.endereco_entrega or {},
             "cliente_cpf_cnpj": v.cliente.cpf_cnpj if v.cliente else "",
-            "cliente_endereco": {
-                "rua": v.cliente.endereco or "",
-                "numero": v.cliente.numero or "",
-                "bairro": v.cliente.bairro or "",
-                "complemento": v.cliente.complemento or "",
-                "cidade": v.cliente.cidade or "",
-            } if v.cliente else {},
+            "cliente_endereco": _cliente_endereco_preferencial(v.cliente),
             "itens": itens,
             "pagamentos": pagamentos,
             "documento_fiscal_status": documento.status if documento else "",
@@ -1072,13 +1075,7 @@ def api_venda_detalhe(request, pk):
         "cliente_id": venda.cliente_id,
         "cliente_nome": venda.cliente.razao_social if venda.cliente else "Consumidor Final",
         "cliente_cpf_cnpj": venda.cliente.cpf_cnpj if venda.cliente else "",
-        "cliente_endereco": {
-            "rua": venda.cliente.endereco or "" if venda.cliente else "",
-            "numero": venda.cliente.numero or "" if venda.cliente else "",
-            "bairro": venda.cliente.bairro or "" if venda.cliente else "",
-            "complemento": venda.cliente.complemento or "" if venda.cliente else "",
-            "cidade": venda.cliente.cidade or "" if venda.cliente else "",
-        } if venda.cliente else {},
+        "cliente_endereco": _cliente_endereco_preferencial(venda.cliente),
         "delivery": venda.delivery,
         "endereco_entrega": venda.endereco_entrega or {},
         "observacao": venda.observacao or "",
@@ -1245,6 +1242,7 @@ def api_cliente_criar(request):
     except Exception as exc:
         return JsonResponse({"erro": str(exc)}, status=500)
 
+    endereco_cliente = _cliente_endereco_preferencial(cliente)
     return JsonResponse({
         "ok": True,
         "cliente": {
@@ -1252,16 +1250,11 @@ def api_cliente_criar(request):
             "razao_social": cliente.razao_social,
             "cpf_cnpj": cliente.cpf_cnpj,
             "celular": cliente.celular,
-            "endereco_entrega": {
-                "rua": cliente.endereco or "",
-                "numero": cliente.numero or "",
-                "bairro": cliente.bairro or "",
-                "complemento": cliente.complemento or "",
-                "cidade": cliente.cidade or "",
-                "uf": cliente.uf or "",
-                "cep": cliente.cep or "",
-            },
-            "tem_endereco": bool(cliente.endereco and cliente.bairro),
+            "endereco_entrega": endereco_cliente,
+            "tem_endereco": bool(
+                endereco_cliente.get("rua")
+                and endereco_cliente.get("bairro")
+            ),
         },
     })
 
