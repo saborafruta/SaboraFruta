@@ -697,8 +697,6 @@
           <svg style="position:absolute;left:10px;top:50%;transform:translateY(-50%);pointer-events:none;" width="14" height="14" fill="none" stroke="#555" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
           <input x-ref="buscaInput" id="busca-produto" type="text" x-model="buscaQuery"
                  @input.debounce.200ms="buscarProdutos($event.target.value)"
-                 @keydown.arrow-down.prevent="moverFocoProduto(1)"
-                 @keydown.arrow-up.prevent="moverFocoProduto(-1)"
                  @keydown.enter.prevent="selecionarProdutoFocado()"
                  @keydown.escape="buscaQuery='';produtos=[];produtoFoco=-1;"
                  placeholder="Buscar produto ou serviço..."
@@ -2642,10 +2640,8 @@ function pdv() {
     get podeFinalizar() { return this.sessao && this.venda.itens.length>0 && parseFloat(this.venda.restante)<=0.001; },
     get formasPagamentoVisiveis() { return this.mostrarMaisFormas ? this.formasPagamento : this.formasPagamento.slice(0,6); },
     get produtosVisiveis() {
-      if (this.produtos.length > 0) return this.produtos;
-      const q = (this.buscaQuery || '').trim().toLowerCase();
-      if (!q) return this.topProdutos;
-      return this.topProdutos.filter(p => (p.descricao || '').toLowerCase().includes(q));
+      if ((this.buscaQuery || '').trim()) return this.produtos;
+      return this.topProdutos;
     },
     get trocoTotal() { return this.venda.pagamentos.reduce((s,p)=>s+parseFloat(p.troco||0),0); },
     get diferencaCaixa() {
@@ -4038,13 +4034,13 @@ ${pgtoHtml ? `<hr class="sep">${pgtoHtml}` : ''}
           this.formaPgtoSelecionada=null;
         }
 
-        if (this.temModalAberto() || this.alvoEhCampoDigitacao(e.target)) return;
-
-        if (['ArrowRight','ArrowDown','ArrowLeft','ArrowUp'].includes(e.key)) {
+        if (!this.temModalAberto() && ['ArrowRight','ArrowDown','ArrowLeft','ArrowUp'].includes(e.key)) {
           e.preventDefault();
           this.moverFocoTela(['ArrowRight','ArrowDown'].includes(e.key) ? 1 : -1);
           return;
         }
+
+        if (this.temModalAberto() || this.alvoEhCampoDigitacao(e.target)) return;
 
         if (!e.ctrlKey && !e.altKey && !e.metaKey && /^[A-Za-zÀ-ÿ0-9]$/.test(e.key)) {
           e.preventDefault();
