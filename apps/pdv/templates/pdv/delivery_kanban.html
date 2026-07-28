@@ -492,11 +492,13 @@
   // ── Relatório por período ────────────────────────────────────────────────
 
   function abrirRelatorioModal() {
-    const hoje = new Date().toISOString().slice(0, 10);
+    const hoje = new Date();
+    const hojeIso = hoje.toISOString().slice(0, 10);
+    const trintaDiasAtras = new Date(hoje.getTime() - 30 * 86400000).toISOString().slice(0, 10);
     const ini = document.getElementById('relatorioDataIni');
     const fim = document.getElementById('relatorioDataFim');
-    if (!ini.value) { ini.value = hoje; ini.dispatchEvent(new Event('change', { bubbles: true })); }
-    if (!fim.value) { fim.value = hoje; fim.dispatchEvent(new Event('change', { bubbles: true })); }
+    if (!ini.value) { ini.value = trintaDiasAtras; ini.dispatchEvent(new Event('change', { bubbles: true })); }
+    if (!fim.value) { fim.value = hojeIso; fim.dispatchEvent(new Event('change', { bubbles: true })); }
     document.getElementById('relatorioModal').classList.add('open');
   }
 
