@@ -705,6 +705,10 @@ class TransferenciaLojaView(PermissaoRequiredMixin, View):
             'filiais_json': filiais_json,
             'filial_nome': filial.nome_fantasia or filial.razao_social,
             'filial_is_matriz': filial.is_matriz,
+            'focusnfe_ambiente': filial.focusnfe_ambiente,
+            'focusnfe_ambiente_label': (
+                'Producao' if filial.focusnfe_ambiente == 1 else 'Homologacao'
+            ),
             'motoristas_json': motoristas_json,
             'veiculos_json': veiculos_json,
             'cancel_url': reverse('estoque:outras-mov-hub'),
@@ -970,7 +974,7 @@ class TransferenciasPendentesNFeView(PermissaoRequiredMixin, View):
         perfil = getattr(usuario, '_perfil_ativo', None) or usuario.perfil
         is_admin = bool(usuario.is_superuser or perfil.is_admin)
 
-        movs = (
+        movs = list(
             MovimentacaoEstoque.objects
             .filter(
                 filial=filial,
@@ -981,6 +985,18 @@ class TransferenciasPendentesNFeView(PermissaoRequiredMixin, View):
             .order_by('-data_movimentacao')[:200]
         )
 
+        from apps.logistica.models import MDFe
+
+        documento_ids = {
+            mov.documento_fiscal_id for mov in movs if mov.documento_fiscal_id
+        }
+        mdfes_por_documento = {
+            mdfe.documento_fiscal_id: mdfe
+            for mdfe in MDFe.objects.for_filial(filial).filter(
+                documento_fiscal_id__in=documento_ids,
+            )
+        }
+
         grupos = {}
         ordem = []
         for mov in movs:
@@ -988,6 +1004,7 @@ class TransferenciasPendentesNFeView(PermissaoRequiredMixin, View):
             if chave not in grupos:
                 doc = mov.documento_fiscal
                 nota = None
+                mdfe_info = None
                 if doc:
                     nota = {
                         'id': doc.pk,
@@ -996,6 +1013,15 @@ class TransferenciasPendentesNFeView(PermissaoRequiredMixin, View):
                         'status_label': doc.get_status_display(),
                         'mensagem_sefaz': doc.mensagem_sefaz if doc.status == StatusDocumentoFiscal.REJEITADA else '',
                     }
+                    mdfe = mdfes_por_documento.get(doc.pk)
+                    if mdfe:
+                        mdfe_info = {
+                            'id': mdfe.pk,
+                            'numero': mdfe.numero,
+                            'status': mdfe.status,
+                            'status_label': mdfe.get_status_display(),
+                            'url': reverse('logistica:mdfe-detail', kwargs={'pk': mdfe.pk}),
+                        }
                 nota_ativa = bool(nota and nota['status'] == StatusDocumentoFiscal.AUTORIZADA)
                 pode_emitir_nota = not nota_ativa and not (nota and nota['status'] == StatusDocumentoFiscal.PROCESSANDO)
                 grupos[chave] = {
@@ -1008,6 +1034,7 @@ class TransferenciasPendentesNFeView(PermissaoRequiredMixin, View):
                     'observacao': mov.observacao,
                     'cancelada': mov.transferencia_cancelada,
                     'nota': nota,
+                    'mdfe': mdfe_info,
                     'pode_emitir_nota': pode_emitir_nota,
                     'pode_cancelar_nota': nota_ativa,
                     'pode_cancelar_transferencia': not mov.transferencia_cancelada and not nota_ativa,

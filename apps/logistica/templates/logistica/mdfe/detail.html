@@ -46,6 +46,11 @@
         {% elif mdfe.status == 'encerrado' %}<span class="soft-pill is-blue">{{ mdfe.get_status_display }}</span>
         {% elif mdfe.status == 'cancelado' %}<span class="soft-pill is-red">{{ mdfe.get_status_display }}</span>
         {% else %}<span class="soft-pill is-slate">{{ mdfe.get_status_display }}</span>{% endif %}
+        {% if mdfe.filial.focusnfe_ambiente == 1 %}
+          <span class="soft-pill is-red">Producao</span>
+        {% else %}
+          <span class="soft-pill is-blue">Homologacao</span>
+        {% endif %}
       </div>
       <p class="text-sm mt-0.5" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">{{ mdfe.data_emissao|date:"d/m/Y" }} &middot; {{ mdfe.get_modal_display }}</p>
     </div>
@@ -66,7 +71,9 @@
         </svg>
         Exportar PDF
       </button>
-      <a href="{% url 'logistica:mdfe-update' mdfe.pk %}" class="btn-secondary">Editar dados</a>
+      {% if mdfe.status == 'rascunho' or mdfe.status == 'aguardando_nfe' or mdfe.status == 'rejeitado' %}
+        <a href="{% url 'logistica:mdfe-update' mdfe.pk %}" class="btn-secondary">Editar dados</a>
+      {% endif %}
     </div>
   </div>
 

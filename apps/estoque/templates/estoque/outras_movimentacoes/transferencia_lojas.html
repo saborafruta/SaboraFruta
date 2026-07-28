@@ -439,6 +439,13 @@
                   <span x-text="it.produto_nome + ' (' + it.quantidade + ')' + (idx < grupo.itens.length - 1 ? ', ' : '')"></span>
                 </template>
               </div>
+              <div x-show="grupo.mdfe" class="text-xs mt-1 flex items-center gap-1.5"
+                   :style="temaClaro ? 'color:#475569;' : 'color:#cbd5e1;'">
+                <span>MDF-e</span>
+                <strong x-text="'#' + String(grupo.mdfe?.numero || '').padStart(6, '0')"></strong>
+                <span>&middot;</span>
+                <span x-text="grupo.mdfe?.status_label"></span>
+              </div>
               <div x-show="grupo.nota && grupo.nota.mensagem_sefaz" class="text-xs mt-1" style="color:#dc2626;"
                    x-text="'Rejeitada: ' + (grupo.nota ? grupo.nota.mensagem_sefaz : '')"></div>
               <div x-show="grupo._erro" class="text-xs mt-1 font-semibold" style="color:#dc2626;" x-text="grupo._erro"></div>
@@ -460,11 +467,18 @@
                 <span x-text="grupo._processando === 'emitir' ? 'Emitindo...' : (grupo.nota ? 'Reemitir NF-e' : 'Emitir NF-e')"></span>
               </button>
 
-              <a x-show="grupo.nota && grupo.nota.status === 'autorizada'"
+              <a x-show="grupo.nota && grupo.nota.status === 'autorizada' && !grupo.mdfe"
                  :href="'{% url 'logistica:mdfe-create' %}?nfe_documento_id=' + (grupo.nota ? grupo.nota.id : '')"
                  target="_blank"
                  class="btn-secondary flex items-center gap-2">
                 Gerar MDF-e
+              </a>
+
+              <a x-show="grupo.mdfe"
+                 :href="grupo.mdfe?.url || '#'"
+                 target="_blank"
+                 class="btn-secondary flex items-center gap-2">
+                Abrir MDF-e
               </a>
 
               <button type="button"
@@ -556,6 +570,22 @@
               </span>
             </span>
           </label>
+
+          <div class="rounded-lg border px-4 py-3"
+               {% if focusnfe_ambiente == 1 %}
+               :style="temaClaro ? 'border-color:#fecaca;background:#fff7ed;color:#9a3412;' : 'border-color:#7f1d1d;background:rgba(127,29,29,.18);color:#fca5a5;'"
+               {% else %}
+               :style="temaClaro ? 'border-color:#bfdbfe;background:#eff6ff;color:#1d4ed8;' : 'border-color:#1e3a8a;background:rgba(30,58,138,.18);color:#93c5fd;'"
+               {% endif %}>
+            <strong class="block text-sm">Ambiente: {{ focusnfe_ambiente_label }}</strong>
+            <span class="block text-xs mt-0.5">
+              {% if focusnfe_ambiente == 1 %}
+                A emissao tera validade fiscal. Confirme os dados reais antes de continuar.
+              {% else %}
+                Documento de teste, sem validade fiscal ou tributaria.
+              {% endif %}
+            </span>
+          </div>
 
           <div x-show="gerarMdfe" x-transition class="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>

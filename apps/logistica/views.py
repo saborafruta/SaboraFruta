@@ -1434,10 +1434,27 @@ class MDFeUpdateView(PermissaoRequiredMixin, View):
     permissao_modulo = "logistica"
     permissao_acao = "editar"
     template_name = "logistica/mdfe/form.html"
+    STATUS_EDITAVEIS = {
+        MDFe.Status.RASCUNHO,
+        MDFe.Status.AGUARDANDO_NFE,
+        MDFe.Status.REJEITADO,
+    }
+
+    def _validar_edicao(self, request, mdfe):
+        if mdfe.status in self.STATUS_EDITAVEIS:
+            return None
+        messages.error(
+            request,
+            "Este MDF-e nao pode mais ser editado porque ja foi enviado para a SEFAZ.",
+        )
+        return redirect("logistica:mdfe-detail", pk=mdfe.pk)
 
     def get(self, request, pk):
         filial = _filial(request)
         mdfe = get_object_or_404(MDFe.objects.for_filial(filial), pk=pk)
+        bloqueio = self._validar_edicao(request, mdfe)
+        if bloqueio:
+            return bloqueio
         form = MDFeForm(instance=mdfe, filial=filial)
         motoristas_json, veiculos_json = _motoristas_veiculos_json(filial)
         return render(request, self.template_name, {
@@ -1452,6 +1469,9 @@ class MDFeUpdateView(PermissaoRequiredMixin, View):
     def post(self, request, pk):
         filial = _filial(request)
         mdfe = get_object_or_404(MDFe.objects.for_filial(filial), pk=pk)
+        bloqueio = self._validar_edicao(request, mdfe)
+        if bloqueio:
+            return bloqueio
         form = MDFeForm(request.POST, instance=mdfe, filial=filial)
         if form.is_valid():
             form.save()
@@ -1475,7 +1495,7 @@ class MDFeDetailView(PermissaoRequiredMixin, View):
     def get(self, request, pk):
         mdfe = get_object_or_404(
             MDFe.objects.for_filial(_filial(request)).select_related(
-                "transportadora", "responsavel", "romaneio", "documento_fiscal"
+                "filial", "transportadora", "responsavel", "romaneio", "documento_fiscal"
             ),
             pk=pk,
         )
