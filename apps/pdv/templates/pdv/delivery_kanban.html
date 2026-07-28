@@ -7,17 +7,19 @@
 <style>
   /* ── Layout Kanban ── */
   .kanban-board {
-    display: flex;
-    gap: 16px;
-    overflow-x: auto;
-    padding-bottom: 12px;
-    min-height: calc(100vh - 200px);
-    align-items: flex-start;
+    display: grid;
+    grid-template-columns: repeat(var(--kanban-cols, 6), minmax(0, 1fr));
+    gap: 12px;
+    align-items: start;
+  }
+  @media (max-width: 900px) {
+    .kanban-board { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   }
   .kanban-col {
-    flex: 0 0 300px;
     display: flex;
     flex-direction: column;
+    min-width: 0;
+    max-height: calc(100vh - 220px);
     border-radius: 14px;
     overflow: hidden;
   }
@@ -47,7 +49,7 @@
   body:not(.tema-claro) .kanban-col-count { background: #2a2a2e; color: #9ca3af; }
 
   /* Cards */
-  .kanban-cards { padding: 4px 10px 10px; flex: 1; min-height: 60px; }
+  .kanban-cards { padding: 4px 10px 10px; flex: 1; min-height: 60px; overflow-y: auto; }
   .kanban-card {
     border-radius: 11px;
     padding: 12px 14px;
@@ -162,7 +164,7 @@
   </div>
 
   <!-- Kanban Board -->
-  <div class="kanban-board" id="kanbanBoard">
+  <div class="kanban-board" id="kanbanBoard" style="--kanban-cols: {{ colunas|length|add:1 }};">
     {% for col in colunas %}
       <div class="kanban-col"
            data-col="{{ col.key }}"
