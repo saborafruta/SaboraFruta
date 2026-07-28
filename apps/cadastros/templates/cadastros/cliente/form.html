@@ -476,11 +476,14 @@ html.tema-escuro body { background: var(--cliente-bg) !important; }
           <div class="erp-field">
             <label>Tabela de preço</label>
             <select name="tabela_preco">
-              <option value="">Selecione</option>
+              <option value="" {% if not form.tabela_preco.value %}selected{% endif %}>Padrao (preco cadastrado no produto)</option>
               {% for tp in form.tabela_preco.field.queryset %}
-              <option value="{{ tp.pk }}" {% if form.tabela_preco.value == tp.pk|stringformat:"s" %}selected{% endif %}>{{ tp }}</option>
+              <option value="{{ tp.pk }}" {% if form.tabela_preco.value|stringformat:"s" == tp.pk|stringformat:"s" %}selected{% endif %}>{{ tp }}</option>
               {% endfor %}
             </select>
+            {% if form.tabela_preco.errors %}
+            <small style="color:#dc2626;">{{ form.tabela_preco.errors|join:", " }}</small>
+            {% endif %}
           </div>
           <div class="erp-field">
             <label style="margin-bottom:8px">Bloqueado</label>

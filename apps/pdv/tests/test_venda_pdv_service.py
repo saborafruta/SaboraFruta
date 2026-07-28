@@ -2,6 +2,7 @@ from decimal import Decimal
 
 from django.test import TestCase
 
+from apps.cadastros.models import Cliente, ClienteFilial
 from apps.core.models import Empresa, Filial, PerfilAcesso, Usuario
 from apps.core.services.exceptions import DadosInvalidosError, EstoqueInsuficienteError
 from apps.estoque.models import Estoque, MovimentacaoEstoque
@@ -15,7 +16,7 @@ from apps.produtos.models import (
     BrindeProduto, BrindeProdutoItem, CondicaoQuantidade, KitCategoria,
     KitCategoriaRegra, KitProduto, KitProdutoItem, Produto, ProdutoFilial,
     PromocaoQuantidade, PromocaoQuantidadeFaixa, TipoDesconto, UnidadeMedida,
-    UnidadeMedidaFilial,
+    UnidadeMedidaFilial, TabelaPreco, TabelaPrecoFilial, ItemTabelaPreco,
 )
 
 
@@ -147,6 +148,55 @@ class VendaPDVServiceTests(TestCase):
         self.assertEqual(estoque.quantidade_disponivel, Decimal("8.000"))
         self.assertEqual(movimento.documento_tipo, MovimentacaoEstoque.DocumentoTipo.NFCE)
         self.assertEqual(movimento.documento_id, venda.pk)
+
+    def test_tabela_do_cliente_precifica_item_e_faz_fallback_no_ausente(self):
+        produto_tabela = self.criar_produto("Produto na tabela")
+        produto_padrao = self.criar_produto("Produto fora da tabela")
+        produto_padrao.preco_venda = Decimal("12.00")
+        produto_padrao.save(update_fields=["preco_venda"])
+        self.abastecer(produto_tabela, "5")
+        self.abastecer(produto_padrao, "5")
+
+        tabela = TabelaPreco.objects.create(
+            filial=self.filial,
+            descricao="Atacado especial",
+            tipo=TabelaPreco.Tipo.ATACADO,
+        )
+        TabelaPrecoFilial.objects.create(tabela=tabela, filial=self.filial)
+        ItemTabelaPreco.objects.create(
+            tabela=tabela,
+            produto=produto_tabela,
+            preco_unitario=Decimal("6.00"),
+            quantidade_minima=Decimal("0"),
+        )
+        cliente = Cliente.objects.create(
+            filial=self.filial,
+            tipo_pessoa="J",
+            razao_social="Cliente Atacado LTDA",
+            tabela_preco=tabela,
+        )
+        ClienteFilial.objects.create(cliente=cliente, filial=self.filial)
+
+        venda = VendaPDVService.finalizar_venda(
+            sessao=self.sessao,
+            filial=self.filial,
+            usuario=self.usuario,
+            cliente_id=cliente.pk,
+            itens=[
+                {"produto_id": produto_tabela.pk, "quantidade": "1"},
+                {"produto_id": produto_padrao.pk, "quantidade": "1"},
+            ],
+            pagamentos=[{"forma_id": self.forma.pk, "valor": "18.00"}],
+        )
+
+        itens = {
+            item.produto_id: item
+            for item in ItemVendaPDV.objects.filter(venda_pdv=venda)
+        }
+        self.assertEqual(itens[produto_tabela.pk].valor_unitario, Decimal("6.0000"))
+        self.assertEqual(itens[produto_tabela.pk].preco_origem, "tabela_cliente")
+        self.assertEqual(itens[produto_padrao.pk].valor_unitario, Decimal("12.0000"))
+        self.assertEqual(venda.valor_total, Decimal("18.00"))
 
     def test_finalizar_venda_sem_estoque_faz_rollback(self):
         produto = self.criar_produto("Produto sem saldo")

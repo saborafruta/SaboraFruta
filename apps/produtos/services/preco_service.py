@@ -12,7 +12,84 @@ from apps.produtos.models import DIAS_SEMANA_TODOS, ItemTabelaPreco, Produto, Pr
 
 
 class PrecoService:
-    """Cálculos e consultas de preço."""
+    """Calculos e consultas de preco."""
+
+    @staticmethod
+    def tabela_cliente_vigente(cliente=None, filial=None, tabela=None):
+        """Retorna somente uma tabela ativa, vigente e vinculada a filial."""
+        tabela = tabela or getattr(cliente, 'tabela_preco', None)
+        if not tabela or not tabela.ativo:
+            return None
+
+        hoje = timezone.localdate()
+        if tabela.data_inicio and tabela.data_inicio > hoje:
+            return None
+        if tabela.data_fim and tabela.data_fim < hoje:
+            return None
+        if filial and not TabelaPreco.objects.for_filial(filial).filter(
+            pk=tabela.pk,
+            ativo=True,
+        ).exists():
+            return None
+        return tabela
+
+    @classmethod
+    def preco_cliente_detalhado(
+        cls,
+        produto: Produto,
+        quantidade: Decimal,
+        *,
+        cliente=None,
+        tabela=None,
+        filial=None,
+        validar_promocoes: bool = True,
+    ) -> dict:
+        """
+        Resolve o preco comercial do cliente, com fallback para a regra padrao.
+        """
+        quantidade = Decimal(str(quantidade or '0'))
+        preco_padrao = cls.melhor_preco_produto_detalhado(
+            produto,
+            usar_promocoes=validar_promocoes,
+            filial=filial,
+            quantidade=quantidade,
+            data=timezone.localdate(),
+        )
+        tabela = cls.tabela_cliente_vigente(
+            cliente=cliente,
+            filial=filial,
+            tabela=tabela,
+        )
+        if not tabela:
+            return preco_padrao
+
+        item = (
+            ItemTabelaPreco.objects
+            .filter(
+                tabela=tabela,
+                produto=produto,
+                quantidade_minima__lte=quantidade,
+            )
+            .order_by('-quantidade_minima')
+            .first()
+        )
+        if not item:
+            return preco_padrao
+
+        preco = item.preco_unitario
+        if tabela.acrescimo_percentual:
+            preco *= Decimal('1') + (tabela.acrescimo_percentual / Decimal('100'))
+        return {
+            'preco': preco,
+            'tipo': 'tabela_cliente',
+            'origem': tabela.descricao,
+            'detalhe': (
+                f'Tabela de preco "{tabela.descricao}" '
+                f'(a partir de {item.quantidade_minima} unidade(s)).'
+            ),
+            'tabela_preco_id': tabela.pk,
+            'item_tabela_preco_id': item.pk,
+        }
 
     @staticmethod
     def promocao_produto_contexto(produto: Produto, filial=None):

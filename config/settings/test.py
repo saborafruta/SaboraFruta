@@ -24,6 +24,7 @@ LOCAL_APP_LABELS = [
     'cadastros',
     'compras',
     'core',
+    'crm',
     'estoque',
     'financeiro',
     'fiscal',

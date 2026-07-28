@@ -6,6 +6,7 @@ from decimal import Decimal, ROUND_HALF_UP
 from django.db import transaction
 from django.utils import timezone
 
+from apps.cadastros.models import Cliente
 from apps.core.services.exceptions import DadosInvalidosError, EstoqueInsuficienteError
 from apps.estoque.models import MovimentacaoEstoque
 from apps.estoque.services.movimentacao_service import MovimentacaoService
@@ -60,11 +61,21 @@ class VendaPDVService:
         # caso contrário, carimba o momento atual. A validação de permissão
         # (somente administrador) é feita na view.
         data_venda_efetiva = data_venda or timezone.now()
+        cliente = None
+        if cliente_id:
+            cliente = (
+                Cliente.objects.for_filial(filial)
+                .select_related('tabela_preco')
+                .filter(pk=cliente_id, ativo=True)
+                .first()
+            )
+            if not cliente:
+                raise DadosInvalidosError("Cliente nao encontrado na filial ativa.")
         venda = VendaPDV.objects.create(
             sessao_pdv=sessao,
             filial=filial,
             numero_venda=numero,
-            cliente_id=cliente_id or None,
+            cliente=cliente,
             status="finalizada",
             delivery=delivery,
             endereco_entrega=endereco_entrega or {},
@@ -150,11 +161,18 @@ class VendaPDVService:
         return venda
 
     @classmethod
-    def resolver_preco_produto(cls, produto: Produto, filial, quantidade: Decimal) -> dict:
+    def resolver_preco_produto(
+        cls,
+        produto: Produto,
+        filial,
+        quantidade: Decimal,
+        cliente=None,
+    ) -> dict:
         contrato = ProdutoVendavelService.consultar(
             produto=produto,
             filial=filial,
             quantidade=quantidade,
+            cliente=cliente,
         )
         preco = cls._decimal(contrato["preco_aplicado"], cls.UNIT)
         return {
@@ -207,8 +225,14 @@ class VendaPDVService:
             produto=produto,
             filial=filial,
             quantidade=quantidade,
+            cliente=venda.cliente,
         )
-        preco_info = cls.resolver_preco_produto(produto, filial, quantidade)
+        preco_info = cls.resolver_preco_produto(
+            produto,
+            filial,
+            quantidade,
+            cliente=venda.cliente,
+        )
         valor_unitario = preco_info["preco"]
         preco_origem_tipo = preco_info["tipo"]
         preco_origem_detalhe = preco_info["detalhe"] or preco_info["origem"]
@@ -222,7 +246,7 @@ class VendaPDVService:
             preco_origem_tipo = "manual"
             preco_origem_detalhe = (
                 f"Preco alterado manualmente pelo operador "
-                f"(tabela: R$ {produto.preco_venda})."
+                f"(preco automatico: R$ {preco_info['preco']})."
             )
 
         valor_total_item = cls._decimal(quantidade * valor_unitario, cls.MONEY)
@@ -237,7 +261,11 @@ class VendaPDVService:
             quantidade=quantidade,
             unidade_medida=unidade,
             valor_unitario=valor_unitario,
-            valor_unitario_tabela=produto.preco_venda,
+            valor_unitario_tabela=(
+                preco_info["preco"]
+                if preco_info["tipo"] == "tabela_cliente"
+                else produto.preco_venda
+            ),
             custo_unitario_snapshot=custo_snapshot,
             preco_origem=preco_origem_tipo,
             preco_origem_detalhe=preco_origem_detalhe,
@@ -310,8 +338,16 @@ class VendaPDVService:
                 produto=comp.produto,
                 filial=filial,
                 quantidade=qtd_componente,
+                cliente=venda.cliente,
             )
-            preco_unitario = contrato["preco_aplicado"] if kit.permite_preco_promocional else comp.produto.preco_venda
+            if venda.cliente and venda.cliente.tabela_preco_id:
+                preco_unitario = contrato["preco_aplicado"]
+            else:
+                preco_unitario = (
+                    contrato["preco_aplicado"]
+                    if kit.permite_preco_promocional
+                    else comp.produto.preco_venda
+                )
             preco_unitario = cls._decimal(preco_unitario, cls.UNIT)
             total = cls._decimal(qtd_componente * preco_unitario, cls.MONEY)
             subtotal_sem_desconto += total
@@ -383,6 +419,7 @@ class VendaPDVService:
                     produto=comp.produto,
                     filial=filial,
                     quantidade=qtd,
+                    cliente=venda.cliente,
                 )
                 item = ItemVendaPDV.objects.create(
                     venda_pdv=venda,

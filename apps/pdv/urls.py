@@ -12,6 +12,7 @@ urlpatterns = [
     path("api/clientes/", pdv.buscar_cliente, name="api_clientes"),
     # Estado e caixa
     path("api/estado/", pdv.api_estado, name="api_estado"),
+    path("api/precos-cliente/", pdv.api_precos_cliente, name="api_precos_cliente"),
     path("api/caixa/criar/", pdv.api_caixa_criar, name="api_caixa_criar"),
     path("api/caixa/abrir/", pdv.api_caixa_abrir, name="api_caixa_abrir"),
     path("api/caixa/resumo/", pdv.api_caixa_resumo, name="api_caixa_resumo"),

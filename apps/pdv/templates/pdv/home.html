@@ -208,6 +208,14 @@
   .prod-card:hover { border-color:#f15a24; background:var(--pdv-hover); }
   .prod-card-nome { font-size:13px;font-weight:500;color:var(--pdv-t5);white-space:nowrap;overflow:hidden;text-overflow:ellipsis; }
   .prod-card-preco { font-size:13px;font-weight:700;color:#f97316;margin-top:2px; }
+  .preco-origem-tag {
+    display:inline-flex;align-items:center;width:max-content;margin-top:3px;padding:1px 6px;
+    border:1px solid rgba(148,163,184,.24);border-radius:4px;background:rgba(148,163,184,.08);
+    color:#94a3b8;font-size:9px;font-weight:700;line-height:1.4;text-transform:uppercase;
+  }
+  .preco-origem-tag.especial {
+    border-color:rgba(34,197,94,.3);background:rgba(34,197,94,.1);color:#4ade80;
+  }
 
   /* Tabs do catálogo */
   .cat-tabs { display:flex; gap:3px; background:var(--pdv-bg); border:1px solid var(--pdv-hover); border-radius:10px; padding:4px; }
@@ -758,6 +766,9 @@
               <div style="flex:1;min-width:0;">
                 <div class="prod-card-nome" x-text="p.descricao"></div>
                 <div class="prod-card-preco" x-text="'R$ ' + fmt(p.preco)"></div>
+                <span class="preco-origem-tag"
+                      :class="p.preco_origem_tipo === 'tabela_cliente' ? 'especial' : ''"
+                      x-text="labelOrigemPreco(p)"></span>
               </div>
             </button>
           </template>
@@ -797,6 +808,9 @@
                @click="venda.cliente.id && window.open('/cadastros/clientes/'+venda.cliente.id+'/?next=/pdv/', '_blank')"
                x-text="venda.cliente.nome"></div>
           <div style="font-size:11px;color:#555;" x-text="venda.cliente.id ? venda.cliente.cpf_cnpj : 'Clique para selecionar'"></div>
+          <span class="preco-origem-tag"
+                :class="venda.cliente.tabela_preco_id ? 'especial' : ''"
+                x-text="venda.cliente.tabela_preco_id ? venda.cliente.tabela_preco_nome : 'Preço padrão'"></span>
         </div>
         <button @click="selecionarClienteBalcao()" class="btn-action">
           <svg width="13" height="13" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/></svg>
@@ -1014,6 +1028,9 @@
                   <template x-if="!item._precoManual">
                     <span style="font-size:12px;color:#555;" x-text="'R$ ' + fmt(item.valor_unitario) + ' / un.'"></span>
                   </template>
+                  <span class="preco-origem-tag"
+                        :class="item.preco_origem_tipo === 'tabela_cliente' ? 'especial' : ''"
+                        x-text="labelOrigemPreco(item)"></span>
                   <template x-if="item.desconto_valor>0">
                     <span style="font-size:11px;padding:1px 6px;background:rgba(34,197,94,.15);color:#4ade80;border-radius:4px;font-weight:600;"
                           x-text="'− R$ ' + fmt(item.desconto_valor)"></span>
@@ -1022,7 +1039,7 @@
                 <div style="display:flex;align-items:center;gap:8px;margin-top:8px;flex-wrap:wrap;">
                   <div class="qty-ctrl">
                     <button @click="alterarQuantidade(item,-1)">−</button>
-                    <input type="number" x-model.number="item.quantidade" @change="recalcularItem(item)" min="0.001" step="0.001">
+                    <input type="number" x-model.number="item.quantidade" @change="atualizarQuantidadeItem(item)" min="0.001" step="0.001">
                     <button @click="alterarQuantidade(item,1)">+</button>
                   </div>
                   <button @click="abrirPrecoItem(item)" class="btn-action" style="font-size:11px;padding:4px 8px;"
@@ -2669,6 +2686,12 @@ function pdv() {
       return this.venda.delivery ? 'FINALIZAR DELIVERY (F12)' : 'FINALIZAR VENDA (F12)';
     },
 
+    labelOrigemPreco(item) {
+      return item?.preco_origem_tipo === 'tabela_cliente'
+        ? (item.preco_origem || this.venda.cliente.tabela_preco_nome || 'Preço especial')
+        : 'Preço padrão';
+    },
+
     async init() {
       this.horaAtual = this._hora();
       setInterval(()=>{ this.horaAtual=this._hora(); }, 1000);
@@ -2684,7 +2707,11 @@ function pdv() {
 
     async carregarEstado() {
       try {
-        const d = await (await fetch('/pdv/api/estado/')).json();
+        const clienteId = this.venda?.cliente?.id;
+        const url = clienteId
+          ? '/pdv/api/estado/?cliente_id='+encodeURIComponent(clienteId)
+          : '/pdv/api/estado/';
+        const d = await (await fetch(url)).json();
         this.sessao = d.sessao;
         this.formasPagamento = d.formas_pagamento || [];
         this.topProdutos = d.top_produtos || [];
@@ -2699,6 +2726,7 @@ function pdv() {
       try {
         const params = new URLSearchParams({q:q.trim()});
         if (this.linhaAtiva) params.set('linha',this.linhaAtiva);
+        if (this.venda.cliente.id) params.set('cliente_id',this.venda.cliente.id);
         const d = await (await fetch('/pdv/api/produtos/?'+params)).json();
         this.produtos = d.produtos || [];
         if (this.produtos.length===1 && /^\d{8,}$/.test(q.trim())) {
@@ -2729,7 +2757,9 @@ function pdv() {
       const code = (this.barcodeQuery||'').trim();
       if (!code) return;
       try {
-        const d = await (await fetch('/pdv/api/produtos/?q='+encodeURIComponent(code))).json();
+        const params = new URLSearchParams({q:code});
+        if (this.venda.cliente.id) params.set('cliente_id',this.venda.cliente.id);
+        const d = await (await fetch('/pdv/api/produtos/?'+params)).json();
         const prods = d.produtos || [];
         let p = prods.find(x => String(x.codigo_barras||'') === code);
         if (!p && prods.length === 1) p = prods[0];
@@ -2762,7 +2792,13 @@ function pdv() {
     adicionarItem(produto) {
       // Se já está no carrinho: só incrementa quantidade
       const ex = this.venda.itens.find(i=>i.produto_id===produto.id);
-      if (ex) { ex.quantidade=parseFloat(ex.quantidade)+1; this.recalcularItem(ex); this.toast_('Quantidade atualizada','ok'); return; }
+      if (ex) {
+        ex.quantidade=parseFloat(ex.quantidade)+1;
+        this.recalcularItem(ex);
+        this.aplicarPrecosCliente(false);
+        this.toast_('Quantidade atualizada','ok');
+        return;
+      }
 
       // Se possui múltiplos preços: abre seletor antes de adicionar
       const precos = produto.todos_precos || [];
@@ -2782,6 +2818,9 @@ function pdv() {
         icone: produto.icone||'📦', cor: produto.cor||null, linha: produto.linha||null,
         estoque_disponivel: parseFloat(produto.estoque_disponivel == null ? 0 : produto.estoque_disponivel),
         quantidade: 1, valor_unitario: preco, _precoOriginal: preco, _precoManual: false,
+        preco_origem: produto.preco_origem || 'Preço de venda',
+        preco_origem_tipo: produto.preco_origem_tipo || 'normal',
+        preco_origem_detalhe: produto.preco_origem_detalhe || '',
         desconto_percentual: 0, desconto_valor: 0, valor_total: preco,
         obs: '', _showObs: false,
       });
@@ -2799,7 +2838,13 @@ function pdv() {
     alterarQuantidade(item, delta) {
       const n = parseFloat(item.quantidade)+delta;
       if (n<=0) { this.removerItem(item); return; }
-      item.quantidade=n; this.recalcularItem(item);
+      item.quantidade=n;
+      this.atualizarQuantidadeItem(item);
+    },
+
+    atualizarQuantidadeItem(item) {
+      this.recalcularItem(item);
+      if (!item._precoManual) this.aplicarPrecosCliente(false);
     },
 
     recalcularItem(item) {
@@ -3714,7 +3759,7 @@ ${pgtoHtml ? `<hr class="sep">${pgtoHtml}` : ''}
       this.recalcularTotais();
     },
 
-    selecionarCliente(c) {
+    async selecionarCliente(c) {
       this.venda.cliente={
         id:c.id,
         nome:c.nome_fantasia||c.razao_social,
@@ -3723,19 +3768,23 @@ ${pgtoHtml ? `<hr class="sep">${pgtoHtml}` : ''}
         telefone:c.telefone||'',
         endereco_entrega:c.endereco_entrega || {},
         tem_endereco:!!c.tem_endereco,
+        tabela_preco_id:c.tabela_preco_id||null,
+        tabela_preco_nome:c.tabela_preco_nome||'Padrao',
       };
       this.showModalCliente=false; this.clienteQuery=''; this.clientesResultados=[]; this.clienteFoco=-1;
       this.carregarHistoricoCliente(c.id);
       this.carregarOrcamentosCliente(c.id);
       this.carregarCreditoCliente(c.id);
       this.carregarCashbackSaldo(c.id);
+      await this.aplicarPrecosCliente();
       if (this.deliveryAguardandoCliente) this.prepararDeliveryClienteSelecionado();
     },
-    selecionarClienteBalcao() {
+    async selecionarClienteBalcao() {
       this.venda.cliente={id:null,nome:'Consumidor Final',cpf_cnpj:'',endereco_entrega:{},tem_endereco:false};
       this.historicoCliente=[]; this.produtosFrequentes=[]; this.historicoClienteTotal=0; this.historicoClienteAberto=null;
       this.orcamentosCliente=[]; this.creditoDisponivel=0; this.creditoAplicado=0; this.cashbackDisponivel=0;
       this.showModalCliente=false; this.clienteQuery=''; this.clientesResultados=[]; this.clienteFoco=-1;
+      await this.aplicarPrecosCliente();
       if (this.deliveryAguardandoCliente) {
         this.deliveryAguardandoCliente=false;
         this.venda.delivery=false;
@@ -3986,6 +4035,7 @@ ${pgtoHtml ? `<hr class="sep">${pgtoHtml}` : ''}
         this.venda.acrescimo = d.acrescimo || 0;
         this.venda.delivery = d.delivery || false;
         this.venda.endereco_entrega = d.endereco_entrega || {};
+        await this.aplicarPrecosCliente();
         this.recalcularTotais();
         this.toast_('✓ Venda #'+String(p.numero_venda).padStart(6,'0')+' retomada — revise e finalize', 'ok');
         await this.carregarPendentes();
@@ -4133,6 +4183,46 @@ ${pgtoHtml ? `<hr class="sep">${pgtoHtml}` : ''}
         input.dispatchEvent(new Event('input', { bubbles:true }));
       } else {
         input.select();
+      }
+    },
+
+    async aplicarPrecosCliente(atualizarCatalogo=true) {
+      try {
+        if (this.venda.itens.length) {
+          const r = await fetch('/pdv/api/precos-cliente/', {
+            method:'POST',
+            headers:{'Content-Type':'application/json','X-CSRFToken':csrf()},
+            body:JSON.stringify({
+              cliente_id:this.venda.cliente.id,
+              itens:this.venda.itens.map(i=>({
+                produto_id:i.produto_id,
+                quantidade:i.quantidade,
+              })),
+            }),
+          });
+          const d = await r.json();
+          if (!r.ok) throw new Error(d.erro||'Falha ao consultar precos');
+          const porProduto = new Map((d.precos||[]).map(p=>[p.id,p]));
+          for (const item of this.venda.itens) {
+            if (item._precoManual) continue;
+            const preco = porProduto.get(item.produto_id);
+            if (!preco) continue;
+            item.valor_unitario=parseFloat(preco.preco)||0;
+            item._precoOriginal=item.valor_unitario;
+            item.preco_manual=null;
+            item.preco_origem=preco.preco_origem||'Preço de venda';
+            item.preco_origem_tipo=preco.preco_origem_tipo||'normal';
+            item.preco_origem_detalhe=preco.preco_origem_detalhe||'';
+            this.recalcularItem(item);
+          }
+        }
+        if (atualizarCatalogo) {
+          await this.carregarEstado();
+          if ((this.buscaQuery||'').trim()) await this.buscarProdutos(this.buscaQuery);
+        }
+        this.recalcularTotais();
+      } catch {
+        this.toast_('Nao foi possivel atualizar os precos do cliente.','erro');
       }
     },
 

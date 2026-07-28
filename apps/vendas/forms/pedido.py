@@ -36,6 +36,13 @@ class PedidoVendaForm(forms.ModelForm):
                 ativo=True,
             )
 
+    def clean(self):
+        cleaned_data = super().clean()
+        cliente = cleaned_data.get('cliente')
+        if cliente and cliente.tabela_preco_id:
+            cleaned_data['tabela_preco'] = cliente.tabela_preco
+        return cleaned_data
+
 
 class AdicionarItemForm(forms.Form):
     produto = forms.ModelChoiceField(queryset=Produto.objects.none(), label='Produto')

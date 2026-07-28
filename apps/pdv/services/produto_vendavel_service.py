@@ -24,17 +24,20 @@ class ProdutoVendavelService:
         filial,
         quantidade=Decimal("1"),
         validar_promocoes: bool = True,
+        cliente=None,
+        tabela_preco=None,
     ) -> dict:
         quantidade = cls._decimal(quantidade, Decimal("0.001"))
         estoque = Estoque.objects.filter(produto=produto, filial=filial).first()
         saldo_disponivel = estoque.quantidade_disponivel if estoque else Decimal("0")
         custo_atual = cls._decimal(custo_referencia(produto), cls.UNIT)
-        preco_info = PrecoService.melhor_preco_produto_detalhado(
+        preco_info = PrecoService.preco_cliente_detalhado(
             produto,
-            usar_promocoes=validar_promocoes,
+            quantidade,
+            cliente=cliente,
+            tabela=tabela_preco,
             filial=filial,
-            quantidade=quantidade,
-            data=timezone.localdate(),
+            validar_promocoes=validar_promocoes,
         )
         preco_aplicado = cls._decimal(preco_info.get("preco"), cls.UNIT)
         margem_percentual = cls._margem(preco_aplicado, custo_atual)
@@ -95,8 +98,22 @@ class ProdutoVendavelService:
         }
 
     @classmethod
-    def validar_venda(cls, *, produto: Produto, filial, quantidade=Decimal("1")) -> dict:
-        contrato = cls.consultar(produto=produto, filial=filial, quantidade=quantidade)
+    def validar_venda(
+        cls,
+        *,
+        produto: Produto,
+        filial,
+        quantidade=Decimal("1"),
+        cliente=None,
+        tabela_preco=None,
+    ) -> dict:
+        contrato = cls.consultar(
+            produto=produto,
+            filial=filial,
+            quantidade=quantidade,
+            cliente=cliente,
+            tabela_preco=tabela_preco,
+        )
         if contrato["bloqueios"]:
             labels = "; ".join(item["label"] for item in contrato["bloqueios"])
             from apps.core.services.exceptions import DadosInvalidosError

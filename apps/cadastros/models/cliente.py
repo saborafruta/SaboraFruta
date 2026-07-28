@@ -68,6 +68,14 @@ class Cliente(FilialScopedModel):
         help_text='Calculado. Atualizado via signals quando contas a receber mudam.',
     )
     prazo_pagamento_dias = models.SmallIntegerField(default=0)
+    tabela_preco = models.ForeignKey(
+        'produtos.TabelaPreco',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='clientes',
+        help_text='Quando vazia, usa o preco padrao cadastrado no produto.',
+    )
     grupo_desconto = models.CharField(
         max_length=50, blank=True,
         help_text='Agrupamento para regras de desconto e tabela de preço.',

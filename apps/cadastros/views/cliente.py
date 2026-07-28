@@ -297,13 +297,13 @@ class ClienteCreateView(PermissaoRequiredMixin, View):
 
     def get(self, request):
         return render(request, self.template_name, {
-            'form': ClienteForm(),
+            'form': ClienteForm(filial=request.filial_ativa),
             'title': 'Novo Cliente',
             'cancel_url': reverse_lazy('cadastros:cliente-list'),
         })
 
     def post(self, request):
-        form = ClienteForm(request.POST)
+        form = ClienteForm(request.POST, filial=request.filial_ativa)
         if form.is_valid():
             try:
                 cliente = ClienteService.criar(
@@ -348,7 +348,7 @@ class ClienteUpdateView(PermissaoRequiredMixin, View):
         cliente = self.get_object(request, pk)
         next_url = self._next_url(request)
         return render(request, self.template_name, {
-            'form': ClienteForm(instance=cliente),
+            'form': ClienteForm(instance=cliente, filial=request.filial_ativa),
             'cliente': cliente,
             'cadastro_log_pk': cliente.pk,
             **cadastro_log_context(cliente, 'clientes', 'Cliente', request.user),
@@ -359,7 +359,11 @@ class ClienteUpdateView(PermissaoRequiredMixin, View):
 
     def post(self, request, pk):
         cliente = self.get_object(request, pk)
-        form = ClienteForm(request.POST, instance=cliente)
+        form = ClienteForm(
+            request.POST,
+            instance=cliente,
+            filial=request.filial_ativa,
+        )
         next_url = self._next_url(request)
         if form.is_valid():
             try:

@@ -10,6 +10,7 @@ from django.core.paginator import Paginator
 from django.utils import timezone
 from django.views.decorators.http import require_GET, require_POST
 
+from apps.cadastros.models import Cliente
 from apps.core.services.exceptions import DadosInvalidosError, EstoqueInsuficienteError
 from apps.core.services.permissions import requer_permissao
 from apps.core.services.search import normalize_search_text, ranked_search_ids
@@ -38,6 +39,22 @@ def _sessao_aberta(request):
     return SessaoPDV.objects.for_filial(request.filial_ativa).filter(
         usuario=request.user, status="aberto"
     ).first()
+
+
+def _cliente_precificacao(request, cliente_id=None):
+    cliente_id = cliente_id or request.GET.get('cliente_id')
+    if not cliente_id:
+        return None
+    try:
+        cliente_id = int(cliente_id)
+    except (TypeError, ValueError):
+        return None
+    return (
+        Cliente.objects.for_filial(request.filial_ativa)
+        .select_related('tabela_preco')
+        .filter(pk=cliente_id, ativo=True)
+        .first()
+    )
 
 
 def _cliente_endereco_preferencial(cliente):
@@ -175,6 +192,7 @@ def buscar_produto(request):
     q = request.GET.get("q", "").strip()
     linha_id = request.GET.get("linha")
     filial = request.filial_ativa
+    cliente = _cliente_precificacao(request)
     qs = Produto.objects.for_filial(filial).filter(ativo=True)
     if linha_id:
         qs = qs.filter(linha_producao_id=linha_id)
@@ -221,9 +239,19 @@ def buscar_produto(request):
             produto=p,
             filial=filial,
             quantidade=Decimal("1"),
+            cliente=cliente,
         )
         # Coleta TODOS os preços candidatos para permitir escolha do vendedor
-        todos_precos = _todos_precos_produto(p, filial, hoje)
+        if contrato["preco_origem_tipo"] == "tabela_cliente":
+            todos_precos = [{
+                "preco": float(contrato["preco_aplicado"]),
+                "tipo": contrato["preco_origem_tipo"],
+                "origem": contrato["preco_origem"],
+                "detalhe": contrato["preco_origem_detalhe"],
+                "melhor": True,
+            }]
+        else:
+            todos_precos = _todos_precos_produto(p, filial, hoje)
 
         data.append({
             "id": p.id, "descricao": p.descricao_pdv or p.descricao,
@@ -349,6 +377,8 @@ def buscar_cliente(request):
             "tem_endereco": bool(endereco_entrega.get("rua") and endereco_entrega.get("bairro")),
             "linhas_interesse": getattr(c, 'linhas_interesse', ''),
             "saldo_devedor": float(c.saldo_devedor or 0),
+            "tabela_preco_id": c.tabela_preco_id,
+            "tabela_preco_nome": c.tabela_preco.descricao if c.tabela_preco_id else "Padrao",
         }
 
     def _aplicar_busca(qs, q):
@@ -362,7 +392,7 @@ def buscar_cliente(request):
             )
         return qs
 
-    base_qs = Cliente.objects.filter(ativo=True)
+    base_qs = Cliente.objects.filter(ativo=True).select_related('tabela_preco')
 
     # ── Tentativa 1: escopo da empresa via FK direta ──────────────────────────
     empresa_id = getattr(filial, 'empresa_id', None) if filial else None
@@ -431,11 +461,12 @@ def api_clientes_debug(request):
 # API — Estado inicial do PDV
 # ---------------------------------------------------------------------------
 
-def _serializa_produto(p, filial):
+def _serializa_produto(p, filial, cliente=None, quantidade=Decimal("1")):
     contrato = ProdutoVendavelService.consultar(
         produto=p,
         filial=filial,
-        quantidade=Decimal("1"),
+        quantidade=quantidade,
+        cliente=cliente,
     )
     return {
         "id": p.id,
@@ -466,6 +497,7 @@ def _serializa_produto(p, filial):
 @require_GET
 def api_estado(request):
     sessao = _sessao_aberta(request)
+    cliente = _cliente_precificacao(request)
 
     try:
         formas = list(
@@ -496,7 +528,11 @@ def api_estado(request):
             for pid in ids_ordenados:
                 p = produtos.get(pid)
                 if p and p.ativo:
-                    top_produtos.append(_serializa_produto(p, request.filial_ativa))
+                    top_produtos.append(_serializa_produto(
+                        p,
+                        request.filial_ativa,
+                        cliente=cliente,
+                    ))
 
         # Sem histórico de vendas: mostra produtos cadastrados
         if not top_produtos:
@@ -506,7 +542,10 @@ def api_estado(request):
                 .select_related('linha_producao')
                 .order_by('descricao')[:10]
             )
-            top_produtos = [_serializa_produto(p, request.filial_ativa) for p in fallback]
+            top_produtos = [
+                _serializa_produto(p, request.filial_ativa, cliente=cliente)
+                for p in fallback
+            ]
     except Exception:
         top_produtos = []
 
@@ -524,6 +563,48 @@ def api_estado(request):
 # ---------------------------------------------------------------------------
 # API — Abertura de caixa
 # ---------------------------------------------------------------------------
+
+@requer_permissao('pdv', 'ver')
+@require_POST
+def api_precos_cliente(request):
+    try:
+        body = json.loads(request.body or b'{}')
+    except (json.JSONDecodeError, TypeError):
+        return JsonResponse({"erro": "JSON invalido."}, status=400)
+
+    cliente = _cliente_precificacao(request, body.get('cliente_id'))
+    if body.get('cliente_id') and not cliente:
+        return JsonResponse({"erro": "Cliente nao encontrado na filial ativa."}, status=404)
+
+    ids = []
+    quantidades = {}
+    for item in body.get('itens') or []:
+        try:
+            produto_id = int(item.get('produto_id'))
+            quantidade = Decimal(str(item.get('quantidade') or '1'))
+        except (TypeError, ValueError):
+            continue
+        ids.append(produto_id)
+        quantidades[produto_id] = quantidade
+
+    produtos = {
+        produto.pk: produto
+        for produto in Produto.objects.for_filial(request.filial_ativa)
+        .filter(pk__in=ids, ativo=True)
+    }
+    precos = []
+    for produto_id in ids:
+        produto = produtos.get(produto_id)
+        if not produto:
+            continue
+        precos.append(_serializa_produto(
+            produto,
+            request.filial_ativa,
+            cliente=cliente,
+            quantidade=quantidades[produto_id],
+        ))
+    return JsonResponse({"precos": precos})
+
 
 @requer_permissao('pdv', 'ver')
 @require_POST

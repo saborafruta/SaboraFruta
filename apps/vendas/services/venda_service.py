@@ -50,6 +50,11 @@ class VendaService:
         if cliente.bloqueado:
             raise DadosInvalidosError(f'Cliente bloqueado: {cliente.motivo_bloqueio}')
 
+        tabela_preco = PrecoService.tabela_cliente_vigente(
+            cliente=cliente,
+            filial=filial,
+            tabela=cliente.tabela_preco or tabela_preco,
+        )
         numero = cls._gerar_numero(filial)
         pedido = PedidoVenda.objects.create(
             filial=filial,
@@ -93,15 +98,12 @@ class VendaService:
             produto=produto,
             filial=pedido.filial,
             quantidade=quantidade,
+            cliente=pedido.cliente,
+            tabela_preco=pedido.tabela_preco,
         )
 
         if valor_unitario is None:
-            if pedido.tabela_preco:
-                valor_unitario = PrecoService.preco_para_cliente(
-                    produto, quantidade, tabela=pedido.tabela_preco,
-                )
-            else:
-                valor_unitario = contrato['preco_aplicado']
+            valor_unitario = contrato['preco_aplicado']
 
         numero_item = pedido.itens.count() + 1
         item = ItemPedidoVenda(

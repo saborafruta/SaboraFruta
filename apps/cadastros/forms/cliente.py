@@ -1,9 +1,16 @@
 from django import forms
 
 from apps.cadastros.models import Cliente, ClienteEndereco
+from apps.produtos.models import TabelaPreco
 
 
 class ClienteForm(forms.ModelForm):
+    tabela_preco = forms.ModelChoiceField(
+        queryset=TabelaPreco.objects.none(),
+        required=False,
+        empty_label='Padrao (preco cadastrado no produto)',
+        label='Tabela de preco',
+    )
     cpf_cnpj = forms.CharField(
         required=False,
         max_length=18,
@@ -27,6 +34,16 @@ class ClienteForm(forms.ModelForm):
             'motivo_bloqueio': forms.Textarea(attrs={'rows': 2}),
             'data_nascimento': forms.DateInput(attrs={'type': 'date'}),
         }
+
+    def __init__(self, *args, filial=None, **kwargs):
+        super().__init__(*args, **kwargs)
+        filial = filial or getattr(self.instance, 'filial', None)
+        if filial:
+            self.fields['tabela_preco'].queryset = (
+                TabelaPreco.objects.for_filial(filial)
+                .filter(ativo=True)
+                .order_by('descricao')
+            )
 
     def clean_cpf_cnpj(self):
         valor = ''.join(filter(str.isdigit, self.cleaned_data.get('cpf_cnpj', '') or ''))
