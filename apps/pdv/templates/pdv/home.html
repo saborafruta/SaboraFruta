@@ -4120,7 +4120,13 @@ ${pgtoHtml ? `<hr class="sep">${pgtoHtml}` : ''}
       const seletores = 'button:not([disabled]),a[href],input:not([disabled]),select:not([disabled]),textarea:not([disabled]),[tabindex]:not([tabindex="-1"])';
       const elementos = Array.from(root.querySelectorAll(seletores)).filter(el => {
         const style = window.getComputedStyle(el);
-        return el.offsetParent !== null && style.visibility !== 'hidden';
+        if (el.offsetParent === null || style.visibility === 'hidden') return false;
+        const rect = el.getBoundingClientRect();
+        const cx = rect.left + rect.width / 2;
+        const cy = rect.top + rect.height / 2;
+        if (cx < 0 || cx > window.innerWidth || cy < 0 || cy > window.innerHeight) return false;
+        const elementoNoPonto = document.elementFromPoint(cx, cy);
+        return !!elementoNoPonto && (elementoNoPonto === el || el.contains(elementoNoPonto));
       });
       if (!elementos.length) return;
       const atual = document.activeElement;
