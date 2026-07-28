@@ -200,6 +200,84 @@
           <p x-show="itemProdutoId" class="text-xs mt-1 text-green-500" x-text="'✓ ' + itemProdutoNome"></p>
         </div>
 
+        <!-- Catalogo visual -->
+        <div x-show="!itemProdutoId" class="space-y-3">
+          <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+            <div>
+              <h4 class="text-sm font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
+                Selecao rapida
+              </h4>
+              <p class="text-xs" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+                Clique no produto para adicionar 1 unidade. Produtos com lote abrem a selecao do lote.
+              </p>
+            </div>
+            <div class="relative w-full sm:w-72">
+              <input type="search"
+                     x-model="catalogoQuery"
+                     @input.debounce.300ms="carregarCatalogo()"
+                     placeholder="Filtrar produtos..."
+                     class="form-input w-full pl-9">
+              <svg class="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2"
+                   fill="none" stroke="currentColor" viewBox="0 0 24 24"
+                   :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                      d="m21 21-4.35-4.35m1.35-5.65a7 7 0 1 1-14 0 7 7 0 0 1 14 0z"/>
+              </svg>
+            </div>
+          </div>
+
+          <div x-show="catalogoCarregando"
+               class="h-28 flex items-center justify-center text-sm"
+               :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+            Carregando produtos...
+          </div>
+
+          <div x-show="!catalogoCarregando && catalogoProdutos.length === 0"
+               class="rounded-lg border border-dashed px-4 py-8 text-center text-sm"
+               :style="temaClaro ? 'border-color:#cbd5e1;color:#64748b;' : 'border-color:#334155;color:#94a3b8;'">
+            Nenhum produto encontrado.
+          </div>
+
+          <div x-show="!catalogoCarregando && catalogoProdutos.length > 0"
+               class="grid grid-cols-2 md:grid-cols-3 gap-2 max-h-80 overflow-y-auto pr-1">
+            <template x-for="produto in catalogoProdutos" :key="produto.id">
+              <button type="button"
+                      @click="adicionarProdutoRapido(produto)"
+                      class="text-left rounded-lg border p-3 transition-colors min-h-28 flex flex-col justify-between"
+                      :style="temaClaro
+                        ? 'border-color:#dbe3ee;background:#ffffff;color:#111827;'
+                        : 'border-color:#334155;background:#111827;color:#f8fafc;'">
+                <div class="flex items-start gap-2">
+                  <div class="w-9 h-9 rounded-md flex items-center justify-center flex-shrink-0 overflow-hidden"
+                       :style="temaClaro ? 'background:#eff6ff;color:#2563eb;' : 'background:#1e3a5f;color:#93c5fd;'">
+                    <template x-if="produto.foto_url">
+                      <img :src="produto.foto_url" :alt="produto.label" class="w-full h-full object-cover">
+                    </template>
+                    <template x-if="!produto.foto_url">
+                      <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                              d="M20 7l-8-4-8 4m16 0-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"/>
+                      </svg>
+                    </template>
+                  </div>
+                  <span class="text-sm font-semibold leading-tight line-clamp-2" x-text="produto.label"></span>
+                </div>
+                <div class="mt-3 flex items-end justify-between gap-2">
+                  <div>
+                    <p class="text-xs" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'"
+                       x-text="produto.detalhe || produto.codigo_barras || 'Sem codigo'"></p>
+                    <p class="text-xs font-medium"
+                       :style="produto.estoque > 0 ? 'color:#15803d;' : 'color:#dc2626;'"
+                       x-text="'Saldo: ' + formatarQuantidade(produto.estoque) + ' ' + (produto.unidade || '')"></p>
+                  </div>
+                  <span class="w-7 h-7 rounded-md flex items-center justify-center text-lg font-bold"
+                        :style="temaClaro ? 'background:#dbeafe;color:#1d4ed8;' : 'background:#1e3a5f;color:#93c5fd;'">+</span>
+                </div>
+              </button>
+            </template>
+          </div>
+        </div>
+
         <!-- Lote / Quantidade -->
         <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
 
@@ -370,6 +448,34 @@
         </div>
       </div>
 
+      <!-- Transporte fiscal -->
+      <div class="card p-5 space-y-3">
+        <div class="flex items-center justify-between gap-3">
+          <h3 class="text-xs font-semibold uppercase tracking-widest"
+              :style="temaClaro ? 'color:#6b7280;' : 'color:#9ca3af;'">
+            Transporte fiscal
+          </h3>
+          <span class="soft-pill is-blue">Carga propria</span>
+        </div>
+        <p class="text-xs leading-relaxed" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+          O transportador sera a propria loja emitente. Motorista e veiculo sao informados na conferencia.
+        </p>
+        <div x-show="motoristaId || veiculoId || pesoBruto" class="space-y-2 text-sm">
+          <div x-show="motoristaId">
+            <span :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Motorista:</span>
+            <strong x-text="motoristaSelecionado()?.nome || ''"></strong>
+          </div>
+          <div x-show="veiculoId">
+            <span :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Veiculo:</span>
+            <strong x-text="veiculoSelecionado()?.placa || ''"></strong>
+          </div>
+          <div x-show="pesoBruto">
+            <span :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Peso bruto:</span>
+            <strong x-text="formatarQuantidade(pesoBruto) + ' kg'"></strong>
+          </div>
+        </div>
+      </div>
+
       <!-- Ações -->
       <div class="card p-5 space-y-3">
         <button type="button"
@@ -384,7 +490,7 @@
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
                   d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4"/>
           </svg>
-          <span x-text="submitting ? 'Transferindo...' : 'Confirmar Transferência'"></span>
+          <span x-text="submitting ? 'Transferindo...' : 'Revisar transferência'"></span>
         </button>
         <a href="{{ cancel_url }}"
            class="btn-secondary w-full flex items-center justify-center gap-2">
@@ -521,7 +627,7 @@
        x-transition:enter-start="opacity-0"
        x-transition:enter-end="opacity-100"
        @keydown.escape.window="showModalNota = false">
-    <div class="w-full max-w-xl max-h-[90vh] overflow-y-auto rounded-lg shadow-2xl"
+    <div class="w-full max-w-4xl max-h-[90vh] overflow-y-auto rounded-lg shadow-2xl"
          :style="temaClaro ? 'background:#ffffff;' : 'background:#0f172a; border:1px solid #1e293b;'"
          @click.outside="showModalNota = false"
          x-transition:enter="transition ease-out duration-150"
@@ -541,12 +647,59 @@
           </div>
           <div>
             <h3 class="text-lg font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
-              Gerar nota fiscal?
+              Conferencia da transferencia
             </h3>
             <p class="text-sm mt-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
-              Deseja emitir a <strong>NF-e de transferência</strong> (modelo 55) para esta
-              movimentação? A nota será enviada para autorização na SEFAZ.
+              Revise a rota, os produtos e o transporte antes de movimentar o estoque
+              ou enviar documentos para a SEFAZ.
             </p>
+          </div>
+        </div>
+
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-3">
+          <div class="rounded-lg border p-4 space-y-2"
+               :style="temaClaro ? 'border-color:#dbe3ee;background:#f8fafc;' : 'border-color:#334155;background:#111827;'">
+            <h4 class="text-xs font-semibold uppercase tracking-wider"
+                :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Rota</h4>
+            <p class="text-sm font-semibold">{{ filial_nome }}</p>
+            <p class="text-xs" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">para</p>
+            <p class="text-sm font-semibold"
+               x-text="filiais.find(f => f.id == filialDestinoId)?.label || ''"></p>
+          </div>
+
+          <div class="rounded-lg border p-4 space-y-2"
+               :style="temaClaro ? 'border-color:#dbe3ee;background:#f8fafc;' : 'border-color:#334155;background:#111827;'">
+            <h4 class="text-xs font-semibold uppercase tracking-wider"
+                :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Documento</h4>
+            <p class="text-sm"><strong>NF-e modelo 55</strong> de transferencia</p>
+            <p class="text-xs" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+              Ambiente: <strong>{{ focusnfe_ambiente_label }}</strong>
+            </p>
+            <p class="text-xs" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'"
+               x-text="observacao"></p>
+          </div>
+        </div>
+
+        <div class="rounded-lg border overflow-hidden"
+             :style="temaClaro ? 'border-color:#dbe3ee;' : 'border-color:#334155;'">
+          <div class="px-4 py-2.5 flex items-center justify-between"
+               :style="temaClaro ? 'background:#eef2f7;' : 'background:#1e293b;'">
+            <h4 class="text-xs font-semibold uppercase tracking-wider">Produtos</h4>
+            <span class="text-xs font-semibold" x-text="itens.length + ' item(ns)'"></span>
+          </div>
+          <div class="max-h-48 overflow-y-auto divide-y"
+               :style="temaClaro ? 'border-color:#e5e7eb;' : 'border-color:#334155;'">
+            <template x-for="(item, idx) in itens" :key="idx">
+              <div class="px-4 py-2.5 flex items-center justify-between gap-4">
+                <div class="min-w-0">
+                  <p class="text-sm font-medium truncate" x-text="item.produto_nome"></p>
+                  <p class="text-xs" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'"
+                     x-text="item.lote_nome ? 'Lote: ' + item.lote_nome : 'Sem lote informado'"></p>
+                </div>
+                <strong class="text-sm whitespace-nowrap"
+                        x-text="formatarQuantidade(item.quantidade) + ' ' + (item.unidade || '')"></strong>
+              </div>
+            </template>
           </div>
         </div>
 
@@ -612,6 +765,29 @@
               <input type="number" min="0.001" step="0.001" x-model="pesoBruto"
                      class="form-input w-full" placeholder="Ex.: 850,000">
             </div>
+            <div class="sm:col-span-2 grid grid-cols-1 md:grid-cols-3 gap-2">
+              <div class="rounded-lg border p-3"
+                   :style="temaClaro ? 'border-color:#dbe3ee;background:#f8fafc;' : 'border-color:#334155;background:#111827;'">
+                <p class="text-xs" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Transportador</p>
+                <p class="text-sm font-semibold">{{ filial_nome }}</p>
+                <p class="text-xs" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Carga propria</p>
+              </div>
+              <div class="rounded-lg border p-3"
+                   :style="temaClaro ? 'border-color:#dbe3ee;background:#f8fafc;' : 'border-color:#334155;background:#111827;'">
+                <p class="text-xs" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Motorista</p>
+                <p class="text-sm font-semibold" x-text="motoristaSelecionado()?.nome || 'Nao selecionado'"></p>
+                <p class="text-xs" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'"
+                   x-text="motoristaSelecionado()?.cpf ? 'CPF: ' + motoristaSelecionado().cpf : ''"></p>
+              </div>
+              <div class="rounded-lg border p-3"
+                   :style="temaClaro ? 'border-color:#dbe3ee;background:#f8fafc;' : 'border-color:#334155;background:#111827;'">
+                <p class="text-xs" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Veiculo</p>
+                <p class="text-sm font-semibold"
+                   x-text="veiculoSelecionado()?.placa || 'Nao selecionado'"></p>
+                <p class="text-xs" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'"
+                   x-text="resumoVeiculo()"></p>
+              </div>
+            </div>
           </div>
         </div>
 
@@ -630,7 +806,7 @@
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
                     d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
             </svg>
-            Sim, gerar nota
+            <span x-text="gerarMdfe ? 'Confirmar, emitir NF-e e MDF-e' : 'Confirmar e emitir NF-e'"></span>
           </button>
           <button type="button"
                   @click="submitForm(false)"
@@ -666,6 +842,7 @@ function transferenciaLojaApp(filiais, motoristas, veiculos) {
     itemProdutoQuery: '',
     itemProdutoId: null,
     itemProdutoNome: '',
+    itemProdutoUnidade: '',
     itemProdutoControlaLote: false,
     itemProdutoResultados: [],
     itemProdutoAberto: false,
@@ -676,6 +853,11 @@ function transferenciaLojaApp(filiais, motoristas, veiculos) {
     itemLotes: [],
     itemLotesCarregando: false,
     itemQuantidade: '',
+
+    // Catalogo visual
+    catalogoQuery: '',
+    catalogoProdutos: [],
+    catalogoCarregando: false,
 
     // Lista de itens confirmados
     itens: [],
@@ -697,6 +879,54 @@ function transferenciaLojaApp(filiais, motoristas, veiculos) {
 
     init() {
       this.carregarPendentesNota();
+      this.carregarCatalogo();
+    },
+
+    formatarQuantidade(valor) {
+      const numero = Number(valor || 0);
+      return numero.toLocaleString('pt-BR', { maximumFractionDigits: 3 });
+    },
+
+    motoristaSelecionado() {
+      return this.motoristas.find(item => item.id == this.motoristaId) || null;
+    },
+
+    veiculoSelecionado() {
+      return this.veiculos.find(item => item.id == this.veiculoId) || null;
+    },
+
+    resumoVeiculo() {
+      const veiculo = this.veiculoSelecionado();
+      if (!veiculo) return '';
+      const partes = [];
+      if (veiculo.descricao) partes.push(veiculo.descricao);
+      if (veiculo.tara) partes.push('Tara ' + this.formatarQuantidade(veiculo.tara) + ' kg');
+      if (veiculo.capacidade_kg) partes.push('Cap. ' + this.formatarQuantidade(veiculo.capacidade_kg) + ' kg');
+      return partes.join(' · ');
+    },
+
+    async carregarCatalogo() {
+      this.catalogoCarregando = true;
+      const q = this.catalogoQuery.trim();
+      try {
+        const params = new URLSearchParams({ scope: 'empresa', browse: '1' });
+        if (q) params.set('q', q);
+        const res = await fetch(`{% url 'estoque:produto-estoque-search-json' %}?${params.toString()}`);
+        const data = await res.json();
+        this.catalogoProdutos = data.results || [];
+      } catch (e) {
+        this.catalogoProdutos = [];
+      } finally {
+        this.catalogoCarregando = false;
+      }
+    },
+
+    async adicionarProdutoRapido(produto) {
+      await this.selecionarProduto(produto);
+      this.itemQuantidade = '1';
+      if (!produto.controla_lote) {
+        this.adicionarItem();
+      }
     },
 
     async carregarPendentesNota() {
@@ -848,6 +1078,7 @@ function transferenciaLojaApp(filiais, motoristas, veiculos) {
       if (!item) return;
       this.itemProdutoId = item.id;
       this.itemProdutoNome = item.label;
+      this.itemProdutoUnidade = item.unidade || '';
       this.itemProdutoQuery = item.label;
       this.itemProdutoControlaLote = item.controla_lote || false;
       this.itemProdutoResultados = [];
@@ -860,6 +1091,7 @@ function transferenciaLojaApp(filiais, motoristas, veiculos) {
     limparProduto() {
       this.itemProdutoId = null;
       this.itemProdutoNome = '';
+      this.itemProdutoUnidade = '';
       this.itemProdutoQuery = '';
       this.itemProdutoControlaLote = false;
       this.itemProdutoResultados = [];
@@ -897,13 +1129,22 @@ function transferenciaLojaApp(filiais, motoristas, veiculos) {
 
       const loteObj = this.itemLoteId ? this.itemLotes.find(l => l.id == this.itemLoteId) : null;
 
-      this.itens.push({
-        produto_id: this.itemProdutoId,
-        produto_nome: this.itemProdutoNome,
-        lote_id: this.itemLoteId ? parseInt(this.itemLoteId) : null,
-        lote_nome: loteObj ? loteObj.label : '',
-        quantidade: qtd,
-      });
+      const loteId = this.itemLoteId ? parseInt(this.itemLoteId) : null;
+      const existente = this.itens.find(item =>
+        item.produto_id == this.itemProdutoId && item.lote_id == loteId
+      );
+      if (existente) {
+        existente.quantidade = Number(existente.quantidade) + qtd;
+      } else {
+        this.itens.push({
+          produto_id: this.itemProdutoId,
+          produto_nome: this.itemProdutoNome,
+          unidade: this.itemProdutoUnidade,
+          lote_id: loteId,
+          lote_nome: loteObj ? loteObj.label : '',
+          quantidade: qtd,
+        });
+      }
 
       this.limparProduto();
       this.itemQuantidade = '';

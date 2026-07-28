@@ -356,6 +356,7 @@ class ProdutoEstoqueSearchJsonView(PermissaoRequiredMixin, View):
     def get(self, request):
         q = request.GET.get('q', '').strip()
         scope = request.GET.get('scope', 'filial')
+        browse = request.GET.get('browse') == '1'
         filial = request.filial_ativa
         if scope == 'empresa':
             empresa = request.user.empresa
@@ -367,7 +368,7 @@ class ProdutoEstoqueSearchJsonView(PermissaoRequiredMixin, View):
             qs = Produto.objects.for_filial(filial).filter(ativo=True)
         else:
             qs = Produto.objects.filter(ativo=True)
-        if len(q) >= 2 or q.isdigit():
+        if len(q) >= 2 or q.isdigit() or (browse and q):
             filtro = (
                 db_models.Q(descricao__icontains=q)
                 | db_models.Q(descricao_curta__icontains=q)
@@ -377,8 +378,19 @@ class ProdutoEstoqueSearchJsonView(PermissaoRequiredMixin, View):
             if q.isdigit():
                 filtro |= db_models.Q(pk=int(q))
             qs = qs.filter(filtro)
-        else:
+        elif not browse:
             qs = qs.none()
+
+        produtos = list(
+            qs.select_related('unidade_medida').order_by('descricao').distinct()[:40]
+        )
+        saldos = {
+            produto_id: float(quantidade or 0)
+            for produto_id, quantidade in Estoque.objects.filter(
+                filial=filial,
+                produto_id__in=[produto.pk for produto in produtos],
+            ).values_list('produto_id', 'quantidade_atual')
+        }
         resultados = [
             {
                 'id': p.pk,
@@ -386,8 +398,11 @@ class ProdutoEstoqueSearchJsonView(PermissaoRequiredMixin, View):
                 'detalhe': p.codigo or '',
                 'unidade': str(p.unidade_medida) if p.unidade_medida_id else '',
                 'controla_lote': p.controla_lote,
+                'codigo_barras': p.codigo_barras or '',
+                'foto_url': p.foto_url or '',
+                'estoque': saldos.get(p.pk, 0),
             }
-            for p in qs.select_related('unidade_medida').order_by('descricao')[:25]
+            for p in produtos
         ]
         return JsonResponse({'results': resultados})
 

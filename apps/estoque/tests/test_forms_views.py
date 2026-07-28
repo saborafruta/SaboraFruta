@@ -193,6 +193,31 @@ class EstoqueFormsViewsTests(TestCase):
         self.assertFalse(form.is_valid())
         self.assertIn('nao pertence ao produto', str(form.errors))
 
+    def test_catalogo_visual_transferencia_retorna_produtos_e_saldo(self):
+        self.conceder(pode_ver=True)
+        produto = self.criar_produto(descricao='Polpa para transferencia')
+        MovimentacaoService.registrar_movimentacao(
+            produto_id=produto.pk,
+            filial_id=self.filial.pk,
+            tipo_operacao=MovimentacaoEstoque.TipoOperacao.ENTRADA,
+            quantidade=Decimal('12.500'),
+            usuario_id=self.usuario.pk,
+            valor_unitario=Decimal('2.00'),
+            documento_tipo=MovimentacaoEstoque.DocumentoTipo.OUTRAS,
+        )
+
+        response = self.client.get(
+            reverse('estoque:produto-estoque-search-json'),
+            {'scope': 'empresa', 'browse': '1'},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        resultado = next(
+            item for item in response.json()['results'] if item['id'] == produto.pk
+        )
+        self.assertEqual(resultado['label'], 'Polpa para transferencia')
+        self.assertEqual(resultado['estoque'], 12.5)
+
     def test_exportacao_estoque_exige_permissao_exportar(self):
         self.conceder(pode_ver=True)
 
