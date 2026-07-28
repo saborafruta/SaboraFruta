@@ -4,6 +4,36 @@
 {% block page_title %}{{ title }}{% endblock %}
 
 {% block content %}
+<style>
+  @media (min-width: 1280px) {
+    .transfer-product-card {
+      display: grid;
+      grid-template-columns: minmax(0, 1.45fr) minmax(340px, .75fr);
+      gap: 1rem;
+      align-items: start;
+    }
+    .transfer-product-heading,
+    .transfer-product-search {
+      grid-column: 1 / -1;
+    }
+    .transfer-product-catalog {
+      grid-column: 1;
+      grid-row: 3 / span 4;
+    }
+    .transfer-product-quantity {
+      grid-column: 2;
+      grid-row: 3;
+    }
+    .transfer-product-add {
+      grid-column: 2;
+      grid-row: 4;
+    }
+    .transfer-product-items {
+      grid-column: 2;
+      grid-row: 5;
+    }
+  }
+</style>
 <div class="space-y-5"
      x-data="transferenciaLojaApp({{ filiais_json }}, {{ motoristas_json }}, {{ veiculos_json }})"
      x-init="init()">
@@ -54,19 +84,19 @@
     <p class="text-sm text-red-500" x-text="erroGeral"></p>
   </div>
 
-  <div class="grid grid-cols-1 xl:grid-cols-3 gap-5">
+  <div class="grid grid-cols-1 xl:grid-cols-4 gap-5">
 
     <!-- ════ COLUNA ESQUERDA (2/3) ════ -->
-    <div class="xl:col-span-2 space-y-5">
+    <div class="xl:col-span-3 space-y-5">
 
       <!-- Seção: Lojas -->
-      <div class="card p-6 space-y-5">
+      <div class="card p-5 space-y-4">
         <h3 class="text-xs font-semibold uppercase tracking-widest pb-2 border-b"
             :style="temaClaro ? 'color:#6b7280; border-color:#e5e7eb;' : 'color:#6b7280; border-color:#374151;'">
           Lojas
         </h3>
 
-        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 items-end">
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-4 items-end">
 
           <!-- Loja de Origem (read-only) -->
           <div>
@@ -101,18 +131,28 @@
               Nenhuma outra loja cadastrada na empresa.
             </p>
           </div>
+
+          <div>
+            <label class="block text-sm font-medium mb-1.5" :style="temaClaro ? 'color:#374151;' : 'color:#d1d5db;'">
+              Observação <span class="text-red-500">*</span>
+            </label>
+            <input type="text"
+                   x-model="observacao"
+                   placeholder="Motivo ou referência da transferência..."
+                   class="form-input w-full">
+          </div>
         </div>
       </div>
 
       <!-- Seção: Adicionar Produto -->
-      <div class="card p-6 space-y-5">
-        <h3 class="text-xs font-semibold uppercase tracking-widest pb-2 border-b"
+      <div class="card p-5 transfer-product-card">
+        <h3 class="transfer-product-heading text-xs font-semibold uppercase tracking-widest pb-2 border-b"
             :style="temaClaro ? 'color:#6b7280; border-color:#e5e7eb;' : 'color:#6b7280; border-color:#374151;'">
           Adicionar Produto
         </h3>
 
         <!-- Produto — Typeahead -->
-        <div>
+        <div class="transfer-product-search">
           <label class="block text-sm font-medium mb-1.5" :style="temaClaro ? 'color:#374151;' : 'color:#d1d5db;'">
             Produto <span class="text-red-500">*</span>
           </label>
@@ -201,14 +241,14 @@
         </div>
 
         <!-- Catalogo visual -->
-        <div x-show="!itemProdutoId" class="space-y-3">
+        <div class="transfer-product-catalog space-y-3">
           <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
             <div>
               <h4 class="text-sm font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
                 Selecao rapida
               </h4>
               <p class="text-xs" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
-                Clique no produto para adicionar 1 unidade. Produtos com lote abrem a selecao do lote.
+                Selecione o produto e confirme a quantidade na unidade cadastrada.
               </p>
             </div>
             <div class="relative w-full sm:w-72">
@@ -279,7 +319,7 @@
         </div>
 
         <!-- Lote / Quantidade -->
-        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <div class="transfer-product-quantity grid grid-cols-1 sm:grid-cols-2 gap-4">
 
           <!-- Lote -->
           <div>
@@ -305,17 +345,25 @@
           <!-- Quantidade -->
           <div>
             <label class="block text-sm font-medium mb-1.5" :style="temaClaro ? 'color:#374151;' : 'color:#d1d5db;'">
-              Quantidade <span class="text-red-500">*</span>
+              Quantidade a transferir <span class="text-red-500">*</span>
             </label>
-            <input type="number" step="0.001" min="0.001"
-                   x-model="itemQuantidade"
-                   placeholder="0,000"
-                   class="form-input w-full">
+            <div class="flex">
+              <input type="number" step="0.001" min="0.001"
+                     x-model="itemQuantidade"
+                     placeholder="0,000"
+                     class="form-input w-full rounded-r-none">
+              <span class="px-3 flex items-center border border-l-0 rounded-r-lg text-sm font-semibold min-w-14 justify-center"
+                    :style="temaClaro ? 'border-color:#d1d5db;background:#f8fafc;color:#475569;' : 'border-color:#374151;background:#1e293b;color:#cbd5e1;'"
+                    x-text="itemProdutoUnidade || 'UN'"></span>
+            </div>
+            <p class="text-xs mt-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+              Informe quanto sairá do estoque na unidade cadastrada do produto.
+            </p>
           </div>
         </div>
 
         <!-- Botão adicionar -->
-        <div class="flex justify-end">
+        <div class="transfer-product-add flex justify-end">
           <button type="button"
                   @click="adicionarItem()"
                   :disabled="!itemProdutoId || !itemQuantidade"
@@ -329,7 +377,7 @@
 
         <!-- Tabela de itens adicionados -->
         <template x-if="itens.length > 0">
-          <div>
+          <div class="transfer-product-items">
             <h4 class="text-xs font-semibold uppercase tracking-widest mb-3"
                 :style="temaClaro ? 'color:#6b7280;' : 'color:#9ca3af;'">
               Produtos a transferir (<span x-text="itens.length"></span>)
@@ -379,23 +427,6 @@
             </div>
           </div>
         </template>
-      </div>
-
-      <!-- Seção: Observação -->
-      <div class="card p-6 space-y-4">
-        <h3 class="text-xs font-semibold uppercase tracking-widest pb-2 border-b"
-            :style="temaClaro ? 'color:#6b7280; border-color:#e5e7eb;' : 'color:#6b7280; border-color:#374151;'">
-          Observação
-        </h3>
-        <div>
-          <label class="block text-sm font-medium mb-1.5" :style="temaClaro ? 'color:#374151;' : 'color:#d1d5db;'">
-            Observação <span class="text-red-500">*</span>
-          </label>
-          <textarea x-model="observacao"
-                    rows="3"
-                    placeholder="Descreva o motivo da transferência..."
-                    class="form-input w-full"></textarea>
-        </div>
       </div>
 
     </div>
@@ -488,9 +519,9 @@
           </svg>
           <svg x-show="!submitting" class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                  d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4"/>
+                  d="M2.25 12s3.75-6.75 9.75-6.75S21.75 12 21.75 12 18 18.75 12 18.75 2.25 12 2.25 12z M12 9a3 3 0 100 6 3 3 0 000-6z"/>
           </svg>
-          <span x-text="submitting ? 'Transferindo...' : 'Revisar transferência'"></span>
+          <span>Pré-visualizar documento</span>
         </button>
         <a href="{{ cancel_url }}"
            class="btn-secondary w-full flex items-center justify-center gap-2">
@@ -499,15 +530,6 @@
           </svg>
           Cancelar
         </a>
-      </div>
-
-      <!-- Dica -->
-      <div class="card p-4"
-           :style="temaClaro ? 'background:#f0f9ff; border-color:#bae6fd;' : 'background:rgba(14,165,233,0.07); border-color:rgba(14,165,233,0.2);'">
-        <p class="text-xs leading-relaxed" :style="temaClaro ? 'color:#0c4a6e;' : 'color:#7dd3fc;'">
-          <strong>Dica:</strong> Você pode adicionar múltiplos produtos antes de confirmar.
-          A transferência é registrada de forma atômica — ou tudo é processado, ou nada.
-        </p>
       </div>
 
     </div>
@@ -647,13 +669,26 @@
           </div>
           <div>
             <h3 class="text-lg font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
-              Conferencia da transferencia
+              Prévia da transferência
             </h3>
             <p class="text-sm mt-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
-              Revise a rota, os produtos e o transporte antes de movimentar o estoque
-              ou enviar documentos para a SEFAZ.
+              Confira o documento antes de movimentar o estoque ou enviar dados para a SEFAZ.
             </p>
           </div>
+        </div>
+
+        <div class="flex items-center justify-between gap-3 rounded-lg border px-4 py-3"
+             :style="temaClaro ? 'border-color:#bfdbfe;background:#eff6ff;color:#1e40af;' : 'border-color:#1e3a8a;background:rgba(30,58,138,.18);color:#93c5fd;'">
+          <p class="text-xs font-semibold">PRÉVIA SEM VALIDADE FISCAL</p>
+          <button type="button"
+                  @click="imprimirPrevia()"
+                  class="btn-secondary flex items-center gap-2 whitespace-nowrap">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                    d="M6 9V2h12v7M6 18H4a2 2 0 01-2-2v-5a2 2 0 012-2h16a2 2 0 012 2v5a2 2 0 01-2 2h-2M6 14h12v8H6z"/>
+            </svg>
+            Imprimir / salvar PDF
+          </button>
         </div>
 
         <div class="grid grid-cols-1 lg:grid-cols-2 gap-3">
@@ -924,9 +959,6 @@ function transferenciaLojaApp(filiais, motoristas, veiculos) {
     async adicionarProdutoRapido(produto) {
       await this.selecionarProduto(produto);
       this.itemQuantidade = '1';
-      if (!produto.controla_lote) {
-        this.adicionarItem();
-      }
     },
 
     async carregarPendentesNota() {
@@ -1046,6 +1078,125 @@ function transferenciaLojaApp(filiais, motoristas, veiculos) {
       if (this.itens.length === 0) { this.erroGeral = 'Adicione ao menos um produto.'; return; }
       if (!this.observacao.trim()) { this.erroGeral = 'Informe a observação.'; return; }
       this.showModalNota = true;
+    },
+
+    escaparHtml(valor) {
+      return String(valor ?? '')
+        .replaceAll('&', '&amp;')
+        .replaceAll('<', '&lt;')
+        .replaceAll('>', '&gt;')
+        .replaceAll('"', '&quot;')
+        .replaceAll("'", '&#039;');
+    },
+
+    imprimirPrevia() {
+      const destino = this.filiais.find(f => f.id == this.filialDestinoId);
+      const motorista = this.motoristaSelecionado();
+      const veiculo = this.veiculoSelecionado();
+      const linhas = this.itens.map((item, indice) => `
+        <tr>
+          <td>${indice + 1}</td>
+          <td>
+            <strong>${this.escaparHtml(item.produto_nome)}</strong>
+            <small>${item.lote_nome ? 'Lote: ' + this.escaparHtml(item.lote_nome) : 'Sem lote informado'}</small>
+          </td>
+          <td class="right">${this.escaparHtml(this.formatarQuantidade(item.quantidade))}</td>
+          <td>${this.escaparHtml(item.unidade || 'UN')}</td>
+        </tr>
+      `).join('');
+      const janela = window.open('', '_blank', 'width=920,height=760');
+      if (!janela) {
+        this.erroGeral = 'O navegador bloqueou a prévia. Permita pop-ups para este sistema.';
+        return;
+      }
+      janela.document.write(`
+        <!doctype html>
+        <html lang="pt-BR">
+        <head>
+          <meta charset="utf-8">
+          <title>Prévia da transferência</title>
+          <style>
+            @page { size: A4; margin: 14mm; }
+            * { box-sizing: border-box; }
+            body { margin: 0; color: #111827; font: 13px Arial, sans-serif; background: #eef2f7; }
+            .toolbar { position: sticky; top: 0; display: flex; justify-content: center; gap: 8px; padding: 12px; background: #111827; }
+            .toolbar button { border: 0; border-radius: 6px; padding: 10px 16px; color: #fff; font-weight: 700; cursor: pointer; }
+            .print { background: #f15a24; }
+            .close { background: #475569; }
+            .sheet { width: 210mm; min-height: 270mm; margin: 16px auto; padding: 14mm; background: #fff; box-shadow: 0 6px 24px rgba(15,23,42,.15); }
+            .warning { margin-bottom: 18px; border: 2px solid #1d4ed8; padding: 9px; color: #1d4ed8; text-align: center; font-weight: 800; letter-spacing: .05em; }
+            h1 { margin: 0; font-size: 22px; }
+            .subtitle { margin: 5px 0 20px; color: #64748b; }
+            .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 14px; }
+            .box { border: 1px solid #cbd5e1; padding: 11px; }
+            .box label { display: block; margin-bottom: 5px; color: #64748b; font-size: 10px; font-weight: 700; text-transform: uppercase; }
+            .route { display: flex; gap: 8px; align-items: center; font-weight: 700; }
+            table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+            th, td { border: 1px solid #cbd5e1; padding: 8px; text-align: left; }
+            th { background: #f1f5f9; font-size: 10px; text-transform: uppercase; }
+            td small { display: block; margin-top: 3px; color: #64748b; }
+            .right { text-align: right; }
+            .footer { margin-top: 18px; border-top: 1px solid #cbd5e1; padding-top: 10px; color: #64748b; font-size: 10px; }
+            @media print {
+              body { background: #fff; }
+              .toolbar { display: none; }
+              .sheet { width: auto; min-height: 0; margin: 0; padding: 0; box-shadow: none; }
+            }
+          </style>
+        </head>
+        <body>
+          <div class="toolbar">
+            <button class="print" onclick="window.print()">Imprimir / salvar PDF</button>
+            <button class="close" onclick="window.close()">Fechar</button>
+          </div>
+          <main class="sheet">
+            <div class="warning">PRÉVIA SEM VALIDADE FISCAL</div>
+            <h1>Transferência entre lojas</h1>
+            <p class="subtitle">Documento para conferência antes da emissão da NF-e.</p>
+            <section class="grid">
+              <div class="box">
+                <label>Rota</label>
+                <div class="route">
+                  <span>{{ filial_nome|escapejs }}</span>
+                  <span>→</span>
+                  <span>${this.escaparHtml(destino?.label || '')}</span>
+                </div>
+              </div>
+              <div class="box">
+                <label>Data da prévia</label>
+                <strong>${new Date().toLocaleString('pt-BR')}</strong>
+              </div>
+              <div class="box">
+                <label>Observação</label>
+                <span>${this.escaparHtml(this.observacao)}</span>
+              </div>
+              <div class="box">
+                <label>Documento previsto</label>
+                <strong>NF-e modelo 55</strong><br>
+                <span>Ambiente: {{ focusnfe_ambiente_label|escapejs }}</span>
+              </div>
+            </section>
+            <table>
+              <thead>
+                <tr><th>#</th><th>Produto</th><th class="right">Quantidade</th><th>Unidade</th></tr>
+              </thead>
+              <tbody>${linhas}</tbody>
+            </table>
+            ${this.gerarMdfe ? `
+              <section class="grid" style="margin-top:14px">
+                <div class="box"><label>Motorista</label><strong>${this.escaparHtml(motorista?.nome || 'Não selecionado')}</strong></div>
+                <div class="box"><label>Veículo</label><strong>${this.escaparHtml(veiculo?.placa || 'Não selecionado')}</strong></div>
+                <div class="box"><label>Peso bruto</label><strong>${this.escaparHtml(this.formatarQuantidade(this.pesoBruto))} kg</strong></div>
+                <div class="box"><label>Manifesto</label><strong>MDF-e solicitado</strong></div>
+              </section>
+            ` : ''}
+            <p class="footer">Esta prévia serve apenas para conferência. A NF-e e o MDF-e oficiais serão gerados após a confirmação e autorização fiscal.</p>
+          </main>
+        </body>
+        </html>
+      `);
+      janela.document.close();
+      janela.focus();
     },
 
     // ── Produto ──────────────────────────────────────────────
