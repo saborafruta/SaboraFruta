@@ -3128,7 +3128,16 @@ function pdv() {
           });
         }
         if (d.cliente_id) {
-          this.venda.cliente = { id: d.cliente_id, nome: d.cliente_nome, cpf_cnpj: d.cliente_cpf_cnpj };
+          // Inclui o endereço (a API já devolve em cliente_endereco), senão
+          // o comprovante da venda editada sairia sem ele.
+          const endCli = d.cliente_endereco || {};
+          this.venda.cliente = {
+            id: d.cliente_id,
+            nome: d.cliente_nome,
+            cpf_cnpj: d.cliente_cpf_cnpj,
+            endereco_entrega: endCli,
+            tem_endereco: !!(endCli.rua && endCli.bairro),
+          };
         }
         this.venda.desconto = d.desconto || 0;
         this.venda.acrescimo = d.acrescimo || 0;
@@ -3956,9 +3965,22 @@ ${pgtoHtml ? `<hr class="sep">${pgtoHtml}` : ''}
             obs: '', _showObs: false,
           });
         }
-        // Restaura cliente, desconto, delivery
+        // Restaura cliente, desconto, delivery. O objeto precisa ter os
+        // mesmos campos de selecionarCliente() — em especial o endereço,
+        // que o comprovante imprime a partir de venda.cliente.
         if (d.cliente_id) {
-          this.venda.cliente = { id: d.cliente_id, nome: d.cliente_nome, cpf_cnpj: d.cliente_cpf_cnpj };
+          this.venda.cliente = {
+            id: d.cliente_id,
+            nome: d.cliente_nome,
+            cpf_cnpj: d.cliente_cpf_cnpj,
+            celular: d.cliente_celular || '',
+            telefone: d.cliente_telefone || '',
+            endereco_entrega: d.cliente_endereco_entrega || {},
+            tem_endereco: !!d.cliente_tem_endereco,
+          };
+          this.carregarHistoricoCliente(d.cliente_id);
+          this.carregarCreditoCliente(d.cliente_id);
+          this.carregarCashbackSaldo(d.cliente_id);
         }
         this.venda.desconto = d.desconto || 0;
         this.venda.acrescimo = d.acrescimo || 0;

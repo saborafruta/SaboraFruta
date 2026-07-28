@@ -876,6 +876,11 @@ def api_pendente_detalhe(request, pk):
             "desconto_percentual": float(item.desconto_percentual or 0),
         })
 
+    # Endereço/contato do cliente também vão no retorno: ao retomar a venda
+    # o PDV remonta o objeto do cliente do zero, e sem isso o comprovante
+    # sairia sem o endereço (o template lê venda.cliente.endereco_entrega).
+    endereco_cliente = _cliente_endereco_preferencial(venda.cliente) if venda.cliente else {}
+
     return JsonResponse({
         "ok": True,
         "venda_id": venda.pk,
@@ -883,6 +888,12 @@ def api_pendente_detalhe(request, pk):
         "cliente_id": venda.cliente_id,
         "cliente_nome": venda.cliente.razao_social if venda.cliente else "Consumidor Final",
         "cliente_cpf_cnpj": venda.cliente.cpf_cnpj if venda.cliente else "",
+        "cliente_celular": venda.cliente.celular if venda.cliente else "",
+        "cliente_telefone": venda.cliente.telefone if venda.cliente else "",
+        "cliente_endereco_entrega": endereco_cliente,
+        "cliente_tem_endereco": bool(
+            endereco_cliente.get("rua") and endereco_cliente.get("bairro")
+        ),
         "desconto": float(venda.valor_desconto),
         "acrescimo": float(venda.valor_acrescimo),
         "delivery": venda.delivery,
