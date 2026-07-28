@@ -677,7 +677,7 @@
   <div style="display:flex;flex:1;overflow:hidden;">
 
     <!-- ─── PAINEL ESQUERDO ─── -->
-    <aside style="width:300px;flex-shrink:0;background:#0d0d16;border-right:1px solid #1a1a28;display:flex;flex-direction:column;overflow:hidden;">
+    <aside id="pdv-left-panel" style="width:300px;flex-shrink:0;background:#0d0d16;border-right:1px solid #1a1a28;display:flex;flex-direction:column;overflow:hidden;">
 
       <!-- Ler código de barras -->
       <div style="padding:11px 12px 7px;border-bottom:1px solid #1a1a28;">
@@ -1054,7 +1054,7 @@
     </main>
 
     <!-- ─── PAINEL DIREITO ─── -->
-    <aside style="width:340px;flex-shrink:0;background:#0d0d16;border-left:1px solid #1a1a28;display:flex;flex-direction:column;overflow:hidden;">
+    <aside id="pdv-right-panel" style="width:340px;flex-shrink:0;background:#0d0d16;border-left:1px solid #1a1a28;display:flex;flex-direction:column;overflow:hidden;">
 
       <!-- Banner: Caixa Fechado -->
       <div x-show="!sessao" x-cloak
@@ -4165,6 +4165,36 @@ ${pgtoHtml ? `<hr class="sep">${pgtoHtml}` : ''}
       const origem = atual.getBoundingClientRect();
       const ox = origem.left + origem.width / 2;
       const oy = origem.top + origem.height / 2;
+
+      if (['ArrowLeft','ArrowRight'].includes(tecla)) {
+        const painelEsquerdo = document.getElementById('pdv-left-panel');
+        const painelDireito = document.getElementById('pdv-right-panel');
+        const estaNaEsquerda = painelEsquerdo?.contains(atual);
+        const estaNaDireita = painelDireito?.contains(atual);
+        const painelDestino = estaNaEsquerda ? painelDireito : (estaNaDireita ? painelEsquerdo : null);
+        if (painelDestino) {
+          const destinoLateral = elementos
+            .filter(el => painelDestino.contains(el))
+            .map(el => {
+              const rect = el.getBoundingClientRect();
+              return {
+                el,
+                distanciaVertical: Math.abs(rect.top + rect.height / 2 - oy),
+                distanciaHorizontal: Math.abs(rect.left + rect.width / 2 - ox),
+              };
+            })
+            .sort((a, b) =>
+              a.distanciaVertical - b.distanciaVertical
+              || a.distanciaHorizontal - b.distanciaHorizontal
+            )[0]?.el;
+          if (destinoLateral) {
+            destinoLateral.focus();
+            destinoLateral.scrollIntoView({ block:'nearest', inline:'nearest' });
+            return;
+          }
+        }
+      }
+
       const candidatos = elementos
         .filter(el => el !== atual)
         .map(el => {
