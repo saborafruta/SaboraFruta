@@ -4132,9 +4132,11 @@ ${pgtoHtml ? `<hr class="sep">${pgtoHtml}` : ''}
         const indice = modos.indexOf(atual);
         if (['ArrowLeft','ArrowRight'].includes(tecla) && indice >= 0) {
           const passo = tecla === 'ArrowRight' ? 1 : -1;
-          const destino = modos[(indice + passo + modos.length) % modos.length];
-          destino.focus();
-          return;
+          const destino = modos[indice + passo];
+          if (destino) {
+            destino.focus();
+            return;
+          }
         }
         if (tecla === 'ArrowDown') {
           document.getElementById('barcode-input')?.focus();
