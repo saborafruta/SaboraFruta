@@ -22,6 +22,7 @@ class VendaPDV(TimestampedModel):
         PREPARANDO = 'preparando', 'Em Preparo'
         EM_ENTREGA = 'em_entrega', 'Saiu para Entrega'
         ENTREGUE = 'entregue', 'Entregue'
+        FINALIZADO = 'finalizado', 'Finalizado'
         CANCELADO = 'cancelado', 'Cancelado'
 
     status = models.CharField(max_length=20, default="aberta")

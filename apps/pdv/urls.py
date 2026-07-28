@@ -44,6 +44,7 @@ urlpatterns = [
     path("api/clientes/debug/", pdv.api_clientes_debug, name="api_clientes_debug"),
     # Delivery
     path("delivery/", pdv.delivery_kanban, name="delivery"),
+    path("delivery/relatorio/", pdv.delivery_relatorio, name="delivery_relatorio"),
     path("delivery/<int:pk>/mover/", pdv.delivery_mover, name="delivery_mover"),
     path("delivery/<int:pk>/atualizar/", pdv.delivery_atualizar, name="delivery_atualizar"),
     # Venda finalizada — detalhe e cancelamento

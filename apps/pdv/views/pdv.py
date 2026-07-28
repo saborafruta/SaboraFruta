@@ -1634,6 +1634,7 @@ DELIVERY_COLUNAS = [
     ('preparando', 'Em Preparo', '#f59e0b'),
     ('em_entrega', 'Saiu para Entrega', '#8b5cf6'),
     ('entregue', 'Entregue', '#10b981'),
+    ('finalizado', 'Finalizado', '#64748b'),
 ]
 
 DELIVERY_STATUS_VALIDOS = {c[0] for c in DELIVERY_COLUNAS} | {'cancelado'}
@@ -1651,6 +1652,21 @@ def delivery_kanban(request):
         .prefetch_related('itens__produto', 'pagamentos__forma_pagamento')
         .order_by('data_venda')
     )
+
+    # Pedido é considerado "não pago" (cobrar na entrega) se ainda existir
+    # uma conta a receber em aberto/vencida gerada por ele (boleto/vale).
+    from apps.financeiro.constants.enums import StatusContaReceber
+    from apps.financeiro.models import ContaReceber
+
+    pks_nao_pagos = set(
+        ContaReceber.objects.filter(
+            documento_tipo='venda_pdv',
+            documento_id__in=[v.pk for v in qs],
+            status__in=[StatusContaReceber.ABERTO, StatusContaReceber.VENCIDO],
+        ).values_list('documento_id', flat=True)
+    )
+    for v in qs:
+        v.pago = v.pk not in pks_nao_pagos
 
     colunas = []
     for status_key, label, cor in DELIVERY_COLUNAS:
@@ -1690,6 +1706,7 @@ def delivery_kanban(request):
             'endereco_entrega': v.endereco_entrega or {},
             'observacao_delivery': v.observacao_delivery or '',
             'valor_total': float(v.valor_total),
+            'pago': v.pago,
             'itens': itens,
             'pagamentos': pagamentos,
         }
@@ -1776,6 +1793,65 @@ def delivery_atualizar(request, pk):
         venda.save(update_fields=campos)
 
     return JsonResponse({'ok': True})
+
+
+@requer_permissao('pdv', 'ver')
+@require_GET
+def delivery_relatorio(request):
+    """Lista de pedidos de delivery num período, para o relatório
+    imprimível/exportável em PDF do Kanban de Delivery."""
+    data_ini_raw = request.GET.get('data_ini', '')
+    data_fim_raw = request.GET.get('data_fim', '')
+    try:
+        data_ini = datetime.date.fromisoformat(data_ini_raw)
+        data_fim = datetime.date.fromisoformat(data_fim_raw)
+    except (TypeError, ValueError):
+        return JsonResponse({'erro': 'Datas inválidas.'}, status=400)
+    if data_ini > data_fim:
+        data_ini, data_fim = data_fim, data_ini
+
+    qs = (
+        VendaPDV.objects
+        .for_filial(request.filial_ativa)
+        .filter(delivery=True, data_venda__date__gte=data_ini, data_venda__date__lte=data_fim)
+        .exclude(status='cancelada')
+        .select_related('cliente')
+        .order_by('data_venda')
+    )
+
+    from apps.financeiro.constants.enums import StatusContaReceber
+    from apps.financeiro.models import ContaReceber
+
+    pks = [v.pk for v in qs]
+    pks_nao_pagos = set(
+        ContaReceber.objects.filter(
+            documento_tipo='venda_pdv',
+            documento_id__in=pks,
+            status__in=[StatusContaReceber.ABERTO, StatusContaReceber.VENCIDO],
+        ).values_list('documento_id', flat=True)
+    )
+
+    pedidos = []
+    total_geral = Decimal('0')
+    for v in qs:
+        pago = v.pk not in pks_nao_pagos
+        total_geral += v.valor_total
+        pedidos.append({
+            'numero_venda': v.numero_venda,
+            'data_venda': timezone.localtime(v.data_venda).strftime('%d/%m/%Y %H:%M'),
+            'cliente_nome': (v.cliente.nome_fantasia or v.cliente.razao_social) if v.cliente else 'Consumidor Final',
+            'status_delivery': v.get_status_delivery_display(),
+            'entregador': v.entregador or '',
+            'valor_total': float(v.valor_total),
+            'pago': pago,
+        })
+
+    return JsonResponse({
+        'pedidos': pedidos,
+        'total_geral': float(total_geral),
+        'total_pedidos': len(pedidos),
+        'periodo_label': f'{data_ini.strftime("%d/%m/%Y")} — {data_fim.strftime("%d/%m/%Y")}',
+    })
 
 
 # ---------------------------------------------------------------------------

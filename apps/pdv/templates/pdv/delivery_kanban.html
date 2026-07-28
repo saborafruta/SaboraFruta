@@ -62,6 +62,18 @@
   body:not(.tema-claro) .kanban-card { background: #242426; border: 1px solid #35353a; box-shadow: 0 2px 8px rgba(0,0,0,.25); }
   .kanban-card:hover { box-shadow: 0 4px 14px rgba(0,0,0,.14); transform: translateY(-1px); }
 
+  /* Pago (verde) / Cobrar na entrega (amarelo) */
+  .kanban-card.kcard-pago { border-left: 4px solid #10b981; }
+  body.tema-claro .kanban-card.kcard-pago { background: #f0fdf4; }
+  body:not(.tema-claro) .kanban-card.kcard-pago { background: #16261f; }
+  .kanban-card.kcard-pendente { border-left: 4px solid #f59e0b; }
+  body.tema-claro .kanban-card.kcard-pendente { background: #fffbeb; }
+  body:not(.tema-claro) .kanban-card.kcard-pendente { background: #2a2211; }
+
+  .kcard-pgto-badge { font-size: 10px; font-weight: 700; padding: 2px 7px; border-radius: 999px; display: inline-flex; align-items: center; gap: 3px; margin-top: 6px; }
+  .kcard-pgto-badge.is-pago { background: rgba(16,185,129,.15); color: #10b981; }
+  .kcard-pgto-badge.is-pendente { background: rgba(245,158,11,.15); color: #f59e0b; }
+
   .kanban-card.dragging { opacity: .45; transform: rotate(2deg) scale(.97); }
   .kanban-col.drag-over .kanban-cards { outline: 2px dashed #f15a24; outline-offset: -4px; border-radius: 8px; }
 
@@ -133,6 +145,12 @@
       </p>
     </div>
     <div class="flex gap-2">
+      <button onclick="abrirRelatorioModal()" class="btn-secondary text-sm">
+        <svg class="w-4 h-4 inline mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 17v-2a2 2 0 012-2h2a2 2 0 012 2v2m-9 4h14a2 2 0 002-2V7a2 2 0 00-2-2h-3l-2-2H9L7 5H4a2 2 0 00-2 2v12a2 2 0 002 2z"/>
+        </svg>
+        Relatório
+      </button>
       <button onclick="location.reload()" class="btn-secondary text-sm">
         <svg class="w-4 h-4 inline mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
@@ -162,7 +180,7 @@
 
         <div class="kanban-cards" id="col-{{ col.key }}">
           {% for pedido in col.pedidos %}
-            <div class="kanban-card"
+            <div class="kanban-card {% if pedido.pago %}kcard-pago{% else %}kcard-pendente{% endif %}"
                  id="card-{{ pedido.pk }}"
                  data-pk="{{ pedido.pk }}"
                  data-status="{{ pedido.status_delivery }}"
@@ -196,6 +214,12 @@
                   <span>· {{ pedido.data_venda|timesince }} atrás</span>
                 {% endif %}
               </div>
+
+              {% if pedido.pago %}
+                <span class="kcard-pgto-badge is-pago">✓ Pago</span>
+              {% else %}
+                <span class="kcard-pgto-badge is-pendente">⏳ Cobrar na entrega</span>
+              {% endif %}
 
               {% if pedido.endereco_entrega %}
                 {% with end=pedido.endereco_entrega %}
@@ -265,6 +289,7 @@
           <option value="preparando">Em Preparo</option>
           <option value="em_entrega">Saiu para Entrega</option>
           <option value="entregue">Entregue</option>
+          <option value="finalizado">Finalizado</option>
           <option value="cancelado">Cancelado</option>
         </select>
       </div>
@@ -281,6 +306,38 @@
     <div class="flex justify-end gap-2 mt-5">
       <button onclick="fecharModal()" class="btn-secondary">Cancelar</button>
       <button onclick="salvarModal()" class="btn-primary">Salvar</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal de Relatório por período -->
+<div class="delivery-modal-bg" id="relatorioModal" onclick="if(event.target===this) fecharRelatorioModal()">
+  <div class="delivery-modal">
+    <div class="flex items-center justify-between mb-5">
+      <h3 class="text-base font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f0f0f0;'">Relatório de Delivery</h3>
+      <button onclick="fecharRelatorioModal()" class="text-lg w-7 h-7 rounded-full flex items-center justify-center"
+              :style="temaClaro ? 'color:#6b7280; background:#f3f4f6;' : 'color:#9ca3af; background:#2a2a2e;'">&times;</button>
+    </div>
+
+    <div class="space-y-4">
+      <p class="text-xs" :style="temaClaro ? 'color:#6b7280;' : 'color:#9ca3af;'">
+        Selecione o período para gerar a lista de pedidos de delivery (imprimir ou exportar como PDF).
+      </p>
+      <div class="grid grid-cols-2 gap-3">
+        <div>
+          <label class="block text-xs font-semibold mb-1.5" :style="temaClaro ? 'color:#374151;' : 'color:#cbd5e1;'">De</label>
+          <input type="date" id="relatorioDataIni" class="form-input w-full">
+        </div>
+        <div>
+          <label class="block text-xs font-semibold mb-1.5" :style="temaClaro ? 'color:#374151;' : 'color:#cbd5e1;'">Até</label>
+          <input type="date" id="relatorioDataFim" class="form-input w-full">
+        </div>
+      </div>
+    </div>
+
+    <div class="flex justify-end gap-2 mt-5">
+      <button onclick="fecharRelatorioModal()" class="btn-secondary">Cancelar</button>
+      <button onclick="gerarRelatorio()" class="btn-primary" id="btnGerarRelatorio">Gerar relatório</button>
     </div>
   </div>
 </div>
@@ -428,6 +485,87 @@
     }
 
     fecharModal();
+  }
+
+  // ── Relatório por período ────────────────────────────────────────────────
+
+  function abrirRelatorioModal() {
+    const hoje = new Date().toISOString().slice(0, 10);
+    const ini = document.getElementById('relatorioDataIni');
+    const fim = document.getElementById('relatorioDataFim');
+    if (!ini.value) { ini.value = hoje; ini.dispatchEvent(new Event('change', { bubbles: true })); }
+    if (!fim.value) { fim.value = hoje; fim.dispatchEvent(new Event('change', { bubbles: true })); }
+    document.getElementById('relatorioModal').classList.add('open');
+  }
+
+  function fecharRelatorioModal() {
+    document.getElementById('relatorioModal').classList.remove('open');
+  }
+
+  async function gerarRelatorio() {
+    const dataIni = document.getElementById('relatorioDataIni').value;
+    const dataFim = document.getElementById('relatorioDataFim').value;
+    if (!dataIni || !dataFim) { mostrarToast('Selecione o período.', true); return; }
+
+    const btn = document.getElementById('btnGerarRelatorio');
+    btn.disabled = true;
+    btn.textContent = 'Gerando…';
+    try {
+      const resp = await fetch(`/pdv/delivery/relatorio/?data_ini=${dataIni}&data_fim=${dataFim}`);
+      const d = await resp.json();
+      if (d.erro) { mostrarToast(d.erro, true); return; }
+      imprimirRelatorio(d);
+      fecharRelatorioModal();
+    } catch {
+      mostrarToast('Erro ao gerar relatório', true);
+    } finally {
+      btn.disabled = false;
+      btn.textContent = 'Gerar relatório';
+    }
+  }
+
+  function imprimirRelatorio(d) {
+    const fmt = n => parseFloat(n || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    const f = window.filialData || {};
+
+    let linhas = '';
+    (d.pedidos || []).forEach(p => {
+      const situacao = p.pago
+        ? '<span style="color:#059669;font-weight:700;">Pago</span>'
+        : '<span style="color:#d97706;font-weight:700;">Cobrar na entrega</span>';
+      linhas += `<tr>
+        <td style="padding:6px 8px;border-bottom:1px solid #eee;font-size:12px;">${p.data_venda}</td>
+        <td style="padding:6px 8px;border-bottom:1px solid #eee;font-size:12px;">#${p.numero_venda}</td>
+        <td style="padding:6px 8px;border-bottom:1px solid #eee;font-size:12px;">${p.cliente_nome}</td>
+        <td style="padding:6px 8px;border-bottom:1px solid #eee;font-size:12px;">${p.status_delivery}</td>
+        <td style="padding:6px 8px;border-bottom:1px solid #eee;font-size:12px;">${p.entregador || '—'}</td>
+        <td style="padding:6px 8px;border-bottom:1px solid #eee;font-size:12px;">${situacao}</td>
+        <td style="padding:6px 8px;border-bottom:1px solid #eee;font-size:12px;text-align:right;">R$&nbsp;${fmt(p.valor_total)}</td>
+      </tr>`;
+    });
+
+    const html = `<!doctype html><html><head><meta charset="utf-8"><title>Relatório de Delivery</title><style>
+        body{font-family:Arial,Helvetica,sans-serif;padding:24px;color:#111;}
+        h1{font-size:18px;margin:0 0 4px;} .sub{color:#555;font-size:13px;margin-bottom:18px;}
+        table{width:100%;border-collapse:collapse;} th{padding:8px;text-align:left;font-size:11px;text-transform:uppercase;color:#666;border-bottom:2px solid #333;}
+        tfoot td{font-weight:bold;border-top:2px solid #333;border-bottom:none;padding:8px;}
+        @media print { @page { size: landscape; } }
+      </style></head><body>
+      <h1>${f.nome || 'Relatório de Delivery'}</h1>
+      <div class="sub">Período: ${d.periodo_label} — ${d.total_pedidos} pedido(s) — gerado em ${new Date().toLocaleString('pt-BR')}</div>
+      <table><thead><tr>
+        <th>Data</th><th>Pedido</th><th>Cliente</th><th>Status</th><th>Entregador</th><th>Pagamento</th><th style="text-align:right;">Valor</th>
+      </tr></thead><tbody>${linhas || '<tr><td colspan="7" style="padding:16px;text-align:center;color:#999;">Nenhum pedido no período.</td></tr>'}</tbody>
+      <tfoot><tr><td colspan="6">Total</td><td style="text-align:right;">R$&nbsp;${fmt(d.total_geral)}</td></tr></tfoot>
+      </table>
+      </body></html>`;
+
+    const win = window.open('', '_blank', 'width=900,height=700');
+    if (!win) { mostrarToast('Habilite pop-ups para gerar o relatório.', true); return; }
+    win.document.write(html);
+    win.document.close();
+    win.focus();
+    win.onload = () => win.print();
   }
 
   // ── Helpers ───────────────────────────────────────────────────────────────
