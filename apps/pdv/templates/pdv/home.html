@@ -4171,8 +4171,36 @@ ${pgtoHtml ? `<hr class="sep">${pgtoHtml}` : ''}
         const painelDireito = document.getElementById('pdv-right-panel');
         const estaNaEsquerda = painelEsquerdo?.contains(atual);
         const estaNaDireita = painelDireito?.contains(atual);
+        const painelOrigem = estaNaEsquerda ? painelEsquerdo : (estaNaDireita ? painelDireito : null);
         const painelDestino = estaNaEsquerda ? painelDireito : (estaNaDireita ? painelEsquerdo : null);
-        if (painelDestino) {
+        if (painelOrigem && painelDestino) {
+          const vizinhoNaLinha = elementos
+            .filter(el => {
+              if (el === atual || !painelOrigem.contains(el)) return false;
+              const rect = el.getBoundingClientRect();
+              const cx = rect.left + rect.width / 2;
+              const estaNaDirecao = tecla === 'ArrowRight' ? cx > ox + 1 : cx < ox - 1;
+              const sobrepoeLinha = rect.bottom >= origem.top && rect.top <= origem.bottom;
+              return estaNaDirecao && sobrepoeLinha;
+            })
+            .map(el => {
+              const rect = el.getBoundingClientRect();
+              return {
+                el,
+                distanciaHorizontal: Math.abs(rect.left + rect.width / 2 - ox),
+                distanciaVertical: Math.abs(rect.top + rect.height / 2 - oy),
+              };
+            })
+            .sort((a, b) =>
+              a.distanciaHorizontal - b.distanciaHorizontal
+              || a.distanciaVertical - b.distanciaVertical
+            )[0]?.el;
+          if (vizinhoNaLinha) {
+            vizinhoNaLinha.focus();
+            vizinhoNaLinha.scrollIntoView({ block:'nearest', inline:'nearest' });
+            return;
+          }
+
           const destinoLateral = elementos
             .filter(el => painelDestino.contains(el))
             .map(el => {
