@@ -28,8 +28,8 @@
           {{ form.nome }}{% if form.nome.errors %}<p class="text-xs text-red-500 mt-0.5">{{ form.nome.errors.0 }}</p>{% endif %}
         </label>
         <label class="space-y-1.5">
-          <span class="text-xs font-semibold uppercase tracking-wide" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">CPF</span>
-          {{ form.cpf }}
+          <span class="text-xs font-semibold uppercase tracking-wide" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">CPF *</span>
+          {{ form.cpf }}{% if form.cpf.errors %}<p class="text-xs text-red-500 mt-0.5">{{ form.cpf.errors.0 }}</p>{% endif %}
         </label>
       </div>
       <div class="grid gap-4 md:grid-cols-3 mt-4">

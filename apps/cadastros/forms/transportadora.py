@@ -35,8 +35,15 @@ class MotoristaForm(forms.ModelForm):
         if filial is not None:
             self.fields['transportadora'].queryset = Transportadora.objects.for_filial(filial).filter(ativo=True)
         self.fields['transportadora'].required = False
+        self.fields['cpf'].required = True
         for field in self.fields.values():
             field.widget.attrs.setdefault('class', 'form-input w-full')
+
+    def clean_cpf(self):
+        cpf = ''.join(filter(str.isdigit, self.cleaned_data.get('cpf') or ''))
+        if len(cpf) != 11:
+            raise forms.ValidationError('Informe um CPF com 11 dígitos.')
+        return cpf
 
 
 class VeiculoForm(forms.ModelForm):
@@ -55,8 +62,26 @@ class VeiculoForm(forms.ModelForm):
         if filial is not None:
             self.fields['transportadora'].queryset = Transportadora.objects.for_filial(filial).filter(ativo=True)
         self.fields['transportadora'].required = False
+        for nome in ('uf_placa', 'tipo_rodado', 'tipo_carroceria', 'tara'):
+            self.fields[nome].required = True
         for field in self.fields.values():
             field.widget.attrs.setdefault('class', 'form-input w-full')
+
+    def clean_placa(self):
+        placa = ''.join(
+            caractere
+            for caractere in (self.cleaned_data.get('placa') or '').upper()
+            if caractere.isalnum()
+        )
+        if len(placa) != 7:
+            raise forms.ValidationError('Informe uma placa com 7 caracteres.')
+        return placa
+
+    def clean_tara(self):
+        tara = self.cleaned_data.get('tara')
+        if tara is None or tara <= 0:
+            raise forms.ValidationError('Informe a tara do veículo em kg, maior que zero.')
+        return tara
 
 
 class RepresentanteForm(forms.ModelForm):

@@ -28,8 +28,8 @@
           {{ form.placa }}{% if form.placa.errors %}<p class="text-xs text-red-500 mt-0.5">{{ form.placa.errors.0 }}</p>{% endif %}
         </label>
         <label class="space-y-1.5">
-          <span class="text-xs font-semibold uppercase tracking-wide" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">UF da Placa</span>
-          {{ form.uf_placa }}
+          <span class="text-xs font-semibold uppercase tracking-wide" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">UF da Placa *</span>
+          {{ form.uf_placa }}{% if form.uf_placa.errors %}<p class="text-xs text-red-500 mt-0.5">{{ form.uf_placa.errors.0 }}</p>{% endif %}
         </label>
         <label class="space-y-1.5 md:col-span-2">
           <span class="text-xs font-semibold uppercase tracking-wide" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Descrição</span>
@@ -76,18 +76,18 @@
       <h3 class="text-xs font-semibold uppercase tracking-wide mb-4" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Tipo e Capacidade</h3>
       <div class="grid gap-4 md:grid-cols-2">
         <label class="space-y-1.5">
-          <span class="text-xs font-semibold uppercase tracking-wide" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Tipo de Rodado</span>
-          {{ form.tipo_rodado }}
+          <span class="text-xs font-semibold uppercase tracking-wide" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Tipo de Rodado *</span>
+          {{ form.tipo_rodado }}{% if form.tipo_rodado.errors %}<p class="text-xs text-red-500 mt-0.5">{{ form.tipo_rodado.errors.0 }}</p>{% endif %}
         </label>
         <label class="space-y-1.5">
-          <span class="text-xs font-semibold uppercase tracking-wide" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Tipo de Carroceria</span>
-          {{ form.tipo_carroceria }}
+          <span class="text-xs font-semibold uppercase tracking-wide" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Tipo de Carroceria *</span>
+          {{ form.tipo_carroceria }}{% if form.tipo_carroceria.errors %}<p class="text-xs text-red-500 mt-0.5">{{ form.tipo_carroceria.errors.0 }}</p>{% endif %}
         </label>
       </div>
       <div class="grid gap-4 md:grid-cols-3 mt-4">
         <label class="space-y-1.5">
-          <span class="text-xs font-semibold uppercase tracking-wide" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Tara (kg)</span>
-          {{ form.tara }}
+          <span class="text-xs font-semibold uppercase tracking-wide" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Tara (kg) *</span>
+          {{ form.tara }}{% if form.tara.errors %}<p class="text-xs text-red-500 mt-0.5">{{ form.tara.errors.0 }}</p>{% endif %}
         </label>
         <label class="space-y-1.5">
           <span class="text-xs font-semibold uppercase tracking-wide" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Capacidade (kg)</span>

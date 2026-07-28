@@ -104,7 +104,9 @@ def _validar_transporte(motorista, veiculo, peso_bruto: Decimal) -> None:
         erros.append("tara do veículo")
     if not veiculo.uf_placa:
         erros.append("UF de licenciamento do veículo")
-    if not veiculo.tipo_carroceria:
+    if not getattr(veiculo, "tipo_rodado", ""):
+        erros.append("tipo de rodado do veículo")
+    if not getattr(veiculo, "tipo_carroceria", ""):
         erros.append("tipo de carroceria do veículo")
     if peso_bruto <= 0:
         erros.append("peso bruto da carga")
@@ -174,9 +176,17 @@ def construir_payload_mdfe(mdfe: MDFe) -> dict[str, Any]:
     tipo_rodado = tipo_rodado or _texto(metadados.get("tipo_rodado"))
     tipo_carroceria = tipo_carroceria or _texto(metadados.get("tipo_carroceria"))
 
-    if len(cpf) != 11 or len(placa) != 7 or tara <= 0 or not uf_placa:
+    if (
+        len(cpf) != 11
+        or len(placa) != 7
+        or tara <= 0
+        or not uf_placa
+        or not tipo_rodado
+        or not tipo_carroceria
+    ):
         raise DadosInvalidosError(
-            "Revise motorista e veículo do MDF-e: CPF, placa, tara e UF são obrigatórios."
+            "Revise motorista e veículo do MDF-e: CPF, placa, tara, UF, tipo de "
+            "rodado e tipo de carroceria são obrigatórios."
         )
 
     veiculo_tracao = {
