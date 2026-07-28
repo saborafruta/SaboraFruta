@@ -2,6 +2,7 @@
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.db.models import Count, DecimalField, ExpressionWrapper, F, Max, Q, Sum
 from django.utils import timezone
+from django.views import View
 from django.views.generic import TemplateView
 
 import datetime
@@ -580,20 +581,72 @@ class DashboardView(LoginRequiredMixin, TemplateView):
         dia = min(d.day, calendar.monthrange(ano, mes)[1])
         return d.replace(year=ano, month=mes, day=dia)
 
+    @staticmethod
+    def _vendas_dow_bucket(filial, inicio, fim):
+        """
+        Faturamento por dia da semana (Seg..Dom) para um único intervalo
+        [inicio, fim], combinando PedidoVenda (B2B) + VendaPDV. Reutilizado
+        tanto pelos períodos fixos do dashboard quanto pelo filtro de
+        período customizado (AJAX).
+        """
+        from django.db.models.functions import ExtractIsoWeekDay
+        from apps.vendas.models import PedidoVenda
+        from apps.pdv.models import VendaPDV
+
+        status_validos = [
+            PedidoVenda.Status.CONFIRMADO,
+            PedidoVenda.Status.EM_SEPARACAO,
+            PedidoVenda.Status.FATURADO,
+            PedidoVenda.Status.PARCIALMENTE_FATURADO,
+            PedidoVenda.Status.ENTREGUE,
+        ]
+        pedido_base = (
+            PedidoVenda.objects.filter(filial__empresa=filial.empresa)
+            if filial.is_matriz
+            else PedidoVenda.objects.filter(filial=filial)
+        ).filter(status__in=status_validos)
+        pdv_base = (
+            VendaPDV.objects.filter(filial__empresa=filial.empresa)
+            if filial.is_matriz
+            else VendaPDV.objects.filter(filial=filial)
+        ).filter(status='finalizada')
+
+        labels = ['Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb', 'Dom']
+
+        def _buckets(qs, data_field):
+            filtro = {f'{data_field}__date__gte': inicio, f'{data_field}__date__lte': fim}
+            rows = (
+                qs.filter(**filtro)
+                .annotate(dow=ExtractIsoWeekDay(data_field))
+                .values('dow')
+                .annotate(total=Sum('valor_total'))
+            )
+            acc = {i: 0.0 for i in range(1, 8)}
+            for r in rows:
+                if r['dow']:
+                    acc[int(r['dow'])] += float(r['total'] or 0)
+            return acc
+
+        b = _buckets(pedido_base, 'data_emissao')
+        p = _buckets(pdv_base, 'data_venda')
+        dias = []
+        total = 0.0
+        for i in range(1, 8):
+            valor = round(b[i] + p[i], 2)
+            total += valor
+            dias.append({'dia': labels[i - 1], 'valor': valor})
+        maximo = max((d['valor'] for d in dias), default=0.0)
+        return {'dias': dias, 'total': round(total, 2), 'maximo': maximo}
+
     def _vendas_por_dia_semana(self, filial):
         """
-        Faturamento agregado por dia da semana (Seg..Dom) em vários períodos.
-        Combina PedidoVenda (B2B) + VendaPDV. Retorna dados prontos para o
-        seletor de período no dashboard.
+        Faturamento agregado por dia da semana (Seg..Dom) em vários períodos
+        fixos, prontos para o seletor de período no dashboard.
         """
         if not filial:
             return {'periodos': {}, 'erro': None}
 
         try:
-            from django.db.models.functions import ExtractIsoWeekDay
-            from apps.vendas.models import PedidoVenda
-            from apps.pdv.models import VendaPDV
-
             hoje = timezone.localdate()
             primeiro_mes = hoje.replace(day=1)
             fim_mes_anterior = primeiro_mes - datetime.timedelta(days=1)
@@ -607,57 +660,9 @@ class DashboardView(LoginRequiredMixin, TemplateView):
                 'ultimo_ano': ('Último ano', self._menos_meses(hoje, 12), hoje),
             }
 
-            status_validos = [
-                PedidoVenda.Status.CONFIRMADO,
-                PedidoVenda.Status.EM_SEPARACAO,
-                PedidoVenda.Status.FATURADO,
-                PedidoVenda.Status.PARCIALMENTE_FATURADO,
-                PedidoVenda.Status.ENTREGUE,
-            ]
-            pedido_base = (
-                PedidoVenda.objects.filter(filial__empresa=filial.empresa)
-                if filial.is_matriz
-                else PedidoVenda.objects.filter(filial=filial)
-            ).filter(status__in=status_validos)
-            pdv_base = (
-                VendaPDV.objects.filter(filial__empresa=filial.empresa)
-                if filial.is_matriz
-                else VendaPDV.objects.filter(filial=filial)
-            ).filter(status='finalizada')
-
-            labels = ['Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb', 'Dom']
-
-            def _buckets(qs, data_field, inicio, fim):
-                filtro = {f'{data_field}__date__gte': inicio, f'{data_field}__date__lte': fim}
-                rows = (
-                    qs.filter(**filtro)
-                    .annotate(dow=ExtractIsoWeekDay(data_field))
-                    .values('dow')
-                    .annotate(total=Sum('valor_total'))
-                )
-                acc = {i: 0.0 for i in range(1, 8)}
-                for r in rows:
-                    if r['dow']:
-                        acc[int(r['dow'])] += float(r['total'] or 0)
-                return acc
-
             periodos = {}
             for chave, (label, inicio, fim) in periodos_def.items():
-                b = _buckets(pedido_base, 'data_emissao', inicio, fim)
-                p = _buckets(pdv_base, 'data_venda', inicio, fim)
-                dias = []
-                total = 0.0
-                for i in range(1, 8):
-                    valor = round(b[i] + p[i], 2)
-                    total += valor
-                    dias.append({'dia': labels[i - 1], 'valor': valor})
-                maximo = max((d['valor'] for d in dias), default=0.0)
-                periodos[chave] = {
-                    'label': label,
-                    'dias': dias,
-                    'total': round(total, 2),
-                    'maximo': maximo,
-                }
+                periodos[chave] = {'label': label, **self._vendas_dow_bucket(filial, inicio, fim)}
 
             return {'periodos': periodos, 'erro': None}
         except Exception as exc:
@@ -972,3 +977,33 @@ class DashboardView(LoginRequiredMixin, TemplateView):
         if R == 1 and F >= 2 and M >= 2:
             return 'hibernando'
         return 'perdidos'
+
+
+class VendasDowPeriodoView(LoginRequiredMixin, View):
+    """AJAX: faturamento por dia da semana num período customizado (filtro
+    de data do widget "Vendas por dia da semana" do dashboard)."""
+
+    def get(self, request, *args, **kwargs):
+        from django.http import JsonResponse
+
+        filial = getattr(request, 'filial_ativa', None)
+        if not filial:
+            return JsonResponse({'erro': 'Nenhuma filial selecionada.'}, status=400)
+
+        data_ini = request.GET.get('data_ini', '')
+        data_fim = request.GET.get('data_fim', '')
+        try:
+            inicio = datetime.date.fromisoformat(data_ini)
+            fim = datetime.date.fromisoformat(data_fim)
+        except (TypeError, ValueError):
+            return JsonResponse({'erro': 'Datas inválidas.'}, status=400)
+        if inicio > fim:
+            inicio, fim = fim, inicio
+
+        try:
+            dados = DashboardView._vendas_dow_bucket(filial, inicio, fim)
+        except Exception as exc:
+            return JsonResponse({'erro': str(exc)}, status=500)
+
+        dados['label'] = f'{inicio.strftime("%d/%m/%Y")} — {fim.strftime("%d/%m/%Y")}'
+        return JsonResponse(dados)

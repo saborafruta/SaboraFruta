@@ -439,8 +439,26 @@
               d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/>
       </svg>
       <h3 class="text-sm font-medium" :style="temaClaro ? 'color:#1a1a1a;' : 'color:#f0f0f0;'">Vendas por dia da semana</h3>
-      <div class="ml-auto flex items-center gap-2">
-        <select x-model="periodo"
+      <div class="ml-auto flex items-center gap-2 flex-wrap justify-end">
+        <!-- Filtro por período customizado -->
+        <input type="date" x-model="dataIni" :max="dataFim || undefined"
+               class="text-xs rounded px-2 py-1 border"
+               :style="temaClaro ? 'background:#fff;color:#333;border-color:#d1d5db;' : 'background:#1e1e22;color:#d4d4d4;border-color:#3a3a3e;'">
+        <input type="date" x-model="dataFim" :min="dataIni || undefined"
+               class="text-xs rounded px-2 py-1 border"
+               :style="temaClaro ? 'background:#fff;color:#333;border-color:#d1d5db;' : 'background:#1e1e22;color:#d4d4d4;border-color:#3a3a3e;'">
+        <button type="button" @click="filtrarPeriodo()" :disabled="!dataIni || !dataFim || carregandoPersonalizado"
+                class="text-xs rounded px-3 py-1 border font-medium transition-colors"
+                :style="temaClaro ? 'background:#fff;color:#333;border-color:#d1d5db;' : 'background:#1e1e22;color:#d4d4d4;border-color:#3a3a3e;'"
+                x-text="carregandoPersonalizado ? '...' : 'Filtrar'"></button>
+        <button type="button" x-show="usandoPersonalizado" x-cloak @click="limparFiltroPeriodo()" title="Limpar filtro de período"
+                class="p-1 rounded transition-colors" :style="temaClaro ? 'color:#6b7280;' : 'color:#9ca3af;'">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M6 18L18 6M6 6l12 12"/>
+          </svg>
+        </button>
+
+        <select x-model="periodo" @change="usandoPersonalizado=false"
                 class="text-xs rounded px-2 py-1 border"
                 :style="temaClaro ? 'background:#fff;color:#333;border-color:#d1d5db;' : 'background:#1e1e22;color:#d4d4d4;border-color:#3a3a3e;'">
           <template x-for="(p, k) in dados" :key="k">
@@ -453,6 +471,14 @@
           <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8"
                   d="M4 16v2a2 2 0 002 2h12a2 2 0 002-2v-2M7 10l5 5 5-5M12 15V3"/>
+          </svg>
+        </button>
+        <button type="button" @click="imprimir()" title="Imprimir / Exportar PDF"
+                class="p-1 rounded transition-colors"
+                :style="temaClaro ? 'color:#6b7280;' : 'color:#9ca3af;'">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8"
+                  d="M6 9V4h12v5M6 18h12v4H6v-4zM6 14H4a2 2 0 01-2-2v-3a2 2 0 012-2h16a2 2 0 012 2v3a2 2 0 01-2 2h-2"/>
           </svg>
         </button>
       </div>
@@ -985,6 +1011,11 @@
     return {
       dados: JSON.parse(document.getElementById('vendas-dow-data').textContent),
       periodo: 'mes_atual',
+      dataIni: '',
+      dataFim: '',
+      usandoPersonalizado: false,
+      carregandoPersonalizado: false,
+      dadosPersonalizados: null,
       init() {
         if (!this.dados[this.periodo]) {
           const chaves = Object.keys(this.dados);
@@ -992,7 +1023,27 @@
         }
       },
       atual() {
+        if (this.usandoPersonalizado && this.dadosPersonalizados) return this.dadosPersonalizados;
         return this.dados[this.periodo] || { dias: [], total: 0, maximo: 0 };
+      },
+      filtrarPeriodo() {
+        if (!this.dataIni || !this.dataFim) return;
+        this.carregandoPersonalizado = true;
+        fetch('{% url "core:dashboard-vendas-dow-periodo" %}?data_ini=' + this.dataIni + '&data_fim=' + this.dataFim)
+          .then(r => r.json())
+          .then(d => {
+            this.carregandoPersonalizado = false;
+            if (d.erro) { alert(d.erro); return; }
+            this.dadosPersonalizados = d;
+            this.usandoPersonalizado = true;
+          })
+          .catch(() => { this.carregandoPersonalizado = false; alert('Não foi possível carregar o período selecionado.'); });
+      },
+      limparFiltroPeriodo() {
+        this.usandoPersonalizado = false;
+        this.dadosPersonalizados = null;
+        this.dataIni = '';
+        this.dataFim = '';
       },
       barPx(valor) {
         const m = this.atual().maximo || 0;
@@ -1023,6 +1074,29 @@
         a.href = URL.createObjectURL(blob);
         a.download = 'vendas_dia_semana_' + this.periodo + '.csv';
         document.body.appendChild(a); a.click(); a.remove();
+      },
+      imprimir() {
+        const p = this.atual();
+        const linhas = (p.dias || []).map(d =>
+          '<tr><td>' + d.dia + '</td><td style="text-align:right;">R$ ' + this.fmt(d.valor) + '</td></tr>'
+        ).join('');
+        const html = '<!doctype html><html><head><meta charset="utf-8"><title>Vendas por dia da semana</title><style>' +
+          'body{font-family:Arial,Helvetica,sans-serif;padding:24px;color:#111;}' +
+          'h1{font-size:18px;margin:0 0 4px;} .sub{color:#555;font-size:13px;margin-bottom:18px;}' +
+          'table{width:100%;border-collapse:collapse;} th,td{padding:8px 10px;border-bottom:1px solid #ddd;font-size:13px;text-align:left;}' +
+          'tfoot td{font-weight:bold;border-top:2px solid #333;border-bottom:none;}' +
+          '</style></head><body>' +
+          '<h1>Vendas por dia da semana</h1>' +
+          '<div class="sub">Período: ' + (p.label || '') + ' — gerado em ' + new Date().toLocaleString('pt-BR') + '</div>' +
+          '<table><thead><tr><th>Dia</th><th style="text-align:right;">Faturamento</th></tr></thead><tbody>' +
+          linhas + '</tbody><tfoot><tr><td>Total</td><td style="text-align:right;">R$ ' + this.fmt(p.total) + '</td></tr></tfoot></table>' +
+          '</body></html>';
+        const win = window.open('', '_blank', 'width=700,height=800');
+        if (!win) { alert('Habilite pop-ups para imprimir.'); return; }
+        win.document.write(html);
+        win.document.close();
+        win.focus();
+        win.onload = () => win.print();
       },
     };
   }
