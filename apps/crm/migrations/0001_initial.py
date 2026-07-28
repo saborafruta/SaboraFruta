@@ -8,7 +8,7 @@ class Migration(migrations.Migration):
 
     dependencies = [
         ('cadastros', '0010_praca_rota'),
-        ('core', '0032_permissao_modulo_crm'),
+        ('core', '0033_permissao_modulo_crm'),
     ]
 
     operations = [

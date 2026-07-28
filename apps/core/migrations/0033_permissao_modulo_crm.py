@@ -4,7 +4,7 @@ from django.db import migrations, models
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('core', '0031_alter_parametrossistema_certificado_base64_and_more'),
+        ('core', '0032_enable_unaccent_extension'),
     ]
 
     operations = [
