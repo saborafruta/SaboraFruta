@@ -4206,6 +4206,31 @@ ${pgtoHtml ? `<hr class="sep">${pgtoHtml}` : ''}
           });
         destino = wrap[0]?.el;
       }
+      if (!destino && ['ArrowUp','ArrowDown'].includes(tecla)) {
+        const rootRect = root.getBoundingClientRect();
+        const centroTela = rootRect.left + rootRect.width / 2;
+        const origemNaEsquerda = ox < centroTela;
+        const ladoOposto = elementos
+          .filter(el => {
+            if (el === atual) return false;
+            const rect = el.getBoundingClientRect();
+            const cx = rect.left + rect.width / 2;
+            return origemNaEsquerda ? cx > centroTela : cx < centroTela;
+          })
+          .map(el => {
+            const rect = el.getBoundingClientRect();
+            return {
+              el,
+              distanciaVertical: Math.abs(rect.top + rect.height / 2 - oy),
+              distanciaHorizontal: Math.abs(rect.left + rect.width / 2 - ox),
+            };
+          })
+          .sort((a, b) =>
+            a.distanciaVertical - b.distanciaVertical
+            || a.distanciaHorizontal - b.distanciaHorizontal
+          );
+        destino = ladoOposto[0]?.el;
+      }
       if (!destino) return;
       destino.focus();
       destino.scrollIntoView({ block:'nearest', inline:'nearest' });
