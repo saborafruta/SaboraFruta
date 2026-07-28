@@ -24,7 +24,7 @@ def _candidate_rank(
     name_fields: Sequence[str],
     code_fields: Sequence[str],
     identifier_field: str,
-) -> tuple[int, int, str] | None:
+) -> tuple[int, str, int] | None:
     normalized_query = normalize_search_text(query)
     if not normalized_query:
         return None
@@ -32,16 +32,16 @@ def _candidate_rank(
     compact_query = normalized_query.replace(' ', '')
     identifier = str(candidate.get(identifier_field) or '').strip()
     if compact_query.isdigit() and identifier == compact_query:
-        return 0, 0, identifier
+        return 0, identifier, 0
 
     for field in code_fields:
         code = normalize_search_text(candidate.get(field)).replace(' ', '')
         if not code:
             continue
         if code == compact_query:
-            return 0, 0, code
+            return 0, code, 0
         if code.startswith(compact_query):
-            return 1, len(code), code
+            return 1, code, len(code)
 
     query_terms = normalized_query.split()
     best_rank = None
@@ -50,7 +50,11 @@ def _candidate_rank(
         if not name:
             continue
         words = name.split()
-        if not all(any(word.startswith(term) for word in words) for term in query_terms):
+        if len(query_terms) == 1 and len(query_terms[0]) == 1:
+            matches = bool(words and words[0].startswith(query_terms[0]))
+        else:
+            matches = all(any(word.startswith(term) for word in words) for term in query_terms)
+        if not matches:
             continue
 
         if name == normalized_query:
@@ -59,7 +63,7 @@ def _candidate_rank(
             rank = 3
         else:
             rank = 4
-        current = rank, len(name), name
+        current = rank, name, len(name)
         if best_rank is None or current < best_rank:
             best_rank = current
     return best_rank

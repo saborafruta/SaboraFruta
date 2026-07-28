@@ -14,6 +14,7 @@ class SearchNormalizationTests(SimpleTestCase):
             {'pk': 4, 'name': 'CAJÁ 1 KG POLPA', 'code': '40'},
             {'pk': 5, 'name': 'CAJÁ BARRA KG POLPA', 'code': '50'},
             {'pk': 6, 'name': 'AÇÚCAR CRISTAL', 'code': '60'},
+            {'pk': 7, 'name': 'FARINHA AMARELA', 'code': '70'},
         ]
 
     def search(self, query):
@@ -30,6 +31,12 @@ class SearchNormalizationTests(SimpleTestCase):
 
     def test_matches_only_at_word_start(self):
         self.assertEqual(self.search('aba'), [1])
+
+    def test_single_character_only_matches_start_of_product_name(self):
+        self.assertEqual(self.search('a'), [1, 6])
+
+    def test_complete_term_can_match_later_word(self):
+        self.assertEqual(self.search('amarela'), [7])
 
     def test_accented_and_unaccented_queries_are_equivalent(self):
         self.assertEqual(self.search('caja'), [4, 5])

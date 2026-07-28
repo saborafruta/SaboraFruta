@@ -118,6 +118,11 @@
                 cursor:pointer; transition:.15s; display:flex; align-items:center;
                 justify-content:center; gap:5px; }
   .input-pdv { width:100%;padding:9px 12px;background:var(--pdv-bg);border:1px solid var(--pdv-bd);border-radius:8px;color:var(--pdv-t1);font-size:13px;outline:none;transition:.15s; }
+  #pdv-app :is(button, a, input, select, textarea, [tabindex]):focus-visible {
+    outline:2px solid #f15a24 !important;
+    outline-offset:2px !important;
+    box-shadow:0 0 0 3px rgba(241,90,36,.18);
+  }
   .input-pdv:focus { border-color:#f15a24; }
   .tipo-pill { flex:1;padding:7px 0;border:1px solid var(--pdv-bd);border-radius:7px;font-size:12px;font-weight:700;cursor:pointer;transition:.15s;background:transparent;color:var(--pdv-tmuted); }
   .tipo-pill.active { background:#f15a24;color:#fff;border-color:#f15a24; }
@@ -503,7 +508,7 @@
 {% endblock %}
 
 {% block body %}
-<div x-data="pdv()" x-init="init()" style="display:flex;flex-direction:column;height:100vh;background:#0a0a12;">
+<div id="pdv-app" x-data="pdv()" x-init="init()" style="display:flex;flex-direction:column;height:100vh;background:#0a0a12;">
   {% csrf_token %}
 
   <!-- ══════════════════ TOPBAR ══════════════════ -->
@@ -2659,7 +2664,7 @@ function pdv() {
       await this.carregarEstado();
       await this.atualizarListasTopo();
       this.registrarAtalhos();
-      this.$nextTick(()=>document.getElementById('barcode-input')?.focus());
+      if (!this.showModalCaixa) this.$nextTick(()=>this.focarBuscaProduto());
     },
 
     _hora() {
@@ -3588,7 +3593,12 @@ ${pgtoHtml ? `<hr class="sep">${pgtoHtml}` : ''}
       try {
         const d=await (await fetch('/pdv/api/caixa/abrir/',{method:'POST',headers:{'Content-Type':'application/json','X-CSRFToken':csrf()},
           body:JSON.stringify({caixa_id:parseInt(this.caixaSelecionada),valor_abertura:parseFloat(this.valorAberturaCaixa)||0})})).json();
-        if (d.ok) { this.sessao={id:d.sessao_id,caixa_id:d.caixa?.id}; this.showModalCaixa=false; this.toast_('Caixa aberto!','ok'); }
+        if (d.ok) {
+          this.sessao={id:d.sessao_id,caixa_id:d.caixa?.id};
+          this.showModalCaixa=false;
+          this.toast_('Caixa aberto!','ok');
+          this.$nextTick(()=>this.focarBuscaProduto());
+        }
         else this.erroCaixa=d.erro||'Erro ao abrir caixa';
       } catch { this.erroCaixa='Erro de comunicação'; }
     },
@@ -4027,7 +4037,62 @@ ${pgtoHtml ? `<hr class="sep">${pgtoHtml}` : ''}
           this.showModalNovoCliente=false; this.showCaixaMenu=false; this.showModalHistorico=false;
           this.formaPgtoSelecionada=null;
         }
+
+        if (this.temModalAberto() || this.alvoEhCampoDigitacao(e.target)) return;
+
+        if (['ArrowRight','ArrowDown','ArrowLeft','ArrowUp'].includes(e.key)) {
+          e.preventDefault();
+          this.moverFocoTela(['ArrowRight','ArrowDown'].includes(e.key) ? 1 : -1);
+          return;
+        }
+
+        if (!e.ctrlKey && !e.altKey && !e.metaKey && /^[A-Za-zÀ-ÿ0-9]$/.test(e.key)) {
+          e.preventDefault();
+          this.focarBuscaProduto(e.key);
+        }
       });
+    },
+
+    temModalAberto() {
+      return this.showModalCaixa || this.showModalCliente || this.showModalDelivery
+        || this.showModalPendentes || this.showModalOrcamentos || this.showModalConfirmacao
+        || this.showModalDescontoItem || this.showModalDesconto || this.showModalPrecoItem
+        || this.showModalNovoCliente || this.showModalCaixaRel || this.showModalConfig
+        || this.showModalHistorico || this.showModalImpressao || this.modalPreco.show;
+    },
+
+    alvoEhCampoDigitacao(target) {
+      if (!target) return false;
+      return ['INPUT','TEXTAREA','SELECT'].includes(target.tagName) || target.isContentEditable;
+    },
+
+    focarBuscaProduto(textoInicial='') {
+      const input = document.getElementById('busca-produto');
+      if (!input) return;
+      input.focus();
+      if (textoInicial) {
+        input.value = textoInicial;
+        input.dispatchEvent(new Event('input', { bubbles:true }));
+      } else {
+        input.select();
+      }
+    },
+
+    moverFocoTela(direcao) {
+      const root = document.getElementById('pdv-app');
+      if (!root) return;
+      const seletores = 'button:not([disabled]),a[href],input:not([disabled]),select:not([disabled]),textarea:not([disabled]),[tabindex]:not([tabindex="-1"])';
+      const elementos = Array.from(root.querySelectorAll(seletores)).filter(el => {
+        const style = window.getComputedStyle(el);
+        return el.offsetParent !== null && style.visibility !== 'hidden';
+      });
+      if (!elementos.length) return;
+      const atual = elementos.indexOf(document.activeElement);
+      const proximo = atual < 0
+        ? (direcao > 0 ? 0 : elementos.length - 1)
+        : (atual + direcao + elementos.length) % elementos.length;
+      elementos[proximo].focus();
+      elementos[proximo].scrollIntoView({ block:'nearest', inline:'nearest' });
     },
 
     fmt(v) { return parseFloat(v||0).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2}); },
