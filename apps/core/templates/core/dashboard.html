@@ -439,34 +439,32 @@
               d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/>
       </svg>
       <h3 class="text-sm font-medium" :style="temaClaro ? 'color:#1a1a1a;' : 'color:#f0f0f0;'">Vendas por dia da semana</h3>
-      <div class="ml-auto flex items-center gap-2 flex-wrap justify-end">
-        <!-- Filtro por período customizado -->
-        <input type="date" x-model="dataIni" :max="dataFim || undefined"
-               class="text-xs rounded px-2 py-1 border"
-               :style="temaClaro ? 'background:#fff;color:#333;border-color:#d1d5db;' : 'background:#1e1e22;color:#d4d4d4;border-color:#3a3a3e;'">
-        <input type="date" x-model="dataFim" :min="dataIni || undefined"
-               class="text-xs rounded px-2 py-1 border"
-               :style="temaClaro ? 'background:#fff;color:#333;border-color:#d1d5db;' : 'background:#1e1e22;color:#d4d4d4;border-color:#3a3a3e;'">
-        <button type="button" @click="filtrarPeriodo()" :disabled="!dataIni || !dataFim || carregandoPersonalizado"
-                class="text-xs rounded px-3 py-1 border font-medium transition-colors"
-                :style="temaClaro ? 'background:#fff;color:#333;border-color:#d1d5db;' : 'background:#1e1e22;color:#d4d4d4;border-color:#3a3a3e;'"
-                x-text="carregandoPersonalizado ? '...' : 'Filtrar'"></button>
-        <button type="button" x-show="usandoPersonalizado" x-cloak @click="limparFiltroPeriodo()" title="Limpar filtro de período"
-                class="p-1 rounded transition-colors" :style="temaClaro ? 'color:#6b7280;' : 'color:#9ca3af;'">
-          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M6 18L18 6M6 6l12 12"/>
-          </svg>
-        </button>
+      <span x-show="usandoPersonalizado" x-cloak
+            class="text-[10px] font-semibold px-2 py-0.5 rounded-full"
+            style="background:rgba(74,222,128,.12); color:#4ade80; border:1px solid rgba(74,222,128,.3);"
+            x-text="atual().label"></span>
 
-        <select x-model="periodo" @change="usandoPersonalizado=false"
-                class="text-xs rounded px-2 py-1 border"
-                :style="temaClaro ? 'background:#fff;color:#333;border-color:#d1d5db;' : 'background:#1e1e22;color:#d4d4d4;border-color:#3a3a3e;'">
+      <div class="ml-auto flex items-center gap-1.5">
+        <select x-model="periodo" @change="usandoPersonalizado=false" :disabled="usandoPersonalizado"
+                class="text-xs rounded-md px-2 py-1.5 border outline-none transition-opacity"
+                :style="(temaClaro ? 'background:#fff;color:#333;border-color:#d1d5db;' : 'background:#1e1e22;color:#d4d4d4;border-color:#3a3a3e;') + (usandoPersonalizado ? 'opacity:.5;' : '')">
           <template x-for="(p, k) in dados" :key="k">
             <option :value="k" x-text="p.label"></option>
           </template>
         </select>
+
+        <div class="w-px h-5 mx-0.5" :style="temaClaro ? 'background:#e5e7eb;' : 'background:#2e2e33;'"></div>
+
+        <button type="button" @click="showFiltroPeriodo=!showFiltroPeriodo" title="Filtrar por período"
+                class="p-1.5 rounded-md transition-colors"
+                :style="(showFiltroPeriodo || usandoPersonalizado) ? 'color:#4ade80;background:rgba(74,222,128,.1);' : (temaClaro ? 'color:#6b7280;' : 'color:#9ca3af;')">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8"
+                  d="M8 7V3m8 4V3M3 11h18M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/>
+          </svg>
+        </button>
         <button type="button" @click="baixarCsv()" title="Baixar CSV"
-                class="p-1 rounded transition-colors"
+                class="p-1.5 rounded-md transition-colors"
                 :style="temaClaro ? 'color:#6b7280;' : 'color:#9ca3af;'">
           <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8"
@@ -474,7 +472,7 @@
           </svg>
         </button>
         <button type="button" @click="imprimir()" title="Imprimir / Exportar PDF"
-                class="p-1 rounded transition-colors"
+                class="p-1.5 rounded-md transition-colors"
                 :style="temaClaro ? 'color:#6b7280;' : 'color:#9ca3af;'">
           <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8"
@@ -482,6 +480,33 @@
           </svg>
         </button>
       </div>
+    </div>
+
+    <!-- Barra de filtro por período customizado (recolhível) -->
+    <div x-show="showFiltroPeriodo" x-cloak x-transition
+         class="px-5 py-3 flex items-center gap-2 flex-wrap"
+         :style="temaClaro ? 'background:#f9fafb;border-bottom:1px solid #e5e7eb;' : 'background:#161619;border-bottom:1px solid #232326;'">
+      <span class="text-xs font-medium flex-shrink-0" :style="temaClaro ? 'color:#6b7280;' : 'color:#9ca3af;'">Período personalizado:</span>
+      <div style="width:132px;">
+        <input type="date" x-model="dataIni" :max="dataFim || undefined"
+               class="text-xs rounded-md px-2 py-1.5 border w-full"
+               :style="temaClaro ? 'background:#fff;color:#333;border-color:#d1d5db;' : 'background:#1e1e22;color:#d4d4d4;border-color:#3a3a3e;'">
+      </div>
+      <span class="text-xs flex-shrink-0" :style="temaClaro ? 'color:#9ca3af;' : 'color:#6b7280;'">até</span>
+      <div style="width:132px;">
+        <input type="date" x-model="dataFim" :min="dataIni || undefined"
+               class="text-xs rounded-md px-2 py-1.5 border w-full"
+               :style="temaClaro ? 'background:#fff;color:#333;border-color:#d1d5db;' : 'background:#1e1e22;color:#d4d4d4;border-color:#3a3a3e;'">
+      </div>
+      <button type="button" @click="filtrarPeriodo()" :disabled="!dataIni || !dataFim || carregandoPersonalizado"
+              class="text-xs rounded-md px-3 py-1.5 font-semibold transition-opacity flex-shrink-0"
+              :style="(!dataIni || !dataFim) ? 'background:#22c55e;color:#fff;opacity:.4;' : 'background:#22c55e;color:#fff;'"
+              x-text="carregandoPersonalizado ? 'Buscando…' : 'Filtrar'"></button>
+      <button type="button" x-show="usandoPersonalizado" @click="limparFiltroPeriodo()"
+              class="text-xs rounded-md px-2 py-1.5 border transition-colors flex-shrink-0"
+              :style="temaClaro ? 'color:#6b7280;border-color:#d1d5db;' : 'color:#9ca3af;border-color:#3a3a3e;'">
+        Limpar
+      </button>
     </div>
 
     {% if vendas_dow.erro %}
@@ -1016,6 +1041,7 @@
       usandoPersonalizado: false,
       carregandoPersonalizado: false,
       dadosPersonalizados: null,
+      showFiltroPeriodo: false,
       init() {
         if (!this.dados[this.periodo]) {
           const chaves = Object.keys(this.dados);
