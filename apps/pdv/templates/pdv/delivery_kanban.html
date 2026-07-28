@@ -550,13 +550,20 @@
 
     const html = `<!doctype html><html><head><meta charset="utf-8"><title>Relatório de Delivery</title><style>
         body{font-family:Arial,Helvetica,sans-serif;padding:24px;color:#111;}
+        .rel-head{display:flex;align-items:flex-start;justify-content:space-between;gap:16px;}
+        .rel-logo{max-height:64px;max-width:220px;object-fit:contain;}
         h1{font-size:18px;margin:0 0 4px;} .sub{color:#555;font-size:13px;margin-bottom:18px;}
         table{width:100%;border-collapse:collapse;} th{padding:8px;text-align:left;font-size:11px;text-transform:uppercase;color:#666;border-bottom:2px solid #333;}
         tfoot td{font-weight:bold;border-top:2px solid #333;border-bottom:none;padding:8px;}
         @media print { @page { size: landscape; } }
       </style></head><body>
-      <h1>${f.nome || 'Relatório de Delivery'}</h1>
-      <div class="sub">Período: ${d.periodo_label} — ${d.total_pedidos} pedido(s) — gerado em ${new Date().toLocaleString('pt-BR')}</div>
+      <div class="rel-head">
+        <div>
+          <h1>${f.nome || 'Relatório de Delivery'}</h1>
+          <div class="sub">Período: ${d.periodo_label} — ${d.total_pedidos} pedido(s) — gerado em ${new Date().toLocaleString('pt-BR')}</div>
+        </div>
+        ${f.logo_url ? '<img class="rel-logo" src="' + f.logo_url + '" alt="Logo">' : ''}
+      </div>
       <table><thead><tr>
         <th>Data</th><th>Pedido</th><th>Cliente</th><th>Status</th><th>Entregador</th><th>Pagamento</th><th style="text-align:right;">Valor</th>
       </tr></thead><tbody>${linhas || '<tr><td colspan="7" style="padding:16px;text-align:center;color:#999;">Nenhum pedido no período.</td></tr>'}</tbody>
