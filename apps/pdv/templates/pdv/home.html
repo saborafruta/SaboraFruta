@@ -784,7 +784,7 @@
     </aside>
 
     <!-- ─── PAINEL CENTRAL ─── -->
-    <main style="flex:1;display:flex;flex-direction:column;overflow:hidden;background:#0a0a12;">
+    <main id="pdv-center-panel" style="flex:1;display:flex;flex-direction:column;overflow:hidden;background:#0a0a12;">
 
       <!-- Barra de cliente -->
       <div style="display:flex;align-items:center;gap:12px;padding:10px 20px;border-bottom:1px solid #1a1a28;flex-shrink:0;">
@@ -4062,7 +4062,7 @@ ${pgtoHtml ? `<hr class="sep">${pgtoHtml}` : ''}
           this.formaPgtoSelecionada=null;
         }
 
-        if (!this.temModalAberto() && ['ArrowRight','ArrowDown','ArrowLeft','ArrowUp'].includes(e.key)) {
+        if (['ArrowRight','ArrowDown','ArrowLeft','ArrowUp'].includes(e.key)) {
           e.preventDefault();
           this.moverFocoTela(e.key);
           return;
@@ -4167,13 +4167,14 @@ ${pgtoHtml ? `<hr class="sep">${pgtoHtml}` : ''}
       const oy = origem.top + origem.height / 2;
 
       if (['ArrowLeft','ArrowRight'].includes(tecla)) {
-        const painelEsquerdo = document.getElementById('pdv-left-panel');
-        const painelDireito = document.getElementById('pdv-right-panel');
-        const estaNaEsquerda = painelEsquerdo?.contains(atual);
-        const estaNaDireita = painelDireito?.contains(atual);
-        const painelOrigem = estaNaEsquerda ? painelEsquerdo : (estaNaDireita ? painelDireito : null);
-        const painelDestino = estaNaEsquerda ? painelDireito : (estaNaDireita ? painelEsquerdo : null);
-        if (painelOrigem && painelDestino) {
+        const paineis = [
+          document.getElementById('pdv-left-panel'),
+          document.getElementById('pdv-center-panel'),
+          document.getElementById('pdv-right-panel'),
+        ].filter(Boolean);
+        const indiceOrigem = paineis.findIndex(painel => painel.contains(atual));
+        const painelOrigem = paineis[indiceOrigem];
+        if (painelOrigem) {
           const vizinhoNaLinha = elementos
             .filter(el => {
               if (el === atual || !painelOrigem.contains(el)) return false;
@@ -4201,24 +4202,31 @@ ${pgtoHtml ? `<hr class="sep">${pgtoHtml}` : ''}
             return;
           }
 
-          const destinoLateral = elementos
-            .filter(el => painelDestino.contains(el))
-            .map(el => {
-              const rect = el.getBoundingClientRect();
-              return {
-                el,
-                distanciaVertical: Math.abs(rect.top + rect.height / 2 - oy),
-                distanciaHorizontal: Math.abs(rect.left + rect.width / 2 - ox),
-              };
-            })
-            .sort((a, b) =>
-              a.distanciaVertical - b.distanciaVertical
-              || a.distanciaHorizontal - b.distanciaHorizontal
-            )[0]?.el;
-          if (destinoLateral) {
-            destinoLateral.focus();
-            destinoLateral.scrollIntoView({ block:'nearest', inline:'nearest' });
-            return;
+          const passo = tecla === 'ArrowRight' ? 1 : -1;
+          for (let distanciaPainel = 1; distanciaPainel < paineis.length; distanciaPainel += 1) {
+            const indiceDestino = (
+              indiceOrigem + passo * distanciaPainel + paineis.length
+            ) % paineis.length;
+            const painelDestino = paineis[indiceDestino];
+            const destinoLateral = elementos
+              .filter(el => painelDestino.contains(el))
+              .map(el => {
+                const rect = el.getBoundingClientRect();
+                return {
+                  el,
+                  distanciaVertical: Math.abs(rect.top + rect.height / 2 - oy),
+                  distanciaHorizontal: Math.abs(rect.left + rect.width / 2 - ox),
+                };
+              })
+              .sort((a, b) =>
+                a.distanciaVertical - b.distanciaVertical
+                || a.distanciaHorizontal - b.distanciaHorizontal
+              )[0]?.el;
+            if (destinoLateral) {
+              destinoLateral.focus();
+              destinoLateral.scrollIntoView({ block:'nearest', inline:'nearest' });
+              return;
+            }
           }
         }
       }
@@ -4269,31 +4277,6 @@ ${pgtoHtml ? `<hr class="sep">${pgtoHtml}` : ''}
             return a.distanciaVertical - b.distanciaVertical || a.extremo - b.extremo;
           });
         destino = wrap[0]?.el;
-      }
-      if (!destino && ['ArrowUp','ArrowDown'].includes(tecla)) {
-        const rootRect = root.getBoundingClientRect();
-        const centroTela = rootRect.left + rootRect.width / 2;
-        const origemNaEsquerda = ox < centroTela;
-        const ladoOposto = elementos
-          .filter(el => {
-            if (el === atual) return false;
-            const rect = el.getBoundingClientRect();
-            const cx = rect.left + rect.width / 2;
-            return origemNaEsquerda ? cx > centroTela : cx < centroTela;
-          })
-          .map(el => {
-            const rect = el.getBoundingClientRect();
-            return {
-              el,
-              distanciaVertical: Math.abs(rect.top + rect.height / 2 - oy),
-              distanciaHorizontal: Math.abs(rect.left + rect.width / 2 - ox),
-            };
-          })
-          .sort((a, b) =>
-            a.distanciaVertical - b.distanciaVertical
-            || a.distanciaHorizontal - b.distanciaHorizontal
-          );
-        destino = ladoOposto[0]?.el;
       }
       if (!destino) return;
       destino.focus();
