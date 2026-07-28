@@ -4183,7 +4183,29 @@ ${pgtoHtml ? `<hr class="sep">${pgtoHtml}` : ''}
         .filter(Boolean)
         .sort((a, b) => a.pontuacao - b.pontuacao);
 
-      const destino = candidatos[0]?.el;
+      let destino = candidatos[0]?.el;
+      if (!destino && ['ArrowLeft','ArrowRight'].includes(tecla)) {
+        const wrap = elementos
+          .filter(el => el !== atual)
+          .map(el => {
+            const rect = el.getBoundingClientRect();
+            const cy = rect.top + rect.height / 2;
+            const sobrepoeLinha = rect.bottom >= origem.top && rect.top <= origem.bottom;
+            return {
+              el,
+              sobrepoeLinha,
+              distanciaVertical: Math.abs(cy - oy),
+              extremo: tecla === 'ArrowRight' ? rect.left : -rect.right,
+            };
+          })
+          .sort((a, b) => {
+            const prioridadeLinha = Number(b.sobrepoeLinha) - Number(a.sobrepoeLinha);
+            if (prioridadeLinha) return prioridadeLinha;
+            if (a.sobrepoeLinha && b.sobrepoeLinha) return a.extremo - b.extremo;
+            return a.distanciaVertical - b.distanciaVertical || a.extremo - b.extremo;
+          });
+        destino = wrap[0]?.el;
+      }
       if (!destino) return;
       destino.focus();
       destino.scrollIntoView({ block:'nearest', inline:'nearest' });
