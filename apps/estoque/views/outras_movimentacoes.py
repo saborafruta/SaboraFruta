@@ -711,9 +711,19 @@ class TransferenciaLojaView(PermissaoRequiredMixin, View):
         filial = request.filial_ativa
         empresa = request.user.empresa
 
-        filiais_qs = Filial.objects.filter(
+        filiais = list(Filial.objects.filter(
             empresa=empresa, ativo=True,
-        ).exclude(pk=filial.pk).order_by('-is_matriz', 'nome_fantasia', 'razao_social')
+        ).exclude(pk=filial.pk).order_by('-is_matriz', 'nome_fantasia', 'razao_social'))
+
+        filial_destino_padrao = next(
+            (
+                item for item in filiais
+                if 'SABORAFRUTA' in (
+                    item.nome_fantasia or item.razao_social or ''
+                ).upper()
+            ),
+            filiais[0] if len(filiais) == 1 else None,
+        )
 
         filiais_json = _json.dumps([
             {
@@ -721,7 +731,7 @@ class TransferenciaLojaView(PermissaoRequiredMixin, View):
                 'label': (f.nome_fantasia or f.razao_social) + (' (Matriz)' if f.is_matriz else ' (Filial)'),
                 'is_matriz': f.is_matriz,
             }
-            for f in filiais_qs
+            for f in filiais
         ])
         motoristas_json = _json.dumps(list(
             Motorista.objects.for_filial(filial).filter(ativo=True)
@@ -738,6 +748,10 @@ class TransferenciaLojaView(PermissaoRequiredMixin, View):
         return render(request, 'estoque/outras_movimentacoes/transferencia_lojas.html', {
             'title': 'Transferência entre Lojas',
             'filiais_json': filiais_json,
+            'filiais': filiais,
+            'filial_destino_padrao_id': (
+                filial_destino_padrao.pk if filial_destino_padrao else None
+            ),
             'filial_nome': filial.nome_fantasia or filial.razao_social,
             'filial_is_matriz': filial.is_matriz,
             'focusnfe_ambiente': filial.focusnfe_ambiente,

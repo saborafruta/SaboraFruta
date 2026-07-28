@@ -123,9 +123,11 @@
             </label>
             <select x-model="filialDestinoId" class="form-input w-full">
               <option value="">Selecione a loja de destino...</option>
-              <template x-for="f in filiais" :key="f.id">
-                <option :value="f.id" x-text="f.label"></option>
-              </template>
+              {% for f in filiais %}
+                <option value="{{ f.pk }}"{% if f.pk == filial_destino_padrao_id %} selected{% endif %}>
+                  {{ f.nome_fantasia|default:f.razao_social }}{% if f.is_matriz %} (Matriz){% else %} (Filial){% endif %}
+                </option>
+              {% endfor %}
             </select>
             <p x-show="!filiais.length" class="text-xs mt-1 text-red-400">
               Nenhuma outra loja cadastrada na empresa.
@@ -363,17 +365,19 @@
         </div>
 
         <!-- Botão adicionar -->
-        <div class="transfer-product-add flex justify-end">
-          <button type="button"
-                  @click="adicionarItem()"
-                  :disabled="!itemProdutoId || !itemQuantidade"
-                  class="btn-primary flex items-center gap-2">
-            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
-            </svg>
-            Adicionar à lista
-          </button>
-        </div>
+        <template x-if="itemProdutoControlaLote">
+          <div class="transfer-product-add flex justify-end">
+            <button type="button"
+                    @click="adicionarItem()"
+                    :disabled="!itemProdutoId || !itemQuantidade || !itemLoteId"
+                    class="btn-primary flex items-center gap-2">
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
+              </svg>
+              Confirmar lote e quantidade
+            </button>
+          </div>
+        </template>
 
         <!-- Tabela de itens adicionados -->
         <template x-if="itens.length > 0">
@@ -433,79 +437,6 @@
 
     <!-- ════ COLUNA DIREITA (1/3) ════ -->
     <div class="xl:col-span-1 space-y-5">
-
-      <!-- Resumo -->
-      <div x-show="false"
-           class="hidden"
-           x-transition:enter="transition ease-out duration-200"
-           x-transition:enter-start="opacity-0 translate-y-2"
-           x-transition:enter-end="opacity-100 translate-y-0">
-        <h3 class="text-xs font-semibold uppercase tracking-widest"
-            :style="temaClaro ? 'color:#6b7280;' : 'color:#9ca3af;'">
-          Resumo
-        </h3>
-        <div class="space-y-3">
-
-          <!-- Rota -->
-          <div x-show="filialDestinoId" class="flex items-start gap-2">
-            <svg class="w-4 h-4 flex-shrink-0 mt-0.5 text-sky-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                    d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4"/>
-            </svg>
-            <div class="min-w-0">
-              <p class="text-xs" :style="temaClaro ? 'color:#9ca3af;' : 'color:#6b7280;'">Rota</p>
-              <p class="text-sm font-medium truncate" :style="temaClaro ? 'color:#111827;' : 'color:#f1f5f9;'">
-                {{ filial_nome }}
-              </p>
-              <p class="text-xs" :style="temaClaro ? 'color:#9ca3af;' : 'color:#6b7280;'">↓ para</p>
-              <p class="text-sm font-medium truncate" :style="temaClaro ? 'color:#111827;' : 'color:#f1f5f9;'"
-                 x-text="filiais.find(f => f.id == filialDestinoId)?.label || ''"></p>
-            </div>
-          </div>
-
-          <!-- Itens -->
-          <div x-show="itens.length > 0" class="flex items-start gap-2">
-            <svg class="w-4 h-4 flex-shrink-0 mt-0.5 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                    d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/>
-            </svg>
-            <div>
-              <p class="text-xs" :style="temaClaro ? 'color:#9ca3af;' : 'color:#6b7280;'">Itens</p>
-              <p class="text-sm font-medium" :style="temaClaro ? 'color:#111827;' : 'color:#f1f5f9;'"
-                 x-text="itens.length + ' produto(s)'"></p>
-            </div>
-          </div>
-
-        </div>
-      </div>
-
-      <!-- Transporte fiscal -->
-      <div class="hidden">
-        <div class="flex items-center justify-between gap-3">
-          <h3 class="text-xs font-semibold uppercase tracking-widest"
-              :style="temaClaro ? 'color:#6b7280;' : 'color:#9ca3af;'">
-            Transporte fiscal
-          </h3>
-          <span class="soft-pill is-blue">Carga propria</span>
-        </div>
-        <p class="text-xs leading-relaxed" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
-          O transportador sera a propria loja emitente. Motorista e veiculo sao informados na conferencia.
-        </p>
-        <div x-show="motoristaId || veiculoId || pesoBruto" class="space-y-2 text-sm">
-          <div x-show="motoristaId">
-            <span :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Motorista:</span>
-            <strong x-text="motoristaSelecionado()?.nome || ''"></strong>
-          </div>
-          <div x-show="veiculoId">
-            <span :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Veiculo:</span>
-            <strong x-text="veiculoSelecionado()?.placa || ''"></strong>
-          </div>
-          <div x-show="pesoBruto">
-            <span :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Peso bruto:</span>
-            <strong x-text="formatarQuantidade(pesoBruto) + ' kg'"></strong>
-          </div>
-        </div>
-      </div>
 
       <!-- Ações -->
       <div class="card p-5 space-y-3">
@@ -579,8 +510,10 @@
     </div>
   </div>
 
+  {% comment %}
+  <!-- Histórico legado mantido apenas como referência; não é renderizado. -->
   <!-- ════ Transferências recentes ════ -->
-  <div class="hidden" x-show="false" x-cloak>
+  <div class="hidden" x-show="false" x-cloak style="display:none !important;">
     <div class="flex items-center gap-2">
       <svg class="w-5 h-5 flex-shrink-0" fill="none" stroke="#f59e0b" viewBox="0 0 24 24">
         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
@@ -683,6 +616,8 @@
       </template>
     </div>
   </div>
+
+  {% endcomment %}
 
   <!-- ════ MODAL: gerar nota fiscal? ════ -->
   <div x-show="showModalNota"
@@ -912,14 +847,11 @@
 <script>
 function transferenciaLojaApp(filiais, motoristas, veiculos) {
   const filiaisDisponiveis = filiais || [];
-  const destinoPreferencial = filiaisDisponiveis.find(
-    filial => String(filial.label || '').toUpperCase().includes('SABORAFRUTA')
-  ) || (filiaisDisponiveis.length === 1 ? filiaisDisponiveis[0] : null);
   return {
     filiais: filiaisDisponiveis,
     motoristas: motoristas || [],
     veiculos: veiculos || [],
-    filialDestinoId: destinoPreferencial ? String(destinoPreferencial.id) : '',
+    filialDestinoId: '{{ filial_destino_padrao_id|default:"" }}',
 
     // Item sendo montado
     itemProdutoQuery: '',
