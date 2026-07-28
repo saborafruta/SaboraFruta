@@ -134,7 +134,7 @@
 
           <div>
             <label class="block text-sm font-medium mb-1.5" :style="temaClaro ? 'color:#374151;' : 'color:#d1d5db;'">
-              Observação <span class="text-red-500">*</span>
+              Observação <span class="text-xs font-normal" :style="temaClaro ? 'color:#94a3b8;' : 'color:#64748b;'">(opcional)</span>
             </label>
             <input type="text"
                    x-model="observacao"
@@ -248,7 +248,7 @@
                 Selecao rapida
               </h4>
               <p class="text-xs" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
-                Selecione o produto e confirme a quantidade na unidade cadastrada.
+                Clique no + para somar 1. Para outra quantidade, selecione o produto e ajuste ao lado.
               </p>
             </div>
             <div class="relative w-full sm:w-72">
@@ -436,7 +436,7 @@
 
       <!-- Resumo -->
       <div x-show="filialDestinoId || itens.length > 0"
-           class="card p-5 space-y-3"
+           class="hidden"
            x-transition:enter="transition ease-out duration-200"
            x-transition:enter-start="opacity-0 translate-y-2"
            x-transition:enter-end="opacity-100 translate-y-0">
@@ -480,7 +480,7 @@
       </div>
 
       <!-- Transporte fiscal -->
-      <div class="card p-5 space-y-3">
+      <div class="hidden">
         <div class="flex items-center justify-between gap-3">
           <h3 class="text-xs font-semibold uppercase tracking-widest"
               :style="temaClaro ? 'color:#6b7280;' : 'color:#9ca3af;'">
@@ -511,7 +511,7 @@
       <div class="card p-5 space-y-3">
         <button type="button"
                 @click="abrirConfirmacao()"
-                :disabled="submitting || itens.length === 0 || !filialDestinoId || !observacao.trim()"
+                :disabled="submitting || itens.length === 0 || !filialDestinoId"
                 class="btn-primary w-full flex items-center justify-center gap-2">
           <svg x-show="submitting" class="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
             <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
@@ -528,15 +528,59 @@
           <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
           </svg>
-          Cancelar
+          Voltar
         </a>
       </div>
+
+      <template x-if="transferenciaLateral">
+        <div class="card p-5 space-y-3">
+          <div>
+            <h3 class="text-xs font-semibold uppercase tracking-widest"
+                :style="temaClaro ? 'color:#6b7280;' : 'color:#9ca3af;'">
+              Última transferência
+            </h3>
+            <p class="text-sm font-semibold mt-2"
+               :style="temaClaro ? 'color:#111827;' : 'color:#f1f5f9;'"
+               x-text="transferenciaLateral.filial_destino_nome"></p>
+            <p class="text-xs mt-1"
+               :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'"
+               x-text="transferenciaLateral.data"></p>
+            <p x-show="transferenciaLateral._erro"
+               class="text-xs mt-2 font-semibold text-red-500"
+               x-text="transferenciaLateral._erro"></p>
+          </div>
+
+          <button type="button"
+                  x-show="transferenciaLateral.pode_emitir_nota"
+                  @click="emitirNotaPendente(transferenciaLateral)"
+                  :disabled="transferenciaLateral._processando"
+                  class="btn-primary w-full flex items-center justify-center gap-2">
+            <span x-text="transferenciaLateral._processando === 'emitir' ? 'Emitindo...' : (transferenciaLateral.nota ? 'Reemitir NF-e' : 'Emitir NF-e')"></span>
+          </button>
+
+          <button type="button"
+                  x-show="transferenciaLateral.pode_cancelar_nota"
+                  @click="cancelarNotaPendente(transferenciaLateral)"
+                  :disabled="transferenciaLateral._processando"
+                  class="btn-secondary w-full flex items-center justify-center gap-2">
+            <span x-text="transferenciaLateral._processando === 'cancelar_nota' ? 'Cancelando...' : 'Cancelar NF-e'"></span>
+          </button>
+
+          <button type="button"
+                  x-show="transferenciaLateral.pode_cancelar_transferencia"
+                  @click="cancelarTransferenciaPendente(transferenciaLateral)"
+                  :disabled="transferenciaLateral._processando"
+                  class="btn-secondary w-full flex items-center justify-center gap-2">
+            <span x-text="transferenciaLateral._processando === 'cancelar_transferencia' ? 'Cancelando...' : 'Cancelar transferência'"></span>
+          </button>
+        </div>
+      </template>
 
     </div>
   </div>
 
   <!-- ════ Transferências recentes ════ -->
-  <div class="card p-5 space-y-4" x-show="pendentesNota.length > 0" x-cloak>
+  <div class="hidden" x-show="pendentesNota.length > 0" x-cloak>
     <div class="flex items-center gap-2">
       <svg class="w-5 h-5 flex-shrink-0" fill="none" stroke="#f59e0b" viewBox="0 0 24 24">
         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
@@ -909,10 +953,17 @@ function transferenciaLojaApp(filiais, motoristas, veiculos) {
 
     // Transferências recentes
     pendentesNota: [],
+    transferenciaLateral: null,
     pendentesErro: '',
     isAdmin: false,
 
     init() {
+      const destinoPreferencial = this.filiais.find(
+        filial => String(filial.label || '').toUpperCase().includes('SABORAFRUTA')
+      ) || (this.filiais.length === 1 ? this.filiais[0] : null);
+      if (destinoPreferencial) {
+        this.filialDestinoId = String(destinoPreferencial.id);
+      }
       this.carregarPendentesNota();
       this.carregarCatalogo();
     },
@@ -959,6 +1010,9 @@ function transferenciaLojaApp(filiais, motoristas, veiculos) {
     async adicionarProdutoRapido(produto) {
       await this.selecionarProduto(produto);
       this.itemQuantidade = '1';
+      if (!produto.controla_lote) {
+        this.adicionarItem();
+      }
     },
 
     async carregarPendentesNota() {
@@ -967,8 +1021,14 @@ function transferenciaLojaApp(filiais, motoristas, veiculos) {
         const data = await res.json();
         this.isAdmin = !!data.is_admin;
         this.pendentesNota = (data.pendentes || []).map(g => ({ ...g, _processando: false, _erro: '' }));
+        this.transferenciaLateral = this.pendentesNota.find(
+          grupo => grupo.pode_emitir_nota
+            || grupo.pode_cancelar_nota
+            || grupo.pode_cancelar_transferencia
+        ) || null;
       } catch (e) {
         this.pendentesNota = [];
+        this.transferenciaLateral = null;
       }
     },
 
@@ -1076,7 +1136,6 @@ function transferenciaLojaApp(filiais, motoristas, veiculos) {
       this.erroGeral = '';
       if (!this.filialDestinoId) { this.erroGeral = 'Selecione a loja de destino.'; return; }
       if (this.itens.length === 0) { this.erroGeral = 'Adicione ao menos um produto.'; return; }
-      if (!this.observacao.trim()) { this.erroGeral = 'Informe a observação.'; return; }
       this.showModalNota = true;
     },
 
@@ -1168,7 +1227,7 @@ function transferenciaLojaApp(filiais, motoristas, veiculos) {
               </div>
               <div class="box">
                 <label>Observação</label>
-                <span>${this.escaparHtml(this.observacao)}</span>
+                <span>${this.escaparHtml(this.observacao || 'Não informada')}</span>
               </div>
               <div class="box">
                 <label>Documento previsto</label>
@@ -1310,7 +1369,6 @@ function transferenciaLojaApp(filiais, motoristas, veiculos) {
       this.erroGeral = '';
       if (!this.filialDestinoId) { this.erroGeral = 'Selecione a loja de destino.'; return; }
       if (this.itens.length === 0) { this.erroGeral = 'Adicione ao menos um produto.'; return; }
-      if (!this.observacao.trim()) { this.erroGeral = 'Informe a observação.'; return; }
       if (gerarNota && this.gerarMdfe && (!this.motoristaId || !this.veiculoId || !(parseFloat(this.pesoBruto) > 0))) {
         this.erroGeral = 'Para emitir o MDF-e, selecione motorista, veículo e informe o peso bruto.';
         return;

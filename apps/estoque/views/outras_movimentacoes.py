@@ -817,7 +817,10 @@ class TransferenciaLojaApiView(PermissaoRequiredMixin, View):
             return JsonResponse({'erro': 'JSON inválido.'}, status=400)
 
         filial_destino_id = body.get('filial_destino_id')
-        observacao = (body.get('observacao') or '').strip()
+        observacao = (
+            (body.get('observacao') or '').strip()
+            or 'Transferência entre filiais'
+        )
         itens = body.get('itens', [])
         gerar_nota = bool(body.get('gerar_nota'))
         gerar_mdfe = gerar_nota and bool(body.get('gerar_mdfe', True))
@@ -827,9 +830,6 @@ class TransferenciaLojaApiView(PermissaoRequiredMixin, View):
             return JsonResponse({'erro': 'Selecione a loja de destino.'}, status=400)
         if not itens:
             return JsonResponse({'erro': 'Adicione ao menos um produto.'}, status=400)
-        if not observacao:
-            return JsonResponse({'erro': 'Informe a justificativa.'}, status=400)
-
         filial = request.filial_ativa
         empresa = request.user.empresa
 
