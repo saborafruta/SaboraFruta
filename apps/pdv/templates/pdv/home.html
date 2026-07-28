@@ -2631,6 +2631,7 @@ function pdv() {
     },
 
     modo: 'venda', horaAtual: '', toast: { show:false, msg:'', tipo:'ok' }, _tt: null,
+    _atalhosRegistrados: false,
     modalEstoque: { show: false, msg: '', itens: [] },
     modalFiscal: { show:false, tipo:'', vendaId:null, carregando:false, pendencias:[], avisos:[], erro:'', permiteContingencia:false },
     modalInformacaoFiscal: { show:false, tipo:'', vendaId:null },
@@ -4018,6 +4019,8 @@ ${pgtoHtml ? `<hr class="sep">${pgtoHtml}` : ''}
     },
 
     registrarAtalhos() {
+      if (this._atalhosRegistrados) return;
+      this._atalhosRegistrados = true;
       document.addEventListener('keydown', e => {
         if (e.key==='F2'&&!e.shiftKey) { e.preventDefault(); document.getElementById('barcode-input')?.focus(); document.getElementById('barcode-input')?.select(); }
         if (e.key==='F2'&&e.shiftKey) { e.preventDefault(); this.buscaAvancada(); }
