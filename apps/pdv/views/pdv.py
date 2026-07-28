@@ -914,6 +914,7 @@ def api_historico(request):
     )
     vendas = []
     for v in qs:
+        documento = obter_documento_fiscal(v)
         vendas.append({
             "id": v.id,
             "numero_venda": v.numero_venda,
@@ -922,6 +923,8 @@ def api_historico(request):
             "data_venda": v.data_venda.isoformat(),
             "delivery": v.delivery,
             "qtd_itens": v.itens.count(),
+            "documento_fiscal_status": documento.status if documento else "",
+            "documento_fiscal_tipo": documento.tipo_documento if documento else "",
         })
     return JsonResponse({"vendas": vendas})
 

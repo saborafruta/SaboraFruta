@@ -38,6 +38,8 @@
     --pdv-tanon:   #5a5a7a;
     --pdv-tavatar: #4a4a6a;
     --pdv-scroll:  #2a2a3e;
+    --pdv-focus:   #3b82f6;
+    --pdv-focus-ring: rgba(59,130,246,.22);
   }
   /* Tema claro — mesma paleta do ERP (erp-tema=claro) */
   html.tema-claro {
@@ -74,6 +76,8 @@
     --pdv-tanon:   #9ca3af;
     --pdv-tavatar: #9ca3af;
     --pdv-scroll:  #cbd5e1;
+    --pdv-focus:   #2563eb;
+    --pdv-focus-ring: rgba(37,99,235,.20);
   }
 
   *, *::before, *::after { box-sizing: border-box; }
@@ -119,11 +123,11 @@
                 justify-content:center; gap:5px; }
   .input-pdv { width:100%;padding:9px 12px;background:var(--pdv-bg);border:1px solid var(--pdv-bd);border-radius:8px;color:var(--pdv-t1);font-size:13px;outline:none;transition:.15s; }
   #pdv-app :is(button, a, input, select, textarea, [tabindex]):focus-visible {
-    outline:2px solid #f15a24 !important;
+    outline:2px solid var(--pdv-focus) !important;
     outline-offset:2px !important;
-    box-shadow:0 0 0 3px rgba(241,90,36,.18);
+    box-shadow:0 0 0 3px var(--pdv-focus-ring);
   }
-  .input-pdv:focus { border-color:#f15a24; }
+  .input-pdv:focus { border-color:var(--pdv-focus); }
   .tipo-pill { flex:1;padding:7px 0;border:1px solid var(--pdv-bd);border-radius:7px;font-size:12px;font-weight:700;cursor:pointer;transition:.15s;background:transparent;color:var(--pdv-tmuted); }
   .tipo-pill.active { background:#f15a24;color:#fff;border-color:#f15a24; }
 
@@ -157,7 +161,7 @@
     border-radius:9px;color:var(--pdv-t1);font-size:13px;font-weight:600;
     outline:none;transition:.15s;letter-spacing:.03em;font-family:inherit;
   }
-  .barcode-input:focus { border-color:#f15a24; }
+  .barcode-input:focus { border-color:var(--pdv-focus); }
 
   /* Chips do topbar (usuário e filial) */
   .topbar-chip {
@@ -2298,7 +2302,7 @@
          ? 'position:fixed;inset:0;z-index:55;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,.85);'
          : 'display:none;'"
        @keydown.escape.window="showModalHistorico=false">
-    <div style="width:100%;max-width:560px;max-height:88vh;background:#13131e;border:1px solid #2a2a3e;border-radius:16px;overflow:hidden;display:flex;flex-direction:column;">
+    <div style="width:100%;max-width:680px;max-height:88vh;background:#13131e;border:1px solid #2a2a3e;border-radius:16px;overflow:hidden;display:flex;flex-direction:column;">
       <div style="display:flex;align-items:center;justify-content:space-between;padding:18px 22px;border-bottom:1px solid #1e1e30;flex-shrink:0;">
         <div style="display:flex;align-items:center;gap:12px;">
           <div style="width:36px;height:36px;border-radius:9px;background:rgba(241,90,36,.15);border:1px solid rgba(241,90,36,.3);display:flex;align-items:center;justify-content:center;font-size:17px;">🕘</div>
@@ -2327,6 +2331,16 @@
               <div style="font-size:11px;color:#555;margin-top:1px;" x-text="new Date(v.data_venda).toLocaleString('pt-BR',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'})+' · '+v.qtd_itens+' itens'"></div>
             </div>
             <span style="font-size:15px;font-weight:800;color:#4ade80;" x-text="'R$ '+fmt(v.valor_total)"></span>
+            <button type="button"
+                    @click.stop="['autorizada','processando'].includes(v.documento_fiscal_status)
+                      ? toast_('A nota fiscal precisa ser cancelada ou concluir o processamento antes de trocar o cliente.','erro')
+                      : editarVendaHistorico(v, true)"
+                    :title="['autorizada','processando'].includes(v.documento_fiscal_status)
+                      ? 'Documento fiscal bloqueia a troca de cliente'
+                      : 'Trocar cliente desta venda'"
+                    style="display:flex;align-items:center;gap:5px;padding:7px 9px;background:#0d0d16;border:1px solid #2563eb;border-radius:8px;color:#60a5fa;font-size:11px;font-weight:700;cursor:pointer;white-space:nowrap;">
+              Trocar cliente
+            </button>
           </div>
         </template>
       </div>
@@ -3087,7 +3101,7 @@ function pdv() {
       w.document.write(html); w.document.close(); w.focus(); setTimeout(() => w.print(), 400);
     },
 
-    async editarVendaHistorico(c) {
+    async editarVendaHistorico(c, abrirCliente=false) {
       try {
         const r = await fetch('/pdv/api/venda/'+c.id+'/detalhe/');
         const d = await r.json();
@@ -3122,7 +3136,17 @@ function pdv() {
         this.vendaEdicaoOrigemId = c.id;
         this.vendaEdicaoOrigemNumero = c.numero_venda;
         this.recalcularTotais();
-        this.toast_('Venda #'+String(c.numero_venda).padStart(6,'0')+' carregada — edite e finalize. A original será cancelada ao confirmar.', 'ok');
+        this.showModalHistorico = false;
+        if (abrirCliente) {
+          this.clienteQuery = '';
+          this.clienteFoco = -1;
+          this.showModalCliente = true;
+          this.$nextTick(() => {
+            this.$refs.inputCliente?.focus();
+            this.buscarClientes('');
+          });
+        }
+        this.toast_('Venda #'+String(c.numero_venda).padStart(6,'0')+' carregada. Troque o cliente e finalize novamente.', 'ok');
       } catch { this.toast_('Erro ao carregar venda para edição', 'erro'); }
     },
 
@@ -4039,7 +4063,13 @@ ${pgtoHtml ? `<hr class="sep">${pgtoHtml}` : ''}
 
         if (!this.temModalAberto() && ['ArrowRight','ArrowDown','ArrowLeft','ArrowUp'].includes(e.key)) {
           e.preventDefault();
-          this.moverFocoTela(['ArrowRight','ArrowDown'].includes(e.key) ? 1 : -1);
+          this.moverFocoTela(e.key);
+          return;
+        }
+
+        if (e.key === 'Enter' && e.target?.matches?.('button:not([disabled]),a[href],[role="button"]')) {
+          e.preventDefault();
+          e.target.click();
           return;
         }
 
@@ -4077,7 +4107,7 @@ ${pgtoHtml ? `<hr class="sep">${pgtoHtml}` : ''}
       }
     },
 
-    moverFocoTela(direcao) {
+    moverFocoTela(tecla) {
       const root = document.getElementById('pdv-app');
       if (!root) return;
       const seletores = 'button:not([disabled]),a[href],input:not([disabled]),select:not([disabled]),textarea:not([disabled]),[tabindex]:not([tabindex="-1"])';
@@ -4086,12 +4116,68 @@ ${pgtoHtml ? `<hr class="sep">${pgtoHtml}` : ''}
         return el.offsetParent !== null && style.visibility !== 'hidden';
       });
       if (!elementos.length) return;
-      const atual = elementos.indexOf(document.activeElement);
-      const proximo = atual < 0
-        ? (direcao > 0 ? 0 : elementos.length - 1)
-        : (atual + direcao + elementos.length) % elementos.length;
-      elementos[proximo].focus();
-      elementos[proximo].scrollIntoView({ block:'nearest', inline:'nearest' });
+      const atual = document.activeElement;
+
+      if (atual?.id === 'barcode-input' && tecla === 'ArrowUp') {
+        const modoAtivo = root.querySelector('.mode-btn[class*="act-"]') || root.querySelector('.mode-btn');
+        if (modoAtivo) {
+          modoAtivo.focus();
+          modoAtivo.scrollIntoView({ block:'nearest', inline:'nearest' });
+          return;
+        }
+      }
+
+      if (atual?.classList?.contains('mode-btn')) {
+        const modos = Array.from(root.querySelectorAll('.mode-btn')).filter(el => el.offsetParent !== null);
+        const indice = modos.indexOf(atual);
+        if (['ArrowLeft','ArrowRight'].includes(tecla) && indice >= 0) {
+          const passo = tecla === 'ArrowRight' ? 1 : -1;
+          const destino = modos[(indice + passo + modos.length) % modos.length];
+          destino.focus();
+          return;
+        }
+        if (tecla === 'ArrowDown') {
+          document.getElementById('barcode-input')?.focus();
+          return;
+        }
+      }
+
+      if (!atual || !elementos.includes(atual)) {
+        elementos[0].focus();
+        return;
+      }
+
+      const origem = atual.getBoundingClientRect();
+      const ox = origem.left + origem.width / 2;
+      const oy = origem.top + origem.height / 2;
+      const candidatos = elementos
+        .filter(el => el !== atual)
+        .map(el => {
+          const rect = el.getBoundingClientRect();
+          const dx = rect.left + rect.width / 2 - ox;
+          const dy = rect.top + rect.height / 2 - oy;
+          const vertical = tecla === 'ArrowUp' || tecla === 'ArrowDown';
+          const sentidoValido = tecla === 'ArrowRight' ? dx > 1
+            : tecla === 'ArrowLeft' ? dx < -1
+            : tecla === 'ArrowDown' ? dy > 1
+            : dy < -1;
+          if (!sentidoValido) return null;
+
+          const principal = vertical ? Math.abs(dy) : Math.abs(dx);
+          const cruzado = vertical ? Math.abs(dx) : Math.abs(dy);
+          const sobrepoeEixo = vertical
+            ? rect.right >= origem.left && rect.left <= origem.right
+            : rect.bottom >= origem.top && rect.top <= origem.bottom;
+          const pontuacao = principal + cruzado * (sobrepoeEixo ? 0.15 : 1.8);
+          return { el, pontuacao };
+        })
+        .filter(Boolean)
+        .sort((a, b) => a.pontuacao - b.pontuacao);
+
+      const destino = candidatos[0]?.el;
+      if (!destino) return;
+      destino.focus();
+      destino.scrollIntoView({ block:'nearest', inline:'nearest' });
     },
 
     fmt(v) { return parseFloat(v||0).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2}); },

@@ -31,10 +31,13 @@ def validar_venda_editavel(venda: VendaPDV) -> None:
             "Esta venda não pode ser editada (já está cancelada ou com outro status)."
         )
     documento = obter_documento_fiscal(venda)
-    if documento and documento.status == StatusDocumentoFiscal.AUTORIZADA:
+    if documento and documento.status in (
+        StatusDocumentoFiscal.AUTORIZADA,
+        StatusDocumentoFiscal.PROCESSANDO,
+    ):
         raise DadosInvalidosError(
-            "Esta venda tem NF-e/NFC-e autorizada. Cancele o documento fiscal "
-            "antes de editar a venda."
+            "Esta venda tem NF-e/NFC-e autorizada ou em processamento. "
+            "Conclua ou cancele o documento fiscal antes de editar a venda."
         )
 
 
