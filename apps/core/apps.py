@@ -7,6 +7,7 @@ class CoreConfig(AppConfig):
     verbose_name = 'Core'
 
     def ready(self):
+        from . import db_lookups  # noqa: F401
         from . import signals  # noqa
         from .models import Empresa, Filial, PerfilAcesso, Permissao, Usuario
         from .signals import register_for_audit

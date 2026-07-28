@@ -17,6 +17,7 @@ from apps.cadastros.models import Cliente, Fornecedor, Motorista, Veiculo
 from apps.core.models import Filial
 from apps.core.services.exceptions import DomainError
 from apps.core.services.permissions import PERMISSION_DENIED_MESSAGE, PermissaoRequiredMixin
+from apps.core.services.search import normalize_search_text, ranked_search_ids
 from apps.estoque.forms.outras_movimentacoes import DevolucaoClienteForm, DevolucaoFornecedorForm, SaidaEspecialForm
 from apps.estoque.models import Estoque, LoteProduto, MovimentacaoEstoque
 from apps.estoque.services.movimentacao_service import MovimentacaoService
@@ -368,22 +369,41 @@ class ProdutoEstoqueSearchJsonView(PermissaoRequiredMixin, View):
             qs = Produto.objects.for_filial(filial).filter(ativo=True)
         else:
             qs = Produto.objects.filter(ativo=True)
+        ranked_ids = None
         if len(q) >= 2 or q.isdigit() or (browse and q):
-            filtro = (
-                db_models.Q(descricao__icontains=q)
-                | db_models.Q(descricao_curta__icontains=q)
-                | db_models.Q(codigo__icontains=q)
-                | db_models.Q(codigo_barras__icontains=q)
+            for term in normalize_search_text(q).split():
+                term_filter = (
+                    db_models.Q(descricao__icontains=term)
+                    | db_models.Q(codigo__icontains=term)
+                    | db_models.Q(codigo_barras__icontains=term)
+                )
+                if term.isdigit():
+                    term_filter |= db_models.Q(pk=int(term))
+                qs = qs.filter(term_filter)
+
+            ranked_ids = ranked_search_ids(
+                qs.values('pk', 'descricao', 'codigo', 'codigo_barras'),
+                q,
+                name_fields=('descricao',),
+                code_fields=('codigo', 'codigo_barras'),
+                limit=40,
             )
-            if q.isdigit():
-                filtro |= db_models.Q(pk=int(q))
-            qs = qs.filter(filtro)
+            qs = qs.filter(pk__in=ranked_ids)
         elif not browse:
             qs = qs.none()
 
-        produtos = list(
-            qs.select_related('unidade_medida').order_by('descricao').distinct()[:40]
-        )
+        if ranked_ids is not None:
+            products_by_id = {
+                produto.pk: produto
+                for produto in qs.select_related('unidade_medida').distinct()
+            }
+            produtos = [
+                products_by_id[pk] for pk in ranked_ids if pk in products_by_id
+            ]
+        else:
+            produtos = list(
+                qs.select_related('unidade_medida').order_by('descricao').distinct()[:40]
+            )
         saldos = {
             produto_id: float(quantidade or 0)
             for produto_id, quantidade in Estoque.objects.filter(

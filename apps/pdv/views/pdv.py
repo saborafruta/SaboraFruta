@@ -12,6 +12,7 @@ from django.views.decorators.http import require_GET, require_POST
 
 from apps.core.services.exceptions import DadosInvalidosError, EstoqueInsuficienteError
 from apps.core.services.permissions import requer_permissao
+from apps.core.services.search import normalize_search_text, ranked_search_ids
 from apps.financeiro.models import FormaPagamento, TaxaParcelamento
 from apps.financeiro.constants.enums import TipoFormaPagamento
 from apps.fiscal.integrations.focusnfe.exceptions import FocusNFeNetworkError, FocusNFeServerError
@@ -144,23 +145,44 @@ def buscar_produto(request):
     linha_id = request.GET.get("linha")
     filial = request.filial_ativa
     qs = Produto.objects.for_filial(filial).filter(ativo=True)
-    if q:
-        # Casa pelo NOME QUE O VENDEDOR VE (descricao_pdv quando preenchido;
-        # senao descricao). Buscar sempre em `descricao` traria falsos
-        # positivos quando esse campo tem texto generico/poluido de
-        # importacao, exibindo produtos com nome diferente do buscado.
-        filtro = (
-            Q(descricao_pdv__icontains=q)
-            | (Q(descricao_pdv="") & Q(descricao__icontains=q))
-            | Q(codigo__icontains=q)
-            | Q(codigo_barras__icontains=q)
-        )
-        if q.isdigit():
-            filtro |= Q(pk=int(q))
-        qs = qs.filter(filtro)
     if linha_id:
         qs = qs.filter(linha_producao_id=linha_id)
-    produtos = list(qs.select_related("linha_producao")[:20])
+
+    if q:
+        for term in normalize_search_text(q).split():
+            term_filter = (
+                Q(descricao_pdv__icontains=term)
+                | (Q(descricao_pdv='') & Q(descricao__icontains=term))
+                | Q(codigo__icontains=term)
+                | Q(codigo_barras__icontains=term)
+            )
+            if term.isdigit():
+                term_filter |= Q(pk=int(term))
+            qs = qs.filter(term_filter)
+
+        candidates = (
+            {
+                **candidate,
+                'nome_visivel': candidate['descricao_pdv'] or candidate['descricao'],
+            }
+            for candidate in qs.values(
+                'pk', 'descricao', 'descricao_pdv', 'codigo', 'codigo_barras',
+            )
+        )
+        ranked_ids = ranked_search_ids(
+            candidates,
+            q,
+            name_fields=('nome_visivel',),
+            code_fields=('codigo', 'codigo_barras'),
+            limit=20,
+        )
+        products_by_id = {
+            produto.pk: produto
+            for produto in qs.filter(pk__in=ranked_ids).select_related('linha_producao')
+        }
+        produtos = [products_by_id[pk] for pk in ranked_ids if pk in products_by_id]
+    else:
+        produtos = list(qs.select_related('linha_producao').order_by('descricao')[:20])
     data = []
     hoje = tz.localdate()
     for p in produtos:
