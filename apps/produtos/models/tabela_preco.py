@@ -1,4 +1,6 @@
 """Tabelas de Preço com vigência e preço escalonado."""
+from decimal import Decimal
+
 from django.db import models
 
 from apps.core.models.base import FilialManager, FilialScopedModel, TimestampedModel
@@ -93,3 +95,14 @@ class ItemTabelaPreco(TimestampedModel):
         db_table = 'itens_tabela_preco'
         unique_together = [('tabela', 'produto', 'quantidade_minima')]
         ordering = ['produto', 'quantidade_minima']
+
+    @property
+    def valor_final(self):
+        """
+        Preço efetivamente cobrado: o unitário já com o desconto em R$
+        abatido. É este o valor que a venda usa — o `preco_unitario` é o
+        valor "cheio" de referência. Nunca fica negativo.
+        """
+        preco = self.preco_unitario or Decimal('0')
+        desconto = self.desconto_valor or Decimal('0')
+        return max(preco - desconto, Decimal('0'))

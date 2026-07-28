@@ -76,7 +76,8 @@ class PrecoService:
         if not item:
             return preco_padrao
 
-        preco = item.preco_unitario
+        # valor_final = preço unitário já com o desconto em R$ abatido.
+        preco = item.valor_final
         if tabela.acrescimo_percentual:
             preco *= Decimal('1') + (tabela.acrescimo_percentual / Decimal('100'))
         return {
@@ -746,7 +747,8 @@ class PrecoService:
         if not item:
             return produto.preco_atual
 
-        preco = item.preco_unitario
+        # valor_final = preço unitário já com o desconto em R$ abatido.
+        preco = item.valor_final
         if tabela.acrescimo_percentual:
             preco = preco * (1 + tabela.acrescimo_percentual / 100)
         return preco
