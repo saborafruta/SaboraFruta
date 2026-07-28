@@ -1,3 +1,11 @@
-from .recompra import AlertasRecompraView, RecompraRecalcularView
+from .recompra import (
+    AlertasRecompraView,
+    RecompraFaixasSalvarView,
+    RecompraRecalcularView,
+)
 
-__all__ = ['AlertasRecompraView', 'RecompraRecalcularView']
+__all__ = [
+    'AlertasRecompraView',
+    'RecompraFaixasSalvarView',
+    'RecompraRecalcularView',
+]

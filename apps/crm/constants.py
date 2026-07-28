@@ -23,6 +23,11 @@ FAIXA_SEMANAL = (6, 8)
 FAIXA_QUINZENAL = (13, 17)
 FAIXA_MENSAL = (28, 32)
 
+# Cards de padrão de recompra na tela de alertas. Os quatro primeiros são
+# fixos; os três últimos o usuário ajusta no próprio card.
+FAIXAS_CARD_FIXAS = [7, 14, 21, 30]
+FAIXAS_CARD_PERSONALIZADAS_PADRAO = [90, 120, 360]
+
 # Dias de antecedência em que o alerta passa de verde para amarelo.
 DIAS_ALERTA_AMARELO = 3
 

@@ -1,6 +1,11 @@
 from django.contrib import admin
 
-from .models import RecompraCliente, RecompraControle
+from .models import ConfiguracaoFaixasRecompra, RecompraCliente, RecompraControle
+
+
+@admin.register(ConfiguracaoFaixasRecompra)
+class ConfiguracaoFaixasRecompraAdmin(admin.ModelAdmin):
+    list_display = ('filial', 'faixa_5_dias', 'faixa_6_dias', 'faixa_7_dias')
 
 
 @admin.register(RecompraCliente)

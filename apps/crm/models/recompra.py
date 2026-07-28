@@ -121,6 +121,33 @@ class RecompraCliente(FilialScopedModel):
         return digitos
 
 
+class ConfiguracaoFaixasRecompra(TimestampedModel):
+    """
+    Os três últimos cards de padrão de recompra da tela de alertas, que o
+    usuário ajusta direto no card. Os quatro primeiros (7/14/21/30 dias)
+    são fixos e vivem em `constants.FAIXAS_CARD_FIXAS`.
+    """
+
+    filial = models.OneToOneField(
+        'core.Filial', on_delete=models.CASCADE, related_name='faixas_recompra',
+    )
+    faixa_5_dias = models.PositiveIntegerField(default=90)
+    faixa_6_dias = models.PositiveIntegerField(default=120)
+    faixa_7_dias = models.PositiveIntegerField(default=360)
+
+    class Meta:
+        db_table = 'crm_faixas_recompra'
+        verbose_name = 'Faixas de Recompra da Filial'
+        verbose_name_plural = 'Faixas de Recompra das Filiais'
+
+    def __str__(self):
+        return f'{self.filial}: {self.faixa_5_dias}/{self.faixa_6_dias}/{self.faixa_7_dias} dias'
+
+    @property
+    def personalizadas(self) -> list[int]:
+        return [self.faixa_5_dias, self.faixa_6_dias, self.faixa_7_dias]
+
+
 class RecompraControle(TimestampedModel):
     """
     Controle de quando a empresa teve o último recálculo em lote.

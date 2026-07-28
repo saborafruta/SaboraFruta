@@ -57,6 +57,115 @@
     </div>
   </div>
 
+  <!-- Cards por padrão de recompra -->
+  <div>
+    <div class="flex items-baseline justify-between gap-3 mb-2">
+      <h3 class="text-sm font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">Padrão de recompra</h3>
+      <span class="text-xs" :style="temaClaro ? 'color:#94a3b8;' : 'color:#64748b;'">Clique num card para ver os clientes</span>
+    </div>
+
+    <form method="post" action="{% url 'crm:recompra-faixas' %}" id="form-faixas">
+      {% csrf_token %}
+      <div class="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-3">
+        {% for fx in faixas %}
+        <div x-data="{ aberto: false }" class="card p-4" style="cursor:pointer;position:relative;"
+             @click="aberto = true">
+
+          <div class="flex items-baseline justify-between gap-1">
+            {% if fx.editavel %}
+              <div class="flex items-baseline gap-1" @click.stop>
+                <input type="number" name="faixa_{{ fx.indice|add:1 }}" value="{{ fx.dias }}"
+                       min="1" max="3650"
+                       @change="document.getElementById('form-faixas').submit()"
+                       class="text-lg font-bold rounded px-1 py-0 border"
+                       style="width:62px;"
+                       :style="temaClaro ? 'background:#fff;color:#111827;border-color:#d1d5db;' : 'background:#1e1e22;color:#f8fafc;border-color:#3a3a3e;'">
+                <span class="text-xs" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">dias</span>
+              </div>
+            {% else %}
+              <p class="text-lg font-bold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
+                {{ fx.dias }} <span class="text-xs font-medium" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">dias</span>
+              </p>
+            {% endif %}
+          </div>
+
+          <p class="text-2xl font-bold mt-2" style="color:#22c55e;">{{ fx.total }}</p>
+          <p class="text-[11px] mt-0.5" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+            cliente{{ fx.total|pluralize }}
+          </p>
+
+          {% if fx.em_atraso %}
+            <span class="inline-block mt-2 text-[10px] font-bold px-2 py-0.5 rounded-full"
+                  style="background:rgba(239,68,68,.12);color:#f87171;border:1px solid rgba(239,68,68,.3);">
+              {{ fx.em_atraso }} em atraso
+            </span>
+          {% else %}
+            <span class="inline-block mt-2 text-[10px]" :style="temaClaro ? 'color:#94a3b8;' : 'color:#64748b;'">nenhum atrasado</span>
+          {% endif %}
+
+          <!-- Modal com os clientes da faixa -->
+          <div x-cloak x-show="aberto" @click.self="aberto = false" @keydown.escape.window="aberto = false"
+               style="position:fixed;inset:0;z-index:70;display:flex;align-items:center;justify-content:center;padding:18px;background:rgba(0,0,0,.68);backdrop-filter:blur(3px);cursor:default;">
+            <div @click.stop
+                 style="width:100%;max-width:720px;max-height:78vh;overflow:hidden;border-radius:14px;background:#16161a;border:1px solid #30303a;box-shadow:0 24px 70px rgba(0,0,0,.55);">
+              <div style="padding:18px 20px;border-bottom:1px solid #2a2a32;display:flex;align-items:flex-start;justify-content:space-between;gap:14px;">
+                <div>
+                  <h4 style="font-size:16px;font-weight:800;color:#f8fafc;margin:0 0 4px;">Compram a cada ~{{ fx.dias }} dias</h4>
+                  <p style="font-size:12px;color:#9ca3af;margin:0;">
+                    {{ fx.total }} cliente{{ fx.total|pluralize }}
+                    {% if fx.em_atraso %} &middot; <span style="color:#f87171;">{{ fx.em_atraso }} em atraso</span>{% endif %}
+                  </p>
+                </div>
+                <button type="button" @click="aberto = false"
+                        style="width:32px;height:32px;border-radius:8px;border:1px solid #343442;background:#1f1f28;color:#cbd5e1;cursor:pointer;font-size:18px;line-height:1;">x</button>
+              </div>
+
+              <div style="max-height:60vh;overflow:auto;padding:6px 0;">
+                {% for r in fx.clientes %}
+                <div style="display:grid;grid-template-columns:minmax(0,1fr) auto;gap:12px;padding:11px 20px;border-bottom:1px solid #24242c;">
+                  <div style="min-width:0;">
+                    <div style="font-size:13px;font-weight:800;color:#f3f4f6;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">
+                      {% if r.status == 'vermelho' %}🔴{% elif r.status == 'amarelo' %}🟡{% else %}🟢{% endif %}
+                      {{ r.cliente.nome_display }}
+                    </div>
+                    <div style="font-size:11px;color:#8b8b9a;margin-top:3px;">
+                      {% if r.status == 'vermelho' %}
+                        {{ r.dias_atraso }} dia{{ r.dias_atraso|pluralize }} de atraso
+                      {% elif r.dias_restantes == 0 %}
+                        previsão para hoje
+                      {% else %}
+                        previsão em {{ r.dias_restantes }} dia{{ r.dias_restantes|pluralize }}
+                      {% endif %}
+                      &middot; última compra {{ r.ultima_compra|date:"d/m/Y" }}
+                    </div>
+                  </div>
+                  <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;justify-content:flex-end;">
+                    <span style="font-size:11px;color:#86efac;background:rgba(34,197,94,.1);border-radius:999px;padding:3px 8px;white-space:nowrap;">R$ {{ r.valor_medio|floatformat:2 }}</span>
+                    {% if r.cliente.celular or r.cliente.telefone %}
+                      <span style="font-size:11px;color:#cbd5e1;background:#20202a;border-radius:999px;padding:3px 8px;white-space:nowrap;">{{ r.cliente.celular|default:r.cliente.telefone }}</span>
+                    {% endif %}
+                    <a href="{% url 'cadastros:cliente-update' r.cliente_id %}" style="font-size:11px;color:#60a5fa;font-weight:700;text-decoration:none;">Ver</a>
+                    {% if r.telefone_whatsapp %}
+                      <a href="https://wa.me/{{ r.telefone_whatsapp }}" target="_blank" rel="noopener"
+                         style="font-size:11px;color:#22c55e;font-weight:700;text-decoration:none;">WhatsApp</a>
+                    {% endif %}
+                  </div>
+                </div>
+                {% empty %}
+                <div style="padding:28px 20px;text-align:center;color:#8b8b9a;font-size:13px;">
+                  Nenhum cliente com esse padrão de recompra.
+                </div>
+                {% endfor %}
+              </div>
+            </div>
+          </div>
+
+        </div>
+        {% endfor %}
+      </div>
+    </form>
+  </div>
+
   <!-- Filtros -->
   <form method="get" class="card p-5 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 items-end">
     <label class="block text-sm lg:col-span-2">

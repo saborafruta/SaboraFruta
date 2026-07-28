@@ -97,6 +97,8 @@ class AlertasRecompraView(PermissaoRequiredMixin, View):
         # vence quem compra mais alto e com mais regularidade.
         qs = qs.order_by('-score', 'dias_restantes')
 
+        faixas, faixas_personalizadas = self._montar_faixas(filial, qs)
+
         paginator = Paginator(qs, 50)
         page_obj = paginator.get_page(request.GET.get('page', 1))
 
@@ -114,6 +116,8 @@ class AlertasRecompraView(PermissaoRequiredMixin, View):
             'title': 'Alertas de Recompra',
             'page_obj': page_obj,
             'kpis': kpis,
+            'faixas': faixas,
+            'faixas_personalizadas': faixas_personalizadas,
             'filtros': f,
             'total_resultados': paginator.count,
             'querystring': querystring.urlencode(),
@@ -134,6 +138,92 @@ class AlertasRecompraView(PermissaoRequiredMixin, View):
             'status_choices': RecompraCliente.Status.choices,
             'hoje': timezone.localdate(),
         })
+
+
+    @staticmethod
+    def _montar_faixas(filial, qs):
+        """
+        Distribui os clientes nos 7 cards de padrão de recompra.
+
+        Cada card tem um alvo em dias (7, 14, 21, 30 + os três que o usuário
+        configura) e o cliente cai no card cujo alvo está mais próximo da sua
+        média de intervalo — assim os grupos se reajustam sozinhos quando os
+        valores personalizados mudam, sem faixas fixas que deixariam buracos.
+        Clientes sem padrão suficiente ficam de fora dos cards (aparecem só
+        na tabela abaixo).
+        """
+        from apps.crm import constants as c
+        from apps.crm.models import ConfiguracaoFaixasRecompra, RecompraCliente
+
+        config, _ = ConfiguracaoFaixasRecompra.objects.get_or_create(filial=filial)
+        personalizadas = config.personalizadas
+        alvos = c.FAIXAS_CARD_FIXAS + personalizadas
+
+        faixas = [
+            {
+                'indice': i,
+                'dias': alvo,
+                'editavel': i >= len(c.FAIXAS_CARD_FIXAS),
+                'clientes': [],
+                'total': 0,
+                'em_atraso': 0,
+                'valor_medio_total': Decimal('0'),
+            }
+            for i, alvo in enumerate(alvos)
+        ]
+
+        com_padrao = qs.exclude(frequencia=RecompraCliente.Frequencia.SEM_PADRAO)
+        for r in com_padrao:
+            media = float(r.media_intervalo_dias or 0)
+            if media <= 0:
+                continue
+            # Índice do alvo mais próximo da média do cliente.
+            idx = min(range(len(alvos)), key=lambda i: abs(alvos[i] - media))
+            faixa = faixas[idx]
+            faixa['total'] += 1
+            faixa['valor_medio_total'] += r.valor_medio or Decimal('0')
+            if r.status == RecompraCliente.Status.VERMELHO:
+                faixa['em_atraso'] += 1
+            # A lista do modal mostra os mais prioritários primeiro; o qs já
+            # vem ordenado por score.
+            if len(faixa['clientes']) < 100:
+                faixa['clientes'].append(r)
+
+        return faixas, personalizadas
+
+
+class RecompraFaixasSalvarView(PermissaoRequiredMixin, View):
+    """Salva os dias dos três cards personalizáveis (editados no próprio card)."""
+
+    permissao_modulo = 'crm'
+    permissao_acao = 'ver'
+
+    def post(self, request):
+        from apps.crm.models import ConfiguracaoFaixasRecompra
+
+        config, _ = ConfiguracaoFaixasRecompra.objects.get_or_create(filial=request.filial_ativa)
+        campos = {'5': 'faixa_5_dias', '6': 'faixa_6_dias', '7': 'faixa_7_dias'}
+
+        alterados = []
+        for chave, campo in campos.items():
+            bruto = request.POST.get(f'faixa_{chave}', '').strip()
+            if not bruto:
+                continue
+            try:
+                dias = int(bruto)
+            except ValueError:
+                messages.error(request, 'Informe a quantidade de dias em números inteiros.')
+                return redirect(reverse('crm:recompra'))
+            if dias < 1 or dias > 3650:
+                messages.error(request, 'A quantidade de dias deve ficar entre 1 e 3650.')
+                return redirect(reverse('crm:recompra'))
+            setattr(config, campo, dias)
+            alterados.append(campo)
+
+        if alterados:
+            config.save(update_fields=alterados + ['updated_at'])
+            messages.success(request, 'Faixas de recompra atualizadas.')
+        return redirect(reverse('crm:recompra'))
 
 
 class RecompraRecalcularView(PermissaoRequiredMixin, View):
