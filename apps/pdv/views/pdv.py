@@ -1712,6 +1712,16 @@ def delivery_kanban(request):
         }
 
     filial = request.filial_ativa
+
+    # Mesma lógica de fallback de logo usada no resto do sistema (ver
+    # apps.core.context_processors.parametros_sistema): filial.imagem
+    # é um upload local (pode não existir mais em disco após um deploy,
+    # já que o storage do Railway é efêmero) -- por isso sempre manda
+    # também o logo_fallback_url (ParametrosSistema/Empresa), pronto
+    # para o onerror do <img> trocar de fonte caso a primeira falhe.
+    from apps.core.context_processors import parametros_sistema as _params_ctx
+    empresa_logo_url = _params_ctx(request).get('empresa_logo_url', '')
+
     filial_info = {
         'nome': filial.nome_fantasia or filial.razao_social,
         'cnpj': filial.cnpj,
@@ -1722,6 +1732,7 @@ def delivery_kanban(request):
         'uf': filial.uf,
         'telefone': filial.telefone,
         'logo_url': request.build_absolute_uri(filial.imagem.url) if filial.imagem else '',
+        'logo_fallback_url': empresa_logo_url or '',
     }
 
     return render(request, 'pdv/delivery_kanban.html', {

@@ -528,6 +528,20 @@
     }
   }
 
+  // Monta a tag <img> da logo com o mesmo fallback usado no resto do sistema:
+  // filial.imagem (upload local, pode ter sumido num deploy no Railway) ->
+  // empresa_logo_url (ParametrosSistema/Empresa) -> some se as duas falharem.
+  function logoImgHtml(f, styleAttr) {
+    const principal = f && f.logo_url;
+    const fallback = f && f.logo_fallback_url;
+    if (!principal && !fallback) return '';
+    const src = principal || fallback;
+    const onerror = principal && fallback
+      ? `this.onerror=null;this.src='${fallback}';`
+      : `this.style.display='none';`;
+    return `<img src="${src}" alt="Logo" style="${styleAttr}" onerror="${onerror}">`;
+  }
+
   function imprimirRelatorio(d) {
     const fmt = n => parseFloat(n || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
     const f = window.filialData || {};
@@ -562,7 +576,7 @@
           <h1>${f.nome || 'Relatório de Delivery'}</h1>
           <div class="sub">Período: ${d.periodo_label} — ${d.total_pedidos} pedido(s) — gerado em ${new Date().toLocaleString('pt-BR')}</div>
         </div>
-        ${f.logo_url ? '<img class="rel-logo" src="' + f.logo_url + '" alt="Logo">' : ''}
+        ${logoImgHtml(f, 'max-height:64px;max-width:220px;object-fit:contain;')}
       </div>
       <table><thead><tr>
         <th>Data</th><th>Pedido</th><th>Cliente</th><th>Status</th><th>Entregador</th><th>Pagamento</th><th style="text-align:right;">Valor</th>
@@ -610,6 +624,7 @@
     const f = window.filialData || {};
     if (!d) { alert('Dados do pedido não encontrados'); return; }
 
+    const logoHtml = logoImgHtml(f, 'max-height:64px;max-width:180px;object-fit:contain;');
     const fmt = n => parseFloat(n || 0).toFixed(2).replace('.', ',');
 
     let itensHtml = '';
@@ -668,7 +683,7 @@
         @media print { @page { margin:0; } body { padding:4px; } }
       </style>
     </head><body>
-      ${f.logo_url ? '<div class="center" style="margin-bottom:6px;"><img src="' + f.logo_url + '" style="max-height:64px;max-width:180px;object-fit:contain;" /></div>' : ''}
+      ${logoHtml ? '<div class="center" style="margin-bottom:6px;">' + logoHtml + '</div>' : ''}
       <div class="center" style="font-size:14px;font-weight:700;margin-bottom:2px;">${f.nome || ''}</div>
       ${cnpjFmt ? '<div class="center sub">CNPJ: ' + cnpjFmt + '</div>' : ''}
       ${filialEnd.trim() ? '<div class="center sub">' + filialEnd.trim() + '</div>' : ''}
