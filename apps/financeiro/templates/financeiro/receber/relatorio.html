@@ -71,16 +71,24 @@
   </div>
 
   <!-- Filtro por cliente -->
-  <form method="get" class="no-print flex flex-wrap items-end gap-3">
-    <div>
-      <label class="block text-xs mb-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Cliente / Doc.</label>
-      <input type="text" name="q" value="{{ q }}" placeholder="Buscar por cliente..." class="input-field" style="width:260px;">
+  <form method="get" class="no-print card p-4 grid grid-cols-1 md:grid-cols-12 gap-3">
+    <div class="md:col-span-8">
+      <input type="text" name="q" value="{{ q }}"
+             placeholder="Cliente ou nº do documento..."
+             class="form-input">
     </div>
     {% if status_filtro %}<input type="hidden" name="status" value="{{ status_filtro }}">{% endif %}
     {% if data_ini %}<input type="hidden" name="data_ini" value="{{ data_ini }}">{% endif %}
     {% if data_fim %}<input type="hidden" name="data_fim" value="{{ data_fim }}">{% endif %}
-    <button type="submit" class="btn-primary">Filtrar</button>
-    {% if q %}<a href="{% url 'financeiro:receber_relatorio' %}" class="btn-secondary">Limpar</a>{% endif %}
+    <div class="md:col-span-4 flex gap-2">
+      <button type="submit" class="btn-secondary w-full justify-center">Filtrar</button>
+      <a href="{% url 'financeiro:receber_relatorio' %}{% if status_filtro %}?status={{ status_filtro }}{% endif %}"
+         class="btn-secondary px-3 flex items-center justify-center" title="Limpar filtro">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+        </svg>
+      </a>
+    </div>
   </form>
 
   <!-- Um bloco por cliente -->
