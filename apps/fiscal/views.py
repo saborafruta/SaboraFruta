@@ -439,6 +439,18 @@ def _filtro_origem_documentos(queryset, origem):
             "devolucao_cliente",
             "devolucao_venda",
         ])
+    if origem == "devolucoes_fornecedores":
+        return queryset.filter(
+            origem_tipo__in=["devolucao_fornecedor", "devolucao_compra"]
+        )
+    if origem == "devolucoes_fabricantes":
+        return queryset.filter(
+            origem_tipo__in=["devolucao_fabricante", "devolucao_industria"]
+        )
+    if origem == "devolucoes_clientes":
+        return queryset.filter(
+            origem_tipo__in=["devolucao_cliente", "devolucao_venda"]
+        )
     if origem == "logistica":
         return queryset.filter(
             Q(origem_tipo__in=["cte", "mdfe"])

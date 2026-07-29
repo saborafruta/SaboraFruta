@@ -91,6 +91,9 @@
           <option value="vendas" {% if origem_export == 'vendas' %}selected{% endif %}>Vendas</option>
           <option value="transferencias" {% if origem_export == 'transferencias' %}selected{% endif %}>Transferências</option>
           <option value="devolucoes" {% if origem_export == 'devolucoes' %}selected{% endif %}>Devoluções</option>
+          <option value="devolucoes_fornecedores" {% if origem_export == 'devolucoes_fornecedores' %}selected{% endif %}>Devoluções a fornecedores</option>
+          <option value="devolucoes_fabricantes" {% if origem_export == 'devolucoes_fabricantes' %}selected{% endif %}>Devoluções a fabricantes</option>
+          <option value="devolucoes_clientes" {% if origem_export == 'devolucoes_clientes' %}selected{% endif %}>Devoluções de clientes</option>
           <option value="logistica" {% if origem_export == 'logistica' %}selected{% endif %}>Logística</option>
           <option value="servicos" {% if origem_export == 'servicos' %}selected{% endif %}>Serviços</option>
           <option value="outras" {% if origem_export == 'outras' %}selected{% endif %}>Outras saídas</option>
