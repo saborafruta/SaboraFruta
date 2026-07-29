@@ -33,6 +33,7 @@ urlpatterns = [
     path('outras-movimentacoes/transferencia-lojas/consultar-nfe/', views.TransferenciaConsultarNFeApiView.as_view(), name='transferencia-lojas-consultar-nfe'),
     path('outras-movimentacoes/transferencia-lojas/cancelar-nfe/', views.TransferenciaCancelarNFeApiView.as_view(), name='transferencia-lojas-cancelar-nfe'),
     path('outras-movimentacoes/transferencia-lojas/cancelar/', views.TransferenciaCancelarApiView.as_view(), name='transferencia-lojas-cancelar'),
+    path('outras-movimentacoes/transferencia-lojas/reativar/', views.TransferenciaReativarApiView.as_view(), name='transferencia-lojas-reativar'),
     path('outras-movimentacoes/transferencia-lojas/excluir/', views.TransferenciaExcluirApiView.as_view(), name='transferencia-lojas-excluir'),
     path('outras-movimentacoes/devolucao/api/', views.DevolucaoClienteApiView.as_view(), name='devolucao-cliente-api'),
     path('outras-movimentacoes/devolucao/venda/', views.VendaDevolucaoJsonView.as_view(), name='devolucao-venda-json'),

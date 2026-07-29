@@ -18,7 +18,8 @@ from .outras_movimentacoes import (
     TransferenciaLojaListView, TransferenciaLojaView, TransferenciaLojaApiView,
     TransferenciasPendentesNFeView, TransferenciaReemitirNFeApiView,
     TransferenciaConsultarNFeApiView,
-    TransferenciaCancelarNFeApiView, TransferenciaCancelarApiView, TransferenciaExcluirApiView,
+    TransferenciaCancelarNFeApiView, TransferenciaCancelarApiView,
+    TransferenciaReativarApiView, TransferenciaExcluirApiView,
 )
 
 __all__ = [
@@ -37,5 +38,6 @@ __all__ = [
     'TransferenciaLojaListView', 'TransferenciaLojaView', 'TransferenciaLojaApiView',
     'TransferenciasPendentesNFeView', 'TransferenciaReemitirNFeApiView',
     'TransferenciaConsultarNFeApiView',
-    'TransferenciaCancelarNFeApiView', 'TransferenciaCancelarApiView', 'TransferenciaExcluirApiView',
+    'TransferenciaCancelarNFeApiView', 'TransferenciaCancelarApiView',
+    'TransferenciaReativarApiView', 'TransferenciaExcluirApiView',
 ]

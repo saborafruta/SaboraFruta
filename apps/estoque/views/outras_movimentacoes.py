@@ -711,6 +711,7 @@ def _transferencias_para_listagem(filial, usuario, limite=500):
             tipo_operacao=MovimentacaoEstoque.TipoOperacao.TRANSFERENCIA_SAIDA,
         )
         .exclude(documento_numero__startswith='EST-')
+        .exclude(documento_numero__startswith='RAT-')
         .select_related(
             'produto',
             'produto__unidade_medida',
@@ -795,6 +796,9 @@ def _transferencias_para_listagem(filial, usuario, limite=500):
                 'pode_cancelar_nota': nota_ativa,
                 'pode_cancelar_transferencia': (
                     not mov.transferencia_cancelada and not nota_ativa
+                ),
+                'pode_reativar_transferencia': (
+                    mov.transferencia_cancelada and nota_ativa
                 ),
                 'pode_excluir': is_admin and not nota_ativa,
                 'itens': [],
@@ -1576,6 +1580,36 @@ class TransferenciaCancelarApiView(PermissaoRequiredMixin, View):
 
         try:
             cancelar_transferencia(documento_numero, filial, request.user)
+        except DomainError as exc:
+            return JsonResponse({'erro': str(exc)}, status=400)
+
+        return JsonResponse({'ok': True})
+
+
+class TransferenciaReativarApiView(PermissaoRequiredMixin, View):
+    """Reativa no estoque uma transferência estornada que possui NF-e ativa."""
+
+    permissao_modulo = 'estoque'
+    permissao_acao = 'criar'
+
+    def post(self, request):
+        from apps.estoque.services.transferencia_cancelamento import reativar_transferencia
+
+        try:
+            body = _json.loads(request.body)
+        except (ValueError, TypeError):
+            return JsonResponse({'erro': 'JSON inválido.'}, status=400)
+
+        documento_numero = (body.get('documento_numero') or '').strip()
+        if not documento_numero:
+            return JsonResponse({'erro': 'Transferência não informada.'}, status=400)
+
+        try:
+            reativar_transferencia(
+                documento_numero,
+                request.filial_ativa,
+                request.user,
+            )
         except DomainError as exc:
             return JsonResponse({'erro': str(exc)}, status=400)
 

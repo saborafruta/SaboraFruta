@@ -26,6 +26,10 @@ def _documento_estorno(documento_numero: str) -> str:
     return f'EST-{documento_numero}'[:20]
 
 
+def _documento_reativacao(documento_numero: str) -> str:
+    return f'RAT-{documento_numero}'[:20]
+
+
 def _movs_saida_transferencia(documento_numero: str, filial_origem):
     # Nota: select_for_update() não pode ser combinado com select_related()
     # em FKs anuláveis (lote, filial_destino, documento_fiscal) — o Postgres
@@ -119,6 +123,68 @@ def cancelar_transferencia(documento_numero: str, filial_origem, usuario) -> lis
     )
 
     return movs_reversao
+
+
+@transaction.atomic
+def reativar_transferencia(documento_numero: str, filial_origem, usuario) -> list[MovimentacaoEstoque]:
+    """
+    Refaz no estoque uma transferência anteriormente estornada.
+
+    A reativação é registrada como um novo par de movimentos para preservar a
+    auditoria. Os movimentos originais voltam a representar uma transferência
+    ativa e continuam vinculados ao mesmo documento fiscal.
+    """
+    movs_saida = _movs_saida_transferencia(documento_numero, filial_origem)
+    if not movs_saida:
+        raise DadosInvalidosError('Transferência não encontrada.')
+    if not all(m.transferencia_cancelada for m in movs_saida):
+        raise DadosInvalidosError('Esta transferência não está cancelada.')
+    if not any(
+        m.documento_fiscal_id
+        and m.documento_fiscal.status == StatusDocumentoFiscal.AUTORIZADA
+        for m in movs_saida
+    ):
+        raise DadosInvalidosError(
+            'A reativação por este fluxo exige uma NF-e autorizada vinculada.'
+        )
+
+    filial_destino = movs_saida[0].filial_destino
+    if not filial_destino:
+        raise DadosInvalidosError('Filial de destino não identificada nesta transferência.')
+
+    documento_reativacao = _documento_reativacao(documento_numero)
+    if MovimentacaoEstoque.objects.filter(documento_numero=documento_reativacao).exists():
+        raise DadosInvalidosError('Esta transferência já foi reativada.')
+
+    movs_reativacao: list[MovimentacaoEstoque] = []
+    for mov in movs_saida:
+        mov_saida, mov_entrada = MovimentacaoService.transferir_entre_filiais(
+            produto_id=mov.produto_id,
+            filial_origem_id=filial_origem.pk,
+            filial_destino_id=filial_destino.pk,
+            quantidade=mov.quantidade,
+            usuario_id=usuario.pk,
+            lote_id=mov.lote_id,
+            observacao=f'Reativação da transferência {documento_numero}.',
+            permitir_sem_lote=True,
+            vincular_destino=True,
+            documento_numero=documento_reativacao,
+        )
+        movs_reativacao.extend([mov_saida, mov_entrada])
+
+    MovimentacaoEstoque.objects.filter(
+        documento_numero=documento_numero,
+        tipo_operacao__in=[
+            MovimentacaoEstoque.TipoOperacao.TRANSFERENCIA_SAIDA,
+            MovimentacaoEstoque.TipoOperacao.TRANSFERENCIA_ENTRADA,
+        ],
+    ).update(
+        transferencia_cancelada=False,
+        transferencia_cancelada_em=None,
+        transferencia_cancelada_por=None,
+    )
+
+    return movs_reativacao
 
 
 @transaction.atomic

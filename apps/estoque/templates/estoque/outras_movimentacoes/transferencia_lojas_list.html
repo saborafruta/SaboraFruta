@@ -101,7 +101,7 @@
           {% elif item.nota.status == "processando" or item.nota.status == "pendente" %}
             <p class="text-xs mt-1" style="color:#d97706">Aguardando autorização da NF-e.</p>
           {% elif item.mdfe_create_url %}
-            <a href="{{ item.mdfe_create_url }}" class="text-sm font-semibold mt-1 inline-block" style="color:#2563eb">Gerar MDF-e</a>
+            <a href="{{ item.mdfe_create_url }}" class="text-sm font-semibold mt-1 inline-block" style="color:#2563eb">Emitir MDF-e</a>
           {% else %}
             <p class="text-sm mt-1" :style="temaClaro ? 'color:#64748b' : 'color:#94a3b8'">Não gerado</p>
           {% endif %}
@@ -119,8 +119,9 @@
         {% if item.pode_emitir_nota and not item.cancelada %}
         <button type="button" class="btn-primary text-xs" :disabled="ocupada" @click="reemitir('{{ item.chave|escapejs }}', [{% for produto in item.itens %}{{ produto.mov_saida_id }}{% if not forloop.last %},{% endif %}{% endfor %}])">{% if item.nota %}Reemitir NF-e{% else %}Emitir NF-e{% endif %}</button>
         {% endif %}
-        {% if item.nota.pdf_danfe_url %}<a class="btn-secondary text-xs" href="{{ item.nota.pdf_danfe_url }}" target="_blank" rel="noopener">Abrir DANFE</a>{% endif %}
+        {% if item.nota.pdf_danfe_url %}<a class="btn-secondary text-xs" href="{{ item.nota.pdf_danfe_url }}" target="_blank" rel="noopener">Ver nota</a>{% endif %}
         {% if item.mdfe %}<a class="btn-secondary text-xs" href="{{ item.mdfe.url }}">Abrir MDF-e</a>{% endif %}
+        {% if item.pode_reativar_transferencia %}<button type="button" class="btn-primary text-xs" @click="reativarTransferencia('{{ item.chave|escapejs }}')">Reativar transferência</button>{% endif %}
         {% if item.pode_cancelar_nota %}<button type="button" class="btn-secondary text-xs" @click="cancelarNfe('{{ item.chave|escapejs }}')">Cancelar NF-e</button>{% endif %}
         {% if item.pode_cancelar_transferencia %}<button type="button" class="btn-secondary text-xs" @click="cancelarTransferencia('{{ item.chave|escapejs }}')">Cancelar transferência</button>{% endif %}
         {% if item.pode_excluir %}<button type="button" class="btn-secondary text-xs" style="color:#dc2626" @click="excluir('{{ item.chave|escapejs }}')">Excluir</button>{% endif %}
@@ -202,6 +203,13 @@ async function cancelarTransferencia(chave) {
   if (!confirm('Cancelar e estornar esta transferência de estoque?')) return;
   try {
     await enviar('{% url "estoque:transferencia-lojas-cancelar" %}', {documento_numero: chave});
+    location.reload();
+  } catch (error) { alert(error.message); }
+}
+async function reativarTransferencia(chave) {
+  if (!confirm('Reativar esta transferência e aplicar novamente a saída e a entrada no estoque?')) return;
+  try {
+    await enviar('{% url "estoque:transferencia-lojas-reativar" %}', {documento_numero: chave});
     location.reload();
   } catch (error) { alert(error.message); }
 }

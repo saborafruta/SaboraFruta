@@ -13,6 +13,15 @@ from apps.estoque.models import (
     AlertaVencimento, Estoque, Inventario, LoteProduto, MovimentacaoEstoque,
 )
 from apps.estoque.services.movimentacao_service import MovimentacaoService
+from apps.estoque.services.transferencia_cancelamento import (
+    cancelar_transferencia,
+    reativar_transferencia,
+)
+from apps.financeiro.constants.enums import (
+    StatusDocumentoFiscal,
+    TipoDocumentoFiscal,
+)
+from apps.financeiro.models import DocumentoFiscal
 from apps.produtos.models import Produto, ProdutoFilial, UnidadeMedida, UnidadeMedidaFilial
 
 
@@ -381,3 +390,67 @@ class MovimentacaoServiceTests(TestCase):
         self.assertEqual(lote_origem.quantidade_atual, Decimal('2.000'))
         self.assertEqual(lote_destino.quantidade_atual, Decimal('3.000'))
         self.assertEqual(lote_destino.status, LoteProduto.Status.ATIVO)
+
+    def test_reativar_transferencia_refaz_estoque_e_limpa_cancelamento(self):
+        produto = self.criar_produto(controla_lote=False)
+        ProdutoFilial.objects.create(produto=produto, filial=self.filial_destino)
+        MovimentacaoService.registrar_movimentacao(
+            produto_id=produto.pk,
+            filial_id=self.filial.pk,
+            tipo_operacao=MovimentacaoEstoque.TipoOperacao.ENTRADA,
+            quantidade=Decimal('5'),
+            usuario_id=self.usuario.pk,
+        )
+        mov_saida, _ = MovimentacaoService.transferir_entre_filiais(
+            produto_id=produto.pk,
+            filial_origem_id=self.filial.pk,
+            filial_destino_id=self.filial_destino.pk,
+            quantidade=Decimal('2'),
+            usuario_id=self.usuario.pk,
+            permitir_sem_lote=True,
+            vincular_destino=True,
+            documento_numero='TRF-TESTE-REATIVAR',
+        )
+
+        cancelar_transferencia(
+            mov_saida.documento_numero,
+            self.filial,
+            self.usuario,
+        )
+        documento = DocumentoFiscal.objects.create(
+            filial=self.filial,
+            tipo_documento=TipoDocumentoFiscal.NFE,
+            origem_tipo='transferencia_estoque',
+            origem_id=mov_saida.pk,
+            numero=1,
+            serie=5,
+            emitente_cnpj=self.filial.cnpj,
+            status=StatusDocumentoFiscal.AUTORIZADA,
+            valor_total=Decimal('2.00'),
+            usuario=self.usuario,
+        )
+        MovimentacaoEstoque.objects.filter(
+            documento_numero=mov_saida.documento_numero,
+        ).update(documento_fiscal=documento)
+        reativar_transferencia(
+            mov_saida.documento_numero,
+            self.filial,
+            self.usuario,
+        )
+
+        mov_saida.refresh_from_db()
+        estoque_origem = Estoque.objects.get(produto=produto, filial=self.filial)
+        estoque_destino = Estoque.objects.get(
+            produto=produto,
+            filial=self.filial_destino,
+        )
+        self.assertFalse(mov_saida.transferencia_cancelada)
+        self.assertIsNone(mov_saida.transferencia_cancelada_em)
+        self.assertEqual(estoque_origem.quantidade_atual, Decimal('3.000'))
+        self.assertEqual(estoque_destino.quantidade_atual, Decimal('2.000'))
+        self.assertEqual(
+            MovimentacaoEstoque.objects.filter(
+                documento_numero='RAT-TRF-TESTE-REATIV',
+            ).count(),
+            2,
+        )
