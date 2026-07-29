@@ -51,7 +51,7 @@
     <div>
       <h3 class="font-semibold">Exportar XMLs fiscais</h3>
       <p class="text-sm text-gray-500 mt-1">
-        Baixe um ZIP organizado em emitidas, canceladas e inutilizadas.
+        Baixe os arquivos XML oficiais em um ZIP organizado por emitidas, canceladas e inutilizadas.
       </p>
     </div>
     <form method="get" action="{% url 'fiscal:documento-saida-exportar-xml' %}"
@@ -87,12 +87,13 @@
       <div>
         <label class="block text-xs font-semibold uppercase text-gray-500 mb-1">Origem</label>
         <select name="origem" class="form-select">
-          <option value="">Todas</option>
+          <option value="">Todas as origens</option>
           <option value="vendas" {% if origem_export == 'vendas' %}selected{% endif %}>Vendas</option>
           <option value="transferencias" {% if origem_export == 'transferencias' %}selected{% endif %}>Transferências</option>
+          <option value="outras" {% if origem_export == 'outras' %}selected{% endif %}>Outras emissões</option>
         </select>
       </div>
-      <button type="submit" class="btn-primary justify-center">Baixar ZIP</button>
+      <button type="submit" class="btn-primary justify-center">Baixar XMLs em ZIP</button>
     </form>
   </section>
 

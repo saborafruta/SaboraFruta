@@ -9,6 +9,7 @@ from django.conf import settings
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.core.paginator import Paginator
+from django.db.models import Exists, OuterRef, Q
 from django.http import Http404, HttpResponse, HttpResponseBadRequest, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
@@ -92,7 +93,34 @@ def _filtro_origem_documentos(queryset, origem):
         return queryset.filter(
             origem_tipo__in=["transferencia_estoque", "mdfe"],
         )
+    if origem == "outras":
+        return queryset.exclude(
+            origem_tipo__in=["venda_pdv", "transferencia_estoque", "mdfe"],
+        )
     return queryset
+
+
+def _documentos_fiscais_operacionais(filial):
+    documentos_concluidos = DocumentoFiscal.objects.for_filial(filial).filter(
+        origem_tipo=OuterRef("origem_tipo"),
+        origem_id=OuterRef("origem_id"),
+        status__in=[
+            StatusDocumentoFiscal.AUTORIZADA,
+            StatusDocumentoFiscal.CANCELADA,
+        ],
+    )
+    return (
+        DocumentoFiscal.objects.for_filial(filial)
+        .annotate(_tem_documento_concluido=Exists(documentos_concluidos))
+        .exclude(
+            Q(status__in=[
+                StatusDocumentoFiscal.REJEITADA,
+                StatusDocumentoFiscal.DENEGADA,
+            ])
+            & Q(origem_id__gt=0)
+            & Q(_tem_documento_concluido=True)
+        )
+    )
 
 
 class ManifestoFiscalListView(PermissaoRequiredMixin, View):
@@ -118,8 +146,7 @@ class ManifestoFiscalListView(PermissaoRequiredMixin, View):
             ).count(),
         }
         saidas = (
-            DocumentoFiscal.objects
-            .for_filial(request.filial_ativa)
+            _documentos_fiscais_operacionais(request.filial_ativa)
             .select_related('usuario')
             .order_by('-created_at')
         )
@@ -144,7 +171,7 @@ class ManifestoFiscalListView(PermissaoRequiredMixin, View):
                     kwargs={'pk': mdfe.pk},
                 )
 
-        saidas_base = DocumentoFiscal.objects.for_filial(request.filial_ativa)
+        saidas_base = _documentos_fiscais_operacionais(request.filial_ativa)
         kpis_saida = {
             'total': saidas_base.count(),
             'processando': saidas_base.filter(
@@ -382,10 +409,7 @@ class DocumentoFiscalExportarXMLView(PermissaoRequiredMixin, View):
         )
         if tipo_documento:
             inutilizacoes = inutilizacoes.filter(tipo_documento=tipo_documento)
-        if situacao not in {"todas", "inutilizadas"} or origem in {
-            "vendas",
-            "transferencias",
-        }:
+        if situacao not in {"todas", "inutilizadas"} or origem:
             inutilizacoes = inutilizacoes.none()
 
         buffer = io.BytesIO()
@@ -472,10 +496,7 @@ class DocumentoFiscalExportarXMLView(PermissaoRequiredMixin, View):
                 inutilizados_legados = inutilizados_legados.filter(
                     tipo_documento=tipo_documento,
                 )
-            if situacao not in {"todas", "inutilizadas"} or origem in {
-                "vendas",
-                "transferencias",
-            }:
+            if situacao not in {"todas", "inutilizadas"} or origem:
                 inutilizados_legados = inutilizados_legados.none()
             for documento in inutilizados_legados.iterator():
                 if any(
