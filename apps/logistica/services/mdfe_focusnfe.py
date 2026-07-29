@@ -452,14 +452,14 @@ def consultar_mdfe(mdfe: MDFe) -> MDFe:
     return _sincronizar_status(mdfe)
 
 
-def cancelar_mdfe(mdfe: MDFe, justificativa: str) -> MDFe:
+def cancelar_mdfe(mdfe: MDFe, justificativa: str, usuario=None) -> MDFe:
     if not mdfe.documento_fiscal:
         raise DadosInvalidosError("Este MDF-e não possui documento fiscal vinculado.")
     justificativa = _texto(justificativa)
     if not 15 <= len(justificativa) <= 255:
         raise DadosInvalidosError("A justificativa deve ter entre 15 e 255 caracteres.")
     FocusNFeService(client=_cliente_focus(mdfe.filial)).cancelar(
-        mdfe.documento_fiscal, justificativa
+        mdfe.documento_fiscal, justificativa, usuario=usuario
     )
     mdfe.justificativa_cancelamento = justificativa
     mdfe.save(update_fields=["justificativa_cancelamento", "updated_at"])

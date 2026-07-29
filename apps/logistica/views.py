@@ -913,7 +913,7 @@ class CteCancelarView(PermissaoRequiredMixin, View):
         if len(justificativa) < 15:
             messages.error(request, "Justificativa deve ter no minimo 15 caracteres.")
             return redirect("logistica:cte-detail", pk=cte.pk)
-        doc, erro = cancelar_cte(cte, justificativa)
+        doc, erro = cancelar_cte(cte, justificativa, usuario=request.user)
         if erro:
             messages.error(request, f"Erro ao cancelar CT-e: {erro}")
         else:
@@ -1392,7 +1392,7 @@ class MDFeCancelarFocusView(PermissaoRequiredMixin, View):
             messages.error(request, "Justificativa deve ter no minimo 15 caracteres.")
             return redirect("logistica:mdfe-detail", pk=mdfe.pk)
         try:
-            cancelar_mdfe(mdfe, justificativa)
+            cancelar_mdfe(mdfe, justificativa, usuario=request.user)
             messages.success(request, "MDF-e cancelado com sucesso.")
         except (DomainError, FocusNFeError, ValueError) as exc:
             messages.error(request, f"Erro ao cancelar MDF-e: {exc}")

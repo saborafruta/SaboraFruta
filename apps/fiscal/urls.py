@@ -11,6 +11,21 @@ urlpatterns = [
         views.DocumentoFiscalSaidaConsultarView.as_view(),
         name='documento-saida-consultar',
     ),
+    path(
+        'manifesto/saidas/<int:pk>/',
+        views.DocumentoFiscalSaidaDetailView.as_view(),
+        name='documento-saida-detail',
+    ),
+    path(
+        'manifesto/saidas/<int:pk>/xml/<slug:tipo>/',
+        views.DocumentoFiscalXMLView.as_view(),
+        name='documento-saida-xml',
+    ),
+    path(
+        'manifesto/saidas/exportar-xml/',
+        views.DocumentoFiscalExportarXMLView.as_view(),
+        name='documento-saida-exportar-xml',
+    ),
     path('manifesto/config/', views.ManifestoFiscalConfigView.as_view(), name='manifesto-config'),
     path(
         'manifesto/<int:pk>/importar-entrada/',

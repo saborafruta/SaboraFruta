@@ -1,11 +1,14 @@
 import json
+import io
 import logging
+import re
+import zipfile
 
 from django.conf import settings
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.core.paginator import Paginator
-from django.http import HttpResponseBadRequest, JsonResponse
+from django.http import Http404, HttpResponse, HttpResponseBadRequest, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.views import View
@@ -14,7 +17,7 @@ from django.views.decorators.http import require_GET, require_POST
 
 from apps.core.services.exceptions import DomainError
 from apps.core.services.permissions import PermissaoRequiredMixin
-from apps.financeiro.models.fiscal import DocumentoFiscal
+from apps.financeiro.models.fiscal import DocumentoFiscal, LogIntegracaoFiscal
 from apps.financeiro.constants.enums import StatusDocumentoFiscal
 from apps.fiscal.integrations.dfe_client import avaliar_prontidao_dfe
 from apps.fiscal.integrations.focusnfe import FocusNFeClient
@@ -25,6 +28,48 @@ from apps.fiscal.services.focusnfe_service import FocusNFeService, parse_ref
 from apps.fiscal.services.manifesto_service import ManifestoFiscalService
 
 logger = logging.getLogger(__name__)
+
+
+def _focus_service_documento(documento):
+    from apps.fiscal.integrations.focusnfe.config import FocusNFeConfig
+
+    filial = documento.filial
+    token = (filial.focusnfe_token or "").strip()
+    if not token:
+        raise DomainError("Configure o token de emissao Focus da filial.")
+    client = FocusNFeClient(
+        config=FocusNFeConfig.from_env(
+            token=token,
+            ambiente=filial.focusnfe_ambiente,
+        ),
+    )
+    return FocusNFeService(client=client)
+
+
+def _nome_xml(documento, sufixo):
+    chave = documento.chave or f"{documento.tipo_documento}-{documento.numero}-{documento.serie}"
+    chave = re.sub(r"[^0-9A-Za-z_-]+", "-", chave)
+    return f"{chave}-{sufixo}.xml"
+
+
+def _obter_xml_documento(documento, tipo):
+    if tipo == "autorizado":
+        xml = documento.xml_assinado or ""
+        if xml.lstrip().startswith("<"):
+            return xml
+        if documento.status != StatusDocumentoFiscal.CANCELADA:
+            service = _focus_service_documento(documento)
+            xml = service.garantir_xml_autorizado(documento)
+        return xml
+    if tipo == "cancelamento":
+        if documento.status != StatusDocumentoFiscal.CANCELADA:
+            raise Http404("Este documento nao esta cancelado.")
+        xml = documento.xml_cancelamento or ""
+        if xml.lstrip().startswith("<"):
+            return xml
+        service = _focus_service_documento(documento)
+        return service.garantir_xml_cancelamento(documento)
+    raise Http404("Tipo de XML invalido.")
 
 
 class ManifestoFiscalListView(PermissaoRequiredMixin, View):
@@ -172,6 +217,111 @@ class DocumentoFiscalSaidaConsultarView(PermissaoRequiredMixin, View):
                 f'{documento.get_status_display()}.',
             )
         return redirect(f"{reverse('fiscal:manifesto-list')}?aba=saidas")
+
+
+class DocumentoFiscalSaidaDetailView(PermissaoRequiredMixin, View):
+    permissao_modulo = "compras"
+    permissao_acao = "ver"
+    template_name = "fiscal/manifesto/saida_detail.html"
+
+    def get(self, request, pk):
+        documento = get_object_or_404(
+            DocumentoFiscal.objects.for_filial(request.filial_ativa).select_related(
+                "usuario", "filial"
+            ),
+            pk=pk,
+        )
+        logs = list(
+            LogIntegracaoFiscal.objects.filter(documento_fiscal=documento)
+            .select_related("usuario")
+            .order_by("created_at")
+        )
+        for log in logs:
+            try:
+                request_data = json.loads(log.request_json or "{}")
+            except (TypeError, ValueError):
+                request_data = {}
+            log.justificativa = request_data.get("justificativa", "")
+        return render(
+            request,
+            self.template_name,
+            {"documento": documento, "logs": logs},
+        )
+
+
+class DocumentoFiscalXMLView(PermissaoRequiredMixin, View):
+    permissao_modulo = "compras"
+    permissao_acao = "ver"
+
+    def get(self, request, pk, tipo):
+        documento = get_object_or_404(
+            DocumentoFiscal.objects.for_filial(request.filial_ativa).select_related("filial"),
+            pk=pk,
+        )
+        try:
+            xml = _obter_xml_documento(documento, tipo)
+        except DomainError as exc:
+            return HttpResponse(str(exc), status=422, content_type="text/plain; charset=utf-8")
+        if not xml or not xml.lstrip().startswith("<"):
+            return HttpResponse(
+                "O XML ainda nao esta disponivel no provedor fiscal.",
+                status=404,
+                content_type="text/plain; charset=utf-8",
+            )
+        response = HttpResponse(xml, content_type="application/xml; charset=utf-8")
+        response["Content-Disposition"] = (
+            f'attachment; filename="{_nome_xml(documento, tipo)}"'
+        )
+        return response
+
+
+class DocumentoFiscalExportarXMLView(PermissaoRequiredMixin, View):
+    permissao_modulo = "compras"
+    permissao_acao = "ver"
+
+    def get(self, request):
+        documentos = (
+            DocumentoFiscal.objects.for_filial(request.filial_ativa)
+            .select_related("filial")
+            .filter(
+                status__in=[
+                    StatusDocumentoFiscal.AUTORIZADA,
+                    StatusDocumentoFiscal.CANCELADA,
+                ]
+            )
+            .order_by("data_emissao")
+        )
+        status = (request.GET.get("status") or "").strip()
+        tipo_documento = (request.GET.get("tipo_documento") or "").strip()
+        if status in {StatusDocumentoFiscal.AUTORIZADA, StatusDocumentoFiscal.CANCELADA}:
+            documentos = documentos.filter(status=status)
+        if tipo_documento:
+            documentos = documentos.filter(tipo_documento=tipo_documento)
+
+        buffer = io.BytesIO()
+        adicionados = 0
+        with zipfile.ZipFile(buffer, "w", zipfile.ZIP_DEFLATED) as arquivo:
+            for documento in documentos.iterator():
+                tipos = ["autorizado"]
+                if documento.status == StatusDocumentoFiscal.CANCELADA:
+                    tipos.append("cancelamento")
+                for tipo in tipos:
+                    try:
+                        xml = _obter_xml_documento(documento, tipo)
+                    except (DomainError, Http404):
+                        continue
+                    if xml and xml.lstrip().startswith("<"):
+                        arquivo.writestr(_nome_xml(documento, tipo), xml)
+                        adicionados += 1
+            if not adicionados:
+                arquivo.writestr(
+                    "LEIA-ME.txt",
+                    "Nenhum XML estava disponivel para os filtros selecionados.",
+                )
+        buffer.seek(0)
+        response = HttpResponse(buffer.getvalue(), content_type="application/zip")
+        response["Content-Disposition"] = 'attachment; filename="documentos-fiscais-xml.zip"'
+        return response
 
 
 class ManifestoFiscalConfigView(PermissaoRequiredMixin, View):

@@ -1542,7 +1542,11 @@ class TransferenciaCancelarNFeApiView(PermissaoRequiredMixin, View):
             return JsonResponse({'erro': 'Nenhuma NF-e vinculada a esta transferência.'}, status=404)
 
         try:
-            doc = cancelar_nfe_transferencia(mov.documento_fiscal, justificativa)
+            doc = cancelar_nfe_transferencia(
+                mov.documento_fiscal,
+                justificativa,
+                usuario=request.user,
+            )
         except DomainError as exc:
             return JsonResponse({'erro': str(exc)}, status=400)
         except Exception as exc:  # noqa: BLE001

@@ -18,6 +18,7 @@ from __future__ import annotations
 
 from datetime import date
 from decimal import Decimal
+import re
 from typing import Any, Dict, List
 
 from django.db import transaction
@@ -46,9 +47,45 @@ class _ItemTransfAdapter:
         self.valor_unitario = valor_unitario
         self.desconto_valor = Decimal("0")
         self.acrescimo_valor = Decimal("0")
-        self.unidade_medida = (
-            produto.unidade_medida.sigla if produto.unidade_medida_id else "UN"
-        )
+        unidade = produto.unidade_medida.sigla if produto.unidade_medida_id else "UN"
+        descricao = (produto.descricao_pdv or produto.descricao or "").upper()
+        if unidade.upper() == "G" and re.search(r"\b\d+\s*G\b", descricao):
+            unidade = "UN"
+        self.unidade_medida = unidade
+
+
+_CHAVES_TRIBUTOS_TRANSFERENCIA_REMOVER = {
+    "icms_modalidade_base_calculo", "icms_reducao_base_calculo",
+    "icms_base_calculo", "icms_aliquota", "icms_valor",
+    "icms_aliquota_credito_simples", "icms_valor_credito_simples",
+    "fcp_base_calculo", "fcp_percentual", "fcp_valor",
+    "ibs_cbs_base_calculo", "ibs_uf_aliquota", "ibs_mun_aliquota",
+    "ibs_uf_percentual_reducao_aliquota", "ibs_uf_aliquota_efetiva",
+    "ibs_mun_percentual_reducao_aliquota", "ibs_mun_aliquota_efetiva",
+    "ibs_uf_valor", "ibs_mun_valor", "ibs_valor_total",
+    "cbs_aliquota", "cbs_percentual_reducao_aliquota",
+    "cbs_aliquota_efetiva", "cbs_valor",
+    "is_situacao_tributaria", "is_classificacao_tributaria",
+    "is_base_calculo", "is_aliquota", "is_valor",
+}
+
+
+def _aplicar_tributacao_transferencia(item: Dict[str, Any]) -> None:
+    """Aplica a tributacao da transferencia entre estabelecimentos do titular."""
+    for chave in _CHAVES_TRIBUTOS_TRANSFERENCIA_REMOVER:
+        item.pop(chave, None)
+
+    item["icms_situacao_tributaria"] = "400"
+    item["pis_situacao_tributaria"] = "08"
+    item["pis_base_calculo"] = 0.0
+    item["pis_valor"] = 0.0
+    item.pop("pis_aliquota_porcentual", None)
+    item["cofins_situacao_tributaria"] = "08"
+    item["cofins_base_calculo"] = 0.0
+    item["cofins_valor"] = 0.0
+    item.pop("cofins_aliquota_porcentual", None)
+    item["ibs_cbs_situacao_tributaria"] = "410"
+    item["ibs_cbs_classificacao_tributaria"] = "410002"
 
 
 def _cfop_transferencia(
@@ -166,6 +203,7 @@ def construir_payload_transferencia(
         )
         # Transferência sempre usa CFOP 5152/6152, independente do CFOP de venda.
         item_payload["cfop"] = cfop
+        _aplicar_tributacao_transferencia(item_payload)
         items.append(item_payload)
 
     cnpj_emitente = _somente_digitos(filial_origem.cnpj)
@@ -333,7 +371,11 @@ def emitir_nfe_transferencia(
     return service.emitir(doc, payload)
 
 
-def cancelar_nfe_transferencia(documento_fiscal, justificativa: str) -> DocumentoFiscal:
+def cancelar_nfe_transferencia(
+    documento_fiscal,
+    justificativa: str,
+    usuario=None,
+) -> DocumentoFiscal:
     """
     Cancela (via Focus/SEFAZ) uma NF-e de transferência já autorizada.
     Só é possível cancelar documentos com status "autorizada" — a Focus
@@ -365,4 +407,4 @@ def cancelar_nfe_transferencia(documento_fiscal, justificativa: str) -> Document
     client = FocusNFeClient(config=config)
     service = FocusNFeService(client=client)
 
-    return service.cancelar(documento_fiscal, justificativa)
+    return service.cancelar(documento_fiscal, justificativa, usuario=usuario)

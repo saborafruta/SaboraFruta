@@ -1,0 +1,97 @@
+{% extends "_base.html" %}
+{% load erp_extras %}
+
+{% block title %}{{ documento.get_tipo_documento_display }} {{ documento.numero }}{% endblock %}
+{% block page_title %}Documento fiscal{% endblock %}
+
+{% block content %}
+<div class="max-w-5xl mx-auto space-y-5">
+  <div class="flex flex-wrap items-start justify-between gap-4">
+    <div>
+      <a href="{% url 'fiscal:manifesto-list' %}?aba=saidas" class="text-primary-600 hover:underline">&lt; Voltar para DF-e</a>
+      <h2 class="text-2xl font-semibold mt-2">
+        {{ documento.get_tipo_documento_display }} nº {{ documento.numero }}
+      </h2>
+      <p class="text-sm text-gray-500">
+        Série {{ documento.serie }} · {{ documento.data_emissao|date:"d/m/Y H:i" }}
+      </p>
+    </div>
+    <span class="soft-pill
+      {% if documento.status == 'autorizada' %}is-green
+      {% elif documento.status == 'cancelada' or documento.status == 'rejeitada' or documento.status == 'denegada' %}is-red
+      {% elif documento.status == 'processando' or documento.status == 'pendente' %}is-amber{% endif %}">
+      {{ documento.get_status_display }}
+    </span>
+  </div>
+
+  <section class="card p-5">
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
+      <div>
+        <div class="text-xs uppercase text-gray-500">Destinatário</div>
+        <strong>{{ documento.destinatario_snapshot.nome|default:"Não identificado" }}</strong>
+        <div class="font-mono text-xs">{{ documento.destinatario_snapshot.cpf_cnpj|default:"" }}</div>
+      </div>
+      <div>
+        <div class="text-xs uppercase text-gray-500">Chave</div>
+        <div class="font-mono break-all">{{ documento.chave|default:"Ainda não gerada" }}</div>
+      </div>
+      <div>
+        <div class="text-xs uppercase text-gray-500">Valor</div>
+        <strong class="text-lg">{{ documento.valor_total|moeda }}</strong>
+      </div>
+    </div>
+    {% if documento.codigo_status_sefaz or documento.mensagem_sefaz %}
+      <div class="mt-4 p-3 rounded border {% if documento.status == 'rejeitada' or documento.status == 'denegada' %}text-red-600{% endif %}">
+        {% if documento.codigo_status_sefaz %}<strong>{{ documento.codigo_status_sefaz }}</strong> · {% endif %}
+        {{ documento.mensagem_sefaz }}
+      </div>
+    {% endif %}
+  </section>
+
+  <section class="flex flex-wrap gap-2">
+    {% if documento.pdf_danfe_url %}
+      <a href="{{ documento.pdf_danfe_url }}" target="_blank" rel="noopener" class="btn-primary">Abrir PDF</a>
+    {% endif %}
+    {% if documento.status == 'autorizada' or documento.xml_assinado %}
+      <a href="{% url 'fiscal:documento-saida-xml' documento.pk 'autorizado' %}" class="btn-secondary">Baixar XML autorizado</a>
+    {% endif %}
+    {% if documento.status == 'cancelada' %}
+      <a href="{% url 'fiscal:documento-saida-xml' documento.pk 'cancelamento' %}" class="btn-secondary">Baixar XML de cancelamento</a>
+      {% if documento.xml_assinado %}
+        <a href="{% url 'fiscal:documento-saida-xml' documento.pk 'autorizado' %}" class="btn-secondary">Baixar XML original</a>
+      {% endif %}
+    {% endif %}
+  </section>
+
+  <section>
+    <h3 class="text-lg font-semibold mb-3">Histórico de interações</h3>
+    <div class="border rounded overflow-hidden">
+      {% for log in logs %}
+        <div class="p-4 border-b last:border-b-0 flex flex-col md:flex-row md:items-start md:justify-between gap-3">
+          <div>
+            <div class="font-semibold">{{ log.acao|title }}</div>
+            <div class="text-sm text-gray-500">
+              {% if log.usuario %}{{ log.usuario.get_full_name|default:log.usuario.email }}{% else %}Sistema{% endif %}
+              · tentativa {{ log.tentativa }}
+            </div>
+            {% if log.justificativa %}
+              <div class="mt-2 text-sm"><strong>Justificativa:</strong> {{ log.justificativa }}</div>
+            {% endif %}
+            {% if log.codigo_status_sefaz %}
+              <div class="mt-1 text-sm">SEFAZ {{ log.codigo_status_sefaz }}</div>
+            {% endif %}
+          </div>
+          <div class="text-right">
+            <div class="text-sm">{{ log.created_at|date:"d/m/Y H:i:s" }}</div>
+            <span class="soft-pill {% if log.sucesso %}is-green{% elif log.sucesso == False %}is-red{% endif %}">
+              {% if log.sucesso %}Concluído{% elif log.sucesso == False %}Falhou{% else %}Registrado{% endif %}
+            </span>
+          </div>
+        </div>
+      {% empty %}
+        <div class="p-6 text-center text-gray-500">Nenhuma interação fiscal registrada.</div>
+      {% endfor %}
+    </div>
+  </section>
+</div>
+{% endblock %}

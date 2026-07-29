@@ -43,6 +43,10 @@
       </div>
       <button type="submit" class="btn-primary">Filtrar</button>
       <a href="?aba=saidas" class="btn-secondary">Limpar</a>
+      <a href="{% url 'fiscal:documento-saida-exportar-xml' %}?status={{ status_saida }}"
+         class="btn-secondary">
+        Exportar XMLs
+      </a>
     </form>
   </div>
 
@@ -117,6 +121,9 @@
           </td>
           <td class="px-4 py-3">
             <div class="flex flex-wrap justify-end gap-2">
+              <a href="{% url 'fiscal:documento-saida-detail' doc.pk %}" class="btn-secondary">
+                Ver documento
+              </a>
               {% if doc.status == 'processando' or doc.status == 'pendente' %}
                 <form method="post" action="{% url 'fiscal:documento-saida-consultar' doc.pk %}">
                   {% csrf_token %}
@@ -166,6 +173,7 @@
       </div>
       {% endif %}
       <div class="flex flex-col gap-2">
+        <a href="{% url 'fiscal:documento-saida-detail' doc.pk %}" class="btn-secondary justify-center">Ver documento</a>
         {% if doc.status == 'processando' or doc.status == 'pendente' %}
           <form method="post" action="{% url 'fiscal:documento-saida-consultar' doc.pk %}">
             {% csrf_token %}

@@ -386,6 +386,13 @@ class InutilizacaoNumeracao(models.Model):
 
 class LogIntegracaoFiscal(models.Model):
     filial = models.ForeignKey(Filial, on_delete=models.PROTECT)
+    usuario = models.ForeignKey(
+        Usuario,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="logs_integracao_fiscal",
+    )
     documento_fiscal = models.ForeignKey(
         DocumentoFiscal, on_delete=models.SET_NULL, null=True, blank=True,
     )

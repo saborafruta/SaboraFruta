@@ -148,11 +148,13 @@ class FocusNFeService:
         sucesso: Optional[bool] = None,
         ms: Optional[int] = None,
         status_sefaz: str = "",
+        usuario=None,
     ) -> None:
         """Grava um LogIntegracaoFiscal. Nunca interrompe o fluxo principal."""
         try:
             LogIntegracaoFiscal.objects.create(
                 filial=documento.filial,
+                usuario=usuario or documento.usuario,
                 documento_fiscal=documento if documento.pk else None,
                 provedor=PROVEDOR,
                 acao=acao[:30],
@@ -222,6 +224,10 @@ class FocusNFeService:
             documento.data_cancelamento = agora
 
         documento.save()
+        if documento.status == StatusDocumentoFiscal.AUTORIZADA:
+            self.garantir_xml_autorizado(documento)
+        elif documento.status == StatusDocumentoFiscal.CANCELADA:
+            self.garantir_xml_cancelamento(documento)
         return documento
 
     # -------------------------------------------------------------- emissão
@@ -297,8 +303,17 @@ class FocusNFeService:
         return self.aplicar_retorno(documento, retorno or {})
 
     # ------------------------------------------------------------ cancelar
-    def cancelar(self, documento: DocumentoFiscal, justificativa: str) -> DocumentoFiscal:
+    def cancelar(
+        self,
+        documento: DocumentoFiscal,
+        justificativa: str,
+        *,
+        usuario=None,
+    ) -> DocumentoFiscal:
         """Cancela um documento autorizado."""
+        # O endpoint da Focus passa a devolver o XML do evento depois do
+        # cancelamento. Preserve antes o XML autorizado para manter os dois.
+        self.garantir_xml_autorizado(documento)
         resource = self._resource(documento.tipo_documento)
         ref = gerar_ref(documento)
         t0 = time.monotonic()
@@ -308,6 +323,7 @@ class FocusNFeService:
             self._registrar_log(
                 documento, "cancelar", request={"justificativa": justificativa},
                 response=exc.response_json, http=exc.status_code, sucesso=False,
+                usuario=usuario,
             )
             raise
         ms = int((time.monotonic() - t0) * 1000)
@@ -321,12 +337,14 @@ class FocusNFeService:
             self._registrar_log(
                 documento, "cancelar", request={"justificativa": justificativa},
                 response=retorno, sucesso=False, ms=ms,
+                usuario=usuario,
             )
             raise FocusNFeProcessingError(mensagem, response_json=retorno)
 
         self._registrar_log(
             documento, "cancelar", request={"justificativa": justificativa},
             response=retorno, sucesso=True, ms=ms,
+            usuario=usuario,
         )
         return self.aplicar_retorno(documento, retorno or {})
 
@@ -344,6 +362,54 @@ class FocusNFeService:
         if not hasattr(resource, "baixar_xml"):
             raise ValueError(f"{documento.tipo_documento} não suporta download de XML.")
         return resource.baixar_xml(gerar_ref(documento))
+
+    @staticmethod
+    def _xml_texto(conteudo: bytes | str) -> str:
+        if isinstance(conteudo, str):
+            return conteudo
+        for encoding in ("utf-8-sig", "utf-8", "latin-1"):
+            try:
+                return conteudo.decode(encoding)
+            except UnicodeDecodeError:
+                continue
+        return conteudo.decode("utf-8", errors="replace")
+
+    @staticmethod
+    def _tem_xml(valor: str) -> bool:
+        return bool(valor and valor.lstrip().startswith("<"))
+
+    def _guardar_xml(self, documento: DocumentoFiscal, campo: str) -> str:
+        atual = getattr(documento, campo, "") or ""
+        if self._tem_xml(atual):
+            return atual
+        try:
+            xml = self._xml_texto(self.baixar_xml(documento))
+        except Exception as exc:  # noqa: BLE001
+            logger.warning(
+                "Nao foi possivel arquivar %s do documento fiscal %s: %s",
+                campo,
+                documento.pk,
+                exc,
+            )
+            return ""
+        if not self._tem_xml(xml):
+            logger.warning(
+                "A Focus nao retornou XML valido para %s do documento fiscal %s.",
+                campo,
+                documento.pk,
+            )
+            return ""
+        setattr(documento, campo, xml)
+        documento.save(update_fields=[campo, "updated_at"])
+        return xml
+
+    def garantir_xml_autorizado(self, documento: DocumentoFiscal) -> str:
+        """Arquiva o XML processado autorizado sem sobrescrever uma copia existente."""
+        return self._guardar_xml(documento, "xml_assinado")
+
+    def garantir_xml_cancelamento(self, documento: DocumentoFiscal) -> str:
+        """Arquiva o XML retornado depois da confirmacao do cancelamento."""
+        return self._guardar_xml(documento, "xml_cancelamento")
 
     # ----------------------------------------- cadastro de empresa na Focus
     def sincronizar_empresa(self, filial, params) -> Dict[str, Any]:

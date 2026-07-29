@@ -65,7 +65,7 @@ def cancelar_venda_e_documento(venda, usuario, justificativa: str):
 
     if documento and documento.status == StatusDocumentoFiscal.AUTORIZADA:
         documento = _focus_service_para_filial(venda.filial).cancelar(
-            documento, justificativa
+            documento, justificativa, usuario=usuario
         )
     elif documento and documento.status == StatusDocumentoFiscal.PROCESSANDO:
         raise DadosInvalidosError(

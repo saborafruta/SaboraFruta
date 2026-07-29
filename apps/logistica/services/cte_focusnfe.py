@@ -316,7 +316,11 @@ def consultar_cte(cte: CTe) -> Tuple[Optional[DocumentoFiscal], str]:
     return doc, ""
 
 
-def cancelar_cte(cte: CTe, justificativa: str) -> Tuple[Optional[DocumentoFiscal], str]:
+def cancelar_cte(
+    cte: CTe,
+    justificativa: str,
+    usuario=None,
+) -> Tuple[Optional[DocumentoFiscal], str]:
     """Cancela o CT-e autorizado."""
     doc = DocumentoFiscal.objects.filter(origem_tipo="cte", origem_id=cte.pk).first()
     if not doc:
@@ -324,7 +328,7 @@ def cancelar_cte(cte: CTe, justificativa: str) -> Tuple[Optional[DocumentoFiscal
 
     service = FocusNFeService()
     try:
-        doc = service.cancelar(doc, justificativa)
+        doc = service.cancelar(doc, justificativa, usuario=usuario)
     except FocusNFeError as exc:
         return doc, str(exc)
     except Exception as exc:

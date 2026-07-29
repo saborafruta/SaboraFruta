@@ -19,6 +19,12 @@ class TransferenciaNFePayloadTests(SimpleTestCase):
             "valor_outras_despesas": 0,
             "icms_valor_st": 0,
             "ipi_valor": 0,
+            "icms_situacao_tributaria": "102",
+            "ibs_cbs_situacao_tributaria": "000",
+            "ibs_cbs_classificacao_tributaria": "000001",
+            "ibs_cbs_base_calculo": 10,
+            "ibs_uf_aliquota": 0.1,
+            "cbs_aliquota": 0.9,
         }
         origem = SimpleNamespace(cnpj="14004764000160", uf="RN")
         destino = SimpleNamespace(
@@ -52,3 +58,13 @@ class TransferenciaNFePayloadTests(SimpleTestCase):
         self.assertEqual(payload["logradouro_destinatario"], "Avenida Capitao Mor Gouveia")
         self.assertEqual(payload["codigo_municipio_destinatario"], "2408102")
         self.assertEqual(payload["modalidade_frete"], "3")
+        item = payload["items"][0]
+        self.assertEqual(item["cfop"], "5151")
+        self.assertEqual(item["icms_situacao_tributaria"], "400")
+        self.assertEqual(item["pis_situacao_tributaria"], "08")
+        self.assertEqual(item["cofins_situacao_tributaria"], "08")
+        self.assertEqual(item["ibs_cbs_situacao_tributaria"], "410")
+        self.assertEqual(item["ibs_cbs_classificacao_tributaria"], "410002")
+        self.assertNotIn("ibs_cbs_base_calculo", item)
+        self.assertNotIn("ibs_uf_aliquota", item)
+        self.assertNotIn("cbs_aliquota", item)

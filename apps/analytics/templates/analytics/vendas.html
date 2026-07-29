@@ -243,6 +243,13 @@ body.tema-claro .hv-page a, body.tema-claro .hv-page span { background:#eef2f7;b
         </svg>
         Imprimir / PDF
       </a>
+      <a href="{% url 'fiscal:documento-saida-exportar-xml' %}{% if filtros.tipo_fiscal == 'cancelada' %}?status=cancelada{% elif filtros.tipo_fiscal == 'nfe' %}?tipo_documento=nfe{% elif filtros.tipo_fiscal == 'nfce' %}?tipo_documento=nfce{% endif %}"
+         title="Baixa os XMLs fiscais das vendas e cancelamentos"
+         style="display:flex;align-items:center;gap:6px;padding:9px 18px;border-radius:9px;
+                font-size:13px;font-weight:700;border:1px solid #15803d;
+                background:#052e16;color:#86efac;text-decoration:none;">
+        Exportar XMLs
+      </a>
       <button @click="modalInut.show=true"
             style="display:flex;align-items:center;gap:6px;padding:9px 18px;border-radius:9px;
                    font-size:13px;font-weight:700;cursor:pointer;border:1px solid #78350f;
