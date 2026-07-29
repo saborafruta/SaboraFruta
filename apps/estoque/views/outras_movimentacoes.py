@@ -711,7 +711,13 @@ def _transferencias_para_listagem(filial, usuario, limite=500):
             tipo_operacao=MovimentacaoEstoque.TipoOperacao.TRANSFERENCIA_SAIDA,
         )
         .exclude(documento_numero__startswith='EST-')
-        .select_related('produto', 'filial_destino', 'lote', 'documento_fiscal')
+        .select_related(
+            'produto',
+            'produto__unidade_medida',
+            'filial_destino',
+            'lote',
+            'documento_fiscal',
+        )
         .order_by('-data_movimentacao')[:limite]
     )
 
@@ -796,7 +802,13 @@ def _transferencias_para_listagem(filial, usuario, limite=500):
             ordem.append(chave)
         grupos[chave]['itens'].append({
             'mov_saida_id': mov.pk,
+            'produto_id': mov.produto_id,
             'produto_nome': mov.produto.descricao,
+            'produto_unidade': (
+                str(mov.produto.unidade_medida)
+                if mov.produto.unidade_medida_id else ''
+            ),
+            'lote_id': mov.lote_id,
             'lote_nome': mov.lote.numero_lote if mov.lote_id else '',
             'quantidade': str(mov.quantidade),
         })
@@ -885,6 +897,46 @@ class TransferenciaLojaView(PermissaoRequiredMixin, View):
     def get(self, request):
         filial = request.filial_ativa
         empresa = request.user.empresa
+        copiar_documento = (request.GET.get('copiar') or '').strip()
+        copia = {}
+
+        if copiar_documento:
+            movs_copia = list(
+                MovimentacaoEstoque.objects.filter(
+                    filial=filial,
+                    tipo_operacao=(
+                        MovimentacaoEstoque.TipoOperacao.TRANSFERENCIA_SAIDA
+                    ),
+                    documento_numero=copiar_documento,
+                    transferencia_cancelada=True,
+                ).select_related(
+                    'produto',
+                    'produto__unidade_medida',
+                    'filial_destino',
+                    'lote',
+                ).order_by('pk')
+            )
+            if movs_copia and movs_copia[0].filial_destino_id:
+                copia = {
+                    'filial_destino_id': movs_copia[0].filial_destino_id,
+                    'observacao': movs_copia[0].observacao or '',
+                    'itens': [
+                        {
+                            'produto_id': mov.produto_id,
+                            'produto_nome': mov.produto.descricao,
+                            'unidade': (
+                                str(mov.produto.unidade_medida)
+                                if mov.produto.unidade_medida_id else ''
+                            ),
+                            'lote_id': mov.lote_id,
+                            'lote_nome': (
+                                mov.lote.numero_lote if mov.lote_id else ''
+                            ),
+                            'quantidade': float(mov.quantidade),
+                        }
+                        for mov in movs_copia
+                    ],
+                }
 
         filiais = list(Filial.objects.filter(
             empresa=empresa, ativo=True,
@@ -893,11 +945,17 @@ class TransferenciaLojaView(PermissaoRequiredMixin, View):
         filial_destino_padrao = next(
             (
                 item for item in filiais
-                if 'SABORAFRUTA' in (
-                    item.nome_fantasia or item.razao_social or ''
-                ).upper()
+                if item.pk == copia.get('filial_destino_id')
             ),
-            filiais[0] if len(filiais) == 1 else None,
+            next(
+                (
+                    item for item in filiais
+                    if 'SABORAFRUTA' in (
+                        item.nome_fantasia or item.razao_social or ''
+                    ).upper()
+                ),
+                filiais[0] if len(filiais) == 1 else None,
+            ),
         )
 
         filiais_json = _json.dumps([
@@ -935,6 +993,7 @@ class TransferenciaLojaView(PermissaoRequiredMixin, View):
             ),
             'motoristas_json': motoristas_json,
             'veiculos_json': veiculos_json,
+            'copia_transferencia_json': _json.dumps(copia),
             'cancel_url': reverse('estoque:transferencia-lojas'),
         })
 

@@ -110,7 +110,8 @@
 
       <div class="px-4 py-3 flex flex-wrap gap-2 border-t" :style="temaClaro ? 'border-color:#e5e7eb; background:#f8fafc' : 'border-color:#2a2a2e; background:#18181a'">
         {% if item.cancelada and item.nota.codigo_status_sefaz == "539" %}
-        <a href="{% url 'estoque:transferencia-lojas-create' %}" class="btn-primary text-xs">Nova transferência</a>
+        <a href="{% url 'estoque:transferencia-lojas-create' %}?copiar={{ item.chave|urlencode }}"
+           class="btn-primary text-xs">Refazer transferência</a>
         {% endif %}
         {% if item.nota and item.nota.status == "processando" or item.nota.status == "pendente" %}
         <button type="button" class="btn-secondary text-xs" :disabled="ocupada" @click="acaoFiscal('consultar', '{{ item.chave|escapejs }}')">Consultar SEFAZ</button>

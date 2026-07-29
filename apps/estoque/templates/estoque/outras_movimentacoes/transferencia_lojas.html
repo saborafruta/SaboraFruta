@@ -35,7 +35,7 @@
   }
 </style>
 <div class="space-y-5"
-     x-data="transferenciaLojaApp({{ filiais_json }}, {{ motoristas_json }}, {{ veiculos_json }})"
+     x-data="transferenciaLojaApp({{ filiais_json }}, {{ motoristas_json }}, {{ veiculos_json }}, {{ copia_transferencia_json }})"
      x-init="init()">
 
   <!-- ── Cabeçalho com breadcrumb ── -->
@@ -941,13 +941,14 @@
 </div>
 
 <script>
-function transferenciaLojaApp(filiais, motoristas, veiculos) {
+function transferenciaLojaApp(filiais, motoristas, veiculos, copiaTransferencia) {
   const filiaisDisponiveis = filiais || [];
+  const copia = copiaTransferencia || {};
   return {
     filiais: filiaisDisponiveis,
     motoristas: motoristas || [],
     veiculos: veiculos || [],
-    filialDestinoId: '{{ filial_destino_padrao_id|default:"" }}',
+    filialDestinoId: copia.filial_destino_id || '{{ filial_destino_padrao_id|default:"" }}',
 
     // Item sendo montado
     itemProdutoQuery: '',
@@ -971,9 +972,9 @@ function transferenciaLojaApp(filiais, motoristas, veiculos) {
     catalogoCarregando: false,
 
     // Lista de itens confirmados
-    itens: [],
+    itens: Array.isArray(copia.itens) ? copia.itens : [],
 
-    observacao: '',
+    observacao: copia.observacao || '',
     origemMercadoria: 'producao_propria',
     gerarMdfe: true,
     motoristaId: '',
