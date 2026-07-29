@@ -2139,7 +2139,11 @@ def api_inutilizar_faixa(request):
     from apps.fiscal.integrations.focusnfe import FocusNFeClient
     from apps.fiscal.integrations.focusnfe.config import FocusNFeConfig
     from apps.financeiro.constants.enums import StatusDocumentoFiscal
-    from apps.financeiro.models.fiscal import DocumentoFiscal
+    from apps.financeiro.models.fiscal import (
+        DocumentoFiscal,
+        InutilizacaoNumeracao,
+    )
+    from django.utils import timezone
 
     try:
         body = _json.loads(request.body)
@@ -2192,21 +2196,128 @@ def api_inutilizar_faixa(request):
         return JsonResponse({"erro": f"Erro ao inutilizar: {exc}"}, status=500)
 
     # Registra DocumentoFiscal para cada número inutilizado
+    def localizar_valor(dados, nomes):
+        if isinstance(dados, dict):
+            for nome in nomes:
+                valor = dados.get(nome)
+                if valor not in (None, ""):
+                    return valor
+            for valor in dados.values():
+                encontrado = localizar_valor(valor, nomes)
+                if encontrado not in (None, ""):
+                    return encontrado
+        if isinstance(dados, list):
+            for valor in dados:
+                encontrado = localizar_valor(valor, nomes)
+                if encontrado not in (None, ""):
+                    return encontrado
+        return ""
+
+    protocolo = str(localizar_valor(
+        resposta,
+        {"protocolo", "numero_protocolo", "nProt"},
+    ))
+    status_retorno = str(localizar_valor(
+        resposta,
+        {"status"},
+    ) or "").strip().lower()
+    status_sefaz = str(localizar_valor(
+        resposta,
+        {"status_sefaz", "codigo_status_sefaz", "cStat"},
+    ) or "").strip()
+    mensagem_sefaz = str(localizar_valor(
+        resposta,
+        {"mensagem_sefaz", "mensagem", "message", "xMotivo"},
+    ) or "").strip()
+    autorizada = (
+        status_retorno in {"autorizado", "autorizada", "sucesso"}
+        or status_sefaz == "102"
+    )
+    xml_retorno = str(localizar_valor(
+        resposta,
+        {"xml", "xml_retorno", "xml_inutilizacao", "procInutNFe"},
+    ))
+    if not xml_retorno.lstrip().startswith("<"):
+        xml_retorno = ""
+    caminho_xml = str(localizar_valor(
+        resposta,
+        {"caminho_xml"},
+    ) or "").strip()
+    if autorizada and not xml_retorno and caminho_xml:
+        try:
+            conteudo_xml = resource.http.get(caminho_xml, binary=True)
+            if isinstance(conteudo_xml, bytes):
+                xml_retorno = conteudo_xml.decode("utf-8-sig")
+            else:
+                xml_retorno = str(conteudo_xml or "")
+            if not xml_retorno.lstrip().startswith("<"):
+                xml_retorno = ""
+        except Exception:
+            # A inutilizacao continua valida; o relatorio guarda o protocolo
+            # e o XML podera ser recuperado posteriormente pela Focus.
+            xml_retorno = ""
+
+    inutilizacao = InutilizacaoNumeracao.objects.create(
+        filial=filial,
+        tipo_documento=tipo_documento,
+        serie=serie,
+        numero_inicial=numero_inicial,
+        numero_final=numero_final,
+        justificativa=justificativa,
+        status=status_retorno or ("autorizada" if autorizada else "erro"),
+        protocolo=protocolo[:20],
+        xml_retorno=xml_retorno,
+        data_inutilizacao=timezone.now() if autorizada else None,
+        usuario=request.user,
+    )
+    if not autorizada:
+        return JsonResponse(
+            {
+                "erro": mensagem_sefaz or (
+                    "A SEFAZ nao autorizou a inutilizacao da faixa."
+                ),
+                "resposta_sefaz": resposta,
+            },
+            status=422,
+        )
+
     for num in range(numero_inicial, numero_final + 1):
-        DocumentoFiscal.objects.get_or_create(
+        documento, _ = DocumentoFiscal.objects.get_or_create(
             filial=filial,
             tipo_documento=tipo_documento,
             numero=num,
             serie=serie,
             defaults={
                 "origem_tipo": "inutilizacao",
-                "origem_id": 0,
+                "origem_id": inutilizacao.pk,
                 "emitente_cnpj": cnpj,
+                "destinatario_snapshot": {},
                 "status": StatusDocumentoFiscal.INUTILIZADA,
                 "valor_total": 0,
+                "data_emissao": timezone.now(),
                 "usuario": request.user,
             },
         )
+        documento.status = StatusDocumentoFiscal.INUTILIZADA
+        documento.origem_id = inutilizacao.pk
+        documento.protocolo = protocolo[:20]
+        documento.codigo_status_sefaz = status_sefaz[:3] or "102"
+        documento.mensagem_sefaz = (
+            f"Numeracao inutilizada: serie {serie}, faixa "
+            f"{numero_inicial} a {numero_final}. "
+            f"{mensagem_sefaz or justificativa}"
+        )
+        if xml_retorno:
+            documento.xml_retorno = xml_retorno
+        documento.save(update_fields=[
+            "status",
+            "origem_id",
+            "protocolo",
+            "codigo_status_sefaz",
+            "mensagem_sefaz",
+            "xml_retorno",
+            "updated_at",
+        ])
 
     return JsonResponse({
         "ok": True,

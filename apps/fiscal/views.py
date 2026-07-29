@@ -1,5 +1,6 @@
 import json
 import io
+import csv
 import logging
 import re
 import zipfile
@@ -11,13 +12,18 @@ from django.core.paginator import Paginator
 from django.http import Http404, HttpResponse, HttpResponseBadRequest, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
+from django.utils.dateparse import parse_date
 from django.views import View
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_GET, require_POST
 
 from apps.core.services.exceptions import DomainError
 from apps.core.services.permissions import PermissaoRequiredMixin
-from apps.financeiro.models.fiscal import DocumentoFiscal, LogIntegracaoFiscal
+from apps.financeiro.models.fiscal import (
+    DocumentoFiscal,
+    InutilizacaoNumeracao,
+    LogIntegracaoFiscal,
+)
 from apps.financeiro.constants.enums import StatusDocumentoFiscal
 from apps.fiscal.integrations.dfe_client import avaliar_prontidao_dfe
 from apps.fiscal.integrations.focusnfe import FocusNFeClient
@@ -57,9 +63,8 @@ def _obter_xml_documento(documento, tipo):
         xml = documento.xml_assinado or ""
         if xml.lstrip().startswith("<"):
             return xml
-        if documento.status != StatusDocumentoFiscal.CANCELADA:
-            service = _focus_service_documento(documento)
-            xml = service.garantir_xml_autorizado(documento)
+        service = _focus_service_documento(documento)
+        xml = service.garantir_xml_autorizado(documento)
         return xml
     if tipo == "cancelamento":
         if documento.status != StatusDocumentoFiscal.CANCELADA:
@@ -70,6 +75,24 @@ def _obter_xml_documento(documento, tipo):
         service = _focus_service_documento(documento)
         return service.garantir_xml_cancelamento(documento)
     raise Http404("Tipo de XML invalido.")
+
+
+def _filtro_data(queryset, campo, data_inicial, data_final):
+    if data_inicial:
+        queryset = queryset.filter(**{f"{campo}__date__gte": data_inicial})
+    if data_final:
+        queryset = queryset.filter(**{f"{campo}__date__lte": data_final})
+    return queryset
+
+
+def _filtro_origem_documentos(queryset, origem):
+    if origem == "vendas":
+        return queryset.filter(origem_tipo="venda_pdv")
+    if origem == "transferencias":
+        return queryset.filter(
+            origem_tipo__in=["transferencia_estoque", "mdfe"],
+        )
+    return queryset
 
 
 class ManifestoFiscalListView(PermissaoRequiredMixin, View):
@@ -139,7 +162,26 @@ class ManifestoFiscalListView(PermissaoRequiredMixin, View):
                     StatusDocumentoFiscal.DENEGADA,
                 ],
             ).count(),
+            'inutilizadas': saidas_base.filter(
+                status=StatusDocumentoFiscal.INUTILIZADA,
+            ).count(),
         }
+        inutilizacoes = (
+            InutilizacaoNumeracao.objects
+            .filter(filial=request.filial_ativa)
+            .select_related('usuario')
+            .order_by('-created_at')[:20]
+        )
+        inutilizacoes_legadas = (
+            saidas_base
+            .filter(
+                status=StatusDocumentoFiscal.INUTILIZADA,
+                origem_id=0,
+            )
+            .select_related('usuario')
+            .order_by('-data_emissao')[:20]
+        )
+        origem_export = (request.GET.get('origem_export') or '').strip()
         config = ManifestoFiscalConfig.objects.for_filial(request.filial_ativa).filter(ativo=True).first()
         return render(request, self.template_name, {
             'aba': aba,
@@ -150,6 +192,9 @@ class ManifestoFiscalListView(PermissaoRequiredMixin, View):
             'saidas_page_obj': saidas_page_obj,
             'kpis_saida': kpis_saida,
             'status_saida': status_saida,
+            'inutilizacoes': inutilizacoes,
+            'inutilizacoes_legadas': inutilizacoes_legadas,
+            'origem_export': origem_export,
             'config': config,
         })
 
@@ -280,6 +325,22 @@ class DocumentoFiscalExportarXMLView(PermissaoRequiredMixin, View):
     permissao_acao = "ver"
 
     def get(self, request):
+        situacao = (request.GET.get("situacao") or "todas").strip()
+        origem = (request.GET.get("origem") or "").strip()
+        tipo_documento = (request.GET.get("tipo_documento") or "").strip()
+        data_inicial = parse_date((request.GET.get("data_ini") or "").strip())
+        data_final = parse_date((request.GET.get("data_fim") or "").strip())
+        if data_inicial and data_final and data_inicial > data_final:
+            return HttpResponseBadRequest(
+                "A data inicial nao pode ser posterior a data final.",
+            )
+
+        status_legado = (request.GET.get("status") or "").strip()
+        if status_legado == StatusDocumentoFiscal.AUTORIZADA:
+            situacao = "emitidas"
+        elif status_legado == StatusDocumentoFiscal.CANCELADA:
+            situacao = "canceladas"
+
         documentos = (
             DocumentoFiscal.objects.for_filial(request.filial_ativa)
             .select_related("filial")
@@ -291,17 +352,49 @@ class DocumentoFiscalExportarXMLView(PermissaoRequiredMixin, View):
             )
             .order_by("data_emissao")
         )
-        status = (request.GET.get("status") or "").strip()
-        tipo_documento = (request.GET.get("tipo_documento") or "").strip()
-        if status in {StatusDocumentoFiscal.AUTORIZADA, StatusDocumentoFiscal.CANCELADA}:
-            documentos = documentos.filter(status=status)
+        if situacao == "emitidas":
+            documentos = documentos.filter(status=StatusDocumentoFiscal.AUTORIZADA)
+        elif situacao == "canceladas":
+            documentos = documentos.filter(status=StatusDocumentoFiscal.CANCELADA)
+        elif situacao == "inutilizadas":
+            documentos = documentos.none()
         if tipo_documento:
             documentos = documentos.filter(tipo_documento=tipo_documento)
+        documentos = _filtro_origem_documentos(documentos, origem)
+        documentos = _filtro_data(
+            documentos,
+            "data_emissao",
+            data_inicial,
+            data_final,
+        )
+
+        inutilizacoes = (
+            InutilizacaoNumeracao.objects
+            .filter(filial=request.filial_ativa)
+            .select_related("usuario")
+            .order_by("created_at")
+        )
+        inutilizacoes = _filtro_data(
+            inutilizacoes,
+            "created_at",
+            data_inicial,
+            data_final,
+        )
+        if tipo_documento:
+            inutilizacoes = inutilizacoes.filter(tipo_documento=tipo_documento)
+        if situacao not in {"todas", "inutilizadas"} or origem in {
+            "vendas",
+            "transferencias",
+        }:
+            inutilizacoes = inutilizacoes.none()
 
         buffer = io.BytesIO()
         adicionados = 0
+        documentos_exportados = 0
+        faixas_exportadas = 0
         with zipfile.ZipFile(buffer, "w", zipfile.ZIP_DEFLATED) as arquivo:
             for documento in documentos.iterator():
+                documentos_exportados += 1
                 tipos = ["autorizado"]
                 if documento.status == StatusDocumentoFiscal.CANCELADA:
                     tipos.append("cancelamento")
@@ -311,16 +404,143 @@ class DocumentoFiscalExportarXMLView(PermissaoRequiredMixin, View):
                     except (DomainError, Http404):
                         continue
                     if xml and xml.lstrip().startswith("<"):
-                        arquivo.writestr(_nome_xml(documento, tipo), xml)
+                        pasta = (
+                            "canceladas"
+                            if documento.status == StatusDocumentoFiscal.CANCELADA
+                            else "emitidas"
+                        )
+                        arquivo.writestr(
+                            f"{pasta}/{_nome_xml(documento, tipo)}",
+                            xml,
+                        )
                         adicionados += 1
+
+            csv_buffer = io.StringIO(newline="")
+            writer = csv.writer(csv_buffer, delimiter=";")
+            writer.writerow([
+                "tipo",
+                "serie",
+                "numero_inicial",
+                "numero_final",
+                "data",
+                "protocolo",
+                "status",
+                "justificativa",
+                "usuario",
+            ])
+            faixas_cobertas = []
+            for inutilizacao in inutilizacoes.iterator():
+                faixas_exportadas += 1
+                faixas_cobertas.append((
+                    inutilizacao.tipo_documento,
+                    inutilizacao.serie,
+                    inutilizacao.numero_inicial,
+                    inutilizacao.numero_final,
+                ))
+                writer.writerow([
+                    inutilizacao.tipo_documento.upper(),
+                    inutilizacao.serie,
+                    inutilizacao.numero_inicial,
+                    inutilizacao.numero_final,
+                    inutilizacao.data_inutilizacao or inutilizacao.created_at,
+                    inutilizacao.protocolo,
+                    inutilizacao.status,
+                    inutilizacao.justificativa,
+                    str(inutilizacao.usuario),
+                ])
+                xml = inutilizacao.xml_retorno or ""
+                if xml.lstrip().startswith("<"):
+                    nome = (
+                        f"inutilizadas/{inutilizacao.tipo_documento}-"
+                        f"serie-{inutilizacao.serie}-"
+                        f"{inutilizacao.numero_inicial}-"
+                        f"{inutilizacao.numero_final}.xml"
+                    )
+                    arquivo.writestr(nome, xml)
+                    adicionados += 1
+
+            inutilizados_legados = DocumentoFiscal.objects.for_filial(
+                request.filial_ativa,
+            ).filter(status=StatusDocumentoFiscal.INUTILIZADA)
+            inutilizados_legados = _filtro_data(
+                inutilizados_legados,
+                "data_emissao",
+                data_inicial,
+                data_final,
+            )
+            if tipo_documento:
+                inutilizados_legados = inutilizados_legados.filter(
+                    tipo_documento=tipo_documento,
+                )
+            if situacao not in {"todas", "inutilizadas"} or origem in {
+                "vendas",
+                "transferencias",
+            }:
+                inutilizados_legados = inutilizados_legados.none()
+            for documento in inutilizados_legados.iterator():
+                if any(
+                    tipo == documento.tipo_documento
+                    and serie == documento.serie
+                    and inicio <= documento.numero <= fim
+                    for tipo, serie, inicio, fim in faixas_cobertas
+                ):
+                    continue
+                faixas_exportadas += 1
+                writer.writerow([
+                    documento.tipo_documento.upper(),
+                    documento.serie,
+                    documento.numero,
+                    documento.numero,
+                    documento.data_emissao,
+                    documento.protocolo,
+                    documento.status,
+                    documento.mensagem_sefaz or "Registro legado",
+                    str(documento.usuario),
+                ])
+                xml = documento.xml_retorno or ""
+                if xml.lstrip().startswith("<"):
+                    arquivo.writestr(
+                        (
+                            f"inutilizadas/{documento.tipo_documento}-"
+                            f"serie-{documento.serie}-{documento.numero}.xml"
+                        ),
+                        xml,
+                    )
+                    adicionados += 1
+            if faixas_exportadas:
+                arquivo.writestr(
+                    "inutilizadas/faixas-inutilizadas.csv",
+                    "\ufeff" + csv_buffer.getvalue(),
+                )
+
+            arquivo.writestr(
+                "resumo-exportacao.txt",
+                (
+                    "Exportacao fiscal do ERP\n"
+                    f"Documentos selecionados: {documentos_exportados}\n"
+                    f"Faixas inutilizadas: {faixas_exportadas}\n"
+                    f"Arquivos XML incluidos: {adicionados}\n"
+                    f"Situacao: {situacao}\n"
+                    f"Tipo: {tipo_documento or 'todos'}\n"
+                    f"Origem: {origem or 'todas'}\n"
+                    f"Periodo: {data_inicial or 'inicio'} a {data_final or 'hoje'}\n"
+                ),
+            )
             if not adicionados:
                 arquivo.writestr(
                     "LEIA-ME.txt",
-                    "Nenhum XML estava disponivel para os filtros selecionados.",
+                    (
+                        "Nenhum XML oficial estava disponivel para os filtros "
+                        "selecionados. Consulte o resumo e, quando aplicavel, "
+                        "o relatorio de faixas inutilizadas."
+                    ),
                 )
         buffer.seek(0)
         response = HttpResponse(buffer.getvalue(), content_type="application/zip")
-        response["Content-Disposition"] = 'attachment; filename="documentos-fiscais-xml.zip"'
+        periodo = f"{data_inicial or 'inicio'}-{data_final or 'hoje'}"
+        response["Content-Disposition"] = (
+            f'attachment; filename="documentos-fiscais-{periodo}.zip"'
+        )
         return response
 
 
