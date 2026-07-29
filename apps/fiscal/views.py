@@ -78,6 +78,16 @@ def _obter_xml_documento(documento, tipo):
     raise Http404("Tipo de XML invalido.")
 
 
+def _obter_xml_documento_arquivado(documento, tipo):
+    if tipo == "autorizado":
+        xml = documento.xml_assinado or ""
+    elif tipo == "cancelamento":
+        xml = documento.xml_cancelamento or ""
+    else:
+        return ""
+    return xml if xml.lstrip().startswith("<") else ""
+
+
 def _filtro_data(queryset, campo, data_inicial, data_final):
     if data_inicial:
         queryset = queryset.filter(**{f"{campo}__date__gte": data_inicial})
@@ -420,6 +430,7 @@ class DocumentoFiscalExportarXMLView(PermissaoRequiredMixin, View):
         adicionados = 0
         documentos_exportados = 0
         faixas_exportadas = 0
+        xmls_pendentes = []
         with zipfile.ZipFile(buffer, "w", zipfile.ZIP_DEFLATED) as arquivo:
             for documento in documentos.iterator():
                 documentos_exportados += 1
@@ -427,10 +438,7 @@ class DocumentoFiscalExportarXMLView(PermissaoRequiredMixin, View):
                 if documento.status == StatusDocumentoFiscal.CANCELADA:
                     tipos.append("cancelamento")
                 for tipo in tipos:
-                    try:
-                        xml = _obter_xml_documento(documento, tipo)
-                    except (DomainError, Http404):
-                        continue
+                    xml = _obter_xml_documento_arquivado(documento, tipo)
                     if xml and xml.lstrip().startswith("<"):
                         pasta = (
                             "canceladas"
@@ -442,6 +450,15 @@ class DocumentoFiscalExportarXMLView(PermissaoRequiredMixin, View):
                             xml,
                         )
                         adicionados += 1
+                    else:
+                        xmls_pendentes.append({
+                            "id": documento.pk,
+                            "tipo_documento": documento.tipo_documento,
+                            "numero": documento.numero,
+                            "serie": documento.serie,
+                            "chave": documento.chave or "",
+                            "arquivo": tipo,
+                        })
 
             csv_buffer = io.StringIO(newline="")
             writer = csv.writer(csv_buffer, delimiter=";")
@@ -538,6 +555,27 @@ class DocumentoFiscalExportarXMLView(PermissaoRequiredMixin, View):
                     "\ufeff" + csv_buffer.getvalue(),
                 )
 
+            if xmls_pendentes:
+                pendentes_buffer = io.StringIO(newline="")
+                pendentes_writer = csv.DictWriter(
+                    pendentes_buffer,
+                    fieldnames=[
+                        "id",
+                        "tipo_documento",
+                        "numero",
+                        "serie",
+                        "chave",
+                        "arquivo",
+                    ],
+                    delimiter=";",
+                )
+                pendentes_writer.writeheader()
+                pendentes_writer.writerows(xmls_pendentes)
+                arquivo.writestr(
+                    "xmls-pendentes.csv",
+                    "\ufeff" + pendentes_buffer.getvalue(),
+                )
+
             arquivo.writestr(
                 "resumo-exportacao.txt",
                 (
@@ -545,6 +583,7 @@ class DocumentoFiscalExportarXMLView(PermissaoRequiredMixin, View):
                     f"Documentos selecionados: {documentos_exportados}\n"
                     f"Faixas inutilizadas: {faixas_exportadas}\n"
                     f"Arquivos XML incluidos: {adicionados}\n"
+                    f"Arquivos XML pendentes: {len(xmls_pendentes)}\n"
                     f"Situacao: {situacao}\n"
                     f"Tipo: {tipo_documento or 'todos'}\n"
                     f"Origem: {origem or 'todas'}\n"
@@ -556,8 +595,9 @@ class DocumentoFiscalExportarXMLView(PermissaoRequiredMixin, View):
                     "LEIA-ME.txt",
                     (
                         "Nenhum XML oficial estava disponivel para os filtros "
-                        "selecionados. Consulte o resumo e, quando aplicavel, "
-                        "o relatorio de faixas inutilizadas."
+                        "selecionados. Consulte o resumo, o arquivo "
+                        "xmls-pendentes.csv e, quando aplicavel, o relatorio "
+                        "de faixas inutilizadas."
                     ),
                 )
         buffer.seek(0)
