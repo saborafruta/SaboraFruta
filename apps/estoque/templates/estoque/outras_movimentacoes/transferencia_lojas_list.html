@@ -74,6 +74,17 @@
             <p class="text-xs mt-2 break-words" style="color:#dc2626">
               {% if item.nota.codigo_status_sefaz %}{{ item.nota.codigo_status_sefaz }} · {% endif %}{{ item.nota.mensagem_sefaz }}
             </p>
+            {% if item.nota.codigo_status_sefaz == "539" %}
+            <div class="mt-2 p-2.5 rounded border text-xs"
+                 :style="temaClaro ? 'background:#fff7ed; border-color:#fdba74; color:#9a3412' : 'background:rgba(154,52,18,.16); border-color:#9a3412; color:#fdba74'">
+              Este número de NF-e já foi usado anteriormente.
+              {% if item.cancelada %}
+                Como a transferência está cancelada, não reemita a nota. Crie uma nova transferência.
+              {% else %}
+                Use <strong>Reemitir NF-e</strong> para tentar com o próximo número fiscal.
+              {% endif %}
+            </div>
+            {% endif %}
             {% endif %}
           {% else %}
             <p class="text-sm mt-1" :style="temaClaro ? 'color:#64748b' : 'color:#94a3b8'">Não emitida</p>
@@ -98,6 +109,9 @@
       </div>
 
       <div class="px-4 py-3 flex flex-wrap gap-2 border-t" :style="temaClaro ? 'border-color:#e5e7eb; background:#f8fafc' : 'border-color:#2a2a2e; background:#18181a'">
+        {% if item.cancelada and item.nota.codigo_status_sefaz == "539" %}
+        <a href="{% url 'estoque:transferencia-lojas-create' %}" class="btn-primary text-xs">Nova transferência</a>
+        {% endif %}
         {% if item.nota and item.nota.status == "processando" or item.nota.status == "pendente" %}
         <button type="button" class="btn-secondary text-xs" :disabled="ocupada" @click="acaoFiscal('consultar', '{{ item.chave|escapejs }}')">Consultar SEFAZ</button>
         {% endif %}
