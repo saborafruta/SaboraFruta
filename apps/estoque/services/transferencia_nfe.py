@@ -187,6 +187,7 @@ def construir_payload_transferencia(
         # 90 = Sem pagamento (transferência não tem cobrança financeira)
         "formas_pagamento": [{"forma_pagamento": "90", "valor_pagamento": 0.0}],
     }
+    _aplicar_destinatario_filial(payload, filial_destino)
 
     # ── Totais fiscais ──────────────────────────────────────────────
     valor_produtos = sum((_decimal(it["valor_bruto"]) for it in items), Decimal("0"))
