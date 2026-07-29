@@ -36,6 +36,11 @@ class VendaPDV(TimestampedModel):
         blank=True,
     )
     observacao_delivery = models.TextField(blank=True)
+    # Momento em que o pedido entrou em "finalizado"/"cancelado". Serve para o
+    # Kanban limpar da tela os pedidos encerrados no corte diario das 04:00 --
+    # nao da pra usar `updated_at` (auto_now) porque as movimentacoes salvam
+    # com update_fields e o auto_now nao entra nessa lista.
+    delivery_encerrado_em = models.DateTimeField(null=True, blank=True)
     entregador = models.CharField(max_length=100, blank=True)
     observacao = models.TextField(blank=True, help_text='Observação geral da venda (ex.: entregar após meio-dia).')
 

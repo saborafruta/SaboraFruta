@@ -4,6 +4,7 @@ from decimal import Decimal
 
 from django.db import transaction
 from django.db.models import Q, Sum
+from django.db.models.functions import Coalesce
 from django.http import JsonResponse
 from django.shortcuts import render
 from django.core.paginator import Paginator
@@ -1749,9 +1750,30 @@ DELIVERY_COLUNAS = [
 
 DELIVERY_STATUS_VALIDOS = {c[0] for c in DELIVERY_COLUNAS} | {'cancelado'}
 
+# Hora do corte diario que limpa do Kanban os pedidos ja encerrados.
+DELIVERY_LIMPEZA_HORA = 4
+
+
+def _delivery_corte_limpeza(agora=None):
+    """Último corte das 04:00 que já passou.
+
+    Pedidos finalizados/cancelados antes disso saem do Kanban. É calculado na
+    hora da consulta em vez de num job agendado porque em produção só sobe o
+    gunicorn (não há worker/beat do Celery) — o resultado visível é o mesmo de
+    uma limpeza às 04:00, com a vantagem de não depender de agendador nem
+    quebrar se o processo reiniciar.
+    """
+    agora = agora or timezone.localtime()
+    corte = agora.replace(hour=DELIVERY_LIMPEZA_HORA, minute=0, second=0, microsecond=0)
+    if agora < corte:
+        corte -= datetime.timedelta(days=1)
+    return corte
+
 
 @requer_permissao('pdv', 'ver')
 def delivery_kanban(request):
+    corte = _delivery_corte_limpeza()
+
     qs = (
         VendaPDV.objects
         .for_filial(request.filial_ativa)
@@ -1761,6 +1783,18 @@ def delivery_kanban(request):
         .select_related('cliente', 'usuario')
         .prefetch_related('itens__produto', 'pagamentos__forma_pagamento')
         .order_by('data_venda')
+    )
+
+    # Limpeza diária das 04:00: pedidos já encerrados (finalizado/cancelado)
+    # antes do último corte saem do quadro. Continuam acessíveis no Relatório
+    # de Delivery e no Histórico de Vendas -- nada é apagado.
+    # Registros antigos sem `delivery_encerrado_em` caem no fallback da própria
+    # data da venda, senão nunca sairiam do quadro.
+    qs = qs.annotate(
+        encerrado_em=Coalesce('delivery_encerrado_em', 'data_venda'),
+    ).exclude(
+        status_delivery__in=['finalizado', 'cancelado'],
+        encerrado_em__lt=corte,
     )
 
     # Pedido é considerado "não pago" (cobrar na entrega) se ainda existir
@@ -1871,6 +1905,17 @@ def delivery_mover(request, pk):
 
     campos = ['status_delivery']
     venda.status_delivery = novo_status
+
+    # Marca/limpa o momento do encerramento, base do corte diário das 04:00
+    # que limpa o Kanban (ver _delivery_corte_limpeza).
+    if novo_status in ('finalizado', 'cancelado'):
+        if venda.delivery_encerrado_em is None:
+            venda.delivery_encerrado_em = timezone.now()
+            campos.append('delivery_encerrado_em')
+    elif venda.delivery_encerrado_em is not None:
+        # Voltou para uma etapa ativa: volta a contar como pedido em aberto.
+        venda.delivery_encerrado_em = None
+        campos.append('delivery_encerrado_em')
 
     observacao = body.get('observacao', '').strip()
     if observacao:
