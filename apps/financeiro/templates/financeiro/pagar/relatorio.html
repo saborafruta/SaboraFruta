@@ -1,0 +1,162 @@
+{% extends "_base.html" %}
+{% load erp_extras %}
+
+{% block title %}{{ title }}{% endblock %}
+{% block page_title %}{{ title }}{% endblock %}
+
+{% block extra_head %}
+<style>
+  #relatorio-cp { color:#111827; }
+  #relatorio-cp .forn-card { border:1px solid #e5e7eb; border-radius:12px; overflow:hidden; break-inside:avoid; }
+  @media print {
+    nav, header, aside, .no-print { display:none !important; }
+    body { background:#fff !important; }
+    #relatorio-cp { color:#000 !important; }
+    #relatorio-cp .forn-card { border-color:#ccc !important; box-shadow:none !important; }
+    * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="space-y-5" id="relatorio-cp">
+
+  <!-- Cabeçalho -->
+  <div class="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
+    <div class="flex items-center gap-4">
+      {% if filial.imagem %}
+        <img src="{{ filial.imagem.url }}"
+             alt="{{ filial.nome_fantasia|default:filial.razao_social }}"
+             style="height:96px; width:auto; max-width:220px; object-fit:contain; flex-shrink:0;"
+             {% if empresa_logo_url %}onerror="this.onerror=null;this.src='{{ empresa_logo_url }}';"{% else %}onerror="this.style.display='none';"{% endif %}>
+      {% elif empresa_logo_url %}
+        <img src="{{ empresa_logo_url }}"
+             alt="{{ filial.nome_fantasia|default:filial.razao_social }}"
+             style="height:96px; width:auto; max-width:220px; object-fit:contain; flex-shrink:0;"
+             onerror="this.style.display='none';">
+      {% endif %}
+      <div>
+        <p class="text-sm mb-1 no-print" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+          <a href="{% url 'financeiro:pagar_list' %}" :style="temaClaro ? 'color:#3b82f6;' : 'color:#60a5fa;'">Contas a Pagar</a>
+          <span class="mx-1">›</span> Relatório
+        </p>
+        <h2 class="text-2xl font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">Relatório de Contas a Pagar</h2>
+        <p class="text-sm mt-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+          {{ filial.nome_fantasia|default:filial.razao_social }} ·
+          Situação: <strong>{{ status_label }}</strong>
+          {% if q %} · Fornecedor/Doc.: <strong>{{ q }}</strong>{% endif %}
+          {% if data_ini or data_fim %} · Vencimento:
+            {% if data_ini %}{{ data_ini }}{% else %}…{% endif %} a {% if data_fim %}{{ data_fim }}{% else %}…{% endif %}
+          {% endif %}
+        </p>
+        <p class="text-xs mt-0.5" :style="temaClaro ? 'color:#94a3b8;' : 'color:#64748b;'">
+          Gerado em {{ gerado_em|date:"d/m/Y H:i" }} · {{ total_titulos }} título{{ total_titulos|pluralize }} · {{ fornecedores|length }} fornecedor{{ fornecedores|length|pluralize }}
+        </p>
+      </div>
+    </div>
+    <div class="flex gap-2 no-print">
+      <button type="button" onclick="window.print()" class="btn-secondary flex items-center gap-2">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"/>
+        </svg>
+        Imprimir
+      </button>
+      <button type="button" id="btn-export-pdf" class="btn-primary flex items-center gap-2">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+        </svg>
+        Exportar PDF
+      </button>
+    </div>
+  </div>
+
+  <!-- Um bloco por fornecedor -->
+  {% for g in fornecedores %}
+  <div class="forn-card card p-0">
+    <div class="px-4 py-3 border-b flex flex-wrap items-center justify-between gap-2"
+         :style="temaClaro ? 'border-color:#e5e7eb; background:#f8fafc;' : 'border-color:#2a2a2e; background:#1e1e20;'">
+      <div>
+        <div class="font-semibold text-base" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">{{ g.fornecedor.razao_social|default:"Sem fornecedor" }}</div>
+        {% if g.fornecedor.cpf_cnpj %}<div class="text-xs font-mono" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">{{ g.fornecedor.cpf_cnpj }}</div>{% endif %}
+      </div>
+      <div class="text-right text-sm">
+        <span :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Saldo em aberto:</span>
+        <strong :style="temaClaro ? 'color:#b45309;' : 'color:#fcd34d;'">R$ {{ g.total_saldo|floatformat:2 }}</strong>
+        <span class="mx-1">·</span>
+        <span :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">{{ g.titulos|length }} título{{ g.titulos|length|pluralize }}</span>
+      </div>
+    </div>
+
+    <div class="p-4 space-y-4">
+      {% for row in g.titulos %}
+      <div class="rounded-lg border" :style="temaClaro ? 'border-color:#eef2f7;' : 'border-color:#2a2a2e;'">
+        <!-- Cabeçalho do título -->
+        <div class="px-3 py-2 flex flex-wrap items-center justify-between gap-2 text-sm border-b"
+             :style="temaClaro ? 'border-color:#eef2f7;' : 'border-color:#2a2a2e;'">
+          <div>
+            <strong :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
+              {% if row.entrada %}NF {{ row.entrada.numero_nf }}{% elif row.titulo.documento_numero %}Doc. {{ row.titulo.documento_numero }}{% else %}Título #{{ row.titulo.pk }}{% endif %}
+            </strong>
+            <span :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+              · Parc. {{ row.titulo.parcela }}/{{ row.titulo.total_parcelas }}
+              · Venc. {{ row.titulo.data_vencimento|date:"d/m/Y" }}
+            </span>
+          </div>
+          <div class="text-center">
+            <span :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Entrada:</span>
+            <strong :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
+              {% if row.entrada %}{{ row.entrada.data_emissao_nf|date:"d/m/Y" }}{% else %}{{ row.titulo.data_emissao|date:"d/m/Y" }}{% endif %}
+            </strong>
+          </div>
+          <div class="text-right">
+            <span :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Saldo:</span>
+            <strong :style="temaClaro ? 'color:#b45309;' : 'color:#fcd34d;'">R$ {{ row.titulo.valor_saldo|floatformat:2 }}</strong>
+          </div>
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+  {% empty %}
+  <div class="card p-8 text-center" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+    Nenhum título encontrado para os filtros selecionados.
+  </div>
+  {% endfor %}
+
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+<script>
+document.getElementById('btn-export-pdf').addEventListener('click', function () {
+  var btn = this;
+  var original = btn.innerHTML;
+  btn.disabled = true;
+  btn.textContent = 'Gerando PDF...';
+
+  var element = document.getElementById('relatorio-cp');
+  var noPrint = element.querySelectorAll('.no-print');
+  noPrint.forEach(function (el) { el.style.display = 'none'; });
+
+  var opt = {
+    margin:      [10, 10, 10, 10],
+    filename:    'contas-a-pagar-{{ gerado_em|date:"Y-m-d" }}.pdf',
+    image:       { type: 'jpeg', quality: 0.95 },
+    html2canvas: { scale: 2, useCORS: true, logging: false },
+    jsPDF:       { unit: 'mm', format: 'a4', orientation: 'portrait' },
+    pagebreak:   { mode: ['css', 'legacy'], avoid: '.forn-card' }
+  };
+
+  html2pdf().set(opt).from(element).save().then(function () {
+    noPrint.forEach(function (el) { el.style.display = ''; });
+    btn.disabled = false;
+    btn.innerHTML = original;
+  }).catch(function () {
+    noPrint.forEach(function (el) { el.style.display = ''; });
+    btn.disabled = false;
+    btn.innerHTML = original;
+  });
+});
+</script>
+{% endblock %}

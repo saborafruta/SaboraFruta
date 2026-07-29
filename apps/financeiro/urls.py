@@ -19,6 +19,7 @@ urlpatterns = [
 
     # ── Contas a Pagar ────────────────────────────────────────────────────────
     path("pagar/",                    pagar_views.ContaPagarListView.as_view(),      name="pagar_list"),
+    path("pagar/relatorio/",          pagar_views.ContaPagarRelatorioView.as_view(), name="pagar_relatorio"),
     path("pagar/novo/",               pagar_views.ContaPagarCreateView.as_view(),    name="pagar_criar"),
     path("pagar/<int:pk>/",           pagar_views.ContaPagarDetailView.as_view(),    name="pagar_detail"),
     path("pagar/<int:pk>/pagar/",     pagar_views.ContaPagarPagamentoView.as_view(), name="pagar_pagar"),
