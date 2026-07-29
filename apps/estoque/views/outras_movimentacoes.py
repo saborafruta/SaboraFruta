@@ -1487,7 +1487,8 @@ class TransferenciaConsultarNFeApiView(PermissaoRequiredMixin, View):
             )
             FocusNFeService(client=client).consultar(documento)
             documento.refresh_from_db()
-            processar_nfe_transferencia_autorizada(documento)
+            if not mov.transferencia_cancelada:
+                processar_nfe_transferencia_autorizada(documento)
         except Exception as exc:  # noqa: BLE001
             return JsonResponse(
                 {'erro': f'Não foi possível consultar a NF-e na SEFAZ: {exc}'},

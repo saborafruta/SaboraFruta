@@ -162,6 +162,34 @@ async function acaoFiscal(acao, chave) {
     location.reload();
   } catch (error) { alert(error.message); }
 }
+async function sincronizarNotasPendentes() {
+  const pendentes = [
+    {% for item in transferencias %}
+      {% if item.nota.status == "processando" or item.nota.status == "pendente" %}
+      '{{ item.chave|escapejs }}',
+      {% endif %}
+    {% endfor %}
+  ];
+
+  for (const chave of pendentes) {
+    const marcador = `transferencia-nfe-consultada:${chave}`;
+    if (sessionStorage.getItem(marcador)) continue;
+    sessionStorage.setItem(marcador, '1');
+    try {
+      const resultado = await enviar(
+        '{% url "estoque:transferencia-lojas-consultar-nfe" %}',
+        {documento_numero: chave}
+      );
+      if (!['processando', 'pendente'].includes(resultado.status)) {
+        location.reload();
+        return;
+      }
+    } catch (error) {
+      sessionStorage.removeItem(marcador);
+      console.warn('Falha ao sincronizar NF-e de transferência:', error.message);
+    }
+  }
+}
 async function cancelarNfe(chave) {
   const justificativa = prompt('Informe a justificativa do cancelamento da NF-e (mínimo 15 caracteres):');
   if (!justificativa) return;
@@ -184,5 +212,6 @@ async function excluir(chave) {
     location.reload();
   } catch (error) { alert(error.message); }
 }
+document.addEventListener('DOMContentLoaded', sincronizarNotasPendentes);
 </script>
 {% endblock %}
