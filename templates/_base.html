@@ -626,6 +626,70 @@
       </svg>
     </a>
 
+    <details class="relative dropdown-nativo">
+      <summary class="relative flex items-center justify-center w-9 h-9 rounded-lg cursor-pointer list-none transition-all"
+               :style="temaClaro
+                 ? 'background:rgba(255,255,255,0.15); border:1px solid rgba(255,255,255,0.25); color:#fff;'
+                 : 'background:#242426; border:1px solid #2a2a2e; color:#cbd5e1;'"
+               title="Notificações">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.7"
+                d="M15 17H9m9-2V11a6 6 0 10-12 0v4l-2 2h16l-2-2zM13.7 21h-3.4"/>
+        </svg>
+        {% if notificacoes_nao_lidas %}
+          <span class="absolute -right-1 -top-1 min-w-[18px] h-[18px] px-1 rounded-full flex items-center justify-center text-[10px] font-bold"
+                style="background:#ef4444;color:#fff;border:2px solid #172554;">
+            {{ notificacoes_nao_lidas }}
+          </span>
+        {% endif %}
+      </summary>
+      <div class="absolute right-0 mt-1 w-[min(24rem,calc(100vw-2rem))] rounded-lg z-50 overflow-hidden"
+           :style="temaClaro
+             ? 'background:#fff; border:1px solid #e5e7eb; box-shadow:0 12px 32px rgba(15,23,42,0.16);'
+             : 'background:#242426; border:1px solid #34343a; box-shadow:0 16px 40px rgba(0,0,0,0.5);'">
+        <div class="flex items-center justify-between px-4 py-3"
+             :style="temaClaro ? 'border-bottom:1px solid #e5e7eb;' : 'border-bottom:1px solid #34343a;'">
+          <div>
+            <p class="text-sm font-bold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">Notificações</p>
+            <p class="text-xs mt-0.5" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+              {{ notificacoes_nao_lidas }} não lida{{ notificacoes_nao_lidas|pluralize }}
+            </p>
+          </div>
+          {% if notificacoes_nao_lidas %}
+            <button type="button" onclick="marcarTodasNotificacoes(this)"
+                    class="text-xs font-semibold" style="color:#2563eb;">
+              Marcar todas
+            </button>
+          {% endif %}
+        </div>
+        <div class="max-h-96 overflow-y-auto">
+          {% for notificacao in notificacoes_recentes %}
+            <a href="{% url 'core:notificacao-abrir' notificacao.pk %}"
+               class="block px-4 py-3 transition-colors"
+               :style="temaClaro
+                 ? 'border-bottom:1px solid #f1f5f9; background:{% if notificacao.foi_lida %}#fff{% else %}#eff6ff{% endif %};'
+                 : 'border-bottom:1px solid #303036; background:{% if notificacao.foi_lida %}#242426{% else %}#172554{% endif %};'">
+              <div class="flex items-start gap-3">
+                <span class="mt-1 h-2 w-2 rounded-full shrink-0"
+                      style="background:{% if notificacao.foi_lida %}#94a3b8{% else %}#3b82f6{% endif %};"></span>
+                <span class="min-w-0">
+                  <span class="block text-sm font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">{{ notificacao.titulo }}</span>
+                  {% if notificacao.mensagem %}
+                    <span class="block text-xs mt-1 leading-5" :style="temaClaro ? 'color:#475569;' : 'color:#cbd5e1;'">{{ notificacao.mensagem }}</span>
+                  {% endif %}
+                  <span class="block text-[11px] mt-1" :style="temaClaro ? 'color:#94a3b8;' : 'color:#71717a;'">{{ notificacao.created_at|timesince }} atrás</span>
+                </span>
+              </div>
+            </a>
+          {% empty %}
+            <div class="px-4 py-8 text-center text-sm" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+              Nenhuma notificação por enquanto.
+            </div>
+          {% endfor %}
+        </div>
+      </div>
+    </details>
+
     <!-- USUÁRIO -->
     <details class="relative dropdown-nativo">
       <summary class="flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm cursor-pointer list-none transition-all"
@@ -1241,6 +1305,22 @@
       window.erpInitDatePickers = initDatePickers;
       window.erpInitDecimalInputs = initDecimalInputs;
     })();
+  </script>
+  <script>
+    async function marcarTodasNotificacoes(botao) {
+      botao.disabled = true;
+      try {
+        const resposta = await fetch("{% url 'core:notificacoes-marcar-todas' %}", {
+          method: 'POST',
+          headers: {'X-CSRFToken': '{{ csrf_token }}'}
+        });
+        if (!resposta.ok) throw new Error('Falha ao atualizar notificações.');
+        window.location.reload();
+      } catch (erro) {
+        botao.disabled = false;
+        alert(erro.message);
+      }
+    }
   </script>
 </body>
 </html>

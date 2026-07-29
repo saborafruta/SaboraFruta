@@ -8,7 +8,7 @@ from django.contrib import messages
 from django.db import models as db_models
 from django.db import transaction
 from django.http import JsonResponse
-from django.shortcuts import redirect, render
+from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.utils import timezone
 from django.views import View
@@ -19,7 +19,13 @@ from apps.core.services.exceptions import DomainError
 from apps.core.services.permissions import PERMISSION_DENIED_MESSAGE, PermissaoRequiredMixin
 from apps.core.services.search import normalize_search_text, ranked_search_ids
 from apps.estoque.forms.outras_movimentacoes import DevolucaoClienteForm, DevolucaoFornecedorForm, SaidaEspecialForm
-from apps.estoque.models import Estoque, LoteProduto, MovimentacaoEstoque
+from apps.estoque.models import (
+    ConferenciaTransferencia,
+    Estoque,
+    ItemConferenciaTransferencia,
+    LoteProduto,
+    MovimentacaoEstoque,
+)
 from apps.estoque.services.movimentacao_service import MovimentacaoService
 from apps.estoque.views.permissoes import permissoes_estoque
 from apps.financeiro.constants.enums import StatusDocumentoFiscal
@@ -733,6 +739,16 @@ def _transferencias_para_listagem(filial, usuario, limite=500):
             documento_fiscal_id__in=documento_ids,
         )
     }
+    documentos_transferencia = {
+        mov.documento_numero for mov in movs if mov.documento_numero
+    }
+    conferencias_por_documento = {
+        conferencia.documento_numero: conferencia
+        for conferencia in ConferenciaTransferencia.objects.filter(
+            filial_origem=filial,
+            documento_numero__in=documentos_transferencia,
+        )
+    }
 
     grupos = {}
     ordem = []
@@ -770,6 +786,7 @@ def _transferencias_para_listagem(filial, usuario, limite=500):
             nota_ativa = bool(
                 nota and nota['status'] == StatusDocumentoFiscal.AUTORIZADA
             )
+            conferencia = conferencias_por_documento.get(chave)
             grupos[chave] = {
                 'chave': chave,
                 'filial_destino_nome': (
@@ -781,6 +798,12 @@ def _transferencias_para_listagem(filial, usuario, limite=500):
                 'cancelada': mov.transferencia_cancelada,
                 'nota': nota,
                 'mdfe': mdfe_info,
+                'conferencia': {
+                    'status': conferencia.status,
+                    'status_label': conferencia.get_status_display(),
+                    'observacao': conferencia.observacao_conferencia,
+                    'conferida_em': conferencia.conferida_em,
+                } if conferencia else None,
                 'mdfe_create_url': (
                     f"{reverse('logistica:mdfe-create')}?nfe_documento_id={doc.pk}"
                     if doc and nota_ativa and not mdfe_info
@@ -1181,12 +1204,30 @@ class TransferenciaLojaApiView(PermissaoRequiredMixin, View):
         except DomainError as exc:
             return JsonResponse({'erro': str(exc)}, status=400)
 
+        from apps.estoque.services.conferencia_transferencia import (
+            criar_conferencia_transferencia,
+        )
+        conferencia = criar_conferencia_transferencia(
+            documento_numero=documento_numero,
+            filial_origem=filial,
+            filial_destino=filial_destino,
+            usuario=request.user,
+            observacao=observacao,
+        )
+
         message = (
             f'{len(resultados)} produto(s) transferido(s) de '
             f'"{filial.nome_fantasia or filial.razao_social}" para '
             f'"{filial_destino.nome_fantasia or filial_destino.razao_social}".'
         )
-        resposta = {'ok': True, 'message': message}
+        resposta = {
+            'ok': True,
+            'message': message,
+            'conferencia_url': reverse(
+                'estoque:transferencia-conferencia-detail',
+                kwargs={'pk': conferencia.pk},
+            ),
+        }
 
         # ── Emissão da NF-e de transferência (fora da transação de
         #    estoque: se a nota falhar, o estoque já movido é mantido) ─
@@ -1245,6 +1286,185 @@ class TransferenciaLojaApiView(PermissaoRequiredMixin, View):
                 resposta['nota_erro'] = nota_erro
 
         return JsonResponse(resposta)
+
+
+def _garantir_conferencias_recebidas(filial_destino):
+    entradas = (
+        MovimentacaoEstoque.objects
+        .filter(
+            filial=filial_destino,
+            tipo_operacao=MovimentacaoEstoque.TipoOperacao.TRANSFERENCIA_ENTRADA,
+            transferencia_cancelada=False,
+        )
+        .exclude(documento_numero='')
+        .select_related('usuario')
+        .order_by('-data_movimentacao')
+    )
+    documentos_existentes = set(
+        ConferenciaTransferencia.objects.filter(
+            documento_numero__in=entradas.values_list('documento_numero', flat=True),
+        ).values_list('documento_numero', flat=True)
+    )
+    for entrada in entradas:
+        if entrada.documento_numero in documentos_existentes:
+            continue
+        saida = (
+            MovimentacaoEstoque.objects
+            .filter(
+                documento_numero=entrada.documento_numero,
+                tipo_operacao=MovimentacaoEstoque.TipoOperacao.TRANSFERENCIA_SAIDA,
+                filial_destino=filial_destino,
+            )
+            .select_related('filial')
+            .first()
+        )
+        if not saida:
+            continue
+        from apps.estoque.services.conferencia_transferencia import (
+            criar_conferencia_transferencia,
+        )
+        criar_conferencia_transferencia(
+            documento_numero=entrada.documento_numero,
+            filial_origem=saida.filial,
+            filial_destino=filial_destino,
+            usuario=saida.usuario,
+            observacao=saida.observacao,
+        )
+        documentos_existentes.add(entrada.documento_numero)
+
+
+class TransferenciaConferenciaListView(PermissaoRequiredMixin, View):
+    permissao_modulo = 'estoque'
+    permissao_acao = 'ver'
+
+    def get(self, request):
+        filial = request.filial_ativa
+        _garantir_conferencias_recebidas(filial)
+        status = (request.GET.get('status') or '').strip()
+        conferencias = (
+            ConferenciaTransferencia.objects
+            .filter(filial_destino=filial)
+            .select_related('filial_origem', 'conferida_por')
+            .prefetch_related('itens__produto_enviado')
+        )
+        if status:
+            conferencias = conferencias.filter(status=status)
+        totais = {
+            'aguardando': ConferenciaTransferencia.objects.filter(
+                filial_destino=filial,
+                status=ConferenciaTransferencia.Status.AGUARDANDO,
+            ).count(),
+            'divergencias': ConferenciaTransferencia.objects.filter(
+                filial_destino=filial,
+                status=ConferenciaTransferencia.Status.COM_DIVERGENCIA,
+            ).count(),
+            'conferidas': ConferenciaTransferencia.objects.filter(
+                filial_destino=filial,
+                status=ConferenciaTransferencia.Status.CONFERIDA,
+            ).count(),
+        }
+        return render(
+            request,
+            'estoque/outras_movimentacoes/transferencia_conferencia_list.html',
+            {
+                'title': 'Recebimento de transferencias',
+                'conferencias': conferencias,
+                'status_filtro': status,
+                'totais': totais,
+                'status_choices': ConferenciaTransferencia.Status.choices,
+            },
+        )
+
+
+class TransferenciaConferenciaDetailView(PermissaoRequiredMixin, View):
+    permissao_modulo = 'estoque'
+    permissao_acao = 'ver'
+
+    def _conferencia(self, request, pk):
+        return get_object_or_404(
+            ConferenciaTransferencia.objects
+            .select_related(
+                'filial_origem', 'filial_destino', 'criada_por',
+                'conferida_por',
+            )
+            .prefetch_related(
+                'itens__produto_enviado',
+                'itens__produto_recebido',
+                'itens__lote_enviado',
+            ),
+            pk=pk,
+            filial_destino=request.filial_ativa,
+        )
+
+    def get(self, request, pk):
+        conferencia = self._conferencia(request, pk)
+        produtos = Produto.objects.for_filial(request.filial_ativa).filter(
+            ativo=True,
+        ).order_by('descricao')
+        return render(
+            request,
+            'estoque/outras_movimentacoes/transferencia_conferencia_detail.html',
+            {
+                'title': f'Conferencia {conferencia.documento_numero}',
+                'conferencia': conferencia,
+                'produtos': produtos,
+                'ocorrencias': ItemConferenciaTransferencia.Ocorrencia.choices,
+                'pode_editar': conferencia.status == ConferenciaTransferencia.Status.AGUARDANDO,
+            },
+        )
+
+    def post(self, request, pk):
+        conferencia = self._conferencia(request, pk)
+        acao = request.POST.get('acao')
+        try:
+            if acao == 'cancelar':
+                from apps.estoque.services.conferencia_transferencia import (
+                    cancelar_na_conferencia,
+                )
+                cancelar_na_conferencia(
+                    conferencia_id=conferencia.pk,
+                    filial_destino=request.filial_ativa,
+                    usuario=request.user,
+                )
+                messages.success(request, 'Transferencia cancelada e estoque estornado.')
+                return redirect('estoque:transferencia-conferencia-list')
+
+            itens = {}
+            for item in conferencia.itens.all():
+                prefixo = f'item_{item.pk}_'
+                itens[str(item.pk)] = {
+                    'ocorrencia': request.POST.get(prefixo + 'ocorrencia'),
+                    'quantidade_recebida': request.POST.get(prefixo + 'quantidade_recebida'),
+                    'produto_recebido_id': request.POST.get(prefixo + 'produto_recebido_id'),
+                    'quantidade_produto_recebido': request.POST.get(
+                        prefixo + 'quantidade_produto_recebido'
+                    ),
+                    'observacao': request.POST.get(prefixo + 'observacao'),
+                }
+            from apps.estoque.services.conferencia_transferencia import (
+                concluir_conferencia,
+            )
+            resultado = concluir_conferencia(
+                conferencia_id=conferencia.pk,
+                filial_destino=request.filial_ativa,
+                usuario=request.user,
+                itens=itens,
+                observacao=request.POST.get('observacao_conferencia'),
+            )
+            messages.success(
+                request,
+                f'Transferencia finalizada como: {resultado.get_status_display()}.',
+            )
+            return redirect(
+                'estoque:transferencia-conferencia-detail',
+                pk=conferencia.pk,
+            )
+        except DomainError as exc:
+            messages.error(request, str(exc))
+            return redirect(
+                'estoque:transferencia-conferencia-detail',
+                pk=conferencia.pk,
+            )
 
 
 class TransferenciasPendentesNFeView(PermissaoRequiredMixin, View):

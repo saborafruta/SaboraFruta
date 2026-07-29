@@ -9,6 +9,8 @@
       <p class="text-sm mt-1" :style="temaClaro ? 'color:#64748b' : 'color:#94a3b8'">Acompanhe estoque, NF-e e MDF-e em um só lugar.</p>
     </div>
     <div class="flex flex-wrap gap-2">
+    <a href="{% url 'estoque:transferencia-conferencia-list' %}"
+       class="btn-secondary">Recebimentos para conferir</a>
     <a href="{% url 'fiscal:manifesto-list' %}?aba=saidas&origem_export=transferencias#exportar-xml"
        class="btn-secondary">XMLs fiscais</a>
     <a href="{% url 'estoque:transferencia-lojas-create' %}" class="btn-primary">
@@ -63,6 +65,15 @@
               {% endfor %}
             </div>
           </details>
+          {% if item.conferencia %}
+          <div class="mt-3">
+            <p class="text-xs uppercase font-semibold" :style="temaClaro ? 'color:#64748b' : 'color:#94a3b8'">Recebimento no destino</p>
+            <span class="soft-pill mt-1 {% if item.conferencia.status == 'conferida' %}is-green{% elif item.conferencia.status == 'com_divergencia' or item.conferencia.status == 'cancelada' %}is-red{% else %}is-slate{% endif %}">
+              {{ item.conferencia.status_label }}
+            </span>
+            {% if item.conferencia.observacao %}<p class="text-xs mt-2">{{ item.conferencia.observacao }}</p>{% endif %}
+          </div>
+          {% endif %}
         </div>
 
         <div>
@@ -105,7 +116,10 @@
           {% elif item.nota.status == "processando" or item.nota.status == "pendente" %}
             <p class="text-xs mt-1" style="color:#d97706">Aguardando autorização da NF-e.</p>
           {% elif item.mdfe_create_url %}
-            <a href="{{ item.mdfe_create_url }}" class="text-sm font-semibold mt-1 inline-block" style="color:#2563eb">Emitir MDF-e</a>
+            <a href="{{ item.mdfe_create_url }}" class="text-sm font-semibold mt-1 inline-block" style="color:#2563eb">Preparar MDF-e (modelo 58)</a>
+            <p class="text-xs mt-1" :style="temaClaro ? 'color:#64748b' : 'color:#94a3b8'">
+              Após a autorização, serão liberados o XML e o DAMDFE.
+            </p>
           {% else %}
             <p class="text-sm mt-1" :style="temaClaro ? 'color:#64748b' : 'color:#94a3b8'">Não gerado</p>
           {% endif %}

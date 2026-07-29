@@ -3,6 +3,7 @@ from .empresa import Empresa, Filial, PoliticaReplicacao, PoliticaReplicacaoFili
 from .usuario import Usuario, PerfilAcesso, Permissao, SessaoUsuario, UsuarioFilialAcesso
 from .log import LogSistema, LogAcesso, RegistroAuditoria
 from .parametros import ParametrosSistema, ParametroDocumentoFiscal
+from .notificacao import Notificacao, NotificacaoLeitura
 
 __all__ = [
     'FilialScopedModel', 'FilialManager', 'TimestampedModel', 'ActiveModel',
@@ -10,4 +11,5 @@ __all__ = [
     'Usuario', 'PerfilAcesso', 'Permissao', 'SessaoUsuario', 'UsuarioFilialAcesso',
     'LogSistema', 'LogAcesso', 'RegistroAuditoria',
     'ParametrosSistema', 'ParametroDocumentoFiscal',
+    'Notificacao', 'NotificacaoLeitura',
 ]

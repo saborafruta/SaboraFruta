@@ -1,0 +1,77 @@
+{% extends "_base.html" %}
+
+{% block page_title %}Recebimento de transferências{% endblock %}
+
+{% block content %}
+<div class="max-w-7xl mx-auto px-4 sm:px-6 py-8">
+  <div class="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between mb-6">
+    <div>
+      <a href="{% url 'estoque:transferencia-lojas' %}" class="text-sm font-semibold" style="color:#2563eb;">← Transferências enviadas</a>
+      <h2 class="text-2xl font-bold mt-3">Conferência de recebimentos</h2>
+      <p class="text-sm mt-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+        Confira o que chegou nesta filial antes de encerrar o recebimento.
+      </p>
+    </div>
+  </div>
+
+  <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-5">
+    <div class="card p-4">
+      <p class="text-xs uppercase font-semibold" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Aguardando</p>
+      <p class="text-2xl font-bold mt-1" style="color:#d97706;">{{ totais.aguardando }}</p>
+    </div>
+    <div class="card p-4">
+      <p class="text-xs uppercase font-semibold" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Conferidas</p>
+      <p class="text-2xl font-bold mt-1" style="color:#059669;">{{ totais.conferidas }}</p>
+    </div>
+    <div class="card p-4">
+      <p class="text-xs uppercase font-semibold" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Com divergência</p>
+      <p class="text-2xl font-bold mt-1" style="color:#dc2626;">{{ totais.divergencias }}</p>
+    </div>
+  </div>
+
+  <form method="get" class="card p-4 mb-5 flex flex-col sm:flex-row gap-3">
+    <select name="status" class="form-input sm:max-w-xs">
+      <option value="">Todos os status</option>
+      {% for valor, rotulo in status_choices %}
+        <option value="{{ valor }}" {% if status_filtro == valor %}selected{% endif %}>{{ rotulo }}</option>
+      {% endfor %}
+    </select>
+    <button class="btn-primary" type="submit">Filtrar</button>
+    <a class="btn-secondary" href="{% url 'estoque:transferencia-conferencia-list' %}">Limpar</a>
+  </form>
+
+  <div class="space-y-3">
+    {% for conferencia in conferencias %}
+      <a href="{% url 'estoque:transferencia-conferencia-detail' conferencia.pk %}"
+         class="card block p-5 transition-transform hover:-translate-y-0.5">
+        <div class="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+          <div>
+            <div class="flex flex-wrap items-center gap-2">
+              <strong>{{ conferencia.documento_numero }}</strong>
+              <span class="badge"
+                    style="{% if conferencia.status == 'aguardando' %}background:#fef3c7;color:#92400e;{% elif conferencia.status == 'conferida' %}background:#dcfce7;color:#166534;{% elif conferencia.status == 'com_divergencia' %}background:#fee2e2;color:#991b1b;{% else %}background:#e2e8f0;color:#334155;{% endif %}">
+                {{ conferencia.get_status_display }}
+              </span>
+            </div>
+            <p class="text-sm mt-2" :style="temaClaro ? 'color:#334155;' : 'color:#cbd5e1;'">
+              Origem: <strong>{{ conferencia.filial_origem.nome_fantasia|default:conferencia.filial_origem.razao_social }}</strong>
+            </p>
+            <p class="text-xs mt-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+              Enviada em {{ conferencia.created_at|date:"d/m/Y H:i" }}
+            </p>
+          </div>
+          <div class="text-left md:text-right">
+            <strong>{{ conferencia.itens.count }} item{{ conferencia.itens.count|pluralize }}</strong>
+            <p class="text-sm mt-1" style="color:#2563eb;">Abrir conferência →</p>
+          </div>
+        </div>
+      </a>
+    {% empty %}
+      <div class="card p-10 text-center">
+        <p class="font-semibold">Nenhuma transferência encontrada.</p>
+      </div>
+    {% endfor %}
+  </div>
+</div>
+{% endblock %}
+

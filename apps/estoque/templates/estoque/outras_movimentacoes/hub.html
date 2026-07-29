@@ -222,6 +222,32 @@
       </div>
     </a>
 
+    <!-- Recebimentos de Transferências -->
+    <a href="{% url 'estoque:transferencia-conferencia-list' %}"
+       class="card p-5 flex items-start gap-4"
+       style="transition:.15s;"
+       onmouseover="this.style.transform='translateY(-2px)'" onmouseout="this.style.transform='translateY(0)'">
+      <div class="flex-shrink-0 w-11 h-11 rounded-xl flex items-center justify-center"
+           :style="temaClaro ? 'background:#dcfce7;' : 'background:rgba(34,197,94,0.13);'">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"
+             :style="temaClaro ? 'color:#15803d;' : 'color:#86efac;'">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                d="M9 11l3 3L22 4M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/>
+        </svg>
+      </div>
+      <div class="flex-1 min-w-0">
+        <div class="font-semibold text-sm mb-1" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
+          Recebimentos de transferências
+        </div>
+        <p class="text-xs leading-relaxed" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+          Confira itens recebidos, registre faltas ou trocas e acompanhe divergências.
+        </p>
+        <div class="flex items-center gap-2 mt-2">
+          <span class="soft-pill is-green">Conferência</span>
+        </div>
+      </div>
+    </a>
+
     <!-- Deterioração -->
     <a href="{% url 'estoque:saida-especial' %}?tipo=deterioracao"
        class="card p-5 flex items-start gap-4"

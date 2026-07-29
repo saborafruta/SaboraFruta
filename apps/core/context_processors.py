@@ -62,3 +62,29 @@ def filial_context(request):
     except Exception:
         pass
     return ctx
+
+
+def notificacoes_context(request):
+    ctx = {'notificacoes_recentes': [], 'notificacoes_nao_lidas': 0}
+    if not request.user.is_authenticated:
+        return ctx
+    filial = getattr(request, 'filial_ativa', None)
+    if not filial:
+        return ctx
+    try:
+        from apps.core.models import Notificacao
+
+        base = Notificacao.objects.filter(filial=filial, ativa=True)
+        nao_lidas = base.exclude(leituras__usuario=request.user)
+        ctx['notificacoes_nao_lidas'] = nao_lidas.count()
+        ids_lidas = set(
+            base.filter(leituras__usuario=request.user)
+            .values_list('pk', flat=True)
+        )
+        recentes = list(base[:15])
+        for notificacao in recentes:
+            notificacao.foi_lida = notificacao.pk in ids_lidas
+        ctx['notificacoes_recentes'] = recentes
+    except Exception:
+        pass
+    return ctx

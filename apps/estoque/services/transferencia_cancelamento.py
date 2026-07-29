@@ -122,6 +122,17 @@ def cancelar_transferencia(documento_numero: str, filial_origem, usuario) -> lis
         transferencia_cancelada_por=usuario,
     )
 
+    from apps.estoque.models import ConferenciaTransferencia
+    ConferenciaTransferencia.objects.filter(
+        documento_numero=documento_numero,
+    ).exclude(
+        status=ConferenciaTransferencia.Status.CANCELADA,
+    ).update(
+        status=ConferenciaTransferencia.Status.CANCELADA,
+        conferida_por=usuario,
+        conferida_em=agora,
+    )
+
     return movs_reversao
 
 
@@ -182,6 +193,14 @@ def reativar_transferencia(documento_numero: str, filial_origem, usuario) -> lis
         transferencia_cancelada=False,
         transferencia_cancelada_em=None,
         transferencia_cancelada_por=None,
+    )
+    from apps.estoque.models import ConferenciaTransferencia
+    ConferenciaTransferencia.objects.filter(
+        documento_numero=documento_numero,
+    ).update(
+        status=ConferenciaTransferencia.Status.AGUARDANDO,
+        conferida_por=None,
+        conferida_em=None,
     )
 
     return movs_reativacao
