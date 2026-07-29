@@ -4,6 +4,8 @@ import csv
 import logging
 import re
 import zipfile
+from collections import defaultdict
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 from django.conf import settings
 from django.contrib import messages
@@ -28,10 +30,16 @@ from apps.financeiro.models.fiscal import (
 from apps.financeiro.constants.enums import StatusDocumentoFiscal
 from apps.fiscal.integrations.dfe_client import avaliar_prontidao_dfe
 from apps.fiscal.integrations.focusnfe import FocusNFeClient
+from apps.fiscal.integrations.focusnfe.config import FocusNFeConfig
 from apps.fiscal.integrations.focusnfe.exceptions import FocusNFeError
 from apps.fiscal.models import ManifestoFiscalConfig, ManifestoFiscalDocumento
 from apps.fiscal.services.certificado_a1 import validar_certificado_a1_para_config
-from apps.fiscal.services.focusnfe_service import FocusNFeService, parse_ref
+from apps.fiscal.services.focusnfe_service import (
+    RESOURCE_POR_TIPO,
+    FocusNFeService,
+    gerar_ref,
+    parse_ref,
+)
 from apps.fiscal.services.manifesto_service import ManifestoFiscalService
 
 logger = logging.getLogger(__name__)
@@ -86,6 +94,179 @@ def _obter_xml_documento_arquivado(documento, tipo):
     else:
         return ""
     return xml if xml.lstrip().startswith("<") else ""
+
+
+def _xml_texto(conteudo):
+    if isinstance(conteudo, str):
+        return conteudo
+    for encoding in ("utf-8-sig", "utf-8", "latin-1"):
+        try:
+            return conteudo.decode(encoding)
+        except UnicodeDecodeError:
+            continue
+    return conteudo.decode("utf-8", errors="replace")
+
+
+def _xml_e_cancelamento(xml):
+    inicio = (xml or "")[:5000].lower()
+    marcadores = (
+        "<proceventonfe",
+        "<proceventocte",
+        "<proceventomdfe",
+        "<retevento",
+        "<tpevento>110111",
+    )
+    return any(marcador in inicio for marcador in marcadores)
+
+
+def _fontes_xml_retorno(valor, chave_pai=""):
+    fontes = []
+    if isinstance(valor, dict):
+        for chave, item in valor.items():
+            fontes.extend(_fontes_xml_retorno(item, str(chave).lower()))
+    elif isinstance(valor, list):
+        for item in valor:
+            fontes.extend(_fontes_xml_retorno(item, chave_pai))
+    elif isinstance(valor, str):
+        texto = valor.strip()
+        if texto.startswith("<"):
+            fontes.append(texto)
+        elif "xml" in chave_pai and (
+            texto.startswith(("http://", "https://", "/"))
+            or ".xml" in texto.lower()
+        ):
+            fontes.append(texto)
+    return fontes
+
+
+def _fontes_xml_por_documento(documentos):
+    fontes = defaultdict(lambda: {"autorizado": [], "cancelamento": []})
+    ids = [documento.pk for documento in documentos]
+    logs = (
+        LogIntegracaoFiscal.objects
+        .filter(documento_fiscal_id__in=ids)
+        .exclude(response_json="")
+        .order_by("-created_at")
+        .values("documento_fiscal_id", "acao", "response_json")
+    )
+    for log in logs:
+        try:
+            retorno = json.loads(log["response_json"])
+        except (TypeError, ValueError, json.JSONDecodeError):
+            continue
+        status = str(
+            retorno.get("status", "") if isinstance(retorno, dict) else ""
+        ).lower()
+        tipo = (
+            "cancelamento"
+            if log["acao"] == "cancelar" or status in {"cancelado", "cancelada"}
+            else "autorizado"
+        )
+        for fonte in _fontes_xml_retorno(retorno):
+            if fonte not in fontes[log["documento_fiscal_id"]][tipo]:
+                fontes[log["documento_fiscal_id"]][tipo].append(fonte)
+    return fontes
+
+
+def _baixar_xml_exportacao(job):
+    config = FocusNFeConfig(
+        token=job["token"],
+        ambiente=job["ambiente"],
+        timeout=5,
+        max_retries=0,
+    )
+    client = FocusNFeClient(config=config)
+    fontes = list(job["fontes"][:2])
+    recurso = RESOURCE_POR_TIPO.get(job["tipo_documento"])
+    if recurso:
+        fontes.append(f"/v2/{recurso}/{job['ref']}.xml")
+
+    for fonte in fontes:
+        try:
+            conteudo = (
+                fonte
+                if fonte.lstrip().startswith("<")
+                else client.http.get(fonte, binary=True)
+            )
+            xml = _xml_texto(conteudo or "")
+        except Exception as exc:  # noqa: BLE001
+            logger.info(
+                "Falha ao recuperar XML fiscal %s/%s pela fonte %s: %s",
+                job["documento_id"],
+                job["arquivo"],
+                fonte,
+                exc,
+            )
+            continue
+        if not xml.lstrip().startswith("<"):
+            continue
+        cancelamento = _xml_e_cancelamento(xml)
+        if (
+            job["arquivo"] == "cancelamento" and cancelamento
+        ) or (
+            job["arquivo"] == "autorizado" and not cancelamento
+        ):
+            return job["documento_id"], job["arquivo"], xml
+    return job["documento_id"], job["arquivo"], ""
+
+
+def _recuperar_xmls_exportacao(documentos):
+    fontes_logs = _fontes_xml_por_documento(documentos)
+    jobs = []
+    documentos_por_id = {documento.pk: documento for documento in documentos}
+    for documento in documentos:
+        tipos = ["autorizado"]
+        if documento.status == StatusDocumentoFiscal.CANCELADA:
+            tipos.append("cancelamento")
+        for tipo in tipos:
+            if _obter_xml_documento_arquivado(documento, tipo):
+                continue
+            fontes = list(fontes_logs[documento.pk][tipo])
+            xml_retorno = (documento.xml_retorno or "").strip()
+            tipo_retorno = (
+                "cancelamento"
+                if documento.status == StatusDocumentoFiscal.CANCELADA
+                else "autorizado"
+            )
+            if (
+                tipo == tipo_retorno
+                and xml_retorno
+                and xml_retorno not in fontes
+            ):
+                fontes.insert(0, xml_retorno)
+            token = (documento.filial.focusnfe_token or "").strip()
+            if not token:
+                continue
+            jobs.append({
+                "documento_id": documento.pk,
+                "arquivo": tipo,
+                "tipo_documento": documento.tipo_documento,
+                "ref": gerar_ref(documento),
+                "token": token,
+                "ambiente": documento.filial.focusnfe_ambiente,
+                "fontes": fontes,
+            })
+
+    if not jobs:
+        return
+
+    recuperados = []
+    workers = min(10, len(jobs))
+    with ThreadPoolExecutor(max_workers=workers) as executor:
+        futuros = [executor.submit(_baixar_xml_exportacao, job) for job in jobs]
+        for futuro in as_completed(futuros):
+            try:
+                resultado = futuro.result()
+            except Exception:  # noqa: BLE001
+                logger.exception("Falha inesperada ao recuperar XML para exportacao.")
+                continue
+            if resultado[2]:
+                recuperados.append(resultado)
+
+    for documento_id, tipo, xml in recuperados:
+        campo = "xml_assinado" if tipo == "autorizado" else "xml_cancelamento"
+        DocumentoFiscal.objects.filter(pk=documento_id).update(**{campo: xml})
+        setattr(documentos_por_id[documento_id], campo, xml)
 
 
 def _filtro_data(queryset, campo, data_inicial, data_final):
@@ -426,13 +607,16 @@ class DocumentoFiscalExportarXMLView(PermissaoRequiredMixin, View):
         if situacao not in {"todas", "inutilizadas"} or origem:
             inutilizacoes = inutilizacoes.none()
 
+        documentos = list(documentos)
+        _recuperar_xmls_exportacao(documentos)
+
         buffer = io.BytesIO()
         adicionados = 0
         documentos_exportados = 0
         faixas_exportadas = 0
         xmls_pendentes = []
         with zipfile.ZipFile(buffer, "w", zipfile.ZIP_DEFLATED) as arquivo:
-            for documento in documentos.iterator():
+            for documento in documentos:
                 documentos_exportados += 1
                 tipos = ["autorizado"]
                 if documento.status == StatusDocumentoFiscal.CANCELADA:
