@@ -91,6 +91,25 @@ class FocusNFeBackupService:
                 ) from exc
 
 
+def classificar_xml_fiscal(nome: str, conteudo: str) -> str:
+    modelo = re.search(
+        r"<(?:[A-Za-z_][\w.-]*:)?mod>\s*(55|65)\s*</(?:[A-Za-z_][\w.-]*:)?mod>",
+        conteudo,
+        flags=re.IGNORECASE,
+    )
+    codigo_modelo = modelo.group(1) if modelo else ""
+    if not codigo_modelo:
+        chaves = re.findall(r"(?<!\d)\d{44}(?!\d)", f"{nome}\n{conteudo}")
+        for chave in chaves:
+            if chave[20:22] in {"55", "65"}:
+                codigo_modelo = chave[20:22]
+                break
+    return {
+        "55": "NF-e",
+        "65": "NFC-e",
+    }.get(codigo_modelo, "Outros")
+
+
 def meses_entre(data_inicial: date, data_final: date) -> set[str]:
     atual = date(data_inicial.year, data_inicial.month, 1)
     limite = date(data_final.year, data_final.month, 1)

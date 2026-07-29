@@ -8,6 +8,7 @@ from apps.core.services.exceptions import DomainError
 from apps.fiscal.services.focusnfe_backup_service import (
     BackupFocus,
     FocusNFeBackupService,
+    classificar_xml_fiscal,
     meses_entre,
 )
 
@@ -94,4 +95,21 @@ class FocusNFeBackupServiceTests(SimpleTestCase):
         self.assertEqual(
             meses_entre(date(2025, 12, 20), date(2026, 2, 1)),
             {"202512", "202601", "202602"},
+        )
+
+    def test_classifica_nfe_nfce_por_modelo_ou_chave(self):
+        self.assertEqual(
+            classificar_xml_fiscal("nota.xml", "<NFe><ide><mod>55</mod></ide></NFe>"),
+            "NF-e",
+        )
+        self.assertEqual(
+            classificar_xml_fiscal(
+                "evento.xml",
+                "<evento><chNFe>24260714004764000240650010000000021561031752</chNFe></evento>",
+            ),
+            "NFC-e",
+        )
+        self.assertEqual(
+            classificar_xml_fiscal("outro.xml", "<documento />"),
+            "Outros",
         )

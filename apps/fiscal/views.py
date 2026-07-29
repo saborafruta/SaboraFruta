@@ -41,7 +41,10 @@ from apps.fiscal.services.focusnfe_service import (
     gerar_ref,
     parse_ref,
 )
-from apps.fiscal.services.focusnfe_backup_service import FocusNFeBackupService
+from apps.fiscal.services.focusnfe_backup_service import (
+    FocusNFeBackupService,
+    classificar_xml_fiscal,
+)
 from apps.fiscal.services.manifesto_service import ManifestoFiscalService
 
 logger = logging.getLogger(__name__)
@@ -215,6 +218,13 @@ def _baixar_xml_exportacao(job):
 def _chave_numerica(documento):
     chave = re.sub(r"\D", "", documento.chave or "")
     return chave if len(chave) == 44 else ""
+
+
+def _pasta_tipo_documento(tipo_documento):
+    return {
+        "nfe": "NF-e",
+        "nfce": "NFC-e",
+    }.get((tipo_documento or "").lower(), "Outros")
 
 
 def _recuperar_xmls_backup_focus(documentos):
@@ -734,7 +744,11 @@ class DocumentoFiscalExportarXMLView(PermissaoRequiredMixin, View):
                             else "emitidas"
                         )
                         arquivo.writestr(
-                            f"{pasta}/{_nome_xml(documento, tipo)}",
+                            (
+                                f"{pasta}/"
+                                f"{_pasta_tipo_documento(documento.tipo_documento)}/"
+                                f"{_nome_xml(documento, tipo)}"
+                            ),
                             xml,
                         )
                         adicionados += 1
@@ -784,7 +798,9 @@ class DocumentoFiscalExportarXMLView(PermissaoRequiredMixin, View):
                 xml = inutilizacao.xml_retorno or ""
                 if xml.lstrip().startswith("<"):
                     nome = (
-                        f"inutilizadas/{inutilizacao.tipo_documento}-"
+                        f"inutilizadas/"
+                        f"{_pasta_tipo_documento(inutilizacao.tipo_documento)}/"
+                        f"{inutilizacao.tipo_documento}-"
                         f"serie-{inutilizacao.serie}-"
                         f"{inutilizacao.numero_inicial}-"
                         f"{inutilizacao.numero_final}.xml"
@@ -831,7 +847,9 @@ class DocumentoFiscalExportarXMLView(PermissaoRequiredMixin, View):
                 if xml.lstrip().startswith("<"):
                     arquivo.writestr(
                         (
-                            f"inutilizadas/{documento.tipo_documento}-"
+                            f"inutilizadas/"
+                            f"{_pasta_tipo_documento(documento.tipo_documento)}/"
+                            f"{documento.tipo_documento}-"
                             f"serie-{documento.serie}-{documento.numero}.xml"
                         ),
                         xml,
@@ -972,8 +990,12 @@ class DocumentoFiscalBackupFocusView(PermissaoRequiredMixin, View):
                         xml_backup.nome,
                     )
                     nome = f"{digest.hex()[:12]}-{nome}"
+                    pasta_tipo = classificar_xml_fiscal(
+                        xml_backup.nome,
+                        xml,
+                    )
                     arquivo.writestr(
-                        f"focus/{xml_backup.mes}/{nome}",
+                        f"focus/{xml_backup.mes}/{pasta_tipo}/{nome}",
                         xml,
                     )
                     adicionados += 1
