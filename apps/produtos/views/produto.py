@@ -449,8 +449,11 @@ def _produtos_com_estoque_total(qs, empresa):
     if ids_externos:
         filtro_relacionados |= Q(id_externo__in=ids_externos)
     if codigos:
-        filtro_relacionados |= Q(id_externo='', codigo_replicacao__in=codigos)
-    relacionados = relacionados_qs.filter(filtro_relacionados).only('id', 'id_externo', 'codigo_replicacao')
+        # codigo_replicacao e uma property (nao um campo de banco): para quem
+        # nao tem id_externo, ela e sempre igual ao proprio pk (ver o
+        # @property no model), entao o filtro equivalente e por pk.
+        filtro_relacionados |= Q(id_externo='', pk__in=codigos)
+    relacionados = relacionados_qs.filter(filtro_relacionados).only('id', 'id_externo')
     produto_para_chave = {
         item.pk: item.id_externo or f'codigo:{item.codigo_replicacao}'
         for item in relacionados
