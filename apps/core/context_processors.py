@@ -73,7 +73,11 @@ def notificacoes_context(request):
         return ctx
     try:
         from apps.core.models import Notificacao
+        from apps.estoque.services.conferencia_transferencia import (
+            garantir_conferencias_recebidas,
+        )
 
+        garantir_conferencias_recebidas(filial)
         base = Notificacao.objects.filter(filial=filial, ativa=True)
         nao_lidas = base.exclude(leituras__usuario=request.user)
         ctx['notificacoes_nao_lidas'] = nao_lidas.count()

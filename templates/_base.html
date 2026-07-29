@@ -626,7 +626,7 @@
       </svg>
     </a>
 
-    <details class="relative dropdown-nativo">
+    <details id="notificacoes-menu" class="relative dropdown-nativo">
       <summary class="relative flex items-center justify-center w-9 h-9 rounded-lg cursor-pointer list-none transition-all"
                :style="temaClaro
                  ? 'background:rgba(255,255,255,0.15); border:1px solid rgba(255,255,255,0.25); color:#fff;'
@@ -636,12 +636,11 @@
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.7"
                 d="M15 17H9m9-2V11a6 6 0 10-12 0v4l-2 2h16l-2-2zM13.7 21h-3.4"/>
         </svg>
-        {% if notificacoes_nao_lidas %}
-          <span class="absolute -right-1 -top-1 min-w-[18px] h-[18px] px-1 rounded-full flex items-center justify-center text-[10px] font-bold"
-                style="background:#ef4444;color:#fff;border:2px solid #172554;">
-            {{ notificacoes_nao_lidas }}
-          </span>
-        {% endif %}
+        <span id="notificacoes-badge"
+              class="absolute -right-1 -top-1 min-w-[18px] h-[18px] px-1 rounded-full flex items-center justify-center text-[10px] font-bold{% if not notificacoes_nao_lidas %} hidden{% endif %}"
+              style="background:#ef4444;color:#fff;border:2px solid #172554;">
+          {{ notificacoes_nao_lidas }}
+        </span>
       </summary>
       <div class="absolute right-0 mt-1 w-[min(24rem,calc(100vw-2rem))] rounded-lg z-50 overflow-hidden"
            :style="temaClaro
@@ -651,18 +650,28 @@
              :style="temaClaro ? 'border-bottom:1px solid #e5e7eb;' : 'border-bottom:1px solid #34343a;'">
           <div>
             <p class="text-sm font-bold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">Notificações</p>
-            <p class="text-xs mt-0.5" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+            <p id="notificacoes-contagem" class="text-xs mt-0.5" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
               {{ notificacoes_nao_lidas }} não lida{{ notificacoes_nao_lidas|pluralize }}
             </p>
           </div>
-          {% if notificacoes_nao_lidas %}
-            <button type="button" onclick="marcarTodasNotificacoes(this)"
-                    class="text-xs font-semibold" style="color:#2563eb;">
+          <div class="flex items-center gap-3">
+            <button id="notificacoes-som-toggle" type="button"
+                    onclick="alternarSomNotificacoes()"
+                    class="flex h-8 w-8 items-center justify-center rounded-md"
+                    style="color:#2563eb;" title="Silenciar alertas sonoros"
+                    aria-label="Silenciar alertas sonoros">
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8"
+                      d="M11 5L6 9H3v6h3l5 4V5zm4.5 3.5a5 5 0 010 7M18 6a8 8 0 010 12"/>
+              </svg>
+            </button>
+            <button id="notificacoes-marcar-todas" type="button" onclick="marcarTodasNotificacoes(this)"
+                    class="text-xs font-semibold{% if not notificacoes_nao_lidas %} hidden{% endif %}" style="color:#2563eb;">
               Marcar todas
             </button>
-          {% endif %}
+          </div>
         </div>
-        <div class="max-h-96 overflow-y-auto">
+        <div id="notificacoes-lista" class="max-h-96 overflow-y-auto">
           {% for notificacao in notificacoes_recentes %}
             <a href="{% url 'core:notificacao-abrir' notificacao.pk %}"
                class="block px-4 py-3 transition-colors"
@@ -1307,6 +1316,135 @@
     })();
   </script>
   <script>
+    const NOTIFICACOES_SOM_KEY = 'erp_notificacoes_som_ativo';
+    let notificacoesNaoLidas = Number('{{ notificacoes_nao_lidas|default:0 }}') || 0;
+    let audioNotificacoesLiberado = false;
+
+    function somNotificacoesAtivo() {
+      return localStorage.getItem(NOTIFICACOES_SOM_KEY) !== '0';
+    }
+
+    function atualizarBotaoSomNotificacoes() {
+      const botao = document.getElementById('notificacoes-som-toggle');
+      if (!botao) return;
+      const ativo = somNotificacoesAtivo();
+      botao.style.opacity = ativo ? '1' : '0.45';
+      botao.title = ativo ? 'Silenciar alertas sonoros' : 'Ativar alertas sonoros';
+      botao.setAttribute('aria-label', botao.title);
+    }
+
+    function tocarSomNotificacao() {
+      if (!somNotificacoesAtivo() || !audioNotificacoesLiberado) return;
+      try {
+        const AudioContext = window.AudioContext || window.webkitAudioContext;
+        if (!AudioContext) return;
+        const contexto = new AudioContext();
+        const ganho = contexto.createGain();
+        ganho.connect(contexto.destination);
+        ganho.gain.setValueAtTime(0.0001, contexto.currentTime);
+        ganho.gain.exponentialRampToValueAtTime(0.16, contexto.currentTime + 0.02);
+        ganho.gain.exponentialRampToValueAtTime(0.0001, contexto.currentTime + 0.72);
+        [740, 988].forEach((frequencia, indice) => {
+          const oscilador = contexto.createOscillator();
+          oscilador.type = 'sine';
+          oscilador.frequency.value = frequencia;
+          oscilador.connect(ganho);
+          oscilador.start(contexto.currentTime + (indice * 0.12));
+          oscilador.stop(contexto.currentTime + 0.72);
+        });
+        window.setTimeout(() => contexto.close(), 900);
+      } catch (_) {
+        // O navegador pode bloquear audio antes da primeira interacao.
+      }
+    }
+
+    function alternarSomNotificacoes() {
+      const ativar = !somNotificacoesAtivo();
+      localStorage.setItem(NOTIFICACOES_SOM_KEY, ativar ? '1' : '0');
+      audioNotificacoesLiberado = true;
+      atualizarBotaoSomNotificacoes();
+      if (ativar) tocarSomNotificacao();
+    }
+
+    function criarTextoNotificacao(classe, texto, estilo) {
+      const elemento = document.createElement('span');
+      elemento.className = classe;
+      elemento.textContent = texto || '';
+      if (estilo) elemento.style.cssText = estilo;
+      return elemento;
+    }
+
+    function renderizarListaNotificacoes(itens) {
+      const lista = document.getElementById('notificacoes-lista');
+      if (!lista) return;
+      lista.replaceChildren();
+      if (!itens.length) {
+        const vazio = document.createElement('div');
+        vazio.className = 'px-4 py-8 text-center text-sm';
+        vazio.style.color = '#94a3b8';
+        vazio.textContent = 'Nenhuma notificacao por enquanto.';
+        lista.appendChild(vazio);
+        return;
+      }
+      itens.forEach((item) => {
+        const link = document.createElement('a');
+        link.href = item.url;
+        link.className = 'block px-4 py-3 transition-colors';
+        link.style.cssText = `border-bottom:1px solid #e5e7eb;background:${item.lida ? 'transparent' : 'rgba(37,99,235,0.10)'}`;
+        const linha = document.createElement('div');
+        linha.className = 'flex items-start gap-3';
+        const ponto = document.createElement('span');
+        ponto.className = 'mt-1 h-2 w-2 rounded-full shrink-0';
+        ponto.style.background = item.lida ? '#94a3b8' : '#3b82f6';
+        const conteudo = document.createElement('span');
+        conteudo.className = 'min-w-0';
+        conteudo.appendChild(criarTextoNotificacao('block text-sm font-semibold', item.titulo, 'color:inherit'));
+        if (item.mensagem) {
+          conteudo.appendChild(criarTextoNotificacao('block text-xs mt-1 leading-5', item.mensagem, 'color:#64748b'));
+        }
+        const criadaEm = new Date(item.criada_em);
+        const data = Number.isNaN(criadaEm.getTime())
+          ? ''
+          : criadaEm.toLocaleString('pt-BR', {dateStyle: 'short', timeStyle: 'short'});
+        conteudo.appendChild(criarTextoNotificacao('block text-[11px] mt-1', data, 'color:#94a3b8'));
+        linha.append(ponto, conteudo);
+        link.appendChild(linha);
+        lista.appendChild(link);
+      });
+    }
+
+    function atualizarResumoNotificacoes(total) {
+      const badge = document.getElementById('notificacoes-badge');
+      const contagem = document.getElementById('notificacoes-contagem');
+      const marcarTodas = document.getElementById('notificacoes-marcar-todas');
+      if (badge) {
+        badge.textContent = total;
+        badge.classList.toggle('hidden', total === 0);
+      }
+      if (contagem) {
+        contagem.textContent = `${total} nao lida${total === 1 ? '' : 's'}`;
+      }
+      if (marcarTodas) marcarTodas.classList.toggle('hidden', total === 0);
+    }
+
+    async function consultarNotificacoes() {
+      try {
+        const resposta = await fetch("{% url 'core:notificacoes-status' %}", {
+          headers: {'X-Requested-With': 'XMLHttpRequest'},
+          cache: 'no-store'
+        });
+        if (!resposta.ok) return;
+        const dados = await resposta.json();
+        const novoTotal = Number(dados.nao_lidas || 0);
+        atualizarResumoNotificacoes(novoTotal);
+        renderizarListaNotificacoes(dados.notificacoes || []);
+        if (novoTotal > notificacoesNaoLidas) tocarSomNotificacao();
+        notificacoesNaoLidas = novoTotal;
+      } catch (_) {
+        // A proxima consulta tenta novamente sem interromper o usuario.
+      }
+    }
+
     async function marcarTodasNotificacoes(botao) {
       botao.disabled = true;
       try {
@@ -1315,12 +1453,30 @@
           headers: {'X-CSRFToken': '{{ csrf_token }}'}
         });
         if (!resposta.ok) throw new Error('Falha ao atualizar notificações.');
-        window.location.reload();
+        notificacoesNaoLidas = 0;
+        await consultarNotificacoes();
+        botao.disabled = false;
       } catch (erro) {
         botao.disabled = false;
         alert(erro.message);
       }
     }
+
+    document.addEventListener('DOMContentLoaded', function() {
+      atualizarBotaoSomNotificacoes();
+      const liberarAudio = () => {
+        audioNotificacoesLiberado = true;
+        document.removeEventListener('pointerdown', liberarAudio);
+        document.removeEventListener('keydown', liberarAudio);
+      };
+      document.addEventListener('pointerdown', liberarAudio, {passive: true});
+      document.addEventListener('keydown', liberarAudio);
+      consultarNotificacoes();
+      window.setInterval(consultarNotificacoes, 15000);
+      document.addEventListener('visibilitychange', function() {
+        if (!document.hidden) consultarNotificacoes();
+      });
+    });
   </script>
 </body>
 </html>

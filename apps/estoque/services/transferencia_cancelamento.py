@@ -198,6 +198,17 @@ def reativar_transferencia(documento_numero: str, filial_origem, usuario) -> lis
     conferencia = ConferenciaTransferencia.objects.filter(
         documento_numero=documento_numero,
     ).first()
+    if not conferencia:
+        from apps.estoque.services.conferencia_transferencia import (
+            criar_conferencia_transferencia,
+        )
+        conferencia = criar_conferencia_transferencia(
+            documento_numero=documento_numero,
+            filial_origem=filial_origem,
+            filial_destino=filial_destino,
+            usuario=usuario,
+            observacao=movs_saida[0].observacao,
+        )
     if conferencia:
         conferencia.status = ConferenciaTransferencia.Status.AGUARDANDO
         conferencia.conferida_por = None

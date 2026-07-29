@@ -8,7 +8,7 @@ from apps.core.views import (
     VendasDowPeriodoView, atualizar_minha_foto, logout_view,
 )
 from apps.core.views.notificacoes import (
-    NotificacaoAbrirView, NotificacaoMarcarTodasView,
+    NotificacaoAbrirView, NotificacaoMarcarTodasView, NotificacaoStatusView,
 )
 
 app_name = 'core'
@@ -25,6 +25,7 @@ urlpatterns = [
     path('auth/trocar-filial/<int:filial_id>/', TrocarFilialView.as_view(), name='trocar-filial'),
     path('notificacoes/<int:pk>/abrir/', NotificacaoAbrirView.as_view(), name='notificacao-abrir'),
     path('notificacoes/marcar-todas/', NotificacaoMarcarTodasView.as_view(), name='notificacoes-marcar-todas'),
+    path('notificacoes/status/', NotificacaoStatusView.as_view(), name='notificacoes-status'),
 
     path('gestao/central/', admin_area.central_administrativa, name='admin_central'),
     path('gestao/parametros/', parametros_views.parametros_sistema, name='admin_parametros'),

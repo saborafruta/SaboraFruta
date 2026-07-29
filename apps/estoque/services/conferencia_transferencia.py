@@ -61,6 +61,62 @@ def criar_conferencia_transferencia(
     return conferencia
 
 
+def garantir_conferencias_recebidas(filial_destino):
+    entradas = (
+        MovimentacaoEstoque.objects
+        .filter(
+            filial=filial_destino,
+            tipo_operacao=MovimentacaoEstoque.TipoOperacao.TRANSFERENCIA_ENTRADA,
+            transferencia_cancelada=False,
+        )
+        .exclude(documento_numero='')
+        .exclude(documento_numero__startswith='EST-')
+        .exclude(documento_numero__startswith='RAT-')
+        .select_related('usuario')
+        .order_by('-data_movimentacao')
+    )
+    documentos = list(dict.fromkeys(
+        entradas.values_list('documento_numero', flat=True),
+    ))
+    conferencias = {
+        item.documento_numero: item
+        for item in ConferenciaTransferencia.objects.filter(
+            filial_destino=filial_destino,
+            documento_numero__in=documentos,
+        )
+    }
+    criadas = []
+    for documento_numero in documentos:
+        conferencia = conferencias.get(documento_numero)
+        if conferencia:
+            if conferencia.status == ConferenciaTransferencia.Status.AGUARDANDO:
+                notificar_transferencia_recebida(conferencia)
+            continue
+        saida = (
+            MovimentacaoEstoque.objects
+            .filter(
+                documento_numero=documento_numero,
+                tipo_operacao=MovimentacaoEstoque.TipoOperacao.TRANSFERENCIA_SAIDA,
+                filial_destino=filial_destino,
+                transferencia_cancelada=False,
+            )
+            .select_related('filial', 'usuario')
+            .first()
+        )
+        if not saida:
+            continue
+        conferencia = criar_conferencia_transferencia(
+            documento_numero=documento_numero,
+            filial_origem=saida.filial,
+            filial_destino=filial_destino,
+            usuario=saida.usuario,
+            observacao=saida.observacao,
+        )
+        conferencias[documento_numero] = conferencia
+        criadas.append(conferencia)
+    return criadas
+
+
 def _decimal_positivo(valor, rotulo, permite_zero=True):
     try:
         numero = Decimal(str(valor or '0'))

@@ -1289,48 +1289,10 @@ class TransferenciaLojaApiView(PermissaoRequiredMixin, View):
 
 
 def _garantir_conferencias_recebidas(filial_destino):
-    entradas = (
-        MovimentacaoEstoque.objects
-        .filter(
-            filial=filial_destino,
-            tipo_operacao=MovimentacaoEstoque.TipoOperacao.TRANSFERENCIA_ENTRADA,
-            transferencia_cancelada=False,
-        )
-        .exclude(documento_numero='')
-        .select_related('usuario')
-        .order_by('-data_movimentacao')
+    from apps.estoque.services.conferencia_transferencia import (
+        garantir_conferencias_recebidas,
     )
-    documentos_existentes = set(
-        ConferenciaTransferencia.objects.filter(
-            documento_numero__in=entradas.values_list('documento_numero', flat=True),
-        ).values_list('documento_numero', flat=True)
-    )
-    for entrada in entradas:
-        if entrada.documento_numero in documentos_existentes:
-            continue
-        saida = (
-            MovimentacaoEstoque.objects
-            .filter(
-                documento_numero=entrada.documento_numero,
-                tipo_operacao=MovimentacaoEstoque.TipoOperacao.TRANSFERENCIA_SAIDA,
-                filial_destino=filial_destino,
-            )
-            .select_related('filial')
-            .first()
-        )
-        if not saida:
-            continue
-        from apps.estoque.services.conferencia_transferencia import (
-            criar_conferencia_transferencia,
-        )
-        criar_conferencia_transferencia(
-            documento_numero=entrada.documento_numero,
-            filial_origem=saida.filial,
-            filial_destino=filial_destino,
-            usuario=saida.usuario,
-            observacao=saida.observacao,
-        )
-        documentos_existentes.add(entrada.documento_numero)
+    return garantir_conferencias_recebidas(filial_destino)
 
 
 class TransferenciaConferenciaListView(PermissaoRequiredMixin, View):

@@ -44,3 +44,39 @@ class NotificacaoMarcarTodasView(LoginRequiredMixin, View):
             ignore_conflicts=True,
         )
         return JsonResponse({'ok': True})
+
+
+class NotificacaoStatusView(LoginRequiredMixin, View):
+    def get(self, request):
+        filial = getattr(request, 'filial_ativa', None)
+        if not filial:
+            return JsonResponse({'nao_lidas': 0, 'notificacoes': []})
+
+        from apps.estoque.services.conferencia_transferencia import (
+            garantir_conferencias_recebidas,
+        )
+        garantir_conferencias_recebidas(filial)
+
+        base = Notificacao.objects.filter(filial=filial, ativa=True)
+        ids_lidas = set(
+            base.filter(leituras__usuario=request.user)
+            .values_list('pk', flat=True)
+        )
+        recentes = list(base[:15])
+        return JsonResponse({
+            'nao_lidas': base.exclude(leituras__usuario=request.user).count(),
+            'notificacoes': [
+                {
+                    'id': item.pk,
+                    'titulo': item.titulo,
+                    'mensagem': item.mensagem,
+                    'url': reverse(
+                        'core:notificacao-abrir',
+                        kwargs={'pk': item.pk},
+                    ),
+                    'criada_em': item.created_at.isoformat(),
+                    'lida': item.pk in ids_lidas,
+                }
+                for item in recentes
+            ],
+        })

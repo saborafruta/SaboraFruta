@@ -20,6 +20,7 @@ from apps.estoque.models import (
 from apps.estoque.services.conferencia_transferencia import (
     concluir_conferencia,
     criar_conferencia_transferencia,
+    garantir_conferencias_recebidas,
 )
 from apps.core.services.notificacao_service import (
     reabrir_notificacao_transferencia,
@@ -133,6 +134,42 @@ class ConferenciaTransferenciaTests(TestCase):
             filial=self.destino,
             tipo=Notificacao.Tipo.TRANSFERENCIA_RECEBIDA,
             referencia_id=str(conferencia.pk),
+        ).exists())
+
+    def test_recupera_transferencia_antiga_sem_conferencia_e_notificacao(self):
+        produto = self.criar_produto('Produto de transferencia antiga')
+        MovimentacaoService.registrar_movimentacao(
+            produto_id=produto.pk,
+            filial_id=self.origem.pk,
+            tipo_operacao=MovimentacaoEstoque.TipoOperacao.ENTRADA,
+            quantidade=Decimal('10'),
+            usuario_id=self.usuario.pk,
+            valor_unitario=Decimal('2'),
+        )
+        saida, _ = MovimentacaoService.transferir_entre_filiais(
+            produto_id=produto.pk,
+            filial_origem_id=self.origem.pk,
+            filial_destino_id=self.destino.pk,
+            quantidade=Decimal('5'),
+            usuario_id=self.usuario.pk,
+            permitir_sem_lote=True,
+            documento_numero='TRF-ANTIGA-SEM-CONFERENCIA',
+        )
+
+        self.assertFalse(ConferenciaTransferencia.objects.filter(
+            documento_numero=saida.documento_numero,
+        ).exists())
+
+        criadas = garantir_conferencias_recebidas(self.destino)
+
+        self.assertEqual(len(criadas), 1)
+        conferencia = criadas[0]
+        self.assertEqual(conferencia.itens.count(), 1)
+        self.assertTrue(Notificacao.objects.filter(
+            filial=self.destino,
+            tipo=Notificacao.Tipo.TRANSFERENCIA_RECEBIDA,
+            referencia_id=str(conferencia.pk),
+            ativa=True,
         ).exists())
 
     def test_falta_parcial_ajusta_estoque_do_destino(self):
