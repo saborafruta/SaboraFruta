@@ -129,6 +129,7 @@ class ManifestoFiscalListView(PermissaoRequiredMixin, View):
 
     def get(self, request):
         aba = request.GET.get('aba', 'saidas')
+        origem_export = (request.GET.get('origem_export') or '').strip()
         documentos = ManifestoFiscalDocumento.objects.for_filial(request.filial_ativa).order_by('-created_at')
         page_obj = Paginator(documentos, 30).get_page(request.GET.get('page'))
         kpis = {
@@ -150,6 +151,7 @@ class ManifestoFiscalListView(PermissaoRequiredMixin, View):
             .select_related('usuario')
             .order_by('-created_at')
         )
+        saidas = _filtro_origem_documentos(saidas, origem_export)
         status_saida = (request.GET.get('status') or '').strip()
         if status_saida:
             saidas = saidas.filter(status=status_saida)
@@ -171,7 +173,10 @@ class ManifestoFiscalListView(PermissaoRequiredMixin, View):
                     kwargs={'pk': mdfe.pk},
                 )
 
-        saidas_base = _documentos_fiscais_operacionais(request.filial_ativa)
+        saidas_base = _filtro_origem_documentos(
+            _documentos_fiscais_operacionais(request.filial_ativa),
+            origem_export,
+        )
         kpis_saida = {
             'total': saidas_base.count(),
             'processando': saidas_base.filter(
@@ -208,7 +213,6 @@ class ManifestoFiscalListView(PermissaoRequiredMixin, View):
             .select_related('usuario')
             .order_by('-data_emissao')[:20]
         )
-        origem_export = (request.GET.get('origem_export') or '').strip()
         config = ManifestoFiscalConfig.objects.for_filial(request.filial_ativa).filter(ativo=True).first()
         return render(request, self.template_name, {
             'aba': aba,

@@ -1,8 +1,11 @@
 """Dashboards: operacional, comercial, produção, DRE."""
 from datetime import date, timedelta
+from urllib.parse import urlencode
+
 from django.shortcuts import render
 from django.db.models import Sum, Count, Avg, F, Q
 from django.core.paginator import Paginator
+from django.urls import reverse
 from django.utils import timezone
 
 from apps.core.services.permissions import requer_permissao
@@ -208,6 +211,26 @@ def historico_vendas(request):
             'ativo': tipo_fiscal == valor,
         })
 
+    situacao_xml = 'todas'
+    if tipo_fiscal in {'emitidas', 'nfe', 'nfce'}:
+        situacao_xml = 'emitidas'
+    elif tipo_fiscal == 'cancelada':
+        situacao_xml = 'canceladas'
+    parametros_xml = {
+        'origem': 'vendas',
+        'situacao': situacao_xml,
+    }
+    if tipo_fiscal in {'nfe', 'nfce'}:
+        parametros_xml['tipo_documento'] = tipo_fiscal
+    if data_ini:
+        parametros_xml['data_ini'] = data_ini
+    if data_fim:
+        parametros_xml['data_fim'] = data_fim
+    exportar_xml_vendas_url = (
+        f"{reverse('fiscal:documento-saida-exportar-xml')}?"
+        f"{urlencode(parametros_xml)}"
+    )
+
     return render(request, 'analytics/vendas.html', {
         'title': 'Histórico de Vendas',
         'page_obj': page_obj,
@@ -216,6 +239,7 @@ def historico_vendas(request):
         'exibir_totalizador': exibir_totalizador,
         'valor_totalizador': valor_totalizador,
         'quantidade_totalizador': quantidade_totalizador,
+        'exportar_xml_vendas_url': exportar_xml_vendas_url,
         'filtros': {
             'pedido': pedido_q,
             'cliente': cliente_q,
