@@ -9,6 +9,7 @@ from apps.fiscal.services.focusnfe_backup_service import (
     BackupFocus,
     FocusNFeBackupService,
     classificar_xml_fiscal,
+    extrair_chaves_xml,
     meses_entre,
 )
 
@@ -112,4 +113,38 @@ class FocusNFeBackupServiceTests(SimpleTestCase):
         self.assertEqual(
             classificar_xml_fiscal("outro.xml", "<documento />"),
             "Outros",
+        )
+
+    def test_classifica_outros_modelos_fiscais(self):
+        cenarios = [
+            ("57", "CT-e"),
+            ("58", "MDF-e"),
+            ("62", "NFCom"),
+            ("67", "CT-e OS"),
+        ]
+        for modelo, pasta in cenarios:
+            with self.subTest(modelo=modelo):
+                self.assertEqual(
+                    classificar_xml_fiscal(
+                        "documento.xml",
+                        f"<documento><ide><mod>{modelo}</mod></ide></documento>",
+                    ),
+                    pasta,
+                )
+        self.assertEqual(
+            classificar_xml_fiscal(
+                "nfse.xml",
+                "<CompNfse><Nfse /></CompNfse>",
+            ),
+            "NFS-e",
+        )
+
+    def test_extrai_chaves_sem_duplicar(self):
+        chave = "24260714004764000240650010000000021561031752"
+        self.assertEqual(
+            extrair_chaves_xml(
+                f"{chave}.xml",
+                f"<evento><chNFe>{chave}</chNFe></evento>",
+            ),
+            [chave],
         )

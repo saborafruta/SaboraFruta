@@ -5,8 +5,10 @@ import hashlib
 import logging
 import re
 import zipfile
+from calendar import monthrange
 from collections import defaultdict
 from concurrent.futures import ThreadPoolExecutor, as_completed
+from datetime import date
 
 from django.conf import settings
 from django.contrib import messages
@@ -44,6 +46,7 @@ from apps.fiscal.services.focusnfe_service import (
 from apps.fiscal.services.focusnfe_backup_service import (
     FocusNFeBackupService,
     classificar_xml_fiscal,
+    extrair_chaves_xml,
 )
 from apps.fiscal.services.manifesto_service import ManifestoFiscalService
 
@@ -224,7 +227,45 @@ def _pasta_tipo_documento(tipo_documento):
     return {
         "nfe": "NF-e",
         "nfce": "NFC-e",
+        "nfse": "NFS-e",
+        "cte": "CT-e",
+        "mdfe": "MDF-e",
     }.get((tipo_documento or "").lower(), "Outros")
+
+
+def _pasta_origem_documento(documento):
+    origem = (documento.origem_tipo or "").lower()
+    if origem == "venda_pdv":
+        return "Vendas"
+    if origem == "transferencia_estoque":
+        return "Transferencias"
+    if origem in {"devolucao_fornecedor", "devolucao_compra"}:
+        return "Devolucoes/Fornecedores"
+    if origem in {"devolucao_fabricante", "devolucao_industria"}:
+        return "Devolucoes/Fabricantes"
+    if origem in {"devolucao_cliente", "devolucao_venda"}:
+        return "Devolucoes/Clientes"
+    if origem in {"cte", "mdfe"} or documento.tipo_documento in {"cte", "mdfe"}:
+        return "Logistica"
+    if documento.tipo_documento == "nfse":
+        return "Servicos"
+    return "Saidas"
+
+
+def _situacao_xml_backup(conteudo):
+    if re.search(
+        r"<(?:[A-Za-z_][\w.-]*:)?tpEvento>\s*110111\s*</",
+        conteudo,
+        flags=re.IGNORECASE,
+    ):
+        return "canceladas"
+    if re.search(
+        r"<(?:[A-Za-z_][\w.-]*:)?(?:procEventoNFe|procEventoCTe|procEventoMDFe)\b",
+        conteudo,
+        flags=re.IGNORECASE,
+    ):
+        return "eventos"
+    return "emitidas"
 
 
 def _recuperar_xmls_backup_focus(documentos):
@@ -388,13 +429,38 @@ def _filtro_origem_documentos(queryset, origem):
     if origem == "vendas":
         return queryset.filter(origem_tipo="venda_pdv")
     if origem == "transferencias":
+        return queryset.filter(origem_tipo="transferencia_estoque")
+    if origem == "devolucoes":
+        return queryset.filter(origem_tipo__in=[
+            "devolucao_fornecedor",
+            "devolucao_compra",
+            "devolucao_fabricante",
+            "devolucao_industria",
+            "devolucao_cliente",
+            "devolucao_venda",
+        ])
+    if origem == "logistica":
         return queryset.filter(
-            origem_tipo__in=["transferencia_estoque", "mdfe"],
+            Q(origem_tipo__in=["cte", "mdfe"])
+            | Q(tipo_documento__in=["cte", "mdfe"])
         )
+    if origem == "servicos":
+        return queryset.filter(tipo_documento="nfse")
     if origem == "outras":
         return queryset.exclude(
-            origem_tipo__in=["venda_pdv", "transferencia_estoque", "mdfe"],
-        )
+            origem_tipo__in=[
+                "venda_pdv",
+                "transferencia_estoque",
+                "devolucao_fornecedor",
+                "devolucao_compra",
+                "devolucao_fabricante",
+                "devolucao_industria",
+                "devolucao_cliente",
+                "devolucao_venda",
+                "cte",
+                "mdfe",
+            ],
+        ).exclude(tipo_documento__in=["nfse", "cte", "mdfe"])
     return queryset
 
 
@@ -745,6 +811,7 @@ class DocumentoFiscalExportarXMLView(PermissaoRequiredMixin, View):
                         )
                         arquivo.writestr(
                             (
+                                f"{_pasta_origem_documento(documento)}/"
                                 f"{pasta}/"
                                 f"{_pasta_tipo_documento(documento.tipo_documento)}/"
                                 f"{_nome_xml(documento, tipo)}"
@@ -972,6 +1039,34 @@ class DocumentoFiscalBackupFocusView(PermissaoRequiredMixin, View):
                     content_type="text/plain; charset=utf-8",
                 )
 
+            primeiro_mes = backups[0].mes
+            ultimo_mes = backups[-1].mes
+            inicio_backups = date(
+                int(primeiro_mes[:4]),
+                int(primeiro_mes[4:]),
+                1,
+            )
+            ultimo_ano = int(ultimo_mes[:4])
+            ultimo_numero_mes = int(ultimo_mes[4:])
+            fim_backups = date(
+                ultimo_ano,
+                ultimo_numero_mes,
+                monthrange(ultimo_ano, ultimo_numero_mes)[1],
+            )
+            documentos_por_chave = {}
+            documentos_erp = (
+                DocumentoFiscal.objects.for_filial(filial)
+                .filter(
+                    data_emissao__date__gte=inicio_backups,
+                    data_emissao__date__lte=fim_backups,
+                )
+                .exclude(chave="")
+            )
+            for documento in documentos_erp.iterator():
+                chave = _chave_numerica(documento)
+                if chave:
+                    documentos_por_chave[chave] = documento
+
             buffer = io.BytesIO()
             adicionados = 0
             hashes = set()
@@ -994,8 +1089,28 @@ class DocumentoFiscalBackupFocusView(PermissaoRequiredMixin, View):
                         xml_backup.nome,
                         xml,
                     )
+                    documento_erp = next(
+                        (
+                            documentos_por_chave[chave]
+                            for chave in extrair_chaves_xml(
+                                xml_backup.nome,
+                                xml,
+                            )
+                            if chave in documentos_por_chave
+                        ),
+                        None,
+                    )
+                    pasta_origem = (
+                        _pasta_origem_documento(documento_erp)
+                        if documento_erp
+                        else "Saidas"
+                    )
+                    pasta_situacao = _situacao_xml_backup(xml)
                     arquivo.writestr(
-                        f"focus/{xml_backup.mes}/{pasta_tipo}/{nome}",
+                        (
+                            f"focus/{xml_backup.mes}/{pasta_origem}/"
+                            f"{pasta_situacao}/{pasta_tipo}/{nome}"
+                        ),
                         xml,
                     )
                     adicionados += 1

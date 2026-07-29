@@ -93,21 +93,37 @@ class FocusNFeBackupService:
 
 def classificar_xml_fiscal(nome: str, conteudo: str) -> str:
     modelo = re.search(
-        r"<(?:[A-Za-z_][\w.-]*:)?mod>\s*(55|65)\s*</(?:[A-Za-z_][\w.-]*:)?mod>",
+        r"<(?:[A-Za-z_][\w.-]*:)?mod>\s*(55|57|58|62|65|67)\s*</(?:[A-Za-z_][\w.-]*:)?mod>",
         conteudo,
         flags=re.IGNORECASE,
     )
     codigo_modelo = modelo.group(1) if modelo else ""
     if not codigo_modelo:
-        chaves = re.findall(r"(?<!\d)\d{44}(?!\d)", f"{nome}\n{conteudo}")
-        for chave in chaves:
-            if chave[20:22] in {"55", "65"}:
+        for chave in extrair_chaves_xml(nome, conteudo):
+            if chave[20:22] in {"55", "57", "58", "62", "65", "67"}:
                 codigo_modelo = chave[20:22]
                 break
+    if not codigo_modelo and re.search(
+        r"<(?:[A-Za-z_][\w.-]*:)?(?:CompNfse|NFS-e|NFSe)\b",
+        conteudo,
+        flags=re.IGNORECASE,
+    ):
+        return "NFS-e"
     return {
         "55": "NF-e",
+        "57": "CT-e",
+        "58": "MDF-e",
+        "62": "NFCom",
         "65": "NFC-e",
+        "67": "CT-e OS",
     }.get(codigo_modelo, "Outros")
+
+
+def extrair_chaves_xml(nome: str, conteudo: str) -> list[str]:
+    """Extrai chaves fiscais de 44 digitos sem repetir a ordem encontrada."""
+    return list(dict.fromkeys(
+        re.findall(r"(?<!\d)\d{44}(?!\d)", f"{nome}\n{conteudo}")
+    ))
 
 
 def meses_entre(data_inicial: date, data_final: date) -> set[str]:

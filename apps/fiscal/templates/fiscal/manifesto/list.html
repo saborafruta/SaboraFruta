@@ -90,7 +90,10 @@
           <option value="">Todas as origens</option>
           <option value="vendas" {% if origem_export == 'vendas' %}selected{% endif %}>Vendas</option>
           <option value="transferencias" {% if origem_export == 'transferencias' %}selected{% endif %}>Transferências</option>
-          <option value="outras" {% if origem_export == 'outras' %}selected{% endif %}>Outras emissões</option>
+          <option value="devolucoes" {% if origem_export == 'devolucoes' %}selected{% endif %}>Devoluções</option>
+          <option value="logistica" {% if origem_export == 'logistica' %}selected{% endif %}>Logística</option>
+          <option value="servicos" {% if origem_export == 'servicos' %}selected{% endif %}>Serviços</option>
+          <option value="outras" {% if origem_export == 'outras' %}selected{% endif %}>Outras saídas</option>
         </select>
       </div>
       <div>
@@ -107,7 +110,7 @@
         <div>
           <div class="text-sm font-semibold">Backup mensal direto da Focus</div>
           <p class="text-xs text-gray-500 mt-1">
-            Baixa os pacotes oficiais disponíveis na Focus e separa NF-e de NFC-e. Sem período, usa o backup mais recente; com datas, considera os meses selecionados e inclui todos os documentos do CNPJ.
+            Baixa os pacotes oficiais disponíveis na Focus e separa por origem, situação e tipo fiscal. Sem período, usa o backup mais recente; com datas, considera os meses selecionados e inclui todos os documentos do CNPJ.
           </p>
         </div>
         <form method="get" action="{% url 'fiscal:documento-saida-backup-focus' %}"
