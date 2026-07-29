@@ -476,6 +476,94 @@
             <p class="text-xs mt-1"
                :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'"
                x-text="transferenciaLateral.data"></p>
+
+            <div class="rounded-lg border p-3 mt-4 space-y-2"
+                 :style="temaClaro ? 'border-color:#dbe3ee;background:#f8fafc;' : 'border-color:#334155;background:#111827;'">
+              <div class="flex items-center justify-between gap-2">
+                <span class="text-xs font-semibold uppercase tracking-wider"
+                      :style="temaClaro ? 'color:#475569;' : 'color:#cbd5e1;'">NF-e de transferência</span>
+                <span class="soft-pill"
+                      :style="!transferenciaLateral.nota
+                        ? 'background:#e2e8f0;color:#475569;'
+                        : transferenciaLateral.nota.status === 'autorizada'
+                          ? 'background:#dcfce7;color:#166534;'
+                          : transferenciaLateral.nota.status === 'rejeitada'
+                            ? 'background:#fee2e2;color:#b91c1c;'
+                            : 'background:#fef3c7;color:#92400e;'"
+                      x-text="transferenciaLateral.nota?.status_label || 'Não emitida'"></span>
+              </div>
+              <template x-if="transferenciaLateral.nota">
+                <div class="space-y-1">
+                  <p class="text-sm font-semibold"
+                     :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
+                    NF-e nº <span x-text="transferenciaLateral.nota.numero"></span>
+                    <span class="font-normal text-xs"> · Série <span x-text="transferenciaLateral.nota.serie"></span></span>
+                  </p>
+                  <p x-show="transferenciaLateral.nota.chave"
+                     class="text-xs break-all"
+                     :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+                    Chave: <span x-text="transferenciaLateral.nota.chave"></span>
+                  </p>
+                  <p x-show="transferenciaLateral.nota.mensagem_sefaz"
+                     class="text-xs font-semibold"
+                     :style="transferenciaLateral.nota.status === 'rejeitada' ? 'color:#dc2626;' : (temaClaro ? 'color:#475569;' : 'color:#cbd5e1;')">
+                    <span x-show="transferenciaLateral.nota.codigo_status_sefaz"
+                          x-text="transferenciaLateral.nota.codigo_status_sefaz + ' — '"></span>
+                    <span x-text="transferenciaLateral.nota.mensagem_sefaz"></span>
+                  </p>
+                  <a x-show="transferenciaLateral.nota.pdf_danfe_url"
+                     :href="transferenciaLateral.nota.pdf_danfe_url || '#'"
+                     target="_blank"
+                     rel="noopener"
+                     class="btn-secondary inline-flex items-center justify-center gap-2 mt-2">
+                    Abrir DANFE
+                  </a>
+                </div>
+              </template>
+            </div>
+
+            <div class="rounded-lg border p-3 mt-3 space-y-2"
+                 :style="temaClaro ? 'border-color:#dbe3ee;background:#f8fafc;' : 'border-color:#334155;background:#111827;'">
+              <div class="flex items-center justify-between gap-2">
+                <span class="text-xs font-semibold uppercase tracking-wider"
+                      :style="temaClaro ? 'color:#475569;' : 'color:#cbd5e1;'">MDF-e da carga</span>
+                <span class="soft-pill"
+                      :style="transferenciaLateral.mdfe?.status === 'autorizado'
+                        ? 'background:#dcfce7;color:#166534;'
+                        : transferenciaLateral.mdfe?.status === 'rejeitado'
+                          ? 'background:#fee2e2;color:#b91c1c;'
+                          : 'background:#e2e8f0;color:#475569;'"
+                      x-text="transferenciaLateral.mdfe?.status_label || 'Não gerado'"></span>
+              </div>
+              <template x-if="transferenciaLateral.mdfe">
+                <div class="space-y-1">
+                  <p class="text-sm font-semibold"
+                     :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
+                    MDF-e nº <span x-text="transferenciaLateral.mdfe.numero"></span>
+                  </p>
+                  <p x-show="transferenciaLateral.mdfe.mensagem_sefaz"
+                     class="text-xs font-semibold text-red-500"
+                     x-text="transferenciaLateral.mdfe.mensagem_sefaz"></p>
+                  <a :href="transferenciaLateral.mdfe.url"
+                     target="_blank"
+                     class="btn-secondary inline-flex items-center justify-center gap-2 mt-2">
+                    Abrir MDF-e
+                  </a>
+                </div>
+              </template>
+              <a x-show="!transferenciaLateral.mdfe && transferenciaLateral.mdfe_create_url"
+                 :href="transferenciaLateral.mdfe_create_url || '#'"
+                 target="_blank"
+                 class="btn-secondary inline-flex items-center justify-center gap-2">
+                Gerar MDF-e a partir desta NF-e
+              </a>
+              <p x-show="!transferenciaLateral.mdfe && !transferenciaLateral.mdfe_create_url"
+                 class="text-xs"
+                 :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+                O MDF-e será liberado depois que a NF-e for autorizada.
+              </p>
+            </div>
+
             <p x-show="transferenciaLateral._erro"
                class="text-xs mt-2 font-semibold text-red-500"
                x-text="transferenciaLateral._erro"></p>
@@ -487,6 +575,14 @@
                   :disabled="transferenciaLateral._processando"
                   class="btn-primary w-full flex items-center justify-center gap-2">
             <span x-text="transferenciaLateral._processando === 'emitir' ? 'Emitindo...' : (transferenciaLateral.nota ? 'Reemitir NF-e' : 'Emitir NF-e')"></span>
+          </button>
+
+          <button type="button"
+                  x-show="transferenciaLateral.nota && transferenciaLateral.nota.status === 'processando'"
+                  @click="consultarNotaPendente(transferenciaLateral)"
+                  :disabled="transferenciaLateral._processando"
+                  class="btn-secondary w-full flex items-center justify-center gap-2">
+            <span x-text="transferenciaLateral._processando === 'consultar' ? 'Consultando...' : 'Consultar SEFAZ'"></span>
           </button>
 
           <button type="button"
@@ -896,6 +992,13 @@ function transferenciaLojaApp(filiais, motoristas, veiculos) {
     init() {
       this.carregarPendentesNota();
       this.carregarCatalogo();
+      this._fiscalTimer = setInterval(() => {
+        const notaProcessando = this.transferenciaLateral?.nota?.status === 'processando';
+        const mdfeProcessando = ['aguardando_nfe', 'processando'].includes(
+          this.transferenciaLateral?.mdfe?.status,
+        );
+        if (notaProcessando || mdfeProcessando) this.carregarPendentesNota();
+      }, 8000);
     },
 
     formatarQuantidade(valor) {
@@ -951,11 +1054,7 @@ function transferenciaLojaApp(filiais, motoristas, veiculos) {
         const data = await res.json();
         this.isAdmin = !!data.is_admin;
         this.pendentesNota = (data.pendentes || []).map(g => ({ ...g, _processando: false, _erro: '' }));
-        this.transferenciaLateral = this.pendentesNota.find(
-          grupo => grupo.pode_emitir_nota
-            || grupo.pode_cancelar_nota
-            || grupo.pode_cancelar_transferencia
-        ) || null;
+        this.transferenciaLateral = this.pendentesNota[0] || null;
       } catch (e) {
         this.pendentesNota = [];
         this.transferenciaLateral = null;
@@ -977,6 +1076,29 @@ function transferenciaLojaApp(filiais, motoristas, veiculos) {
           await this.carregarPendentesNota();
         } else {
           grupo._erro = data.erro || 'Erro ao emitir a NF-e.';
+        }
+      } catch (e) {
+        grupo._erro = 'Erro de comunicação com o servidor.';
+      } finally {
+        grupo._processando = false;
+      }
+    },
+
+    async consultarNotaPendente(grupo) {
+      grupo._processando = 'consultar';
+      grupo._erro = '';
+      try {
+        const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]').value;
+        const res = await fetch('{% url "estoque:transferencia-lojas-consultar-nfe" %}', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken },
+          body: JSON.stringify({ documento_numero: grupo.chave }),
+        });
+        const data = await res.json();
+        if (data.ok) {
+          await this.carregarPendentesNota();
+        } else {
+          grupo._erro = data.erro || 'Erro ao consultar a NF-e.';
         }
       } catch (e) {
         grupo._erro = 'Erro de comunicação com o servidor.';

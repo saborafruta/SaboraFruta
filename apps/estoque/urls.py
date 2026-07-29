@@ -29,6 +29,7 @@ urlpatterns = [
     path('outras-movimentacoes/transferencia-lojas/api/', views.TransferenciaLojaApiView.as_view(), name='transferencia-lojas-api'),
     path('outras-movimentacoes/transferencia-lojas/pendentes-nfe/', views.TransferenciasPendentesNFeView.as_view(), name='transferencia-lojas-pendentes-nfe'),
     path('outras-movimentacoes/transferencia-lojas/reemitir-nfe/', views.TransferenciaReemitirNFeApiView.as_view(), name='transferencia-lojas-reemitir-nfe'),
+    path('outras-movimentacoes/transferencia-lojas/consultar-nfe/', views.TransferenciaConsultarNFeApiView.as_view(), name='transferencia-lojas-consultar-nfe'),
     path('outras-movimentacoes/transferencia-lojas/cancelar-nfe/', views.TransferenciaCancelarNFeApiView.as_view(), name='transferencia-lojas-cancelar-nfe'),
     path('outras-movimentacoes/transferencia-lojas/cancelar/', views.TransferenciaCancelarApiView.as_view(), name='transferencia-lojas-cancelar'),
     path('outras-movimentacoes/transferencia-lojas/excluir/', views.TransferenciaExcluirApiView.as_view(), name='transferencia-lojas-excluir'),

@@ -1058,9 +1058,14 @@ class TransferenciasPendentesNFeView(PermissaoRequiredMixin, View):
                     nota = {
                         'id': doc.pk,
                         'numero': doc.numero,
+                        'serie': doc.serie,
                         'status': doc.status,
                         'status_label': doc.get_status_display(),
-                        'mensagem_sefaz': doc.mensagem_sefaz if doc.status == StatusDocumentoFiscal.REJEITADA else '',
+                        'codigo_status_sefaz': doc.codigo_status_sefaz,
+                        'mensagem_sefaz': doc.mensagem_sefaz,
+                        'chave': doc.chave or '',
+                        'protocolo': doc.protocolo,
+                        'pdf_danfe_url': doc.pdf_danfe_url,
                     }
                     mdfe = mdfes_por_documento.get(doc.pk)
                     if mdfe:
@@ -1069,6 +1074,7 @@ class TransferenciasPendentesNFeView(PermissaoRequiredMixin, View):
                             'numero': mdfe.numero,
                             'status': mdfe.status,
                             'status_label': mdfe.get_status_display(),
+                            'mensagem_sefaz': mdfe.mensagem_sefaz,
                             'url': reverse('logistica:mdfe-detail', kwargs={'pk': mdfe.pk}),
                         }
                 nota_ativa = bool(nota and nota['status'] == StatusDocumentoFiscal.AUTORIZADA)
@@ -1084,6 +1090,11 @@ class TransferenciasPendentesNFeView(PermissaoRequiredMixin, View):
                     'cancelada': mov.transferencia_cancelada,
                     'nota': nota,
                     'mdfe': mdfe_info,
+                    'mdfe_create_url': (
+                        f"{reverse('logistica:mdfe-create')}?nfe_documento_id={doc.pk}"
+                        if doc and nota_ativa and not mdfe_info
+                        else ''
+                    ),
                     'pode_emitir_nota': pode_emitir_nota,
                     'pode_cancelar_nota': nota_ativa,
                     'pode_cancelar_transferencia': not mov.transferencia_cancelada and not nota_ativa,
@@ -1185,6 +1196,76 @@ class TransferenciaReemitirNFeApiView(PermissaoRequiredMixin, View):
             return JsonResponse({'erro': nota_erro}, status=400)
 
         return JsonResponse({'ok': True, 'nota': nota_info})
+
+
+class TransferenciaConsultarNFeApiView(PermissaoRequiredMixin, View):
+    """Consulta na Focus o status atual da NF-e vinculada à transferência."""
+
+    permissao_modulo = 'estoque'
+    permissao_acao = 'ver'
+
+    def post(self, request):
+        from apps.fiscal.integrations.focusnfe import FocusNFeClient
+        from apps.fiscal.integrations.focusnfe.config import FocusNFeConfig
+        from apps.fiscal.services.focusnfe_service import FocusNFeService
+        from apps.logistica.services.mdfe_focusnfe import (
+            processar_nfe_transferencia_autorizada,
+        )
+
+        try:
+            body = _json.loads(request.body)
+        except (ValueError, TypeError):
+            return JsonResponse({'erro': 'JSON inválido.'}, status=400)
+
+        documento_numero = (body.get('documento_numero') or '').strip()
+        mov = (
+            MovimentacaoEstoque.objects
+            .filter(
+                filial=request.filial_ativa,
+                tipo_operacao=MovimentacaoEstoque.TipoOperacao.TRANSFERENCIA_SAIDA,
+                documento_numero=documento_numero,
+                documento_fiscal__isnull=False,
+            )
+            .select_related('documento_fiscal', 'documento_fiscal__filial')
+            .first()
+        )
+        if not mov:
+            return JsonResponse(
+                {'erro': 'Nenhuma NF-e vinculada a esta transferência.'},
+                status=404,
+            )
+
+        documento = mov.documento_fiscal
+        filial = documento.filial
+        token = (filial.focusnfe_token or '').strip()
+        if not token:
+            return JsonResponse(
+                {'erro': 'Configure o token de emissão Focus da filial.'},
+                status=400,
+            )
+
+        try:
+            client = FocusNFeClient(
+                config=FocusNFeConfig.from_env(
+                    token=token,
+                    ambiente=filial.focusnfe_ambiente,
+                ),
+            )
+            FocusNFeService(client=client).consultar(documento)
+            documento.refresh_from_db()
+            processar_nfe_transferencia_autorizada(documento)
+        except Exception as exc:  # noqa: BLE001
+            return JsonResponse(
+                {'erro': f'Não foi possível consultar a NF-e na SEFAZ: {exc}'},
+                status=400,
+            )
+
+        return JsonResponse({
+            'ok': True,
+            'status': documento.status,
+            'status_label': documento.get_status_display(),
+            'mensagem_sefaz': documento.mensagem_sefaz,
+        })
 
 
 class TransferenciaCancelarNFeApiView(PermissaoRequiredMixin, View):
