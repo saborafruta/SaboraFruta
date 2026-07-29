@@ -466,18 +466,33 @@
             {% endif %}
           </div>
         </div>
-        <div class="text-xs" :style="temaClaro ? 'color:#6b7280;' : 'color:#9ca3af;'">
-          Valor médio <span class="font-semibold" style="color:#22c55e;">R$ {{ r.valor_medio|floatformat:2 }}</span>
-        </div>
-        {% if r.cliente.celular or r.cliente.telefone %}
-          <div class="text-xs font-mono" :style="temaClaro ? 'color:#6b7280;' : 'color:#9ca3af;'">
-            {{ r.cliente.celular|default:r.cliente.telefone }}
+        {% comment %}
+          Lado direito em colunas de largura fixa: os telefones têm tamanhos
+          diferentes e, sem isso, empurravam o valor e o link de linha para
+          linha. Os blocos vazios continuam ocupando a coluna para o
+          alinhamento não quebrar em quem não tem telefone.
+        {% endcomment %}
+        <div class="ml-auto flex items-center gap-4 flex-shrink-0">
+          <div class="text-xs whitespace-nowrap" :style="temaClaro ? 'color:#6b7280;' : 'color:#9ca3af;'">
+            Valor médio
+            <span class="font-semibold inline-block text-right"
+                  style="color:#22c55e; width:78px; font-variant-numeric:tabular-nums;">R$ {{ r.valor_medio|floatformat:2 }}</span>
           </div>
-        {% endif %}
-        {% if r.telefone_whatsapp %}
-          <a href="https://wa.me/{{ r.telefone_whatsapp }}" target="_blank" rel="noopener"
-             class="text-xs font-semibold" style="color:#22c55e;">WhatsApp</a>
-        {% endif %}
+          <div class="text-xs font-mono text-right whitespace-nowrap"
+               :style="'width:118px;' + (temaClaro ? 'color:#6b7280;' : 'color:#9ca3af;')">
+            {% if r.cliente.celular or r.cliente.telefone %}
+              {{ r.cliente.celular|default:r.cliente.telefone|telefone }}
+            {% else %}
+              <span style="opacity:.4;">—</span>
+            {% endif %}
+          </div>
+          <div class="text-right" style="width:66px;">
+            {% if r.telefone_whatsapp %}
+              <a href="https://wa.me/{{ r.telefone_whatsapp }}" target="_blank" rel="noopener"
+                 class="text-xs font-semibold" style="color:#22c55e;">WhatsApp</a>
+            {% endif %}
+          </div>
+        </div>
       </div>
       {% endfor %}
     </div>
