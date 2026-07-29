@@ -21,6 +21,9 @@ from apps.estoque.services.conferencia_transferencia import (
     concluir_conferencia,
     criar_conferencia_transferencia,
 )
+from apps.core.services.notificacao_service import (
+    reabrir_notificacao_transferencia,
+)
 from apps.estoque.services.movimentacao_service import MovimentacaoService
 from apps.produtos.models import (
     Produto,
@@ -252,3 +255,27 @@ class ConferenciaTransferenciaTests(TestCase):
             notificacao=notificacao,
             usuario=self.usuario,
         ).exists())
+
+    def test_reativacao_reabre_notificacao_ja_lida(self):
+        produto = self.criar_produto('Produto reativado')
+        conferencia = self.criar_transferencia(produto)
+        notificacao = Notificacao.objects.get(
+            filial=self.destino,
+            tipo=Notificacao.Tipo.TRANSFERENCIA_RECEBIDA,
+            referencia_id=str(conferencia.pk),
+        )
+        NotificacaoLeitura.objects.create(
+            notificacao=notificacao,
+            usuario=self.usuario,
+        )
+
+        reabrir_notificacao_transferencia(conferencia)
+
+        notificacao.refresh_from_db()
+        self.assertTrue(notificacao.ativa)
+        self.assertFalse(
+            NotificacaoLeitura.objects.filter(
+                notificacao=notificacao,
+                usuario=self.usuario,
+            ).exists(),
+        )

@@ -24,6 +24,12 @@ def notificar_transferencia_recebida(conferencia):
     )[0]
 
 
+def reabrir_notificacao_transferencia(conferencia):
+    notificacao = notificar_transferencia_recebida(conferencia)
+    notificacao.leituras.all().delete()
+    return notificacao
+
+
 def notificar_transferencia_conferida(conferencia):
     titulos = {
         conferencia.Status.CONFERIDA: 'Transferencia conferida no destino',

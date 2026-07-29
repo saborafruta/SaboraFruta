@@ -4,13 +4,28 @@ from decimal import Decimal
 from django.test import TestCase
 from django.utils import timezone
 
-from apps.core.models import Empresa, Filial, PerfilAcesso, Usuario
+from apps.core.models import (
+    Empresa,
+    Filial,
+    Notificacao,
+    NotificacaoLeitura,
+    PerfilAcesso,
+    Usuario,
+)
 from apps.core.services.exceptions import (
     DadosInvalidosError,
     EstoqueInsuficienteError,
 )
 from apps.estoque.models import (
-    AlertaVencimento, Estoque, Inventario, LoteProduto, MovimentacaoEstoque,
+    AlertaVencimento,
+    ConferenciaTransferencia,
+    Estoque,
+    Inventario,
+    LoteProduto,
+    MovimentacaoEstoque,
+)
+from apps.estoque.services.conferencia_transferencia import (
+    criar_conferencia_transferencia,
 )
 from apps.estoque.services.movimentacao_service import MovimentacaoService
 from apps.estoque.services.transferencia_cancelamento import (
@@ -411,6 +426,21 @@ class MovimentacaoServiceTests(TestCase):
             vincular_destino=True,
             documento_numero='TRF-TESTE-REATIVAR',
         )
+        conferencia = criar_conferencia_transferencia(
+            documento_numero=mov_saida.documento_numero,
+            filial_origem=self.filial,
+            filial_destino=self.filial_destino,
+            usuario=self.usuario,
+        )
+        notificacao = Notificacao.objects.get(
+            filial=self.filial_destino,
+            tipo=Notificacao.Tipo.TRANSFERENCIA_RECEBIDA,
+            referencia_id=str(conferencia.pk),
+        )
+        NotificacaoLeitura.objects.create(
+            notificacao=notificacao,
+            usuario=self.usuario,
+        )
 
         cancelar_transferencia(
             mov_saida.documento_numero,
@@ -427,6 +457,8 @@ class MovimentacaoServiceTests(TestCase):
             emitente_cnpj=self.filial.cnpj,
             status=StatusDocumentoFiscal.AUTORIZADA,
             valor_total=Decimal('2.00'),
+            destinatario_snapshot={},
+            data_emissao=timezone.now(),
             usuario=self.usuario,
         )
         MovimentacaoEstoque.objects.filter(
@@ -446,6 +478,17 @@ class MovimentacaoServiceTests(TestCase):
         )
         self.assertFalse(mov_saida.transferencia_cancelada)
         self.assertIsNone(mov_saida.transferencia_cancelada_em)
+        conferencia.refresh_from_db()
+        self.assertEqual(
+            conferencia.status,
+            ConferenciaTransferencia.Status.AGUARDANDO,
+        )
+        self.assertFalse(
+            NotificacaoLeitura.objects.filter(
+                notificacao=notificacao,
+                usuario=self.usuario,
+            ).exists(),
+        )
         self.assertEqual(estoque_origem.quantidade_atual, Decimal('3.000'))
         self.assertEqual(estoque_destino.quantidade_atual, Decimal('2.000'))
         self.assertEqual(

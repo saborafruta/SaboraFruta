@@ -195,13 +195,25 @@ def reativar_transferencia(documento_numero: str, filial_origem, usuario) -> lis
         transferencia_cancelada_por=None,
     )
     from apps.estoque.models import ConferenciaTransferencia
-    ConferenciaTransferencia.objects.filter(
+    conferencia = ConferenciaTransferencia.objects.filter(
         documento_numero=documento_numero,
-    ).update(
-        status=ConferenciaTransferencia.Status.AGUARDANDO,
-        conferida_por=None,
-        conferida_em=None,
-    )
+    ).first()
+    if conferencia:
+        conferencia.status = ConferenciaTransferencia.Status.AGUARDANDO
+        conferencia.conferida_por = None
+        conferencia.conferida_em = None
+        conferencia.save(
+            update_fields=[
+                'status',
+                'conferida_por',
+                'conferida_em',
+                'updated_at',
+            ],
+        )
+        from apps.core.services.notificacao_service import (
+            reabrir_notificacao_transferencia,
+        )
+        reabrir_notificacao_transferencia(conferencia)
 
     return movs_reativacao
 
