@@ -1,0 +1,206 @@
+{% extends "_base.html" %}
+{% load erp_extras %}
+
+{% block title %}{{ title }}{% endblock %}
+{% block page_title %}{{ title }}{% endblock %}
+
+{% block extra_head %}
+<style>
+  #relatorio-abc { color:#111827; }
+  #relatorio-abc table { border-collapse: collapse; width: 100%; }
+  #relatorio-abc th, #relatorio-abc td { border-bottom: 1px solid #e5e7eb; }
+  @media print {
+    nav, header, aside, .no-print { display:none !important; }
+    body { background:#fff !important; }
+    #relatorio-abc { color:#000 !important; }
+    * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="space-y-5" id="relatorio-abc">
+
+  <!-- Cabeçalho -->
+  <div class="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
+    <div class="flex items-center gap-4">
+      {% if filial.imagem %}
+        <img src="{{ filial.imagem.url }}"
+             alt="{{ filial.nome_fantasia|default:filial.razao_social }}"
+             style="height:96px; width:auto; max-width:220px; object-fit:contain; flex-shrink:0;"
+             {% if empresa_logo_url %}onerror="this.onerror=null;this.src='{{ empresa_logo_url }}';"{% else %}onerror="this.style.display='none';"{% endif %}>
+      {% elif empresa_logo_url %}
+        <img src="{{ empresa_logo_url }}"
+             alt="{{ filial.nome_fantasia|default:filial.razao_social }}"
+             style="height:96px; width:auto; max-width:220px; object-fit:contain; flex-shrink:0;"
+             onerror="this.style.display='none';">
+      {% endif %}
+      <div>
+        <p class="text-sm mb-1 no-print" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+          <a href="{% url 'core:dashboard' %}" :style="temaClaro ? 'color:#3b82f6;' : 'color:#60a5fa;'">Dashboard</a>
+          <span class="mx-1">›</span> Relatório Curva ABC
+        </p>
+        <h2 class="text-2xl font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
+          Curva ABC — {% if tipo == 'produtos' %}Produtos{% else %}Clientes{% endif %}
+        </h2>
+        <p class="text-sm mt-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+          {{ filial.nome_fantasia|default:filial.razao_social }} ·
+          Período: <strong>{{ data_ini|date:"d/m/Y" }} a {{ data_fim|date:"d/m/Y" }}</strong>
+        </p>
+        <p class="text-xs mt-0.5" :style="temaClaro ? 'color:#94a3b8;' : 'color:#64748b;'">
+          Gerado em {{ gerado_em|date:"d/m/Y H:i" }} · {{ dados.total_itens|default:0 }} {% if tipo == 'produtos' %}produto{{ dados.total_itens|pluralize }}{% else %}cliente{{ dados.total_itens|pluralize }}{% endif %}
+        </p>
+      </div>
+    </div>
+    <div class="flex gap-2 no-print">
+      <button type="button" onclick="window.print()" class="btn-secondary flex items-center gap-2">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"/>
+        </svg>
+        Imprimir
+      </button>
+      <button type="button" id="btn-export-pdf" class="btn-primary flex items-center gap-2">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+        </svg>
+        Exportar PDF
+      </button>
+    </div>
+  </div>
+
+  <!-- Filtros -->
+  <form method="get" class="card p-4 no-print flex flex-wrap items-end gap-3">
+    <div>
+      <label class="block text-xs mb-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Curva</label>
+      <select name="tipo" class="input-field" style="width:150px;">
+        <option value="clientes" {% if tipo == 'clientes' %}selected{% endif %}>Clientes</option>
+        <option value="produtos" {% if tipo == 'produtos' %}selected{% endif %}>Produtos</option>
+      </select>
+    </div>
+    <div>
+      <label class="block text-xs mb-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">De</label>
+      <input type="date" name="data_ini" value="{{ data_ini|date:'Y-m-d' }}" class="input-field" style="width:150px;">
+    </div>
+    <div>
+      <label class="block text-xs mb-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Até</label>
+      <input type="date" name="data_fim" value="{{ data_fim|date:'Y-m-d' }}" class="input-field" style="width:150px;">
+    </div>
+    <button type="submit" class="btn-primary">Filtrar</button>
+  </form>
+
+  {% if dados.erro %}
+    <div class="card p-8 text-center" style="color:#f87171;">Erro: {{ dados.erro }}</div>
+  {% elif dados.sem_dados %}
+    <div class="card p-8 text-center" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+      Nenhuma venda encontrada para o período selecionado.
+    </div>
+  {% else %}
+    <!-- Barra resumo ABC -->
+    <div class="card p-4">
+      <div class="flex rounded-lg overflow-hidden mb-3" style="height:28px;">
+        {% if dados.resumo.A.pct_receita %}
+          <div style="width:{{ dados.resumo.A.pct_receita }}%; background:#22c55e; display:flex; align-items:center; justify-content:center;">
+            <span style="font-size:10px; font-weight:700; color:#fff;">A&nbsp;{{ dados.resumo.A.pct_receita }}%</span>
+          </div>
+        {% endif %}
+        {% if dados.resumo.B.pct_receita %}
+          <div style="width:{{ dados.resumo.B.pct_receita }}%; background:#f59e0b; display:flex; align-items:center; justify-content:center;">
+            <span style="font-size:10px; font-weight:700; color:#fff;">B&nbsp;{{ dados.resumo.B.pct_receita }}%</span>
+          </div>
+        {% endif %}
+        {% if dados.resumo.C.pct_receita %}
+          <div style="flex:1; background:#ef4444; display:flex; align-items:center; justify-content:center;">
+            <span style="font-size:10px; font-weight:700; color:#fff;">C&nbsp;{{ dados.resumo.C.pct_receita }}%</span>
+          </div>
+        {% endif %}
+      </div>
+      <div class="flex gap-4 text-xs" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+        <span><span style="color:#22c55e; font-weight:700;">A</span> — {{ dados.resumo.A.qtd }} · 80% da receita</span>
+        <span><span style="color:#f59e0b; font-weight:700;">B</span> — {{ dados.resumo.B.qtd }} · 15% da receita</span>
+        <span><span style="color:#ef4444; font-weight:700;">C</span> — {{ dados.resumo.C.qtd }} · 5% da receita</span>
+      </div>
+    </div>
+
+    <!-- Tabela completa -->
+    <div class="card p-0 overflow-hidden">
+      <table class="w-full text-sm">
+        <thead>
+          <tr :style="temaClaro ? 'background:#f8fafc;' : 'background:#1e1e20;'">
+            <th class="text-left py-2 px-3" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">#</th>
+            <th class="text-left py-2 px-3" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">{% if tipo == 'produtos' %}Produto{% else %}Cliente{% endif %}</th>
+            {% if tipo == 'produtos' %}
+            <th class="text-right py-2 px-3" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Qtd.</th>
+            {% endif %}
+            <th class="text-right py-2 px-3" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Receita</th>
+            <th class="text-right py-2 px-3" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">% Total</th>
+            <th class="text-right py-2 px-3" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">% Acum.</th>
+            <th class="text-right py-2 px-3" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Classe</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for item in dados.itens %}
+          <tr>
+            <td class="py-2 px-3" :style="temaClaro ? 'color:#94a3b8;' : 'color:#64748b;'">{{ item.rank }}</td>
+            <td class="py-2 px-3" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
+              {{ item.nome }}
+              {% if tipo == 'produtos' and item.codigo %}<span class="block text-xs font-mono" :style="temaClaro ? 'color:#94a3b8;' : 'color:#64748b;'">{{ item.codigo }}</span>{% endif %}
+            </td>
+            {% if tipo == 'produtos' %}
+            <td class="py-2 px-3 text-right font-mono" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">{{ item.quantidade|floatformat:0 }}</td>
+            {% endif %}
+            <td class="py-2 px-3 text-right font-mono" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">R$ {{ item.receita|floatformat:2 }}</td>
+            <td class="py-2 px-3 text-right" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">{{ item.pct_receita }}%</td>
+            <td class="py-2 px-3 text-right" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">{{ item.pct_acumulado }}%</td>
+            <td class="py-2 px-3 text-right">
+              {% if item.classe == 'A' %}
+                <span class="inline-block px-1.5 py-0.5 rounded font-bold text-xs" style="background:rgba(34,197,94,0.15);color:#22c55e;">A</span>
+              {% elif item.classe == 'B' %}
+                <span class="inline-block px-1.5 py-0.5 rounded font-bold text-xs" style="background:rgba(245,158,11,0.15);color:#f59e0b;">B</span>
+              {% else %}
+                <span class="inline-block px-1.5 py-0.5 rounded font-bold text-xs" style="background:rgba(239,68,68,0.15);color:#ef4444;">C</span>
+              {% endif %}
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  {% endif %}
+
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+<script>
+document.getElementById('btn-export-pdf').addEventListener('click', function () {
+  var btn = this;
+  var original = btn.innerHTML;
+  btn.disabled = true;
+  btn.textContent = 'Gerando PDF...';
+
+  var element = document.getElementById('relatorio-abc');
+  var noPrint = element.querySelectorAll('.no-print');
+  noPrint.forEach(function (el) { el.style.display = 'none'; });
+
+  var opt = {
+    margin:      [10, 10, 10, 10],
+    filename:    'curva-abc-{{ tipo }}-{{ gerado_em|date:"Y-m-d" }}.pdf',
+    image:       { type: 'jpeg', quality: 0.95 },
+    html2canvas: { scale: 2, useCORS: true, logging: false },
+    jsPDF:       { unit: 'mm', format: 'a4', orientation: 'portrait' },
+    pagebreak:   { mode: ['css', 'legacy'] }
+  };
+
+  html2pdf().set(opt).from(element).save().then(function () {
+    noPrint.forEach(function (el) { el.style.display = ''; });
+    btn.disabled = false;
+    btn.innerHTML = original;
+  }).catch(function () {
+    noPrint.forEach(function (el) { el.style.display = ''; });
+    btn.disabled = false;
+    btn.innerHTML = original;
+  });
+});
+</script>
+{% endblock %}

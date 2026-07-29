@@ -4,7 +4,7 @@ from apps.core.views import admin_area
 from apps.core.views import parametros as parametros_views
 from apps.core.views.audit import CoreAdminLogExportCsvView, CoreAdminLogExportPdfView, CoreAdminLogItemsView
 from apps.core.views import (
-    DashboardView, LoginView, SelecionarFilialView, TrocarFilialView, VendasDowPeriodoView,
+    CurvaAbcRelatorioView, DashboardView, LoginView, SelecionarFilialView, TrocarFilialView, VendasDowPeriodoView,
     atualizar_minha_foto, logout_view,
 )
 
@@ -13,6 +13,7 @@ app_name = 'core'
 urlpatterns = [
     path('dashboard/', DashboardView.as_view(), name='dashboard'),
     path('dashboard/vendas-dia-semana/', VendasDowPeriodoView.as_view(), name='dashboard-vendas-dow-periodo'),
+    path('dashboard/curva-abc/relatorio/', CurvaAbcRelatorioView.as_view(), name='dashboard-curva-abc-relatorio'),
     path('auth/login/', LoginView.as_view(), name='login'),
     path('auth/logout/', logout_view, name='logout'),
     path('auth/minha-foto/', atualizar_minha_foto, name='atualizar_minha_foto'),

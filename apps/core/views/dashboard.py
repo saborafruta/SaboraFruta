@@ -1,6 +1,7 @@
 """Dashboard principal — KPIs do dia, estoque por filial e RFM de clientes."""
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.db.models import Count, DecimalField, ExpressionWrapper, F, Max, Q, Sum
+from django.shortcuts import render
 from django.utils import timezone
 from django.views import View
 from django.views.generic import TemplateView
@@ -830,8 +831,9 @@ class DashboardView(LoginRequiredMixin, TemplateView):
 
         return itens_ordenados, resumo
 
-    def _base_qs_vendas(self, filial):
-        """QuerySet base de PedidoVenda filtrado por filial/empresa e status válidos."""
+    @staticmethod
+    def _base_qs_vendas(filial, data_ini=None, data_fim=None):
+        """QuerySet base de PedidoVenda filtrado por filial/empresa, status válidos e período."""
         from apps.vendas.models import PedidoVenda
 
         status_validos = [
@@ -842,20 +844,22 @@ class DashboardView(LoginRequiredMixin, TemplateView):
             PedidoVenda.Status.ENTREGUE,
         ]
         hoje = timezone.now().date()
-        inicio = hoje - datetime.timedelta(days=365)
+        inicio = data_ini or (hoje - datetime.timedelta(days=365))
+        fim = data_fim or hoje
 
         base = (
             PedidoVenda.objects.filter(filial__empresa=filial.empresa)
             if filial.is_matriz
             else PedidoVenda.objects.filter(filial=filial)
         )
-        return base.filter(status__in=status_validos, data_emissao__date__gte=inicio)
+        return base.filter(status__in=status_validos, data_emissao__date__gte=inicio, data_emissao__date__lte=fim)
 
     # ------------------------------------------------------------------
     # Curva ABC — Clientes
     # ------------------------------------------------------------------
 
-    def _curva_abc_clientes(self, filial, top=12):
+    @staticmethod
+    def _curva_abc_clientes(filial, top=12, data_ini=None, data_fim=None):
         if not filial:
             return {'itens': [], 'resumo': {}, 'sem_dados': True, 'erro': None}
 
@@ -863,24 +867,29 @@ class DashboardView(LoginRequiredMixin, TemplateView):
         try:
             from apps.pdv.models import VendaPDV
 
+            hoje = timezone.now().date()
+            inicio = data_ini or (hoje - datetime.timedelta(days=365))
+            fim = data_fim or hoje
+
             # --- PedidoVenda (B2B) ---
             b2b_qs = (
-                self._base_qs_vendas(filial)
+                DashboardView._base_qs_vendas(filial, inicio, fim)
                 .filter(cliente_id__isnull=False)
                 .values('cliente_id', 'cliente__razao_social', 'cliente__nome_fantasia')
                 .annotate(receita=Sum('valor_total'))
             )
 
             # --- VendaPDV com cliente identificado ---
-            hoje = timezone.now().date()
-            inicio = hoje - datetime.timedelta(days=365)
             pdv_qs = (
                 (
                     VendaPDV.objects.filter(filial__empresa=filial.empresa)
                     if filial.is_matriz
                     else VendaPDV.objects.filter(filial=filial)
                 )
-                .filter(status='finalizada', cliente_id__isnull=False, data_venda__date__gte=inicio)
+                .filter(
+                    status='finalizada', cliente_id__isnull=False,
+                    data_venda__date__gte=inicio, data_venda__date__lte=fim,
+                )
                 .values('cliente_id', 'cliente__razao_social', 'cliente__nome_fantasia')
                 .annotate(receita=Sum('valor_total'))
             )
@@ -899,19 +908,21 @@ class DashboardView(LoginRequiredMixin, TemplateView):
 
             itens = sorted(acum.values(), key=lambda x: x['receita'], reverse=True)
             if not itens:
-                return {'itens': [], 'resumo': {}, 'sem_dados': True, 'erro': None}
+                return {'itens': [], 'resumo': {}, 'sem_dados': True, 'erro': None, 'data_ini': inicio, 'data_fim': fim}
 
-            itens_cls, resumo = self._classificar_abc(itens, 'receita')
+            itens_cls, resumo = DashboardView._classificar_abc(itens, 'receita')
             for i, item in enumerate(itens_cls, start=1):
                 item['rank'] = i
                 item['nome'] = item['cliente__nome_fantasia'] or item['cliente__razao_social'] or f'Cliente {item["cliente_id"]}'
 
             return {
-                'itens': itens_cls[:top],
+                'itens': itens_cls if top is None else itens_cls[:top],
                 'total_itens': len(itens_cls),
                 'resumo': resumo,
                 'sem_dados': False,
                 'erro': None,
+                'data_ini': inicio,
+                'data_fim': fim,
             }
         except Exception as exc:
             erro = str(exc)
@@ -921,7 +932,8 @@ class DashboardView(LoginRequiredMixin, TemplateView):
     # Curva ABC — Produtos
     # ------------------------------------------------------------------
 
-    def _curva_abc_produtos(self, filial, top=12):
+    @staticmethod
+    def _curva_abc_produtos(filial, top=12, data_ini=None, data_fim=None):
         if not filial:
             return {'itens': [], 'resumo': {}, 'sem_dados': True, 'erro': None}
 
@@ -930,8 +942,12 @@ class DashboardView(LoginRequiredMixin, TemplateView):
             from apps.vendas.models import ItemPedidoVenda
             from apps.pdv.models import ItemVendaPDV as PDVItem, VendaPDV
 
+            hoje = timezone.now().date()
+            inicio = data_ini or (hoje - datetime.timedelta(days=365))
+            fim = data_fim or hoje
+
             # --- PedidoVenda (B2B) ---
-            pedidos_ids = self._base_qs_vendas(filial).values_list('id', flat=True)
+            pedidos_ids = DashboardView._base_qs_vendas(filial, inicio, fim).values_list('id', flat=True)
             b2b_qs = (
                 ItemPedidoVenda.objects.filter(pedido_id__in=pedidos_ids)
                 .values('produto_id', 'produto__descricao', 'produto__codigo')
@@ -939,13 +955,13 @@ class DashboardView(LoginRequiredMixin, TemplateView):
             )
 
             # --- VendaPDV ---
-            hoje = timezone.now().date()
-            inicio = hoje - datetime.timedelta(days=365)
             pdv_ids = (
                 VendaPDV.objects.filter(filial__empresa=filial.empresa)
                 if filial.is_matriz
                 else VendaPDV.objects.filter(filial=filial)
-            ).filter(status='finalizada', data_venda__date__gte=inicio).values_list('id', flat=True)
+            ).filter(
+                status='finalizada', data_venda__date__gte=inicio, data_venda__date__lte=fim,
+            ).values_list('id', flat=True)
 
             pdv_qs = (
                 PDVItem.objects.filter(venda_pdv_id__in=pdv_ids)
@@ -969,20 +985,22 @@ class DashboardView(LoginRequiredMixin, TemplateView):
 
             itens = sorted(acum.values(), key=lambda x: x['receita'], reverse=True)
             if not itens:
-                return {'itens': [], 'resumo': {}, 'sem_dados': True, 'erro': None}
+                return {'itens': [], 'resumo': {}, 'sem_dados': True, 'erro': None, 'data_ini': inicio, 'data_fim': fim}
 
-            itens_cls, resumo = self._classificar_abc(itens, 'receita')
+            itens_cls, resumo = DashboardView._classificar_abc(itens, 'receita')
             for i, item in enumerate(itens_cls, start=1):
                 item['rank'] = i
                 item['nome'] = item['produto__descricao'] or f'Produto {item["produto_id"]}'
                 item['codigo'] = item['produto__codigo'] or ''
 
             return {
-                'itens': itens_cls[:top],
+                'itens': itens_cls if top is None else itens_cls[:top],
                 'total_itens': len(itens_cls),
                 'resumo': resumo,
                 'sem_dados': False,
                 'erro': None,
+                'data_ini': inicio,
+                'data_fim': fim,
             }
         except Exception as exc:
             erro = str(exc)
@@ -1041,3 +1059,42 @@ class VendasDowPeriodoView(LoginRequiredMixin, View):
 
         dados['label'] = f'{inicio.strftime("%d/%m/%Y")} — {fim.strftime("%d/%m/%Y")}'
         return JsonResponse(dados)
+
+
+class CurvaAbcRelatorioView(LoginRequiredMixin, View):
+    """Relatório imprimível da Curva ABC (clientes ou produtos), com todos os
+    itens (sem o corte de top-12 do card do dashboard) e filtro de período."""
+
+    def get(self, request, *args, **kwargs):
+        filial = getattr(request, 'filial_ativa', None)
+
+        tipo = request.GET.get('tipo', 'clientes')
+        if tipo not in ('clientes', 'produtos'):
+            tipo = 'clientes'
+
+        hoje = timezone.now().date()
+        try:
+            data_ini = datetime.date.fromisoformat(request.GET.get('data_ini', ''))
+        except (TypeError, ValueError):
+            data_ini = hoje - datetime.timedelta(days=365)
+        try:
+            data_fim = datetime.date.fromisoformat(request.GET.get('data_fim', ''))
+        except (TypeError, ValueError):
+            data_fim = hoje
+        if data_ini > data_fim:
+            data_ini, data_fim = data_fim, data_ini
+
+        if tipo == 'produtos':
+            dados = DashboardView._curva_abc_produtos(filial, top=None, data_ini=data_ini, data_fim=data_fim)
+        else:
+            dados = DashboardView._curva_abc_clientes(filial, top=None, data_ini=data_ini, data_fim=data_fim)
+
+        return render(request, 'core/curva_abc_relatorio.html', {
+            'title': 'Relatório Curva ABC',
+            'tipo': tipo,
+            'filial': filial,
+            'dados': dados,
+            'data_ini': data_ini,
+            'data_fim': data_fim,
+            'gerado_em': timezone.localtime(),
+        })

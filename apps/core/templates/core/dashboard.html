@@ -854,7 +854,9 @@
 
     <!-- ABC Clientes -->
     <div class="card" style="border-radius:12px; overflow:hidden;">
-      <div class="px-5 py-4 flex items-center justify-between" style="border-bottom:1px solid #2a2a2e;">
+      <a href="{% url 'core:dashboard-curva-abc-relatorio' %}?tipo=clientes" target="_blank"
+         class="px-5 py-4 flex items-center justify-between hover:bg-black/5 transition-colors cursor-pointer"
+         style="border-bottom:1px solid #2a2a2e;" title="Abrir relatório imprimível">
         <div class="flex items-center gap-2">
           <svg class="w-4 h-4" fill="none" stroke="#34d399" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"
@@ -862,11 +864,14 @@
           </svg>
           <h3 class="text-sm font-medium" :style="temaClaro ? 'color:#1a1a1a;' : 'color:#f0f0f0;'">Curva ABC — Clientes</h3>
           <span class="text-xs px-2 py-0.5 rounded-full" style="background:rgba(52,211,153,0.15);color:#34d399;">12 meses</span>
+          <svg class="w-3.5 h-3.5" fill="none" stroke="#888" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"/>
+          </svg>
         </div>
         {% if abc_clientes.total_itens %}
           <span class="text-xs" style="color:#888;">{{ abc_clientes.total_itens }} cliente{{ abc_clientes.total_itens|pluralize }}</span>
         {% endif %}
-      </div>
+      </a>
 
       <div class="p-5">
         {% if abc_clientes.erro %}
@@ -946,7 +951,9 @@
 
     <!-- ABC Produtos -->
     <div class="card" style="border-radius:12px; overflow:hidden;">
-      <div class="px-5 py-4 flex items-center justify-between" style="border-bottom:1px solid #2a2a2e;">
+      <a href="{% url 'core:dashboard-curva-abc-relatorio' %}?tipo=produtos" target="_blank"
+         class="px-5 py-4 flex items-center justify-between hover:bg-black/5 transition-colors cursor-pointer"
+         style="border-bottom:1px solid #2a2a2e;" title="Abrir relatório imprimível">
         <div class="flex items-center gap-2">
           <svg class="w-4 h-4" fill="none" stroke="#818cf8" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"
@@ -954,11 +961,14 @@
           </svg>
           <h3 class="text-sm font-medium" :style="temaClaro ? 'color:#1a1a1a;' : 'color:#f0f0f0;'">Curva ABC — Produtos</h3>
           <span class="text-xs px-2 py-0.5 rounded-full" style="background:rgba(129,140,248,0.15);color:#818cf8;">12 meses</span>
+          <svg class="w-3.5 h-3.5" fill="none" stroke="#888" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"/>
+          </svg>
         </div>
         {% if abc_produtos.total_itens %}
           <span class="text-xs" style="color:#888;">{{ abc_produtos.total_itens }} produto{{ abc_produtos.total_itens|pluralize }}</span>
         {% endif %}
-      </div>
+      </a>
 
       <div class="p-5">
         {% if abc_produtos.erro %}
