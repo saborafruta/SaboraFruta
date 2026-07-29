@@ -17,6 +17,10 @@
   .resumo { display: flex; gap: 26px; flex-wrap: wrap; border: 1px solid #ddd; border-radius: 6px; padding: 10px 14px; margin-bottom: 16px; }
   .resumo div { font-size: 11px; color: #666; }
   .resumo span { display: block; font-size: 15px; font-weight: bold; color: #111; margin-top: 2px; }
+  .resumo small { display: block; font-size: 10px; color: #888; margin-top: 1px; }
+  /* Total geral destacado: fecha o resumo depois dos subtotais por tipo. */
+  .resumo .resumo-total { margin-left: auto; padding-left: 18px; border-left: 2px solid #333; }
+  .resumo .resumo-total span { font-size: 17px; }
 
   table { width: 100%; border-collapse: collapse; }
   th { font-size: 10px; text-transform: uppercase; letter-spacing: .04em; color: #555; text-align: left; border-bottom: 2px solid #333; padding: 7px 6px; }
@@ -95,7 +99,9 @@
 <div class="resumo">
   <div>Registros no relatório<span>{{ vendas|length }}</span></div>
   <div>Vendas consideradas<span>{{ quantidade_considerada }}</span></div>
-  <div>Valor total<span>R$ {{ valor_total|floatformat:2 }}</span></div>
+  <div>Total balcão<span>R$ {{ valor_balcao|floatformat:2 }}</span><small>{{ qtd_balcao }} venda{{ qtd_balcao|pluralize }}</small></div>
+  <div>Total delivery<span>R$ {{ valor_delivery|floatformat:2 }}</span><small>{{ qtd_delivery }} venda{{ qtd_delivery|pluralize }}</small></div>
+  <div class="resumo-total">Valor total das vendas<span>R$ {{ valor_total|floatformat:2 }}</span></div>
 </div>
 
 {% if truncado %}

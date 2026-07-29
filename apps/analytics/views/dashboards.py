@@ -281,8 +281,20 @@ def historico_vendas_relatorio(request):
     total = qs.count()
     vendas = list(qs[:LIMITE])
 
+    # Totais desconsiderando canceladas, quebrados por tipo de venda. O
+    # balcão/delivery sai num único aggregate com Sum condicional para não
+    # disparar uma query extra por linha do resumo.
     qs_totais = qs.exclude(status='cancelada')
-    valor_total = qs_totais.aggregate(total=Sum('valor_total'))['total'] or 0
+    totais = qs_totais.aggregate(
+        total=Sum('valor_total'),
+        total_balcao=Sum('valor_total', filter=Q(delivery=False)),
+        total_delivery=Sum('valor_total', filter=Q(delivery=True)),
+        qtd_balcao=Count('id', filter=Q(delivery=False)),
+        qtd_delivery=Count('id', filter=Q(delivery=True)),
+    )
+    valor_total = totais['total'] or 0
+    valor_balcao = totais['total_balcao'] or 0
+    valor_delivery = totais['total_delivery'] or 0
 
     rotulos_tipo = {
         '': 'Todas as vendas',
@@ -306,7 +318,11 @@ def historico_vendas_relatorio(request):
         'truncado': total > LIMITE,
         'limite': LIMITE,
         'valor_total': valor_total,
-        'quantidade_considerada': qs_totais.count(),
+        'valor_balcao': valor_balcao,
+        'valor_delivery': valor_delivery,
+        'qtd_balcao': totais['qtd_balcao'] or 0,
+        'qtd_delivery': totais['qtd_delivery'] or 0,
+        'quantidade_considerada': (totais['qtd_balcao'] or 0) + (totais['qtd_delivery'] or 0),
         'filtros': f,
         'rotulo_tipo': rotulos_tipo.get(f['tipo_fiscal'], 'Todas as vendas'),
         'rotulo_tipo_venda': rotulos_tipo_venda.get(f['tipo_venda'], 'Balcão e delivery'),
