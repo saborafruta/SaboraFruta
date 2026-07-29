@@ -1,4 +1,5 @@
 {% extends "_base.html" %}
+{% load erp_extras %}
 {% block title %}Alertas de Recompra{% endblock %}
 {% block page_title %}Alertas de Recompra{% endblock %}
 
@@ -163,9 +164,15 @@
           <!-- Modal com os clientes da faixa -->
           <div x-cloak x-show="aberto" @click.self="aberto = false" @keydown.escape.window="aberto = false"
                style="position:fixed;inset:0;z-index:70;display:flex;align-items:center;justify-content:center;padding:18px;background:rgba(0,0,0,.68);backdrop-filter:blur(3px);cursor:default;">
+            {% comment %}
+              Modal em coluna flex: o cabeçalho fica fixo e a lista ocupa o
+              resto da altura. Antes o container tinha max-height 78vh e a
+              lista 60vh por dentro, então sobrava um vão morto embaixo e
+              cabiam menos linhas do que o espaço permitia.
+            {% endcomment %}
             <div @click.stop
-                 style="width:100%;max-width:720px;max-height:78vh;overflow:hidden;border-radius:14px;background:#16161a;border:1px solid #30303a;box-shadow:0 24px 70px rgba(0,0,0,.55);">
-              <div style="padding:18px 20px;border-bottom:1px solid #2a2a32;display:flex;align-items:flex-start;justify-content:space-between;gap:14px;">
+                 style="width:100%;max-width:1040px;max-height:88vh;display:flex;flex-direction:column;overflow:hidden;border-radius:14px;background:#16161a;border:1px solid #30303a;box-shadow:0 24px 70px rgba(0,0,0,.55);">
+              <div style="flex-shrink:0;padding:18px 20px;border-bottom:1px solid #2a2a32;display:flex;align-items:flex-start;justify-content:space-between;gap:14px;">
                 <div>
                   <h4 style="font-size:16px;font-weight:800;color:#f8fafc;margin:0 0 4px;">Compram a cada ~{{ fx.dias }} dias</h4>
                   <p style="font-size:12px;color:#9ca3af;margin:0;">
@@ -177,9 +184,14 @@
                         style="width:32px;height:32px;border-radius:8px;border:1px solid #343442;background:#1f1f28;color:#cbd5e1;cursor:pointer;font-size:18px;line-height:1;">x</button>
               </div>
 
-              <div style="max-height:60vh;overflow:auto;padding:6px 0;">
+              <div style="flex:1;min-height:0;overflow:auto;padding:6px 0;">
                 {% for r in fx.clientes %}
-                <div style="display:grid;grid-template-columns:minmax(0,1fr) auto;gap:12px;padding:11px 20px;border-bottom:1px solid #24242c;">
+                {% comment %}
+                  Colunas de largura fixa (valor / telefone / Ver / WhatsApp).
+                  Com larguras naturais, quem não tinha telefone encurtava a
+                  linha e desalinhava tudo em relação às outras.
+                {% endcomment %}
+                <div style="display:grid;grid-template-columns:minmax(0,1fr) 92px 132px 30px 68px;align-items:center;gap:10px;padding:11px 20px;border-bottom:1px solid #24242c;">
                   <div style="min-width:0;">
                     <div style="font-size:13px;font-weight:800;color:#f3f4f6;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">
                       {% if r.status == 'vermelho' %}🔴{% elif r.status == 'amarelo' %}🟡{% else %}🟢{% endif %}
@@ -196,17 +208,19 @@
                       &middot; última compra {{ r.ultima_compra|date:"d/m/Y" }}
                     </div>
                   </div>
-                  <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;justify-content:flex-end;">
-                    <span style="font-size:11px;color:#86efac;background:rgba(34,197,94,.1);border-radius:999px;padding:3px 8px;white-space:nowrap;">R$ {{ r.valor_medio|floatformat:2 }}</span>
-                    {% if r.cliente.celular or r.cliente.telefone %}
-                      <span style="font-size:11px;color:#cbd5e1;background:#20202a;border-radius:999px;padding:3px 8px;white-space:nowrap;">{{ r.cliente.celular|default:r.cliente.telefone }}</span>
-                    {% endif %}
-                    <a href="{% url 'cadastros:cliente-update' r.cliente_id %}" style="font-size:11px;color:#60a5fa;font-weight:700;text-decoration:none;">Ver</a>
-                    {% if r.telefone_whatsapp %}
-                      <a href="https://wa.me/{{ r.telefone_whatsapp }}" target="_blank" rel="noopener"
-                         style="font-size:11px;color:#22c55e;font-weight:700;text-decoration:none;">WhatsApp</a>
-                    {% endif %}
-                  </div>
+                  <span style="font-size:11px;color:#86efac;background:rgba(34,197,94,.1);border-radius:999px;padding:3px 8px;white-space:nowrap;text-align:center;font-variant-numeric:tabular-nums;">R$ {{ r.valor_medio|floatformat:2 }}</span>
+                  {% if r.cliente.celular or r.cliente.telefone %}
+                    <span style="font-size:11px;color:#cbd5e1;background:#20202a;border-radius:999px;padding:3px 8px;white-space:nowrap;text-align:center;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;">{{ r.cliente.celular|default:r.cliente.telefone|telefone }}</span>
+                  {% else %}
+                    <span style="font-size:11px;color:#4b5563;text-align:center;">&mdash;</span>
+                  {% endif %}
+                  <a href="{% url 'cadastros:cliente-update' r.cliente_id %}" style="font-size:11px;color:#60a5fa;font-weight:700;text-decoration:none;">Ver</a>
+                  {% if r.telefone_whatsapp %}
+                    <a href="https://wa.me/{{ r.telefone_whatsapp }}" target="_blank" rel="noopener"
+                       style="font-size:11px;color:#22c55e;font-weight:700;text-decoration:none;white-space:nowrap;">WhatsApp</a>
+                  {% else %}
+                    <span></span>
+                  {% endif %}
                 </div>
                 {% empty %}
                 <div style="padding:28px 20px;text-align:center;color:#8b8b9a;font-size:13px;">
