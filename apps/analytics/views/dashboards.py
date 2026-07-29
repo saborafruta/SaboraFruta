@@ -3,6 +3,7 @@ from datetime import date, timedelta
 from django.shortcuts import render
 from django.db.models import Sum, Count, Avg, F, Q
 from django.core.paginator import Paginator
+from django.utils import timezone
 
 from apps.core.services.permissions import requer_permissao
 from apps.estoque.models import Estoque, AlertaVencimento
@@ -58,20 +59,30 @@ def dashboard_dre(request):
     })
 
 
-@requer_permissao('relatorios', 'ver')
-def historico_vendas(request):
-    pedido_q   = request.GET.get('pedido', '').strip()
-    cliente_q  = request.GET.get('cliente', '').strip()
-    data_ini   = request.GET.get('data_ini', '')
-    data_fim   = request.GET.get('data_fim', '')
-    tipo_fiscal = request.GET.get('tipo_fiscal', '')  # emitidas | nfce | nfe | nao_fiscal | cancelada
-    desconsiderar_canceladas = request.GET.get('desconsiderar_canceladas', '1') != '0'
+def _filtros_historico_vendas(request):
+    """
+    Lê os filtros da querystring do Histórico de Vendas, aplicando o
+    padrão "hoje" quando nada foi informado. Compartilhado pela tela e
+    pelo relatório imprimível, para que os dois nunca divirjam.
+    """
+    f = {
+        'pedido': request.GET.get('pedido', '').strip(),
+        'cliente': request.GET.get('cliente', '').strip(),
+        'data_ini': request.GET.get('data_ini', ''),
+        'data_fim': request.GET.get('data_fim', ''),
+        # emitidas | nfce | nfe | nao_fiscal | cancelada
+        'tipo_fiscal': request.GET.get('tipo_fiscal', ''),
+        'desconsiderar_canceladas': request.GET.get('desconsiderar_canceladas', '1') != '0',
+    }
+    if not f['data_ini'] and not f['data_fim'] and not f['tipo_fiscal']:
+        hoje = date.today().isoformat()
+        f['data_ini'] = hoje
+        f['data_fim'] = hoje
+    return f
 
-    if not data_ini and not data_fim and not tipo_fiscal:
-        hoje = date.today()
-        data_ini = hoje.isoformat()
-        data_fim = hoje.isoformat()
 
+def _queryset_historico_vendas(request, f):
+    """Vendas da filial já filtradas por pedido/cliente/período (sem tipo fiscal)."""
     qs = (
         VendaPDV.objects
         .for_filial(request.filial_ativa)
@@ -81,22 +92,63 @@ def historico_vendas(request):
         .order_by('-data_venda')
     )
 
-    if pedido_q:
+    if f['pedido']:
         try:
-            qs = qs.filter(numero_venda=int(pedido_q))
+            qs = qs.filter(numero_venda=int(f['pedido']))
         except ValueError:
             qs = qs.none()
 
-    if cliente_q:
+    if f['cliente']:
         qs = qs.filter(
-            Q(cliente__razao_social__icontains=cliente_q) |
-            Q(cliente__cpf_cnpj__icontains=cliente_q)
+            Q(cliente__razao_social__icontains=f['cliente']) |
+            Q(cliente__cpf_cnpj__icontains=f['cliente'])
         )
 
-    if data_ini:
-        qs = qs.filter(data_venda__date__gte=data_ini)
-    if data_fim:
-        qs = qs.filter(data_venda__date__lte=data_fim)
+    if f['data_ini']:
+        qs = qs.filter(data_venda__date__gte=f['data_ini'])
+    if f['data_fim']:
+        qs = qs.filter(data_venda__date__lte=f['data_fim'])
+
+    return qs
+
+
+def _aplicar_tipo_fiscal(qs, tipo_fiscal, desconsiderar_canceladas):
+    """Recorte por situação fiscal usado nas abas da tela e no relatório."""
+    if tipo_fiscal == 'emitidas':
+        return qs.filter(
+            status='finalizada', documento_fiscal__status='autorizada',
+            documento_fiscal__tipo_documento__in=['nfe', 'nfce'],
+        )
+    if tipo_fiscal == 'nfce':
+        return qs.filter(
+            status='finalizada', documento_fiscal__status='autorizada',
+            documento_fiscal__tipo_documento='nfce',
+        )
+    if tipo_fiscal == 'nfe':
+        return qs.filter(
+            status='finalizada', documento_fiscal__status='autorizada',
+            documento_fiscal__tipo_documento='nfe',
+        )
+    if tipo_fiscal == 'nao_fiscal':
+        return qs.filter(documento_fiscal__isnull=True, status='finalizada')
+    if tipo_fiscal == 'cancelada':
+        return qs.filter(status='cancelada')
+    if desconsiderar_canceladas:
+        return qs.exclude(status='cancelada')
+    return qs
+
+
+@requer_permissao('relatorios', 'ver')
+def historico_vendas(request):
+    f = _filtros_historico_vendas(request)
+    pedido_q = f['pedido']
+    cliente_q = f['cliente']
+    data_ini = f['data_ini']
+    data_fim = f['data_fim']
+    tipo_fiscal = f['tipo_fiscal']
+    desconsiderar_canceladas = f['desconsiderar_canceladas']
+
+    qs = _queryset_historico_vendas(request, f)
 
     contadores = {
         '': qs.exclude(status='cancelada').count() if desconsiderar_canceladas else qs.count(),
@@ -115,27 +167,7 @@ def historico_vendas(request):
         'cancelada': qs.filter(status='cancelada').count(),
     }
 
-    if tipo_fiscal == 'emitidas':
-        qs = qs.filter(
-            status='finalizada', documento_fiscal__status='autorizada',
-            documento_fiscal__tipo_documento__in=['nfe', 'nfce'],
-        )
-    elif tipo_fiscal == 'nfce':
-        qs = qs.filter(
-            status='finalizada', documento_fiscal__status='autorizada',
-            documento_fiscal__tipo_documento='nfce',
-        )
-    elif tipo_fiscal == 'nfe':
-        qs = qs.filter(
-            status='finalizada', documento_fiscal__status='autorizada',
-            documento_fiscal__tipo_documento='nfe',
-        )
-    elif tipo_fiscal == 'nao_fiscal':
-        qs = qs.filter(documento_fiscal__isnull=True, status='finalizada')
-    elif tipo_fiscal == 'cancelada':
-        qs = qs.filter(status='cancelada')
-    elif desconsiderar_canceladas:
-        qs = qs.exclude(status='cancelada')
+    qs = _aplicar_tipo_fiscal(qs, tipo_fiscal, desconsiderar_canceladas)
 
     exibir_totalizador = tipo_fiscal != 'cancelada'
     qs_totalizador = qs.exclude(status='cancelada')
@@ -192,4 +224,50 @@ def historico_vendas(request):
             'tipo_fiscal': tipo_fiscal,
             'desconsiderar_canceladas': desconsiderar_canceladas,
         },
+    })
+
+
+@requer_permissao('relatorios', 'ver')
+def historico_vendas_relatorio(request):
+    """
+    Versão imprimível do Histórico de Vendas: respeita exatamente os
+    mesmos filtros da tela (por isso reaproveita os helpers acima), mas
+    sem paginação — o relatório traz todos os registros do período.
+    """
+    f = _filtros_historico_vendas(request)
+    qs = _aplicar_tipo_fiscal(
+        _queryset_historico_vendas(request, f),
+        f['tipo_fiscal'],
+        f['desconsiderar_canceladas'],
+    )
+
+    # Teto de segurança: um período muito largo geraria um PDF gigante e
+    # um request lento. Avisa no relatório quando houver corte.
+    LIMITE = 2000
+    total = qs.count()
+    vendas = list(qs[:LIMITE])
+
+    qs_totais = qs.exclude(status='cancelada')
+    valor_total = qs_totais.aggregate(total=Sum('valor_total'))['total'] or 0
+
+    rotulos_tipo = {
+        '': 'Todas as vendas',
+        'emitidas': 'Somente notas emitidas',
+        'nfe': 'Somente NF-e',
+        'nfce': 'Somente NFC-e',
+        'nao_fiscal': 'Somente sem documento fiscal',
+        'cancelada': 'Somente vendas canceladas',
+    }
+
+    return render(request, 'analytics/vendas_relatorio.html', {
+        'title': 'Relatório de Vendas',
+        'vendas': vendas,
+        'total': total,
+        'truncado': total > LIMITE,
+        'limite': LIMITE,
+        'valor_total': valor_total,
+        'quantidade_considerada': qs_totais.count(),
+        'filtros': f,
+        'rotulo_tipo': rotulos_tipo.get(f['tipo_fiscal'], 'Todas as vendas'),
+        'gerado_em': timezone.localtime(),
     })

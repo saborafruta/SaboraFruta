@@ -9,4 +9,5 @@ urlpatterns = [
     path("producao/", dashboards.dashboard_producao, name="producao"),
     path("dre/", dashboards.dashboard_dre, name="dre"),
     path("vendas/", dashboards.historico_vendas, name="vendas"),
+    path("vendas/relatorio/", dashboards.historico_vendas_relatorio, name="vendas-relatorio"),
 ]

@@ -229,6 +229,20 @@ body.tema-claro .hv-page a, body.tema-claro .hv-page span { background:#eef2f7;b
         <span class="hv-total-top-count">{{ quantidade_totalizador }} venda{{ quantidade_totalizador|pluralize }} considerada{{ quantidade_totalizador|pluralize }}</span>
       </div>
       {% endif %}
+      <a href="{% url 'analytics:vendas-relatorio' %}{% if request.GET.urlencode %}?{{ request.GET.urlencode }}{% endif %}"
+         target="_blank" rel="noopener"
+         title="Abre o relatório dos filtros atuais para imprimir ou salvar em PDF"
+         style="display:flex;align-items:center;gap:6px;padding:9px 18px;border-radius:9px;
+                font-size:13px;font-weight:700;cursor:pointer;border:1px solid #1d4ed8;
+                background:#0f1c3d;color:#93c5fd;transition:.15s;text-decoration:none;"
+         onmouseover="this.style.background='#152a56';this.style.borderColor='#60a5fa';"
+         onmouseout="this.style.background='#0f1c3d';this.style.borderColor='#1d4ed8';">
+        <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                d="M6 9V4h12v5M6 18h12v4H6v-4zM6 14H4a2 2 0 01-2-2v-3a2 2 0 012-2h16a2 2 0 012 2v3a2 2 0 01-2 2h-2"/>
+        </svg>
+        Imprimir / PDF
+      </a>
       <button @click="modalInut.show=true"
             style="display:flex;align-items:center;gap:6px;padding:9px 18px;border-radius:9px;
                    font-size:13px;font-weight:700;cursor:pointer;border:1px solid #78350f;

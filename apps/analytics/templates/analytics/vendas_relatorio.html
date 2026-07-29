@@ -1,0 +1,157 @@
+{% load static %}<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<title>Relatório de Vendas</title>
+<style>
+  * { box-sizing: border-box; }
+  body { font-family: Arial, Helvetica, sans-serif; color: #111; margin: 0; padding: 24px; background: #fff; }
+
+  .rel-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 20px; border-bottom: 2px solid #333; padding-bottom: 14px; margin-bottom: 6px; }
+  .rel-logo { max-height: 70px; max-width: 220px; object-fit: contain; }
+  h1 { font-size: 19px; margin: 0 0 3px; }
+  .empresa { font-size: 12px; color: #444; line-height: 1.45; }
+  .meta { font-size: 11px; color: #666; margin: 10px 0 16px; line-height: 1.6; }
+  .meta strong { color: #111; }
+
+  .resumo { display: flex; gap: 26px; flex-wrap: wrap; border: 1px solid #ddd; border-radius: 6px; padding: 10px 14px; margin-bottom: 16px; }
+  .resumo div { font-size: 11px; color: #666; }
+  .resumo span { display: block; font-size: 15px; font-weight: bold; color: #111; margin-top: 2px; }
+
+  table { width: 100%; border-collapse: collapse; }
+  th { font-size: 10px; text-transform: uppercase; letter-spacing: .04em; color: #555; text-align: left; border-bottom: 2px solid #333; padding: 7px 6px; }
+  td { font-size: 11px; padding: 6px; border-bottom: 1px solid #e6e6e6; vertical-align: top; }
+  .num { text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; }
+  .cancelada { color: #b91c1c; font-weight: bold; }
+  tfoot td { font-size: 12px; font-weight: bold; border-top: 2px solid #333; border-bottom: none; padding-top: 9px; }
+
+  .aviso { font-size: 11px; color: #b45309; background: #fffbeb; border: 1px solid #fcd34d; border-radius: 6px; padding: 8px 12px; margin-bottom: 14px; }
+  .vazio { text-align: center; color: #888; padding: 40px 0; font-size: 13px; }
+  .rodape { margin-top: 18px; font-size: 10px; color: #888; text-align: center; }
+
+  .barra-acoes { position: sticky; top: 0; display: flex; gap: 10px; justify-content: flex-end; padding-bottom: 12px; }
+  .barra-acoes button, .barra-acoes a { font-size: 12px; font-weight: 700; padding: 8px 16px; border-radius: 7px; cursor: pointer; text-decoration: none; border: 1px solid #d1d5db; background: #fff; color: #374151; }
+  .barra-acoes .primario { background: #2563eb; border-color: #2563eb; color: #fff; }
+
+  @media print {
+    body { padding: 0; }
+    .barra-acoes { display: none; }
+    thead { display: table-header-group; }
+    tr { page-break-inside: avoid; }
+    @page { size: A4 landscape; margin: 12mm; }
+  }
+</style>
+</head>
+<body>
+
+<div class="barra-acoes">
+  <a href="{% url 'analytics:vendas' %}">← Voltar</a>
+  <button type="button" class="primario" onclick="window.print()">Imprimir / Salvar PDF</button>
+</div>
+
+<div class="rel-head">
+  <div>
+    <h1>Relatório de Vendas</h1>
+    <div class="empresa">
+      <strong>{{ filial_ativa.nome_fantasia|default:filial_ativa.razao_social }}</strong><br>
+      {% if filial_ativa.cnpj %}CNPJ: {{ filial_ativa.cnpj }}<br>{% endif %}
+      {% if filial_ativa.endereco %}{{ filial_ativa.endereco }}{% if filial_ativa.numero %}, {{ filial_ativa.numero }}{% endif %}{% if filial_ativa.bairro %} — {{ filial_ativa.bairro }}{% endif %}<br>{% endif %}
+      {% if filial_ativa.cidade %}{{ filial_ativa.cidade }}{% if filial_ativa.uf %}/{{ filial_ativa.uf }}{% endif %}{% endif %}
+      {% if filial_ativa.telefone %} · Tel: {{ filial_ativa.telefone }}{% endif %}
+    </div>
+  </div>
+
+  {# Mesma cascata de logo do resto do sistema: a imagem da filial é upload
+     local e some em redeploy, então cai para a URL externa persistente. #}
+  {% if parametros_sistema and parametros_sistema.logo_url %}
+    <img class="rel-logo" src="{{ parametros_sistema.logo_url }}" alt="Logo"
+         {% if empresa_logo_url %}onerror="this.onerror=null;this.src='{{ empresa_logo_url }}';"{% else %}onerror="this.style.display='none';"{% endif %}>
+  {% elif parametros_sistema and parametros_sistema.logo %}
+    <img class="rel-logo" src="{{ parametros_sistema.logo.url }}" alt="Logo"
+         {% if empresa_logo_url %}onerror="this.onerror=null;this.src='{{ empresa_logo_url }}';"{% else %}onerror="this.style.display='none';"{% endif %}>
+  {% elif filial_ativa and filial_ativa.imagem %}
+    <img class="rel-logo" src="{{ filial_ativa.imagem.url }}" alt="Logo"
+         {% if empresa_logo_url %}onerror="this.onerror=null;this.src='{{ empresa_logo_url }}';"{% else %}onerror="this.style.display='none';"{% endif %}>
+  {% elif empresa_logo_url %}
+    <img class="rel-logo" src="{{ empresa_logo_url }}" alt="Logo" onerror="this.style.display='none';">
+  {% endif %}
+</div>
+
+<div class="meta">
+  <strong>Período:</strong>
+  {% if filtros.data_ini %}{{ filtros.data_ini }}{% else %}início{% endif %}
+  a
+  {% if filtros.data_fim %}{{ filtros.data_fim }}{% else %}hoje{% endif %}
+  &nbsp;·&nbsp; <strong>Filtro:</strong> {{ rotulo_tipo }}
+  {% if filtros.pedido %}&nbsp;·&nbsp; <strong>Pedido:</strong> #{{ filtros.pedido }}{% endif %}
+  {% if filtros.cliente %}&nbsp;·&nbsp; <strong>Cliente:</strong> {{ filtros.cliente }}{% endif %}
+  {% if filtros.desconsiderar_canceladas %}&nbsp;·&nbsp; canceladas desconsideradas{% endif %}
+  <br><strong>Gerado em:</strong> {{ gerado_em|date:"d/m/Y H:i" }}
+</div>
+
+<div class="resumo">
+  <div>Registros no relatório<span>{{ vendas|length }}</span></div>
+  <div>Vendas consideradas<span>{{ quantidade_considerada }}</span></div>
+  <div>Valor total<span>R$ {{ valor_total|floatformat:2 }}</span></div>
+</div>
+
+{% if truncado %}
+  <div class="aviso">
+    Este relatório mostra os {{ limite }} registros mais recentes de {{ total }} encontrados.
+    Reduza o período para incluir todos.
+  </div>
+{% endif %}
+
+<table>
+  <thead>
+    <tr>
+      <th>Pedido</th>
+      <th>Data/Hora</th>
+      <th>Cliente</th>
+      <th>CPF/CNPJ</th>
+      <th>Pagamento</th>
+      <th>Situação</th>
+      <th class="num">Total</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for v in vendas %}
+    <tr>
+      <td>#{{ v.numero_venda|stringformat:"06d" }}</td>
+      <td>{{ v.data_venda|date:"d/m/Y H:i" }}</td>
+      <td>{{ v.cliente.nome_display|default:"Consumidor Final" }}</td>
+      <td>{{ v.cliente.cpf_cnpj|default:"—" }}</td>
+      <td>
+        {% for pg in v.pagamentos.all %}{{ pg.forma_pagamento.descricao }}{% if not forloop.last %}, {% endif %}{% empty %}—{% endfor %}
+      </td>
+      <td>
+        {% if v.status == 'cancelada' %}
+          <span class="cancelada">Cancelada</span>
+        {% elif v.documento_fiscal and v.documento_fiscal.status == 'autorizada' %}
+          {{ v.documento_fiscal.get_tipo_documento_display|default:v.documento_fiscal.tipo_documento|upper }} autorizada
+        {% else %}
+          Sem documento fiscal
+        {% endif %}
+      </td>
+      <td class="num">R$ {{ v.valor_total|floatformat:2 }}</td>
+    </tr>
+    {% empty %}
+    <tr><td colspan="7" class="vazio">Nenhuma venda encontrada para os filtros selecionados.</td></tr>
+    {% endfor %}
+  </tbody>
+  {% if vendas %}
+  <tfoot>
+    <tr>
+      <td colspan="6">Total (desconsiderando canceladas)</td>
+      <td class="num">R$ {{ valor_total|floatformat:2 }}</td>
+    </tr>
+  </tfoot>
+  {% endif %}
+</table>
+
+<div class="rodape">
+  {{ filial_ativa.nome_fantasia|default:filial_ativa.razao_social }} · Relatório gerado pelo ERP iNoovaTed
+</div>
+
+</body>
+</html>
