@@ -147,9 +147,9 @@
     </div>
   </form>
 
-  <!-- ── Totais da seleção ── -->
-  {% if totais_filtro.total_saldo %}
-  <div class="flex flex-wrap gap-4 text-sm px-1">
+  <!-- ── Totais da seleção + relatório ── -->
+  <div class="flex flex-wrap items-center gap-4 text-sm px-1">
+    {% if totais_filtro.total_saldo %}
     <span :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
       Seleção —
       <strong :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
@@ -169,6 +169,7 @@
         R$ {{ totais_filtro.total_pago|floatformat:2 }}
       </strong>
     </span>
+    {% endif %}
     <a href="{% url 'financeiro:pagar_relatorio' %}{% if page_querystring %}?{{ page_querystring }}{% endif %}"
        target="_blank"
        class="btn-secondary sm:ml-auto flex items-center gap-2 px-3 py-1.5">
@@ -179,7 +180,6 @@
       Imprimir relatório
     </a>
   </div>
-  {% endif %}
 
   <!-- ── Cards mobile ── -->
   <div class="md:hidden space-y-3">
