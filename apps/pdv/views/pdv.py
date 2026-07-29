@@ -1916,24 +1916,12 @@ def delivery_atualizar(request, pk):
     return JsonResponse({'ok': True})
 
 
-@requer_permissao('pdv', 'ver')
-@require_GET
-def delivery_relatorio(request):
-    """Lista de pedidos de delivery num período, para o relatório
-    imprimível/exportável em PDF do Kanban de Delivery."""
-    data_ini_raw = request.GET.get('data_ini', '')
-    data_fim_raw = request.GET.get('data_fim', '')
-    try:
-        data_ini = datetime.date.fromisoformat(data_ini_raw)
-        data_fim = datetime.date.fromisoformat(data_fim_raw)
-    except (TypeError, ValueError):
-        return JsonResponse({'erro': 'Datas inválidas.'}, status=400)
-    if data_ini > data_fim:
-        data_ini, data_fim = data_fim, data_ini
-
+def _delivery_relatorio_dados(filial, data_ini, data_fim):
+    """Pedidos de delivery do período + total, usados tanto pelo endpoint JSON
+    (modal do Kanban) quanto pela página imprimível do relatório."""
     qs = (
         VendaPDV.objects
-        .for_filial(request.filial_ativa)
+        .for_filial(filial)
         .filter(delivery=True, data_venda__date__gte=data_ini, data_venda__date__lte=data_fim)
         .exclude(status='cancelada')
         .select_related('cliente')
@@ -1954,24 +1942,81 @@ def delivery_relatorio(request):
 
     pedidos = []
     total_geral = Decimal('0')
+    total_pago = Decimal('0')
     for v in qs:
         pago = v.pk not in pks_nao_pagos
         total_geral += v.valor_total
+        if pago:
+            total_pago += v.valor_total
         pedidos.append({
             'numero_venda': v.numero_venda,
             'data_venda': timezone.localtime(v.data_venda).strftime('%d/%m/%Y %H:%M'),
             'cliente_nome': (v.cliente.nome_fantasia or v.cliente.razao_social) if v.cliente else 'Consumidor Final',
             'status_delivery': v.get_status_delivery_display(),
             'entregador': v.entregador or '',
-            'valor_total': float(v.valor_total),
+            'valor_total': v.valor_total,
             'pago': pago,
         })
 
-    return JsonResponse({
+    return {
         'pedidos': pedidos,
-        'total_geral': float(total_geral),
+        'total_geral': total_geral,
+        'total_pago': total_pago,
+        'total_a_receber': total_geral - total_pago,
         'total_pedidos': len(pedidos),
         'periodo_label': f'{data_ini.strftime("%d/%m/%Y")} — {data_fim.strftime("%d/%m/%Y")}',
+    }
+
+
+@requer_permissao('pdv', 'ver')
+@require_GET
+def delivery_relatorio(request):
+    """Endpoint JSON consumido pelo modal "Relatório" do Kanban de Delivery.
+    A versão navegável/imprimível é `delivery_relatorio_pagina`."""
+    try:
+        data_ini = datetime.date.fromisoformat(request.GET.get('data_ini', ''))
+        data_fim = datetime.date.fromisoformat(request.GET.get('data_fim', ''))
+    except (TypeError, ValueError):
+        return JsonResponse({'erro': 'Datas inválidas.'}, status=400)
+    if data_ini > data_fim:
+        data_ini, data_fim = data_fim, data_ini
+
+    dados = _delivery_relatorio_dados(request.filial_ativa, data_ini, data_fim)
+    return JsonResponse({
+        'pedidos': [
+            {**p, 'valor_total': float(p['valor_total'])} for p in dados['pedidos']
+        ],
+        'total_geral': float(dados['total_geral']),
+        'total_pedidos': dados['total_pedidos'],
+        'periodo_label': dados['periodo_label'],
+    })
+
+
+@requer_permissao('pdv', 'ver')
+@require_GET
+def delivery_relatorio_pagina(request):
+    """Relatório de Delivery imprimível/exportável em PDF, com filtro de
+    período. Sem datas na URL, assume os últimos 30 dias."""
+    hoje = timezone.localdate()
+    try:
+        data_ini = datetime.date.fromisoformat(request.GET.get('data_ini', ''))
+    except (TypeError, ValueError):
+        data_ini = hoje - datetime.timedelta(days=30)
+    try:
+        data_fim = datetime.date.fromisoformat(request.GET.get('data_fim', ''))
+    except (TypeError, ValueError):
+        data_fim = hoje
+    if data_ini > data_fim:
+        data_ini, data_fim = data_fim, data_ini
+
+    dados = _delivery_relatorio_dados(request.filial_ativa, data_ini, data_fim)
+    return render(request, 'pdv/delivery_relatorio.html', {
+        'title': 'Relatório de Delivery',
+        'filial': request.filial_ativa,
+        'data_ini': data_ini,
+        'data_fim': data_fim,
+        'gerado_em': timezone.localtime(),
+        **dados,
     })
 
 

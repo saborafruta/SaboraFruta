@@ -44,7 +44,7 @@ class RelatoriosHubView(PermissaoRequiredMixin, TemplateView):
                     {
                         'nome': 'Relatório de Delivery',
                         'descricao': 'Pedidos do Kanban de delivery por período, com status de pagamento.',
-                        'url_name': 'pdv:delivery_relatorio',
+                        'url_name': 'pdv:delivery_relatorio_pagina',
                     },
                 ],
             },
