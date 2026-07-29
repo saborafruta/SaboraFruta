@@ -85,6 +85,7 @@
   a
   {% if filtros.data_fim %}{{ filtros.data_fim }}{% else %}hoje{% endif %}
   &nbsp;·&nbsp; <strong>Filtro:</strong> {{ rotulo_tipo }}
+  &nbsp;·&nbsp; <strong>Tipo de venda:</strong> {{ rotulo_tipo_venda }}
   {% if filtros.pedido %}&nbsp;·&nbsp; <strong>Pedido:</strong> #{{ filtros.pedido }}{% endif %}
   {% if filtros.cliente %}&nbsp;·&nbsp; <strong>Cliente:</strong> {{ filtros.cliente }}{% endif %}
   {% if filtros.desconsiderar_canceladas %}&nbsp;·&nbsp; canceladas desconsideradas{% endif %}
@@ -109,6 +110,7 @@
     <tr>
       <th>Pedido</th>
       <th>Data/Hora</th>
+      <th>Tipo</th>
       <th>Cliente</th>
       <th>CPF/CNPJ</th>
       <th>Pagamento</th>
@@ -121,6 +123,7 @@
     <tr>
       <td>#{{ v.numero_venda|stringformat:"06d" }}</td>
       <td>{{ v.data_venda|date:"d/m/Y H:i" }}</td>
+      <td>{% if v.delivery %}Delivery{% else %}Balcão{% endif %}</td>
       <td>{{ v.cliente.nome_display|default:"Consumidor Final" }}</td>
       <td>{{ v.cliente.cpf_cnpj|default:"—" }}</td>
       <td>
@@ -138,13 +141,13 @@
       <td class="num">R$ {{ v.valor_total|floatformat:2 }}</td>
     </tr>
     {% empty %}
-    <tr><td colspan="7" class="vazio">Nenhuma venda encontrada para os filtros selecionados.</td></tr>
+    <tr><td colspan="8" class="vazio">Nenhuma venda encontrada para os filtros selecionados.</td></tr>
     {% endfor %}
   </tbody>
   {% if vendas %}
   <tfoot>
     <tr>
-      <td colspan="6">Total (desconsiderando canceladas)</td>
+      <td colspan="7">Total (desconsiderando canceladas)</td>
       <td class="num">R$ {{ valor_total|floatformat:2 }}</td>
     </tr>
   </tfoot>

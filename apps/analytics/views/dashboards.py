@@ -75,9 +75,13 @@ def _filtros_historico_vendas(request):
         'data_fim': request.GET.get('data_fim', ''),
         # emitidas | nfce | nfe | nao_fiscal | cancelada
         'tipo_fiscal': request.GET.get('tipo_fiscal', ''),
+        # '' (todas) | balcao | delivery
+        'tipo_venda': request.GET.get('tipo_venda', ''),
         'desconsiderar_canceladas': request.GET.get('desconsiderar_canceladas', '1') != '0',
     }
-    if not f['data_ini'] and not f['data_fim'] and not f['tipo_fiscal']:
+    if f['tipo_venda'] not in ('balcao', 'delivery'):
+        f['tipo_venda'] = ''
+    if not f['data_ini'] and not f['data_fim'] and not f['tipo_fiscal'] and not f['tipo_venda']:
         hoje = date.today().isoformat()
         f['data_ini'] = hoje
         f['data_fim'] = hoje
@@ -111,6 +115,11 @@ def _queryset_historico_vendas(request, f):
         qs = qs.filter(data_venda__date__gte=f['data_ini'])
     if f['data_fim']:
         qs = qs.filter(data_venda__date__lte=f['data_fim'])
+
+    if f.get('tipo_venda') == 'delivery':
+        qs = qs.filter(delivery=True)
+    elif f.get('tipo_venda') == 'balcao':
+        qs = qs.filter(delivery=False)
 
     return qs
 
@@ -246,6 +255,7 @@ def historico_vendas(request):
             'data_ini': data_ini,
             'data_fim': data_fim,
             'tipo_fiscal': tipo_fiscal,
+            'tipo_venda': f['tipo_venda'],
             'desconsiderar_canceladas': desconsiderar_canceladas,
         },
     })
@@ -283,6 +293,12 @@ def historico_vendas_relatorio(request):
         'cancelada': 'Somente vendas canceladas',
     }
 
+    rotulos_tipo_venda = {
+        '': 'Balcão e delivery',
+        'balcao': 'Somente balcão',
+        'delivery': 'Somente delivery',
+    }
+
     return render(request, 'analytics/vendas_relatorio.html', {
         'title': 'Relatório de Vendas',
         'vendas': vendas,
@@ -293,5 +309,6 @@ def historico_vendas_relatorio(request):
         'quantidade_considerada': qs_totais.count(),
         'filtros': f,
         'rotulo_tipo': rotulos_tipo.get(f['tipo_fiscal'], 'Todas as vendas'),
+        'rotulo_tipo_venda': rotulos_tipo_venda.get(f['tipo_venda'], 'Balcão e delivery'),
         'gerado_em': timezone.localtime(),
     })

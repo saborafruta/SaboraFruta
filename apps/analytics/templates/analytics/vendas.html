@@ -294,6 +294,14 @@ body.tema-claro .hv-page a, body.tema-claro .hv-page span { background:#eef2f7;b
       <input class="hv-input" type="date" name="data_fim" value="{{ filtros.data_fim }}" style="width:140px;">
     </div>
     <div class="hv-filter-group">
+      <label class="hv-filter-label">Tipo de Venda</label>
+      <select class="hv-input" name="tipo_venda" style="width:130px;">
+        <option value="">Todas</option>
+        <option value="balcao"   {% if filtros.tipo_venda == 'balcao'   %}selected{% endif %}>Balcão</option>
+        <option value="delivery" {% if filtros.tipo_venda == 'delivery' %}selected{% endif %}>Delivery</option>
+      </select>
+    </div>
+    <div class="hv-filter-group">
       <label class="hv-filter-label">Tipo Fiscal</label>
       <select class="hv-input" name="tipo_fiscal" style="width:140px;">
         <option value="">Todos</option>
@@ -345,6 +353,11 @@ body.tema-claro .hv-page a, body.tema-claro .hv-page span { background:#eef2f7;b
           <!-- Pedido -->
           <td class="hv-td">
             <span style="font-weight:700;color:#f97316;">#{{ venda.numero_venda|stringformat:"06d" }}</span>
+            {% if venda.delivery %}
+            <div style="margin-top:2px;">
+              <span style="font-size:10px;font-weight:700;color:#93c5fd;background:#0c1a2d;border:1px solid #1d4ed8;border-radius:4px;padding:1px 5px;">Delivery</span>
+            </div>
+            {% endif %}
             {% if venda.status == 'cancelada' %}
             <div style="margin-top:2px;">
               <span style="font-size:10px;font-weight:700;color:#f87171;background:#2d0808;border:1px solid #991b1b;border-radius:4px;padding:1px 5px;">Cancelada</span>
