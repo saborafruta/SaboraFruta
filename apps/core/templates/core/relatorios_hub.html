@@ -1,0 +1,36 @@
+{% extends "_base.html" %}
+
+{% block title %}{{ title }}{% endblock %}
+{% block page_title %}{{ title }}{% endblock %}
+
+{% block content %}
+<div class="space-y-6">
+  <p class="text-sm" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+    Todos os relatórios imprimíveis/exportáveis do sistema, organizados por área.
+  </p>
+
+  {% for grupo in grupos %}
+  <div>
+    <h3 class="text-xs font-medium uppercase tracking-widest mb-2" :style="temaClaro ? 'color:#9ca3af;' : 'color:#71717a;'">
+      {{ grupo.titulo }}
+    </h3>
+    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+      {% for item in grupo.itens %}
+      <a href="{% url item.url_name %}{% if item.query %}?{{ item.query }}{% endif %}"
+         target="_blank"
+         class="card p-4 flex flex-col gap-1 hover:shadow-md transition-shadow"
+         style="border-radius:12px;">
+        <div class="flex items-center gap-2">
+          <svg class="w-4 h-4 flex-shrink-0" fill="none" stroke="#60a5fa" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+          </svg>
+          <span class="text-sm font-medium" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">{{ item.nome }}</span>
+        </div>
+        <p class="text-xs" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">{{ item.descricao }}</p>
+      </a>
+      {% endfor %}
+    </div>
+  </div>
+  {% endfor %}
+</div>
+{% endblock %}
