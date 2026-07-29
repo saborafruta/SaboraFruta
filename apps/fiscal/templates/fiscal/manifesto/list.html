@@ -1,11 +1,204 @@
 {% extends "_base.html" %}
 {% load erp_extras %}
 
-{% block title %}Manifesto Fiscal{% endblock %}
-{% block page_title %}Manifesto Fiscal{% endblock %}
+{% block title %}Documentos Fiscais (DF-e){% endblock %}
+{% block page_title %}Documentos Fiscais (DF-e){% endblock %}
 
 {% block content %}
 <div class="max-w-7xl mx-auto space-y-5">
+  <div class="flex flex-wrap gap-2">
+    <a href="?aba=saidas"
+       class="{% if aba == 'saidas' %}btn-primary{% else %}btn-secondary{% endif %}">
+      Saídas
+      <span class="ml-1">({{ kpis_saida.total }})</span>
+    </a>
+    <a href="?aba=recebidos"
+       class="{% if aba == 'recebidos' %}btn-primary{% else %}btn-secondary{% endif %}">
+      Recebidos
+      <span class="ml-1">({{ page_obj.paginator.count }})</span>
+    </a>
+  </div>
+
+  {% if aba == 'saidas' %}
+  <div class="flex flex-col lg:flex-row lg:items-end lg:justify-between gap-4">
+    <div>
+      <h2 class="text-xl font-semibold">Documentos emitidos pelo sistema</h2>
+      <p class="text-sm text-gray-500 mt-1">
+        NF-e, NFC-e e MDF-e aparecem aqui mesmo quando estão processando ou foram rejeitados.
+      </p>
+    </div>
+    <form method="get" class="flex flex-wrap items-end gap-2">
+      <input type="hidden" name="aba" value="saidas">
+      <div>
+        <label for="status-saida" class="block text-xs font-semibold uppercase text-gray-500 mb-1">Status</label>
+        <select id="status-saida" name="status" class="form-select">
+          <option value="">Todos</option>
+          <option value="pendente" {% if status_saida == 'pendente' %}selected{% endif %}>Pendente</option>
+          <option value="processando" {% if status_saida == 'processando' %}selected{% endif %}>Processando</option>
+          <option value="autorizada" {% if status_saida == 'autorizada' %}selected{% endif %}>Autorizada</option>
+          <option value="rejeitada" {% if status_saida == 'rejeitada' %}selected{% endif %}>Rejeitada</option>
+          <option value="denegada" {% if status_saida == 'denegada' %}selected{% endif %}>Denegada</option>
+          <option value="cancelada" {% if status_saida == 'cancelada' %}selected{% endif %}>Cancelada</option>
+        </select>
+      </div>
+      <button type="submit" class="btn-primary">Filtrar</button>
+      <a href="?aba=saidas" class="btn-secondary">Limpar</a>
+    </form>
+  </div>
+
+  <div class="grid grid-cols-2 lg:grid-cols-4 gap-3">
+    <div class="card p-4">
+      <div class="text-xs text-gray-500 uppercase">Total</div>
+      <div class="text-2xl font-semibold">{{ kpis_saida.total }}</div>
+    </div>
+    <div class="card p-4">
+      <div class="text-xs text-gray-500 uppercase">Processando</div>
+      <div class="text-2xl font-semibold text-amber-500">{{ kpis_saida.processando }}</div>
+    </div>
+    <div class="card p-4">
+      <div class="text-xs text-gray-500 uppercase">Autorizadas</div>
+      <div class="text-2xl font-semibold text-green-600">{{ kpis_saida.autorizadas }}</div>
+    </div>
+    <div class="card p-4" {% if kpis_saida.erros %}style="border-color:#dc2626;"{% endif %}>
+      <div class="text-xs text-gray-500 uppercase">Com erro</div>
+      <div class="text-2xl font-semibold text-red-600">{{ kpis_saida.erros }}</div>
+    </div>
+  </div>
+
+  <div class="card overflow-hidden hidden md:block">
+    <table class="w-full text-sm">
+      <thead>
+        <tr class="text-left text-xs uppercase tracking-wide text-gray-500">
+          <th class="px-4 py-3">Status</th>
+          <th class="px-4 py-3">Documento</th>
+          <th class="px-4 py-3">Destinatário</th>
+          <th class="px-4 py-3">Emissão</th>
+          <th class="px-4 py-3 text-right">Valor</th>
+          <th class="px-4 py-3">Retorno SEFAZ</th>
+          <th class="px-4 py-3 text-right">Ações</th>
+        </tr>
+      </thead>
+      <tbody class="divide-y divide-gray-800">
+        {% for doc in documentos_saida %}
+        <tr {% if doc.status == 'rejeitada' or doc.status == 'denegada' %}style="background:rgba(220,38,38,.07);"{% endif %}>
+          <td class="px-4 py-3">
+            <span class="soft-pill
+              {% if doc.status == 'autorizada' %}is-green
+              {% elif doc.status == 'rejeitada' or doc.status == 'denegada' %}is-red
+              {% elif doc.status == 'processando' or doc.status == 'pendente' %}is-amber
+              {% endif %}">
+              {{ doc.get_status_display }}
+            </span>
+          </td>
+          <td class="px-4 py-3">
+            <strong>{{ doc.get_tipo_documento_display }} nº {{ doc.numero }}</strong>
+            <div class="text-xs text-gray-500">Série {{ doc.serie }}</div>
+            {% if doc.chave %}
+              <div class="font-mono text-xs text-gray-500" title="{{ doc.chave }}">{{ doc.chave|truncatechars:24 }}</div>
+            {% endif %}
+          </td>
+          <td class="px-4 py-3">
+            {{ doc.destinatario_snapshot.nome|default:"Consumidor não identificado" }}
+            <div class="font-mono text-xs text-gray-500">{{ doc.destinatario_snapshot.cpf_cnpj|default:"" }}</div>
+          </td>
+          <td class="px-4 py-3">{{ doc.data_emissao|date:"d/m/Y H:i" }}</td>
+          <td class="px-4 py-3 text-right">{{ doc.valor_total|moeda }}</td>
+          <td class="px-4 py-3 max-w-sm">
+            {% if doc.codigo_status_sefaz or doc.mensagem_sefaz %}
+              <div class="{% if doc.status == 'rejeitada' or doc.status == 'denegada' %}text-red-600 font-semibold{% endif %}">
+                {% if doc.codigo_status_sefaz %}{{ doc.codigo_status_sefaz }} — {% endif %}
+                {{ doc.mensagem_sefaz|default:"Sem detalhes retornados." }}
+              </div>
+            {% elif doc.status == 'processando' or doc.status == 'pendente' %}
+              <span class="text-amber-600">Aguardando retorno da SEFAZ.</span>
+            {% else %}
+              <span class="text-gray-500">Sem ocorrência.</span>
+            {% endif %}
+          </td>
+          <td class="px-4 py-3">
+            <div class="flex flex-wrap justify-end gap-2">
+              {% if doc.status == 'processando' or doc.status == 'pendente' %}
+                <form method="post" action="{% url 'fiscal:documento-saida-consultar' doc.pk %}">
+                  {% csrf_token %}
+                  <button type="submit" class="btn-secondary">Consultar SEFAZ</button>
+                </form>
+              {% endif %}
+              {% if doc.pdf_danfe_url %}
+                <a href="{{ doc.pdf_danfe_url }}" target="_blank" rel="noopener" class="btn-secondary">Abrir PDF</a>
+              {% endif %}
+              {% if doc.mdfe_url %}
+                <a href="{{ doc.mdfe_url }}" class="btn-secondary">Abrir MDF-e</a>
+              {% endif %}
+              {% if doc.origem_url %}
+                <a href="{{ doc.origem_url }}" class="btn-primary">
+                  {% if doc.status == 'rejeitada' or doc.status == 'denegada' %}Resolver / reemitir{% else %}Abrir origem{% endif %}
+                </a>
+              {% endif %}
+            </div>
+          </td>
+        </tr>
+        {% empty %}
+        <tr><td colspan="7" class="text-center py-10 text-gray-500">Nenhum documento fiscal de saída encontrado.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  <div class="md:hidden space-y-3">
+    {% for doc in documentos_saida %}
+    <div class="card p-4 space-y-3" {% if doc.status == 'rejeitada' or doc.status == 'denegada' %}style="border-color:#dc2626;"{% endif %}>
+      <div class="flex items-start justify-between gap-3">
+        <div>
+          <strong>{{ doc.get_tipo_documento_display }} nº {{ doc.numero }}</strong>
+          <div class="text-xs text-gray-500">Série {{ doc.serie }} · {{ doc.data_emissao|date:"d/m/Y H:i" }}</div>
+        </div>
+        <span class="soft-pill">{{ doc.get_status_display }}</span>
+      </div>
+      <div>
+        <div class="text-xs text-gray-500">Destinatário</div>
+        <div>{{ doc.destinatario_snapshot.nome|default:"Consumidor não identificado" }}</div>
+      </div>
+      {% if doc.codigo_status_sefaz or doc.mensagem_sefaz %}
+      <div class="rounded-lg p-3 text-sm {% if doc.status == 'rejeitada' or doc.status == 'denegada' %}text-red-600 font-semibold{% endif %}"
+           style="background:rgba(148,163,184,.10);">
+        {% if doc.codigo_status_sefaz %}{{ doc.codigo_status_sefaz }} — {% endif %}
+        {{ doc.mensagem_sefaz|default:"Sem detalhes retornados." }}
+      </div>
+      {% endif %}
+      <div class="flex flex-col gap-2">
+        {% if doc.status == 'processando' or doc.status == 'pendente' %}
+          <form method="post" action="{% url 'fiscal:documento-saida-consultar' doc.pk %}">
+            {% csrf_token %}
+            <button type="submit" class="btn-secondary justify-center w-full">Consultar SEFAZ</button>
+          </form>
+        {% endif %}
+        {% if doc.pdf_danfe_url %}<a href="{{ doc.pdf_danfe_url }}" target="_blank" class="btn-secondary justify-center">Abrir PDF</a>{% endif %}
+        {% if doc.mdfe_url %}<a href="{{ doc.mdfe_url }}" class="btn-secondary justify-center">Abrir MDF-e</a>{% endif %}
+        {% if doc.origem_url %}
+          <a href="{{ doc.origem_url }}" class="btn-primary justify-center">
+            {% if doc.status == 'rejeitada' or doc.status == 'denegada' %}Resolver / reemitir{% else %}Abrir origem{% endif %}
+          </a>
+        {% endif %}
+      </div>
+    </div>
+    {% empty %}
+      <div class="card p-6 text-center text-gray-500">Nenhum documento fiscal de saída encontrado.</div>
+    {% endfor %}
+  </div>
+
+  {% if saidas_page_obj.has_other_pages %}
+  <div class="flex items-center justify-center gap-2">
+    {% if saidas_page_obj.has_previous %}
+      <a class="btn-secondary" href="?aba=saidas&status={{ status_saida }}&page_saida={{ saidas_page_obj.previous_page_number }}">Anterior</a>
+    {% endif %}
+    <span class="text-sm text-gray-500">Página {{ saidas_page_obj.number }} de {{ saidas_page_obj.paginator.num_pages }}</span>
+    {% if saidas_page_obj.has_next %}
+      <a class="btn-secondary" href="?aba=saidas&status={{ status_saida }}&page_saida={{ saidas_page_obj.next_page_number }}">Próxima</a>
+    {% endif %}
+  </div>
+  {% endif %}
+
+  {% else %}
   <div class="flex flex-col lg:flex-row lg:items-end lg:justify-between gap-4">
     <div class="flex flex-wrap gap-2">
       <form method="post">{% csrf_token %}<button class="btn-primary" type="submit">Consultar novas notas</button></form>
@@ -109,5 +302,6 @@
       <div class="card p-6 text-center text-gray-500">Nenhum documento DF-e registrado ainda.</div>
     {% endfor %}
   </div>
+  {% endif %}
 </div>
 {% endblock %}

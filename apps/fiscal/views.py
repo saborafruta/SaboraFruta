@@ -7,6 +7,7 @@ from django.contrib.auth.decorators import login_required
 from django.core.paginator import Paginator
 from django.http import HttpResponseBadRequest, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
+from django.urls import reverse
 from django.views import View
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_GET, require_POST
@@ -14,6 +15,7 @@ from django.views.decorators.http import require_GET, require_POST
 from apps.core.services.exceptions import DomainError
 from apps.core.services.permissions import PermissaoRequiredMixin
 from apps.financeiro.models.fiscal import DocumentoFiscal
+from apps.financeiro.constants.enums import StatusDocumentoFiscal
 from apps.fiscal.integrations.dfe_client import avaliar_prontidao_dfe
 from apps.fiscal.integrations.focusnfe import FocusNFeClient
 from apps.fiscal.integrations.focusnfe.exceptions import FocusNFeError
@@ -30,6 +32,7 @@ class ManifestoFiscalListView(PermissaoRequiredMixin, View):
     template_name = 'fiscal/manifesto/list.html'
 
     def get(self, request):
+        aba = request.GET.get('aba', 'saidas')
         documentos = ManifestoFiscalDocumento.objects.for_filial(request.filial_ativa).order_by('-created_at')
         page_obj = Paginator(documentos, 30).get_page(request.GET.get('page'))
         kpis = {
@@ -46,11 +49,62 @@ class ManifestoFiscalListView(PermissaoRequiredMixin, View):
                 status_download_xml=ManifestoFiscalDocumento.StatusDownload.IMPORTADA,
             ).count(),
         }
+        saidas = (
+            DocumentoFiscal.objects
+            .for_filial(request.filial_ativa)
+            .select_related('usuario')
+            .order_by('-created_at')
+        )
+        status_saida = (request.GET.get('status') or '').strip()
+        if status_saida:
+            saidas = saidas.filter(status=status_saida)
+        saidas_page_obj = Paginator(saidas, 30).get_page(
+            request.GET.get('page_saida'),
+        )
+        for documento in saidas_page_obj.object_list:
+            documento.origem_url = ''
+            documento.mdfe_url = ''
+            if documento.origem_tipo == 'transferencia_estoque':
+                documento.origem_url = reverse('estoque:transferencia-lojas')
+            try:
+                mdfe = documento.mdfe_logistico
+            except Exception:  # noqa: BLE001
+                mdfe = None
+            if mdfe:
+                documento.mdfe_url = reverse(
+                    'logistica:mdfe-detail',
+                    kwargs={'pk': mdfe.pk},
+                )
+
+        saidas_base = DocumentoFiscal.objects.for_filial(request.filial_ativa)
+        kpis_saida = {
+            'total': saidas_base.count(),
+            'processando': saidas_base.filter(
+                status__in=[
+                    StatusDocumentoFiscal.PENDENTE,
+                    StatusDocumentoFiscal.PROCESSANDO,
+                ],
+            ).count(),
+            'autorizadas': saidas_base.filter(
+                status=StatusDocumentoFiscal.AUTORIZADA,
+            ).count(),
+            'erros': saidas_base.filter(
+                status__in=[
+                    StatusDocumentoFiscal.REJEITADA,
+                    StatusDocumentoFiscal.DENEGADA,
+                ],
+            ).count(),
+        }
         config = ManifestoFiscalConfig.objects.for_filial(request.filial_ativa).filter(ativo=True).first()
         return render(request, self.template_name, {
+            'aba': aba,
             'documentos': page_obj.object_list,
             'page_obj': page_obj,
             'kpis': kpis,
+            'documentos_saida': saidas_page_obj.object_list,
+            'saidas_page_obj': saidas_page_obj,
+            'kpis_saida': kpis_saida,
+            'status_saida': status_saida,
             'config': config,
         })
 
@@ -75,6 +129,49 @@ class ManifestoFiscalListView(PermissaoRequiredMixin, View):
                 resultado.mensagem or 'Consulta DF-e executada em modo seguro; nenhum documento novo.',
             )
         return redirect('fiscal:manifesto-list')
+
+
+class DocumentoFiscalSaidaConsultarView(PermissaoRequiredMixin, View):
+    permissao_modulo = 'compras'
+    permissao_acao = 'ver'
+
+    def post(self, request, pk):
+        from apps.fiscal.integrations.focusnfe.config import FocusNFeConfig
+        from apps.logistica.services.mdfe_focusnfe import (
+            processar_nfe_transferencia_autorizada,
+            sincronizar_mdfe_por_documento,
+        )
+
+        documento = get_object_or_404(
+            DocumentoFiscal.objects.for_filial(request.filial_ativa),
+            pk=pk,
+        )
+        filial = documento.filial
+        token = (filial.focusnfe_token or '').strip()
+        if not token:
+            messages.error(request, 'Configure o token de emissão Focus da filial.')
+            return redirect(f"{reverse('fiscal:manifesto-list')}?aba=saidas")
+
+        try:
+            client = FocusNFeClient(
+                config=FocusNFeConfig.from_env(
+                    token=token,
+                    ambiente=filial.focusnfe_ambiente,
+                ),
+            )
+            FocusNFeService(client=client).consultar(documento)
+            documento.refresh_from_db()
+            sincronizar_mdfe_por_documento(documento)
+            processar_nfe_transferencia_autorizada(documento)
+        except Exception as exc:  # noqa: BLE001
+            messages.error(request, f'Falha ao consultar documento na SEFAZ: {exc}')
+        else:
+            messages.success(
+                request,
+                f'{documento.get_tipo_documento_display()} nº {documento.numero}: '
+                f'{documento.get_status_display()}.',
+            )
+        return redirect(f"{reverse('fiscal:manifesto-list')}?aba=saidas")
 
 
 class ManifestoFiscalConfigView(PermissaoRequiredMixin, View):

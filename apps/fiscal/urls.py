@@ -6,6 +6,11 @@ app_name = 'fiscal'
 
 urlpatterns = [
     path('manifesto/', views.ManifestoFiscalListView.as_view(), name='manifesto-list'),
+    path(
+        'manifesto/saidas/<int:pk>/consultar/',
+        views.DocumentoFiscalSaidaConsultarView.as_view(),
+        name='documento-saida-consultar',
+    ),
     path('manifesto/config/', views.ManifestoFiscalConfigView.as_view(), name='manifesto-config'),
     path(
         'manifesto/<int:pk>/importar-entrada/',
