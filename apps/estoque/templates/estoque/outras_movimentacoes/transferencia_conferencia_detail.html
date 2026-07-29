@@ -1,9 +1,72 @@
 {% extends "_base.html" %}
+{% load erp_extras %}
 
 {% block page_title %}Conferência de transferência{% endblock %}
 
 {% block content %}
-<div class="max-w-7xl mx-auto px-4 sm:px-6 py-8">
+<style>
+  .conference-shell { max-width: 1240px; margin: 0 auto; padding: 2rem 1rem; }
+  .conference-toolbar { display:flex; gap:1rem; align-items:center; justify-content:space-between; margin-bottom:1rem; }
+  .conference-progress { display:flex; align-items:center; gap:.65rem; color:#64748b; font-size:.82rem; }
+  .conference-progress strong { color:#15803d; font-size:1rem; }
+  .conference-mark-all {
+    display:inline-flex; align-items:center; gap:.5rem; min-height:40px; padding:.6rem .9rem;
+    border:1px solid #86efac; border-radius:7px; background:#f0fdf4; color:#166534; font-weight:700;
+  }
+  .conference-item {
+    display:grid; grid-template-columns:52px minmax(190px,1.2fr) minmax(420px,2fr);
+    gap:1rem; align-items:start; border:1px solid #dbe3ee; border-radius:8px;
+    padding:1rem; background:#fff; transition:border-color .15s, box-shadow .15s, background .15s;
+  }
+  .dark .conference-item { background:#171717; border-color:#334155; }
+  .conference-item.is-confirmed { border-color:#22c55e; box-shadow:0 0 0 2px rgba(34,197,94,.1); }
+  .conference-check {
+    width:38px; height:38px; display:grid; place-items:center; border:2px solid #94a3b8;
+    border-radius:7px; cursor:pointer; color:transparent; background:#fff; transition:.15s;
+  }
+  .conference-check input { position:absolute; opacity:0; pointer-events:none; }
+  .conference-check span { font-size:1.35rem; font-weight:900; line-height:1; }
+  .conference-check:has(input:checked) { border-color:#16a34a; background:#16a34a; color:#fff; }
+  .conference-product-name { font-weight:800; color:#111827; }
+  .dark .conference-product-name { color:#f8fafc; }
+  .conference-meta { margin-top:.35rem; color:#64748b; font-size:.8rem; }
+  .conference-sent { display:inline-flex; margin-top:.7rem; padding:.3rem .55rem; border-radius:6px; background:#eff6ff; color:#1d4ed8; font-size:.82rem; font-weight:700; }
+  .dark .conference-sent { background:rgba(37,99,235,.18); color:#93c5fd; }
+  .conference-options { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:.5rem; }
+  .conference-option input { position:absolute; opacity:0; pointer-events:none; }
+  .conference-option span {
+    min-height:42px; display:flex; align-items:center; justify-content:center; gap:.35rem;
+    padding:.55rem .45rem; border:1px solid #cbd5e1; border-radius:7px; cursor:pointer;
+    color:#475569; font-size:.78rem; font-weight:750; text-align:center; background:#fff;
+  }
+  .dark .conference-option span { background:#111827; border-color:#475569; color:#cbd5e1; }
+  .conference-option.is-ok input:checked + span { border-color:#16a34a; background:#dcfce7; color:#166534; }
+  .conference-option.is-missing input:checked + span { border-color:#d97706; background:#fef3c7; color:#92400e; }
+  .conference-option.is-swapped input:checked + span { border-color:#2563eb; background:#dbeafe; color:#1d4ed8; }
+  .conference-option.is-returned input:checked + span { border-color:#dc2626; background:#fee2e2; color:#991b1b; }
+  .conference-details {
+    display:none; grid-template-columns:180px minmax(220px,1fr); gap:.75rem; margin-top:.8rem;
+    padding:.8rem; border-left:3px solid #94a3b8; background:#f8fafc; border-radius:0 7px 7px 0;
+  }
+  .dark .conference-details { background:#0f172a; }
+  .conference-item[data-occurrence="faltante"] .conference-details,
+  .conference-item[data-occurrence="devolvido"] .conference-details { display:grid; }
+  .conference-item[data-occurrence="trocado"] .conference-details { display:grid; grid-template-columns:minmax(220px,1fr) 180px minmax(220px,1fr); }
+  .conference-item[data-occurrence="trocado"] .received-field { display:none; }
+  .conference-item:not([data-occurrence="trocado"]) .swap-field { display:none; }
+  .conference-item[data-occurrence="devolvido"] .received-field { display:none; }
+  .conference-field label { display:block; margin-bottom:.3rem; color:#475569; font-size:.72rem; font-weight:750; text-transform:uppercase; }
+  .dark .conference-field label { color:#94a3b8; }
+  .conference-empty { padding:2rem; text-align:center; color:#64748b; }
+  @media (max-width:900px) {
+    .conference-item { grid-template-columns:44px 1fr; }
+    .conference-actions { grid-column:1 / -1; }
+    .conference-options { grid-template-columns:1fr 1fr; }
+    .conference-details, .conference-item[data-occurrence="trocado"] .conference-details { grid-template-columns:1fr; }
+  }
+</style>
+
+<div class="conference-shell">
   <div class="flex flex-col gap-4 md:flex-row md:items-end md:justify-between mb-6">
     <div>
       <a href="{% url 'estoque:transferencia-conferencia-list' %}" class="text-sm font-semibold" style="color:#2563eb;">← Recebimentos</a>
@@ -28,73 +91,99 @@
 
   <form method="post" id="form-conferencia">
     {% csrf_token %}
-    <div class="space-y-4">
+    {% if pode_editar %}
+      <div class="conference-toolbar">
+        <div class="conference-progress">
+          <strong id="conference-count">0</strong>
+          <span>de {{ conferencia.itens.count }} itens conferidos</span>
+        </div>
+        <button type="button" class="conference-mark-all" id="conference-mark-all">
+          <span aria-hidden="true">✓</span> Marcar todos como recebidos
+        </button>
+      </div>
+    {% endif %}
+
+    <div class="space-y-3">
       {% for item in conferencia.itens.all %}
-        <section class="card p-5" data-item-conferencia>
-          <div class="grid grid-cols-1 xl:grid-cols-[minmax(220px,1.5fr)_180px_220px_minmax(260px,1fr)] gap-4 items-start">
-            <div>
-              <p class="text-xs uppercase font-semibold" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Produto enviado</p>
-              <p class="font-bold mt-1">{{ item.produto_enviado.descricao }}</p>
-              {% if item.lote_enviado %}<p class="text-xs mt-1">Lote {{ item.lote_enviado.numero_lote }}</p>{% endif %}
-              <p class="text-sm mt-2">Enviado: <strong>{{ item.quantidade_enviada }}</strong></p>
-            </div>
-            <div>
-              <label class="block text-xs font-semibold mb-1">Quantidade recebida</label>
-              <input class="form-input" type="text"
-                     name="item_{{ item.pk }}_quantidade_recebida"
-                     value="{{ item.quantidade_recebida|stringformat:'f' }}"
-                     {% if not pode_editar %}disabled{% endif %}>
-              <p class="text-xs mt-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
-                Informe apenas quanto chegou corretamente deste produto.
-              </p>
-            </div>
-            <div>
-              <label class="block text-xs font-semibold mb-1">Resultado</label>
-              <select class="form-input ocorrencia-select"
-                      name="item_{{ item.pk }}_ocorrencia"
-                      {% if not pode_editar %}disabled{% endif %}>
-                {% for valor, rotulo in ocorrencias %}
-                  <option value="{{ valor }}" {% if item.ocorrencia == valor %}selected{% endif %}>{{ rotulo }}</option>
-                {% endfor %}
-              </select>
-            </div>
-            <div>
-              <label class="block text-xs font-semibold mb-1">Observação do item</label>
-              <input class="form-input" type="text"
-                     name="item_{{ item.pk }}_observacao"
-                     value="{{ item.observacao }}"
-                     placeholder="Explique a divergência"
-                     {% if not pode_editar %}disabled{% endif %}>
-            </div>
+        <section class="conference-item" data-item-conferencia data-occurrence="{{ item.ocorrencia }}" data-sent="{{ item.quantidade_enviada|stringformat:'f' }}">
+          <label class="conference-check" title="Marcar item como conferido">
+            <input type="checkbox" class="item-confirmado" {% if not pode_editar or conferencia.status != 'aguardando' %}checked{% endif %} {% if not pode_editar %}disabled{% endif %}>
+            <span aria-hidden="true">✓</span>
+          </label>
+
+          <div>
+            <p class="conference-product-name">{{ item.produto_enviado.descricao }}</p>
+            {% if item.lote_enviado %}<p class="conference-meta">Lote {{ item.lote_enviado.numero_lote }}</p>{% endif %}
+            <span class="conference-sent">Enviado: {{ item.quantidade_enviada|quantidade:2 }}</span>
           </div>
-          <div class="troca-fields grid grid-cols-1 md:grid-cols-2 gap-4 mt-4"
-               {% if item.ocorrencia != 'trocado' %}style="display:none;"{% endif %}>
-            <div>
-              <label class="block text-xs font-semibold mb-1">Produto que chegou no lugar</label>
-              <select class="form-input" name="item_{{ item.pk }}_produto_recebido_id"
-                      {% if not pode_editar %}disabled{% endif %}>
-                <option value="">Selecione...</option>
-                {% for produto in produtos %}
-                  <option value="{{ produto.pk }}" {% if item.produto_recebido_id == produto.pk %}selected{% endif %}>{{ produto.descricao }}</option>
-                {% endfor %}
-              </select>
+
+          <div class="conference-actions">
+            <div class="conference-options" role="radiogroup" aria-label="Resultado de {{ item.produto_enviado.descricao }}">
+              <label class="conference-option is-ok">
+                <input type="radio" name="item_{{ item.pk }}_ocorrencia" value="ok" {% if item.ocorrencia == 'ok' %}checked{% endif %} {% if not pode_editar %}disabled{% endif %}>
+                <span>✓ Recebido</span>
+              </label>
+              <label class="conference-option is-missing">
+                <input type="radio" name="item_{{ item.pk }}_ocorrencia" value="faltante" {% if item.ocorrencia == 'faltante' %}checked{% endif %} {% if not pode_editar %}disabled{% endif %}>
+                <span>− Faltando</span>
+              </label>
+              <label class="conference-option is-swapped">
+                <input type="radio" name="item_{{ item.pk }}_ocorrencia" value="trocado" {% if item.ocorrencia == 'trocado' %}checked{% endif %} {% if not pode_editar %}disabled{% endif %}>
+                <span>⇄ Veio trocado</span>
+              </label>
+              <label class="conference-option is-returned">
+                <input type="radio" name="item_{{ item.pk }}_ocorrencia" value="devolvido" {% if item.ocorrencia == 'devolvido' %}checked{% endif %} {% if not pode_editar %}disabled{% endif %}>
+                <span>↩ Devolver</span>
+              </label>
             </div>
-            <div>
-              <label class="block text-xs font-semibold mb-1">Quantidade do produto trocado</label>
-              <input class="form-input" type="text"
-                     name="item_{{ item.pk }}_quantidade_produto_recebido"
-                     value="{{ item.quantidade_produto_recebido|stringformat:'f' }}"
-                     {% if not pode_editar %}disabled{% endif %}>
+
+            <div class="conference-details">
+              <div class="conference-field received-field">
+                <label>Quantidade recebida</label>
+                <input class="form-input received-quantity" type="text" inputmode="decimal" data-decimal-places="2"
+                       name="item_{{ item.pk }}_quantidade_recebida"
+                       value="{{ item.quantidade_recebida|floatformat:'2u' }}"
+                       {% if not pode_editar %}disabled{% endif %}>
+              </div>
+              <div class="conference-field swap-field">
+                <label>Produto que chegou no lugar</label>
+                <select class="form-input replacement-product" name="item_{{ item.pk }}_produto_recebido_id" {% if not pode_editar %}disabled{% endif %}>
+                  <option value="">Selecione o item recebido...</option>
+                  {% for produto in produtos %}
+                    <option value="{{ produto.pk }}" {% if item.produto_recebido_id == produto.pk %}selected{% endif %}>{{ produto.descricao }}</option>
+                  {% endfor %}
+                </select>
+              </div>
+              <div class="conference-field swap-field">
+                <label>Quantidade do item trocado</label>
+                <input class="form-input replacement-quantity" type="text" inputmode="decimal" data-decimal-places="2"
+                       name="item_{{ item.pk }}_quantidade_produto_recebido"
+                       value="{{ item.quantidade_produto_recebido|floatformat:'2u' }}"
+                       {% if not pode_editar %}disabled{% endif %}>
+              </div>
+              <div class="conference-field observation-field">
+                <label>Motivo / observação</label>
+                <input class="form-input item-observation" type="text"
+                       name="item_{{ item.pk }}_observacao"
+                       value="{{ item.observacao }}"
+                       placeholder="Explique o que aconteceu"
+                       {% if not pode_editar %}disabled{% endif %}>
+              </div>
             </div>
+
+            <input type="hidden" class="received-quantity-hidden"
+                   name="item_{{ item.pk }}_quantidade_recebida_fallback"
+                   value="{{ item.quantidade_recebida|floatformat:'2u' }}">
           </div>
         </section>
+      {% empty %}
+        <div class="card conference-empty">Nenhum item encontrado nesta transferência.</div>
       {% endfor %}
     </div>
 
     <div class="card p-5 mt-5">
-      <label class="block text-sm font-semibold mb-2">Observação geral da conferência</label>
-      <textarea class="form-input min-h-24" name="observacao_conferencia"
-                {% if not pode_editar %}disabled{% endif %}>{{ conferencia.observacao_conferencia }}</textarea>
+      <label class="block text-sm font-semibold mb-2">Observação geral da conferência <span class="font-normal text-xs" style="color:#64748b;">(opcional)</span></label>
+      <textarea class="form-input min-h-20" name="observacao_conferencia" {% if not pode_editar %}disabled{% endif %}>{{ conferencia.observacao_conferencia }}</textarea>
       {% if conferencia.conferida_por %}
         <p class="text-xs mt-3" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
           Conferida por {{ conferencia.conferida_por.nome }} em {{ conferencia.conferida_em|date:"d/m/Y H:i" }}.
@@ -104,7 +193,7 @@
 
     {% if pode_editar %}
       <div class="flex flex-col-reverse sm:flex-row sm:justify-between gap-3 mt-5">
-        <button class="btn-danger" type="submit" name="acao" value="cancelar"
+        <button class="btn-danger" type="submit" name="acao" value="cancelar" formnovalidate
                 onclick="return confirm('Cancelar e estornar esta transferência? Se houver NF-e autorizada, ela deverá ser cancelada antes.')">
           Cancelar transferência
         </button>
@@ -116,18 +205,93 @@
   </form>
 </div>
 
+{% if pode_editar %}
 <script>
-document.querySelectorAll('[data-item-conferencia]').forEach(function(card) {
-  const select = card.querySelector('.ocorrencia-select');
-  const camposTroca = card.querySelector('.troca-fields');
-  if (!select || !camposTroca) return;
-  select.addEventListener('change', function() {
-    camposTroca.style.display = select.value === 'trocado' ? 'grid' : 'none';
-    if (select.value === 'trocado') {
-      const quantidadeRecebida = card.querySelector('[name$="_quantidade_recebida"]');
-      if (quantidadeRecebida) quantidadeRecebida.value = '0';
+(function() {
+  const form = document.getElementById('form-conferencia');
+  const cards = Array.from(document.querySelectorAll('[data-item-conferencia]'));
+  const counter = document.getElementById('conference-count');
+
+  function selectedOccurrence(card) {
+    const selected = card.querySelector('input[type="radio"]:checked');
+    return selected ? selected.value : 'ok';
+  }
+
+  function updateCounter() {
+    const checked = cards.filter(function(card) {
+      return card.querySelector('.item-confirmado').checked;
+    }).length;
+    counter.textContent = checked;
+  }
+
+  function applyOccurrence(card, occurrence, setDefaults) {
+    card.dataset.occurrence = occurrence;
+    const checkbox = card.querySelector('.item-confirmado');
+    const received = card.querySelector('.received-quantity');
+    const replacementQty = card.querySelector('.replacement-quantity');
+    const replacementProduct = card.querySelector('.replacement-product');
+    const observation = card.querySelector('.item-observation');
+    const sent = Number(card.dataset.sent || 0).toFixed(2);
+
+    if (setDefaults) {
+      if (occurrence === 'ok') {
+        received.value = sent;
+        replacementQty.value = '0.00';
+        replacementProduct.value = '';
+        observation.value = '';
+      } else if (occurrence === 'trocado' || occurrence === 'devolvido') {
+        received.value = '0.00';
+        if (occurrence === 'devolvido' && !observation.value) {
+          observation.value = 'Item devolvido à filial de origem';
+        }
+      }
+      checkbox.checked = true;
+    }
+
+    observation.required = occurrence !== 'ok';
+    replacementProduct.required = occurrence === 'trocado';
+    replacementQty.required = occurrence === 'trocado';
+    card.classList.toggle('is-confirmed', checkbox.checked);
+    updateCounter();
+  }
+
+  cards.forEach(function(card) {
+    const checkbox = card.querySelector('.item-confirmado');
+    checkbox.addEventListener('change', function() {
+      card.classList.toggle('is-confirmed', checkbox.checked);
+      updateCounter();
+    });
+    card.querySelectorAll('input[type="radio"]').forEach(function(radio) {
+      radio.addEventListener('change', function() {
+        if (radio.checked) applyOccurrence(card, radio.value, true);
+      });
+    });
+    applyOccurrence(card, selectedOccurrence(card), false);
+  });
+
+  document.getElementById('conference-mark-all').addEventListener('click', function() {
+    cards.forEach(function(card) {
+      const ok = card.querySelector('input[type="radio"][value="ok"]');
+      ok.checked = true;
+      applyOccurrence(card, 'ok', true);
+    });
+  });
+
+  form.addEventListener('submit', function(event) {
+    const submitter = event.submitter;
+    if (submitter && submitter.value === 'cancelar') return;
+    const pending = cards.find(function(card) {
+      return !card.querySelector('.item-confirmado').checked;
+    });
+    if (pending) {
+      event.preventDefault();
+      pending.scrollIntoView({ behavior:'smooth', block:'center' });
+      pending.querySelector('.conference-check').focus();
+      if (window.showToast) window.showToast('Marque todos os itens antes de concluir.', 'warning');
+      else alert('Marque todos os itens antes de concluir.');
     }
   });
-});
+})();
 </script>
+{% endif %}
 {% endblock %}

@@ -84,7 +84,7 @@
             </div>
             <div>
               <span class="block text-xs" :style="temaClaro ? 'color:#9ca3af;' : 'color:#64748b;'">Saldo</span>
-              <strong :style="temaClaro ? 'color:#374151;' : 'color:#d4d4d4;'">{{ lote.quantidade_atual|quantidade:3 }}</strong>
+              <strong :style="temaClaro ? 'color:#374151;' : 'color:#d4d4d4;'">{{ lote.quantidade_atual|quantidade:2 }}</strong>
             </div>
             <div>
               <span class="block text-xs" :style="temaClaro ? 'color:#9ca3af;' : 'color:#64748b;'">Fabricação</span>
@@ -149,7 +149,7 @@
               <td class="px-4 py-3 text-center">
                 <span class="px-2 py-0.5 rounded-full text-xs font-bold" style="background:{{ bg_hex }}; color:{{ text_hex }};">{{ lote.dias_para_vencer }}</span>
               </td>
-              <td class="px-4 py-3 text-right font-semibold text-xs" :style="temaClaro ? 'color:#111827;' : 'color:#f0f0f0;'">{{ lote.quantidade_atual|quantidade:3 }}</td>
+              <td class="px-4 py-3 text-right font-semibold text-xs" :style="temaClaro ? 'color:#111827;' : 'color:#f0f0f0;'">{{ lote.quantidade_atual|quantidade:2 }}</td>
               <td class="px-4 py-3 text-right">
                 <div class="flex items-center justify-end gap-3">
                   <a href="{% url 'lotes:rastreabilidade' %}?lote={{ lote.pk }}" class="text-xs" style="color:#3b82f6;"

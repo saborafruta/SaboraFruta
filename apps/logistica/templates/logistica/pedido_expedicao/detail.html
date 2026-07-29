@@ -119,7 +119,7 @@
         </div>
         <div class="flex justify-between">
           <span :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Peso (kg)</span>
-          <span class="font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">{{ pedido.peso_total_kg|floatformat:3 }}</span>
+          <span class="font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">{{ pedido.peso_total_kg|floatformat:2 }}</span>
         </div>
         <div class="flex justify-between pt-2 border-t" :style="temaClaro ? 'border-color:#e2e8f0;' : 'border-color:#2a2a2e;'">
           <span class="font-semibold" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Valor Total</span>
@@ -172,10 +172,10 @@
             {{ item.produto_nome }}
             {% if item.observacao %}<p class="text-xs font-normal mt-0.5" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">{{ item.observacao }}</p>{% endif %}
           </td>
-          <td class="px-3 py-2.5" :style="temaClaro ? 'color:#374151;' : 'color:#d1d5db;'">{{ item.quantidade|floatformat:"-3" }}</td>
+          <td class="px-3 py-2.5" :style="temaClaro ? 'color:#374151;' : 'color:#d1d5db;'">{{ item.quantidade|floatformat:"-2" }}</td>
           <td class="px-3 py-2.5 text-xs" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">{{ item.unidade }}</td>
-          <td class="px-3 py-2.5" :style="temaClaro ? 'color:#374151;' : 'color:#d1d5db;'">{{ item.volumes|floatformat:"-3" }}</td>
-          <td class="px-3 py-2.5" :style="temaClaro ? 'color:#374151;' : 'color:#d1d5db;'">{{ item.peso_kg|floatformat:3 }}</td>
+          <td class="px-3 py-2.5" :style="temaClaro ? 'color:#374151;' : 'color:#d1d5db;'">{{ item.volumes|floatformat:"-2" }}</td>
+          <td class="px-3 py-2.5" :style="temaClaro ? 'color:#374151;' : 'color:#d1d5db;'">{{ item.peso_kg|floatformat:2 }}</td>
           <td class="px-3 py-2.5" :style="temaClaro ? 'color:#374151;' : 'color:#d1d5db;'">{{ item.valor_unitario|floatformat:2 }}</td>
           <td class="px-3 py-2.5 font-medium" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">{{ item.valor_total|floatformat:2 }}</td>
           <td class="px-3 py-2.5">
@@ -221,7 +221,7 @@
           {% elif item.status_item == 'expedido' %}<span class="soft-pill is-green text-xs">Expedido</span>
           {% else %}<span class="soft-pill is-slate text-xs">{{ item.get_status_item_display }}</span>{% endif %}
         </div>
-        <p class="text-xs" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">{{ item.quantidade|floatformat:"-3" }} {{ item.unidade }} · R$ {{ item.valor_total|floatformat:2 }}</p>
+        <p class="text-xs" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">{{ item.quantidade|floatformat:"-2" }} {{ item.unidade }} · R$ {{ item.valor_total|floatformat:2 }}</p>
       </div>
       {% endfor %}
     </div>

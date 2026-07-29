@@ -181,7 +181,7 @@
               <strong>{{ item.finalizacao_proxima_acao }}</strong>
             </div>
             <div class="mt-3 grid grid-cols-2 gap-2 text-xs text-gray-500">
-              <div>Qtd estoque<br><strong class="text-gray-900 dark:text-gray-100">{{ item.quantidade_movimenta|quantidade:3 }} {{ item.unidade_estoque }}</strong></div>
+              <div>Qtd estoque<br><strong class="text-gray-900 dark:text-gray-100">{{ item.quantidade_movimenta|quantidade:2 }} {{ item.unidade_estoque }}</strong></div>
               <div>Custo<br><strong class="text-gray-900 dark:text-gray-100">{{ item.custo_unitario_preview|default:item.custo_unitario_total|moeda }}</strong></div>
             </div>
           </div>
@@ -284,10 +284,10 @@
                   <div class="text-xs text-amber-600">Sem produto interno</div>
                 {% endif %}
               </td>
-              <td class="px-4 py-3 text-right">{{ item.quantidade_xml|quantidade:3 }} {{ item.unidade_xml }}</td>
+              <td class="px-4 py-3 text-right">{{ item.quantidade_xml|quantidade:2 }} {{ item.unidade_xml }}</td>
               <td class="px-4 py-3 text-right">{{ item.fator_conversao|quantidade:4 }}</td>
               <td class="px-4 py-3 text-right font-medium">
-                {{ item.quantidade_recebida|quantidade:3 }} {{ item.unidade_estoque }}
+                {{ item.quantidade_recebida|quantidade:2 }} {{ item.unidade_estoque }}
                 {% if item.item_recusado %}
                   <div class="text-xs text-red-600">Nao movimenta</div>
                 {% endif %}
@@ -327,9 +327,9 @@
             {% endif %}
           </div>
           <div class="grid grid-cols-2 gap-2 text-sm">
-            <div><span class="text-gray-500">Nota</span><br>{{ item.quantidade_xml|quantidade:3 }} {{ item.unidade_xml }}</div>
+            <div><span class="text-gray-500">Nota</span><br>{{ item.quantidade_xml|quantidade:2 }} {{ item.unidade_xml }}</div>
             <div>
-              <span class="text-gray-500">Estoque</span><br>{{ item.quantidade_recebida|quantidade:3 }} {{ item.unidade_estoque }}
+              <span class="text-gray-500">Estoque</span><br>{{ item.quantidade_recebida|quantidade:2 }} {{ item.unidade_estoque }}
               {% if item.item_recusado %}<div class="text-xs text-red-600">Nao movimenta</div>{% endif %}
             </div>
             <div><span class="text-gray-500">Fator</span><br>{{ item.fator_conversao|quantidade:4 }}</div>

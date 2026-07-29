@@ -276,6 +276,43 @@ class ConferenciaTransferenciaTests(TestCase):
         self.assertEqual(estoque_esperado.quantidade_atual, Decimal('0'))
         self.assertEqual(estoque_recebido.quantidade_atual, Decimal('5'))
 
+    def test_item_devolvido_retorna_estoque_para_filial_de_origem(self):
+        produto = self.criar_produto('Produto devolvido')
+        conferencia = self.criar_transferencia(produto)
+        item = conferencia.itens.get()
+
+        concluir_conferencia(
+            conferencia_id=conferencia.pk,
+            filial_destino=self.destino,
+            usuario=self.usuario,
+            itens={
+                str(item.pk): {
+                    'ocorrencia': 'devolvido',
+                    'quantidade_recebida': '0',
+                    'observacao': 'Embalagem danificada',
+                },
+            },
+        )
+
+        conferencia.refresh_from_db()
+        item.refresh_from_db()
+        estoque_origem = Estoque.objects.get(produto=produto, filial=self.origem)
+        estoque_destino = Estoque.objects.get(produto=produto, filial=self.destino)
+
+        self.assertEqual(
+            conferencia.status,
+            ConferenciaTransferencia.Status.COM_DIVERGENCIA,
+        )
+        self.assertEqual(item.ocorrencia, 'devolvido')
+        self.assertEqual(estoque_origem.quantidade_atual, Decimal('10'))
+        self.assertEqual(estoque_destino.quantidade_atual, Decimal('0'))
+        self.assertTrue(MovimentacaoEstoque.objects.filter(
+            filial=self.destino,
+            produto=produto,
+            tipo_operacao=MovimentacaoEstoque.TipoOperacao.TRANSFERENCIA_SAIDA,
+            documento_numero__startswith=f'DEV-{conferencia.pk}-',
+        ).exists())
+
     def test_abrir_notificacao_marca_como_lida_e_redireciona(self):
         produto = self.criar_produto('Produto notificado')
         conferencia = self.criar_transferencia(produto)

@@ -631,7 +631,7 @@
     (d.itens || []).forEach(item => {
       const qtd = parseFloat(item.quantidade || 0);
       const un  = item.unidade_medida || 'UN';
-      const qtdFmt = qtd % 1 === 0 ? qtd : qtd.toFixed(3).replace('.', ',');
+      const qtdFmt = qtd % 1 === 0 ? qtd : qtd.toFixed(2).replace('.', ',');
       itensHtml += `<tr>
         <td style="padding:4px 6px 4px 0;font-size:12px;text-align:left;white-space:nowrap;">${qtdFmt} ${un}</td>
         <td style="padding:4px 6px;font-size:12px;word-break:break-word;">${item.descricao || ''}</td>
@@ -641,7 +641,7 @@
     });
 
     const totalItens = (d.itens || []).reduce((s, i) => s + parseFloat(i.quantidade || 0), 0);
-    const totalItensStr = totalItens % 1 === 0 ? totalItens : totalItens.toFixed(3).replace('.', ',');
+    const totalItensStr = totalItens % 1 === 0 ? totalItens : totalItens.toFixed(2).replace('.', ',');
 
     let pgtoHtml = '';
     (d.pagamentos || []).forEach(p => {

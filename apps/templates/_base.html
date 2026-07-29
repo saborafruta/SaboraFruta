@@ -1210,6 +1210,8 @@
         (root || document).querySelectorAll('input').forEach(function(input) {
           if (input.dataset.decimalInputReady || !isDecimalInput(input)) return;
           input.dataset.decimalInputReady = '1';
+          var initial = sanitizeDecimal(input.value, decimalPlacesFor(input), input.type === 'number');
+          if (input.value !== initial) input.value = initial;
           input.addEventListener('input', function() {
             var clean = sanitizeDecimal(input.value, decimalPlacesFor(input), input.type === 'number');
             if (input.value !== clean) input.value = clean;

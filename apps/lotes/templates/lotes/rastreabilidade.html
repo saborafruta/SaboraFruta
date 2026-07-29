@@ -46,7 +46,7 @@
                 <td class="px-4 py-2.5 font-mono text-xs" :style="temaClaro ? 'color:#374151;' : 'color:#e5e5e5;'">{{ l.numero_lote }}</td>
                 <td class="px-4 py-2.5 text-xs" :style="temaClaro ? 'color:#374151;' : 'color:#d4d4d4;'">{{ l.produto.descricao|truncatechars:40 }}</td>
                 <td class="px-4 py-2.5 text-center text-xs" :style="temaClaro ? 'color:#374151;' : 'color:#d4d4d4;'">{{ l.data_validade|date:"d/m/Y"|default:"—" }}</td>
-                <td class="px-4 py-2.5 text-right font-semibold text-xs" :style="temaClaro ? 'color:#111827;' : 'color:#f0f0f0;'">{{ l.quantidade_atual|quantidade:3 }}</td>
+                <td class="px-4 py-2.5 text-right font-semibold text-xs" :style="temaClaro ? 'color:#111827;' : 'color:#f0f0f0;'">{{ l.quantidade_atual|quantidade:2 }}</td>
                 <td class="px-4 py-2.5 text-center">
                   <span class="px-2 py-0.5 rounded-full text-xs"
                     style="{% if l.status == 'ativo' %}background:rgba(16,185,129,0.15); color:#34d399;{% elif l.status == 'vencido' %}background:rgba(239,68,68,0.15); color:#f87171;{% elif l.status == 'bloqueado' %}background:rgba(251,191,36,0.15); color:#fbbf24;{% else %}background:rgba(59,130,246,0.12); color:#60a5fa;{% endif %}">
@@ -97,7 +97,7 @@
           </div>
           <div>
             <span class="block text-xs" :style="temaClaro ? 'color:#9ca3af;' : 'color:#64748b;'">Saldo atual</span>
-            <strong :style="temaClaro ? 'color:#374151;' : 'color:#d4d4d4;'">{{ lote.quantidade_atual|quantidade:3 }}</strong>
+            <strong :style="temaClaro ? 'color:#374151;' : 'color:#d4d4d4;'">{{ lote.quantidade_atual|quantidade:2 }}</strong>
           </div>
         </div>
       </div>
@@ -138,7 +138,7 @@
               </div>
               <div>
                 <span class="block text-xs mb-0.5" :style="temaClaro ? 'color:#9ca3af;' : 'color:#64748b;'">Qtd. Recebida</span>
-                <strong :style="temaClaro ? 'color:#374151;' : 'color:#d4d4d4;'">{{ item_entrada.quantidade_recebida|quantidade:3 }}</strong>
+                <strong :style="temaClaro ? 'color:#374151;' : 'color:#d4d4d4;'">{{ item_entrada.quantidade_recebida|quantidade:2 }}</strong>
               </div>
             </div>
             <div class="mt-3">
@@ -164,7 +164,7 @@
               </div>
               <div>
                 <span class="block text-xs mb-0.5" :style="temaClaro ? 'color:#9ca3af;' : 'color:#64748b;'">Qtd. Produzida</span>
-                <strong :style="temaClaro ? 'color:#374151;' : 'color:#d4d4d4;'">{{ ordem_producao.quantidade_produzida|quantidade:3 }}</strong>
+                <strong :style="temaClaro ? 'color:#374151;' : 'color:#d4d4d4;'">{{ ordem_producao.quantidade_produzida|quantidade:2 }}</strong>
               </div>
             </div>
 
@@ -269,7 +269,7 @@
                         <span class="ml-1" :style="temaClaro ? 'color:#9ca3af;' : 'color:#64748b;'">{{ mov.created_at|date:"d/m/y H:i" }}</span>
                       </div>
                       <span class="font-semibold {% if mov.tipo_operacao == 'saida' or mov.tipo_operacao == 'baixa_validade' %}text-red-400{% else %}text-emerald-400{% endif %}">
-                        {{ mov.quantidade|quantidade:3 }}
+                        {{ mov.quantidade|quantidade:2 }}
                       </span>
                     </div>
                   {% endfor %}
@@ -300,7 +300,7 @@
                       </div>
                     </div>
                     <div class="text-right">
-                      <div class="text-xs font-semibold" :style="temaClaro ? 'color:#065f46;' : 'color:#34d399;'">{{ ca.quantidade_total|floatformat:3 }} un.</div>
+                      <div class="text-xs font-semibold" :style="temaClaro ? 'color:#065f46;' : 'color:#34d399;'">{{ ca.quantidade_total|floatformat:2 }} un.</div>
                       <div class="text-xs" :style="temaClaro ? 'color:#047857;' : 'color:#6ee7b7;'">{{ ca.pedidos|length }} pedido(s)</div>
                     </div>
                   </div>
@@ -320,7 +320,7 @@
             <p class="text-sm" :style="temaClaro ? 'color:#9ca3af;' : 'color:#64748b;'">
               Nenhuma saída para clientes registrada ainda.
               {% if lote.quantidade_atual and lote.quantidade_atual > 0 %}
-                O saldo de {{ lote.quantidade_atual|quantidade:3 }} ainda está em estoque.
+                O saldo de {{ lote.quantidade_atual|quantidade:2 }} ainda está em estoque.
               {% endif %}
             </p>
           {% endif %}

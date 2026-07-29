@@ -1101,7 +1101,7 @@ ${filialTelefone ? `<div class="sub">Tel: ${esc(filialTelefone)}</div>` : ''}
 ${venda.cliente_cpf_cnpj ? `<div class="line"><span>CPF/CNPJ</span><strong>${esc(venda.cliente_cpf_cnpj)}</strong></div>` : ''}
 ${(() => { const e = venda.cliente_endereco || {}; if (!e.rua) return ''; const l1 = e.rua + (e.numero ? ', ' + e.numero : '') + (e.complemento ? ' - ' + e.complemento : ''); const cidadeUf = [e.cidade, e.uf].filter(Boolean).join('/'); const l2 = [e.bairro, cidadeUf, e.cep].filter(Boolean).join(' - '); return `<div class="muted" style="margin:3px 0 0;overflow-wrap:anywhere"><strong>Endereço:</strong> ${esc(l1)}${l2 ? ' - ' + esc(l2) : ''}</div>`; })()}
 ${documento}<hr class="sep"><table><tbody>${itens}</tbody></table><hr class="sep">
-<div class="line"><span>Qtd total de itens</span><strong>${(() => { const t = (venda.itens || []).reduce((s, i) => s + Number(i.quantidade || 0), 0); return t % 1 === 0 ? t : t.toFixed(3).replace('.', ','); })()}</strong></div>
+<div class="line"><span>Qtd total de itens</span><strong>${(() => { const t = (venda.itens || []).reduce((s, i) => s + Number(i.quantidade || 0), 0); return t % 1 === 0 ? t : t.toFixed(2).replace('.', ','); })()}</strong></div>
 <div class="line"><span>Subtotal</span><strong>R$ ${this.dinheiro(Number(venda.valor_total) + Number(venda.desconto) - Number(venda.acrescimo))}</strong></div>
 ${Number(venda.desconto) ? `<div class="line"><span>Desconto</span><strong>- R$ ${this.dinheiro(venda.desconto)}</strong></div>` : ''}
 ${Number(venda.acrescimo) ? `<div class="line"><span>Acréscimo</span><strong>R$ ${this.dinheiro(venda.acrescimo)}</strong></div>` : ''}

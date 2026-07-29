@@ -39,10 +39,10 @@
               {% endif %}
             </td>
             <td class="px-4 py-3 font-mono text-xs">{{ item.ean_xml|default:"-" }}</td>
-            <td class="px-4 py-3 text-right">{{ item.quantidade_xml|quantidade:3 }} {{ item.unidade_xml }}</td>
+            <td class="px-4 py-3 text-right">{{ item.quantidade_xml|quantidade:2 }} {{ item.unidade_xml }}</td>
             <td class="px-4 py-3 text-right">{{ item.fator_conversao|quantidade:4 }}</td>
             <td class="px-4 py-3 text-right">
-              <div>{{ item.quantidade_recebida|quantidade:3 }} {{ item.unidade_estoque }}</div>
+              <div>{{ item.quantidade_recebida|quantidade:2 }} {{ item.unidade_estoque }}</div>
               {% if item.item_recusado %}
                 <div class="text-xs text-red-600">Nao movimenta</div>
               {% endif %}

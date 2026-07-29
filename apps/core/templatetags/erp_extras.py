@@ -28,7 +28,7 @@ def moeda(valor):
 
 
 @register.filter
-def quantidade(valor, casas=3):
+def quantidade(valor, casas=2):
     """Formata quantidade sem zeros finais desnecessarios."""
     if valor is None:
         return '0'
@@ -61,7 +61,7 @@ def quantidade_produto(valor, produto=None):
             or getattr(produto, 'fracionavel', False)
             or getattr(produto, 'eh_granel', False)
         )
-    casas = 3 if usa_decimal else (2 if valor != valor.to_integral_value() else 0)
+    casas = 2 if usa_decimal else (2 if valor != valor.to_integral_value() else 0)
     fmt = f'{{:,.{casas}f}}'
     return fmt.format(valor).replace(',', 'X').replace('.', ',').replace('X', '.')
 

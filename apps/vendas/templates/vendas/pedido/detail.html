@@ -104,7 +104,7 @@
               {% for item in itens %}
                 <tr>
                   <td class="p-2">{{ item.produto|truncatechars:30 }}</td>
-                  <td class="p-2 text-right">{{ item.quantidade|quantidade:3 }}</td>
+                  <td class="p-2 text-right">{{ item.quantidade|quantidade:2 }}</td>
                   <td class="p-2">
                     <input type="number" step="0.001" min="0" max="{{ item.quantidade }}"
                            name="item_{{ item.pk }}_qtd" value="0"
@@ -172,7 +172,7 @@
           <tr>
             <td class="px-5 py-2 font-mono text-xs">{{ item.numero_item }}</td>
             <td class="px-5 py-2">{{ item.produto.descricao }}</td>
-            <td class="px-5 py-2 text-right">{{ item.quantidade|quantidade:3 }} {{ item.produto.unidade_medida.sigla }}</td>
+            <td class="px-5 py-2 text-right">{{ item.quantidade|quantidade:2 }} {{ item.produto.unidade_medida.sigla }}</td>
             <td class="px-5 py-2 text-right">{{ item.valor_unitario|moeda }}</td>
             <td class="px-5 py-2 text-right text-xs text-gray-500">
               {% if item.percentual_desconto %}{{ item.percentual_desconto }}%{% endif %}

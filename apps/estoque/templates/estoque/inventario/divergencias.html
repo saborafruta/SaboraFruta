@@ -41,12 +41,12 @@
     <div class="card p-4">
       <div class="text-xs uppercase tracking-wide" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Itens com falta</div>
       <div class="mt-1 text-2xl font-semibold" :style="temaClaro ? 'color:#b91c1c;' : 'color:#fca5a5;'">{{ relatorio.faltas }}</div>
-      <div class="text-xs mt-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">{{ relatorio.quantidade_falta|quantidade:3 }} un.</div>
+      <div class="text-xs mt-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">{{ relatorio.quantidade_falta|quantidade:2 }} un.</div>
     </div>
     <div class="card p-4">
       <div class="text-xs uppercase tracking-wide" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Itens com sobra</div>
       <div class="mt-1 text-2xl font-semibold" :style="temaClaro ? 'color:#15803d;' : 'color:#86efac;'">{{ relatorio.sobras }}</div>
-      <div class="text-xs mt-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">{{ relatorio.quantidade_sobra|quantidade:3 }} un.</div>
+      <div class="text-xs mt-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">{{ relatorio.quantidade_sobra|quantidade:2 }} un.</div>
     </div>
     <div class="card p-4">
       <div class="text-xs uppercase tracking-wide" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Valor faltas</div>

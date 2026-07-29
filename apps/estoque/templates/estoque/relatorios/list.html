@@ -66,7 +66,7 @@
                   <div class="text-xs" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">{{ filial.filial__uf }}</div>
                 </td>
                 <td class="px-4 py-3 text-right">{{ filial.skus }}</td>
-                <td class="px-4 py-3 text-right">{{ filial.quantidade_total|quantidade:3 }}</td>
+                <td class="px-4 py-3 text-right">{{ filial.quantidade_total|quantidade:2 }}</td>
                 <td class="px-4 py-3 text-right font-semibold">{{ filial.valor_custo_total|moeda }}</td>
               </tr>
             {% empty %}
@@ -113,7 +113,7 @@
               <div class="font-medium truncate">{{ lote.produto.descricao }}</div>
               <div class="text-xs" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Lote {{ lote.numero_lote }} &middot; validade {{ lote.data_validade|date:"d/m/Y" }}</div>
             </div>
-            <span class="soft-pill is-red">{{ lote.quantidade_atual|quantidade:3 }}</span>
+            <span class="soft-pill is-red">{{ lote.quantidade_atual|quantidade:2 }}</span>
           </div>
         {% empty %}
           <div class="p-5 text-sm" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Nenhum lote vencido com saldo.</div>
@@ -133,7 +133,7 @@
               <div class="font-medium truncate">{{ lote.produto.descricao }}</div>
               <div class="text-xs" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Lote {{ lote.numero_lote }} &middot; D-{{ lote.dias_para_vencer }}</div>
             </div>
-            <span class="soft-pill is-amber">{{ lote.quantidade_atual|quantidade:3 }}</span>
+            <span class="soft-pill is-amber">{{ lote.quantidade_atual|quantidade:2 }}</span>
           </div>
         {% empty %}
           <div class="p-5 text-sm" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Nenhum lote proximo do vencimento.</div>

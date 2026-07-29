@@ -59,7 +59,7 @@
                   {% if item.produto %}{{ item.produto.descricao }}{% else %}{{ item.descricao_xml|default:"Produto da nota" }}{% endif %}
                 </div>
                 <div class="text-xs text-gray-500">
-                  Nota {{ item.quantidade_estoque|quantidade:3 }} {{ item.unidade_estoque|default:item.unidade_xml }}
+                  Nota {{ item.quantidade_estoque|quantidade:2 }} {{ item.unidade_estoque|default:item.unidade_xml }}
                   {% if item.produto and item.produto.controla_lote %}| lote obrigatorio{% endif %}
                   {% if item.produto and item.produto.controla_validade %}| validade obrigatoria{% endif %}
                 </div>
@@ -81,7 +81,7 @@
                   <form method="post" action="{% url 'compras:entrada-diferencas' entrada.pk %}" class="grid grid-cols-[110px_120px_150px_minmax(220px,1fr)_auto] gap-2 items-start">
                     {% csrf_token %}
                     <input type="hidden" name="item_id" value="{{ item.pk }}">
-                    <input name="quantidade_recebida" class="form-input" value="{{ item.quantidade_recebida|quantidade:3 }}" inputmode="decimal">
+                    <input name="quantidade_recebida" class="form-input" value="{{ item.quantidade_recebida|quantidade:2 }}" inputmode="decimal">
                     <input name="numero_lote" class="form-input" value="{{ item.numero_lote }}" placeholder="Lote">
                     <input type="date" name="data_validade" class="form-input" value="{{ item.data_validade|date:'Y-m-d' }}">
                     <textarea name="justificativa_diferenca" rows="2" class="form-input" placeholder="Justificativa operacional">{{ item.justificativa_diferenca }}</textarea>
@@ -112,7 +112,7 @@
             <div class="font-semibold leading-snug break-words">
               {% if item.produto %}{{ item.produto.descricao }}{% else %}{{ item.descricao_xml|default:"Produto da nota" }}{% endif %}
             </div>
-            <div class="text-xs text-gray-500">Nota {{ item.quantidade_estoque|quantidade:3 }} {{ item.unidade_estoque|default:item.unidade_xml }}</div>
+            <div class="text-xs text-gray-500">Nota {{ item.quantidade_estoque|quantidade:2 }} {{ item.unidade_estoque|default:item.unidade_xml }}</div>
           </div>
           {% if item.diferenca_bloqueante or not item.produto_id %}
             <span class="px-2 py-1 text-xs rounded-full bg-red-100 text-red-700">Bloqueia</span>
@@ -134,7 +134,7 @@
             <input type="hidden" name="item_id" value="{{ item.pk }}">
             <div>
               <label class="block text-xs font-medium mb-1">Quantidade recebida</label>
-              <input name="quantidade_recebida" class="form-input" value="{{ item.quantidade_recebida|quantidade:3 }}" inputmode="decimal">
+              <input name="quantidade_recebida" class="form-input" value="{{ item.quantidade_recebida|quantidade:2 }}" inputmode="decimal">
             </div>
             <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
               <div>

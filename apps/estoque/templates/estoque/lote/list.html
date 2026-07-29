@@ -63,7 +63,7 @@
       <div class="grid grid-cols-2 gap-2 text-sm">
         <div>
           <span class="block text-xs" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Quantidade</span>
-          <strong>{{ l.quantidade_atual|quantidade:3 }}</strong>
+          <strong>{{ l.quantidade_atual|quantidade:2 }}</strong>
         </div>
         <div>
           <span class="block text-xs" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Custo un.</span>
@@ -170,7 +170,7 @@
           <span style="color:#555;">—</span>
         {% endif %}
       </td>
-      <td class="px-4 py-3 text-right font-semibold" style="color:#e5e5e5;">{{ l.quantidade_atual|quantidade:3 }}</td>
+      <td class="px-4 py-3 text-right font-semibold" style="color:#e5e5e5;">{{ l.quantidade_atual|quantidade:2 }}</td>
       <td class="px-4 py-3 text-right text-sm" style="color:#d4d4d4;">{{ l.custo_unitario|moeda }}</td>
       <td class="px-4 py-3 text-right text-sm font-semibold" style="color:#34d399;">{{ l.valor_total_lote|moeda }}</td>
       <td class="px-4 py-3 text-xs" style="color:#999;">

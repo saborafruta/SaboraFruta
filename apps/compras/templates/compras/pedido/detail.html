@@ -148,11 +148,11 @@
           <tr>
             <td class="px-5 py-2 font-mono text-xs">{{ item.numero_item }}</td>
             <td class="px-5 py-2">{{ item.produto.descricao }}</td>
-            <td class="px-5 py-2 text-right">{{ item.quantidade|quantidade:3 }}</td>
+            <td class="px-5 py-2 text-right">{{ item.quantidade|quantidade:2 }}</td>
             <td class="px-5 py-2 text-right">
               {% if item.quantidade_recebida > 0 %}
                 <span class="{% if item.recebido_completo %}text-emerald-600{% else %}text-amber-600{% endif %}">
-                  {{ item.quantidade_recebida|quantidade:3 }}
+                  {{ item.quantidade_recebida|quantidade:2 }}
                 </span>
               {% else %}—{% endif %}
             </td>

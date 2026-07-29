@@ -190,7 +190,7 @@
               <div class="min-w-0 flex-1">
                 <div class="text-xs text-gray-500">Item {{ item.numero_item }} | {{ item.ean_xml|default:"sem EAN" }}</div>
                 <div class="font-medium leading-snug break-words">{{ item.descricao_xml|default:"Produto da nota" }}</div>
-                <div class="text-xs text-gray-500">{{ item.quantidade_xml|quantidade:3 }} {{ item.unidade_xml }} | codigo {{ item.codigo_produto_fornecedor|default:"-" }}</div>
+                <div class="text-xs text-gray-500">{{ item.quantidade_xml|quantidade:2 }} {{ item.unidade_xml }} | codigo {{ item.codigo_produto_fornecedor|default:"-" }}</div>
               </div>
             </div>
 
@@ -266,7 +266,7 @@
                   {% endif %}
                 </div>
                 <div class="text-xs text-gray-500">
-                  {{ item.quantidade_xml|quantidade:3 }} {{ item.unidade_xml }} | codigo {{ item.codigo_produto_fornecedor|default:"-" }}
+                  {{ item.quantidade_xml|quantidade:2 }} {{ item.unidade_xml }} | codigo {{ item.codigo_produto_fornecedor|default:"-" }}
                   {% if item.ncm_xml %}| NCM {{ item.ncm_xml }}{% endif %}
                 </div>
               </td>
@@ -289,7 +289,7 @@
                   {% endif %}
                 {% endif %}
               </td>
-              <td class="px-4 py-3">{{ item.fator_conversao|quantidade:4 }} | {{ item.quantidade_recebida|quantidade:3 }} {{ item.unidade_estoque }}</td>
+              <td class="px-4 py-3">{{ item.fator_conversao|quantidade:4 }} | {{ item.quantidade_recebida|quantidade:2 }} {{ item.unidade_estoque }}</td>
               <td class="px-4 py-3">
                 <div class="font-medium">{{ item.numero_lote|default:"-" }}</div>
                 {% if item.data_validade %}<div class="text-xs text-gray-500">{{ item.data_validade|date:"d/m/Y" }}</div>{% endif %}
@@ -440,7 +440,7 @@
               {% if item.descricao_xml %}{{ item.descricao_xml }}{% elif item.produto %}{{ item.produto.descricao }}{% else %}Item{% endif %}
             </div>
             <div class="text-xs text-gray-500">
-              {{ item.quantidade_xml|quantidade:3 }} {{ item.unidade_xml }} | fator {{ item.fator_conversao|quantidade:4 }}
+              {{ item.quantidade_xml|quantidade:2 }} {{ item.unidade_xml }} | fator {{ item.fator_conversao|quantidade:4 }}
             </div>
           </div>
           <div class="flex flex-wrap gap-1">

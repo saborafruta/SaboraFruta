@@ -248,7 +248,7 @@
                 </div>
                 <div class="text-xs text-gray-500">{{ linha.item.ean_xml|default:linha.item.codigo_produto_fornecedor|default:"Sem codigo" }}</div>
               </td>
-              <td class="px-4 py-3 text-right">{{ linha.quantidade|quantidade:3 }}</td>
+              <td class="px-4 py-3 text-right">{{ linha.quantidade|quantidade:2 }}</td>
               <td class="px-4 py-3 text-right">{{ linha.valor_mercadoria|moeda }}</td>
               <td class="px-4 py-3 text-right">{{ linha.frete|moeda }}</td>
               <td class="px-4 py-3 text-right">{{ linha.seguro|moeda }}</td>
@@ -309,7 +309,7 @@
             <span class="soft-pill {% if linha.alerta_custo_nivel == 'critico' %}is-red{% elif linha.alerta_custo_nivel == 'atencao' %}is-amber{% else %}is-green{% endif %}">{{ linha.custo_unitario|moeda }}</span>
           </div>
           <div class="grid grid-cols-2 gap-2 text-sm">
-            <div><span class="text-gray-500">Qtd</span><br>{{ linha.quantidade|quantidade:3 }}</div>
+            <div><span class="text-gray-500">Qtd</span><br>{{ linha.quantidade|quantidade:2 }}</div>
             <div><span class="text-gray-500">Mercadoria</span><br>{{ linha.valor_mercadoria|moeda }}</div>
             <div><span class="text-gray-500">Adicoes</span><br>{{ linha.frete|add:linha.seguro|add:linha.outras_despesas|add:linha.ipi|add:linha.icms_st|add:linha.icms_nao_recuperavel|add:linha.custo_financeiro|moeda }}</div>
             <div><span class="text-gray-500">Desconto</span><br>- {{ linha.desconto|moeda }}</div>

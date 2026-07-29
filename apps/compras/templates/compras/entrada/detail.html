@@ -113,7 +113,7 @@
           <h3 class="font-semibold text-lg">{% if resultado_efetivacao.estornada %}Entrada estornada{% else %}Resultado da efetivacao{% endif %}</h3>
           <p class="mt-1">
             Entrada efetivada: {{ resultado_efetivacao.produtos_movimentados }} produto(s),
-            {{ resultado_efetivacao.quantidade_total|quantidade:3 }} unidade(s),
+            {{ resultado_efetivacao.quantidade_total|quantidade:2 }} unidade(s),
             {{ resultado_efetivacao.custo_total|moeda }} custo total.
             {% if resultado_efetivacao.estornada %}
               Estorno gerado em {{ entrada.data_estorno|date:"d/m/Y H:i" }} por {{ entrada.usuario_estorno.nome|default:entrada.usuario_estorno }}.
@@ -213,7 +213,7 @@
                     {% if mov.lote_id %}| lote {{ mov.lote.numero_lote }}{% endif %}
                   </div>
                 </div>
-                <strong>{{ mov.quantidade|quantidade:3 }}</strong>
+                <strong>{{ mov.quantidade|quantidade:2 }}</strong>
               </div>
               <div class="grid grid-cols-1 sm:grid-cols-3 gap-2 mt-3 text-xs">
                 <div><span class="text-gray-500">Custo gravado</span><br><strong>{{ mov.valor_unitario|moeda }}</strong></div>
@@ -244,12 +244,12 @@
                     <div class="font-medium">{{ mov.produto.descricao }}</div>
                     <div class="text-xs">Movimento #{{ mov.pk }} | {{ mov.data_movimentacao|date:"d/m/Y H:i" }}{% if mov.lote_id %} | lote {{ mov.lote.numero_lote }}{% endif %}</div>
                   </div>
-                  <strong>{{ mov.quantidade|quantidade:3 }}</strong>
+                  <strong>{{ mov.quantidade|quantidade:2 }}</strong>
                 </div>
                 <div class="grid grid-cols-1 sm:grid-cols-3 gap-2 mt-3 text-xs">
                   <div><span>Custo reverso</span><br><strong>{{ mov.valor_unitario|moeda }}</strong></div>
                   <div><span>Total</span><br><strong>{{ mov.valor_total|moeda }}</strong></div>
-                  <div><span>Saldo apos</span><br><strong>{{ mov.quantidade_posterior|quantidade:3 }}</strong></div>
+                  <div><span>Saldo apos</span><br><strong>{{ mov.quantidade_posterior|quantidade:2 }}</strong></div>
                 </div>
               </div>
             {% endfor %}
@@ -271,8 +271,8 @@
                 <a href="{% url 'estoque:lote-update' lote.pk %}" class="text-emerald-600 text-xs hover:underline">Ver lote</a>
               </div>
               <div class="grid grid-cols-1 sm:grid-cols-3 gap-2 mt-3 text-xs">
-                <div><span class="text-gray-500">Qtd inicial</span><br><strong>{{ lote.quantidade_inicial|quantidade:3 }}</strong></div>
-                <div><span class="text-gray-500">Qtd atual</span><br><strong>{{ lote.quantidade_atual|quantidade:3 }}</strong></div>
+                <div><span class="text-gray-500">Qtd inicial</span><br><strong>{{ lote.quantidade_inicial|quantidade:2 }}</strong></div>
+                <div><span class="text-gray-500">Qtd atual</span><br><strong>{{ lote.quantidade_atual|quantidade:2 }}</strong></div>
                 <div><span class="text-gray-500">Custo lote</span><br><strong>{{ lote.custo_unitario|moeda }}</strong></div>
               </div>
             </div>
@@ -301,7 +301,7 @@
                     <div class="font-medium">{{ item.produto.descricao }}</div>
                     <a href="{{ item.extrato_produto_url }}" class="text-primary-600 text-xs hover:underline">Ver extrato do produto</a>
                   </td>
-                  <td class="py-2 pr-3 text-right">{{ item.quantidade_movimenta|quantidade:3 }}</td>
+                  <td class="py-2 pr-3 text-right">{{ item.quantidade_movimenta|quantidade:2 }}</td>
                   <td class="py-2 pr-3 text-right">{{ item.custo_unitario_total|moeda }}</td>
                   <td class="py-2 pr-3 text-right">{{ item.custo_total_efetivado|moeda }}</td>
                   <td class="py-2 pr-3 text-right">{{ item.estoque_custo_medio|moeda }}</td>
@@ -320,7 +320,7 @@
           {% for item in resultado_efetivacao.itens_recusados %}
             <div class="rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-900">
               <div class="font-medium">{{ item.produto.descricao|default:item.descricao_xml }}</div>
-              <div class="text-xs mt-1">Qtd da nota {{ item.quantidade_xml|quantidade:3 }} {{ item.unidade_xml }} | qtd recebida {{ item.quantidade_recebida|quantidade:3 }}</div>
+              <div class="text-xs mt-1">Qtd da nota {{ item.quantidade_xml|quantidade:2 }} {{ item.unidade_xml }} | qtd recebida {{ item.quantidade_recebida|quantidade:2 }}</div>
               <div class="text-xs mt-2">{{ item.justificativa_diferenca|default:"Item recusado na conferencia." }}</div>
             </div>
           {% empty %}

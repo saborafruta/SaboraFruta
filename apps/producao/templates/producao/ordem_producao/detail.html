@@ -52,12 +52,12 @@
   <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
     <div class="card p-4">
       <div class="text-xs uppercase tracking-wider text-gray-500">Planejado</div>
-      <div class="text-2xl font-bold mt-1">{{ op.quantidade_planejada|quantidade:3 }}</div>
+      <div class="text-2xl font-bold mt-1">{{ op.quantidade_planejada|quantidade:2 }}</div>
     </div>
     <div class="card p-4">
       <div class="text-xs uppercase tracking-wider text-gray-500">Produzido</div>
       <div class="text-2xl font-bold mt-1">
-        {% if op.quantidade_produzida > 0 %}{{ op.quantidade_produzida|quantidade:3 }}{% else %}<span class="text-gray-400">—</span>{% endif %}
+        {% if op.quantidade_produzida > 0 %}{{ op.quantidade_produzida|quantidade:2 }}{% else %}<span class="text-gray-400">—</span>{% endif %}
       </div>
     </div>
     <div class="card p-4">
@@ -117,9 +117,9 @@
         {% for item in itens_bom %}
           <tr>
             <td class="px-5 py-2">{{ item.materia_prima.descricao }}</td>
-            <td class="px-5 py-2 text-right">{{ item.quantidade|quantidade:3 }} {{ item.materia_prima.unidade_medida.sigla }}</td>
+            <td class="px-5 py-2 text-right">{{ item.quantidade|quantidade:2 }} {{ item.materia_prima.unidade_medida.sigla }}</td>
             <td class="px-5 py-2 text-right text-gray-500">{{ item.perda_prevista }}%</td>
-            <td class="px-5 py-2 text-right font-semibold">{{ item.quantidade_com_perda|quantidade:3 }}</td>
+            <td class="px-5 py-2 text-right font-semibold">{{ item.quantidade_com_perda|quantidade:2 }}</td>
             <td class="px-5 py-2 text-right">{{ item.materia_prima.preco_custo_medio|moeda }}</td>
           </tr>
         {% endfor %}
@@ -173,7 +173,7 @@
                 <span class="px-2 py-0.5 text-xs rounded-full bg-red-100 text-red-700">{{ p.get_categoria_display }}</span>
               </td>
               <td class="px-5 py-2">{{ p.produto }}</td>
-              <td class="px-5 py-2 text-right">{{ p.quantidade|quantidade:3 }}</td>
+              <td class="px-5 py-2 text-right">{{ p.quantidade|quantidade:2 }}</td>
               <td class="px-5 py-2 text-right">{{ p.valor|moeda }}</td>
               <td class="px-5 py-2 text-xs text-gray-500">{{ p.descricao|truncatechars:60 }}</td>
             </tr>

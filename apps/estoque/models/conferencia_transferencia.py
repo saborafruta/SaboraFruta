@@ -61,6 +61,7 @@ class ItemConferenciaTransferencia(TimestampedModel):
         OK = 'ok', 'Recebido corretamente'
         FALTANTE = 'faltante', 'Quantidade faltante'
         TROCADO = 'trocado', 'Item trocado'
+        DEVOLVIDO = 'devolvido', 'Devolver a origem'
 
     conferencia = models.ForeignKey(
         ConferenciaTransferencia,

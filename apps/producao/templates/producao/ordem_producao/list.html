@@ -42,9 +42,9 @@
     <tr class="table-row-hover">
       <td class="px-4 py-3 font-mono text-xs font-semibold">{{ op.numero }}</td>
       <td class="px-4 py-3 text-sm">{{ op.produto_acabado.descricao }}</td>
-      <td class="px-4 py-3 text-right">{{ op.quantidade_planejada|quantidade:3 }}</td>
+      <td class="px-4 py-3 text-right">{{ op.quantidade_planejada|quantidade:2 }}</td>
       <td class="px-4 py-3 text-right">
-        {% if op.quantidade_produzida > 0 %}{{ op.quantidade_produzida|quantidade:3 }}{% else %}—{% endif %}
+        {% if op.quantidade_produzida > 0 %}{{ op.quantidade_produzida|quantidade:2 }}{% else %}—{% endif %}
       </td>
       <td class="px-4 py-3 text-center">
         {% if op.status == 'encerrada' %}

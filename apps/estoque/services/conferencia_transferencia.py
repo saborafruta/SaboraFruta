@@ -119,7 +119,12 @@ def garantir_conferencias_recebidas(filial_destino):
 
 def _decimal_positivo(valor, rotulo, permite_zero=True):
     try:
-        numero = Decimal(str(valor or '0'))
+        texto = str(valor or '0').strip()
+        if ',' in texto and '.' in texto:
+            texto = texto.replace('.', '').replace(',', '.')
+        else:
+            texto = texto.replace(',', '.')
+        numero = Decimal(texto)
     except (InvalidOperation, TypeError, ValueError):
         raise DadosInvalidosError(f'{rotulo} invalida.')
     if numero < 0 or (not permite_zero and numero == 0):
@@ -186,6 +191,7 @@ def concluir_conferencia(*, conferencia_id, filial_destino, usuario, itens, obse
 
         produto_recebido = None
         quantidade_trocada = Decimal('0')
+        item_devolvido = ocorrencia == ItemConferenciaTransferencia.Ocorrencia.DEVOLVIDO
         if ocorrencia == ItemConferenciaTransferencia.Ocorrencia.OK:
             recebida = item.quantidade_enviada
         elif ocorrencia == ItemConferenciaTransferencia.Ocorrencia.TROCADO:
@@ -200,9 +206,28 @@ def concluir_conferencia(*, conferencia_id, filial_destino, usuario, itens, obse
             )
             if not produto_recebido:
                 raise DadosInvalidosError('Selecione o produto recebido no lugar.')
+        elif item_devolvido:
+            recebida = Decimal('0')
+            lote_destino = _lote_destino(item)
+            MovimentacaoService.transferir_entre_filiais(
+                produto_id=item.produto_enviado_id,
+                filial_origem_id=filial_destino.pk,
+                filial_destino_id=conferencia.filial_origem_id,
+                quantidade=item.quantidade_enviada,
+                usuario_id=usuario.pk,
+                lote_id=lote_destino.pk if lote_destino else None,
+                observacao=(
+                    f'Devolucao na conferencia da transferencia '
+                    f'{conferencia.documento_numero}: {observacao_item}'
+                ),
+                permitir_sem_lote=True,
+                vincular_destino=True,
+                documento_numero=f'DEV-{conferencia.pk}-{item.pk}'[:20],
+            )
+            tem_divergencia = True
 
         diferenca = item.quantidade_enviada - recebida
-        if diferenca > 0:
+        if diferenca > 0 and not item_devolvido:
             lote_destino = _lote_destino(item)
             MovimentacaoService.registrar_movimentacao(
                 produto_id=item.produto_enviado_id,

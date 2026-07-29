@@ -1,4 +1,4 @@
-﻿{% extends "pdv_base.html" %}
+{% extends "pdv_base.html" %}
 {% block title %}PDV{% endblock %}
 
 {% block extra_head %}
@@ -3348,7 +3348,7 @@ ${(v.observacao && v.observacao.trim()) ? `<div class="sub">Obs: ${v.observacao.
 </table>
 <hr class="sep">
 <div style="display:flex;justify-content:space-between;font-size:11px;color:#555;margin-bottom:4px;">
-  <span>Qtd total de itens</span><span>${totalItens % 1 === 0 ? totalItens : totalItens.toFixed(3).replace('.',',')}</span>
+  <span>Qtd total de itens</span><span>${totalItens % 1 === 0 ? totalItens : totalItens.toFixed(2).replace('.',',')}</span>
 </div>
 <div style="display:flex;justify-content:space-between;font-size:13px;margin-bottom:3px;">
   <span>Subtotal</span><span>R$&nbsp;${fmt(v.subtotal)}</span>
@@ -3482,7 +3482,7 @@ ${(c.observacao && c.observacao.trim()) ? `<div class="sub">Obs: ${c.observacao.
 </table>
 <hr class="sep">
 <div style="display:flex;justify-content:space-between;font-size:11px;color:#555;margin-bottom:4px;">
-  <span>Qtd total de itens</span><span>${totalItensRP % 1 === 0 ? totalItensRP : totalItensRP.toFixed(3).replace('.',',')}</span>
+  <span>Qtd total de itens</span><span>${totalItensRP % 1 === 0 ? totalItensRP : totalItensRP.toFixed(2).replace('.',',')}</span>
 </div>
 <div style="display:flex;justify-content:space-between;" class="total-row">
   <span>TOTAL</span><span>R$&nbsp;${fmt(c.valor_total)}</span>
