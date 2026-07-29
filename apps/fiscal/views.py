@@ -1,6 +1,7 @@
 import json
 import io
 import csv
+import hashlib
 import logging
 import re
 import zipfile
@@ -40,6 +41,7 @@ from apps.fiscal.services.focusnfe_service import (
     gerar_ref,
     parse_ref,
 )
+from apps.fiscal.services.focusnfe_backup_service import FocusNFeBackupService
 from apps.fiscal.services.manifesto_service import ManifestoFiscalService
 
 logger = logging.getLogger(__name__)
@@ -210,7 +212,102 @@ def _baixar_xml_exportacao(job):
     return job["documento_id"], job["arquivo"], ""
 
 
-def _recuperar_xmls_exportacao(documentos):
+def _chave_numerica(documento):
+    chave = re.sub(r"\D", "", documento.chave or "")
+    return chave if len(chave) == 44 else ""
+
+
+def _recuperar_xmls_backup_focus(documentos):
+    pendentes_por_filial = defaultdict(list)
+    for documento in documentos:
+        chave = _chave_numerica(documento)
+        if not chave:
+            continue
+        tipos = ["autorizado"]
+        if documento.status == StatusDocumentoFiscal.CANCELADA:
+            tipos.append("cancelamento")
+        tipos_pendentes = [
+            tipo
+            for tipo in tipos
+            if not _obter_xml_documento_arquivado(documento, tipo)
+        ]
+        if tipos_pendentes:
+            pendentes_por_filial[documento.filial_id].append(
+                (documento, chave, tipos_pendentes)
+            )
+
+    recuperados = []
+    for itens in pendentes_por_filial.values():
+        filial = itens[0][0].filial
+        token = (filial.focusnfe_token or "").strip()
+        if not token or filial.focusnfe_ambiente != 1:
+            continue
+        meses = {
+            documento.data_emissao.strftime("%Y%m")
+            for documento, _, _ in itens
+            if documento.data_emissao
+        }
+        pendentes_por_chave = {
+            chave: {
+                "documento": documento,
+                "tipos": set(tipos),
+            }
+            for documento, chave, tipos in itens
+        }
+        try:
+            client = FocusNFeClient(
+                config=FocusNFeConfig(
+                    token=token,
+                    ambiente=filial.focusnfe_ambiente,
+                    timeout=15,
+                    max_retries=1,
+                )
+            )
+            service = FocusNFeBackupService(client)
+            backups = service.selecionar(filial.cnpj, meses)
+            for xml_backup in service.iter_xmls(backups):
+                xml = xml_backup.conteudo
+                if not xml.lstrip().startswith("<"):
+                    continue
+                chaves_xml = set(re.findall(r"(?<!\d)\d{44}(?!\d)", xml_backup.nome))
+                chaves_xml.update(re.findall(r"(?<!\d)\d{44}(?!\d)", xml))
+                for chave in chaves_xml.intersection(pendentes_por_chave):
+                    pendente = pendentes_por_chave[chave]
+                    tipo = (
+                        "cancelamento"
+                        if _xml_e_cancelamento(xml)
+                        else "autorizado"
+                    )
+                    if tipo not in pendente["tipos"]:
+                        continue
+                    recuperados.append(
+                        (pendente["documento"].pk, tipo, xml)
+                    )
+                    pendente["tipos"].discard(tipo)
+        except Exception as exc:  # noqa: BLE001
+            logger.info(
+                "Backup Focus indisponivel para %s; usando fallback individual: %s",
+                filial.cnpj,
+                exc,
+            )
+
+    documentos_por_id = {documento.pk: documento for documento in documentos}
+    for documento_id, tipo, xml in recuperados:
+        campo = "xml_assinado" if tipo == "autorizado" else "xml_cancelamento"
+        DocumentoFiscal.objects.filter(pk=documento_id).update(**{campo: xml})
+        setattr(documentos_por_id[documento_id], campo, xml)
+
+
+def _recuperar_xmls_exportacao(
+    documentos,
+    *,
+    usar_backup_focus=True,
+    usar_consulta_individual=True,
+):
+    if usar_backup_focus:
+        _recuperar_xmls_backup_focus(documentos)
+    if not usar_consulta_individual:
+        return
     fontes_logs = _fontes_xml_por_documento(documentos)
     jobs = []
     documentos_por_id = {documento.pk: documento for documento in documentos}
@@ -550,6 +647,9 @@ class DocumentoFiscalExportarXMLView(PermissaoRequiredMixin, View):
         situacao = (request.GET.get("situacao") or "todas").strip()
         origem = (request.GET.get("origem") or "").strip()
         tipo_documento = (request.GET.get("tipo_documento") or "").strip()
+        fonte = (request.GET.get("fonte") or "automatica").strip()
+        if fonte not in {"automatica", "erp"}:
+            fonte = "automatica"
         data_inicial = parse_date((request.GET.get("data_ini") or "").strip())
         data_final = parse_date((request.GET.get("data_fim") or "").strip())
         if data_inicial and data_final and data_inicial > data_final:
@@ -608,7 +708,11 @@ class DocumentoFiscalExportarXMLView(PermissaoRequiredMixin, View):
             inutilizacoes = inutilizacoes.none()
 
         documentos = list(documentos)
-        _recuperar_xmls_exportacao(documentos)
+        _recuperar_xmls_exportacao(
+            documentos,
+            usar_backup_focus=fonte == "automatica",
+            usar_consulta_individual=fonte == "automatica",
+        )
 
         buffer = io.BytesIO()
         adicionados = 0
@@ -771,6 +875,7 @@ class DocumentoFiscalExportarXMLView(PermissaoRequiredMixin, View):
                     f"Situacao: {situacao}\n"
                     f"Tipo: {tipo_documento or 'todos'}\n"
                     f"Origem: {origem or 'todas'}\n"
+                    f"Fonte: {fonte}\n"
                     f"Periodo: {data_inicial or 'inicio'} a {data_final or 'hoje'}\n"
                 ),
             )
@@ -789,6 +894,111 @@ class DocumentoFiscalExportarXMLView(PermissaoRequiredMixin, View):
         periodo = f"{data_inicial or 'inicio'}-{data_final or 'hoje'}"
         response["Content-Disposition"] = (
             f'attachment; filename="documentos-fiscais-{periodo}.zip"'
+        )
+        return response
+
+
+class DocumentoFiscalBackupFocusView(PermissaoRequiredMixin, View):
+    permissao_modulo = "compras"
+    permissao_acao = "ver"
+
+    def get(self, request):
+        data_inicial = parse_date((request.GET.get("data_ini") or "").strip())
+        data_final = parse_date((request.GET.get("data_fim") or "").strip())
+        if data_inicial and data_final and data_inicial > data_final:
+            return HttpResponseBadRequest(
+                "A data inicial nao pode ser posterior a data final."
+            )
+
+        filial = request.filial_ativa
+        token = (filial.focusnfe_token or "").strip()
+        if not token:
+            return HttpResponse(
+                "Configure o token de emissao Focus da filial.",
+                status=422,
+                content_type="text/plain; charset=utf-8",
+            )
+        if filial.focusnfe_ambiente != 1:
+            return HttpResponse(
+                "Os backups mensais da Focus estao disponiveis somente em producao.",
+                status=422,
+                content_type="text/plain; charset=utf-8",
+            )
+
+        try:
+            client = FocusNFeClient(
+                config=FocusNFeConfig(
+                    token=token,
+                    ambiente=filial.focusnfe_ambiente,
+                    timeout=30,
+                    max_retries=1,
+                )
+            )
+            service = FocusNFeBackupService(client)
+            backups = service.listar(filial.cnpj)
+            mes_inicial = data_inicial.strftime("%Y%m") if data_inicial else ""
+            mes_final = data_final.strftime("%Y%m") if data_final else ""
+            if not mes_inicial and not mes_final and backups:
+                backups = [backups[-1]]
+            else:
+                backups = [
+                    backup
+                    for backup in backups
+                    if (not mes_inicial or backup.mes >= mes_inicial)
+                    and (not mes_final or backup.mes <= mes_final)
+                ]
+            if not backups:
+                return HttpResponse(
+                    "A Focus ainda nao disponibilizou backups para o periodo selecionado.",
+                    status=404,
+                    content_type="text/plain; charset=utf-8",
+                )
+
+            buffer = io.BytesIO()
+            adicionados = 0
+            hashes = set()
+            with zipfile.ZipFile(buffer, "w", zipfile.ZIP_DEFLATED) as arquivo:
+                for xml_backup in service.iter_xmls(backups):
+                    xml = xml_backup.conteudo
+                    if not xml.lstrip().startswith("<"):
+                        continue
+                    digest = hashlib.sha256(xml.encode("utf-8")).digest()
+                    if digest in hashes:
+                        continue
+                    hashes.add(digest)
+                    nome = re.sub(
+                        r"[^0-9A-Za-z_.-]+",
+                        "-",
+                        xml_backup.nome,
+                    )
+                    nome = f"{digest.hex()[:12]}-{nome}"
+                    arquivo.writestr(
+                        f"focus/{xml_backup.mes}/{nome}",
+                        xml,
+                    )
+                    adicionados += 1
+                arquivo.writestr(
+                    "resumo-backup-focus.txt",
+                    (
+                        "Backup oficial obtido diretamente da Focus NFe\n"
+                        f"CNPJ: {filial.cnpj}\n"
+                        f"Meses incluidos: {', '.join(backup.mes for backup in backups)}\n"
+                        f"Arquivos XML incluidos: {adicionados}\n"
+                    ),
+                )
+        except Exception as exc:  # noqa: BLE001
+            logger.exception("Falha ao baixar backups mensais da Focus.")
+            return HttpResponse(
+                f"Nao foi possivel baixar o backup da Focus: {exc}",
+                status=502,
+                content_type="text/plain; charset=utf-8",
+            )
+
+        buffer.seek(0)
+        response = HttpResponse(buffer.getvalue(), content_type="application/zip")
+        periodo = f"{data_inicial or 'disponivel'}-{data_final or 'atual'}"
+        response["Content-Disposition"] = (
+            f'attachment; filename="backup-focus-{periodo}.zip"'
         )
         return response
 

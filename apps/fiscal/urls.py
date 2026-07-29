@@ -26,6 +26,11 @@ urlpatterns = [
         views.DocumentoFiscalExportarXMLView.as_view(),
         name='documento-saida-exportar-xml',
     ),
+    path(
+        'manifesto/saidas/backup-focus/',
+        views.DocumentoFiscalBackupFocusView.as_view(),
+        name='documento-saida-backup-focus',
+    ),
     path('manifesto/config/', views.ManifestoFiscalConfigView.as_view(), name='manifesto-config'),
     path(
         'manifesto/<int:pk>/importar-entrada/',

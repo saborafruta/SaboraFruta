@@ -29,6 +29,7 @@ from .resources.nfcom import NFCOMResource
 from .resources.mdfe import MDFeResource
 from .resources.nfe_recebidas import NFeRecebidasResource
 from .resources.cte_recebidas import CTeRecebidasResource
+from .resources.backups import BackupsResource
 from .resources.consultas import (
     NCMResource,
     CFOPResource,
@@ -117,6 +118,7 @@ class FocusNFeClient:
 
         # Gestão de empresas Focus (certificado, CSC, regime, etc.)
         self.empresas = EmpresasResource(self.http)
+        self.backups = BackupsResource(self.http)
 
         # Namespace agrupado
         self.consultas = _ConsultasNamespace(self.http)

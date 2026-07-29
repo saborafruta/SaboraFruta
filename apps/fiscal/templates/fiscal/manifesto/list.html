@@ -51,11 +51,11 @@
     <div>
       <h3 class="font-semibold">Exportar XMLs fiscais</h3>
       <p class="text-sm text-gray-500 mt-1">
-        Baixe os arquivos XML oficiais em um ZIP organizado por emitidas, canceladas e inutilizadas.
+        A exportação automática usa os arquivos guardados pelo ERP e completa o que faltar pelos backups ou pela API da Focus.
       </p>
     </div>
     <form method="get" action="{% url 'fiscal:documento-saida-exportar-xml' %}"
-          class="grid sm:grid-cols-2 xl:grid-cols-[1fr_1fr_1.2fr_1fr_1.2fr_auto] gap-3 items-end">
+          class="grid sm:grid-cols-2 xl:grid-cols-4 gap-3 items-end">
       <div>
         <label class="block text-xs font-semibold uppercase text-gray-500 mb-1">Data inicial</label>
         <input type="date" name="data_ini" class="form-input">
@@ -93,8 +93,37 @@
           <option value="outras" {% if origem_export == 'outras' %}selected{% endif %}>Outras emissões</option>
         </select>
       </div>
-      <button type="submit" class="btn-primary justify-center">Baixar XMLs em ZIP</button>
+      <div>
+        <label class="block text-xs font-semibold uppercase text-gray-500 mb-1">Fonte</label>
+        <select name="fonte" class="form-select">
+          <option value="automatica">Automática: ERP + Focus</option>
+          <option value="erp">Somente arquivos do ERP</option>
+        </select>
+      </div>
+      <button type="submit" class="btn-primary justify-center">Baixar XMLs filtrados</button>
     </form>
+    <div class="border-t pt-3" style="border-color:var(--border-color, rgba(148,163,184,.25));">
+      <div class="flex flex-col xl:flex-row xl:items-end xl:justify-between gap-3">
+        <div>
+          <div class="text-sm font-semibold">Backup mensal direto da Focus</div>
+          <p class="text-xs text-gray-500 mt-1">
+            Baixa os pacotes oficiais disponíveis na Focus. Sem período, usa o backup mais recente; com datas, considera os meses selecionados e inclui todos os documentos do CNPJ.
+          </p>
+        </div>
+        <form method="get" action="{% url 'fiscal:documento-saida-backup-focus' %}"
+              class="grid sm:grid-cols-[1fr_1fr_auto] gap-3 items-end">
+          <div>
+            <label class="block text-xs font-semibold uppercase text-gray-500 mb-1">Mês inicial</label>
+            <input type="date" name="data_ini" class="form-input">
+          </div>
+          <div>
+            <label class="block text-xs font-semibold uppercase text-gray-500 mb-1">Mês final</label>
+            <input type="date" name="data_fim" class="form-input">
+          </div>
+          <button type="submit" class="btn-secondary justify-center">Baixar direto da Focus</button>
+        </form>
+      </div>
+    </div>
   </section>
 
   <div class="grid grid-cols-2 lg:grid-cols-5 gap-3">
