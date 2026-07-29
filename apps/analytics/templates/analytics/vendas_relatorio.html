@@ -61,8 +61,10 @@
     </div>
   </div>
 
-  {# Mesma cascata de logo do resto do sistema: a imagem da filial é upload
-     local e some em redeploy, então cai para a URL externa persistente. #}
+  {% comment %}
+    Mesma cascata de logo do resto do sistema: a imagem da filial é upload
+    local e some em redeploy, então cai para a URL externa persistente.
+  {% endcomment %}
   {% if parametros_sistema and parametros_sistema.logo_url %}
     <img class="rel-logo" src="{{ parametros_sistema.logo_url }}" alt="Logo"
          {% if empresa_logo_url %}onerror="this.onerror=null;this.src='{{ empresa_logo_url }}';"{% else %}onerror="this.style.display='none';"{% endif %}>
