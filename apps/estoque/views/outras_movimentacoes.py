@@ -1401,6 +1401,9 @@ class TransferenciaConferenciaDetailView(PermissaoRequiredMixin, View):
                     'quantidade_produto_recebido': request.POST.get(
                         prefixo + 'quantidade_produto_recebido'
                     ),
+                    'quantidade_devolvida': request.POST.get(
+                        prefixo + 'quantidade_devolvida'
+                    ),
                     'observacao': request.POST.get(prefixo + 'observacao'),
                 }
             from apps.estoque.services.conferencia_transferencia import (

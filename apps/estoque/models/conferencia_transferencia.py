@@ -104,6 +104,11 @@ class ItemConferenciaTransferencia(TimestampedModel):
         decimal_places=3,
         default=0,
     )
+    quantidade_devolvida = models.DecimalField(
+        max_digits=12,
+        decimal_places=3,
+        default=0,
+    )
     observacao = models.CharField(max_length=500, blank=True)
 
     class Meta:

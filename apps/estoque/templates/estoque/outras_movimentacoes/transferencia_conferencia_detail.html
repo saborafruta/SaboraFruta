@@ -55,6 +55,8 @@
   .conference-item[data-occurrence="trocado"] .received-field { display:none; }
   .conference-item:not([data-occurrence="trocado"]) .swap-field { display:none; }
   .conference-item[data-occurrence="devolvido"] .received-field { display:none; }
+  .return-field { display:none; }
+  .conference-item[data-occurrence="devolvido"] .return-field { display:block; }
   .conference-field label { display:block; margin-bottom:.3rem; color:#475569; font-size:.72rem; font-weight:750; text-transform:uppercase; }
   .dark .conference-field label { color:#94a3b8; }
   .conference-empty { padding:2rem; text-align:center; color:#64748b; }
@@ -161,6 +163,14 @@
                        value="{{ item.quantidade_produto_recebido|floatformat:'2u' }}"
                        {% if not pode_editar %}disabled{% endif %}>
               </div>
+              <div class="conference-field return-field">
+                <label>Quantidade a devolver</label>
+                <input class="form-input return-quantity" type="text" inputmode="decimal" data-decimal-places="2"
+                       name="item_{{ item.pk }}_quantidade_devolvida"
+                       value="{{ item.quantidade_devolvida|floatformat:'2u' }}"
+                       {% if not pode_editar %}disabled{% endif %}>
+                <p class="text-xs mt-1" style="color:#64748b;">O restante será confirmado como recebido.</p>
+              </div>
               <div class="conference-field observation-field">
                 <label>Motivo / observação</label>
                 <input class="form-input item-observation" type="text"
@@ -230,6 +240,7 @@
     const received = card.querySelector('.received-quantity');
     const replacementQty = card.querySelector('.replacement-quantity');
     const replacementProduct = card.querySelector('.replacement-product');
+    const returnQty = card.querySelector('.return-quantity');
     const observation = card.querySelector('.item-observation');
     const sent = Number(card.dataset.sent || 0).toFixed(2);
 
@@ -238,10 +249,16 @@
         received.value = sent;
         replacementQty.value = '0.00';
         replacementProduct.value = '';
+        returnQty.value = '0.00';
         observation.value = '';
-      } else if (occurrence === 'trocado' || occurrence === 'devolvido') {
+      } else if (occurrence === 'trocado') {
         received.value = '0.00';
-        if (occurrence === 'devolvido' && !observation.value) {
+      } else if (occurrence === 'devolvido') {
+        received.value = '0.00';
+        if (Number(returnQty.value || 0) <= 0) {
+          returnQty.value = Math.min(Number(sent), 1).toFixed(2);
+        }
+        if (!observation.value) {
           observation.value = 'Item devolvido à filial de origem';
         }
       }
@@ -251,6 +268,7 @@
     observation.required = occurrence !== 'ok';
     replacementProduct.required = occurrence === 'trocado';
     replacementQty.required = occurrence === 'trocado';
+    returnQty.required = occurrence === 'devolvido';
     card.classList.toggle('is-confirmed', checkbox.checked);
     updateCounter();
   }

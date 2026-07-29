@@ -191,6 +191,7 @@ def concluir_conferencia(*, conferencia_id, filial_destino, usuario, itens, obse
 
         produto_recebido = None
         quantidade_trocada = Decimal('0')
+        quantidade_devolvida = Decimal('0')
         item_devolvido = ocorrencia == ItemConferenciaTransferencia.Ocorrencia.DEVOLVIDO
         if ocorrencia == ItemConferenciaTransferencia.Ocorrencia.OK:
             recebida = item.quantidade_enviada
@@ -207,13 +208,23 @@ def concluir_conferencia(*, conferencia_id, filial_destino, usuario, itens, obse
             if not produto_recebido:
                 raise DadosInvalidosError('Selecione o produto recebido no lugar.')
         elif item_devolvido:
-            recebida = Decimal('0')
+            quantidade_devolvida = _decimal_positivo(
+                dados.get('quantidade_devolvida'),
+                f'Quantidade devolvida de {item.produto_enviado.descricao}',
+                permite_zero=False,
+            )
+            if quantidade_devolvida > item.quantidade_enviada:
+                raise DadosInvalidosError(
+                    f'A quantidade devolvida de {item.produto_enviado.descricao} '
+                    'nao pode superar a quantidade enviada.'
+                )
+            recebida = item.quantidade_enviada - quantidade_devolvida
             lote_destino = _lote_destino(item)
             MovimentacaoService.transferir_entre_filiais(
                 produto_id=item.produto_enviado_id,
                 filial_origem_id=filial_destino.pk,
                 filial_destino_id=conferencia.filial_origem_id,
-                quantidade=item.quantidade_enviada,
+                quantidade=quantidade_devolvida,
                 usuario_id=usuario.pk,
                 lote_id=lote_destino.pk if lote_destino else None,
                 observacao=(
@@ -270,6 +281,7 @@ def concluir_conferencia(*, conferencia_id, filial_destino, usuario, itens, obse
         item.ocorrencia = ocorrencia
         item.produto_recebido = produto_recebido
         item.quantidade_produto_recebido = quantidade_trocada
+        item.quantidade_devolvida = quantidade_devolvida
         item.observacao = observacao_item
         item.save()
         tem_divergencia = tem_divergencia or ocorrencia != ItemConferenciaTransferencia.Ocorrencia.OK

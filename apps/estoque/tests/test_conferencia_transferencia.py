@@ -276,7 +276,7 @@ class ConferenciaTransferenciaTests(TestCase):
         self.assertEqual(estoque_esperado.quantidade_atual, Decimal('0'))
         self.assertEqual(estoque_recebido.quantidade_atual, Decimal('5'))
 
-    def test_item_devolvido_retorna_estoque_para_filial_de_origem(self):
+    def test_devolucao_parcial_retorna_apenas_quantidade_informada(self):
         produto = self.criar_produto('Produto devolvido')
         conferencia = self.criar_transferencia(produto)
         item = conferencia.itens.get()
@@ -289,6 +289,7 @@ class ConferenciaTransferenciaTests(TestCase):
                 str(item.pk): {
                     'ocorrencia': 'devolvido',
                     'quantidade_recebida': '0',
+                    'quantidade_devolvida': '1',
                     'observacao': 'Embalagem danificada',
                 },
             },
@@ -304,12 +305,15 @@ class ConferenciaTransferenciaTests(TestCase):
             ConferenciaTransferencia.Status.COM_DIVERGENCIA,
         )
         self.assertEqual(item.ocorrencia, 'devolvido')
-        self.assertEqual(estoque_origem.quantidade_atual, Decimal('10'))
-        self.assertEqual(estoque_destino.quantidade_atual, Decimal('0'))
+        self.assertEqual(item.quantidade_recebida, Decimal('4'))
+        self.assertEqual(item.quantidade_devolvida, Decimal('1'))
+        self.assertEqual(estoque_origem.quantidade_atual, Decimal('6'))
+        self.assertEqual(estoque_destino.quantidade_atual, Decimal('4'))
         self.assertTrue(MovimentacaoEstoque.objects.filter(
             filial=self.destino,
             produto=produto,
             tipo_operacao=MovimentacaoEstoque.TipoOperacao.TRANSFERENCIA_SAIDA,
+            quantidade=Decimal('1'),
             documento_numero__startswith=f'DEV-{conferencia.pk}-',
         ).exists())
 
