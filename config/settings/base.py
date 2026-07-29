@@ -207,3 +207,33 @@ ERP_FOCUSNFE_WEBHOOK_TOKEN = env('FOCUSNFE_WEBHOOK_TOKEN', default='')
 SESSION_ENGINE = 'django.contrib.sessions.backends.db'
 SESSION_COOKIE_AGE = 60 * 60 * 8  # 8 horas
 
+
+# Logging — sem isso, uma excecao 500 nao tratada em producao (DEBUG=False)
+# simplesmente some: nao aparece no console/stdout, entao os logs do Railway
+# nao mostram nada util pra investigar. O handler abaixo garante que todo
+# traceback vai para stdout (capturado como log do deployment).
+LOGGING = {
+    'version': 1,
+    'disable_existing_loggers': False,
+    'handlers': {
+        'console': {
+            'class': 'logging.StreamHandler',
+        },
+    },
+    'root': {
+        'handlers': ['console'],
+        'level': 'INFO',
+    },
+    'loggers': {
+        'django': {
+            'handlers': ['console'],
+            'level': 'INFO',
+            'propagate': False,
+        },
+        'django.request': {
+            'handlers': ['console'],
+            'level': 'ERROR',
+            'propagate': False,
+        },
+    },
+}
