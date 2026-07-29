@@ -70,6 +70,19 @@
     </div>
   </div>
 
+  <!-- Filtro por cliente -->
+  <form method="get" class="no-print flex flex-wrap items-end gap-3">
+    <div>
+      <label class="block text-xs mb-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Cliente / Doc.</label>
+      <input type="text" name="q" value="{{ q }}" placeholder="Buscar por cliente..." class="input-field" style="width:260px;">
+    </div>
+    {% if status_filtro %}<input type="hidden" name="status" value="{{ status_filtro }}">{% endif %}
+    {% if data_ini %}<input type="hidden" name="data_ini" value="{{ data_ini }}">{% endif %}
+    {% if data_fim %}<input type="hidden" name="data_fim" value="{{ data_fim }}">{% endif %}
+    <button type="submit" class="btn-primary">Filtrar</button>
+    {% if q %}<a href="{% url 'financeiro:receber_relatorio' %}" class="btn-secondary">Limpar</a>{% endif %}
+  </form>
+
   <!-- Um bloco por cliente -->
   {% for g in clientes %}
   <div class="cli-card card p-0">

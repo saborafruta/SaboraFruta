@@ -230,6 +230,7 @@ class ContaReceberRelatorioView(PermissaoRequiredMixin, View):
             'clientes': clientes,
             'filial': filial,
             'q': q,
+            'status_filtro': status,
             'status_label': status_label,
             'data_ini': data_ini,
             'data_fim': data_fim,
