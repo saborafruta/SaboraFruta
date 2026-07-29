@@ -10,10 +10,15 @@
       <h2 class="text-2xl font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">Manifesto Eletronico de Documentos Fiscais</h2>
       <p class="text-sm mt-0.5" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Gestao dos MDF-e para transporte de cargas.</p>
     </div>
-    <a href="{% url 'logistica:mdfe-create' %}" class="btn-primary">
-      <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
-      Novo MDF-e
-    </a>
+    <div class="flex flex-wrap gap-2">
+      <a href="{% url 'estoque:transferencia-lojas' %}" class="btn-secondary">
+        Ver transferências
+      </a>
+      <a href="{% url 'logistica:mdfe-create' %}" class="btn-primary">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
+        Novo MDF-e
+      </a>
+    </div>
   </div>
 
   <!-- KPIs -->
@@ -155,7 +160,9 @@
             <svg class="w-8 h-8 mx-auto mb-2 opacity-30" fill="none" stroke="currentColor" viewBox="0 0 24 24" :style="temaClaro ? 'color:#94a3b8;' : 'color:#64748b;'">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
             </svg>
-            <p class="text-sm" :style="temaClaro ? 'color:#94a3b8;' : 'color:#64748b;'">Nenhum MDF-e emitido ainda.</p>
+            <p class="text-sm" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Nenhum MDF-e criado ainda.</p>
+            <p class="text-xs mt-1" :style="temaClaro ? 'color:#94a3b8;' : 'color:#64748b;'">Transferências bloqueadas ou aguardando NF-e ficam na tela de transferências.</p>
+            <a href="{% url 'estoque:transferencia-lojas' %}" class="btn-secondary mt-3">Ver transferências</a>
           </td>
         </tr>
         {% endfor %}
@@ -188,7 +195,8 @@
     </a>
     {% empty %}
     <div class="card p-8 text-center">
-      <p class="text-sm" :style="temaClaro ? 'color:#94a3b8;' : 'color:#64748b;'">Nenhum MDF-e encontrado.</p>
+      <p class="text-sm" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Nenhum MDF-e encontrado.</p>
+      <a href="{% url 'estoque:transferencia-lojas' %}" class="btn-secondary mt-3">Ver transferências</a>
     </div>
     {% endfor %}
   </div>

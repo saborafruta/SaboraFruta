@@ -701,6 +701,181 @@ class DevolucaoClienteApiView(PermissaoRequiredMixin, View):
 # Transferência entre lojas (multi-produto)
 # ────────────────────────────────────────────────────────────
 
+def _transferencias_para_listagem(filial, usuario, limite=500):
+    perfil = getattr(usuario, '_perfil_ativo', None) or usuario.perfil
+    is_admin = bool(usuario.is_superuser or perfil.is_admin)
+    movs = list(
+        MovimentacaoEstoque.objects
+        .filter(
+            filial=filial,
+            tipo_operacao=MovimentacaoEstoque.TipoOperacao.TRANSFERENCIA_SAIDA,
+        )
+        .exclude(documento_numero__startswith='EST-')
+        .select_related('produto', 'filial_destino', 'lote', 'documento_fiscal')
+        .order_by('-data_movimentacao')[:limite]
+    )
+
+    from apps.logistica.models import MDFe
+
+    documento_ids = {
+        mov.documento_fiscal_id for mov in movs if mov.documento_fiscal_id
+    }
+    mdfes_por_documento = {
+        mdfe.documento_fiscal_id: mdfe
+        for mdfe in MDFe.objects.for_filial(filial).filter(
+            documento_fiscal_id__in=documento_ids,
+        )
+    }
+
+    grupos = {}
+    ordem = []
+    for mov in movs:
+        chave = mov.documento_numero or f'MOV-{mov.pk}'
+        if chave not in grupos:
+            doc = mov.documento_fiscal
+            nota = None
+            mdfe_info = None
+            if doc:
+                nota = {
+                    'id': doc.pk,
+                    'numero': doc.numero,
+                    'serie': doc.serie,
+                    'status': doc.status,
+                    'status_label': doc.get_status_display(),
+                    'codigo_status_sefaz': doc.codigo_status_sefaz,
+                    'mensagem_sefaz': doc.mensagem_sefaz,
+                    'chave': doc.chave or '',
+                    'protocolo': doc.protocolo,
+                    'pdf_danfe_url': doc.pdf_danfe_url,
+                }
+                mdfe = mdfes_por_documento.get(doc.pk)
+                if mdfe:
+                    mdfe_info = {
+                        'id': mdfe.pk,
+                        'numero': mdfe.numero,
+                        'status': mdfe.status,
+                        'status_label': mdfe.get_status_display(),
+                        'mensagem_sefaz': mdfe.mensagem_sefaz,
+                        'url': reverse(
+                            'logistica:mdfe-detail', kwargs={'pk': mdfe.pk},
+                        ),
+                    }
+            nota_ativa = bool(
+                nota and nota['status'] == StatusDocumentoFiscal.AUTORIZADA
+            )
+            grupos[chave] = {
+                'chave': chave,
+                'filial_destino_nome': (
+                    mov.filial_destino.nome_fantasia
+                    or mov.filial_destino.razao_social
+                ) if mov.filial_destino else '—',
+                'data': mov.data_movimentacao,
+                'observacao': mov.observacao,
+                'cancelada': mov.transferencia_cancelada,
+                'nota': nota,
+                'mdfe': mdfe_info,
+                'mdfe_create_url': (
+                    f"{reverse('logistica:mdfe-create')}?nfe_documento_id={doc.pk}"
+                    if doc and nota_ativa and not mdfe_info
+                    else ''
+                ),
+                'pode_emitir_nota': (
+                    not nota_ativa
+                    and not (
+                        nota
+                        and nota['status'] == StatusDocumentoFiscal.PROCESSANDO
+                    )
+                ),
+                'pode_cancelar_nota': nota_ativa,
+                'pode_cancelar_transferencia': (
+                    not mov.transferencia_cancelada and not nota_ativa
+                ),
+                'pode_excluir': is_admin and not nota_ativa,
+                'itens': [],
+            }
+            ordem.append(chave)
+        grupos[chave]['itens'].append({
+            'mov_saida_id': mov.pk,
+            'produto_nome': mov.produto.descricao,
+            'lote_nome': mov.lote.numero_lote if mov.lote_id else '',
+            'quantidade': str(mov.quantidade),
+        })
+
+    return [grupos[chave] for chave in ordem], is_admin
+
+
+class TransferenciaLojaListView(PermissaoRequiredMixin, View):
+    """Lista transferências e centraliza seu acompanhamento fiscal."""
+
+    permissao_modulo = 'estoque'
+    permissao_acao = 'ver'
+
+    def get(self, request):
+        transferencias, is_admin = _transferencias_para_listagem(
+            request.filial_ativa, request.user,
+        )
+        q = (request.GET.get('q') or '').strip().casefold()
+        status = (request.GET.get('status') or '').strip()
+
+        if q:
+            transferencias = [
+                item for item in transferencias
+                if q in item['chave'].casefold()
+                or q in item['filial_destino_nome'].casefold()
+                or any(
+                    q in produto['produto_nome'].casefold()
+                    for produto in item['itens']
+                )
+                or (
+                    item['nota']
+                    and q in str(item['nota']['numero']).casefold()
+                )
+            ]
+        if status:
+            def corresponde(item):
+                if status == 'cancelada':
+                    return item['cancelada']
+                if status == 'sem_nota':
+                    return not item['nota'] and not item['cancelada']
+                if status == 'com_mdfe':
+                    return bool(item['mdfe'])
+                return bool(
+                    item['nota']
+                    and item['nota']['status'] == status
+                    and not item['cancelada']
+                )
+
+            transferencias = [item for item in transferencias if corresponde(item)]
+
+        totais = {
+            'total': len(transferencias),
+            'com_nfe': sum(bool(item['nota']) for item in transferencias),
+            'com_mdfe': sum(bool(item['mdfe']) for item in transferencias),
+            'com_erro': sum(
+                bool(
+                    item['nota']
+                    and item['nota']['status'] in {
+                        StatusDocumentoFiscal.REJEITADA,
+                        StatusDocumentoFiscal.DENEGADA,
+                    }
+                )
+                for item in transferencias
+            ),
+        }
+        return render(
+            request,
+            'estoque/outras_movimentacoes/transferencia_lojas_list.html',
+            {
+                'title': 'Transferências entre Lojas',
+                'transferencias': transferencias,
+                'is_admin': is_admin,
+                'q': request.GET.get('q', ''),
+                'status_filtro': status,
+                'totais': totais,
+            },
+        )
+
+
 class TransferenciaLojaView(PermissaoRequiredMixin, View):
     """Tela de transferência entre lojas com suporte a múltiplos produtos."""
 
@@ -760,7 +935,7 @@ class TransferenciaLojaView(PermissaoRequiredMixin, View):
             ),
             'motoristas_json': motoristas_json,
             'veiculos_json': veiculos_json,
-            'cancel_url': reverse('estoque:outras-mov-hub'),
+            'cancel_url': reverse('estoque:transferencia-lojas'),
         })
 
 

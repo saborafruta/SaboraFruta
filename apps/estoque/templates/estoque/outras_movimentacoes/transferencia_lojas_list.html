@@ -1,0 +1,173 @@
+{% extends "_base.html" %}
+{% block title %}Transferências entre Lojas{% endblock %}
+{% block page_title %}Transferências entre Lojas{% endblock %}
+{% block content %}
+<div class="space-y-5" x-data="{ ocupada: false }">
+  <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+    <div>
+      <h2 class="text-2xl font-semibold" :style="temaClaro ? 'color:#111827' : 'color:#f8fafc'">Transferências entre Lojas</h2>
+      <p class="text-sm mt-1" :style="temaClaro ? 'color:#64748b' : 'color:#94a3b8'">Acompanhe estoque, NF-e e MDF-e em um só lugar.</p>
+    </div>
+    <a href="{% url 'estoque:transferencia-lojas-create' %}" class="btn-primary">
+      <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
+      Nova transferência
+    </a>
+  </div>
+
+  <div class="grid grid-cols-2 lg:grid-cols-4 gap-3">
+    <div class="card p-4"><p class="text-xs uppercase font-semibold" :style="temaClaro ? 'color:#64748b' : 'color:#94a3b8'">Transferências</p><p class="text-2xl font-bold mt-1" :style="temaClaro ? 'color:#111827' : 'color:#f8fafc'">{{ totais.total }}</p></div>
+    <div class="card p-4"><p class="text-xs uppercase font-semibold" :style="temaClaro ? 'color:#64748b' : 'color:#94a3b8'">Com NF-e</p><p class="text-2xl font-bold mt-1" style="color:#2563eb">{{ totais.com_nfe }}</p></div>
+    <div class="card p-4"><p class="text-xs uppercase font-semibold" :style="temaClaro ? 'color:#64748b' : 'color:#94a3b8'">Com MDF-e</p><p class="text-2xl font-bold mt-1" style="color:#059669">{{ totais.com_mdfe }}</p></div>
+    <div class="card p-4"><p class="text-xs uppercase font-semibold" :style="temaClaro ? 'color:#64748b' : 'color:#94a3b8'">Com erro fiscal</p><p class="text-2xl font-bold mt-1" style="color:#dc2626">{{ totais.com_erro }}</p></div>
+  </div>
+
+  <form method="get" class="card p-4">
+    <div class="grid md:grid-cols-[1fr_220px_auto_auto] gap-3">
+      <input class="form-input" name="q" value="{{ q }}" placeholder="Buscar transferência, destino, produto ou NF-e">
+      <select class="form-input" name="status">
+        <option value="">Todos os status</option>
+        <option value="sem_nota" {% if status_filtro == "sem_nota" %}selected{% endif %}>Sem NF-e</option>
+        <option value="processando" {% if status_filtro == "processando" %}selected{% endif %}>NF-e processando</option>
+        <option value="autorizada" {% if status_filtro == "autorizada" %}selected{% endif %}>NF-e autorizada</option>
+        <option value="rejeitada" {% if status_filtro == "rejeitada" %}selected{% endif %}>NF-e rejeitada</option>
+        <option value="com_mdfe" {% if status_filtro == "com_mdfe" %}selected{% endif %}>Com MDF-e</option>
+        <option value="cancelada" {% if status_filtro == "cancelada" %}selected{% endif %}>Transferência cancelada</option>
+      </select>
+      <button class="btn-secondary justify-center" type="submit">Filtrar</button>
+      <a class="btn-secondary justify-center" href="{% url 'estoque:transferencia-lojas' %}">Limpar</a>
+    </div>
+  </form>
+
+  <div class="space-y-3">
+    {% for item in transferencias %}
+    <article class="card overflow-hidden">
+      <div class="p-4 grid lg:grid-cols-[180px_1fr_230px_220px] gap-4 items-start">
+        <div>
+          <p class="font-semibold text-sm" :style="temaClaro ? 'color:#111827' : 'color:#f8fafc'">{{ item.chave }}</p>
+          <p class="text-xs mt-1" :style="temaClaro ? 'color:#64748b' : 'color:#94a3b8'">{{ item.data|date:"d/m/Y H:i" }}</p>
+          {% if item.cancelada %}<span class="soft-pill is-red mt-2">Transferência cancelada</span>{% endif %}
+        </div>
+
+        <div>
+          <p class="text-xs uppercase font-semibold" :style="temaClaro ? 'color:#64748b' : 'color:#94a3b8'">Destino</p>
+          <p class="font-semibold mt-1" :style="temaClaro ? 'color:#111827' : 'color:#f8fafc'">{{ item.filial_destino_nome }}</p>
+          <details class="mt-2">
+            <summary class="text-sm cursor-pointer" style="color:#2563eb">{{ item.itens|length }} produto{{ item.itens|length|pluralize }}</summary>
+            <div class="mt-2 space-y-1">
+              {% for produto in item.itens %}
+              <p class="text-xs" :style="temaClaro ? 'color:#374151' : 'color:#d1d5db'">{{ produto.produto_nome }} · {{ produto.quantidade }}{% if produto.lote_nome %} · lote {{ produto.lote_nome }}{% endif %}</p>
+              {% endfor %}
+            </div>
+          </details>
+        </div>
+
+        <div>
+          <p class="text-xs uppercase font-semibold" :style="temaClaro ? 'color:#64748b' : 'color:#94a3b8'">NF-e de transferência</p>
+          {% if item.nota %}
+            <div class="flex items-center gap-2 mt-1">
+              <strong :style="temaClaro ? 'color:#111827' : 'color:#f8fafc'">Nº {{ item.nota.numero }}</strong>
+              {% if item.nota.status == "autorizada" %}<span class="soft-pill is-green">{{ item.nota.status_label }}</span>
+              {% elif item.nota.status == "rejeitada" or item.nota.status == "denegada" %}<span class="soft-pill is-red">{{ item.nota.status_label }}</span>
+              {% else %}<span class="soft-pill is-slate">{{ item.nota.status_label }}</span>{% endif %}
+            </div>
+            {% if item.nota.mensagem_sefaz %}
+            <p class="text-xs mt-2 break-words" style="color:#dc2626">
+              {% if item.nota.codigo_status_sefaz %}{{ item.nota.codigo_status_sefaz }} · {% endif %}{{ item.nota.mensagem_sefaz }}
+            </p>
+            {% endif %}
+          {% else %}
+            <p class="text-sm mt-1" :style="temaClaro ? 'color:#64748b' : 'color:#94a3b8'">Não emitida</p>
+          {% endif %}
+        </div>
+
+        <div>
+          <p class="text-xs uppercase font-semibold" :style="temaClaro ? 'color:#64748b' : 'color:#94a3b8'">MDF-e</p>
+          {% if item.mdfe %}
+            <a href="{{ item.mdfe.url }}" class="inline-flex items-center gap-2 mt-1 font-semibold" style="color:#2563eb">Nº {{ item.mdfe.numero }} · {{ item.mdfe.status_label }}</a>
+            {% if item.mdfe.mensagem_sefaz %}<p class="text-xs mt-2" style="color:#dc2626">{{ item.mdfe.mensagem_sefaz }}</p>{% endif %}
+          {% elif item.nota.status == "rejeitada" or item.nota.status == "denegada" %}
+            <p class="text-xs mt-1" style="color:#dc2626">Não gerado: corrija a NF-e primeiro.</p>
+          {% elif item.nota.status == "processando" or item.nota.status == "pendente" %}
+            <p class="text-xs mt-1" style="color:#d97706">Aguardando autorização da NF-e.</p>
+          {% elif item.mdfe_create_url %}
+            <a href="{{ item.mdfe_create_url }}" class="text-sm font-semibold mt-1 inline-block" style="color:#2563eb">Gerar MDF-e</a>
+          {% else %}
+            <p class="text-sm mt-1" :style="temaClaro ? 'color:#64748b' : 'color:#94a3b8'">Não gerado</p>
+          {% endif %}
+        </div>
+      </div>
+
+      <div class="px-4 py-3 flex flex-wrap gap-2 border-t" :style="temaClaro ? 'border-color:#e5e7eb; background:#f8fafc' : 'border-color:#2a2a2e; background:#18181a'">
+        {% if item.nota and item.nota.status == "processando" or item.nota.status == "pendente" %}
+        <button type="button" class="btn-secondary text-xs" :disabled="ocupada" @click="acaoFiscal('consultar', '{{ item.chave|escapejs }}')">Consultar SEFAZ</button>
+        {% endif %}
+        {% if item.pode_emitir_nota and not item.cancelada %}
+        <button type="button" class="btn-primary text-xs" :disabled="ocupada" @click="reemitir('{{ item.chave|escapejs }}', [{% for produto in item.itens %}{{ produto.mov_saida_id }}{% if not forloop.last %},{% endif %}{% endfor %}])">{% if item.nota %}Reemitir NF-e{% else %}Emitir NF-e{% endif %}</button>
+        {% endif %}
+        {% if item.nota.pdf_danfe_url %}<a class="btn-secondary text-xs" href="{{ item.nota.pdf_danfe_url }}" target="_blank" rel="noopener">Abrir DANFE</a>{% endif %}
+        {% if item.mdfe %}<a class="btn-secondary text-xs" href="{{ item.mdfe.url }}">Abrir MDF-e</a>{% endif %}
+        {% if item.pode_cancelar_nota %}<button type="button" class="btn-secondary text-xs" @click="cancelarNfe('{{ item.chave|escapejs }}')">Cancelar NF-e</button>{% endif %}
+        {% if item.pode_cancelar_transferencia %}<button type="button" class="btn-secondary text-xs" @click="cancelarTransferencia('{{ item.chave|escapejs }}')">Cancelar transferência</button>{% endif %}
+        {% if item.pode_excluir %}<button type="button" class="btn-secondary text-xs" style="color:#dc2626" @click="excluir('{{ item.chave|escapejs }}')">Excluir</button>{% endif %}
+      </div>
+    </article>
+    {% empty %}
+    <div class="card p-12 text-center">
+      <p class="font-semibold" :style="temaClaro ? 'color:#111827' : 'color:#f8fafc'">Nenhuma transferência encontrada.</p>
+      <a href="{% url 'estoque:transferencia-lojas-create' %}" class="btn-primary mt-4">Criar primeira transferência</a>
+    </div>
+    {% endfor %}
+  </div>
+</div>
+
+<script>
+function csrfToken() {
+  return document.cookie.split('; ').find(v => v.startsWith('csrftoken='))?.split('=')[1] || '';
+}
+async function enviar(url, body) {
+  const response = await fetch(url, {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json', 'X-CSRFToken': csrfToken()},
+    body: JSON.stringify(body)
+  });
+  const data = await response.json();
+  if (!response.ok || data.erro) throw new Error(data.erro || 'Não foi possível concluir a ação.');
+  return data;
+}
+async function reemitir(chave, ids) {
+  if (!confirm('Emitir uma nova NF-e para esta transferência?')) return;
+  try {
+    await enviar('{% url "estoque:transferencia-lojas-reemitir-nfe" %}', {mov_saida_ids: ids});
+    location.reload();
+  } catch (error) { alert(error.message); }
+}
+async function acaoFiscal(acao, chave) {
+  try {
+    await enviar('{% url "estoque:transferencia-lojas-consultar-nfe" %}', {documento_numero: chave});
+    location.reload();
+  } catch (error) { alert(error.message); }
+}
+async function cancelarNfe(chave) {
+  const justificativa = prompt('Informe a justificativa do cancelamento da NF-e (mínimo 15 caracteres):');
+  if (!justificativa) return;
+  try {
+    await enviar('{% url "estoque:transferencia-lojas-cancelar-nfe" %}', {documento_numero: chave, justificativa});
+    location.reload();
+  } catch (error) { alert(error.message); }
+}
+async function cancelarTransferencia(chave) {
+  if (!confirm('Cancelar e estornar esta transferência de estoque?')) return;
+  try {
+    await enviar('{% url "estoque:transferencia-lojas-cancelar" %}', {documento_numero: chave});
+    location.reload();
+  } catch (error) { alert(error.message); }
+}
+async function excluir(chave) {
+  if (!confirm('Excluir definitivamente esta transferência? Esta ação não pode ser desfeita.')) return;
+  try {
+    await enviar('{% url "estoque:transferencia-lojas-excluir" %}', {documento_numero: chave});
+    location.reload();
+  } catch (error) { alert(error.message); }
+}
+</script>
+{% endblock %}
