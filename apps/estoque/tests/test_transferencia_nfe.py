@@ -51,3 +51,4 @@ class TransferenciaNFePayloadTests(SimpleTestCase):
         self.assertEqual(payload["inscricao_estadual_destinatario"], "207184704")
         self.assertEqual(payload["logradouro_destinatario"], "Avenida Capitao Mor Gouveia")
         self.assertEqual(payload["codigo_municipio_destinatario"], "2408102")
+        self.assertEqual(payload["modalidade_frete"], "3")

@@ -182,7 +182,7 @@ def construir_payload_transferencia(
         "consumidor_final": 0,
         "presenca_comprador": "9",      # 9 = operação não presencial (outros)
         "local_destino": local_destino,
-        "modalidade_frete": "0",        # 0 = por conta do emitente
+        "modalidade_frete": "3",        # 3 = transporte proprio por conta do remetente
         "items": items,
         # 90 = Sem pagamento (transferência não tem cobrança financeira)
         "formas_pagamento": [{"forma_pagamento": "90", "valor_pagamento": 0.0}],
@@ -309,7 +309,7 @@ def emitir_nfe_transferencia(
         natureza_operacao_descricao="Transferencia de mercadoria",
         tipo_operacao="1",
         finalidade_nfe=1,
-        modalidade_frete=0,
+        modalidade_frete=3,
         emitente_cnpj=filial_origem.cnpj,
         destinatario_tipo="filial",
         destinatario_id=filial_destino.pk,
