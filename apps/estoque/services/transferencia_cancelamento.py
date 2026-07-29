@@ -83,6 +83,19 @@ def cancelar_transferencia(documento_numero: str, filial_origem, usuario) -> lis
     if not filial_destino:
         raise DadosInvalidosError('Filial de destino não identificada nesta transferência.')
 
+    from apps.estoque.models import ConferenciaTransferencia
+    conferencia = ConferenciaTransferencia.objects.filter(
+        documento_numero=documento_numero,
+    ).first()
+    if (
+        conferencia
+        and conferencia.status == ConferenciaTransferencia.Status.COM_DIVERGENCIA
+    ):
+        raise DadosInvalidosError(
+            'Esta transferência foi conferida com divergência. '
+            'Estorne a conferência antes de cancelar a transferência.'
+        )
+
     documento_estorno = _documento_estorno(documento_numero)
     movs_reversao: list[MovimentacaoEstoque] = []
     for mov in movs_saida:
@@ -122,7 +135,6 @@ def cancelar_transferencia(documento_numero: str, filial_origem, usuario) -> lis
         transferencia_cancelada_por=usuario,
     )
 
-    from apps.estoque.models import ConferenciaTransferencia
     ConferenciaTransferencia.objects.filter(
         documento_numero=documento_numero,
     ).exclude(

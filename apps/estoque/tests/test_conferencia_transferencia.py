@@ -11,6 +11,7 @@ from apps.core.models import (
     PerfilAcesso,
     Usuario,
 )
+from apps.core.services.exceptions import DadosInvalidosError
 from apps.core.views.notificacoes import NotificacaoAbrirView
 from apps.estoque.models import (
     ConferenciaTransferencia,
@@ -26,6 +27,7 @@ from apps.core.services.notificacao_service import (
     reabrir_notificacao_transferencia,
 )
 from apps.estoque.services.movimentacao_service import MovimentacaoService
+from apps.estoque.services.transferencia_cancelamento import cancelar_transferencia
 from apps.produtos.models import (
     Produto,
     ProdutoFilial,
@@ -203,6 +205,16 @@ class ConferenciaTransferenciaTests(TestCase):
             tipo_operacao=MovimentacaoEstoque.TipoOperacao.AJUSTE_MENOS,
             quantidade=Decimal('2'),
         ).exists())
+
+        with self.assertRaisesMessage(
+            DadosInvalidosError,
+            'Estorne a conferência antes de cancelar',
+        ):
+            cancelar_transferencia(
+                conferencia.documento_numero,
+                self.origem,
+                self.usuario,
+            )
 
     def test_recebimento_correto_conclui_sem_ajuste(self):
         produto = self.criar_produto('Produto correto')
