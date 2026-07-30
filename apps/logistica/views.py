@@ -1,4 +1,5 @@
 import json
+import logging
 from datetime import timedelta
 from decimal import Decimal, InvalidOperation
 from xml.etree import ElementTree
@@ -48,6 +49,9 @@ from apps.logistica.models import (
     PedidoExpedicao,
     RomaneioCarga,
 )
+
+
+logger = logging.getLogger(__name__)
 
 
 def _filial(request):
@@ -1850,7 +1854,23 @@ class MDFeEmitirView(PermissaoRequiredMixin, View):
             emitir_mdfe(mdfe, request.user)
             messages.success(request, "MDF-e enviado para autorização na SEFAZ.")
         except (DomainError, FocusNFeError, ValueError) as exc:
+            mdfe.mensagem_sefaz = str(exc)[:2000]
+            mdfe.save(update_fields=["mensagem_sefaz", "updated_at"])
             messages.error(request, f"Erro ao emitir MDF-e: {exc}")
+        except Exception as exc:
+            logger.exception(
+                "Falha inesperada ao emitir MDF-e %s da filial %s",
+                mdfe.pk,
+                mdfe.filial_id,
+            )
+            detalhe = str(exc).strip() or exc.__class__.__name__
+            mensagem = (
+                "Não foi possível concluir a emissão do MDF-e. "
+                f"Detalhe técnico: {detalhe}"
+            )
+            mdfe.mensagem_sefaz = mensagem[:2000]
+            mdfe.save(update_fields=["mensagem_sefaz", "updated_at"])
+            messages.error(request, mensagem)
         return redirect("logistica:mdfe-detail", pk=mdfe.pk)
 
 

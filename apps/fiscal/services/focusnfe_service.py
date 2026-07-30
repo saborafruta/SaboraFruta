@@ -282,6 +282,12 @@ class FocusNFeService:
         # status inicial: processando, salvo se o retorno já trouxer algo definitivo
         if documento.status == StatusDocumentoFiscal.PENDENTE:
             documento.status = StatusDocumentoFiscal.PROCESSANDO
+        if retorno is not None and not isinstance(retorno, dict):
+            raise FocusNFeProcessingError(
+                "A Focus recebeu o documento, mas devolveu uma resposta inesperada. "
+                "Consulte o documento antes de tentar emitir novamente.",
+                response_text=str(retorno)[:2000],
+            )
         return self.aplicar_retorno(documento, retorno or {})
 
     # ------------------------------------------------------------- consulta

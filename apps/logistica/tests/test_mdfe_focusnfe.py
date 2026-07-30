@@ -9,6 +9,8 @@ from django.utils import timezone
 from apps.core.services.exceptions import DadosInvalidosError
 from apps.estoque.services.transferencia_nfe import _cfop_transferencia
 from apps.fiscal.integrations.focusnfe.resources.mdfe import MDFeResource
+from apps.fiscal.integrations.focusnfe.exceptions import FocusNFeProcessingError
+from apps.fiscal.services.focusnfe_service import FocusNFeService
 from apps.financeiro.constants.enums import StatusDocumentoFiscal
 from apps.logistica.services.mdfe_focusnfe import (
     _validar_transporte,
@@ -275,3 +277,20 @@ class MDFeResourceTests(SimpleTestCase):
             "/v2/mdfe/df-10/inclusao_dfe",
             json_body={"chave_nfe": "1" * 44},
         )
+
+    def test_emissao_rejeita_resposta_nao_estruturada_sem_gerar_attribute_error(self):
+        client = Mock()
+        client.mdfe.endpoint = "mdfe"
+        client.mdfe.autorizar.return_value = "resposta inesperada"
+        documento = SimpleNamespace(
+            pk=10,
+            tipo_documento="mdfe",
+            status=StatusDocumentoFiscal.PENDENTE,
+            tentativas_envio=0,
+        )
+        service = FocusNFeService(client=client)
+
+        with patch.object(service, "_registrar_log"), self.assertRaises(
+            FocusNFeProcessingError
+        ):
+            service.emitir(documento, {"numero": 1})
