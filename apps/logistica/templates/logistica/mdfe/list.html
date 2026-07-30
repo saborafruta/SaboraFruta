@@ -119,8 +119,11 @@
           <td class="px-4 py-3 text-sm" :style="temaClaro ? 'color:#374151;' : 'color:#d1d5db;'">{{ mdfe.data_emissao|date:"d/m/Y" }}</td>
           <td class="px-4 py-3">
             {% if mdfe.status == 'rascunho' %}<span class="soft-pill is-slate">{{ mdfe.get_status_display }}</span>
+            {% elif mdfe.status == 'aguardando_nfe' %}<span class="soft-pill is-amber">{{ mdfe.get_status_display }}</span>
+            {% elif mdfe.status == 'processando' %}<span class="soft-pill is-blue">{{ mdfe.get_status_display }}</span>
             {% elif mdfe.status == 'autorizado' %}<span class="soft-pill is-green">{{ mdfe.get_status_display }}</span>
             {% elif mdfe.status == 'encerrado' %}<span class="soft-pill is-blue">{{ mdfe.get_status_display }}</span>
+            {% elif mdfe.status == 'rejeitado' %}<span class="soft-pill is-red">{{ mdfe.get_status_display }}</span>
             {% elif mdfe.status == 'cancelado' %}<span class="soft-pill is-red">{{ mdfe.get_status_display }}</span>
             {% else %}<span class="soft-pill is-slate">{{ mdfe.get_status_display }}</span>{% endif %}
           </td>
@@ -135,22 +138,26 @@
           </td>
           <td class="px-4 py-3 text-right text-sm" :style="temaClaro ? 'color:#374151;' : 'color:#d1d5db;'">{{ mdfe.qtd_documentos }}</td>
           <td class="px-4 py-3">
-            <div class="flex items-center justify-end gap-0.5">
-              <a href="{% url 'logistica:mdfe-detail' mdfe.pk %}" title="Visualizar"
-                 class="p-1.5 rounded" :style="temaClaro ? 'color:#555;' : 'color:#888;'"
-                 onmouseover="this.style.background=temaClaro?'#f0f0f0':'#1a1a1a'" onmouseout="this.style.background=''">
-                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/>
-                </svg>
-              </a>
-              <a href="{% url 'logistica:mdfe-update' mdfe.pk %}" title="Editar"
-                 class="p-1.5 rounded" :style="temaClaro ? 'color:#555;' : 'color:#888;'"
-                 onmouseover="this.style.background=temaClaro?'#f0f0f0':'#1a1a1a'" onmouseout="this.style.background=''">
-                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/>
-                </svg>
-              </a>
+            <div class="flex items-center justify-end gap-1.5">
+              <a href="{% url 'logistica:mdfe-detail' mdfe.pk %}" class="btn-secondary text-xs px-2.5 py-1.5">Ver</a>
+              {% if mdfe.status == 'rascunho' or mdfe.status == 'aguardando_nfe' %}
+                <form method="post" action="{% url 'logistica:mdfe-emitir' mdfe.pk %}">
+                  {% csrf_token %}
+                  <button type="submit" class="btn-primary text-xs px-2.5 py-1.5">Emitir</button>
+                </form>
+              {% elif mdfe.status == 'rejeitado' %}
+                <form method="post" action="{% url 'logistica:mdfe-emitir' mdfe.pk %}">
+                  {% csrf_token %}
+                  <button type="submit" class="btn-primary text-xs px-2.5 py-1.5">Reemitir</button>
+                </form>
+              {% elif mdfe.status == 'processando' %}
+                <form method="post" action="{% url 'logistica:mdfe-consultar' mdfe.pk %}">
+                  {% csrf_token %}
+                  <button type="submit" class="btn-primary text-xs px-2.5 py-1.5">Consultar</button>
+                </form>
+              {% elif mdfe.status == 'autorizado' or mdfe.status == 'encerrado' %}
+                <a href="{% url 'logistica:mdfe-damdfe' mdfe.pk %}" target="_blank" class="btn-primary text-xs px-2.5 py-1.5">Abrir DAMDFE</a>
+              {% endif %}
             </div>
           </td>
         </tr>
@@ -173,7 +180,7 @@
   <!-- Mobile cards -->
   <div class="md:hidden space-y-3">
     {% for mdfe in mdfes %}
-    <a href="{% url 'logistica:mdfe-detail' mdfe.pk %}" class="card p-4 block">
+    <div class="card p-4">
       <div class="flex items-start justify-between gap-2">
         <div>
           <span class="font-semibold text-sm" :style="temaClaro ? 'color:#2563eb;' : 'color:#60a5fa;'">#{{ mdfe.numero|stringformat:"06d" }}</span>
@@ -182,8 +189,11 @@
         </div>
         <div class="text-right flex-shrink-0">
           {% if mdfe.status == 'rascunho' %}<span class="soft-pill is-slate">{{ mdfe.get_status_display }}</span>
+          {% elif mdfe.status == 'aguardando_nfe' %}<span class="soft-pill is-amber">{{ mdfe.get_status_display }}</span>
+          {% elif mdfe.status == 'processando' %}<span class="soft-pill is-blue">{{ mdfe.get_status_display }}</span>
           {% elif mdfe.status == 'autorizado' %}<span class="soft-pill is-green">{{ mdfe.get_status_display }}</span>
           {% elif mdfe.status == 'encerrado' %}<span class="soft-pill is-blue">{{ mdfe.get_status_display }}</span>
+          {% elif mdfe.status == 'rejeitado' %}<span class="soft-pill is-red">{{ mdfe.get_status_display }}</span>
           {% elif mdfe.status == 'cancelado' %}<span class="soft-pill is-red">{{ mdfe.get_status_display }}</span>
           {% else %}<span class="soft-pill is-slate">{{ mdfe.get_status_display }}</span>{% endif %}
         </div>
@@ -192,7 +202,23 @@
         <span class="text-xs" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">{{ mdfe.data_emissao|date:"d/m/Y" }} &middot; {{ mdfe.get_modal_display }}</span>
         <span class="text-xs" :style="temaClaro ? 'color:#374151;' : 'color:#d1d5db;'">{{ mdfe.qtd_documentos }} doc{{ mdfe.qtd_documentos|pluralize }}</span>
       </div>
-    </a>
+      <div class="flex items-center gap-2 mt-3">
+        <a href="{% url 'logistica:mdfe-detail' mdfe.pk %}" class="btn-secondary text-xs flex-1">Ver</a>
+        {% if mdfe.status == 'rascunho' or mdfe.status == 'aguardando_nfe' or mdfe.status == 'rejeitado' %}
+          <form method="post" action="{% url 'logistica:mdfe-emitir' mdfe.pk %}" class="flex-1">
+            {% csrf_token %}
+            <button type="submit" class="btn-primary text-xs w-full">{% if mdfe.status == 'rejeitado' %}Reemitir{% else %}Emitir{% endif %}</button>
+          </form>
+        {% elif mdfe.status == 'processando' %}
+          <form method="post" action="{% url 'logistica:mdfe-consultar' mdfe.pk %}" class="flex-1">
+            {% csrf_token %}
+            <button type="submit" class="btn-primary text-xs w-full">Consultar</button>
+          </form>
+        {% elif mdfe.status == 'autorizado' or mdfe.status == 'encerrado' %}
+          <a href="{% url 'logistica:mdfe-damdfe' mdfe.pk %}" target="_blank" class="btn-primary text-xs flex-1">Abrir DAMDFE</a>
+        {% endif %}
+      </div>
+    </div>
     {% empty %}
     <div class="card p-8 text-center">
       <p class="text-sm" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Nenhum MDF-e encontrado.</p>

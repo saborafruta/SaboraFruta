@@ -18,6 +18,7 @@ from apps.logistica.services.mdfe_focusnfe import (
     _preparar_reemissao,
     _validar_transporte,
     construir_payload_mdfe,
+    sincronizar_mdfe,
 )
 from apps.logistica.views import (
     _dados_destino_nfe,
@@ -28,6 +29,35 @@ from apps.logistica.views import (
 
 
 class TransferenciaFiscalTests(SimpleTestCase):
+    def test_sincroniza_mdfe_com_documento_fiscal_autorizado(self):
+        autorizado_em = timezone.now()
+        documento = SimpleNamespace(
+            status=StatusDocumentoFiscal.AUTORIZADA,
+            chave="2" * 44,
+            protocolo="924260003004634",
+            data_autorizacao=autorizado_em,
+            data_cancelamento=None,
+            mensagem_sefaz="100 - Autorizado o uso do MDF-e",
+        )
+        mdfe = SimpleNamespace(
+            documento_fiscal=documento,
+            status="rejeitado",
+            chave_acesso="",
+            protocolo_autorizacao="",
+            data_autorizacao=None,
+            data_cancelamento=None,
+            mensagem_sefaz="Rejeitado",
+            save=Mock(),
+        )
+
+        sincronizar_mdfe(mdfe)
+
+        self.assertEqual(mdfe.status, "autorizado")
+        self.assertEqual(mdfe.chave_acesso, "2" * 44)
+        self.assertEqual(mdfe.protocolo_autorizacao, "924260003004634")
+        self.assertEqual(mdfe.data_autorizacao, autorizado_em)
+        mdfe.save.assert_called_once()
+
     def test_reemissao_limpa_retorno_sem_apagar_documento(self):
         documento = SimpleNamespace(
             status="rejeitada",

@@ -344,14 +344,27 @@ def _sincronizar_status(mdfe: MDFe) -> MDFe:
         StatusDocumentoFiscal.DENEGADA: MDFe.Status.REJEITADO,
         StatusDocumentoFiscal.CANCELADA: MDFe.Status.CANCELADO,
     }
-    mdfe.status = mapa.get(documento.status, mdfe.status)
-    mdfe.chave_acesso = documento.chave or mdfe.chave_acesso
-    mdfe.protocolo_autorizacao = documento.protocolo or mdfe.protocolo_autorizacao
-    mdfe.data_autorizacao = documento.data_autorizacao
-    mdfe.data_cancelamento = documento.data_cancelamento
-    mdfe.mensagem_sefaz = documento.mensagem_sefaz
-    mdfe.save()
+    novos_valores = {
+        "status": mapa.get(documento.status, mdfe.status),
+        "chave_acesso": documento.chave or mdfe.chave_acesso,
+        "protocolo_autorizacao": documento.protocolo or mdfe.protocolo_autorizacao,
+        "data_autorizacao": documento.data_autorizacao,
+        "data_cancelamento": documento.data_cancelamento,
+        "mensagem_sefaz": documento.mensagem_sefaz,
+    }
+    campos_alterados = []
+    for campo, valor in novos_valores.items():
+        if getattr(mdfe, campo) != valor:
+            setattr(mdfe, campo, valor)
+            campos_alterados.append(campo)
+    if campos_alterados:
+        mdfe.save(update_fields=campos_alterados)
     return mdfe
+
+
+def sincronizar_mdfe(mdfe: MDFe) -> MDFe:
+    """Atualiza o MDF-e a partir do documento fiscal que representa a emissão."""
+    return _sincronizar_status(mdfe)
 
 
 def sincronizar_mdfe_por_documento(documento: DocumentoFiscal) -> None:

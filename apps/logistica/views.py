@@ -1641,10 +1641,22 @@ class MDFeListView(PermissaoRequiredMixin, View):
     template_name = "logistica/mdfe/list.html"
 
     def get(self, request):
+        from apps.logistica.services.mdfe_focusnfe import sincronizar_mdfe
+
         filial = _filial(request)
+        mdfes_com_documento = (
+            MDFe.objects.for_filial(filial)
+            .exclude(documento_fiscal__isnull=True)
+            .select_related("documento_fiscal")
+        )
+        for mdfe in mdfes_com_documento:
+            sincronizar_mdfe(mdfe)
+
         qs = (
             MDFe.objects.for_filial(filial)
-            .select_related("transportadora", "responsavel", "romaneio")
+            .select_related(
+                "transportadora", "responsavel", "romaneio", "documento_fiscal"
+            )
             .annotate(qtd_documentos=Count("documentos"))
         )
 
