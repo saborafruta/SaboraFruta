@@ -54,6 +54,42 @@ class _ItemTransfAdapter:
         self.unidade_medida = unidade
 
 
+def _validar_cancelamento_sem_mdfe_ativo(documento_fiscal: DocumentoFiscal) -> None:
+    """Impede cancelar uma NF-e ainda vinculada a um MDF-e operacional."""
+    from apps.logistica.models import DocumentoMDFe, MDFe
+
+    vinculo = (
+        DocumentoMDFe.objects.select_related("mdfe")
+        .filter(documento_fiscal=documento_fiscal)
+        .exclude(
+            mdfe__status__in=[
+                MDFe.Status.REJEITADO,
+                MDFe.Status.CANCELADO,
+                MDFe.Status.ENCERRADO,
+            ]
+        )
+        .order_by("-mdfe__data_emissao", "-mdfe__numero")
+        .first()
+    )
+    if not vinculo:
+        return
+
+    mdfe = vinculo.mdfe
+    identificacao = f"MDF-e nº {mdfe.numero}, série {mdfe.serie}"
+    if mdfe.status in {MDFe.Status.AUTORIZADO, MDFe.Status.PROCESSANDO}:
+        raise DadosInvalidosError(
+            f"Esta NF-e está vinculada ao {identificacao}, que está "
+            f"{mdfe.get_status_display().lower()}. Cancele o MDF-e antes da NF-e "
+            "se a viagem ainda não começou; se o transporte já começou, encerre "
+            "o MDF-e e siga o procedimento fiscal adequado."
+        )
+
+    raise DadosInvalidosError(
+        f"Esta NF-e está vinculada ao {identificacao}. Remova o vínculo ou "
+        "cancele o MDF-e antes de cancelar a NF-e."
+    )
+
+
 _CHAVES_TRIBUTOS_TRANSFERENCIA_REMOVER = {
     "icms_modalidade_base_calculo", "icms_reducao_base_calculo",
     "icms_base_calculo", "icms_aliquota", "icms_valor",
@@ -402,6 +438,8 @@ def cancelar_nfe_transferencia(
         raise DadosInvalidosError(
             "Somente uma NF-e autorizada pode ser cancelada."
         )
+
+    _validar_cancelamento_sem_mdfe_ativo(documento_fiscal)
 
     filial = documento_fiscal.filial
     token = (getattr(filial, "focusnfe_token", "") or "").strip()
