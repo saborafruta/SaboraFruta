@@ -16,21 +16,24 @@
     .transfer-product-search {
       grid-column: 1 / -1;
     }
+    /* Selecao rapida ocupa a largura toda: com a coluna estreita a direita,
+       os cards ficavam espremidos em 3 por linha. Quantidade, botao e lista
+       de itens passam a ficar empilhados abaixo, tambem em largura cheia. */
     .transfer-product-catalog {
-      grid-column: 1;
-      grid-row: 3 / span 4;
-    }
-    .transfer-product-quantity {
-      grid-column: 2;
+      grid-column: 1 / -1;
       grid-row: 3;
     }
-    .transfer-product-add {
-      grid-column: 2;
+    .transfer-product-quantity {
+      grid-column: 1 / -1;
       grid-row: 4;
     }
-    .transfer-product-items {
-      grid-column: 2;
+    .transfer-product-add {
+      grid-column: 1 / -1;
       grid-row: 5;
+    }
+    .transfer-product-items {
+      grid-column: 1 / -1;
+      grid-row: 6;
     }
   }
 </style>
@@ -282,10 +285,14 @@
 
           <div x-show="!catalogoCarregando && catalogoProdutos.length > 0"
                class="grid grid-cols-2 md:grid-cols-3 gap-2 max-h-80 overflow-y-auto pr-1">
+            {% comment %}
+              Era <button> com o card inteiro clicavel. Virou <div> porque agora
+              ha um <input> dentro, e input dentro de button e HTML invalido --
+              o navegador se comporta de forma imprevisivel ao clicar no campo.
+            {% endcomment %}
             <template x-for="produto in catalogoProdutos" :key="produto.id">
-              <button type="button"
-                      @click="adicionarProdutoRapido(produto)"
-                      class="text-left rounded-lg border p-3 transition-colors min-h-28 flex flex-col justify-between"
+              <div @click="adicionarProdutoRapido(produto, produto.qtd_rapida)"
+                      class="text-left rounded-lg border p-3 transition-colors min-h-28 flex flex-col justify-between cursor-pointer"
                       :style="temaClaro
                         ? 'border-color:#dbe3ee;background:#ffffff;color:#111827;'
                         : 'border-color:#334155;background:#111827;color:#f8fafc;'">
@@ -312,22 +319,47 @@
                        :style="produto.estoque > 0 ? 'color:#15803d;' : 'color:#dc2626;'"
                        x-text="'Saldo: ' + formatarQuantidade(produto.estoque) + ' ' + (produto.unidade || '')"></p>
                   </div>
-                  <span class="w-7 h-7 rounded-md flex items-center justify-center text-lg font-bold"
-                        :style="temaClaro ? 'background:#dbeafe;color:#1d4ed8;' : 'background:#1e3a5f;color:#93c5fd;'">+</span>
+                  {% comment %}
+                    Digitar a quantidade direto no card. Antes so dava para
+                    clicar no + (soma 1 por vez), ou selecionar o produto e
+                    usar o campo ao lado. O @click.stop evita que digitar no
+                    campo dispare o clique do card.
+                  {% endcomment %}
+                  <div class="flex items-center gap-1 flex-shrink-0">
+                    <input type="number" step="0.001" min="0.001"
+                           x-model.number="produto.qtd_rapida"
+                           @click.stop
+                           @keydown.enter.stop.prevent="adicionarProdutoRapido(produto, produto.qtd_rapida)"
+                           placeholder="1"
+                           class="form-input text-right py-1 px-1.5 text-xs"
+                           style="width:58px;">
+                    <button type="button"
+                            @click.stop="adicionarProdutoRapido(produto, produto.qtd_rapida)"
+                            class="w-7 h-7 rounded-md flex items-center justify-center text-lg font-bold flex-shrink-0"
+                            :title="'Adicionar ' + (produto.qtd_rapida || 1) + ' ' + (produto.unidade || '')"
+                            :style="temaClaro ? 'background:#dbeafe;color:#1d4ed8;' : 'background:#1e3a5f;color:#93c5fd;'">+</button>
+                  </div>
                 </div>
-              </button>
+              </div>
             </template>
           </div>
         </div>
 
         <!-- Lote / Quantidade -->
-        <div class="transfer-product-quantity grid grid-cols-1 sm:grid-cols-2 gap-4">
+        {% comment %}
+          O Lote so aparece para produto que controla lote. Para os demais o
+          campo ficava permanentemente desabilitado ("Selecione um produto"),
+          ocupando metade da linha sem nunca ser usado. Quando ele some, a
+          Quantidade passa a ocupar a linha inteira.
+        {% endcomment %}
+        <div class="transfer-product-quantity grid grid-cols-1 gap-4"
+             :class="itemProdutoControlaLote ? 'sm:grid-cols-2' : ''">
 
           <!-- Lote -->
-          <div>
+          <div x-show="itemProdutoControlaLote" x-cloak>
             <label class="block text-sm font-medium mb-1.5" :style="temaClaro ? 'color:#374151;' : 'color:#d1d5db;'">
               Lote
-              <span class="text-xs font-normal" :style="temaClaro ? 'color:#9ca3af;' : 'color:#6b7280;'">(opcional)</span>
+              <span class="text-xs font-normal" :style="temaClaro ? 'color:#9ca3af;' : 'color:#6b7280;'">(obrigatorio)</span>
             </label>
             <select x-model="itemLoteId"
                     :disabled="!itemProdutoId || itemLotesCarregando"
@@ -1129,11 +1161,18 @@ function transferenciaLojaApp(filiais, motoristas, veiculos, copiaTransferencia)
       }
     },
 
-    async adicionarProdutoRapido(produto) {
+    // `quantidade` vem do campo digitado no proprio card; sem valor, mantem o
+    // comportamento antigo de somar 1. Produto que controla lote continua so
+    // sendo selecionado, porque ainda falta escolher o lote.
+    async adicionarProdutoRapido(produto, quantidade) {
+      const qtd = Number(quantidade);
       await this.selecionarProduto(produto);
-      this.itemQuantidade = '1';
+      this.itemQuantidade = (Number.isFinite(qtd) && qtd > 0) ? String(qtd) : '1';
       if (!produto.controla_lote) {
         this.adicionarItem();
+        // Zera o campo do card para o proximo uso nao herdar a quantidade
+        // anterior sem o usuario perceber.
+        produto.qtd_rapida = null;
       }
     },
 
