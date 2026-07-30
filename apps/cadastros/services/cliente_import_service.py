@@ -10,6 +10,8 @@ from typing import List
 
 from django.utils.dateparse import parse_date
 
+from apps.mapas.signals import modo_lote
+
 from apps.cadastros.models import Cliente
 from apps.cadastros.services.cliente_service import ClienteService
 from apps.core.constants.choices import TipoPessoa, UF
@@ -100,7 +102,11 @@ class ClienteImportService:
 
             try:
                 dados = ClienteImportService._validar_e_converter(row_limpo, num_linha)
-                ClienteService.criar(dados, usuario, filial)
+                # Sem modo_lote, cada cliente do CSV dispararia uma chamada de
+                # rede ao geocoder e a importacao estouraria o timeout. Eles
+                # ficam pendentes para o `manage.py geocodificar`.
+                with modo_lote():
+                    ClienteService.criar(dados, usuario, filial)
                 resultado.criados += 1
             except DomainError as e:
                 resultado.erros.append({

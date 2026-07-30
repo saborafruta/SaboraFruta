@@ -66,12 +66,18 @@ class CoordenadaMixin(models.Model):
         uf = (getattr(self, 'uf', '') or '').strip()
         cep = ''.join(filter(str.isdigit, str(getattr(self, 'cep', '') or '')))
 
+        # Sem cidade não se geocodifica: um cadastro só com a UF viraria a
+        # busca "RN, Brasil", que o provider resolve para o centro do estado.
+        # O resultado seria um pino no meio do nada, indistinguível de uma
+        # coordenada boa — pior que não ter coordenada nenhuma.
+        if not cidade:
+            return ''
+
         logradouro = f'{rua}, {numero}' if rua and numero else rua
         partes = [p for p in (logradouro, bairro, cidade, uf) if p]
         if cep and len(cep) == 8:
             partes.append(f'{cep[:5]}-{cep[5:]}')
-        if partes:
-            partes.append('Brasil')
+        partes.append('Brasil')
         return ', '.join(partes)
 
     def hash_endereco_atual(self) -> str:

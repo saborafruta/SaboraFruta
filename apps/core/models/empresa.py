@@ -12,7 +12,7 @@ cnpj_validator = RegexValidator(r'^\d{14}$', 'CNPJ deve conter 14 dígitos numé
 cep_validator = RegexValidator(r'^\d{8}$', 'CEP deve conter 8 dígitos numéricos.')
 
 
-class Empresa(TimestampedModel):
+class Empresa(CoordenadaMixin, TimestampedModel):
     """Entidade jurídica raiz. Uma empresa pode ter várias filiais."""
 
     class RegimeTributario(models.TextChoices):

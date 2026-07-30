@@ -1,6 +1,7 @@
 ﻿"""
 ConfiguraÃ§Ãµes base do projeto ERP iNoovaTed.
 """
+import sys
 from datetime import timedelta
 from pathlib import Path
 
@@ -246,6 +247,17 @@ LOGGING = {
 # e limita a 1 req/s. Para uso comercial em volume, use um provider com
 # chave (LocationIQ/Geoapify têm plano gratuito que permite uso comercial)
 # ou aponte MAPAS_NOMINATIM_URL para uma instância própria.
+# Geocodificar automaticamente ao salvar um cadastro (secao 2: "caso o
+# endereco seja alterado, atualizar automaticamente latitude e longitude").
+# Desligado durante os testes: sem isso, cada cliente criado numa fixture
+# viraria uma chamada de rede real, deixando a suite lenta e instavel.
+# Tambem serve de interruptor de emergencia se o provider estiver degradado --
+# os registros ficam pendentes para o `manage.py geocodificar`.
+_EXECUTANDO_TESTES = 'test' in sys.argv
+MAPAS_GEOCODIFICAR_AO_SALVAR = env.bool(
+    'MAPAS_GEOCODIFICAR_AO_SALVAR', default=not _EXECUTANDO_TESTES,
+)
+
 MAPAS_GEOCODER = env('MAPAS_GEOCODER', default='nominatim')
 MAPAS_GEOCODER_API_KEY = env('MAPAS_GEOCODER_API_KEY', default='')
 MAPAS_NOMINATIM_URL = env('MAPAS_NOMINATIM_URL', default='')

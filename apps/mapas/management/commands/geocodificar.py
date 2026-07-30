@@ -16,6 +16,7 @@ from django.core.management.base import BaseCommand, CommandError
 from apps.mapas import constants as c
 from apps.mapas.managers import pendentes_de_geocodificacao
 from apps.mapas.services import GeocodificacaoService
+from apps.mapas.signals import modo_lote
 
 #: apelido -> (app_label, ModelName)
 MODELOS = {
@@ -50,6 +51,10 @@ class Command(BaseCommand):
         )
 
     def handle(self, *args, **opts):
+        with modo_lote():
+            self._executar(*args, **opts)
+
+    def _executar(self, *args, **opts):
         from django.apps import apps as django_apps
 
         alvos = opts['modelo'] or sorted(MODELOS)
@@ -96,6 +101,8 @@ class Command(BaseCommand):
                     )
                     continue
 
+                # O proprio comando ja geocodifica; o modo_lote evita que o
+                # post_save faca a mesma chamada de novo ao salvar.
                 if servico.geocodificar_objeto(obj):
                     ok += 1
                 else:
