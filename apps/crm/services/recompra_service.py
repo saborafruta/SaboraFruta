@@ -76,12 +76,16 @@ class RecompraService:
             PedidoVenda.Status.ENTREGUE,
         ]
 
+        # `cliente__ativo=True`: nao faz sentido mandar a equipe contatar hoje
+        # um cliente que foi desativado de proposito. Ele tambem esta invisivel
+        # na tela de Clientes, entao aparecer no CRM era incoerente.
         pedidos = (
             PedidoVenda.objects
             .filter(
                 filial__in=filiais,
                 status__in=status_validos,
                 cliente_id__isnull=False,
+                cliente__ativo=True,
                 data_emissao__date__gte=inicio,
             )
             .order_by('cliente_id', 'data_emissao')
@@ -92,6 +96,7 @@ class RecompraService:
                 filial__in=filiais,
                 status='finalizada',
                 cliente_id__isnull=False,
+                cliente__ativo=True,
                 data_venda__date__gte=inicio,
             )
             .order_by('cliente_id', 'data_venda')

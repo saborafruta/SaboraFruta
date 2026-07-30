@@ -36,9 +36,11 @@ class AlertasRecompraView(PermissaoRequiredMixin, View):
             else Filial.objects.filter(pk=filial.pk)
         )
 
+        # Cliente inativo fica fora: ele nao aparece na tela de Clientes nem
+        # no mapa, entao listar aqui produzia alerta para quem foi desativado.
         qs = (
             RecompraCliente.objects
-            .filter(filial__in=filiais_escopo)
+            .filter(filial__in=filiais_escopo, cliente__ativo=True)
             .select_related('cliente', 'representante', 'filial')
         )
 

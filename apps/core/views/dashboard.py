@@ -59,6 +59,7 @@ class DashboardView(LoginRequiredMixin, TemplateView):
             )
             base = RecompraCliente.objects.filter(
                 filial__in=filiais,
+                cliente__ativo=True,
                 status__in=[RecompraCliente.Status.VERMELHO, RecompraCliente.Status.AMARELO],
             )
             # Ordem por urgência real, e não por score: o card se chama

@@ -185,7 +185,22 @@
       </td>
     </tr>
   {% empty %}
-    <tr><td colspan="8" class="text-center py-12" :style="temaClaro ? 'color:#666;' : 'color:#555;'">Nenhum cliente encontrado.</td></tr>
+    {% comment %}
+      A lista esconde inativos por padrao. Sem este aviso, buscar um cliente
+      desativado devolvia "nenhum resultado" -- indistinguivel de o cliente nao
+      existir na base.
+    {% endcomment %}
+    <tr><td colspan="8" class="text-center py-12" :style="temaClaro ? 'color:#666;' : 'color:#555;'">
+      Nenhum cliente <strong>ativo</strong> encontrado.
+      {% if inativos_na_busca %}
+        <div class="mt-3 text-sm" style="color:#fbbf24;">
+          {{ inativos_na_busca }} cliente{{ inativos_na_busca|pluralize }} inativo{{ inativos_na_busca|pluralize }}
+          casa{{ inativos_na_busca|pluralize:"m" }} com esta busca.
+          <a href="?{% if page_querystring %}{{ page_querystring }}&{% endif %}inativos=1"
+             class="underline font-semibold" style="color:#fbbf24;">Mostrar inativos</a>
+        </div>
+      {% endif %}
+    </td></tr>
   {% endfor %}
 {% endblock %}
 

@@ -86,6 +86,28 @@ def _cliente_queryset_filtrado(request, incluir_inativos_por_padrao=False):
     return qs.order_by(ordenacoes.get(ordem, 'id'))
 
 
+def _inativos_na_busca(request):
+    """
+    Quantos clientes INATIVOS casam com a busca atual.
+
+    Existe porque a lista esconde inativos por padrao, e o usuario nao tinha
+    como saber disso: buscar um cliente desativado devolvia "nenhum resultado",
+    exatamente como se ele nao existisse na base. Com este numero a tela pode
+    dizer "ha N inativo(s)" e oferecer o link para mostra-los.
+
+    Reaproveita `_cliente_queryset_filtrado` com os inativos incluidos e
+    subtrai os ativos, para nao duplicar a montagem do filtro de busca.
+    """
+    if not request.GET.get('q', '').strip():
+        return 0
+    if request.GET.get('inativos') == '1':
+        return 0
+    try:
+        todos = _cliente_queryset_filtrado(request, incluir_inativos_por_padrao=True)
+        return todos.filter(ativo=False).count()
+    except Exception:
+        return 0
+
 def _codigo(pk):
     return f'{pk:02d}'
 
@@ -232,6 +254,7 @@ class ClienteListView(PermissaoRequiredMixin, View):
             'data_inicio': data_inicio,
             'data_fim': data_fim,
             'mostrar_inativos': mostrar_inativos,
+            'inativos_na_busca': _inativos_na_busca(request),
             'pode_exportar': _usuario_pode_exportar(request),
             'pode_editar': request.user.tem_permissao('cadastros', 'editar'),
         })
