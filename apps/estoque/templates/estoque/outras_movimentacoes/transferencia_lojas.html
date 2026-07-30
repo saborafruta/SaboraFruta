@@ -872,14 +872,37 @@
             </div>
             <div class="sm:col-span-2">
               <label class="block text-sm font-medium mb-1">Peso bruto da carga (kg)</label>
-              <input type="text" :value="formatarQuantidade(pesoBrutoCalculado())"
-                     class="form-input w-full" readonly>
-              <p class="text-xs mt-1"
+              <input type="text" inputmode="decimal"
+                     :value="pesoManualAtivo ? pesoBrutoManual : formatarQuantidade(pesoBrutoCalculado())"
+                     @input="definirPesoManual($event.target.value)"
+                     class="form-input w-full">
+
+              <p class="text-xs mt-1" x-show="!pesoManualAtivo"
                  :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
-                Calculado automaticamente pelo peso bruto cadastrado em cada produto.
+                Calculado pelo peso cadastrado em cada produto. Voce pode digitar
+                outro valor se precisar.
               </p>
-              <p x-show="produtosSemPeso().length" class="text-xs mt-1 text-red-500"
-                 x-text="'Cadastre o peso bruto: ' + produtosSemPeso().map(item => item.produto_nome).join(', ')"></p>
+              <p class="text-xs mt-1" x-show="pesoManualAtivo" x-cloak
+                 style="color:#fbbf24;">
+                Peso informado manualmente.
+                <a href="#" @click.prevent="usarPesoCalculado()" class="underline font-semibold">
+                  voltar ao calculado (<span x-text="formatarQuantidade(pesoBrutoCalculado())"></span> kg)
+                </a>
+              </p>
+
+              {% comment %}
+                Sem peso manual, listar os produtos pendentes e uma instrucao do
+                que fazer. Com peso manual, vira apenas informativo -- a emissao
+                ja esta destravada, mas o usuario continua sabendo que aqueles
+                produtos nao entraram na soma automatica.
+              {% endcomment %}
+              <p x-show="produtosSemPeso().length && !pesoManualAtivo"
+                 class="text-xs mt-1 text-red-500"
+                 x-text="'Sem peso cadastrado: ' + produtosSemPeso().map(item => item.produto_nome).join(', ') + ' — cadastre o peso ou informe o total manualmente acima.'"></p>
+              <p x-show="produtosSemPeso().length && pesoManualAtivo" x-cloak
+                 class="text-xs mt-1"
+                 :style="temaClaro ? 'color:#94a3b8;' : 'color:#64748b;'"
+                 x-text="'Nao entraram na soma automatica: ' + produtosSemPeso().map(item => item.produto_nome).join(', ')"></p>
             </div>
             <div class="sm:col-span-2 grid grid-cols-1 md:grid-cols-3 gap-2">
               <div class="rounded-lg border p-3"
@@ -984,6 +1007,9 @@ function transferenciaLojaApp(filiais, motoristas, veiculos, copiaTransferencia)
     observacao: copia.observacao || '',
     origemMercadoria: 'producao_propria',
     gerarMdfe: true,
+    // Peso do MDF-e digitado a mao; vazio = usa o calculo automatico.
+    pesoManualAtivo: false,
+    pesoBrutoManual: '',
     motoristaId: '',
     veiculoId: '',
     submitting: false,
@@ -1017,6 +1043,33 @@ function transferenciaLojaApp(filiais, motoristas, veiculos, copiaTransferencia)
       return this.itens.reduce((total, item) => (
         total + Number(item.peso_bruto || 0) * Number(item.quantidade || 0)
       ), 0);
+    },
+
+    // Peso informado a mao. Serve para produto sem peso no cadastro (ou quando
+    // a balanca da outro numero): a emissao do MDF-e nao pode ficar travada
+    // esperando um cadastro. Campo vazio volta ao calculo automatico.
+    definirPesoManual(valor) {
+      const limpo = String(valor ?? '').trim();
+      if (!limpo) { this.usarPesoCalculado(); return; }
+      this.pesoManualAtivo = true;
+      this.pesoBrutoManual = limpo;
+    },
+
+    usarPesoCalculado() {
+      this.pesoManualAtivo = false;
+      this.pesoBrutoManual = '';
+    },
+
+    // Aceita o formato pt-BR digitado pelo usuario ("1.234,5").
+    pesoTextoParaNumero(texto) {
+      const n = Number(String(texto ?? '').replace(/\./g, '').replace(',', '.'));
+      return Number.isFinite(n) ? n : 0;
+    },
+
+    pesoBrutoEfetivo() {
+      return this.pesoManualAtivo
+        ? this.pesoTextoParaNumero(this.pesoBrutoManual)
+        : this.pesoBrutoCalculado();
     },
 
     produtosSemPeso() {
@@ -1446,9 +1499,14 @@ function transferenciaLojaApp(filiais, motoristas, veiculos, copiaTransferencia)
         this.erroGeral = 'Para emitir o MDF-e, selecione o motorista e o veículo.';
         return;
       }
-      if (gerarNota && this.gerarMdfe && this.produtosSemPeso().length) {
-        this.erroGeral = 'Cadastre o peso bruto destes produtos: '
+      if (gerarNota && this.gerarMdfe && this.produtosSemPeso().length && !this.pesoManualAtivo) {
+        this.erroGeral = 'Cadastre o peso destes produtos ou informe o peso total '
+          + 'manualmente: '
           + this.produtosSemPeso().map(item => item.produto_nome).join(', ') + '.';
+        return;
+      }
+      if (gerarNota && this.gerarMdfe && !(this.pesoBrutoEfetivo() > 0)) {
+        this.erroGeral = 'Informe o peso bruto da carga para emitir o MDF-e.';
         return;
       }
 
@@ -1462,7 +1520,8 @@ function transferenciaLojaApp(filiais, motoristas, veiculos, copiaTransferencia)
         origem_mercadoria: this.origemMercadoria,
         motorista_id: this.motoristaId || null,
         veiculo_id: this.veiculoId || null,
-        peso_bruto: this.pesoBrutoCalculado(),
+        peso_bruto: this.pesoBrutoEfetivo(),
+        peso_bruto_manual: !!this.pesoManualAtivo,
         itens: this.itens.map(i => ({
           produto_id: i.produto_id,
           lote_id: i.lote_id,

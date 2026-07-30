@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 import json as _json
-from decimal import Decimal
+from decimal import Decimal, InvalidOperation
 
 from django.contrib import messages
 from django.db import models as db_models
@@ -1203,13 +1203,28 @@ class TransferenciaLojaApiView(PermissaoRequiredMixin, View):
             ])
             peso_bruto = resultado_peso['peso_kg']
 
-            if resultado_peso['pendentes']:
+            # Peso informado a mao pelo operador tem precedencia: e a saida
+            # para produto sem peso no cadastro (ou quando a balanca diverge).
+            # Recusa zero/negativo aqui e o `_validar_transporte` recusa de
+            # novo antes de montar o payload. Nenhum dos dois compara com a
+            # capacidade do veiculo -- essa checagem nao existe hoje.
+            if body.get('peso_bruto_manual'):
+                try:
+                    peso_bruto = Decimal(str(body.get('peso_bruto') or '0'))
+                except (InvalidOperation, TypeError, ValueError):
+                    peso_bruto = Decimal('0')
+                if peso_bruto <= 0:
+                    return JsonResponse({
+                        'erro': 'Informe um peso bruto maior que zero para o MDF-e.',
+                    }, status=400)
+
+            elif resultado_peso['pendentes']:
                 nomes = resultado_peso['pendentes']
                 return JsonResponse({
                     'erro': (
                         'Para gerar o MDF-e, informe o peso destes produtos '
-                        '(peso bruto, peso liquido ou unidade de medida em kg): '
-                        f'{", ".join(nomes)}.'
+                        '(peso bruto, peso liquido ou unidade de medida em kg) '
+                        f'ou digite o peso total manualmente: {", ".join(nomes)}.'
                     ),
                     'produtos_sem_peso': nomes,
                 }, status=400)
