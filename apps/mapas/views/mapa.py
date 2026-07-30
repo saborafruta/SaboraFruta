@@ -17,6 +17,9 @@ class MapaPrincipalView(PermissaoRequiredMixin, TemplateView):
         filial = getattr(self.request, 'filial_ativa', None)
 
         ctx['title'] = 'Mapas e Geolocalização'
+        # O modo de desenho grava território, então é ação de edição. Esconder
+        # o botão é só conveniência: a API valida a permissão de novo.
+        ctx['pode_editar'] = self.request.user.tem_permissao('mapas', 'editar')
         ctx['camadas'] = [
             {'chave': k, 'rotulo': v[0], 'cor': v[1], 'icone': v[2]}
             for k, v in c.CAMADAS.items()
