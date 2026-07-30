@@ -7,6 +7,7 @@
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
 <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.css">
 <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.Default.css">
+<link rel="stylesheet" href="https://unpkg.com/leaflet-draw@1.0.4/dist/leaflet.draw.css">
 <style>
   /* Mapa em tela cheia descontando o header do ERP. */
   .mapa-wrap { position:relative; height:calc(100vh - 132px); min-height:460px;
@@ -48,6 +49,28 @@
   .mapa-aviso { position:absolute; top:12px; left:50%; transform:translateX(-50%); z-index:4;
                 border-radius:9px; padding:8px 14px; font-size:12px; font-weight:600;
                 box-shadow:0 8px 22px rgba(0,0,0,.24); display:none; }
+
+  /* ── Painel do modo de desenho (§11) ── */
+  .desenho-painel { position:absolute; top:12px; right:12px; z-index:5; width:262px;
+                    border-radius:12px; overflow:hidden; backdrop-filter:blur(10px);
+                    box-shadow:0 10px 34px rgba(0,0,0,.3); }
+  .desenho-head { padding:10px 13px; font-size:12px; font-weight:800;
+                  text-transform:uppercase; letter-spacing:.05em;
+                  display:flex; align-items:center; gap:8px; }
+  .desenho-body { padding:11px 13px; display:flex; flex-direction:column; gap:9px; font-size:12.5px; }
+  .desenho-body select { width:100%; padding:6px 8px; border-radius:7px; font-size:12.5px; }
+  .desenho-dica { font-size:11px; line-height:1.5; opacity:.75; }
+  .desenho-acoes { display:flex; gap:6px; }
+  .desenho-acoes button { flex:1; font-size:11.5px; font-weight:700; padding:7px 8px;
+                          border-radius:7px; border:none; cursor:pointer; }
+  .desenho-acoes button:disabled { opacity:.45; cursor:not-allowed; }
+  .btn-desenhar { position:absolute; top:12px; right:12px; z-index:4; border:none;
+                  border-radius:9px; padding:8px 13px; font-size:12px; font-weight:700;
+                  cursor:pointer; box-shadow:0 6px 18px rgba(0,0,0,.26);
+                  display:flex; align-items:center; gap:7px; }
+  /* O toolbar do Leaflet.draw nasce no canto esquerdo, onde fica o painel de
+     camadas — empurra para baixo dele. */
+  .leaflet-draw.leaflet-control { margin-top:8px; }
 
   .popup-mapa { font-size:12.5px; min-width:216px; }
   .popup-mapa h4 { font-size:13.5px; font-weight:800; margin:0 0 6px; }
@@ -134,6 +157,65 @@
 
     <div class="mapa-aviso" x-show="aviso" x-cloak x-text="aviso"
          style="background:#7c2d12; color:#fed7aa;"></div>
+
+    {% if pode_editar %}
+    <!-- Modo de desenho de território (§11) -->
+    <button type="button" class="btn-desenhar" x-show="!modoDesenho" x-cloak
+            @click="abrirDesenho()"
+            :style="temaClaro ? 'background:#fff;color:#1d4ed8;' : 'background:#16161a;color:#93c5fd;'">
+      <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+              d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/>
+      </svg>
+      Desenhar território
+    </button>
+
+    <div class="desenho-painel" x-show="modoDesenho" x-cloak
+         :style="temaClaro ? 'background:rgba(255,255,255,.96); color:#111827;'
+                           : 'background:rgba(22,22,26,.95); color:#f8fafc;'">
+      <div class="desenho-head"
+           :style="temaClaro ? 'border-bottom:1px solid #e5e7eb;' : 'border-bottom:1px solid #2a2a32;'">
+        <span>Desenhar território</span>
+        <button type="button" @click="fecharDesenho()" title="Sair do modo de desenho"
+                style="margin-left:auto;background:none;border:none;cursor:pointer;font-size:15px;color:inherit;opacity:.6;">&times;</button>
+      </div>
+      <div class="desenho-body">
+        <label>
+          <span style="display:block;margin-bottom:3px;opacity:.7;font-size:11px;">Praça</span>
+          <select x-model="pracaSelecionada" @change="carregarPracaParaEdicao()"
+                  :style="temaClaro ? 'background:#fff;color:#111827;border:1px solid #d1d5db;'
+                                    : 'background:#1e1e22;color:#f8fafc;border:1px solid #3a3a3e;'">
+            <option value="">— escolha a praça —</option>
+            <template x-for="p in pracas" :key="p.id">
+              <option :value="p.id"
+                      x-text="p.nome + (p.poligono ? ' (tem polígono)' : '')"></option>
+            </template>
+          </select>
+        </label>
+
+        <div class="desenho-dica" x-show="!pracaSelecionada">
+          Escolha uma praça para desenhar ou editar o polígono dela.
+        </div>
+        <div class="desenho-dica" x-show="pracaSelecionada">
+          Use o ícone de polígono na barra à esquerda para desenhar. Clique nos
+          vértices para ajustar. Um novo desenho substitui o anterior.
+        </div>
+
+        <div class="desenho-acoes">
+          <button type="button" @click="salvarPoligono()"
+                  :disabled="!pracaSelecionada || salvando"
+                  style="background:#1d4ed8;color:#fff;"
+                  x-text="salvando ? 'Salvando...' : 'Salvar'"></button>
+          <button type="button" @click="removerPoligono()"
+                  :disabled="!pracaSelecionada || salvando"
+                  style="background:#7f1d1d;color:#fecaca;">Remover</button>
+        </div>
+
+        <div class="desenho-dica" x-show="resultadoDesenho" x-cloak
+             x-text="resultadoDesenho" style="opacity:1;color:#4ade80;font-weight:600;"></div>
+      </div>
+    </div>
+    {% endif %}
   </div>
 </div>
 {% endblock %}
@@ -141,7 +223,10 @@
 {% block extra_js %}
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js"></script>
+<script src="https://unpkg.com/leaflet-draw@1.0.4/dist/leaflet.draw.js"></script>
 <script>
+const CSRF = '{{ csrf_token }}';
+
 function mapaGeo() {
   return {
     camadas: JSON.parse(document.getElementById('mapas-camadas').textContent),
@@ -154,10 +239,18 @@ function mapaGeo() {
     statusTexto: '',
     aviso: '',
     mostrarTerritorios: false,
+    // modo de desenho
+    modoDesenho: false,
+    pracas: [],
+    pracaSelecionada: '',
+    salvando: false,
+    resultadoDesenho: '',
     _mapa: null,
     _grupos: {},
     _carregando: false,
     _camadaTerritorios: null,
+    _desenhados: null,
+    _controleDesenho: null,
 
     iniciar() {
       this._mapa = L.map('mapa', { zoomControl: true, preferCanvas: true })
@@ -332,6 +425,142 @@ function mapaGeo() {
         }
       } catch (e) {
         this.aviso = 'Não foi possível carregar os territórios.';
+      }
+    },
+
+    // ── Modo de desenho (§11) ───────────────────────────────────────────
+    async abrirDesenho() {
+      this.modoDesenho = true;
+      this.resultadoDesenho = '';
+
+      // O ?todas=1 traz também as praças SEM polígono — são justamente as que
+      // se quer desenhar pela primeira vez.
+      try {
+        const resp = await fetch(`{% url 'mapas:api-territorios' %}?todas=1`,
+                                 { headers: { 'Accept': 'application/json' } });
+        if (!resp.ok) throw new Error('HTTP ' + resp.status);
+        this.pracas = (await resp.json()).territorios;
+        if (!this.pracas.length) {
+          this.aviso = 'Nenhuma praça cadastrada. Cadastre em Cadastros › Praças.';
+        }
+      } catch (e) {
+        this.aviso = 'Não foi possível carregar as praças.';
+        return;
+      }
+
+      this._desenhados = new L.FeatureGroup().addTo(this._mapa);
+      this._controleDesenho = new L.Control.Draw({
+        position: 'topleft',
+        // Só polígono: círculo/linha/marcador não têm significado para
+        // território, e oferecê-los geraria desenho que o backend recusa.
+        draw: {
+          polygon: { allowIntersection: false, showArea: true,
+                     shapeOptions: { color: '#8b5cf6', weight: 2 } },
+          polyline: false, rectangle: false, circle: false,
+          marker: false, circlemarker: false,
+        },
+        edit: { featureGroup: this._desenhados, remove: false },
+      });
+      this._mapa.addControl(this._controleDesenho);
+
+      // Um território = um polígono. Desenhar de novo substitui.
+      this._mapa.on(L.Draw.Event.CREATED, (e) => {
+        this._desenhados.clearLayers();
+        this._desenhados.addLayer(e.layer);
+      });
+    },
+
+    fecharDesenho() {
+      this.modoDesenho = false;
+      this.pracaSelecionada = '';
+      this.resultadoDesenho = '';
+      this._mapa.off(L.Draw.Event.CREATED);
+      if (this._controleDesenho) {
+        this._mapa.removeControl(this._controleDesenho);
+        this._controleDesenho = null;
+      }
+      if (this._desenhados) {
+        this._mapa.removeLayer(this._desenhados);
+        this._desenhados = null;
+      }
+    },
+
+    carregarPracaParaEdicao() {
+      this.resultadoDesenho = '';
+      if (!this._desenhados) return;
+      this._desenhados.clearLayers();
+
+      const praca = this.pracas.find(p => String(p.id) === String(this.pracaSelecionada));
+      if (!praca || !praca.poligono) return;
+
+      // Carrega o polígono existente já editável, para ajustar vértices em vez
+      // de redesenhar do zero.
+      const poly = L.polygon(praca.poligono, {
+        color: praca.cor || '#8b5cf6', weight: 2, fillOpacity: 0.15,
+      });
+      this._desenhados.addLayer(poly);
+      this._mapa.fitBounds(poly.getBounds(), { padding: [40, 40] });
+    },
+
+    _pontosDesenhados() {
+      if (!this._desenhados) return [];
+      const camadas = this._desenhados.getLayers();
+      if (!camadas.length) return [];
+      // getLatLngs() devolve os anéis do polígono; [0] é o externo, o único
+      // que o modelo guarda (sem buracos).
+      const anel = camadas[0].getLatLngs()[0] || [];
+      return anel.map(ll => [ll.lat, ll.lng]);
+    },
+
+    async salvarPoligono() {
+      const pontos = this._pontosDesenhados();
+      if (pontos.length < 3) {
+        this.aviso = 'Desenhe um polígono com pelo menos 3 pontos antes de salvar.';
+        return;
+      }
+      await this._enviarPoligono(pontos);
+    },
+
+    async removerPoligono() {
+      if (!confirm('Remover o polígono desta praça? Os clientes deixam de ser atribuídos a ela.')) return;
+      await this._enviarPoligono(null);
+    },
+
+    async _enviarPoligono(pontos) {
+      this.salvando = true;
+      this.aviso = '';
+      try {
+        const url = `{% url 'mapas:api-territorio-poligono' 0 %}`
+          .replace('/0/', `/${this.pracaSelecionada}/`);
+        const resp = await fetch(url, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'X-CSRFToken': CSRF },
+          body: JSON.stringify({ poligono: pontos }),
+        });
+        const dados = await resp.json().catch(() => ({}));
+        if (!resp.ok) throw new Error(dados.erro || ('HTTP ' + resp.status));
+
+        // Reflete no estado local para o seletor já mostrar "(tem polígono)".
+        const praca = this.pracas.find(p => String(p.id) === String(this.pracaSelecionada));
+        if (praca) praca.poligono = pontos;
+
+        this.resultadoDesenho = pontos
+          ? `Salvo — ${dados.clientes} cliente(s) neste território.`
+          : 'Polígono removido.';
+        if (!pontos) this._desenhados.clearLayers();
+
+        // A camada de territórios ficou obsoleta; recarrega se estiver ligada.
+        if (this.mostrarTerritorios) {
+          if (this._camadaTerritorios) {
+            this._mapa.removeLayer(this._camadaTerritorios);
+            this._camadaTerritorios = null;
+          }
+          await this.alternarTerritorios();
+        }
+      } catch (e) {
+        this.aviso = 'Falha ao salvar: ' + e.message;
+      } finally {
+        this.salvando = false;
       }
     },
 

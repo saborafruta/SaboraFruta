@@ -18,14 +18,22 @@ def _escopo(request):
 @require_GET
 @requer_permissao('mapas', 'ver')
 def territorios(request):
-    """Polígonos das praças do escopo, para desenhar no mapa."""
+    """
+    Polígonos das praças do escopo.
+
+    `?todas=1` inclui também as praças SEM polígono (com `poligono: null`).
+    O modo de desenho precisa delas para o seletor "em qual praça desenhar" —
+    e servir tudo na mesma chamada evita um segundo endpoint quase idêntico.
+    """
     from apps.cadastros.models import Praca
 
     qs = (
         Praca.objects.filter(filial__in=_escopo(request), ativo=True)
-        .exclude(poligono__isnull=True)
         .select_related('representante')
     )
+    if request.GET.get('todas') != '1':
+        qs = qs.exclude(poligono__isnull=True)
+
     return JsonResponse({
         'territorios': [
             {
@@ -37,7 +45,7 @@ def territorios(request):
                 'representante': getattr(p.representante, 'nome', '') or '',
                 'supervisor': p.supervisor or '',
             }
-            for p in qs
+            for p in qs.order_by('nome')
         ],
     })
 

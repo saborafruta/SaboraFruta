@@ -266,12 +266,33 @@ listaria motoristas e representantes de outros inquilinos. O helper `_escopar`
 em `forms/rota_praca.py` resolve, e há testes (`FormEscopoTests`) que falham se
 alguém adicionar uma FK sem escopo.
 
-### Onde o §11 ainda não fecha
+### Modo de desenho (Leaflet.draw)
 
-O desenho do polígono pelo mapa **não tem UI ainda** — a API
-(`POST /mapas/api/territorios/<pk>/poligono/`) está pronta e testada, mas falta
-o modo de desenho com Leaflet.draw. Hoje os polígonos aparecem no mapa e são
-clicáveis (indicadores), porém precisam ser gravados via API.
+O §11 fecha: o polígono é desenhado no próprio mapa.
+
+Fluxo: botão **“Desenhar território”** (só aparece com permissão
+`mapas`/`editar`) → escolhe a praça no seletor → desenha ou ajusta → **Salvar**.
+A resposta traz quantos clientes caíram no território, que é o feedback que
+valida o traçado na hora.
+
+Detalhes de implementação que importam:
+
+- **Só a ferramenta de polígono** está habilitada. Círculo, linha e marcador
+  ficariam desenháveis mas o backend os recusaria — oferecer o que não funciona
+  é pior que não oferecer.
+- `?todas=1` no endpoint de territórios inclui as praças **sem** polígono. São
+  exatamente as que se quer desenhar pela primeira vez; o padrão continua só
+  com polígono, para a camada de exibição não mudar de comportamento.
+- Ao escolher uma praça que já tem polígono, ele é carregado **editável** — dá
+  para arrastar vértices em vez de redesenhar do zero.
+- Um território guarda **um** anel externo, sem buracos: `getLatLngs()[0]`. Um
+  desenho novo substitui o anterior.
+- **Remover** manda `poligono: null`, o que zera bbox e apaga as atribuições.
+
+Cobertura: `tests/test_api_territorio.py` testa salvar, editar, remover,
+polígono curto, tipo errado, JSON quebrado, método errado, permissão ausente,
+usuário anônimo e — o mais importante — que **não se edita nem se lista praça
+de outra empresa** (404 e lista vazia, respectivamente).
 
 `Representante` não tem campos de endereço — só `regiao_atuacao` em texto. Para
 colocá-lo no mapa (§1) é preciso decidir: endereço próprio, ou centroide dos
