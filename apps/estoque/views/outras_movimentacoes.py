@@ -27,6 +27,7 @@ from apps.estoque.models import (
     LoteProduto,
     MovimentacaoEstoque,
 )
+from apps.estoque.services.peso_carga import calcular_peso_bruto, peso_unitario_kg
 from apps.estoque.services.movimentacao_service import MovimentacaoService
 from apps.estoque.views.permissoes import permissoes_estoque
 from apps.financeiro.constants.enums import StatusDocumentoFiscal
@@ -51,6 +52,18 @@ TIPOS_OUTRAS = {
     MovimentacaoEstoque.TipoOperacao.TRANSFERENCIA_SAIDA,
     MovimentacaoEstoque.TipoOperacao.TRANSFERENCIA_ENTRADA,
 }
+
+
+
+def _peso_unitario_para_json(produto):
+    """
+    Peso unitario em kg para o front, ou None quando nao ha fonte.
+
+    None (e nao 0) porque a tela usa a ausencia para listar o produto como
+    pendente; 0 seria indistinguivel de um peso legitimamente zerado.
+    """
+    peso, origem = peso_unitario_kg(produto)
+    return float(peso) if origem != 'ausente' else None
 
 
 class OutrasMovimentacoesHubView(PermissaoRequiredMixin, View):
@@ -428,9 +441,11 @@ class ProdutoEstoqueSearchJsonView(PermissaoRequiredMixin, View):
                 'codigo_barras': p.codigo_barras or '',
                 'foto_url': p.foto_url or '',
                 'estoque': saldos.get(p.pk, 0),
-                'peso_bruto': (
-                    float(p.peso_bruto) if p.peso_bruto is not None else None
-                ),
+                # Peso ja resolvido pela hierarquia (peso_bruto ->
+                # peso_liquido -> unidade em peso): a tela precisa somar
+                # exatamente o mesmo que o backend valida, senao o usuario ve
+                # um total e recebe outro erro.
+                'peso_bruto': _peso_unitario_para_json(p),
             }
             for p in produtos
         ]
@@ -969,10 +984,7 @@ class TransferenciaLojaView(PermissaoRequiredMixin, View):
                                 mov.lote.numero_lote if mov.lote_id else ''
                             ),
                             'quantidade': float(mov.quantidade),
-                            'peso_bruto': (
-                                float(mov.produto.peso_bruto)
-                                if mov.produto.peso_bruto is not None else None
-                            ),
+                            'peso_bruto': _peso_unitario_para_json(mov.produto),
                         }
                         for mov in movs_copia
                     ],
@@ -1182,21 +1194,22 @@ class TransferenciaLojaApiView(PermissaoRequiredMixin, View):
             )
 
         if gerar_mdfe:
-            produtos_sem_peso = []
-            for item in itens_norm:
-                produto = produtos[item['produto_id']]
-                peso_produto = produto.peso_bruto or Decimal('0')
-                if peso_produto <= 0:
-                    produtos_sem_peso.append(produto.descricao)
-                    continue
-                peso_bruto += peso_produto * item['quantidade']
+            # O peso sai de uma hierarquia de fontes ja cadastradas
+            # (peso_bruto -> peso_liquido -> unidade de medida em peso), em vez
+            # de exigir peso_bruto em todo produto. Ver services.peso_carga.
+            resultado_peso = calcular_peso_bruto([
+                (produtos[item['produto_id']], item['quantidade'])
+                for item in itens_norm
+            ])
+            peso_bruto = resultado_peso['peso_kg']
 
-            if produtos_sem_peso:
-                nomes = sorted(set(produtos_sem_peso))
+            if resultado_peso['pendentes']:
+                nomes = resultado_peso['pendentes']
                 return JsonResponse({
                     'erro': (
-                        'Para gerar o MDF-e, cadastre o peso bruto destes '
-                        f'produtos: {", ".join(nomes)}.'
+                        'Para gerar o MDF-e, informe o peso destes produtos '
+                        '(peso bruto, peso liquido ou unidade de medida em kg): '
+                        f'{", ".join(nomes)}.'
                     ),
                     'produtos_sem_peso': nomes,
                 }, status=400)
