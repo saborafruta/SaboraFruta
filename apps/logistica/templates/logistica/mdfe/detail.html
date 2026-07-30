@@ -140,10 +140,16 @@
       </div>
       <div class="flex flex-wrap gap-2">
         {% if mdfe.status == 'rascunho' or mdfe.status == 'rejeitado' %}
+          {% if tem_documentos and mdfe.municipio_carregamento and mdfe.municipio_descarregamento %}
           <form method="post" action="{% url 'logistica:mdfe-emitir' mdfe.pk %}">
             {% csrf_token %}
             <button type="submit" class="btn-primary gap-1.5" onclick="return confirm('Emitir este MDF-e na SEFAZ (via Focus NFe)?')">Emitir MDF-e</button>
           </form>
+          {% else %}
+          <span class="rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-sm font-semibold text-amber-800">
+            MDF-e incompleto
+          </span>
+          {% endif %}
         {% elif mdfe.status == 'aguardando_nfe' %}
           <span class="text-sm" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
             O envio ocorrerá automaticamente após a autorização da NF-e vinculada.
@@ -205,6 +211,15 @@
     {% endif %}
   </div>
 
+  {% if not tem_documentos or not mdfe.municipio_carregamento or not mdfe.municipio_descarregamento %}
+  <div class="rounded-lg border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-900 no-print">
+    <strong>Este MDF-e ainda não pode ser emitido.</strong>
+    {% if not tem_documentos %}A NF-e autorizada não está vinculada. {% endif %}
+    {% if not mdfe.municipio_carregamento %}O município de carregamento não foi informado. {% endif %}
+    {% if not mdfe.municipio_descarregamento %}O município de descarregamento não foi informado.{% endif %}
+  </div>
+  {% endif %}
+
   <!-- Dados principais -->
   <div class="card p-5">
     <h3 class="text-xs font-semibold uppercase tracking-wide mb-4" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Dados do MDF-e</h3>
@@ -227,7 +242,7 @@
       </div>
       <div>
         <span class="block text-xs font-medium mb-0.5" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Carregamento</span>
-        <span class="font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">{{ mdfe.municipio_carregamento|default:"—" }}{% if mdfe.uf_carregamento %}/{{ mdfe.uf_carregamento }}{% endif %}</span>
+        <span class="font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">{{ mdfe.municipio_carregamento|default:"Não informado" }}{% if mdfe.uf_carregamento %}/{{ mdfe.uf_carregamento }}{% endif %}</span>
       </div>
       {% if mdfe.percurso_ufs %}
       <div>
@@ -237,7 +252,7 @@
       {% endif %}
       <div>
         <span class="block text-xs font-medium mb-0.5" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Descarregamento</span>
-        <span class="font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">{{ mdfe.municipio_descarregamento|default:"—" }}{% if mdfe.uf_descarregamento %}/{{ mdfe.uf_descarregamento }}{% endif %}</span>
+        <span class="font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">{{ mdfe.municipio_descarregamento|default:"Não informado" }}{% if mdfe.uf_descarregamento %}/{{ mdfe.uf_descarregamento }}{% endif %}</span>
       </div>
       {% if mdfe.romaneio %}
       <div>
@@ -260,8 +275,8 @@
     </div>
   </div>
 
-  <!-- Documentos + form -->
-  <div class="grid gap-6 xl:grid-cols-[1fr_380px]">
+  <!-- Documentos vinculados -->
+  <div class="space-y-4">
     <div class="card overflow-hidden">
       <div class="border-b px-4 py-3" :style="temaClaro ? 'border-color:#e5e7eb;' : 'border-color:#2a2a2e;'">
         <h3 class="font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">Documentos vinculados ao MDF-e</h3>
@@ -309,7 +324,12 @@
       </div>
     </div>
 
-    <form method="post" action="{% url 'logistica:mdfe-documento-create' mdfe.pk %}" class="card p-5 space-y-4">
+    {% if mdfe.status == 'rascunho' or mdfe.status == 'rejeitado' %}
+    <details class="card p-5 no-print">
+      <summary class="cursor-pointer font-semibold" :style="temaClaro ? 'color:#334155;' : 'color:#cbd5e1;'">
+        Opção avançada: vincular outro documento manualmente
+      </summary>
+    <form method="post" action="{% url 'logistica:mdfe-documento-create' mdfe.pk %}" class="mt-5 space-y-4">
       {% csrf_token %}
       <h3 class="font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">Vincular documento</h3>
       <div class="grid grid-cols-2 gap-3">
@@ -330,6 +350,8 @@
       <label class="block space-y-1.5"><span class="text-xs font-semibold uppercase tracking-wide" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Observacao</span>{{ documento_form.observacao }}</label>
       <button type="submit" class="btn-primary w-full justify-center">Vincular documento</button>
     </form>
+    </details>
+    {% endif %}
   </div>
 
   <!-- Modal: Encerrar MDF-e -->

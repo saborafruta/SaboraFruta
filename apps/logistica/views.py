@@ -1836,6 +1836,7 @@ class MDFeDetailView(PermissaoRequiredMixin, View):
             "title": f"MDF-e #{mdfe.numero:06d}",
             "mdfe": mdfe,
             "documentos": documentos,
+            "tem_documentos": documentos.exists(),
             "documento_form": documento_form,
         })
 
