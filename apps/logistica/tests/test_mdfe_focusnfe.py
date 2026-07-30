@@ -277,6 +277,73 @@ class TransferenciaFiscalTests(SimpleTestCase):
             "2026-07-29T22:30:00-03:00",
         )
 
+    def test_payload_mdfe_usa_chave_salva_na_vinculacao(self):
+        filial = SimpleNamespace(
+            cnpj="14004764000240",
+            razao_social="SABORAFRUTA INDUSTRIA ALIMENTICIA LTDA",
+            nome_fantasia="SABOR A FRUTA",
+            inscricao_estadual="207184704",
+            endereco="Avenida Capitao Mor Gouveia",
+            numero="3005",
+            complemento="BOX 11",
+            bairro="Lagoa Nova",
+            codigo_municipio_ibge="2408102",
+            cidade="Natal",
+            uf="RN",
+            cep="59063410",
+        )
+        nfe = SimpleNamespace(
+            status=StatusDocumentoFiscal.AUTORIZADA,
+            chave="",
+            numero=1,
+        )
+        vinculo = SimpleNamespace(
+            documento_fiscal=nfe,
+            chave_acesso="2" * 44,
+        )
+
+        class Documentos:
+            def select_related(self, *args):
+                return self
+
+            def filter(self, **kwargs):
+                return [vinculo]
+
+        mdfe = SimpleNamespace(
+            filial=filial,
+            documentos=Documentos(),
+            serie="1",
+            numero=1,
+            uf_carregamento="RN",
+            uf_descarregamento="RN",
+            codigo_municipio_carregamento="2408102",
+            municipio_carregamento="Natal",
+            codigo_municipio_descarregamento="2408102",
+            municipio_descarregamento="Natal",
+            veiculo_placa="ABC1D23",
+            motorista_nome="Maria Silva",
+            motorista_cpf="12345678901",
+            transporte_metadados={
+                "tara": "2500",
+                "uf_placa": "RN",
+                "tipo_rodado": "Truck",
+                "tipo_carroceria": "Fechada",
+            },
+            valor_total=Decimal("52.50"),
+            peso_total_kg=Decimal("5.400"),
+            observacao="Transferencia entre filiais.",
+            data_hora_inicio_viagem=timezone.make_aware(
+                datetime(2026, 7, 30, 2, 30)
+            ),
+        )
+
+        payload = construir_payload_mdfe(mdfe)
+
+        self.assertEqual(
+            payload["municipios_descarregamento"][0]["notas_fiscais"],
+            [{"chave_nfe": "2" * 44}],
+        )
+
     @patch("apps.logistica.services.mdfe_focusnfe.DocumentoFiscal.objects")
     def test_documento_fiscal_do_mdfe_manual_preenche_snapshot_obrigatorio(
         self, documentos_mock

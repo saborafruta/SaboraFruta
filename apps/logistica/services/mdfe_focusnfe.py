@@ -129,7 +129,7 @@ def construir_payload_mdfe(mdfe: MDFe) -> dict[str, Any]:
     for vinculo in documentos:
         documento = vinculo.documento_fiscal
         chave = _digitos(
-            documento.chave if documento else vinculo.chave_acesso
+            (documento.chave if documento else "") or vinculo.chave_acesso
         )
         if documento and documento.status != StatusDocumentoFiscal.AUTORIZADA:
             raise DadosInvalidosError(
