@@ -347,16 +347,23 @@
 
         <!-- Lote / Quantidade -->
         {% comment %}
-          O Lote so aparece para produto que controla lote. Para os demais o
-          campo ficava permanentemente desabilitado ("Selecione um produto"),
-          ocupando metade da linha sem nunca ser usado. Quando ele some, a
-          Quantidade passa a ocupar a linha inteira.
+          Bloco inteiro so aparece para produto que CONTROLA LOTE, junto com o
+          botao Adicionar (que tambem so existe nesse caso).
+
+          Para produto sem lote a quantidade e digitada no proprio card da
+          Selecao rapida, entao este campo virou duplicado -- e o Lote ficava
+          permanentemente desabilitado ("Selecione um produto"), ocupando
+          espaco sem nunca ser usado.
+
+          Nao da para remover de vez: com lote, o fluxo exige escolher o lote e
+          a quantidade antes de clicar em Adicionar, e o botao le justamente o
+          `itemQuantidade` deste campo.
         {% endcomment %}
-        <div class="transfer-product-quantity grid grid-cols-1 gap-4"
-             :class="itemProdutoControlaLote ? 'sm:grid-cols-2' : ''">
+        <div x-show="itemProdutoControlaLote" x-cloak
+             class="transfer-product-quantity grid grid-cols-1 sm:grid-cols-2 gap-4">
 
           <!-- Lote -->
-          <div x-show="itemProdutoControlaLote" x-cloak>
+          <div>
             <label class="block text-sm font-medium mb-1.5" :style="temaClaro ? 'color:#374151;' : 'color:#d1d5db;'">
               Lote
               <span class="text-xs font-normal" :style="temaClaro ? 'color:#9ca3af;' : 'color:#6b7280;'">(obrigatorio)</span>
