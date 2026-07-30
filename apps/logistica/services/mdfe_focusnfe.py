@@ -221,6 +221,10 @@ def construir_payload_mdfe(mdfe: MDFe) -> dict[str, Any]:
         )
 
     veiculo_tracao = {
+        # A API v2 identifica o modal rodoviario pela chave "placa".
+        # Mantemos "placa_veiculo" porque ela ainda consta na tabela completa
+        # de campos da Focus e e aceita por integracoes legadas.
+        "placa": placa,
         "codigo_veiculo": placa,
         "placa_veiculo": placa,
         "tara_veiculo": tara,

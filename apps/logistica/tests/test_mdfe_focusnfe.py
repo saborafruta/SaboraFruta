@@ -266,6 +266,8 @@ class TransferenciaFiscalTests(SimpleTestCase):
 
         self.assertEqual(payload["emitente"], "2")
         self.assertEqual(payload["seguros_carga"], [{"responsavel_seguro": "1"}])
+        self.assertEqual(payload["veiculo_tracao"]["placa"], "ABC1D23")
+        self.assertEqual(payload["veiculo_tracao"]["placa_veiculo"], "ABC1D23")
         self.assertEqual(payload["veiculo_tracao"]["tipo_rodado_veiculo"], "01")
         self.assertEqual(payload["veiculo_tracao"]["tipo_carroceria_veiculo"], "02")
         self.assertEqual(
