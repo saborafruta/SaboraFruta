@@ -1434,6 +1434,88 @@ class TransferenciaConferenciaDetailView(PermissaoRequiredMixin, View):
             )
 
 
+def _quantidade_log(valor):
+    try:
+        return f'{Decimal(str(valor or 0)):.2f}'.replace('.', ',')
+    except Exception:
+        return str(valor or '-')
+
+
+def _transferencia_log_entries(conferencia):
+    entries = []
+    registros = list(auditoria_para_objeto(conferencia, limit=100))
+    for registro in registros:
+        metadados = registro.metadados or {}
+        evento = metadados.get('evento')
+        itens = metadados.get('itens') or []
+        changes = []
+        for item in itens:
+            produto = item.get('produto_enviado') or 'Produto'
+            enviada = _quantidade_log(item.get('quantidade_enviada'))
+            recebida = _quantidade_log(item.get('quantidade_recebida'))
+            ocorrencia = item.get('ocorrencia') or 'ok'
+            substituto = item.get('produto_recebido') or ''
+            trocada = _quantidade_log(item.get('quantidade_trocada'))
+            devolvida = _quantidade_log(item.get('quantidade_devolvida'))
+            depois = f'Recebido: {recebida}; resultado: {ocorrencia}'
+            if substituto:
+                depois += f'; substituto: {substituto} ({trocada})'
+            if devolvida != '0,00':
+                depois += f'; devolvido: {devolvida}'
+            changes.append({
+                'campo': produto,
+                'antes': f'Enviado: {enviada}',
+                'depois': depois if evento != 'transferencia_enviada' else 'Aguardando conferencia',
+            })
+
+        if evento == 'transferencia_enviada':
+            acao = 'Transferencia enviada'
+            kind = 'created'
+            detalhe = (
+                f'{metadados.get("filial_origem", "")} para '
+                f'{metadados.get("filial_destino", "")}.'
+            )
+        elif evento == 'conferencia_concluida':
+            acao = 'Conferencia concluida'
+            kind = 'stock'
+            detalhe = f'Resultado: {conferencia.get_status_display()}.'
+        elif registro.acao == 'cancelar':
+            acao = 'Transferencia cancelada'
+            kind = 'cancelled'
+            detalhe = registro.justificativa or registro.objeto_descricao
+        else:
+            acao = registro.get_acao_display()
+            kind = 'edit'
+            detalhe = registro.justificativa or registro.objeto_descricao
+
+        entries.append({
+            'data': registro.criado_em,
+            'usuario': registro.usuario.nome if registro.usuario else 'Sistema',
+            'acao': acao,
+            'quantidade': f'{len(itens)} item(ns)' if itens else '',
+            'detalhes': detalhe,
+            'changes': changes,
+            'kind': kind,
+        })
+
+    if not entries:
+        entries.append({
+            'data': conferencia.created_at,
+            'usuario': (
+                conferencia.criada_por.nome
+                if conferencia.criada_por_id else 'Sistema'
+            ),
+            'acao': 'Transferencia enviada',
+            'quantidade': f'{conferencia.itens.count()} item(ns)',
+            'detalhes': (
+                f'{conferencia.filial_origem} para {conferencia.filial_destino}.'
+            ),
+            'changes': [],
+            'kind': 'created',
+        })
+    return sorted(entries, key=lambda item: item['data'], reverse=True)
+
+
 class TransferenciaConferenciaLogView(PermissaoRequiredMixin, View):
     permissao_modulo = 'estoque'
     permissao_acao = 'ver'
@@ -1455,13 +1537,23 @@ class TransferenciaConferenciaLogView(PermissaoRequiredMixin, View):
             ),
             pk=pk,
         )
+        logs = _transferencia_log_entries(conferencia)
         return render(
             request,
             'estoque/outras_movimentacoes/transferencia_conferencia_log.html',
             {
                 'title': f'Historico {conferencia.documento_numero}',
                 'conferencia': conferencia,
-                'registros': list(auditoria_para_objeto(conferencia, limit=100)),
+                'transferencia_logs': logs,
+                'transferencia_log_usuarios': sorted({
+                    item['usuario'] for item in logs if item.get('usuario')
+                }),
+                'transferencia_log_campos': sorted({
+                    change['campo']
+                    for item in logs
+                    for change in item.get('changes', [])
+                    if change.get('campo')
+                }),
                 'e_destino': conferencia.filial_destino_id == request.filial_ativa.pk,
             },
         )

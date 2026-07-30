@@ -51,7 +51,11 @@
   .dark .conference-details { background:#0f172a; }
   .conference-item[data-occurrence="faltante"] .conference-details,
   .conference-item[data-occurrence="devolvido"] .conference-details { display:grid; }
-  .conference-item[data-occurrence="trocado"] .conference-details { display:grid; grid-template-columns:minmax(220px,1fr) 180px minmax(220px,1fr); }
+  .conference-item[data-occurrence="trocado"] .conference-details {
+    display:grid;
+    grid-template-columns:minmax(280px,1.35fr) minmax(220px,.9fr) minmax(240px,1fr);
+    align-items:end;
+  }
   .conference-item[data-occurrence="trocado"] .received-field { display:none; }
   .conference-item:not([data-occurrence="trocado"]) .swap-field { display:none; }
   .conference-item[data-occurrence="devolvido"] .received-field { display:none; }
@@ -59,6 +63,29 @@
   .conference-item[data-occurrence="devolvido"] .return-field { display:block; }
   .conference-field label { display:block; margin-bottom:.3rem; color:#475569; font-size:.72rem; font-weight:750; text-transform:uppercase; }
   .dark .conference-field label { color:#94a3b8; }
+  .conference-quantity-control {
+    display:grid; grid-template-columns:40px minmax(92px,1fr) 40px; align-items:stretch;
+    border:1px solid #cbd5e1; border-radius:7px; overflow:hidden; background:#fff;
+  }
+  .dark .conference-quantity-control { border-color:#475569; background:#111827; }
+  .conference-quantity-control button {
+    border:0; background:#eff6ff; color:#1d4ed8; font-size:1.15rem; font-weight:900;
+  }
+  .dark .conference-quantity-control button { background:#1e3a5f; color:#bfdbfe; }
+  .conference-quantity-control input {
+    min-width:0; border:0 !important; border-left:1px solid #cbd5e1 !important;
+    border-right:1px solid #cbd5e1 !important; border-radius:0 !important;
+    text-align:center; font-weight:800;
+  }
+  .dark .conference-quantity-control input { border-color:#475569 !important; }
+  .conference-limit { margin-top:.3rem; color:#64748b; font-size:.72rem; }
+  .conference-swap-summary {
+    grid-column:1 / -1; display:flex; align-items:center; gap:.45rem; min-height:38px;
+    padding:.55rem .7rem; border:1px solid #bfdbfe; border-radius:7px;
+    background:#eff6ff; color:#1e3a8a; font-size:.8rem; font-weight:700;
+  }
+  .dark .conference-swap-summary { border-color:#1e40af; background:rgba(30,58,95,.55); color:#bfdbfe; }
+  .conference-swap-summary strong { font-size:.92rem; }
   .replacement-search { position:relative; }
   .replacement-results {
     display:none; position:absolute; z-index:30; top:calc(100% + 4px); left:0; right:0;
@@ -185,10 +212,16 @@
               </div>
               <div class="conference-field swap-field">
                 <label>Quantidade que veio trocada</label>
-                <input class="form-input replacement-quantity" type="text" inputmode="decimal" data-decimal-places="2"
-                       name="item_{{ item.pk }}_quantidade_produto_recebido"
-                       value="{{ item.quantidade_produto_recebido|floatformat:'2u' }}"
-                       {% if not pode_editar %}disabled{% endif %}>
+                <div class="conference-quantity-control">
+                  <button type="button" class="replacement-quantity-minus" aria-label="Diminuir quantidade trocada">−</button>
+                  <input class="form-input replacement-quantity" type="text" inputmode="decimal" data-decimal-places="2"
+                         name="item_{{ item.pk }}_quantidade_produto_recebido"
+                         value="{{ item.quantidade_produto_recebido|floatformat:'2u' }}"
+                         aria-label="Quantidade trocada"
+                         {% if not pode_editar %}disabled{% endif %}>
+                  <button type="button" class="replacement-quantity-plus" aria-label="Aumentar quantidade trocada">+</button>
+                </div>
+                <p class="conference-limit">Pode trocar de 0,01 até <strong>{{ item.quantidade_enviada|quantidade:2 }}</strong>.</p>
               </div>
               <div class="conference-field return-field">
                 <label>Quantidade a devolver</label>
@@ -205,6 +238,12 @@
                        value="{{ item.observacao }}"
                        placeholder="Explique o que aconteceu"
                        {% if not pode_editar %}disabled{% endif %}>
+              </div>
+              <div class="conference-swap-summary swap-field" aria-live="polite">
+                Resultado desta linha:
+                <strong class="replacement-summary-received">0,00 recebido</strong>
+                <span>+</span>
+                <strong class="replacement-summary-swapped">0,00 trocado</strong>
               </div>
             </div>
 
@@ -282,7 +321,10 @@
         returnQty.value = '0.00';
         observation.value = '';
       } else if (occurrence === 'trocado') {
-        received.value = '0.00';
+        if (Number(replacementQty.value.replace(',', '.')) <= 0) {
+          replacementQty.value = Math.min(Number(sent), 1).toFixed(2);
+        }
+        received.value = Math.max(0, Number(sent) - parseQuantity(replacementQty.value)).toFixed(2);
       } else if (occurrence === 'devolvido') {
         received.value = '0.00';
         if (Number(returnQty.value || 0) <= 0) {
@@ -300,7 +342,43 @@
     replacementQty.required = occurrence === 'trocado';
     returnQty.required = occurrence === 'devolvido';
     card.classList.toggle('is-confirmed', checkbox.checked);
+    updateSwapSummary(card);
     updateCounter();
+  }
+
+  function parseQuantity(value) {
+    let normalized = String(value || '0').trim();
+    if (normalized.includes(',') && normalized.includes('.')) {
+      normalized = normalized.replace(/\./g, '').replace(',', '.');
+    } else {
+      normalized = normalized.replace(',', '.');
+    }
+    const parsed = Number.parseFloat(normalized);
+    return Number.isFinite(parsed) ? parsed : 0;
+  }
+
+  function formatQuantity(value) {
+    return Math.max(0, value).toLocaleString('pt-BR', {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    });
+  }
+
+  function clampSwapQuantity(card, value) {
+    const sent = parseQuantity(card.dataset.sent);
+    return Math.min(sent, Math.max(0, value));
+  }
+
+  function updateSwapSummary(card) {
+    const sent = parseQuantity(card.dataset.sent);
+    const input = card.querySelector('.replacement-quantity');
+    const swapped = clampSwapQuantity(card, parseQuantity(input.value));
+    const received = Math.max(0, sent - swapped);
+    card.querySelector('.replacement-summary-received').textContent =
+      formatQuantity(received) + (received === 1 ? ' recebido' : ' recebidos');
+    card.querySelector('.replacement-summary-swapped').textContent =
+      formatQuantity(swapped) + (swapped === 1 ? ' trocado' : ' trocados');
+    card.querySelector('.received-quantity').value = received.toFixed(2);
   }
 
   cards.forEach(function(card) {
@@ -315,6 +393,32 @@
       });
     });
     applyOccurrence(card, selectedOccurrence(card), false);
+
+    const replacementQuantity = card.querySelector('.replacement-quantity');
+    const changeReplacementQuantity = function(delta) {
+      const next = clampSwapQuantity(
+        card,
+        parseQuantity(replacementQuantity.value) + delta
+      );
+      replacementQuantity.value = next.toFixed(2);
+      updateSwapSummary(card);
+      replacementQuantity.focus();
+      replacementQuantity.select();
+    };
+    card.querySelector('.replacement-quantity-minus').addEventListener('click', function() {
+      changeReplacementQuantity(-1);
+    });
+    card.querySelector('.replacement-quantity-plus').addEventListener('click', function() {
+      changeReplacementQuantity(1);
+    });
+    replacementQuantity.addEventListener('input', function() {
+      updateSwapSummary(card);
+    });
+    replacementQuantity.addEventListener('blur', function() {
+      const value = clampSwapQuantity(card, parseQuantity(replacementQuantity.value));
+      replacementQuantity.value = value.toFixed(2);
+      updateSwapSummary(card);
+    });
 
     const search = card.querySelector('.replacement-product-search');
     const selectedId = card.querySelector('.replacement-product');

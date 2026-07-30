@@ -1,18 +1,93 @@
 {% extends "_base.html" %}
-{% load erp_extras %}
 
-{% block page_title %}Historico da transferencia{% endblock %}
+{% block page_title %}Log da transferencia{% endblock %}
 
 {% block content %}
-<div class="mx-auto max-w-6xl space-y-5 py-6">
-  <div class="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+<style>
+  .transfer-log-page { max-width:1180px; margin:0 auto; padding:1.5rem 1rem; color:#e5e7eb; }
+  body.tema-claro .transfer-log-page { color:#0f172a; }
+  .transfer-log-back { color:#60a5fa; font-weight:750; font-size:.88rem; }
+  body.tema-claro .transfer-log-back { color:#2563eb; }
+  .transfer-log-headline { display:flex; justify-content:space-between; align-items:flex-end; gap:1rem; margin:.8rem 0 1rem; }
+  .transfer-log-title { font-size:1.7rem; font-weight:850; }
+  .transfer-log-route { margin-top:.25rem; color:#94a3b8; font-size:.84rem; }
+  body.tema-claro .transfer-log-route { color:#64748b; }
+  .produto-log-modal { width:100%; overflow:hidden; border-radius:10px; border:1px solid rgba(148,163,184,.22); background:#202124; color:#e5e7eb; box-shadow:0 18px 45px rgba(0,0,0,.18); display:flex; flex-direction:column; }
+  body.tema-claro .produto-log-modal { background:#fff; color:#0f172a; border-color:#dfe5ee; }
+  .produto-log-head { display:flex; align-items:center; justify-content:space-between; gap:.75rem; padding:.95rem 1rem; border-bottom:1px solid rgba(59,130,246,.20); background:rgba(37,99,235,.10); }
+  body.tema-claro .produto-log-head { background:#eff6ff; border-color:#bfdbfe; }
+  .produto-help { color:#94a3b8; font-size:.78rem; margin-top:.12rem; }
+  body.tema-claro .produto-help { color:#64748b; }
+  .produto-log-presets { display:flex; flex-wrap:wrap; gap:.35rem; padding:.7rem 1rem 0; }
+  .produto-log-preset { min-height:30px; border-radius:999px; padding:.22rem .65rem; font-size:.76rem; font-weight:800; border:1px solid rgba(96,165,250,.26); color:#bfdbfe; background:rgba(37,99,235,.10); }
+  body.tema-claro .produto-log-preset { color:#1d4ed8; background:#eff6ff; border-color:#bfdbfe; }
+  .produto-log-tools { display:grid; grid-template-columns:repeat(6,minmax(0,1fr)); gap:.55rem; padding:.75rem 1rem; border-bottom:1px solid rgba(148,163,184,.16); }
+  .produto-log-filter { display:grid; gap:.2rem; }
+  .produto-log-tools input, .produto-log-tools select { min-height:34px; border-radius:8px; border:1px solid #353944; background:#18191b; color:#f8fafc; padding:.35rem .5rem; font-size:.8rem; }
+  body.tema-claro .produto-log-tools input, body.tema-claro .produto-log-tools select { background:#fff; color:#0f172a; border-color:#cfd8e3; }
+  .produto-log-list { padding:.75rem 1rem 1rem; display:grid; gap:.62rem; }
+  .produto-log-item { display:grid; grid-template-columns:145px minmax(120px,.9fr) minmax(150px,1fr) 90px minmax(180px,1.2fr); gap:.55rem; align-items:start; border:1px solid rgba(148,163,184,.16); border-left:5px solid #3b82f6; border-radius:8px; padding:.68rem; font-size:.8rem; background:rgba(37,99,235,.08); }
+  .produto-log-item.log-kind-cancelled { border-left-color:#ef4444; background:rgba(239,68,68,.08); }
+  body.tema-claro .produto-log-item { border-color:#e2e8f0; background:#eff6ff; }
+  body.tema-claro .produto-log-item.log-kind-cancelled { background:#fef2f2; }
+  .produto-log-kind { display:inline-flex; width:max-content; max-width:100%; border-radius:999px; padding:.18rem .5rem; font-weight:900; font-size:.74rem; background:rgba(96,165,250,.18); color:#bfdbfe; }
+  body.tema-claro .produto-log-kind { background:#dbeafe; color:#1d4ed8; }
+  .produto-log-label { color:#93a4bd; font-size:.68rem; font-weight:800; text-transform:uppercase; }
+  body.tema-claro .produto-log-label { color:#64748b; }
+  .produto-log-detail-action { display:block; margin-top:.45rem; min-height:30px; border-radius:7px; padding:.3rem .6rem; border:1px solid #2563eb; background:#2563eb; color:#fff; font-weight:800; }
+  .produto-log-changes { grid-column:1 / -1; border-top:1px solid rgba(148,163,184,.16); margin-top:.25rem; padding-top:.45rem; display:grid; gap:.35rem; }
+  .produto-log-change { display:grid; grid-template-columns:minmax(150px,.8fr) minmax(0,1fr) minmax(0,1.2fr); gap:.45rem; align-items:start; }
+  .produto-log-change strong { font-size:.72rem; }
+  .produto-log-value { border-radius:7px; padding:.4rem .5rem; background:rgba(15,23,42,.18); word-break:break-word; }
+  body.tema-claro .produto-log-value { background:#eef2f7; }
+  .transfer-log-empty { padding:2rem; text-align:center; color:#64748b; }
+  @media (max-width:900px) {
+    .produto-log-tools { grid-template-columns:repeat(2,minmax(0,1fr)); }
+    .produto-log-item { grid-template-columns:repeat(2,minmax(0,1fr)); }
+    .produto-log-item > div:nth-child(3), .produto-log-item > div:nth-child(5) { grid-column:1 / -1; }
+    .produto-log-changes, .produto-log-change { grid-template-columns:1fr; }
+  }
+</style>
+
+<div class="transfer-log-page"
+     x-data="{
+       logStart: '',
+       logEnd: '',
+       logStartTime: '',
+       logEndTime: '',
+       logUser: '',
+       logField: '',
+       dateValue(date) {
+         const offset = date.getTimezoneOffset() * 60000;
+         return new Date(date.getTime() - offset).toISOString().slice(0, 10);
+       },
+       setPreset(name) {
+         const today = new Date();
+         let start = new Date(today);
+         let end = new Date(today);
+         if (name === 'yesterday') {
+           start.setDate(start.getDate() - 1);
+           end = new Date(start);
+         } else if (name === 'week') {
+           const day = (start.getDay() + 6) % 7;
+           start.setDate(start.getDate() - day);
+         } else if (name === 'month') {
+           start = new Date(today.getFullYear(), today.getMonth(), 1);
+         }
+         this.logStart = this.dateValue(start);
+         this.logEnd = this.dateValue(end);
+       },
+       clearFilters() {
+         this.logStart = this.logEnd = this.logStartTime = this.logEndTime = this.logUser = this.logField = '';
+       }
+     }">
+  <a href="{% if e_destino %}{% url 'estoque:transferencia-conferencia-detail' conferencia.pk %}{% else %}{% url 'estoque:transferencia-lojas' %}{% endif %}"
+     class="transfer-log-back">&larr; Voltar</a>
+
+  <div class="transfer-log-headline">
     <div>
-      <a href="{% if e_destino %}{% url 'estoque:transferencia-conferencia-detail' conferencia.pk %}{% else %}{% url 'estoque:transferencia-lojas' %}{% endif %}"
-         class="text-sm font-semibold" style="color:#2563eb;">
-        &larr; Voltar
-      </a>
-      <h2 class="mt-3 text-2xl font-bold">Historico {{ conferencia.documento_numero }}</h2>
-      <p class="mt-1 text-sm text-gray-500">
+      <h2 class="transfer-log-title">{{ conferencia.documento_numero }}</h2>
+      <p class="transfer-log-route">
         {{ conferencia.filial_origem.nome_fantasia|default:conferencia.filial_origem.razao_social }}
         &rarr;
         {{ conferencia.filial_destino.nome_fantasia|default:conferencia.filial_destino.razao_social }}
@@ -23,82 +98,62 @@
     </span>
   </div>
 
-  <section class="grid gap-4 md:grid-cols-2">
-    <div class="card p-5">
-      <p class="text-xs font-semibold uppercase text-gray-500">Transferencia enviada</p>
-      <p class="mt-2 font-semibold">
-        {{ conferencia.criada_por.nome|default:conferencia.criada_por }}
-      </p>
-      <p class="text-sm text-gray-500">{{ conferencia.created_at|date:"d/m/Y H:i" }}</p>
-      <p class="mt-3 text-sm">
-        <strong>Origem:</strong>
-        {{ conferencia.filial_origem.nome_fantasia|default:conferencia.filial_origem.razao_social }}
-      </p>
-      <p class="text-sm">
-        <strong>Destino:</strong>
-        {{ conferencia.filial_destino.nome_fantasia|default:conferencia.filial_destino.razao_social }}
-      </p>
-      {% if conferencia.observacao_origem %}
-        <p class="mt-3 text-sm"><strong>Observacao:</strong> {{ conferencia.observacao_origem }}</p>
-      {% endif %}
+  <section class="produto-log-modal" aria-label="Log da transferencia">
+    <div class="produto-log-head">
+      <div>
+        <strong>Log da transferencia</strong>
+        <div class="produto-help">Quem fez, quando fez, o que fez e todas as quantidades envolvidas.</div>
+      </div>
     </div>
 
-    <div class="card p-5">
-      <p class="text-xs font-semibold uppercase text-gray-500">Recebimento</p>
-      {% if conferencia.conferida_por %}
-        <p class="mt-2 font-semibold">
-          {{ conferencia.conferida_por.nome|default:conferencia.conferida_por }}
-        </p>
-        <p class="text-sm text-gray-500">{{ conferencia.conferida_em|date:"d/m/Y H:i" }}</p>
-        <p class="mt-3 text-sm"><strong>Resultado:</strong> {{ conferencia.get_status_display }}</p>
-        {% if conferencia.observacao_conferencia %}
-          <p class="mt-2 text-sm"><strong>Observacao:</strong> {{ conferencia.observacao_conferencia }}</p>
-        {% endif %}
-      {% else %}
-        <p class="mt-2 text-sm text-gray-500">Ainda nao recebida ou conferida.</p>
-      {% endif %}
+    <div class="produto-log-presets">
+      <button type="button" class="produto-log-preset" @click="setPreset('today')">Hoje</button>
+      <button type="button" class="produto-log-preset" @click="setPreset('yesterday')">Ontem</button>
+      <button type="button" class="produto-log-preset" @click="setPreset('week')">Essa semana</button>
+      <button type="button" class="produto-log-preset" @click="setPreset('month')">Esse mes</button>
+      <button type="button" class="produto-log-preset" @click="clearFilters()">Limpar filtros</button>
+    </div>
+
+    <div class="produto-log-tools">
+      <label class="produto-log-filter">
+        <span class="produto-log-label">De</span>
+        <input type="date" x-model="logStart">
+      </label>
+      <label class="produto-log-filter">
+        <span class="produto-log-label">Ate</span>
+        <input type="date" x-model="logEnd">
+      </label>
+      <label class="produto-log-filter">
+        <span class="produto-log-label">Hora inicial</span>
+        <input type="time" x-model="logStartTime">
+      </label>
+      <label class="produto-log-filter">
+        <span class="produto-log-label">Hora final</span>
+        <input type="time" x-model="logEndTime">
+      </label>
+      <label class="produto-log-filter">
+        <span class="produto-log-label">Usuario</span>
+        <select x-model="logUser">
+          <option value="">Todos usuarios</option>
+          {% for usuario in transferencia_log_usuarios %}<option value="{{ usuario }}">{{ usuario }}</option>{% endfor %}
+        </select>
+      </label>
+      <label class="produto-log-filter">
+        <span class="produto-log-label">Item</span>
+        <select x-model="logField">
+          <option value="">Todos itens</option>
+          {% for campo in transferencia_log_campos %}<option value="{{ campo }}">{{ campo }}</option>{% endfor %}
+        </select>
+      </label>
+    </div>
+
+    <div class="produto-log-list">
+      {% for item in transferencia_logs %}
+        {% include "produtos/produto/partials/_log_item.html" with item=item %}
+      {% empty %}
+        <div class="transfer-log-empty">Nenhum evento registrado nesta transferencia.</div>
+      {% endfor %}
     </div>
   </section>
-
-  <section class="card overflow-hidden">
-    <div class="border-b border-gray-200 p-4 dark:border-gray-800">
-      <h3 class="font-semibold">Itens e divergencias</h3>
-    </div>
-    <div class="overflow-x-auto">
-      <table class="w-full text-sm">
-        <thead class="bg-gray-50 text-left text-xs uppercase text-gray-500 dark:bg-gray-900">
-          <tr>
-            <th class="px-4 py-3">Produto enviado</th>
-            <th class="px-4 py-3 text-right">Enviado</th>
-            <th class="px-4 py-3 text-right">Recebido</th>
-            <th class="px-4 py-3">Resultado</th>
-            <th class="px-4 py-3">Produto substituto</th>
-            <th class="px-4 py-3 text-right">Trocado</th>
-            <th class="px-4 py-3 text-right">Devolvido</th>
-            <th class="px-4 py-3">Observacao</th>
-          </tr>
-        </thead>
-        <tbody class="divide-y divide-gray-200 dark:divide-gray-800">
-          {% for item in conferencia.itens.all %}
-            <tr>
-              <td class="px-4 py-3 font-semibold">
-                {{ item.produto_enviado.descricao }}
-                {% if item.lote_enviado %}<small class="block text-gray-500">Lote {{ item.lote_enviado.numero_lote }}</small>{% endif %}
-              </td>
-              <td class="px-4 py-3 text-right">{{ item.quantidade_enviada|quantidade:2 }}</td>
-              <td class="px-4 py-3 text-right">{{ item.quantidade_recebida|quantidade:2 }}</td>
-              <td class="px-4 py-3">{{ item.get_ocorrencia_display }}</td>
-              <td class="px-4 py-3">{{ item.produto_recebido.descricao|default:"-" }}</td>
-              <td class="px-4 py-3 text-right">{{ item.quantidade_produto_recebido|quantidade:2 }}</td>
-              <td class="px-4 py-3 text-right">{{ item.quantidade_devolvida|quantidade:2 }}</td>
-              <td class="px-4 py-3">{{ item.observacao|default:"-" }}</td>
-            </tr>
-          {% endfor %}
-        </tbody>
-      </table>
-    </div>
-  </section>
-
-  {% include "core/partials/_auditoria_operacional.html" with registros=registros titulo="Log operacional da transferencia" %}
 </div>
 {% endblock %}
