@@ -6,7 +6,7 @@ from django.db import migrations, models
 class Migration(migrations.Migration):
 
     dependencies = [
-        ("core", "0037_probe_capacidades_geo"),
+        ("core", "0036_notificacao"),
     ]
 
     operations = [
