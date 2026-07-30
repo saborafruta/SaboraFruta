@@ -220,11 +220,7 @@ def construir_payload_mdfe(mdfe: MDFe) -> dict[str, Any]:
             "rodado e tipo de carroceria são obrigatórios."
         )
 
-    veiculo_tracao = {
-        # A API v2 identifica o modal rodoviario pela chave "placa".
-        # Mantemos "placa_veiculo" porque ela ainda consta na tabela completa
-        # de campos da Focus e e aceita por integracoes legadas.
-        "placa": placa,
+    modal_rodoviario = {
         "codigo_veiculo": placa,
         "placa_veiculo": placa,
         "tara_veiculo": tara,
@@ -235,10 +231,18 @@ def construir_payload_mdfe(mdfe: MDFe) -> dict[str, Any]:
     }
     renavam = _digitos(metadados.get("renavam"))
     if 9 <= len(renavam) <= 11:
-        veiculo_tracao["renavam_veiculo"] = renavam
+        modal_rodoviario["renavam_veiculo"] = renavam
     capacidade = int(Decimal(str(metadados.get("capacidade_kg") or 0)))
     if capacidade > 0:
-        veiculo_tracao["capacidade_kg_veiculo"] = capacidade
+        modal_rodoviario["capacidade_kg_veiculo"] = capacidade
+
+    # A API exige o modal rodoviario para selecionar o grupo XML infModal/rodo
+    # e tambem declara veiculo_tracao como obrigatorio. Enviamos os dois grupos
+    # com os mesmos dados para atender a validacao atual da Focus.
+    veiculo_tracao = {
+        "placa": placa,
+        **modal_rodoviario,
+    }
 
     codigo_carregamento = _digitos(
         mdfe.codigo_municipio_carregamento or filial.codigo_municipio_ibge
@@ -294,6 +298,7 @@ def construir_payload_mdfe(mdfe: MDFe) -> dict[str, Any]:
             "notas_fiscais": [{"chave_nfe": chave} for chave in chaves],
         }],
         "seguros_carga": [{"responsavel_seguro": "1"}],
+        "modal_rodoviario": modal_rodoviario,
         "veiculo_tracao": veiculo_tracao,
         "quantidade_total_nfe": len(chaves),
         "valor_total_carga": float(mdfe.valor_total),
@@ -303,14 +308,9 @@ def construir_payload_mdfe(mdfe: MDFe) -> dict[str, Any]:
         "descricao_produto": "Polpas e produtos alimentícios",
         "informacao_complementar": _texto(mdfe.observacao)[:5000],
     }
-    # A tabela completa de campos do MDF-e da Focus define os dados do modal
-    # rodoviario na raiz do documento. Mantemos o objeto aninhado exigido pela
-    # referencia resumida da API e repetimos na raiz apenas os campos oficiais.
-    payload.update({
-        chave: valor
-        for chave, valor in veiculo_tracao.items()
-        if chave != "placa"
-    })
+    # Mantemos os campos oficiais na raiz para compatibilidade com integracoes
+    # anteriores da Focus, alem dos objetos exigidos pela API atual.
+    payload.update(modal_rodoviario)
     data_hora_inicio_viagem = getattr(mdfe, "data_hora_inicio_viagem", None)
     if data_hora_inicio_viagem:
         payload["data_hora_previsto_inicio_viagem"] = timezone.localtime(

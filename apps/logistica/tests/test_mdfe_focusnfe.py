@@ -270,6 +270,19 @@ class TransferenciaFiscalTests(SimpleTestCase):
         self.assertEqual(payload["veiculo_tracao"]["placa_veiculo"], "ABC1D23")
         self.assertEqual(payload["veiculo_tracao"]["tipo_rodado_veiculo"], "01")
         self.assertEqual(payload["veiculo_tracao"]["tipo_carroceria_veiculo"], "02")
+        self.assertEqual(payload["modal_rodoviario"]["placa_veiculo"], "ABC1D23")
+        self.assertEqual(payload["modal_rodoviario"]["tara_veiculo"], 2500)
+        self.assertEqual(
+            payload["modal_rodoviario"]["condutores"],
+            [{"nome": "Maria Silva", "cpf": "12345678901"}],
+        )
+        self.assertEqual(payload["modal_rodoviario"]["tipo_rodado_veiculo"], "01")
+        self.assertEqual(
+            payload["modal_rodoviario"]["tipo_carroceria_veiculo"], "02"
+        )
+        self.assertEqual(
+            payload["modal_rodoviario"]["uf_licenciamento_veiculo"], "RN"
+        )
         self.assertEqual(payload["codigo_veiculo"], "ABC1D23")
         self.assertEqual(payload["placa_veiculo"], "ABC1D23")
         self.assertEqual(payload["tara_veiculo"], 2500)
