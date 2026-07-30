@@ -12,9 +12,28 @@ from apps.logistica.services.mdfe_focusnfe import (
     _validar_transporte,
     construir_payload_mdfe,
 )
+from apps.logistica.views import _peso_bruto_nfe
 
 
 class TransferenciaFiscalTests(SimpleTestCase):
+    def test_peso_bruto_e_reaproveitado_do_xml_da_nfe(self):
+        documento = SimpleNamespace(
+            xml_assinado="""
+                <NFe xmlns="http://www.portalfiscal.inf.br/nfe">
+                  <infNFe>
+                    <transp>
+                      <vol><pesoB>125.500</pesoB></vol>
+                      <vol><pesoB>24.500</pesoB></vol>
+                    </transp>
+                  </infNFe>
+                </NFe>
+            """,
+            xml_retorno="",
+            xml_enviado="",
+        )
+
+        self.assertEqual(_peso_bruto_nfe(documento), Decimal("150.000"))
+
     def test_cfop_producao_propria(self):
         self.assertEqual(_cfop_transferencia("RN", "RN", "producao_propria"), "5151")
         self.assertEqual(_cfop_transferencia("RN", "PB", "producao_propria"), "6151")

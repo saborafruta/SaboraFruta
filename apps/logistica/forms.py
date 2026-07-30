@@ -1,6 +1,6 @@
 from django import forms
 
-from apps.cadastros.models import Cliente, Fornecedor, Transportadora
+from apps.cadastros.models import Cliente, Fornecedor, Motorista, Transportadora, Veiculo
 from apps.logistica.models import (
     CTe,
     DocumentoCTe,
@@ -458,6 +458,27 @@ class ItemPedidoExpedicaoForm(forms.ModelForm):
 # ─── MDF-e ────────────────────────────────────────────────────────────────────
 
 class MDFeForm(forms.ModelForm):
+    motorista_cadastro = forms.ModelChoiceField(
+        queryset=Motorista.objects.none(),
+        required=False,
+        empty_label="Selecione o motorista...",
+        label="Motorista",
+    )
+    veiculo_cadastro = forms.ModelChoiceField(
+        queryset=Veiculo.objects.none(),
+        required=False,
+        empty_label="Selecione o veículo...",
+        label="Veículo",
+    )
+    peso_carga_kg = forms.DecimalField(
+        required=False,
+        min_value=0,
+        decimal_places=3,
+        max_digits=12,
+        label="Peso bruto da carga (kg)",
+        widget=forms.NumberInput(attrs={"step": "0.001", "min": "0"}),
+    )
+
     class Meta:
         model = MDFe
         fields = [
@@ -487,10 +508,90 @@ class MDFeForm(forms.ModelForm):
             self.fields["romaneio"].queryset = RomaneioCarga.objects.for_filial(filial).exclude(
                 status__in=[RomaneioCarga.Status.CANCELADO]
             )
+            self.fields["motorista_cadastro"].queryset = (
+                Motorista.objects.for_filial(filial).filter(ativo=True).order_by("nome")
+            )
+            self.fields["veiculo_cadastro"].queryset = (
+                Veiculo.objects.for_filial(filial).filter(ativo=True).order_by("placa")
+            )
+            if self.instance and self.instance.pk:
+                cpf = "".join(filter(str.isdigit, self.instance.motorista_cpf or ""))
+                placa = (self.instance.veiculo_placa or "").replace("-", "").upper()
+                if cpf:
+                    self.fields["motorista_cadastro"].initial = next(
+                        (
+                            motorista.pk
+                            for motorista in self.fields["motorista_cadastro"].queryset
+                            if "".join(filter(str.isdigit, motorista.cpf or "")) == cpf
+                        ),
+                        None,
+                    )
+                if placa:
+                    self.fields["veiculo_cadastro"].initial = next(
+                        (
+                            veiculo.pk
+                            for veiculo in self.fields["veiculo_cadastro"].queryset
+                            if (veiculo.placa or "").replace("-", "").upper() == placa
+                        ),
+                        None,
+                    )
+                self.fields["peso_carga_kg"].initial = self.instance.peso_total_kg
         for nome in ("transportadora", "romaneio", "data_encerramento"):
             self.fields[nome].required = False
         for field in self.fields.values():
             field.widget.attrs["class"] = BASE_INPUT_CLASS
+        self.fields["numero"].widget.attrs["readonly"] = True
+        self.fields["serie"].widget.attrs["readonly"] = True
+
+    def clean(self):
+        cleaned = super().clean()
+        motorista = cleaned.get("motorista_cadastro")
+        veiculo = cleaned.get("veiculo_cadastro")
+        if not motorista and not cleaned.get("motorista_nome"):
+            self.add_error(
+                "motorista_cadastro",
+                "Selecione o motorista responsável pelo transporte.",
+            )
+        if not veiculo and not cleaned.get("veiculo_placa"):
+            self.add_error(
+                "veiculo_cadastro",
+                "Selecione o veículo que fará o transporte.",
+            )
+        if not cleaned.get("peso_carga_kg"):
+            self.add_error(
+                "peso_carga_kg",
+                "Informe o peso bruto da carga para emitir o MDF-e.",
+            )
+        return cleaned
+
+    def save(self, commit=True):
+        mdfe = super().save(commit=False)
+        motorista = self.cleaned_data.get("motorista_cadastro")
+        veiculo = self.cleaned_data.get("veiculo_cadastro")
+        if motorista:
+            mdfe.motorista_nome = motorista.nome
+            mdfe.motorista_cpf = motorista.cpf
+            mdfe.motorista_cnh = motorista.cnh
+        if veiculo:
+            mdfe.veiculo_placa = (veiculo.placa or "").replace("-", "").upper()
+            mdfe.veiculo_rntrc = (
+                getattr(veiculo.transportadora, "rntrc", "") if veiculo.transportadora else ""
+            )
+            mdfe.veiculo_descricao = (
+                veiculo.descricao or f"{veiculo.marca} {veiculo.modelo}".strip()
+            )
+            mdfe.transporte_metadados = {
+                "tara": str(veiculo.tara or ""),
+                "capacidade_kg": str(veiculo.capacidade_kg or ""),
+                "renavam": veiculo.renavam,
+                "uf_placa": veiculo.uf_placa,
+                "tipo_rodado": veiculo.tipo_rodado,
+                "tipo_carroceria": veiculo.tipo_carroceria,
+            }
+        mdfe.peso_total_kg = self.cleaned_data.get("peso_carga_kg") or 0
+        if commit:
+            mdfe.save()
+        return mdfe
 
 
 class DocumentoMDFeForm(forms.ModelForm):

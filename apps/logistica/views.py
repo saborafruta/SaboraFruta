@@ -1,7 +1,10 @@
 import json
+from decimal import Decimal, InvalidOperation
+from xml.etree import ElementTree
 
 from django.contrib import messages
 from django.core.paginator import Paginator
+from django.db import transaction
 from django.db.models import Count, Q, Sum
 from django.http import HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
@@ -72,10 +75,16 @@ def _motoristas_veiculos_json(filial):
     )
     veiculos = list(
         Veiculo.objects.for_filial(filial).filter(ativo=True)
-        .values('id', 'placa', 'descricao', 'marca', 'modelo')
+        .values(
+            'id', 'placa', 'descricao', 'marca', 'modelo', 'renavam',
+            'uf_placa', 'tipo_rodado', 'tipo_carroceria', 'tara',
+            'capacidade_kg', 'transportadora__rntrc',
+        )
         .order_by('placa')
     )
-    return json.dumps(motoristas), json.dumps(veiculos)
+    return json.dumps(motoristas, ensure_ascii=False), json.dumps(
+        veiculos, ensure_ascii=False, default=str
+    )
 
 
 def _proximo_numero(filial):
@@ -1157,13 +1166,74 @@ class ItemPedidoExpedicaoToggleStatusView(PermissaoRequiredMixin, View):
 # ── MDF-e ────────────────────────────────────────────────────────────────────
 
 def _proximo_numero_mdfe(filial):
+    from apps.core.models.parametros import ParametroDocumentoFiscal, ParametrosSistema
+
+    parametros = ParametrosSistema.objects.filter(filial=filial).first()
     ultimo = (
         MDFe.objects.for_filial(filial)
         .order_by("-numero")
         .values_list("numero", flat=True)
         .first()
-    )
-    return (ultimo or 0) + 1
+    ) or 0
+    if parametros:
+        configuracao = ParametroDocumentoFiscal.objects.filter(
+            parametros=parametros,
+            tipo_documento=ParametroDocumentoFiscal.TipoDocumento.MDFE,
+        ).first()
+        if configuracao:
+            return max(configuracao.proximo_numero, ultimo + 1), str(
+                configuracao.serie or 1
+            )
+    return ultimo + 1, "1"
+
+
+def _peso_bruto_nfe(documento):
+    """Obtém o peso da NF-e; usa o XML e recorre ao cadastro dos produtos."""
+    for xml in (documento.xml_assinado, documento.xml_retorno, documento.xml_enviado):
+        if not xml:
+            continue
+        try:
+            raiz = ElementTree.fromstring(xml)
+            pesos = raiz.findall(".//{*}transp/{*}vol/{*}pesoB")
+            total = sum(
+                (Decimal((peso.text or "0").replace(",", ".")) for peso in pesos),
+                Decimal("0"),
+            )
+            if total > 0:
+                return total
+        except (ElementTree.ParseError, InvalidOperation):
+            continue
+
+    total = Decimal("0")
+    for item in documento.itens.select_related("produto"):
+        peso_unitario = getattr(item.produto, "peso_bruto", None) if item.produto else None
+        if peso_unitario:
+            total += Decimal(str(peso_unitario)) * item.quantidade
+    return total
+
+
+def _nfe_inicial(documento):
+    if not documento:
+        return None
+    destinatario = documento.destinatario_snapshot or {}
+    peso = _peso_bruto_nfe(documento)
+    return {
+        "id": documento.pk,
+        "label": f"NF-e nº {documento.numero} · Série {documento.serie}",
+        "numero": documento.numero,
+        "serie": documento.serie,
+        "chave": documento.chave or "",
+        "valor_total": str(documento.valor_total),
+        "peso_kg": str(peso),
+        "destinatario": destinatario.get("nome", ""),
+        "municipio": destinatario.get("cidade", ""),
+        "uf": destinatario.get("uf", ""),
+        "codigo_municipio": (
+            destinatario.get("codigo_municipio")
+            or destinatario.get("codigo_municipio_ibge")
+            or ""
+        ),
+    }
 
 
 class MDFeListView(PermissaoRequiredMixin, View):
@@ -1233,8 +1303,10 @@ class MDFeCreateView(PermissaoRequiredMixin, View):
                 pk=nfe_documento_id, filial=filial,
                 tipo_documento="nfe", status="autorizada",
             ).first()
+        proximo_numero, serie_mdfe = _proximo_numero_mdfe(filial)
         initial = {
-            "numero": _proximo_numero_mdfe(filial),
+            "numero": proximo_numero,
+            "serie": serie_mdfe,
             "data_emissao": timezone.localdate(),
         }
         nfe_documento_inicial_json = "null"
@@ -1250,12 +1322,19 @@ class MDFeCreateView(PermissaoRequiredMixin, View):
                 or destinatario.get("codigo_municipio_ibge")
                 or ""
             )
-            nfe_documento_inicial_json = json.dumps({
-                "id": nfe_documento.pk,
-                "label": f"{nfe_documento.get_tipo_documento_display()} {nfe_documento.numero}/{nfe_documento.serie}",
-                "valor_total": str(nfe_documento.valor_total),
-                "destinatario": (nfe_documento.destinatario_snapshot or {}).get("nome", ""),
-            })
+            initial["peso_carga_kg"] = _peso_bruto_nfe(nfe_documento)
+            if nfe_documento.transportadora_id:
+                initial["transportadora"] = nfe_documento.transportadora_id
+            nfe_documento_inicial_json = json.dumps(
+                _nfe_inicial(nfe_documento), ensure_ascii=False
+            )
+
+        motoristas = Motorista.objects.for_filial(filial).filter(ativo=True)
+        veiculos = Veiculo.objects.for_filial(filial).filter(ativo=True)
+        if motoristas.count() == 1:
+            initial["motorista_cadastro"] = motoristas.values_list("pk", flat=True).first()
+        if veiculos.count() == 1:
+            initial["veiculo_cadastro"] = veiculos.values_list("pk", flat=True).first()
         form = MDFeForm(filial=filial, initial=initial)
         motoristas_json, veiculos_json = _motoristas_veiculos_json(filial)
         return render(request, self.template_name, {
@@ -1270,18 +1349,49 @@ class MDFeCreateView(PermissaoRequiredMixin, View):
     def post(self, request):
         filial = _filial(request)
         form = MDFeForm(request.POST, filial=filial)
+        nfe_documento_id = request.POST.get("nfe_documento_id", "").strip()
+        nfe_documento = None
+        if nfe_documento_id:
+            nfe_documento = DocumentoFiscal.objects.filter(
+                pk=nfe_documento_id, filial=filial,
+                tipo_documento="nfe", status="autorizada",
+            ).first()
         if form.is_valid():
-            mdfe = form.save(commit=False)
-            mdfe.filial = filial
-            mdfe.responsavel = request.user
-            mdfe.save()
+            from apps.core.models.parametros import (
+                ParametroDocumentoFiscal,
+                ParametrosSistema,
+            )
 
-            nfe_documento_id = request.POST.get("nfe_documento_id", "").strip()
-            if nfe_documento_id:
-                nfe_documento = DocumentoFiscal.objects.filter(
-                    pk=nfe_documento_id, filial=filial,
-                    tipo_documento="nfe", status="autorizada",
-                ).first()
+            with transaction.atomic():
+                parametros, _ = ParametrosSistema.objects.get_or_create(filial=filial)
+                ultimo_numero = (
+                    MDFe.objects.for_filial(filial)
+                    .select_for_update()
+                    .order_by("-numero")
+                    .values_list("numero", flat=True)
+                    .first()
+                ) or 0
+                configuracao, _ = (
+                    ParametroDocumentoFiscal.objects.select_for_update().get_or_create(
+                        parametros=parametros,
+                        tipo_documento=ParametroDocumentoFiscal.TipoDocumento.MDFE,
+                        defaults={
+                            "habilitado": True,
+                            "serie": 1,
+                            "proximo_numero": ultimo_numero + 1,
+                        },
+                    )
+                )
+                mdfe = form.save(commit=False)
+                mdfe.filial = filial
+                mdfe.responsavel = request.user
+                mdfe.numero = max(configuracao.proximo_numero, ultimo_numero + 1)
+                mdfe.serie = str(configuracao.serie or 1)
+                mdfe.data_encerramento = None
+                mdfe.save()
+                configuracao.proximo_numero = mdfe.numero + 1
+                configuracao.save(update_fields=["proximo_numero", "updated_at"])
+
                 if nfe_documento:
                     destinatario = nfe_documento.destinatario_snapshot or {}
                     DocumentoMDFe.objects.create(
@@ -1299,6 +1409,7 @@ class MDFeCreateView(PermissaoRequiredMixin, View):
                         emitente_documento=filial.cnpj or "",
                         municipio_descarga=destinatario.get("cidade", ""),
                         uf_descarga=destinatario.get("uf", ""),
+                        peso_kg=form.cleaned_data.get("peso_carga_kg") or 0,
                         valor=nfe_documento.valor_total or 0,
                     )
                     mdfe.recalcular_totais()
@@ -1312,6 +1423,9 @@ class MDFeCreateView(PermissaoRequiredMixin, View):
             "cancel_url": reverse("logistica:mdfe-list"),
             "motoristas_json": motoristas_json,
             "veiculos_json": veiculos_json,
+            "nfe_documento_inicial_json": json.dumps(
+                _nfe_inicial(nfe_documento), ensure_ascii=False
+            ) if nfe_documento else "null",
         })
 
 
@@ -1338,14 +1452,8 @@ class MDFeNFeSearchView(PermissaoRequiredMixin, View):
         else:
             qs = qs.filter(chave__icontains=q_raw)
         results = [
-            {
-                "id": doc.pk,
-                "label": f"{doc.get_tipo_documento_display()} {doc.numero}/{doc.serie}",
-                "chave": doc.chave or "",
-                "valor_total": str(doc.valor_total),
-                "destinatario": (doc.destinatario_snapshot or {}).get("nome", ""),
-            }
-            for doc in qs.order_by("-data_emissao")[:15]
+            _nfe_inicial(doc)
+            for doc in qs.prefetch_related("itens__produto").order_by("-data_emissao")[:15]
         ]
         return JsonResponse({"results": results})
 
