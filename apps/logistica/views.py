@@ -1404,6 +1404,57 @@ def _nfe_inicial(documento):
     }
 
 
+def _vincular_nfe_ao_mdfe(mdfe, nfe_documento):
+    if nfe_documento.filial_id != mdfe.filial_id:
+        raise ValueError("A NF-e pertence a outra filial.")
+    if (
+        nfe_documento.tipo_documento != "nfe"
+        or nfe_documento.status != "autorizada"
+    ):
+        raise ValueError("Selecione uma NF-e autorizada.")
+    if DocumentoMDFe.objects.filter(
+        documento_fiscal=nfe_documento
+    ).exclude(mdfe=mdfe).exists():
+        raise ValueError("Esta NF-e ja esta vinculada a outro MDF-e.")
+
+    rota = _rota_filiais_nfe(nfe_documento)
+    campos_rota = {
+        campo: valor
+        for campo, valor in rota.items()
+        if campo not in {"origem", "destino"}
+    }
+    for campo, valor in campos_rota.items():
+        setattr(mdfe, campo, valor)
+    mdfe.save(update_fields=[*campos_rota.keys(), "updated_at"])
+
+    destinatario = _dados_destino_nfe(nfe_documento)
+    peso_produtos, produtos_sem_peso = _peso_produtos_nfe(nfe_documento)
+    peso_xml = _peso_bruto_nfe(nfe_documento)
+    peso_documento = (
+        peso_produtos
+        if peso_produtos > 0 and not produtos_sem_peso
+        else peso_xml or mdfe.peso_total_kg
+    )
+    DocumentoMDFe.objects.update_or_create(
+        mdfe=mdfe,
+        documento_fiscal=nfe_documento,
+        defaults={
+            "tipo_documento": DocumentoMDFe.TipoDocumento.NFE,
+            "chave_acesso": nfe_documento.chave or "",
+            "numero_documento": str(nfe_documento.numero),
+            "serie": str(nfe_documento.serie),
+            "emitente_nome": mdfe.filial.razao_social or "",
+            "emitente_documento": mdfe.filial.cnpj or "",
+            "municipio_descarga": destinatario.get("cidade", ""),
+            "uf_descarga": destinatario.get("uf", ""),
+            "peso_kg": peso_documento or 0,
+            "valor": nfe_documento.valor_total or 0,
+        },
+    )
+    mdfe.recalcular_totais()
+    return mdfe
+
+
 class MDFeListView(PermissaoRequiredMixin, View):
     permissao_modulo = "logistica"
     template_name = "logistica/mdfe/list.html"
@@ -1605,26 +1656,7 @@ class MDFeCreateView(PermissaoRequiredMixin, View):
                 configuracao.save(update_fields=["proximo_numero", "updated_at"])
 
                 if nfe_documento:
-                    destinatario = _dados_destino_nfe(nfe_documento)
-                    DocumentoMDFe.objects.create(
-                        mdfe=mdfe,
-                        documento_fiscal=nfe_documento,
-                        tipo_documento=(
-                            DocumentoMDFe.TipoDocumento.NFCE
-                            if nfe_documento.tipo_documento == "nfce"
-                            else DocumentoMDFe.TipoDocumento.NFE
-                        ),
-                        chave_acesso=nfe_documento.chave or "",
-                        numero_documento=str(nfe_documento.numero),
-                        serie=str(nfe_documento.serie),
-                        emitente_nome=filial.razao_social or "",
-                        emitente_documento=filial.cnpj or "",
-                        municipio_descarga=destinatario.get("cidade", ""),
-                        uf_descarga=destinatario.get("uf", ""),
-                        peso_kg=form.cleaned_data.get("peso_carga_kg") or 0,
-                        valor=nfe_documento.valor_total or 0,
-                    )
-                    mdfe.recalcular_totais()
+                    _vincular_nfe_ao_mdfe(mdfe, nfe_documento)
 
             messages.success(request, f"MDF-e #{mdfe.numero:06d} criado.")
             return redirect("logistica:mdfe-detail", pk=mdfe.pk)
@@ -1832,13 +1864,60 @@ class MDFeDetailView(PermissaoRequiredMixin, View):
         )
         documentos = mdfe.documentos.all()
         documento_form = DocumentoMDFeForm()
+        nfe_disponiveis = DocumentoFiscal.objects.filter(
+            filial=mdfe.filial,
+            tipo_documento="nfe",
+            status="autorizada",
+        ).filter(
+            Q(vinculos_mdfe__isnull=True) | Q(vinculos_mdfe__mdfe=mdfe)
+        ).distinct().order_by("-data_emissao", "-numero")[:30]
         return render(request, self.template_name, {
             "title": f"MDF-e #{mdfe.numero:06d}",
             "mdfe": mdfe,
             "documentos": documentos,
             "tem_documentos": documentos.exists(),
             "documento_form": documento_form,
+            "nfe_disponiveis": nfe_disponiveis,
         })
+
+
+class MDFeVincularNFeView(PermissaoRequiredMixin, View):
+    permissao_modulo = "logistica"
+    permissao_acao = "editar"
+
+    def post(self, request, pk):
+        filial = _filial(request)
+        mdfe = get_object_or_404(MDFe.objects.for_filial(filial), pk=pk)
+        if mdfe.status not in {
+            MDFe.Status.RASCUNHO,
+            MDFe.Status.AGUARDANDO_NFE,
+            MDFe.Status.REJEITADO,
+        }:
+            messages.error(
+                request,
+                "Este MDF-e ja foi enviado e nao permite alterar a NF-e vinculada.",
+            )
+            return redirect("logistica:mdfe-detail", pk=mdfe.pk)
+
+        nfe_documento = get_object_or_404(
+            DocumentoFiscal,
+            pk=request.POST.get("nfe_documento_id"),
+            filial=filial,
+            tipo_documento="nfe",
+            status="autorizada",
+        )
+        try:
+            with transaction.atomic():
+                _vincular_nfe_ao_mdfe(mdfe, nfe_documento)
+        except ValueError as exc:
+            messages.error(request, str(exc))
+        else:
+            messages.success(
+                request,
+                f"NF-e n. {nfe_documento.numero}, serie {nfe_documento.serie}, "
+                "vinculada ao MDF-e.",
+            )
+        return redirect("logistica:mdfe-detail", pk=mdfe.pk)
 
 
 class DocumentoMDFeCreateView(PermissaoRequiredMixin, View):
