@@ -15,6 +15,7 @@ from apps.financeiro.constants.enums import StatusDocumentoFiscal
 from apps.logistica.services.mdfe_focusnfe import (
     _chave_nfe_vinculada,
     _obter_ou_criar_documento_mdfe,
+    _preparar_reemissao,
     _validar_transporte,
     construir_payload_mdfe,
 )
@@ -27,6 +28,38 @@ from apps.logistica.views import (
 
 
 class TransferenciaFiscalTests(SimpleTestCase):
+    def test_reemissao_limpa_retorno_sem_apagar_documento(self):
+        documento = SimpleNamespace(
+            status="rejeitada",
+            codigo_status_sefaz="539",
+            mensagem_sefaz="Duplicidade",
+            chave="1" * 44,
+            protocolo="123",
+            data_autorizacao=timezone.now(),
+            data_cancelamento=None,
+            save=Mock(),
+        )
+        mdfe = SimpleNamespace(
+            documento_fiscal=documento,
+            status="rejeitado",
+            chave_acesso="1" * 44,
+            protocolo_autorizacao="123",
+            data_autorizacao=timezone.now(),
+            data_cancelamento=None,
+            mensagem_sefaz="Duplicidade",
+            save=Mock(),
+        )
+
+        _preparar_reemissao(mdfe)
+
+        self.assertEqual(documento.status, StatusDocumentoFiscal.PENDENTE)
+        self.assertIsNone(documento.chave)
+        self.assertEqual(documento.codigo_status_sefaz, "")
+        self.assertEqual(mdfe.status, "rascunho")
+        self.assertEqual(mdfe.mensagem_sefaz, "")
+        documento.save.assert_called_once()
+        mdfe.save.assert_called_once()
+
     @patch("apps.logistica.views.Filial.objects.filter")
     def test_destino_prioriza_endereco_atual_da_filial(self, filter_mock):
         filial_destino = SimpleNamespace(

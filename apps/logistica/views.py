@@ -1899,8 +1899,9 @@ class MDFeEmitirView(PermissaoRequiredMixin, View):
             emitir_mdfe(mdfe, request.user)
             messages.success(request, "MDF-e enviado para autorização na SEFAZ.")
         except (DomainError, FocusNFeError, ValueError) as exc:
+            mdfe.status = MDFe.Status.REJEITADO
             mdfe.mensagem_sefaz = str(exc)[:2000]
-            mdfe.save(update_fields=["mensagem_sefaz", "updated_at"])
+            mdfe.save(update_fields=["status", "mensagem_sefaz", "updated_at"])
             messages.error(request, f"Erro ao emitir MDF-e: {exc}")
         except Exception as exc:
             logger.exception(
@@ -1913,8 +1914,9 @@ class MDFeEmitirView(PermissaoRequiredMixin, View):
                 "Não foi possível concluir a emissão do MDF-e. "
                 f"Detalhe técnico: {detalhe}"
             )
+            mdfe.status = MDFe.Status.REJEITADO
             mdfe.mensagem_sefaz = mensagem[:2000]
-            mdfe.save(update_fields=["mensagem_sefaz", "updated_at"])
+            mdfe.save(update_fields=["status", "mensagem_sefaz", "updated_at"])
             messages.error(request, mensagem)
         return redirect("logistica:mdfe-detail", pk=mdfe.pk)
 

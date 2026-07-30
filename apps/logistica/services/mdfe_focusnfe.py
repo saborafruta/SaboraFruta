@@ -473,7 +473,19 @@ def criar_mdfe_transferencia(
 
 def _obter_ou_criar_documento_mdfe(mdfe: MDFe, usuario=None) -> DocumentoFiscal:
     if mdfe.documento_fiscal:
-        return mdfe.documento_fiscal
+        documento = mdfe.documento_fiscal
+        campos_atualizados = []
+        serie = int(mdfe.serie or 1)
+        if documento.numero != mdfe.numero:
+            documento.numero = mdfe.numero
+            campos_atualizados.append("numero")
+        if documento.serie != serie:
+            documento.serie = serie
+            campos_atualizados.append("serie")
+        if campos_atualizados:
+            campos_atualizados.append("updated_at")
+            documento.save(update_fields=campos_atualizados)
+        return documento
     documento = DocumentoFiscal.objects.filter(
         origem_tipo="mdfe",
         origem_id=mdfe.pk,
@@ -500,13 +512,68 @@ def _obter_ou_criar_documento_mdfe(mdfe: MDFe, usuario=None) -> DocumentoFiscal:
     return documento
 
 
+def _preparar_reemissao(mdfe: MDFe) -> None:
+    """Limpa apenas o retorno da tentativa rejeitada, preservando os logs fiscais."""
+    documento = mdfe.documento_fiscal
+    if not documento:
+        return
+    if documento.status not in (
+        StatusDocumentoFiscal.REJEITADA,
+        StatusDocumentoFiscal.DENEGADA,
+    ) and mdfe.status != MDFe.Status.REJEITADO:
+        return
+
+    documento.status = StatusDocumentoFiscal.PENDENTE
+    documento.codigo_status_sefaz = ""
+    documento.mensagem_sefaz = ""
+    documento.chave = None
+    documento.protocolo = ""
+    documento.data_autorizacao = None
+    documento.data_cancelamento = None
+    documento.save(
+        update_fields=[
+            "status",
+            "codigo_status_sefaz",
+            "mensagem_sefaz",
+            "chave",
+            "protocolo",
+            "data_autorizacao",
+            "data_cancelamento",
+            "updated_at",
+        ]
+    )
+
+    mdfe.status = MDFe.Status.RASCUNHO
+    mdfe.chave_acesso = ""
+    mdfe.protocolo_autorizacao = ""
+    mdfe.data_autorizacao = None
+    mdfe.data_cancelamento = None
+    mdfe.mensagem_sefaz = ""
+    mdfe.save(
+        update_fields=[
+            "status",
+            "chave_acesso",
+            "protocolo_autorizacao",
+            "data_autorizacao",
+            "data_cancelamento",
+            "mensagem_sefaz",
+            "updated_at",
+        ]
+    )
+
+
 def emitir_mdfe(mdfe: MDFe, usuario=None) -> MDFe:
     if mdfe.status in (MDFe.Status.PROCESSANDO, MDFe.Status.AUTORIZADO, MDFe.Status.ENCERRADO):
         return mdfe
     _obter_ou_criar_documento_mdfe(mdfe, usuario)
+    _preparar_reemissao(mdfe)
     payload = construir_payload_mdfe(mdfe)
     service = FocusNFeService(client=_cliente_focus(mdfe.filial))
-    service.emitir(mdfe.documento_fiscal, payload)
+    try:
+        service.emitir(mdfe.documento_fiscal, payload)
+    except Exception:
+        _sincronizar_status(mdfe)
+        raise
     return _sincronizar_status(mdfe)
 
 

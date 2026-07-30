@@ -143,7 +143,11 @@
           {% if tem_documentos and mdfe.municipio_carregamento and mdfe.municipio_descarregamento %}
           <form method="post" action="{% url 'logistica:mdfe-emitir' mdfe.pk %}">
             {% csrf_token %}
+            {% if mdfe.status == 'rejeitado' or mdfe.mensagem_sefaz %}
+            <button type="submit" class="btn-primary gap-1.5" onclick="return confirm('Reemitir este MDF-e corrigido na SEFAZ (via Focus NFe)?')">Reemitir MDF-e</button>
+            {% else %}
             <button type="submit" class="btn-primary gap-1.5" onclick="return confirm('Emitir este MDF-e na SEFAZ (via Focus NFe)?')">Emitir MDF-e</button>
+            {% endif %}
           </form>
           {% else %}
           <span class="rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-sm font-semibold text-amber-800">
