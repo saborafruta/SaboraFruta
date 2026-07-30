@@ -1176,21 +1176,28 @@ def _proximo_numero_mdfe(filial):
     from apps.core.models.parametros import ParametroDocumentoFiscal, ParametrosSistema
 
     parametros = ParametrosSistema.objects.filter(filial=filial).first()
-    ultimo = (
-        MDFe.objects.for_filial(filial)
-        .order_by("-numero")
-        .values_list("numero", flat=True)
-        .first()
-    ) or 0
     if parametros:
         configuracao = ParametroDocumentoFiscal.objects.filter(
             parametros=parametros,
             tipo_documento=ParametroDocumentoFiscal.TipoDocumento.MDFE,
         ).first()
         if configuracao:
-            return max(configuracao.proximo_numero, ultimo + 1), str(
-                configuracao.serie or 1
-            )
+            serie = str(configuracao.serie or 1)
+            ultimo = (
+                MDFe.objects.for_filial(filial)
+                .filter(serie=serie)
+                .order_by("-numero")
+                .values_list("numero", flat=True)
+                .first()
+            ) or 0
+            return max(configuracao.proximo_numero, ultimo + 1), serie
+    ultimo = (
+        MDFe.objects.for_filial(filial)
+        .filter(serie="1")
+        .order_by("-numero")
+        .values_list("numero", flat=True)
+        .first()
+    ) or 0
     return ultimo + 1, "1"
 
 
