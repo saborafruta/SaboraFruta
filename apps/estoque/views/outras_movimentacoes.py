@@ -15,6 +15,7 @@ from django.views import View
 
 from apps.cadastros.models import Cliente, Fornecedor, Motorista, Veiculo
 from apps.core.models import Filial
+from apps.core.services.auditoria import auditoria_para_objeto
 from apps.core.services.exceptions import DomainError
 from apps.core.services.permissions import PERMISSION_DENIED_MESSAGE, PermissaoRequiredMixin
 from apps.core.services.search import normalize_search_text, ranked_search_ids
@@ -799,10 +800,15 @@ def _transferencias_para_listagem(filial, usuario, limite=500):
                 'nota': nota,
                 'mdfe': mdfe_info,
                 'conferencia': {
+                    'id': conferencia.pk,
                     'status': conferencia.status,
                     'status_label': conferencia.get_status_display(),
                     'observacao': conferencia.observacao_conferencia,
                     'conferida_em': conferencia.conferida_em,
+                    'log_url': reverse(
+                        'estoque:transferencia-conferencia-log',
+                        kwargs={'pk': conferencia.pk},
+                    ),
                 } if conferencia else None,
                 'mdfe_create_url': (
                     f"{reverse('logistica:mdfe-create')}?nfe_documento_id={doc.pk}"
@@ -1360,16 +1366,12 @@ class TransferenciaConferenciaDetailView(PermissaoRequiredMixin, View):
 
     def get(self, request, pk):
         conferencia = self._conferencia(request, pk)
-        produtos = Produto.objects.for_filial(request.filial_ativa).filter(
-            ativo=True,
-        ).order_by('descricao')
         return render(
             request,
             'estoque/outras_movimentacoes/transferencia_conferencia_detail.html',
             {
                 'title': f'Conferencia {conferencia.documento_numero}',
                 'conferencia': conferencia,
-                'produtos': produtos,
                 'ocorrencias': ItemConferenciaTransferencia.Ocorrencia.choices,
                 'pode_editar': conferencia.status == ConferenciaTransferencia.Status.AGUARDANDO,
             },
@@ -1430,6 +1432,39 @@ class TransferenciaConferenciaDetailView(PermissaoRequiredMixin, View):
                 'estoque:transferencia-conferencia-detail',
                 pk=conferencia.pk,
             )
+
+
+class TransferenciaConferenciaLogView(PermissaoRequiredMixin, View):
+    permissao_modulo = 'estoque'
+    permissao_acao = 'ver'
+
+    def get(self, request, pk):
+        conferencia = get_object_or_404(
+            ConferenciaTransferencia.objects
+            .select_related(
+                'filial_origem', 'filial_destino', 'criada_por', 'conferida_por',
+            )
+            .prefetch_related(
+                'itens__produto_enviado',
+                'itens__produto_recebido',
+                'itens__lote_enviado',
+            )
+            .filter(
+                db_models.Q(filial_origem=request.filial_ativa)
+                | db_models.Q(filial_destino=request.filial_ativa)
+            ),
+            pk=pk,
+        )
+        return render(
+            request,
+            'estoque/outras_movimentacoes/transferencia_conferencia_log.html',
+            {
+                'title': f'Historico {conferencia.documento_numero}',
+                'conferencia': conferencia,
+                'registros': list(auditoria_para_objeto(conferencia, limit=100)),
+                'e_destino': conferencia.filial_destino_id == request.filial_ativa.pk,
+            },
+        )
 
 
 class TransferenciasPendentesNFeView(PermissaoRequiredMixin, View):

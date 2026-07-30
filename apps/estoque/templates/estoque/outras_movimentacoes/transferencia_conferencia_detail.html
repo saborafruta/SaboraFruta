@@ -59,6 +59,23 @@
   .conference-item[data-occurrence="devolvido"] .return-field { display:block; }
   .conference-field label { display:block; margin-bottom:.3rem; color:#475569; font-size:.72rem; font-weight:750; text-transform:uppercase; }
   .dark .conference-field label { color:#94a3b8; }
+  .replacement-search { position:relative; }
+  .replacement-results {
+    display:none; position:absolute; z-index:30; top:calc(100% + 4px); left:0; right:0;
+    max-height:240px; overflow:auto; border:1px solid #cbd5e1; border-radius:7px;
+    background:#fff; box-shadow:0 12px 28px rgba(15,23,42,.16);
+  }
+  .dark .replacement-results { background:#111827; border-color:#475569; }
+  .replacement-results.is-open { display:block; }
+  .replacement-result {
+    display:block; width:100%; padding:.7rem .8rem; border:0; border-bottom:1px solid #e2e8f0;
+    background:transparent; color:#0f172a; text-align:left; cursor:pointer;
+  }
+  .dark .replacement-result { color:#f8fafc; border-color:#334155; }
+  .replacement-result:hover, .replacement-result:focus { background:#eff6ff; outline:none; }
+  .dark .replacement-result:hover, .dark .replacement-result:focus { background:#1e3a5f; }
+  .replacement-result small { display:block; margin-top:.15rem; color:#64748b; }
+  .replacement-empty { padding:.8rem; color:#64748b; font-size:.82rem; }
   .conference-empty { padding:2rem; text-align:center; color:#64748b; }
   @media (max-width:900px) {
     .conference-item { grid-template-columns:44px 1fr; }
@@ -78,10 +95,15 @@
         → {{ conferencia.filial_destino.nome_fantasia|default:conferencia.filial_destino.razao_social }}
       </p>
     </div>
-    <span class="badge self-start"
-          style="{% if conferencia.status == 'aguardando' %}background:#fef3c7;color:#92400e;{% elif conferencia.status == 'conferida' %}background:#dcfce7;color:#166534;{% elif conferencia.status == 'com_divergencia' %}background:#fee2e2;color:#991b1b;{% else %}background:#e2e8f0;color:#334155;{% endif %}">
-      {{ conferencia.get_status_display }}
-    </span>
+    <div class="flex items-center gap-2">
+      <a href="{% url 'estoque:transferencia-conferencia-log' conferencia.pk %}" class="btn-secondary">
+        Historico
+      </a>
+      <span class="badge self-start"
+            style="{% if conferencia.status == 'aguardando' %}background:#fef3c7;color:#92400e;{% elif conferencia.status == 'conferida' %}background:#dcfce7;color:#166534;{% elif conferencia.status == 'com_divergencia' %}background:#fee2e2;color:#991b1b;{% else %}background:#e2e8f0;color:#334155;{% endif %}">
+        {{ conferencia.get_status_display }}
+      </span>
+    </div>
   </div>
 
   {% if conferencia.observacao_origem %}
@@ -149,15 +171,20 @@
               </div>
               <div class="conference-field swap-field">
                 <label>Produto que chegou no lugar</label>
-                <select class="form-input replacement-product" name="item_{{ item.pk }}_produto_recebido_id" {% if not pode_editar %}disabled{% endif %}>
-                  <option value="">Selecione o item recebido...</option>
-                  {% for produto in produtos %}
-                    <option value="{{ produto.pk }}" {% if item.produto_recebido_id == produto.pk %}selected{% endif %}>{{ produto.descricao }}</option>
-                  {% endfor %}
-                </select>
+                <div class="replacement-search">
+                  <input type="hidden" class="replacement-product"
+                         name="item_{{ item.pk }}_produto_recebido_id"
+                         value="{{ item.produto_recebido_id|default:'' }}">
+                  <input class="form-input replacement-product-search" type="search"
+                         autocomplete="off"
+                         value="{% if item.produto_recebido %}{{ item.produto_recebido.descricao }}{% endif %}"
+                         placeholder="Pesquise nome, codigo ou barras"
+                         {% if not pode_editar %}disabled{% endif %}>
+                  <div class="replacement-results" role="listbox"></div>
+                </div>
               </div>
               <div class="conference-field swap-field">
-                <label>Quantidade do item trocado</label>
+                <label>Quantidade que veio trocada</label>
                 <input class="form-input replacement-quantity" type="text" inputmode="decimal" data-decimal-places="2"
                        name="item_{{ item.pk }}_quantidade_produto_recebido"
                        value="{{ item.quantidade_produto_recebido|floatformat:'2u' }}"
@@ -221,6 +248,7 @@
   const form = document.getElementById('form-conferencia');
   const cards = Array.from(document.querySelectorAll('[data-item-conferencia]'));
   const counter = document.getElementById('conference-count');
+  const productSearchUrl = "{% url 'estoque:produto-estoque-search-json' %}";
 
   function selectedOccurrence(card) {
     const selected = card.querySelector('input[type="radio"]:checked');
@@ -240,6 +268,7 @@
     const received = card.querySelector('.received-quantity');
     const replacementQty = card.querySelector('.replacement-quantity');
     const replacementProduct = card.querySelector('.replacement-product');
+    const replacementSearch = card.querySelector('.replacement-product-search');
     const returnQty = card.querySelector('.return-quantity');
     const observation = card.querySelector('.item-observation');
     const sent = Number(card.dataset.sent || 0).toFixed(2);
@@ -249,6 +278,7 @@
         received.value = sent;
         replacementQty.value = '0.00';
         replacementProduct.value = '';
+        replacementSearch.value = '';
         returnQty.value = '0.00';
         observation.value = '';
       } else if (occurrence === 'trocado') {
@@ -266,7 +296,7 @@
     }
 
     observation.required = occurrence !== 'ok';
-    replacementProduct.required = occurrence === 'trocado';
+    replacementSearch.required = occurrence === 'trocado';
     replacementQty.required = occurrence === 'trocado';
     returnQty.required = occurrence === 'devolvido';
     card.classList.toggle('is-confirmed', checkbox.checked);
@@ -285,6 +315,78 @@
       });
     });
     applyOccurrence(card, selectedOccurrence(card), false);
+
+    const search = card.querySelector('.replacement-product-search');
+    const selectedId = card.querySelector('.replacement-product');
+    const results = card.querySelector('.replacement-results');
+    let timer = null;
+    let controller = null;
+
+    function closeResults() {
+      results.classList.remove('is-open');
+    }
+
+    function renderResults(items) {
+      results.innerHTML = '';
+      if (!items.length) {
+        const empty = document.createElement('div');
+        empty.className = 'replacement-empty';
+        empty.textContent = 'Nenhum produto encontrado.';
+        results.appendChild(empty);
+      } else {
+        items.forEach(function(product) {
+          const button = document.createElement('button');
+          button.type = 'button';
+          button.className = 'replacement-result';
+          button.innerHTML = '<strong></strong><small></small>';
+          button.querySelector('strong').textContent = product.label;
+          button.querySelector('small').textContent = [
+            product.detalhe || '',
+            product.codigo_barras || '',
+          ].filter(Boolean).join(' | ') || 'Sem codigo';
+          button.addEventListener('click', function() {
+            selectedId.value = product.id;
+            search.value = product.label;
+            closeResults();
+            card.querySelector('.item-confirmado').checked = true;
+            card.classList.add('is-confirmed');
+            updateCounter();
+          });
+          results.appendChild(button);
+        });
+      }
+      results.classList.add('is-open');
+    }
+
+    search.addEventListener('input', function() {
+      selectedId.value = '';
+      window.clearTimeout(timer);
+      const query = search.value.trim();
+      if (query.length < 2) {
+        closeResults();
+        return;
+      }
+      timer = window.setTimeout(async function() {
+        if (controller) controller.abort();
+        controller = new AbortController();
+        try {
+          const response = await fetch(
+            productSearchUrl + '?q=' + encodeURIComponent(query),
+            { signal: controller.signal }
+          );
+          const payload = await response.json();
+          renderResults(payload.results || []);
+        } catch (error) {
+          if (error.name !== 'AbortError') closeResults();
+        }
+      }, 180);
+    });
+    search.addEventListener('focus', function() {
+      if (results.children.length) results.classList.add('is-open');
+    });
+    document.addEventListener('click', function(event) {
+      if (!event.target.closest('.replacement-search')) closeResults();
+    });
   });
 
   document.getElementById('conference-mark-all').addEventListener('click', function() {

@@ -4,6 +4,7 @@ from django.db import transaction
 from django.utils import timezone
 
 from apps.core.services.exceptions import DadosInvalidosError
+from apps.core.services.auditoria import registrar_auditoria
 from apps.core.services.notificacao_service import (
     notificar_transferencia_conferida,
     notificar_transferencia_recebida,
@@ -16,6 +17,28 @@ from apps.estoque.models import (
 )
 from apps.estoque.services.movimentacao_service import MovimentacaoService
 from apps.produtos.models import Produto
+
+
+def _itens_auditoria(conferencia):
+    return [
+        {
+            'produto_enviado_id': item.produto_enviado_id,
+            'produto_enviado': item.produto_enviado.descricao,
+            'quantidade_enviada': str(item.quantidade_enviada),
+            'quantidade_recebida': str(item.quantidade_recebida),
+            'ocorrencia': item.ocorrencia,
+            'produto_recebido_id': item.produto_recebido_id,
+            'produto_recebido': (
+                item.produto_recebido.descricao if item.produto_recebido_id else ''
+            ),
+            'quantidade_trocada': str(item.quantidade_produto_recebido),
+            'quantidade_devolvida': str(item.quantidade_devolvida),
+            'observacao': item.observacao,
+        }
+        for item in conferencia.itens.select_related(
+            'produto_enviado', 'produto_recebido',
+        )
+    ]
 
 
 @transaction.atomic
@@ -57,6 +80,21 @@ def criar_conferencia_transferencia(
                 quantidade_enviada=movimento.quantidade,
                 quantidade_recebida=movimento.quantidade,
             )
+        registrar_auditoria(
+            usuario=usuario,
+            filial=filial_origem,
+            modulo='estoque',
+            acao='transferir',
+            objeto=conferencia,
+            descricao=f'Transferencia {conferencia.documento_numero} enviada',
+            metadados={
+                'evento': 'transferencia_enviada',
+                'filial_origem': filial_origem.nome_fantasia or filial_origem.razao_social,
+                'filial_destino': filial_destino.nome_fantasia or filial_destino.razao_social,
+                'observacao': observacao,
+                'itens': _itens_auditoria(conferencia),
+            },
+        )
     notificar_transferencia_recebida(conferencia)
     return conferencia
 
@@ -207,6 +245,12 @@ def concluir_conferencia(*, conferencia_id, filial_destino, usuario, itens, obse
             )
             if not produto_recebido:
                 raise DadosInvalidosError('Selecione o produto recebido no lugar.')
+            if quantidade_trocada > item.quantidade_enviada:
+                raise DadosInvalidosError(
+                    f'A quantidade trocada de {item.produto_enviado.descricao} '
+                    'nao pode superar a quantidade enviada.'
+                )
+            recebida = item.quantidade_enviada - quantidade_trocada
         elif item_devolvido:
             quantidade_devolvida = _decimal_positivo(
                 dados.get('quantidade_devolvida'),
@@ -295,6 +339,31 @@ def concluir_conferencia(*, conferencia_id, filial_destino, usuario, itens, obse
     conferencia.conferida_por = usuario
     conferencia.conferida_em = timezone.now()
     conferencia.save()
+    registrar_auditoria(
+        usuario=usuario,
+        filial=filial_destino,
+        modulo='estoque',
+        acao='efetivar',
+        objeto=conferencia,
+        descricao=(
+            f'Transferencia {conferencia.documento_numero} '
+            f'{conferencia.get_status_display().lower()}'
+        ),
+        justificativa=conferencia.observacao_conferencia,
+        metadados={
+            'evento': 'conferencia_concluida',
+            'filial_origem': (
+                conferencia.filial_origem.nome_fantasia
+                or conferencia.filial_origem.razao_social
+            ),
+            'filial_destino': (
+                conferencia.filial_destino.nome_fantasia
+                or conferencia.filial_destino.razao_social
+            ),
+            'status': conferencia.status,
+            'itens': _itens_auditoria(conferencia),
+        },
+    )
     notificar_transferencia_conferida(conferencia)
     return conferencia
 
@@ -322,5 +391,25 @@ def cancelar_na_conferencia(*, conferencia_id, filial_destino, usuario):
     conferencia.conferida_por = usuario
     conferencia.conferida_em = timezone.now()
     conferencia.save()
+    registrar_auditoria(
+        usuario=usuario,
+        filial=filial_destino,
+        modulo='estoque',
+        acao='cancelar',
+        objeto=conferencia,
+        descricao=f'Transferencia {conferencia.documento_numero} cancelada no recebimento',
+        metadados={
+            'evento': 'transferencia_cancelada',
+            'filial_origem': (
+                conferencia.filial_origem.nome_fantasia
+                or conferencia.filial_origem.razao_social
+            ),
+            'filial_destino': (
+                conferencia.filial_destino.nome_fantasia
+                or conferencia.filial_destino.razao_social
+            ),
+            'itens': _itens_auditoria(conferencia),
+        },
+    )
     notificar_transferencia_conferida(conferencia)
     return conferencia

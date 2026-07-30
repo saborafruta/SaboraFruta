@@ -29,6 +29,7 @@ urlpatterns = [
     path('outras-movimentacoes/transferencia-lojas/nova/', views.TransferenciaLojaView.as_view(), name='transferencia-lojas-create'),
     path('outras-movimentacoes/transferencia-lojas/recebimentos/', views.TransferenciaConferenciaListView.as_view(), name='transferencia-conferencia-list'),
     path('outras-movimentacoes/transferencia-lojas/recebimentos/<int:pk>/', views.TransferenciaConferenciaDetailView.as_view(), name='transferencia-conferencia-detail'),
+    path('outras-movimentacoes/transferencia-lojas/recebimentos/<int:pk>/historico/', views.TransferenciaConferenciaLogView.as_view(), name='transferencia-conferencia-log'),
     path('outras-movimentacoes/transferencia-lojas/api/', views.TransferenciaLojaApiView.as_view(), name='transferencia-lojas-api'),
     path('outras-movimentacoes/transferencia-lojas/pendentes-nfe/', views.TransferenciasPendentesNFeView.as_view(), name='transferencia-lojas-pendentes-nfe'),
     path('outras-movimentacoes/transferencia-lojas/reemitir-nfe/', views.TransferenciaReemitirNFeApiView.as_view(), name='transferencia-lojas-reemitir-nfe'),

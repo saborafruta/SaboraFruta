@@ -139,6 +139,7 @@
         {% endif %}
         {% if item.nota.pdf_danfe_url %}<a class="btn-secondary text-xs" href="{{ item.nota.pdf_danfe_url }}" target="_blank" rel="noopener">Ver nota</a>{% endif %}
         {% if item.mdfe %}<a class="btn-secondary text-xs" href="{{ item.mdfe.url }}">Abrir MDF-e</a>{% endif %}
+        {% if item.conferencia %}<a class="btn-secondary text-xs" href="{{ item.conferencia.log_url }}">Historico</a>{% endif %}
         {% if item.pode_reativar_transferencia %}<button type="button" class="btn-primary text-xs" @click="reativarTransferencia('{{ item.chave|escapejs }}')">Reativar transferência</button>{% endif %}
         {% if item.pode_cancelar_nota %}<button type="button" class="btn-secondary text-xs" @click="cancelarNfe('{{ item.chave|escapejs }}')">Cancelar NF-e</button>{% endif %}
         {% if item.pode_cancelar_transferencia %}<button type="button" class="btn-secondary text-xs" @click="cancelarTransferencia('{{ item.chave|escapejs }}')">Cancelar transferência</button>{% endif %}

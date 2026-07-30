@@ -10,6 +10,7 @@ from apps.core.models import (
     NotificacaoLeitura,
     PerfilAcesso,
     Usuario,
+    RegistroAuditoria,
 )
 from apps.core.services.exceptions import DadosInvalidosError
 from apps.core.views.notificacoes import NotificacaoAbrirView
@@ -275,6 +276,73 @@ class ConferenciaTransferenciaTests(TestCase):
         )
         self.assertEqual(estoque_esperado.quantidade_atual, Decimal('0'))
         self.assertEqual(estoque_recebido.quantidade_atual, Decimal('5'))
+
+    def test_troca_parcial_mantem_restante_do_produto_enviado(self):
+        esperado = self.criar_produto('Produto parcialmente trocado')
+        recebido = self.criar_produto('Produto substituto parcial')
+        conferencia = self.criar_transferencia(esperado)
+        item = conferencia.itens.get()
+
+        concluir_conferencia(
+            conferencia_id=conferencia.pk,
+            filial_destino=self.destino,
+            usuario=self.usuario,
+            itens={
+                str(item.pk): {
+                    'ocorrencia': 'trocado',
+                    'quantidade_recebida': '0',
+                    'produto_recebido_id': str(recebido.pk),
+                    'quantidade_produto_recebido': '1',
+                    'observacao': 'Uma unidade veio trocada',
+                },
+            },
+        )
+
+        item.refresh_from_db()
+        estoque_esperado = Estoque.objects.get(
+            produto=esperado,
+            filial=self.destino,
+        )
+        estoque_recebido = Estoque.objects.get(
+            produto=recebido,
+            filial=self.destino,
+        )
+        self.assertEqual(item.quantidade_recebida, Decimal('4'))
+        self.assertEqual(item.quantidade_produto_recebido, Decimal('1'))
+        self.assertEqual(estoque_esperado.quantidade_atual, Decimal('4'))
+        self.assertEqual(estoque_recebido.quantidade_atual, Decimal('1'))
+
+    def test_transferencia_e_conferencia_geram_log_operacional(self):
+        produto = self.criar_produto('Produto com historico')
+        conferencia = self.criar_transferencia(produto)
+        item = conferencia.itens.get()
+
+        self.assertTrue(RegistroAuditoria.objects.filter(
+            objeto_tipo=conferencia._meta.label_lower,
+            objeto_id=conferencia.pk,
+            acao='transferir',
+        ).exists())
+
+        concluir_conferencia(
+            conferencia_id=conferencia.pk,
+            filial_destino=self.destino,
+            usuario=self.usuario,
+            itens={
+                str(item.pk): {
+                    'ocorrencia': 'ok',
+                    'quantidade_recebida': '5',
+                    'observacao': '',
+                },
+            },
+        )
+
+        self.assertTrue(RegistroAuditoria.objects.filter(
+            objeto_tipo=conferencia._meta.label_lower,
+            objeto_id=conferencia.pk,
+            acao='efetivar',
+            usuario=self.usuario,
+            filial=self.destino,
+        ).exists())
 
     def test_devolucao_parcial_retorna_apenas_quantidade_informada(self):
         produto = self.criar_produto('Produto devolvido')

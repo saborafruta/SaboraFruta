@@ -1,0 +1,104 @@
+{% extends "_base.html" %}
+{% load erp_extras %}
+
+{% block page_title %}Historico da transferencia{% endblock %}
+
+{% block content %}
+<div class="mx-auto max-w-6xl space-y-5 py-6">
+  <div class="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+    <div>
+      <a href="{% if e_destino %}{% url 'estoque:transferencia-conferencia-detail' conferencia.pk %}{% else %}{% url 'estoque:transferencia-lojas' %}{% endif %}"
+         class="text-sm font-semibold" style="color:#2563eb;">
+        &larr; Voltar
+      </a>
+      <h2 class="mt-3 text-2xl font-bold">Historico {{ conferencia.documento_numero }}</h2>
+      <p class="mt-1 text-sm text-gray-500">
+        {{ conferencia.filial_origem.nome_fantasia|default:conferencia.filial_origem.razao_social }}
+        &rarr;
+        {{ conferencia.filial_destino.nome_fantasia|default:conferencia.filial_destino.razao_social }}
+      </p>
+    </div>
+    <span class="soft-pill {% if conferencia.status == 'conferida' %}is-green{% elif conferencia.status == 'com_divergencia' or conferencia.status == 'cancelada' %}is-red{% else %}is-slate{% endif %}">
+      {{ conferencia.get_status_display }}
+    </span>
+  </div>
+
+  <section class="grid gap-4 md:grid-cols-2">
+    <div class="card p-5">
+      <p class="text-xs font-semibold uppercase text-gray-500">Transferencia enviada</p>
+      <p class="mt-2 font-semibold">
+        {{ conferencia.criada_por.nome|default:conferencia.criada_por }}
+      </p>
+      <p class="text-sm text-gray-500">{{ conferencia.created_at|date:"d/m/Y H:i" }}</p>
+      <p class="mt-3 text-sm">
+        <strong>Origem:</strong>
+        {{ conferencia.filial_origem.nome_fantasia|default:conferencia.filial_origem.razao_social }}
+      </p>
+      <p class="text-sm">
+        <strong>Destino:</strong>
+        {{ conferencia.filial_destino.nome_fantasia|default:conferencia.filial_destino.razao_social }}
+      </p>
+      {% if conferencia.observacao_origem %}
+        <p class="mt-3 text-sm"><strong>Observacao:</strong> {{ conferencia.observacao_origem }}</p>
+      {% endif %}
+    </div>
+
+    <div class="card p-5">
+      <p class="text-xs font-semibold uppercase text-gray-500">Recebimento</p>
+      {% if conferencia.conferida_por %}
+        <p class="mt-2 font-semibold">
+          {{ conferencia.conferida_por.nome|default:conferencia.conferida_por }}
+        </p>
+        <p class="text-sm text-gray-500">{{ conferencia.conferida_em|date:"d/m/Y H:i" }}</p>
+        <p class="mt-3 text-sm"><strong>Resultado:</strong> {{ conferencia.get_status_display }}</p>
+        {% if conferencia.observacao_conferencia %}
+          <p class="mt-2 text-sm"><strong>Observacao:</strong> {{ conferencia.observacao_conferencia }}</p>
+        {% endif %}
+      {% else %}
+        <p class="mt-2 text-sm text-gray-500">Ainda nao recebida ou conferida.</p>
+      {% endif %}
+    </div>
+  </section>
+
+  <section class="card overflow-hidden">
+    <div class="border-b border-gray-200 p-4 dark:border-gray-800">
+      <h3 class="font-semibold">Itens e divergencias</h3>
+    </div>
+    <div class="overflow-x-auto">
+      <table class="w-full text-sm">
+        <thead class="bg-gray-50 text-left text-xs uppercase text-gray-500 dark:bg-gray-900">
+          <tr>
+            <th class="px-4 py-3">Produto enviado</th>
+            <th class="px-4 py-3 text-right">Enviado</th>
+            <th class="px-4 py-3 text-right">Recebido</th>
+            <th class="px-4 py-3">Resultado</th>
+            <th class="px-4 py-3">Produto substituto</th>
+            <th class="px-4 py-3 text-right">Trocado</th>
+            <th class="px-4 py-3 text-right">Devolvido</th>
+            <th class="px-4 py-3">Observacao</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-gray-200 dark:divide-gray-800">
+          {% for item in conferencia.itens.all %}
+            <tr>
+              <td class="px-4 py-3 font-semibold">
+                {{ item.produto_enviado.descricao }}
+                {% if item.lote_enviado %}<small class="block text-gray-500">Lote {{ item.lote_enviado.numero_lote }}</small>{% endif %}
+              </td>
+              <td class="px-4 py-3 text-right">{{ item.quantidade_enviada|quantidade:2 }}</td>
+              <td class="px-4 py-3 text-right">{{ item.quantidade_recebida|quantidade:2 }}</td>
+              <td class="px-4 py-3">{{ item.get_ocorrencia_display }}</td>
+              <td class="px-4 py-3">{{ item.produto_recebido.descricao|default:"-" }}</td>
+              <td class="px-4 py-3 text-right">{{ item.quantidade_produto_recebido|quantidade:2 }}</td>
+              <td class="px-4 py-3 text-right">{{ item.quantidade_devolvida|quantidade:2 }}</td>
+              <td class="px-4 py-3">{{ item.observacao|default:"-" }}</td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  {% include "core/partials/_auditoria_operacional.html" with registros=registros titulo="Log operacional da transferencia" %}
+</div>
+{% endblock %}
