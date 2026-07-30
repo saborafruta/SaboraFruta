@@ -45,6 +45,7 @@ class TransferenciaFiscalTests(SimpleTestCase):
                 "logradouro": "Endereco antigo",
                 "cidade": "Cidade antiga",
             },
+            destinatario_tipo="filial",
             destinatario_id=2,
             xml_assinado="",
             xml_retorno="",
@@ -129,19 +130,54 @@ class TransferenciaFiscalTests(SimpleTestCase):
         self.assertEqual(peso, Decimal("2.500"))
         self.assertEqual(faltantes, ["CAJA"])
 
+    @patch("apps.logistica.views._dados_destino_nfe")
     @patch("apps.logistica.views._filial_destino_nfe")
-    def test_rota_mdfe_usa_municipios_das_filiais(self, destino_mock):
+    def test_rota_mdfe_usa_municipios_das_filiais(
+        self, destino_mock, dados_destino_mock
+    ):
         origem = SimpleNamespace(
             uf="RN", cidade="Macaiba", codigo_municipio_ibge="2407104",
         )
         destino_mock.return_value = SimpleNamespace(
             uf="RN", cidade="Natal", codigo_municipio_ibge="2408102",
         )
+        dados_destino_mock.return_value = {
+            "uf": "RN",
+            "cidade": "Natal",
+            "codigo_municipio": "2408102",
+        }
 
         rota = _rota_filiais_nfe(SimpleNamespace(filial=origem))
 
         self.assertEqual(rota["municipio_carregamento"], "Macaiba")
         self.assertEqual(rota["codigo_municipio_carregamento"], "2407104")
+        self.assertEqual(rota["municipio_descarregamento"], "Natal")
+        self.assertEqual(rota["codigo_municipio_descarregamento"], "2408102")
+
+    @patch("apps.logistica.views._filial_destino_nfe", return_value=None)
+    def test_rota_mdfe_recupera_destino_do_xml(self, _destino_mock):
+        origem = SimpleNamespace(
+            uf="RN", cidade="Macaiba", codigo_municipio_ibge="2407104",
+        )
+        documento = SimpleNamespace(
+            filial=origem,
+            destinatario_snapshot={},
+            destinatario_tipo="",
+            destinatario_id=None,
+            xml_assinado="""
+                <NFe xmlns="http://www.portalfiscal.inf.br/nfe">
+                  <infNFe><dest><enderDest>
+                    <cMun>2408102</cMun><xMun>Natal</xMun><UF>RN</UF>
+                  </enderDest></dest></infNFe>
+                </NFe>
+            """,
+            xml_retorno="",
+            xml_enviado="",
+        )
+
+        rota = _rota_filiais_nfe(documento)
+
+        self.assertEqual(rota["municipio_carregamento"], "Macaiba")
         self.assertEqual(rota["municipio_descarregamento"], "Natal")
         self.assertEqual(rota["codigo_municipio_descarregamento"], "2408102")
 

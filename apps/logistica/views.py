@@ -1325,7 +1325,10 @@ def _dados_destino_nfe(documento):
 def _filial_destino_nfe(documento, snapshot=None):
     """Resolve a filial destinataria sem depender de snapshots antigos."""
     snapshot = snapshot or dict(documento.destinatario_snapshot or {})
-    if documento.destinatario_id:
+    if (
+        getattr(documento, "destinatario_tipo", "") == "filial"
+        and getattr(documento, "destinatario_id", None)
+    ):
         filial = Filial.objects.filter(pk=documento.destinatario_id).first()
         if filial:
             return filial
@@ -1369,19 +1372,20 @@ def _endereco_filial(filial):
 
 
 def _rota_filiais_nfe(documento):
-    """Monta a rota do MDF-e somente com os cadastros das filiais."""
+    """Monta a rota usando filiais e o XML autorizado como contingencia."""
     origem = documento.filial
     destino = _filial_destino_nfe(documento)
+    dados_destino = _dados_destino_nfe(documento)
     return {
         "origem": origem,
         "destino": destino,
         "uf_carregamento": origem.uf or "",
         "municipio_carregamento": origem.cidade or "",
         "codigo_municipio_carregamento": origem.codigo_municipio_ibge or "",
-        "uf_descarregamento": destino.uf if destino else "",
-        "municipio_descarregamento": destino.cidade if destino else "",
-        "codigo_municipio_descarregamento": (
-            destino.codigo_municipio_ibge if destino else ""
+        "uf_descarregamento": dados_destino.get("uf", ""),
+        "municipio_descarregamento": dados_destino.get("cidade", ""),
+        "codigo_municipio_descarregamento": dados_destino.get(
+            "codigo_municipio", ""
         ),
     }
 
@@ -1464,6 +1468,46 @@ def _vincular_nfe_ao_mdfe(mdfe, nfe_documento, atualizar_rota=True):
         },
     )
     mdfe.recalcular_totais()
+    return mdfe
+
+
+def _completar_rota_mdfe(mdfe):
+    """Repara a rota com os dados da filial e da NF-e vinculada."""
+    campos = {
+        "uf_carregamento": mdfe.filial.uf or "",
+        "municipio_carregamento": mdfe.filial.cidade or "",
+        "codigo_municipio_carregamento": (
+            mdfe.filial.codigo_municipio_ibge or ""
+        ),
+    }
+    vinculo_nfe = (
+        mdfe.documentos.select_related("documento_fiscal")
+        .filter(tipo_documento=DocumentoMDFe.TipoDocumento.NFE)
+        .first()
+    )
+    if vinculo_nfe and vinculo_nfe.documento_fiscal:
+        rota = _rota_filiais_nfe(vinculo_nfe.documento_fiscal)
+        campos.update({
+            "uf_descarregamento": rota["uf_descarregamento"],
+            "municipio_descarregamento": rota["municipio_descarregamento"],
+            "codigo_municipio_descarregamento": (
+                rota["codigo_municipio_descarregamento"]
+            ),
+        })
+    elif vinculo_nfe:
+        campos.update({
+            "uf_descarregamento": vinculo_nfe.uf_descarga or "",
+            "municipio_descarregamento": vinculo_nfe.municipio_descarga or "",
+        })
+
+    alterados = []
+    for campo, valor in campos.items():
+        valor = str(valor or "").strip()
+        if valor and getattr(mdfe, campo) != valor:
+            setattr(mdfe, campo, valor)
+            alterados.append(campo)
+    if alterados:
+        mdfe.save(update_fields=[*alterados, "updated_at"])
     return mdfe
 
 
@@ -1851,6 +1895,7 @@ class MDFeEmitirView(PermissaoRequiredMixin, View):
         from apps.logistica.services.mdfe_focusnfe import emitir_mdfe
         mdfe = get_object_or_404(MDFe.objects.for_filial(_filial(request)), pk=pk)
         try:
+            _completar_rota_mdfe(mdfe)
             emitir_mdfe(mdfe, request.user)
             messages.success(request, "MDF-e enviado para autorização na SEFAZ.")
         except (DomainError, FocusNFeError, ValueError) as exc:
@@ -2032,6 +2077,8 @@ class MDFeDetailView(PermissaoRequiredMixin, View):
             else:
                 mdfe.refresh_from_db()
 
+        _completar_rota_mdfe(mdfe)
+        mdfe.refresh_from_db()
         documentos = mdfe.documentos.all()
         documento_form = DocumentoMDFeForm()
         nfe_disponiveis = nfe_disponiveis_qs[:30]

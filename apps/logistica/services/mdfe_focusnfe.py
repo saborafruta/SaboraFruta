@@ -209,10 +209,26 @@ def construir_payload_mdfe(mdfe: MDFe) -> dict[str, Any]:
         mdfe.codigo_municipio_carregamento or filial.codigo_municipio_ibge
     )
     codigo_descarregamento = _digitos(mdfe.codigo_municipio_descarregamento)
-    if len(codigo_carregamento) != 7 or len(codigo_descarregamento) != 7:
+    municipio_carregamento = _texto(mdfe.municipio_carregamento)
+    municipio_descarregamento = _texto(mdfe.municipio_descarregamento)
+    uf_carregamento = _texto(mdfe.uf_carregamento).upper()
+    uf_descarregamento = _texto(mdfe.uf_descarregamento).upper()
+    erros_rota = []
+    if len(codigo_carregamento) != 7 or not municipio_carregamento:
+        erros_rota.append("municipio de carregamento com codigo IBGE")
+    if len(codigo_descarregamento) != 7 or not municipio_descarregamento:
+        erros_rota.append("municipio de descarregamento com codigo IBGE")
+    if len(uf_carregamento) != 2:
+        erros_rota.append("UF de carregamento")
+    if len(uf_descarregamento) != 2:
+        erros_rota.append("UF de descarregamento")
+    if Decimal(str(mdfe.peso_total_kg or 0)) <= 0:
+        erros_rota.append("peso bruto da carga")
+    if not _texto(mdfe.motorista_nome):
+        erros_rota.append("nome do motorista")
+    if erros_rota:
         raise DadosInvalidosError(
-            "Selecione os municípios de carregamento e descarregamento para "
-            "preencher os códigos IBGE do MDF-e."
+            "Antes de emitir o MDF-e, informe: " + ", ".join(erros_rota) + "."
         )
 
     data_emissao = timezone.localtime().replace(microsecond=0).isoformat()
@@ -221,11 +237,11 @@ def construir_payload_mdfe(mdfe: MDFe) -> dict[str, Any]:
         "emitente": "2",
         "serie": int(mdfe.serie or 1),
         "numero": mdfe.numero,
-        "uf_inicio": mdfe.uf_carregamento,
-        "uf_fim": mdfe.uf_descarregamento,
+        "uf_inicio": uf_carregamento,
+        "uf_fim": uf_descarregamento,
         "municipios_carregamento": [{
             "codigo": int(codigo_carregamento),
-            "nome": mdfe.municipio_carregamento,
+            "nome": municipio_carregamento,
         }],
         "cnpj_emitente": cnpj,
         "inscricao_estadual_emitente": _digitos(filial.inscricao_estadual),
@@ -239,7 +255,7 @@ def construir_payload_mdfe(mdfe: MDFe) -> dict[str, Any]:
         "uf_emitente": _texto(filial.uf)[:2].upper(),
         "municipios_descarregamento": [{
             "codigo": int(codigo_descarregamento),
-            "nome": mdfe.municipio_descarregamento,
+            "nome": municipio_descarregamento,
             "notas_fiscais": [{"chave_nfe": chave} for chave in chaves],
         }],
         "seguros_carga": [{"responsavel_seguro": "1"}],
