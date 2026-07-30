@@ -391,11 +391,15 @@
               <table class="w-full text-sm">
                 <thead>
                   <tr :style="temaClaro ? 'background:#f9fafb;' : 'background:#1e293b;'">
-                    <th class="text-left px-3 py-2 text-xs font-medium"
+                    {% comment %}
+                      Coluna Lote saiu da exibicao: o lote continua sendo
+                      capturado no formulario acima e enviado no payload, mas
+                      ocupava espaco que o nome do produto usa melhor. Quando
+                      existe, aparece como legenda sob o nome.
+                    {% endcomment %}
+                    <th class="text-left px-3 py-2 text-xs font-medium" style="width:100%;"
                         :style="temaClaro ? 'color:#6b7280;' : 'color:#9ca3af;'">Produto</th>
-                    <th class="text-left px-3 py-2 text-xs font-medium"
-                        :style="temaClaro ? 'color:#6b7280;' : 'color:#9ca3af;'">Lote</th>
-                    <th class="text-right px-3 py-2 text-xs font-medium"
+                    <th class="text-right px-3 py-2 text-xs font-medium whitespace-nowrap"
                         :style="temaClaro ? 'color:#6b7280;' : 'color:#9ca3af;'">Quantidade</th>
                     <th class="px-3 py-2"></th>
                   </tr>
@@ -404,15 +408,30 @@
                   <template x-for="(item, idx) in itens" :key="idx">
                     <tr class="border-t"
                         :style="temaClaro ? 'border-color:#e5e7eb;' : 'border-color:#374151;'">
-                      <td class="px-3 py-2"
-                          :style="temaClaro ? 'color:#111827;' : 'color:#f1f5f9;'"
-                          x-text="item.produto_nome"></td>
-                      <td class="px-3 py-2 text-xs"
-                          :style="temaClaro ? 'color:#6b7280;' : 'color:#94a3b8;'"
-                          x-text="item.lote_nome || '—'"></td>
-                      <td class="px-3 py-2 text-right font-mono"
-                          :style="temaClaro ? 'color:#111827;' : 'color:#f1f5f9;'"
-                          x-text="item.quantidade"></td>
+                      <td class="px-3 py-2" style="width:100%;"
+                          :style="temaClaro ? 'color:#111827;' : 'color:#f1f5f9;'">
+                        <span x-text="item.produto_nome"></span>
+                        <span x-show="item.lote_nome" x-cloak class="block text-xs"
+                              :style="temaClaro ? 'color:#6b7280;' : 'color:#94a3b8;'"
+                              x-text="'Lote: ' + item.lote_nome"></span>
+                      </td>
+                      {% comment %}
+                        Quantidade editavel na propria linha: antes era so
+                        leitura, e corrigir um numero exigia remover o item e
+                        adicionar de novo, reescolhendo produto e lote.
+                      {% endcomment %}
+                      <td class="px-3 py-2 text-right">
+                        <div class="flex items-center justify-end gap-1">
+                          <input type="number" step="0.001" min="0.001"
+                                 :value="item.quantidade"
+                                 @input="atualizarQuantidadeItem(idx, $event.target.value)"
+                                 class="form-input text-right font-mono py-1"
+                                 style="width:104px;">
+                          <span class="text-xs" style="min-width:30px;"
+                                :style="temaClaro ? 'color:#6b7280;' : 'color:#94a3b8;'"
+                                x-text="item.unidade || ''"></span>
+                        </div>
+                      </td>
                       <td class="px-3 py-2 text-right">
                         <button type="button"
                                 @click="removerItem(idx)"
@@ -1258,6 +1277,7 @@ function transferenciaLojaApp(filiais, motoristas, veiculos, copiaTransferencia)
       this.erroGeral = '';
       if (!this.filialDestinoId) { this.erroGeral = 'Selecione a loja de destino.'; return; }
       if (this.itens.length === 0) { this.erroGeral = 'Adicione ao menos um produto.'; return; }
+      if (this.itensSemQuantidade().length) { this.erroGeral = this.erroQuantidade(); return; }
       this.showModalNota = true;
     },
 
@@ -1490,11 +1510,33 @@ function transferenciaLojaApp(filiais, motoristas, veiculos, copiaTransferencia)
       this.itens.splice(idx, 1);
     },
 
+    // Edicao da quantidade direto na linha da tabela. Aceita valor
+    // transitoriamente vazio/invalido enquanto o usuario digita (guardando 0),
+    // em vez de reverter a cada tecla -- o que impediria apagar para redigitar.
+    // Quem barra o zero e a validacao do submit, com a linha identificada.
+    atualizarQuantidadeItem(idx, valor) {
+      const item = this.itens[idx];
+      if (!item) return;
+      const qtd = parseFloat(valor);
+      item.quantidade = (Number.isFinite(qtd) && qtd > 0) ? qtd : 0;
+      this.erroGeral = '';
+    },
+
+    itensSemQuantidade() {
+      return this.itens.filter(item => !(Number(item.quantidade) > 0));
+    },
+
+    erroQuantidade() {
+      return 'Informe uma quantidade maior que zero para: '
+        + this.itensSemQuantidade().map(item => item.produto_nome).join(', ') + '.';
+    },
+
     // ── Submit ───────────────────────────────────────────────
     async submitForm(gerarNota) {
       this.erroGeral = '';
       if (!this.filialDestinoId) { this.erroGeral = 'Selecione a loja de destino.'; return; }
       if (this.itens.length === 0) { this.erroGeral = 'Adicione ao menos um produto.'; return; }
+      if (this.itensSemQuantidade().length) { this.erroGeral = this.erroQuantidade(); return; }
       if (gerarNota && this.gerarMdfe && (!this.motoristaId || !this.veiculoId)) {
         this.erroGeral = 'Para emitir o MDF-e, selecione o motorista e o veículo.';
         return;
