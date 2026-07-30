@@ -13,6 +13,7 @@ from apps.fiscal.integrations.focusnfe.exceptions import FocusNFeProcessingError
 from apps.fiscal.services.focusnfe_service import FocusNFeService
 from apps.financeiro.constants.enums import StatusDocumentoFiscal
 from apps.logistica.services.mdfe_focusnfe import (
+    _chave_nfe_vinculada,
     _obter_ou_criar_documento_mdfe,
     _validar_transporte,
     construir_payload_mdfe,
@@ -343,6 +344,31 @@ class TransferenciaFiscalTests(SimpleTestCase):
             payload["municipios_descarregamento"][0]["notas_fiscais"],
             [{"chave_nfe": "2" * 44}],
         )
+
+    def test_chave_vinculada_valida_prevalece_sobre_campo_fiscal_invalido(self):
+        documento = SimpleNamespace(
+            chave="1",
+            xml_assinado="",
+            xml_retorno="",
+            xml_enviado="",
+        )
+        vinculo = SimpleNamespace(
+            documento_fiscal=documento,
+            chave_acesso="NFe" + ("2" * 44),
+        )
+
+        self.assertEqual(_chave_nfe_vinculada(vinculo), "2" * 44)
+
+    def test_chave_vinculada_e_recuperada_do_xml_autorizado(self):
+        documento = SimpleNamespace(
+            chave="",
+            xml_assinado='<NFe><infNFe Id="NFe' + ("3" * 44) + '"></infNFe></NFe>',
+            xml_retorno="",
+            xml_enviado="",
+        )
+        vinculo = SimpleNamespace(documento_fiscal=documento, chave_acesso="")
+
+        self.assertEqual(_chave_nfe_vinculada(vinculo), "3" * 44)
 
     @patch("apps.logistica.services.mdfe_focusnfe.DocumentoFiscal.objects")
     def test_documento_fiscal_do_mdfe_manual_preenche_snapshot_obrigatorio(

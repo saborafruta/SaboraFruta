@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 from decimal import Decimal
+import re
 from typing import Any
 
 from django.db import transaction
@@ -45,6 +46,35 @@ def _digitos(valor: Any) -> str:
 
 def _texto(valor: Any) -> str:
     return " ".join(str(valor or "").split()).strip()
+
+
+def _chave_nfe_vinculada(vinculo: DocumentoMDFe) -> str:
+    documento = vinculo.documento_fiscal
+    for candidato in (
+        getattr(documento, "chave", ""),
+        getattr(vinculo, "chave_acesso", ""),
+    ):
+        chave = _digitos(candidato)
+        if len(chave) == 44:
+            return chave
+
+    if documento:
+        for fonte in (
+            getattr(documento, "xml_assinado", ""),
+            getattr(documento, "xml_retorno", ""),
+            getattr(documento, "xml_enviado", ""),
+        ):
+            texto = str(fonte or "")
+            correspondencias = re.findall(
+                r'(?:Id=["\']NFe|<chNFe>)(\d{44})',
+                texto,
+            )
+            if correspondencias:
+                return correspondencias[0]
+            correspondencias = re.findall(r"(?<!\d)(\d{44})(?!\d)", texto)
+            if correspondencias:
+                return correspondencias[0]
+    return ""
 
 
 def _cliente_focus(filial) -> FocusNFeClient:
@@ -128,9 +158,7 @@ def construir_payload_mdfe(mdfe: MDFe) -> dict[str, Any]:
     chaves = []
     for vinculo in documentos:
         documento = vinculo.documento_fiscal
-        chave = _digitos(
-            (documento.chave if documento else "") or vinculo.chave_acesso
-        )
+        chave = _chave_nfe_vinculada(vinculo)
         if documento and documento.status != StatusDocumentoFiscal.AUTORIZADA:
             raise DadosInvalidosError(
                 f"A NF-e nº {documento.numero} ainda não foi autorizada."
@@ -139,6 +167,9 @@ def construir_payload_mdfe(mdfe: MDFe) -> dict[str, Any]:
             raise DadosInvalidosError(
                 "A NF-e vinculada ainda não possui chave de acesso autorizada."
             )
+        if vinculo.chave_acesso != chave and hasattr(vinculo, "save"):
+            vinculo.chave_acesso = chave
+            vinculo.save(update_fields=["chave_acesso", "updated_at"])
         chaves.append(chave)
 
     cnpj = _digitos(filial.cnpj)
