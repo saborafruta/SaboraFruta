@@ -871,9 +871,15 @@
               </select>
             </div>
             <div class="sm:col-span-2">
-              <label class="block text-sm font-medium mb-1">Peso bruto da carga (kg) <span class="text-red-500">*</span></label>
-              <input type="number" min="0.001" step="0.001" x-model="pesoBruto"
-                     class="form-input w-full" placeholder="Ex.: 850,000">
+              <label class="block text-sm font-medium mb-1">Peso bruto da carga (kg)</label>
+              <input type="text" :value="formatarQuantidade(pesoBrutoCalculado())"
+                     class="form-input w-full" readonly>
+              <p class="text-xs mt-1"
+                 :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+                Calculado automaticamente pelo peso bruto cadastrado em cada produto.
+              </p>
+              <p x-show="produtosSemPeso().length" class="text-xs mt-1 text-red-500"
+                 x-text="'Cadastre o peso bruto: ' + produtosSemPeso().map(item => item.produto_nome).join(', ')"></p>
             </div>
             <div class="sm:col-span-2 grid grid-cols-1 md:grid-cols-3 gap-2">
               <div class="rounded-lg border p-3"
@@ -955,6 +961,7 @@ function transferenciaLojaApp(filiais, motoristas, veiculos, copiaTransferencia)
     itemProdutoId: null,
     itemProdutoNome: '',
     itemProdutoUnidade: '',
+    itemProdutoPesoBruto: null,
     itemProdutoControlaLote: false,
     itemProdutoResultados: [],
     itemProdutoAberto: false,
@@ -979,7 +986,6 @@ function transferenciaLojaApp(filiais, motoristas, veiculos, copiaTransferencia)
     gerarMdfe: true,
     motoristaId: '',
     veiculoId: '',
-    pesoBruto: '',
     submitting: false,
     erroGeral: '',
     showModalNota: false,
@@ -1005,6 +1011,16 @@ function transferenciaLojaApp(filiais, motoristas, veiculos, copiaTransferencia)
     formatarQuantidade(valor) {
       const numero = Number(valor || 0);
       return numero.toLocaleString('pt-BR', { maximumFractionDigits: 3 });
+    },
+
+    pesoBrutoCalculado() {
+      return this.itens.reduce((total, item) => (
+        total + Number(item.peso_bruto || 0) * Number(item.quantidade || 0)
+      ), 0);
+    },
+
+    produtosSemPeso() {
+      return this.itens.filter(item => !(Number(item.peso_bruto) > 0));
     },
 
     motoristaSelecionado() {
@@ -1298,7 +1314,7 @@ function transferenciaLojaApp(filiais, motoristas, veiculos, copiaTransferencia)
               <section class="grid" style="margin-top:14px">
                 <div class="box"><label>Motorista</label><strong>${this.escaparHtml(motorista?.nome || 'Não selecionado')}</strong></div>
                 <div class="box"><label>Veículo</label><strong>${this.escaparHtml(veiculo?.placa || 'Não selecionado')}</strong></div>
-                <div class="box"><label>Peso bruto</label><strong>${this.escaparHtml(this.formatarQuantidade(this.pesoBruto))} kg</strong></div>
+                <div class="box"><label>Peso bruto</label><strong>${this.escaparHtml(this.formatarQuantidade(this.pesoBrutoCalculado()))} kg</strong></div>
                 <div class="box"><label>Manifesto</label><strong>MDF-e solicitado</strong></div>
               </section>
             ` : ''}
@@ -1342,6 +1358,7 @@ function transferenciaLojaApp(filiais, motoristas, veiculos, copiaTransferencia)
       this.itemProdutoId = item.id;
       this.itemProdutoNome = item.label;
       this.itemProdutoUnidade = item.unidade || '';
+      this.itemProdutoPesoBruto = item.peso_bruto;
       this.itemProdutoQuery = item.label;
       this.itemProdutoControlaLote = item.controla_lote || false;
       this.itemProdutoResultados = [];
@@ -1355,6 +1372,7 @@ function transferenciaLojaApp(filiais, motoristas, veiculos, copiaTransferencia)
       this.itemProdutoId = null;
       this.itemProdutoNome = '';
       this.itemProdutoUnidade = '';
+      this.itemProdutoPesoBruto = null;
       this.itemProdutoQuery = '';
       this.itemProdutoControlaLote = false;
       this.itemProdutoResultados = [];
@@ -1398,6 +1416,7 @@ function transferenciaLojaApp(filiais, motoristas, veiculos, copiaTransferencia)
       );
       if (existente) {
         existente.quantidade = Number(existente.quantidade) + qtd;
+        existente.peso_bruto = this.itemProdutoPesoBruto;
       } else {
         this.itens.push({
           produto_id: this.itemProdutoId,
@@ -1406,6 +1425,7 @@ function transferenciaLojaApp(filiais, motoristas, veiculos, copiaTransferencia)
           lote_id: loteId,
           lote_nome: loteObj ? loteObj.label : '',
           quantidade: qtd,
+          peso_bruto: this.itemProdutoPesoBruto,
         });
       }
 
@@ -1422,8 +1442,13 @@ function transferenciaLojaApp(filiais, motoristas, veiculos, copiaTransferencia)
       this.erroGeral = '';
       if (!this.filialDestinoId) { this.erroGeral = 'Selecione a loja de destino.'; return; }
       if (this.itens.length === 0) { this.erroGeral = 'Adicione ao menos um produto.'; return; }
-      if (gerarNota && this.gerarMdfe && (!this.motoristaId || !this.veiculoId || !(parseFloat(this.pesoBruto) > 0))) {
-        this.erroGeral = 'Para emitir o MDF-e, selecione motorista, veículo e informe o peso bruto.';
+      if (gerarNota && this.gerarMdfe && (!this.motoristaId || !this.veiculoId)) {
+        this.erroGeral = 'Para emitir o MDF-e, selecione o motorista e o veículo.';
+        return;
+      }
+      if (gerarNota && this.gerarMdfe && this.produtosSemPeso().length) {
+        this.erroGeral = 'Cadastre o peso bruto destes produtos: '
+          + this.produtosSemPeso().map(item => item.produto_nome).join(', ') + '.';
         return;
       }
 
@@ -1437,7 +1462,7 @@ function transferenciaLojaApp(filiais, motoristas, veiculos, copiaTransferencia)
         origem_mercadoria: this.origemMercadoria,
         motorista_id: this.motoristaId || null,
         veiculo_id: this.veiculoId || null,
-        peso_bruto: this.pesoBruto || null,
+        peso_bruto: this.pesoBrutoCalculado(),
         itens: this.itens.map(i => ({
           produto_id: i.produto_id,
           lote_id: i.lote_id,

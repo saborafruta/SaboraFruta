@@ -428,6 +428,9 @@ class ProdutoEstoqueSearchJsonView(PermissaoRequiredMixin, View):
                 'codigo_barras': p.codigo_barras or '',
                 'foto_url': p.foto_url or '',
                 'estoque': saldos.get(p.pk, 0),
+                'peso_bruto': (
+                    float(p.peso_bruto) if p.peso_bruto is not None else None
+                ),
             }
             for p in produtos
         ]
@@ -966,6 +969,10 @@ class TransferenciaLojaView(PermissaoRequiredMixin, View):
                                 mov.lote.numero_lote if mov.lote_id else ''
                             ),
                             'quantidade': float(mov.quantidade),
+                            'peso_bruto': (
+                                float(mov.produto.peso_bruto)
+                                if mov.produto.peso_bruto is not None else None
+                            ),
                         }
                         for mov in movs_copia
                     ],
@@ -1144,39 +1151,13 @@ class TransferenciaLojaApiView(PermissaoRequiredMixin, View):
                     {'erro': 'Informe a origem fiscal dos produtos.'}, status=400,
                 )
 
-        if gerar_mdfe:
-            try:
-                peso_bruto = Decimal(str(body.get('peso_bruto') or 0))
-            except Exception:
-                return JsonResponse({'erro': 'Informe um peso bruto válido.'}, status=400)
-            motorista = Motorista.objects.for_filial(filial).filter(
-                pk=body.get('motorista_id'), ativo=True,
-            ).first()
-            veiculo = Veiculo.objects.for_filial(filial).filter(
-                pk=body.get('veiculo_id'), ativo=True,
-            ).first()
-            if not motorista or not veiculo or peso_bruto <= 0:
-                return JsonResponse({
-                    'erro': (
-                        'Para emitir o MDF-e, selecione motorista, veículo '
-                        'e informe o peso bruto da carga.'
-                    ),
-                }, status=400)
-            from apps.logistica.services.mdfe_focusnfe import (
-                _validar_filial_mdfe,
-                _validar_transporte,
-            )
-            try:
-                _validar_filial_mdfe(filial)
-                _validar_filial_mdfe(filial_destino, destino=True)
-                _validar_transporte(motorista, veiculo, peso_bruto)
-            except DomainError as exc:
-                return JsonResponse({'erro': str(exc)}, status=400)
-
         # ── Validação prévia dos itens ──────────────────────────────
         itens_norm = []
         for i, item_data in enumerate(itens, 1):
-            produto_id = item_data.get('produto_id')
+            try:
+                produto_id = int(item_data.get('produto_id'))
+            except (TypeError, ValueError):
+                produto_id = None
             lote_id = item_data.get('lote_id') or None
             try:
                 quantidade = Decimal(str(item_data.get('quantidade', 0)))
@@ -1187,6 +1168,62 @@ class TransferenciaLojaApiView(PermissaoRequiredMixin, View):
             if quantidade <= 0:
                 return JsonResponse({'erro': f'Quantidade deve ser maior que zero (item {i}).'}, status=400)
             itens_norm.append({'produto_id': produto_id, 'lote_id': lote_id, 'quantidade': quantidade})
+
+        produtos = {
+            produto.pk: produto
+            for produto in Produto.objects.filter(
+                pk__in=[item['produto_id'] for item in itens_norm],
+            )
+        }
+        if any(item['produto_id'] not in produtos for item in itens_norm):
+            return JsonResponse(
+                {'erro': 'Um ou mais produtos da transferência não existem.'},
+                status=400,
+            )
+
+        if gerar_mdfe:
+            produtos_sem_peso = []
+            for item in itens_norm:
+                produto = produtos[item['produto_id']]
+                peso_produto = produto.peso_bruto or Decimal('0')
+                if peso_produto <= 0:
+                    produtos_sem_peso.append(produto.descricao)
+                    continue
+                peso_bruto += peso_produto * item['quantidade']
+
+            if produtos_sem_peso:
+                nomes = sorted(set(produtos_sem_peso))
+                return JsonResponse({
+                    'erro': (
+                        'Para gerar o MDF-e, cadastre o peso bruto destes '
+                        f'produtos: {", ".join(nomes)}.'
+                    ),
+                    'produtos_sem_peso': nomes,
+                }, status=400)
+
+            motorista = Motorista.objects.for_filial(filial).filter(
+                pk=body.get('motorista_id'), ativo=True,
+            ).first()
+            veiculo = Veiculo.objects.for_filial(filial).filter(
+                pk=body.get('veiculo_id'), ativo=True,
+            ).first()
+            if not motorista or not veiculo:
+                return JsonResponse({
+                    'erro': (
+                        'Para emitir o MDF-e, selecione o motorista e o veículo.'
+                    ),
+                }, status=400)
+
+            from apps.logistica.services.mdfe_focusnfe import (
+                _validar_filial_mdfe,
+                _validar_transporte,
+            )
+            try:
+                _validar_filial_mdfe(filial)
+                _validar_filial_mdfe(filial_destino, destino=True)
+                _validar_transporte(motorista, veiculo, peso_bruto)
+            except DomainError as exc:
+                return JsonResponse({'erro': str(exc)}, status=400)
 
         # ── Transferência de estoque (atômica entre os itens) ───────
         documento_numero = _gerar_documento_numero_transferencia(filial.pk)
@@ -1240,9 +1277,7 @@ class TransferenciaLojaApiView(PermissaoRequiredMixin, View):
         if gerar_nota:
             itens_nota = []
             for item in itens_norm:
-                produto = Produto.objects.filter(pk=item['produto_id']).first()
-                if not produto:
-                    continue
+                produto = produtos[item['produto_id']]
                 itens_nota.append({
                     'produto': produto,
                     'quantidade': item['quantidade'],
