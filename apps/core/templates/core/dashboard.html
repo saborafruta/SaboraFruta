@@ -410,11 +410,24 @@
               </thead>
               <tbody>
                 {% for row in vendas_acumuladas.por_pagamento %}
+                {% comment %}
+                  Doação/Permuta continuam listadas (saber que houve permuta é
+                  informação gerencial), mas marcadas: não entram no total por
+                  filial, que é faturamento.
+                {% endcomment %}
                 <tr class="table-row-hover" style="border-bottom:1px solid #1e1e1e;">
                   <td class="px-5 py-2 font-mono" style="color:#888;">{{ row.mes_label }}</td>
-                  <td class="px-3 py-2 truncate" style="max-width:140px;" :style="temaClaro ? 'color:#333;' : 'color:#d4d4d4;'" title="{{ row.forma }}">{{ row.forma }}</td>
+                  <td class="px-3 py-2 truncate" style="max-width:140px;" :style="temaClaro ? 'color:#333;' : 'color:#d4d4d4;'" title="{{ row.forma }}">
+                    {{ row.forma }}
+                    {% if not row.e_receita %}
+                      <span class="ml-1 text-[9.5px] font-bold px-1.5 py-0.5 rounded-full whitespace-nowrap"
+                            style="background:rgba(245,158,11,.14); color:#fbbf24; border:1px solid rgba(245,158,11,.32);"
+                            title="Não entra no faturamento">não é receita</span>
+                    {% endif %}
+                  </td>
                   <td class="px-3 py-2 text-right" :style="temaClaro ? 'color:#333;' : 'color:#d4d4d4;'">{{ row.qtd }}</td>
-                  <td class="px-5 py-2 text-right font-mono" :style="temaClaro ? 'color:#333;' : 'color:#d4d4d4;'">R$ {{ row.valor|floatformat:0 }}</td>
+                  <td class="px-5 py-2 text-right font-mono"
+                      :style="temaClaro ? 'color:{% if row.e_receita %}#333{% else %}#9ca3af{% endif %};' : 'color:{% if row.e_receita %}#d4d4d4{% else %}#6b7280{% endif %};'">R$ {{ row.valor|floatformat:0 }}</td>
                 </tr>
                 {% empty %}
                 <tr><td colspan="4" class="px-5 py-4 text-center" style="color:#555;">Sem dados de pagamento</td></tr>

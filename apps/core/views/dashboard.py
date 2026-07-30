@@ -8,6 +8,10 @@ from django.views.generic import TemplateView
 
 import datetime
 
+from apps.financeiro.services.receita import (
+    ajuste_por_grupo, ajuste_total, formas_nao_contabilizadas,
+)
+
 
 class DashboardView(LoginRequiredMixin, TemplateView):
     template_name = 'core/dashboard.html'
@@ -406,7 +410,11 @@ class DashboardView(LoginRequiredMixin, TemplateView):
             )
 
             # --- Combina ---
-            valor_total  += float(pdv_agg['valor_total'] or 0)
+            # Doação/Permuta saem do valor (não são receita) mas continuam
+            # contando como venda: a baixa de estoque e o atendimento
+            # aconteceram. Por isso o desconto entra só em `valor_total`.
+            valor_pdv = float(pdv_agg['valor_total'] or 0) - float(ajuste_total(pdv_qs))
+            valor_total  += max(0.0, valor_pdv)
             qtd_pedidos  += pdv_agg['qtd_pedidos'] or 0
             skus         += pdv_itens['skus'] or 0
             unidades     += float(pdv_itens['unidades'] or 0)
@@ -515,6 +523,22 @@ class DashboardView(LoginRequiredMixin, TemplateView):
                 acum_filial[k]['qtd']   += row['qtd']
                 acum_filial[k]['valor'] += float(row['valor'] or 0)
 
+            # Desconta Doação/Permuta: dão baixa no estoque mas não são
+            # receita. Mesma regra do fechamento de caixa — ver
+            # apps.financeiro.services.receita.
+            ajustes = ajuste_por_grupo(
+                pdv_base,
+                'venda_pdv__data_venda__year', 'venda_pdv__data_venda__month',
+                'venda_pdv__filial__nome_fantasia', 'venda_pdv__filial__razao_social',
+            )
+            for (ano, mes, nome_fantasia, razao), desconto in ajustes.items():
+                fn = nome_fantasia or razao or '—'
+                k = (ano, mes, fn)
+                if k in acum_filial:
+                    acum_filial[k]['valor'] = max(
+                        0.0, acum_filial[k]['valor'] - float(desconto),
+                    )
+
             por_filial = [
                 {
                     'mes_label': f"{MESES_PT[mes]}/{str(ano)[2:]}",
@@ -578,6 +602,10 @@ class DashboardView(LoginRequiredMixin, TemplateView):
                 acum_pgto[k]['qtd']   += row['qtd']
                 acum_pgto[k]['valor'] += float(row['valor'] or 0)
 
+            # As linhas de Doação/Permuta continuam aparecendo — saber que
+            # houve 10 permutas tem valor gerencial. O que não pode é somá-las
+            # ao faturamento, então vão marcadas para a tela sinalizar.
+            sem_receita = formas_nao_contabilizadas(filial.empresa_id)
             por_pagamento = [
                 {
                     'mes_label': f"{MESES_PT[mes]}/{str(ano)[2:]}",
@@ -585,6 +613,7 @@ class DashboardView(LoginRequiredMixin, TemplateView):
                     'forma': forma,
                     'qtd': v['qtd'],
                     'valor': v['valor'],
+                    'e_receita': forma not in sem_receita,
                 }
                 for (ano, mes, forma), v in sorted(acum_pgto.items())
             ]
