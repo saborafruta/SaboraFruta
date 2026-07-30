@@ -55,6 +55,7 @@ LOCAL_APPS = [
     'apps.lotes',
     'apps.cashback',
     'apps.crm',
+    'apps.mapas',
 ]
 
 INSTALLED_APPS = DJANGO_APPS + THIRD_PARTY_APPS + LOCAL_APPS
@@ -238,3 +239,17 @@ LOGGING = {
         },
     },
 }
+
+# ── Mapas e Geolocalização ───────────────────────────────────────────────
+# Provider de geocodificação: 'nominatim' | 'locationiq' | 'geoapify'.
+# ATENÇÃO: a instância PÚBLICA do Nominatim proíbe geocodificação em massa
+# e limita a 1 req/s. Para uso comercial em volume, use um provider com
+# chave (LocationIQ/Geoapify têm plano gratuito que permite uso comercial)
+# ou aponte MAPAS_NOMINATIM_URL para uma instância própria.
+MAPAS_GEOCODER = env('MAPAS_GEOCODER', default='nominatim')
+MAPAS_GEOCODER_API_KEY = env('MAPAS_GEOCODER_API_KEY', default='')
+MAPAS_NOMINATIM_URL = env('MAPAS_NOMINATIM_URL', default='')
+MAPAS_GEOCODER_USER_AGENT = env(
+    'MAPAS_GEOCODER_USER_AGENT',
+    default='ERP-iNoovaTed/1.0 (contato: bsthiago8@gmail.com)',
+)

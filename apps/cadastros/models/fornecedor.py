@@ -4,7 +4,7 @@ import uuid
 from django.db import models
 
 from apps.core.constants.choices import TipoPessoa, UF
-from apps.core.models.base import FilialManager, FilialScopedModel, TimestampedModel
+from apps.core.models.base import CoordenadaMixin, FilialManager, FilialScopedModel, TimestampedModel
 
 
 class FornecedorManager(FilialManager):
@@ -19,7 +19,7 @@ class FornecedorManager(FilialManager):
         return self.get_queryset().filter(filiais_vinculo__filial__empresa=empresa, filiais_vinculo__ativo=True).distinct()
 
 
-class Fornecedor(FilialScopedModel):
+class Fornecedor(CoordenadaMixin, FilialScopedModel):
     """Mapeia `fornecedores` do banco de referência."""
 
     tipo_pessoa = models.CharField(max_length=1, choices=TipoPessoa.choices)

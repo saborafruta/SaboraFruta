@@ -5,7 +5,7 @@ Mapeia as tabelas `empresas` e `filiais` do banco de referência.
 from django.core.validators import RegexValidator
 from django.db import models
 
-from .base import TimestampedModel
+from .base import CoordenadaMixin, TimestampedModel
 
 
 cnpj_validator = RegexValidator(r'^\d{14}$', 'CNPJ deve conter 14 dígitos numéricos.')
@@ -78,7 +78,7 @@ class Empresa(TimestampedModel):
         return self.nome_fantasia or self.razao_social
 
 
-class Filial(TimestampedModel):
+class Filial(CoordenadaMixin, TimestampedModel):
     """
     Unidade operacional da empresa. Todo dado transacional é escopado por filial.
     A filial marcada como `is_matriz=True` tem visão consolidada.

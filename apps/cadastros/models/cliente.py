@@ -4,7 +4,7 @@ import uuid
 from django.db import models
 
 from apps.core.constants.choices import TipoPessoa, UF
-from apps.core.models.base import FilialManager, FilialScopedModel, TimestampedModel
+from apps.core.models.base import CoordenadaMixin, FilialManager, FilialScopedModel, TimestampedModel
 
 
 class ClienteManager(FilialManager):
@@ -19,7 +19,7 @@ class ClienteManager(FilialManager):
         return self.get_queryset().filter(filiais_vinculo__filial__empresa=empresa, filiais_vinculo__ativo=True).distinct()
 
 
-class Cliente(FilialScopedModel):
+class Cliente(CoordenadaMixin, FilialScopedModel):
     """Mapeia `clientes` do banco de referência."""
 
     class Tipo(models.TextChoices):
@@ -143,7 +143,7 @@ class ClienteFilial(TimestampedModel):
         return f'{self.cliente} - {self.filial}'
 
 
-class ClienteEndereco(TimestampedModel):
+class ClienteEndereco(CoordenadaMixin, TimestampedModel):
     """Endereços adicionais do cliente (entrega, cobrança, filiais)."""
 
     class Tipo(models.TextChoices):

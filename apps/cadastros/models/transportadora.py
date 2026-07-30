@@ -2,7 +2,7 @@
 from django.db import models
 
 from apps.core.constants.choices import UF
-from apps.core.models.base import FilialManager, FilialScopedModel, TimestampedModel
+from apps.core.models.base import CoordenadaMixin, FilialManager, FilialScopedModel, TimestampedModel
 
 
 class CadastroFilialManager(FilialManager):
@@ -17,7 +17,7 @@ class CadastroFilialManager(FilialManager):
         return self.get_queryset().filter(filiais_vinculo__filial__empresa=empresa, filiais_vinculo__ativo=True).distinct()
 
 
-class Transportadora(FilialScopedModel):
+class Transportadora(CoordenadaMixin, FilialScopedModel):
     razao_social = models.CharField(max_length=150)
     nome_fantasia = models.CharField(max_length=100, blank=True)
     cnpj = models.CharField(max_length=14, blank=True, db_index=True)
@@ -105,7 +105,7 @@ class VeiculoTransportadora(TimestampedModel):
         return f'{self.placa} ({self.transportadora})'
 
 
-class Motorista(FilialScopedModel):
+class Motorista(CoordenadaMixin, FilialScopedModel):
     class CategoriaCNH(models.TextChoices):
         A = 'A', 'A'
         B = 'B', 'B'

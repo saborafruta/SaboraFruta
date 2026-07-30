@@ -1,0 +1,302 @@
+{% extends "_base.html" %}
+
+{% block title %}{{ title }}{% endblock %}
+{% block page_title %}{{ title }}{% endblock %}
+
+{% block extra_head %}
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.css">
+<link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.Default.css">
+<style>
+  /* Mapa em tela cheia descontando o header do ERP. */
+  .mapa-wrap { position:relative; height:calc(100vh - 132px); min-height:460px;
+               border-radius:14px; overflow:hidden; }
+  #mapa { position:absolute; inset:0; z-index:1; }
+
+  /* Painel lateral retrátil (§17) */
+  .mapa-painel { position:absolute; top:12px; left:12px; z-index:2; width:250px;
+                 max-height:calc(100% - 24px); display:flex; flex-direction:column;
+                 border-radius:12px; overflow:hidden; backdrop-filter:blur(10px);
+                 box-shadow:0 10px 34px rgba(0,0,0,.28); transition:transform .22s ease; }
+  .mapa-painel.recolhido { transform:translateX(calc(-100% - 14px)); }
+  .mapa-painel-head { display:flex; align-items:center; gap:8px; padding:11px 13px; font-size:12px;
+                      font-weight:800; text-transform:uppercase; letter-spacing:.06em; }
+  .mapa-painel-body { overflow:auto; padding:6px 0 10px; }
+
+  .camada-item { display:flex; align-items:center; gap:9px; padding:8px 13px; cursor:pointer;
+                 font-size:13px; user-select:none; }
+  .camada-item:hover { background:rgba(127,127,127,.10); }
+  .camada-bolinha { width:11px; height:11px; border-radius:50%; flex-shrink:0;
+                    box-shadow:0 0 0 2px rgba(255,255,255,.55); }
+  .camada-contador { margin-left:auto; font-size:11px; font-variant-numeric:tabular-nums; opacity:.65; }
+
+  /* Botão de recolher, fica visível mesmo com o painel fechado. */
+  .mapa-toggle { position:absolute; top:12px; left:12px; z-index:3; width:34px; height:34px;
+                 border-radius:9px; border:none; cursor:pointer; display:none;
+                 align-items:center; justify-content:center; font-size:17px;
+                 box-shadow:0 6px 18px rgba(0,0,0,.28); }
+  .mapa-painel.recolhido + .mapa-toggle { display:flex; }
+
+  /* Marcador: divIcon colorido pela camada (ou pelo status de recompra). */
+  .pino { width:15px; height:15px; border-radius:50% 50% 50% 0; transform:rotate(-45deg);
+          border:2px solid rgba(255,255,255,.9); box-shadow:0 2px 5px rgba(0,0,0,.4); }
+
+  .mapa-legenda { position:absolute; bottom:12px; right:12px; z-index:2; border-radius:10px;
+                  padding:9px 12px; font-size:11px; line-height:1.7;
+                  backdrop-filter:blur(10px); box-shadow:0 8px 22px rgba(0,0,0,.24); }
+
+  .mapa-aviso { position:absolute; top:12px; left:50%; transform:translateX(-50%); z-index:4;
+                border-radius:9px; padding:8px 14px; font-size:12px; font-weight:600;
+                box-shadow:0 8px 22px rgba(0,0,0,.24); display:none; }
+
+  .popup-mapa { font-size:12.5px; min-width:216px; }
+  .popup-mapa h4 { font-size:13.5px; font-weight:800; margin:0 0 6px; }
+  .popup-mapa dl { display:grid; grid-template-columns:auto 1fr; gap:2px 8px; margin:0 0 9px; }
+  .popup-mapa dt { opacity:.65; }
+  .popup-mapa dd { margin:0; font-weight:600; text-align:right; }
+  .popup-acoes { display:flex; flex-wrap:wrap; gap:5px; }
+  .popup-acoes a, .popup-acoes button { font-size:11px; font-weight:700; padding:4px 8px;
+        border-radius:6px; text-decoration:none; border:1px solid transparent; cursor:pointer; }
+  .leaflet-popup-content { margin:11px 13px; }
+</style>
+{% endblock %}
+
+{% block content %}
+{{ camadas|json_script:"mapas-camadas" }}
+{{ centro|json_script:"mapas-centro" }}
+
+<div class="space-y-3" x-data="mapaGeo()" x-init="iniciar()">
+
+  <!-- Cobertura de geocodificação (§14): sem isso o usuário não sabe que o
+       mapa está incompleto porque falta rodar o backfill. -->
+  <div class="flex flex-wrap items-center gap-x-5 gap-y-1 text-sm">
+    <span :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+      Clientes no mapa
+      <strong :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
+        {{ cobertura.com_coordenada }}/{{ cobertura.total }}
+      </strong>
+      ({{ cobertura.percentual }}%)
+    </span>
+    {% if cobertura.sem_coordenada %}
+      <span style="color:#f59e0b;">
+        {{ cobertura.sem_coordenada }} sem coordenada — rode
+        <code style="font-size:11px;">manage.py geocodificar</code>
+      </span>
+    {% endif %}
+    <span class="ml-auto text-xs" :style="temaClaro ? 'color:#94a3b8;' : 'color:#64748b;'"
+          x-text="statusTexto"></span>
+  </div>
+
+  <div class="mapa-wrap card" style="padding:0;">
+    <div id="mapa"></div>
+
+    <!-- Menu de camadas -->
+    <div class="mapa-painel" :class="painelRecolhido ? 'recolhido' : ''"
+         :style="temaClaro ? 'background:rgba(255,255,255,.94); color:#111827;'
+                           : 'background:rgba(22,22,26,.92); color:#f8fafc;'">
+      <div class="mapa-painel-head"
+           :style="temaClaro ? 'border-bottom:1px solid #e5e7eb;' : 'border-bottom:1px solid #2a2a32;'">
+        <span>Camadas</span>
+        <button type="button" @click="painelRecolhido = true" title="Recolher painel"
+                style="margin-left:auto;background:none;border:none;cursor:pointer;font-size:15px;color:inherit;opacity:.6;">&laquo;</button>
+      </div>
+      <div class="mapa-painel-body">
+        <template x-for="cam in camadas" :key="cam.chave">
+          <label class="camada-item">
+            <input type="checkbox" :value="cam.chave" x-model="ativas" @change="recarregar()">
+            <span class="camada-bolinha" :style="'background:' + cam.cor"></span>
+            <span x-text="cam.rotulo"></span>
+            <span class="camada-contador" x-text="contadores[cam.chave] ?? ''"></span>
+          </label>
+        </template>
+      </div>
+    </div>
+    <button type="button" class="mapa-toggle" @click="painelRecolhido = false" title="Mostrar camadas"
+            :style="temaClaro ? 'background:#fff;color:#111827;' : 'background:#16161a;color:#f8fafc;'">&raquo;</button>
+
+    <!-- Legenda do status de recompra, que recolore os pinos de cliente -->
+    <div class="mapa-legenda"
+         :style="temaClaro ? 'background:rgba(255,255,255,.94); color:#111827;'
+                           : 'background:rgba(22,22,26,.92); color:#f8fafc;'">
+      <div style="font-weight:800; margin-bottom:3px;">Clientes por recompra</div>
+      <div><span class="camada-bolinha" style="background:#ef4444; display:inline-block;"></span> em atraso</div>
+      <div><span class="camada-bolinha" style="background:#f59e0b; display:inline-block;"></span> compra próxima</div>
+      <div><span class="camada-bolinha" style="background:#22c55e; display:inline-block;"></span> em dia</div>
+    </div>
+
+    <div class="mapa-aviso" x-show="aviso" x-cloak x-text="aviso"
+         style="background:#7c2d12; color:#fed7aa;"></div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js"></script>
+<script>
+function mapaGeo() {
+  return {
+    camadas: JSON.parse(document.getElementById('mapas-camadas').textContent),
+    centro: JSON.parse(document.getElementById('mapas-centro').textContent),
+    // Só clientes ligados de início: acender tudo faria N requisições e
+    // encheria o mapa antes do usuário escolher o que quer ver.
+    ativas: ['clientes'],
+    contadores: {},
+    painelRecolhido: false,
+    statusTexto: '',
+    aviso: '',
+    _mapa: null,
+    _grupos: {},
+    _carregando: false,
+
+    iniciar() {
+      this._mapa = L.map('mapa', { zoomControl: true, preferCanvas: true })
+        .setView([this.centro.lat, this.centro.lng], this.centro.zoom);
+
+      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        maxZoom: 19,
+        attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
+      }).addTo(this._mapa);
+
+      this.recarregar();
+      // Recarrega ao navegar: o backend recorta pela viewport, então mover o
+      // mapa precisa buscar os pinos da área nova (lazy loading).
+      this._mapa.on('moveend', () => this.recarregar());
+    },
+
+    _grupo(chave) {
+      if (!this._grupos[chave]) {
+        this._grupos[chave] = L.markerClusterGroup({
+          chunkedLoading: true, spiderfyOnMaxZoom: true,
+          disableClusteringAtZoom: 17, maxClusterRadius: 55
+        });
+        this._mapa.addLayer(this._grupos[chave]);
+      }
+      return this._grupos[chave];
+    },
+
+    async recarregar() {
+      // Camadas desligadas: limpa e some do mapa.
+      Object.keys(this._grupos).forEach(k => {
+        if (!this.ativas.includes(k)) {
+          this._grupos[k].clearLayers();
+          delete this.contadores[k];
+        }
+      });
+      if (!this.ativas.length) { this.statusTexto = ''; return; }
+      if (this._carregando) return;
+      this._carregando = true;
+      this.statusTexto = 'carregando...';
+
+      const b = this._mapa.getBounds();
+      const params = new URLSearchParams({
+        camadas: this.ativas.join(','),
+        sul: b.getSouth(), oeste: b.getWest(),
+        norte: b.getNorth(), leste: b.getEast()
+      });
+
+      try {
+        const resp = await fetch(`{% url 'mapas:api-camadas' %}?${params}`,
+                                 { headers: { 'Accept': 'application/json' } });
+        if (!resp.ok) throw new Error('HTTP ' + resp.status);
+        const dados = await resp.json();
+
+        for (const [chave, marcadores] of Object.entries(dados.camadas)) {
+          const grupo = this._grupo(chave);
+          grupo.clearLayers();
+          grupo.addLayers(marcadores.map(m => this._marcador(chave, m)));
+          this.contadores[chave] = marcadores.length;
+        }
+
+        this.aviso = dados.truncadas && dados.truncadas.length
+          ? `Muitos pontos em ${dados.truncadas.join(', ')} — mostrando os primeiros ${dados.limite}. Dê zoom para ver todos.`
+          : '';
+        const total = Object.values(dados.camadas).reduce((s, l) => s + l.length, 0);
+        this.statusTexto = `${total} ponto(s) na área`;
+      } catch (e) {
+        this.statusTexto = 'falha ao carregar';
+        this.aviso = 'Não foi possível carregar os marcadores.';
+      } finally {
+        this._carregando = false;
+      }
+    },
+
+    _marcador(chave, m) {
+      const marker = L.marker([m.lat, m.lng], {
+        title: m.nome,
+        icon: L.divIcon({
+          className: '', iconSize: [15, 15], iconAnchor: [7, 14], popupAnchor: [0, -14],
+          html: `<div class="pino" style="background:${m.cor}"></div>`
+        })
+      });
+      // Popup montado on-demand: os dados ricos (§3) só são buscados no
+      // clique, senão a carga de milhares de pinos traria tudo à toa.
+      marker.bindPopup('<div class="popup-mapa">carregando...</div>');
+      marker.on('popupopen', () => this._preencherPopup(marker, chave, m));
+      return marker;
+    },
+
+    async _preencherPopup(marker, chave, m) {
+      if (chave !== 'clientes') {
+        marker.setPopupContent(
+          `<div class="popup-mapa"><h4>${this._esc(m.nome)}</h4>` +
+          `<div style="opacity:.7">${this._esc(m.cidade || '')}</div></div>`
+        );
+        return;
+      }
+      try {
+        const url = `{% url 'mapas:api-cliente-detalhe' 0 %}`.replace('/0/', `/${m.id}/`);
+        const resp = await fetch(url, { headers: { 'Accept': 'application/json' } });
+        if (!resp.ok) throw new Error('HTTP ' + resp.status);
+        marker.setPopupContent(this._htmlCliente(await resp.json()));
+      } catch (e) {
+        marker.setPopupContent(
+          `<div class="popup-mapa"><h4>${this._esc(m.nome)}</h4>` +
+          `<div style="color:#b91c1c">Falha ao carregar os detalhes.</div></div>`
+        );
+      }
+    },
+
+    _htmlCliente(d) {
+      const brl = v => (v === null || v === undefined)
+        ? '—' : 'R$ ' + Number(v).toLocaleString('pt-BR', { minimumFractionDigits: 2 });
+      const linha = (rot, val) => `<dt>${rot}</dt><dd>${val}</dd>`;
+      const wa = (d.telefone || '').replace(/\D/g, '');
+
+      return `<div class="popup-mapa">
+        <h4>${this._esc(d.nome || '')}</h4>
+        <dl>
+          ${linha('Telefone', this._esc(d.telefone || '—'))}
+          ${linha('Cidade', this._esc((d.cidade || '') + (d.uf ? '/' + d.uf : '') || '—'))}
+          ${linha('Última compra', d.ultima_compra ? d.ultima_compra.split('-').reverse().join('/') : '—')}
+          ${linha('Comprou no mês', brl(d.valor_mes))}
+          ${linha('Dias sem comprar', d.dias_sem_comprar ?? '—')}
+          ${linha('Limite de crédito', brl(d.limite_credito))}
+          ${linha('Representante', this._esc(d.representante || '—'))}
+        </dl>
+        <div class="popup-acoes">
+          <a href="{% url 'pdv:home' %}" style="background:#1d4ed8;color:#fff;">Nova Venda</a>
+          <a href="${this._urlCadastro(d.id)}" style="background:#374151;color:#fff;">Cadastro</a>
+          <a href="{% url 'analytics:vendas' %}?cliente=${encodeURIComponent(d.cpf_cnpj || d.nome || '')}"
+             target="_blank" style="background:#374151;color:#fff;">Histórico</a>
+          ${wa.length >= 10 ? `<a href="https://wa.me/55${wa}" target="_blank" rel="noopener"
+             style="background:#16a34a;color:#fff;">WhatsApp</a>` : ''}
+        </div>
+      </div>`;
+    },
+
+    // Monta a URL do cadastro trocando o id de um reverse feito com pk=0.
+    // Concatenar caminho à mão quebraria silenciosamente se a rota mudar.
+    _urlCadastro(id) {
+      return `{% url 'cadastros:cliente-update' 0 %}`.replace('/0/', `/${id}/`);
+    },
+
+    _esc(s) {
+      const d = document.createElement('div');
+      d.textContent = s == null ? '' : String(s);
+      return d.innerHTML;
+    }
+  };
+}
+</script>
+{% endblock %}

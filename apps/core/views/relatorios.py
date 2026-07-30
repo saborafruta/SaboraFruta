@@ -88,5 +88,15 @@ class RelatoriosHubView(PermissaoRequiredMixin, TemplateView):
                     },
                 ],
             },
+            {
+                'titulo': 'Mapas e Geolocalização',
+                'itens': [
+                    {
+                        'nome': 'Mapa de Clientes',
+                        'descricao': 'Clientes, fornecedores, filiais e motoristas no mapa, coloridos por situação de recompra.',
+                        'url_name': 'mapas:mapa',
+                    },
+                ],
+            },
         ]
         return ctx
