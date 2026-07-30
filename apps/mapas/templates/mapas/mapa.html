@@ -378,7 +378,7 @@ function mapaGeo() {
           ${linha('Representante', this._esc(d.representante || '—'))}
         </dl>
         <div class="popup-acoes">
-          <a href="{% url 'pdv:home' %}" style="background:#1d4ed8;color:#fff;">Nova Venda</a>
+          <a href="{% url 'pdv:home' %}?cliente=${d.id}" style="background:#1d4ed8;color:#fff;">Nova Venda</a>
           <a href="${this._urlCadastro(d.id)}" style="background:#374151;color:#fff;">Cadastro</a>
           <a href="{% url 'analytics:vendas' %}?cliente=${encodeURIComponent(d.cpf_cnpj || d.nome || '')}"
              target="_blank" style="background:#374151;color:#fff;">Histórico</a>

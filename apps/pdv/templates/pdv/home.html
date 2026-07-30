@@ -2697,8 +2697,24 @@ function pdv() {
       setInterval(()=>{ this.horaAtual=this._hora(); }, 1000);
       await this.carregarEstado();
       await this.atualizarListasTopo();
+      await this.aplicarClienteInicial();
       this.registrarAtalhos();
       if (!this.showModalCaixa) this.$nextTick(()=>this.focarBuscaProduto());
+    },
+
+    // Cliente vindo de ?cliente=<id> (ex.: botao "Nova Venda" do mapa).
+    // Passa pelo mesmo selecionarCliente() usado quando o operador escolhe a
+    // mao: e o caminho ja testado, que carrega historico, credito, cashback e
+    // tabela de preco. Reimplementar aqui so a atribuicao do cliente foi
+    // exatamente o que causou o bug do endereco sumindo do cupom.
+    async aplicarClienteInicial() {
+      const inicial = {{ cliente_inicial_json|safe }};
+      if (!inicial) return;
+      try {
+        await this.selecionarCliente(inicial);
+      } catch (e) {
+        this.toast_('Nao foi possivel pre-selecionar o cliente.', 'erro');
+      }
     },
 
     _hora() {

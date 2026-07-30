@@ -377,7 +377,7 @@
               <div class="inline-flex gap-2 whitespace-nowrap">
                 <a href="{% url 'cadastros:cliente-update' r.cliente_id %}" class="text-xs font-semibold"
                    :style="temaClaro ? 'color:#2563eb;' : 'color:#60a5fa;'" title="Ver cliente">Ver</a>
-                <a href="{% url 'pdv:home' %}" class="text-xs font-semibold"
+                <a href="{% url 'pdv:home' %}?cliente={{ r.cliente_id }}" class="text-xs font-semibold"
                    :style="temaClaro ? 'color:#2563eb;' : 'color:#60a5fa;'" title="Nova venda">Vender</a>
                 {% if r.telefone_whatsapp %}
                   <a href="https://wa.me/{{ r.telefone_whatsapp }}?text=Ol%C3%A1%2C%20{{ r.cliente.nome_display|urlencode }}%21%20Tudo%20bem%3F" target="_blank" rel="noopener"

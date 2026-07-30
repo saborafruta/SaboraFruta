@@ -164,7 +164,51 @@ def pdv_home(request):
         "caixas_json": json.dumps(caixas),
         "linhas_json": json.dumps(linhas),
         "usuario_e_admin": _usuario_e_admin(request),
+        "cliente_inicial_json": json.dumps(_cliente_inicial(request)),
     })
+
+
+def _cliente_inicial(request):
+    """
+    Cliente a deixar pré-selecionado ao abrir o PDV, via `?cliente=<id>`.
+
+    Serve para quem chega de outra tela já sabendo com quem vai vender — hoje
+    o botão "Nova Venda" do popup do mapa, e qualquer outro atalho no futuro.
+    Sem isso a venda abria sempre em "Consumidor Final" e o operador tinha de
+    procurar o cliente de novo.
+
+    Devolve None quando não há parâmetro, quando o id é inválido ou quando o
+    cliente não pertence ao escopo da filial ativa — nunca levanta exceção,
+    porque um link ruim não pode impedir a abertura do PDV.
+    """
+    from apps.cadastros.models import Cliente
+
+    bruto = request.GET.get("cliente")
+    if not bruto:
+        return None
+    try:
+        cliente_id = int(bruto)
+    except (TypeError, ValueError):
+        return None
+
+    filial = request.filial_ativa
+    empresa_id = getattr(filial, 'empresa_id', None)
+    if not empresa_id:
+        return None
+
+    # Escopo por empresa usando o FK direto, e nao `Cliente.objects.for_filial`.
+    # O for_filial do ClienteManager filtra pelo vinculo `filiais_vinculo`
+    # (ClienteFilial), que boa parte da base nao tem preenchido -- e por isso
+    # que `buscar_cliente` tem toda aquela cascata de fallbacks. Usar o mesmo
+    # criterio do mapa (empresa via FK direta) garante que todo cliente
+    # clicavel no mapa e pre-selecionavel aqui, sem sair da empresa.
+    cliente = (
+        Cliente.objects
+        .filter(pk=cliente_id, ativo=True, filial__empresa_id=empresa_id)
+        .select_related('tabela_preco')
+        .first()
+    )
+    return _serializar_cliente(cliente) if cliente else None
 
 
 # ---------------------------------------------------------------------------
@@ -356,6 +400,34 @@ def _todos_precos_produto(produto, filial, hoje=None):
     return unicos
 
 
+def _serializar_cliente(c):
+    """
+    Payload de cliente no formato que o `selecionarCliente()` do PDV espera.
+
+    Está em nível de módulo (e não dentro de `buscar_cliente`) porque o
+    pré-carregamento de cliente na abertura do PDV usa o MESMO formato. Já
+    houve bug de endereço desaparecendo do cupom por causa de um objeto de
+    cliente montado pela metade em outro caminho — com um serializador único,
+    os campos não podem divergir.
+    """
+    endereco_entrega = _cliente_endereco_preferencial(c)
+
+    return {
+        "id": c.id,
+        "razao_social": c.razao_social,
+        "nome_fantasia": c.nome_fantasia or "",
+        "cpf_cnpj": c.cpf_cnpj or "",
+        "celular": c.celular or "",
+        "telefone": c.telefone or "",
+        "endereco_entrega": endereco_entrega,
+        "tem_endereco": bool(endereco_entrega.get("rua") and endereco_entrega.get("bairro")),
+        "linhas_interesse": getattr(c, 'linhas_interesse', ''),
+        "saldo_devedor": float(c.saldo_devedor or 0),
+        "tabela_preco_id": c.tabela_preco_id,
+        "tabela_preco_nome": c.tabela_preco.descricao if c.tabela_preco_id else "Padrao",
+    }
+
+
 @requer_permissao('pdv', 'ver')
 def buscar_cliente(request):
     from apps.cadastros.models import Cliente
@@ -363,24 +435,7 @@ def buscar_cliente(request):
 
     q = request.GET.get("q", "").strip()
     filial = request.filial_ativa
-
-    def _serializar(c):
-        endereco_entrega = _cliente_endereco_preferencial(c)
-
-        return {
-            "id": c.id,
-            "razao_social": c.razao_social,
-            "nome_fantasia": c.nome_fantasia or "",
-            "cpf_cnpj": c.cpf_cnpj or "",
-            "celular": c.celular or "",
-            "telefone": c.telefone or "",
-            "endereco_entrega": endereco_entrega,
-            "tem_endereco": bool(endereco_entrega.get("rua") and endereco_entrega.get("bairro")),
-            "linhas_interesse": getattr(c, 'linhas_interesse', ''),
-            "saldo_devedor": float(c.saldo_devedor or 0),
-            "tabela_preco_id": c.tabela_preco_id,
-            "tabela_preco_nome": c.tabela_preco.descricao if c.tabela_preco_id else "Padrao",
-        }
+    _serializar = _serializar_cliente
 
     def _aplicar_busca(qs, q):
         if len(q) >= 2:
