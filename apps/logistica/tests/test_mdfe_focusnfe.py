@@ -14,7 +14,12 @@ from apps.logistica.services.mdfe_focusnfe import (
     _validar_transporte,
     construir_payload_mdfe,
 )
-from apps.logistica.views import _dados_destino_nfe, _peso_bruto_nfe
+from apps.logistica.views import (
+    _dados_destino_nfe,
+    _peso_bruto_nfe,
+    _peso_produtos_nfe,
+    _rota_filiais_nfe,
+)
 
 
 class TransferenciaFiscalTests(SimpleTestCase):
@@ -98,6 +103,45 @@ class TransferenciaFiscalTests(SimpleTestCase):
         )
 
         self.assertEqual(_peso_bruto_nfe(documento), Decimal("150.000"))
+
+    def test_peso_produtos_informa_cadastros_incompletos(self):
+        itens = Mock()
+        itens.select_related.return_value = [
+            SimpleNamespace(
+                produto=SimpleNamespace(nome="ABACAXI", peso_bruto=Decimal("1.250")),
+                quantidade=Decimal("2"),
+                descricao="ABACAXI",
+                codigo_produto="1",
+            ),
+            SimpleNamespace(
+                produto=SimpleNamespace(nome="CAJA", peso_bruto=None),
+                quantidade=Decimal("3"),
+                descricao="CAJA",
+                codigo_produto="2",
+            ),
+        ]
+        documento = SimpleNamespace(itens=itens)
+
+        peso, faltantes = _peso_produtos_nfe(documento)
+
+        self.assertEqual(peso, Decimal("2.500"))
+        self.assertEqual(faltantes, ["CAJA"])
+
+    @patch("apps.logistica.views._filial_destino_nfe")
+    def test_rota_mdfe_usa_municipios_das_filiais(self, destino_mock):
+        origem = SimpleNamespace(
+            uf="RN", cidade="Macaiba", codigo_municipio_ibge="2407104",
+        )
+        destino_mock.return_value = SimpleNamespace(
+            uf="RN", cidade="Natal", codigo_municipio_ibge="2408102",
+        )
+
+        rota = _rota_filiais_nfe(SimpleNamespace(filial=origem))
+
+        self.assertEqual(rota["municipio_carregamento"], "Macaiba")
+        self.assertEqual(rota["codigo_municipio_carregamento"], "2407104")
+        self.assertEqual(rota["municipio_descarregamento"], "Natal")
+        self.assertEqual(rota["codigo_municipio_descarregamento"], "2408102")
 
     def test_cfop_producao_propria(self):
         self.assertEqual(_cfop_transferencia("RN", "RN", "producao_propria"), "5151")

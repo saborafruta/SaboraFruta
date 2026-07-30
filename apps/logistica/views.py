@@ -1215,6 +1215,22 @@ def _peso_bruto_nfe(documento):
     return total
 
 
+def _peso_produtos_nfe(documento):
+    """Calcula o peso pelos produtos e informa quais cadastros estão incompletos."""
+    total = Decimal("0")
+    produtos_sem_peso = []
+    for item in documento.itens.select_related("produto"):
+        produto = item.produto
+        peso_unitario = getattr(produto, "peso_bruto", None) if produto else None
+        if not peso_unitario or peso_unitario <= 0:
+            produtos_sem_peso.append(
+                getattr(produto, "nome", "") or item.descricao or item.codigo_produto
+            )
+            continue
+        total += Decimal(str(peso_unitario)) * item.quantidade
+    return total, list(dict.fromkeys(produtos_sem_peso))
+
+
 def _texto_xml_destino(documento):
     for xml in (documento.xml_assinado, documento.xml_retorno, documento.xml_enviado):
         if not xml:
@@ -1348,6 +1364,24 @@ def _endereco_filial(filial):
     return " - ".join(parte for parte in partes if parte)
 
 
+def _rota_filiais_nfe(documento):
+    """Monta a rota do MDF-e somente com os cadastros das filiais."""
+    origem = documento.filial
+    destino = _filial_destino_nfe(documento)
+    return {
+        "origem": origem,
+        "destino": destino,
+        "uf_carregamento": origem.uf or "",
+        "municipio_carregamento": origem.cidade or "",
+        "codigo_municipio_carregamento": origem.codigo_municipio_ibge or "",
+        "uf_descarregamento": destino.uf if destino else "",
+        "municipio_descarregamento": destino.cidade if destino else "",
+        "codigo_municipio_descarregamento": (
+            destino.codigo_municipio_ibge if destino else ""
+        ),
+    }
+
+
 def _nfe_inicial(documento):
     if not documento:
         return None
@@ -1452,14 +1486,18 @@ class MDFeCreateView(PermissaoRequiredMixin, View):
             ),
         }
         nfe_documento_inicial_json = "null"
+        rota_automatica = None
+        produtos_sem_peso = []
         if nfe_documento:
-            destinatario = _dados_destino_nfe(nfe_documento)
-            initial["uf_descarregamento"] = destinatario.get("uf", "")
-            initial["municipio_descarregamento"] = destinatario.get("cidade", "")
-            initial["codigo_municipio_descarregamento"] = destinatario.get(
-                "codigo_municipio", ""
-            )
-            initial["peso_carga_kg"] = _peso_bruto_nfe(nfe_documento)
+            rota_automatica = _rota_filiais_nfe(nfe_documento)
+            initial.update({
+                campo: valor
+                for campo, valor in rota_automatica.items()
+                if campo not in {"origem", "destino"}
+            })
+            peso_carga, produtos_sem_peso = _peso_produtos_nfe(nfe_documento)
+            if not produtos_sem_peso:
+                initial["peso_carga_kg"] = peso_carga
             if nfe_documento.transportadora_id:
                 initial["transportadora"] = nfe_documento.transportadora_id
             nfe_documento_inicial_json = json.dumps(
@@ -1473,6 +1511,8 @@ class MDFeCreateView(PermissaoRequiredMixin, View):
         if veiculos.count() == 1:
             initial["veiculo_cadastro"] = veiculos.values_list("pk", flat=True).first()
         form = MDFeForm(filial=filial, initial=initial)
+        if nfe_documento:
+            form.fields["peso_carga_kg"].widget.attrs["readonly"] = True
         motoristas_json, veiculos_json = _motoristas_veiculos_json(filial)
         return render(request, self.template_name, {
             "title": "Novo MDF-e",
@@ -1481,10 +1521,13 @@ class MDFeCreateView(PermissaoRequiredMixin, View):
             "motoristas_json": motoristas_json,
             "veiculos_json": veiculos_json,
             "nfe_documento_inicial_json": nfe_documento_inicial_json,
-            "endereco_origem": _endereco_filial(filial),
+            "rota_automatica": rota_automatica,
+            "produtos_sem_peso": produtos_sem_peso,
+            "endereco_origem": _endereco_filial(nfe_documento.filial)
+            if nfe_documento else _endereco_filial(filial),
             "endereco_destino": (
-                _dados_destino_nfe(nfe_documento).get("endereco_completo", "")
-                if nfe_documento else ""
+                _endereco_filial(rota_automatica["destino"])
+                if rota_automatica and rota_automatica["destino"] else ""
             ),
         })
 
@@ -1498,23 +1541,29 @@ class MDFeCreateView(PermissaoRequiredMixin, View):
                 tipo_documento="nfe", status="autorizada",
             ).first()
         dados_post = request.POST.copy()
+        rota_automatica = None
+        produtos_sem_peso = []
         if nfe_documento:
-            destino = _dados_destino_nfe(nfe_documento)
-            preenchimentos = {
-                "uf_carregamento": filial.uf,
-                "municipio_carregamento": filial.cidade,
-                "codigo_municipio_carregamento": filial.codigo_municipio_ibge,
-                "uf_descarregamento": destino.get("uf", ""),
-                "municipio_descarregamento": destino.get("cidade", ""),
-                "codigo_municipio_descarregamento": destino.get(
-                    "codigo_municipio", ""
-                ),
-            }
-            for campo, valor in preenchimentos.items():
-                if not dados_post.get(campo) and valor:
+            rota_automatica = _rota_filiais_nfe(nfe_documento)
+            for campo, valor in rota_automatica.items():
+                if campo not in {"origem", "destino"}:
                     dados_post[campo] = valor
+            peso_carga, produtos_sem_peso = _peso_produtos_nfe(nfe_documento)
+            dados_post["peso_carga_kg"] = (
+                str(peso_carga) if peso_carga > 0 and not produtos_sem_peso else ""
+            )
         form = MDFeForm(dados_post, filial=filial)
-        if form.is_valid():
+        if nfe_documento:
+            form.fields["peso_carga_kg"].widget.attrs["readonly"] = True
+        formulario_valido = form.is_valid()
+        if produtos_sem_peso:
+            form.add_error(
+                "peso_carga_kg",
+                "Cadastre o peso bruto destes produtos antes de emitir: "
+                + ", ".join(produtos_sem_peso),
+            )
+            formulario_valido = False
+        if formulario_valido:
             from apps.core.models.parametros import (
                 ParametroDocumentoFiscal,
                 ParametrosSistema,
@@ -1584,10 +1633,15 @@ class MDFeCreateView(PermissaoRequiredMixin, View):
             "nfe_documento_inicial_json": json.dumps(
                 _nfe_inicial(nfe_documento), ensure_ascii=False
             ) if nfe_documento else "null",
-            "endereco_origem": _endereco_filial(filial),
-            "endereco_destino": (
-                _dados_destino_nfe(nfe_documento).get("endereco_completo", "")
+            "rota_automatica": rota_automatica,
+            "produtos_sem_peso": produtos_sem_peso,
+            "endereco_origem": (
+                _endereco_filial(nfe_documento.filial)
                 if nfe_documento else ""
+            ),
+            "endereco_destino": (
+                _endereco_filial(rota_automatica["destino"])
+                if rota_automatica and rota_automatica["destino"] else ""
             ),
         })
 

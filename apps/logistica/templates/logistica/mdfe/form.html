@@ -95,6 +95,12 @@
           <span class="text-xs font-semibold uppercase tracking-wide" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Peso bruto (kg)</span>
           {{ form.peso_carga_kg }}
           {% if form.peso_carga_kg.errors %}<p class="text-xs text-red-500 mt-0.5">{{ form.peso_carga_kg.errors.0 }}</p>{% endif %}
+          {% if produtos_sem_peso %}
+            <p class="mt-1 rounded-md border border-amber-400 bg-amber-50 p-2 text-xs font-semibold text-amber-800">
+              Peso não calculado. Cadastre o peso bruto em:
+              {{ produtos_sem_peso|join:", " }}.
+            </p>
+          {% endif %}
         </label>
         <label class="space-y-1.5">
           <span class="text-xs font-semibold uppercase tracking-wide" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Modal</span>
@@ -204,6 +210,32 @@
         </div>
       </div>
       {% endif %}
+      {% if rota_automatica %}
+      <div class="grid gap-3 md:grid-cols-2">
+        <div class="rounded-md border p-4"
+             :style="temaClaro ? 'border-color:#bfdbfe; background:#eff6ff;' : 'border-color:#1e3a8a; background:rgba(30,58,138,.18);'">
+          <span class="block text-xs font-semibold uppercase text-blue-600">Carregamento</span>
+          <strong class="mt-1 block">{{ rota_automatica.municipio_carregamento }} / {{ rota_automatica.uf_carregamento }}</strong>
+          <span class="mt-1 block text-xs" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+            Código IBGE {{ rota_automatica.codigo_municipio_carregamento|default:"não cadastrado" }}
+          </span>
+        </div>
+        <div class="rounded-md border p-4"
+             :style="temaClaro ? 'border-color:#bfdbfe; background:#eff6ff;' : 'border-color:#1e3a8a; background:rgba(30,58,138,.18);'">
+          <span class="block text-xs font-semibold uppercase text-blue-600">Descarregamento</span>
+          <strong class="mt-1 block">{{ rota_automatica.municipio_descarregamento }} / {{ rota_automatica.uf_descarregamento }}</strong>
+          <span class="mt-1 block text-xs" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+            Código IBGE {{ rota_automatica.codigo_municipio_descarregamento|default:"não cadastrado" }}
+          </span>
+        </div>
+      </div>
+      <input type="hidden" name="uf_carregamento" value="{{ rota_automatica.uf_carregamento }}">
+      <input type="hidden" name="municipio_carregamento" value="{{ rota_automatica.municipio_carregamento }}">
+      <input type="hidden" name="codigo_municipio_carregamento" value="{{ rota_automatica.codigo_municipio_carregamento }}">
+      <input type="hidden" name="uf_descarregamento" value="{{ rota_automatica.uf_descarregamento }}">
+      <input type="hidden" name="municipio_descarregamento" value="{{ rota_automatica.municipio_descarregamento }}">
+      <input type="hidden" name="codigo_municipio_descarregamento" value="{{ rota_automatica.codigo_municipio_descarregamento }}">
+      {% else %}
       <div class="grid gap-4 md:grid-cols-4" x-data="municipioAutocomplete('municipio_carregamento')">
         {{ form.codigo_municipio_carregamento }}
         <label class="space-y-1.5" @input.debounce.300ms="onUf($event.target.value)">
@@ -267,6 +299,7 @@
           </template>
         </label>
       </div>
+      {% endif %}
     </div>
 
     <!-- Observações -->
