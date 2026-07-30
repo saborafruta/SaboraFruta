@@ -258,6 +258,15 @@ MAPAS_GEOCODIFICAR_AO_SALVAR = env.bool(
     'MAPAS_GEOCODIFICAR_AO_SALVAR', default=not _EXECUTANDO_TESTES,
 )
 
+# Roteirizacao (secao 4). A instancia PUBLICA do OSRM
+# (router.project-osrm.org) e declarada "for development only" e nao serve
+# para uso comercial: aponte MAPAS_OSRM_URL para uma instancia propria, ou
+# use MAPAS_ROTA_PROVIDER=openrouteservice + MAPAS_ROTA_API_KEY (plano
+# gratuito do ORS permite uso comercial).
+MAPAS_ROTA_PROVIDER = env('MAPAS_ROTA_PROVIDER', default='osrm')
+MAPAS_ROTA_API_KEY = env('MAPAS_ROTA_API_KEY', default='')
+MAPAS_OSRM_URL = env('MAPAS_OSRM_URL', default='')
+
 MAPAS_GEOCODER = env('MAPAS_GEOCODER', default='nominatim')
 MAPAS_GEOCODER_API_KEY = env('MAPAS_GEOCODER_API_KEY', default='')
 MAPAS_NOMINATIM_URL = env('MAPAS_NOMINATIM_URL', default='')

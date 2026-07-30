@@ -228,8 +228,9 @@ Celery aponta para `localhost`). Onde há cache de fato hoje é no banco.
 |---|---|---|
 | **1** | Fundação: coordenadas, geocodificação, mapa, clientes próximos | ✅ entregue |
 | **4** | §11 territórios — `Praca` evoluída para geográfica, `Rota` com FKs | ✅ entregue |
+| **3a** | §4 rotas — selecionar clientes, distância, tempo, traçado e paradas | ✅ entregue |
 | **2** | §8 sugestão ao faturar delivery (`proximos_de_entrega` já pronto); §10 heatmap; §14 dashboard | a fazer |
-| **3** | §4 rotas, §5 otimização, §6 distância ponto-a-ponto | precisa de provider de roteamento |
+| **3b** | §5 otimização (reordenar), §6 distância ponto-a-ponto | a fazer |
 | **5** | §12 geofence + §13 rastreamento | **stand by** — depende de app de motorista |
 
 ### Etapa 4 — o que foi feito
@@ -265,6 +266,35 @@ selects de FK com queryset de *todos* os registros. Num SaaS multiempresa isso
 listaria motoristas e representantes de outros inquilinos. O helper `_escopar`
 em `forms/rota_praca.py` resolve, e há testes (`FormEscopoTests`) que falham se
 alguém adicionar uma FK sem escopo.
+
+### §4 — Rotas
+
+Botão **“Criar rota”** no mapa → clique nos clientes (a ordem dos cliques é a
+ordem das paradas) → **Criar rota**. Volta distância total, tempo estimado, o
+traçado desenhado no mapa e a lista de paradas numerada.
+
+- No modo rota o clique no pino **monta o roteiro em vez de abrir o popup** —
+  com vários clientes em sequência, um popup por clique atrapalharia.
+- Sai da filial ativa quando ela tem coordenada (o ponto de partida real de uma
+  entrega). Desmarcável.
+- Teto de 25 paradas: o OSRM recebe as coordenadas no path da URL.
+- A ordem é a que o usuário montou. **Reordenar é o §5** e será outro serviço.
+
+**A armadilha deste módulo:** OSRM e ORS recebem coordenadas em `lon,lat`,
+enquanto Leaflet e o resto do sistema usam `lat,lng`. Inverter não levanta erro
+— devolve uma rota plausível no lugar errado do mundo. A conversão está isolada
+em `_para_lonlat()` e há teste dedicado nos dois sentidos.
+
+Configuração (`MAPAS_ROTA_PROVIDER`):
+
+| Valor | Quando usar |
+|---|---|
+| `osrm` (padrão) | Instância pública — **só testes**, é "development only" |
+| `osrm` + `MAPAS_OSRM_URL` | Instância própria: uso comercial liberado |
+| `openrouteservice` + `MAPAS_ROTA_API_KEY` | Plano gratuito com uso comercial permitido |
+
+A resposta da API traz `uso_comercial_liberado`; quando é `false`, o painel
+avisa na tela que aquele servidor não serve para produção.
 
 ### Modo de desenho (Leaflet.draw)
 

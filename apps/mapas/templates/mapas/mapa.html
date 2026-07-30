@@ -72,6 +72,30 @@
      camadas — empurra para baixo dele. */
   .leaflet-draw.leaflet-control { margin-top:8px; }
 
+  /* ── Painel de rota (§4) ── */
+  .rota-painel { position:absolute; top:56px; right:12px; z-index:5; width:280px;
+                 max-height:calc(100% - 76px); display:flex; flex-direction:column;
+                 border-radius:12px; overflow:hidden; backdrop-filter:blur(10px);
+                 box-shadow:0 10px 34px rgba(0,0,0,.3); }
+  .rota-head { padding:10px 13px; font-size:12px; font-weight:800;
+               text-transform:uppercase; letter-spacing:.05em;
+               display:flex; align-items:center; gap:8px; }
+  .rota-body { padding:11px 13px; overflow:auto; font-size:12.5px; }
+  .rota-resumo { display:flex; gap:14px; margin-bottom:10px; }
+  .rota-resumo div { font-size:11px; opacity:.7; }
+  .rota-resumo strong { display:block; font-size:16px; opacity:1; margin-top:2px; }
+  .rota-parada { display:flex; align-items:flex-start; gap:8px; padding:6px 0;
+                 border-top:1px solid rgba(127,127,127,.18); }
+  .rota-num { width:20px; height:20px; border-radius:50%; flex-shrink:0;
+              display:flex; align-items:center; justify-content:center;
+              font-size:10.5px; font-weight:800; background:#1d4ed8; color:#fff; }
+  .btn-rota { position:absolute; top:56px; right:12px; z-index:4; border:none;
+              border-radius:9px; padding:8px 13px; font-size:12px; font-weight:700;
+              cursor:pointer; box-shadow:0 6px 18px rgba(0,0,0,.26);
+              display:flex; align-items:center; gap:7px; }
+  /* Pino de cliente já escolhido para a rota, para dar retorno visual no mapa. */
+  .pino-rota { box-shadow:0 0 0 3px rgba(29,78,216,.55), 0 2px 5px rgba(0,0,0,.4); }
+
   .popup-mapa { font-size:12.5px; min-width:216px; }
   .popup-mapa h4 { font-size:13.5px; font-weight:800; margin:0 0 6px; }
   .popup-mapa dl { display:grid; grid-template-columns:auto 1fr; gap:2px 8px; margin:0 0 9px; }
@@ -157,6 +181,93 @@
 
     <div class="mapa-aviso" x-show="aviso" x-cloak x-text="aviso"
          style="background:#7c2d12; color:#fed7aa;"></div>
+
+    <!-- Criar rota (§4) -->
+    <button type="button" class="btn-rota" x-show="!modoRota" x-cloak
+            @click="abrirRota()"
+            :style="temaClaro ? 'background:#fff;color:#1d4ed8;' : 'background:#16161a;color:#93c5fd;'">
+      <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+              d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7"/>
+      </svg>
+      Criar rota
+    </button>
+
+    <div class="rota-painel" x-show="modoRota" x-cloak
+         :style="temaClaro ? 'background:rgba(255,255,255,.96); color:#111827;'
+                           : 'background:rgba(22,22,26,.95); color:#f8fafc;'">
+      <div class="rota-head"
+           :style="temaClaro ? 'border-bottom:1px solid #e5e7eb;' : 'border-bottom:1px solid #2a2a32;'">
+        <span>Rota</span>
+        <span class="text-xs font-normal" style="opacity:.6;"
+              x-text="rotaClientes.length + '/' + rotaMaxParadas"></span>
+        <button type="button" @click="fecharRota()" title="Sair do modo rota"
+                style="margin-left:auto;background:none;border:none;cursor:pointer;font-size:15px;color:inherit;opacity:.6;">&times;</button>
+      </div>
+
+      <div class="rota-body">
+        <p class="text-xs mb-2" x-show="!rotaClientes.length"
+           :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+          Clique nos clientes no mapa para montar o roteiro. A ordem dos cliques
+          e a ordem das paradas.
+        </p>
+
+        <label class="flex items-center gap-2 text-xs mb-2" x-show="!rotaResultado">
+          <input type="checkbox" x-model="rotaPartirDaFilial">
+          <span>Sair da filial</span>
+        </label>
+
+        <!-- Selecionados, antes de calcular -->
+        <template x-if="!rotaResultado">
+          <div>
+            <template x-for="(c, i) in rotaClientes" :key="c.id">
+              <div class="rota-parada">
+                <span class="rota-num" x-text="i + 1"></span>
+                <span class="flex-1" x-text="c.nome"></span>
+                <button type="button" @click="removerDaRota(c.id)"
+                        style="background:none;border:none;cursor:pointer;color:#f87171;font-size:14px;"
+                        title="Remover">&times;</button>
+              </div>
+            </template>
+          </div>
+        </template>
+
+        <!-- Resultado -->
+        <template x-if="rotaResultado">
+          <div>
+            <div class="rota-resumo">
+              <div>Distancia
+                <strong x-text="rotaResultado.distancia_km + ' km'"></strong>
+              </div>
+              <div>Tempo estimado
+                <strong x-text="rotaResultado.duracao_texto"></strong>
+              </div>
+            </div>
+            <p class="text-xs mb-1" style="font-weight:700;">Paradas</p>
+            <template x-for="p in rotaResultado.paradas" :key="p.ordem">
+              <div class="rota-parada">
+                <span class="rota-num" x-text="p.ordem"></span>
+                <span class="flex-1" x-text="p.nome"></span>
+              </div>
+            </template>
+            <p class="text-xs mt-2" x-show="!rotaResultado.uso_comercial_liberado"
+               style="color:#fbbf24;">
+              Servidor de rotas publico (<span x-text="rotaResultado.provider"></span>):
+              so para testes. Configure MAPAS_OSRM_URL ou MAPAS_ROTA_API_KEY.
+            </p>
+          </div>
+        </template>
+
+        <div class="desenho-acoes" style="margin-top:10px;">
+          <button type="button" @click="calcularRota()"
+                  :disabled="!rotaClientes.length || rotaCalculando"
+                  style="background:#1d4ed8;color:#fff;"
+                  x-text="rotaCalculando ? 'Calculando...' : (rotaResultado ? 'Recalcular' : 'Criar rota')"></button>
+          <button type="button" @click="limparRota()" :disabled="rotaCalculando"
+                  style="background:#374151;color:#e5e7eb;">Limpar</button>
+        </div>
+      </div>
+    </div>
 
     {% if pode_editar %}
     <!-- Modo de desenho de território (§11) -->
@@ -245,12 +356,20 @@ function mapaGeo() {
     pracaSelecionada: '',
     salvando: false,
     resultadoDesenho: '',
+    // modo rota (§4)
+    modoRota: false,
+    rotaClientes: [],
+    rotaResultado: null,
+    rotaCalculando: false,
+    rotaPartirDaFilial: true,
+    rotaMaxParadas: 25,
     _mapa: null,
     _grupos: {},
     _carregando: false,
     _camadaTerritorios: null,
     _desenhados: null,
     _controleDesenho: null,
+    _linhaRota: null,
 
     iniciar() {
       this._mapa = L.map('mapa', { zoomControl: true, preferCanvas: true })
@@ -332,10 +451,24 @@ function mapaGeo() {
           html: `<div class="pino" style="background:${m.cor}"></div>`
         })
       });
+      // No modo rota o clique monta o roteiro em vez de abrir o popup: o
+      // usuário está selecionando vários clientes em sequência, e um popup a
+      // cada clique atrapalharia. Só clientes entram na rota.
+      if (chave === 'clientes') {
+        marker.on('click', (ev) => {
+          if (!this.modoRota) return;
+          L.DomEvent.stopPropagation(ev);
+          this.alternarNaRota(m);
+        });
+      }
+
       // Popup montado on-demand: os dados ricos (§3) só são buscados no
       // clique, senão a carga de milhares de pinos traria tudo à toa.
       marker.bindPopup('<div class="popup-mapa">carregando...</div>');
-      marker.on('popupopen', () => this._preencherPopup(marker, chave, m));
+      marker.on('popupopen', () => {
+        if (this.modoRota) { marker.closePopup(); return; }
+        this._preencherPopup(marker, chave, m);
+      });
       return marker;
     },
 
@@ -392,6 +525,89 @@ function mapaGeo() {
     // Concatenar caminho à mão quebraria silenciosamente se a rota mudar.
     _urlCadastro(id) {
       return `{% url 'cadastros:cliente-update' 0 %}`.replace('/0/', `/${id}/`);
+    },
+
+    // ── Rotas (§4) ──────────────────────────────────────────────────────
+    abrirRota() {
+      this.modoRota = true;
+      this.aviso = '';
+      // Territórios ligados atrapalham a leitura do traçado.
+      if (this.mostrarTerritorios) {
+        this.mostrarTerritorios = false;
+        this.alternarTerritorios();
+      }
+    },
+
+    fecharRota() {
+      this.modoRota = false;
+      this.limparRota();
+    },
+
+    alternarNaRota(marcador) {
+      const existente = this.rotaClientes.findIndex(c => c.id === marcador.id);
+      if (existente >= 0) {
+        this.rotaClientes.splice(existente, 1);
+      } else {
+        if (this.rotaClientes.length >= this.rotaMaxParadas) {
+          this.aviso = `Máximo de ${this.rotaMaxParadas} paradas por rota.`;
+          return;
+        }
+        this.rotaClientes.push({ id: marcador.id, nome: marcador.nome });
+      }
+      // O traçado antigo não vale mais depois de mudar as paradas.
+      this._removerLinha();
+      this.rotaResultado = null;
+      this.aviso = '';
+    },
+
+    removerDaRota(id) {
+      this.rotaClientes = this.rotaClientes.filter(c => c.id !== id);
+      this._removerLinha();
+      this.rotaResultado = null;
+    },
+
+    limparRota() {
+      this.rotaClientes = [];
+      this.rotaResultado = null;
+      this._removerLinha();
+    },
+
+    _removerLinha() {
+      if (this._linhaRota) {
+        this._mapa.removeLayer(this._linhaRota);
+        this._linhaRota = null;
+      }
+    },
+
+    async calcularRota() {
+      if (!this.rotaClientes.length) return;
+      this.rotaCalculando = true;
+      this.aviso = '';
+      try {
+        const resp = await fetch(`{% url 'mapas:api-rota' %}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'X-CSRFToken': CSRF },
+          body: JSON.stringify({
+            clientes: this.rotaClientes.map(c => c.id),
+            partir_da_filial: this.rotaPartirDaFilial,
+          }),
+        });
+        const dados = await resp.json().catch(() => ({}));
+        if (!resp.ok) throw new Error(dados.erro || ('HTTP ' + resp.status));
+
+        this.rotaResultado = dados;
+        this.rotaMaxParadas = dados.max_paradas || this.rotaMaxParadas;
+
+        this._removerLinha();
+        this._linhaRota = L.polyline(dados.geometria, {
+          color: '#1d4ed8', weight: 5, opacity: 0.85,
+        }).addTo(this._mapa);
+        this._mapa.fitBounds(this._linhaRota.getBounds(), { padding: [50, 50] });
+      } catch (e) {
+        this.aviso = 'Não foi possível criar a rota: ' + e.message;
+      } finally {
+        this.rotaCalculando = false;
+      }
     },
 
     // ── Territórios (§11) ───────────────────────────────────────────────
