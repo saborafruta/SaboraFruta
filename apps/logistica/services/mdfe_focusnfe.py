@@ -303,6 +303,14 @@ def construir_payload_mdfe(mdfe: MDFe) -> dict[str, Any]:
         "descricao_produto": "Polpas e produtos alimentícios",
         "informacao_complementar": _texto(mdfe.observacao)[:5000],
     }
+    # A tabela completa de campos do MDF-e da Focus define os dados do modal
+    # rodoviario na raiz do documento. Mantemos o objeto aninhado exigido pela
+    # referencia resumida da API e repetimos na raiz apenas os campos oficiais.
+    payload.update({
+        chave: valor
+        for chave, valor in veiculo_tracao.items()
+        if chave != "placa"
+    })
     data_hora_inicio_viagem = getattr(mdfe, "data_hora_inicio_viagem", None)
     if data_hora_inicio_viagem:
         payload["data_hora_previsto_inicio_viagem"] = timezone.localtime(
