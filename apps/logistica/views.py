@@ -19,6 +19,7 @@ from apps.core.services.exceptions import DomainError
 from apps.core.services.permissions import PermissaoRequiredMixin
 from apps.fiscal.integrations.focusnfe.exceptions import FocusNFeError
 from apps.financeiro.models.fiscal import DocumentoFiscal
+from apps.estoque.models import MovimentacaoEstoque
 from apps.logistica.forms import (
     CTeForm,
     DocumentoCTeForm,
@@ -1245,9 +1246,7 @@ def _texto_xml_destino(documento):
 
 def _dados_destino_nfe(documento):
     snapshot = dict(documento.destinatario_snapshot or {})
-    filial_destino = None
-    if documento.destinatario_tipo == "filial" and documento.destinatario_id:
-        filial_destino = Filial.objects.filter(pk=documento.destinatario_id).first()
+    filial_destino = _filial_destino_nfe(documento, snapshot)
     xml = _texto_xml_destino(documento)
 
     def primeiro(*valores):
@@ -1256,37 +1255,39 @@ def _dados_destino_nfe(documento):
     dados = {
         "nome": primeiro(snapshot.get("nome"), getattr(filial_destino, "razao_social", "")),
         "logradouro": primeiro(
+            getattr(filial_destino, "endereco", ""),
             snapshot.get("logradouro"), snapshot.get("endereco"),
-            getattr(filial_destino, "endereco", ""), xml.get("logradouro"),
+            xml.get("logradouro"),
         ),
         "numero": primeiro(
-            snapshot.get("numero"), getattr(filial_destino, "numero", ""),
+            getattr(filial_destino, "numero", ""), snapshot.get("numero"),
             xml.get("numero"),
         ),
         "complemento": primeiro(
-            snapshot.get("complemento"), getattr(filial_destino, "complemento", ""),
+            getattr(filial_destino, "complemento", ""), snapshot.get("complemento"),
             xml.get("complemento"),
         ),
         "bairro": primeiro(
-            snapshot.get("bairro"), getattr(filial_destino, "bairro", ""),
+            getattr(filial_destino, "bairro", ""), snapshot.get("bairro"),
             xml.get("bairro"),
         ),
         "cidade": primeiro(
+            getattr(filial_destino, "cidade", ""),
             snapshot.get("cidade"), snapshot.get("municipio"),
-            snapshot.get("nome_municipio"), getattr(filial_destino, "cidade", ""),
+            snapshot.get("nome_municipio"),
             xml.get("cidade"),
         ),
         "uf": primeiro(
-            snapshot.get("uf"), getattr(filial_destino, "uf", ""), xml.get("uf"),
+            getattr(filial_destino, "uf", ""), snapshot.get("uf"), xml.get("uf"),
         ).upper(),
         "cep": primeiro(
-            snapshot.get("cep"), getattr(filial_destino, "cep", ""), xml.get("cep"),
+            getattr(filial_destino, "cep", ""), snapshot.get("cep"), xml.get("cep"),
         ),
         "codigo_municipio": primeiro(
+            getattr(filial_destino, "codigo_municipio_ibge", ""),
             snapshot.get("codigo_municipio"),
             snapshot.get("codigo_municipio_ibge"),
             snapshot.get("codigo_ibge"),
-            getattr(filial_destino, "codigo_municipio_ibge", ""),
             xml.get("codigo_municipio"),
         ),
     }
@@ -1299,6 +1300,41 @@ def _dados_destino_nfe(documento):
     ]
     dados["endereco_completo"] = " - ".join(parte for parte in partes if parte)
     return dados
+
+
+def _filial_destino_nfe(documento, snapshot=None):
+    """Resolve a filial destinataria sem depender de snapshots antigos."""
+    snapshot = snapshot or dict(documento.destinatario_snapshot or {})
+    if documento.destinatario_id:
+        filial = Filial.objects.filter(pk=documento.destinatario_id).first()
+        if filial:
+            return filial
+
+    if getattr(documento, "pk", None):
+        movimento = (
+            MovimentacaoEstoque.objects
+            .filter(
+                documento_fiscal=documento,
+                tipo_operacao=MovimentacaoEstoque.TipoOperacao.TRANSFERENCIA_SAIDA,
+            )
+            .select_related("filial_destino")
+            .first()
+        )
+        if movimento and movimento.filial_destino_id:
+            return movimento.filial_destino
+
+    documento_destino = "".join(
+        ch for ch in str(
+            snapshot.get("cpf_cnpj")
+            or snapshot.get("cnpj")
+            or snapshot.get("documento")
+            or ""
+        )
+        if ch.isdigit()
+    )
+    if documento_destino:
+        return Filial.objects.filter(cnpj=documento_destino).first()
+    return None
 
 
 def _endereco_filial(filial):
@@ -1445,6 +1481,11 @@ class MDFeCreateView(PermissaoRequiredMixin, View):
             "motoristas_json": motoristas_json,
             "veiculos_json": veiculos_json,
             "nfe_documento_inicial_json": nfe_documento_inicial_json,
+            "endereco_origem": _endereco_filial(filial),
+            "endereco_destino": (
+                _dados_destino_nfe(nfe_documento).get("endereco_completo", "")
+                if nfe_documento else ""
+            ),
         })
 
     def post(self, request):
@@ -1543,6 +1584,11 @@ class MDFeCreateView(PermissaoRequiredMixin, View):
             "nfe_documento_inicial_json": json.dumps(
                 _nfe_inicial(nfe_documento), ensure_ascii=False
             ) if nfe_documento else "null",
+            "endereco_origem": _endereco_filial(filial),
+            "endereco_destino": (
+                _dados_destino_nfe(nfe_documento).get("endereco_completo", "")
+                if nfe_documento else ""
+            ),
         })
 
 

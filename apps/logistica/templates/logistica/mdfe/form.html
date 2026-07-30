@@ -191,6 +191,19 @@
     <!-- Percurso -->
     <div class="card p-6 space-y-4">
       <h3 class="text-xs font-semibold uppercase tracking-wide" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Percurso</h3>
+      {% if endereco_origem or endereco_destino %}
+      <div class="grid gap-3 rounded-md border p-4 md:grid-cols-2"
+           :style="temaClaro ? 'border-color:#dbeafe; background:#eff6ff;' : 'border-color:#1e3a8a; background:rgba(30,58,138,.18);'">
+        <div>
+          <span class="block text-xs font-semibold uppercase text-blue-600">Endereço de saída</span>
+          <strong class="mt-1 block text-sm">{{ endereco_origem|default:"Endereço não cadastrado na filial de origem" }}</strong>
+        </div>
+        <div>
+          <span class="block text-xs font-semibold uppercase text-blue-600">Endereço de destino</span>
+          <strong class="mt-1 block text-sm">{{ endereco_destino|default:"Endereço não cadastrado na filial de destino" }}</strong>
+        </div>
+      </div>
+      {% endif %}
       <div class="grid gap-4 md:grid-cols-4" x-data="municipioAutocomplete('municipio_carregamento')">
         {{ form.codigo_municipio_carregamento }}
         <label class="space-y-1.5" @input.debounce.300ms="onUf($event.target.value)">
@@ -221,9 +234,9 @@
         </label>
       </div>
       <label class="block space-y-1.5">
-        <span class="text-xs font-semibold uppercase tracking-wide" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">UFs do Percurso</span>
+        <span class="text-xs font-semibold uppercase tracking-wide" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Estados intermediários (opcional)</span>
         {{ form.percurso_ufs }}
-        <p class="text-xs mt-0.5" :style="temaClaro ? 'color:#94a3b8;' : 'color:#64748b;'">Informe as UFs percorridas separadas por virgula. Ex: SP, RJ, MG, ES</p>
+        <p class="text-xs mt-0.5" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Não repita origem e destino. Em viagem dentro do RN, deixe este campo vazio.</p>
       </label>
       <div class="grid gap-4 md:grid-cols-4" x-data="municipioAutocomplete('municipio_descarregamento')">
         {{ form.codigo_municipio_descarregamento }}

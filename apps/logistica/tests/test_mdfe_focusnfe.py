@@ -1,7 +1,7 @@
 from decimal import Decimal
 from datetime import datetime
 from types import SimpleNamespace
-from unittest.mock import Mock
+from unittest.mock import Mock, patch
 
 from django.test import SimpleTestCase
 from django.utils import timezone
@@ -18,6 +18,39 @@ from apps.logistica.views import _dados_destino_nfe, _peso_bruto_nfe
 
 
 class TransferenciaFiscalTests(SimpleTestCase):
+    @patch("apps.logistica.views.Filial.objects.filter")
+    def test_destino_prioriza_endereco_atual_da_filial(self, filter_mock):
+        filial_destino = SimpleNamespace(
+            razao_social="SABORAFRUTA INDUSTRIA ALIMENTICIA LTDA",
+            endereco="Avenida Capitao Mor Gouveia",
+            numero="3005",
+            complemento="BOX 11",
+            bairro="Lagoa Nova",
+            cidade="Natal",
+            uf="RN",
+            cep="59063410",
+            codigo_municipio_ibge="2408102",
+        )
+        filter_mock.return_value.first.return_value = filial_destino
+        documento = SimpleNamespace(
+            destinatario_snapshot={
+                "nome": "SABORAFRUTA",
+                "logradouro": "Endereco antigo",
+                "cidade": "Cidade antiga",
+            },
+            destinatario_id=2,
+            xml_assinado="",
+            xml_retorno="",
+            xml_enviado="",
+        )
+
+        destino = _dados_destino_nfe(documento)
+
+        filter_mock.assert_called_once_with(pk=2)
+        self.assertEqual(destino["cidade"], "Natal")
+        self.assertEqual(destino["codigo_municipio"], "2408102")
+        self.assertIn("Avenida Capitao Mor Gouveia 3005", destino["endereco_completo"])
+
     def test_destino_e_recuperado_do_xml_quando_snapshot_antigo_esta_incompleto(self):
         documento = SimpleNamespace(
             destinatario_snapshot={"nome": "SABORAFRUTA"},
