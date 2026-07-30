@@ -76,8 +76,8 @@
               {% endif %}
               {% endwith %}
             </td>
-            <td class="px-4 py-3 text-sm" :style="temaClaro ? 'color:#374151;' : 'color:#d1d5db;'">{{ r.motorista_padrao|default:"—" }}</td>
-            <td class="px-4 py-3 font-mono text-xs" :style="temaClaro ? 'color:#374151;' : 'color:#d1d5db;'">{{ r.veiculo_padrao|default:"—" }}</td>
+            <td class="px-4 py-3 text-sm" :style="temaClaro ? 'color:#374151;' : 'color:#d1d5db;'">{{ r.motorista_nome|default:"—" }}</td>
+            <td class="px-4 py-3 font-mono text-xs" :style="temaClaro ? 'color:#374151;' : 'color:#d1d5db;'">{{ r.veiculo_placa|default:"—" }}</td>
             <td class="px-4 py-3 text-center">
               {% if r.ativo %}<span class="soft-pill is-green">Ativa</span>{% else %}<span class="soft-pill is-slate">Inativa</span>{% endif %}
             </td>
@@ -148,8 +148,8 @@
       </div>
       {% endif %}
       {% endwith %}
-      {% if r.motorista_padrao %}
-      <div class="text-xs" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Motorista: {{ r.motorista_padrao }}</div>
+      {% if r.motorista_nome %}
+      <div class="text-xs" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Motorista: {{ r.motorista_nome }}</div>
       {% endif %}
       <div class="flex gap-3 pt-1">
         <a href="{% url 'cadastros:rota-update' r.pk %}" class="btn-secondary text-xs">Editar</a>

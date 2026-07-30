@@ -48,13 +48,13 @@ class PracaCreateView(PermissaoRequiredMixin, View):
 
     def get(self, request):
         return render(request, self.template_name, {
-            'form': PracaForm(),
+            'form': PracaForm(filial=request.filial_ativa),
             'title': 'Nova Praça',
             'cancel_url': reverse_lazy('cadastros:praca-list'),
         })
 
     def post(self, request):
-        form = PracaForm(request.POST)
+        form = PracaForm(request.POST, filial=request.filial_ativa)
         if form.is_valid():
             obj = form.save(commit=False)
             obj.filial = request.filial_ativa
@@ -76,7 +76,7 @@ class PracaUpdateView(PermissaoRequiredMixin, View):
     def get(self, request, pk):
         obj = get_object_or_404(Praca.objects.for_filial(request.filial_ativa), pk=pk)
         return render(request, self.template_name, {
-            'form': PracaForm(instance=obj),
+            'form': PracaForm(instance=obj, filial=request.filial_ativa),
             'praca': obj,
             'title': f'Editar — {obj.nome}',
             'cancel_url': reverse_lazy('cadastros:praca-list'),
@@ -84,7 +84,7 @@ class PracaUpdateView(PermissaoRequiredMixin, View):
 
     def post(self, request, pk):
         obj = get_object_or_404(Praca.objects.for_filial(request.filial_ativa), pk=pk)
-        form = PracaForm(request.POST, instance=obj)
+        form = PracaForm(request.POST, instance=obj, filial=request.filial_ativa)
         if form.is_valid():
             form.save()
             messages.success(request, f'Praça "{obj.nome}" atualizada.')
@@ -129,10 +129,14 @@ class RotaListView(PermissaoRequiredMixin, View):
                 Q(nome__icontains=busca)
                 | Q(codigo__icontains=busca)
                 | Q(descricao__icontains=busca)
+                | Q(motorista__nome__icontains=busca)
+                | Q(veiculo__placa__icontains=busca)
                 | Q(motorista_padrao__icontains=busca)
                 | Q(veiculo_padrao__icontains=busca)
             )
-        page_obj = Paginator(qs.prefetch_related('pracas').order_by('nome'), 25).get_page(request.GET.get('page'))
+        page_obj = Paginator(
+            qs.select_related('motorista', 'veiculo').prefetch_related('pracas')
+              .distinct().order_by('nome'), 25).get_page(request.GET.get('page'))
         return render(request, self.template_name, {
             'rotas': page_obj.object_list,
             'page_obj': page_obj,

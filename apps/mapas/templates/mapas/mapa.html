@@ -109,6 +109,14 @@
             <span class="camada-contador" x-text="contadores[cam.chave] ?? ''"></span>
           </label>
         </template>
+
+        <!-- Territórios: polígonos, não pontos — camada separada. -->
+        <div class="my-1 mx-3" :style="temaClaro ? 'border-top:1px solid #e5e7eb;' : 'border-top:1px solid #2a2a32;'"></div>
+        <label class="camada-item">
+          <input type="checkbox" x-model="mostrarTerritorios" @change="alternarTerritorios()">
+          <span class="camada-bolinha" style="background:#8b5cf6; border-radius:3px;"></span>
+          <span>Regiões / Territórios</span>
+        </label>
       </div>
     </div>
     <button type="button" class="mapa-toggle" @click="painelRecolhido = false" title="Mostrar camadas"
@@ -145,9 +153,11 @@ function mapaGeo() {
     painelRecolhido: false,
     statusTexto: '',
     aviso: '',
+    mostrarTerritorios: false,
     _mapa: null,
     _grupos: {},
     _carregando: false,
+    _camadaTerritorios: null,
 
     iniciar() {
       this._mapa = L.map('mapa', { zoomControl: true, preferCanvas: true })
@@ -289,6 +299,70 @@ function mapaGeo() {
     // Concatenar caminho à mão quebraria silenciosamente se a rota mudar.
     _urlCadastro(id) {
       return `{% url 'cadastros:cliente-update' 0 %}`.replace('/0/', `/${id}/`);
+    },
+
+    // ── Territórios (§11) ───────────────────────────────────────────────
+    async alternarTerritorios() {
+      if (!this.mostrarTerritorios) {
+        if (this._camadaTerritorios) {
+          this._mapa.removeLayer(this._camadaTerritorios);
+          this._camadaTerritorios = null;
+        }
+        return;
+      }
+      try {
+        const resp = await fetch(`{% url 'mapas:api-territorios' %}`,
+                                 { headers: { 'Accept': 'application/json' } });
+        if (!resp.ok) throw new Error('HTTP ' + resp.status);
+        const { territorios } = await resp.json();
+
+        // Territórios não entram no cluster: são polígonos, não pontos, e
+        // ficam numa camada própria abaixo dos marcadores.
+        this._camadaTerritorios = L.layerGroup().addTo(this._mapa);
+        territorios.forEach(t => {
+          const poly = L.polygon(t.poligono, {
+            color: t.cor, weight: 2, fillColor: t.cor, fillOpacity: 0.12,
+          }).addTo(this._camadaTerritorios);
+          poly.bindPopup('<div class="popup-mapa">carregando...</div>');
+          poly.on('popupopen', () => this._popupTerritorio(poly, t));
+        });
+
+        if (!territorios.length) {
+          this.aviso = 'Nenhuma praça tem polígono desenhado ainda.';
+        }
+      } catch (e) {
+        this.aviso = 'Não foi possível carregar os territórios.';
+      }
+    },
+
+    async _popupTerritorio(poly, t) {
+      try {
+        const url = `{% url 'mapas:api-territorio-indicadores' 0 %}`
+          .replace('/0/', `/${t.id}/`);
+        const resp = await fetch(url, { headers: { 'Accept': 'application/json' } });
+        if (!resp.ok) throw new Error('HTTP ' + resp.status);
+        const d = await resp.json();
+        const brl = v => 'R$ ' + Number(v || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 });
+        const linha = (r, v) => `<dt>${r}</dt><dd>${v}</dd>`;
+
+        poly.setPopupContent(`<div class="popup-mapa">
+          <h4>${this._esc(d.nome)}</h4>
+          <dl>
+            ${linha('Clientes', d.clientes)}
+            ${linha(`Faturamento (${d.dias}d)`, brl(d.faturamento))}
+            ${linha('Pedidos', d.pedidos)}
+            ${linha('Ticket médio', brl(d.ticket_medio))}
+            ${linha('Meta', d.meta ? brl(d.meta) : '—')}
+            ${linha('Realizado', d.realizado_pct === null ? '—' : d.realizado_pct + '%')}
+            ${linha('Representante', this._esc(d.representante || '—'))}
+          </dl>
+        </div>`);
+      } catch (e) {
+        poly.setPopupContent(
+          `<div class="popup-mapa"><h4>${this._esc(t.nome)}</h4>` +
+          `<div style="color:#b91c1c">Falha ao carregar os indicadores.</div></div>`
+        );
+      }
     },
 
     _esc(s) {

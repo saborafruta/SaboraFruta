@@ -224,16 +224,54 @@ Celery aponta para `localhost`). Onde há cache de fato hoje é no banco.
 
 ## 8. Etapas seguintes
 
-| Etapa | Escopo | Pré-requisito |
+| Etapa | Escopo | Situação |
 |---|---|---|
-| **2** | §8 sugestão ao faturar delivery (o `ProximidadeService.proximos_de_entrega` já está pronto); §10 heatmap; §14 dashboard completo | — |
-| **3** | §4 rotas, §5 otimização, §6 distância ponto-a-ponto | **OSRM + VROOM self-hosted** (públicos vedam uso comercial) |
-| **4** | §11 territórios, §12 geofence | Polígono em JSON + atribuição pré-calculada por cliente (point-in-polygon no app, recalculado quando o polígono muda) |
-| **5** | §13 rastreamento em tempo real | **App de motorista** para enviar GPS (não existe) + polling, pois a produção é WSGI sem Channels |
+| **1** | Fundação: coordenadas, geocodificação, mapa, clientes próximos | ✅ entregue |
+| **4** | §11 territórios — `Praca` evoluída para geográfica, `Rota` com FKs | ✅ entregue |
+| **2** | §8 sugestão ao faturar delivery (`proximos_de_entrega` já pronto); §10 heatmap; §14 dashboard | a fazer |
+| **3** | §4 rotas, §5 otimização, §6 distância ponto-a-ponto | precisa de provider de roteamento |
+| **5** | §12 geofence + §13 rastreamento | **stand by** — depende de app de motorista |
 
-`Praca` e `Rota` de `cadastros` hoje são textuais (cidades em texto,
-motorista/veículo como `CharField`). A etapa 4 deve migrá-los para o modelo
-geográfico em vez de criar entidades paralelas.
+### Etapa 4 — o que foi feito
+
+`Praca` **evoluiu** para território geográfico em vez de ganhar entidade
+paralela. Os dois critérios convivem: `cidades` (texto, por município)
+continua valendo para precificação, e `poligono` dá delimitação precisa.
+
+- `Praca.poligono` — JSON de `[[lat, lng], ...]` (ordem do Leaflet, não do
+  GeoJSON, porque é o Leaflet quem lê e escreve).
+- `Praca.bbox_*` — caixa envolvente materializada. Sem ela, achar os clientes
+  de um território varreria a base inteira; com ela o índice B-tree recorta
+  primeiro e só os candidatos passam pelo ray casting.
+- `definir_poligono()` grava polígono e bbox **juntos** — se divergirem, a
+  atribuição ignora parte do território sem dar erro. Por isso o polígono é
+  excluído do `PracaForm`: só a API o grava.
+- `mapas.ClienteTerritorio` — atribuição materializada (delete + bulk_create no
+  recálculo). Fica em `mapas`, não como FK em `Cliente`, para manter a direção
+  da dependência.
+
+`Rota` passou de texto para FK: `motorista` → `Motorista`, `veiculo` →
+`Veiculo`. A migration `cadastros.0014` casa os textos antigos com os
+cadastros (nome normalizado / placa alfanumérica). **O que não casar é
+mantido no texto legado de propósito** — pode ser terceirizado ou erro de
+digitação, e apagar destruiria a única informação. As properties
+`motorista_nome`/`veiculo_placa` exibem a FK e caem no texto quando não há.
+
+> Ao subir, procure no log a linha `[rotas] N de M rota(s) vinculadas`. A
+> diferença são as rotas que ficaram só com o texto — vale conferir.
+
+**Atenção de segurança corrigida aqui:** `ModelForm` com `exclude` cria os
+selects de FK com queryset de *todos* os registros. Num SaaS multiempresa isso
+listaria motoristas e representantes de outros inquilinos. O helper `_escopar`
+em `forms/rota_praca.py` resolve, e há testes (`FormEscopoTests`) que falham se
+alguém adicionar uma FK sem escopo.
+
+### Onde o §11 ainda não fecha
+
+O desenho do polígono pelo mapa **não tem UI ainda** — a API
+(`POST /mapas/api/territorios/<pk>/poligono/`) está pronta e testada, mas falta
+o modo de desenho com Leaflet.draw. Hoje os polígonos aparecem no mapa e são
+clicáveis (indicadores), porém precisam ser gravados via API.
 
 `Representante` não tem campos de endereço — só `regiao_atuacao` em texto. Para
 colocá-lo no mapa (§1) é preciso decidir: endereço próprio, ou centroide dos
