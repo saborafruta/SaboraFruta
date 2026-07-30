@@ -86,6 +86,57 @@ def ajuste_por_cliente(vendas_qs) -> dict:
     }
 
 
+def ajuste_por_produto(vendas_qs) -> dict:
+    """
+    Desconto por produto — para a Curva ABC de produtos.
+
+    Aqui não dá para somar e subtrair como nos outros casos: o pagamento é da
+    VENDA, e a curva é por PRODUTO. Se uma venda de R$ 100 (item A R$ 60,
+    item B R$ 40) foi paga metade em permuta, cada item perde metade da sua
+    própria receita — ou seja, o desconto é **rateado proporcionalmente**.
+
+    O rateio usa a participação do item no valor da venda, e não uma divisão
+    igual: um item de R$ 60 tem de absorver mais desconto que um de R$ 40.
+
+    Só as vendas que têm pagamento não contabilizado são carregadas (na prática
+    uma fração pequena do total), então isto não vira uma varredura da base.
+
+    Devolve `{produto_id: Decimal}`.
+    """
+    from apps.pdv.models import ItemVendaPDV
+
+    descontos_por_venda = {
+        chave[0]: valor
+        for chave, valor in ajuste_por_grupo(vendas_qs, 'venda_pdv_id').items()
+    }
+    if not descontos_por_venda:
+        return {}
+
+    # valor_total de cada venda afetada, para calcular a fração do rateio.
+    totais = dict(
+        vendas_qs.filter(pk__in=descontos_por_venda)
+        .values_list('pk', 'valor_total')
+    )
+
+    itens = (
+        ItemVendaPDV.objects
+        .filter(venda_pdv_id__in=descontos_por_venda, produto_id__isnull=False)
+        .values('venda_pdv_id', 'produto_id')
+        .annotate(valor=Sum('valor_total'))
+    )
+
+    ajustes: dict = {}
+    for item in itens:
+        total_venda = totais.get(item['venda_pdv_id']) or Decimal('0')
+        if total_venda <= 0:
+            continue
+        desconto_venda = descontos_por_venda[item['venda_pdv_id']]
+        fracao = (item['valor'] or Decimal('0')) / total_venda
+        parcela = desconto_venda * fracao
+        ajustes[item['produto_id']] = ajustes.get(item['produto_id'], Decimal('0')) + parcela
+    return ajustes
+
+
 def formas_nao_contabilizadas(empresa_id) -> set[str]:
     """
     Descrições das formas que não são receita, para os painéis marcarem as

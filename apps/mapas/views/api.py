@@ -275,9 +275,14 @@ def _indicadores_comerciais(cliente, filiais) -> dict:
         pass
 
     hoje = date.today()
-    total = VendaPDV.objects.filter(
+    vendas_mes = VendaPDV.objects.filter(
         cliente=cliente, filial__in=filiais, status='finalizada',
         data_venda__date__gte=hoje.replace(day=1),
-    ).aggregate(t=Sum('valor_total'))['t']
-    saida['valor_mes'] = float(total or 0)
+    )
+    # Doacao/Permuta nao sao receita: o popup mostra o que o cliente
+    # efetivamente pagou no mes.
+    from apps.financeiro.services.receita import ajuste_total
+
+    total = vendas_mes.aggregate(t=Sum('valor_total'))['t'] or 0
+    saida['valor_mes'] = float(max(0, total - ajuste_total(vendas_mes)))
     return saida

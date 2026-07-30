@@ -9,7 +9,8 @@ from django.views.generic import TemplateView
 import datetime
 
 from apps.financeiro.services.receita import (
-    ajuste_por_grupo, ajuste_total, formas_nao_contabilizadas,
+    ajuste_por_cliente, ajuste_por_grupo, ajuste_por_produto, ajuste_total,
+    formas_nao_contabilizadas,
 )
 
 
@@ -230,13 +231,16 @@ class DashboardView(LoginRequiredMixin, TemplateView):
                     )
                 )
 
+                pdv_rfm_base = (
+                    VendaPDV.objects.filter(filial__empresa=filial.empresa)
+                    if filial.is_matriz
+                    else VendaPDV.objects.filter(filial=filial)
+                ).filter(
+                    status='finalizada', cliente_id__isnull=False,
+                    data_venda__date__gte=inicio,
+                )
                 pdv_rows = list(
-                    (
-                        VendaPDV.objects.filter(filial__empresa=filial.empresa)
-                        if filial.is_matriz
-                        else VendaPDV.objects.filter(filial=filial)
-                    )
-                    .filter(status='finalizada', cliente_id__isnull=False, data_venda__date__gte=inicio)
+                    pdv_rfm_base
                     .values('cliente_id')
                     .annotate(
                         ultima_compra=Max('data_venda'),
@@ -244,6 +248,15 @@ class DashboardView(LoginRequiredMixin, TemplateView):
                         monetario=Sum('valor_total'),
                     )
                 )
+                # O "M" do RFM e valor gasto pelo cliente: Doacao/Permuta nao
+                # entram, senao o cliente sobe de segmento sem ter pago nada.
+                ajustes_rfm = ajuste_por_cliente(pdv_rfm_base)
+                for row in pdv_rows:
+                    desconto = ajustes_rfm.get(row['cliente_id'])
+                    if desconto:
+                        row['monetario'] = max(
+                            0, (row['monetario'] or 0) - desconto,
+                        )
 
                 # Combina B2B + PDV por cliente_id
                 acum_rfm = {}
@@ -693,6 +706,19 @@ class DashboardView(LoginRequiredMixin, TemplateView):
 
         b = _buckets(pedido_base, 'data_emissao')
         p = _buckets(pdv_base, 'data_venda')
+
+        # Doacao/Permuta nao sao faturamento. O ajuste vem agrupado pelo mesmo
+        # dia da semana (ISO) usado nos buckets, para o desconto cair no dia
+        # certo em vez de ser diluido no total.
+        pdv_no_periodo = pdv_base.filter(
+            data_venda__date__gte=inicio, data_venda__date__lte=fim,
+        )
+        ajustes_dow = ajuste_por_grupo(
+            pdv_no_periodo, 'venda_pdv__data_venda__iso_week_day',
+        )
+        for (dow,), desconto in ajustes_dow.items():
+            if dow:
+                p[int(dow)] = max(0.0, p[int(dow)] - float(desconto))
         dias = []
         total = 0.0
         for i in range(1, 8):
@@ -909,7 +935,9 @@ class DashboardView(LoginRequiredMixin, TemplateView):
             )
 
             # --- VendaPDV com cliente identificado ---
-            pdv_qs = (
+            # `pdv_qs_base` fica separado do agregado porque o ajuste de
+            # Doacao/Permuta precisa do queryset de VENDAS, nao do .values().
+            pdv_qs_base = (
                 (
                     VendaPDV.objects.filter(filial__empresa=filial.empresa)
                     if filial.is_matriz
@@ -919,6 +947,9 @@ class DashboardView(LoginRequiredMixin, TemplateView):
                     status='finalizada', cliente_id__isnull=False,
                     data_venda__date__gte=inicio, data_venda__date__lte=fim,
                 )
+            )
+            pdv_qs = (
+                pdv_qs_base
                 .values('cliente_id', 'cliente__razao_social', 'cliente__nome_fantasia')
                 .annotate(receita=Sum('valor_total'))
             )
@@ -934,6 +965,12 @@ class DashboardView(LoginRequiredMixin, TemplateView):
                     'receita': 0.0,
                 })
                 acum[cid]['receita'] += float(row['receita'] or 0)
+
+            # Doacao/Permuta nao sao receita: sai da curva, senao um cliente
+            # que so recebeu doacao apareceria como classe A.
+            for cid, desconto in ajuste_por_cliente(pdv_qs_base).items():
+                if cid in acum:
+                    acum[cid]['receita'] = max(0.0, acum[cid]['receita'] - float(desconto))
 
             itens = sorted(acum.values(), key=lambda x: x['receita'], reverse=True)
             if not itens:
@@ -984,13 +1021,14 @@ class DashboardView(LoginRequiredMixin, TemplateView):
             )
 
             # --- VendaPDV ---
-            pdv_ids = (
+            pdv_vendas = (
                 VendaPDV.objects.filter(filial__empresa=filial.empresa)
                 if filial.is_matriz
                 else VendaPDV.objects.filter(filial=filial)
             ).filter(
                 status='finalizada', data_venda__date__gte=inicio, data_venda__date__lte=fim,
-            ).values_list('id', flat=True)
+            )
+            pdv_ids = pdv_vendas.values_list('id', flat=True)
 
             pdv_qs = (
                 PDVItem.objects.filter(venda_pdv_id__in=pdv_ids)
@@ -1011,6 +1049,14 @@ class DashboardView(LoginRequiredMixin, TemplateView):
                 })
                 acum[pid]['receita']    += float(row['receita'] or 0)
                 acum[pid]['quantidade'] += float(row['quantidade'] or 0)
+
+            # Doacao/Permuta: o pagamento e da venda, a curva e por produto,
+            # entao o desconto e rateado proporcionalmente entre os itens
+            # daquela venda (ver ajuste_por_produto). A QUANTIDADE nao muda --
+            # o produto saiu do estoque de verdade.
+            for pid, desconto in ajuste_por_produto(pdv_vendas).items():
+                if pid in acum:
+                    acum[pid]['receita'] = max(0.0, acum[pid]['receita'] - float(desconto))
 
             itens = sorted(acum.values(), key=lambda x: x['receita'], reverse=True)
             if not itens:

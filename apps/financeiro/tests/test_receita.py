@@ -167,6 +167,100 @@ class AjustePorGrupoTests(BaseReceita):
         self.assertEqual(ajuste_por_grupo(self._vendas(), 'venda_pdv__filial_id'), {})
 
 
+class AjustePorProdutoTests(BaseReceita):
+    """
+    Rateio proporcional — o caso mais delicado de todos.
+
+    O pagamento é da venda, mas a Curva ABC é por produto. Cada item tem de
+    absorver a fatia do desconto correspondente à sua participação no valor da
+    venda, e não uma divisão igual.
+    """
+
+    def _produto(self, nome, preco='10'):
+        from apps.produtos.models import Produto, UnidadeMedida
+
+        unidade, _ = UnidadeMedida.objects.get_or_create(
+            empresa=self.empresa, sigla='UN', defaults={'descricao': 'Unidade'},
+        )
+        return Produto.objects.create(
+            filial=self.filial, descricao=nome, codigo=nome[:6],
+            unidade_medida=unidade, preco_venda=Decimal(preco), ativo=True,
+        )
+
+    def _item(self, venda, produto, valor):
+        from apps.pdv.models import ItemVendaPDV
+
+        self._seq = getattr(self, '_seq', 0) + 1
+        return ItemVendaPDV.objects.create(
+            venda_pdv=venda, produto=produto, numero_item=self._seq,
+            quantidade=Decimal('1'),
+            valor_unitario=Decimal(str(valor)), valor_total=Decimal(str(valor)),
+        )
+
+    def test_venda_toda_em_permuta_zera_os_dois_itens(self):
+        from apps.financeiro.services.receita import ajuste_por_produto
+
+        a, b = self._produto('AAA'), self._produto('BBB')
+        venda = self._venda(100, [(self.permuta, 100, 0)], numero=20)
+        self._item(venda, a, 60)
+        self._item(venda, b, 40)
+
+        ajustes = ajuste_por_produto(self._vendas())
+        self.assertEqual(ajustes[a.pk], Decimal('60'))
+        self.assertEqual(ajustes[b.pk], Decimal('40'))
+
+    def test_rateio_e_proporcional_e_nao_igualitario(self):
+        """
+        Venda de R$ 100 (itens 60 e 40) com R$ 50 em permuta.
+
+        O item de 60 absorve 60% do desconto (R$ 30) e o de 40 absorve 40%
+        (R$ 20) — dividir igual (R$ 25 cada) distorceria a curva.
+        """
+        from apps.financeiro.services.receita import ajuste_por_produto
+
+        a, b = self._produto('AAA'), self._produto('BBB')
+        venda = self._venda(100, [(self.dinheiro, 50, 0), (self.permuta, 50, 0)], numero=21)
+        self._item(venda, a, 60)
+        self._item(venda, b, 40)
+
+        ajustes = ajuste_por_produto(self._vendas())
+        self.assertEqual(ajustes[a.pk], Decimal('30'))
+        self.assertEqual(ajustes[b.pk], Decimal('20'))
+
+    def test_soma_do_rateio_fecha_com_o_desconto_da_venda(self):
+        """Invariante: nada de desconto se perde nem se duplica no rateio."""
+        from apps.financeiro.services.receita import ajuste_por_produto, ajuste_total
+
+        a, b, c_ = self._produto('AAA'), self._produto('BBB'), self._produto('CCC')
+        venda = self._venda(90, [(self.permuta, 90, 0)], numero=22)
+        self._item(venda, a, 30)
+        self._item(venda, b, 30)
+        self._item(venda, c_, 30)
+
+        ajustes = ajuste_por_produto(self._vendas())
+        self.assertEqual(sum(ajustes.values()), ajuste_total(self._vendas()))
+
+    def test_venda_sem_forma_nao_contabilizada_nao_entra(self):
+        from apps.financeiro.services.receita import ajuste_por_produto
+
+        a = self._produto('AAA')
+        venda = self._venda(50, [(self.dinheiro, 50, 0)], numero=23)
+        self._item(venda, a, 50)
+
+        self.assertEqual(ajuste_por_produto(self._vendas()), {})
+
+    def test_produto_em_duas_vendas_acumula(self):
+        from apps.financeiro.services.receita import ajuste_por_produto
+
+        a = self._produto('AAA')
+        v1 = self._venda(20, [(self.permuta, 20, 0)], numero=24)
+        self._item(v1, a, 20)
+        v2 = self._venda(30, [(self.doacao, 30, 0)], numero=25)
+        self._item(v2, a, 30)
+
+        self.assertEqual(ajuste_por_produto(self._vendas())[a.pk], Decimal('50'))
+
+
 class FormasNaoContabilizadasTests(BaseReceita):
     def test_lista_apenas_as_que_nao_movimentam_caixa(self):
         formas = formas_nao_contabilizadas(self.empresa.pk)

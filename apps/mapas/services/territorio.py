@@ -13,6 +13,8 @@ from decimal import Decimal
 
 from django.db import transaction
 
+from apps.financeiro.services.receita import ajuste_total
+
 from apps.mapas.managers import na_area
 
 logger = logging.getLogger(__name__)
@@ -110,7 +112,7 @@ class TerritorioService:
         """
         from datetime import timedelta
 
-        from django.db.models import Avg, Count, Sum
+        from django.db.models import Count, Sum
         from django.utils import timezone
 
         from apps.mapas.models import ClienteTerritorio
@@ -121,26 +123,36 @@ class TerritorioService:
         )
         desde = timezone.localdate() - timedelta(days=dias)
 
-        agg = {'faturamento': None, 'pedidos': 0, 'ticket': None}
+        agg = {'faturamento': None, 'pedidos': 0}
+        faturamento = Decimal('0')
         if cliente_ids:
-            agg = VendaPDV.objects.filter(
+            vendas = VendaPDV.objects.filter(
                 cliente_id__in=cliente_ids,
                 filial__in=cls._escopo_filiais(praca.filial),
                 status='finalizada',
                 data_venda__date__gte=desde,
-            ).aggregate(
+            )
+            agg = vendas.aggregate(
                 faturamento=Sum('valor_total'),
                 pedidos=Count('id'),
-                ticket=Avg('valor_total'),
+            )
+            # Doacao/Permuta nao sao receita do territorio.
+            faturamento = max(
+                Decimal('0'),
+                (agg['faturamento'] or Decimal('0')) - ajuste_total(vendas),
             )
 
-        faturamento = agg['faturamento'] or Decimal('0')
+        # Ticket medio derivado do faturamento ja liquido, e nao Avg(valor_total):
+        # o Avg ignoraria o desconto e ficaria incoerente com o faturamento
+        # exibido logo ao lado.
+        pedidos = agg['pedidos'] or 0
+        ticket = (faturamento / pedidos) if pedidos else Decimal('0')
         meta = praca.meta_mensal or Decimal('0')
         return {
             'clientes': len(cliente_ids),
             'faturamento': faturamento,
-            'pedidos': agg['pedidos'] or 0,
-            'ticket_medio': agg['ticket'] or Decimal('0'),
+            'pedidos': pedidos,
+            'ticket_medio': ticket,
             'meta': meta,
             'realizado_pct': (
                 round(float(faturamento) / float(meta) * 100, 1) if meta else None

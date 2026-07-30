@@ -9,6 +9,7 @@ from django.urls import reverse
 from django.utils import timezone
 
 from apps.core.services.permissions import requer_permissao
+from apps.financeiro.services.receita import ajuste_por_grupo, ajuste_total
 from apps.estoque.models import Estoque, AlertaVencimento
 from apps.producao.models import OrdemProducao
 from apps.producao.constants.enums import StatusOP
@@ -183,8 +184,10 @@ def historico_vendas(request):
 
     exibir_totalizador = tipo_fiscal != 'cancelada'
     qs_totalizador = qs.exclude(status='cancelada')
+    # Doacao/Permuta nao sao receita (ver financeiro.services.receita).
     valor_totalizador = (
-        qs_totalizador.aggregate(total=Sum('valor_total'))['total'] or 0
+        max(0, (qs_totalizador.aggregate(total=Sum('valor_total'))['total'] or 0)
+               - ajuste_total(qs_totalizador))
         if exibir_totalizador else None
     )
     quantidade_totalizador = qs_totalizador.count() if exibir_totalizador else 0
@@ -292,9 +295,16 @@ def historico_vendas_relatorio(request):
         qtd_balcao=Count('id', filter=Q(delivery=False)),
         qtd_delivery=Count('id', filter=Q(delivery=True)),
     )
-    valor_total = totais['total'] or 0
-    valor_balcao = totais['total_balcao'] or 0
-    valor_delivery = totais['total_delivery'] or 0
+    # Desconta Doacao/Permuta de cada subtotal. O ajuste vem agrupado pelo
+    # mesmo flag `delivery` usado no aggregate, senao balcao + delivery
+    # deixaria de fechar com o total.
+    ajustes = ajuste_por_grupo(qs_totais, 'venda_pdv__delivery')
+    aj_balcao = ajustes.get((False,), 0)
+    aj_delivery = ajustes.get((True,), 0)
+
+    valor_balcao = max(0, (totais['total_balcao'] or 0) - aj_balcao)
+    valor_delivery = max(0, (totais['total_delivery'] or 0) - aj_delivery)
+    valor_total = valor_balcao + valor_delivery
 
     rotulos_tipo = {
         '': 'Todas as vendas',
