@@ -61,8 +61,18 @@ class DashboardView(LoginRequiredMixin, TemplateView):
                 filial__in=filiais,
                 status__in=[RecompraCliente.Status.VERMELHO, RecompraCliente.Status.AMARELO],
             )
+            # Ordem por urgência real, e não por score: o card se chama
+            # "Contato Hoje", então quem vence hoje tem de aparecer antes de
+            # quem vence em 2 dias. Ordenar por `-score` enterrava o cliente de
+            # hoje abaixo de outros só porque tinham ticket maior.
+            #
+            # `dias_restantes` crescente resolve os três casos de uma vez:
+            # negativo (atrasado, o mais atrasado primeiro), 0 (hoje), depois
+            # 1, 2, 3... O score entra apenas como critério de desempate, para
+            # que entre dois clientes do mesmo dia o de maior valor venha antes.
             itens = list(
-                base.select_related('cliente').order_by('-score')[:limite]
+                base.select_related('cliente')
+                .order_by(F('dias_restantes').asc(nulls_last=True), '-score')[:limite]
             )
             total_atraso = base.filter(status=RecompraCliente.Status.VERMELHO).count()
             return {'itens': itens, 'total_atraso': total_atraso, 'erro': None}
