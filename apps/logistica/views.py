@@ -1862,15 +1862,33 @@ class MDFeDetailView(PermissaoRequiredMixin, View):
             ),
             pk=pk,
         )
-        documentos = mdfe.documentos.all()
-        documento_form = DocumentoMDFeForm()
-        nfe_disponiveis = DocumentoFiscal.objects.filter(
+        nfe_disponiveis_qs = DocumentoFiscal.objects.filter(
             filial=mdfe.filial,
             tipo_documento="nfe",
             status="autorizada",
         ).filter(
             Q(vinculos_mdfe__isnull=True) | Q(vinculos_mdfe__mdfe=mdfe)
-        ).distinct().order_by("-data_emissao", "-numero")[:30]
+        ).distinct().order_by("-data_emissao", "-numero")
+        if (
+            mdfe.status in {
+                MDFe.Status.RASCUNHO,
+                MDFe.Status.AGUARDANDO_NFE,
+                MDFe.Status.REJEITADO,
+            }
+            and not mdfe.documentos.exists()
+            and nfe_disponiveis_qs.count() == 1
+        ):
+            try:
+                with transaction.atomic():
+                    _vincular_nfe_ao_mdfe(mdfe, nfe_disponiveis_qs.first())
+            except ValueError:
+                pass
+            else:
+                mdfe.refresh_from_db()
+
+        documentos = mdfe.documentos.all()
+        documento_form = DocumentoMDFeForm()
+        nfe_disponiveis = nfe_disponiveis_qs[:30]
         return render(request, self.template_name, {
             "title": f"MDF-e #{mdfe.numero:06d}",
             "mdfe": mdfe,
