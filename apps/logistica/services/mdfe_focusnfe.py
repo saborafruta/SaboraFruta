@@ -472,7 +472,20 @@ def criar_mdfe_transferencia(
 
 
 def _obter_ou_criar_documento_mdfe(mdfe: MDFe, usuario=None) -> DocumentoFiscal:
-    if mdfe.documento_fiscal:
+    documento_atual = mdfe.documento_fiscal
+    documento_eh_mdfe = (
+        documento_atual
+        and documento_atual.tipo_documento == TipoDocumentoFiscal.MDFE
+        and documento_atual.origem_tipo == "mdfe"
+        and documento_atual.origem_id == mdfe.pk
+    )
+    if documento_atual and not documento_eh_mdfe:
+        # Um MDF-e nunca pode compartilhar o DocumentoFiscal da NF-e transportada.
+        # Isso apagaria chave, protocolo e autorizacao da NF-e numa reemissao.
+        mdfe.documento_fiscal = None
+        mdfe.save(update_fields=["documento_fiscal", "updated_at"])
+
+    if documento_eh_mdfe:
         documento = mdfe.documento_fiscal
         campos_atualizados = []
         serie = int(mdfe.serie or 1)

@@ -11,7 +11,7 @@ from apps.estoque.services.transferencia_nfe import _cfop_transferencia
 from apps.fiscal.integrations.focusnfe.resources.mdfe import MDFeResource
 from apps.fiscal.integrations.focusnfe.exceptions import FocusNFeProcessingError
 from apps.fiscal.services.focusnfe_service import FocusNFeService
-from apps.financeiro.constants.enums import StatusDocumentoFiscal
+from apps.financeiro.constants.enums import StatusDocumentoFiscal, TipoDocumentoFiscal
 from apps.logistica.services.mdfe_focusnfe import (
     _chave_nfe_vinculada,
     _obter_ou_criar_documento_mdfe,
@@ -455,6 +455,39 @@ class TransferenciaFiscalTests(SimpleTestCase):
         self.assertEqual(
             documentos_mock.create.call_args.kwargs["destinatario_snapshot"],
             {},
+        )
+
+    @patch("apps.logistica.services.mdfe_focusnfe.DocumentoFiscal.objects")
+    def test_documento_fiscal_da_nfe_nunca_e_reutilizado_pelo_mdfe(
+        self, documentos_mock
+    ):
+        nfe = SimpleNamespace(
+            tipo_documento=TipoDocumentoFiscal.NFE,
+            origem_tipo="transferencia_loja",
+            origem_id=10,
+        )
+        documento_mdfe = Mock()
+        documentos_mock.filter.return_value.first.return_value = None
+        documentos_mock.create.return_value = documento_mdfe
+        mdfe = SimpleNamespace(
+            pk=1,
+            filial=SimpleNamespace(cnpj="14004764000160"),
+            documento_fiscal=nfe,
+            numero=1,
+            serie="2",
+            valor_total=Decimal("52.50"),
+            responsavel=None,
+            save=Mock(),
+        )
+
+        resultado = _obter_ou_criar_documento_mdfe(mdfe)
+
+        self.assertIs(resultado, documento_mdfe)
+        self.assertIs(mdfe.documento_fiscal, documento_mdfe)
+        documentos_mock.create.assert_called_once()
+        self.assertEqual(
+            documentos_mock.create.call_args.kwargs["tipo_documento"],
+            TipoDocumentoFiscal.MDFE,
         )
 
 
