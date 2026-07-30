@@ -446,6 +446,7 @@ def _obter_ou_criar_documento_mdfe(mdfe: MDFe, usuario=None) -> DocumentoFiscal:
             natureza_operacao_descricao="Manifesto de documentos fiscais",
             tipo_operacao="1",
             emitente_cnpj=_digitos(mdfe.filial.cnpj),
+            destinatario_snapshot={},
             valor_total=mdfe.valor_total,
             status=StatusDocumentoFiscal.PENDENTE,
             data_emissao=timezone.now(),

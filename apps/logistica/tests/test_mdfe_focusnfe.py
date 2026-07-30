@@ -13,6 +13,7 @@ from apps.fiscal.integrations.focusnfe.exceptions import FocusNFeProcessingError
 from apps.fiscal.services.focusnfe_service import FocusNFeService
 from apps.financeiro.constants.enums import StatusDocumentoFiscal
 from apps.logistica.services.mdfe_focusnfe import (
+    _obter_ou_criar_documento_mdfe,
     _validar_transporte,
     construir_payload_mdfe,
 )
@@ -274,6 +275,32 @@ class TransferenciaFiscalTests(SimpleTestCase):
         self.assertEqual(
             payload["data_hora_previsto_inicio_viagem"],
             "2026-07-29T22:30:00-03:00",
+        )
+
+    @patch("apps.logistica.services.mdfe_focusnfe.DocumentoFiscal.objects")
+    def test_documento_fiscal_do_mdfe_manual_preenche_snapshot_obrigatorio(
+        self, documentos_mock
+    ):
+        documentos_mock.filter.return_value.first.return_value = None
+        documento = Mock()
+        documentos_mock.create.return_value = documento
+        mdfe = SimpleNamespace(
+            pk=1,
+            filial=SimpleNamespace(cnpj="14004764000160"),
+            documento_fiscal=None,
+            numero=1,
+            serie="1",
+            valor_total=Decimal("52.50"),
+            responsavel=None,
+            save=Mock(),
+        )
+
+        resultado = _obter_ou_criar_documento_mdfe(mdfe)
+
+        self.assertIs(resultado, documento)
+        self.assertEqual(
+            documentos_mock.create.call_args.kwargs["destinatario_snapshot"],
+            {},
         )
 
 
