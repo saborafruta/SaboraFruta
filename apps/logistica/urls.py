@@ -50,6 +50,7 @@ urlpatterns = [
     path("mdfe/<int:pk>/", views.MDFeDetailView.as_view(), name="mdfe-detail"),
     path("mdfe/<int:pk>/editar/", views.MDFeUpdateView.as_view(), name="mdfe-update"),
     path("mdfe/<int:pk>/vincular-nfe/", views.MDFeVincularNFeView.as_view(), name="mdfe-vincular-nfe"),
+    path("mdfe/<int:pk>/vincular-documentos/", views.MDFeVincularDocumentosView.as_view(), name="mdfe-vincular-documentos"),
     path("mdfe/<int:pk>/alterar-status/", views.MDFeAlterarStatusView.as_view(), name="mdfe-alterar-status"),
     path("mdfe/<int:pk>/emitir/", views.MDFeEmitirView.as_view(), name="mdfe-emitir"),
     path("mdfe/<int:pk>/consultar/", views.MDFeConsultarView.as_view(), name="mdfe-consultar"),

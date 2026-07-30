@@ -300,8 +300,14 @@
   <!-- Documentos vinculados -->
   <div class="space-y-4">
     <div class="card overflow-hidden">
-      <div class="border-b px-4 py-3" :style="temaClaro ? 'border-color:#e5e7eb;' : 'border-color:#2a2a2e;'">
+      <div class="border-b px-4 py-3 flex items-center justify-between gap-3" :style="temaClaro ? 'border-color:#e5e7eb;' : 'border-color:#2a2a2e;'">
         <h3 class="font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">Documentos vinculados ao MDF-e</h3>
+        {% if mdfe_editavel %}
+        <button type="button" class="btn-primary no-print"
+                onclick="document.getElementById('modal-vincular-documentos').classList.remove('hidden')">
+          + Vincular documento
+        </button>
+        {% endif %}
       </div>
       <div class="overflow-x-auto">
         <table class="w-full text-sm">
@@ -327,10 +333,12 @@
               <td class="px-4 py-3 text-right text-sm" :style="temaClaro ? 'color:#374151;' : 'color:#d1d5db;'">{{ doc.peso_kg|floatformat:1 }}</td>
               <td class="px-4 py-3 text-right font-semibold" :style="temaClaro ? 'color:#15803d;' : 'color:#86efac;'">R$ {{ doc.valor|floatformat:2 }}</td>
               <td class="px-4 py-3 text-right">
+                {% if mdfe_editavel %}
                 <form method="post" action="{% url 'logistica:mdfe-documento-delete' mdfe.pk doc.pk %}" onsubmit="return confirm('Remover documento do MDF-e?')">
                   {% csrf_token %}
                   <button class="text-xs font-semibold" :style="temaClaro ? 'color:#dc2626;' : 'color:#fca5a5;'">Remover</button>
                 </form>
+                {% endif %}
               </td>
             </tr>
             {% empty %}
@@ -376,6 +384,95 @@
     {% endif %}
   </div>
 
+  {% if mdfe_editavel %}
+  <div id="modal-vincular-documentos"
+       class="hidden fixed inset-0 z-[100] flex items-center justify-center p-4 no-print"
+       style="background:rgba(0,0,0,0.58);">
+    <div class="w-full max-w-4xl rounded-lg shadow-2xl overflow-hidden"
+         :style="temaClaro ? 'background:#fff;' : 'background:#111827; border:1px solid #334155;'">
+      <div class="flex items-start justify-between gap-4 border-b px-5 py-4"
+           :style="temaClaro ? 'border-color:#e5e7eb;' : 'border-color:#334155;'">
+        <div>
+          <h3 class="text-lg font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">Vincular documentos ao MDF-e</h3>
+          <p class="mt-1 text-sm" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Selecione uma ou mais NF-es ou CT-es autorizados e ainda livres.</p>
+        </div>
+        <button type="button" class="btn-secondary"
+                onclick="document.getElementById('modal-vincular-documentos').classList.add('hidden')"
+                aria-label="Fechar">Fechar</button>
+      </div>
+
+      <form method="post" action="{% url 'logistica:mdfe-vincular-documentos' mdfe.pk %}">
+        {% csrf_token %}
+        <div class="px-5 pt-4">
+          <div class="flex flex-col sm:flex-row gap-3">
+            <label class="relative flex-1">
+              <span class="sr-only">Buscar documento</span>
+              <input id="busca-documento-mdfe" type="search"
+                     class="form-input w-full pl-10"
+                     placeholder="Buscar por numero, chave ou participante...">
+              <svg class="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="m21 21-4.35-4.35m1.35-5.65a7 7 0 1 1-14 0 7 7 0 0 1 14 0Z"/>
+              </svg>
+            </label>
+            <div class="flex rounded-md border p-1"
+                 :style="temaClaro ? 'border-color:#cbd5e1;' : 'border-color:#475569;'">
+              <button type="button" class="filtro-documento px-3 py-1.5 text-sm font-semibold rounded bg-blue-600 text-white" data-tipo="todos">Todos</button>
+              <button type="button" class="filtro-documento px-3 py-1.5 text-sm font-semibold rounded" data-tipo="nfe">NF-e</button>
+              <button type="button" class="filtro-documento px-3 py-1.5 text-sm font-semibold rounded" data-tipo="cte">CT-e</button>
+            </div>
+          </div>
+          <div class="mt-3 flex items-center justify-between gap-3">
+            <label class="inline-flex items-center gap-2 text-sm font-medium cursor-pointer">
+              <input id="selecionar-todos-documentos" type="checkbox" class="h-4 w-4 accent-blue-600">
+              Selecionar documentos visiveis
+            </label>
+            <span id="contador-documentos-mdfe" class="text-sm font-semibold text-blue-600">0 selecionados</span>
+          </div>
+        </div>
+
+        <div class="mt-3 max-h-[52vh] overflow-y-auto border-y"
+             :style="temaClaro ? 'border-color:#e5e7eb;' : 'border-color:#334155;'">
+          {% for item in documentos_disponiveis %}
+          <label class="documento-disponivel flex items-start gap-3 px-5 py-3 border-b cursor-pointer"
+                 data-tipo="{{ item.tipo }}"
+                 data-busca="{{ item.tipo_label }} {{ item.numero }} {{ item.serie }} {{ item.parte }} {{ item.chave }}"
+                 :style="temaClaro ? 'border-color:#f1f5f9;' : 'border-color:#1f2937;'">
+            <input type="checkbox" name="documentos" value="{{ item.valor_selecao }}"
+                   class="documento-checkbox mt-1 h-4 w-4 accent-blue-600">
+            <span class="soft-pill {% if item.tipo == 'nfe' %}is-green{% else %}is-blue{% endif %}">{{ item.tipo_label }}</span>
+            <span class="min-w-0 flex-1">
+              <span class="block font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
+                {{ item.tipo_label }} n. {{ item.numero }} / Serie {{ item.serie }}
+              </span>
+              <span class="block text-sm truncate" :style="temaClaro ? 'color:#475569;' : 'color:#cbd5e1;'">{{ item.parte }}</span>
+              {% if item.chave %}<span class="block text-xs font-mono truncate" :style="temaClaro ? 'color:#94a3b8;' : 'color:#64748b;'">{{ item.chave }}</span>{% endif %}
+            </span>
+            <span class="text-right whitespace-nowrap">
+              <span class="block text-sm font-semibold" :style="temaClaro ? 'color:#15803d;' : 'color:#86efac;'">R$ {{ item.valor|floatformat:2 }}</span>
+              <span class="block text-xs" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">{{ item.data_emissao|date:"d/m/Y" }}</span>
+            </span>
+          </label>
+          {% empty %}
+          <div class="px-5 py-12 text-center" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+            Nenhuma NF-e ou CT-e autorizada e disponivel foi encontrada nesta filial.
+          </div>
+          {% endfor %}
+          <div id="nenhum-documento-filtrado" class="hidden px-5 py-12 text-center"
+               :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+            Nenhum documento corresponde a esta busca.
+          </div>
+        </div>
+
+        <div class="flex justify-end gap-2 px-5 py-4">
+          <button type="button" class="btn-secondary"
+                  onclick="document.getElementById('modal-vincular-documentos').classList.add('hidden')">Cancelar</button>
+          <button id="confirmar-vinculo-documentos" type="submit" class="btn-primary" disabled>Vincular selecionados</button>
+        </div>
+      </form>
+    </div>
+  </div>
+  {% endif %}
+
   <!-- Modal: Encerrar MDF-e -->
   <div id="modal-encerrar-mdfe" class="hidden fixed inset-0 z-[100] flex items-center justify-center p-4 no-print" style="background:rgba(0,0,0,0.55);">
     <div class="w-full max-w-md rounded-2xl shadow-2xl p-6 space-y-4" :style="temaClaro ? 'background:#fff;' : 'background:#0f172a; border:1px solid #1e293b;'">
@@ -416,6 +513,68 @@
 {% block extra_js %}
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
 <script>
+function normalizarBuscaDocumento(valor) {
+  return (valor || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+}
+
+(function configurarVinculoDocumentos() {
+  var busca = document.getElementById('busca-documento-mdfe');
+  if (!busca) return;
+  var filtroAtual = 'todos';
+  var linhas = Array.from(document.querySelectorAll('.documento-disponivel'));
+  var filtros = Array.from(document.querySelectorAll('.filtro-documento'));
+  var selecionarTodos = document.getElementById('selecionar-todos-documentos');
+  var contador = document.getElementById('contador-documentos-mdfe');
+  var confirmar = document.getElementById('confirmar-vinculo-documentos');
+  var vazio = document.getElementById('nenhum-documento-filtrado');
+
+  function atualizarContador() {
+    var quantidade = linhas.filter(function (linha) {
+      return linha.querySelector('.documento-checkbox').checked;
+    }).length;
+    contador.textContent = quantidade + (quantidade === 1 ? ' selecionado' : ' selecionados');
+    confirmar.disabled = quantidade === 0;
+  }
+
+  function aplicarFiltro() {
+    var termo = normalizarBuscaDocumento(busca.value);
+    var visiveis = 0;
+    linhas.forEach(function (linha) {
+      var tipoOk = filtroAtual === 'todos' || linha.dataset.tipo === filtroAtual;
+      var buscaOk = normalizarBuscaDocumento(linha.dataset.busca).includes(termo);
+      var mostrar = tipoOk && buscaOk;
+      linha.classList.toggle('hidden', !mostrar);
+      if (mostrar) visiveis += 1;
+    });
+    vazio.classList.toggle('hidden', visiveis !== 0 || linhas.length === 0);
+    selecionarTodos.checked = false;
+  }
+
+  filtros.forEach(function (botao) {
+    botao.addEventListener('click', function () {
+      filtroAtual = botao.dataset.tipo;
+      filtros.forEach(function (item) {
+        item.classList.remove('bg-blue-600', 'text-white');
+      });
+      botao.classList.add('bg-blue-600', 'text-white');
+      aplicarFiltro();
+    });
+  });
+  busca.addEventListener('input', aplicarFiltro);
+  linhas.forEach(function (linha) {
+    linha.querySelector('.documento-checkbox').addEventListener('change', atualizarContador);
+  });
+  selecionarTodos.addEventListener('change', function () {
+    linhas.forEach(function (linha) {
+      if (!linha.classList.contains('hidden')) {
+        linha.querySelector('.documento-checkbox').checked = selecionarTodos.checked;
+      }
+    });
+    atualizarContador();
+  });
+  atualizarContador();
+})();
+
 document.getElementById('btn-export-pdf').addEventListener('click', function () {
   var btn = this;
   btn.disabled = true;

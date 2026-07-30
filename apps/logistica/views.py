@@ -1404,7 +1404,14 @@ def _nfe_inicial(documento):
     }
 
 
-def _vincular_nfe_ao_mdfe(mdfe, nfe_documento):
+STATUS_MDFE_EDITAVEIS = {
+    MDFe.Status.RASCUNHO,
+    MDFe.Status.AGUARDANDO_NFE,
+    MDFe.Status.REJEITADO,
+}
+
+
+def _vincular_nfe_ao_mdfe(mdfe, nfe_documento, atualizar_rota=True):
     if nfe_documento.filial_id != mdfe.filial_id:
         raise ValueError("A NF-e pertence a outra filial.")
     if (
@@ -1417,15 +1424,16 @@ def _vincular_nfe_ao_mdfe(mdfe, nfe_documento):
     ).exclude(mdfe=mdfe).exists():
         raise ValueError("Esta NF-e ja esta vinculada a outro MDF-e.")
 
-    rota = _rota_filiais_nfe(nfe_documento)
-    campos_rota = {
-        campo: valor
-        for campo, valor in rota.items()
-        if campo not in {"origem", "destino"}
-    }
-    for campo, valor in campos_rota.items():
-        setattr(mdfe, campo, valor)
-    mdfe.save(update_fields=[*campos_rota.keys(), "updated_at"])
+    if atualizar_rota:
+        rota = _rota_filiais_nfe(nfe_documento)
+        campos_rota = {
+            campo: valor
+            for campo, valor in rota.items()
+            if campo not in {"origem", "destino"}
+        }
+        for campo, valor in campos_rota.items():
+            setattr(mdfe, campo, valor)
+        mdfe.save(update_fields=[*campos_rota.keys(), "updated_at"])
 
     destinatario = _dados_destino_nfe(nfe_documento)
     peso_produtos, produtos_sem_peso = _peso_produtos_nfe(nfe_documento)
@@ -1453,6 +1461,124 @@ def _vincular_nfe_ao_mdfe(mdfe, nfe_documento):
     )
     mdfe.recalcular_totais()
     return mdfe
+
+
+def _vincular_cte_ao_mdfe(mdfe, cte):
+    if cte.filial_id != mdfe.filial_id:
+        raise ValueError("O CT-e pertence a outra filial.")
+    if cte.status != CTe.Status.AUTORIZADO:
+        raise ValueError("Selecione um CT-e autorizado.")
+
+    duplicado = DocumentoMDFe.objects.filter(
+        tipo_documento=DocumentoMDFe.TipoDocumento.CTE,
+    ).exclude(mdfe=mdfe)
+    if cte.chave_acesso:
+        duplicado = duplicado.filter(chave_acesso=cte.chave_acesso)
+    else:
+        duplicado = duplicado.filter(
+            numero_documento=str(cte.numero),
+            serie=str(cte.serie),
+        )
+    if duplicado.exists():
+        raise ValueError("Este CT-e ja esta vinculado a outro MDF-e.")
+
+    transportadora = cte.transportadora
+    emitente_nome = (
+        getattr(transportadora, "razao_social", "")
+        or getattr(transportadora, "nome_fantasia", "")
+        or cte.remetente_nome
+        or ""
+    )
+    emitente_documento = (
+        getattr(transportadora, "cpf_cnpj", "")
+        or getattr(transportadora, "cnpj", "")
+        or cte.remetente_documento
+        or ""
+    )
+    DocumentoMDFe.objects.update_or_create(
+        mdfe=mdfe,
+        tipo_documento=DocumentoMDFe.TipoDocumento.CTE,
+        numero_documento=str(cte.numero),
+        serie=str(cte.serie),
+        defaults={
+            "chave_acesso": cte.chave_acesso or "",
+            "emitente_nome": emitente_nome,
+            "emitente_documento": emitente_documento,
+            "municipio_descarga": cte.cidade_destino or "",
+            "uf_descarga": cte.uf_destino or "",
+            "peso_kg": cte.peso_total_kg or 0,
+            "valor": cte.valor_carga or cte.valor_total or 0,
+        },
+    )
+    mdfe.recalcular_totais()
+    return mdfe
+
+
+def _documentos_disponiveis_mdfe(mdfe):
+    nfe_qs = (
+        DocumentoFiscal.objects.filter(
+            filial=mdfe.filial,
+            tipo_documento="nfe",
+            status="autorizada",
+            vinculos_mdfe__isnull=True,
+        )
+        .distinct()
+        .order_by("-data_emissao", "-numero")[:100]
+    )
+    documentos = []
+    for nfe in nfe_qs:
+        destinatario = nfe.destinatario_snapshot or {}
+        documentos.append({
+            "valor_selecao": f"nfe:{nfe.pk}",
+            "tipo": "nfe",
+            "tipo_label": "NF-e",
+            "numero": nfe.numero,
+            "serie": nfe.serie,
+            "data_emissao": nfe.data_emissao,
+            "parte": (
+                destinatario.get("nome")
+                or destinatario.get("razao_social")
+                or destinatario.get("nome_fantasia")
+                or "Destinatario nao informado"
+            ),
+            "chave": nfe.chave or "",
+            "valor": nfe.valor_total or 0,
+        })
+
+    cte_qs = (
+        CTe.objects.for_filial(mdfe.filial)
+        .filter(status=CTe.Status.AUTORIZADO)
+        .select_related("transportadora")
+        .order_by("-data_emissao", "-numero")[:100]
+    )
+    for cte in cte_qs:
+        identificador = Q(
+            tipo_documento=DocumentoMDFe.TipoDocumento.CTE,
+            numero_documento=str(cte.numero),
+            serie=str(cte.serie),
+        )
+        if cte.chave_acesso:
+            identificador = Q(chave_acesso=cte.chave_acesso)
+        if DocumentoMDFe.objects.filter(identificador).exclude(mdfe=mdfe).exists():
+            continue
+        if DocumentoMDFe.objects.filter(mdfe=mdfe).filter(identificador).exists():
+            continue
+        documentos.append({
+            "valor_selecao": f"cte:{cte.pk}",
+            "tipo": "cte",
+            "tipo_label": "CT-e",
+            "numero": cte.numero,
+            "serie": cte.serie,
+            "data_emissao": cte.data_emissao,
+            "parte": cte.destinatario_nome or cte.remetente_nome or "Participante nao informado",
+            "chave": cte.chave_acesso or "",
+            "valor": cte.valor_carga or cte.valor_total or 0,
+        })
+    return sorted(
+        documentos,
+        key=lambda item: (str(item["data_emissao"]), item["numero"]),
+        reverse=True,
+    )
 
 
 class MDFeListView(PermissaoRequiredMixin, View):
@@ -1889,6 +2015,7 @@ class MDFeDetailView(PermissaoRequiredMixin, View):
         documentos = mdfe.documentos.all()
         documento_form = DocumentoMDFeForm()
         nfe_disponiveis = nfe_disponiveis_qs[:30]
+        editavel = mdfe.status in STATUS_MDFE_EDITAVEIS
         return render(request, self.template_name, {
             "title": f"MDF-e #{mdfe.numero:06d}",
             "mdfe": mdfe,
@@ -1896,6 +2023,10 @@ class MDFeDetailView(PermissaoRequiredMixin, View):
             "tem_documentos": documentos.exists(),
             "documento_form": documento_form,
             "nfe_disponiveis": nfe_disponiveis,
+            "documentos_disponiveis": (
+                _documentos_disponiveis_mdfe(mdfe) if editavel else []
+            ),
+            "mdfe_editavel": editavel,
         })
 
 
@@ -1906,11 +2037,7 @@ class MDFeVincularNFeView(PermissaoRequiredMixin, View):
     def post(self, request, pk):
         filial = _filial(request)
         mdfe = get_object_or_404(MDFe.objects.for_filial(filial), pk=pk)
-        if mdfe.status not in {
-            MDFe.Status.RASCUNHO,
-            MDFe.Status.AGUARDANDO_NFE,
-            MDFe.Status.REJEITADO,
-        }:
+        if mdfe.status not in STATUS_MDFE_EDITAVEIS:
             messages.error(
                 request,
                 "Este MDF-e ja foi enviado e nao permite alterar a NF-e vinculada.",
@@ -1938,12 +2065,80 @@ class MDFeVincularNFeView(PermissaoRequiredMixin, View):
         return redirect("logistica:mdfe-detail", pk=mdfe.pk)
 
 
+class MDFeVincularDocumentosView(PermissaoRequiredMixin, View):
+    permissao_modulo = "logistica"
+    permissao_acao = "editar"
+
+    def post(self, request, pk):
+        filial = _filial(request)
+        mdfe = get_object_or_404(MDFe.objects.for_filial(filial), pk=pk)
+        if mdfe.status not in STATUS_MDFE_EDITAVEIS:
+            messages.error(
+                request,
+                "Este MDF-e ja foi enviado e nao permite alterar os documentos.",
+            )
+            return redirect("logistica:mdfe-detail", pk=mdfe.pk)
+
+        selecoes = list(dict.fromkeys(request.POST.getlist("documentos")))
+        if not selecoes:
+            messages.error(request, "Selecione ao menos uma NF-e ou um CT-e.")
+            return redirect("logistica:mdfe-detail", pk=mdfe.pk)
+
+        vinculados = []
+        try:
+            with transaction.atomic():
+                for selecao in selecoes:
+                    try:
+                        tipo, documento_id = selecao.split(":", 1)
+                        documento_id = int(documento_id)
+                    except (TypeError, ValueError):
+                        raise ValueError("Foi selecionado um documento invalido.")
+
+                    if tipo == "nfe":
+                        documento = DocumentoFiscal.objects.filter(
+                            pk=documento_id,
+                            filial=filial,
+                            tipo_documento="nfe",
+                            status="autorizada",
+                        ).first()
+                        if not documento:
+                            raise ValueError("Uma das NF-es selecionadas nao esta disponivel.")
+                        _vincular_nfe_ao_mdfe(
+                            mdfe,
+                            documento,
+                            atualizar_rota=not mdfe.documentos.exists(),
+                        )
+                        vinculados.append(f"NF-e {documento.numero}/{documento.serie}")
+                    elif tipo == "cte":
+                        cte = CTe.objects.for_filial(filial).filter(
+                            pk=documento_id,
+                            status=CTe.Status.AUTORIZADO,
+                        ).first()
+                        if not cte:
+                            raise ValueError("Um dos CT-es selecionados nao esta disponivel.")
+                        _vincular_cte_ao_mdfe(mdfe, cte)
+                        vinculados.append(f"CT-e {cte.numero}/{cte.serie}")
+                    else:
+                        raise ValueError("Tipo de documento nao permitido.")
+        except ValueError as exc:
+            messages.error(request, str(exc))
+        else:
+            messages.success(
+                request,
+                f"{len(vinculados)} documento(s) vinculado(s): {', '.join(vinculados)}.",
+            )
+        return redirect("logistica:mdfe-detail", pk=mdfe.pk)
+
+
 class DocumentoMDFeCreateView(PermissaoRequiredMixin, View):
     permissao_modulo = "logistica"
     permissao_acao = "editar"
 
     def post(self, request, pk):
         mdfe = get_object_or_404(MDFe.objects.for_filial(_filial(request)), pk=pk)
+        if mdfe.status not in STATUS_MDFE_EDITAVEIS:
+            messages.error(request, "Este MDF-e nao permite adicionar documentos.")
+            return redirect("logistica:mdfe-detail", pk=mdfe.pk)
         form = DocumentoMDFeForm(request.POST)
         if form.is_valid():
             documento = form.save(commit=False)
@@ -1962,6 +2157,9 @@ class DocumentoMDFeDeleteView(PermissaoRequiredMixin, View):
 
     def post(self, request, pk, documento_pk):
         mdfe = get_object_or_404(MDFe.objects.for_filial(_filial(request)), pk=pk)
+        if mdfe.status not in STATUS_MDFE_EDITAVEIS:
+            messages.error(request, "Este MDF-e nao permite remover documentos.")
+            return redirect("logistica:mdfe-detail", pk=mdfe.pk)
         documento = get_object_or_404(DocumentoMDFe.objects.filter(mdfe=mdfe), pk=documento_pk)
         documento.delete()
         mdfe.recalcular_totais()
