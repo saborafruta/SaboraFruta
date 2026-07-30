@@ -1,8 +1,10 @@
 from decimal import Decimal
+from datetime import datetime
 from types import SimpleNamespace
 from unittest.mock import Mock
 
 from django.test import SimpleTestCase
+from django.utils import timezone
 
 from apps.core.services.exceptions import DadosInvalidosError
 from apps.estoque.services.transferencia_nfe import _cfop_transferencia
@@ -12,10 +14,40 @@ from apps.logistica.services.mdfe_focusnfe import (
     _validar_transporte,
     construir_payload_mdfe,
 )
-from apps.logistica.views import _peso_bruto_nfe
+from apps.logistica.views import _dados_destino_nfe, _peso_bruto_nfe
 
 
 class TransferenciaFiscalTests(SimpleTestCase):
+    def test_destino_e_recuperado_do_xml_quando_snapshot_antigo_esta_incompleto(self):
+        documento = SimpleNamespace(
+            destinatario_snapshot={"nome": "SABORAFRUTA"},
+            destinatario_tipo="",
+            destinatario_id=None,
+            xml_assinado="""
+                <NFe xmlns="http://www.portalfiscal.inf.br/nfe">
+                  <infNFe>
+                    <dest><enderDest>
+                      <xLgr>Avenida Capitao Mor Gouveia</xLgr>
+                      <nro>3005</nro>
+                      <xBairro>Lagoa Nova</xBairro>
+                      <cMun>2408102</cMun>
+                      <xMun>Natal</xMun>
+                      <UF>RN</UF>
+                      <CEP>59063410</CEP>
+                    </enderDest></dest>
+                  </infNFe>
+                </NFe>
+            """,
+            xml_retorno="",
+            xml_enviado="",
+        )
+
+        destino = _dados_destino_nfe(documento)
+
+        self.assertEqual(destino["cidade"], "Natal")
+        self.assertEqual(destino["codigo_municipio"], "2408102")
+        self.assertIn("Avenida Capitao Mor Gouveia 3005", destino["endereco_completo"])
+
     def test_peso_bruto_e_reaproveitado_do_xml_da_nfe(self):
         documento = SimpleNamespace(
             xml_assinado="""
@@ -108,6 +140,9 @@ class TransferenciaFiscalTests(SimpleTestCase):
             valor_total=Decimal("1200.00"),
             peso_total_kg=Decimal("850.000"),
             observacao="Transferencia entre filiais.",
+            data_hora_inicio_viagem=timezone.make_aware(
+                datetime(2026, 7, 29, 22, 30)
+            ),
         )
 
         payload = construir_payload_mdfe(mdfe)
@@ -121,6 +156,10 @@ class TransferenciaFiscalTests(SimpleTestCase):
             [{"chave_nfe": "2" * 44}],
         )
         self.assertEqual(payload["codigo_unidade_medida_peso_bruto"], "01")
+        self.assertEqual(
+            payload["data_hora_previsto_inicio_viagem"],
+            "2026-07-29T22:30:00-03:00",
+        )
 
 
 class MDFeResourceTests(SimpleTestCase):

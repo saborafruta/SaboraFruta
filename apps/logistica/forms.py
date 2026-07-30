@@ -1,4 +1,7 @@
+from datetime import timedelta
+
 from django import forms
+from django.utils import timezone
 
 from apps.cadastros.models import Cliente, Fornecedor, Motorista, Transportadora, Veiculo
 from apps.logistica.models import (
@@ -458,6 +461,24 @@ class ItemPedidoExpedicaoForm(forms.ModelForm):
 # ─── MDF-e ────────────────────────────────────────────────────────────────────
 
 class MDFeForm(forms.ModelForm):
+    inicio_viagem = forms.DateTimeField(
+        required=True,
+        label="Início previsto da viagem",
+        input_formats=["%Y-%m-%dT%H:%M"],
+        widget=forms.DateTimeInput(
+            format="%Y-%m-%dT%H:%M",
+            attrs={"type": "datetime-local"},
+        ),
+    )
+    previsao_chegada = forms.DateTimeField(
+        required=True,
+        label="Previsão de chegada",
+        input_formats=["%Y-%m-%dT%H:%M"],
+        widget=forms.DateTimeInput(
+            format="%Y-%m-%dT%H:%M",
+            attrs={"type": "datetime-local"},
+        ),
+    )
     motorista_cadastro = forms.ModelChoiceField(
         queryset=Motorista.objects.none(),
         required=False,
@@ -493,7 +514,9 @@ class MDFeForm(forms.ModelForm):
             "observacao",
         ]
         widgets = {
-            "data_emissao": forms.DateInput(attrs={"type": "date"}),
+            "numero": forms.HiddenInput(),
+            "serie": forms.HiddenInput(),
+            "data_emissao": forms.HiddenInput(),
             "data_encerramento": forms.DateInput(attrs={"type": "date"}),
             "observacao": forms.Textarea(attrs={"rows": 3}),
             "percurso_ufs": forms.TextInput(attrs={"placeholder": "SP, RJ, MG, ES..."}),
@@ -503,6 +526,13 @@ class MDFeForm(forms.ModelForm):
 
     def __init__(self, *args, filial=None, **kwargs):
         super().__init__(*args, **kwargs)
+        agora = timezone.localtime().replace(second=0, microsecond=0)
+        if self.instance and self.instance.pk:
+            self.fields["inicio_viagem"].initial = self.instance.data_hora_inicio_viagem
+            self.fields["previsao_chegada"].initial = self.instance.data_hora_previsao_fim
+        else:
+            self.fields["inicio_viagem"].initial = agora
+            self.fields["previsao_chegada"].initial = agora + timedelta(hours=1)
         if filial:
             self.fields["transportadora"].queryset = Transportadora.objects.for_filial(filial).filter(ativo=True)
             self.fields["romaneio"].queryset = RomaneioCarga.objects.for_filial(filial).exclude(
@@ -538,6 +568,8 @@ class MDFeForm(forms.ModelForm):
                 self.fields["peso_carga_kg"].initial = self.instance.peso_total_kg
         for nome in ("transportadora", "romaneio", "data_encerramento"):
             self.fields[nome].required = False
+        self.fields["transportadora"].empty_label = "Transporte por conta própria"
+        self.fields["romaneio"].empty_label = "Dispensado"
         for field in self.fields.values():
             field.widget.attrs["class"] = BASE_INPUT_CLASS
         self.fields["numero"].widget.attrs["readonly"] = True
@@ -561,6 +593,13 @@ class MDFeForm(forms.ModelForm):
             self.add_error(
                 "peso_carga_kg",
                 "Informe o peso bruto da carga para emitir o MDF-e.",
+            )
+        inicio = cleaned.get("inicio_viagem")
+        fim = cleaned.get("previsao_chegada")
+        if inicio and fim and fim <= inicio:
+            self.add_error(
+                "previsao_chegada",
+                "A previsão de chegada deve ser posterior ao início da viagem.",
             )
         return cleaned
 
@@ -589,6 +628,12 @@ class MDFeForm(forms.ModelForm):
                 "tipo_carroceria": veiculo.tipo_carroceria,
             }
         mdfe.peso_total_kg = self.cleaned_data.get("peso_carga_kg") or 0
+        mdfe.data_hora_inicio_viagem = self.cleaned_data.get("inicio_viagem")
+        mdfe.data_hora_previsao_fim = self.cleaned_data.get("previsao_chegada")
+        if mdfe.data_hora_inicio_viagem:
+            mdfe.data_emissao = timezone.localtime(
+                mdfe.data_hora_inicio_viagem
+            ).date()
         if commit:
             mdfe.save()
         return mdfe

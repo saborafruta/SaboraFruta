@@ -252,6 +252,11 @@ def construir_payload_mdfe(mdfe: MDFe) -> dict[str, Any]:
         "descricao_produto": "Polpas e produtos alimentícios",
         "informacao_complementar": _texto(mdfe.observacao)[:5000],
     }
+    data_hora_inicio_viagem = getattr(mdfe, "data_hora_inicio_viagem", None)
+    if data_hora_inicio_viagem:
+        payload["data_hora_previsto_inicio_viagem"] = timezone.localtime(
+            data_hora_inicio_viagem
+        ).replace(microsecond=0).isoformat()
     cep = _digitos(filial.cep)
     if len(cep) == 8:
         payload["cep_emitente"] = cep

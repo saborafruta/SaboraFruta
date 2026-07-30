@@ -1,4 +1,5 @@
 import json
+from datetime import timedelta
 from decimal import Decimal, InvalidOperation
 from xml.etree import ElementTree
 
@@ -13,6 +14,7 @@ from django.utils import timezone
 from django.views import View
 
 from apps.cadastros.models import Cliente, Fornecedor, Motorista, Veiculo
+from apps.core.models.empresa import Filial
 from apps.core.services.exceptions import DomainError
 from apps.core.services.permissions import PermissaoRequiredMixin
 from apps.fiscal.integrations.focusnfe.exceptions import FocusNFeError
@@ -1212,10 +1214,108 @@ def _peso_bruto_nfe(documento):
     return total
 
 
+def _texto_xml_destino(documento):
+    for xml in (documento.xml_assinado, documento.xml_retorno, documento.xml_enviado):
+        if not xml:
+            continue
+        try:
+            raiz = ElementTree.fromstring(xml)
+        except ElementTree.ParseError:
+            continue
+        endereco = raiz.find(".//{*}dest/{*}enderDest")
+        if endereco is None:
+            continue
+
+        def texto(tag):
+            elemento = endereco.find(f"{{*}}{tag}")
+            return (elemento.text or "").strip() if elemento is not None else ""
+
+        return {
+            "logradouro": texto("xLgr"),
+            "numero": texto("nro"),
+            "complemento": texto("xCpl"),
+            "bairro": texto("xBairro"),
+            "cidade": texto("xMun"),
+            "uf": texto("UF"),
+            "cep": texto("CEP"),
+            "codigo_municipio": texto("cMun"),
+        }
+    return {}
+
+
+def _dados_destino_nfe(documento):
+    snapshot = dict(documento.destinatario_snapshot or {})
+    filial_destino = None
+    if documento.destinatario_tipo == "filial" and documento.destinatario_id:
+        filial_destino = Filial.objects.filter(pk=documento.destinatario_id).first()
+    xml = _texto_xml_destino(documento)
+
+    def primeiro(*valores):
+        return next((str(valor).strip() for valor in valores if valor), "")
+
+    dados = {
+        "nome": primeiro(snapshot.get("nome"), getattr(filial_destino, "razao_social", "")),
+        "logradouro": primeiro(
+            snapshot.get("logradouro"), snapshot.get("endereco"),
+            getattr(filial_destino, "endereco", ""), xml.get("logradouro"),
+        ),
+        "numero": primeiro(
+            snapshot.get("numero"), getattr(filial_destino, "numero", ""),
+            xml.get("numero"),
+        ),
+        "complemento": primeiro(
+            snapshot.get("complemento"), getattr(filial_destino, "complemento", ""),
+            xml.get("complemento"),
+        ),
+        "bairro": primeiro(
+            snapshot.get("bairro"), getattr(filial_destino, "bairro", ""),
+            xml.get("bairro"),
+        ),
+        "cidade": primeiro(
+            snapshot.get("cidade"), snapshot.get("municipio"),
+            snapshot.get("nome_municipio"), getattr(filial_destino, "cidade", ""),
+            xml.get("cidade"),
+        ),
+        "uf": primeiro(
+            snapshot.get("uf"), getattr(filial_destino, "uf", ""), xml.get("uf"),
+        ).upper(),
+        "cep": primeiro(
+            snapshot.get("cep"), getattr(filial_destino, "cep", ""), xml.get("cep"),
+        ),
+        "codigo_municipio": primeiro(
+            snapshot.get("codigo_municipio"),
+            snapshot.get("codigo_municipio_ibge"),
+            snapshot.get("codigo_ibge"),
+            getattr(filial_destino, "codigo_municipio_ibge", ""),
+            xml.get("codigo_municipio"),
+        ),
+    }
+    partes = [
+        " ".join(filter(None, [dados["logradouro"], dados["numero"]])),
+        dados["complemento"],
+        dados["bairro"],
+        " / ".join(filter(None, [dados["cidade"], dados["uf"]])),
+        dados["cep"],
+    ]
+    dados["endereco_completo"] = " - ".join(parte for parte in partes if parte)
+    return dados
+
+
+def _endereco_filial(filial):
+    partes = [
+        " ".join(filter(None, [filial.endereco, filial.numero])),
+        filial.complemento,
+        filial.bairro,
+        " / ".join(filter(None, [filial.cidade, filial.uf])),
+        filial.cep,
+    ]
+    return " - ".join(parte for parte in partes if parte)
+
+
 def _nfe_inicial(documento):
     if not documento:
         return None
-    destinatario = documento.destinatario_snapshot or {}
+    destinatario = _dados_destino_nfe(documento)
     peso = _peso_bruto_nfe(documento)
     return {
         "id": documento.pk,
@@ -1228,11 +1328,9 @@ def _nfe_inicial(documento):
         "destinatario": destinatario.get("nome", ""),
         "municipio": destinatario.get("cidade", ""),
         "uf": destinatario.get("uf", ""),
-        "codigo_municipio": (
-            destinatario.get("codigo_municipio")
-            or destinatario.get("codigo_municipio_ibge")
-            or ""
-        ),
+        "codigo_municipio": destinatario.get("codigo_municipio", ""),
+        "endereco_origem": _endereco_filial(documento.filial),
+        "endereco_destino": destinatario.get("endereco_completo", ""),
     }
 
 
@@ -1308,19 +1406,22 @@ class MDFeCreateView(PermissaoRequiredMixin, View):
             "numero": proximo_numero,
             "serie": serie_mdfe,
             "data_emissao": timezone.localdate(),
+            "uf_carregamento": filial.uf,
+            "municipio_carregamento": filial.cidade,
+            "codigo_municipio_carregamento": filial.codigo_municipio_ibge,
+            "inicio_viagem": timezone.localtime().replace(second=0, microsecond=0),
+            "previsao_chegada": (
+                timezone.localtime().replace(second=0, microsecond=0)
+                + timedelta(hours=1)
+            ),
         }
         nfe_documento_inicial_json = "null"
         if nfe_documento:
-            initial["uf_carregamento"] = filial.uf
-            initial["municipio_carregamento"] = filial.cidade
-            initial["codigo_municipio_carregamento"] = filial.codigo_municipio_ibge
-            destinatario = nfe_documento.destinatario_snapshot or {}
+            destinatario = _dados_destino_nfe(nfe_documento)
             initial["uf_descarregamento"] = destinatario.get("uf", "")
             initial["municipio_descarregamento"] = destinatario.get("cidade", "")
-            initial["codigo_municipio_descarregamento"] = (
-                destinatario.get("codigo_municipio")
-                or destinatario.get("codigo_municipio_ibge")
-                or ""
+            initial["codigo_municipio_descarregamento"] = destinatario.get(
+                "codigo_municipio", ""
             )
             initial["peso_carga_kg"] = _peso_bruto_nfe(nfe_documento)
             if nfe_documento.transportadora_id:
@@ -1348,7 +1449,6 @@ class MDFeCreateView(PermissaoRequiredMixin, View):
 
     def post(self, request):
         filial = _filial(request)
-        form = MDFeForm(request.POST, filial=filial)
         nfe_documento_id = request.POST.get("nfe_documento_id", "").strip()
         nfe_documento = None
         if nfe_documento_id:
@@ -1356,6 +1456,23 @@ class MDFeCreateView(PermissaoRequiredMixin, View):
                 pk=nfe_documento_id, filial=filial,
                 tipo_documento="nfe", status="autorizada",
             ).first()
+        dados_post = request.POST.copy()
+        if nfe_documento:
+            destino = _dados_destino_nfe(nfe_documento)
+            preenchimentos = {
+                "uf_carregamento": filial.uf,
+                "municipio_carregamento": filial.cidade,
+                "codigo_municipio_carregamento": filial.codigo_municipio_ibge,
+                "uf_descarregamento": destino.get("uf", ""),
+                "municipio_descarregamento": destino.get("cidade", ""),
+                "codigo_municipio_descarregamento": destino.get(
+                    "codigo_municipio", ""
+                ),
+            }
+            for campo, valor in preenchimentos.items():
+                if not dados_post.get(campo) and valor:
+                    dados_post[campo] = valor
+        form = MDFeForm(dados_post, filial=filial)
         if form.is_valid():
             from apps.core.models.parametros import (
                 ParametroDocumentoFiscal,
@@ -1393,7 +1510,7 @@ class MDFeCreateView(PermissaoRequiredMixin, View):
                 configuracao.save(update_fields=["proximo_numero", "updated_at"])
 
                 if nfe_documento:
-                    destinatario = nfe_documento.destinatario_snapshot or {}
+                    destinatario = _dados_destino_nfe(nfe_documento)
                     DocumentoMDFe.objects.create(
                         mdfe=mdfe,
                         documento_fiscal=nfe_documento,

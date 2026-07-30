@@ -15,6 +15,9 @@
 
   <form method="post" class="space-y-5">
     {% csrf_token %}
+    {{ form.numero }}
+    {{ form.serie }}
+    {{ form.data_emissao }}
     {% if form.non_field_errors %}
       <div class="rounded-lg border border-red-500/30 bg-red-500/10 p-3 text-sm text-red-500">{{ form.non_field_errors }}</div>
     {% endif %}
@@ -52,11 +55,14 @@
           <span class="block text-xs font-semibold uppercase text-green-700">Documento</span>
           <strong class="mt-1 block" x-text="selecionada ? selecionada.label : ''"></strong>
           <span class="mt-1 block break-all text-xs" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'" x-text="selecionada ? selecionada.chave : ''"></span>
+          <span class="mt-2 block text-xs font-semibold text-green-700">Saída</span>
+          <span class="block text-xs" :style="temaClaro ? 'color:#475569;' : 'color:#cbd5e1;'" x-text="selecionada ? selecionada.endereco_origem : ''"></span>
         </div>
         <div>
           <span class="block text-xs font-semibold uppercase text-green-700">Destino</span>
           <strong class="mt-1 block text-sm" x-text="selecionada ? selecionada.destinatario : ''"></strong>
           <span class="text-xs" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'" x-text="selecionada ? ((selecionada.municipio || '') + (selecionada.uf ? ' / ' + selecionada.uf : '')) : ''"></span>
+          <span class="mt-1 block text-xs" :style="temaClaro ? 'color:#475569;' : 'color:#cbd5e1;'" x-text="selecionada ? selecionada.endereco_destino : ''"></span>
         </div>
         <div>
           <span class="block text-xs font-semibold uppercase text-green-700">Carga</span>
@@ -68,23 +74,22 @@
     </div>
     {% endif %}
 
-    <!-- Identificacao -->
+    <!-- Viagem e carga -->
     <div class="card p-6 space-y-4">
-      <h3 class="text-xs font-semibold uppercase tracking-wide" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Identificacao</h3>
-      <div class="grid gap-4 md:grid-cols-5">
+      <div>
+        <h3 class="text-xs font-semibold uppercase tracking-wide" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Viagem e carga</h3>
+        <p class="mt-1 text-sm" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Informe quando o veículo sai e a previsão de chegada.</p>
+      </div>
+      <div class="grid gap-4 md:grid-cols-4">
         <label class="space-y-1.5">
-          <span class="text-xs font-semibold uppercase tracking-wide" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Número do MDF-e</span>
-          {{ form.numero }}{% if form.numero.errors %}<p class="text-xs text-red-500 mt-0.5">{{ form.numero.errors.0 }}</p>{% endif %}
-          <p class="text-xs" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Sequência própria do MDF-e.</p>
+          <span class="text-xs font-semibold uppercase tracking-wide" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Início da viagem</span>
+          {{ form.inicio_viagem }}
+          {% if form.inicio_viagem.errors %}<p class="text-xs text-red-500 mt-0.5">{{ form.inicio_viagem.errors.0 }}</p>{% endif %}
         </label>
         <label class="space-y-1.5">
-          <span class="text-xs font-semibold uppercase tracking-wide" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Série do MDF-e</span>
-          {{ form.serie }}
-          <p class="text-xs" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Definida nos parâmetros fiscais.</p>
-        </label>
-        <label class="space-y-1.5">
-          <span class="text-xs font-semibold uppercase tracking-wide" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Emissao</span>
-          {{ form.data_emissao }}{% if form.data_emissao.errors %}<p class="text-xs text-red-500 mt-0.5">{{ form.data_emissao.errors.0 }}</p>{% endif %}
+          <span class="text-xs font-semibold uppercase tracking-wide" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Previsão de chegada</span>
+          {{ form.previsao_chegada }}
+          {% if form.previsao_chegada.errors %}<p class="text-xs text-red-500 mt-0.5">{{ form.previsao_chegada.errors.0 }}</p>{% endif %}
         </label>
         <label class="space-y-1.5">
           <span class="text-xs font-semibold uppercase tracking-wide" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Peso bruto (kg)</span>
@@ -100,11 +105,12 @@
         <label class="space-y-1.5">
           <span class="text-xs font-semibold uppercase tracking-wide" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Transportadora</span>
           {{ form.transportadora }}
-          <p class="text-xs" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Deixe vazio para transporte por conta própria.</p>
+          <p class="text-xs" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Para veículo da empresa, mantenha Transporte por conta própria.</p>
         </label>
         <label class="space-y-1.5">
           <span class="text-xs font-semibold uppercase tracking-wide" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Romaneio de Carga</span>
           {{ form.romaneio }}
+          <p class="text-xs" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Se não houver romaneio, mantenha Dispensado.</p>
         </label>
       </div>
     </div>

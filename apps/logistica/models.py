@@ -622,6 +622,8 @@ class MDFe(FilialScopedModel):
     chave_acesso = models.CharField(max_length=44, blank=True, db_index=True)
     data_emissao = models.DateField(default=timezone.localdate, db_index=True)
     data_encerramento = models.DateField(null=True, blank=True)
+    data_hora_inicio_viagem = models.DateTimeField(null=True, blank=True)
+    data_hora_previsao_fim = models.DateTimeField(null=True, blank=True)
     status = models.CharField(max_length=20, choices=Status.choices, default=Status.RASCUNHO, db_index=True)
     modal = models.CharField(max_length=20, choices=Modal.choices, default=Modal.RODOVIARIO)
     responsavel = models.ForeignKey(
