@@ -32,7 +32,11 @@
         </div>
         <span x-show="selecionada" class="rounded-md bg-green-500/10 px-2.5 py-1 text-xs font-semibold text-green-600">NF-e vinculada</span>
       </div>
-      <input type="hidden" name="nfe_documento_id" :value="selecionada ? selecionada.id : ''">
+      {% if nfe_documento_id %}
+        <input type="hidden" name="nfe_documento_id" value="{{ nfe_documento_id }}">
+      {% else %}
+        <input type="hidden" name="nfe_documento_id" :value="selecionada ? selecionada.id : ''">
+      {% endif %}
       <div class="relative" x-show="!selecionada">
         <input type="text" x-model="query" @input.debounce.300ms="buscar()"
                placeholder="Número ou chave de acesso da NF-e..."

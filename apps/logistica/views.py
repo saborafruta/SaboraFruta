@@ -1521,6 +1521,7 @@ class MDFeCreateView(PermissaoRequiredMixin, View):
             "motoristas_json": motoristas_json,
             "veiculos_json": veiculos_json,
             "nfe_documento_inicial_json": nfe_documento_inicial_json,
+            "nfe_documento_id": nfe_documento.pk if nfe_documento else "",
             "rota_automatica": rota_automatica,
             "produtos_sem_peso": produtos_sem_peso,
             "endereco_origem": _endereco_filial(nfe_documento.filial)
@@ -1533,7 +1534,11 @@ class MDFeCreateView(PermissaoRequiredMixin, View):
 
     def post(self, request):
         filial = _filial(request)
-        nfe_documento_id = request.POST.get("nfe_documento_id", "").strip()
+        nfe_documento_id = (
+            request.POST.get("nfe_documento_id")
+            or request.GET.get("nfe_documento_id")
+            or ""
+        ).strip()
         nfe_documento = None
         if nfe_documento_id:
             nfe_documento = DocumentoFiscal.objects.filter(
@@ -1633,6 +1638,7 @@ class MDFeCreateView(PermissaoRequiredMixin, View):
             "nfe_documento_inicial_json": json.dumps(
                 _nfe_inicial(nfe_documento), ensure_ascii=False
             ) if nfe_documento else "null",
+            "nfe_documento_id": nfe_documento.pk if nfe_documento else "",
             "rota_automatica": rota_automatica,
             "produtos_sem_peso": produtos_sem_peso,
             "endereco_origem": (
