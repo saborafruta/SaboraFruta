@@ -266,6 +266,10 @@ MAPAS_GEOCODIFICAR_AO_SALVAR = env.bool(
 MAPAS_ROTA_PROVIDER = env('MAPAS_ROTA_PROVIDER', default='osrm')
 MAPAS_ROTA_API_KEY = env('MAPAS_ROTA_API_KEY', default='')
 MAPAS_OSRM_URL = env('MAPAS_OSRM_URL', default='')
+# Otimizacao (secao 5). O endpoint /optimization do OpenRouteService E o
+# VROOM hospedado, entao MAPAS_ROTA_API_KEY ja habilita a otimizacao. Só
+# defina MAPAS_VROOM_URL se tiver uma instancia propria do VROOM.
+MAPAS_VROOM_URL = env('MAPAS_VROOM_URL', default='')
 
 MAPAS_GEOCODER = env('MAPAS_GEOCODER', default='nominatim')
 MAPAS_GEOCODER_API_KEY = env('MAPAS_GEOCODER_API_KEY', default='')

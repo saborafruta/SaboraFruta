@@ -15,6 +15,7 @@ urlpatterns = [
 
     # Rotas (secao 4)
     path('api/rota/', rota.criar_rota, name='api-rota'),
+    path('api/rota/otimizar/', rota.otimizar_rota, name='api-rota-otimizar'),
 
     # Territorios (secao 11)
     path('api/territorios/', territorio.territorios, name='api-territorios'),

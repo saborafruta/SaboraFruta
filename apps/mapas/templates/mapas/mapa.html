@@ -258,13 +258,65 @@
           </div>
         </template>
 
+        {% comment %}
+          Resultado da otimizacao (§5): antes, depois e o que se economiza.
+          Fica separado do bloco da rota para o usuario comparar os dois
+          numeros lado a lado, em vez de ver so o valor final.
+        {% endcomment %}
+        <template x-if="otimizacao">
+          <div style="margin-top:10px; padding-top:10px; border-top:1px solid rgba(127,127,127,.25);">
+            <p class="text-xs mb-1" style="font-weight:700;">Otimizacao</p>
+
+            <template x-if="otimizacao.melhorou">
+              <div>
+                <div class="rota-resumo">
+                  <div style="opacity:.6;">Antes
+                    <strong style="font-size:13px; text-decoration:line-through;"
+                            x-text="otimizacao.antes.distancia_km + ' km · ' + otimizacao.antes.duracao_texto"></strong>
+                  </div>
+                </div>
+                <div class="rota-resumo">
+                  <div>Depois
+                    <strong style="font-size:13px; color:#4ade80;"
+                            x-text="otimizacao.depois.distancia_km + ' km · ' + otimizacao.depois.duracao_texto"></strong>
+                  </div>
+                </div>
+                <div class="rota-resumo">
+                  <div>Economia
+                    <strong style="color:#4ade80;"
+                            x-text="otimizacao.economia_km + ' km · ' + otimizacao.economia_texto"></strong>
+                  </div>
+                </div>
+              </div>
+            </template>
+
+            <p class="text-xs" x-show="!otimizacao.melhorou" style="color:#94a3b8;">
+              A ordem que voce montou ja e a melhor — nao ha ganho a obter.
+            </p>
+
+            <p class="text-xs mt-1" style="opacity:.55;"
+               x-text="'Estrategia: ' + otimizacao.estrategia"></p>
+            <p class="text-xs mt-1" x-show="otimizacao.estrategia.startsWith('local')"
+               style="color:#fbbf24;">
+              Heuristica local (linha reta), sem VROOM. Configure
+              MAPAS_ROTA_API_KEY para otimizar por rua.
+            </p>
+          </div>
+        </template>
+
         <div class="desenho-acoes" style="margin-top:10px;">
           <button type="button" @click="calcularRota()"
-                  :disabled="!rotaClientes.length || rotaCalculando"
+                  :disabled="!rotaClientes.length || rotaCalculando || rotaOtimizando"
                   style="background:#1d4ed8;color:#fff;"
                   x-text="rotaCalculando ? 'Calculando...' : (rotaResultado ? 'Recalcular' : 'Criar rota')"></button>
-          <button type="button" @click="limparRota()" :disabled="rotaCalculando"
+          <button type="button" @click="limparRota()" :disabled="rotaCalculando || rotaOtimizando"
                   style="background:#374151;color:#e5e7eb;">Limpar</button>
+        </div>
+        <div class="desenho-acoes" style="margin-top:6px;">
+          <button type="button" @click="otimizarRota()"
+                  :disabled="rotaClientes.length < 2 || rotaCalculando || rotaOtimizando"
+                  style="background:#166534;color:#dcfce7;"
+                  x-text="rotaOtimizando ? 'Otimizando...' : 'Otimizar Ordem'"></button>
         </div>
       </div>
     </div>
@@ -363,6 +415,8 @@ function mapaGeo() {
     rotaCalculando: false,
     rotaPartirDaFilial: true,
     rotaMaxParadas: 25,
+    otimizacao: null,
+    rotaOtimizando: false,
     _mapa: null,
     _grupos: {},
     _carregando: false,
@@ -557,6 +611,7 @@ function mapaGeo() {
       // O traçado antigo não vale mais depois de mudar as paradas.
       this._removerLinha();
       this.rotaResultado = null;
+      this.otimizacao = null;
       this.aviso = '';
     },
 
@@ -564,11 +619,13 @@ function mapaGeo() {
       this.rotaClientes = this.rotaClientes.filter(c => c.id !== id);
       this._removerLinha();
       this.rotaResultado = null;
+      this.otimizacao = null;
     },
 
     limparRota() {
       this.rotaClientes = [];
       this.rotaResultado = null;
+      this.otimizacao = null;
       this._removerLinha();
     },
 
@@ -576,6 +633,49 @@ function mapaGeo() {
       if (this._linhaRota) {
         this._mapa.removeLayer(this._linhaRota);
         this._linhaRota = null;
+      }
+    },
+
+    async otimizarRota() {
+      if (this.rotaClientes.length < 2) return;
+      this.rotaOtimizando = true;
+      this.aviso = '';
+      try {
+        const resp = await fetch(`{% url 'mapas:api-rota-otimizar' %}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'X-CSRFToken': CSRF },
+          body: JSON.stringify({
+            clientes: this.rotaClientes.map(c => c.id),
+            partir_da_filial: this.rotaPartirDaFilial,
+          }),
+        });
+        const dados = await resp.json().catch(() => ({}));
+        if (!resp.ok) throw new Error(dados.erro || ('HTTP ' + resp.status));
+
+        this.otimizacao = dados;
+
+        // Reordena a lista lateral na nova sequencia, para o painel e o mapa
+        // contarem a mesma historia. Sem isso o usuario veria o tracado novo
+        // com a numeracao antiga ao lado.
+        const porId = new Map(this.rotaClientes.map(c => [c.id, c]));
+        this.rotaClientes = dados.ordem_depois
+          .map(id => porId.get(id))
+          .filter(Boolean);
+
+        this.rotaResultado = { ...dados.depois,
+          provider: (this.rotaResultado || {}).provider,
+          uso_comercial_liberado: (this.rotaResultado || {}).uso_comercial_liberado !== false,
+        };
+
+        this._removerLinha();
+        this._linhaRota = L.polyline(dados.depois.geometria, {
+          color: '#16a34a', weight: 5, opacity: 0.9,
+        }).addTo(this._mapa);
+        this._mapa.fitBounds(this._linhaRota.getBounds(), { padding: [50, 50] });
+      } catch (e) {
+        this.aviso = 'Não foi possível otimizar: ' + e.message;
+      } finally {
+        this.rotaOtimizando = false;
       }
     },
 

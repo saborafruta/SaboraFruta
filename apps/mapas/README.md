@@ -230,7 +230,8 @@ Celery aponta para `localhost`). Onde há cache de fato hoje é no banco.
 | **4** | §11 territórios — `Praca` evoluída para geográfica, `Rota` com FKs | ✅ entregue |
 | **3a** | §4 rotas — selecionar clientes, distância, tempo, traçado e paradas | ✅ entregue |
 | **2** | §8 sugestão ao faturar delivery (`proximos_de_entrega` já pronto); §10 heatmap; §14 dashboard | a fazer |
-| **3b** | §5 otimização (reordenar), §6 distância ponto-a-ponto | a fazer |
+| **3b** | §5 otimização (reordenar) | ✅ entregue |
+| **3c** | §6 distância ponto-a-ponto | a fazer |
 | **5** | §12 geofence + §13 rastreamento | **stand by** — depende de app de motorista |
 
 ### Etapa 4 — o que foi feito
@@ -295,6 +296,38 @@ Configuração (`MAPAS_ROTA_PROVIDER`):
 
 A resposta da API traz `uso_comercial_liberado`; quando é `false`, o painel
 avisa na tela que aquele servidor não serve para produção.
+
+### §5 — Otimização (VROOM)
+
+Botão **“Otimizar Ordem”** no painel de rota. Mostra **antes** (riscado),
+**depois**, e os **km + tempo economizados**.
+
+O ganho é medido **roteirizando as duas ordens** no mesmo provider. Comparar
+distância em linha reta daria um número bonito e errado: o motorista anda por
+rua, não em linha reta.
+
+Estratégias, em ordem de preferência (`construir_otimizador`):
+
+| Condição | Estratégia |
+|---|---|
+| `MAPAS_VROOM_URL` | VROOM próprio |
+| `MAPAS_ROTA_API_KEY` | **VROOM via ORS** — `/optimization` do OpenRouteService É o VROOM |
+| nada configurado | heurística local: vizinho mais próximo + 2-opt |
+
+A heurística local não conhece as ruas (trabalha em linha reta) e não é ótima,
+mas entrega a maior parte do ganho num roteiro de 5–20 paradas e **funciona sem
+infraestrutura**. A resposta traz `estrategia`, e a tela avisa quando o
+resultado veio da heurística — para não vender como “otimizado por VROOM” o que
+não foi.
+
+Duas decisões de segurança:
+
+- **Sem ganho, a ordem do usuário é mantida.** Reordenar sem motivo confundiria
+  quem montou o roteiro de propósito.
+- **Provider fora do ar cai para a heurística local** em vez de deixar o usuário
+  sem o recurso; a estratégia reportada vira `local (fallback)`.
+- Se o VROOM devolver menos paradas do que foram enviadas, o resultado é
+  **recusado** — aceitar faria o usuário perder entregas silenciosamente.
 
 ### Modo de desenho (Leaflet.draw)
 
