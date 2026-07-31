@@ -1,0 +1,167 @@
+{% comment %}
+  Widget de distância (§6), reutilizável em qualquer cadastro.
+
+  Uso, a partir de uma tela de cadastro já salva:
+
+      {% include "mapas/_widget_distancia.html" with origem_tipo="cliente" origem_id=cliente.pk %}
+
+  Tipos aceitos: cliente, fornecedor, transportadora, motorista, filial.
+
+  Não carrega Leaflet: uma tela de cadastro não deveria pagar o custo de um
+  mapa completo só por causa deste bloco. A distância e o tempo aparecem aqui,
+  e o traçado abre no mapa principal, que já tem tudo carregado.
+{% endcomment %}
+
+<div class="card p-4" x-data="widgetDistancia('{{ origem_tipo }}', {{ origem_id }})" x-init="carregarDestinos()">
+  <div class="flex items-center gap-2 mb-3">
+    <svg class="w-4 h-4" fill="none" stroke="#60a5fa" viewBox="0 0 24 24">
+      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"
+            d="M17.657 16.657L13.414 20.9a2 2 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"/>
+      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"
+            d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"/>
+    </svg>
+    <h3 class="text-sm font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
+      Calcular distância
+    </h3>
+  </div>
+
+  <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 items-end">
+    <label class="block text-sm">
+      <span class="block text-xs font-semibold mb-1"
+            :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Até</span>
+      <select x-model="tipo" @change="destinoId=''; carregarDestinos()" class="form-input w-full">
+        <option value="filial">Filial</option>
+        <option value="fornecedor">Fornecedor</option>
+        <option value="cliente">Cliente</option>
+        <option value="motorista">Motorista</option>
+        <option value="transportadora">Transportadora</option>
+      </select>
+    </label>
+
+    <label class="block text-sm sm:col-span-2">
+      <span class="block text-xs font-semibold mb-1"
+            :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Destino</span>
+      <div class="flex gap-2">
+        <input type="search" x-model="busca" @input.debounce.350ms="carregarDestinos()"
+               placeholder="Filtrar..." class="form-input" style="width:130px;">
+        <select x-model="destinoId" class="form-input flex-1">
+          <option value="">
+            <span x-show="carregandoDestinos">Carregando...</span>
+          </option>
+          <template x-for="d in destinos" :key="d.id">
+            <option :value="d.id" x-text="d.nome + (d.cidade ? ' — ' + d.cidade : '')"></option>
+          </template>
+        </select>
+      </div>
+    </label>
+  </div>
+
+  <p class="text-xs mt-2" x-show="!destinos.length && !carregandoDestinos" x-cloak
+     style="color:#fbbf24;">
+    Nenhum cadastro desse tipo com coordenada. Rode
+    <code style="font-size:11px;">manage.py geocodificar</code>.
+  </p>
+
+  <div class="flex gap-2 mt-3">
+    <button type="button" @click="calcular()" :disabled="!destinoId || calculando"
+            class="btn-primary text-sm"
+            x-text="calculando ? 'Calculando...' : 'Calcular'"></button>
+    <a x-show="resultado" x-cloak :href="urlMapa()" target="_blank"
+       class="btn-secondary text-sm">Ver rota no mapa</a>
+  </div>
+
+  <p class="text-xs mt-2" x-show="erro" x-cloak x-text="erro" style="color:#f87171;"></p>
+
+  <template x-if="resultado">
+    <div class="mt-3 pt-3" :style="temaClaro ? 'border-top:1px solid #e5e7eb;' : 'border-top:1px solid #2a2a32;'">
+      <div class="flex flex-wrap gap-5">
+        <div>
+          <p class="text-xs" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Distância</p>
+          <p class="text-lg font-bold" style="color:#4ade80;"
+             x-text="resultado.distancia_km + ' km'"></p>
+        </div>
+        <div>
+          <p class="text-xs" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Tempo</p>
+          <p class="text-lg font-bold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'"
+             x-text="resultado.duracao_texto"></p>
+        </div>
+        <div>
+          <p class="text-xs" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Linha reta</p>
+          <p class="text-lg font-bold" :style="temaClaro ? 'color:#94a3b8;' : 'color:#64748b;'"
+             x-text="resultado.linha_reta_km + ' km'"></p>
+        </div>
+      </div>
+      {% comment %}
+        Rota muito mais longa que a reta costuma ser rio/serra no caminho --
+        ou endereço geocodificado errado. Avisar evita decisão baseada num
+        número que parece certo.
+      {% endcomment %}
+      <p class="text-xs mt-2" x-show="resultado.desvio && resultado.desvio > 2.5" x-cloak
+         style="color:#fbbf24;"
+         x-text="'A rota é ' + resultado.desvio + 'x a linha reta — verifique se o endereço está correto.'"></p>
+      <p class="text-xs mt-1" :style="temaClaro ? 'color:#94a3b8;' : 'color:#64748b;'"
+         x-text="resultado.origem.nome + ' → ' + resultado.destino.nome"></p>
+    </div>
+  </template>
+</div>
+
+<script>
+function widgetDistancia(origemTipo, origemId) {
+  return {
+    origemTipo, origemId,
+    tipo: 'filial',
+    busca: '',
+    destinos: [],
+    destinoId: '',
+    carregandoDestinos: false,
+    calculando: false,
+    resultado: null,
+    erro: '',
+
+    async carregarDestinos() {
+      this.carregandoDestinos = true;
+      try {
+        const params = new URLSearchParams({ tipo: this.tipo, q: this.busca });
+        const resp = await fetch(`{% url 'mapas:api-distancia-destinos' %}?${params}`,
+                                 { headers: { 'Accept': 'application/json' } });
+        const dados = await resp.json();
+        this.destinos = dados.resultados || [];
+      } catch (e) {
+        this.destinos = [];
+      } finally {
+        this.carregandoDestinos = false;
+      }
+    },
+
+    async calcular() {
+      this.calculando = true;
+      this.erro = '';
+      this.resultado = null;
+      try {
+        const params = new URLSearchParams({
+          de_tipo: this.origemTipo, de_id: this.origemId,
+          para_tipo: this.tipo, para_id: this.destinoId,
+        });
+        const resp = await fetch(`{% url 'mapas:api-distancia' %}?${params}`,
+                                 { headers: { 'Accept': 'application/json' } });
+        const dados = await resp.json();
+        if (!resp.ok) throw new Error(dados.erro || ('HTTP ' + resp.status));
+        this.resultado = dados;
+      } catch (e) {
+        this.erro = e.message;
+      } finally {
+        this.calculando = false;
+      }
+    },
+
+    // O traçado abre no mapa principal, que já tem Leaflet carregado.
+    urlMapa() {
+      const p = new URLSearchParams({
+        de_tipo: this.origemTipo, de_id: this.origemId,
+        para_tipo: this.tipo, para_id: this.destinoId,
+      });
+      return `{% url 'mapas:mapa' %}?${p}`;
+    },
+  };
+}
+</script>

@@ -231,7 +231,7 @@ Celery aponta para `localhost`). Onde há cache de fato hoje é no banco.
 | **3a** | §4 rotas — selecionar clientes, distância, tempo, traçado e paradas | ✅ entregue |
 | **2** | §8 sugestão ao faturar delivery (`proximos_de_entrega` já pronto); §10 heatmap; §14 dashboard | a fazer |
 | **3b** | §5 otimização (reordenar) | ✅ entregue |
-| **3c** | §6 distância ponto-a-ponto | a fazer |
+| **3c** | §6 distância ponto-a-ponto | ✅ entregue |
 | **5** | §12 geofence + §13 rastreamento | **stand by** — depende de app de motorista |
 
 ### Etapa 4 — o que foi feito
@@ -328,6 +328,36 @@ Duas decisões de segurança:
   sem o recurso; a estratégia reportada vira `local (fallback)`.
 - Se o VROOM devolver menos paradas do que foram enviadas, o resultado é
   **recusado** — aceitar faria o usuário perder entregas silenciosamente.
+
+### §6 — Distância entre cadastros
+
+Widget reutilizável. Basta incluir numa tela de cadastro já salva:
+
+```django
+{% include "mapas/_widget_distancia.html" with origem_tipo="cliente" origem_id=cliente.pk %}
+```
+
+Tipos: `cliente`, `fornecedor`, `transportadora`, `motorista`, `filial`.
+Já está no formulário de Cliente; incluir nos demais é essa uma linha.
+
+Mostra **distância**, **tempo** e um botão **“Ver rota no mapa”**.
+
+**O widget não carrega Leaflet de propósito.** Uma tela de cadastro não deveria
+pagar o custo de um mapa completo por causa de um bloco lateral — o traçado
+abre no mapa principal, que já tem tudo carregado, via
+`/mapas/?de_tipo=...&para_tipo=...`.
+
+Usa o mesmo provider de rotas do §4: se usasse outro caminho, a distância no
+cadastro poderia divergir da mostrada no mapa para o mesmo par de pontos.
+
+Dois cuidados:
+
+- O seletor de destino **só lista quem tem coordenada** — oferecer um destino
+  sem coordenada garantiria um erro no passo seguinte.
+- A resposta traz a **linha reta** junto. Quando a rota por rua passa de ~2,5x
+  a reta, a tela avisa: costuma ser rio/serra no caminho, ou endereço
+  geocodificado errado. Sem isso, o usuário decidiria em cima de um número que
+  parece certo.
 
 ### Modo de desenho (Leaflet.draw)
 

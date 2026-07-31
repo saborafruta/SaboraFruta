@@ -526,6 +526,17 @@ html.tema-escuro body { background: var(--cliente-bg) !important; }
     </div>
 
   </form>
+
+  {% comment %}
+    Distância deste cliente até filial/fornecedor/motorista (§6). Só num
+    cliente já salvo: sem pk não há de onde medir. Fica fora do <form> para
+    não interferir no submit do cadastro.
+  {% endcomment %}
+  {% if cliente.pk %}
+    <div class="mt-4">
+      {% include "mapas/_widget_distancia.html" with origem_tipo="cliente" origem_id=cliente.pk %}
+    </div>
+  {% endif %}
 </div>
 {% endblock %}
 

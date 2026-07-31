@@ -1,7 +1,7 @@
 from django.urls import path
 
 from apps.mapas.views import MapaPrincipalView
-from apps.mapas.views import api, rota, territorio
+from apps.mapas.views import api, distancia, rota, territorio
 
 app_name = 'mapas'
 
@@ -16,6 +16,10 @@ urlpatterns = [
     # Rotas (secao 4)
     path('api/rota/', rota.criar_rota, name='api-rota'),
     path('api/rota/otimizar/', rota.otimizar_rota, name='api-rota-otimizar'),
+
+    # Distancia entre cadastros (secao 6)
+    path('api/distancia/', distancia.calcular_distancia, name='api-distancia'),
+    path('api/distancia/destinos/', distancia.buscar_destino, name='api-distancia-destinos'),
 
     # Territorios (secao 11)
     path('api/territorios/', territorio.territorios, name='api-territorios'),

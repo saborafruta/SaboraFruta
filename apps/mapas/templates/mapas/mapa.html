@@ -438,6 +438,35 @@ function mapaGeo() {
       // Recarrega ao navegar: o backend recorta pela viewport, então mover o
       // mapa precisa buscar os pinos da área nova (lazy loading).
       this._mapa.on('moveend', () => this.recarregar());
+
+      this.desenharDistanciaDaUrl();
+    },
+
+    // Rota vinda do widget de distância de um cadastro (§6): a tela de
+    // cadastro não carrega Leaflet, então manda o par de pontos para cá.
+    async desenharDistanciaDaUrl() {
+      const p = new URLSearchParams(location.search);
+      if (!p.get('de_tipo') || !p.get('para_tipo')) return;
+      try {
+        const resp = await fetch(`{% url 'mapas:api-distancia' %}?${p}`,
+                                 { headers: { 'Accept': 'application/json' } });
+        const d = await resp.json();
+        if (!resp.ok) throw new Error(d.erro || ('HTTP ' + resp.status));
+
+        this._linhaRota = L.polyline(d.geometria, {
+          color: '#1d4ed8', weight: 5, opacity: 0.85,
+        }).addTo(this._mapa);
+        L.marker([d.origem.lat, d.origem.lng]).addTo(this._linhaRota._map)
+          .bindPopup(this._esc(d.origem.nome)).openPopup();
+        L.marker([d.destino.lat, d.destino.lng]).addTo(this._mapa)
+          .bindPopup(this._esc(d.destino.nome));
+        this._mapa.fitBounds(this._linhaRota.getBounds(), { padding: [60, 60] });
+
+        this.statusTexto = `${d.origem.nome} → ${d.destino.nome}: `
+          + `${d.distancia_km} km · ${d.duracao_texto}`;
+      } catch (e) {
+        this.aviso = 'Não foi possível desenhar a rota: ' + e.message;
+      }
     },
 
     _grupo(chave) {
