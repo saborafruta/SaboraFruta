@@ -455,6 +455,42 @@ O `filial_id` do filtro é sempre validado contra o escopo do usuário — aceit
 direto deixaria qualquer um ler o faturamento de outra empresa trocando um
 número na URL.
 
+### §14 — Painel de indicadores
+
+`/mapas/painel/` — os nove indicadores da especificação, com filtro de período
+(sem parâmetros, o dia de hoje).
+
+**Quatro deles não tinham de onde sair.** Rotas e otimizações eram calculadas,
+mostradas e descartadas; sugestões de proximidade também. Sem registro, km em
+rota, tempo em rota, economia da otimização e clientes sugeridos só poderiam
+ser inventados. Daí os dois modelos novos (`0004_registro_rota_e_sugestao`):
+
+| Modelo | Grava | Alimenta |
+|---|---|---|
+| `RegistroRota` | cada rota calculada (§4) ou otimizada (§5) | km, tempo, economia |
+| `SugestaoProximidade` | cada consulta de clientes próximos (§8) | clientes sugeridos |
+
+Os dois registros estão envoltos em `try/except`: falhar ao gravar **não pode
+derrubar** a rota nem a sugestão. O log serve a um número no painel; a rota,
+à operação. Há teste para isso.
+
+**O aviso mais importante da tela:** km e tempo são de **rotas calculadas**,
+não de percurso medido. Sem o rastreamento (§13, em standby) o sistema não
+sabe por onde o veículo passou. Apresentar planejado como percorrido faria
+alguém decidir sobre frota em cima de um número que não existe — por isso o
+rótulo diz o que o número é, e um teste garante que o aviso continue na página.
+
+Duas contagens que parecem iguais e não são:
+
+- **Entregas** conta pedidos; **clientes visitados** conta clientes distintos
+  que chegaram a `entregue`/`finalizado`. Dois pedidos para o mesmo endereço
+  não são duas visitas, e pedido em preparo não visitou ninguém.
+- **Rotas montadas** conta cálculos, não entregas: ajustar as paradas e
+  recalcular gera várias linhas para a mesma saída.
+
+A economia soma a diferença **de cada rota otimizada**, e não a diferença dos
+totais — senão as rotas que nunca passaram pela otimização entrariam na conta.
+
 ### Modo de desenho (Leaflet.draw)
 
 O §11 fecha: o polígono é desenhado no próprio mapa.

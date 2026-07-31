@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+import logging
 
 from django.http import JsonResponse
 from django.views.decorators.http import require_POST
@@ -9,6 +10,34 @@ from django.views.decorators.http import require_POST
 from apps.core.services.permissions import requer_permissao
 from apps.mapas.services.otimizacao import OtimizacaoService
 from apps.mapas.services.roteirizacao import MAX_PARADAS, RoteirizacaoService
+
+logger = logging.getLogger(__name__)
+
+
+def _registrar(request, rota, *, provider='', antes=None, otimizada=False):
+    """
+    Grava a rota calculada, para o painel do §14 ter de onde tirar km e tempo.
+
+    Envolto em try/except de propósito: falhar ao registrar não pode derrubar
+    a rota que o usuário pediu. O log serve a um indicador; a rota, à operação.
+    """
+    from apps.mapas.models import RegistroRota
+
+    filial = getattr(request, 'filial_ativa', None)
+    if filial is None:
+        return
+    try:
+        RegistroRota.objects.create(
+            filial=filial,
+            usuario=request.user if request.user.is_authenticated else None,
+            paradas=len(rota.paradas), distancia_m=round(rota.distancia_m),
+            duracao_s=round(rota.duracao_s), provider=provider,
+            otimizada=otimizada,
+            distancia_antes_m=round(antes.distancia_m) if antes else None,
+            duracao_antes_s=round(antes.duracao_s) if antes else None,
+        )
+    except Exception:
+        logger.exception('falha ao registrar rota para o painel de mapas')
 
 
 def _ids_do_corpo(corpo):
@@ -76,6 +105,8 @@ def criar_rota(request):
             {'erro': rota.erro or 'Não foi possível calcular a rota.'}, status=400,
         )
 
+    _registrar(request, rota, provider=servico.roteirizador.nome)
+
     return JsonResponse({
         **_serializar_rota(rota),
         'provider': servico.roteirizador.nome,
@@ -110,6 +141,11 @@ def otimizar_rota(request):
         return JsonResponse(
             {'erro': resultado.erro or 'Não foi possível otimizar.'}, status=400,
         )
+
+    _registrar(
+        request, resultado.rota_depois, provider=resultado.estrategia,
+        antes=resultado.rota_antes, otimizada=True,
+    )
 
     return JsonResponse({
         'estrategia': resultado.estrategia,

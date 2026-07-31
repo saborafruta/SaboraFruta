@@ -231,6 +231,8 @@ def sugestao_entrega(request, pk):
                       'Geocodifique o endereço do cliente para ver sugestões.',
         })
 
+    _registrar_sugestao(venda, raio, len(clientes))
+
     return JsonResponse({
         'venda_id': venda.pk,
         'centro': {'lat': lat, 'lng': lng},
@@ -238,6 +240,27 @@ def sugestao_entrega(request, pk):
         'total': len(clientes),
         'clientes': [serializar_cliente_proximo(cl) for cl in clientes],
     })
+
+
+def _registrar_sugestao(venda, raio, total):
+    """
+    Grava a sugestão oferecida, para o indicador do §14.
+
+    Como no registro de rota, uma falha aqui não pode tirar a sugestão da tela:
+    o log serve a um número no painel, a sugestão serve à venda.
+    """
+    import logging
+
+    from apps.mapas.models import SugestaoProximidade
+
+    try:
+        SugestaoProximidade.objects.create(
+            filial=venda.filial, venda_pdv_id=venda.pk,
+            raio_m=raio, total=total,
+        )
+    except Exception:
+        logging.getLogger(__name__).exception(
+            'falha ao registrar sugestão de proximidade')
 
 
 # ─────────────────────────────────────────────── detalhe do popup (§3)
