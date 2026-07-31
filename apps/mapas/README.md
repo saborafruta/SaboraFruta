@@ -385,6 +385,37 @@ olhou: sem ele, uma lista curta se confunde com "não tem cliente aqui" quando o
 raio é que estava pequeno. Clicando num cliente, ele sai da própria lista — a
 0 m ele não acrescentaria nada.
 
+### §8 — Sugestão ao sair para entrega
+
+`GET /mapas/api/sugestao-entrega/<venda_pk>/?raio=`
+
+Quando um pedido de delivery **sai para entrega**, o Kanban abre sozinho uma
+janela com os clientes ao redor do endereço: nome, distância, última compra,
+dias sem comprar, valor médio e frequência — e três ações por linha: **Criar
+oferta** (abre o PDV com o cliente já selecionado), **WhatsApp** e **+ Rota**.
+
+**Por que ao sair para entrega, e não ao faturar.** Quando o pedido chega ao
+Kanban a venda já está fechada; o momento em que a sugestão ainda dá para usar
+é enquanto o entregador não saiu. Depois que ele voltou, saber quem estava
+perto do trajeto não serve para nada. Há também um botão no card, para olhar
+antes de despachar ou conferir de novo depois.
+
+A permissão exigida é a do **PDV**, não a de mapas: quem consome é o Kanban, e
+um operador de balcão costuma não ter acesso ao módulo de mapas — exigir
+`mapas.ver` esconderia a sugestão justamente de quem está com o pedido na mão.
+O dado exposto (clientes da própria filial) esse operador já alcança pela busca
+do PDV.
+
+A coordenada da entrega sai, nesta ordem, do `endereco_entrega` da venda (o
+operador pode ter ajustado o ponto no checkout) e depois do cadastro do
+cliente. Sem nenhuma das duas, a API responde **200 com `motivo`**, não um
+erro: a saída é geocodificar o cliente, e um 4xx viraria só um "falhou"
+genérico na tela.
+
+**+ Rota** manda os ids escolhidos para `/mapas/?rota=1,2,3`. Só os ids viajam
+na URL — os nomes o mapa resolve por `api/distancia/destinos/?ids=`, senão um
+link com meia dúzia de razões sociais fica enorme e quebra ao ser copiado.
+
 ### Modo de desenho (Leaflet.draw)
 
 O §11 fecha: o polígono é desenhado no próprio mapa.

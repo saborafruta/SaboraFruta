@@ -130,8 +130,14 @@ class DistanciaService:
         }
 
     @classmethod
-    def buscar(cls, filial, tipo, termo, limite=15):
-        """Candidatos a destino, para o autocomplete do widget."""
+    def buscar(cls, filial, tipo, termo, limite=15, ids=None):
+        """
+        Candidatos a destino, para o autocomplete do widget.
+
+        `ids` resolve um conjunto conhecido em vez de filtrar por texto — é
+        como o mapa descobre os nomes de uma rota recebida por URL (§8), sem
+        precisar carregar id e nome no próprio link.
+        """
         from django.apps import apps as django_apps
         from django.db.models import Q
 
@@ -150,7 +156,10 @@ class DistanciaService:
         # um erro logo em seguida.
         qs = qs.filter(latitude__isnull=False, longitude__isnull=False)
 
-        if termo:
+        if ids:
+            qs = qs.filter(pk__in=ids)
+            limite = max(limite, len(ids))
+        elif termo:
             filtro = Q()
             for campo in campos:
                 filtro |= Q(**{f'{campo}__icontains': termo})

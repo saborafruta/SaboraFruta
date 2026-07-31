@@ -128,6 +128,34 @@
   }
   body.tema-claro .delivery-modal { background: #fff; }
   body:not(.tema-claro) .delivery-modal { background: #1c1c1f; }
+
+  /* ── Sugestão de clientes próximos à entrega (§8) ── */
+  .delivery-modal.largo { max-width: 900px; max-height: 88vh; display: flex;
+                          flex-direction: column; }
+  .sug-raios { display: flex; gap: 6px; }
+  .sug-raios button { font-size: 12px; font-weight: 700; padding: 5px 12px;
+                      border-radius: 7px; border: 1px solid rgba(127,127,127,.32);
+                      background: transparent; color: inherit; cursor: pointer; }
+  .sug-raios button.ativo { background: #0e7490; color: #fff; border-color: #0e7490; }
+  .sug-lista { overflow: auto; margin: 14px -4px 0; }
+  .sug-tabela { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+  .sug-tabela th { text-align: left; font-size: 10.5px; text-transform: uppercase;
+                   letter-spacing: .05em; font-weight: 800; opacity: .6;
+                   padding: 6px 8px; position: sticky; top: 0; }
+  body.tema-claro .sug-tabela th { background: #fff; }
+  body:not(.tema-claro) .sug-tabela th { background: #1c1c1f; }
+  .sug-tabela td { padding: 8px; border-top: 1px solid rgba(127,127,127,.16);
+                   vertical-align: middle; }
+  /* Números à direita e tabulares: a coluna alinha e dá para varrer a lista. */
+  .sug-tabela td.num, .sug-tabela th.num { text-align: right;
+                                           font-variant-numeric: tabular-nums; }
+  .sug-dist { font-weight: 800; color: #0891b2; }
+  .sug-atraso { color: #ef4444; font-weight: 700; }
+  .sug-acoes { display: flex; gap: 4px; justify-content: flex-end; }
+  .sug-acoes a, .sug-acoes button { font-size: 10.5px; font-weight: 700;
+        padding: 4px 8px; border-radius: 6px; text-decoration: none;
+        border: none; cursor: pointer; white-space: nowrap; }
+  .sug-acoes .na-rota { background: #1d4ed8; color: #fff; }
 </style>
 {% endblock %}
 
@@ -197,6 +225,17 @@
                   <span class="text-xs" :style="temaClaro ? 'color:#9ca3af;' : 'color:#6b7280;'">
                     {{ pedido.data_venda|date:"H:i" }}
                   </span>
+                  {% comment %}
+                    Atalho para a sugestão (§8) fora do momento automático:
+                    serve para conferir de novo um pedido que já saiu, ou para
+                    olhar antes de despachar.
+                  {% endcomment %}
+                  <button onclick="event.stopPropagation(); abrirSugestao('{{ pedido.pk }}')"
+                          title="Clientes próximos desta entrega"
+                          style="padding:2px 4px;border-radius:4px;border:none;background:transparent;cursor:pointer;opacity:0.6;display:flex;align-items:center;"
+                          onmouseover="this.style.opacity='1'" onmouseout="this.style.opacity='0.6'">
+                    <svg xmlns="http://www.w3.org/2000/svg" style="width:13px;height:13px;" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a2 2 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
+                  </button>
                   <button onclick="event.stopPropagation(); imprimirDelivery('{{ pedido.pk }}')"
                           title="Imprimir comprovante"
                           style="padding:2px 4px;border-radius:4px;border:none;background:transparent;cursor:pointer;opacity:0.6;display:flex;align-items:center;"
@@ -312,6 +351,49 @@
   </div>
 </div>
 
+{% comment %}
+  Sugestão de clientes próximos à entrega (§8).
+
+  Abre sozinha quando o pedido sai para entrega — é o único momento em que a
+  informação ainda dá para usar: depois que o entregador voltou, saber quem
+  estava perto não serve para nada. Também abre sob demanda pelo botão do card.
+{% endcomment %}
+<div class="delivery-modal-bg" id="sugestaoModal" onclick="if(event.target===this) fecharSugestao()">
+  <div class="delivery-modal largo">
+    <div class="flex items-center justify-between gap-3 mb-3">
+      <h3 class="text-base font-semibold" id="sugTitulo"
+          :style="temaClaro ? 'color:#111827;' : 'color:#f0f0f0;'">Clientes próximos desta entrega</h3>
+      <button onclick="fecharSugestao()" class="text-lg w-7 h-7 rounded-full flex items-center justify-center"
+              :style="temaClaro ? 'color:#6b7280; background:#f3f4f6;' : 'color:#9ca3af; background:#2a2a2e;'">&times;</button>
+    </div>
+
+    <div class="flex items-center justify-between gap-3 flex-wrap">
+      <div class="sug-raios" id="sugRaios"></div>
+      <button class="btn-primary text-sm" id="sugBtnRota" style="display:none;"
+              onclick="abrirRotaSugerida()"></button>
+    </div>
+
+    <p class="text-sm mt-3" id="sugResumo" :style="temaClaro ? 'color:#374151;' : 'color:#cbd5e1;'"></p>
+
+    <div class="sug-lista">
+      <table class="sug-tabela">
+        <thead>
+          <tr>
+            <th>Cliente</th>
+            <th class="num">Distância</th>
+            <th>Última compra</th>
+            <th class="num">Dias sem comprar</th>
+            <th class="num">Valor médio</th>
+            <th>Frequência</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody id="sugCorpo"></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
 <!-- Modal de Relatório por período -->
 <div class="delivery-modal-bg" id="relatorioModal" onclick="if(event.target===this) fecharRelatorioModal()">
   <div class="delivery-modal">
@@ -412,6 +494,10 @@
       const data = await resp.json();
       if (data.ok) {
         mostrarToast('Pedido movido para ' + data.status_label);
+        // A sugestão (§8) aparece ao sair para entrega: é o último momento em
+        // que ela ainda dá para usar. Depois que o entregador voltou, saber
+        // quem estava perto do trajeto não serve para nada.
+        if (status === 'em_entrega') abrirSugestao(pk);
       } else {
         mostrarToast(data.erro || 'Erro ao mover', true);
         location.reload();
@@ -612,8 +698,143 @@
     setTimeout(() => t.classList.remove('show'), 2800);
   }
 
-  // Auto-refresh a cada 60 segundos
-  setTimeout(() => location.reload(), 60000);
+  // ── Sugestão de clientes próximos à entrega (§8) ────────────────────────
+  const SUG_RAIOS = [1000, 3000, 5000, 10000];
+  let sugPedido = null;
+  let sugRaio = 3000;
+  let sugRota = [];        // ids escolhidos para "Adicionar à rota"
+  let sugClientes = [];    // último resultado, para redesenhar sem rebuscar
+
+  function abrirSugestao(pk) {
+    sugPedido = pk;
+    sugRota = [];
+    document.getElementById('sugestaoModal').classList.add('open');
+    document.getElementById('sugRaios').innerHTML = SUG_RAIOS.map(r =>
+      `<button data-raio="${r}" onclick="trocarRaioSugestao(${r})">${r / 1000} km</button>`
+    ).join('');
+    carregarSugestao();
+  }
+
+  function fecharSugestao() {
+    document.getElementById('sugestaoModal').classList.remove('open');
+    sugPedido = null;
+  }
+
+  function trocarRaioSugestao(r) {
+    sugRaio = r;
+    carregarSugestao();
+  }
+
+  async function carregarSugestao() {
+    const corpo = document.getElementById('sugCorpo');
+    const resumo = document.getElementById('sugResumo');
+    document.querySelectorAll('#sugRaios button').forEach(b =>
+      b.classList.toggle('ativo', Number(b.dataset.raio) === sugRaio));
+
+    corpo.innerHTML = '';
+    resumo.textContent = 'Buscando...';
+    atualizarBotaoRota();
+
+    try {
+      const resp = await fetch(`/mapas/api/sugestao-entrega/${sugPedido}/?raio=${sugRaio}`,
+                               { headers: { 'Accept': 'application/json' } });
+      const d = await resp.json();
+      if (!resp.ok) throw new Error(d.erro || ('HTTP ' + resp.status));
+
+      // Pedido sem coordenada: a API explica o motivo em vez de dar erro,
+      // porque a saída é geocodificar o cliente, não tentar de novo.
+      if (d.motivo) { resumo.textContent = d.motivo; return; }
+
+      sugClientes = d.clientes;
+      const n = sugClientes.length;
+      resumo.textContent = n
+        ? `Existem ${n} cliente${n > 1 ? 's' : ''} próximo${n > 1 ? 's' : ''} desta entrega.`
+        : `Nenhum cliente num raio de ${sugRaio / 1000} km. Tente um raio maior.`;
+      renderSugestao();
+    } catch (e) {
+      resumo.textContent = 'Não foi possível buscar: ' + e.message;
+    }
+  }
+
+  // Marcar/desmarcar uma parada é só redesenho — rebuscar no servidor a cada
+  // clique gastaria uma requisição para mostrar exatamente os mesmos clientes.
+  function renderSugestao() {
+    document.getElementById('sugCorpo').innerHTML = sugClientes.map(linhaSugestao).join('');
+    atualizarBotaoRota();
+  }
+
+  function linhaSugestao(c) {
+    const naRota = sugRota.includes(c.id);
+    // Dias sem comprar acima da média do cliente é atraso — é o que justifica
+    // a visita. Sem padrão calculado ainda, não dá para afirmar nada.
+    const dias = c.dias_sem_comprar === null ? '—' : c.dias_sem_comprar;
+    const atrasado = c.status_recompra === 'vermelho';
+    const zap = c.whatsapp
+      ? `<a href="https://wa.me/${c.whatsapp}?text=${encodeURIComponent(MSG_ZAP)}"
+            target="_blank" style="background:#16a34a;color:#fff;">WhatsApp</a>`
+      : '';
+
+    return `<tr>
+      <td><strong>${esc(c.nome)}</strong>
+          <div style="font-size:11px;opacity:.6;">${esc([c.bairro, c.cidade].filter(Boolean).join(' · '))}</div></td>
+      <td class="num"><span class="sug-dist">${esc(c.distancia_texto)}</span></td>
+      <td>${c.ultima_compra ? formatarData(c.ultima_compra) : '—'}</td>
+      <td class="num ${atrasado ? 'sug-atraso' : ''}">${dias}</td>
+      <td class="num">${c.valor_medio === null ? '—' : 'R$ ' + fmtBR(c.valor_medio)}</td>
+      <td>${esc(c.frequencia || '—')}</td>
+      <td><div class="sug-acoes">
+        <a href="/pdv/?cliente=${c.id}" target="_blank" style="background:#1d4ed8;color:#fff;">Criar oferta</a>
+        ${zap}
+        <button class="${naRota ? 'na-rota' : ''}" onclick="alternarNaRotaSugerida(${c.id})"
+                style="${naRota ? '' : 'border:1px solid rgba(127,127,127,.4);background:transparent;color:inherit;'}">
+          ${naRota ? '✓ Na rota' : '+ Rota'}
+        </button>
+      </div></td>
+    </tr>`;
+  }
+
+  const MSG_ZAP = 'Olá! Estamos entregando aqui perto e passamos para saber '
+                + 'se você precisa de algo hoje.';
+
+  function alternarNaRotaSugerida(id) {
+    const i = sugRota.indexOf(id);
+    if (i >= 0) sugRota.splice(i, 1); else sugRota.push(id);
+    renderSugestao();
+  }
+
+  function atualizarBotaoRota() {
+    const btn = document.getElementById('sugBtnRota');
+    btn.style.display = sugRota.length ? '' : 'none';
+    btn.textContent = `Abrir rota no mapa (${sugRota.length})`;
+  }
+
+  // Só os ids viajam na URL: o mapa resolve os nomes, e um link com meia dúzia
+  // de razões sociais fica enorme e quebra ao ser copiado.
+  function abrirRotaSugerida() {
+    if (!sugRota.length) return;
+    window.open(`/mapas/?rota=${sugRota.join(',')}`, '_blank');
+  }
+
+  function esc(s) {
+    const d = document.createElement('div');
+    d.textContent = s == null ? '' : s;
+    return d.innerHTML;
+  }
+
+  function fmtBR(n) {
+    return parseFloat(n || 0).toFixed(2).replace('.', ',');
+  }
+
+  function formatarData(iso) {
+    const [a, m, d] = String(iso).split('-');
+    return d ? `${d}/${m}/${a}` : iso;
+  }
+
+  // Auto-refresh a cada 60 segundos. Não recarrega com um modal aberto: a
+  // página sumindo no meio da leitura perderia o que o usuário estava fazendo.
+  setInterval(() => {
+    if (!document.querySelector('.delivery-modal-bg.open')) location.reload();
+  }, 60000);
 
   // ── Dados para impressão ────────────────────────────────────────────────────
   window.deliveryData = {{ pedidos_json|safe }};

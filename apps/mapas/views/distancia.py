@@ -54,10 +54,19 @@ def buscar_destino(request):
             {'erro': f'Tipos válidos: {", ".join(sorted(TIPOS))}.'}, status=400,
         )
 
+    # `ids=1,2,3` resolve um conjunto conhecido (a rota que veio do Kanban de
+    # delivery, §8). Ids inválidos são descartados em silêncio: o escopo de
+    # filial já barra o que não é do usuário, e derrubar a lista inteira por
+    # causa de um id ruim seria pior que ignorá-lo.
+    ids = [
+        int(p) for p in request.GET.get('ids', '').split(',')
+        if p.strip().isdigit()
+    ]
+
     return JsonResponse({
         'tipo': tipo,
         'resultados': DistanciaService.buscar(
             getattr(request, 'filial_ativa', None), tipo,
-            request.GET.get('q', '').strip(),
+            request.GET.get('q', '').strip(), ids=ids,
         ),
     })

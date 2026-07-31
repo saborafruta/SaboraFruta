@@ -192,6 +192,54 @@ def clientes_proximos(request):
     })
 
 
+# ─────────────────────────────────────────────── sugestão ao entregar (§8)
+@require_GET
+@requer_permissao('pdv', 'ver')
+def sugestao_entrega(request, pk):
+    """
+    GET /mapas/api/sugestao-entrega/<pk>/?raio=
+
+    Clientes perto do endereço de entrega de um pedido de delivery.
+
+    A permissão exigida é a do **PDV**, não a de mapas: quem consome isto é o
+    Kanban de delivery, e um operador de balcão costuma não ter acesso ao
+    módulo de mapas. Exigir `mapas.ver` esconderia a sugestão justamente de
+    quem está com o pedido na mão. O dado exposto (clientes da própria filial)
+    esse operador já alcança pela busca do PDV.
+    """
+    from apps.pdv.models import VendaPDV
+
+    venda = (
+        VendaPDV.objects
+        .filter(pk=pk, delivery=True, filial__in=_escopo(request))
+        .select_related('cliente')
+        .first()
+    )
+    if venda is None:
+        return JsonResponse({'erro': 'Pedido não encontrado.'}, status=404)
+
+    raio = int(_float(request.GET.get('raio'), c.RAIO_PADRAO_M))
+    lat, lng, clientes = ProximidadeService.proximos_de_entrega(venda, raio_m=raio)
+
+    # Sem coordenada não há sugestão possível. Devolver 200 com o motivo (em
+    # vez de erro) deixa a tela explicar o que fazer: um 4xx viraria só um
+    # "falhou" genérico para quem só precisa geocodificar o cliente.
+    if lat is None:
+        return JsonResponse({
+            'venda_id': venda.pk, 'centro': None, 'total': 0, 'clientes': [],
+            'motivo': 'Este pedido não tem coordenada de entrega. '
+                      'Geocodifique o endereço do cliente para ver sugestões.',
+        })
+
+    return JsonResponse({
+        'venda_id': venda.pk,
+        'centro': {'lat': lat, 'lng': lng},
+        'raio_m': min(max(raio, 1), c.RAIO_MAXIMO_M),
+        'total': len(clientes),
+        'clientes': [serializar_cliente_proximo(cl) for cl in clientes],
+    })
+
+
 # ─────────────────────────────────────────────── detalhe do popup (§3)
 @require_GET
 @requer_permissao('mapas', 'ver')

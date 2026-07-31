@@ -555,6 +555,34 @@ function mapaGeo() {
       });
 
       this.desenharDistanciaDaUrl();
+      this.carregarRotaDaUrl();
+    },
+
+    // Rota montada em outra tela (§8: sugestão do Kanban de delivery), que
+    // manda só os ids. Os nomes vêm daqui para não viajarem na URL — um link
+    // com meia dúzia de razões sociais fica enorme e quebra ao ser copiado.
+    async carregarRotaDaUrl() {
+      const ids = (new URLSearchParams(location.search).get('rota') || '')
+        .split(',').filter(s => /^\d+$/.test(s));
+      if (!ids.length) return;
+
+      this.abrirRota();
+      try {
+        const params = new URLSearchParams({ tipo: 'cliente', ids: ids.join(',') });
+        const resp = await fetch(`{% url 'mapas:api-distancia-destinos' %}?${params}`,
+                                 { headers: { 'Accept': 'application/json' } });
+        const d = await resp.json();
+        // Preserva a ordem em que vieram: quem montou a lista já escolheu
+        // uma sequência, e o backend devolve na ordem do banco.
+        const porId = Object.fromEntries((d.resultados || []).map(r => [String(r.id), r]));
+        this.rotaClientes = ids.filter(i => porId[i])
+                               .map(i => ({ id: porId[i].id, nome: porId[i].nome }));
+        if (!this.rotaClientes.length) {
+          this.aviso = 'Os clientes da rota não têm coordenada.';
+        }
+      } catch (e) {
+        this.aviso = 'Não foi possível carregar a rota: ' + e.message;
+      }
     },
 
     // Rota vinda do widget de distância de um cadastro (§6): a tela de

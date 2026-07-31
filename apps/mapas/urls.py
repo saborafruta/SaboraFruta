@@ -13,6 +13,10 @@ urlpatterns = [
     path('api/clientes-proximos/', api.clientes_proximos, name='api-clientes-proximos'),
     path('api/clientes/<int:pk>/', api.cliente_detalhe, name='api-cliente-detalhe'),
 
+    # Sugestao ao entregar (secao 8) -- consumida pelo Kanban de delivery
+    path('api/sugestao-entrega/<int:pk>/', api.sugestao_entrega,
+         name='api-sugestao-entrega'),
+
     # Rotas (secao 4)
     path('api/rota/', rota.criar_rota, name='api-rota'),
     path('api/rota/otimizar/', rota.otimizar_rota, name='api-rota-otimizar'),
