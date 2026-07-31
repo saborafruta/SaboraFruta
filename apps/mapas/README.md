@@ -359,6 +359,32 @@ Dois cuidados:
   geocodificado errado. Sem isso, o usuário decidiria em cima de um número que
   parece certo.
 
+### §7 — Clientes próximos
+
+`GET /mapas/api/clientes-proximos/?lat=&lng=&raio=[&excluir_cliente=]`
+
+Devolve os clientes do mais perto para o mais longe, já com `distancia_texto`
+formatado (`320 m`, `1,2 km`) — a tela não deveria ter de decidir entre metros
+e km. Cada cliente vem enriquecido com os indicadores do CRM (última compra,
+dias sem comprar, valor médio, score): proximidade sozinha não diz se vale a
+pena bater na porta.
+
+```json
+{"centro": {"lat": -5.79, "lng": -35.21}, "raio_m": 3000, "total": 3,
+ "clientes": [{"nome": "Cliente A", "distancia_m": 320, "distancia_texto": "320 m", ...}]}
+```
+
+O trabalho fica no banco (`earth_box` + índice GIST), não em Python — ver §4
+acima. Teto de **50 km** de raio e **100 registros**; ambos aparecem na
+resposta (`raio_m`) ou na tela, porque um limite silencioso faria o usuário ler
+"100 clientes" como "todos os clientes da área".
+
+**Na tela:** botão *Clientes próximos* no mapa. Clique num ponto (ou num pino)
+e escolha o raio — 1/3/5/10 km. O círculo desenhado mostra até onde a busca
+olhou: sem ele, uma lista curta se confunde com "não tem cliente aqui" quando o
+raio é que estava pequeno. Clicando num cliente, ele sai da própria lista — a
+0 m ele não acrescentaria nada.
+
 ### Modo de desenho (Leaflet.draw)
 
 O §11 fecha: o polígono é desenhado no próprio mapa.

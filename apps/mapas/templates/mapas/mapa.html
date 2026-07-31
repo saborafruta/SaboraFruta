@@ -96,6 +96,30 @@
   /* Pino de cliente já escolhido para a rota, para dar retorno visual no mapa. */
   .pino-rota { box-shadow:0 0 0 3px rgba(29,78,216,.55), 0 2px 5px rgba(0,0,0,.4); }
 
+  /* ── Painel de clientes próximos (§7) ── */
+  .prox-painel { position:absolute; top:100px; right:12px; z-index:5; width:286px;
+                 max-height:calc(100% - 120px); display:flex; flex-direction:column;
+                 border-radius:12px; overflow:hidden; backdrop-filter:blur(10px);
+                 box-shadow:0 10px 34px rgba(0,0,0,.3); }
+  .prox-body { padding:11px 13px; overflow:auto; font-size:12.5px; }
+  .prox-raios { display:flex; gap:5px; margin-bottom:9px; }
+  .prox-raios button { flex:1; font-size:11.5px; font-weight:700; padding:6px 4px;
+                       border-radius:7px; border:1px solid rgba(127,127,127,.32);
+                       background:transparent; color:inherit; cursor:pointer; }
+  .prox-raios button.ativo { background:#0e7490; color:#fff; border-color:#0e7490; }
+  .prox-item { display:flex; align-items:flex-start; gap:8px; padding:7px 0;
+               border-top:1px solid rgba(127,127,127,.18); cursor:pointer; }
+  .prox-item:hover { background:rgba(127,127,127,.09); }
+  /* Distância à direita, tabular: a coluna alinha e dá para varrer a lista. */
+  .prox-dist { margin-left:auto; font-size:11.5px; font-weight:800;
+               font-variant-numeric:tabular-nums; white-space:nowrap; color:#22d3ee; }
+  .prox-nome { font-weight:700; line-height:1.35; }
+  .prox-sub { font-size:11px; opacity:.68; }
+  .btn-proximos { position:absolute; top:100px; right:12px; z-index:4; border:none;
+                  border-radius:9px; padding:8px 13px; font-size:12px; font-weight:700;
+                  cursor:pointer; box-shadow:0 6px 18px rgba(0,0,0,.26);
+                  display:flex; align-items:center; gap:7px; }
+
   .popup-mapa { font-size:12.5px; min-width:216px; }
   .popup-mapa h4 { font-size:13.5px; font-weight:800; margin:0 0 6px; }
   .popup-mapa dl { display:grid; grid-template-columns:auto 1fr; gap:2px 8px; margin:0 0 9px; }
@@ -111,6 +135,7 @@
 {% block content %}
 {{ camadas|json_script:"mapas-camadas" }}
 {{ centro|json_script:"mapas-centro" }}
+{{ cores_status|json_script:"mapas-cores-status" }}
 
 <div class="space-y-3" x-data="mapaGeo()" x-init="iniciar()">
 
@@ -321,6 +346,83 @@
       </div>
     </div>
 
+    <!-- Clientes próximos (§7) -->
+    <button type="button" class="btn-proximos" x-show="!modoProximos && !modoRota" x-cloak
+            @click="abrirProximos()"
+            :style="temaClaro ? 'background:#fff;color:#0e7490;' : 'background:#16161a;color:#67e8f9;'">
+      <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+              d="M12 8v8m4-4H8m13 0a9 9 0 11-18 0 9 9 0 0118 0z"/>
+      </svg>
+      Clientes próximos
+    </button>
+
+    <div class="prox-painel" x-show="modoProximos" x-cloak
+         :style="temaClaro ? 'background:rgba(255,255,255,.96); color:#111827;'
+                           : 'background:rgba(22,22,26,.95); color:#f8fafc;'">
+      <div class="rota-head"
+           :style="temaClaro ? 'border-bottom:1px solid #e5e7eb;' : 'border-bottom:1px solid #2a2a32;'">
+        <span>Clientes próximos</span>
+        <button type="button" @click="fecharProximos()" title="Fechar"
+                style="margin-left:auto;background:none;border:none;cursor:pointer;font-size:16px;color:inherit;opacity:.6;">&times;</button>
+      </div>
+      <div class="prox-body">
+        <div class="prox-raios">
+          {% for r in raios %}
+            <button type="button" @click="proxRaio = {{ r }}; buscarProximos()"
+                    :class="proxRaio === {{ r }} ? 'ativo' : ''">
+              {% if r < 1000 %}{{ r }} m{% else %}{{ r|floatformat:0|slice:":-3" }} km{% endif %}
+            </button>
+          {% endfor %}
+        </div>
+
+        <p x-show="!proxCentro" x-cloak style="font-size:11.5px; line-height:1.5; opacity:.75;">
+          Clique num ponto do mapa para buscar os clientes ao redor.
+          Vale também clicar num pino existente.
+        </p>
+
+        <p x-show="proxCarregando" x-cloak style="font-size:11.5px; opacity:.75;">Buscando...</p>
+
+        <template x-if="proxCentro && !proxCarregando">
+          <div>
+            <p style="font-size:11.5px; opacity:.75; margin-bottom:2px;">
+              <strong x-text="proxClientes.length"></strong>
+              <span x-text="proxClientes.length === 1 ? ' cliente' : ' clientes'"></span>
+              <span x-text="' num raio de ' + rotuloRaio()"></span>
+            </p>
+            {% comment %}
+              O teto de 100 é da API. Sem avisar, a lista pareceria completa e
+              o usuário concluiria que só existem 100 clientes na área.
+            {% endcomment %}
+            <p x-show="proxClientes.length >= 100" x-cloak
+               style="font-size:11px; color:#fbbf24;">
+              Mostrando os 100 mais próximos. Diminua o raio para ver menos.
+            </p>
+
+            <template x-for="cl in proxClientes" :key="cl.id">
+              <div class="prox-item" @click="focarCliente(cl)">
+                <span class="camada-bolinha" style="margin-top:4px;"
+                      :style="'background:' + corDoStatus(cl.status_recompra)"></span>
+                <span style="min-width:0;">
+                  <span class="prox-nome" x-text="cl.nome"></span>
+                  <span class="prox-sub" style="display:block;"
+                        x-text="[cl.bairro, cl.cidade].filter(Boolean).join(' · ')"></span>
+                  <span class="prox-sub" style="display:block;" x-show="cl.dias_sem_comprar !== null"
+                        x-text="cl.dias_sem_comprar + ' dias sem comprar'"></span>
+                </span>
+                <span class="prox-dist" x-text="cl.distancia_texto"></span>
+              </div>
+            </template>
+
+            <p x-show="!proxClientes.length" x-cloak
+               style="font-size:11.5px; opacity:.75; padding-top:8px;">
+              Nenhum cliente nesse raio. Tente um raio maior.
+            </p>
+          </div>
+        </template>
+      </div>
+    </div>
+
     {% if pode_editar %}
     <!-- Modo de desenho de território (§11) -->
     <button type="button" class="btn-desenhar" x-show="!modoDesenho" x-cloak
@@ -417,10 +519,18 @@ function mapaGeo() {
     rotaMaxParadas: 25,
     otimizacao: null,
     rotaOtimizando: false,
+    // clientes próximos (§7)
+    modoProximos: false,
+    proxRaio: {{ raio_padrao }},
+    proxCentro: null,
+    proxClientes: [],
+    proxCarregando: false,
+    coresStatus: JSON.parse(document.getElementById('mapas-cores-status').textContent),
     _mapa: null,
     _grupos: {},
     _carregando: false,
     _camadaTerritorios: null,
+    _circuloProx: null,
     _desenhados: null,
     _controleDesenho: null,
     _linhaRota: null,
@@ -438,6 +548,11 @@ function mapaGeo() {
       // Recarrega ao navegar: o backend recorta pela viewport, então mover o
       // mapa precisa buscar os pinos da área nova (lazy loading).
       this._mapa.on('moveend', () => this.recarregar());
+      // Só responde no modo de proximidade: fora dele, clicar no mapa é como
+      // se fecha um popup, e sequestrar isso irritaria.
+      this._mapa.on('click', (e) => {
+        if (this.modoProximos) this.buscarProximos(e.latlng.lat, e.latlng.lng);
+      });
 
       this.desenharDistanciaDaUrl();
     },
@@ -545,11 +660,22 @@ function mapaGeo() {
         });
       }
 
+      // No modo de proximidade, clicar num pino centra a busca nele — é mais
+      // preciso que mirar o clique no mapa. Um clique em pino não chega ao
+      // handler do mapa, daí precisar do tratamento aqui.
+      marker.on('click', (ev) => {
+        if (!this.modoProximos) return;
+        L.DomEvent.stopPropagation(ev);
+        // Centrando num cliente, ele sairia da lista a 0 m sem acrescentar
+        // nada: o que interessa é quem está em volta.
+        this.buscarProximos(m.lat, m.lng, chave === 'clientes' ? m.id : null);
+      });
+
       // Popup montado on-demand: os dados ricos (§3) só são buscados no
       // clique, senão a carga de milhares de pinos traria tudo à toa.
       marker.bindPopup('<div class="popup-mapa">carregando...</div>');
       marker.on('popupopen', () => {
-        if (this.modoRota) { marker.closePopup(); return; }
+        if (this.modoRota || this.modoProximos) { marker.closePopup(); return; }
         this._preencherPopup(marker, chave, m);
       });
       return marker;
@@ -610,8 +736,96 @@ function mapaGeo() {
       return `{% url 'cadastros:cliente-update' 0 %}`.replace('/0/', `/${id}/`);
     },
 
+    // ── Clientes próximos (§7) ──────────────────────────────────────────
+    abrirProximos() {
+      // Modos exclusivos: com os dois ligados, um clique em pino tanto
+      // entraria na rota quanto recentraria a busca.
+      if (this.modoRota) this.fecharRota();
+      this.modoProximos = true;
+      this.aviso = 'Clique num ponto do mapa para ver os clientes ao redor.';
+    },
+
+    fecharProximos() {
+      this.modoProximos = false;
+      this.proxCentro = null;
+      this.proxClientes = [];
+      this.aviso = '';
+      if (this._circuloProx) {
+        this._mapa.removeLayer(this._circuloProx);
+        this._circuloProx = null;
+      }
+    },
+
+    rotuloRaio() {
+      return this.proxRaio < 1000
+        ? `${this.proxRaio} m`
+        : `${(this.proxRaio / 1000).toString().replace('.', ',')} km`;
+    },
+
+    corDoStatus(status) {
+      return this.coresStatus[status] || this.coresStatus.cinza;
+    },
+
+    // lat/lng opcionais: os botões de raio rebuscam no mesmo centro, com a
+    // mesma exclusão de antes — senão o cliente central reapareceria a 0 m só
+    // por ter trocado o raio.
+    async buscarProximos(lat, lng, excluir) {
+      if (lat === undefined) {
+        if (!this.proxCentro) return;
+        ({ lat, lng, excluir } = this.proxCentro);
+      }
+      this.proxCentro = { lat, lng, excluir: excluir || null };
+      this.proxCarregando = true;
+      this.aviso = '';
+      this._desenharCirculo(lat, lng);
+
+      try {
+        const params = new URLSearchParams({ lat, lng, raio: this.proxRaio });
+        if (excluir) params.set('excluir_cliente', excluir);
+        const resp = await fetch(`{% url 'mapas:api-clientes-proximos' %}?${params}`,
+                                 { headers: { 'Accept': 'application/json' } });
+        const d = await resp.json();
+        if (!resp.ok) throw new Error(d.erro || ('HTTP ' + resp.status));
+        this.proxClientes = d.clientes || [];
+      } catch (e) {
+        this.proxClientes = [];
+        this.aviso = 'Não foi possível buscar os clientes: ' + e.message;
+      } finally {
+        this.proxCarregando = false;
+      }
+    },
+
+    // O círculo mostra até onde a busca olhou. Sem ele, uma lista curta pode
+    // ser lida como "não tem cliente aqui" quando o raio é que estava pequeno.
+    _desenharCirculo(lat, lng) {
+      if (this._circuloProx) this._mapa.removeLayer(this._circuloProx);
+      this._circuloProx = L.circle([lat, lng], {
+        radius: this.proxRaio, color: '#0e7490', weight: 2,
+        fillColor: '#22d3ee', fillOpacity: 0.10,
+      }).addTo(this._mapa);
+      this._mapa.fitBounds(this._circuloProx.getBounds(), { padding: [40, 40] });
+    },
+
+    focarCliente(cl) {
+      this._mapa.setView([cl.lat, cl.lng], 17);
+      L.popup()
+        .setLatLng([cl.lat, cl.lng])
+        .setContent(
+          `<div class="popup-mapa"><h4>${this._esc(cl.nome)}</h4>` +
+          `<div style="margin-bottom:7px;">${this._esc(cl.distancia_texto)} daqui</div>` +
+          `<div class="popup-acoes">` +
+          `<a href="${this._urlCadastro(cl.id)}" style="background:#1d4ed8;color:#fff;">Ver cliente</a>` +
+          (cl.whatsapp
+            ? `<a href="https://wa.me/${cl.whatsapp}" target="_blank" style="background:#16a34a;color:#fff;">WhatsApp</a>`
+            : '') +
+          `</div></div>`
+        )
+        .openOn(this._mapa);
+    },
+
     // ── Rotas (§4) ──────────────────────────────────────────────────────
     abrirRota() {
+      if (this.modoProximos) this.fecharProximos();
       this.modoRota = true;
       this.aviso = '';
       // Territórios ligados atrapalham a leitura do traçado.
