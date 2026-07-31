@@ -96,6 +96,31 @@
   /* Pino de cliente já escolhido para a rota, para dar retorno visual no mapa. */
   .pino-rota { box-shadow:0 0 0 3px rgba(29,78,216,.55), 0 2px 5px rgba(0,0,0,.4); }
 
+  /* ── Mapa de calor (§10) ── */
+  .calor-painel { position:absolute; top:144px; right:12px; z-index:5; width:270px;
+                  max-height:calc(100% - 164px); display:flex; flex-direction:column;
+                  border-radius:12px; overflow:hidden; backdrop-filter:blur(10px);
+                  box-shadow:0 10px 34px rgba(0,0,0,.3); }
+  .calor-body { padding:11px 13px; overflow:auto; font-size:12.5px;
+                display:flex; flex-direction:column; gap:8px; }
+  .calor-body label { display:block; font-size:10.5px; font-weight:800;
+                      text-transform:uppercase; letter-spacing:.05em; opacity:.6;
+                      margin-bottom:3px; }
+  .calor-body select, .calor-body input { width:100%; padding:5px 7px;
+                      border-radius:7px; font-size:12.5px; }
+  .calor-resumo { display:flex; gap:12px; }
+  .calor-resumo div { font-size:10.5px; opacity:.65; }
+  .calor-resumo strong { display:block; font-size:15px; opacity:1; margin-top:1px;
+                         font-variant-numeric:tabular-nums; }
+  /* Faixa de cor igual à do leaflet.heat, para a legenda não mentir. */
+  .calor-escala { height:9px; border-radius:5px;
+                  background:linear-gradient(to right,#2b83ba,#64b6ac,#abdda4,
+                                             #ffffbf,#fdae61,#d7191c); }
+  .btn-calor { position:absolute; top:144px; right:12px; z-index:4; border:none;
+               border-radius:9px; padding:8px 13px; font-size:12px; font-weight:700;
+               cursor:pointer; box-shadow:0 6px 18px rgba(0,0,0,.26);
+               display:flex; align-items:center; gap:7px; }
+
   /* ── Painel de clientes próximos (§7) ── */
   .prox-painel { position:absolute; top:100px; right:12px; z-index:5; width:286px;
                  max-height:calc(100% - 120px); display:flex; flex-direction:column;
@@ -208,7 +233,7 @@
          style="background:#7c2d12; color:#fed7aa;"></div>
 
     <!-- Criar rota (§4) -->
-    <button type="button" class="btn-rota" x-show="!modoRota" x-cloak
+    <button type="button" class="btn-rota" x-show="!modoRota && !modoCalor" x-cloak
             @click="abrirRota()"
             :style="temaClaro ? 'background:#fff;color:#1d4ed8;' : 'background:#16161a;color:#93c5fd;'">
       <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -346,8 +371,128 @@
       </div>
     </div>
 
+    <!-- Mapa de calor (§10) -->
+    <button type="button" class="btn-calor" x-show="!modoCalor && !modoRota && !modoProximos" x-cloak
+            @click="abrirCalor()"
+            :style="temaClaro ? 'background:#fff;color:#b45309;' : 'background:#16161a;color:#fcd34d;'">
+      <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+              d="M17.657 18.657A8 8 0 016.343 7.343S7 9 9 10c0-2 .5-5 2.986-7C14 5 16.09 5.777 17.656 7.343A7.975 7.975 0 0120 13a7.975 7.975 0 01-2.343 5.657z"/>
+      </svg>
+      Mapa de calor
+    </button>
+
+    <div class="calor-painel" x-show="modoCalor" x-cloak
+         :style="temaClaro ? 'background:rgba(255,255,255,.96); color:#111827;'
+                           : 'background:rgba(22,22,26,.95); color:#f8fafc;'">
+      <div class="rota-head"
+           :style="temaClaro ? 'border-bottom:1px solid #e5e7eb;' : 'border-bottom:1px solid #2a2a32;'">
+        <span>Mapa de calor</span>
+        <button type="button" @click="fecharCalor()" title="Fechar"
+                style="margin-left:auto;background:none;border:none;cursor:pointer;font-size:16px;color:inherit;opacity:.6;">&times;</button>
+      </div>
+      <div class="calor-body">
+        <div>
+          <label>Medir</label>
+          <select x-model="calorMetrica" @change="carregarCalor()" class="form-input">
+            <template x-for="m in calorMetricas" :key="m.chave">
+              <option :value="m.chave" x-text="m.rotulo"></option>
+            </template>
+          </select>
+        </div>
+
+        <div class="grid grid-cols-2 gap-2">
+          <div>
+            <label>De</label>
+            <input type="date" x-model="calorDe" @change="carregarCalor()" class="form-input">
+          </div>
+          <div>
+            <label>Até</label>
+            <input type="date" x-model="calorAte" @change="carregarCalor()" class="form-input">
+          </div>
+        </div>
+
+        <div>
+          <label>Estado</label>
+          <select x-model="calorUf" @change="carregarCalor()" class="form-input">
+            <option value="">Todos</option>
+            <template x-for="u in calorOpcoes.ufs" :key="u">
+              <option :value="u" x-text="u"></option>
+            </template>
+          </select>
+        </div>
+
+        <div>
+          <label>Cidade</label>
+          <select x-model="calorCidade" @change="carregarCalor()" class="form-input">
+            <option value="">Todas</option>
+            <template x-for="c in calorOpcoes.cidades" :key="c">
+              <option :value="c" x-text="c"></option>
+            </template>
+          </select>
+        </div>
+
+        <div>
+          <label>Representante</label>
+          <select x-model="calorRepresentante" @change="carregarCalor()" class="form-input">
+            <option value="">Todos</option>
+            <template x-for="r in calorOpcoes.representantes" :key="r.id">
+              <option :value="r.id" x-text="r.nome"></option>
+            </template>
+          </select>
+        </div>
+
+        <div>
+          <label>Filial</label>
+          <select x-model="calorFilial" @change="carregarCalor()" class="form-input">
+            <option value="">Todas</option>
+            <template x-for="f in calorOpcoes.filiais" :key="f.id">
+              <option :value="f.id" x-text="f.nome"></option>
+            </template>
+          </select>
+        </div>
+
+        {% comment %}
+          Venda de balcão não guarda representante. Filtrar por um deles deixa
+          o recorte só com os pedidos B2B — sem o aviso, o mapa esfriaria e
+          pareceria queda de vendas.
+        {% endcomment %}
+        <p x-show="calorRepresentante" x-cloak style="font-size:11px; color:#fbbf24;">
+          Com representante escolhido, as vendas de balcão ficam de fora — elas
+          não guardam representante.
+        </p>
+
+        <p x-show="calorCarregando" x-cloak style="font-size:11.5px; opacity:.7;">Calculando...</p>
+
+        <template x-if="calorResultado && !calorCarregando">
+          <div>
+            <div class="calor-resumo" style="margin-bottom:7px;">
+              <div>Total<strong x-text="formatarMetrica(calorResultado.total)"></strong></div>
+              <div>Locais<strong x-text="calorResultado.locais"></strong></div>
+            </div>
+            <div class="calor-escala"></div>
+            <div class="flex justify-between" style="font-size:10px; opacity:.6; margin-top:2px;">
+              <span>menor</span>
+              <span x-text="formatarMetrica(calorResultado.maximo)"></span>
+            </div>
+            <p x-show="!calorResultado.locais" x-cloak
+               style="font-size:11.5px; opacity:.75; margin-top:7px;">
+              Nenhuma venda no recorte.
+            </p>
+            {% comment %}
+              Cliente sem coordenada não entra no mapa. Sem esse aviso, um mapa
+              incompleto seria lido como o todo.
+            {% endcomment %}
+            <p x-show="calorResultado.sem_coordenada" x-cloak
+               style="font-size:11px; color:#fbbf24; margin-top:7px;"
+               x-text="calorResultado.sem_coordenada + ' cliente(s) com venda no período estão fora do mapa por falta de coordenada.'"></p>
+          </div>
+        </template>
+      </div>
+    </div>
+
     <!-- Clientes próximos (§7) -->
-    <button type="button" class="btn-proximos" x-show="!modoProximos && !modoRota" x-cloak
+    <button type="button" class="btn-proximos" x-show="!modoProximos && !modoRota && !modoCalor" x-cloak
             @click="abrirProximos()"
             :style="temaClaro ? 'background:#fff;color:#0e7490;' : 'background:#16161a;color:#67e8f9;'">
       <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -489,6 +634,7 @@
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js"></script>
 <script src="https://unpkg.com/leaflet-draw@1.0.4/dist/leaflet.draw.js"></script>
+<script src="https://unpkg.com/leaflet.heat@0.2.0/dist/leaflet-heat.js"></script>
 <script>
 const CSRF = '{{ csrf_token }}';
 
@@ -526,10 +672,21 @@ function mapaGeo() {
     proxClientes: [],
     proxCarregando: false,
     coresStatus: JSON.parse(document.getElementById('mapas-cores-status').textContent),
+    // mapa de calor (§10)
+    modoCalor: false,
+    calorMetrica: 'receita',
+    calorMetricas: [],
+    calorOpcoes: { cidades: [], ufs: [], representantes: [], filiais: [] },
+    calorDe: '', calorAte: '',
+    calorCidade: '', calorUf: '', calorRepresentante: '', calorFilial: '',
+    calorResultado: null,
+    calorCarregando: false,
     _mapa: null,
     _grupos: {},
     _carregando: false,
     _camadaTerritorios: null,
+    _camadaCalor: null,
+    _ativasAntesDoCalor: null,
     _circuloProx: null,
     _desenhados: null,
     _controleDesenho: null,
@@ -764,11 +921,110 @@ function mapaGeo() {
       return `{% url 'cadastros:cliente-update' 0 %}`.replace('/0/', `/${id}/`);
     },
 
+    // ── Mapa de calor (§10) ─────────────────────────────────────────────
+    async abrirCalor() {
+      // Modos exclusivos: o painel de calor e o de rota ocupam o mesmo canto,
+      // e um clique em pino significaria coisas diferentes em cada um.
+      if (this.modoRota) this.fecharRota();
+      if (this.modoProximos) this.fecharProximos();
+      this.modoCalor = true;
+      // Pinos por cima do calor viram ruído: o calor já é a leitura, e os
+      // marcadores tapam justamente as manchas mais densas.
+      this._ativasAntesDoCalor = [...this.ativas];
+      this.ativas = [];
+      this.recarregar();
+
+      if (!this.calorMetricas.length) await this.carregarOpcoesCalor();
+      this.carregarCalor();
+    },
+
+    fecharCalor() {
+      this.modoCalor = false;
+      this._removerCalor();
+      this.calorResultado = null;
+      this.ativas = this._ativasAntesDoCalor || ['clientes'];
+      this.recarregar();
+    },
+
+    async carregarOpcoesCalor() {
+      try {
+        const resp = await fetch(`{% url 'mapas:api-heatmap-filtros' %}`,
+                                 { headers: { 'Accept': 'application/json' } });
+        const d = await resp.json();
+        this.calorMetricas = d.metricas || [];
+        this.calorOpcoes = {
+          cidades: d.cidades || [], ufs: d.ufs || [],
+          representantes: d.representantes || [], filiais: d.filiais || [],
+        };
+      } catch (e) {
+        this.aviso = 'Não foi possível carregar os filtros: ' + e.message;
+      }
+    },
+
+    async carregarCalor() {
+      this.calorCarregando = true;
+      this.aviso = '';
+      try {
+        const p = new URLSearchParams({ metrica: this.calorMetrica });
+        if (this.calorDe) p.set('de', this.calorDe);
+        if (this.calorAte) p.set('ate', this.calorAte);
+        if (this.calorCidade) p.set('cidade', this.calorCidade);
+        if (this.calorUf) p.set('uf', this.calorUf);
+        if (this.calorRepresentante) p.set('representante', this.calorRepresentante);
+        if (this.calorFilial) p.set('filial', this.calorFilial);
+
+        const resp = await fetch(`{% url 'mapas:api-heatmap' %}?${p}`,
+                                 { headers: { 'Accept': 'application/json' } });
+        const d = await resp.json();
+        if (!resp.ok) throw new Error(d.erro || ('HTTP ' + resp.status));
+
+        this.calorResultado = d;
+        this._desenharCalor(d.pontos);
+      } catch (e) {
+        this.aviso = 'Não foi possível montar o mapa de calor: ' + e.message;
+      } finally {
+        this.calorCarregando = false;
+      }
+    },
+
+    _desenharCalor(pontos) {
+      this._removerCalor();
+      if (!pontos || !pontos.length) return;
+
+      // `maxZoom` alto evita que o calor "estoure" ao aproximar; o raio em
+      // pixels é fixo de propósito — em metros, mudar o zoom mudaria a
+      // mancha e a leitura deixaria de ser comparável entre níveis.
+      this._camadaCalor = L.heatLayer(pontos, {
+        radius: 28, blur: 20, maxZoom: 17, minOpacity: 0.25,
+        gradient: { 0.0: '#2b83ba', 0.25: '#abdda4', 0.5: '#ffffbf',
+                    0.75: '#fdae61', 1.0: '#d7191c' },
+      }).addTo(this._mapa);
+
+      const limites = L.latLngBounds(pontos.map(p => [p[0], p[1]]));
+      if (limites.isValid()) this._mapa.fitBounds(limites, { padding: [50, 50] });
+    },
+
+    _removerCalor() {
+      if (this._camadaCalor) {
+        this._mapa.removeLayer(this._camadaCalor);
+        this._camadaCalor = null;
+      }
+    },
+
+    formatarMetrica(valor) {
+      const v = Number(valor || 0);
+      if (this.calorMetrica === 'receita') {
+        return 'R$ ' + v.toLocaleString('pt-BR', { maximumFractionDigits: 0 });
+      }
+      return v.toLocaleString('pt-BR', { maximumFractionDigits: 0 });
+    },
+
     // ── Clientes próximos (§7) ──────────────────────────────────────────
     abrirProximos() {
       // Modos exclusivos: com os dois ligados, um clique em pino tanto
       // entraria na rota quanto recentraria a busca.
       if (this.modoRota) this.fecharRota();
+      if (this.modoCalor) this.fecharCalor();
       this.modoProximos = true;
       this.aviso = 'Clique num ponto do mapa para ver os clientes ao redor.';
     },
@@ -854,6 +1110,7 @@ function mapaGeo() {
     // ── Rotas (§4) ──────────────────────────────────────────────────────
     abrirRota() {
       if (this.modoProximos) this.fecharProximos();
+      if (this.modoCalor) this.fecharCalor();
       this.modoRota = true;
       this.aviso = '';
       // Territórios ligados atrapalham a leitura do traçado.

@@ -1,7 +1,7 @@
 from django.urls import path
 
 from apps.mapas.views import MapaPrincipalView
-from apps.mapas.views import api, distancia, rota, territorio
+from apps.mapas.views import api, distancia, heatmap, rota, territorio
 
 app_name = 'mapas'
 
@@ -24,6 +24,10 @@ urlpatterns = [
     # Distancia entre cadastros (secao 6)
     path('api/distancia/', distancia.calcular_distancia, name='api-distancia'),
     path('api/distancia/destinos/', distancia.buscar_destino, name='api-distancia-destinos'),
+
+    # Mapa de calor (secao 10)
+    path('api/heatmap/', heatmap.heatmap, name='api-heatmap'),
+    path('api/heatmap/filtros/', heatmap.heatmap_filtros, name='api-heatmap-filtros'),
 
     # Territorios (secao 11)
     path('api/territorios/', territorio.territorios, name='api-territorios'),

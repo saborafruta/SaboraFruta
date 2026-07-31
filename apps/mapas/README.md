@@ -416,6 +416,45 @@ genérico na tela.
 na URL — os nomes o mapa resolve por `api/distancia/destinos/?ids=`, senão um
 link com meia dúzia de razões sociais fica enorme e quebra ao ser copiado.
 
+### §10 — Mapa de calor
+
+`GET /mapas/api/heatmap/?metrica=&de=&ate=&cidade=&uf=&representante=&filial=`
+
+Quatro métricas: **receita**, **quantidade de pedidos**, **volume vendido** e
+**número de clientes**. Filtros de cidade, estado, representante, filial e
+período. Botão *Mapa de calor* no mapa.
+
+**O ponto de calor é a coordenada do cliente**, não a do endereço de entrega: a
+do cadastro é a que o backfill geocodifica e mantém; a de entrega é um JSON por
+venda que quase nunca traz lat/lng. O resultado é uma leitura estável de "de
+onde vem meu dinheiro".
+
+**Soma as duas origens de venda** — `PedidoVenda` (B2B) e `VendaPDV` (balcão e
+delivery) —, como o dashboard e a Curva ABC já fazem. Usar só uma mostraria
+metade do faturamento, e o mapa continuaria plausível: ninguém notaria.
+
+**A receita desconta Doação e Permuta** (`movimenta_caixa=False`), via
+`apps.financeiro.services.receita`. Sem isso o mapa acenderia bairros onde não
+entrou dinheiro nenhum e divergiria do faturamento do resto do ERP. O desconto
+só cabe no dinheiro: em *pedidos* e *volume* ele não se aplica, porque a venda
+aconteceu — o que não houve foi receita.
+
+**Peso normalizado de 0 a 1** contra o maior valor do recorte. O `leaflet.heat`
+satura acima de 1: mandar reais crus pintaria o mapa inteiro de vermelho. Os
+absolutos voltam em `total` e `maximo`, para a legenda dizer o que a cor vale.
+
+Dois avisos que a tela dá, e por quê:
+
+- **Filtrar por representante deixa o balcão de fora.** `VendaPDV` não guarda
+  representante; incluí-la atribuiria a um vendedor faturamento que não é dele.
+  Sem o aviso, o mapa esfriaria e pareceria queda de vendas.
+- **Cliente sem coordenada não entra no mapa.** O contador de quantos ficaram
+  de fora evita ler um mapa incompleto como se fosse o todo.
+
+O `filial_id` do filtro é sempre validado contra o escopo do usuário — aceitá-lo
+direto deixaria qualquer um ler o faturamento de outra empresa trocando um
+número na URL.
+
 ### Modo de desenho (Leaflet.draw)
 
 O §11 fecha: o polígono é desenhado no próprio mapa.
