@@ -517,6 +517,35 @@ Duas contagens que parecem iguais e não são:
 A economia soma a diferença **de cada rota otimizada**, e não a diferença dos
 totais — senão as rotas que nunca passaram pela otimização entrariam na conta.
 
+### Relatórios (imprimíveis / PDF)
+
+Três relatórios sob **Relatórios › Mapas e Geolocalização**, todos com botão de
+imprimir e de exportar PDF (mesmo padrão da Curva ABC: `@media print` + html2pdf).
+
+| Relatório | Responde |
+|---|---|
+| **Vendas por Região** | receita, pedidos, volume e clientes por cidade, bairro, zona ou estado |
+| **Cobertura de Geolocalização** | *quais* clientes estão fora do mapa, com endereço e motivo |
+| **Rotas e Otimização** | rotas montadas no período, km, tempo e economia |
+
+As métricas reaproveitam `HeatmapService`. Se os relatórios recalculassem por
+conta própria, eles e o mapa acabariam divergindo para o mesmo período — e numa
+reunião os dois números brigariam sem que ninguém soubesse qual está certo.
+
+**Vendas por Região traz as quatro métricas lado a lado**, diferente do mapa,
+que pinta uma por vez. É essa disposição que revela o bairro de muita receita e
+poucos clientes (ou o contrário). Cliente **sem venda no período não entra na
+contagem**: um bairro com 40 cadastros e 2 compradores não pode aparecer com 40.
+
+**A permissão é a de `relatorios`, não a de `mapas`.** Quem tira relatório para
+uma reunião não é necessariamente quem opera o mapa, e o hub já é governado por
+essa permissão — exigir as duas esconderia o item de quem tem acesso ao hub.
+
+As ressalvas do mapa se repetem impressas, e ali pesam mais, porque o papel
+circula: receita já sem Doação/Permuta; volume somando unidades diferentes;
+zona como quadrante geométrico, não divisão da prefeitura; e km de rota
+**calculada**, não medida por GPS.
+
 ### Modo de desenho (Leaflet.draw)
 
 O §11 fecha: o polígono é desenhado no próprio mapa.

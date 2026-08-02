@@ -150,6 +150,14 @@ class PainelService:
         return f'{horas}h{minutos:02d}' if minutos else f'{horas}h'
 
     @staticmethod
+    def periodo_padrao(inicio=None, fim=None):
+        """Normaliza um par de datas: vazio vira hoje, invertido vira ordenado."""
+        hoje = timezone.localdate()
+        inicio = inicio or hoje
+        fim = fim or hoje
+        return (fim, inicio) if fim < inicio else (inicio, fim)
+
+    @staticmethod
     def periodo_de(request):
         """
         Lê `?de=&ate=` da querystring; sem parâmetros, o dia de hoje.
@@ -163,9 +171,6 @@ class PainelService:
             except (TypeError, ValueError):
                 return None
 
-        hoje = timezone.localdate()
-        inicio = _data(request.GET.get('de')) or hoje
-        fim = _data(request.GET.get('ate')) or hoje
-        if fim < inicio:
-            inicio, fim = fim, inicio
-        return inicio, fim
+        return PainelService.periodo_padrao(
+            _data(request.GET.get('de')), _data(request.GET.get('ate')),
+        )

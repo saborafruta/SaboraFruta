@@ -1,0 +1,114 @@
+{% extends "mapas/_relatorio_base.html" %}
+
+{% block relatorio_nome %}Cobertura de Geolocalização{% endblock %}
+{% block relatorio_arquivo %}cobertura-geolocalizacao{% endblock %}
+
+{% block relatorio_subtitulo %}
+  · {{ dados.com_coordenada }} de {{ dados.total }} clientes no mapa
+  (<strong>{{ dados.percentual }}%</strong>)
+{% endblock %}
+
+{% block relatorio_corpo %}
+
+<div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
+  <div class="card p-4">
+    <p class="text-xs font-medium uppercase"
+       :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Clientes ativos</p>
+    <p class="text-lg font-bold mt-1"
+       :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">{{ dados.total }}</p>
+  </div>
+  <div class="card p-4">
+    <p class="text-xs font-medium uppercase"
+       :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">No mapa</p>
+    <p class="text-lg font-bold mt-1" style="color:#22c55e;">{{ dados.com_coordenada }}</p>
+  </div>
+  <div class="card p-4">
+    <p class="text-xs font-medium uppercase"
+       :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Sem coordenada</p>
+    <p class="text-lg font-bold mt-1"
+       style="{% if dados.sem_coordenada %}color:#f59e0b;{% else %}color:#22c55e;{% endif %}">
+      {{ dados.sem_coordenada }}
+    </p>
+  </div>
+  <div class="card p-4">
+    <p class="text-xs font-medium uppercase"
+       :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Cobertura</p>
+    <p class="text-lg font-bold mt-1"
+       :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">{{ dados.percentual }}%</p>
+  </div>
+</div>
+
+{% if dados.por_cidade %}
+  <div class="card p-4">
+    <h3 class="text-sm font-semibold mb-3"
+        :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">Pendências por cidade</h3>
+    <table>
+      <thead>
+        <tr><th>Cidade</th><th class="num">Sem coordenada</th></tr>
+      </thead>
+      <tbody>
+        {% for c in dados.por_cidade %}
+          <tr><td>{{ c.cidade }}</td><td class="num">{{ c.qtd }}</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+{% endif %}
+
+<div class="card p-4">
+  <h3 class="text-sm font-semibold mb-3"
+      :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
+    Clientes a corrigir
+  </h3>
+
+  {% if dados.pendentes %}
+    {% comment %}
+      O endereço e o erro juntos são o ponto do relatório: dá para ver na hora
+      se o problema é endereço incompleto, cidade errada ou um CEP que o
+      provider não conhece. Só o nome não permitiria fazer nada.
+    {% endcomment %}
+    <table class="zebra">
+      <thead>
+        <tr>
+          <th style="width:26%;">Cliente</th>
+          <th style="width:38%;">Endereço cadastrado</th>
+          <th>Cidade/UF</th>
+          <th>Motivo</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for p in dados.pendentes %}
+          <tr>
+            <td><strong>{{ p.nome }}</strong></td>
+            <td>{{ p.endereco|default:"—" }}</td>
+            <td>{{ p.cidade }}{% if p.uf %}/{{ p.uf }}{% endif %}</td>
+            <td style="font-size:11.5px;">
+              {% if p.erro %}
+                {{ p.erro }}
+              {% elif not p.endereco %}
+                Endereço em branco
+              {% elif not p.cidade %}
+                Sem cidade — o geocodificador não busca sem ela
+              {% else %}
+                Ainda não geocodificado
+              {% endif %}
+            </td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+
+    <p class="text-xs mt-3 no-print" :style="temaClaro ? 'color:#94a3b8;' : 'color:#64748b;'">
+      Depois de corrigir os endereços, rode
+      <code style="font-size:11px;">manage.py geocodificar</code> para trazê-los
+      ao mapa. Endereço sem cidade não é consultado de propósito: a busca
+      devolveria o centro do estado, e o cliente apareceria a dezenas de
+      quilômetros de onde realmente está.
+    </p>
+  {% else %}
+    <p class="text-sm text-center py-8" style="color:#22c55e;">
+      Todos os clientes ativos estão no mapa.
+    </p>
+  {% endif %}
+</div>
+{% endblock %}

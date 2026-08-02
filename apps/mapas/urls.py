@@ -1,6 +1,9 @@
 from django.urls import path
 
-from apps.mapas.views import MapaPrincipalView, PainelMapasView
+from apps.mapas.views import (
+    MapaPrincipalView, PainelMapasView,
+    RelatorioCoberturaView, RelatorioRegiaoView, RelatorioRotasView,
+)
 from apps.mapas.views import api, distancia, heatmap, rota, territorio
 
 app_name = 'mapas'
@@ -8,6 +11,12 @@ app_name = 'mapas'
 urlpatterns = [
     path('', MapaPrincipalView.as_view(), name='mapa'),
     path('painel/', PainelMapasView.as_view(), name='painel'),
+
+    # Relatorios imprimiveis / PDF
+    path('relatorios/regiao/', RelatorioRegiaoView.as_view(), name='relatorio-regiao'),
+    path('relatorios/cobertura/', RelatorioCoberturaView.as_view(),
+         name='relatorio-cobertura'),
+    path('relatorios/rotas/', RelatorioRotasView.as_view(), name='relatorio-rotas'),
 
     # APIs consumidas pelo Leaflet
     path('api/camadas/', api.camadas, name='api-camadas'),

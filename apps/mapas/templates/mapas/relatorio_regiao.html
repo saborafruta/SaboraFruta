@@ -1,0 +1,99 @@
+{% extends "mapas/_relatorio_base.html" %}
+
+{% block relatorio_nome %}Vendas por {{ dados.rotulo_grupo }}{% endblock %}
+{% block relatorio_arquivo %}vendas-por-{{ dados.agrupar_por }}{% endblock %}
+
+{% block relatorio_subtitulo %}
+  · Período: <strong>{{ dados.inicio|date:"d/m/Y" }} a {{ dados.fim|date:"d/m/Y" }}</strong>
+  · {{ dados.linhas|length }} {{ dados.rotulo_grupo|lower }}{{ dados.linhas|length|pluralize }}
+{% endblock %}
+
+{% block relatorio_filtros %}
+<form method="get" class="card p-4 grid grid-cols-12 gap-3 items-end">
+  <div class="col-span-12 sm:col-span-3">
+    <label class="block text-xs font-semibold mb-1.5"
+           :style="temaClaro ? 'color:#374151;' : 'color:#cbd5e1;'">Agrupar por</label>
+    <select name="agrupar" class="form-input w-full">
+      {% for a in agrupamentos %}
+        <option value="{{ a.chave }}" {% if a.chave == dados.agrupar_por %}selected{% endif %}>
+          {{ a.rotulo }}
+        </option>
+      {% endfor %}
+    </select>
+  </div>
+  <div class="col-span-6 sm:col-span-3">
+    <label class="block text-xs font-semibold mb-1.5"
+           :style="temaClaro ? 'color:#374151;' : 'color:#cbd5e1;'">De</label>
+    <input type="date" name="de" value="{{ dados.inicio|date:'Y-m-d' }}" class="form-input w-full">
+  </div>
+  <div class="col-span-6 sm:col-span-3">
+    <label class="block text-xs font-semibold mb-1.5"
+           :style="temaClaro ? 'color:#374151;' : 'color:#cbd5e1;'">Até</label>
+    <input type="date" name="ate" value="{{ dados.fim|date:'Y-m-d' }}" class="form-input w-full">
+  </div>
+  <div class="col-span-12 sm:col-span-3 flex gap-2">
+    <button type="submit" class="btn-primary">Aplicar</button>
+    <a href="{% url 'mapas:relatorio-regiao' %}" class="btn-secondary">Limpar</a>
+  </div>
+</form>
+{% endblock %}
+
+{% block relatorio_corpo %}
+<div class="card p-4">
+  {% if dados.linhas %}
+    <table class="zebra">
+      <thead>
+        <tr>
+          <th style="width:34%;">{{ dados.rotulo_grupo }}</th>
+          <th class="num">Clientes</th>
+          <th class="num">Pedidos</th>
+          <th class="num">Volume</th>
+          <th class="num">Receita</th>
+          <th class="num">Part.</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for l in dados.linhas %}
+          <tr>
+            <td><strong>{{ l.regiao }}</strong></td>
+            <td class="num">{{ l.clientes }}</td>
+            <td class="num">{{ l.pedidos|floatformat:0 }}</td>
+            <td class="num">{{ l.volume|floatformat:0 }}</td>
+            <td class="num">R$ {{ l.receita|floatformat:2 }}</td>
+            <td class="num">{{ l.participacao }}%</td>
+          </tr>
+        {% endfor %}
+      </tbody>
+      <tfoot>
+        <tr>
+          <td>TOTAL</td>
+          <td class="num">{{ dados.total.clientes }}</td>
+          <td class="num">{{ dados.total.pedidos|floatformat:0 }}</td>
+          <td class="num">{{ dados.total.volume|floatformat:0 }}</td>
+          <td class="num">R$ {{ dados.total.receita|floatformat:2 }}</td>
+          <td class="num">100%</td>
+        </tr>
+      </tfoot>
+    </table>
+
+    {% comment %}
+      As mesmas ressalvas do mapa de calor. Num papel que circula numa reunião
+      elas importam mais ainda: alguém vai comparar com outro relatório.
+    {% endcomment %}
+    <p class="text-xs mt-3" :style="temaClaro ? 'color:#94a3b8;' : 'color:#64748b;'">
+      Receita já descontada de Doação e Permuta, que não são receita.
+      Volume soma quantidades de unidades diferentes (kg, un, cx) — serve para
+      comparar regiões entre si, não como peso total.
+      {% if dados.agrupar_por == 'zona' %}
+        Zona é o quadrante geográfico calculado pela coordenada, em relação ao
+        centro da carteira — não é a divisão administrativa do município.
+      {% endif %}
+      Clientes sem coordenada ficam fora deste relatório.
+    </p>
+  {% else %}
+    <p class="text-sm text-center py-8" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+      Nenhuma venda no período.
+    </p>
+  {% endif %}
+</div>
+{% endblock %}

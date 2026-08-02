@@ -1,0 +1,111 @@
+{% extends "mapas/_relatorio_base.html" %}
+
+{% block relatorio_nome %}Rotas e Otimização{% endblock %}
+{% block relatorio_arquivo %}rotas-e-otimizacao{% endblock %}
+
+{% block relatorio_subtitulo %}
+  · Período: <strong>{{ dados.inicio|date:"d/m/Y" }} a {{ dados.fim|date:"d/m/Y" }}</strong>
+{% endblock %}
+
+{% block relatorio_filtros %}
+<form method="get" class="card p-4 grid grid-cols-12 gap-3 items-end">
+  <div class="col-span-6 sm:col-span-3">
+    <label class="block text-xs font-semibold mb-1.5"
+           :style="temaClaro ? 'color:#374151;' : 'color:#cbd5e1;'">De</label>
+    <input type="date" name="de" value="{{ dados.inicio|date:'Y-m-d' }}" class="form-input w-full">
+  </div>
+  <div class="col-span-6 sm:col-span-3">
+    <label class="block text-xs font-semibold mb-1.5"
+           :style="temaClaro ? 'color:#374151;' : 'color:#cbd5e1;'">Até</label>
+    <input type="date" name="ate" value="{{ dados.fim|date:'Y-m-d' }}" class="form-input w-full">
+  </div>
+  <div class="col-span-12 sm:col-span-6 flex gap-2">
+    <button type="submit" class="btn-primary">Aplicar</button>
+    <a href="{% url 'mapas:relatorio-rotas' %}" class="btn-secondary">Hoje</a>
+  </div>
+</form>
+{% endblock %}
+
+{% block relatorio_corpo %}
+
+<div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
+  <div class="card p-4">
+    <p class="text-xs font-medium uppercase"
+       :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Rotas montadas</p>
+    <p class="text-lg font-bold mt-1"
+       :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">{{ dados.total_rotas }}</p>
+  </div>
+  <div class="card p-4">
+    <p class="text-xs font-medium uppercase"
+       :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Paradas</p>
+    <p class="text-lg font-bold mt-1"
+       :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">{{ dados.total_paradas }}</p>
+  </div>
+  <div class="card p-4">
+    <p class="text-xs font-medium uppercase"
+       :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Km em rota</p>
+    <p class="text-lg font-bold mt-1"
+       :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">{{ dados.total_km }} km</p>
+  </div>
+  <div class="card p-4">
+    <p class="text-xs font-medium uppercase"
+       :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Economia</p>
+    <p class="text-lg font-bold mt-1" style="color:#22c55e;">{{ dados.total_economia_km }} km</p>
+  </div>
+</div>
+
+<div class="card p-4">
+  {% if dados.linhas %}
+    <table class="zebra">
+      <thead>
+        <tr>
+          <th>Quando</th>
+          <th>Usuário</th>
+          <th class="num">Paradas</th>
+          <th class="num">Km</th>
+          <th class="num">Tempo</th>
+          <th>Otimizada</th>
+          <th class="num">Economia</th>
+          <th>Motor</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for l in dados.linhas %}
+          <tr>
+            <td>{{ l.quando|date:"d/m/Y H:i" }}</td>
+            <td>{{ l.usuario }}</td>
+            <td class="num">{{ l.paradas }}</td>
+            <td class="num">{{ l.km }}</td>
+            <td class="num">{{ l.tempo }}</td>
+            <td>{% if l.otimizada %}Sim{% else %}—{% endif %}</td>
+            <td class="num">
+              {% if l.economia_km %}<span style="color:#16a34a;">{{ l.economia_km }} km</span>
+              {% else %}—{% endif %}
+            </td>
+            <td style="font-size:11.5px;">{{ l.provider }}</td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+
+    {% comment %}
+      A mesma ressalva do painel, e aqui ela pesa mais: um relatório impresso
+      circula, e alguém pode decidir sobre frota ou combustível achando que
+      são quilômetros rodados de verdade.
+    {% endcomment %}
+    <p class="text-xs mt-3" style="color:#b45309;">
+      Km e tempo são das <strong>rotas calculadas no mapa</strong>,
+      não de percurso medido por GPS.
+      Rastreamento de veículo em tempo real ainda não está ativo.
+    </p>
+    <p class="text-xs mt-1" :style="temaClaro ? 'color:#94a3b8;' : 'color:#64748b;'">
+      Cada linha é um cálculo: ajustar as paradas e recalcular gera mais de uma
+      linha para a mesma saída.
+    </p>
+  {% else %}
+    <p class="text-sm text-center py-8" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+      Nenhuma rota montada no período.
+    </p>
+  {% endif %}
+</div>
+{% endblock %}

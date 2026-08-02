@@ -92,6 +92,26 @@ class RelatoriosHubView(PermissaoRequiredMixin, TemplateView):
                 'titulo': 'Mapas e Geolocalização',
                 'itens': [
                     {
+                        'nome': 'Vendas por Região',
+                        'descricao': 'Receita, pedidos, volume e clientes por cidade, bairro, zona ou estado — imprimível e em PDF.',
+                        'url_name': 'mapas:relatorio-regiao',
+                    },
+                    {
+                        'nome': 'Cobertura de Geolocalização',
+                        'descricao': 'Quais clientes estão fora do mapa, com o endereço cadastrado e o motivo da falha.',
+                        'url_name': 'mapas:relatorio-cobertura',
+                    },
+                    {
+                        'nome': 'Rotas e Otimização',
+                        'descricao': 'Rotas montadas no período, paradas, km, tempo e o quanto a otimização poupou.',
+                        'url_name': 'mapas:relatorio-rotas',
+                    },
+                    {
+                        'nome': 'Painel de Mapas',
+                        'descricao': 'Indicadores de cobertura, entregas do dia, rotas e sugestões de proximidade.',
+                        'url_name': 'mapas:painel',
+                    },
+                    {
                         'nome': 'Mapa de Clientes',
                         'descricao': 'Clientes, fornecedores, filiais e motoristas no mapa, coloridos por situação de recompra.',
                         'url_name': 'mapas:mapa',
