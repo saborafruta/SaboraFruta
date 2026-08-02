@@ -580,6 +580,43 @@ ficou lá, e ela só existe no par. Entrada sem saída aparece como *ainda dentr
 — pode ser o motorista no local ou o rastreio interrompido, e omitir a linha
 esconderia as duas coisas.
 
+### §13 — Rastreamento em tempo real
+
+`/mapas/ao-vivo/` — motoristas no mapa, atualizando a cada 10 s, com
+**velocidade**, **última atualização**, **rota** (trajeto percorrido) e
+**destino**.
+
+A posição chega pelo mesmo endpoint do §12 (`POST /mapas/api/posicao/`): uma
+posição alimenta cerca e rastreamento. Dois endpoints separados fariam o
+celular mandar a mesma coordenada duas vezes.
+
+**Duas tabelas, propósitos diferentes.** `PosicaoMotorista` tem **uma linha por
+motorista**, sobrescrita — é o que o mapa ao vivo lê a cada 10 s, e uma
+consulta que varresse o histórico ficaria mais lenta a cada dia de uso.
+`PontoPercurso` é o histórico, gravado **com filtro**: só entra ponto novo se o
+motorista andou 60 m ou passaram 3 min. Sem o filtro, um veículo no semáforo
+geraria centenas de pontos idênticos; sem o limite de tempo, uma parada longa
+viraria um buraco no trajeto. Expurgo por `manage.py limpar_percursos`
+(padrão 30 dias).
+
+**Velocidade nula não é zero.** O navegador manda `null` quando o aparelho não
+sabe; nesse caso o servidor calcula pela distância entre duas posições, e se
+nem isso der (primeira posição, intervalo curto demais em que o erro do GPS
+domina), fica nula. A tela mostra “—”. Um zero afirmaria “parado”, que é uma
+afirmação diferente de “não sei”.
+
+**Destino é informado pelo motorista.** O Kanban guarda o entregador como texto
+livre, então não há vínculo com o cadastro de Motorista para deduzir para onde
+ele vai — a tela de rastreio lista as entregas abertas e ele escolhe.
+
+Quem para de transmitir **não some do mapa**: fica cinza, marcado como “sem
+sinal há X”. Sumir seria lido como fim de turno, quando pode ser bateria,
+sinal ou a página fechada. A tela diz isso explicitamente.
+
+O horário aparece como “atualizado há 12 min”, não como hora absoluta: numa
+tela de tempo real o que importa é se o dado é de agora, e a subtração mental
+do relógio é justamente o passo que induz a erro.
+
 ### Modo de desenho (Leaflet.draw)
 
 O §11 fecha: o polígono é desenhado no próprio mapa.

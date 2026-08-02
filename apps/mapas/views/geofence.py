@@ -1,10 +1,9 @@
 """
-Cercas virtuais: cadastro, ingestão de posição e eventos (§12).
+Cercas virtuais e ingestão de posição (§12 + entrada do §13).
 
-A ingestão fica aqui e não num app à parte porque é o mínimo do §13 que o §12
-exige para existir: sem alguém dizendo onde o motorista está, a cerca nunca
-dispara. O restante do rastreamento (mapa ao vivo, trilha do percurso) segue
-fora de escopo.
+A ingestão fica aqui porque nasceu do §12: sem alguém dizendo onde o motorista
+está, a cerca nunca dispara. A mesma posição alimenta o rastreamento — as duas
+funções compartilham a entrada, não o armazenamento.
 """
 from __future__ import annotations
 
@@ -163,10 +162,10 @@ def registrar_posicao(request):
     Recebe uma posição e devolve os eventos que ela provocou — quase sempre
     nenhum, porque só há evento quando o motorista cruza uma cerca.
 
-    **A posição não é armazenada.** Só as travessias ficam. Guardar cada ping
-    seriam milhares de linhas por dia por motorista para responder o que dois
-    registros por visita já respondem; quando o §13 (trilha do percurso) for
-    feito, aí sim entra uma tabela própria, com política de retenção.
+    A mesma posição alimenta o rastreamento (§13): a última posição do
+    motorista é atualizada e, se ele andou o bastante, o ponto entra no
+    histórico do percurso. Dois endpoints separados fariam o celular mandar a
+    mesma coordenada duas vezes.
     """
     try:
         corpo = json.loads(request.body or b'{}')
@@ -193,6 +192,16 @@ def registrar_posicao(request):
     if motorista is None:
         return JsonResponse({'erro': 'Motorista não encontrado.'}, status=404)
 
+    from apps.mapas.services import RastreioService
+
+    # Rastreamento (§13): última posição + histórico, quando couber.
+    RastreioService.registrar(
+        filial=filial, motorista=motorista, latitude=lat, longitude=lng,
+        velocidade_kmh=_velocidade(corpo.get('velocidade')),
+        precisao_m=_inteiro(corpo.get('precisao')),
+        destino_venda_id=_destino_venda(corpo.get('destino_venda'), filial),
+    )
+
     eventos = GeofenceService.processar_posicao(
         filial=filial, motorista=motorista, latitude=lat, longitude=lng,
     )
@@ -210,6 +219,34 @@ def registrar_posicao(request):
     })
 
 
+def _velocidade(bruto):
+    """
+    m/s do navegador -> km/h. Valor ausente ou negativo vira None.
+
+    O navegador manda `null` quando o aparelho não sabe a velocidade. Tratar
+    isso como zero afirmaria "parado", que é diferente de "não sei" — e o
+    serviço sabe calcular pela distância entre posições.
+    """
+    try:
+        ms = float(bruto)
+    except (TypeError, ValueError):
+        return None
+    return round(ms * 3.6, 1) if ms >= 0 else None
+
+
+def _destino_venda(bruto, filial):
+    """Valida o pedido informado como destino contra o escopo da filial."""
+    from apps.pdv.models import VendaPDV
+
+    pk = _inteiro(bruto)
+    if not pk:
+        return None
+    existe = VendaPDV.objects.filter(
+        pk=pk, delivery=True, filial__in=GeofenceService._escopo(filial),
+    ).exists()
+    return pk if existe else None
+
+
 @requer_permissao('mapas', 'ver')
 def pagina_rastreio(request):
     """
@@ -225,10 +262,25 @@ def pagina_rastreio(request):
     recusa dar a localização.
     """
     from apps.cadastros.models import Motorista
+    from apps.pdv.models import VendaPDV
 
     filiais = GeofenceService._escopo(getattr(request, 'filial_ativa', None))
+
+    # Entregas ainda abertas: é entre elas que o motorista escolhe para onde
+    # está indo. O Kanban guarda o entregador como texto livre, então não há
+    # como deduzir o destino — quem informa é ele.
+    entregas = (
+        VendaPDV.objects
+        .filter(filial__in=filiais, delivery=True,
+                status_delivery__in=['novo', 'preparando', 'em_entrega'])
+        .exclude(status='cancelada')
+        .select_related('cliente')
+        .order_by('-data_venda')[:60]
+    )
+
     return render(request, 'mapas/rastreio.html', {
         'title': 'Rastreio do Motorista',
         'motoristas': Motorista.objects.filter(
             filial__in=filiais, ativo=True).order_by('nome'),
+        'entregas': entregas,
     })

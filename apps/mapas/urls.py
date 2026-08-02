@@ -3,10 +3,12 @@ from django.urls import path
 from apps.mapas.views import (
     GeofenceCreateView, GeofenceDeleteView, GeofenceEventosView,
     GeofenceListView, GeofenceUpdateView,
-    MapaPrincipalView, PainelMapasView,
+    MapaAoVivoView, MapaPrincipalView, PainelMapasView,
     RelatorioCoberturaView, RelatorioRegiaoView, RelatorioRotasView,
 )
-from apps.mapas.views import api, distancia, geofence, heatmap, rota, territorio
+from apps.mapas.views import (
+    api, distancia, geofence, heatmap, rastreio, rota, territorio,
+)
 
 app_name = 'mapas'
 
@@ -28,6 +30,11 @@ urlpatterns = [
     path('cercas/eventos/', GeofenceEventosView.as_view(), name='geofence-eventos'),
     path('rastreio/', geofence.pagina_rastreio, name='rastreio'),
     path('api/posicao/', geofence.registrar_posicao, name='api-posicao'),
+
+    # Rastreamento ao vivo (secao 13)
+    path('ao-vivo/', MapaAoVivoView.as_view(), name='ao-vivo'),
+    path('api/ao-vivo/', rastreio.api_ao_vivo, name='api-ao-vivo'),
+    path('api/percurso/<int:pk>/', rastreio.api_percurso, name='api-percurso'),
 
     # APIs consumidas pelo Leaflet
     path('api/camadas/', api.camadas, name='api-camadas'),

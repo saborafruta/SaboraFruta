@@ -7,13 +7,14 @@ from .relatorios import (
 )
 from .geocoder import GeocodificacaoService, construir_geocoder
 from .proximidade import ProximidadeService
+from .rastreio import RastreioService
 from .otimizacao import OtimizacaoService, construir_otimizador
 from .roteirizacao import RoteirizacaoService, construir_roteirizador
 from .territorio import TerritorioService
 
 __all__ = [
     'GeocodificacaoService', 'construir_geocoder', 'DistanciaService',
-    'ProximidadeService', 'TerritorioService', 'HeatmapService', 'PainelService', 'GeofenceService',
+    'ProximidadeService', 'TerritorioService', 'HeatmapService', 'PainelService', 'GeofenceService', 'RastreioService',
     'RelatorioRegiaoService', 'RelatorioCoberturaService', 'RelatorioRotasService',
     'RoteirizacaoService', 'construir_roteirizador',
     'OtimizacaoService', 'construir_otimizador',

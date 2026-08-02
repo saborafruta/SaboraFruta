@@ -29,6 +29,29 @@
       </select>
     </div>
 
+    {% comment %}
+      O Kanban guarda o entregador como texto livre, entao nao ha como deduzir
+      para onde ele esta indo. Quem informa e o proprio motorista -- e e isso
+      que faz a tela ao vivo mostrar "Destino: Cliente X".
+    {% endcomment %}
+    <div>
+      <label class="block text-xs font-semibold mb-1.5"
+             :style="temaClaro ? 'color:#374151;' : 'color:#cbd5e1;'">
+        Indo entregar para (opcional)
+      </label>
+      <select x-model="destino" class="form-input w-full">
+        <option value="">Sem destino definido</option>
+        {% for e in entregas %}
+          <option value="{{ e.pk }}">
+            #{{ e.numero_venda }} — {{ e.cliente.nome_fantasia|default:e.cliente.razao_social|default:"Consumidor Final" }}
+          </option>
+        {% endfor %}
+      </select>
+      <p class="text-xs mt-1" :style="temaClaro ? 'color:#94a3b8;' : 'color:#64748b;'">
+        Pode trocar durante o percurso — vale a partir do proximo envio.
+      </p>
+    </div>
+
     <button type="button" class="rastreio-botao"
             @click="ligado ? parar() : comecar()"
             :disabled="!motorista"
@@ -88,6 +111,7 @@ const CSRF = '{{ csrf_token }}';
 function rastreio() {
   return {
     motorista: '',
+    destino: '',
     ligado: false,
     mensagem: '',
     erro: false,
@@ -132,6 +156,11 @@ function rastreio() {
             motorista: this.motorista,
             lat: pos.coords.latitude,
             lng: pos.coords.longitude,
+            // O navegador manda `null` quando nao sabe a velocidade; o
+            // servidor entao calcula pela distancia entre duas posicoes.
+            velocidade: pos.coords.speed,
+            precisao: pos.coords.accuracy ? Math.round(pos.coords.accuracy) : null,
+            destino_venda: this.destino || null,
           }),
         });
         const d = await resp.json();
