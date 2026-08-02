@@ -86,7 +86,7 @@ class LoteListView(PermissaoRequiredMixin, View):
         if vencendo:
             from datetime import timedelta
             from django.utils import timezone
-            hoje = timezone.now().date()
+            hoje = timezone.localdate()
             dias = int(vencendo)
             qs = qs.filter(
                 data_validade__isnull=False,

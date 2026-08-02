@@ -1785,7 +1785,7 @@ class EntradaRecebimentoTests(TestCase):
             fornecedor=self.criar_fornecedor(),
             numero_nf='REM-1',
             serie_nf='1',
-            data_emissao_nf=date.today(),
+            data_emissao_nf=timezone.localdate(),
             usuario=self.usuario,
         )
         item = CompraService.adicionar_item_entrada(
@@ -1811,7 +1811,7 @@ class EntradaRecebimentoTests(TestCase):
             fornecedor=self.criar_fornecedor(),
             numero_nf='REM-2',
             serie_nf='1',
-            data_emissao_nf=date.today(),
+            data_emissao_nf=timezone.localdate(),
             usuario=self.usuario,
         )
         item = CompraService.adicionar_item_entrada(

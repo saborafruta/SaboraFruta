@@ -5,6 +5,7 @@ from datetime import date
 from decimal import Decimal
 
 from django.db import transaction
+from django.utils import timezone
 
 from apps.core.services.exceptions import DomainError
 from apps.financeiro.constants.enums import StatusContaPagar
@@ -126,7 +127,7 @@ class ContaPagarService:
             raise DomainError('Esta conta já está cancelada.')
 
         conta.status = StatusContaPagar.CANCELADO
-        sufixo = f'[Cancelado por {usuario} em {date.today():%d/%m/%Y}] {motivo}'
+        sufixo = f'[Cancelado por {usuario} em {timezone.localdate():%d/%m/%Y}] {motivo}'
         conta.observacao = f'{conta.observacao}\n{sufixo}'.strip() if conta.observacao else sufixo
         conta.save()
         return conta
@@ -134,7 +135,7 @@ class ContaPagarService:
     @staticmethod
     def atualizar_status_vencidos(filial) -> int:
         """Marca como VENCIDO contas com data_vencimento < hoje e status ABERTO."""
-        hoje = date.today()
+        hoje = timezone.localdate()
         return (
             ContaPagar.objects
             .for_filial(filial)

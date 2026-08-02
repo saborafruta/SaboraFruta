@@ -729,7 +729,7 @@ class PrecoService:
         - Vigência da tabela
         - Fallback para Produto.preco_atual (promocao ativa ou preco de venda)
         """
-        hoje = timezone.now().date()
+        hoje = timezone.localdate()
         if tabela and tabela.ativo:
             if tabela.data_inicio and tabela.data_inicio > hoje:
                 tabela = None

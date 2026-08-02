@@ -10,6 +10,7 @@ multiempresa: sem isso um usuário veria pinos de outra empresa.
 from __future__ import annotations
 
 from django.http import JsonResponse
+from django.utils import timezone
 from django.views.decorators.http import require_GET
 
 from apps.core.services.permissions import requer_permissao
@@ -308,7 +309,6 @@ def _indicadores_comerciais(cliente, filiais) -> dict:
     calculado e indexado) e soma o mês corrente direto no PDV. Recalcular o
     histórico aqui seria duplicar o serviço de recompra.
     """
-    from datetime import date
 
     from django.db.models import Sum
 
@@ -345,7 +345,7 @@ def _indicadores_comerciais(cliente, filiais) -> dict:
     except Exception:  # pragma: no cover
         pass
 
-    hoje = date.today()
+    hoje = timezone.localdate()
     vendas_mes = VendaPDV.objects.filter(
         cliente=cliente, filial__in=filiais, status='finalizada',
         data_venda__date__gte=hoje.replace(day=1),

@@ -92,7 +92,7 @@ class ClasseFiscalAliquotaQuerySet(models.QuerySet):
     def vigentes(self, data=None):
         """Filtra alíquotas vigentes na data informada (default: hoje)."""
         from django.utils import timezone
-        data = data or timezone.now().date()
+        data = data or timezone.localdate()
         return self.filter(
             Q(vigencia_inicio__lte=data)
             & (Q(vigencia_fim__gte=data) | Q(vigencia_fim__isnull=True))

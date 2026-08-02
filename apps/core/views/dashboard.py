@@ -211,7 +211,7 @@ class DashboardView(LoginRequiredMixin, TemplateView):
                 from apps.pdv.models import VendaPDV
                 from apps.cadastros.models import Cliente
 
-                hoje = timezone.now().date()
+                hoje = timezone.localdate()
                 inicio = hoje - datetime.timedelta(days=365)
 
                 status_validos = [
@@ -381,7 +381,7 @@ class DashboardView(LoginRequiredMixin, TemplateView):
             from apps.vendas.models import ItemPedidoVenda, PedidoVenda
             from apps.pdv.models import VendaPDV, ItemVendaPDV as PDVItem
 
-            hoje = timezone.now().date()
+            hoje = timezone.localdate()
 
             # --- PedidoVenda (B2B) ---
             status_validos = [
@@ -479,7 +479,7 @@ class DashboardView(LoginRequiredMixin, TemplateView):
             from apps.financeiro.models import ContaReceber
             from apps.pdv.models import VendaPDV, PagamentoVendaPDV
 
-            hoje = timezone.now().date()
+            hoje = timezone.localdate()
             mes_inicio = hoje.replace(day=1)
             for _ in range(meses - 1):
                 mes_inicio = (mes_inicio - datetime.timedelta(days=1)).replace(day=1)
@@ -782,7 +782,7 @@ class DashboardView(LoginRequiredMixin, TemplateView):
             from apps.financeiro.models import ContaPagar, ContaReceber
             from apps.financeiro.constants.enums import StatusContaPagar, StatusContaReceber
 
-            hoje = timezone.now().date()
+            hoje = timezone.localdate()
             limite = hoje + datetime.timedelta(days=7)
 
             base_receber = (
@@ -909,7 +909,7 @@ class DashboardView(LoginRequiredMixin, TemplateView):
             PedidoVenda.Status.PARCIALMENTE_FATURADO,
             PedidoVenda.Status.ENTREGUE,
         ]
-        hoje = timezone.now().date()
+        hoje = timezone.localdate()
         inicio = data_ini or (hoje - datetime.timedelta(days=365))
         fim = data_fim or hoje
 
@@ -933,7 +933,7 @@ class DashboardView(LoginRequiredMixin, TemplateView):
         try:
             from apps.pdv.models import VendaPDV
 
-            hoje = timezone.now().date()
+            hoje = timezone.localdate()
             inicio = data_ini or (hoje - datetime.timedelta(days=365))
             fim = data_fim or hoje
 
@@ -1019,7 +1019,7 @@ class DashboardView(LoginRequiredMixin, TemplateView):
             from apps.vendas.models import ItemPedidoVenda
             from apps.pdv.models import ItemVendaPDV as PDVItem, VendaPDV
 
-            hoje = timezone.now().date()
+            hoje = timezone.localdate()
             inicio = data_ini or (hoje - datetime.timedelta(days=365))
             fim = data_fim or hoje
 
@@ -1158,7 +1158,7 @@ class CurvaAbcRelatorioView(LoginRequiredMixin, View):
         if tipo not in ('clientes', 'produtos'):
             tipo = 'clientes'
 
-        hoje = timezone.now().date()
+        hoje = timezone.localdate()
         try:
             data_ini = datetime.date.fromisoformat(request.GET.get('data_ini', ''))
         except (TypeError, ValueError):

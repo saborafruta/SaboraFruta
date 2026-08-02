@@ -1,5 +1,5 @@
 """Dashboards: operacional, comercial, produção, DRE."""
-from datetime import date, timedelta
+from datetime import timedelta
 from urllib.parse import urlencode
 
 from django.shortcuts import render
@@ -21,7 +21,7 @@ from apps.pdv.models import VendaPDV
 
 @requer_permissao('relatorios', 'ver')
 def dashboard_operacional(request):
-    hoje = date.today()
+    hoje = timezone.localdate()
     linhas = LinhaProducao.objects.filter(ativo=True)
     blocos = []
     for linha in linhas:
@@ -83,7 +83,7 @@ def _filtros_historico_vendas(request):
     if f['tipo_venda'] not in ('balcao', 'delivery'):
         f['tipo_venda'] = ''
     if not f['data_ini'] and not f['data_fim'] and not f['tipo_fiscal'] and not f['tipo_venda']:
-        hoje = date.today().isoformat()
+        hoje = timezone.localdate().isoformat()
         f['data_ini'] = hoje
         f['data_fim'] = hoje
     return f

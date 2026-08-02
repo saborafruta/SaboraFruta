@@ -233,7 +233,7 @@ class ProdutoFornecedorVinculoTests(TestCase):
             numero_nf='1001',
             serie_nf='1',
             chave_acesso_nf='',
-            data_emissao_nf=timezone.now().date(),
+            data_emissao_nf=timezone.localdate(),
             data_entrada=timezone.now(),
             status=EntradaNF.Status.AGUARDANDO_CONFERENCIA,
             valor_produtos=Decimal('39.08'),

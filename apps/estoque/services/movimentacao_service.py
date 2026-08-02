@@ -55,7 +55,7 @@ class MovimentacaoService:
 
         Levanta EstoqueInsuficienteError se soma dos lotes disponíveis < quantidade.
         """
-        hoje = timezone.now().date()
+        hoje = timezone.localdate()
 
         qs = LoteProduto.objects.filter(
             produto_id=produto_id,

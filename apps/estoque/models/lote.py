@@ -75,14 +75,14 @@ class LoteProduto(FilialScopedModel):
         from django.utils import timezone
         if not self.data_validade:
             return False
-        return self.data_validade < timezone.now().date()
+        return self.data_validade < timezone.localdate()
 
     @property
     def dias_para_vencer(self):
         from django.utils import timezone
         if not self.data_validade:
             return None
-        delta = self.data_validade - timezone.now().date()
+        delta = self.data_validade - timezone.localdate()
         return delta.days
 
     @property

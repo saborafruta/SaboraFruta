@@ -2,13 +2,14 @@
 from datetime import date, timedelta
 from django.db import transaction
 from django.db.models import Sum
+from django.utils import timezone
 from apps.financeiro.models import DREConsolidado, ContaReceber, ContaPagar
 from apps.produtos.models import LinhaProducao
 
 
 def consolidar_dre_diario():
     """Recalcula o DRE do mês corrente para todas as filiais e linhas."""
-    hoje = date.today()
+    hoje = timezone.localdate()
     competencia = hoje.replace(day=1)
     from apps.core.models import Filial
     for filial in Filial.objects.filter(ativo=True):

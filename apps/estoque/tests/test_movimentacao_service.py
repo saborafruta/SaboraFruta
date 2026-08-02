@@ -180,12 +180,12 @@ class MovimentacaoServiceTests(TestCase):
         vencido = self.criar_lote(
             produto,
             numero='VENCIDO',
-            validade=timezone.now().date() - timedelta(days=1),
+            validade=timezone.localdate() - timedelta(days=1),
         )
         vigente = self.criar_lote(
             produto,
             numero='VIGENTE',
-            validade=timezone.now().date() + timedelta(days=10),
+            validade=timezone.localdate() + timedelta(days=10),
         )
         MovimentacaoService.registrar_movimentacao(
             produto_id=produto.pk,
@@ -223,7 +223,7 @@ class MovimentacaoServiceTests(TestCase):
         lote = self.criar_lote(
             produto,
             numero='ALERTA-LOTE',
-            validade=timezone.now().date() + timedelta(days=5),
+            validade=timezone.localdate() + timedelta(days=5),
         )
 
         MovimentacaoService.registrar_movimentacao(
@@ -254,7 +254,7 @@ class MovimentacaoServiceTests(TestCase):
         lote = self.criar_lote(
             produto,
             numero='VENCIDO',
-            validade=timezone.now().date() - timedelta(days=1),
+            validade=timezone.localdate() - timedelta(days=1),
         )
         MovimentacaoService.registrar_movimentacao(
             produto_id=produto.pk,
@@ -357,13 +357,13 @@ class MovimentacaoServiceTests(TestCase):
         lote_origem = self.criar_lote(
             produto,
             numero='TRF-LOTE',
-            validade=timezone.now().date() + timedelta(days=20),
+            validade=timezone.localdate() + timedelta(days=20),
         )
         lote_destino = self.criar_lote(
             produto,
             numero='TRF-LOTE',
             quantidade='0',
-            validade=timezone.now().date() + timedelta(days=20),
+            validade=timezone.localdate() + timedelta(days=20),
             filial=self.filial_destino,
         )
         lote_destino.status = LoteProduto.Status.ESGOTADO

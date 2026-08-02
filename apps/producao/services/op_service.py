@@ -228,7 +228,7 @@ class OrdemProducaoService:
             filial=op.filial,
             produto=op.produto_acabado,
             numero_lote=numero_lote_gerado,
-            data_fabricacao=timezone.now().date(),
+            data_fabricacao=timezone.localdate(),
             data_validade=data_validade,
             ordem_producao_id=op.pk,
             quantidade_inicial=quantidade_produzida,
@@ -288,7 +288,7 @@ class OrdemProducaoService:
     @staticmethod
     def _gerar_numero_lote(op: OrdemProducao) -> str:
         """Gera número de lote padrão: L<YYYYMMDD>-<OP-number>"""
-        hoje = timezone.now().date()
+        hoje = timezone.localdate()
         return f'L{hoje:%Y%m%d}-{op.numero.replace("OP-", "")}'
 
     @staticmethod

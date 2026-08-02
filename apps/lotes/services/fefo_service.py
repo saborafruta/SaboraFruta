@@ -13,7 +13,7 @@ from apps.estoque.models import LoteProduto
 
 def sugerir_lotes_fefo(produto_id: int, filial_id: int) -> list[LoteProduto]:
     """Retorna lista de lotes disponíveis para saída em ordem FEFO."""
-    hoje = timezone.now().date()
+    hoje = timezone.localdate()
 
     com_validade = list(
         LoteProduto.objects

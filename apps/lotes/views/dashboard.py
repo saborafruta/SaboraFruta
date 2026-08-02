@@ -19,7 +19,7 @@ class LotesDashboardView(PermissaoRequiredMixin, View):
 
     def get(self, request):
         filial = request.filial_ativa
-        hoje = timezone.now().date()
+        hoje = timezone.localdate()
 
         qs_base = LoteProduto.objects.for_filial(filial)
 

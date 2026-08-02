@@ -551,7 +551,7 @@ class CompraService:
         itens = list(pedido.itens.all())
         if all(item.recebido_completo for item in itens):
             pedido.status = PedidoCompra.Status.RECEBIDO
-            pedido.data_entrega_realizada = timezone.now().date()
+            pedido.data_entrega_realizada = timezone.localdate()
         else:
             pedido.status = PedidoCompra.Status.PARCIALMENTE_RECEBIDO
         pedido.save(update_fields=['status', 'data_entrega_realizada', 'updated_at'])

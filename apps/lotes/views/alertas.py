@@ -53,7 +53,7 @@ class AlertasVencimentoView(PermissaoRequiredMixin, View):
 
     def get(self, request):
         filial = request.filial_ativa
-        hoje = timezone.now().date()
+        hoje = timezone.localdate()
         faixa_ativa = request.GET.get('faixa', '')
 
         lotes_por_faixa = _lotes_por_faixa(filial, hoje)

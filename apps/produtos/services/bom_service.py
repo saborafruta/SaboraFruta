@@ -31,7 +31,7 @@ class BOMService:
     def vigente_para(produto_acabado, data_referencia=None) -> FichaTecnica | None:
         """Retorna a ficha vigente para um produto na data referência."""
         from django.utils import timezone
-        data_referencia = data_referencia or timezone.now().date()
+        data_referencia = data_referencia or timezone.localdate()
         return (
             FichaTecnica.objects
             .filter(

@@ -114,7 +114,7 @@ class EstoqueIntegracoesTests(TestCase):
             fornecedor=self.fornecedor,
             numero_nf='NF-INT-001',
             serie_nf='1',
-            data_emissao_nf=timezone.now().date(),
+            data_emissao_nf=timezone.localdate(),
             pedido_compra=pedido,
         )
         CompraService.adicionar_item_entrada(
@@ -123,7 +123,7 @@ class EstoqueIntegracoesTests(TestCase):
             quantidade=Decimal('5'),
             valor_unitario=Decimal('4.00'),
             numero_lote='COMPRA-INT-001',
-            data_validade=timezone.now().date() + timedelta(days=90),
+            data_validade=timezone.localdate() + timedelta(days=90),
             item_pedido_compra=item_pedido,
         )
 

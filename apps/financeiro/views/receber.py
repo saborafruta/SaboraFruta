@@ -1,7 +1,6 @@
 """Views de Contas a Receber."""
 from __future__ import annotations
 
-from datetime import date
 from decimal import Decimal
 
 from django.contrib import messages
@@ -36,7 +35,7 @@ def _filial(request):
 
 
 def _kpis(qs_base):
-    hoje = date.today()
+    hoje = timezone.localdate()
     primeiro_dia_mes = hoje.replace(day=1)
 
     totais = qs_base.filter(
@@ -138,7 +137,7 @@ class ContaReceberListView(PermissaoRequiredMixin, View):
             'pill_status': PILL_STATUS,
             'pode_criar': pode_criar,
             'pode_editar': pode_editar,
-            'today': date.today(),
+            'today': timezone.localdate(),
             **kpis,
         })
 

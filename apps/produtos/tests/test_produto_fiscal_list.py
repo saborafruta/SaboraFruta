@@ -78,7 +78,7 @@ class ProdutoFiscalListTests(TestCase):
             uf_destino='RN',
             pis=Decimal('0.65'),
             cofins=Decimal('3.00'),
-            vigencia_inicio=timezone.now().date(),
+            vigencia_inicio=timezone.localdate(),
         )
 
     def setUp(self):

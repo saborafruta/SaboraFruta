@@ -892,7 +892,7 @@ class EstoqueFormsViewsTests(TestCase):
         produto = self.criar_produto(descricao='Produto Lote Mobile', controla_lote=True)
         lote = self.criar_lote(produto)
         lote.numero_lote = 'LT-MOBILE'
-        lote.data_validade = timezone.now().date()
+        lote.data_validade = timezone.localdate()
         lote.quantidade_atual = Decimal('3')
         lote.save(update_fields=['numero_lote', 'data_validade', 'quantidade_atual', 'updated_at'])
 

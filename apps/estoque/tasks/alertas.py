@@ -22,7 +22,7 @@ def verificar_vencimentos():
     from apps.estoque.models import LoteProduto
     from apps.estoque.services.alerta_service import AlertaService
 
-    hoje = timezone.now().date()
+    hoje = timezone.localdate()
     limite = hoje.fromordinal(hoje.toordinal() + 60)
 
     lotes = LoteProduto.objects.filter(
@@ -48,7 +48,7 @@ def bloquear_lotes_vencidos():
     from apps.estoque.models import LoteProduto
     from apps.estoque.services.alerta_service import AlertaService
 
-    hoje = timezone.now().date()
+    hoje = timezone.localdate()
     lotes = LoteProduto.objects.filter(
         status=LoteProduto.Status.ATIVO,
         data_validade__isnull=False,

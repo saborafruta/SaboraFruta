@@ -381,7 +381,7 @@ class VendaService:
             motivo=motivo,
             descricao=descricao,
             status=DevolucaoVenda.Status.APROVADA,
-            data_devolucao=timezone.now().date(),
+            data_devolucao=timezone.localdate(),
             usuario=usuario,
             aprovado_por=usuario,
         )
