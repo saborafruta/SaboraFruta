@@ -34,6 +34,16 @@ METRICAS = {
 
 JANELA_PADRAO_DIAS = 365
 
+# Quadrantes geograficos, calculados a partir da coordenada — nao existe campo
+# de zona no cadastro, e pedir preenchimento manual de 450 clientes seria pior
+# que derivar do que ja esta geocodificado.
+ZONAS = {
+    'norte':  'Norte',
+    'sul':    'Sul',
+    'leste':  'Leste',
+    'oeste':  'Oeste',
+}
+
 
 class HeatmapService:
     """Agrega vendas por cliente e devolve pontos ponderados para o Leaflet."""
@@ -55,8 +65,8 @@ class HeatmapService:
         return filiais
 
     @classmethod
-    def _clientes(cls, filiais, cidade='', uf=''):
-        """Clientes geocodificados do escopo, já filtrados por cidade/UF."""
+    def _clientes(cls, filiais, cidade='', uf='', bairro='', zona='', praca_id=None):
+        """Clientes geocodificados do escopo, já filtrados."""
         from apps.cadastros.models import Cliente
 
         qs = Cliente.objects.filter(
@@ -66,7 +76,85 @@ class HeatmapService:
             qs = qs.filter(cidade__iexact=cidade)
         if uf:
             qs = qs.filter(uf__iexact=uf)
+        if bairro:
+            qs = qs.filter(bairro__iexact=bairro)
+        if praca_id:
+            # Território desenhado (§11): limite exato, definido pelo usuário.
+            qs = qs.filter(territorios__praca_id=praca_id,
+                           territorios__praca__filial__in=filiais)
+        if zona:
+            qs = cls._filtrar_zona(qs, zona, filiais, cidade, uf)
         return qs
+
+    @classmethod
+    def _centro_da_base(cls, filiais, cidade='', uf=''):
+        """
+        Ponto de referência das zonas: o centro médio dos clientes do escopo.
+
+        Não é a filial de propósito. Uma filial na borda da cidade jogaria
+        quase todo mundo para uma única zona; o centro da própria carteira
+        divide a base em quatro partes que significam alguma coisa.
+
+        O centro considera cidade/UF mas **não** o bairro nem o território:
+        se movesse a cada filtro, "Zona Norte" mudaria de lugar conforme o
+        recorte e dois relatórios não seriam comparáveis.
+        """
+        from django.db.models import Avg
+
+        from apps.cadastros.models import Cliente
+
+        qs = Cliente.objects.filter(
+            filial__in=filiais, latitude__isnull=False, longitude__isnull=False,
+        )
+        if cidade:
+            qs = qs.filter(cidade__iexact=cidade)
+        if uf:
+            qs = qs.filter(uf__iexact=uf)
+
+        agg = qs.aggregate(lat=Avg('latitude'), lng=Avg('longitude'))
+        return agg['lat'], agg['lng']
+
+    @classmethod
+    def _filtrar_zona(cls, qs, zona, filiais, cidade, uf):
+        """
+        Recorta por quadrante geográfico em relação ao centro da base.
+
+        A divisão é em quatro cunhas, não em metades: um cliente vai para
+        Norte/Sul quando se afasta mais em latitude, e para Leste/Oeste
+        quando se afasta mais em longitude. Com metades simples, cada ponto
+        cairia em duas zonas ao mesmo tempo e a soma das quatro daria o dobro
+        da base.
+
+        Isto é geometria, não a divisão administrativa da prefeitura — os
+        limites não vão bater exatamente com o que o pessoal da rua chama de
+        "Zona Norte". Para limite exato existe o filtro de Território, que usa
+        o polígono desenhado no mapa.
+        """
+        from django.db.models import F, FloatField, Q
+        from django.db.models.functions import Abs, Cast
+
+        zona = (zona or '').lower()
+        if zona not in ZONAS:
+            return qs
+
+        centro_lat, centro_lng = cls._centro_da_base(filiais, cidade, uf)
+        if centro_lat is None:
+            return qs
+
+        qs = qs.annotate(
+            _dlat=Cast(F('latitude') - centro_lat, FloatField()),
+            _dlng=Cast(F('longitude') - centro_lng, FloatField()),
+        ).annotate(
+            _vertical=Q(_dlat__gte=Abs(F('_dlng'))) | Q(_dlat__lte=-Abs(F('_dlng'))),
+        )
+
+        if zona == 'norte':
+            return qs.filter(_vertical=True, _dlat__gt=0)
+        if zona == 'sul':
+            return qs.filter(_vertical=True, _dlat__lte=0)
+        if zona == 'leste':
+            return qs.filter(_vertical=False, _dlng__gt=0)
+        return qs.filter(_vertical=False, _dlng__lte=0)   # oeste
 
     @staticmethod
     def _periodo(inicio, fim):
@@ -152,7 +240,8 @@ class HeatmapService:
 
     @classmethod
     def pontos(cls, *, filial, metrica='receita', inicio=None, fim=None,
-               cidade='', uf='', representante_id=None, filial_id=None):
+               cidade='', uf='', bairro='', zona='', praca_id=None,
+               representante_id=None, filial_id=None):
         """
         Pontos `[lat, lng, peso]` para o Leaflet.heat.
 
@@ -166,7 +255,7 @@ class HeatmapService:
 
         filiais = cls._escopo_filiais(filial, filial_id)
         inicio, fim = cls._periodo(inicio, fim)
-        clientes = cls._clientes(filiais, cidade, uf)
+        clientes = cls._clientes(filiais, cidade, uf, bairro, zona, praca_id)
 
         b2b = cls._pedidos_b2b(filiais, inicio, fim, representante_id, metrica)
         pdv = cls._vendas_pdv(filiais, inicio, fim, representante_id, metrica)
@@ -204,12 +293,19 @@ class HeatmapService:
             'locais': len(brutos),
             # Sem coordenada o cliente não entra no mapa. Contar quantos ficaram
             # de fora evita ler um mapa incompleto como se fosse o todo.
-            'sem_coordenada': cls._sem_coordenada(filiais, valores, cidade, uf),
+            'sem_coordenada': cls._sem_coordenada(
+                filiais, valores, cidade, uf, bairro),
         }
 
     @classmethod
-    def _sem_coordenada(cls, filiais, valores, cidade, uf):
-        """Quantos clientes com venda no recorte não puderam ser plotados."""
+    def _sem_coordenada(cls, filiais, valores, cidade, uf, bairro=''):
+        """
+        Quantos clientes com venda no recorte não puderam ser plotados.
+
+        Zona e território não entram aqui de propósito: os dois se decidem
+        pela coordenada, e quem não tem coordenada não pertence a nenhum
+        deles — o número viraria sempre zero e esconderia o problema.
+        """
         from apps.cadastros.models import Cliente
 
         if not valores:
@@ -221,18 +317,23 @@ class HeatmapService:
             qs = qs.filter(cidade__iexact=cidade)
         if uf:
             qs = qs.filter(uf__iexact=uf)
+        if bairro:
+            qs = qs.filter(bairro__iexact=bairro)
         return qs.count()
 
     @classmethod
     def opcoes_de_filtro(cls, filial):
         """Cidades, UFs, representantes e filiais que existem no escopo."""
-        from apps.cadastros.models import Representante
+        from apps.cadastros.models import Praca, Representante
 
         filiais = cls._escopo_filiais(filial)
         clientes = cls._clientes(filiais)
 
         cidades = sorted(
             {c for c in clientes.values_list('cidade', flat=True).distinct() if c}
+        )
+        bairros = sorted(
+            {b for b in clientes.values_list('bairro', flat=True).distinct() if b}
         )
         ufs = sorted(
             {u for u in clientes.values_list('uf', flat=True).distinct() if u}
@@ -245,7 +346,17 @@ class HeatmapService:
         ]
         return {
             'cidades': cidades,
+            'bairros': bairros,
             'ufs': ufs,
+            'zonas': [{'chave': k, 'rotulo': v} for k, v in ZONAS.items()],
+            # Só praças com polígono desenhado: sem polígono não há como dizer
+            # quem está dentro, e a opção viraria um filtro que zera tudo.
+            'territorios': [
+                {'id': p.pk, 'nome': p.nome}
+                for p in Praca.objects.filter(
+                    filial__in=filiais, clientes_territorio__isnull=False,
+                ).distinct().order_by('nome')[:200]
+            ],
             'representantes': representantes,
             'filiais': [
                 {'id': f.pk, 'nome': f.nome_fantasia or f.razao_social}

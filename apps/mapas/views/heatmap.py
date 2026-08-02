@@ -29,9 +29,11 @@ def _inteiro(valor):
 @requer_permissao('mapas', 'ver')
 def heatmap(request):
     """
-    GET /mapas/api/heatmap/?metrica=receita&de=&ate=&cidade=&uf=&representante=&filial=
+    GET /mapas/api/heatmap/?metrica=receita&de=&ate=&cidade=&bairro=&uf=
+                           &zona=&territorio=&representante=&filial=
 
     Métricas: receita, pedidos, volume, clientes.
+    Zonas: norte, sul, leste, oeste (quadrante calculado pela coordenada).
     """
     return JsonResponse(HeatmapService.pontos(
         filial=getattr(request, 'filial_ativa', None),
@@ -40,6 +42,9 @@ def heatmap(request):
         fim=_data(request.GET.get('ate')),
         cidade=request.GET.get('cidade', '').strip(),
         uf=request.GET.get('uf', '').strip(),
+        bairro=request.GET.get('bairro', '').strip(),
+        zona=request.GET.get('zona', '').strip(),
+        praca_id=_inteiro(request.GET.get('territorio')),
         representante_id=_inteiro(request.GET.get('representante')),
         filial_id=_inteiro(request.GET.get('filial')),
     ))
@@ -57,7 +62,8 @@ def heatmap_filtros(request):
     """
     filial = getattr(request, 'filial_ativa', None)
     if filial is None:
-        return JsonResponse({'cidades': [], 'ufs': [],
+        return JsonResponse({'cidades': [], 'bairros': [], 'ufs': [],
+                             'zonas': [], 'territorios': [],
                              'representantes': [], 'filiais': [],
                              'metricas': []})
 

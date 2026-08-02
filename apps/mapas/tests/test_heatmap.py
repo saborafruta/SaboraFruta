@@ -436,3 +436,173 @@ class ApiTests(BaseHeatmap):
         self.client.logout()
         resp = self.client.get(reverse('mapas:api-heatmap'))
         self.assertIn(resp.status_code, (302, 401, 403))
+
+
+class ZonaTests(BaseHeatmap):
+    """
+    Quadrantes N/S/L/O calculados a partir da coordenada.
+
+    O centro e a media dos clientes do escopo. Aqui os pontos sao montados em
+    volta de (-5.79, -35.21) para o centro cair ali e as zonas ficarem obvias.
+    """
+
+    def _cenario(self):
+        """Quatro clientes, um em cada direcao, simetricos em volta do centro."""
+        pontos = {
+            'NORTE': (-5.70, -35.21),
+            'SUL':   (-5.88, -35.21),
+            'LESTE': (-5.79, -35.12),
+            'OESTE': (-5.79, -35.30),
+        }
+        for i, (nome, (lat, lng)) in enumerate(pontos.items()):
+            c = self._cliente(nome, str(i), lat=lat, lng=lng)
+            self._venda_pdv(c, 100)
+
+    def _nomes(self, **kw):
+        from apps.cadastros.models import Cliente
+
+        d = self._pontos(metrica='receita', **kw)
+        coords = {(round(p[0], 4), round(p[1], 4)) for p in d['pontos']}
+        return sorted(
+            c.razao_social for c in Cliente.objects.filter(filial=self.filial)
+            if c.latitude and (round(c.latitude, 4), round(c.longitude, 4)) in coords
+        )
+
+    def test_cada_zona_traz_so_o_seu_quadrante(self):
+        self._cenario()
+
+        self.assertEqual(self._nomes(zona='norte'), ['NORTE'])
+        self.assertEqual(self._nomes(zona='sul'), ['SUL'])
+        self.assertEqual(self._nomes(zona='leste'), ['LESTE'])
+        self.assertEqual(self._nomes(zona='oeste'), ['OESTE'])
+
+    def test_as_quatro_zonas_somam_a_base_inteira(self):
+        """
+        Com metades simples em vez de cunhas, cada ponto cairia em duas zonas
+        e a soma daria o dobro. Este teste e o que trava isso.
+        """
+        self._cenario()
+
+        total = self._pontos(metrica='receita')['total']
+        soma = sum(
+            self._pontos(metrica='receita', zona=z)['total']
+            for z in ('norte', 'sul', 'leste', 'oeste')
+        )
+        self.assertEqual(soma, total)
+
+    def test_zona_desconhecida_nao_filtra_nada(self):
+        self._cenario()
+        self.assertEqual(self._pontos(metrica='receita', zona='nordeste')['total'],
+                         self._pontos(metrica='receita')['total'])
+
+    def test_base_sem_coordenada_nenhuma_nao_quebra(self):
+        """Sem centro nao da para dividir; a consulta nao pode estourar."""
+        d = self._pontos(metrica='receita', zona='norte')
+        self.assertEqual(d['total'], 0.0)
+
+    def test_zona_combina_com_periodo(self):
+        self._cenario()
+        d = self._pontos(
+            metrica='receita', zona='norte',
+            inicio=timezone.localdate() - datetime.timedelta(days=30),
+            fim=timezone.localdate(),
+        )
+        self.assertEqual(d['total'], 100.0)
+
+
+class BairroTests(BaseHeatmap):
+    def test_filtra_por_bairro(self):
+        from apps.cadastros.models import Cliente
+
+        a = self._cliente('PONTA NEGRA', '1', lat=-5.88)
+        b = self._cliente('ALECRIM', '2', lat=-5.79)
+        Cliente.objects.filter(pk=a.pk).update(bairro='Ponta Negra')
+        Cliente.objects.filter(pk=b.pk).update(bairro='Alecrim')
+        self._venda_pdv(a, 300)
+        self._venda_pdv(b, 700)
+
+        self.assertEqual(
+            self._pontos(metrica='receita', bairro='Ponta Negra')['total'], 300.0)
+
+    def test_bairro_ignora_maiusculas(self):
+        from apps.cadastros.models import Cliente
+
+        c = self._cliente('A', '1')
+        Cliente.objects.filter(pk=c.pk).update(bairro='Ponta Negra')
+        self._venda_pdv(c, 300)
+
+        self.assertEqual(
+            self._pontos(metrica='receita', bairro='PONTA NEGRA')['total'], 300.0)
+
+    def test_bairro_entra_na_contagem_de_sem_coordenada(self):
+        """O aviso tem de acompanhar o recorte, senao vira um numero solto."""
+        from apps.cadastros.models import Cliente
+
+        sem = Cliente.objects.create(
+            filial=self.filial, razao_social='SEM GEO', cpf_cnpj='9',
+            cidade='Natal', uf='RN', bairro='Alecrim', ativo=True,
+        )
+        self._venda_pdv(sem, 100)
+
+        self.assertEqual(
+            self._pontos(metrica='receita', bairro='Alecrim')['sem_coordenada'], 1)
+        self.assertEqual(
+            self._pontos(metrica='receita', bairro='Tirol')['sem_coordenada'], 0)
+
+    def test_lista_de_bairros_so_traz_o_escopo(self):
+        from apps.cadastros.models import Cliente
+
+        outra = self._empresa('Beta', '99888777000166')
+        meu = self._cliente('MEU', '1')
+        alheio = self._cliente('ALHEIO', '9', filial=outra)
+        Cliente.objects.filter(pk=meu.pk).update(bairro='Alecrim')
+        Cliente.objects.filter(pk=alheio.pk).update(bairro='Boa Viagem')
+
+        d = self.client.get(reverse('mapas:api-heatmap-filtros')).json()
+
+        self.assertIn('Alecrim', d['bairros'])
+        self.assertNotIn('Boa Viagem', d['bairros'])
+        self.assertEqual(len(d['zonas']), 4)
+
+
+class TerritorioFiltroTests(BaseHeatmap):
+    def test_filtra_pelos_clientes_do_territorio_desenhado(self):
+        from apps.cadastros.models import Praca
+        from apps.mapas.models import ClienteTerritorio
+
+        praca = Praca.objects.create(filial=self.filial, nome='Zona Sul')
+        dentro = self._cliente('DENTRO', '1', lat=-5.88)
+        fora = self._cliente('FORA', '2', lat=-5.70)
+        ClienteTerritorio.objects.create(praca=praca, cliente=dentro)
+        self._venda_pdv(dentro, 400)
+        self._venda_pdv(fora, 600)
+
+        d = self._pontos(metrica='receita', praca_id=praca.pk)
+        self.assertEqual(d['total'], 400.0)
+
+    def test_territorio_de_outra_empresa_nao_vaza(self):
+        from apps.cadastros.models import Praca
+        from apps.mapas.models import ClienteTerritorio
+
+        outra = self._empresa('Beta', '99888777000166')
+        praca_alheia = Praca.objects.create(filial=outra, nome='Alheia')
+        alheio = self._cliente('ALHEIO', '9', filial=outra)
+        ClienteTerritorio.objects.create(praca=praca_alheia, cliente=alheio)
+        self._venda_pdv(alheio, 5000, filial=outra)
+
+        d = self._pontos(metrica='receita', praca_id=praca_alheia.pk)
+        self.assertEqual(d['total'], 0.0)
+
+    def test_so_lista_praca_com_cliente_atribuido(self):
+        """Praca sem poligono nao tem como dizer quem esta dentro."""
+        from apps.cadastros.models import Praca
+        from apps.mapas.models import ClienteTerritorio
+
+        com = Praca.objects.create(filial=self.filial, nome='Com Poligono')
+        Praca.objects.create(filial=self.filial, nome='Sem Poligono')
+        ClienteTerritorio.objects.create(praca=com, cliente=self._cliente('A', '1'))
+
+        d = self.client.get(reverse('mapas:api-heatmap-filtros')).json()
+        nomes = [t['nome'] for t in d['territorios']]
+
+        self.assertEqual(nomes, ['Com Poligono'])

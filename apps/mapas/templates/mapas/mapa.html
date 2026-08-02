@@ -433,6 +433,48 @@
         </div>
 
         <div>
+          <label>Bairro</label>
+          <select x-model="calorBairro" @change="carregarCalor()" class="form-input">
+            <option value="">Todos</option>
+            <template x-for="b in calorOpcoes.bairros" :key="b">
+              <option :value="b" x-text="b"></option>
+            </template>
+          </select>
+        </div>
+
+        <div>
+          <label>Zona</label>
+          <select x-model="calorZona" @change="carregarCalor()" class="form-input">
+            <option value="">Todas</option>
+            <template x-for="z in calorOpcoes.zonas" :key="z.chave">
+              <option :value="z.chave" x-text="z.rotulo"></option>
+            </template>
+          </select>
+        </div>
+
+        {% comment %}
+          A zona é quadrante geográfico calculado a partir da coordenada, não a
+          divisão administrativa da prefeitura. Dizer isso evita que alguém
+          compare o número com um relatório oficial e ache que um dos dois
+          está errado — e aponta para o Território, que é o limite exato.
+        {% endcomment %}
+        <p x-show="calorZona" x-cloak style="font-size:11px; opacity:.7;">
+          Quadrante calculado pela coordenada, em relação ao centro da sua
+          carteira. Para o limite exato de uma região, desenhe um território
+          e use o filtro abaixo.
+        </p>
+
+        <div x-show="calorOpcoes.territorios.length" x-cloak>
+          <label>Território</label>
+          <select x-model="calorTerritorio" @change="carregarCalor()" class="form-input">
+            <option value="">Todos</option>
+            <template x-for="t in calorOpcoes.territorios" :key="t.id">
+              <option :value="t.id" x-text="t.nome"></option>
+            </template>
+          </select>
+        </div>
+
+        <div>
           <label>Representante</label>
           <select x-model="calorRepresentante" @change="carregarCalor()" class="form-input">
             <option value="">Todos</option>
@@ -676,9 +718,11 @@ function mapaGeo() {
     modoCalor: false,
     calorMetrica: 'receita',
     calorMetricas: [],
-    calorOpcoes: { cidades: [], ufs: [], representantes: [], filiais: [] },
+    calorOpcoes: { cidades: [], bairros: [], ufs: [], zonas: [],
+                   territorios: [], representantes: [], filiais: [] },
     calorDe: '', calorAte: '',
-    calorCidade: '', calorUf: '', calorRepresentante: '', calorFilial: '',
+    calorCidade: '', calorBairro: '', calorZona: '', calorTerritorio: '',
+    calorUf: '', calorRepresentante: '', calorFilial: '',
     calorResultado: null,
     calorCarregando: false,
     _mapa: null,
@@ -953,7 +997,9 @@ function mapaGeo() {
         const d = await resp.json();
         this.calorMetricas = d.metricas || [];
         this.calorOpcoes = {
-          cidades: d.cidades || [], ufs: d.ufs || [],
+          cidades: d.cidades || [], bairros: d.bairros || [],
+          ufs: d.ufs || [], zonas: d.zonas || [],
+          territorios: d.territorios || [],
           representantes: d.representantes || [], filiais: d.filiais || [],
         };
       } catch (e) {
@@ -969,6 +1015,9 @@ function mapaGeo() {
         if (this.calorDe) p.set('de', this.calorDe);
         if (this.calorAte) p.set('ate', this.calorAte);
         if (this.calorCidade) p.set('cidade', this.calorCidade);
+        if (this.calorBairro) p.set('bairro', this.calorBairro);
+        if (this.calorZona) p.set('zona', this.calorZona);
+        if (this.calorTerritorio) p.set('territorio', this.calorTerritorio);
         if (this.calorUf) p.set('uf', this.calorUf);
         if (this.calorRepresentante) p.set('representante', this.calorRepresentante);
         if (this.calorFilial) p.set('filial', this.calorFilial);

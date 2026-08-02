@@ -439,6 +439,32 @@ entrou dinheiro nenhum e divergiria do faturamento do resto do ERP. O desconto
 só cabe no dinheiro: em *pedidos* e *volume* ele não se aplica, porque a venda
 aconteceu — o que não houve foi receita.
 
+**Filtros:** cidade, bairro, zona, território, estado, representante, filial e
+período.
+
+**Zona (Norte/Sul/Leste/Oeste) é derivada da coordenada** — não existe campo de
+zona no cadastro, e pedir preenchimento manual de centenas de clientes seria
+pior que calcular do que já está geocodificado. A referência é o **centro médio
+da carteira**, não a filial: uma filial na borda da cidade jogaria quase todo
+mundo para um lado só.
+
+A divisão é em **quatro cunhas, não em metades**: o cliente vai para Norte/Sul
+quando se afasta mais em latitude, e para Leste/Oeste quando se afasta mais em
+longitude. Com metades simples cada ponto cairia em duas zonas e a soma das
+quatro daria o dobro da base — há um teste somando as quatro contra o total
+justamente para travar isso.
+
+O centro considera cidade/UF mas **não** bairro nem território: se ele se
+movesse a cada filtro, "Zona Norte" mudaria de lugar conforme o recorte e dois
+relatórios deixariam de ser comparáveis.
+
+Isto é geometria, **não a divisão administrativa da prefeitura** — os limites
+não batem exatamente com o que o pessoal da rua chama de Zona Norte. Para
+limite exato existe o filtro de **Território**, que usa o polígono desenhado no
+mapa (§11) e a atribuição já materializada em `ClienteTerritorio`. A lista só
+oferece praças que têm clientes atribuídos: sem polígono não há como dizer quem
+está dentro, e a opção viraria um filtro que zera tudo.
+
 **Peso normalizado de 0 a 1** contra o maior valor do recorte. O `leaflet.heat`
 satura acima de 1: mandar reais crus pintaria o mapa inteiro de vermelho. Os
 absolutos voltam em `total` e `maximo`, para a legenda dizer o que a cor vale.
