@@ -1,0 +1,16 @@
+{% extends "_base.html" %}
+{% block title %}Excluir cerca{% endblock %}
+{% block page_title %}Excluir cerca{% endblock %}
+{% block content %}
+<div class="card p-6 space-y-4" style="max-width:520px;">
+  <p class="text-sm" :style="temaClaro ? 'color:#374151;' : 'color:#cbd5e1;'">
+    Excluir a cerca <strong>{{ object.nome }}</strong>?
+    Os eventos já registrados nela serão removidos junto.
+  </p>
+  <form method="post" class="flex gap-2">
+    {% csrf_token %}
+    <button type="submit" class="btn-primary" style="background:#dc2626;">Excluir</button>
+    <a href="{% url 'mapas:geofence-list' %}" class="btn-secondary">Cancelar</a>
+  </form>
+</div>
+{% endblock %}

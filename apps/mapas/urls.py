@@ -1,10 +1,12 @@
 from django.urls import path
 
 from apps.mapas.views import (
+    GeofenceCreateView, GeofenceDeleteView, GeofenceEventosView,
+    GeofenceListView, GeofenceUpdateView,
     MapaPrincipalView, PainelMapasView,
     RelatorioCoberturaView, RelatorioRegiaoView, RelatorioRotasView,
 )
-from apps.mapas.views import api, distancia, heatmap, rota, territorio
+from apps.mapas.views import api, distancia, geofence, heatmap, rota, territorio
 
 app_name = 'mapas'
 
@@ -17,6 +19,15 @@ urlpatterns = [
     path('relatorios/cobertura/', RelatorioCoberturaView.as_view(),
          name='relatorio-cobertura'),
     path('relatorios/rotas/', RelatorioRotasView.as_view(), name='relatorio-rotas'),
+
+    # Cercas virtuais (secao 12)
+    path('cercas/', GeofenceListView.as_view(), name='geofence-list'),
+    path('cercas/nova/', GeofenceCreateView.as_view(), name='geofence-novo'),
+    path('cercas/<int:pk>/editar/', GeofenceUpdateView.as_view(), name='geofence-editar'),
+    path('cercas/<int:pk>/excluir/', GeofenceDeleteView.as_view(), name='geofence-excluir'),
+    path('cercas/eventos/', GeofenceEventosView.as_view(), name='geofence-eventos'),
+    path('rastreio/', geofence.pagina_rastreio, name='rastreio'),
+    path('api/posicao/', geofence.registrar_posicao, name='api-posicao'),
 
     # APIs consumidas pelo Leaflet
     path('api/camadas/', api.camadas, name='api-camadas'),

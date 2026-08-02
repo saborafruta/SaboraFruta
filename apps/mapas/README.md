@@ -546,6 +546,40 @@ circula: receita já sem Doação/Permuta; volume somando unidades diferentes;
 zona como quadrante geométrico, não divisão da prefeitura; e km de rota
 **calculada**, não medida por GPS.
 
+### §12 — Cercas virtuais (geofence)
+
+`/mapas/cercas/` — cerca circular (ponto + raio, padrão 300 m). Quando um
+motorista entra, registra a hora; quando sai, registra a hora.
+
+**Uma cerca só dispara se alguém disser onde o motorista está.** Isso é o §13,
+que estava em standby — por isso veio junto o **mínimo** dele: um endpoint de
+posição (`POST /mapas/api/posicao/`) e a página `/mapas/rastreio/`, que o
+motorista deixa aberta no celular e que usa a geolocalização do navegador. É a
+fonte mais simples que faz o §12 funcionar hoje, sem rastreador nem aplicativo.
+O resto do §13 (mapa ao vivo, trilha do percurso) continua fora.
+
+**Círculo e não polígono.** O caso da especificação é "raio de 300 metros", e o
+teste dentro/fora vira uma conta de distância. Regiões de formato livre já são
+atendidas pelos territórios (§11), que respondem outra pergunta: lá é "que
+clientes moram nesta região", aqui é "o veículo chegou".
+
+**Não há tabela de pings.** O estado "está dentro" é deduzido do último evento
+do par (motorista, cerca) via `DISTINCT ON`. Guardar cada posição recebida
+seriam milhares de linhas por dia por motorista para responder o que dois
+registros por visita respondem.
+
+**Histerese de 60 m.** Entra ao cruzar o raio, mas só sai depois de se afastar
+mais um tanto. O GPS de celular oscila dezenas de metros mesmo parado — sem a
+margem, um motorista parado na borda geraria uma enxurrada de entrada/saída e o
+relatório viraria ruído. A folga vale **só para sair**: se valesse para entrar,
+os 300 m configurados não seriam 300 m.
+
+Os eventos são apresentados **emparelhados em visitas** (entrada, saída,
+permanência), não como lista crua: a pergunta real é quanto tempo o motorista
+ficou lá, e ela só existe no par. Entrada sem saída aparece como *ainda dentro*
+— pode ser o motorista no local ou o rastreio interrompido, e omitir a linha
+esconderia as duas coisas.
+
 ### Modo de desenho (Leaflet.draw)
 
 O §11 fecha: o polígono é desenhado no próprio mapa.

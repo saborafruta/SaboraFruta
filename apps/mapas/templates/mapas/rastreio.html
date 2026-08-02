@@ -1,0 +1,172 @@
+{% extends "_base.html" %}
+
+{% block title %}{{ title }}{% endblock %}
+{% block page_title %}{{ title }}{% endblock %}
+
+{% block extra_head %}
+<style>
+  /* Alvos grandes: esta tela é usada de pé, no celular, dentro do veículo. */
+  .rastreio-botao { width:100%; padding:16px; border-radius:12px; border:none;
+                    font-size:16px; font-weight:800; cursor:pointer; }
+  .rastreio-status { font-size:13px; line-height:1.6; }
+  .rastreio-log { max-height:260px; overflow:auto; font-size:12.5px; }
+  .rastreio-log div { padding:6px 0; border-top:1px solid rgba(127,127,127,.18); }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="space-y-4" style="max-width:520px;" x-data="rastreio()">
+
+  <div class="card p-5 space-y-4">
+    <div>
+      <label class="block text-xs font-semibold mb-1.5"
+             :style="temaClaro ? 'color:#374151;' : 'color:#cbd5e1;'">Motorista</label>
+      <select x-model="motorista" :disabled="ligado" class="form-input w-full">
+        <option value="">Selecione...</option>
+        {% for m in motoristas %}
+          <option value="{{ m.pk }}">{{ m.nome }}</option>
+        {% endfor %}
+      </select>
+    </div>
+
+    <button type="button" class="rastreio-botao"
+            @click="ligado ? parar() : comecar()"
+            :disabled="!motorista"
+            :style="ligado ? 'background:#dc2626;color:#fff;' : 'background:#16a34a;color:#fff;'"
+            x-text="ligado ? 'Parar rastreio' : 'Iniciar rastreio'"></button>
+
+    <p class="rastreio-status" x-show="mensagem" x-cloak x-text="mensagem"
+       :style="erro ? 'color:#f87171;' : (temaClaro ? 'color:#374151;' : 'color:#cbd5e1;')"></p>
+
+    <template x-if="ligado">
+      <p class="rastreio-status" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+        Última posição enviada: <strong x-text="ultimaHora || '—'"></strong>
+        <span x-show="precisao" x-cloak x-text="' · precisão ~' + Math.round(precisao) + ' m'"></span>
+      </p>
+    </template>
+  </div>
+
+  {% comment %}
+    As duas limitações reais desta abordagem. Descobrir isso em campo, com o
+    motorista na rua e o relatório vazio, seria bem pior que ler aqui.
+  {% endcomment %}
+  <div class="card p-4" style="border-left:3px solid #f59e0b;">
+    <p class="text-sm" :style="temaClaro ? 'color:#374151;' : 'color:#cbd5e1;'">
+      <strong>Deixe esta página aberta e a tela ligada.</strong>
+      O navegador para de atualizar a localização quando fica em segundo plano
+      ou o celular bloqueia — e sem posição a cerca não registra nada.
+    </p>
+    <p class="text-xs mt-2" :style="temaClaro ? 'color:#94a3b8;' : 'color:#64748b;'">
+      Para rastreio contínuo, mesmo com o celular no bolso, é preciso um
+      rastreador de veículo ou um aplicativo. O endereço que recebe a posição
+      é o mesmo, então trocar a fonte depois não muda nada aqui dentro.
+    </p>
+  </div>
+
+  <div class="card p-4" x-show="eventos.length" x-cloak>
+    <h3 class="text-sm font-semibold mb-2"
+        :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">Cercas nesta sessão</h3>
+    <div class="rastreio-log">
+      <template x-for="(e, i) in eventos" :key="i">
+        <div>
+          <strong x-text="e.hora"></strong>
+          <span x-text="e.tipo === 'entrada' ? ' entrou em ' : ' saiu de '"
+                :style="e.tipo === 'entrada' ? 'color:#22c55e;' : 'color:#f59e0b;'"></span>
+          <strong x-text="e.cerca"></strong>
+        </div>
+      </template>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+{{ block.super }}
+<script>
+const CSRF = '{{ csrf_token }}';
+
+function rastreio() {
+  return {
+    motorista: '',
+    ligado: false,
+    mensagem: '',
+    erro: false,
+    ultimaHora: '',
+    precisao: null,
+    eventos: [],
+    _watch: null,
+
+    comecar() {
+      if (!navigator.geolocation) {
+        this._falha('Este navegador não fornece localização.');
+        return;
+      }
+      this.ligado = true;
+      this.erro = false;
+      this.mensagem = 'Obtendo localização...';
+
+      // watchPosition em vez de um timer com getCurrentPosition: o navegador
+      // avisa quando a posição muda de verdade, o que gasta menos bateria e
+      // reage na hora ao cruzar a cerca.
+      this._watch = navigator.geolocation.watchPosition(
+        (pos) => this._enviar(pos),
+        (err) => this._falha(this._motivo(err)),
+        { enableHighAccuracy: true, maximumAge: 10000, timeout: 30000 },
+      );
+    },
+
+    parar() {
+      if (this._watch !== null) navigator.geolocation.clearWatch(this._watch);
+      this._watch = null;
+      this.ligado = false;
+      this.mensagem = 'Rastreio parado.';
+    },
+
+    async _enviar(pos) {
+      this.precisao = pos.coords.accuracy;
+      try {
+        const resp = await fetch('{% url "mapas:api-posicao" %}', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'X-CSRFToken': CSRF },
+          body: JSON.stringify({
+            motorista: this.motorista,
+            lat: pos.coords.latitude,
+            lng: pos.coords.longitude,
+          }),
+        });
+        const d = await resp.json();
+        if (!resp.ok) throw new Error(d.erro || ('HTTP ' + resp.status));
+
+        this.erro = false;
+        this.mensagem = 'Rastreio ativo.';
+        this.ultimaHora = new Date().toLocaleTimeString('pt-BR');
+
+        (d.eventos || []).forEach((e) => this.eventos.unshift({
+          hora: new Date(e.momento).toLocaleTimeString('pt-BR'),
+          tipo: e.tipo, cerca: e.cerca,
+        }));
+      } catch (e) {
+        // Sem sinal não é motivo para desligar: a próxima posição tenta de
+        // novo, e desligar sozinho deixaria o motorista sem rastreio sem ele
+        // perceber.
+        this.erro = true;
+        this.mensagem = 'Sem conexão — tentando de novo. ' + e.message;
+      }
+    },
+
+    _falha(texto) {
+      this.erro = true;
+      this.mensagem = texto;
+      this.parar();
+    },
+
+    _motivo(err) {
+      if (err.code === 1) return 'Permissão de localização negada. Autorize nas configurações do navegador.';
+      if (err.code === 2) return 'Não foi possível obter a localização (sem sinal de GPS).';
+      if (err.code === 3) return 'A localização demorou demais para responder.';
+      return 'Falha ao obter a localização.';
+    },
+  };
+}
+</script>
+{% endblock %}

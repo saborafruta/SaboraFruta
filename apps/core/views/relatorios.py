@@ -107,6 +107,11 @@ class RelatoriosHubView(PermissaoRequiredMixin, TemplateView):
                         'url_name': 'mapas:relatorio-rotas',
                     },
                     {
+                        'nome': 'Eventos de Cerca',
+                        'descricao': 'Entrada, saída e permanência dos motoristas nas cercas virtuais.',
+                        'url_name': 'mapas:geofence-eventos',
+                    },
+                    {
                         'nome': 'Painel de Mapas',
                         'descricao': 'Indicadores de cobertura, entregas do dia, rotas e sugestões de proximidade.',
                         'url_name': 'mapas:painel',

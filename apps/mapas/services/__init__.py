@@ -1,4 +1,5 @@
 from .distancia import DistanciaService
+from .geofence import GeofenceService
 from .heatmap import HeatmapService
 from .painel import PainelService
 from .relatorios import (
@@ -12,7 +13,7 @@ from .territorio import TerritorioService
 
 __all__ = [
     'GeocodificacaoService', 'construir_geocoder', 'DistanciaService',
-    'ProximidadeService', 'TerritorioService', 'HeatmapService', 'PainelService',
+    'ProximidadeService', 'TerritorioService', 'HeatmapService', 'PainelService', 'GeofenceService',
     'RelatorioRegiaoService', 'RelatorioCoberturaService', 'RelatorioRotasService',
     'RoteirizacaoService', 'construir_roteirizador',
     'OtimizacaoService', 'construir_otimizador',

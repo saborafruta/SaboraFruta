@@ -1,0 +1,127 @@
+{% extends "_base.html" %}
+
+{% block title %}{{ title }}{% endblock %}
+{% block page_title %}{{ title }}{% endblock %}
+
+{% block extra_head %}
+<style>
+  #eventos table { width:100%; border-collapse:collapse; font-size:13px; }
+  #eventos th { text-align:left; padding:7px 8px; font-size:10.5px;
+                text-transform:uppercase; letter-spacing:.04em; font-weight:800;
+                border-bottom:2px solid rgba(127,127,127,.3); }
+  #eventos td { padding:7px 8px; border-bottom:1px solid rgba(127,127,127,.16); }
+  #eventos td.num { text-align:right; font-variant-numeric:tabular-nums; }
+  @media print {
+    nav, header, aside, .no-print { display:none !important; }
+    body { background:#fff !important; }
+    #eventos { color:#000 !important; }
+    #eventos thead { display: table-header-group; }
+    * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    @page { margin: 12mm; }
+  }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="space-y-4" id="eventos">
+
+  <div class="flex items-center justify-between gap-3 flex-wrap no-print">
+    <p class="text-sm" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+      Entrada, saída e tempo de permanência em cada cerca.
+    </p>
+    <div class="flex gap-2">
+      <button type="button" onclick="window.print()" class="btn-secondary">Imprimir</button>
+      <a href="{% url 'mapas:geofence-list' %}" class="btn-secondary">Cercas</a>
+    </div>
+  </div>
+
+  <form method="get" class="card p-4 grid grid-cols-12 gap-3 items-end no-print">
+    <div class="col-span-6 sm:col-span-2">
+      <label class="block text-xs font-semibold mb-1.5"
+             :style="temaClaro ? 'color:#374151;' : 'color:#cbd5e1;'">De</label>
+      <input type="date" name="de" value="{{ dados.inicio|date:'Y-m-d' }}" class="form-input w-full">
+    </div>
+    <div class="col-span-6 sm:col-span-2">
+      <label class="block text-xs font-semibold mb-1.5"
+             :style="temaClaro ? 'color:#374151;' : 'color:#cbd5e1;'">Até</label>
+      <input type="date" name="ate" value="{{ dados.fim|date:'Y-m-d' }}" class="form-input w-full">
+    </div>
+    <div class="col-span-12 sm:col-span-3">
+      <label class="block text-xs font-semibold mb-1.5"
+             :style="temaClaro ? 'color:#374151;' : 'color:#cbd5e1;'">Cerca</label>
+      <select name="cerca" class="form-input w-full">
+        <option value="">Todas</option>
+        {% for c in cercas %}
+          <option value="{{ c.pk }}" {% if cerca_sel == c.pk|stringformat:"s" %}selected{% endif %}>
+            {{ c.nome }}
+          </option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="col-span-12 sm:col-span-3">
+      <label class="block text-xs font-semibold mb-1.5"
+             :style="temaClaro ? 'color:#374151;' : 'color:#cbd5e1;'">Motorista</label>
+      <select name="motorista" class="form-input w-full">
+        <option value="">Todos</option>
+        {% for m in motoristas %}
+          <option value="{{ m.pk }}" {% if motorista_sel == m.pk|stringformat:"s" %}selected{% endif %}>
+            {{ m.nome }}
+          </option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="col-span-12 sm:col-span-2 flex gap-2">
+      <button type="submit" class="btn-primary">Aplicar</button>
+      <a href="{% url 'mapas:geofence-eventos' %}" class="btn-secondary">Hoje</a>
+    </div>
+  </form>
+
+  <div class="card p-4">
+    {% if dados.visitas %}
+      <table>
+        <thead>
+          <tr>
+            <th>Cerca</th>
+            <th>Motorista</th>
+            <th>Entrada</th>
+            <th>Saída</th>
+            <th class="num">Permanência</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for v in dados.visitas %}
+            <tr>
+              <td><strong>{{ v.cerca }}</strong></td>
+              <td>{{ v.motorista }}</td>
+              <td>
+                {% if v.entrada %}{{ v.entrada|date:"d/m/Y H:i:s" }}
+                {% else %}<span style="opacity:.55;">—</span>{% endif %}
+              </td>
+              <td>
+                {% if v.saida %}{{ v.saida|date:"d/m/Y H:i:s" }}
+                {% else %}<span style="color:#f59e0b;">ainda dentro</span>{% endif %}
+              </td>
+              <td class="num">{{ v.permanencia }}</td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+
+      {% comment %}
+        Visita sem saída pode ser o motorista ainda lá ou o rastreamento
+        interrompido. Omitir a linha esconderia as duas situações; dizer as
+        duas evita que "ainda dentro" às 23h seja lido como esquecimento.
+      {% endcomment %}
+      <p class="text-xs mt-3" :style="temaClaro ? 'color:#94a3b8;' : 'color:#64748b;'">
+        “Ainda dentro” significa que não chegou o registro de saída — ou o
+        motorista continua no local, ou o rastreio parou (celular sem bateria,
+        página fechada, sem sinal).
+      </p>
+    {% else %}
+      <p class="text-sm text-center py-8" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+        Nenhum evento no período.
+      </p>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}

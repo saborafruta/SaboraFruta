@@ -1,0 +1,179 @@
+{% extends "_base.html" %}
+
+{% block title %}{{ title }}{% endblock %}
+{% block page_title %}{{ title }}{% endblock %}
+
+{% block extra_head %}
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<style>
+  #mapa-cerca { height: 340px; border-radius: 10px; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="space-y-4" x-data="formCerca()" x-init="iniciar()">
+  <form method="post" class="card p-5 space-y-4">
+    {% csrf_token %}
+
+    {% if form.errors %}
+      <div class="text-sm p-3 rounded" style="background:rgba(239,68,68,.1); color:#f87171;">
+        {{ form.errors }}
+      </div>
+    {% endif %}
+
+    <div class="grid grid-cols-12 gap-3">
+      <div class="col-span-12 sm:col-span-6">
+        <label class="block text-xs font-semibold mb-1.5"
+               :style="temaClaro ? 'color:#374151;' : 'color:#cbd5e1;'">Nome</label>
+        {{ form.nome }}
+      </div>
+      <div class="col-span-6 sm:col-span-3">
+        <label class="block text-xs font-semibold mb-1.5"
+               :style="temaClaro ? 'color:#374151;' : 'color:#cbd5e1;'">Raio (metros)</label>
+        {{ form.raio_m }}
+      </div>
+      <div class="col-span-6 sm:col-span-3 flex items-end gap-2">
+        <label class="flex items-center gap-2 text-sm pb-2">
+          {{ form.ativo }}
+          <span :style="temaClaro ? 'color:#374151;' : 'color:#cbd5e1;'">Ativa</span>
+        </label>
+      </div>
+
+      {% comment %}
+        Escolher um cliente copia a coordenada dele para a cerca — é o caminho
+        mais rápido para o caso comum ("cerca de 300 m no cliente X"). A
+        coordenada fica copiada, não vinculada: corrigir o endereço do cliente
+        depois não pode mover uma cerca que já tem eventos registrados.
+      {% endcomment %}
+      <div class="col-span-12 sm:col-span-6">
+        <label class="block text-xs font-semibold mb-1.5"
+               :style="temaClaro ? 'color:#374151;' : 'color:#cbd5e1;'">
+          Cliente de referência (opcional)
+        </label>
+        {{ form.cliente }}
+        <p class="text-xs mt-1" :style="temaClaro ? 'color:#94a3b8;' : 'color:#64748b;'">
+          Escolher um cliente preenche a coordenada abaixo. Ela fica copiada:
+          corrigir o endereço dele depois não move a cerca.
+        </p>
+      </div>
+
+      <div class="col-span-6 sm:col-span-3">
+        <label class="block text-xs font-semibold mb-1.5"
+               :style="temaClaro ? 'color:#374151;' : 'color:#cbd5e1;'">Latitude</label>
+        {{ form.latitude }}
+      </div>
+      <div class="col-span-6 sm:col-span-3">
+        <label class="block text-xs font-semibold mb-1.5"
+               :style="temaClaro ? 'color:#374151;' : 'color:#cbd5e1;'">Longitude</label>
+        {{ form.longitude }}
+      </div>
+
+      <div class="col-span-12">
+        <label class="block text-xs font-semibold mb-1.5"
+               :style="temaClaro ? 'color:#374151;' : 'color:#cbd5e1;'">Observação</label>
+        {{ form.observacao }}
+      </div>
+    </div>
+
+    <div>
+      <p class="text-xs font-semibold mb-1.5"
+         :style="temaClaro ? 'color:#374151;' : 'color:#cbd5e1;'">
+        Clique no mapa para posicionar a cerca
+      </p>
+      <div id="mapa-cerca"></div>
+      <p class="text-xs mt-1" :style="temaClaro ? 'color:#94a3b8;' : 'color:#64748b;'">
+        O círculo mostra o raio na escala real — 300 m parece pouco no zoom
+        errado, e é aqui que dá para ver se a cerca cobre a quadra inteira.
+      </p>
+    </div>
+
+    <div class="flex gap-2">
+      <button type="submit" class="btn-primary">Salvar</button>
+      <a href="{% url 'mapas:geofence-list' %}" class="btn-secondary">Cancelar</a>
+      {% if object.pk %}
+        <a href="{% url 'mapas:geofence-excluir' object.pk %}"
+           class="btn-secondary ml-auto" style="color:#dc2626;">Excluir</a>
+      {% endif %}
+    </div>
+  </form>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+{{ block.super }}
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+function formCerca() {
+  return {
+    _mapa: null, _marcador: null, _circulo: null,
+
+    iniciar() {
+      const lat = this._campo('latitude');
+      const lng = this._campo('longitude');
+      const partida = [
+        parseFloat(lat.value) || {{ centro_lat|default:"-5.79" }},
+        parseFloat(lng.value) || {{ centro_lng|default:"-35.21" }},
+      ];
+
+      this._mapa = L.map('mapa-cerca').setView(partida, lat.value ? 15 : 12);
+      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        maxZoom: 19,
+        attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
+      }).addTo(this._mapa);
+
+      if (lat.value && lng.value) this._desenhar(partida[0], partida[1]);
+
+      this._mapa.on('click', (e) => {
+        lat.value = e.latlng.lat.toFixed(6);
+        lng.value = e.latlng.lng.toFixed(6);
+        this._desenhar(e.latlng.lat, e.latlng.lng);
+      });
+
+      // Digitar a coordenada ou mudar o raio redesenha: o mapa é a conferência
+      // do que foi digitado, então não pode ficar defasado dos campos.
+      ['latitude', 'longitude', 'raio_m'].forEach((nome) => {
+        this._campo(nome).addEventListener('input', () => {
+          const la = parseFloat(lat.value), lo = parseFloat(lng.value);
+          if (!isNaN(la) && !isNaN(lo)) this._desenhar(la, lo);
+        });
+      });
+
+      this._campo('cliente').addEventListener('change', (e) => this._doCliente(e.target.value));
+    },
+
+    _campo(nome) {
+      return document.querySelector(`[name="${nome}"]`);
+    },
+
+    _desenhar(la, lo) {
+      const raio = parseInt(this._campo('raio_m').value, 10) || 300;
+      if (this._marcador) this._mapa.removeLayer(this._marcador);
+      if (this._circulo) this._mapa.removeLayer(this._circulo);
+
+      this._marcador = L.marker([la, lo]).addTo(this._mapa);
+      this._circulo = L.circle([la, lo], {
+        radius: raio, color: '#7c3aed', weight: 2,
+        fillColor: '#a78bfa', fillOpacity: 0.18,
+      }).addTo(this._mapa);
+      this._mapa.setView([la, lo], Math.max(this._mapa.getZoom(), 15));
+    },
+
+    // Copia a coordenada do cliente escolhido. Reaproveita a API de detalhe do
+    // mapa (§3), que já devolve lat/lng com escopo de filial validado.
+    async _doCliente(id) {
+      if (!id) return;
+      try {
+        const url = `{% url 'mapas:api-cliente-detalhe' 0 %}`.replace('/0/', `/${id}/`);
+        const resp = await fetch(url, { headers: { 'Accept': 'application/json' } });
+        const d = await resp.json();
+        if (!resp.ok || d.lat == null) return;
+        this._campo('latitude').value = Number(d.lat).toFixed(6);
+        this._campo('longitude').value = Number(d.lng).toFixed(6);
+        if (!this._campo('nome').value) this._campo('nome').value = d.nome || '';
+        this._desenhar(d.lat, d.lng);
+      } catch (e) { /* coordenada continua a que estava */ }
+    },
+  };
+}
+</script>
+{% endblock %}
