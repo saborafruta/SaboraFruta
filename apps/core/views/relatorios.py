@@ -92,6 +92,11 @@ class RelatoriosHubView(PermissaoRequiredMixin, TemplateView):
                 'titulo': 'Mapas e Geolocalização',
                 'itens': [
                     {
+                        'nome': 'Relatório de Mapas (completo)',
+                        'descricao': 'Faturamento por zona e bairro, clientes de cada zona, quem está sem endereço e o roteiro sugerido — num documento só.',
+                        'url_name': 'mapas:relatorio-completo',
+                    },
+                    {
                         'nome': 'Vendas por Região',
                         'descricao': 'Receita, pedidos, volume e clientes por cidade, bairro, zona ou estado — imprimível e em PDF.',
                         'url_name': 'mapas:relatorio-regiao',

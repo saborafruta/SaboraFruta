@@ -617,6 +617,43 @@ O horário aparece como “atualizado há 12 min”, não como hora absoluta: nu
 tela de tempo real o que importa é se o dado é de agora, e a subtração mental
 do relógio é justamente o passo que induz a erro.
 
+### Relatório de Mapas (completo)
+
+`/mapas/relatorios/completo/` — cinco seções num documento só, imprimível e em
+PDF: faturamento **por zona**, faturamento **por bairro**, **clientes de cada
+zona**, **quem está sem endereço** e o **roteiro sugerido**.
+
+Existe além dos relatórios de uma seção porque a pergunta é outra: aqueles
+servem para conferir um número, este para levar a operação inteira para uma
+reunião — ou para a rua — numa impressão só. Cada seção começa em página nova.
+
+**A seção de clientes por zona traz a base toda**, inclusive quem *não* comprou
+no período. O relatório por região responde "a Zona Sul faturou X"; esta
+responde "e são estes os clientes" — e para conferir cobertura de carteira,
+quem não comprou é justamente a informação que interessa.
+
+#### Roteiro sugerido
+
+Duas decisões distintas, em sequência:
+
+1. **Quem visitar** — não é quem comprou mais, é quem vale a visita agora.
+   Prioridade para quem está **atrasado na recompra**, depois pelo `score` do
+   CRM (atraso + ticket + regularidade), e por fim pela receita do período.
+   Cliente sem padrão calculado entra pela receita, para não ficar de fora só
+   por ser recente.
+2. **Em que ordem** — aí sim é geografia: a lista escolhida no passo 1 é
+   reordenada pelo otimizador (§5).
+
+Misturar as duas num critério só daria um roteiro que ou anda muito para vender
+pouco, ou visita o vizinho errado.
+
+**A ordenação nunca derruba o relatório.** Se o provider de rotas não responder,
+cai no otimizador local (linha reta) e a página **diz qual dos dois foi usado** —
+senão a quilometragem pareceria equivalente, e não é.
+
+O rodapé da seção explica o critério de escolha. Sem isso o roteiro parece
+arbitrário, e quem recebe a folha precisa poder discordar com conhecimento.
+
 ### Modo de desenho (Leaflet.draw)
 
 O §11 fecha: o polígono é desenhado no próprio mapa.

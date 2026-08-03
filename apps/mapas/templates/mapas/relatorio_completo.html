@@ -1,0 +1,330 @@
+{% extends "mapas/_relatorio_base.html" %}
+
+{% block relatorio_nome %}Relatório de Mapas{% endblock %}
+{% block relatorio_arquivo %}relatorio-de-mapas{% endblock %}
+
+{% block relatorio_subtitulo %}
+  · Período: <strong>{{ dados.inicio|date:"d/m/Y" }} a {{ dados.fim|date:"d/m/Y" }}</strong>
+  {% if dados.zona %} · Zona: <strong>{{ dados.zona|capfirst }}</strong>{% endif %}
+  {% if dados.cidade %} · {{ dados.cidade }}{% endif %}
+{% endblock %}
+
+{% block relatorio_filtros %}
+<form method="get" class="card p-4 grid grid-cols-12 gap-3 items-end">
+  <div class="col-span-6 sm:col-span-2">
+    <label class="block text-xs font-semibold mb-1.5"
+           :style="temaClaro ? 'color:#374151;' : 'color:#cbd5e1;'">De</label>
+    <input type="date" name="de" value="{{ dados.inicio|date:'Y-m-d' }}" class="form-input w-full">
+  </div>
+  <div class="col-span-6 sm:col-span-2">
+    <label class="block text-xs font-semibold mb-1.5"
+           :style="temaClaro ? 'color:#374151;' : 'color:#cbd5e1;'">Até</label>
+    <input type="date" name="ate" value="{{ dados.fim|date:'Y-m-d' }}" class="form-input w-full">
+  </div>
+  <div class="col-span-6 sm:col-span-3">
+    <label class="block text-xs font-semibold mb-1.5"
+           :style="temaClaro ? 'color:#374151;' : 'color:#cbd5e1;'">Cidade</label>
+    <input type="text" name="cidade" value="{{ dados.cidade }}"
+           placeholder="Todas" class="form-input w-full">
+  </div>
+  <div class="col-span-6 sm:col-span-2">
+    <label class="block text-xs font-semibold mb-1.5"
+           :style="temaClaro ? 'color:#374151;' : 'color:#cbd5e1;'">Zona</label>
+    <select name="zona" class="form-input w-full">
+      <option value="">Todas</option>
+      {% for z in zonas %}
+        <option value="{{ z.chave }}" {% if z.chave == dados.zona %}selected{% endif %}>{{ z.rotulo }}</option>
+      {% endfor %}
+    </select>
+  </div>
+  <div class="col-span-12 sm:col-span-3 flex gap-2">
+    <button type="submit" class="btn-primary">Aplicar</button>
+    <a href="{% url 'mapas:relatorio-completo' %}" class="btn-secondary">Limpar</a>
+  </div>
+</form>
+{% endblock %}
+
+{% block relatorio_corpo %}
+
+{% comment %}
+  ── 1. Faturamento por zona ────────────────────────────────────────────────
+{% endcomment %}
+<div class="card p-4">
+  <h3 class="text-base font-semibold mb-3"
+      :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">1. Faturamento por zona</h3>
+
+  {% if dados.por_zona.linhas %}
+    <table class="zebra">
+      <thead>
+        <tr>
+          <th style="width:30%;">Zona</th>
+          <th class="num">Clientes</th>
+          <th class="num">Pedidos</th>
+          <th class="num">Volume</th>
+          <th class="num">Receita</th>
+          <th class="num">Part.</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for l in dados.por_zona.linhas %}
+          <tr>
+            <td><strong>{{ l.regiao }}</strong></td>
+            <td class="num">{{ l.clientes }}</td>
+            <td class="num">{{ l.pedidos|floatformat:0 }}</td>
+            <td class="num">{{ l.volume|floatformat:0 }}</td>
+            <td class="num">R$ {{ l.receita|floatformat:2 }}</td>
+            <td class="num">{{ l.participacao }}%</td>
+          </tr>
+        {% endfor %}
+      </tbody>
+      <tfoot>
+        <tr>
+          <td>TOTAL</td>
+          <td class="num">{{ dados.por_zona.total.clientes }}</td>
+          <td class="num">{{ dados.por_zona.total.pedidos|floatformat:0 }}</td>
+          <td class="num">{{ dados.por_zona.total.volume|floatformat:0 }}</td>
+          <td class="num">R$ {{ dados.por_zona.total.receita|floatformat:2 }}</td>
+          <td class="num">100%</td>
+        </tr>
+      </tfoot>
+    </table>
+    <p class="text-xs mt-2" :style="temaClaro ? 'color:#94a3b8;' : 'color:#64748b;'">
+      Zona é o quadrante geográfico calculado pela coordenada, em relação ao
+      centro da carteira — não é a divisão administrativa do município.
+    </p>
+  {% else %}
+    <p class="text-sm py-4" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+      Nenhuma venda no período.
+    </p>
+  {% endif %}
+</div>
+
+{% comment %}
+  ── 2. Faturamento por bairro ──────────────────────────────────────────────
+{% endcomment %}
+<div class="card p-4" style="page-break-before: always;">
+  <h3 class="text-base font-semibold mb-3"
+      :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">2. Faturamento por bairro</h3>
+
+  {% if dados.por_bairro.linhas %}
+    <table class="zebra">
+      <thead>
+        <tr>
+          <th style="width:30%;">Bairro</th>
+          <th class="num">Clientes</th>
+          <th class="num">Pedidos</th>
+          <th class="num">Volume</th>
+          <th class="num">Receita</th>
+          <th class="num">Part.</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for l in dados.por_bairro.linhas %}
+          <tr>
+            <td><strong>{{ l.regiao }}</strong></td>
+            <td class="num">{{ l.clientes }}</td>
+            <td class="num">{{ l.pedidos|floatformat:0 }}</td>
+            <td class="num">{{ l.volume|floatformat:0 }}</td>
+            <td class="num">R$ {{ l.receita|floatformat:2 }}</td>
+            <td class="num">{{ l.participacao }}%</td>
+          </tr>
+        {% endfor %}
+      </tbody>
+      <tfoot>
+        <tr>
+          <td>TOTAL</td>
+          <td class="num">{{ dados.por_bairro.total.clientes }}</td>
+          <td class="num">{{ dados.por_bairro.total.pedidos|floatformat:0 }}</td>
+          <td class="num">{{ dados.por_bairro.total.volume|floatformat:0 }}</td>
+          <td class="num">R$ {{ dados.por_bairro.total.receita|floatformat:2 }}</td>
+          <td class="num">100%</td>
+        </tr>
+      </tfoot>
+    </table>
+  {% else %}
+    <p class="text-sm py-4" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+      Nenhuma venda no período.
+    </p>
+  {% endif %}
+</div>
+
+{% comment %}
+  ── 3. Clientes de cada zona ───────────────────────────────────────────────
+  A seção 1 responde "a Zona Sul faturou X"; esta responde "e são estes os
+  clientes" — que é o que permite distribuir carteira ou achar alguém no
+  lugar errado. Entra a base toda, inclusive quem não comprou: para conferir
+  cobertura, quem não comprou é justamente o que interessa.
+{% endcomment %}
+<div class="card p-4" style="page-break-before: always;">
+  <h3 class="text-base font-semibold mb-1"
+      :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">3. Clientes por zona</h3>
+  <p class="text-xs mb-3" :style="temaClaro ? 'color:#94a3b8;' : 'color:#64748b;'">
+    Toda a base geolocalizada do recorte, inclusive quem não comprou no período.
+  </p>
+
+  {% for grupo in dados.clientes_por_zona %}
+    <div style="margin-bottom:18px;">
+      <h4 class="text-sm font-bold mb-2"
+          :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
+        {{ grupo.zona }}
+        <span class="font-normal" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+          — {{ grupo.quantidade }} cliente{{ grupo.quantidade|pluralize }},
+          R$ {{ grupo.total|floatformat:2 }}
+          {% if grupo.sem_compra %}· {{ grupo.sem_compra }} sem compra no período{% endif %}
+        </span>
+      </h4>
+      <table class="zebra">
+        <thead>
+          <tr>
+            <th style="width:38%;">Cliente</th>
+            <th>Bairro</th>
+            <th>Cidade</th>
+            <th>Telefone</th>
+            <th class="num">Receita</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for c in grupo.clientes %}
+            <tr>
+              <td>{{ c.nome }}</td>
+              <td>{{ c.bairro }}</td>
+              <td>{{ c.cidade }}</td>
+              <td>{{ c.telefone|default:"—" }}</td>
+              <td class="num">
+                {% if c.receita %}R$ {{ c.receita|floatformat:2 }}
+                {% else %}<span style="opacity:.5;">—</span>{% endif %}
+              </td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  {% empty %}
+    <p class="text-sm py-4" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+      Nenhum cliente geolocalizado neste recorte.
+    </p>
+  {% endfor %}
+</div>
+
+{% comment %}
+  ── 4. Clientes sem endereço ───────────────────────────────────────────────
+{% endcomment %}
+<div class="card p-4" style="page-break-before: always;">
+  <h3 class="text-base font-semibold mb-1"
+      :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">4. Clientes sem endereço no mapa</h3>
+  <p class="text-xs mb-3" :style="temaClaro ? 'color:#94a3b8;' : 'color:#64748b;'">
+    {{ dados.cobertura.com_coordenada }} de {{ dados.cobertura.total }} clientes ativos
+    estão no mapa ({{ dados.cobertura.percentual }}%).
+    Os abaixo ficam de fora de <strong>todas</strong> as seções anteriores.
+  </p>
+
+  {% if dados.cobertura.pendentes %}
+    <table class="zebra">
+      <thead>
+        <tr>
+          <th style="width:26%;">Cliente</th>
+          <th style="width:34%;">Endereço cadastrado</th>
+          <th>Cidade/UF</th>
+          <th>Motivo</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for p in dados.cobertura.pendentes %}
+          <tr>
+            <td><strong>{{ p.nome }}</strong></td>
+            <td>{{ p.endereco|default:"—" }}</td>
+            <td>{{ p.cidade }}{% if p.uf %}/{{ p.uf }}{% endif %}</td>
+            <td style="font-size:11.5px;">
+              {% if p.erro %}{{ p.erro }}
+              {% elif not p.endereco %}Endereço em branco
+              {% elif not p.cidade %}Sem cidade — o geocodificador não busca sem ela
+              {% else %}Ainda não geocodificado{% endif %}
+            </td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  {% else %}
+    <p class="text-sm py-4" style="color:#22c55e;">
+      Todos os clientes ativos estão no mapa.
+    </p>
+  {% endif %}
+</div>
+
+{% comment %}
+  ── 5. Roteiro sugerido ────────────────────────────────────────────────────
+{% endcomment %}
+<div class="card p-4" style="page-break-before: always;">
+  <h3 class="text-base font-semibold mb-1"
+      :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">5. Roteiro sugerido</h3>
+
+  {% if dados.roteiro.paradas %}
+    <p class="text-xs mb-3" :style="temaClaro ? 'color:#94a3b8;' : 'color:#64748b;'">
+      {{ dados.roteiro.paradas|length }} parada{{ dados.roteiro.paradas|length|pluralize }}
+      escolhidas entre {{ dados.roteiro.candidatos }} cliente{{ dados.roteiro.candidatos|pluralize }}
+      que compraram no período{% if dados.roteiro.km %} ·
+      <strong>{{ dados.roteiro.km }} km</strong>{% if dados.roteiro.duracao %},
+      {{ dados.roteiro.duracao }}{% endif %}{% endif %}
+      {% if dados.roteiro.ordem_por %} · ordem por {{ dados.roteiro.ordem_por }}{% endif %}
+    </p>
+
+    <table class="zebra">
+      <thead>
+        <tr>
+          <th style="width:5%;" class="num">#</th>
+          <th style="width:26%;">Cliente</th>
+          <th style="width:26%;">Endereço</th>
+          <th>Telefone</th>
+          <th class="num">Sem comprar</th>
+          <th>Frequência</th>
+          <th class="num">Ticket médio</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for p in dados.roteiro.paradas %}
+          <tr>
+            <td class="num"><strong>{{ p.ordem }}</strong></td>
+            <td>
+              <strong>{{ p.nome }}</strong>
+              {% if p.atrasado %}
+                <span style="color:#dc2626; font-size:10.5px; font-weight:800;"> ATRASADO</span>
+              {% endif %}
+            </td>
+            <td>{{ p.endereco }}{% if p.cidade %} — {{ p.cidade }}{% endif %}</td>
+            <td>{{ p.telefone|default:"—" }}</td>
+            <td class="num">
+              {% if p.dias_sem_comprar is not None %}{{ p.dias_sem_comprar }} d
+              {% else %}—{% endif %}
+            </td>
+            <td>{{ p.frequencia|default:"—" }}</td>
+            <td class="num">
+              {% if p.valor_medio %}R$ {{ p.valor_medio|floatformat:2 }}
+              {% else %}—{% endif %}
+            </td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+
+    {% comment %}
+      Como a lista foi montada. Sem isso o roteiro parece arbitrário — e quem
+      recebe a folha precisa poder discordar da escolha com conhecimento.
+    {% endcomment %}
+    <p class="text-xs mt-3" :style="temaClaro ? 'color:#94a3b8;' : 'color:#64748b;'">
+      <strong>Como a lista foi montada:</strong> entram os clientes que já
+      compraram no período. A prioridade é de quem está <strong>atrasado na
+      recompra</strong>, depois pelo score do CRM (que combina atraso, ticket e
+      regularidade) e por fim pela receita. Escolhidos os clientes, a ordem das
+      paradas é geográfica.
+      {% if dados.roteiro.ordem_por == 'proximidade em linha reta' %}
+        Desta vez o servidor de rotas não respondeu, então a ordem saiu por
+        distância em linha reta — a quilometragem real será maior.
+      {% endif %}
+    </p>
+  {% else %}
+    <p class="text-sm py-4" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+      {{ dados.roteiro.motivo|default:"Sem paradas para sugerir." }}
+    </p>
+  {% endif %}
+</div>
+{% endblock %}

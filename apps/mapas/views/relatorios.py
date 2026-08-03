@@ -13,6 +13,7 @@ from apps.mapas.services.relatorios import (
     RelatorioRegiaoService,
     RelatorioRotasService,
 )
+from apps.mapas.services.roteiro import RelatorioCompletoService
 
 
 def _data(valor):
@@ -103,5 +104,30 @@ class RelatorioRotasView(BaseRelatorioMapas):
             ctx['filial'],
             inicio=_data(self.request.GET.get('de')),
             fim=_data(self.request.GET.get('ate')),
+        )
+        return ctx
+
+
+class RelatorioCompletoView(BaseRelatorioMapas):
+    """
+    Documento único: faturamento por zona e por bairro, clientes de cada zona,
+    quem está sem endereço e o roteiro sugerido.
+    """
+
+    template_name = 'mapas/relatorio_completo.html'
+
+    def get_context_data(self, **kwargs):
+        from apps.mapas.services.heatmap import ZONAS
+
+        ctx = super().get_context_data(**kwargs)
+        ctx['title'] = 'Relatório de Mapas'
+        ctx['zonas'] = [{'chave': k, 'rotulo': v} for k, v in ZONAS.items()]
+        ctx['dados'] = RelatorioCompletoService.gerar(
+            ctx['filial'],
+            inicio=_data(self.request.GET.get('de')),
+            fim=_data(self.request.GET.get('ate')),
+            cidade=self.request.GET.get('cidade', '').strip(),
+            uf=self.request.GET.get('uf', '').strip(),
+            zona=self.request.GET.get('zona', '').strip(),
         )
         return ctx

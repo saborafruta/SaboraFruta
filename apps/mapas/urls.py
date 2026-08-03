@@ -4,7 +4,8 @@ from apps.mapas.views import (
     GeofenceCreateView, GeofenceDeleteView, GeofenceEventosView,
     GeofenceListView, GeofenceUpdateView,
     MapaAoVivoView, MapaPrincipalView, PainelMapasView,
-    RelatorioCoberturaView, RelatorioRegiaoView, RelatorioRotasView,
+    RelatorioCoberturaView, RelatorioCompletoView, RelatorioRegiaoView,
+    RelatorioRotasView,
 )
 from apps.mapas.views import (
     api, distancia, geofence, heatmap, rastreio, rota, territorio,
@@ -17,6 +18,7 @@ urlpatterns = [
     path('painel/', PainelMapasView.as_view(), name='painel'),
 
     # Relatorios imprimiveis / PDF
+    path('relatorios/completo/', RelatorioCompletoView.as_view(), name='relatorio-completo'),
     path('relatorios/regiao/', RelatorioRegiaoView.as_view(), name='relatorio-regiao'),
     path('relatorios/cobertura/', RelatorioCoberturaView.as_view(),
          name='relatorio-cobertura'),
