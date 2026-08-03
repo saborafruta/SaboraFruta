@@ -311,3 +311,67 @@ class CascataDaNFeTests(BaseMDFe):
 
         payload = self._payload(mdfe)
         self.assertEqual(payload['uf_fim'], 'RN')
+
+
+class EntregaParaClienteTests(BaseMDFe):
+    """
+    Entrega para CLIENTE, nao para filial.
+
+    O caminho original so montava o endereco de destino quando o destinatario
+    era uma filial. Numa entrega para cliente o campo ficava vazio e a tela
+    mandava conferir "o cadastro da filial de destino" -- um cadastro que nao
+    tem nada a ver com o problema.
+    """
+
+    def _endereco_destino(self, nfe):
+        from apps.logistica.views import _endereco_destino_nfe
+
+        return _endereco_destino_nfe(nfe)
+
+    def test_endereco_do_cliente_sai_do_snapshot_da_nfe(self):
+        endereco = self._endereco_destino(self._nfe())
+
+        self.assertIn('Rua do Destino', endereco)
+        self.assertIn('50', endereco)
+        self.assertIn('Parnamirim', endereco)
+        self.assertIn('RN', endereco)
+
+    def test_rota_para_cliente_preenche_o_descarregamento(self):
+        """
+        O municipio ja vinha certo pelo snapshot -- so o endereco e que nao.
+        Este teste garante que a correcao nao mexeu no que ja funcionava.
+        """
+        from apps.logistica.views import _rota_filiais_nfe
+
+        rota = _rota_filiais_nfe(self._nfe())
+
+        self.assertEqual(rota['municipio_descarregamento'], 'Parnamirim')
+        self.assertEqual(rota['codigo_municipio_descarregamento'], '2403251')
+        self.assertEqual(rota['uf_descarregamento'], 'RN')
+        # Sem filial de destino: e uma entrega para cliente.
+        self.assertIsNone(rota['destino'])
+
+    def test_snapshot_vazio_devolve_endereco_vazio(self):
+        """Aí sim o dado falta de verdade — e a tela precisa dizer isso."""
+        from apps.financeiro.models import DocumentoFiscal
+
+        nfe = self._nfe()
+        DocumentoFiscal.objects.filter(pk=nfe.pk).update(destinatario_snapshot={})
+        nfe.refresh_from_db()
+
+        self.assertEqual(self._endereco_destino(nfe), '')
+
+    def test_mdfe_para_cliente_emite_normalmente(self):
+        """O que fecha o caso: entrega para cliente gera o payload."""
+        from apps.logistica.views import _vincular_nfe_ao_mdfe
+
+        mdfe = self._mdfe(municipio_descarregamento='',
+                          codigo_municipio_descarregamento='',
+                          uf_descarregamento='')
+        _vincular_nfe_ao_mdfe(mdfe, self._nfe(), atualizar_rota=True)
+        mdfe.refresh_from_db()
+
+        payload = self._payload(mdfe)
+
+        self.assertEqual(payload['uf_fim'], 'RN')
+        self.assertEqual(mdfe.municipio_descarregamento, 'Parnamirim')

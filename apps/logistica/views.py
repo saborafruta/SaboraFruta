@@ -1378,6 +1378,33 @@ def _endereco_filial(filial):
     return " - ".join(parte for parte in partes if parte)
 
 
+def _endereco_destino_nfe(documento):
+    """
+    Endereço de descarregamento, venha ele de uma filial ou de um cliente.
+
+    Antes só existia o caminho da filial: numa entrega para CLIENTE o campo
+    ficava vazio e a tela dizia "Endereço não cadastrado na filial de destino"
+    — mensagem que manda conferir um cadastro que não é o do problema.
+
+    Os dados do cliente já estão no snapshot do destinatário da NF-e, que é a
+    mesma fonte usada para o município de descarregamento. Só não estavam
+    sendo usados aqui.
+    """
+    destino = _filial_destino_nfe(documento)
+    if destino:
+        return _endereco_filial(destino)
+
+    d = _dados_destino_nfe(documento)
+    partes = [
+        " ".join(filter(None, [d.get("logradouro"), d.get("numero")])),
+        d.get("complemento"),
+        d.get("bairro"),
+        " / ".join(filter(None, [d.get("cidade"), d.get("uf")])),
+        d.get("cep"),
+    ]
+    return " - ".join(parte for parte in partes if parte)
+
+
 def _rota_filiais_nfe(documento):
     """Monta a rota usando filiais e o XML autorizado como contingencia."""
     origem = documento.filial
@@ -1771,8 +1798,7 @@ class MDFeCreateView(PermissaoRequiredMixin, View):
             "endereco_origem": _endereco_filial(nfe_documento.filial)
             if nfe_documento else _endereco_filial(filial),
             "endereco_destino": (
-                _endereco_filial(rota_automatica["destino"])
-                if rota_automatica and rota_automatica["destino"] else ""
+                _endereco_destino_nfe(nfe_documento) if nfe_documento else ""
             ),
         })
 
@@ -1871,8 +1897,7 @@ class MDFeCreateView(PermissaoRequiredMixin, View):
                 if nfe_documento else ""
             ),
             "endereco_destino": (
-                _endereco_filial(rota_automatica["destino"])
-                if rota_automatica and rota_automatica["destino"] else ""
+                _endereco_destino_nfe(nfe_documento) if nfe_documento else ""
             ),
         })
 
