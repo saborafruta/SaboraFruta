@@ -1,3 +1,4 @@
+from .aviso import mensagem_geo
 from .distancia import DistanciaService
 from .geofence import GeofenceService
 from .heatmap import HeatmapService
@@ -16,6 +17,7 @@ from .territorio import TerritorioService
 __all__ = [
     'GeocodificacaoService', 'construir_geocoder', 'DistanciaService',
     'ProximidadeService', 'TerritorioService', 'HeatmapService', 'PainelService', 'GeofenceService', 'RastreioService',
+    'mensagem_geo',
     'RelatorioRegiaoService', 'RelatorioCoberturaService', 'RelatorioRotasService',
     'RelatorioCompletoService', 'RoteiroSugeridoService',
     'RoteirizacaoService', 'construir_roteirizador',

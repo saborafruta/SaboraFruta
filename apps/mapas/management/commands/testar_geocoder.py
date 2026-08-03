@@ -47,6 +47,19 @@ class Command(BaseCommand):
         self.stdout.write(f'  classe   : {type(geocoder).__name__}')
         self.stdout.write(f'  nome     : {geocoder.nome}')
 
+        # O interruptor do ajuste automatico ao salvar. Se estiver desligado
+        # em producao, o cadastro nunca entra no mapa sozinho -- e isso e
+        # invisivel na tela, so aparece aqui.
+        if getattr(settings, 'MAPAS_GEOCODIFICAR_AO_SALVAR', True):
+            self.stdout.write(self.style.SUCCESS(
+                '  ajuste automatico ao salvar: LIGADO'))
+        else:
+            self.stdout.write(self.style.WARNING(
+                '  ajuste automatico ao salvar: DESLIGADO '
+                '(MAPAS_GEOCODIFICAR_AO_SALVAR=false).'))
+            self.stdout.write(self.style.WARNING(
+                '  Os cadastros ficam pendentes para o "manage.py geocodificar".'))
+
         # O aviso mais importante do comando: dizer se a configuração atual
         # pode ser usada legalmente para geocodificar a base inteira.
         if geocoder.permite_uso_comercial:

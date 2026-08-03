@@ -1,5 +1,6 @@
 """CRUD de Cliente + endpoint de consulta CEP."""
 import csv
+import logging
 
 from django.contrib import messages
 from django.core.paginator import Paginator
@@ -25,6 +26,8 @@ from apps.cadastros.services.replicacao_service import ReplicacaoCadastrosServic
 from apps.cadastros.views.audit import cadastro_log_context
 from apps.core.services.exceptions import DomainError
 from apps.core.services.permissions import PermissaoRequiredMixin
+
+logger = logging.getLogger(__name__)
 
 
 def _usuario_pode_exportar(request):
@@ -333,6 +336,7 @@ class ClienteCreateView(PermissaoRequiredMixin, View):
                     form.cleaned_data, request.user, request.filial_ativa,
                 )
                 messages.success(request, f'Cliente "{cliente.nome_display}" criado.')
+                _avisar_geo(request, cliente)
                 return redirect('cadastros:cliente-list')
             except DomainError as e:
                 messages.error(request, str(e))
@@ -392,6 +396,7 @@ class ClienteUpdateView(PermissaoRequiredMixin, View):
             try:
                 ClienteService.atualizar(cliente, form.cleaned_data)
                 messages.success(request, 'Cliente atualizado.')
+                _avisar_geo(request, cliente)
                 return redirect(next_url or 'cadastros:cliente-list')
             except DomainError as e:
                 messages.error(request, str(e))
@@ -554,3 +559,26 @@ def consultar_cep_ajax(request):
     if not dados:
         return JsonResponse({'erro': 'CEP não encontrado.'}, status=404)
     return JsonResponse(dados)
+
+
+def _avisar_geo(request, cliente):
+    """
+    Diz se o cadastro entrou no mapa.
+
+    A geocodificação acontece no `post_save` e era silenciosa: quem cadastrava
+    só descobria que o endereço não fora encontrado semanas depois, num
+    relatório de cobertura. A mensagem transforma isso em correção na hora.
+
+    Envolto em try/except porque um aviso não pode derrubar o salvamento que
+    já aconteceu.
+    """
+    try:
+        from apps.mapas.services import mensagem_geo
+
+        aviso = mensagem_geo(cliente)
+        if aviso is None:
+            return
+        nivel, texto = aviso
+        getattr(messages, nivel, messages.info)(request, texto)
+    except Exception:  # pragma: no cover - defensivo
+        logger.exception('falha ao avisar sobre a geocodificacao do cliente %s', cliente.pk)
