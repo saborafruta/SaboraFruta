@@ -5,7 +5,11 @@
 
 {% block relatorio_subtitulo %}
   · Período: <strong>{{ dados.inicio|date:"d/m/Y" }} a {{ dados.fim|date:"d/m/Y" }}</strong>
-  · {{ dados.linhas|length }} {{ dados.rotulo_grupo|lower }}{{ dados.linhas|length|pluralize }}
+  {% if dados.regiao %}
+    · Somente <strong>{{ dados.regiao }}</strong>
+  {% else %}
+    · {{ dados.linhas|length }} {{ dados.rotulo_grupo|lower }}{{ dados.linhas|length|pluralize }}
+  {% endif %}
 {% endblock %}
 
 {% block relatorio_filtros %}
@@ -31,6 +35,24 @@
            :style="temaClaro ? 'color:#374151;' : 'color:#cbd5e1;'">Até</label>
     <input type="date" name="ate" value="{{ dados.fim|date:'Y-m-d' }}" class="form-input w-full">
   </div>
+  {% comment %}
+    Recorte para uma regiao so — imprimir apenas a Zona Leste, por exemplo.
+    As opcoes saem do proprio relatorio, entao a lista muda junto com o
+    agrupamento: zonas quando agrupa por zona, bairros quando por bairro.
+  {% endcomment %}
+  <div class="col-span-12 sm:col-span-3">
+    <label class="block text-xs font-semibold mb-1.5"
+           :style="temaClaro ? 'color:#374151;' : 'color:#cbd5e1;'">
+      Somente {{ dados.rotulo_grupo|lower }}
+    </label>
+    <select name="regiao" class="form-input w-full">
+      <option value="">Todas</option>
+      {% for o in dados.opcoes %}
+        <option value="{{ o }}" {% if o == dados.regiao %}selected{% endif %}>{{ o }}</option>
+      {% endfor %}
+    </select>
+  </div>
+
   {% comment %}
     O detalhe expande na tela com um clique, mas a impressao e o PDF levam o
     que estiver marcado aqui: papel nao tem clique, e quem manda o arquivo
@@ -71,13 +93,24 @@
       <p class="text-lg font-bold mt-1">{{ dados.total.pedidos|floatformat:0 }}</p>
     </div>
     <div class="card p-4">
-      <p class="rel-nota uppercase font-semibold">{{ dados.rotulo_grupo }}s</p>
-      <p class="text-lg font-bold mt-1">{{ dados.linhas|length }}</p>
+      <p class="rel-nota uppercase font-semibold">
+        {% if dados.regiao %}Participação{% else %}{{ dados.rotulo_grupo }}s{% endif %}
+      </p>
+      <p class="text-lg font-bold mt-1">
+        {% if dados.regiao %}{{ dados.total.participacao }}%
+        {% else %}{{ dados.linhas|length }}{% endif %}
+      </p>
     </div>
   </div>
 {% endif %}
 
-<div class="card p-4" x-data="{ aberta: null, todos: {{ detalhar|yesno:"true,false" }} }">
+{% comment %}
+  Escolher uma regiao ja abre a lista dela: quem filtrou por "Zona Leste"
+  quer os clientes da Zona Leste, nao mais um clique para chegar neles.
+{% endcomment %}
+<div class="card p-4"
+     x-data="{ aberta: {% if dados.regiao %}1{% else %}null{% endif %},
+               todos: {{ detalhar|yesno:"true,false" }} }">
   {% if dados.linhas %}
     <p class="rel-nota mb-2 no-print">
       Clique numa linha para ver os clientes daquela {{ dados.rotulo_grupo|lower }}.
@@ -151,13 +184,28 @@
       </tbody>
       <tfoot>
         <tr>
-          <td>TOTAL</td>
+          <td>{% if dados.regiao %}SUBTOTAL{% else %}TOTAL{% endif %}</td>
           <td class="num">{{ dados.total.clientes }}</td>
           <td class="num">{{ dados.total.pedidos|floatformat:0 }}</td>
           <td class="num">{{ dados.total.volume|floatformat:0 }}</td>
           <td class="num">R$ {{ dados.total.receita|floatformat:2 }}</td>
-          <td class="num">100%</td>
+          <td class="num">{{ dados.total.participacao }}%</td>
         </tr>
+        {% comment %}
+          Com recorte ligado, mostrar so o subtotal faria "R$ 32.655" parecer
+          o faturamento inteiro. A linha do total geral e o que mantem a
+          proporcao visivel.
+        {% endcomment %}
+        {% if dados.regiao %}
+          <tr>
+            <td style="opacity:.75;">TOTAL GERAL</td>
+            <td class="num" style="opacity:.75;">{{ dados.total_geral.clientes }}</td>
+            <td class="num" style="opacity:.75;">{{ dados.total_geral.pedidos|floatformat:0 }}</td>
+            <td class="num" style="opacity:.75;">{{ dados.total_geral.volume|floatformat:0 }}</td>
+            <td class="num" style="opacity:.75;">R$ {{ dados.total_geral.receita|floatformat:2 }}</td>
+            <td class="num" style="opacity:.75;">100%</td>
+          </tr>
+        {% endif %}
       </tfoot>
     </table>
 

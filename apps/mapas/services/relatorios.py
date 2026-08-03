@@ -34,13 +34,20 @@ class RelatorioRegiaoService:
 
     @classmethod
     def gerar(cls, filial, *, agrupar_por='cidade', inicio=None, fim=None,
-              cidade='', uf='', filial_id=None, representante_id=None):
+              cidade='', uf='', filial_id=None, representante_id=None,
+              regiao=''):
         """
         Uma linha por região, com as quatro métricas juntas.
 
         Diferente do mapa, que pinta uma métrica por vez: aqui as quatro
         aparecem lado a lado, que é o que deixa ver um bairro com muita
         receita e poucos clientes — ou o contrário.
+
+        `regiao` recorta o relatório para **uma** região (imprimir só a Zona
+        Leste, por exemplo). O recorte é feito no fim, depois de tudo somado:
+        assim a participação de cada linha continua sendo sobre o faturamento
+        inteiro. Recalcular sobre o recorte daria 100% para a zona escolhida,
+        que é verdade sem valor nenhum.
         """
         if agrupar_por not in AGRUPAMENTOS:
             agrupar_por = 'cidade'
@@ -112,12 +119,36 @@ class RelatorioRegiaoService:
             # alguém procuraria um nome ao abrir o detalhe.
             r['detalhe'].sort(key=lambda c: c['receita'], reverse=True)
 
+        # Todas as regiões existentes, para alimentar o seletor — inclusive as
+        # que o recorte esconde, senão não haveria como trocar de região.
+        opcoes = [r['regiao'] for r in ordenadas]
+
+        recortadas = ordenadas
+        if regiao:
+            recortadas = [r for r in ordenadas if r['regiao'] == regiao]
+
+        parcial = {
+            'clientes': sum(r['clientes'] for r in recortadas),
+            'pedidos': sum((r['pedidos'] for r in recortadas), Decimal('0')),
+            'volume': sum((r['volume'] for r in recortadas), Decimal('0')),
+            'receita': sum((r['receita'] for r in recortadas), Decimal('0')),
+        }
+        parcial['participacao'] = (
+            round(float(parcial['receita'] / total['receita'] * 100), 1)
+            if total['receita'] else 0.0
+        )
+
         return {
             'agrupar_por': agrupar_por,
             'rotulo_grupo': AGRUPAMENTOS[agrupar_por],
             'inicio': inicio, 'fim': fim,
-            'linhas': ordenadas,
-            'total': total,
+            'linhas': recortadas,
+            'opcoes': opcoes,
+            'regiao': regiao,
+            # `total` e o do recorte; `total_geral` e o de tudo. Com filtro
+            # ligado os dois diferem, e a tela precisa dizer qual e qual.
+            'total': parcial,
+            'total_geral': total,
         }
 
     @staticmethod

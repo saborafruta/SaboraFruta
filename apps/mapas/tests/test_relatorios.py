@@ -557,3 +557,86 @@ class CustoDoDetalheTests(BaseRelatorio):
 
         self.assertEqual(len(d['linhas'][0]['detalhe']), 40)
         self.assertEqual(len(muitos), len(poucos))
+
+
+class RecorteDeRegiaoTests(BaseRelatorio):
+    """
+    Imprimir uma regiao so -- "quero so os da Zona Leste".
+
+    O recorte e feito depois de tudo somado, de proposito: a participacao de
+    cada linha continua sendo sobre o faturamento inteiro. Recalcular sobre o
+    recorte daria 100% para a zona escolhida, que e verdade sem valor nenhum.
+    """
+
+    def _cenario(self):
+        norte = self._cliente('NORTE', '1', lat=-5.70)
+        sul = self._cliente('SUL', '2', lat=-5.88)
+        self._venda(norte, 800)
+        self._venda(sul, 200)
+        return norte, sul
+
+    def test_recorta_para_uma_regiao(self):
+        self._cenario()
+
+        d = self._regiao(agrupar_por='zona', regiao='Norte')
+
+        self.assertEqual([l['regiao'] for l in d['linhas']], ['Norte'])
+        self.assertEqual(float(d['total']['receita']), 800.0)
+
+    def test_participacao_continua_sobre_o_total_geral(self):
+        """80% e a informacao util; 100% seria so o recorte se olhando."""
+        self._cenario()
+
+        d = self._regiao(agrupar_por='zona', regiao='Norte')
+
+        self.assertEqual(d['linhas'][0]['participacao'], 80.0)
+        self.assertEqual(d['total']['participacao'], 80.0)
+        self.assertEqual(float(d['total_geral']['receita']), 1000.0)
+
+    def test_seletor_oferece_todas_as_regioes_mesmo_com_recorte(self):
+        """Sem isso, escolher uma zona impediria de trocar para outra."""
+        self._cenario()
+
+        d = self._regiao(agrupar_por='zona', regiao='Norte')
+        self.assertEqual(sorted(d['opcoes']), ['Norte', 'Sul'])
+
+    def test_sem_recorte_o_total_e_o_geral(self):
+        self._cenario()
+
+        d = self._regiao(agrupar_por='zona')
+        self.assertEqual(d['total']['receita'], d['total_geral']['receita'])
+        self.assertEqual(d['total']['participacao'], 100.0)
+
+    def test_regiao_inexistente_devolve_vazio_sem_quebrar(self):
+        self._cenario()
+
+        d = self._regiao(agrupar_por='zona', regiao='Nordeste')
+        self.assertEqual(d['linhas'], [])
+        self.assertEqual(float(d['total']['receita']), 0.0)
+
+    def test_recorte_funciona_tambem_por_cidade(self):
+        """O filtro e generico: nao e uma regra so de zona."""
+        a = self._cliente('A', '1', cidade='Natal')
+        b = self._cliente('B', '2', cidade='Mossoró', lat=-5.19)
+        self._venda(a, 100)
+        self._venda(b, 400)
+
+        d = self._regiao(agrupar_por='cidade', regiao='Mossoró')
+        self.assertEqual([l['regiao'] for l in d['linhas']], ['Mossoró'])
+
+    def test_detalhe_da_regiao_recortada_vem_junto(self):
+        """E o motivo de filtrar: sair com a lista de clientes daquela zona."""
+        self._cenario()
+
+        d = self._regiao(agrupar_por='zona', regiao='Norte')
+        self.assertEqual([c['nome'] for c in d['linhas'][0]['detalhe']], ['NORTE'])
+
+    def test_pagina_aceita_o_recorte_pela_querystring(self):
+        self._cenario()
+
+        resp = self.client.get(reverse('mapas:relatorio-regiao'),
+                               {'agrupar': 'zona', 'regiao': 'Norte'})
+
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(resp.context['dados']['regiao'], 'Norte')
+        self.assertContains(resp, 'TOTAL GERAL')

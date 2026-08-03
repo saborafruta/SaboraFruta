@@ -74,6 +74,7 @@ class RelatorioRegiaoView(BaseRelatorioMapas):
             uf=self.request.GET.get('uf', '').strip(),
             representante_id=_inteiro(self.request.GET.get('representante')),
             filial_id=_inteiro(self.request.GET.get('filial')),
+            regiao=self.request.GET.get('regiao', '').strip(),
         )
         return ctx
 
