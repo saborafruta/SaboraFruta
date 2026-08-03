@@ -329,11 +329,30 @@
 // Cache de municipios por UF (evita rebuscar a mesma UF na mesma pagina).
 window._municipiosPorUf = window._municipiosPorUf || {};
 function municipioAutocomplete(nomeCampoMunicipio) {
+  const sufixo = nomeCampoMunicipio.replace('municipio_', '');
   return {
     _lista: [],
     _ufAtual: '',
     sugestoes: [],
     foco: -1,
+
+    // Carrega a lista da UF que ja esta na tela.
+    //
+    // Antes, `onUf` so rodava no evento `input` do campo de UF. Ao EDITAR um
+    // MDF-e a UF ja vem preenchida do banco e nenhum input acontece -- a lista
+    // ficava vazia para sempre, e o campo de municipio nunca sugeria nada.
+    init() {
+      const uf = this._campoUf();
+      if (uf && uf.value) this.onUf(uf.value);
+    },
+
+    _campoUf() {
+      return document.querySelector(`[name="uf_${sufixo}"]`);
+    },
+    _campoCodigo() {
+      return document.querySelector(`[name="codigo_municipio_${sufixo}"]`);
+    },
+
     async onUf(val) {
       const uf = (val || '').trim().toUpperCase();
       this.sugestoes = [];
@@ -372,12 +391,27 @@ function municipioAutocomplete(nomeCampoMunicipio) {
     onMunicipio(val) {
       const q = this._norm(val);
       this.foco = -1;
+      this._sincronizarCodigo(q);
       if (!this._lista.length) { this.sugestoes = []; return; }
       // Sem texto: mostra todas (a lista tem rolagem). Com texto: filtra
       // ignorando acentos, para "sao" encontrar "São ...".
       this.sugestoes = q
         ? this._lista.filter(m => this._norm(m.nome).includes(q))
         : this._lista;
+    },
+
+    // Mantem o codigo IBGE (campo oculto) coerente com o texto digitado.
+    //
+    // Duas situacoes que davam errado sem isto: digitar "Natal" sem clicar na
+    // sugestao deixava o codigo vazio, e a emissao era recusada por um campo
+    // que o usuario nem ve; e trocar o texto depois de escolher deixava o
+    // codigo do municipio ANTERIOR -- nome de uma cidade com o codigo de
+    // outra, que a SEFAZ rejeita sem dizer por que.
+    _sincronizarCodigo(qNormalizado) {
+      const campo = this._campoCodigo();
+      if (!campo || !this._lista.length) return;
+      const exato = this._lista.find(m => this._norm(m.nome) === qNormalizado);
+      campo.value = exato ? (exato.codigo_ibge || '') : '';
     },
     onFocus(val) {
       this.onMunicipio(val);
@@ -401,8 +435,7 @@ function municipioAutocomplete(nomeCampoMunicipio) {
     selecionar(m) {
       const campo = document.querySelector(`[name="${nomeCampoMunicipio}"]`);
       if (campo) campo.value = m.nome;
-      const sufixo = nomeCampoMunicipio.replace('municipio_', '');
-      const campoCodigo = document.querySelector(`[name="codigo_municipio_${sufixo}"]`);
+      const campoCodigo = this._campoCodigo();
       if (campoCodigo) campoCodigo.value = m.codigo_ibge || '';
       this.sugestoes = [];
       this.foco = -1;
