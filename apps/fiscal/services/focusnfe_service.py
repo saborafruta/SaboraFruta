@@ -356,11 +356,47 @@ class FocusNFeService:
 
     # -------------------------------------------------------------- arquivos
     def baixar_pdf(self, documento: DocumentoFiscal) -> bytes:
-        """Baixa o DANFE/DACTE/etc. em PDF (binário)."""
+        """
+        Baixa o DANFE/DACTE/DAMDFE em PDF (binário).
+
+        Confere a assinatura do arquivo antes de devolver. O provider às vezes
+        responde 200 com um JSON ("documento ainda em processamento", por
+        exemplo) e o cliente HTTP entrega esses bytes como se fossem o PDF —
+        o navegador então mostra apenas "Falha ao carregar documento PDF",
+        que é um beco sem saída: não diz o que houve nem o que fazer.
+
+        Com a checagem, o motivo real do provider chega até a tela.
+        """
         resource = self._resource(documento.tipo_documento)
         if not hasattr(resource, "baixar_pdf"):
             raise ValueError(f"{documento.tipo_documento} não suporta download de PDF.")
-        return resource.baixar_pdf(gerar_ref(documento))
+
+        conteudo = resource.baixar_pdf(gerar_ref(documento))
+        self._exigir_pdf(conteudo)
+        return conteudo
+
+    @staticmethod
+    def _exigir_pdf(conteudo) -> None:
+        """Levanta FocusNFeError quando o retorno não é um PDF."""
+        if not conteudo:
+            raise FocusNFeError(
+                "O provider devolveu um arquivo vazio no lugar do PDF. "
+                "Se o documento acabou de ser autorizado, aguarde alguns "
+                "segundos e tente de novo."
+            )
+
+        # Todo PDF comeca com "%PDF-". Qualquer outra coisa e mensagem, nao
+        # documento.
+        if isinstance(conteudo, bytes) and conteudo[:4] == b"%PDF":
+            return
+
+        texto = conteudo if isinstance(conteudo, str) else conteudo.decode(
+            "utf-8", errors="replace"
+        )
+        raise FocusNFeError(
+            "O provider não devolveu um PDF. Resposta: "
+            + " ".join(texto.split())[:300]
+        )
 
     def baixar_xml(self, documento: DocumentoFiscal) -> bytes:
         """Baixa o XML autorizado (binário)."""
