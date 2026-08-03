@@ -113,6 +113,16 @@
            x-text="percurso ? (percurso.km + ' km · ' + percurso.total_pontos + ' pontos'
                    + (percurso.velocidade_media_kmh ? ' · média ' + percurso.velocidade_media_kmh + ' km/h' : ''))
                    : ''"></p>
+
+        {% comment %}
+          Descarta a posição e o percurso de um motorista — para jogar fora um
+          teste ou zerar quem saiu da equipe. Não toca nos eventos de cerca:
+          aqueles registram visitas que aconteceram e podem já estar num
+          relatório impresso.
+        {% endcomment %}
+        <button type="button" class="btn-secondary" style="width:100%; font-size:11.5px; margin-top:6px;"
+                @click="limparRastreio()" x-text="limpando ? 'Limpando...' : 'Limpar rastreio deste motorista'"
+                :disabled="limpando"></button>
       </div>
     </div>
   </div>
@@ -133,6 +143,8 @@
 {{ block.super }}
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script>
+const CSRF_VIVO = '{{ csrf_token }}';
+
 function aoVivo() {
   return {
     centro: JSON.parse(document.getElementById('vivo-centro').textContent),
@@ -141,6 +153,7 @@ function aoVivo() {
     percurso: null,
     percursoVisivel: false,
     autoAtualizar: true,
+    limpando: false,
     status: '',
     _mapa: null,
     _marcadores: {},
@@ -288,6 +301,35 @@ function aoVivo() {
         this._linha = null;
       }
       this.percurso = null;
+    },
+
+    async limparRastreio() {
+      const m = this.motoristas.find(x => x.motorista_id === this.selecionado);
+      if (!m) return;
+      if (!confirm(`Apagar a posicao e o percurso de ${m.nome}? `
+                 + `Os eventos de cerca dele nao sao afetados.`)) return;
+
+      this.limpando = true;
+      try {
+        const url = `{% url 'mapas:api-limpar-rastreio' 0 %}`.replace('/0/', `/${this.selecionado}/`);
+        const resp = await fetch(url, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'X-CSRFToken': CSRF_VIVO },
+        });
+        const d = await resp.json();
+        if (!resp.ok) throw new Error(d.erro || ('HTTP ' + resp.status));
+
+        this._limparPercurso();
+        this.percursoVisivel = false;
+        this.selecionado = null;
+        // Marcador some junto: sem posicao ele nao pertence mais ao mapa.
+        await this.atualizar();
+        this.status = `rastreio de ${d.motorista} apagado`;
+      } catch (e) {
+        this.status = 'falha ao limpar: ' + e.message;
+      } finally {
+        this.limpando = false;
+      }
     },
 
     _esc(s) {

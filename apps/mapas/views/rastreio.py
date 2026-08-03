@@ -4,7 +4,7 @@ from __future__ import annotations
 import datetime
 
 from django.http import JsonResponse
-from django.views.decorators.http import require_GET
+from django.views.decorators.http import require_GET, require_POST
 from django.views.generic import TemplateView
 
 from apps.core.services.permissions import PermissaoRequiredMixin, requer_permissao
@@ -66,3 +66,25 @@ def api_percurso(request, pk):
         inicio=_data(request.GET.get('de')),
         fim=_data(request.GET.get('ate')),
     ))
+
+
+@require_POST
+@requer_permissao('mapas', 'editar')
+def api_limpar_rastreio(request, pk):
+    """
+    POST /mapas/api/rastreio/<motorista_id>/limpar/
+
+    Descarta a posição e o percurso de um motorista. Exige permissão de
+    **edição**, não de leitura: quem só acompanha o mapa não deveria conseguir
+    apagar o histórico de ninguém.
+    """
+    from apps.cadastros.models import Motorista
+
+    filial = getattr(request, 'filial_ativa', None)
+    motorista = Motorista.objects.filter(
+        pk=pk, filial__in=RastreioService._escopo(filial)).first()
+    if motorista is None:
+        return JsonResponse({'erro': 'Motorista não encontrado.'}, status=404)
+
+    apagado = RastreioService.limpar_motorista(filial, motorista.pk)
+    return JsonResponse({'ok': True, 'motorista': motorista.nome, **apagado})

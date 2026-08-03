@@ -35,6 +35,8 @@ urlpatterns = [
     path('ao-vivo/', MapaAoVivoView.as_view(), name='ao-vivo'),
     path('api/ao-vivo/', rastreio.api_ao_vivo, name='api-ao-vivo'),
     path('api/percurso/<int:pk>/', rastreio.api_percurso, name='api-percurso'),
+    path('api/rastreio/<int:pk>/limpar/', rastreio.api_limpar_rastreio,
+         name='api-limpar-rastreio'),
 
     # APIs consumidas pelo Leaflet
     path('api/camadas/', api.camadas, name='api-camadas'),

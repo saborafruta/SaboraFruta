@@ -211,6 +211,26 @@ class RastreioService:
         return f'{segundos // 86400} d'
 
     @classmethod
+    def limpar_motorista(cls, filial, motorista_id):
+        """
+        Apaga a posição atual e o percurso de um motorista.
+
+        Serve para descartar um teste ou zerar quem saiu da equipe. Os eventos
+        de cerca (§12) **não** são tocados: eles registram visitas que de fato
+        aconteceram e podem já estar num relatório impresso — apagá-los de
+        carona num botão de rastreio seria destruir dado que ninguém pediu
+        para destruir.
+        """
+        from apps.mapas.models import PontoPercurso, PosicaoMotorista
+
+        filiais = cls._escopo(filial)
+        posicoes, _ = PosicaoMotorista.objects.filter(
+            motorista_id=motorista_id, filial__in=filiais).delete()
+        pontos, _ = PontoPercurso.objects.filter(
+            motorista_id=motorista_id, filial__in=filiais).delete()
+        return {'posicoes': posicoes, 'pontos': pontos}
+
+    @classmethod
     def expurgar(cls, dias=RETENCAO_PADRAO_DIAS):
         """Apaga pontos de percurso mais antigos que `dias`."""
         from apps.mapas.models import PontoPercurso

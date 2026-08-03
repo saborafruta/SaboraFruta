@@ -373,3 +373,104 @@ class PaginaTests(BaseRastreio):
 
         resp = self.client.get(reverse('mapas:rastreio'))
         self.assertNotContains(resp, 'JA ENTREGUE')
+
+
+class LimparRastreioTests(BaseRastreio):
+    """
+    Descartar o rastreio de um motorista -- teste jogado fora, ou quem saiu da
+    equipe. Acao destrutiva: o que precisa valer e que apague o alvo certo e
+    NADA alem dele.
+    """
+
+    def _limpar(self, motorista_id):
+        return self.client.post(
+            reverse('mapas:api-limpar-rastreio', args=[motorista_id]))
+
+    def test_apaga_posicao_e_percurso(self):
+        from apps.mapas.models import PontoPercurso, PosicaoMotorista
+
+        agora = self._manha()
+        self._registrar(deslocar(0), momento=agora)
+        self._registrar(deslocar(500), momento=agora + datetime.timedelta(minutes=2))
+
+        resp = self._limpar(self.motorista.pk)
+
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(PosicaoMotorista.objects.count(), 0)
+        self.assertEqual(PontoPercurso.objects.count(), 0)
+
+    def test_nao_mexe_no_rastreio_dos_outros(self):
+        """O erro grave seria limpar a frota inteira num clique."""
+        from apps.mapas.models import PosicaoMotorista
+
+        outro = self._motorista('Maria')
+        self._registrar(deslocar(0))
+        self._registrar(deslocar(0), motorista=outro)
+
+        self._limpar(self.motorista.pk)
+
+        self.assertEqual(
+            list(PosicaoMotorista.objects.values_list('motorista_id', flat=True)),
+            [outro.pk],
+        )
+
+    def test_nao_apaga_os_eventos_de_cerca(self):
+        """
+        Visitas aconteceram de verdade e podem estar num relatorio impresso.
+        Apaga-las de carona seria destruir dado que ninguem pediu.
+        """
+        from apps.mapas.models import EventoGeofence, Geofence
+
+        cerca = Geofence.objects.create(
+            filial=self.filial, nome='Deposito',
+            latitude=CENTRO[0], longitude=CENTRO[1], raio_m=300)
+        EventoGeofence.objects.create(
+            geofence=cerca, motorista=self.motorista, tipo='entrada',
+            momento=timezone.now(), latitude=CENTRO[0], longitude=CENTRO[1])
+        self._registrar(deslocar(0))
+
+        self._limpar(self.motorista.pk)
+
+        self.assertEqual(EventoGeofence.objects.count(), 1)
+
+    def test_motorista_de_outra_empresa_e_404(self):
+        from apps.mapas.models import PosicaoMotorista
+
+        outra = self._empresa('Beta', '99888777000166')
+        alheio = self._motorista('Alheio', filial=outra)
+        self._registrar(deslocar(0), filial=outra, motorista=alheio)
+
+        self.assertEqual(self._limpar(alheio.pk).status_code, 404)
+        self.assertEqual(PosicaoMotorista.objects.count(), 1)
+
+    def test_get_nao_apaga(self):
+        """Acao destrutiva por link seria disparada por prefetch do navegador."""
+        from apps.mapas.models import PosicaoMotorista
+
+        self._registrar(deslocar(0))
+        self.client.get(reverse('mapas:api-limpar-rastreio', args=[self.motorista.pk]))
+
+        self.assertEqual(PosicaoMotorista.objects.count(), 1)
+
+    def test_exige_permissao_de_edicao(self):
+        """Quem so acompanha o mapa nao deveria apagar historico de ninguem."""
+        from apps.core.models import PerfilAcesso, Permissao, Usuario
+        from apps.mapas.models import PosicaoMotorista
+
+        self._registrar(deslocar(0))
+
+        perfil = PerfilAcesso.objects.create(
+            empresa=self.filial.empresa, nome='So leitura', is_admin=False)
+        Permissao.objects.create(perfil=perfil, modulo='mapas', pode_ver=True)
+        leitor = Usuario.objects.create_user(
+            email='leitor@teste.local', nome='Leitor', password='senha-de-teste-123',
+            empresa=self.filial.empresa, perfil=perfil, filial=self.filial)
+        self._logar(leitor, self.filial)
+
+        self._limpar(self.motorista.pk)
+        self.assertEqual(PosicaoMotorista.objects.count(), 1)
+
+    def test_sem_rastreio_nao_da_erro(self):
+        resp = self._limpar(self.motorista.pk)
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(resp.json()['pontos'], 0)
