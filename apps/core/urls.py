@@ -53,6 +53,8 @@ urlpatterns = [
     path('gestao/usuarios/novo/', admin_area.usuario_form, name='admin_usuario_create'),
     path('gestao/usuarios/<int:pk>/editar/', admin_area.usuario_form, name='admin_usuario_edit'),
     path('gestao/usuarios/<int:pk>/toggle/', admin_area.usuario_toggle, name='admin_usuario_toggle'),
+    path('gestao/usuarios/<int:pk>/encerrar-sessoes/', admin_area.usuario_encerrar_sessoes,
+         name='admin_usuario_encerrar_sessoes'),
 
     path('gestao/perfis/', admin_area.perfil_list, name='admin_perfil_list'),
     path('gestao/perfis/novo/', admin_area.perfil_form, name='admin_perfil_create'),

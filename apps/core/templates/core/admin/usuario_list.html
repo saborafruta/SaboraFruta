@@ -100,6 +100,16 @@
         {% csrf_token %}
         <button type="submit" class="btn-table {% if usuario.ativo %}btn-table-red{% else %}btn-table-blue{% endif %}">{% if usuario.ativo %}Desativar{% else %}Ativar{% endif %}</button>
       </form>
+      {% comment %}
+        Derruba o acesso em todos os aparelhos sem mexer na senha. Trocar a
+        senha tambem derrubaria, mas obriga a combinar uma senha nova com quem
+        esta na rua -- o que nao da para fazer quando o aparelho sumiu.
+      {% endcomment %}
+      <form method="post" action="{% url 'core:admin_usuario_encerrar_sessoes' usuario.pk %}{% if super_admins %}?super_admins=1{% elif central_filial %}?central_filial={{ central_filial.pk }}{% elif central_global %}?central=1{% endif %}" class="inline-block ml-2"
+            onsubmit="return confirm('Encerrar as sessoes de {{ usuario.nome|escapejs }}? Ele tera de entrar de novo em todos os aparelhos.');">
+        {% csrf_token %}
+        <button type="submit" class="btn-table" title="Derruba o acesso em todos os aparelhos, sem trocar a senha">Encerrar sessoes</button>
+      </form>
     </td>
   </tr>
 {% empty %}

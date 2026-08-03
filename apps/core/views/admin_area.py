@@ -628,6 +628,43 @@ def usuario_toggle(request, pk):
 
 
 @admin_area_required
+@require_POST
+def usuario_encerrar_sessoes(request, pk):
+    """
+    Derruba o acesso do usuário em todos os aparelhos, sem mexer na senha.
+
+    Para celular perdido, trocado ou funcionário desligado. Trocar a senha
+    também derrubaria, mas obriga a combinar uma senha nova com quem está na
+    rua — exatamente o que não dá para fazer quando o aparelho sumiu.
+    """
+    from apps.core.services.sessoes import encerrar_sessoes
+
+    if request.user.is_superuser and request.GET.get('super_admins') == '1':
+        usuario = get_object_or_404(Usuario, pk=pk, is_superuser=True)
+    elif _is_central_global(request):
+        usuario = get_object_or_404(Usuario, pk=pk)
+    else:
+        usuario = _require_object_in_scope(
+            get_object_or_404(Usuario, pk=pk),
+            _usuarios_scope(request),
+        )
+
+    # Encerrar as próprias sessões preserva a atual: um botão numa lista não
+    # deveria deslogar quem clicou nele.
+    quantas = encerrar_sessoes(usuario, preservar=request.session.session_key)
+
+    if quantas:
+        messages.success(
+            request,
+            f'{quantas} sessao(oes) de {usuario.nome} encerrada(s). '
+            'Ele precisara entrar de novo.',
+        )
+    else:
+        messages.info(request, f'{usuario.nome} nao tem sessao ativa.')
+    return redirect(_central_redirect(request, 'core:admin_usuario_list'))
+
+
+@admin_area_required
 def perfil_list(request):
     busca = request.GET.get('q', '').strip()
     empresa_id = request.GET.get('empresa', '').strip()
