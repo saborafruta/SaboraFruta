@@ -115,3 +115,89 @@ class BaixarPdfTests(TestCase):
 
         with self.assertRaises(ValueError):
             servico.baixar_pdf(self._documento())
+
+
+class DamdfeTests(TestCase):
+    """
+    O DAMDFE nao vem por `/v2/mdfe/{ref}.pdf`.
+
+    A Focus ignora o sufixo `.pdf` nesse recurso e responde 200 com o JSON de
+    consulta -- o mesmo corpo que apareceu na tela do usuario. O caminho certo
+    e consultar e seguir o link que vem na resposta.
+    """
+
+    # Resposta real que a Focus devolveu (encurtada).
+    CONSULTA = {
+        'ref': 'df-127',
+        'cnpj_emitente': '14004764000240',
+        'status': 'autorizado',
+        'status_sefaz': '100',
+        'mensagem_sefaz': 'Autorizado o uso do MDF-e',
+        'chave': 'MDFe24260814004764000240580010000000021925411639',
+        'numero': '2', 'serie': '1', 'modelo': '58',
+        'caminho_xml': 'https://focusnfe.s3.sa-east-1.amazonaws.com/arq/df-127.xml',
+        'caminho_damdfe': 'https://focusnfe.s3.sa-east-1.amazonaws.com/arq/df-127.pdf',
+    }
+
+    def _recurso(self, consulta, pdf=PDF_VALIDO):
+        from apps.fiscal.integrations.focusnfe.resources.mdfe import MDFeResource
+
+        http = MagicMock()
+        http.get.side_effect = lambda path, **kw: (
+            pdf if kw.get('binary') else consulta
+        )
+        recurso = MDFeResource(http)
+        return recurso, http
+
+    def test_baixa_pelo_caminho_damdfe_da_consulta(self):
+        recurso, http = self._recurso(self.CONSULTA)
+
+        conteudo = recurso.baixar_pdf('df-127')
+
+        self.assertEqual(conteudo, PDF_VALIDO)
+        # A segunda chamada tem de ser o link do S3, nao `/v2/mdfe/ref.pdf`.
+        ultima = http.get.call_args_list[-1]
+        self.assertEqual(ultima.args[0], self.CONSULTA['caminho_damdfe'])
+        self.assertTrue(ultima.kwargs.get('binary'))
+
+    def test_nao_usa_mais_o_sufixo_pdf(self):
+        """Era essa chamada que devolvia JSON e virava 'Falha ao carregar'."""
+        recurso, http = self._recurso(self.CONSULTA)
+
+        recurso.baixar_pdf('df-127')
+
+        caminhos = [c.args[0] for c in http.get.call_args_list]
+        self.assertNotIn('/v2/mdfe/df-127.pdf', caminhos)
+
+    def test_consulta_sem_caminho_explica_e_manda_aguardar(self):
+        """
+        Autorizado mas ainda sem o arquivo gerado do lado da Focus. Dizer isso
+        e melhor que devolver bytes que o navegador nao consegue abrir.
+        """
+        sem_pdf = {k: v for k, v in self.CONSULTA.items() if k != 'caminho_damdfe'}
+        recurso, _ = self._recurso(sem_pdf)
+
+        with self.assertRaises(FocusNFeError) as ctx:
+            recurso.baixar_pdf('df-127')
+
+        texto = str(ctx.exception)
+        self.assertIn('autorizado', texto)      # o status entra na mensagem
+        self.assertIn('aguarde', texto.lower())
+
+    def test_aceita_nome_de_campo_diferente_terminado_em_pdf(self):
+        """Um rename do campo pela Focus nao pode derrubar o download."""
+        outro = {'status': 'autorizado',
+                 'caminho_arquivo_damdfe': 'https://x/y.pdf'}
+        recurso, http = self._recurso(outro)
+
+        recurso.baixar_pdf('df-127')
+
+        self.assertEqual(http.get.call_args_list[-1].args[0], 'https://x/y.pdf')
+
+    def test_xml_nao_e_confundido_com_o_pdf(self):
+        """`caminho_xml` tambem comeca com `caminho_` -- nao pode ser escolhido."""
+        so_xml = {'status': 'autorizado', 'caminho_xml': 'https://x/y.xml'}
+        recurso, _ = self._recurso(so_xml)
+
+        with self.assertRaises(FocusNFeError):
+            recurso.baixar_pdf('df-127')

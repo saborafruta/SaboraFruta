@@ -39,5 +39,54 @@ class MDFeResource(AuthorizedDocResource):
         """Inclui DF-e (NFe/CTe) em MDFe já autorizado."""
         return self._http.post(f"/v2/mdfe/{ref}/inclusao_dfe", json_body=payload)
 
+    # ----------------------------------------------------- DAMDFE
+    #: Chaves onde a consulta pode trazer o caminho do PDF, em ordem de
+    #: preferencia. A Focus usa `caminho_damdfe`; as outras cobrem variacoes
+    #: entre ambientes sem exigir uma alteracao de codigo.
+    CHAVES_PDF = ("caminho_damdfe", "caminho_pdf", "caminho_danfe")
+
+    def baixar_pdf(self, ref: str) -> bytes:
+        """
+        Baixa o DAMDFE.
+
+        Diferente da NF-e, o endpoint `/v2/mdfe/{ref}.pdf` **nao** devolve o
+        arquivo: a Focus ignora o sufixo e responde o JSON de consulta, com
+        status 200. Servir esses bytes como PDF produzia um "Falha ao carregar
+        documento" no navegador, sem pista do motivo.
+
+        O caminho correto e consultar e seguir o link que vem na resposta.
+        """
+        dados = self.consultar(ref)
+        url = self._url_do_pdf(dados)
+        if not url:
+            from ..exceptions import FocusNFeError
+
+            status = (dados or {}).get("status", "?") if isinstance(dados, dict) else "?"
+            raise FocusNFeError(
+                "A consulta do MDF-e nao trouxe o caminho do DAMDFE "
+                f"(status: {status}). Se ele acabou de ser autorizado, "
+                "aguarde alguns segundos e tente de novo."
+            )
+        return self._http.get(url, binary=True)
+
+    @classmethod
+    def _url_do_pdf(cls, dados) -> str:
+        """Extrai o link do DAMDFE da resposta de consulta."""
+        if not isinstance(dados, dict):
+            return ""
+        for chave in cls.CHAVES_PDF:
+            valor = str(dados.get(chave) or "").strip()
+            if valor:
+                return valor
+        # Ultimo recurso: qualquer `caminho_*` que aponte para um .pdf. Cobre
+        # um nome de campo novo sem quebrar o download.
+        for chave, valor in dados.items():
+            if (
+                str(chave).startswith("caminho_")
+                and str(valor or "").lower().endswith(".pdf")
+            ):
+                return str(valor).strip()
+        return ""
+
     def baixar_damdfe(self, ref: str) -> bytes:
         return self.baixar_pdf(ref)
