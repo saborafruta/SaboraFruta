@@ -201,3 +201,90 @@ class DamdfeTests(TestCase):
 
         with self.assertRaises(FocusNFeError):
             recurso.baixar_pdf('df-127')
+
+
+class CredencialEmLinkExternoTests(TestCase):
+    """
+    O link do arquivo aponta para o S3, nao para a Focus.
+
+    A sessao HTTP carrega `Authorization: Basic <token>` para toda chamada.
+    Mandar esse cabecalho no link do bucket fazia o S3 responder:
+
+        400 InvalidArgument -- Unsupported Authorization Type
+
+    O S3 nao entende autenticacao basica, e o proprio link ja carrega a
+    autorizacao dele. Estes testes fixam quem leva credencial e quem nao leva.
+    """
+
+    def _cliente(self):
+        from apps.fiscal.integrations.focusnfe._base import BaseAPIClient
+        from apps.fiscal.integrations.focusnfe.config import (
+            HOMOLOGACAO, FocusNFeConfig,
+        )
+
+        return BaseAPIClient(FocusNFeConfig(token='segredo', ambiente=HOMOLOGACAO))
+
+    def test_link_do_s3_e_tratado_como_externo(self):
+        c = self._cliente()
+        self.assertTrue(
+            c._externo('https://focusnfe.s3.sa-east-1.amazonaws.com/arq/df-127.pdf'))
+
+    def test_url_da_propria_api_nao_e_externa(self):
+        c = self._cliente()
+        self.assertFalse(c._externo(c.config.base_url + '/v2/mdfe/df-127'))
+
+    def test_caminho_relativo_nao_e_externo(self):
+        """`/v2/...` e a API; tratar como externo tiraria a credencial dela."""
+        c = self._cliente()
+        self.assertFalse(c._externo('/v2/mdfe/df-127'))
+
+    def test_download_externo_vai_sem_o_cabecalho_de_autorizacao(self):
+        """O teste que reproduz o 400 do S3."""
+        c = self._cliente()
+        usadas = {}
+
+        class SessaoFalsa:
+            def __init__(self, nome):
+                self.nome = nome
+                self.auth = None
+
+            def request(self, **kw):
+                usadas['sessao'] = self.nome
+                usadas['auth'] = self.auth
+                resp = MagicMock()
+                resp.status_code = 200
+                resp.content = PDF_VALIDO
+                return resp
+
+        sessao_api = SessaoFalsa('api')
+        sessao_api.auth = ('segredo', '')
+        c._session = sessao_api
+
+        with patch('apps.fiscal.integrations.focusnfe._base.requests.Session',
+                   return_value=SessaoFalsa('nova')):
+            c.get('https://focusnfe.s3.sa-east-1.amazonaws.com/a.pdf', binary=True)
+
+        self.assertEqual(usadas['sessao'], 'nova')
+        self.assertIsNone(usadas['auth'])
+
+    def test_chamada_a_api_continua_autenticada(self):
+        """A correcao nao pode tirar a credencial de quem precisa dela."""
+        c = self._cliente()
+        usadas = {}
+
+        class SessaoFalsa:
+            auth = ('segredo', '')
+
+            def request(self, **kw):
+                usadas['auth'] = self.auth
+                resp = MagicMock()
+                resp.status_code = 200
+                resp.content = b'{}'
+                resp.headers = {'Content-Type': 'application/json'}
+                resp.json = lambda: {}
+                return resp
+
+        c._session = SessaoFalsa()
+        c.get('/v2/mdfe/df-127')
+
+        self.assertEqual(usadas['auth'], ('segredo', ''))

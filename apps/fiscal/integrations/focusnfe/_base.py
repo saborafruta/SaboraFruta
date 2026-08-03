@@ -14,6 +14,7 @@ from __future__ import annotations
 import json
 import logging
 import time
+from urllib.parse import urlparse
 from typing import Any, Dict, Optional, Union
 
 import requests
@@ -84,10 +85,13 @@ class BaseAPIClient:
         url = self._build_url(path)
         headers = dict(extra_headers or {})
 
+        # Link de arquivo no S3: vai sem a credencial da Focus (ver `_externo`).
+        sessao = requests.Session() if self._externo(url) else self._session
+
         last_exc: Optional[BaseException] = None
         for attempt in range(self.config.max_retries + 1):
             try:
-                resp = self._session.request(
+                resp = sessao.request(
                     method=method.upper(),
                     url=url,
                     params=params,
@@ -137,6 +141,20 @@ class BaseAPIClient:
         return self.request("DELETE", path, **kw)
 
     # ---------------------------------------------------------------- helpers
+    def _externo(self, url: str) -> bool:
+        """
+        A URL aponta para fora da API da Focus?
+
+        Os arquivos (XML e DAMDFE) ficam num bucket S3, e a resposta de
+        consulta devolve o link absoluto para la. Mandar o `Authorization:
+        Basic` da Focus nesse link faz o S3 responder 400 "Unsupported
+        Authorization Type" -- ele nao entende autenticacao basica, e o
+        proprio link ja carrega a autorizacao dele.
+        """
+        if not url.startswith(("http://", "https://")):
+            return False
+        return urlparse(url).netloc != urlparse(self.config.base_url).netloc
+
     def _build_url(self, path: str) -> str:
         if path.startswith("http://") or path.startswith("https://"):
             return path
