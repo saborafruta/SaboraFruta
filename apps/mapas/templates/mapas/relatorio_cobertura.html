@@ -12,27 +12,23 @@
 
 <div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
   <div class="card p-4">
-    <p class="text-xs font-medium uppercase"
-       :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Clientes ativos</p>
+    <p class="rel-nota uppercase font-semibold">Clientes ativos</p>
     <p class="text-lg font-bold mt-1"
        :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">{{ dados.total }}</p>
   </div>
   <div class="card p-4">
-    <p class="text-xs font-medium uppercase"
-       :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">No mapa</p>
+    <p class="rel-nota uppercase font-semibold">No mapa</p>
     <p class="text-lg font-bold mt-1" style="color:#22c55e;">{{ dados.com_coordenada }}</p>
   </div>
   <div class="card p-4">
-    <p class="text-xs font-medium uppercase"
-       :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Sem coordenada</p>
+    <p class="rel-nota uppercase font-semibold">Sem coordenada</p>
     <p class="text-lg font-bold mt-1"
        style="{% if dados.sem_coordenada %}color:#f59e0b;{% else %}color:#22c55e;{% endif %}">
       {{ dados.sem_coordenada }}
     </p>
   </div>
   <div class="card p-4">
-    <p class="text-xs font-medium uppercase"
-       :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Cobertura</p>
+    <p class="rel-nota uppercase font-semibold">Cobertura</p>
     <p class="text-lg font-bold mt-1"
        :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">{{ dados.percentual }}%</p>
   </div>
@@ -40,8 +36,7 @@
 
 {% if dados.por_cidade %}
   <div class="card p-4">
-    <h3 class="text-sm font-semibold mb-3"
-        :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">Pendências por cidade</h3>
+    <h3 class="rel-secao mb-3" style="font-size:13.5px;">Pendências por cidade</h3>
     <table>
       <thead>
         <tr><th>Cidade</th><th class="num">Sem coordenada</th></tr>
@@ -56,8 +51,7 @@
 {% endif %}
 
 <div class="card p-4">
-  <h3 class="text-sm font-semibold mb-3"
-      :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
+  <h3 class="rel-secao mb-3" style="font-size:13.5px;">
     Clientes a corrigir
   </h3>
 
@@ -98,7 +92,7 @@
       </tbody>
     </table>
 
-    <p class="text-xs mt-3 no-print" :style="temaClaro ? 'color:#94a3b8;' : 'color:#64748b;'">
+    <p class="rel-nota mt-3 no-print">
       Depois de corrigir os endereços, rode
       <code style="font-size:11px;">manage.py geocodificar</code> para trazê-los
       ao mapa. Endereço sem cidade não é consultado de propósito: a busca

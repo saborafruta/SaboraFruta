@@ -19,27 +19,103 @@
 
 {% block extra_head %}
 <style>
-  #relatorio { color:#111827; }
-  #relatorio table { border-collapse: collapse; width: 100%; font-size: 12.5px; }
+  /* ── Cores por tema ──────────────────────────────────────────────────────
+     A versao anterior fixava `color:#111827` no relatorio inteiro: texto
+     quase preto sobre fundo escuro, ilegivel na tela. As cores agora vem de
+     variaveis, e o bloco de impressao as troca por preto no branco -- que e
+     o unico lugar onde a cor escura sempre faz sentido.                    */
+  #relatorio {
+    --rel-texto: #e8e8ea;
+    --rel-suave: #9aa4b2;
+    --rel-linha: rgba(148,163,184,.18);
+    --rel-borda: rgba(148,163,184,.45);
+    --rel-zebra: rgba(148,163,184,.07);
+    --rel-cabecalho: rgba(148,163,184,.10);
+    --rel-destaque: rgba(59,130,246,.12);
+    color: var(--rel-texto);
+  }
+  body.tema-claro #relatorio {
+    --rel-texto: #111827;
+    --rel-suave: #64748b;
+    --rel-linha: #e5e7eb;
+    --rel-borda: #cbd5e1;
+    --rel-zebra: rgba(15,23,42,.035);
+    --rel-cabecalho: rgba(15,23,42,.045);
+    --rel-destaque: rgba(37,99,235,.07);
+  }
+
+  /* ── Tabela ─────────────────────────────────────────────────────────── */
+  #relatorio table { border-collapse: collapse; width: 100%; font-size: 13px; }
   #relatorio th {
     text-align: left; font-size: 10.5px; text-transform: uppercase;
-    letter-spacing: .04em; font-weight: 800; padding: 7px 8px;
-    border-bottom: 2px solid #cbd5e1;
+    letter-spacing: .05em; font-weight: 800; padding: 9px 10px;
+    color: var(--rel-suave); background: var(--rel-cabecalho);
+    border-bottom: 1px solid var(--rel-borda);
+    /* Cabecalho preso ao topo: em lista longa, rolar perdia a referencia de
+       qual coluna e qual. Na impressao ele se repete por pagina. */
+    position: sticky; top: 0; z-index: 1;
   }
-  #relatorio td { padding: 6px 8px; border-bottom: 1px solid #e5e7eb; }
-  /* Números à direita e tabulares: coluna alinhada dá para conferir de bater o olho. */
-  #relatorio th.num, #relatorio td.num { text-align: right; font-variant-numeric: tabular-nums; }
-  #relatorio tfoot td { font-weight: 800; border-top: 2px solid #cbd5e1; border-bottom: none; }
-  #relatorio .zebra tbody tr:nth-child(even) { background: rgba(127,127,127,.06); }
+  #relatorio th:first-child { border-top-left-radius: 8px; }
+  #relatorio th:last-child { border-top-right-radius: 8px; }
+  #relatorio td {
+    padding: 9px 10px; border-bottom: 1px solid var(--rel-linha);
+    color: var(--rel-texto);
+  }
+  /* Numeros a direita e tabulares: coluna alinhada da para conferir de bater
+     o olho, e digito com largura fixa impede o numero de "dancar". */
+  #relatorio th.num, #relatorio td.num {
+    text-align: right; font-variant-numeric: tabular-nums;
+  }
+  #relatorio tbody tr:hover td { background: var(--rel-destaque); }
+  #relatorio .zebra tbody tr:nth-child(even) td { background: var(--rel-zebra); }
+  #relatorio .zebra tbody tr:nth-child(even):hover td { background: var(--rel-destaque); }
 
+  #relatorio tfoot td {
+    font-weight: 800; font-size: 13.5px;
+    border-top: 2px solid var(--rel-borda); border-bottom: none;
+    background: var(--rel-cabecalho);
+  }
+
+  /* ── Barra de participacao ──────────────────────────────────────────────
+     Percentual em texto obriga a comparar numeros mentalmente; a barra
+     mostra a proporcao antes da leitura. Fica atras do numero, nao no lugar
+     dele -- o valor exato continua sendo o dado.                          */
+  .rel-part { position: relative; }
+  .rel-part-barra {
+    position: absolute; right: 10px; top: 50%; transform: translateY(-50%);
+    height: 5px; border-radius: 3px; background: #3b82f6; opacity: .30;
+    pointer-events: none;
+  }
+  .rel-part span { position: relative; }
+
+  /* ── Titulos de secao ──────────────────────────────────────────────── */
+  #relatorio .rel-secao {
+    font-size: 15px; font-weight: 700; margin-bottom: 4px;
+    color: var(--rel-texto);
+  }
+  #relatorio .rel-nota { font-size: 11.5px; color: var(--rel-suave); line-height: 1.55; }
+  #relatorio code { font-size: 11px; opacity: .9; }
+
+  /* ── Impressao ─────────────────────────────────────────────────────── */
   @media print {
     nav, header, aside, .no-print { display:none !important; }
     body { background:#fff !important; }
-    #relatorio { color:#000 !important; }
-    /* Cabeçalho da tabela repetido em cada página: sem isso, da segunda folha
-       em diante ninguém sabe que coluna é qual. */
+    #relatorio {
+      --rel-texto: #000;
+      --rel-suave: #555;
+      --rel-linha: #ddd;
+      --rel-borda: #999;
+      --rel-zebra: #f4f4f5;
+      --rel-cabecalho: #eee;
+      --rel-destaque: transparent;
+      color: #000 !important;
+    }
+    /* Sticky vira ancora no papel; o repeat por pagina e o table-header-group.
+       Sem isso, da segunda folha em diante ninguem sabe que coluna e qual. */
+    #relatorio th { position: static; }
     #relatorio thead { display: table-header-group; }
     #relatorio tr { page-break-inside: avoid; }
+    #relatorio .card { box-shadow: none !important; border: none !important; }
     * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
     @page { margin: 12mm; }
   }

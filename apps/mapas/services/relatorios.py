@@ -117,14 +117,32 @@ class RelatorioRegiaoService:
         return junto
 
     @staticmethod
-    def _chave(agrupar_por, cidade, bairro, uf, lat, lng, centro):
+    def _normalizar(texto, vazio):
+        """
+        Rótulo comparável, sem depender de como foi digitado no cadastro.
+
+        "Natal" e "NATAL" são a mesma cidade, mas vinham como duas linhas —
+        cada uma com parte dos clientes e do faturamento. O relatório ficava
+        plausível e errado: ninguém desconfia de uma lista com dez cidades.
+
+        A comparação ignora caixa e espaços; o rótulo exibido sai em Title
+        Case, que é legível tanto para "NATAL" quanto para "natal".
+        """
+        limpo = ' '.join((texto or '').split())
+        if not limpo:
+            return vazio
+        # Siglas de estado ficam em maiúsculas; o resto vira Title Case.
+        return limpo.upper() if len(limpo) <= 2 else limpo.title()
+
+    @classmethod
+    def _chave(cls, agrupar_por, cidade, bairro, uf, lat, lng, centro):
         """Nome da região de um cliente, conforme o agrupamento escolhido."""
         if agrupar_por == 'cidade':
-            return cidade or '(sem cidade)'
+            return cls._normalizar(cidade, '(sem cidade)')
         if agrupar_por == 'bairro':
-            return bairro or '(sem bairro)'
+            return cls._normalizar(bairro, '(sem bairro)')
         if agrupar_por == 'uf':
-            return uf or '(sem estado)'
+            return cls._normalizar(uf, '(sem estado)')
 
         # Zona: mesmo critério de cunhas do mapa de calor. Repetir a regra em
         # SQL aqui faria o relatório e o mapa poderem discordar.

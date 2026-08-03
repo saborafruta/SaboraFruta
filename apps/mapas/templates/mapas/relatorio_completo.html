@@ -50,8 +50,7 @@
   ── 1. Faturamento por zona ────────────────────────────────────────────────
 {% endcomment %}
 <div class="card p-4">
-  <h3 class="text-base font-semibold mb-3"
-      :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">1. Faturamento por zona</h3>
+  <h3 class="rel-secao mb-3">1. Faturamento por zona</h3>
 
   {% if dados.por_zona.linhas %}
     <table class="zebra">
@@ -73,7 +72,10 @@
             <td class="num">{{ l.pedidos|floatformat:0 }}</td>
             <td class="num">{{ l.volume|floatformat:0 }}</td>
             <td class="num">R$ {{ l.receita|floatformat:2 }}</td>
-            <td class="num">{{ l.participacao }}%</td>
+            <td class="num rel-part">
+              <div class="rel-part-barra" style="width:{{ l.participacao }}%; max-width:70px;"></div>
+              <span>{{ l.participacao }}%</span>
+            </td>
           </tr>
         {% endfor %}
       </tbody>
@@ -88,12 +90,12 @@
         </tr>
       </tfoot>
     </table>
-    <p class="text-xs mt-2" :style="temaClaro ? 'color:#94a3b8;' : 'color:#64748b;'">
+    <p class="rel-nota mt-2">
       Zona é o quadrante geográfico calculado pela coordenada, em relação ao
       centro da carteira — não é a divisão administrativa do município.
     </p>
   {% else %}
-    <p class="text-sm py-4" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+    <p class="rel-nota py-4" style="font-size:13px;">
       Nenhuma venda no período.
     </p>
   {% endif %}
@@ -103,8 +105,7 @@
   ── 2. Faturamento por bairro ──────────────────────────────────────────────
 {% endcomment %}
 <div class="card p-4" style="page-break-before: always;">
-  <h3 class="text-base font-semibold mb-3"
-      :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">2. Faturamento por bairro</h3>
+  <h3 class="rel-secao mb-3">2. Faturamento por bairro</h3>
 
   {% if dados.por_bairro.linhas %}
     <table class="zebra">
@@ -126,7 +127,10 @@
             <td class="num">{{ l.pedidos|floatformat:0 }}</td>
             <td class="num">{{ l.volume|floatformat:0 }}</td>
             <td class="num">R$ {{ l.receita|floatformat:2 }}</td>
-            <td class="num">{{ l.participacao }}%</td>
+            <td class="num rel-part">
+              <div class="rel-part-barra" style="width:{{ l.participacao }}%; max-width:70px;"></div>
+              <span>{{ l.participacao }}%</span>
+            </td>
           </tr>
         {% endfor %}
       </tbody>
@@ -142,7 +146,7 @@
       </tfoot>
     </table>
   {% else %}
-    <p class="text-sm py-4" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+    <p class="rel-nota py-4" style="font-size:13px;">
       Nenhuma venda no período.
     </p>
   {% endif %}
@@ -156,18 +160,16 @@
   cobertura, quem não comprou é justamente o que interessa.
 {% endcomment %}
 <div class="card p-4" style="page-break-before: always;">
-  <h3 class="text-base font-semibold mb-1"
-      :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">3. Clientes por zona</h3>
-  <p class="text-xs mb-3" :style="temaClaro ? 'color:#94a3b8;' : 'color:#64748b;'">
+  <h3 class="rel-secao mb-1">3. Clientes por zona</h3>
+  <p class="rel-nota mb-3">
     Toda a base geolocalizada do recorte, inclusive quem não comprou no período.
   </p>
 
   {% for grupo in dados.clientes_por_zona %}
     <div style="margin-bottom:18px;">
-      <h4 class="text-sm font-bold mb-2"
-          :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
+      <h4 class="rel-secao mb-2" style="font-size:13.5px;">
         {{ grupo.zona }}
-        <span class="font-normal" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+        <span class="font-normal rel-nota">
           — {{ grupo.quantidade }} cliente{{ grupo.quantidade|pluralize }},
           R$ {{ grupo.total|floatformat:2 }}
           {% if grupo.sem_compra %}· {{ grupo.sem_compra }} sem compra no período{% endif %}
@@ -200,7 +202,7 @@
       </table>
     </div>
   {% empty %}
-    <p class="text-sm py-4" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+    <p class="rel-nota py-4" style="font-size:13px;">
       Nenhum cliente geolocalizado neste recorte.
     </p>
   {% endfor %}
@@ -210,9 +212,8 @@
   ── 4. Clientes sem endereço ───────────────────────────────────────────────
 {% endcomment %}
 <div class="card p-4" style="page-break-before: always;">
-  <h3 class="text-base font-semibold mb-1"
-      :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">4. Clientes sem endereço no mapa</h3>
-  <p class="text-xs mb-3" :style="temaClaro ? 'color:#94a3b8;' : 'color:#64748b;'">
+  <h3 class="rel-secao mb-1">4. Clientes sem endereço no mapa</h3>
+  <p class="rel-nota mb-3">
     {{ dados.cobertura.com_coordenada }} de {{ dados.cobertura.total }} clientes ativos
     estão no mapa ({{ dados.cobertura.percentual }}%).
     Os abaixo ficam de fora de <strong>todas</strong> as seções anteriores.
@@ -255,11 +256,10 @@
   ── 5. Roteiro sugerido ────────────────────────────────────────────────────
 {% endcomment %}
 <div class="card p-4" style="page-break-before: always;">
-  <h3 class="text-base font-semibold mb-1"
-      :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">5. Roteiro sugerido</h3>
+  <h3 class="rel-secao mb-1">5. Roteiro sugerido</h3>
 
   {% if dados.roteiro.paradas %}
-    <p class="text-xs mb-3" :style="temaClaro ? 'color:#94a3b8;' : 'color:#64748b;'">
+    <p class="rel-nota mb-3">
       {{ dados.roteiro.paradas|length }} parada{{ dados.roteiro.paradas|length|pluralize }}
       escolhidas entre {{ dados.roteiro.candidatos }} cliente{{ dados.roteiro.candidatos|pluralize }}
       que compraram no período{% if dados.roteiro.km %} ·
@@ -310,7 +310,7 @@
       Como a lista foi montada. Sem isso o roteiro parece arbitrário — e quem
       recebe a folha precisa poder discordar da escolha com conhecimento.
     {% endcomment %}
-    <p class="text-xs mt-3" :style="temaClaro ? 'color:#94a3b8;' : 'color:#64748b;'">
+    <p class="rel-nota mt-3">
       <strong>Como a lista foi montada:</strong> entram os clientes que já
       compraram no período. A prioridade é de quem está <strong>atrasado na
       recompra</strong>, depois pelo score do CRM (que combina atraso, ticket e
@@ -322,7 +322,7 @@
       {% endif %}
     </p>
   {% else %}
-    <p class="text-sm py-4" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+    <p class="rel-nota py-4" style="font-size:13px;">
       {{ dados.roteiro.motivo|default:"Sem paradas para sugerir." }}
     </p>
   {% endif %}

@@ -39,6 +39,32 @@
 {% endblock %}
 
 {% block relatorio_corpo %}
+{% if dados.linhas %}
+  {% comment %}
+    Totais antes da tabela: a pergunta "quanto deu no total" nao deveria
+    exigir rolar ate o rodape de uma lista de dezenas de linhas.
+  {% endcomment %}
+  <div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
+    <div class="card p-4">
+      <p class="rel-nota uppercase font-semibold">Receita</p>
+      <p class="text-lg font-bold mt-1" style="color:#22c55e;">
+        R$ {{ dados.total.receita|floatformat:2 }}</p>
+    </div>
+    <div class="card p-4">
+      <p class="rel-nota uppercase font-semibold">Clientes</p>
+      <p class="text-lg font-bold mt-1">{{ dados.total.clientes }}</p>
+    </div>
+    <div class="card p-4">
+      <p class="rel-nota uppercase font-semibold">Pedidos</p>
+      <p class="text-lg font-bold mt-1">{{ dados.total.pedidos|floatformat:0 }}</p>
+    </div>
+    <div class="card p-4">
+      <p class="rel-nota uppercase font-semibold">{{ dados.rotulo_grupo }}s</p>
+      <p class="text-lg font-bold mt-1">{{ dados.linhas|length }}</p>
+    </div>
+  </div>
+{% endif %}
+
 <div class="card p-4">
   {% if dados.linhas %}
     <table class="zebra">
@@ -60,7 +86,14 @@
             <td class="num">{{ l.pedidos|floatformat:0 }}</td>
             <td class="num">{{ l.volume|floatformat:0 }}</td>
             <td class="num">R$ {{ l.receita|floatformat:2 }}</td>
-            <td class="num">{{ l.participacao }}%</td>
+            {% comment %}
+              A barra mostra a proporcao antes da leitura do numero; o valor
+              exato continua ali, so deixou de ser o unico jeito de comparar.
+            {% endcomment %}
+            <td class="num rel-part">
+              <div class="rel-part-barra" style="width:{{ l.participacao }}%; max-width:70px;"></div>
+              <span>{{ l.participacao }}%</span>
+            </td>
           </tr>
         {% endfor %}
       </tbody>
@@ -80,7 +113,7 @@
       As mesmas ressalvas do mapa de calor. Num papel que circula numa reunião
       elas importam mais ainda: alguém vai comparar com outro relatório.
     {% endcomment %}
-    <p class="text-xs mt-3" :style="temaClaro ? 'color:#94a3b8;' : 'color:#64748b;'">
+    <p class="rel-nota mt-3">
       Receita já descontada de Doação e Permuta, que não são receita.
       Volume soma quantidades de unidades diferentes (kg, un, cx) — serve para
       comparar regiões entre si, não como peso total.
@@ -91,7 +124,7 @@
       Clientes sem coordenada ficam fora deste relatório.
     </p>
   {% else %}
-    <p class="text-sm text-center py-8" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+    <p class="rel-nota text-center py-8" style="font-size:13px;">
       Nenhuma venda no período.
     </p>
   {% endif %}

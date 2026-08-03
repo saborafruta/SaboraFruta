@@ -382,3 +382,77 @@ class PaginaTests(BaseRelatorio):
 
         self.assertEqual(
             self.client.get(reverse('mapas:relatorio-regiao')).status_code, 200)
+
+
+class NormalizacaoTests(BaseRelatorio):
+    """
+    "Natal" e "NATAL" sao a mesma cidade.
+
+    Vinham como duas linhas, cada uma com parte dos clientes e do faturamento.
+    O relatorio ficava plausivel e errado -- ninguem desconfia de uma lista com
+    dez cidades, e a participacao de cada uma saia pela metade.
+    """
+
+    def test_cidade_em_caixas_diferentes_vira_uma_linha(self):
+        a = self._cliente('A', '1', cidade='Natal')
+        b = self._cliente('B', '2', cidade='NATAL', lat=-5.80)
+        self._venda(a, 100)
+        self._venda(b, 300)
+
+        d = self._regiao()
+
+        self.assertEqual(len(d['linhas']), 1)
+        self.assertEqual(d['linhas'][0]['clientes'], 2)
+        self.assertEqual(float(d['linhas'][0]['receita']), 400.0)
+
+    def test_rotulo_sai_legivel(self):
+        c = self._cliente('A', '1', cidade='NATAL')
+        self._venda(c, 100)
+
+        self.assertEqual(self._regiao()['linhas'][0]['regiao'], 'Natal')
+
+    def test_espaco_extra_nao_separa(self):
+        a = self._cliente('A', '1', cidade='Sao  Goncalo')
+        b = self._cliente('B', '2', cidade='sao goncalo', lat=-5.80)
+        self._venda(a, 100)
+        self._venda(b, 100)
+
+        self.assertEqual(len(self._regiao()['linhas']), 1)
+
+    def test_bairro_tambem_e_normalizado(self):
+        from apps.cadastros.models import Cliente
+
+        a = self._cliente('A', '1')
+        b = self._cliente('B', '2', lat=-5.80)
+        Cliente.objects.filter(pk=a.pk).update(bairro='Ponta Negra')
+        Cliente.objects.filter(pk=b.pk).update(bairro='PONTA NEGRA')
+        self._venda(a, 100)
+        self._venda(b, 100)
+
+        d = self._regiao(agrupar_por='bairro')
+        self.assertEqual([l['regiao'] for l in d['linhas']], ['Ponta Negra'])
+
+    def test_sigla_de_estado_fica_em_maiusculas(self):
+        """`RN` em Title Case viraria `Rn`, que ninguem escreve assim."""
+        c = self._cliente('A', '1', uf='RN')
+        self._venda(c, 100)
+
+        d = self._regiao(agrupar_por='uf')
+        self.assertEqual(d['linhas'][0]['regiao'], 'RN')
+
+    def test_vazio_continua_com_rotulo_explicito(self):
+        c = self._cliente('A', '1', cidade='')
+        self._venda(c, 100)
+
+        self.assertEqual(self._regiao()['linhas'][0]['regiao'], '(sem cidade)')
+
+    def test_participacao_soma_cem_apos_a_uniao(self):
+        a = self._cliente('A', '1', cidade='Natal')
+        b = self._cliente('B', '2', cidade='NATAL', lat=-5.80)
+        c = self._cliente('C', '3', cidade='Mossoró', lat=-5.19)
+        self._venda(a, 250)
+        self._venda(b, 250)
+        self._venda(c, 500)
+
+        d = self._regiao()
+        self.assertEqual(sorted(l['participacao'] for l in d['linhas']), [50.0, 50.0])
