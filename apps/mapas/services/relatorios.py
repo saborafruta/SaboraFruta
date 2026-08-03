@@ -55,10 +55,14 @@ class RelatorioRegiaoService:
         }
 
         centro = HeatmapService._centro_da_base(filiais, cidade, uf)
-        campos = ('id', 'cidade', 'bairro', 'uf', 'latitude', 'longitude')
+        # Nome e telefone entram no mesmo `values_list` que ja era feito: a
+        # lista de quem compos cada linha sai sem nenhuma query a mais.
+        campos = ('id', 'cidade', 'bairro', 'uf', 'latitude', 'longitude',
+                  'razao_social', 'nome_fantasia', 'telefone', 'celular')
 
         linhas = {}
-        for cid, cid_cidade, bairro, cid_uf, lat, lng in clientes.values_list(*campos):
+        for (cid, cid_cidade, bairro, cid_uf, lat, lng,
+             razao, fantasia, tel, cel) in clientes.values_list(*campos):
             receita = valores['receita'].get(cid, Decimal('0'))
             pedidos = valores['pedidos'].get(cid, Decimal('0'))
             volume = valores['volume'].get(cid, Decimal('0'))
@@ -72,12 +76,22 @@ class RelatorioRegiaoService:
             linha = linhas.setdefault(chave, {
                 'regiao': chave, 'clientes': 0,
                 'pedidos': Decimal('0'), 'volume': Decimal('0'),
-                'receita': Decimal('0'),
+                'receita': Decimal('0'), 'detalhe': [],
             })
             linha['clientes'] += 1
             linha['pedidos'] += pedidos
             linha['volume'] += volume
             linha['receita'] += receita
+            linha['detalhe'].append({
+                'id': cid,
+                'nome': fantasia or razao or f'Cliente {cid}',
+                'bairro': cls._normalizar(bairro, '—'),
+                'cidade': cls._normalizar(cid_cidade, '—'),
+                'telefone': cel or tel or '',
+                'pedidos': pedidos,
+                'volume': volume,
+                'receita': receita,
+            })
 
         ordenadas = sorted(linhas.values(), key=lambda r: r['receita'], reverse=True)
         total = {
@@ -94,6 +108,9 @@ class RelatorioRegiaoService:
                 round(float(r['receita'] / total['receita'] * 100), 1)
                 if total['receita'] else 0.0
             )
+            # Dentro da região, quem mais faturou primeiro — é a ordem em que
+            # alguém procuraria um nome ao abrir o detalhe.
+            r['detalhe'].sort(key=lambda c: c['receita'], reverse=True)
 
         return {
             'agrupar_por': agrupar_por,

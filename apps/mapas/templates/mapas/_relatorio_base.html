@@ -88,6 +88,17 @@
   }
   .rel-part span { position: relative; }
 
+  /* ── Linha expansivel ───────────────────────────────────────────────── */
+  .rel-seta { display:inline-block; width:12px; margin-right:5px;
+              transition:transform .15s ease; color:var(--rel-suave);
+              font-weight:800; }
+  /* O detalhe e uma tabela dentro da celula: recuo e fundo proprio para nao
+     se confundir com as linhas de cima. */
+  .rel-detalhe > td { background: var(--rel-zebra); }
+  .rel-detalhe table { font-size: 12px; }
+  .rel-detalhe th { background: transparent; position: static; padding: 6px 8px; }
+  .rel-detalhe td { padding: 5px 8px; border-bottom: 1px solid var(--rel-linha); }
+
   /* ── Titulos de secao ──────────────────────────────────────────────── */
   #relatorio .rel-secao {
     font-size: 15px; font-weight: 700; margin-bottom: 4px;
@@ -115,6 +126,8 @@
     #relatorio th { position: static; }
     #relatorio thead { display: table-header-group; }
     #relatorio tr { page-break-inside: avoid; }
+    /* A seta e um controle de tela; no papel viraria um caractere solto. */
+    .rel-seta { display: none !important; }
     #relatorio .card { box-shadow: none !important; border: none !important; }
     * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
     @page { margin: 12mm; }

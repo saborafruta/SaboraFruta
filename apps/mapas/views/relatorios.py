@@ -63,6 +63,8 @@ class RelatorioRegiaoView(BaseRelatorioMapas):
         ctx['agrupamentos'] = [
             {'chave': k, 'rotulo': v} for k, v in AGRUPAMENTOS.items()
         ]
+        # Só controla o que vai impresso: na tela o detalhe abre no clique.
+        ctx['detalhar'] = self.request.GET.get('detalhar') == '1'
         ctx['dados'] = RelatorioRegiaoService.gerar(
             ctx['filial'],
             agrupar_por=agrupar,

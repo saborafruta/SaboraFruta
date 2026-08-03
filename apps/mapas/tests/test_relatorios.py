@@ -456,3 +456,104 @@ class NormalizacaoTests(BaseRelatorio):
 
         d = self._regiao()
         self.assertEqual(sorted(l['participacao'] for l in d['linhas']), [50.0, 50.0])
+
+
+class DetalheDeClientesTests(BaseRelatorio):
+    """
+    Quem compos cada linha do relatorio.
+
+    Vem junto da agregacao de proposito: o servico ja percorre cliente a
+    cliente para somar, entao a lista sai sem nenhuma query a mais. Buscar
+    depois, por clique, custaria uma requisicao para repetir um trabalho ja
+    feito.
+    """
+
+    def test_cada_linha_traz_os_clientes_que_a_compoem(self):
+        a = self._cliente('PADARIA', '1', cidade='Natal')
+        b = self._cliente('MERCADO', '2', cidade='Natal', lat=-5.80)
+        c = self._cliente('LONGE', '3', cidade='Mossoró', lat=-5.19)
+        self._venda(a, 100)
+        self._venda(b, 300)
+        self._venda(c, 50)
+
+        por_nome = {l['regiao']: l for l in self._regiao()['linhas']}
+
+        self.assertEqual(
+            [d['nome'] for d in por_nome['Natal']['detalhe']],
+            ['MERCADO', 'PADARIA'],          # maior receita primeiro
+        )
+        self.assertEqual([d['nome'] for d in por_nome['Mossoró']['detalhe']], ['LONGE'])
+
+    def test_a_soma_do_detalhe_bate_com_a_linha(self):
+        """Se divergisse, o detalhe desmentiria o total logo acima dele."""
+        a = self._cliente('A', '1')
+        b = self._cliente('B', '2', lat=-5.80)
+        self._venda(a, 100)
+        self._venda(b, 250)
+
+        linha = self._regiao()['linhas'][0]
+        soma = sum(d['receita'] for d in linha['detalhe'])
+
+        self.assertEqual(soma, linha['receita'])
+        self.assertEqual(len(linha['detalhe']), linha['clientes'])
+
+    def test_traz_telefone_para_dar_para_ligar(self):
+        from apps.cadastros.models import Cliente
+
+        c = self._cliente('PADARIA', '1')
+        Cliente.objects.filter(pk=c.pk).update(celular='84999990000')
+        self._venda(c, 100)
+
+        detalhe = self._regiao()['linhas'][0]['detalhe'][0]
+        self.assertEqual(detalhe['telefone'], '84999990000')
+
+    def test_cliente_sem_venda_nao_aparece_no_detalhe(self):
+        comprou = self._cliente('COMPROU', '1')
+        self._cliente('NAO COMPROU', '2', lat=-5.80)
+        self._venda(comprou, 100)
+
+        nomes = [d['nome'] for d in self._regiao()['linhas'][0]['detalhe']]
+        self.assertEqual(nomes, ['COMPROU'])
+
+    def test_pagina_traz_os_clientes_no_html(self):
+        c = self._cliente('PADARIA DO ZE', '1')
+        self._venda(c, 100)
+
+        resp = self.client.get(reverse('mapas:relatorio-regiao'))
+        self.assertContains(resp, 'PADARIA DO ZE')
+
+    def test_detalhar_no_pdf_vem_da_querystring(self):
+        resp = self.client.get(reverse('mapas:relatorio-regiao'), {'detalhar': '1'})
+        self.assertTrue(resp.context['detalhar'])
+
+        resp = self.client.get(reverse('mapas:relatorio-regiao'))
+        self.assertFalse(resp.context['detalhar'])
+
+
+class CustoDoDetalheTests(BaseRelatorio):
+    def test_numero_de_queries_nao_cresce_com_a_base(self):
+        """
+        O detalhe sai do mesmo `values_list` da agregacao. Se algum dia
+        virar um acesso por cliente, o relatorio degrada em silencio: continua
+        correto e fica lento so quando a base cresce -- que e quando ninguem
+        esta olhando o codigo.
+        """
+        from django.db import connection
+        from django.test.utils import CaptureQueriesContext
+
+        for i in range(5):
+            c = self._cliente(f'C{i}', str(i), lat=-5.79 - i / 1000)
+            self._venda(c, 100)
+
+        with CaptureQueriesContext(connection) as poucos:
+            self._regiao()
+
+        for i in range(5, 40):
+            c = self._cliente(f'C{i}', str(i), lat=-5.79 - i / 1000)
+            self._venda(c, 100)
+
+        with CaptureQueriesContext(connection) as muitos:
+            d = self._regiao()
+
+        self.assertEqual(len(d['linhas'][0]['detalhe']), 40)
+        self.assertEqual(len(muitos), len(poucos))
