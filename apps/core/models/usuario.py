@@ -153,8 +153,13 @@ class Usuario(AbstractBaseUser, PermissionsMixin):
     def _otimizar_foto(self):
         if not self.foto:
             return
-        arquivo = getattr(self.foto, 'file', None)
-        if not arquivo or getattr(self.foto, '_committed', True):
+        if getattr(self.foto, '_committed', True):
+            return
+        try:
+            arquivo = getattr(self.foto, 'file', None)
+        except (FileNotFoundError, ValueError):
+            return
+        if not arquivo:
             return
         try:
             arquivo.seek(0)
@@ -173,10 +178,15 @@ class Usuario(AbstractBaseUser, PermissionsMixin):
             nome_base = Path(self.foto.name).stem or 'foto'
             self.foto.save(f'{nome_base}.jpg', ContentFile(buffer.getvalue()), save=False)
         except Exception:
-            arquivo.seek(0)
+            try:
+                arquivo.seek(0)
+            except Exception:
+                pass
 
     def save(self, *args, **kwargs):
-        self._otimizar_foto()
+        update_fields = kwargs.get('update_fields')
+        if update_fields is None or 'foto' in update_fields:
+            self._otimizar_foto()
         super().save(*args, **kwargs)
 
     @property
