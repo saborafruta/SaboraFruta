@@ -1136,6 +1136,10 @@
                               <svg width="12" height="12" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"/></svg>
                               Comprovante
                             </button>
+                            <button @click.stop="compartilharCupomWhatsApp(c)"
+                                    style="flex:1;display:flex;align-items:center;justify-content:center;gap:5px;padding:7px 10px;background:#0d0d16;border:1px solid #14532d;border-radius:8px;color:#4ade80;font-size:11px;font-weight:600;cursor:pointer;">
+                              WhatsApp
+                            </button>
                             <button @click.stop="reimprimirOrcamento(c)"
                                     style="flex:1;display:flex;align-items:center;justify-content:center;gap:5px;padding:7px 10px;background:#0d0d16;border:1px solid #2a2a3e;border-radius:8px;color:#c0c0d8;font-size:11px;font-weight:600;cursor:pointer;">
                               <svg width="12" height="12" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
@@ -2536,6 +2540,11 @@
             </div>
             <span style="font-size:15px;font-weight:800;color:#4ade80;" x-text="'R$ '+fmt(v.valor_total)"></span>
             <button type="button"
+                    @click.stop="compartilharCupomWhatsApp(v)"
+                    style="display:flex;align-items:center;gap:5px;padding:7px 9px;background:#0d0d16;border:1px solid #14532d;border-radius:8px;color:#4ade80;font-size:11px;font-weight:700;cursor:pointer;white-space:nowrap;">
+              WhatsApp
+            </button>
+            <button type="button"
                     @click.stop="['autorizada','processando'].includes(v.documento_fiscal_status)
                       ? toast_('A nota fiscal precisa ser cancelada ou concluir o processamento antes de trocar o cliente.','erro')
                       : editarVendaHistorico(v, true)"
@@ -3734,50 +3743,177 @@ ${pgtoHtml ? `<hr class="sep">${pgtoHtml}` : ''}
     },
 
     async _carregarHtml2Pdf() {
-      if (window.html2pdf) return;
+      if (window.jspdf?.jsPDF || window.jsPDF) return;
       if (!this._html2pdfPromise) {
         this._html2pdfPromise = new Promise((resolve, reject) => {
           const s = document.createElement('script');
-          s.src = 'https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js';
+          s.src = 'https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js';
           s.onload = resolve;
-          s.onerror = () => reject(new Error('html2pdf'));
+          s.onerror = () => reject(new Error('jspdf'));
           document.head.appendChild(s);
         });
       }
       await this._html2pdfPromise;
     },
 
-    _cupomArquivoNome() {
-      const numero = this.venda.numero || this.vendaFinalizadaData.numero || 'venda';
+    async _dadosCupomVenda(origem = null) {
+      if (!origem) return this.venda;
+      let d = origem;
+      if (d.id && (!d.itens || !d.itens.length)) {
+        const r = await fetch('/pdv/api/venda/'+d.id+'/detalhe/');
+        d = await r.json();
+        if (!r.ok || !d.ok) throw new Error(d.erro || 'venda_detalhe');
+      }
+      return {
+        id: d.venda_id || d.id || null,
+        numero: d.numero_venda || d.numero || null,
+        cliente: {
+          id: d.cliente_id || null,
+          nome: d.cliente_nome || d.cliente || 'Consumidor Final',
+          cpf_cnpj: d.cliente_cpf_cnpj || '',
+          celular: d.cliente_celular || '',
+          telefone: d.cliente_telefone || '',
+          endereco_entrega: d.cliente_endereco || d.cliente_endereco_entrega || {},
+        },
+        itens: d.itens || [],
+        pagamentos: d.pagamentos || [],
+        subtotal: parseFloat(d.subtotal ?? d.valor_subtotal ?? d.valor_total ?? 0),
+        desconto: parseFloat(d.desconto ?? d.valor_desconto ?? 0),
+        acrescimo: parseFloat(d.acrescimo ?? d.valor_acrescimo ?? 0),
+        total: parseFloat(d.total ?? d.valor_total ?? 0),
+        delivery: !!d.delivery,
+        endereco_entrega: d.endereco_entrega || {},
+        observacao: d.observacao || '',
+        data_venda: d.data_venda || '',
+      };
+    },
+
+    _cupomArquivoNome(vendaCupom = null) {
+      const numero = vendaCupom?.numero || this.venda.numero || this.vendaFinalizadaData.numero || 'venda';
       return `comprovante-nao-fiscal-${String(numero).padStart(6,'0')}.pdf`;
     },
 
-    async _gerarCupomPdfBlob() {
+    async _gerarCupomPdfBlob(vendaCupom = null) {
       await this._carregarHtml2Pdf();
-      const el = document.createElement('div');
-      const doc = new DOMParser().parseFromString(this._cupomPdfHtml(), 'text/html');
-      const style = doc.head.querySelector('style');
-      if (style) el.appendChild(style.cloneNode(true));
-      Array.from(doc.body.childNodes).forEach(node => el.appendChild(node.cloneNode(true)));
-      el.style.position = 'fixed';
-      el.style.left = '-10000px';
-      el.style.top = '0';
-      document.body.appendChild(el);
-      try {
-        return await window.html2pdf().set({
-          margin: 0,
-          filename: this._cupomArquivoNome(),
-          html2canvas: { scale: 2, useCORS: true, backgroundColor: '#ffffff' },
-          jsPDF: { unit: 'mm', format: [80, 260], orientation: 'portrait' },
-          pagebreak: { mode: ['css', 'legacy'] },
-        }).from(el).toPdf().outputPdf('blob');
-      } finally {
-        el.remove();
+      const JsPDF = window.jspdf?.jsPDF || window.jsPDF;
+      if (!JsPDF) throw new Error('jspdf');
+
+      const v = vendaCupom || this.venda;
+      const qtdItensEstimado = Math.max(1, (v.itens || []).length);
+      const qtdPgtoEstimado = Math.max(0, (v.pagamentos || []).length);
+      const pageH = Math.min(220, Math.max(92, 72 + qtdItensEstimado * 9 + qtdPgtoEstimado * 5 + (v.observacao ? 10 : 0)));
+      const doc = new JsPDF({ unit: 'mm', format: [80, pageH], orientation: 'portrait' });
+      const pageW = 80;
+      const margin = 5;
+      const maxW = pageW - margin * 2;
+      let y = 8;
+      const fmt = n => parseFloat(n || 0).toFixed(2).replace('.', ',');
+      const clean = s => String(s ?? '').replace(/\s+/g, ' ').trim();
+      const numero = v.numero || this.vendaFinalizadaData.numero;
+      const numeroTxt = numero ? '#'+String(numero).padStart(6,'0') : '';
+      const filial = clean('{{ filial_ativa.nome_fantasia|default:filial_ativa.razao_social|escapejs }}');
+      const filialEndereco = clean('{{ filial_ativa.endereco|escapejs }}');
+      const filialNumero = clean('{{ filial_ativa.numero|escapejs }}');
+      const filialBairro = clean('{{ filial_ativa.bairro|escapejs }}');
+      const filialCidade = clean('{{ filial_ativa.cidade|escapejs }}');
+      const filialUf = clean('{{ filial_ativa.uf|escapejs }}');
+      const filialTelefone = clean('{{ filial_ativa.telefone|escapejs }}');
+
+      const ensure = h => {
+        if (y + h > pageH - margin) {
+          doc.addPage([80, 260], 'portrait');
+          y = 8;
+        }
+      };
+      const text = (value, opts = {}) => {
+        const size = opts.size || 9;
+        const weight = opts.bold ? 'bold' : 'normal';
+        const align = opts.align || 'left';
+        const x = align === 'center' ? pageW / 2 : (align === 'right' ? pageW - margin : margin);
+        const lineH = opts.lineH || (size >= 12 ? 5 : 4);
+        doc.setFont('courier', weight);
+        doc.setFontSize(size);
+        const lines = doc.splitTextToSize(clean(value), opts.maxW || maxW);
+        lines.forEach(line => {
+          ensure(lineH);
+          doc.text(line, x, y, { align });
+          y += lineH;
+        });
+      };
+      const pair = (label, value, opts = {}) => {
+        ensure(5);
+        doc.setFont('courier', opts.bold ? 'bold' : 'normal');
+        doc.setFontSize(opts.size || 9);
+        doc.text(clean(label), margin, y);
+        doc.text(clean(value), pageW - margin, y, { align: 'right' });
+        y += opts.lineH || 4.5;
+      };
+      const sep = () => {
+        ensure(4);
+        doc.setDrawColor(80);
+        doc.setLineDashPattern([1.5, 1.5], 0);
+        doc.line(margin, y, pageW - margin, y);
+        doc.setLineDashPattern([], 0);
+        y += 4;
+      };
+
+      text(filial || 'Comprovante', { align: 'center', bold: true, size: 13, lineH: 5 });
+      const filialLinha1 = [filialEndereco, filialNumero].filter(Boolean).join(', ');
+      const filialLinha2 = [filialBairro, [filialCidade, filialUf].filter(Boolean).join(' - ')].filter(Boolean).join(' - ');
+      if (filialLinha1) text(filialLinha1, { align: 'center', size: 8 });
+      if (filialLinha2) text(filialLinha2, { align: 'center', size: 8 });
+      if (filialTelefone) text('Tel: ' + filialTelefone, { align: 'center', size: 8 });
+      text(new Date().toLocaleString('pt-BR',{day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'}) + (numeroTxt ? ' - ' + numeroTxt : ''), { align: 'center', size: 8 });
+
+      sep();
+      const cliente = v.cliente || {};
+      text('Cliente: ' + (cliente.nome || 'Consumidor Final'), { size: 9, bold: true });
+      if (cliente.cpf_cnpj) text('CPF/CNPJ: ' + cliente.cpf_cnpj, { size: 8 });
+      const end = v.delivery ? (v.endereco_entrega || {}) : (cliente.endereco_entrega || {});
+      if (end && end.rua) {
+        text((v.delivery ? 'Entrega: ' : 'Endereco: ') + end.rua + (end.numero ? ', '+end.numero : '') + (end.complemento ? ' - '+end.complemento : ''), { size: 8 });
+        const cidadeUf = [end.cidade, end.uf].filter(Boolean).join('/');
+        const end2 = [end.bairro, cidadeUf, end.cep].filter(Boolean).join(' - ');
+        if (end2) text(end2, { size: 8 });
       }
+      if (v.observacao) text('Obs: ' + v.observacao, { size: 8 });
+
+      sep();
+      text('ITENS', { size: 9, bold: true });
+      (v.itens || []).forEach(item => {
+        const qtd = parseFloat(item.quantidade || 1);
+        const uni = parseFloat(item.valor_unitario || 0);
+        const tot = parseFloat(item.valor_total || 0);
+        text(item.descricao || item.produto_nome || 'Produto', { size: 9, bold: true });
+        pair(`${qtd % 1 === 0 ? qtd : qtd.toFixed(2).replace('.', ',')} x R$ ${fmt(uni)}`, `R$ ${fmt(tot)}`, { size: 9 });
+      });
+      if (!v.itens || !v.itens.length) text('Carrinho vazio', { align: 'center', size: 9 });
+
+      sep();
+      const totalItens = (v.itens || []).reduce((s, i) => s + parseFloat(i.quantidade || 0), 0);
+      pair('Qtd total de itens', totalItens % 1 === 0 ? String(totalItens) : totalItens.toFixed(2).replace('.', ','), { size: 8 });
+      pair('Subtotal', 'R$ ' + fmt(v.subtotal), { size: 9 });
+      if (parseFloat(v.desconto || 0) > 0) pair('Desconto', '- R$ ' + fmt(v.desconto), { size: 9 });
+      if (parseFloat(v.acrescimo || 0) > 0) pair('Acrescimo', '+ R$ ' + fmt(v.acrescimo), { size: 9 });
+      pair('TOTAL', 'R$ ' + fmt(v.total), { size: 12, bold: true, lineH: 6 });
+
+      if (v.pagamentos && v.pagamentos.length) {
+        sep();
+        text('PAGAMENTO', { size: 9, bold: true });
+        v.pagamentos.forEach(p => {
+          pair(p.forma_descricao || p.forma_nome || p.forma || 'Pagamento', 'R$ ' + fmt(p.valor), { size: 9 });
+          if (parseFloat(p.troco || 0) > 0) pair('Troco', 'R$ ' + fmt(p.troco), { size: 8 });
+        });
+      }
+
+      sep();
+      text('Obrigado pela preferencia!', { align: 'center', size: 8 });
+      text('Este nao e um documento fiscal.', { align: 'center', size: 8 });
+      return doc.output('blob');
     },
 
-    _telefoneWhatsAppCliente() {
-      const c = this.venda.cliente || {};
+    _telefoneWhatsAppCliente(vendaCupom = null) {
+      const c = (vendaCupom || this.venda).cliente || {};
       return c.whatsapp || c.celular || c.telefone || '';
     },
 
@@ -3792,36 +3928,40 @@ ${pgtoHtml ? `<hr class="sep">${pgtoHtml}` : ''}
       const a = document.createElement('a');
       a.href = url;
       a.download = filename;
+      a.target = '_blank';
+      a.rel = 'noopener';
       document.body.appendChild(a);
       a.click();
       a.remove();
-      setTimeout(() => URL.revokeObjectURL(url), 1500);
+      setTimeout(() => URL.revokeObjectURL(url), 10000);
     },
 
-    _mensagemWhatsAppCupom() {
-      const numero = this.venda.numero || this.vendaFinalizadaData.numero;
+    _mensagemWhatsAppCupom(vendaCupom = null) {
+      const v = vendaCupom || this.venda;
+      const numero = v.numero || this.vendaFinalizadaData.numero;
       const vendaTxt = numero ? ` #${String(numero).padStart(6,'0')}` : '';
-      const total = parseFloat(this.venda.total || 0).toFixed(2).replace('.', ',');
+      const total = parseFloat(v.total || 0).toFixed(2).replace('.', ',');
       return `Ola! Segue o comprovante nao fiscal da venda${vendaTxt}, no valor de R$ ${total}.`;
     },
 
-    async compartilharCupomWhatsApp() {
+    async compartilharCupomWhatsApp(origem = null) {
       if (this.compartilhandoCupom) return;
       this.compartilhandoCupom = true;
       try {
-        const blob = await this._gerarCupomPdfBlob();
-        const filename = this._cupomArquivoNome();
+        const vendaCupom = await this._dadosCupomVenda(origem);
+        const blob = await this._gerarCupomPdfBlob(vendaCupom);
+        const filename = this._cupomArquivoNome(vendaCupom);
         const file = new File([blob], filename, { type: 'application/pdf' });
-        const mensagem = this._mensagemWhatsAppCupom();
+        const mensagem = this._mensagemWhatsAppCupom(vendaCupom);
         if (navigator.canShare && navigator.canShare({ files: [file] }) && navigator.share) {
           await navigator.share({ title: 'Comprovante nao fiscal', text: mensagem, files: [file] });
           this.toast_('Compartilhamento aberto.','ok');
-          this.fecharModalImpressao();
+          if (!origem) this.fecharModalImpressao();
           return;
         }
 
         this._baixarBlob(blob, filename);
-        const sugerido = this._telefoneWhatsAppCliente();
+        const sugerido = this._telefoneWhatsAppCliente(vendaCupom);
         const digitado = window.prompt('WhatsApp do cliente (opcional, com DDD):', sugerido || '');
         if (digitado === null) return;
         const telefone = this._normalizarWhatsApp(digitado);
@@ -3830,7 +3970,7 @@ ${pgtoHtml ? `<hr class="sep">${pgtoHtml}` : ''}
           ? `https://wa.me/${telefone}?text=${encodeURIComponent(mensagem + '\n' + extra)}`
           : `https://wa.me/?text=${encodeURIComponent(mensagem + '\n' + extra)}`;
         window.open(url, '_blank');
-        this.fecharModalImpressao();
+        if (!origem) this.fecharModalImpressao();
       } catch (e) {
         this.toast_('Nao foi possivel gerar o PDF para WhatsApp.','erro');
       } finally {

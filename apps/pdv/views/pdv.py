@@ -1223,6 +1223,8 @@ def api_venda_detalhe(request, pk):
         "cliente_id": venda.cliente_id,
         "cliente_nome": venda.cliente.razao_social if venda.cliente else "Consumidor Final",
         "cliente_cpf_cnpj": venda.cliente.cpf_cnpj if venda.cliente else "",
+        "cliente_celular": venda.cliente.celular if venda.cliente else "",
+        "cliente_telefone": venda.cliente.telefone if venda.cliente else "",
         "cliente_endereco": _cliente_endereco_preferencial(venda.cliente),
         "delivery": venda.delivery,
         "endereco_entrega": venda.endereco_entrega or {},
