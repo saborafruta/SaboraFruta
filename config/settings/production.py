@@ -25,11 +25,10 @@ DATABASES = {
 
 # Whitenoise — serve arquivos estáticos direto pelo Django, sem precisar de nginx
 MIDDLEWARE.insert(1, 'whitenoise.middleware.WhiteNoiseMiddleware')
-STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
-WHITENOISE_MANIFEST_STRICT = False
+STATICFILES_STORAGE = 'whitenoise.storage.CompressedStaticFilesStorage'
 if 'STORAGES' in globals():
     STORAGES['staticfiles'] = {
-        'BACKEND': 'whitenoise.storage.CompressedManifestStaticFilesStorage',
+        'BACKEND': 'whitenoise.storage.CompressedStaticFilesStorage',
     }
 
 # Uploads no Railway
