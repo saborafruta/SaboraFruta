@@ -176,11 +176,37 @@
 
   /* Esconde mensagem externa do _base na tela de login */
   body > div.space-y-2 { display: none !important; }
+
+  .login-shell { min-height: 100dvh; overflow-x: hidden; }
+  .login-painel-dir, .login-form-wrap { min-width: 0; }
+  @media (max-width: 1023px) {
+    .login-painel-dir {
+      min-height: 100dvh;
+      padding: 72px 20px 24px !important;
+      align-items: flex-start !important;
+      overflow-y: auto;
+    }
+    .login-form-wrap { max-width: 400px !important; margin: auto; }
+    .login-brand-mobile {
+      font-size: clamp(42px, 11vw, 72px) !important;
+      white-space: nowrap;
+      letter-spacing: 0 !important;
+    }
+  }
+  @media (max-width: 480px) {
+    .login-painel-dir { padding: 68px 16px 20px !important; }
+    .login-brand-mobile { font-size: clamp(38px, 13vw, 54px) !important; }
+    .login-card { padding: 24px 20px !important; }
+  }
+  @media (max-height: 760px) and (max-width: 1023px) {
+    .login-painel-dir { padding-top: 56px !important; }
+    .login-brand-mobile { font-size: 44px !important; margin-bottom: 8px !important; }
+  }
 </style>
 {% endblock %}
 
 {% block full_content %}
-<div class="min-h-screen flex" :style="temaClaro ? 'background:#f5f0e8;' : 'background:#1c1c1e;'">
+<div class="min-h-screen flex login-shell" :style="temaClaro ? 'background:#f5f0e8;' : 'background:#1c1c1e;'">
 
   <!-- ===================== PAINEL ESQUERDO (só desktop) ===================== -->
   <div class="hidden lg:flex flex-1 self-stretch items-center justify-center relative overflow-hidden login-painel-esq"
@@ -242,7 +268,7 @@
       </button>
     </div>
 
-    <div class="w-full relative" style="z-index:1;max-width:360px;">
+    <div class="w-full relative login-form-wrap" style="z-index:1;max-width:360px;">
 
       <!-- MOBILE: logo -->
       <div class="lg:hidden text-center mb-10">

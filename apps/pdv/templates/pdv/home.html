@@ -477,6 +477,61 @@
 
   /* Toggle button ativo no tema claro */
   html.tema-claro #pdv-theme-btn { color: #f59e0b !important; }
+
+  .mobile-pdv-nav, .camera-scan-btn { display:none; }
+  .scanner-overlay { position:fixed;inset:0;z-index:120;display:flex;align-items:center;justify-content:center;padding:18px;background:rgba(3,3,10,.88);backdrop-filter:blur(5px); }
+  .scanner-modal { width:min(100%,520px);max-height:calc(100dvh - 36px);overflow:auto;background:var(--pdv-card);border:1px solid var(--pdv-bd);border-radius:12px;padding:16px;box-shadow:0 22px 70px rgba(0,0,0,.45); }
+  .scanner-head { display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:12px; }
+  .scanner-head strong { color:var(--pdv-t1);font-size:15px; }
+  .scanner-close { width:36px;height:36px;border:1px solid var(--pdv-bd);border-radius:8px;background:transparent;color:var(--pdv-t2);font-size:22px;cursor:pointer; }
+  #pdv-camera-reader { width:100%;min-height:260px;overflow:hidden;border-radius:8px;background:#050508; }
+  #pdv-camera-reader video { width:100% !important;border-radius:8px; }
+  .scanner-help { margin:10px 0 0;color:var(--pdv-t3);font-size:12px;line-height:1.45; }
+  .scanner-error { margin-top:10px;color:#f87171;font-size:12px; }
+
+  @media (max-width:960px) {
+    #pdv-app { position:relative;height:100dvh !important;min-height:100dvh;overflow:hidden; }
+    #pdv-app > header { height:52px !important;min-height:52px;padding:0 8px !important;gap:6px !important;overflow-x:auto;overflow-y:hidden;scrollbar-width:none; }
+    #pdv-app > header::-webkit-scrollbar { display:none; }
+    #pdv-app > header .topbar-chip { display:none !important; }
+    #pdv-app > header .topbar-btn { padding:7px 10px !important;font-size:12px !important; }
+    .mode-seg { gap:3px;padding:3px;border-radius:9px; }
+    .mode-btn { gap:5px;padding:7px 9px;font-size:12px; }
+    .pdv-workspace { display:block !important;position:relative;overflow:hidden !important; }
+    .pdv-pane { display:none !important;position:absolute;inset:0 0 68px 0;width:100% !important;height:auto !important;min-width:0 !important;max-width:none !important;border:0 !important; }
+    .pdv-pane.mobile-active { display:flex !important; }
+    .mobile-pdv-nav { display:grid;grid-template-columns:repeat(3,minmax(0,1fr));position:absolute;left:0;right:0;bottom:0;z-index:45;height:68px;padding:6px max(8px,env(safe-area-inset-right)) calc(6px + env(safe-area-inset-bottom)) max(8px,env(safe-area-inset-left));background:var(--pdv-surface);border-top:1px solid var(--pdv-bd2);box-shadow:0 -8px 24px rgba(0,0,0,.18); }
+    .mobile-pdv-nav button { position:relative;min-width:0;border:0;border-radius:6px;background:transparent;color:var(--pdv-t3);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;font:600 11px/1.15 Inter, ui-sans-serif, sans-serif;cursor:pointer; }
+    .mobile-pdv-nav button.active { color:#f15a24;background:rgba(241,90,36,.10); }
+    .mobile-pdv-nav svg { width:20px;height:20px; }
+    .mobile-pdv-nav .count { position:absolute;top:5px;right:calc(50% - 24px);min-width:17px;height:17px;padding:0 4px;border-radius:9px;background:#f15a24;color:#fff;font-size:9px;line-height:17px;text-align:center; }
+    .camera-scan-btn { display:flex;position:absolute;right:7px;width:36px;height:36px;align-items:center;justify-content:center;border:1px solid rgba(241,90,36,.45);border-radius:8px;background:rgba(241,90,36,.10);color:#f15a24;cursor:pointer; }
+    #barcode-input { padding-right:50px !important; }
+    #barcode-input + kbd { display:none; }
+    #pdv-left-panel .prod-card, #pdv-right-panel button, #pdv-center-panel button { min-height:42px; }
+    #pdv-center-panel > div:first-child { align-items:flex-start !important;gap:8px !important;padding:10px 12px !important;flex-wrap:wrap; }
+    #pdv-center-panel > div:first-child > div:nth-child(2) { flex-basis:calc(100% - 50px); }
+    #pdv-center-panel > div:first-child .btn-action { flex:1 1 calc(33.333% - 6px);justify-content:center;padding:7px 6px;font-size:11px; }
+    #pdv-center-panel > div:nth-child(2) { padding:9px 12px !important;gap:8px !important;flex-wrap:wrap; }
+    #pdv-center-panel > div:nth-child(2) .btn-action { padding:7px 8px;font-size:11px; }
+    #pdv-center-panel .item-card { padding:10px; }
+    #pdv-center-panel .item-card > div { gap:9px !important; }
+    #pdv-center-panel .qty-ctrl input { width:44px; }
+    #pdv-right-panel .forma-btn { min-height:70px;padding:10px 5px 9px;border-radius:10px; }
+    #pdv-right-panel .forma-icon { width:32px;height:32px;border-radius:9px; }
+    #pdv-right-panel { overflow-y:auto !important;padding-bottom:10px; }
+  }
+
+  @media (max-width:430px) {
+    #pdv-app > header { gap:5px !important; }
+    #pdv-app > header > div:nth-of-type(2), #pdv-app > header > button[title="Atalhos de teclado"], #pdv-app > header > button[title="Tela cheia"] { display:none !important; }
+    .mode-btn { padding:7px 8px;font-size:11px; }
+    #pdv-center-panel > div:first-child .btn-action { flex-basis:100%; }
+    #pdv-center-panel .item-card > div { align-items:stretch !important; }
+    #pdv-center-panel .item-card > div > div:first-child { display:none !important; }
+    #pdv-center-panel .item-card > div > div:last-child { min-width:78px; }
+    #pdv-right-panel .forma-btn span { white-space:normal !important; }
+  }
 </style>
 <script>
   (function() {
@@ -682,10 +737,10 @@
   </header>
 
   <!-- ══════════════════ CORPO ══════════════════ -->
-  <div style="display:flex;flex:1;overflow:hidden;">
+  <div class="pdv-layout pdv-workspace" style="display:flex;flex:1;overflow:hidden;">
 
     <!-- ─── PAINEL ESQUERDO ─── -->
-    <aside id="pdv-left-panel" style="width:300px;flex-shrink:0;background:#0d0d16;border-right:1px solid #1a1a28;display:flex;flex-direction:column;overflow:hidden;">
+    <aside id="pdv-left-panel" class="pdv-pane" :class="{'mobile-active':mobilePane==='catalogo'}" style="width:300px;flex-shrink:0;background:#0d0d16;border-right:1px solid #1a1a28;display:flex;flex-direction:column;overflow:hidden;">
 
       <!-- Ler código de barras -->
       <div style="padding:11px 12px 7px;border-bottom:1px solid #1a1a28;">
@@ -700,6 +755,9 @@
                  autocomplete="off" inputmode="numeric"
                  class="barcode-input">
           <kbd style="position:absolute;right:8px;font-size:10px;font-family:ui-monospace,monospace;padding:3px 7px;background:#0a0a12;border:1px solid #2a2a42;border-bottom:2px solid #2a2a42;border-radius:5px;color:#f15a24;font-weight:700;letter-spacing:.05em;pointer-events:none;">F2</kbd>
+          <button type="button" class="camera-scan-btn" @click="abrirScanner()" title="Ler codigo de barras com a camera" aria-label="Ler codigo de barras com a camera">
+            <svg width="19" height="19" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M3 8a2 2 0 012-2h2l1.2-2h7.6L17 6h2a2 2 0 012 2v10a2 2 0 01-2 2H5a2 2 0 01-2-2V8z"/><circle cx="12" cy="13" r="3.5" stroke-width="1.8"/></svg>
+          </button>
         </div>
       </div>
 
@@ -795,7 +853,7 @@
     </aside>
 
     <!-- ─── PAINEL CENTRAL ─── -->
-    <main id="pdv-center-panel" style="flex:1;display:flex;flex-direction:column;overflow:hidden;background:#0a0a12;">
+    <main id="pdv-center-panel" class="pdv-pane" :class="{'mobile-active':mobilePane==='carrinho'}" style="flex:1;display:flex;flex-direction:column;overflow:hidden;background:#0a0a12;">
 
       <!-- Barra de cliente -->
       <div style="display:flex;align-items:center;gap:12px;padding:10px 20px;border-bottom:1px solid #1a1a28;flex-shrink:0;">
@@ -1071,7 +1129,7 @@
     </main>
 
     <!-- ─── PAINEL DIREITO ─── -->
-    <aside id="pdv-right-panel" style="width:340px;flex-shrink:0;background:#0d0d16;border-left:1px solid #1a1a28;display:flex;flex-direction:column;overflow:hidden;">
+    <aside id="pdv-right-panel" class="pdv-pane" :class="{'mobile-active':mobilePane==='pagamento'}" style="width:340px;flex-shrink:0;background:#0d0d16;border-left:1px solid #1a1a28;display:flex;flex-direction:column;overflow:hidden;">
 
       <!-- Banner: Caixa Fechado -->
       <div x-show="!sessao" x-cloak
@@ -1355,6 +1413,34 @@
         </div>
       </div>
     </aside>
+  </div>
+
+  <nav class="mobile-pdv-nav" aria-label="Navegacao do PDV no celular">
+    <button type="button" :class="{'active':mobilePane==='catalogo'}" @click="mobilePane='catalogo';$nextTick(()=>focarBuscaProduto())">
+      <svg width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M4 7h16M5 7l1 13h12l1-13M9 11v5m6-5v5M8 7l1-3h6l1 3"/></svg>
+      Produtos
+    </button>
+    <button type="button" :class="{'active':mobilePane==='carrinho'}" @click="mobilePane='carrinho'">
+      <span class="count" x-show="venda.itens.length" x-text="venda.itens.length"></span>
+      <svg width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M3 4h2l2 11h10l2-7H7m2 11a1 1 0 100 2 1 1 0 000-2zm8 0a1 1 0 100 2 1 1 0 000-2z"/></svg>
+      Carrinho
+    </button>
+    <button type="button" :class="{'active':mobilePane==='pagamento'}" @click="mobilePane='pagamento'">
+      <svg width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14" rx="2" stroke-width="1.8"/><path d="M3 10h18" stroke-width="1.8"/></svg>
+      Pagamento
+    </button>
+  </nav>
+
+  <div x-cloak x-show="showScanner" class="scanner-overlay" @click.self="fecharScanner()">
+    <section class="scanner-modal" role="dialog" aria-modal="true" aria-label="Leitor de codigo de barras">
+      <div class="scanner-head">
+        <strong>Aponte para o codigo de barras</strong>
+        <button type="button" class="scanner-close" @click="fecharScanner()" aria-label="Fechar">&times;</button>
+      </div>
+      <div id="pdv-camera-reader"></div>
+      <p class="scanner-help">Mantenha o codigo centralizado e com boa iluminacao.</p>
+      <p class="scanner-error" x-show="scannerErro" x-text="scannerErro"></p>
+    </section>
   </div>
 
   <!-- ══════════════════ MODAIS ══════════════════ -->
@@ -2632,6 +2718,13 @@ function pdv() {
 
     produtos: [], topProdutos: [], buscaQuery: '', buscandoProdutos: false, produtoFoco: -1,
     barcodeQuery: '',
+    mobilePane: 'catalogo',
+    showScanner: false,
+    scannerErro: '',
+    scannerAtivo: false,
+    _scanner: null,
+    _scannerScript: null,
+    _ultimoCodigoCamera: '',
     tabAtiva: 'todos', linhaAtiva: null,
 
     formasPagamento: [], mostrarMaisFormas: false, formaPgtoSelecionada: null, valorPgto: '', prazoDiasPgto: '',
@@ -2783,7 +2876,67 @@ function pdv() {
         else { this.toast_('Código "' + code + '" não encontrado', 'erro'); }
       } catch { this.toast_('Erro ao ler código de barras', 'erro'); }
       this.barcodeQuery = '';
-      this.$nextTick(() => this.$refs.barcodeInput?.focus());
+      this.$nextTick(() => {
+        if (window.matchMedia('(max-width:960px)').matches) this.$refs.buscaInput?.focus({ preventScroll:true });
+        else this.$refs.barcodeInput?.focus();
+      });
+    },
+
+    _carregarScannerLib() {
+      if (window.Html5Qrcode) return Promise.resolve();
+      if (this._scannerScript) return this._scannerScript;
+      this._scannerScript = new Promise((resolve, reject) => {
+        const script = document.createElement('script');
+        script.src = 'https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js';
+        script.onload = resolve;
+        script.onerror = () => reject(new Error('Falha ao carregar leitor de camera'));
+        document.head.appendChild(script);
+      });
+      return this._scannerScript;
+    },
+
+    async abrirScanner() {
+      this.scannerErro = '';
+      this.showScanner = true;
+      this.mobilePane = 'catalogo';
+      try {
+        await this._carregarScannerLib();
+        await this.$nextTick();
+        this._scanner = new window.Html5Qrcode('pdv-camera-reader');
+        await this._scanner.start(
+          { facingMode: 'environment' },
+          { fps: 10, qrbox: { width: 280, height: 130 }, aspectRatio: 1.7778 },
+          decodedText => this.processarCodigoCamera(decodedText),
+          () => {}
+        );
+        this.scannerAtivo = true;
+      } catch (error) {
+        this.scannerErro = location.protocol !== 'https:'
+          ? 'A camera exige acesso por HTTPS.'
+          : 'Nao foi possivel abrir a camera. Autorize o acesso e tente novamente.';
+        this.scannerAtivo = false;
+      }
+    },
+
+    async fecharScanner() {
+      const scanner = this._scanner;
+      this._scanner = null;
+      this.scannerAtivo = false;
+      if (scanner) {
+        try { if (scanner.isScanning) await scanner.stop(); } catch (_) {}
+        try { await scanner.clear(); } catch (_) {}
+      }
+      this.showScanner = false;
+    },
+
+    async processarCodigoCamera(decodedText) {
+      const code = String(decodedText || '').trim();
+      if (!code || code === this._ultimoCodigoCamera) return;
+      this._ultimoCodigoCamera = code;
+      await this.fecharScanner();
+      this.barcodeQuery = code;
+      await this.lerCodigoBarras();
+      setTimeout(() => { this._ultimoCodigoCamera = ''; }, 1200);
     },
 
     async caixaMenuAcao(acao) {
