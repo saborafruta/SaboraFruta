@@ -26,6 +26,10 @@ DATABASES = {
 # Whitenoise — serve arquivos estáticos direto pelo Django, sem precisar de nginx
 MIDDLEWARE.insert(1, 'whitenoise.middleware.WhiteNoiseMiddleware')
 STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
+if 'STORAGES' in globals():
+    STORAGES['staticfiles'] = {
+        'BACKEND': 'whitenoise.storage.CompressedManifestStaticFilesStorage',
+    }
 
 # Uploads no Railway
 # O volume persistente deve ser montado em /app/media. Se MEDIA_ROOT nao for

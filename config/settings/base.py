@@ -36,6 +36,7 @@ THIRD_PARTY_APPS = [
     'widget_tweaks',
     'django_celery_beat',
     'django_celery_results',
+    'storages',
 ]
 
 LOCAL_APPS = [
@@ -130,6 +131,29 @@ STATIC_ROOT = BASE_DIR / 'staticfiles'
 
 MEDIA_URL = env('MEDIA_URL', default='/media/')
 MEDIA_ROOT = Path(env('MEDIA_ROOT', default=str(BASE_DIR / 'media')))
+
+AWS_STORAGE_BUCKET_NAME = env('AWS_STORAGE_BUCKET_NAME', default='')
+AWS_S3_ENDPOINT_URL = env('AWS_S3_ENDPOINT_URL', default='')
+if AWS_STORAGE_BUCKET_NAME and AWS_S3_ENDPOINT_URL:
+    AWS_ACCESS_KEY_ID = env('AWS_ACCESS_KEY_ID')
+    AWS_SECRET_ACCESS_KEY = env('AWS_SECRET_ACCESS_KEY')
+    AWS_S3_REGION_NAME = env('AWS_S3_REGION_NAME', default='auto')
+    AWS_S3_ADDRESSING_STYLE = env('AWS_S3_ADDRESSING_STYLE', default='virtual')
+    AWS_S3_SIGNATURE_VERSION = env('AWS_S3_SIGNATURE_VERSION', default='s3v4')
+    AWS_QUERYSTRING_AUTH = env.bool('AWS_QUERYSTRING_AUTH', default=True)
+    AWS_S3_FILE_OVERWRITE = False
+    AWS_DEFAULT_ACL = None
+    AWS_S3_OBJECT_PARAMETERS = {
+        'CacheControl': env('AWS_S3_CACHE_CONTROL', default='max-age=86400'),
+    }
+    STORAGES = {
+        'default': {
+            'BACKEND': 'storages.backends.s3.S3Storage',
+        },
+        'staticfiles': {
+            'BACKEND': 'django.contrib.staticfiles.storage.StaticFilesStorage',
+        },
+    }
 
 # PK padrÃ£o: INTEGER incremental (requisito do cliente)
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'

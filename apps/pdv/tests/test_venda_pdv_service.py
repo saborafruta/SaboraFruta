@@ -198,6 +198,29 @@ class VendaPDVServiceTests(TestCase):
         self.assertEqual(itens[produto_padrao.pk].valor_unitario, Decimal("12.0000"))
         self.assertEqual(venda.valor_total, Decimal("18.00"))
 
+    def test_finalizar_venda_respeita_desconto_manual_do_item(self):
+        produto = self.criar_produto("Produto com desconto")
+        self.abastecer(produto, "5")
+
+        venda = VendaPDVService.finalizar_venda(
+            sessao=self.sessao,
+            filial=self.filial,
+            usuario=self.usuario,
+            itens=[{
+                "produto_id": produto.pk,
+                "quantidade": "2",
+                "desconto_valor": "3.00",
+            }],
+            pagamentos=[{"forma_id": self.forma.pk, "valor": "17.00"}],
+        )
+
+        item = ItemVendaPDV.objects.get(venda_pdv=venda)
+        self.assertEqual(venda.valor_subtotal, Decimal("17.00"))
+        self.assertEqual(venda.valor_total, Decimal("17.00"))
+        self.assertEqual(item.desconto_valor, Decimal("3.00"))
+        self.assertEqual(item.desconto_percentual, Decimal("15.00"))
+        self.assertEqual(item.valor_total, Decimal("17.00"))
+
     def test_finalizar_venda_sem_estoque_faz_rollback(self):
         produto = self.criar_produto("Produto sem saldo")
         self.abastecer(produto, "1")

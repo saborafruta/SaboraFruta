@@ -249,7 +249,20 @@ class VendaPDVService:
                 f"(preco automatico: R$ {preco_info['preco']})."
             )
 
-        valor_total_item = cls._decimal(quantidade * valor_unitario, cls.MONEY)
+        valor_bruto_item = cls._decimal(quantidade * valor_unitario, cls.MONEY)
+        desconto_valor = cls._decimal(item_dados.get("desconto_valor", "0"), cls.MONEY)
+        desconto_percentual = cls._decimal(
+            item_dados.get("desconto_percentual", "0"),
+            Decimal("0.01"),
+        )
+        if desconto_valor <= 0 and desconto_percentual > 0:
+            desconto_valor = cls._decimal(valor_bruto_item * (desconto_percentual / Decimal("100")), cls.MONEY)
+        desconto_valor = min(max(Decimal("0.00"), desconto_valor), valor_bruto_item)
+        desconto_percentual = (
+            cls._decimal((desconto_valor / valor_bruto_item) * Decimal("100"), Decimal("0.01"))
+            if valor_bruto_item > 0 else Decimal("0.00")
+        )
+        valor_total_item = cls._decimal(valor_bruto_item - desconto_valor, cls.MONEY)
         unidade = produto.unidade_medida.sigla if produto.unidade_medida_id else "UN"
         custo_snapshot = contrato["custo_atual"]
 
@@ -269,6 +282,9 @@ class VendaPDVService:
             custo_unitario_snapshot=custo_snapshot,
             preco_origem=preco_origem_tipo,
             preco_origem_detalhe=preco_origem_detalhe,
+            desconto_percentual=desconto_percentual,
+            desconto_valor=desconto_valor,
+            desconto_manual=desconto_valor > 0,
             valor_total=valor_total_item,
         )
 

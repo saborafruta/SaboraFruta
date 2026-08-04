@@ -25,6 +25,7 @@ cryptography>=42.0
 # Produção
 gunicorn>=21.2
 whitenoise>=6.6
+django-storages[boto3]>=1.14
 
 # Dev/Test
 django-extensions>=3.2
