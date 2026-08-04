@@ -178,6 +178,8 @@
   .topbar-icon-btn:hover,
   .topbar-icon-btn--active { background:var(--pdv-hover2); color:var(--pdv-t2); }
   .topbar-brand-mark { display:none !important; }
+  .pdv-topbar-info { flex-shrink:0; }
+  .pdv-topbar-sep { width:1px;height:28px;background:#1e1e30;margin:0 4px;flex-shrink:0; }
 
   /* Botão secundário do rodapé (Salvar Pendente) */
   .btn-rodape-secondary { background:var(--pdv-card); border:1px solid var(--pdv-bd); color:var(--pdv-t2); }
@@ -500,10 +502,29 @@
 
   @media (max-width:1100px) {
     #pdv-app { position:relative;height:100dvh !important;min-height:100dvh;overflow:hidden; }
-    #pdv-app > header { height:52px !important;min-height:52px;padding:0 8px !important;gap:6px !important;overflow-x:auto;overflow-y:hidden;scrollbar-width:none; }
+    #pdv-app > header { position:relative;height:52px !important;min-height:52px;padding:0 8px !important;gap:6px !important;overflow-x:auto;overflow-y:hidden;scrollbar-width:none; }
+    #pdv-app > header.pdv-topbar::after {
+      content:"›";
+      position:sticky;
+      right:-8px;
+      align-self:stretch;
+      width:24px;
+      min-width:24px;
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      color:#f97316;
+      font-size:24px;
+      font-weight:700;
+      background:linear-gradient(90deg,rgba(13,13,22,0),#0d0d16 62%);
+      pointer-events:none;
+      z-index:2;
+    }
     #pdv-app > header::-webkit-scrollbar { display:none; }
     #pdv-app > header .topbar-chip { display:none !important; }
     #pdv-app > header .topbar-brand-mark { display:none !important; }
+    #pdv-app > header .pdv-topbar-info,
+    #pdv-app > header .pdv-topbar-sep { display:none !important; }
     #pdv-app > header .topbar-btn { padding:7px 10px !important;font-size:12px !important; }
     .mode-seg { gap:3px;padding:3px;border-radius:9px; }
     .mode-btn { gap:5px;padding:7px 9px;font-size:12px; }
@@ -527,10 +548,15 @@
     #barcode-input { padding-right:50px !important; }
     #barcode-input + kbd { display:none; }
     #pdv-left-panel .prod-card, #pdv-right-panel button, #pdv-center-panel button { min-height:42px; }
-    #pdv-center-panel > div:first-child { align-items:flex-start !important;gap:8px !important;padding:10px 12px !important;flex-wrap:wrap; }
-    #pdv-center-panel > div:first-child > div:nth-child(2) { flex-basis:calc(100% - 50px); }
-    #pdv-center-panel > div:first-child .btn-action { justify-content:center;padding:7px 6px;font-size:11px;min-height:36px; }
-    #pdv-center-panel > div:first-child .client-balcao-btn { flex:0 1 31%; }
+    #pdv-center-panel > div:first-child { align-items:center !important;gap:7px !important;padding:8px 12px 9px !important;flex-wrap:wrap; }
+    #pdv-center-panel > div:first-child .client-summary { order:2;flex:1 0 100%;min-width:0;display:grid !important;grid-template-columns:34px minmax(0,1fr);column-gap:9px;align-items:center;padding-top:2px; }
+    #pdv-center-panel > div:first-child .client-avatar { width:34px !important;height:34px !important;font-size:12px !important;grid-row:1 / span 2; }
+    #pdv-center-panel > div:first-child .client-info { min-width:0; }
+    #pdv-center-panel > div:first-child .client-info > div:first-child { font-size:13px !important;line-height:1.15 !important;white-space:normal; }
+    #pdv-center-panel > div:first-child .client-info > div:nth-child(2) { font-size:10px !important;margin-top:1px; }
+    #pdv-center-panel > div:first-child .client-info .preco-origem-tag { margin-top:3px;font-size:8px;padding:1px 5px; }
+    #pdv-center-panel > div:first-child .btn-action { order:1;justify-content:center;padding:6px 7px;font-size:11px;min-height:32px; }
+    #pdv-center-panel > div:first-child .client-balcao-btn { flex:0 0 84px; }
     #pdv-center-panel > div:first-child .client-new-btn,
     #pdv-center-panel > div:first-child .client-swap-btn { flex:1 1 0; }
     .client-btn-text-mobile { display:inline; }
@@ -553,8 +579,11 @@
 
   @media (max-width:430px) {
     #pdv-app > header { gap:5px !important; }
-    #pdv-app > header > div:nth-of-type(1), #pdv-app > header > button[title="Atalhos de teclado"], #pdv-app > header > button[title="Tela cheia"] { display:none !important; }
+    #pdv-app > header > button[title="Atalhos de teclado"], #pdv-app > header > button[title="Tela cheia"] { display:none !important; }
     .mode-btn { padding:7px 8px;font-size:11px; }
+    #pdv-center-panel > div:first-child .client-balcao-btn { flex-basis:76px; }
+    #pdv-center-panel > div:first-child .client-new-btn,
+    #pdv-center-panel > div:first-child .client-swap-btn { max-width:132px; }
     #pdv-center-panel .item-card > div { align-items:stretch !important; }
     #pdv-center-panel .item-card > div > div:first-child { display:none !important; }
     #pdv-center-panel .item-card > div > div:last-child { min-width:78px; }
@@ -611,7 +640,7 @@
   {% csrf_token %}
 
   <!-- ══════════════════ TOPBAR ══════════════════ -->
-  <header style="height:54px;background:#0d0d16;border-bottom:1px solid #1a1a28;display:flex;align-items:center;padding:0 12px;gap:9px;flex-shrink:0;">
+  <header class="pdv-topbar" style="height:54px;background:#0d0d16;border-bottom:1px solid #1a1a28;display:flex;align-items:center;padding:0 12px;gap:9px;flex-shrink:0;">
 
     <!-- Voltar + Logo + Info -->
     <a href="/" class="topbar-icon-btn" style="text-decoration:none;">
@@ -620,12 +649,12 @@
     <div class="topbar-brand-mark" style="width:36px;height:36px;border-radius:50%;background:#0a0a12;border:2px solid #2a2a3e;display:flex;align-items:center;justify-content:center;">
       <span style="color:#a0a0b8;font-size:16px;font-weight:700;">$</span>
     </div>
-    <div>
+    <div class="pdv-topbar-info">
       <div style="font-size:15px;font-weight:700;color:#fff;line-height:1;">PDV</div>
       <div style="font-size:11px;color:#555;line-height:1;margin-top:2px;" x-text="horaAtual"></div>
     </div>
 
-    <div style="width:1px;height:28px;background:#1e1e30;margin:0 4px;"></div>
+    <div class="pdv-topbar-sep"></div>
 
     <!-- Modos (seletor segmentado) -->
     <div class="mode-seg">
@@ -895,11 +924,12 @@
     <main id="pdv-center-panel" class="pdv-pane" :class="{'mobile-active':mobilePane==='carrinho'}" style="flex:1;display:flex;flex-direction:column;overflow:hidden;background:#0a0a12;">
 
       <!-- Barra de cliente -->
-      <div style="display:flex;align-items:center;gap:12px;padding:10px 20px;border-bottom:1px solid #1a1a28;flex-shrink:0;">
-        <div style="width:38px;height:38px;border-radius:50%;background:linear-gradient(135deg,#f15a24,#ea580c);display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;color:#fff;flex-shrink:0;"
-             x-text="venda.cliente.nome.substring(0,2).toUpperCase()"></div>
-        <div style="flex:1;min-width:0;">
-          <div style="font-size:14px;font-weight:600;color:#e5e5f0;"
+      <div class="client-bar" style="display:flex;align-items:center;gap:12px;padding:10px 20px;border-bottom:1px solid #1a1a28;flex-shrink:0;">
+        <div class="client-summary" style="display:flex;align-items:center;gap:12px;flex:1;min-width:0;">
+          <div class="client-avatar" style="width:38px;height:38px;border-radius:50%;background:linear-gradient(135deg,#f15a24,#ea580c);display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;color:#fff;flex-shrink:0;"
+               x-text="venda.cliente.nome.substring(0,2).toUpperCase()"></div>
+          <div class="client-info" style="flex:1;min-width:0;">
+            <div style="font-size:14px;font-weight:600;color:#e5e5f0;"
                :style="venda.cliente.id ? 'cursor:pointer;text-decoration:underline;text-underline-offset:3px;text-decoration-color:rgba(229,229,240,0.35);' : ''"
                :title="venda.cliente.id ? 'Ver / editar cadastro' : ''"
                @click="venda.cliente.id && window.open('/cadastros/clientes/'+venda.cliente.id+'/?next=/pdv/', '_blank')"
@@ -908,6 +938,7 @@
           <span class="preco-origem-tag"
                 :class="venda.cliente.tabela_preco_id ? 'especial' : ''"
                 x-text="venda.cliente.tabela_preco_id ? venda.cliente.tabela_preco_nome : 'Preço padrão'"></span>
+          </div>
         </div>
         <button @click="selecionarClienteBalcao()" class="btn-action client-balcao-btn">
           <svg width="13" height="13" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/></svg>
