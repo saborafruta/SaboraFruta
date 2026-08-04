@@ -207,13 +207,17 @@
     background:var(--pdv-card);border:1px solid var(--pdv-bd2);
     border-radius:10px;text-align:left;cursor:pointer;width:100%;
     transition:.15s;margin-bottom:4px;
+    touch-action:manipulation;
+    user-select:none;
+    -webkit-user-select:none;
+    -webkit-tap-highlight-color:transparent;
   }
   .prod-card:hover { border-color:#f15a24; background:var(--pdv-hover); }
-  .prod-card-main { display:flex;align-items:center;gap:10px;flex:1;min-width:0;border:0;background:transparent;color:inherit;text-align:left;padding:0;cursor:pointer;font:inherit; }
+  .prod-card-main { display:flex;align-items:center;gap:10px;flex:1;min-width:0;border:0;background:transparent;color:inherit;text-align:left;padding:0;cursor:pointer;font:inherit;touch-action:manipulation; }
   .prod-card-nome { font-size:13px;font-weight:500;color:var(--pdv-t5);white-space:nowrap;overflow:hidden;text-overflow:ellipsis; }
   .prod-card-preco { font-size:13px;font-weight:700;color:#f97316;margin-top:2px; }
   .prod-card-qty { display:none;align-items:center;border:1px solid rgba(241,90,36,.42);border-radius:8px;overflow:hidden;background:rgba(241,90,36,.08);flex-shrink:0; }
-  .prod-card-qty button { width:34px;height:34px;border:0;background:transparent;color:#f15a24;font-size:16px;font-weight:800;cursor:pointer; }
+  .prod-card-qty button { width:34px;height:34px;border:0;background:transparent;color:#f15a24;font-size:16px;font-weight:800;cursor:pointer;touch-action:manipulation; }
   .prod-card-remove { color:#f87171 !important;border-left:1px solid rgba(248,113,113,.22) !important;background:rgba(248,113,113,.06) !important; }
   .prod-card-qty span { min-width:32px;text-align:center;color:var(--pdv-t1);font-size:13px;font-weight:800; }
   .prod-card.in-cart { border-color:#f15a24;background:rgba(241,90,36,.10); }
@@ -594,6 +598,10 @@
     #pdv-center-panel .item-card > div > div:last-child { min-width:78px; }
     #pdv-center-panel .item-card .btn-action { padding-left:7px !important;padding-right:7px !important;font-size:10px !important; }
     .prod-card { padding:10px;gap:8px; }
+    .prod-card,
+    .prod-card-main,
+    .prod-card-qty,
+    .prod-card-qty button { touch-action:manipulation; }
     .prod-card-qty button { width:31px; }
     .prod-card-qty span { min-width:28px; }
     #pdv-right-panel .forma-btn span { white-space:normal !important; }
