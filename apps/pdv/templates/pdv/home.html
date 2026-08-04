@@ -177,6 +177,7 @@
   }
   .topbar-icon-btn:hover,
   .topbar-icon-btn--active { background:var(--pdv-hover2); color:var(--pdv-t2); }
+  .topbar-brand-mark { display:none !important; }
 
   /* Botão secundário do rodapé (Salvar Pendente) */
   .btn-rodape-secondary { background:var(--pdv-card); border:1px solid var(--pdv-bd); color:var(--pdv-t2); }
@@ -206,8 +207,16 @@
     transition:.15s;margin-bottom:4px;
   }
   .prod-card:hover { border-color:#f15a24; background:var(--pdv-hover); }
+  .prod-card-main { display:flex;align-items:center;gap:10px;flex:1;min-width:0;border:0;background:transparent;color:inherit;text-align:left;padding:0;cursor:pointer;font:inherit; }
   .prod-card-nome { font-size:13px;font-weight:500;color:var(--pdv-t5);white-space:nowrap;overflow:hidden;text-overflow:ellipsis; }
   .prod-card-preco { font-size:13px;font-weight:700;color:#f97316;margin-top:2px; }
+  .prod-card-qty { display:none;align-items:center;border:1px solid rgba(241,90,36,.42);border-radius:8px;overflow:hidden;background:rgba(241,90,36,.08);flex-shrink:0; }
+  .prod-card-qty button { width:34px;height:34px;border:0;background:transparent;color:#f15a24;font-size:16px;font-weight:800;cursor:pointer; }
+  .prod-card-qty span { min-width:32px;text-align:center;color:var(--pdv-t1);font-size:13px;font-weight:800; }
+  .prod-card.in-cart { border-color:#f15a24;background:rgba(241,90,36,.10); }
+  .prod-card.in-cart .prod-card-qty { display:flex; }
+  .client-btn-text-mobile { display:none; }
+  .client-btn-text-full { display:inline; }
   .preco-origem-tag {
     display:inline-flex;align-items:center;width:max-content;margin-top:3px;padding:1px 6px;
     border:1px solid rgba(148,163,184,.24);border-radius:4px;background:rgba(148,163,184,.08);
@@ -494,6 +503,7 @@
     #pdv-app > header { height:52px !important;min-height:52px;padding:0 8px !important;gap:6px !important;overflow-x:auto;overflow-y:hidden;scrollbar-width:none; }
     #pdv-app > header::-webkit-scrollbar { display:none; }
     #pdv-app > header .topbar-chip { display:none !important; }
+    #pdv-app > header .topbar-brand-mark { display:none !important; }
     #pdv-app > header .topbar-btn { padding:7px 10px !important;font-size:12px !important; }
     .mode-seg { gap:3px;padding:3px;border-radius:9px; }
     .mode-btn { gap:5px;padding:7px 9px;font-size:12px; }
@@ -519,12 +529,23 @@
     #pdv-left-panel .prod-card, #pdv-right-panel button, #pdv-center-panel button { min-height:42px; }
     #pdv-center-panel > div:first-child { align-items:flex-start !important;gap:8px !important;padding:10px 12px !important;flex-wrap:wrap; }
     #pdv-center-panel > div:first-child > div:nth-child(2) { flex-basis:calc(100% - 50px); }
-    #pdv-center-panel > div:first-child .btn-action { flex:1 1 calc(33.333% - 6px);justify-content:center;padding:7px 6px;font-size:11px; }
+    #pdv-center-panel > div:first-child .btn-action { justify-content:center;padding:7px 6px;font-size:11px;min-height:36px; }
+    #pdv-center-panel > div:first-child .client-balcao-btn { flex:0 1 31%; }
+    #pdv-center-panel > div:first-child .client-new-btn,
+    #pdv-center-panel > div:first-child .client-swap-btn { flex:1 1 0; }
+    .client-btn-text-mobile { display:inline; }
+    .client-btn-text-full { display:none; }
     #pdv-center-panel > div:nth-child(2) { padding:9px 12px !important;gap:8px !important;flex-wrap:wrap; }
     #pdv-center-panel > div:nth-child(2) .btn-action { padding:7px 8px;font-size:11px; }
+    .cart-mobile-totals { display:grid !important; }
     #pdv-center-panel .item-card { padding:10px; }
     #pdv-center-panel .item-card > div { gap:9px !important; }
-    #pdv-center-panel .qty-ctrl input { width:44px; }
+    #pdv-center-panel .qty-ctrl button { width:30px;height:30px; }
+    #pdv-center-panel .qty-ctrl input { width:38px;height:30px; }
+    .cart-item-controls { flex-wrap:nowrap !important;gap:6px !important;overflow-x:auto;scrollbar-width:none; }
+    .cart-item-controls::-webkit-scrollbar { display:none; }
+    .cart-item-controls .btn-action { flex:0 0 auto;min-height:32px !important; }
+    .cart-item-controls .item-obs-btn { width:38px;min-width:38px;padding-left:0 !important;padding-right:0 !important; }
     #pdv-right-panel .forma-btn { min-height:70px;padding:10px 5px 9px;border-radius:10px; }
     #pdv-right-panel .forma-icon { width:32px;height:32px;border-radius:9px; }
     #pdv-right-panel { overflow-y:auto !important;padding-bottom:10px; }
@@ -532,12 +553,15 @@
 
   @media (max-width:430px) {
     #pdv-app > header { gap:5px !important; }
-    #pdv-app > header > div:nth-of-type(2), #pdv-app > header > button[title="Atalhos de teclado"], #pdv-app > header > button[title="Tela cheia"] { display:none !important; }
+    #pdv-app > header > div:nth-of-type(1), #pdv-app > header > button[title="Atalhos de teclado"], #pdv-app > header > button[title="Tela cheia"] { display:none !important; }
     .mode-btn { padding:7px 8px;font-size:11px; }
-    #pdv-center-panel > div:first-child .btn-action { flex-basis:100%; }
     #pdv-center-panel .item-card > div { align-items:stretch !important; }
     #pdv-center-panel .item-card > div > div:first-child { display:none !important; }
     #pdv-center-panel .item-card > div > div:last-child { min-width:78px; }
+    #pdv-center-panel .item-card .btn-action { padding-left:7px !important;padding-right:7px !important;font-size:10px !important; }
+    .prod-card { padding:10px;gap:8px; }
+    .prod-card-qty button { width:31px; }
+    .prod-card-qty span { min-width:28px; }
     #pdv-right-panel .forma-btn span { white-space:normal !important; }
   }
 </style>
@@ -593,7 +617,7 @@
     <a href="/" class="topbar-icon-btn" style="text-decoration:none;">
       <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/></svg>
     </a>
-    <div style="width:36px;height:36px;border-radius:50%;background:#0a0a12;border:2px solid #2a2a3e;display:flex;align-items:center;justify-content:center;">
+    <div class="topbar-brand-mark" style="width:36px;height:36px;border-radius:50%;background:#0a0a12;border:2px solid #2a2a3e;display:flex;align-items:center;justify-content:center;">
       <span style="color:#a0a0b8;font-size:16px;font-weight:700;">$</span>
     </div>
     <div>
@@ -823,20 +847,27 @@
                x-text="buscaQuery.trim() ? 'Nenhum produto encontrado para \'' + buscaQuery.trim() + '\'' : 'Nenhum produto cadastrado'"></p>
           </template>
           <template x-for="(p, idx) in produtosVisiveis" :key="p.id">
-            <button @click="adicionarItem(p)" @mouseenter="produtoFoco = idx"
-                    class="prod-card" :id="'prodcard-' + idx"
-                    :style="produtoFoco === idx ? 'outline:2px solid #f15a24;outline-offset:-1px;background:rgba(241,90,36,0.10);' : ''">
-              <div style="width:34px;height:34px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0;"
-                   :style="p.cor ? `background:${p.cor}22;border:1px solid ${p.cor}44` : 'background:#1e1e2a;border:1px solid #2a2a3e;'"
-                   x-text="p.icone || '📦'"></div>
-              <div style="flex:1;min-width:0;">
-                <div class="prod-card-nome" x-text="p.descricao"></div>
-                <div class="prod-card-preco" x-text="'R$ ' + fmt(p.preco)"></div>
-                <span class="preco-origem-tag"
-                      :class="p.preco_origem_tipo === 'tabela_cliente' ? 'especial' : ''"
-                      x-text="labelOrigemPreco(p)"></span>
+            <div @mouseenter="produtoFoco = idx"
+                 class="prod-card" :class="{'in-cart':qtdProdutoNoCarrinho(p.id)>0}" :id="'prodcard-' + idx"
+                 :style="produtoFoco === idx ? 'outline:2px solid #f15a24;outline-offset:-1px;background:rgba(241,90,36,0.10);' : ''">
+              <button type="button" @click="adicionarItem(p)" class="prod-card-main">
+                <div style="width:34px;height:34px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0;"
+                     :style="p.cor ? `background:${p.cor}22;border:1px solid ${p.cor}44` : 'background:#1e1e2a;border:1px solid #2a2a3e;'"
+                     x-text="p.icone || '📦'"></div>
+                <div style="flex:1;min-width:0;">
+                  <div class="prod-card-nome" x-text="p.descricao"></div>
+                  <div class="prod-card-preco" x-text="'R$ ' + fmt(p.preco)"></div>
+                  <span class="preco-origem-tag"
+                        :class="p.preco_origem_tipo === 'tabela_cliente' ? 'especial' : ''"
+                        x-text="labelOrigemPreco(p)"></span>
+                </div>
+              </button>
+              <div class="prod-card-qty" x-show="qtdProdutoNoCarrinho(p.id)>0" x-cloak>
+                <button type="button" @click.stop="alterarProdutoCatalogo(p,-1)" aria-label="Diminuir quantidade">−</button>
+                <span x-text="fmtQtd(qtdProdutoNoCarrinho(p.id))"></span>
+                <button type="button" @click.stop="alterarProdutoCatalogo(p,1)" aria-label="Aumentar quantidade">+</button>
               </div>
-            </button>
+            </div>
           </template>
         </div>
 
@@ -878,17 +909,17 @@
                 :class="venda.cliente.tabela_preco_id ? 'especial' : ''"
                 x-text="venda.cliente.tabela_preco_id ? venda.cliente.tabela_preco_nome : 'Preço padrão'"></span>
         </div>
-        <button @click="selecionarClienteBalcao()" class="btn-action">
+        <button @click="selecionarClienteBalcao()" class="btn-action client-balcao-btn">
           <svg width="13" height="13" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/></svg>
-          Cliente Balcão
+          <span class="client-btn-text-full">Cliente Balcão</span><span class="client-btn-text-mobile">Balcão</span>
         </button>
-        <button @click="abrirNovoCliente()" class="btn-action" style="color:#22c55e;border-color:rgba(34,197,94,.25);">
+        <button @click="abrirNovoCliente()" class="btn-action client-new-btn" style="color:#22c55e;border-color:rgba(34,197,94,.25);">
           <svg width="13" height="13" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
           Novo Cliente
         </button>
-        <button @click="clienteQuery='';clienteFoco=-1;showModalCliente=true;$nextTick(()=>{$refs.inputCliente?.focus();buscarClientes('');})" class="btn-action" style="color:#f97316;border-color:#f15a2440;">
+        <button @click="clienteQuery='';clienteFoco=-1;showModalCliente=true;$nextTick(()=>{$refs.inputCliente?.focus();buscarClientes('');})" class="btn-action client-swap-btn" style="color:#f97316;border-color:#f15a2440;">
           <svg width="13" height="13" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4"/></svg>
-          Trocar Cliente (F4)
+          <span class="client-btn-text-full">Trocar Cliente (F4)</span><span class="client-btn-text-mobile">Trocar</span>
         </button>
       </div>
 
@@ -908,6 +939,21 @@
           <svg width="13" height="13" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6M4 7h16"/></svg>
           Limpar Carrinho
         </button>
+      </div>
+
+      <div class="cart-mobile-totals" style="display:none;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;padding:10px 12px;border-bottom:1px solid #1a1a28;background:#0d0d16;flex-shrink:0;">
+        <div style="border:1px solid #1e1e30;border-radius:9px;padding:8px;background:#13131e;">
+          <div style="font-size:9px;font-weight:800;color:#6a6a88;text-transform:uppercase;letter-spacing:.08em;">Sem desc.</div>
+          <div style="font-size:14px;font-weight:800;color:#e5e5f0;margin-top:2px;" x-text="'R$ ' + fmt(totalSemDesconto)"></div>
+        </div>
+        <div style="border:1px solid rgba(34,197,94,.24);border-radius:9px;padding:8px;background:rgba(34,197,94,.06);">
+          <div style="font-size:9px;font-weight:800;color:#4ade80;text-transform:uppercase;letter-spacing:.08em;">Desconto</div>
+          <div style="font-size:14px;font-weight:800;color:#4ade80;margin-top:2px;" x-text="'R$ ' + fmt(totalDescontos)"></div>
+        </div>
+        <div style="border:1px solid rgba(241,90,36,.34);border-radius:9px;padding:8px;background:rgba(241,90,36,.08);">
+          <div style="font-size:9px;font-weight:800;color:#f97316;text-transform:uppercase;letter-spacing:.08em;">Total</div>
+          <div style="font-size:14px;font-weight:800;color:#fff;margin-top:2px;" x-text="'R$ ' + fmt(venda.total)"></div>
+        </div>
       </div>
 
       <!-- Lista itens -->
@@ -1102,7 +1148,7 @@
                           x-text="'− R$ ' + fmt(item.desconto_valor)"></span>
                   </template>
                 </div>
-                <div style="display:flex;align-items:center;gap:8px;margin-top:8px;flex-wrap:wrap;">
+                <div class="cart-item-controls" style="display:flex;align-items:center;gap:8px;margin-top:8px;flex-wrap:wrap;">
                   <div class="qty-ctrl">
                     <button @click="alterarQuantidade(item,-1)">−</button>
                     <input type="number" x-model.number="item.quantidade" @change="atualizarQuantidadeItem(item)" min="0.001" step="0.001">
@@ -1116,7 +1162,7 @@
                           :style="item.desconto_valor>0?'color:#4ade80;border-color:rgba(34,197,94,.3);':''">
                     desc <span x-show="item.desconto_valor>0" x-text="'R$'+fmt(item.desconto_valor)" x-cloak></span>
                   </button>
-                  <button @click="item._showObs=!item._showObs" class="btn-action" style="font-size:11px;padding:4px 8px;"
+                  <button @click="item._showObs=!item._showObs" class="btn-action item-obs-btn" style="font-size:11px;padding:4px 8px;"
                           :style="item.obs?'color:#f59e0b;border-color:rgba(245,158,11,.3);':''">💬</button>
                 </div>
                 <div x-show="item._showObs" x-cloak style="margin-top:6px;">
@@ -2770,6 +2816,13 @@ function pdv() {
     informacaoFiscal: '',
 
     get totalUnidades() { return this.venda.itens.reduce((s,i)=>s+parseFloat(i.quantidade||0),0); },
+    get totalSemDesconto() {
+      return this.venda.itens.reduce((s,i)=>s+(parseFloat(i.quantidade||0)*parseFloat(i.valor_unitario||0)),0) + parseFloat(this.venda.acrescimo||0);
+    },
+    get totalDescontos() {
+      const descontosItens = this.venda.itens.reduce((s,i)=>s+parseFloat(i.desconto_valor||0),0);
+      return descontosItens + parseFloat(this.venda.desconto||0);
+    },
     get podeFinalizar() { return this.sessao && this.venda.itens.length>0 && parseFloat(this.venda.restante)<=0.001; },
     get formasPagamentoVisiveis() { return this.mostrarMaisFormas ? this.formasPagamento : this.formasPagamento.slice(0,6); },
     get produtosVisiveis() {
@@ -2791,6 +2844,20 @@ function pdv() {
       return item?.preco_origem_tipo === 'tabela_cliente'
         ? (item.preco_origem || this.venda.cliente.tabela_preco_nome || 'Preço especial')
         : 'Preço padrão';
+    },
+
+    itemNoCarrinho(produtoId) {
+      return this.venda.itens.find(i => String(i.produto_id) === String(produtoId));
+    },
+
+    qtdProdutoNoCarrinho(produtoId) {
+      const item = this.itemNoCarrinho(produtoId);
+      return item ? parseFloat(item.quantidade || 0) : 0;
+    },
+
+    fmtQtd(valor) {
+      const n = parseFloat(valor || 0);
+      return Number.isInteger(n) ? String(n) : n.toFixed(3).replace(/0+$/,'').replace(/\.$/,'');
     },
 
     async init() {
@@ -2986,6 +3053,15 @@ function pdv() {
 
       // Apenas 1 preço ou sem tabela: adiciona direto
       this._pushItem(produto, parseFloat(produto.preco) || 0);
+    },
+
+    alterarProdutoCatalogo(produto, delta) {
+      const item = this.itemNoCarrinho(produto.id);
+      if (!item) {
+        if (delta > 0) this.adicionarItem(produto);
+        return;
+      }
+      this.alterarQuantidade(item, delta);
     },
 
     _pushItem(produto, preco) {
