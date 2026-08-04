@@ -2703,7 +2703,7 @@
 
         <div style="height:1px;background:#16162a;margin:4px 4px;"></div>
 
-        <button class="impr-opt" @click="imprimirCupom(); fecharModalImpressao()">
+        <button class="impr-opt" @click="imprimirCupom('termica'); fecharModalImpressao()">
           <div class="impr-opt-icon" style="background:linear-gradient(135deg,#451a03,#b45309);">
             <svg fill="none" stroke="#fff" viewBox="0 0 24 24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
               <path d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"/>
@@ -2711,9 +2711,26 @@
           </div>
           <div style="flex:1;min-width:0;">
             <div style="font-size:13.5px;font-weight:700;color:#e8e8f8;">Cupom nao Fiscal</div>
-            <div style="font-size:11px;color:#3a3a52;margin-top:2px;">Comprovante interno / rascunho</div>
+            <div style="font-size:11px;color:#3a3a52;margin-top:2px;">Bobina 80mm / impressora de cupom</div>
           </div>
           <span class="impr-badge" style="background:#451a03;color:#f59e0b;">Cupom</span>
+        </button>
+
+        {% comment %}
+          Mesmo comprovante, formato de folha A4 -- para quem imprime numa
+          impressora de escritorio comum, sem bobina termica na loja.
+        {% endcomment %}
+        <button class="impr-opt" @click="imprimirCupom('a4'); fecharModalImpressao()">
+          <div class="impr-opt-icon" style="background:linear-gradient(135deg,#1e1b4b,#4338ca);">
+            <svg fill="none" stroke="#fff" viewBox="0 0 24 24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2zm7-16v4a1 1 0 001 1h4"/>
+            </svg>
+          </div>
+          <div style="flex:1;min-width:0;">
+            <div style="font-size:13.5px;font-weight:700;color:#e8e8f8;">Cupom em A4</div>
+            <div style="font-size:11px;color:#3a3a52;margin-top:2px;">Folha inteira / impressora comum</div>
+          </div>
+          <span class="impr-badge" style="background:#1e1b4b;color:#818cf8;">A4</span>
         </button>
 
         <button class="impr-opt" @click="compartilharCupomWhatsApp()" :disabled="compartilhandoCupom">
@@ -3612,7 +3629,13 @@ function pdv() {
         w.document.write(html); w.document.close(); w.focus(); setTimeout(() => w.print(), 500);
       } catch (e) { this.toast_('Erro ao imprimir relatorio do caixa.','erro'); }
     },
-    imprimirCupom() {
+    imprimirCupom(modo) {
+      // Dois formatos do mesmo comprovante: bobina termica (80mm, o padrao
+      // de sempre) ou folha A4 inteira, para quem imprime numa impressora de
+      // escritorio comum. So a "roupa" (CSS/tamanho de pagina) muda -- o
+      // conteudo e montado uma unica vez logo abaixo, para os dois formatos
+      // nunca poderem divergir no que mostram.
+      const a4 = modo === 'a4';
       const v = this.venda;
       const filial = '{{ filial_ativa.nome_fantasia|default:filial_ativa.razao_social|escapejs }}';
       const filialEndereco = '{{ filial_ativa.endereco|escapejs }}';
@@ -3676,20 +3699,23 @@ function pdv() {
 <title>Cupom PDV</title>
 <style>
   * { margin:0; padding:0; box-sizing:border-box; }
-  body { font-family: 'Courier New', monospace; font-size:12px; color:#000; background:#fff; width:80mm; padding:8px; }
-  h1 { font-size:15px; font-weight:800; text-align:center; margin-bottom:2px; }
-  .sub { font-size:11px; line-height:1.35; text-align:center; color:#000; font-weight:700; margin-bottom:5px; overflow-wrap:anywhere; }
+  body { font-family: ${a4 ? "Arial, Helvetica, sans-serif" : "'Courier New', monospace"}; font-size:${a4 ? '13px' : '12px'}; color:#000; background:#fff; width:${a4 ? '190mm' : '80mm'}; padding:${a4 ? '14mm 16mm' : '8px'}; }
+  h1 { font-size:${a4 ? '20px' : '15px'}; font-weight:800; text-align:${a4 ? 'left' : 'center'}; margin-bottom:2px; }
+  .sub { font-size:${a4 ? '12px' : '11px'}; line-height:1.35; text-align:${a4 ? 'left' : 'center'}; color:#000; font-weight:700; margin-bottom:5px; overflow-wrap:anywhere; }
   .sep { border:none; border-top:1px dashed #000; margin:8px 0; }
   table { width:100%; border-collapse:collapse; }
-  th { font-size:10px; text-transform:uppercase; color:#000; padding-bottom:4px; border-bottom:1px solid #000; font-weight:800; }
+  th { font-size:${a4 ? '11px' : '10px'}; text-transform:uppercase; color:#000; padding-bottom:4px; border-bottom:1px solid #000; font-weight:800; }
   td { color:#000; font-weight:700; }
-  .total-row { font-size:14px; font-weight:800; }
-  .footer { text-align:center; margin-top:10px; font-size:10px; color:#000; font-weight:700; }
+  .total-row { font-size:${a4 ? '18px' : '14px'}; font-weight:800; }
+  .footer { text-align:center; margin-top:10px; font-size:${a4 ? '11px' : '10px'}; color:#000; font-weight:700; }
+  /* Sem isto o navegador imprime no tamanho padrao do driver (geralmente A4)
+     mesmo no modo termico, e a bobina sai cortada ou com margem gigante. */
+  @page { size: ${a4 ? 'A4 portrait' : '80mm auto'}; margin: ${a4 ? '12mm' : '0'}; }
   @media print { body { margin:0; } }
 </style>
 </head>
 <body>
-${logoUrl ? `<div style="text-align:center;margin-bottom:10px;"><img src="${logoUrl}" style="max-height:130px;max-width:260px;object-fit:contain;" /></div>` : ''}
+${logoUrl ? `<div style="text-align:${a4 ? 'left' : 'center'};margin-bottom:10px;"><img src="${logoUrl}" style="max-height:${a4 ? '80px' : '130px'};max-width:${a4 ? '220px' : '260px'};object-fit:contain;" /></div>` : ''}
 <h1>${filial}</h1>
 ${filialEndereco ? `<div class="sub">${filialEndereco}${filialNumero ? ', '+filialNumero : ''}${filialBairro ? ' - '+filialBairro : ''}</div>` : ''}
 ${filialCidade ? `<div class="sub">${filialCidade}${filialUf ? ' - '+filialUf : ''}</div>` : ''}
@@ -3726,7 +3752,7 @@ ${pgtoHtml ? `<hr class="sep">${pgtoHtml}` : ''}
 <div class="footer">Obrigado pela preferência!<br>Este não é um documento fiscal.</div>
 </body></html>`;
 
-      const w = window.open('', '_blank', 'width=340,height=600,scrollbars=yes');
+      const w = window.open('', '_blank', a4 ? 'width=820,height=920,scrollbars=yes' : 'width=340,height=600,scrollbars=yes');
       if (!w) { this.toast_('Permita popups para imprimir.','erro'); return; }
       w.document.write(html);
       w.document.close();
