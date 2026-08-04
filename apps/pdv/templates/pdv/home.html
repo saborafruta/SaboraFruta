@@ -905,7 +905,7 @@
               </button>
               <div class="prod-card-qty" x-show="qtdProdutoNoCarrinho(p.id)>0" x-cloak>
                 <button type="button" @click.stop="alterarProdutoCatalogo(p,-1)" aria-label="Diminuir quantidade">−</button>
-                <span x-text="fmtQtd(qtdProdutoNoCarrinho(p.id))"></span>
+                <span x-text="fmtQtdProdutoNoCarrinho(p)"></span>
                 <button type="button" @click.stop="alterarProdutoCatalogo(p,1)" aria-label="Aumentar quantidade">+</button>
                 <button type="button" class="prod-card-remove" x-show="qtdProdutoNoCarrinho(p.id)>1" @click.stop="removerProdutoCatalogo(p)" aria-label="Remover produto">x</button>
               </div>
@@ -976,7 +976,7 @@
         <span style="font-size:14px;font-weight:600;color:#e5e5f0;">Carrinho</span>
         <span style="font-size:12px;padding:2px 8px;background:#1e1e2a;border-radius:12px;color:#888;border:1px solid #2a2a3e;"
               x-text="venda.itens.length + ' ' + (venda.itens.length===1?'item':'itens')"></span>
-        <span style="font-size:12px;color:#555;" x-text="'• ' + totalUnidades.toFixed(0) + ' un.'"></span>
+        <span style="font-size:12px;color:#555;" x-text="'• ' + fmtQtd(totalUnidades) + ' un.'"></span>
         <div class="cart-header-spacer" style="flex:1;"></div>
         <button @click="showModalDesconto=true" class="btn-action cart-discount-btn">
           <span style="font-size:13px;font-weight:600;">%</span>
@@ -1201,9 +1201,9 @@
                 </div>
                 <div class="cart-item-controls" style="display:flex;align-items:center;gap:8px;margin-top:8px;flex-wrap:wrap;">
                   <div class="qty-ctrl">
-                    <button @click="alterarQuantidade(item,-1)">−</button>
-                    <input type="number" x-model.number="item.quantidade" @change="atualizarQuantidadeItem(item)" min="0.001" step="0.001">
-                    <button @click="alterarQuantidade(item,1)">+</button>
+                    <button @click="alterarQuantidade(item,-quantidadePasso(item))">−</button>
+                    <input type="number" x-model.number="item.quantidade" @change="atualizarQuantidadeItem(item)" :min="quantidadeMinima(item)" :step="quantidadePasso(item)">
+                    <button @click="alterarQuantidade(item,quantidadePasso(item))">+</button>
                   </div>
                   <button @click="abrirPrecoItem(item)" class="btn-action" style="font-size:11px;padding:4px 8px;"
                           :style="item._precoManual?'color:#60a5fa;border-color:rgba(59,130,246,.35);':''">
@@ -2924,9 +2924,36 @@ function pdv() {
       return item ? parseFloat(item.quantidade || 0) : 0;
     },
 
-    fmtQtd(valor) {
+    produtoAceitaDecimal(produto) {
+      return !!(produto?.fracionavel || parseFloat(produto?.quantidade_step || 1) < 1 || ['fracionado', 'granel_peso', 'granel_volume', 'granel_metragem'].includes(produto?.tipo_produto));
+    },
+
+    quantidadePasso(item) {
+      return this.produtoAceitaDecimal(item) ? 0.001 : 1;
+    },
+
+    quantidadeMinima(item) {
+      return this.produtoAceitaDecimal(item) ? 0.001 : 1;
+    },
+
+    normalizarQuantidade(valor, item) {
+      const n = parseFloat(String(valor ?? '').replace(',', '.'));
+      const minimo = this.quantidadeMinima(item);
+      if (!Number.isFinite(n) || n < minimo) return minimo;
+      return this.produtoAceitaDecimal(item) ? Math.round(n * 1000) / 1000 : Math.round(n);
+    },
+
+    fmtQtd(valor, item=null) {
       const n = parseFloat(valor || 0);
+      if (!Number.isFinite(n)) return '0';
+      if (item && this.produtoAceitaDecimal(item)) {
+        return n.toLocaleString('pt-BR', { minimumFractionDigits: 3, maximumFractionDigits: 3 });
+      }
       return Number.isInteger(n) ? String(n) : n.toFixed(3).replace(/0+$/,'').replace(/\.$/,'');
+    },
+
+    fmtQtdProdutoNoCarrinho(produto) {
+      return this.fmtQtd(this.qtdProdutoNoCarrinho(produto.id), produto);
     },
 
     async init() {
@@ -3106,9 +3133,7 @@ function pdv() {
       // Se já está no carrinho: só incrementa quantidade
       const ex = this.venda.itens.find(i=>i.produto_id===produto.id);
       if (ex) {
-        ex.quantidade=parseFloat(ex.quantidade)+1;
-        this.recalcularItem(ex);
-        this.aplicarPrecosCliente(false);
+        this.alterarQuantidade(ex, this.quantidadePasso(ex));
         this.toast_('Quantidade atualizada','ok');
         return;
       }
@@ -3126,11 +3151,12 @@ function pdv() {
 
     alterarProdutoCatalogo(produto, delta) {
       const item = this.itemNoCarrinho(produto.id);
+      const passo = this.quantidadePasso(item || produto);
       if (!item) {
         if (delta > 0) this.adicionarItem(produto);
         return;
       }
-      this.alterarQuantidade(item, delta);
+      this.alterarQuantidade(item, delta > 0 ? passo : -passo);
     },
 
     removerProdutoCatalogo(produto) {
@@ -3144,6 +3170,10 @@ function pdv() {
         descricao: produto.descricao, codigo_barras: produto.codigo_barras||'',
         icone: produto.icone||'📦', cor: produto.cor||null, linha: produto.linha||null,
         estoque_disponivel: parseFloat(produto.estoque_disponivel == null ? 0 : produto.estoque_disponivel),
+        tipo_produto: produto.tipo_produto || '',
+        fracionavel: this.produtoAceitaDecimal(produto),
+        quantidade_step: this.quantidadePasso(produto),
+        quantidade_decimais: this.produtoAceitaDecimal(produto) ? 3 : 0,
         quantidade: 1, valor_unitario: preco, _precoOriginal: preco, _precoManual: false,
         preco_origem: produto.preco_origem || 'Preço de venda',
         preco_origem_tipo: produto.preco_origem_tipo || 'normal',
@@ -3163,13 +3193,15 @@ function pdv() {
     },
 
     alterarQuantidade(item, delta) {
-      const n = parseFloat(item.quantidade)+delta;
-      if (n<=0) { this.removerItem(item); return; }
+      const bruto = parseFloat(item.quantidade || 0) + delta;
+      if (bruto<=0) { this.removerItem(item); return; }
+      const n = this.normalizarQuantidade(bruto, item);
       item.quantidade=n;
       this.atualizarQuantidadeItem(item);
     },
 
     atualizarQuantidadeItem(item) {
+      item.quantidade = this.normalizarQuantidade(item.quantidade, item);
       this.recalcularItem(item);
       if (!item._precoManual) this.aplicarPrecosCliente(false);
     },
@@ -3490,6 +3522,10 @@ function pdv() {
             icone: item.icone||'📦',
             cor: item.cor||null,
             linha: item.linha||null,
+            tipo_produto: item.tipo_produto||'',
+            fracionavel: this.produtoAceitaDecimal(item),
+            quantidade_step: this.quantidadePasso(item),
+            quantidade_decimais: this.produtoAceitaDecimal(item) ? 3 : 0,
             quantidade: item.quantidade,
             valor_unitario: item.valor_unitario,
             desconto_percentual: pct,
@@ -4613,6 +4649,10 @@ ${pgtoHtml ? `<hr class="sep">${pgtoHtml}` : ''}
             icone: item.icone||'📦',
             cor: item.cor||null,
             linha: item.linha||null,
+            tipo_produto: item.tipo_produto||'',
+            fracionavel: this.produtoAceitaDecimal(item),
+            quantidade_step: this.quantidadePasso(item),
+            quantidade_decimais: this.produtoAceitaDecimal(item) ? 3 : 0,
             quantidade: item.quantidade,
             valor_unitario: item.valor_unitario,
             desconto_percentual: pct,
@@ -4817,6 +4857,10 @@ ${pgtoHtml ? `<hr class="sep">${pgtoHtml}` : ''}
             item.valor_unitario=parseFloat(preco.preco)||0;
             item._precoOriginal=item.valor_unitario;
             item.preco_manual=null;
+            item.tipo_produto=preco.tipo_produto||item.tipo_produto||'';
+            item.fracionavel=this.produtoAceitaDecimal(preco)||this.produtoAceitaDecimal(item);
+            item.quantidade_step=this.quantidadePasso(item);
+            item.quantidade_decimais=item.fracionavel ? 3 : 0;
             item.preco_origem=preco.preco_origem||'Preço de venda';
             item.preco_origem_tipo=preco.preco_origem_tipo||'normal';
             item.preco_origem_detalhe=preco.preco_origem_detalhe||'';

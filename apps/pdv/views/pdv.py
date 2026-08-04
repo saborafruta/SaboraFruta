@@ -280,6 +280,7 @@ def buscar_produto(request):
     data = []
     hoje = tz.localdate()
     for p in produtos:
+        aceita_decimal = _produto_aceita_quantidade_decimal(p)
         contrato = ProdutoVendavelService.consultar(
             produto=p,
             filial=filial,
@@ -301,6 +302,10 @@ def buscar_produto(request):
         data.append({
             "id": p.id, "descricao": p.descricao_pdv or p.descricao,
             "codigo_barras": p.codigo_barras,
+            "tipo_produto": p.tipo_produto,
+            "fracionavel": aceita_decimal,
+            "quantidade_step": 0.001 if aceita_decimal else 1,
+            "quantidade_decimais": 3 if aceita_decimal else 0,
             "preco": float(contrato["preco_aplicado"]),
             "preco_base": float(p.preco_venda or 0),
             "preco_origem": contrato["preco_origem"],
@@ -517,6 +522,19 @@ def api_clientes_debug(request):
 # API — Estado inicial do PDV
 # ---------------------------------------------------------------------------
 
+def _produto_aceita_quantidade_decimal(produto):
+    return bool(
+        produto.fracionavel
+        or produto.vendido_por_peso_granel
+        or produto.tipo_produto in {
+            Produto.TipoProduto.FRACIONADO,
+            Produto.TipoProduto.GRANEL_PESO,
+            Produto.TipoProduto.GRANEL_VOLUME,
+            Produto.TipoProduto.GRANEL_METRAGEM,
+        }
+    )
+
+
 def _serializa_produto(p, filial, cliente=None, quantidade=Decimal("1")):
     contrato = ProdutoVendavelService.consultar(
         produto=p,
@@ -524,10 +542,15 @@ def _serializa_produto(p, filial, cliente=None, quantidade=Decimal("1")):
         quantidade=quantidade,
         cliente=cliente,
     )
+    aceita_decimal = _produto_aceita_quantidade_decimal(p)
     return {
         "id": p.id,
         "descricao": p.descricao_pdv or p.descricao,
         "codigo_barras": p.codigo_barras,
+        "tipo_produto": p.tipo_produto,
+        "fracionavel": aceita_decimal,
+        "quantidade_step": 0.001 if aceita_decimal else 1,
+        "quantidade_decimais": 3 if aceita_decimal else 0,
         "preco": float(contrato["preco_aplicado"]),
         "preco_base": float(p.preco_venda or 0),
         "preco_origem": contrato["preco_origem"],
@@ -1000,10 +1023,15 @@ def api_pendente_detalhe(request, pk):
     itens = []
     for item in venda.itens.select_related("produto__linha_producao"):
         p = item.produto
+        aceita_decimal = _produto_aceita_quantidade_decimal(p)
         itens.append({
             "produto_id": p.pk,
             "descricao": p.descricao_pdv or p.descricao,
             "codigo_barras": p.codigo_barras or "",
+            "tipo_produto": p.tipo_produto,
+            "fracionavel": aceita_decimal,
+            "quantidade_step": 0.001 if aceita_decimal else 1,
+            "quantidade_decimais": 3 if aceita_decimal else 0,
             "icone": p.linha_producao.icone if p.linha_producao else "📦",
             "cor": p.linha_producao.cor_identificacao if p.linha_producao else None,
             "linha": p.linha_producao.nome if p.linha_producao else None,
@@ -1190,6 +1218,7 @@ def api_venda_detalhe(request, pk):
     itens = []
     for item in venda.itens.select_related("produto__linha_producao"):
         p = item.produto
+        aceita_decimal = _produto_aceita_quantidade_decimal(p)
         itens.append({
             "produto_id": p.pk,
             "descricao": p.descricao_pdv or p.descricao,
@@ -1202,6 +1231,10 @@ def api_venda_detalhe(request, pk):
             "valor_total": float(item.valor_total),
             "desconto_percentual": float(item.desconto_percentual or 0),
             "unidade_medida": item.unidade_medida or "UN",
+            "tipo_produto": p.tipo_produto,
+            "fracionavel": aceita_decimal,
+            "quantidade_step": 0.001 if aceita_decimal else 1,
+            "quantidade_decimais": 3 if aceita_decimal else 0,
         })
 
     pagamentos = [
@@ -2642,6 +2675,7 @@ def api_orcamento_detalhe(request, pk):
     itens = []
     for item in venda.itens.select_related("produto__linha_producao").order_by("numero_item"):
         p = item.produto
+        aceita_decimal = _produto_aceita_quantidade_decimal(p)
         itens.append({
             "produto_id": p.pk,
             "descricao": p.descricao_pdv or p.descricao,
@@ -2654,6 +2688,10 @@ def api_orcamento_detalhe(request, pk):
             "valor_total": float(item.valor_total),
             "desconto_percentual": float(item.desconto_percentual or 0),
             "unidade_medida": item.unidade_medida,
+            "tipo_produto": p.tipo_produto,
+            "fracionavel": aceita_decimal,
+            "quantidade_step": 0.001 if aceita_decimal else 1,
+            "quantidade_decimais": 3 if aceita_decimal else 0,
         })
 
     return JsonResponse({
