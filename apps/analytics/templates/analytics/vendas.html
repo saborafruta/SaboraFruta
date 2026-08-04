@@ -493,7 +493,7 @@ body.tema-claro .hv-page a, body.tema-claro .hv-page span { background:#eef2f7;b
               {# 2 — Enviar por e-mail (se autorizada) #}
               {% if doc and doc.status == 'autorizada' %}
               <button class="hv-ab hv-ab-blue"
-                      onclick="hvApp_instance.abrirEmail({{ venda.pk }}, '{{ venda.numero_venda|stringformat:'06d' }}', '{{ venda.cliente.email_nfe|default:venda.cliente.email|default:''|escapejs }}')"
+                      onclick="hvApp_instance.abrirEmail({{ venda.pk }}, '{{ venda.numero_venda|stringformat:'06d' }}', '{% if venda.cliente %}{{ venda.cliente.email_nfe|default:venda.cliente.email|default:''|escapejs }}{% endif %}')"
                       title="Enviar por e-mail">
                 <span class="hv-ab-tip">2 – Enviar por e-mail</span>
                 2
