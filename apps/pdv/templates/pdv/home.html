@@ -489,7 +489,7 @@
   .scanner-help { margin:10px 0 0;color:var(--pdv-t3);font-size:12px;line-height:1.45; }
   .scanner-error { margin-top:10px;color:#f87171;font-size:12px; }
 
-  @media (max-width:960px) {
+  @media (max-width:1100px) {
     #pdv-app { position:relative;height:100dvh !important;min-height:100dvh;overflow:hidden; }
     #pdv-app > header { height:52px !important;min-height:52px;padding:0 8px !important;gap:6px !important;overflow-x:auto;overflow-y:hidden;scrollbar-width:none; }
     #pdv-app > header::-webkit-scrollbar { display:none; }
@@ -497,6 +497,14 @@
     #pdv-app > header .topbar-btn { padding:7px 10px !important;font-size:12px !important; }
     .mode-seg { gap:3px;padding:3px;border-radius:9px; }
     .mode-btn { gap:5px;padding:7px 9px;font-size:12px; }
+    #pdv-app input,
+    #pdv-app select,
+    #pdv-app textarea {
+      font-size:16px !important;
+      line-height:1.25 !important;
+    }
+    #pdv-app input::placeholder,
+    #pdv-app textarea::placeholder { font-size:16px !important; }
     .pdv-workspace { display:block !important;position:relative;overflow:hidden !important; }
     .pdv-pane { display:none !important;position:absolute;inset:0 0 68px 0;width:100% !important;height:auto !important;min-width:0 !important;max-width:none !important;border:0 !important; }
     .pdv-pane.mobile-active { display:flex !important; }
