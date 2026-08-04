@@ -214,6 +214,7 @@
   .prod-card-preco { font-size:13px;font-weight:700;color:#f97316;margin-top:2px; }
   .prod-card-qty { display:none;align-items:center;border:1px solid rgba(241,90,36,.42);border-radius:8px;overflow:hidden;background:rgba(241,90,36,.08);flex-shrink:0; }
   .prod-card-qty button { width:34px;height:34px;border:0;background:transparent;color:#f15a24;font-size:16px;font-weight:800;cursor:pointer; }
+  .prod-card-remove { color:#f87171 !important;border-left:1px solid rgba(248,113,113,.22) !important;background:rgba(248,113,113,.06) !important; }
   .prod-card-qty span { min-width:32px;text-align:center;color:var(--pdv-t1);font-size:13px;font-weight:800; }
   .prod-card.in-cart { border-color:#f15a24;background:rgba(241,90,36,.10); }
   .prod-card.in-cart .prod-card-qty { display:flex; }
@@ -526,6 +527,7 @@
     #pdv-app > header .pdv-topbar-info,
     #pdv-app > header .pdv-topbar-sep { display:none !important; }
     #pdv-app > header .topbar-btn { padding:7px 10px !important;font-size:12px !important; }
+    .caixa-menu { position:fixed !important;top:50px !important;left:auto !important;right:8px !important;z-index:120 !important;max-width:calc(100vw - 16px); }
     .mode-seg { gap:3px;padding:3px;border-radius:9px; }
     .mode-btn { gap:5px;padding:7px 9px;font-size:12px; }
     #pdv-app input,
@@ -549,8 +551,8 @@
     #barcode-input + kbd { display:none; }
     #pdv-left-panel .prod-card, #pdv-right-panel button, #pdv-center-panel button { min-height:42px; }
     #pdv-center-panel > div:first-child { align-items:center !important;gap:7px !important;padding:8px 12px 9px !important;flex-wrap:wrap; }
-    #pdv-center-panel > div:first-child .client-summary { order:2;flex:1 0 100%;min-width:0;display:grid !important;grid-template-columns:34px minmax(0,1fr);column-gap:9px;align-items:center;padding-top:2px; }
-    #pdv-center-panel > div:first-child .client-avatar { width:34px !important;height:34px !important;font-size:12px !important;grid-row:1 / span 2; }
+    #pdv-center-panel > div:first-child .client-summary { order:2 !important;flex:0 0 100% !important;min-width:0;display:block !important;padding-top:2px; }
+    #pdv-center-panel > div:first-child .client-avatar { display:none !important; }
     #pdv-center-panel > div:first-child .client-info { min-width:0; }
     #pdv-center-panel > div:first-child .client-info > div:first-child { font-size:13px !important;line-height:1.15 !important;white-space:normal; }
     #pdv-center-panel > div:first-child .client-info > div:nth-child(2) { font-size:10px !important;margin-top:1px; }
@@ -561,8 +563,11 @@
     #pdv-center-panel > div:first-child .client-swap-btn { flex:1 1 0; }
     .client-btn-text-mobile { display:inline; }
     .client-btn-text-full { display:none; }
-    #pdv-center-panel > div:nth-child(2) { padding:9px 12px !important;gap:8px !important;flex-wrap:wrap; }
-    #pdv-center-panel > div:nth-child(2) .btn-action { padding:7px 8px;font-size:11px; }
+    #pdv-center-panel .cart-header { padding:9px 12px !important;gap:8px !important;flex-wrap:wrap; }
+    #pdv-center-panel .cart-header .btn-action { padding:7px 8px;font-size:11px; }
+    #pdv-center-panel .cart-header-spacer { display:none !important; }
+    #pdv-center-panel .cart-header .cart-discount-btn,
+    #pdv-center-panel .cart-header .cart-clear-btn { flex:1 1 0;justify-content:center; }
     .cart-mobile-totals { display:grid !important; }
     #pdv-center-panel .item-card { padding:10px; }
     #pdv-center-panel .item-card > div { gap:9px !important; }
@@ -634,7 +639,6 @@
   });
 </script>
 {% endblock %}
-
 {% block body %}
 <div id="pdv-app" x-data="pdv()" x-init="init()" style="display:flex;flex-direction:column;height:100vh;background:#0a0a12;">
   {% csrf_token %}
@@ -895,6 +899,7 @@
                 <button type="button" @click.stop="alterarProdutoCatalogo(p,-1)" aria-label="Diminuir quantidade">−</button>
                 <span x-text="fmtQtd(qtdProdutoNoCarrinho(p.id))"></span>
                 <button type="button" @click.stop="alterarProdutoCatalogo(p,1)" aria-label="Aumentar quantidade">+</button>
+                <button type="button" class="prod-card-remove" x-show="qtdProdutoNoCarrinho(p.id)>1" @click.stop="removerProdutoCatalogo(p)" aria-label="Remover produto">x</button>
               </div>
             </div>
           </template>
@@ -909,10 +914,13 @@
 
       <!-- Ações inferiores -->
       <div style="border-top:1px solid #1a1a28;">
-        <button @click="buscaAvancada()" class="cat-action-btn" style="border-bottom:1px solid var(--pdv-bd2);">
-          <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
-          Busca Avançada (Shift + F2)
-        </button>
+        <div class="cat-action-btn" style="justify-content:space-between;border-bottom:1px solid var(--pdv-bd2);cursor:default;">
+          <span style="display:flex;align-items:center;gap:8px;">
+            <svg width="14" height="14" fill="none" stroke="#f97316" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17"/></svg>
+            Parcial
+          </span>
+          <strong style="color:#fff;font-size:13px;" x-text="'R$ ' + fmt(venda.total)"></strong>
+        </div>
         <button @click="abrirHistorico()" class="cat-action-btn">
           <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
           Histórico de compras (F7)
@@ -955,18 +963,18 @@
       </div>
 
       <!-- Cabeçalho carrinho -->
-      <div style="display:flex;align-items:center;padding:10px 20px;border-bottom:1px solid #1a1a28;flex-shrink:0;gap:10px;">
+      <div class="cart-header" style="display:flex;align-items:center;padding:10px 20px;border-bottom:1px solid #1a1a28;flex-shrink:0;gap:10px;">
         <svg width="16" height="16" fill="none" stroke="#f97316" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z"/></svg>
         <span style="font-size:14px;font-weight:600;color:#e5e5f0;">Carrinho</span>
         <span style="font-size:12px;padding:2px 8px;background:#1e1e2a;border-radius:12px;color:#888;border:1px solid #2a2a3e;"
               x-text="venda.itens.length + ' ' + (venda.itens.length===1?'item':'itens')"></span>
         <span style="font-size:12px;color:#555;" x-text="'• ' + totalUnidades.toFixed(0) + ' un.'"></span>
-        <div style="flex:1;"></div>
-        <button @click="showModalDesconto=true" class="btn-action">
+        <div class="cart-header-spacer" style="flex:1;"></div>
+        <button @click="showModalDesconto=true" class="btn-action cart-discount-btn">
           <span style="font-size:13px;font-weight:600;">%</span>
           Desconto (F6)
         </button>
-        <button @click="confirmarLimpar()" class="btn-action" x-show="venda.itens.length>0" x-cloak>
+        <button @click="confirmarLimpar()" class="btn-action cart-clear-btn" x-show="venda.itens.length>0" x-cloak>
           <svg width="13" height="13" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6M4 7h16"/></svg>
           Limpar Carrinho
         </button>
@@ -3093,6 +3101,11 @@ function pdv() {
         return;
       }
       this.alterarQuantidade(item, delta);
+    },
+
+    removerProdutoCatalogo(produto) {
+      const item = this.itemNoCarrinho(produto.id);
+      if (item) this.removerItem(item);
     },
 
     _pushItem(produto, preco) {
