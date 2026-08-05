@@ -1089,14 +1089,14 @@ function hvApp() {
 /* Modo A4: mesmo conteudo, layout de pagina inteira em vez da bobina estreita
    de 80mm. Troca so a largura/tipografia do "papel"; a montagem do HTML acima
    e uma so, para os dois formatos nunca poderem divergir no conteudo. */
-body.a4 .receipt{width:190mm;min-height:0;padding:14mm 16mm;font-family:Arial,Helvetica,sans-serif}
-body.a4 h1{font-size:20px;text-align:left}
-body.a4 .logo{text-align:left}
-body.a4 .sub{text-align:left;font-size:12px}
-body.a4 td{font-size:13px;padding:7px 0}
-body.a4 .muted{font-size:11px}
-body.a4 .total{font-size:20px}
-body.a4 .footer{font-size:11px}
+body.a4 .receipt{width:130mm;min-height:0;padding:10mm 12mm;font-family:Arial,Helvetica,sans-serif}
+body.a4 h1{font-size:17px;text-align:center}
+body.a4 .logo{text-align:center}
+body.a4 .sub{text-align:center;font-size:11px}
+body.a4 td{font-size:12px;padding:6px 0}
+body.a4 .muted{font-size:10px}
+body.a4 .total{font-size:17px}
+body.a4 .footer{font-size:10px}
 @page{size:A4 portrait;margin:12mm}
 @media print{
 html,body{width:100%;background:#fff}
@@ -1109,13 +1109,15 @@ h1{font-size:14px}.sub,.muted{font-size:9px}.sub{margin:1.5px 0}.sep{margin:6px 
 .footer{font-size:9px;margin-top:7px}
 /* No modo A4 a folha inteira e aproveitada — a versao estreita acima e so
    para a bobina termica, entao aqui os valores viram a excecao. */
-body.a4 .receipt{width:100%;max-width:180mm;padding:0;font-size:12px;line-height:1.5}
-body.a4 .logo img{max-height:70px;max-width:220px}
-body.a4 h1{font-size:17px}
-body.a4 .sub,body.a4 .muted{font-size:10.5px}
-body.a4 td{font-size:12px;padding:6px 0}
-body.a4 .total{font-size:17px}
-body.a4 .footer{font-size:10px}
+body.a4 .receipt{width:100%;max-width:120mm;margin:0 auto;padding:0;font-size:11px;line-height:1.4}
+body.a4 .logo{text-align:center}
+body.a4 .logo img{max-height:60px;max-width:180px}
+body.a4 h1{font-size:15px;text-align:center}
+body.a4 .sub{text-align:center}
+body.a4 .sub,body.a4 .muted{font-size:9.5px}
+body.a4 td{font-size:11px;padding:5px 0}
+body.a4 .total{font-size:15px}
+body.a4 .footer{font-size:9px}
 }
 </style></head><body>
 <div class="actions">
