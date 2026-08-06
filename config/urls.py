@@ -29,6 +29,7 @@ urlpatterns = [
     path('crm/', include('apps.crm.urls', namespace='crm')),
     path('mapas/', include('apps.mapas.urls', namespace='mapas')),
     path('food-service/', include('apps.food_service.urls', namespace='food_service')),
+    path('cardapio/', include('apps.food_service.urls_publico', namespace='food_service_publico')),
 ]
 
 handler403 = 'apps.core.views.errors.permission_denied'

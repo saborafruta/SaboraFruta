@@ -22,6 +22,41 @@
     </div>
   </div>
 
+  {% with pendentes=comanda.pedidos_pendentes.all %}
+  {% if pendentes %}
+  <div class="card space-y-3" style="border:1px solid #f59e0b;">
+    <h3 class="text-sm font-semibold">Pedidos recebidos pelo Cardápio Digital</h3>
+    {% for pedido in pendentes %}
+    {% if pedido.status == "pendente" %}
+    <div class="p-3 rounded-lg" :style="temaClaro ? 'background:#fffbeb;' : 'background:#292410;'">
+      <ul class="text-sm space-y-1 mb-2">
+        {% for item in pedido.itens.all %}
+        <li>
+          {{ item.quantidade }}x {{ item.produto.descricao }}
+          {% if item.observacoes %}<span class="text-xs">({{ item.observacoes }})</span>{% endif %}
+          {% for complemento in item.complementos.all %}
+          <div class="text-xs" style="margin-left:14px;">+ {{ complemento.quantidade }}x {{ complemento.produto.descricao }}</div>
+          {% endfor %}
+        </li>
+        {% endfor %}
+      </ul>
+      <div class="flex gap-2">
+        <form method="post" action="{% url 'food_service:comanda-pedido-pendente-confirmar' comanda.pk pedido.pk %}">
+          {% csrf_token %}
+          <button class="btn-primary" style="font-size:12px;">Confirmar</button>
+        </form>
+        <form method="post" action="{% url 'food_service:comanda-pedido-pendente-recusar' comanda.pk pedido.pk %}">
+          {% csrf_token %}
+          <button class="text-xs font-semibold" style="color:#dc2626;">Recusar</button>
+        </form>
+      </div>
+    </div>
+    {% endif %}
+    {% endfor %}
+  </div>
+  {% endif %}
+  {% endwith %}
+
   {% if comanda.status == "aberta" %}
   <div class="card space-y-3">
     <h3 class="text-sm font-semibold">Adicionar item</h3>

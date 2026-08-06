@@ -1,0 +1,47 @@
+{% extends "_base.html" %}
+{% block title %}Avaliar atendimento{% endblock %}
+
+{% block extra_head %}
+<style>
+  body { background: #faf7f2; color: #1c1917; }
+  .av-wrap { max-width: 480px; margin: 0 auto; padding: 40px 18px; }
+  .av-card { background: #fff; border-radius: 16px; padding: 22px; box-shadow: 0 4px 18px rgba(0,0,0,.08); }
+  .av-estrela { font-size: 34px; cursor: pointer; opacity: .35; }
+  .av-estrela.ativa { opacity: 1; }
+  textarea { width: 100%; border: 1px solid #e7e1d8; border-radius: 10px; padding: 10px; font-size: 14px; margin-top: 12px; }
+</style>
+{% endblock %}
+
+{% block full_content %}
+<div class="av-wrap" x-data="{ nota: 0 }">
+  <div class="av-card">
+    {% if ja_avaliada %}
+      <h2 style="font-weight:700; font-size:18px;">
+        {% if agradecer %}Obrigado pela avaliação!{% else %}Você já avaliou este atendimento.{% endif %}
+      </h2>
+      <p style="font-size:13px; color:#78716c; margin-top:6px;">Mesa {{ mesa.numero }} — Comanda #{{ comanda.pk }}</p>
+    {% else %}
+      <h2 style="font-weight:700; font-size:18px; margin-bottom:4px;">Como foi seu atendimento?</h2>
+      <p style="font-size:13px; color:#78716c; margin-bottom:16px;">Mesa {{ mesa.numero }} — Comanda #{{ comanda.pk }}</p>
+
+      {% if erro %}<p style="color:#dc2626; font-size:13px; margin-bottom:10px;">{{ erro }}</p>{% endif %}
+
+      <form method="post">
+        {% csrf_token %}
+        <div style="display:flex; gap:8px; justify-content:center;">
+          <template x-for="n in [1,2,3,4,5]" :key="n">
+            <span class="av-estrela" :class="n <= nota ? 'ativa' : ''" @click="nota = n" x-text="'★'"></span>
+          </template>
+        </div>
+        <input type="hidden" name="nota" :value="nota">
+
+        <textarea name="comentario" rows="3" placeholder="Conte um pouco sobre sua experiência (opcional)"></textarea>
+
+        <button type="submit" style="width:100%; margin-top:14px; padding:11px; border-radius:10px; background:#e8824a; color:#fff; font-weight:700; border:none;">
+          Enviar avaliação
+        </button>
+      </form>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}

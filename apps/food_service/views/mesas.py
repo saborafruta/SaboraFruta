@@ -1,6 +1,8 @@
 """CRUD de cadastro de mesas."""
+import io
+
 from django.contrib import messages
-from django.http import JsonResponse
+from django.http import HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.utils.http import url_has_allowed_host_and_scheme
@@ -135,6 +137,25 @@ class MesaMarcarReservadaView(PermissaoRequiredMixin, View):
                 return JsonResponse({'erro': str(exc)}, status=400)
             messages.error(request, str(exc))
         return _redirect_seguro(request, reverse('food_service:mesa-list'))
+
+
+class MesaQrCodeView(PermissaoRequiredMixin, View):
+    """PNG do QR Code que leva ao Cardápio Digital público desta mesa."""
+
+    permissao_modulo = 'food_service'
+    permissao_acao = 'ver'
+
+    def get(self, request, pk):
+        import qrcode
+
+        mesa = get_object_or_404(Mesa.objects.for_filial(request.filial_ativa), pk=pk)
+        url_publica = request.build_absolute_uri(
+            reverse('food_service_publico:cardapio', args=[mesa.qr_token]),
+        )
+        imagem = qrcode.make(url_publica)
+        buffer = io.BytesIO()
+        imagem.save(buffer, format='PNG')
+        return HttpResponse(buffer.getvalue(), content_type='image/png')
 
 
 class MesaMarcarLivreView(PermissaoRequiredMixin, View):

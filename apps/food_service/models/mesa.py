@@ -1,3 +1,5 @@
+import secrets
+
 from django.db import models
 
 from apps.core.models.base import ActiveModel, FilialManager, FilialScopedModel
@@ -27,6 +29,10 @@ class Mesa(FilialScopedModel, ActiveModel):
     setor = models.CharField(max_length=60, blank=True)
     status = models.CharField(max_length=20, choices=Status.choices, default=Status.LIVRE)
     observacoes = models.TextField(blank=True)
+    # Identificador opaco usado na URL pública do Cardápio Digital
+    # (/cardapio/<qr_token>/) -- não é PK sequencial de propósito, pra não
+    # dar pra adivinhar/enumerar mesas de outro estabelecimento.
+    qr_token = models.CharField(max_length=24, unique=True, editable=False, blank=True)
 
     objects = FilialManager()
     all_objects = models.Manager()
@@ -42,3 +48,8 @@ class Mesa(FilialScopedModel, ActiveModel):
 
     def __str__(self):
         return self.nome or f'Mesa {self.numero}'
+
+    def save(self, *args, **kwargs):
+        if not self.qr_token:
+            self.qr_token = secrets.token_urlsafe(12)
+        super().save(*args, **kwargs)

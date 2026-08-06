@@ -70,6 +70,7 @@ class ComandaDetailView(PermissaoRequiredMixin, View):
         comanda = get_object_or_404(
             Comanda.objects.for_filial(request.filial_ativa).prefetch_related(
                 'itens__produto', 'itens__complementos__produto', 'mesas',
+                'pedidos_pendentes__itens__produto', 'pedidos_pendentes__itens__complementos__produto',
             ),
             pk=pk,
         )
@@ -349,3 +350,39 @@ class ComandaHistoricoListView(PermissaoRequiredMixin, View):
             'mesa_selecionada': mesa_selecionada,
             'mesas': Mesa.objects.for_filial(request.filial_ativa).order_by('numero'),
         })
+
+
+class ComandaPedidoPendenteConfirmarView(PermissaoRequiredMixin, View):
+    """Confirma um pedido enviado pelo cliente via Cardápio Digital, lançando os itens na comanda."""
+
+    permissao_modulo = 'food_service'
+    permissao_acao = 'editar'
+
+    def post(self, request, pk, pedido_pk):
+        from ..models import PedidoPendente
+        from ..services import PedidoPendenteService
+
+        comanda = _comanda_da_filial(request, pk)
+        pedido = get_object_or_404(PedidoPendente, pk=pedido_pk, comanda=comanda)
+        try:
+            PedidoPendenteService.confirmar_pedido(pedido=pedido, usuario=request.user)
+        except DadosInvalidosError as exc:
+            messages.error(request, str(exc))
+        return redirect(reverse('food_service:comanda-detail', args=[comanda.pk]))
+
+
+class ComandaPedidoPendenteRecusarView(PermissaoRequiredMixin, View):
+    permissao_modulo = 'food_service'
+    permissao_acao = 'editar'
+
+    def post(self, request, pk, pedido_pk):
+        from ..models import PedidoPendente
+        from ..services import PedidoPendenteService
+
+        comanda = _comanda_da_filial(request, pk)
+        pedido = get_object_or_404(PedidoPendente, pk=pedido_pk, comanda=comanda)
+        try:
+            PedidoPendenteService.recusar_pedido(pedido=pedido, motivo=request.POST.get('motivo', ''))
+        except DadosInvalidosError as exc:
+            messages.error(request, str(exc))
+        return redirect(reverse('food_service:comanda-detail', args=[comanda.pk]))

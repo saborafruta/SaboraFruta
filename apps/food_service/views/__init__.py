@@ -6,6 +6,8 @@ from .comandas import (
     ComandaFecharView,
     ComandaHistoricoListView,
     ComandaLiberarMesaView,
+    ComandaPedidoPendenteConfirmarView,
+    ComandaPedidoPendenteRecusarView,
     ComandaRemoverComplementoView,
     ComandaRemoverItemView,
     ComandaSepararView,
@@ -20,10 +22,16 @@ from .mesas import (
     MesaListView,
     MesaMarcarLivreView,
     MesaMarcarReservadaView,
+    MesaQrCodeView,
     MesaToggleAtivoView,
     MesaUpdateView,
 )
-from .painel import PainelMesasView, api_painel_mesas
+from .painel import (
+    ChamadoAtenderView,
+    PainelMesasView,
+    api_chamados_pendentes,
+    api_painel_mesas,
+)
 from .reservas import (
     ReservaAtenderView,
     ReservaCancelarView,
@@ -32,6 +40,7 @@ from .reservas import (
 )
 
 __all__ = [
+    'ChamadoAtenderView',
     'ComandaAbrirView',
     'ComandaAdicionarComplementoView',
     'ComandaAdicionarItemView',
@@ -39,6 +48,8 @@ __all__ = [
     'ComandaFecharView',
     'ComandaHistoricoListView',
     'ComandaLiberarMesaView',
+    'ComandaPedidoPendenteConfirmarView',
+    'ComandaPedidoPendenteRecusarView',
     'ComandaRemoverComplementoView',
     'ComandaRemoverItemView',
     'ComandaSepararView',
@@ -51,6 +62,7 @@ __all__ = [
     'MesaListView',
     'MesaMarcarLivreView',
     'MesaMarcarReservadaView',
+    'MesaQrCodeView',
     'MesaToggleAtivoView',
     'MesaUpdateView',
     'PainelMesasView',
@@ -58,5 +70,6 @@ __all__ = [
     'ReservaCancelarView',
     'ReservaCreateView',
     'ReservaListView',
+    'api_chamados_pendentes',
     'api_painel_mesas',
 ]

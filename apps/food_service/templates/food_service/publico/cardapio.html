@@ -1,0 +1,282 @@
+{% extends "_base.html" %}
+{% load static %}
+{% block title %}Cardápio — Mesa {{ mesa.numero }}{% endblock %}
+
+{% block extra_head %}
+<style>
+  body { background: #faf7f2; color: #1c1917; }
+  .cp-header { position: sticky; top: 0; z-index: 20; background: #1c1c1e; color: #fff;
+               padding: 14px 16px; box-shadow: 0 4px 14px rgba(0,0,0,.15); }
+  .cp-wrap { max-width: 720px; margin: 0 auto; padding: 0 14px 100px; }
+  .cp-search { margin: 14px 0; }
+  .cp-search input { width: 100%; padding: 10px 14px; border-radius: 10px; border: 1px solid #e7e1d8;
+                      font-size: 15px; }
+  .cp-tabs { display: flex; gap: 8px; overflow-x: auto; padding: 4px 0 12px; }
+  .cp-tab { flex-shrink: 0; padding: 7px 14px; border-radius: 999px; font-size: 13px; font-weight: 600;
+            background: #efe9df; color: #57534e; cursor: pointer; white-space: nowrap; }
+  .cp-tab.ativa { background: #e8824a; color: #fff; }
+  .cp-strip { display: flex; gap: 10px; overflow-x: auto; padding: 4px 0 16px; }
+  .cp-strip-card { flex-shrink: 0; width: 130px; border-radius: 12px; overflow: hidden; background: #fff;
+                    box-shadow: 0 2px 8px rgba(0,0,0,.06); }
+  .cp-strip-card img { width: 100%; height: 80px; object-fit: cover; background: #eee; }
+  .cp-strip-card .nome { font-size: 12px; font-weight: 600; padding: 6px 8px 8px; line-height: 1.3; }
+  .cp-grid { display: grid; grid-template-columns: 1fr; gap: 12px; }
+  .cp-card { display: flex; gap: 12px; background: #fff; border-radius: 14px; padding: 10px;
+             box-shadow: 0 2px 10px rgba(0,0,0,.06); }
+  .cp-card img { width: 84px; height: 84px; border-radius: 10px; object-fit: cover; background: #eee; flex-shrink: 0; }
+  .cp-card-info { flex: 1; min-width: 0; }
+  .cp-card-nome { font-weight: 700; font-size: 14.5px; }
+  .cp-card-desc { font-size: 12.5px; color: #78716c; margin-top: 2px; line-height: 1.4; }
+  .cp-card-preco { font-weight: 700; margin-top: 6px; font-size: 14px; }
+  .cp-preco-riscado { text-decoration: line-through; color: #a8a29e; font-weight: 400; font-size: 12px; margin-right: 4px; }
+  .cp-badge { display: inline-block; font-size: 10px; font-weight: 700; padding: 2px 6px; border-radius: 999px;
+              background: #16a34a; color: #fff; margin-right: 4px; }
+  .cp-add-btn { margin-top: 6px; padding: 5px 12px; border-radius: 8px; background: #1c1c1e; color: #fff;
+                font-size: 12px; font-weight: 600; border: none; }
+  .cp-fab-bar { position: fixed; bottom: 0; left: 0; right: 0; z-index: 30; background: #fff;
+                box-shadow: 0 -6px 20px rgba(0,0,0,.1); padding: 10px 14px; display: flex; gap: 8px; }
+  .cp-fab-btn { flex: 1; padding: 11px; border-radius: 10px; font-size: 13px; font-weight: 700; border: none; }
+  .cp-drawer { position: fixed; inset: 0; z-index: 50; background: rgba(0,0,0,.5); }
+  .cp-drawer-panel { position: absolute; bottom: 0; left: 0; right: 0; max-height: 80vh; overflow-y: auto;
+                      background: #fff; border-radius: 18px 18px 0 0; padding: 18px; }
+  .cp-toast { position: fixed; top: 66px; left: 50%; transform: translateX(-50%); z-index: 60;
+              background: #1c1c1e; color: #fff; padding: 9px 16px; border-radius: 10px; font-size: 13px; }
+</style>
+{% endblock %}
+
+{% block full_content %}
+{{ comanda_itens|json_script:"comanda-itens-data" }}
+<div x-data="cardapioApp()" x-init="init()">
+
+  <div class="cp-header">
+    <div class="cp-wrap" style="padding:0; display:flex; align-items:center; justify-content:space-between;">
+      <div>
+        <div style="font-weight:700; font-size:16px;">{{ mesa.filial.nome_fantasia|default:mesa.filial.razao_social }}</div>
+        <div style="font-size:12px; opacity:.8;">Mesa {{ mesa.numero }}{% if mesa.nome %} — {{ mesa.nome }}{% endif %}</div>
+      </div>
+      <div style="position:relative;">
+        <button type="button" @click="carrinhoAberto = true" style="background:#e8824a; color:#fff; border:none; border-radius:10px; padding:8px 12px; font-size:13px; font-weight:700;">
+          🛒 <span x-text="totalItensCarrinho()"></span>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <div class="cp-wrap">
+
+    {% if comanda_para_avaliar %}
+    <div style="margin-top:14px; background:#fff7ed; border:1px solid #fed7aa; border-radius:12px; padding:12px;">
+      <p style="font-size:13px; margin-bottom:8px;">Sua conta foi fechada. Que tal avaliar o atendimento?</p>
+      <a href="{% url 'food_service_publico:avaliacao' mesa.qr_token comanda_para_avaliar.pk %}"
+         style="display:inline-block; background:#1c1c1e; color:#fff; padding:7px 14px; border-radius:8px; font-size:13px; font-weight:600;">
+        Avaliar atendimento
+      </a>
+    </div>
+    {% endif %}
+
+    <div class="cp-search">
+      <input type="text" x-model="busca" placeholder="Buscar no cardápio...">
+    </div>
+
+    <div class="cp-tabs">
+      <span class="cp-tab" :class="categoriaAtiva === '' ? 'ativa' : ''" @click="categoriaAtiva = ''">Todos</span>
+      {% regroup produtos by categoria.nome as produtos_por_categoria %}
+      {% for grupo in produtos_por_categoria %}
+      <span class="cp-tab" :class="categoriaAtiva === '{{ grupo.grouper|default:"Outros"|escapejs }}' ? 'ativa' : ''"
+            @click="categoriaAtiva = '{{ grupo.grouper|default:"Outros"|escapejs }}'">{{ grupo.grouper|default:"Outros" }}</span>
+      {% endfor %}
+    </div>
+
+    {% if promocoes %}
+    <h3 style="font-size:14px; font-weight:700; margin:6px 0;">Promoções</h3>
+    <div class="cp-strip">
+      {% for produto in promocoes %}
+      <div class="cp-strip-card">
+        <img src="{{ produto.foto_url }}" onerror="this.style.visibility='hidden'" alt="">
+        <div class="nome">{{ produto.descricao }}</div>
+        <div style="padding:0 8px 8px; font-size:11px;">
+          <span class="cp-preco-riscado">R$ {{ produto.preco_venda }}</span>
+          <strong>R$ {{ produto.preco_promocional_exibicao }}</strong>
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+    {% endif %}
+
+    {% if mais_vendidos %}
+    <h3 style="font-size:14px; font-weight:700; margin:6px 0;">Mais vendidos</h3>
+    <div class="cp-strip">
+      {% for produto in mais_vendidos %}
+      <div class="cp-strip-card">
+        <img src="{{ produto.foto_url }}" onerror="this.style.visibility='hidden'" alt="">
+        <div class="nome">{{ produto.descricao }}</div>
+      </div>
+      {% endfor %}
+    </div>
+    {% endif %}
+
+    <h3 style="font-size:14px; font-weight:700; margin:14px 0 8px;">Cardápio</h3>
+    <div class="cp-grid">
+      {% for produto in produtos %}
+      <div class="cp-card" data-nome="{{ produto.descricao|lower }}" data-categoria="{{ produto.categoria.nome|default:'Outros' }}"
+           x-show="passaFiltro('{{ produto.descricao|lower|escapejs }}', '{{ produto.categoria.nome|default:"Outros"|escapejs }}')">
+        <img src="{{ produto.foto_url }}" onerror="this.style.visibility='hidden'" alt="">
+        <div class="cp-card-info">
+          <div class="cp-card-nome">{{ produto.descricao }}</div>
+          <div class="cp-card-preco">R$ {{ produto.preco_venda }}</div>
+          <button type="button" class="cp-add-btn"
+                  @click="adicionar({ produto_id: {{ produto.pk }}, nome: '{{ produto.descricao|escapejs }}', preco: {{ produto.preco_venda|default:0 }} })">
+            Adicionar
+          </button>
+        </div>
+      </div>
+      {% empty %}
+      <p style="font-size:13px; color:#78716c;">Cardápio ainda sem produtos disponíveis.</p>
+      {% endfor %}
+    </div>
+
+  </div>
+
+  <div class="cp-fab-bar">
+    <button type="button" class="cp-fab-btn" style="background:#efe9df; color:#1c1c1e;" @click="chamarGarcom()">📣 Chamar garçom</button>
+    <button type="button" class="cp-fab-btn" style="background:#efe9df; color:#1c1c1e;" @click="pedirConta()">🧾 Pedir a conta</button>
+    <button type="button" class="cp-fab-btn" style="background:#e8824a; color:#fff;" @click="carrinhoAberto = true">
+      Ver pedido (<span x-text="totalItensCarrinho()"></span>)
+    </button>
+  </div>
+
+  <div class="cp-drawer" x-show="carrinhoAberto" x-cloak @click.self="carrinhoAberto = false">
+    <div class="cp-drawer-panel">
+      <h3 style="font-weight:700; font-size:16px; margin-bottom:10px;">Meu pedido</h3>
+
+      <template x-if="comandaItens.length">
+        <div style="margin-bottom:14px;">
+          <p style="font-size:12px; color:#78716c; margin-bottom:6px;">Já lançado na comanda:</p>
+          <template x-for="(it, idx) in comandaItens" :key="idx">
+            <div style="display:flex; justify-content:space-between; font-size:13px; padding:4px 0;">
+              <span x-text="it.quantidade + 'x ' + it.nome"></span>
+              <span x-text="'R$ ' + it.valor_total"></span>
+            </div>
+          </template>
+        </div>
+      </template>
+
+      <template x-if="!carrinho.length">
+        <p style="font-size:13px; color:#78716c;">Nenhum item novo no carrinho ainda.</p>
+      </template>
+
+      <template x-for="(it, idx) in carrinho" :key="idx">
+        <div style="display:flex; align-items:center; justify-content:space-between; padding:8px 0; border-bottom:1px solid #f1ede6;">
+          <div>
+            <div style="font-size:13.5px; font-weight:600" x-text="it.nome"></div>
+            <div style="font-size:12px; color:#78716c;" x-text="'R$ ' + it.preco.toFixed(2)"></div>
+          </div>
+          <div style="display:flex; align-items:center; gap:8px;">
+            <button type="button" @click="it.quantidade > 1 ? it.quantidade-- : carrinho.splice(idx,1)" style="width:26px;">−</button>
+            <span x-text="it.quantidade"></span>
+            <button type="button" @click="it.quantidade++" style="width:26px;">+</button>
+          </div>
+        </div>
+      </template>
+
+      <p style="font-size:13px; margin-top:10px;" x-show="erro" x-text="erro" style="color:#dc2626;"></p>
+
+      <div style="display:flex; gap:8px; margin-top:14px;">
+        <button type="button" class="cp-fab-btn" style="background:#efe9df; color:#1c1c1e;" @click="carrinhoAberto = false">Fechar</button>
+        <button type="button" class="cp-fab-btn" style="background:#e8824a; color:#fff;" :disabled="!carrinho.length || enviando"
+                @click="enviarPedido()" x-text="enviando ? 'Enviando...' : 'Enviar pedido'"></button>
+      </div>
+    </div>
+  </div>
+
+  <div class="cp-toast" x-show="toast" x-cloak x-text="toast"></div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+{{ block.super }}
+<script>
+function cardapioApp() {
+  return {
+    busca: '',
+    categoriaAtiva: '',
+    carrinho: [],
+    carrinhoAberto: false,
+    enviando: false,
+    erro: '',
+    toast: '',
+    comandaItens: [],
+
+    init() {
+      const el = document.getElementById('comanda-itens-data');
+      this.comandaItens = el ? JSON.parse(el.textContent || '[]') : [];
+    },
+
+    passaFiltro(nome, categoria) {
+      const buscaOk = !this.busca || nome.includes(this.busca.toLowerCase());
+      const categoriaOk = !this.categoriaAtiva || categoria === this.categoriaAtiva;
+      return buscaOk && categoriaOk;
+    },
+
+    adicionar(produto) {
+      const existente = this.carrinho.find(i => i.produto_id === produto.produto_id);
+      if (existente) { existente.quantidade++; return; }
+      this.carrinho.push({ ...produto, quantidade: 1 });
+      this._mostrarToast('Adicionado ao pedido');
+    },
+
+    totalItensCarrinho() {
+      return this.carrinho.reduce((s, i) => s + i.quantidade, 0);
+    },
+
+    _mostrarToast(msg) {
+      this.toast = msg;
+      setTimeout(() => { this.toast = ''; }, 1800);
+    },
+
+    _csrf() {
+      const el = document.querySelector('input[name=csrfmiddlewaretoken]');
+      return el ? el.value : '';
+    },
+
+    async enviarPedido() {
+      this.erro = '';
+      this.enviando = true;
+      try {
+        const resp = await fetch(`{% url 'food_service_publico:pedido-criar' mesa.qr_token %}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'X-CSRFToken': this._csrf() },
+          body: JSON.stringify({
+            itens: this.carrinho.map(i => ({ produto_id: i.produto_id, quantidade: i.quantidade })),
+          }),
+        });
+        const d = await resp.json();
+        if (!resp.ok || !d.ok) throw new Error(d.erro || 'Não foi possível enviar o pedido.');
+        this.carrinho = [];
+        this.carrinhoAberto = false;
+        this._mostrarToast('Pedido enviado! O garçom vai confirmar em instantes.');
+      } catch (e) {
+        this.erro = e.message;
+      } finally {
+        this.enviando = false;
+      }
+    },
+
+    async chamarGarcom() {
+      await fetch(`{% url 'food_service_publico:chamar-garcom' mesa.qr_token %}`, {
+        method: 'POST', headers: { 'X-CSRFToken': this._csrf() },
+      });
+      this._mostrarToast('Garçom chamado!');
+    },
+
+    async pedirConta() {
+      await fetch(`{% url 'food_service_publico:pedir-conta' mesa.qr_token %}`, {
+        method: 'POST', headers: { 'X-CSRFToken': this._csrf() },
+      });
+      this._mostrarToast('Conta solicitada!');
+    },
+  };
+}
+</script>
+<form style="display:none;">{% csrf_token %}</form>
+{% endblock %}

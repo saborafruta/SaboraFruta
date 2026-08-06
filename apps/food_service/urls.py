@@ -7,10 +7,13 @@ app_name = 'food_service'
 urlpatterns = [
     path('', views.PainelMesasView.as_view(), name='painel'),
     path('api/painel/', views.api_painel_mesas, name='api-painel'),
+    path('api/chamados/', views.api_chamados_pendentes, name='api-chamados'),
+    path('chamados/<int:pk>/atender/', views.ChamadoAtenderView.as_view(), name='chamado-atender'),
 
     path('mesas/', views.MesaListView.as_view(), name='mesa-list'),
     path('mesas/nova/', views.MesaCreateView.as_view(), name='mesa-create'),
     path('mesas/<int:pk>/', views.MesaUpdateView.as_view(), name='mesa-update'),
+    path('mesas/<int:pk>/qr-code/', views.MesaQrCodeView.as_view(), name='mesa-qr-code'),
     path('mesas/<int:pk>/toggle-ativo/', views.MesaToggleAtivoView.as_view(), name='mesa-toggle-ativo'),
     path('mesas/<int:pk>/marcar-reservada/', views.MesaMarcarReservadaView.as_view(), name='mesa-marcar-reservada'),
     path('mesas/<int:pk>/marcar-livre/', views.MesaMarcarLivreView.as_view(), name='mesa-marcar-livre'),
@@ -30,6 +33,8 @@ urlpatterns = [
     path('comandas/<int:pk>/unir-mesas/', views.ComandaUnirMesasView.as_view(), name='comanda-unir-mesas'),
     path('comandas/<int:pk>/liberar-mesa/', views.ComandaLiberarMesaView.as_view(), name='comanda-liberar-mesa'),
     path('comandas/<int:pk>/fechar/', views.ComandaFecharView.as_view(), name='comanda-fechar'),
+    path('comandas/<int:pk>/pedidos-pendentes/<int:pedido_pk>/confirmar/', views.ComandaPedidoPendenteConfirmarView.as_view(), name='comanda-pedido-pendente-confirmar'),
+    path('comandas/<int:pk>/pedidos-pendentes/<int:pedido_pk>/recusar/', views.ComandaPedidoPendenteRecusarView.as_view(), name='comanda-pedido-pendente-recusar'),
 
     path('reservas/', views.ReservaListView.as_view(), name='reserva-list'),
     path('reservas/nova/', views.ReservaCreateView.as_view(), name='reserva-create'),

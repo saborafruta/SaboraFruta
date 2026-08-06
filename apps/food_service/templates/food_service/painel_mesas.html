@@ -14,10 +14,14 @@
   .fs-status { font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.04em;
                margin-top:8px; }
   .fs-info { font-size:11.5px; margin-top:6px; line-height:1.5; opacity:.92; }
+  .fs-badge { position:absolute; top:8px; right:8px; background:#fff; color:#b45309; font-size:10px;
+              font-weight:800; border-radius:999px; padding:2px 6px; }
+  .fs-card { position:relative; }
 </style>
 {% endblock %}
 
 {% block content %}
+{% csrf_token %}
 <div class="space-y-4" x-data="painelMesas()" x-init="iniciar()">
 
   <div class="flex flex-wrap items-center gap-x-5 gap-y-1 text-sm">
@@ -29,6 +33,18 @@
       Atualização automática (10s)
     </label>
     <span class="ml-auto text-xs" :style="temaClaro ? 'color:#94a3b8;' : 'color:#64748b;'" x-text="status"></span>
+  </div>
+
+  <div class="card" x-show="chamados.length" x-cloak style="border:1px solid #f59e0b;">
+    <h3 class="text-sm font-semibold mb-2">Chamados dos clientes</h3>
+    <div class="space-y-2">
+      <template x-for="c in chamados" :key="c.id">
+        <div class="flex items-center justify-between text-sm">
+          <span>Mesa <strong x-text="c.mesa_numero"></strong> — <span x-text="c.tipo_display"></span> (há <span x-text="c.ha_minutos"></span> min)</span>
+          <button type="button" class="text-xs font-semibold" :style="temaClaro ? 'color:#2563eb;' : 'color:#60a5fa;'" @click="atenderChamado(c.id)">Marcar atendido</button>
+        </div>
+      </template>
+    </div>
   </div>
 
   <div class="flex flex-wrap gap-3 text-xs">
@@ -44,6 +60,7 @@
     <template x-for="m in mesas" :key="m.id">
       <div class="fs-card" :style="'background:' + corDeFundo(m.status) + '; color:' + corDeTexto(m.status)"
            @click="abrirMesa(m)">
+        <span class="fs-badge" x-show="m.pedidos_pendentes" x-text="m.pedidos_pendentes + ' novo(s)'"></span>
         <div class="fs-numero" x-text="m.numero"></div>
         <div class="fs-nome" x-show="m.nome" x-text="m.nome"></div>
         <div class="fs-status" x-text="rotulo(m.status)"></div>
@@ -73,6 +90,7 @@
 function painelMesas() {
   return {
     mesas: [],
+    chamados: [],
     autoAtualizar: true,
     status: '',
     _timer: null,
@@ -101,6 +119,24 @@ function painelMesas() {
       } catch (e) {
         this.status = 'falha ao atualizar: ' + e.message;
       }
+      try {
+        const resp = await fetch(`{% url 'food_service:api-chamados' %}`, { headers: { 'Accept': 'application/json' } });
+        const d = await resp.json();
+        if (resp.ok) this.chamados = d.chamados || [];
+      } catch (e) { /* silencioso -- não sobrescreve o status principal */ }
+    },
+
+    _csrf() {
+      const el = document.querySelector('input[name=csrfmiddlewaretoken]');
+      return el ? el.value : '';
+    },
+
+    async atenderChamado(id) {
+      await fetch(`/food-service/chamados/${id}/atender/`, {
+        method: 'POST',
+        headers: { 'X-CSRFToken': this._csrf() },
+      });
+      this.atualizar();
     },
 
     rotulo(status) {
