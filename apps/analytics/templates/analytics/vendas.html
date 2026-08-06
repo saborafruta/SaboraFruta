@@ -1097,11 +1097,10 @@ body.a4 td{font-size:12px;padding:6px 0}
 body.a4 .muted{font-size:10px}
 body.a4 .total{font-size:17px}
 body.a4 .footer{font-size:10px}
-@page{size:A4 portrait;margin:12mm}
 @media print{
 html,body{width:100%;background:#fff}
 .actions{display:none}
-.receipt{width:86mm;min-height:0;margin:0 auto;padding:4mm 5mm;box-shadow:none;font-size:10.5px;line-height:1.35}
+.receipt{width:80mm;min-height:0;margin:0 auto;padding:2mm 3mm;box-shadow:none;font-size:10.5px;line-height:1.35}
 .logo{margin-bottom:5px}.logo img{max-height:56px;max-width:190px}
 h1{font-size:14px}.sub,.muted{font-size:9px}.sub{margin:1.5px 0}.sep{margin:6px 0}.line{margin:3px 0}
 .receipt td{padding:4px 0}.total{font-size:14px}
@@ -1119,7 +1118,9 @@ body.a4 td{font-size:11px;padding:5px 0}
 body.a4 .total{font-size:15px}
 body.a4 .footer{font-size:9px}
 }
-</style></head><body>
+</style>
+<style id="pagesize">@page{size:80mm auto;margin:2mm 3mm}</style>
+</head><body>
 <div class="actions">
   <button id="btn-termica" onclick="imprimirComo('termica')">Imprimir térmica (80mm)</button>
   <button id="btn-a4" onclick="imprimirComo('a4')">Imprimir em A4</button>
@@ -1155,6 +1156,9 @@ function imprimirComo(modo) {
   document.body.classList.toggle('a4', modo === 'a4');
   document.getElementById('btn-termica').classList.toggle('ativo', modo !== 'a4');
   document.getElementById('btn-a4').classList.toggle('ativo', modo === 'a4');
+  document.getElementById('pagesize').textContent = modo === 'a4'
+    ? '@page{size:A4 portrait;margin:12mm}'
+    : '@page{size:80mm auto;margin:2mm 3mm}';
   window.print();
 }
 <\/script>
