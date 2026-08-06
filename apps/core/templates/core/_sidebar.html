@@ -278,15 +278,16 @@
   secoes: (function(){
     try {
       var raw = localStorage.getItem('sidebar-secoes');
-      var s = raw ? JSON.parse(raw) : {cadastros:true, operacoes:true, financeiro:true, logistica:true, avancado:true};
+      var s = raw ? JSON.parse(raw) : {cadastros:true, operacoes:true, financeiro:true, logistica:true, avancado:true, food_service:true};
       {% if '/cadastros/' in request.path or '/produtos/' in request.path %}s.cadastros = true;{% endif %}
       {% if '/estoque/' in request.path or '/compras/' in request.path or '/producao/' in request.path or '/lotes/' in request.path %}s.operacoes = true;{% endif %}
       {% if '/financeiro/' in request.path %}s.financeiro = true;{% endif %}
       {% if '/logistica/' in request.path %}s.logistica = true;{% endif %}
       {% if '/pdv/' in request.path or '/fiscal/' in request.path or '/qualidade/' in request.path or '/analytics/' in request.path %}s.avancado = true;{% endif %}
+      {% if '/food-service/' in request.path %}s.food_service = true;{% endif %}
       return s;
     } catch(e) {
-      return {cadastros:true, operacoes:true, financeiro:true, logistica:true, avancado:true};
+      return {cadastros:true, operacoes:true, financeiro:true, logistica:true, avancado:true, food_service:true};
     }
   })(),
   toggleSecao: function(nome) {
@@ -1027,6 +1028,37 @@
         </a>
       {% endif %}
       </div><!-- /avancado -->
+
+      <button type="button" @click="!collapsed && toggleSecao('food_service')" class="w-full flex items-center justify-between pt-4 pb-1 px-3" x-show="!collapsed" style="background:none;border:none;cursor:pointer;">
+        <span :class="temaClaro ? 'sidebar-section-label' : 'text-xs font-medium uppercase tracking-widest'" :style="temaClaro ? '' : 'color:#f8fafc; letter-spacing:0.1em;'">Food Service</span>
+        <svg class="w-3 h-3 flex-shrink-0 transition-transform duration-200" :class="secoes.food_service ? '' : '-rotate-90'" :style="temaClaro ? 'color:#9ca3af;' : 'color:#555570;'" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M19 9l-7 7-7-7"/></svg>
+      </button>
+      <div class="my-2 mx-3" x-show="collapsed" :style="temaClaro ? 'border-top:1px solid #e5e5e5;' : 'border-top:1px solid #2a2a2e;'"></div>
+      <div x-show="collapsed || secoes.food_service">
+      <a href="{% url 'food_service:painel' %}"
+         class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-all duration-150"
+         :class="collapsed ? 'justify-center' : ''"
+         :style="{% if request.path == '/food-service/' %}temaClaro ? 'background:#dbeafe; color:#1d4ed8; font-weight:600;' : 'background:#1e2a3a; color:#f8fafc;'{% else %}temaClaro ? 'color:#6b7280;' : 'color:#f8fafc;'{% endif %}"
+         {% if request.path != '/food-service/' %}onmouseover="this.style.background=temaClaro?'#eff6ff':'#242426'; this.style.color=temaClaro?'#1d4ed8':'#d4d4d4';" onmouseout="this.style.background='transparent'; this.style.color=temaClaro?'#6b7280':'#f8fafc'; this.style.fontWeight='';"{% endif %}
+         title="Painel de Mesas">
+        <svg class="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M3 10h18M3 10a2 2 0 002 2h14a2 2 0 002-2M3 10l1.5-4.5A2 2 0 016.4 4h11.2a2 2 0 011.9 1.5L21 10M8 12v8m8-8v8M6 20h12"/>
+        </svg>
+        <span x-show="!collapsed">Painel de Mesas</span>
+      </a>
+
+      <a href="{% url 'food_service:mesa-list' %}"
+         class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-all duration-150"
+         :class="collapsed ? 'justify-center' : ''"
+         :style="{% if '/food-service/mesas/' in request.path %}temaClaro ? 'background:#dbeafe; color:#1d4ed8; font-weight:600;' : 'background:#1e2a3a; color:#f8fafc;'{% else %}temaClaro ? 'color:#6b7280;' : 'color:#f8fafc;'{% endif %}"
+         {% if '/food-service/mesas/' not in request.path %}onmouseover="this.style.background=temaClaro?'#eff6ff':'#242426'; this.style.color=temaClaro?'#1d4ed8':'#d4d4d4';" onmouseout="this.style.background='transparent'; this.style.color=temaClaro?'#6b7280':'#f8fafc'; this.style.fontWeight='';"{% endif %}
+         title="Mesas">
+        <svg class="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01"/>
+        </svg>
+        <span x-show="!collapsed">Mesas</span>
+      </a>
+      </div><!-- /food_service -->
     </nav>
 
     <!-- Footer sidebar desktop -->
@@ -1565,6 +1597,32 @@
         Histórico de Vendas
       </a>
       </div><!-- /avancado -->
+
+      <button type="button" @click="toggleSecao('food_service')" class="w-full flex items-center justify-between pt-4 pb-1 px-3" style="background:none;border:none;cursor:pointer;">
+        <span :class="temaClaro ? 'sidebar-section-label' : 'text-xs font-medium uppercase tracking-widest'" :style="temaClaro ? '' : 'color:#f8fafc; letter-spacing:0.1em;'">Food Service</span>
+        <svg class="w-3 h-3 flex-shrink-0 transition-transform duration-200" :class="secoes.food_service ? '' : '-rotate-90'" :style="temaClaro ? 'color:#9ca3af;' : 'color:#555570;'" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M19 9l-7 7-7-7"/></svg>
+      </button>
+      <div x-show="secoes.food_service">
+      <a href="{% url 'food_service:painel' %}" @click="mobileOpen = false"
+         class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-all duration-150"
+         :style="{% if request.path == '/food-service/' %}temaClaro ? 'background:#dbeafe; color:#1d4ed8; font-weight:600;' : 'background:#1e2a3a; color:#f8fafc;'{% else %}temaClaro ? 'color:#6b7280;' : 'color:#f8fafc;'{% endif %}"
+         {% if request.path != '/food-service/' %}onmouseover="this.style.background=temaClaro?'#eff6ff':'#242426'; this.style.color=temaClaro?'#1d4ed8':'#d4d4d4';" onmouseout="this.style.background='transparent'; this.style.color=temaClaro?'#6b7280':'#f8fafc'; this.style.fontWeight='';"{% endif %}>
+        <svg class="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M3 10h18M3 10a2 2 0 002 2h14a2 2 0 002-2M3 10l1.5-4.5A2 2 0 016.4 4h11.2a2 2 0 011.9 1.5L21 10M8 12v8m8-8v8M6 20h12"/>
+        </svg>
+        Painel de Mesas
+      </a>
+
+      <a href="{% url 'food_service:mesa-list' %}" @click="mobileOpen = false"
+         class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-all duration-150"
+         :style="{% if '/food-service/mesas/' in request.path %}temaClaro ? 'background:#dbeafe; color:#1d4ed8; font-weight:600;' : 'background:#1e2a3a; color:#f8fafc;'{% else %}temaClaro ? 'color:#6b7280;' : 'color:#f8fafc;'{% endif %}"
+         {% if '/food-service/mesas/' not in request.path %}onmouseover="this.style.background=temaClaro?'#eff6ff':'#242426'; this.style.color=temaClaro?'#1d4ed8':'#d4d4d4';" onmouseout="this.style.background='transparent'; this.style.color=temaClaro?'#6b7280':'#f8fafc'; this.style.fontWeight='';"{% endif %}>
+        <svg class="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01"/>
+        </svg>
+        Mesas
+      </a>
+      </div><!-- /food_service -->
     </nav>
 
     <div class="p-2" :style="temaClaro ? 'border-top:1px solid #e5e5e5;' : 'border-top:1px solid #2a2a2e;'">

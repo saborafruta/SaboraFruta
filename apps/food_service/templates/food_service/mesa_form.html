@@ -1,0 +1,46 @@
+{% extends "_base.html" %}
+{% block title %}{{ title }}{% endblock %}
+{% block page_title %}{{ title }}{% endblock %}
+
+{% block content %}
+<div class="max-w-md mx-auto space-y-5">
+  <p class="text-sm" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+    <a href="{% url 'food_service:mesa-list' %}" :style="temaClaro ? 'color:#3b82f6;' : 'color:#60a5fa;'">Mesas</a>
+    <span class="mx-1">›</span> {{ title }}
+  </p>
+
+  <form method="post" class="card space-y-4">
+    {% csrf_token %}
+
+    <div>
+      <label class="block text-xs font-semibold mb-1">Número *</label>
+      <input type="number" name="numero" required class="w-full" value="{{ mesa.numero|default:'' }}">
+    </div>
+
+    <div>
+      <label class="block text-xs font-semibold mb-1">Nome (opcional)</label>
+      <input type="text" name="nome" class="w-full" value="{{ mesa.nome|default:'' }}" placeholder="Ex.: Varanda 1">
+    </div>
+
+    <div>
+      <label class="block text-xs font-semibold mb-1">Capacidade</label>
+      <input type="number" name="capacidade" min="1" class="w-full" value="{{ mesa.capacidade|default:4 }}">
+    </div>
+
+    <div>
+      <label class="block text-xs font-semibold mb-1">Setor</label>
+      <input type="text" name="setor" class="w-full" value="{{ mesa.setor|default:'' }}" placeholder="Ex.: Salão, Varanda, Área externa">
+    </div>
+
+    <div>
+      <label class="block text-xs font-semibold mb-1">Observações</label>
+      <textarea name="observacoes" rows="2" class="w-full">{{ mesa.observacoes|default:'' }}</textarea>
+    </div>
+
+    <div class="flex justify-end gap-2">
+      <a href="{{ cancel_url }}" class="btn-secondary">Cancelar</a>
+      <button type="submit" class="btn-primary">Salvar</button>
+    </div>
+  </form>
+</div>
+{% endblock %}

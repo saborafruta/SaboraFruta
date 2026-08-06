@@ -1,0 +1,46 @@
+{% extends "_base.html" %}
+
+{% block title %}{{ title }}{% endblock %}
+{% block page_title %}{{ title }}{% endblock %}
+
+{% block content %}
+<div class="max-w-md mx-auto space-y-5">
+  <p class="text-sm" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+    <a href="{% url 'food_service:painel' %}" :style="temaClaro ? 'color:#3b82f6;' : 'color:#60a5fa;'">Painel de Mesas</a>
+    <span class="mx-1">›</span> Abrir comanda
+  </p>
+
+  <form method="post" action="{% url 'food_service:comanda-abrir' %}" class="card space-y-4">
+    {% csrf_token %}
+    {% for mesa in mesas_selecionadas %}
+      <input type="hidden" name="mesa_id" value="{{ mesa.pk }}">
+    {% endfor %}
+
+    {% if mesas_selecionadas %}
+      <p class="text-sm">
+        Mesa{{ mesas_selecionadas|length|pluralize }}:
+        <strong>{% for mesa in mesas_selecionadas %}{{ mesa }}{% if not forloop.last %}, {% endif %}{% endfor %}</strong>
+      </p>
+    {% else %}
+      <p class="text-sm" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+        Comanda avulsa (sem mesa) — balcão ou individual.
+      </p>
+    {% endif %}
+
+    <div>
+      <label class="block text-xs font-semibold mb-1">Nome do ocupante</label>
+      <input type="text" name="nome_ocupante" class="w-full" placeholder="Ex.: João (sem cadastro)">
+    </div>
+
+    <div>
+      <label class="block text-xs font-semibold mb-1">Quantidade de pessoas</label>
+      <input type="number" name="quantidade_pessoas" value="1" min="1" class="w-full">
+    </div>
+
+    <div class="flex justify-end gap-2">
+      <a href="{% url 'food_service:painel' %}" class="btn-secondary">Cancelar</a>
+      <button type="submit" class="btn-primary">Abrir comanda</button>
+    </div>
+  </form>
+</div>
+{% endblock %}

@@ -1,0 +1,128 @@
+{% extends "_base.html" %}
+
+{% block title %}{{ title }}{% endblock %}
+{% block page_title %}{{ title }}{% endblock %}
+
+{% block extra_head %}
+<style>
+  .fs-grid { display:grid; grid-template-columns:repeat(auto-fill, minmax(170px, 1fr)); gap:14px; }
+  .fs-card { border-radius:14px; padding:14px; cursor:pointer; transition:transform .1s;
+             box-shadow:0 4px 14px rgba(0,0,0,.12); }
+  .fs-card:hover { transform:translateY(-2px); }
+  .fs-numero { font-size:22px; font-weight:800; line-height:1; }
+  .fs-nome { font-size:12px; opacity:.85; margin-top:2px; }
+  .fs-status { font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.04em;
+               margin-top:8px; }
+  .fs-info { font-size:11.5px; margin-top:6px; line-height:1.5; opacity:.92; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="space-y-4" x-data="painelMesas()" x-init="iniciar()">
+
+  <div class="flex flex-wrap items-center gap-x-5 gap-y-1 text-sm">
+    <a href="{% url 'food_service:mesa-list' %}" class="btn-secondary" style="font-size:12px;">Cadastro de mesas</a>
+    <label class="flex items-center gap-2 text-xs" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+      <input type="checkbox" x-model="autoAtualizar">
+      Atualização automática (10s)
+    </label>
+    <span class="ml-auto text-xs" :style="temaClaro ? 'color:#94a3b8;' : 'color:#64748b;'" x-text="status"></span>
+  </div>
+
+  <div class="flex flex-wrap gap-3 text-xs">
+    <template x-for="s in legenda" :key="s.status">
+      <span class="flex items-center gap-1.5">
+        <span style="width:10px;height:10px;border-radius:50%;display:inline-block;" :style="'background:' + s.cor"></span>
+        <span x-text="s.label"></span>
+      </span>
+    </template>
+  </div>
+
+  <div class="fs-grid">
+    <template x-for="m in mesas" :key="m.id">
+      <div class="fs-card" :style="'background:' + corDeFundo(m.status) + '; color:' + corDeTexto(m.status)"
+           @click="abrirMesa(m)">
+        <div class="fs-numero" x-text="m.numero"></div>
+        <div class="fs-nome" x-show="m.nome" x-text="m.nome"></div>
+        <div class="fs-status" x-text="rotulo(m.status)"></div>
+        <template x-if="m.comanda_id">
+          <div class="fs-info">
+            <div x-show="m.garcom">Garçom: <strong x-text="m.garcom"></strong></div>
+            <div x-show="m.cliente">Cliente: <strong x-text="m.cliente"></strong></div>
+            <div>Pessoas: <strong x-text="m.quantidade_pessoas"></strong></div>
+            <div>Aberta há <strong x-text="m.aberta_ha_minutos"></strong> min</div>
+            <div>Consumo: <strong x-text="'R$ ' + m.valor_consumido"></strong></div>
+          </div>
+        </template>
+      </div>
+    </template>
+
+    <p x-show="!mesas.length" x-cloak class="text-sm" style="padding:14px; opacity:.75;">
+      Nenhuma mesa cadastrada ainda. <a href="{% url 'food_service:mesa-create' %}"
+         :style="temaClaro ? 'color:#1d4ed8;' : 'color:#93c5fd;'">Cadastrar a primeira mesa</a>.
+    </p>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+{{ block.super }}
+<script>
+function painelMesas() {
+  return {
+    mesas: [],
+    autoAtualizar: true,
+    status: '',
+    _timer: null,
+    legenda: [
+      { status: 'livre', label: 'Livre', cor: '#16a34a' },
+      { status: 'ocupada', label: 'Ocupada', cor: '#dc2626' },
+      { status: 'reservada', label: 'Reservada', cor: '#7c3aed' },
+      { status: 'aguardando_limpeza', label: 'Aguardando limpeza', cor: '#d97706' },
+      { status: 'fechando_conta', label: 'Fechando conta', cor: '#2563eb' },
+    ],
+
+    iniciar() {
+      this.atualizar();
+      this._timer = setInterval(() => {
+        if (this.autoAtualizar) this.atualizar();
+      }, 10000);
+    },
+
+    async atualizar() {
+      try {
+        const resp = await fetch(`{% url 'food_service:api-painel' %}`, { headers: { 'Accept': 'application/json' } });
+        const d = await resp.json();
+        if (!resp.ok) throw new Error(d.erro || ('HTTP ' + resp.status));
+        this.mesas = d.mesas || [];
+        this.status = 'atualizado às ' + new Date().toLocaleTimeString('pt-BR');
+      } catch (e) {
+        this.status = 'falha ao atualizar: ' + e.message;
+      }
+    },
+
+    rotulo(status) {
+      const item = this.legenda.find(s => s.status === status);
+      return item ? item.label : status;
+    },
+
+    corDeFundo(status) {
+      const item = this.legenda.find(s => s.status === status);
+      return item ? item.cor : '#94a3b8';
+    },
+
+    corDeTexto(status) {
+      return '#ffffff';
+    },
+
+    abrirMesa(m) {
+      if (m.comanda_id) {
+        window.location.href = `/food-service/comandas/${m.comanda_id}/`;
+      } else {
+        window.location.href = `/food-service/comandas/abrir/?mesa_id=${m.id}`;
+      }
+    },
+  };
+}
+</script>
+{% endblock %}

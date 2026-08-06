@@ -73,6 +73,7 @@ class Permissao(models.Model):
         CASHBACK = 'cashback', 'Cashback'
         CRM = 'crm', 'CRM'
         MAPAS = 'mapas', 'Mapas e Geolocalização'
+        FOOD_SERVICE = 'food_service', 'Food Service'
 
     perfil = models.ForeignKey(
         PerfilAcesso, on_delete=models.CASCADE, related_name='permissoes',
