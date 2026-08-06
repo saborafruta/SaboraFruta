@@ -3,6 +3,8 @@ from .comandas import (
     ComandaAdicionarItemView,
     ComandaDetailView,
     ComandaFecharView,
+    ComandaHistoricoListView,
+    ComandaLiberarMesaView,
     ComandaRemoverItemView,
     ComandaTransferirItemView,
     ComandaTransferirMesaView,
@@ -13,16 +15,26 @@ from .mesas import (
     MesaCreateView,
     MesaDeleteView,
     MesaListView,
+    MesaMarcarLivreView,
+    MesaMarcarReservadaView,
     MesaToggleAtivoView,
     MesaUpdateView,
 )
 from .painel import PainelMesasView, api_painel_mesas
+from .reservas import (
+    ReservaAtenderView,
+    ReservaCancelarView,
+    ReservaCreateView,
+    ReservaListView,
+)
 
 __all__ = [
     'ComandaAbrirView',
     'ComandaAdicionarItemView',
     'ComandaDetailView',
     'ComandaFecharView',
+    'ComandaHistoricoListView',
+    'ComandaLiberarMesaView',
     'ComandaRemoverItemView',
     'ComandaTransferirItemView',
     'ComandaTransferirMesaView',
@@ -31,8 +43,14 @@ __all__ = [
     'MesaCreateView',
     'MesaDeleteView',
     'MesaListView',
+    'MesaMarcarLivreView',
+    'MesaMarcarReservadaView',
     'MesaToggleAtivoView',
     'MesaUpdateView',
     'PainelMesasView',
+    'ReservaAtenderView',
+    'ReservaCancelarView',
+    'ReservaCreateView',
+    'ReservaListView',
     'api_painel_mesas',
 ]

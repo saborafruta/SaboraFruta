@@ -39,8 +39,20 @@
           <td class="px-4 py-3">{{ mesa.get_status_display }}</td>
           <td class="px-4 py-3">{% if mesa.ativo %}<span class="soft-pill is-green">Ativa</span>{% else %}<span class="soft-pill is-amber">Inativa</span>{% endif %}</td>
           <td class="px-4 py-3 text-right">
-            <div class="inline-flex gap-2">
+            <div class="inline-flex gap-2 flex-wrap justify-end">
               <a href="{% url 'food_service:mesa-update' mesa.pk %}" class="text-xs font-semibold" :style="temaClaro ? 'color:#2563eb;' : 'color:#60a5fa;'">Editar</a>
+              {% if mesa.status == "livre" %}
+              <form method="post" action="{% url 'food_service:mesa-marcar-reservada' mesa.pk %}" style="display:inline;">
+                {% csrf_token %}
+                <button class="text-xs font-semibold" style="color:#7c3aed;">Reservar</button>
+              </form>
+              {% elif mesa.status == "reservada" or mesa.status == "aguardando_limpeza" %}
+              <form method="post" action="{% url 'food_service:mesa-marcar-livre' mesa.pk %}" style="display:inline;">
+                {% csrf_token %}
+                <button class="text-xs font-semibold" style="color:#16a34a;">Marcar como livre</button>
+              </form>
+              {% endif %}
+              <a href="{% url 'food_service:comanda-historico' %}?mesa_id={{ mesa.pk }}" class="text-xs font-semibold" :style="temaClaro ? 'color:#6b7280;' : 'color:#94a3b8;'">Histórico</a>
               <form method="post" action="{% url 'food_service:mesa-toggle-ativo' mesa.pk %}" style="display:inline;">
                 {% csrf_token %}
                 <button class="text-xs font-semibold" :style="temaClaro ? 'color:#6b7280;' : 'color:#94a3b8;'">{% if mesa.ativo %}Desativar{% else %}Ativar{% endif %}</button>

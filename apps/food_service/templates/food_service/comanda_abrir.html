@@ -29,12 +29,12 @@
 
     <div>
       <label class="block text-xs font-semibold mb-1">Nome do ocupante</label>
-      <input type="text" name="nome_ocupante" class="w-full" placeholder="Ex.: João (sem cadastro)">
+      <input type="text" name="nome_ocupante" class="w-full" value="{{ nome_ocupante_sugerido }}" placeholder="Ex.: João (sem cadastro)">
     </div>
 
     <div>
       <label class="block text-xs font-semibold mb-1">Quantidade de pessoas</label>
-      <input type="number" name="quantidade_pessoas" value="1" min="1" class="w-full">
+      <input type="number" name="quantidade_pessoas" value="{{ quantidade_pessoas_sugerida }}" min="1" class="w-full">
     </div>
 
     <div class="flex justify-end gap-2">

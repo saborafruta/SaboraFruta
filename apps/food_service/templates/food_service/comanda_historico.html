@@ -1,0 +1,95 @@
+{% extends "_base.html" %}
+{% block title %}{{ title }}{% endblock %}
+{% block page_title %}{{ title }}{% endblock %}
+
+{% block content %}
+<div class="max-w-5xl mx-auto space-y-5">
+
+  <div>
+    <p class="text-sm mb-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+      <a href="{% url 'food_service:painel' %}" :style="temaClaro ? 'color:#3b82f6;' : 'color:#60a5fa;'">Painel de Mesas</a>
+      <span class="mx-1">›</span> Histórico
+    </p>
+    <h2 class="text-2xl font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
+      Histórico de Pedidos e Atendimentos
+      {% if mesa_selecionada %}<span class="text-base font-normal">— {{ mesa_selecionada }}</span>{% endif %}
+    </h2>
+  </div>
+
+  <form method="get" class="card flex flex-wrap gap-3 items-end">
+    <div>
+      <label class="block text-xs font-semibold mb-1">Mesa</label>
+      <select name="mesa_id">
+        <option value="">Todas</option>
+        {% for mesa in mesas %}
+        <option value="{{ mesa.pk }}" {% if mesa_selecionada.pk == mesa.pk %}selected{% endif %}>{{ mesa }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div>
+      <label class="block text-xs font-semibold mb-1">De</label>
+      <input type="date" name="data_inicio" value="{{ request.GET.data_inicio }}">
+    </div>
+    <div>
+      <label class="block text-xs font-semibold mb-1">Até</label>
+      <input type="date" name="data_fim" value="{{ request.GET.data_fim }}">
+    </div>
+    <button type="submit" class="btn-secondary">Filtrar</button>
+    <a href="{% url 'food_service:comanda-historico' %}" class="text-xs font-semibold" :style="temaClaro ? 'color:#6b7280;' : 'color:#94a3b8;'">Limpar filtros</a>
+  </form>
+
+  <div class="card overflow-hidden">
+    <table class="w-full text-sm">
+      <thead>
+        <tr class="text-left text-xs uppercase tracking-wide" :style="temaClaro ? 'color:#6b7280;background:#f9fafb;' : 'color:#9ca3af;background:#1e1e20;'">
+          <th class="px-4 py-3">Comanda</th>
+          <th class="px-4 py-3">Mesas</th>
+          <th class="px-4 py-3">Garçom</th>
+          <th class="px-4 py-3">Ocupante</th>
+          <th class="px-4 py-3">Itens</th>
+          <th class="px-4 py-3">Aberta em</th>
+          <th class="px-4 py-3">Fechada em</th>
+          <th class="px-4 py-3">Status</th>
+          <th class="px-4 py-3">Venda</th>
+        </tr>
+      </thead>
+      <tbody class="divide-y">
+        {% for comanda in pagina %}
+        <tr>
+          <td class="px-4 py-3 font-medium">#{{ comanda.pk }}</td>
+          <td class="px-4 py-3">{% for mesa in comanda.mesas.all %}{{ mesa }}{% if not forloop.last %}, {% endif %}{% empty %}avulsa{% endfor %}</td>
+          <td class="px-4 py-3">{{ comanda.garcom.nome|default:"—" }}</td>
+          <td class="px-4 py-3">{{ comanda.cliente|default:comanda.nome_ocupante|default:"—" }}</td>
+          <td class="px-4 py-3">{{ comanda.itens.count }}</td>
+          <td class="px-4 py-3 text-xs">{{ comanda.aberta_em|date:"d/m/Y H:i" }}</td>
+          <td class="px-4 py-3 text-xs">{{ comanda.fechada_em|date:"d/m/Y H:i"|default:"—" }}</td>
+          <td class="px-4 py-3">
+            {% if comanda.status == "fechada" %}<span class="soft-pill is-green">Fechada</span>
+            {% else %}<span class="soft-pill is-amber">Cancelada</span>{% endif %}
+          </td>
+          <td class="px-4 py-3">
+            {% if comanda.venda_pdv %}
+            <a href="{% url 'analytics:vendas' %}" :style="temaClaro ? 'color:#2563eb;' : 'color:#60a5fa;'">#{{ comanda.venda_pdv.numero_venda }}</a>
+            {% else %}—{% endif %}
+          </td>
+        </tr>
+        {% empty %}
+        <tr><td colspan="9" class="px-4 py-8 text-center" :style="temaClaro ? 'color:#94a3b8;' : 'color:#64748b;'">Nenhum atendimento encontrado.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  {% if pagina.paginator.num_pages > 1 %}
+  <div class="flex justify-center gap-2 text-sm">
+    {% if pagina.has_previous %}
+    <a href="?pagina={{ pagina.previous_page_number }}" class="btn-secondary" style="font-size:12px;">Anterior</a>
+    {% endif %}
+    <span class="px-2 py-1">Página {{ pagina.number }} de {{ pagina.paginator.num_pages }}</span>
+    {% if pagina.has_next %}
+    <a href="?pagina={{ pagina.next_page_number }}" class="btn-secondary" style="font-size:12px;">Próxima</a>
+    {% endif %}
+  </div>
+  {% endif %}
+</div>
+{% endblock %}

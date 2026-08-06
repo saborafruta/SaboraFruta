@@ -3,6 +3,7 @@ import json
 from decimal import Decimal
 
 from django.contrib import messages
+from django.core.paginator import Paginator
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.views import View
@@ -28,6 +29,8 @@ class ComandaAbrirView(PermissaoRequiredMixin, View):
         return render(request, 'food_service/comanda_abrir.html', {
             'title': 'Abrir comanda',
             'mesas_selecionadas': mesas,
+            'nome_ocupante_sugerido': request.GET.get('nome_ocupante', ''),
+            'quantidade_pessoas_sugerida': request.GET.get('quantidade_pessoas', '1'),
         })
 
     def post(self, request):
@@ -185,6 +188,22 @@ class ComandaUnirMesasView(PermissaoRequiredMixin, View):
         return redirect(reverse('food_service:comanda-detail', args=[comanda.pk]))
 
 
+class ComandaLiberarMesaView(PermissaoRequiredMixin, View):
+    permissao_modulo = 'food_service'
+    permissao_acao = 'editar'
+
+    def post(self, request, pk):
+        comanda = _comanda_da_filial(request, pk)
+        mesa = get_object_or_404(
+            Mesa.objects.for_filial(request.filial_ativa), pk=request.POST.get('mesa_id'),
+        )
+        try:
+            ComandaService.liberar_mesa(comanda=comanda, mesa=mesa)
+        except DadosInvalidosError as exc:
+            messages.error(request, str(exc))
+        return redirect(reverse('food_service:comanda-detail', args=[comanda.pk]))
+
+
 class ComandaFecharView(PermissaoRequiredMixin, View):
     permissao_modulo = 'food_service'
     permissao_acao = 'editar'
@@ -225,3 +244,46 @@ def _erro_json_ou_redirect(request, comanda, erro):
         return JsonResponse({'erro': erro}, status=400)
     messages.error(request, erro)
     return redirect(reverse('food_service:comanda-detail', args=[comanda.pk]))
+
+
+class ComandaHistoricoListView(PermissaoRequiredMixin, View):
+    """Histórico de pedidos/atendimentos: comandas já fechadas ou canceladas."""
+
+    permissao_modulo = 'food_service'
+    permissao_acao = 'ver'
+
+    def get(self, request):
+        qs = (
+            Comanda.objects.for_filial(request.filial_ativa)
+            .exclude(status=Comanda.Status.ABERTA)
+            .select_related('cliente', 'garcom', 'venda_pdv')
+            .prefetch_related('itens', 'mesas')
+            .order_by('-aberta_em')
+        )
+
+        mesa_id = request.GET.get('mesa_id', '').strip()
+        mesa_selecionada = None
+        if mesa_id.isdigit():
+            qs = qs.filter(mesas__pk=mesa_id)
+            mesa_selecionada = Mesa.objects.for_filial(request.filial_ativa).filter(pk=mesa_id).first()
+
+        garcom_id = request.GET.get('garcom_id', '').strip()
+        if garcom_id.isdigit():
+            qs = qs.filter(garcom_id=garcom_id)
+
+        data_inicio = request.GET.get('data_inicio', '').strip()
+        data_fim = request.GET.get('data_fim', '').strip()
+        if data_inicio:
+            qs = qs.filter(aberta_em__date__gte=data_inicio)
+        if data_fim:
+            qs = qs.filter(aberta_em__date__lte=data_fim)
+
+        paginator = Paginator(qs, 30)
+        pagina = paginator.get_page(request.GET.get('pagina'))
+
+        return render(request, 'food_service/comanda_historico.html', {
+            'title': 'Histórico de Pedidos e Atendimentos',
+            'pagina': pagina,
+            'mesa_selecionada': mesa_selecionada,
+            'mesas': Mesa.objects.for_filial(request.filial_ativa).order_by('numero'),
+        })

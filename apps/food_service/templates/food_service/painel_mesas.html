@@ -22,6 +22,8 @@
 
   <div class="flex flex-wrap items-center gap-x-5 gap-y-1 text-sm">
     <a href="{% url 'food_service:mesa-list' %}" class="btn-secondary" style="font-size:12px;">Cadastro de mesas</a>
+    <a href="{% url 'food_service:comanda-historico' %}" class="btn-secondary" style="font-size:12px;">Histórico</a>
+    <a href="{% url 'food_service:reserva-list' %}" class="btn-secondary" style="font-size:12px;">Reservas</a>
     <label class="flex items-center gap-2 text-xs" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
       <input type="checkbox" x-model="autoAtualizar">
       Atualização automática (10s)

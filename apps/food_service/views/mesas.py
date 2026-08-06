@@ -1,12 +1,16 @@
 """CRUD de cadastro de mesas."""
 from django.contrib import messages
+from django.http import JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
+from django.utils.http import url_has_allowed_host_and_scheme
 from django.views import View
 
+from apps.core.services.exceptions import DadosInvalidosError
 from apps.core.services.permissions import PermissaoRequiredMixin
 
 from ..models import Mesa
+from ..services import MesaService
 
 
 class MesaListView(PermissaoRequiredMixin, View):
@@ -109,3 +113,40 @@ class MesaDeleteView(PermissaoRequiredMixin, View):
         mesa.delete()
         messages.success(request, f'Mesa "{nome}" excluída.')
         return redirect(reverse('food_service:mesa-list'))
+
+
+def _redirect_seguro(request, padrao):
+    destino = request.POST.get('next') or request.GET.get('next')
+    if destino and url_has_allowed_host_and_scheme(destino, allowed_hosts={request.get_host()}):
+        return redirect(destino)
+    return redirect(padrao)
+
+
+class MesaMarcarReservadaView(PermissaoRequiredMixin, View):
+    permissao_modulo = 'food_service'
+    permissao_acao = 'editar'
+
+    def post(self, request, pk):
+        mesa = get_object_or_404(Mesa.objects.for_filial(request.filial_ativa), pk=pk)
+        try:
+            MesaService.marcar_reservada(mesa)
+        except DadosInvalidosError as exc:
+            if request.headers.get('Accept', '').startswith('application/json'):
+                return JsonResponse({'erro': str(exc)}, status=400)
+            messages.error(request, str(exc))
+        return _redirect_seguro(request, reverse('food_service:mesa-list'))
+
+
+class MesaMarcarLivreView(PermissaoRequiredMixin, View):
+    permissao_modulo = 'food_service'
+    permissao_acao = 'editar'
+
+    def post(self, request, pk):
+        mesa = get_object_or_404(Mesa.objects.for_filial(request.filial_ativa), pk=pk)
+        try:
+            MesaService.marcar_livre(mesa)
+        except DadosInvalidosError as exc:
+            if request.headers.get('Accept', '').startswith('application/json'):
+                return JsonResponse({'erro': str(exc)}, status=400)
+            messages.error(request, str(exc))
+        return _redirect_seguro(request, reverse('food_service:mesa-list'))

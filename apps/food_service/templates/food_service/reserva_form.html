@@ -1,0 +1,56 @@
+{% extends "_base.html" %}
+{% block title %}{{ title }}{% endblock %}
+{% block page_title %}{{ title }}{% endblock %}
+
+{% block content %}
+<div class="max-w-md mx-auto space-y-5">
+  <p class="text-sm" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+    <a href="{% url 'food_service:reserva-list' %}" :style="temaClaro ? 'color:#3b82f6;' : 'color:#60a5fa;'">Reservas</a>
+    <span class="mx-1">›</span> Nova reserva
+  </p>
+
+  <form method="post" class="card space-y-4">
+    {% csrf_token %}
+
+    <div>
+      <label class="block text-xs font-semibold mb-1">Data e hora *</label>
+      <input type="datetime-local" name="data_hora" required class="w-full" value="{{ dados.data_hora }}">
+    </div>
+
+    <div>
+      <label class="block text-xs font-semibold mb-1">Nome do contato</label>
+      <input type="text" name="nome_contato" class="w-full" value="{{ dados.nome_contato }}" placeholder="Ex.: Maria">
+    </div>
+
+    <div>
+      <label class="block text-xs font-semibold mb-1">Telefone</label>
+      <input type="text" name="telefone" class="w-full" value="{{ dados.telefone }}">
+    </div>
+
+    <div>
+      <label class="block text-xs font-semibold mb-1">Mesa (opcional)</label>
+      <select name="mesa_id">
+        <option value="">A definir</option>
+        {% for mesa in mesas %}
+        <option value="{{ mesa.pk }}">{{ mesa }}</option>
+        {% endfor %}
+      </select>
+    </div>
+
+    <div>
+      <label class="block text-xs font-semibold mb-1">Quantidade de pessoas</label>
+      <input type="number" name="quantidade_pessoas" value="{{ dados.quantidade_pessoas|default:2 }}" min="1" class="w-full">
+    </div>
+
+    <div>
+      <label class="block text-xs font-semibold mb-1">Observações</label>
+      <textarea name="observacoes" rows="2" class="w-full">{{ dados.observacoes }}</textarea>
+    </div>
+
+    <div class="flex justify-end gap-2">
+      <a href="{% url 'food_service:reserva-list' %}" class="btn-secondary">Cancelar</a>
+      <button type="submit" class="btn-primary">Salvar reserva</button>
+    </div>
+  </form>
+</div>
+{% endblock %}

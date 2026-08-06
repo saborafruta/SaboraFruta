@@ -8,7 +8,8 @@ class FoodServiceConfig(AppConfig):
 
     def ready(self):
         from apps.core.signals import register_for_audit
-        from .models import Comanda, Mesa
+        from .models import Comanda, Mesa, Reserva
 
         register_for_audit(Mesa, "food_service")
         register_for_audit(Comanda, "food_service")
+        register_for_audit(Reserva, "food_service")

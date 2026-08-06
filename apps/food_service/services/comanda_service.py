@@ -102,6 +102,21 @@ class ComandaService:
 
     @classmethod
     @transaction.atomic
+    def liberar_mesa(cls, *, comanda: Comanda, mesa: Mesa):
+        """
+        "Dividir mesas": separa uma mesa de uma comanda que cobre várias
+        (união desfeita), liberando-a para outro atendimento sem fechar a
+        comanda nem afetar as demais mesas vinculadas.
+        """
+        if comanda.mesas.count() <= 1:
+            raise DadosInvalidosError('A comanda só tem uma mesa vinculada — não há o que dividir.')
+        comanda.mesas.remove(mesa)
+        if not mesa.comandas.filter(status=Comanda.Status.ABERTA).exists():
+            mesa.status = Mesa.Status.LIVRE
+            mesa.save(update_fields=['status'])
+
+    @classmethod
+    @transaction.atomic
     def fechar(
         cls,
         *,

@@ -161,6 +161,70 @@
 
   {% if comanda.status == "aberta" %}
   <div class="card space-y-3">
+    <h3 class="text-sm font-semibold">Mesas desta comanda</h3>
+
+    {% if comanda.mesas.all %}
+    <ul class="text-sm space-y-1">
+      {% for mesa in comanda.mesas.all %}
+      <li class="flex items-center justify-between gap-2">
+        <span>{{ mesa }}</span>
+        {% if comanda.mesas.count > 1 %}
+        <form method="post" action="{% url 'food_service:comanda-liberar-mesa' comanda.pk %}">
+          {% csrf_token %}
+          <input type="hidden" name="mesa_id" value="{{ mesa.pk }}">
+          <button class="text-xs font-semibold" style="color:#dc2626;">Dividir (liberar esta mesa)</button>
+        </form>
+        {% endif %}
+      </li>
+      {% endfor %}
+    </ul>
+    {% else %}
+    <p class="text-sm" :style="temaClaro ? 'color:#94a3b8;' : 'color:#64748b;'">Comanda avulsa, sem mesa vinculada.</p>
+    {% endif %}
+
+    {% if mesas_livres %}
+    <div class="flex flex-wrap gap-4 pt-2" :style="temaClaro ? 'border-top:1px solid #e5e7eb;' : 'border-top:1px solid #2a2a2e;'">
+      <form method="post" action="{% url 'food_service:comanda-unir-mesas' comanda.pk %}" class="flex gap-2 items-end">
+        {% csrf_token %}
+        <div>
+          <label class="block text-xs font-semibold mb-1">Unir mesa livre a esta comanda</label>
+          <select name="mesa_id" required>
+            <option value="">Selecione...</option>
+            {% for mesa in mesas_livres %}
+            <option value="{{ mesa.pk }}">{{ mesa }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <button class="btn-secondary" style="font-size:12px;">Unir mesa</button>
+      </form>
+
+      {% if comanda.mesas.all %}
+      <form method="post" action="{% url 'food_service:comanda-transferir-mesa' comanda.pk %}" class="flex gap-2 items-end">
+        {% csrf_token %}
+        <div>
+          <label class="block text-xs font-semibold mb-1">Transferir de</label>
+          <select name="mesa_origem_id" required>
+            {% for mesa in comanda.mesas.all %}
+            <option value="{{ mesa.pk }}">{{ mesa }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div>
+          <label class="block text-xs font-semibold mb-1">Para</label>
+          <select name="mesa_destino_id" required>
+            {% for mesa in mesas_livres %}
+            <option value="{{ mesa.pk }}">{{ mesa }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <button class="btn-secondary" style="font-size:12px;">Transferir mesa</button>
+      </form>
+      {% endif %}
+    </div>
+    {% endif %}
+  </div>
+
+  <div class="card space-y-3">
     <h3 class="text-sm font-semibold">Unir com outra comanda aberta</h3>
     {% if outras_comandas_abertas %}
     <form method="post" action="{% url 'food_service:comanda-unir' comanda.pk %}" class="flex gap-2 items-end">
