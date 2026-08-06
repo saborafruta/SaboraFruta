@@ -1,3 +1,5 @@
+from decimal import Decimal
+
 from django.db import models
 
 from apps.core.models.base import FilialManager, FilialScopedModel
@@ -23,6 +25,14 @@ class Comanda(FilialScopedModel):
         FECHADA = 'fechada', 'Fechada'
         CANCELADA = 'cancelada', 'Cancelada'
 
+    class Tipo(models.TextChoices):
+        MESA = 'mesa', 'Por mesa'
+        CLIENTE = 'cliente', 'Por cliente'
+        INDIVIDUAL = 'individual', 'Individual'
+        COMPARTILHADA = 'compartilhada', 'Compartilhada'
+        QR_CODE = 'qrcode', 'QR Code'
+
+    tipo = models.CharField(max_length=20, choices=Tipo.choices, default=Tipo.MESA)
     mesas = models.ManyToManyField('food_service.Mesa', related_name='comandas', blank=True)
     cliente = models.ForeignKey(
         'cadastros.Cliente', on_delete=models.PROTECT, null=True, blank=True,
@@ -57,4 +67,7 @@ class Comanda(FilialScopedModel):
 
     @property
     def valor_total(self):
-        return sum((item.valor_total for item in self.itens.all()), 0)
+        return sum(
+            (item.valor_total_com_complementos for item in self.itens.all()),
+            Decimal('0'),
+        )

@@ -35,3 +35,9 @@ class ItemComanda(TimestampedModel):
     @property
     def valor_total(self):
         return self.quantidade * self.valor_unitario
+
+    @property
+    def valor_total_com_complementos(self):
+        return self.valor_total + sum(
+            (c.valor_total for c in self.complementos.all()), Decimal('0'),
+        )

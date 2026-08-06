@@ -14,6 +14,7 @@
   <div class="card space-y-1">
     <div class="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm">
       <span><strong>Status:</strong> {{ comanda.get_status_display }}</span>
+      <span><strong>Tipo:</strong> {{ comanda.get_tipo_display }}</span>
       <span><strong>Mesas:</strong> {% for mesa in comanda.mesas.all %}{{ mesa }}{% if not forloop.last %}, {% endif %}{% empty %}avulsa{% endfor %}</span>
       <span><strong>Ocupante:</strong> {{ comanda.cliente|default:comanda.nome_ocupante|default:"—" }}</span>
       <span><strong>Pessoas:</strong> {{ comanda.quantidade_pessoas }}</span>
@@ -65,10 +66,34 @@
           <td class="px-4 py-3">
             {{ item.produto.descricao }}
             {% if item.observacoes %}<div class="text-xs" :style="temaClaro ? 'color:#94a3b8;' : 'color:#64748b;'">{{ item.observacoes }}</div>{% endif %}
+            {% for complemento in item.complementos.all %}
+            <div class="text-xs flex items-center gap-2" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'" style="margin-top:2px;">
+              <span>+ {{ complemento.quantidade }}x {{ complemento.produto.descricao }} (R$ {{ complemento.valor_total }})</span>
+              {% if comanda.status == "aberta" %}
+              <form method="post" action="{% url 'food_service:comanda-item-complemento-remover' comanda.pk item.pk complemento.pk %}">
+                {% csrf_token %}
+                <button class="text-xs font-semibold" style="color:#dc2626;">remover</button>
+              </form>
+              {% endif %}
+            </div>
+            {% endfor %}
+            {% if comanda.status == "aberta" %}
+            <form method="post" action="{% url 'food_service:comanda-item-complemento-adicionar' comanda.pk item.pk %}" class="flex items-center gap-1" style="margin-top:4px;">
+              {% csrf_token %}
+              <select name="produto_id" required style="font-size:11px;max-width:160px;">
+                <option value="">+ complemento</option>
+                {% for produto in produtos %}
+                <option value="{{ produto.pk }}">{{ produto.descricao }}</option>
+                {% endfor %}
+              </select>
+              <input type="text" name="quantidade" value="1" style="width:40px;font-size:11px;">
+              <button class="text-xs font-semibold" :style="temaClaro ? 'color:#2563eb;' : 'color:#60a5fa;'">Adicionar</button>
+            </form>
+            {% endif %}
           </td>
           <td class="px-4 py-3">{{ item.quantidade }}</td>
           <td class="px-4 py-3">R$ {{ item.valor_unitario }}</td>
-          <td class="px-4 py-3">R$ {{ item.valor_total }}</td>
+          <td class="px-4 py-3">R$ {{ item.valor_total_com_complementos }}</td>
           {% if comanda.status == "aberta" %}
           <td class="px-4 py-3 text-right">
             <div class="inline-flex gap-2 items-center">

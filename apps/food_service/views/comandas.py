@@ -15,7 +15,7 @@ from apps.core.services.permissions import PermissaoRequiredMixin
 from apps.financeiro.models import FormaPagamento
 from apps.produtos.models import Produto
 
-from ..models import Comanda, ItemComanda, Mesa
+from ..models import Comanda, ComplementoItemComanda, ItemComanda, Mesa
 from ..services import ComandaService
 
 
@@ -45,6 +45,10 @@ class ComandaAbrirView(PermissaoRequiredMixin, View):
         quantidade_pessoas = request.POST.get('quantidade_pessoas', '1').strip()
         quantidade_pessoas = int(quantidade_pessoas) if quantidade_pessoas.isdigit() else 1
 
+        tipo = request.POST.get('tipo', '').strip()
+        if tipo not in Comanda.Tipo.values:
+            tipo = None
+
         comanda = ComandaService.abrir(
             filial=request.filial_ativa,
             usuario=request.user,
@@ -53,6 +57,7 @@ class ComandaAbrirView(PermissaoRequiredMixin, View):
             nome_ocupante=request.POST.get('nome_ocupante', '').strip(),
             garcom=request.user,
             quantidade_pessoas=quantidade_pessoas,
+            tipo=tipo,
         )
         return redirect(reverse('food_service:comanda-detail', args=[comanda.pk]))
 
@@ -63,7 +68,9 @@ class ComandaDetailView(PermissaoRequiredMixin, View):
 
     def get(self, request, pk):
         comanda = get_object_or_404(
-            Comanda.objects.for_filial(request.filial_ativa).prefetch_related('itens__produto', 'mesas'),
+            Comanda.objects.for_filial(request.filial_ativa).prefetch_related(
+                'itens__produto', 'itens__complementos__produto', 'mesas',
+            ),
             pk=pk,
         )
         outras_comandas_abertas = (
@@ -126,6 +133,42 @@ class ComandaRemoverItemView(PermissaoRequiredMixin, View):
         item = get_object_or_404(ItemComanda, pk=item_pk, comanda=comanda)
         try:
             ComandaService.remover_item(item=item)
+        except DadosInvalidosError as exc:
+            messages.error(request, str(exc))
+        return redirect(reverse('food_service:comanda-detail', args=[comanda.pk]))
+
+
+class ComandaAdicionarComplementoView(PermissaoRequiredMixin, View):
+    permissao_modulo = 'food_service'
+    permissao_acao = 'editar'
+
+    def post(self, request, pk, item_pk):
+        comanda = _comanda_da_filial(request, pk)
+        item = get_object_or_404(ItemComanda, pk=item_pk, comanda=comanda)
+        produto = get_object_or_404(
+            Produto.objects.for_filial(request.filial_ativa), pk=request.POST.get('produto_id'),
+        )
+        try:
+            ComandaService.adicionar_complemento(
+                item=item,
+                produto=produto,
+                quantidade=request.POST.get('quantidade', '1').replace(',', '.'),
+            )
+        except DadosInvalidosError as exc:
+            messages.error(request, str(exc))
+        return redirect(reverse('food_service:comanda-detail', args=[comanda.pk]))
+
+
+class ComandaRemoverComplementoView(PermissaoRequiredMixin, View):
+    permissao_modulo = 'food_service'
+    permissao_acao = 'editar'
+
+    def post(self, request, pk, item_pk, complemento_pk):
+        comanda = _comanda_da_filial(request, pk)
+        item = get_object_or_404(ItemComanda, pk=item_pk, comanda=comanda)
+        complemento = get_object_or_404(ComplementoItemComanda, pk=complemento_pk, item=item)
+        try:
+            ComandaService.remover_complemento(complemento=complemento)
         except DadosInvalidosError as exc:
             messages.error(request, str(exc))
         return redirect(reverse('food_service:comanda-detail', args=[comanda.pk]))

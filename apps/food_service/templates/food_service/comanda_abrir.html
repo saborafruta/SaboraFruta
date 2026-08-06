@@ -28,6 +28,28 @@
     {% endif %}
 
     <div>
+      <label class="block text-xs font-semibold mb-1">Tipo de comanda</label>
+      <select name="tipo" class="w-full">
+        <option value="mesa" {% if mesas_selecionadas %}selected{% endif %}>Por mesa</option>
+        <option value="cliente">Por cliente</option>
+        <option value="individual" {% if not mesas_selecionadas %}selected{% endif %}>Individual</option>
+        <option value="compartilhada">Compartilhada</option>
+        <option value="qrcode">QR Code</option>
+      </select>
+      <p class="text-xs mt-1" :style="temaClaro ? 'color:#94a3b8;' : 'color:#64748b;'">
+        "QR Code" só registra o tipo por enquanto — a leitura pelo cliente chega junto com o Cardápio Digital.
+      </p>
+    </div>
+
+    <div>
+      <label class="block text-xs font-semibold mb-1">Cliente (código do cadastro, opcional)</label>
+      <input type="number" name="cliente_id" class="w-full" placeholder="Ex.: 42">
+      <p class="text-xs mt-1" :style="temaClaro ? 'color:#94a3b8;' : 'color:#64748b;'">
+        Consulte o código em <a href="{% url 'cadastros:cliente-list' %}" :style="temaClaro ? 'color:#1d4ed8;' : 'color:#93c5fd;'">Clientes</a>.
+      </p>
+    </div>
+
+    <div>
       <label class="block text-xs font-semibold mb-1">Nome do ocupante</label>
       <input type="text" name="nome_ocupante" class="w-full" value="{{ nome_ocupante_sugerido }}" placeholder="Ex.: João (sem cadastro)">
     </div>

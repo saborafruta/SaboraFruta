@@ -1,10 +1,12 @@
 from .comandas import (
     ComandaAbrirView,
+    ComandaAdicionarComplementoView,
     ComandaAdicionarItemView,
     ComandaDetailView,
     ComandaFecharView,
     ComandaHistoricoListView,
     ComandaLiberarMesaView,
+    ComandaRemoverComplementoView,
     ComandaRemoverItemView,
     ComandaTransferirItemView,
     ComandaTransferirMesaView,
@@ -30,11 +32,13 @@ from .reservas import (
 
 __all__ = [
     'ComandaAbrirView',
+    'ComandaAdicionarComplementoView',
     'ComandaAdicionarItemView',
     'ComandaDetailView',
     'ComandaFecharView',
     'ComandaHistoricoListView',
     'ComandaLiberarMesaView',
+    'ComandaRemoverComplementoView',
     'ComandaRemoverItemView',
     'ComandaTransferirItemView',
     'ComandaTransferirMesaView',

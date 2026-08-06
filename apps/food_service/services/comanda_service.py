@@ -6,7 +6,7 @@ from django.db import transaction
 from django.utils import timezone
 
 from apps.core.services.exceptions import DadosInvalidosError
-from apps.food_service.models import Comanda, ItemComanda, Mesa
+from apps.food_service.models import Comanda, ComplementoItemComanda, ItemComanda, Mesa
 from apps.pdv.services.venda_pdv_service import VendaPDVService
 
 
@@ -28,13 +28,19 @@ class ComandaService:
         nome_ocupante: str = '',
         garcom=None,
         quantidade_pessoas: int = 1,
+        tipo: str | None = None,
     ) -> Comanda:
+        if not tipo:
+            tipo = Comanda.Tipo.MESA if mesas else (
+                Comanda.Tipo.CLIENTE if cliente else Comanda.Tipo.INDIVIDUAL
+            )
         comanda = Comanda.objects.create(
             filial=filial,
             cliente=cliente,
             nome_ocupante=nome_ocupante,
             garcom=garcom,
             quantidade_pessoas=quantidade_pessoas or 1,
+            tipo=tipo,
         )
         if mesas:
             comanda.mesas.set(mesas)
@@ -64,6 +70,31 @@ class ComandaService:
         if item.comanda.status != Comanda.Status.ABERTA:
             raise DadosInvalidosError('Comanda não está aberta.')
         item.delete()
+
+    @classmethod
+    def adicionar_complemento(
+        cls, *, item: ItemComanda, produto, quantidade='1',
+    ) -> ComplementoItemComanda:
+        if item.comanda.status != Comanda.Status.ABERTA:
+            raise DadosInvalidosError('Comanda não está aberta.')
+        quantidade = Decimal(str(quantidade))
+        if quantidade <= 0:
+            raise DadosInvalidosError('Quantidade deve ser positiva.')
+        preco_info = VendaPDVService.resolver_preco_produto(
+            produto, item.comanda.filial, quantidade, cliente=item.comanda.cliente,
+        )
+        return ComplementoItemComanda.objects.create(
+            item=item,
+            produto=produto,
+            quantidade=quantidade,
+            valor_unitario=preco_info['preco'],
+        )
+
+    @classmethod
+    def remover_complemento(cls, *, complemento: ComplementoItemComanda):
+        if complemento.item.comanda.status != Comanda.Status.ABERTA:
+            raise DadosInvalidosError('Comanda não está aberta.')
+        complemento.delete()
 
     @classmethod
     def transferir_item(cls, *, item: ItemComanda, destino: Comanda) -> ItemComanda:
@@ -131,7 +162,7 @@ class ComandaService:
         if comanda.status != Comanda.Status.ABERTA:
             raise DadosInvalidosError('Comanda não está aberta.')
 
-        itens_comanda = list(comanda.itens.all())
+        itens_comanda = list(comanda.itens.prefetch_related('complementos').all())
         if not itens_comanda:
             raise DadosInvalidosError('Comanda sem itens lançados.')
 
@@ -139,10 +170,16 @@ class ComandaService:
         if not sessao:
             raise DadosInvalidosError('Nenhuma sessão de caixa aberta.')
 
-        itens = [
-            {'produto_id': item.produto_id, 'quantidade': item.quantidade}
-            for item in itens_comanda
-        ]
+        # Cada complemento vira sua própria linha na venda (mesmo tratamento
+        # fiscal/estoque de qualquer produto vendido) -- não existe um
+        # conceito de "sub-item" em VendaPDV/ItemVendaPDV, então a relação
+        # com o item principal fica só no lado da comanda (que continua
+        # consultável no histórico após o fechamento).
+        itens = []
+        for item in itens_comanda:
+            itens.append({'produto_id': item.produto_id, 'quantidade': item.quantidade})
+            for complemento in item.complementos.all():
+                itens.append({'produto_id': complemento.produto_id, 'quantidade': complemento.quantidade})
 
         venda = VendaPDVService.finalizar_venda(
             sessao=sessao,
