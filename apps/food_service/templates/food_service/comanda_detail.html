@@ -139,12 +139,14 @@
       <select x-model="divisaoTipo" @change="montarDivisao()" class="w-full sm:w-64">
         <option value="unica">Um pagamento (forma única)</option>
         <option value="igual">Dividir igualmente entre N pessoas</option>
+        <option value="percentual">Dividir por percentual</option>
+        <option value="cliente">Dividir por cliente (nomear cada parte)</option>
       </select>
     </div>
 
-    <div x-show="divisaoTipo === 'igual'" x-cloak class="flex items-end gap-2">
+    <div x-show="divisaoTipo === 'igual' || divisaoTipo === 'percentual' || divisaoTipo === 'cliente'" x-cloak class="flex items-end gap-2">
       <div>
-        <label class="block text-xs font-semibold mb-1">Dividir entre quantas pessoas</label>
+        <label class="block text-xs font-semibold mb-1">Dividir entre quantas partes</label>
         <input type="number" min="1" x-model.number="numeroPessoasDivisao" @input="montarDivisao()" class="w-32">
       </div>
     </div>
@@ -152,6 +154,10 @@
     <div class="space-y-2">
       <template x-for="(pgto, idx) in pagamentos" :key="idx">
         <div class="flex flex-wrap gap-2 items-end">
+          <div x-show="divisaoTipo === 'cliente'" style="width:140px;">
+            <label class="block text-xs font-semibold mb-1">Nome</label>
+            <input type="text" x-model="pgto.nome" class="w-full" placeholder="Ex.: Maria">
+          </div>
           <div class="flex-1 min-w-[160px]">
             <label class="block text-xs font-semibold mb-1">Forma de pagamento</label>
             <select x-model.number="pgto.forma_id" class="w-full">
@@ -161,6 +167,10 @@
               </template>
             </select>
           </div>
+          <div x-show="divisaoTipo === 'percentual'" style="width:100px;">
+            <label class="block text-xs font-semibold mb-1">% </label>
+            <input type="number" step="0.01" min="0" max="100" x-model.number="pgto.percentual" @input="aplicarPercentual(pgto)" class="w-full">
+          </div>
           <div style="width:140px;">
             <label class="block text-xs font-semibold mb-1">Valor (R$)</label>
             <input type="number" step="0.01" min="0" x-model.number="pgto.valor" class="w-full">
@@ -168,7 +178,7 @@
           <button type="button" class="text-xs font-semibold" style="color:#dc2626;" @click="pagamentos.splice(idx, 1)" x-show="pagamentos.length > 1">Remover</button>
         </div>
       </template>
-      <button type="button" class="btn-secondary" style="font-size:12px;" @click="pagamentos.push({forma_id: '', valor: 0})">+ Adicionar forma de pagamento</button>
+      <button type="button" class="btn-secondary" style="font-size:12px;" @click="pagamentos.push({forma_id: '', valor: 0, percentual: 0, nome: ''})">+ Adicionar forma de pagamento</button>
     </div>
 
     <p class="text-xs" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
@@ -264,6 +274,13 @@
     {% else %}
     <p class="text-sm" :style="temaClaro ? 'color:#94a3b8;' : 'color:#64748b;'">Nenhuma outra comanda aberta no momento.</p>
     {% endif %}
+
+    <div class="pt-2" :style="temaClaro ? 'border-top:1px solid #e5e7eb;' : 'border-top:1px solid #2a2a2e;'">
+      <form method="post" action="{% url 'food_service:comanda-separar' comanda.pk %}">
+        {% csrf_token %}
+        <button class="btn-secondary" style="font-size:12px;">Separar comanda (abrir nova para transferir itens)</button>
+      </form>
+    </div>
   </div>
   {% endif %}
 
@@ -286,7 +303,7 @@ function comandaApp() {
     valorTotal: {{ comanda.valor_total|default:0 }},
     divisaoTipo: 'unica',
     numeroPessoasDivisao: 2,
-    pagamentos: [{ forma_id: '', valor: {{ comanda.valor_total|default:0 }} }],
+    pagamentos: [{ forma_id: '', valor: {{ comanda.valor_total|default:0 }}, percentual: 100, nome: '' }],
     fechando: false,
     erro: '',
 
@@ -296,16 +313,32 @@ function comandaApp() {
 
     montarDivisao() {
       if (this.divisaoTipo === 'unica') {
-        this.pagamentos = [{ forma_id: '', valor: this.valorTotal }];
+        this.pagamentos = [{ forma_id: '', valor: this.valorTotal, percentual: 100, nome: '' }];
         return;
       }
       const n = Math.max(1, this.numeroPessoasDivisao || 1);
-      const partes = Math.round((this.valorTotal / n) * 100) / 100;
-      this.pagamentos = Array.from({ length: n }, () => ({ forma_id: '', valor: partes }));
+      const percentualParte = Math.round((100 / n) * 100) / 100;
+      const valorParte = Math.round((this.valorTotal / n) * 100) / 100;
+      this.pagamentos = Array.from({ length: n }, () => (
+        { forma_id: '', valor: valorParte, percentual: percentualParte, nome: '' }
+      ));
+    },
+
+    aplicarPercentual(pgto) {
+      const percentual = Number(pgto.percentual) || 0;
+      pgto.valor = Math.round(this.valorTotal * (percentual / 100) * 100) / 100;
     },
 
     somaPagamentos() {
       return this.pagamentos.reduce((s, p) => s + (Number(p.valor) || 0), 0);
+    },
+
+    notaDivisao() {
+      if (this.divisaoTipo !== 'cliente') return '';
+      const partes = this.pagamentos
+        .filter(p => p.nome)
+        .map(p => `${p.nome}: R$ ${Number(p.valor || 0).toFixed(2)}`);
+      return partes.length ? `Divisão por cliente — ${partes.join('; ')}` : '';
     },
 
     async fechar() {
@@ -323,7 +356,10 @@ function comandaApp() {
             'Accept': 'application/json',
             'X-CSRFToken': '{{ csrf_token }}',
           },
-          body: JSON.stringify({ pagamentos: this.pagamentos.map(p => ({ forma_id: p.forma_id, valor: p.valor })) }),
+          body: JSON.stringify({
+            pagamentos: this.pagamentos.map(p => ({ forma_id: p.forma_id, valor: p.valor })),
+            nota_divisao: this.notaDivisao(),
+          }),
         });
         const d = await resp.json();
         if (!resp.ok || !d.ok) throw new Error(d.erro || 'Não foi possível fechar a comanda.');

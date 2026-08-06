@@ -203,6 +203,23 @@ class ComandaUnirView(PermissaoRequiredMixin, View):
         return redirect(reverse('food_service:comanda-detail', args=[comanda.pk]))
 
 
+class ComandaSepararView(PermissaoRequiredMixin, View):
+    """Abre uma comanda-irmã vazia para transferir itens (dividir por item/por pessoa)."""
+
+    permissao_modulo = 'food_service'
+    permissao_acao = 'criar'
+
+    def post(self, request, pk):
+        comanda = _comanda_da_filial(request, pk)
+        try:
+            nova = ComandaService.separar(comanda=comanda)
+        except DadosInvalidosError as exc:
+            messages.error(request, str(exc))
+            return redirect(reverse('food_service:comanda-detail', args=[comanda.pk]))
+        messages.success(request, f'Comanda #{nova.pk} aberta — transfira os itens dela.')
+        return redirect(reverse('food_service:comanda-detail', args=[nova.pk]))
+
+
 class ComandaTransferirMesaView(PermissaoRequiredMixin, View):
     permissao_modulo = 'food_service'
     permissao_acao = 'editar'
@@ -261,6 +278,7 @@ class ComandaFecharView(PermissaoRequiredMixin, View):
         pagamentos = body.get('pagamentos', [])
         desconto = Decimal(str(body.get('desconto', '0') or '0'))
         acrescimo = Decimal(str(body.get('acrescimo', '0') or '0'))
+        nota_divisao = (body.get('nota_divisao') or '').strip()
 
         try:
             venda = ComandaService.fechar(
@@ -269,6 +287,7 @@ class ComandaFecharView(PermissaoRequiredMixin, View):
                 pagamentos=pagamentos,
                 desconto=desconto,
                 acrescimo=acrescimo,
+                nota_divisao=nota_divisao,
             )
         except DadosInvalidosError as exc:
             return _erro_json_ou_redirect(request, comanda, str(exc))

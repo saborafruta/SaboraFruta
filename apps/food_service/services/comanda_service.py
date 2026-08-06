@@ -116,6 +116,25 @@ class ComandaService:
 
     @classmethod
     @transaction.atomic
+    def separar(cls, *, comanda: Comanda) -> Comanda:
+        """
+        Abre uma comanda-irmã vazia nas mesmas mesas, pronta para receber
+        itens transferidos desta (`transferir_item`) — o primitivo por trás
+        de "separar comandas" quando a divisão é por item/por pessoa.
+        """
+        if comanda.status != Comanda.Status.ABERTA:
+            raise DadosInvalidosError('Comanda não está aberta.')
+        nova = Comanda.objects.create(
+            filial=comanda.filial,
+            garcom=comanda.garcom,
+            tipo=Comanda.Tipo.INDIVIDUAL,
+        )
+        if comanda.mesas.exists():
+            nova.mesas.set(comanda.mesas.all())
+        return nova
+
+    @classmethod
+    @transaction.atomic
     def transferir_mesa(cls, *, comanda: Comanda, mesa_origem: Mesa, mesa_destino: Mesa):
         comanda.mesas.remove(mesa_origem)
         comanda.mesas.add(mesa_destino)
@@ -156,6 +175,7 @@ class ComandaService:
         pagamentos: list[dict],
         desconto=Decimal('0'),
         acrescimo=Decimal('0'),
+        nota_divisao: str = '',
     ):
         from apps.pdv.views.pdv import _sessao_aberta
 
@@ -181,6 +201,10 @@ class ComandaService:
             for complemento in item.complementos.all():
                 itens.append({'produto_id': complemento.produto_id, 'quantidade': complemento.quantidade})
 
+        observacao = comanda.observacoes
+        if nota_divisao:
+            observacao = f'{observacao}\n{nota_divisao}'.strip()
+
         venda = VendaPDVService.finalizar_venda(
             sessao=sessao,
             filial=comanda.filial,
@@ -190,7 +214,7 @@ class ComandaService:
             cliente_id=comanda.cliente_id,
             desconto=desconto,
             acrescimo=acrescimo,
-            observacao=comanda.observacoes,
+            observacao=observacao,
             request=request,
         )
 
