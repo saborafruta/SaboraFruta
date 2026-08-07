@@ -116,8 +116,8 @@ class CmvService:
         total = ContaPagar.objects.filter(
             filial=filial,
             status='pago',
-            data_pagamento__date__gte=data_inicio,
-            data_pagamento__date__lte=data_fim,
+            data_pagamento__gte=data_inicio,
+            data_pagamento__lte=data_fim,
             plano_contas__tipo='D',
         ).aggregate(total=Sum('valor_pago'))['total']
         return total or Decimal('0')
