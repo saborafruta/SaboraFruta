@@ -1,0 +1,140 @@
+{% extends "_base.html" %}
+{% block title %}{{ title }}{% endblock %}
+{% block page_title %}{{ title }}{% endblock %}
+
+{% block content %}
+<div class="max-w-5xl mx-auto space-y-5" x-data="{ lancarModal: false }">
+
+  <div>
+    <p class="text-sm mb-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+      <a href="{% url 'financeiro:painel' %}" :style="temaClaro ? 'color:#3b82f6;' : 'color:#60a5fa;'">Gestão Financeira</a>
+      <span class="mx-1">›</span> Conciliação Bancária
+    </p>
+    <h2 class="text-2xl font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">Conciliação Bancária</h2>
+    <p class="text-sm mt-1" :style="temaClaro ? 'color:#6b7280;' : 'color:#aaa;'">
+      {{ total_pendentes }} pendente{{ total_pendentes|pluralize }}, {{ total_conciliados }} conciliado{{ total_conciliados|pluralize }}.
+    </p>
+  </div>
+
+  <form method="get" class="card p-4 grid grid-cols-1 sm:grid-cols-3 gap-3">
+    <select name="status" class="form-input">
+      <option value="">Todos os status</option>
+      <option value="importado" {% if status == 'importado' %}selected{% endif %}>Pendente</option>
+      <option value="conciliado" {% if status == 'conciliado' %}selected{% endif %}>Conciliado</option>
+    </select>
+    <select name="conta_bancaria" class="form-input">
+      <option value="">Todas as contas</option>
+      {% for c in contas_bancarias %}
+        <option value="{{ c.pk }}" {% if conta_bancaria_id == c.pk|stringformat:"s" %}selected{% endif %}>{{ c }}</option>
+      {% endfor %}
+    </select>
+    <div class="flex gap-2">
+      <button type="submit" class="btn-secondary">Filtrar</button>
+      <button type="button" @click="lancarModal = true" class="btn-secondary">Lançar extrato</button>
+    </div>
+  </form>
+
+  <div class="card overflow-hidden">
+    <table class="w-full text-sm">
+      <thead>
+        <tr class="text-left text-xs uppercase tracking-wide" :style="temaClaro ? 'color:#6b7280;background:#f9fafb;' : 'color:#9ca3af;background:#1e1e20;'">
+          <th class="px-4 py-3">Data</th>
+          <th class="px-4 py-3">Conta</th>
+          <th class="px-4 py-3">Histórico</th>
+          <th class="px-4 py-3 text-right">Valor</th>
+          <th class="px-4 py-3">Status</th>
+          <th class="px-4 py-3">Ação</th>
+        </tr>
+      </thead>
+      <tbody class="divide-y">
+        {% for linha in linhas %}
+        <tr>
+          <td class="px-4 py-3">{{ linha.extrato.data_lancamento|date:"d/m/Y" }}</td>
+          <td class="px-4 py-3">{{ linha.extrato.conta_bancaria }}</td>
+          <td class="px-4 py-3">{{ linha.extrato.historico|default:"-" }}</td>
+          <td class="px-4 py-3 text-right font-semibold" style="color:{% if linha.extrato.valor < 0 %}#dc2626{% else %}#16a34a{% endif %};">
+            R$ {{ linha.extrato.valor|floatformat:2 }}
+          </td>
+          <td class="px-4 py-3">
+            {% if linha.extrato.status == 'conciliado' %}
+              <span class="px-2 py-1 text-xs rounded-full bg-green-100 text-green-700 font-medium">Conciliado</span>
+            {% else %}
+              <span class="px-2 py-1 text-xs rounded-full bg-amber-100 text-amber-700 font-medium">Pendente</span>
+            {% endif %}
+          </td>
+          <td class="px-4 py-3">
+            {% if linha.extrato.status == 'conciliado' %}
+              <form method="post" action="{% url 'financeiro:conciliacao_desconciliar' linha.extrato.pk %}">
+                {% csrf_token %}
+                <button type="submit" class="btn-secondary text-xs">Desfazer</button>
+              </form>
+            {% elif linha.sugestoes %}
+              <div class="space-y-1">
+                {% for s in linha.sugestoes %}
+                <form method="post" action="{% url 'financeiro:conciliacao_conciliar' linha.extrato.pk %}" class="flex items-center gap-2">
+                  {% csrf_token %}
+                  <input type="hidden" name="lancamento_tipo" value="{{ s.tipo }}">
+                  <input type="hidden" name="lancamento_id" value="{{ s.obj.pk }}">
+                  <button type="submit" class="btn-secondary text-xs">
+                    Casar com {{ s.descricao }} (R$ {{ s.valor|floatformat:2 }} em {{ s.data|date:"d/m" }})
+                  </button>
+                </form>
+                {% endfor %}
+              </div>
+            {% else %}
+              <span class="text-xs" :style="temaClaro ? 'color:#94a3b8;' : 'color:#64748b;'">Sem sugestão</span>
+            {% endif %}
+          </td>
+        </tr>
+        {% empty %}
+        <tr><td colspan="6" class="px-4 py-8 text-center" :style="temaClaro ? 'color:#94a3b8;' : 'color:#64748b;'">Nenhum lançamento.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  {% if page_obj.paginator.num_pages > 1 %}
+  <div class="flex justify-center gap-2">
+    {% if page_obj.has_previous %}<a href="?page={{ page_obj.previous_page_number }}" class="btn-secondary text-xs">Anterior</a>{% endif %}
+    <span class="text-xs self-center">Página {{ page_obj.number }} de {{ page_obj.paginator.num_pages }}</span>
+    {% if page_obj.has_next %}<a href="?page={{ page_obj.next_page_number }}" class="btn-secondary text-xs">Próxima</a>{% endif %}
+  </div>
+  {% endif %}
+
+  <!-- ── Modal lançar extrato ── -->
+  <div x-show="lancarModal" x-cloak
+       class="fixed inset-0 z-50 flex items-center justify-center p-4"
+       style="background:rgba(0,0,0,0.5);">
+    <div class="card p-6 w-full max-w-md space-y-4" @click.stop>
+      <h3 class="text-lg font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">Lançar extrato</h3>
+      <form method="post" action="{% url 'financeiro:conciliacao_lancar' %}" class="space-y-3">
+        {% csrf_token %}
+        <div>
+          <label class="text-xs font-medium block mb-1">Conta bancária</label>
+          <select name="conta_bancaria" class="form-input w-full" required>
+            {% for c in contas_bancarias %}
+              <option value="{{ c.pk }}">{{ c }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div>
+          <label class="text-xs font-medium block mb-1">Data</label>
+          <input type="date" name="data_lancamento" class="form-input w-full" required>
+        </div>
+        <div>
+          <label class="text-xs font-medium block mb-1">Histórico</label>
+          <input type="text" name="historico" class="form-input w-full" placeholder="Ex.: TED recebida João Silva">
+        </div>
+        <div>
+          <label class="text-xs font-medium block mb-1">Valor (positivo = crédito, negativo = débito)</label>
+          <input type="text" name="valor" class="form-input w-full" placeholder="Ex.: 150,00 ou -80,00" required>
+        </div>
+        <div class="flex gap-3 justify-end">
+          <button type="button" @click="lancarModal = false" class="btn-secondary">Voltar</button>
+          <button type="submit" class="px-4 py-2 rounded-lg text-sm font-semibold" style="background:#3b82f6; color:#fff;">Lançar</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+{% endblock %}

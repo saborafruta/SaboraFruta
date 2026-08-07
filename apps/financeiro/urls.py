@@ -5,10 +5,25 @@ from apps.financeiro.views import receber as receber_views
 from apps.financeiro.views import pagar as pagar_views
 from apps.financeiro.views import plano_contas as pc_views
 from apps.financeiro.views import credito_cliente as cc_views
+from apps.financeiro.views.painel import PainelFinanceiroView
+from apps.financeiro.views.fluxo_caixa import FluxoCaixaView
+from apps.financeiro.views.conciliacao import (
+    ExtratoListView, ExtratoLancarView, ExtratoConciliarView, ExtratoDesconciliarView,
+)
 
 app_name = "financeiro"
 
 urlpatterns = [
+    # ── Gestão Financeira ───────────────────────────────────────────────────────
+    path("painel/",       PainelFinanceiroView.as_view(), name="painel"),
+    path("fluxo-caixa/",  FluxoCaixaView.as_view(),       name="fluxo_caixa"),
+
+    # ── Conciliação Bancária ─────────────────────────────────────────────────────
+    path("conciliacao/",                    ExtratoListView.as_view(),         name="conciliacao_list"),
+    path("conciliacao/lancar/",             ExtratoLancarView.as_view(),       name="conciliacao_lancar"),
+    path("conciliacao/<int:pk>/conciliar/", ExtratoConciliarView.as_view(),    name="conciliacao_conciliar"),
+    path("conciliacao/<int:pk>/desconciliar/", ExtratoDesconciliarView.as_view(), name="conciliacao_desconciliar"),
+
     # ── Contas a Receber ──────────────────────────────────────────────────────
     path("receber/",                   receber_views.ContaReceberListView.as_view(),     name="receber_list"),
     path("receber/relatorio/",         receber_views.ContaReceberRelatorioView.as_view(), name="receber_relatorio"),

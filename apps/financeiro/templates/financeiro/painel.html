@@ -1,0 +1,77 @@
+{% extends "_base.html" %}
+{% block title %}{{ title }}{% endblock %}
+{% block page_title %}{{ title }}{% endblock %}
+
+{% block content %}
+<div class="max-w-5xl mx-auto space-y-5">
+
+  <div>
+    <h2 class="text-2xl font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">Gestão Financeira</h2>
+    <p class="text-sm mt-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+      Resumo consolidado de {{ inicio_mes|date:"d/m" }} até {{ hoje|date:"d/m/Y" }} — PDV, Caixa e Financeiro num só lugar.
+    </p>
+  </div>
+
+  <div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
+    <div class="card">
+      <div class="text-xs" :style="temaClaro ? 'color:#94a3b8;' : 'color:#64748b;'">Entradas no mês</div>
+      <div class="text-xl font-bold" style="color:#16a34a;">R$ {{ fluxo.entradas_realizadas|floatformat:2 }}</div>
+    </div>
+    <div class="card">
+      <div class="text-xs" :style="temaClaro ? 'color:#94a3b8;' : 'color:#64748b;'">Saídas no mês</div>
+      <div class="text-xl font-bold" style="color:#dc2626;">R$ {{ fluxo.saidas_realizadas|floatformat:2 }}</div>
+    </div>
+    <div class="card">
+      <div class="text-xs" :style="temaClaro ? 'color:#94a3b8;' : 'color:#64748b;'">Saldo do período</div>
+      <div class="text-xl font-bold" style="color:{% if fluxo.saldo_periodo < 0 %}#dc2626{% else %}#16a34a{% endif %};">R$ {{ fluxo.saldo_periodo|floatformat:2 }}</div>
+    </div>
+    <div class="card">
+      <div class="text-xs" :style="temaClaro ? 'color:#94a3b8;' : 'color:#64748b;'">Saldo projetado</div>
+      <div class="text-xl font-bold">R$ {{ fluxo.saldo_projetado|floatformat:2 }}</div>
+    </div>
+  </div>
+
+  <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+    <a href="{% url 'financeiro:receber_list' %}?status=vencido" class="card block hover:opacity-90">
+      <div class="text-xs" :style="temaClaro ? 'color:#94a3b8;' : 'color:#64748b;'">Contas a receber</div>
+      <div class="text-xl font-bold">R$ {{ receber_pendente|floatformat:2 }}</div>
+      {% if receber_vencido %}<div class="text-xs mt-1" style="color:#dc2626;">R$ {{ receber_vencido|floatformat:2 }} vencido</div>{% endif %}
+    </a>
+    <a href="{% url 'financeiro:pagar_list' %}" class="card block hover:opacity-90">
+      <div class="text-xs" :style="temaClaro ? 'color:#94a3b8;' : 'color:#64748b;'">Contas a pagar</div>
+      <div class="text-xl font-bold">R$ {{ pagar_pendente|floatformat:2 }}</div>
+      {% if pagar_vencido %}<div class="text-xs mt-1" style="color:#dc2626;">R$ {{ pagar_vencido|floatformat:2 }} vencido</div>{% endif %}
+    </a>
+  </div>
+
+  <div class="card">
+    <h3 class="text-sm font-semibold mb-2">Caixa (PDV)</h3>
+    {% if sessoes_abertas %}
+      <ul class="space-y-1 text-sm">
+        {% for s in sessoes_abertas %}
+        <li>🟢 {{ s.caixa }} aberto por {{ s.usuario }} desde {{ s.data_abertura|date:"d/m H:i" }}</li>
+        {% endfor %}
+      </ul>
+    {% else %}
+      <p class="text-sm" :style="temaClaro ? 'color:#94a3b8;' : 'color:#64748b;'">Nenhum caixa aberto no momento.</p>
+    {% endif %}
+  </div>
+
+  <div class="card flex items-center justify-between">
+    <div>
+      <h3 class="text-sm font-semibold">Conciliação bancária</h3>
+      <p class="text-sm" :style="temaClaro ? 'color:#94a3b8;' : 'color:#64748b;'">
+        {% if extrato_pendente %}{{ extrato_pendente }} lançamento{{ extrato_pendente|pluralize }} do extrato ainda não conciliado{{ extrato_pendente|pluralize }}.{% else %}Tudo conciliado.{% endif %}
+      </p>
+    </div>
+    <a href="{% url 'financeiro:conciliacao_list' %}" class="btn-secondary">Conciliar</a>
+  </div>
+
+  <div class="flex flex-wrap gap-3">
+    <a href="{% url 'financeiro:fluxo_caixa' %}" class="btn-secondary">Fluxo de Caixa detalhado</a>
+    <a href="{% url 'financeiro:dre' %}" class="btn-secondary">DRE</a>
+    <a href="{% url 'financeiro:receber_list' %}" class="btn-secondary">Contas a Receber</a>
+    <a href="{% url 'financeiro:pagar_list' %}" class="btn-secondary">Contas a Pagar</a>
+  </div>
+</div>
+{% endblock %}
