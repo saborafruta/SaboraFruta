@@ -24,34 +24,48 @@
 {% csrf_token %}
 <div class="space-y-4" x-data="painelMesas()" x-init="iniciar()">
 
-  <div class="flex flex-wrap items-center gap-x-5 gap-y-1 text-sm">
-    <a href="{% url 'food_service:mesa-list' %}" class="btn-secondary" style="font-size:12px;">Cadastro de mesas</a>
-    <a href="{% url 'food_service:comanda-historico' %}" class="btn-secondary" style="font-size:12px;">Histórico</a>
-    <a href="{% url 'food_service:reserva-list' %}" class="btn-secondary" style="font-size:12px;">Reservas</a>
-    <label class="flex items-center gap-2 text-xs" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
-      <input type="checkbox" x-model="autoAtualizar">
-      Atualização automática (10s)
-    </label>
-    <span class="ml-auto text-xs" :style="temaClaro ? 'color:#94a3b8;' : 'color:#64748b;'" x-text="status"></span>
+  <div>
+    <h2 class="text-2xl font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">Painel de Mesas</h2>
+    <div class="flex flex-wrap items-center gap-3 mt-2">
+      <a href="{% url 'food_service:mesa-list' %}" class="btn-secondary" style="font-size:12px;">Cadastro de mesas</a>
+      <a href="{% url 'food_service:comanda-historico' %}" class="btn-secondary" style="font-size:12px;">Histórico</a>
+      <a href="{% url 'food_service:reserva-list' %}" class="btn-secondary" style="font-size:12px;">Reservas</a>
+      <label class="flex items-center gap-1.5 text-xs cursor-pointer" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+        <input type="checkbox" x-model="autoAtualizar">
+        Atualização automática (10s)
+      </label>
+      <span class="ml-auto text-xs" :style="temaClaro ? 'color:#94a3b8;' : 'color:#64748b;'" x-text="status"></span>
+    </div>
   </div>
 
-  <div class="card" x-show="chamados.length" x-cloak style="border:1px solid #f59e0b;">
-    <h3 class="text-sm font-semibold mb-2">Chamados dos clientes</h3>
-    <div class="space-y-2">
+  <div class="card p-4" x-show="chamados.length" x-cloak
+       :style="temaClaro ? 'border:1px solid #f59e0b; background:#fffbeb;' : 'border:1px solid #92400e; background:#292410;'">
+    <h3 class="text-sm font-semibold mb-3 flex items-center gap-2" style="color:#b45309;">
+      <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"/>
+      </svg>
+      Chamados dos clientes
+    </h3>
+    <div class="space-y-1.5">
       <template x-for="c in chamados" :key="c.id">
-        <div class="flex items-center justify-between text-sm">
-          <span>Mesa <strong x-text="c.mesa_numero"></strong> — <span x-text="c.tipo_display"></span> (há <span x-text="c.ha_minutos"></span> min)</span>
-          <button type="button" class="text-xs font-semibold" :style="temaClaro ? 'color:#2563eb;' : 'color:#60a5fa;'" @click="atenderChamado(c.id)">Marcar atendido</button>
+        <div class="flex items-center justify-between text-sm p-2 rounded-lg"
+             :style="temaClaro ? 'background:#fff;' : 'background:rgba(0,0,0,0.2);'">
+          <span>Mesa <strong x-text="c.mesa_numero"></strong> — <span x-text="c.tipo_display"></span>
+            <span class="text-xs" :style="temaClaro ? 'color:#94a3b8;' : 'color:#64748b;'">(há <span x-text="c.ha_minutos"></span> min)</span>
+          </span>
+          <button type="button" class="btn-secondary" style="font-size:11px; padding:4px 10px;" @click="atenderChamado(c.id)">Marcar atendido</button>
         </div>
       </template>
     </div>
   </div>
 
-  <div class="flex flex-wrap gap-3 text-xs">
+  <div class="flex flex-wrap items-center gap-x-4 gap-y-2 text-xs p-3 rounded-lg"
+       :style="temaClaro ? 'background:#f9fafb;' : 'background:#1e1e20;'">
+    <span class="font-semibold uppercase tracking-wide" :style="temaClaro ? 'color:#6b7280;' : 'color:#9ca3af;'">Legenda</span>
     <template x-for="s in legenda" :key="s.status">
       <span class="flex items-center gap-1.5">
         <span style="width:10px;height:10px;border-radius:50%;display:inline-block;" :style="'background:' + s.cor"></span>
-        <span x-text="s.label"></span>
+        <span x-text="s.label" :style="temaClaro ? 'color:#374151;' : 'color:#d4d4d4;'"></span>
       </span>
     </template>
   </div>
@@ -70,7 +84,7 @@
             <div x-show="m.cliente">Cliente: <strong x-text="m.cliente"></strong></div>
             <div>Pessoas: <strong x-text="m.quantidade_pessoas"></strong></div>
             <div>Aberta há <strong x-text="m.aberta_ha_minutos"></strong> min</div>
-            <div>Consumo: <strong x-text="'R$ ' + m.valor_consumido"></strong></div>
+            <div>Consumo: <strong x-text="'R$ ' + Number(m.valor_consumido || 0).toFixed(2)"></strong></div>
           </div>
         </template>
       </div>
