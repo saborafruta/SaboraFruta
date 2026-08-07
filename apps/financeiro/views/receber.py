@@ -9,6 +9,7 @@ from django.db.models import Count, Q, Sum
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.utils import timezone
+from django.utils.dateparse import parse_date
 from django.views import View
 
 from apps.core.services.exceptions import DomainError
@@ -312,6 +313,7 @@ class ContaReceberDetailView(PermissaoRequiredMixin, View):
             request.user.tem_permissao('financeiro', 'editar')
             and conta.status not in [StatusContaReceber.CANCELADO, StatusContaReceber.PAGO]
         )
+        pode_editar_prazo = pode_cancelar
         pill = PILL_STATUS.get(conta.status, 'is-slate')
 
         return render(request, 'financeiro/receber/detail.html', {
@@ -319,6 +321,7 @@ class ContaReceberDetailView(PermissaoRequiredMixin, View):
             'conta': conta,
             'pode_baixar': pode_baixar,
             'pode_cancelar': pode_cancelar,
+            'pode_editar_prazo': pode_editar_prazo,
             'pill': pill,
         })
 
@@ -410,6 +413,28 @@ class ContaReceberCancelarView(PermissaoRequiredMixin, View):
         try:
             ContaReceberService.cancelar(conta, motivo, request.user)
             messages.success(request, f'Conta #{pk} cancelada.')
+        except DomainError as exc:
+            messages.error(request, str(exc))
+        return redirect(reverse('financeiro:receber_detail', args=[pk]))
+
+
+class ContaReceberEditarPrazoView(PermissaoRequiredMixin, View):
+    permissao_modulo = 'financeiro'
+    permissao_acao = 'editar'
+
+    def post(self, request, pk):
+        filial = _filial(request)
+        conta = get_object_or_404(
+            ContaReceber.objects.for_filial(filial), pk=pk
+        )
+        nova_data = parse_date(request.POST.get('data_vencimento', '').strip())
+        motivo = request.POST.get('motivo', '').strip()
+        if not nova_data:
+            messages.error(request, 'Informe uma data de vencimento válida.')
+            return redirect(reverse('financeiro:receber_detail', args=[pk]))
+        try:
+            ContaReceberService.alterar_prazo(conta, nova_data, motivo, request.user)
+            messages.success(request, f'Prazo da conta #{pk} atualizado.')
         except DomainError as exc:
             messages.error(request, str(exc))
         return redirect(reverse('financeiro:receber_detail', args=[pk]))

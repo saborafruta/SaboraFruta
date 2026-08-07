@@ -130,6 +130,39 @@ class ContaReceberService:
         return conta
 
     @staticmethod
+    @transaction.atomic
+    def alterar_prazo(
+        conta: ContaReceber,
+        nova_data_vencimento: date,
+        motivo: str,
+        usuario,
+    ) -> ContaReceber:
+        """
+        Renegocia o vencimento de uma conta ainda não paga. Vira NEGOCIADO
+        (não ABERTO/VENCIDO) porque é isso que o campo de status já
+        representa: um prazo que foi conversado/ajustado com o cliente.
+        """
+        if conta.status == StatusContaReceber.PAGO:
+            raise DomainError('Não é possível alterar o prazo de uma conta já recebida.')
+        if conta.status == StatusContaReceber.CANCELADO:
+            raise DomainError('Não é possível alterar o prazo de uma conta cancelada.')
+
+        data_anterior = conta.data_vencimento
+        conta.data_vencimento = nova_data_vencimento
+        conta.status = StatusContaReceber.NEGOCIADO
+
+        sufixo = (
+            f'[Prazo alterado por {usuario} em {timezone.localdate():%d/%m/%Y}] '
+            f'{data_anterior:%d/%m/%Y} → {nova_data_vencimento:%d/%m/%Y}.'
+        )
+        if motivo:
+            sufixo += f' {motivo}'
+        conta.observacao = f'{conta.observacao}\n{sufixo}'.strip() if conta.observacao else sufixo
+
+        conta.save()
+        return conta
+
+    @staticmethod
     def atualizar_status_vencidos(filial) -> int:
         """Marca como VENCIDO contas com data_vencimento < hoje e status ABERTO."""
         hoje = timezone.localdate()

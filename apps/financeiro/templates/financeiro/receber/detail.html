@@ -5,7 +5,7 @@
 
 {% block content %}
 <div class="max-w-3xl mx-auto space-y-5"
-     x-data="{ cancelModal: false }">
+     x-data="{ cancelModal: false, prazoModal: false }">
 
   <!-- ── Breadcrumb ── -->
   <div>
@@ -195,6 +195,17 @@
     </button>
     {% endif %}
 
+    {% if pode_editar_prazo %}
+    <button @click="prazoModal = true"
+            class="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold transition-all"
+            :style="temaClaro ? 'background:#fffbeb; color:#b45309; border:1px solid #fde68a;' : 'background:rgba(245,158,11,0.1); color:#fcd34d; border:1px solid rgba(245,158,11,0.2);'">
+      <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/>
+      </svg>
+      Editar prazo
+    </button>
+    {% endif %}
+
     <a href="{% url 'financeiro:receber_list' %}" class="btn-secondary">← Voltar</a>
   </div>
 
@@ -219,6 +230,42 @@
                   class="px-4 py-2 rounded-lg text-sm font-semibold"
                   :style="temaClaro ? 'background:#be123c; color:#fff;' : 'background:#be123c; color:#fff;'">
             Confirmar cancelamento
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- ── Modal editar prazo ── -->
+  <div x-show="prazoModal" x-cloak
+       class="fixed inset-0 z-50 flex items-center justify-center p-4"
+       style="background:rgba(0,0,0,0.5);">
+    <div class="card p-6 w-full max-w-md space-y-4" @click.stop>
+      <h3 class="text-lg font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
+        Editar prazo — título #{{ conta.pk }}
+      </h3>
+      <p class="text-sm" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+        Renegocie a data de vencimento. A conta será marcada como Negociada.
+      </p>
+      <form method="post" action="{% url 'financeiro:receber_editar_prazo' conta.pk %}">
+        {% csrf_token %}
+        <label class="text-xs font-medium block mb-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+          Nova data de vencimento
+        </label>
+        <input type="date" name="data_vencimento" required
+               value="{{ conta.data_vencimento|date:'Y-m-d' }}"
+               class="form-input w-full mb-3">
+        <label class="text-xs font-medium block mb-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+          Motivo (opcional)
+        </label>
+        <textarea name="motivo" rows="3" placeholder="Motivo da renegociação..."
+                  class="form-input w-full mb-4"></textarea>
+        <div class="flex gap-3 justify-end">
+          <button type="button" @click="prazoModal = false" class="btn-secondary">Voltar</button>
+          <button type="submit"
+                  class="px-4 py-2 rounded-lg text-sm font-semibold"
+                  :style="temaClaro ? 'background:#b45309; color:#fff;' : 'background:#b45309; color:#fff;'">
+            Confirmar alteração
           </button>
         </div>
       </form>
