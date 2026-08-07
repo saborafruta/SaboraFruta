@@ -1,0 +1,132 @@
+{% extends "_base.html" %}
+{% block title %}{{ title }}{% endblock %}
+{% block page_title %}{{ title }}{% endblock %}
+
+{% block content %}
+<div class="max-w-5xl mx-auto space-y-5">
+
+  <div>
+    <p class="text-sm mb-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+      <a href="{% url 'food_service:painel' %}" :style="temaClaro ? 'color:#3b82f6;' : 'color:#60a5fa;'">Painel de Mesas</a>
+      <span class="mx-1">›</span> Controle de CMV
+    </p>
+    <h2 class="text-2xl font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">Controle de CMV</h2>
+  </div>
+
+  <form method="get" class="card flex flex-wrap gap-3 items-end">
+    <div>
+      <label class="block text-xs font-semibold mb-1">De</label>
+      <input type="date" name="data_inicio" value="{{ data_inicio|date:'Y-m-d' }}">
+    </div>
+    <div>
+      <label class="block text-xs font-semibold mb-1">Até</label>
+      <input type="date" name="data_fim" value="{{ data_fim|date:'Y-m-d' }}">
+    </div>
+    <div>
+      <label class="block text-xs font-semibold mb-1">Meta de CMV (%)</label>
+      <input type="text" name="meta_cmv" value="{{ meta_cmv_percentual|default:'' }}" placeholder="Ex.: 30" style="width:100px;">
+    </div>
+    <button type="submit" class="btn-secondary">Filtrar</button>
+  </form>
+
+  {% if resumo.alertas %}
+  <div class="card" style="border:1px solid #dc2626;">
+    <h3 class="text-sm font-semibold mb-2" style="color:#dc2626;">Alertas</h3>
+    <ul class="space-y-1 text-sm">
+      {% for alerta in resumo.alertas %}
+      <li>⚠️ {{ alerta.mensagem }}</li>
+      {% endfor %}
+    </ul>
+  </div>
+  {% endif %}
+
+  <div class="grid grid-cols-2 sm:grid-cols-3 gap-3">
+    <div class="card">
+      <div class="text-xs" :style="temaClaro ? 'color:#94a3b8;' : 'color:#64748b;'">Receita do período</div>
+      <div class="text-xl font-bold">R$ {{ resumo.receita_total|floatformat:2 }}</div>
+    </div>
+    <div class="card">
+      <div class="text-xs" :style="temaClaro ? 'color:#94a3b8;' : 'color:#64748b;'">CMV</div>
+      <div class="text-xl font-bold">R$ {{ resumo.custo_total|floatformat:2 }}
+        {% if resumo.cmv_percentual %}<span class="text-sm font-normal">({{ resumo.cmv_percentual|floatformat:1 }}%)</span>{% endif %}
+      </div>
+    </div>
+    <div class="card">
+      <div class="text-xs" :style="temaClaro ? 'color:#94a3b8;' : 'color:#64748b;'">Margem de contribuição</div>
+      <div class="text-xl font-bold" style="color:#16a34a;">R$ {{ resumo.margem_contribuicao|floatformat:2 }}</div>
+    </div>
+    <div class="card">
+      <div class="text-xs" :style="temaClaro ? 'color:#94a3b8;' : 'color:#64748b;'">Lucro bruto</div>
+      <div class="text-xl font-bold">R$ {{ resumo.lucro_bruto|floatformat:2 }}</div>
+    </div>
+    <div class="card">
+      <div class="text-xs" :style="temaClaro ? 'color:#94a3b8;' : 'color:#64748b;'">Despesas operacionais</div>
+      <div class="text-xl font-bold">R$ {{ resumo.despesas_operacionais|floatformat:2 }}</div>
+    </div>
+    <div class="card">
+      <div class="text-xs" :style="temaClaro ? 'color:#94a3b8;' : 'color:#64748b;'">Lucro líquido</div>
+      <div class="text-xl font-bold" style="color:{% if resumo.lucro_liquido < 0 %}#dc2626{% else %}#16a34a{% endif %};">R$ {{ resumo.lucro_liquido|floatformat:2 }}</div>
+    </div>
+  </div>
+  <p class="text-xs" :style="temaClaro ? 'color:#94a3b8;' : 'color:#64748b;'">
+    Margem de contribuição e lucro bruto usam o mesmo cálculo aqui (receita − CMV), já que o CMV é o principal custo variável considerado.
+    Lucro líquido subtrai as despesas operacionais pagas no financeiro (contas a pagar categorizadas como despesa) — a precisão depende do plano de contas estar bem categorizado.
+  </p>
+
+  <div class="card overflow-hidden">
+    <h3 class="text-sm font-semibold px-4 pt-4">CMV por prato</h3>
+    <table class="w-full text-sm mt-2">
+      <thead>
+        <tr class="text-left text-xs uppercase tracking-wide" :style="temaClaro ? 'color:#6b7280;background:#f9fafb;' : 'color:#9ca3af;background:#1e1e20;'">
+          <th class="px-4 py-3">Prato</th>
+          <th class="px-4 py-3">Receita</th>
+          <th class="px-4 py-3">Custo</th>
+          <th class="px-4 py-3">CMV %</th>
+          <th class="px-4 py-3">Margem</th>
+        </tr>
+      </thead>
+      <tbody class="divide-y">
+        {% for p in resumo.por_prato %}
+        <tr>
+          <td class="px-4 py-3">{{ p.nome }}{% if not p.tem_ficha %} <span class="text-xs" :style="temaClaro ? 'color:#94a3b8;' : 'color:#64748b;'">(sem ficha técnica)</span>{% endif %}</td>
+          <td class="px-4 py-3">R$ {{ p.receita|floatformat:2 }}</td>
+          <td class="px-4 py-3">R$ {{ p.custo|floatformat:2 }}</td>
+          <td class="px-4 py-3">{% if p.cmv_percentual is not None %}{{ p.cmv_percentual }}%{% else %}—{% endif %}</td>
+          <td class="px-4 py-3">R$ {{ p.margem|floatformat:2 }}</td>
+        </tr>
+        {% empty %}
+        <tr><td colspan="5" class="px-4 py-8 text-center" :style="temaClaro ? 'color:#94a3b8;' : 'color:#64748b;'">Nenhuma venda no período.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  <div class="card overflow-hidden">
+    <h3 class="text-sm font-semibold px-4 pt-4">CMV por categoria</h3>
+    <table class="w-full text-sm mt-2">
+      <thead>
+        <tr class="text-left text-xs uppercase tracking-wide" :style="temaClaro ? 'color:#6b7280;background:#f9fafb;' : 'color:#9ca3af;background:#1e1e20;'">
+          <th class="px-4 py-3">Categoria</th>
+          <th class="px-4 py-3">Receita</th>
+          <th class="px-4 py-3">Custo</th>
+          <th class="px-4 py-3">CMV %</th>
+          <th class="px-4 py-3">Margem</th>
+        </tr>
+      </thead>
+      <tbody class="divide-y">
+        {% for c in resumo.por_categoria %}
+        <tr>
+          <td class="px-4 py-3">{{ c.nome }}</td>
+          <td class="px-4 py-3">R$ {{ c.receita|floatformat:2 }}</td>
+          <td class="px-4 py-3">R$ {{ c.custo|floatformat:2 }}</td>
+          <td class="px-4 py-3">{% if c.cmv_percentual is not None %}{{ c.cmv_percentual }}%{% else %}—{% endif %}</td>
+          <td class="px-4 py-3">R$ {{ c.margem|floatformat:2 }}</td>
+        </tr>
+        {% empty %}
+        <tr><td colspan="5" class="px-4 py-8 text-center" :style="temaClaro ? 'color:#94a3b8;' : 'color:#64748b;'">Nenhuma venda no período.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

@@ -49,4 +49,6 @@ urlpatterns = [
     path('kds/<int:pk>/cancelar/', views.KdsCancelarItemView.as_view(), name='kds-cancelar'),
     path('kds/produto-indisponivel/', views.ProdutoIndisponivelView.as_view(), name='produto-indisponivel'),
     path('kds/produto-disponivel/<int:pk>/', views.ProdutoDisponivelView.as_view(), name='produto-disponivel'),
+
+    path('cmv/', views.CmvView.as_view(), name='cmv'),
 ]

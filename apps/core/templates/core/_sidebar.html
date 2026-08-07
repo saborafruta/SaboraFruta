@@ -1094,6 +1094,18 @@
         </svg>
         <span x-show="!collapsed">Cozinha (KDS)</span>
       </a>
+
+      <a href="{% url 'food_service:cmv' %}"
+         class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-all duration-150"
+         :class="collapsed ? 'justify-center' : ''"
+         :style="{% if '/food-service/cmv/' in request.path %}temaClaro ? 'background:#dbeafe; color:#1d4ed8; font-weight:600;' : 'background:#1e2a3a; color:#f8fafc;'{% else %}temaClaro ? 'color:#6b7280;' : 'color:#f8fafc;'{% endif %}"
+         {% if '/food-service/cmv/' not in request.path %}onmouseover="this.style.background=temaClaro?'#eff6ff':'#242426'; this.style.color=temaClaro?'#1d4ed8':'#d4d4d4';" onmouseout="this.style.background='transparent'; this.style.color=temaClaro?'#6b7280':'#f8fafc'; this.style.fontWeight='';"{% endif %}
+         title="Controle de CMV">
+        <svg class="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 8h6m-5 4h5m-5 4h5M5 6h14a1 1 0 011 1v10a1 1 0 01-1 1H5a1 1 0 01-1-1V7a1 1 0 011-1z"/>
+        </svg>
+        <span x-show="!collapsed">Controle de CMV</span>
+      </a>
       </div><!-- /food_service -->
     </nav>
 
@@ -1687,6 +1699,16 @@
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M12 3v2m6.364.636l-1.414 1.414M21 12h-2M5 12H3m3.05-6.95L4.636 6.464M12 8a4 4 0 100 8 4 4 0 000-8z"/>
         </svg>
         Cozinha (KDS)
+      </a>
+
+      <a href="{% url 'food_service:cmv' %}" @click="mobileOpen = false"
+         class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-all duration-150"
+         :style="{% if '/food-service/cmv/' in request.path %}temaClaro ? 'background:#dbeafe; color:#1d4ed8; font-weight:600;' : 'background:#1e2a3a; color:#f8fafc;'{% else %}temaClaro ? 'color:#6b7280;' : 'color:#f8fafc;'{% endif %}"
+         {% if '/food-service/cmv/' not in request.path %}onmouseover="this.style.background=temaClaro?'#eff6ff':'#242426'; this.style.color=temaClaro?'#1d4ed8':'#d4d4d4';" onmouseout="this.style.background='transparent'; this.style.color=temaClaro?'#6b7280':'#f8fafc'; this.style.fontWeight='';"{% endif %}>
+        <svg class="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 8h6m-5 4h5m-5 4h5M5 6h14a1 1 0 011 1v10a1 1 0 01-1 1H5a1 1 0 01-1-1V7a1 1 0 011-1z"/>
+        </svg>
+        Controle de CMV
       </a>
       </div><!-- /food_service -->
     </nav>

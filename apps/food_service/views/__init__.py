@@ -36,6 +36,7 @@ from .kds import (
     api_kds,
 )
 from .kds_indicadores import KdsIndicadoresView
+from .cmv import CmvView
 from .painel import (
     ChamadoAtenderView,
     PainelMesasView,
@@ -51,6 +52,7 @@ from .reservas import (
 
 __all__ = [
     'ChamadoAtenderView',
+    'CmvView',
     'ComandaAbrirView',
     'ComandaAdicionarComplementoView',
     'ComandaAdicionarItemView',
