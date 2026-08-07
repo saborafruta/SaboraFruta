@@ -7,13 +7,14 @@
 
 {% block list_subtitle %}
   <p class="text-sm mt-1" :style="temaClaro ? 'color:#6b7280;' : 'color:#aaa;'">
-    {{ total_alertas }} ativos, {{ total_criticos }} criticos, {{ total_minimos }} de estoque minimo e {{ total_vencimentos }} de vencimento.
+    {{ total_alertas }} ativos, {{ total_criticos }} criticos, {{ total_minimos }} de estoque minimo, {{ total_vencimentos }} de vencimento, {{ total_parados }} parados e {{ total_sem_giro }} sem giro.
   </p>
 {% endblock %}
 
 {% block list_actions %}
   <a href="{% url 'estoque:estoque-list' %}?status=critico" class="btn-secondary">Ver Estoque Critico</a>
   <a href="{% url 'estoque:lote-list' %}" class="btn-secondary">Ver Lotes</a>
+  <a href="{% url 'estoque:desperdicio-dashboard' %}" class="btn-secondary">Desperdicio</a>
 {% endblock %}
 
 {% block list_filters %}
@@ -22,6 +23,8 @@
     <option value="">Todos os tipos</option>
     <option value="minimo" {% if tipo == 'minimo' %}selected{% endif %}>Estoque minimo</option>
     <option value="vencimento" {% if tipo == 'vencimento' %}selected{% endif %}>Vencimento</option>
+    <option value="parado" {% if tipo == 'parado' %}selected{% endif %}>Estoque parado</option>
+    <option value="sem_giro" {% if tipo == 'sem_giro' %}selected{% endif %}>Sem giro</option>
   </select>
   <select name="nivel" class="form-input">
     <option value="">Todos os niveis</option>

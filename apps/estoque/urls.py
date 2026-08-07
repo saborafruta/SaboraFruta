@@ -56,6 +56,7 @@ urlpatterns = [
 
     # Alertas
     path('alertas/', views.AlertaListView.as_view(), name='alerta-list'),
+    path('desperdicio/', views.DesperdicioDashboardView.as_view(), name='desperdicio-dashboard'),
 
     # Endpoints JSON para typeahead
     path('api/fornecedores/buscar/', views.FornecedorSearchJsonView.as_view(), name='fornecedor-search-json'),

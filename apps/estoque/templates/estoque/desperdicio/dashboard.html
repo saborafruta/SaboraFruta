@@ -1,0 +1,140 @@
+{% extends "_base.html" %}
+{% block title %}{{ title }}{% endblock %}
+{% block page_title %}{{ title }}{% endblock %}
+
+{% block content %}
+<div class="max-w-5xl mx-auto space-y-5">
+
+  <div>
+    <p class="text-sm mb-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+      <a href="{% url 'estoque:alerta-list' %}" :style="temaClaro ? 'color:#3b82f6;' : 'color:#60a5fa;'">Alertas de Estoque</a>
+      <span class="mx-1">›</span> Controle de Validade e Desperdício
+    </p>
+    <h2 class="text-2xl font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">Controle de Validade e Desperdício</h2>
+  </div>
+
+  <form method="get" class="card flex flex-wrap gap-3 items-end">
+    <div>
+      <label class="block text-xs font-semibold mb-1">De</label>
+      <input type="date" name="data_inicio" value="{{ data_inicio|date:'Y-m-d' }}">
+    </div>
+    <div>
+      <label class="block text-xs font-semibold mb-1">Até</label>
+      <input type="date" name="data_fim" value="{{ data_fim|date:'Y-m-d' }}">
+    </div>
+    <button type="submit" class="btn-secondary">Filtrar</button>
+    <a href="{% url 'estoque:alerta-list' %}?tipo=parado" class="btn-secondary ml-auto">Ver estoque parado</a>
+    <a href="{% url 'estoque:alerta-list' %}?tipo=sem_giro" class="btn-secondary">Ver produtos sem giro</a>
+  </form>
+
+  <div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
+    <div class="card">
+      <div class="text-xs" :style="temaClaro ? 'color:#94a3b8;' : 'color:#64748b;'">Perdas no período</div>
+      <div class="text-xl font-bold" style="color:#dc2626;">R$ {{ resumo.valor|floatformat:2 }}</div>
+      <div class="text-xs" :style="temaClaro ? 'color:#94a3b8;' : 'color:#64748b;'">{{ resumo.eventos }} evento{{ resumo.eventos|pluralize }}</div>
+    </div>
+    <div class="card">
+      <div class="text-xs" :style="temaClaro ? 'color:#94a3b8;' : 'color:#64748b;'">Quantidade perdida</div>
+      <div class="text-xl font-bold">{{ resumo.quantidade|floatformat:2 }}</div>
+    </div>
+    <div class="card">
+      <div class="text-xs" :style="temaClaro ? 'color:#94a3b8;' : 'color:#64748b;'">Estoque parado</div>
+      <div class="text-xl font-bold">{{ total_parados }}</div>
+      <div class="text-xs" :style="temaClaro ? 'color:#94a3b8;' : 'color:#64748b;'">produto{{ total_parados|pluralize }} sem movimentação</div>
+    </div>
+    <div class="card">
+      <div class="text-xs" :style="temaClaro ? 'color:#94a3b8;' : 'color:#64748b;'">Sem giro</div>
+      <div class="text-xl font-bold">{{ total_sem_giro }}</div>
+      <div class="text-xs" :style="temaClaro ? 'color:#94a3b8;' : 'color:#64748b;'">produto{{ total_sem_giro|pluralize }} sem saída</div>
+    </div>
+  </div>
+
+  {% if indicador %}
+  <div class="card">
+    <h3 class="text-sm font-semibold mb-2">Indicador de redução de desperdício</h3>
+    <p class="text-sm" :style="temaClaro ? 'color:#374151;' : 'color:#d4d4d4;'">
+      Perdas em {{ indicador.mes_atual|date:"M/Y" }}: R$ {{ indicador.valor_atual|floatformat:2 }}
+      vs. {{ indicador.mes_anterior|date:"M/Y" }}: R$ {{ indicador.valor_anterior|floatformat:2 }}
+      —
+      <span style="color:{% if indicador.variacao_percentual < 0 %}#16a34a{% else %}#dc2626{% endif %}; font-weight:600;">
+        {% if indicador.variacao_percentual < 0 %}redução{% else %}aumento{% endif %} de {{ indicador.variacao_percentual|floatformat:1 }}%
+      </span>
+    </p>
+  </div>
+  {% endif %}
+
+  <div class="card overflow-hidden">
+    <h3 class="text-sm font-semibold px-4 pt-4">Evolução mensal das perdas</h3>
+    <table class="w-full text-sm mt-2">
+      <thead>
+        <tr class="text-left text-xs uppercase tracking-wide" :style="temaClaro ? 'color:#6b7280;background:#f9fafb;' : 'color:#9ca3af;background:#1e1e20;'">
+          <th class="px-4 py-3">Mês</th>
+          <th class="px-4 py-3">Quantidade</th>
+          <th class="px-4 py-3">Valor</th>
+        </tr>
+      </thead>
+      <tbody class="divide-y">
+        {% for m in evolucao %}
+        <tr>
+          <td class="px-4 py-3">{{ m.mes|date:"M/Y" }}</td>
+          <td class="px-4 py-3">{{ m.quantidade|floatformat:2 }}</td>
+          <td class="px-4 py-3">R$ {{ m.valor|floatformat:2 }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  <div class="card overflow-hidden">
+    <h3 class="text-sm font-semibold px-4 pt-4">Perdas por tipo</h3>
+    <table class="w-full text-sm mt-2">
+      <thead>
+        <tr class="text-left text-xs uppercase tracking-wide" :style="temaClaro ? 'color:#6b7280;background:#f9fafb;' : 'color:#9ca3af;background:#1e1e20;'">
+          <th class="px-4 py-3">Tipo</th>
+          <th class="px-4 py-3">Eventos</th>
+          <th class="px-4 py-3">Quantidade</th>
+          <th class="px-4 py-3">Valor</th>
+        </tr>
+      </thead>
+      <tbody class="divide-y">
+        {% for t in resumo.por_tipo %}
+        <tr>
+          <td class="px-4 py-3">{{ t.tipo_label }}</td>
+          <td class="px-4 py-3">{{ t.eventos }}</td>
+          <td class="px-4 py-3">{{ t.quantidade|floatformat:2 }}</td>
+          <td class="px-4 py-3">R$ {{ t.valor|floatformat:2 }}</td>
+        </tr>
+        {% empty %}
+        <tr><td colspan="4" class="px-4 py-8 text-center" :style="temaClaro ? 'color:#94a3b8;' : 'color:#64748b;'">Nenhuma perda registrada no período.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  <div class="card overflow-hidden">
+    <h3 class="text-sm font-semibold px-4 pt-4">Desperdício por setor (categoria do produto)</h3>
+    <table class="w-full text-sm mt-2">
+      <thead>
+        <tr class="text-left text-xs uppercase tracking-wide" :style="temaClaro ? 'color:#6b7280;background:#f9fafb;' : 'color:#9ca3af;background:#1e1e20;'">
+          <th class="px-4 py-3">Categoria</th>
+          <th class="px-4 py-3">Eventos</th>
+          <th class="px-4 py-3">Quantidade</th>
+          <th class="px-4 py-3">Valor</th>
+        </tr>
+      </thead>
+      <tbody class="divide-y">
+        {% for c in por_categoria %}
+        <tr>
+          <td class="px-4 py-3">{{ c.categoria }}</td>
+          <td class="px-4 py-3">{{ c.eventos }}</td>
+          <td class="px-4 py-3">{{ c.quantidade|floatformat:2 }}</td>
+          <td class="px-4 py-3">R$ {{ c.valor|floatformat:2 }}</td>
+        </tr>
+        {% empty %}
+        <tr><td colspan="4" class="px-4 py-8 text-center" :style="temaClaro ? 'color:#94a3b8;' : 'color:#64748b;'">Nenhuma perda registrada no período.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}
