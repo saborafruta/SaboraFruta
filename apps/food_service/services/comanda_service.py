@@ -7,6 +7,7 @@ from django.utils import timezone
 
 from apps.core.services.exceptions import DadosInvalidosError
 from apps.food_service.models import Comanda, ComplementoItemComanda, ItemComanda, Mesa
+from apps.food_service.services.ficha_tecnica_service import FichaTecnicaService
 from apps.food_service.services.notificacao_service import notificar_pedido_recebido
 from apps.pdv.services.venda_pdv_service import VendaPDVService
 
@@ -200,10 +201,13 @@ class ComandaService:
         # com o item principal fica só no lado da comanda (que continua
         # consultável no histórico após o fechamento).
         itens = []
+        produtos_vendidos = []  # (produto, quantidade) -- pra explodir ficha técnica depois
         for item in itens_comanda:
             itens.append({'produto_id': item.produto_id, 'quantidade': item.quantidade})
+            produtos_vendidos.append((item.produto, item.quantidade))
             for complemento in item.complementos.all():
                 itens.append({'produto_id': complemento.produto_id, 'quantidade': complemento.quantidade})
+                produtos_vendidos.append((complemento.produto, complemento.quantidade))
 
         observacao = comanda.observacoes
         if nota_divisao:
@@ -221,6 +225,19 @@ class ComandaService:
             observacao=observacao,
             request=request,
         )
+
+        # Pratos com ficha técnica ativa consomem os ingredientes do
+        # estoque (não o próprio prato -- ver FichaTecnicaService). Prato
+        # sem ficha cadastrada passa direto, sem efeito nenhum aqui.
+        for produto, quantidade in produtos_vendidos:
+            FichaTecnicaService.consumir_ingredientes(
+                produto=produto,
+                quantidade_vendida=quantidade,
+                filial=comanda.filial,
+                usuario=request.user,
+                documento_id=venda.pk,
+                documento_numero=str(venda.numero_venda),
+            )
 
         comanda.venda_pdv = venda
         comanda.status = Comanda.Status.FECHADA

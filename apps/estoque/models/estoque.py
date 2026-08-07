@@ -89,6 +89,7 @@ class MovimentacaoEstoque(FilialScopedModel):
         AJUSTE_MANUAL = 'ajuste_manual', 'Ajuste Manual'
         ORDEM_PRODUCAO = 'ordem_producao', 'Ordem de Produção'
         ESTORNO_ENTRADA = 'estorno_entrada', 'Estorno de Entrada'
+        COMANDA = 'comanda', 'Comanda (Food Service)'
 
     produto = models.ForeignKey(
         'produtos.Produto', on_delete=models.PROTECT, related_name='movimentacoes',

@@ -16,7 +16,7 @@ from apps.financeiro.models import FormaPagamento
 from apps.produtos.models import Produto
 
 from ..models import Comanda, ComplementoItemComanda, ItemComanda, Mesa
-from ..services import ComandaService
+from ..services import ComandaService, FichaTecnicaService
 
 
 class ComandaAbrirView(PermissaoRequiredMixin, View):
@@ -74,6 +74,11 @@ class ComandaDetailView(PermissaoRequiredMixin, View):
             ),
             pk=pk,
         )
+        for item in comanda.itens.all():
+            item.custo_estimado = FichaTecnicaService.custo_estimado(item.produto, item.quantidade)
+            if item.custo_estimado is not None:
+                item.margem_estimada = item.valor_total_com_complementos - item.custo_estimado
+
         outras_comandas_abertas = (
             Comanda.objects.for_filial(request.filial_ativa)
             .filter(status=Comanda.Status.ABERTA)

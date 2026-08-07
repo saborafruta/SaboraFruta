@@ -105,6 +105,11 @@
               {{ item.get_status_preparo_display }}
             </span>
             {% endif %}
+            {% if item.custo_estimado is not None %}
+            <div class="text-xs" :style="temaClaro ? 'color:#94a3b8;' : 'color:#64748b;'">
+              CMV: R$ {{ item.custo_estimado|floatformat:2 }} · margem: R$ {{ item.margem_estimada|floatformat:2 }}
+            </div>
+            {% endif %}
             {% if item.observacoes %}<div class="text-xs" :style="temaClaro ? 'color:#94a3b8;' : 'color:#64748b;'">{{ item.observacoes }}</div>{% endif %}
             {% for complemento in item.complementos.all %}
             <div class="text-xs flex items-center gap-2" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'" style="margin-top:2px;">
