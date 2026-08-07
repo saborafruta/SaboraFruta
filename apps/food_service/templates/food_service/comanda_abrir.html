@@ -4,64 +4,86 @@
 {% block page_title %}{{ title }}{% endblock %}
 
 {% block content %}
-<div class="max-w-md mx-auto space-y-5">
-  <p class="text-sm" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
-    <a href="{% url 'food_service:painel' %}" :style="temaClaro ? 'color:#3b82f6;' : 'color:#60a5fa;'">Painel de Mesas</a>
-    <span class="mx-1">›</span> Abrir comanda
-  </p>
+<div class="max-w-2xl mx-auto space-y-5">
 
-  <form method="post" action="{% url 'food_service:comanda-abrir' %}" class="card space-y-4">
+  <div>
+    <p class="text-sm mb-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+      <a href="{% url 'food_service:painel' %}" :style="temaClaro ? 'color:#3b82f6;' : 'color:#60a5fa;'">Painel de Mesas</a>
+      <span class="mx-1">›</span> Abrir comanda
+    </p>
+    <h2 class="text-2xl font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">Abrir comanda</h2>
+    {% if mesas_selecionadas %}
+      <p class="text-sm mt-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+        Mesa{{ mesas_selecionadas|length|pluralize }}:
+        <strong :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">{% for mesa in mesas_selecionadas %}{{ mesa }}{% if not forloop.last %}, {% endif %}{% endfor %}</strong>
+      </p>
+    {% else %}
+      <p class="text-sm mt-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+        Comanda avulsa (sem mesa) — balcão ou individual.
+      </p>
+    {% endif %}
+  </div>
+
+  <form method="post" action="{% url 'food_service:comanda-abrir' %}" novalidate>
     {% csrf_token %}
     {% for mesa in mesas_selecionadas %}
       <input type="hidden" name="mesa_id" value="{{ mesa.pk }}">
     {% endfor %}
 
-    {% if mesas_selecionadas %}
-      <p class="text-sm">
-        Mesa{{ mesas_selecionadas|length|pluralize }}:
-        <strong>{% for mesa in mesas_selecionadas %}{{ mesa }}{% if not forloop.last %}, {% endif %}{% endfor %}</strong>
-      </p>
-    {% else %}
-      <p class="text-sm" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
-        Comanda avulsa (sem mesa) — balcão ou individual.
-      </p>
-    {% endif %}
+    <div class="space-y-5">
+      <div class="card p-6 space-y-5">
+        <h3 class="text-xs font-semibold uppercase tracking-widest pb-2 border-b"
+            :style="temaClaro ? 'color:#6b7280; border-color:#e5e7eb;' : 'color:#6b7280; border-color:#374151;'">
+          Dados da comanda
+        </h3>
 
-    <div>
-      <label class="block text-xs font-semibold mb-1">Tipo de comanda</label>
-      <select name="tipo" class="w-full">
-        <option value="mesa" {% if mesas_selecionadas %}selected{% endif %}>Por mesa</option>
-        <option value="cliente">Por cliente</option>
-        <option value="individual" {% if not mesas_selecionadas %}selected{% endif %}>Individual</option>
-        <option value="compartilhada">Compartilhada</option>
-        <option value="qrcode">QR Code</option>
-      </select>
-      <p class="text-xs mt-1" :style="temaClaro ? 'color:#94a3b8;' : 'color:#64748b;'">
-        "QR Code" só registra o tipo por enquanto — a leitura pelo cliente chega junto com o Cardápio Digital.
-      </p>
-    </div>
+        <div>
+          <label class="block text-sm font-medium mb-1.5" :style="temaClaro ? 'color:#374151;' : 'color:#d1d5db;'">
+            Tipo de comanda
+          </label>
+          <select name="tipo" class="form-input w-full">
+            <option value="mesa" {% if mesas_selecionadas %}selected{% endif %}>Por mesa</option>
+            <option value="cliente">Por cliente</option>
+            <option value="individual" {% if not mesas_selecionadas %}selected{% endif %}>Individual</option>
+            <option value="compartilhada">Compartilhada</option>
+            <option value="qrcode">QR Code</option>
+          </select>
+          <p class="text-xs mt-1.5" :style="temaClaro ? 'color:#94a3b8;' : 'color:#64748b;'">
+            "QR Code" só registra o tipo por enquanto — a leitura pelo cliente chega junto com o Cardápio Digital.
+          </p>
+        </div>
 
-    <div>
-      <label class="block text-xs font-semibold mb-1">Cliente (código do cadastro, opcional)</label>
-      <input type="number" name="cliente_id" class="w-full" placeholder="Ex.: 42">
-      <p class="text-xs mt-1" :style="temaClaro ? 'color:#94a3b8;' : 'color:#64748b;'">
-        Consulte o código em <a href="{% url 'cadastros:cliente-list' %}" :style="temaClaro ? 'color:#1d4ed8;' : 'color:#93c5fd;'">Clientes</a>.
-      </p>
-    </div>
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-5">
+          <div>
+            <label class="block text-sm font-medium mb-1.5" :style="temaClaro ? 'color:#374151;' : 'color:#d1d5db;'">
+              Cliente (código do cadastro, opcional)
+            </label>
+            <input type="number" name="cliente_id" class="form-input w-full" placeholder="Ex.: 42">
+            <p class="text-xs mt-1.5" :style="temaClaro ? 'color:#94a3b8;' : 'color:#64748b;'">
+              Consulte o código em <a href="{% url 'cadastros:cliente-list' %}" :style="temaClaro ? 'color:#1d4ed8;' : 'color:#93c5fd;'">Clientes</a>.
+            </p>
+          </div>
 
-    <div>
-      <label class="block text-xs font-semibold mb-1">Nome do ocupante</label>
-      <input type="text" name="nome_ocupante" class="w-full" value="{{ nome_ocupante_sugerido }}" placeholder="Ex.: João (sem cadastro)">
-    </div>
+          <div>
+            <label class="block text-sm font-medium mb-1.5" :style="temaClaro ? 'color:#374151;' : 'color:#d1d5db;'">
+              Nome do ocupante
+            </label>
+            <input type="text" name="nome_ocupante" class="form-input w-full" value="{{ nome_ocupante_sugerido }}" placeholder="Ex.: João (sem cadastro)">
+          </div>
 
-    <div>
-      <label class="block text-xs font-semibold mb-1">Quantidade de pessoas</label>
-      <input type="number" name="quantidade_pessoas" value="{{ quantidade_pessoas_sugerida }}" min="1" class="w-full">
-    </div>
+          <div>
+            <label class="block text-sm font-medium mb-1.5" :style="temaClaro ? 'color:#374151;' : 'color:#d1d5db;'">
+              Quantidade de pessoas
+            </label>
+            <input type="number" name="quantidade_pessoas" value="{{ quantidade_pessoas_sugerida }}" min="1" class="form-input w-full">
+          </div>
+        </div>
+      </div>
 
-    <div class="flex justify-end gap-2">
-      <a href="{% url 'food_service:painel' %}" class="btn-secondary">Cancelar</a>
-      <button type="submit" class="btn-primary">Abrir comanda</button>
+      <div class="flex gap-3 justify-end">
+        <a href="{% url 'food_service:painel' %}" class="btn-secondary">Cancelar</a>
+        <button type="submit" class="btn-primary">Abrir comanda</button>
+      </div>
     </div>
   </form>
 </div>
