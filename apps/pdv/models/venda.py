@@ -29,6 +29,11 @@ class VendaPDV(TimestampedModel):
     origem = models.CharField(max_length=20, default="pdv")
     delivery = models.BooleanField(default=False)
     endereco_entrega = models.JSONField(default=dict, blank=True)
+    # Rascunho das formas de pagamento selecionadas antes de salvar como
+    # pendente -- NAO sao pagamentos de verdade (isso e' PagamentoVendaPDV,
+    # so criado na finalizacao). So serve pra devolver a mesma selecao na
+    # tela quando o operador retoma a venda pendente depois.
+    pagamentos_rascunho = models.JSONField(default=list, blank=True)
     status_delivery = models.CharField(
         max_length=20,
         choices=StatusDelivery.choices,

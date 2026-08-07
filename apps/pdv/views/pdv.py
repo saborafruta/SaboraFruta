@@ -928,6 +928,7 @@ def api_venda_pendente(request):
     acrescimo = Decimal(str(body.get("acrescimo", "0")))
     delivery = bool(body.get("delivery", False))
     endereco_entrega = body.get("endereco_entrega", {})
+    pagamentos_rascunho = body.get("pagamentos", [])
 
     try:
         with transaction.atomic():
@@ -941,6 +942,7 @@ def api_venda_pendente(request):
                 status="aberta",
                 delivery=delivery,
                 endereco_entrega=endereco_entrega,
+                pagamentos_rascunho=pagamentos_rascunho,
                 valor_desconto=desconto,
                 valor_acrescimo=acrescimo,
                 usuario=request.user,
@@ -1063,6 +1065,7 @@ def api_pendente_detalhe(request, pk):
         "acrescimo": float(venda.valor_acrescimo),
         "delivery": venda.delivery,
         "endereco_entrega": venda.endereco_entrega or {},
+        "pagamentos": venda.pagamentos_rascunho or [],
         "itens": itens,
     })
 

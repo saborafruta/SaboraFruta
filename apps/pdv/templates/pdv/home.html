@@ -3449,7 +3449,8 @@ function pdv() {
         const r=await fetch('/pdv/api/venda/pendente/',{method:'POST',headers:{'Content-Type':'application/json','X-CSRFToken':csrf()},
           body:JSON.stringify({sessao_id:this.sessao?.id,cliente_id:this.venda.cliente?.id||null,
             itens:this.venda.itens,desconto:this.venda.desconto,
-            delivery:this.venda.delivery,endereco_entrega:this.venda.endereco_entrega})});
+            delivery:this.venda.delivery,endereco_entrega:this.venda.endereco_entrega,
+            pagamentos:this.venda.pagamentos})});
         const d=await r.json();
         if (d.ok) { this.toast_('Venda salva como pendente','ok'); this.novaVenda(); await this.carregarPendentes(); }
         else this.toast_('Erro: '+(d.erro||''),'erro');
@@ -4712,6 +4713,9 @@ ${pgtoHtml ? `<hr class="sep">${pgtoHtml}` : ''}
         this.venda.acrescimo = d.acrescimo || 0;
         this.venda.delivery = d.delivery || false;
         this.venda.endereco_entrega = d.endereco_entrega || {};
+        // Restaura as formas de pagamento selecionadas antes de salvar como
+        // pendente (_id novo pra nao colidir com o :key do Alpine).
+        this.venda.pagamentos = (d.pagamentos || []).map(p => ({ ...p, _id: Date.now()+Math.random() }));
         await this.aplicarPrecosCliente();
         this.recalcularTotais();
         this.toast_('✓ Venda #'+String(p.numero_venda).padStart(6,'0')+' retomada — revise e finalize', 'ok');
