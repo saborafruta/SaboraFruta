@@ -11,6 +11,7 @@ app_name = 'food_service_publico'
 
 urlpatterns = [
     path('<str:token>/', publico.CardapioView.as_view(), name='cardapio'),
+    path('<str:token>/meu-pedido/', publico.MeuPedidoApiView.as_view(), name='meu-pedido'),
     path('<str:token>/pedido/', publico.PedidoPendenteCreateView.as_view(), name='pedido-criar'),
     path('<str:token>/chamar-garcom/', publico.ChamarGarcomView.as_view(), name='chamar-garcom'),
     path('<str:token>/pedir-conta/', publico.PedirContaView.as_view(), name='pedir-conta'),

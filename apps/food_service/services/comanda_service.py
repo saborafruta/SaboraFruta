@@ -7,6 +7,7 @@ from django.utils import timezone
 
 from apps.core.services.exceptions import DadosInvalidosError
 from apps.food_service.models import Comanda, ComplementoItemComanda, ItemComanda, Mesa
+from apps.food_service.services.notificacao_service import notificar_pedido_recebido
 from apps.pdv.services.venda_pdv_service import VendaPDVService
 
 
@@ -57,7 +58,7 @@ class ComandaService:
         preco_info = VendaPDVService.resolver_preco_produto(
             produto, comanda.filial, quantidade, cliente=comanda.cliente,
         )
-        return ItemComanda.objects.create(
+        item = ItemComanda.objects.create(
             comanda=comanda,
             produto=produto,
             quantidade=quantidade,
@@ -65,6 +66,8 @@ class ComandaService:
             observacoes=observacoes,
             recebido_em=timezone.now(),
         )
+        notificar_pedido_recebido(item)
+        return item
 
     @classmethod
     def remover_item(cls, *, item: ItemComanda):

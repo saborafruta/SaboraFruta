@@ -31,6 +31,8 @@ from .kds import (
     KdsAvancarStatusView,
     KdsCancelarItemView,
     KdsView,
+    ProdutoDisponivelView,
+    ProdutoIndisponivelView,
     api_kds,
 )
 from .kds_indicadores import KdsIndicadoresView
@@ -79,6 +81,8 @@ __all__ = [
     'MesaToggleAtivoView',
     'MesaUpdateView',
     'PainelMesasView',
+    'ProdutoDisponivelView',
+    'ProdutoIndisponivelView',
     'ReservaAtenderView',
     'ReservaCancelarView',
     'ReservaCreateView',

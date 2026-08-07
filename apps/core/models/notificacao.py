@@ -9,6 +9,13 @@ class Notificacao(TimestampedModel):
         TRANSFERENCIA_RECEBIDA = 'transferencia_recebida', 'Transferencia recebida'
         TRANSFERENCIA_CONFERIDA = 'transferencia_conferida', 'Transferencia conferida'
         ALERTA_SISTEMA = 'alerta_sistema', 'Alerta do sistema'
+        FOOD_PEDIDO_RECEBIDO = 'food_pedido_recebido', 'Pedido recebido na cozinha'
+        FOOD_PEDIDO_INICIADO = 'food_pedido_iniciado', 'Pedido em preparo'
+        FOOD_PEDIDO_PRONTO = 'food_pedido_pronto', 'Pedido pronto'
+        FOOD_PEDIDO_ENTREGUE = 'food_pedido_entregue', 'Pedido entregue'
+        FOOD_ITEM_CANCELADO = 'food_item_cancelado', 'Item cancelado na cozinha'
+        FOOD_ITEM_ATRASADO = 'food_item_atrasado', 'Item atrasado na cozinha'
+        FOOD_PRODUTO_INDISPONIVEL = 'food_produto_indisponivel', 'Produto indisponível'
 
     filial = models.ForeignKey(
         'core.Filial',

@@ -4,6 +4,12 @@ from django.utils import timezone
 
 from apps.core.services.exceptions import DadosInvalidosError
 from apps.food_service.models import ItemComanda
+from apps.food_service.services.notificacao_service import (
+    notificar_item_cancelado,
+    notificar_pedido_entregue,
+    notificar_pedido_iniciado,
+    notificar_pedido_pronto,
+)
 
 
 class KdsService:
@@ -13,6 +19,12 @@ class KdsService:
         ItemComanda.StatusPreparo.EM_PREPARO: 'iniciado_em',
         ItemComanda.StatusPreparo.PRONTO: 'pronto_em',
         ItemComanda.StatusPreparo.ENTREGUE: 'entregue_em',
+    }
+
+    _NOTIFICAR_POR_STATUS = {
+        ItemComanda.StatusPreparo.EM_PREPARO: notificar_pedido_iniciado,
+        ItemComanda.StatusPreparo.PRONTO: notificar_pedido_pronto,
+        ItemComanda.StatusPreparo.ENTREGUE: notificar_pedido_entregue,
     }
 
     # Quando o produto não tem tempo de preparo cadastrado, assume este valor
@@ -58,6 +70,9 @@ class KdsService:
             item.preparado_por = usuario
             campos.append('preparado_por')
         item.save(update_fields=campos)
+        notificar = cls._NOTIFICAR_POR_STATUS.get(novo_status)
+        if notificar:
+            notificar(item)
         return item
 
     @classmethod
@@ -74,4 +89,5 @@ class KdsService:
             raise DadosInvalidosError('Item já foi encerrado na cozinha.')
         item.status_preparo = ItemComanda.StatusPreparo.CANCELADO
         item.save(update_fields=['status_preparo'])
+        notificar_item_cancelado(item)
         return item

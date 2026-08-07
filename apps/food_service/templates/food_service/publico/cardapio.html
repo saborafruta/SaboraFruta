@@ -153,9 +153,12 @@
         <div style="margin-bottom:14px;">
           <p style="font-size:12px; color:#78716c; margin-bottom:6px;">Já lançado na comanda:</p>
           <template x-for="(it, idx) in comandaItens" :key="idx">
-            <div style="display:flex; justify-content:space-between; font-size:13px; padding:4px 0;">
-              <span x-text="it.quantidade + 'x ' + it.nome"></span>
-              <span x-text="'R$ ' + it.valor_total"></span>
+            <div style="font-size:13px; padding:4px 0;">
+              <div style="display:flex; justify-content:space-between;">
+                <span x-text="it.quantidade + 'x ' + it.nome"></span>
+                <span x-text="'R$ ' + it.valor_total"></span>
+              </div>
+              <div style="font-size:11px; color:#78716c;" x-text="it.status_display"></div>
             </div>
           </template>
         </div>
@@ -206,10 +209,26 @@ function cardapioApp() {
     erro: '',
     toast: '',
     comandaItens: [],
+    _comandaParaAvaliarId: null,
 
     init() {
       const el = document.getElementById('comanda-itens-data');
       this.comandaItens = el ? JSON.parse(el.textContent || '[]') : [];
+      this._comandaParaAvaliarId = {{ comanda_para_avaliar.pk|default:"null" }};
+      setInterval(() => this.atualizarMeuPedido(), 10000);
+    },
+
+    async atualizarMeuPedido() {
+      try {
+        const resp = await fetch(`{% url 'food_service_publico:meu-pedido' mesa.qr_token %}`, { headers: { 'Accept': 'application/json' } });
+        const d = await resp.json();
+        if (!resp.ok || !d.ok) return;
+        this.comandaItens = d.itens || [];
+        if (d.comanda_para_avaliar_id && d.comanda_para_avaliar_id !== this._comandaParaAvaliarId) {
+          this._comandaParaAvaliarId = d.comanda_para_avaliar_id;
+          this._mostrarToast('Sua conta foi fechada — avalie o atendimento no topo da página.');
+        }
+      } catch (e) { /* silencioso -- não interrompe o cliente por causa de um poll */ }
     },
 
     passaFiltro(nome, categoria) {

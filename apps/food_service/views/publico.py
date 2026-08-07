@@ -27,6 +27,18 @@ def _json_body(request):
         return {}
 
 
+def _comanda_itens(comanda):
+    return [
+        {
+            'nome': item.produto.descricao,
+            'quantidade': str(item.quantidade),
+            'valor_total': str(item.valor_total_com_complementos),
+            'status_display': item.get_status_preparo_display(),
+        }
+        for item in comanda.itens.all()
+    ]
+
+
 class CardapioView(View):
     def get(self, request, token):
         mesa = _mesa_do_token(token)
@@ -45,16 +57,7 @@ class CardapioView(View):
             .first()
         )
 
-        comanda_itens = []
-        if comanda_aberta:
-            comanda_itens = [
-                {
-                    'nome': item.produto.descricao,
-                    'quantidade': str(item.quantidade),
-                    'valor_total': str(item.valor_total_com_complementos),
-                }
-                for item in comanda_aberta.itens.all()
-            ]
+        comanda_itens = _comanda_itens(comanda_aberta) if comanda_aberta else []
 
         return render(request, 'food_service/publico/cardapio.html', {
             'mesa': mesa,
@@ -64,6 +67,36 @@ class CardapioView(View):
             'comanda_aberta': comanda_aberta,
             'comanda_itens': comanda_itens,
             'comanda_para_avaliar': comanda_para_avaliar,
+        })
+
+
+class MeuPedidoApiView(View):
+    """
+    Polling leve pro cliente ver o status dos itens (recebido/em preparo/
+    pronto) sem precisar recarregar a página -- a parte "cliente (opcional)"
+    da comunicação automática.
+    """
+
+    def get(self, request, token):
+        from django.http import JsonResponse
+
+        mesa = _mesa_do_token(token)
+        comanda_aberta = (
+            Comanda.objects.for_filial(mesa.filial)
+            .filter(mesas=mesa, status=Comanda.Status.ABERTA)
+            .prefetch_related('itens__produto', 'itens__complementos')
+            .first()
+        )
+        comanda_para_avaliar = (
+            Comanda.objects.for_filial(mesa.filial)
+            .filter(mesas=mesa, status=Comanda.Status.FECHADA, avaliacao__isnull=True)
+            .order_by('-fechada_em')
+            .first()
+        )
+        return JsonResponse({
+            'ok': True,
+            'itens': _comanda_itens(comanda_aberta) if comanda_aberta else [],
+            'comanda_para_avaliar_id': comanda_para_avaliar.pk if comanda_para_avaliar else None,
         })
 
 
