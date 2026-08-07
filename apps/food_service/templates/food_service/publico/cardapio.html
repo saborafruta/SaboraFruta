@@ -25,22 +25,45 @@
              box-shadow: 0 2px 10px rgba(0,0,0,.06); }
   .cp-card img { width: 84px; height: 84px; border-radius: 10px; object-fit: cover; background: #eee; flex-shrink: 0; }
   .cp-card-info { flex: 1; min-width: 0; }
-  .cp-card-nome { font-weight: 700; font-size: 14.5px; }
+  .cp-card-nome { font-weight: 700; font-size: 14.5px; color: #1c1917; }
   .cp-card-desc { font-size: 12.5px; color: #78716c; margin-top: 2px; line-height: 1.4; }
-  .cp-card-preco { font-weight: 700; margin-top: 6px; font-size: 14px; }
+  .cp-card-preco { font-weight: 700; margin-top: 6px; font-size: 14px; color: #1c1917; }
   .cp-preco-riscado { text-decoration: line-through; color: #a8a29e; font-weight: 400; font-size: 12px; margin-right: 4px; }
   .cp-badge { display: inline-block; font-size: 10px; font-weight: 700; padding: 2px 6px; border-radius: 999px;
               background: #16a34a; color: #fff; margin-right: 4px; }
-  .cp-add-btn { margin-top: 6px; padding: 5px 12px; border-radius: 8px; background: #1c1c1e; color: #fff;
-                font-size: 12px; font-weight: 600; border: none; }
+  .cp-add-btn { margin-top: 8px; padding: 6px 14px; border-radius: 8px; background: #1c1c1e; color: #fff;
+                font-size: 12px; font-weight: 600; border: none; cursor: pointer; }
+  .cp-stepper { margin-top: 8px; display: inline-flex; align-items: center; gap: 10px; background: #f4f1ec;
+                border-radius: 8px; padding: 4px 6px; }
+  .cp-stepper button { width: 24px; height: 24px; border-radius: 6px; border: none; background: #1c1c1e; color: #fff;
+                        font-size: 15px; font-weight: 700; cursor: pointer; line-height: 1; }
+  .cp-stepper span { min-width: 16px; text-align: center; font-weight: 700; font-size: 13px; }
   .cp-fab-bar { position: fixed; bottom: 0; left: 0; right: 0; z-index: 30; background: #fff;
                 box-shadow: 0 -6px 20px rgba(0,0,0,.1); padding: 10px 14px; display: flex; gap: 8px; }
-  .cp-fab-btn { flex: 1; padding: 11px; border-radius: 10px; font-size: 13px; font-weight: 700; border: none; }
+  .cp-fab-btn { flex: 1; padding: 11px; border-radius: 10px; font-size: 13px; font-weight: 700; border: none; cursor: pointer; }
   .cp-drawer { position: fixed; inset: 0; z-index: 50; background: rgba(0,0,0,.5); }
   .cp-drawer-panel { position: absolute; bottom: 0; left: 0; right: 0; max-height: 80vh; overflow-y: auto;
                       background: #fff; border-radius: 18px 18px 0 0; padding: 18px; }
   .cp-toast { position: fixed; top: 66px; left: 50%; transform: translateX(-50%); z-index: 60;
               background: #1c1c1e; color: #fff; padding: 9px 16px; border-radius: 10px; font-size: 13px; }
+
+  /* Tablet */
+  @media (min-width: 640px) {
+    .cp-wrap { max-width: 900px; padding: 0 24px 110px; }
+    .cp-grid { grid-template-columns: repeat(2, 1fr); }
+    .cp-card { flex-direction: column; }
+    .cp-card img { width: 100%; height: 140px; }
+    .cp-strip-card { width: 160px; }
+    .cp-strip-card img { height: 110px; }
+  }
+
+  /* Desktop */
+  @media (min-width: 1024px) {
+    .cp-wrap { max-width: 1200px; padding: 0 32px 40px; }
+    .cp-grid { grid-template-columns: repeat(3, 1fr); }
+    .cp-card img { height: 170px; }
+    .cp-fab-bar { max-width: 1200px; left: 50%; transform: translateX(-50%); border-radius: 16px 16px 0 0; }
+  }
 </style>
 {% endblock %}
 
@@ -95,8 +118,8 @@
         <img src="{{ produto.foto_url }}" onerror="this.style.visibility='hidden'" alt="">
         <div class="nome">{{ produto.descricao }}</div>
         <div style="padding:0 8px 8px; font-size:11px;">
-          <span class="cp-preco-riscado">R$ {{ produto.preco_venda }}</span>
-          <strong>R$ {{ produto.preco_promocional_exibicao }}</strong>
+          <span class="cp-preco-riscado">R$ {{ produto.preco_venda|floatformat:2 }}</span>
+          <strong>R$ {{ produto.preco_promocional_exibicao|floatformat:2 }}</strong>
         </div>
       </div>
       {% endfor %}
@@ -123,11 +146,20 @@
         <img src="{{ produto.foto_url }}" onerror="this.style.visibility='hidden'" alt="">
         <div class="cp-card-info">
           <div class="cp-card-nome">{{ produto.descricao }}</div>
-          <div class="cp-card-preco">R$ {{ produto.preco_venda }}</div>
-          <button type="button" class="cp-add-btn"
-                  @click="adicionar({ produto_id: {{ produto.pk }}, nome: '{{ produto.descricao|escapejs }}', preco: {{ produto.preco_venda|default:0 }} })">
-            Adicionar
-          </button>
+          <div class="cp-card-preco">R$ {{ produto.preco_venda|floatformat:2 }}</div>
+          <template x-if="quantidadeNoCarrinho({{ produto.pk }}) === 0">
+            <button type="button" class="cp-add-btn"
+                    @click="adicionar({ produto_id: {{ produto.pk }}, nome: '{{ produto.descricao|escapejs }}', preco: {{ produto.preco_venda|default:0 }} })">
+              Adicionar
+            </button>
+          </template>
+          <template x-if="quantidadeNoCarrinho({{ produto.pk }}) > 0">
+            <div class="cp-stepper">
+              <button type="button" @click="alterarQuantidade({{ produto.pk }}, -1)">−</button>
+              <span x-text="quantidadeNoCarrinho({{ produto.pk }})"></span>
+              <button type="button" @click="alterarQuantidade({{ produto.pk }}, 1)">+</button>
+            </div>
+          </template>
         </div>
       </div>
       {% empty %}
@@ -242,6 +274,18 @@ function cardapioApp() {
       if (existente) { existente.quantidade++; return; }
       this.carrinho.push({ ...produto, quantidade: 1 });
       this._mostrarToast('Adicionado ao pedido');
+    },
+
+    quantidadeNoCarrinho(produtoId) {
+      const item = this.carrinho.find(i => i.produto_id === produtoId);
+      return item ? item.quantidade : 0;
+    },
+
+    alterarQuantidade(produtoId, delta) {
+      const idx = this.carrinho.findIndex(i => i.produto_id === produtoId);
+      if (idx === -1) return;
+      this.carrinho[idx].quantidade += delta;
+      if (this.carrinho[idx].quantidade <= 0) this.carrinho.splice(idx, 1);
     },
 
     totalItensCarrinho() {
