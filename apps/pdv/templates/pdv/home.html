@@ -3699,29 +3699,33 @@ function pdv() {
 <title>Cupom PDV</title>
 <style>
   * { margin:0; padding:0; box-sizing:border-box; }
-  body { font-family: ${a4 ? "Arial, Helvetica, sans-serif" : "'Courier New', monospace"}; font-size:${a4 ? '13px' : '12px'}; color:#000; background:#fff; width:${a4 ? '190mm' : '80mm'}; padding:${a4 ? '14mm 16mm' : '8px'}; }
-  h1 { font-size:${a4 ? '20px' : '15px'}; font-weight:800; text-align:${a4 ? 'left' : 'center'}; margin-bottom:2px; }
-  .sub { font-size:${a4 ? '12px' : '11px'}; line-height:1.35; text-align:${a4 ? 'left' : 'center'}; color:#000; font-weight:700; margin-bottom:5px; overflow-wrap:anywhere; }
+  body { font-family: ${a4 ? "Arial, Helvetica, sans-serif" : "'Courier New', monospace"}; font-size:${a4 ? '12px' : '12px'}; color:#000; background:#fff; width:${a4 ? '120mm' : '80mm'}; padding:${a4 ? '6mm 8mm' : '8px'}; }
+  h1 { font-size:${a4 ? '17px' : '15px'}; font-weight:800; text-align:center; margin-bottom:2px; }
+  .sub { font-size:${a4 ? '11px' : '11px'}; line-height:1.35; text-align:center; color:#000; font-weight:700; margin-bottom:5px; overflow-wrap:anywhere; }
   .sep { border:none; border-top:1px dashed #000; margin:8px 0; }
   table { width:100%; border-collapse:collapse; }
   th { font-size:${a4 ? '11px' : '10px'}; text-transform:uppercase; color:#000; padding-bottom:4px; border-bottom:1px solid #000; font-weight:800; }
   td { color:#000; font-weight:700; }
-  .total-row { font-size:${a4 ? '18px' : '14px'}; font-weight:800; }
+  .total-row { font-size:${a4 ? '16px' : '14px'}; font-weight:800; }
   .footer { text-align:center; margin-top:10px; font-size:${a4 ? '11px' : '10px'}; color:#000; font-weight:700; }
   /* Sem isto o navegador imprime no tamanho padrao do driver (geralmente A4)
-     mesmo no modo termico, e a bobina sai cortada ou com margem gigante. */
-  @page { size: ${a4 ? 'A4 portrait' : '80mm auto'}; margin: ${a4 ? '12mm' : '0'}; }
+     mesmo no modo termico, e a bobina sai cortada ou com margem gigante.
+     No A4 a largura do corpo (120mm) ja e' bem menor que a folha inteira
+     (210mm) -- margem pequena aqui e' o que deixa o recibo ocupando so
+     a metade da pagina em vez da folha toda. */
+  @page { size: ${a4 ? 'A4 portrait' : '80mm auto'}; margin: ${a4 ? '6mm' : '0'}; }
   @media print { body { margin:0; } }
 </style>
 </head>
 <body>
-${logoUrl ? `<div style="text-align:${a4 ? 'left' : 'center'};margin-bottom:10px;"><img src="${logoUrl}" style="max-height:${a4 ? '80px' : '130px'};max-width:${a4 ? '220px' : '260px'};object-fit:contain;" /></div>` : ''}
+${logoUrl ? `<div style="text-align:center;margin-bottom:10px;"><img src="${logoUrl}" style="max-height:${a4 ? '70px' : '130px'};max-width:${a4 ? '180px' : '260px'};object-fit:contain;" /></div>` : ''}
 <h1>${filial}</h1>
 ${filialEndereco ? `<div class="sub">${filialEndereco}${filialNumero ? ', '+filialNumero : ''}${filialBairro ? ' - '+filialBairro : ''}</div>` : ''}
 ${filialCidade ? `<div class="sub">${filialCidade}${filialUf ? ' - '+filialUf : ''}</div>` : ''}
 ${filialTelefone ? `<div class="sub">Tel: ${filialTelefone}</div>` : ''}
 <div class="sub">${agora} &bull; ${numero}</div>
 <div class="sub">Cliente: <strong>${v.cliente ? v.cliente.nome : 'Consumidor Final'}</strong></div>
+${v.cliente && (v.cliente.celular || v.cliente.telefone) ? `<div class="sub">Tel: ${v.cliente.celular || v.cliente.telefone}</div>` : ''}
 ${v.cliente && v.cliente.cpf_cnpj ? `<div class="sub">CPF/CNPJ: ${v.cliente.cpf_cnpj}</div>` : ''}
 ${(() => { const e = v.delivery ? (v.endereco_entrega || {}) : (v.cliente?.endereco_entrega || {}); if (!e || !e.rua) return ''; const l1 = e.rua + (e.numero ? ', '+e.numero : '') + (e.complemento ? ' - '+e.complemento : ''); const cidadeUf = [e.cidade, e.uf].filter(Boolean).join('/'); const l2 = [e.bairro, cidadeUf, e.cep].filter(Boolean).join(' - '); const obs = e.observacao || ''; return '<div class="sub">'+(v.delivery ? 'Entrega: ' : 'End: ')+l1+'</div>'+(l2 ? '<div class="sub">'+l2+'</div>' : '')+(obs ? '<div class="sub">Obs: '+obs+'</div>' : ''); })()}
 ${(v.observacao && v.observacao.trim()) ? `<div class="sub">Obs: ${v.observacao.trim()}</div>` : ''}
