@@ -3700,7 +3700,9 @@ function pdv() {
 <title>Cupom PDV</title>
 <style>
   * { margin:0; padding:0; box-sizing:border-box; }
-  body { font-family: ${a4 ? "Arial, Helvetica, sans-serif" : "'Courier New', monospace"}; font-size:${a4 ? '12px' : '12px'}; color:#000; background:#fff; width:${a4 ? '120mm' : '80mm'}; margin:${a4 ? '0 auto' : '0'}; padding:${a4 ? '6mm 8mm' : '8px'}; }
+  html, body { width:100%; }
+  body { font-family: ${a4 ? "Arial, Helvetica, sans-serif" : "'Courier New', monospace"}; font-size:${a4 ? '12px' : '12px'}; color:#000; background:#fff; display:${a4 ? 'flex' : 'block'}; justify-content:${a4 ? 'center' : 'flex-start'}; }
+  .ticket { width:${a4 ? '120mm' : '80mm'}; padding:${a4 ? '6mm 8mm' : '8px'}; }
   h1 { font-size:${a4 ? '17px' : '15px'}; font-weight:800; text-align:center; margin-bottom:2px; }
   .sub { font-size:${a4 ? '11px' : '11px'}; line-height:1.35; text-align:center; color:#000; font-weight:700; margin-bottom:5px; overflow-wrap:anywhere; }
   .sep { border:none; border-top:1px dashed #000; margin:8px 0; }
@@ -3719,6 +3721,7 @@ function pdv() {
 </style>
 </head>
 <body>
+<div class="ticket">
 ${logoUrl ? `<div style="text-align:center;margin-bottom:10px;"><img src="${logoUrl}" style="max-height:${a4 ? '70px' : '130px'};max-width:${a4 ? '180px' : '260px'};object-fit:contain;" /></div>` : ''}
 <h1>${filial}</h1>
 ${filialEndereco ? `<div class="sub">${filialEndereco}${filialNumero ? ', '+filialNumero : ''}${filialBairro ? ' - '+filialBairro : ''}</div>` : ''}
@@ -3755,6 +3758,7 @@ ${parseFloat(v.acrescimo||0)>0?`<div style="display:flex;justify-content:space-b
 ${pgtoHtml ? `<hr class="sep">${pgtoHtml}` : ''}
 <hr class="sep">
 <div class="footer">Obrigado pela preferência!<br>Este não é um documento fiscal.</div>
+</div>
 </body></html>`;
 
       const w = window.open('', '_blank', a4 ? 'width=820,height=920,scrollbars=yes' : 'width=340,height=600,scrollbars=yes');
