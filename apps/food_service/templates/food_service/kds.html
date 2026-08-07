@@ -19,31 +19,35 @@
   .kds-tempo.atraso { background:#fee2e2; color:#991b1b; }
   .kds-obs { font-size:11.5px; margin-top:6px; font-style:italic; }
   .kds-comp { font-size:11px; margin-top:2px; opacity:.85; }
-  .kds-acoes { display:flex; gap:6px; margin-top:8px; flex-wrap:wrap; }
+  .kds-acoes { display:flex; align-items:center; gap:8px; margin-top:10px; flex-wrap:wrap; }
+  .kds-cat-pill { padding:5px 12px; border-radius:999px; cursor:pointer; font-weight:600; font-size:12px; transition:background 0.15s, color 0.15s; border:1px solid transparent; }
 </style>
 {% endblock %}
 
 {% block content %}
 <div class="space-y-4" x-data="kdsApp()" x-init="iniciar()">
 
-  <div class="flex flex-wrap items-center gap-x-5 gap-y-1 text-sm">
-    <a href="{% url 'food_service:painel' %}" class="btn-secondary" style="font-size:12px;">Painel de Mesas</a>
-    <a href="{% url 'food_service:kds-indicadores' %}" class="btn-secondary" style="font-size:12px;">Indicadores</a>
-    <label class="flex items-center gap-2 text-xs" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
-      <input type="checkbox" x-model="autoAtualizar">
-      Atualização automática (10s)
-    </label>
-    <span class="ml-auto text-xs" :style="temaClaro ? 'color:#94a3b8;' : 'color:#64748b;'" x-text="status"></span>
+  <div>
+    <h2 class="text-2xl font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">Cozinha (KDS)</h2>
+    <div class="flex flex-wrap items-center gap-3 mt-2">
+      <a href="{% url 'food_service:painel' %}" class="btn-secondary" style="font-size:12px;">Painel de Mesas</a>
+      <a href="{% url 'food_service:kds-indicadores' %}" class="btn-secondary" style="font-size:12px;">Indicadores</a>
+      <label class="flex items-center gap-1.5 text-xs cursor-pointer" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+        <input type="checkbox" x-model="autoAtualizar">
+        Atualização automática (10s)
+      </label>
+      <span class="ml-auto text-xs" :style="temaClaro ? 'color:#94a3b8;' : 'color:#64748b;'" x-text="status"></span>
+    </div>
   </div>
 
-  <div class="flex flex-wrap items-center gap-2 text-xs">
-    <span :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Categoria:</span>
-    <span style="padding:4px 10px;border-radius:999px;cursor:pointer;"
-          :style="categoriaFiltro === '' ? 'background:#e8824a;color:#fff;' : 'background:#efe9df;color:#57534e;'"
+  <div class="flex flex-wrap items-center gap-2">
+    <span class="text-xs font-semibold uppercase tracking-wide mr-1" :style="temaClaro ? 'color:#6b7280;' : 'color:#9ca3af;'">Categoria</span>
+    <span class="kds-cat-pill"
+          :style="categoriaFiltro === '' ? 'background:#e8824a;color:#fff;' : (temaClaro ? 'background:#f3f4f6;color:#374151;' : 'background:#2a2a2e;color:#d4d4d4;')"
           @click="categoriaFiltro = ''">Todas</span>
     <template x-for="cat in categoriasDisponiveis()" :key="cat">
-      <span style="padding:4px 10px;border-radius:999px;cursor:pointer;"
-            :style="categoriaFiltro === cat ? 'background:#e8824a;color:#fff;' : 'background:#efe9df;color:#57534e;'"
+      <span class="kds-cat-pill"
+            :style="categoriaFiltro === cat ? 'background:#e8824a;color:#fff;' : (temaClaro ? 'background:#f3f4f6;color:#374151;' : 'background:#2a2a2e;color:#d4d4d4;')"
             @click="categoriaFiltro = (categoriaFiltro === cat ? '' : cat)" x-text="cat"></span>
     </template>
   </div>
@@ -89,7 +93,10 @@
       <div class="kds-col" :style="temaClaro ? 'background:#f4f4f5;' : 'background:#1e1e20;'">
         <div class="kds-col-titulo" :style="temaClaro ? 'color:#3f3f46;' : 'color:#d4d4d8;'">
           <span x-text="coluna.label"></span>
-          <span x-text="itensDaColuna(coluna.status).length"></span>
+          <span class="inline-flex items-center justify-center rounded-full"
+                style="min-width:20px; height:20px; padding:0 6px; font-size:11px;"
+                :style="temaClaro ? 'background:#e5e7eb;color:#374151;' : 'background:#3f3f46;color:#e4e4e7;'"
+                x-text="itensDaColuna(coluna.status).length"></span>
         </div>
         <template x-for="item in itensDaColuna(coluna.status)" :key="item.id">
           <div class="kds-card" :style="temaClaro ? 'background:#fff;' : 'background:#27272a;'">
@@ -105,11 +112,18 @@
               <div class="kds-comp" x-text="'+ ' + c"></div>
             </template>
             <div class="kds-acoes">
-              <button type="button" class="btn-secondary" style="font-size:11px;padding:4px 8px;"
+              <button type="button" class="btn-primary" style="font-size:11px;padding:5px 10px;"
                       x-show="proximoStatus(item.status_preparo)"
-                      @click="avancar(item)" x-text="'→ ' + rotuloProximo(item.status_preparo)"></button>
-              <button type="button" class="text-xs font-semibold" style="color:#7c3aed;" @click="aumentarPrioridade(item)">↑ prioridade</button>
-              <button type="button" class="text-xs font-semibold" style="color:#dc2626;" @click="cancelar(item)">Cancelar</button>
+                      @click="avancar(item)" x-text="rotuloProximo(item.status_preparo)"></button>
+              <button type="button" title="Aumentar prioridade"
+                      class="inline-flex items-center justify-center rounded-full"
+                      style="width:24px; height:24px; color:#7c3aed; background:rgba(124,58,237,0.12);"
+                      @click="aumentarPrioridade(item)">
+                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 15l7-7 7 7"/>
+                </svg>
+              </button>
+              <button type="button" class="text-xs font-semibold ml-auto" style="color:#dc2626;" @click="cancelar(item)">Cancelar</button>
             </div>
           </div>
         </template>
