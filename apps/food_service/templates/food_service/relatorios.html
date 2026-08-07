@@ -3,7 +3,7 @@
 {% block page_title %}{{ title }}{% endblock %}
 
 {% block content %}
-<div class="max-w-5xl mx-auto space-y-5">
+<div class="space-y-5">
 
   <div>
     <p class="text-sm mb-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
@@ -13,90 +13,112 @@
     <h2 class="text-2xl font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">Relatórios Gerenciais</h2>
   </div>
 
-  <form method="get" class="card flex flex-wrap gap-3 items-end">
-    <div>
-      <label class="block text-xs font-semibold mb-1">De</label>
-      <input type="date" name="data_inicio" value="{{ data_inicio|date:'Y-m-d' }}" class="form-input">
+  <form method="get" class="card p-4 space-y-3">
+    <div class="flex flex-wrap gap-3 items-end">
+      <div>
+        <label class="block text-xs font-semibold mb-1.5" :style="temaClaro ? 'color:#374151;' : 'color:#d1d5db;'">De</label>
+        <input type="date" name="data_inicio" value="{{ data_inicio|date:'Y-m-d' }}" class="form-input">
+      </div>
+      <div>
+        <label class="block text-xs font-semibold mb-1.5" :style="temaClaro ? 'color:#374151;' : 'color:#d1d5db;'">Até</label>
+        <input type="date" name="data_fim" value="{{ data_fim|date:'Y-m-d' }}" class="form-input">
+      </div>
+      <div>
+        <label class="block text-xs font-semibold mb-1.5" :style="temaClaro ? 'color:#374151;' : 'color:#d1d5db;'">Turno</label>
+        <select name="turno" class="form-input" style="width:150px;">
+          <option value="">Todos</option>
+          {% for chave, faixa in turnos.items %}
+            <option value="{{ chave }}" {% if turno == chave %}selected{% endif %}>{{ faixa.2 }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div>
+        <label class="block text-xs font-semibold mb-1.5" :style="temaClaro ? 'color:#374151;' : 'color:#d1d5db;'">Colaborador (garçom)</label>
+        <select name="colaborador" class="form-input" style="width:200px;">
+          <option value="">Todos</option>
+          {% for c in colaboradores %}
+            <option value="{{ c.pk }}" {% if colaborador_id == c.pk %}selected{% endif %}>{{ c.nome }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <button type="submit" class="btn-primary">Filtrar</button>
     </div>
-    <div>
-      <label class="block text-xs font-semibold mb-1">Até</label>
-      <input type="date" name="data_fim" value="{{ data_fim|date:'Y-m-d' }}" class="form-input">
-    </div>
-    <div>
-      <label class="block text-xs font-semibold mb-1">Turno</label>
-      <select name="turno" class="form-input" style="width:140px;">
-        <option value="">Todos</option>
-        {% for chave, faixa in turnos.items %}
-          <option value="{{ chave }}" {% if turno == chave %}selected{% endif %}>{{ faixa.2 }}</option>
-        {% endfor %}
-      </select>
-    </div>
-    <div>
-      <label class="block text-xs font-semibold mb-1">Colaborador (garçom)</label>
-      <select name="colaborador" class="form-input" style="width:180px;">
-        <option value="">Todos</option>
-        {% for c in colaboradores %}
-          <option value="{{ c.pk }}" {% if colaborador_id == c.pk %}selected{% endif %}>{{ c.nome }}</option>
-        {% endfor %}
-      </select>
-    </div>
-    <button type="submit" class="btn-secondary">Filtrar</button>
-    <div class="flex gap-2 ml-auto">
-      <a href="#vendas" class="btn-secondary text-xs">Vendas</a>
-      <a href="#produtos" class="btn-secondary text-xs">Produtos</a>
-      <a href="#atendimento" class="btn-secondary text-xs">Atendimento</a>
-      <a href="#operacao" class="btn-secondary text-xs">Operação</a>
-      <a href="#financeiro" class="btn-secondary text-xs">Financeiro</a>
+
+    <div class="flex flex-wrap gap-1 pt-3" :style="temaClaro ? 'border-top:1px solid #e5e7eb;' : 'border-top:1px solid #2a2a2e;'">
+      <a href="#vendas" class="px-3 py-1.5 rounded-lg text-sm font-medium transition-colors"
+         :style="temaClaro ? 'color:#374151;' : 'color:#d4d4d4;'"
+         onmouseover="this.style.background=temaClaro?'#f3f4f6':'#2a2a2e';"
+         onmouseout="this.style.background='transparent';">Vendas</a>
+      <a href="#produtos" class="px-3 py-1.5 rounded-lg text-sm font-medium transition-colors"
+         :style="temaClaro ? 'color:#374151;' : 'color:#d4d4d4;'"
+         onmouseover="this.style.background=temaClaro?'#f3f4f6':'#2a2a2e';"
+         onmouseout="this.style.background='transparent';">Produtos</a>
+      <a href="#atendimento" class="px-3 py-1.5 rounded-lg text-sm font-medium transition-colors"
+         :style="temaClaro ? 'color:#374151;' : 'color:#d4d4d4;'"
+         onmouseover="this.style.background=temaClaro?'#f3f4f6':'#2a2a2e';"
+         onmouseout="this.style.background='transparent';">Atendimento</a>
+      <a href="#operacao" class="px-3 py-1.5 rounded-lg text-sm font-medium transition-colors"
+         :style="temaClaro ? 'color:#374151;' : 'color:#d4d4d4;'"
+         onmouseover="this.style.background=temaClaro?'#f3f4f6':'#2a2a2e';"
+         onmouseout="this.style.background='transparent';">Operação</a>
+      <a href="#financeiro" class="px-3 py-1.5 rounded-lg text-sm font-medium transition-colors"
+         :style="temaClaro ? 'color:#374151;' : 'color:#d4d4d4;'"
+         onmouseover="this.style.background=temaClaro?'#f3f4f6':'#2a2a2e';"
+         onmouseout="this.style.background='transparent';">Financeiro</a>
     </div>
   </form>
 
   <!-- ══════════════ VENDAS ══════════════ -->
-  <div id="vendas">
-    <h3 class="text-lg font-semibold mb-2">Vendas</h3>
-    <div class="grid grid-cols-2 sm:grid-cols-5 gap-3">
-      <div class="card">
+  <section id="vendas" class="space-y-3">
+    <h3 class="text-lg font-semibold flex items-center gap-2" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
+      <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" style="color:#3b82f6;">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z"/>
+      </svg>
+      Vendas
+    </h3>
+    <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
+      <div class="card p-4">
         <div class="text-xs" :style="temaClaro ? 'color:#94a3b8;' : 'color:#64748b;'">Faturamento</div>
         <div class="text-xl font-bold">R$ {{ vendas.faturamento_total|floatformat:2 }}</div>
       </div>
-      <div class="card">
+      <div class="card p-4">
         <div class="text-xs" :style="temaClaro ? 'color:#94a3b8;' : 'color:#64748b;'">Pedidos</div>
         <div class="text-xl font-bold">{{ vendas.numero_pedidos }}</div>
       </div>
-      <div class="card">
+      <div class="card p-4">
         <div class="text-xs" :style="temaClaro ? 'color:#94a3b8;' : 'color:#64748b;'">Ticket médio</div>
         <div class="text-xl font-bold">{% if vendas.ticket_medio %}R$ {{ vendas.ticket_medio|floatformat:2 }}{% else %}—{% endif %}</div>
       </div>
-      <div class="card">
+      <div class="card p-4">
         <div class="text-xs" :style="temaClaro ? 'color:#94a3b8;' : 'color:#64748b;'">Clientes cadastrados</div>
         <div class="text-xl font-bold">{{ vendas.clientes_distintos }}</div>
       </div>
-      <div class="card">
+      <div class="card p-4">
         <div class="text-xs" :style="temaClaro ? 'color:#94a3b8;' : 'color:#64748b;'">Pessoas atendidas</div>
         <div class="text-xl font-bold">{{ vendas.pessoas_atendidas }}</div>
       </div>
     </div>
 
-    <div class="card overflow-hidden mt-3">
-      <h4 class="text-sm font-semibold px-4 pt-4">Vendas por canal</h4>
-      <table class="w-full text-sm mt-2">
-        <thead>
-          <tr class="text-left text-xs uppercase tracking-wide" :style="temaClaro ? 'color:#6b7280;background:#f9fafb;' : 'color:#9ca3af;background:#1e1e20;'">
-            <th class="px-4 py-3">Canal</th>
-            <th class="px-4 py-3">Pedidos</th>
-            <th class="px-4 py-3">Faturamento</th>
-          </tr>
-        </thead>
-        <tbody class="divide-y">
-          {% for c in vendas.por_canal %}
-          <tr><td class="px-4 py-3">{{ c.canal }}</td><td class="px-4 py-3">{{ c.pedidos }}</td><td class="px-4 py-3">R$ {{ c.valor|floatformat:2 }}</td></tr>
-          {% empty %}
-          <tr><td colspan="3" class="px-4 py-8 text-center" :style="temaClaro ? 'color:#94a3b8;' : 'color:#64748b;'">Nenhuma venda no período.</td></tr>
-          {% endfor %}
-        </tbody>
-      </table>
-    </div>
-
-    <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-3">
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-3">
+      <div class="card overflow-hidden">
+        <h4 class="text-sm font-semibold px-4 pt-4">Vendas por canal</h4>
+        <table class="w-full text-sm mt-2">
+          <thead>
+            <tr class="text-left text-xs uppercase tracking-wide" :style="temaClaro ? 'color:#6b7280;background:#f9fafb;' : 'color:#9ca3af;background:#1e1e20;'">
+              <th class="px-4 py-3">Canal</th>
+              <th class="px-4 py-3">Pedidos</th>
+              <th class="px-4 py-3">Faturamento</th>
+            </tr>
+          </thead>
+          <tbody class="divide-y">
+            {% for c in vendas.por_canal %}
+            <tr><td class="px-4 py-3">{{ c.canal }}</td><td class="px-4 py-3">{{ c.pedidos }}</td><td class="px-4 py-3">R$ {{ c.valor|floatformat:2 }}</td></tr>
+            {% empty %}
+            <tr><td colspan="3" class="px-4 py-8 text-center" :style="temaClaro ? 'color:#94a3b8;' : 'color:#64748b;'">Nenhuma venda no período.</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
       <div class="card overflow-hidden">
         <h4 class="text-sm font-semibold px-4 pt-4">Faturamento diário (últimos 14 dias)</h4>
         <table class="w-full text-sm mt-2">
@@ -122,15 +144,22 @@
         </table>
       </div>
     </div>
-  </div>
+  </section>
 
   <!-- ══════════════ PRODUTOS ══════════════ -->
-  <div id="produtos">
-    <h3 class="text-lg font-semibold mb-2 mt-4">Produtos</h3>
-    <p class="text-xs mb-2" :style="temaClaro ? 'color:#94a3b8;' : 'color:#64748b;'">
-      Curva ABC completa disponível em <a href="{% url 'core:dashboard-curva-abc-relatorio' %}" :style="temaClaro ? 'color:#3b82f6;' : 'color:#60a5fa;'">Dashboard › Curva ABC</a>.
-    </p>
-    <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+  <section id="produtos" class="space-y-3">
+    <div>
+      <h3 class="text-lg font-semibold flex items-center gap-2" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" style="color:#16a34a;">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"/>
+        </svg>
+        Produtos
+      </h3>
+      <p class="text-xs mt-1" :style="temaClaro ? 'color:#94a3b8;' : 'color:#64748b;'">
+        Curva ABC completa disponível em <a href="{% url 'core:dashboard-curva-abc-relatorio' %}" :style="temaClaro ? 'color:#3b82f6;' : 'color:#60a5fa;'">Dashboard › Curva ABC</a>.
+      </p>
+    </div>
+    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
       <div class="card overflow-hidden">
         <h4 class="text-sm font-semibold px-4 pt-4">Mais vendidos (qtd.)</h4>
         <table class="w-full text-sm mt-2">
@@ -172,33 +201,38 @@
         </table>
       </div>
     </div>
-  </div>
+  </section>
 
   <!-- ══════════════ ATENDIMENTO ══════════════ -->
-  <div id="atendimento">
-    <h3 class="text-lg font-semibold mb-2 mt-4">Atendimento</h3>
-    <div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
-      <div class="card">
+  <section id="atendimento" class="space-y-3">
+    <h3 class="text-lg font-semibold flex items-center gap-2" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
+      <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" style="color:#7c3aed;">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
+      </svg>
+      Atendimento
+    </h3>
+    <div class="grid grid-cols-2 lg:grid-cols-4 gap-3">
+      <div class="card p-4">
         <div class="text-xs" :style="temaClaro ? 'color:#94a3b8;' : 'color:#64748b;'">Permanência média na mesa</div>
         <div class="text-xl font-bold">{% if atendimento.tempo_medio_permanencia %}{{ atendimento.tempo_medio_permanencia }} min{% else %}—{% endif %}</div>
       </div>
-      <div class="card">
+      <div class="card p-4">
         <div class="text-xs" :style="temaClaro ? 'color:#94a3b8;' : 'color:#64748b;'">Tempo médio de preparo</div>
         <div class="text-xl font-bold">{% if atendimento.tempo_medio_preparo %}{{ atendimento.tempo_medio_preparo }} min{% else %}—{% endif %}</div>
       </div>
-      <div class="card">
+      <div class="card p-4">
         <div class="text-xs" :style="temaClaro ? 'color:#94a3b8;' : 'color:#64748b;'">Avaliação média</div>
         <div class="text-xl font-bold">{% if atendimento.nota_media %}{{ atendimento.nota_media }} / 5{% else %}—{% endif %}</div>
-        <div class="text-xs" :style="temaClaro ? 'color:#94a3b8;' : 'color:#64748b;'">{{ atendimento.total_avaliacoes }} avaliação{{ atendimento.total_avaliacoes|pluralize:"ões" }}</div>
+        <div class="text-xs mt-0.5" :style="temaClaro ? 'color:#94a3b8;' : 'color:#64748b;'">{{ atendimento.total_avaliacoes }} avaliação{{ atendimento.total_avaliacoes|pluralize:"ões" }}</div>
       </div>
-      <div class="card">
+      <div class="card p-4">
         <div class="text-xs" :style="temaClaro ? 'color:#94a3b8;' : 'color:#64748b;'">Tempo médio de entrega</div>
         <div class="text-xl font-bold">{% if atendimento.tempo_medio_entrega %}{{ atendimento.tempo_medio_entrega }} min{% else %}—{% endif %}</div>
-        <div class="text-xs" :style="temaClaro ? 'color:#94a3b8;' : 'color:#64748b;'">{{ atendimento.total_entregas_com_tempo }} entrega{{ atendimento.total_entregas_com_tempo|pluralize }} concluída{{ atendimento.total_entregas_com_tempo|pluralize }}</div>
+        <div class="text-xs mt-0.5" :style="temaClaro ? 'color:#94a3b8;' : 'color:#64748b;'">{{ atendimento.total_entregas_com_tempo }} entrega{{ atendimento.total_entregas_com_tempo|pluralize }} concluída{{ atendimento.total_entregas_com_tempo|pluralize }}</div>
       </div>
     </div>
 
-    <div class="card overflow-hidden mt-3">
+    <div class="card overflow-hidden">
       <h4 class="text-sm font-semibold px-4 pt-4">Produtividade da cozinha (tempo médio de preparo por cozinheiro)</h4>
       <table class="w-full text-sm mt-2">
         <thead>
@@ -213,22 +247,27 @@
         </tbody>
       </table>
     </div>
-  </div>
+  </section>
 
   <!-- ══════════════ OPERAÇÃO ══════════════ -->
-  <div id="operacao">
-    <h3 class="text-lg font-semibold mb-2 mt-4">Operação</h3>
+  <section id="operacao" class="space-y-3">
+    <h3 class="text-lg font-semibold flex items-center gap-2" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
+      <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" style="color:#d97706;">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/>
+      </svg>
+      Operação
+    </h3>
 
-    <div class="card overflow-hidden">
-      <h4 class="text-sm font-semibold px-4 pt-4">Mesas por status (agora)</h4>
-      <div class="px-4 py-3 flex flex-wrap gap-2">
+    <div class="card p-4">
+      <h4 class="text-sm font-semibold mb-2">Mesas por status (agora)</h4>
+      <div class="flex flex-wrap gap-2">
         {% for m in operacao.mesas_status %}
         <span class="px-2 py-1 text-xs rounded-full font-medium" :style="temaClaro ? 'background:#f3f4f6; color:#374151;' : 'background:#2a2a2e; color:#d4d4d4;'">{{ m.status }}: {{ m.total }}</span>
         {% endfor %}
       </div>
     </div>
 
-    <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-3">
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-3">
       <div class="card overflow-hidden">
         <h4 class="text-sm font-semibold px-4 pt-4">Horários de pico</h4>
         <table class="w-full text-sm mt-2">
@@ -251,90 +290,114 @@
       </div>
     </div>
 
-    <div class="card overflow-hidden mt-3">
-      <h4 class="text-sm font-semibold px-4 pt-4">Giros por mesa</h4>
-      <table class="w-full text-sm mt-2">
-        <thead>
-          <tr class="text-left text-xs uppercase tracking-wide" :style="temaClaro ? 'color:#6b7280;background:#f9fafb;' : 'color:#9ca3af;background:#1e1e20;'">
-            <th class="px-4 py-3">Mesa</th><th class="px-4 py-3">Giros</th><th class="px-4 py-3">Faturamento</th>
-          </tr>
-        </thead>
-        <tbody class="divide-y">
-          {% for g in operacao.giros_por_mesa %}
-          <tr><td class="px-4 py-3">{{ g.mesa }}</td><td class="px-4 py-3">{{ g.giros }}</td><td class="px-4 py-3">R$ {{ g.faturamento|floatformat:2 }}</td></tr>
-          {% empty %}<tr><td colspan="3" class="px-4 py-8 text-center" :style="temaClaro ? 'color:#94a3b8;' : 'color:#64748b;'">Sem dados.</td></tr>{% endfor %}
-        </tbody>
-      </table>
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-3">
+      <div class="card overflow-hidden">
+        <h4 class="text-sm font-semibold px-4 pt-4">Giros por mesa</h4>
+        <table class="w-full text-sm mt-2">
+          <thead>
+            <tr class="text-left text-xs uppercase tracking-wide" :style="temaClaro ? 'color:#6b7280;background:#f9fafb;' : 'color:#9ca3af;background:#1e1e20;'">
+              <th class="px-4 py-3">Mesa</th><th class="px-4 py-3">Giros</th><th class="px-4 py-3">Faturamento</th>
+            </tr>
+          </thead>
+          <tbody class="divide-y">
+            {% for g in operacao.giros_por_mesa %}
+            <tr><td class="px-4 py-3">{{ g.mesa }}</td><td class="px-4 py-3">{{ g.giros }}</td><td class="px-4 py-3">R$ {{ g.faturamento|floatformat:2 }}</td></tr>
+            {% empty %}<tr><td colspan="3" class="px-4 py-8 text-center" :style="temaClaro ? 'color:#94a3b8;' : 'color:#64748b;'">Sem dados.</td></tr>{% endfor %}
+          </tbody>
+        </table>
+      </div>
+      <div class="card overflow-hidden">
+        <h4 class="text-sm font-semibold px-4 pt-4">Produtividade por garçom</h4>
+        <table class="w-full text-sm mt-2">
+          <thead>
+            <tr class="text-left text-xs uppercase tracking-wide" :style="temaClaro ? 'color:#6b7280;background:#f9fafb;' : 'color:#9ca3af;background:#1e1e20;'">
+              <th class="px-4 py-3">Garçom</th><th class="px-4 py-3">Pedidos</th><th class="px-4 py-3">Faturamento</th>
+            </tr>
+          </thead>
+          <tbody class="divide-y">
+            {% for g in operacao.produtividade_garcom %}
+            <tr><td class="px-4 py-3">{{ g.nome }}</td><td class="px-4 py-3">{{ g.pedidos }}</td><td class="px-4 py-3">R$ {{ g.faturamento|floatformat:2 }}</td></tr>
+            {% empty %}<tr><td colspan="3" class="px-4 py-8 text-center" :style="temaClaro ? 'color:#94a3b8;' : 'color:#64748b;'">Sem dados.</td></tr>{% endfor %}
+          </tbody>
+        </table>
+      </div>
     </div>
-
-    <div class="card overflow-hidden mt-3">
-      <h4 class="text-sm font-semibold px-4 pt-4">Produtividade por garçom</h4>
-      <table class="w-full text-sm mt-2">
-        <thead>
-          <tr class="text-left text-xs uppercase tracking-wide" :style="temaClaro ? 'color:#6b7280;background:#f9fafb;' : 'color:#9ca3af;background:#1e1e20;'">
-            <th class="px-4 py-3">Garçom</th><th class="px-4 py-3">Pedidos</th><th class="px-4 py-3">Faturamento</th>
-          </tr>
-        </thead>
-        <tbody class="divide-y">
-          {% for g in operacao.produtividade_garcom %}
-          <tr><td class="px-4 py-3">{{ g.nome }}</td><td class="px-4 py-3">{{ g.pedidos }}</td><td class="px-4 py-3">R$ {{ g.faturamento|floatformat:2 }}</td></tr>
-          {% empty %}<tr><td colspan="3" class="px-4 py-8 text-center" :style="temaClaro ? 'color:#94a3b8;' : 'color:#64748b;'">Sem dados.</td></tr>{% endfor %}
-        </tbody>
-      </table>
-    </div>
-  </div>
+  </section>
 
   <!-- ══════════════ FINANCEIRO ══════════════ -->
-  <div id="financeiro">
-    <h3 class="text-lg font-semibold mb-2 mt-4">Financeiro</h3>
-    <div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
-      <div class="card">
+  <section id="financeiro" class="space-y-3">
+    <h3 class="text-lg font-semibold flex items-center gap-2" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
+      <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" style="color:#16a34a;">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+      </svg>
+      Financeiro
+    </h3>
+    <div class="grid grid-cols-2 lg:grid-cols-4 gap-3">
+      <div class="card p-4">
         <div class="text-xs" :style="temaClaro ? 'color:#94a3b8;' : 'color:#64748b;'">CMV</div>
         <div class="text-xl font-bold">{% if financeiro.cmv_percentual %}{{ financeiro.cmv_percentual|floatformat:1 }}%{% else %}—{% endif %}</div>
       </div>
-      <div class="card">
+      <div class="card p-4">
         <div class="text-xs" :style="temaClaro ? 'color:#94a3b8;' : 'color:#64748b;'">Margem de contribuição</div>
-        <div class="text-xl font-bold">R$ {{ financeiro.margem_contribuicao|floatformat:2 }}</div>
+        <div class="text-xl font-bold" style="color:{% if financeiro.margem_contribuicao < 0 %}#dc2626{% elif financeiro.margem_contribuicao > 0 %}#16a34a{% endif %};">R$ {{ financeiro.margem_contribuicao|floatformat:2 }}</div>
       </div>
-      <div class="card">
+      <div class="card p-4">
         <div class="text-xs" :style="temaClaro ? 'color:#94a3b8;' : 'color:#64748b;'">Lucro bruto</div>
         <div class="text-xl font-bold">R$ {{ financeiro.lucro_bruto|floatformat:2 }}</div>
       </div>
-      <div class="card">
+      <div class="card p-4">
         <div class="text-xs" :style="temaClaro ? 'color:#94a3b8;' : 'color:#64748b;'">Lucro líquido</div>
-        <div class="text-xl font-bold" style="color:{% if financeiro.lucro_liquido < 0 %}#dc2626{% else %}#16a34a{% endif %};">R$ {{ financeiro.lucro_liquido|floatformat:2 }}</div>
+        <div class="text-xl font-bold" style="color:{% if financeiro.lucro_liquido < 0 %}#dc2626{% elif financeiro.lucro_liquido > 0 %}#16a34a{% endif %};">R$ {{ financeiro.lucro_liquido|floatformat:2 }}</div>
       </div>
     </div>
 
-    <div class="grid grid-cols-2 sm:grid-cols-3 gap-3 mt-3">
-      <div class="card">
+    <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+      <div class="card p-4">
         <div class="text-xs" :style="temaClaro ? 'color:#94a3b8;' : 'color:#64748b;'">Entradas no caixa</div>
-        <div class="text-xl font-bold" style="color:#16a34a;">R$ {{ financeiro.fluxo.entradas_realizadas|floatformat:2 }}</div>
+        <div class="text-xl font-bold" style="color:{% if financeiro.fluxo.entradas_realizadas > 0 %}#16a34a{% endif %};">R$ {{ financeiro.fluxo.entradas_realizadas|floatformat:2 }}</div>
       </div>
-      <div class="card">
+      <div class="card p-4">
         <div class="text-xs" :style="temaClaro ? 'color:#94a3b8;' : 'color:#64748b;'">Saídas no caixa</div>
-        <div class="text-xl font-bold" style="color:#dc2626;">R$ {{ financeiro.fluxo.saidas_realizadas|floatformat:2 }}</div>
+        <div class="text-xl font-bold" style="color:{% if financeiro.fluxo.saidas_realizadas > 0 %}#dc2626{% endif %};">R$ {{ financeiro.fluxo.saidas_realizadas|floatformat:2 }}</div>
       </div>
-      <div class="card">
+      <div class="card p-4">
         <div class="text-xs" :style="temaClaro ? 'color:#94a3b8;' : 'color:#64748b;'">Saldo do período</div>
         <div class="text-xl font-bold">R$ {{ financeiro.fluxo.saldo_periodo|floatformat:2 }}</div>
       </div>
     </div>
 
-    {% if financeiro.dre_recente %}
-    <div class="card mt-3">
-      <h4 class="text-sm font-semibold mb-2">DRE mais recente ({{ financeiro.dre_recente.competencia|date:"m/Y" }})</h4>
-      <div class="grid grid-cols-2 sm:grid-cols-4 gap-2 text-sm">
-        <div>Margem bruta: <strong>{{ financeiro.dre_recente.margem_bruta_percentual }}%</strong></div>
-        <div>Margem EBITDA: <strong>{{ financeiro.dre_recente.margem_ebitda_percentual }}%</strong></div>
-        <div>Margem líquida: <strong>{{ financeiro.dre_recente.margem_liquida_percentual }}%</strong></div>
-        <div>Margem de contribuição: <strong>{{ financeiro.dre_recente.margem_contribuicao_percentual }}%</strong></div>
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-3">
+      {% if financeiro.dre_recente %}
+      <div class="card p-4">
+        <h4 class="text-sm font-semibold mb-2">DRE mais recente ({{ financeiro.dre_recente.competencia|date:"m/Y" }})</h4>
+        <div class="grid grid-cols-2 gap-2 text-sm">
+          <div>Margem bruta: <strong>{{ financeiro.dre_recente.margem_bruta_percentual }}%</strong></div>
+          <div>Margem EBITDA: <strong>{{ financeiro.dre_recente.margem_ebitda_percentual }}%</strong></div>
+          <div>Margem líquida: <strong>{{ financeiro.dre_recente.margem_liquida_percentual }}%</strong></div>
+          <div>Margem de contribuição: <strong>{{ financeiro.dre_recente.margem_contribuicao_percentual }}%</strong></div>
+        </div>
+        <a href="{% url 'financeiro:dre' %}" class="text-xs inline-block mt-2" :style="temaClaro ? 'color:#3b82f6;' : 'color:#60a5fa;'">Ver DRE completo →</a>
       </div>
-      <a href="{% url 'financeiro:dre' %}" class="text-xs" :style="temaClaro ? 'color:#3b82f6;' : 'color:#60a5fa;'">Ver DRE completo →</a>
-    </div>
-    {% endif %}
+      {% endif %}
 
-    <div class="card overflow-hidden mt-3">
+      <div class="card p-4">
+        <h4 class="text-sm font-semibold mb-2">Comparativo com o período anterior</h4>
+        <p class="text-sm" :style="temaClaro ? 'color:#374151;' : 'color:#d4d4d4;'">
+          {{ financeiro.comparativo.periodo_atual.inicio|date:"d/m" }} a {{ financeiro.comparativo.periodo_atual.fim|date:"d/m" }}:
+          R$ {{ financeiro.comparativo.periodo_atual.faturamento|floatformat:2 }} ({{ financeiro.comparativo.periodo_atual.pedidos }} pedidos)
+          vs. {{ financeiro.comparativo.periodo_anterior.inicio|date:"d/m" }} a {{ financeiro.comparativo.periodo_anterior.fim|date:"d/m" }}:
+          R$ {{ financeiro.comparativo.periodo_anterior.faturamento|floatformat:2 }} ({{ financeiro.comparativo.periodo_anterior.pedidos }} pedidos)
+          {% if financeiro.comparativo.variacao_percentual is not None %}
+          —
+          <span style="font-weight:600; color:{% if financeiro.comparativo.variacao_percentual < 0 %}#dc2626{% else %}#16a34a{% endif %};">
+            {% if financeiro.comparativo.variacao_percentual >= 0 %}+{% endif %}{{ financeiro.comparativo.variacao_percentual|floatformat:1 }}%
+          </span>
+          {% endif %}
+        </p>
+      </div>
+    </div>
+
+    <div class="card overflow-hidden">
       <h4 class="text-sm font-semibold px-4 pt-4">Lucro por categoria</h4>
       <table class="w-full text-sm mt-2">
         <thead>
@@ -349,23 +412,7 @@
         </tbody>
       </table>
     </div>
-
-    <div class="card mt-3">
-      <h4 class="text-sm font-semibold mb-2">Comparativo com o período anterior</h4>
-      <p class="text-sm" :style="temaClaro ? 'color:#374151;' : 'color:#d4d4d4;'">
-        {{ financeiro.comparativo.periodo_atual.inicio|date:"d/m" }} a {{ financeiro.comparativo.periodo_atual.fim|date:"d/m" }}:
-        R$ {{ financeiro.comparativo.periodo_atual.faturamento|floatformat:2 }} ({{ financeiro.comparativo.periodo_atual.pedidos }} pedidos)
-        vs. {{ financeiro.comparativo.periodo_anterior.inicio|date:"d/m" }} a {{ financeiro.comparativo.periodo_anterior.fim|date:"d/m" }}:
-        R$ {{ financeiro.comparativo.periodo_anterior.faturamento|floatformat:2 }} ({{ financeiro.comparativo.periodo_anterior.pedidos }} pedidos)
-        {% if financeiro.comparativo.variacao_percentual is not None %}
-        —
-        <span style="font-weight:600; color:{% if financeiro.comparativo.variacao_percentual < 0 %}#dc2626{% else %}#16a34a{% endif %};">
-          {% if financeiro.comparativo.variacao_percentual >= 0 %}+{% endif %}{{ financeiro.comparativo.variacao_percentual|floatformat:1 }}%
-        </span>
-        {% endif %}
-      </p>
-    </div>
-  </div>
+  </section>
 
 </div>
 {% endblock %}
