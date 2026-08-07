@@ -36,11 +36,11 @@
     </div>
     <div class="card">
       <div class="text-xs" :style="temaClaro ? 'color:#94a3b8;' : 'color:#64748b;'">Atrasados no período</div>
-      <div class="text-xl font-bold" style="color:#dc2626;">{{ resumo.pedidos_atrasados_concluidos }}</div>
+      <div class="text-xl font-bold" style="{% if resumo.pedidos_atrasados_concluidos %}color:#dc2626;{% endif %}">{{ resumo.pedidos_atrasados_concluidos }}</div>
     </div>
     <div class="card">
       <div class="text-xs" :style="temaClaro ? 'color:#94a3b8;' : 'color:#64748b;'">Atrasados agora</div>
-      <div class="text-xl font-bold" style="color:#dc2626;">{{ resumo.pedidos_atrasados_agora }}</div>
+      <div class="text-xl font-bold" style="{% if resumo.pedidos_atrasados_agora %}color:#dc2626;{% endif %}">{{ resumo.pedidos_atrasados_agora }}</div>
     </div>
   </div>
 
@@ -81,7 +81,14 @@
           <td class="px-4 py-3">{% if p.atrasados %}<span style="color:#dc2626;font-weight:700;">{{ p.atrasados }}</span>{% else %}0{% endif %}</td>
         </tr>
         {% empty %}
-        <tr><td colspan="5" class="px-4 py-8 text-center" :style="temaClaro ? 'color:#94a3b8;' : 'color:#64748b;'">Nenhum item concluído no período.</td></tr>
+        <tr>
+          <td colspan="5" class="px-4 py-10 text-center">
+            <svg class="w-8 h-8 mx-auto mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24" :style="temaClaro ? 'color:#d1d5db;' : 'color:#374151;'">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
+            </svg>
+            <p :style="temaClaro ? 'color:#94a3b8;' : 'color:#64748b;'">Nenhum item concluído no período.</p>
+          </td>
+        </tr>
         {% endfor %}
       </tbody>
     </table>
@@ -106,7 +113,14 @@
           <td class="px-4 py-3">{{ c.tempo_medio }} min</td>
         </tr>
         {% empty %}
-        <tr><td colspan="3" class="px-4 py-8 text-center" :style="temaClaro ? 'color:#94a3b8;' : 'color:#64748b;'">Sem dados de cozinheiro no período.</td></tr>
+        <tr>
+          <td colspan="3" class="px-4 py-10 text-center">
+            <svg class="w-8 h-8 mx-auto mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24" :style="temaClaro ? 'color:#d1d5db;' : 'color:#374151;'">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/>
+            </svg>
+            <p :style="temaClaro ? 'color:#94a3b8;' : 'color:#64748b;'">Sem dados de cozinheiro no período.</p>
+          </td>
+        </tr>
         {% endfor %}
       </tbody>
     </table>
