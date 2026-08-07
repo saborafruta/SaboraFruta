@@ -51,4 +51,5 @@ urlpatterns = [
     path('kds/produto-disponivel/<int:pk>/', views.ProdutoDisponivelView.as_view(), name='produto-disponivel'),
 
     path('cmv/', views.CmvView.as_view(), name='cmv'),
+    path('relatorios/', views.RelatoriosGerenciaisView.as_view(), name='relatorios'),
 ]

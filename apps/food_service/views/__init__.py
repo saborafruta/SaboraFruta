@@ -37,6 +37,7 @@ from .kds import (
 )
 from .kds_indicadores import KdsIndicadoresView
 from .cmv import CmvView
+from .relatorios import RelatoriosGerenciaisView
 from .painel import (
     ChamadoAtenderView,
     PainelMesasView,
@@ -89,6 +90,7 @@ __all__ = [
     'ReservaCancelarView',
     'ReservaCreateView',
     'ReservaListView',
+    'RelatoriosGerenciaisView',
     'api_chamados_pendentes',
     'api_kds',
     'api_painel_mesas',
