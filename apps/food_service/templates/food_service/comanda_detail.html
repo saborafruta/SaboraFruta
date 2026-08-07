@@ -6,30 +6,54 @@
 {{ formas_pagamento|json_script:"formas-pagamento" }}
 
 <div class="max-w-3xl mx-auto space-y-5" x-data="comandaApp()" x-init="init()">
-  <p class="text-sm" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
-    <a href="{% url 'food_service:painel' %}" :style="temaClaro ? 'color:#3b82f6;' : 'color:#60a5fa;'">Painel de Mesas</a>
-    <span class="mx-1">›</span> Comanda #{{ comanda.pk }}
-  </p>
+  <div>
+    <p class="text-sm mb-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+      <a href="{% url 'food_service:painel' %}" :style="temaClaro ? 'color:#3b82f6;' : 'color:#60a5fa;'">Painel de Mesas</a>
+      <span class="mx-1">›</span> Comanda #{{ comanda.pk }}
+    </p>
+    <div class="flex items-center gap-3">
+      <h2 class="text-2xl font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">Comanda #{{ comanda.pk }}</h2>
+      {% if comanda.status == "aberta" %}<span class="soft-pill is-green">Aberta</span>
+      {% elif comanda.status == "fechando" %}<span class="soft-pill is-amber">Fechando</span>
+      {% elif comanda.status == "fechada" %}<span class="soft-pill is-slate">Fechada</span>
+      {% elif comanda.status == "cancelada" %}<span class="soft-pill is-red">Cancelada</span>
+      {% endif %}
+    </div>
+  </div>
 
-  <div class="card space-y-1">
-    <div class="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm">
-      <span><strong>Status:</strong> {{ comanda.get_status_display }}</span>
-      <span><strong>Tipo:</strong> {{ comanda.get_tipo_display }}</span>
-      <span><strong>Mesas:</strong> {% for mesa in comanda.mesas.all %}{{ mesa }}{% if not forloop.last %}, {% endif %}{% empty %}avulsa{% endfor %}</span>
-      <span><strong>Ocupante:</strong> {{ comanda.cliente|default:comanda.nome_ocupante|default:"—" }}</span>
-      <span><strong>Pessoas:</strong> {{ comanda.quantidade_pessoas }}</span>
-      <span><strong>Aberta em:</strong> {{ comanda.aberta_em|date:"d/m/Y H:i" }}</span>
+  <div class="card p-4">
+    <div class="grid grid-cols-2 sm:grid-cols-5 gap-4 text-sm">
+      <div>
+        <div class="text-xs uppercase tracking-wide" :style="temaClaro ? 'color:#94a3b8;' : 'color:#64748b;'">Tipo</div>
+        <div class="font-medium mt-0.5">{{ comanda.get_tipo_display }}</div>
+      </div>
+      <div>
+        <div class="text-xs uppercase tracking-wide" :style="temaClaro ? 'color:#94a3b8;' : 'color:#64748b;'">Mesas</div>
+        <div class="font-medium mt-0.5">{% for mesa in comanda.mesas.all %}{{ mesa }}{% if not forloop.last %}, {% endif %}{% empty %}avulsa{% endfor %}</div>
+      </div>
+      <div>
+        <div class="text-xs uppercase tracking-wide" :style="temaClaro ? 'color:#94a3b8;' : 'color:#64748b;'">Ocupante</div>
+        <div class="font-medium mt-0.5">{{ comanda.cliente|default:comanda.nome_ocupante|default:"—" }}</div>
+      </div>
+      <div>
+        <div class="text-xs uppercase tracking-wide" :style="temaClaro ? 'color:#94a3b8;' : 'color:#64748b;'">Pessoas</div>
+        <div class="font-medium mt-0.5">{{ comanda.quantidade_pessoas }}</div>
+      </div>
+      <div>
+        <div class="text-xs uppercase tracking-wide" :style="temaClaro ? 'color:#94a3b8;' : 'color:#64748b;'">Aberta em</div>
+        <div class="font-medium mt-0.5">{{ comanda.aberta_em|date:"d/m/Y H:i" }}</div>
+      </div>
     </div>
   </div>
 
   {% with pendentes=comanda.pedidos_pendentes.all %}
   {% if pendentes %}
-  <div class="card space-y-3" style="border:1px solid #f59e0b;">
-    <h3 class="text-sm font-semibold">Pedidos recebidos pelo Cardápio Digital</h3>
+  <div class="card p-6 space-y-3" style="border:1px solid #f59e0b;">
+    <h3 class="text-xs font-semibold uppercase tracking-widest" style="color:#b45309;">Pedidos recebidos pelo Cardápio Digital</h3>
     {% for pedido in pendentes %}
     {% if pedido.status == "pendente" %}
     <div class="p-3 rounded-lg" :style="temaClaro ? 'background:#fffbeb;' : 'background:#292410;'">
-      <ul class="text-sm space-y-1 mb-2">
+      <ul class="text-sm space-y-1 mb-3">
         {% for item in pedido.itens.all %}
         <li>
           {{ item.quantidade }}x {{ item.produto.descricao }}
@@ -43,11 +67,11 @@
       <div class="flex gap-2">
         <form method="post" action="{% url 'food_service:comanda-pedido-pendente-confirmar' comanda.pk pedido.pk %}">
           {% csrf_token %}
-          <button class="btn-primary" style="font-size:12px;">Confirmar</button>
+          <button type="submit" class="btn-primary" style="font-size:12px; padding:6px 12px;">Confirmar</button>
         </form>
         <form method="post" action="{% url 'food_service:comanda-pedido-pendente-recusar' comanda.pk pedido.pk %}">
           {% csrf_token %}
-          <button class="text-xs font-semibold" style="color:#dc2626;">Recusar</button>
+          <button type="submit" class="btn-secondary" style="font-size:12px; padding:6px 12px; color:#dc2626;">Recusar</button>
         </form>
       </div>
     </div>
@@ -58,26 +82,29 @@
   {% endwith %}
 
   {% if comanda.status == "aberta" %}
-  <div class="card space-y-3">
-    <h3 class="text-sm font-semibold">Adicionar item</h3>
-    <form method="post" action="{% url 'food_service:comanda-item-adicionar' comanda.pk %}" class="flex flex-wrap gap-2 items-end">
+  <div class="card p-6 space-y-3">
+    <h3 class="text-xs font-semibold uppercase tracking-widest pb-2 border-b"
+        :style="temaClaro ? 'color:#6b7280; border-color:#e5e7eb;' : 'color:#6b7280; border-color:#374151;'">
+      Adicionar item
+    </h3>
+    <form method="post" action="{% url 'food_service:comanda-item-adicionar' comanda.pk %}" class="flex flex-wrap gap-3 items-end">
       {% csrf_token %}
       <div class="flex-1 min-w-[220px]">
-        <label class="block text-xs font-semibold mb-1">Produto</label>
-        <select name="produto_id" required class="w-full">
+        <label class="block text-xs font-semibold mb-1.5" :style="temaClaro ? 'color:#374151;' : 'color:#d1d5db;'">Produto</label>
+        <select name="produto_id" required class="form-input w-full">
           <option value="">Selecione...</option>
           {% for produto in produtos %}
           <option value="{{ produto.pk }}">{{ produto.descricao }} — R$ {{ produto.preco_venda }}</option>
           {% endfor %}
         </select>
       </div>
-      <div style="width:110px;">
-        <label class="block text-xs font-semibold mb-1">Qtd</label>
-        <input type="text" name="quantidade" value="1" class="w-full">
+      <div style="width:100px;">
+        <label class="block text-xs font-semibold mb-1.5" :style="temaClaro ? 'color:#374151;' : 'color:#d1d5db;'">Qtd</label>
+        <input type="text" name="quantidade" value="1" class="form-input w-full">
       </div>
       <div class="flex-1 min-w-[160px]">
-        <label class="block text-xs font-semibold mb-1">Observações</label>
-        <input type="text" name="observacoes" class="w-full" placeholder="Ex.: sem cebola">
+        <label class="block text-xs font-semibold mb-1.5" :style="temaClaro ? 'color:#374151;' : 'color:#d1d5db;'">Observações</label>
+        <input type="text" name="observacoes" class="form-input w-full" placeholder="Ex.: sem cebola">
       </div>
       <button type="submit" class="btn-primary">Adicionar</button>
     </form>
@@ -112,50 +139,50 @@
             {% endif %}
             {% if item.observacoes %}<div class="text-xs" :style="temaClaro ? 'color:#94a3b8;' : 'color:#64748b;'">{{ item.observacoes }}</div>{% endif %}
             {% for complemento in item.complementos.all %}
-            <div class="text-xs flex items-center gap-2" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'" style="margin-top:2px;">
+            <div class="text-xs flex items-center gap-2 mt-0.5" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
               <span>+ {{ complemento.quantidade }}x {{ complemento.produto.descricao }} (R$ {{ complemento.valor_total }})</span>
               {% if comanda.status == "aberta" %}
               <form method="post" action="{% url 'food_service:comanda-item-complemento-remover' comanda.pk item.pk complemento.pk %}">
                 {% csrf_token %}
-                <button class="text-xs font-semibold" style="color:#dc2626;">remover</button>
+                <button type="submit" class="text-xs font-semibold" style="color:#dc2626;">remover</button>
               </form>
               {% endif %}
             </div>
             {% endfor %}
             {% if comanda.status == "aberta" %}
-            <form method="post" action="{% url 'food_service:comanda-item-complemento-adicionar' comanda.pk item.pk %}" class="flex items-center gap-1" style="margin-top:4px;">
+            <form method="post" action="{% url 'food_service:comanda-item-complemento-adicionar' comanda.pk item.pk %}" class="flex items-center gap-1.5 mt-2">
               {% csrf_token %}
-              <select name="produto_id" required style="font-size:11px;max-width:160px;">
+              <select name="produto_id" required class="form-input" style="font-size:11px; padding:4px 8px; max-width:160px;">
                 <option value="">+ complemento</option>
                 {% for produto in produtos %}
                 <option value="{{ produto.pk }}">{{ produto.descricao }}</option>
                 {% endfor %}
               </select>
-              <input type="text" name="quantidade" value="1" style="width:40px;font-size:11px;">
-              <button class="text-xs font-semibold" :style="temaClaro ? 'color:#2563eb;' : 'color:#60a5fa;'">Adicionar</button>
+              <input type="text" name="quantidade" value="1" class="form-input" style="width:44px; font-size:11px; padding:4px 6px;">
+              <button type="submit" class="text-xs font-semibold" :style="temaClaro ? 'color:#2563eb;' : 'color:#60a5fa;'">Adicionar</button>
             </form>
             {% endif %}
           </td>
           <td class="px-4 py-3">{{ item.quantidade }}</td>
           <td class="px-4 py-3">R$ {{ item.valor_unitario }}</td>
-          <td class="px-4 py-3">R$ {{ item.valor_total_com_complementos }}</td>
+          <td class="px-4 py-3 font-medium">R$ {{ item.valor_total_com_complementos }}</td>
           {% if comanda.status == "aberta" %}
           <td class="px-4 py-3 text-right">
-            <div class="inline-flex gap-2 items-center">
+            <div class="inline-flex gap-3 items-center">
               {% if outras_comandas_abertas %}
-              <form method="post" action="{% url 'food_service:comanda-item-transferir' comanda.pk item.pk %}" style="display:inline-flex;gap:4px;">
+              <form method="post" action="{% url 'food_service:comanda-item-transferir' comanda.pk item.pk %}" class="inline-flex gap-1.5">
                 {% csrf_token %}
-                <select name="destino_comanda_id" style="font-size:11px;">
+                <select name="destino_comanda_id" class="form-input" style="font-size:11px; padding:4px 8px;">
                   {% for c in outras_comandas_abertas %}
                   <option value="{{ c.pk }}">Comanda #{{ c.pk }}</option>
                   {% endfor %}
                 </select>
-                <button class="text-xs font-semibold" :style="temaClaro ? 'color:#2563eb;' : 'color:#60a5fa;'">Transferir</button>
+                <button type="submit" class="text-xs font-semibold" :style="temaClaro ? 'color:#2563eb;' : 'color:#60a5fa;'">Transferir</button>
               </form>
               {% endif %}
               <form method="post" action="{% url 'food_service:comanda-item-remover' comanda.pk item.pk %}">
                 {% csrf_token %}
-                <button class="text-xs font-semibold" style="color:#dc2626;">Remover</button>
+                <button type="submit" class="text-xs font-semibold" style="color:#dc2626;">Remover</button>
               </form>
             </div>
           </td>
@@ -166,7 +193,7 @@
         {% endfor %}
       </tbody>
       <tfoot>
-        <tr class="font-semibold">
+        <tr class="font-semibold" :style="temaClaro ? 'background:#f9fafb;' : 'background:#1e1e20;'">
           <td class="px-4 py-3" colspan="3">Total</td>
           <td class="px-4 py-3">R$ {{ comanda.valor_total }}</td>
           {% if comanda.status == "aberta" %}<td></td>{% endif %}
@@ -176,12 +203,15 @@
   </div>
 
   {% if comanda.status == "aberta" and comanda.itens.all %}
-  <div class="card space-y-3">
-    <h3 class="text-sm font-semibold">Fechar comanda</h3>
+  <div class="card p-6 space-y-4">
+    <h3 class="text-xs font-semibold uppercase tracking-widest pb-2 border-b"
+        :style="temaClaro ? 'color:#6b7280; border-color:#e5e7eb;' : 'color:#6b7280; border-color:#374151;'">
+      Fechar comanda
+    </h3>
 
     <div>
-      <label class="block text-xs font-semibold mb-1">Divisão</label>
-      <select x-model="divisaoTipo" @change="montarDivisao()" class="w-full sm:w-64">
+      <label class="block text-sm font-medium mb-1.5" :style="temaClaro ? 'color:#374151;' : 'color:#d1d5db;'">Divisão</label>
+      <select x-model="divisaoTipo" @change="montarDivisao()" class="form-input w-full sm:w-64">
         <option value="unica">Um pagamento (forma única)</option>
         <option value="igual">Dividir igualmente entre N pessoas</option>
         <option value="percentual">Dividir por percentual</option>
@@ -189,46 +219,44 @@
       </select>
     </div>
 
-    <div x-show="divisaoTipo === 'igual' || divisaoTipo === 'percentual' || divisaoTipo === 'cliente'" x-cloak class="flex items-end gap-2">
-      <div>
-        <label class="block text-xs font-semibold mb-1">Dividir entre quantas partes</label>
-        <input type="number" min="1" x-model.number="numeroPessoasDivisao" @input="montarDivisao()" class="w-32">
-      </div>
+    <div x-show="divisaoTipo === 'igual' || divisaoTipo === 'percentual' || divisaoTipo === 'cliente'" x-cloak>
+      <label class="block text-sm font-medium mb-1.5" :style="temaClaro ? 'color:#374151;' : 'color:#d1d5db;'">Dividir entre quantas partes</label>
+      <input type="number" min="1" x-model.number="numeroPessoasDivisao" @input="montarDivisao()" class="form-input" style="width:120px;">
     </div>
 
-    <div class="space-y-2">
+    <div class="space-y-3">
       <template x-for="(pgto, idx) in pagamentos" :key="idx">
-        <div class="flex flex-wrap gap-2 items-end">
+        <div class="flex flex-wrap gap-3 items-end p-3 rounded-lg" :style="temaClaro ? 'background:#f9fafb;' : 'background:#1e1e20;'">
           <div x-show="divisaoTipo === 'cliente'" style="width:140px;">
-            <label class="block text-xs font-semibold mb-1">Nome</label>
-            <input type="text" x-model="pgto.nome" class="w-full" placeholder="Ex.: Maria">
+            <label class="block text-xs font-semibold mb-1.5" :style="temaClaro ? 'color:#374151;' : 'color:#d1d5db;'">Nome</label>
+            <input type="text" x-model="pgto.nome" class="form-input w-full" placeholder="Ex.: Maria">
           </div>
           <div class="flex-1 min-w-[160px]">
-            <label class="block text-xs font-semibold mb-1">Forma de pagamento</label>
-            <select x-model.number="pgto.forma_id" class="w-full">
+            <label class="block text-xs font-semibold mb-1.5" :style="temaClaro ? 'color:#374151;' : 'color:#d1d5db;'">Forma de pagamento</label>
+            <select x-model.number="pgto.forma_id" class="form-input w-full">
               <option value="">Selecione...</option>
               <template x-for="f in formasPagamento" :key="f.id">
                 <option :value="f.id" x-text="f.descricao"></option>
               </template>
             </select>
           </div>
-          <div x-show="divisaoTipo === 'percentual'" style="width:100px;">
-            <label class="block text-xs font-semibold mb-1">% </label>
-            <input type="number" step="0.01" min="0" max="100" x-model.number="pgto.percentual" @input="aplicarPercentual(pgto)" class="w-full">
+          <div x-show="divisaoTipo === 'percentual'" style="width:90px;">
+            <label class="block text-xs font-semibold mb-1.5" :style="temaClaro ? 'color:#374151;' : 'color:#d1d5db;'">%</label>
+            <input type="number" step="0.01" min="0" max="100" x-model.number="pgto.percentual" @input="aplicarPercentual(pgto)" class="form-input w-full">
           </div>
-          <div style="width:140px;">
-            <label class="block text-xs font-semibold mb-1">Valor (R$)</label>
-            <input type="number" step="0.01" min="0" x-model.number="pgto.valor" class="w-full">
+          <div style="width:130px;">
+            <label class="block text-xs font-semibold mb-1.5" :style="temaClaro ? 'color:#374151;' : 'color:#d1d5db;'">Valor (R$)</label>
+            <input type="number" step="0.01" min="0" x-model.number="pgto.valor" class="form-input w-full">
           </div>
-          <button type="button" class="text-xs font-semibold" style="color:#dc2626;" @click="pagamentos.splice(idx, 1)" x-show="pagamentos.length > 1">Remover</button>
+          <button type="button" class="text-xs font-semibold" style="color:#dc2626; padding-bottom:9px;" @click="pagamentos.splice(idx, 1)" x-show="pagamentos.length > 1">Remover</button>
         </div>
       </template>
       <button type="button" class="btn-secondary" style="font-size:12px;" @click="pagamentos.push({forma_id: '', valor: 0, percentual: 0, nome: ''})">+ Adicionar forma de pagamento</button>
     </div>
 
-    <p class="text-xs" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
-      Total da comanda: <strong>R$ {{ comanda.valor_total }}</strong> ·
-      Soma dos pagamentos: <strong x-text="'R$ ' + somaPagamentos().toFixed(2)"></strong>
+    <p class="text-sm" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+      Total da comanda: <strong :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">R$ {{ comanda.valor_total }}</strong> ·
+      Soma dos pagamentos: <strong :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'" x-text="'R$ ' + somaPagamentos().toFixed(2)"></strong>
     </p>
 
     <p x-show="erro" x-cloak class="text-sm" style="color:#dc2626;" x-text="erro"></p>
@@ -240,19 +268,22 @@
   {% endif %}
 
   {% if comanda.status == "aberta" %}
-  <div class="card space-y-3">
-    <h3 class="text-sm font-semibold">Mesas desta comanda</h3>
+  <div class="card p-6 space-y-4">
+    <h3 class="text-xs font-semibold uppercase tracking-widest pb-2 border-b"
+        :style="temaClaro ? 'color:#6b7280; border-color:#e5e7eb;' : 'color:#6b7280; border-color:#374151;'">
+      Mesas desta comanda
+    </h3>
 
     {% if comanda.mesas.all %}
-    <ul class="text-sm space-y-1">
+    <ul class="text-sm space-y-2">
       {% for mesa in comanda.mesas.all %}
       <li class="flex items-center justify-between gap-2">
-        <span>{{ mesa }}</span>
+        <span class="font-medium">{{ mesa }}</span>
         {% if comanda.mesas.count > 1 %}
         <form method="post" action="{% url 'food_service:comanda-liberar-mesa' comanda.pk %}">
           {% csrf_token %}
           <input type="hidden" name="mesa_id" value="{{ mesa.pk }}">
-          <button class="text-xs font-semibold" style="color:#dc2626;">Dividir (liberar esta mesa)</button>
+          <button type="submit" class="text-xs font-semibold" style="color:#dc2626;">Dividir (liberar esta mesa)</button>
         </form>
         {% endif %}
       </li>
@@ -263,74 +294,77 @@
     {% endif %}
 
     {% if mesas_livres %}
-    <div class="flex flex-wrap gap-4 pt-2" :style="temaClaro ? 'border-top:1px solid #e5e7eb;' : 'border-top:1px solid #2a2a2e;'">
+    <div class="flex flex-wrap gap-4 pt-3" :style="temaClaro ? 'border-top:1px solid #e5e7eb;' : 'border-top:1px solid #2a2a2e;'">
       <form method="post" action="{% url 'food_service:comanda-unir-mesas' comanda.pk %}" class="flex gap-2 items-end">
         {% csrf_token %}
         <div>
-          <label class="block text-xs font-semibold mb-1">Unir mesa livre a esta comanda</label>
-          <select name="mesa_id" required>
+          <label class="block text-xs font-semibold mb-1.5" :style="temaClaro ? 'color:#374151;' : 'color:#d1d5db;'">Unir mesa livre a esta comanda</label>
+          <select name="mesa_id" required class="form-input">
             <option value="">Selecione...</option>
             {% for mesa in mesas_livres %}
             <option value="{{ mesa.pk }}">{{ mesa }}</option>
             {% endfor %}
           </select>
         </div>
-        <button class="btn-secondary" style="font-size:12px;">Unir mesa</button>
+        <button type="submit" class="btn-secondary" style="font-size:12px;">Unir mesa</button>
       </form>
 
       {% if comanda.mesas.all %}
       <form method="post" action="{% url 'food_service:comanda-transferir-mesa' comanda.pk %}" class="flex gap-2 items-end">
         {% csrf_token %}
         <div>
-          <label class="block text-xs font-semibold mb-1">Transferir de</label>
-          <select name="mesa_origem_id" required>
+          <label class="block text-xs font-semibold mb-1.5" :style="temaClaro ? 'color:#374151;' : 'color:#d1d5db;'">Transferir de</label>
+          <select name="mesa_origem_id" required class="form-input">
             {% for mesa in comanda.mesas.all %}
             <option value="{{ mesa.pk }}">{{ mesa }}</option>
             {% endfor %}
           </select>
         </div>
         <div>
-          <label class="block text-xs font-semibold mb-1">Para</label>
-          <select name="mesa_destino_id" required>
+          <label class="block text-xs font-semibold mb-1.5" :style="temaClaro ? 'color:#374151;' : 'color:#d1d5db;'">Para</label>
+          <select name="mesa_destino_id" required class="form-input">
             {% for mesa in mesas_livres %}
             <option value="{{ mesa.pk }}">{{ mesa }}</option>
             {% endfor %}
           </select>
         </div>
-        <button class="btn-secondary" style="font-size:12px;">Transferir mesa</button>
+        <button type="submit" class="btn-secondary" style="font-size:12px;">Transferir mesa</button>
       </form>
       {% endif %}
     </div>
     {% endif %}
   </div>
 
-  <div class="card space-y-3">
-    <h3 class="text-sm font-semibold">Unir com outra comanda aberta</h3>
+  <div class="card p-6 space-y-4">
+    <h3 class="text-xs font-semibold uppercase tracking-widest pb-2 border-b"
+        :style="temaClaro ? 'color:#6b7280; border-color:#e5e7eb;' : 'color:#6b7280; border-color:#374151;'">
+      Unir com outra comanda aberta
+    </h3>
     {% if outras_comandas_abertas %}
     <form method="post" action="{% url 'food_service:comanda-unir' comanda.pk %}" class="flex gap-2 items-end">
       {% csrf_token %}
-      <select name="origem_comanda_id" required>
+      <select name="origem_comanda_id" required class="form-input flex-1">
         {% for c in outras_comandas_abertas %}
         <option value="{{ c.pk }}">Comanda #{{ c.pk }} ({{ c.itens.count }} itens)</option>
         {% endfor %}
       </select>
-      <button class="btn-secondary" style="font-size:12px;">Trazer itens para esta comanda</button>
+      <button type="submit" class="btn-secondary" style="font-size:12px;">Trazer itens para esta comanda</button>
     </form>
     {% else %}
     <p class="text-sm" :style="temaClaro ? 'color:#94a3b8;' : 'color:#64748b;'">Nenhuma outra comanda aberta no momento.</p>
     {% endif %}
 
-    <div class="pt-2" :style="temaClaro ? 'border-top:1px solid #e5e7eb;' : 'border-top:1px solid #2a2a2e;'">
+    <div class="pt-3" :style="temaClaro ? 'border-top:1px solid #e5e7eb;' : 'border-top:1px solid #2a2a2e;'">
       <form method="post" action="{% url 'food_service:comanda-separar' comanda.pk %}">
         {% csrf_token %}
-        <button class="btn-secondary" style="font-size:12px;">Separar comanda (abrir nova para transferir itens)</button>
+        <button type="submit" class="btn-secondary" style="font-size:12px;">Separar comanda (abrir nova para transferir itens)</button>
       </form>
     </div>
   </div>
   {% endif %}
 
   {% if comanda.venda_pdv_id %}
-  <div class="card">
+  <div class="card p-4">
     <p class="text-sm">Comanda fechada — venda #{{ comanda.venda_pdv.numero_venda }} gerada.
       <a href="{% url 'analytics:vendas' %}" :style="temaClaro ? 'color:#1d4ed8;' : 'color:#93c5fd;'">Ver no Histórico de Vendas</a>.
     </p>
