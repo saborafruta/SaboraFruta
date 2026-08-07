@@ -3,53 +3,80 @@
 {% block page_title %}{{ title }}{% endblock %}
 
 {% block content %}
-<div class="max-w-md mx-auto space-y-5">
-  <p class="text-sm" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
-    <a href="{% url 'food_service:reserva-list' %}" :style="temaClaro ? 'color:#3b82f6;' : 'color:#60a5fa;'">Reservas</a>
-    <span class="mx-1">›</span> Nova reserva
-  </p>
+<div class="max-w-2xl mx-auto space-y-5">
 
-  <form method="post" class="card space-y-4">
+  <div>
+    <p class="text-sm mb-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+      <a href="{% url 'food_service:reserva-list' %}" :style="temaClaro ? 'color:#3b82f6;' : 'color:#60a5fa;'">Reservas</a>
+      <span class="mx-1">›</span> Nova reserva
+    </p>
+    <h2 class="text-2xl font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">Nova reserva</h2>
+  </div>
+
+  <form method="post" novalidate>
     {% csrf_token %}
 
-    <div>
-      <label class="block text-xs font-semibold mb-1">Data e hora *</label>
-      <input type="datetime-local" name="data_hora" required class="w-full" value="{{ dados.data_hora }}">
-    </div>
+    <div class="space-y-5">
+      <div class="card p-6 space-y-5">
+        <h3 class="text-xs font-semibold uppercase tracking-widest pb-2 border-b"
+            :style="temaClaro ? 'color:#6b7280; border-color:#e5e7eb;' : 'color:#6b7280; border-color:#374151;'">
+          Dados da reserva
+        </h3>
 
-    <div>
-      <label class="block text-xs font-semibold mb-1">Nome do contato</label>
-      <input type="text" name="nome_contato" class="w-full" value="{{ dados.nome_contato }}" placeholder="Ex.: Maria">
-    </div>
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-5">
+          <div>
+            <label class="block text-sm font-medium mb-1.5" :style="temaClaro ? 'color:#374151;' : 'color:#d1d5db;'">
+              Data e hora <span class="text-red-500">*</span>
+            </label>
+            <input type="datetime-local" name="data_hora" required class="form-input w-full" value="{{ dados.data_hora }}">
+          </div>
 
-    <div>
-      <label class="block text-xs font-semibold mb-1">Telefone</label>
-      <input type="text" name="telefone" class="w-full" value="{{ dados.telefone }}">
-    </div>
+          <div>
+            <label class="block text-sm font-medium mb-1.5" :style="temaClaro ? 'color:#374151;' : 'color:#d1d5db;'">
+              Quantidade de pessoas
+            </label>
+            <input type="number" name="quantidade_pessoas" value="{{ dados.quantidade_pessoas|default:2 }}" min="1" class="form-input w-full">
+          </div>
 
-    <div>
-      <label class="block text-xs font-semibold mb-1">Mesa (opcional)</label>
-      <select name="mesa_id">
-        <option value="">A definir</option>
-        {% for mesa in mesas %}
-        <option value="{{ mesa.pk }}">{{ mesa }}</option>
-        {% endfor %}
-      </select>
-    </div>
+          <div>
+            <label class="block text-sm font-medium mb-1.5" :style="temaClaro ? 'color:#374151;' : 'color:#d1d5db;'">
+              Nome do contato
+            </label>
+            <input type="text" name="nome_contato" class="form-input w-full" value="{{ dados.nome_contato }}" placeholder="Ex.: Maria">
+          </div>
 
-    <div>
-      <label class="block text-xs font-semibold mb-1">Quantidade de pessoas</label>
-      <input type="number" name="quantidade_pessoas" value="{{ dados.quantidade_pessoas|default:2 }}" min="1" class="w-full">
-    </div>
+          <div>
+            <label class="block text-sm font-medium mb-1.5" :style="temaClaro ? 'color:#374151;' : 'color:#d1d5db;'">
+              Telefone
+            </label>
+            <input type="text" name="telefone" class="form-input w-full" value="{{ dados.telefone }}">
+          </div>
 
-    <div>
-      <label class="block text-xs font-semibold mb-1">Observações</label>
-      <textarea name="observacoes" rows="2" class="w-full">{{ dados.observacoes }}</textarea>
-    </div>
+          <div class="sm:col-span-2">
+            <label class="block text-sm font-medium mb-1.5" :style="temaClaro ? 'color:#374151;' : 'color:#d1d5db;'">
+              Mesa (opcional)
+            </label>
+            <select name="mesa_id" class="form-input w-full">
+              <option value="">A definir</option>
+              {% for mesa in mesas %}
+              <option value="{{ mesa.pk }}">{{ mesa }}</option>
+              {% endfor %}
+            </select>
+          </div>
+        </div>
 
-    <div class="flex justify-end gap-2">
-      <a href="{% url 'food_service:reserva-list' %}" class="btn-secondary">Cancelar</a>
-      <button type="submit" class="btn-primary">Salvar reserva</button>
+        <div>
+          <label class="block text-sm font-medium mb-1.5" :style="temaClaro ? 'color:#374151;' : 'color:#d1d5db;'">
+            Observações
+          </label>
+          <textarea name="observacoes" rows="3" class="form-input w-full" placeholder="Observações sobre a reserva...">{{ dados.observacoes }}</textarea>
+        </div>
+      </div>
+
+      <div class="flex gap-3 justify-end">
+        <a href="{% url 'food_service:reserva-list' %}" class="btn-secondary">Cancelar</a>
+        <button type="submit" class="btn-primary">Salvar reserva</button>
+      </div>
     </div>
   </form>
 </div>

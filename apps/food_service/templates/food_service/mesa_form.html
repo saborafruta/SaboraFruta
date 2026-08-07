@@ -3,43 +3,68 @@
 {% block page_title %}{{ title }}{% endblock %}
 
 {% block content %}
-<div class="max-w-md mx-auto space-y-5">
-  <p class="text-sm" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
-    <a href="{% url 'food_service:mesa-list' %}" :style="temaClaro ? 'color:#3b82f6;' : 'color:#60a5fa;'">Mesas</a>
-    <span class="mx-1">›</span> {{ title }}
-  </p>
+<div class="max-w-2xl mx-auto space-y-5">
 
-  <form method="post" class="card space-y-4">
+  <div>
+    <p class="text-sm mb-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+      <a href="{% url 'food_service:mesa-list' %}" :style="temaClaro ? 'color:#3b82f6;' : 'color:#60a5fa;'">Mesas</a>
+      <span class="mx-1">›</span> {{ title }}
+    </p>
+    <h2 class="text-2xl font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">{{ title }}</h2>
+  </div>
+
+  <form method="post" novalidate>
     {% csrf_token %}
 
-    <div>
-      <label class="block text-xs font-semibold mb-1">Número *</label>
-      <input type="number" name="numero" required class="w-full" value="{{ mesa.numero|default:'' }}">
-    </div>
+    <div class="space-y-5">
+      <div class="card p-6 space-y-5">
+        <h3 class="text-xs font-semibold uppercase tracking-widest pb-2 border-b"
+            :style="temaClaro ? 'color:#6b7280; border-color:#e5e7eb;' : 'color:#6b7280; border-color:#374151;'">
+          Dados da mesa
+        </h3>
 
-    <div>
-      <label class="block text-xs font-semibold mb-1">Nome (opcional)</label>
-      <input type="text" name="nome" class="w-full" value="{{ mesa.nome|default:'' }}" placeholder="Ex.: Varanda 1">
-    </div>
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-5">
+          <div>
+            <label class="block text-sm font-medium mb-1.5" :style="temaClaro ? 'color:#374151;' : 'color:#d1d5db;'">
+              Número <span class="text-red-500">*</span>
+            </label>
+            <input type="number" name="numero" required class="form-input w-full" value="{{ mesa.numero|default:'' }}">
+          </div>
 
-    <div>
-      <label class="block text-xs font-semibold mb-1">Capacidade</label>
-      <input type="number" name="capacidade" min="1" class="w-full" value="{{ mesa.capacidade|default:4 }}">
-    </div>
+          <div>
+            <label class="block text-sm font-medium mb-1.5" :style="temaClaro ? 'color:#374151;' : 'color:#d1d5db;'">
+              Nome (opcional)
+            </label>
+            <input type="text" name="nome" class="form-input w-full" value="{{ mesa.nome|default:'' }}" placeholder="Ex.: Varanda 1">
+          </div>
 
-    <div>
-      <label class="block text-xs font-semibold mb-1">Setor</label>
-      <input type="text" name="setor" class="w-full" value="{{ mesa.setor|default:'' }}" placeholder="Ex.: Salão, Varanda, Área externa">
-    </div>
+          <div>
+            <label class="block text-sm font-medium mb-1.5" :style="temaClaro ? 'color:#374151;' : 'color:#d1d5db;'">
+              Capacidade
+            </label>
+            <input type="number" name="capacidade" min="1" class="form-input w-full" value="{{ mesa.capacidade|default:4 }}">
+          </div>
 
-    <div>
-      <label class="block text-xs font-semibold mb-1">Observações</label>
-      <textarea name="observacoes" rows="2" class="w-full">{{ mesa.observacoes|default:'' }}</textarea>
-    </div>
+          <div>
+            <label class="block text-sm font-medium mb-1.5" :style="temaClaro ? 'color:#374151;' : 'color:#d1d5db;'">
+              Setor
+            </label>
+            <input type="text" name="setor" class="form-input w-full" value="{{ mesa.setor|default:'' }}" placeholder="Ex.: Salão, Varanda, Área externa">
+          </div>
+        </div>
 
-    <div class="flex justify-end gap-2">
-      <a href="{{ cancel_url }}" class="btn-secondary">Cancelar</a>
-      <button type="submit" class="btn-primary">Salvar</button>
+        <div>
+          <label class="block text-sm font-medium mb-1.5" :style="temaClaro ? 'color:#374151;' : 'color:#d1d5db;'">
+            Observações
+          </label>
+          <textarea name="observacoes" rows="3" class="form-input w-full" placeholder="Observações internas sobre a mesa...">{{ mesa.observacoes|default:'' }}</textarea>
+        </div>
+      </div>
+
+      <div class="flex gap-3 justify-end">
+        <a href="{{ cancel_url }}" class="btn-secondary">Cancelar</a>
+        <button type="submit" class="btn-primary">Salvar</button>
+      </div>
     </div>
   </form>
 </div>
