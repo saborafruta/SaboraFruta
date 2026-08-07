@@ -42,7 +42,7 @@ class KdsService:
         return sorted(itens, key=lambda item: (-item.prioridade, cls.prazo(item)))
 
     @classmethod
-    def avancar_status(cls, *, item: ItemComanda, novo_status: str) -> ItemComanda:
+    def avancar_status(cls, *, item: ItemComanda, novo_status: str, usuario=None) -> ItemComanda:
         if novo_status not in ItemComanda.StatusPreparo.values:
             raise DadosInvalidosError('Status de preparo inválido.')
         if item.status_preparo in (ItemComanda.StatusPreparo.ENTREGUE, ItemComanda.StatusPreparo.CANCELADO):
@@ -54,6 +54,9 @@ class KdsService:
         if carimbo and not getattr(item, carimbo):
             setattr(item, carimbo, timezone.now())
             campos.append(carimbo)
+        if novo_status == ItemComanda.StatusPreparo.EM_PREPARO and usuario and not item.preparado_por_id:
+            item.preparado_por = usuario
+            campos.append('preparado_por')
         item.save(update_fields=campos)
         return item
 

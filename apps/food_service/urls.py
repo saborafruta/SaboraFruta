@@ -42,6 +42,7 @@ urlpatterns = [
     path('reservas/<int:pk>/atender/', views.ReservaAtenderView.as_view(), name='reserva-atender'),
 
     path('kds/', views.KdsView.as_view(), name='kds'),
+    path('kds/indicadores/', views.KdsIndicadoresView.as_view(), name='kds-indicadores'),
     path('api/kds/', views.api_kds, name='api-kds'),
     path('kds/<int:pk>/avancar/', views.KdsAvancarStatusView.as_view(), name='kds-avancar'),
     path('kds/<int:pk>/prioridade/', views.KdsAlterarPrioridadeView.as_view(), name='kds-prioridade'),

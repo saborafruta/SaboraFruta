@@ -1,0 +1,115 @@
+{% extends "_base.html" %}
+{% block title %}{{ title }}{% endblock %}
+{% block page_title %}{{ title }}{% endblock %}
+
+{% block content %}
+<div class="max-w-5xl mx-auto space-y-5">
+
+  <div>
+    <p class="text-sm mb-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+      <a href="{% url 'food_service:kds' %}" :style="temaClaro ? 'color:#3b82f6;' : 'color:#60a5fa;'">Cozinha (KDS)</a>
+      <span class="mx-1">›</span> Indicadores
+    </p>
+    <h2 class="text-2xl font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">Indicadores de Preparo</h2>
+  </div>
+
+  <form method="get" class="card flex flex-wrap gap-3 items-end">
+    <div>
+      <label class="block text-xs font-semibold mb-1">De</label>
+      <input type="date" name="data_inicio" value="{{ data_inicio|date:'Y-m-d' }}">
+    </div>
+    <div>
+      <label class="block text-xs font-semibold mb-1">Até</label>
+      <input type="date" name="data_fim" value="{{ data_fim|date:'Y-m-d' }}">
+    </div>
+    <button type="submit" class="btn-secondary">Filtrar</button>
+  </form>
+
+  <div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
+    <div class="card">
+      <div class="text-xs" :style="temaClaro ? 'color:#94a3b8;' : 'color:#64748b;'">Tempo médio geral</div>
+      <div class="text-xl font-bold">{{ resumo.tempo_medio_geral|default:"—" }}{% if resumo.tempo_medio_geral %} min{% endif %}</div>
+    </div>
+    <div class="card">
+      <div class="text-xs" :style="temaClaro ? 'color:#94a3b8;' : 'color:#64748b;'">SLA de produção</div>
+      <div class="text-xl font-bold">{{ resumo.sla_percentual|default:"—" }}{% if resumo.sla_percentual %}%{% endif %}</div>
+    </div>
+    <div class="card">
+      <div class="text-xs" :style="temaClaro ? 'color:#94a3b8;' : 'color:#64748b;'">Atrasados no período</div>
+      <div class="text-xl font-bold" style="color:#dc2626;">{{ resumo.pedidos_atrasados_concluidos }}</div>
+    </div>
+    <div class="card">
+      <div class="text-xs" :style="temaClaro ? 'color:#94a3b8;' : 'color:#64748b;'">Atrasados agora</div>
+      <div class="text-xl font-bold" style="color:#dc2626;">{{ resumo.pedidos_atrasados_agora }}</div>
+    </div>
+  </div>
+
+  {% if resumo.gargalos %}
+  <div class="card">
+    <h3 class="text-sm font-semibold mb-2">Gargalos da cozinha</h3>
+    <p class="text-xs mb-3" :style="temaClaro ? 'color:#94a3b8;' : 'color:#64748b;'">Pratos cujo tempo médio real mais ultrapassa o tempo de preparo esperado.</p>
+    <div class="space-y-2">
+      {% for g in resumo.gargalos %}
+      <div class="flex items-center justify-between text-sm">
+        <span>{{ g.nome }}</span>
+        <span style="color:#dc2626;font-weight:700;">+{{ g.desvio }} min <span class="text-xs" style="color:inherit;opacity:.7;">({{ g.tempo_medio }} min vs {{ g.tempo_esperado }} esperado)</span></span>
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+  {% endif %}
+
+  <div class="card overflow-hidden">
+    <h3 class="text-sm font-semibold px-4 pt-4">Tempo médio por prato</h3>
+    <table class="w-full text-sm mt-2">
+      <thead>
+        <tr class="text-left text-xs uppercase tracking-wide" :style="temaClaro ? 'color:#6b7280;background:#f9fafb;' : 'color:#9ca3af;background:#1e1e20;'">
+          <th class="px-4 py-3">Prato</th>
+          <th class="px-4 py-3">Qtd</th>
+          <th class="px-4 py-3">Tempo médio</th>
+          <th class="px-4 py-3">Esperado</th>
+          <th class="px-4 py-3">Atrasados</th>
+        </tr>
+      </thead>
+      <tbody class="divide-y">
+        {% for p in resumo.por_prato %}
+        <tr>
+          <td class="px-4 py-3">{{ p.nome }}</td>
+          <td class="px-4 py-3">{{ p.quantidade }}</td>
+          <td class="px-4 py-3">{{ p.tempo_medio }} min</td>
+          <td class="px-4 py-3">{{ p.tempo_esperado }} min</td>
+          <td class="px-4 py-3">{% if p.atrasados %}<span style="color:#dc2626;font-weight:700;">{{ p.atrasados }}</span>{% else %}0{% endif %}</td>
+        </tr>
+        {% empty %}
+        <tr><td colspan="5" class="px-4 py-8 text-center" :style="temaClaro ? 'color:#94a3b8;' : 'color:#64748b;'">Nenhum item concluído no período.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  <div class="card overflow-hidden">
+    <h3 class="text-sm font-semibold px-4 pt-4">Tempo médio por cozinheiro</h3>
+    <p class="text-xs px-4" :style="temaClaro ? 'color:#94a3b8;' : 'color:#64748b;'">Tempo entre iniciar e concluir o preparo (não conta a espera na fila).</p>
+    <table class="w-full text-sm mt-2">
+      <thead>
+        <tr class="text-left text-xs uppercase tracking-wide" :style="temaClaro ? 'color:#6b7280;background:#f9fafb;' : 'color:#9ca3af;background:#1e1e20;'">
+          <th class="px-4 py-3">Cozinheiro</th>
+          <th class="px-4 py-3">Pratos preparados</th>
+          <th class="px-4 py-3">Tempo médio de preparo</th>
+        </tr>
+      </thead>
+      <tbody class="divide-y">
+        {% for c in resumo.por_cozinheiro %}
+        <tr>
+          <td class="px-4 py-3">{{ c.nome }}</td>
+          <td class="px-4 py-3">{{ c.quantidade }}</td>
+          <td class="px-4 py-3">{{ c.tempo_medio }} min</td>
+        </tr>
+        {% empty %}
+        <tr><td colspan="3" class="px-4 py-8 text-center" :style="temaClaro ? 'color:#94a3b8;' : 'color:#64748b;'">Sem dados de cozinheiro no período.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

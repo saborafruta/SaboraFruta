@@ -33,6 +33,7 @@ from .kds import (
     KdsView,
     api_kds,
 )
+from .kds_indicadores import KdsIndicadoresView
 from .painel import (
     ChamadoAtenderView,
     PainelMesasView,
@@ -67,6 +68,7 @@ __all__ = [
     'KdsAlterarPrioridadeView',
     'KdsAvancarStatusView',
     'KdsCancelarItemView',
+    'KdsIndicadoresView',
     'KdsView',
     'MesaCreateView',
     'MesaDeleteView',

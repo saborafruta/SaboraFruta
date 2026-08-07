@@ -39,6 +39,12 @@ class ItemComanda(TimestampedModel):
     iniciado_em = models.DateTimeField(null=True, blank=True)
     pronto_em = models.DateTimeField(null=True, blank=True)
     entregue_em = models.DateTimeField(null=True, blank=True)
+    # Quem iniciou o preparo -- usado nos indicadores de tempo médio por
+    # cozinheiro. Setado automaticamente na primeira vez que o item entra
+    # em "em_preparo".
+    preparado_por = models.ForeignKey(
+        'core.Usuario', on_delete=models.SET_NULL, null=True, blank=True, related_name='+',
+    )
 
     class Meta:
         db_table = 'food_service_itens_comanda'

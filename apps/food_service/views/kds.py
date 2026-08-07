@@ -96,7 +96,7 @@ class KdsAvancarStatusView(PermissaoRequiredMixin, View):
     def post(self, request, pk):
         item = _item_da_filial(request, pk)
         try:
-            KdsService.avancar_status(item=item, novo_status=request.POST.get('status', ''))
+            KdsService.avancar_status(item=item, novo_status=request.POST.get('status', ''), usuario=request.user)
         except DadosInvalidosError as exc:
             return JsonResponse({'erro': str(exc)}, status=400)
         return JsonResponse({'ok': True})
