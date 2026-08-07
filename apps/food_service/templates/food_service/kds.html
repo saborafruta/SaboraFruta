@@ -1,0 +1,167 @@
+{% extends "_base.html" %}
+
+{% block title %}{{ title }}{% endblock %}
+{% block page_title %}{{ title }}{% endblock %}
+
+{% block extra_head %}
+<style>
+  .kds-board { display:grid; grid-template-columns:repeat(4, minmax(230px, 1fr)); gap:14px; overflow-x:auto; }
+  .kds-col { border-radius:14px; padding:10px; min-height:200px; }
+  .kds-col-titulo { font-size:12px; font-weight:800; text-transform:uppercase; letter-spacing:.04em;
+                     margin-bottom:10px; display:flex; justify-content:space-between; }
+  .kds-card { border-radius:12px; padding:10px; margin-bottom:10px; box-shadow:0 3px 10px rgba(0,0,0,.1); }
+  .kds-card-topo { display:flex; justify-content:space-between; align-items:start; }
+  .kds-produto { font-weight:700; font-size:13.5px; }
+  .kds-meta { font-size:11px; opacity:.75; margin-top:2px; }
+  .kds-tempo { font-size:11px; font-weight:700; padding:2px 6px; border-radius:999px; }
+  .kds-tempo.ok { background:#dcfce7; color:#166534; }
+  .kds-tempo.atencao { background:#fef3c7; color:#92400e; }
+  .kds-tempo.atraso { background:#fee2e2; color:#991b1b; }
+  .kds-obs { font-size:11.5px; margin-top:6px; font-style:italic; }
+  .kds-comp { font-size:11px; margin-top:2px; opacity:.85; }
+  .kds-acoes { display:flex; gap:6px; margin-top:8px; flex-wrap:wrap; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="space-y-4" x-data="kdsApp()" x-init="iniciar()">
+
+  <div class="flex flex-wrap items-center gap-x-5 gap-y-1 text-sm">
+    <a href="{% url 'food_service:painel' %}" class="btn-secondary" style="font-size:12px;">Painel de Mesas</a>
+    <label class="flex items-center gap-2 text-xs" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+      <input type="checkbox" x-model="autoAtualizar">
+      Atualização automática (10s)
+    </label>
+    <span class="ml-auto text-xs" :style="temaClaro ? 'color:#94a3b8;' : 'color:#64748b;'" x-text="status"></span>
+  </div>
+
+  <div class="kds-board">
+    <template x-for="coluna in colunas" :key="coluna.status">
+      <div class="kds-col" :style="temaClaro ? 'background:#f4f4f5;' : 'background:#1e1e20;'">
+        <div class="kds-col-titulo" :style="temaClaro ? 'color:#3f3f46;' : 'color:#d4d4d8;'">
+          <span x-text="coluna.label"></span>
+          <span x-text="itensDaColuna(coluna.status).length"></span>
+        </div>
+        <template x-for="item in itensDaColuna(coluna.status)" :key="item.id">
+          <div class="kds-card" :style="temaClaro ? 'background:#fff;' : 'background:#27272a;'">
+            <div class="kds-card-topo">
+              <div>
+                <div class="kds-produto" x-text="item.quantidade + 'x ' + item.produto"></div>
+                <div class="kds-meta" x-text="'Mesa ' + item.mesas + (item.garcom ? ' · ' + item.garcom : '')"></div>
+              </div>
+              <span class="kds-tempo" :class="corTempo(item.minutos_decorridos)" x-text="(item.minutos_decorridos ?? 0) + ' min'"></span>
+            </div>
+            <div x-show="item.observacoes" class="kds-obs" x-text="item.observacoes"></div>
+            <template x-for="c in item.complementos" :key="c">
+              <div class="kds-comp" x-text="'+ ' + c"></div>
+            </template>
+            <div class="kds-acoes">
+              <button type="button" class="btn-secondary" style="font-size:11px;padding:4px 8px;"
+                      x-show="proximoStatus(item.status_preparo)"
+                      @click="avancar(item)" x-text="'→ ' + rotuloProximo(item.status_preparo)"></button>
+              <button type="button" class="text-xs font-semibold" style="color:#7c3aed;" @click="aumentarPrioridade(item)">↑ prioridade</button>
+              <button type="button" class="text-xs font-semibold" style="color:#dc2626;" @click="cancelar(item)">Cancelar</button>
+            </div>
+          </div>
+        </template>
+      </div>
+    </template>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+{{ block.super }}
+<script>
+function kdsApp() {
+  return {
+    itens: [],
+    autoAtualizar: true,
+    status: '',
+    _timer: null,
+    colunas: [
+      { status: 'recebido', label: 'Recebido' },
+      { status: 'em_preparo', label: 'Em preparo' },
+      { status: 'quase_pronto', label: 'Quase pronto' },
+      { status: 'pronto', label: 'Pronto' },
+    ],
+    _sequencia: ['recebido', 'em_preparo', 'quase_pronto', 'pronto', 'entregue'],
+
+    iniciar() {
+      this.atualizar();
+      this._timer = setInterval(() => {
+        if (this.autoAtualizar) this.atualizar();
+      }, 10000);
+    },
+
+    async atualizar() {
+      try {
+        const resp = await fetch(`{% url 'food_service:api-kds' %}`, { headers: { 'Accept': 'application/json' } });
+        const d = await resp.json();
+        if (!resp.ok) throw new Error(d.erro || ('HTTP ' + resp.status));
+        this.itens = d.itens || [];
+        this.status = 'atualizado às ' + new Date().toLocaleTimeString('pt-BR');
+      } catch (e) {
+        this.status = 'falha ao atualizar: ' + e.message;
+      }
+    },
+
+    itensDaColuna(status) {
+      return this.itens.filter(i => i.status_preparo === status);
+    },
+
+    corTempo(minutos) {
+      if (minutos === null || minutos === undefined) return 'ok';
+      if (minutos >= 20) return 'atraso';
+      if (minutos >= 10) return 'atencao';
+      return 'ok';
+    },
+
+    proximoStatus(atual) {
+      const idx = this._sequencia.indexOf(atual);
+      return idx >= 0 && idx < this._sequencia.length - 1 ? this._sequencia[idx + 1] : null;
+    },
+
+    rotuloProximo(atual) {
+      const proximo = this.proximoStatus(atual);
+      const rotulos = { em_preparo: 'Iniciar preparo', quase_pronto: 'Quase pronto', pronto: 'Pronto', entregue: 'Entregar' };
+      return rotulos[proximo] || '';
+    },
+
+    _csrf() {
+      const el = document.querySelector('input[name=csrfmiddlewaretoken]');
+      return el ? el.value : '';
+    },
+
+    async avancar(item) {
+      const proximo = this.proximoStatus(item.status_preparo);
+      if (!proximo) return;
+      await fetch(`/food-service/kds/${item.id}/avancar/`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'X-CSRFToken': this._csrf() },
+        body: `status=${proximo}`,
+      });
+      this.atualizar();
+    },
+
+    async aumentarPrioridade(item) {
+      await fetch(`/food-service/kds/${item.id}/prioridade/`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'X-CSRFToken': this._csrf() },
+        body: `prioridade=${(item.prioridade || 0) + 1}`,
+      });
+      this.atualizar();
+    },
+
+    async cancelar(item) {
+      await fetch(`/food-service/kds/${item.id}/cancelar/`, {
+        method: 'POST',
+        headers: { 'X-CSRFToken': this._csrf() },
+      });
+      this.atualizar();
+    },
+  };
+}
+</script>
+<form style="display:none;">{% csrf_token %}</form>
+{% endblock %}

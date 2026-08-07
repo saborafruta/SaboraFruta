@@ -16,12 +16,29 @@ class ItemComanda(TimestampedModel):
     usada nos dois momentos, então normalmente coincidem.
     """
 
+    class StatusPreparo(models.TextChoices):
+        RECEBIDO = 'recebido', 'Recebido'
+        EM_PREPARO = 'em_preparo', 'Em preparo'
+        QUASE_PRONTO = 'quase_pronto', 'Quase pronto'
+        PRONTO = 'pronto', 'Pronto'
+        ENTREGUE = 'entregue', 'Entregue'
+        CANCELADO = 'cancelado', 'Cancelado'
+
     comanda = models.ForeignKey('food_service.Comanda', on_delete=models.CASCADE, related_name='itens')
     produto = models.ForeignKey('produtos.Produto', on_delete=models.PROTECT, related_name='+')
     quantidade = models.DecimalField(max_digits=12, decimal_places=3, default=Decimal('1'))
     valor_unitario = models.DecimalField(max_digits=14, decimal_places=4)
     observacoes = models.TextField(blank=True)
     adicionado_em = models.DateTimeField(auto_now_add=True)
+
+    # KDS -- rastreio do preparo na cozinha. `prioridade` maior = mais
+    # urgente, ajustável manualmente pelo gerente na tela do KDS.
+    status_preparo = models.CharField(max_length=20, choices=StatusPreparo.choices, default=StatusPreparo.RECEBIDO)
+    prioridade = models.PositiveSmallIntegerField(default=0)
+    recebido_em = models.DateTimeField(null=True, blank=True)
+    iniciado_em = models.DateTimeField(null=True, blank=True)
+    pronto_em = models.DateTimeField(null=True, blank=True)
+    entregue_em = models.DateTimeField(null=True, blank=True)
 
     class Meta:
         db_table = 'food_service_itens_comanda'

@@ -40,4 +40,10 @@ urlpatterns = [
     path('reservas/nova/', views.ReservaCreateView.as_view(), name='reserva-create'),
     path('reservas/<int:pk>/cancelar/', views.ReservaCancelarView.as_view(), name='reserva-cancelar'),
     path('reservas/<int:pk>/atender/', views.ReservaAtenderView.as_view(), name='reserva-atender'),
+
+    path('kds/', views.KdsView.as_view(), name='kds'),
+    path('api/kds/', views.api_kds, name='api-kds'),
+    path('kds/<int:pk>/avancar/', views.KdsAvancarStatusView.as_view(), name='kds-avancar'),
+    path('kds/<int:pk>/prioridade/', views.KdsAlterarPrioridadeView.as_view(), name='kds-prioridade'),
+    path('kds/<int:pk>/cancelar/', views.KdsCancelarItemView.as_view(), name='kds-cancelar'),
 ]

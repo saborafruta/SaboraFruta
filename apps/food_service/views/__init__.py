@@ -26,6 +26,13 @@ from .mesas import (
     MesaToggleAtivoView,
     MesaUpdateView,
 )
+from .kds import (
+    KdsAlterarPrioridadeView,
+    KdsAvancarStatusView,
+    KdsCancelarItemView,
+    KdsView,
+    api_kds,
+)
 from .painel import (
     ChamadoAtenderView,
     PainelMesasView,
@@ -57,6 +64,10 @@ __all__ = [
     'ComandaTransferirMesaView',
     'ComandaUnirMesasView',
     'ComandaUnirView',
+    'KdsAlterarPrioridadeView',
+    'KdsAvancarStatusView',
+    'KdsCancelarItemView',
+    'KdsView',
     'MesaCreateView',
     'MesaDeleteView',
     'MesaListView',
@@ -71,5 +82,6 @@ __all__ = [
     'ReservaCreateView',
     'ReservaListView',
     'api_chamados_pendentes',
+    'api_kds',
     'api_painel_mesas',
 ]

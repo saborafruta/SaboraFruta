@@ -100,6 +100,11 @@
         <tr>
           <td class="px-4 py-3">
             {{ item.produto.descricao }}
+            {% if item.status_preparo != "entregue" and item.status_preparo != "cancelado" %}
+            <span class="soft-pill {% if item.status_preparo == 'pronto' %}is-green{% elif item.status_preparo == 'recebido' %}is-amber{% else %}is-blue{% endif %}" style="font-size:10px; margin-left:4px;">
+              {{ item.get_status_preparo_display }}
+            </span>
+            {% endif %}
             {% if item.observacoes %}<div class="text-xs" :style="temaClaro ? 'color:#94a3b8;' : 'color:#64748b;'">{{ item.observacoes }}</div>{% endif %}
             {% for complemento in item.complementos.all %}
             <div class="text-xs flex items-center gap-2" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'" style="margin-top:2px;">

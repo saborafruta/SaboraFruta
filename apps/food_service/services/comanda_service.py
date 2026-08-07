@@ -63,6 +63,7 @@ class ComandaService:
             quantidade=quantidade,
             valor_unitario=preco_info['preco'],
             observacoes=observacoes,
+            recebido_em=timezone.now(),
         )
 
     @classmethod
