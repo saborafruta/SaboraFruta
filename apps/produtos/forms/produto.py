@@ -149,6 +149,7 @@ class ProdutoForm(forms.ModelForm):
             'fornecedor': 'Fornecedor',
             'subcategoria': 'Sub categoria',
             'linha_producao': 'Familia / Linha',
+            'tempo_preparo_minutos': 'Tempo de preparo (min)',
             'ativo': 'Status ativo',
             'rascunho_comercial': 'Rascunho comercial',
             'observacao': 'Observacao interna',

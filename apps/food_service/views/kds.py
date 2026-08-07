@@ -28,13 +28,16 @@ _ATIVOS = [
 ]
 
 
-def _resumo_item(item, agora):
+def _resumo_item(item, agora, posicao):
     comanda = item.comanda
     mesas = ', '.join(str(m) for m in comanda.mesas.all()) or 'avulsa'
     referencia = item.recebido_em or item.adicionado_em
     return {
         'id': item.pk,
+        'posicao': posicao,
         'produto': item.produto.descricao,
+        'categoria': item.produto.categoria.nome if item.produto.categoria_id else 'Outros',
+        'tipo_produto': item.produto.tipo_produto,
         'quantidade': str(item.quantidade),
         'observacoes': item.observacoes,
         'status_preparo': item.status_preparo,
@@ -66,13 +69,16 @@ def api_kds(request):
             comanda__status=Comanda.Status.ABERTA,
             status_preparo__in=_ATIVOS,
         )
-        .select_related('produto', 'comanda', 'comanda__garcom', 'comanda__cliente')
+        .select_related('produto', 'produto__categoria', 'comanda', 'comanda__garcom', 'comanda__cliente')
         .prefetch_related('comanda__mesas', 'complementos__produto')
-        .order_by('-prioridade', 'recebido_em')
     )
+    itens_ordenados = KdsService.fila_ordenada(itens)
     return JsonResponse({
         'ok': True,
-        'itens': [_resumo_item(item, agora) for item in itens],
+        'itens': [
+            _resumo_item(item, agora, posicao)
+            for posicao, item in enumerate(itens_ordenados, start=1)
+        ],
     })
 
 

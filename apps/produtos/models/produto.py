@@ -283,6 +283,9 @@ class Produto(FilialScopedModel):
         max_length=30, blank=True, help_text='Corredor/Prateleira/Posicao',
     )
     foto_url = models.URLField(max_length=500, blank=True)
+    # Usado pela fila inteligente do KDS (apps.food_service) para calcular o
+    # prazo de cada item -- quando em branco, o KDS assume um tempo padrão.
+    tempo_preparo_minutos = models.PositiveSmallIntegerField(null=True, blank=True)
 
     # Industrial
     condicao_armazenamento = models.CharField(

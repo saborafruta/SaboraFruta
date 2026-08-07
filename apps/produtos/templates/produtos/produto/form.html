@@ -621,6 +621,7 @@
           <div class="produto-field">{% include "produtos/produto/partials/_field.html" with field=form.categoria required=True %}</div>
           <div class="produto-field">{% include "produtos/produto/partials/_field.html" with field=form.subcategoria %}</div>
           <div class="produto-field">{% include "produtos/produto/partials/_field.html" with field=form.tipo_produto required=True %}</div>
+          <div class="produto-field">{% include "produtos/produto/partials/_field.html" with field=form.tempo_preparo_minutos %}<p class="produto-help">Tempo médio de preparo (min) — usado pela fila do KDS.</p></div>
           <div class="produto-field">{% include "produtos/produto/partials/_field.html" with field=form.linha_producao %}</div>
           <div class="produto-field">{% include "produtos/produto/partials/_field.html" with field=form.marca %}</div>
           <div class="produto-field">{% include "produtos/produto/partials/_field.html" with field=form.fornecedor %}</div>

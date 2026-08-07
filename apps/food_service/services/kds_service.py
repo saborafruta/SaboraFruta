@@ -15,6 +15,32 @@ class KdsService:
         ItemComanda.StatusPreparo.ENTREGUE: 'entregue_em',
     }
 
+    # Quando o produto não tem tempo de preparo cadastrado, assume este valor
+    # só para dar um prazo pra ordenar -- não é exibido como estimativa real.
+    TEMPO_PREPARO_PADRAO_MINUTOS = 15
+
+    @classmethod
+    def prazo(cls, item: ItemComanda):
+        """
+        "Devido em" -- horário de recebimento + tempo de preparo esperado do
+        produto. Itens com prazo mais próximo (vão atrasar primeiro se não
+        começarem agora) sobem na fila, no mesmo espírito de escalonamento
+        por menor prazo (earliest due date) usado em cozinhas de verdade:
+        um prato de preparo longo recebido há pouco pode já estar mais
+        urgente que um prato rápido recebido antes dele.
+        """
+        referencia = item.recebido_em or item.adicionado_em
+        tempo_preparo = item.produto.tempo_preparo_minutos or cls.TEMPO_PREPARO_PADRAO_MINUTOS
+        return referencia + timezone.timedelta(minutes=tempo_preparo)
+
+    @classmethod
+    def fila_ordenada(cls, itens):
+        """
+        Prioridade manual sempre vence (é a forma do gerente furar a fila);
+        dentro do mesmo nível de prioridade, ordena por prazo mais próximo.
+        """
+        return sorted(itens, key=lambda item: (-item.prioridade, cls.prazo(item)))
+
     @classmethod
     def avancar_status(cls, *, item: ItemComanda, novo_status: str) -> ItemComanda:
         if novo_status not in ItemComanda.StatusPreparo.values:

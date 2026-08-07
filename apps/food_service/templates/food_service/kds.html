@@ -35,6 +35,18 @@
     <span class="ml-auto text-xs" :style="temaClaro ? 'color:#94a3b8;' : 'color:#64748b;'" x-text="status"></span>
   </div>
 
+  <div class="flex flex-wrap items-center gap-2 text-xs">
+    <span :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Categoria:</span>
+    <span style="padding:4px 10px;border-radius:999px;cursor:pointer;"
+          :style="categoriaFiltro === '' ? 'background:#e8824a;color:#fff;' : 'background:#efe9df;color:#57534e;'"
+          @click="categoriaFiltro = ''">Todas</span>
+    <template x-for="cat in categoriasDisponiveis()" :key="cat">
+      <span style="padding:4px 10px;border-radius:999px;cursor:pointer;"
+            :style="categoriaFiltro === cat ? 'background:#e8824a;color:#fff;' : 'background:#efe9df;color:#57534e;'"
+            @click="categoriaFiltro = (categoriaFiltro === cat ? '' : cat)" x-text="cat"></span>
+    </template>
+  </div>
+
   <div class="kds-board">
     <template x-for="coluna in colunas" :key="coluna.status">
       <div class="kds-col" :style="temaClaro ? 'background:#f4f4f5;' : 'background:#1e1e20;'">
@@ -46,8 +58,8 @@
           <div class="kds-card" :style="temaClaro ? 'background:#fff;' : 'background:#27272a;'">
             <div class="kds-card-topo">
               <div>
-                <div class="kds-produto" x-text="item.quantidade + 'x ' + item.produto"></div>
-                <div class="kds-meta" x-text="'Mesa ' + item.mesas + (item.garcom ? ' · ' + item.garcom : '')"></div>
+                <div class="kds-produto" x-text="'#' + item.posicao + ' — ' + item.quantidade + 'x ' + item.produto"></div>
+                <div class="kds-meta" x-text="item.categoria + ' · Mesa ' + item.mesas + (item.garcom ? ' · ' + item.garcom : '')"></div>
               </div>
               <span class="kds-tempo" :class="corTempo(item.minutos_decorridos)" x-text="(item.minutos_decorridos ?? 0) + ' min'"></span>
             </div>
@@ -77,6 +89,7 @@ function kdsApp() {
   return {
     itens: [],
     autoAtualizar: true,
+    categoriaFiltro: '',
     status: '',
     _timer: null,
     colunas: [
@@ -107,7 +120,12 @@ function kdsApp() {
     },
 
     itensDaColuna(status) {
-      return this.itens.filter(i => i.status_preparo === status);
+      return this.itens.filter(i => i.status_preparo === status
+        && (!this.categoriaFiltro || i.categoria === this.categoriaFiltro));
+    },
+
+    categoriasDisponiveis() {
+      return [...new Set(this.itens.map(i => i.categoria))].sort();
     },
 
     corTempo(minutos) {
