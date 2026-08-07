@@ -16,15 +16,15 @@
   <form method="get" class="card flex flex-wrap gap-3 items-end">
     <div>
       <label class="block text-xs font-semibold mb-1">De</label>
-      <input type="date" name="data_inicio" value="{{ data_inicio|date:'Y-m-d' }}">
+      <input type="date" name="data_inicio" value="{{ data_inicio|date:'Y-m-d' }}" class="form-input">
     </div>
     <div>
       <label class="block text-xs font-semibold mb-1">Até</label>
-      <input type="date" name="data_fim" value="{{ data_fim|date:'Y-m-d' }}">
+      <input type="date" name="data_fim" value="{{ data_fim|date:'Y-m-d' }}" class="form-input">
     </div>
     <div>
       <label class="block text-xs font-semibold mb-1">Meta de CMV (%)</label>
-      <input type="text" name="meta_cmv" value="{{ meta_cmv_percentual|default:'' }}" placeholder="Ex.: 30" style="width:100px;">
+      <input type="text" name="meta_cmv" value="{{ meta_cmv_percentual|default:'' }}" placeholder="Ex.: 30" class="form-input" style="width:100px;">
     </div>
     <button type="submit" class="btn-secondary">Filtrar</button>
   </form>

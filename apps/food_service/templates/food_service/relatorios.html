@@ -16,15 +16,15 @@
   <form method="get" class="card flex flex-wrap gap-3 items-end">
     <div>
       <label class="block text-xs font-semibold mb-1">De</label>
-      <input type="date" name="data_inicio" value="{{ data_inicio|date:'Y-m-d' }}">
+      <input type="date" name="data_inicio" value="{{ data_inicio|date:'Y-m-d' }}" class="form-input">
     </div>
     <div>
       <label class="block text-xs font-semibold mb-1">Até</label>
-      <input type="date" name="data_fim" value="{{ data_fim|date:'Y-m-d' }}">
+      <input type="date" name="data_fim" value="{{ data_fim|date:'Y-m-d' }}" class="form-input">
     </div>
     <div>
       <label class="block text-xs font-semibold mb-1">Turno</label>
-      <select name="turno" style="width:140px;">
+      <select name="turno" class="form-input" style="width:140px;">
         <option value="">Todos</option>
         {% for chave, faixa in turnos.items %}
           <option value="{{ chave }}" {% if turno == chave %}selected{% endif %}>{{ faixa.2 }}</option>
@@ -33,7 +33,7 @@
     </div>
     <div>
       <label class="block text-xs font-semibold mb-1">Colaborador (garçom)</label>
-      <select name="colaborador" style="width:180px;">
+      <select name="colaborador" class="form-input" style="width:180px;">
         <option value="">Todos</option>
         {% for c in colaboradores %}
           <option value="{{ c.pk }}" {% if colaborador_id == c.pk %}selected{% endif %}>{{ c.nome }}</option>

@@ -55,7 +55,7 @@
         {% csrf_token %}
         <div class="flex-1 min-w-[220px]">
           <label class="block text-xs font-semibold mb-1">Marcar como indisponível ("acabou")</label>
-          <select name="produto_id" required class="w-full">
+          <select name="produto_id" required class="form-input w-full">
             <option value="">Selecione o produto...</option>
             {% for produto in produtos_ativos %}
             <option value="{{ produto.pk }}">{{ produto.descricao }}</option>

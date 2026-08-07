@@ -16,10 +16,10 @@
     </h2>
   </div>
 
-  <form method="get" class="card flex flex-wrap gap-3 items-end">
+  <form method="get" class="card p-4 flex flex-wrap gap-3 items-end">
     <div>
-      <label class="block text-xs font-semibold mb-1">Mesa</label>
-      <select name="mesa_id">
+      <label class="block text-xs font-semibold mb-1.5" :style="temaClaro ? 'color:#374151;' : 'color:#d1d5db;'">Mesa</label>
+      <select name="mesa_id" class="form-input">
         <option value="">Todas</option>
         {% for mesa in mesas %}
         <option value="{{ mesa.pk }}" {% if mesa_selecionada.pk == mesa.pk %}selected{% endif %}>{{ mesa }}</option>
@@ -27,12 +27,12 @@
       </select>
     </div>
     <div>
-      <label class="block text-xs font-semibold mb-1">De</label>
-      <input type="date" name="data_inicio" value="{{ request.GET.data_inicio }}">
+      <label class="block text-xs font-semibold mb-1.5" :style="temaClaro ? 'color:#374151;' : 'color:#d1d5db;'">De</label>
+      <input type="date" name="data_inicio" value="{{ request.GET.data_inicio }}" class="form-input">
     </div>
     <div>
-      <label class="block text-xs font-semibold mb-1">Até</label>
-      <input type="date" name="data_fim" value="{{ request.GET.data_fim }}">
+      <label class="block text-xs font-semibold mb-1.5" :style="temaClaro ? 'color:#374151;' : 'color:#d1d5db;'">Até</label>
+      <input type="date" name="data_fim" value="{{ request.GET.data_fim }}" class="form-input">
     </div>
     <button type="submit" class="btn-secondary">Filtrar</button>
     <a href="{% url 'food_service:comanda-historico' %}" class="text-xs font-semibold" :style="temaClaro ? 'color:#6b7280;' : 'color:#94a3b8;'">Limpar filtros</a>
@@ -55,37 +55,44 @@
       </thead>
       <tbody class="divide-y">
         {% for comanda in pagina %}
-        <tr>
+        <tr class="table-row-hover">
           <td class="px-4 py-3 font-medium">#{{ comanda.pk }}</td>
           <td class="px-4 py-3">{% for mesa in comanda.mesas.all %}{{ mesa }}{% if not forloop.last %}, {% endif %}{% empty %}avulsa{% endfor %}</td>
           <td class="px-4 py-3">{{ comanda.garcom.nome|default:"—" }}</td>
           <td class="px-4 py-3">{{ comanda.cliente|default:comanda.nome_ocupante|default:"—" }}</td>
           <td class="px-4 py-3">{{ comanda.itens.count }}</td>
-          <td class="px-4 py-3 text-xs">{{ comanda.aberta_em|date:"d/m/Y H:i" }}</td>
-          <td class="px-4 py-3 text-xs">{{ comanda.fechada_em|date:"d/m/Y H:i"|default:"—" }}</td>
+          <td class="px-4 py-3 text-xs" :style="temaClaro ? 'color:#6b7280;' : 'color:#9ca3af;'">{{ comanda.aberta_em|date:"d/m/Y H:i" }}</td>
+          <td class="px-4 py-3 text-xs" :style="temaClaro ? 'color:#6b7280;' : 'color:#9ca3af;'">{{ comanda.fechada_em|date:"d/m/Y H:i"|default:"—" }}</td>
           <td class="px-4 py-3">
             {% if comanda.status == "fechada" %}<span class="soft-pill is-green">Fechada</span>
             {% else %}<span class="soft-pill is-amber">Cancelada</span>{% endif %}
           </td>
           <td class="px-4 py-3">
             {% if comanda.venda_pdv %}
-            <a href="{% url 'analytics:vendas' %}" :style="temaClaro ? 'color:#2563eb;' : 'color:#60a5fa;'">#{{ comanda.venda_pdv.numero_venda }}</a>
-            {% else %}—{% endif %}
+            <a href="{% url 'analytics:vendas' %}" class="font-medium" :style="temaClaro ? 'color:#2563eb;' : 'color:#60a5fa;'">#{{ comanda.venda_pdv.numero_venda }}</a>
+            {% else %}<span :style="temaClaro ? 'color:#94a3b8;' : 'color:#64748b;'">—</span>{% endif %}
           </td>
         </tr>
         {% empty %}
-        <tr><td colspan="9" class="px-4 py-8 text-center" :style="temaClaro ? 'color:#94a3b8;' : 'color:#64748b;'">Nenhum atendimento encontrado.</td></tr>
+        <tr>
+          <td colspan="9" class="px-4 py-12 text-center">
+            <svg class="w-10 h-10 mx-auto mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24" :style="temaClaro ? 'color:#d1d5db;' : 'color:#374151;'">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+            </svg>
+            <p :style="temaClaro ? 'color:#94a3b8;' : 'color:#64748b;'">Nenhum atendimento encontrado para os filtros selecionados.</p>
+          </td>
+        </tr>
         {% endfor %}
       </tbody>
     </table>
   </div>
 
   {% if pagina.paginator.num_pages > 1 %}
-  <div class="flex justify-center gap-2 text-sm">
+  <div class="flex justify-center items-center gap-3 text-sm">
     {% if pagina.has_previous %}
     <a href="?pagina={{ pagina.previous_page_number }}" class="btn-secondary" style="font-size:12px;">Anterior</a>
     {% endif %}
-    <span class="px-2 py-1">Página {{ pagina.number }} de {{ pagina.paginator.num_pages }}</span>
+    <span :style="temaClaro ? 'color:#6b7280;' : 'color:#94a3b8;'">Página {{ pagina.number }} de {{ pagina.paginator.num_pages }}</span>
     {% if pagina.has_next %}
     <a href="?pagina={{ pagina.next_page_number }}" class="btn-secondary" style="font-size:12px;">Próxima</a>
     {% endif %}

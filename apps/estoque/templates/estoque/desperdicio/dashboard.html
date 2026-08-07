@@ -16,11 +16,11 @@
   <form method="get" class="card flex flex-wrap gap-3 items-end">
     <div>
       <label class="block text-xs font-semibold mb-1">De</label>
-      <input type="date" name="data_inicio" value="{{ data_inicio|date:'Y-m-d' }}">
+      <input type="date" name="data_inicio" value="{{ data_inicio|date:'Y-m-d' }}" class="form-input">
     </div>
     <div>
       <label class="block text-xs font-semibold mb-1">Até</label>
-      <input type="date" name="data_fim" value="{{ data_fim|date:'Y-m-d' }}">
+      <input type="date" name="data_fim" value="{{ data_fim|date:'Y-m-d' }}" class="form-input">
     </div>
     <button type="submit" class="btn-secondary">Filtrar</button>
     <a href="{% url 'estoque:alerta-list' %}?tipo=parado" class="btn-secondary ml-auto">Ver estoque parado</a>
