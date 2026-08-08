@@ -264,11 +264,12 @@ def pagina_rastreio(request):
     from apps.cadastros.models import Motorista
     from apps.pdv.models import VendaPDV
 
-    filiais = GeofenceService._escopo(getattr(request, 'filial_ativa', None))
+    filial = getattr(request, 'filial_ativa', None)
+    filiais = GeofenceService._escopo(filial)
 
-    # Entregas ainda abertas: é entre elas que o motorista escolhe para onde
-    # está indo. O Kanban guarda o entregador como texto livre, então não há
-    # como deduzir o destino — quem informa é ele.
+    # Entregas ainda abertas: é entre elas que o motorista monta o roteiro do
+    # dia. O Kanban guarda o entregador como texto livre, então não há como
+    # deduzir o destino — quem informa é ele.
     entregas = (
         VendaPDV.objects
         .filter(filial__in=filiais, delivery=True,
@@ -278,9 +279,54 @@ def pagina_rastreio(request):
         .order_by('-data_venda')[:60]
     )
 
+    # Serializa aqui para o Alpine montar a lista, a rota e o mapa sem uma
+    # segunda ida ao servidor. `roteavel` é o que decide se a parada pode
+    # entrar na rota: sem coordenada o roteirizador ignora o cliente, e
+    # descobrir isso só depois de montar o roteiro seria pior.
+    entregas_json = []
+    for venda in entregas:
+        cliente = venda.cliente
+        lat = getattr(cliente, 'latitude', None) if cliente else None
+        lng = getattr(cliente, 'longitude', None) if cliente else None
+        entregas_json.append({
+            'id': venda.pk,
+            'numero': venda.numero_venda,
+            'cliente_id': cliente.pk if cliente else None,
+            'cliente': (
+                (cliente.nome_fantasia or cliente.razao_social)
+                if cliente else 'Consumidor Final'
+            ),
+            'endereco': _endereco_entrega_texto(venda),
+            'lat': float(lat) if lat is not None else None,
+            'lng': float(lng) if lng is not None else None,
+            'roteavel': bool(cliente and lat is not None and lng is not None),
+        })
+
+    centro = None
+    if filial is not None and filial.latitude is not None and filial.longitude is not None:
+        centro = {'lat': float(filial.latitude), 'lng': float(filial.longitude)}
+
     return render(request, 'mapas/rastreio.html', {
         'title': 'Rastreio do Motorista',
         'motoristas': Motorista.objects.filter(
             filial__in=filiais, ativo=True).order_by('nome'),
         'entregas': entregas,
+        'entregas_json': entregas_json,
+        'centro': centro,
     })
+
+
+def _endereco_entrega_texto(venda):
+    """Endereço curto da entrega, para o motorista reconhecer a parada."""
+    end = venda.endereco_entrega or {}
+    if isinstance(end, dict) and end.get('rua'):
+        partes = [end.get('rua'), end.get('numero'), end.get('bairro')]
+        return ', '.join(p for p in partes if p)
+    cliente = venda.cliente
+    if cliente:
+        partes = [
+            getattr(cliente, 'endereco', ''), getattr(cliente, 'numero', ''),
+            getattr(cliente, 'bairro', ''),
+        ]
+        return ', '.join(p for p in partes if p)
+    return ''

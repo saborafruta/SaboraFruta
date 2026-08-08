@@ -4,94 +4,214 @@
 {% block page_title %}{{ title }}{% endblock %}
 
 {% block extra_head %}
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
 <style>
   /* Alvos grandes: esta tela é usada de pé, no celular, dentro do veículo. */
-  .rastreio-botao { width:100%; padding:16px; border-radius:12px; border:none;
-                    font-size:16px; font-weight:800; cursor:pointer; }
-  .rastreio-status { font-size:13px; line-height:1.6; }
-  .rastreio-log { max-height:260px; overflow:auto; font-size:12.5px; }
-  .rastreio-log div { padding:6px 0; border-top:1px solid rgba(127,127,127,.18); }
+  .rt-botao { width:100%; padding:16px; border-radius:12px; border:none;
+              font-size:16px; font-weight:800; cursor:pointer; }
+  .rt-secao-num { width:22px; height:22px; border-radius:50%; flex-shrink:0;
+                  display:inline-flex; align-items:center; justify-content:center;
+                  font-size:11px; font-weight:800; background:#2563eb; color:#fff; }
+  .rt-lista { max-height:280px; overflow:auto; border-radius:10px; }
+  .rt-item { display:flex; align-items:flex-start; gap:10px; padding:10px 12px;
+             cursor:pointer; border-top:1px solid rgba(127,127,127,.16); }
+  .rt-item:first-child { border-top:none; }
+  .rt-item input { margin-top:3px; width:18px; height:18px; flex-shrink:0; }
+  .rt-item.sem-coord { opacity:.55; cursor:not-allowed; }
+  .rt-mapa { height:300px; border-radius:12px; overflow:hidden; }
+  .rt-parada { display:flex; align-items:flex-start; gap:10px; padding:10px 12px;
+               border-top:1px solid rgba(127,127,127,.16); }
+  .rt-parada:first-child { border-top:none; }
+  .rt-parada.atual { background:rgba(37,99,235,.12); }
+  .rt-parada.feita { opacity:.5; }
+  .rt-ordem { width:24px; height:24px; border-radius:50%; flex-shrink:0;
+              display:flex; align-items:center; justify-content:center;
+              font-size:12px; font-weight:800; background:#2563eb; color:#fff; }
+  .rt-parada.feita .rt-ordem { background:#16a34a; }
+  .rt-chip { display:inline-flex; align-items:center; gap:5px; padding:3px 9px;
+             border-radius:999px; font-size:11px; font-weight:700; }
+  .rt-pino-motorista { width:26px; height:26px; border-radius:50%; display:flex;
+                       align-items:center; justify-content:center; font-size:13px;
+                       background:#16a34a; color:#fff;
+                       border:2px solid rgba(255,255,255,.9);
+                       box-shadow:0 2px 6px rgba(0,0,0,.45); }
 </style>
 {% endblock %}
 
 {% block content %}
-<div class="space-y-4" style="max-width:520px;" x-data="rastreio()">
+{{ entregas_json|json_script:"rt-entregas" }}
+{{ centro|json_script:"rt-centro" }}
 
-  <div class="card p-5 space-y-4">
-    <div>
-      <label class="block text-xs font-semibold mb-1.5"
-             :style="temaClaro ? 'color:#374151;' : 'color:#cbd5e1;'">Motorista</label>
-      <select x-model="motorista" :disabled="ligado" class="form-input w-full">
-        <option value="">Selecione...</option>
-        {% for m in motoristas %}
-          <option value="{{ m.pk }}">{{ m.nome }}</option>
-        {% endfor %}
-      </select>
+<div class="space-y-4" style="max-width:640px;" x-data="rastreio()" x-init="iniciar()">
+
+  <!-- ── 1. Motorista ── -->
+  <div class="card p-5 space-y-3">
+    <h3 class="text-sm font-semibold flex items-center gap-2"
+        :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
+      <span class="rt-secao-num">1</span> Motorista
+    </h3>
+    <select x-model="motorista" :disabled="ligado" class="form-input w-full">
+      <option value="">Selecione...</option>
+      {% for m in motoristas %}
+        <option value="{{ m.pk }}">{{ m.nome }}</option>
+      {% endfor %}
+    </select>
+  </div>
+
+  <!-- ── 2. Entregas do roteiro ── -->
+  <div class="card p-5 space-y-3">
+    <div class="flex items-center justify-between gap-2 flex-wrap">
+      <h3 class="text-sm font-semibold flex items-center gap-2"
+          :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
+        <span class="rt-secao-num">2</span> Entregas deste roteiro
+      </h3>
+      <span class="rt-chip"
+            :style="temaClaro ? 'background:#dbeafe; color:#1d4ed8;' : 'background:rgba(37,99,235,.18); color:#93c5fd;'"
+            x-text="selecionadas.length + ' selecionada(s)'"></span>
     </div>
 
-    {% comment %}
-      O Kanban guarda o entregador como texto livre, entao nao ha como deduzir
-      para onde ele esta indo. Quem informa e o proprio motorista -- e e isso
-      que faz a tela ao vivo mostrar "Destino: Cliente X".
-    {% endcomment %}
-    <div>
-      <label class="block text-xs font-semibold mb-1.5"
-             :style="temaClaro ? 'color:#374151;' : 'color:#cbd5e1;'">
-        Indo entregar para (opcional)
-      </label>
-      <select x-model="destino" class="form-input w-full">
-        <option value="">Sem destino definido</option>
-        {% for e in entregas %}
-          <option value="{{ e.pk }}">
-            #{{ e.numero_venda }} — {{ e.cliente.nome_fantasia|default:e.cliente.razao_social|default:"Consumidor Final" }}
-          </option>
-        {% endfor %}
-      </select>
-      <p class="text-xs mt-1" :style="temaClaro ? 'color:#94a3b8;' : 'color:#64748b;'">
-        Pode trocar durante o percurso — vale a partir do proximo envio.
-      </p>
+    <input type="text" x-model="busca" class="form-input w-full"
+           placeholder="Buscar cliente ou número do pedido...">
+
+    <div class="rt-lista" :style="temaClaro ? 'background:#f9fafb;' : 'background:#1a1a1c;'">
+      <template x-for="e in entregasFiltradas()" :key="e.id">
+        <label class="rt-item" :class="e.roteavel ? '' : 'sem-coord'">
+          <input type="checkbox" :value="e.id" :disabled="!e.roteavel || ligado"
+                 :checked="selecionadas.includes(e.id)" @change="alternar(e)">
+          <span class="min-w-0 flex-1">
+            <span class="block text-sm font-semibold"
+                  :style="temaClaro ? 'color:#111827;' : 'color:#f1f5f9;'"
+                  x-text="'#' + e.numero + ' — ' + e.cliente"></span>
+            <span class="block text-xs mt-0.5"
+                  :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'"
+                  x-text="e.endereco || 'Sem endereço informado'"></span>
+            <span x-show="!e.roteavel" class="block text-xs mt-0.5" style="color:#f59e0b;">
+              Sem coordenada — não entra na rota.
+            </span>
+          </span>
+        </label>
+      </template>
+      <template x-if="!entregasFiltradas().length">
+        <p class="text-sm p-4 text-center"
+           :style="temaClaro ? 'color:#94a3b8;' : 'color:#64748b;'">
+          Nenhuma entrega em aberto.
+        </p>
+      </template>
     </div>
 
-    <button type="button" class="rastreio-botao"
+    <div class="flex gap-2 flex-wrap">
+      <button type="button" class="btn-primary flex-1" style="min-width:150px;"
+              :disabled="!selecionadas.length || carregandoRota || ligado"
+              @click="montarRota()"
+              x-text="carregandoRota ? 'Calculando...' : 'Montar rota'"></button>
+      <button type="button" class="btn-secondary flex-1" style="min-width:150px;"
+              :disabled="selecionadas.length < 2 || carregandoRota || ligado"
+              @click="otimizarRota()">Otimizar rota</button>
+    </div>
+    <p x-show="erroRota" x-cloak class="text-sm" style="color:#f87171;" x-text="erroRota"></p>
+  </div>
+
+  <!-- ── 3. Rota ── -->
+  <div class="card p-5 space-y-3" x-show="rota" x-cloak>
+    <h3 class="text-sm font-semibold flex items-center gap-2"
+        :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
+      <span class="rt-secao-num">3</span> Rota
+    </h3>
+
+    <div class="flex gap-2 flex-wrap text-sm">
+      <span class="rt-chip"
+            :style="temaClaro ? 'background:#f3f4f6; color:#374151;' : 'background:#2a2a2e; color:#d4d4d4;'"
+            x-text="rota ? rota.distancia_km + ' km' : ''"></span>
+      <span class="rt-chip"
+            :style="temaClaro ? 'background:#f3f4f6; color:#374151;' : 'background:#2a2a2e; color:#d4d4d4;'"
+            x-text="rota ? rota.duracao_texto : ''"></span>
+      <span class="rt-chip" x-show="economia" x-cloak
+            style="background:#dcfce7; color:#16a34a;" x-text="economia"></span>
+    </div>
+
+    <div class="rt-mapa" id="rt-mapa"></div>
+
+    <div :style="temaClaro ? 'background:#f9fafb;' : 'background:#1a1a1c;'" class="rounded-lg">
+      <template x-for="(p, i) in paradas" :key="i">
+        <div class="rt-parada"
+             :class="i === paradaAtual ? 'atual' : (feitas.includes(i) ? 'feita' : '')">
+          <span class="rt-ordem" x-text="feitas.includes(i) ? '✓' : (i + 1)"></span>
+          <span class="min-w-0 flex-1">
+            <span class="block text-sm font-semibold"
+                  :style="temaClaro ? 'color:#111827;' : 'color:#f1f5f9;'" x-text="p.nome"></span>
+            <span class="block text-xs mt-0.5" x-show="i === paradaAtual && ligado"
+                  style="color:#2563eb; font-weight:700;">Destino atual</span>
+          </span>
+          <span class="flex flex-col gap-1 items-end">
+            <a :href="'https://www.google.com/maps/dir/?api=1&destination=' + p.lat + ',' + p.lng"
+               target="_blank" rel="noopener" class="text-xs font-semibold"
+               :style="temaClaro ? 'color:#2563eb;' : 'color:#60a5fa;'">Navegar</a>
+            <button type="button" class="text-xs font-semibold" x-show="ligado"
+                    style="color:#16a34a;" @click="marcarFeita(i)"
+                    x-text="feitas.includes(i) ? 'Desfazer' : 'Entregue'"></button>
+          </span>
+        </div>
+      </template>
+    </div>
+  </div>
+
+  <!-- ── 4. Rastreio ── -->
+  <div class="card p-5 space-y-3">
+    <h3 class="text-sm font-semibold flex items-center gap-2"
+        :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
+      <span class="rt-secao-num">4</span> Rastreio ao vivo
+    </h3>
+
+    <button type="button" class="rt-botao"
             @click="ligado ? parar() : comecar()"
             :disabled="!motorista"
             :style="ligado ? 'background:#dc2626;color:#fff;' : 'background:#16a34a;color:#fff;'"
             x-text="ligado ? 'Parar rastreio' : 'Iniciar rastreio'"></button>
 
-    <p class="rastreio-status" x-show="mensagem" x-cloak x-text="mensagem"
+    <p class="text-sm" x-show="mensagem" x-cloak x-text="mensagem"
        :style="erro ? 'color:#f87171;' : (temaClaro ? 'color:#374151;' : 'color:#cbd5e1;')"></p>
 
     <template x-if="ligado">
-      <p class="rastreio-status" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
-        Última posição enviada: <strong x-text="ultimaHora || '—'"></strong>
-        <span x-show="precisao" x-cloak x-text="' · precisão ~' + Math.round(precisao) + ' m'"></span>
-      </p>
+      <div class="text-sm space-y-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+        <p>
+          Última posição enviada: <strong x-text="ultimaHora || '—'"></strong>
+          <span x-show="precisao" x-cloak x-text="' · precisão ~' + Math.round(precisao) + ' m'"></span>
+        </p>
+        <p x-show="pendentes.length" x-cloak style="color:#f59e0b;"
+           x-text="pendentes.length + ' posição(ões) na fila — reenviando quando a conexão voltar.'"></p>
+        <p x-show="telaTravada" x-cloak style="color:#16a34a;">
+          Tela travada acesa — o rastreio continua enquanto ela ficar assim.
+        </p>
+      </div>
     </template>
   </div>
 
   {% comment %}
-    As duas limitações reais desta abordagem. Descobrir isso em campo, com o
-    motorista na rua e o relatório vazio, seria bem pior que ler aqui.
+    O limite real desta abordagem. Descobrir isso em campo, com o motorista na
+    rua e o relatório vazio, seria bem pior que ler aqui.
   {% endcomment %}
   <div class="card p-4" style="border-left:3px solid #f59e0b;">
     <p class="text-sm" :style="temaClaro ? 'color:#374151;' : 'color:#cbd5e1;'">
-      <strong>Deixe esta página aberta e a tela ligada.</strong>
-      O navegador para de atualizar a localização quando fica em segundo plano
-      ou o celular bloqueia — e sem posição a cerca não registra nada.
+      <strong>Deixe esta página aberta.</strong>
+      Ao iniciar, a tela é travada acesa automaticamente para o rastreio não
+      parar. Se o celular bloquear ou o navegador for para segundo plano, o
+      envio de posição para até você voltar à tela.
     </p>
     <p class="text-xs mt-2" :style="temaClaro ? 'color:#94a3b8;' : 'color:#64748b;'">
-      Para rastreio contínuo, mesmo com o celular no bolso, é preciso um
-      rastreador de veículo ou um aplicativo. O endereço que recebe a posição
-      é o mesmo, então trocar a fonte depois não muda nada aqui dentro.
+      Isso é limite do navegador, não da configuração: posição em segundo plano
+      com a tela apagada só é possível com rastreador de veículo ou aplicativo
+      instalado. O endereço que recebe a posição é o mesmo, então trocar a
+      fonte depois não muda nada aqui dentro. As posições captadas sem sinal
+      ficam na fila e sobem sozinhas quando a conexão volta.
     </p>
   </div>
 
   <div class="card p-4" x-show="eventos.length" x-cloak>
     <h3 class="text-sm font-semibold mb-2"
         :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">Cercas nesta sessão</h3>
-    <div class="rastreio-log">
+    <div style="max-height:240px; overflow:auto; font-size:12.5px;">
       <template x-for="(e, i) in eventos" :key="i">
-        <div>
+        <div style="padding:6px 0; border-top:1px solid rgba(127,127,127,.18);">
           <strong x-text="e.hora"></strong>
           <span x-text="e.tipo === 'entrada' ? ' entrou em ' : ' saiu de '"
                 :style="e.tipo === 'entrada' ? 'color:#22c55e;' : 'color:#f59e0b;'"></span>
@@ -105,20 +225,195 @@
 
 {% block extra_js %}
 {{ block.super }}
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script>
 const CSRF = '{{ csrf_token }}';
 
 function rastreio() {
   return {
+    entregas: [],
+    centro: null,
     motorista: '',
-    destino: '',
+    busca: '',
+    selecionadas: [],
+    rota: null,
+    paradas: [],
+    paradaAtual: 0,
+    feitas: [],
+    economia: '',
+    carregandoRota: false,
+    erroRota: '',
     ligado: false,
     mensagem: '',
     erro: false,
     ultimaHora: '',
     precisao: null,
     eventos: [],
+    // Posicoes que nao subiram (sem sinal). Ficam aqui e sobem na proxima
+    // que der certo -- perder trecho de percurso por causa de tunel/sombra de
+    // sinal seria pior que guardar meia duzia de pontos na memoria.
+    pendentes: [],
+    telaTravada: false,
     _watch: null,
+    _wakeLock: null,
+    _mapa: null,
+    _traco: null,
+    _marcadorMotorista: null,
+    _marcadoresParada: [],
+
+    iniciar() {
+      this.entregas = JSON.parse(document.getElementById('rt-entregas').textContent || '[]');
+      const centroEl = document.getElementById('rt-centro');
+      this.centro = centroEl ? JSON.parse(centroEl.textContent || 'null') : null;
+      // A tela volta do segundo plano: reaquire o wake lock, que o navegador
+      // solta sozinho nessa transicao.
+      document.addEventListener('visibilitychange', () => {
+        if (document.visibilityState === 'visible' && this.ligado) this._travarTela();
+      });
+    },
+
+    entregasFiltradas() {
+      const q = this.busca.trim().toLowerCase();
+      if (!q) return this.entregas;
+      return this.entregas.filter(e =>
+        (e.cliente || '').toLowerCase().includes(q) || String(e.numero).includes(q)
+      );
+    },
+
+    alternar(e) {
+      if (!e.roteavel || this.ligado) return;
+      const i = this.selecionadas.indexOf(e.id);
+      if (i >= 0) this.selecionadas.splice(i, 1);
+      else this.selecionadas.push(e.id);
+    },
+
+    // Ids de cliente na ordem em que o motorista marcou. A API de rota
+    // trabalha com cliente, nao com venda -- duas entregas do mesmo cliente
+    // viram uma parada so, que e' o comportamento certo na rua.
+    _clientesSelecionados() {
+      const vistos = new Set();
+      const ids = [];
+      for (const id of this.selecionadas) {
+        const e = this.entregas.find(x => x.id === id);
+        if (e && e.cliente_id && !vistos.has(e.cliente_id)) {
+          vistos.add(e.cliente_id);
+          ids.push(e.cliente_id);
+        }
+      }
+      return ids;
+    },
+
+    async montarRota() {
+      await this._pedirRota('{% url "mapas:api-rota" %}', d => {
+        this.economia = '';
+        return d;
+      });
+    },
+
+    async otimizarRota() {
+      await this._pedirRota('{% url "mapas:api-rota-otimizar" %}', d => {
+        this.economia = d.melhorou ? ('economia de ' + d.economia_texto) : 'já era a melhor ordem';
+        return d.depois;
+      });
+    },
+
+    async _pedirRota(url, extrair) {
+      this.erroRota = '';
+      this.carregandoRota = true;
+      try {
+        const resp = await fetch(url, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'X-CSRFToken': CSRF },
+          body: JSON.stringify({
+            clientes: this._clientesSelecionados(),
+            partir_da_filial: true,
+          }),
+        });
+        const d = await resp.json();
+        if (!resp.ok) throw new Error(d.erro || ('HTTP ' + resp.status));
+        this.rota = extrair(d);
+        this.paradas = this.rota.paradas || [];
+        this.paradaAtual = 0;
+        this.feitas = [];
+        this.$nextTick(() => this._desenharMapa());
+      } catch (e) {
+        this.erroRota = e.message;
+      } finally {
+        this.carregandoRota = false;
+      }
+    },
+
+    _desenharMapa() {
+      const el = document.getElementById('rt-mapa');
+      if (!el || !window.L) return;
+      if (!this._mapa) {
+        const c = this.centro || { lat: -14.235, lng: -51.925 };
+        this._mapa = L.map(el).setView([c.lat, c.lng], 12);
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+          maxZoom: 19, attribution: '&copy; OpenStreetMap',
+        }).addTo(this._mapa);
+      }
+      if (this._traco) { this._mapa.removeLayer(this._traco); this._traco = null; }
+      this._marcadoresParada.forEach(m => this._mapa.removeLayer(m));
+      this._marcadoresParada = [];
+
+      const geo = (this.rota && this.rota.geometria) || [];
+      if (geo.length) {
+        this._traco = L.polyline(geo, { color: '#2563eb', weight: 5, opacity: .8 })
+          .addTo(this._mapa);
+      }
+      this.paradas.forEach((p, i) => {
+        const icone = L.divIcon({
+          className: '', iconSize: [24, 24], iconAnchor: [12, 12],
+          html: `<div class="rt-ordem">${i + 1}</div>`,
+        });
+        this._marcadoresParada.push(
+          L.marker([p.lat, p.lng], { icon: icone }).bindPopup(p.nome).addTo(this._mapa)
+        );
+      });
+
+      const alvo = this._traco || (this._marcadoresParada.length
+        ? L.featureGroup(this._marcadoresParada) : null);
+      if (alvo) this._mapa.fitBounds(alvo.getBounds(), { padding: [30, 30] });
+      // O container nasce escondido (x-show) e o Leaflet calcula 0x0 nesse
+      // caso; sem isso o mapa aparece cinza ate' alguem redimensionar.
+      setTimeout(() => this._mapa.invalidateSize(), 60);
+    },
+
+    marcarFeita(i) {
+      const pos = this.feitas.indexOf(i);
+      if (pos >= 0) this.feitas.splice(pos, 1);
+      else this.feitas.push(i);
+      const proxima = this.paradas.findIndex((_, idx) => !this.feitas.includes(idx));
+      this.paradaAtual = proxima >= 0 ? proxima : this.paradas.length;
+    },
+
+    // Venda que representa a parada atual -- e' ela que vai no destino_venda,
+    // pra tela ao vivo do gestor mostrar "indo para o cliente X".
+    _vendaDestinoAtual() {
+      const p = this.paradas[this.paradaAtual];
+      if (!p || !p.cliente_id) return null;
+      const e = this.entregas.find(
+        x => x.cliente_id === p.cliente_id && this.selecionadas.includes(x.id)
+      );
+      return e ? e.id : null;
+    },
+
+    async _travarTela() {
+      if (!('wakeLock' in navigator)) return;
+      try {
+        this._wakeLock = await navigator.wakeLock.request('screen');
+        this.telaTravada = true;
+        this._wakeLock.addEventListener('release', () => { this.telaTravada = false; });
+      } catch (e) {
+        this.telaTravada = false;
+      }
+    },
+
+    _soltarTela() {
+      if (this._wakeLock) { this._wakeLock.release().catch(() => {}); this._wakeLock = null; }
+      this.telaTravada = false;
+    },
 
     comecar() {
       if (!navigator.geolocation) {
@@ -128,6 +423,7 @@ function rastreio() {
       this.ligado = true;
       this.erro = false;
       this.mensagem = 'Obtendo localização...';
+      this._travarTela();
 
       // watchPosition em vez de um timer com getCurrentPosition: o navegador
       // avisa quando a posição muda de verdade, o que gasta menos bateria e
@@ -143,43 +439,76 @@ function rastreio() {
       if (this._watch !== null) navigator.geolocation.clearWatch(this._watch);
       this._watch = null;
       this.ligado = false;
+      this._soltarTela();
       this.mensagem = 'Rastreio parado.';
     },
 
     async _enviar(pos) {
       this.precisao = pos.coords.accuracy;
-      try {
-        const resp = await fetch('{% url "mapas:api-posicao" %}', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'X-CSRFToken': CSRF },
-          body: JSON.stringify({
-            motorista: this.motorista,
-            lat: pos.coords.latitude,
-            lng: pos.coords.longitude,
-            // O navegador manda `null` quando nao sabe a velocidade; o
-            // servidor entao calcula pela distancia entre duas posicoes.
-            velocidade: pos.coords.speed,
-            precisao: pos.coords.accuracy ? Math.round(pos.coords.accuracy) : null,
-            destino_venda: this.destino || null,
-          }),
-        });
-        const d = await resp.json();
-        if (!resp.ok) throw new Error(d.erro || ('HTTP ' + resp.status));
+      const payload = {
+        motorista: this.motorista,
+        lat: pos.coords.latitude,
+        lng: pos.coords.longitude,
+        // O navegador manda `null` quando nao sabe a velocidade; o
+        // servidor entao calcula pela distancia entre duas posicoes.
+        velocidade: pos.coords.speed,
+        precisao: pos.coords.accuracy ? Math.round(pos.coords.accuracy) : null,
+        destino_venda: this._vendaDestinoAtual(),
+      };
 
+      // Manda o que ficou preso antes desta, na ordem em que foi captado.
+      const fila = [...this.pendentes, payload];
+      const naoEnviados = [];
+      let algumOk = false;
+
+      for (const item of fila) {
+        try {
+          const resp = await fetch('{% url "mapas:api-posicao" %}', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'X-CSRFToken': CSRF },
+            body: JSON.stringify(item),
+          });
+          const d = await resp.json();
+          if (!resp.ok) throw new Error(d.erro || ('HTTP ' + resp.status));
+          algumOk = true;
+          (d.eventos || []).forEach((e) => this.eventos.unshift({
+            hora: new Date(e.momento).toLocaleTimeString('pt-BR'),
+            tipo: e.tipo, cerca: e.cerca,
+          }));
+        } catch (e) {
+          naoEnviados.push(item);
+        }
+      }
+
+      // Guarda no maximo os ultimos 50: a memoria do celular importa mais que
+      // um rastro perfeito de horas sem sinal nenhum.
+      this.pendentes = naoEnviados.slice(-50);
+      this._moverMarcador(pos.coords.latitude, pos.coords.longitude);
+
+      if (algumOk) {
         this.erro = false;
         this.mensagem = 'Rastreio ativo.';
         this.ultimaHora = new Date().toLocaleTimeString('pt-BR');
-
-        (d.eventos || []).forEach((e) => this.eventos.unshift({
-          hora: new Date(e.momento).toLocaleTimeString('pt-BR'),
-          tipo: e.tipo, cerca: e.cerca,
-        }));
-      } catch (e) {
+      } else {
         // Sem sinal não é motivo para desligar: a próxima posição tenta de
         // novo, e desligar sozinho deixaria o motorista sem rastreio sem ele
         // perceber.
         this.erro = true;
-        this.mensagem = 'Sem conexão — tentando de novo. ' + e.message;
+        this.mensagem = 'Sem conexão — as posições estão na fila e sobem sozinhas.';
+      }
+    },
+
+    _moverMarcador(lat, lng) {
+      if (!this._mapa || !window.L) return;
+      if (!this._marcadorMotorista) {
+        const icone = L.divIcon({
+          className: '', iconSize: [26, 26], iconAnchor: [13, 13],
+          html: '<div class="rt-pino-motorista">▲</div>',
+        });
+        this._marcadorMotorista = L.marker([lat, lng], { icon: icone })
+          .bindPopup('Você').addTo(this._mapa);
+      } else {
+        this._marcadorMotorista.setLatLng([lat, lng]);
       }
     },
 
