@@ -409,6 +409,7 @@
       </a>
 
       <!-- Seção Cadastros -->
+      {% if request.filial_ativa and 'cadastros' not in request.filial_ativa.modulos_desativados %}
       <button type="button" @click="!collapsed && toggleSecao('cadastros')" class="w-full flex items-center justify-between pt-4 pb-1 px-3" x-show="!collapsed" style="background:none;border:none;cursor:pointer;">
         <span :class="temaClaro ? 'sidebar-section-label' : 'text-xs font-medium uppercase tracking-widest'" :style="temaClaro ? '' : 'color:#f8fafc; letter-spacing:0.1em;'">Cadastros</span>
         <svg class="w-3 h-3 flex-shrink-0 transition-transform duration-200" :class="secoes.cadastros ? '' : '-rotate-90'" :style="temaClaro ? 'color:#9ca3af;' : 'color:#555570;'" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M19 9l-7 7-7-7"/></svg>
@@ -541,7 +542,9 @@
         <span x-show="!collapsed">Produtos</span>
       </a>
       </div><!-- /cadastros -->
+      {% endif %}
 
+      {% if request.filial_ativa and 'operacoes' not in request.filial_ativa.modulos_desativados %}
       <button type="button" @click="!collapsed && toggleSecao('operacoes')" class="w-full flex items-center justify-between pt-4 pb-1 px-3" x-show="!collapsed" style="background:none;border:none;cursor:pointer;">
         <span :class="temaClaro ? 'sidebar-section-label' : 'text-xs font-medium uppercase tracking-widest'" :style="temaClaro ? '' : 'color:#f8fafc; letter-spacing:0.1em;'">Operações</span>
         <svg class="w-3 h-3 flex-shrink-0 transition-transform duration-200" :class="secoes.operacoes ? '' : '-rotate-90'" :style="temaClaro ? 'color:#9ca3af;' : 'color:#555570;'" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M19 9l-7 7-7-7"/></svg>
@@ -719,8 +722,10 @@
         <span x-show="!collapsed">Relatórios</span>
       </a>
       </div><!-- /operacoes -->
+      {% endif %}
 
       <!-- â”€â”€ SEÃ‡ÃƒO AVANÃ‡ADO â”€â”€ -->
+      {% if request.filial_ativa and 'financeiro' not in request.filial_ativa.modulos_desativados %}
       <button type="button" @click="!collapsed && toggleSecao('financeiro')" class="w-full flex items-center justify-between pt-4 pb-1 px-3" x-show="!collapsed" style="background:none;border:none;cursor:pointer;">
         <span :class="temaClaro ? 'sidebar-section-label' : 'text-xs font-medium uppercase tracking-widest'" :style="temaClaro ? '' : 'color:#f8fafc; letter-spacing:0.1em;'">Financeiro</span>
         <svg class="w-3 h-3 flex-shrink-0 transition-transform duration-200" :class="secoes.financeiro ? '' : '-rotate-90'" :style="temaClaro ? 'color:#9ca3af;' : 'color:#555570;'" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M19 9l-7 7-7-7"/></svg>
@@ -895,7 +900,9 @@
         <span x-show="!collapsed">Tabela de Preço</span>
       </a>
       </div><!-- /financeiro -->
+      {% endif %}
 
+      {% if request.filial_ativa and 'logistica' not in request.filial_ativa.modulos_desativados %}
       <button type="button" @click="!collapsed && toggleSecao('logistica')" class="w-full flex items-center justify-between pt-4 pb-1 px-3" x-show="!collapsed" style="background:none;border:none;cursor:pointer;">
         <span :class="temaClaro ? 'sidebar-section-label' : 'text-xs font-medium uppercase tracking-widest'" :style="temaClaro ? '' : 'color:#f8fafc; letter-spacing:0.1em;'">Logistica</span>
         <svg class="w-3 h-3 flex-shrink-0 transition-transform duration-200" :class="secoes.logistica ? '' : '-rotate-90'" :style="temaClaro ? 'color:#9ca3af;' : 'color:#555570;'" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M19 9l-7 7-7-7"/></svg>
@@ -969,7 +976,9 @@
         <span x-show="!collapsed">MDF-e</span>
       </a>
       </div><!-- /logistica -->
+      {% endif %}
 
+      {% if request.filial_ativa and 'avancado' not in request.filial_ativa.modulos_desativados %}
       <button type="button" @click="!collapsed && toggleSecao('avancado')" class="w-full flex items-center justify-between pt-4 pb-1 px-3" x-show="!collapsed" style="background:none;border:none;cursor:pointer;">
         <span :class="temaClaro ? 'sidebar-section-label' : 'text-xs font-medium uppercase tracking-widest'" :style="temaClaro ? '' : 'color:#f8fafc; letter-spacing:0.1em;'">Avançado</span>
         <svg class="w-3 h-3 flex-shrink-0 transition-transform duration-200" :class="secoes.avancado ? '' : '-rotate-90'" :style="temaClaro ? 'color:#9ca3af;' : 'color:#555570;'" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M19 9l-7 7-7-7"/></svg>
@@ -1070,7 +1079,9 @@
         </a>
       {% endif %}
       </div><!-- /avancado -->
+      {% endif %}
 
+      {% if request.filial_ativa and 'food_service' not in request.filial_ativa.modulos_desativados %}
       <button type="button" @click="!collapsed && toggleSecao('food_service')" class="w-full flex items-center justify-between pt-4 pb-1 px-3" x-show="!collapsed" style="background:none;border:none;cursor:pointer;">
         <span :class="temaClaro ? 'sidebar-section-label' : 'text-xs font-medium uppercase tracking-widest'" :style="temaClaro ? '' : 'color:#f8fafc; letter-spacing:0.1em;'">Food Service</span>
         <svg class="w-3 h-3 flex-shrink-0 transition-transform duration-200" :class="secoes.food_service ? '' : '-rotate-90'" :style="temaClaro ? 'color:#9ca3af;' : 'color:#555570;'" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M19 9l-7 7-7-7"/></svg>
@@ -1173,6 +1184,7 @@
         <span x-show="!collapsed">Gestão Financeira</span>
       </a>
       </div><!-- /food_service -->
+      {% endif %}
     </nav>
 
     <!-- Footer sidebar desktop -->
@@ -1275,6 +1287,7 @@
         Dashboard
       </a>
 
+      {% if request.filial_ativa and 'cadastros' not in request.filial_ativa.modulos_desativados %}
       <button type="button" @click="toggleSecao('cadastros')" class="w-full flex items-center justify-between pt-4 pb-1 px-3" style="background:none;border:none;cursor:pointer;">
         <span :class="temaClaro ? 'sidebar-section-label' : 'text-xs font-medium uppercase tracking-widest'" :style="temaClaro ? '' : 'color:#f8fafc; letter-spacing:0.1em;'">Cadastros</span>
         <svg class="w-3 h-3 flex-shrink-0 transition-transform duration-200" :class="secoes.cadastros ? '' : '-rotate-90'" :style="temaClaro ? 'color:#9ca3af;' : 'color:#555570;'" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M19 9l-7 7-7-7"/></svg>
@@ -1362,6 +1375,8 @@
       </a>
 
       </div><!-- /cadastros -->
+      {% endif %}
+      {% if request.filial_ativa and 'operacoes' not in request.filial_ativa.modulos_desativados %}
       <button type="button" @click="toggleSecao('operacoes')" class="w-full flex items-center justify-between pt-4 pb-1 px-3" style="background:none;border:none;cursor:pointer;">
         <span :class="temaClaro ? 'sidebar-section-label' : 'text-xs font-medium uppercase tracking-widest'" :style="temaClaro ? '' : 'color:#f8fafc; letter-spacing:0.1em;'">Operações</span>
         <svg class="w-3 h-3 flex-shrink-0 transition-transform duration-200" :class="secoes.operacoes ? '' : '-rotate-90'" :style="temaClaro ? 'color:#9ca3af;' : 'color:#555570;'" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M19 9l-7 7-7-7"/></svg>
@@ -1476,6 +1491,8 @@
 
       <!-- â”€â”€ SEÃ‡ÃƒO AVANÃ‡ADO MOBILE â”€â”€ -->
       </div><!-- /operacoes -->
+      {% endif %}
+      {% if request.filial_ativa and 'financeiro' not in request.filial_ativa.modulos_desativados %}
       <button type="button" @click="toggleSecao('financeiro')" class="w-full flex items-center justify-between pt-4 pb-1 px-3" style="background:none;border:none;cursor:pointer;">
         <span :class="temaClaro ? 'sidebar-section-label' : 'text-xs font-medium uppercase tracking-widest'" :style="temaClaro ? '' : 'color:#f8fafc; letter-spacing:0.1em;'">Financeiro</span>
         <svg class="w-3 h-3 flex-shrink-0 transition-transform duration-200" :class="secoes.financeiro ? '' : '-rotate-90'" :style="temaClaro ? 'color:#9ca3af;' : 'color:#555570;'" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M19 9l-7 7-7-7"/></svg>
@@ -1620,6 +1637,8 @@
       </a>
 
       </div><!-- /financeiro -->
+      {% endif %}
+      {% if request.filial_ativa and 'logistica' not in request.filial_ativa.modulos_desativados %}
       <button type="button" @click="toggleSecao('logistica')" class="w-full flex items-center justify-between pt-4 pb-1 px-3" style="background:none;border:none;cursor:pointer;">
         <span :class="temaClaro ? 'sidebar-section-label' : 'text-xs font-medium uppercase tracking-widest'" :style="temaClaro ? '' : 'color:#f8fafc; letter-spacing:0.1em;'">Logistica</span>
         <svg class="w-3 h-3 flex-shrink-0 transition-transform duration-200" :class="secoes.logistica ? '' : '-rotate-90'" :style="temaClaro ? 'color:#9ca3af;' : 'color:#555570;'" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M19 9l-7 7-7-7"/></svg>
@@ -1681,6 +1700,8 @@
       </a>
 
       </div><!-- /logistica -->
+      {% endif %}
+      {% if request.filial_ativa and 'avancado' not in request.filial_ativa.modulos_desativados %}
       <button type="button" @click="toggleSecao('avancado')" class="w-full flex items-center justify-between pt-4 pb-1 px-3" style="background:none;border:none;cursor:pointer;">
         <span :class="temaClaro ? 'sidebar-section-label' : 'text-xs font-medium uppercase tracking-widest'" :style="temaClaro ? '' : 'color:#f8fafc; letter-spacing:0.1em;'">Avançado</span>
         <svg class="w-3 h-3 flex-shrink-0 transition-transform duration-200" :class="secoes.avancado ? '' : '-rotate-90'" :style="temaClaro ? 'color:#9ca3af;' : 'color:#555570;'" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M19 9l-7 7-7-7"/></svg>
@@ -1744,7 +1765,9 @@
         Histórico de Vendas
       </a>
       </div><!-- /avancado -->
+      {% endif %}
 
+      {% if request.filial_ativa and 'food_service' not in request.filial_ativa.modulos_desativados %}
       <button type="button" @click="toggleSecao('food_service')" class="w-full flex items-center justify-between pt-4 pb-1 px-3" style="background:none;border:none;cursor:pointer;">
         <span :class="temaClaro ? 'sidebar-section-label' : 'text-xs font-medium uppercase tracking-widest'" :style="temaClaro ? '' : 'color:#f8fafc; letter-spacing:0.1em;'">Food Service</span>
         <svg class="w-3 h-3 flex-shrink-0 transition-transform duration-200" :class="secoes.food_service ? '' : '-rotate-90'" :style="temaClaro ? 'color:#9ca3af;' : 'color:#555570;'" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M19 9l-7 7-7-7"/></svg>
@@ -1830,6 +1853,7 @@
         Gestão Financeira
       </a>
       </div><!-- /food_service -->
+      {% endif %}
     </nav>
 
     <div class="p-2" :style="temaClaro ? 'border-top:1px solid #e5e5e5;' : 'border-top:1px solid #2a2a2e;'">

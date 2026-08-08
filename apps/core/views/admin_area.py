@@ -19,6 +19,7 @@ from apps.core.forms.admin_forms import (
     PoliticaReplicacaoForm,
     UsuarioAdminForm,
 )
+from apps.core.constants.modulos import SECOES_MODULOS
 from apps.core.models import Empresa, Filial, PerfilAcesso, Permissao, Usuario
 from apps.core.services.imagem_filial import preparar_imagem_filial
 from apps.core.views.audit import core_log_context
@@ -235,6 +236,7 @@ def central_administrativa(request):
         'total_empresas': Empresa.objects.count(),
         'total_filiais': Filial.objects.count(),
         'total_super_admins': Usuario.objects.filter(is_superuser=True).count(),
+        'secoes_modulos': SECOES_MODULOS,
     })
 
 
@@ -337,6 +339,24 @@ def filial_imagem_update(request, filial_id):
         filial.imagem.storage.delete(imagem_antiga)
 
     messages.success(request, 'Imagem da filial atualizada.')
+    return redirect(voltar_para)
+
+
+@superuser_required
+@require_POST
+def modulos_update(request, filial_id):
+    """Liga/desliga secoes inteiras do menu (Cadastros, Operacoes,
+    Financeiro, Logistica, Avancado, Food Service) para uma filial --
+    escondidas no sidebar e bloqueadas no FilialMiddleware."""
+    filial = get_object_or_404(Filial, pk=filial_id)
+    voltar_para = request.META.get('HTTP_REFERER') or reverse('core:admin_central')
+
+    ativos = set(request.POST.getlist('modulo'))
+    filial.modulos_desativados = [
+        chave for chave, _label, _desc in SECOES_MODULOS if chave not in ativos
+    ]
+    filial.save(update_fields=['modulos_desativados'])
+    messages.success(request, f'Modulos atualizados para {filial.nome_fantasia or filial.razao_social}.')
     return redirect(voltar_para)
 
 

@@ -149,6 +149,12 @@ class Filial(CoordenadaMixin, TimestampedModel):
         db_index=True,
         help_text='Define se esta filial envia e recebe cadastros replicados.',
     )
+    modulos_desativados = models.JSONField(
+        default=list,
+        blank=True,
+        help_text='Chaves das secoes do menu desativadas nesta filial '
+                   '(cadastros/operacoes/financeiro/logistica/avancado/food_service).',
+    )
 
     class Meta:
         db_table = 'filiais'

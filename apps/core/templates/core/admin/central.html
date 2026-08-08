@@ -261,7 +261,7 @@
     </div>
   </form>
 
-  <section class="card p-6 lg:p-7" x-data="{ imagemFilialAberta: false }">
+  <section class="card p-6 lg:p-7" x-data="{ imagemFilialAberta: false, modulosAberta: false }">
     {% if filial_selecionada %}
       <div class="grid grid-cols-1 xl:grid-cols-[1.15fr_1fr] gap-7">
         <div class="flex gap-5">
@@ -329,6 +329,7 @@
             <a href="{% url 'core:admin_usuario_create' %}?central_filial={{ filial_selecionada.pk }}" class="btn-secondary justify-center">+ Novo usuario</a>
             <a href="{% url 'core:admin_perfil_list' %}?central_filial={{ filial_selecionada.pk }}" class="btn-secondary justify-center">Perfis da empresa</a>
             <a href="{% url 'core:admin_perfil_create' %}?central_filial={{ filial_selecionada.pk }}" class="btn-secondary justify-center">+ Novo perfil</a>
+            <button type="button" @click="modulosAberta = true" class="btn-secondary justify-center">Módulos</button>
           </div>
         </div>
       </div>
@@ -373,6 +374,42 @@
                         :style="temaClaro ? 'background:#fee2e2; color:#dc2626; border:1px solid #fecaca;' : 'background:rgba(239,68,68,0.14); color:#fca5a5; border:1px solid rgba(239,68,68,0.25);'">Remover</button>
               {% endif %}
             </div>
+          </form>
+        </div>
+      </div>
+      <div x-show="modulosAberta" x-cloak
+           class="fixed inset-0 z-[80] flex items-center justify-center px-4"
+           @keydown.escape.window="modulosAberta = false">
+        <div class="absolute inset-0"
+             :style="temaClaro ? 'background:radial-gradient(circle at 50% 42%, rgba(255,255,255,0.82), rgba(255,250,246,0.66) 42%, rgba(232,130,74,0.12) 100%); backdrop-filter:blur(5px);' : 'background:rgba(0,0,0,0.55); backdrop-filter:blur(6px);'"
+             @click="modulosAberta = false"></div>
+        <div class="relative w-full max-w-md overflow-hidden rounded-2xl p-5 shadow-2xl"
+             :style="temaClaro ? 'background:linear-gradient(180deg,#ffffff 0%,#fffaf6 100%); color:#0f172a; border:1px solid rgba(251,146,60,0.26); box-shadow:0 26px 70px rgba(124,45,18,0.22);' : 'background:#202024; color:#f8fafc; border:1px solid #303036;'">
+          <div class="absolute inset-x-0 top-0 h-1"
+               :style="temaClaro ? 'background:linear-gradient(90deg,#f15a24,#e8824a,#2563eb);' : 'background:linear-gradient(90deg,#2563eb,#1d4ed8);'"></div>
+          <button type="button"
+                  @click="modulosAberta = false"
+                  class="absolute right-3 top-3 grid h-8 w-8 place-items-center rounded-full text-lg"
+                  :style="temaClaro ? 'color:#64748b; background:#f8fafc;' : 'color:#a1a1aa; background:#18181b;'">&times;</button>
+          <h2 class="text-lg font-bold">Módulos — {{ filial_selecionada.nome_fantasia|default:filial_selecionada.razao_social }}</h2>
+          <p class="mt-1 text-sm" :style="temaClaro ? 'color:#64748b;' : 'color:#a1a1aa;'">
+            Desligue uma seção pra ela sumir do menu e ficar bloqueada nesta filial. Um módulo desligado não afeta as outras filiais.
+          </p>
+          <form method="post" action="{% url 'core:admin_modulos_update' filial_selecionada.pk %}" class="mt-4 space-y-2">
+            {% csrf_token %}
+            {% for chave, label, descricao in secoes_modulos %}
+            <label class="flex items-start gap-3 p-3 rounded-lg cursor-pointer"
+                   :style="temaClaro ? 'background:#f8fafc; border:1px solid #e5e7eb;' : 'background:#18181b; border:1px solid #303036;'">
+              <input type="checkbox" name="modulo" value="{{ chave }}" class="mt-0.5"
+                     {% if chave not in filial_selecionada.modulos_desativados %}checked{% endif %}>
+              <span>
+                <span class="block font-semibold text-sm">{{ label }}</span>
+                <span class="block text-xs mt-0.5" :style="temaClaro ? 'color:#64748b;' : 'color:#a1a1aa;'">{{ descricao }}</span>
+              </span>
+            </label>
+            {% endfor %}
+            <button type="submit" class="w-full mt-3 rounded-lg px-4 py-2 text-sm font-bold"
+                    :style="temaClaro ? 'background:#2563eb; color:#fff;' : 'background:#2563eb; color:#fff;'">Salvar módulos</button>
           </form>
         </div>
       </div>

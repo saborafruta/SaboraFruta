@@ -7,9 +7,11 @@ Regras:
 3. Se o usuário não pertence à filial informada, retorna 403.
 4. Injeta `request.filial_ativa` em toda request autenticada.
 """
+from django.contrib import messages
 from django.shortcuts import redirect
 from django.urls import reverse
 
+from apps.core.constants.modulos import PREFIXOS_POR_MODULO
 from apps.core.models import Filial
 
 
@@ -70,4 +72,16 @@ class FilialMiddleware:
 
         request.filial_ativa = filial
         request.user._perfil_ativo = request.user.perfil_para_filial(filial)
+
+        # Bloqueia acesso direto a uma secao de menu desativada nesta filial
+        # (alem de escondida no sidebar) -- superuser nunca fica trancado
+        # fora, pra sempre poder religar pela Central Administrativa.
+        if filial.modulos_desativados and not request.user.is_superuser:
+            for chave, prefixos in PREFIXOS_POR_MODULO.items():
+                if chave in filial.modulos_desativados and any(
+                    request.path.startswith(p) for p in prefixos
+                ):
+                    messages.error(request, 'Este módulo está desativado para esta filial.')
+                    return redirect('core:dashboard')
+
         return self.get_response(request)
