@@ -306,6 +306,32 @@ class ComandaFecharView(PermissaoRequiredMixin, View):
         return redirect(reverse('food_service:painel'))
 
 
+class ComandaPdvPayloadView(PermissaoRequiredMixin, View):
+    """Itens da comanda no formato que o carrinho do PDV espera -- so
+    leitura. O PDV busca isso ao abrir com ?comanda_id=<pk> na URL."""
+    permissao_modulo = 'food_service'
+    permissao_acao = 'ver'
+
+    def get(self, request, pk):
+        from django.http import JsonResponse
+
+        comanda = _comanda_da_filial(request, pk)
+        try:
+            itens = ComandaService.itens_para_pdv(comanda)
+        except DadosInvalidosError as exc:
+            return JsonResponse({'ok': False, 'erro': str(exc)}, status=400)
+
+        cliente = comanda.cliente
+        return JsonResponse({
+            'ok': True,
+            'comanda_id': comanda.pk,
+            'cliente_id': cliente.pk if cliente else None,
+            'cliente_nome': cliente.razao_social if cliente else '',
+            'cliente_cpf_cnpj': cliente.cpf_cnpj if cliente else '',
+            'itens': itens,
+        })
+
+
 def _erro_json_ou_redirect(request, comanda, erro):
     if request.headers.get('Accept', '').startswith('application/json') or request.content_type == 'application/json':
         from django.http import JsonResponse

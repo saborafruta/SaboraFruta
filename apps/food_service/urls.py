@@ -33,6 +33,7 @@ urlpatterns = [
     path('comandas/<int:pk>/unir-mesas/', views.ComandaUnirMesasView.as_view(), name='comanda-unir-mesas'),
     path('comandas/<int:pk>/liberar-mesa/', views.ComandaLiberarMesaView.as_view(), name='comanda-liberar-mesa'),
     path('comandas/<int:pk>/fechar/', views.ComandaFecharView.as_view(), name='comanda-fechar'),
+    path('comandas/<int:pk>/pdv-payload/', views.ComandaPdvPayloadView.as_view(), name='comanda-pdv-payload'),
     path('comandas/<int:pk>/pedidos-pendentes/<int:pedido_pk>/confirmar/', views.ComandaPedidoPendenteConfirmarView.as_view(), name='comanda-pedido-pendente-confirmar'),
     path('comandas/<int:pk>/pedidos-pendentes/<int:pedido_pk>/recusar/', views.ComandaPedidoPendenteRecusarView.as_view(), name='comanda-pedido-pendente-recusar'),
 

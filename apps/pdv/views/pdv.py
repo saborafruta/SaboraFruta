@@ -806,6 +806,8 @@ def api_venda_finalizar(request):
     except DadosInvalidosError as exc:
         return JsonResponse({"erro": str(exc)}, status=400)
 
+    comanda_id = body.get("comanda_id")
+
     try:
         with transaction.atomic():
             if venda_edicao_origem:
@@ -827,6 +829,8 @@ def api_venda_finalizar(request):
                 observacao=body.get("observacao", ""),
                 request=request,
             )
+            if comanda_id:
+                _fechar_comanda_origem(comanda_id, request, venda)
     except EstoqueInsuficienteError as exc:
         return JsonResponse({"erro": str(exc), "tipo": "estoque_insuficiente"}, status=400)
     except DadosInvalidosError as exc:
@@ -835,6 +839,23 @@ def api_venda_finalizar(request):
         return JsonResponse({"erro": str(exc)}, status=500)
 
     return JsonResponse({"ok": True, "numero_venda": venda.numero_venda, "venda_id": venda.id})
+
+
+def _fechar_comanda_origem(comanda_id, request, venda):
+    """Quando a venda veio do botao 'Ir para o PDV e fechar a conta' da
+    Comanda (Food Service, ?comanda_id=<id>), fecha a comanda de origem
+    logo apos a venda ser finalizada -- consumindo a ficha tecnica e
+    liberando as mesas, igual ao antigo fechamento direto pela comanda.
+    Import tardio pra nao criar dependencia circular no import do modulo
+    (apps.food_service ja importa deste arquivo)."""
+    from apps.food_service.models import Comanda
+    from apps.food_service.services import ComandaService
+
+    try:
+        comanda = Comanda.objects.for_filial(request.filial_ativa).get(pk=comanda_id, status="aberta")
+    except Comanda.DoesNotExist:
+        return
+    ComandaService.fechar_apos_pdv(comanda=comanda, venda=venda, usuario=request.user)
 
 
 # ---------------------------------------------------------------------------
@@ -874,6 +895,8 @@ def api_venda_finalizar_forcado(request):
     except DadosInvalidosError as exc:
         return JsonResponse({"erro": str(exc)}, status=400)
 
+    comanda_id = body.get("comanda_id")
+
     try:
         with transaction.atomic():
             if venda_edicao_origem:
@@ -895,6 +918,8 @@ def api_venda_finalizar_forcado(request):
                 observacao=body.get("observacao", ""),
                 request=request,
             )
+            if comanda_id:
+                _fechar_comanda_origem(comanda_id, request, venda)
     except DadosInvalidosError as exc:
         return JsonResponse({"erro": str(exc)}, status=400)
     except Exception as exc:

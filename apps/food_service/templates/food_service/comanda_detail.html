@@ -3,9 +3,7 @@
 {% block page_title %}{{ title }}{% endblock %}
 
 {% block content %}
-{{ formas_pagamento|json_script:"formas-pagamento" }}
-
-<div class="space-y-5" x-data="comandaApp()" x-init="init()">
+<div class="space-y-5">
   <div>
     <p class="text-sm mb-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
       <a href="{% url 'food_service:painel' %}" :style="temaClaro ? 'color:#3b82f6;' : 'color:#60a5fa;'">Painel de Mesas</a>
@@ -311,61 +309,16 @@
           Fechar comanda
         </h3>
 
-        <div>
-          <label class="block text-sm font-medium mb-1.5" :style="temaClaro ? 'color:#374151;' : 'color:#d1d5db;'">Divisão</label>
-          <select x-model="divisaoTipo" @change="montarDivisao()" class="form-input w-full">
-            <option value="unica">Um pagamento (forma única)</option>
-            <option value="igual">Dividir igualmente entre N pessoas</option>
-            <option value="percentual">Dividir por percentual</option>
-            <option value="cliente">Dividir por cliente (nomear cada parte)</option>
-          </select>
-        </div>
-
-        <div x-show="divisaoTipo === 'igual' || divisaoTipo === 'percentual' || divisaoTipo === 'cliente'" x-cloak>
-          <label class="block text-sm font-medium mb-1.5" :style="temaClaro ? 'color:#374151;' : 'color:#d1d5db;'">Dividir entre quantas partes</label>
-          <input type="number" min="1" x-model.number="numeroPessoasDivisao" @input="montarDivisao()" class="form-input" style="width:120px;">
-        </div>
-
-        <div class="space-y-3">
-          <template x-for="(pgto, idx) in pagamentos" :key="idx">
-            <div class="space-y-2 p-3 rounded-lg" :style="temaClaro ? 'background:#f9fafb;' : 'background:#1e1e20;'">
-              <div x-show="divisaoTipo === 'cliente'">
-                <label class="block text-xs font-semibold mb-1.5" :style="temaClaro ? 'color:#374151;' : 'color:#d1d5db;'">Nome</label>
-                <input type="text" x-model="pgto.nome" class="form-input w-full" placeholder="Ex.: Maria">
-              </div>
-              <div>
-                <label class="block text-xs font-semibold mb-1.5" :style="temaClaro ? 'color:#374151;' : 'color:#d1d5db;'">Forma de pagamento</label>
-                <select x-model.number="pgto.forma_id" class="form-input w-full">
-                  <option value="">Selecione...</option>
-                  <template x-for="f in formasPagamento" :key="f.id">
-                    <option :value="f.id" x-text="f.descricao"></option>
-                  </template>
-                </select>
-              </div>
-              <div class="flex gap-2">
-                <div x-show="divisaoTipo === 'percentual'" style="width:80px;">
-                  <label class="block text-xs font-semibold mb-1.5" :style="temaClaro ? 'color:#374151;' : 'color:#d1d5db;'">%</label>
-                  <input type="number" step="0.01" min="0" max="100" x-model.number="pgto.percentual" @input="aplicarPercentual(pgto)" class="form-input w-full">
-                </div>
-                <div class="flex-1">
-                  <label class="block text-xs font-semibold mb-1.5" :style="temaClaro ? 'color:#374151;' : 'color:#d1d5db;'">Valor (R$)</label>
-                  <input type="number" step="0.01" min="0" x-model.number="pgto.valor" class="form-input w-full">
-                </div>
-              </div>
-              <button type="button" class="text-xs font-semibold" style="color:#dc2626;" @click="pagamentos.splice(idx, 1)" x-show="pagamentos.length > 1">Remover</button>
-            </div>
-          </template>
-          <button type="button" class="btn-secondary w-full" style="font-size:12px;" @click="pagamentos.push({forma_id: '', valor: 0, percentual: 0, nome: ''})">+ Adicionar forma de pagamento</button>
-        </div>
-
         <p class="text-sm" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
-          Total: <strong :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">R$ {{ comanda.valor_total|floatformat:2 }}</strong><br>
-          Pagamentos: <strong :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'" x-text="'R$ ' + somaPagamentos().toFixed(2)"></strong>
+          Total: <strong :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">R$ {{ comanda.valor_total|floatformat:2 }}</strong>
+        </p>
+        <p class="text-xs" :style="temaClaro ? 'color:#94a3b8;' : 'color:#64748b;'">
+          Os itens vão para o PDV — escolha lá a forma de pagamento (dinheiro, cartão, etc.) e finalize a venda.
         </p>
 
-        <p x-show="erro" x-cloak class="text-sm" style="color:#dc2626;" x-text="erro"></p>
-
-        <button type="button" class="btn-primary w-full" :disabled="fechando" @click="fechar()" x-text="fechando ? 'Fechando...' : 'Fechar comanda e ir para o PDV'"></button>
+        <a href="{% url 'pdv:home' %}?comanda_id={{ comanda.pk }}" class="btn-primary w-full text-center block">
+          Ir para o PDV e fechar a conta
+        </a>
       </div>
       {% endif %}
 
@@ -381,85 +334,4 @@
     </div>
   </div>
 </div>
-{% endblock %}
-
-{% block extra_js %}
-{{ block.super }}
-<script>
-function comandaApp() {
-  return {
-    formasPagamento: [],
-    valorTotal: {{ comanda.valor_total|default:0 }},
-    divisaoTipo: 'unica',
-    numeroPessoasDivisao: 2,
-    pagamentos: [{ forma_id: '', valor: {{ comanda.valor_total|default:0 }}, percentual: 100, nome: '' }],
-    fechando: false,
-    erro: '',
-
-    init() {
-      this.formasPagamento = JSON.parse(document.getElementById('formas-pagamento').textContent || '[]');
-    },
-
-    montarDivisao() {
-      if (this.divisaoTipo === 'unica') {
-        this.pagamentos = [{ forma_id: '', valor: this.valorTotal, percentual: 100, nome: '' }];
-        return;
-      }
-      const n = Math.max(1, this.numeroPessoasDivisao || 1);
-      const percentualParte = Math.round((100 / n) * 100) / 100;
-      const valorParte = Math.round((this.valorTotal / n) * 100) / 100;
-      this.pagamentos = Array.from({ length: n }, () => (
-        { forma_id: '', valor: valorParte, percentual: percentualParte, nome: '' }
-      ));
-    },
-
-    aplicarPercentual(pgto) {
-      const percentual = Number(pgto.percentual) || 0;
-      pgto.valor = Math.round(this.valorTotal * (percentual / 100) * 100) / 100;
-    },
-
-    somaPagamentos() {
-      return this.pagamentos.reduce((s, p) => s + (Number(p.valor) || 0), 0);
-    },
-
-    notaDivisao() {
-      if (this.divisaoTipo !== 'cliente') return '';
-      const partes = this.pagamentos
-        .filter(p => p.nome)
-        .map(p => `${p.nome}: R$ ${Number(p.valor || 0).toFixed(2)}`);
-      return partes.length ? `Divisão por cliente — ${partes.join('; ')}` : '';
-    },
-
-    async fechar() {
-      this.erro = '';
-      if (this.pagamentos.some(p => !p.forma_id)) {
-        this.erro = 'Selecione a forma de pagamento em todas as linhas.';
-        return;
-      }
-      this.fechando = true;
-      try {
-        const resp = await fetch(`{% url 'food_service:comanda-fechar' comanda.pk %}`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Accept': 'application/json',
-            'X-CSRFToken': '{{ csrf_token }}',
-          },
-          body: JSON.stringify({
-            pagamentos: this.pagamentos.map(p => ({ forma_id: p.forma_id, valor: p.valor })),
-            nota_divisao: this.notaDivisao(),
-          }),
-        });
-        const d = await resp.json();
-        if (!resp.ok || !d.ok) throw new Error(d.erro || 'Não foi possível fechar a comanda.');
-        window.location.href = `{% url 'pdv:home' %}`;
-      } catch (e) {
-        this.erro = e.message;
-      } finally {
-        this.fechando = false;
-      }
-    },
-  };
-}
-</script>
 {% endblock %}

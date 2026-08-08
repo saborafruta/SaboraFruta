@@ -250,3 +250,94 @@ class ComandaService:
                 mesa.save(update_fields=['status'])
 
         return venda
+
+    @staticmethod
+    def _linha_pdv(produto):
+        return {
+            'produto_id': produto.pk,
+            'descricao': produto.descricao_pdv or produto.descricao,
+            'codigo_barras': produto.codigo_barras or '',
+            'tipo_produto': produto.tipo_produto,
+            'icone': produto.linha_producao.icone if produto.linha_producao else '📦',
+            'cor': produto.linha_producao.cor_identificacao if produto.linha_producao else None,
+            'linha': produto.linha_producao.nome if produto.linha_producao else None,
+        }
+
+    @classmethod
+    def itens_para_pdv(cls, comanda: Comanda) -> list[dict]:
+        """
+        Monta os itens da comanda no mesmo formato que o carrinho do PDV usa
+        pra renderizar (espelha `api_pendente_detalhe`) -- so leitura, nao
+        grava nada. Usado quando o fechamento passa a escolher a forma de
+        pagamento la no PDV em vez de aqui.
+        """
+        if comanda.status != Comanda.Status.ABERTA:
+            raise DadosInvalidosError('Comanda não está aberta.')
+
+        itens_comanda = list(
+            comanda.itens
+            .select_related('produto__linha_producao')
+            .prefetch_related('complementos__produto__linha_producao')
+            .all()
+        )
+        if not itens_comanda:
+            raise DadosInvalidosError('Comanda sem itens lançados.')
+
+        itens = []
+        for item in itens_comanda:
+            itens.append({
+                **cls._linha_pdv(item.produto),
+                'quantidade': float(item.quantidade),
+                'valor_unitario': float(item.valor_unitario),
+                'valor_total': float(item.valor_total),
+            })
+            for complemento in item.complementos.all():
+                itens.append({
+                    **cls._linha_pdv(complemento.produto),
+                    'quantidade': float(complemento.quantidade),
+                    'valor_unitario': float(complemento.valor_unitario),
+                    'valor_total': float(complemento.valor_total),
+                })
+        return itens
+
+    @classmethod
+    @transaction.atomic
+    def fechar_apos_pdv(cls, *, comanda: Comanda, venda, usuario):
+        """
+        Fecha a comanda depois que o pagamento foi feito direto no PDV (fluxo
+        novo, ver `itens_para_pdv`) -- espelha o final de `fechar()`, mas sem
+        repetir a baixa de estoque do produto vendido (a `finalizar_venda` do
+        PDV ja fez isso) e sem recriar a VendaPDV (ja existe). So consome a
+        ficha tecnica e fecha a comanda/libera as mesas.
+        """
+        if comanda.status != Comanda.Status.ABERTA:
+            # Ja foi fechada por outro caminho (ex.: duplo clique/reload) --
+            # a venda no PDV ja aconteceu de qualquer forma, entao nao ha
+            # erro a levantar aqui, so nada mais a fazer.
+            return
+
+        produtos_vendidos = []
+        for item in comanda.itens.prefetch_related('complementos').all():
+            produtos_vendidos.append((item.produto, item.quantidade))
+            for complemento in item.complementos.all():
+                produtos_vendidos.append((complemento.produto, complemento.quantidade))
+
+        for produto, quantidade in produtos_vendidos:
+            FichaTecnicaService.consumir_ingredientes(
+                produto=produto,
+                quantidade_vendida=quantidade,
+                filial=comanda.filial,
+                usuario=usuario,
+                documento_id=venda.pk,
+                documento_numero=str(venda.numero_venda),
+            )
+
+        comanda.venda_pdv = venda
+        comanda.status = Comanda.Status.FECHADA
+        comanda.fechada_em = timezone.now()
+        comanda.save(update_fields=['venda_pdv', 'status', 'fechada_em'])
+
+        for mesa in comanda.mesas.all():
+            if not mesa.comandas.filter(status=Comanda.Status.ABERTA).exists():
+                mesa.status = Mesa.Status.AGUARDANDO_LIMPEZA
+                mesa.save(update_fields=['status'])

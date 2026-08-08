@@ -2853,7 +2853,7 @@ function pdv() {
       subtotal: 0, desconto: 0, acrescimo: 0,
       total: 0, valor_pago: 0, restante: 0,
       delivery: false, endereco_entrega: {},
-      observacao: '',
+      observacao: '', comanda_id_origem: null,
     },
 
     produtos: [], topProdutos: [], buscaQuery: '', buscandoProdutos: false, produtoFoco: -1,
@@ -2979,8 +2979,54 @@ function pdv() {
       await this.carregarEstado();
       await this.atualizarListasTopo();
       await this.aplicarClienteInicial();
+      await this.aplicarComandaInicial();
       this.registrarAtalhos();
       if (!this.showModalCaixa) this.$nextTick(()=>this.focarBuscaProduto());
+    },
+
+    // Itens vindos de ?comanda_id=<id> (botao "Ir para o PDV e fechar a
+    // conta" da tela de Comanda do Food Service). So leitura no lado da
+    // comanda -- nada e' gravado ate' o operador escolher a forma de
+    // pagamento aqui e finalizar; o comanda_id viaja junto no payload de
+    // finalizar_venda pra fechar a comanda so' depois que a venda for real.
+    async aplicarComandaInicial() {
+      const comandaId = new URLSearchParams(window.location.search).get('comanda_id');
+      if (!comandaId) return;
+      try {
+        const d = await (await fetch(`/food-service/comandas/${comandaId}/pdv-payload/`)).json();
+        if (!d.ok) { this.toast_(d.erro || 'Não foi possível carregar a comanda.', 'erro'); return; }
+        this.novaVenda();
+        for (const item of d.itens) {
+          this.venda.itens.push({
+            _id: Date.now()+Math.random(),
+            produto_id: item.produto_id,
+            descricao: item.descricao,
+            codigo_barras: item.codigo_barras||'',
+            icone: item.icone||'📦',
+            cor: item.cor||null,
+            linha: item.linha||null,
+            tipo_produto: item.tipo_produto||'',
+            fracionavel: this.produtoAceitaDecimal(item),
+            quantidade_step: this.quantidadePasso(item),
+            quantidade_decimais: this.produtoAceitaDecimal(item) ? 3 : 0,
+            quantidade: item.quantidade,
+            valor_unitario: item.valor_unitario,
+            desconto_percentual: 0,
+            desconto_valor: 0,
+            valor_total: item.valor_total,
+            obs: '', _showObs: false,
+          });
+        }
+        if (d.cliente_id) {
+          await this.selecionarCliente({ id: d.cliente_id, nome: d.cliente_nome, cpf_cnpj: d.cliente_cpf_cnpj });
+        }
+        this.venda.comanda_id_origem = d.comanda_id;
+        this.recalcularTotais();
+        window.history.replaceState({}, '', window.location.pathname);
+        this.toast_('Comanda carregada — escolha a forma de pagamento e finalize.', 'ok');
+      } catch (e) {
+        this.toast_('Erro ao carregar itens da comanda.', 'erro');
+      }
     },
 
     // Cliente vindo de ?cliente=<id> (ex.: botao "Nova Venda" do mapa).
@@ -3377,6 +3423,7 @@ function pdv() {
           data_venda: (this.usuarioEhAdmin && this.dataVendaRetroativa) ? this.dataVendaRetroativa : null,
           observacao: this.venda.observacao || '',
           venda_edicao_origem_id: this.vendaEdicaoOrigemId || null,
+          comanda_id: this.venda.comanda_id_origem || null,
         };
         payload.forcar_estoque_negativo = true;
         const r = await fetch('/pdv/api/venda/finalizar/',{method:'POST',headers:{'Content-Type':'application/json','X-CSRFToken':csrf()},body:JSON.stringify(payload)});
@@ -3422,6 +3469,7 @@ function pdv() {
           data_venda: (this.usuarioEhAdmin && this.dataVendaRetroativa) ? this.dataVendaRetroativa : null,
           observacao: this.venda.observacao || '',
           venda_edicao_origem_id: this.vendaEdicaoOrigemId || null,
+          comanda_id: this.venda.comanda_id_origem || null,
         };
         // Endpoint dedicado que sempre ignora verificação de estoque
         const r = await fetch('/pdv/api/venda/finalizar/forcado/', {
