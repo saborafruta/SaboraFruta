@@ -209,6 +209,31 @@ class ComandaUnirView(PermissaoRequiredMixin, View):
         return redirect(reverse('food_service:comanda-detail', args=[comanda.pk]))
 
 
+class ComandaCancelarView(PermissaoRequiredMixin, View):
+    """Cancela uma comanda aberta sem gerar venda e libera as mesas -- usado
+    pelo botao "Liberar mesa" do Painel quando a mesa tem uma comanda aberta
+    (ex.: aberta por engano, sem pedido real)."""
+    permissao_modulo = 'food_service'
+    permissao_acao = 'editar'
+
+    def post(self, request, pk):
+        from django.http import JsonResponse
+
+        comanda = _comanda_da_filial(request, pk)
+        try:
+            ComandaService.cancelar(comanda=comanda)
+        except DadosInvalidosError as exc:
+            if request.headers.get('Accept', '').startswith('application/json'):
+                return JsonResponse({'ok': False, 'erro': str(exc)}, status=400)
+            messages.error(request, str(exc))
+            return redirect(reverse('food_service:comanda-detail', args=[comanda.pk]))
+
+        if request.headers.get('Accept', '').startswith('application/json'):
+            return JsonResponse({'ok': True})
+        messages.success(request, f'Comanda #{comanda.pk} cancelada.')
+        return redirect(reverse('food_service:painel'))
+
+
 class ComandaSepararView(PermissaoRequiredMixin, View):
     """Abre uma comanda-irmã vazia para transferir itens (dividir por item/por pessoa)."""
 

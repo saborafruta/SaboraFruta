@@ -19,8 +19,13 @@
   .fs-card { position:relative; }
   .fs-liberar-btn { position:absolute; bottom:10px; right:10px; background:rgba(255,255,255,.92);
                      color:#1c1c1e; font-size:10px; font-weight:700; border:none; border-radius:6px;
-                     padding:4px 8px; cursor:pointer; }
+                     padding:4px 8px; cursor:pointer; transition:background .15s; }
   .fs-liberar-btn:hover { background:#fff; }
+  .fs-toast { position:fixed; top:76px; left:50%; transform:translateX(-50%); z-index:60;
+              padding:10px 18px; border-radius:10px; font-size:13px; font-weight:600; color:#fff;
+              box-shadow:0 6px 20px rgba(0,0,0,.2); max-width:90vw; text-align:center; }
+  .fs-toast.ok { background:#16a34a; }
+  .fs-toast.erro { background:#dc2626; }
 </style>
 {% endblock %}
 
@@ -102,6 +107,8 @@
          :style="temaClaro ? 'color:#1d4ed8;' : 'color:#93c5fd;'">Cadastrar a primeira mesa</a>.
     </p>
   </div>
+
+  <div class="fs-toast" :class="toastTipo" x-show="toast" x-cloak x-text="toast"></div>
 </div>
 {% endblock %}
 
@@ -114,6 +121,8 @@ function painelMesas() {
     chamados: [],
     autoAtualizar: true,
     status: '',
+    toast: '',
+    toastTipo: 'ok',
     _timer: null,
     legenda: [
       { status: 'livre', label: 'Livre', cor: '#16a34a' },
@@ -152,11 +161,19 @@ function painelMesas() {
       return el ? el.value : '';
     },
 
+    _mostrarToast(msg, tipo = 'ok') {
+      this.toast = msg;
+      this.toastTipo = tipo;
+      clearTimeout(this._toastTimer);
+      this._toastTimer = setTimeout(() => { this.toast = ''; }, tipo === 'erro' ? 4500 : 2500);
+    },
+
     async atenderChamado(id) {
       await fetch(`/food-service/chamados/${id}/atender/`, {
         method: 'POST',
         headers: { 'X-CSRFToken': this._csrf() },
       });
+      this._mostrarToast('Chamado marcado como atendido.');
       this.atualizar();
     },
 
@@ -189,14 +206,45 @@ function painelMesas() {
           headers: { 'X-CSRFToken': this._csrf(), 'Accept': 'application/json' },
         });
         if (resp.status === 400) {
+          // Mesa tem comanda aberta -- se ela nao tiver consumo real, oferece
+          // cancelar a comanda (aberta por engano, sem pedido) e liberar a
+          // mesa junto. Com consumo, manda pro fluxo normal (fechar/pagar).
+          if (m.comanda_id) {
+            const consumo = Number(m.valor_consumido || 0);
+            const aviso = consumo > 0
+              ? `A Mesa ${m.numero} tem uma comanda aberta com R$ ${consumo.toFixed(2)} em consumo. Cancelar a comanda (perde os itens lançados) e liberar a mesa mesmo assim?`
+              : `A Mesa ${m.numero} tem uma comanda aberta sem consumo. Cancelar a comanda e liberar a mesa?`;
+            if (confirm(aviso)) {
+              await this.cancelarComandaELiberar(m);
+            }
+            return;
+          }
           const d = await resp.json().catch(() => ({}));
-          this.status = d.erro || 'Não foi possível liberar a mesa.';
+          this._mostrarToast(d.erro || 'Não foi possível liberar a mesa.', 'erro');
           return;
         }
-        this.status = `Mesa ${m.numero} liberada.`;
+        this._mostrarToast(`Mesa ${m.numero} liberada.`);
         this.atualizar();
       } catch (e) {
-        this.status = 'Erro ao liberar mesa.';
+        this._mostrarToast('Erro ao liberar mesa.', 'erro');
+      }
+    },
+
+    async cancelarComandaELiberar(m) {
+      try {
+        const resp = await fetch(`/food-service/comandas/${m.comanda_id}/cancelar/`, {
+          method: 'POST',
+          headers: { 'X-CSRFToken': this._csrf(), 'Accept': 'application/json' },
+        });
+        const d = await resp.json().catch(() => ({}));
+        if (!resp.ok || !d.ok) {
+          this._mostrarToast(d.erro || 'Não foi possível cancelar a comanda.', 'erro');
+          return;
+        }
+        this._mostrarToast(`Comanda cancelada — Mesa ${m.numero} liberada.`);
+        this.atualizar();
+      } catch (e) {
+        this._mostrarToast('Erro ao cancelar comanda.', 'erro');
       }
     },
   };

@@ -28,6 +28,7 @@ urlpatterns = [
     path('comandas/<int:pk>/itens/<int:item_pk>/complementos/<int:complemento_pk>/remover/', views.ComandaRemoverComplementoView.as_view(), name='comanda-item-complemento-remover'),
     path('comandas/<int:pk>/itens/<int:item_pk>/transferir/', views.ComandaTransferirItemView.as_view(), name='comanda-item-transferir'),
     path('comandas/<int:pk>/unir/', views.ComandaUnirView.as_view(), name='comanda-unir'),
+    path('comandas/<int:pk>/cancelar/', views.ComandaCancelarView.as_view(), name='comanda-cancelar'),
     path('comandas/<int:pk>/separar/', views.ComandaSepararView.as_view(), name='comanda-separar'),
     path('comandas/<int:pk>/transferir-mesa/', views.ComandaTransferirMesaView.as_view(), name='comanda-transferir-mesa'),
     path('comandas/<int:pk>/unir-mesas/', views.ComandaUnirMesasView.as_view(), name='comanda-unir-mesas'),

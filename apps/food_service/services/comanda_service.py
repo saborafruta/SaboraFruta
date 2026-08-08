@@ -121,6 +121,27 @@ class ComandaService:
 
     @classmethod
     @transaction.atomic
+    def cancelar(cls, *, comanda: Comanda):
+        """
+        Cancela uma comanda aberta sem gerar venda (nenhum item foi pago,
+        nada a estornar em estoque/fiscal) e libera as mesas vinculadas --
+        usado pra destravar uma mesa que ficou "ocupada" por engano (teste,
+        comanda aberta sem pedido real etc).
+        """
+        if comanda.status != Comanda.Status.ABERTA:
+            raise DadosInvalidosError('Comanda não está aberta.')
+
+        comanda.status = Comanda.Status.CANCELADA
+        comanda.fechada_em = timezone.now()
+        comanda.save(update_fields=['status', 'fechada_em'])
+
+        for mesa in comanda.mesas.all():
+            if not mesa.comandas.filter(status=Comanda.Status.ABERTA).exists():
+                mesa.status = Mesa.Status.LIVRE
+                mesa.save(update_fields=['status'])
+
+    @classmethod
+    @transaction.atomic
     def separar(cls, *, comanda: Comanda) -> Comanda:
         """
         Abre uma comanda-irmã vazia nas mesmas mesas, pronta para receber
