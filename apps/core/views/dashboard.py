@@ -484,6 +484,13 @@ class DashboardView(LoginRequiredMixin, TemplateView):
             for _ in range(meses - 1):
                 mes_inicio = (mes_inicio - datetime.timedelta(days=1)).replace(day=1)
 
+            # A tabela por forma de pagamento tem seletor de período próprio
+            # (até "Último ano"), então busca 12 meses -- a por filial continua
+            # nos `meses` de sempre, pra não mudar o que ela já mostrava.
+            mes_inicio_pgto = hoje.replace(day=1)
+            for _ in range(11):
+                mes_inicio_pgto = (mes_inicio_pgto - datetime.timedelta(days=1)).replace(day=1)
+
             MESES_PT = ['', 'Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun',
                         'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez']
 
@@ -579,12 +586,12 @@ class DashboardView(LoginRequiredMixin, TemplateView):
                 ContaReceber.objects.filter(
                     filial__empresa=filial.empresa,
                     documento_tipo='pedido_venda',
-                    data_emissao__gte=mes_inicio,
+                    data_emissao__gte=mes_inicio_pgto,
                 ) if filial.is_matriz else
                 ContaReceber.objects.filter(
                     filial=filial,
                     documento_tipo='pedido_venda',
-                    data_emissao__gte=mes_inicio,
+                    data_emissao__gte=mes_inicio_pgto,
                 )
             )
             por_pgto_qs = (
@@ -605,10 +612,16 @@ class DashboardView(LoginRequiredMixin, TemplateView):
                 acum_pgto[k]['qtd']   += row['qtd']
                 acum_pgto[k]['valor'] += float(row['valor'] or 0)
 
-            # PDV pagamentos
+            # PDV pagamentos -- base própria de 12 meses (ver mes_inicio_pgto)
+            pdv_base_pgto = (
+                VendaPDV.objects.filter(filial__empresa=filial.empresa)
+                if filial.is_matriz
+                else VendaPDV.objects.filter(filial=filial)
+            ).filter(status='finalizada', data_venda__date__gte=mes_inicio_pgto)
+
             pdv_pgto_qs = (
                 PagamentoVendaPDV.objects.filter(
-                    venda_pdv__in=pdv_base
+                    venda_pdv__in=pdv_base_pgto
                 )
                 .values('venda_pdv__data_venda__year', 'venda_pdv__data_venda__month',
                         'forma_pagamento__descricao')

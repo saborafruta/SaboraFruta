@@ -394,9 +394,39 @@
         </div>
 
         <!-- Por Forma de Pagamento -->
-        <div>
-          <div class="px-5 py-3" style="border-bottom:1px solid #2a2a2e;">
+        {{ vendas_acumuladas.por_pagamento|json_script:"pgto-linhas" }}
+        <div x-data="pagamentoPeriodo()" x-init="iniciar()">
+          <div class="px-5 py-3 flex items-center gap-2 flex-wrap" style="border-bottom:1px solid #2a2a2e;">
             <span class="text-xs font-medium uppercase tracking-widest" style="color:#888; letter-spacing:0.08em;">Por Forma de Pagamento</span>
+
+            <div class="ml-auto flex items-center gap-1.5">
+              <select x-model="periodo"
+                      class="text-xs rounded-md px-2 py-1.5 border outline-none"
+                      :style="temaClaro ? 'background:#fff;color:#333;border-color:#d1d5db;' : 'background:#1e1e22;color:#d4d4d4;border-color:#3a3a3e;'">
+                <template x-for="(p, k) in opcoes" :key="k">
+                  <option :value="k" x-text="p"></option>
+                </template>
+              </select>
+
+              <div class="w-px h-5 mx-0.5" :style="temaClaro ? 'background:#e5e7eb;' : 'background:#2e2e33;'"></div>
+
+              <button type="button" @click="baixarCsv()" title="Baixar CSV"
+                      class="p-1.5 rounded-md transition-colors"
+                      :style="temaClaro ? 'color:#6b7280;' : 'color:#9ca3af;'">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8"
+                        d="M4 16v2a2 2 0 002 2h12a2 2 0 002-2v-2M7 10l5 5 5-5M12 15V3"/>
+                </svg>
+              </button>
+              <button type="button" @click="imprimir()" title="Imprimir"
+                      class="p-1.5 rounded-md transition-colors"
+                      :style="temaClaro ? 'color:#6b7280;' : 'color:#9ca3af;'">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8"
+                        d="M6 9V2h12v7M6 18H4a2 2 0 01-2-2v-5a2 2 0 012-2h16a2 2 0 012 2v5a2 2 0 01-2 2h-2M6 14h12v8H6v-8z"/>
+                </svg>
+              </button>
+            </div>
           </div>
           <div class="overflow-x-auto">
             <table class="w-full text-xs">
@@ -409,30 +439,43 @@
                 </tr>
               </thead>
               <tbody>
-                {% for row in vendas_acumuladas.por_pagamento %}
                 {% comment %}
                   Doação/Permuta continuam listadas (saber que houve permuta é
                   informação gerencial), mas marcadas: não entram no total por
                   filial, que é faturamento.
                 {% endcomment %}
-                <tr class="table-row-hover" style="border-bottom:1px solid #1e1e1e;">
-                  <td class="px-5 py-2 font-mono" style="color:#888;">{{ row.mes_label }}</td>
-                  <td class="px-3 py-2 truncate" style="max-width:140px;" :style="temaClaro ? 'color:#333;' : 'color:#d4d4d4;'" title="{{ row.forma }}">
-                    {{ row.forma }}
-                    {% if not row.e_receita %}
-                      <span class="ml-1 text-[9.5px] font-bold px-1.5 py-0.5 rounded-full whitespace-nowrap"
-                            style="background:rgba(245,158,11,.14); color:#fbbf24; border:1px solid rgba(245,158,11,.32);"
-                            title="Não entra no faturamento">não é receita</span>
-                    {% endif %}
-                  </td>
-                  <td class="px-3 py-2 text-right" :style="temaClaro ? 'color:#333;' : 'color:#d4d4d4;'">{{ row.qtd }}</td>
-                  <td class="px-5 py-2 text-right font-mono"
-                      :style="temaClaro ? 'color:{% if row.e_receita %}#333{% else %}#9ca3af{% endif %};' : 'color:{% if row.e_receita %}#d4d4d4{% else %}#6b7280{% endif %};'">R$ {{ row.valor|floatformat:0 }}</td>
-                </tr>
-                {% empty %}
-                <tr><td colspan="4" class="px-5 py-4 text-center" style="color:#555;">Sem dados de pagamento</td></tr>
-                {% endfor %}
+                <template x-for="row in filtradas()" :key="row.mes_label + row.forma">
+                  <tr class="table-row-hover" style="border-bottom:1px solid #1e1e1e;">
+                    <td class="px-5 py-2 font-mono" style="color:#888;" x-text="row.mes_label"></td>
+                    <td class="px-3 py-2 truncate" style="max-width:140px;"
+                        :style="temaClaro ? 'color:#333;' : 'color:#d4d4d4;'" :title="row.forma">
+                      <span x-text="row.forma"></span>
+                      <template x-if="!row.e_receita">
+                        <span class="ml-1 text-[9.5px] font-bold px-1.5 py-0.5 rounded-full whitespace-nowrap"
+                              style="background:rgba(245,158,11,.14); color:#fbbf24; border:1px solid rgba(245,158,11,.32);"
+                              title="Não entra no faturamento">não é receita</span>
+                      </template>
+                    </td>
+                    <td class="px-3 py-2 text-right" :style="temaClaro ? 'color:#333;' : 'color:#d4d4d4;'" x-text="row.qtd"></td>
+                    <td class="px-5 py-2 text-right font-mono"
+                        :style="row.e_receita ? (temaClaro ? 'color:#333;' : 'color:#d4d4d4;') : (temaClaro ? 'color:#9ca3af;' : 'color:#6b7280;')"
+                        x-text="'R$ ' + fmt(row.valor)"></td>
+                  </tr>
+                </template>
+                <template x-if="!filtradas().length">
+                  <tr><td colspan="4" class="px-5 py-4 text-center" style="color:#555;">Sem dados de pagamento no período</td></tr>
+                </template>
               </tbody>
+              <tfoot x-show="filtradas().length" x-cloak>
+                <tr style="border-top:1px solid #2a2a2e;">
+                  <td class="px-5 py-2 font-semibold" colspan="2"
+                      :style="temaClaro ? 'color:#333;' : 'color:#d4d4d4;'">Total (receita)</td>
+                  <td class="px-3 py-2 text-right font-semibold"
+                      :style="temaClaro ? 'color:#333;' : 'color:#d4d4d4;'" x-text="totalQtd()"></td>
+                  <td class="px-5 py-2 text-right font-mono font-semibold"
+                      style="color:#4ade80;" x-text="'R$ ' + fmt(totalValor())"></td>
+                </tr>
+              </tfoot>
             </table>
           </div>
         </div>
@@ -1210,6 +1253,116 @@
           '<div class="sub">Período: ' + (p.label || '') + ' — gerado em ' + new Date().toLocaleString('pt-BR') + '</div>' +
           '<table><thead><tr><th>Dia</th><th style="text-align:right;">Faturamento</th></tr></thead><tbody>' +
           linhas + '</tbody><tfoot><tr><td>Total</td><td style="text-align:right;">R$ ' + this.fmt(p.total) + '</td></tr></tfoot></table>' +
+          '</body></html>';
+        const win = window.open('', '_blank', 'width=700,height=800');
+        if (!win) { alert('Habilite pop-ups para imprimir.'); return; }
+        win.document.write(html);
+        win.document.close();
+        win.focus();
+        win.onload = () => win.print();
+      },
+    };
+  }
+
+  // Tabela "Por forma de pagamento": o servidor manda 12 meses de uma vez e o
+  // filtro roda aqui. Sao poucas linhas (formas x meses), entao trocar de
+  // periodo nao precisa de nova ida ao servidor.
+  function pagamentoPeriodo() {
+    return {
+      linhas: [],
+      periodo: 'mes_atual',
+      opcoes: {
+        mes_atual: 'Mês atual',
+        mes_anterior: 'Mês anterior',
+        ultimos_3: 'Últimos 3 meses',
+        ultimos_6: 'Últimos 6 meses',
+        ultimo_ano: 'Último ano',
+      },
+
+      iniciar() {
+        const el = document.getElementById('pgto-linhas');
+        this.linhas = el ? JSON.parse(el.textContent || '[]') : [];
+      },
+
+      // Chaves "ano-mes" que o periodo cobre, contando a partir do mes atual.
+      _chavesDoPeriodo() {
+        const hoje = new Date();
+        const chave = (d) => d.getFullYear() + '-' + (d.getMonth() + 1);
+        const voltar = (n) => new Date(hoje.getFullYear(), hoje.getMonth() - n, 1);
+
+        if (this.periodo === 'mes_atual') return [chave(voltar(0))];
+        if (this.periodo === 'mes_anterior') return [chave(voltar(1))];
+        const quantos = { ultimos_3: 3, ultimos_6: 6, ultimo_ano: 12 }[this.periodo] || 1;
+        return Array.from({ length: quantos }, (_, i) => chave(voltar(i)));
+      },
+
+      filtradas() {
+        const chaves = this._chavesDoPeriodo();
+        return this.linhas.filter(r => chaves.includes(r.ano + '-' + r.mes));
+      },
+
+      // Doacao/Permuta aparecem na lista mas ficam fora do total: o total aqui
+      // e' faturamento, e somar permuta inflaria a receita.
+      _receita() {
+        return this.filtradas().filter(r => r.e_receita);
+      },
+
+      totalQtd() {
+        return this._receita().reduce((s, r) => s + (Number(r.qtd) || 0), 0);
+      },
+
+      totalValor() {
+        return this._receita().reduce((s, r) => s + (Number(r.valor) || 0), 0);
+      },
+
+      fmt(v) {
+        return (Number(v) || 0).toLocaleString('pt-BR', {
+          minimumFractionDigits: 2, maximumFractionDigits: 2,
+        });
+      },
+
+      baixarCsv() {
+        const linhas = this.filtradas();
+        if (!linhas.length) { alert('Sem dados no período selecionado.'); return; }
+        const csv = ['Mes;Forma;Receita;Qtd;Valor']
+          .concat(linhas.map(r => [
+            r.mes_label, r.forma, r.e_receita ? 'sim' : 'nao', r.qtd,
+            (Number(r.valor) || 0).toFixed(2).replace('.', ','),
+          ].join(';')))
+          .join('\n');
+        // BOM pro Excel abrir os acentos certos.
+        const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8;' });
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(blob);
+        a.download = 'formas-pagamento-' + this.periodo + '.csv';
+        a.click();
+        URL.revokeObjectURL(a.href);
+      },
+
+      imprimir() {
+        const linhas = this.filtradas();
+        if (!linhas.length) { alert('Sem dados no período selecionado.'); return; }
+        const corpo = linhas.map(r =>
+          '<tr><td>' + r.mes_label + '</td><td>' + r.forma +
+          (r.e_receita ? '' : ' (não é receita)') +
+          '</td><td style="text-align:right;">' + r.qtd +
+          '</td><td style="text-align:right;">R$ ' + this.fmt(r.valor) + '</td></tr>'
+        ).join('');
+        const html = '<!doctype html><html><head><meta charset="utf-8">' +
+          '<title>Por forma de pagamento</title><style>' +
+          'body{font-family:Arial,Helvetica,sans-serif;padding:24px;color:#111;}' +
+          'h1{font-size:18px;margin:0 0 4px;} .sub{color:#555;font-size:13px;margin-bottom:18px;}' +
+          'table{width:100%;border-collapse:collapse;} th,td{padding:8px 10px;border-bottom:1px solid #ddd;font-size:13px;text-align:left;}' +
+          'tfoot td{font-weight:bold;border-top:2px solid #333;border-bottom:none;}' +
+          '</style></head><body>' +
+          '<h1>Por forma de pagamento</h1>' +
+          '<div class="sub">Período: ' + this.opcoes[this.periodo] +
+          ' — gerado em ' + new Date().toLocaleString('pt-BR') + '</div>' +
+          '<table><thead><tr><th>Mês</th><th>Forma</th>' +
+          '<th style="text-align:right;">Qtd</th><th style="text-align:right;">Valor</th></tr></thead><tbody>' +
+          corpo + '</tbody><tfoot><tr><td colspan="2">Total (receita)</td>' +
+          '<td style="text-align:right;">' + this.totalQtd() + '</td>' +
+          '<td style="text-align:right;">R$ ' + this.fmt(this.totalValor()) + '</td></tr></tfoot></table>' +
           '</body></html>';
         const win = window.open('', '_blank', 'width=700,height=800');
         if (!win) { alert('Habilite pop-ups para imprimir.'); return; }
