@@ -1295,5 +1295,22 @@
       });
     })();
   </script>
+
+  {% comment %}
+    Service worker (PWA). Registrado de /sw.js -- e nao de /static/sw.js --
+    porque o navegador limita o escopo do worker ao diretorio de origem.
+    Ele so guarda estatico; pagina autenticada nunca vai pro cache (o
+    porque esta comentado no proprio sw.js).
+  {% endcomment %}
+  <script>
+    if ('serviceWorker' in navigator && location.protocol === 'https:') {
+      window.addEventListener('load', function() {
+        navigator.serviceWorker.register('/sw.js', { scope: '/' }).catch(function() {
+          // Falhar aqui nao pode atrapalhar o uso normal do sistema: sem
+          // service worker o app continua funcionando, so perde o cache.
+        });
+      });
+    }
+  </script>
 </body>
 </html>
