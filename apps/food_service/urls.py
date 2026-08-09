@@ -40,6 +40,7 @@ urlpatterns = [
 
     path('reservas/', views.ReservaListView.as_view(), name='reserva-list'),
     path('reservas/nova/', views.ReservaCreateView.as_view(), name='reserva-create'),
+    path('api/clientes-busca/', views.api_clientes_busca, name='api-clientes-busca'),
     path('reservas/<int:pk>/cancelar/', views.ReservaCancelarView.as_view(), name='reserva-cancelar'),
     path('reservas/<int:pk>/atender/', views.ReservaAtenderView.as_view(), name='reserva-atender'),
 

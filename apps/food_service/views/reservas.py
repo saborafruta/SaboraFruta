@@ -1,14 +1,52 @@
 """Reservas futuras de mesa."""
 from django.contrib import messages
+from django.db.models import Q
+from django.http import JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.utils import timezone
 from django.views import View
+from django.views.decorators.http import require_GET
 
 from apps.cadastros.models import Cliente
 from apps.core.services.permissions import PermissaoRequiredMixin
 
 from ..models import Mesa, Reserva
+
+
+@require_GET
+def api_clientes_busca(request):
+    """Autocomplete de clientes cadastrados para a Nova Reserva."""
+    if not request.user.is_authenticated:
+        return JsonResponse({'erro': 'Sessão expirada.'}, status=401)
+    if not request.user.tem_permissao('food_service', 'criar'):
+        return JsonResponse({'erro': 'Você não tem permissão para esta ação.'}, status=403)
+
+    q = request.GET.get('q', '').strip()
+    if len(q) < 2:
+        return JsonResponse({'clientes': []})
+
+    clientes = (
+        Cliente.objects.for_filial(request.filial_ativa)
+        .filter(ativo=True)
+        .filter(
+            Q(razao_social__icontains=q)
+            | Q(nome_fantasia__icontains=q)
+            | Q(celular__icontains=q)
+            | Q(telefone__icontains=q)
+        )
+        .order_by('razao_social')[:8]
+    )
+    return JsonResponse({
+        'clientes': [
+            {
+                'id': c.pk,
+                'nome': c.nome_fantasia or c.razao_social,
+                'telefone': c.celular or c.telefone or '',
+            }
+            for c in clientes
+        ],
+    })
 
 
 class ReservaListView(PermissaoRequiredMixin, View):

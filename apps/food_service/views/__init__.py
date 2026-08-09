@@ -51,6 +51,7 @@ from .reservas import (
     ReservaCancelarView,
     ReservaCreateView,
     ReservaListView,
+    api_clientes_busca,
 )
 
 __all__ = [
@@ -96,6 +97,7 @@ __all__ = [
     'ReservaListView',
     'RelatoriosGerenciaisView',
     'api_chamados_pendentes',
+    'api_clientes_busca',
     'api_kds',
     'api_painel_mesas',
 ]
