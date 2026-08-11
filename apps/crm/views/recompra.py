@@ -5,7 +5,7 @@ from decimal import Decimal
 
 from django.contrib import messages
 from django.core.paginator import Paginator
-from django.db.models import Count, Q, Sum
+from django.db.models import Count, F, Q, Sum
 from django.shortcuts import redirect, render
 from django.urls import reverse
 from django.utils import timezone
@@ -174,7 +174,17 @@ class AlertasRecompraView(PermissaoRequiredMixin, View):
             for i, alvo in enumerate(alvos)
         ]
 
-        com_padrao = qs.exclude(frequencia=RecompraCliente.Frequencia.SEM_PADRAO)
+        # Ordenado por tempo sem comprar (quem comprou ha mais tempo primeiro),
+        # e nao pelo score do qs. A ordenacao precisa ser aqui no banco, e nao
+        # numa ordenacao da lista depois: o corte de 100 abaixo pegaria os 100
+        # de maior score e so entao ordenaria, escondendo justamente quem esta
+        # ha mais tempo sem comprar caso a faixa passe de 100 clientes.
+        # `ultima_compra` crescente == mais tempo sem comprar primeiro, ja que
+        # `dias_desde_ultima_compra` e' hoje - ultima_compra.
+        com_padrao = (
+            qs.exclude(frequencia=RecompraCliente.Frequencia.SEM_PADRAO)
+              .order_by(F('ultima_compra').asc(nulls_last=True), '-score')
+        )
         for r in com_padrao:
             media = float(r.media_intervalo_dias or 0)
             if media <= 0:
@@ -186,8 +196,8 @@ class AlertasRecompraView(PermissaoRequiredMixin, View):
             faixa['valor_medio_total'] += r.valor_medio or Decimal('0')
             if r.status == RecompraCliente.Status.VERMELHO:
                 faixa['em_atraso'] += 1
-            # A lista do modal mostra os mais prioritários primeiro; o qs já
-            # vem ordenado por score.
+            # A lista já chega ordenada por tempo sem comprar (ver order_by
+            # acima), então basta cortar nos 100 primeiros.
             if len(faixa['clientes']) < 100:
                 faixa['clientes'].append(r)
 
