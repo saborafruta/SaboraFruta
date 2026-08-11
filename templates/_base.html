@@ -569,7 +569,7 @@
             {% if request.GET.central_filial or request.GET.central or '/gestao/central/' in request.path or '/gestao/empresas/' in request.path or '/gestao/filiais/' in request.path %}
               Selecionar empresa
             {% else %}
-              {{ filial_ativa.nome_fantasia|default:filial_ativa.razao_social|default:filial_ativa }}
+              {% firstof filial_ativa.nome_fantasia filial_ativa.razao_social filial_ativa '' %}
             {% endif %}
           </span>
           <svg class="w-3 h-3 hidden sm:block shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -612,7 +612,7 @@
             :style="temaClaro
               ? 'color:#fff; border:1px solid rgba(255,255,255,0.30); background:rgba(255,255,255,0.14); font-weight:600;'
               : 'color:#e5e7eb; border:1px solid rgba(59,130,246,0.18); background:rgba(37,99,235,0.08);'">
-        {{ filial_ativa.nome_fantasia|default:filial_ativa.razao_social|default:filial_ativa }}
+        {% firstof filial_ativa.nome_fantasia filial_ativa.razao_social filial_ativa '' %}
       </span>
     {% endif %}
     <a href="{% url 'core:dashboard' %}"
@@ -1479,6 +1479,23 @@
         if (!document.hidden) consultarNotificacoes();
       });
     });
+  </script>
+
+  {% comment %}
+    Service worker (PWA). Registrado de /sw.js -- e nao de /static/sw.js --
+    porque o navegador limita o escopo do worker ao diretorio de origem.
+    Ele so guarda estatico; pagina autenticada nunca vai pro cache (o
+    porque esta comentado no proprio sw.js).
+  {% endcomment %}
+  <script>
+    if ('serviceWorker' in navigator && location.protocol === 'https:') {
+      window.addEventListener('load', function() {
+        navigator.serviceWorker.register('/sw.js', { scope: '/' }).catch(function() {
+          // Falhar aqui nao pode atrapalhar o uso normal do sistema: sem
+          // service worker o app continua funcionando, so perde o cache.
+        });
+      });
+    }
   </script>
 </body>
 </html>

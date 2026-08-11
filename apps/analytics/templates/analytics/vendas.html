@@ -492,10 +492,12 @@ body.tema-claro .hv-page a, body.tema-claro .hv-page span { background:#eef2f7;b
 
               {# 2 — Enviar por e-mail (se autorizada) #}
               {% if doc and doc.status == 'autorizada' %}
-              {# firstof e nao `|default:venda.cliente.email`: argumento de filtro
-                 nao tolera falha de lookup, entao com cliente nulo (Consumidor
-                 Final) o `.email` derrubava a pagina inteira. firstof resolve
-                 com ignore_failures e cai na string vazia. #}
+              {% comment %}
+                firstof e nao `|default:venda.cliente.email`: argumento de filtro
+                nao tolera falha de lookup, entao com cliente nulo (Consumidor
+                Final) o `.email` derrubava a pagina inteira. firstof resolve
+                com ignore_failures e cai na string vazia.
+              {% endcomment %}
               {% firstof venda.cliente.email_nfe venda.cliente.email '' as email_cliente %}
               <button class="hv-ab hv-ab-blue"
                       onclick="hvApp_instance.abrirEmail({{ venda.pk }}, '{{ venda.numero_venda|stringformat:'06d' }}', '{{ email_cliente|escapejs }}')"

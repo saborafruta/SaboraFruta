@@ -91,7 +91,8 @@
       <div class="flex items-center justify-between">
         <div class="dashboard-kpi-copy">
           <div class="text-xs font-medium uppercase tracking-widest mb-2" style="color:#888; letter-spacing:0.1em;">Filial</div>
-          <div class="dashboard-branch-name text-base font-semibold" :style="temaClaro ? 'color:#1a1a1a;' : 'color:#f0f0f0;'" title="{{ filial_ativa.nome_fantasia|default:filial_ativa.razao_social }}">{{ filial_ativa|filial_apelido }}</div>
+          {% firstof filial_ativa.nome_fantasia filial_ativa.razao_social '' as titulo_filial %}
+          <div class="dashboard-branch-name text-base font-semibold" :style="temaClaro ? 'color:#1a1a1a;' : 'color:#f0f0f0;'" title="{{ titulo_filial }}">{{ filial_ativa|filial_apelido }}</div>
           <div class="text-xs mt-0.5" style="color:#888;">{{ filial_ativa.cidade }}/{{ filial_ativa.uf }} - {{ filial_ativa.is_matriz|yesno:"Matriz,Filial" }}</div>
         </div>
         <div class="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0" style="background:rgba(16,185,129,0.10);">
