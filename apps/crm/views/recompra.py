@@ -174,16 +174,27 @@ class AlertasRecompraView(PermissaoRequiredMixin, View):
             for i, alvo in enumerate(alvos)
         ]
 
-        # Ordenado por tempo sem comprar (quem comprou ha mais tempo primeiro),
-        # e nao pelo score do qs. A ordenacao precisa ser aqui no banco, e nao
-        # numa ordenacao da lista depois: o corte de 100 abaixo pegaria os 100
-        # de maior score e so entao ordenaria, escondendo justamente quem esta
-        # ha mais tempo sem comprar caso a faixa passe de 100 clientes.
-        # `ultima_compra` crescente == mais tempo sem comprar primeiro, ja que
-        # `dias_desde_ultima_compra` e' hoje - ultima_compra.
+        # Ordenado por atraso: quem esta ha mais tempo sem comprar EM RELACAO
+        # AO PROPRIO CICLO vem primeiro. `dias_restantes` ja e' negativo para
+        # quem passou da data prevista, entao crescente poe o mais atrasado no
+        # topo, depois quem vence hoje (0), depois os futuros.
+        #
+        # Ordenar pela data da ultima compra nao serve: dois clientes que
+        # compraram no mesmo dia podem estar em situacoes opostas se compram
+        # em ritmos diferentes -- um de ciclo curto ja esta atrasado enquanto
+        # o de ciclo longo ainda nem venceu.
+        #
+        # A ordenacao precisa ser no banco, e nao numa ordenacao da lista
+        # depois: o corte de 100 abaixo pegaria os 100 de maior score e so
+        # entao ordenaria, escondendo os mais atrasados numa faixa com mais
+        # de 100 clientes.
         com_padrao = (
             qs.exclude(frequencia=RecompraCliente.Frequencia.SEM_PADRAO)
-              .order_by(F('ultima_compra').asc(nulls_last=True), '-score')
+              .order_by(
+                  F('dias_restantes').asc(nulls_last=True),
+                  F('ultima_compra').asc(nulls_last=True),
+                  '-score',
+              )
         )
         for r in com_padrao:
             media = float(r.media_intervalo_dias or 0)
