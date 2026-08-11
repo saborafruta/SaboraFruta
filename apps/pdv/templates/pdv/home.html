@@ -3749,12 +3749,12 @@ function pdv() {
 <style>
   * { margin:0; padding:0; box-sizing:border-box; }
   html, body { width:100%; }
-  body { font-family: ${a4 ? "Arial, Helvetica, sans-serif" : "'Courier New', monospace"}; font-size:${a4 ? '12px' : '12px'}; color:#000; background:#fff; display:flex; justify-content:center; }
-  /* Termica: 80mm e' a largura FISICA da bobina, mas a cabeca de impressao
-     so alcanca ~72mm. Ocupar os 80mm fazia a primeira coluna sair cortada
-     ("QTD" virava "TD"). 72mm centrado deixa ~4mm de folga de cada lado,
-     que e' justamente a parte que a impressora nao alcanca. */
-  .ticket { width:${a4 ? '120mm' : '72mm'}; padding:${a4 ? '6mm 8mm' : '8px 0'}; }
+  body { font-family: ${a4 ? "Arial, Helvetica, sans-serif" : "'Courier New', monospace"}; font-size:${a4 ? '12px' : '12px'}; color:#000; background:#fff; display:flex; justify-content:${a4 ? 'center' : 'flex-start'}; }
+  /* Termica encostada a esquerda (A4 continua centralizado).
+     A margem de 3mm nao e' estetica: 80mm e' a largura FISICA da bobina,
+     mas a cabeca de impressao so alcanca ~72mm. Coladinho no zero, a
+     primeira coluna saia cortada ("QTD" virava "TD"). */
+  .ticket { width:${a4 ? '120mm' : '72mm'}; padding:${a4 ? '6mm 8mm' : '8px 0'}; margin-left:${a4 ? '0' : '3mm'}; }
   h1 { font-size:${a4 ? '17px' : '15px'}; font-weight:800; text-align:center; margin-bottom:2px; }
   .sub { font-size:${a4 ? '11px' : '11px'}; line-height:1.35; text-align:center; color:#000; font-weight:700; margin-bottom:5px; overflow-wrap:anywhere; }
   .sep { border:none; border-top:1px dashed #000; margin:8px 0; }
@@ -4181,8 +4181,8 @@ ${pgtoHtml ? `<hr class="sep">${pgtoHtml}` : ''}
      80mm, senao a coluna da esquerda sai cortada. Sem o @page abaixo o
      navegador usava o tamanho padrao do driver (A4) e o cupom saia como
      uma tira estreita no canto de uma folha inteira. */
-  body { font-family: 'Courier New', monospace; font-size:12px; color:#000; background:#fff; display:flex; justify-content:center; }
-  .ticket { width:72mm; padding:8px 0; }
+  body { font-family: 'Courier New', monospace; font-size:12px; color:#000; background:#fff; display:flex; justify-content:flex-start; }
+  .ticket { width:72mm; padding:8px 0; margin-left:3mm; }
   h1 { font-size:15px; font-weight:800; text-align:center; margin-bottom:2px; }
   .sub { font-size:11px; line-height:1.35; text-align:center; color:#000; font-weight:700; margin-bottom:5px; overflow-wrap:anywhere; }
   .sep { border:none; border-top:1px dashed #000; margin:8px 0; }
