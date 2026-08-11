@@ -57,7 +57,8 @@
   <div>
     <h1>Relatório de Vendas</h1>
     <div class="empresa">
-      <strong>{{ filial_ativa.nome_fantasia|default:filial_ativa.razao_social }}</strong><br>
+      {% firstof filial_ativa.nome_fantasia filial_ativa.razao_social '' as nome_filial_topo %}
+      <strong>{{ nome_filial_topo }}</strong><br>
       {% if filial_ativa.cnpj %}CNPJ: {{ filial_ativa.cnpj }}<br>{% endif %}
       {% if filial_ativa.endereco %}{{ filial_ativa.endereco }}{% if filial_ativa.numero %}, {{ filial_ativa.numero }}{% endif %}{% if filial_ativa.bairro %} — {{ filial_ativa.bairro }}{% endif %}<br>{% endif %}
       {% if filial_ativa.cidade %}{{ filial_ativa.cidade }}{% if filial_ativa.uf %}/{{ filial_ativa.uf }}{% endif %}{% endif %}
@@ -139,7 +140,8 @@
         {% if v.status == 'cancelada' %}
           <span class="cancelada">Cancelada</span>
         {% elif v.documento_fiscal and v.documento_fiscal.status == 'autorizada' %}
-          {{ v.documento_fiscal.get_tipo_documento_display|default:v.documento_fiscal.tipo_documento|upper }} autorizada
+          {% firstof v.documento_fiscal.get_tipo_documento_display v.documento_fiscal.tipo_documento '' as tipo_doc %}
+          {{ tipo_doc|upper }} autorizada
         {% else %}
           Sem documento fiscal
         {% endif %}
@@ -161,7 +163,8 @@
 </table>
 
 <div class="rodape">
-  {{ filial_ativa.nome_fantasia|default:filial_ativa.razao_social }} · Relatório gerado pelo ERP iNoovaTed
+  {% firstof filial_ativa.nome_fantasia filial_ativa.razao_social '' as nome_filial_rodape %}
+  {{ nome_filial_rodape }} · Relatório gerado pelo ERP iNoovaTed
 </div>
 
 </body>
