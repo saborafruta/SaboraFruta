@@ -5,7 +5,8 @@ import logging
 from django.contrib import messages
 from django.core.paginator import Paginator
 from django.db import transaction
-from django.db.models import IntegerField, OuterRef, Q, Subquery
+from django.db.models import Case, CharField, IntegerField, OuterRef, Q, Subquery, When
+from django.db.models.functions import Lower
 from django.http import HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse_lazy
@@ -43,6 +44,14 @@ def _cliente_queryset_filtrado(request, incluir_inativos_por_padrao=False):
     ).order_by('pk').values('pk')[:1]
     qs = Cliente.objects.for_filial(request.filial_ativa).annotate(
         codigo_global=Subquery(codigo_global, output_field=IntegerField()),
+        nome_ordenacao=Lower(
+            Case(
+                When(nome_fantasia='', then='razao_social'),
+                When(nome_fantasia__isnull=True, then='razao_social'),
+                default='nome_fantasia',
+                output_field=CharField(),
+            )
+        ),
     )
     if not mostrar_inativos:
         qs = qs.filter(ativo=True)
@@ -79,14 +88,14 @@ def _cliente_queryset_filtrado(request, incluir_inativos_por_padrao=False):
         qs = qs.filter(created_at__date__lte=data_fim_valida)
 
     ordenacoes = {
-        'id': 'codigo_global',
-        'id_desc': '-codigo_global',
-        'az': 'razao_social',
-        'za': '-razao_social',
-        'criado_desc': '-created_at',
-        'criado_asc': 'created_at',
+        'id': ('codigo_global',),
+        'id_desc': ('-codigo_global',),
+        'az': ('nome_ordenacao', 'codigo_global'),
+        'za': ('-nome_ordenacao', 'codigo_global'),
+        'criado_desc': ('-created_at', 'codigo_global'),
+        'criado_asc': ('created_at', 'codigo_global'),
     }
-    return qs.order_by(ordenacoes.get(ordem, 'id'))
+    return qs.order_by(*ordenacoes.get(ordem, ordenacoes['id']))
 
 
 def _inativos_na_busca(request):
