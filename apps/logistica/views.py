@@ -1124,6 +1124,19 @@ class PedidoExpedicaoDeleteView(PermissaoRequiredMixin, View):
             )
             return redirect("logistica:pedido-expedicao-list")
 
+        # Fecha o caminho "cancela e depois exclui", que devolveria a
+        # exclusao a um pedido ja expedido. `data_expedicao` e' preenchida a
+        # mao no formulario, entao nao pega quem expediu sem registrar a
+        # data -- mas nesse caso tambem nao ha registro de saida a proteger.
+        if pedido.data_expedicao:
+            messages.error(
+                request,
+                f"Pedido #{pedido.numero:06d} tem saída registrada em "
+                f"{pedido.data_expedicao:%d/%m/%Y} e não pode ser excluído. "
+                f"Ele permanece na lista como cancelado.",
+            )
+            return redirect("logistica:pedido-expedicao-list")
+
         numero = pedido.numero
         # Avisa que a exclusao mexeu num romaneio ja montado -- sem isso o
         # pedido simplesmente sumiria da carga sem ninguem perceber.
@@ -1138,6 +1151,56 @@ class PedidoExpedicaoDeleteView(PermissaoRequiredMixin, View):
             )
         else:
             messages.success(request, f"Pedido #{numero:06d} excluído.")
+        return redirect("logistica:pedido-expedicao-list")
+
+
+class PedidoExpedicaoCancelarView(PermissaoRequiredMixin, View):
+    """Encerra o pedido sem apagar o histórico — a alternativa à exclusão."""
+
+    permissao_modulo = "logistica"
+    permissao_acao = "cancelar"
+
+    def post(self, request, pk):
+        pedido = get_object_or_404(
+            PedidoExpedicao.objects.for_filial(_filial(request)), pk=pk
+        )
+
+        if pedido.status == PedidoExpedicao.Status.CANCELADO:
+            messages.info(request, f"Pedido #{pedido.numero:06d} já estava cancelado.")
+            return redirect("logistica:pedido-expedicao-list")
+
+        motivo = (request.POST.get("motivo") or "").strip()
+        campos = ["status", "updated_at"]
+
+        pedido.status = PedidoExpedicao.Status.CANCELADO
+
+        # Pedido cancelado nao pode continuar numa carga: senao alguem
+        # separaria e embarcaria mercadoria de um pedido encerrado.
+        romaneio = pedido.romaneio
+        if romaneio:
+            pedido.romaneio = None
+            campos.append("romaneio")
+
+        # O motivo vai para a observacao porque o model nao tem campo
+        # proprio de cancelamento -- e' o registro de quem/quando/por que,
+        # que e' justamente o que se perde numa exclusao.
+        if motivo:
+            carimbo = (
+                f"[Cancelado em {timezone.localtime():%d/%m/%Y %H:%M} "
+                f"por {request.user.nome or request.user.email}] {motivo}"
+            )
+            pedido.observacao = f"{pedido.observacao}\n{carimbo}".strip()
+            campos.append("observacao")
+
+        pedido.save(update_fields=campos)
+
+        if romaneio:
+            messages.success(
+                request,
+                f"Pedido #{pedido.numero:06d} cancelado e retirado do {romaneio}.",
+            )
+        else:
+            messages.success(request, f"Pedido #{pedido.numero:06d} cancelado.")
         return redirect("logistica:pedido-expedicao-list")
 
 

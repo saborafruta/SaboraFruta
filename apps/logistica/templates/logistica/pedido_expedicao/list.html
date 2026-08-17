@@ -13,7 +13,7 @@
 </style>
 {% endblock %}
 {% block content %}
-<div class="space-y-5" x-data="{ excluir: null }">
+<div class="space-y-5" x-data="{ excluir: null, cancelar: null }">
 
   <!-- Cabeçalho -->
   <div class="flex flex-wrap items-start justify-between gap-3">
@@ -151,11 +151,24 @@
                 </svg>
               </a>
               {% comment %}
+                Cancelar aparece justamente onde excluir nao aparece -- e'
+                a saida para encerrar um pedido ja expedido sem apagar o
+                historico. Some so quando ja esta cancelado.
+              {% endcomment %}
+              {% if p.status != 'cancelado' %}
+                <button type="button" title="Cancelar pedido" class="oms-acao" style="color:#fbbf24;"
+                        @click="cancelar = { url: '{% url 'logistica:pedido-expedicao-cancelar' p.pk %}', numero: '#{{ p.numero|stringformat:"06d" }}', cliente: '{{ p.cliente.nome_fantasia|default:p.cliente.razao_social|escapejs }}' }">
+                  <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M18.364 5.636A9 9 0 105.636 18.364 9 9 0 0018.364 5.636zM5.636 5.636l12.728 12.728"/>
+                  </svg>
+                </button>
+              {% endif %}
+              {% comment %}
                 Expedido/entregue nao aparece com botao de excluir: a view
                 recusa esses status, entao mostrar o botao so levaria a um
                 clique que termina em mensagem de erro.
               {% endcomment %}
-              {% if p.status != 'expedido' and p.status != 'entregue' %}
+              {% if p.status != 'expedido' and p.status != 'entregue' and not p.data_expedicao %}
                 <button type="button" title="Excluir pedido" class="oms-acao" style="color:#f87171;"
                         @click="excluir = { url: '{% url 'logistica:pedido-expedicao-delete' p.pk %}', numero: '#{{ p.numero|stringformat:"06d" }}', cliente: '{{ p.cliente.nome_fantasia|default:p.cliente.razao_social|escapejs }}', itens: {{ p.qtd_itens|default:0 }} }">
                   <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -213,7 +226,15 @@
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/>
         </svg>
       </a>
-      {% if p.status != 'expedido' and p.status != 'entregue' %}
+      {% if p.status != 'cancelado' %}
+        <button type="button" class="oms-acao" title="Cancelar" style="color:#fbbf24;"
+                @click="cancelar = { url: '{% url 'logistica:pedido-expedicao-cancelar' p.pk %}', numero: '#{{ p.numero|stringformat:"06d" }}', cliente: '{{ p.cliente.nome_fantasia|default:p.cliente.razao_social|escapejs }}' }">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M18.364 5.636A9 9 0 105.636 18.364 9 9 0 0018.364 5.636zM5.636 5.636l12.728 12.728"/>
+          </svg>
+        </button>
+      {% endif %}
+      {% if p.status != 'expedido' and p.status != 'entregue' and not p.data_expedicao %}
         <button type="button" class="oms-acao" title="Excluir" style="color:#f87171;"
                 @click="excluir = { url: '{% url 'logistica:pedido-expedicao-delete' p.pk %}', numero: '#{{ p.numero|stringformat:"06d" }}', cliente: '{{ p.cliente.nome_fantasia|default:p.cliente.razao_social|escapejs }}', itens: {{ p.qtd_itens|default:0 }} }">
           <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -243,6 +264,50 @@
     {% endif %}
   </div>
   {% endif %}
+
+  {% comment %}
+    Cancelar: encerra sem apagar. O motivo e' opcional mas vai carimbado na
+    observacao com quem e quando -- e' esse rastro que justifica preferir o
+    cancelamento a exclusao num pedido que ja rodou.
+  {% endcomment %}
+  <div x-show="cancelar" x-cloak @keydown.escape.window="cancelar = null"
+       class="fixed inset-0 z-50 flex items-center justify-center p-4"
+       style="background:rgba(0,0,0,.6);" @click.self="cancelar = null">
+    <form method="post" :action="cancelar?.url" class="card p-6 w-full max-w-md space-y-4">
+      {% csrf_token %}
+      <div class="flex items-start gap-3">
+        <div class="shrink-0 w-10 h-10 rounded-full flex items-center justify-center"
+             style="background:rgba(251,191,36,.14); color:#fbbf24;">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M18.364 5.636A9 9 0 105.636 18.364 9 9 0 0018.364 5.636zM5.636 5.636l12.728 12.728"/>
+          </svg>
+        </div>
+        <div class="min-w-0">
+          <h3 class="text-base font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
+            Cancelar pedido <span x-text="cancelar?.numero"></span>?
+          </h3>
+          <p class="text-sm mt-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+            Cliente: <strong x-text="cancelar?.cliente"></strong>.
+            O pedido continua na lista com status Cancelado — nada é apagado.
+            Se estiver num romaneio, sai da carga.
+          </p>
+        </div>
+      </div>
+      <div>
+        <label class="block text-sm font-medium mb-1.5" :style="temaClaro ? 'color:#374151;' : 'color:#d1d5db;'">
+          Motivo (opcional)
+        </label>
+        <textarea name="motivo" rows="2" class="form-input w-full"
+                  placeholder="Ex.: cliente desistiu da compra"></textarea>
+      </div>
+      <div class="flex justify-end gap-2">
+        <button type="button" class="btn-secondary text-sm" @click="cancelar = null">Voltar</button>
+        <button type="submit" class="btn-primary text-sm" style="background:#d97706; border-color:#d97706;">
+          Cancelar pedido
+        </button>
+      </div>
+    </form>
+  </div>
 
   {% comment %}
     Modal em vez de confirm() do navegador: exclusao aqui apaga tambem os
