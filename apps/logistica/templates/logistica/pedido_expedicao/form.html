@@ -182,18 +182,31 @@
 <script>
 const clientesData = JSON.parse(document.getElementById('clientes-data').textContent || '[]');
 
+// Busca por nome ignorando acento: quem procura "jose" tem que achar
+// "JOSÉ", e quem digita "AÇAI" tem que achar "ACAI".
+function semAcento(texto) {
+  return (texto || '')
+    .normalize('NFD').replace(/[̀-ͯ]/g, '')
+    .toLowerCase().trim();
+}
+
 function combobox(fieldName, items, initialId) {
   const initial = initialId ? items.find(i => i.id == initialId) : null;
   return {
     items, query: initial ? (initial.nome_fantasia || initial.razao_social) : '',
     selectedId: initial ? initial.id : null, open: false, highlighted: -1,
     get filtered() {
-      const q = this.query.trim().toLowerCase();
+      const q = semAcento(this.query);
       if (!q) return this.items.slice(0, 40);
+      // So compara documento quando o que foi digitado tem digito. Sem esse
+      // guarda, digitar um nome deixava a busca de CPF/CNPJ com string
+      // vazia -- e `''.includes('')` e' true em JS, entao TODO cliente
+      // passava no filtro e a lista vinha inteira.
+      const qDigitos = q.replace(/\D/g, '');
       return this.items.filter(i =>
-        (i.razao_social||'').toLowerCase().includes(q) ||
-        (i.nome_fantasia||'').toLowerCase().includes(q) ||
-        (i.cpf_cnpj||'').replace(/\D/g,'').includes(q.replace(/\D/g,''))
+        semAcento(i.razao_social).includes(q) ||
+        semAcento(i.nome_fantasia).includes(q) ||
+        (qDigitos !== '' && (i.cpf_cnpj||'').replace(/\D/g,'').includes(qDigitos))
       ).slice(0, 40);
     },
     select(item) { this.selectedId = item.id; this.query = item.nome_fantasia || item.razao_social; this.open = false; this.highlighted = -1; },

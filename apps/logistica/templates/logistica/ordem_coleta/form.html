@@ -297,6 +297,13 @@
 const clientesData    = JSON.parse(document.getElementById('clientes-data').textContent    || '[]');
 const fornecedoresData = JSON.parse(document.getElementById('fornecedores-data').textContent || '[]');
 
+// Busca por nome ignorando acento: quem digita "jose" tem que achar "JOSÉ".
+function semAcentoOC(texto) {
+  return (texto || '')
+    .normalize('NFD').replace(/[̀-ͯ]/g, '')
+    .toLowerCase().trim();
+}
+
 // ── Combobox genérico (cliente / fornecedor) ──────────────────────────────────
 function combobox(fieldName, items, initialId) {
   // Encontra o item selecionado para pré-preencher o texto
@@ -310,12 +317,15 @@ function combobox(fieldName, items, initialId) {
     highlighted: -1,
 
     get filtered() {
-      const q = this.query.trim().toLowerCase();
-      if (!q || q.length < 1) return this.items.slice(0, 40);
+      const q = semAcentoOC(this.query);
+      if (!q) return this.items.slice(0, 40);
+      // Sem este guarda, digitar um nome zerava o termo de documento e
+      // `''.includes('')` (true em JS) fazia todo cliente passar no filtro.
+      const qDigitos = q.replace(/\D/g, '');
       return this.items.filter(i =>
-        (i.razao_social  || '').toLowerCase().includes(q) ||
-        (i.nome_fantasia || '').toLowerCase().includes(q) ||
-        (i.cpf_cnpj      || '').replace(/\D/g,'').includes(q.replace(/\D/g,''))
+        semAcentoOC(i.razao_social).includes(q) ||
+        semAcentoOC(i.nome_fantasia).includes(q) ||
+        (qDigitos !== '' && (i.cpf_cnpj || '').replace(/\D/g,'').includes(qDigitos))
       ).slice(0, 40);
     },
 
