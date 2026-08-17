@@ -40,6 +40,7 @@ urlpatterns = [
     path("pedidos/novo/", views.PedidoExpedicaoCreateView.as_view(), name="pedido-expedicao-create"),
     path("pedidos/<int:pk>/", views.PedidoExpedicaoDetailView.as_view(), name="pedido-expedicao-detail"),
     path("pedidos/<int:pk>/editar/", views.PedidoExpedicaoUpdateView.as_view(), name="pedido-expedicao-update"),
+    path("pedidos/<int:pk>/excluir/", views.PedidoExpedicaoDeleteView.as_view(), name="pedido-expedicao-delete"),
     path("pedidos/<int:pk>/itens/novo/", views.ItemPedidoExpedicaoCreateView.as_view(), name="pedido-expedicao-item-create"),
     path("pedidos/<int:pk>/itens/<int:item_pk>/remover/", views.ItemPedidoExpedicaoDeleteView.as_view(), name="pedido-expedicao-item-delete"),
     path("pedidos/<int:pk>/itens/<int:item_pk>/toggle-status/", views.ItemPedidoExpedicaoToggleStatusView.as_view(), name="pedido-expedicao-item-toggle"),

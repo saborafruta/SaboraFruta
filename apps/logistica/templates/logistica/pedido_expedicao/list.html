@@ -1,8 +1,19 @@
 {% extends "_base.html" %}
 {% block title %}Pedidos de Expedição{% endblock %}
 {% block page_title %}Pedidos de Expedição{% endblock %}
+
+{% block extra_head %}
+<style>
+  /* Alvo de clique maior que o icone: os links de texto "Ver Editar"
+     tinham area minuscula e ficavam colados um no outro. */
+  .oms-acao { display:inline-flex; align-items:center; justify-content:center;
+              width:32px; height:32px; border-radius:8px; border:none;
+              background:transparent; cursor:pointer; transition:background .15s; }
+  .oms-acao:hover { background:rgba(148,163,184,.16); }
+</style>
+{% endblock %}
 {% block content %}
-<div class="space-y-5">
+<div class="space-y-5" x-data="{ excluir: null }">
 
   <!-- Cabeçalho -->
   <div class="flex flex-wrap items-start justify-between gap-3">
@@ -18,24 +29,31 @@
     </a>
   </div>
 
-  <!-- KPIs -->
+  {% comment %}
+    KPIs viraram atalhos de filtro: o numero sozinho so informava, e o
+    caminho natural depois de ler "3 em separacao" e' querer ver quais sao.
+  {% endcomment %}
   <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
-    <div class="card p-4">
+    <a href="{% url 'logistica:pedido-expedicao-list' %}" class="card p-4 block transition-transform hover:-translate-y-0.5"
+       :style="'{{ status_filtro }}' === '' ? 'border-color:#3b82f6;' : ''">
       <p class="text-xs font-semibold uppercase tracking-wide mb-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Total</p>
       <p class="text-2xl font-bold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">{{ kpis.total|default:0 }}</p>
-    </div>
-    <div class="card p-4">
+    </a>
+    <a href="?status=aberto" class="card p-4 block transition-transform hover:-translate-y-0.5"
+       :style="'{{ status_filtro }}' === 'aberto' ? 'border-color:#3b82f6;' : ''">
       <p class="text-xs font-semibold uppercase tracking-wide mb-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Abertos</p>
       <p class="text-2xl font-bold" style="color:#3b82f6;">{{ kpis.abertos|default:0 }}</p>
-    </div>
-    <div class="card p-4">
+    </a>
+    <a href="?status=em_separacao" class="card p-4 block transition-transform hover:-translate-y-0.5"
+       :style="'{{ status_filtro }}' === 'em_separacao' ? 'border-color:#a855f7;' : ''">
       <p class="text-xs font-semibold uppercase tracking-wide mb-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Em Separação</p>
       <p class="text-2xl font-bold" style="color:#a855f7;">{{ kpis.em_separacao|default:0 }}</p>
-    </div>
-    <div class="card p-4">
+    </a>
+    <a href="?status=expedido" class="card p-4 block transition-transform hover:-translate-y-0.5"
+       :style="'{{ status_filtro }}' === 'expedido' ? 'border-color:#22c55e;' : ''">
       <p class="text-xs font-semibold uppercase tracking-wide mb-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Expedidos</p>
       <p class="text-2xl font-bold" style="color:#22c55e;">{{ kpis.expedidos|default:0 }}</p>
-    </div>
+    </a>
   </div>
 
   <!-- Filtros -->
@@ -118,11 +136,33 @@
             R$ {{ p.valor_total|floatformat:2 }}
           </td>
           <td class="px-4 py-3">
-            <div class="flex items-center gap-2">
-              <a href="{% url 'logistica:pedido-expedicao-detail' p.pk %}"
-                 class="text-xs font-semibold" :style="temaClaro ? 'color:#2563eb;' : 'color:#60a5fa;'">Ver</a>
-              <a href="{% url 'logistica:pedido-expedicao-update' p.pk %}"
-                 class="text-xs font-semibold" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Editar</a>
+            <div class="flex items-center gap-1">
+              <a href="{% url 'logistica:pedido-expedicao-detail' p.pk %}" title="Ver pedido"
+                 class="oms-acao" :style="temaClaro ? 'color:#2563eb;' : 'color:#60a5fa;'">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M2.5 12S5.5 5.5 12 5.5 21.5 12 21.5 12 18.5 18.5 12 18.5 2.5 12 2.5 12z"/>
+                </svg>
+              </a>
+              <a href="{% url 'logistica:pedido-expedicao-update' p.pk %}" title="Editar pedido"
+                 class="oms-acao" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/>
+                </svg>
+              </a>
+              {% comment %}
+                Expedido/entregue nao aparece com botao de excluir: a view
+                recusa esses status, entao mostrar o botao so levaria a um
+                clique que termina em mensagem de erro.
+              {% endcomment %}
+              {% if p.status != 'expedido' and p.status != 'entregue' %}
+                <button type="button" title="Excluir pedido" class="oms-acao" style="color:#f87171;"
+                        @click="excluir = { url: '{% url 'logistica:pedido-expedicao-delete' p.pk %}', numero: '#{{ p.numero|stringformat:"06d" }}', cliente: '{{ p.cliente.nome_fantasia|default:p.cliente.razao_social|escapejs }}', itens: {{ p.qtd_itens|default:0 }} }">
+                  <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
+                  </svg>
+                </button>
+              {% endif %}
             </div>
           </td>
         </tr>
@@ -162,6 +202,26 @@
       </div>
       <p class="text-sm font-semibold mt-2" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">R$ {{ p.valor_total|floatformat:2 }}</p>
     </a>
+    {% comment %}
+      Acoes fora do <a> do card: aninhar link/botao dentro de link e' HTML
+      invalido e o toque acabaria abrindo o detalhe em vez de excluir.
+    {% endcomment %}
+    <div class="flex items-center justify-end gap-1 -mt-2 px-2 pb-1">
+      <a href="{% url 'logistica:pedido-expedicao-update' p.pk %}" class="oms-acao"
+         title="Editar" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/>
+        </svg>
+      </a>
+      {% if p.status != 'expedido' and p.status != 'entregue' %}
+        <button type="button" class="oms-acao" title="Excluir" style="color:#f87171;"
+                @click="excluir = { url: '{% url 'logistica:pedido-expedicao-delete' p.pk %}', numero: '#{{ p.numero|stringformat:"06d" }}', cliente: '{{ p.cliente.nome_fantasia|default:p.cliente.razao_social|escapejs }}', itens: {{ p.qtd_itens|default:0 }} }">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
+          </svg>
+        </button>
+      {% endif %}
+    </div>
     {% empty %}
     <div class="card p-8 text-center text-sm" :style="temaClaro ? 'color:#94a3b8;' : 'color:#64748b;'">
       Nenhum pedido encontrado.
@@ -183,6 +243,47 @@
     {% endif %}
   </div>
   {% endif %}
+
+  {% comment %}
+    Modal em vez de confirm() do navegador: exclusao aqui apaga tambem os
+    itens do pedido (FK em cascata), entao vale mostrar numero, cliente e
+    quantos itens vao junto antes de confirmar.
+  {% endcomment %}
+  <div x-show="excluir" x-cloak @keydown.escape.window="excluir = null"
+       class="fixed inset-0 z-50 flex items-center justify-center p-4"
+       style="background:rgba(0,0,0,.6);" @click.self="excluir = null">
+    <div class="card p-6 w-full max-w-md space-y-4">
+      <div class="flex items-start gap-3">
+        <div class="shrink-0 w-10 h-10 rounded-full flex items-center justify-center"
+             style="background:rgba(248,113,113,.14); color:#f87171;">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M12 9v4m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/>
+          </svg>
+        </div>
+        <div class="min-w-0">
+          <h3 class="text-base font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
+            Excluir pedido <span x-text="excluir?.numero"></span>?
+          </h3>
+          <p class="text-sm mt-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+            Cliente: <strong x-text="excluir?.cliente"></strong>.
+            <template x-if="excluir?.itens > 0">
+              <span>Os <strong x-text="excluir.itens"></strong> iten(s) do pedido são apagados junto.</span>
+            </template>
+            Esta ação não pode ser desfeita.
+          </p>
+        </div>
+      </div>
+      <div class="flex justify-end gap-2">
+        <button type="button" class="btn-secondary text-sm" @click="excluir = null">Cancelar</button>
+        <form method="post" :action="excluir?.url">
+          {% csrf_token %}
+          <button type="submit" class="btn-primary text-sm" style="background:#dc2626; border-color:#dc2626;">
+            Excluir pedido
+          </button>
+        </form>
+      </div>
+    </div>
+  </div>
 
 </div>
 {% endblock %}

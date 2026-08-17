@@ -1097,6 +1097,50 @@ class PedidoExpedicaoUpdateView(PermissaoRequiredMixin, View):
         })
 
 
+class PedidoExpedicaoDeleteView(PermissaoRequiredMixin, View):
+    """Exclui um pedido de expedição. Os itens vão junto (FK em cascata)."""
+
+    permissao_modulo = "logistica"
+    permissao_acao = "excluir"
+
+    # Depois de expedido o pedido virou historico de operacao: o que saiu,
+    # quando e para quem. Apagar isso deixaria o registro da entrega sem
+    # origem, entao a saida aqui e' cancelar, nao excluir.
+    STATUS_BLOQUEADOS = (
+        PedidoExpedicao.Status.EXPEDIDO,
+        PedidoExpedicao.Status.ENTREGUE,
+    )
+
+    def post(self, request, pk):
+        pedido = get_object_or_404(
+            PedidoExpedicao.objects.for_filial(_filial(request)), pk=pk
+        )
+
+        if pedido.status in self.STATUS_BLOQUEADOS:
+            messages.error(
+                request,
+                f"Pedido #{pedido.numero:06d} já foi {pedido.get_status_display().lower()} "
+                f"e não pode ser excluído. Use o cancelamento para encerrá-lo sem perder o histórico.",
+            )
+            return redirect("logistica:pedido-expedicao-list")
+
+        numero = pedido.numero
+        # Avisa que a exclusao mexeu num romaneio ja montado -- sem isso o
+        # pedido simplesmente sumiria da carga sem ninguem perceber.
+        romaneio = pedido.romaneio
+        pedido.delete()
+
+        if romaneio:
+            messages.success(
+                request,
+                f"Pedido #{numero:06d} excluído. Ele saiu do romaneio {romaneio}, "
+                f"que agora tem uma carga a menos.",
+            )
+        else:
+            messages.success(request, f"Pedido #{numero:06d} excluído.")
+        return redirect("logistica:pedido-expedicao-list")
+
+
 class PedidoExpedicaoDetailView(PermissaoRequiredMixin, View):
     permissao_modulo = "logistica"
     template_name = "logistica/pedido_expedicao/detail.html"
