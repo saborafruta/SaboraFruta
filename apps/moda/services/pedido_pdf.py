@@ -92,6 +92,59 @@ def _imagem(campo, largura, altura):
         return None
 
 
+def whatsapp_numero(pedido) -> str:
+    """
+    Número do cliente em formato aceito pelo wa.me: só dígitos, com DDI.
+
+    O 55 é acrescentado quando o cadastro tem só DDD + número, que é como
+    quase todo telefone brasileiro é digitado. Número que já vem com DDI
+    (13 dígitos) passa intacto — reescrevê-lo transformaria um celular certo
+    num errado.
+    """
+    bruto = (
+        getattr(pedido, 'contato_telefone', '')
+        or getattr(pedido.cliente, 'celular', '')
+        or getattr(pedido.cliente, 'telefone', '')
+        or ''
+    )
+    digitos = ''.join(c for c in bruto if c.isdigit())
+    if not digitos:
+        return ''
+    if len(digitos) in (10, 11):
+        return f'55{digitos}'
+    return digitos
+
+
+def mensagem_whatsapp(pedido, link: str) -> str:
+    """
+    A mensagem padrão da especificação, com o link do PDF no lugar do anexo.
+
+    O texto original dizia "em anexo". O wa.me — que é o que abre o WhatsApp
+    a partir do navegador — só carrega TEXTO: não existe forma de anexar
+    arquivo por link. Prometer anexo e mandar só texto faria o cliente
+    procurar um arquivo que não chegou, então a frase virou o link. Anexar
+    de verdade continua possível pelo botão de baixar, arrastando o arquivo
+    na conversa.
+    """
+    entrega = (
+        f'{pedido.data_prevista_entrega:%d/%m/%Y}'
+        if pedido.data_prevista_entrega else 'a combinar'
+    )
+    cliente = (
+        getattr(pedido.cliente, 'nome_fantasia', '')
+        or getattr(pedido.cliente, 'razao_social', '')
+        or 'cliente'
+    )
+    return (
+        f'Olá, {cliente}!\n\n'
+        f'Seu pedido #{pedido.numero:06d} foi finalizado.\n\n'
+        f'Segue o PDF com todos os detalhes do pedido para sua conferência:\n'
+        f'{link}\n\n'
+        f'Prazo de entrega: {entrega}.\n\n'
+        f'Obrigado!'
+    )
+
+
 class PedidoPdfService:
 
     @classmethod

@@ -10,6 +10,7 @@ Este arquivo cobre o cabeçalho do pedido. Os itens (produto × grade com
 quantidade por tamanho) e as etapas de produção entram na sequência,
 apontando para cá.
 """
+import secrets
 from decimal import Decimal
 
 from django.conf import settings
@@ -46,6 +47,13 @@ class PedidoProducao(FilialScopedModel):
         URGENTE = 'urgente', 'Urgente'
 
     numero = models.PositiveIntegerField(db_index=True)
+
+    # Token do link público do PDF — o que vai no WhatsApp do cliente.
+    # Opaco e longo de propósito: com o número sequencial na URL, trocar um
+    # dígito abriria o pedido do vizinho.
+    token_publico = models.CharField(
+        max_length=32, unique=True, editable=False, blank=True, db_index=True,
+    )
 
     cliente = models.ForeignKey(
         'cadastros.Cliente', on_delete=models.PROTECT,
@@ -126,6 +134,8 @@ class PedidoProducao(FilialScopedModel):
     def save(self, *args, **kwargs):
         if not self.numero:
             self.numero = self._proximo_numero()
+        if not self.token_publico:
+            self.token_publico = secrets.token_urlsafe(16)
         super().save(*args, **kwargs)
 
     def _proximo_numero(self) -> int:

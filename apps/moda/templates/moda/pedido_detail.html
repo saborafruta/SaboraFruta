@@ -9,6 +9,132 @@
 {% endcomment %}
 <div class="max-w-4xl mx-auto space-y-5" x-data="{ ampliada: null }">
 
+  {% comment %}
+    Painel de conclusão + envio por WhatsApp.
+
+    Aparece por querystring (`?finalizado=1`), não por campo no banco: é um
+    MOMENTO ("acabei de finalizar"), não um estado do pedido. Gravado,
+    ficaria reaparecendo em toda visita para sempre.
+  {% endcomment %}
+  {% if finalizado %}
+    {# A mensagem sai por `json_script` e não dentro do `x-data`: ela tem
+       aspas, quebras de linha e o link — interpolada no atributo, quebraria
+       o HTML na primeira aspa do nome do cliente. #}
+    {{ mensagem_whatsapp|json_script:"msg-wa" }}
+
+    <div class="card p-5" style="border-left:4px solid #059669;"
+         x-data="{
+           modal: false,
+           numero: '{{ whatsapp_numero }}',
+           mensagem: JSON.parse(document.getElementById('msg-wa').textContent),
+           enviar() {
+             const alvo = (this.numero || '').replace(/\D/g, '');
+             if (!alvo) { alert('Informe o número do WhatsApp.'); return; }
+             window.open('https://wa.me/' + alvo + '?text=' + encodeURIComponent(this.mensagem), '_blank');
+             this.modal = false;
+           }
+         }">
+
+      <div class="flex items-start gap-3">
+        <span class="text-2xl leading-none" style="color:#059669;">✓</span>
+        <div class="min-w-0">
+          <h3 class="text-lg font-bold" style="color:#059669;">PEDIDO FINALIZADO COM SUCESSO</h3>
+          <p class="text-sm mt-0.5" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+            Pedido #{{ pedido.numero|stringformat:"06d" }} · {{ pedido.cliente }}
+          </p>
+        </div>
+      </div>
+
+      <div class="flex flex-wrap gap-2 mt-4">
+        <a href="{% url 'moda:pedido-pdf' pedido.pk %}" target="_blank" rel="noopener"
+           class="btn-secondary text-sm">VISUALIZAR PDF</a>
+        {# `download` no link de baixar: a mesma rota serve inline e anexo, e
+           o navegador decide pelo atributo em vez de precisarmos de duas. #}
+        <a href="{% url 'moda:pedido-pdf' pedido.pk %}"
+           download="PED-{{ pedido.numero|stringformat:'06d' }}.pdf"
+           class="btn-secondary text-sm">BAIXAR PDF</a>
+        <button type="button" class="btn-primary text-sm" @click="modal = true"
+                style="background:#25D366; border-color:#25D366;">ENVIAR PELO WHATSAPP</button>
+        <form method="post" action="{% url 'moda:ordem-gerar' pedido.pk %}">
+          {% csrf_token %}
+          <button type="submit" class="btn-primary text-sm">GERAR ORDEM DE PRODUÇÃO</button>
+        </form>
+      </div>
+
+      {# ── Modal ──────────────────────────────────────────────────────── #}
+      <div x-show="modal" x-cloak @keydown.escape.window="modal = false"
+           class="fixed inset-0 z-50 flex items-center justify-center p-4"
+           style="background:rgba(0,0,0,.6);" @click.self="modal = false">
+        <div class="card p-5 w-full max-w-lg space-y-4" style="max-height:90vh; overflow-y:auto;">
+
+          <div class="flex items-start justify-between gap-3">
+            <h3 class="text-lg font-bold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
+              Enviar pelo WhatsApp
+            </h3>
+            <button type="button" @click="modal = false"
+                    class="w-8 h-8 rounded-lg text-xl leading-none shrink-0"
+                    :style="temaClaro ? 'background:#f1f5f9; color:#64748b;' : 'background:#27272a; color:#a1a1aa;'">&times;</button>
+          </div>
+
+          <div class="space-y-3 text-sm">
+            <div>
+              <p class="text-xs uppercase tracking-wider" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Cliente</p>
+              <p class="font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#e5e7eb;'">{{ pedido.cliente }}</p>
+            </div>
+            <div>
+              <p class="text-xs uppercase tracking-wider mb-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">WhatsApp</p>
+              {# Editável: o número do cadastro nem sempre é o de quem vai
+                 receber, e obrigar a corrigir o cliente antes de mandar uma
+                 mensagem seria atrito à toa. #}
+              <input type="text" x-model="numero" class="form-input w-full"
+                     placeholder="55 84 99999-0000">
+              {% if not whatsapp_numero %}
+                <span class="block text-xs mt-1" style="color:#d97706;">
+                  O cadastro do cliente não tem celular — digite o número.
+                </span>
+              {% endif %}
+            </div>
+            <div>
+              <p class="text-xs uppercase tracking-wider" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Documento</p>
+              <p class="font-mono font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#e5e7eb;'">
+                PED-{{ pedido.numero|stringformat:"06d" }}.pdf
+              </p>
+            </div>
+          </div>
+
+          <div>
+            <label class="block text-xs uppercase tracking-wider mb-1"
+                   :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+              Mensagem <span class="normal-case">(edite à vontade antes de enviar)</span>
+            </label>
+            <textarea x-model="mensagem" rows="9" class="form-input w-full text-sm"></textarea>
+          </div>
+
+          {% comment %}
+            O aviso é necessário, não é ruído: o texto da especificação dizia
+            "em anexo", e o wa.me só carrega TEXTO — não existe forma de
+            anexar arquivo por link. Sem dizer isso, o usuário mandaria a
+            mensagem esperando que o PDF fosse junto.
+          {% endcomment %}
+          <div class="p-3 rounded-lg text-xs"
+               :style="temaClaro ? 'background:rgba(59,130,246,.08); color:#374151;' : 'background:rgba(59,130,246,.10); color:#cbd5e1;'">
+            <strong>O WhatsApp não aceita anexo por link.</strong> A mensagem leva o
+            endereço do PDF, que o cliente abre no celular sem precisar de senha.
+            Para anexar o arquivo de verdade, use <strong>BAIXAR PDF</strong> e
+            arraste-o na conversa.
+          </div>
+
+          <div class="flex justify-end gap-2">
+            <button type="button" class="btn-secondary text-sm" @click="modal = false">Cancelar</button>
+            <button type="button" class="btn-primary text-sm" @click="enviar()"
+                    style="background:#25D366; border-color:#25D366;">Abrir WhatsApp</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  {% endif %}
+
+
   <div class="flex flex-wrap items-start justify-between gap-3">
     <div>
       <p class="text-sm mb-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
@@ -23,8 +149,23 @@
           existir duas versoes do mesmo pedido. Como a URL e' estavel, o link
           continua valendo -- so devolve sempre o pedido de agora.
         {% endcomment %}
-        <a href="{% url 'moda:pedido-pdf' pedido.pk %}" target="_blank" rel="noopener"
-           class="btn-secondary text-sm mt-2 inline-block">Abrir PDF do pedido</a>
+        <div class="flex flex-wrap gap-2 mt-2">
+          <a href="{% url 'moda:pedido-pdf' pedido.pk %}" target="_blank" rel="noopener"
+             class="btn-secondary text-sm">Abrir PDF do pedido</a>
+          {% comment %}
+            Finalizar só aparece enquanto o pedido é orçamento: depois de
+            confirmado o botão não teria o que fazer, e um botão que não faz
+            nada ensina o usuário a desconfiar dos outros.
+          {% endcomment %}
+          {% if pedido.status == 'orcamento' and itens %}
+            <form method="post" action="{% url 'moda:pedido-finalizar' pedido.pk %}">
+              {% csrf_token %}
+              <button type="submit" class="btn-primary text-sm">FINALIZAR PEDIDO</button>
+            </form>
+          {% elif pedido.status != 'cancelado' %}
+            <a href="?finalizado=1" class="btn-secondary text-sm">Enviar ao cliente</a>
+          {% endif %}
+        </div>
         {% include "moda/_status_pill.html" with status=pedido.status %}
       </div>
     </div>

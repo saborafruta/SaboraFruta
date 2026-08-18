@@ -35,6 +35,9 @@ urlpatterns = [
     path('food-service/', include('apps.food_service.urls', namespace='food_service')),
     path('moda/', include('apps.moda.urls', namespace='moda')),
     path('cardapio/', include('apps.food_service.urls_publico', namespace='food_service_publico')),
+    # PDF do pedido de moda pelo link que vai no WhatsApp do cliente.
+    # Fora de /moda/ porque o cliente nao tem login nem filial ativa.
+    path('pedido/', include('apps.moda.urls_publico', namespace='moda_publico')),
 ]
 
 handler403 = 'apps.core.views.errors.permission_denied'

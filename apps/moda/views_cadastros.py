@@ -27,6 +27,7 @@ from .models import (
     Personalizacao, PersonalizacaoIndividual, ProdutoCor, ProdutoModa,
     Tamanho, VisualItemPedido,
 )
+from .services.pedido_pdf import mensagem_whatsapp, whatsapp_numero
 from .services import (
     FinanceiroPedidoService, GradePedidoService, IndividualService,
     VarianteService,
@@ -397,7 +398,51 @@ class PedidoDetailView(ModaBaseView):
             'plano': FinanceiroPedidoService.planejar(pedido),
             'contas': FinanceiroPedidoService.contas_do_pedido(pedido),
             'valores_js': _valores_js(pedido, itens),
+            'finalizado': request.GET.get('finalizado') == '1',
+            'whatsapp_numero': whatsapp_numero(pedido),
+            'pdf_publico': request.build_absolute_uri(
+                reverse('moda_publico:pedido-pdf', args=[pedido.token_publico])
+            ),
+            'mensagem_whatsapp': mensagem_whatsapp(
+                pedido,
+                request.build_absolute_uri(
+                    reverse('moda_publico:pedido-pdf', args=[pedido.token_publico])
+                ),
+            ),
         })
+
+
+class PedidoFinalizarView(ModaBaseView):
+    """
+    Fecha o orcamento e leva de volta a tela com o painel de conclusao.
+
+    O painel aparece por querystring e nao por campo no banco: ele e' um
+    MOMENTO ("acabei de finalizar"), nao um estado do pedido. Gravado, ele
+    ficaria aparecendo para sempre em toda visita.
+    """
+
+    permissao_acao = 'editar'
+
+    def post(self, request, pk):
+        pedido = get_object_or_404(
+            PedidoProducao.objects.for_filial(_filial(request)), pk=pk,
+        )
+
+        if pedido.status == PedidoProducao.Status.CANCELADO:
+            messages.error(request, 'Pedido cancelado nao pode ser finalizado.')
+            return redirect(reverse('moda:pedido-detail', args=[pedido.pk]))
+
+        if not pedido.itens.exists():
+            messages.error(request, 'Acrescente ao menos um produto antes de finalizar.')
+            return redirect(reverse('moda:pedido-detail', args=[pedido.pk]))
+
+        if pedido.status == PedidoProducao.Status.ORCAMENTO:
+            pedido.status = PedidoProducao.Status.CONFIRMADO
+            pedido.save(update_fields=['status', 'updated_at'])
+
+        return redirect(
+            reverse('moda:pedido-detail', args=[pedido.pk]) + '?finalizado=1'
+        )
 
 
 class PedidoPdfView(ModaBaseView):
