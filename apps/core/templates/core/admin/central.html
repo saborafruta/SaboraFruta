@@ -392,19 +392,54 @@
                   class="absolute right-3 top-3 grid h-8 w-8 place-items-center rounded-full text-lg"
                   :style="temaClaro ? 'color:#64748b; background:#f8fafc;' : 'color:#a1a1aa; background:#18181b;'">&times;</button>
           <h2 class="text-lg font-bold">Módulos — {{ filial_selecionada.nome_fantasia|default:filial_selecionada.razao_social }}</h2>
-          <p class="mt-1 text-sm" :style="temaClaro ? 'color:#64748b;' : 'color:#a1a1aa;'">
+
+          {% comment %}
+            O segmento fica aqui em cima porque é ele que decide a lista de
+            baixo: trocar o vertical muda quais módulos sequer aparecem.
+            Fica na empresa, não na filial -- vertical é da empresa inteira.
+          {% endcomment %}
+          <form method="post" action="{% url 'core:admin_segmento_update' filial_selecionada.empresa.pk %}"
+                class="mt-4 p-3 rounded-lg"
+                :style="temaClaro ? 'background:#f8fafc; border:1px solid #e5e7eb;' : 'background:#18181b; border:1px solid #303036;'">
+            {% csrf_token %}
+            <label class="block text-xs font-semibold uppercase tracking-wide mb-1.5"
+                   :style="temaClaro ? 'color:#64748b;' : 'color:#a1a1aa;'">
+              Segmento de {{ filial_selecionada.empresa.nome_fantasia|default:filial_selecionada.empresa.razao_social }}
+            </label>
+            <div class="flex gap-2">
+              <select name="segmento" class="form-input flex-1 text-sm">
+                <option value="">Sem vertical (só módulos universais)</option>
+                {% for valor, rotulo in segmentos %}
+                  <option value="{{ valor }}" {% if filial_selecionada.empresa.segmento == valor %}selected{% endif %}>{{ rotulo }}</option>
+                {% endfor %}
+              </select>
+              <button type="submit" class="rounded-lg px-3 py-2 text-sm font-bold shrink-0"
+                      style="background:#2563eb; color:#fff;">Aplicar</button>
+            </div>
+            <p class="mt-1.5 text-xs" :style="temaClaro ? 'color:#64748b;' : 'color:#a1a1aa;'">
+              Vale para todas as filiais desta empresa.
+            </p>
+          </form>
+
+          <p class="mt-4 text-sm" :style="temaClaro ? 'color:#64748b;' : 'color:#a1a1aa;'">
             Desligue uma seção pra ela sumir do menu e ficar bloqueada nesta filial. Um módulo desligado não afeta as outras filiais.
           </p>
-          <form method="post" action="{% url 'core:admin_modulos_update' filial_selecionada.pk %}" class="mt-4 space-y-2">
+          <form method="post" action="{% url 'core:admin_modulos_update' filial_selecionada.pk %}" class="mt-3 space-y-2">
             {% csrf_token %}
-            {% for chave, label, descricao in secoes_modulos %}
+            {% for m in secoes_modulos %}
             <label class="flex items-start gap-3 p-3 rounded-lg cursor-pointer"
                    :style="temaClaro ? 'background:#f8fafc; border:1px solid #e5e7eb;' : 'background:#18181b; border:1px solid #303036;'">
-              <input type="checkbox" name="modulo" value="{{ chave }}" class="mt-0.5"
-                     {% if chave not in filial_selecionada.modulos_desativados %}checked{% endif %}>
+              <input type="checkbox" name="modulo" value="{{ m.chave }}" class="mt-0.5"
+                     {% if m.chave not in filial_selecionada.modulos_desativados %}checked{% endif %}>
               <span>
-                <span class="block font-semibold text-sm">{{ label }}</span>
-                <span class="block text-xs mt-0.5" :style="temaClaro ? 'color:#64748b;' : 'color:#a1a1aa;'">{{ descricao }}</span>
+                <span class="block font-semibold text-sm">
+                  {{ m.label }}
+                  {% if m.do_segmento %}
+                    <span class="ml-1 text-[10px] font-bold px-1.5 py-0.5 rounded-full align-middle"
+                          style="background:rgba(37,99,235,.14); color:#60a5fa;">deste vertical</span>
+                  {% endif %}
+                </span>
+                <span class="block text-xs mt-0.5" :style="temaClaro ? 'color:#64748b;' : 'color:#a1a1aa;'">{{ m.descricao }}</span>
               </span>
             </label>
             {% endfor %}

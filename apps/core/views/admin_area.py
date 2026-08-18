@@ -19,7 +19,8 @@ from apps.core.forms.admin_forms import (
     PoliticaReplicacaoForm,
     UsuarioAdminForm,
 )
-from apps.core.constants.modulos import SECOES_MODULOS
+from apps.core.constants.segmentos import SEGMENTOS
+from apps.core.services.modulos import modulos_disponiveis, modulos_para_admin
 from apps.core.models import Empresa, Filial, PerfilAcesso, Permissao, Usuario
 from apps.core.services.imagem_filial import preparar_imagem_filial
 from apps.core.views.audit import core_log_context
@@ -236,7 +237,13 @@ def central_administrativa(request):
         'total_empresas': Empresa.objects.count(),
         'total_filiais': Filial.objects.count(),
         'total_super_admins': Usuario.objects.filter(is_superuser=True).count(),
-        'secoes_modulos': SECOES_MODULOS,
+        # Só os módulos que a empresa da filial pode ter -- um módulo de
+        # outro vertical não aparece nem desmarcado, porque marcá-lo não
+        # bastaria: quem concede é o segmento.
+        'secoes_modulos': modulos_para_admin(
+            filial_selecionada.empresa if filial_selecionada else None
+        ),
+        'segmentos': SEGMENTOS,
     })
 
 
@@ -344,6 +351,38 @@ def filial_imagem_update(request, filial_id):
 
 @superuser_required
 @require_POST
+def segmento_update(request, empresa_id):
+    """Define o vertical da empresa — é o que libera os módulos especializados."""
+    from apps.core.constants.segmentos import LABEL_POR_SEGMENTO
+
+    empresa = get_object_or_404(Empresa, pk=empresa_id)
+    voltar_para = request.META.get('HTTP_REFERER') or reverse('core:admin_central')
+
+    segmento = (request.POST.get('segmento') or '').strip()
+    if segmento and segmento not in LABEL_POR_SEGMENTO:
+        messages.error(request, 'Segmento inválido.')
+        return redirect(voltar_para)
+
+    empresa.segmento = segmento
+    empresa.save(update_fields=['segmento'])
+
+    nome = empresa.nome_fantasia or empresa.razao_social
+    if segmento:
+        messages.success(
+            request,
+            f'{nome} agora é {LABEL_POR_SEGMENTO[segmento]}. '
+            f'Os módulos desse vertical já estão liberados para as filiais dela.',
+        )
+    else:
+        messages.success(
+            request,
+            f'{nome} ficou sem vertical — só os módulos universais seguem disponíveis.',
+        )
+    return redirect(voltar_para)
+
+
+@superuser_required
+@require_POST
 def modulos_update(request, filial_id):
     """Liga/desliga secoes inteiras do menu (Cadastros, Operacoes,
     Financeiro, Logistica, Avancado, Food Service) para uma filial --
@@ -351,10 +390,12 @@ def modulos_update(request, filial_id):
     filial = get_object_or_404(Filial, pk=filial_id)
     voltar_para = request.META.get('HTTP_REFERER') or reverse('core:admin_central')
 
+    # Só desliga o que a empresa poderia ter: assim um módulo indisponível
+    # não entra na lista de desativados sem necessidade, e se o segmento
+    # mudar depois ele já nasce ligado.
+    disponiveis = modulos_disponiveis(filial.empresa)
     ativos = set(request.POST.getlist('modulo'))
-    filial.modulos_desativados = [
-        chave for chave, _label, _desc in SECOES_MODULOS if chave not in ativos
-    ]
+    filial.modulos_desativados = sorted(disponiveis - ativos)
     filial.save(update_fields=['modulos_desativados'])
     messages.success(request, f'Modulos atualizados para {filial.nome_fantasia or filial.razao_social}.')
     return redirect(voltar_para)

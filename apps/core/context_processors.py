@@ -1,5 +1,6 @@
 """Context processors: disponibilizam dados em todos os templates."""
 from apps.core.models import Filial
+from apps.core.services.modulos import modulos_ativos
 
 
 def parametros_sistema(request):
@@ -40,9 +41,14 @@ def filial_context(request):
     ctx = {
         'filial_ativa': getattr(request, 'filial_ativa', None),
         'filiais_disponiveis': [],
+        # Chaves dos módulos que esta filial enxerga. O sidebar testa
+        # `'chave' in modulos_ativos` -- mesma resposta que o middleware usa
+        # para barrar a URL, então menu e acesso nunca discordam.
+        'modulos_ativos': set(),
     }
     if not request.user.is_authenticated:
         return ctx
+    ctx['modulos_ativos'] = modulos_ativos(ctx['filial_ativa'])
     try:
         user = request.user
         qs = Filial.objects.filter(ativo=True)

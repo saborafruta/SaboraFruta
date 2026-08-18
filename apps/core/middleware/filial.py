@@ -11,8 +11,8 @@ from django.contrib import messages
 from django.shortcuts import redirect
 from django.urls import reverse
 
-from apps.core.constants.modulos import PREFIXOS_POR_MODULO
 from apps.core.models import Filial
+from apps.core.services.modulos import modulo_da_url, modulos_ativos
 
 
 class FilialMiddleware:
@@ -73,15 +73,17 @@ class FilialMiddleware:
         request.filial_ativa = filial
         request.user._perfil_ativo = request.user.perfil_para_filial(filial)
 
-        # Bloqueia acesso direto a uma secao de menu desativada nesta filial
-        # (alem de escondida no sidebar) -- superuser nunca fica trancado
-        # fora, pra sempre poder religar pela Central Administrativa.
-        if filial.modulos_desativados and not request.user.is_superuser:
-            for chave, prefixos in PREFIXOS_POR_MODULO.items():
-                if chave in filial.modulos_desativados and any(
-                    request.path.startswith(p) for p in prefixos
-                ):
-                    messages.error(request, 'Este módulo está desativado para esta filial.')
-                    return redirect('core:dashboard')
+        # Bloqueia acesso direto a modulo que a filial nao tem -- seja
+        # porque desligou, seja porque o vertical da empresa nao concede.
+        # Esconder do menu nao basta: a URL continuaria respondendo.
+        # Superuser nunca fica trancado fora, pra sempre poder ajustar pela
+        # Central Administrativa.
+        if not request.user.is_superuser:
+            chave = modulo_da_url(request.path)
+            if chave and chave not in modulos_ativos(filial):
+                messages.error(
+                    request, 'Este módulo não está disponível para esta filial.'
+                )
+                return redirect('core:dashboard')
 
         return self.get_response(request)

@@ -5,6 +5,8 @@ Mapeia as tabelas `empresas` e `filiais` do banco de referência.
 from django.core.validators import RegexValidator
 from django.db import models
 
+from apps.core.constants.segmentos import SEGMENTOS
+
 from .base import CoordenadaMixin, TimestampedModel
 
 
@@ -36,6 +38,21 @@ class Empresa(CoordenadaMixin, TimestampedModel):
     cnpj = models.CharField(max_length=14, unique=True, validators=[cnpj_validator])
     inscricao_estadual = models.CharField(max_length=20, blank=True)
     inscricao_municipal = models.CharField(max_length=20, blank=True)
+
+    # ── Vertical de atuação ──────────────────────────────────────────────
+    # Define quais módulos especializados a empresa enxerga. Em branco =
+    # nenhum vertical, só os módulos universais -- que é o estado de toda
+    # empresa já cadastrada, então ligar isso não muda nada para elas.
+    segmento = models.CharField(
+        max_length=30, choices=SEGMENTOS, blank=True,
+        help_text='Libera automaticamente os módulos especializados do vertical.',
+    )
+    # Escape hatch do admin: liberar um módulo para uma empresa cujo
+    # segmento não o concede (ex.: comércio que também costura uniforme).
+    modulos_extras = models.JSONField(
+        default=list, blank=True,
+        help_text='Módulos liberados manualmente, além dos que o segmento já concede.',
+    )
 
     regime_tributario = models.CharField(max_length=20, choices=RegimeTributario.choices)
     codigo_regime_tributario = models.SmallIntegerField(

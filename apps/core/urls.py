@@ -39,6 +39,7 @@ urlpatterns = [
     path('gestao/central/empresas/<int:empresa_id>/replicacao/', admin_area.politica_replicacao_update, name='admin_politica_replicacao_update'),
     path('gestao/central/filiais/<int:filial_id>/imagem/', admin_area.filial_imagem_update, name='admin_filial_imagem_update'),
     path('gestao/central/filiais/<int:filial_id>/modulos/', admin_area.modulos_update, name='admin_modulos_update'),
+    path('gestao/central/empresas/<int:empresa_id>/segmento/', admin_area.segmento_update, name='admin_segmento_update'),
 
     path('gestao/empresas/', admin_area.empresa_list, name='admin_empresa_list'),
     path('gestao/empresas/nova/', admin_area.empresa_form, name='admin_empresa_create'),
