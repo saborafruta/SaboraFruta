@@ -5,6 +5,7 @@ São as três que fecham o ciclo até o SKU — grade define os tamanhos, cor
 define as cores, e o produto cruza as duas para gerar as variantes.
 """
 from django.contrib import messages
+from django.db import models
 from django.db.models import Count, Prefetch, Q
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
@@ -12,9 +13,12 @@ from django.views import View
 
 from apps.core.services.exceptions import DadosInvalidosError
 
-from .forms import CorForm, GradeForm, PedidoProducaoForm, ProdutoModaForm
+from .forms import (
+    CorForm, GradeForm, ItemPedidoProducaoForm, PedidoProducaoForm, ProdutoModaForm,
+)
 from .models import (
-    Cor, Grade, ItemGrade, PedidoProducao, ProdutoCor, ProdutoModa, Tamanho,
+    Cor, Grade, ItemGrade, ItemPedidoProducao, PedidoProducao, ProdutoCor,
+    ProdutoModa, Tamanho,
 )
 from .services import VarianteService
 from .views import ModaBaseView
@@ -337,10 +341,16 @@ class PedidoDetailView(ModaBaseView):
             .select_related('cliente', 'vendedor'),
             pk=pk,
         )
+        itens = pedido.itens.select_related(
+            'produto', 'modelo', 'cor', 'tecido', 'produto__tecido',
+        ).all()
         return render(request, 'moda/pedido_detail.html', {
             'title': f'Pedido #{pedido.numero:06d}',
             'pedido': pedido,
             'status_choices': PedidoProducao.Status.choices,
+            'itens': itens,
+            'total_pecas': sum(i.quantidade for i in itens),
+            'form_item': ItemPedidoProducaoForm(filial=_filial(request)),
         })
 
 
@@ -368,4 +378,50 @@ class PedidoStatusView(ModaBaseView):
             request,
             f'Pedido #{pedido.numero:06d}: {anterior} → {pedido.get_status_display()}.',
         )
+        return redirect(reverse('moda:pedido-detail', args=[pedido.pk]))
+
+
+class ItemPedidoCreateView(ModaBaseView):
+    """Acrescenta um produto ao pedido — vários por pedido."""
+
+    permissao_acao = 'editar'
+
+    def post(self, request, pk):
+        pedido = get_object_or_404(PedidoProducao.objects.for_filial(_filial(request)), pk=pk)
+        form = ItemPedidoProducaoForm(request.POST, filial=_filial(request))
+
+        if not form.is_valid():
+            # Erros voltam na própria tela do pedido, com o formulário
+            # preenchido — reabrir vazio faria o usuário digitar tudo de novo.
+            itens = pedido.itens.select_related('produto', 'modelo', 'cor', 'tecido').all()
+            return render(request, 'moda/pedido_detail.html', {
+                'title': f'Pedido #{pedido.numero:06d}',
+                'pedido': pedido,
+                'status_choices': PedidoProducao.Status.choices,
+                'itens': itens,
+                'total_pecas': sum(i.quantidade for i in itens),
+                'form_item': form,
+                'abrir_form_item': True,
+            })
+
+        item = form.save(commit=False)
+        item.pedido = pedido
+        # Última posição: o item novo entra no fim da ficha, como numa lista
+        # escrita à mão.
+        ultima = pedido.itens.aggregate(models.Max('ordem'))['ordem__max'] or 0
+        item.ordem = ultima + 10
+        item.save()
+        messages.success(request, f'{item.nome_exibicao} adicionado ao pedido.')
+        return redirect(reverse('moda:pedido-detail', args=[pedido.pk]))
+
+
+class ItemPedidoDeleteView(ModaBaseView):
+    permissao_acao = 'editar'
+
+    def post(self, request, pk, item_pk):
+        pedido = get_object_or_404(PedidoProducao.objects.for_filial(_filial(request)), pk=pk)
+        item = get_object_or_404(ItemPedidoProducao, pk=item_pk, pedido=pedido)
+        nome = item.nome_exibicao
+        item.delete()
+        messages.success(request, f'{nome} removido do pedido.')
         return redirect(reverse('moda:pedido-detail', args=[pedido.pk]))

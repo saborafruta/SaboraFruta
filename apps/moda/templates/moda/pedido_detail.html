@@ -110,12 +110,84 @@
 
   </div>
 
+  {# ── Itens do pedido ─────────────────────────────────────────────── #}
+  <div class="card p-5 space-y-4" x-data="{ novoItem: {% if abrir_form_item %}true{% else %}false{% endif %} }">
+    <div class="flex items-center justify-between gap-2 flex-wrap">
+      <div>
+        <h3 class="text-sm font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">Produtos do pedido</h3>
+        <p class="text-xs mt-0.5" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+          {{ itens|length }} item{{ itens|length|pluralize:"ns" }} · {{ total_pecas }} peça{{ total_pecas|pluralize }} no total
+        </p>
+      </div>
+      <button type="button" class="btn-primary text-sm" @click="novoItem = !novoItem"
+              x-text="novoItem ? 'Fechar' : '+ Adicionar produto'"></button>
+    </div>
+
+    {% if itens %}
+      <div class="space-y-2">
+        {% for item in itens %}
+          <div class="p-3 rounded-lg" :style="temaClaro ? 'background:#f8fafc; border:1px solid #e5e7eb;' : 'background:#18181b; border:1px solid #303036;'">
+            <div class="flex items-start justify-between gap-3">
+              <div class="min-w-0">
+                <p class="font-semibold text-sm" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
+                  {{ item.nome_exibicao }}
+                  {% if item.referencia %}<span class="font-normal text-xs" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">· ref. {{ item.referencia }}</span>{% endif %}
+                </p>
+                {% comment %}
+                  Só os atributos preenchidos viram chip: linha com
+                  "Gola: —" a cada item polui a ficha sem informar nada.
+                {% endcomment %}
+                <div class="flex flex-wrap gap-1.5 mt-2">
+                  {% if item.tecido_exibicao %}<span class="text-xs px-2 py-0.5 rounded" :style="temaClaro ? 'background:#e5e7eb; color:#374151;' : 'background:#2a2a2e; color:#d4d4d4;'">Malha: {{ item.tecido_exibicao }}</span>{% endif %}
+                  {% if item.cor %}<span class="text-xs px-2 py-0.5 rounded" :style="temaClaro ? 'background:#e5e7eb; color:#374151;' : 'background:#2a2a2e; color:#d4d4d4;'">Cor: {{ item.cor.nome }}</span>{% endif %}
+                  {% if item.gola %}<span class="text-xs px-2 py-0.5 rounded" :style="temaClaro ? 'background:#e5e7eb; color:#374151;' : 'background:#2a2a2e; color:#d4d4d4;'">Gola: {{ item.get_gola_display }}</span>{% endif %}
+                  {% if item.manga %}<span class="text-xs px-2 py-0.5 rounded" :style="temaClaro ? 'background:#e5e7eb; color:#374151;' : 'background:#2a2a2e; color:#d4d4d4;'">Manga: {{ item.get_manga_display }}</span>{% endif %}
+                  {% if item.modelo %}<span class="text-xs px-2 py-0.5 rounded" :style="temaClaro ? 'background:#e5e7eb; color:#374151;' : 'background:#2a2a2e; color:#d4d4d4;'">Modelo: {{ item.modelo.nome }}</span>{% endif %}
+                </div>
+                {% if item.acabamento %}
+                  <p class="text-xs mt-2" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'"><strong>Acabamento:</strong> {{ item.acabamento }}</p>
+                {% endif %}
+                {% if item.observacoes %}
+                  <p class="text-xs mt-1 whitespace-pre-line" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">{{ item.observacoes }}</p>
+                {% endif %}
+              </div>
+              <div class="flex flex-col items-end gap-2 shrink-0">
+                <span class="text-lg font-bold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">{{ item.quantidade }}</span>
+                <form method="post" action="{% url 'moda:pedido-item-delete' pedido.pk item.pk %}"
+                      onsubmit="return confirm('Remover {{ item.nome_exibicao|escapejs }} do pedido?');">
+                  {% csrf_token %}
+                  <button type="submit" class="text-xs font-semibold" style="color:#f87171;">Remover</button>
+                </form>
+              </div>
+            </div>
+          </div>
+        {% endfor %}
+      </div>
+    {% else %}
+      <p class="text-sm" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+        Nenhum produto no pedido ainda.
+      </p>
+    {% endif %}
+
+    <div x-show="novoItem" x-cloak class="pt-2 border-t" :style="temaClaro ? 'border-color:#e5e7eb;' : 'border-color:#303036;'">
+      <form method="post" action="{% url 'moda:pedido-item-add' pedido.pk %}" novalidate class="space-y-4 pt-4">
+        {% csrf_token %}
+        <div class="grid gap-4 sm:grid-cols-2">
+          {% include "moda/_form_campos.html" with form=form_item %}
+        </div>
+        <div class="flex justify-end gap-2">
+          <button type="button" class="btn-secondary text-sm" @click="novoItem = false">Cancelar</button>
+          <button type="submit" class="btn-primary text-sm">Adicionar ao pedido</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
   <div class="card p-4" style="border-left:3px solid #f59e0b;">
     <p class="text-sm" :style="temaClaro ? 'color:#374151;' : 'color:#cbd5e1;'">
-      <strong>Falta a parte de baixo da ficha.</strong>
-      Os itens do pedido (produto, grade e quantidade por tamanho) e as etapas
-      de produção — Corte, Sublimação, Costura, Entrega — ainda não estão neste
-      pedido. É o próximo bloco.
+      <strong>Ainda falta da ficha:</strong> a grade com quantidade por tamanho
+      (PP a G3) e as etapas de produção — Corte, Sublimação, Costura, Entrega.
+      Hoje o item tem só a quantidade total.
     </p>
   </div>
 

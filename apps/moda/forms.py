@@ -1,7 +1,9 @@
 """Formulários do vertical Moda."""
 from django import forms
 
-from .models import Cor, Grade, PedidoProducao, ProdutoModa, Tamanho
+from .models import (
+    Cor, Grade, ItemPedidoProducao, PedidoProducao, ProdutoModa, Tamanho,
+)
 
 
 class _FilialFormMixin:
@@ -169,4 +171,50 @@ class PedidoProducaoForm(_FilialFormMixin, forms.ModelForm):
                 'data_prevista_entrega',
                 'A entrega não pode ser anterior à data do pedido.',
             )
+        return dados
+
+
+class ItemPedidoProducaoForm(_FilialFormMixin, forms.ModelForm):
+    """Um produto dentro do pedido — o miolo da ficha."""
+
+    campos_por_filial = {}  # preenchido em __init__, para evitar import circular
+
+    class Meta:
+        model = ItemPedidoProducao
+        fields = [
+            'produto', 'descricao', 'referencia',
+            'modelo', 'cor', 'tecido', 'gola', 'manga',
+            'acabamento', 'quantidade', 'observacoes',
+        ]
+        widgets = {
+            'descricao': forms.TextInput(attrs={'placeholder': 'Ex.: Conjunto — Camisa + Calção'}),
+            'acabamento': forms.TextInput(attrs={'placeholder': 'Ex.: escudo em patch aplicado'}),
+            'observacoes': forms.Textarea(attrs={'rows': 2}),
+            'quantidade': forms.NumberInput(attrs={'min': 1}),
+        }
+
+    def __init__(self, *args, filial=None, **kwargs):
+        from .models import Cor, Modelo, ProdutoModa, Tecido
+        self.campos_por_filial = {
+            'produto': ProdutoModa, 'modelo': Modelo, 'cor': Cor, 'tecido': Tecido,
+        }
+        super().__init__(*args, filial=filial, **kwargs)
+        for nome in ('produto', 'modelo', 'cor', 'tecido'):
+            self.fields[nome].required = False
+        # Em branco, o item herda do modelo na gravação — por isso não são
+        # obrigatórios aqui.
+        self.fields['gola'].required = False
+        self.fields['manga'].required = False
+
+    def clean(self):
+        dados = super().clean()
+        # Sem produto de catálogo nem descrição, o item apareceria na ficha
+        # como uma linha em branco — e ninguém no corte saberia o que cortar.
+        if not dados.get('produto') and not (dados.get('descricao') or '').strip():
+            self.add_error(
+                'descricao',
+                'Escolha um produto do catálogo ou descreva o item.',
+            )
+        if (dados.get('quantidade') or 0) < 1:
+            self.add_error('quantidade', 'A quantidade precisa ser pelo menos 1.')
         return dados

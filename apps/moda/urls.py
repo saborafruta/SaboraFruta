@@ -23,6 +23,8 @@ ROTAS_PRONTAS: list = [
     path('comercial/pedidos/<int:pk>/', vc.PedidoDetailView.as_view(), name='pedido-detail'),
     path('comercial/pedidos/<int:pk>/editar/', vc.PedidoFormView.as_view(), name='pedido-update'),
     path('comercial/pedidos/<int:pk>/status/', vc.PedidoStatusView.as_view(), name='pedido-status'),
+    path('comercial/pedidos/<int:pk>/itens/', vc.ItemPedidoCreateView.as_view(), name='pedido-item-add'),
+    path('comercial/pedidos/<int:pk>/itens/<int:item_pk>/remover/', vc.ItemPedidoDeleteView.as_view(), name='pedido-item-delete'),
 
     path('produtos/grades/', vc.GradeListView.as_view(), name='grade-list'),
     path('produtos/grades/nova/', vc.GradeFormView.as_view(), name='grade-create'),
