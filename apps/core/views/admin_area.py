@@ -20,7 +20,9 @@ from apps.core.forms.admin_forms import (
     UsuarioAdminForm,
 )
 from apps.core.constants.segmentos import SEGMENTOS
-from apps.core.services.modulos import modulos_disponiveis, modulos_para_admin
+from apps.core.services.modulos import (
+    modulos_de_verticais, modulos_disponiveis, modulos_para_admin,
+)
 from apps.core.models import Empresa, Filial, PerfilAcesso, Permissao, Usuario
 from apps.core.services.imagem_filial import preparar_imagem_filial
 from apps.core.views.audit import core_log_context
@@ -244,6 +246,9 @@ def central_administrativa(request):
             filial_selecionada.empresa if filial_selecionada else None
         ),
         'segmentos': SEGMENTOS,
+        'modulos_verticais': modulos_de_verticais(
+            filial_selecionada.empresa if filial_selecionada else None
+        ),
     })
 
 
@@ -363,8 +368,18 @@ def segmento_update(request, empresa_id):
         messages.error(request, 'Segmento inválido.')
         return redirect(voltar_para)
 
+    # Habilitação manual: módulos de vertical marcados que o segmento não
+    # concede. Só as chaves conhecidas entram, para um valor antigo de
+    # módulo renomeado não ficar preso na lista.
+    from apps.core.constants.modulos import MODULOS_POR_CHAVE
+    marcados = set(request.POST.getlist('modulo_extra'))
+    empresa.modulos_extras = sorted(
+        c for c in marcados
+        if c in MODULOS_POR_CHAVE and segmento not in MODULOS_POR_CHAVE[c].segmentos
+    )
+
     empresa.segmento = segmento
-    empresa.save(update_fields=['segmento'])
+    empresa.save(update_fields=['segmento', 'modulos_extras'])
 
     nome = empresa.nome_fantasia or empresa.razao_social
     if segmento:

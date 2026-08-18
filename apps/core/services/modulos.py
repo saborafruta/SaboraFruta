@@ -57,10 +57,11 @@ def modulo_da_url(caminho: str) -> str | None:
 
 def modulos_para_admin(empresa) -> list[dict]:
     """
-    Lista para a tela da Central Administrativa: só os módulos que a
-    empresa pode ter, já com o motivo de estarem ali. Um módulo de outro
-    vertical não aparece nem como caixa desmarcada -- mostrar sugeriria
-    que basta marcar, e não basta: depende do segmento.
+    Lista para a Central Administrativa: os módulos que a empresa TEM.
+
+    Só o que está disponível — o que ela não tem aparece em
+    `modulos_de_verticais`, que é uma pergunta diferente ("o que eu poderia
+    ligar?") e merece um lugar próprio na tela.
     """
     disponiveis = modulos_disponiveis(empresa)
     segmento = getattr(empresa, 'segmento', '') or ''
@@ -75,4 +76,32 @@ def modulos_para_admin(empresa) -> list[dict]:
         }
         for m in MODULOS
         if m.chave in disponiveis
+    ]
+
+
+def modulos_de_verticais(empresa) -> list[dict]:
+    """
+    Os módulos especializados que existem no sistema, com a situação de cada
+    um para esta empresa.
+
+    Antes eu escondia da tela o que a empresa não tinha. Isso deixava um
+    vertical inteiro invisível: quem não soubesse que o módulo Moda existe
+    não tinha como descobrir, e nem por que o menu não aparecia. Listar
+    tudo, dizendo de onde vem cada um, resolve — e é aqui que o admin liga
+    um módulo fora do segmento (`Empresa.modulos_extras`), que é a
+    habilitação manual.
+    """
+    segmento = getattr(empresa, 'segmento', '') or ''
+    extras = set(getattr(empresa, 'modulos_extras', None) or [])
+    return [
+        {
+            'chave': m.chave,
+            'label': m.label,
+            'descricao': m.descricao,
+            'segmentos': m.segmentos,
+            'pelo_segmento': bool(segmento and segmento in m.segmentos),
+            'manual': m.chave in extras,
+        }
+        for m in MODULOS
+        if not m.e_universal
     ]
