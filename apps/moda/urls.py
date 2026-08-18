@@ -11,7 +11,10 @@ então o link do menu continua valendo.
 """
 from django.urls import path
 
-from . import views, views_apoio as va, views_cadastros as vc, views_ficha as vf
+from . import (
+    views, views_apoio as va, views_cadastros as vc, views_ficha as vf,
+    views_roteiro as vr,
+)
 
 app_name = 'moda'
 
@@ -61,6 +64,17 @@ ROTAS_PRONTAS: list = [
     path('engenharia/ficha-tecnica/<int:pk>/materiais/<int:material_pk>/remover/', vf.MaterialDeleteView.as_view(), name='ficha-material-delete'),
     path('engenharia/ficha-tecnica/<int:pk>/imagens/', vf.ImagemCreateView.as_view(), name='ficha-imagem-add'),
     path('engenharia/ficha-tecnica/<int:pk>/imagens/<int:imagem_pk>/remover/', vf.ImagemDeleteView.as_view(), name='ficha-imagem-delete'),
+
+    # Roteiro de produção. A lista fica no endereço do menu
+    # (/moda/engenharia/sequencia-producao/), pelo mesmo motivo da ficha.
+    path('engenharia/sequencia-producao/', vr.RoteiroListView.as_view(), name='roteiro-list'),
+    path('engenharia/sequencia-producao/novo/', vr.RoteiroFormView.as_view(), name='roteiro-create'),
+    path('engenharia/sequencia-producao/<int:pk>/', vr.RoteiroDetailView.as_view(), name='roteiro-detail'),
+    path('engenharia/sequencia-producao/<int:pk>/editar/', vr.RoteiroFormView.as_view(), name='roteiro-update'),
+    path('engenharia/sequencia-producao/<int:pk>/copiar/', vr.RoteiroCopiarView.as_view(), name='roteiro-copiar'),
+    path('engenharia/sequencia-producao/<int:pk>/etapas/', vr.EtapaCreateView.as_view(), name='roteiro-etapa-add'),
+    path('engenharia/sequencia-producao/<int:pk>/etapas/salvar/', vr.EtapaUpdateView.as_view(), name='roteiro-etapa-salvar'),
+    path('engenharia/sequencia-producao/<int:pk>/etapas/<int:etapa_pk>/remover/', vr.EtapaDeleteView.as_view(), name='roteiro-etapa-delete'),
 
     path('produtos/grades/', vc.GradeListView.as_view(), name='grade-list'),
     path('produtos/grades/nova/', vc.GradeFormView.as_view(), name='grade-create'),

@@ -7,6 +7,7 @@ from .item_pedido import ItemPedidoProducao
 from .pedido import PedidoProducao
 from .personalizacao import Personalizacao
 from .produto import ProdutoCor, ProdutoModa, Variante
+from .roteiro import Operacao, OperacaoRoteiro, Roteiro, custo_por_peca
 from .visual import MockupVisual, Posicao, VisualItemPedido
 
 __all__ = [
@@ -22,6 +23,8 @@ __all__ = [
     'MaterialFicha',
     'MockupVisual',
     'Linha',
+    'Operacao',
+    'OperacaoRoteiro',
     'Marca',
     'Modelo',
     'PedidoProducao',
@@ -30,8 +33,10 @@ __all__ = [
     'PersonalizacaoIndividual',
     'ProdutoCor',
     'ProdutoModa',
+    'Roteiro',
     'Tamanho',
     'Tecido',
     'Variante',
     'VisualItemPedido',
+    'custo_por_peca',
 ]

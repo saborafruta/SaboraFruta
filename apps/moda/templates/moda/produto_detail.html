@@ -19,6 +19,11 @@
       existe -- foi exatamente assim que o vertical inteiro ficou invisível
       da outra vez.
     {% endcomment %}
+    {% if produto.roteiro %}
+      <a href="{% url 'moda:roteiro-detail' produto.roteiro.pk %}" class="btn-secondary">Roteiro</a>
+    {% else %}
+      <a href="{% url 'moda:roteiro-create' %}" class="btn-secondary">Criar roteiro</a>
+    {% endif %}
     {% if produto.ficha %}
       <a href="{% url 'moda:ficha-detail' produto.ficha.pk %}" class="btn-secondary">Ficha técnica</a>
     {% else %}

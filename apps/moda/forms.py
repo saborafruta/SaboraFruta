@@ -4,8 +4,8 @@ from django.db import models
 
 from .models import (
     Cor, FichaTecnica, Grade, ImagemFicha, ItemPedidoProducao, MaterialFicha,
-    MockupVisual, PedidoProducao, Personalizacao, ProdutoModa, Tamanho,
-    VisualItemPedido,
+    MockupVisual, Operacao, OperacaoRoteiro, PedidoProducao, Personalizacao,
+    ProdutoModa, Roteiro, Tamanho, VisualItemPedido,
 )
 
 
@@ -649,6 +649,117 @@ class ImagemFichaForm(forms.ModelForm):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.fields['legenda'].required = False
+        for campo in self.fields.values():
+            css = campo.widget.attrs.get('class', '')
+            if 'form-input' not in css:
+                campo.widget.attrs['class'] = (css + ' form-input').strip()
+
+# ══════════════════════════════════════════════════════════════════════
+# ENGENHARIA — OPERAÇÕES E ROTEIRO
+# ══════════════════════════════════════════════════════════════════════
+
+class OperacaoForm(_FilialFormMixin, forms.ModelForm):
+    """Uma operação do catálogo da fábrica."""
+
+    class Meta:
+        model = Operacao
+        fields = [
+            'nome', 'sequencia', 'setor', 'maquina', 'responsavel',
+            'tempo_padrao', 'tipo_custo', 'custo', 'capacidade',
+            'observacao', 'ativo',
+        ]
+        widgets = {
+            'nome': forms.TextInput(attrs={'placeholder': 'Ex.: Costura'}),
+            'maquina': forms.TextInput(attrs={'placeholder': 'Ex.: Overloque'}),
+            'responsavel': forms.TextInput(attrs={'placeholder': 'Pessoa ou equipe'}),
+            'tempo_padrao': forms.NumberInput(attrs={'step': '0.01', 'min': '0'}),
+            'custo': forms.NumberInput(attrs={'step': '0.0001', 'min': '0'}),
+            'capacidade': forms.NumberInput(attrs={'step': '0.01', 'min': '0'}),
+            'sequencia': forms.NumberInput(attrs={'min': 0}),
+            'observacao': forms.Textarea(attrs={'rows': 2}),
+        }
+
+    def clean_nome(self):
+        nome = (self.cleaned_data['nome'] or '').strip()
+        qs = Operacao.objects.filter(filial=self.filial, nome__iexact=nome)
+        if self.instance.pk:
+            qs = qs.exclude(pk=self.instance.pk)
+        if qs.exists():
+            raise forms.ValidationError('Já existe uma operação com esse nome nesta filial.')
+        return nome
+
+
+class RoteiroForm(forms.ModelForm):
+    """Cabeçalho do roteiro — o produto a que ele pertence."""
+
+    class Meta:
+        model = Roteiro
+        fields = ['produto', 'versao', 'observacoes']
+        widgets = {
+            'versao': forms.NumberInput(attrs={'min': 1}),
+            'observacoes': forms.Textarea(attrs={'rows': 2}),
+        }
+
+    def __init__(self, *args, filial=None, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.filial = filial
+
+        produtos = ProdutoModa.objects.filter(filial=filial, ativo=True).order_by('codigo')
+        # Mesmo motivo da ficha: é OneToOne, e oferecer um produto que já tem
+        # roteiro só renderia erro de integridade depois de preencher tudo.
+        if self.instance.pk:
+            produtos = produtos.filter(
+                models.Q(roteiro__isnull=True) | models.Q(roteiro=self.instance)
+            )
+            self.fields['produto'].disabled = True
+        else:
+            produtos = produtos.filter(roteiro__isnull=True)
+        self.fields['produto'].queryset = produtos
+        self.fields['produto'].empty_label = 'Escolha o produto'
+
+        for campo in self.fields.values():
+            css = campo.widget.attrs.get('class', '')
+            if 'form-input' not in css:
+                campo.widget.attrs['class'] = (css + ' form-input').strip()
+
+
+class OperacaoRoteiroForm(forms.ModelForm):
+    """
+    Uma etapa do roteiro.
+
+    Tempo, custo e capacidade ficam vazios por padrão de propósito: vazio
+    significa "usa o padrão da operação", que é o caso comum. Pré-preencher
+    com o valor do catálogo transformaria toda etapa numa exceção fixa, e
+    corrigir o catálogo depois não corrigiria mais nada.
+    """
+
+    class Meta:
+        model = OperacaoRoteiro
+        fields = [
+            'operacao', 'sequencia', 'tempo_padrao', 'custo',
+            'capacidade', 'maquina', 'responsavel', 'observacao',
+        ]
+        widgets = {
+            'sequencia': forms.NumberInput(attrs={'min': 0}),
+            'tempo_padrao': forms.NumberInput(attrs={'step': '0.01', 'min': '0', 'placeholder': 'padrão'}),
+            'custo': forms.NumberInput(attrs={'step': '0.0001', 'min': '0', 'placeholder': 'padrão'}),
+            'capacidade': forms.NumberInput(attrs={'step': '0.01', 'min': '0', 'placeholder': 'padrão'}),
+            'maquina': forms.TextInput(attrs={'placeholder': 'padrão'}),
+            'responsavel': forms.TextInput(attrs={'placeholder': 'padrão'}),
+        }
+
+    def __init__(self, *args, filial=None, roteiro=None, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.roteiro = roteiro
+
+        qs = Operacao.objects.filter(filial=filial, ativo=True).order_by('sequencia', 'nome')
+        # Operação já no roteiro sai da lista: `unique_together` a recusaria
+        # de qualquer forma, e ver a opção ali sugere que dá para repetir.
+        if roteiro is not None:
+            qs = qs.exclude(etapas__roteiro=roteiro)
+        self.fields['operacao'].queryset = qs
+        self.fields['operacao'].empty_label = 'Escolha a operação'
+
         for campo in self.fields.values():
             css = campo.widget.attrs.get('class', '')
             if 'form-input' not in css:

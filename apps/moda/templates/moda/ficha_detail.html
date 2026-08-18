@@ -272,6 +272,42 @@
     </div>
   {% endif %}
 
+  {% comment %}
+    Custo cheio. A ficha sozinha responde só pelos materiais; a mão de obra
+    vem do roteiro do produto. Somar aqui é o que transforma dois números
+    parciais na resposta que se procura -- e por isso o bloco só aparece
+    quando existe roteiro, em vez de mostrar um total pela metade.
+  {% endcomment %}
+  {% if produto.roteiro %}
+    <div class="card p-5">
+      <h3 class="text-sm font-semibold mb-3" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">Custo cheio da peça</h3>
+      <div class="space-y-2 text-sm">
+        <div class="flex justify-between">
+          <span :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Materiais (esta ficha)</span>
+          <span class="tabular-nums">R$ {{ ficha.custo_estimado|floatformat:2 }}</span>
+        </div>
+        <div class="flex justify-between">
+          <span :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+            Mão de obra
+            (<a href="{% url 'moda:roteiro-detail' produto.roteiro.pk %}"
+                :style="temaClaro ? 'color:#3b82f6;' : 'color:#60a5fa;'">roteiro</a>,
+            {{ produto.roteiro.tempo_total|floatformat:0 }} min)
+          </span>
+          <span class="tabular-nums">R$ {{ produto.roteiro.custo_total|floatformat:2 }}</span>
+        </div>
+        <div class="flex justify-between pt-2 border-t text-base font-bold"
+             :style="temaClaro ? 'border-color:#e5e7eb; color:#111827;' : 'border-color:#303036; color:#f8fafc;'">
+          <span>Custo total</span>
+          <span class="tabular-nums">R$ {{ ficha.custo_com_mao_de_obra|floatformat:2 }}</span>
+        </div>
+      </div>
+      <p class="text-xs mt-3" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+        Materiais e mão de obra diretos. Não inclui rateio de despesa fixa,
+        imposto nem margem.
+      </p>
+    </div>
+  {% endif %}
+
   {# ── Desenho técnico e imagens ────────────────────────────────────── #}
   <div class="card p-5 space-y-4" x-data="{ ampliada: null, anexar: false }">
     <div class="flex items-center justify-between gap-2 flex-wrap">

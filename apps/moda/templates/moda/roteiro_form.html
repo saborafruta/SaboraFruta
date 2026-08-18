@@ -1,0 +1,31 @@
+{% extends "_base.html" %}
+{% block title %}{{ title }}{% endblock %}
+{% block page_title %}{{ title }}{% endblock %}
+{% block content %}
+<div class="max-w-2xl mx-auto space-y-5">
+  <div>
+    <p class="text-sm mb-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+      <a href="{% url 'moda:roteiro-list' %}" :style="temaClaro ? 'color:#3b82f6;' : 'color:#60a5fa;'">Roteiro de Produção</a>
+      <span class="mx-1">›</span> {{ title }}
+    </p>
+    <h2 class="text-2xl font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">{{ title }}</h2>
+    <p class="text-sm mt-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+      Escolha o produto. As etapas — quais operações e em que ordem — entram
+      na tela seguinte, e podem ser copiadas de outro roteiro parecido.
+    </p>
+  </div>
+
+  <form method="post" novalidate class="space-y-5">
+    {% csrf_token %}
+    <div class="card p-6 space-y-4">
+      {% include "moda/_form_campos.html" %}
+    </div>
+
+    <div class="flex justify-end gap-2">
+      <a href="{% if roteiro %}{% url 'moda:roteiro-detail' roteiro.pk %}{% else %}{% url 'moda:roteiro-list' %}{% endif %}"
+         class="btn-secondary">Cancelar</a>
+      <button type="submit" class="btn-primary">Salvar roteiro</button>
+    </div>
+  </form>
+</div>
+{% endblock %}

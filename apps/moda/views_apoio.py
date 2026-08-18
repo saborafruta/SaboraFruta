@@ -77,6 +77,22 @@ CADASTROS: dict[str, Cadastro] = {
         colunas=(('Nome', 'nome'), ('Observação', 'observacao')),
         ajuda='Linha de produto: Esportiva, Casual, Uniforme profissional.',
     ),
+    'operacoes': Cadastro(
+        slug='operacoes', model=m.Operacao, form=f.OperacaoForm,
+        singular='Operação', plural='Operações', grupo='engenharia',
+        colunas=(
+            ('Operação', 'nome'), ('Setor', 'get_setor_display'),
+            ('Máquina', 'maquina'), ('Tempo (min)', 'tempo_padrao'),
+            ('Custo/peça', 'custo_por_peca'), ('Cap. (pç/h)', 'capacidade'),
+        ),
+        busca_em=('nome', 'maquina', 'responsavel'),
+        ordem=('sequencia', 'nome'),
+        ajuda=(
+            'O catálogo da fábrica. O roteiro de cada produto escolhe daqui '
+            'quais operações usa e em que ordem. As 15 padrão saem de uma vez '
+            'pelo comando seed_operacoes_moda.'
+        ),
+    ),
     'materiais': Cadastro(
         slug='materiais', model=m.Tecido, form=f.TecidoForm,
         singular='Tecido', plural='Tecidos e Malhas', grupo='engenharia',

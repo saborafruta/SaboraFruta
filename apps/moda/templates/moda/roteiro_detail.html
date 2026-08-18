@@ -1,0 +1,289 @@
+{% extends "_base.html" %}
+{% block title %}{{ title }}{% endblock %}
+{% block page_title %}Roteiro {{ produto.codigo }}{% endblock %}
+{% block content %}
+<div class="space-y-5">
+
+  {# ── Cabeçalho e totais ───────────────────────────────────────────── #}
+  <div class="card p-5">
+    <p class="text-sm mb-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+      <a href="{% url 'moda:roteiro-list' %}" :style="temaClaro ? 'color:#3b82f6;' : 'color:#60a5fa;'">Roteiro de Produção</a>
+      <span class="mx-1">›</span> {{ produto.codigo }}
+    </p>
+    <div class="flex flex-wrap items-start justify-between gap-4">
+      <div class="min-w-0">
+        <h2 class="text-2xl font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
+          {{ produto.nome }}
+        </h2>
+        <p class="text-sm mt-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+          Versão {{ roteiro.versao }} · {{ etapas|length }} etapa(s)
+        </p>
+      </div>
+      <a href="{% url 'moda:roteiro-update' roteiro.pk %}" class="btn-secondary text-sm">Editar</a>
+    </div>
+
+    <div class="grid grid-cols-2 lg:grid-cols-4 gap-3 mt-5">
+      <div class="rounded-xl p-3"
+           :style="temaClaro ? 'background:#f8fafc;' : 'background:#18181b;'">
+        <p class="text-xs uppercase tracking-wider" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Tempo/peça</p>
+        <p class="text-xl font-bold tabular-nums mt-0.5" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
+          {{ roteiro.tempo_total|floatformat:2 }}<span class="text-sm font-normal"> min</span>
+        </p>
+      </div>
+      <div class="rounded-xl p-3"
+           :style="temaClaro ? 'background:#f8fafc;' : 'background:#18181b;'">
+        <p class="text-xs uppercase tracking-wider" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Mão de obra</p>
+        <p class="text-xl font-bold tabular-nums mt-0.5" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
+          R$ {{ roteiro.custo_total|floatformat:2 }}
+        </p>
+      </div>
+      <div class="rounded-xl p-3"
+           :style="temaClaro ? 'background:#f8fafc;' : 'background:#18181b;'">
+        <p class="text-xs uppercase tracking-wider" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Gargalo</p>
+        <p class="text-sm font-bold mt-1" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
+          {% if roteiro.gargalo %}
+            {{ roteiro.gargalo.operacao.nome }}
+            <span class="block text-xs font-normal" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+              {{ roteiro.gargalo.capacidade_efetiva|floatformat:0 }} pç/h
+            </span>
+          {% else %}
+            <span class="font-normal" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+              sem capacidade informada
+            </span>
+          {% endif %}
+        </p>
+      </div>
+      <div class="rounded-xl p-3"
+           :style="temaClaro ? 'background:#f8fafc;' : 'background:#18181b;'">
+        <p class="text-xs uppercase tracking-wider" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Capacidade/dia</p>
+        <p class="text-xl font-bold tabular-nums mt-0.5" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
+          {{ roteiro.capacidade_diaria|floatformat:0 }}
+        </p>
+        <p class="text-xs" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">peças, jornada de 8h</p>
+      </div>
+    </div>
+
+    {% comment %}
+      A capacidade do dia sai do gargalo, não da média das etapas: a fábrica
+      não entrega mais do que a etapa mais lenta deixa passar, e a média
+      daria um número que a produção nunca alcança.
+    {% endcomment %}
+  </div>
+
+  {# ── Etapas ───────────────────────────────────────────────────────── #}
+  <div class="card p-5 space-y-4" x-data="{ nova: false, copiar: false }">
+    <div class="flex items-center justify-between gap-2 flex-wrap">
+      <div>
+        <h3 class="text-sm font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">Etapas</h3>
+        <p class="text-xs mt-0.5" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+          Campo em branco herda o padrão da operação.
+        </p>
+      </div>
+      <div class="flex gap-2">
+        {% if outros_roteiros %}
+          <button type="button" class="btn-secondary text-sm" @click="copiar = !copiar; nova = false">Copiar de…</button>
+        {% endif %}
+        <button type="button" class="btn-primary text-sm" @click="nova = !nova; copiar = false"
+                x-text="nova ? 'Fechar' : '+ Etapa'"></button>
+      </div>
+    </div>
+
+    {# Copiar de outro roteiro #}
+    {% if outros_roteiros %}
+      <form method="post" action="{% url 'moda:roteiro-copiar' roteiro.pk %}"
+            x-show="copiar" x-cloak class="rounded-xl p-4 flex flex-wrap items-end gap-3"
+            :style="temaClaro ? 'background:#f8fafc; border:1px solid #e5e7eb;' : 'background:#18181b; border:1px solid #303036;'">
+        {% csrf_token %}
+        <div class="flex-1 min-w-[220px]">
+          <label class="block text-xs font-semibold mb-1" :style="temaClaro ? 'color:#374151;' : 'color:#cbd5e1;'">
+            Copiar as etapas de
+          </label>
+          <select name="origem" class="form-input w-full">
+            {% for r in outros_roteiros %}
+              <option value="{{ r.pk }}">{{ r.produto.codigo }} — {{ r.produto.nome }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <button type="submit" class="btn-primary text-sm">Copiar</button>
+        <p class="w-full text-xs" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+          Etapas que este roteiro já tem não são tocadas — os ajustes feitos aqui ficam.
+        </p>
+      </form>
+    {% endif %}
+
+    {# Nova etapa #}
+    <form method="post" action="{% url 'moda:roteiro-etapa-add' roteiro.pk %}"
+          x-show="nova" x-cloak class="rounded-xl p-4 space-y-3"
+          :style="temaClaro ? 'background:#f8fafc; border:1px solid #e5e7eb;' : 'background:#18181b; border:1px solid #303036;'">
+      {% csrf_token %}
+      {% if form_etapa.errors %}
+        <div class="text-xs font-semibold p-2 rounded-lg" style="background:rgba(220,38,38,.1); color:#dc2626;">
+          {% for campo, erros in form_etapa.errors.items %}{{ erros|join:" " }}<br>{% endfor %}
+        </div>
+      {% endif %}
+      <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+        <div class="lg:col-span-2">
+          <label class="block text-xs font-semibold mb-1" :style="temaClaro ? 'color:#374151;' : 'color:#cbd5e1;'">Operação</label>
+          {{ form_etapa.operacao }}
+        </div>
+        <div>
+          <label class="block text-xs font-semibold mb-1" :style="temaClaro ? 'color:#374151;' : 'color:#cbd5e1;'">Sequência</label>
+          {{ form_etapa.sequencia }}
+        </div>
+        <div>
+          <label class="block text-xs font-semibold mb-1" :style="temaClaro ? 'color:#374151;' : 'color:#cbd5e1;'">Tempo (min)</label>
+          {{ form_etapa.tempo_padrao }}
+        </div>
+        <div>
+          <label class="block text-xs font-semibold mb-1" :style="temaClaro ? 'color:#374151;' : 'color:#cbd5e1;'">Custo</label>
+          {{ form_etapa.custo }}
+        </div>
+        <div>
+          <label class="block text-xs font-semibold mb-1" :style="temaClaro ? 'color:#374151;' : 'color:#cbd5e1;'">Capacidade</label>
+          {{ form_etapa.capacidade }}
+        </div>
+        <div>
+          <label class="block text-xs font-semibold mb-1" :style="temaClaro ? 'color:#374151;' : 'color:#cbd5e1;'">Máquina</label>
+          {{ form_etapa.maquina }}
+        </div>
+        <div>
+          <label class="block text-xs font-semibold mb-1" :style="temaClaro ? 'color:#374151;' : 'color:#cbd5e1;'">Responsável</label>
+          {{ form_etapa.responsavel }}
+        </div>
+      </div>
+      <div class="flex justify-end gap-2">
+        <button type="button" class="btn-secondary text-sm" @click="nova = false">Cancelar</button>
+        <button type="submit" class="btn-primary text-sm">Acrescentar</button>
+      </div>
+    </form>
+
+    {# Tabela das etapas #}
+    {% if etapas %}
+      <form method="post" action="{% url 'moda:roteiro-etapa-salvar' roteiro.pk %}">
+        {% csrf_token %}
+        <div class="overflow-x-auto">
+          <table class="w-full text-sm" style="min-width:900px;">
+            <thead>
+              <tr class="text-xs uppercase tracking-wider" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+                <th class="text-right font-semibold pb-2 w-20">Seq.</th>
+                <th class="text-left font-semibold pb-2">Operação</th>
+                <th class="text-left font-semibold pb-2 w-28">Setor</th>
+                <th class="text-left font-semibold pb-2 w-32">Máquina</th>
+                <th class="text-left font-semibold pb-2 w-32">Responsável</th>
+                <th class="text-right font-semibold pb-2 w-24">Tempo</th>
+                <th class="text-right font-semibold pb-2 w-28">Custo</th>
+                <th class="text-right font-semibold pb-2 w-24">Cap.</th>
+                <th class="text-right font-semibold pb-2 w-24">R$/peça</th>
+                <th class="w-10"></th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for e in etapas %}
+                <tr class="border-t" :style="temaClaro ? 'border-color:#e5e7eb;' : 'border-color:#303036;'">
+                  <td class="py-2 pr-2">
+                    <input type="number" min="0" name="et_{{ e.pk }}-sequencia" value="{{ e.sequencia }}"
+                           class="form-input text-right w-full">
+                  </td>
+                  <td class="py-2 pr-2" :style="temaClaro ? 'color:#111827;' : 'color:#e5e7eb;'">
+                    {{ e.operacao.nome }}
+                    {% if e.pk == gargalo_id %}
+                      <span class="text-[10px] font-bold px-1.5 py-0.5 rounded-full ml-1"
+                            style="background:rgba(220,38,38,.12); color:#dc2626;">gargalo</span>
+                    {% endif %}
+                    {% if e.observacao %}<span class="block text-xs opacity-60">{{ e.observacao }}</span>{% endif %}
+                  </td>
+                  <td class="py-2 pr-2 text-xs" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+                    {{ e.operacao.get_setor_display }}
+                  </td>
+                  <td class="py-2 pr-2 text-xs" :style="temaClaro ? 'color:#374151;' : 'color:#cbd5e1;'">
+                    {% firstof e.maquina_efetiva '—' %}
+                  </td>
+                  <td class="py-2 pr-2 text-xs" :style="temaClaro ? 'color:#374151;' : 'color:#cbd5e1;'">
+                    {% firstof e.responsavel_efetivo '—' %}
+                  </td>
+                  {% comment %}
+                    O valor herdado NÃO é impresso dentro do input: se estivesse
+                    ali, salvar a tabela gravaria a herança como exceção fixa em
+                    toda etapa, e mexer no catálogo depois não mudaria mais nada.
+                    Ele aparece como placeholder e abaixo, em cinza.
+                  {% endcomment %}
+                  <td class="py-2 pl-2">
+                    <input type="number" step="0.01" min="0" name="et_{{ e.pk }}-tempo_padrao"
+                           value="{% if e.tempo_padrao is not None %}{{ e.tempo_padrao|stringformat:'s' }}{% endif %}"
+                           placeholder="{{ e.operacao.tempo_padrao|floatformat:2 }}"
+                           class="form-input text-right w-full">
+                  </td>
+                  <td class="py-2 pl-2">
+                    <input type="number" step="0.0001" min="0" name="et_{{ e.pk }}-custo"
+                           value="{% if e.custo is not None %}{{ e.custo|stringformat:'s' }}{% endif %}"
+                           placeholder="{{ e.operacao.custo|floatformat:2 }}"
+                           class="form-input text-right w-full">
+                    <span class="block text-[10px] text-right mt-0.5" :style="temaClaro ? 'color:#94a3b8;' : 'color:#71717a;'">
+                      {{ e.operacao.get_tipo_custo_display|lower }}
+                    </span>
+                  </td>
+                  <td class="py-2 pl-2">
+                    <input type="number" step="0.01" min="0" name="et_{{ e.pk }}-capacidade"
+                           value="{% if e.capacidade is not None %}{{ e.capacidade|stringformat:'s' }}{% endif %}"
+                           placeholder="{{ e.operacao.capacidade|floatformat:0 }}"
+                           class="form-input text-right w-full">
+                  </td>
+                  <td class="py-2 pl-2 text-right font-semibold tabular-nums"
+                      :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
+                    R$ {{ e.custo_peca|floatformat:2 }}
+                  </td>
+                  <td class="py-2 pl-2 text-right">
+                    <button type="submit" form="rme-{{ e.pk }}" title="Remover"
+                            class="w-7 h-7 rounded-lg text-base leading-none"
+                            style="background:rgba(220,38,38,.1); color:#dc2626;">&times;</button>
+                  </td>
+                </tr>
+              {% endfor %}
+            </tbody>
+            <tfoot>
+              <tr class="border-t-2" :style="temaClaro ? 'border-color:#cbd5e1;' : 'border-color:#3f3f46;'">
+                <td colspan="5" class="pt-3 text-right font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
+                  Total por peça
+                </td>
+                <td class="pt-3 pl-2 text-right font-bold tabular-nums" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
+                  {{ roteiro.tempo_total|floatformat:2 }}
+                </td>
+                <td colspan="2"></td>
+                <td class="pt-3 pl-2 text-right text-base font-bold tabular-nums"
+                    :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
+                  R$ {{ roteiro.custo_total|floatformat:2 }}
+                </td>
+                <td></td>
+              </tr>
+            </tfoot>
+          </table>
+        </div>
+
+        <div class="flex justify-end mt-3">
+          <button type="submit" class="btn-primary text-sm">Salvar etapas</button>
+        </div>
+      </form>
+
+      {% comment %}
+        Formulários de remoção fora da tabela, ligados pelo atributo `form`
+        do botão: <form> dentro de <tbody> é HTML inválido e o navegador o
+        move para fora, quebrando o formulário que envolve a tabela.
+      {% endcomment %}
+      {% for e in etapas %}
+        <form id="rme-{{ e.pk }}" method="post"
+              action="{% url 'moda:roteiro-etapa-delete' roteiro.pk e.pk %}"
+              onsubmit="return confirm('Tirar {{ e.operacao.nome|escapejs }} do roteiro?');">
+          {% csrf_token %}
+        </form>
+      {% endfor %}
+
+    {% else %}
+      <p class="text-sm" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+        Nenhuma etapa ainda. Acrescente as operações por onde este produto
+        passa — ou copie de um roteiro parecido, se já houver.
+      </p>
+    {% endif %}
+  </div>
+
+</div>
+{% endblock %}

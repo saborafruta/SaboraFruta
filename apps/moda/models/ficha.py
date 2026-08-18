@@ -109,6 +109,20 @@ class FichaTecnica(FilialScopedModel):
         return sorted(linhas, key=lambda x: x['custo'], reverse=True)
 
     @property
+    def custo_com_mao_de_obra(self) -> Decimal:
+        """
+        Materiais + mão de obra do roteiro do produto.
+
+        Sem roteiro, devolve só os materiais: a ficha não tem como inventar
+        um custo de produção que ninguém informou, e um total inflado por
+        chute seria pior do que um total incompleto e assumido como tal.
+        """
+        roteiro = getattr(self.produto, 'roteiro', None)
+        if roteiro is None:
+            return self.custo_estimado
+        return (self.custo_estimado + roteiro.custo_total).quantize(Decimal('0.01'))
+
+    @property
     def desenho(self):
         """O desenho da ficha; sem ele, o do produto."""
         return self.desenho_tecnico or self.produto.desenho_tecnico
