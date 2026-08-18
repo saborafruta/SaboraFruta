@@ -1,0 +1,24 @@
+{% extends "_base.html" %}
+{% block title %}{{ title }}{% endblock %}
+{% block page_title %}{{ title }}{% endblock %}
+{% block content %}
+<div class="max-w-xl mx-auto space-y-5">
+  <div>
+    <p class="text-sm mb-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+      <a href="{% url 'moda:cor-list' %}" :style="temaClaro ? 'color:#3b82f6;' : 'color:#60a5fa;'">Cores</a>
+      <span class="mx-1">›</span> {{ title }}
+    </p>
+    <h2 class="text-2xl font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">{{ title }}</h2>
+  </div>
+  <form method="post" novalidate class="space-y-5">
+    {% csrf_token %}
+    <div class="card p-6 space-y-4">
+      {% include "moda/_form_campos.html" %}
+    </div>
+    <div class="flex gap-3 justify-end">
+      <a href="{% url 'moda:cor-list' %}" class="btn-secondary">Cancelar</a>
+      <button type="submit" class="btn-primary">Salvar cor</button>
+    </div>
+  </form>
+</div>
+{% endblock %}

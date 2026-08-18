@@ -1,0 +1,131 @@
+{% extends "_base.html" %}
+{% block title %}{{ title }}{% endblock %}
+{% block page_title %}{{ produto.codigo }} — {{ produto.nome }}{% endblock %}
+
+{% block content %}
+<div class="space-y-5">
+
+  <div class="flex flex-wrap items-start justify-between gap-3">
+    <div>
+      <p class="text-sm mb-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+        <a href="{% url 'moda:produto-list' %}" :style="temaClaro ? 'color:#3b82f6;' : 'color:#60a5fa;'">Produtos</a>
+        <span class="mx-1">›</span> {{ produto.codigo }}
+      </p>
+      <h2 class="text-2xl font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">{{ produto.nome }}</h2>
+    </div>
+    <a href="{% url 'moda:produto-update' produto.pk %}" class="btn-secondary">Editar</a>
+  </div>
+
+  <div class="grid gap-4 lg:grid-cols-3">
+
+    <!-- Ficha do produto -->
+    <div class="card p-5 space-y-3 lg:col-span-1">
+      <h3 class="text-xs font-semibold uppercase tracking-wide pb-2 border-b"
+          :style="temaClaro ? 'color:#6b7280; border-color:#e5e7eb;' : 'color:#6b7280; border-color:#374151;'">Ficha</h3>
+      {% for rotulo, valor in ficha %}
+        <div class="flex justify-between gap-3 text-sm">
+          <span :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">{{ rotulo }}</span>
+          <span class="text-right font-medium" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">{{ valor|default:"—" }}</span>
+        </div>
+      {% endfor %}
+    </div>
+
+    <!-- Cores + variantes -->
+    <div class="space-y-4 lg:col-span-2">
+
+      <div class="card p-5 space-y-3">
+        <div class="flex items-center justify-between gap-2 flex-wrap">
+          <h3 class="text-sm font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">Cores do produto</h3>
+          <span class="text-xs" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">{{ cores_produto|length }} cor(es)</span>
+        </div>
+
+        <div class="flex flex-wrap gap-2">
+          {% for pc in cores_produto %}
+            <span class="inline-flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-sm"
+                  :style="temaClaro ? 'background:#f3f4f6;' : 'background:#2a2a2e;'">
+              <span class="w-4 h-4 rounded border" style="background:{{ pc.cor.hex_cor|default:'#e5e7eb' }}; border-color:rgba(127,127,127,.3);"></span>
+              <span :style="temaClaro ? 'color:#111827;' : 'color:#f1f5f9;'">{{ pc.cor.nome }}</span>
+              <span class="font-mono text-xs" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">{{ pc.cor.sigla }}</span>
+            </span>
+          {% empty %}
+            <p class="text-sm" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+              Nenhuma cor ainda. Sem cor não há variante para gerar.
+            </p>
+          {% endfor %}
+        </div>
+
+        <form method="post" action="{% url 'moda:produto-cor-add' produto.pk %}" class="flex gap-2 pt-1">
+          {% csrf_token %}
+          <select name="cor" class="form-input flex-1" required>
+            <option value="">Adicionar cor...</option>
+            {% for c in cores_disponiveis %}
+              <option value="{{ c.pk }}">{{ c.nome }} ({{ c.sigla }})</option>
+            {% endfor %}
+          </select>
+          <button type="submit" class="btn-secondary">Adicionar</button>
+        </form>
+      </div>
+
+      <div class="card p-5 space-y-3">
+        <div class="flex items-center justify-between gap-2 flex-wrap">
+          <div>
+            <h3 class="text-sm font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">Variantes (SKUs)</h3>
+            {% comment %}
+              A prévia mostra o que a geração criaria e o que já existe --
+              gerar de novo nunca recria SKU em uso, mas ver isso antes
+              evita a dúvida de "vou perder o que já tenho?".
+            {% endcomment %}
+            <p class="text-xs mt-0.5" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+              Um SKU por cor × tamanho da grade. Gerar de novo cria só o que falta.
+            </p>
+          </div>
+          <form method="post" action="{% url 'moda:produto-gerar-variantes' produto.pk %}">
+            {% csrf_token %}
+            <button type="submit" class="btn-primary text-sm">Gerar variantes</button>
+          </form>
+        </div>
+
+        {% if variantes %}
+          <div class="overflow-x-auto">
+            <table class="w-full text-sm">
+              <thead>
+                <tr class="border-b" :style="temaClaro ? 'border-color:#e2e8f0;' : 'border-color:#2a2a2e;'">
+                  <th class="text-left px-2 py-2 text-xs font-semibold uppercase" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">SKU</th>
+                  <th class="text-left px-2 py-2 text-xs font-semibold uppercase" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Cor</th>
+                  <th class="text-left px-2 py-2 text-xs font-semibold uppercase" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Tamanho</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for v in variantes %}
+                  <tr class="border-b" :style="temaClaro ? 'border-color:#f1f5f9;' : 'border-color:#1e1e22;'">
+                    <td class="px-2 py-2 font-mono" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">{{ v.sku }}</td>
+                    <td class="px-2 py-2" :style="temaClaro ? 'color:#374151;' : 'color:#d1d5db;'">{{ v.produto_cor.cor.nome }}</td>
+                    <td class="px-2 py-2 font-mono" :style="temaClaro ? 'color:#374151;' : 'color:#d1d5db;'">{{ v.tamanho.sigla }}</td>
+                  </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+        {% elif previa %}
+          <div>
+            <p class="text-xs mb-2" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+              Prévia — {{ previa|length }} SKU(s) serão criados:
+            </p>
+            <div class="flex flex-wrap gap-1.5">
+              {% for p in previa %}
+                <span class="font-mono text-xs px-2 py-1 rounded"
+                      :style="temaClaro ? 'background:#f3f4f6; color:#374151;' : 'background:#2a2a2e; color:#d4d4d4;'">{{ p.sku }}</span>
+              {% endfor %}
+            </div>
+          </div>
+        {% else %}
+          <p class="text-sm" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+            Defina a grade e adicione ao menos uma cor para gerar as variantes.
+          </p>
+        {% endif %}
+      </div>
+
+    </div>
+  </div>
+</div>
+{% endblock %}

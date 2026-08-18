@@ -1,0 +1,55 @@
+{% extends "_base.html" %}
+{% block title %}{{ title }}{% endblock %}
+{% block page_title %}{{ title }}{% endblock %}
+{% block content %}
+<div class="max-w-2xl mx-auto space-y-5">
+  <div>
+    <p class="text-sm mb-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+      <a href="{% url 'moda:grade-list' %}" :style="temaClaro ? 'color:#3b82f6;' : 'color:#60a5fa;'">Grades</a>
+      <span class="mx-1">›</span> {{ title }}
+    </p>
+    <h2 class="text-2xl font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">{{ title }}</h2>
+  </div>
+
+  <form method="post" novalidate class="space-y-5">
+    {% csrf_token %}
+    <div class="card p-6 space-y-4">
+      {% include "moda/_form_campos.html" %}
+    </div>
+
+    <div class="card p-6 space-y-3">
+      <div>
+        <h3 class="text-sm font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">Tamanhos da grade</h3>
+        {% comment %}
+          A ordem gravada é a ordem desta lista, não a ordem de clique --
+          por isso os tamanhos aparecem já ordenados por tipo e posição.
+        {% endcomment %}
+        <p class="text-xs mt-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+          Marque os tamanhos. Eles são gravados na ordem em que aparecem aqui,
+          que é a ordem que sai na ficha de produção.
+        </p>
+      </div>
+      <div class="grid grid-cols-3 sm:grid-cols-5 gap-2">
+        {% for t in tamanhos %}
+          <label class="flex items-center gap-2 p-2.5 rounded-lg cursor-pointer"
+                 :style="temaClaro ? 'background:#f8fafc; border:1px solid #e5e7eb;' : 'background:#18181b; border:1px solid #303036;'">
+            <input type="checkbox" name="tamanho" value="{{ t.pk }}"
+                   {% if t.pk in selecionados %}checked{% endif %}>
+            <span class="font-mono text-sm font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">{{ t.sigla }}</span>
+          </label>
+        {% empty %}
+          <p class="col-span-full text-sm" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+            Nenhum tamanho cadastrado ainda. Rode <code>seed_grades_moda</code> para criar
+            os tamanhos padrão de uma vez.
+          </p>
+        {% endfor %}
+      </div>
+    </div>
+
+    <div class="flex gap-3 justify-end">
+      <a href="{% url 'moda:grade-list' %}" class="btn-secondary">Cancelar</a>
+      <button type="submit" class="btn-primary">Salvar grade</button>
+    </div>
+  </form>
+</div>
+{% endblock %}

@@ -1,0 +1,43 @@
+{% extends "_base.html" %}
+{% block title %}{{ title }}{% endblock %}
+{% block page_title %}{{ title }}{% endblock %}
+{% block content %}
+<div class="space-y-5">
+  <div class="flex flex-wrap items-start justify-between gap-3">
+    <div>
+      <p class="text-sm mb-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+        <a href="{% url 'moda:grupo' 'produtos' %}" :style="temaClaro ? 'color:#3b82f6;' : 'color:#60a5fa;'">Produtos</a>
+        <span class="mx-1">›</span> Grades
+      </p>
+      <h2 class="text-2xl font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">Grades de Tamanho</h2>
+      <p class="text-sm mt-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+        A ordem dos tamanhos aqui é a ordem que sai na ficha de produção.
+      </p>
+    </div>
+    <a href="{% url 'moda:grade-create' %}" class="btn-primary">+ Nova grade</a>
+  </div>
+
+  <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+    {% for g in grades %}
+      <a href="{% url 'moda:grade-update' g.pk %}" class="card p-4 block transition-transform hover:-translate-y-0.5">
+        <div class="flex items-start justify-between gap-2">
+          <h3 class="font-semibold text-sm" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">{{ g.nome }}</h3>
+          {% if g.padrao %}<span class="text-[10px] font-bold px-1.5 py-0.5 rounded-full shrink-0" style="background:rgba(37,99,235,.14); color:#60a5fa;">padrão</span>{% endif %}
+        </div>
+        <p class="text-xs mt-2 font-mono" :style="temaClaro ? 'color:#374151;' : 'color:#d4d4d4;'">{{ g.resumo|default:"— sem tamanhos —" }}</p>
+        <p class="text-xs mt-2" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+          {{ g.get_tipo_display }} · {{ g.qtd_produtos }} produto{{ g.qtd_produtos|pluralize }}
+        </p>
+      </a>
+    {% empty %}
+      <div class="card p-8 text-center sm:col-span-2 lg:col-span-3">
+        <p class="text-sm" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+          Nenhuma grade cadastrada. As três padrão (Adulto, Plus Size, Infantil)
+          podem ser criadas de uma vez pelo comando <code>seed_grades_moda</code>,
+          ou monte a sua em "Nova grade".
+        </p>
+      </div>
+    {% endfor %}
+  </div>
+</div>
+{% endblock %}

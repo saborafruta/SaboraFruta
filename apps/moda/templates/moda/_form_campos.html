@@ -1,0 +1,18 @@
+{% comment %}
+  Renderiza os campos de um form no padrão visual das outras telas.
+  Num arquivo só para os 3 formulários do vertical não divergirem.
+{% endcomment %}
+{% for campo in form %}
+  <div class="{{ campo.css_classes|default:'' }}">
+    <label class="block text-sm font-medium mb-1.5" :style="temaClaro ? 'color:#374151;' : 'color:#d1d5db;'">
+      {{ campo.label }}{% if campo.field.required %} <span class="text-red-500">*</span>{% endif %}
+    </label>
+    {{ campo }}
+    {% if campo.help_text %}
+      <p class="text-xs mt-1" :style="temaClaro ? 'color:#94a3b8;' : 'color:#64748b;'">{{ campo.help_text }}</p>
+    {% endif %}
+    {% for erro in campo.errors %}
+      <p class="text-xs mt-1" style="color:#f87171;">{{ erro }}</p>
+    {% endfor %}
+  </div>
+{% endfor %}

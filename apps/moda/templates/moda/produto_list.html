@@ -1,0 +1,55 @@
+{% extends "_base.html" %}
+{% block title %}{{ title }}{% endblock %}
+{% block page_title %}{{ title }}{% endblock %}
+{% block content %}
+<div class="space-y-5">
+  <div class="flex flex-wrap items-start justify-between gap-3">
+    <div>
+      <p class="text-sm mb-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+        <a href="{% url 'moda:grupo' 'produtos' %}" :style="temaClaro ? 'color:#3b82f6;' : 'color:#60a5fa;'">Produtos</a>
+        <span class="mx-1">›</span> Produtos
+      </p>
+      <h2 class="text-2xl font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">Produtos de Moda</h2>
+    </div>
+    <a href="{% url 'moda:produto-create' %}" class="btn-primary">+ Novo produto</a>
+  </div>
+
+  <form method="get" class="card p-4">
+    <div class="flex gap-2">
+      <input type="text" name="q" value="{{ busca }}" class="form-input flex-1"
+             placeholder="Buscar por código, nome ou referência...">
+      <button type="submit" class="btn-primary">Buscar</button>
+      {% if busca %}<a href="{% url 'moda:produto-list' %}" class="btn-secondary">Limpar</a>{% endif %}
+    </div>
+  </form>
+
+  <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+    {% for p in produtos %}
+      <a href="{% url 'moda:produto-detail' p.pk %}" class="card p-4 block transition-transform hover:-translate-y-0.5">
+        <div class="flex items-start justify-between gap-2">
+          <div class="min-w-0">
+            <p class="font-mono text-xs font-semibold" :style="temaClaro ? 'color:#1d4ed8;' : 'color:#60a5fa;'">{{ p.codigo }}</p>
+            <h3 class="font-semibold text-sm mt-0.5 truncate" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">{{ p.nome }}</h3>
+          </div>
+          {% if p.status == 'ativo' %}<span class="soft-pill is-green text-xs shrink-0">Ativo</span>
+          {% elif p.status == 'rascunho' %}<span class="soft-pill is-slate text-xs shrink-0">Rascunho</span>
+          {% else %}<span class="soft-pill is-red text-xs shrink-0">Descontinuado</span>{% endif %}
+        </div>
+        <p class="text-xs mt-2" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+          {% if p.tecido %}{{ p.tecido.nome }}{% endif %}
+          {% if p.grade %} · grade {{ p.grade.nome }}{% endif %}
+        </p>
+        <p class="text-xs mt-1.5 font-semibold" :style="temaClaro ? 'color:#2563eb;' : 'color:#60a5fa;'">
+          {{ p.qtd_variantes }} SKU{{ p.qtd_variantes|pluralize }}
+        </p>
+      </a>
+    {% empty %}
+      <div class="card p-8 text-center sm:col-span-2 lg:col-span-3">
+        <p class="text-sm" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+          {% if busca %}Nenhum produto encontrado para "{{ busca }}".{% else %}Nenhum produto cadastrado ainda.{% endif %}
+        </p>
+      </div>
+    {% endfor %}
+  </div>
+</div>
+{% endblock %}
