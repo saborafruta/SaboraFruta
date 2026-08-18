@@ -613,7 +613,7 @@ class MaterialFichaForm(forms.ModelForm):
     class Meta:
         model = MaterialFicha
         fields = [
-            'tipo', 'descricao', 'codigo', 'unidade',
+            'tipo', 'descricao', 'codigo', 'produto_estoque', 'unidade',
             'consumo', 'perda', 'custo_unitario', 'observacao',
         ]
         widgets = {
@@ -626,7 +626,18 @@ class MaterialFichaForm(forms.ModelForm):
         }
 
     def __init__(self, *args, **kwargs):
+        from apps.produtos.models import Produto
+
         super().__init__(*args, **kwargs)
+
+        # Sem escopo de filial aqui: o produto de estoque e' do catalogo da
+        # empresa, e o saldo e' que e' por filial.
+        self.fields['produto_estoque'].queryset = Produto.objects.filter(
+            ativo=True,
+        ).order_by('descricao')
+        self.fields['produto_estoque'].required = False
+        self.fields['produto_estoque'].empty_label = 'sem ligacao com estoque'
+
         for campo in self.fields.values():
             css = campo.widget.attrs.get('class', '')
             if 'form-input' not in css:

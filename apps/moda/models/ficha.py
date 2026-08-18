@@ -199,6 +199,16 @@ class MaterialFicha(models.Model):
         help_text='Código do material no estoque ou no fornecedor.',
     )
 
+    # A ponte com o estoque real. Sem ela o material é só texto e não há de
+    # onde ler "estoque atual" -- a necessidade continua sendo calculada, mas
+    # a tela não consegue dizer se falta.
+    produto_estoque = models.ForeignKey(
+        'produtos.Produto', on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='materiais_moda',
+        verbose_name='Produto no estoque',
+        help_text='Ligue para o sistema conferir saldo e permitir reserva. A unidade precisa ser a mesma — não há conversão.',
+    )
+
     unidade = models.CharField(max_length=6, choices=Unidade.choices, default=Unidade.UNIDADE)
     consumo = models.DecimalField(
         max_digits=12, decimal_places=4, default=Decimal('0'),

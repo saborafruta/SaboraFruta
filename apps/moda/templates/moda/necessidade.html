@@ -1,0 +1,217 @@
+{% extends "_base.html" %}
+{% block title %}{{ title }}{% endblock %}
+{% block page_title %}Necessidade de Materiais{% endblock %}
+{% block content %}
+<div class="space-y-5">
+
+  <div>
+    <p class="text-sm mb-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+      <a href="{% url 'moda:grupo' 'pcp' %}" :style="temaClaro ? 'color:#3b82f6;' : 'color:#60a5fa;'">PCP</a>
+      <span class="mx-1">›</span> Necessidade de Materiais
+    </p>
+    <h2 class="text-2xl font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
+      Necessidade de Materiais
+    </h2>
+    {% comment %}
+      Recalculado a cada carga, nunca gravado: necessidade é uma foto de
+      ordens abertas × ficha técnica × estoque, e as três mudam o tempo todo.
+    {% endcomment %}
+    <p class="text-sm mt-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+      Consumo das fichas técnicas de todas as ordens abertas, contra o estoque
+      atual. Recalculado agora.
+    </p>
+  </div>
+
+  {# ── Resumo ───────────────────────────────────────────────────────── #}
+  <div class="grid grid-cols-2 lg:grid-cols-4 gap-3">
+    <div class="card p-4">
+      <p class="text-xs uppercase tracking-wider" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Materiais</p>
+      <p class="text-3xl font-bold tabular-nums mt-1" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
+        {{ resumo.materiais }}
+      </p>
+    </div>
+    <div class="card p-4" {% if resumo.insuficientes %}style="border-left:3px solid #dc2626;"{% endif %}>
+      <p class="text-xs uppercase tracking-wider" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Insuficientes</p>
+      <p class="text-3xl font-bold tabular-nums mt-1"
+         {% if resumo.insuficientes %}style="color:#dc2626;"
+         {% else %}style="color:#059669;"{% endif %}>{{ resumo.insuficientes }}</p>
+    </div>
+    <div class="card p-4">
+      <p class="text-xs uppercase tracking-wider" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Sem ligação com estoque</p>
+      <p class="text-3xl font-bold tabular-nums mt-1"
+         {% if resumo.sem_ligacao %}style="color:#d97706;"
+         {% else %}:style="temaClaro ? 'color:#cbd5e1;' : 'color:#52525b;'"{% endif %}>
+        {{ resumo.sem_ligacao }}
+      </p>
+    </div>
+    <div class="card p-4 flex flex-col justify-center gap-2">
+      {% if pode_agir %}
+        <form method="post" action="{% url 'moda:requisicao-gerar' %}">
+          {% csrf_token %}
+          <button type="submit" class="btn-primary text-sm w-full"
+                  {% if not resumo.insuficientes %}disabled title="Nada em déficit."{% endif %}>
+            GERAR REQUISIÇÃO DE COMPRA
+          </button>
+        </form>
+      {% endif %}
+      <p class="text-[10px]" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+        {% comment %}
+          Requisição, não pedido de compra: fornecedor, preço e condição não
+          saem da ficha técnica, e inventá-los daria um documento que o
+          comprador teria de refazer inteiro.
+        {% endcomment %}
+        Registra o que falta. Compras escolhe fornecedor e preço.
+      </p>
+    </div>
+  </div>
+
+  {% if resumo.insuficientes %}
+    <div class="card p-4 flex items-start gap-3" style="border-left:3px solid #dc2626;">
+      <span class="text-xs font-bold px-2 py-1 rounded-full shrink-0"
+            style="background:rgba(220,38,38,.12); color:#dc2626;">MATERIAL INSUFICIENTE</span>
+      <p class="text-sm" :style="temaClaro ? 'color:#374151;' : 'color:#cbd5e1;'">
+        {{ resumo.insuficientes }} material(is) sem estoque para atender as ordens
+        abertas. Déficit total: <strong>{{ resumo.deficit_total|floatformat:2 }}</strong>
+        (as unidades variam por material — veja a tabela).
+      </p>
+    </div>
+  {% endif %}
+
+  {# ── Tabela ───────────────────────────────────────────────────────── #}
+  <div class="card p-5">
+    {% if linhas %}
+      {% comment %}
+        Insuficientes no topo, maior déficit primeiro: a tela existe para
+        responder "o que falta comprar", e a resposta tem de estar na
+        primeira linha.
+      {% endcomment %}
+      <div class="overflow-x-auto">
+        <table class="w-full text-sm" style="min-width:940px;">
+          <thead>
+            <tr class="text-xs uppercase tracking-wider" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+              <th class="text-left font-semibold pb-2">Material</th>
+              <th class="text-right font-semibold pb-2 w-28">Necessário</th>
+              <th class="text-right font-semibold pb-2 w-28">Estoque</th>
+              <th class="text-right font-semibold pb-2 w-28">Livre</th>
+              <th class="text-right font-semibold pb-2 w-28">Reservado</th>
+              <th class="text-right font-semibold pb-2 w-28">Déficit</th>
+              <th class="text-right font-semibold pb-2 w-20">OPs</th>
+              {% if pode_agir %}<th class="w-28"></th>{% endif %}
+            </tr>
+          </thead>
+          <tbody>
+            {% for l in linhas %}
+              <tr class="border-t" :style="temaClaro ? 'border-color:#e5e7eb;' : 'border-color:#303036;'"
+                  {% if l.insuficiente %}style="background:rgba(220,38,38,.04);"{% endif %}>
+                <td class="py-2 pr-3" :style="temaClaro ? 'color:#111827;' : 'color:#e5e7eb;'">
+                  {{ l.descricao }}
+                  <span class="block text-xs opacity-60">
+                    {{ l.tipo }}{% if l.codigo %} · {{ l.codigo }}{% endif %}
+                  </span>
+                  {% if not l.ligado %}
+                    <span class="text-[10px] font-bold px-1.5 py-0.5 rounded-full inline-block mt-1"
+                          style="background:rgba(245,158,11,.14); color:#d97706;">
+                      sem produto de estoque ligado
+                    </span>
+                  {% endif %}
+                </td>
+                <td class="py-2 text-right tabular-nums font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
+                  {{ l.previsto|floatformat:2 }}
+                  <span class="text-[10px] font-normal opacity-60">{{ l.unidade }}</span>
+                </td>
+                {% if l.ligado %}
+                  <td class="py-2 text-right tabular-nums" :style="temaClaro ? 'color:#374151;' : 'color:#cbd5e1;'">
+                    {{ l.estoque_fisico|floatformat:2 }}
+                  </td>
+                  <td class="py-2 text-right tabular-nums" :style="temaClaro ? 'color:#374151;' : 'color:#cbd5e1;'">
+                    {{ l.livre|floatformat:2 }}
+                    <span class="block text-[10px] opacity-60">{{ l.cobertura }}%</span>
+                  </td>
+                  <td class="py-2 text-right tabular-nums" :style="temaClaro ? 'color:#374151;' : 'color:#cbd5e1;'">
+                    {% if l.reservado_nosso %}{{ l.reservado_nosso|floatformat:2 }}{% else %}—{% endif %}
+                  </td>
+                  <td class="py-2 text-right tabular-nums font-bold"
+                      {% if l.insuficiente %}style="color:#dc2626;"{% else %}style="color:#059669;"{% endif %}>
+                    {% if l.insuficiente %}{{ l.deficit|floatformat:2 }}{% else %}—{% endif %}
+                  </td>
+                {% else %}
+                  <td colspan="4" class="py-2 text-center text-xs" :style="temaClaro ? 'color:#94a3b8;' : 'color:#71717a;'">
+                    Ligue este material a um produto de estoque na
+                    <a href="{% url 'moda:ficha-list' %}"
+                       :style="temaClaro ? 'color:#3b82f6;' : 'color:#60a5fa;'">ficha técnica</a>
+                    para o estoque ser conferido.
+                  </td>
+                {% endif %}
+                <td class="py-2 text-right tabular-nums text-xs" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+                  {{ l.ordens|length }}
+                </td>
+                {% if pode_agir %}
+                  <td class="py-2 text-right">
+                    {% if l.a_reservar %}
+                      <form method="post" action="{% url 'moda:necessidade-reservar' %}">
+                        {% csrf_token %}
+                        <input type="hidden" name="chave" value="{{ l.chave }}">
+                        <button type="submit" class="btn-secondary text-xs"
+                                title="Separar {{ l.a_reservar|floatformat:2 }} {{ l.unidade }}">
+                          RESERVAR
+                        </button>
+                      </form>
+                    {% endif %}
+                  </td>
+                {% endif %}
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+
+      <p class="text-xs mt-4" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+        <strong>Livre</strong> é o estoque físico menos as reservas de outros
+        setores — o que estas ordens podem usar. Reservar move material de
+        “livre” para “reservado” e <strong>não altera o déficit</strong>.
+        As unidades vêm da ficha técnica e não são convertidas: ligue cada
+        material a um produto medido na mesma unidade.
+      </p>
+    {% else %}
+      <p class="text-sm" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+        Nenhuma necessidade calculada. Ela aparece quando houver ordem de
+        produção aberta cujo produto tenha
+        <a href="{% url 'moda:ficha-list' %}" :style="temaClaro ? 'color:#3b82f6;' : 'color:#60a5fa;'">ficha técnica</a>
+        com materiais.
+      </p>
+    {% endif %}
+  </div>
+
+  {# ── Requisições ──────────────────────────────────────────────────── #}
+  {% if requisicoes %}
+    <div class="card p-5 space-y-3">
+      <h3 class="text-sm font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
+        Últimas requisições
+      </h3>
+      <div class="space-y-1">
+        {% for r in requisicoes %}
+          <a href="{% url 'moda:requisicao-detail' r.pk %}"
+             class="flex items-center justify-between gap-3 text-sm px-3 py-2 rounded-lg"
+             :style="temaClaro ? 'background:#f8fafc; color:#334155;' : 'background:#18181b; color:#d4d4d8;'">
+            <span>
+              <strong class="font-mono">#{{ r.numero|stringformat:"04d" }}</strong>
+              · {{ r.criado_em|date:"d/m/Y H:i" }}
+              {% if r.criado_por %} · {{ r.criado_por }}{% endif %}
+            </span>
+            <span class="flex items-center gap-3 shrink-0">
+              <span class="text-xs opacity-70">{{ r.itens.all|length }} item(ns)</span>
+              <span class="text-xs font-semibold px-2 py-0.5 rounded-full"
+                    {% if r.status == 'atendida' %}style="background:rgba(16,185,129,.14); color:#059669;"
+                    {% elif r.status == 'cancelada' %}style="background:rgba(148,163,184,.18); color:#64748b;"
+                    {% else %}style="background:rgba(245,158,11,.14); color:#d97706;"{% endif %}>
+                {{ r.get_status_display }}
+              </span>
+            </span>
+          </a>
+        {% endfor %}
+      </div>
+    </div>
+  {% endif %}
+
+</div>
+{% endblock %}

@@ -15,7 +15,8 @@ from . import (
     views, views_apoio as va, views_cadastros as vc, views_ficha as vf,
     views_corte as vco, views_encaixe as ve, views_fluxo as vx,
     views_ordem as vo, views_pcp as vp,
-    views_kanban as vk, views_roteiro as vr, views_wip as vw,
+    views_kanban as vk, views_necessidade as vn, views_roteiro as vr,
+    views_wip as vw,
 )
 
 app_name = 'moda'
@@ -47,6 +48,14 @@ ROTAS_PRONTAS: list = [
     path('comercial/pedidos/<int:pk>/pessoas/<int:individual_pk>/', vc.IndividualFormView.as_view(), name='pedido-individual-update'),
     path('comercial/pedidos/<int:pk>/pessoas/<int:individual_pk>/remover/', vc.IndividualDeleteView.as_view(), name='pedido-individual-delete'),
     path('comercial/pedidos/<int:pk>/pessoas/importar/', vc.IndividualImportarView.as_view(), name='pedido-individual-importar'),
+
+    # Necessidade de materiais. Endereco do menu de PCP.
+    path('pcp/necessidade-materiais/', vn.NecessidadeView.as_view(), name='necessidade'),
+    path('pcp/necessidade-materiais/reservar/', vn.ReservarView.as_view(), name='necessidade-reservar'),
+    path('pcp/necessidade-materiais/reservas/<int:pk>/cancelar/', vn.CancelarReservaView.as_view(), name='necessidade-reserva-cancelar'),
+    path('pcp/necessidade-materiais/requisicao/', vn.RequisicaoGerarView.as_view(), name='requisicao-gerar'),
+    path('pcp/necessidade-materiais/requisicao/<int:pk>/', vn.RequisicaoDetailView.as_view(), name='requisicao-detail'),
+    path('pcp/necessidade-materiais/requisicao/<int:pk>/status/', vn.RequisicaoStatusView.as_view(), name='requisicao-status'),
 
     # Kanban. Endereco do menu de Producao; a movimentacao responde JSON
     # para o arrasto nao recarregar a pagina a cada solta.

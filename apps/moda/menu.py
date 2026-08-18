@@ -92,6 +92,8 @@ GRUPOS: tuple[Grupo, ...] = (
         (
             Item('planejamento', 'Planejamento', 'Carga de trabalho no horizonte.'),
             Item('capacidade', 'Capacidade', 'Quanto cada setor aguenta por período.'),
+            Item('necessidade-materiais', 'Necessidade de Materiais',
+                 'O que as ordens vão consumir contra o que há em estoque.'),
             Item('programacao', 'Programação', 'Distribuição das ordens no tempo.'),
             Item('ordens-producao', 'Ordens de Produção', 'A OP que desce para a fábrica.'),
             Item('priorizacao', 'Priorização', 'O que passa na frente e por quê.'),

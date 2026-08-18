@@ -27,6 +27,7 @@ ABAS = (
     ('moda:pcp-priorizacao', 'Priorização'),
     ('moda:pcp-acompanhamento', 'Acompanhamento'),
     ('moda:pcp-capacidade', 'Capacidade'),
+    ('moda:necessidade', 'Materiais'),
 )
 
 
