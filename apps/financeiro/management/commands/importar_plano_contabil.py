@@ -39,36 +39,64 @@ class Command(BaseCommand):
         if len(contas) != payload.get("total"):
             raise CommandError("Quantidade de contas diverge do total informado no arquivo.")
 
+        classificacoes_existentes = set(
+            PlanoContabil.objects.filter(empresa=empresa).values_list(
+                "classificacao", flat=True
+            )
+        )
+        origem = f"{payload.get('fonte', 'Relação de Contas')} - emissão {payload.get('emitido_em', '')}"
+
+        objetos_importacao = []
+        for item in contas:
+            objetos_importacao.append(PlanoContabil(
+                empresa=empresa,
+                classificacao=item["classificacao"],
+                codigo_referencia=item["codigo_referencia"],
+                tipo_conta=item["tipo_conta"],
+                descricao=item["descricao"],
+                codigo_dre=item["codigo_dre"],
+                data_inicio=item["data_inicio"],
+                nivel=item["nivel"],
+                ordem=item["ordem"],
+                pagina_origem=item["pagina_origem"],
+                origem=origem,
+                ativo=item["ativo"],
+            ))
+
+        PlanoContabil.objects.bulk_create(
+            objetos_importacao,
+            update_conflicts=True,
+            unique_fields=["empresa", "classificacao"],
+            update_fields=[
+                "codigo_referencia",
+                "tipo_conta",
+                "descricao",
+                "codigo_dre",
+                "data_inicio",
+                "nivel",
+                "ordem",
+                "pagina_origem",
+                "origem",
+                "ativo",
+            ],
+        )
+
         objetos = {
             conta.classificacao: conta
             for conta in PlanoContabil.objects.filter(empresa=empresa)
         }
-        criadas = 0
-        atualizadas = 0
-        origem = f"{payload.get('fonte', 'Relação de Contas')} - emissão {payload.get('emitido_em', '')}"
-
-        for item in sorted(contas, key=lambda row: (row["nivel"], row["ordem"])):
+        contas_com_pai = []
+        for item in contas:
+            conta = objetos[item["classificacao"]]
             pai = objetos.get(item["classificacao_pai"])
-            conta, criada = PlanoContabil.objects.update_or_create(
-                empresa=empresa,
-                classificacao=item["classificacao"],
-                defaults={
-                    "conta_pai": pai,
-                    "codigo_referencia": item["codigo_referencia"],
-                    "tipo_conta": item["tipo_conta"],
-                    "descricao": item["descricao"],
-                    "codigo_dre": item["codigo_dre"],
-                    "data_inicio": item["data_inicio"],
-                    "nivel": item["nivel"],
-                    "ordem": item["ordem"],
-                    "pagina_origem": item["pagina_origem"],
-                    "origem": origem,
-                    "ativo": item["ativo"],
-                },
-            )
-            objetos[conta.classificacao] = conta
-            criadas += int(criada)
-            atualizadas += int(not criada)
+            if conta.conta_pai_id != (pai.id if pai else None):
+                conta.conta_pai = pai
+                contas_com_pai.append(conta)
+        if contas_com_pai:
+            PlanoContabil.objects.bulk_update(contas_com_pai, ["conta_pai"])
+
+        criadas = len(set(objetos) - classificacoes_existentes)
+        atualizadas = len(contas) - criadas
 
         importadas = PlanoContabil.objects.filter(
             empresa=empresa,
