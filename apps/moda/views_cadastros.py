@@ -15,13 +15,15 @@ from apps.core.services.exceptions import DadosInvalidosError
 
 from .forms import (
     CorForm, GradeForm, ItemPedidoProducaoForm, PedidoProducaoForm,
-    PersonalizacaoForm, ProdutoModaForm, VisualItemPedidoForm,
+    PersonalizacaoForm, PersonalizacaoIndividualForm, ProdutoModaForm,
+    VisualItemPedidoForm,
 )
 from .models import (
     Cor, Grade, ItemGrade, ItemGradePedido, ItemPedidoProducao, PedidoProducao,
-    Personalizacao, ProdutoCor, ProdutoModa, Tamanho, VisualItemPedido,
+    Personalizacao, PersonalizacaoIndividual, ProdutoCor, ProdutoModa,
+    Tamanho, VisualItemPedido,
 )
-from .services import GradePedidoService, VarianteService
+from .services import GradePedidoService, IndividualService, VarianteService
 from .views import ModaBaseView
 
 
@@ -356,6 +358,11 @@ class PedidoDetailView(ModaBaseView):
             'form_visual': VisualItemPedidoForm(filial=_filial(request)),
             'tabela': GradePedidoService.montar_tabela(pedido),
             'tamanhos_disponiveis': Tamanho.objects.for_filial(_filial(request)).filter(ativo=True),
+            'individuais': pedido.individuais.select_related('item', 'tamanho').all(),
+            'conferencia': IndividualService.conferir(pedido),
+            'form_individual': PersonalizacaoIndividualForm(
+                filial=_filial(request), pedido=pedido,
+            ),
         })
 
 
@@ -635,4 +642,85 @@ class ItemDuplicarView(ModaBaseView):
             f'{copia.nome_exibicao} duplicado. A arte e as imagens não vieram junto — '
             f'quase sempre mudam entre peças.',
         )
+        return redirect(reverse('moda:pedido-detail', args=[pedido.pk]))
+
+
+# ══════════════════════════════════════════════════════════════════════
+# PERSONALIZAÇÃO POR PESSOA
+# ══════════════════════════════════════════════════════════════════════
+
+class IndividualFormView(ModaBaseView):
+    """Adiciona ou edita uma pessoa da lista."""
+
+    permissao_acao = 'editar'
+
+    def post(self, request, pk, individual_pk=None):
+        pedido = get_object_or_404(PedidoProducao.objects.for_filial(_filial(request)), pk=pk)
+        obj = (
+            get_object_or_404(PersonalizacaoIndividual, pk=individual_pk, pedido=pedido)
+            if individual_pk else None
+        )
+        form = PersonalizacaoIndividualForm(
+            request.POST, instance=obj, filial=_filial(request), pedido=pedido,
+        )
+
+        if not form.is_valid():
+            for campo, erros in form.errors.items():
+                rotulo = form.fields[campo].label if campo in form.fields else campo
+                for erro in erros:
+                    messages.error(request, f'{rotulo}: {erro}')
+            return redirect(reverse('moda:pedido-detail', args=[pedido.pk]))
+
+        pessoa = form.save(commit=False)
+        pessoa.pedido = pedido
+        if not pessoa.ordem:
+            pessoa.ordem = (pedido.individuais.count() + 1) * 10
+        pessoa.save()
+        messages.success(request, f'{pessoa.identificacao} salvo(a).')
+        return redirect(reverse('moda:pedido-detail', args=[pedido.pk]))
+
+
+class IndividualDeleteView(ModaBaseView):
+    permissao_acao = 'editar'
+
+    def post(self, request, pk, individual_pk):
+        pedido = get_object_or_404(PedidoProducao.objects.for_filial(_filial(request)), pk=pk)
+        pessoa = get_object_or_404(PersonalizacaoIndividual, pk=individual_pk, pedido=pedido)
+        nome = pessoa.identificacao
+        pessoa.delete()
+        messages.success(request, f'{nome} removido(a) da lista.')
+        return redirect(reverse('moda:pedido-detail', args=[pedido.pk]))
+
+
+class IndividualImportarView(ModaBaseView):
+    """Importa a lista de pessoas de um CSV ou Excel."""
+
+    permissao_acao = 'editar'
+
+    def post(self, request, pk):
+        pedido = get_object_or_404(PedidoProducao.objects.for_filial(_filial(request)), pk=pk)
+        arquivo = request.FILES.get('arquivo')
+
+        if not arquivo:
+            messages.error(request, 'Escolha um arquivo .csv ou .xlsx.')
+            return redirect(reverse('moda:pedido-detail', args=[pedido.pk]))
+
+        try:
+            resultado = IndividualService.importar(pedido, arquivo, arquivo.name)
+        except DadosInvalidosError as exc:
+            messages.error(request, str(exc))
+            return redirect(reverse('moda:pedido-detail', args=[pedido.pk]))
+
+        if resultado.criados:
+            messages.success(request, f'{resultado.criados} pessoa(s) importada(s).')
+
+        # Erros linha a linha: o usuário precisa saber QUAIS linhas falharam
+        # para corrigir só elas, em vez de reenviar a planilha inteira.
+        for erro in resultado.erros[:10]:
+            messages.warning(request, f'Linha {erro["linha"]}: {erro["erro"]}')
+        if len(resultado.erros) > 10:
+            messages.warning(request, f'... e mais {len(resultado.erros) - 10} linha(s) com problema.')
+        if not resultado.criados and not resultado.erros:
+            messages.info(request, 'Nenhuma linha com dados foi encontrada no arquivo.')
+
         return redirect(reverse('moda:pedido-detail', args=[pedido.pk]))

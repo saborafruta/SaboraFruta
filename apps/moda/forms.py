@@ -456,3 +456,33 @@ class CategoriaForm(_FilialFormMixin, forms.ModelForm):
             onde = f'dentro de {pai.nome}' if pai else 'como categoria raiz'
             self.add_error('nome', f'Já existe "{nome}" {onde}.')
         return dados
+
+
+class PersonalizacaoIndividualForm(_FilialFormMixin, forms.ModelForm):
+    """Uma pessoa da lista (jogador, aluno, funcionário)."""
+
+    class Meta:
+        from .models import PersonalizacaoIndividual
+        model = PersonalizacaoIndividual
+        fields = ['item', 'tamanho', 'nome', 'numero', 'observacoes']
+        widgets = {
+            'nome': forms.TextInput(attrs={'placeholder': 'Ex.: SILVA'}),
+            'numero': forms.TextInput(attrs={'placeholder': 'Ex.: 10'}),
+            'observacoes': forms.TextInput(attrs={'placeholder': 'Detalhe desta peça'}),
+        }
+
+    def __init__(self, *args, filial=None, pedido=None, **kwargs):
+        from .models import Tamanho
+        super().__init__(*args, filial=filial, **kwargs)
+        self.pedido = pedido
+        if pedido is not None:
+            self.fields['item'].queryset = pedido.itens.all()
+        self.fields['tamanho'].queryset = Tamanho.objects.filter(filial=filial, ativo=True)
+
+    def clean(self):
+        dados = super().clean()
+        # Sem nome nem número a peça não é identificável na produção — é uma
+        # linha que ninguém sabe de quem é.
+        if not (dados.get('nome') or '').strip() and not (dados.get('numero') or '').strip():
+            self.add_error('nome', 'Informe ao menos o nome ou o número.')
+        return dados
