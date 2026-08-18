@@ -1,9 +1,11 @@
 """Formulários do vertical Moda."""
 from django import forms
+from django.db import models
 
 from .models import (
-    Cor, Grade, ItemPedidoProducao, MockupVisual, PedidoProducao,
-    Personalizacao, ProdutoModa, Tamanho, VisualItemPedido,
+    Cor, FichaTecnica, Grade, ImagemFicha, ItemPedidoProducao, MaterialFicha,
+    MockupVisual, PedidoProducao, Personalizacao, ProdutoModa, Tamanho,
+    VisualItemPedido,
 )
 
 
@@ -555,3 +557,99 @@ class PersonalizacaoIndividualForm(_FilialFormMixin, forms.ModelForm):
         if not (dados.get('nome') or '').strip() and not (dados.get('numero') or '').strip():
             self.add_error('nome', 'Informe ao menos o nome ou o número.')
         return dados
+
+# ══════════════════════════════════════════════════════════════════════
+# ENGENHARIA — FICHA TÉCNICA
+# ══════════════════════════════════════════════════════════════════════
+
+class FichaTecnicaForm(forms.ModelForm):
+    """
+    Cabeçalho da ficha.
+
+    Não tem modelo, coleção, tecido nem grade: esses campos são do produto e
+    repeti-los aqui daria duas verdades para a mesma informação. A tela lê
+    do produto.
+    """
+
+    class Meta:
+        model = FichaTecnica
+        fields = ['produto', 'versao', 'status', 'descricao', 'desenho_tecnico', 'observacoes']
+        widgets = {
+            'descricao': forms.Textarea(attrs={
+                'rows': 4,
+                'placeholder': 'Modelagem, tipo de costura, acabamentos, tolerâncias de medida.',
+            }),
+            'observacoes': forms.Textarea(attrs={'rows': 2}),
+            'versao': forms.NumberInput(attrs={'min': 1}),
+        }
+
+    def __init__(self, *args, filial=None, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.filial = filial
+
+        produtos = ProdutoModa.objects.filter(filial=filial, ativo=True).order_by('codigo')
+        # Produto que já tem ficha sai da lista -- é OneToOne, e deixá-lo
+        # ali só renderia um erro de integridade depois de preencher tudo.
+        if self.instance.pk:
+            produtos = produtos.filter(
+                models.Q(ficha__isnull=True) | models.Q(ficha=self.instance)
+            )
+            self.fields['produto'].disabled = True
+        else:
+            produtos = produtos.filter(ficha__isnull=True)
+        self.fields['produto'].queryset = produtos
+        self.fields['produto'].empty_label = 'Escolha o produto'
+
+        for campo in self.fields.values():
+            css = campo.widget.attrs.get('class', '')
+            if 'form-input' not in css:
+                campo.widget.attrs['class'] = (css + ' form-input').strip()
+
+
+class MaterialFichaForm(forms.ModelForm):
+    """Uma linha da lista de materiais."""
+
+    class Meta:
+        model = MaterialFicha
+        fields = [
+            'tipo', 'descricao', 'codigo', 'unidade',
+            'consumo', 'perda', 'custo_unitario', 'observacao',
+        ]
+        widgets = {
+            'descricao': forms.TextInput(attrs={'placeholder': 'Ex.: Malha Dry Fit 100% poliéster 140g'}),
+            'codigo': forms.TextInput(attrs={'placeholder': 'Código no estoque'}),
+            'consumo': forms.NumberInput(attrs={'step': '0.0001', 'min': '0'}),
+            'perda': forms.NumberInput(attrs={'step': '0.01', 'min': '0', 'max': '100'}),
+            'custo_unitario': forms.NumberInput(attrs={'step': '0.0001', 'min': '0'}),
+            'observacao': forms.TextInput(attrs={'placeholder': 'Opcional'}),
+        }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        for campo in self.fields.values():
+            css = campo.widget.attrs.get('class', '')
+            if 'form-input' not in css:
+                campo.widget.attrs['class'] = (css + ' form-input').strip()
+
+    def clean_descricao(self):
+        descricao = (self.cleaned_data['descricao'] or '').strip()
+        if not descricao:
+            raise forms.ValidationError('Descreva o material — sem isso a ficha não diz o que comprar.')
+        return descricao
+
+
+class ImagemFichaForm(forms.ModelForm):
+    class Meta:
+        model = ImagemFicha
+        fields = ['imagem', 'legenda']
+        widgets = {
+            'legenda': forms.TextInput(attrs={'placeholder': 'Ex.: detalhe da gola'}),
+        }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields['legenda'].required = False
+        for campo in self.fields.values():
+            css = campo.widget.attrs.get('class', '')
+            if 'form-input' not in css:
+                campo.widget.attrs['class'] = (css + ' form-input').strip()

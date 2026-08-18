@@ -13,6 +13,17 @@
       </p>
       <h2 class="text-2xl font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">{{ produto.nome }}</h2>
     </div>
+    {% comment %}
+      Atalho para a ficha técnica. Sem ele a ficha só existiria pelo menu de
+      Engenharia, e quem está olhando o produto não teria pista de que ela
+      existe -- foi exatamente assim que o vertical inteiro ficou invisível
+      da outra vez.
+    {% endcomment %}
+    {% if produto.ficha %}
+      <a href="{% url 'moda:ficha-detail' produto.ficha.pk %}" class="btn-secondary">Ficha técnica</a>
+    {% else %}
+      <a href="{% url 'moda:ficha-create' %}" class="btn-secondary">Criar ficha técnica</a>
+    {% endif %}
     <a href="{% url 'moda:produto-update' produto.pk %}" class="btn-secondary">Editar</a>
   </div>
 

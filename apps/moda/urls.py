@@ -11,7 +11,7 @@ então o link do menu continua valendo.
 """
 from django.urls import path
 
-from . import views, views_apoio as va, views_cadastros as vc
+from . import views, views_apoio as va, views_cadastros as vc, views_ficha as vf
 
 app_name = 'moda'
 
@@ -48,6 +48,19 @@ ROTAS_PRONTAS: list = [
     # tela sai do placeholder. So criar/editar precisam de rota.
     path('<slug:grupo>/<slug:slug>/novo/', va.CadastroApoioFormView.as_view(), name='apoio-create'),
     path('<slug:grupo>/<slug:slug>/<int:pk>/editar/', va.CadastroApoioFormView.as_view(), name='apoio-update'),
+
+    # Ficha técnica. A lista fica no endereço do menu
+    # (/moda/engenharia/ficha-tecnica/), declarada antes do catch-all para
+    # o placeholder não engolir — mesmo motivo das rotas de pedido.
+    path('engenharia/ficha-tecnica/', vf.FichaListView.as_view(), name='ficha-list'),
+    path('engenharia/ficha-tecnica/nova/', vf.FichaFormView.as_view(), name='ficha-create'),
+    path('engenharia/ficha-tecnica/<int:pk>/', vf.FichaDetailView.as_view(), name='ficha-detail'),
+    path('engenharia/ficha-tecnica/<int:pk>/editar/', vf.FichaFormView.as_view(), name='ficha-update'),
+    path('engenharia/ficha-tecnica/<int:pk>/materiais/', vf.MaterialCreateView.as_view(), name='ficha-material-add'),
+    path('engenharia/ficha-tecnica/<int:pk>/materiais/salvar/', vf.MaterialUpdateView.as_view(), name='ficha-material-salvar'),
+    path('engenharia/ficha-tecnica/<int:pk>/materiais/<int:material_pk>/remover/', vf.MaterialDeleteView.as_view(), name='ficha-material-delete'),
+    path('engenharia/ficha-tecnica/<int:pk>/imagens/', vf.ImagemCreateView.as_view(), name='ficha-imagem-add'),
+    path('engenharia/ficha-tecnica/<int:pk>/imagens/<int:imagem_pk>/remover/', vf.ImagemDeleteView.as_view(), name='ficha-imagem-delete'),
 
     path('produtos/grades/', vc.GradeListView.as_view(), name='grade-list'),
     path('produtos/grades/nova/', vc.GradeFormView.as_view(), name='grade-create'),

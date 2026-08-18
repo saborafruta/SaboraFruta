@@ -1,0 +1,66 @@
+{% extends "_base.html" %}
+{% block title %}{{ title }}{% endblock %}
+{% block page_title %}{{ title }}{% endblock %}
+{% block content %}
+<div class="space-y-5">
+  <div class="flex flex-wrap items-start justify-between gap-3">
+    <div>
+      <p class="text-sm mb-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+        <a href="{% url 'moda:grupo' 'engenharia' %}" :style="temaClaro ? 'color:#3b82f6;' : 'color:#60a5fa;'">Engenharia</a>
+        <span class="mx-1">›</span> Ficha Técnica
+      </p>
+      <h2 class="text-2xl font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">Ficha Técnica</h2>
+      <p class="text-sm mt-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+        Materiais, consumo e o custo que sai deles. Uma ficha por produto.
+      </p>
+    </div>
+    <a href="{% url 'moda:ficha-create' %}" class="btn-primary">+ Nova ficha</a>
+  </div>
+
+  <form method="get" class="flex gap-2">
+    <input type="search" name="q" value="{{ busca }}" placeholder="Produto ou código"
+           class="form-input flex-1 max-w-sm">
+    <button type="submit" class="btn-secondary">Buscar</button>
+    {% if busca %}<a href="{% url 'moda:ficha-list' %}" class="btn-secondary">Limpar</a>{% endif %}
+  </form>
+
+  <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+    {% for f in fichas %}
+      <a href="{% url 'moda:ficha-detail' f.pk %}" class="card p-4 block transition-transform hover:-translate-y-0.5">
+        <div class="flex items-start justify-between gap-2">
+          <h3 class="font-semibold text-sm" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
+            {{ f.produto.nome }}
+          </h3>
+          <span class="text-[10px] font-bold px-1.5 py-0.5 rounded-full shrink-0"
+                {% if f.status == 'aprovada' %}style="background:rgba(16,185,129,.14); color:#059669;"
+                {% elif f.status == 'obsoleta' %}style="background:rgba(148,163,184,.18); color:#64748b;"
+                {% else %}style="background:rgba(245,158,11,.16); color:#d97706;"{% endif %}>
+            {{ f.get_status_display }}
+          </span>
+        </div>
+        <p class="text-xs mt-1 font-mono" :style="temaClaro ? 'color:#374151;' : 'color:#d4d4d4;'">
+          {{ f.produto.codigo }} · v{{ f.versao }}
+        </p>
+        <p class="text-sm mt-3 font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
+          R$ {{ f.custo_estimado|floatformat:2 }}
+          <span class="text-xs font-normal" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+            · {{ f.materiais.all|length }} material(is)
+          </span>
+        </p>
+      </a>
+    {% empty %}
+      <div class="card p-8 text-center sm:col-span-2 lg:col-span-3">
+        <p class="text-sm" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+          {% if busca %}
+            Nenhuma ficha encontrada para “{{ busca }}”.
+          {% else %}
+            Nenhuma ficha técnica ainda. Cadastre o produto primeiro em
+            <a href="{% url 'moda:produto-list' %}" :style="temaClaro ? 'color:#3b82f6;' : 'color:#60a5fa;'">Produtos</a>,
+            depois abra a ficha dele aqui.
+          {% endif %}
+        </p>
+      </div>
+    {% endfor %}
+  </div>
+</div>
+{% endblock %}

@@ -1,0 +1,357 @@
+{% extends "_base.html" %}
+{% block title %}{{ title }}{% endblock %}
+{% block page_title %}Ficha {{ produto.codigo }}{% endblock %}
+{% block content %}
+<div class="space-y-5">
+
+  {# ── Cabeçalho ────────────────────────────────────────────────────── #}
+  <div class="card p-5">
+    <p class="text-sm mb-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+      <a href="{% url 'moda:ficha-list' %}" :style="temaClaro ? 'color:#3b82f6;' : 'color:#60a5fa;'">Ficha Técnica</a>
+      <span class="mx-1">›</span> {{ produto.codigo }}
+    </p>
+    <div class="flex flex-wrap items-start justify-between gap-4">
+      <div class="min-w-0">
+        <h2 class="text-2xl font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
+          {{ produto.nome }}
+        </h2>
+        <p class="text-sm mt-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+          Versão {{ ficha.versao }} ·
+          <span class="font-semibold"
+                {% if ficha.status == 'aprovada' %}style="color:#059669;"
+                {% elif ficha.status == 'obsoleta' %}style="color:#64748b;"
+                {% else %}style="color:#d97706;"{% endif %}>{{ ficha.get_status_display }}</span>
+        </p>
+      </div>
+
+      <div class="flex items-center gap-4">
+        {% comment %}
+          O custo fica no cabeçalho, e não no fim da lista de materiais, por
+          ser a resposta que se vem buscar aqui. No fim da tabela, exigiria
+          rolar a ficha inteira para saber quanto a peça custa.
+        {% endcomment %}
+        <div class="text-right">
+          <p class="text-xs uppercase tracking-wider" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+            Custo estimado
+          </p>
+          <p class="text-2xl font-bold tabular-nums" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
+            R$ {{ ficha.custo_estimado|floatformat:2 }}
+          </p>
+          <p class="text-xs" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">por peça, com perdas</p>
+        </div>
+        <a href="{% url 'moda:ficha-update' ficha.pk %}" class="btn-secondary text-sm">Editar</a>
+      </div>
+    </div>
+  </div>
+
+  {# ── Informações (lidas do produto) ───────────────────────────────── #}
+  <div class="card p-5 space-y-4">
+    <div>
+      <h3 class="text-sm font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">Informações</h3>
+      <p class="text-xs mt-0.5" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+        Vêm do cadastro do produto. Para alterar,
+        <a href="{% url 'moda:produto-update' produto.pk %}"
+           :style="temaClaro ? 'color:#3b82f6;' : 'color:#60a5fa;'">edite o produto</a>.
+      </p>
+    </div>
+
+    <dl class="grid grid-cols-2 md:grid-cols-4 gap-x-4 gap-y-3 text-sm">
+      {% for rotulo, valor in informacoes %}
+        <div>
+          <dt class="text-xs uppercase tracking-wider" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">{{ rotulo }}</dt>
+          <dd class="mt-0.5 font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#e5e7eb;'">
+            {% firstof valor '—' %}
+          </dd>
+        </div>
+      {% endfor %}
+    </dl>
+
+    {% if produto.cores.all %}
+      <div>
+        <p class="text-xs uppercase tracking-wider mb-1.5" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Cores</p>
+        <div class="flex flex-wrap gap-2">
+          {% for pc in produto.cores.all %}
+            <span class="text-xs font-semibold px-2.5 py-1 rounded-full"
+                  :style="temaClaro ? 'background:#f1f5f9; color:#334155;' : 'background:#27272a; color:#d4d4d8;'">
+              {{ pc.cor.nome }}{% if pc.referencia_cor %} · {{ pc.referencia_cor }}{% endif %}
+            </span>
+          {% endfor %}
+        </div>
+      </div>
+    {% endif %}
+
+    {% if ficha.descricao %}
+      <div>
+        <p class="text-xs uppercase tracking-wider mb-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Descrição técnica</p>
+        <p class="text-sm whitespace-pre-line" :style="temaClaro ? 'color:#374151;' : 'color:#cbd5e1;'">{{ ficha.descricao }}</p>
+      </div>
+    {% endif %}
+  </div>
+
+  {# ── Materiais ────────────────────────────────────────────────────── #}
+  <div class="card p-5 space-y-4" x-data="{ novo: false }">
+    <div class="flex items-center justify-between gap-2 flex-wrap">
+      <div>
+        <h3 class="text-sm font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">Materiais</h3>
+        <p class="text-xs mt-0.5" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+          {{ materiais|length }} material(is) · consumo para UMA peça
+        </p>
+      </div>
+      <button type="button" class="btn-primary text-sm" @click="novo = !novo"
+              x-text="novo ? 'Fechar' : '+ Material'"></button>
+    </div>
+
+    {# Formulário de inclusão #}
+    <form method="post" action="{% url 'moda:ficha-material-add' ficha.pk %}"
+          x-show="novo" x-cloak class="rounded-xl p-4 space-y-3"
+          :style="temaClaro ? 'background:#f8fafc; border:1px solid #e5e7eb;' : 'background:#18181b; border:1px solid #303036;'">
+      {% csrf_token %}
+      {% if form_material.errors %}
+        <div class="text-xs font-semibold p-2 rounded-lg" style="background:rgba(220,38,38,.1); color:#dc2626;">
+          {% for campo, erros in form_material.errors.items %}{{ erros|join:" " }}<br>{% endfor %}
+        </div>
+      {% endif %}
+      <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+        <div class="lg:col-span-1">
+          <label class="block text-xs font-semibold mb-1" :style="temaClaro ? 'color:#374151;' : 'color:#cbd5e1;'">Tipo</label>
+          {{ form_material.tipo }}
+        </div>
+        <div class="sm:col-span-1 lg:col-span-2">
+          <label class="block text-xs font-semibold mb-1" :style="temaClaro ? 'color:#374151;' : 'color:#cbd5e1;'">Descrição</label>
+          {{ form_material.descricao }}
+        </div>
+        <div>
+          <label class="block text-xs font-semibold mb-1" :style="temaClaro ? 'color:#374151;' : 'color:#cbd5e1;'">Código</label>
+          {{ form_material.codigo }}
+        </div>
+        <div>
+          <label class="block text-xs font-semibold mb-1" :style="temaClaro ? 'color:#374151;' : 'color:#cbd5e1;'">Unidade</label>
+          {{ form_material.unidade }}
+        </div>
+        <div>
+          <label class="block text-xs font-semibold mb-1" :style="temaClaro ? 'color:#374151;' : 'color:#cbd5e1;'">Consumo</label>
+          {{ form_material.consumo }}
+        </div>
+        <div>
+          <label class="block text-xs font-semibold mb-1" :style="temaClaro ? 'color:#374151;' : 'color:#cbd5e1;'">Perda (%)</label>
+          {{ form_material.perda }}
+        </div>
+        <div>
+          <label class="block text-xs font-semibold mb-1" :style="temaClaro ? 'color:#374151;' : 'color:#cbd5e1;'">Custo unitário</label>
+          {{ form_material.custo_unitario }}
+        </div>
+      </div>
+      <div class="flex justify-end gap-2">
+        <button type="button" class="btn-secondary text-sm" @click="novo = false">Cancelar</button>
+        <button type="submit" class="btn-primary text-sm">Acrescentar</button>
+      </div>
+    </form>
+
+    {# Tabela editável #}
+    {% if materiais %}
+      <form method="post" action="{% url 'moda:ficha-material-salvar' ficha.pk %}">
+        {% csrf_token %}
+        <div class="overflow-x-auto">
+          <table class="w-full text-sm" style="min-width:820px;">
+            <thead>
+              <tr class="text-xs uppercase tracking-wider" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+                <th class="text-left font-semibold pb-2">Tipo</th>
+                <th class="text-left font-semibold pb-2">Material</th>
+                <th class="text-left font-semibold pb-2 w-28">Código</th>
+                <th class="text-center font-semibold pb-2 w-16">Un.</th>
+                <th class="text-right font-semibold pb-2 w-28">Consumo</th>
+                <th class="text-right font-semibold pb-2 w-24">Perda %</th>
+                <th class="text-right font-semibold pb-2 w-28">Custo un.</th>
+                <th class="text-right font-semibold pb-2 w-28">Custo total</th>
+                <th class="w-10"></th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for m in materiais %}
+                <tr class="border-t" :style="temaClaro ? 'border-color:#e5e7eb;' : 'border-color:#303036;'">
+                  <td class="py-2 pr-2 text-xs font-semibold" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+                    {{ m.get_tipo_display }}
+                  </td>
+                  <td class="py-2 pr-2" :style="temaClaro ? 'color:#111827;' : 'color:#e5e7eb;'">
+                    {{ m.descricao }}
+                    {% if m.observacao %}<span class="block text-xs opacity-60">{{ m.observacao }}</span>{% endif %}
+                  </td>
+                  <td class="py-2 pr-2 font-mono text-xs" :style="temaClaro ? 'color:#374151;' : 'color:#cbd5e1;'">
+                    {% firstof m.codigo '—' %}
+                  </td>
+                  <td class="py-2 text-center text-xs" :style="temaClaro ? 'color:#374151;' : 'color:#cbd5e1;'">
+                    {{ m.get_unidade_display }}
+                  </td>
+                  <td class="py-2 pl-2">
+                    <input type="number" step="0.0001" min="0" name="mat_{{ m.pk }}-consumo"
+                           value="{{ m.consumo|stringformat:'s' }}" class="form-input text-right w-full">
+                  </td>
+                  <td class="py-2 pl-2">
+                    <input type="number" step="0.01" min="0" max="100" name="mat_{{ m.pk }}-perda"
+                           value="{{ m.perda|stringformat:'s' }}" class="form-input text-right w-full">
+                  </td>
+                  <td class="py-2 pl-2">
+                    <input type="number" step="0.0001" min="0" name="mat_{{ m.pk }}-custo_unitario"
+                           value="{{ m.custo_unitario|stringformat:'s' }}" class="form-input text-right w-full">
+                  </td>
+                  <td class="py-2 pl-2 text-right font-semibold tabular-nums"
+                      :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
+                    R$ {{ m.custo_total|floatformat:2 }}
+                  </td>
+                  <td class="py-2 pl-2 text-right">
+                    <button type="submit" form="rm-{{ m.pk }}" title="Remover"
+                            class="w-7 h-7 rounded-lg text-base leading-none"
+                            style="background:rgba(220,38,38,.1); color:#dc2626;">&times;</button>
+                  </td>
+                </tr>
+              {% endfor %}
+            </tbody>
+            <tfoot>
+              <tr class="border-t-2" :style="temaClaro ? 'border-color:#cbd5e1;' : 'border-color:#3f3f46;'">
+                <td colspan="7" class="pt-3 text-right font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
+                  Custo estimado por peça
+                </td>
+                <td class="pt-3 pl-2 text-right text-base font-bold tabular-nums"
+                    :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
+                  R$ {{ ficha.custo_estimado|floatformat:2 }}
+                </td>
+                <td></td>
+              </tr>
+            </tfoot>
+          </table>
+        </div>
+
+        <div class="flex justify-end mt-3">
+          <button type="submit" class="btn-primary text-sm">Salvar consumos e custos</button>
+        </div>
+      </form>
+
+      {% comment %}
+        Os formulários de remoção ficam fora da tabela: um <form> dentro de
+        <tbody> é HTML inválido e o navegador o move para fora, quebrando o
+        formulário de edição que envolve a tabela. O atributo `form` do botão
+        liga um ao outro sem aninhar nada.
+      {% endcomment %}
+      {% for m in materiais %}
+        <form id="rm-{{ m.pk }}" method="post"
+              action="{% url 'moda:ficha-material-delete' ficha.pk m.pk %}"
+              onsubmit="return confirm('Remover {{ m.descricao|escapejs }} da ficha?');">
+          {% csrf_token %}
+        </form>
+      {% endfor %}
+
+    {% else %}
+      <p class="text-sm" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+        Nenhum material lançado. O custo estimado só aparece depois que o
+        primeiro material entrar.
+      </p>
+    {% endif %}
+  </div>
+
+  {# ── Onde vai o custo ─────────────────────────────────────────────── #}
+  {% if custo_por_tipo %}
+    <div class="card p-5 space-y-3">
+      <h3 class="text-sm font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">Onde vai o custo</h3>
+      <div class="space-y-2">
+        {% for linha in custo_por_tipo %}
+          <div>
+            <div class="flex justify-between text-sm mb-1">
+              <span :style="temaClaro ? 'color:#374151;' : 'color:#cbd5e1;'">{{ linha.label }}</span>
+              <span class="tabular-nums font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
+                R$ {{ linha.custo|floatformat:2 }}
+                <span class="text-xs font-normal opacity-60">{{ linha.percentual }}%</span>
+              </span>
+            </div>
+            <div class="h-1.5 rounded-full overflow-hidden"
+                 :style="temaClaro ? 'background:#e5e7eb;' : 'background:#27272a;'">
+              <div class="h-full rounded-full" style="background:#3b82f6; width:{{ linha.percentual }}%;"></div>
+            </div>
+          </div>
+        {% endfor %}
+      </div>
+    </div>
+  {% endif %}
+
+  {# ── Desenho técnico e imagens ────────────────────────────────────── #}
+  <div class="card p-5 space-y-4" x-data="{ ampliada: null, anexar: false }">
+    <div class="flex items-center justify-between gap-2 flex-wrap">
+      <div>
+        <h3 class="text-sm font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">Desenho técnico e imagens</h3>
+        <p class="text-xs mt-0.5" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+          {{ imagens|length }} imagem(ns) anexada(s)
+        </p>
+      </div>
+      <button type="button" class="btn-secondary text-sm" @click="anexar = !anexar"
+              x-text="anexar ? 'Fechar' : '+ Imagem'"></button>
+    </div>
+
+    <form method="post" action="{% url 'moda:ficha-imagem-add' ficha.pk %}"
+          enctype="multipart/form-data" x-show="anexar" x-cloak
+          class="rounded-xl p-4 flex flex-wrap items-end gap-3"
+          :style="temaClaro ? 'background:#f8fafc; border:1px solid #e5e7eb;' : 'background:#18181b; border:1px solid #303036;'">
+      {% csrf_token %}
+      <div class="flex-1 min-w-[200px]">
+        <label class="block text-xs font-semibold mb-1" :style="temaClaro ? 'color:#374151;' : 'color:#cbd5e1;'">Imagem</label>
+        {{ form_imagem.imagem }}
+      </div>
+      <div class="flex-1 min-w-[200px]">
+        <label class="block text-xs font-semibold mb-1" :style="temaClaro ? 'color:#374151;' : 'color:#cbd5e1;'">Legenda</label>
+        {{ form_imagem.legenda }}
+      </div>
+      <button type="submit" class="btn-primary text-sm">Anexar</button>
+    </form>
+
+    {% if ficha.desenho %}
+      <a href="{{ ficha.desenho.url }}" target="_blank" rel="noopener"
+         class="inline-flex items-center gap-2 text-sm font-semibold"
+         :style="temaClaro ? 'color:#3b82f6;' : 'color:#60a5fa;'">
+        Abrir desenho técnico
+        {% if not ficha.desenho_tecnico %}
+          <span class="text-xs font-normal opacity-70">(do produto)</span>
+        {% endif %}
+      </a>
+    {% endif %}
+
+    {% if imagens %}
+      <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
+        {% for img in imagens %}
+          <div class="relative group">
+            <img src="{{ img.imagem.url }}" alt="{{ img.legenda }}"
+                 class="w-full rounded-lg cursor-zoom-in"
+                 style="aspect-ratio:1; object-fit:cover; background:#fff;"
+                 @click="ampliada = { url: '{{ img.imagem.url }}', titulo: '{{ img.legenda|escapejs }}' }">
+            {% if img.legenda %}
+              <p class="text-xs mt-1 truncate" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">{{ img.legenda }}</p>
+            {% endif %}
+            <form method="post" action="{% url 'moda:ficha-imagem-delete' ficha.pk img.pk %}"
+                  onsubmit="return confirm('Remover esta imagem?');"
+                  class="absolute top-1.5 right-1.5 opacity-0 group-hover:opacity-100 transition-opacity">
+              {% csrf_token %}
+              <button type="submit" class="w-6 h-6 rounded-lg text-sm leading-none"
+                      style="background:rgba(0,0,0,.6); color:#fff;">&times;</button>
+            </form>
+          </div>
+        {% endfor %}
+      </div>
+    {% endif %}
+
+    {% comment %}
+      Fundo branco na ampliação de propósito: desenho técnico costuma ser
+      traço preto em fundo transparente, e sobre o tema escuro sumiria.
+    {% endcomment %}
+    <div x-show="ampliada" x-cloak @keydown.escape.window="ampliada = null"
+         class="fixed inset-0 z-50 flex flex-col items-center justify-center p-4"
+         style="background:rgba(0,0,0,.85);" @click.self="ampliada = null">
+      <div class="flex items-center justify-between gap-4 w-full max-w-3xl mb-3">
+        <p class="font-semibold text-white min-w-0 truncate" x-text="ampliada?.titulo"></p>
+        <button type="button" @click="ampliada = null"
+                class="w-9 h-9 rounded-lg text-xl leading-none shrink-0"
+                style="background:rgba(255,255,255,.15); color:#fff;">&times;</button>
+      </div>
+      <img :src="ampliada?.url" class="max-w-full rounded-lg"
+           style="max-height:78vh; object-fit:contain; background:#fff;">
+    </div>
+  </div>
+
+</div>
+{% endblock %}
