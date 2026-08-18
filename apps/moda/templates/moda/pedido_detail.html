@@ -17,6 +17,14 @@
       </p>
       <div class="flex items-center gap-2 flex-wrap">
         <h2 class="text-2xl font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">{{ pedido.cliente }}</h2>
+        {% comment %}
+          O PDF e' gerado na hora, nunca gravado: arquivo salvo no fechamento
+          envelhece na primeira alteracao de grade, arte ou valor, e passam a
+          existir duas versoes do mesmo pedido. Como a URL e' estavel, o link
+          continua valendo -- so devolve sempre o pedido de agora.
+        {% endcomment %}
+        <a href="{% url 'moda:pedido-pdf' pedido.pk %}" target="_blank" rel="noopener"
+           class="btn-secondary text-sm mt-2 inline-block">Abrir PDF do pedido</a>
         {% include "moda/_status_pill.html" with status=pedido.status %}
       </div>
     </div>

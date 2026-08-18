@@ -400,6 +400,45 @@ class PedidoDetailView(ModaBaseView):
         })
 
 
+class PedidoPdfView(ModaBaseView):
+    """
+    O PDF do pedido, gerado na hora.
+
+    Inline e nao anexo: quem clica quer conferir antes de mandar para o
+    cliente, e forcar download obriga a abrir o arquivo baixado so para
+    olhar. O nome do arquivo continua bom para quando for salvo.
+    """
+
+    def get(self, request, pk):
+        from django.http import HttpResponse
+
+        from .services.pedido_pdf import PedidoPdfService
+
+        pedido = get_object_or_404(
+            PedidoProducao.objects.for_filial(_filial(request))
+            .select_related('cliente', 'filial', 'filial__empresa',
+                            'forma_pagamento', 'condicao_pagamento')
+            .prefetch_related(
+                'itens__produto', 'itens__modelo', 'itens__cor', 'itens__tecido',
+                'itens__grade__tamanho', 'itens__personalizacoes',
+                'itens__visuais__mockup', 'individuais__tamanho', 'individuais__item',
+            ),
+            pk=pk,
+        )
+
+        # A base da URL sai da propria requisicao: o QR precisa apontar para
+        # o dominio de onde a folha foi impressa, e fixar isso num setting
+        # daria link quebrado em ambiente de teste.
+        base = f'{request.scheme}://{request.get_host()}'
+        pdf = PedidoPdfService.gerar(pedido, base_url=base)
+
+        resposta = HttpResponse(pdf, content_type='application/pdf')
+        resposta['Content-Disposition'] = (
+            f'inline; filename="pedido-{pedido.numero:06d}.pdf"'
+        )
+        return resposta
+
+
 class PedidoStatusView(ModaBaseView):
     """Muda só o status — o caminho curto de quem está no chão de fábrica."""
 
