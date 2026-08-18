@@ -1,0 +1,21 @@
+{% comment %}
+  Navegação do PCP.
+
+  As cinco telas são leituras diferentes do mesmo plano, e quem está
+  olhando a carga quase sempre quer ver a fila em seguida. Sem estas abas,
+  cada troca exigiria voltar ao menu lateral — e o menu não diz qual delas
+  está aberta.
+{% endcomment %}
+<div class="flex flex-wrap gap-1 border-b pb-0"
+     :style="temaClaro ? 'border-color:#e5e7eb;' : 'border-color:#303036;'">
+  {% for rota, rotulo in abas %}
+    <a href="{% url rota %}"
+       class="px-3 py-2 text-sm font-semibold rounded-t-lg -mb-px border-b-2"
+       {% if rota == aba_ativa %}
+         :style="temaClaro ? 'color:#2563eb; border-color:#2563eb;' : 'color:#60a5fa; border-color:#60a5fa;'"
+       {% else %}
+         style="border-color:transparent;"
+         :style="temaClaro ? 'color:#64748b; border-color:transparent;' : 'color:#94a3b8; border-color:transparent;'"
+       {% endif %}>{{ rotulo }}</a>
+  {% endfor %}
+</div>

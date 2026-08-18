@@ -1,0 +1,74 @@
+{% extends "_base.html" %}
+{% block title %}{{ title }}{% endblock %}
+{% block page_title %}PCP — Acompanhamento{% endblock %}
+{% block content %}
+<div class="space-y-5">
+
+  <div>
+    <p class="text-sm mb-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+      <a href="{% url 'moda:grupo' 'pcp' %}" :style="temaClaro ? 'color:#3b82f6;' : 'color:#60a5fa;'">PCP</a>
+      <span class="mx-1">›</span> Acompanhamento
+    </p>
+    <h2 class="text-2xl font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">Acompanhamento</h2>
+    <p class="text-sm mt-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+      {{ total_pedidos }} pedido(s) aberto(s){% if total_atrasados %},
+      <strong style="color:#dc2626;">{{ total_atrasados }} atrasado(s)</strong>{% endif %}.
+    </p>
+  </div>
+
+  {% include "moda/_pcp_abas.html" %}
+
+  {% comment %}
+    Colunas na ordem do fluxo (a de `Status.choices`), e não por volume: a
+    tela é lida como uma esteira, da esquerda para a direita. Ordenar pelo
+    maior primeiro embaralharia a leitura a cada mudança de status.
+  {% endcomment %}
+  <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+    {% for coluna in colunas %}
+      <div class="card p-4 space-y-3">
+        <div>
+          <div class="flex items-baseline justify-between gap-2">
+            <h3 class="text-sm font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
+              {{ coluna.label }}
+            </h3>
+            <span class="text-xl font-bold tabular-nums" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
+              {{ coluna.quantidade }}
+            </span>
+          </div>
+          <p class="text-xs mt-0.5" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+            {{ coluna.pecas }} peça(s)
+            {% if coluna.atrasados %}
+              · <span style="color:#dc2626; font-weight:700;">{{ coluna.atrasados }} atrasado(s)</span>
+            {% endif %}
+          </p>
+        </div>
+
+        <div class="space-y-1">
+          {% for p in coluna.pedidos %}
+            <a href="{% url 'moda:pedido-detail' p.pk %}"
+               class="block text-xs px-2.5 py-1.5 rounded-lg"
+               :style="temaClaro ? 'background:#f8fafc; color:#334155;' : 'background:#18181b; color:#d4d4d8;'">
+              <span class="font-semibold">#{{ p.numero|stringformat:"06d" }}</span>
+              <span class="opacity-70">{{ p.cliente }}</span>
+              {% if p.data_prevista_entrega %}
+                <span class="block mt-0.5 opacity-60"
+                      {% if p.atrasado %}style="color:#dc2626; font-weight:700;"{% endif %}>
+                  {{ p.data_prevista_entrega|date:"d/m" }}
+                  {% if p.atrasado %}· atrasado{% endif %}
+                </span>
+              {% endif %}
+            </a>
+          {% endfor %}
+        </div>
+      </div>
+    {% empty %}
+      <div class="card p-8 text-center sm:col-span-2 lg:col-span-3 xl:col-span-4">
+        <p class="text-sm" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+          Nenhum pedido aberto. Pedidos entregues e cancelados não aparecem aqui.
+        </p>
+      </div>
+    {% endfor %}
+  </div>
+
+</div>
+{% endblock %}

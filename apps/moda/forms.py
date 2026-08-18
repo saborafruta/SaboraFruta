@@ -3,9 +3,9 @@ from django import forms
 from django.db import models
 
 from .models import (
-    Cor, FichaTecnica, Grade, ImagemFicha, ItemPedidoProducao, MaterialFicha,
-    MockupVisual, Operacao, OperacaoRoteiro, PedidoProducao, Personalizacao,
-    ProdutoModa, Roteiro, Tamanho, VisualItemPedido,
+    CapacidadeSetor, Cor, FichaTecnica, Grade, ImagemFicha, ItemPedidoProducao,
+    MaterialFicha, MockupVisual, Operacao, OperacaoRoteiro, PedidoProducao,
+    Personalizacao, ProdutoModa, Roteiro, Tamanho, VisualItemPedido,
 )
 
 
@@ -764,3 +764,38 @@ class OperacaoRoteiroForm(forms.ModelForm):
             css = campo.widget.attrs.get('class', '')
             if 'form-input' not in css:
                 campo.widget.attrs['class'] = (css + ' form-input').strip()
+
+class CapacidadeSetorForm(forms.ModelForm):
+    """Quanto um setor entrega por semana."""
+
+    class Meta:
+        model = CapacidadeSetor
+        fields = ['setor', 'postos', 'horas_dia', 'dias_semana', 'eficiencia', 'observacao']
+        widgets = {
+            'postos': forms.NumberInput(attrs={'min': 1}),
+            'horas_dia': forms.NumberInput(attrs={'step': '0.5', 'min': '0', 'max': '24'}),
+            'dias_semana': forms.NumberInput(attrs={'min': 1, 'max': 7}),
+            'eficiencia': forms.NumberInput(attrs={'step': '1', 'min': '1', 'max': '100'}),
+            'observacao': forms.TextInput(attrs={'placeholder': 'Opcional'}),
+        }
+
+    def __init__(self, *args, filial=None, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.filial = filial
+        for campo in self.fields.values():
+            css = campo.widget.attrs.get('class', '')
+            if 'form-input' not in css:
+                campo.widget.attrs['class'] = (css + ' form-input').strip()
+
+    def clean_setor(self):
+        setor = self.cleaned_data['setor']
+        # `unique_together` recusaria de qualquer forma, mas com erro de
+        # banco. Aqui a mensagem diz o que fazer: editar a linha que existe.
+        qs = CapacidadeSetor.objects.filter(filial=self.filial, setor=setor)
+        if self.instance.pk:
+            qs = qs.exclude(pk=self.instance.pk)
+        if qs.exists():
+            raise forms.ValidationError(
+                'Este setor já tem capacidade cadastrada. Edite a linha existente.'
+            )
+        return setor

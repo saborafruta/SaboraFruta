@@ -1,0 +1,122 @@
+{% extends "_base.html" %}
+{% block title %}{{ title }}{% endblock %}
+{% block page_title %}PCP — Capacidade{% endblock %}
+{% block content %}
+<div class="space-y-5">
+
+  <div>
+    <p class="text-sm mb-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+      <a href="{% url 'moda:grupo' 'pcp' %}" :style="temaClaro ? 'color:#3b82f6;' : 'color:#60a5fa;'">PCP</a>
+      <span class="mx-1">›</span> Capacidade
+    </p>
+    <h2 class="text-2xl font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">Capacidade Produtiva</h2>
+    <p class="text-sm mt-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+      Quantas horas cada setor entrega por semana. É contra estes números que
+      a carga do planejamento é comparada — sem eles, não há como dizer se cabe.
+    </p>
+  </div>
+
+  {% include "moda/_pcp_abas.html" %}
+
+  {# ── Cadastradas ──────────────────────────────────────────────────── #}
+  {% if capacidades %}
+    <div class="card p-5 space-y-3">
+      <h3 class="text-sm font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">Setores cadastrados</h3>
+      <div class="overflow-x-auto">
+        <table class="w-full text-sm" style="min-width:720px;">
+          <thead>
+            <tr class="text-xs uppercase tracking-wider" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+              <th class="text-left font-semibold pb-2">Setor</th>
+              <th class="text-right font-semibold pb-2 w-24">Postos</th>
+              <th class="text-right font-semibold pb-2 w-24">Horas/dia</th>
+              <th class="text-right font-semibold pb-2 w-24">Dias/sem.</th>
+              <th class="text-right font-semibold pb-2 w-24">Eficiência</th>
+              <th class="text-right font-semibold pb-2 w-28">Horas/semana</th>
+              <th class="w-10"></th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for c in capacidades %}
+              <tr class="border-t" :style="temaClaro ? 'border-color:#e5e7eb;' : 'border-color:#303036;'">
+                <form id="cap-{{ c.pk }}" method="post" action="{% url 'moda:pcp-capacidade-update' c.pk %}"></form>
+                <td class="py-2 pr-3 font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#e5e7eb;'">
+                  {{ c.get_setor_display }}
+                  <input type="hidden" form="cap-{{ c.pk }}" name="csrfmiddlewaretoken" value="{{ csrf_token }}">
+                  <input type="hidden" form="cap-{{ c.pk }}" name="setor" value="{{ c.setor }}">
+                  {% if c.observacao %}<span class="block text-xs opacity-60">{{ c.observacao }}</span>{% endif %}
+                </td>
+                <td class="py-2 pl-2">
+                  <input type="number" min="1" form="cap-{{ c.pk }}" name="postos" value="{{ c.postos }}"
+                         class="form-input text-right w-full">
+                </td>
+                <td class="py-2 pl-2">
+                  <input type="number" step="0.5" min="0" max="24" form="cap-{{ c.pk }}" name="horas_dia"
+                         value="{{ c.horas_dia|stringformat:'s' }}" class="form-input text-right w-full">
+                </td>
+                <td class="py-2 pl-2">
+                  <input type="number" min="1" max="7" form="cap-{{ c.pk }}" name="dias_semana"
+                         value="{{ c.dias_semana }}" class="form-input text-right w-full">
+                </td>
+                <td class="py-2 pl-2">
+                  <input type="number" step="1" min="1" max="100" form="cap-{{ c.pk }}" name="eficiencia"
+                         value="{{ c.eficiencia|stringformat:'s' }}" class="form-input text-right w-full">
+                </td>
+                <td class="py-2 pl-2 text-right font-bold tabular-nums"
+                    :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
+                  {{ c.horas_semana }}h
+                </td>
+                <td class="py-2 pl-2 text-right">
+                  <button type="submit" form="rmc-{{ c.pk }}" title="Remover"
+                          class="w-7 h-7 rounded-lg text-base leading-none"
+                          style="background:rgba(220,38,38,.1); color:#dc2626;">&times;</button>
+                </td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+
+      {% comment %}
+        Um formulário por linha, declarado fora da tabela e ligado pelo
+        atributo `form`: salvar um setor não deve arrastar os outros junto, e
+        <form> dentro de <tbody> é HTML inválido.
+      {% endcomment %}
+      <div class="flex flex-wrap gap-2">
+        {% for c in capacidades %}
+          <button type="submit" form="cap-{{ c.pk }}" class="btn-secondary text-sm">
+            Salvar {{ c.get_setor_display }}
+          </button>
+        {% endfor %}
+      </div>
+
+      {% for c in capacidades %}
+        <form id="rmc-{{ c.pk }}" method="post" action="{% url 'moda:pcp-capacidade-delete' c.pk %}"
+              onsubmit="return confirm('Remover a capacidade de {{ c.get_setor_display|escapejs }}?');">
+          {% csrf_token %}
+        </form>
+      {% endfor %}
+    </div>
+  {% endif %}
+
+  {# ── Nova ─────────────────────────────────────────────────────────── #}
+  <div class="card p-5 space-y-4">
+    <div>
+      <h3 class="text-sm font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">Novo setor</h3>
+      <p class="text-xs mt-0.5" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+        Horas por semana = postos × horas por dia × dias por semana × eficiência.
+        Eficiência abaixo de 100% é o normal: troca de peça, ajuste de máquina e
+        parada consomem jornada, e planejar com 100% faz o plano estourar na
+        primeira semana sem explicação aparente.
+      </p>
+    </div>
+    <form method="post" novalidate class="space-y-4">
+      {% csrf_token %}
+      {% include "moda/_form_campos.html" %}
+      <div class="flex justify-end">
+        <button type="submit" class="btn-primary">Cadastrar setor</button>
+      </div>
+    </form>
+  </div>
+
+</div>
+{% endblock %}

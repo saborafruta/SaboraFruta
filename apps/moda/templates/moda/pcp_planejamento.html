@@ -1,0 +1,227 @@
+{% extends "_base.html" %}
+{% block title %}{{ title }}{% endblock %}
+{% block page_title %}PCP — Planejamento{% endblock %}
+{% block content %}
+<div class="space-y-5">
+
+  <div>
+    <p class="text-sm mb-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+      <a href="{% url 'moda:grupo' 'pcp' %}" :style="temaClaro ? 'color:#3b82f6;' : 'color:#60a5fa;'">PCP</a>
+      <span class="mx-1">›</span> Planejamento
+    </p>
+    <h2 class="text-2xl font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
+      Capacidade disponível × carga planejada
+    </h2>
+  </div>
+
+  {% include "moda/_pcp_abas.html" %}
+
+  {# ── Alertas ──────────────────────────────────────────────────────── #}
+  {% if alertas %}
+    <div class="space-y-2">
+      {% for alerta in alertas %}
+        <div class="card p-3 flex items-start gap-3"
+             {% if alerta.nivel == 'sobrecarga' %}style="border-left:3px solid #dc2626;"
+             {% elif alerta.nivel == 'sem_capacidade' %}style="border-left:3px solid #f59e0b;"
+             {% elif alerta.nivel == 'incompleto' %}style="border-left:3px solid #f59e0b;"
+             {% else %}style="border-left:3px solid #3b82f6;"{% endif %}>
+          <span class="text-xs font-bold px-2 py-0.5 rounded-full shrink-0 mt-0.5"
+                {% if alerta.nivel == 'sobrecarga' %}style="background:rgba(220,38,38,.12); color:#dc2626;"
+                {% elif alerta.nivel == 'info' %}style="background:rgba(59,130,246,.12); color:#3b82f6;"
+                {% else %}style="background:rgba(245,158,11,.14); color:#d97706;"{% endif %}>
+            {% if alerta.nivel == 'sobrecarga' %}SOBRECARGA
+            {% elif alerta.nivel == 'sem_capacidade' %}SEM CAPACIDADE
+            {% elif alerta.nivel == 'incompleto' %}PLANO INCOMPLETO
+            {% else %}INFO{% endif %}
+          </span>
+          <p class="text-sm" :style="temaClaro ? 'color:#374151;' : 'color:#cbd5e1;'">{{ alerta.texto }}</p>
+        </div>
+      {% endfor %}
+    </div>
+  {% else %}
+    <div class="card p-4" style="border-left:3px solid #059669;">
+      <p class="text-sm" :style="temaClaro ? 'color:#374151;' : 'color:#cbd5e1;'">
+        Nenhuma semana acima da capacidade no horizonte.
+      </p>
+    </div>
+  {% endif %}
+
+  {# ── Horizonte ────────────────────────────────────────────────────── #}
+  <form method="get" class="flex items-end gap-2">
+    <div>
+      <label class="block text-xs font-semibold mb-1" :style="temaClaro ? 'color:#374151;' : 'color:#cbd5e1;'">
+        Semanas no horizonte
+      </label>
+      <input type="number" name="semanas" min="1" max="26" value="{{ semanas_escolhidas }}"
+             class="form-input w-28">
+    </div>
+    <button type="submit" class="btn-secondary">Aplicar</button>
+  </form>
+
+  {# ── Carga por setor ──────────────────────────────────────────────── #}
+  <div class="card p-5 space-y-3">
+    <div>
+      <h3 class="text-sm font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">Carga por setor</h3>
+      <p class="text-xs mt-0.5" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+        Horas de carga por semana contra as horas que o setor tem. Pedido
+        atrasado entra na semana corrente — o trabalho continua para ser feito.
+      </p>
+    </div>
+
+    {% if linhas %}
+      <div class="overflow-x-auto">
+        <table class="w-full text-sm" style="min-width:760px;">
+          <thead>
+            <tr class="text-xs uppercase tracking-wider" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+              <th class="text-left font-semibold pb-2">Setor</th>
+              <th class="text-right font-semibold pb-2 w-24">Disponível</th>
+              {% for semana in semanas %}
+                <th class="text-right font-semibold pb-2 w-20">{{ semana|date:"d/m" }}</th>
+              {% endfor %}
+            </tr>
+          </thead>
+          <tbody>
+            {% for linha in linhas %}
+              <tr class="border-t" :style="temaClaro ? 'border-color:#e5e7eb;' : 'border-color:#303036;'">
+                <td class="py-2 pr-3 font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#e5e7eb;'">
+                  {{ linha.label }}
+                </td>
+                <td class="py-2 text-right text-xs tabular-nums" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+                  {% if linha.capacidade %}
+                    {{ linha.capacidade|floatformat:0 }} min
+                  {% else %}
+                    <a href="{% url 'moda:pcp-capacidade' %}" style="color:#d97706;">cadastrar</a>
+                  {% endif %}
+                </td>
+                {% for celula in linha.celulas %}
+                  {% comment %}
+                    A célula mostra HORAS e percentual. Minutos seriam exatos e
+                    ilegíveis: ninguém planeja fábrica em 2.760 minutos, planeja
+                    em 46 horas.
+                  {% endcomment %}
+                  <td class="py-2 text-right tabular-nums"
+                      {% if celula.sobrecarga %}style="background:rgba(220,38,38,.10);"
+                      {% elif celula.percentual >= 85 %}style="background:rgba(245,158,11,.12);"{% endif %}>
+                    {% if celula.minutos %}
+                      <span class="font-semibold"
+                            {% if celula.sobrecarga %}style="color:#dc2626;"
+                            {% else %}:style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'"{% endif %}>
+                        {{ celula.horas }}h
+                      </span>
+                      {% if linha.capacidade %}
+                        <span class="block text-[10px]" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+                          {{ celula.percentual }}%
+                        </span>
+                      {% endif %}
+                    {% else %}
+                      <span :style="temaClaro ? 'color:#cbd5e1;' : 'color:#52525b;'">—</span>
+                    {% endif %}
+                  </td>
+                {% endfor %}
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    {% else %}
+      <p class="text-sm" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+        Sem carga no horizonte. A carga aparece quando houver pedido de produção
+        aberto, com data prevista de entrega, cujo produto tenha
+        <a href="{% url 'moda:roteiro-list' %}" :style="temaClaro ? 'color:#3b82f6;' : 'color:#60a5fa;'">roteiro</a>.
+      </p>
+    {% endif %}
+  </div>
+
+  {# ── Carga por máquina ────────────────────────────────────────────── #}
+  {% if maquinas %}
+    <div class="card p-5 space-y-3">
+      <div>
+        <h3 class="text-sm font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">Carga por máquina</h3>
+        {% comment %}
+          Sem percentual de ocupação: não existe cadastro de capacidade POR
+          MÁQUINA, só por setor. Mostrar um percentual aqui exigiria inventar
+          o denominador — e um número inventado num painel de capacidade é
+          pior do que a ausência dele.
+        {% endcomment %}
+        <p class="text-xs mt-0.5" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+          Horas de trabalho no horizonte inteiro, por máquina. A capacidade é
+          cadastrada por setor, não por máquina — por isso aqui vai a carga e a
+          fatia dela, sem percentual de ocupação.
+        </p>
+      </div>
+      <div class="space-y-2">
+        {% for m in maquinas %}
+          <div>
+            <div class="flex justify-between text-sm mb-1">
+              <span :style="temaClaro ? 'color:#374151;' : 'color:#cbd5e1;'">{{ m.maquina }}</span>
+              <span class="tabular-nums font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
+                {{ m.horas }}h
+                <span class="text-xs font-normal opacity-60">{{ m.percentual }}%</span>
+              </span>
+            </div>
+            <div class="h-1.5 rounded-full overflow-hidden"
+                 :style="temaClaro ? 'background:#e5e7eb;' : 'background:#27272a;'">
+              <div class="h-full rounded-full" style="background:#3b82f6; width:{{ m.percentual }}%;"></div>
+            </div>
+          </div>
+        {% endfor %}
+      </div>
+    </div>
+  {% endif %}
+
+  {# ── O que ficou de fora ──────────────────────────────────────────── #}
+  {% if sem_roteiro or sem_data %}
+    <div class="card p-5 space-y-4">
+      <div>
+        <h3 class="text-sm font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">Fora desta conta</h3>
+        <p class="text-xs mt-0.5" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+          Trabalho que existe mas não entrou no plano. Enquanto estiver aqui, a
+          carga real é maior do que a mostrada acima.
+        </p>
+      </div>
+
+      {% if sem_roteiro %}
+        <div>
+          <p class="text-xs font-semibold uppercase tracking-wider mb-2" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+            Itens sem roteiro
+          </p>
+          <div class="space-y-1">
+            {% for i in sem_roteiro %}
+              <div class="flex items-center justify-between gap-3 text-sm px-3 py-2 rounded-lg"
+                   :style="temaClaro ? 'background:#f8fafc;' : 'background:#18181b;'">
+                <span :style="temaClaro ? 'color:#374151;' : 'color:#cbd5e1;'">
+                  <a href="{% url 'moda:pedido-detail' i.pedido.pk %}"
+                     :style="temaClaro ? 'color:#3b82f6;' : 'color:#60a5fa;'">#{{ i.pedido.numero|stringformat:"06d" }}</a>
+                  — {{ i.descricao }}
+                  <span class="text-xs opacity-60">({{ i.motivo }})</span>
+                </span>
+                <strong class="tabular-nums shrink-0" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
+                  {{ i.quantidade }} pç
+                </strong>
+              </div>
+            {% endfor %}
+          </div>
+        </div>
+      {% endif %}
+
+      {% if sem_data %}
+        <div>
+          <p class="text-xs font-semibold uppercase tracking-wider mb-2" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+            Pedidos sem data prevista
+          </p>
+          <div class="flex flex-wrap gap-2">
+            {% for p in sem_data %}
+              <a href="{% url 'moda:pedido-detail' p.pk %}"
+                 class="text-xs font-semibold px-2.5 py-1 rounded-full"
+                 :style="temaClaro ? 'background:#f1f5f9; color:#334155;' : 'background:#27272a; color:#d4d4d8;'">
+                #{{ p.numero|stringformat:"06d" }} — {{ p.cliente }}
+              </a>
+            {% endfor %}
+          </div>
+        </div>
+      {% endif %}
+    </div>
+  {% endif %}
+
+</div>
+{% endblock %}

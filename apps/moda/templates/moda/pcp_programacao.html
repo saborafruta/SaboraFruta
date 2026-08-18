@@ -1,0 +1,81 @@
+{% extends "_base.html" %}
+{% block title %}{{ title }}{% endblock %}
+{% block page_title %}PCP — Programação{% endblock %}
+{% block content %}
+<div class="space-y-5">
+
+  <div>
+    <p class="text-sm mb-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+      <a href="{% url 'moda:grupo' 'pcp' %}" :style="temaClaro ? 'color:#3b82f6;' : 'color:#60a5fa;'">PCP</a>
+      <span class="mx-1">›</span> Programação
+    </p>
+    <h2 class="text-2xl font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">Programação</h2>
+    <p class="text-sm mt-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+      Os pedidos abertos distribuídos pelas semanas, pela data prevista de
+      entrega. Atrasado sobe para a semana corrente.
+    </p>
+  </div>
+
+  {% include "moda/_pcp_abas.html" %}
+
+  <form method="get" class="flex items-end gap-2">
+    <div>
+      <label class="block text-xs font-semibold mb-1" :style="temaClaro ? 'color:#374151;' : 'color:#cbd5e1;'">
+        Semanas no horizonte
+      </label>
+      <input type="number" name="semanas" min="1" max="26" value="{{ semanas_escolhidas }}"
+             class="form-input w-28">
+    </div>
+    <button type="submit" class="btn-secondary">Aplicar</button>
+  </form>
+
+  <div class="space-y-3">
+    {% for l in linhas %}
+      <div class="card p-4"
+           {% if l.corrente %}style="border-left:3px solid #3b82f6;"{% endif %}>
+        <div class="flex flex-wrap items-center justify-between gap-2 mb-3">
+          <div>
+            <h3 class="text-sm font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
+              {% if l.semana %}
+                {{ l.semana|date:"d/m" }} a {{ l.fim|date:"d/m/Y" }}
+                {% if l.corrente %}<span class="text-xs font-normal" style="color:#3b82f6;">· semana corrente</span>{% endif %}
+              {% else %}
+                Fora do horizonte ou sem data
+              {% endif %}
+            </h3>
+          </div>
+          <div class="flex gap-4 text-xs" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+            <span>{{ l.pedidos|length }} pedido(s)</span>
+            <span>{{ l.pecas }} peça(s)</span>
+            <span class="font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">{{ l.horas }}h</span>
+          </div>
+        </div>
+
+        {% if l.pedidos %}
+          <div class="flex flex-wrap gap-2">
+            {% for p in l.pedidos %}
+              <a href="{% url 'moda:pedido-detail' p.pk %}"
+                 class="text-xs font-semibold px-2.5 py-1.5 rounded-lg"
+                 {% if p.prioridade == 'urgente' %}style="background:rgba(220,38,38,.12); color:#dc2626;"
+                 {% elif p.prioridade == 'alta' %}style="background:rgba(245,158,11,.14); color:#d97706;"
+                 {% else %}:style="temaClaro ? 'background:#f1f5f9; color:#334155;' : 'background:#27272a; color:#d4d4d8;'"{% endif %}>
+                #{{ p.numero|stringformat:"06d" }} · {{ p.cliente }}
+                {% if p.atrasado %}<span style="color:#dc2626;">⚠</span>{% endif %}
+              </a>
+            {% endfor %}
+          </div>
+        {% else %}
+          <p class="text-xs" :style="temaClaro ? 'color:#cbd5e1;' : 'color:#52525b;'">Semana livre.</p>
+        {% endif %}
+      </div>
+    {% empty %}
+      <div class="card p-8 text-center">
+        <p class="text-sm" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+          Nenhum pedido aberto para programar.
+        </p>
+      </div>
+    {% endfor %}
+  </div>
+
+</div>
+{% endblock %}

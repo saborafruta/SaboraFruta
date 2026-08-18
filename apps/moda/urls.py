@@ -13,7 +13,7 @@ from django.urls import path
 
 from . import (
     views, views_apoio as va, views_cadastros as vc, views_ficha as vf,
-    views_roteiro as vr,
+    views_pcp as vp, views_roteiro as vr,
 )
 
 app_name = 'moda'
@@ -75,6 +75,16 @@ ROTAS_PRONTAS: list = [
     path('engenharia/sequencia-producao/<int:pk>/etapas/', vr.EtapaCreateView.as_view(), name='roteiro-etapa-add'),
     path('engenharia/sequencia-producao/<int:pk>/etapas/salvar/', vr.EtapaUpdateView.as_view(), name='roteiro-etapa-salvar'),
     path('engenharia/sequencia-producao/<int:pk>/etapas/<int:etapa_pk>/remover/', vr.EtapaDeleteView.as_view(), name='roteiro-etapa-delete'),
+
+    # PCP. Cada rota fica no endereço que o menu já aponta, antes do
+    # catch-all — mesmo motivo das telas de Engenharia.
+    path('pcp/planejamento/', vp.PlanejamentoView.as_view(), name='pcp-planejamento'),
+    path('pcp/capacidade/', vp.CapacidadeView.as_view(), name='pcp-capacidade'),
+    path('pcp/capacidade/<int:pk>/', vp.CapacidadeUpdateView.as_view(), name='pcp-capacidade-update'),
+    path('pcp/capacidade/<int:pk>/remover/', vp.CapacidadeDeleteView.as_view(), name='pcp-capacidade-delete'),
+    path('pcp/programacao/', vp.ProgramacaoView.as_view(), name='pcp-programacao'),
+    path('pcp/priorizacao/', vp.PriorizacaoView.as_view(), name='pcp-priorizacao'),
+    path('pcp/acompanhamento/', vp.AcompanhamentoView.as_view(), name='pcp-acompanhamento'),
 
     path('produtos/grades/', vc.GradeListView.as_view(), name='grade-list'),
     path('produtos/grades/nova/', vc.GradeFormView.as_view(), name='grade-create'),

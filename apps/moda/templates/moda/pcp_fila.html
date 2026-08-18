@@ -1,0 +1,112 @@
+{% extends "_base.html" %}
+{% block title %}{{ title }}{% endblock %}
+{% block page_title %}PCP — Priorização{% endblock %}
+{% block content %}
+<div class="space-y-5">
+
+  <div>
+    <p class="text-sm mb-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+      <a href="{% url 'moda:grupo' 'pcp' %}" :style="temaClaro ? 'color:#3b82f6;' : 'color:#60a5fa;'">PCP</a>
+      <span class="mx-1">›</span> Priorização
+    </p>
+    <h2 class="text-2xl font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
+      Priorização e Sequenciamento
+    </h2>
+    {% comment %}
+      Prioridade antes da data, e não o contrário: "urgente" existe
+      justamente para furar a fila da data. Se a data mandasse primeiro,
+      marcar um pedido como urgente não mudaria nada.
+    {% endcomment %}
+    <p class="text-sm mt-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+      Ordenado por prioridade e, dentro dela, pela data de entrega. Pedido sem
+      data vai para o fim — não dá para prometer o que não tem prazo.
+    </p>
+  </div>
+
+  {% include "moda/_pcp_abas.html" %}
+
+  <div class="card p-5">
+    {% if linhas %}
+      <div class="overflow-x-auto">
+        <table class="w-full text-sm" style="min-width:820px;">
+          <thead>
+            <tr class="text-xs uppercase tracking-wider" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+              <th class="text-right font-semibold pb-2 w-12">#</th>
+              <th class="text-left font-semibold pb-2">Pedido</th>
+              <th class="text-left font-semibold pb-2 w-24">Prioridade</th>
+              <th class="text-left font-semibold pb-2 w-32">Status</th>
+              <th class="text-right font-semibold pb-2 w-24">Entrega</th>
+              <th class="text-right font-semibold pb-2 w-20">Peças</th>
+              <th class="text-right font-semibold pb-2 w-24">Carga</th>
+              <th class="text-right font-semibold pb-2 w-28">Acumulado</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for l in linhas %}
+              <tr class="border-t" :style="temaClaro ? 'border-color:#e5e7eb;' : 'border-color:#303036;'">
+                <td class="py-2 text-right tabular-nums font-bold" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+                  {{ l.posicao }}
+                </td>
+                <td class="py-2 pr-3">
+                  <a href="{% url 'moda:pedido-detail' l.pedido.pk %}" class="font-semibold"
+                     :style="temaClaro ? 'color:#3b82f6;' : 'color:#60a5fa;'">
+                    #{{ l.pedido.numero|stringformat:"06d" }}
+                  </a>
+                  <span class="block text-xs" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+                    {{ l.pedido.cliente }}
+                  </span>
+                </td>
+                <td class="py-2">
+                  <span class="text-xs font-bold px-2 py-0.5 rounded-full"
+                        {% if l.pedido.prioridade == 'urgente' %}style="background:rgba(220,38,38,.12); color:#dc2626;"
+                        {% elif l.pedido.prioridade == 'alta' %}style="background:rgba(245,158,11,.14); color:#d97706;"
+                        {% else %}:style="temaClaro ? 'background:#f1f5f9; color:#64748b;' : 'background:#27272a; color:#a1a1aa;'"{% endif %}>
+                    {{ l.pedido.get_prioridade_display }}
+                  </span>
+                </td>
+                <td class="py-2 text-xs" :style="temaClaro ? 'color:#374151;' : 'color:#cbd5e1;'">
+                  {{ l.pedido.get_status_display }}
+                </td>
+                <td class="py-2 text-right text-xs tabular-nums">
+                  {% if l.pedido.data_prevista_entrega %}
+                    <span {% if l.atrasado %}style="color:#dc2626; font-weight:700;"
+                          {% else %}:style="temaClaro ? 'color:#374151;' : 'color:#cbd5e1;'"{% endif %}>
+                      {{ l.pedido.data_prevista_entrega|date:"d/m/Y" }}
+                    </span>
+                    {% if l.dias is not None %}
+                      <span class="block text-[10px]" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+                        {% if l.atrasado %}{{ l.dias }} dia(s){% else %}em {{ l.dias }} dia(s){% endif %}
+                      </span>
+                    {% endif %}
+                  {% else %}
+                    <span :style="temaClaro ? 'color:#cbd5e1;' : 'color:#52525b;'">sem data</span>
+                  {% endif %}
+                </td>
+                <td class="py-2 text-right tabular-nums" :style="temaClaro ? 'color:#374151;' : 'color:#cbd5e1;'">
+                  {{ l.pecas }}
+                </td>
+                <td class="py-2 text-right tabular-nums font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
+                  {% if l.minutos %}{{ l.horas }}h{% else %}<span class="text-xs font-normal" style="color:#d97706;">sem roteiro</span>{% endif %}
+                </td>
+                {% comment %}
+                  O acumulado é o valor do sequenciamento: sozinha, a carga de
+                  um pedido não diz quando ele começa. Somada da fila até ele,
+                  diz quantas horas de fábrica vêm antes.
+                {% endcomment %}
+                <td class="py-2 text-right tabular-nums" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+                  {{ l.acumulado_horas }}h
+                </td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    {% else %}
+      <p class="text-sm" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+        Nenhum pedido aberto na fila.
+      </p>
+    {% endif %}
+  </div>
+
+</div>
+{% endblock %}
