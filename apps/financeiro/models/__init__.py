@@ -14,6 +14,7 @@ from .extrato import ExtratoBancario, ConciliacaoBancaria, AgendaPagamento
 from .tef import TEFConfiguracao, TEFTransacao
 from .dre import DREConsolidado, DRECentroCusto
 from .credito_cliente import CreditoCliente
+from .plano_contabil import PlanoContabil
 
 __all__ = [
     "ClasseFiscal","ClasseFiscalAliquota","NaturezaOperacao",
@@ -27,5 +28,5 @@ __all__ = [
     "ExtratoBancario","ConciliacaoBancaria","AgendaPagamento",
     "TEFConfiguracao","TEFTransacao",
     "DREConsolidado","DRECentroCusto",
-    "CreditoCliente",
+    "CreditoCliente","PlanoContabil",
 ]

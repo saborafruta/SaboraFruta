@@ -10,6 +10,7 @@
 {% endblock %}
 
 {% block list_actions %}
+  <a href="{% url 'financeiro:plano_contabil_list' %}" class="btn-secondary">Plano Contábil</a>
   {% if pode_editar %}
     <a href="{% url 'financeiro:plano_contas_criar' %}?tipo={{ tipo_key }}"
        class="inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold transition-all"
