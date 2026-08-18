@@ -98,19 +98,29 @@
     <div>
       <h3 class="text-sm font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">Encaixe</h3>
       {% comment %}
-        O aproveitamento é informado, não calculado: ele vem do software de
-        encaixe ou da medição do risco, e é a razão entre a área das peças e a
-        do tecido — dado que o sistema não tem, porque não conhece o molde.
+        Com encaixe ligado, o aproveitamento vem calculado de lá (área útil ÷
+        área utilizada) e ninguém digita o número. Sem encaixe, sobra o campo
+        deste registro — que é como funcionava antes do cadastro de encaixe.
       {% endcomment %}
       <p class="text-xs mt-0.5" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
-        O aproveitamento vem do encaixe; a perda é o que sobra dele.
+        {% if corte.aproveitamento_do_encaixe %}
+          Calculado do encaixe
+          <a href="{% url 'moda:encaixe-detail' corte.encaixe.pk %}"
+             :style="temaClaro ? 'color:#3b82f6;' : 'color:#60a5fa;'">{{ corte.encaixe.nome }}</a>
+          — área útil ÷ área utilizada.
+        {% else %}
+          Informado à mão. Ligue um
+          <a href="{% url 'moda:encaixe-list' %}"
+             :style="temaClaro ? 'color:#3b82f6;' : 'color:#60a5fa;'">encaixe</a>
+          ao corte para o número passar a ser calculado.
+        {% endif %}
       </p>
     </div>
 
     <div class="grid grid-cols-2 lg:grid-cols-4 gap-3">
       <div class="rounded-xl p-4 text-center" :style="temaClaro ? 'background:#f8fafc;' : 'background:#18181b;'">
         <p class="text-xs uppercase tracking-wider" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Aproveitamento</p>
-        <p class="text-3xl font-bold tabular-nums mt-1" style="color:#059669;">{{ corte.aproveitamento }}%</p>
+        <p class="text-3xl font-bold tabular-nums mt-1" style="color:#059669;">{{ corte.aproveitamento_efetivo }}%</p>
       </div>
       <div class="rounded-xl p-4 text-center" :style="temaClaro ? 'background:#f8fafc;' : 'background:#18181b;'">
         <p class="text-xs uppercase tracking-wider" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Perda</p>

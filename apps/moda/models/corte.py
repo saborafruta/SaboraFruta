@@ -11,12 +11,15 @@ Produto e modelo são lidos da ordem. Tecido e cor podem ser sobrescritos
 aqui, porque o corte é feito com um rolo específico: a mesma OP com três
 cores tem três cortes, cada um com o seu.
 
-APROVEITAMENTO É INFORMADO, NÃO CALCULADO. Ele vem do encaixe (do software
-de encaixe ou da medição do risco) e é a razão entre a área das peças e a
-área do tecido — dado que o sistema não tem, porque não conhece o molde.
-Calcular a partir do consumo daria outra coisa: a diferença entre o que se
-planejou e o que se gastou, que é a comparação do bloco de baixo e responde
-a outra pergunta.
+O APROVEITAMENTO VEM DO ENCAIXE quando há um cadastrado: lá ele é
+calculado (área útil ÷ área utilizada) e não depende de ninguém copiar o
+número certo para cá. Sem encaixe, sobra o campo digitado neste registro,
+que é como funcionava antes de o cadastro de encaixe existir.
+
+Não confundir com a comparação do bloco de baixo: aproveitamento é quanto do
+tecido virou peça no risco; planejado × utilizado é a diferença entre o que
+a ficha previa e o que o enfesto gastou. São perguntas diferentes e ficam em
+lugares diferentes da tela.
 """
 from decimal import Decimal
 
@@ -70,6 +73,14 @@ class RegistroCorte(FilialScopedModel):
     )
 
     # ── Encaixe ──────────────────────────────────────────────────────────
+    # Com encaixe cadastrado, o aproveitamento vem CALCULADO de lá (área
+    # útil ÷ área utilizada) e o campo abaixo deixa de valer. Sem encaixe,
+    # sobra o valor digitado — que é o que existia antes desta ligação.
+    encaixe = models.ForeignKey(
+        'moda.Encaixe', on_delete=models.PROTECT, null=True, blank=True,
+        related_name='cortes',
+        help_text='Ligando o encaixe, o aproveitamento passa a ser calculado dele.',
+    )
     largura_tecido = models.DecimalField(
         max_digits=6, decimal_places=2, default=Decimal('0'),
         verbose_name='Largura do tecido (m)',
@@ -171,17 +182,35 @@ class RegistroCorte(FilialScopedModel):
     # ── Encaixe ──────────────────────────────────────────────────────────
 
     @property
+    def aproveitamento_efetivo(self) -> Decimal:
+        """
+        O aproveitamento que vale: o do encaixe, se houver; senão o digitado.
+
+        O do encaixe vem primeiro porque é calculado da área e não depende
+        de alguém lembrar de copiar o número certo para cá.
+        """
+        if self.encaixe_id and self.encaixe.medido:
+            return self.encaixe.aproveitamento
+        return self.aproveitamento or Decimal('0')
+
+    @property
+    def aproveitamento_do_encaixe(self) -> bool:
+        """Para a tela dizer de onde veio o número."""
+        return bool(self.encaixe_id and self.encaixe.medido)
+
+    @property
     def perda_percentual(self) -> Decimal:
         """
         O que sobra do aproveitamento. Aproveitamento 87,5% = perda 12,5%.
 
-        Sem aproveitamento informado devolve zero, e não 100: zero ali
+        Sem aproveitamento medido devolve zero, e não 100: zero ali
         significa "ninguém mediu ainda", e mostrar 100% de perda numa ficha
         recém-aberta seria alarme falso todo dia.
         """
-        if not self.aproveitamento:
+        aproveitamento = self.aproveitamento_efetivo
+        if not aproveitamento:
             return Decimal('0')
-        return (CEM - self.aproveitamento).quantize(Decimal('0.01'))
+        return (CEM - aproveitamento).quantize(Decimal('0.01'))
 
     @property
     def consumo_do_encaixe(self) -> Decimal:

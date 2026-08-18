@@ -3,10 +3,10 @@ from django import forms
 from django.db import models
 
 from .models import (
-    CapacidadeSetor, Cor, FichaTecnica, Grade, ImagemFicha, ItemPedidoProducao,
-    MaterialFicha, MockupVisual, Operacao, OperacaoRoteiro, PedidoProducao,
-    Personalizacao, ProdutoModa, RegistroCorte, Roteiro, Tamanho,
-    VisualItemPedido,
+    CapacidadeSetor, Cor, Encaixe, FichaTecnica, Grade, ImagemFicha,
+    ItemPedidoProducao, MaterialFicha, MockupVisual, Operacao, OperacaoRoteiro,
+    PedidoProducao, Personalizacao, ProdutoModa, RegistroCorte, Roteiro,
+    Tamanho, VisualItemPedido,
 )
 
 
@@ -810,7 +810,7 @@ class RegistroCorteForm(_FilialFormMixin, forms.ModelForm):
         model = RegistroCorte
         fields = [
             'ordem', 'tecido', 'cor', 'lote', 'data', 'responsavel', 'status',
-            'largura_tecido', 'comprimento_encaixe', 'folhas', 'aproveitamento',
+            'encaixe', 'largura_tecido', 'comprimento_encaixe', 'folhas', 'aproveitamento',
             'consumo_planejado', 'consumo_real', 'observacao',
         ]
         widgets = {
@@ -845,3 +845,77 @@ class RegistroCorteForm(_FilialFormMixin, forms.ModelForm):
         for nome in ('tecido', 'cor'):
             self.fields[nome].required = False
             self.fields[nome].empty_label = 'do item da ordem'
+
+        from .models import Encaixe as EncaixeModel
+
+        self.fields['encaixe'].queryset = EncaixeModel.objects.filter(
+            filial=filial, ativo=True,
+        ).order_by('nome')
+        self.fields['encaixe'].required = False
+        self.fields['encaixe'].empty_label = 'sem encaixe - aproveitamento a mao'
+
+class EncaixeForm(_FilialFormMixin, forms.ModelForm):
+    """
+    Um risco.
+
+    Aproveitamento e perda nao estao aqui: sao calculados de comprimento,
+    largura e area util. Oferecer o campo faria a tela aceitar um numero que
+    contradiz a propria conta ao lado.
+    """
+
+    campos_por_filial = {}  # preenchido em __init__, para evitar import circular
+
+    class Meta:
+        model = Encaixe
+        fields = [
+            'nome', 'produto', 'modelo', 'tecido',
+            'comprimento', 'largura_tecido', 'quantidade_pecas', 'area_util',
+            'arquivo', 'observacao', 'ativo',
+        ]
+        widgets = {
+            'nome': forms.TextInput(attrs={'placeholder': 'Ex.: Camisa gola redonda - P ao GG, 1,60 m'}),
+            'comprimento': forms.NumberInput(attrs={'step': '0.001', 'min': '0'}),
+            'largura_tecido': forms.NumberInput(attrs={'step': '0.001', 'min': '0'}),
+            'quantidade_pecas': forms.NumberInput(attrs={'min': 0}),
+            'area_util': forms.NumberInput(attrs={'step': '0.0001', 'min': '0'}),
+            'observacao': forms.Textarea(attrs={'rows': 2}),
+        }
+
+    def __init__(self, *args, filial=None, **kwargs):
+        from .models import Modelo, ProdutoModa as Produto, Tecido
+
+        self.campos_por_filial = {'modelo': Modelo, 'tecido': Tecido}
+        super().__init__(*args, filial=filial, **kwargs)
+
+        self.fields['produto'].queryset = Produto.objects.filter(
+            filial=filial, ativo=True,
+        ).order_by('codigo')
+        for nome in ('produto', 'modelo', 'tecido'):
+            self.fields[nome].required = False
+            self.fields[nome].empty_label = '-'
+
+    def clean_nome(self):
+        nome = (self.cleaned_data['nome'] or '').strip()
+        qs = Encaixe.objects.filter(filial=self.filial, nome__iexact=nome)
+        if self.instance.pk:
+            qs = qs.exclude(pk=self.instance.pk)
+        if qs.exists():
+            raise forms.ValidationError('Ja existe um encaixe com esse nome nesta filial.')
+        return nome
+
+    def clean(self):
+        dados = super().clean()
+        util = dados.get('area_util') or 0
+        comprimento = dados.get('comprimento') or 0
+        largura = dados.get('largura_tecido') or 0
+        utilizada = comprimento * largura
+
+        # Moldes que nao cabem no risco significam medida errada em algum dos
+        # tres campos, e passariam como aproveitamento acima de 100%.
+        if util and utilizada and util > utilizada:
+            self.add_error(
+                'area_util',
+                f'A area util ({util} m2) nao cabe na area utilizada '
+                f'({utilizada} m2). Confira comprimento, largura e a area do CAD.',
+            )
+        return dados

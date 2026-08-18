@@ -1,0 +1,37 @@
+{% extends "_base.html" %}
+{% block title %}{{ title }}{% endblock %}
+{% block page_title %}{{ title }}{% endblock %}
+{% block content %}
+<div class="max-w-2xl mx-auto space-y-5">
+  <div>
+    <p class="text-sm mb-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+      <a href="{% url 'moda:encaixe-list' %}" :style="temaClaro ? 'color:#3b82f6;' : 'color:#60a5fa;'">Encaixes</a>
+      <span class="mx-1">›</span> {{ title }}
+    </p>
+    <h2 class="text-2xl font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">{{ title }}</h2>
+    {% comment %}
+      Aproveitamento e perda não estão no formulário: são calculados de
+      comprimento, largura e área útil. Oferecer o campo faria a tela aceitar
+      um número que contradiz a própria conta exibida ao lado.
+    {% endcomment %}
+    <p class="text-sm mt-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+      Aproveitamento e perda não são digitados — saem de
+      <span class="font-mono">área útil ÷ (comprimento × largura)</span>.
+      A área útil é o único número que vem de fora: some as áreas dos moldes no CAD.
+    </p>
+  </div>
+
+  <form method="post" enctype="multipart/form-data" novalidate class="space-y-5">
+    {% csrf_token %}
+    <div class="card p-6 space-y-4">
+      {% include "moda/_form_campos.html" %}
+    </div>
+
+    <div class="flex justify-end gap-2">
+      <a href="{% if encaixe %}{% url 'moda:encaixe-detail' encaixe.pk %}{% else %}{% url 'moda:encaixe-list' %}{% endif %}"
+         class="btn-secondary">Cancelar</a>
+      <button type="submit" class="btn-primary">Salvar encaixe</button>
+    </div>
+  </form>
+</div>
+{% endblock %}

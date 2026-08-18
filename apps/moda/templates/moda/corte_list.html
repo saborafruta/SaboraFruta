@@ -15,7 +15,10 @@
         Um registro por enfesto. A mesma ordem em duas cores são dois cortes.
       </p>
     </div>
-    <a href="{% url 'moda:corte-create' %}" class="btn-primary">+ Novo corte</a>
+    <div class="flex gap-2">
+      <a href="{% url 'moda:encaixe-list' %}" class="btn-secondary">Encaixes</a>
+      <a href="{% url 'moda:corte-create' %}" class="btn-primary">+ Novo corte</a>
+    </div>
   </div>
 
   {# ── Indicadores ──────────────────────────────────────────────────── #}
@@ -141,8 +144,8 @@
                   {{ c.quantidade }}
                 </td>
                 <td class="py-2 text-right tabular-nums">
-                  {% if c.aproveitamento %}
-                    <span style="color:#059669; font-weight:600;">{{ c.aproveitamento }}%</span>
+                  {% if c.aproveitamento_efetivo %}
+                    <span style="color:#059669; font-weight:600;">{{ c.aproveitamento_efetivo }}%</span>
                     <span class="block text-[10px]" style="color:#dc2626;">perda {{ c.perda_percentual }}%</span>
                   {% else %}
                     <span :style="temaClaro ? 'color:#cbd5e1;' : 'color:#52525b;'">—</span>

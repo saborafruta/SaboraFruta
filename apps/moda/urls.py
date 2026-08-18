@@ -13,7 +13,8 @@ from django.urls import path
 
 from . import (
     views, views_apoio as va, views_cadastros as vc, views_ficha as vf,
-    views_corte as vco, views_fluxo as vx, views_ordem as vo, views_pcp as vp,
+    views_corte as vco, views_encaixe as ve, views_fluxo as vx,
+    views_ordem as vo, views_pcp as vp,
     views_roteiro as vr,
 )
 
@@ -46,6 +47,13 @@ ROTAS_PRONTAS: list = [
     path('comercial/pedidos/<int:pk>/pessoas/<int:individual_pk>/', vc.IndividualFormView.as_view(), name='pedido-individual-update'),
     path('comercial/pedidos/<int:pk>/pessoas/<int:individual_pk>/remover/', vc.IndividualDeleteView.as_view(), name='pedido-individual-delete'),
     path('comercial/pedidos/<int:pk>/pessoas/importar/', vc.IndividualImportarView.as_view(), name='pedido-individual-importar'),
+
+    # Encaixe. Cadastro proprio: o mesmo risco serve a todos os enfestos
+    # daquele modelo, entao nao pendura no corte.
+    path('producao/encaixe/', ve.EncaixeListView.as_view(), name='encaixe-list'),
+    path('producao/encaixe/novo/', ve.EncaixeFormView.as_view(), name='encaixe-create'),
+    path('producao/encaixe/<int:pk>/', ve.EncaixeDetailView.as_view(), name='encaixe-detail'),
+    path('producao/encaixe/<int:pk>/editar/', ve.EncaixeFormView.as_view(), name='encaixe-update'),
 
     # Controle de corte. A lista fica no endereço do menu (producao/corte).
     path('producao/corte/', vco.CorteListView.as_view(), name='corte-list'),

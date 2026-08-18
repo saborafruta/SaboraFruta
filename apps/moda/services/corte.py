@@ -103,7 +103,7 @@ class CorteService:
                 'texto': 'Consumo real não apontado — o comparativo com o planejado fica sem base.',
             })
 
-        if corte.quantidade and not corte.aproveitamento:
+        if corte.quantidade and not corte.aproveitamento_efetivo:
             avisos.append({
                 'nivel': 'pendente',
                 'texto': 'Aproveitamento do encaixe não informado.',
@@ -129,11 +129,13 @@ class CorteService:
         real = sum((c.consumo_real or Decimal('0') for c in cortes), Decimal('0'))
         pecas = sum(c.quantidade for c in cortes)
 
-        com_aproveitamento = [c for c in cortes if c.aproveitamento and c.consumo_real]
+        com_aproveitamento = [
+            c for c in cortes if c.aproveitamento_efetivo and c.consumo_real
+        ]
         base = sum((c.consumo_real for c in com_aproveitamento), Decimal('0'))
         if base:
             ponderado = sum(
-                (c.aproveitamento * c.consumo_real for c in com_aproveitamento),
+                (c.aproveitamento_efetivo * c.consumo_real for c in com_aproveitamento),
                 Decimal('0'),
             ) / base
             aproveitamento = ponderado.quantize(Decimal('0.1'))

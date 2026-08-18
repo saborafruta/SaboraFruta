@@ -1,0 +1,156 @@
+{% extends "_base.html" %}
+{% block title %}{{ title }}{% endblock %}
+{% block page_title %}Encaixes{% endblock %}
+{% block content %}
+<div class="space-y-5">
+
+  <div class="flex flex-wrap items-start justify-between gap-3">
+    <div>
+      <p class="text-sm mb-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+        <a href="{% url 'moda:grupo' 'producao' %}" :style="temaClaro ? 'color:#3b82f6;' : 'color:#60a5fa;'">Produção</a>
+        <span class="mx-1">›</span> Encaixe
+      </p>
+      <h2 class="text-2xl font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">Encaixes</h2>
+      <p class="text-sm mt-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+        O risco é do produto, não do enfesto: o mesmo serve para todos os cortes
+        daquele modelo naquela largura de tecido.
+      </p>
+    </div>
+    <a href="{% url 'moda:encaixe-create' %}" class="btn-primary">+ Novo encaixe</a>
+  </div>
+
+  {# ── Resumo ───────────────────────────────────────────────────────── #}
+  <div class="grid grid-cols-2 lg:grid-cols-4 gap-3">
+    <div class="card p-4">
+      <p class="text-xs uppercase tracking-wider" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Aproveitamento</p>
+      <p class="text-3xl font-bold tabular-nums mt-1" style="color:#059669;">{{ resumo.aproveitamento }}%</p>
+      <p class="text-xs mt-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+        média ponderada pela área
+      </p>
+    </div>
+    <div class="card p-4">
+      <p class="text-xs uppercase tracking-wider" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Perda</p>
+      <p class="text-3xl font-bold tabular-nums mt-1" style="color:#dc2626;">{{ resumo.perda }}%</p>
+      <p class="text-xs mt-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+        do tecido vira retalho
+      </p>
+    </div>
+    <div class="card p-4">
+      <p class="text-xs uppercase tracking-wider" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Melhor risco</p>
+      {% if resumo.melhor %}
+        <p class="text-xl font-bold tabular-nums mt-1" style="color:#059669;">{{ resumo.melhor.aproveitamento }}%</p>
+        <p class="text-xs mt-1 truncate" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">{{ resumo.melhor.nome }}</p>
+      {% else %}
+        <p class="text-sm mt-2" :style="temaClaro ? 'color:#94a3b8;' : 'color:#71717a;'">—</p>
+      {% endif %}
+    </div>
+    <div class="card p-4">
+      <p class="text-xs uppercase tracking-wider" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Pior risco</p>
+      {% if resumo.pior %}
+        <p class="text-xl font-bold tabular-nums mt-1" style="color:#dc2626;">{{ resumo.pior.aproveitamento }}%</p>
+        <p class="text-xs mt-1 truncate" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">{{ resumo.pior.nome }}</p>
+      {% else %}
+        <p class="text-sm mt-2" :style="temaClaro ? 'color:#94a3b8;' : 'color:#71717a;'">—</p>
+      {% endif %}
+    </div>
+  </div>
+
+  {% if resumo.pendentes %}
+    <div class="card p-3" style="border-left:3px solid #f59e0b;">
+      <p class="text-sm" :style="temaClaro ? 'color:#374151;' : 'color:#cbd5e1;'">
+        <strong>{{ resumo.pendentes }} encaixe(s) sem área útil informada.</strong>
+        Ela vem do CAD e é o único número que o sistema não deduz — sem ela não
+        há aproveitamento, e o risco fica fora da média.
+      </p>
+    </div>
+  {% endif %}
+
+  <form method="get" class="flex gap-2">
+    <input type="search" name="q" value="{{ busca }}" placeholder="Nome ou produto"
+           class="form-input flex-1 max-w-sm">
+    <button type="submit" class="btn-secondary">Buscar</button>
+    {% if busca %}<a href="{% url 'moda:encaixe-list' %}" class="btn-secondary">Limpar</a>{% endif %}
+  </form>
+
+  {# ── Lista ────────────────────────────────────────────────────────── #}
+  <div class="card p-5">
+    {% if encaixes %}
+      {% comment %}
+        Ordenado pelo aproveitamento, do maior para o menor: a pergunta desta
+        lista é "quais riscos estão desperdiçando tecido", e a resposta são as
+        últimas linhas. Os não medidos vão para o fim — zero ali não é
+        aproveitamento ruim, é ausência de medição.
+      {% endcomment %}
+      <div class="overflow-x-auto">
+        <table class="w-full text-sm" style="min-width:860px;">
+          <thead>
+            <tr class="text-xs uppercase tracking-wider" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+              <th class="text-left font-semibold pb-2">Encaixe</th>
+              <th class="text-left font-semibold pb-2 w-32">Produto</th>
+              <th class="text-right font-semibold pb-2 w-28">Compr. × larg.</th>
+              <th class="text-right font-semibold pb-2 w-20">Peças</th>
+              <th class="text-right font-semibold pb-2 w-28">m/peça</th>
+              <th class="text-right font-semibold pb-2 w-32">Aproveitamento</th>
+              <th class="text-center font-semibold pb-2 w-16">Arquivo</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for e in encaixes %}
+              <tr class="border-t" :style="temaClaro ? 'border-color:#e5e7eb;' : 'border-color:#303036;'">
+                <td class="py-2 pr-2">
+                  <a href="{% url 'moda:encaixe-detail' e.pk %}" class="font-semibold"
+                     :style="temaClaro ? 'color:#3b82f6;' : 'color:#60a5fa;'">{{ e.nome }}</a>
+                  {% if not e.ativo %}
+                    <span class="text-[10px] font-bold px-1.5 py-0.5 rounded-full ml-1"
+                          :style="temaClaro ? 'background:#f1f5f9; color:#64748b;' : 'background:#27272a; color:#a1a1aa;'">inativo</span>
+                  {% endif %}
+                </td>
+                <td class="py-2 pr-2 text-xs" :style="temaClaro ? 'color:#374151;' : 'color:#cbd5e1;'">
+                  {% firstof e.produto e.modelo '—' %}
+                </td>
+                <td class="py-2 text-right tabular-nums text-xs" :style="temaClaro ? 'color:#374151;' : 'color:#cbd5e1;'">
+                  {{ e.comprimento }} × {{ e.largura_tecido }} m
+                  <span class="block text-[10px] opacity-60">{{ e.area_utilizada }} m²</span>
+                </td>
+                <td class="py-2 text-right tabular-nums" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
+                  {{ e.quantidade_pecas }}
+                </td>
+                <td class="py-2 text-right tabular-nums text-xs" :style="temaClaro ? 'color:#374151;' : 'color:#cbd5e1;'">
+                  {{ e.consumo_por_peca }}
+                </td>
+                <td class="py-2 text-right tabular-nums">
+                  {% if e.medido %}
+                    <span class="font-bold" style="color:#059669;">{{ e.aproveitamento }}%</span>
+                    <span class="block text-[10px]" style="color:#dc2626;">perda {{ e.perda_percentual }}%</span>
+                  {% else %}
+                    <span class="text-xs" style="color:#d97706;">sem área útil</span>
+                  {% endif %}
+                </td>
+                <td class="py-2 text-center">
+                  {% if e.arquivo %}
+                    <a href="{{ e.arquivo.url }}" target="_blank" rel="noopener" title="Abrir o risco"
+                       :style="temaClaro ? 'color:#3b82f6;' : 'color:#60a5fa;'">↓</a>
+                  {% else %}
+                    <span :style="temaClaro ? 'color:#cbd5e1;' : 'color:#52525b;'">—</span>
+                  {% endif %}
+                </td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    {% else %}
+      <p class="text-sm" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+        {% if busca %}
+          Nenhum encaixe encontrado para “{{ busca }}”.
+        {% else %}
+          Nenhum encaixe cadastrado. Com um risco cadastrado, o aproveitamento
+          do <a href="{% url 'moda:corte-list' %}" :style="temaClaro ? 'color:#3b82f6;' : 'color:#60a5fa;'">corte</a>
+          passa a ser calculado em vez de digitado.
+        {% endif %}
+      </p>
+    {% endif %}
+  </div>
+
+</div>
+{% endblock %}
