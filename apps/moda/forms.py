@@ -2,8 +2,8 @@
 from django import forms
 
 from .models import (
-    Cor, Grade, ItemPedidoProducao, PedidoProducao, Personalizacao,
-    ProdutoModa, Tamanho,
+    Cor, Grade, ItemPedidoProducao, MockupVisual, PedidoProducao,
+    Personalizacao, ProdutoModa, Tamanho, VisualItemPedido,
 )
 
 
@@ -267,4 +267,59 @@ class PersonalizacaoForm(_FilialFormMixin, forms.ModelForm):
                 'patrocinios',
                 'Informe quais são os patrocinadores, ou deixe a quantidade em zero.',
             )
+        return dados
+
+
+class VisualItemPedidoForm(_FilialFormMixin, forms.ModelForm):
+    """Uma das quatro vistas do item (frente/costas de camisa e calção)."""
+
+    class Meta:
+        model = VisualItemPedido
+        fields = ['posicao', 'imagem', 'mockup', 'nome', 'numero', 'observacoes']
+        widgets = {
+            'nome': forms.TextInput(attrs={'placeholder': 'Ex.: SILVA'}),
+            'numero': forms.TextInput(attrs={'placeholder': 'Ex.: 25'}),
+            'observacoes': forms.TextInput(attrs={'placeholder': 'Detalhe desta vista'}),
+        }
+
+    def __init__(self, *args, filial=None, item=None, **kwargs):
+        super().__init__(*args, filial=filial, **kwargs)
+        self.item = item
+        self.fields['mockup'].queryset = MockupVisual.objects.filter(
+            filial=filial, ativo=True,
+        )
+        self.fields['mockup'].required = False
+        self.fields['imagem'].required = False
+
+    def clean(self):
+        from .models.visual import POSICOES_COSTAS
+
+        dados = super().clean()
+        posicao = dados.get('posicao')
+
+        # Sem imagem própria nem mockup a vista não mostraria nada — seria um
+        # quadro vazio no painel, indistinguível de erro de carregamento.
+        if not dados.get('imagem') and not dados.get('mockup'):
+            self.add_error('imagem', 'Envie uma imagem ou escolha um mockup cadastrado.')
+
+        # Nome e número vão nas costas da peça. Aceitá-los numa vista de
+        # frente gravaria um dado que a produção nunca veria.
+        if posicao and posicao not in POSICOES_COSTAS:
+            if (dados.get('nome') or '').strip() or (dados.get('numero') or '').strip():
+                self.add_error(
+                    'posicao',
+                    'Nome e número só se aplicam às costas — troque a posição ou limpe os campos.',
+                )
+
+        # Uma vista por posição: duas "frentes da camisa" no mesmo item
+        # seriam contraditórias na hora de produzir.
+        if posicao and self.item is not None:
+            existente = self.item.visuais.filter(posicao=posicao)
+            if self.instance.pk:
+                existente = existente.exclude(pk=self.instance.pk)
+            if existente.exists():
+                self.add_error(
+                    'posicao',
+                    'Esta posição já tem imagem neste item. Remova a atual para substituir.',
+                )
         return dados

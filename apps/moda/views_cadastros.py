@@ -15,11 +15,11 @@ from apps.core.services.exceptions import DadosInvalidosError
 
 from .forms import (
     CorForm, GradeForm, ItemPedidoProducaoForm, PedidoProducaoForm,
-    PersonalizacaoForm, ProdutoModaForm,
+    PersonalizacaoForm, ProdutoModaForm, VisualItemPedidoForm,
 )
 from .models import (
     Cor, Grade, ItemGrade, ItemPedidoProducao, PedidoProducao, Personalizacao,
-    ProdutoCor, ProdutoModa, Tamanho,
+    ProdutoCor, ProdutoModa, Tamanho, VisualItemPedido,
 )
 from .services import VarianteService
 from .views import ModaBaseView
@@ -344,7 +344,7 @@ class PedidoDetailView(ModaBaseView):
         )
         itens = pedido.itens.select_related(
             'produto', 'modelo', 'cor', 'tecido', 'produto__tecido',
-        ).prefetch_related('personalizacoes').all()
+        ).prefetch_related('personalizacoes', 'visuais__mockup').all()
         return render(request, 'moda/pedido_detail.html', {
             'title': f'Pedido #{pedido.numero:06d}',
             'pedido': pedido,
@@ -353,6 +353,7 @@ class PedidoDetailView(ModaBaseView):
             'total_pecas': sum(i.quantidade for i in itens),
             'form_item': ItemPedidoProducaoForm(filial=_filial(request)),
             'form_arte': PersonalizacaoForm(),
+            'form_visual': VisualItemPedidoForm(filial=_filial(request)),
         })
 
 
@@ -464,4 +465,45 @@ class PersonalizacaoDeleteView(ModaBaseView):
         arte = get_object_or_404(Personalizacao, pk=arte_pk, item=item)
         arte.delete()
         messages.success(request, 'Arte removida.')
+        return redirect(reverse('moda:pedido-detail', args=[pedido.pk]))
+
+
+class VisualCreateView(ModaBaseView):
+    """Acrescenta uma vista (frente/costas) ao item."""
+
+    permissao_acao = 'editar'
+
+    def post(self, request, pk, item_pk):
+        pedido = get_object_or_404(PedidoProducao.objects.for_filial(_filial(request)), pk=pk)
+        item = get_object_or_404(ItemPedidoProducao, pk=item_pk, pedido=pedido)
+        form = VisualItemPedidoForm(
+            request.POST, request.FILES, filial=_filial(request), item=item,
+        )
+
+        if not form.is_valid():
+            for campo, erros in form.errors.items():
+                rotulo = form.fields[campo].label if campo in form.fields else campo
+                for erro in erros:
+                    messages.error(request, f'{rotulo}: {erro}')
+            return redirect(reverse('moda:pedido-detail', args=[pedido.pk]))
+
+        visual = form.save(commit=False)
+        visual.item = item
+        visual.save()
+        messages.success(
+            request, f'{visual.get_posicao_display()} adicionada a {item.nome_exibicao}.',
+        )
+        return redirect(reverse('moda:pedido-detail', args=[pedido.pk]))
+
+
+class VisualDeleteView(ModaBaseView):
+    permissao_acao = 'editar'
+
+    def post(self, request, pk, item_pk, visual_pk):
+        pedido = get_object_or_404(PedidoProducao.objects.for_filial(_filial(request)), pk=pk)
+        item = get_object_or_404(ItemPedidoProducao, pk=item_pk, pedido=pedido)
+        visual = get_object_or_404(VisualItemPedido, pk=visual_pk, item=item)
+        nome = visual.get_posicao_display()
+        visual.delete()
+        messages.success(request, f'{nome} removida.')
         return redirect(reverse('moda:pedido-detail', args=[pedido.pk]))

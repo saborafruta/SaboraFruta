@@ -3,7 +3,11 @@
 {% block page_title %}Pedido #{{ pedido.numero|stringformat:"06d" }}{% endblock %}
 
 {% block content %}
-<div class="max-w-4xl mx-auto space-y-5">
+{% comment %}
+  `ampliada` no topo da página, e não dentro de cada item: o overlay ocupa a
+  tela inteira, então um por item ficaria preso ao card e recortado.
+{% endcomment %}
+<div class="max-w-4xl mx-auto space-y-5" x-data="{ ampliada: null }">
 
   <div class="flex flex-wrap items-start justify-between gap-3">
     <div>
@@ -151,6 +155,71 @@
                   <p class="text-xs mt-1 whitespace-pre-line" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">{{ item.observacoes }}</p>
                 {% endif %}
 
+                {# ── Visual da peça ────────────────────────────────── #}
+                <div class="mt-3 pt-3 border-t" :style="temaClaro ? 'border-color:#e5e7eb;' : 'border-color:#303036;'"
+                     x-data="{ novoVisual: false }">
+                  <div class="flex items-center justify-between gap-2">
+                    <span class="text-xs font-semibold uppercase tracking-wide" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+                      Visual da peça
+                    </span>
+                    <button type="button" class="text-xs font-semibold" @click="novoVisual = !novoVisual"
+                            :style="temaClaro ? 'color:#2563eb;' : 'color:#60a5fa;'"
+                            x-text="novoVisual ? 'Fechar' : '+ Vista'"></button>
+                  </div>
+
+                  {% if item.visuais.all %}
+                    <div class="grid grid-cols-2 sm:grid-cols-4 gap-2 mt-2">
+                      {% for v in item.visuais.all %}
+                        <div class="rounded-lg overflow-hidden"
+                             :style="temaClaro ? 'background:#fff; border:1px solid #e5e7eb;' : 'background:#111113; border:1px solid #2a2a2e;'">
+                          {% if v.tem_imagem %}
+                            <button type="button" class="block w-full" style="background:#fff; border:none; padding:0; cursor:zoom-in;"
+                                    @click="ampliada = { url: '{{ v.url_imagem }}', titulo: '{{ v.get_posicao_display|escapejs }}', nome: '{{ v.nome|escapejs }}', numero: '{{ v.numero|escapejs }}' }"
+                                    title="Ampliar {{ v.get_posicao_display }}">
+                              <img src="{{ v.url_imagem }}" alt="{{ v.get_posicao_display }}"
+                                   class="w-full h-24 object-contain" style="background:#fff;">
+                            </button>
+                          {% else %}
+                            <div class="w-full h-24 flex items-center justify-center text-xs"
+                                 :style="temaClaro ? 'color:#9ca3af;' : 'color:#4b5563;'">sem imagem</div>
+                          {% endif %}
+                          <div class="p-1.5">
+                            <p class="text-[11px] font-semibold leading-tight" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">{{ v.get_posicao_display }}</p>
+                            {% if v.e_costas and v.nome or v.numero %}
+                              <p class="text-[11px] mt-0.5" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+                                {{ v.nome }}{% if v.numero %} <strong>{{ v.numero }}</strong>{% endif %}
+                              </p>
+                            {% endif %}
+                            <form method="post" action="{% url 'moda:pedido-visual-delete' pedido.pk item.pk v.pk %}"
+                                  onsubmit="return confirm('Remover {{ v.get_posicao_display|escapejs }}?');">
+                              {% csrf_token %}
+                              <button type="submit" class="text-[11px] font-semibold mt-0.5" style="color:#f87171;">Remover</button>
+                            </form>
+                          </div>
+                        </div>
+                      {% endfor %}
+                    </div>
+                  {% else %}
+                    <p class="text-xs mt-1.5" :style="temaClaro ? 'color:#94a3b8;' : 'color:#64748b;'">
+                      Sem imagens. Envie a arte ou escolha um mockup cadastrado.
+                    </p>
+                  {% endif %}
+
+                  <div x-show="novoVisual" x-cloak class="mt-3">
+                    <form method="post" enctype="multipart/form-data"
+                          action="{% url 'moda:pedido-visual-add' pedido.pk item.pk %}" novalidate class="space-y-3">
+                      {% csrf_token %}
+                      <div class="grid gap-3 sm:grid-cols-2">
+                        {% include "moda/_form_campos.html" with form=form_visual %}
+                      </div>
+                      <div class="flex justify-end gap-2">
+                        <button type="button" class="btn-secondary text-xs" @click="novoVisual = false">Cancelar</button>
+                        <button type="submit" class="btn-primary text-xs">Salvar vista</button>
+                      </div>
+                    </form>
+                  </div>
+                </div>
+
                 {# ── Personalização / arte ─────────────────────────── #}
                 <div class="mt-3 pt-3 border-t" :style="temaClaro ? 'border-color:#e5e7eb;' : 'border-color:#303036;'"
                      x-data="{ novaArte: false }">
@@ -280,6 +349,38 @@
       (PP a G3) e as etapas de produção — Corte, Sublimação, Costura, Entrega.
       Hoje o item tem só a quantidade total.
     </p>
+  </div>
+
+  {% comment %}
+    Visualização ampliada. Fundo branco de propósito: arte de confecção vem
+    quase sempre com fundo transparente, e sobre o escuro do tema um desenho
+    de linha preta simplesmente sumiria.
+  {% endcomment %}
+  <div x-show="ampliada" x-cloak @keydown.escape.window="ampliada = null"
+       class="fixed inset-0 z-50 flex flex-col items-center justify-center p-4"
+       style="background:rgba(0,0,0,.85);" @click.self="ampliada = null">
+
+    <div class="flex items-center justify-between gap-4 w-full max-w-3xl mb-3">
+      <div class="text-white min-w-0">
+        <p class="font-semibold" x-text="ampliada?.titulo"></p>
+        <p class="text-sm opacity-70" x-show="ampliada?.nome || ampliada?.numero">
+          <span x-text="ampliada?.nome"></span>
+          <strong x-text="ampliada?.numero"></strong>
+        </p>
+      </div>
+      <div class="flex items-center gap-2 shrink-0">
+        <a :href="ampliada?.url" target="_blank" rel="noopener"
+           class="text-sm font-semibold px-3 py-1.5 rounded-lg"
+           style="background:rgba(255,255,255,.15); color:#fff;">Abrir original</a>
+        <button type="button" @click="ampliada = null"
+                class="w-9 h-9 rounded-lg text-xl leading-none"
+                style="background:rgba(255,255,255,.15); color:#fff;">&times;</button>
+      </div>
+    </div>
+
+    <img :src="ampliada?.url" :alt="ampliada?.titulo"
+         class="max-w-full rounded-lg"
+         style="max-height:78vh; object-fit:contain; background:#fff;">
   </div>
 
 </div>
