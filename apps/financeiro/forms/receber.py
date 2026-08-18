@@ -64,7 +64,8 @@ class ContaReceberForm(forms.Form):
     plano_contas = forms.ModelChoiceField(
         queryset=PlanoContas.objects.none(),
         required=False,
-        label='Plano de contas',
+        label='Categoria da receita',
+        help_text='Selecione uma conta analítica do plano financeiro.',
     )
     observacao = forms.CharField(
         widget=forms.Textarea(attrs={'rows': 2}),
@@ -85,7 +86,16 @@ class ContaReceberForm(forms.Form):
                 .filter(empresa=filial.empresa, ativo=True)
                 .order_by('descricao')
             )
-            # plano_contas mantém queryset=none() até a migração empresa_id ser aplicada
+            self.fields['plano_contas'].queryset = (
+                PlanoContas.objects
+                .filter(
+                    empresa=filial.empresa,
+                    tipo='R',
+                    ativo=True,
+                    aceita_lancamento=True,
+                )
+                .order_by('codigo')
+            )
 
     def clean(self):
         cleaned = super().clean()
