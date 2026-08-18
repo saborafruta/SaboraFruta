@@ -65,12 +65,22 @@ class EmpresaAdminForm(forms.ModelForm):
             'certificado_digital_path',
             'certificado_senha_hash',
             'certificado_validade',
+            # Gerenciado pela tela de Módulos, na Central. Como JSONField ele
+            # apareceria aqui como caixa de texto crua, e um colchete a menos
+            # deixaria a empresa sem módulo nenhum.
+            'modulos_extras',
         ]
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.fields['codigo_regime_tributario'].label = 'Codigo do regime tributario'
         self.fields['ambiente_nfe'].label = 'Ambiente NFe'
+        if 'segmento' in self.fields:
+            self.fields['segmento'].label = 'Segmento (vertical)'
+            self.fields['segmento'].help_text = (
+                'Libera os módulos especializados do ramo. '
+                'Também dá para definir pela Central Administrativa.'
+            )
 
     def clean_cnpj(self):
         cnpj = _digits(self.cleaned_data.get('cnpj'))
@@ -140,6 +150,12 @@ class FilialAdminForm(forms.ModelForm):
         self.fields['regime_tributario'].label = 'Regime tributario da filial'
         self.fields['codigo_regime_tributario'].label = 'Codigo do regime tributario'
         self.fields['ambiente_nfe'].label = 'Ambiente NFe'
+        if 'segmento' in self.fields:
+            self.fields['segmento'].label = 'Segmento (vertical)'
+            self.fields['segmento'].help_text = (
+                'Libera os módulos especializados do ramo. '
+                'Também dá para definir pela Central Administrativa.'
+            )
         self.fields['serie_nfe'].label = 'Serie NFe'
         self.fields['serie_nfce'].label = 'Serie NFCe'
         self.fields['serie_nfse'].label = 'Serie NFSe'

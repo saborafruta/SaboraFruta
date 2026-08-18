@@ -261,6 +261,69 @@
     </div>
   </form>
 
+  {% comment %}
+    Vertical por empresa, fora do bloco que exige filial selecionada.
+
+    O segmento é uma propriedade da EMPRESA, então exigir a escolha de uma
+    filial para configurá-lo era um caminho errado — e, na prática, deixava
+    o controle inalcançável para quem chegava aqui sem saber que precisava
+    selecionar antes. Aqui a lista aparece de cara.
+  {% endcomment %}
+  <section class="card p-6 lg:p-7">
+    <div class="flex items-start gap-4 mb-4">
+      <div class="grid h-12 w-12 shrink-0 place-items-center rounded-xl"
+           :style="temaClaro ? 'background:#eff6ff; color:#2563eb;' : 'background:rgba(37,99,235,.14); color:#60a5fa;'">
+        <svg class="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.6"
+                d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"/>
+        </svg>
+      </div>
+      <div>
+        <h3 class="text-xl font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">Vertical de cada empresa</h3>
+        <p class="mt-1 text-sm" :style="temaClaro ? 'color:#64748b;' : 'color:#a1a1aa;'">
+          O segmento libera os módulos especializados daquele ramo. Vale para
+          todas as filiais da empresa.
+        </p>
+      </div>
+    </div>
+
+    <div class="space-y-2">
+      {% for emp in empresas %}
+        <form method="post" action="{% url 'core:admin_segmento_update' emp.pk %}"
+              class="flex flex-wrap items-center gap-2 p-3 rounded-lg"
+              :style="temaClaro ? 'background:#f8fafc; border:1px solid #e5e7eb;' : 'background:#18181b; border:1px solid #303036;'">
+          {% csrf_token %}
+          <span class="font-semibold text-sm flex-1 min-w-[180px]" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
+            {{ emp.nome_fantasia|default:emp.razao_social }}
+            {% if emp.segmento %}
+              <span class="ml-1 text-[10px] font-bold px-1.5 py-0.5 rounded-full align-middle"
+                    style="background:rgba(34,197,94,.14); color:#4ade80;">{{ emp.get_segmento_display }}</span>
+            {% else %}
+              <span class="ml-1 text-[10px] font-bold px-1.5 py-0.5 rounded-full align-middle"
+                    style="background:rgba(148,163,184,.18); color:#94a3b8;">sem vertical</span>
+            {% endif %}
+          </span>
+          <select name="segmento" class="form-input text-sm" style="max-width:240px;">
+            <option value="">Sem vertical (só módulos universais)</option>
+            {% for valor, rotulo in segmentos %}
+              <option value="{{ valor }}" {% if emp.segmento == valor %}selected{% endif %}>{{ rotulo }}</option>
+            {% endfor %}
+          </select>
+          {% comment %}
+            Os módulos ligados na mão viajam junto no POST: sem isso, salvar
+            o segmento aqui apagaria a habilitação manual feita no modal.
+          {% endcomment %}
+          {% for chave in emp.modulos_extras %}
+            <input type="hidden" name="modulo_extra" value="{{ chave }}">
+          {% endfor %}
+          <button type="submit" class="btn-primary text-sm">Aplicar</button>
+        </form>
+      {% empty %}
+        <p class="text-sm" :style="temaClaro ? 'color:#64748b;' : 'color:#a1a1aa;'">Nenhuma empresa cadastrada.</p>
+      {% endfor %}
+    </div>
+  </section>
+
   <section class="card p-6 lg:p-7" x-data="{ imagemFilialAberta: false, modulosAberta: false }">
     {% if filial_selecionada %}
       <div class="grid grid-cols-1 xl:grid-cols-[1.15fr_1fr] gap-7">
