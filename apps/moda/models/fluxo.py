@@ -21,6 +21,7 @@ planejando um número que já não existe no chão.
 from decimal import Decimal
 
 from django.conf import settings
+from django.core.validators import MinValueValidator
 from django.db import models
 
 
@@ -62,6 +63,16 @@ class EtapaOrdem(models.Model):
     )
     responsavel = models.CharField(
         max_length=80, blank=True, help_text='Quem responde por esta etapa.',
+    )
+    maquina = models.CharField(
+        max_length=80, blank=True,
+        help_text='Máquina ou posto usado nesta etapa. Ex.: Overloque 3, Calandra 1.',
+    )
+    tempo_minutos = models.DecimalField(
+        max_digits=10, decimal_places=2, null=True, blank=True,
+        verbose_name='Tempo gasto (min)',
+        help_text='Minutos efetivamente gastos. Em branco, ninguém cronometrou.',
+        validators=[MinValueValidator(Decimal('0'))],
     )
 
     data_inicio = models.DateField(null=True, blank=True, verbose_name='Data de início')
@@ -151,6 +162,13 @@ class EtapaOrdem(models.Model):
         return (Decimal(self.perda) / planejada * 100).quantize(Decimal('0.1'))
 
     # ── Situação ─────────────────────────────────────────────────────────
+
+    @property
+    def minutos_por_peca(self) -> Decimal:
+        """Tempo real por peça — o que se compara com o padrão do roteiro."""
+        if not self.tempo_minutos or not self.quantidade_produzida:
+            return Decimal('0')
+        return (self.tempo_minutos / self.quantidade_produzida).quantize(Decimal('0.01'))
 
     @property
     def concluida(self) -> bool:

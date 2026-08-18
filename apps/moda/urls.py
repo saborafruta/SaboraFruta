@@ -16,7 +16,7 @@ from . import (
     views_corte as vco, views_encaixe as ve, views_fluxo as vx,
     views_ordem as vo, views_pcp as vp,
     views_kanban as vk, views_necessidade as vn, views_roteiro as vr,
-    views_wip as vw,
+    views_terminal as vt, views_wip as vw,
 )
 
 app_name = 'moda'
@@ -83,6 +83,15 @@ ROTAS_PRONTAS: list = [
     # Fluxo de produção. O painel fica no grupo Produção; o fluxo de cada
     # ordem pendura na OP, que é a quem as etapas pertencem.
     path('producao/fluxo/', vx.PainelFluxoView.as_view(), name='fluxo-painel'),
+
+    # Terminais de setor. Ficam DEPOIS de todas as rotas especificas de
+    # /producao/ porque `<slug:slug>` casa com qualquer coisa: declarado
+    # antes, engoliria corte, encaixe, fluxo e kanban de uma vez.
+    # O corte tem endereco proprio (/apontamento/) porque /producao/corte/
+    # ja e' o controle de enfesto, que e' outra tela.
+    path('producao/corte/apontamento/', vt.TerminalView.as_view(), {'slug': 'corte'}, name='terminal-corte'),
+    path('producao/<slug:slug>/apontar/<int:pk>/', vt.TerminalApontarView.as_view(), name='terminal-apontar'),
+    path('producao/<slug:slug>/', vt.TerminalView.as_view(), name='terminal'),
     path('pcp/ordens-producao/<int:pk>/fluxo/', vx.FluxoOrdemView.as_view(), name='fluxo-ordem'),
     path('pcp/ordens-producao/<int:pk>/fluxo/<int:etapa_pk>/', vx.ApontarView.as_view(), name='fluxo-apontar'),
 

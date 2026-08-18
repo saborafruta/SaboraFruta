@@ -1,0 +1,113 @@
+{% extends "_base.html" %}
+{% block title %}{{ title }}{% endblock %}
+{% block page_title %}{{ setor.titulo }}{% endblock %}
+{% block content %}
+{% comment %}
+  Tela de chão de fábrica: fonte grande, botões grandes, poucos campos. Quem
+  usa está de pé, muitas vezes com a mão suja, num celular ou num tablet
+  preso na máquina — a densidade das telas de escritório não serve aqui.
+{% endcomment %}
+<div class="space-y-4">
+
+  <div>
+    <p class="text-sm mb-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+      <a href="{% url 'moda:grupo' 'producao' %}" :style="temaClaro ? 'color:#3b82f6;' : 'color:#60a5fa;'">Produção</a>
+      <span class="mx-1">›</span> {{ setor.titulo }}
+    </p>
+    <h2 class="text-3xl font-bold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">{{ setor.titulo }}</h2>
+    <p class="text-sm mt-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">{{ setor.ajuda }}</p>
+  </div>
+
+  {# Troca rápida de setor: o mesmo tablet costuma servir dois postos #}
+  <div class="flex flex-wrap gap-2">
+    {% for s in outros %}
+      <a href="{% url 'moda:terminal' s.slug %}" class="btn-secondary text-sm">{{ s.titulo }}</a>
+    {% endfor %}
+  </div>
+
+  {# ── Resumo do turno ──────────────────────────────────────────────── #}
+  <div class="grid grid-cols-2 lg:grid-cols-4 gap-3">
+    <div class="card p-4">
+      <p class="text-xs uppercase tracking-wider" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Na máquina</p>
+      <p class="text-3xl font-bold tabular-nums mt-1" style="color:#3b82f6;">{{ fila.em_andamento|length }}</p>
+      <p class="text-xs" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">{{ fila.pecas_em_andamento }} peça(s)</p>
+    </div>
+    <div class="card p-4">
+      <p class="text-xs uppercase tracking-wider" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Aguardando</p>
+      <p class="text-3xl font-bold tabular-nums mt-1" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
+        {{ fila.aguardando|length }}
+      </p>
+      <p class="text-xs" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">{{ fila.pecas_aguardando }} peça(s)</p>
+    </div>
+    <div class="card p-4">
+      <p class="text-xs uppercase tracking-wider" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Saiu hoje</p>
+      <p class="text-3xl font-bold tabular-nums mt-1" style="color:#059669;">{{ fila.produzidas_hoje }}</p>
+      <p class="text-xs" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">{{ fila.concluidas_hoje|length }} ordem(ns)</p>
+    </div>
+    <div class="card p-4">
+      <p class="text-xs uppercase tracking-wider" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">{{ setor.rotulo_perda }} hoje</p>
+      <p class="text-3xl font-bold tabular-nums mt-1"
+         {% if fila.perdas_hoje %}style="color:#dc2626;"{% else %}:style="temaClaro ? 'color:#cbd5e1;' : 'color:#52525b;'"{% endif %}>
+        {{ fila.perdas_hoje }}
+      </p>
+    </div>
+  </div>
+
+  {% if not pode_apontar %}
+    <div class="card p-4">
+      <p class="text-sm" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+        Seu perfil não pode apontar produção. Esta tela é somente leitura.
+      </p>
+    </div>
+  {% endif %}
+
+  {# ── Na máquina ───────────────────────────────────────────────────── #}
+  {% with linhas=fila.em_andamento titulo="Na máquina" aberto=True %}
+    {% include "moda/_terminal_bloco.html" %}
+  {% endwith %}
+
+  {# ── Aguardando ───────────────────────────────────────────────────── #}
+  {% with linhas=fila.aguardando titulo="Aguardando" aberto=False %}
+    {% include "moda/_terminal_bloco.html" %}
+  {% endwith %}
+
+  {# ── Concluídas hoje ──────────────────────────────────────────────── #}
+  {% if fila.concluidas_hoje %}
+    <div class="card p-4 space-y-2">
+      <h3 class="text-sm font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
+        Concluídas hoje
+      </h3>
+      {% for l in fila.concluidas_hoje %}
+        <div class="flex items-center justify-between gap-3 text-sm px-3 py-2 rounded-lg"
+             :style="temaClaro ? 'background:#f0fdf4;' : 'background:#18181b;'">
+          <span :style="temaClaro ? 'color:#374151;' : 'color:#cbd5e1;'">
+            <a href="{% url 'moda:fluxo-ordem' l.ordem.pk %}" class="font-mono font-semibold"
+               :style="temaClaro ? 'color:#3b82f6;' : 'color:#60a5fa;'">{{ l.ordem.numero }}</a>
+            · {{ l.ordem.pedido.cliente }}
+            {% if l.etapa.responsavel %} · {{ l.etapa.responsavel }}{% endif %}
+          </span>
+          <span class="tabular-nums shrink-0" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
+            <strong style="color:#059669;">{{ l.etapa.quantidade_produzida }}</strong>
+            {% if l.etapa.perda %}
+              · <strong style="color:#dc2626;">{{ l.etapa.perda }}</strong>
+            {% endif %}
+            {% if l.etapa.minutos_por_peca %}
+              <span class="text-xs opacity-60">· {{ l.etapa.minutos_por_peca }} min/pç</span>
+            {% endif %}
+          </span>
+        </div>
+      {% endfor %}
+    </div>
+  {% endif %}
+
+  {% if not fila.em_andamento and not fila.aguardando and not fila.concluidas_hoje %}
+    <div class="card p-8 text-center">
+      <p class="text-sm" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+        Nada para {{ setor.titulo|lower }} agora. A ordem aparece aqui quando as
+        etapas anteriores forem concluídas.
+      </p>
+    </div>
+  {% endif %}
+
+</div>
+{% endblock %}

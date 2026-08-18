@@ -11,7 +11,7 @@ significa erro de digitação.
 from __future__ import annotations
 
 from datetime import datetime
-from decimal import Decimal
+from decimal import Decimal, InvalidOperation
 
 from django.db import transaction
 from django.utils import timezone
@@ -31,6 +31,8 @@ SEQUENCIA = [(e.value, (i + 1) * 10) for i, e in enumerate(EtapaOrdem.Etapa)]
 CAMPOS: dict[str, str] = {
     'status': 'editar',
     'responsavel': 'editar',
+    'maquina': 'editar',
+    'tempo_minutos': 'editar',
     'data_inicio': 'editar',
     'data_conclusao': 'editar',
     'quantidade_produzida': 'editar',
@@ -41,6 +43,9 @@ CAMPOS: dict[str, str] = {
 }
 
 DATAS = ('data_inicio', 'data_prevista', 'data_conclusao')
+# Decimal em vez de inteiro: meia hora de costura e' 30, mas 7,5 min de
+# prensa por peca tambem precisa caber.
+DECIMAIS = ('tempo_minutos',)
 INTEIROS = ('quantidade_produzida', 'perda', 'quantidade_planejada')
 
 
@@ -137,6 +142,16 @@ class FluxoService:
                 return datetime.strptime(texto, '%Y-%m-%d').date()
             except ValueError:
                 return cls._INVALIDO
+
+        if campo in DECIMAIS:
+            texto = (bruto or '').strip() if isinstance(bruto, str) else bruto
+            if texto in ('', None):
+                return None
+            try:
+                valor = Decimal(str(texto).replace(',', '.'))
+            except InvalidOperation:
+                return cls._INVALIDO
+            return valor if valor >= 0 else cls._INVALIDO
 
         if campo in INTEIROS:
             texto = (bruto or '').strip() if isinstance(bruto, str) else bruto
