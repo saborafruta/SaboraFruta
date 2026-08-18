@@ -8,8 +8,8 @@ from django.contrib import messages
 from django.core.files.storage import default_storage
 from django.core.paginator import Paginator
 from django.db import transaction
-from django.db.models import DecimalField, F, FilteredRelation, Max, OuterRef, Q, Subquery, Sum, Value
-from django.db.models.functions import Coalesce
+from django.db.models import Case, DecimalField, F, FilteredRelation, IntegerField, Max, OuterRef, Q, Subquery, Sum, Value, When
+from django.db.models.functions import Cast, Coalesce
 from django.http import HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.template.loader import render_to_string
@@ -233,6 +233,14 @@ def _produto_queryset_filtrado(request, incluir_inativos_por_padrao=False):
             Value(Decimal('0')),
             output_field=DecimalField(max_digits=12, decimal_places=3),
         ),
+        codigo_ordenacao=Coalesce(
+            Case(
+                When(codigo__regex=r'^\d+$', then=Cast('codigo', IntegerField())),
+                output_field=IntegerField(),
+            ),
+            F('id'),
+            output_field=IntegerField(),
+        ),
     )
     if busca:
         filtro_busca = (
@@ -328,20 +336,20 @@ def _produto_queryset_filtrado(request, incluir_inativos_por_padrao=False):
             qs = qs.filter(filtro_fornecedor)
 
     ordenacoes = {
-        'id': 'id',
-        'id_desc': '-id',
-        'referencia': 'codigo',
-        'referencia_desc': '-codigo',
-        'az': 'descricao',
-        'za': '-descricao',
-        'custo': 'preco_custo',
-        'custo_desc': '-preco_custo',
-        'preco': 'preco_venda',
-        'preco_desc': '-preco_venda',
-        'criado_desc': '-created_at',
-        'criado_asc': 'created_at',
+        'id': ('codigo_ordenacao', 'id'),
+        'id_desc': ('-codigo_ordenacao', '-id'),
+        'referencia': ('codigo_ordenacao', 'codigo', 'id'),
+        'referencia_desc': ('-codigo_ordenacao', '-codigo', '-id'),
+        'az': ('descricao', 'id'),
+        'za': ('-descricao', 'id'),
+        'custo': ('preco_custo', 'id'),
+        'custo_desc': ('-preco_custo', 'id'),
+        'preco': ('preco_venda', 'id'),
+        'preco_desc': ('-preco_venda', 'id'),
+        'criado_desc': ('-created_at', 'id'),
+        'criado_asc': ('created_at', 'id'),
     }
-    return qs.order_by(ordenacoes.get(ordem, 'id'))
+    return qs.order_by(*ordenacoes.get(ordem, ordenacoes['id']))
 
 
 def _produto_fiscal_pendencias(produto):
