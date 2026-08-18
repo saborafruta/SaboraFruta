@@ -1,0 +1,124 @@
+{% extends "_base.html" %}
+{% block title %}{{ title }}{% endblock %}
+{% block page_title %}Ordens de Produção{% endblock %}
+{% block content %}
+<div class="space-y-5">
+
+  <div>
+    <p class="text-sm mb-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+      <a href="{% url 'moda:grupo' 'pcp' %}" :style="temaClaro ? 'color:#3b82f6;' : 'color:#60a5fa;'">PCP</a>
+      <span class="mx-1">›</span> Ordens de Produção
+    </p>
+    <h2 class="text-2xl font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">Ordens de Produção</h2>
+    {% comment %}
+      Não existe "nova ordem" em branco de propósito: uma OP sem pedido não
+      teria cliente, grade, ficha nem roteiro — que é tudo o que ela mostra.
+      Ela nasce do pedido, pelo botão que fica lá.
+    {% endcomment %}
+    <p class="text-sm mt-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+      A ordem nasce do pedido. Abra um
+      <a href="{% url 'moda:pedido-list' %}" :style="temaClaro ? 'color:#3b82f6;' : 'color:#60a5fa;'">pedido de produção</a>
+      e use “Gerar ordem de produção”.
+    </p>
+  </div>
+
+  <form method="get" class="flex flex-wrap items-end gap-2">
+    <div>
+      <label class="block text-xs font-semibold mb-1" :style="temaClaro ? 'color:#374151;' : 'color:#cbd5e1;'">Número</label>
+      <input type="search" name="q" value="{{ busca }}" placeholder="OP-2026-…" class="form-input w-48">
+    </div>
+    <div>
+      <label class="block text-xs font-semibold mb-1" :style="temaClaro ? 'color:#374151;' : 'color:#cbd5e1;'">Status</label>
+      <select name="status" class="form-input w-44">
+        <option value="">Todos</option>
+        {% for valor, rotulo in status_choices %}
+          <option value="{{ valor }}" {% if valor == status_escolhido %}selected{% endif %}>{{ rotulo }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <button type="submit" class="btn-secondary">Filtrar</button>
+    {% if busca or status_escolhido %}
+      <a href="{% url 'moda:ordem-list' %}" class="btn-secondary">Limpar</a>
+    {% endif %}
+  </form>
+
+  <div class="card p-5">
+    {% if ordens %}
+      <div class="overflow-x-auto">
+        <table class="w-full text-sm" style="min-width:820px;">
+          <thead>
+            <tr class="text-xs uppercase tracking-wider" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+              <th class="text-left font-semibold pb-2 w-40">Ordem</th>
+              <th class="text-left font-semibold pb-2">Cliente / Produto</th>
+              <th class="text-left font-semibold pb-2 w-28">Pedido</th>
+              <th class="text-right font-semibold pb-2 w-20">Qtd</th>
+              <th class="text-right font-semibold pb-2 w-28">Prazo</th>
+              <th class="text-left font-semibold pb-2 w-24">Prioridade</th>
+              <th class="text-left font-semibold pb-2 w-32">Status</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for o in ordens %}
+              <tr class="border-t" :style="temaClaro ? 'border-color:#e5e7eb;' : 'border-color:#303036;'">
+                <td class="py-2 pr-3">
+                  <a href="{% url 'moda:ordem-detail' o.pk %}" class="font-mono font-semibold"
+                     :style="temaClaro ? 'color:#3b82f6;' : 'color:#60a5fa;'">{{ o.numero }}</a>
+                </td>
+                <td class="py-2 pr-3" :style="temaClaro ? 'color:#111827;' : 'color:#e5e7eb;'">
+                  {{ o.pedido.cliente }}
+                  <span class="block text-xs opacity-60">{{ o.item.nome_exibicao }}</span>
+                </td>
+                <td class="py-2 text-xs" :style="temaClaro ? 'color:#374151;' : 'color:#cbd5e1;'">
+                  <a href="{% url 'moda:pedido-detail' o.pedido.pk %}"
+                     :style="temaClaro ? 'color:#3b82f6;' : 'color:#60a5fa;'">
+                    #{{ o.pedido.numero|stringformat:"06d" }}
+                  </a>
+                </td>
+                <td class="py-2 text-right tabular-nums font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
+                  {{ o.quantidade }}
+                </td>
+                <td class="py-2 text-right text-xs tabular-nums">
+                  {% if o.prazo %}
+                    <span {% if o.atrasada %}style="color:#dc2626; font-weight:700;"
+                          {% else %}:style="temaClaro ? 'color:#374151;' : 'color:#cbd5e1;'"{% endif %}>
+                      {{ o.prazo|date:"d/m/Y" }}
+                    </span>
+                  {% else %}
+                    <span :style="temaClaro ? 'color:#cbd5e1;' : 'color:#52525b;'">—</span>
+                  {% endif %}
+                </td>
+                <td class="py-2">
+                  <span class="text-xs font-bold px-2 py-0.5 rounded-full"
+                        {% if o.prioridade == 'urgente' %}style="background:rgba(220,38,38,.12); color:#dc2626;"
+                        {% elif o.prioridade == 'alta' %}style="background:rgba(245,158,11,.14); color:#d97706;"
+                        {% else %}:style="temaClaro ? 'background:#f1f5f9; color:#64748b;' : 'background:#27272a; color:#a1a1aa;'"{% endif %}>
+                    {{ o.get_prioridade_display }}
+                  </span>
+                </td>
+                <td class="py-2">
+                  <span class="text-xs font-semibold px-2 py-0.5 rounded-full"
+                        {% if o.status == 'concluida' %}style="background:rgba(16,185,129,.14); color:#059669;"
+                        {% elif o.status == 'cancelada' %}style="background:rgba(148,163,184,.18); color:#64748b;"
+                        {% elif o.status == 'em_producao' %}style="background:rgba(59,130,246,.14); color:#3b82f6;"
+                        {% else %}style="background:rgba(245,158,11,.14); color:#d97706;"{% endif %}>
+                    {{ o.get_status_display }}
+                  </span>
+                </td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    {% else %}
+      <p class="text-sm" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+        {% if busca or status_escolhido %}
+          Nenhuma ordem com esse filtro.
+        {% else %}
+          Nenhuma ordem emitida ainda.
+        {% endif %}
+      </p>
+    {% endif %}
+  </div>
+
+</div>
+{% endblock %}

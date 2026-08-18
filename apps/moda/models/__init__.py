@@ -4,6 +4,7 @@ from .grade import Grade, ItemGrade, Tamanho
 from .grade_pedido import ItemGradePedido
 from .individual import PersonalizacaoIndividual
 from .item_pedido import ItemPedidoProducao
+from .ordem import OrdemProducao
 from .pcp import CapacidadeSetor
 from .pedido import PedidoProducao
 from .personalizacao import Personalizacao
@@ -26,6 +27,7 @@ __all__ = [
     'MockupVisual',
     'Linha',
     'Operacao',
+    'OrdemProducao',
     'OperacaoRoteiro',
     'Marca',
     'Modelo',

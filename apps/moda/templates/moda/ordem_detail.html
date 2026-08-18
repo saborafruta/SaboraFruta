@@ -1,0 +1,398 @@
+{% extends "_base.html" %}
+{% block title %}{{ title }}{% endblock %}
+{% block page_title %}{{ ordem.numero }}{% endblock %}
+{% block content %}
+<div class="space-y-5">
+
+  {# ── Cabeçalho ────────────────────────────────────────────────────── #}
+  <div class="card p-5">
+    <p class="text-sm mb-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+      <a href="{% url 'moda:ordem-list' %}" :style="temaClaro ? 'color:#3b82f6;' : 'color:#60a5fa;'">Ordens de Produção</a>
+      <span class="mx-1">›</span> {{ ordem.numero }}
+    </p>
+    <div class="flex flex-wrap items-start justify-between gap-4">
+      <div class="min-w-0">
+        <h2 class="text-2xl font-semibold font-mono" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
+          {{ ordem.numero }}
+        </h2>
+        <p class="text-sm mt-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+          Emitida em {{ ordem.emitida_em|date:"d/m/Y H:i" }}
+          {% if ordem.emitida_por %}por {{ ordem.emitida_por }}{% endif %}
+        </p>
+      </div>
+      <div class="flex items-center gap-3 flex-wrap">
+        <span class="text-sm font-bold px-3 py-1.5 rounded-full"
+              {% if ordem.status == 'concluida' %}style="background:rgba(16,185,129,.14); color:#059669;"
+              {% elif ordem.status == 'cancelada' %}style="background:rgba(148,163,184,.18); color:#64748b;"
+              {% elif ordem.status == 'em_producao' %}style="background:rgba(59,130,246,.14); color:#3b82f6;"
+              {% else %}style="background:rgba(245,158,11,.14); color:#d97706;"{% endif %}>
+          {{ ordem.get_status_display }}
+        </span>
+        {% for valor, rotulo in proximos_status %}
+          {% if valor != 'cancelada' or pode_cancelar %}
+            <form method="post" action="{% url 'moda:ordem-status' ordem.pk %}"
+                  {% if valor == 'cancelada' %}onsubmit="return confirm('Cancelar {{ ordem.numero }}?');"{% endif %}>
+              {% csrf_token %}
+              <input type="hidden" name="status" value="{{ valor }}">
+              <button type="submit" class="{% if valor == 'cancelada' %}btn-secondary{% else %}btn-primary{% endif %} text-sm">
+                {{ rotulo }}
+              </button>
+            </form>
+          {% endif %}
+        {% endfor %}
+      </div>
+    </div>
+  </div>
+
+  {# ── Divergências com o pedido ────────────────────────────────────── #}
+  {% if divergencias %}
+    {% comment %}
+      A ordem copiou quantidade, prazo e prioridade na emissão. Quando o
+      pedido muda depois, nem sobrescrevemos calados (o corte já feito
+      viraria erro) nem escondemos — a diferença aparece aqui para alguém
+      decidir.
+    {% endcomment %}
+    <div class="card p-4 space-y-1" style="border-left:3px solid #f59e0b;">
+      <p class="text-xs font-bold uppercase tracking-wider" style="color:#d97706;">
+        Diverge do pedido
+      </p>
+      {% for d in divergencias %}
+        <p class="text-sm" :style="temaClaro ? 'color:#374151;' : 'color:#cbd5e1;'">{{ d }}</p>
+      {% endfor %}
+    </div>
+  {% endif %}
+
+  {# ── Identificação ────────────────────────────────────────────────── #}
+  <div class="card p-5 space-y-4">
+    <h3 class="text-sm font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">Identificação</h3>
+    <dl class="grid grid-cols-2 md:grid-cols-4 gap-x-4 gap-y-3 text-sm">
+      <div>
+        <dt class="text-xs uppercase tracking-wider" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Cliente</dt>
+        <dd class="mt-0.5 font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#e5e7eb;'">{{ ordem.cliente }}</dd>
+      </div>
+      <div>
+        <dt class="text-xs uppercase tracking-wider" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Pedido</dt>
+        <dd class="mt-0.5 font-semibold">
+          <a href="{% url 'moda:pedido-detail' ordem.pedido.pk %}"
+             :style="temaClaro ? 'color:#3b82f6;' : 'color:#60a5fa;'">
+            #{{ ordem.pedido.numero|stringformat:"06d" }}
+          </a>
+        </dd>
+      </div>
+      <div>
+        <dt class="text-xs uppercase tracking-wider" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Produto</dt>
+        <dd class="mt-0.5 font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#e5e7eb;'">
+          {{ ordem.descricao_produto }}
+        </dd>
+      </div>
+      <div>
+        <dt class="text-xs uppercase tracking-wider" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Quantidade</dt>
+        <dd class="mt-0.5 font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#e5e7eb;'">{{ ordem.quantidade }} peça(s)</dd>
+      </div>
+      <div>
+        <dt class="text-xs uppercase tracking-wider" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Prazo</dt>
+        <dd class="mt-0.5 font-semibold"
+            {% if ordem.atrasada %}style="color:#dc2626;"{% else %}:style="temaClaro ? 'color:#111827;' : 'color:#e5e7eb;'"{% endif %}>
+          {% if ordem.prazo %}{{ ordem.prazo|date:"d/m/Y" }}{% else %}—{% endif %}
+          {% if ordem.dias_para_prazo is not None %}
+            <span class="block text-xs font-normal opacity-70">
+              {% if ordem.atrasada %}{{ ordem.dias_para_prazo }} dia(s){% else %}em {{ ordem.dias_para_prazo }} dia(s){% endif %}
+            </span>
+          {% endif %}
+        </dd>
+      </div>
+      <div>
+        <dt class="text-xs uppercase tracking-wider" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Prioridade</dt>
+        <dd class="mt-0.5 font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#e5e7eb;'">{{ ordem.get_prioridade_display }}</dd>
+      </div>
+      <div>
+        <dt class="text-xs uppercase tracking-wider" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Modelo / Cor</dt>
+        <dd class="mt-0.5 font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#e5e7eb;'">
+          {% firstof ordem.item.modelo '—' %}{% if ordem.item.cor %} · {{ ordem.item.cor }}{% endif %}
+        </dd>
+      </div>
+      <div>
+        <dt class="text-xs uppercase tracking-wider" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Tecido</dt>
+        <dd class="mt-0.5 font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#e5e7eb;'">
+          {% firstof ordem.item.tecido_exibicao '—' %}
+        </dd>
+      </div>
+    </dl>
+
+    {% if ordem.observacoes %}
+      <div>
+        <p class="text-xs uppercase tracking-wider mb-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Observações</p>
+        <p class="text-sm whitespace-pre-line" :style="temaClaro ? 'color:#374151;' : 'color:#cbd5e1;'">{{ ordem.observacoes }}</p>
+      </div>
+    {% endif %}
+  </div>
+
+  {# ── Edição conforme o perfil ─────────────────────────────────────── #}
+  {% if pode_editar_algo %}
+    {% comment %}
+      Só aparecem os campos que o perfil pode alterar. Quem barra de verdade
+      é o servidor: campo não autorizado que chegue por POST forjado é
+      descartado no serviço, não aqui.
+    {% endcomment %}
+    <div class="card p-5 space-y-4" x-data="{ aberto: false }">
+      <div class="flex items-center justify-between gap-2 flex-wrap">
+        <div>
+          <h3 class="text-sm font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">Alterar</h3>
+          <p class="text-xs mt-0.5" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+            Seu perfil pode alterar: {{ editaveis|join:", " }}.
+          </p>
+        </div>
+        <button type="button" class="btn-secondary text-sm" @click="aberto = !aberto"
+                x-text="aberto ? 'Fechar' : 'Alterar campos'"></button>
+      </div>
+
+      <form method="post" action="{% url 'moda:ordem-editar' ordem.pk %}"
+            x-show="aberto" x-cloak class="space-y-3">
+        {% csrf_token %}
+        <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+          {% if 'quantidade' in editaveis %}
+            <div>
+              <label class="block text-xs font-semibold mb-1" :style="temaClaro ? 'color:#374151;' : 'color:#cbd5e1;'">Quantidade</label>
+              <input type="number" min="1" name="quantidade" value="{{ ordem.quantidade }}" class="form-input w-full">
+            </div>
+          {% endif %}
+          {% if 'prazo' in editaveis %}
+            <div>
+              <label class="block text-xs font-semibold mb-1" :style="temaClaro ? 'color:#374151;' : 'color:#cbd5e1;'">Prazo</label>
+              <input type="date" name="prazo" value="{{ ordem.prazo|date:'Y-m-d' }}" class="form-input w-full">
+            </div>
+          {% endif %}
+          {% if 'prioridade' in editaveis %}
+            <div>
+              <label class="block text-xs font-semibold mb-1" :style="temaClaro ? 'color:#374151;' : 'color:#cbd5e1;'">Prioridade</label>
+              <select name="prioridade" class="form-input w-full">
+                {% for valor, rotulo in ordem.Prioridade.choices %}
+                  <option value="{{ valor }}" {% if valor == ordem.prioridade %}selected{% endif %}>{{ rotulo }}</option>
+                {% endfor %}
+              </select>
+            </div>
+          {% endif %}
+        </div>
+        {% if 'observacoes' in editaveis %}
+          <div>
+            <label class="block text-xs font-semibold mb-1" :style="temaClaro ? 'color:#374151;' : 'color:#cbd5e1;'">Observações</label>
+            <textarea name="observacoes" rows="3" class="form-input w-full">{{ ordem.observacoes }}</textarea>
+          </div>
+        {% endif %}
+        <div class="flex justify-end">
+          <button type="submit" class="btn-primary text-sm">Salvar</button>
+        </div>
+      </form>
+    </div>
+  {% elif not ordem.encerrada %}
+    <div class="card p-4">
+      <p class="text-sm" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+        Seu perfil não tem permissão para alterar campos desta ordem.
+      </p>
+    </div>
+  {% endif %}
+
+  {# ── Grade ────────────────────────────────────────────────────────── #}
+  {% if ordem.grade %}
+    <div class="card p-5 space-y-3">
+      <h3 class="text-sm font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">Grade</h3>
+      <div class="flex flex-wrap gap-2">
+        {% for g in ordem.grade %}
+          <div class="text-center px-3 py-2 rounded-lg"
+               :style="temaClaro ? 'background:#f8fafc; border:1px solid #e5e7eb;' : 'background:#18181b; border:1px solid #303036;'">
+            <span class="block text-xs font-mono font-bold" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+              {{ g.tamanho.sigla }}
+            </span>
+            <span class="block text-lg font-bold tabular-nums" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
+              {{ g.quantidade }}
+            </span>
+          </div>
+        {% endfor %}
+      </div>
+    </div>
+  {% endif %}
+
+  {# ── Personalização e arte ────────────────────────────────────────── #}
+  {% if ordem.personalizacoes or ordem.visuais or ordem.individuais %}
+    <div class="card p-5 space-y-4">
+      <h3 class="text-sm font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">Personalização e arte</h3>
+
+      {% for p in ordem.personalizacoes %}
+        <div class="rounded-lg p-3 text-sm"
+             :style="temaClaro ? 'background:#f8fafc;' : 'background:#18181b;'">
+          <p class="font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#e5e7eb;'">
+            {{ p.get_tipo_display|default:p }}
+          </p>
+          {% if p.arquivo %}
+            <a href="{{ p.arquivo.url }}" target="_blank" rel="noopener" class="text-xs font-semibold"
+               :style="temaClaro ? 'color:#3b82f6;' : 'color:#60a5fa;'">Abrir arte</a>
+          {% endif %}
+        </div>
+      {% endfor %}
+
+      {% if ordem.visuais %}
+        <div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
+          {% for v in ordem.visuais %}
+            <div>
+              {% if v.mockup and v.mockup.imagem %}
+                <img src="{{ v.mockup.imagem.url }}" alt="{{ v.get_posicao_display }}"
+                     class="w-full rounded-lg" style="aspect-ratio:1; object-fit:contain; background:#fff;">
+              {% endif %}
+              <p class="text-xs mt-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+                {{ v.get_posicao_display }}
+              </p>
+            </div>
+          {% endfor %}
+        </div>
+      {% endif %}
+
+      {% if ordem.individuais %}
+        <div>
+          <p class="text-xs uppercase tracking-wider mb-2" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+            Personalização por pessoa ({{ ordem.individuais|length }})
+          </p>
+          <div class="overflow-x-auto">
+            <table class="w-full text-sm" style="min-width:400px;">
+              <thead>
+                <tr class="text-xs uppercase tracking-wider" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+                  <th class="text-left font-semibold pb-1">Nome</th>
+                  <th class="text-left font-semibold pb-1 w-20">Número</th>
+                  <th class="text-left font-semibold pb-1 w-24">Tamanho</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for i in ordem.individuais %}
+                  <tr class="border-t" :style="temaClaro ? 'border-color:#e5e7eb;' : 'border-color:#303036;'">
+                    <td class="py-1.5" :style="temaClaro ? 'color:#111827;' : 'color:#e5e7eb;'">{{ i.nome|default:"—" }}</td>
+                    <td class="py-1.5 font-mono" :style="temaClaro ? 'color:#374151;' : 'color:#cbd5e1;'">{{ i.numero|default:"—" }}</td>
+                    <td class="py-1.5 font-mono" :style="temaClaro ? 'color:#374151;' : 'color:#cbd5e1;'">{{ i.tamanho.sigla }}</td>
+                  </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      {% endif %}
+    </div>
+  {% endif %}
+
+  {# ── Ficha técnica e materiais ────────────────────────────────────── #}
+  <div class="card p-5 space-y-3">
+    <div class="flex items-baseline justify-between gap-2 flex-wrap">
+      <h3 class="text-sm font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">Materiais</h3>
+      {% if ordem.ficha %}
+        <a href="{% url 'moda:ficha-detail' ordem.ficha.pk %}" class="text-xs font-semibold"
+           :style="temaClaro ? 'color:#3b82f6;' : 'color:#60a5fa;'">Ver ficha técnica</a>
+      {% endif %}
+    </div>
+
+    {% if ordem.materiais %}
+      {% comment %}
+        A coluna que interessa aqui é a de ORDEM, não a da peça: quem vai ao
+        estoque precisa saber quanto separar para as {{ ordem.quantidade }}
+        peças, não quanto entra em uma.
+      {% endcomment %}
+      <div class="overflow-x-auto">
+        <table class="w-full text-sm" style="min-width:640px;">
+          <thead>
+            <tr class="text-xs uppercase tracking-wider" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+              <th class="text-left font-semibold pb-2">Material</th>
+              <th class="text-left font-semibold pb-2 w-28">Código</th>
+              <th class="text-right font-semibold pb-2 w-28">Por peça</th>
+              <th class="text-right font-semibold pb-2 w-32">Para a ordem</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for linha in ordem.materiais_da_ordem %}{% with m=linha.material %}
+              <tr class="border-t" :style="temaClaro ? 'border-color:#e5e7eb;' : 'border-color:#303036;'">
+                <td class="py-2 pr-2" :style="temaClaro ? 'color:#111827;' : 'color:#e5e7eb;'">
+                  <span class="text-xs opacity-60">{{ m.get_tipo_display }}</span><br>{{ m.descricao }}
+                </td>
+                <td class="py-2 font-mono text-xs" :style="temaClaro ? 'color:#374151;' : 'color:#cbd5e1;'">
+                  {% firstof m.codigo '—' %}
+                </td>
+                <td class="py-2 text-right tabular-nums text-xs" :style="temaClaro ? 'color:#374151;' : 'color:#cbd5e1;'">
+                  {{ m.consumo_bruto|floatformat:4 }} {{ m.get_unidade_display }}
+                </td>
+                <td class="py-2 text-right tabular-nums font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
+                  {{ linha.total|floatformat:4 }} {{ m.get_unidade_display }}
+                </td>
+              </tr>
+            {% endwith %}{% endfor %}
+          </tbody>
+        </table>
+      </div>
+      <p class="text-sm text-right font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
+        Custo de materiais desta ordem: R$ {{ ordem.custo_materiais|floatformat:2 }}
+      </p>
+    {% else %}
+      <p class="text-sm" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+        {% if ordem.produto %}
+          Este produto ainda não tem ficha técnica —
+          <a href="{% url 'moda:ficha-create' %}" :style="temaClaro ? 'color:#3b82f6;' : 'color:#60a5fa;'">criar</a>.
+        {% else %}
+          O item é descrição livre, sem produto de catálogo, então não há ficha técnica.
+        {% endif %}
+      </p>
+    {% endif %}
+  </div>
+
+  {# ── Operações ────────────────────────────────────────────────────── #}
+  <div class="card p-5 space-y-3">
+    <div class="flex items-baseline justify-between gap-2 flex-wrap">
+      <h3 class="text-sm font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">Operações</h3>
+      {% if ordem.roteiro %}
+        <a href="{% url 'moda:roteiro-detail' ordem.roteiro.pk %}" class="text-xs font-semibold"
+           :style="temaClaro ? 'color:#3b82f6;' : 'color:#60a5fa;'">Ver roteiro</a>
+      {% endif %}
+    </div>
+
+    {% if ordem.operacoes %}
+      <div class="overflow-x-auto">
+        <table class="w-full text-sm" style="min-width:640px;">
+          <thead>
+            <tr class="text-xs uppercase tracking-wider" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+              <th class="text-right font-semibold pb-2 w-16">Seq.</th>
+              <th class="text-left font-semibold pb-2">Operação</th>
+              <th class="text-left font-semibold pb-2 w-28">Setor</th>
+              <th class="text-left font-semibold pb-2 w-32">Máquina</th>
+              <th class="text-right font-semibold pb-2 w-24">Min/peça</th>
+              <th class="text-right font-semibold pb-2 w-28">Min/ordem</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for linha in ordem.operacoes_da_ordem %}{% with e=linha.etapa %}
+              <tr class="border-t" :style="temaClaro ? 'border-color:#e5e7eb;' : 'border-color:#303036;'">
+                <td class="py-2 text-right tabular-nums" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">{{ e.sequencia }}</td>
+                <td class="py-2 pr-2" :style="temaClaro ? 'color:#111827;' : 'color:#e5e7eb;'">{{ e.operacao.nome }}</td>
+                <td class="py-2 text-xs" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">{{ e.operacao.get_setor_display }}</td>
+                <td class="py-2 text-xs" :style="temaClaro ? 'color:#374151;' : 'color:#cbd5e1;'">{% firstof e.maquina_efetiva '—' %}</td>
+                <td class="py-2 text-right tabular-nums" :style="temaClaro ? 'color:#374151;' : 'color:#cbd5e1;'">{{ e.tempo|floatformat:2 }}</td>
+                <td class="py-2 text-right tabular-nums font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
+                  {{ linha.minutos|floatformat:0 }}
+                </td>
+              </tr>
+            {% endwith %}{% endfor %}
+          </tbody>
+        </table>
+      </div>
+      <div class="flex flex-wrap justify-end gap-6 text-sm font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
+        <span>Tempo total: {{ ordem.tempo_total_minutos|floatformat:0 }} min</span>
+        <span>Mão de obra: R$ {{ ordem.custo_mao_de_obra|floatformat:2 }}</span>
+        <span>Custo total: R$ {{ ordem.custo_total|floatformat:2 }}</span>
+      </div>
+    {% else %}
+      <p class="text-sm" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+        {% if ordem.produto %}
+          Este produto ainda não tem roteiro —
+          <a href="{% url 'moda:roteiro-create' %}" :style="temaClaro ? 'color:#3b82f6;' : 'color:#60a5fa;'">criar</a>.
+          Sem ele, a ordem não estima tempo nem entra na carga do PCP.
+        {% else %}
+          O item é descrição livre, sem produto de catálogo, então não há roteiro.
+        {% endif %}
+      </p>
+    {% endif %}
+  </div>
+
+</div>
+{% endblock %}

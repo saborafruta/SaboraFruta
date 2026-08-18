@@ -890,6 +890,45 @@
     {% endif %}
   </div>
 
+  {% comment %}
+    Emissão da OP. Fica no pedido, e não numa tela de "nova ordem", porque a
+    ordem nasce daqui: sem pedido ela não teria cliente, grade, ficha nem
+    roteiro — que é tudo o que ela mostra.
+  {% endcomment %}
+  {% if itens %}
+    <div class="card p-5">
+      <div class="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <h3 class="text-sm font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">Ordens de produção</h3>
+          <p class="text-xs mt-0.5" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+            {% if pedido.ordens.all %}
+              {{ pedido.ordens.all|length }} ordem(ns) emitida(s) para este pedido.
+            {% else %}
+              Uma ordem por produto — é o que caminha pela fábrica.
+            {% endif %}
+          </p>
+        </div>
+        <form method="post" action="{% url 'moda:ordem-gerar' pedido.pk %}">
+          {% csrf_token %}
+          <button type="submit" class="btn-primary text-sm">Gerar ordem de produção</button>
+        </form>
+      </div>
+
+      {% if pedido.ordens.all %}
+        <div class="flex flex-wrap gap-2 mt-3">
+          {% for o in pedido.ordens.all %}
+            <a href="{% url 'moda:ordem-detail' o.pk %}"
+               class="text-xs font-mono font-semibold px-2.5 py-1.5 rounded-lg"
+               {% if o.status == 'cancelada' %}style="background:rgba(148,163,184,.18); color:#64748b;"
+               {% else %}:style="temaClaro ? 'background:#f1f5f9; color:#334155;' : 'background:#27272a; color:#d4d4d8;'"{% endif %}>
+              {{ o.numero }} · {{ o.get_status_display }}
+            </a>
+          {% endfor %}
+        </div>
+      {% endif %}
+    </div>
+  {% endif %}
+
   <div class="card p-4" style="border-left:3px solid #f59e0b;">
     <p class="text-sm" :style="temaClaro ? 'color:#374151;' : 'color:#cbd5e1;'">
       <strong>Ainda falta da ficha:</strong> as etapas de produção — Corte,

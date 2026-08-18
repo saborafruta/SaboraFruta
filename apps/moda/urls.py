@@ -13,7 +13,7 @@ from django.urls import path
 
 from . import (
     views, views_apoio as va, views_cadastros as vc, views_ficha as vf,
-    views_pcp as vp, views_roteiro as vr,
+    views_ordem as vo, views_pcp as vp, views_roteiro as vr,
 )
 
 app_name = 'moda'
@@ -78,6 +78,12 @@ ROTAS_PRONTAS: list = [
 
     # PCP. Cada rota fica no endereço que o menu já aponta, antes do
     # catch-all — mesmo motivo das telas de Engenharia.
+    path('pcp/ordens-producao/', vo.OrdemListView.as_view(), name='ordem-list'),
+    path('pcp/ordens-producao/<int:pk>/', vo.OrdemDetailView.as_view(), name='ordem-detail'),
+    path('pcp/ordens-producao/<int:pk>/editar/', vo.OrdemEditarView.as_view(), name='ordem-editar'),
+    path('pcp/ordens-producao/<int:pk>/status/', vo.OrdemStatusView.as_view(), name='ordem-status'),
+    path('comercial/pedidos/<int:pedido_pk>/ordens/', vo.OrdemGerarView.as_view(), name='ordem-gerar'),
+
     path('pcp/planejamento/', vp.PlanejamentoView.as_view(), name='pcp-planejamento'),
     path('pcp/capacidade/', vp.CapacidadeView.as_view(), name='pcp-capacidade'),
     path('pcp/capacidade/<int:pk>/', vp.CapacidadeUpdateView.as_view(), name='pcp-capacidade-update'),
