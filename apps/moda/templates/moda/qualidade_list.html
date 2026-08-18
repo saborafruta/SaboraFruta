@@ -1,0 +1,218 @@
+{% extends "_base.html" %}
+{% block title %}{{ title }}{% endblock %}
+{% block page_title %}Qualidade{% endblock %}
+{% block content %}
+<div class="space-y-5">
+
+  <div>
+    <p class="text-sm mb-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+      <a href="{% url 'moda:grupo' 'producao' %}" :style="temaClaro ? 'color:#3b82f6;' : 'color:#60a5fa;'">Produção</a>
+      <span class="mx-1">›</span> Qualidade
+    </p>
+    <h2 class="text-2xl font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
+      Controle de Qualidade
+    </h2>
+    <p class="text-sm mt-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+      Checklist de nove pontos, decisão entre aprovar, reprovar e retrabalhar.
+    </p>
+  </div>
+
+  {# ── Indicadores ──────────────────────────────────────────────────── #}
+  <div class="grid grid-cols-2 lg:grid-cols-4 gap-3">
+    <div class="card p-4">
+      <p class="text-xs uppercase tracking-wider" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Aprovação</p>
+      <p class="text-3xl font-bold tabular-nums mt-1" style="color:#059669;">
+        {{ indicadores.percentual_aprovacao }}%
+      </p>
+      <p class="text-xs mt-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+        {{ indicadores.aprovadas }} de {{ indicadores.inspecionadas }} peça(s)
+      </p>
+    </div>
+    <div class="card p-4">
+      <p class="text-xs uppercase tracking-wider" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Refugo</p>
+      <p class="text-3xl font-bold tabular-nums mt-1" style="color:#dc2626;">
+        {{ indicadores.percentual_refugo }}%
+      </p>
+      {% comment %}
+        Só o reprovado. Retrabalho fica de fora de propósito: a peça voltou
+        para a linha e ainda pode ser vendida — contá-la como refugo faria a
+        fábrica parecer pior do que é.
+      {% endcomment %}
+      <p class="text-xs mt-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+        {{ indicadores.reprovadas }} peça(s) · sem contar retrabalho
+      </p>
+    </div>
+    <div class="card p-4">
+      <p class="text-xs uppercase tracking-wider" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Retrabalho</p>
+      <p class="text-3xl font-bold tabular-nums mt-1" style="color:#d97706;">
+        {{ indicadores.percentual_retrabalho }}%
+      </p>
+      <p class="text-xs mt-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+        {{ indicadores.retrabalho }} peça(s) recuperável(is)
+      </p>
+    </div>
+    <div class="card p-4">
+      <p class="text-xs uppercase tracking-wider" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Inspeções</p>
+      <p class="text-3xl font-bold tabular-nums mt-1" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
+        {{ indicadores.inspecoes }}
+      </p>
+      <p class="text-xs mt-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+        decididas{% if indicadores.abertas %} · {{ indicadores.abertas }} em andamento{% endif %}
+      </p>
+    </div>
+  </div>
+
+  {# ── Onde estão as falhas ─────────────────────────────────────────── #}
+  {% if indicadores.causas %}
+    <div class="card p-5 space-y-2">
+      <h3 class="text-sm font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
+        Onde as peças reprovam
+      </h3>
+      {% comment %}
+        Contado pelos pontos do checklist, não pelo texto do motivo: motivo
+        é livre e nunca agrega — "costura torta" e "costura ruim" seriam duas
+        causas diferentes num relatório.
+      {% endcomment %}
+      <p class="text-xs" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+        Por ponto do checklist, do mais frequente ao menos.
+      </p>
+      <div class="flex flex-wrap gap-2 pt-1">
+        {% for ponto, vezes in indicadores.causas %}
+          <span class="text-sm font-semibold px-3 py-1.5 rounded-lg"
+                style="background:rgba(220,38,38,.10); color:#dc2626;">
+            {{ ponto }} <span class="opacity-70">· {{ vezes }}×</span>
+          </span>
+        {% endfor %}
+      </div>
+    </div>
+  {% endif %}
+
+  {# ── Prontas para inspecionar ─────────────────────────────────────── #}
+  {% if candidatas %}
+    <div class="card p-5 space-y-3">
+      <div>
+        <h3 class="text-sm font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
+          Prontas para inspeção
+        </h3>
+        {% comment %}
+          Só ordens cujas etapas anteriores acabaram: oferecer inspeção de
+          peça que ainda está na costura faria o inspetor abrir uma ficha sem
+          ter o que conferir.
+        {% endcomment %}
+        <p class="text-xs mt-0.5" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+          Ordens que chegaram à qualidade e ainda não têm inspeção aberta.
+        </p>
+      </div>
+      <div class="space-y-1">
+        {% for o in candidatas %}
+          <div class="flex items-center justify-between gap-3 text-sm px-3 py-2 rounded-lg"
+               :style="temaClaro ? 'background:#f8fafc;' : 'background:#18181b;'">
+            <span :style="temaClaro ? 'color:#374151;' : 'color:#cbd5e1;'">
+              <span class="font-mono font-semibold">{{ o.numero }}</span>
+              · {{ o.pedido.cliente }} · {{ o.item.nome_exibicao }}
+              <span class="opacity-60">· {{ o.quantidade }} pç</span>
+            </span>
+            {% if pode_agir %}
+              <form method="post" action="{% url 'moda:inspecao-criar' o.pk %}">
+                {% csrf_token %}
+                <button type="submit" class="btn-primary text-xs">Inspecionar</button>
+              </form>
+            {% endif %}
+          </div>
+        {% endfor %}
+      </div>
+    </div>
+  {% endif %}
+
+  {# ── Inspeções ────────────────────────────────────────────────────── #}
+  <form method="get" class="flex items-end gap-2">
+    <div>
+      <label class="block text-xs font-semibold mb-1" :style="temaClaro ? 'color:#374151;' : 'color:#cbd5e1;'">Status</label>
+      <select name="status" class="form-input w-48">
+        <option value="">Todas</option>
+        {% for valor, rotulo in status_choices %}
+          <option value="{{ valor }}" {% if valor == status_escolhido %}selected{% endif %}>{{ rotulo }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <button type="submit" class="btn-secondary">Filtrar</button>
+    {% if status_escolhido %}<a href="{% url 'moda:qualidade-list' %}" class="btn-secondary">Limpar</a>{% endif %}
+  </form>
+
+  <div class="card p-5">
+    {% if inspecoes %}
+      <div class="overflow-x-auto">
+        <table class="w-full text-sm" style="min-width:880px;">
+          <thead>
+            <tr class="text-xs uppercase tracking-wider" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+              <th class="text-left font-semibold pb-2 w-24">Inspeção</th>
+              <th class="text-left font-semibold pb-2 w-32">OP</th>
+              <th class="text-left font-semibold pb-2">Cliente / Produto</th>
+              <th class="text-right font-semibold pb-2 w-24">Inspec.</th>
+              <th class="text-right font-semibold pb-2 w-24">Aprov.</th>
+              <th class="text-right font-semibold pb-2 w-24">Reprov.</th>
+              <th class="text-right font-semibold pb-2 w-24">Retrab.</th>
+              <th class="text-left font-semibold pb-2 w-28">Status</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for i in inspecoes %}
+              <tr class="border-t" :style="temaClaro ? 'border-color:#e5e7eb;' : 'border-color:#303036;'">
+                <td class="py-2 pr-2">
+                  <a href="{% url 'moda:inspecao-detail' i.pk %}" class="font-mono font-semibold"
+                     :style="temaClaro ? 'color:#3b82f6;' : 'color:#60a5fa;'">#{{ i.numero|stringformat:"04d" }}</a>
+                  <span class="block text-[10px]" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+                    {{ i.data|date:"d/m/Y" }}
+                  </span>
+                </td>
+                <td class="py-2 font-mono text-xs" :style="temaClaro ? 'color:#374151;' : 'color:#cbd5e1;'">
+                  {{ i.ordem.numero }}
+                </td>
+                <td class="py-2 pr-2" :style="temaClaro ? 'color:#111827;' : 'color:#e5e7eb;'">
+                  {{ i.ordem.pedido.cliente }}
+                  <span class="block text-xs opacity-60">{{ i.ordem.item.nome_exibicao }}</span>
+                </td>
+                <td class="py-2 text-right tabular-nums" :style="temaClaro ? 'color:#374151;' : 'color:#cbd5e1;'">
+                  {{ i.quantidade_inspecionada }}
+                </td>
+                <td class="py-2 text-right tabular-nums font-semibold" style="color:#059669;">
+                  {{ i.quantidade_aprovada }}
+                </td>
+                <td class="py-2 text-right tabular-nums font-semibold"
+                    {% if i.quantidade_reprovada %}style="color:#dc2626;"
+                    {% else %}:style="temaClaro ? 'color:#cbd5e1;' : 'color:#52525b;'"{% endif %}>
+                  {{ i.quantidade_reprovada }}
+                </td>
+                <td class="py-2 text-right tabular-nums font-semibold"
+                    {% if i.quantidade_retrabalho %}style="color:#d97706;"
+                    {% else %}:style="temaClaro ? 'color:#cbd5e1;' : 'color:#52525b;'"{% endif %}>
+                  {{ i.quantidade_retrabalho }}
+                </td>
+                <td class="py-2">
+                  <span class="text-xs font-semibold px-2 py-0.5 rounded-full"
+                        {% if i.status == 'aprovado' %}style="background:rgba(16,185,129,.14); color:#059669;"
+                        {% elif i.status == 'reprovado' %}style="background:rgba(220,38,38,.12); color:#dc2626;"
+                        {% elif i.status == 'retrabalho' %}style="background:rgba(245,158,11,.14); color:#d97706;"
+                        {% else %}:style="temaClaro ? 'background:#f1f5f9; color:#64748b;' : 'background:#27272a; color:#a1a1aa;'"{% endif %}>
+                    {{ i.get_status_display }}
+                  </span>
+                </td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    {% else %}
+      <p class="text-sm" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+        {% if status_escolhido %}
+          Nenhuma inspeção com esse status.
+        {% else %}
+          Nenhuma inspeção ainda. Elas partem de uma ordem que chegou à etapa
+          de Qualidade no fluxo.
+        {% endif %}
+      </p>
+    {% endif %}
+  </div>
+
+</div>
+{% endblock %}

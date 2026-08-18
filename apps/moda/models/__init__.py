@@ -13,6 +13,7 @@ from .pcp import CapacidadeSetor
 from .pedido import PedidoProducao
 from .personalizacao import Personalizacao
 from .produto import ProdutoCor, ProdutoModa, Variante
+from .qualidade import Inspecao, ItemInspecao
 from .roteiro import Operacao, OperacaoRoteiro, Roteiro, custo_por_peca
 from .visual import MockupVisual, Posicao, VisualItemPedido
 
@@ -30,6 +31,8 @@ __all__ = [
     'ItemGradePedido',
     'ItemRequisicao',
     'ImagemFicha',
+    'Inspecao',
+    'ItemInspecao',
     'ItemPedidoProducao',
     'MaterialFicha',
     'MockupVisual',

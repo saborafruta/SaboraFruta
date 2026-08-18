@@ -7,6 +7,7 @@ from .kanban import KanbanService
 from .necessidade import NecessidadeService
 from .ordem import OrdemProducaoService
 from .pcp import PcpService
+from .qualidade import QualidadeService
 from .variantes import ResultadoGeracao, VarianteService, montar_sku
 from .wip import WipService
 
@@ -14,5 +15,6 @@ __all__ = [
     'CorteService', 'FinanceiroPedidoService', 'FluxoService', 'GradePedidoService',
     'IndividualService', 'KanbanService', 'NecessidadeService',
     'OrdemProducaoService', 'Parcela', 'PcpService',
-    'ResultadoGeracao', 'VarianteService', 'WipService', 'montar_sku',
+    'QualidadeService', 'ResultadoGeracao', 'VarianteService', 'WipService',
+    'montar_sku',
 ]

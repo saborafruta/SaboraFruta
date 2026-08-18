@@ -15,8 +15,8 @@ from . import (
     views, views_apoio as va, views_cadastros as vc, views_ficha as vf,
     views_corte as vco, views_encaixe as ve, views_fluxo as vx,
     views_ordem as vo, views_pcp as vp,
-    views_kanban as vk, views_necessidade as vn, views_roteiro as vr,
-    views_terminal as vt, views_wip as vw,
+    views_kanban as vk, views_necessidade as vn, views_qualidade as vq,
+    views_roteiro as vr, views_terminal as vt, views_wip as vw,
 )
 
 app_name = 'moda'
@@ -83,6 +83,15 @@ ROTAS_PRONTAS: list = [
     # Fluxo de produção. O painel fica no grupo Produção; o fluxo de cada
     # ordem pendura na OP, que é a quem as etapas pertencem.
     path('producao/fluxo/', vx.PainelFluxoView.as_view(), name='fluxo-painel'),
+
+    # Qualidade. Endereco do menu; declarado antes do catch-all dos
+    # terminais, senao `producao/<slug>/` engoliria e devolveria 404.
+    path('producao/qualidade/', vq.QualidadeListView.as_view(), name='qualidade-list'),
+    path('producao/qualidade/ordens/<int:pk>/', vq.InspecaoCriarView.as_view(), name='inspecao-criar'),
+    path('producao/qualidade/<int:pk>/', vq.InspecaoDetailView.as_view(), name='inspecao-detail'),
+    path('producao/qualidade/<int:pk>/checklist/', vq.InspecaoChecklistView.as_view(), name='inspecao-checklist'),
+    path('producao/qualidade/<int:pk>/decidir/', vq.InspecaoDecidirView.as_view(), name='inspecao-decidir'),
+    path('producao/qualidade/<int:pk>/aplicar/', vq.InspecaoAplicarView.as_view(), name='inspecao-aplicar'),
 
     # Terminais de setor. Ficam DEPOIS de todas as rotas especificas de
     # /producao/ porque `<slug:slug>` casa com qualquer coisa: declarado

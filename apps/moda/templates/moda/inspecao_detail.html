@@ -1,0 +1,222 @@
+{% extends "_base.html" %}
+{% block title %}{{ title }}{% endblock %}
+{% block page_title %}Inspeção #{{ inspecao.numero|stringformat:"04d" }}{% endblock %}
+{% block content %}
+<div class="space-y-5">
+
+  {# ── Cabeçalho ────────────────────────────────────────────────────── #}
+  <div class="card p-5">
+    <p class="text-sm mb-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+      <a href="{% url 'moda:qualidade-list' %}" :style="temaClaro ? 'color:#3b82f6;' : 'color:#60a5fa;'">Qualidade</a>
+      <span class="mx-1">›</span> #{{ inspecao.numero|stringformat:"04d" }}
+    </p>
+    <div class="flex flex-wrap items-start justify-between gap-4">
+      <div class="min-w-0">
+        <h2 class="text-2xl font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
+          {{ inspecao.ordem.pedido.cliente }}
+        </h2>
+        <p class="text-sm mt-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+          <a href="{% url 'moda:ordem-detail' inspecao.ordem.pk %}" class="font-mono"
+             :style="temaClaro ? 'color:#3b82f6;' : 'color:#60a5fa;'">{{ inspecao.ordem.numero }}</a>
+          · {{ inspecao.ordem.item.nome_exibicao }}
+          · {{ inspecao.data|date:"d/m/Y" }}
+          {% if inspecao.inspetor %} · {{ inspecao.inspetor }}{% endif %}
+        </p>
+      </div>
+      <div class="flex items-center gap-3 flex-wrap">
+        <span class="text-sm font-bold px-3 py-1.5 rounded-full"
+              {% if inspecao.status == 'aprovado' %}style="background:rgba(16,185,129,.14); color:#059669;"
+              {% elif inspecao.status == 'reprovado' %}style="background:rgba(220,38,38,.12); color:#dc2626;"
+              {% elif inspecao.status == 'retrabalho' %}style="background:rgba(245,158,11,.14); color:#d97706;"
+              {% else %}:style="temaClaro ? 'background:#f1f5f9; color:#64748b;' : 'background:#27272a; color:#a1a1aa;'"{% endif %}>
+          {{ inspecao.get_status_display }}
+        </span>
+        {% if pode_agir and inspecao.encerrada and not inspecao.aplicada_no_fluxo %}
+          <form method="post" action="{% url 'moda:inspecao-aplicar' inspecao.pk %}">
+            {% csrf_token %}
+            <button type="submit" class="btn-primary text-sm">Aplicar no fluxo</button>
+          </form>
+        {% elif inspecao.aplicada_no_fluxo %}
+          <span class="text-xs font-semibold px-2 py-1 rounded-full"
+                style="background:rgba(59,130,246,.14); color:#3b82f6;">já aplicada no fluxo</span>
+        {% endif %}
+      </div>
+    </div>
+
+    {% if inspecao.encerrada %}
+      <div class="grid grid-cols-2 lg:grid-cols-4 gap-3 mt-5">
+        <div class="rounded-xl p-3 text-center" :style="temaClaro ? 'background:#f8fafc;' : 'background:#18181b;'">
+          <p class="text-xs uppercase tracking-wider" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Inspecionadas</p>
+          <p class="text-2xl font-bold tabular-nums mt-1" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
+            {{ inspecao.quantidade_inspecionada }}
+          </p>
+        </div>
+        <div class="rounded-xl p-3 text-center" :style="temaClaro ? 'background:#f8fafc;' : 'background:#18181b;'">
+          <p class="text-xs uppercase tracking-wider" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Aprovadas</p>
+          <p class="text-2xl font-bold tabular-nums mt-1" style="color:#059669;">{{ inspecao.quantidade_aprovada }}</p>
+          <p class="text-[10px]" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">{{ inspecao.percentual_aprovacao }}%</p>
+        </div>
+        <div class="rounded-xl p-3 text-center" :style="temaClaro ? 'background:#f8fafc;' : 'background:#18181b;'">
+          <p class="text-xs uppercase tracking-wider" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Reprovadas</p>
+          <p class="text-2xl font-bold tabular-nums mt-1" style="color:#dc2626;">{{ inspecao.quantidade_reprovada }}</p>
+          <p class="text-[10px]" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">refugo</p>
+        </div>
+        <div class="rounded-xl p-3 text-center" :style="temaClaro ? 'background:#f8fafc;' : 'background:#18181b;'">
+          <p class="text-xs uppercase tracking-wider" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Retrabalho</p>
+          <p class="text-2xl font-bold tabular-nums mt-1" style="color:#d97706;">{{ inspecao.quantidade_retrabalho }}</p>
+          <p class="text-[10px]" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">volta para a linha</p>
+        </div>
+      </div>
+
+      {% if inspecao.motivo %}
+        <div class="mt-4 p-3 rounded-lg" style="background:rgba(220,38,38,.06);">
+          <p class="text-xs font-bold uppercase tracking-wider mb-1" style="color:#dc2626;">Motivo</p>
+          <p class="text-sm whitespace-pre-line" :style="temaClaro ? 'color:#374151;' : 'color:#cbd5e1;'">{{ inspecao.motivo }}</p>
+        </div>
+      {% endif %}
+    {% endif %}
+  </div>
+
+  {# ── Checklist ────────────────────────────────────────────────────── #}
+  <form method="post" action="{% url 'moda:inspecao-checklist' inspecao.pk %}" class="card p-5 space-y-3">
+    {% csrf_token %}
+    <div>
+      <h3 class="text-sm font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">Checklist</h3>
+      {% comment %}
+        "Não se aplica" existe porque peça lisa não tem estampa e peça sem
+        personalização não tem nome nem número — marcar "conforme" no que não
+        existe mentiria no indicador de qualidade.
+      {% endcomment %}
+      <p class="text-xs mt-0.5" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+        {{ inspecao.avaliados }} de {{ itens|length }} avaliados. Use
+        “Não se aplica” no que esta peça não tem.
+      </p>
+    </div>
+
+    <div class="space-y-2">
+      {% for i in itens %}
+        <div class="rounded-lg p-3"
+             {% if i.reprovado %}style="background:rgba(220,38,38,.06);"
+             {% else %}:style="temaClaro ? 'background:#f8fafc;' : 'background:#18181b;'"{% endif %}>
+          <div class="flex flex-wrap items-center justify-between gap-3">
+            <p class="font-semibold text-sm" :style="temaClaro ? 'color:#111827;' : 'color:#e5e7eb;'">
+              {{ i.get_ponto_display }}
+            </p>
+            <div class="flex gap-1 flex-wrap">
+              {% for valor, rotulo in resultados %}
+                <label>
+                  <input type="radio" name="ponto_{{ i.pk }}" value="{{ valor }}" class="sr-only peer"
+                         {% if i.resultado == valor %}checked{% endif %}
+                         {% if inspecao.encerrada or not pode_agir %}disabled{% endif %}>
+                  <span class="block px-3 py-1.5 rounded-lg text-xs font-bold cursor-pointer border-2"
+                        {% if i.resultado == valor and valor == 'conforme' %}style="border-color:#059669; color:#059669;"
+                        {% elif i.resultado == valor and valor == 'nao_conforme' %}style="border-color:#dc2626; color:#dc2626;"
+                        {% elif i.resultado == valor %}style="border-color:#94a3b8; color:#64748b;"
+                        {% else %}:style="temaClaro ? 'border-color:#e5e7eb; color:#94a3b8;' : 'border-color:#303036; color:#71717a;'"{% endif %}>
+                    {{ rotulo }}
+                  </span>
+                </label>
+              {% endfor %}
+            </div>
+          </div>
+          {% if not inspecao.encerrada and pode_agir %}
+            <input type="text" name="obs_{{ i.pk }}" value="{{ i.observacao }}"
+                   placeholder="Observação deste ponto" class="form-input w-full mt-2 text-sm">
+          {% elif i.observacao %}
+            <p class="text-xs mt-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">{{ i.observacao }}</p>
+          {% endif %}
+        </div>
+      {% endfor %}
+    </div>
+
+    {% if pode_agir and not inspecao.encerrada %}
+      <div class="flex justify-end">
+        <button type="submit" class="btn-secondary">Salvar checklist</button>
+      </div>
+    {% endif %}
+  </form>
+
+  {# ── Decisão ──────────────────────────────────────────────────────── #}
+  {% if pode_agir and not inspecao.encerrada %}
+    <form method="post" action="{% url 'moda:inspecao-decidir' inspecao.pk %}"
+          class="card p-5 space-y-4" x-data="{ status: '' }">
+      {% csrf_token %}
+      <div>
+        <h3 class="text-sm font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">Decisão</h3>
+        {% comment %}
+          Aprovar com não conformidade é recusado pelo servidor: seria uma
+          contradição, e um sistema que a aceita transforma o checklist em
+          enfeite. Reprovar ou retrabalhar é julgamento do inspetor — o
+          sistema não decide por ele, só exige o motivo.
+        {% endcomment %}
+        <p class="text-xs mt-0.5" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+          {% if inspecao.conforme %}
+            Nenhuma não conformidade no checklist.
+          {% else %}
+            Há não conformidade — só reprovação ou retrabalho são possíveis.
+          {% endif %}
+        </p>
+      </div>
+
+      <div class="grid grid-cols-2 lg:grid-cols-4 gap-3">
+        <div>
+          <label class="block text-xs font-bold uppercase tracking-wider mb-1"
+                 :style="temaClaro ? 'color:#374151;' : 'color:#cbd5e1;'">Inspecionadas</label>
+          <input type="number" min="0" name="quantidade_inspecionada"
+                 value="{{ inspecao.quantidade_inspecionada }}" class="form-input w-full text-right font-bold">
+        </div>
+        <div>
+          <label class="block text-xs font-bold uppercase tracking-wider mb-1" style="color:#059669;">Aprovadas</label>
+          <input type="number" min="0" name="quantidade_aprovada"
+                 value="{{ inspecao.quantidade_aprovada }}" class="form-input w-full text-right font-bold">
+        </div>
+        <div>
+          <label class="block text-xs font-bold uppercase tracking-wider mb-1" style="color:#dc2626;">Reprovadas</label>
+          <input type="number" min="0" name="quantidade_reprovada"
+                 value="{{ inspecao.quantidade_reprovada }}" class="form-input w-full text-right font-bold">
+        </div>
+        <div>
+          <label class="block text-xs font-bold uppercase tracking-wider mb-1" style="color:#d97706;">Retrabalho</label>
+          <input type="number" min="0" name="quantidade_retrabalho"
+                 value="{{ inspecao.quantidade_retrabalho }}" class="form-input w-full text-right font-bold">
+        </div>
+      </div>
+
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <div>
+          <label class="block text-xs font-bold uppercase tracking-wider mb-1"
+                 :style="temaClaro ? 'color:#374151;' : 'color:#cbd5e1;'">Inspetor</label>
+          <input type="text" name="inspetor" value="{{ inspecao.inspetor }}" class="form-input w-full">
+        </div>
+        <div>
+          <label class="block text-xs font-bold uppercase tracking-wider mb-1"
+                 :style="temaClaro ? 'color:#374151;' : 'color:#cbd5e1;'">Observação</label>
+          <input type="text" name="observacao" value="{{ inspecao.observacao }}" class="form-input w-full">
+        </div>
+      </div>
+
+      <div>
+        <label class="block text-xs font-bold uppercase tracking-wider mb-1"
+               :style="temaClaro ? 'color:#374151;' : 'color:#cbd5e1;'">
+          Motivo <span class="font-normal opacity-70">(obrigatório em reprovação e retrabalho)</span>
+        </label>
+        <textarea name="motivo" rows="2" class="form-input w-full">{{ inspecao.motivo }}</textarea>
+      </div>
+
+      <div class="flex flex-wrap gap-2">
+        {% if inspecao.conforme %}
+          <button type="submit" name="status" value="aprovado"
+                  class="btn-primary flex-1 min-w-[150px] py-3 font-bold">APROVAR</button>
+        {% endif %}
+        <button type="submit" name="status" value="retrabalho"
+                class="flex-1 min-w-[150px] py-3 rounded-xl font-bold border-2"
+                style="border-color:#d97706; color:#d97706; background:transparent;">RETRABALHO</button>
+        <button type="submit" name="status" value="reprovado"
+                class="flex-1 min-w-[150px] py-3 rounded-xl font-bold border-2"
+                style="border-color:#dc2626; color:#dc2626; background:transparent;">REPROVAR</button>
+      </div>
+    </form>
+  {% endif %}
+
+</div>
+{% endblock %}
