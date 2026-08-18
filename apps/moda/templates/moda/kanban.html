@@ -1,0 +1,244 @@
+{% extends "_base.html" %}
+{% block title %}{{ title }}{% endblock %}
+{% block page_title %}Kanban{% endblock %}
+
+{% block extra_head %}
+{{ block.super }}
+<style>
+  /* A raia que recebe o cartão precisa se anunciar durante o arrasto —
+     sem isso o usuário solta no lugar errado e culpa o sistema. */
+  .kanban-raia.recebendo { outline: 2px dashed #3b82f6; outline-offset: -4px; }
+  .kanban-card.arrastando { opacity: .4; }
+  .kanban-card { cursor: grab; }
+  .kanban-card:active { cursor: grabbing; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="space-y-4">
+
+  <div>
+    <p class="text-sm mb-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+      <a href="{% url 'moda:grupo' 'producao' %}" :style="temaClaro ? 'color:#3b82f6;' : 'color:#60a5fa;'">Produção</a>
+      <span class="mx-1">›</span> Kanban
+    </p>
+    <div class="flex flex-wrap items-center justify-between gap-3">
+      <h2 class="text-2xl font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">Kanban de Produção</h2>
+      <a href="{% url 'moda:wip' %}" class="btn-secondary text-sm">Painel de WIP</a>
+    </div>
+    <p class="text-sm mt-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+      {{ total }} ordem(ns) no quadro.
+      {% if pode_mover %}
+        Arraste o cartão para mover a ordem — as etapas anteriores são concluídas
+        e o status da OP acompanha.
+      {% else %}
+        Seu perfil não pode movimentar ordens; o quadro é somente leitura.
+      {% endif %}
+    </p>
+  </div>
+
+  {# ── Filtros ──────────────────────────────────────────────────────── #}
+  <form method="get" class="card p-4 flex flex-wrap items-end gap-3">
+    <div class="flex-1 min-w-[160px]">
+      <label class="block text-xs font-semibold mb-1" :style="temaClaro ? 'color:#374151;' : 'color:#cbd5e1;'">Cliente</label>
+      <input type="search" name="cliente" value="{{ filtros.cliente }}" class="form-input w-full">
+    </div>
+    <div class="flex-1 min-w-[160px]">
+      <label class="block text-xs font-semibold mb-1" :style="temaClaro ? 'color:#374151;' : 'color:#cbd5e1;'">Produto</label>
+      <input type="search" name="produto" value="{{ filtros.produto }}" class="form-input w-full">
+    </div>
+    <div>
+      <label class="block text-xs font-semibold mb-1" :style="temaClaro ? 'color:#374151;' : 'color:#cbd5e1;'">Prioridade</label>
+      <select name="prioridade" class="form-input w-40">
+        <option value="">Todas</option>
+        {% for valor, rotulo in prioridades %}
+          <option value="{{ valor }}" {% if valor == filtros.prioridade %}selected{% endif %}>{{ rotulo }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <button type="submit" class="btn-secondary">Filtrar</button>
+    {% if tem_filtro %}<a href="{% url 'moda:kanban' %}" class="btn-secondary">Limpar</a>{% endif %}
+  </form>
+
+  {# Aviso do último movimento — o serviço devolve o que foi concluído
+     automaticamente, e esconder isso encheria o relatório de produção com
+     números que ninguém digitou. #}
+  <div id="kanban-aviso" class="card p-3 hidden" style="border-left:3px solid #3b82f6;">
+    <p class="text-sm" id="kanban-aviso-texto" :style="temaClaro ? 'color:#374151;' : 'color:#cbd5e1;'"></p>
+  </div>
+
+  {# ── Quadro ───────────────────────────────────────────────────────── #}
+  <div class="overflow-x-auto pb-3">
+    <div class="flex gap-3" style="min-width:1500px;">
+      {% for r in raias %}
+        <div class="kanban-raia card p-3 flex-1 space-y-2" data-coluna="{{ r.coluna.chave }}"
+             style="min-width:165px;">
+          <div class="flex items-baseline justify-between gap-2 pb-2 border-b"
+               :style="temaClaro ? 'border-color:#e5e7eb;' : 'border-color:#303036;'">
+            <h3 class="text-xs font-bold uppercase tracking-wider"
+                :style="temaClaro ? 'color:#374151;' : 'color:#cbd5e1;'">{{ r.coluna.label }}</h3>
+            <span class="text-xs font-bold tabular-nums" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+              {{ r.total }}
+            </span>
+          </div>
+          {% if r.pecas %}
+            <p class="text-[10px]" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+              {{ r.pecas }} peça(s)
+            </p>
+          {% endif %}
+
+          <div class="space-y-2 min-h-[60px]" data-lista>
+            {% for c in r.cartoes %}
+              <div class="kanban-card rounded-lg p-2.5" data-ordem="{{ c.ordem.pk }}"
+                   {% if pode_mover %}draggable="true"{% endif %}
+                   :style="temaClaro ? 'background:#f8fafc; border:1px solid #e5e7eb;' : 'background:#18181b; border:1px solid #303036;'">
+                <div class="flex items-start justify-between gap-1">
+                  <a href="{% url 'moda:fluxo-ordem' c.ordem.pk %}" class="font-mono text-xs font-bold"
+                     :style="temaClaro ? 'color:#3b82f6;' : 'color:#60a5fa;'">{{ c.ordem.numero }}</a>
+                  <span class="text-[9px] font-bold px-1.5 py-0.5 rounded-full shrink-0"
+                        {% if c.ordem.prioridade == 'urgente' %}style="background:rgba(220,38,38,.14); color:#dc2626;"
+                        {% elif c.ordem.prioridade == 'alta' %}style="background:rgba(245,158,11,.16); color:#d97706;"
+                        {% else %}:style="temaClaro ? 'background:#e5e7eb; color:#64748b;' : 'background:#27272a; color:#a1a1aa;'"{% endif %}>
+                    {{ c.ordem.get_prioridade_display|upper }}
+                  </span>
+                </div>
+
+                <p class="text-xs font-semibold mt-1 truncate" :style="temaClaro ? 'color:#111827;' : 'color:#e5e7eb;'"
+                   title="{{ c.ordem.pedido.cliente }}">{{ c.ordem.pedido.cliente }}</p>
+                <p class="text-[11px] truncate" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'"
+                   title="{{ c.ordem.item.nome_exibicao }}">{{ c.ordem.item.nome_exibicao }}</p>
+
+                <div class="flex items-center justify-between gap-1 mt-1.5 text-[11px]">
+                  <span class="font-bold tabular-nums" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
+                    {{ c.ordem.quantidade }} pç
+                  </span>
+                  <span class="tabular-nums"
+                        {% if c.ordem.atrasada %}style="color:#dc2626; font-weight:700;"
+                        {% else %}:style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'"{% endif %}>
+                    {% if c.ordem.prazo %}{{ c.ordem.prazo|date:"d/m" }}{% else %}sem prazo{% endif %}
+                  </span>
+                </div>
+
+                <p class="text-[10px] mt-1 truncate" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+                  {{ c.etapa.get_etapa_display }}
+                </p>
+
+                <div class="flex items-center gap-1.5 mt-1">
+                  <div class="h-1 rounded-full overflow-hidden flex-1"
+                       :style="temaClaro ? 'background:#e5e7eb;' : 'background:#27272a;'">
+                    <div class="h-full rounded-full" style="background:#059669; width:{{ c.percentual }}%;"></div>
+                  </div>
+                  <span class="text-[10px] tabular-nums shrink-0" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+                    {{ c.percentual }}%
+                  </span>
+                </div>
+              </div>
+            {% empty %}
+              <p class="text-[11px] text-center py-3" :style="temaClaro ? 'color:#cbd5e1;' : 'color:#52525b;'">
+                vazia
+              </p>
+            {% endfor %}
+          </div>
+        </div>
+      {% endfor %}
+    </div>
+  </div>
+
+  {% if sem_fluxo %}
+    <div class="card p-4" style="border-left:3px solid #f59e0b;">
+      <p class="text-sm" :style="temaClaro ? 'color:#374151;' : 'color:#cbd5e1;'">
+        <strong>{{ sem_fluxo|length }} ordem(ns) fora do quadro</strong> — emitidas
+        antes do fluxo existir e sem etapas montadas. Rode
+        <code>python manage.py criar_etapas_fluxo --filial &lt;id&gt;</code>.
+      </p>
+      <div class="flex flex-wrap gap-2 mt-2">
+        {% for o in sem_fluxo %}
+          <a href="{% url 'moda:ordem-detail' o.pk %}"
+             class="text-xs font-mono font-semibold px-2 py-1 rounded-lg"
+             style="background:rgba(245,158,11,.14); color:#d97706;">{{ o.numero }}</a>
+        {% endfor %}
+      </div>
+    </div>
+  {% endif %}
+
+</div>
+{% endblock %}
+
+{% block extra_js %}
+{{ block.super }}
+{% if pode_mover %}
+<script>
+(function () {
+  const csrf = document.querySelector('[name=csrfmiddlewaretoken]')?.value
+    || document.cookie.match(/csrftoken=([^;]+)/)?.[1] || '';
+  const aviso = document.getElementById('kanban-aviso');
+  const avisoTexto = document.getElementById('kanban-aviso-texto');
+  let arrastando = null;
+  let origem = null;
+
+  function mostrar(texto, erro) {
+    avisoTexto.textContent = texto;
+    aviso.style.borderLeftColor = erro ? '#dc2626' : '#3b82f6';
+    aviso.classList.remove('hidden');
+  }
+
+  document.querySelectorAll('.kanban-card[draggable=true]').forEach((card) => {
+    card.addEventListener('dragstart', (e) => {
+      arrastando = card;
+      origem = card.closest('.kanban-raia');
+      card.classList.add('arrastando');
+      // Alguns navegadores só iniciam o arrasto se houver dados no evento.
+      e.dataTransfer.setData('text/plain', card.dataset.ordem);
+      e.dataTransfer.effectAllowed = 'move';
+    });
+    card.addEventListener('dragend', () => {
+      card.classList.remove('arrastando');
+      document.querySelectorAll('.kanban-raia').forEach(
+        (r) => r.classList.remove('recebendo'));
+    });
+  });
+
+  document.querySelectorAll('.kanban-raia').forEach((raia) => {
+    raia.addEventListener('dragover', (e) => {
+      e.preventDefault();
+      e.dataTransfer.dropEffect = 'move';
+      raia.classList.add('recebendo');
+    });
+    raia.addEventListener('dragleave', () => raia.classList.remove('recebendo'));
+
+    raia.addEventListener('drop', async (e) => {
+      e.preventDefault();
+      raia.classList.remove('recebendo');
+      if (!arrastando || raia === origem) return;
+
+      const card = arrastando;
+      const anterior = origem;
+      // `[data-lista]` e nao seletor por classe do Tailwind: mudar uma
+      // classe de layout nao pode quebrar o arrasto.
+      const destino = raia.querySelector('[data-lista]') || raia;
+
+      // Move na tela antes da resposta: o arrasto tem de parecer imediato.
+      // Se o servidor recusar, o cartão volta para a coluna de origem — é
+      // por isso que guardamos `anterior`.
+      destino.appendChild(card);
+
+      try {
+        const resp = await fetch(`/moda/producao/kanban/${card.dataset.ordem}/mover/`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrf },
+          body: JSON.stringify({ coluna: raia.dataset.coluna }),
+        });
+        const dados = await resp.json();
+        if (!dados.ok) throw new Error(dados.erro || 'Não foi possível mover.');
+        mostrar(dados.mensagem, false);
+      } catch (erro) {
+        const volta = anterior.querySelector('[data-lista]') || anterior;
+        volta.appendChild(card);
+        mostrar(erro.message, true);
+      }
+    });
+  });
+})();
+</script>
+{% endif %}
+{% endblock %}

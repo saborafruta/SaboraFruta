@@ -103,6 +103,7 @@ GRUPOS: tuple[Grupo, ...] = (
         'O chão de fábrica, na ordem em que a peça caminha.',
         'tesoura',
         (
+            Item('kanban', 'Kanban', 'O quadro da fábrica, com arrastar e soltar.'),
             Item('corte', 'Corte', 'Corte do tecido conforme o encaixe.'),
             Item('encaixe', 'Encaixe', 'Aproveitamento do tecido no risco.'),
             Item('sublimacao', 'Sublimação', 'Estampa por transferência térmica.'),
