@@ -1,0 +1,185 @@
+{% extends "_base.html" %}
+{% block title %}{{ title }}{% endblock %}
+{% block page_title %}Controle de Corte{% endblock %}
+{% block content %}
+<div class="space-y-5">
+
+  <div class="flex flex-wrap items-start justify-between gap-3">
+    <div>
+      <p class="text-sm mb-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+        <a href="{% url 'moda:grupo' 'producao' %}" :style="temaClaro ? 'color:#3b82f6;' : 'color:#60a5fa;'">Produção</a>
+        <span class="mx-1">›</span> Corte
+      </p>
+      <h2 class="text-2xl font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">Controle de Corte</h2>
+      <p class="text-sm mt-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+        Um registro por enfesto. A mesma ordem em duas cores são dois cortes.
+      </p>
+    </div>
+    <a href="{% url 'moda:corte-create' %}" class="btn-primary">+ Novo corte</a>
+  </div>
+
+  {# ── Indicadores ──────────────────────────────────────────────────── #}
+  <div class="grid grid-cols-2 lg:grid-cols-4 gap-3">
+    <div class="card p-4">
+      <p class="text-xs uppercase tracking-wider" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Aproveitamento</p>
+      <p class="text-3xl font-bold tabular-nums mt-1" style="color:#059669;">
+        {{ indicadores.aproveitamento }}%
+      </p>
+      {% comment %}
+        Ponderado pelo consumo, não pela contagem de cortes: um enfesto de
+        300 m com 70% e outro de 5 m com 95% não dão 82,5% — dão 70,4%. A
+        média simples deixaria um corte pequeno e bem-feito esconder o
+        desperdício do grande.
+      {% endcomment %}
+      <p class="text-xs mt-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+        média ponderada pelo consumo
+      </p>
+    </div>
+    <div class="card p-4">
+      <p class="text-xs uppercase tracking-wider" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Perda</p>
+      <p class="text-3xl font-bold tabular-nums mt-1" style="color:#dc2626;">
+        {{ indicadores.perda }}%
+      </p>
+      <p class="text-xs mt-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+        {{ indicadores.perda_metros }} m de tecido
+      </p>
+    </div>
+    <div class="card p-4">
+      <p class="text-xs uppercase tracking-wider" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Tecido planejado</p>
+      <p class="text-2xl font-bold tabular-nums mt-1" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
+        {{ indicadores.planejado }} m
+      </p>
+      <p class="text-xs mt-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+        da ficha técnica
+      </p>
+    </div>
+    <div class="card p-4">
+      <p class="text-xs uppercase tracking-wider" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Tecido utilizado</p>
+      <p class="text-2xl font-bold tabular-nums mt-1"
+         {% if indicadores.variacao > 0 %}style="color:#dc2626;"
+         {% else %}:style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'"{% endif %}>
+        {{ indicadores.real }} m
+      </p>
+      <p class="text-xs mt-1"
+         {% if indicadores.variacao > 0 %}style="color:#dc2626; font-weight:600;"
+         {% else %}:style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'"{% endif %}>
+        {% if indicadores.variacao > 0 %}+{% endif %}{{ indicadores.variacao }} m
+        ({{ indicadores.variacao_percentual }}%)
+      </p>
+    </div>
+  </div>
+
+  <div class="card p-4 flex flex-wrap gap-x-6 gap-y-1 text-sm"
+       :style="temaClaro ? 'color:#374151;' : 'color:#cbd5e1;'">
+    <span>{{ indicadores.cortes }} corte(s)</span>
+    <span>{{ indicadores.pecas }} peça(s) cortada(s)</span>
+    <span>{{ indicadores.consumo_por_peca }} m por peça</span>
+    {% if indicadores.sem_medicao %}
+      <span style="color:#d97706; font-weight:600;">
+        {{ indicadores.sem_medicao }} corte(s) sem aproveitamento medido — fora da média
+      </span>
+    {% endif %}
+  </div>
+
+  <form method="get" class="flex items-end gap-2">
+    <div>
+      <label class="block text-xs font-semibold mb-1" :style="temaClaro ? 'color:#374151;' : 'color:#cbd5e1;'">Status</label>
+      <select name="status" class="form-input w-44">
+        <option value="">Todos</option>
+        {% for valor, rotulo in status_choices %}
+          <option value="{{ valor }}" {% if valor == status_escolhido %}selected{% endif %}>{{ rotulo }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <button type="submit" class="btn-secondary">Filtrar</button>
+    {% if status_escolhido %}<a href="{% url 'moda:corte-list' %}" class="btn-secondary">Limpar</a>{% endif %}
+  </form>
+
+  {# ── Lista ────────────────────────────────────────────────────────── #}
+  <div class="card p-5">
+    {% if cortes %}
+      <div class="overflow-x-auto">
+        <table class="w-full text-sm" style="min-width:900px;">
+          <thead>
+            <tr class="text-xs uppercase tracking-wider" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+              <th class="text-left font-semibold pb-2 w-20">Corte</th>
+              <th class="text-left font-semibold pb-2 w-32">OP</th>
+              <th class="text-left font-semibold pb-2">Produto / Tecido</th>
+              <th class="text-left font-semibold pb-2 w-24">Lote</th>
+              <th class="text-right font-semibold pb-2 w-20">Peças</th>
+              <th class="text-right font-semibold pb-2 w-24">Aprov.</th>
+              <th class="text-right font-semibold pb-2 w-32">Planej. × real</th>
+              <th class="text-left font-semibold pb-2 w-24">Status</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for c in cortes %}
+              <tr class="border-t" :style="temaClaro ? 'border-color:#e5e7eb;' : 'border-color:#303036;'">
+                <td class="py-2 pr-2">
+                  <a href="{% url 'moda:corte-detail' c.pk %}" class="font-mono font-semibold"
+                     :style="temaClaro ? 'color:#3b82f6;' : 'color:#60a5fa;'">#{{ c.numero|stringformat:"04d" }}</a>
+                  {% if c.data %}
+                    <span class="block text-[10px]" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+                      {{ c.data|date:"d/m/Y" }}
+                    </span>
+                  {% endif %}
+                </td>
+                <td class="py-2 pr-2 font-mono text-xs">
+                  <a href="{% url 'moda:ordem-detail' c.ordem.pk %}"
+                     :style="temaClaro ? 'color:#3b82f6;' : 'color:#60a5fa;'">{{ c.ordem.numero }}</a>
+                </td>
+                <td class="py-2 pr-2" :style="temaClaro ? 'color:#111827;' : 'color:#e5e7eb;'">
+                  {{ c.descricao_produto }}
+                  <span class="block text-xs opacity-60">
+                    {% firstof c.tecido_efetivo '—' %}{% if c.cor_efetiva %} · {{ c.cor_efetiva }}{% endif %}
+                  </span>
+                </td>
+                <td class="py-2 font-mono text-xs" :style="temaClaro ? 'color:#374151;' : 'color:#cbd5e1;'">
+                  {% firstof c.lote '—' %}
+                </td>
+                <td class="py-2 text-right tabular-nums font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
+                  {{ c.quantidade }}
+                </td>
+                <td class="py-2 text-right tabular-nums">
+                  {% if c.aproveitamento %}
+                    <span style="color:#059669; font-weight:600;">{{ c.aproveitamento }}%</span>
+                    <span class="block text-[10px]" style="color:#dc2626;">perda {{ c.perda_percentual }}%</span>
+                  {% else %}
+                    <span :style="temaClaro ? 'color:#cbd5e1;' : 'color:#52525b;'">—</span>
+                  {% endif %}
+                </td>
+                <td class="py-2 text-right tabular-nums text-xs" :style="temaClaro ? 'color:#374151;' : 'color:#cbd5e1;'">
+                  {{ c.planejado|floatformat:2 }} × {{ c.consumo_real|floatformat:2 }}
+                  {% if c.estourou %}
+                    <span class="block text-[10px]" style="color:#dc2626; font-weight:700;">
+                      +{{ c.variacao|floatformat:2 }} m
+                    </span>
+                  {% endif %}
+                </td>
+                <td class="py-2">
+                  <span class="text-xs font-semibold px-2 py-0.5 rounded-full"
+                        {% if c.status == 'cortado' %}style="background:rgba(16,185,129,.14); color:#059669;"
+                        {% elif c.status == 'cancelado' %}style="background:rgba(148,163,184,.18); color:#64748b;"
+                        {% else %}style="background:rgba(245,158,11,.14); color:#d97706;"{% endif %}>
+                    {{ c.get_status_display }}
+                  </span>
+                </td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    {% else %}
+      <p class="text-sm" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+        {% if status_escolhido %}
+          Nenhum corte com esse status.
+        {% else %}
+          Nenhum corte registrado. O corte parte de uma
+          <a href="{% url 'moda:ordem-list' %}" :style="temaClaro ? 'color:#3b82f6;' : 'color:#60a5fa;'">ordem de produção</a> aberta.
+        {% endif %}
+      </p>
+    {% endif %}
+  </div>
+
+</div>
+{% endblock %}

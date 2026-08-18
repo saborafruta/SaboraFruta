@@ -1,0 +1,227 @@
+{% extends "_base.html" %}
+{% block title %}{{ title }}{% endblock %}
+{% block page_title %}Corte #{{ corte.numero|stringformat:"04d" }}{% endblock %}
+{% block content %}
+<div class="space-y-5">
+
+  {# ── Cabeçalho ────────────────────────────────────────────────────── #}
+  <div class="card p-5">
+    <p class="text-sm mb-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+      <a href="{% url 'moda:corte-list' %}" :style="temaClaro ? 'color:#3b82f6;' : 'color:#60a5fa;'">Corte</a>
+      <span class="mx-1">›</span> #{{ corte.numero|stringformat:"04d" }}
+    </p>
+    <div class="flex flex-wrap items-start justify-between gap-4">
+      <div class="min-w-0">
+        <h2 class="text-2xl font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
+          {{ corte.descricao_produto }}
+        </h2>
+        <p class="text-sm mt-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+          <a href="{% url 'moda:ordem-detail' corte.ordem.pk %}" class="font-mono"
+             :style="temaClaro ? 'color:#3b82f6;' : 'color:#60a5fa;'">{{ corte.ordem.numero }}</a>
+          · {{ corte.ordem.pedido.cliente }}
+          {% if corte.data %} · cortado em {{ corte.data|date:"d/m/Y" }}{% endif %}
+        </p>
+      </div>
+      <div class="flex items-center gap-3 flex-wrap">
+        <span class="text-sm font-bold px-3 py-1.5 rounded-full"
+              {% if corte.status == 'cortado' %}style="background:rgba(16,185,129,.14); color:#059669;"
+              {% elif corte.status == 'cancelado' %}style="background:rgba(148,163,184,.18); color:#64748b;"
+              {% else %}style="background:rgba(245,158,11,.14); color:#d97706;"{% endif %}>
+          {{ corte.get_status_display }}
+        </span>
+        <a href="{% url 'moda:corte-update' corte.pk %}" class="btn-secondary text-sm">Editar</a>
+      </div>
+    </div>
+  </div>
+
+  {# ── Alertas ──────────────────────────────────────────────────────── #}
+  {% for a in alertas %}
+    <div class="card p-3 flex items-start gap-3"
+         {% if a.nivel == 'estouro' or a.nivel == 'grade' %}style="border-left:3px solid #dc2626;"
+         {% else %}style="border-left:3px solid #f59e0b;"{% endif %}>
+      <span class="text-xs font-bold px-2 py-0.5 rounded-full shrink-0 mt-0.5"
+            {% if a.nivel == 'estouro' %}style="background:rgba(220,38,38,.12); color:#dc2626;"
+            {% elif a.nivel == 'grade' %}style="background:rgba(220,38,38,.12); color:#dc2626;"
+            {% else %}style="background:rgba(245,158,11,.14); color:#d97706;"{% endif %}>
+        {% if a.nivel == 'estouro' %}ESTOUROU O TECIDO
+        {% elif a.nivel == 'grade' %}GRADE DIVERGENTE
+        {% else %}PENDENTE{% endif %}
+      </span>
+      <p class="text-sm" :style="temaClaro ? 'color:#374151;' : 'color:#cbd5e1;'">{{ a.texto }}</p>
+    </div>
+  {% endfor %}
+
+  {# ── Identificação ────────────────────────────────────────────────── #}
+  <div class="card p-5">
+    <h3 class="text-sm font-semibold mb-3" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">Identificação</h3>
+    <dl class="grid grid-cols-2 md:grid-cols-4 gap-x-4 gap-y-3 text-sm">
+      <div>
+        <dt class="text-xs uppercase tracking-wider" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Modelo</dt>
+        <dd class="mt-0.5 font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#e5e7eb;'">{% firstof corte.modelo '—' %}</dd>
+      </div>
+      <div>
+        <dt class="text-xs uppercase tracking-wider" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Tecido</dt>
+        <dd class="mt-0.5 font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#e5e7eb;'">{% firstof corte.tecido_efetivo '—' %}</dd>
+      </div>
+      <div>
+        <dt class="text-xs uppercase tracking-wider" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Cor</dt>
+        <dd class="mt-0.5 font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#e5e7eb;'">{% firstof corte.cor_efetiva '—' %}</dd>
+      </div>
+      <div>
+        <dt class="text-xs uppercase tracking-wider" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Lote</dt>
+        <dd class="mt-0.5 font-semibold font-mono" :style="temaClaro ? 'color:#111827;' : 'color:#e5e7eb;'">{% firstof corte.lote '—' %}</dd>
+      </div>
+      <div>
+        <dt class="text-xs uppercase tracking-wider" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Quantidade</dt>
+        <dd class="mt-0.5 font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#e5e7eb;'">{{ corte.quantidade }} peça(s)</dd>
+      </div>
+      <div>
+        <dt class="text-xs uppercase tracking-wider" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Responsável</dt>
+        <dd class="mt-0.5 font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#e5e7eb;'">{% firstof corte.responsavel '—' %}</dd>
+      </div>
+      <div>
+        <dt class="text-xs uppercase tracking-wider" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Peças por folha</dt>
+        <dd class="mt-0.5 font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#e5e7eb;'">{{ corte.pecas_por_folha }}</dd>
+      </div>
+      <div>
+        <dt class="text-xs uppercase tracking-wider" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Consumo por peça</dt>
+        <dd class="mt-0.5 font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#e5e7eb;'">{{ corte.consumo_por_peca }} m</dd>
+      </div>
+    </dl>
+    {% if corte.observacao %}
+      <p class="text-sm mt-4 whitespace-pre-line" :style="temaClaro ? 'color:#374151;' : 'color:#cbd5e1;'">{{ corte.observacao }}</p>
+    {% endif %}
+  </div>
+
+  {# ── Encaixe e aproveitamento ─────────────────────────────────────── #}
+  <div class="card p-5 space-y-4">
+    <div>
+      <h3 class="text-sm font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">Encaixe</h3>
+      {% comment %}
+        O aproveitamento é informado, não calculado: ele vem do software de
+        encaixe ou da medição do risco, e é a razão entre a área das peças e a
+        do tecido — dado que o sistema não tem, porque não conhece o molde.
+      {% endcomment %}
+      <p class="text-xs mt-0.5" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+        O aproveitamento vem do encaixe; a perda é o que sobra dele.
+      </p>
+    </div>
+
+    <div class="grid grid-cols-2 lg:grid-cols-4 gap-3">
+      <div class="rounded-xl p-4 text-center" :style="temaClaro ? 'background:#f8fafc;' : 'background:#18181b;'">
+        <p class="text-xs uppercase tracking-wider" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Aproveitamento</p>
+        <p class="text-3xl font-bold tabular-nums mt-1" style="color:#059669;">{{ corte.aproveitamento }}%</p>
+      </div>
+      <div class="rounded-xl p-4 text-center" :style="temaClaro ? 'background:#f8fafc;' : 'background:#18181b;'">
+        <p class="text-xs uppercase tracking-wider" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Perda</p>
+        <p class="text-3xl font-bold tabular-nums mt-1" style="color:#dc2626;">{{ corte.perda_percentual }}%</p>
+        <p class="text-xs mt-0.5" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">{{ corte.perda_metros }} m</p>
+      </div>
+      <div class="rounded-xl p-4 text-center" :style="temaClaro ? 'background:#f8fafc;' : 'background:#18181b;'">
+        <p class="text-xs uppercase tracking-wider" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Enfesto</p>
+        <p class="text-xl font-bold tabular-nums mt-1" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
+          {{ corte.folhas }} folha(s)
+        </p>
+        <p class="text-xs mt-0.5" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+          {{ corte.comprimento_encaixe }} m × {{ corte.largura_tecido }} m
+        </p>
+      </div>
+      <div class="rounded-xl p-4 text-center" :style="temaClaro ? 'background:#f8fafc;' : 'background:#18181b;'">
+        <p class="text-xs uppercase tracking-wider" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Encaixe gasta</p>
+        <p class="text-xl font-bold tabular-nums mt-1" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
+          {{ corte.consumo_do_encaixe }} m
+        </p>
+        <p class="text-xs mt-0.5" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">comprimento × folhas</p>
+      </div>
+    </div>
+
+    {# ── Planejado × utilizado ───────────────────────────────────────── #}
+    <div class="rounded-xl p-4 space-y-3"
+         :style="temaClaro ? 'background:#f8fafc; border:1px solid #e5e7eb;' : 'background:#18181b; border:1px solid #303036;'">
+      <p class="text-xs font-semibold uppercase tracking-wider" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+        Tecido planejado × utilizado
+      </p>
+      <div class="flex flex-wrap items-end justify-between gap-4">
+        <div>
+          <p class="text-xs" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Planejado</p>
+          <p class="text-2xl font-bold tabular-nums" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
+            {{ corte.planejado }} m
+          </p>
+          {% if corte.consumo_planejado is None %}
+            <p class="text-[10px]" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">da ficha técnica</p>
+          {% endif %}
+        </div>
+        <div class="text-2xl" :style="temaClaro ? 'color:#cbd5e1;' : 'color:#52525b;'">×</div>
+        <div>
+          <p class="text-xs" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Utilizado</p>
+          <p class="text-2xl font-bold tabular-nums"
+             {% if corte.estourou %}style="color:#dc2626;"{% else %}style="color:#059669;"{% endif %}>
+            {{ corte.consumo_real }} m
+          </p>
+        </div>
+        <div>
+          <p class="text-xs" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Diferença</p>
+          <p class="text-2xl font-bold tabular-nums"
+             {% if corte.estourou %}style="color:#dc2626;"{% else %}style="color:#059669;"{% endif %}>
+            {% if corte.variacao > 0 %}+{% endif %}{{ corte.variacao }} m
+          </p>
+          <p class="text-[10px]"
+             {% if corte.estourou %}style="color:#dc2626;"{% else %}:style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'"{% endif %}>
+            {{ corte.variacao_percentual }}%
+          </p>
+        </div>
+      </div>
+
+      {% if not corte.planejado %}
+        <p class="text-xs" style="color:#d97706;">
+          Sem planejado: o produto não tem ficha técnica com tecido principal, e
+          nada foi informado à mão. O comparativo fica sem base.
+        </p>
+      {% endif %}
+    </div>
+  </div>
+
+  {# ── Grade do corte ───────────────────────────────────────────────── #}
+  <div class="card p-5 space-y-3">
+    <div>
+      <h3 class="text-sm font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">Grade do corte</h3>
+      {% comment %}
+        Mesma regra do pedido: a quantidade é a SOMA da grade, nunca digitada
+        à parte. Lá a divergência gerava pedido errado; aqui gera lote errado
+        — a costura recebe um número de peças por tamanho que não é o que foi
+        cortado, e a diferença só aparece na expedição.
+      {% endcomment %}
+      <p class="text-xs mt-0.5" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+        A quantidade do corte é a soma desta grade — não há como divergir.
+      </p>
+    </div>
+
+    <form method="post" action="{% url 'moda:corte-grade' corte.pk %}" class="space-y-3">
+      {% csrf_token %}
+      <div class="flex flex-wrap gap-2">
+        {% for linha in linhas_grade %}
+          <div class="text-center">
+            <label class="block text-xs font-mono font-bold mb-1"
+                   :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">{{ linha.tamanho.sigla }}</label>
+            <input type="number" min="0" name="tam_{{ linha.tamanho.pk }}" value="{{ linha.quantidade }}"
+                   class="form-input text-center" style="width:72px;">
+          </div>
+        {% empty %}
+          <p class="text-sm" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+            Nenhum tamanho cadastrado nesta filial.
+          </p>
+        {% endfor %}
+      </div>
+      {% if linhas_grade %}
+        <div class="flex items-center justify-between gap-3 flex-wrap">
+          <p class="text-sm font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
+            Total atual: {{ corte.quantidade }} peça(s)
+          </p>
+          <button type="submit" class="btn-primary text-sm">Salvar grade</button>
+        </div>
+      {% endif %}
+    </form>
+  </div>
+
+</div>
+{% endblock %}

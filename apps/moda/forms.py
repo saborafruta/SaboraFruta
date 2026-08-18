@@ -5,7 +5,8 @@ from django.db import models
 from .models import (
     CapacidadeSetor, Cor, FichaTecnica, Grade, ImagemFicha, ItemPedidoProducao,
     MaterialFicha, MockupVisual, Operacao, OperacaoRoteiro, PedidoProducao,
-    Personalizacao, ProdutoModa, Roteiro, Tamanho, VisualItemPedido,
+    Personalizacao, ProdutoModa, RegistroCorte, Roteiro, Tamanho,
+    VisualItemPedido,
 )
 
 
@@ -799,3 +800,48 @@ class CapacidadeSetorForm(forms.ModelForm):
                 'Este setor já tem capacidade cadastrada. Edite a linha existente.'
             )
         return setor
+
+class RegistroCorteForm(_FilialFormMixin, forms.ModelForm):
+    """Um enfesto. A grade vem em campos à parte, na própria tela."""
+
+    campos_por_filial = {}  # preenchido em __init__, para evitar import circular
+
+    class Meta:
+        model = RegistroCorte
+        fields = [
+            'ordem', 'tecido', 'cor', 'lote', 'data', 'responsavel', 'status',
+            'largura_tecido', 'comprimento_encaixe', 'folhas', 'aproveitamento',
+            'consumo_planejado', 'consumo_real', 'observacao',
+        ]
+        widgets = {
+            'data': forms.DateInput(attrs={'type': 'date'}),
+            'lote': forms.TextInput(attrs={'placeholder': 'Ex.: RL-4471'}),
+            'largura_tecido': forms.NumberInput(attrs={'step': '0.01', 'min': '0'}),
+            'comprimento_encaixe': forms.NumberInput(attrs={'step': '0.01', 'min': '0'}),
+            'folhas': forms.NumberInput(attrs={'min': 1}),
+            'aproveitamento': forms.NumberInput(attrs={'step': '0.01', 'min': '0', 'max': '100'}),
+            'consumo_planejado': forms.NumberInput(attrs={'step': '0.0001', 'min': '0', 'placeholder': 'da ficha'}),
+            'consumo_real': forms.NumberInput(attrs={'step': '0.0001', 'min': '0'}),
+            'observacao': forms.Textarea(attrs={'rows': 2}),
+        }
+
+    def __init__(self, *args, filial=None, **kwargs):
+        from .models import Cor as CorModel, OrdemProducao, Tecido
+
+        self.campos_por_filial = {'cor': CorModel, 'tecido': Tecido}
+        super().__init__(*args, filial=filial, **kwargs)
+
+        # Ordens encerradas ficam fora: não se corta para uma OP concluída
+        # ou cancelada, e oferecer a opção só produz registro órfão.
+        ordens = OrdemProducao.objects.filter(filial=filial).exclude(
+            status__in=OrdemProducao.STATUS_ENCERRADOS,
+        ).select_related('pedido__cliente').order_by('-ano', '-sequencial')
+        if self.instance.pk:
+            ordens = ordens | OrdemProducao.objects.filter(pk=self.instance.ordem_id)
+            self.fields['ordem'].disabled = True
+        self.fields['ordem'].queryset = ordens
+        self.fields['ordem'].empty_label = 'Escolha a ordem'
+
+        for nome in ('tecido', 'cor'):
+            self.fields[nome].required = False
+            self.fields[nome].empty_label = 'do item da ordem'

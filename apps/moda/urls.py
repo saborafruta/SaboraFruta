@@ -13,7 +13,8 @@ from django.urls import path
 
 from . import (
     views, views_apoio as va, views_cadastros as vc, views_ficha as vf,
-    views_fluxo as vx, views_ordem as vo, views_pcp as vp, views_roteiro as vr,
+    views_corte as vco, views_fluxo as vx, views_ordem as vo, views_pcp as vp,
+    views_roteiro as vr,
 )
 
 app_name = 'moda'
@@ -45,6 +46,14 @@ ROTAS_PRONTAS: list = [
     path('comercial/pedidos/<int:pk>/pessoas/<int:individual_pk>/', vc.IndividualFormView.as_view(), name='pedido-individual-update'),
     path('comercial/pedidos/<int:pk>/pessoas/<int:individual_pk>/remover/', vc.IndividualDeleteView.as_view(), name='pedido-individual-delete'),
     path('comercial/pedidos/<int:pk>/pessoas/importar/', vc.IndividualImportarView.as_view(), name='pedido-individual-importar'),
+
+    # Controle de corte. A lista fica no endereço do menu (producao/corte).
+    path('producao/corte/', vco.CorteListView.as_view(), name='corte-list'),
+    path('producao/corte/novo/', vco.CorteFormView.as_view(), name='corte-create'),
+    path('producao/corte/<int:pk>/', vco.CorteDetailView.as_view(), name='corte-detail'),
+    path('producao/corte/<int:pk>/editar/', vco.CorteFormView.as_view(), name='corte-update'),
+    path('producao/corte/<int:pk>/grade/', vco.CorteGradeView.as_view(), name='corte-grade'),
+    path('producao/corte/<int:pk>/remover/', vco.CorteDeleteView.as_view(), name='corte-delete'),
 
     # Fluxo de produção. O painel fica no grupo Produção; o fluxo de cada
     # ordem pendura na OP, que é a quem as etapas pertencem.
