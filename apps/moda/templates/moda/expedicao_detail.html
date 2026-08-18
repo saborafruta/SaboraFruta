@@ -1,0 +1,265 @@
+{% extends "_base.html" %}
+{% block title %}{{ title }}{% endblock %}
+{% block page_title %}Expedição #{{ expedicao.numero|stringformat:"04d" }}{% endblock %}
+{% block content %}
+<div class="space-y-5">
+
+  {# ── Cabeçalho ────────────────────────────────────────────────────── #}
+  <div class="card p-5">
+    <p class="text-sm mb-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+      <a href="{% url 'moda:expedicao-list' %}" :style="temaClaro ? 'color:#3b82f6;' : 'color:#60a5fa;'">Expedição</a>
+      <span class="mx-1">›</span> #{{ expedicao.numero|stringformat:"04d" }}
+    </p>
+    <div class="flex flex-wrap items-start justify-between gap-4">
+      <div class="min-w-0">
+        <h2 class="text-2xl font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
+          {{ expedicao.cliente }}
+        </h2>
+        <p class="text-sm mt-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+          <a href="{% url 'moda:ordem-detail' expedicao.ordem.pk %}" class="font-mono"
+             :style="temaClaro ? 'color:#3b82f6;' : 'color:#60a5fa;'">{{ expedicao.ordem.numero }}</a>
+          · pedido
+          <a href="{% url 'moda:pedido-detail' expedicao.pedido.pk %}"
+             :style="temaClaro ? 'color:#3b82f6;' : 'color:#60a5fa;'">#{{ expedicao.pedido.numero|stringformat:"06d" }}</a>
+          · {{ expedicao.ordem.item.nome_exibicao }}
+        </p>
+        <p class="text-xs mt-1 font-mono" :style="temaClaro ? 'color:#94a3b8;' : 'color:#71717a;'">
+          código {{ expedicao.codigo }}
+        </p>
+      </div>
+      <div class="text-right">
+        <p class="text-3xl font-bold tabular-nums" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
+          {{ expedicao.quantidade_esperada }}
+        </p>
+        <p class="text-xs uppercase tracking-wider" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+          peças da ordem
+        </p>
+      </div>
+    </div>
+
+    {# ── Régua do processo ──────────────────────────────────────────── #}
+    <div class="flex flex-wrap items-center gap-1 mt-5">
+      {% for e in etapas %}
+        <div class="flex items-center gap-1">
+          <span class="text-xs font-bold px-2.5 py-1.5 rounded-lg whitespace-nowrap"
+                {% if e.atual %}style="background:#3b82f6; color:#fff;"
+                {% elif e.passou %}style="background:rgba(16,185,129,.16); color:#059669;"
+                {% else %}:style="temaClaro ? 'background:#f1f5f9; color:#94a3b8;' : 'background:#27272a; color:#71717a;'"{% endif %}>
+            {% if e.passou and not e.atual %}✓ {% endif %}{{ e.label }}
+          </span>
+          {% if not forloop.last %}
+            <span class="text-xs" :style="temaClaro ? 'color:#cbd5e1;' : 'color:#52525b;'">→</span>
+          {% endif %}
+        </div>
+      {% endfor %}
+      {% if expedicao.cancelada %}
+        <span class="text-xs font-bold px-2.5 py-1.5 rounded-lg ml-2"
+              style="background:rgba(148,163,184,.18); color:#64748b;">CANCELADA</span>
+      {% endif %}
+    </div>
+
+    {% if expedicao.transportadora or expedicao.rastreio or expedicao.recebido_por %}
+      <div class="flex flex-wrap gap-x-6 gap-y-1 mt-4 text-sm" :style="temaClaro ? 'color:#374151;' : 'color:#cbd5e1;'">
+        {% if expedicao.transportadora %}<span>Transportadora: <strong>{{ expedicao.transportadora }}</strong></span>{% endif %}
+        {% if expedicao.rastreio %}<span>Rastreio: <strong class="font-mono">{{ expedicao.rastreio }}</strong></span>{% endif %}
+        {% if expedicao.recebido_por %}<span>Recebido por: <strong>{{ expedicao.recebido_por }}</strong></span>{% endif %}
+      </div>
+    {% endif %}
+  </div>
+
+  {# ── Conferência ──────────────────────────────────────────────────── #}
+  <div class="card p-5 space-y-3">
+    <div class="flex flex-wrap items-baseline justify-between gap-2">
+      <div>
+        <h3 class="text-sm font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">Conferência</h3>
+        {% comment %}
+          A divergência é mostrada POR TAMANHO e não só no total: o total
+          pode fechar com dois erros que se cancelam — dois P a mais e dois G
+          a menos somam zero, e o cliente recebe a caixa errada.
+        {% endcomment %}
+        <p class="text-xs mt-0.5" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+          Compare com a grade da ordem, tamanho a tamanho.
+        </p>
+      </div>
+      <p class="text-sm font-bold tabular-nums"
+         {% if expedicao.conferencia_fecha %}style="color:#059669;"{% else %}style="color:#dc2626;"{% endif %}>
+        {{ expedicao.quantidade_conferida }} / {{ expedicao.quantidade_esperada }}
+        {% if not expedicao.conferencia_fecha %}
+          ({{ expedicao.divergencia_conferencia }} de diferença)
+        {% endif %}
+      </p>
+    </div>
+
+    {% if expedicao.divergencias_por_tamanho %}
+      <div class="p-3 rounded-lg" style="background:rgba(220,38,38,.06);">
+        <p class="text-xs font-bold uppercase tracking-wider mb-1" style="color:#dc2626;">Divergências</p>
+        {% for d in expedicao.divergencias_por_tamanho %}
+          <p class="text-sm" :style="temaClaro ? 'color:#374151;' : 'color:#cbd5e1;'">
+            <strong class="font-mono">{{ d.tamanho.sigla }}</strong>:
+            esperado {{ d.esperado }}, conferido {{ d.conferido }}
+            <strong style="color:#dc2626;">({{ d.diferenca|stringformat:"+d" }})</strong>
+          </p>
+        {% endfor %}
+      </div>
+    {% endif %}
+
+    <form method="post" action="{% url 'moda:expedicao-conferir' expedicao.pk %}" class="space-y-3">
+      {% csrf_token %}
+      <div class="flex flex-wrap gap-2">
+        {% for l in linhas %}
+          <div class="text-center">
+            <label class="block text-xs font-mono font-bold mb-1"
+                   :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">{{ l.tamanho.sigla }}</label>
+            <input type="number" min="0" name="tam_{{ l.tamanho.pk }}" value="{{ l.conferido }}"
+                   class="form-input text-center font-bold" style="width:76px;"
+                   {% if not pode_agir or conferencia_travada %}disabled{% endif %}>
+            <span class="block text-[10px] mt-0.5" :style="temaClaro ? 'color:#94a3b8;' : 'color:#71717a;'">
+              de {{ l.esperado }}
+            </span>
+          </div>
+        {% empty %}
+          <p class="text-sm" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+            A ordem não tem grade lançada — confira pelo total no pedido.
+          </p>
+        {% endfor %}
+      </div>
+
+      {% if pode_agir and not conferencia_travada %}
+        <div class="flex flex-wrap items-end gap-3">
+          <div class="flex-1 min-w-[200px]">
+            <label class="block text-xs font-semibold mb-1" :style="temaClaro ? 'color:#374151;' : 'color:#cbd5e1;'">
+              Conferido por
+            </label>
+            <input type="text" name="conferido_por" value="{{ expedicao.conferido_por }}" class="form-input w-full">
+          </div>
+          <button type="submit" class="btn-primary">Salvar conferência</button>
+        </div>
+      {% elif expedicao.conferido_por %}
+        <p class="text-xs" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+          Conferido por {{ expedicao.conferido_por }}
+          {% if expedicao.data_conferencia %} em {{ expedicao.data_conferencia|date:"d/m/Y H:i" }}{% endif %}.
+        </p>
+      {% endif %}
+    </form>
+  </div>
+
+  {# ── Volumes ──────────────────────────────────────────────────────── #}
+  <div class="card p-5 space-y-3">
+    <div class="flex flex-wrap items-baseline justify-between gap-2">
+      <div>
+        <h3 class="text-sm font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">Volumes</h3>
+        <p class="text-xs mt-0.5" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+          Cada volume tem etiqueta própria — é ela que viaja e é bipada na entrega.
+        </p>
+      </div>
+      <p class="text-sm font-bold tabular-nums"
+         {% if expedicao.volumes_fecham %}style="color:#059669;"{% else %}style="color:#d97706;"{% endif %}>
+        {{ expedicao.total_volumes }} volume(s) · {{ expedicao.pecas_nos_volumes }} peça(s)
+        {% if expedicao.peso_total %} · {{ expedicao.peso_total|floatformat:3 }} kg{% endif %}
+      </p>
+    </div>
+
+    {% if volumes %}
+      <div class="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+        {% for v in volumes %}
+          <div class="rounded-lg p-3 flex items-center gap-3"
+               :style="temaClaro ? 'background:#f8fafc; border:1px solid #e5e7eb;' : 'background:#18181b; border:1px solid #303036;'">
+            <img src="{% url 'moda:expedicao-etiqueta' expedicao.pk v.pk %}"
+                 alt="QR do volume {{ v.numero }}" class="rounded shrink-0"
+                 style="width:64px; height:64px; background:#fff;">
+            <div class="min-w-0 flex-1">
+              <p class="font-bold text-sm" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
+                Volume {{ v.numero }}
+              </p>
+              <p class="text-xs" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+                {{ v.quantidade }} peça(s){% if v.peso_kg %} · {{ v.peso_kg|floatformat:3 }} kg{% endif %}
+              </p>
+              <p class="text-[10px] font-mono truncate" :style="temaClaro ? 'color:#94a3b8;' : 'color:#71717a;'">
+                {{ v.codigo }}
+              </p>
+            </div>
+            {% if pode_agir and not volumes_travados %}
+              <form method="post" action="{% url 'moda:expedicao-volume-remover' expedicao.pk v.pk %}"
+                    onsubmit="return confirm('Remover o volume {{ v.numero }}?');">
+                {% csrf_token %}
+                <button type="submit" class="w-7 h-7 rounded-lg text-base leading-none shrink-0"
+                        style="background:rgba(220,38,38,.1); color:#dc2626;">&times;</button>
+              </form>
+            {% endif %}
+          </div>
+        {% endfor %}
+      </div>
+    {% endif %}
+
+    {% if pode_agir and not volumes_travados and not expedicao.cancelada %}
+      <form method="post" action="{% url 'moda:expedicao-volume-criar' expedicao.pk %}"
+            class="flex flex-wrap items-end gap-3 pt-2 border-t"
+            :style="temaClaro ? 'border-color:#e5e7eb;' : 'border-color:#303036;'">
+        {% csrf_token %}
+        <div>
+          <label class="block text-xs font-semibold mb-1" :style="temaClaro ? 'color:#374151;' : 'color:#cbd5e1;'">Peças</label>
+          <input type="number" min="1" name="quantidade" class="form-input w-24 text-right" required>
+        </div>
+        <div>
+          <label class="block text-xs font-semibold mb-1" :style="temaClaro ? 'color:#374151;' : 'color:#cbd5e1;'">Peso (kg)</label>
+          <input type="number" step="0.001" min="0" name="peso_kg" class="form-input w-28 text-right">
+        </div>
+        <div class="flex-1 min-w-[160px]">
+          <label class="block text-xs font-semibold mb-1" :style="temaClaro ? 'color:#374151;' : 'color:#cbd5e1;'">Observação</label>
+          <input type="text" name="observacao" class="form-input w-full">
+        </div>
+        <button type="submit" class="btn-secondary">+ Volume</button>
+      </form>
+    {% endif %}
+  </div>
+
+  {# ── Avanço ───────────────────────────────────────────────────────── #}
+  {% if pode_agir and not expedicao.cancelada and not expedicao.entregue %}
+    <form method="post" action="{% url 'moda:expedicao-avancar' expedicao.pk %}"
+          class="card p-5 space-y-3">
+      {% csrf_token %}
+      <h3 class="text-sm font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
+        Avançar o processo
+      </h3>
+      {% comment %}
+        As validações ficam no servidor e não em campos desabilitados: a tela
+        não sabe se a conferência fecha até recarregar, e um botão que some
+        sozinho confundiria mais do que a mensagem de recusa.
+      {% endcomment %}
+
+      {% if expedicao.status == 'embalagem' %}
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <div>
+            <label class="block text-xs font-semibold mb-1" :style="temaClaro ? 'color:#374151;' : 'color:#cbd5e1;'">Transportadora</label>
+            <input type="text" name="transportadora" value="{{ expedicao.transportadora }}" class="form-input w-full">
+          </div>
+          <div>
+            <label class="block text-xs font-semibold mb-1" :style="temaClaro ? 'color:#374151;' : 'color:#cbd5e1;'">Rastreio</label>
+            <input type="text" name="rastreio" value="{{ expedicao.rastreio }}" class="form-input w-full">
+          </div>
+        </div>
+      {% elif expedicao.status == 'despacho' %}
+        <div>
+          <label class="block text-xs font-semibold mb-1" :style="temaClaro ? 'color:#374151;' : 'color:#cbd5e1;'">
+            Recebido por <span class="font-normal opacity-70">(obrigatório — é a prova da entrega)</span>
+          </label>
+          <input type="text" name="recebido_por" class="form-input w-full">
+        </div>
+      {% endif %}
+
+      <button type="submit" class="btn-primary w-full py-3 font-bold">
+        AVANÇAR PARA {{ proxima_label|upper }}
+      </button>
+    </form>
+  {% endif %}
+
+  {% if expedicao.observacao %}
+    <div class="card p-4">
+      <p class="text-sm whitespace-pre-line" :style="temaClaro ? 'color:#374151;' : 'color:#cbd5e1;'">
+        {{ expedicao.observacao }}
+      </p>
+    </div>
+  {% endif %}
+
+</div>
+{% endblock %}

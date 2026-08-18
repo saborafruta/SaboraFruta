@@ -15,7 +15,8 @@ from . import (
     views, views_apoio as va, views_cadastros as vc, views_ficha as vf,
     views_corte as vco, views_encaixe as ve, views_fluxo as vx,
     views_ordem as vo, views_pcp as vp,
-    views_kanban as vk, views_necessidade as vn, views_qualidade as vq,
+    views_expedicao as vex, views_kanban as vk, views_necessidade as vn,
+    views_qualidade as vq,
     views_roteiro as vr, views_terminal as vt, views_wip as vw,
 )
 
@@ -83,6 +84,19 @@ ROTAS_PRONTAS: list = [
     # Fluxo de produção. O painel fica no grupo Produção; o fluxo de cada
     # ordem pendura na OP, que é a quem as etapas pertencem.
     path('producao/fluxo/', vx.PainelFluxoView.as_view(), name='fluxo-painel'),
+
+    # Expedicao. Grupo proprio no menu; `separacao` e' o endereco de
+    # entrada porque e' o primeiro item do grupo.
+    path('expedicao/separacao/', vex.ExpedicaoListView.as_view(), name='expedicao-list'),
+    path('expedicao/buscar/', vex.ExpedicaoBuscarView.as_view(), name='expedicao-buscar'),
+    path('expedicao/ordens/<int:pk>/', vex.ExpedicaoCriarView.as_view(), name='expedicao-criar'),
+    path('expedicao/<int:pk>/', vex.ExpedicaoDetailView.as_view(), name='expedicao-detail'),
+    path('expedicao/<int:pk>/conferir/', vex.ExpedicaoConferirView.as_view(), name='expedicao-conferir'),
+    path('expedicao/<int:pk>/avancar/', vex.ExpedicaoAvancarView.as_view(), name='expedicao-avancar'),
+    path('expedicao/<int:pk>/cancelar/', vex.ExpedicaoCancelarView.as_view(), name='expedicao-cancelar'),
+    path('expedicao/<int:pk>/volumes/', vex.VolumeCriarView.as_view(), name='expedicao-volume-criar'),
+    path('expedicao/<int:pk>/volumes/<int:volume_pk>/remover/', vex.VolumeRemoverView.as_view(), name='expedicao-volume-remover'),
+    path('expedicao/<int:pk>/volumes/<int:volume_pk>/etiqueta/', vex.EtiquetaView.as_view(), name='expedicao-etiqueta'),
 
     # Qualidade. Endereco do menu; declarado antes do catch-all dos
     # terminais, senao `producao/<slug>/` engoliria e devolveria 404.

@@ -1,0 +1,164 @@
+{% extends "_base.html" %}
+{% block title %}{{ title }}{% endblock %}
+{% block page_title %}Expedição{% endblock %}
+{% block content %}
+<div class="space-y-5">
+
+  <div>
+    <p class="text-sm mb-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+      <a href="{% url 'moda:grupo' 'expedicao' %}" :style="temaClaro ? 'color:#3b82f6;' : 'color:#60a5fa;'">Expedição</a>
+    </p>
+    <h2 class="text-2xl font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">Expedição</h2>
+    <p class="text-sm mt-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+      Produção concluída → conferência → separação → embalagem → despacho → entrega.
+    </p>
+  </div>
+
+  {# ── Leitura de código ────────────────────────────────────────────── #}
+  {% comment %}
+    O leitor de código de barras digita e dá Enter: um formulário GET comum
+    basta, e funciona sem JavaScript. `autofocus` deixa o campo pronto assim
+    que a tela abre — quem está na doca não quer clicar antes de bipar.
+  {% endcomment %}
+  <form method="get" action="{% url 'moda:expedicao-buscar' %}" class="card p-4">
+    <label class="block text-xs font-bold uppercase tracking-wider mb-2"
+           :style="temaClaro ? 'color:#374151;' : 'color:#cbd5e1;'">
+      Ler código de barras / QR
+    </label>
+    <div class="flex gap-2">
+      <input type="search" name="codigo" autofocus autocomplete="off"
+             placeholder="Bipe a etiqueta ou digite o número da OP"
+             class="form-input flex-1 text-lg">
+      <button type="submit" class="btn-primary px-6">Buscar</button>
+    </div>
+    <p class="text-xs mt-2" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+      Aceita a etiqueta do volume, o código da expedição, o número da OP
+      (com ou sem “OP-”) e o número da expedição.
+    </p>
+  </form>
+
+  {# ── Régua do processo ────────────────────────────────────────────── #}
+  <div class="grid grid-cols-2 lg:grid-cols-6 gap-3">
+    {% for e in resumo %}
+      <div class="card p-4">
+        <p class="text-xs uppercase tracking-wider" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+          {{ e.label }}
+        </p>
+        <p class="text-3xl font-bold tabular-nums mt-1"
+           {% if e.total %}:style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'"
+           {% else %}:style="temaClaro ? 'color:#cbd5e1;' : 'color:#52525b;'"{% endif %}>
+          {{ e.total }}
+        </p>
+      </div>
+    {% endfor %}
+  </div>
+
+  {# ── Prontas para expedir ─────────────────────────────────────────── #}
+  {% if candidatas %}
+    <div class="card p-5 space-y-3">
+      <div>
+        <h3 class="text-sm font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
+          Prontas para expedir
+        </h3>
+        <p class="text-xs mt-0.5" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+          Ordens que passaram pela Qualidade e ainda não têm expedição aberta.
+        </p>
+      </div>
+      <div class="space-y-1">
+        {% for o in candidatas %}
+          <div class="flex items-center justify-between gap-3 text-sm px-3 py-2 rounded-lg"
+               :style="temaClaro ? 'background:#f8fafc;' : 'background:#18181b;'">
+            <span :style="temaClaro ? 'color:#374151;' : 'color:#cbd5e1;'">
+              <span class="font-mono font-semibold">{{ o.numero }}</span>
+              · {{ o.pedido.cliente }} · {{ o.item.nome_exibicao }}
+              <span class="opacity-60">· {{ o.quantidade }} pç</span>
+            </span>
+            {% if pode_agir %}
+              <form method="post" action="{% url 'moda:expedicao-criar' o.pk %}">
+                {% csrf_token %}
+                <button type="submit" class="btn-primary text-xs">Abrir expedição</button>
+              </form>
+            {% endif %}
+          </div>
+        {% endfor %}
+      </div>
+    </div>
+  {% endif %}
+
+  {# ── Lista ────────────────────────────────────────────────────────── #}
+  <form method="get" class="flex items-end gap-2">
+    <div>
+      <label class="block text-xs font-semibold mb-1" :style="temaClaro ? 'color:#374151;' : 'color:#cbd5e1;'">Etapa</label>
+      <select name="status" class="form-input w-52">
+        <option value="">Todas</option>
+        {% for valor, rotulo in status_choices %}
+          <option value="{{ valor }}" {% if valor == status_escolhido %}selected{% endif %}>{{ rotulo }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <button type="submit" class="btn-secondary">Filtrar</button>
+    {% if status_escolhido %}<a href="{% url 'moda:expedicao-list' %}" class="btn-secondary">Limpar</a>{% endif %}
+  </form>
+
+  <div class="card p-5">
+    {% if expedicoes %}
+      <div class="overflow-x-auto">
+        <table class="w-full text-sm" style="min-width:900px;">
+          <thead>
+            <tr class="text-xs uppercase tracking-wider" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+              <th class="text-left font-semibold pb-2 w-24">Expedição</th>
+              <th class="text-left font-semibold pb-2 w-32">OP</th>
+              <th class="text-left font-semibold pb-2">Cliente / Produto</th>
+              <th class="text-right font-semibold pb-2 w-24">Peças</th>
+              <th class="text-right font-semibold pb-2 w-24">Volumes</th>
+              <th class="text-left font-semibold pb-2 w-40">Etapa</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for e in expedicoes %}
+              <tr class="border-t" :style="temaClaro ? 'border-color:#e5e7eb;' : 'border-color:#303036;'">
+                <td class="py-2 pr-2">
+                  <a href="{% url 'moda:expedicao-detail' e.pk %}" class="font-mono font-semibold"
+                     :style="temaClaro ? 'color:#3b82f6;' : 'color:#60a5fa;'">#{{ e.numero|stringformat:"04d" }}</a>
+                </td>
+                <td class="py-2 font-mono text-xs" :style="temaClaro ? 'color:#374151;' : 'color:#cbd5e1;'">
+                  {{ e.ordem.numero }}
+                </td>
+                <td class="py-2 pr-2" :style="temaClaro ? 'color:#111827;' : 'color:#e5e7eb;'">
+                  {{ e.ordem.pedido.cliente }}
+                  <span class="block text-xs opacity-60">{{ e.ordem.item.nome_exibicao }}</span>
+                </td>
+                <td class="py-2 text-right tabular-nums" :style="temaClaro ? 'color:#374151;' : 'color:#cbd5e1;'">
+                  {{ e.quantidade_conferida }} / {{ e.quantidade_esperada }}
+                </td>
+                <td class="py-2 text-right tabular-nums" :style="temaClaro ? 'color:#374151;' : 'color:#cbd5e1;'">
+                  {{ e.total_volumes }}
+                </td>
+                <td class="py-2">
+                  <span class="text-xs font-semibold px-2 py-0.5 rounded-full"
+                        {% if e.status == 'entrega' %}style="background:rgba(16,185,129,.14); color:#059669;"
+                        {% elif e.status == 'cancelada' %}style="background:rgba(148,163,184,.18); color:#64748b;"
+                        {% elif e.status == 'despacho' %}style="background:rgba(59,130,246,.14); color:#3b82f6;"
+                        {% else %}style="background:rgba(245,158,11,.14); color:#d97706;"{% endif %}>
+                    {{ e.get_status_display }}
+                  </span>
+                </td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    {% else %}
+      <p class="text-sm" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+        {% if status_escolhido %}
+          Nenhuma expedição nessa etapa.
+        {% else %}
+          Nenhuma expedição ainda. Ela parte de uma ordem que passou pela
+          <a href="{% url 'moda:qualidade-list' %}" :style="temaClaro ? 'color:#3b82f6;' : 'color:#60a5fa;'">Qualidade</a>.
+        {% endif %}
+      </p>
+    {% endif %}
+  </div>
+
+</div>
+{% endblock %}

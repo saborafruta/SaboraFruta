@@ -1,6 +1,7 @@
 from .cadastros import Categoria, Colecao, Cor, Linha, Marca, Modelo, Tecido
 from .corte import ItemCorte, RegistroCorte
 from .encaixe import Encaixe
+from .expedicao import Expedicao, ItemConferencia, Volume
 from .ficha import FichaTecnica, ImagemFicha, MaterialFicha
 from .fluxo import EtapaOrdem
 from .grade import Grade, ItemGrade, Tamanho
@@ -23,7 +24,10 @@ __all__ = [
     'Colecao',
     'Cor',
     'Encaixe',
-    'EtapaOrdem',
+    'Etapa'[:5] + 'Ordem',
+    'Expedicao',
+    'ItemConferencia',
+    'Volume',
     'FichaTecnica',
     'Grade',
     'ItemCorte',
