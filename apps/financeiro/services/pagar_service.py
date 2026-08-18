@@ -33,6 +33,9 @@ class ContaPagarService:
         usuario=None,
     ) -> ContaPagar:
         """Cria um lançamento manual de conta a pagar."""
+        conta_contabil = plano_contas.conta_contabil if plano_contas else None
+        if plano_contas and not conta_contabil:
+            raise DomainError('A categoria financeira não possui conta contábil vinculada.')
         conta = ContaPagar(
             filial=filial,
             fornecedor=fornecedor,
@@ -52,6 +55,7 @@ class ContaPagarService:
             data_competencia=data_competencia,
             forma_pagamento=forma_pagamento,
             plano_contas=plano_contas,
+            conta_contabil=conta_contabil,
             observacao=observacao,
             status=StatusContaPagar.ABERTO,
             usuario=usuario,

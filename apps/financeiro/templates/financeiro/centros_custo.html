@@ -9,7 +9,7 @@
   <div class="flex flex-col lg:flex-row lg:items-end lg:justify-between gap-3">
     <div class="flex flex-wrap gap-2">
       <a href="{% url 'financeiro:formas_pagamento' %}" class="btn-secondary">Formas de pagamento</a>
-      <a href="{% url 'financeiro:plano_contas_despesas' %}" class="btn-secondary">Plano de contas</a>
+      <a href="{% url 'financeiro:plano_contas_list' %}?tipo=outras_despesas" class="btn-secondary">Categorias Financeiras</a>
       <a href="{% url 'financeiro:pagar_list' %}" class="btn-secondary">Contas a pagar</a>
     </div>
   </div>

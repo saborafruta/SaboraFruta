@@ -1,7 +1,8 @@
-"""Formularios de Plano de Contas."""
+"""Formularios de Categorias Financeiras."""
 from django import forms
 
 from apps.financeiro.models.conta_bancaria import PlanoContas
+from apps.financeiro.models.plano_contabil import PlanoContabil
 
 TIPO_CONFIGS = {
     'grupo_receita':    {'tipo': 'R', 'nivel': 1, 'pai_nivel': None},
@@ -14,11 +15,11 @@ TIPO_CONFIGS = {
 
 
 class PlanoContasForm(forms.ModelForm):
-    """Criacao / edicao de uma conta no plano de contas."""
+    """Criacao / edicao de uma categoria financeira."""
 
     class Meta:
         model = PlanoContas
-        fields = ['conta_pai', 'codigo', 'descricao', 'ativo']
+        fields = ['conta_pai', 'codigo', 'descricao', 'conta_contabil', 'ativo']
         widgets = {
             'codigo': forms.TextInput(attrs={'placeholder': 'ex.: 1.1.01'}),
             'descricao': forms.TextInput(attrs={'placeholder': 'ex.: Vendas de mercadorias'}),
@@ -27,6 +28,7 @@ class PlanoContasForm(forms.ModelForm):
             'conta_pai': 'Vinculado a',
             'codigo': 'Codigo',
             'descricao': 'Descricao',
+            'conta_contabil': 'Conta contábil vinculada',
             'ativo': 'Ativo',
         }
 
@@ -35,6 +37,25 @@ class PlanoContasForm(forms.ModelForm):
         cfg = TIPO_CONFIGS.get(tipo_key, {})
         pai_nivel = cfg.get('pai_nivel')
         tipo = cfg.get('tipo')
+
+        if empresa and cfg.get('nivel') == 3:
+            self.fields['conta_contabil'].queryset = (
+                PlanoContabil.objects
+                .filter(
+                    empresa=empresa,
+                    tipo_conta=PlanoContabil.TipoConta.ANALITICA,
+                    ativo=True,
+                )
+                .order_by('ordem')
+            )
+            self.fields['conta_contabil'].required = True
+            self.fields['conta_contabil'].help_text = (
+                'A classificação contábil será preenchida automaticamente nos lançamentos.'
+            )
+        else:
+            self.fields['conta_contabil'].queryset = PlanoContabil.objects.none()
+            self.fields['conta_contabil'].required = False
+            self.fields['conta_contabil'].widget = forms.HiddenInput()
 
         # Conta pai: so mostra contas do nivel pai, do mesmo tipo
         if empresa and pai_nivel and tipo:
@@ -59,3 +80,8 @@ class PlanoContasForm(forms.ModelForm):
             initial=tipo_key or '',
             required=False,
         )
+
+
+class CategoriaFinanceiraChoiceField(forms.ModelChoiceField):
+    def label_from_instance(self, obj):
+        return f"{obj.caminho_descricao} ({obj.conta_contabil.classificacao})"

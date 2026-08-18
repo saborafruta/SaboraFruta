@@ -7,6 +7,7 @@ from django import forms
 from apps.cadastros.models import Fornecedor
 from apps.financeiro.models.conta_bancaria import ContaBancaria, PlanoContas
 from apps.financeiro.models.formas_pagamento import FormaPagamento
+from apps.financeiro.forms.plano_contas import CategoriaFinanceiraChoiceField
 
 VALOR_WIDGET = forms.NumberInput(attrs={
     'step': '0.01',
@@ -75,11 +76,11 @@ class ContaPagarForm(forms.Form):
         required=False,
         label='Forma de pagamento',
     )
-    plano_contas = forms.ModelChoiceField(
+    plano_contas = CategoriaFinanceiraChoiceField(
         queryset=PlanoContas.objects.none(),
         required=False,
-        label='Categoria da despesa',
-        help_text='Selecione uma conta analítica do plano financeiro.',
+        label='Categoria financeira',
+        help_text='Grupo > Subgrupo > Categoria. A conta contábil será preenchida automaticamente.',
     )
     observacao = forms.CharField(
         widget=forms.Textarea(attrs={'rows': 2}),
@@ -100,16 +101,21 @@ class ContaPagarForm(forms.Form):
                 .filter(empresa=filial.empresa, ativo=True)
                 .order_by('descricao')
             )
-            self.fields['plano_contas'].queryset = (
+            categorias = (
                 PlanoContas.objects
                 .filter(
                     empresa=filial.empresa,
                     tipo='D',
                     ativo=True,
                     aceita_lancamento=True,
+                    nivel=3,
+                    conta_contabil__isnull=False,
                 )
+                .select_related('conta_pai__conta_pai', 'conta_contabil')
                 .order_by('codigo')
             )
+            self.fields['plano_contas'].queryset = categorias
+            self.fields['plano_contas'].required = categorias.exists()
 
     def clean(self):
         cleaned = super().clean()

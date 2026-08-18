@@ -44,6 +44,13 @@ class PlanoContas(ActiveModel):
     empresa = models.ForeignKey(Empresa, on_delete=models.CASCADE, related_name="plano_contas", null=True, blank=True)
     conta_pai = models.ForeignKey("self", on_delete=models.SET_NULL, null=True, blank=True,
                                    related_name="filhas")
+    conta_contabil = models.ForeignKey(
+        "financeiro.PlanoContabil",
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="categorias_financeiras",
+    )
     codigo = models.CharField(max_length=20)
     descricao = models.CharField(max_length=100)
     tipo = models.CharField(
@@ -55,9 +62,18 @@ class PlanoContas(ActiveModel):
 
     class Meta:
         db_table = "plano_contas"
-        verbose_name = "Plano de contas"
-        verbose_name_plural = "Plano de contas"
+        verbose_name = "Categoria financeira"
+        verbose_name_plural = "Categorias financeiras"
         ordering = ["codigo"]
 
     def __str__(self):
         return f"{self.codigo} – {self.descricao}"
+
+    @property
+    def caminho_descricao(self):
+        partes = []
+        atual = self
+        while atual and len(partes) < 3:
+            partes.append(atual.descricao)
+            atual = atual.conta_pai
+        return " > ".join(reversed(partes))

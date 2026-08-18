@@ -1,7 +1,8 @@
 {% extends "_list_base.html" %}
 
-{% block list_title %}Plano de Contas{% endblock %}
-{% block page_title %}Plano de Contas{% endblock %}
+{% block list_title %}Categorias Financeiras{% endblock %}
+{% block page_title %}Categorias Financeiras{% endblock %}
+{% block header_title %}Categorias Financeiras{% endblock %}
 
 {% block list_subtitle %}
   <p class="text-sm mt-0.5" :style="temaClaro ? 'color:#6b7280;' : 'color:#94a3b8;'">
@@ -77,6 +78,10 @@
     <th class="text-left px-4 py-3 font-medium text-xs uppercase tracking-wide hidden sm:table-cell"
         :style="temaClaro ? 'color:#6b7280;' : 'color:#94a3b8;'">Vinculado a</th>
   {% endif %}
+  {% if cfg.aceita_lancamento %}
+    <th class="text-left px-4 py-3 font-medium text-xs uppercase tracking-wide hidden lg:table-cell"
+        :style="temaClaro ? 'color:#6b7280;' : 'color:#94a3b8;'">Conta contábil</th>
+  {% endif %}
   <th class="text-center px-4 py-3 font-medium text-xs uppercase tracking-wide"
       :style="temaClaro ? 'color:#6b7280;' : 'color:#94a3b8;'">Tipo</th>
   <th class="text-center px-4 py-3 font-medium text-xs uppercase tracking-wide"
@@ -116,6 +121,21 @@
         <td class="px-4 py-3 text-sm hidden sm:table-cell"
             :style="temaClaro ? 'color:#6b7280;' : 'color:#94a3b8;'">
           {{ c.conta_pai.descricao|default:"-" }}
+        </td>
+      {% endif %}
+
+      {% if cfg.aceita_lancamento %}
+        <td class="px-4 py-3 text-sm hidden lg:table-cell">
+          {% if c.conta_contabil %}
+            <span class="font-mono text-xs" :style="temaClaro ? 'color:#2563eb;' : 'color:#93c5fd;'">
+              {{ c.conta_contabil.classificacao }}
+            </span>
+            <span class="block text-xs mt-0.5" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+              {{ c.conta_contabil.descricao }}
+            </span>
+          {% else %}
+            <span class="text-xs text-red-500">Não vinculada</span>
+          {% endif %}
         </td>
       {% endif %}
 
@@ -192,7 +212,7 @@
     </tr>
   {% empty %}
     <tr>
-      <td colspan="{% if cfg.pai_nivel %}{% if pode_editar %}6{% else %}5{% endif %}{% else %}{% if pode_editar %}5{% else %}4{% endif %}{% endif %}"
+      <td colspan="{% if cfg.aceita_lancamento %}{% if pode_editar %}7{% else %}6{% endif %}{% elif cfg.pai_nivel %}{% if pode_editar %}6{% else %}5{% endif %}{% else %}{% if pode_editar %}5{% else %}4{% endif %}{% endif %}"
           class="text-center py-14">
         <div class="flex flex-col items-center gap-3">
           <svg class="w-10 h-10 opacity-20" fill="none" stroke="currentColor" viewBox="0 0 24 24">

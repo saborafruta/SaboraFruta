@@ -132,9 +132,19 @@
       {% if conta.plano_contas %}
       <div>
         <span class="block text-xs font-medium mb-0.5"
-              :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Plano de contas</span>
+              :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Categoria financeira</span>
         <span :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
           {{ conta.plano_contas }}
+        </span>
+      </div>
+      {% endif %}
+
+      {% if conta.conta_contabil %}
+      <div>
+        <span class="block text-xs font-medium mb-0.5"
+              :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Conta contábil automática</span>
+        <span :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
+          {{ conta.conta_contabil.classificacao }} – {{ conta.conta_contabil.descricao }}
         </span>
       </div>
       {% endif %}

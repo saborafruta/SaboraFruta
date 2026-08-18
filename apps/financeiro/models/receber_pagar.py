@@ -33,6 +33,13 @@ class ContaReceber(TimestampedModel):
     forma_pagamento = models.ForeignKey(FormaPagamento, on_delete=models.SET_NULL, null=True, blank=True)
     conta_bancaria = models.ForeignKey(ContaBancaria, on_delete=models.SET_NULL, null=True, blank=True)
     plano_contas = models.ForeignKey(PlanoContas, on_delete=models.SET_NULL, null=True, blank=True)
+    conta_contabil = models.ForeignKey(
+        "financeiro.PlanoContabil",
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="contas_receber_classificadas",
+    )
 
     nosso_numero = models.CharField(max_length=20, blank=True)
     linha_digitavel = models.CharField(max_length=54, blank=True)
@@ -99,6 +106,13 @@ class ContaPagar(TimestampedModel):
     forma_pagamento = models.ForeignKey(FormaPagamento, on_delete=models.SET_NULL, null=True, blank=True)
     conta_bancaria = models.ForeignKey(ContaBancaria, on_delete=models.SET_NULL, null=True, blank=True)
     plano_contas = models.ForeignKey(PlanoContas, on_delete=models.SET_NULL, null=True, blank=True)
+    conta_contabil = models.ForeignKey(
+        "financeiro.PlanoContabil",
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="contas_pagar_classificadas",
+    )
 
     status = models.CharField(
         max_length=20, choices=StatusContaPagar.choices, default=StatusContaPagar.ABERTO,

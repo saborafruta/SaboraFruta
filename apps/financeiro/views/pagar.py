@@ -298,7 +298,7 @@ class ContaPagarDetailView(PermissaoRequiredMixin, View):
         conta = get_object_or_404(
             ContaPagar.objects.for_filial(filial).select_related(
                 'fornecedor', 'forma_pagamento', 'conta_bancaria',
-                'plano_contas', 'usuario', 'usuario_pagamento',
+                'plano_contas', 'conta_contabil', 'usuario', 'usuario_pagamento',
             ),
             pk=pk,
         )

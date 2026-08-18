@@ -12,7 +12,7 @@
     <p class="text-sm mb-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
       <a href="{% url 'financeiro:plano_contas_list' %}?tipo={{ tipo_key }}"
          :style="temaClaro ? 'color:#3b82f6;' : 'color:#60a5fa;'">
-        Plano de Contas
+        Categorias Financeiras
       </a>
       <span class="mx-1">›</span>
       <a href="{% url 'financeiro:plano_contas_list' %}?tipo={{ tipo_key }}"
@@ -102,6 +102,24 @@
           <p class="text-xs mt-1 text-red-500">{{ form.descricao.errors.0 }}</p>
         {% endif %}
       </div>
+
+      <!-- Vinculo contabil (somente nivel 3) -->
+      {% if cfg.aceita_lancamento %}
+        <div>
+          <label class="block text-sm font-medium mb-1" :style="temaClaro ? 'color:#374151;' : 'color:#d1d5db;'">
+            {{ form.conta_contabil.label }} <span class="text-red-500">*</span>
+          </label>
+          {{ form.conta_contabil|add_class:"form-input w-full" }}
+          {% if form.conta_contabil.help_text %}
+            <p class="text-xs mt-1" :style="temaClaro ? 'color:#9ca3af;' : 'color:#6b7280;'">{{ form.conta_contabil.help_text }}</p>
+          {% endif %}
+          {% if form.conta_contabil.errors %}
+            <p class="text-xs mt-1 text-red-500">{{ form.conta_contabil.errors.0 }}</p>
+          {% endif %}
+        </div>
+      {% else %}
+        {{ form.conta_contabil }}
+      {% endif %}
 
       <!-- Ativo -->
       <div class="flex items-center gap-3">

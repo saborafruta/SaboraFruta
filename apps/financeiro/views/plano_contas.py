@@ -1,4 +1,4 @@
-"""Views de Plano de Contas."""
+"""Views de Categorias Financeiras."""
 from django.contrib import messages
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
@@ -12,10 +12,10 @@ from apps.financeiro.models.conta_bancaria import PlanoContas
 TIPO_CONFIGS = {
     'grupo_receita':    {'tipo': 'R', 'nivel': 1, 'label': 'Grupos de Receitas',    'label_singular': 'Grupo de Receitas',    'pai_nivel': None, 'aceita_lancamento': False},
     'subgrupo_receita': {'tipo': 'R', 'nivel': 2, 'label': 'Subgrupos de Receitas', 'label_singular': 'Subgrupo de Receitas', 'pai_nivel': 1,    'aceita_lancamento': False},
-    'outras_receitas':  {'tipo': 'R', 'nivel': 3, 'label': 'Outras Receitas',       'label_singular': 'Receita',              'pai_nivel': 2,    'aceita_lancamento': True},
+    'outras_receitas':  {'tipo': 'R', 'nivel': 3, 'label': 'Categorias de Receitas','label_singular': 'Categoria de Receita', 'pai_nivel': 2,    'aceita_lancamento': True},
     'grupo_despesa':    {'tipo': 'D', 'nivel': 1, 'label': 'Grupos de Despesas',    'label_singular': 'Grupo de Despesas',    'pai_nivel': None, 'aceita_lancamento': False},
     'subgrupo_despesa': {'tipo': 'D', 'nivel': 2, 'label': 'Subgrupos de Despesas', 'label_singular': 'Subgrupo de Despesas', 'pai_nivel': 1,    'aceita_lancamento': False},
-    'outras_despesas':  {'tipo': 'D', 'nivel': 3, 'label': 'Outras Despesas',       'label_singular': 'Despesa',              'pai_nivel': 2,    'aceita_lancamento': True},
+    'outras_despesas':  {'tipo': 'D', 'nivel': 3, 'label': 'Categorias de Despesas','label_singular': 'Categoria de Despesa', 'pai_nivel': 2,    'aceita_lancamento': True},
 }
 
 DEFAULT_TIPO = 'grupo_receita'
@@ -44,7 +44,7 @@ class PlanoContasListView(PermissaoRequiredMixin, View):
             contas_qs = (
                 PlanoContas.objects
                 .filter(empresa=empresa, tipo=cfg['tipo'], nivel=cfg['nivel'])
-                .select_related('conta_pai')
+                .select_related('conta_pai', 'conta_contabil')
                 .order_by('codigo')
             )
             if q:
@@ -54,7 +54,7 @@ class PlanoContasListView(PermissaoRequiredMixin, View):
                 contas_qs = contas_qs.distinct().order_by('codigo')
 
         return render(request, 'financeiro/plano_contas/list.html', {
-            'title': 'Plano de Contas',
+            'title': 'Categorias Financeiras',
             'tipo_key': tipo_key,
             'cfg': cfg,
             'contas': contas_qs,

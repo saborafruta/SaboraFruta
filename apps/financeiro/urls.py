@@ -1,4 +1,5 @@
 from django.urls import path
+from django.views.generic import RedirectView
 
 from apps.financeiro.views import financeiro
 from apps.financeiro.views import receber as receber_views
@@ -42,11 +43,12 @@ urlpatterns = [
     path("pagar/<int:pk>/pagar/",     pagar_views.ContaPagarPagamentoView.as_view(), name="pagar_pagar"),
     path("pagar/<int:pk>/cancelar/",  pagar_views.ContaPagarCancelarView.as_view(),  name="pagar_cancelar"),
 
-    # ── Plano de Contas ───────────────────────────────────────────────────────
-    path("plano-contas/",                       pc_views.PlanoContasListView.as_view(),        name="plano_contas_list"),
-    path("plano-contas/novo/",                  pc_views.PlanoContasCreateView.as_view(),      name="plano_contas_criar"),
-    path("plano-contas/<int:pk>/editar/",       pc_views.PlanoContasEditView.as_view(),        name="plano_contas_editar"),
-    path("plano-contas/<int:pk>/toggle-ativo/", pc_views.PlanoContasToggleAtivoView.as_view(), name="plano_contas_toggle"),
+    # ── Categorias Financeiras ────────────────────────────────────────────────
+    path("categorias-financeiras/",                       pc_views.PlanoContasListView.as_view(),        name="plano_contas_list"),
+    path("categorias-financeiras/nova/",                  pc_views.PlanoContasCreateView.as_view(),      name="plano_contas_criar"),
+    path("categorias-financeiras/<int:pk>/editar/",       pc_views.PlanoContasEditView.as_view(),        name="plano_contas_editar"),
+    path("categorias-financeiras/<int:pk>/toggle-ativo/", pc_views.PlanoContasToggleAtivoView.as_view(), name="plano_contas_toggle"),
+    path("plano-contas/", RedirectView.as_view(pattern_name="financeiro:plano_contas_list")),
     path("plano-contabil/", plano_contabil_views.PlanoContabilListView.as_view(), name="plano_contabil_list"),
 
     # ── Créditos de Clientes ──────────────────────────────────────────────────

@@ -31,6 +31,9 @@ class ContaReceberService:
         usuario=None,
     ) -> ContaReceber:
         """Cria um lançamento manual de conta a receber."""
+        conta_contabil = plano_contas.conta_contabil if plano_contas else None
+        if plano_contas and not conta_contabil:
+            raise DomainError('A categoria financeira não possui conta contábil vinculada.')
         conta = ContaReceber(
             filial=filial,
             cliente=cliente,
@@ -48,6 +51,7 @@ class ContaReceberService:
             data_vencimento=data_vencimento,
             forma_pagamento=forma_pagamento,
             plano_contas=plano_contas,
+            conta_contabil=conta_contabil,
             observacao=observacao,
             status=StatusContaReceber.ABERTO,
             usuario=usuario,
