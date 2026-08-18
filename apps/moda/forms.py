@@ -175,6 +175,71 @@ class PedidoProducaoForm(_FilialFormMixin, forms.ModelForm):
         return dados
 
 
+
+class ValoresPedidoForm(forms.ModelForm):
+    """
+    A seção financeira do pedido.
+
+    Não usa `_FilialFormMixin` porque forma e condição de pagamento são do
+    app financeiro e têm escopo próprio: a forma é por empresa E filial
+    (com filial nula valendo para todas), a condição é só por empresa.
+    Passar isso pelo mixin daria um filtro errado nos dois casos.
+    """
+
+    class Meta:
+        model = PedidoProducao
+        fields = [
+            'desconto', 'acrescimo', 'frete', 'entrada',
+            'forma_pagamento', 'condicao_pagamento',
+        ]
+        # `x-model.number` liga cada campo ao Alpine da tela, para o total
+        # fechar enquanto o usuário digita em vez de só depois de salvar.
+        widgets = {
+            campo: forms.NumberInput(attrs={
+                'step': '0.01', 'min': '0', 'x-model.number': f'd.{campo}',
+            })
+            for campo in ('desconto', 'acrescimo', 'frete', 'entrada')
+        }
+
+    def __init__(self, *args, filial=None, **kwargs):
+        from django.db.models import Q
+
+        from apps.financeiro.models.formas_pagamento import (
+            CondicaoPagamento, FormaPagamento,
+        )
+
+        super().__init__(*args, **kwargs)
+        self.filial = filial
+        empresa = filial.empresa if filial else None
+
+        self.fields['forma_pagamento'].queryset = FormaPagamento.objects.filter(
+            Q(filial=filial) | Q(filial__isnull=True), empresa=empresa, ativo=True,
+        ).order_by('descricao')
+        self.fields['condicao_pagamento'].queryset = CondicaoPagamento.objects.filter(
+            empresa=empresa, ativo=True,
+        ).order_by('descricao')
+
+        self.fields['forma_pagamento'].empty_label = 'Não informada'
+        self.fields['condicao_pagamento'].empty_label = 'À vista'
+
+        for campo in self.fields.values():
+            css = campo.widget.attrs.get('class', '')
+            if 'form-input' not in css:
+                campo.widget.attrs['class'] = (css + ' form-input').strip()
+
+    def clean(self):
+        dados = super().clean()
+
+        # Valor negativo em desconto/frete inverteria o sinal do total sem
+        # ninguém perceber -- o campo aceita, a conta a receber sai errada.
+        for campo in ('desconto', 'acrescimo', 'frete', 'entrada'):
+            valor = dados.get(campo)
+            if valor is not None and valor < 0:
+                self.add_error(campo, 'Não pode ser negativo.')
+
+        return dados
+
+
 class ItemPedidoProducaoForm(_FilialFormMixin, forms.ModelForm):
     """Um produto dentro do pedido — o miolo da ficha."""
 
@@ -185,13 +250,14 @@ class ItemPedidoProducaoForm(_FilialFormMixin, forms.ModelForm):
         fields = [
             'produto', 'descricao', 'referencia',
             'modelo', 'cor', 'tecido', 'gola', 'manga',
-            'acabamento', 'quantidade', 'observacoes',
+            'acabamento', 'quantidade', 'valor_unitario', 'observacoes',
         ]
         widgets = {
             'descricao': forms.TextInput(attrs={'placeholder': 'Ex.: Conjunto — Camisa + Calção'}),
             'acabamento': forms.TextInput(attrs={'placeholder': 'Ex.: escudo em patch aplicado'}),
             'observacoes': forms.Textarea(attrs={'rows': 2}),
             'quantidade': forms.NumberInput(attrs={'min': 1}),
+            'valor_unitario': forms.NumberInput(attrs={'step': '0.01', 'min': '0'}),
         }
 
     def __init__(self, *args, filial=None, **kwargs):
@@ -202,6 +268,9 @@ class ItemPedidoProducaoForm(_FilialFormMixin, forms.ModelForm):
         super().__init__(*args, filial=filial, **kwargs)
         for nome in ('produto', 'modelo', 'cor', 'tecido'):
             self.fields[nome].required = False
+        # Preço não é obrigatório aqui: o comercial monta a ficha antes de
+        # fechar valor, e exigir agora travaria o cadastro do produto.
+        self.fields['valor_unitario'].required = False
         # Em branco, o item herda do modelo na gravação — por isso não são
         # obrigatórios aqui.
         self.fields['gola'].required = False

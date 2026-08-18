@@ -10,6 +10,8 @@ Este arquivo cobre o cabeçalho do pedido. Os itens (produto × grade com
 quantidade por tamanho) e as etapas de produção entram na sequência,
 apontando para cá.
 """
+from decimal import Decimal
+
 from django.conf import settings
 from django.db import models
 from django.utils import timezone
@@ -76,6 +78,34 @@ class PedidoProducao(FilialScopedModel):
 
     observacoes = models.TextField(blank=True)
 
+    # ── Valores ──────────────────────────────────────────────────────────
+    # O subtotal NÃO é campo: é a soma dos itens, calculada na leitura. Um
+    # campo gravado sairia do lugar toda vez que alguém mexesse num item e
+    # esquecesse de recalcular — e um pedido com subtotal errado é pior do
+    # que um pedido sem subtotal.
+    desconto = models.DecimalField(max_digits=12, decimal_places=2, default=Decimal('0'))
+    acrescimo = models.DecimalField(max_digits=12, decimal_places=2, default=Decimal('0'))
+    frete = models.DecimalField(max_digits=12, decimal_places=2, default=Decimal('0'))
+    entrada = models.DecimalField(
+        max_digits=12, decimal_places=2, default=Decimal('0'),
+        help_text='Sinal combinado. Vira a primeira conta a receber, com vencimento na data do pedido.',
+    )
+
+    forma_pagamento = models.ForeignKey(
+        'financeiro.FormaPagamento', on_delete=models.SET_NULL,
+        null=True, blank=True, related_name='pedidos_moda',
+    )
+    condicao_pagamento = models.ForeignKey(
+        'financeiro.CondicaoPagamento', on_delete=models.SET_NULL,
+        null=True, blank=True, related_name='pedidos_moda',
+        help_text='Define em quantas parcelas o saldo é dividido e de quanto em quanto tempo.',
+    )
+
+    # Carimbo de quando o financeiro foi gerado. É só para a tela mostrar:
+    # a trava de verdade contra gerar duas vezes é a consulta às contas a
+    # receber do pedido, que sobrevive a este campo ser limpo à mão.
+    financeiro_gerado_em = models.DateTimeField(null=True, blank=True, editable=False)
+
     objects = FilialManager()
     all_objects = models.Manager()
 
@@ -132,3 +162,41 @@ class PedidoProducao(FilialScopedModel):
     def atrasado(self) -> bool:
         dias = self.dias_para_entrega
         return dias is not None and dias < 0
+
+    # ── Valores ──────────────────────────────────────────────────────────
+
+    @property
+    def quantidade_total(self) -> int:
+        return sum(i.quantidade for i in self.itens.all())
+
+    @property
+    def subtotal(self) -> Decimal:
+        return sum((i.subtotal for i in self.itens.all()), Decimal('0'))
+
+    @property
+    def valor_total(self) -> Decimal:
+        """Subtotal − desconto + acréscimo + frete. Nunca negativo."""
+        total = (
+            self.subtotal
+            - (self.desconto or Decimal('0'))
+            + (self.acrescimo or Decimal('0'))
+            + (self.frete or Decimal('0'))
+        )
+        return total if total > 0 else Decimal('0')
+
+    @property
+    def saldo(self) -> Decimal:
+        """O que falta receber depois da entrada. Nunca negativo."""
+        resto = self.valor_total - (self.entrada or Decimal('0'))
+        return resto if resto > 0 else Decimal('0')
+
+    @property
+    def valor_unitario_medio(self) -> Decimal:
+        qtd = self.quantidade_total
+        if not qtd:
+            return Decimal('0')
+        return (self.subtotal / qtd).quantize(Decimal('0.01'))
+
+    @property
+    def financeiro_gerado(self) -> bool:
+        return self.financeiro_gerado_em is not None

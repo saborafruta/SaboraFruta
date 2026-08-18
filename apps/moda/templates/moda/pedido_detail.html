@@ -622,6 +622,274 @@
   </div>
   {% endif %}
 
+  {% comment %}
+    Valores do pedido.
+
+    O total é recalculado no navegador enquanto o usuário digita, mas quem
+    grava é o servidor, em Decimal. A conta do JavaScript é só para a tela
+    responder na hora — nenhum centavo dela chega ao contas a receber.
+  {% endcomment %}
+  {{ valores_js|json_script:"moda-valores" }}
+  <div class="card p-5 space-y-5"
+       x-data="{
+         d: JSON.parse(document.getElementById('moda-valores').textContent),
+         n(v) { const x = parseFloat(v); return isNaN(x) ? 0 : x; },
+         get subtotal() { return this.d.itens.reduce((s, i) => s + i.qtd * this.n(i.unit), 0); },
+         get total() {
+           const t = this.subtotal - this.n(this.d.desconto) + this.n(this.d.acrescimo) + this.n(this.d.frete);
+           return t > 0 ? t : 0;
+         },
+         get saldo() { const s = this.total - this.n(this.d.entrada); return s > 0 ? s : 0; },
+         get qtdTotal() { return this.d.itens.reduce((s, i) => s + i.qtd, 0); },
+         brl(v) { return v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }); }
+       }">
+
+    <div class="flex items-center justify-between gap-2 flex-wrap">
+      <div>
+        <h3 class="text-sm font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">Valores do pedido</h3>
+        <p class="text-xs mt-0.5" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+          <span x-text="qtdTotal"></span> peça(s) · total <strong x-text="brl(total)"></strong>
+        </p>
+      </div>
+      {% if pedido.financeiro_gerado %}
+        <span class="text-xs font-semibold px-2.5 py-1 rounded-full"
+              style="background:rgba(16,185,129,.14); color:#059669;">
+          Financeiro gerado em {{ pedido.financeiro_gerado_em|date:"d/m/Y H:i" }}
+        </span>
+      {% endif %}
+    </div>
+
+    {% if not itens %}
+      <p class="text-sm" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+        Acrescente ao menos um produto ao pedido para lançar valores.
+      </p>
+    {% else %}
+
+    <form method="post" action="{% url 'moda:pedido-valores' pedido.pk %}" class="space-y-5">
+      {% csrf_token %}
+
+      {# ── Preço por item ─────────────────────────────────────────────── #}
+      <div class="overflow-x-auto">
+        <table class="w-full text-sm" style="min-width:520px;">
+          <thead>
+            <tr class="text-xs uppercase tracking-wider"
+                :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+              <th class="text-left font-semibold pb-2">Produto</th>
+              <th class="text-right font-semibold pb-2 w-24">Qtd</th>
+              <th class="text-right font-semibold pb-2 w-40">Valor unitário</th>
+              <th class="text-right font-semibold pb-2 w-32">Subtotal</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for item in itens %}
+              <tr class="border-t" :style="temaClaro ? 'border-color:#e5e7eb;' : 'border-color:#303036;'">
+                <td class="py-2 pr-3" :style="temaClaro ? 'color:#111827;' : 'color:#e5e7eb;'">
+                  {{ item.nome_exibicao }}
+                  {% if item.cor %}<span class="text-xs opacity-60">· {{ item.cor }}</span>{% endif %}
+                </td>
+                {% comment %}
+                  A quantidade é só leitura aqui: quem manda nela é a grade,
+                  que já sincroniza o total do item. Deixar editável nos dois
+                  lugares criaria divergência entre a grade e o valor.
+                {% endcomment %}
+                <td class="py-2 text-right tabular-nums" :style="temaClaro ? 'color:#374151;' : 'color:#cbd5e1;'">
+                  {{ item.quantidade }}
+                </td>
+                <td class="py-2 pl-3">
+                  <input type="number" step="0.01" min="0"
+                         name="valor_{{ item.pk }}"
+                         x-model.number="d.itens[{{ forloop.counter0 }}].unit"
+                         class="form-input text-right w-full">
+                </td>
+                <td class="py-2 pl-3 text-right font-semibold tabular-nums"
+                    :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'"
+                    x-text="brl(d.itens[{{ forloop.counter0 }}].qtd * n(d.itens[{{ forloop.counter0 }}].unit))"></td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+
+      {# ── Ajustes e totais ───────────────────────────────────────────── #}
+      <div class="grid grid-cols-1 lg:grid-cols-2 gap-5">
+
+        <div class="space-y-3">
+          <div class="grid grid-cols-2 gap-3">
+            <div>
+              <label class="block text-xs font-semibold mb-1"
+                     :style="temaClaro ? 'color:#374151;' : 'color:#cbd5e1;'">Desconto</label>
+              {{ form_valores.desconto }}
+            </div>
+            <div>
+              <label class="block text-xs font-semibold mb-1"
+                     :style="temaClaro ? 'color:#374151;' : 'color:#cbd5e1;'">Acréscimo</label>
+              {{ form_valores.acrescimo }}
+            </div>
+            <div>
+              <label class="block text-xs font-semibold mb-1"
+                     :style="temaClaro ? 'color:#374151;' : 'color:#cbd5e1;'">Frete</label>
+              {{ form_valores.frete }}
+            </div>
+            <div>
+              <label class="block text-xs font-semibold mb-1"
+                     :style="temaClaro ? 'color:#374151;' : 'color:#cbd5e1;'">Entrada</label>
+              {{ form_valores.entrada }}
+            </div>
+          </div>
+
+          <div>
+            <label class="block text-xs font-semibold mb-1"
+                   :style="temaClaro ? 'color:#374151;' : 'color:#cbd5e1;'">Forma de pagamento</label>
+            {{ form_valores.forma_pagamento }}
+          </div>
+          <div>
+            <label class="block text-xs font-semibold mb-1"
+                   :style="temaClaro ? 'color:#374151;' : 'color:#cbd5e1;'">Condição de pagamento</label>
+            {{ form_valores.condicao_pagamento }}
+            <p class="text-xs mt-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+              Define em quantas parcelas o saldo é dividido. Em branco, o
+              saldo sai numa parcela só, vencendo na data prevista de entrega.
+            </p>
+          </div>
+        </div>
+
+        <div class="rounded-xl p-4 space-y-2 text-sm"
+             :style="temaClaro ? 'background:#f8fafc; border:1px solid #e5e7eb;' : 'background:#18181b; border:1px solid #303036;'">
+          <div class="flex justify-between">
+            <span :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Quantidade</span>
+            <span class="tabular-nums" x-text="qtdTotal"></span>
+          </div>
+          <div class="flex justify-between">
+            <span :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Subtotal</span>
+            <span class="tabular-nums" x-text="brl(subtotal)"></span>
+          </div>
+          <div class="flex justify-between">
+            <span :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Desconto</span>
+            <span class="tabular-nums" style="color:#dc2626;" x-text="'− ' + brl(n(d.desconto))"></span>
+          </div>
+          <div class="flex justify-between">
+            <span :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Acréscimo</span>
+            <span class="tabular-nums" x-text="'+ ' + brl(n(d.acrescimo))"></span>
+          </div>
+          <div class="flex justify-between">
+            <span :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Frete</span>
+            <span class="tabular-nums" x-text="'+ ' + brl(n(d.frete))"></span>
+          </div>
+
+          <div class="flex justify-between pt-2 border-t text-base font-bold"
+               :style="temaClaro ? 'border-color:#e5e7eb; color:#111827;' : 'border-color:#303036; color:#f8fafc;'">
+            <span>Valor total</span>
+            <span class="tabular-nums" x-text="brl(total)"></span>
+          </div>
+
+          <div class="flex justify-between pt-2">
+            <span :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Entrada</span>
+            <span class="tabular-nums" x-text="'− ' + brl(n(d.entrada))"></span>
+          </div>
+          <div class="flex justify-between font-semibold"
+               :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
+            <span>Saldo</span>
+            <span class="tabular-nums" x-text="brl(saldo)"></span>
+          </div>
+
+          {% comment %}
+            Entrada maior que o total é erro de digitação, e sem aviso o
+            saldo simplesmente zera — o pedido pareceria quitado.
+          {% endcomment %}
+          <p x-show="n(d.entrada) > total" x-cloak
+             class="text-xs font-semibold pt-1" style="color:#dc2626;">
+            A entrada está maior que o valor total.
+          </p>
+        </div>
+      </div>
+
+      <div class="flex justify-end">
+        <button type="submit" class="btn-primary text-sm">Salvar valores</button>
+      </div>
+    </form>
+
+    {# ── Financeiro ─────────────────────────────────────────────────── #}
+    <div class="pt-4 border-t space-y-3"
+         :style="temaClaro ? 'border-color:#e5e7eb;' : 'border-color:#303036;'">
+
+      {% if contas %}
+        <div>
+          <p class="text-xs font-semibold uppercase tracking-wider mb-2"
+             :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+            Contas a receber deste pedido
+          </p>
+          <div class="space-y-1">
+            {% for conta in contas %}
+              <div class="flex items-center justify-between gap-3 text-sm px-3 py-2 rounded-lg"
+                   :style="temaClaro ? 'background:#f8fafc;' : 'background:#18181b;'">
+                <span :style="temaClaro ? 'color:#374151;' : 'color:#cbd5e1;'">
+                  Parcela {{ conta.parcela }}/{{ conta.total_parcelas }}
+                  · vence {{ conta.data_vencimento|date:"d/m/Y" }}
+                </span>
+                <span class="flex items-center gap-3">
+                  <span class="text-xs px-2 py-0.5 rounded-full"
+                        :style="temaClaro ? 'background:#e5e7eb; color:#374151;' : 'background:#27272a; color:#a1a1aa;'">
+                    {{ conta.get_status_display }}
+                  </span>
+                  <strong class="tabular-nums" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
+                    R$ {{ conta.valor_final|floatformat:2 }}
+                  </strong>
+                </span>
+              </div>
+            {% endfor %}
+          </div>
+        </div>
+
+        <form method="post" action="{% url 'moda:pedido-financeiro-cancelar' pedido.pk %}"
+              onsubmit="return confirm('Cancelar as contas a receber geradas por este pedido?');">
+          {% csrf_token %}
+          <button type="submit" class="btn-secondary text-sm">Cancelar financeiro</button>
+        </form>
+
+      {% else %}
+        {% if plano %}
+          <div>
+            <p class="text-xs font-semibold uppercase tracking-wider mb-2"
+               :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+              Como vai ficar (com os valores já salvos)
+            </p>
+            <div class="space-y-1">
+              {% for parcela in plano %}
+                <div class="flex items-center justify-between gap-3 text-sm px-3 py-2 rounded-lg"
+                     :style="temaClaro ? 'background:#f8fafc;' : 'background:#18181b;'">
+                  <span :style="temaClaro ? 'color:#374151;' : 'color:#cbd5e1;'">
+                    {{ parcela.rotulo }} · vence {{ parcela.vencimento|date:"d/m/Y" }}
+                  </span>
+                  <strong class="tabular-nums" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
+                    R$ {{ parcela.valor|floatformat:2 }}
+                  </strong>
+                </div>
+              {% endfor %}
+            </div>
+          </div>
+        {% endif %}
+
+        <form method="post" action="{% url 'moda:pedido-financeiro-gerar' pedido.pk %}">
+          {% csrf_token %}
+          <button type="submit" class="btn-primary text-sm w-full sm:w-auto"
+                  {% if not plano %}disabled title="Preencha os valores e salve antes de gerar."{% endif %}>
+            GERAR FINANCEIRO
+          </button>
+          <p class="text-xs mt-1.5" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+            {% if plano %}
+              Cria as contas a receber no financeiro. Salve os valores antes,
+              se acabou de alterá-los.
+            {% else %}
+              Lance o valor unitário dos produtos e salve para liberar.
+            {% endif %}
+          </p>
+        </form>
+      {% endif %}
+    </div>
+
+    {% endif %}
+  </div>
+
   <div class="card p-4" style="border-left:3px solid #f59e0b;">
     <p class="text-sm" :style="temaClaro ? 'color:#374151;' : 'color:#cbd5e1;'">
       <strong>Ainda falta da ficha:</strong> as etapas de produção — Corte,

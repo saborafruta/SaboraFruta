@@ -7,6 +7,8 @@ cliente pedir também bonés, é outro).
 A quantidade aqui é o total do item. A distribuição por tamanho (PP..G3,
 como na grade da ficha) é o bloco seguinte e vai apontar para cá.
 """
+from decimal import Decimal
+
 from django.db import models
 
 from .cadastros import Modelo
@@ -62,6 +64,15 @@ class ItemPedidoProducao(models.Model):
     )
 
     quantidade = models.PositiveIntegerField(default=1)
+
+    # Preço fechado com o cliente para ESTA peça neste pedido. Fica no item
+    # e não no produto porque confecção negocia por pedido: o mesmo modelo
+    # sai a um preço para um time de 40 peças e a outro para um de 200.
+    valor_unitario = models.DecimalField(
+        max_digits=12, decimal_places=2, default=Decimal('0'),
+        verbose_name='Valor unitário',
+    )
+
     observacoes = models.TextField(blank=True)
 
     ordem = models.PositiveIntegerField(
@@ -95,6 +106,11 @@ class ItemPedidoProducao(models.Model):
         if self.produto_id:
             return self.produto.nome
         return self.descricao or 'Item sem descrição'
+
+    @property
+    def subtotal(self) -> Decimal:
+        """Quantidade × valor unitário. Base de tudo na seção de valores."""
+        return (self.valor_unitario or Decimal('0')) * self.quantidade
 
     @property
     def tecido_exibicao(self) -> str:

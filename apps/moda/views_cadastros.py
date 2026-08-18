@@ -4,8 +4,10 @@ Telas de cadastro do vertical Moda: Grades, Cores e Produtos.
 São as três que fecham o ciclo até o SKU — grade define os tamanhos, cor
 define as cores, e o produto cruza as duas para gerar as variantes.
 """
+from decimal import Decimal, InvalidOperation
+
 from django.contrib import messages
-from django.db import models
+from django.db import models, transaction
 from django.db.models import Count, Prefetch, Q
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
@@ -13,22 +15,48 @@ from django.views import View
 
 from apps.core.services.exceptions import DadosInvalidosError
 
+from apps.core.services.exceptions import DomainError
+
 from .forms import (
     CorForm, GradeForm, ItemPedidoProducaoForm, PedidoProducaoForm,
     PersonalizacaoForm, PersonalizacaoIndividualForm, ProdutoModaForm,
-    VisualItemPedidoForm,
+    ValoresPedidoForm, VisualItemPedidoForm,
 )
 from .models import (
     Cor, Grade, ItemGrade, ItemGradePedido, ItemPedidoProducao, PedidoProducao,
     Personalizacao, PersonalizacaoIndividual, ProdutoCor, ProdutoModa,
     Tamanho, VisualItemPedido,
 )
-from .services import GradePedidoService, IndividualService, VarianteService
+from .services import (
+    FinanceiroPedidoService, GradePedidoService, IndividualService,
+    VarianteService,
+)
 from .views import ModaBaseView
 
 
 def _filial(request):
     return request.filial_ativa
+
+
+def _valores_js(pedido, itens) -> dict:
+    """
+    Números da seção de valores para o Alpine recalcular enquanto o usuário
+    digita.
+
+    Vai como float porque é só para a conta da tela: quem manda no valor
+    gravado é o servidor, que refaz tudo em Decimal ao salvar. Assim o
+    arredondamento do JavaScript nunca chega ao contas a receber.
+    """
+    return {
+        'itens': [
+            {'id': i.pk, 'qtd': i.quantidade, 'unit': float(i.valor_unitario or 0)}
+            for i in itens
+        ],
+        'desconto': float(pedido.desconto or 0),
+        'acrescimo': float(pedido.acrescimo or 0),
+        'frete': float(pedido.frete or 0),
+        'entrada': float(pedido.entrada or 0),
+    }
 
 
 # ══════════════════════════════════════════════════════════════════════
@@ -363,6 +391,12 @@ class PedidoDetailView(ModaBaseView):
             'form_individual': PersonalizacaoIndividualForm(
                 filial=_filial(request), pedido=pedido,
             ),
+            'form_valores': ValoresPedidoForm(
+                instance=pedido, filial=_filial(request),
+            ),
+            'plano': FinanceiroPedidoService.planejar(pedido),
+            'contas': FinanceiroPedidoService.contas_do_pedido(pedido),
+            'valores_js': _valores_js(pedido, itens),
         })
 
 
@@ -390,6 +424,108 @@ class PedidoStatusView(ModaBaseView):
             request,
             f'Pedido #{pedido.numero:06d}: {anterior} → {pedido.get_status_display()}.',
         )
+        return redirect(reverse('moda:pedido-detail', args=[pedido.pk]))
+
+
+class PedidoValoresView(ModaBaseView):
+    """
+    Grava a seção de valores: os campos do cabeçalho e o preço de cada item.
+
+    Os dois juntos num POST só porque na tela são um bloco só. Separar em
+    dois formulários faria o usuário salvar duas vezes para ver o total
+    fechar -- e o total é justamente o que ele veio conferir.
+    """
+
+    permissao_acao = 'editar'
+
+    def post(self, request, pk):
+        pedido = get_object_or_404(
+            PedidoProducao.objects.for_filial(_filial(request)), pk=pk,
+        )
+        form = ValoresPedidoForm(request.POST, instance=pedido, filial=_filial(request))
+
+        if not form.is_valid():
+            erros = '; '.join(
+                f'{form.fields[c].label or c}: {e[0]}' for c, e in form.errors.items()
+            )
+            messages.error(request, f'Valores não salvos — {erros}')
+            return redirect(reverse('moda:pedido-detail', args=[pedido.pk]))
+
+        with transaction.atomic():
+            form.save()
+            self._salvar_precos(request, pedido)
+
+        messages.success(request, 'Valores do pedido atualizados.')
+        return redirect(reverse('moda:pedido-detail', args=[pedido.pk]))
+
+    @staticmethod
+    def _salvar_precos(request, pedido):
+        """
+        Lê os campos `valor_<id>` da tabela de itens.
+
+        Só grava o que mudou e só o que pertence a ESTE pedido: os ids vêm
+        do formulário, e aceitar um id de outro pedido deixaria alterar
+        preço de fora da tela.
+        """
+        itens = {i.pk: i for i in pedido.itens.all()}
+        alterados = []
+        for chave, bruto in request.POST.items():
+            if not chave.startswith('valor_'):
+                continue
+            try:
+                item = itens[int(chave.removeprefix('valor_'))]
+                valor = Decimal((bruto or '0').replace(',', '.'))
+            except (ValueError, KeyError, InvalidOperation):
+                continue
+            if valor < 0 or valor == item.valor_unitario:
+                continue
+            item.valor_unitario = valor
+            alterados.append(item)
+
+        if alterados:
+            ItemPedidoProducao.objects.bulk_update(alterados, ['valor_unitario'])
+
+
+class PedidoFinanceiroGerarView(ModaBaseView):
+    """Botão GERAR FINANCEIRO — cria as contas a receber do pedido."""
+
+    permissao_acao = 'editar'
+
+    def post(self, request, pk):
+        pedido = get_object_or_404(
+            PedidoProducao.objects.for_filial(_filial(request))
+            .select_related('cliente', 'condicao_pagamento', 'forma_pagamento'),
+            pk=pk,
+        )
+        try:
+            contas = FinanceiroPedidoService.gerar(pedido, usuario=request.user)
+        except DomainError as erro:
+            messages.error(request, str(erro))
+        else:
+            messages.success(
+                request,
+                f'{len(contas)} conta{"s" if len(contas) > 1 else ""} a receber '
+                f'gerada{"s" if len(contas) > 1 else ""} — '
+                f'total R$ {pedido.valor_total:.2f}.',
+            )
+        return redirect(reverse('moda:pedido-detail', args=[pedido.pk]))
+
+
+class PedidoFinanceiroCancelarView(ModaBaseView):
+    """Desfaz o financeiro para poder gerar de novo com os valores certos."""
+
+    permissao_acao = 'editar'
+
+    def post(self, request, pk):
+        pedido = get_object_or_404(
+            PedidoProducao.objects.for_filial(_filial(request)), pk=pk,
+        )
+        try:
+            quantidade = FinanceiroPedidoService.cancelar(pedido, request.user)
+        except DomainError as erro:
+            messages.error(request, str(erro))
+        else:
+            messages.success(request, f'{quantidade} conta(s) cancelada(s).')
         return redirect(reverse('moda:pedido-detail', args=[pedido.pk]))
 
 
