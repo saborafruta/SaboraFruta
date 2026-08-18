@@ -14,11 +14,12 @@ from django.views import View
 from apps.core.services.exceptions import DadosInvalidosError
 
 from .forms import (
-    CorForm, GradeForm, ItemPedidoProducaoForm, PedidoProducaoForm, ProdutoModaForm,
+    CorForm, GradeForm, ItemPedidoProducaoForm, PedidoProducaoForm,
+    PersonalizacaoForm, ProdutoModaForm,
 )
 from .models import (
-    Cor, Grade, ItemGrade, ItemPedidoProducao, PedidoProducao, ProdutoCor,
-    ProdutoModa, Tamanho,
+    Cor, Grade, ItemGrade, ItemPedidoProducao, PedidoProducao, Personalizacao,
+    ProdutoCor, ProdutoModa, Tamanho,
 )
 from .services import VarianteService
 from .views import ModaBaseView
@@ -343,7 +344,7 @@ class PedidoDetailView(ModaBaseView):
         )
         itens = pedido.itens.select_related(
             'produto', 'modelo', 'cor', 'tecido', 'produto__tecido',
-        ).all()
+        ).prefetch_related('personalizacoes').all()
         return render(request, 'moda/pedido_detail.html', {
             'title': f'Pedido #{pedido.numero:06d}',
             'pedido': pedido,
@@ -351,6 +352,7 @@ class PedidoDetailView(ModaBaseView):
             'itens': itens,
             'total_pecas': sum(i.quantidade for i in itens),
             'form_item': ItemPedidoProducaoForm(filial=_filial(request)),
+            'form_arte': PersonalizacaoForm(),
         })
 
 
@@ -424,4 +426,42 @@ class ItemPedidoDeleteView(ModaBaseView):
         nome = item.nome_exibicao
         item.delete()
         messages.success(request, f'{nome} removido do pedido.')
+        return redirect(reverse('moda:pedido-detail', args=[pedido.pk]))
+
+
+class PersonalizacaoCreateView(ModaBaseView):
+    """Acrescenta uma arte ao item — várias por item."""
+
+    permissao_acao = 'editar'
+
+    def post(self, request, pk, item_pk):
+        pedido = get_object_or_404(PedidoProducao.objects.for_filial(_filial(request)), pk=pk)
+        item = get_object_or_404(ItemPedidoProducao, pk=item_pk, pedido=pedido)
+        form = PersonalizacaoForm(request.POST, request.FILES)
+
+        if not form.is_valid():
+            # Erro de upload não pode custar o resto do formulário: os erros
+            # vão como mensagem, com o campo nomeado.
+            for campo, erros in form.errors.items():
+                rotulo = form.fields[campo].label if campo in form.fields else campo
+                for erro in erros:
+                    messages.error(request, f'{rotulo}: {erro}')
+            return redirect(reverse('moda:pedido-detail', args=[pedido.pk]))
+
+        arte = form.save(commit=False)
+        arte.item = item
+        arte.save()
+        messages.success(request, f'Arte adicionada a {item.nome_exibicao}.')
+        return redirect(reverse('moda:pedido-detail', args=[pedido.pk]))
+
+
+class PersonalizacaoDeleteView(ModaBaseView):
+    permissao_acao = 'editar'
+
+    def post(self, request, pk, item_pk, arte_pk):
+        pedido = get_object_or_404(PedidoProducao.objects.for_filial(_filial(request)), pk=pk)
+        item = get_object_or_404(ItemPedidoProducao, pk=item_pk, pedido=pedido)
+        arte = get_object_or_404(Personalizacao, pk=arte_pk, item=item)
+        arte.delete()
+        messages.success(request, 'Arte removida.')
         return redirect(reverse('moda:pedido-detail', args=[pedido.pk]))

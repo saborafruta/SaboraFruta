@@ -2,7 +2,8 @@
 from django import forms
 
 from .models import (
-    Cor, Grade, ItemPedidoProducao, PedidoProducao, ProdutoModa, Tamanho,
+    Cor, Grade, ItemPedidoProducao, PedidoProducao, Personalizacao,
+    ProdutoModa, Tamanho,
 )
 
 
@@ -217,4 +218,53 @@ class ItemPedidoProducaoForm(_FilialFormMixin, forms.ModelForm):
             )
         if (dados.get('quantidade') or 0) < 1:
             self.add_error('quantidade', 'A quantidade precisa ser pelo menos 1.')
+        return dados
+
+
+class PersonalizacaoForm(_FilialFormMixin, forms.ModelForm):
+    """Uma aplicação de arte no item — técnica, local e arquivo."""
+
+    class Meta:
+        model = Personalizacao
+        fields = [
+            'tipo', 'tecnica', 'local',
+            'nome_personalizado', 'numero_personalizado',
+            'patrocinios', 'quantidade_patrocinadores',
+            'arquivo', 'observacoes',
+        ]
+        widgets = {
+            'local': forms.TextInput(attrs={'placeholder': 'Ex.: peito esquerdo'}),
+            'nome_personalizado': forms.TextInput(attrs={'placeholder': 'Ex.: SILVA'}),
+            'numero_personalizado': forms.TextInput(attrs={'placeholder': 'Ex.: 25'}),
+            'patrocinios': forms.Textarea(attrs={'rows': 2}),
+            'observacoes': forms.Textarea(attrs={'rows': 2}),
+            'quantidade_patrocinadores': forms.NumberInput(attrs={'min': 0}),
+        }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        # O input aceita só o que o model valida — sem isto o seletor de
+        # arquivos ofereceria qualquer coisa e o erro só apareceria depois
+        # do upload inteiro subir.
+        from .models.personalizacao import EXTENSOES_ARTE
+        self.fields['arquivo'].widget.attrs['accept'] = ','.join(
+            f'.{ext}' for ext in EXTENSOES_ARTE
+        )
+
+    def clean(self):
+        dados = super().clean()
+        tecnica = dados.get('tecnica')
+        # "Sem impressão" com arquivo anexado é contradição: alguém marcou
+        # errado, e a produção seguiria a etiqueta em vez da arte.
+        if tecnica == Personalizacao.Tecnica.SEM_IMPRESSAO and dados.get('arquivo'):
+            self.add_error(
+                'tecnica',
+                'Você anexou uma arte, então a técnica não pode ser "Sem impressão".',
+            )
+        qtd = dados.get('quantidade_patrocinadores') or 0
+        if qtd and not (dados.get('patrocinios') or '').strip():
+            self.add_error(
+                'patrocinios',
+                'Informe quais são os patrocinadores, ou deixe a quantidade em zero.',
+            )
         return dados

@@ -150,6 +150,97 @@
                 {% if item.observacoes %}
                   <p class="text-xs mt-1 whitespace-pre-line" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">{{ item.observacoes }}</p>
                 {% endif %}
+
+                {# ── Personalização / arte ─────────────────────────── #}
+                <div class="mt-3 pt-3 border-t" :style="temaClaro ? 'border-color:#e5e7eb;' : 'border-color:#303036;'"
+                     x-data="{ novaArte: false }">
+                  <div class="flex items-center justify-between gap-2">
+                    <span class="text-xs font-semibold uppercase tracking-wide" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+                      Personalização / Arte
+                    </span>
+                    <button type="button" class="text-xs font-semibold" @click="novaArte = !novaArte"
+                            :style="temaClaro ? 'color:#2563eb;' : 'color:#60a5fa;'"
+                            x-text="novaArte ? 'Fechar' : '+ Arte'"></button>
+                  </div>
+
+                  {% if item.personalizacoes.all %}
+                    <div class="grid gap-2 sm:grid-cols-2 mt-2">
+                      {% for arte in item.personalizacoes.all %}
+                        <div class="p-2.5 rounded-lg flex gap-2.5"
+                             :style="temaClaro ? 'background:#fff; border:1px solid #e5e7eb;' : 'background:#111113; border:1px solid #2a2a2e;'">
+                          {% comment %}
+                            Prévia só quando o navegador sabe desenhar o
+                            arquivo (PNG/JPG/SVG). CDR e AI não abrem, e um
+                            <img> com eles daria quadrado quebrado — pior que
+                            assumir que não há prévia e oferecer o download.
+                          {% endcomment %}
+                          {% if arte.arquivo %}
+                            {% if arte.pode_pre_visualizar %}
+                              <a href="{{ arte.arquivo.url }}" target="_blank" rel="noopener" class="shrink-0">
+                                <img src="{{ arte.arquivo.url }}" alt="Arte {{ arte.get_tecnica_display }}"
+                                     class="w-14 h-14 object-contain rounded"
+                                     style="background:#fff; border:1px solid rgba(127,127,127,.25);">
+                              </a>
+                            {% else %}
+                              <a href="{{ arte.arquivo.url }}" target="_blank" rel="noopener"
+                                 class="shrink-0 w-14 h-14 rounded flex flex-col items-center justify-center"
+                                 :style="temaClaro ? 'background:#f3f4f6; color:#6b7280;' : 'background:#2a2a2e; color:#9ca3af;'"
+                                 title="{{ arte.nome_arquivo }}">
+                                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.6"
+                                        d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+                                </svg>
+                                <span class="text-[9px] font-bold mt-0.5 uppercase">{{ arte.extensao }}</span>
+                              </a>
+                            {% endif %}
+                          {% endif %}
+
+                          <div class="min-w-0 flex-1">
+                            <p class="text-xs font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
+                              {{ arte.get_tecnica_display }}
+                              <span class="font-normal" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">· {{ arte.get_tipo_display }}</span>
+                            </p>
+                            {% if arte.local %}
+                              <p class="text-xs mt-0.5" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">{{ arte.local }}</p>
+                            {% endif %}
+                            {% if arte.nome_personalizado or arte.numero_personalizado %}
+                              <p class="text-xs mt-0.5" :style="temaClaro ? 'color:#374151;' : 'color:#d1d5db;'">
+                                {% if arte.nome_personalizado %}{{ arte.nome_personalizado }}{% endif %}
+                                {% if arte.numero_personalizado %}<strong>{{ arte.numero_personalizado }}</strong>{% endif %}
+                              </p>
+                            {% endif %}
+                            {% if arte.quantidade_patrocinadores %}
+                              <p class="text-xs mt-0.5" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+                                {{ arte.quantidade_patrocinadores }} patrocinador{{ arte.quantidade_patrocinadores|pluralize:"es" }}
+                              </p>
+                            {% endif %}
+                            <form method="post" action="{% url 'moda:pedido-arte-delete' pedido.pk item.pk arte.pk %}"
+                                  onsubmit="return confirm('Remover esta arte?');" class="mt-1">
+                              {% csrf_token %}
+                              <button type="submit" class="text-xs font-semibold" style="color:#f87171;">Remover</button>
+                            </form>
+                          </div>
+                        </div>
+                      {% endfor %}
+                    </div>
+                  {% else %}
+                    <p class="text-xs mt-1.5" :style="temaClaro ? 'color:#94a3b8;' : 'color:#64748b;'">Sem arte cadastrada.</p>
+                  {% endif %}
+
+                  <div x-show="novaArte" x-cloak class="mt-3">
+                    <form method="post" enctype="multipart/form-data"
+                          action="{% url 'moda:pedido-arte-add' pedido.pk item.pk %}" novalidate class="space-y-3">
+                      {% csrf_token %}
+                      <div class="grid gap-3 sm:grid-cols-2">
+                        {% include "moda/_form_campos.html" with form=form_arte %}
+                      </div>
+                      <div class="flex justify-end gap-2">
+                        <button type="button" class="btn-secondary text-xs" @click="novaArte = false">Cancelar</button>
+                        <button type="submit" class="btn-primary text-xs">Salvar arte</button>
+                      </div>
+                    </form>
+                  </div>
+                </div>
               </div>
               <div class="flex flex-col items-end gap-2 shrink-0">
                 <span class="text-lg font-bold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">{{ item.quantidade }}</span>
