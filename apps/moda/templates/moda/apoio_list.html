@@ -1,0 +1,75 @@
+{% extends "_base.html" %}
+{% block title %}{{ title }}{% endblock %}
+{% block page_title %}{{ title }}{% endblock %}
+{% block content %}
+<div class="space-y-5">
+
+  <div class="flex flex-wrap items-start justify-between gap-3">
+    <div>
+      <p class="text-sm mb-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+        <a href="{% url 'moda:grupo' cadastro.grupo %}" :style="temaClaro ? 'color:#3b82f6;' : 'color:#60a5fa;'">{{ cadastro.grupo|capfirst }}</a>
+        <span class="mx-1">›</span> {{ cadastro.plural }}
+      </p>
+      <h2 class="text-2xl font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">{{ cadastro.plural }}</h2>
+      {% if cadastro.ajuda %}
+        <p class="text-sm mt-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">{{ cadastro.ajuda }}</p>
+      {% endif %}
+    </div>
+    <a href="{% url 'moda:apoio-create' cadastro.grupo cadastro.slug %}" class="btn-primary">+ Novo(a) {{ cadastro.singular|lower }}</a>
+  </div>
+
+  <form method="get" class="card p-4">
+    <div class="flex gap-2">
+      <input type="text" name="q" value="{{ busca }}" class="form-input flex-1" placeholder="Buscar...">
+      <button type="submit" class="btn-primary">Buscar</button>
+      {% if busca %}<a href="{% url 'moda:item' cadastro.grupo cadastro.slug %}" class="btn-secondary">Limpar</a>{% endif %}
+    </div>
+  </form>
+
+  <div class="card overflow-hidden">
+    <div class="overflow-x-auto">
+      <table class="w-full text-sm">
+        <thead>
+          <tr class="border-b" :style="temaClaro ? 'border-color:#e2e8f0;' : 'border-color:#2a2a2e;'">
+            {% for rotulo, _attr in cadastro.colunas %}
+              <th class="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wide" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">{{ rotulo }}</th>
+            {% endfor %}
+            <th class="px-4 py-3 text-xs font-semibold uppercase tracking-wide text-right" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Situação</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for linha in linhas %}
+            <tr class="border-b" :style="temaClaro ? 'border-color:#f1f5f9;' : 'border-color:#1e1e22;'">
+              {% for valor in linha.valores %}
+                <td class="px-4 py-3">
+                  {% if forloop.first %}
+                    {# Primeira coluna e' o link de edicao: e' o identificador da linha. #}
+                    <a href="{% url 'moda:apoio-update' cadastro.grupo cadastro.slug linha.obj.pk %}" class="font-medium"
+                       :style="temaClaro ? 'color:#1d4ed8;' : 'color:#60a5fa;'">{{ valor|default:"—" }}</a>
+                  {% else %}
+                    <span :style="temaClaro ? 'color:#374151;' : 'color:#d1d5db;'">{{ valor|default:"—" }}</span>
+                  {% endif %}
+                </td>
+              {% endfor %}
+              <td class="px-4 py-3 text-right">
+                {% if linha.obj.ativo %}<span class="soft-pill is-green text-xs">Ativo</span>
+                {% else %}<span class="soft-pill is-slate text-xs">Inativo</span>{% endif %}
+              </td>
+            </tr>
+          {% empty %}
+            <tr>
+              <td colspan="9" class="px-4 py-10 text-center text-sm" :style="temaClaro ? 'color:#94a3b8;' : 'color:#64748b;'">
+                {% if busca %}Nada encontrado para "{{ busca }}".{% else %}
+                  Nenhum registro ainda.
+                  <a href="{% url 'moda:apoio-create' cadastro.grupo cadastro.slug %}" class="ml-1 font-semibold" :style="temaClaro ? 'color:#2563eb;' : 'color:#60a5fa;'">Cadastrar o primeiro</a>
+                {% endif %}
+              </td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+</div>
+{% endblock %}

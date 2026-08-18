@@ -59,6 +59,11 @@ GRUPOS: tuple[Grupo, ...] = (
             Item('modelos', 'Modelos', 'Modelagem base reaproveitada entre produtos.'),
             Item('colecoes', 'Coleções', 'Agrupamento por temporada ou campanha.'),
             Item('categorias', 'Categorias', 'Classificação do catálogo.'),
+            # Marcas e Linhas não estavam na lista original do menu, mas o
+            # cadastro do produto tem os dois campos — sem tela, ficariam
+            # como selects permanentemente vazios.
+            Item('marcas', 'Marcas', 'Marcas próprias e de terceiros.'),
+            Item('linhas', 'Linhas', 'Esportiva, Casual, Uniforme profissional.'),
             Item('cores', 'Cores', 'Cartela de cores da confecção.'),
             Item('tamanhos', 'Tamanhos', 'P, M, G, numéricos e especiais.'),
             Item('grades', 'Grades', 'Combinações de tamanho usadas nos pedidos.'),

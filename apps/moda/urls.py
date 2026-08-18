@@ -11,7 +11,7 @@ então o link do menu continua valendo.
 """
 from django.urls import path
 
-from . import views, views_cadastros as vc
+from . import views, views_apoio as va, views_cadastros as vc
 
 app_name = 'moda'
 
@@ -35,6 +35,12 @@ ROTAS_PRONTAS: list = [
     path('comercial/pedidos/<int:pk>/itens/<int:item_pk>/grade-produto/', vc.GradeAplicarDoProdutoView.as_view(), name='pedido-grade-do-produto'),
     path('comercial/pedidos/<int:pk>/itens/<int:item_pk>/grade-copiar/', vc.GradeCopiarView.as_view(), name='pedido-grade-copiar'),
     path('comercial/pedidos/<int:pk>/itens/<int:item_pk>/duplicar/', vc.ItemDuplicarView.as_view(), name='pedido-item-duplicar'),
+
+    # Cadastros de apoio. A LISTA nao tem rota propria: ela e' entregue
+    # pela rota do menu (`moda:item`), pra o endereco nao mudar quando a
+    # tela sai do placeholder. So criar/editar precisam de rota.
+    path('<slug:grupo>/<slug:slug>/novo/', va.CadastroApoioFormView.as_view(), name='apoio-create'),
+    path('<slug:grupo>/<slug:slug>/<int:pk>/editar/', va.CadastroApoioFormView.as_view(), name='apoio-update'),
 
     path('produtos/grades/', vc.GradeListView.as_view(), name='grade-list'),
     path('produtos/grades/nova/', vc.GradeFormView.as_view(), name='grade-create'),

@@ -323,3 +323,136 @@ class VisualItemPedidoForm(_FilialFormMixin, forms.ModelForm):
                     'Esta posição já tem imagem neste item. Remova a atual para substituir.',
                 )
         return dados
+
+
+# ══════════════════════════════════════════════════════════════════════
+# Cadastros de apoio
+# ══════════════════════════════════════════════════════════════════════
+
+class _NomeUnicoMixin:
+    """
+    Impede nome repetido na filial, com mensagem que diz o que houve.
+
+    O model sai do próprio Meta — repeti-lo num atributo abriria a chance
+    de os dois discordarem numa edição futura.
+    """
+
+    def clean_nome(self):
+        nome = (self.cleaned_data['nome'] or '').strip()
+        qs = self._meta.model.objects.filter(filial=self.filial, nome__iexact=nome)
+        if self.instance.pk:
+            qs = qs.exclude(pk=self.instance.pk)
+        if qs.exists():
+            raise forms.ValidationError(f'Já existe "{nome}" cadastrado nesta filial.')
+        return nome
+
+
+class MarcaForm(_NomeUnicoMixin, _FilialFormMixin, forms.ModelForm):
+
+    class Meta:
+        from .models import Marca
+        model = Marca
+        fields = ['nome', 'observacao', 'ativo']
+        widgets = {'observacao': forms.Textarea(attrs={'rows': 2})}
+
+
+class LinhaForm(_NomeUnicoMixin, _FilialFormMixin, forms.ModelForm):
+    class Meta:
+        from .models import Linha
+        model = Linha
+        fields = ['nome', 'observacao', 'ativo']
+        widgets = {'observacao': forms.Textarea(attrs={'rows': 2})}
+
+
+class ColecaoForm(_NomeUnicoMixin, _FilialFormMixin, forms.ModelForm):
+    class Meta:
+        from .models import Colecao
+        model = Colecao
+        fields = ['nome', 'ano', 'estacao', 'data_inicio', 'data_fim', 'observacao', 'ativo']
+        widgets = {
+            'data_inicio': forms.DateInput(attrs={'type': 'date'}),
+            'data_fim': forms.DateInput(attrs={'type': 'date'}),
+            'estacao': forms.TextInput(attrs={'placeholder': 'Ex.: Verão'}),
+            'observacao': forms.Textarea(attrs={'rows': 2}),
+        }
+
+    def clean(self):
+        dados = super().clean()
+        inicio, fim = dados.get('data_inicio'), dados.get('data_fim')
+        if inicio and fim and fim < inicio:
+            self.add_error('data_fim', 'O fim da coleção não pode ser antes do início.')
+        return dados
+
+
+class ModeloForm(_NomeUnicoMixin, _FilialFormMixin, forms.ModelForm):
+    class Meta:
+        from .models import Modelo
+        model = Modelo
+        fields = ['nome', 'gola', 'manga', 'observacao', 'ativo']
+        widgets = {
+            'nome': forms.TextInput(attrs={'placeholder': 'Ex.: Camisa gola frade manga com punho'}),
+            'observacao': forms.Textarea(attrs={'rows': 2}),
+        }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        # Gola e manga são o default que o item do pedido herda — mas o
+        # item pode sobrescrever, então aqui não são obrigatórias.
+        self.fields['gola'].required = False
+        self.fields['manga'].required = False
+
+
+class TecidoForm(_NomeUnicoMixin, _FilialFormMixin, forms.ModelForm):
+    class Meta:
+        from .models import Tecido
+        model = Tecido
+        fields = [
+            'nome', 'composicao', 'gramatura', 'largura_cm',
+            'fornecedor', 'observacao', 'ativo',
+        ]
+        widgets = {
+            'nome': forms.TextInput(attrs={'placeholder': 'Ex.: Dry'}),
+            'composicao': forms.TextInput(attrs={'placeholder': 'Ex.: 100% Poliéster'}),
+            'observacao': forms.Textarea(attrs={'rows': 2}),
+        }
+
+    def __init__(self, *args, filial=None, **kwargs):
+        from apps.cadastros.models import Fornecedor
+        super().__init__(*args, filial=filial, **kwargs)
+        self.fields['fornecedor'].required = False
+        self.fields['fornecedor'].queryset = (
+            Fornecedor.objects.for_filial(filial).filter(ativo=True).order_by('razao_social')
+            if filial else Fornecedor.objects.none()
+        )
+
+
+class CategoriaForm(_FilialFormMixin, forms.ModelForm):
+    class Meta:
+        from .models import Categoria
+        model = Categoria
+        fields = ['nome', 'pai', 'observacao', 'ativo']
+        widgets = {'observacao': forms.Textarea(attrs={'rows': 2})}
+
+    def __init__(self, *args, filial=None, **kwargs):
+        from .models import Categoria
+        super().__init__(*args, filial=filial, **kwargs)
+        self.fields['pai'].required = False
+        # Só categorias raiz podem ser pai: um terceiro nível existe no
+        # model, mas expor isso na tela confundiria mais do que ajudaria.
+        qs = Categoria.objects.filter(filial=filial, ativo=True, pai__isnull=True)
+        if self.instance.pk:
+            qs = qs.exclude(pk=self.instance.pk)  # não pode ser pai de si mesma
+        self.fields['pai'].queryset = qs
+
+    def clean(self):
+        from .models import Categoria
+        dados = super().clean()
+        nome = (dados.get('nome') or '').strip()
+        pai = dados.get('pai')
+        qs = Categoria.objects.filter(filial=self.filial, pai=pai, nome__iexact=nome)
+        if self.instance.pk:
+            qs = qs.exclude(pk=self.instance.pk)
+        if qs.exists():
+            onde = f'dentro de {pai.nome}' if pai else 'como categoria raiz'
+            self.add_error('nome', f'Já existe "{nome}" {onde}.')
+        return dados

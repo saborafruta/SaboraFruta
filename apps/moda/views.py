@@ -55,12 +55,26 @@ class GrupoView(ModaBaseView):
 
 
 class ItemView(ModaBaseView):
-    """Placeholder de uma tela ainda não construída."""
+    """
+    Tela de um item do menu.
+
+    Entrega o cadastro real quando existe um registrado para aquele
+    endereço, e a página de "em construção" quando não. Fazer o desvio aqui
+    — e não com rotas paralelas — é o que mantém o endereço estável: o link
+    do menu é o mesmo antes e depois de a tela ficar pronta.
+    """
 
     def get(self, request, grupo_slug, item_slug):
         grupo, item = buscar_item(grupo_slug, item_slug)
         if grupo is None or item is None:
             raise Http404('Tela não existe no vertical Moda.')
+
+        from .views_apoio import CADASTROS, CadastroApoioListView
+
+        cadastro = CADASTROS.get(item_slug)
+        if cadastro is not None and cadastro.grupo == grupo_slug:
+            return CadastroApoioListView.as_view()(request, slug=item_slug)
+
         return render(request, 'moda/em_construcao.html', {
             'title': item.label,
             'grupo': grupo,
