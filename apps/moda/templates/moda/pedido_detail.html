@@ -343,11 +343,154 @@
     </div>
   </div>
 
+  {# ── Grade do pedido ──────────────────────────────────────────────── #}
+  {% if tabela.linhas %}
+  <div class="card p-5 space-y-4">
+    <div class="flex items-center justify-between gap-2 flex-wrap">
+      <div>
+        <h3 class="text-sm font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">Grade do pedido</h3>
+        <p class="text-xs mt-0.5" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+          A quantidade de cada item é a soma da linha — não se digita em separado.
+        </p>
+      </div>
+      <form method="post" action="{% url 'moda:pedido-grade-tamanho-add' pedido.pk %}" class="flex gap-2">
+        {% csrf_token %}
+        <select name="tamanho" class="form-input text-sm" required>
+          <option value="">+ Tamanho...</option>
+          {% for t in tamanhos_disponiveis %}<option value="{{ t.pk }}">{{ t.sigla }}</option>{% endfor %}
+        </select>
+        <button type="submit" class="btn-secondary text-sm">Adicionar</button>
+      </form>
+    </div>
+
+    {% comment %}
+      Totais recalculados no navegador enquanto se digita, e de novo no
+      servidor ao salvar. O da tela é conferência imediata; o que vale é o
+      do servidor, que é quem grava a quantidade do item.
+    {% endcomment %}
+    <form method="post" action="{% url 'moda:pedido-grade-salvar' pedido.pk %}"
+          x-data="gradePedido()" x-init="somar()">
+      {% csrf_token %}
+      <div class="overflow-x-auto">
+        <table class="w-full text-sm">
+          <thead>
+            <tr class="border-b" :style="temaClaro ? 'border-color:#e2e8f0;' : 'border-color:#2a2a2e;'">
+              <th class="text-left px-2 py-2 text-xs font-semibold uppercase" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Produto</th>
+              {% for t in tabela.colunas %}
+                <th class="px-1 py-2 text-center text-xs font-semibold" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+                  {{ t.sigla }}
+                  <form method="post" action="{% url 'moda:pedido-grade-tamanho-remove' pedido.pk t.pk %}"
+                        onsubmit="return confirm('Remover a coluna {{ t.sigla|escapejs }} do pedido inteiro?');">
+                    {% csrf_token %}
+                    <button type="submit" class="text-[10px] font-normal" style="color:#f87171;">remover</button>
+                  </form>
+                </th>
+              {% endfor %}
+              <th class="px-2 py-2 text-right text-xs font-semibold uppercase" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Total</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for linha in tabela.linhas %}
+              <tr class="border-b" :style="temaClaro ? 'border-color:#f1f5f9;' : 'border-color:#1e1e22;'">
+                <td class="px-2 py-2 min-w-[140px]">
+                  <span class="font-medium" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">{{ linha.item.nome_exibicao }}</span>
+                  <div class="flex gap-2 mt-1">
+                    <button type="submit" form="dup-{{ linha.item.pk }}" class="text-[11px] font-semibold"
+                            :style="temaClaro ? 'color:#2563eb;' : 'color:#60a5fa;'">duplicar</button>
+                    {% if linha.item.produto and linha.item.produto.grade %}
+                      <button type="submit" form="gp-{{ linha.item.pk }}" class="text-[11px] font-semibold"
+                              :style="temaClaro ? 'color:#2563eb;' : 'color:#60a5fa;'">grade do produto</button>
+                    {% endif %}
+                  </div>
+                </td>
+                {% for celula in linha.celulas %}
+                  <td class="px-1 py-2 text-center">
+                    <input type="number" min="0" class="form-input text-center" style="width:60px; padding:4px;"
+                           name="qtd_{{ linha.item.pk }}_{{ celula.tamanho.pk }}"
+                           value="{{ celula.quantidade|default:0 }}"
+                           data-linha="{{ linha.item.pk }}" data-coluna="{{ celula.tamanho.pk }}"
+                           @input="somar()">
+                  </td>
+                {% endfor %}
+                <td class="px-2 py-2 text-right font-bold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'"
+                    x-text="totalLinha[{{ linha.item.pk }}] ?? 0"></td>
+              </tr>
+            {% endfor %}
+          </tbody>
+          <tfoot>
+            <tr style="border-top:2px solid rgba(127,127,127,.35);">
+              <td class="px-2 py-2 font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">Total por tamanho</td>
+              {% for t in tabela.colunas %}
+                <td class="px-1 py-2 text-center font-bold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'"
+                    x-text="totalColuna[{{ t.pk }}] ?? 0"></td>
+              {% endfor %}
+              <td class="px-2 py-2 text-right text-lg font-bold" style="color:#22c55e;" x-text="totalGeral"></td>
+            </tr>
+          </tfoot>
+        </table>
+      </div>
+
+      <div class="flex items-center justify-between gap-3 mt-4 flex-wrap">
+        <p class="text-xs" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+          Totais na tela são conferência. O valor gravado é recalculado ao salvar.
+        </p>
+        <button type="submit" class="btn-primary text-sm">Salvar grade</button>
+      </div>
+    </form>
+
+    {% comment %} Forms fora da tabela: form aninhado é HTML inválido. {% endcomment %}
+    {% for linha in tabela.linhas %}
+      <form id="dup-{{ linha.item.pk }}" method="post"
+            action="{% url 'moda:pedido-item-duplicar' pedido.pk linha.item.pk %}" class="hidden">{% csrf_token %}</form>
+      {% if linha.item.produto and linha.item.produto.grade %}
+        <form id="gp-{{ linha.item.pk }}" method="post"
+              action="{% url 'moda:pedido-grade-do-produto' pedido.pk linha.item.pk %}" class="hidden">{% csrf_token %}</form>
+      {% endif %}
+    {% endfor %}
+
+    {% if tabela.linhas|length > 1 %}
+      <div class="pt-3 border-t" :style="temaClaro ? 'border-color:#e5e7eb;' : 'border-color:#303036;'">
+        <p class="text-xs font-semibold uppercase tracking-wide mb-2" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Copiar grade</p>
+        {% for linha in tabela.linhas %}
+          <form method="post" action="{% url 'moda:pedido-grade-copiar' pedido.pk linha.item.pk %}"
+                class="flex items-center gap-2 mb-2 flex-wrap">
+            {% csrf_token %}
+            <span class="text-sm" :style="temaClaro ? 'color:#374151;' : 'color:#d1d5db;'">De <strong>{{ linha.item.nome_exibicao }}</strong> para</span>
+            <select name="destino" class="form-input text-sm" required style="max-width:220px;">
+              <option value="">escolha o item...</option>
+              {% for outra in tabela.linhas %}
+                {% if outra.item.pk != linha.item.pk %}
+                  <option value="{{ outra.item.pk }}">{{ outra.item.nome_exibicao }}</option>
+                {% endif %}
+              {% endfor %}
+            </select>
+            <button type="submit" class="btn-secondary text-xs">Copiar</button>
+          </form>
+        {% endfor %}
+      </div>
+    {% endif %}
+  </div>
+  {% elif itens %}
+    <div class="card p-5">
+      <h3 class="text-sm font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">Grade do pedido</h3>
+      <p class="text-sm mt-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+        Nenhum tamanho na grade ainda. Adicione uma coluna para distribuir as quantidades por tamanho.
+      </p>
+      <form method="post" action="{% url 'moda:pedido-grade-tamanho-add' pedido.pk %}" class="flex gap-2 mt-3">
+        {% csrf_token %}
+        <select name="tamanho" class="form-input text-sm" required style="max-width:180px;">
+          <option value="">Escolha um tamanho...</option>
+          {% for t in tamanhos_disponiveis %}<option value="{{ t.pk }}">{{ t.sigla }}</option>{% endfor %}
+        </select>
+        <button type="submit" class="btn-primary text-sm">Adicionar tamanho</button>
+      </form>
+    </div>
+  {% endif %}
+
   <div class="card p-4" style="border-left:3px solid #f59e0b;">
     <p class="text-sm" :style="temaClaro ? 'color:#374151;' : 'color:#cbd5e1;'">
-      <strong>Ainda falta da ficha:</strong> a grade com quantidade por tamanho
-      (PP a G3) e as etapas de produção — Corte, Sublimação, Costura, Entrega.
-      Hoje o item tem só a quantidade total.
+      <strong>Ainda falta da ficha:</strong> as etapas de produção — Corte,
+      Sublimação, Costura, Entrega.
     </p>
   </div>
 
@@ -384,4 +527,42 @@
   </div>
 
 </div>
+{% endblock %}
+
+{% block extra_js %}
+{{ block.super }}
+<script>
+// Totais da grade recalculados enquanto se digita. E' conferencia visual:
+// quem grava a quantidade do item e' o servidor, no submit. Manter os dois
+// evita o pior dos mundos -- ou digitar as cegas, ou confiar num numero de
+// tela que ninguem validou.
+function gradePedido() {
+  return {
+    totalLinha: {},
+    totalColuna: {},
+    totalGeral: 0,
+
+    somar() {
+      const linhas = {};
+      const colunas = {};
+      let geral = 0;
+
+      this.$el.querySelectorAll('input[data-linha]').forEach((campo) => {
+        // Campo vazio conta zero: durante a digitacao o usuario apaga o
+        // valor antes de trocar, e NaN faria o total sumir no meio.
+        const qtd = parseInt(campo.value, 10) || 0;
+        const linha = campo.dataset.linha;
+        const coluna = campo.dataset.coluna;
+        linhas[linha] = (linhas[linha] || 0) + qtd;
+        colunas[coluna] = (colunas[coluna] || 0) + qtd;
+        geral += qtd;
+      });
+
+      this.totalLinha = linhas;
+      this.totalColuna = colunas;
+      this.totalGeral = geral;
+    },
+  };
+}
+</script>
 {% endblock %}

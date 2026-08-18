@@ -18,10 +18,10 @@ from .forms import (
     PersonalizacaoForm, ProdutoModaForm, VisualItemPedidoForm,
 )
 from .models import (
-    Cor, Grade, ItemGrade, ItemPedidoProducao, PedidoProducao, Personalizacao,
-    ProdutoCor, ProdutoModa, Tamanho, VisualItemPedido,
+    Cor, Grade, ItemGrade, ItemGradePedido, ItemPedidoProducao, PedidoProducao,
+    Personalizacao, ProdutoCor, ProdutoModa, Tamanho, VisualItemPedido,
 )
-from .services import VarianteService
+from .services import GradePedidoService, VarianteService
 from .views import ModaBaseView
 
 
@@ -354,6 +354,8 @@ class PedidoDetailView(ModaBaseView):
             'form_item': ItemPedidoProducaoForm(filial=_filial(request)),
             'form_arte': PersonalizacaoForm(),
             'form_visual': VisualItemPedidoForm(filial=_filial(request)),
+            'tabela': GradePedidoService.montar_tabela(pedido),
+            'tamanhos_disponiveis': Tamanho.objects.for_filial(_filial(request)).filter(ativo=True),
         })
 
 
@@ -506,4 +508,131 @@ class VisualDeleteView(ModaBaseView):
         nome = visual.get_posicao_display()
         visual.delete()
         messages.success(request, f'{nome} removida.')
+        return redirect(reverse('moda:pedido-detail', args=[pedido.pk]))
+
+
+# ══════════════════════════════════════════════════════════════════════
+# GRADE DO PEDIDO (quantidade por tamanho)
+# ══════════════════════════════════════════════════════════════════════
+
+class GradePedidoSalvarView(ModaBaseView):
+    """Grava a tabela inteira de uma vez."""
+
+    permissao_acao = 'editar'
+
+    def post(self, request, pk):
+        pedido = get_object_or_404(PedidoProducao.objects.for_filial(_filial(request)), pk=pk)
+
+        # Campos chegam como qtd_<item_id>_<tamanho_id>. Ler tudo antes de
+        # gravar deixa o service salvar numa transação só.
+        quantidades = {}
+        for chave, valor in request.POST.items():
+            if not chave.startswith('qtd_'):
+                continue
+            try:
+                _, item_id, tamanho_id = chave.split('_')
+                quantidades[(int(item_id), int(tamanho_id))] = int(valor or 0)
+            except (ValueError, TypeError):
+                # Campo malformado é ignorado em vez de derrubar a tela: o
+                # resto da tabela continua válido.
+                continue
+
+        try:
+            total = GradePedidoService.salvar_quantidades(pedido, quantidades)
+        except DadosInvalidosError as exc:
+            messages.error(request, str(exc))
+        else:
+            messages.success(request, f'Grade salva. Total do pedido: {total} peça(s).')
+        return redirect(reverse('moda:pedido-detail', args=[pedido.pk]))
+
+
+class GradeTamanhoAddView(ModaBaseView):
+    """Acrescenta uma coluna (tamanho) à tabela."""
+
+    permissao_acao = 'editar'
+
+    def post(self, request, pk):
+        pedido = get_object_or_404(PedidoProducao.objects.for_filial(_filial(request)), pk=pk)
+
+        if not pedido.itens.exists():
+            messages.error(request, 'Adicione um produto ao pedido antes de montar a grade.')
+            return redirect(reverse('moda:pedido-detail', args=[pedido.pk]))
+
+        tamanho = get_object_or_404(
+            Tamanho.objects.for_filial(_filial(request)), pk=request.POST.get('tamanho'),
+        )
+        criadas = GradePedidoService.adicionar_tamanho(pedido, tamanho)
+        if criadas:
+            messages.success(request, f'Tamanho {tamanho.sigla} adicionado à grade.')
+        else:
+            messages.info(request, f'{tamanho.sigla} já estava na grade.')
+        return redirect(reverse('moda:pedido-detail', args=[pedido.pk]))
+
+
+class GradeTamanhoRemoveView(ModaBaseView):
+    permissao_acao = 'editar'
+
+    def post(self, request, pk, tamanho_pk):
+        pedido = get_object_or_404(PedidoProducao.objects.for_filial(_filial(request)), pk=pk)
+        tamanho = get_object_or_404(Tamanho.objects.for_filial(_filial(request)), pk=tamanho_pk)
+        GradePedidoService.remover_tamanho(pedido, tamanho)
+        messages.success(request, f'Tamanho {tamanho.sigla} removido da grade.')
+        return redirect(reverse('moda:pedido-detail', args=[pedido.pk]))
+
+
+class GradeAplicarDoProdutoView(ModaBaseView):
+    """Monta as colunas a partir da grade cadastrada do produto do item."""
+
+    permissao_acao = 'editar'
+
+    def post(self, request, pk, item_pk):
+        pedido = get_object_or_404(PedidoProducao.objects.for_filial(_filial(request)), pk=pk)
+        item = get_object_or_404(ItemPedidoProducao, pk=item_pk, pedido=pedido)
+        try:
+            criadas = GradePedidoService.aplicar_grade_do_produto(item)
+        except DadosInvalidosError as exc:
+            messages.error(request, str(exc))
+        else:
+            messages.success(request, f'{criadas} tamanho(s) trazidos da grade do produto.')
+        return redirect(reverse('moda:pedido-detail', args=[pedido.pk]))
+
+
+class GradeCopiarView(ModaBaseView):
+    """Copia a grade de um item para outro do mesmo pedido."""
+
+    permissao_acao = 'editar'
+
+    def post(self, request, pk, item_pk):
+        pedido = get_object_or_404(PedidoProducao.objects.for_filial(_filial(request)), pk=pk)
+        origem = get_object_or_404(ItemPedidoProducao, pk=item_pk, pedido=pedido)
+        destino = get_object_or_404(
+            ItemPedidoProducao, pk=request.POST.get('destino'), pedido=pedido,
+        )
+        try:
+            copiadas = GradePedidoService.copiar_grade(origem, destino)
+        except DadosInvalidosError as exc:
+            messages.error(request, str(exc))
+        else:
+            messages.success(
+                request,
+                f'Grade de {origem.nome_exibicao} copiada para {destino.nome_exibicao} '
+                f'({copiadas} tamanho(s)).',
+            )
+        return redirect(reverse('moda:pedido-detail', args=[pedido.pk]))
+
+
+class ItemDuplicarView(ModaBaseView):
+    """Duplica a linha: mesmas especificações e mesma grade."""
+
+    permissao_acao = 'editar'
+
+    def post(self, request, pk, item_pk):
+        pedido = get_object_or_404(PedidoProducao.objects.for_filial(_filial(request)), pk=pk)
+        item = get_object_or_404(ItemPedidoProducao, pk=item_pk, pedido=pedido)
+        copia = GradePedidoService.duplicar_item(item)
+        messages.success(
+            request,
+            f'{copia.nome_exibicao} duplicado. A arte e as imagens não vieram junto — '
+            f'quase sempre mudam entre peças.',
+        )
         return redirect(reverse('moda:pedido-detail', args=[pedido.pk]))

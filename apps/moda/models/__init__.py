@@ -1,5 +1,6 @@
 from .cadastros import Categoria, Colecao, Cor, Linha, Marca, Modelo, Tecido
 from .grade import Grade, ItemGrade, Tamanho
+from .grade_pedido import ItemGradePedido
 from .item_pedido import ItemPedidoProducao
 from .pedido import PedidoProducao
 from .personalizacao import Personalizacao
@@ -12,6 +13,7 @@ __all__ = [
     'Cor',
     'Grade',
     'ItemGrade',
+    'ItemGradePedido',
     'ItemPedidoProducao',
     'MockupVisual',
     'Linha',

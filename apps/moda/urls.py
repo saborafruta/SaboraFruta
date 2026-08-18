@@ -29,6 +29,12 @@ ROTAS_PRONTAS: list = [
     path('comercial/pedidos/<int:pk>/itens/<int:item_pk>/arte/<int:arte_pk>/remover/', vc.PersonalizacaoDeleteView.as_view(), name='pedido-arte-delete'),
     path('comercial/pedidos/<int:pk>/itens/<int:item_pk>/visual/', vc.VisualCreateView.as_view(), name='pedido-visual-add'),
     path('comercial/pedidos/<int:pk>/itens/<int:item_pk>/visual/<int:visual_pk>/remover/', vc.VisualDeleteView.as_view(), name='pedido-visual-delete'),
+    path('comercial/pedidos/<int:pk>/grade/', vc.GradePedidoSalvarView.as_view(), name='pedido-grade-salvar'),
+    path('comercial/pedidos/<int:pk>/grade/tamanho/', vc.GradeTamanhoAddView.as_view(), name='pedido-grade-tamanho-add'),
+    path('comercial/pedidos/<int:pk>/grade/tamanho/<int:tamanho_pk>/remover/', vc.GradeTamanhoRemoveView.as_view(), name='pedido-grade-tamanho-remove'),
+    path('comercial/pedidos/<int:pk>/itens/<int:item_pk>/grade-produto/', vc.GradeAplicarDoProdutoView.as_view(), name='pedido-grade-do-produto'),
+    path('comercial/pedidos/<int:pk>/itens/<int:item_pk>/grade-copiar/', vc.GradeCopiarView.as_view(), name='pedido-grade-copiar'),
+    path('comercial/pedidos/<int:pk>/itens/<int:item_pk>/duplicar/', vc.ItemDuplicarView.as_view(), name='pedido-item-duplicar'),
 
     path('produtos/grades/', vc.GradeListView.as_view(), name='grade-list'),
     path('produtos/grades/nova/', vc.GradeFormView.as_view(), name='grade-create'),
