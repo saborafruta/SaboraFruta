@@ -21,6 +21,12 @@
         </p>
       </div>
       <div class="flex items-center gap-3 flex-wrap">
+        {% comment %}
+          Atalho para o fluxo. É a tela em que a OP passa a maior parte da
+          vida — sem link aqui, o encarregado teria de voltar ao menu para
+          apontar produção da ordem que já está aberta na frente dele.
+        {% endcomment %}
+        <a href="{% url 'moda:fluxo-ordem' ordem.pk %}" class="btn-secondary text-sm">Fluxo de produção</a>
         <span class="text-sm font-bold px-3 py-1.5 rounded-full"
               {% if ordem.status == 'concluida' %}style="background:rgba(16,185,129,.14); color:#059669;"
               {% elif ordem.status == 'cancelada' %}style="background:rgba(148,163,184,.18); color:#64748b;"

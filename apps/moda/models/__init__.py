@@ -1,5 +1,6 @@
 from .cadastros import Categoria, Colecao, Cor, Linha, Marca, Modelo, Tecido
 from .ficha import FichaTecnica, ImagemFicha, MaterialFicha
+from .fluxo import EtapaOrdem
 from .grade import Grade, ItemGrade, Tamanho
 from .grade_pedido import ItemGradePedido
 from .individual import PersonalizacaoIndividual
@@ -17,6 +18,7 @@ __all__ = [
     'Categoria',
     'Colecao',
     'Cor',
+    'EtapaOrdem',
     'FichaTecnica',
     'Grade',
     'ItemGrade',

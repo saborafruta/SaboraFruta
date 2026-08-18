@@ -1,0 +1,128 @@
+{% extends "_base.html" %}
+{% block title %}{{ title }}{% endblock %}
+{% block page_title %}Fluxo de Produção{% endblock %}
+{% block content %}
+<div class="space-y-5">
+
+  <div>
+    <p class="text-sm mb-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+      <a href="{% url 'moda:grupo' 'producao' %}" :style="temaClaro ? 'color:#3b82f6;' : 'color:#60a5fa;'">Produção</a>
+      <span class="mx-1">›</span> Fluxo
+    </p>
+    <h2 class="text-2xl font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">Fluxo de Produção</h2>
+    <p class="text-sm mt-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+      {{ linhas|length }} ordem(ns) no chão de fábrica
+      {% if total_atrasadas %}, <strong style="color:#dc2626;">{{ total_atrasadas }} com etapa atrasada</strong>{% endif %}.
+      Ordens concluídas e canceladas não aparecem — já saíram da fábrica.
+    </p>
+  </div>
+
+  {% if linhas %}
+    {% comment %}
+      Uma linha por ordem, com as onze etapas como bolinhas. É a leitura que
+      o encarregado faz de manhã: onde cada ordem está, sem abrir nenhuma.
+      Abrir a ordem é o passo seguinte, não o primeiro.
+    {% endcomment %}
+    <div class="card p-5 space-y-4">
+      <div class="overflow-x-auto">
+        <table class="w-full text-sm" style="min-width:900px;">
+          <thead>
+            <tr class="text-xs uppercase tracking-wider" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+              <th class="text-left font-semibold pb-2 w-36">Ordem</th>
+              <th class="text-left font-semibold pb-2">Cliente / Produto</th>
+              <th class="text-center font-semibold pb-2 w-64">Etapas</th>
+              <th class="text-left font-semibold pb-2 w-36">Está em</th>
+              <th class="text-right font-semibold pb-2 w-24">Prazo</th>
+              <th class="text-right font-semibold pb-2 w-20">Perda</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for l in linhas %}
+              <tr class="border-t" :style="temaClaro ? 'border-color:#e5e7eb;' : 'border-color:#303036;'">
+                <td class="py-2 pr-2">
+                  <a href="{% url 'moda:fluxo-ordem' l.ordem.pk %}" class="font-mono font-semibold text-xs"
+                     :style="temaClaro ? 'color:#3b82f6;' : 'color:#60a5fa;'">{{ l.ordem.numero }}</a>
+                  <span class="block text-[10px]" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+                    {{ l.percentual }}% · {{ l.ordem.quantidade }} pç
+                  </span>
+                </td>
+                <td class="py-2 pr-2" :style="temaClaro ? 'color:#111827;' : 'color:#e5e7eb;'">
+                  {{ l.ordem.pedido.cliente }}
+                  <span class="block text-xs opacity-60">{{ l.ordem.item.nome_exibicao }}</span>
+                </td>
+                <td class="py-2">
+                  <div class="flex items-center justify-center gap-1">
+                    {% for e in l.etapas %}
+                      <span class="w-4 h-4 rounded-full shrink-0" title="{{ e.get_etapa_display }} — {{ e.get_status_display }}"
+                            {% if e.status == 'concluida' %}style="background:#059669;"
+                            {% elif e.status == 'em_andamento' %}style="background:#3b82f6;"
+                            {% elif e.status == 'pulada' %}style="background:#cbd5e1;"
+                            {% elif e.atrasada %}style="background:#dc2626;"
+                            {% else %}:style="temaClaro ? 'background:#e5e7eb;' : 'background:#3f3f46;'"{% endif %}></span>
+                    {% endfor %}
+                  </div>
+                </td>
+                <td class="py-2 text-xs" :style="temaClaro ? 'color:#374151;' : 'color:#cbd5e1;'">
+                  {% if l.atual %}
+                    {{ l.atual.get_etapa_display }}
+                    {% if l.atual.responsavel %}
+                      <span class="block opacity-60">{{ l.atual.responsavel }}</span>
+                    {% endif %}
+                  {% else %}
+                    <span style="color:#059669; font-weight:600;">fluxo concluído</span>
+                  {% endif %}
+                </td>
+                <td class="py-2 text-right text-xs tabular-nums">
+                  {% if l.ordem.prazo %}
+                    <span {% if l.ordem.atrasada %}style="color:#dc2626; font-weight:700;"
+                          {% else %}:style="temaClaro ? 'color:#374151;' : 'color:#cbd5e1;'"{% endif %}>
+                      {{ l.ordem.prazo|date:"d/m" }}
+                    </span>
+                  {% else %}
+                    <span :style="temaClaro ? 'color:#cbd5e1;' : 'color:#52525b;'">—</span>
+                  {% endif %}
+                </td>
+                <td class="py-2 text-right text-xs tabular-nums">
+                  {% if l.perda_total %}
+                    <strong style="color:#dc2626;">{{ l.perda_total }}</strong>
+                    <span class="block text-[10px]" style="color:#dc2626;">{{ l.percentual_perda }}%</span>
+                  {% else %}
+                    <span :style="temaClaro ? 'color:#cbd5e1;' : 'color:#52525b;'">—</span>
+                  {% endif %}
+                </td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+
+      {# Legenda: sem ela as bolinhas não dizem nada a quem abre a tela hoje #}
+      <div class="flex flex-wrap gap-x-4 gap-y-1 text-xs" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+        <span class="flex items-center gap-1.5"><span class="w-3 h-3 rounded-full" style="background:#059669;"></span> concluída</span>
+        <span class="flex items-center gap-1.5"><span class="w-3 h-3 rounded-full" style="background:#3b82f6;"></span> em andamento</span>
+        <span class="flex items-center gap-1.5"><span class="w-3 h-3 rounded-full" style="background:#dc2626;"></span> atrasada</span>
+        <span class="flex items-center gap-1.5"><span class="w-3 h-3 rounded-full" style="background:#cbd5e1;"></span> não se aplica</span>
+        <span class="flex items-center gap-1.5">
+          <span class="w-3 h-3 rounded-full" :style="temaClaro ? 'background:#e5e7eb;' : 'background:#3f3f46;'"></span> pendente
+        </span>
+      </div>
+
+      <p class="text-xs" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+        A ordem das bolinhas é a do fluxo: Pedido, Planejamento, Materiais,
+        Corte, Estampa, Costura, Acabamento, Qualidade, Embalagem, Expedição,
+        Entrega.
+      </p>
+    </div>
+  {% else %}
+    <div class="card p-8 text-center">
+      <p class="text-sm" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+        Nenhuma ordem aberta na fábrica. As ordens nascem do pedido —
+        abra um <a href="{% url 'moda:pedido-list' %}"
+                   :style="temaClaro ? 'color:#3b82f6;' : 'color:#60a5fa;'">pedido de produção</a>
+        e use “Gerar ordem de produção”.
+      </p>
+    </div>
+  {% endif %}
+
+</div>
+{% endblock %}

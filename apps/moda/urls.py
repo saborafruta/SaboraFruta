@@ -13,7 +13,7 @@ from django.urls import path
 
 from . import (
     views, views_apoio as va, views_cadastros as vc, views_ficha as vf,
-    views_ordem as vo, views_pcp as vp, views_roteiro as vr,
+    views_fluxo as vx, views_ordem as vo, views_pcp as vp, views_roteiro as vr,
 )
 
 app_name = 'moda'
@@ -45,6 +45,12 @@ ROTAS_PRONTAS: list = [
     path('comercial/pedidos/<int:pk>/pessoas/<int:individual_pk>/', vc.IndividualFormView.as_view(), name='pedido-individual-update'),
     path('comercial/pedidos/<int:pk>/pessoas/<int:individual_pk>/remover/', vc.IndividualDeleteView.as_view(), name='pedido-individual-delete'),
     path('comercial/pedidos/<int:pk>/pessoas/importar/', vc.IndividualImportarView.as_view(), name='pedido-individual-importar'),
+
+    # Fluxo de produção. O painel fica no grupo Produção; o fluxo de cada
+    # ordem pendura na OP, que é a quem as etapas pertencem.
+    path('producao/fluxo/', vx.PainelFluxoView.as_view(), name='fluxo-painel'),
+    path('pcp/ordens-producao/<int:pk>/fluxo/', vx.FluxoOrdemView.as_view(), name='fluxo-ordem'),
+    path('pcp/ordens-producao/<int:pk>/fluxo/<int:etapa_pk>/', vx.ApontarView.as_view(), name='fluxo-apontar'),
 
     # Cadastros de apoio. A LISTA nao tem rota propria: ela e' entregue
     # pela rota do menu (`moda:item`), pra o endereco nao mudar quando a

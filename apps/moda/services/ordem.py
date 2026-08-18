@@ -133,6 +133,14 @@ class OrdemProducaoService:
         # `bulk_create` não chama `save()`, por isso o número é montado
         # acima em vez de ficar só no `save()` do modelo.
         OrdemProducao.objects.bulk_create(criadas)
+
+        # As etapas do fluxo nascem aqui, e não sob demanda: uma OP aberta
+        # amanhã mostraria só as etapas que alguém tocou, e "não iniciada"
+        # ficaria indistinguível de "não existe".
+        from apps.moda.services.fluxo import FluxoService
+        for ordem in criadas:
+            FluxoService.criar_etapas(ordem)
+
         return criadas
 
     @staticmethod

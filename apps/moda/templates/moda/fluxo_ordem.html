@@ -1,0 +1,237 @@
+{% extends "_base.html" %}
+{% block title %}{{ title }}{% endblock %}
+{% block page_title %}Fluxo — {{ ordem.numero }}{% endblock %}
+{% block content %}
+<div class="space-y-5">
+
+  {# ── Cabeçalho ────────────────────────────────────────────────────── #}
+  <div class="card p-5">
+    <p class="text-sm mb-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+      <a href="{% url 'moda:ordem-list' %}" :style="temaClaro ? 'color:#3b82f6;' : 'color:#60a5fa;'">Ordens</a>
+      <span class="mx-1">›</span>
+      <a href="{% url 'moda:ordem-detail' ordem.pk %}" :style="temaClaro ? 'color:#3b82f6;' : 'color:#60a5fa;'">{{ ordem.numero }}</a>
+      <span class="mx-1">›</span> Fluxo
+    </p>
+    <div class="flex flex-wrap items-start justify-between gap-4">
+      <div class="min-w-0">
+        <h2 class="text-2xl font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
+          {{ ordem.pedido.cliente }}
+        </h2>
+        <p class="text-sm mt-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+          {{ ordem.descricao_produto }} · {{ ordem.quantidade }} peça(s)
+          {% if ordem.prazo %} · entrega {{ ordem.prazo|date:"d/m/Y" }}{% endif %}
+        </p>
+      </div>
+      <div class="text-right">
+        <p class="text-xs uppercase tracking-wider" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Andamento</p>
+        <p class="text-2xl font-bold tabular-nums" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
+          {{ percentual }}%
+        </p>
+        <p class="text-xs" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+          {{ concluidas }} de {{ total }} etapas
+        </p>
+      </div>
+    </div>
+
+    <div class="h-2 rounded-full overflow-hidden mt-4"
+         :style="temaClaro ? 'background:#e5e7eb;' : 'background:#27272a;'">
+      <div class="h-full rounded-full" style="background:#059669; width:{{ percentual }}%;"></div>
+    </div>
+
+    <div class="flex flex-wrap gap-x-6 gap-y-1 mt-3 text-sm">
+      {% if atual %}
+        <span :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+          Agora em <strong :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">{{ atual.get_etapa_display }}</strong>
+        </span>
+      {% else %}
+        <span style="color:#059669; font-weight:600;">Fluxo concluído.</span>
+      {% endif %}
+      {% if perda_total %}
+        <span :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+          Perda acumulada
+          <strong style="color:#dc2626;">{{ perda_total }} peça(s) ({{ percentual_perda }}%)</strong>
+        </span>
+      {% endif %}
+      {% if atrasadas %}
+        <span style="color:#dc2626; font-weight:600;">{{ atrasadas|length }} etapa(s) atrasada(s)</span>
+      {% endif %}
+    </div>
+  </div>
+
+  {% if not pode_apontar and not ordem.encerrada %}
+    <div class="card p-4">
+      <p class="text-sm" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+        Seu perfil não tem permissão para apontar produção. O fluxo abaixo é
+        somente leitura.
+      </p>
+    </div>
+  {% endif %}
+
+  {% comment %}
+    O fluxo é vertical, com a seta entre as etapas, e não abas nem colunas:
+    é assim que a ficha de papel da confecção mostra o caminho da peça, e
+    manter o mesmo desenho é o que dispensa explicação para quem vem do
+    papel. Cada etapa abre no lugar, sem trocar de tela — o apontamento é
+    feito no meio do turno, muitas vezes no celular.
+  {% endcomment %}
+  <div class="space-y-0">
+    {% for e in etapas %}
+      <div x-data="{ aberto: false }">
+        <div class="card p-4"
+             {% if e.status == 'concluida' %}style="border-left:3px solid #059669;"
+             {% elif e.status == 'em_andamento' %}style="border-left:3px solid #3b82f6;"
+             {% elif e.status == 'pulada' %}style="border-left:3px solid #94a3b8;"
+             {% elif e.atrasada %}style="border-left:3px solid #dc2626;"
+             {% else %}style="border-left:3px solid transparent;"{% endif %}>
+
+          <div class="flex flex-wrap items-center gap-3">
+            <div class="w-8 h-8 rounded-full grid place-items-center shrink-0 text-sm font-bold"
+                 {% if e.status == 'concluida' %}style="background:rgba(16,185,129,.16); color:#059669;"
+                 {% elif e.status == 'em_andamento' %}style="background:rgba(59,130,246,.16); color:#3b82f6;"
+                 {% elif e.status == 'pulada' %}style="background:rgba(148,163,184,.18); color:#64748b;"
+                 {% else %}:style="temaClaro ? 'background:#f1f5f9; color:#94a3b8;' : 'background:#27272a; color:#71717a;'"{% endif %}>
+              {% if e.status == 'concluida' %}✓{% elif e.status == 'pulada' %}—{% else %}{{ forloop.counter }}{% endif %}
+            </div>
+
+            <div class="flex-1 min-w-[160px]">
+              <p class="font-semibold text-sm" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
+                {{ e.get_etapa_display }}
+                {% if e.atrasada %}
+                  <span class="text-[10px] font-bold px-1.5 py-0.5 rounded-full ml-1"
+                        style="background:rgba(220,38,38,.12); color:#dc2626;">atrasada</span>
+                {% endif %}
+              </p>
+              <p class="text-xs mt-0.5" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+                {{ e.get_status_display }}
+                {% if e.responsavel %} · {{ e.responsavel }}{% endif %}
+                {% if e.data_conclusao %} · concluída {{ e.data_conclusao|date:"d/m" }}
+                {% elif e.data_prevista %} · prevista {{ e.data_prevista|date:"d/m" }}{% endif %}
+              </p>
+            </div>
+
+            <div class="text-right text-sm shrink-0">
+              <p class="tabular-nums font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
+                {{ e.quantidade_produzida }} / {{ e.planejada }}
+              </p>
+              {% if e.perda %}
+                <p class="text-xs tabular-nums" style="color:#dc2626;">perda {{ e.perda }}</p>
+              {% endif %}
+            </div>
+
+            {% if pode_apontar %}
+              <button type="button" class="btn-secondary text-sm shrink-0" @click="aberto = !aberto"
+                      x-text="aberto ? 'Fechar' : 'Apontar'"></button>
+            {% endif %}
+          </div>
+
+          {% if e.divergencia %}
+            <p class="text-xs mt-2 font-semibold" style="color:#d97706;">{{ e.divergencia }}</p>
+          {% endif %}
+          {% if e.observacao %}
+            <p class="text-xs mt-2 whitespace-pre-line" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+              {{ e.observacao }}
+            </p>
+          {% endif %}
+
+          {# Apontamento #}
+          {% if pode_apontar %}
+            <form method="post" action="{% url 'moda:fluxo-apontar' ordem.pk e.pk %}"
+                  x-show="aberto" x-cloak class="mt-4 pt-4 border-t space-y-3"
+                  :style="temaClaro ? 'border-color:#e5e7eb;' : 'border-color:#303036;'">
+              {% csrf_token %}
+              <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+                {% if 'status' in editaveis %}
+                  <div>
+                    <label class="block text-xs font-semibold mb-1" :style="temaClaro ? 'color:#374151;' : 'color:#cbd5e1;'">Status</label>
+                    <select name="status" class="form-input w-full">
+                      {% for valor, rotulo in status_choices %}
+                        <option value="{{ valor }}" {% if valor == e.status %}selected{% endif %}>{{ rotulo }}</option>
+                      {% endfor %}
+                    </select>
+                  </div>
+                {% endif %}
+                {% if 'responsavel' in editaveis %}
+                  <div>
+                    <label class="block text-xs font-semibold mb-1" :style="temaClaro ? 'color:#374151;' : 'color:#cbd5e1;'">Responsável</label>
+                    <input type="text" name="responsavel" value="{{ e.responsavel }}" class="form-input w-full">
+                  </div>
+                {% endif %}
+                {% if 'data_inicio' in editaveis %}
+                  <div>
+                    <label class="block text-xs font-semibold mb-1" :style="temaClaro ? 'color:#374151;' : 'color:#cbd5e1;'">Início</label>
+                    <input type="date" name="data_inicio" value="{{ e.data_inicio|date:'Y-m-d' }}" class="form-input w-full">
+                  </div>
+                {% endif %}
+                {% if 'data_prevista' in editaveis %}
+                  <div>
+                    <label class="block text-xs font-semibold mb-1" :style="temaClaro ? 'color:#374151;' : 'color:#cbd5e1;'">Prevista</label>
+                    <input type="date" name="data_prevista" value="{{ e.data_prevista|date:'Y-m-d' }}" class="form-input w-full">
+                  </div>
+                {% endif %}
+                {% if 'data_conclusao' in editaveis %}
+                  <div>
+                    <label class="block text-xs font-semibold mb-1" :style="temaClaro ? 'color:#374151;' : 'color:#cbd5e1;'">Concluída</label>
+                    <input type="date" name="data_conclusao" value="{{ e.data_conclusao|date:'Y-m-d' }}" class="form-input w-full">
+                  </div>
+                {% endif %}
+                {% if 'quantidade_planejada' in editaveis %}
+                  <div>
+                    <label class="block text-xs font-semibold mb-1" :style="temaClaro ? 'color:#374151;' : 'color:#cbd5e1;'">Planejada</label>
+                    {% comment %}
+                      Placeholder e não valor: em branco significa "herda da
+                      etapa anterior". Preencher o campo com o herdado
+                      transformaria a herança em número fixo ao salvar.
+                    {% endcomment %}
+                    <input type="number" min="0" name="quantidade_planejada"
+                           value="{% if e.quantidade_planejada is not None %}{{ e.quantidade_planejada }}{% endif %}"
+                           placeholder="{{ e.planejada }}" class="form-input w-full">
+                  </div>
+                {% endif %}
+                {% if 'quantidade_produzida' in editaveis %}
+                  <div>
+                    <label class="block text-xs font-semibold mb-1" :style="temaClaro ? 'color:#374151;' : 'color:#cbd5e1;'">Produzida</label>
+                    <input type="number" min="0" name="quantidade_produzida" value="{{ e.quantidade_produzida }}" class="form-input w-full">
+                  </div>
+                {% endif %}
+                {% if 'perda' in editaveis %}
+                  <div>
+                    <label class="block text-xs font-semibold mb-1" :style="temaClaro ? 'color:#374151;' : 'color:#cbd5e1;'">Perda</label>
+                    <input type="number" min="0" name="perda" value="{{ e.perda }}" class="form-input w-full">
+                  </div>
+                {% endif %}
+              </div>
+              {% if 'observacao' in editaveis %}
+                <div>
+                  <label class="block text-xs font-semibold mb-1" :style="temaClaro ? 'color:#374151;' : 'color:#cbd5e1;'">Observação</label>
+                  <textarea name="observacao" rows="2" class="form-input w-full">{{ e.observacao }}</textarea>
+                </div>
+              {% endif %}
+              <div class="flex justify-end gap-2">
+                <button type="button" class="btn-secondary text-sm" @click="aberto = false">Cancelar</button>
+                <button type="submit" class="btn-primary text-sm">Salvar apontamento</button>
+              </div>
+            </form>
+          {% endif %}
+        </div>
+
+        {% if not forloop.last %}
+          <div class="flex justify-center py-1">
+            <span class="text-lg leading-none"
+                  {% if e.encerrada %}style="color:#059669;"
+                  {% else %}:style="temaClaro ? 'color:#cbd5e1;' : 'color:#52525b;'"{% endif %}>↓</span>
+          </div>
+        {% endif %}
+      </div>
+    {% empty %}
+      <div class="card p-8 text-center">
+        <p class="text-sm" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+          Esta ordem foi emitida antes do fluxo existir e está sem etapas. Rode
+          <code>python manage.py criar_etapas_fluxo --filial &lt;id&gt;</code>
+          para montá-las sem perder nada do que já foi apontado.
+        </p>
+      </div>
+    {% endfor %}
+  </div>
+
+</div>
+{% endblock %}
