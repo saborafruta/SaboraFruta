@@ -15,7 +15,7 @@ from . import (
     views, views_apoio as va, views_cadastros as vc, views_ficha as vf,
     views_corte as vco, views_encaixe as ve, views_fluxo as vx,
     views_ordem as vo, views_pcp as vp,
-    views_roteiro as vr,
+    views_roteiro as vr, views_wip as vw,
 )
 
 app_name = 'moda'
@@ -47,6 +47,9 @@ ROTAS_PRONTAS: list = [
     path('comercial/pedidos/<int:pk>/pessoas/<int:individual_pk>/', vc.IndividualFormView.as_view(), name='pedido-individual-update'),
     path('comercial/pedidos/<int:pk>/pessoas/<int:individual_pk>/remover/', vc.IndividualDeleteView.as_view(), name='pedido-individual-delete'),
     path('comercial/pedidos/<int:pk>/pessoas/importar/', vc.IndividualImportarView.as_view(), name='pedido-individual-importar'),
+
+    # WIP. Fica no grupo Relatorios, que e' o endereco que o menu aponta.
+    path('relatorios/wip/', vw.WipView.as_view(), name='wip'),
 
     # Encaixe. Cadastro proprio: o mesmo risco serve a todos os enfestos
     # daquele modelo, entao nao pendura no corte.

@@ -9,7 +9,10 @@
       <a href="{% url 'moda:grupo' 'producao' %}" :style="temaClaro ? 'color:#3b82f6;' : 'color:#60a5fa;'">Produção</a>
       <span class="mx-1">›</span> Fluxo
     </p>
-    <h2 class="text-2xl font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">Fluxo de Produção</h2>
+    <div class="flex flex-wrap items-center justify-between gap-3">
+      <h2 class="text-2xl font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">Fluxo de Produção</h2>
+      <a href="{% url 'moda:wip' %}" class="btn-secondary text-sm">Painel de WIP</a>
+    </div>
     <p class="text-sm mt-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
       {{ linhas|length }} ordem(ns) no chão de fábrica
       {% if total_atrasadas %}, <strong style="color:#dc2626;">{{ total_atrasadas }} com etapa atrasada</strong>{% endif %}.

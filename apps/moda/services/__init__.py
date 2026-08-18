@@ -6,9 +6,10 @@ from .individual import IndividualService
 from .ordem import OrdemProducaoService
 from .pcp import PcpService
 from .variantes import ResultadoGeracao, VarianteService, montar_sku
+from .wip import WipService
 
 __all__ = [
     'CorteService', 'FinanceiroPedidoService', 'FluxoService', 'GradePedidoService',
     'IndividualService', 'OrdemProducaoService', 'Parcela', 'PcpService',
-    'ResultadoGeracao', 'VarianteService', 'montar_sku',
+    'ResultadoGeracao', 'VarianteService', 'WipService', 'montar_sku',
 ]

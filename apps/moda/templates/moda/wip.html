@@ -1,0 +1,248 @@
+{% extends "_base.html" %}
+{% block title %}{{ title }}{% endblock %}
+{% block page_title %}WIP{% endblock %}
+{% block content %}
+<div class="space-y-5">
+
+  <div>
+    <p class="text-sm mb-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+      <a href="{% url 'moda:grupo' 'relatorios' %}" :style="temaClaro ? 'color:#3b82f6;' : 'color:#60a5fa;'">Relatórios</a>
+      <span class="mx-1">›</span> WIP
+    </p>
+    <h2 class="text-2xl font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
+      WIP — Trabalho em Processo
+    </h2>
+    <p class="text-sm mt-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+      {{ total_pecas }} peça(s) em {{ total_ordens }} ordem(ns) no chão de fábrica.
+    </p>
+  </div>
+
+  {# ── Filtros ──────────────────────────────────────────────────────── #}
+  <form method="get" class="card p-4 grid grid-cols-2 lg:grid-cols-6 gap-3 items-end">
+    <div>
+      <label class="block text-xs font-semibold mb-1" :style="temaClaro ? 'color:#374151;' : 'color:#cbd5e1;'">OP</label>
+      <input type="search" name="ordem" value="{{ filtros.ordem }}" placeholder="000123" class="form-input w-full">
+    </div>
+    <div>
+      <label class="block text-xs font-semibold mb-1" :style="temaClaro ? 'color:#374151;' : 'color:#cbd5e1;'">Cliente</label>
+      <input type="search" name="cliente" value="{{ filtros.cliente }}" class="form-input w-full">
+    </div>
+    <div>
+      <label class="block text-xs font-semibold mb-1" :style="temaClaro ? 'color:#374151;' : 'color:#cbd5e1;'">Produto</label>
+      <input type="search" name="produto" value="{{ filtros.produto }}" class="form-input w-full">
+    </div>
+    <div>
+      <label class="block text-xs font-semibold mb-1" :style="temaClaro ? 'color:#374151;' : 'color:#cbd5e1;'">Setor</label>
+      <select name="setor" class="form-input w-full">
+        <option value="">Todos</option>
+        {% for valor, rotulo in setores %}
+          <option value="{{ valor }}" {% if valor == filtros.setor %}selected{% endif %}>{{ rotulo }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div>
+      <label class="block text-xs font-semibold mb-1" :style="temaClaro ? 'color:#374151;' : 'color:#cbd5e1;'">Responsável</label>
+      <input type="search" name="responsavel" value="{{ filtros.responsavel }}" class="form-input w-full">
+    </div>
+    <div class="grid grid-cols-2 gap-2">
+      <div>
+        {% comment %}
+          A data filtra o PRAZO da ordem, não a data da etapa: a pergunta
+          desta tela é "o que vence nesta semana e onde está parado", e o
+          prazo é o que responde. Filtrar pela data da etapa mostraria o que
+          foi tocado no período, que é outra coisa.
+        {% endcomment %}
+        <label class="block text-xs font-semibold mb-1" :style="temaClaro ? 'color:#374151;' : 'color:#cbd5e1;'">Prazo de</label>
+        <input type="date" name="de" value="{{ de_texto }}" class="form-input w-full">
+      </div>
+      <div>
+        <label class="block text-xs font-semibold mb-1" :style="temaClaro ? 'color:#374151;' : 'color:#cbd5e1;'">até</label>
+        <input type="date" name="ate" value="{{ ate_texto }}" class="form-input w-full">
+      </div>
+    </div>
+    <div class="col-span-2 lg:col-span-6 flex gap-2">
+      <button type="submit" class="btn-primary">Filtrar</button>
+      {% if tem_filtro %}<a href="{% url 'moda:wip' %}" class="btn-secondary">Limpar</a>{% endif %}
+    </div>
+  </form>
+
+  {# ── WIP por setor ────────────────────────────────────────────────── #}
+  <div class="card p-5 space-y-3">
+    <div>
+      <h3 class="text-sm font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">WIP atual, por setor</h3>
+      {% comment %}
+        Cada peça conta uma vez só. Isso é o que faz a soma daqui bater com
+        o que existe na fábrica — se "Cortadas" e "Aguardando sublimação"
+        fossem baldes separados, as mesmas peças entrariam duas vezes.
+      {% endcomment %}
+      <p class="text-xs mt-0.5" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+        Cada peça aparece num setor só — a soma é o WIP total.
+      </p>
+    </div>
+
+    {% if total_pecas %}
+      <div class="space-y-2">
+        {% for s in por_setor %}
+          {% if s.pecas %}
+            <div>
+              <div class="flex justify-between text-sm mb-1">
+                <span :style="temaClaro ? 'color:#374151;' : 'color:#cbd5e1;'">{{ s.setor }}</span>
+                <span class="tabular-nums font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
+                  {{ s.pecas }} peça(s)
+                  <span class="text-xs font-normal opacity-60">· {{ s.ordens }} OP</span>
+                </span>
+              </div>
+              <div class="h-2 rounded-full overflow-hidden" :style="temaClaro ? 'background:#e5e7eb;' : 'background:#27272a;'">
+                <div class="h-full rounded-full" style="background:#3b82f6; width:{{ s.proporcao }}%;"></div>
+              </div>
+            </div>
+          {% endif %}
+        {% endfor %}
+      </div>
+    {% else %}
+      <p class="text-sm" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+        Nada em processo{% if tem_filtro %} com esses filtros{% endif %}.
+      </p>
+    {% endif %}
+  </div>
+
+  {# ── Os nove estados ──────────────────────────────────────────────── #}
+  <div class="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-3">
+    {% for c in colunas %}
+      <div class="card p-4"
+           {% if c.pecas %}style="border-left:3px solid #3b82f6;"{% endif %}>
+        <p class="text-xs uppercase tracking-wider" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+          {{ c.balde.label }}
+        </p>
+        <p class="text-3xl font-bold tabular-nums mt-1"
+           {% if c.pecas %}:style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'"
+           {% else %}:style="temaClaro ? 'color:#cbd5e1;' : 'color:#52525b;'"{% endif %}>
+          {{ c.pecas }}
+        </p>
+        <p class="text-xs" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+          peça(s) · {{ c.ordens }} OP
+        </p>
+        {% if c.balde.tambem %}
+          {% comment %}
+            O segundo nome do mesmo balde. Dizê-lo evita a pergunta "e onde
+            estão as aguardando sublimação?" — estão aqui, é a mesma pilha.
+          {% endcomment %}
+          <p class="text-[10px] mt-1.5 italic" :style="temaClaro ? 'color:#94a3b8;' : 'color:#71717a;'">
+            = {{ c.balde.tambem }}
+          </p>
+        {% endif %}
+      </div>
+    {% endfor %}
+  </div>
+
+  {# ── Detalhe por ordem ────────────────────────────────────────────── #}
+  {% for c in colunas %}
+    {% if c.linhas %}
+      <div class="card p-5 space-y-3">
+        <h3 class="text-sm font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
+          {{ c.balde.label }}
+          <span class="font-normal" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+            — {{ c.pecas }} peça(s)
+          </span>
+        </h3>
+        <div class="overflow-x-auto">
+          <table class="w-full text-sm" style="min-width:760px;">
+            <thead>
+              <tr class="text-xs uppercase tracking-wider" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+                <th class="text-left font-semibold pb-2 w-32">OP</th>
+                <th class="text-left font-semibold pb-2">Cliente / Produto</th>
+                <th class="text-left font-semibold pb-2 w-32">Responsável</th>
+                <th class="text-right font-semibold pb-2 w-24">Peças</th>
+                <th class="text-right font-semibold pb-2 w-28">Prazo</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for l in c.linhas %}
+                <tr class="border-t" :style="temaClaro ? 'border-color:#e5e7eb;' : 'border-color:#303036;'">
+                  <td class="py-2 pr-2 font-mono text-xs">
+                    <a href="{% url 'moda:fluxo-ordem' l.ordem.pk %}"
+                       :style="temaClaro ? 'color:#3b82f6;' : 'color:#60a5fa;'">{{ l.ordem.numero }}</a>
+                  </td>
+                  <td class="py-2 pr-2" :style="temaClaro ? 'color:#111827;' : 'color:#e5e7eb;'">
+                    {{ l.ordem.pedido.cliente }}
+                    <span class="block text-xs opacity-60">{{ l.ordem.item.nome_exibicao }}</span>
+                  </td>
+                  <td class="py-2 text-xs" :style="temaClaro ? 'color:#374151;' : 'color:#cbd5e1;'">
+                    {% firstof l.etapa.responsavel '—' %}
+                  </td>
+                  <td class="py-2 text-right tabular-nums font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
+                    {{ l.quantidade }}
+                  </td>
+                  <td class="py-2 text-right text-xs tabular-nums">
+                    {% if l.ordem.prazo %}
+                      <span {% if l.ordem.atrasada %}style="color:#dc2626; font-weight:700;"
+                            {% else %}:style="temaClaro ? 'color:#374151;' : 'color:#cbd5e1;'"{% endif %}>
+                        {{ l.ordem.prazo|date:"d/m/Y" }}
+                      </span>
+                    {% else %}
+                      <span :style="temaClaro ? 'color:#cbd5e1;' : 'color:#52525b;'">—</span>
+                    {% endif %}
+                  </td>
+                </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    {% endif %}
+  {% endfor %}
+
+  {# ── Fora do chão de fábrica ──────────────────────────────────────── #}
+  {% if escritorio or sem_fluxo %}
+    <div class="card p-5 space-y-4">
+      <div>
+        <h3 class="text-sm font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">Fora do WIP</h3>
+        <p class="text-xs mt-0.5" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+          Ordens abertas que ainda não chegaram ao corte, ou que não têm fluxo
+          montado. Não entram na conta acima porque não há peça no chão — mas
+          também não somem, senão a soma das OPs não fecharia.
+        </p>
+      </div>
+
+      {% if escritorio %}
+        <div>
+          <p class="text-xs font-semibold uppercase tracking-wider mb-2" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+            Antes do corte ({{ escritorio|length }})
+          </p>
+          <div class="flex flex-wrap gap-2">
+            {% for l in escritorio %}
+              <a href="{% url 'moda:fluxo-ordem' l.ordem.pk %}"
+                 class="text-xs font-semibold px-2.5 py-1.5 rounded-lg"
+                 :style="temaClaro ? 'background:#f8fafc; color:#334155;' : 'background:#18181b; color:#d4d4d8;'">
+                <span class="font-mono">{{ l.ordem.numero }}</span>
+                · {{ l.etapa.get_etapa_display }}
+              </a>
+            {% endfor %}
+          </div>
+        </div>
+      {% endif %}
+
+      {% if sem_fluxo %}
+        <div>
+          <p class="text-xs font-semibold uppercase tracking-wider mb-2" style="color:#d97706;">
+            Sem fluxo montado ({{ sem_fluxo|length }})
+          </p>
+          <p class="text-xs mb-2" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+            Emitidas antes do fluxo existir. Rode
+            <code>python manage.py criar_etapas_fluxo --filial &lt;id&gt;</code>
+            para elas entrarem no painel.
+          </p>
+          <div class="flex flex-wrap gap-2">
+            {% for o in sem_fluxo %}
+              <a href="{% url 'moda:ordem-detail' o.pk %}"
+                 class="text-xs font-mono font-semibold px-2.5 py-1.5 rounded-lg"
+                 style="background:rgba(245,158,11,.14); color:#d97706;">{{ o.numero }}</a>
+            {% endfor %}
+          </div>
+        </div>
+      {% endif %}
+    </div>
+  {% endif %}
+
+</div>
+{% endblock %}
