@@ -5,15 +5,17 @@ São as três que fecham o ciclo até o SKU — grade define os tamanhos, cor
 define as cores, e o produto cruza as duas para gerar as variantes.
 """
 from django.contrib import messages
-from django.db.models import Count, Prefetch
+from django.db.models import Count, Prefetch, Q
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.views import View
 
 from apps.core.services.exceptions import DadosInvalidosError
 
-from .forms import CorForm, GradeForm, ProdutoModaForm
-from .models import Cor, Grade, ItemGrade, ProdutoCor, ProdutoModa, Tamanho
+from .forms import CorForm, GradeForm, PedidoProducaoForm, ProdutoModaForm
+from .models import (
+    Cor, Grade, ItemGrade, PedidoProducao, ProdutoCor, ProdutoModa, Tamanho,
+)
 from .services import VarianteService
 from .views import ModaBaseView
 
@@ -142,7 +144,6 @@ class ProdutoListView(ModaBaseView):
             .annotate(qtd_variantes=Count('variantes', distinct=True))
         )
         if busca:
-            from django.db.models import Q
             produtos = produtos.filter(
                 Q(nome__icontains=busca) | Q(codigo__icontains=busca)
                 | Q(referencia__icontains=busca)
@@ -247,3 +248,124 @@ class ProdutoGerarVariantesView(ModaBaseView):
         else:
             messages.success(request, resultado.mensagem)
         return redirect(reverse('moda:produto-detail', args=[produto.pk]))
+
+
+# ══════════════════════════════════════════════════════════════════════
+# PEDIDOS DE PRODUÇÃO
+# ══════════════════════════════════════════════════════════════════════
+
+class PedidoListView(ModaBaseView):
+    def get(self, request):
+        busca = (request.GET.get('q') or '').strip()
+        status = (request.GET.get('status') or '').strip()
+
+        pedidos = (
+            PedidoProducao.objects.for_filial(_filial(request))
+            .select_related('cliente', 'vendedor')
+        )
+        if busca:
+            pedidos = pedidos.filter(
+                Q(numero__icontains=busca)
+                | Q(cliente__razao_social__icontains=busca)
+                | Q(cliente__nome_fantasia__icontains=busca)
+                | Q(contato_nome__icontains=busca)
+            )
+        if status:
+            pedidos = pedidos.filter(status=status)
+
+        # Contagem por status para os atalhos do topo. Uma consulta só, em
+        # vez de uma por status.
+        contagem = dict(
+            PedidoProducao.objects.for_filial(_filial(request))
+            .values_list('status')
+            .annotate(n=Count('id'))
+        )
+
+        # Choices e contagem casados aqui: o template Django nao indexa
+        # dicionario por variavel de laco, entao juntar la exigiria filtro
+        # customizado so pra isso.
+        atalhos = [
+            {'valor': valor, 'rotulo': rotulo, 'n': contagem.get(valor, 0)}
+            for valor, rotulo in PedidoProducao.Status.choices
+        ]
+
+        return render(request, 'moda/pedido_list.html', {
+            'title': 'Pedidos de Produção',
+            'pedidos': pedidos,
+            'busca': busca,
+            'status_filtro': status,
+            'atalhos': atalhos,
+            'total': sum(contagem.values()),
+        })
+
+
+class PedidoFormView(ModaBaseView):
+    permissao_acao = 'criar'
+
+    def _obter(self, request, pk):
+        if pk is None:
+            return None
+        return get_object_or_404(PedidoProducao.objects.for_filial(_filial(request)), pk=pk)
+
+    def get(self, request, pk=None):
+        pedido = self._obter(request, pk)
+        return render(request, 'moda/pedido_form.html', {
+            'title': f'Pedido #{pedido.numero:06d}' if pedido else 'Novo Pedido de Produção',
+            'pedido': pedido,
+            'form': PedidoProducaoForm(instance=pedido, filial=_filial(request)),
+        })
+
+    def post(self, request, pk=None):
+        pedido = self._obter(request, pk)
+        form = PedidoProducaoForm(request.POST, instance=pedido, filial=_filial(request))
+        if not form.is_valid():
+            return render(request, 'moda/pedido_form.html', {
+                'title': f'Pedido #{pedido.numero:06d}' if pedido else 'Novo Pedido de Produção',
+                'pedido': pedido, 'form': form,
+            })
+        pedido = form.save(commit=False)
+        pedido.filial = _filial(request)
+        pedido.save()
+        messages.success(request, f'Pedido #{pedido.numero:06d} salvo.')
+        return redirect(reverse('moda:pedido-detail', args=[pedido.pk]))
+
+
+class PedidoDetailView(ModaBaseView):
+    def get(self, request, pk):
+        pedido = get_object_or_404(
+            PedidoProducao.objects.for_filial(_filial(request))
+            .select_related('cliente', 'vendedor'),
+            pk=pk,
+        )
+        return render(request, 'moda/pedido_detail.html', {
+            'title': f'Pedido #{pedido.numero:06d}',
+            'pedido': pedido,
+            'status_choices': PedidoProducao.Status.choices,
+        })
+
+
+class PedidoStatusView(ModaBaseView):
+    """Muda só o status — o caminho curto de quem está no chão de fábrica."""
+
+    permissao_acao = 'editar'
+
+    def post(self, request, pk):
+        pedido = get_object_or_404(PedidoProducao.objects.for_filial(_filial(request)), pk=pk)
+        novo = (request.POST.get('status') or '').strip()
+
+        if novo not in PedidoProducao.Status.values:
+            messages.error(request, 'Status inválido.')
+            return redirect(reverse('moda:pedido-detail', args=[pedido.pk]))
+
+        if novo == pedido.status:
+            messages.info(request, 'O pedido já estava nesse status.')
+            return redirect(reverse('moda:pedido-detail', args=[pedido.pk]))
+
+        anterior = pedido.get_status_display()
+        pedido.status = novo
+        pedido.save(update_fields=['status', 'updated_at'])
+        messages.success(
+            request,
+            f'Pedido #{pedido.numero:06d}: {anterior} → {pedido.get_status_display()}.',
+        )
+        return redirect(reverse('moda:pedido-detail', args=[pedido.pk]))

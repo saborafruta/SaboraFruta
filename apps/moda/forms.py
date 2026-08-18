@@ -1,7 +1,7 @@
 """Formulários do vertical Moda."""
 from django import forms
 
-from .models import Cor, Grade, ProdutoModa, Tamanho
+from .models import Cor, Grade, PedidoProducao, ProdutoModa, Tamanho
 
 
 class _FilialFormMixin:
@@ -120,3 +120,53 @@ class ProdutoModaForm(_FilialFormMixin, forms.ModelForm):
                 f'Já existe um produto com o código {codigo} — ele é o prefixo do SKU.'
             )
         return codigo
+
+
+class PedidoProducaoForm(_FilialFormMixin, forms.ModelForm):
+    """Cabeçalho do pedido de produção — a parte de cima da ficha."""
+
+    class Meta:
+        model = PedidoProducao
+        fields = [
+            'cliente', 'contato_nome', 'contato_telefone',
+            'data_pedido', 'data_prevista_entrega',
+            'vendedor', 'prioridade', 'status', 'observacoes',
+        ]
+        widgets = {
+            'data_pedido': forms.DateInput(attrs={'type': 'date'}),
+            'data_prevista_entrega': forms.DateInput(attrs={'type': 'date'}),
+            'observacoes': forms.Textarea(attrs={'rows': 3}),
+            'contato_nome': forms.TextInput(attrs={'placeholder': 'Ex.: Anderson'}),
+            'contato_telefone': forms.TextInput(attrs={'placeholder': '(84) 99210-8081'}),
+        }
+
+    def __init__(self, *args, filial=None, **kwargs):
+        from apps.cadastros.models import Cliente
+        from apps.core.models import Usuario
+
+        super().__init__(*args, filial=filial, **kwargs)
+
+        # Cliente e vendedor não passam pelo `campos_por_filial` porque são
+        # de outros apps e têm regra própria de escopo.
+        self.fields['cliente'].queryset = (
+            Cliente.objects.filter(ativo=True).order_by('razao_social')
+            if filial is None else
+            Cliente.objects.for_filial(filial).filter(ativo=True).order_by('razao_social')
+        )
+        self.fields['vendedor'].queryset = Usuario.objects.filter(
+            ativo=True, empresa=filial.empresa if filial else None,
+        ).order_by('nome')
+        self.fields['vendedor'].required = False
+
+    def clean(self):
+        dados = super().clean()
+        pedido = dados.get('data_pedido')
+        entrega = dados.get('data_prevista_entrega')
+        # Entrega antes do pedido é erro de digitação, e passaria despercebido
+        # até o PCP priorizar um pedido "atrasado" que nem começou.
+        if pedido and entrega and entrega < pedido:
+            self.add_error(
+                'data_prevista_entrega',
+                'A entrega não pode ser anterior à data do pedido.',
+            )
+        return dados

@@ -1,5 +1,6 @@
 from .cadastros import Categoria, Colecao, Cor, Linha, Marca, Modelo, Tecido
 from .grade import Grade, ItemGrade, Tamanho
+from .pedido import PedidoProducao
 from .produto import ProdutoCor, ProdutoModa, Variante
 
 __all__ = [
@@ -11,6 +12,7 @@ __all__ = [
     'Linha',
     'Marca',
     'Modelo',
+    'PedidoProducao',
     'ProdutoCor',
     'ProdutoModa',
     'Tamanho',

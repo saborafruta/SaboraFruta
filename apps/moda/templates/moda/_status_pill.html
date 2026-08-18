@@ -1,0 +1,29 @@
+{% comment %}
+  Selo do status do pedido. Num arquivo só porque lista e detalhe precisam
+  da mesma cor — em dois lugares, um dia divergiriam.
+
+  As cores seguem o significado operacional, não a ordem do fluxo:
+  cinza = ainda não é pedido firme, âmbar = parado esperando algo,
+  azul = andando, verde = concluído, vermelho = cancelado.
+{% endcomment %}
+{% if status == 'orcamento' %}
+  <span class="soft-pill is-slate text-xs">Orçamento</span>
+{% elif status == 'confirmado' %}
+  <span class="soft-pill is-blue text-xs">Pedido Confirmado</span>
+{% elif status == 'aguardando_arte' %}
+  <span class="soft-pill is-yellow text-xs">Aguardando Arte</span>
+{% elif status == 'aguardando_material' %}
+  <span class="soft-pill is-yellow text-xs">Aguardando Material</span>
+{% elif status == 'liberado_producao' %}
+  <span class="soft-pill is-blue text-xs">Liberado para Produção</span>
+{% elif status == 'em_producao' %}
+  <span class="soft-pill is-purple text-xs">Em Produção</span>
+{% elif status == 'em_acabamento' %}
+  <span class="soft-pill is-purple text-xs">Em Acabamento</span>
+{% elif status == 'pronto' %}
+  <span class="soft-pill is-green text-xs">Pronto</span>
+{% elif status == 'entregue' %}
+  <span class="soft-pill is-green text-xs">Entregue</span>
+{% elif status == 'cancelado' %}
+  <span class="soft-pill is-red text-xs">Cancelado</span>
+{% endif %}

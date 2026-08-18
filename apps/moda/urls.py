@@ -18,6 +18,12 @@ app_name = 'moda'
 # Telas já implementadas — declaradas ANTES do catch-all, senão o
 # placeholder as engoliria. O endereço é o mesmo que o menu já aponta.
 ROTAS_PRONTAS: list = [
+    path('comercial/pedidos/', vc.PedidoListView.as_view(), name='pedido-list'),
+    path('comercial/pedidos/novo/', vc.PedidoFormView.as_view(), name='pedido-create'),
+    path('comercial/pedidos/<int:pk>/', vc.PedidoDetailView.as_view(), name='pedido-detail'),
+    path('comercial/pedidos/<int:pk>/editar/', vc.PedidoFormView.as_view(), name='pedido-update'),
+    path('comercial/pedidos/<int:pk>/status/', vc.PedidoStatusView.as_view(), name='pedido-status'),
+
     path('produtos/grades/', vc.GradeListView.as_view(), name='grade-list'),
     path('produtos/grades/nova/', vc.GradeFormView.as_view(), name='grade-create'),
     path('produtos/grades/<int:pk>/', vc.GradeFormView.as_view(), name='grade-update'),

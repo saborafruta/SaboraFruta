@@ -1,0 +1,123 @@
+{% extends "_base.html" %}
+{% block title %}{{ title }}{% endblock %}
+{% block page_title %}Pedido #{{ pedido.numero|stringformat:"06d" }}{% endblock %}
+
+{% block content %}
+<div class="max-w-4xl mx-auto space-y-5">
+
+  <div class="flex flex-wrap items-start justify-between gap-3">
+    <div>
+      <p class="text-sm mb-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+        <a href="{% url 'moda:pedido-list' %}" :style="temaClaro ? 'color:#3b82f6;' : 'color:#60a5fa;'">Pedidos</a>
+        <span class="mx-1">›</span> #{{ pedido.numero|stringformat:"06d" }}
+      </p>
+      <div class="flex items-center gap-2 flex-wrap">
+        <h2 class="text-2xl font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">{{ pedido.cliente }}</h2>
+        {% include "moda/_status_pill.html" with status=pedido.status %}
+      </div>
+    </div>
+    <a href="{% url 'moda:pedido-update' pedido.pk %}" class="btn-secondary">Editar</a>
+  </div>
+
+  {% if pedido.atrasado %}
+    <div class="card p-4" style="border-left:3px solid #dc2626;">
+      <p class="text-sm font-semibold" style="color:#f87171;">
+        Entrega vencida em {{ pedido.data_prevista_entrega|date:"d/m/Y" }}.
+      </p>
+    </div>
+  {% endif %}
+
+  <div class="grid gap-4 lg:grid-cols-3">
+
+    <div class="card p-5 space-y-3 lg:col-span-2">
+      <h3 class="text-xs font-semibold uppercase tracking-widest pb-2 border-b"
+          :style="temaClaro ? 'color:#6b7280; border-color:#e5e7eb;' : 'color:#6b7280; border-color:#374151;'">
+        Cabeçalho
+      </h3>
+      <div class="grid gap-3 sm:grid-cols-2 text-sm">
+        <div>
+          <span class="block text-xs" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Cliente</span>
+          <span class="font-medium" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">{{ pedido.cliente }}</span>
+        </div>
+        <div>
+          <span class="block text-xs" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Contato</span>
+          <span class="font-medium" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
+            {% if pedido.contato_nome %}{{ pedido.contato_nome }}{% else %}—{% endif %}
+          </span>
+          {% if pedido.contato_telefone %}
+            <span class="block text-xs mt-0.5" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">{{ pedido.contato_telefone }}</span>
+          {% endif %}
+        </div>
+        <div>
+          <span class="block text-xs" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Data do pedido</span>
+          <span class="font-medium" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">{{ pedido.data_pedido|date:"d/m/Y" }}</span>
+        </div>
+        <div>
+          <span class="block text-xs" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Entrega prevista</span>
+          <span class="font-medium" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
+            {{ pedido.data_prevista_entrega|date:"d/m/Y"|default:"—" }}
+          </span>
+          {% comment %}
+            Contagem só em pedido aberto: em pedido entregue ou cancelado
+            "faltam -3 dias" não significa nada.
+          {% endcomment %}
+          {% if pedido.dias_para_entrega is not None and not pedido.atrasado %}
+            <span class="block text-xs mt-0.5" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+              faltam {{ pedido.dias_para_entrega }} dia{{ pedido.dias_para_entrega|pluralize }}
+            </span>
+          {% endif %}
+        </div>
+        <div>
+          <span class="block text-xs" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Vendedor</span>
+          <span class="font-medium" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">{{ pedido.vendedor|default:"—" }}</span>
+        </div>
+        <div>
+          <span class="block text-xs" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Prioridade</span>
+          {% if pedido.prioridade == 'urgente' %}<span class="soft-pill is-red text-xs">Urgente</span>
+          {% elif pedido.prioridade == 'alta' %}<span class="soft-pill is-yellow text-xs">Alta</span>
+          {% else %}<span class="soft-pill is-slate text-xs">Normal</span>{% endif %}
+        </div>
+      </div>
+
+      {% if pedido.observacoes %}
+        <div class="pt-2">
+          <span class="block text-xs mb-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Observações</span>
+          <p class="text-sm whitespace-pre-line" :style="temaClaro ? 'color:#374151;' : 'color:#d1d5db;'">{{ pedido.observacoes }}</p>
+        </div>
+      {% endif %}
+    </div>
+
+    <div class="card p-5 space-y-3">
+      <h3 class="text-xs font-semibold uppercase tracking-widest pb-2 border-b"
+          :style="temaClaro ? 'color:#6b7280; border-color:#e5e7eb;' : 'color:#6b7280; border-color:#374151;'">
+        Situação
+      </h3>
+      {% comment %}
+        Troca de status em um clique, separada do formulário: quem está no
+        chão de fábrica só quer carimbar a etapa, não reabrir o cadastro.
+      {% endcomment %}
+      <form method="post" action="{% url 'moda:pedido-status' pedido.pk %}" class="space-y-2">
+        {% csrf_token %}
+        <label class="block text-sm font-medium" :style="temaClaro ? 'color:#374151;' : 'color:#d1d5db;'">Mudar status</label>
+        <select name="status" class="form-input w-full">
+          {% for valor, rotulo in status_choices %}
+            <option value="{{ valor }}" {% if pedido.status == valor %}selected{% endif %}>{{ rotulo }}</option>
+          {% endfor %}
+        </select>
+        <button type="submit" class="btn-primary w-full text-sm">Aplicar</button>
+      </form>
+    </div>
+
+  </div>
+
+  <div class="card p-4" style="border-left:3px solid #f59e0b;">
+    <p class="text-sm" :style="temaClaro ? 'color:#374151;' : 'color:#cbd5e1;'">
+      <strong>Falta a parte de baixo da ficha.</strong>
+      Os itens do pedido (produto, grade e quantidade por tamanho) e as etapas
+      de produção — Corte, Sublimação, Costura, Entrega — ainda não estão neste
+      pedido. É o próximo bloco.
+    </p>
+  </div>
+
+</div>
+{% endblock %}
