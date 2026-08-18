@@ -68,12 +68,18 @@ MODULOS = [
         'PDV, fiscal, qualidade e relatórios (Analytics).',
         prefixos=('/pdv/', '/fiscal/', '/qualidade/', '/analytics/'),
     ),
+    # ── Verticais ────────────────────────────────────────────────────────
     Modulo(
         'food_service', 'Food Service',
         'Mesas, comandas, cozinha (KDS) e cardápio digital.',
         prefixos=('/food-service/',),
+        # Deixou de ser universal: mesa e comanda não fazem sentido numa
+        # distribuidora ou num atacado, e o menu delas ficava poluído.
+        # Para conceder a outro ramo, acrescente o segmento aqui — ou ligue
+        # na mão pela Central, que é o caminho para quem não se encaixa em
+        # nenhum destes.
+        segmentos=(seg.PADARIAS, seg.INDUSTRIA_ALIMENTICIA),
     ),
-    # ── Verticais ────────────────────────────────────────────────────────
     Modulo(
         'moda', 'Moda / Confecção',
         'Ficha de produção, engenharia do produto, corte, costura e acabamento.',
