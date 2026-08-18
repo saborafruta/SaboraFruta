@@ -1,0 +1,60 @@
+{% extends "_base.html" %}
+{% block title %}{{ title }} — Moda{% endblock %}
+{% block page_title %}{{ title }}{% endblock %}
+
+{% block content %}
+<div class="space-y-5">
+
+  <div>
+    <p class="text-sm mb-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+      <a href="{% url 'moda:hub' %}" :style="temaClaro ? 'color:#3b82f6;' : 'color:#60a5fa;'">Moda e Confecção</a>
+      <span class="mx-1">›</span> {{ grupo.label }}
+    </p>
+    <div class="flex items-start gap-3">
+      <span class="shrink-0 w-11 h-11 rounded-lg flex items-center justify-center"
+            :style="temaClaro ? 'background:#eff6ff; color:#2563eb;' : 'background:rgba(37,99,235,.14); color:#60a5fa;'">
+        {% include "moda/_icones.html" with icone=grupo.icone classe="w-6 h-6" %}
+      </span>
+      <div>
+        <h2 class="text-2xl font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">{{ grupo.label }}</h2>
+        <p class="text-sm mt-0.5" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">{{ grupo.descricao }}</p>
+      </div>
+    </div>
+  </div>
+
+  <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+    {% for item in grupo.itens %}
+      <a href="{% url 'moda:item' grupo.slug item.slug %}"
+         class="card p-4 block transition-transform hover:-translate-y-0.5">
+        <div class="flex items-start justify-between gap-2">
+          <div class="min-w-0">
+            <h3 class="font-semibold text-sm" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">{{ item.label }}</h3>
+            <p class="text-xs mt-1 leading-relaxed" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">{{ item.descricao }}</p>
+          </div>
+          {% comment %}
+            Todo item é "em construção" hoje. Quando a tela real existir,
+            some o selo — quem olha a lista vê o que já dá para usar.
+          {% endcomment %}
+          <span class="shrink-0 text-[10px] font-bold px-1.5 py-0.5 rounded-full"
+                style="background:rgba(245,158,11,.14); color:#fbbf24;">em breve</span>
+        </div>
+      </a>
+    {% endfor %}
+  </div>
+
+  {% comment %} Navegação lateral entre grupos, sem voltar ao hub. {% endcomment %}
+  <div class="card p-4">
+    <p class="text-xs font-semibold uppercase tracking-wide mb-2.5"
+       :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Outras etapas</p>
+    <div class="flex flex-wrap gap-2">
+      {% for g in grupos %}
+        {% if g.slug != grupo.slug %}
+          <a href="{% url 'moda:grupo' g.slug %}" class="text-xs font-semibold px-2.5 py-1.5 rounded-lg"
+             :style="temaClaro ? 'background:#f3f4f6; color:#374151;' : 'background:#2a2a2e; color:#d4d4d4;'">{{ g.label }}</a>
+        {% endif %}
+      {% endfor %}
+    </div>
+  </div>
+
+</div>
+{% endblock %}

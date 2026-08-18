@@ -1,0 +1,41 @@
+{% comment %}
+  Ícones dos grupos, num arquivo só para hub, grupo e sidebar usarem o
+  mesmo desenho. Recebe `icone` (chave declarada em menu.py) e `classe`.
+{% endcomment %}
+{% if icone == 'carrinho' %}
+  <svg class="{{ classe|default:'w-5 h-5' }}" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.6" d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.3 2.3A1 1 0 005.4 17H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z"/>
+  </svg>
+{% elif icone == 'camiseta' %}
+  <svg class="{{ classe|default:'w-5 h-5' }}" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.6" d="M9 3l3 2 3-2 6 3-2 4-2-1v12H7V9L5 10 3 6l6-3z"/>
+  </svg>
+{% elif icone == 'regua' %}
+  <svg class="{{ classe|default:'w-5 h-5' }}" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.6" d="M3 17L17 3l4 4L7 21l-4-4zM8 12l2 2M11 9l2 2M14 6l2 2"/>
+  </svg>
+{% elif icone == 'calendario' %}
+  <svg class="{{ classe|default:'w-5 h-5' }}" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.6" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/>
+  </svg>
+{% elif icone == 'tesoura' %}
+  <svg class="{{ classe|default:'w-5 h-5' }}" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.6" d="M6 4l12 12M6 20L18 8M8 6a2 2 0 11-4 0 2 2 0 014 0zm0 12a2 2 0 11-4 0 2 2 0 014 0z"/>
+  </svg>
+{% elif icone == 'caixa' %}
+  <svg class="{{ classe|default:'w-5 h-5' }}" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.6" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"/>
+  </svg>
+{% elif icone == 'caminhao' %}
+  <svg class="{{ classe|default:'w-5 h-5' }}" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.6" d="M9 17a2 2 0 11-4 0 2 2 0 014 0zm10 0a2 2 0 11-4 0 2 2 0 014 0zM13 16V6a1 1 0 00-1-1H4a1 1 0 00-1 1v10a1 1 0 001 1h1m8 0h2m4 0h1a1 1 0 001-1v-4.6a1 1 0 00-.3-.7L18 8h-5"/>
+  </svg>
+{% elif icone == 'grafico' %}
+  <svg class="{{ classe|default:'w-5 h-5' }}" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.6" d="M9 19v-6m4 6V7m4 12v-9M4 21h16a1 1 0 001-1V4a1 1 0 00-1-1H4a1 1 0 00-1 1v16a1 1 0 001 1z"/>
+  </svg>
+{% else %}
+  <svg class="{{ classe|default:'w-5 h-5' }}" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.6" d="M4 6h16M4 12h16M4 18h16"/>
+  </svg>
+{% endif %}

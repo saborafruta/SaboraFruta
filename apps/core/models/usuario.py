@@ -74,6 +74,7 @@ class Permissao(models.Model):
         CRM = 'crm', 'CRM'
         MAPAS = 'mapas', 'Mapas e Geolocalização'
         FOOD_SERVICE = 'food_service', 'Food Service'
+        MODA = 'moda', 'Moda e Confecção'
 
     perfil = models.ForeignKey(
         PerfilAcesso, on_delete=models.CASCADE, related_name='permissoes',

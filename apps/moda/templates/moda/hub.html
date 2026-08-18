@@ -1,0 +1,64 @@
+{% extends "_base.html" %}
+{% block title %}{{ title }}{% endblock %}
+{% block page_title %}{{ title }}{% endblock %}
+
+{% block content %}
+<div class="space-y-6">
+
+  <div>
+    <h2 class="text-2xl font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">Moda e Confecção</h2>
+    <p class="text-sm mt-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+      Do pedido do cliente até a entrega, num fluxo só.
+    </p>
+  </div>
+
+  {% comment %}
+    A régua do fluxo antes dos cards: os 8 grupos abaixo não são uma lista
+    qualquer, são as etapas nessa ordem. Ver a sequência ajuda a entender
+    por que "Engenharia" vem antes de "PCP".
+  {% endcomment %}
+  <div class="card p-4 overflow-x-auto">
+    <p class="text-xs font-semibold uppercase tracking-wide mb-2.5"
+       :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Fluxo da confecção</p>
+    <div class="flex items-center gap-1.5 text-xs whitespace-nowrap">
+      {% for etapa in etapas_fluxo %}
+        <span class="px-2 py-1 rounded-md font-medium"
+              :style="temaClaro ? 'background:#eff6ff; color:#1d4ed8;' : 'background:rgba(37,99,235,.14); color:#93c5fd;'">{{ etapa }}</span>
+        {% if not forloop.last %}
+          <span :style="temaClaro ? 'color:#cbd5e1;' : 'color:#475569;'">›</span>
+        {% endif %}
+      {% endfor %}
+    </div>
+  </div>
+
+  <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+    {% for grupo in grupos %}
+      <a href="{% url 'moda:grupo' grupo.slug %}"
+         class="card p-5 block transition-transform hover:-translate-y-0.5">
+        <div class="flex items-start gap-3">
+          <span class="shrink-0 w-10 h-10 rounded-lg flex items-center justify-center"
+                :style="temaClaro ? 'background:#eff6ff; color:#2563eb;' : 'background:rgba(37,99,235,.14); color:#60a5fa;'">
+            {% include "moda/_icones.html" with icone=grupo.icone classe="w-5 h-5" %}
+          </span>
+          <div class="min-w-0">
+            <h3 class="font-semibold text-sm" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">{{ grupo.label }}</h3>
+            <p class="text-xs mt-1 leading-relaxed" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">{{ grupo.descricao }}</p>
+            <p class="text-xs mt-2 font-semibold" :style="temaClaro ? 'color:#2563eb;' : 'color:#60a5fa;'">
+              {{ grupo.itens|length }} tela{{ grupo.itens|length|pluralize }}
+            </p>
+          </div>
+        </div>
+      </a>
+    {% endfor %}
+  </div>
+
+  <div class="card p-4" style="border-left:3px solid #f59e0b;">
+    <p class="text-sm" :style="temaClaro ? 'color:#374151;' : 'color:#cbd5e1;'">
+      <strong>Estrutura publicada, telas em construção.</strong>
+      As {{ total_itens }} telas do vertical já estão mapeadas e navegáveis, mas
+      ainda sem funcionamento — cada uma vai sendo entregue por módulo.
+    </p>
+  </div>
+
+</div>
+{% endblock %}

@@ -1,0 +1,57 @@
+{% extends "_base.html" %}
+{% block title %}{{ title }} — Moda{% endblock %}
+{% block page_title %}{{ title }}{% endblock %}
+
+{% block content %}
+<div class="max-w-2xl mx-auto space-y-5">
+
+  <div>
+    <p class="text-sm mb-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+      <a href="{% url 'moda:hub' %}" :style="temaClaro ? 'color:#3b82f6;' : 'color:#60a5fa;'">Moda e Confecção</a>
+      <span class="mx-1">›</span>
+      <a href="{% url 'moda:grupo' grupo.slug %}" :style="temaClaro ? 'color:#3b82f6;' : 'color:#60a5fa;'">{{ grupo.label }}</a>
+      <span class="mx-1">›</span> {{ item.label }}
+    </p>
+    <h2 class="text-2xl font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">{{ item.label }}</h2>
+  </div>
+
+  <div class="card p-8 text-center space-y-4">
+    <div class="mx-auto w-14 h-14 rounded-full flex items-center justify-center"
+         style="background:rgba(245,158,11,.14); color:#fbbf24;">
+      <svg class="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.6"
+              d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
+      </svg>
+    </div>
+    <div>
+      <h3 class="text-lg font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">Tela em construção</h3>
+      <p class="text-sm mt-1.5 leading-relaxed" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+        {% if item.descricao %}{{ item.descricao }}<br>{% endif %}
+        Esta tela já tem endereço e lugar no menu, mas ainda não funciona.
+      </p>
+    </div>
+    <div class="flex justify-center gap-2 pt-1">
+      <a href="{% url 'moda:grupo' grupo.slug %}" class="btn-secondary text-sm">Voltar para {{ grupo.label }}</a>
+      <a href="{% url 'moda:hub' %}" class="btn-primary text-sm">Início do vertical</a>
+    </div>
+  </div>
+
+  {% comment %}
+    Vizinhas do mesmo grupo: quem chegou aqui por engano acha o que queria
+    sem voltar dois níveis.
+  {% endcomment %}
+  <div class="card p-4">
+    <p class="text-xs font-semibold uppercase tracking-wide mb-2.5"
+       :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Outras telas de {{ grupo.label }}</p>
+    <div class="flex flex-wrap gap-2">
+      {% for outro in grupo.itens %}
+        {% if outro.slug != item.slug %}
+          <a href="{% url 'moda:item' grupo.slug outro.slug %}" class="text-xs font-semibold px-2.5 py-1.5 rounded-lg"
+             :style="temaClaro ? 'background:#f3f4f6; color:#374151;' : 'background:#2a2a2e; color:#d4d4d4;'">{{ outro.label }}</a>
+        {% endif %}
+      {% endfor %}
+    </div>
+  </div>
+
+</div>
+{% endblock %}

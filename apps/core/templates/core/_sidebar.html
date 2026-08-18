@@ -278,16 +278,20 @@
   secoes: (function(){
     try {
       var raw = localStorage.getItem('sidebar-secoes');
-      var s = raw ? JSON.parse(raw) : {cadastros:true, operacoes:true, financeiro:true, logistica:true, avancado:true, food_service:true};
+      // Chave nova precisa de default: quem ja tem preferencia salva no
+      // localStorage nao a teria, e a secao nasceria fechada sem motivo.
+      var s = raw ? JSON.parse(raw) : {cadastros:true, operacoes:true, financeiro:true, logistica:true, avancado:true, food_service:true, moda:true};
+      if (s.moda === undefined) s.moda = true;
       {% if '/cadastros/' in request.path or '/produtos/' in request.path %}s.cadastros = true;{% endif %}
       {% if '/estoque/' in request.path or '/compras/' in request.path or '/producao/' in request.path or '/lotes/' in request.path %}s.operacoes = true;{% endif %}
       {% if '/financeiro/' in request.path %}s.financeiro = true;{% endif %}
       {% if '/logistica/' in request.path %}s.logistica = true;{% endif %}
       {% if '/pdv/' in request.path or '/fiscal/' in request.path or '/qualidade/' in request.path or '/analytics/' in request.path %}s.avancado = true;{% endif %}
       {% if '/food-service/' in request.path %}s.food_service = true;{% endif %}
+      {% if '/moda/' in request.path %}s.moda = true;{% endif %}
       return s;
     } catch(e) {
-      return {cadastros:true, operacoes:true, financeiro:true, logistica:true, avancado:true, food_service:true};
+      return {cadastros:true, operacoes:true, financeiro:true, logistica:true, avancado:true, food_service:true, moda:true};
     }
   })(),
   toggleSecao: function(nome) {
@@ -1185,6 +1189,31 @@
       </a>
       </div><!-- /food_service -->
       {% endif %}
+      {% if 'moda' in modulos_ativos %}
+      {% comment %}
+        Vertical Moda: o menu lista os 8 grupos, não as 62 telas -- cada
+        grupo abre uma página com as telas dele. Os itens vêm de
+        apps/moda/menu.py, então acrescentar um grupo é uma linha lá, e não
+        mais um bloco de HTML aqui.
+      {% endcomment %}
+      <button type="button" @click="!collapsed && toggleSecao('moda')" class="w-full flex items-center justify-between pt-4 pb-1 px-3" x-show="!collapsed" style="background:none;border:none;cursor:pointer;">
+        <span :class="temaClaro ? 'sidebar-section-label' : 'text-xs font-medium uppercase tracking-widest'" :style="temaClaro ? '' : 'color:#f8fafc; letter-spacing:0.1em;'">Moda e Confecção</span>
+        <svg class="w-3 h-3 flex-shrink-0 transition-transform duration-200" :class="secoes.moda ? '' : '-rotate-90'" :style="temaClaro ? 'color:#9ca3af;' : 'color:#555570;'" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M19 9l-7 7-7-7"/></svg>
+      </button>
+      <div class="my-2 mx-3" x-show="collapsed" :style="temaClaro ? 'border-top:1px solid #e5e5e5;' : 'border-top:1px solid #2a2a2e;'"></div>
+      <div x-show="collapsed || secoes.moda">
+      {% for grupo in moda_grupos %}
+      <a href="{% url 'moda:grupo' grupo.slug %}"
+         class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-all duration-150"
+         :class="collapsed ? 'justify-center' : ''"
+         :style="'{{ request.path }}'.startsWith('/moda/{{ grupo.slug }}/') ? (temaClaro ? 'background:#dbeafe; color:#1d4ed8; font-weight:600;' : 'background:#1e2a3a; color:#f8fafc;') : (temaClaro ? 'color:#6b7280;' : 'color:#f8fafc;')"
+         title="{{ grupo.label }}">
+        {% include "moda/_icones.html" with icone=grupo.icone classe="w-5 h-5 flex-shrink-0" %}
+        <span x-show="!collapsed">{{ grupo.label }}</span>
+      </a>
+      {% endfor %}
+      </div><!-- /moda -->
+      {% endif %}
     </nav>
 
     <!-- Footer sidebar desktop -->
@@ -1853,6 +1882,31 @@
         Gestão Financeira
       </a>
       </div><!-- /food_service -->
+      {% endif %}
+      {% if 'moda' in modulos_ativos %}
+      {% comment %}
+        Vertical Moda: o menu lista os 8 grupos, não as 62 telas -- cada
+        grupo abre uma página com as telas dele. Os itens vêm de
+        apps/moda/menu.py, então acrescentar um grupo é uma linha lá, e não
+        mais um bloco de HTML aqui.
+      {% endcomment %}
+      <button type="button" @click="!collapsed && toggleSecao('moda')" class="w-full flex items-center justify-between pt-4 pb-1 px-3" x-show="!collapsed" style="background:none;border:none;cursor:pointer;">
+        <span :class="temaClaro ? 'sidebar-section-label' : 'text-xs font-medium uppercase tracking-widest'" :style="temaClaro ? '' : 'color:#f8fafc; letter-spacing:0.1em;'">Moda e Confecção</span>
+        <svg class="w-3 h-3 flex-shrink-0 transition-transform duration-200" :class="secoes.moda ? '' : '-rotate-90'" :style="temaClaro ? 'color:#9ca3af;' : 'color:#555570;'" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M19 9l-7 7-7-7"/></svg>
+      </button>
+      <div class="my-2 mx-3" x-show="collapsed" :style="temaClaro ? 'border-top:1px solid #e5e5e5;' : 'border-top:1px solid #2a2a2e;'"></div>
+      <div x-show="collapsed || secoes.moda">
+      {% for grupo in moda_grupos %}
+      <a href="{% url 'moda:grupo' grupo.slug %}"
+         class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-all duration-150"
+         :class="collapsed ? 'justify-center' : ''"
+         :style="'{{ request.path }}'.startsWith('/moda/{{ grupo.slug }}/') ? (temaClaro ? 'background:#dbeafe; color:#1d4ed8; font-weight:600;' : 'background:#1e2a3a; color:#f8fafc;') : (temaClaro ? 'color:#6b7280;' : 'color:#f8fafc;')"
+         title="{{ grupo.label }}">
+        {% include "moda/_icones.html" with icone=grupo.icone classe="w-5 h-5 flex-shrink-0" %}
+        <span x-show="!collapsed">{{ grupo.label }}</span>
+      </a>
+      {% endfor %}
+      </div><!-- /moda -->
       {% endif %}
     </nav>
 
