@@ -28,11 +28,15 @@ from django.db import models
 
 from apps.core.models.base import FilialManager, FilialScopedModel
 
+from .qr import ComCodigoQr
+
 CEM = Decimal('100')
 
 
-class RegistroCorte(FilialScopedModel):
+class RegistroCorte(ComCodigoQr, FilialScopedModel):
     """Um enfesto/corte de uma ordem de produção."""
+
+    PREFIXO_QR = 'LT'
 
     class Status(models.TextChoices):
         PLANEJADO = 'planejado', 'Planejado'

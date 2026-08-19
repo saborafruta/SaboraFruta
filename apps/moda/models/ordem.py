@@ -24,13 +24,17 @@ from django.utils import timezone
 
 from apps.core.models.base import FilialManager, FilialScopedModel
 
+from .qr import ComCodigoQr
+
 
 def _data(dia) -> str:
     """Data para mensagem, ou 'sem prazo' — evita 'None' na tela."""
     return f'{dia:%d/%m/%Y}' if dia else 'sem prazo'
 
 
-class OrdemProducao(FilialScopedModel):
+class OrdemProducao(ComCodigoQr, FilialScopedModel):
+
+    PREFIXO_QR = 'OP'
 
     class Status(models.TextChoices):
         # Ordem do fluxo, não alfabética — é a fila que a fábrica percorre.

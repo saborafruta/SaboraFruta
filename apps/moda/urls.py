@@ -16,7 +16,7 @@ from . import (
     views_corte as vco, views_encaixe as ve, views_fluxo as vx,
     views_ordem as vo, views_pcp as vp,
     views_expedicao as vex, views_kanban as vk, views_necessidade as vn,
-    views_qualidade as vq,
+    views_qualidade as vq, views_qr as vqr,
     views_roteiro as vr, views_terminal as vt, views_wip as vw,
 )
 
@@ -108,6 +108,13 @@ ROTAS_PRONTAS: list = [
     path('producao/qualidade/<int:pk>/checklist/', vq.InspecaoChecklistView.as_view(), name='inspecao-checklist'),
     path('producao/qualidade/<int:pk>/decidir/', vq.InspecaoDecidirView.as_view(), name='inspecao-decidir'),
     path('producao/qualidade/<int:pk>/aplicar/', vq.InspecaoAplicarView.as_view(), name='inspecao-aplicar'),
+
+    # QR Code. O endereco que o QR guarda e' `/q/<codigo>/`, fora daqui --
+    # estas rotas sao as do lado de dentro: gerar o desenho, imprimir a
+    # etiqueta e buscar por codigo digitado ou lido por leitor de bancada.
+    path('escanear/', vqr.QrEscanearView.as_view(), name='qr-escanear'),
+    path('qr/<str:codigo>/imagem.png', vqr.QrImagemView.as_view(), name='qr-imagem'),
+    path('qr/<str:codigo>/etiqueta/', vqr.QrEtiquetaView.as_view(), name='qr-etiqueta'),
 
     # Terminais de setor. Ficam DEPOIS de todas as rotas especificas de
     # /producao/ porque `<slug:slug>` casa com qualquer coisa: declarado

@@ -18,6 +18,11 @@
     <p class="text-sm mt-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">{{ setor.ajuda }}</p>
   </div>
 
+  {# Atalho do QR: o operador escaneia a ficha e cai direto na OP, sem
+     procurar o número na lista. Fica aqui em cima porque no terminal é
+     a primeira coisa que ele faz ao pegar um pacote novo. #}
+  <a href="{% url 'moda:qr-escanear' %}" class="btn-secondary text-sm">Escanear código</a>
+
   {# Troca rápida de setor: o mesmo tablet costuma servir dois postos #}
   <div class="flex flex-wrap gap-2">
     {% for s in outros %}

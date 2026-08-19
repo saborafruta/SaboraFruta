@@ -30,6 +30,7 @@
           {{ corte.get_status_display }}
         </span>
         <a href="{% url 'moda:corte-update' corte.pk %}" class="btn-secondary text-sm">Editar</a>
+        <a href="{% url 'moda:qr-etiqueta' corte.codigo_qr %}" class="btn-secondary text-sm">QR Code</a>
       </div>
     </div>
   </div>

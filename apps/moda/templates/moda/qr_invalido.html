@@ -1,0 +1,54 @@
+{% extends "_base.html" %}
+{% block title %}{{ title }}{% endblock %}
+{% block page_title %}Código não encontrado{% endblock %}
+{% block content %}
+
+{% comment %}
+  Tela própria em vez do 404 do sistema.
+
+  Quem chega aqui está com o papel na mão, no meio do turno, e escaneou uma
+  etiqueta velha ou digitou errado. O 404 genérico diz "não existe" e não
+  oferece nenhum caminho — esta tela oferece o campo para tentar de novo.
+{% endcomment %}
+<div class="space-y-5 max-w-xl">
+
+  <div class="card p-5" style="border-left:4px solid #d97706;">
+    <h2 class="text-xl font-semibold mb-1"
+        :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
+      Nenhum documento com este código
+    </h2>
+    <p class="text-sm" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+      Código lido:
+      <span style="font-family:monospace; font-weight:700;">{{ codigo|default:'—' }}</span>
+    </p>
+    <p class="text-sm mt-3" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+      Pode ser etiqueta de um documento já removido, ou um caractere trocado
+      na digitação — o código diferencia maiúscula de minúscula depois do
+      prefixo.
+    </p>
+
+    <form method="get" action="{% url 'moda:qr-escanear' %}" class="flex flex-wrap gap-2 mt-4">
+      <input type="text" name="codigo" autofocus autocomplete="off"
+             value="{{ codigo }}"
+             class="form-input flex-1" style="font-family:monospace; min-width:220px;">
+      <button type="submit" class="btn-primary text-sm">TENTAR DE NOVO</button>
+    </form>
+  </div>
+
+  <div class="card p-5">
+    <p class="text-xs font-bold uppercase tracking-wider mb-3"
+       :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+      O prefixo diz o que é
+    </p>
+    <div class="space-y-2 text-sm">
+      {% for d in documentos %}
+        <p :style="temaClaro ? 'color:#374151;' : 'color:#cbd5e1;'">
+          <span style="font-family:monospace; font-weight:700;">{{ d.prefixo }}-</span>
+          <span class="mx-1">→</span>{{ d.label }}
+        </p>
+      {% endfor %}
+    </div>
+  </div>
+
+</div>
+{% endblock %}

@@ -1,0 +1,91 @@
+{% extends "_base.html" %}
+{% block title %}{{ title }}{% endblock %}
+{% block page_title %}QR Code{% endblock %}
+{% block content %}
+
+{% comment %}
+  Etiqueta para imprimir e colar no fardo, na ficha ou na capa da OP.
+
+  As cores da etiqueta são fixas (preto no branco), e não as do tema: o que
+  sai da impressora é sempre em papel branco, e um card em tema escuro
+  imprimiria um retângulo cinza gastando toner sem melhorar nada.
+
+  A `@media print` esconde tudo que não é a etiqueta. Sem ela, a folha sairia
+  com menu, cabeçalho e botões em volta de um quadrado de 4 cm.
+{% endcomment %}
+<style>
+  @media print {
+    body * { visibility: hidden; }
+    #etiqueta, #etiqueta * { visibility: visible; }
+    #etiqueta {
+      position: absolute; top: 0; left: 0;
+      width: 100%; border: none !important; box-shadow: none !important;
+    }
+    .sem-impressao { display: none !important; }
+  }
+</style>
+
+<div class="space-y-5 max-w-xl">
+
+  <div class="sem-impressao">
+    <p class="text-sm" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+      <a href="{{ url_destino }}" :style="temaClaro ? 'color:#3b82f6;' : 'color:#60a5fa;'">
+        ‹ Voltar para {{ documento.label|lower }}
+      </a>
+    </p>
+  </div>
+
+  {# ── A etiqueta ───────────────────────────────────────────────────── #}
+  <div id="etiqueta" class="rounded-xl p-6 text-center"
+       style="background:#fff; color:#111827; border:1px solid #d1d5db;">
+
+    <p class="text-xs font-bold uppercase tracking-widest" style="color:#6b7280;">
+      {{ documento.label }}
+    </p>
+
+    <img src="{% url 'moda:qr-imagem' codigo %}" alt="QR Code — {{ codigo }}"
+         style="width:220px; height:220px; margin:12px auto; display:block;">
+
+    <p style="font-family:monospace; font-size:15px; font-weight:700; letter-spacing:1px;">
+      {{ codigo }}
+    </p>
+
+    <div style="margin-top:14px; text-align:left; display:inline-block;">
+      {% for rotulo, valor in linhas %}
+        <p style="font-size:13px; margin:2px 0;">
+          <span style="color:#6b7280;">{{ rotulo }}:</span>
+          <strong>{{ valor }}</strong>
+        </p>
+      {% endfor %}
+    </div>
+
+    <p style="font-size:11px; color:#6b7280; margin-top:14px;">
+      Aponte a câmera do celular para abrir.
+    </p>
+  </div>
+
+  {# ── Ações ────────────────────────────────────────────────────────── #}
+  <div class="sem-impressao flex flex-wrap gap-2">
+    <button type="button" class="btn-primary text-sm" onclick="window.print()">
+      IMPRIMIR ETIQUETA
+    </button>
+    <a href="{% url 'moda:qr-imagem' codigo %}" download="{{ codigo }}.png"
+       class="btn-secondary text-sm">BAIXAR PNG</a>
+    <a href="{{ url_destino }}" class="btn-secondary text-sm">ABRIR {{ documento.label|upper }}</a>
+  </div>
+
+  <div class="sem-impressao card p-4 text-sm"
+       :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+    {% comment %}
+      Vale dizer o que o código NÃO é: sem esta frase, alguém trata a
+      etiqueta como segredo e evita colá-la à vista — ou, pior, acha que ela
+      é segredo e deixa de trancar o que importa.
+    {% endcomment %}
+    <p>
+      Quem escanear precisa estar logado no sistema, com permissão do módulo
+      e na filial certa — o código abre a tela, não substitui o acesso.
+    </p>
+  </div>
+
+</div>
+{% endblock %}

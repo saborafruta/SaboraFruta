@@ -40,6 +40,7 @@
           <p class="text-xs" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">por peça, com perdas</p>
         </div>
         <a href="{% url 'moda:ficha-update' ficha.pk %}" class="btn-secondary text-sm">Editar</a>
+        <a href="{% url 'moda:qr-etiqueta' ficha.codigo_qr %}" class="btn-secondary text-sm">QR Code</a>
       </div>
     </div>
   </div>

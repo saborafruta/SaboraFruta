@@ -19,9 +19,13 @@ from django.db import models
 
 from apps.core.models.base import FilialManager, FilialScopedModel
 
+from .qr import ComCodigoQr
 
-class FichaTecnica(FilialScopedModel):
+
+class FichaTecnica(ComCodigoQr, FilialScopedModel):
     """A ficha de um produto. Uma por produto, versionada."""
+
+    PREFIXO_QR = 'FT'
 
     class Status(models.TextChoices):
         RASCUNHO = 'rascunho', 'Rascunho'

@@ -38,6 +38,10 @@ urlpatterns = [
     # PDF do pedido de moda pelo link que vai no WhatsApp do cliente.
     # Fora de /moda/ porque o cliente nao tem login nem filial ativa.
     path('pedido/', include('apps.moda.urls_publico', namespace='moda_publico')),
+    # Leitor de QR Code dos documentos da fábrica. Endereço curto de
+    # propósito: menos caracteres, desenho menos denso, leitura de mais
+    # longe com a câmera do celular do operador.
+    path('q/', include('apps.moda.urls_qr', namespace='qr')),
 ]
 
 handler403 = 'apps.core.views.errors.permission_denied'

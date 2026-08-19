@@ -19,8 +19,12 @@ from django.utils import timezone
 
 from apps.core.models.base import FilialManager, FilialScopedModel
 
+from .qr import ComCodigoQr
 
-class PedidoProducao(FilialScopedModel):
+
+class PedidoProducao(ComCodigoQr, FilialScopedModel):
+
+    PREFIXO_QR = 'PED'
 
     class Status(models.TextChoices):
         # A ordem aqui é a ordem do fluxo, não alfabética: `Status.choices`

@@ -1,0 +1,46 @@
+{% extends "_base.html" %}
+{% block title %}{{ title }}{% endblock %}
+{% block page_title %}Escanear código{% endblock %}
+{% block content %}
+<div class="space-y-5 max-w-xl">
+
+  <div class="card p-5">
+    <h2 class="text-xl font-semibold mb-1"
+        :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
+      Abrir documento pelo código
+    </h2>
+    <p class="text-sm mb-4" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+      Aponte o leitor de bancada para o QR ou digite o código impresso na
+      etiqueta. Pelo celular, a própria câmera já abre a tela — não precisa
+      passar por aqui.
+    </p>
+
+    {# GET e não POST: a busca não altera nada, e com GET o leitor de mão
+       que termina com Enter dispara o formulário sozinho. #}
+    <form method="get" class="flex flex-wrap gap-2">
+      {# `autofocus` é o que faz o leitor de bancada funcionar sem clique:
+         ele digita no campo que já está com o cursor. #}
+      <input type="text" name="codigo" autofocus autocomplete="off"
+             placeholder="OP-7hK2mQx3Za_1"
+             class="form-input flex-1" style="font-family:monospace; min-width:220px;">
+      <button type="submit" class="btn-primary text-sm">ABRIR</button>
+    </form>
+  </div>
+
+  <div class="card p-5">
+    <p class="text-xs font-bold uppercase tracking-wider mb-3"
+       :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+      O prefixo diz o que é
+    </p>
+    <div class="space-y-2 text-sm">
+      {% for d in documentos %}
+        <p :style="temaClaro ? 'color:#374151;' : 'color:#cbd5e1;'">
+          <span style="font-family:monospace; font-weight:700;">{{ d.prefixo }}-</span>
+          <span class="mx-1">→</span>{{ d.label }}
+        </p>
+      {% endfor %}
+    </div>
+  </div>
+
+</div>
+{% endblock %}
