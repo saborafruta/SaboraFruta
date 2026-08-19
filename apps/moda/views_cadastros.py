@@ -295,6 +295,9 @@ class PedidoListView(ModaBaseView):
     def get(self, request):
         busca = (request.GET.get('q') or '').strip()
         status = (request.GET.get('status') or '').strip()
+        # Filtro por cliente, vindo da carteira: por id e não por nome,
+        # senão "Interfort" traria também "Interfort Filial 2".
+        cliente_id = (request.GET.get('cliente') or '').strip()
 
         pedidos = (
             PedidoProducao.objects.for_filial(_filial(request))
@@ -309,6 +312,8 @@ class PedidoListView(ModaBaseView):
             )
         if status:
             pedidos = pedidos.filter(status=status)
+        if cliente_id.isdigit():
+            pedidos = pedidos.filter(cliente_id=int(cliente_id))
 
         # Contagem por status para os atalhos do topo. Uma consulta só, em
         # vez de uma por status.
@@ -346,10 +351,20 @@ class PedidoFormView(ModaBaseView):
 
     def get(self, request, pk=None):
         pedido = self._obter(request, pk)
+        # Cliente já escolhido quando se chega pela carteira: quem clicou
+        # em "novo pedido" na linha de alguém não quer procurar esse
+        # alguém de novo num select de mil nomes.
+        inicial = {}
+        cliente_id = (request.GET.get('cliente') or '').strip()
+        if pedido is None and cliente_id.isdigit():
+            inicial['cliente'] = int(cliente_id)
+
         return render(request, 'moda/pedido_form.html', {
             'title': f'Pedido #{pedido.numero:06d}' if pedido else 'Novo Pedido de Produção',
             'pedido': pedido,
-            'form': PedidoProducaoForm(instance=pedido, filial=_filial(request)),
+            'form': PedidoProducaoForm(
+                instance=pedido, filial=_filial(request), initial=inicial,
+            ),
         })
 
     def post(self, request, pk=None):

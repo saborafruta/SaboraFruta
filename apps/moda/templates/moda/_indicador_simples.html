@@ -1,0 +1,18 @@
+{% comment %}
+  Um número do topo da tela. Espera `rotulo` e `valor`; aceita `dinheiro` e
+  `tom`.
+
+  Existe separado do `_indicador.html` do dashboard de propósito: aquele
+  carrega ressalva, base de cálculo e tom por faixa, porque lá o número é a
+  conclusão. Aqui é só contagem — e reusar o card grande encheria a tela de
+  espaço vazio onde não há o que ressalvar.
+{% endcomment %}
+<div class="card p-4">
+  <p class="text-xs uppercase tracking-wider truncate"
+     :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">{{ rotulo }}</p>
+  <p class="text-xl font-bold mt-1 tabular-nums"
+     {% if tom == 'ruim' and valor %}style="color:#dc2626;"
+     {% else %}:style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'"{% endif %}>
+    {% if dinheiro %}R$ {{ valor|floatformat:2 }}{% else %}{{ valor }}{% endif %}
+  </p>
+</div>

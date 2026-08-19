@@ -16,7 +16,7 @@ from . import (
     views_corte as vco, views_encaixe as ve, views_fluxo as vx,
     views_ordem as vo, views_pcp as vp,
     views_expedicao as vex, views_kanban as vk, views_necessidade as vn,
-    views_alertas as val, views_aprovacao as vap,
+    views_alertas as val, views_aprovacao as vap, views_clientes as vcl,
     views_dashboard as vd, views_historico as vh, views_qualidade as vq, views_qr as vqr,
     views_roteiro as vr, views_terminal as vt, views_wip as vw,
 )
@@ -26,6 +26,11 @@ app_name = 'moda'
 # Telas já implementadas — declaradas ANTES do catch-all, senão o
 # placeholder as engoliria. O endereço é o mesmo que o menu já aponta.
 ROTAS_PRONTAS: list = [
+    # Carteira de clientes. Fica ANTES do catch-all do menu, senão
+    # `<slug:grupo>/<slug:item>` engoliria o endereço e devolveria o
+    # placeholder de "em construção" -- foi o que aconteceu com o WIP.
+    path('comercial/clientes/', vcl.CarteiraClientesView.as_view(), name='clientes'),
+    path('comercial/clientes/novo/', vcl.ClienteRapidoCreateView.as_view(), name='cliente-criar'),
     path('comercial/pedidos/', vc.PedidoListView.as_view(), name='pedido-list'),
     path('comercial/pedidos/novo/', vc.PedidoFormView.as_view(), name='pedido-create'),
     path('comercial/pedidos/<int:pk>/', vc.PedidoDetailView.as_view(), name='pedido-detail'),

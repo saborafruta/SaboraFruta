@@ -1,0 +1,243 @@
+{% extends "_base.html" %}
+{% block title %}{{ title }}{% endblock %}
+{% block page_title %}Clientes{% endblock %}
+{% block content %}
+<div class="space-y-5" x-data="{ novo: false }">
+
+  {# ── Cabeçalho ────────────────────────────────────────────────────── #}
+  <div class="card p-5">
+    <p class="text-sm mb-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+      <a href="{% url 'moda:hub' %}" :style="temaClaro ? 'color:#3b82f6;' : 'color:#60a5fa;'">Moda e Confecção</a>
+      <span class="mx-1">›</span>
+      <a href="{% url 'moda:grupo' 'comercial' %}" :style="temaClaro ? 'color:#3b82f6;' : 'color:#60a5fa;'">Comercial</a>
+      <span class="mx-1">›</span> Clientes
+    </p>
+
+    <div class="flex flex-wrap items-start justify-between gap-4">
+      <div>
+        <h2 class="text-2xl font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
+          Carteira da confecção
+        </h2>
+        {% comment %}
+          Dizer que é o mesmo cadastro do ERP evita a pergunta seguinte —
+          "então tenho que cadastrar de novo lá?". Não tem: é a mesma base.
+        {% endcomment %}
+        <p class="text-sm mt-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+          Os mesmos clientes do cadastro do ERP, com o que cada um já pediu
+          na confecção.
+        </p>
+      </div>
+
+      {% if pode_criar %}
+        <button type="button" class="btn-primary text-sm" @click="novo = true">
+          + NOVO CLIENTE
+        </button>
+      {% endif %}
+    </div>
+  </div>
+
+  {# ── Números da carteira ──────────────────────────────────────────── #}
+  <div class="grid grid-cols-2 lg:grid-cols-5 gap-3">
+    {% include "moda/_indicador_simples.html" with rotulo="Clientes na lista" valor=resumo.clientes %}
+    {% include "moda/_indicador_simples.html" with rotulo="Já compraram" valor=resumo.com_pedido %}
+    {% include "moda/_indicador_simples.html" with rotulo="Peças pedidas" valor=resumo.pecas %}
+    {% include "moda/_indicador_simples.html" with rotulo="Valor em produtos" valor=resumo.valor dinheiro=1 %}
+    {% include "moda/_indicador_simples.html" with rotulo="Com pedido atrasado" valor=resumo.com_atraso tom="ruim" %}
+  </div>
+
+  {# ── Filtros ──────────────────────────────────────────────────────── #}
+  <div class="card p-4">
+    {# GET no servidor, e não filtro só no navegador: a carteira é maior que
+       a página, e buscar só o que está à vista acharia menos do que existe. #}
+    <form method="get" class="flex flex-wrap items-center gap-2">
+      <input type="search" name="q" value="{{ busca }}"
+             placeholder="Buscar por nome, CNPJ/CPF ou cidade"
+             class="form-input text-sm flex-1" style="min-width:220px;">
+      <label class="flex items-center gap-2 text-sm"
+             :style="temaClaro ? 'color:#374151;' : 'color:#cbd5e1;'">
+        <input type="checkbox" name="com_pedido" value="1"
+               {% if so_com_pedido %}checked{% endif %}>
+        Só quem já pediu
+      </label>
+      <button type="submit" class="btn-primary text-sm">BUSCAR</button>
+      {% if busca or so_com_pedido %}
+        <a href="{% url 'moda:clientes' %}" class="btn-secondary text-sm">Limpar</a>
+      {% endif %}
+    </form>
+
+    {% if cortada %}
+      <p class="text-xs mt-3" style="color:#d97706;">
+        Mostrando os {{ por_pagina }} primeiros de {{ total }}. Use a busca
+        para chegar em quem não apareceu.
+      </p>
+    {% endif %}
+  </div>
+
+  {# ── A lista ──────────────────────────────────────────────────────── #}
+  {% if clientes %}
+    <div class="card p-0" data-tabela>
+      <div class="overflow-x-auto">
+        <table class="w-full text-sm" style="min-width:860px;">
+          <thead>
+            <tr style="border-bottom:1px solid rgba(148,163,184,.25);">
+              <th data-ordenar class="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wide"
+                  :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Cliente</th>
+              <th data-ordenar class="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wide"
+                  :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">CPF / CNPJ</th>
+              <th data-ordenar class="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wide"
+                  :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Cidade</th>
+              <th data-ordenar="numero" class="text-right px-4 py-3 text-xs font-semibold uppercase tracking-wide"
+                  :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Pedidos</th>
+              <th data-ordenar="numero" class="text-right px-4 py-3 text-xs font-semibold uppercase tracking-wide"
+                  :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Peças</th>
+              <th data-ordenar="numero" class="text-right px-4 py-3 text-xs font-semibold uppercase tracking-wide"
+                  :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Valor</th>
+              <th data-ordenar class="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wide"
+                  :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Último pedido</th>
+              <th class="text-right px-4 py-3"></th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for c in clientes %}
+              <tr style="border-bottom:1px solid rgba(148,163,184,.12);">
+                <td class="px-4 py-3">
+                  <p class="font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
+                    {{ c.nome_fantasia|default:c.razao_social }}
+                  </p>
+                  {% if c.nome_fantasia and c.razao_social != c.nome_fantasia %}
+                    <p class="text-xs" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+                      {{ c.razao_social }}
+                    </p>
+                  {% endif %}
+                  {% comment %}
+                    O atraso vira etiqueta na linha do cliente, e não só na do
+                    pedido: quem abre a carteira está decidindo para quem
+                    ligar, e o motivo mais urgente de ligar é o atraso.
+                  {% endcomment %}
+                  {% if c.pedidos_moda_atrasados %}
+                    <span class="inline-block text-xs font-semibold px-2 py-0.5 rounded-full mt-1"
+                          style="background:rgba(220,38,38,.12); color:#dc2626;">
+                      {{ c.pedidos_moda_atrasados }} atrasado{{ c.pedidos_moda_atrasados|pluralize }}
+                    </span>
+                  {% elif c.pedidos_moda_abertos %}
+                    <span class="inline-block text-xs font-semibold px-2 py-0.5 rounded-full mt-1"
+                          style="background:rgba(37,99,235,.12); color:#2563eb;">
+                      {{ c.pedidos_moda_abertos }} em produção
+                    </span>
+                  {% endif %}
+                </td>
+                <td class="px-4 py-3 tabular-nums" :style="temaClaro ? 'color:#374151;' : 'color:#cbd5e1;'">
+                  {{ c.cpf_cnpj|default:"—" }}
+                </td>
+                <td class="px-4 py-3" :style="temaClaro ? 'color:#374151;' : 'color:#cbd5e1;'">
+                  {{ c.cidade|default:"—" }}{% if c.uf %}/{{ c.uf }}{% endif %}
+                </td>
+                <td class="px-4 py-3 text-right tabular-nums font-semibold"
+                    :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
+                  {{ c.pedidos_moda_total }}
+                </td>
+                <td class="px-4 py-3 text-right tabular-nums"
+                    :style="temaClaro ? 'color:#374151;' : 'color:#cbd5e1;'">
+                  {{ c.pecas_moda|default:0 }}
+                </td>
+                <td class="px-4 py-3 text-right tabular-nums"
+                    :style="temaClaro ? 'color:#374151;' : 'color:#cbd5e1;'">
+                  R$ {{ c.valor_moda|floatformat:2 }}
+                </td>
+                <td class="px-4 py-3" :style="temaClaro ? 'color:#374151;' : 'color:#cbd5e1;'">
+                  {{ c.ultimo_pedido_moda|date:"d/m/Y"|default:"—" }}
+                </td>
+                <td class="px-4 py-3 text-right whitespace-nowrap">
+                  {# Os dois caminhos que se toma daqui: ver o que ele já
+                     pediu, ou abrir um pedido novo já com ele escolhido. #}
+                  <a href="{% url 'moda:pedido-list' %}?cliente={{ c.pk }}"
+                     class="btn-secondary text-xs">Pedidos</a>
+                  <a href="{% url 'moda:pedido-create' %}?cliente={{ c.pk }}"
+                     class="btn-primary text-xs">Novo pedido</a>
+                </td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+  {% else %}
+    <div class="card p-8 text-center">
+      <p class="text-sm" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+        {% if busca or so_com_pedido %}
+          Nenhum cliente com esse filtro.
+        {% else %}
+          Nenhum cliente cadastrado nesta filial ainda.
+        {% endif %}
+      </p>
+      {% if pode_criar %}
+        <button type="button" class="btn-primary text-sm mt-4" @click="novo = true">
+          CADASTRAR O PRIMEIRO
+        </button>
+      {% endif %}
+    </div>
+  {% endif %}
+
+  {# ── Modal de cadastro rápido ─────────────────────────────────────── #}
+  {% if pode_criar %}
+    <div x-show="novo" x-cloak @keydown.escape.window="novo = false"
+         class="fixed inset-0 z-50 flex items-center justify-center p-4"
+         style="background:rgba(0,0,0,.6);" @click.self="novo = false">
+      <div class="card p-5 w-full max-w-2xl space-y-4"
+           style="max-height:90vh; overflow-y:auto;">
+
+        <div class="flex items-start justify-between gap-3">
+          <div>
+            <h3 class="text-lg font-bold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
+              Novo cliente
+            </h3>
+            {% comment %}
+              Avisar que o formulário é curto DE PROPÓSITO evita a impressão
+              de que falta campo. Trinta campos aqui fariam o vendedor
+              desistir e digitar "CLIENTE NOVO" no lugar do nome.
+            {% endcomment %}
+            <p class="text-xs mt-0.5" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+              Só o essencial para começar o pedido. Endereço, tabela de preço
+              e limite ficam no cadastro geral.
+            </p>
+          </div>
+          <button type="button" @click="novo = false"
+                  class="w-8 h-8 rounded-lg text-xl leading-none shrink-0"
+                  :style="temaClaro ? 'background:#f1f5f9; color:#64748b;' : 'background:#27272a; color:#a1a1aa;'">&times;</button>
+        </div>
+
+        <form method="post" action="{% url 'moda:cliente-criar' %}" class="space-y-3">
+          {% csrf_token %}
+
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            {% for campo in form %}
+              <div class="{% if campo.name == 'razao_social' %}sm:col-span-2{% endif %}">
+                <label class="block text-xs uppercase tracking-wider mb-1"
+                       :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+                  {{ campo.label }}{% if campo.field.required %} *{% endif %}
+                </label>
+                {{ campo }}
+                {% if campo.help_text %}
+                  <p class="text-xs mt-1" :style="temaClaro ? 'color:#94a3b8;' : 'color:#71717a;'">
+                    {{ campo.help_text }}
+                  </p>
+                {% endif %}
+              </div>
+            {% endfor %}
+          </div>
+
+          <div class="flex justify-end gap-2 pt-2">
+            <button type="button" class="btn-secondary text-sm" @click="novo = false">
+              Cancelar
+            </button>
+            <button type="submit" class="btn-primary text-sm">CADASTRAR</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  {% endif %}
+
+</div>
+{% include "moda/_tabela_dinamica.html" %}
+{% endblock %}
