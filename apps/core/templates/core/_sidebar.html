@@ -283,7 +283,7 @@
       var s = raw ? JSON.parse(raw) : {cadastros:true, operacoes:true, financeiro:true, logistica:true, avancado:true, food_service:true, moda:true};
       if (s.moda === undefined) s.moda = true;
       {% if '/cadastros/' in request.path or '/produtos/' in request.path %}s.cadastros = true;{% endif %}
-      {% if '/estoque/' in request.path or '/compras/' in request.path or '/producao/' in request.path or '/lotes/' in request.path %}s.operacoes = true;{% endif %}
+      {% if '/estoque/' in request.path or '/compras/' in request.path or '/lotes/' in request.path %}s.operacoes = true;{% endif %}
       {% if '/financeiro/' in request.path %}s.financeiro = true;{% endif %}
       {% if '/logistica/' in request.path %}s.logistica = true;{% endif %}
       {% if '/pdv/' in request.path or '/fiscal/' in request.path or '/qualidade/' in request.path or '/analytics/' in request.path %}s.avancado = true;{% endif %}
@@ -366,7 +366,6 @@
       {% url 'compras:entrada-list' as compras_url %}
       {% url 'estoque:sugestao-compras' as sugestao_compras_url %}
       {% url 'estoque:outras-mov-hub' as outras_mov_url %}
-      {% url 'producao:op-list' as producao_url %}
       {% url 'lotes:dashboard' as lotes_url %}
 
       {% if filial_ativa and filial_ativa.imagem %}
@@ -614,30 +613,6 @@
         <span x-show="!collapsed">Outras Mov.</span>
       </a>
 
-      {% comment %}
-        A tela genérica de Ordens de Produção some para quem tem um
-        vertical com produção própria (Moda). Sem isso o menu oferece
-        duas produções, e a genérica fica sempre vazia -- pior do que
-        não existir, porque quem clica conclui que o sistema perdeu as
-        ordens. A regra está em `core/services/modulos.py`.
-      {% endcomment %}
-      {% if producao_generica %}
-        <a href="{{ producao_url }}"
-           class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-all duration-150"
-           :class="collapsed ? 'justify-center' : ''"
-           :style="{% if producao_url in request.path %}temaClaro ? 'background:#dbeafe; color:#1d4ed8; font-weight:600;' : 'background:#1e2a3a; color:#f8fafc;'{% else %}temaClaro ? 'color:#6b7280;' : 'color:#f8fafc;'{% endif %}"
-           {% if producao_url not in request.path %}
-           onmouseover="this.style.background=temaClaro?'#eff6ff':'#242426'; this.style.color=temaClaro?'#1d4ed8':'#d4d4d4';"
-           onmouseout="this.style.background='transparent'; this.style.color=temaClaro?'#6b7280':'#f8fafc'; this.style.fontWeight='';"
-           {% endif %}
-           title="Produção">
-          <svg class="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/>
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
-          </svg>
-          <span x-show="!collapsed">Produção</span>
-        </a>
-      {% endif %}
 
       <a href="{{ lotes_url }}"
          class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-all duration-150"
@@ -1299,7 +1274,6 @@
       {% url 'compras:entrada-list' as compras_url %}
       {% url 'estoque:sugestao-compras' as sugestao_compras_url %}
       {% url 'estoque:outras-mov-hub' as outras_mov_url %}
-      {% url 'producao:op-list' as producao_url %}
       {% url 'lotes:dashboard' as lotes_url %}
 
       {% if filial_ativa and filial_ativa.imagem %}
@@ -1475,25 +1449,6 @@
         Outras Mov.
       </a>
 
-      {% comment %}
-        A tela genérica de Ordens de Produção some para quem tem um
-        vertical com produção própria (Moda). Sem isso o menu oferece
-        duas produções, e a genérica fica sempre vazia -- pior do que
-        não existir, porque quem clica conclui que o sistema perdeu as
-        ordens. A regra está em `core/services/modulos.py`.
-      {% endcomment %}
-      {% if producao_generica %}
-        <a href="{{ producao_url }}" @click="mobileOpen = false"
-           class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-all duration-150"
-           :style="{% if producao_url in request.path %}temaClaro ? 'background:#dbeafe; color:#1d4ed8; font-weight:600;' : 'background:#1e2a3a; color:#f8fafc;'{% else %}temaClaro ? 'color:#6b7280;' : 'color:#f8fafc;'{% endif %}"
-           {% if producao_url not in request.path %}onmouseover="this.style.background=temaClaro?'#eff6ff':'#242426'; this.style.color=temaClaro?'#1d4ed8':'#d4d4d4';" onmouseout="this.style.background='transparent'; this.style.color=temaClaro?'#6b7280':'#f8fafc'; this.style.fontWeight='';"{% endif %}>
-          <svg class="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/>
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
-          </svg>
-          Produção
-        </a>
-      {% endif %}
 
       <a href="{{ lotes_url }}" @click="mobileOpen = false"
          class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-all duration-150"

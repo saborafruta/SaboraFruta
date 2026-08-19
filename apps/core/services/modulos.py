@@ -105,30 +105,3 @@ def modulos_de_verticais(empresa) -> list[dict]:
         for m in MODULOS
         if not m.e_universal
     ]
-
-
-# Verticais que trazem a PRÓPRIA produção. Onde um deles está ativo, a
-# tela genérica de Ordens de Produção (`/producao/`) vira duplicata: a
-# fábrica aponta no PCP do vertical, e a lista genérica fica sempre
-# vazia -- pior do que não existir, porque quem clica conclui que o
-# sistema perdeu as ordens.
-#
-# A regra fica aqui, e não escondida numa condição do sidebar, para ser
-# uma linha de leitura só: o próximo vertical com produção própria entra
-# nesta lista e mais nada muda.
-VERTICAIS_COM_PRODUCAO_PROPRIA = ('moda',)
-
-
-def producao_generica_visivel(filial) -> bool:
-    """
-    A tela genérica de produção deve aparecer no menu desta filial?
-
-    Some só para quem tem um vertical que já resolve produção. Para todo
-    o resto do ERP -- indústria alimentícia, polpas, padaria -- ela
-    continua sendo A tela de produção, e retirá-la seria tirar o módulo
-    de quem o usa.
-    """
-    ativos = modulos_ativos(filial)
-    if 'operacoes' not in ativos:
-        return False
-    return not any(v in ativos for v in VERTICAIS_COM_PRODUCAO_PROPRIA)
