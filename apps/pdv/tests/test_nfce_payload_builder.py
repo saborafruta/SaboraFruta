@@ -126,6 +126,90 @@ class NfePayloadBuilderTests(TestCase):
         dados.update(kwargs)
         return Cliente.objects.create(**dados)
 
+    # ── indIEDest: a rejeicao 805 ────────────────────────────────────
+    # "A SEFAZ do destinatario nao permite Contribuinte Isento de
+    # Inscricao Estadual". O indIEDest=2 depende de a UF aceitar, e a
+    # maioria nao aceita. Nenhum destes casos existia antes -- foi por
+    # isso que a nota 98 saiu com 2 e voltou rejeitada.
+
+    def test_cliente_com_ie_isento_vai_como_nao_contribuinte(self):
+        cliente = self.criar_cliente(
+            tipo_pessoa=TipoPessoa.JURIDICA,
+            razao_social="CENTRO ESPIRITA IRMAOS DO CAMINHO",
+            cpf_cnpj="12640991000156",
+            inscricao_estadual="ISENTO",
+            contribuinte_icms=False,
+            endereco="Rua Praia de Muriu",
+            numero="9150",
+            bairro="Ponta Negra",
+            cidade="Natal",
+            uf="RN",
+            cep="59092390",
+            codigo_municipio_ibge="2408102",
+        )
+        venda = self.criar_venda(cliente)
+
+        payload = NfePayloadBuilder.build(venda, numero_nfe=98, serie_nfe=1)
+
+        self.assertEqual(
+            payload["indicador_inscricao_estadual_destinatario"], "9",
+        )
+        # A IE nao pode ir junto: "ISENTO" no campo de inscricao estadual
+        # e' outra rejeicao esperando para acontecer.
+        self.assertNotIn("inscricao_estadual_destinatario", payload)
+
+    def test_indicador_ie_nunca_usa_o_valor_2(self):
+        for ie, contribuinte in [
+            ("ISENTO", False), ("isento", True), ("", False), ("   ", True),
+        ]:
+            with self.subTest(ie=ie, contribuinte=contribuinte):
+                cliente = self.criar_cliente(
+                    tipo_pessoa=TipoPessoa.JURIDICA,
+                    cpf_cnpj="12640991000156",
+                    inscricao_estadual=ie,
+                    contribuinte_icms=contribuinte,
+            endereco="Rua Praia de Muriu",
+            numero="9150",
+            bairro="Ponta Negra",
+            cidade="Natal",
+            uf="RN",
+            cep="59092390",
+            codigo_municipio_ibge="2408102",
+                )
+                venda = self.criar_venda(cliente)
+                payload = NfePayloadBuilder.build(
+                    venda, numero_nfe=99, serie_nfe=1,
+                )
+                self.assertEqual(
+                    payload["indicador_inscricao_estadual_destinatario"], "9",
+                )
+
+    def test_contribuinte_com_ie_numerica_continua_indo_como_1(self):
+        cliente = self.criar_cliente(
+            tipo_pessoa=TipoPessoa.JURIDICA,
+            cpf_cnpj="12640991000156",
+            inscricao_estadual="207.184.704",
+            contribuinte_icms=True,
+            endereco="Rua Praia de Muriu",
+            numero="9150",
+            bairro="Ponta Negra",
+            cidade="Natal",
+            uf="RN",
+            cep="59092390",
+            codigo_municipio_ibge="2408102",
+        )
+        venda = self.criar_venda(cliente)
+
+        payload = NfePayloadBuilder.build(venda, numero_nfe=100, serie_nfe=1)
+
+        self.assertEqual(
+            payload["indicador_inscricao_estadual_destinatario"], "1",
+        )
+        # Sem pontuacao: a SEFAZ quer so' digitos.
+        self.assertEqual(
+            payload["inscricao_estadual_destinatario"], "207184704",
+        )
+
     def test_nfe_exige_endereco_completo_do_destinatario(self):
         venda = self.criar_venda(self.criar_cliente())
 

@@ -158,12 +158,13 @@ def _aplicar_destinatario_filial(payload: Dict[str, Any], filial_destino) -> Non
     payload["nome_destinatario"] = filial_destino.razao_social
     payload["cnpj_destinatario"] = cnpj
 
-    ie = (filial_destino.inscricao_estadual or "").strip()
-    if ie and ie.upper() != "ISENTO":
-        payload["inscricao_estadual_destinatario"] = ie
+    # Mesmo motivo do builder do PDV: indIEDest=2 ("contribuinte isento
+    # de inscricao") e' recusado pela maioria das UFs com a rejeicao 805,
+    # e a IE nao vai no XML quando o indicador nao e' 1.
+    ie_numerica = _somente_digitos(filial_destino.inscricao_estadual or "")
+    if ie_numerica:
+        payload["inscricao_estadual_destinatario"] = ie_numerica
         payload["indicador_inscricao_estadual_destinatario"] = "1"
-    elif ie.upper() == "ISENTO":
-        payload["indicador_inscricao_estadual_destinatario"] = "2"
     else:
         payload["indicador_inscricao_estadual_destinatario"] = "9"
 

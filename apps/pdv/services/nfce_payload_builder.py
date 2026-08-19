@@ -658,13 +658,30 @@ def _aplicar_destinatario(
             return
         raise DadosInvalidosError("CPF/CNPJ do cliente invalido para emissao fiscal.")
 
-    ie = (getattr(cliente, "inscricao_estadual", "") or getattr(cliente, "rg_ie", "") or "").strip()
-    if ie:
-        payload["inscricao_estadual_destinatario"] = ie
-    if getattr(cliente, "contribuinte_icms", False) and ie and ie.upper() != "ISENTO":
+    # indIEDest -- so' DOIS valores, e o "2" nao entra.
+    #
+    # A tabela da NF-e tem tres: 1 (contribuinte com IE), 2 (contribuinte
+    # ISENTO de inscricao) e 9 (nao contribuinte). O "2" depende de a UF
+    # do DESTINATARIO aceitar, e a maioria nao aceita -- inclusive o RN.
+    # Mandar 2 volta com a rejeicao 805: "A SEFAZ do destinatario nao
+    # permite Contribuinte Isento de Inscricao Estadual".
+    #
+    # Quem tem a IE escrita como "ISENTO" e' justamente quem NAO e'
+    # contribuinte de ICMS -- igreja, associacao, condominio, orgao
+    # publico. O valor certo para essa gente e' 9.
+    #
+    # E com 9 a IE NAO VAI no XML: mandar a palavra "ISENTO" no campo de
+    # inscricao estadual e' outra rejeicao esperando para acontecer.
+    ie_bruta = (
+        getattr(cliente, "inscricao_estadual", "")
+        or getattr(cliente, "rg_ie", "")
+        or ""
+    ).strip()
+    ie_numerica = _somente_digitos(ie_bruta)
+
+    if getattr(cliente, "contribuinte_icms", False) and ie_numerica:
+        payload["inscricao_estadual_destinatario"] = ie_numerica
         payload["indicador_inscricao_estadual_destinatario"] = "1"
-    elif ie.upper() == "ISENTO":
-        payload["indicador_inscricao_estadual_destinatario"] = "2"
     else:
         payload["indicador_inscricao_estadual_destinatario"] = "9"
 
