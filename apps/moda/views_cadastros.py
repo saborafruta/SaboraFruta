@@ -373,6 +373,9 @@ class PedidoDetailView(ModaBaseView):
             .select_related('cliente', 'vendedor'),
             pk=pk,
         )
+        link_publico = request.build_absolute_uri(
+            reverse('moda_publico:pedido', args=[pedido.token_publico])
+        )
         itens = pedido.itens.select_related(
             'produto', 'modelo', 'cor', 'tecido', 'produto__tecido',
         ).prefetch_related('personalizacoes', 'visuais__mockup').all()
@@ -400,15 +403,12 @@ class PedidoDetailView(ModaBaseView):
             'valores_js': _valores_js(pedido, itens),
             'finalizado': request.GET.get('finalizado') == '1',
             'whatsapp_numero': whatsapp_numero(pedido),
-            'pdf_publico': request.build_absolute_uri(
-                reverse('moda_publico:pedido-pdf', args=[pedido.token_publico])
-            ),
-            'mensagem_whatsapp': mensagem_whatsapp(
-                pedido,
-                request.build_absolute_uri(
-                    reverse('moda_publico:pedido-pdf', args=[pedido.token_publico])
-                ),
-            ),
+            # O link do cliente e' a PAGINA, nao o PDF: no celular o PDF
+            # abre no visualizador, e o status do pedido -- que e' o que ele
+            # volta para consultar -- fica de fora. O PDF continua a um
+            # toque, dentro da pagina.
+            'link_publico': link_publico,
+            'mensagem_whatsapp': mensagem_whatsapp(pedido, link_publico),
         })
 
 

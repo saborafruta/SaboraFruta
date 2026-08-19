@@ -117,7 +117,7 @@ def whatsapp_numero(pedido) -> str:
 
 def mensagem_whatsapp(pedido, link: str) -> str:
     """
-    A mensagem padrão da especificação, com o link do PDF no lugar do anexo.
+    A mensagem padrão da especificação, com o link do pedido no lugar do anexo.
 
     O texto original dizia "em anexo". O wa.me — que é o que abre o WhatsApp
     a partir do navegador — só carrega TEXTO: não existe forma de anexar
@@ -125,6 +125,10 @@ def mensagem_whatsapp(pedido, link: str) -> str:
     procurar um arquivo que não chegou, então a frase virou o link. Anexar
     de verdade continua possível pelo botão de baixar, arrastando o arquivo
     na conversa.
+
+    O link é o da PÁGINA do pedido, não o do PDF: no celular o PDF abre no
+    visualizador e o status do pedido fica de fora — e é o status que o
+    cliente volta para consultar depois. O PDF está a um toque de lá.
     """
     entrega = (
         f'{pedido.data_prevista_entrega:%d/%m/%Y}'
@@ -138,7 +142,7 @@ def mensagem_whatsapp(pedido, link: str) -> str:
     return (
         f'Olá, {cliente}!\n\n'
         f'Seu pedido #{pedido.numero:06d} foi finalizado.\n\n'
-        f'Segue o PDF com todos os detalhes do pedido para sua conferência:\n'
+        f'Neste link você acompanha o pedido e baixa o PDF:\n'
         f'{link}\n\n'
         f'Prazo de entrega: {entrega}.\n\n'
         f'Obrigado!'

@@ -1,42 +1,130 @@
 """
-View pública do PDF do pedido.
+Acesso público do cliente ao pedido: a página e o PDF.
 
-Sem `PermissaoRequiredMixin` e sem `ModaBaseView` — é deliberado, e é a
-única view do vertical assim. Quem abre é o cliente, pelo link que recebeu
-no WhatsApp; exigir login aqui tornaria o envio inútil.
+Nenhuma das duas views herda `ModaBaseView` — é deliberado, e são as únicas
+do vertical assim. Quem abre é o cliente, pelo link que recebeu; exigir
+login aqui tornaria o envio inútil.
 
-O que ela expõe é o PDF de UM pedido, para quem tem o token daquele pedido.
-Não há listagem, não há busca e não há como andar de um pedido para outro:
-o token não é adivinhável e a view não aceita nenhum outro parâmetro.
+O QUE IMPEDE CHEGAR A OUTRO PEDIDO, concretamente:
+
+  1. a busca é só por token, e o token não é derivável do número do pedido;
+  2. não existe listagem, busca nem paginação — nenhuma rota pública aceita
+     qualquer outro parâmetro além do token;
+  3. a página não tem UM ÚNICO link para outro pedido, para o sistema ou
+     para o login: o que não está na tela não pode ser seguido;
+  4. token inexistente responde 404, igual a token de pedido apagado — a
+     resposta não distingue "não existe" de "existe e você não pode".
+
+O que a página mostra é o combinado com o cliente: pedido, produtos,
+quantidade, grade, arte, prazo e status. Observação interna do pedido e do
+item ficam de fora — são recado entre a equipe, e o cliente não é o
+destinatário delas.
 """
 from django.http import Http404, HttpResponse
+from django.shortcuts import render
 from django.views import View
 
 from .models import PedidoProducao
 from .services.pedido_pdf import PedidoPdfService
 
+# Status internos que não fazem sentido para quem está do lado de fora.
+# Cancelado aparece; orçamento não — pedido que ainda é proposta não deveria
+# ter link circulando.
+STATUS_OCULTOS = ('orcamento',)
 
-class PedidoPdfPublicoView(View):
-    """Entrega o PDF de um pedido pelo token."""
+
+def _blindar(resposta) -> None:
+    """
+    Cabeçalhos de uma URL-capacidade.
+
+    `no-store` porque o documento traz dados do cliente e não pode ficar em
+    cache de proxy; `noindex` porque um link vazado para rede social ou
+    e-mail acabaria em buscador, e aí o token deixaria de ser segredo.
+    """
+    resposta['Cache-Control'] = 'private, no-store'
+    resposta['X-Robots-Tag'] = 'noindex, nofollow, noarchive'
+    resposta['Referrer-Policy'] = 'no-referrer'
+
+
+def _buscar(token: str) -> PedidoProducao:
+    """
+    O pedido daquele token, ou 404.
+
+    `all_objects` porque não há filial ativa numa requisição sem login — e o
+    escopo aqui é o token, que já é de um pedido só.
+    """
+    if not token or len(token) < 16:
+        # Token curto demais nem chega ao banco: é tentativa de adivinhação,
+        # e responder rápido evita usar o banco como oráculo de tempo.
+        raise Http404('Pedido não encontrado.')
+
+    pedido = (
+        PedidoProducao.all_objects
+        .select_related('cliente', 'filial', 'filial__empresa')
+        .prefetch_related(
+            'itens__produto', 'itens__modelo', 'itens__cor', 'itens__tecido',
+            'itens__grade__tamanho', 'itens__personalizacoes',
+            'itens__visuais__mockup',
+        )
+        .filter(token_publico=token)
+        .first()
+    )
+    if pedido is None or pedido.status in STATUS_OCULTOS:
+        raise Http404('Pedido não encontrado.')
+    return pedido
+
+
+def _prazo(pedido) -> str:
+    """
+    "em 12 dias", "hoje", "12 dias em atraso" — ou vazio.
+
+    Sai daqui e não do template porque o número cru é negativo
+    quando atrasa: "-12 dia(s)" na tela do cliente nao diz nada.
+    """
+    dias = pedido.dias_para_entrega
+    if dias is None:
+        return ''
+    if dias == 0:
+        return 'hoje'
+    if dias > 0:
+        return f'em {dias} dia' + ('s' if dias > 1 else '')
+    atraso = -dias
+    return f'{atraso} dia' + ('s' if atraso > 1 else '') + ' em atraso'
+
+
+class PedidoOnlineView(View):
+    """A página que o cliente abre pelo link."""
 
     def get(self, request, token):
-        pedido = (
-            PedidoProducao.all_objects
-            .select_related('cliente', 'filial', 'filial__empresa',
-                            'forma_pagamento', 'condicao_pagamento')
-            .prefetch_related(
-                'itens__produto', 'itens__modelo', 'itens__cor', 'itens__tecido',
-                'itens__grade__tamanho', 'itens__personalizacoes',
-                'itens__visuais__mockup', 'individuais__tamanho', 'individuais__item',
-            )
-            .filter(token_publico=token)
-            .first()
-        )
-        # 404 e não 403: um token errado não deve confirmar que o pedido
-        # existe. "Não encontrado" é a resposta certa para as duas situações.
-        if pedido is None or not token:
-            raise Http404('Pedido não encontrado.')
+        pedido = _buscar(token)
 
+        etapas = [
+            (valor, rotulo) for valor, rotulo in PedidoProducao.Status.choices
+            if valor not in STATUS_OCULTOS and valor != 'cancelado'
+        ]
+        valores = [v for v, _r in etapas]
+        atual = valores.index(pedido.status) if pedido.status in valores else -1
+
+        resposta = render(request, 'moda/publico/pedido.html', {
+            'pedido': pedido,
+            'itens': pedido.itens.all(),
+            'empresa': pedido.filial.empresa,
+            'etapas': [
+                {'label': rotulo, 'passou': i <= atual, 'atual': i == atual}
+                for i, (_v, rotulo) in enumerate(etapas)
+            ],
+            'cancelado': pedido.status == 'cancelado',
+            'prazo': _prazo(pedido),
+        })
+        _blindar(resposta)
+        return resposta
+
+
+class PedidoPdfPublicoView(View):
+    """O mesmo pedido, em PDF."""
+
+    def get(self, request, token):
+        pedido = _buscar(token)
         base = f'{request.scheme}://{request.get_host()}'
         pdf = PedidoPdfService.gerar(pedido, base_url=base)
 
@@ -46,8 +134,5 @@ class PedidoPdfPublicoView(View):
         resposta['Content-Disposition'] = (
             f'inline; filename="PED-{pedido.numero:06d}.pdf"'
         )
-        # O documento traz dados do cliente: não deve ficar em cache de
-        # proxy nem ser indexado se o link vazar para algum lugar público.
-        resposta['Cache-Control'] = 'private, no-store'
-        resposta['X-Robots-Tag'] = 'noindex, nofollow'
+        _blindar(resposta)
         return resposta

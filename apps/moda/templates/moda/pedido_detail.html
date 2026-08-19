@@ -25,6 +25,15 @@
     <div class="card p-5" style="border-left:4px solid #059669;"
          x-data="{
            modal: false,
+           copiado: false,
+           copiar() {
+             const campo = this.$refs.link;
+             campo.select();
+             if (navigator.clipboard) { navigator.clipboard.writeText(campo.value); }
+             else { document.execCommand('copy'); }
+             this.copiado = true;
+             setTimeout(() => this.copiado = false, 2000);
+           },
            numero: '{{ whatsapp_numero }}',
            mensagem: JSON.parse(document.getElementById('msg-wa').textContent),
            enviar() {
@@ -59,6 +68,28 @@
           {% csrf_token %}
           <button type="submit" class="btn-primary text-sm">GERAR ORDEM DE PRODUÇÃO</button>
         </form>
+      </div>
+
+      {% comment %}
+        O link fica visível, e não só dentro do modal do WhatsApp: nem
+        todo cliente recebe por WhatsApp — muitos pedem por e-mail ou
+        pelo grupo da equipe, e sem o campo aqui não haveria de onde
+        copiá-lo.
+      {% endcomment %}
+      <div class="mt-4 p-3 rounded-lg"
+           :style="temaClaro ? 'background:#f8fafc;' : 'background:#27272a;'">
+        <p class="text-xs uppercase tracking-wider mb-1"
+           :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Link do cliente</p>
+        <div class="flex gap-2">
+          <input type="text" readonly x-ref="link" value="{{ link_publico }}"
+                 class="form-input w-full text-xs" style="font-family:monospace;">
+          <button type="button" class="btn-secondary text-sm shrink-0" @click="copiar()"
+                  x-text="copiado ? 'Copiado!' : 'Copiar'"></button>
+        </div>
+        <p class="text-xs mt-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+          Abre o pedido sem senha, com produtos, grade, arte, prazo e status.
+          Quem tiver o endereço vê o pedido — mande só para o cliente.
+        </p>
       </div>
 
       {# ── Modal ──────────────────────────────────────────────────────── #}
@@ -119,7 +150,8 @@
           <div class="p-3 rounded-lg text-xs"
                :style="temaClaro ? 'background:rgba(59,130,246,.08); color:#374151;' : 'background:rgba(59,130,246,.10); color:#cbd5e1;'">
             <strong>O WhatsApp não aceita anexo por link.</strong> A mensagem leva o
-            endereço do PDF, que o cliente abre no celular sem precisar de senha.
+            endereço da página do pedido, que o cliente abre no celular sem senha
+            — e de lá ele vê o status e baixa o PDF.
             Para anexar o arquivo de verdade, use <strong>BAIXAR PDF</strong> e
             arraste-o na conversa.
           </div>

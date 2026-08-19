@@ -1,0 +1,196 @@
+{% extends "_base.html" %}
+{% block title %}Pedido #{{ pedido.numero|stringformat:"06d" }}{% endblock %}
+
+{% comment %}
+  `full_content` e não `content`: o bloco `content` do `_base.html` vive
+  dentro do shell autenticado (sidebar, header, seletor de filial). O cliente
+  não tem login, e `full_content` é o bloco que a tela de login já usa —
+  página limpa, sem nada do sistema aparecendo.
+
+  Esta página NÃO TEM NENHUM LINK para outro pedido, para o sistema ou para
+  o login. É o que fecha a porta junto com o token: o que não está na tela
+  não pode ser seguido.
+{% endcomment %}
+{% block full_content %}
+<div class="min-h-screen py-8 px-4" style="background:#f1f5f9;">
+  <div class="max-w-3xl mx-auto space-y-4">
+
+    {# ── Cabeçalho ────────────────────────────────────────────────────── #}
+    <div class="bg-white rounded-2xl p-6" style="box-shadow:0 4px 16px rgba(15,23,42,.06);">
+      <div class="flex flex-wrap items-start justify-between gap-4">
+        <div class="min-w-0">
+          <p class="text-xs font-bold uppercase tracking-widest" style="color:#2563eb;">
+            {{ empresa }}
+          </p>
+          <h1 class="text-2xl font-bold mt-1" style="color:#0f172a;">
+            Pedido #{{ pedido.numero|stringformat:"06d" }}
+          </h1>
+          <p class="text-sm mt-1" style="color:#64748b;">{{ pedido.cliente }}</p>
+        </div>
+        <div class="text-right">
+          <p class="text-xs uppercase tracking-wider" style="color:#64748b;">Entrega prevista</p>
+          <p class="text-xl font-bold" style="color:#0f172a;">
+            {% if pedido.data_prevista_entrega %}
+              {{ pedido.data_prevista_entrega|date:"d/m/Y" }}
+            {% else %}
+              a combinar
+            {% endif %}
+          </p>
+          {% if prazo %}
+            <p class="text-xs" style="color:{% if pedido.atrasado %}#dc2626{% else %}#64748b{% endif %};">
+              {{ prazo }}
+            </p>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+
+    {# ── Status ───────────────────────────────────────────────────────── #}
+    <div class="bg-white rounded-2xl p-6" style="box-shadow:0 4px 16px rgba(15,23,42,.06);">
+      <p class="text-xs font-bold uppercase tracking-wider mb-3" style="color:#64748b;">
+        Situação do pedido
+      </p>
+
+      {% if cancelado %}
+        <p class="text-lg font-bold" style="color:#64748b;">Pedido cancelado</p>
+        <p class="text-sm mt-1" style="color:#64748b;">
+          Fale com a gente se precisar de mais informações.
+        </p>
+      {% else %}
+        <p class="text-xl font-bold mb-4" style="color:#2563eb;">
+          {{ pedido.get_status_display }}
+        </p>
+        {% comment %}
+          A régua mostra o caminho inteiro e onde o pedido está. O cliente
+          quer saber "falta muito?", e uma etiqueta solta com o status não
+          responde isso — não dá para saber se "Em Acabamento" é o começo ou
+          o fim sem ver o resto do caminho.
+        {% endcomment %}
+        <div class="flex flex-wrap gap-1.5">
+          {% for e in etapas %}
+            <span class="text-xs font-semibold px-2.5 py-1.5 rounded-lg"
+                  {% if e.atual %}style="background:#2563eb; color:#fff;"
+                  {% elif e.passou %}style="background:#dcfce7; color:#059669;"
+                  {% else %}style="background:#f1f5f9; color:#94a3b8;"{% endif %}>
+              {% if e.passou and not e.atual %}✓ {% endif %}{{ e.label }}
+            </span>
+          {% endfor %}
+        </div>
+      {% endif %}
+    </div>
+
+    {# ── Produtos ─────────────────────────────────────────────────────── #}
+    {% for item in itens %}
+      <div class="bg-white rounded-2xl p-6 space-y-4" style="box-shadow:0 4px 16px rgba(15,23,42,.06);">
+        <div class="flex flex-wrap items-start justify-between gap-3">
+          <div class="min-w-0">
+            <h2 class="text-lg font-bold" style="color:#0f172a;">{{ item.nome_exibicao }}</h2>
+            <p class="text-sm mt-0.5" style="color:#64748b;">
+              {% if item.modelo %}{{ item.modelo }}{% endif %}
+              {% if item.cor %} · {{ item.cor }}{% endif %}
+              {% if item.tecido_exibicao %} · {{ item.tecido_exibicao }}{% endif %}
+            </p>
+          </div>
+          <div class="text-right shrink-0">
+            <p class="text-2xl font-bold" style="color:#0f172a;">{{ item.quantidade }}</p>
+            <p class="text-xs uppercase tracking-wider" style="color:#64748b;">peças</p>
+          </div>
+        </div>
+
+        {# ── Grade ──────────────────────────────────────────────────── #}
+        {% if item.grade.all %}
+          <div>
+            <p class="text-xs font-bold uppercase tracking-wider mb-2" style="color:#64748b;">Grade</p>
+            <div class="flex flex-wrap gap-2">
+              {% for g in item.grade.all %}
+                <div class="text-center px-3 py-2 rounded-xl" style="background:#f8fafc;">
+                  <span class="block text-xs font-mono font-bold" style="color:#64748b;">
+                    {{ g.tamanho.sigla }}
+                  </span>
+                  <span class="block text-lg font-bold" style="color:#0f172a;">{{ g.quantidade }}</span>
+                </div>
+              {% endfor %}
+            </div>
+          </div>
+        {% endif %}
+
+        {# ── Arte ───────────────────────────────────────────────────── #}
+        {% if item.visuais.all %}
+          <div>
+            <p class="text-xs font-bold uppercase tracking-wider mb-2" style="color:#64748b;">Arte</p>
+            <div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
+              {% for v in item.visuais.all %}
+                <div>
+                  {# `url_imagem` resolve a arte própria antes do mockup — é a
+                     mesma regra da tela interna, e o cliente precisa ver a
+                     arte DELE, não a base genérica. #}
+                  {% if v.tem_imagem %}
+                    <img src="{{ v.url_imagem }}" alt="{{ v.get_posicao_display }}"
+                         class="w-full rounded-xl"
+                         style="aspect-ratio:1; object-fit:contain; background:#fff; border:1px solid #e2e8f0;">
+                  {% endif %}
+                  <p class="text-xs mt-1 text-center" style="color:#64748b;">
+                    {{ v.get_posicao_display }}
+                    {% if v.nome or v.numero %}
+                      <span class="block font-semibold" style="color:#0f172a;">
+                        {{ v.nome }} {{ v.numero }}
+                      </span>
+                    {% endif %}
+                  </p>
+                </div>
+              {% endfor %}
+            </div>
+          </div>
+        {% endif %}
+
+        {% if item.personalizacoes.all %}
+          <div>
+            <p class="text-xs font-bold uppercase tracking-wider mb-1" style="color:#64748b;">
+              Personalização
+            </p>
+            {% for p in item.personalizacoes.all %}
+              <p class="text-sm" style="color:#334155;">
+                {{ p.get_tipo_display }} em {{ p.get_tecnica_display }}{% if p.local %} · {{ p.local }}{% endif %}
+              </p>
+            {% endfor %}
+          </div>
+        {% endif %}
+      </div>
+    {% empty %}
+      <div class="bg-white rounded-2xl p-6 text-center" style="box-shadow:0 4px 16px rgba(15,23,42,.06);">
+        <p class="text-sm" style="color:#64748b;">
+          Este pedido ainda não tem produtos lançados.
+        </p>
+      </div>
+    {% endfor %}
+
+    {# ── PDF ──────────────────────────────────────────────────────────── #}
+    <div class="bg-white rounded-2xl p-6 text-center" style="box-shadow:0 4px 16px rgba(15,23,42,.06);">
+      <a href="{% url 'moda_publico:pedido-pdf' pedido.token_publico %}" target="_blank" rel="noopener"
+         class="inline-block px-6 py-3 rounded-xl font-bold text-white"
+         style="background:#2563eb;">Ver o PDF do pedido</a>
+      <p class="text-xs mt-3" style="color:#64748b;">
+        O PDF traz também os valores e a personalização pessoa a pessoa.
+      </p>
+    </div>
+
+    {# ── Rodapé ───────────────────────────────────────────────────────── #}
+    <div class="text-center py-4 space-y-1">
+      <p class="text-sm font-semibold" style="color:#334155;">{{ empresa }}</p>
+      <p class="text-xs" style="color:#94a3b8;">
+        {% if empresa.telefone %}{{ empresa.telefone }}{% endif %}
+        {% if empresa.email %} · {{ empresa.email }}{% endif %}
+      </p>
+      {% comment %}
+        O aviso não é ruído: sem ele o cliente repassa o endereço num grupo
+        achando que é uma página pública qualquer — e o link É a senha.
+      {% endcomment %}
+      <p class="text-xs pt-2" style="color:#94a3b8;">
+        Este link é exclusivo deste pedido. Não compartilhe — quem tiver o
+        endereço vê estas informações.
+      </p>
+    </div>
+
+  </div>
+</div>
+{% endblock %}
