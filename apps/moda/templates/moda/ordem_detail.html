@@ -35,6 +35,7 @@
            download="FICHA-{{ ordem.numero }}.pdf"
            class="btn-secondary text-sm">Baixar ficha</a>
         <a href="{% url 'moda:qr-etiqueta' ordem.codigo_qr %}" class="btn-secondary text-sm">QR Code</a>
+        <a href="{% url 'moda:ordem-historico' ordem.pk %}" class="btn-secondary text-sm">Histórico</a>
         <span class="text-sm font-bold px-3 py-1.5 rounded-full"
               {% if ordem.status == 'concluida' %}style="background:rgba(16,185,129,.14); color:#059669;"
               {% elif ordem.status == 'cancelada' %}style="background:rgba(148,163,184,.18); color:#64748b;"

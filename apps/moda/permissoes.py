@@ -68,6 +68,8 @@ AREA_POR_MODULO = {
     'apps.moda.views_expedicao': 'expedicao',
     'apps.moda.views_dashboard': 'indicadores',
     'apps.moda.views_alertas': 'indicadores',
+    # O histórico atende pedido e ordem, então cada view dele declara a
+    # própria área -- é o caso que justifica o `area` na classe.
     # `views.py` (hub, grupos e placeholders) fica de fora de propósito: é a
     # navegação do vertical, e quem entra em qualquer área precisa dela.
 }

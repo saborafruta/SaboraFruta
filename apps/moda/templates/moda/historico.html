@@ -1,0 +1,93 @@
+{% extends "_base.html" %}
+{% block title %}{{ title }}{% endblock %}
+{% block page_title %}Histórico{% endblock %}
+{% block content %}
+<div class="space-y-5">
+
+  {# ── Cabeçalho ────────────────────────────────────────────────────── #}
+  <div class="card p-5">
+    <p class="text-sm mb-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+      <a href="{% url voltar.0 voltar.1 %}" :style="temaClaro ? 'color:#3b82f6;' : 'color:#60a5fa;'">
+        ‹ Voltar
+      </a>
+    </p>
+    <h2 class="text-2xl font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
+      {{ raiz }}
+    </h2>
+    <p class="text-sm mt-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+      {{ subtitulo }} · {{ eventos|length }} registro{{ eventos|length|pluralize }},
+      {{ marcos|length }} marco{{ marcos|length|pluralize }}
+    </p>
+    {% comment %}
+      Dizer que não dá para mexer não é ruído: é o que dá valor ao registro.
+      Auditoria que se pode editar não serve para auditar nada.
+    {% endcomment %}
+    <p class="text-xs mt-3" :style="temaClaro ? 'color:#94a3b8;' : 'color:#71717a;'">
+      Registro automático e permanente. Não pode ser editado nem apagado por
+      ninguém dentro do sistema.
+    </p>
+  </div>
+
+  {# ── Linha do tempo ───────────────────────────────────────────────── #}
+  {% if eventos %}
+    <div class="card p-5">
+      <div style="position:relative; padding-left:22px;">
+        {# O fio vertical que liga os eventos. Um <div> absoluto e não uma
+           borda no item: com borda, o último evento continuaria o traço
+           para baixo, sugerindo que há mais coisa. #}
+        <div style="position:absolute; left:5px; top:6px; bottom:6px; width:2px;
+                    background:rgba(148,163,184,.25);"></div>
+
+        <div class="space-y-4">
+          {% for e in eventos %}
+            <div style="position:relative;">
+              {# Marco é bolinha cheia e colorida; ajuste de campo é oca e
+                 cinza. É o que permite bater o olho e ler só as etapas. #}
+              <span style="position:absolute; left:-21px; top:5px;
+                           width:10px; height:10px; border-radius:50%;
+                           {% if e.marco %}background:#2563eb;{% else %}background:transparent; border:2px solid #94a3b8;{% endif %}"></span>
+
+              <p class="text-xs" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+                {{ e.quando|date:"d/m/Y H:i" }} · {{ e.usuario }}
+              </p>
+              <p class="{% if e.marco %}font-semibold{% endif %} text-sm"
+                 :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
+                {{ e.titulo }}
+              </p>
+
+              {% if e.mudancas %}
+                <div class="mt-1 space-y-0.5">
+                  {% for m in e.mudancas %}
+                    <p class="text-xs" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+                      <span class="font-semibold">{{ m.campo }}:</span>
+                      <span style="text-decoration:line-through; opacity:.7;">{{ m.antes }}</span>
+                      <span class="mx-1">→</span>
+                      <span :style="temaClaro ? 'color:#111827;' : 'color:#e5e7eb;'">{{ m.depois }}</span>
+                    </p>
+                  {% endfor %}
+                </div>
+              {% endif %}
+            </div>
+          {% endfor %}
+        </div>
+      </div>
+    </div>
+  {% else %}
+    <div class="card p-8 text-center">
+      <p class="text-sm" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+        Nenhum registro ainda.
+      </p>
+      {% comment %}
+        A ressalva importa: o registro começa quando a auditoria do vertical
+        entra no ar. Sem dizer isso, um pedido antigo com histórico vazio
+        parece defeito.
+      {% endcomment %}
+      <p class="text-xs mt-2" :style="temaClaro ? 'color:#94a3b8;' : 'color:#71717a;'">
+        O registro vale a partir do momento em que a auditoria do vertical
+        entrou no ar — o que aconteceu antes disso não foi gravado.
+      </p>
+    </div>
+  {% endif %}
+
+</div>
+{% endblock %}
