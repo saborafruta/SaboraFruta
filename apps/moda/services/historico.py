@@ -121,6 +121,7 @@ FRASES = {
     (PedidoProducao._meta.db_table, 'status'): {
         'Pedido Confirmado': 'Pedido confirmado',
         'Aguardando Arte': 'Aguardando arte',
+        'Aguardando Aprovação': 'Aguardando aprovação do cliente',
         'Aguardando Material': 'Aguardando material',
         'Liberado para Produção': 'Pedido liberado para produção',
         'Em Produção': 'Produção iniciada',

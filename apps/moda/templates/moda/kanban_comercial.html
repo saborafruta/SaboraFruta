@@ -1,0 +1,361 @@
+{% extends "_base.html" %}
+{% block title %}Comercial — Moda{% endblock %}
+{% block page_title %}Comercial{% endblock %}
+
+{% block extra_head %}
+{{ block.super }}
+<style>
+  /* A raia que vai receber o cartão precisa se anunciar durante o arrasto —
+     sem isso o usuário solta no lugar errado e culpa o sistema. */
+  .kc-raia.recebendo { outline: 2px dashed #3b82f6; outline-offset: -4px; }
+  .kc-card.arrastando { opacity: .4; }
+  .kc-card { cursor: grab; }
+  .kc-card:active { cursor: grabbing; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="space-y-4">
+  {% csrf_token %}
+
+  {# ── Cabeçalho ────────────────────────────────────────────────────── #}
+  <div>
+    <p class="text-sm mb-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+      <a href="{% url 'moda:hub' %}" :style="temaClaro ? 'color:#3b82f6;' : 'color:#60a5fa;'">Moda e Confecção</a>
+      <span class="mx-1">›</span> Comercial
+    </p>
+    <div class="flex flex-wrap items-start justify-between gap-3">
+      <div>
+        <h2 class="text-2xl font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">Comercial</h2>
+        <p class="text-sm mt-0.5" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+          {{ total }} pedido(s) no quadro · {{ pecas }} peça(s) · R$ {{ valor|floatformat:2 }}
+          {% if atrasados %}
+            · <span style="color:#dc2626; font-weight:700;">{{ atrasados }} atrasado(s)</span>
+          {% endif %}
+          {% comment %}
+            Cancelado não é coluna — é a saída do fluxo, e uma raia de
+            cartões mortos no fim do quadro só empurraria o trabalho de
+            verdade para o lado. Mas o número aparece: sumir seria pior.
+          {% endcomment %}
+          {% if cancelados %}· {{ cancelados }} cancelado(s), fora do quadro{% endif %}
+        </p>
+      </div>
+      <a href="{% url 'moda:pedido-create' %}" class="btn-primary">+ Novo pedido</a>
+    </div>
+  </div>
+
+  {# ── Telas do grupo ───────────────────────────────────────────────── #}
+  {% comment %}
+    O menu de cartões que ficava aqui virou esta barra. As telas continuam
+    a um clique; o que mudou é que o trabalho aparece primeiro, e não a
+    lista de onde ele poderia estar.
+  {% endcomment %}
+  <div class="flex flex-wrap gap-2">
+    {% for item in grupo.itens %}
+      <a href="{% url 'moda:item' grupo.slug item.slug %}"
+         class="text-xs font-semibold px-2.5 py-1.5 rounded-lg flex items-center gap-1.5"
+         :style="temaClaro ? 'background:#f3f4f6; color:#374151;' : 'background:#2a2a2e; color:#d4d4d4;'">
+        {{ item.label }}
+        {% if item.slug not in prontos %}
+          <span class="text-[9px] font-bold px-1 rounded-full"
+                style="background:rgba(245,158,11,.16); color:#d97706;">em breve</span>
+        {% endif %}
+      </a>
+    {% endfor %}
+  </div>
+
+  {# ── Filtros ──────────────────────────────────────────────────────── #}
+  <form method="get" class="card p-4 flex flex-wrap items-end gap-3">
+    <div class="flex-1 min-w-[180px]">
+      <label class="block text-xs font-semibold mb-1" :style="temaClaro ? 'color:#374151;' : 'color:#cbd5e1;'">Cliente ou número</label>
+      <input type="search" name="busca" value="{{ filtros.busca }}" class="form-input w-full"
+             placeholder="Ex.: INTERFORT, 000142">
+    </div>
+    <div>
+      <label class="block text-xs font-semibold mb-1" :style="temaClaro ? 'color:#374151;' : 'color:#cbd5e1;'">Prioridade</label>
+      <select name="prioridade" class="form-input w-40">
+        <option value="">Todas</option>
+        {% for valor, rotulo in prioridades %}
+          <option value="{{ valor }}" {% if valor == filtros.prioridade %}selected{% endif %}>{{ rotulo }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <label class="flex items-center gap-2 text-sm pb-2" :style="temaClaro ? 'color:#374151;' : 'color:#cbd5e1;'">
+      <input type="checkbox" name="atrasados" value="1" {% if filtros.atrasados %}checked{% endif %}>
+      Só atrasados
+    </label>
+    <button type="submit" class="btn-secondary">Filtrar</button>
+    {% if tem_filtro %}<a href="{% url 'moda:comercial' %}" class="btn-secondary">Limpar</a>{% endif %}
+  </form>
+
+  {% comment %}
+    Aviso do último movimento. Mover um cartão muda o status do pedido de
+    verdade — e uma mudança dessas feita em silêncio é a que ninguém
+    consegue explicar depois.
+  {% endcomment %}
+  <div id="kc-aviso" class="card p-3 hidden" style="border-left:3px solid #3b82f6;">
+    <p class="text-sm" id="kc-aviso-texto" :style="temaClaro ? 'color:#374151;' : 'color:#cbd5e1;'"></p>
+  </div>
+
+  {% if pode_mover %}
+    <p class="text-xs" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+      Arraste o cartão para mudar o status do pedido. No celular, use o seletor
+      dentro do cartão. Soltar em <strong>Produção</strong> passa pelas mesmas
+      validações da tela do pedido.
+    </p>
+  {% else %}
+    <p class="text-xs" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+      Seu perfil não pode mover pedidos; o quadro é somente leitura.
+    </p>
+  {% endif %}
+
+  {# ── Quadro ───────────────────────────────────────────────────────── #}
+  <div class="overflow-x-auto pb-3">
+    <div class="flex gap-3" style="min-width:1560px;">
+      {% for r in raias %}
+        <div class="kc-raia card p-3 flex-1 space-y-2" data-coluna="{{ r.coluna.chave }}"
+             style="min-width:185px;">
+          <div class="flex items-baseline justify-between gap-2 pb-2 border-b"
+               :style="temaClaro ? 'border-color:#e5e7eb;' : 'border-color:#303036;'">
+            <h3 class="text-xs font-bold uppercase tracking-wider"
+                :style="temaClaro ? 'color:#374151;' : 'color:#cbd5e1;'"
+                title="{{ r.coluna.descricao }}">{{ r.coluna.label }}</h3>
+            <span class="text-xs font-bold tabular-nums" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+              {{ r.total }}
+            </span>
+          </div>
+
+          <p class="text-[10px]" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+            {% if r.total %}
+              {{ r.pecas }} pç · R$ {{ r.valor|floatformat:0 }}
+              {% if r.atrasados %}
+                · <span style="color:#dc2626; font-weight:700;">{{ r.atrasados }} atras.</span>
+              {% endif %}
+            {% else %}
+              &nbsp;
+            {% endif %}
+          </p>
+
+          <div class="space-y-2 min-h-[60px]" data-lista>
+            {% for c in r.cartoes %}
+              <div class="kc-card rounded-lg p-2.5" data-pedido="{{ c.pedido.pk }}"
+                   {% if pode_mover %}draggable="true"{% endif %}
+                   :style="temaClaro ? 'background:#f8fafc; border:1px solid #e5e7eb;' : 'background:#18181b; border:1px solid #303036;'">
+                <div class="flex items-start justify-between gap-1">
+                  <a href="{% url 'moda:pedido-detail' c.pedido.pk %}" class="font-mono text-xs font-bold"
+                     :style="temaClaro ? 'color:#3b82f6;' : 'color:#60a5fa;'">#{{ c.pedido.numero|stringformat:"06d" }}</a>
+                  {% if c.pedido.prioridade != 'normal' %}
+                    <span class="text-[9px] font-bold px-1.5 py-0.5 rounded-full shrink-0"
+                          {% if c.pedido.prioridade == 'urgente' %}style="background:rgba(220,38,38,.14); color:#dc2626;"
+                          {% else %}style="background:rgba(245,158,11,.16); color:#d97706;"{% endif %}>
+                      {{ c.pedido.get_prioridade_display|upper }}
+                    </span>
+                  {% endif %}
+                </div>
+
+                <p class="text-xs font-semibold mt-1 truncate" :style="temaClaro ? 'color:#111827;' : 'color:#e5e7eb;'"
+                   title="{{ c.pedido.cliente }}">{{ c.pedido.cliente }}</p>
+                {% if c.pedido.contato_nome %}
+                  <p class="text-[11px] truncate" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+                    {{ c.pedido.contato_nome }}
+                  </p>
+                {% endif %}
+
+                <div class="flex items-center justify-between gap-1 mt-1.5 text-[11px]">
+                  <span class="font-bold tabular-nums" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
+                    {{ c.pedido.quantidade_total }} pç
+                  </span>
+                  {% comment %}
+                    Pedido SEM data não vira "no prazo": vira "sem prazo", em
+                    laranja. São situações diferentes, e pintar as duas de
+                    cinza esconderia justamente o que ninguém combinou.
+                  {% endcomment %}
+                  {% if not c.pedido.data_prevista_entrega %}
+                    <span class="tabular-nums" style="color:#d97706;">sem prazo</span>
+                  {% elif c.atrasado %}
+                    <span class="tabular-nums" style="color:#dc2626; font-weight:700;">
+                      {{ c.pedido.data_prevista_entrega|date:"d/m" }}
+                    </span>
+                  {% elif c.apertado %}
+                    <span class="tabular-nums" style="color:#d97706; font-weight:700;">
+                      {{ c.pedido.data_prevista_entrega|date:"d/m" }}
+                    </span>
+                  {% else %}
+                    <span class="tabular-nums" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+                      {{ c.pedido.data_prevista_entrega|date:"d/m" }}
+                    </span>
+                  {% endif %}
+                </div>
+
+                <p class="text-[11px] tabular-nums mt-0.5" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+                  R$ {{ c.pedido.valor_total|floatformat:2 }}
+                </p>
+
+                {% if c.pediu_ajuste %}
+                  <p class="text-[10px] mt-1 font-semibold" style="color:#dc2626;">
+                    Cliente pediu ajuste
+                  </p>
+                {% elif r.coluna.chave == 'arte' or r.coluna.chave == 'aprovacao' %}
+                  {% if not c.tem_arte %}
+                    <p class="text-[10px] mt-1" style="color:#d97706;">Sem arte anexada</p>
+                  {% endif %}
+                {% endif %}
+
+                {% if pode_mover %}
+                  {% comment %}
+                    Arrastar não existe no toque. Sem este seletor, o quadro
+                    seria somente leitura no celular — que é onde o vendedor
+                    está quando o cliente responde.
+                  {% endcomment %}
+                  <select class="kc-mover form-input w-full mt-2 text-[11px] py-1 sm:hidden">
+                    <option value="">mover para…</option>
+                    {% for col in colunas %}
+                      {% if col.chave != r.coluna.chave %}
+                        <option value="{{ col.chave }}">{{ col.label }}</option>
+                      {% endif %}
+                    {% endfor %}
+                  </select>
+                {% endif %}
+              </div>
+            {% empty %}
+              <p class="text-[11px] text-center py-3" :style="temaClaro ? 'color:#cbd5e1;' : 'color:#52525b;'">
+                vazia
+              </p>
+            {% endfor %}
+          </div>
+        </div>
+      {% endfor %}
+    </div>
+  </div>
+
+  {% if not total %}
+    <div class="card p-8 text-center">
+      <p class="text-sm" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+        {% if tem_filtro %}
+          Nenhum pedido com esses filtros.
+          <a href="{% url 'moda:comercial' %}" :style="temaClaro ? 'color:#3b82f6;' : 'color:#60a5fa;'">Limpar</a>.
+        {% else %}
+          Nenhum pedido ainda. Cadastre o cliente em
+          <a href="{% url 'moda:clientes' %}" :style="temaClaro ? 'color:#3b82f6;' : 'color:#60a5fa;'">Clientes</a>
+          e abra o primeiro em
+          <a href="{% url 'moda:pedido-create' %}" :style="temaClaro ? 'color:#3b82f6;' : 'color:#60a5fa;'">Novo pedido</a>.
+        {% endif %}
+      </p>
+    </div>
+  {% endif %}
+
+</div>
+{% endblock %}
+
+{% block extra_js %}
+{{ block.super }}
+{% if pode_mover %}
+<script>
+(function () {
+  const csrf = document.querySelector('[name=csrfmiddlewaretoken]')?.value
+    || document.cookie.match(/csrftoken=([^;]+)/)?.[1] || '';
+  const aviso = document.getElementById('kc-aviso');
+  const avisoTexto = document.getElementById('kc-aviso-texto');
+  let arrastando = null;
+  let origem = null;
+
+  function mostrar(texto, erro) {
+    avisoTexto.textContent = texto;
+    aviso.style.borderLeftColor = erro ? '#dc2626' : '#3b82f6';
+    aviso.classList.remove('hidden');
+  }
+
+  // Uma função só para as duas formas de mover (arrasto e seletor): a regra
+  // de "desfaz na tela quando o servidor recusa" precisa valer para as duas,
+  // senão o celular fica mostrando o cartão numa coluna que o banco recusou.
+  async function mover(card, coluna, destino, volta) {
+    destino.appendChild(card);
+    try {
+      const resp = await fetch(`/moda/comercial/kanban/${card.dataset.pedido}/mover/`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrf },
+        body: JSON.stringify({ coluna: coluna }),
+      });
+      const dados = await resp.json();
+      if (!dados.ok) throw new Error(dados.erro || 'Não foi possível mover.');
+      mostrar(dados.mensagem, false);
+      atualizarSeletor(card, coluna);
+    } catch (erro) {
+      volta.appendChild(card);
+      mostrar(erro.message, true);
+    }
+  }
+
+  // O seletor do celular lista as OUTRAS colunas. Depois de mover, a coluna
+  // atual passa a ser outra — sem reconstruir a lista, o cartão ofereceria
+  // mover para onde ele já está.
+  function atualizarSeletor(card, colunaAtual) {
+    const select = card.querySelector('.kc-mover');
+    if (!select) return;
+    const raias = document.querySelectorAll('.kc-raia');
+    select.innerHTML = '<option value="">mover para…</option>';
+    raias.forEach((raia) => {
+      const chave = raia.dataset.coluna;
+      if (chave === colunaAtual) return;
+      const titulo = raia.querySelector('h3');
+      const op = document.createElement('option');
+      op.value = chave;
+      op.textContent = titulo ? titulo.textContent.trim() : chave;
+      select.appendChild(op);
+    });
+  }
+
+  document.querySelectorAll('.kc-card[draggable=true]').forEach((card) => {
+    card.addEventListener('dragstart', (e) => {
+      arrastando = card;
+      origem = card.closest('.kc-raia');
+      card.classList.add('arrastando');
+      // Alguns navegadores só iniciam o arrasto se houver dados no evento.
+      e.dataTransfer.setData('text/plain', card.dataset.pedido);
+      e.dataTransfer.effectAllowed = 'move';
+    });
+    card.addEventListener('dragend', () => {
+      card.classList.remove('arrastando');
+      document.querySelectorAll('.kc-raia').forEach(
+        (r) => r.classList.remove('recebendo'));
+    });
+  });
+
+  document.querySelectorAll('.kc-raia').forEach((raia) => {
+    raia.addEventListener('dragover', (e) => {
+      e.preventDefault();
+      e.dataTransfer.dropEffect = 'move';
+      raia.classList.add('recebendo');
+    });
+    raia.addEventListener('dragleave', () => raia.classList.remove('recebendo'));
+
+    raia.addEventListener('drop', (e) => {
+      e.preventDefault();
+      raia.classList.remove('recebendo');
+      if (!arrastando || raia === origem) return;
+      const card = arrastando;
+      const anterior = origem;
+      // `[data-lista]` e não seletor por classe do Tailwind: mudar uma
+      // classe de layout não pode quebrar o arrasto.
+      mover(card, raia.dataset.coluna,
+            raia.querySelector('[data-lista]') || raia,
+            anterior.querySelector('[data-lista]') || anterior);
+    });
+  });
+
+  document.addEventListener('change', (e) => {
+    const select = e.target.closest('.kc-mover');
+    if (!select || !select.value) return;
+    const card = select.closest('.kc-card');
+    const anterior = card.closest('.kc-raia');
+    const raia = document.querySelector(`.kc-raia[data-coluna="${select.value}"]`);
+    select.value = '';
+    if (!raia || raia === anterior) return;
+    mover(card, raia.dataset.coluna,
+          raia.querySelector('[data-lista]') || raia,
+          anterior.querySelector('[data-lista]') || anterior);
+  });
+})();
+</script>
+{% endif %}
+{% endblock %}

@@ -18,6 +18,7 @@ from . import (
     views_expedicao as vex, views_kanban as vk, views_necessidade as vn,
     views_alertas as val, views_aprovacao as vap, views_clientes as vcl,
     views_orcamentos as vorc,
+    views_comercial as vcom,
     views_dashboard as vd, views_historico as vh, views_qualidade as vq, views_qr as vqr,
     views_roteiro as vr, views_terminal as vt, views_wip as vw,
 )
@@ -27,6 +28,12 @@ app_name = 'moda'
 # Telas já implementadas — declaradas ANTES do catch-all, senão o
 # placeholder as engoliria. O endereço é o mesmo que o menu já aponta.
 ROTAS_PRONTAS: list = [
+    # A tela do grupo Comercial e' o QUADRO de pedidos, nao mais o menu de
+    # cartoes. Declarada aqui, antes do catch-all `<slug:grupo_slug>/`, que
+    # senao devolveria a lista de telas do grupo neste mesmo endereco.
+    path('comercial/', vcom.ComercialView.as_view(), name='comercial'),
+    path('comercial/kanban/<int:pk>/mover/', vcom.ComercialMoverView.as_view(), name='comercial-mover'),
+
     # Carteira de clientes. Fica ANTES do catch-all do menu, senão
     # `<slug:grupo>/<slug:item>` engoliria o endereço e devolveria o
     # placeholder de "em construção" -- foi o que aconteceu com o WIP.

@@ -52,6 +52,9 @@ MODULOS_DE_AREA = [modulo_da_area(a) for a in AREAS]
 # porta por engano, no máximo deixa de estreitá-la.
 AREA_POR_MODULO = {
     'apps.moda.views_cadastros': 'comercial',
+    'apps.moda.views_comercial': 'comercial',
+    'apps.moda.views_clientes': 'comercial',
+    'apps.moda.views_orcamentos': 'comercial',
     'apps.moda.views_apoio': 'comercial',
     'apps.moda.views_ficha': 'pcp',
     'apps.moda.views_roteiro': 'pcp',

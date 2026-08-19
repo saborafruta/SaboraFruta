@@ -33,6 +33,11 @@ class PedidoProducao(ComCodigoQr, FilialScopedModel):
         ORCAMENTO = 'orcamento', 'Orçamento'
         CONFIRMADO = 'confirmado', 'Pedido Confirmado'
         AGUARDANDO_ARTE = 'aguardando_arte', 'Aguardando Arte'
+        # O aceite do CLIENTE, que é outra coisa da aprovação interna: a
+        # arte foi enviada e a bola está do lado de lá. Sem este status o
+        # pedido esperando resposta ficava indistinguível do que ainda nem
+        # tem arte, e os dois pediam providências opostas.
+        AGUARDANDO_APROVACAO = 'aguardando_aprovacao', 'Aguardando Aprovação'
         AGUARDANDO_MATERIAL = 'aguardando_material', 'Aguardando Material'
         LIBERADO_PRODUCAO = 'liberado_producao', 'Liberado para Produção'
         EM_PRODUCAO = 'em_producao', 'Em Produção'

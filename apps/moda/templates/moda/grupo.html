@@ -32,28 +32,18 @@
             <p class="text-xs mt-1 leading-relaxed" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">{{ item.descricao }}</p>
           </div>
           {% comment %}
-            Todo item é "em construção" hoje. Quando a tela real existir,
-            some o selo — quem olha a lista vê o que já dá para usar.
+            O selo agora acompanha a REALIDADE: `prontos` vem da resolução
+            das rotas, e o item some do "em breve" no dia em que ganha tela.
+            Antes era fixo, e Clientes e Orçamentos continuaram anunciados
+            como inexistentes depois de prontos.
           {% endcomment %}
-          <span class="shrink-0 text-[10px] font-bold px-1.5 py-0.5 rounded-full"
-                style="background:rgba(245,158,11,.14); color:#fbbf24;">em breve</span>
+          {% if item.slug not in prontos %}
+            <span class="shrink-0 text-[10px] font-bold px-1.5 py-0.5 rounded-full"
+                  style="background:rgba(245,158,11,.14); color:#fbbf24;">em breve</span>
+          {% endif %}
         </div>
       </a>
     {% endfor %}
-  </div>
-
-  {% comment %} Navegação lateral entre grupos, sem voltar ao hub. {% endcomment %}
-  <div class="card p-4">
-    <p class="text-xs font-semibold uppercase tracking-wide mb-2.5"
-       :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Outras etapas</p>
-    <div class="flex flex-wrap gap-2">
-      {% for g in grupos %}
-        {% if g.slug != grupo.slug %}
-          <a href="{% url 'moda:grupo' g.slug %}" class="text-xs font-semibold px-2.5 py-1.5 rounded-lg"
-             :style="temaClaro ? 'background:#f3f4f6; color:#374151;' : 'background:#2a2a2e; color:#d4d4d4;'">{{ g.label }}</a>
-        {% endif %}
-      {% endfor %}
-    </div>
   </div>
 
 </div>

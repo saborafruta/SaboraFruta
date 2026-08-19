@@ -71,6 +71,32 @@ def grupos_visiveis(usuario) -> list:
     ]
 
 
+def itens_com_tela(grupo) -> set[str]:
+    """
+    Quais itens do grupo já têm tela de verdade.
+
+    Descoberto por resolução de rota, não por lista mantida à mão: um item
+    passa a ter tela quando alguém declara a rota dele em `ROTAS_PRONTAS`, e
+    uma segunda lista aqui envelheceria em silêncio — foi o que fez o selo
+    "em breve" continuar aparecendo em Clientes e Orçamentos depois de as
+    duas telas estarem no ar.
+    """
+    from .views_apoio import CADASTROS
+
+    prontos = set()
+    for item in grupo.itens:
+        if item.slug in CADASTROS:
+            prontos.add(item.slug)
+            continue
+        try:
+            achado = resolve(reverse('moda:item', args=[grupo.slug, item.slug]))
+        except (NoReverseMatch, Resolver404):
+            continue
+        if getattr(achado.func, 'view_class', None) is not ItemView:
+            prontos.add(item.slug)
+    return prontos
+
+
 class HubView(ModaBaseView):
     """Porta de entrada do vertical: os grupos que o perfil enxerga."""
 
@@ -100,6 +126,7 @@ class GrupoView(ModaBaseView):
             'title': grupo.label,
             'grupo': grupo,
             'grupos': grupos_visiveis(request.user),
+            'prontos': itens_com_tela(grupo),
         })
 
 
