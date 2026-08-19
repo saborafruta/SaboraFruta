@@ -16,7 +16,7 @@ from . import (
     views_corte as vco, views_encaixe as ve, views_fluxo as vx,
     views_ordem as vo, views_pcp as vp,
     views_expedicao as vex, views_kanban as vk, views_necessidade as vn,
-    views_qualidade as vq, views_qr as vqr,
+    views_dashboard as vd, views_qualidade as vq, views_qr as vqr,
     views_roteiro as vr, views_terminal as vt, views_wip as vw,
 )
 
@@ -66,7 +66,14 @@ ROTAS_PRONTAS: list = [
     path('producao/kanban/<int:pk>/mover/', vk.KanbanMoverView.as_view(), name='kanban-mover'),
 
     # WIP. Fica no grupo Relatorios, que e' o endereco que o menu aponta.
-    path('relatorios/wip/', vw.WipView.as_view(), name='wip'),
+    # Indicadores. O endereco tem que ser o que o MENU aponta
+    # (`indicadores/<item>`): o WIP estava em `relatorios/wip/` e o link do
+    # menu caia no placeholder de 'em construcao' -- a tela existia e nao
+    # tinha como chegar nela. O endereco antigo continua respondendo para
+    # nao quebrar link salvo.
+    path('indicadores/dashboard/', vd.DashboardView.as_view(), name='dashboard'),
+    path('indicadores/wip/', vw.WipView.as_view(), name='wip'),
+    path('relatorios/wip/', vw.WipView.as_view(), name='wip-antigo'),
 
     # Encaixe. Cadastro proprio: o mesmo risco serve a todos os enfestos
     # daquele modelo, entao nao pendura no corte.

@@ -1,0 +1,137 @@
+{% extends "_base.html" %}
+{% block title %}{{ title }}{% endblock %}
+{% block page_title %}Dashboard{% endblock %}
+{% block content %}
+
+{% comment %}
+  Gráficos em CSS puro, sem biblioteca.
+
+  Barra é `<div>` com largura ou altura em porcentagem — o servidor já
+  mandou a proporção pronta. Uma biblioteca de gráficos por CDN custaria
+  ~200 KB para desenhar oito barras, e a fábrica abre esta tela em tablet
+  com internet ruim. Também imprime: a folha sai igual à tela.
+{% endcomment %}
+<div class="space-y-5">
+
+  {# ── Período ──────────────────────────────────────────────────────── #}
+  <div class="card p-4 flex flex-wrap items-center justify-between gap-3">
+    <div>
+      <h2 class="text-xl font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
+        Como a operação está indo
+      </h2>
+      <p class="text-sm mt-0.5" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+        {{ inicio|date:"d/m/Y" }} a {{ fim|date:"d/m/Y" }}
+      </p>
+    </div>
+    <div class="flex flex-wrap gap-2">
+      {% for valor, rotulo in periodos %}
+        <a href="?dias={{ valor }}"
+           class="{% if valor == dias %}btn-primary{% else %}btn-secondary{% endif %} text-sm">
+          {{ rotulo }}
+        </a>
+      {% endfor %}
+    </div>
+  </div>
+
+  {# ── Indicadores do período ───────────────────────────────────────── #}
+  <div>
+    <p class="text-xs font-bold uppercase tracking-wider mb-2"
+       :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+      No período · {{ dias }} dias
+    </p>
+    <div class="grid grid-cols-2 lg:grid-cols-4 gap-3">
+      {% for i in do_periodo %}{% include "moda/_indicador.html" %}{% endfor %}
+    </div>
+  </div>
+
+  {# ── Foto de agora ────────────────────────────────────────────────── #}
+  <div>
+    {% comment %}
+      Bloco separado, e não misturado com os de cima, porque estes números
+      NÃO mudam com o filtro. Juntos, alguém escolhe "7 dias", lê WIP de 500
+      peças e conclui que entraram 500 peças na semana.
+    {% endcomment %}
+    <p class="text-xs font-bold uppercase tracking-wider mb-2"
+       :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+      Agora · não muda com o filtro
+    </p>
+    <div class="grid grid-cols-2 lg:grid-cols-4 gap-3">
+      {% for i in de_agora %}{% include "moda/_indicador.html" %}{% endfor %}
+    </div>
+  </div>
+
+  {# ── Gráficos ─────────────────────────────────────────────────────── #}
+  <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+    {% for g in graficos %}
+      <div class="card p-5 {% if g.tipo == 'barras' %}lg:col-span-2{% endif %}">
+        <h3 class="text-base font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
+          {{ g.titulo }}
+        </h3>
+        <p class="text-xs mt-0.5 mb-4" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+          {{ g.ajuda }}
+        </p>
+
+        {% if g.vazio %}
+          {% comment %}
+            Gráfico sem dado DIZ que está sem dado. Sumir da tela esconderia
+            que ninguém apontou produção no período — que é justamente a
+            informação mais importante ali.
+          {% endcomment %}
+          <p class="text-sm py-6 text-center" :style="temaClaro ? 'color:#94a3b8;' : 'color:#71717a;'">
+            Sem dados no período.
+          </p>
+
+        {% elif g.tipo == 'barras' %}
+          {# Série no tempo: barras verticais, com rolagem quando o período
+             é longo — 90 barras não cabem em tela de tablet. #}
+          <div style="overflow-x:auto;">
+            <div class="flex items-end gap-1" style="height:150px; min-width:100%;">
+              {% for fatia, tamanho in g.barras %}
+                <div class="flex-1 flex flex-col justify-end items-center"
+                     style="min-width:14px; height:100%;"
+                     title="{{ fatia.label }} — {{ fatia.texto }}">
+                  <span class="w-full rounded-t"
+                        style="height:{{ tamanho }}%; min-height:2px;
+                               background:{% if fatia.tom == 'ruim' %}#dc2626{% elif fatia.tom == 'atencao' %}#d97706{% elif fatia.tom == 'bom' %}#059669{% else %}#2563eb{% endif %};"></span>
+                </div>
+              {% endfor %}
+            </div>
+            <div class="flex gap-1 mt-1">
+              {% for fatia, tamanho in g.barras %}
+                <span class="flex-1 text-center" style="min-width:14px; font-size:9px; color:#94a3b8;">
+                  {% if forloop.counter0|divisibleby:5 or forloop.last %}{{ fatia.label }}{% endif %}
+                </span>
+              {% endfor %}
+            </div>
+          </div>
+
+        {% else %}
+          {# Comparação entre categorias: barras horizontais, porque o rótulo
+             ("Sublimação / Bordado / Silk") não cabe embaixo de uma barra
+             vertical sem virar de lado. #}
+          <div class="space-y-2">
+            {% for fatia, tamanho in g.barras %}
+              <div>
+                <div class="flex justify-between gap-3 text-xs mb-1">
+                  <span class="truncate" :style="temaClaro ? 'color:#374151;' : 'color:#cbd5e1;'">
+                    {{ fatia.label }}
+                  </span>
+                  <span class="shrink-0 font-semibold tabular-nums"
+                        :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
+                    {{ fatia.texto }}
+                  </span>
+                </div>
+                <div class="w-full rounded-full" style="height:8px; background:rgba(148,163,184,.2);">
+                  <div class="rounded-full" style="height:8px; width:{{ tamanho }}%;
+                       background:{% if fatia.tom == 'ruim' %}#dc2626{% elif fatia.tom == 'atencao' %}#d97706{% elif fatia.tom == 'bom' %}#059669{% else %}#2563eb{% endif %};"></div>
+                </div>
+              </div>
+            {% endfor %}
+          </div>
+        {% endif %}
+      </div>
+    {% endfor %}
+  </div>
+
+</div>
+{% endblock %}

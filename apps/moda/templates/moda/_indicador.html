@@ -1,0 +1,23 @@
+{% comment %}
+  Um card de indicador. Espera `i` no contexto.
+
+  A segunda linha (`detalhe`) nunca é decoração: é a base de cálculo, a
+  ressalva ou a comparação. É o que separa "Margem 32%" de "Margem 32%,
+  sobre 12 de 40 ordens" — e o segundo é o único dos dois em que dá para
+  tomar decisão.
+{% endcomment %}
+<div class="card p-4"
+     style="border-left:3px solid {% if i.tom == 'ruim' %}#dc2626{% elif i.tom == 'atencao' %}#d97706{% elif i.tom == 'bom' %}#059669{% else %}#2563eb{% endif %};">
+  <p class="text-xs uppercase tracking-wider truncate"
+     :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">{{ i.label }}</p>
+  <p class="text-2xl font-bold mt-1 tabular-nums"
+     style="{% if i.tom == 'ruim' %}color:#dc2626;{% elif i.tom == 'atencao' %}color:#d97706;{% elif i.tom == 'bom' %}color:#059669;{% endif %}"
+     {% if i.tom == 'neutro' %}:style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'"{% endif %}>
+    {{ i.valor }}
+  </p>
+  {% if i.detalhe %}
+    <p class="text-xs mt-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+      {{ i.detalhe }}
+    </p>
+  {% endif %}
+</div>
