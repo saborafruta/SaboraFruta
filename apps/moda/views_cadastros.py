@@ -17,6 +17,7 @@ from apps.core.services.exceptions import DadosInvalidosError
 
 from apps.core.services.exceptions import DomainError
 
+from .forms_cliente import ClienteRapidoForm
 from .forms import (
     CorForm, GradeForm, ItemPedidoProducaoForm, PedidoProducaoForm,
     PersonalizacaoForm, PersonalizacaoIndividualForm, ProdutoModaForm,
@@ -359,22 +360,54 @@ class PedidoFormView(ModaBaseView):
         if pedido is None and cliente_id.isdigit():
             inicial['cliente'] = int(cliente_id)
 
-        return render(request, 'moda/pedido_form.html', {
+        form = PedidoProducaoForm(
+            instance=pedido, filial=_filial(request), initial=inicial,
+        )
+        return render(request, 'moda/pedido_form.html',
+                      self._contexto(request, pedido, form))
+
+    def _contexto(self, request, pedido, form) -> dict:
+        """O que a tela precisa além do formulário."""
+        import json
+
+        from apps.moda.services.clientes import BuscaClientes
+        from apps.moda.services.historico import HistoricoService
+
+        # O campo de cliente é uma caixa de busca, não um select: para ele
+        # mostrar o nome de quem já está escolhido (edição, ou volta de um
+        # erro de validação), a tela precisa do cliente, não só do id.
+        escolhido = None
+        bruto = form['cliente'].value()
+        if bruto:
+            achado = form.fields['cliente'].queryset.filter(pk=bruto).first()
+            if achado is not None:
+                escolhido = BuscaClientes.como_dicionario(achado)
+
+        return {
             'title': f'Pedido #{pedido.numero:06d}' if pedido else 'Novo Pedido de Produção',
             'pedido': pedido,
-            'form': PedidoProducaoForm(
-                instance=pedido, filial=_filial(request), initial=inicial,
-            ),
-        })
+            'form': form,
+            'combo_cliente': True,
+            'cliente_escolhido': escolhido,
+            # Vai como texto JSON dentro do atributo do Alpine. NÃO é
+            # `mark_safe`: o escape do Django transforma as aspas em
+            # `&quot;`, que o navegador desfaz ao ler o atributo -- é o que
+            # impede um nome de cliente com aspas de quebrar a tela.
+            'cliente_escolhido_json': json.dumps(escolhido),
+            # Cadastrar cliente mexe na base do ERP inteiro: é permissão de
+            # `cadastros`, não da moda. Quem não tem, não vê o botão -- em
+            # vez de vê-lo e levar um 'sem permissão' depois de digitar.
+            'pode_criar_cliente': request.user.tem_permissao('cadastros', 'criar'),
+            'form_cliente': ClienteRapidoForm(),
+            'auditoria': HistoricoService.resumo_do_pedido(pedido) if pedido else None,
+        }
 
     def post(self, request, pk=None):
         pedido = self._obter(request, pk)
         form = PedidoProducaoForm(request.POST, instance=pedido, filial=_filial(request))
         if not form.is_valid():
-            return render(request, 'moda/pedido_form.html', {
-                'title': f'Pedido #{pedido.numero:06d}' if pedido else 'Novo Pedido de Produção',
-                'pedido': pedido, 'form': form,
-            })
+            return render(request, 'moda/pedido_form.html',
+                          self._contexto(request, pedido, form))
         pedido = form.save(commit=False)
         pedido.filial = _filial(request)
         pedido.save()

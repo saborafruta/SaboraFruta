@@ -200,6 +200,35 @@ class HistoricoService:
         return cls._montar(cls._alvos_do_pedido(pedido), str(pedido))
 
     @classmethod
+    def resumo_do_pedido(cls, pedido) -> dict:
+        """
+        Quem criou, quem mexeu por último, e quantas mãos passaram.
+
+        É o cabeçalho da mesma história que `do_pedido` conta inteira. Sai
+        do LogSistema como todo o resto: um par de campos `criado_por` /
+        `alterado_por` no pedido seria uma segunda verdade sobre o mesmo
+        fato -- e a primeira vez que divergisse do log, ninguém saberia
+        qual das duas valia.
+        """
+        eventos = cls.do_pedido(pedido)
+        if not eventos:
+            # Pedido anterior à auditoria, ou log já expurgado. Dizer isso
+            # é melhor do que a tela sugerir que ninguém nunca mexeu nele.
+            return {'criacao': None, 'ultima': None, 'total': 0, 'pessoas': []}
+
+        criacao = next(
+            (e for e in eventos if e.acao == LogSistema.Acao.CRIAR), eventos[0],
+        )
+        return {
+            'criacao': criacao,
+            'ultima': eventos[-1],
+            'total': len(eventos),
+            # Ordem de entrada, sem repetir: é a lista de quem tocou no
+            # pedido, que é a pergunta que se faz quando algo saiu errado.
+            'pessoas': list(dict.fromkeys(e.usuario for e in eventos)),
+        }
+
+    @classmethod
     def da_ficha(cls, ficha) -> list[Evento]:
         """
         A história da ficha: ela, os materiais e as imagens.

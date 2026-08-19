@@ -2,7 +2,8 @@
 {% block title %}{{ title }}{% endblock %}
 {% block page_title %}{{ title }}{% endblock %}
 {% block content %}
-<div class="max-w-3xl mx-auto space-y-5">
+<div class="max-w-3xl mx-auto space-y-5" x-data="{ novoCliente: false }"
+     @cliente-criado.window="novoCliente = false">
   <div>
     <p class="text-sm mb-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
       <a href="{% url 'moda:pedido-list' %}" :style="temaClaro ? 'color:#3b82f6;' : 'color:#60a5fa;'">Pedidos</a>
@@ -28,19 +29,287 @@
     {% endif %}
 
     <div class="card p-6 space-y-4">
-      <h3 class="text-xs font-semibold uppercase tracking-widest pb-2 border-b"
-          :style="temaClaro ? 'color:#6b7280; border-color:#e5e7eb;' : 'color:#6b7280; border-color:#374151;'">
-        Dados do pedido
-      </h3>
+      <div class="flex items-center justify-between gap-3 pb-2 border-b"
+           :style="temaClaro ? 'border-color:#e5e7eb;' : 'border-color:#374151;'">
+        <h3 class="text-xs font-semibold uppercase tracking-widest"
+            style="color:#6b7280;">Dados do pedido</h3>
+        {% comment %}
+          Cadastrar cliente SEM SAIR DAQUI. O cliente novo aparece na hora do
+          pedido — é o momento em que se descobre que ele não está na base.
+          Mandar a pessoa para o cadastro geral e voltar perderia tudo que já
+          foi digitado, e é assim que nasce o pedido no nome de "CLIENTE NOVO".
+        {% endcomment %}
+        {% if pode_criar_cliente %}
+          <button type="button" class="btn-secondary text-xs" @click="novoCliente = true">
+            + Novo cliente
+          </button>
+        {% endif %}
+      </div>
       <div class="grid gap-4 sm:grid-cols-2">
         {% include "moda/_form_campos.html" %}
       </div>
     </div>
+
+    {# ── Auditoria ──────────────────────────────────────────────────── #}
+    {% comment %}
+      Quem criou e quem mexeu por último, na própria tela de edição. Sai do
+      log de auditoria que o sistema já grava a cada save — não de campos
+      novos no pedido, que seriam uma segunda verdade sobre o mesmo fato.
+    {% endcomment %}
+    {% if pedido %}
+      <div class="card p-5 space-y-3">
+        <div class="flex items-center justify-between gap-3">
+          <h3 class="text-xs font-semibold uppercase tracking-widest" style="color:#6b7280;">
+            Auditoria
+          </h3>
+          <a href="{% url 'moda:pedido-historico' pedido.pk %}" class="text-xs underline"
+             :style="temaClaro ? 'color:#3b82f6;' : 'color:#60a5fa;'">Histórico completo</a>
+        </div>
+
+        {% if auditoria.total %}
+          <div class="grid gap-3 sm:grid-cols-2">
+            <div>
+              <p class="text-[10px] uppercase tracking-wider" style="color:#6b7280;">Criado por</p>
+              <p class="text-sm font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
+                {{ auditoria.criacao.usuario }}
+              </p>
+              <p class="text-xs" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+                {{ auditoria.criacao.quando|date:"d/m/Y H:i" }}
+              </p>
+            </div>
+            <div>
+              <p class="text-[10px] uppercase tracking-wider" style="color:#6b7280;">Última alteração</p>
+              <p class="text-sm font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
+                {{ auditoria.ultima.usuario }}
+              </p>
+              <p class="text-xs" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+                {{ auditoria.ultima.quando|date:"d/m/Y H:i" }} · {{ auditoria.ultima.titulo }}
+              </p>
+            </div>
+          </div>
+          <p class="text-xs" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+            {{ auditoria.total }} registro(s) de alteração ·
+            {{ auditoria.pessoas|join:", " }}
+          </p>
+        {% else %}
+          {% comment %}
+            Pedido anterior à auditoria não tem registro — e dizer isso evita
+            a leitura de que ninguém nunca mexeu nele.
+          {% endcomment %}
+          <p class="text-sm" :style="temaClaro ? 'color:#94a3b8;' : 'color:#71717a;'">
+            Sem registro de alteração para este pedido.
+          </p>
+        {% endif %}
+      </div>
+    {% endif %}
 
     <div class="flex gap-3 justify-end">
       <a href="{% if pedido %}{% url 'moda:pedido-detail' pedido.pk %}{% else %}{% url 'moda:pedido-list' %}{% endif %}" class="btn-secondary">Cancelar</a>
       <button type="submit" class="btn-primary">Salvar pedido</button>
     </div>
   </form>
+
+  {# ── Cadastro rápido de cliente ─────────────────────────────────────── #}
+  {% if pode_criar_cliente %}
+    {% comment %}
+      Fica FORA do formulário do pedido: um <form> dentro de outro não é
+      HTML válido, e o navegador fecha o de fora onde o de dentro começa —
+      o pedido inteiro deixaria de ser enviado.
+    {% endcomment %}
+    <div x-show="novoCliente" x-cloak @keydown.escape.window="novoCliente = false"
+         class="fixed inset-0 z-50 flex items-start justify-center p-4 overflow-y-auto"
+         style="background:rgba(0,0,0,.6);" @click.self="novoCliente = false">
+      <div class="card p-5 w-full max-w-2xl my-8 space-y-4"
+           x-data="cadastroRapidoCliente('{% url 'moda:cliente-criar-json' %}')">
+        <div class="flex items-start justify-between gap-3">
+          <div>
+            <h3 class="text-lg font-bold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
+              Novo cliente
+            </h3>
+            <p class="text-xs mt-0.5" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+              Só o essencial para começar o pedido. Endereço, tabela de preço
+              e limite ficam no cadastro geral.
+            </p>
+          </div>
+          <button type="button" @click="novoCliente = false"
+                  class="w-8 h-8 rounded-lg text-xl leading-none shrink-0"
+                  :style="temaClaro ? 'background:#f1f5f9; color:#64748b;' : 'background:#27272a; color:#a1a1aa;'">&times;</button>
+        </div>
+
+        <template x-if="erroGeral">
+          <p class="text-sm" style="color:#f87171;" x-text="erroGeral"></p>
+        </template>
+
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          {% for campo in form_cliente %}
+            <div class="{% if campo.name == 'razao_social' %}sm:col-span-2{% endif %}">
+              <label class="block text-xs uppercase tracking-wider mb-1"
+                     :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+                {{ campo.label }}{% if campo.field.required %} *{% endif %}
+              </label>
+              {{ campo }}
+              {% if campo.help_text %}
+                <p class="text-xs mt-1" :style="temaClaro ? 'color:#94a3b8;' : 'color:#71717a;'">
+                  {{ campo.help_text }}
+                </p>
+              {% endif %}
+              <p class="text-xs mt-1" style="color:#f87171;"
+                 x-text="erros['{{ campo.name }}'] || ''"></p>
+            </div>
+          {% endfor %}
+        </div>
+
+        <div class="flex justify-end gap-2 pt-2">
+          <button type="button" class="btn-secondary text-sm" @click="novoCliente = false">
+            Cancelar
+          </button>
+          <button type="button" class="btn-primary text-sm" @click="salvar()"
+                  :disabled="salvando" x-text="salvando ? 'SALVANDO…' : 'CADASTRAR'"></button>
+        </div>
+      </div>
+    </div>
+  {% endif %}
+
 </div>
+{% endblock %}
+
+{% block extra_js %}
+{{ block.super }}
+<script>
+// Os dois componentes ficam registrados ANTES do Alpine subir: o Alpine é
+// carregado com `defer` no <head>, e script comum no fim do body roda antes
+// de qualquer script adiado.
+document.addEventListener('alpine:init', () => {
+
+  Alpine.data('comboCliente', (config) => ({
+    url: config.url,
+    escolhido: config.escolhido,
+    termo: config.escolhido ? config.escolhido.nome : '',
+    resultados: [],
+    aberto: false,
+    carregando: false,
+    destaque: 0,
+    // Cada busca leva um número. Resposta de busca antiga que chega depois
+    // da nova é descartada — senão a lista pisca com o resultado do que o
+    // usuário já terminou de digitar.
+    requisicao: 0,
+
+    async buscar() {
+      const termo = this.termo.trim();
+      if (termo.length < 2) { this.resultados = []; return; }
+
+      const minha = ++this.requisicao;
+      this.carregando = true;
+      try {
+        const resp = await fetch(`${this.url}?q=${encodeURIComponent(termo)}`);
+        const dados = await resp.json();
+        if (minha !== this.requisicao) return;
+        this.resultados = dados.clientes || [];
+        this.destaque = 0;
+        this.aberto = true;
+      } catch (e) {
+        this.resultados = [];
+      } finally {
+        if (minha === this.requisicao) this.carregando = false;
+      }
+    },
+
+    escolher(cliente) {
+      this.escolhido = cliente;
+      this.termo = cliente.nome;
+      this.aberto = false;
+      this.resultados = [];
+      this.preencherContato(cliente);
+    },
+
+    // Só campo VAZIO. O que já está digitado é o contato DESTE pedido — o
+    // cadastro traz o telefone da empresa, e sobrescrever apagaria o número
+    // da pessoa que está acompanhando.
+    preencherContato(cliente) {
+      const par = [
+        ['id_contato_telefone', cliente.telefone],
+        ['id_contato_nome', cliente.contato],
+      ];
+      for (const [id, valor] of par) {
+        const campo = document.getElementById(id);
+        if (campo && !campo.value && valor) {
+          campo.value = valor;
+          campo.dispatchEvent(new Event('input', { bubbles: true }));
+        }
+      }
+    },
+
+    limpar() {
+      this.escolhido = null;
+      this.termo = '';
+      this.resultados = [];
+      this.aberto = false;
+      this.$nextTick(() => this.$el.querySelector('input[type=text]').focus());
+    },
+
+    mover(passo) {
+      if (!this.resultados.length) return;
+      const total = this.resultados.length;
+      this.destaque = (this.destaque + passo + total) % total;
+    },
+
+    escolherDestacado() {
+      if (this.aberto && this.resultados[this.destaque]) {
+        this.escolher(this.resultados[this.destaque]);
+      }
+    },
+  }));
+
+  Alpine.data('cadastroRapidoCliente', (url) => ({
+    url: url,
+    salvando: false,
+    erros: {},
+    erroGeral: '',
+
+    async salvar() {
+      this.salvando = true;
+      this.erros = {};
+      this.erroGeral = '';
+
+      // Os campos do cadastro rápido são lidos do próprio modal — não há
+      // <form> aqui: um formulário dentro do formulário do pedido faria o
+      // navegador fechar o de fora, e o pedido deixaria de ser enviado.
+      const dados = new FormData();
+      dados.append('csrfmiddlewaretoken',
+        document.querySelector('[name=csrfmiddlewaretoken]').value);
+      this.$el.querySelectorAll('input, select, textarea').forEach((campo) => {
+        if (!campo.name) return;
+        if (campo.type === 'checkbox') {
+          if (campo.checked) dados.append(campo.name, 'on');
+        } else {
+          dados.append(campo.name, campo.value);
+        }
+      });
+
+      try {
+        const resp = await fetch(this.url, { method: 'POST', body: dados });
+        const corpo = await resp.json();
+        if (!corpo.ok) {
+          this.erros = Object.fromEntries(
+            Object.entries(corpo.erros || {}).map(([c, e]) => [c, e.join(' ')]));
+          this.erroGeral = corpo.erro || '';
+          return;
+        }
+        // Cadastrou: o cliente novo já entra escolhido no pedido, com o
+        // telefone preenchido. Ter de procurá-lo de novo seria repetir o
+        // trabalho que a tela acabou de fazer.
+        const combo = Alpine.$data(document.querySelector('[x-data^="comboCliente"]'));
+        combo.escolher(corpo.cliente);
+        // Fecha o modal avisando quem o abriu: o estado do modal e' do
+        // container de fora, nao deste componente.
+        window.dispatchEvent(new CustomEvent('cliente-criado'));
+      } catch (e) {
+        this.erroGeral = 'Não foi possível cadastrar agora. Tente de novo.';
+      } finally {
+        this.salvando = false;
+      }
+    },
+  }));
+});
+</script>
 {% endblock %}

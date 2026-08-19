@@ -7,7 +7,17 @@
     <label class="block text-sm font-medium mb-1.5" :style="temaClaro ? 'color:#374151;' : 'color:#d1d5db;'">
       {{ campo.label }}{% if campo.field.required %} <span class="text-red-500">*</span>{% endif %}
     </label>
-    {{ campo }}
+    {% comment %}
+      O cliente do pedido tem campo próprio (caixa de busca). O desvio é
+      aqui, e não numa cópia deste arquivo, porque as outras três telas que
+      o usam continuam certas do jeito que estão -- duas versões deste laço
+      é que divergiriam na primeira mudança de estilo.
+    {% endcomment %}
+    {% if combo_cliente and campo.name == 'cliente' %}
+      {% include "moda/_combo_cliente.html" %}
+    {% else %}
+      {{ campo }}
+    {% endif %}
     {% if campo.help_text %}
       <p class="text-xs mt-1" :style="temaClaro ? 'color:#94a3b8;' : 'color:#64748b;'">{{ campo.help_text }}</p>
     {% endif %}

@@ -120,3 +120,68 @@ class CarteiraService:
             'valor': sum((c.valor_moda or ZERO for c in clientes), ZERO),
             'com_atraso': sum(1 for c in clientes if c.pedidos_moda_atrasados),
         }
+
+
+class BuscaClientes:
+    """
+    A busca que alimenta o campo de cliente do pedido.
+
+    SEPARADA DA CARTEIRA de propósito: `listar` agrega pedidos, peças e
+    valores em cada linha — o que a carteira precisa mostrar e o campo do
+    formulário não. Rodar aquela consulta a cada tecla digitada seria pagar
+    cinco junções para exibir um nome.
+
+    Devolve TAMBÉM o telefone e o contato: quem escolhe o cliente no pedido
+    quer o telefone preenchido junto, e uma segunda ida ao servidor só para
+    isso deixaria o campo piscando depois de escolhido.
+    """
+
+    # O suficiente para achar sem rolar. Mais do que isso não ajuda: se o
+    # nome não está nos vinte primeiros, o termo é que está curto demais.
+    LIMITE = 20
+
+    @staticmethod
+    def procurar(filial, termo: str = '', limite: int | None = None) -> list[Cliente]:
+        consulta = Cliente.objects.for_filial(filial).filter(ativo=True)
+
+        termo = (termo or '').strip()
+        if termo:
+            # O documento é guardado só com dígitos; quem digita cola com
+            # ponto e barra. Sem tirar a pontuação, procurar pelo CNPJ
+            # copiado da nota não acha nada.
+            digitos = ''.join(c for c in termo if c.isdigit())
+            filtro = (
+                Q(razao_social__icontains=termo)
+                | Q(nome_fantasia__icontains=termo)
+            )
+            if digitos:
+                filtro |= Q(cpf_cnpj__contains=digitos)
+            consulta = consulta.filter(filtro)
+
+        return list(consulta.order_by('razao_social')[:(limite or BuscaClientes.LIMITE)])
+
+    @staticmethod
+    def como_dicionario(cliente: Cliente) -> dict:
+        """O cliente do jeito que o campo do pedido consome."""
+        return {
+            'id': cliente.pk,
+            'nome': cliente.nome_display,
+            'razao_social': cliente.razao_social,
+            'documento': _documento(cliente.cpf_cnpj),
+            # Celular primeiro: é o número de WhatsApp, que é por onde o
+            # pedido é enviado ao cliente.
+            'telefone': cliente.celular or cliente.telefone or '',
+            'contato': cliente.contato_nome or '',
+            'cidade': cliente.cidade or '',
+        }
+
+
+def _documento(valor: str) -> str:
+    """CPF/CNPJ com pontuação — guardado sem ela, lido com ela."""
+    digitos = ''.join(c for c in (valor or '') if c.isdigit())
+    if len(digitos) == 11:
+        return f'{digitos[:3]}.{digitos[3:6]}.{digitos[6:9]}-{digitos[9:]}'
+    if len(digitos) == 14:
+        return (f'{digitos[:2]}.{digitos[2:5]}.{digitos[5:8]}/'
+                f'{digitos[8:12]}-{digitos[12:]}')
+    return digitos

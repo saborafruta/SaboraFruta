@@ -39,6 +39,11 @@ ROTAS_PRONTAS: list = [
     # placeholder de "em construção" -- foi o que aconteceu com o WIP.
     path('comercial/clientes/', vcl.CarteiraClientesView.as_view(), name='clientes'),
     path('comercial/clientes/novo/', vcl.ClienteRapidoCreateView.as_view(), name='cliente-criar'),
+    # Busca por digitação e cadastro sem sair do formulário do pedido: os
+    # dois respondem JSON, para o pedido em digitação não ser recarregado.
+    path('comercial/clientes/buscar/', vcl.ClienteBuscaView.as_view(), name='cliente-buscar'),
+    path('comercial/clientes/novo/json/', vcl.ClienteRapidoJsonView.as_view(), name='cliente-criar-json'),
+
     # Orçamento é o pedido no primeiro status: a tela filtra, não duplica.
     path('comercial/orcamentos/', vorc.OrcamentoListView.as_view(), name='orcamentos'),
     path('comercial/orcamentos/<int:pk>/fechar/', vorc.OrcamentoFecharView.as_view(), name='orcamento-fechar'),

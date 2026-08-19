@@ -7,6 +7,7 @@ do comercial da moda (`moda_comercial`); CRIAR cliente é do cadastro do ERP
 moda vê a lista e não cria — e isso é o certo, não uma limitação.
 """
 from django.contrib import messages
+from django.http import JsonResponse
 from django.shortcuts import redirect, render
 from django.urls import reverse
 
@@ -14,7 +15,7 @@ from apps.cadastros.services.cliente_service import ClienteService
 from apps.core.services.exceptions import DomainError
 
 from .forms_cliente import ClienteRapidoForm
-from .services.clientes import CarteiraService
+from .services.clientes import BuscaClientes, CarteiraService
 from .views import ModaBaseView
 
 # Quantos nomes por página. A carteira de uma confecção passa de mil, e
@@ -96,3 +97,70 @@ class ClienteRapidoCreateView(ModaBaseView):
         # e devolver a lista inteira faria procurar de novo o que acabou de
         # ser criado.
         return redirect(f'{destino}?q={cliente.cpf_cnpj}')
+
+
+class ClienteBuscaView(ModaBaseView):
+    """
+    Busca de clientes por digitação, em JSON.
+
+    NO SERVIDOR, e não filtrando uma lista embutida na página: a base de
+    clientes do ERP passa de mil nomes, e mandar todos em toda abertura do
+    formulário de pedido pesaria em cada carregamento para economizar uma
+    consulta rápida.
+
+    Devolve telefone e contato junto com o nome — é o que preenche os campos
+    de contato assim que o cliente é escolhido.
+    """
+
+    area = 'comercial'
+    permissao_acao = 'ver'
+
+    def get(self, request):
+        clientes = BuscaClientes.procurar(
+            request.filial_ativa, request.GET.get('q') or '',
+        )
+        return JsonResponse({
+            'clientes': [BuscaClientes.como_dicionario(c) for c in clientes],
+        })
+
+
+class ClienteRapidoJsonView(ModaBaseView):
+    """
+    O mesmo cadastro rápido, respondendo JSON.
+
+    EXISTE PORQUE O PEDIDO ESTÁ SENDO DIGITADO. A versão que redireciona
+    serve à carteira, onde não há nada a perder; aqui, recarregar a página
+    jogaria fora tudo que o vendedor já preencheu no pedido — que é
+    exatamente o que faz alguém desistir e digitar o nome do cliente na
+    observação.
+    """
+
+    area = 'comercial'
+    permissao_modulo = 'cadastros'
+    permissao_acao = 'criar'
+
+    def post(self, request):
+        form = ClienteRapidoForm(request.POST)
+
+        if not form.is_valid():
+            # Erro por campo, e não uma frase geral: o formulário continua
+            # aberto na tela, e cada mensagem tem onde aparecer.
+            return JsonResponse({
+                'ok': False,
+                'erros': {c: [str(e) for e in erros]
+                          for c, erros in form.errors.items()},
+            }, status=400)
+
+        try:
+            cliente = ClienteService.criar(
+                form.cleaned_data, request.user, request.filial_ativa,
+            )
+        except DomainError as erro:
+            # CPF/CNPJ repetido cai aqui. É regra de negócio recusando, não
+            # falha do sistema.
+            return JsonResponse({'ok': False, 'erro': str(erro)}, status=400)
+
+        return JsonResponse({
+            'ok': True,
+            'cliente': BuscaClientes.como_dicionario(cliente),
+        })

@@ -1,0 +1,86 @@
+{% comment %}
+  O campo de cliente do pedido: caixa de busca, não select.
+
+  UM SELECT COM MIL NOMES é rolagem, não escolha. A carteira de uma
+  confecção passa de mil clientes, e o vendedor sabe o nome — o que ele não
+  sabe é em que posição da lista ele está.
+
+  O QUE VAI PARA O SERVIDOR CONTINUA SENDO O ID, num `<input type="hidden">`
+  com o mesmo nome do campo. O formulário do Django valida igual: o cliente
+  precisa existir, estar ativo e ser da filial. A caixa de texto é só a
+  forma de escolher — se ela fosse o que é enviado, bastaria digitar
+  qualquer coisa para gravar um cliente que não existe.
+
+  ESCOLHER O CLIENTE PREENCHE O CONTATO. O telefone está no cadastro; fazer
+  o vendedor copiar de uma tela para a outra é pedir para ele errar um
+  dígito. Só preenche campo VAZIO: o que já foi digitado à mão é o contato
+  daquele pedido, e sobrescrever seria apagar o que a pessoa acabou de
+  escrever.
+{% endcomment %}
+<div x-data="comboCliente({
+       url: '{% url 'moda:cliente-buscar' %}',
+       escolhido: {{ cliente_escolhido_json|default:'null' }}
+     })"
+     @click.outside="aberto = false"
+     @keydown.escape="aberto = false"
+     class="relative">
+
+  <input type="hidden" name="{{ campo.html_name }}"
+         :value="escolhido ? escolhido.id : ''">
+
+  <input type="text" class="form-input w-full" autocomplete="off"
+         x-model="termo"
+         @input.debounce.250ms="buscar()"
+         @focus="aberto = true; if (!resultados.length) buscar()"
+         @keydown.arrow-down.prevent="mover(1)"
+         @keydown.arrow-up.prevent="mover(-1)"
+         @keydown.enter.prevent="escolherDestacado()"
+         placeholder="Digite o nome, o apelido ou o CNPJ">
+
+  {% comment %}
+    Confirmação do que está escolhido: sem isto, texto digitado e cliente
+    gravado parecem a mesma coisa — e não são.
+  {% endcomment %}
+  <template x-if="escolhido">
+    <p class="text-xs mt-1 flex items-center gap-2" style="color:#059669;">
+      <span x-text="'✓ ' + escolhido.nome"></span>
+      <template x-if="escolhido.documento">
+        <span class="font-mono" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'"
+              x-text="escolhido.documento"></span>
+      </template>
+      <button type="button" class="underline" style="color:#dc2626;"
+              @click="limpar()">trocar</button>
+    </p>
+  </template>
+
+  <template x-if="!escolhido && termo.length >= 2 && !carregando && !resultados.length">
+    <p class="text-xs mt-1" style="color:#d97706;">
+      Nenhum cliente encontrado.
+      {% if pode_criar_cliente %}Use “+ Novo cliente” acima para cadastrar.{% endif %}
+    </p>
+  </template>
+
+  {# ── Lista ────────────────────────────────────────────────────────── #}
+  <div x-show="aberto && resultados.length" x-cloak
+       class="absolute z-30 left-0 right-0 mt-1 rounded-lg overflow-hidden shadow-lg max-h-64 overflow-y-auto"
+       :style="temaClaro ? 'background:#ffffff; border:1px solid #e5e7eb;' : 'background:#18181b; border:1px solid #3f3f46;'">
+    <template x-for="(c, i) in resultados" :key="c.id">
+      <button type="button" class="w-full text-left px-3 py-2 block"
+              @click="escolher(c)"
+              @mouseenter="destaque = i"
+              :style="destaque === i
+                ? (temaClaro ? 'background:#eff6ff;' : 'background:#27272a;')
+                : ''">
+        <span class="text-sm font-medium block truncate"
+              :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'"
+              x-text="c.nome"></span>
+        <span class="text-xs block truncate"
+              :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+          <span class="font-mono" x-text="c.documento"></span>
+          <template x-if="c.telefone"><span x-text="' · ' + c.telefone"></span></template>
+          <template x-if="c.cidade"><span x-text="' · ' + c.cidade"></span></template>
+        </span>
+      </button>
+    </template>
+  </div>
+</div>
