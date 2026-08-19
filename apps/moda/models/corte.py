@@ -123,6 +123,13 @@ class RegistroCorte(ComCodigoQr, FilialScopedModel):
     )
 
     observacao = models.TextField(blank=True)
+
+    # Quando o tecido deste corte saiu do estoque. Carimbo, e não
+    # booleano: além de impedir a baixa dupla, responde "desde quando o
+    # saldo está certo" -- e o vazio diz que o consumo ainda não chegou
+    # ao estoque.
+    estoque_baixado_em = models.DateTimeField(null=True, blank=True, editable=False)
+
     criado_em = models.DateTimeField(auto_now_add=True)
 
     objects = FilialManager()

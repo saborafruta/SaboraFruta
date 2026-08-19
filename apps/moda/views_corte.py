@@ -15,6 +15,7 @@ from apps.core.services.exceptions import DomainError
 from .forms import RegistroCorteForm
 from .models import RegistroCorte, Tamanho
 from .services import CorteService
+from .services.integracao import IntegracaoService
 from .views import ModaBaseView
 
 
@@ -109,6 +110,10 @@ class CorteDetailView(ModaBaseView):
 
     @staticmethod
     def contexto(request, corte) -> dict:
+        # O material e a quantidade que a baixa vai mexer, mostrados ANTES
+        # do clique: mexer no estoque de outro módulo às cegas é como o
+        # saldo errado começa.
+        produto_estoque, a_baixar, impedimento = IntegracaoService.material_do_corte(corte)
         gravados = {g.tamanho_id: g.quantidade for g in corte.grade.all()}
         # Tamanhos da grade do produto quando existe; senão, todos os da
         # filial. Assim a tela não obriga a rolar 30 tamanhos para achar os
@@ -126,6 +131,14 @@ class CorteDetailView(ModaBaseView):
             'linhas_grade': [
                 {'tamanho': t, 'quantidade': gravados.get(t.pk, 0)} for t in tamanhos
             ],
+            'produto_estoque': produto_estoque,
+            'a_baixar': a_baixar,
+            'impedimento_baixa': impedimento,
+            'pode_baixar': (
+                not impedimento
+                and not corte.estoque_baixado_em
+                and corte.status == corte.Status.CORTADO
+            ),
         }
 
 
@@ -170,3 +183,40 @@ class CorteDeleteView(ModaBaseView):
         corte.delete()
         messages.success(request, f'Corte #{numero:04d} excluído.')
         return redirect(reverse('moda:corte-list'))
+
+
+class CorteEstoqueView(ModaBaseView):
+    """
+    Dá baixa (ou estorna) o tecido que este corte consumiu.
+
+    Um botão, e não automático ao marcar cortado: mexer no estoque de
+    outro módulo é efeito colateral grande demais para acontecer sem
+    alguém mandar. O consumo continua digitado uma vez só, aqui no corte.
+    """
+
+    permissao_acao = 'editar'
+
+    def post(self, request, pk):
+        corte = _corte(request, pk)
+        estornar = request.POST.get('acao') == 'estornar'
+
+        try:
+            if estornar:
+                produto, quantidade = IntegracaoService.estornar_estoque_do_corte(
+                    corte, request.user,
+                )
+                messages.success(
+                    request,
+                    f'Estorno feito: {quantidade} devolvido(s) ao estoque de {produto}.',
+                )
+            else:
+                produto, quantidade = IntegracaoService.baixar_estoque_do_corte(
+                    corte, request.user,
+                )
+                messages.success(
+                    request,
+                    f'Baixa registrada: {quantidade} de {produto} saíram do estoque.',
+                )
+        except DomainError as erro:
+            messages.error(request, str(erro))
+        return redirect(reverse('moda:corte-detail', args=[corte.pk]))

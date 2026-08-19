@@ -64,6 +64,7 @@ ROTAS_PRONTAS: list = [
     path('pcp/necessidade-materiais/requisicao/', vn.RequisicaoGerarView.as_view(), name='requisicao-gerar'),
     path('pcp/necessidade-materiais/requisicao/<int:pk>/', vn.RequisicaoDetailView.as_view(), name='requisicao-detail'),
     path('pcp/necessidade-materiais/requisicao/<int:pk>/status/', vn.RequisicaoStatusView.as_view(), name='requisicao-status'),
+    path('pcp/necessidade-materiais/requisicao/<int:pk>/comprar/', vn.RequisicaoParaCompraView.as_view(), name='requisicao-comprar'),
 
     # Kanban. Endereco do menu de Producao; a movimentacao responde JSON
     # para o arrasto nao recarregar a pagina a cada solta.
@@ -95,6 +96,7 @@ ROTAS_PRONTAS: list = [
     path('producao/corte/<int:pk>/editar/', vco.CorteFormView.as_view(), name='corte-update'),
     path('producao/corte/<int:pk>/grade/', vco.CorteGradeView.as_view(), name='corte-grade'),
     path('producao/corte/<int:pk>/remover/', vco.CorteDeleteView.as_view(), name='corte-delete'),
+    path('producao/corte/<int:pk>/estoque/', vco.CorteEstoqueView.as_view(), name='corte-estoque'),
 
     # Fluxo de produção. O painel fica no grupo Produção; o fluxo de cada
     # ordem pendura na OP, que é a quem as etapas pertencem.

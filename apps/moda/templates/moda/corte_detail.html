@@ -234,5 +234,48 @@
     </form>
   </div>
 
+  {# ── Ponte com Estoque ────────────────────────────────────────────── #}
+  <div class="card p-5">
+    <h3 class="text-base font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
+      Baixa no estoque
+    </h3>
+
+    {% if corte.estoque_baixado_em %}
+      <p class="text-sm mt-2" style="color:#059669;">
+        ✓ Tecido baixado em {{ corte.estoque_baixado_em|date:"d/m/Y H:i" }}
+        {% if produto_estoque %} · {{ a_baixar }} de {{ produto_estoque }}{% endif %}
+      </p>
+      {% comment %}
+        O estorno existe porque corte é cancelado de verdade: enfesto
+        errado, tecido trocado. Sem ele, a saída seria um ajuste manual —
+        que é a redigitação que este caminho veio eliminar.
+      {% endcomment %}
+      <form method="post" action="{% url 'moda:corte-estoque' corte.pk %}" class="mt-3">
+        {% csrf_token %}
+        <input type="hidden" name="acao" value="estornar">
+        <button type="submit" class="btn-secondary text-sm">ESTORNAR BAIXA</button>
+      </form>
+
+    {% elif impedimento_baixa %}
+      <p class="text-sm mt-2" style="color:#d97706;">{{ impedimento_baixa }}</p>
+
+    {% elif pode_baixar %}
+      <p class="text-sm mt-2 mb-3" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+        Vai sair do estoque: <strong>{{ a_baixar }}</strong> de
+        <strong>{{ produto_estoque }}</strong> — o consumo real que já está
+        lançado neste corte.
+      </p>
+      <form method="post" action="{% url 'moda:corte-estoque' corte.pk %}">
+        {% csrf_token %}
+        <button type="submit" class="btn-primary text-sm">DAR BAIXA NO ESTOQUE</button>
+      </form>
+
+    {% else %}
+      <p class="text-sm mt-2" :style="temaClaro ? 'color:#94a3b8;' : 'color:#71717a;'">
+        Marque o corte como <strong>cortado</strong> para dar baixa — é o
+        status que diz que o tecido saiu do rolo.
+      </p>
+    {% endif %}
+  </div>
 </div>
 {% endblock %}

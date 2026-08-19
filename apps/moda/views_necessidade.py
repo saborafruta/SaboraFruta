@@ -13,6 +13,9 @@ from apps.core.services.exceptions import DomainError
 
 from .models import RequisicaoMaterial, ReservaMaterial
 from .services.necessidade import NecessidadeService
+from apps.cadastros.models import Fornecedor
+
+from .services.integracao import IntegracaoService
 from .views import ModaBaseView
 
 
@@ -107,12 +110,19 @@ class RequisicaoDetailView(ModaBaseView):
             .select_related('criado_por').prefetch_related('itens__produto'),
             pk=pk,
         )
+        itens = list(requisicao.itens.all())
         return render(request, 'moda/requisicao_detail.html', {
             'title': f'Requisição #{requisicao.numero:04d}',
             'requisicao': requisicao,
-            'itens': requisicao.itens.all(),
+            'itens': itens,
             'pode_agir': request.user.tem_permissao('moda', 'editar'),
             'status_choices': RequisicaoMaterial.Status.choices,
+            # Só linha ligada a um produto vira item de compra: comprar
+            # exige produto cadastrado. As soltas continuam visíveis aqui,
+            # em vez de sumirem num pedido incompleto.
+            'compraveis': sum(1 for i in itens if i.produto_id),
+            'sem_produto': sum(1 for i in itens if not i.produto_id),
+            'fornecedores': Fornecedor.objects.filter(ativo=True).order_by('razao_social')[:200],
         })
 
 
@@ -132,4 +142,39 @@ class RequisicaoStatusView(ModaBaseView):
             requisicao.save(update_fields=['status'])
             messages.success(request, f'Requisição marcada como {requisicao.get_status_display()}.')
 
+        return redirect(reverse('moda:requisicao-detail', args=[requisicao.pk]))
+
+
+class RequisicaoParaCompraView(ModaBaseView):
+    """
+    Transforma a requisição num pedido de compra de verdade.
+
+    É a ponte que faltava: antes, o comprador abria o pedido de compra e
+    redigitava linha por linha o que o PCP já tinha apurado -- com o risco
+    de trocar quantidade ou produto no caminho.
+    """
+
+    permissao_acao = 'criar'
+
+    def post(self, request, pk):
+        requisicao = get_object_or_404(
+            RequisicaoMaterial.objects.for_filial(_filial(request)), pk=pk,
+        )
+        fornecedor = get_object_or_404(
+            Fornecedor, pk=request.POST.get('fornecedor'),
+        )
+        try:
+            pedido, gerados, ignorados = IntegracaoService.gerar_pedido_compra(
+                requisicao, fornecedor, request.user,
+            )
+        except DomainError as erro:
+            messages.error(request, str(erro))
+        else:
+            aviso = (f' {ignorados} linha(s) sem produto de estoque ficaram de fora.'
+                     if ignorados else '')
+            messages.success(
+                request,
+                f'Pedido de compra {pedido.numero_pedido} criado com '
+                f'{gerados} item(ns).' + aviso,
+            )
         return redirect(reverse('moda:requisicao-detail', args=[requisicao.pk]))

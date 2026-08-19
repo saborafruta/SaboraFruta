@@ -99,6 +99,14 @@ class RequisicaoMaterial(FilialScopedModel):
     )
     observacao = models.TextField(blank=True)
 
+    # Para onde esta requisição foi. Ligação, e não cópia: o pedido de
+    # compra tem vida própria (negociação, aprovação, recebimento), e o
+    # que interessa aqui é não gerar duas vezes e saber onde foi parar.
+    pedido_compra = models.ForeignKey(
+        'compras.PedidoCompra', on_delete=models.SET_NULL,
+        null=True, blank=True, related_name='requisicoes_moda',
+    )
+
     objects = FilialManager()
     all_objects = models.Manager()
 

@@ -104,5 +104,54 @@
     </p>
   </div>
 
+  {# ── Ponte com Compras ────────────────────────────────────────────── #}
+  <div class="card p-5">
+    <h3 class="text-base font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
+      Pedido de compra
+    </h3>
+
+    {% if requisicao.pedido_compra %}
+      <p class="text-sm mt-2" style="color:#059669;">
+        ✓ Virou o pedido de compra
+        <strong>{{ requisicao.pedido_compra.numero_pedido }}</strong>
+        · {{ requisicao.pedido_compra.fornecedor }}
+      </p>
+      {% comment %}
+        A requisição NÃO vira "atendida" aqui: atendida é quando o material
+        chega. Marcar na emissão faria o PCP achar que o tecido está na
+        prateleira porque alguém mandou comprar.
+      {% endcomment %}
+      <p class="text-xs mt-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+        A requisição só fica atendida quando o material chegar.
+      </p>
+
+    {% elif pode_agir and compraveis %}
+      <p class="text-sm mt-2 mb-3" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+        {{ compraveis }} item(ns) vão para o pedido de compra com a
+        quantidade já apurada aqui — sem redigitar nada.
+        {% if sem_produto %}
+          <span style="color:#d97706;">{{ sem_produto }} linha(s) sem produto
+          de estoque ficam de fora.</span>
+        {% endif %}
+      </p>
+      <form method="post" action="{% url 'moda:requisicao-comprar' requisicao.pk %}"
+            class="flex flex-wrap gap-2">
+        {% csrf_token %}
+        <select name="fornecedor" required class="form-input" style="min-width:240px;">
+          <option value="">Escolha o fornecedor</option>
+          {% for f in fornecedores %}
+            <option value="{{ f.pk }}">{{ f }}</option>
+          {% endfor %}
+        </select>
+        <button type="submit" class="btn-primary text-sm">GERAR PEDIDO DE COMPRA</button>
+      </form>
+
+    {% else %}
+      <p class="text-sm mt-2" :style="temaClaro ? 'color:#94a3b8;' : 'color:#71717a;'">
+        Nenhum item desta requisição está ligado a um produto de estoque —
+        ligue o material na ficha técnica para poder comprar.
+      </p>
+    {% endif %}
+  </div>
 </div>
 {% endblock %}
