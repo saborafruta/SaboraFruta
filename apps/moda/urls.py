@@ -152,11 +152,6 @@ ROTAS_PRONTAS: list = [
     path('pcp/ordens-producao/<int:pk>/fluxo/', vx.FluxoOrdemView.as_view(), name='fluxo-ordem'),
     path('pcp/ordens-producao/<int:pk>/fluxo/<int:etapa_pk>/', vx.ApontarView.as_view(), name='fluxo-apontar'),
 
-    # Cadastros de apoio. A LISTA nao tem rota propria: ela e' entregue
-    # pela rota do menu (`moda:item`), pra o endereco nao mudar quando a
-    # tela sai do placeholder. So criar/editar precisam de rota.
-    path('<slug:grupo>/<slug:slug>/novo/', va.CadastroApoioFormView.as_view(), name='apoio-create'),
-    path('<slug:grupo>/<slug:slug>/<int:pk>/editar/', va.CadastroApoioFormView.as_view(), name='apoio-update'),
 
     # Ficha técnica. A lista fica no endereço do menu
     # (/moda/engenharia/ficha-tecnica/), declarada antes do catch-all para
@@ -218,6 +213,21 @@ ROTAS_PRONTAS: list = [
     path('produtos/produtos/<int:pk>/editar/', vc.ProdutoFormView.as_view(), name='produto-update'),
     path('produtos/produtos/<int:pk>/cores/', vc.ProdutoCorAddView.as_view(), name='produto-cor-add'),
     path('produtos/produtos/<int:pk>/variantes/', vc.ProdutoGerarVariantesView.as_view(), name='produto-gerar-variantes'),
+    # ── Cadastros de apoio: POR ÚLTIMO, e é o que importa nesta lista ──
+    #
+    # `<slug:grupo>/<slug:slug>/novo/` casa com QUASE TUDO: produtos/
+    # produtos/novo/, engenharia/sequencia-producao/novo/, e por aí vai.
+    # Declarado no meio da lista, ele engolia seis telas reais -- o link
+    # saía certo (o `reverse` acha pelo NOME) e a página dava 404 (o
+    # `resolve` acha pelo PADRÃO). Endereço que existe no HTML e não
+    # existe no servidor é o pior tipo de rota quebrada, porque nada
+    # avisa até alguém clicar.
+    #
+    # A lista de cada cadastro de apoio não tem rota própria: quem a
+    # entrega é a rota do menu, para o endereço não mudar quando a tela
+    # sai do placeholder. Só criar e editar precisam de rota.
+    path('<slug:grupo>/<slug:slug>/novo/', va.CadastroApoioFormView.as_view(), name='apoio-create'),
+    path('<slug:grupo>/<slug:slug>/<int:pk>/editar/', va.CadastroApoioFormView.as_view(), name='apoio-update'),
 ]
 
 urlpatterns = [
