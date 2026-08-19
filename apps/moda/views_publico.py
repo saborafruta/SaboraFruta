@@ -21,10 +21,13 @@ item ficam de fora — são recado entre a equipe, e o cliente não é o
 destinatário delas.
 """
 from django.http import Http404, HttpResponse
-from django.shortcuts import render
+from django.shortcuts import redirect, render
+from django.urls import reverse
 from django.views import View
 
-from .models import PedidoProducao
+from apps.core.middleware.audit import get_client_ip
+
+from .models import AprovacaoPedido, PedidoProducao
 from .services.pedido_pdf import PedidoPdfService
 
 # Status internos que não fazem sentido para quem está do lado de fora.
@@ -115,6 +118,10 @@ class PedidoOnlineView(View):
             ],
             'cancelado': pedido.status == 'cancelado',
             'prazo': _prazo(pedido),
+            # A aprovação só aparece depois que a casa liberou o pedido: até
+            # lá o cliente estaria aprovando um documento que ainda pode
+            # mudar de preço.
+            'aprovacao': getattr(pedido, 'aprovacao', None),
         })
         _blindar(resposta)
         return resposta
@@ -136,3 +143,42 @@ class PedidoPdfPublicoView(View):
         )
         _blindar(resposta)
         return resposta
+
+
+class PedidoResponderView(View):
+    """
+    O aceite (ou o pedido de ajuste) do cliente — o passo 10 do fluxo.
+
+    ÚNICA ESCRITA PÚBLICA DO VERTICAL, e o raio dela é mínimo de propósito:
+    grava a resposta numa tabela própria e não toca em preço, grade, arte
+    nem status de produção. Quem tem o link responde sobre O PRÓPRIO pedido
+    e mais nada — a busca continua sendo só por token.
+
+    CSRF normal do Django: o formulário sai da página com `{% csrf_token %}`
+    e o cookie de sessão vem junto, como no cardápio digital. Não há
+    `csrf_exempt` aqui.
+    """
+
+    def post(self, request, token):
+        pedido = _buscar(token)
+        aprovacao = getattr(pedido, 'aprovacao', None)
+
+        # Sem liberação interna não há o que responder: o pedido ainda não
+        # foi apresentado ao cliente.
+        if aprovacao is None or not aprovacao.liberado:
+            raise Http404('Pedido não encontrado.')
+
+        resposta = request.POST.get('resposta')
+        if resposta not in (AprovacaoPedido.Resposta.APROVADO,
+                            AprovacaoPedido.Resposta.AJUSTE):
+            raise Http404('Resposta inválida.')
+
+        aprovacao.responder(
+            resposta=resposta,
+            nome=request.POST.get('nome', ''),
+            ip=get_client_ip(request),
+            motivo=request.POST.get('motivo', '')[:2000],
+        )
+        # Redirect depois do POST: sem isso, atualizar a página reenviaria a
+        # resposta, e o cliente veria "aprovado" virar "ajuste" sem entender.
+        return redirect(reverse('moda_publico:pedido', args=[token]))

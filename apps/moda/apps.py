@@ -28,7 +28,7 @@ class ModaConfig(AppConfig):
         from apps.core.signals import register_for_audit
 
         from .models import (
-            Encaixe, Expedicao, EtapaOrdem, FichaTecnica, Inspecao,
+            AprovacaoPedido, Encaixe, Expedicao, EtapaOrdem, FichaTecnica, Inspecao,
             ItemConferencia, ItemCorte, ItemGradePedido, ItemInspecao,
             ItemPedidoProducao, MaterialFicha, OperacaoRoteiro, OrdemProducao,
             PedidoProducao, Personalizacao, PersonalizacaoIndividual,
@@ -39,6 +39,7 @@ class ModaConfig(AppConfig):
         for modelo in (
             # Comercial
             PedidoProducao, ItemPedidoProducao, ItemGradePedido,
+            AprovacaoPedido,
             Personalizacao, VisualItemPedido, PersonalizacaoIndividual,
             # Engenharia e PCP
             FichaTecnica, MaterialFicha, Roteiro, OperacaoRoteiro,

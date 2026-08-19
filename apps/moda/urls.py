@@ -16,7 +16,8 @@ from . import (
     views_corte as vco, views_encaixe as ve, views_fluxo as vx,
     views_ordem as vo, views_pcp as vp,
     views_expedicao as vex, views_kanban as vk, views_necessidade as vn,
-    views_alertas as val, views_dashboard as vd, views_historico as vh, views_qualidade as vq, views_qr as vqr,
+    views_alertas as val, views_aprovacao as vap,
+    views_dashboard as vd, views_historico as vh, views_qualidade as vq, views_qr as vqr,
     views_roteiro as vr, views_terminal as vt, views_wip as vw,
 )
 
@@ -31,6 +32,9 @@ ROTAS_PRONTAS: list = [
     path('comercial/pedidos/<int:pk>/editar/', vc.PedidoFormView.as_view(), name='pedido-update'),
     path('comercial/pedidos/<int:pk>/pdf/', vc.PedidoPdfView.as_view(), name='pedido-pdf'),
     path('comercial/pedidos/<int:pk>/historico/', vh.HistoricoPedidoView.as_view(), name='pedido-historico'),
+    path('comercial/pedidos/<int:pk>/fluxo/', vap.FluxoPedidoView.as_view(), name='pedido-fluxo'),
+    path('comercial/pedidos/<int:pk>/aprovacao/', vap.AprovacaoPedidoView.as_view(), name='pedido-aprovacao'),
+    path('comercial/pedidos/<int:pk>/aprovacao/liberar/', vap.LiberarPedidoView.as_view(), name='pedido-liberar'),
     path('comercial/pedidos/<int:pk>/finalizar/', vc.PedidoFinalizarView.as_view(), name='pedido-finalizar'),
     path('comercial/pedidos/<int:pk>/status/', vc.PedidoStatusView.as_view(), name='pedido-status'),
     path('comercial/pedidos/<int:pk>/valores/', vc.PedidoValoresView.as_view(), name='pedido-valores'),

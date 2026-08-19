@@ -26,4 +26,5 @@ urlpatterns = [
     # busca nem paginação pública. O token é o escopo inteiro.
     path('<str:token>/', views_publico.PedidoOnlineView.as_view(), name='pedido'),
     path('<str:token>/pdf/', views_publico.PedidoPdfPublicoView.as_view(), name='pedido-pdf'),
+    path('<str:token>/responder/', views_publico.PedidoResponderView.as_view(), name='pedido-responder'),
 ]

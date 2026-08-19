@@ -164,6 +164,70 @@
       </div>
     {% endfor %}
 
+    {# ── Aprovação do cliente ─────────────────────────────────────────── #}
+    {% if aprovacao and aprovacao.liberado and not cancelado %}
+      {% comment %}
+        O aceite do cliente é o que autoriza cortar tecido. Sem um botão
+        aqui, ele responde por WhatsApp e a autorização fica num print de
+        conversa — que não serve quando o pedido dá problema.
+
+        "Pedir ajuste" existe pelo mesmo motivo: sem ele, quem não gostou
+        da arte não teria o que clicar, e o pedido ficaria parado sem
+        ninguém saber por quê.
+      {% endcomment %}
+      <div class="bg-white rounded-2xl p-6" style="box-shadow:0 4px 16px rgba(15,23,42,.06);">
+        {% if aprovacao.aprovado_pelo_cliente %}
+          <p class="text-lg font-bold" style="color:#059669;">✓ Pedido aprovado</p>
+          <p class="text-sm mt-1" style="color:#64748b;">
+            {% if aprovacao.respondido_por %}Por {{ aprovacao.respondido_por }} · {% endif %}
+            {{ aprovacao.respondido_em|date:"d/m/Y H:i" }}
+          </p>
+
+        {% elif aprovacao.pediu_ajuste %}
+          <p class="text-lg font-bold" style="color:#d97706;">Ajuste solicitado</p>
+          <p class="text-sm mt-1" style="color:#64748b;">
+            Recebemos seu pedido de ajuste em
+            {{ aprovacao.respondido_em|date:"d/m/Y H:i" }}. Vamos te retornar.
+          </p>
+
+        {% else %}
+          <p class="text-lg font-bold" style="color:#0f172a;">Confira e responda</p>
+          <p class="text-sm mt-1 mb-4" style="color:#64748b;">
+            Confira produtos, grade e arte acima. A produção começa depois
+            da sua aprovação.
+          </p>
+
+          <form method="post" action="{% url 'moda_publico:pedido-responder' pedido.token_publico %}"
+                x-data="{ ajuste: false }" class="space-y-3">
+            {% csrf_token %}
+            <input type="text" name="nome" required maxlength="120"
+                   placeholder="Seu nome"
+                   class="w-full rounded-xl px-4 py-3"
+                   style="border:1px solid #cbd5e1; background:#fff; color:#0f172a;">
+
+            <div x-show="ajuste" x-cloak>
+              <textarea name="motivo" rows="3" maxlength="2000"
+                        placeholder="O que precisa ser ajustado?"
+                        class="w-full rounded-xl px-4 py-3"
+                        style="border:1px solid #cbd5e1; background:#fff; color:#0f172a;"></textarea>
+            </div>
+
+            <div class="flex flex-wrap gap-2">
+              <button type="submit" name="resposta" value="aprovado"
+                      class="px-6 py-3 rounded-xl font-bold text-white"
+                      style="background:#059669;">APROVAR PEDIDO</button>
+              <button type="button" x-show="!ajuste" @click="ajuste = true"
+                      class="px-6 py-3 rounded-xl font-bold"
+                      style="background:#f1f5f9; color:#334155;">Pedir ajuste</button>
+              <button type="submit" x-show="ajuste" x-cloak name="resposta" value="ajuste"
+                      class="px-6 py-3 rounded-xl font-bold text-white"
+                      style="background:#d97706;">ENVIAR PEDIDO DE AJUSTE</button>
+            </div>
+          </form>
+        {% endif %}
+      </div>
+    {% endif %}
+
     {# ── PDF ──────────────────────────────────────────────────────────── #}
     <div class="bg-white rounded-2xl p-6 text-center" style="box-shadow:0 4px 16px rgba(15,23,42,.06);">
       <a href="{% url 'moda_publico:pedido-pdf' pedido.token_publico %}" target="_blank" rel="noopener"

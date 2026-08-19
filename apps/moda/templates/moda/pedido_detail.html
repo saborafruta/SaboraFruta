@@ -204,6 +204,8 @@
     <a href="{% url 'moda:pedido-update' pedido.pk %}" class="btn-secondary">Editar</a>
     <a href="{% url 'moda:qr-etiqueta' pedido.codigo_qr %}" class="btn-secondary">QR Code</a>
     <a href="{% url 'moda:pedido-historico' pedido.pk %}" class="btn-secondary">Histórico</a>
+    <a href="{% url 'moda:pedido-fluxo' pedido.pk %}" class="btn-secondary">Fluxo</a>
+    <a href="{% url 'moda:pedido-aprovacao' pedido.pk %}" class="btn-secondary">Aprovação</a>
   </div>
 
   {% if pedido.atrasado %}

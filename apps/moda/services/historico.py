@@ -40,7 +40,7 @@ from django.db import models as djm
 
 from apps.core.models import LogSistema
 from apps.moda.models import (
-    EtapaOrdem, Expedicao, Inspecao, ItemConferencia, ItemCorte,
+    AprovacaoPedido, EtapaOrdem, Expedicao, Inspecao, ItemConferencia, ItemCorte,
     ItemGradePedido, ItemInspecao, OrdemProducao, PedidoProducao,
     Personalizacao, PersonalizacaoIndividual, RegistroCorte, VisualItemPedido,
     Volume,
@@ -58,6 +58,7 @@ IGNORADOS = {
 # Nome legível de cada tabela auditada do vertical.
 ENTIDADES = {
     PedidoProducao: 'Pedido',
+    AprovacaoPedido: 'Aprovação',
     ItemGradePedido: 'Grade',
     Personalizacao: 'Arte',
     VisualItemPedido: 'Visual',
@@ -139,6 +140,10 @@ FRASES = {
         'Reprovado': 'Inspeção reprovada',
         'Retrabalho': 'Enviado para retrabalho',
     },
+    (AprovacaoPedido._meta.db_table, 'resposta'): {
+        'Aprovado pelo cliente': 'Cliente aprovou o pedido',
+        'Cliente pediu ajuste': 'Cliente pediu ajuste',
+    },
     (Expedicao._meta.db_table, 'status'): {
         'Conferência': 'Conferência iniciada',
         'Separação': 'Separação iniciada',
@@ -160,6 +165,7 @@ FRASES_CRIACAO = {
     Inspecao._meta.db_table: 'Inspeção aberta',
     Expedicao._meta.db_table: 'Expedição aberta',
     Volume._meta.db_table: 'Volume criado',
+    AprovacaoPedido._meta.db_table: 'Pedido liberado para o cliente',
 }
 
 FRASES_EXCLUSAO = {
@@ -348,13 +354,19 @@ class HistoricoService:
             if chave in FRASES_ETAPA and any(m.campo == 'Status' for m in mudancas):
                 return FRASES_ETAPA[chave], True
 
-        # Mudança de status com frase própria — só quando o status é o que
-        # de fato mudou: salvar outro campo não deve reanunciar "Pedido
-        # confirmado" toda vez.
-        mudou_status = any(m.campo == 'Status' for m in mudancas)
-        frase = FRASES.get((tabela, 'status'), {}).get(novos.get('status'))
-        if frase and mudou_status:
-            return frase, True
+        # Campo com frase própria — só quando ELE é o que de fato mudou:
+        # salvar outro campo não deve reanunciar "Pedido confirmado" toda
+        # vez. O campo varia por tabela (`status` na maioria, `resposta` na
+        # aprovação do cliente), então a busca é pela chave da tabela.
+        mudados = {m.campo for m in mudancas}
+        for (tab, campo), dicionario in FRASES.items():
+            if tab != tabela:
+                continue
+            if ROTULOS.get(campo, campo.capitalize()) not in mudados:
+                continue
+            frase = dicionario.get(novos.get(campo))
+            if frase:
+                return frase, True
 
         if len(mudancas) == 1:
             return f'{rotulo}: {mudancas[0].campo.lower()} alterado', False
@@ -426,6 +438,7 @@ ROTULOS = {
     'lote': 'Lote',
     'motivo': 'Motivo',
     'status': 'Status',
+    'resposta': 'Resposta',
 }
 
 

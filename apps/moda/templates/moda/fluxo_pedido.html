@@ -1,0 +1,115 @@
+{% extends "_base.html" %}
+{% block title %}{{ title }}{% endblock %}
+{% block page_title %}Fluxo do pedido{% endblock %}
+{% block content %}
+<div class="space-y-5">
+
+  {# ── Onde está ────────────────────────────────────────────────────── #}
+  <div class="card p-5">
+    <p class="text-sm mb-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+      <a href="{% url 'moda:pedido-detail' pedido.pk %}"
+         :style="temaClaro ? 'color:#3b82f6;' : 'color:#60a5fa;'">‹ Voltar ao pedido</a>
+    </p>
+    <div class="flex flex-wrap items-start justify-between gap-4">
+      <div>
+        <h2 class="text-2xl font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
+          Pedido #{{ pedido.numero|stringformat:"06d" }}
+        </h2>
+        <p class="text-sm mt-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+          {{ pedido.cliente }} · {{ feitos }} de {{ total }} passos concluídos
+        </p>
+      </div>
+      {% if atual %}
+        {% comment %}
+          O próximo passo em destaque, com o botão que o executa. É a
+          pergunta que traz alguém a esta tela — "por onde eu continuo?" — e
+          respondê-la com uma lista de 23 linhas seria devolver a pergunta.
+        {% endcomment %}
+        <div class="text-right">
+          <p class="text-xs uppercase tracking-wider" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+            Próximo passo
+          </p>
+          <p class="text-lg font-bold" style="color:#2563eb;">
+            {{ atual.numero }}. {{ atual.label }}
+          </p>
+          {% if atual.url %}
+            <a href="{{ atual.url }}" class="btn-primary text-sm mt-2 inline-block">IR PARA O PASSO</a>
+          {% endif %}
+        </div>
+      {% elif esperando_cliente %}
+        <p class="text-sm font-semibold" style="color:#d97706;">
+          Aguardando a resposta do cliente
+        </p>
+      {% endif %}
+    </div>
+
+    <div class="w-full rounded-full mt-4" style="height:8px; background:rgba(148,163,184,.2);">
+      <div class="rounded-full" style="height:8px; background:#2563eb;
+           width:{% widthratio feitos total 100 %}%;"></div>
+    </div>
+  </div>
+
+  {# ── Os 23 passos ─────────────────────────────────────────────────── #}
+  <div class="card p-5">
+    <div style="position:relative; padding-left:26px;">
+      <div style="position:absolute; left:7px; top:8px; bottom:8px; width:2px;
+                  background:rgba(148,163,184,.25);"></div>
+
+      <div class="space-y-3">
+        {% for p in passos %}
+          <div style="position:relative;">
+            {% comment %}
+              Quatro estados, quatro marcas. "Esperando" e "agora" precisam
+              ser distinguíveis de longe: um é responsabilidade de alguém
+              aqui, o outro não é atraso de ninguém desta casa.
+            {% endcomment %}
+            <span style="position:absolute; left:-26px; top:3px; width:16px; height:16px;
+                         border-radius:50%; display:flex; align-items:center;
+                         justify-content:center; font-size:10px; font-weight:700;
+                         {% if p.situacao == 'feito' %}background:#059669; color:#fff;
+                         {% elif p.situacao == 'agora' %}background:#2563eb; color:#fff;
+                         {% elif p.situacao == 'dispensado' %}background:transparent; border:2px dashed #94a3b8; color:#94a3b8;
+                         {% else %}background:transparent; border:2px solid #94a3b8; color:#94a3b8;{% endif %}">
+              {% if p.situacao == 'feito' %}✓{% elif p.situacao == 'dispensado' %}–{% endif %}
+            </span>
+
+            <div class="flex flex-wrap items-baseline justify-between gap-2">
+              <p class="text-sm {% if p.situacao == 'agora' %}font-bold{% elif p.situacao == 'feito' %}font-semibold{% endif %}"
+                 style="{% if p.situacao == 'agora' %}color:#2563eb;{% elif p.situacao == 'dispensado' %}color:#94a3b8;{% endif %}"
+                 {% if p.situacao == 'feito' or p.situacao == 'esperando' %}:style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'"{% endif %}>
+                {% if p.url %}<a href="{{ p.url }}" style="color:inherit;">{% endif %}{{ p.numero }}. {{ p.label }}{% if p.url %}</a>{% endif %}
+              </p>
+              {% if p.quando %}
+                <span class="text-xs" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+                  {{ p.quando|date:"d/m/Y" }}
+                </span>
+              {% endif %}
+            </div>
+
+            {% if p.detalhe %}
+              <p class="text-xs" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+                {{ p.detalhe }}
+              </p>
+            {% endif %}
+            {% if p.ajuda and not p.feito %}
+              <p class="text-xs mt-0.5" style="color:{% if p.situacao == 'agora' %}#2563eb{% else %}#94a3b8{% endif %};">
+                {{ p.ajuda }}
+              </p>
+            {% endif %}
+          </div>
+        {% endfor %}
+      </div>
+    </div>
+  </div>
+
+  <p class="text-xs" :style="temaClaro ? 'color:#94a3b8;' : 'color:#71717a;'">
+    {% comment %}
+      Dizer que é um mapa e não uma cancela evita a pergunta seguinte: "por
+      que ele me deixou pular o passo 6?". A confecção real pula passos.
+    {% endcomment %}
+    Este painel mostra onde o pedido está — não trava nenhuma etapa. Pedido
+    sem personalização não passa pela arte, e isso aparece como dispensado.
+  </p>
+
+</div>
+{% endblock %}

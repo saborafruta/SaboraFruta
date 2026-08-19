@@ -1,0 +1,121 @@
+{% extends "_base.html" %}
+{% block title %}{{ title }}{% endblock %}
+{% block page_title %}Aprovação{% endblock %}
+{% block content %}
+<div class="space-y-5 max-w-2xl">
+
+  <div>
+    <p class="text-sm mb-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+      <a href="{% url 'moda:pedido-detail' pedido.pk %}"
+         :style="temaClaro ? 'color:#3b82f6;' : 'color:#60a5fa;'">‹ Voltar ao pedido</a>
+    </p>
+    <h2 class="text-2xl font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
+      Pedido #{{ pedido.numero|stringformat:"06d" }}
+    </h2>
+    <p class="text-sm mt-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+      {{ pedido.cliente }}
+    </p>
+  </div>
+
+  {% comment %}
+    Duas aprovações, dois cartões, nesta ordem. São coisas diferentes:
+    liberar internamente é conferir preço e prazo; o aceite do cliente é o
+    que autoriza cortar tecido. Juntá-las num "aprovado" só faria alguém
+    produzir sem o aceite de quem paga.
+  {% endcomment %}
+
+  {# ── 7. Aprovação interna ─────────────────────────────────────────── #}
+  <div class="card p-5" style="border-left:4px solid {% if aprovacao.liberado %}#059669{% else %}#2563eb{% endif %};">
+    <p class="text-xs uppercase tracking-wider" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+      Passo 7
+    </p>
+    <h3 class="text-lg font-bold mt-0.5" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
+      Aprovação interna
+    </h3>
+
+    {% if aprovacao.liberado %}
+      <p class="text-sm mt-2" style="color:#059669;">
+        ✓ Liberado em {{ aprovacao.liberado_em|date:"d/m/Y H:i" }}
+        {% if aprovacao.liberado_por %} por {{ aprovacao.liberado_por }}{% endif %}
+      </p>
+      {% if aprovacao.observacao_interna %}
+        <p class="text-sm mt-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+          {{ aprovacao.observacao_interna }}
+        </p>
+      {% endif %}
+    {% else %}
+      <p class="text-sm mt-2 mb-3" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+        Confira preço, prazo e condição de pagamento. Depois de liberado, o
+        cliente passa a poder aprovar pelo link.
+      </p>
+      <form method="post" action="{% url 'moda:pedido-liberar' pedido.pk %}" class="space-y-2">
+        {% csrf_token %}
+        <input type="text" name="observacao" maxlength="500"
+               placeholder="Observação da liberação (opcional)"
+               class="form-input w-full text-sm">
+        <button type="submit" class="btn-primary text-sm">LIBERAR PARA O CLIENTE</button>
+      </form>
+    {% endif %}
+  </div>
+
+  {# ── 10. Aprovação do cliente ─────────────────────────────────────── #}
+  <div class="card p-5"
+       style="border-left:4px solid {% if aprovacao.aprovado_pelo_cliente %}#059669{% elif aprovacao.pediu_ajuste %}#d97706{% else %}#94a3b8{% endif %};">
+    <p class="text-xs uppercase tracking-wider" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+      Passo 10
+    </p>
+    <h3 class="text-lg font-bold mt-0.5" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
+      Aprovação do cliente
+    </h3>
+
+    {% if aprovacao.aprovado_pelo_cliente %}
+      <p class="text-sm mt-2" style="color:#059669;">
+        ✓ Aprovado em {{ aprovacao.respondido_em|date:"d/m/Y H:i" }}
+        {% if aprovacao.respondido_por %} por {{ aprovacao.respondido_por }}{% endif %}
+      </p>
+      {% comment %}
+        O IP fica registrado junto com o nome e a data: é o que transforma
+        um clique em prova de aceite quando o pedido dá problema.
+      {% endcomment %}
+      {% if aprovacao.ip_resposta %}
+        <p class="text-xs mt-1" :style="temaClaro ? 'color:#94a3b8;' : 'color:#71717a;'">
+          Registrado do IP {{ aprovacao.ip_resposta }}
+        </p>
+      {% endif %}
+
+    {% elif aprovacao.pediu_ajuste %}
+      <p class="text-sm mt-2 font-semibold" style="color:#d97706;">
+        Cliente pediu ajuste em {{ aprovacao.respondido_em|date:"d/m/Y H:i" }}
+        {% if aprovacao.respondido_por %} ({{ aprovacao.respondido_por }}){% endif %}
+      </p>
+      <p class="text-sm mt-2 p-3 rounded-lg"
+         :style="temaClaro ? 'background:#fff7ed; color:#374151;' : 'background:#27272a; color:#e5e7eb;'">
+        {{ aprovacao.motivo_ajuste|linebreaksbr }}
+      </p>
+
+    {% elif aprovacao.liberado %}
+      <p class="text-sm mt-2" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+        Aguardando o cliente responder. Mande o link abaixo por WhatsApp ou
+        e-mail — ele aprova ou pede ajuste na própria página.
+      </p>
+      <div class="flex gap-2 mt-3">
+        <input type="text" readonly value="{{ link_publico }}"
+               class="form-input w-full text-xs" style="font-family:monospace;">
+        <a href="{{ link_publico }}" target="_blank" rel="noopener"
+           class="btn-secondary text-sm shrink-0">Abrir</a>
+      </div>
+
+    {% else %}
+      <p class="text-sm mt-2" :style="temaClaro ? 'color:#94a3b8;' : 'color:#71717a;'">
+        Libere o pedido internamente primeiro. Até lá o cliente vê o pedido
+        pelo link, mas não tem o que aprovar.
+      </p>
+    {% endif %}
+  </div>
+
+  <a href="{% url 'moda:pedido-fluxo' pedido.pk %}" class="btn-secondary text-sm">
+    VER OS 23 PASSOS DO PEDIDO
+  </a>
+
+</div>
+{% endblock %}
