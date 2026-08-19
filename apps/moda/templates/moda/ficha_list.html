@@ -2,14 +2,19 @@
 {% block title %}{{ title }}{% endblock %}
 {% block page_title %}{{ title }}{% endblock %}
 {% block content %}
-<div class="space-y-5">
+<div class="space-y-5" x-data="{ apagar: null }">
+
+  {# ── Cabeçalho ────────────────────────────────────────────────────── #}
   <div class="flex flex-wrap items-start justify-between gap-3">
     <div>
       <p class="text-sm mb-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
-        <a href="{% url 'moda:grupo' 'engenharia' %}" :style="temaClaro ? 'color:#3b82f6;' : 'color:#60a5fa;'">Engenharia</a>
+        <a href="{% url 'moda:grupo' 'engenharia' %}"
+           :style="temaClaro ? 'color:#3b82f6;' : 'color:#60a5fa;'">Engenharia</a>
         <span class="mx-1">›</span> Ficha Técnica
       </p>
-      <h2 class="text-2xl font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">Ficha Técnica</h2>
+      <h2 class="text-2xl font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
+        Ficha Técnica
+      </h2>
       <p class="text-sm mt-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
         Materiais, consumo e o custo que sai deles. Uma ficha por produto.
       </p>
@@ -24,13 +29,22 @@
     {% if busca %}<a href="{% url 'moda:ficha-list' %}" class="btn-secondary">Limpar</a>{% endif %}
   </form>
 
+  {# ── Cards ────────────────────────────────────────────────────────── #}
   <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
     {% for f in fichas %}
-      <a href="{% url 'moda:ficha-detail' f.pk %}" class="card p-4 block transition-transform hover:-translate-y-0.5">
+      {% comment %}
+        O card deixou de ser um `<a>` inteiro: link não pode conter botão
+        nem formulário, e era por isso que não havia como pôr editar e
+        excluir aqui. Agora é uma caixa comum, com o título linkado e as
+        ações embaixo.
+      {% endcomment %}
+      <div class="card p-4 flex flex-col">
         <div class="flex items-start justify-between gap-2">
-          <h3 class="font-semibold text-sm" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
+          <a href="{% url 'moda:ficha-detail' f.pk %}"
+             class="font-semibold text-sm hover:underline"
+             :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
             {{ f.produto.nome }}
-          </h3>
+          </a>
           <span class="text-[10px] font-bold px-1.5 py-0.5 rounded-full shrink-0"
                 {% if f.status == 'aprovada' %}style="background:rgba(16,185,129,.14); color:#059669;"
                 {% elif f.status == 'obsoleta' %}style="background:rgba(148,163,184,.18); color:#64748b;"
@@ -38,16 +52,70 @@
             {{ f.get_status_display }}
           </span>
         </div>
+
         <p class="text-xs mt-1 font-mono" :style="temaClaro ? 'color:#374151;' : 'color:#d4d4d4;'">
           {{ f.produto.codigo }} · v{{ f.versao }}
         </p>
+
         <p class="text-sm mt-3 font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
           R$ {{ f.custo_estimado|floatformat:2 }}
           <span class="text-xs font-normal" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
             · {{ f.materiais.all|length }} material(is)
           </span>
         </p>
-      </a>
+
+        {% comment %}
+          Ficha sem material tem custo zero, e zero de custo vira 100% de
+          margem lá no dashboard. O aviso aqui é o que faz alguém completar
+          antes de a ficha ser usada num pedido.
+        {% endcomment %}
+        {% if not f.materiais.all %}
+          <p class="text-xs mt-1" style="color:#d97706;">
+            Sem materiais — o custo desta peça é zero até você lançá-los.
+          </p>
+        {% endif %}
+
+        {# ── Auditoria ─────────────────────────────────────────────── #}
+        <div class="mt-3 pt-3" style="border-top:1px solid rgba(148,163,184,.15);">
+          {% if f.ultima_alteracao %}
+            <p class="text-xs" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+              Última alteração {{ f.ultima_alteracao.quando|date:"d/m/Y H:i" }}
+              {% if f.ultima_alteracao.quem %} · {{ f.ultima_alteracao.quem }}{% endif %}
+            </p>
+          {% else %}
+            {% comment %}
+              Ficha criada antes de a auditoria do vertical entrar no ar
+              não tem registro — e dizer isso evita a leitura de que
+              ninguém nunca mexeu nela.
+            {% endcomment %}
+            <p class="text-xs" :style="temaClaro ? 'color:#94a3b8;' : 'color:#71717a;'">
+              Sem alteração registrada.
+            </p>
+          {% endif %}
+        </div>
+
+        {# ── Ações ─────────────────────────────────────────────────── #}
+        <div class="flex flex-wrap gap-1 mt-3">
+          <a href="{% url 'moda:ficha-detail' f.pk %}" class="btn-secondary text-xs">Abrir</a>
+          <a href="{% url 'moda:ficha-update' f.pk %}" class="btn-secondary text-xs">Editar</a>
+          <a href="{% url 'moda:ficha-historico' f.pk %}" class="btn-secondary text-xs">Histórico</a>
+          {% if pode_excluir %}
+            {% comment %}
+              Apagar abre confirmação, e a confirmação diz o NOME do produto
+              e quantos materiais vão junto: "tem certeza?" sozinho não dá a
+              quem clica nenhuma informação nova para decidir.
+            {% endcomment %}
+            <button type="button" class="btn-secondary text-xs"
+                    style="color:#dc2626;"
+                    @click="apagar = {
+                      url: '{% url 'moda:ficha-delete' f.pk %}',
+                      nome: '{{ f.produto.nome|escapejs }}',
+                      materiais: {{ f.materiais.all|length }}
+                    }">Excluir</button>
+          {% endif %}
+        </div>
+      </div>
+
     {% empty %}
       <div class="card p-8 text-center sm:col-span-2 lg:col-span-3">
         <p class="text-sm" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
@@ -55,12 +123,56 @@
             Nenhuma ficha encontrada para “{{ busca }}”.
           {% else %}
             Nenhuma ficha técnica ainda. Cadastre o produto primeiro em
-            <a href="{% url 'moda:produto-list' %}" :style="temaClaro ? 'color:#3b82f6;' : 'color:#60a5fa;'">Produtos</a>,
+            <a href="{% url 'moda:produto-list' %}"
+               :style="temaClaro ? 'color:#3b82f6;' : 'color:#60a5fa;'">Produtos</a>,
             depois abra a ficha dele aqui.
           {% endif %}
         </p>
       </div>
     {% endfor %}
   </div>
+
+  {# ── Confirmação de exclusão ──────────────────────────────────────── #}
+  {% if pode_excluir %}
+    <div x-show="apagar" x-cloak @keydown.escape.window="apagar = null"
+         class="fixed inset-0 z-50 flex items-center justify-center p-4"
+         style="background:rgba(0,0,0,.6);" @click.self="apagar = null">
+      <div class="card p-5 w-full max-w-md space-y-4">
+        <h3 class="text-lg font-bold" style="color:#dc2626;">Apagar a ficha?</h3>
+
+        <p class="text-sm" :style="temaClaro ? 'color:#374151;' : 'color:#cbd5e1;'">
+          A ficha de <strong x-text="apagar?.nome"></strong> some, junto com
+          <strong x-text="apagar?.materiais"></strong> material(is). O produto
+          continua cadastrado.
+        </p>
+        {% comment %}
+          Dizer o que sobra é tão importante quanto dizer o que some: sem
+          isso a pessoa hesita achando que vai perder o produto também.
+
+          E oferecer "obsoleta" aqui é oferecer o que ela quase sempre
+          queria — tirar de circulação sem perder a história.
+        {% endcomment %}
+        <p class="text-xs" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+          Se a intenção é só parar de usar, marque a ficha como
+          <strong>obsoleta</strong> — assim o histórico e o custo das ordens
+          antigas continuam de pé.
+        </p>
+
+        <div class="flex justify-end gap-2">
+          <button type="button" class="btn-secondary text-sm" @click="apagar = null">
+            Cancelar
+          </button>
+          <form method="post" :action="apagar?.url">
+            {% csrf_token %}
+            <button type="submit" class="btn-primary text-sm"
+                    style="background:#dc2626; border-color:#dc2626;">
+              APAGAR A FICHA
+            </button>
+          </form>
+        </div>
+      </div>
+    </div>
+  {% endif %}
+
 </div>
 {% endblock %}

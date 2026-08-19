@@ -40,7 +40,8 @@ from django.db import models as djm
 
 from apps.core.models import LogSistema
 from apps.moda.models import (
-    AprovacaoPedido, EtapaOrdem, Expedicao, Inspecao, ItemConferencia, ItemCorte,
+    AprovacaoPedido, EtapaOrdem, Expedicao, FichaTecnica, ImagemFicha,
+    Inspecao, ItemConferencia, ItemCorte, MaterialFicha,
     ItemGradePedido, ItemInspecao, OrdemProducao, PedidoProducao,
     Personalizacao, PersonalizacaoIndividual, RegistroCorte, VisualItemPedido,
     Volume,
@@ -72,6 +73,9 @@ ENTIDADES = {
     Expedicao: 'Expedição',
     ItemConferencia: 'Conferência',
     Volume: 'Volume',
+    FichaTecnica: 'Ficha técnica',
+    MaterialFicha: 'Material da ficha',
+    ImagemFicha: 'Imagem da ficha',
 }
 POR_TABELA = {m._meta.db_table: (m, rotulo) for m, rotulo in ENTIDADES.items()}
 
@@ -135,6 +139,11 @@ FRASES = {
         'Cortado': 'Corte concluído',
         'Cancelado': 'Corte cancelado',
     },
+    (FichaTecnica._meta.db_table, 'status'): {
+        'Aprovada': 'Ficha aprovada para produzir',
+        'Obsoleta': 'Ficha marcada como obsoleta',
+        'Rascunho': 'Ficha voltou para rascunho',
+    },
     (Inspecao._meta.db_table, 'status'): {
         'Aprovado': 'Inspeção aprovada',
         'Reprovado': 'Inspeção reprovada',
@@ -166,6 +175,9 @@ FRASES_CRIACAO = {
     Expedicao._meta.db_table: 'Expedição aberta',
     Volume._meta.db_table: 'Volume criado',
     AprovacaoPedido._meta.db_table: 'Pedido liberado para o cliente',
+    FichaTecnica._meta.db_table: 'Ficha técnica criada',
+    MaterialFicha._meta.db_table: 'Material acrescentado',
+    ImagemFicha._meta.db_table: 'Imagem anexada',
 }
 
 FRASES_EXCLUSAO = {
@@ -173,6 +185,8 @@ FRASES_EXCLUSAO = {
     Personalizacao._meta.db_table: 'Arte removida',
     VisualItemPedido._meta.db_table: 'Visual removido',
     Volume._meta.db_table: 'Volume removido',
+    MaterialFicha._meta.db_table: 'Material removido',
+    ImagemFicha._meta.db_table: 'Imagem removida',
 }
 
 
@@ -183,6 +197,25 @@ class HistoricoService:
     @classmethod
     def do_pedido(cls, pedido) -> list[Evento]:
         return cls._montar(cls._alvos_do_pedido(pedido), str(pedido))
+
+    @classmethod
+    def da_ficha(cls, ficha) -> list[Evento]:
+        """
+        A história da ficha: ela, os materiais e as imagens.
+
+        A ficha é o que define custo e consumo da peça -- saber quem
+        mexeu em qual material, e quando, é o que permite explicar
+        por que o custo do produto mudou de um mês para o outro.
+        """
+        return cls._montar(cls._alvos_da_ficha(ficha), str(ficha))
+
+    @staticmethod
+    def _alvos_da_ficha(ficha) -> dict[str, list[int]]:
+        return {
+            FichaTecnica._meta.db_table: [ficha.pk],
+            MaterialFicha._meta.db_table: _ids(MaterialFicha, ficha=ficha),
+            ImagemFicha._meta.db_table: _ids(ImagemFicha, ficha=ficha),
+        }
 
     @classmethod
     def da_ordem(cls, ordem) -> list[Evento]:

@@ -56,6 +56,61 @@ def _informacoes(produto) -> list[tuple[str, str]]:
     ]
 
 
+def _marcar_ultima_alteracao(fichas) -> None:
+    """
+    Quando cada ficha mudou pela última vez, e por quem.
+
+    UMA consulta para a lista inteira, agrupando o log por registro. Uma
+    por card seria uma consulta por linha da tela -- e é justamente o
+    tipo de coluna que parece barata e não é.
+
+    Só o cabeçalho da ficha entra aqui. Mexer num material também é
+    mexer na ficha, mas essa história completa está no histórico; no card
+    o que interessa é "isto foi tocado recentemente?".
+    """
+    from django.db.models import Max
+
+    from apps.core.models import LogSistema
+    from apps.moda.models import FichaTecnica
+
+    if not fichas:
+        return
+
+    linhas = (
+        LogSistema.objects
+        .filter(
+            tabela_afetada=FichaTecnica._meta.db_table,
+            registro_id__in=[f.pk for f in fichas],
+        )
+        .values('registro_id')
+        .annotate(quando=Max('data_hora'))
+    )
+    quando_por_ficha = {l['registro_id']: l['quando'] for l in linhas}
+
+    # O nome de quem fez vem numa segunda consulta, só das linhas mais
+    # recentes: trazer o usuário no agrupamento exigiria uma subconsulta
+    # por ficha, que é o que se está evitando.
+    recentes = (
+        LogSistema.objects
+        .filter(
+            tabela_afetada=FichaTecnica._meta.db_table,
+            registro_id__in=list(quando_por_ficha),
+            data_hora__in=list(quando_por_ficha.values()),
+        )
+        .select_related('usuario')
+    )
+    quem = {l.registro_id: getattr(l.usuario, 'nome', '') or 'Sistema' for l in recentes}
+
+    # Pendurado em cada ficha, e não devolvido num dicionário à parte: no
+    # template, casar uma lista com um dicionário exigiria um laço dentro do
+    # outro para cada card.
+    for ficha in fichas:
+        quando = quando_por_ficha.get(ficha.pk)
+        ficha.ultima_alteracao = (
+            {'quando': quando, 'quem': quem.get(ficha.pk, '')} if quando else None
+        )
+
+
 class FichaListView(ModaBaseView):
     """Lista das fichas. Entregue no endereço do menu (engenharia/ficha-tecnica)."""
 
@@ -72,10 +127,14 @@ class FichaListView(ModaBaseView):
                 produto__codigo__icontains=busca
             )
 
+        fichas = list(fichas)
+        _marcar_ultima_alteracao(fichas)
+
         return render(request, 'moda/ficha_list.html', {
             'title': 'Ficha Técnica',
             'fichas': fichas,
             'busca': busca,
+            'pode_excluir': request.user.tem_permissao('moda_pcp', 'excluir'),
         })
 
 
@@ -334,3 +393,72 @@ class ImportarProdutosView(ModaBaseView):
             f'tecido e grade — a ficha técnica lê esses campos de lá.',
         )
         return redirect(reverse('moda:produto-list'))
+
+class FichaHistoricoView(ModaBaseView):
+    """
+    Quem mexeu na ficha, quando, e o que mudou.
+
+    A ficha define custo e consumo da peça. Saber que material entrou,
+    saiu ou teve o consumo alterado -- e por quem -- é o que permite
+    explicar por que o custo do produto mudou de um mês para o outro.
+    """
+
+    def get(self, request, pk):
+        from apps.moda.services.historico import HistoricoService
+
+        ficha = _ficha_da_filial(request, pk)
+        eventos = HistoricoService.da_ficha(ficha)
+        return render(request, 'moda/historico.html', {
+            'title': f'Histórico da ficha {ficha.produto.codigo}',
+            'raiz': f'Ficha {ficha.produto.codigo} — {ficha.produto.nome}',
+            'subtitulo': f'Versão {ficha.versao} · {ficha.get_status_display()}',
+            'voltar': ('moda:ficha-detail', ficha.pk),
+            'eventos': eventos,
+            'marcos': [e for e in eventos if e.marco],
+        })
+
+
+class FichaDeleteView(ModaBaseView):
+    """
+    Apaga a ficha — com a trava que evita o estrago.
+
+    A ORDEM DE PRODUÇÃO LÊ A FICHA, não copia: apagá-la enquanto há OP
+    aberta deixaria a fábrica sem lista de material no meio do trabalho, e
+    o custo da ordem viraria zero sem ninguém decidir isso.
+
+    Para tirar a ficha de circulação sem perder a história, o caminho é
+    marcá-la como OBSOLETA — e a mensagem de bloqueio diz isso, porque é
+    quase sempre o que a pessoa queria.
+    """
+
+    permissao_acao = 'excluir'
+
+    def post(self, request, pk):
+        from apps.moda.models import OrdemProducao
+
+        ficha = _ficha_da_filial(request, pk)
+        produto = ficha.produto
+
+        abertas = (
+            OrdemProducao.objects.for_filial(_filial(request))
+            .filter(item__produto=produto)
+            .exclude(status__in=OrdemProducao.STATUS_ENCERRADOS)
+            .count()
+        )
+        if abertas:
+            messages.error(
+                request,
+                f'{produto.nome} tem {abertas} ordem(ns) de produção em '
+                f'aberto, e elas leem esta ficha. Marque a ficha como '
+                f'obsoleta em vez de apagar.',
+            )
+            return redirect(reverse('moda:ficha-detail', args=[ficha.pk]))
+
+        materiais = ficha.materiais.count()
+        ficha.delete()
+        messages.success(
+            request,
+            f'Ficha de {produto.nome} apagada, com {materiais} material(is). '
+            f'O produto continua cadastrado.',
+        )
+        return redirect(reverse('moda:ficha-list'))
