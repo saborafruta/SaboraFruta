@@ -1,0 +1,123 @@
+{% comment %}
+  Busca e ordenação de tabela, no cliente.
+
+  COMO USAR — três atributos, nenhum JavaScript novo por tela:
+
+    <div data-tabela>                      ← envolve busca + tabela
+      <input data-busca placeholder="...">  ← opcional
+      <table>
+        <thead><tr>
+          <th data-ordenar>Cliente</th>          ← ordena por texto
+          <th data-ordenar="numero">Qtd</th>     ← ordena por número
+          <th>Ações</th>                         ← sem atributo, não ordena
+        </tr></thead>
+        <tbody>...</tbody>
+      </table>
+    </div>
+
+  Depois é só incluir este arquivo UMA vez na tela.
+
+  POR QUE NO CLIENTE, e não com `?ordem=` no servidor: a lista já veio
+  inteira e paginada; reordenar no servidor custaria uma ida ao banco e uma
+  recarga de página para responder uma pergunta que o navegador responde
+  sozinho. Quem está no chão de fábrica com internet ruim sente essa
+  diferença.
+
+  O LIMITE, dito na cara: ordena e busca o que ESTÁ NA PÁGINA. Com lista
+  paginada, a ordenação é da página atual — e por isso o rodapé escreve
+  isso. Prometer ordenação global e entregar da página seria pior do que
+  não ter.
+{% endcomment %}
+<script>
+(function () {
+  // Números em pt-BR ("1.234,56") e datas ("31/12/2026") não se comparam
+  // como texto: "10" viria antes de "9", e 01/02 antes de 31/01.
+  function paraNumero(texto) {
+    const limpo = texto.replace(/[^\d,.-]/g, '').replace(/\./g, '').replace(',', '.');
+    const n = parseFloat(limpo);
+    return isNaN(n) ? -Infinity : n;
+  }
+
+  function paraData(texto) {
+    const m = texto.match(/(\d{2})\/(\d{2})\/(\d{4})/);
+    return m ? new Date(`${m[3]}-${m[2]}-${m[1]}`).getTime() : null;
+  }
+
+  function valor(celula, tipo) {
+    const texto = (celula ? celula.innerText : '').trim();
+    if (tipo === 'numero') return paraNumero(texto);
+    const data = paraData(texto);
+    if (data !== null) return data;
+    // `localeCompare` com sensibilidade de base: "Ácido" cai junto de
+    // "Acido", que é o que quem procura espera.
+    return texto.toLowerCase();
+  }
+
+  function ligar(raiz) {
+    const tabela = raiz.querySelector('table');
+    if (!tabela) return;
+    const corpo = tabela.querySelector('tbody');
+    if (!corpo) return;
+
+    const busca = raiz.querySelector('[data-busca]');
+    if (busca) {
+      busca.addEventListener('input', function () {
+        const termo = busca.value.trim().toLowerCase();
+        let visiveis = 0;
+        corpo.querySelectorAll('tr').forEach(function (linha) {
+          const casa = !termo || linha.innerText.toLowerCase().includes(termo);
+          linha.style.display = casa ? '' : 'none';
+          if (casa) visiveis++;
+        });
+        const contador = raiz.querySelector('[data-contagem]');
+        if (contador) contador.textContent = visiveis;
+        // Sem esta linha, filtrar tudo deixa a tabela em branco sem
+        // explicação — e o usuário acha que a tela quebrou.
+        const vazio = raiz.querySelector('[data-vazio]');
+        if (vazio) vazio.style.display = visiveis ? 'none' : '';
+      });
+    }
+
+    tabela.querySelectorAll('th[data-ordenar]').forEach(function (th, indice) {
+      const colunas = Array.from(th.parentNode.children);
+      const posicao = colunas.indexOf(th);
+      const tipo = th.getAttribute('data-ordenar') || 'texto';
+
+      th.style.cursor = 'pointer';
+      th.setAttribute('title', 'Clique para ordenar');
+      const seta = document.createElement('span');
+      seta.style.opacity = '.4';
+      seta.style.marginLeft = '4px';
+      seta.textContent = '↕';
+      th.appendChild(seta);
+
+      th.addEventListener('click', function () {
+        const crescente = th.getAttribute('data-direcao') !== 'asc';
+
+        tabela.querySelectorAll('th[data-ordenar]').forEach(function (outro) {
+          if (outro !== th) {
+            outro.removeAttribute('data-direcao');
+            const s = outro.querySelector('span');
+            if (s) { s.textContent = '↕'; s.style.opacity = '.4'; }
+          }
+        });
+        th.setAttribute('data-direcao', crescente ? 'asc' : 'desc');
+        seta.textContent = crescente ? '↑' : '↓';
+        seta.style.opacity = '1';
+
+        const linhas = Array.from(corpo.querySelectorAll('tr'));
+        linhas.sort(function (a, b) {
+          const va = valor(a.children[posicao], tipo);
+          const vb = valor(b.children[posicao], tipo);
+          if (va < vb) return crescente ? -1 : 1;
+          if (va > vb) return crescente ? 1 : -1;
+          return 0;
+        });
+        linhas.forEach(function (linha) { corpo.appendChild(linha); });
+      });
+    });
+  }
+
+  document.querySelectorAll('[data-tabela]').forEach(ligar);
+})();
+</script>

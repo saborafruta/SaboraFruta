@@ -1,6 +1,8 @@
 {% extends "_base.html" %}
-{% block title %}{{ title }}{% endblock %}
-{% block page_title %}{{ title }}{% endblock %}
+{% block title %}{{ title }}
+{% endblock %}
+{% block page_title %}{{ title }}
+{% endblock %}
 
 {% block content %}
 <div class="space-y-5">
@@ -51,15 +53,23 @@
   </form>
 
   <div class="card overflow-hidden">
-    <div class="overflow-x-auto">
+    <div data-tabela>
+      {# Busca e ordenação no cliente: a lista já veio inteira, e
+         reordenar no servidor custaria ida ao banco e recarga de
+         página para uma pergunta que o navegador responde sozinho. #}
+      <div class="flex flex-wrap items-center gap-2 mb-3">
+        <input type="search" data-busca class="form-input text-sm flex-1"
+               style="min-width:220px;" placeholder="Buscar nesta página: cliente, número, status…">
+      </div>
+      <div class="overflow-x-auto">
       <table class="w-full text-sm">
         <thead>
           <tr class="border-b" :style="temaClaro ? 'border-color:#e2e8f0;' : 'border-color:#2a2a2e;'">
-            <th class="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wide" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Pedido</th>
-            <th class="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wide" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Cliente</th>
-            <th class="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wide" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Entrega</th>
-            <th class="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wide" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Prioridade</th>
-            <th class="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wide" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Status</th>
+            <th class="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wide" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'" data-ordenar="numero">Pedido</th>
+            <th class="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wide" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'" data-ordenar>Cliente</th>
+            <th class="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wide" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'" data-ordenar>Entrega</th>
+            <th class="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wide" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'" data-ordenar>Prioridade</th>
+            <th class="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wide" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'" data-ordenar>Status</th>
           </tr>
         </thead>
         <tbody>
@@ -112,4 +122,6 @@
   </div>
 
 </div>
+</div>
+{% include "moda/_tabela_dinamica.html" %}
 {% endblock %}

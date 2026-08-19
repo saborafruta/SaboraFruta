@@ -22,6 +22,7 @@ from django.views import View
 
 from apps.core.services.permissions import PERMISSION_DENIED_MESSAGE
 
+from .services.barras import suportado, svg as barras_svg
 from .services.qr import DOCUMENTOS, limpar, resolver
 from .views import ModaBaseView
 
@@ -118,6 +119,32 @@ class QrImagemView(ModaBaseView):
         return HttpResponse(buffer.getvalue(), content_type='image/png')
 
 
+class BarrasImagemView(ModaBaseView):
+    """
+    O mesmo código, em barras — para o leitor laser.
+
+    Existe ao lado do QR porque são aparelhos diferentes: o QR precisa de
+    câmera (o celular do operador), e a pistola do almoxarifado varre uma
+    linha e não enxerga QR nenhum. Ter só um dos dois obrigaria a fábrica
+    a escolher entre trocar de equipamento e perder o atalho do celular.
+    """
+
+    def get(self, request, codigo):
+        documento, objeto = resolver(codigo)
+        if documento is None:
+            raise Http404('Código não encontrado.')
+        _exigir_filial(request, objeto)
+
+        if not suportado(objeto.codigo_qr):
+            # Melhor 404 do que um desenho que o leitor traduz para outro
+            # código -- erro silencioso é o pior tipo aqui.
+            raise Http404('Código não representável em barras.')
+
+        return HttpResponse(
+            barras_svg(objeto.codigo_qr), content_type='image/svg+xml',
+        )
+
+
 class QrEtiquetaView(ModaBaseView):
     """
     A etiqueta pronta para imprimir e colar no fardo, na ficha ou na capa da OP.
@@ -141,6 +168,7 @@ class QrEtiquetaView(ModaBaseView):
             'codigo': objeto.codigo_qr,
             'url_destino': reverse(rota, args=args),
             'linhas': _linhas(documento, objeto),
+            'tem_barras': suportado(objeto.codigo_qr),
         })
 
 

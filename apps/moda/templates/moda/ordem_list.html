@@ -1,6 +1,8 @@
 {% extends "_base.html" %}
-{% block title %}{{ title }}{% endblock %}
-{% block page_title %}Ordens de Produção{% endblock %}
+{% block title %}{{ title }}
+{% endblock %}
+{% block page_title %}Ordens de Produção
+{% endblock %}
 {% block content %}
 <div class="space-y-5">
 
@@ -44,17 +46,25 @@
 
   <div class="card p-5">
     {% if ordens %}
-      <div class="overflow-x-auto">
+      <div data-tabela>
+        {# Busca e ordenação no cliente: a lista já veio inteira, e
+           reordenar no servidor custaria ida ao banco e recarga de
+           página para uma pergunta que o navegador responde sozinho. #}
+        <div class="flex flex-wrap items-center gap-2 mb-3">
+          <input type="search" data-busca class="form-input text-sm flex-1"
+                 style="min-width:220px;" placeholder="Buscar nesta página: OP, cliente, produto…">
+        </div>
+        <div class="overflow-x-auto">
         <table class="w-full text-sm" style="min-width:820px;">
           <thead>
             <tr class="text-xs uppercase tracking-wider" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
-              <th class="text-left font-semibold pb-2 w-40">Ordem</th>
-              <th class="text-left font-semibold pb-2">Cliente / Produto</th>
-              <th class="text-left font-semibold pb-2 w-28">Pedido</th>
-              <th class="text-right font-semibold pb-2 w-20">Qtd</th>
-              <th class="text-right font-semibold pb-2 w-28">Prazo</th>
-              <th class="text-left font-semibold pb-2 w-24">Prioridade</th>
-              <th class="text-left font-semibold pb-2 w-32">Status</th>
+              <th class="text-left font-semibold pb-2 w-40" data-ordenar>Ordem</th>
+              <th class="text-left font-semibold pb-2" data-ordenar>Cliente / Produto</th>
+              <th class="text-left font-semibold pb-2 w-28" data-ordenar>Pedido</th>
+              <th class="text-right font-semibold pb-2 w-20" data-ordenar="numero">Qtd</th>
+              <th class="text-right font-semibold pb-2 w-28" data-ordenar>Prazo</th>
+              <th class="text-left font-semibold pb-2 w-24" data-ordenar>Prioridade</th>
+              <th class="text-left font-semibold pb-2 w-32" data-ordenar>Status</th>
             </tr>
           </thead>
           <tbody>
@@ -121,4 +131,6 @@
   </div>
 
 </div>
+</div>
+{% include "moda/_tabela_dinamica.html" %}
 {% endblock %}

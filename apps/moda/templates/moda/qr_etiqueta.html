@@ -50,6 +50,16 @@
       {{ codigo }}
     </p>
 
+    {% comment %}
+      O código de barras vai junto do QR, não no lugar dele: a pistola do
+      almoxarifado é laser e não lê QR; a câmera do celular não lê barras
+      de longe. Uma etiqueta só, os dois leitores atendidos.
+    {% endcomment %}
+    {% if tem_barras %}
+      <img src="{% url 'moda:qr-barras' codigo %}" alt="Código de barras {{ codigo }}"
+           style="max-width:100%; height:auto; margin:10px auto 0; display:block;">
+    {% endif %}
+
     <div style="margin-top:14px; text-align:left; display:inline-block;">
       {% for rotulo, valor in linhas %}
         <p style="font-size:13px; margin:2px 0;">

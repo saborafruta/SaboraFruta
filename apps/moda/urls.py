@@ -129,6 +129,7 @@ ROTAS_PRONTAS: list = [
     # etiqueta e buscar por codigo digitado ou lido por leitor de bancada.
     path('escanear/', vqr.QrEscanearView.as_view(), name='qr-escanear'),
     path('qr/<str:codigo>/imagem.png', vqr.QrImagemView.as_view(), name='qr-imagem'),
+    path('qr/<str:codigo>/barras.svg', vqr.BarrasImagemView.as_view(), name='qr-barras'),
     path('qr/<str:codigo>/etiqueta/', vqr.QrEtiquetaView.as_view(), name='qr-etiqueta'),
 
     # Terminais de setor. Ficam DEPOIS de todas as rotas especificas de
