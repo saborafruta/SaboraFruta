@@ -7,12 +7,14 @@ uma OP sem pedido não teria cliente, grade, ficha nem roteiro, que é
 justamente tudo o que ela mostra.
 """
 from django.contrib import messages
+from django.http import HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 
 from apps.core.services.exceptions import DomainError
 
 from .models import OrdemProducao, PedidoProducao
+from .services.ficha_pdf import FichaProducaoPdfService
 from .services.ordem import CAMPOS, OrdemProducaoService
 from .views import ModaBaseView
 
@@ -95,6 +97,33 @@ class OrdemDetailView(ModaBaseView):
             'pode_cancelar': OrdemProducaoService.pode_cancelar(request.user),
             'divergencias': ordem.divergencias,
         }
+
+
+class FichaProducaoPdfView(ModaBaseView):
+    """
+    A ficha de produção da OP, em PDF.
+
+    `exportar` e não `ver`: esta folha sai do sistema e vai para a mão de
+    faccionista e de terceiro. Quem pode consultar a OP na tela não
+    necessariamente pode tirá-la de dentro de casa, e o sistema de
+    permissões já separa as duas coisas.
+    """
+
+    permissao_acao = 'exportar'
+
+    def get(self, request, pk):
+        ordem = _ordem_da_filial(request, pk)
+        base = f'{request.scheme}://{request.get_host()}'
+        pdf = FichaProducaoPdfService.gerar(ordem, base_url=base)
+
+        resposta = HttpResponse(pdf, content_type='application/pdf')
+        # Inline: quem clica quer conferir antes de imprimir. O botão de
+        # baixar da tela usa `download` e resolve o outro caso com a
+        # mesma rota.
+        resposta['Content-Disposition'] = (
+            f'inline; filename="FICHA-{ordem.numero}.pdf"'
+        )
+        return resposta
 
 
 class OrdemGerarView(ModaBaseView):

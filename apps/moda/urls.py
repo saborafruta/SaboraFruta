@@ -163,6 +163,7 @@ ROTAS_PRONTAS: list = [
     path('pcp/ordens-producao/<int:pk>/', vo.OrdemDetailView.as_view(), name='ordem-detail'),
     path('pcp/ordens-producao/<int:pk>/editar/', vo.OrdemEditarView.as_view(), name='ordem-editar'),
     path('pcp/ordens-producao/<int:pk>/status/', vo.OrdemStatusView.as_view(), name='ordem-status'),
+    path('pcp/ordens-producao/<int:pk>/ficha.pdf', vo.FichaProducaoPdfView.as_view(), name='ordem-ficha-pdf'),
     path('comercial/pedidos/<int:pedido_pk>/ordens/', vo.OrdemGerarView.as_view(), name='ordem-gerar'),
 
     path('pcp/planejamento/', vp.PlanejamentoView.as_view(), name='pcp-planejamento'),

@@ -27,6 +27,13 @@
           apontar produção da ordem que já está aberta na frente dele.
         {% endcomment %}
         <a href="{% url 'moda:fluxo-ordem' ordem.pk %}" class="btn-secondary text-sm">Fluxo de produção</a>
+        {# A ficha é o que desce para a fábrica: fica na frente do QR e do
+           fluxo porque é o botão que o PCP aperta toda vez que emite. #}
+        <a href="{% url 'moda:ordem-ficha-pdf' ordem.pk %}" target="_blank" rel="noopener"
+           class="btn-primary text-sm">FICHA DE PRODUÇÃO</a>
+        <a href="{% url 'moda:ordem-ficha-pdf' ordem.pk %}"
+           download="FICHA-{{ ordem.numero }}.pdf"
+           class="btn-secondary text-sm">Baixar ficha</a>
         <a href="{% url 'moda:qr-etiqueta' ordem.codigo_qr %}" class="btn-secondary text-sm">QR Code</a>
         <span class="text-sm font-bold px-3 py-1.5 rounded-full"
               {% if ordem.status == 'concluida' %}style="background:rgba(16,185,129,.14); color:#059669;"
