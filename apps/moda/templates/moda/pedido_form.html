@@ -2,22 +2,35 @@
 {% block title %}{{ title }}{% endblock %}
 {% block page_title %}{{ title }}{% endblock %}
 {% block content %}
-<div class="max-w-3xl mx-auto space-y-5" x-data="{ novoCliente: false }"
+<div class="max-w-4xl mx-auto space-y-5 pb-24" x-data="{ novoCliente: false }"
      @cliente-criado.window="novoCliente = false">
-  <div>
-    <p class="text-sm mb-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
-      <a href="{% url 'moda:pedido-list' %}" :style="temaClaro ? 'color:#3b82f6;' : 'color:#60a5fa;'">Pedidos</a>
-      <span class="mx-1">›</span> {{ title }}
-    </p>
-    <h2 class="text-2xl font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">{{ title }}</h2>
-    {% if not pedido %}
-      <p class="text-sm mt-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
-        O número é gerado ao salvar, na sequência desta filial.
+
+  {# ── Cabeçalho ────────────────────────────────────────────────────── #}
+  <div class="flex flex-wrap items-start justify-between gap-3">
+    <div>
+      <p class="text-sm mb-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+        <a href="{% url 'moda:comercial' %}" :style="temaClaro ? 'color:#3b82f6;' : 'color:#60a5fa;'">Comercial</a>
+        <span class="mx-1">›</span>
+        <a href="{% url 'moda:pedido-list' %}" :style="temaClaro ? 'color:#3b82f6;' : 'color:#60a5fa;'">Pedidos</a>
+        <span class="mx-1">›</span> {{ title }}
       </p>
+      <h2 class="text-2xl font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">{{ title }}</h2>
+      <p class="text-sm mt-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+        {% if pedido %}
+          Produtos, grade e arte ficam na tela do pedido, depois de salvar o cabeçalho.
+        {% else %}
+          O número é gerado ao salvar, na sequência desta filial.
+        {% endif %}
+      </p>
+    </div>
+    {% if pedido %}
+      <a href="{% url 'moda:pedido-detail' pedido.pk %}" class="btn-secondary text-sm">
+        Abrir o pedido
+      </a>
     {% endif %}
   </div>
 
-  <form method="post" novalidate class="space-y-5">
+  <form method="post" novalidate class="space-y-4" id="form-pedido">
     {% csrf_token %}
 
     {% if form.non_field_errors %}
@@ -28,11 +41,24 @@
       </div>
     {% endif %}
 
-    <div class="card p-6 space-y-4">
-      <div class="flex items-center justify-between gap-3 pb-2 border-b"
-           :style="temaClaro ? 'border-color:#e5e7eb;' : 'border-color:#374151;'">
-        <h3 class="text-xs font-semibold uppercase tracking-widest"
-            style="color:#6b7280;">Dados do pedido</h3>
+    {% comment %}
+      TRÊS BLOCOS, e não um paredão de nove campos: quem é o cliente, quando
+      é para entregar, e como o pedido entra na fila. É a mesma ordem em que
+      a conversa com o cliente acontece — e é o que permite parar no meio e
+      saber onde estava.
+    {% endcomment %}
+
+    {# ── 1. Cliente ───────────────────────────────────────────────────── #}
+    <div class="card p-5 sm:p-6 space-y-4">
+      <div class="flex items-center justify-between gap-3">
+        <div>
+          <h3 class="text-sm font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
+            Cliente e contato
+          </h3>
+          <p class="text-xs mt-0.5" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+            Para quem é o pedido e com quem falar sobre ele.
+          </p>
+        </div>
         {% comment %}
           Cadastrar cliente SEM SAIR DAQUI. O cliente novo aparece na hora do
           pedido — é o momento em que se descobre que ele não está na base.
@@ -40,14 +66,62 @@
           foi digitado, e é assim que nasce o pedido no nome de "CLIENTE NOVO".
         {% endcomment %}
         {% if pode_criar_cliente %}
-          <button type="button" class="btn-secondary text-xs" @click="novoCliente = true">
+          <button type="button" class="btn-secondary text-xs shrink-0" @click="novoCliente = true">
             + Novo cliente
           </button>
         {% endif %}
       </div>
-      <div class="grid gap-4 sm:grid-cols-2">
-        {% include "moda/_form_campos.html" %}
+
+      <div>
+        <label for="{{ form.cliente.id_for_label }}"
+               class="block text-xs uppercase tracking-wider mb-1"
+               :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+          {{ form.cliente.label }} <span style="color:#dc2626;">*</span>
+        </label>
+        {% include "moda/_combo_cliente.html" with campo=form.cliente %}
+        {% for erro in form.cliente.errors %}
+          <p class="text-xs mt-1" style="color:#dc2626;">{{ erro }}</p>
+        {% endfor %}
       </div>
+
+      <div class="grid gap-4 sm:grid-cols-2">
+        {% include "moda/_campo.html" with campo=form.contato_nome %}
+        {% include "moda/_campo.html" with campo=form.contato_telefone %}
+      </div>
+    </div>
+
+    {# ── 2. Prazos ────────────────────────────────────────────────────── #}
+    <div class="card p-5 sm:p-6 space-y-4">
+      <div>
+        <h3 class="text-sm font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
+          Datas e responsável
+        </h3>
+        <p class="text-xs mt-0.5" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+          A data de entrega é o que ordena a fila da fábrica.
+        </p>
+      </div>
+      <div class="grid gap-4 sm:grid-cols-3">
+        {% include "moda/_campo.html" with campo=form.data_pedido %}
+        {% include "moda/_campo.html" with campo=form.data_prevista_entrega %}
+        {% include "moda/_campo.html" with campo=form.vendedor %}
+      </div>
+    </div>
+
+    {# ── 3. Classificação ─────────────────────────────────────────────── #}
+    <div class="card p-5 sm:p-6 space-y-4">
+      <div>
+        <h3 class="text-sm font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
+          Situação e observações
+        </h3>
+        <p class="text-xs mt-0.5" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+          O status é a coluna em que o pedido aparece no quadro do comercial.
+        </p>
+      </div>
+      <div class="grid gap-4 sm:grid-cols-2">
+        {% include "moda/_campo.html" with campo=form.prioridade %}
+        {% include "moda/_campo.html" with campo=form.status %}
+      </div>
+      {% include "moda/_campo.html" with campo=form.observacoes %}
     </div>
 
     {# ── Auditoria ──────────────────────────────────────────────────── #}
@@ -57,9 +131,9 @@
       novos no pedido, que seriam uma segunda verdade sobre o mesmo fato.
     {% endcomment %}
     {% if pedido %}
-      <div class="card p-5 space-y-3">
+      <div class="card p-5 sm:p-6 space-y-3">
         <div class="flex items-center justify-between gap-3">
-          <h3 class="text-xs font-semibold uppercase tracking-widest" style="color:#6b7280;">
+          <h3 class="text-sm font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
             Auditoria
           </h3>
           <a href="{% url 'moda:pedido-historico' pedido.pk %}" class="text-xs underline"
@@ -68,7 +142,8 @@
 
         {% if auditoria.total %}
           <div class="grid gap-3 sm:grid-cols-2">
-            <div>
+            <div class="rounded-lg p-3"
+                 :style="temaClaro ? 'background:#f8fafc;' : 'background:#18181b;'">
               <p class="text-[10px] uppercase tracking-wider" style="color:#6b7280;">Criado por</p>
               <p class="text-sm font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
                 {{ auditoria.criacao.usuario }}
@@ -77,7 +152,8 @@
                 {{ auditoria.criacao.quando|date:"d/m/Y H:i" }}
               </p>
             </div>
-            <div>
+            <div class="rounded-lg p-3"
+                 :style="temaClaro ? 'background:#f8fafc;' : 'background:#18181b;'">
               <p class="text-[10px] uppercase tracking-wider" style="color:#6b7280;">Última alteração</p>
               <p class="text-sm font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
                 {{ auditoria.ultima.usuario }}
@@ -102,12 +178,29 @@
         {% endif %}
       </div>
     {% endif %}
-
-    <div class="flex gap-3 justify-end">
-      <a href="{% if pedido %}{% url 'moda:pedido-detail' pedido.pk %}{% else %}{% url 'moda:pedido-list' %}{% endif %}" class="btn-secondary">Cancelar</a>
-      <button type="submit" class="btn-primary">Salvar pedido</button>
-    </div>
   </form>
+
+  {% comment %}
+    A barra de ação gruda no rodapé: o formulário passa da altura da tela no
+    notebook, e botão de salvar que exige rolar até o fim é botão que a
+    pessoa procura. `form="form-pedido"` liga o botão ao formulário mesmo
+    estando fora dele.
+  {% endcomment %}
+  <div class="fixed bottom-0 left-0 right-0 z-20 px-4 py-3"
+       :style="temaClaro
+         ? 'background:rgba(255,255,255,.92); border-top:1px solid #e5e7eb; backdrop-filter:blur(6px);'
+         : 'background:rgba(24,24,27,.92); border-top:1px solid #303036; backdrop-filter:blur(6px);'">
+    <div class="max-w-4xl mx-auto flex items-center justify-between gap-3">
+      <p class="text-xs hidden sm:block" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+        <span style="color:#dc2626;">*</span> campos obrigatórios
+      </p>
+      <div class="flex gap-2 ml-auto">
+        <a href="{% if pedido %}{% url 'moda:pedido-detail' pedido.pk %}{% else %}{% url 'moda:pedido-list' %}{% endif %}"
+           class="btn-secondary">Cancelar</a>
+        <button type="submit" form="form-pedido" class="btn-primary">Salvar pedido</button>
+      </div>
+    </div>
+  </div>
 
   {# ── Cadastro rápido de cliente ─────────────────────────────────────── #}
   {% if pode_criar_cliente %}
@@ -181,6 +274,12 @@
 // de qualquer script adiado.
 document.addEventListener('alpine:init', () => {
 
+  // Os campos de contato do pedido que o cliente escolhido preenche.
+  const CONTATO = [
+    { id: 'id_contato_telefone', chave: 'telefone', rotulo: 'telefone' },
+    { id: 'id_contato_nome', chave: 'contato', rotulo: 'contato' },
+  ];
+
   Alpine.data('comboCliente', (config) => ({
     url: config.url,
     escolhido: config.escolhido,
@@ -189,10 +288,24 @@ document.addEventListener('alpine:init', () => {
     aberto: false,
     carregando: false,
     destaque: 0,
+    avisos: [],
+    // O que ESTA tela escreveu em cada campo de contato. É o que permite
+    // trocar de cliente sem apagar o que a pessoa digitou à mão: valor
+    // igual ao que preenchemos é nosso e pode ser substituído; valor
+    // diferente é dela e fica.
+    preenchido: {},
     // Cada busca leva um número. Resposta de busca antiga que chega depois
     // da nova é descartada — senão a lista pisca com o resultado do que o
     // usuário já terminou de digitar.
     requisicao: 0,
+
+    init() {
+      // Cliente que já veio escolhido (edição, ou volta de erro): o que
+      // está nos campos veio do banco, não desta tela. Não marcamos como
+      // nosso — trocar o cliente vai oferecer o novo contato em vez de
+      // apagar o que está gravado.
+      if (this.escolhido) this.avaliarFaltas(this.escolhido);
+    },
 
     async buscar() {
       const termo = this.termo.trim();
@@ -222,27 +335,78 @@ document.addEventListener('alpine:init', () => {
       this.preencherContato(cliente);
     },
 
-    // Só campo VAZIO. O que já está digitado é o contato DESTE pedido — o
-    // cadastro traz o telefone da empresa, e sobrescrever apagaria o número
-    // da pessoa que está acompanhando.
+    // TROCAR DE CLIENTE TROCA O CONTATO. O telefone do cliente anterior num
+    // pedido de outro cliente é o erro que faz ligar para a pessoa errada.
+    // O que a tela preencheu, a tela substitui; o que foi digitado à mão
+    // fica, e o cadastro do novo cliente aparece como oferta.
     preencherContato(cliente) {
-      const par = [
-        ['id_contato_telefone', cliente.telefone],
-        ['id_contato_nome', cliente.contato],
-      ];
-      for (const [id, valor] of par) {
-        const campo = document.getElementById(id);
-        if (campo && !campo.value && valor) {
-          campo.value = valor;
-          campo.dispatchEvent(new Event('input', { bubbles: true }));
+      this.avisos = [];
+
+      for (const campo of CONTATO) {
+        const elemento = document.getElementById(campo.id);
+        if (!elemento) continue;
+
+        const valor = cliente[campo.chave] || '';
+        const nosso = this.preenchido[campo.id];
+        const digitadoAMao = elemento.value && elemento.value !== nosso;
+
+        if (digitadoAMao) {
+          if (valor && valor !== elemento.value) {
+            this.avisos.push({
+              tipo: 'oferta', campo: campo.id, valor: valor,
+              texto: `No cadastro, o ${campo.rotulo} é ${valor}.`,
+              acao: 'usar este',
+            });
+          }
+          continue;
+        }
+        this.escrever(campo.id, valor);
+      }
+
+      this.avaliarFaltas(cliente);
+    },
+
+    // O que falta no CADASTRO do cliente. Contato em branco não é detalhe
+    // numa confecção: é não saber para quem ligar quando a arte precisa de
+    // aprovação — e descobrir isso agora custa menos do que no dia da
+    // entrega.
+    avaliarFaltas(cliente) {
+      for (const campo of CONTATO) {
+        if (!cliente[campo.chave]) {
+          this.avisos.push({
+            tipo: 'falta',
+            texto: `Este cliente não tem ${campo.rotulo} no cadastro — digite aqui.`,
+          });
         }
       }
     },
 
+    aplicar(aviso) {
+      this.escrever(aviso.campo, aviso.valor);
+      this.avisos = this.avisos.filter((a) => a !== aviso);
+    },
+
+    escrever(id, valor) {
+      const elemento = document.getElementById(id);
+      if (!elemento) return;
+      elemento.value = valor;
+      this.preenchido[id] = valor;
+      elemento.dispatchEvent(new Event('input', { bubbles: true }));
+    },
+
     limpar() {
+      // Some o cliente e some junto o que ELE trouxe. O que foi digitado à
+      // mão continua: não é do cliente, é deste pedido.
+      for (const campo of CONTATO) {
+        const elemento = document.getElementById(campo.id);
+        if (elemento && elemento.value === this.preenchido[campo.id]) {
+          this.escrever(campo.id, '');
+        }
+      }
       this.escolhido = null;
       this.termo = '';
       this.resultados = [];
+      this.avisos = [];
       this.aberto = false;
       this.$nextTick(() => this.$el.querySelector('input[type=text]').focus());
     },
@@ -296,12 +460,12 @@ document.addEventListener('alpine:init', () => {
           return;
         }
         // Cadastrou: o cliente novo já entra escolhido no pedido, com o
-        // telefone preenchido. Ter de procurá-lo de novo seria repetir o
-        // trabalho que a tela acabou de fazer.
+        // telefone e o contato preenchidos. Ter de procurá-lo de novo seria
+        // repetir o trabalho que a tela acabou de fazer.
         const combo = Alpine.$data(document.querySelector('[x-data^="comboCliente"]'));
         combo.escolher(corpo.cliente);
-        // Fecha o modal avisando quem o abriu: o estado do modal e' do
-        // container de fora, nao deste componente.
+        // Fecha o modal avisando quem o abriu: o estado do modal é do
+        // container de fora, não deste componente.
         window.dispatchEvent(new CustomEvent('cliente-criado'));
       } catch (e) {
         this.erroGeral = 'Não foi possível cadastrar agora. Tente de novo.';

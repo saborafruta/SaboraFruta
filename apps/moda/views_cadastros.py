@@ -387,7 +387,6 @@ class PedidoFormView(ModaBaseView):
             'title': f'Pedido #{pedido.numero:06d}' if pedido else 'Novo Pedido de Produção',
             'pedido': pedido,
             'form': form,
-            'combo_cliente': True,
             'cliente_escolhido': escolhido,
             # Vai como texto JSON dentro do atributo do Alpine. NÃO é
             # `mark_safe`: o escape do Django transforma as aspas em

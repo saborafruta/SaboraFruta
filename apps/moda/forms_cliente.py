@@ -40,7 +40,7 @@ class ClienteRapidoForm(forms.ModelForm):
         fields = [
             'tipo_pessoa', 'razao_social', 'nome_fantasia', 'cpf_cnpj',
             'inscricao_estadual', 'contribuinte_icms',
-            'celular', 'telefone', 'email', 'cidade', 'uf',
+            'contato_nome', 'celular', 'telefone', 'email', 'cidade', 'uf',
         ]
         labels = {
             'razao_social': 'Nome / Razão social',
@@ -49,6 +49,7 @@ class ClienteRapidoForm(forms.ModelForm):
             'inscricao_estadual': 'Inscrição estadual',
             'contribuinte_icms': 'Contribuinte de ICMS',
             'celular': 'WhatsApp',
+            'contato_nome': 'Contato',
         }
         help_texts = {
             # A tela do pedido manda o link e o PDF por aqui: sem número, o
@@ -56,6 +57,10 @@ class ClienteRapidoForm(forms.ModelForm):
             'celular': 'É por aqui que o pedido é enviado ao cliente.',
             'inscricao_estadual': 'Deixe em branco se for isento ou não contribuinte.',
             'contribuinte_icms': 'Marque só quem tem inscrição estadual ativa.',
+            # Sem este campo, todo cliente criado por aqui nascia sem
+            # contato -- e o pedido puxava o telefone do cadastro sem saber
+            # com quem falar, que é a metade que importa numa confecção.
+            'contato_nome': 'Quem acompanha o pedido do lado do cliente.',
         }
 
     def __init__(self, *args, **kwargs):

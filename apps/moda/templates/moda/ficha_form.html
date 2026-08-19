@@ -176,7 +176,7 @@
         <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
           {% for campo in form %}
             {% if campo.name == 'versao' or campo.name == 'status' %}
-              {% include "moda/_campo_ficha.html" %}
+              {% include "moda/_campo.html" %}
             {% endif %}
           {% endfor %}
         </div>
@@ -190,7 +190,7 @@
         </h3>
         {% for campo in form %}
           {% if campo.name == 'descricao' or campo.name == 'desenho_tecnico' or campo.name == 'observacoes' %}
-            {% include "moda/_campo_ficha.html" %}
+            {% include "moda/_campo.html" %}
           {% endif %}
         {% endfor %}
       </div>

@@ -11,11 +11,11 @@
   forma de escolher — se ela fosse o que é enviado, bastaria digitar
   qualquer coisa para gravar um cliente que não existe.
 
-  ESCOLHER O CLIENTE PREENCHE O CONTATO. O telefone está no cadastro; fazer
-  o vendedor copiar de uma tela para a outra é pedir para ele errar um
-  dígito. Só preenche campo VAZIO: o que já foi digitado à mão é o contato
-  daquele pedido, e sobrescrever seria apagar o que a pessoa acabou de
-  escrever.
+  ESCOLHER O CLIENTE PREENCHE O CONTATO, e TROCAR DE CLIENTE TROCA O
+  CONTATO. O que a tela preencheu, a tela substitui: telefone do cliente
+  anterior num pedido de outro cliente é o erro que faz a confecção ligar
+  para a pessoa errada. O que foi digitado À MÃO fica — mas a tela mostra o
+  que o cadastro do novo cliente traz, com um botão para usar.
 {% endcomment %}
 <div x-data="comboCliente({
        url: '{% url 'moda:cliente-buscar' %}',
@@ -28,28 +28,56 @@
   <input type="hidden" name="{{ campo.html_name }}"
          :value="escolhido ? escolhido.id : ''">
 
-  <input type="text" class="form-input w-full" autocomplete="off"
-         x-model="termo"
-         @input.debounce.250ms="buscar()"
-         @focus="aberto = true; if (!resultados.length) buscar()"
-         @keydown.arrow-down.prevent="mover(1)"
-         @keydown.arrow-up.prevent="mover(-1)"
-         @keydown.enter.prevent="escolherDestacado()"
-         placeholder="Digite o nome, o apelido ou o CNPJ">
+  <div class="relative">
+    <input type="text" class="form-input w-full pr-9" autocomplete="off"
+           x-model="termo"
+           @input.debounce.250ms="buscar()"
+           @focus="aberto = true; if (!resultados.length) buscar()"
+           @keydown.arrow-down.prevent="mover(1)"
+           @keydown.arrow-up.prevent="mover(-1)"
+           @keydown.enter.prevent="escolherDestacado()"
+           :style="escolhido ? 'border-color:#059669;' : ''"
+           placeholder="Digite o nome, o apelido ou o CNPJ">
+
+    <span class="absolute right-3 top-1/2 -translate-y-1/2 text-xs pointer-events-none"
+          :style="temaClaro ? 'color:#94a3b8;' : 'color:#71717a;'">
+      <span x-show="carregando">…</span>
+      <span x-show="!carregando && !escolhido">🔍</span>
+      <span x-show="!carregando && escolhido" style="color:#059669;">✓</span>
+    </span>
+  </div>
 
   {% comment %}
     Confirmação do que está escolhido: sem isto, texto digitado e cliente
     gravado parecem a mesma coisa — e não são.
   {% endcomment %}
   <template x-if="escolhido">
-    <p class="text-xs mt-1 flex items-center gap-2" style="color:#059669;">
-      <span x-text="'✓ ' + escolhido.nome"></span>
+    <div class="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs">
+      <span class="font-medium" style="color:#059669;" x-text="escolhido.nome"></span>
       <template x-if="escolhido.documento">
         <span class="font-mono" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'"
               x-text="escolhido.documento"></span>
       </template>
-      <button type="button" class="underline" style="color:#dc2626;"
-              @click="limpar()">trocar</button>
+      <button type="button" class="underline" style="color:#dc2626;" @click="limpar()">
+        trocar
+      </button>
+    </div>
+  </template>
+
+  {% comment %}
+    O que o cadastro do cliente NÃO tem também precisa aparecer. Contato em
+    branco não é detalhe numa confecção: é não saber para quem ligar quando
+    a arte precisa de aprovação.
+  {% endcomment %}
+  <template x-for="aviso in avisos" :key="aviso.texto">
+    <p class="text-xs mt-1 flex flex-wrap items-center gap-2"
+       :style="aviso.tipo === 'falta' ? 'color:#d97706;' : (temaClaro ? 'color:#64748b;' : 'color:#94a3b8;')">
+      <span x-text="aviso.texto"></span>
+      <template x-if="aviso.acao">
+        <button type="button" class="underline font-semibold"
+                :style="temaClaro ? 'color:#3b82f6;' : 'color:#60a5fa;'"
+                @click="aplicar(aviso)" x-text="aviso.acao"></button>
+      </template>
     </p>
   </template>
 
@@ -77,6 +105,7 @@
         <span class="text-xs block truncate"
               :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
           <span class="font-mono" x-text="c.documento"></span>
+          <template x-if="c.contato"><span x-text="' · ' + c.contato"></span></template>
           <template x-if="c.telefone"><span x-text="' · ' + c.telefone"></span></template>
           <template x-if="c.cidade"><span x-text="' · ' + c.cidade"></span></template>
         </span>
