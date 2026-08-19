@@ -49,6 +49,68 @@
     </div>
   </div>
 
+  {# ── As onze validações ───────────────────────────────────────────── #}
+  <div class="card p-5"
+       style="border-left:4px solid {% if validacao.liberado %}#059669{% else %}#dc2626{% endif %};">
+    <div class="flex flex-wrap items-center justify-between gap-3">
+      <h3 class="text-base font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
+        Validações para liberar a produção
+      </h3>
+      {% if validacao.liberado %}
+        <span class="text-sm font-bold" style="color:#059669;">✓ Pode liberar</span>
+      {% else %}
+        <span class="text-sm font-bold" style="color:#dc2626;">
+          {{ validacao.bloqueios|length }} pendência{{ validacao.bloqueios|length|pluralize }}
+        </span>
+      {% endif %}
+    </div>
+
+    {% comment %}
+      A lista inteira aparece, inclusive o que já está certo: quem vai
+      liberar precisa saber o que FOI conferido, não só o que falta. Uma
+      lista só de erros não diz se a checagem cobriu tudo.
+    {% endcomment %}
+    <div class="space-y-2 mt-4">
+      {% for c in validacao.checagens %}
+        <div class="flex items-start gap-2">
+          <span class="shrink-0 text-sm" style="width:16px;">
+            {% if c.situacao == 'ok' %}<span style="color:#059669;">✓</span>
+            {% elif c.situacao == 'aviso' %}<span style="color:#d97706;">!</span>
+            {% else %}<span style="color:#dc2626;">✗</span>{% endif %}
+          </span>
+          <div class="min-w-0">
+            <p class="text-sm {% if c.situacao != 'ok' %}font-semibold{% endif %}"
+               :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">{{ c.label }}</p>
+
+            {% if c.motivo %}
+              <p class="text-xs" style="color:{% if c.situacao == 'aviso' %}#d97706{% else %}#dc2626{% endif %};">
+                {{ c.motivo }}
+              </p>
+            {% endif %}
+            {% for d in c.detalhes %}
+              <p class="text-xs" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">· {{ d }}</p>
+            {% endfor %}
+            {# Onde resolver: sem isso a trava transfere para quem está com
+               pressa o trabalho de descobrir o caminho -- e é assim que
+               alguém acha um jeito de contornar o sistema. #}
+            {% if c.onde_resolver and c.situacao != 'ok' %}
+              <p class="text-xs mt-0.5" :style="temaClaro ? 'color:#94a3b8;' : 'color:#71717a;'">
+                Resolver em: {{ c.onde_resolver }}
+              </p>
+            {% endif %}
+          </div>
+        </div>
+      {% endfor %}
+    </div>
+
+    {% if not validacao.liberado %}
+      <p class="text-xs mt-4" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+        Enquanto houver pendência, a emissão da ordem de produção fica
+        bloqueada — inclusive pela troca de status.
+      </p>
+    {% endif %}
+  </div>
+
   {# ── Os 23 passos ─────────────────────────────────────────────────── #}
   <div class="card p-5">
     <div style="position:relative; padding-left:26px;">

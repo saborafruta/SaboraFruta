@@ -28,6 +28,7 @@ from .models import (
     Tamanho, VisualItemPedido,
 )
 from .services.pedido_pdf import mensagem_whatsapp, whatsapp_numero
+from .services.validacao import ValidacaoProducao
 from .services import (
     FinanceiroPedidoService, GradePedidoService, IndividualService,
     VarianteService,
@@ -484,6 +485,14 @@ class PedidoPdfView(ModaBaseView):
         return resposta
 
 
+# Os status que colocam o pedido na mão da fábrica. Chegar em qualquer
+# um deles é liberar produção, e cobra as onze validações.
+LIBERAM_PRODUCAO = (
+    PedidoProducao.Status.LIBERADO_PRODUCAO,
+    PedidoProducao.Status.EM_PRODUCAO,
+)
+
+
 class PedidoStatusView(ModaBaseView):
     """Muda só o status — o caminho curto de quem está no chão de fábrica."""
 
@@ -500,6 +509,16 @@ class PedidoStatusView(ModaBaseView):
         if novo == pedido.status:
             messages.info(request, 'O pedido já estava nesse status.')
             return redirect(reverse('moda:pedido-detail', args=[pedido.pk]))
+
+        # O outro caminho até a produção: mudar o status à mão. Sem a
+        # mesma trava aqui, bastaria escolher "Liberado para Produção" no
+        # select para pular as onze validações inteiras.
+        if novo in LIBERAM_PRODUCAO:
+            try:
+                ValidacaoProducao.exigir(pedido)
+            except DomainError as erro:
+                messages.error(request, str(erro))
+                return redirect(reverse('moda:pedido-detail', args=[pedido.pk]))
 
         anterior = pedido.get_status_display()
         pedido.status = novo

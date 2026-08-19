@@ -27,6 +27,8 @@ from django.db import transaction
 from django.utils import timezone
 
 from apps.core.services.exceptions import DomainError
+
+from .validacao import ValidacaoProducao
 from apps.moda.models import OrdemProducao
 
 MODULO = 'moda'
@@ -93,6 +95,12 @@ class OrdemProducaoService:
         """
         if pedido.status == pedido.Status.CANCELADO:
             raise DomainError('Pedido cancelado não gera ordem de produção.')
+
+        # A TRAVA. Emitir a OP é o momento em que o pedido vira tecido
+        # cortado, e daí não volta com um Ctrl+Z: as onze validações são
+        # cobradas aqui, e não só na tela, porque a tela não é o único
+        # caminho até este serviço.
+        ValidacaoProducao.exigir(pedido)
 
         itens = list(pedido.itens.all())
         if not itens:

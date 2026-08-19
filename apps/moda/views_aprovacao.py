@@ -11,6 +11,7 @@ from django.urls import reverse
 
 from .models import AprovacaoPedido, PedidoProducao
 from .services.fluxo_completo import FluxoCompletoService
+from .services.validacao import ValidacaoProducao
 from .views import ModaBaseView
 
 
@@ -44,6 +45,11 @@ class FluxoPedidoView(ModaBaseView):
             'title': f'Fluxo do pedido #{pedido.numero:06d}',
             'pedido': pedido,
             **FluxoCompletoService.do_pedido(pedido),
+            # As onze validações ao lado dos 23 passos: o painel diz onde o
+            # pedido está, e a lista diz o que impede ele de descer para a
+            # fábrica. Descobrir isso só ao clicar em emitir seria descobrir
+            # tarde.
+            'validacao': ValidacaoProducao.resumo(pedido),
         })
 
 
