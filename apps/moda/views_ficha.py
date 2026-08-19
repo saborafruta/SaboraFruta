@@ -110,10 +110,42 @@ class FichaFormView(ModaBaseView):
 
     @staticmethod
     def _render(request, form, ficha):
+        from apps.moda.models import ProdutoModa
+        from apps.moda.services.importar_produtos import ImportarProdutosService
+
+        filial = _filial(request)
+        disponiveis = getattr(form, 'produtos_disponiveis', [])
+
+        # Quando não há produto para escolher, a tela precisa dizer POR
+        # QUÊ. Um select vazio sem explicação é o que trava a pessoa: ela
+        # não sabe se falta cadastrar produto ou se todos já têm ficha.
+        total_produtos = ProdutoModa.objects.filter(filial=filial).count()
+        do_erp = (
+            len(ImportarProdutosService.disponiveis(filial))
+            if not disponiveis else 0
+        )
+
         return render(request, 'moda/ficha_form.html', {
             'title': 'Editar ficha técnica' if ficha else 'Nova ficha técnica',
             'form': form,
             'ficha': ficha,
+            'produtos': disponiveis,
+            # O que cada produto traz junto, para a tela mostrar assim
+            # que alguém escolhe. Vai por `json_script` e não interpolado
+            # no atributo: nome de produto tem aspas e acento, e no
+            # atributo quebraria o HTML na primeira aspa.
+            'produtos_json': {
+                str(p.pk): {
+                    'modelo': str(p.modelo) if p.modelo_id else '',
+                    'colecao': str(p.colecao) if p.colecao_id else '',
+                    'tecido': str(p.tecido) if p.tecido_id else '',
+                    'grade': str(p.grade) if p.grade_id else '',
+                }
+                for p in disponiveis
+            },
+            'total_produtos': total_produtos,
+            'ja_com_ficha': total_produtos - len(disponiveis),
+            'do_erp': do_erp,
         })
 
 
@@ -259,3 +291,46 @@ class ImagemDeleteView(ModaBaseView):
         get_object_or_404(ImagemFicha, pk=imagem_pk, ficha=ficha).delete()
         messages.success(request, 'Imagem removida.')
         return redirect(reverse('moda:ficha-detail', args=[ficha.pk]))
+
+
+class ImportarProdutosView(ModaBaseView):
+    """
+    Traz produtos do catálogo do ERP para a confecção.
+
+    É a resposta para o caso mais comum de tela travada: a empresa já
+    cadastrou o produto no ERP e o select da ficha aparece vazio, porque
+    o produto de MODA -- o que tem modelo, tecido e grade -- ainda não
+    existe. Em vez de mandar redigitar tudo, traz o que já está lá.
+    """
+
+    permissao_acao = 'criar'
+
+    def get(self, request):
+        from apps.moda.services.importar_produtos import ImportarProdutosService
+
+        return render(request, 'moda/importar_produtos.html', {
+            'title': 'Trazer produtos do ERP',
+            'produtos': ImportarProdutosService.disponiveis(_filial(request)),
+        })
+
+    def post(self, request):
+        from apps.core.services.exceptions import DomainError
+        from apps.moda.services.importar_produtos import ImportarProdutosService
+
+        ids = [
+            int(v) for v in request.POST.getlist('produtos') if v.isdigit()
+        ]
+        try:
+            criados = ImportarProdutosService.importar(
+                _filial(request), ids, request.user,
+            )
+        except DomainError as erro:
+            messages.error(request, str(erro))
+            return redirect(reverse('moda:produtos-importar'))
+
+        messages.success(
+            request,
+            f'{len(criados)} produto(s) trazidos do ERP. Complete modelo, '
+            f'tecido e grade — a ficha técnica lê esses campos de lá.',
+        )
+        return redirect(reverse('moda:produto-list'))

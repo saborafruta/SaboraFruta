@@ -2,31 +2,215 @@
 {% block title %}{{ title }}{% endblock %}
 {% block page_title %}{{ title }}{% endblock %}
 {% block content %}
-<div class="max-w-2xl mx-auto space-y-5">
-  <div>
+
+{% comment %}
+  O `x-data` guarda o produto escolhido para a tela mostrar, na hora, o que
+  a ficha vai herdar dele. O texto sozinho ("a ficha lê do produto") não
+  ajuda: sem ver O QUE ela lê, ninguém sabe se o produto está completo.
+{% endcomment %}
+<div class="space-y-5 max-w-4xl"
+     x-data="{
+       produto: '{{ form.produto.value|default:'' }}',
+       dados: {},
+       get atual() { return this.dados[this.produto] || null; }
+     }"
+     x-init="dados = JSON.parse(document.getElementById('dados-produtos').textContent)">
+
+  {{ produtos_json|json_script:"dados-produtos" }}
+
+  {# ── Cabeçalho ────────────────────────────────────────────────────── #}
+  <div class="card p-5">
     <p class="text-sm mb-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
-      <a href="{% url 'moda:ficha-list' %}" :style="temaClaro ? 'color:#3b82f6;' : 'color:#60a5fa;'">Ficha Técnica</a>
+      <a href="{% url 'moda:ficha-list' %}"
+         :style="temaClaro ? 'color:#3b82f6;' : 'color:#60a5fa;'">Ficha Técnica</a>
       <span class="mx-1">›</span> {{ title }}
     </p>
-    <h2 class="text-2xl font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">{{ title }}</h2>
+    <h2 class="text-2xl font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
+      {{ title }}
+    </h2>
     <p class="text-sm mt-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
-      Modelo, coleção, tecido, grade e referência vêm do cadastro do produto —
-      a ficha lê de lá em vez de pedir de novo, para não haver duas versões da
-      mesma informação. Os materiais entram na tela seguinte.
+      Modelo, coleção, tecido e grade vêm do cadastro do produto — a ficha lê
+      de lá para não existirem duas versões da mesma informação. Os materiais
+      entram na tela seguinte.
     </p>
   </div>
 
-  <form method="post" enctype="multipart/form-data" novalidate class="space-y-5">
-    {% csrf_token %}
-    <div class="card p-6 space-y-4">
-      {% include "moda/_form_campos.html" %}
+  {# ── Sem produto para escolher ────────────────────────────────────── #}
+  {% if not produtos and not ficha %}
+    {% comment %}
+      O select vazio sem explicação é o que trava a pessoa: ela não sabe se
+      falta cadastrar produto, se todos já têm ficha, ou se o sistema
+      quebrou. Cada caso tem uma saída diferente, e a tela oferece a certa.
+    {% endcomment %}
+    <div class="card p-6" style="border-left:4px solid #d97706;">
+      <h3 class="text-lg font-bold" style="color:#d97706;">
+        Não há produto disponível para receber ficha
+      </h3>
+
+      {% if total_produtos == 0 %}
+        <p class="text-sm mt-2" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+          Nenhum produto de confecção cadastrado nesta filial. A ficha é
+          sempre <strong>de um produto</strong>, então ele precisa existir
+          primeiro.
+        </p>
+        <div class="flex flex-wrap gap-2 mt-4">
+          {% if do_erp %}
+            <a href="{% url 'moda:produtos-importar' %}" class="btn-primary text-sm">
+              TRAZER {{ do_erp }} PRODUTO{{ do_erp|pluralize }} DO ERP
+            </a>
+          {% endif %}
+          <a href="{% url 'moda:produto-create' %}" class="btn-secondary text-sm">
+            Cadastrar produto novo
+          </a>
+        </div>
+        {% if do_erp %}
+          <p class="text-xs mt-3" :style="temaClaro ? 'color:#94a3b8;' : 'color:#71717a;'">
+            O catálogo do ERP já tem {{ do_erp }} produto{{ do_erp|pluralize }}
+            que ainda não está na confecção — dá para trazer sem redigitar.
+          </p>
+        {% endif %}
+
+      {% else %}
+        <p class="text-sm mt-2" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+          Os {{ total_produtos }} produtos desta filial já têm ficha. Cada
+          produto tem uma só — para mudar consumo ou material, edite a ficha
+          que já existe em vez de criar outra.
+        </p>
+        <div class="flex flex-wrap gap-2 mt-4">
+          <a href="{% url 'moda:ficha-list' %}" class="btn-primary text-sm">
+            VER AS FICHAS EXISTENTES
+          </a>
+          <a href="{% url 'moda:produto-create' %}" class="btn-secondary text-sm">
+            Cadastrar produto novo
+          </a>
+        </div>
+      {% endif %}
     </div>
 
-    <div class="flex justify-end gap-2">
-      <a href="{% if ficha %}{% url 'moda:ficha-detail' ficha.pk %}{% else %}{% url 'moda:ficha-list' %}{% endif %}"
-         class="btn-secondary">Cancelar</a>
-      <button type="submit" class="btn-primary">Salvar ficha</button>
-    </div>
-  </form>
+  {% else %}
+    <form method="post" enctype="multipart/form-data" class="space-y-5">
+      {% csrf_token %}
+
+      {# ── 1. Produto ────────────────────────────────────────────────── #}
+      <div class="card p-5 space-y-4">
+        <div class="flex items-baseline justify-between gap-3">
+          <h3 class="text-base font-semibold"
+              :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
+            1. De qual produto é esta ficha
+          </h3>
+          {% if produtos %}
+            <span class="text-xs" :style="temaClaro ? 'color:#94a3b8;' : 'color:#71717a;'">
+              {{ produtos|length }} sem ficha{% if ja_com_ficha %} · {{ ja_com_ficha }} já têm{% endif %}
+            </span>
+          {% endif %}
+        </div>
+
+        <div>
+          <label class="block text-xs uppercase tracking-wider mb-1"
+                 :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+            Produto *
+          </label>
+
+          {% if ficha %}
+            {% comment %}
+              Na edição o produto não muda: a ficha É dele. Trocar exigiria
+              mover materiais e histórico de um produto para outro, que é
+              outra operação — e nunca a que alguém queria fazer aqui.
+            {% endcomment %}
+            <p class="form-input w-full" style="opacity:.7;">
+              {{ ficha.produto }}
+            </p>
+            <input type="hidden" name="produto" value="{{ ficha.produto_id }}">
+            <p class="text-xs mt-1" :style="temaClaro ? 'color:#94a3b8;' : 'color:#71717a;'">
+              O produto de uma ficha não muda. Para outro produto, crie a
+              ficha dele.
+            </p>
+          {% else %}
+            <select name="produto" required x-model="produto" class="form-input w-full">
+              <option value="">Escolha o produto</option>
+              {% for p in produtos %}
+                <option value="{{ p.pk }}">{{ p.codigo }} — {{ p.nome }}</option>
+              {% endfor %}
+            </select>
+          {% endif %}
+          {% for erro in form.produto.errors %}
+            <p class="text-xs mt-1" style="color:#dc2626;">{{ erro }}</p>
+          {% endfor %}
+        </div>
+
+        {# ── O que a ficha herda ─────────────────────────────────────── #}
+        <template x-if="atual">
+          <div class="rounded-xl p-4"
+               :style="temaClaro ? 'background:#f8fafc;' : 'background:#27272a;'">
+            <p class="text-xs uppercase tracking-wider mb-2"
+               :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+              O que vem do cadastro deste produto
+            </p>
+            <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 text-sm">
+              <template x-for="campo in ['modelo', 'colecao', 'tecido', 'grade']" :key="campo">
+                <div>
+                  <p class="text-xs capitalize"
+                     :style="temaClaro ? 'color:#94a3b8;' : 'color:#71717a;'"
+                     x-text="campo === 'colecao' ? 'coleção' : campo"></p>
+                  {% comment %}
+                    Campo vazio aparece como "não informado" em laranja, e não
+                    some: é isso que faz alguém voltar ao cadastro do produto
+                    ANTES de a ficha descer para a fábrica sem tecido.
+                  {% endcomment %}
+                  <p class="font-semibold"
+                     :style="atual[campo] ? (temaClaro ? 'color:#111827;' : 'color:#f8fafc;') : 'color:#d97706;'"
+                     x-text="atual[campo] || 'não informado'"></p>
+                </div>
+              </template>
+            </div>
+          </div>
+        </template>
+      </div>
+
+      {# ── 2. Versão e situação ──────────────────────────────────────── #}
+      <div class="card p-5">
+        <h3 class="text-base font-semibold mb-4"
+            :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
+          2. Versão e situação
+        </h3>
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          {% for campo in form %}
+            {% if campo.name == 'versao' or campo.name == 'status' %}
+              {% include "moda/_campo_ficha.html" %}
+            {% endif %}
+          {% endfor %}
+        </div>
+      </div>
+
+      {# ── 3. Especificação ──────────────────────────────────────────── #}
+      <div class="card p-5 space-y-4">
+        <h3 class="text-base font-semibold"
+            :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
+          3. Como a peça é feita
+        </h3>
+        {% for campo in form %}
+          {% if campo.name == 'descricao' or campo.name == 'desenho_tecnico' or campo.name == 'observacoes' %}
+            {% include "moda/_campo_ficha.html" %}
+          {% endif %}
+        {% endfor %}
+      </div>
+
+      {# ── Ações ─────────────────────────────────────────────────────── #}
+      <div class="flex flex-wrap items-center justify-between gap-3">
+        <p class="text-xs" :style="temaClaro ? 'color:#94a3b8;' : 'color:#71717a;'">
+          Depois de salvar, a próxima tela é a dos materiais — é lá que o
+          custo da peça é calculado.
+        </p>
+        <div class="flex gap-2">
+          <a href="{% if ficha %}{% url 'moda:ficha-detail' ficha.pk %}{% else %}{% url 'moda:ficha-list' %}{% endif %}"
+             class="btn-secondary text-sm">Cancelar</a>
+          <button type="submit" class="btn-primary text-sm">
+            {% if ficha %}SALVAR ALTERAÇÕES{% else %}SALVAR E IR PARA OS MATERIAIS{% endif %}
+          </button>
+        </div>
+      </div>
+    </form>
+  {% endif %}
+
 </div>
 {% endblock %}

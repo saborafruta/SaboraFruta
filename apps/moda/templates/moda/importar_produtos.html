@@ -1,0 +1,98 @@
+{% extends "_base.html" %}
+{% block title %}{{ title }}{% endblock %}
+{% block page_title %}Trazer produtos do ERP{% endblock %}
+{% block content %}
+<div class="space-y-5 max-w-4xl" x-data="{ marcados: 0 }">
+
+  <div class="card p-5">
+    <p class="text-sm mb-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+      <a href="{% url 'moda:produto-list' %}"
+         :style="temaClaro ? 'color:#3b82f6;' : 'color:#60a5fa;'">Produtos</a>
+      <span class="mx-1">›</span> Trazer do ERP
+    </p>
+    <h2 class="text-2xl font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
+      Produtos do catálogo do ERP
+    </h2>
+    {% comment %}
+      Explicar por que existem dois catálogos evita a conclusão de que o
+      sistema está duplicando cadastro à toa — que é a leitura natural de
+      quem vê o mesmo produto em dois lugares.
+    {% endcomment %}
+    <p class="text-sm mt-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+      O produto do ERP é o que se vende e se estoca. O da confecção é o que
+      se produz — tem modelo, coleção, tecido e grade. Trazer copia o nome, o
+      código e a descrição; o resto você completa aqui.
+    </p>
+  </div>
+
+  {% if produtos %}
+    <form method="post" class="space-y-4">
+      {% csrf_token %}
+
+      <div class="card p-0">
+        <div class="overflow-x-auto">
+          <table class="w-full text-sm" style="min-width:620px;">
+            <thead>
+              <tr style="border-bottom:1px solid rgba(148,163,184,.25);">
+                <th class="px-4 py-3 w-10"></th>
+                <th class="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wide"
+                    :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Código</th>
+                <th class="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wide"
+                    :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Descrição</th>
+                <th class="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wide"
+                    :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Unidade</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for p in produtos %}
+                <tr style="border-bottom:1px solid rgba(148,163,184,.12);">
+                  <td class="px-4 py-3">
+                    <input type="checkbox" name="produtos" value="{{ p.pk }}"
+                           @change="marcados += $event.target.checked ? 1 : -1">
+                  </td>
+                  <td class="px-4 py-3 tabular-nums"
+                      :style="temaClaro ? 'color:#374151;' : 'color:#cbd5e1;'">
+                    {{ p.codigo|default:"—" }}
+                  </td>
+                  <td class="px-4 py-3 font-semibold"
+                      :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
+                    {{ p.descricao }}
+                  </td>
+                  <td class="px-4 py-3" :style="temaClaro ? 'color:#374151;' : 'color:#cbd5e1;'">
+                    {{ p.unidade_medida|default:"—" }}
+                  </td>
+                </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="flex flex-wrap items-center justify-between gap-3">
+        <p class="text-sm" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+          <span x-text="marcados"></span> de {{ produtos|length }} marcado(s)
+        </p>
+        <div class="flex gap-2">
+          <a href="{% url 'moda:produto-list' %}" class="btn-secondary text-sm">Cancelar</a>
+          <button type="submit" class="btn-primary text-sm" :disabled="marcados === 0"
+                  :style="marcados === 0 ? 'opacity:.5; cursor:not-allowed;' : ''">
+            TRAZER PARA A CONFECÇÃO
+          </button>
+        </div>
+      </div>
+    </form>
+
+  {% else %}
+    <div class="card p-8 text-center">
+      <p class="text-sm" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+        Todos os produtos do ERP já estão na confecção — ou o catálogo do ERP
+        está vazio nesta filial.
+      </p>
+      <a href="{% url 'moda:produto-create' %}" class="btn-primary text-sm mt-4 inline-block">
+        CADASTRAR PRODUTO NOVO
+      </a>
+    </div>
+  {% endif %}
+
+</div>
+{% endblock %}

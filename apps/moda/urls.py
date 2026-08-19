@@ -208,6 +208,10 @@ ROTAS_PRONTAS: list = [
     path('produtos/cores/nova/', vc.CorFormView.as_view(), name='cor-create'),
     path('produtos/cores/<int:pk>/', vc.CorFormView.as_view(), name='cor-update'),
 
+    # Trazer produto do catálogo do ERP para a Moda. Fica no grupo de
+    # produtos, que é de onde a pessoa vem quando descobre que o select da
+    # ficha está vazio.
+    path('produtos/importar/', vf.ImportarProdutosView.as_view(), name='produtos-importar'),
     path('produtos/produtos/', vc.ProdutoListView.as_view(), name='produto-list'),
     path('produtos/produtos/novo/', vc.ProdutoFormView.as_view(), name='produto-create'),
     path('produtos/produtos/<int:pk>/', vc.ProdutoDetailView.as_view(), name='produto-detail'),

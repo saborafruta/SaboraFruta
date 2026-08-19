@@ -34,6 +34,17 @@ class ProdutoModa(FilialScopedModel, ActiveModel):
     nome = models.CharField(max_length=120)
     descricao = models.TextField(blank=True)
 
+    # De onde este produto veio, quando foi trazido do catálogo do ERP.
+    # LIGAÇÃO, e não cópia de dados: o produto de moda tem modelo,
+    # coleção, tecido e grade que o do ERP não tem, então ele existe de
+    # verdade aqui. O vínculo serve para não importar duas vezes e para
+    # saber que os dois são a mesma coisa na hora do estoque.
+    produto_erp = models.ForeignKey(
+        'produtos.Produto', on_delete=models.SET_NULL,
+        null=True, blank=True, related_name='produtos_moda',
+        help_text='Produto do catálogo do ERP que originou este.',
+    )
+
     # ── Classificação ────────────────────────────────────────────────────
     categoria = models.ForeignKey(
         'moda.Categoria', on_delete=models.PROTECT, null=True, blank=True,

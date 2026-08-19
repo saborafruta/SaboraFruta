@@ -1,0 +1,27 @@
+{% comment %}
+  Um campo do formulário da ficha. Espera `campo`.
+
+  Existe para o rótulo, o erro e a ajuda saírem sempre no mesmo lugar: o
+  Django desenha cada widget, mas quem decide onde fica o texto de ajuda e
+  como o erro aparece é a tela — e repetir isso campo a campo é como o
+  formulário fica desalinhado.
+{% endcomment %}
+<div>
+  <label for="{{ campo.id_for_label }}"
+         class="block text-xs uppercase tracking-wider mb-1"
+         :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+    {{ campo.label }}{% if campo.field.required %} *{% endif %}
+  </label>
+
+  {{ campo }}
+
+  {% if campo.help_text %}
+    <p class="text-xs mt-1" :style="temaClaro ? 'color:#94a3b8;' : 'color:#71717a;'">
+      {{ campo.help_text }}
+    </p>
+  {% endif %}
+
+  {% for erro in campo.errors %}
+    <p class="text-xs mt-1" style="color:#dc2626;">{{ erro }}</p>
+  {% endfor %}
+</div>

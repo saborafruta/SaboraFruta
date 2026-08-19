@@ -575,6 +575,24 @@ class FichaTecnicaForm(forms.ModelForm):
     class Meta:
         model = FichaTecnica
         fields = ['produto', 'versao', 'status', 'descricao', 'desenho_tecnico', 'observacoes']
+        # O `verbose_name` automático do Django tira o acento ("Versao",
+        # "Descricao", "Observacoes"). Numa tela que o usuário lê, escrever
+        # errado é ruído -- e ruído que ele acha que é defeito do sistema.
+        labels = {
+            'produto': 'Produto',
+            'versao': 'Versão',
+            'status': 'Situação da ficha',
+            'descricao': 'Especificação técnica',
+            'desenho_tecnico': 'Desenho técnico',
+            'observacoes': 'Observações',
+        }
+        help_texts = {
+            'versao': 'Suba a versão quando mudar consumo ou material — o custo muda junto.',
+            'status': 'Só a ficha aprovada deveria descer para a fábrica.',
+            'descricao': 'Modelagem, costura, acabamentos, tolerâncias.',
+            'desenho_tecnico': 'PNG, JPG, PDF, CDR ou AI. Em branco, usa o desenho do produto.',
+            'observacoes': 'Recado para quem for produzir.',
+        }
         widgets = {
             'descricao': forms.Textarea(attrs={
                 'rows': 4,
@@ -588,7 +606,11 @@ class FichaTecnicaForm(forms.ModelForm):
         super().__init__(*args, **kwargs)
         self.filial = filial
 
-        produtos = ProdutoModa.objects.filter(filial=filial, ativo=True).order_by('codigo')
+        produtos = (
+            ProdutoModa.objects.filter(filial=filial, ativo=True)
+            .select_related('modelo', 'colecao', 'tecido', 'grade')
+            .order_by('codigo')
+        )
         # Produto que já tem ficha sai da lista -- é OneToOne, e deixá-lo
         # ali só renderia um erro de integridade depois de preencher tudo.
         if self.instance.pk:
@@ -600,6 +622,12 @@ class FichaTecnicaForm(forms.ModelForm):
             produtos = produtos.filter(ficha__isnull=True)
         self.fields['produto'].queryset = produtos
         self.fields['produto'].empty_label = 'Escolha o produto'
+
+        # A lista vai inteira para a tela, que desenha o `<select>` à mão
+        # com o que cada produto traz junto (modelo, tecido, grade). O
+        # texto diz que a ficha "lê do produto" -- sem MOSTRAR o que ela
+        # lê, a frase não ajuda em nada.
+        self.produtos_disponiveis = list(produtos)
 
         for campo in self.fields.values():
             css = campo.widget.attrs.get('class', '')
@@ -716,7 +744,11 @@ class RoteiroForm(forms.ModelForm):
         super().__init__(*args, **kwargs)
         self.filial = filial
 
-        produtos = ProdutoModa.objects.filter(filial=filial, ativo=True).order_by('codigo')
+        produtos = (
+            ProdutoModa.objects.filter(filial=filial, ativo=True)
+            .select_related('modelo', 'colecao', 'tecido', 'grade')
+            .order_by('codigo')
+        )
         # Mesmo motivo da ficha: é OneToOne, e oferecer um produto que já tem
         # roteiro só renderia erro de integridade depois de preencher tudo.
         if self.instance.pk:
