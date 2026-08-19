@@ -1,6 +1,8 @@
 """Context processors: disponibilizam dados em todos os templates."""
 from apps.core.models import Filial
-from apps.core.services.modulos import modulos_ativos
+from apps.core.services.modulos import (
+    modulos_ativos, producao_generica_visivel,
+)
 
 
 def parametros_sistema(request):
@@ -45,10 +47,15 @@ def filial_context(request):
         # `'chave' in modulos_ativos` -- mesma resposta que o middleware usa
         # para barrar a URL, então menu e acesso nunca discordam.
         'modulos_ativos': set(),
+        # A tela genérica de produção some para quem tem um vertical com
+        # produção própria -- senão o menu oferece duas produções, e a
+        # genérica fica sempre vazia.
+        'producao_generica': False,
     }
     if not request.user.is_authenticated:
         return ctx
     ctx['modulos_ativos'] = modulos_ativos(ctx['filial_ativa'])
+    ctx['producao_generica'] = producao_generica_visivel(ctx['filial_ativa'])
     try:
         user = request.user
         qs = Filial.objects.filter(ativo=True)
