@@ -33,6 +33,34 @@
     </div>
   </div>
 
+  {# ── Alertas ──────────────────────────────────────────────────────── #}
+  {% if resumo_alertas.total %}
+    {% comment %}
+      No topo, antes dos indicadores: quem abre o painel de manhã precisa
+      ver o que está pegando fogo antes de ver o faturamento do mês. Só
+      os críticos aparecem aqui — a tela de alertas tem a lista inteira.
+    {% endcomment %}
+    <div class="card p-4" style="border-left:4px solid {% if resumo_alertas.criticos %}#dc2626{% else %}#d97706{% endif %};">
+      <div class="flex flex-wrap items-center justify-between gap-3">
+        <p class="font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
+          {{ resumo_alertas.criticos }} alerta{{ resumo_alertas.criticos|pluralize }} crítico{{ resumo_alertas.criticos|pluralize }}
+          · {{ resumo_alertas.atencao }} de atenção
+        </p>
+        <a href="{% url 'moda:alertas' %}" class="btn-secondary text-sm">VER TODOS</a>
+      </div>
+      {% if alertas_topo %}
+        <div class="mt-3 space-y-1">
+          {% for a in alertas_topo %}
+            <a href="{{ a.url }}" class="block text-sm"
+               :style="temaClaro ? 'color:#374151;' : 'color:#cbd5e1;'">
+              🔴 {{ a.titulo }}
+            </a>
+          {% endfor %}
+        </div>
+      {% endif %}
+    </div>
+  {% endif %}
+
   {# ── Indicadores do período ───────────────────────────────────────── #}
   <div>
     <p class="text-xs font-bold uppercase tracking-wider mb-2"

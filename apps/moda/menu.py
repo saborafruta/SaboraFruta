@@ -148,6 +148,7 @@ GRUPOS: tuple[Grupo, ...] = (
         'grafico',
         (
             Item('dashboard', 'Dashboard', 'Visão geral do vertical.'),
+            Item('alertas', 'Alertas', 'O que precisa de alguém agora.'),
             Item('producao', 'Produção', 'Volume produzido por etapa.'),
             Item('wip', 'WIP', 'Trabalho em processo parado entre etapas.'),
             Item('eficiencia', 'Eficiência', 'Produzido contra capacidade.'),

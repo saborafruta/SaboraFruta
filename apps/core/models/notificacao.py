@@ -17,6 +17,17 @@ class Notificacao(TimestampedModel):
         FOOD_ITEM_ATRASADO = 'food_item_atrasado', 'Item atrasado na cozinha'
         FOOD_PRODUTO_INDISPONIVEL = 'food_produto_indisponivel', 'Produto indisponível'
 
+        # Alertas automáticos do vertical Moda. São CONDIÇÕES, não eventos:
+        # a mesma referência é reaproveitada enquanto a condição vale, e
+        # desativada quando ela passa. Ver `apps.moda.services.alertas`.
+        MODA_PEDIDO_ATRASADO = 'moda_pedido_atrasado', 'Moda: pedido atrasado'
+        MODA_PEDIDO_VENCENDO = 'moda_pedido_vencendo', 'Moda: pedido perto do prazo'
+        MODA_MATERIAL_INSUFICIENTE = 'moda_material_insuficiente', 'Moda: material insuficiente'
+        MODA_PRODUCAO_ABAIXO = 'moda_producao_abaixo', 'Moda: produção abaixo do planejado'
+        MODA_SETOR_SOBRECARREGADO = 'moda_setor_sobrecarregado', 'Moda: setor sobrecarregado'
+        MODA_REJEICAO_ALTA = 'moda_rejeicao_alta', 'Moda: alto índice de rejeição'
+        MODA_APROVEITAMENTO_BAIXO = 'moda_aproveitamento_baixo', 'Moda: baixo aproveitamento de corte'
+
     filial = models.ForeignKey(
         'core.Filial',
         on_delete=models.CASCADE,

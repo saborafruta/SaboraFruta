@@ -16,7 +16,7 @@ from . import (
     views_corte as vco, views_encaixe as ve, views_fluxo as vx,
     views_ordem as vo, views_pcp as vp,
     views_expedicao as vex, views_kanban as vk, views_necessidade as vn,
-    views_dashboard as vd, views_qualidade as vq, views_qr as vqr,
+    views_alertas as val, views_dashboard as vd, views_qualidade as vq, views_qr as vqr,
     views_roteiro as vr, views_terminal as vt, views_wip as vw,
 )
 
@@ -72,6 +72,7 @@ ROTAS_PRONTAS: list = [
     # tinha como chegar nela. O endereco antigo continua respondendo para
     # nao quebrar link salvo.
     path('indicadores/dashboard/', vd.DashboardView.as_view(), name='dashboard'),
+    path('indicadores/alertas/', val.AlertasView.as_view(), name='alertas'),
     path('indicadores/wip/', vw.WipView.as_view(), name='wip'),
     path('relatorios/wip/', vw.WipView.as_view(), name='wip-antigo'),
 

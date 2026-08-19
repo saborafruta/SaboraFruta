@@ -1,0 +1,87 @@
+{% extends "_base.html" %}
+{% block title %}{{ title }}{% endblock %}
+{% block page_title %}Alertas{% endblock %}
+{% block content %}
+<div class="space-y-5">
+
+  {# ── Resumo ───────────────────────────────────────────────────────── #}
+  <div class="card p-5">
+    <div class="flex flex-wrap items-start justify-between gap-4">
+      <div>
+        <h2 class="text-xl font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
+          {% if resumo.total %}
+            {{ resumo.criticos }} crítico{{ resumo.criticos|pluralize }},
+            {{ resumo.atencao }} de atenção
+          {% else %}
+            Nenhum alerta agora
+          {% endif %}
+        </h2>
+        <p class="text-sm mt-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+          {% comment %}
+            Dizer que a lista é recalculada não é detalhe técnico: é o que
+            explica por que não há botão de dispensar. O alerta sai sozinho
+            quando o problema acaba.
+          {% endcomment %}
+          Recalculado a cada visita. Cada alerta desaparece quando a situação
+          que o causou é resolvida — não há o que marcar como lido.
+        </p>
+      </div>
+    </div>
+
+    {% if resumo.por_regra %}
+      <div class="flex flex-wrap gap-2 mt-4">
+        <a href="{% url 'moda:alertas' %}"
+           class="{% if not filtro %}btn-primary{% else %}btn-secondary{% endif %} text-sm">
+          Todos ({{ resumo.total }})
+        </a>
+        {% for regra, lista in resumo.por_regra %}
+          <a href="?regra={{ regra.chave }}"
+             class="{% if filtro == regra.chave %}btn-primary{% else %}btn-secondary{% endif %} text-sm">
+            {% if regra.critico %}🔴{% else %}🟡{% endif %}
+            {{ regra.label }} ({{ lista|length }})
+          </a>
+        {% endfor %}
+      </div>
+    {% endif %}
+  </div>
+
+  {# ── Lista ────────────────────────────────────────────────────────── #}
+  {% if alertas %}
+    <div class="space-y-2">
+      {% for a in alertas %}
+        <a href="{{ a.url }}" class="card p-4 block"
+           style="border-left:4px solid {% if a.critico %}#dc2626{% else %}#d97706{% endif %};">
+          <div class="flex items-start gap-3">
+            <span class="text-lg leading-none shrink-0">
+              {% if a.critico %}🔴{% else %}🟡{% endif %}
+            </span>
+            <div class="min-w-0">
+              <p class="font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
+                {{ a.titulo }}
+              </p>
+              <p class="text-sm mt-0.5" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+                {{ a.mensagem }}
+              </p>
+              <p class="text-xs mt-1" :style="temaClaro ? 'color:#94a3b8;' : 'color:#71717a;'">
+                {{ a.regra.label }}
+              </p>
+            </div>
+          </div>
+        </a>
+      {% endfor %}
+    </div>
+  {% else %}
+    <div class="card p-8 text-center">
+      <p class="text-3xl mb-2">✓</p>
+      <p class="text-sm" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+        {% if filtro %}
+          Nenhum alerta deste tipo agora.
+        {% else %}
+          Nenhum pedido atrasado, material em falta ou setor sobrecarregado.
+        {% endif %}
+      </p>
+    </div>
+  {% endif %}
+
+</div>
+{% endblock %}

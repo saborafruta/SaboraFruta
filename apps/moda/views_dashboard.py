@@ -9,6 +9,7 @@ apontava — a tela sai do placeholder sem que nenhum link mude.
 """
 from django.shortcuts import render
 
+from .services.alertas import AlertaService
 from .services.dashboard import PERIODO_PADRAO, DashboardService
 from .views import ModaBaseView
 
@@ -20,8 +21,15 @@ class DashboardView(ModaBaseView):
         painel = DashboardService.painel(
             request.filial_ativa, dias=_dias(request),
         )
+        # Os alertas entram no TOPO do dashboard, e não só na tela
+        # própria: quem abre o painel de manhã não vai clicar em mais uma
+        # aba para descobrir que tem pedido atrasado.
+        alertas = AlertaService.detectar(request.filial_ativa)
+
         return render(request, 'moda/dashboard.html', {
             'title': 'Dashboard',
+            'resumo_alertas': AlertaService.resumo(alertas),
+            'alertas_topo': [a for a in alertas if a.critico][:4],
             **painel,
             # Separados aqui e não no template: `{% if %}` dentro do laço
             # repetiria a regra em dois lugares, e a distinção entre número
