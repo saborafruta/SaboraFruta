@@ -17,9 +17,11 @@
     ficaria reaparecendo em toda visita para sempre.
   {% endcomment %}
   {% if finalizado %}
-    {# A mensagem sai por `json_script` e não dentro do `x-data`: ela tem
-       aspas, quebras de linha e o link — interpolada no atributo, quebraria
-       o HTML na primeira aspa do nome do cliente. #}
+    {% comment %}
+      A mensagem sai por `json_script` e não dentro do `x-data`: ela tem
+      aspas, quebras de linha e o link — interpolada no atributo, quebraria
+      o HTML na primeira aspa do nome do cliente.
+    {% endcomment %}
     {{ mensagem_whatsapp|json_script:"msg-wa" }}
 
     <div class="card p-5" style="border-left:4px solid #059669;"
@@ -57,8 +59,10 @@
       <div class="flex flex-wrap gap-2 mt-4">
         <a href="{% url 'moda:pedido-pdf' pedido.pk %}" target="_blank" rel="noopener"
            class="btn-secondary text-sm">VISUALIZAR PDF</a>
-        {# `download` no link de baixar: a mesma rota serve inline e anexo, e
-           o navegador decide pelo atributo em vez de precisarmos de duas. #}
+        {% comment %}
+          `download` no link de baixar: a mesma rota serve inline e anexo, e
+          o navegador decide pelo atributo em vez de precisarmos de duas.
+        {% endcomment %}
         <a href="{% url 'moda:pedido-pdf' pedido.pk %}"
            download="PED-{{ pedido.numero|stringformat:'06d' }}.pdf"
            class="btn-secondary text-sm">BAIXAR PDF</a>
@@ -114,9 +118,11 @@
             </div>
             <div>
               <p class="text-xs uppercase tracking-wider mb-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">WhatsApp</p>
-              {# Editável: o número do cadastro nem sempre é o de quem vai
-                 receber, e obrigar a corrigir o cliente antes de mandar uma
-                 mensagem seria atrito à toa. #}
+              {% comment %}
+                Editável: o número do cadastro nem sempre é o de quem vai
+                receber, e obrigar a corrigir o cliente antes de mandar uma
+                mensagem seria atrito à toa.
+              {% endcomment %}
               <input type="text" x-model="numero" class="form-input w-full"
                      placeholder="55 84 99999-0000">
               {% if not whatsapp_numero %}

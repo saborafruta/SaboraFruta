@@ -121,9 +121,11 @@
             <div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
               {% for v in item.visuais.all %}
                 <div>
-                  {# `url_imagem` resolve a arte própria antes do mockup — é a
-                     mesma regra da tela interna, e o cliente precisa ver a
-                     arte DELE, não a base genérica. #}
+                  {% comment %}
+                    `url_imagem` resolve a arte própria antes do mockup — é a
+                    mesma regra da tela interna, e o cliente precisa ver a
+                    arte DELE, não a base genérica.
+                  {% endcomment %}
                   {% if v.tem_imagem %}
                     <img src="{{ v.url_imagem }}" alt="{{ v.get_posicao_display }}"
                          class="w-full rounded-xl"

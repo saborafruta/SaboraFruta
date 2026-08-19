@@ -110,8 +110,10 @@
           </p>
 
         {% elif g.tipo == 'barras' %}
-          {# Série no tempo: barras verticais, com rolagem quando o período
-             é longo — 90 barras não cabem em tela de tablet. #}
+          {% comment %}
+            Série no tempo: barras verticais, com rolagem quando o período
+            é longo — 90 barras não cabem em tela de tablet.
+          {% endcomment %}
           <div style="overflow-x:auto;">
             <div class="flex items-end gap-1" style="height:150px; min-width:100%;">
               {% for fatia, tamanho in g.barras %}
@@ -134,9 +136,11 @@
           </div>
 
         {% else %}
-          {# Comparação entre categorias: barras horizontais, porque o rótulo
-             ("Sublimação / Bordado / Silk") não cabe embaixo de uma barra
-             vertical sem virar de lado. #}
+          {% comment %}
+            Comparação entre categorias: barras horizontais, porque o rótulo
+            ("Sublimação / Bordado / Silk") não cabe embaixo de uma barra
+            vertical sem virar de lado.
+          {% endcomment %}
           <div class="space-y-2">
             {% for fatia, tamanho in g.barras %}
               <div>

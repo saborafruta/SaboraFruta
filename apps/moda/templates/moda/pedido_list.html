@@ -54,9 +54,11 @@
 
   <div class="card overflow-hidden">
     <div data-tabela>
-      {# Busca e ordenação no cliente: a lista já veio inteira, e
-         reordenar no servidor custaria ida ao banco e recarga de
-         página para uma pergunta que o navegador responde sozinho. #}
+      {% comment %}
+        Busca e ordenação no cliente: a lista já veio inteira, e
+        reordenar no servidor custaria ida ao banco e recarga de
+        página para uma pergunta que o navegador responde sozinho.
+      {% endcomment %}
       <div class="flex flex-wrap items-center gap-2 mb-3">
         <input type="search" data-busca class="form-input text-sm flex-1"
                style="min-width:220px;" placeholder="Buscar nesta página: cliente, número, status…">

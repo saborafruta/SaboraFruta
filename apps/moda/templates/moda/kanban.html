@@ -60,9 +60,11 @@
     {% if tem_filtro %}<a href="{% url 'moda:kanban' %}" class="btn-secondary">Limpar</a>{% endif %}
   </form>
 
-  {# Aviso do último movimento — o serviço devolve o que foi concluído
-     automaticamente, e esconder isso encheria o relatório de produção com
-     números que ninguém digitou. #}
+  {% comment %}
+    Aviso do último movimento — o serviço devolve o que foi concluído
+    automaticamente, e esconder isso encheria o relatório de produção com
+    números que ninguém digitou.
+  {% endcomment %}
   <div id="kanban-aviso" class="card p-3 hidden" style="border-left:3px solid #3b82f6;">
     <p class="text-sm" id="kanban-aviso-texto" :style="temaClaro ? 'color:#374151;' : 'color:#cbd5e1;'"></p>
   </div>

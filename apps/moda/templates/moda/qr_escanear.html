@@ -15,11 +15,15 @@
       passar por aqui.
     </p>
 
-    {# GET e não POST: a busca não altera nada, e com GET o leitor de mão
-       que termina com Enter dispara o formulário sozinho. #}
+    {% comment %}
+      GET e não POST: a busca não altera nada, e com GET o leitor de mão
+      que termina com Enter dispara o formulário sozinho.
+    {% endcomment %}
     <form method="get" class="flex flex-wrap gap-2">
-      {# `autofocus` é o que faz o leitor de bancada funcionar sem clique:
-         ele digita no campo que já está com o cursor. #}
+      {% comment %}
+        `autofocus` é o que faz o leitor de bancada funcionar sem clique:
+        ele digita no campo que já está com o cursor.
+      {% endcomment %}
       <input type="text" name="codigo" autofocus autocomplete="off"
              placeholder="OP-7hK2mQx3Za_1"
              class="form-input flex-1" style="font-family:monospace; min-width:220px;">

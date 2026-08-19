@@ -27,8 +27,10 @@
           apontar produção da ordem que já está aberta na frente dele.
         {% endcomment %}
         <a href="{% url 'moda:fluxo-ordem' ordem.pk %}" class="btn-secondary text-sm">Fluxo de produção</a>
-        {# A ficha é o que desce para a fábrica: fica na frente do QR e do
-           fluxo porque é o botão que o PCP aperta toda vez que emite. #}
+        {% comment %}
+          A ficha é o que desce para a fábrica: fica na frente do QR e do
+          fluxo porque é o botão que o PCP aperta toda vez que emite.
+        {% endcomment %}
         <a href="{% url 'moda:ordem-ficha-pdf' ordem.pk %}" target="_blank" rel="noopener"
            class="btn-primary text-sm">FICHA DE PRODUÇÃO</a>
         <a href="{% url 'moda:ordem-ficha-pdf' ordem.pk %}"

@@ -46,36 +46,64 @@
   </div>
 
   {# ── Filtros ──────────────────────────────────────────────────────── #}
+  <div data-tabela>
   <div class="card p-4">
-    {# GET no servidor, e não filtro só no navegador: a carteira é maior que
-       a página, e buscar só o que está à vista acharia menos do que existe. #}
+    {% comment %}
+      GET no servidor, e não filtro só no navegador: a carteira é maior que
+      a página, e buscar só o que está à vista acharia menos do que existe.
+    {% endcomment %}
     <form method="get" class="flex flex-wrap items-center gap-2">
-      <input type="search" name="q" value="{{ busca }}"
-             placeholder="Buscar por nome, CNPJ/CPF ou cidade"
-             class="form-input text-sm flex-1" style="min-width:220px;">
+      {% comment %}
+        O campo faz DUAS coisas, e é de propósito: `data-busca` filtra na
+        hora o que já está na tela, e o `name="q"` manda a busca ao
+        servidor quando se aperta Enter. Só o filtro local acharia menos
+        do que existe (a carteira é maior que a página); só o servidor
+        faria esperar uma volta inteira para ver um nome que já está ali.
+      {% endcomment %}
+      <input type="search" name="q" value="{{ busca }}" data-busca
+             autocomplete="off"
+             placeholder="Digite para filtrar · Enter busca em todos"
+             class="form-input text-sm flex-1" style="min-width:240px;">
       <label class="flex items-center gap-2 text-sm"
              :style="temaClaro ? 'color:#374151;' : 'color:#cbd5e1;'">
         <input type="checkbox" name="com_pedido" value="1"
                {% if so_com_pedido %}checked{% endif %}>
         Só quem já pediu
       </label>
-      <button type="submit" class="btn-primary text-sm">BUSCAR</button>
+      <button type="submit" class="btn-primary text-sm">BUSCAR EM TODOS</button>
       {% if busca or so_com_pedido %}
         <a href="{% url 'moda:clientes' %}" class="btn-secondary text-sm">Limpar</a>
       {% endif %}
     </form>
 
-    {% if cortada %}
-      <p class="text-xs mt-3" style="color:#d97706;">
-        Mostrando os {{ por_pagina }} primeiros de {{ total }}. Use a busca
-        para chegar em quem não apareceu.
-      </p>
-    {% endif %}
+    <div class="flex flex-wrap items-center gap-3 mt-3 text-xs">
+      <span :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+        <span data-contagem>{{ clientes|length }}</span> de
+        {{ clientes|length }} nesta página
+      </span>
+      {% if cortada %}
+        {% comment %}
+          O aviso muda de sentido com a busca ao vivo: filtrar na tela
+          não alcança quem ficou de fora da página, e sem dizer isso
+          alguém conclui que o cliente não existe.
+        {% endcomment %}
+        <span style="color:#d97706;">
+          A página traz {{ por_pagina }} de {{ total }} clientes — aperte
+          <strong>Enter</strong> para procurar nos {{ total }}.
+        </span>
+      {% endif %}
+    </div>
   </div>
 
   {# ── A lista ──────────────────────────────────────────────────────── #}
   {% if clientes %}
-    <div class="card p-0" data-tabela>
+    <p data-vazio class="card p-6 text-center text-sm" style="display:none;"
+       :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+      Nenhum cliente desta página bate com o que você digitou —
+      aperte <strong>Enter</strong> para procurar na carteira inteira.
+    </p>
+
+    <div class="card p-0">
       <div class="overflow-x-auto">
         <table class="w-full text-sm" style="min-width:860px;">
           <thead>
@@ -148,8 +176,10 @@
                   {{ c.ultimo_pedido_moda|date:"d/m/Y"|default:"—" }}
                 </td>
                 <td class="px-4 py-3 text-right whitespace-nowrap">
-                  {# Os dois caminhos que se toma daqui: ver o que ele já
-                     pediu, ou abrir um pedido novo já com ele escolhido. #}
+                  {% comment %}
+                    Os dois caminhos que se toma daqui: ver o que ele já
+                    pediu, ou abrir um pedido novo já com ele escolhido.
+                  {% endcomment %}
                   <a href="{% url 'moda:pedido-list' %}?cliente={{ c.pk }}"
                      class="btn-secondary text-xs">Pedidos</a>
                   <a href="{% url 'moda:pedido-create' %}?cliente={{ c.pk }}"
@@ -178,6 +208,8 @@
       {% endif %}
     </div>
   {% endif %}
+
+  </div>
 
   {# ── Modal de cadastro rápido ─────────────────────────────────────── #}
   {% if pode_criar %}

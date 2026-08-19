@@ -90,9 +90,11 @@
             {% for d in c.detalhes %}
               <p class="text-xs" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">· {{ d }}</p>
             {% endfor %}
-            {# Onde resolver: sem isso a trava transfere para quem está com
-               pressa o trabalho de descobrir o caminho -- e é assim que
-               alguém acha um jeito de contornar o sistema. #}
+            {% comment %}
+              Onde resolver: sem isso a trava transfere para quem está com
+              pressa o trabalho de descobrir o caminho -- e é assim que
+              alguém acha um jeito de contornar o sistema.
+            {% endcomment %}
             {% if c.onde_resolver and c.situacao != 'ok' %}
               <p class="text-xs mt-0.5" :style="temaClaro ? 'color:#94a3b8;' : 'color:#71717a;'">
                 Resolver em: {{ c.onde_resolver }}

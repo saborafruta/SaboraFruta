@@ -32,17 +32,21 @@
   {% if eventos %}
     <div class="card p-5">
       <div style="position:relative; padding-left:22px;">
-        {# O fio vertical que liga os eventos. Um <div> absoluto e não uma
-           borda no item: com borda, o último evento continuaria o traço
-           para baixo, sugerindo que há mais coisa. #}
+        {% comment %}
+          O fio vertical que liga os eventos. Um <div> absoluto e não uma
+          borda no item: com borda, o último evento continuaria o traço
+          para baixo, sugerindo que há mais coisa.
+        {% endcomment %}
         <div style="position:absolute; left:5px; top:6px; bottom:6px; width:2px;
                     background:rgba(148,163,184,.25);"></div>
 
         <div class="space-y-4">
           {% for e in eventos %}
             <div style="position:relative;">
-              {# Marco é bolinha cheia e colorida; ajuste de campo é oca e
-                 cinza. É o que permite bater o olho e ler só as etapas. #}
+              {% comment %}
+                Marco é bolinha cheia e colorida; ajuste de campo é oca e
+                cinza. É o que permite bater o olho e ler só as etapas.
+              {% endcomment %}
               <span style="position:absolute; left:-21px; top:5px;
                            width:10px; height:10px; border-radius:50%;
                            {% if e.marco %}background:#2563eb;{% else %}background:transparent; border:2px solid #94a3b8;{% endif %}"></span>
