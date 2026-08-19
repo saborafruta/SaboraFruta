@@ -11,11 +11,16 @@ Quando uma tela fica pronta, o roteamento dela sai do catch-all em
 `urls.py` e vira uma rota própria — o item continua no menu, apontando
 para o mesmo endereço.
 """
+from django.contrib import messages
 from django.http import Http404
-from django.shortcuts import render
+from django.shortcuts import redirect, render
 from django.views import View
 
-from apps.core.services.permissions import PermissaoRequiredMixin
+from apps.core.services.permissions import (
+    PERMISSION_DENIED_MESSAGE, PermissaoRequiredMixin,
+)
+
+from .permissoes import AREA_POR_GRUPO, area_da_view, pode_na_area
 
 from .menu import ETAPAS_FLUXO, GRUPOS, GRUPOS_POR_SLUG, buscar_item, total_itens
 
@@ -27,14 +32,53 @@ class ModaBaseView(PermissaoRequiredMixin, View):
     permissao_modulo = 'moda'
     permissao_acao = 'ver'
 
+    # Área do vertical. Em branco, sai do arquivo da view (ver
+    # `permissoes.AREA_POR_MODULO`); declarada aqui, vence a tabela.
+    area: str | None = None
+
+    def dispatch(self, request, *args, **kwargs):
+        """
+        Estreita a permissão do módulo para a permissão da ÁREA.
+
+        O mixin de cima já cobra `moda`; aqui vem a segunda pergunta:
+        o cortador pode ver a OP, mas não editar o valor do pedido. Sem
+        esta camada, quem entra no vertical faz tudo dentro dele.
+
+        A checagem só roda para usuário logado, e o `super()` cuida do
+        anônimo: chamar `tem_permissao` num visitante estouraria antes de
+        ele ser mandado para o login.
+        """
+        if request.user.is_authenticated:
+            area = area_da_view(self)
+            if area and not pode_na_area(request.user, area, self.permissao_acao):
+                messages.error(request, PERMISSION_DENIED_MESSAGE)
+                return redirect('core:dashboard')
+        return super().dispatch(request, *args, **kwargs)
+
+
+def grupos_visiveis(usuario) -> list:
+    """
+    Os grupos do menu que este perfil pode abrir.
+
+    Filtrar aqui é mais do que estética: sem isto o cortador vê Comercial
+    e Financeiro no menu, clica, e leva um 'você não tem permissão'.
+    Menu que oferece porta trancada ensina que o sistema é confuso, não
+    que a permissão está certa.
+    """
+    return [
+        g for g in GRUPOS
+        if pode_na_area(usuario, AREA_POR_GRUPO.get(g.slug))
+    ]
+
 
 class HubView(ModaBaseView):
-    """Porta de entrada do vertical: os 8 grupos do fluxo."""
+    """Porta de entrada do vertical: os grupos que o perfil enxerga."""
 
     def get(self, request):
+        grupos = grupos_visiveis(request.user)
         return render(request, 'moda/hub.html', {
             'title': 'Moda e Confecção',
-            'grupos': GRUPOS,
+            'grupos': grupos,
             'etapas_fluxo': ETAPAS_FLUXO,
             'total_itens': total_itens(),
         })
@@ -47,10 +91,15 @@ class GrupoView(ModaBaseView):
         grupo = GRUPOS_POR_SLUG.get(grupo_slug)
         if grupo is None:
             raise Http404('Grupo não existe no vertical Moda.')
+        # O grupo inteiro é de uma área: quem não tem a área não abre a
+        # lista de telas dela, nem por link direto.
+        if not pode_na_area(request.user, AREA_POR_GRUPO.get(grupo_slug)):
+            messages.error(request, PERMISSION_DENIED_MESSAGE)
+            return redirect('moda:hub')
         return render(request, 'moda/grupo.html', {
             'title': grupo.label,
             'grupo': grupo,
-            'grupos': GRUPOS,
+            'grupos': grupos_visiveis(request.user),
         })
 
 
@@ -68,6 +117,9 @@ class ItemView(ModaBaseView):
         grupo, item = buscar_item(grupo_slug, item_slug)
         if grupo is None or item is None:
             raise Http404('Tela não existe no vertical Moda.')
+        if not pode_na_area(request.user, AREA_POR_GRUPO.get(grupo_slug)):
+            messages.error(request, PERMISSION_DENIED_MESSAGE)
+            return redirect('moda:hub')
 
         from .views_apoio import CADASTROS, CadastroApoioListView
 

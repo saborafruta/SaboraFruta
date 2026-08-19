@@ -76,6 +76,17 @@ class Permissao(models.Model):
         FOOD_SERVICE = 'food_service', 'Food Service'
         MODA = 'moda', 'Moda e Confecção'
 
+        # Áreas do vertical Moda. `moda` continua valendo como guarda-
+        # chuva para os perfis antigos; estas estreitam por posto de
+        # trabalho. Ver `apps.moda.permissoes`.
+        MODA_COMERCIAL = 'moda_comercial', 'Moda: Comercial'
+        MODA_PCP = 'moda_pcp', 'Moda: PCP'
+        MODA_CORTE = 'moda_corte', 'Moda: Corte'
+        MODA_PRODUCAO = 'moda_producao', 'Moda: Produção'
+        MODA_QUALIDADE = 'moda_qualidade', 'Moda: Qualidade'
+        MODA_EXPEDICAO = 'moda_expedicao', 'Moda: Expedição'
+        MODA_INDICADORES = 'moda_indicadores', 'Moda: Indicadores'
+
     perfil = models.ForeignKey(
         PerfilAcesso, on_delete=models.CASCADE, related_name='permissoes',
     )
@@ -206,8 +217,30 @@ class Usuario(AbstractBaseUser, PermissionsMixin):
         try:
             perm = perfil.permissoes.get(modulo=modulo)
         except Permissao.DoesNotExist:
+            if self._guarda_chuva_moda(perfil, modulo):
+                return self.tem_permissao('moda', acao)
             return False
         return getattr(perm, f'pode_{acao}', False)
+
+    @staticmethod
+    def _guarda_chuva_moda(perfil, modulo: str) -> bool:
+        """
+        Perfil ANTIGO consultando uma área do vertical Moda.
+
+        As áreas (`moda_corte`, `moda_pcp`...) nasceram depois de `moda`.
+        Sem esta regra, o dia em que elas entraram trancaria para fora todo
+        perfil já existente -- nenhum deles tem linha de área, e todos
+        passariam a receber 'não'.
+
+        A condição é a que separa os dois mundos: só cai no guarda-chuva
+        quem NÃO tem nenhuma área cadastrada. Perfil novo, montado com as
+        áreas, responde pela área e ponto -- senão o Comercial, que tem
+        `moda` com tudo por causa da própria área, herdaria o corte inteiro
+        por não ter linha de corte.
+        """
+        if not modulo.startswith('moda_'):
+            return False
+        return not perfil.permissoes.filter(modulo__startswith='moda_').exists()
 
     def pode_acessar_filial(self, filial) -> bool:
         """Permite acesso apenas a filiais da mesma empresa (perfil admin acessa qualquer filial)."""
