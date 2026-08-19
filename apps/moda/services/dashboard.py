@@ -236,7 +236,7 @@ class DashboardService:
 
         em_producao = cls._em_producao(wip)
         prontas = cls._pecas_do_balde(wip, 'prontas')
-        total_wip = sum(c.pecas for c in wip['colunas'].values())
+        total_wip = sum(c.pecas for c in wip['colunas'])
 
         return [
             # ── Comercial ────────────────────────────────────────────────
@@ -531,16 +531,22 @@ class DashboardService:
         pior = min(p.dias_para_entrega for p in atrasados)
         return f'o mais antigo tem {-pior} dias de atraso'
 
+    # O WIP devolve as colunas em LISTA, para preservar a ordem dos baldes
+    # no painel. Este módulo lia como se fosse dicionário -- e derrubava o
+    # dashboard inteiro com AttributeError, em toda visita. A chave de cada
+    # coluna mora em `coluna.balde.chave`.
     @staticmethod
     def _pecas_do_balde(wip, chave) -> int:
-        coluna = wip['colunas'].get(chave)
-        return coluna.pecas if coluna else 0
+        for coluna in wip['colunas']:
+            if coluna.balde.chave == chave:
+                return coluna.pecas
+        return 0
 
     @staticmethod
     def _em_producao(wip) -> int:
         """Tudo que está no chão de fábrica menos o que já está pronto."""
         return sum(
-            c.pecas for chave, c in wip['colunas'].items() if chave != 'prontas'
+            c.pecas for c in wip['colunas'] if c.balde.chave != 'prontas'
         )
 
     # ── Gráficos ─────────────────────────────────────────────────────────
