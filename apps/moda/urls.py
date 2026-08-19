@@ -17,6 +17,7 @@ from . import (
     views_ordem as vo, views_pcp as vp,
     views_expedicao as vex, views_kanban as vk, views_necessidade as vn,
     views_alertas as val, views_aprovacao as vap, views_clientes as vcl,
+    views_orcamentos as vorc,
     views_dashboard as vd, views_historico as vh, views_qualidade as vq, views_qr as vqr,
     views_roteiro as vr, views_terminal as vt, views_wip as vw,
 )
@@ -31,6 +32,9 @@ ROTAS_PRONTAS: list = [
     # placeholder de "em construção" -- foi o que aconteceu com o WIP.
     path('comercial/clientes/', vcl.CarteiraClientesView.as_view(), name='clientes'),
     path('comercial/clientes/novo/', vcl.ClienteRapidoCreateView.as_view(), name='cliente-criar'),
+    # Orçamento é o pedido no primeiro status: a tela filtra, não duplica.
+    path('comercial/orcamentos/', vorc.OrcamentoListView.as_view(), name='orcamentos'),
+    path('comercial/orcamentos/<int:pk>/fechar/', vorc.OrcamentoFecharView.as_view(), name='orcamento-fechar'),
     path('comercial/pedidos/', vc.PedidoListView.as_view(), name='pedido-list'),
     path('comercial/pedidos/novo/', vc.PedidoFormView.as_view(), name='pedido-create'),
     path('comercial/pedidos/<int:pk>/', vc.PedidoDetailView.as_view(), name='pedido-detail'),

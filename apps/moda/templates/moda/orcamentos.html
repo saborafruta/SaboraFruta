@@ -1,0 +1,210 @@
+{% extends "_base.html" %}
+{% block title %}{{ title }}{% endblock %}
+{% block page_title %}Orçamentos{% endblock %}
+{% block content %}
+<div class="space-y-5">
+
+  {# ── Cabeçalho ────────────────────────────────────────────────────── #}
+  <div class="card p-5">
+    <p class="text-sm mb-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+      <a href="{% url 'moda:hub' %}" :style="temaClaro ? 'color:#3b82f6;' : 'color:#60a5fa;'">Moda e Confecção</a>
+      <span class="mx-1">›</span>
+      <a href="{% url 'moda:grupo' 'comercial' %}" :style="temaClaro ? 'color:#3b82f6;' : 'color:#60a5fa;'">Comercial</a>
+      <span class="mx-1">›</span> Orçamentos
+    </p>
+
+    <div class="flex flex-wrap items-start justify-between gap-4">
+      <div>
+        <h2 class="text-2xl font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
+          Propostas em aberto
+        </h2>
+        {% comment %}
+          Explicar que fechar não copia nada evita o medo de perder o que já
+          foi lançado — que é o que faz alguém refazer o pedido do zero.
+        {% endcomment %}
+        <p class="text-sm mt-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+          Ao fechar, o orçamento vira pedido mantendo o mesmo número, a arte,
+          a grade e as pessoas já lançadas.
+        </p>
+      </div>
+
+      <a href="{% url 'moda:pedido-create' %}" class="btn-primary text-sm">
+        + NOVO ORÇAMENTO
+      </a>
+    </div>
+  </div>
+
+  {# ── Números ──────────────────────────────────────────────────────── #}
+  <div class="grid grid-cols-2 lg:grid-cols-5 gap-3">
+    {% include "moda/_indicador_simples.html" with rotulo="Em aberto" valor=resumo.total %}
+    {% include "moda/_indicador_simples.html" with rotulo="Prontos para fechar" valor=resumo.prontos %}
+    {% include "moda/_indicador_simples.html" with rotulo="Falta algo" valor=resumo.incompletos tom="ruim" %}
+    {% include "moda/_indicador_simples.html" with rotulo="Peças propostas" valor=resumo.pecas %}
+    {% include "moda/_indicador_simples.html" with rotulo="Valor proposto" valor=resumo.valor dinheiro=1 %}
+  </div>
+
+  {% if resumo.esfriando %}
+    {% comment %}
+      Um orçamento parado há três semanas não é igual a um de ontem, e a
+      lista comum de pedidos não faz essa distinção. É o aviso que faz
+      alguém pegar o telefone.
+    {% endcomment %}
+    <div class="card p-4" style="border-left:4px solid #d97706;">
+      <p class="text-sm font-semibold" style="color:#d97706;">
+        {{ resumo.esfriando }} proposta{{ resumo.esfriando|pluralize }} parada{{ resumo.esfriando|pluralize }}
+        há mais de {{ dias_esfriar }} dias
+      </p>
+      <p class="text-xs mt-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+        Depois desse tempo, tecido e prazo já mudaram — vale ligar ou refazer
+        o preço antes de fechar.
+      </p>
+    </div>
+  {% endif %}
+
+  <div data-tabela>
+    {# ── Busca ──────────────────────────────────────────────────────── #}
+    <div class="card p-4">
+      <form method="get" class="flex flex-wrap items-center gap-2">
+        {% comment %}
+          Mesmo desenho da carteira: filtra ao digitar o que está na tela e,
+          no Enter, procura no servidor. Aqui a lista costuma caber inteira,
+          mas manter o mesmo comportamento evita que a pessoa aprenda duas
+          regras diferentes para o mesmo campo.
+        {% endcomment %}
+        <input type="search" name="q" value="{{ busca }}" data-busca
+               autocomplete="off"
+               placeholder="Digite para filtrar · Enter busca em todos"
+               class="form-input text-sm flex-1" style="min-width:240px;">
+        <button type="submit" class="btn-primary text-sm">BUSCAR</button>
+        {% if busca %}
+          <a href="{% url 'moda:orcamentos' %}" class="btn-secondary text-sm">Limpar</a>
+        {% endif %}
+      </form>
+      <p class="text-xs mt-3" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+        <span data-contagem>{{ linhas|length }}</span> de {{ linhas|length }} propostas
+      </p>
+    </div>
+
+    {# ── Lista ──────────────────────────────────────────────────────── #}
+    {% if linhas %}
+      <p data-vazio class="card p-6 text-center text-sm" style="display:none;"
+         :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+        Nenhuma proposta bate com o que você digitou.
+      </p>
+
+      <div class="card p-0">
+        <div class="overflow-x-auto">
+          <table class="w-full text-sm" style="min-width:900px;">
+            <thead>
+              <tr style="border-bottom:1px solid rgba(148,163,184,.25);">
+                <th data-ordenar="numero" class="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wide"
+                    :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Nº</th>
+                <th data-ordenar class="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wide"
+                    :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Cliente</th>
+                <th data-ordenar class="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wide"
+                    :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Data</th>
+                <th data-ordenar="numero" class="text-right px-4 py-3 text-xs font-semibold uppercase tracking-wide"
+                    :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Parado</th>
+                <th data-ordenar="numero" class="text-right px-4 py-3 text-xs font-semibold uppercase tracking-wide"
+                    :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Peças</th>
+                <th data-ordenar="numero" class="text-right px-4 py-3 text-xs font-semibold uppercase tracking-wide"
+                    :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Valor</th>
+                <th data-ordenar class="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wide"
+                    :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Situação</th>
+                <th class="text-right px-4 py-3"></th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for l in linhas %}
+                <tr style="border-bottom:1px solid rgba(148,163,184,.12);">
+                  <td class="px-4 py-3 tabular-nums font-semibold"
+                      :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
+                    <a href="{% url 'moda:pedido-detail' l.pedido.pk %}"
+                       :style="temaClaro ? 'color:#3b82f6;' : 'color:#60a5fa;'">
+                      #{{ l.pedido.numero|stringformat:"06d" }}
+                    </a>
+                  </td>
+                  <td class="px-4 py-3">
+                    <p :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
+                      {{ l.pedido.cliente }}
+                    </p>
+                    {% if l.pedido.contato_nome %}
+                      <p class="text-xs" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+                        {{ l.pedido.contato_nome }}
+                      </p>
+                    {% endif %}
+                  </td>
+                  <td class="px-4 py-3" :style="temaClaro ? 'color:#374151;' : 'color:#cbd5e1;'">
+                    {{ l.pedido.data_pedido|date:"d/m/Y" }}
+                  </td>
+                  <td class="px-4 py-3 text-right tabular-nums"
+                      style="{% if l.esfriando %}color:#d97706; font-weight:600;{% endif %}"
+                      {% if not l.esfriando %}:style="temaClaro ? 'color:#374151;' : 'color:#cbd5e1;'"{% endif %}>
+                    {{ l.dias_parado }} dia{{ l.dias_parado|pluralize }}
+                  </td>
+                  <td class="px-4 py-3 text-right tabular-nums"
+                      :style="temaClaro ? 'color:#374151;' : 'color:#cbd5e1;'">
+                    {{ l.pedido.quantidade_total }}
+                  </td>
+                  <td class="px-4 py-3 text-right tabular-nums"
+                      :style="temaClaro ? 'color:#374151;' : 'color:#cbd5e1;'">
+                    R$ {{ l.pedido.valor_total|floatformat:2 }}
+                  </td>
+                  <td class="px-4 py-3">
+                    {% comment %}
+                      O que FALTA aparece na linha, não atrás de um clique:
+                      quem abre esta tela está decidindo o que fechar hoje, e
+                      descobrir a pendência só ao tentar seria uma ida e
+                      volta por proposta.
+                    {% endcomment %}
+                    {% if l.pode_fechar %}
+                      <span class="inline-block text-xs font-semibold px-2 py-0.5 rounded-full"
+                            style="background:rgba(5,150,105,.12); color:#059669;">
+                        pronto para fechar
+                      </span>
+                    {% else %}
+                      {% for falta in l.faltas %}
+                        <span class="inline-block text-xs font-semibold px-2 py-0.5 rounded-full mr-1 mb-1"
+                              style="background:rgba(220,38,38,.12); color:#dc2626;">
+                          {{ falta }}
+                        </span>
+                      {% endfor %}
+                    {% endif %}
+                  </td>
+                  <td class="px-4 py-3 text-right whitespace-nowrap">
+                    <a href="{% url 'moda:pedido-update' l.pedido.pk %}"
+                       class="btn-secondary text-xs">Editar</a>
+                    {% if pode_fechar and l.pode_fechar %}
+                      <form method="post" action="{% url 'moda:orcamento-fechar' l.pedido.pk %}"
+                            class="inline">
+                        {% csrf_token %}
+                        <button type="submit" class="btn-primary text-xs">FECHAR</button>
+                      </form>
+                    {% endif %}
+                  </td>
+                </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+    {% else %}
+      <div class="card p-8 text-center">
+        <p class="text-sm" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+          {% if busca %}
+            Nenhuma proposta com esse filtro.
+          {% else %}
+            Nenhum orçamento em aberto. Todo pedido novo começa aqui.
+          {% endif %}
+        </p>
+        <a href="{% url 'moda:pedido-create' %}" class="btn-primary text-sm mt-4 inline-block">
+          CRIAR ORÇAMENTO
+        </a>
+      </div>
+    {% endif %}
+  </div>
+
+</div>
+{% include "moda/_tabela_dinamica.html" %}
+{% endblock %}
