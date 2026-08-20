@@ -85,6 +85,13 @@ class ContaPagar(TimestampedModel):
         FUNCIONARIO = "funcionario", "Pagamento ao funcionario"
         ENCARGO = "encargo", "Encargo ou beneficio"
 
+    class FrequenciaRecorrencia(models.TextChoices):
+        SEMANAL = "semanal", "Semanal"
+        MENSAL = "mensal", "Mensal"
+        TRIMESTRAL = "trimestral", "Trimestral"
+        SEMESTRAL = "semestral", "Semestral"
+        ANUAL = "anual", "Anual"
+
     filial = models.ForeignKey(Filial, on_delete=models.PROTECT, related_name="contas_pagar")
     fornecedor = models.ForeignKey(Fornecedor, on_delete=models.PROTECT,
                                     null=True, blank=True, related_name="contas_pagar")
@@ -101,6 +108,10 @@ class ContaPagar(TimestampedModel):
     nota_fiscal_fornecedor = models.CharField(max_length=20, blank=True)
     parcela = models.PositiveSmallIntegerField(default=1)
     total_parcelas = models.PositiveSmallIntegerField(default=1)
+    grupo_recorrencia = models.UUIDField(null=True, blank=True, db_index=True)
+    frequencia_recorrencia = models.CharField(
+        max_length=12, choices=FrequenciaRecorrencia.choices, blank=True,
+    )
 
     valor_original = models.DecimalField(max_digits=14, decimal_places=2)
     valor_juros = models.DecimalField(max_digits=14, decimal_places=2, default=0)
@@ -148,6 +159,7 @@ class ContaPagar(TimestampedModel):
             models.Index(fields=["filial", "status", "data_vencimento"]),
             models.Index(fields=["filial", "fornecedor"]),
             models.Index(fields=["filial", "funcionario"]),
+            models.Index(fields=["filial", "grupo_recorrencia"]),
         ]
 
     def __str__(self):

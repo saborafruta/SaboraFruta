@@ -268,25 +268,38 @@ class ContaPagarCreateView(PermissaoRequiredMixin, View):
 
         d = form.cleaned_data
         try:
-            conta = ContaPagarService.criar(
+            dados_conta = dict(
                 filial=filial,
                 fornecedor=d.get('fornecedor'),
                 funcionario=d.get('funcionario'),
                 tipo_lancamento=d['tipo_lancamento'],
                 valor_original=d['valor_original'],
                 data_emissao=d['data_emissao'],
-                data_vencimento=d['data_vencimento'],
-                parcela=d['parcela'],
-                total_parcelas=d['total_parcelas'],
                 documento_numero=d.get('documento_numero', ''),
                 nota_fiscal_fornecedor=d.get('nota_fiscal_fornecedor', ''),
                 forma_pagamento=d.get('forma_pagamento'),
                 plano_contas=d.get('plano_contas'),
-                data_competencia=d.get('data_competencia'),
                 observacao=d.get('observacao', ''),
                 usuario=request.user,
             )
-            messages.success(request, f'Conta a pagar #{conta.pk} lançada com sucesso.')
+            if d['recorrente']:
+                contas = ContaPagarService.criar_recorrencia(
+                    **dados_conta,
+                    quantidade=d['quantidade_recorrencias'],
+                    frequencia=d['frequencia_recorrencia'],
+                    data_vencimento=d['data_vencimento'],
+                    data_competencia=d.get('data_competencia'),
+                )
+                messages.success(request, f'{len(contas)} títulos recorrentes lançados com sucesso.')
+            else:
+                conta = ContaPagarService.criar(
+                    **dados_conta,
+                    data_vencimento=d['data_vencimento'],
+                    data_competencia=d.get('data_competencia'),
+                    parcela=d['parcela'],
+                    total_parcelas=d['total_parcelas'],
+                )
+                messages.success(request, f'Conta a pagar #{conta.pk} lançada com sucesso.')
         except DomainError as exc:
             messages.error(request, str(exc))
             return render(request, 'financeiro/pagar/form.html', {

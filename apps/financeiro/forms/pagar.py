@@ -69,13 +69,25 @@ class ContaPagarForm(forms.Form):
         min_value=1,
         initial=1,
         label='Parcela',
-        widget=forms.NumberInput(attrs={'min': '1'}),
+        widget=forms.HiddenInput,
     )
     total_parcelas = forms.IntegerField(
         min_value=1,
         initial=1,
         label='Total de parcelas',
-        widget=forms.NumberInput(attrs={'min': '1'}),
+        widget=forms.HiddenInput,
+    )
+    recorrente = forms.BooleanField(required=False, label='Título recorrente')
+    frequencia_recorrencia = forms.ChoiceField(
+        choices=ContaPagar.FrequenciaRecorrencia.choices,
+        initial=ContaPagar.FrequenciaRecorrencia.MENSAL,
+        required=False,
+        label='Periodicidade',
+    )
+    quantidade_recorrencias = forms.IntegerField(
+        min_value=2, max_value=60, initial=12, required=False,
+        label='Quantidade de ocorrências',
+        widget=forms.NumberInput(attrs={'min': '2', 'max': '60'}),
     )
     valor_original = forms.DecimalField(
         max_digits=14,
@@ -111,7 +123,7 @@ class ContaPagarForm(forms.Form):
         help_text='Grupo > Subgrupo > Categoria. A conta contábil será preenchida automaticamente.',
     )
     observacao = forms.CharField(
-        widget=forms.Textarea(attrs={'rows': 2}),
+        widget=forms.Textarea(attrs={'rows': 4}),
         required=False,
         label='Observação',
     )
@@ -149,6 +161,23 @@ class ContaPagarForm(forms.Form):
             )
             self.fields['plano_contas'].queryset = categorias
             self.fields['plano_contas'].required = categorias.exists()
+            subgrupo_ids = categorias.values_list('conta_pai_id', flat=True)
+            grupo_ids = categorias.values_list('conta_pai__conta_pai_id', flat=True)
+            self.categoria_grupos = list(
+                PlanoContas.objects.filter(
+                    empresa=filial.empresa, tipo='D', ativo=True, nivel=1,
+                    pk__in=grupo_ids,
+                ).order_by('codigo')
+            )
+            self.categoria_subgrupos = list(
+                PlanoContas.objects.filter(
+                    empresa=filial.empresa, tipo='D', ativo=True, nivel=2,
+                    conta_pai__isnull=False, pk__in=subgrupo_ids,
+                ).select_related('conta_pai').order_by('codigo')
+            )
+        else:
+            self.categoria_grupos = []
+            self.categoria_subgrupos = []
 
     def clean(self):
         cleaned = super().clean()
@@ -158,6 +187,7 @@ class ContaPagarForm(forms.Form):
         total = cleaned.get('total_parcelas')
         tipo = cleaned.get('tipo_lancamento')
         funcionario = cleaned.get('funcionario')
+        recorrente = cleaned.get('recorrente')
         if tipo == ContaPagar.TipoLancamento.FORNECEDOR:
             cleaned['funcionario'] = None
         elif tipo == ContaPagar.TipoLancamento.FUNCIONARIO:
@@ -170,6 +200,14 @@ class ContaPagarForm(forms.Form):
             self.add_error('data_vencimento', 'Vencimento não pode ser anterior à emissão.')
         if parcela and total and parcela > total:
             self.add_error('parcela', 'Parcela não pode ser maior que o total de parcelas.')
+        if recorrente:
+            if not cleaned.get('frequencia_recorrencia'):
+                self.add_error('frequencia_recorrencia', 'Informe a periodicidade.')
+            if not cleaned.get('quantidade_recorrencias'):
+                self.add_error('quantidade_recorrencias', 'Informe quantos títulos devem ser gerados.')
+        else:
+            cleaned['frequencia_recorrencia'] = ''
+            cleaned['quantidade_recorrencias'] = 1
         return cleaned
 
 

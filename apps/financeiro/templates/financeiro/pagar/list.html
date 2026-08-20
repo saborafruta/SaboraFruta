@@ -193,7 +193,7 @@
           </div>
           <div class="text-xs mt-0.5" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
             {% if c.documento_numero %}Doc. {{ c.documento_numero }} — {% endif %}
-            Parc. {{ c.parcela }}/{{ c.total_parcelas }}
+            {% if c.grupo_recorrencia %}Recorrência{% else %}Parc.{% endif %} {{ c.parcela }}/{{ c.total_parcelas }}
           </div>
         </div>
         <span class="soft-pill {{ pill_status|dict_get:c.status|default:'is-slate' }} flex-shrink-0">
@@ -250,7 +250,7 @@
             <th class="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wide" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">#</th>
             <th class="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wide" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Beneficiario</th>
             <th class="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wide" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Documento</th>
-            <th class="text-center px-4 py-3 text-xs font-semibold uppercase tracking-wide" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Parcela</th>
+            <th class="text-center px-4 py-3 text-xs font-semibold uppercase tracking-wide" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Parcela / recorrência</th>
             <th class="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wide" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Vencimento</th>
             <th class="text-right px-4 py-3 text-xs font-semibold uppercase tracking-wide" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Valor</th>
             <th class="text-right px-4 py-3 text-xs font-semibold uppercase tracking-wide" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Saldo</th>
@@ -277,7 +277,7 @@
               {{ c.documento_numero|default:"—" }}
             </td>
             <td class="px-4 py-3 text-center text-xs font-mono" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
-              {{ c.parcela }}/{{ c.total_parcelas }}
+              {{ c.parcela }}/{{ c.total_parcelas }}{% if c.grupo_recorrencia %}<span class="block text-[10px] opacity-70">{{ c.get_frequencia_recorrencia_display }}</span>{% endif %}
             </td>
             <td class="px-4 py-3 text-sm whitespace-nowrap">
               {% if c.status == 'vencido' %}

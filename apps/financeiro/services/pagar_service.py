@@ -3,9 +3,11 @@ from __future__ import annotations
 
 from datetime import date
 from decimal import Decimal
+import uuid
 
 from django.db import transaction
 from django.utils import timezone
+from dateutil.relativedelta import relativedelta
 
 from apps.core.services.exceptions import DomainError
 from apps.financeiro.constants.enums import StatusContaPagar
@@ -33,6 +35,8 @@ class ContaPagarService:
         data_competencia: date | None = None,
         observacao: str = '',
         usuario=None,
+        grupo_recorrencia=None,
+        frequencia_recorrencia: str = '',
     ) -> ContaPagar:
         """Cria um lançamento manual de conta a pagar."""
         conta_contabil = plano_contas.conta_contabil if plano_contas else None
@@ -53,6 +57,8 @@ class ContaPagarService:
             nota_fiscal_fornecedor=nota_fiscal_fornecedor,
             parcela=parcela,
             total_parcelas=total_parcelas,
+            grupo_recorrencia=grupo_recorrencia,
+            frequencia_recorrencia=frequencia_recorrencia,
             valor_original=valor_original,
             valor_juros=Decimal('0'),
             valor_multa=Decimal('0'),
@@ -72,6 +78,40 @@ class ContaPagarService:
         )
         conta.save()
         return conta
+
+    @staticmethod
+    @transaction.atomic
+    def criar_recorrencia(
+        *, quantidade: int, frequencia: str, data_vencimento: date,
+        data_competencia: date | None = None, **dados,
+    ) -> list[ContaPagar]:
+        if quantidade < 2 or quantidade > 60:
+            raise DomainError('A recorrência deve gerar entre 2 e 60 títulos.')
+        incrementos = {
+            ContaPagar.FrequenciaRecorrencia.SEMANAL: relativedelta(weeks=1),
+            ContaPagar.FrequenciaRecorrencia.MENSAL: relativedelta(months=1),
+            ContaPagar.FrequenciaRecorrencia.TRIMESTRAL: relativedelta(months=3),
+            ContaPagar.FrequenciaRecorrencia.SEMESTRAL: relativedelta(months=6),
+            ContaPagar.FrequenciaRecorrencia.ANUAL: relativedelta(years=1),
+        }
+        incremento = incrementos.get(frequencia)
+        if not incremento:
+            raise DomainError('Periodicidade de recorrência inválida.')
+
+        grupo = uuid.uuid4()
+        contas = []
+        for indice in range(quantidade):
+            deslocamento = incremento * indice
+            contas.append(ContaPagarService.criar(
+                **dados,
+                data_vencimento=data_vencimento + deslocamento,
+                data_competencia=(data_competencia + deslocamento) if data_competencia else None,
+                parcela=indice + 1,
+                total_parcelas=quantidade,
+                grupo_recorrencia=grupo,
+                frequencia_recorrencia=frequencia,
+            ))
+        return contas
 
     @staticmethod
     @transaction.atomic

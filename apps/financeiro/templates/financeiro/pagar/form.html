@@ -9,78 +9,141 @@
   <div class="flex flex-wrap items-end justify-between gap-3">
     <div>
       <a href="{% url 'financeiro:pagar_list' %}" class="text-sm text-blue-500">Contas a Pagar /</a>
-      <h2 class="mt-1 text-xl font-semibold">Novo lancamento</h2>
+      <h2 class="mt-1 text-xl font-semibold">Novo lançamento</h2>
     </div>
-    <p class="text-sm" :style="temaClaro ? 'color:#64748b' : 'color:#94a3b8'">Os campos com * sao obrigatorios.</p>
+    <p class="text-sm" :style="temaClaro ? 'color:#64748b' : 'color:#94a3b8'">Os campos com * são obrigatórios.</p>
   </div>
 
   <form method="post" class="card overflow-visible"
-        x-data="{ loading: false, tipoLancamento: '{{ form.tipo_lancamento.value|default:"fornecedor" }}' }"
-        @submit="loading = true" novalidate>{% csrf_token %}
+        x-data="{ loading:false, tipoLancamento:'{{ form.tipo_lancamento.value|default:"fornecedor" }}', recorrente:{{ form.recorrente.value|yesno:"true,false" }} }"
+        @submit="loading=true" novalidate>{% csrf_token %}
     <input type="hidden" name="tipo_lancamento" :value="tipoLancamento">
+    {{ form.parcela }}{{ form.total_parcelas }}
     {% if form.non_field_errors %}<div class="m-5 rounded-md border border-red-300 bg-red-50 p-3 text-sm text-red-700">{{ form.non_field_errors }}</div>{% endif %}
 
     <section class="p-5 sm:p-6">
       <div class="mb-4 flex items-center gap-3">
         <span class="grid h-8 w-8 place-items-center rounded-md bg-blue-600 text-sm font-bold text-white">1</span>
-        <div><h3 class="text-sm font-semibold">Origem e beneficiario</h3><p class="text-xs opacity-70">Defina quem ou o que sera pago.</p></div>
+        <div><h3 class="text-sm font-semibold">Origem e beneficiário</h3><p class="text-xs opacity-70">Defina quem ou o que será pago.</p></div>
       </div>
       <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <div class="sm:col-span-2 grid grid-cols-2 gap-2 rounded-md border p-1" :style="temaClaro ? 'border-color:#dbe3ee;background:#f8fafc' : 'border-color:#3f3f46;background:#18181b'">
           <button type="button" @click="tipoLancamento='fornecedor'" class="rounded px-3 py-2.5 text-sm font-semibold" :style="tipoLancamento==='fornecedor' ? 'background:#2563eb;color:#fff' : ''">Fornecedor ou outro</button>
-          <button type="button" @click="if(tipoLancamento==='fornecedor') tipoLancamento='funcionario'" class="rounded px-3 py-2.5 text-sm font-semibold" :style="tipoLancamento!=='fornecedor' ? 'background:#059669;color:#fff' : ''">Funcionario e encargos</button>
+          <button type="button" @click="if(tipoLancamento==='fornecedor') tipoLancamento='funcionario'; window.dispatchEvent(new CustomEvent('tipo-pessoal'))" class="rounded px-3 py-2.5 text-sm font-semibold" :style="tipoLancamento!=='fornecedor' ? 'background:#059669;color:#fff' : ''">Funcionário e encargos</button>
         </div>
 
         <div class="sm:col-span-2" x-show="tipoLancamento==='fornecedor'" x-cloak>
           <label class="mb-1 block text-sm font-medium">Fornecedor <span class="text-xs font-normal opacity-70">(opcional)</span></label>
-          {% include "financeiro/pagar/_search_select.html" with field=form.fornecedor placeholder="Pesquisar por nome, razao social ou CNPJ" %}
+          {% include "financeiro/pagar/_search_select.html" with field=form.fornecedor placeholder="Pesquisar por nome, razão social ou CNPJ" %}
           {% if form.fornecedor.errors %}<p class="mt-1 text-xs text-red-500">{{ form.fornecedor.errors|join:", " }}</p>{% endif %}
         </div>
 
         <div class="sm:col-span-2 space-y-4" x-show="tipoLancamento!=='fornecedor'" x-cloak>
           <div>
-            <label class="mb-1 block text-sm font-medium">Natureza do lancamento</label>
+            <label class="mb-1 block text-sm font-medium">Natureza do lançamento</label>
             <div class="grid grid-cols-2 gap-2">
-              <button type="button" @click="tipoLancamento='funcionario'" class="rounded-md border px-3 py-2 text-sm font-semibold" :style="tipoLancamento==='funcionario' ? 'border-color:#059669;background:rgba(5,150,105,.16);color:#34d399' : ''">Pagamento ao funcionario</button>
-              <button type="button" @click="tipoLancamento='encargo'" class="rounded-md border px-3 py-2 text-sm font-semibold" :style="tipoLancamento==='encargo' ? 'border-color:#7c3aed;background:rgba(124,58,237,.16);color:#a78bfa' : ''">Encargo ou beneficio</button>
+              <button type="button" @click="tipoLancamento='funcionario'" class="rounded-md border px-3 py-2 text-sm font-semibold" :style="tipoLancamento==='funcionario' ? 'border-color:#059669;background:rgba(5,150,105,.16);color:#34d399' : ''">Pagamento ao funcionário</button>
+              <button type="button" @click="tipoLancamento='encargo'" class="rounded-md border px-3 py-2 text-sm font-semibold" :style="tipoLancamento==='encargo' ? 'border-color:#7c3aed;background:rgba(124,58,237,.16);color:#a78bfa' : ''">Encargo ou benefício</button>
             </div>
           </div>
           <div>
-            <label class="mb-1 block text-sm font-medium">Funcionario <span x-show="tipoLancamento==='funcionario'" class="text-red-500">*</span><span x-show="tipoLancamento==='encargo'" class="text-xs font-normal opacity-70"> (opcional para encargo geral)</span></label>
+            <label class="mb-1 block text-sm font-medium">Funcionário <span x-show="tipoLancamento==='funcionario'" class="text-red-500">*</span><span x-show="tipoLancamento==='encargo'" class="text-xs font-normal opacity-70"> (opcional para encargo geral)</span></label>
             {% include "financeiro/pagar/_search_select.html" with field=form.funcionario placeholder="Pesquisar por nome, cargo ou CPF" %}
             {% if form.funcionario.errors %}<p class="mt-1 text-xs text-red-500">{{ form.funcionario.errors|join:", " }}</p>{% endif %}
           </div>
         </div>
 
-        <div><label class="mb-1 block text-sm font-medium">{{ form.documento_numero.label }}</label>{{ form.documento_numero|add_class:"form-input"|attr:"placeholder:Boleto, recibo ou referencia" }}{{ form.documento_numero.errors }}</div>
-        <div x-show="tipoLancamento==='fornecedor'" x-cloak><label class="mb-1 block text-sm font-medium">{{ form.nota_fiscal_fornecedor.label }}</label>{{ form.nota_fiscal_fornecedor|add_class:"form-input"|attr:"placeholder:Numero da nota fiscal" }}{{ form.nota_fiscal_fornecedor.errors }}</div>
+        <div><label class="mb-1 block text-sm font-medium">{{ form.documento_numero.label }}</label>{{ form.documento_numero|add_class:"form-input"|attr:"placeholder:Boleto, recibo ou referência" }}{{ form.documento_numero.errors }}</div>
+        <div x-show="tipoLancamento==='fornecedor'" x-cloak><label class="mb-1 block text-sm font-medium">{{ form.nota_fiscal_fornecedor.label }}</label>{{ form.nota_fiscal_fornecedor|add_class:"form-input"|attr:"placeholder:Número da nota fiscal" }}{{ form.nota_fiscal_fornecedor.errors }}</div>
       </div>
     </section>
 
     <section class="border-t p-5 sm:p-6" :style="temaClaro ? 'border-color:#e5e7eb' : 'border-color:#303038'">
-      <div class="mb-4 flex items-center gap-3"><span class="grid h-8 w-8 place-items-center rounded-md bg-emerald-600 text-sm font-bold text-white">2</span><h3 class="text-sm font-semibold">Valor, parcelas e datas</h3></div>
+      <div class="mb-4 flex items-center gap-3"><span class="grid h-8 w-8 place-items-center rounded-md bg-emerald-600 text-sm font-bold text-white">2</span><div><h3 class="text-sm font-semibold">Valor, datas e recorrência</h3><p class="text-xs opacity-70">Escolha título único ou geração automática dos próximos vencimentos.</p></div></div>
+
+      <div class="mb-4 grid grid-cols-2 gap-2 rounded-md border p-1" :style="temaClaro ? 'border-color:#dbe3ee;background:#f8fafc' : 'border-color:#3f3f46;background:#18181b'">
+        <button type="button" @click="recorrente=false" class="rounded px-3 py-2 text-sm font-semibold" :style="!recorrente ? 'background:#059669;color:#fff' : ''">Título único</button>
+        <button type="button" @click="recorrente=true" class="rounded px-3 py-2 text-sm font-semibold" :style="recorrente ? 'background:#7c3aed;color:#fff' : ''">Título recorrente</button>
+        <input type="hidden" name="recorrente" :value="recorrente ? 'on' : ''">
+      </div>
+
       <div class="grid grid-cols-1 gap-4 sm:grid-cols-3">
         {% include "financeiro/pagar/_field.html" with field=form.valor_original %}
-        {% include "financeiro/pagar/_field.html" with field=form.parcela %}
-        {% include "financeiro/pagar/_field.html" with field=form.total_parcelas %}
         {% include "financeiro/pagar/_field.html" with field=form.data_emissao %}
         {% include "financeiro/pagar/_field.html" with field=form.data_vencimento %}
         {% include "financeiro/pagar/_field.html" with field=form.data_competencia %}
+        <div x-show="recorrente" x-cloak>{% include "financeiro/pagar/_field.html" with field=form.frequencia_recorrencia %}</div>
+        <div x-show="recorrente" x-cloak>{% include "financeiro/pagar/_field.html" with field=form.quantidade_recorrencias %}</div>
+      </div>
+      <div x-show="recorrente" x-cloak class="mt-4 rounded-md border border-violet-500/30 bg-violet-500/10 px-4 py-3 text-sm">
+        O primeiro vencimento será a data informada acima. Os demais serão criados automaticamente conforme a periodicidade; a competência avançará junto quando preenchida.
       </div>
     </section>
 
     <section class="border-t p-5 sm:p-6" :style="temaClaro ? 'border-color:#e5e7eb' : 'border-color:#303038'">
-      <div class="mb-4 flex items-center gap-3"><span class="grid h-8 w-8 place-items-center rounded-md bg-violet-600 text-sm font-bold text-white">3</span><div><h3 class="text-sm font-semibold">Classificacao financeira</h3><p class="text-xs opacity-70">Grupo, subgrupo e categoria definem a conta contabil automaticamente.</p><p x-show="tipoLancamento!=='fornecedor'" x-cloak class="mt-1 text-xs font-medium text-emerald-500">Pesquise por Salarios, Ferias, 13o, INSS, FGTS ou outro encargo.</p></div></div>
-      <div class="grid grid-cols-1 gap-4 lg:grid-cols-5">
-        <div class="lg:col-span-2"><label class="mb-1 block text-sm font-medium">{{ form.forma_pagamento.label }}</label>{{ form.forma_pagamento|add_class:"form-input" }}{{ form.forma_pagamento.errors }}</div>
-        <div class="lg:col-span-3"><label class="mb-1 block text-sm font-medium">{{ form.plano_contas.label }}{% if form.plano_contas.field.required %} <span class="text-red-500">*</span>{% endif %}</label>{% include "financeiro/pagar/_search_select.html" with field=form.plano_contas placeholder="Pesquisar categoria ou conta contabil" %}{% if form.plano_contas.errors %}<p class="mt-1 text-xs text-red-500">{{ form.plano_contas.errors|join:", " }}</p>{% endif %}</div>
-        <div class="lg:col-span-5"><label class="mb-1 block text-sm font-medium">{{ form.observacao.label }}</label>{{ form.observacao|add_class:"form-input"|attr:"placeholder:Detalhes do pagamento ou da competencia" }}{{ form.observacao.errors }}</div>
+      <div class="mb-4 flex items-center gap-3"><span class="grid h-8 w-8 place-items-center rounded-md bg-violet-600 text-sm font-bold text-white">3</span><div><h3 class="text-sm font-semibold">Classificação financeira guiada</h3><p class="text-xs opacity-70">Responda aos três níveis. A conta contábil será vinculada automaticamente.</p></div></div>
+
+      <div x-data="categoriaGuiada($el)" x-init="init()" @tipo-pessoal.window="selecionarPessoal()"
+           data-initial="{{ form.plano_contas.value|default_if_none:'' }}" class="space-y-4">
+        <input type="hidden" name="plano_contas" :value="categoriaId">
+        <div class="grid grid-cols-1 gap-4 lg:grid-cols-3">
+          <div>
+            <label class="mb-1 block text-sm font-medium"><span class="mr-1 text-violet-400">1.</span> Grupo da despesa *</label>
+            <select x-model="grupoId" @change="subgrupoId=''; limparCategoria()" class="form-input">
+              <option value="">Selecione o grupo</option>
+              {% for grupo in form.categoria_grupos %}<option value="{{ grupo.pk }}" data-group-code="{{ grupo.codigo }}">{{ grupo.descricao }}</option>{% endfor %}
+            </select>
+            <p class="mt-1 text-xs opacity-60">Ex.: despesas administrativas ou custos.</p>
+          </div>
+          <div>
+            <label class="mb-1 block text-sm font-medium"><span class="mr-1 text-violet-400">2.</span> Tipo de gasto *</label>
+            <select x-model="subgrupoId" @change="limparCategoria()" :disabled="!grupoId" class="form-input disabled:opacity-50">
+              <option value="">Selecione o tipo</option>
+              {% for subgrupo in form.categoria_subgrupos %}<option value="{{ subgrupo.pk }}" data-grupo="{{ subgrupo.conta_pai_id }}" data-subgroup-code="{{ subgrupo.codigo }}" x-show="grupoId==='{{ subgrupo.conta_pai_id }}'" :disabled="grupoId!=='{{ subgrupo.conta_pai_id }}'">{{ subgrupo.descricao }}</option>{% endfor %}
+            </select>
+            <p class="mt-1 text-xs opacity-60">Ex.: pessoal, aluguel ou mercadorias.</p>
+          </div>
+          <div class="relative">
+            <label class="mb-1 block text-sm font-medium"><span class="mr-1 text-violet-400">3.</span> Categoria específica *</label>
+            <div class="relative">
+              <input type="search" x-model="query" @focus="open=!!subgrupoId" @input="open=true;categoriaId=''" @blur="fecharDepois()"
+                     :disabled="!subgrupoId" class="form-input pr-9 disabled:opacity-50" placeholder="Digite para buscar">
+              <span class="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-xs">&#9662;</span>
+            </div>
+            <div x-show="open && subgrupoId" x-cloak class="absolute z-50 mt-1 max-h-64 w-full overflow-y-auto rounded-md border p-1 shadow-xl" :style="temaClaro ? 'background:#fff;border-color:#d1d5db' : 'background:#18181b;border-color:#3f3f46'">
+              {% for categoria in form.plano_contas.field.queryset %}
+              <button type="button" data-category-option data-value="{{ categoria.pk }}" data-label="{{ categoria.descricao }}" data-code="{{ categoria.codigo }}" data-grupo="{{ categoria.conta_pai.conta_pai_id }}" data-subgrupo="{{ categoria.conta_pai_id }}"
+                      x-show="corresponde($el)" @mousedown.prevent="selecionar($el)" class="block w-full rounded px-3 py-2 text-left text-sm">
+                <span class="block font-medium">{{ categoria.descricao }}</span><span class="text-xs opacity-55">Código {{ categoria.codigo }}</span>
+              </button>
+              {% endfor %}
+              <p x-show="opcoesVisiveis()===0" class="px-3 py-4 text-center text-sm opacity-60">Nenhuma categoria encontrada.</p>
+            </div>
+            <p class="mt-1 text-xs opacity-60">Escolha o destino mais específico do gasto.</p>
+          </div>
+        </div>
+
+        <div x-show="categoriaId" x-cloak class="flex items-center gap-2 rounded-md border border-emerald-500/30 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-500">
+          <span class="font-bold">✓</span><span>Classificação escolhida: <strong x-text="query"></strong></span>
+        </div>
+        {% if form.plano_contas.errors %}<p class="text-sm text-red-500">{{ form.plano_contas.errors|join:", " }}</p>{% endif %}
+      </div>
+
+      <div class="mt-5 grid grid-cols-1 gap-4 sm:grid-cols-2">
+        <div><label class="mb-1 block text-sm font-medium">{{ form.forma_pagamento.label }}</label>{{ form.forma_pagamento|add_class:"form-input" }}{{ form.forma_pagamento.errors }}</div>
+      </div>
+
+      <div class="mt-5 w-full">
+        <label class="mb-1 block text-sm font-medium">Informações complementares</label>
+        {{ form.observacao|add_class:"form-input w-full"|attr:"placeholder:Ex.: competência da folha, motivo do pagamento, contrato ou instrução importante para a conferência" }}
+        <p class="mt-1 text-xs opacity-60">Não repita fornecedor, valor ou categoria. Registre apenas o que ajuda a conferir e aprovar o pagamento.</p>
+        {% if form.observacao.errors %}<p class="mt-1 text-xs text-red-500">{{ form.observacao.errors|join:", " }}</p>{% endif %}
       </div>
     </section>
 
     <div class="flex justify-end gap-3 border-t px-5 py-4" :style="temaClaro ? 'border-color:#e5e7eb;background:#f8fafc' : 'border-color:#303038;background:#1c1c20'">
       <a href="{{ cancel_url }}" class="btn-secondary">Cancelar</a>
-      <button type="submit" class="btn-primary" :disabled="loading"><span x-show="!loading">Lancar titulo</span><span x-show="loading" x-cloak>Salvando...</span></button>
+      <button type="submit" class="btn-primary" :disabled="loading"><span x-show="!loading">Lançar título</span><span x-show="loading" x-cloak>Salvando...</span></button>
     </div>
   </form>
 </div>
@@ -90,17 +153,38 @@
 <script>
 function financeSearchSelect(root) {
   return {
-    value: root.dataset.initial || '', query: '', open: false,
-    init() { const selected = this.options().find(option => option.dataset.value === this.value); if (selected) this.query = selected.dataset.label; },
-    options() { return Array.from(root.querySelectorAll('[data-finance-option]')); },
-    normalize(text) { return (text || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim(); },
-    matches(option) { return !this.query || this.normalize(option.dataset.search).includes(this.normalize(this.query)); },
-    visibleOptions() { return this.options().filter(option => this.matches(option)); },
-    visibleCount() { return this.visibleOptions().length; },
-    select(option) { this.value = option.dataset.value; this.query = option.dataset.label; this.open = false; },
-    clear() { this.value = ''; this.query = ''; this.open = true; },
-    focusOption(direction) { this.open = true; this.$nextTick(() => { const visible = this.visibleOptions(); if (!visible.length) return; const index = visible.indexOf(document.activeElement); const next = index < 0 ? (direction > 0 ? 0 : visible.length - 1) : Math.max(0, Math.min(visible.length - 1, index + direction)); visible[next].focus(); }); },
-    closeLater() { setTimeout(() => { this.open = false; }, 180); },
+    value:root.dataset.initial||'', query:'', open:false,
+    init(){const selected=this.options().find(option=>option.dataset.value===this.value);if(selected)this.query=selected.dataset.label;},
+    options(){return Array.from(root.querySelectorAll('[data-finance-option]'));},
+    normalize(text){return(text||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().replace(/[^a-z0-9]+/g,' ').trim();},
+    matches(option){return!this.query||this.normalize(option.dataset.search).includes(this.normalize(this.query));},
+    visibleOptions(){return this.options().filter(option=>this.matches(option));},
+    visibleCount(){return this.visibleOptions().length;},
+    select(option){this.value=option.dataset.value;this.query=option.dataset.label;this.open=false;},
+    clear(){this.value='';this.query='';this.open=true;},
+    focusOption(direction){this.open=true;this.$nextTick(()=>{const visible=this.visibleOptions();if(!visible.length)return;const index=visible.indexOf(document.activeElement);const next=index<0?(direction>0?0:visible.length-1):Math.max(0,Math.min(visible.length-1,index+direction));visible[next].focus();});},
+    closeLater(){setTimeout(()=>{this.open=false;},180);},
+  };
+}
+
+function categoriaGuiada(root) {
+  return {
+    grupoId:'', subgrupoId:'', categoriaId:root.dataset.initial||'', query:'', open:false,
+    normalizar(text){return(text||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase();},
+    opcoes(){return Array.from(root.querySelectorAll('[data-category-option]'));},
+    init(){const atual=this.opcoes().find(item=>item.dataset.value===this.categoriaId);if(atual){this.grupoId=atual.dataset.grupo;this.subgrupoId=atual.dataset.subgrupo;this.query=atual.dataset.label;}},
+    corresponde(item){return item.dataset.grupo===this.grupoId&&item.dataset.subgrupo===this.subgrupoId&&(!this.query||this.normalizar(item.dataset.label+' '+item.dataset.code).includes(this.normalizar(this.query)));},
+    opcoesVisiveis(){return this.opcoes().filter(item=>this.corresponde(item)).length;},
+    selecionar(item){this.categoriaId=item.dataset.value;this.query=item.dataset.label;this.open=false;},
+    limparCategoria(){this.categoriaId='';this.query='';this.open=false;},
+    fecharDepois(){setTimeout(()=>{this.open=false;},180);},
+    selecionarPessoal(){
+      const grupo=root.querySelector('[data-group-code="332"]');
+      const subgrupo=root.querySelector('[data-subgroup-code="33201"]');
+      const atual=this.opcoes().find(item=>item.dataset.value===this.categoriaId);
+      if(atual&&atual.dataset.code.startsWith('33201'))return;
+      if(grupo&&subgrupo){this.grupoId=grupo.value;this.subgrupoId=subgrupo.value;this.limparCategoria();}
+    },
   };
 }
 </script>

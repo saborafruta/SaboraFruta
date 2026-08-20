@@ -98,7 +98,7 @@
               {% if row.entrada %}NF {{ row.entrada.numero_nf }}{% elif row.titulo.documento_numero %}Doc. {{ row.titulo.documento_numero }}{% else %}Título #{{ row.titulo.pk }}{% endif %}
             </strong>
             <span :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
-              · Parc. {{ row.titulo.parcela }}/{{ row.titulo.total_parcelas }}
+              · {% if row.titulo.grupo_recorrencia %}Recorrência{% else %}Parc.{% endif %} {{ row.titulo.parcela }}/{{ row.titulo.total_parcelas }}
               · Venc. {{ row.titulo.data_vencimento|date:"d/m/Y" }}
             </span>
           </div>

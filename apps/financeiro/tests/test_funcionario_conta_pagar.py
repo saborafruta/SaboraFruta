@@ -90,3 +90,28 @@ class FuncionarioContaPagarTests(TestCase):
         self.assertEqual(categoria.conta_pai.codigo, "33201")
         self.assertEqual(categoria.conta_pai.conta_pai.codigo, "332")
         self.assertEqual(categoria.conta_contabil, self.conta_contabil)
+
+    def test_recorrencia_mensal_cria_titulos_com_datas_validas(self):
+        contas = ContaPagarService.criar_recorrencia(
+            filial=self.filial,
+            funcionario=self.funcionario,
+            tipo_lancamento="funcionario",
+            valor_original=Decimal("1800.00"),
+            data_emissao=date(2026, 8, 20),
+            data_vencimento=date(2026, 8, 31),
+            competencia=date(2026, 8, 1),
+            plano_contas=self.categoria,
+            frequencia="mensal",
+            quantidade=3,
+        )
+
+        self.assertEqual([conta.data_vencimento for conta in contas], [
+            date(2026, 8, 31), date(2026, 9, 30), date(2026, 10, 31),
+        ])
+        self.assertEqual([conta.competencia for conta in contas], [
+            date(2026, 8, 1), date(2026, 9, 1), date(2026, 10, 1),
+        ])
+        self.assertEqual([conta.parcela for conta in contas], [1, 2, 3])
+        self.assertTrue(all(conta.total_parcelas == 3 for conta in contas))
+        self.assertEqual(len({conta.grupo_recorrencia for conta in contas}), 1)
+        self.assertIsNotNone(contas[0].grupo_recorrencia)

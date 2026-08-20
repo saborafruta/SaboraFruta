@@ -68,9 +68,9 @@
 
       <div>
         <span class="block text-xs font-medium mb-0.5"
-              :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Parcela</span>
+              :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">{% if conta.grupo_recorrencia %}Recorrência{% else %}Parcela{% endif %}</span>
         <span :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
-          {{ conta.parcela }} de {{ conta.total_parcelas }}
+          {{ conta.parcela }} de {{ conta.total_parcelas }}{% if conta.grupo_recorrencia %} · {{ conta.get_frequencia_recorrencia_display }}{% endif %}
         </span>
       </div>
 
