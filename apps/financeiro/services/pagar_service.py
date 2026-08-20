@@ -22,6 +22,8 @@ class ContaPagarService:
         data_emissao: date,
         data_vencimento: date,
         fornecedor=None,
+        funcionario=None,
+        tipo_lancamento=ContaPagar.TipoLancamento.FORNECEDOR,
         parcela: int = 1,
         total_parcelas: int = 1,
         documento_numero: str = '',
@@ -36,9 +38,17 @@ class ContaPagarService:
         conta_contabil = plano_contas.conta_contabil if plano_contas else None
         if plano_contas and not conta_contabil:
             raise DomainError('A categoria financeira não possui conta contábil vinculada.')
+        if tipo_lancamento == ContaPagar.TipoLancamento.FUNCIONARIO and not funcionario:
+            raise DomainError('Selecione o funcionario deste pagamento.')
+        if tipo_lancamento != ContaPagar.TipoLancamento.FORNECEDOR:
+            fornecedor = None
+        if tipo_lancamento == ContaPagar.TipoLancamento.FORNECEDOR:
+            funcionario = None
         conta = ContaPagar(
             filial=filial,
             fornecedor=fornecedor,
+            funcionario=funcionario,
+            tipo_lancamento=tipo_lancamento,
             documento_numero=documento_numero,
             nota_fiscal_fornecedor=nota_fiscal_fornecedor,
             parcela=parcela,

@@ -10,6 +10,10 @@ from .fornecedor import (
     FornecedorDeleteView, FornecedorToggleAtivoView, FornecedorInlineEditView, FornecedorExportCsvView,
     FornecedorExportTodosCsvView, FornecedorExportPdfView,
 )
+from .funcionario import (
+    FuncionarioListView, FuncionarioCreateView, FuncionarioUpdateView,
+    FuncionarioToggleAtivoView,
+)
 from .rota_praca import (
     PracaListView, PracaCreateView, PracaUpdateView, PracaToggleAtivoView,
     RotaListView, RotaCreateView, RotaUpdateView, RotaToggleAtivoView,
@@ -31,6 +35,8 @@ __all__ = [
     'FornecedorListView', 'FornecedorCreateView', 'FornecedorUpdateView',
     'FornecedorDeleteView', 'FornecedorToggleAtivoView', 'FornecedorInlineEditView', 'FornecedorExportCsvView',
     'FornecedorExportTodosCsvView', 'FornecedorExportPdfView',
+    'FuncionarioListView', 'FuncionarioCreateView', 'FuncionarioUpdateView',
+    'FuncionarioToggleAtivoView',
     'TransportadoraListView', 'TransportadoraCreateView', 'TransportadoraUpdateView', 'TransportadoraToggleAtivoView',
     'MotoristaListView', 'MotoristaCreateView', 'MotoristaUpdateView', 'MotoristaToggleAtivoView', 'MotoristaAjaxCreateView',
     'VeiculoListView', 'VeiculoCreateView', 'VeiculoUpdateView', 'VeiculoToggleAtivoView', 'VeiculoAjaxCreateView',

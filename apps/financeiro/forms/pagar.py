@@ -4,10 +4,11 @@ from decimal import Decimal
 
 from django import forms
 
-from apps.cadastros.models import Fornecedor
+from apps.cadastros.models import Fornecedor, Funcionario
 from apps.financeiro.models.conta_bancaria import ContaBancaria, PlanoContas
 from apps.financeiro.models.formas_pagamento import FormaPagamento
 from apps.financeiro.forms.plano_contas import CategoriaFinanceiraChoiceField
+from apps.financeiro.models.receber_pagar import ContaPagar
 
 VALOR_WIDGET = forms.NumberInput(attrs={
     'step': '0.01',
@@ -27,14 +28,30 @@ class FornecedorChoiceField(forms.ModelChoiceField):
         return f"{principal} - {' - '.join(detalhes)}" if detalhes else principal
 
 
+class FuncionarioChoiceField(forms.ModelChoiceField):
+    def label_from_instance(self, funcionario):
+        detalhes = [valor for valor in (funcionario.cargo, funcionario.cpf) if valor]
+        return f"{funcionario.nome} - {' - '.join(detalhes)}" if detalhes else funcionario.nome
+
+
 class ContaPagarForm(forms.Form):
     """Lançamento manual de conta a pagar."""
 
+    tipo_lancamento = forms.ChoiceField(
+        choices=ContaPagar.TipoLancamento.choices,
+        initial=ContaPagar.TipoLancamento.FORNECEDOR,
+        widget=forms.HiddenInput,
+    )
     fornecedor = FornecedorChoiceField(
         queryset=Fornecedor.objects.none(),
         required=False,
         label='Fornecedor',
         help_text='Opcional para despesas sem fornecedor cadastrado.',
+    )
+    funcionario = FuncionarioChoiceField(
+        queryset=Funcionario.objects.none(),
+        required=False,
+        label='Funcionario',
     )
     documento_numero = forms.CharField(
         max_length=20,
@@ -107,6 +124,11 @@ class ContaPagarForm(forms.Form):
                 .filter(ativo=True)
                 .order_by('razao_social')
             )
+            self.fields['funcionario'].queryset = (
+                Funcionario.objects.for_filial(filial)
+                .filter(ativo=True)
+                .order_by('nome')
+            )
             self.fields['forma_pagamento'].queryset = (
                 FormaPagamento.objects
                 .filter(empresa=filial.empresa, ativo=True)
@@ -134,6 +156,16 @@ class ContaPagarForm(forms.Form):
         vencimento = cleaned.get('data_vencimento')
         parcela = cleaned.get('parcela')
         total = cleaned.get('total_parcelas')
+        tipo = cleaned.get('tipo_lancamento')
+        funcionario = cleaned.get('funcionario')
+        if tipo == ContaPagar.TipoLancamento.FORNECEDOR:
+            cleaned['funcionario'] = None
+        elif tipo == ContaPagar.TipoLancamento.FUNCIONARIO:
+            cleaned['fornecedor'] = None
+            if not funcionario:
+                self.add_error('funcionario', 'Selecione o funcionario que recebera este pagamento.')
+        elif tipo == ContaPagar.TipoLancamento.ENCARGO:
+            cleaned['fornecedor'] = None
         if emissao and vencimento and vencimento < emissao:
             self.add_error('data_vencimento', 'Vencimento não pode ser anterior à emissão.')
         if parcela and total and parcela > total:

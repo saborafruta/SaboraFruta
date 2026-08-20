@@ -28,9 +28,9 @@
        :style="temaClaro ? 'color:#6b7280;' : 'color:#9ca3af;'">Título</p>
     <div class="grid grid-cols-2 sm:grid-cols-4 gap-4 text-sm">
       <div>
-        <span class="block text-xs" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Fornecedor</span>
+        <span class="block text-xs" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Beneficiario</span>
         <strong :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
-          {{ conta.fornecedor|default:"— Sem fornecedor —"|truncatechars:28 }}
+          {{ conta.beneficiario_nome|truncatechars:28 }}
         </strong>
       </div>
       <div>

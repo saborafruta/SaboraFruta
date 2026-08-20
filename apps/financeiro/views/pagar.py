@@ -79,7 +79,7 @@ class ContaPagarListView(PermissaoRequiredMixin, View):
 
         qs = (
             ContaPagar.objects.for_filial(filial)
-            .select_related('fornecedor', 'forma_pagamento')
+            .select_related('fornecedor', 'funcionario', 'forma_pagamento')
             .order_by('data_vencimento')
         )
 
@@ -95,6 +95,9 @@ class ContaPagarListView(PermissaoRequiredMixin, View):
         if q:
             qs = qs.filter(
                 Q(fornecedor__razao_social__icontains=q)
+                | Q(fornecedor__nome_fantasia__icontains=q)
+                | Q(funcionario__nome__icontains=q)
+                | Q(funcionario__cpf__icontains=q)
                 | Q(documento_numero__icontains=q)
                 | Q(nota_fiscal_fornecedor__icontains=q)
             )
@@ -157,8 +160,8 @@ class ContaPagarRelatorioView(PermissaoRequiredMixin, View):
 
         qs = (
             ContaPagar.objects.for_filial(filial)
-            .select_related('fornecedor')
-            .order_by('fornecedor__razao_social', 'data_vencimento')
+            .select_related('fornecedor', 'funcionario')
+            .order_by('data_vencimento')
         )
         if status:
             qs = qs.filter(status=status)
@@ -172,6 +175,7 @@ class ContaPagarRelatorioView(PermissaoRequiredMixin, View):
         if q:
             qs = qs.filter(
                 Q(fornecedor__razao_social__icontains=q)
+                | Q(funcionario__nome__icontains=q)
                 | Q(documento_numero__icontains=q)
                 | Q(nota_fiscal_fornecedor__icontains=q)
             )
@@ -196,15 +200,18 @@ class ContaPagarRelatorioView(PermissaoRequiredMixin, View):
 
         grupos: dict = {}
         for t in titulos:
-            g = grupos.get(t.fornecedor_id)
+            chave = (t.tipo_lancamento, t.funcionario_id or t.fornecedor_id or 0)
+            g = grupos.get(chave)
             if g is None:
                 g = {
                     'fornecedor': t.fornecedor,
+                    'beneficiario_nome': t.beneficiario_nome,
+                    'beneficiario_documento': t.beneficiario_documento,
                     'titulos': [],
                     'total_saldo': Decimal('0'),
                     'total_valor': Decimal('0'),
                 }
-                grupos[t.fornecedor_id] = g
+                grupos[chave] = g
 
             entrada = entradas.get(t.documento_id) if t.documento_tipo == 'entrada_nf' else None
             g['titulos'].append({'titulo': t, 'entrada': entrada})
@@ -213,7 +220,7 @@ class ContaPagarRelatorioView(PermissaoRequiredMixin, View):
 
         fornecedores = sorted(
             grupos.values(),
-            key=lambda x: ((x['fornecedor'].razao_social if x['fornecedor'] else '') or '').lower(),
+            key=lambda x: x['beneficiario_nome'].lower(),
         )
 
         total_geral_saldo = sum((g['total_saldo'] for g in fornecedores), Decimal('0'))
@@ -264,6 +271,8 @@ class ContaPagarCreateView(PermissaoRequiredMixin, View):
             conta = ContaPagarService.criar(
                 filial=filial,
                 fornecedor=d.get('fornecedor'),
+                funcionario=d.get('funcionario'),
+                tipo_lancamento=d['tipo_lancamento'],
                 valor_original=d['valor_original'],
                 data_emissao=d['data_emissao'],
                 data_vencimento=d['data_vencimento'],
@@ -297,7 +306,7 @@ class ContaPagarDetailView(PermissaoRequiredMixin, View):
         filial = _filial(request)
         conta = get_object_or_404(
             ContaPagar.objects.for_filial(filial).select_related(
-                'fornecedor', 'forma_pagamento', 'conta_bancaria',
+                'fornecedor', 'funcionario', 'forma_pagamento', 'conta_bancaria',
                 'plano_contas', 'conta_contabil', 'usuario', 'usuario_pagamento',
             ),
             pk=pk,
@@ -326,7 +335,7 @@ class ContaPagarPagamentoView(PermissaoRequiredMixin, View):
 
     def _get_conta(self, request, pk):
         return get_object_or_404(
-            ContaPagar.objects.for_filial(_filial(request)).select_related('fornecedor'),
+            ContaPagar.objects.for_filial(_filial(request)).select_related('fornecedor', 'funcionario'),
             pk=pk,
         )
 

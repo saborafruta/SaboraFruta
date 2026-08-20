@@ -35,6 +35,12 @@ urlpatterns = [
     path('fornecedores/<int:pk>/excluir/', views.FornecedorDeleteView.as_view(), name='fornecedor-delete'),
     path('fornecedores/<int:pk>/toggle-ativo/', views.FornecedorToggleAtivoView.as_view(), name='fornecedor-toggle-ativo'),
 
+    # Funcionarios
+    path('funcionarios/', views.FuncionarioListView.as_view(), name='funcionario-list'),
+    path('funcionarios/novo/', views.FuncionarioCreateView.as_view(), name='funcionario-create'),
+    path('funcionarios/<int:pk>/', views.FuncionarioUpdateView.as_view(), name='funcionario-update'),
+    path('funcionarios/<int:pk>/toggle-ativo/', views.FuncionarioToggleAtivoView.as_view(), name='funcionario-toggle-ativo'),
+
     # Transportadoras
     path('transportadoras/', views.TransportadoraListView.as_view(), name='transportadora-list'),
     path('transportadoras/novo/', views.TransportadoraCreateView.as_view(), name='transportadora-create'),

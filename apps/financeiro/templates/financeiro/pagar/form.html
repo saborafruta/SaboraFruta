@@ -8,57 +8,57 @@
 <div class="mx-auto max-w-5xl space-y-4">
   <div class="flex flex-wrap items-end justify-between gap-3">
     <div>
-      <p class="mb-1 text-sm" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
-        <a href="{% url 'financeiro:pagar_list' %}" :style="temaClaro ? 'color:#2563eb;' : 'color:#60a5fa;'">Contas a Pagar</a>
-        <span class="mx-1">/</span> Novo título
-      </p>
-      <h2 class="text-xl font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">Novo lançamento</h2>
+      <a href="{% url 'financeiro:pagar_list' %}" class="text-sm text-blue-500">Contas a Pagar /</a>
+      <h2 class="mt-1 text-xl font-semibold">Novo lancamento</h2>
     </div>
-    <p class="text-sm" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Os campos com * são obrigatórios.</p>
+    <p class="text-sm" :style="temaClaro ? 'color:#64748b' : 'color:#94a3b8'">Os campos com * sao obrigatorios.</p>
   </div>
 
-  <form method="post" class="card overflow-visible" x-data="{ loading: false }" @submit="loading = true" novalidate>
-    {% csrf_token %}
-
-    {% if form.non_field_errors %}
-      <div class="m-5 rounded-md border border-red-300 bg-red-50 p-3 text-sm text-red-700 dark:border-red-800 dark:bg-red-950/30 dark:text-red-300">
-        {{ form.non_field_errors }}
-      </div>
-    {% endif %}
+  <form method="post" class="card overflow-visible"
+        x-data="{ loading: false, tipoLancamento: '{{ form.tipo_lancamento.value|default:"fornecedor" }}' }"
+        @submit="loading = true" novalidate>{% csrf_token %}
+    <input type="hidden" name="tipo_lancamento" :value="tipoLancamento">
+    {% if form.non_field_errors %}<div class="m-5 rounded-md border border-red-300 bg-red-50 p-3 text-sm text-red-700">{{ form.non_field_errors }}</div>{% endif %}
 
     <section class="p-5 sm:p-6">
       <div class="mb-4 flex items-center gap-3">
-        <span class="grid h-8 w-8 shrink-0 place-items-center rounded-md bg-blue-600 text-sm font-bold text-white">1</span>
-        <div>
-          <h3 class="text-sm font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f3f4f6;'">Documento e fornecedor</h3>
-          <p class="text-xs" :style="temaClaro ? 'color:#64748b;' : 'color:#9ca3af;'">Identificação da cobrança.</p>
-        </div>
+        <span class="grid h-8 w-8 place-items-center rounded-md bg-blue-600 text-sm font-bold text-white">1</span>
+        <div><h3 class="text-sm font-semibold">Origem e beneficiario</h3><p class="text-xs opacity-70">Defina quem ou o que sera pago.</p></div>
       </div>
-
       <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
-        <div class="sm:col-span-2">
-          <label class="mb-1 block text-sm font-medium" :style="temaClaro ? 'color:#374151;' : 'color:#d1d5db;'">Fornecedor</label>
-          {% include "financeiro/pagar/_search_select.html" with field=form.fornecedor placeholder="Pesquisar por nome, razão social ou CNPJ" %}
+        <div class="sm:col-span-2 grid grid-cols-2 gap-2 rounded-md border p-1" :style="temaClaro ? 'border-color:#dbe3ee;background:#f8fafc' : 'border-color:#3f3f46;background:#18181b'">
+          <button type="button" @click="tipoLancamento='fornecedor'" class="rounded px-3 py-2.5 text-sm font-semibold" :style="tipoLancamento==='fornecedor' ? 'background:#2563eb;color:#fff' : ''">Fornecedor ou outro</button>
+          <button type="button" @click="if(tipoLancamento==='fornecedor') tipoLancamento='funcionario'" class="rounded px-3 py-2.5 text-sm font-semibold" :style="tipoLancamento!=='fornecedor' ? 'background:#059669;color:#fff' : ''">Funcionario e encargos</button>
+        </div>
+
+        <div class="sm:col-span-2" x-show="tipoLancamento==='fornecedor'" x-cloak>
+          <label class="mb-1 block text-sm font-medium">Fornecedor <span class="text-xs font-normal opacity-70">(opcional)</span></label>
+          {% include "financeiro/pagar/_search_select.html" with field=form.fornecedor placeholder="Pesquisar por nome, razao social ou CNPJ" %}
           {% if form.fornecedor.errors %}<p class="mt-1 text-xs text-red-500">{{ form.fornecedor.errors|join:", " }}</p>{% endif %}
         </div>
-        <div>
-          <label for="{{ form.documento_numero.id_for_label }}" class="mb-1 block text-sm font-medium" :style="temaClaro ? 'color:#374151;' : 'color:#d1d5db;'">{{ form.documento_numero.label }}</label>
-          {{ form.documento_numero|add_class:"form-input"|attr:"placeholder:NF, boleto ou referência" }}
-          {% if form.documento_numero.errors %}<p class="mt-1 text-xs text-red-500">{{ form.documento_numero.errors|join:", " }}</p>{% endif %}
+
+        <div class="sm:col-span-2 space-y-4" x-show="tipoLancamento!=='fornecedor'" x-cloak>
+          <div>
+            <label class="mb-1 block text-sm font-medium">Natureza do lancamento</label>
+            <div class="grid grid-cols-2 gap-2">
+              <button type="button" @click="tipoLancamento='funcionario'" class="rounded-md border px-3 py-2 text-sm font-semibold" :style="tipoLancamento==='funcionario' ? 'border-color:#059669;background:rgba(5,150,105,.16);color:#34d399' : ''">Pagamento ao funcionario</button>
+              <button type="button" @click="tipoLancamento='encargo'" class="rounded-md border px-3 py-2 text-sm font-semibold" :style="tipoLancamento==='encargo' ? 'border-color:#7c3aed;background:rgba(124,58,237,.16);color:#a78bfa' : ''">Encargo ou beneficio</button>
+            </div>
+          </div>
+          <div>
+            <label class="mb-1 block text-sm font-medium">Funcionario <span x-show="tipoLancamento==='funcionario'" class="text-red-500">*</span><span x-show="tipoLancamento==='encargo'" class="text-xs font-normal opacity-70"> (opcional para encargo geral)</span></label>
+            {% include "financeiro/pagar/_search_select.html" with field=form.funcionario placeholder="Pesquisar por nome, cargo ou CPF" %}
+            {% if form.funcionario.errors %}<p class="mt-1 text-xs text-red-500">{{ form.funcionario.errors|join:", " }}</p>{% endif %}
+          </div>
         </div>
-        <div>
-          <label for="{{ form.nota_fiscal_fornecedor.id_for_label }}" class="mb-1 block text-sm font-medium" :style="temaClaro ? 'color:#374151;' : 'color:#d1d5db;'">{{ form.nota_fiscal_fornecedor.label }}</label>
-          {{ form.nota_fiscal_fornecedor|add_class:"form-input"|attr:"placeholder:Número da nota fiscal" }}
-          {% if form.nota_fiscal_fornecedor.errors %}<p class="mt-1 text-xs text-red-500">{{ form.nota_fiscal_fornecedor.errors|join:", " }}</p>{% endif %}
-        </div>
+
+        <div><label class="mb-1 block text-sm font-medium">{{ form.documento_numero.label }}</label>{{ form.documento_numero|add_class:"form-input"|attr:"placeholder:Boleto, recibo ou referencia" }}{{ form.documento_numero.errors }}</div>
+        <div x-show="tipoLancamento==='fornecedor'" x-cloak><label class="mb-1 block text-sm font-medium">{{ form.nota_fiscal_fornecedor.label }}</label>{{ form.nota_fiscal_fornecedor|add_class:"form-input"|attr:"placeholder:Numero da nota fiscal" }}{{ form.nota_fiscal_fornecedor.errors }}</div>
       </div>
     </section>
 
-    <section class="border-t p-5 sm:p-6" :style="temaClaro ? 'border-color:#e5e7eb;' : 'border-color:#303038;'">
-      <div class="mb-4 flex items-center gap-3">
-        <span class="grid h-8 w-8 shrink-0 place-items-center rounded-md bg-emerald-600 text-sm font-bold text-white">2</span>
-        <h3 class="text-sm font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f3f4f6;'">Valor, parcelas e datas</h3>
-      </div>
+    <section class="border-t p-5 sm:p-6" :style="temaClaro ? 'border-color:#e5e7eb' : 'border-color:#303038'">
+      <div class="mb-4 flex items-center gap-3"><span class="grid h-8 w-8 place-items-center rounded-md bg-emerald-600 text-sm font-bold text-white">2</span><h3 class="text-sm font-semibold">Valor, parcelas e datas</h3></div>
       <div class="grid grid-cols-1 gap-4 sm:grid-cols-3">
         {% include "financeiro/pagar/_field.html" with field=form.valor_original %}
         {% include "financeiro/pagar/_field.html" with field=form.parcela %}
@@ -69,41 +69,18 @@
       </div>
     </section>
 
-    <section class="border-t p-5 sm:p-6" :style="temaClaro ? 'border-color:#e5e7eb;' : 'border-color:#303038;'">
-      <div class="mb-4 flex items-center gap-3">
-        <span class="grid h-8 w-8 shrink-0 place-items-center rounded-md bg-violet-600 text-sm font-bold text-white">3</span>
-        <div>
-          <h3 class="text-sm font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f3f4f6;'">Classificação financeira</h3>
-          <p class="text-xs" :style="temaClaro ? 'color:#64748b;' : 'color:#9ca3af;'">Grupo, subgrupo e categoria definem a conta contábil automaticamente.</p>
-        </div>
-      </div>
+    <section class="border-t p-5 sm:p-6" :style="temaClaro ? 'border-color:#e5e7eb' : 'border-color:#303038'">
+      <div class="mb-4 flex items-center gap-3"><span class="grid h-8 w-8 place-items-center rounded-md bg-violet-600 text-sm font-bold text-white">3</span><div><h3 class="text-sm font-semibold">Classificacao financeira</h3><p class="text-xs opacity-70">Grupo, subgrupo e categoria definem a conta contabil automaticamente.</p><p x-show="tipoLancamento!=='fornecedor'" x-cloak class="mt-1 text-xs font-medium text-emerald-500">Pesquise por Salarios, Ferias, 13o, INSS, FGTS ou outro encargo.</p></div></div>
       <div class="grid grid-cols-1 gap-4 lg:grid-cols-5">
-        <div class="lg:col-span-2">
-          <label for="{{ form.forma_pagamento.id_for_label }}" class="mb-1 block text-sm font-medium" :style="temaClaro ? 'color:#374151;' : 'color:#d1d5db;'">{{ form.forma_pagamento.label }}</label>
-          {{ form.forma_pagamento|add_class:"form-input" }}
-          {% if form.forma_pagamento.errors %}<p class="mt-1 text-xs text-red-500">{{ form.forma_pagamento.errors|join:", " }}</p>{% endif %}
-        </div>
-        <div class="lg:col-span-3">
-          <label class="mb-1 block text-sm font-medium" :style="temaClaro ? 'color:#374151;' : 'color:#d1d5db;'">
-            {{ form.plano_contas.label }}{% if form.plano_contas.field.required %} <span class="text-red-500">*</span>{% endif %}
-          </label>
-          {% include "financeiro/pagar/_search_select.html" with field=form.plano_contas placeholder="Pesquisar categoria ou conta contábil" %}
-          {% if form.plano_contas.errors %}<p class="mt-1 text-xs text-red-500">{{ form.plano_contas.errors|join:", " }}</p>{% endif %}
-        </div>
-        <div class="lg:col-span-5">
-          <label for="{{ form.observacao.id_for_label }}" class="mb-1 block text-sm font-medium" :style="temaClaro ? 'color:#374151;' : 'color:#d1d5db;'">{{ form.observacao.label }}</label>
-          {{ form.observacao|add_class:"form-input"|attr:"placeholder:Informações adicionais sobre o título" }}
-          {% if form.observacao.errors %}<p class="mt-1 text-xs text-red-500">{{ form.observacao.errors|join:", " }}</p>{% endif %}
-        </div>
+        <div class="lg:col-span-2"><label class="mb-1 block text-sm font-medium">{{ form.forma_pagamento.label }}</label>{{ form.forma_pagamento|add_class:"form-input" }}{{ form.forma_pagamento.errors }}</div>
+        <div class="lg:col-span-3"><label class="mb-1 block text-sm font-medium">{{ form.plano_contas.label }}{% if form.plano_contas.field.required %} <span class="text-red-500">*</span>{% endif %}</label>{% include "financeiro/pagar/_search_select.html" with field=form.plano_contas placeholder="Pesquisar categoria ou conta contabil" %}{% if form.plano_contas.errors %}<p class="mt-1 text-xs text-red-500">{{ form.plano_contas.errors|join:", " }}</p>{% endif %}</div>
+        <div class="lg:col-span-5"><label class="mb-1 block text-sm font-medium">{{ form.observacao.label }}</label>{{ form.observacao|add_class:"form-input"|attr:"placeholder:Detalhes do pagamento ou da competencia" }}{{ form.observacao.errors }}</div>
       </div>
     </section>
 
-    <div class="flex flex-wrap justify-end gap-3 border-t px-5 py-4 sm:px-6" :style="temaClaro ? 'border-color:#e5e7eb; background:#f8fafc;' : 'border-color:#303038; background:#1c1c20;'">
+    <div class="flex justify-end gap-3 border-t px-5 py-4" :style="temaClaro ? 'border-color:#e5e7eb;background:#f8fafc' : 'border-color:#303038;background:#1c1c20'">
       <a href="{{ cancel_url }}" class="btn-secondary">Cancelar</a>
-      <button type="submit" class="btn-primary" :disabled="loading">
-        <span x-show="!loading">Lançar título</span>
-        <span x-show="loading" x-cloak>Salvando...</span>
-      </button>
+      <button type="submit" class="btn-primary" :disabled="loading"><span x-show="!loading">Lancar titulo</span><span x-show="loading" x-cloak>Salvando...</span></button>
     </div>
   </form>
 </div>
@@ -113,67 +90,17 @@
 <script>
 function financeSearchSelect(root) {
   return {
-    value: root.dataset.initial || '',
-    query: '',
-    open: false,
-
-    init() {
-      const selected = this.options().find(option => option.dataset.value === this.value);
-      if (selected) this.query = selected.dataset.label;
-    },
-
-    options() {
-      return Array.from(root.querySelectorAll('[data-finance-option]'));
-    },
-
-    normalize(text) {
-      return (text || '')
-        .normalize('NFD')
-        .replace(/[\u0300-\u036f]/g, '')
-        .toLowerCase()
-        .replace(/[^a-z0-9]+/g, ' ')
-        .trim();
-    },
-
-    matches(option) {
-      return !this.query || this.normalize(option.dataset.search).includes(this.normalize(this.query));
-    },
-
-    visibleOptions() {
-      return this.options().filter(option => this.matches(option));
-    },
-
-    visibleCount() {
-      return this.visibleOptions().length;
-    },
-
-    select(option) {
-      this.value = option.dataset.value;
-      this.query = option.dataset.label;
-      this.open = false;
-    },
-
-    clear() {
-      this.value = '';
-      this.query = '';
-      this.open = true;
-    },
-
-    focusOption(direction) {
-      this.open = true;
-      this.$nextTick(() => {
-        const visible = this.visibleOptions();
-        if (!visible.length) return;
-        const current = document.activeElement;
-        const index = visible.indexOf(current);
-        const next = index < 0 ? (direction > 0 ? 0 : visible.length - 1) : Math.max(0, Math.min(visible.length - 1, index + direction));
-        visible[next].focus();
-      });
-    },
-
-    closeLater() {
-      setTimeout(() => { this.open = false; }, 180);
-    },
+    value: root.dataset.initial || '', query: '', open: false,
+    init() { const selected = this.options().find(option => option.dataset.value === this.value); if (selected) this.query = selected.dataset.label; },
+    options() { return Array.from(root.querySelectorAll('[data-finance-option]')); },
+    normalize(text) { return (text || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim(); },
+    matches(option) { return !this.query || this.normalize(option.dataset.search).includes(this.normalize(this.query)); },
+    visibleOptions() { return this.options().filter(option => this.matches(option)); },
+    visibleCount() { return this.visibleOptions().length; },
+    select(option) { this.value = option.dataset.value; this.query = option.dataset.label; this.open = false; },
+    clear() { this.value = ''; this.query = ''; this.open = true; },
+    focusOption(direction) { this.open = true; this.$nextTick(() => { const visible = this.visibleOptions(); if (!visible.length) return; const index = visible.indexOf(document.activeElement); const next = index < 0 ? (direction > 0 ? 0 : visible.length - 1) : Math.max(0, Math.min(visible.length - 1, index + direction)); visible[next].focus(); }); },
+    closeLater() { setTimeout(() => { this.open = false; }, 180); },
   };
 }
 </script>

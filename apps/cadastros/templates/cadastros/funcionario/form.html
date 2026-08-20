@@ -1,0 +1,48 @@
+{% extends "_base.html" %}
+{% load widget_tweaks %}
+
+{% block title %}{{ title }}{% endblock %}
+{% block page_title %}Funcionarios{% endblock %}
+
+{% block content %}
+<div class="mx-auto max-w-4xl space-y-4">
+  <div class="flex items-end justify-between gap-3">
+    <div>
+      <a href="{% url 'cadastros:funcionario-list' %}" class="text-sm text-blue-500">Funcionarios /</a>
+      <h2 class="mt-1 text-xl font-semibold">{{ title }}</h2>
+    </div>
+    <span class="text-xs" :style="temaClaro ? 'color:#64748b' : 'color:#94a3b8'">Cadastro financeiro, nao substitui a folha.</span>
+  </div>
+  <form method="post" class="card overflow-hidden" novalidate>{% csrf_token %}
+    {% if form.errors %}<div class="m-5 rounded-md border border-red-300 bg-red-50 p-3 text-sm text-red-700">Confira os campos destacados. {{ form.non_field_errors }}</div>{% endif %}
+    <section class="p-5 sm:p-6">
+      <h3 class="mb-4 text-sm font-semibold uppercase" :style="temaClaro ? 'color:#475569' : 'color:#cbd5e1'">Identificacao e vinculo</h3>
+      <div class="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        <div class="lg:col-span-2"><label class="mb-1 block text-sm font-medium">Nome *</label>{{ form.nome|add_class:"form-input" }}{{ form.nome.errors }}</div>
+        <div><label class="mb-1 block text-sm font-medium">CPF</label>{{ form.cpf|add_class:"form-input"|attr:"placeholder:000.000.000-00" }}{{ form.cpf.errors }}</div>
+        <div><label class="mb-1 block text-sm font-medium">Cargo</label>{{ form.cargo|add_class:"form-input" }}</div>
+        <div><label class="mb-1 block text-sm font-medium">Data de admissao</label>{{ form.data_admissao|add_class:"form-input" }}</div>
+        <div><label class="mb-1 block text-sm font-medium">Salario base</label>{{ form.salario_base|add_class:"form-input" }}</div>
+        <div><label class="mb-1 block text-sm font-medium">Telefone</label>{{ form.telefone|add_class:"form-input" }}</div>
+        <div class="sm:col-span-2"><label class="mb-1 block text-sm font-medium">E-mail</label>{{ form.email|add_class:"form-input" }}</div>
+      </div>
+    </section>
+    <section class="border-t p-5 sm:p-6" :style="temaClaro ? 'border-color:#e5e7eb' : 'border-color:#303038'">
+      <h3 class="mb-1 text-sm font-semibold uppercase" :style="temaClaro ? 'color:#475569' : 'color:#cbd5e1'">Dados para pagamento</h3>
+      <p class="mb-4 text-xs" :style="temaClaro ? 'color:#64748b' : 'color:#94a3b8'">Informe Pix ou conta bancaria. Nao e necessario preencher os dois.</p>
+      <div class="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <div class="sm:col-span-2"><label class="mb-1 block text-sm font-medium">Chave Pix</label>{{ form.chave_pix|add_class:"form-input" }}</div>
+        <div class="sm:col-span-2"><label class="mb-1 block text-sm font-medium">Banco</label>{{ form.banco|add_class:"form-input" }}</div>
+        <div><label class="mb-1 block text-sm font-medium">Agencia</label>{{ form.agencia|add_class:"form-input" }}</div>
+        <div><label class="mb-1 block text-sm font-medium">Conta</label>{{ form.conta|add_class:"form-input" }}</div>
+        <div class="sm:col-span-2"><label class="mb-1 block text-sm font-medium">Tipo de conta</label>{{ form.tipo_conta|add_class:"form-input" }}</div>
+        <div class="sm:col-span-2 lg:col-span-4"><label class="mb-1 block text-sm font-medium">Observacao</label>{{ form.observacao|add_class:"form-input" }}</div>
+      </div>
+    </section>
+    <div class="flex justify-end gap-3 border-t px-5 py-4" :style="temaClaro ? 'border-color:#e5e7eb;background:#f8fafc' : 'border-color:#303038;background:#1c1c20'">
+      <a href="{% url 'cadastros:funcionario-list' %}" class="btn-secondary">Cancelar</a>
+      <button type="submit" class="btn-primary">Salvar funcionario</button>
+    </div>
+  </form>
+</div>
+{% endblock %}

@@ -80,9 +80,21 @@ class ContaReceber(TimestampedModel):
 
 
 class ContaPagar(TimestampedModel):
+    class TipoLancamento(models.TextChoices):
+        FORNECEDOR = "fornecedor", "Fornecedor ou outro"
+        FUNCIONARIO = "funcionario", "Pagamento ao funcionario"
+        ENCARGO = "encargo", "Encargo ou beneficio"
+
     filial = models.ForeignKey(Filial, on_delete=models.PROTECT, related_name="contas_pagar")
     fornecedor = models.ForeignKey(Fornecedor, on_delete=models.PROTECT,
                                     null=True, blank=True, related_name="contas_pagar")
+    funcionario = models.ForeignKey(
+        "cadastros.Funcionario", on_delete=models.PROTECT,
+        null=True, blank=True, related_name="contas_pagar",
+    )
+    tipo_lancamento = models.CharField(
+        max_length=12, choices=TipoLancamento.choices, default=TipoLancamento.FORNECEDOR,
+    )
     documento_tipo = models.CharField(max_length=30, blank=True)
     documento_id = models.BigIntegerField(null=True, blank=True)
     documento_numero = models.CharField(max_length=20, blank=True)
@@ -135,7 +147,26 @@ class ContaPagar(TimestampedModel):
         indexes = [
             models.Index(fields=["filial", "status", "data_vencimento"]),
             models.Index(fields=["filial", "fornecedor"]),
+            models.Index(fields=["filial", "funcionario"]),
         ]
 
     def __str__(self):
         return f"CP {self.documento_numero}/{self.parcela}"
+
+    @property
+    def beneficiario_nome(self):
+        if self.funcionario_id:
+            return self.funcionario.nome
+        if self.fornecedor_id:
+            return str(self.fornecedor)
+        if self.tipo_lancamento == self.TipoLancamento.ENCARGO:
+            return "Encargo trabalhista"
+        return "Sem beneficiario"
+
+    @property
+    def beneficiario_documento(self):
+        if self.funcionario_id:
+            return self.funcionario.cpf
+        if self.fornecedor_id:
+            return self.fornecedor.cpf_cnpj
+        return ""

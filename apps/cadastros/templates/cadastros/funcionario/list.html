@@ -1,0 +1,59 @@
+{% extends "_list_base.html" %}
+
+{% block list_title %}Funcionarios{% endblock %}
+{% block page_title %}Funcionarios{% endblock %}
+{% block list_subtitle %}<p class="mt-1 text-sm" :style="temaClaro ? 'color:#64748b' : 'color:#94a3b8'">Dados essenciais para salarios, beneficios e encargos.</p>{% endblock %}
+
+{% block list_actions %}
+<a href="{% url 'cadastros:funcionario-create' %}" class="btn-primary">
+  <span class="text-lg leading-none">+</span> Novo funcionario
+</a>
+{% endblock %}
+
+{% block list_filters %}
+<form method="get" class="card grid grid-cols-1 gap-3 p-4 md:grid-cols-12">
+  <div class="md:col-span-8">
+    <input class="form-input" type="search" name="q" value="{{ busca }}" placeholder="Buscar por nome, CPF, cargo ou chave Pix">
+  </div>
+  <label class="flex items-center gap-2 text-sm md:col-span-2" :style="temaClaro ? 'color:#475569' : 'color:#cbd5e1'">
+    <input type="checkbox" name="inativos" value="1" {% if mostrar_inativos %}checked{% endif %}> Mostrar inativos
+  </label>
+  <button class="btn-secondary justify-center md:col-span-2" type="submit">Filtrar</button>
+</form>
+{% endblock %}
+
+{% block table_head %}
+<th class="px-4 py-3 text-left text-xs font-semibold uppercase">Nome</th>
+<th class="px-4 py-3 text-left text-xs font-semibold uppercase">CPF</th>
+<th class="px-4 py-3 text-left text-xs font-semibold uppercase">Cargo</th>
+<th class="px-4 py-3 text-left text-xs font-semibold uppercase">Pagamento</th>
+<th class="px-4 py-3 text-left text-xs font-semibold uppercase">Salario base</th>
+<th class="px-4 py-3 text-right text-xs font-semibold uppercase">Acoes</th>
+{% endblock %}
+
+{% block table_body %}
+{% for funcionario in funcionarios %}
+<tr class="border-t" :style="temaClaro ? 'border-color:#eef2f7' : 'border-color:#303038'">
+  <td class="px-4 py-3">
+    <a class="font-semibold hover:underline" href="{% url 'cadastros:funcionario-update' funcionario.pk %}">{{ funcionario.nome }}</a>
+    {% if not funcionario.ativo %}<span class="ml-2 rounded bg-red-100 px-2 py-0.5 text-xs font-semibold text-red-700">Inativo</span>{% endif %}
+  </td>
+  <td class="px-4 py-3 font-mono text-xs">{{ funcionario.cpf|default:"-" }}</td>
+  <td class="px-4 py-3">{{ funcionario.cargo|default:"-" }}</td>
+  <td class="px-4 py-3 text-sm">
+    {% if funcionario.chave_pix %}Pix: {{ funcionario.chave_pix|truncatechars:28 }}{% elif funcionario.banco %}{{ funcionario.banco }} - Ag. {{ funcionario.agencia }} / {{ funcionario.conta }}{% else %}-{% endif %}
+  </td>
+  <td class="px-4 py-3 font-semibold">R$ {{ funcionario.salario_base|floatformat:2 }}</td>
+  <td class="px-4 py-3 text-right">
+    <a href="{% url 'cadastros:funcionario-update' funcionario.pk %}" class="btn-secondary px-3 py-1.5">Editar</a>
+    {% if pode_editar %}
+    <form method="post" action="{% url 'cadastros:funcionario-toggle-ativo' funcionario.pk %}" class="inline">{% csrf_token %}
+      <button class="btn-secondary px-3 py-1.5" type="submit">{% if funcionario.ativo %}Desativar{% else %}Ativar{% endif %}</button>
+    </form>
+    {% endif %}
+  </td>
+</tr>
+{% empty %}
+<tr><td colspan="6" class="px-4 py-10 text-center" :style="temaClaro ? 'color:#64748b' : 'color:#94a3b8'">Nenhum funcionario encontrado.</td></tr>
+{% endfor %}
+{% endblock %}
