@@ -80,6 +80,43 @@
     </div>
 
     {# ── Produtos ─────────────────────────────────────────────────────── #}
+    {% comment %}
+      ARTE DO PEDIDO. É onde o layout costuma estar antes de virar
+      aplicação numa peça: o cliente manda o escudo por WhatsApp, e ele
+      é anexado ao pedido inteiro. Aparece aqui em cima porque é a
+      primeira coisa que se olha para aprovar.
+
+      Só ARTE e REFERÊNCIA chegam a esta página -- a filtragem é por
+      tipo, na view. Contrato e planilha de custo ficam do lado de
+      dentro, onde foram anexados.
+    {% endcomment %}
+    {% if artes %}
+      <div class="bg-white rounded-2xl p-5 mb-4" style="box-shadow:0 4px 16px rgba(15,23,42,.06);">
+        <p class="text-xs font-bold uppercase tracking-wider mb-3" style="color:#64748b;">
+          Arte do pedido
+        </p>
+        <div class="grid grid-cols-2 sm:grid-cols-3 gap-3">
+          {% for a in artes %}
+            <a href="{{ a.arquivo.url }}" target="_blank" rel="noopener" class="block">
+              {% if a.pode_pre_visualizar %}
+                <img src="{{ a.arquivo.url }}" alt="{{ a.descricao|default:a.nome_arquivo }}"
+                     class="w-full rounded-xl"
+                     style="aspect-ratio:1; object-fit:contain; background:#fff; border:1px solid #e2e8f0;">
+              {% else %}
+                <div class="w-full rounded-xl flex flex-col items-center justify-center"
+                     style="aspect-ratio:1; background:#f1f5f9; border:1px solid #e2e8f0; color:#64748b;">
+                  <span style="font-size:26px;">📄</span>
+                  <span class="text-[10px] font-bold mt-1 uppercase">{{ a.extensao }}</span>
+                </div>
+              {% endif %}
+              <p class="text-xs mt-1 text-center truncate" style="color:#64748b;">
+                {{ a.descricao|default:a.nome_arquivo }}
+              </p>
+            </a>
+          {% endfor %}
+        </div>
+      </div>
+    {% endif %}
     {% for item in itens %}
       <div class="bg-white rounded-2xl p-6 space-y-4" style="box-shadow:0 4px 16px rgba(15,23,42,.06);">
         <div class="flex flex-wrap items-start justify-between gap-3">
@@ -147,14 +184,65 @@
 
         {% if item.personalizacoes.all %}
           <div>
-            <p class="text-xs font-bold uppercase tracking-wider mb-1" style="color:#64748b;">
+            <p class="text-xs font-bold uppercase tracking-wider mb-2" style="color:#64748b;">
               Personalização
             </p>
-            {% for p in item.personalizacoes.all %}
-              <p class="text-sm" style="color:#334155;">
-                {{ p.get_tipo_display }} em {{ p.get_tecnica_display }}{% if p.local %} · {{ p.local }}{% endif %}
-              </p>
-            {% endfor %}
+            {% comment %}
+              A ARTE, e não só o nome dela. A página dizia "Arte /
+              estampa em Sublimação" e nada mais -- e é a imagem que o
+              cliente precisa olhar para poder aprovar. Aprovar um
+              texto que descreve a arte não é aprovar a arte.
+            {% endcomment %}
+            <div class="space-y-3">
+              {% for p in item.personalizacoes.all %}
+                <div class="flex items-start gap-3">
+                  {% if p.arquivo %}
+                    {% if p.pode_pre_visualizar %}
+                      <a href="{{ p.arquivo.url }}" target="_blank" rel="noopener" class="shrink-0">
+                        <img src="{{ p.arquivo.url }}" alt="{{ p.get_tipo_display }}"
+                             class="rounded-xl"
+                             style="width:96px; height:96px; object-fit:contain; background:#fff; border:1px solid #e2e8f0;">
+                      </a>
+                    {% else %}
+                      {% comment %}
+                        PDF, CDR e AI o navegador não desenha. Em vez de
+                        um quadrado quebrado, o cliente ganha o arquivo
+                        -- que é o que ele consegue abrir de verdade.
+                      {% endcomment %}
+                      <a href="{{ p.arquivo.url }}" target="_blank" rel="noopener"
+                         class="shrink-0 rounded-xl flex flex-col items-center justify-center"
+                         style="width:96px; height:96px; background:#f1f5f9; border:1px solid #e2e8f0; color:#64748b;">
+                        <span style="font-size:22px;">📄</span>
+                        <span class="text-[10px] font-bold mt-1 uppercase">{{ p.extensao }}</span>
+                      </a>
+                    {% endif %}
+                  {% endif %}
+                  <div class="min-w-0">
+                    <p class="text-sm font-semibold" style="color:#0f172a;">
+                      {{ p.get_tipo_display }} em {{ p.get_tecnica_display }}
+                    </p>
+                    {% if p.local %}
+                      <p class="text-sm" style="color:#334155;">{{ p.local }}</p>
+                    {% endif %}
+                    {% if p.nome_personalizado or p.numero_personalizado %}
+                      <p class="text-sm" style="color:#334155;">
+                        {{ p.nome_personalizado }} {{ p.numero_personalizado }}
+                      </p>
+                    {% endif %}
+                    {% if not p.arquivo %}
+                      {% comment %}
+                        Dizer que a arte ainda não subiu evita a leitura
+                        de que ela sumiu -- e é o que faz o cliente
+                        cobrar antes de aprovar no escuro.
+                      {% endcomment %}
+                      <p class="text-xs mt-0.5" style="color:#b45309;">
+                        Arte ainda não anexada.
+                      </p>
+                    {% endif %}
+                  </div>
+                </div>
+              {% endfor %}
+            </div>
           </div>
         {% endif %}
       </div>

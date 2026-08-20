@@ -32,6 +32,22 @@ EXTENSOES = [
 COM_PREVIA = {'png', 'jpg', 'jpeg', 'gif', 'webp', 'svg'}
 
 
+def caminho_do_arquivo(instancia, nome_original: str) -> str:
+    """
+    Guarda dentro de uma pasta com o TOKEN do pedido.
+
+    A pasta `moda/pedidos/` era comum a todo mundo, e o nome do arquivo é o
+    que o usuário mandou: `contrato.pdf` viraria um endereço adivinhável, e
+    /media/ é servido sem login (é isso que faz a arte abrir no link do
+    cliente). Com o token no caminho, o endereço do arquivo é tão secreto
+    quanto o link do pedido -- que é exatamente a proteção que ele já tem.
+    """
+    from django.utils.text import get_valid_filename
+
+    token = getattr(instancia.pedido, 'token_publico', '') or 'sem-token'
+    return f'moda/pedidos/{token}/{get_valid_filename(nome_original)}'
+
+
 class ArquivoPedido(models.Model):
     """Um arquivo pendurado no pedido inteiro."""
 
@@ -45,7 +61,7 @@ class ArquivoPedido(models.Model):
         'moda.PedidoProducao', on_delete=models.CASCADE, related_name='arquivos',
     )
     arquivo = models.FileField(
-        upload_to='moda/pedidos/', validators=[FileExtensionValidator(EXTENSOES)],
+        upload_to=caminho_do_arquivo, validators=[FileExtensionValidator(EXTENSOES)],
     )
     tipo = models.CharField(max_length=20, choices=Tipo.choices, default=Tipo.ARTE)
     descricao = models.CharField(

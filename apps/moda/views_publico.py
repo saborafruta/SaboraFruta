@@ -27,13 +27,22 @@ from django.views import View
 
 from apps.core.middleware.audit import get_client_ip
 
-from .models import AprovacaoPedido, PedidoProducao
+from .models import AprovacaoPedido, ArquivoPedido, PedidoProducao
 from .services.pedido_pdf import PedidoPdfService
 
 # Status internos que não fazem sentido para quem está do lado de fora.
 # Cancelado aparece; orçamento não — pedido que ainda é proposta não deveria
 # ter link circulando.
 STATUS_OCULTOS = ('orcamento',)
+
+# O que do acervo de arquivos aparece para o cliente. A escolha é por TIPO,
+# e não por arquivo: quem anexa não deveria ter de decidir, item a item, o
+# que vaza para fora -- e a decisão errada aqui manda contrato e planilha de
+# custo para o WhatsApp do cliente.
+TIPOS_VISIVEIS_AO_CLIENTE = (
+    ArquivoPedido.Tipo.ARTE,
+    ArquivoPedido.Tipo.REFERENCIA,
+)
 
 
 def _blindar(resposta) -> None:
@@ -67,6 +76,7 @@ def _buscar(token: str) -> PedidoProducao:
         .prefetch_related(
             'itens__produto', 'itens__modelo', 'itens__cor', 'itens__tecido',
             'itens__grade__tamanho', 'itens__personalizacoes',
+            'arquivos',
             'itens__visuais__mockup',
         )
         .filter(token_publico=token)
@@ -122,6 +132,13 @@ class PedidoOnlineView(View):
             # lá o cliente estaria aprovando um documento que ainda pode
             # mudar de preço.
             'aprovacao': getattr(pedido, 'aprovacao', None),
+            # ARTE DO PEDIDO. Só os tipos que o cliente deve ver: a arte e
+            # a referência que ele mesmo mandou. Documento e 'outro' ficam
+            # de fora -- contrato e recado interno não são para este lado.
+            'artes': [
+                a for a in pedido.arquivos.all()
+                if a.tipo in TIPOS_VISIVEIS_AO_CLIENTE
+            ],
         })
         _blindar(resposta)
         return resposta

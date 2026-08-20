@@ -20,6 +20,9 @@
             Layout, referência do cliente, planilha de nomes — tudo que veio junto.
           {% endif %}
         </p>
+        <p class="text-xs mt-0.5" style="color:#059669;">
+          Arte e referência aparecem no link do cliente.
+        </p>
       </div>
       <button type="button" class="btn-secondary text-sm" @click="enviando = !enviando"
               x-text="enviando ? 'Fechar' : '+ Anexar arquivo'"></button>
@@ -56,6 +59,17 @@
                 {{ anexo.get_tipo_display }} · {{ anexo.tamanho_legivel }}
                 {% if anexo.enviado_por %}· {{ anexo.enviado_por.nome }}{% endif %}
               </p>
+              {% comment %}
+                QUEM VÊ O QUÊ, dito no cartão. Arte e referência aparecem no
+                link que vai para o cliente; documento e outro ficam só aqui.
+                Sem esta etiqueta, a escolha do tipo parece organização e é
+                na verdade a decisão de publicar ou não o arquivo.
+              {% endcomment %}
+              {% if anexo.tipo == 'arte' or anexo.tipo == 'referencia' %}
+                <p class="text-[10px] mt-0.5" style="color:#059669;">visível ao cliente</p>
+              {% else %}
+                <p class="text-[10px] mt-0.5" :style="temaClaro ? 'color:#94a3b8;' : 'color:#71717a;'">só interno</p>
+              {% endif %}
               <div class="flex items-center gap-2 mt-1.5">
                 <a href="{{ anexo.arquivo.url }}" target="_blank" rel="noopener"
                    class="text-[11px] underline"
