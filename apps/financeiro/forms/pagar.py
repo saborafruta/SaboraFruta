@@ -1,6 +1,7 @@
 """Formulários de Contas a Pagar."""
 from datetime import date
 from decimal import Decimal
+from pathlib import Path
 
 from django import forms
 
@@ -14,6 +15,25 @@ VALOR_WIDGET = forms.NumberInput(attrs={
     'step': '0.01',
     'inputmode': 'decimal',
     'data-decimal-places': '2',
+})
+
+EXTENSOES_COMPROVANTE = {'.pdf', '.jpg', '.jpeg', '.png', '.webp', '.heic', '.heif'}
+LIMITE_COMPROVANTE = 10 * 1024 * 1024
+
+
+def validar_comprovante(arquivo):
+    if not arquivo:
+        return arquivo
+    extensao = Path(arquivo.name).suffix.lower()
+    if extensao not in EXTENSOES_COMPROVANTE:
+        raise forms.ValidationError('Envie uma foto ou PDF válido.')
+    if arquivo.size > LIMITE_COMPROVANTE:
+        raise forms.ValidationError('O comprovante deve ter no máximo 10 MB.')
+    return arquivo
+
+
+COMPROVANTE_WIDGET = forms.ClearableFileInput(attrs={
+    'accept': 'image/*,.pdf,application/pdf',
 })
 
 
@@ -142,10 +162,11 @@ class ContaPagarForm(forms.Form):
         required=False,
         label='Conta bancária debitada',
     )
-    comprovante_url_pagamento = forms.URLField(
+    comprovante_pagamento = forms.FileField(
         required=False,
-        label='URL do comprovante',
-        widget=forms.URLInput(attrs={'placeholder': 'https://...'}),
+        label='Comprovante',
+        widget=COMPROVANTE_WIDGET,
+        validators=[validar_comprovante],
     )
     plano_contas = CategoriaFinanceiraChoiceField(
         queryset=PlanoContas.objects.none(),
@@ -264,7 +285,7 @@ class ContaPagarForm(forms.Form):
             cleaned['data_pagamento_imediato'] = None
             cleaned['forma_pagamento_utilizada'] = None
             cleaned['conta_bancaria_pagamento'] = None
-            cleaned['comprovante_url_pagamento'] = ''
+            cleaned['comprovante_pagamento'] = None
         return cleaned
 
 
@@ -320,11 +341,11 @@ class PagamentoContaPagarForm(forms.Form):
         label='Conta bancária',
         help_text='Conta debitada no pagamento.',
     )
-    comprovante_url = forms.URLField(
+    comprovante = forms.FileField(
         required=False,
-        label='URL do comprovante',
-        help_text='Link para comprovante de pagamento (opcional).',
-        widget=forms.URLInput(attrs={'placeholder': 'https://...'}),
+        label='Comprovante',
+        widget=COMPROVANTE_WIDGET,
+        validators=[validar_comprovante],
     )
     observacao = forms.CharField(
         widget=forms.Textarea(attrs={'rows': 2}),

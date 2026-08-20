@@ -163,7 +163,7 @@
       {% if conta.comprovante_url %}
       <div class="sm:col-span-2">
         <span class="block text-xs font-medium mb-0.5"
-              :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Comprovante</span>
+              :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Comprovante por link antigo</span>
         <a href="{{ conta.comprovante_url }}" target="_blank" rel="noopener"
            :style="temaClaro ? 'color:#2563eb;' : 'color:#60a5fa;'"
            class="text-sm hover:underline break-all">
@@ -243,14 +243,24 @@
     </div>
     <div class="divide-y" :style="temaClaro ? 'border-color:#e5e7eb' : 'border-color:#303038'">
       {% for pagamento in pagamentos %}
-      <div class="grid grid-cols-1 gap-3 px-5 py-4 text-sm sm:grid-cols-4">
+      <div class="grid grid-cols-1 gap-3 px-4 py-4 text-sm sm:grid-cols-4 sm:px-5">
         <div><span class="block text-xs opacity-60">Data</span><strong>{{ pagamento.data_pagamento|date:"d/m/Y" }}</strong></div>
         <div><span class="block text-xs opacity-60">Valor pago</span><strong class="text-emerald-500">R$ {{ pagamento.valor_pago|floatformat:2 }}</strong></div>
         <div><span class="block text-xs opacity-60">Forma utilizada</span><strong>{{ pagamento.forma_pagamento.descricao|default:"Não informada" }}</strong></div>
         <div><span class="block text-xs opacity-60">Conta debitada</span><strong>{{ pagamento.conta_bancaria.descricao|default:pagamento.conta_bancaria|default:"Não informada" }}</strong></div>
         {% if pagamento.valor_juros or pagamento.valor_multa or pagamento.valor_desconto %}<p class="sm:col-span-4 text-xs opacity-70">Juros: R$ {{ pagamento.valor_juros|floatformat:2 }} · Multa: R$ {{ pagamento.valor_multa|floatformat:2 }} · Desconto: R$ {{ pagamento.valor_desconto|floatformat:2 }}</p>{% endif %}
-        {% if pagamento.observacao %}<p class="text-xs opacity-70 sm:col-span-3">{{ pagamento.observacao }}</p>{% endif %}
-        {% if pagamento.comprovante_url %}<a class="text-xs text-blue-500 hover:underline sm:text-right" href="{{ pagamento.comprovante_url }}" target="_blank" rel="noopener">Abrir comprovante</a>{% endif %}
+        {% if pagamento.observacao %}<p class="text-xs opacity-70 sm:col-span-2">{{ pagamento.observacao }}</p>{% endif %}
+        {% if pagamento.comprovante_arquivo %}
+        <div class="flex w-full gap-2 sm:col-span-2 sm:justify-end">
+          <a class="inline-flex min-h-11 flex-1 items-center justify-center rounded-md border border-blue-500/40 px-3 py-2 text-sm font-semibold text-blue-500 sm:flex-none"
+             href="{% url 'financeiro:pagar_comprovante' conta.pk pagamento.pk %}" target="_blank" rel="noopener">Visualizar</a>
+          <a class="inline-flex min-h-11 flex-1 items-center justify-center rounded-md bg-blue-600 px-3 py-2 text-sm font-semibold text-white sm:flex-none"
+             href="{% url 'financeiro:pagar_comprovante' conta.pk pagamento.pk %}?download=1">Baixar</a>
+        </div>
+        {% elif pagamento.comprovante_url %}
+        <a class="inline-flex min-h-11 items-center justify-center rounded-md border border-blue-500/40 px-3 py-2 text-sm font-semibold text-blue-500 sm:col-span-2 sm:justify-self-end"
+           href="{{ pagamento.comprovante_url }}" target="_blank" rel="noopener">Abrir comprovante antigo</a>
+        {% endif %}
       </div>
       {% endfor %}
     </div>

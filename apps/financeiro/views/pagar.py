@@ -2,10 +2,13 @@
 from __future__ import annotations
 
 from decimal import Decimal
+import mimetypes
+from pathlib import Path
 
 from django.contrib import messages
 from django.core.paginator import Paginator
 from django.db.models import Count, Q, Sum
+from django.http import FileResponse, Http404
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.utils import timezone
@@ -15,7 +18,7 @@ from apps.core.services.exceptions import DomainError
 from apps.core.services.permissions import PermissaoRequiredMixin
 from apps.financeiro.constants.enums import StatusContaPagar
 from apps.financeiro.forms.pagar import ContaPagarForm, PagamentoContaPagarForm
-from apps.financeiro.models.receber_pagar import ContaPagar
+from apps.financeiro.models.receber_pagar import ContaPagar, PagamentoContaPagar
 from apps.financeiro.services.pagar_service import ContaPagarService
 
 STATUS_CHOICES = StatusContaPagar.choices
@@ -258,7 +261,7 @@ class ContaPagarCreateView(PermissaoRequiredMixin, View):
 
     def post(self, request):
         filial = _filial(request)
-        form = ContaPagarForm(request.POST, filial=filial)
+        form = ContaPagarForm(request.POST, request.FILES, filial=filial)
         if not form.is_valid():
             return render(request, 'financeiro/pagar/form.html', {
                 'title': 'Nova Conta a Pagar',
@@ -302,7 +305,7 @@ class ContaPagarCreateView(PermissaoRequiredMixin, View):
                     data_pagamento=d['data_pagamento_imediato'],
                     forma_pagamento_utilizada=d['forma_pagamento_utilizada'],
                     conta_bancaria_pagamento=d.get('conta_bancaria_pagamento'),
-                    comprovante_url_pagamento=d.get('comprovante_url_pagamento', ''),
+                    comprovante_pagamento=d.get('comprovante_pagamento'),
                 )
                 messages.success(request, f'Conta a pagar #{conta.pk} lançada e quitada com sucesso.')
             else:
@@ -390,7 +393,9 @@ class ContaPagarPagamentoView(PermissaoRequiredMixin, View):
             messages.warning(request, 'Esta conta não pode ser paga.')
             return redirect(reverse('financeiro:pagar_detail', args=[pk]))
 
-        form = PagamentoContaPagarForm(request.POST, filial=_filial(request), conta=conta)
+        form = PagamentoContaPagarForm(
+            request.POST, request.FILES, filial=_filial(request), conta=conta,
+        )
         if not form.is_valid():
             return render(request, 'financeiro/pagar/pagamento.html', {
                 'title': f'Pagar — #{conta.pk}',
@@ -411,7 +416,7 @@ class ContaPagarPagamentoView(PermissaoRequiredMixin, View):
                 valor_juros=d.get('valor_juros'),
                 valor_multa=d.get('valor_multa'),
                 valor_desconto=d.get('valor_desconto'),
-                comprovante_url=d.get('comprovante_url', ''),
+                comprovante=d.get('comprovante'),
                 observacao=d.get('observacao', ''),
             )
             if conta.status == StatusContaPagar.PAGO:
@@ -428,6 +433,35 @@ class ContaPagarPagamentoView(PermissaoRequiredMixin, View):
             })
 
         return redirect(reverse('financeiro:pagar_detail', args=[pk]))
+
+
+class ComprovantePagamentoView(PermissaoRequiredMixin, View):
+    permissao_modulo = 'financeiro'
+    permissao_acao = 'ver'
+
+    def get(self, request, pk, pagamento_pk):
+        pagamento = get_object_or_404(
+            PagamentoContaPagar.objects.for_filial(_filial(request)),
+            pk=pagamento_pk,
+            conta_pagar_id=pk,
+        )
+        if not pagamento.comprovante_arquivo:
+            raise Http404('Comprovante não encontrado.')
+
+        nome = Path(
+            pagamento.comprovante_nome_original or pagamento.comprovante_arquivo.name
+        ).name
+        tipo, _ = mimetypes.guess_type(nome)
+        try:
+            arquivo = pagamento.comprovante_arquivo.open('rb')
+        except (FileNotFoundError, OSError):
+            raise Http404('Arquivo do comprovante não encontrado.')
+        return FileResponse(
+            arquivo,
+            as_attachment=request.GET.get('download') == '1',
+            filename=nome,
+            content_type=tipo or 'application/octet-stream',
+        )
 
 
 class ContaPagarCancelarView(PermissaoRequiredMixin, View):

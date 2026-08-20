@@ -41,6 +41,11 @@ urlpatterns = [
     path("pagar/novo/",               pagar_views.ContaPagarCreateView.as_view(),    name="pagar_criar"),
     path("pagar/<int:pk>/",           pagar_views.ContaPagarDetailView.as_view(),    name="pagar_detail"),
     path("pagar/<int:pk>/pagar/",     pagar_views.ContaPagarPagamentoView.as_view(), name="pagar_pagar"),
+    path(
+        "pagar/<int:pk>/pagamentos/<int:pagamento_pk>/comprovante/",
+        pagar_views.ComprovantePagamentoView.as_view(),
+        name="pagar_comprovante",
+    ),
     path("pagar/<int:pk>/cancelar/",  pagar_views.ContaPagarCancelarView.as_view(),  name="pagar_cancelar"),
 
     # ── Categorias Financeiras ────────────────────────────────────────────────

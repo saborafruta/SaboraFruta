@@ -88,7 +88,7 @@ class ContaPagarService:
     @transaction.atomic
     def criar_e_quitar(
         *, data_pagamento: date, forma_pagamento_utilizada,
-        conta_bancaria_pagamento=None, comprovante_url_pagamento: str = '',
+        conta_bancaria_pagamento=None, comprovante_pagamento=None,
         usuario=None, **dados,
     ) -> ContaPagar:
         """Cria um título único e registra sua quitação integral na mesma transação."""
@@ -99,7 +99,7 @@ class ContaPagarService:
             valor_pago=conta.valor_saldo,
             forma_pagamento=forma_pagamento_utilizada,
             conta_bancaria=conta_bancaria_pagamento,
-            comprovante_url=comprovante_url_pagamento,
+            comprovante=comprovante_pagamento,
             observacao='Quitado no lançamento do título.',
             usuario=usuario,
         )
@@ -150,6 +150,7 @@ class ContaPagarService:
         valor_juros: Decimal = Decimal('0'),
         valor_multa: Decimal = Decimal('0'),
         valor_desconto: Decimal = Decimal('0'),
+        comprovante=None,
         comprovante_url: str = '',
         observacao: str = '',
     ) -> ContaPagar:
@@ -199,7 +200,7 @@ class ContaPagarService:
             conta.observacao = f'{conta.observacao}\n{sufixo}'.strip() if conta.observacao else sufixo
 
         conta.save()
-        PagamentoContaPagar.objects.create(
+        pagamento = PagamentoContaPagar(
             filial=conta.filial,
             conta_pagar=conta,
             data_pagamento=data_pagamento,
@@ -210,9 +211,12 @@ class ContaPagarService:
             forma_pagamento=forma_pagamento,
             conta_bancaria=conta_bancaria,
             comprovante_url=comprovante_url,
+            comprovante_arquivo=comprovante,
+            comprovante_nome_original=getattr(comprovante, 'name', '') if comprovante else '',
             observacao=observacao,
             usuario=usuario,
         )
+        pagamento.save()
         return conta
 
     @staticmethod

@@ -14,7 +14,7 @@
     <p class="text-sm" :style="temaClaro ? 'color:#64748b' : 'color:#94a3b8'">Os campos com * são obrigatórios.</p>
   </div>
 
-  <form method="post" class="card overflow-visible"
+  <form method="post" enctype="multipart/form-data" class="card overflow-visible"
         x-data="{ loading:false, tipoLancamento:'{{ form.tipo_lancamento.value|default:"fornecedor" }}', recorrente:{{ form.recorrente.value|yesno:"true,false" }}, quitarAgora:{{ form.quitar_ao_lancar.value|yesno:"true,false" }} }"
         @submit="loading=true" novalidate>{% csrf_token %}
     <input type="hidden" name="tipo_lancamento" :value="tipoLancamento">
@@ -161,7 +161,7 @@
             {% include "financeiro/pagar/_field.html" with field=form.data_pagamento_imediato %}
             {% include "financeiro/pagar/_field.html" with field=form.forma_pagamento_utilizada %}
             {% include "financeiro/pagar/_field.html" with field=form.conta_bancaria_pagamento %}
-            {% include "financeiro/pagar/_field.html" with field=form.comprovante_url_pagamento %}
+            {% include "financeiro/pagar/_comprovante_upload.html" with field=form.comprovante_pagamento %}
           </div>
           <p class="mt-3 text-xs opacity-65"><strong>Obrigatórios:</strong> data e forma utilizada. Conta bancária e comprovante são opcionais.</p>
         </div>

@@ -1,14 +1,20 @@
 from datetime import date
 from decimal import Decimal
 from importlib import import_module
+from pathlib import Path
+from types import SimpleNamespace
+from tempfile import TemporaryDirectory
 
 from django.apps import apps as django_apps
-from django.test import TestCase
+from django.core.files.uploadedfile import SimpleUploadedFile
+from django.core.exceptions import ValidationError
+from django.http import Http404
+from django.test import RequestFactory, TestCase
 
 from apps.cadastros.forms import FuncionarioForm
 from apps.cadastros.models import Funcionario
 from apps.core.models import Empresa, Filial
-from apps.financeiro.forms.pagar import ContaPagarForm
+from apps.financeiro.forms.pagar import ContaPagarForm, validar_comprovante
 from apps.financeiro.models import (
     ContaPagar,
     FormaPagamento,
@@ -17,6 +23,7 @@ from apps.financeiro.models import (
     PlanoContas,
 )
 from apps.financeiro.services.pagar_service import ContaPagarService
+from apps.financeiro.views.pagar import ComprovantePagamentoView
 
 
 class FuncionarioContaPagarTests(TestCase):
@@ -202,3 +209,75 @@ class FuncionarioContaPagarTests(TestCase):
         self.assertEqual(pagamentos[0].forma_pagamento, self.forma_pix)
         self.assertEqual(pagamentos[1].forma_pagamento, self.forma_prevista)
         self.assertEqual(conta.status, "pago")
+
+    def test_comprovante_valida_tipo_e_tamanho(self):
+        invalido = SimpleUploadedFile(
+            "programa.exe", b"conteudo", content_type="application/octet-stream",
+        )
+        grande = SimpleUploadedFile(
+            "comprovante.pdf", b"x" * (10 * 1024 * 1024 + 1),
+            content_type="application/pdf",
+        )
+
+        with self.assertRaisesMessage(ValidationError, "foto ou PDF"):
+            validar_comprovante(invalido)
+        with self.assertRaisesMessage(ValidationError, "máximo 10 MB"):
+            validar_comprovante(grande)
+
+    def test_comprovante_fica_guardado_e_download_exige_a_filial(self):
+        with TemporaryDirectory() as media_root, self.settings(MEDIA_ROOT=Path(media_root)):
+            conta = ContaPagarService.criar(
+                filial=self.filial,
+                funcionario=self.funcionario,
+                tipo_lancamento="funcionario",
+                valor_original=Decimal("1800.00"),
+                data_emissao=date(2026, 8, 20),
+                data_vencimento=date(2026, 8, 30),
+                plano_contas=self.categoria,
+            )
+            arquivo = SimpleUploadedFile(
+                "recibo agosto.pdf", b"%PDF-1.4 comprovante",
+                content_type="application/pdf",
+            )
+            ContaPagarService.registrar_pagamento(
+                conta=conta,
+                data_pagamento=date(2026, 8, 20),
+                valor_pago=Decimal("1800.00"),
+                forma_pagamento=self.forma_pix,
+                comprovante=arquivo,
+                usuario=None,
+            )
+            pagamento = conta.pagamentos.get()
+            self.assertEqual(pagamento.comprovante_nome_original, "recibo agosto.pdf")
+            self.assertTrue(pagamento.comprovante_arquivo.storage.exists(
+                pagamento.comprovante_arquivo.name,
+            ))
+
+            request = RequestFactory().get('/comprovante/?download=1')
+            request.user = SimpleNamespace(
+                is_authenticated=True,
+                tem_permissao=lambda modulo, acao: True,
+            )
+            request.filial_ativa = self.filial
+            response = ComprovantePagamentoView.as_view()(
+                request, pk=conta.pk, pagamento_pk=pagamento.pk,
+            )
+            self.assertEqual(response.status_code, 200)
+            self.assertIn('attachment;', response['Content-Disposition'])
+            self.assertEqual(b''.join(response.streaming_content), b"%PDF-1.4 comprovante")
+            response.close()
+
+            outra_filial = Filial.objects.create(
+                empresa=self.empresa,
+                razao_social="Outra filial",
+                nome_fantasia="Outra filial",
+                cnpj="50649395000128",
+                uf="RN",
+            )
+            request_outra = RequestFactory().get('/comprovante/')
+            request_outra.user = request.user
+            request_outra.filial_ativa = outra_filial
+            with self.assertRaises(Http404):
+                ComprovantePagamentoView.as_view()(
+                    request_outra, pk=conta.pk, pagamento_pk=pagamento.pk,
+                )

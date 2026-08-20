@@ -28,7 +28,14 @@
             {% if field.field.required %}<span class="text-red-500 ml-0.5">*</span>{% endif %}
           </label>
 
-          {% if field.name == 'foto' or field.name == 'imagem' %}
+          {% if field.name == 'comprovante' or field.name == 'comprovante_pagamento' %}
+            <div class="rounded-md border p-3 sm:p-4"
+                 :style="temaClaro ? 'border-color:#dbe3ee;background:#f8fafc' : 'border-color:#3f3f46;background:#18181b'">
+              <p class="mb-2 text-sm font-medium">Anexar comprovante ou tirar foto</p>
+              {{ field|add_class:"block min-h-12 w-full cursor-pointer text-sm file:mr-3 file:min-h-11 file:rounded-md file:border-0 file:bg-blue-600 file:px-4 file:py-2.5 file:font-semibold file:text-white" }}
+              <p class="mt-2 text-xs opacity-65">PDF ou foto de até 10 MB. No celular, escolha câmera, galeria ou arquivos.</p>
+            </div>
+          {% elif field.name == 'foto' or field.name == 'imagem' %}
             {% if field.value %}
               <div class="mb-2 flex items-center gap-3 rounded-lg border p-2"
                    :style="temaClaro ? 'border-color:#e5e7eb; background:#f8fafc;' : 'border-color:#2f3340; background:#18181b;'">

@@ -1,4 +1,8 @@
 """Contas a receber e contas a pagar."""
+from pathlib import Path
+import uuid
+
+from django.core.validators import FileExtensionValidator
 from django.db import models
 from apps.core.models import Filial, Usuario
 from apps.cadastros.models import Cliente, Fornecedor
@@ -7,6 +11,15 @@ from apps.core.models.base import FilialManager as FilialAwareManager
 from .formas_pagamento import FormaPagamento
 from .conta_bancaria import ContaBancaria, PlanoContas
 from ..constants.enums import StatusContaReceber, StatusContaPagar, StatusPIX
+
+
+EXTENSOES_COMPROVANTE = ['pdf', 'jpg', 'jpeg', 'png', 'webp', 'heic', 'heif']
+
+
+def caminho_comprovante_pagamento(instancia, nome_original):
+    """Usa nome imprevisível e separa os comprovantes por filial."""
+    extensao = Path(nome_original).suffix.lower()
+    return f'financeiro/comprovantes/{instancia.filial_id}/{uuid.uuid4().hex}{extensao}'
 
 
 class ContaReceber(TimestampedModel):
@@ -207,6 +220,13 @@ class PagamentoContaPagar(TimestampedModel):
         ContaBancaria, on_delete=models.SET_NULL, null=True, blank=True, related_name='+',
     )
     comprovante_url = models.URLField(max_length=500, blank=True)
+    comprovante_arquivo = models.FileField(
+        upload_to=caminho_comprovante_pagamento,
+        validators=[FileExtensionValidator(allowed_extensions=EXTENSOES_COMPROVANTE)],
+        max_length=500,
+        blank=True,
+    )
+    comprovante_nome_original = models.CharField(max_length=255, blank=True)
     observacao = models.TextField(blank=True)
     usuario = models.ForeignKey(
         Usuario, on_delete=models.SET_NULL, null=True, blank=True,
