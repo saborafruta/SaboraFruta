@@ -7,6 +7,7 @@ from decimal import Decimal
 from django.db.models import Count, Q, Sum
 
 from apps.financeiro.constants.enums import StatusContaPagar, StatusContaReceber
+from apps.financeiro.models.conta_bancaria import ContaBancaria
 from apps.financeiro.models.receber_pagar import ContaPagar, ContaReceber
 
 
@@ -21,6 +22,13 @@ def _percentual(valor, referencia):
     if not valor or not referencia:
         return 0
     return max(3, min(100, round((valor / referencia) * 100)))
+
+
+def _adicionar_percentuais(itens):
+    maior = max([abs(item['total']) for item in itens] or [ZERO])
+    for item in itens:
+        item['percentual'] = _percentual(abs(item['total']), maior)
+    return itens
 
 
 class DashboardContasService:
@@ -96,10 +104,40 @@ class DashboardContasService:
             .annotate(total=Sum('valor_saldo'))
             .order_by('-total')[:5]
         )
-        maior_cliente = maiores_clientes[0]['total'] if maiores_clientes else ZERO
         for item in maiores_clientes:
             item['nome'] = item['cliente__razao_social'] or 'Cliente não identificado'
-            item['percentual'] = _percentual(item['total'], maior_cliente)
+        _adicionar_percentuais(maiores_clientes)
+
+        formas_previstas_agrupadas = {}
+        formas_previstas = (
+            pagar_qs.filter(status__in=status_pagar)
+            .values('forma_pagamento_prevista__descricao', 'forma_pagamento__descricao')
+            .annotate(total=Sum('valor_saldo'))
+            .order_by('-total')
+        )
+        for item in formas_previstas:
+            nome = (
+                item['forma_pagamento_prevista__descricao']
+                or item['forma_pagamento__descricao']
+                or 'Não informada'
+            )
+            formas_previstas_agrupadas[nome] = formas_previstas_agrupadas.get(nome, ZERO) + item['total']
+        maiores_formas = [
+            {'nome': nome, 'total': total}
+            for nome, total in sorted(
+                formas_previstas_agrupadas.items(), key=lambda registro: registro[1], reverse=True,
+            )[:5]
+        ]
+        _adicionar_percentuais(maiores_formas)
+
+        contas_bancarias = [
+            {
+                'nome': conta.descricao or f'{conta.banco_nome} · {conta.agencia}/{conta.conta}',
+                'total': conta.saldo_atual,
+            }
+            for conta in ContaBancaria.objects.for_filial(filial).filter(ativo=True).order_by('-saldo_atual')[:5]
+        ]
+        _adicionar_percentuais(contas_bancarias)
 
         maiores_categorias = list(
             pagar_qs.filter(status__in=status_pagar, plano_contas__isnull=False)
@@ -107,10 +145,9 @@ class DashboardContasService:
             .annotate(total=Sum('valor_saldo'))
             .order_by('-total')[:5]
         )
-        maior_categoria = maiores_categorias[0]['total'] if maiores_categorias else ZERO
         for item in maiores_categorias:
             item['nome'] = item['plano_contas__descricao'] or 'Sem categoria'
-            item['percentual'] = _percentual(item['total'], maior_categoria)
+        _adicionar_percentuais(maiores_categorias)
 
         saldo_projetado = receber['aberto'] - pagar['aberto']
         saldo_realizado_mes = receber['realizado_mes'] - pagar['realizado_mes']
@@ -128,5 +165,7 @@ class DashboardContasService:
             'saldo_realizado_mes_abs': abs(saldo_realizado_mes),
             'agenda': agenda,
             'maiores_clientes': maiores_clientes,
+            'maiores_formas': maiores_formas,
+            'contas_bancarias': contas_bancarias,
             'maiores_categorias': maiores_categorias,
         }

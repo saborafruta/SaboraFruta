@@ -9,7 +9,8 @@
          style="z-index:120;background:rgba(15,23,42,.72);"
          role="dialog" aria-modal="true" aria-label="Visão financeira"
          @click.self="aberto=false">
-      <section class="flex h-full w-full flex-col overflow-hidden sm:h-auto sm:max-h-screen sm:max-w-6xl sm:rounded-lg"
+      <section class="flex h-full w-full flex-col overflow-hidden sm:h-auto sm:rounded-lg"
+               style="max-height:calc(100vh - 2.5rem);max-width:72rem"
                :style="temaClaro ? 'background:#f8fafc;color:#111827' : 'background:#18181b;color:#f8fafc'">
         <header class="flex items-start justify-between gap-4 border-b px-4 py-4 sm:px-6"
                 :style="temaClaro ? 'border-color:#e2e8f0;background:#fff' : 'border-color:#303038;background:#202024'">
@@ -87,15 +88,31 @@
             </section>
           </div>
 
-          <div class="grid grid-cols-1 border-t lg:grid-cols-2" :style="temaClaro ? 'border-color:#e2e8f0' : 'border-color:#303038'">
-            <section class="border-b p-4 sm:p-6 lg:border-b-0 lg:border-r" :style="temaClaro ? 'border-color:#e2e8f0' : 'border-color:#303038'">
+          <div class="border-t px-4 pt-4 sm:px-6 sm:pt-6" :style="temaClaro ? 'border-color:#e2e8f0' : 'border-color:#303038'">
+            <h3 class="font-semibold">Distribuição financeira</h3>
+            <p class="text-xs opacity-60">Compare a concentração por origem e destino do dinheiro</p>
+          </div>
+          <div class="grid grid-cols-1 lg:grid-cols-2" :style="temaClaro ? 'border-color:#e2e8f0' : 'border-color:#303038'">
+            <section class="border-b p-4 sm:p-6 lg:border-r" :style="temaClaro ? 'border-color:#e2e8f0' : 'border-color:#303038'">
               <h3 class="font-semibold">Maiores saldos a receber</h3><p class="mb-4 text-xs opacity-60">Concentração por cliente</p>
               <div class="space-y-3">
                 {% for item in dashboard_contas.maiores_clientes %}<div><div class="mb-1 flex justify-between gap-3 text-xs"><span class="truncate">{{ item.nome }}</span><strong>R$ {{ item.total|floatformat:2 }}</strong></div><div class="h-1.5 rounded-sm" :style="temaClaro ? 'background:#e2e8f0' : 'background:#303038'"><div class="h-full bg-blue-500" style="width:{{ item.percentual }}%"></div></div></div>{% empty %}<p class="text-sm opacity-60">Nenhum saldo a receber em aberto.</p>{% endfor %}
               </div>
             </section>
+            <section class="border-b p-4 sm:p-6">
+              <h3 class="font-semibold">Formas de pagamento</h3><p class="mb-4 text-xs opacity-60">Distribuição prevista dos compromissos em aberto</p>
+              <div class="space-y-3">
+                {% for item in dashboard_contas.maiores_formas %}<div><div class="mb-1 flex justify-between gap-3 text-xs"><span class="truncate">{{ item.nome }}</span><strong>R$ {{ item.total|floatformat:2 }}</strong></div><div class="h-1.5 rounded-sm" :style="temaClaro ? 'background:#e2e8f0' : 'background:#303038'"><div class="h-full bg-violet-500" style="width:{{ item.percentual }}%"></div></div></div>{% empty %}<p class="text-sm opacity-60">Nenhuma forma prevista nos títulos em aberto.</p>{% endfor %}
+              </div>
+            </section>
+            <section class="border-b p-4 sm:p-6 lg:border-b-0 lg:border-r" :style="temaClaro ? 'border-color:#e2e8f0' : 'border-color:#303038'">
+              <h3 class="font-semibold">Contas bancárias</h3><p class="mb-4 text-xs opacity-60">Saldo atual por conta cadastrada</p>
+              <div class="space-y-3">
+                {% for item in dashboard_contas.contas_bancarias %}<div><div class="mb-1 flex justify-between gap-3 text-xs"><span class="truncate">{{ item.nome }}</span><strong class="{% if item.total < 0 %}text-red-500{% else %}text-emerald-500{% endif %}">R$ {{ item.total|floatformat:2 }}</strong></div><div class="h-1.5 rounded-sm" :style="temaClaro ? 'background:#e2e8f0' : 'background:#303038'"><div class="h-full {% if item.total < 0 %}bg-red-500{% else %}bg-emerald-500{% endif %}" style="width:{{ item.percentual }}%"></div></div></div>{% empty %}<p class="text-sm opacity-60">Nenhuma conta bancária cadastrada.</p>{% endfor %}
+              </div>
+            </section>
             <section class="p-4 sm:p-6">
-              <h3 class="font-semibold">Maiores compromissos</h3><p class="mb-4 text-xs opacity-60">Concentração por categoria financeira</p>
+              <h3 class="font-semibold">Categorias financeiras</h3><p class="mb-4 text-xs opacity-60">Concentração dos compromissos em aberto</p>
               <div class="space-y-3">
                 {% for item in dashboard_contas.maiores_categorias %}<div><div class="mb-1 flex justify-between gap-3 text-xs"><span class="truncate">{{ item.nome }}</span><strong>R$ {{ item.total|floatformat:2 }}</strong></div><div class="h-1.5 rounded-sm" :style="temaClaro ? 'background:#e2e8f0' : 'background:#303038'"><div class="h-full bg-orange-500" style="width:{{ item.percentual }}%"></div></div></div>{% empty %}<p class="text-sm opacity-60">Nenhum compromisso classificado em aberto.</p>{% endfor %}
               </div>

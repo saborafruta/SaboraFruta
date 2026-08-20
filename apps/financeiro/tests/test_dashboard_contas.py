@@ -7,7 +7,7 @@ from django.test import TestCase
 from apps.cadastros.models import Cliente
 from apps.core.models import Empresa, Filial
 from apps.financeiro.constants.enums import StatusContaPagar, StatusContaReceber
-from apps.financeiro.models import PlanoContas
+from apps.financeiro.models import ContaBancaria, FormaPagamento, PlanoContas
 from apps.financeiro.models.receber_pagar import ContaPagar, ContaReceber
 from apps.financeiro.services.dashboard_contas_service import DashboardContasService
 
@@ -43,6 +43,21 @@ class DashboardContasServiceTests(TestCase):
             tipo='D',
             nivel=3,
         )
+        self.forma = FormaPagamento.objects.create(
+            empresa=self.empresa,
+            filial=self.filial,
+            descricao='PIX',
+            tipo='pix',
+        )
+        self.conta_bancaria = ContaBancaria.objects.create(
+            filial=self.filial,
+            banco_codigo='001',
+            banco_nome='Banco do Brasil',
+            agencia='1234',
+            conta='56789',
+            descricao='Conta corrente principal',
+            saldo_atual='2500.00',
+        )
 
     def _receber(self, valor, vencimento, status=StatusContaReceber.ABERTO, pago=0):
         return ContaReceber.objects.create(
@@ -62,6 +77,7 @@ class DashboardContasServiceTests(TestCase):
         return ContaPagar.objects.create(
             filial=self.filial,
             plano_contas=self.categoria if categoria else None,
+            forma_pagamento_prevista=self.forma,
             valor_original=valor,
             valor_final=valor,
             valor_pago=pago,
@@ -90,6 +106,8 @@ class DashboardContasServiceTests(TestCase):
         self.assertEqual(painel['pagar']['sete'], Decimal('600.00'))
         self.assertEqual(painel['pagar']['sem_categoria'], Decimal('200.00'))
         self.assertEqual(painel['maiores_clientes'][0]['nome'], 'Cliente Alpha')
+        self.assertEqual(painel['maiores_formas'][0]['nome'], 'PIX')
+        self.assertEqual(painel['contas_bancarias'][0]['total'], Decimal('2500.00'))
         self.assertEqual(painel['maiores_categorias'][0]['nome'], 'Materia-prima')
 
     def test_modal_renderiza_indicadores_e_atalhos(self):
@@ -104,5 +122,7 @@ class DashboardContasServiceTests(TestCase):
         self.assertIn('Visão financeira', html)
         self.assertIn('Contas a pagar e receber', html)
         self.assertIn('Agenda financeira', html)
+        self.assertIn('Formas de pagamento', html)
+        self.assertIn('Contas bancárias', html)
+        self.assertIn('Categorias financeiras', html)
         self.assertIn('Cliente Alpha', html)
-
