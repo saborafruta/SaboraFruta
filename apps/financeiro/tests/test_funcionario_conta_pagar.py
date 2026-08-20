@@ -472,6 +472,7 @@ class FuncionarioContaPagarTests(TestCase):
         self.assertContains(response, "Resumo da baixa")
         self.assertContains(response, "Pagamento parcial")
         self.assertContains(response, "Referência da transação")
+        self.assertContains(response, 'value="2026-08-20"')
 
     def test_comprovante_valida_tipo_e_tamanho(self):
         invalido = SimpleUploadedFile(

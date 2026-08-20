@@ -311,7 +311,7 @@ class PagamentoContaPagarForm(forms.Form):
 
     data_pagamento = forms.DateField(
         label='Data do pagamento',
-        widget=forms.DateInput(attrs={'type': 'date'}),
+        widget=forms.DateInput(format='%Y-%m-%d', attrs={'type': 'date'}),
         initial=date.today,
     )
     valor_pago = forms.DecimalField(
