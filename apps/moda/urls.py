@@ -51,6 +51,7 @@ ROTAS_PRONTAS: list = [
     path('comercial/aprovacao-pedido/', vap.FilaAprovacaoView.as_view(), name='aprovacao-fila'),
     path('comercial/aprovacao-arte/', vap.FilaArteView.as_view(), name='arte-fila'),
     path('comercial/envio-pedido/', vap.EnvioProducaoView.as_view(), name='envio-fila'),
+    path('comercial/historico/', vh.HistoricoComercialView.as_view(), name='historico-comercial'),
     path('comercial/orcamentos/<int:pk>/fechar/', vorc.OrcamentoFecharView.as_view(), name='orcamento-fechar'),
     path('comercial/pedidos/', vc.PedidoListView.as_view(), name='pedido-list'),
     path('comercial/pedidos/novo/', vc.PedidoFormView.as_view(), name='pedido-create'),

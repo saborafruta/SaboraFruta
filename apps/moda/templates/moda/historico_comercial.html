@@ -1,0 +1,174 @@
+{% extends "_base.html" %}
+{% block title %}{{ title }}{% endblock %}
+{% block page_title %}Histórico{% endblock %}
+
+{% block content %}
+<div class="space-y-5">
+
+  {# ── Cabeçalho ────────────────────────────────────────────────────── #}
+  <div>
+    <p class="text-sm mb-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+      <a href="{% url 'moda:comercial' %}" :style="temaClaro ? 'color:#3b82f6;' : 'color:#60a5fa;'">Comercial</a>
+      <span class="mx-1">›</span> Histórico
+    </p>
+    <h2 class="text-2xl font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
+      Histórico do comercial
+    </h2>
+    <p class="text-sm mt-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+      {{ total }} registro{{ total|pluralize }} nos últimos {{ dias }} dias ·
+      {{ pedidos_tocados }} pedido(s) ·
+      {{ pessoas|length }} pessoa(s)
+    </p>
+  </div>
+
+  {# ── Filtros ──────────────────────────────────────────────────────── #}
+  {% comment %}
+    O período é obrigatório e tem teto: sem ele a consulta cresce para
+    sempre e a tela fica mais lenta a cada mês de uso, até alguém desistir
+    de abri-la.
+  {% endcomment %}
+  <form method="get" class="card p-4 flex flex-wrap items-end gap-3">
+    <div class="flex-1 min-w-[180px]">
+      <label class="block text-xs font-semibold mb-1" :style="temaClaro ? 'color:#374151;' : 'color:#cbd5e1;'">Pedido ou cliente</label>
+      <input type="search" name="q" value="{{ busca }}" class="form-input w-full"
+             placeholder="Ex.: INTERFORT, 000142">
+    </div>
+    <div>
+      <label class="block text-xs font-semibold mb-1" :style="temaClaro ? 'color:#374151;' : 'color:#cbd5e1;'">Período</label>
+      <select name="dias" class="form-input w-36">
+        {% for valor, rotulo in periodos %}
+          <option value="{{ valor }}" {% if valor == dias %}selected{% endif %}>{{ rotulo }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div>
+      <label class="block text-xs font-semibold mb-1" :style="temaClaro ? 'color:#374151;' : 'color:#cbd5e1;'">Quem</label>
+      <select name="usuario" class="form-input w-44">
+        <option value="">Todos</option>
+        {% for u in usuarios %}
+          <option value="{{ u.pk }}" {% if usuario_id == u.pk|stringformat:"s" %}selected{% endif %}>{{ u.nome }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div>
+      <label class="block text-xs font-semibold mb-1" :style="temaClaro ? 'color:#374151;' : 'color:#cbd5e1;'">Ação</label>
+      <select name="acao" class="form-input w-36">
+        <option value="">Todas</option>
+        {% for valor, rotulo in acoes %}
+          <option value="{{ valor }}" {% if acao == valor %}selected{% endif %}>{{ rotulo }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <button type="submit" class="btn-secondary">Filtrar</button>
+    {% if busca or usuario_id or acao %}
+      <a href="{% url 'moda:historico-comercial' %}" class="btn-secondary">Limpar</a>
+    {% endif %}
+  </form>
+
+  {% if cortado %}
+    {% comment %}
+      A lista tem teto. Dizer que ela foi cortada evita a leitura de que
+      "não houve mais nada" — que é a conclusão errada mais fácil de tirar
+      de uma tela de auditoria.
+    {% endcomment %}
+    <p class="text-xs" style="color:#d97706;">
+      Mostrando os {{ limite }} registros mais recentes do período. Estreite a
+      busca ou o período para ver o resto.
+    </p>
+  {% endif %}
+
+  {# ── A linha do tempo ─────────────────────────────────────────────── #}
+  {% for grupo in dias_por_dia %}
+    <div class="card p-5 space-y-3">
+      <h3 class="text-xs font-bold uppercase tracking-wider pb-2 border-b"
+          :style="temaClaro ? 'color:#374151; border-color:#e5e7eb;' : 'color:#cbd5e1; border-color:#303036;'">
+        {{ grupo.dia|date:"l, d/m/Y" }}
+      </h3>
+
+      {% for item in grupo.eventos %}
+        <div class="flex gap-3">
+          {% comment %}
+            MARCO em verde e maior: "Pedido criado" e "Corte concluído" são
+            etapas vencidas, e um ajuste de campo não pode ter o mesmo peso
+            visual — é essa distinção que faz a lista ser lida em cinco
+            segundos em vez de percorrida inteira.
+          {% endcomment %}
+          <div class="shrink-0 flex flex-col items-center">
+            <span class="rounded-full mt-1.5"
+                  {% if item.evento.marco %}style="width:9px; height:9px; background:#059669;"
+                  {% else %}style="width:7px; height:7px; background:#94a3b8;"{% endif %}></span>
+            <span class="flex-1 w-px my-1" :style="temaClaro ? 'background:#e5e7eb;' : 'background:#303036;'"></span>
+          </div>
+
+          <div class="min-w-0 pb-2">
+            <p class="text-sm" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
+              <span {% if item.evento.marco %}class="font-semibold"{% endif %}>{{ item.evento.titulo }}</span>
+              {% if item.pedido %}
+                <a href="{% url 'moda:pedido-detail' item.pedido.pk %}"
+                   class="font-mono text-xs ml-1"
+                   :style="temaClaro ? 'color:#3b82f6;' : 'color:#60a5fa;'">
+                  #{{ item.pedido.numero|stringformat:"06d" }}
+                </a>
+                <span class="text-xs" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+                  {{ item.pedido.cliente }}
+                </span>
+              {% else %}
+                {% comment %}
+                  Registro apagado não tem mais dono para apontar. O evento
+                  fica na lista, sem link: sumir com ele seria esconder
+                  justamente a exclusão.
+                {% endcomment %}
+                <span class="text-xs" :style="temaClaro ? 'color:#94a3b8;' : 'color:#71717a;'">
+                  · registro removido
+                </span>
+              {% endif %}
+            </p>
+
+            <p class="text-xs mt-0.5" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+              {{ item.evento.quando|date:"H:i" }} · {{ item.evento.usuario }}
+              · {{ item.evento.entidade }}
+            </p>
+
+            {% if item.evento.mudancas %}
+              <div class="mt-1 space-y-0.5">
+                {% for m in item.evento.mudancas %}
+                  <p class="text-xs" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+                    <span class="font-medium">{{ m.campo }}:</span>
+                    <span style="text-decoration:line-through;">{{ m.antes|default:"—" }}</span>
+                    <span class="mx-1">→</span>
+                    <span :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">{{ m.depois|default:"—" }}</span>
+                  </p>
+                {% endfor %}
+              </div>
+            {% endif %}
+          </div>
+        </div>
+      {% endfor %}
+    </div>
+  {% empty %}
+    <div class="card p-8 text-center">
+      <p class="text-sm" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+        {% if busca or usuario_id or acao %}
+          Nenhum registro com esses filtros nos últimos {{ dias }} dias.
+          <a href="{% url 'moda:historico-comercial' %}"
+             :style="temaClaro ? 'color:#3b82f6;' : 'color:#60a5fa;'">Limpar</a>.
+        {% else %}
+          {% comment %}
+            Sem registro pode ser "ninguém mexeu" ou "o período é curto
+            demais" — e a diferença importa em auditoria.
+          {% endcomment %}
+          Nada registrado nos últimos {{ dias }} dias. Aumente o período para
+          olhar mais para trás.
+        {% endif %}
+      </p>
+    </div>
+  {% endfor %}
+
+  {% if pessoas %}
+    <p class="text-xs" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+      Quem aparece no período: {{ pessoas|join:", " }}.
+    </p>
+  {% endif %}
+
+</div>
+{% endblock %}

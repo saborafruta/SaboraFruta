@@ -41,8 +41,8 @@ from django.db import models as djm
 from apps.core.models import LogSistema
 from apps.moda.models import (
     AprovacaoPedido, EtapaOrdem, Expedicao, FichaTecnica, ImagemFicha,
-    Inspecao, ItemConferencia, ItemCorte, MaterialFicha,
-    ItemGradePedido, ItemInspecao, OrdemProducao, PedidoProducao,
+    Inspecao, ItemConferencia, ItemCorte, ItemGradePedido, ItemInspecao,
+    ItemPedidoProducao, MaterialFicha, OrdemProducao, PedidoProducao,
     Personalizacao, PersonalizacaoIndividual, RegistroCorte, VisualItemPedido,
     Volume,
 )
@@ -60,6 +60,7 @@ IGNORADOS = {
 ENTIDADES = {
     PedidoProducao: 'Pedido',
     AprovacaoPedido: 'Aprovação',
+    ItemPedidoProducao: 'Produto do pedido',
     ItemGradePedido: 'Grade',
     Personalizacao: 'Arte',
     VisualItemPedido: 'Visual',
@@ -166,6 +167,7 @@ FRASES = {
 # Criação de um registro: a frase que a fábrica usa.
 FRASES_CRIACAO = {
     PedidoProducao._meta.db_table: 'Pedido criado',
+    ItemPedidoProducao._meta.db_table: 'Produto lançado no pedido',
     ItemGradePedido._meta.db_table: 'Grade lançada',
     Personalizacao._meta.db_table: 'Arte anexada',
     VisualItemPedido._meta.db_table: 'Visual anexado',
@@ -182,6 +184,7 @@ FRASES_CRIACAO = {
 }
 
 FRASES_EXCLUSAO = {
+    ItemPedidoProducao._meta.db_table: 'Produto removido do pedido',
     ItemGradePedido._meta.db_table: 'Tamanho removido da grade',
     Personalizacao._meta.db_table: 'Arte removida',
     VisualItemPedido._meta.db_table: 'Visual removido',
@@ -278,6 +281,7 @@ class HistoricoService:
 
         return {
             PedidoProducao._meta.db_table: [pedido.pk],
+            ItemPedidoProducao._meta.db_table: itens,
             ItemGradePedido._meta.db_table: _ids(ItemGradePedido, item__in=itens),
             Personalizacao._meta.db_table: _ids(Personalizacao, item__in=itens),
             VisualItemPedido._meta.db_table: _ids(VisualItemPedido, item__in=itens),

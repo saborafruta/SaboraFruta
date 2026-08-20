@@ -8,7 +8,12 @@ sobrou do que aconteceu.
 from django.shortcuts import get_object_or_404, render
 
 from .models import OrdemProducao, PedidoProducao
+from apps.core.models import Usuario
+
 from .services.historico import HistoricoService
+from .services.historico_comercial import (
+    PERIODOS, HistoricoComercialService,
+)
 from .views import ModaBaseView
 
 
@@ -63,4 +68,43 @@ class HistoricoOrdemView(ModaBaseView):
             'voltar': ('moda:ordem-detail', ordem.pk),
             'eventos': eventos,
             'marcos': [e for e in eventos if e.marco],
+        })
+
+
+class HistoricoComercialView(ModaBaseView):
+    """
+    A linha do tempo da carteira inteira — "o que aconteceu no comercial".
+
+    Endereço do menu (`comercial/historico/`), que até agora devolvia a tela
+    de "em construção". Leitura pura, como as outras: auditoria que se pode
+    editar não é auditoria.
+    """
+
+    area = 'comercial'
+
+    def get(self, request):
+        try:
+            dias = int(request.GET.get('dias') or 30)
+        except (TypeError, ValueError):
+            # Período inventado na URL vira o padrão em vez de erro: quem
+            # digitou errado quer ver a tela, não uma página de exceção.
+            dias = 30
+        dias = dias if dias in [d for d, _r in PERIODOS] else 30
+
+        dados = HistoricoComercialService.montar(
+            _filial(request),
+            dias=dias,
+            busca=(request.GET.get('q') or '').strip(),
+            usuario_id=(request.GET.get('usuario') or '').strip(),
+            acao=(request.GET.get('acao') or '').strip(),
+        )
+
+        return render(request, 'moda/historico_comercial.html', {
+            'title': 'Histórico do comercial',
+            'usuario_id': request.GET.get('usuario') or '',
+            'acao': request.GET.get('acao') or '',
+            'usuarios': Usuario.objects.filter(
+                ativo=True, empresa=_filial(request).empresa,
+            ).order_by('nome'),
+            **dados,
         })
