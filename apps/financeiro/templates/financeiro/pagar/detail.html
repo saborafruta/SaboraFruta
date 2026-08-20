@@ -88,6 +88,7 @@
         <span class="font-semibold"
               :style="{% if conta.status == 'vencido' %}temaClaro ? 'color:#be123c;' : 'color:#fca5a5;'{% else %}temaClaro ? 'color:#111827;' : 'color:#f8fafc;'{% endif %}">
           {{ conta.data_vencimento|date:"d/m/Y" }}
+          {% if conta.ajustar_vencimento_dia_util %}<span class="mt-1 block text-[10px] font-normal opacity-65">Domingos e feriados ajustados; sábado permitido</span>{% endif %}
         </span>
       </div>
 

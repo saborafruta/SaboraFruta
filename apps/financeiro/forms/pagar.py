@@ -105,6 +105,11 @@ class ContaPagarForm(forms.Form):
         label='Data de vencimento',
         widget=forms.DateInput(attrs={'type': 'date'}),
     )
+    ajustar_vencimento_dia_util = forms.BooleanField(
+        required=False,
+        initial=True,
+        label='Ajustar se cair em domingo ou feriado',
+    )
     data_competencia = forms.DateField(
         required=False,
         label='Competência',

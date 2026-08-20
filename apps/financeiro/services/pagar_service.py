@@ -9,6 +9,7 @@ from django.db import transaction
 from django.utils import timezone
 from dateutil.relativedelta import relativedelta
 
+from apps.core.services.calendario import proximo_dia_util
 from apps.core.services.exceptions import DomainError
 from apps.financeiro.constants.enums import StatusContaPagar
 from apps.financeiro.models.receber_pagar import ContaPagar
@@ -37,6 +38,7 @@ class ContaPagarService:
         usuario=None,
         grupo_recorrencia=None,
         frequencia_recorrencia: str = '',
+        ajustar_vencimento_dia_util: bool = False,
     ) -> ContaPagar:
         """Cria um lançamento manual de conta a pagar."""
         conta_contabil = plano_contas.conta_contabil if plano_contas else None
@@ -48,6 +50,8 @@ class ContaPagarService:
             fornecedor = None
         if tipo_lancamento == ContaPagar.TipoLancamento.FORNECEDOR:
             funcionario = None
+        if ajustar_vencimento_dia_util:
+            data_vencimento = proximo_dia_util(data_vencimento, filial)
         conta = ContaPagar(
             filial=filial,
             fornecedor=fornecedor,
@@ -69,6 +73,7 @@ class ContaPagarService:
             data_emissao=data_emissao,
             data_vencimento=data_vencimento,
             data_competencia=data_competencia,
+            ajustar_vencimento_dia_util=ajustar_vencimento_dia_util,
             forma_pagamento=forma_pagamento,
             plano_contas=plano_contas,
             conta_contabil=conta_contabil,

@@ -75,6 +75,10 @@
         <div x-show="recorrente" x-cloak>{% include "financeiro/pagar/_field.html" with field=form.frequencia_recorrencia %}</div>
         <div x-show="recorrente" x-cloak>{% include "financeiro/pagar/_field.html" with field=form.quantidade_recorrencias %}</div>
       </div>
+      <label class="mt-4 flex cursor-pointer items-start gap-3 rounded-md border px-4 py-3" :style="temaClaro ? 'border-color:#dbe3ee;background:#f8fafc' : 'border-color:#3f3f46;background:#18181b'">
+        {{ form.ajustar_vencimento_dia_util|add_class:"mt-0.5 h-4 w-4 accent-emerald-600" }}
+        <span><strong class="block text-sm">Ajustar se cair em domingo ou feriado</strong><span class="block text-xs opacity-65">O vencimento passa para o próximo dia permitido. Sábado conta normalmente; a competência não muda.</span></span>
+      </label>
       <div x-show="recorrente" x-cloak class="mt-4 rounded-md border border-violet-500/30 bg-violet-500/10 px-4 py-3 text-sm">
         O primeiro vencimento será a data informada acima. Os demais serão criados automaticamente conforme a periodicidade; a competência avançará junto quando preenchida.
       </div>
