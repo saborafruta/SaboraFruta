@@ -12,7 +12,7 @@ from dateutil.relativedelta import relativedelta
 from apps.core.services.calendario import proximo_dia_util
 from apps.core.services.exceptions import DomainError
 from apps.financeiro.constants.enums import StatusContaPagar
-from apps.financeiro.models.receber_pagar import ContaPagar
+from apps.financeiro.models.receber_pagar import ContaPagar, PagamentoContaPagar
 
 
 class ContaPagarService:
@@ -31,7 +31,7 @@ class ContaPagarService:
         total_parcelas: int = 1,
         documento_numero: str = '',
         nota_fiscal_fornecedor: str = '',
-        forma_pagamento=None,
+        forma_pagamento_prevista=None,
         plano_contas=None,
         data_competencia: date | None = None,
         observacao: str = '',
@@ -74,7 +74,7 @@ class ContaPagarService:
             data_vencimento=data_vencimento,
             data_competencia=data_competencia,
             ajustar_vencimento_dia_util=ajustar_vencimento_dia_util,
-            forma_pagamento=forma_pagamento,
+            forma_pagamento_prevista=forma_pagamento_prevista,
             plano_contas=plano_contas,
             conta_contabil=conta_contabil,
             observacao=observacao,
@@ -83,6 +83,26 @@ class ContaPagarService:
         )
         conta.save()
         return conta
+
+    @staticmethod
+    @transaction.atomic
+    def criar_e_quitar(
+        *, data_pagamento: date, forma_pagamento_utilizada,
+        conta_bancaria_pagamento=None, comprovante_url_pagamento: str = '',
+        usuario=None, **dados,
+    ) -> ContaPagar:
+        """Cria um título único e registra sua quitação integral na mesma transação."""
+        conta = ContaPagarService.criar(usuario=usuario, **dados)
+        return ContaPagarService.registrar_pagamento(
+            conta=conta,
+            data_pagamento=data_pagamento,
+            valor_pago=conta.valor_saldo,
+            forma_pagamento=forma_pagamento_utilizada,
+            conta_bancaria=conta_bancaria_pagamento,
+            comprovante_url=comprovante_url_pagamento,
+            observacao='Quitado no lançamento do título.',
+            usuario=usuario,
+        )
 
     @staticmethod
     @transaction.atomic
@@ -138,6 +158,12 @@ class ContaPagarService:
             raise DomainError('Não é possível pagar uma conta cancelada.')
         if conta.status == StatusContaPagar.PAGO:
             raise DomainError('Esta conta já foi integralmente paga.')
+        if not forma_pagamento:
+            raise DomainError('Informe a forma utilizada no pagamento.')
+        if data_pagamento < conta.data_emissao:
+            raise DomainError('A data do pagamento não pode ser anterior à emissão.')
+        if valor_pago <= Decimal('0'):
+            raise DomainError('O valor pago deve ser maior que zero.')
 
         conta.valor_juros += valor_juros or Decimal('0')
         conta.valor_multa += valor_multa or Decimal('0')
@@ -163,8 +189,7 @@ class ContaPagarService:
 
         conta.data_pagamento = data_pagamento
         conta.forma_pagamento = forma_pagamento
-        if conta_bancaria:
-            conta.conta_bancaria = conta_bancaria
+        conta.conta_bancaria = conta_bancaria
         if comprovante_url:
             conta.comprovante_url = comprovante_url
         conta.usuario_pagamento = usuario
@@ -174,6 +199,20 @@ class ContaPagarService:
             conta.observacao = f'{conta.observacao}\n{sufixo}'.strip() if conta.observacao else sufixo
 
         conta.save()
+        PagamentoContaPagar.objects.create(
+            filial=conta.filial,
+            conta_pagar=conta,
+            data_pagamento=data_pagamento,
+            valor_pago=valor_pago,
+            valor_juros=valor_juros or Decimal('0'),
+            valor_multa=valor_multa or Decimal('0'),
+            valor_desconto=valor_desconto or Decimal('0'),
+            forma_pagamento=forma_pagamento,
+            conta_bancaria=conta_bancaria,
+            comprovante_url=comprovante_url,
+            observacao=observacao,
+            usuario=usuario,
+        )
         return conta
 
     @staticmethod

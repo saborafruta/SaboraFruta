@@ -277,7 +277,7 @@ class ContaPagarCreateView(PermissaoRequiredMixin, View):
                 data_emissao=d['data_emissao'],
                 documento_numero=d.get('documento_numero', ''),
                 nota_fiscal_fornecedor=d.get('nota_fiscal_fornecedor', ''),
-                forma_pagamento=d.get('forma_pagamento'),
+                forma_pagamento_prevista=d.get('forma_pagamento_prevista'),
                 plano_contas=d.get('plano_contas'),
                 observacao=d.get('observacao', ''),
                 ajustar_vencimento_dia_util=d.get('ajustar_vencimento_dia_util', False),
@@ -292,6 +292,19 @@ class ContaPagarCreateView(PermissaoRequiredMixin, View):
                     data_competencia=d.get('data_competencia'),
                 )
                 messages.success(request, f'{len(contas)} títulos recorrentes lançados com sucesso.')
+            elif d['quitar_ao_lancar']:
+                conta = ContaPagarService.criar_e_quitar(
+                    **dados_conta,
+                    data_vencimento=d['data_vencimento'],
+                    data_competencia=d.get('data_competencia'),
+                    parcela=d['parcela'],
+                    total_parcelas=d['total_parcelas'],
+                    data_pagamento=d['data_pagamento_imediato'],
+                    forma_pagamento_utilizada=d['forma_pagamento_utilizada'],
+                    conta_bancaria_pagamento=d.get('conta_bancaria_pagamento'),
+                    comprovante_url_pagamento=d.get('comprovante_url_pagamento', ''),
+                )
+                messages.success(request, f'Conta a pagar #{conta.pk} lançada e quitada com sucesso.')
             else:
                 conta = ContaPagarService.criar(
                     **dados_conta,
@@ -320,8 +333,10 @@ class ContaPagarDetailView(PermissaoRequiredMixin, View):
         filial = _filial(request)
         conta = get_object_or_404(
             ContaPagar.objects.for_filial(filial).select_related(
-                'fornecedor', 'funcionario', 'forma_pagamento', 'conta_bancaria',
+                'fornecedor', 'funcionario', 'forma_pagamento', 'forma_pagamento_prevista', 'conta_bancaria',
                 'plano_contas', 'conta_contabil', 'usuario', 'usuario_pagamento',
+            ).prefetch_related(
+                'pagamentos__forma_pagamento', 'pagamentos__conta_bancaria', 'pagamentos__usuario',
             ),
             pk=pk,
         )
@@ -349,7 +364,9 @@ class ContaPagarPagamentoView(PermissaoRequiredMixin, View):
 
     def _get_conta(self, request, pk):
         return get_object_or_404(
-            ContaPagar.objects.for_filial(_filial(request)).select_related('fornecedor', 'funcionario'),
+            ContaPagar.objects.for_filial(_filial(request)).select_related(
+                'fornecedor', 'funcionario', 'forma_pagamento_prevista', 'forma_pagamento',
+            ),
             pk=pk,
         )
 

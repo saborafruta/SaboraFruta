@@ -94,7 +94,7 @@
 
       <div>
         <span class="block text-xs font-medium mb-0.5"
-              :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Data de pagamento</span>
+              :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Último pagamento</span>
         <span :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
           {{ conta.data_pagamento|date:"d/m/Y"|default:"—" }}
         </span>
@@ -110,10 +110,20 @@
       </div>
       {% endif %}
 
+      {% if conta.forma_pagamento_prevista %}
+      <div>
+        <span class="block text-xs font-medium mb-0.5"
+              :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Forma prevista</span>
+        <span :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
+          {{ conta.forma_pagamento_prevista.descricao }}
+        </span>
+      </div>
+      {% endif %}
+
       {% if conta.forma_pagamento %}
       <div>
         <span class="block text-xs font-medium mb-0.5"
-              :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Forma de pagamento</span>
+              :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Última forma utilizada</span>
         <span :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
           {{ conta.forma_pagamento.descricao }}
         </span>
@@ -123,7 +133,7 @@
       {% if conta.conta_bancaria %}
       <div>
         <span class="block text-xs font-medium mb-0.5"
-              :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Conta bancária</span>
+              :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Última conta debitada</span>
         <span :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
           {{ conta.conta_bancaria.descricao|default:conta.conta_bancaria }}
         </span>
@@ -224,6 +234,30 @@
   </div>
 
   <!-- ── Ações ── -->
+  {% with pagamentos=conta.pagamentos.all %}
+  {% if pagamentos %}
+  <div class="card overflow-hidden">
+    <div class="border-b px-5 py-4" :style="temaClaro ? 'border-color:#e5e7eb' : 'border-color:#303038'">
+      <h3 class="text-sm font-semibold uppercase tracking-wide" :style="temaClaro ? 'color:#64748b' : 'color:#94a3b8'">Histórico de pagamentos</h3>
+      <p class="mt-1 text-xs opacity-65">Cada baixa permanece registrada individualmente.</p>
+    </div>
+    <div class="divide-y" :style="temaClaro ? 'border-color:#e5e7eb' : 'border-color:#303038'">
+      {% for pagamento in pagamentos %}
+      <div class="grid grid-cols-1 gap-3 px-5 py-4 text-sm sm:grid-cols-4">
+        <div><span class="block text-xs opacity-60">Data</span><strong>{{ pagamento.data_pagamento|date:"d/m/Y" }}</strong></div>
+        <div><span class="block text-xs opacity-60">Valor pago</span><strong class="text-emerald-500">R$ {{ pagamento.valor_pago|floatformat:2 }}</strong></div>
+        <div><span class="block text-xs opacity-60">Forma utilizada</span><strong>{{ pagamento.forma_pagamento.descricao|default:"Não informada" }}</strong></div>
+        <div><span class="block text-xs opacity-60">Conta debitada</span><strong>{{ pagamento.conta_bancaria.descricao|default:pagamento.conta_bancaria|default:"Não informada" }}</strong></div>
+        {% if pagamento.valor_juros or pagamento.valor_multa or pagamento.valor_desconto %}<p class="sm:col-span-4 text-xs opacity-70">Juros: R$ {{ pagamento.valor_juros|floatformat:2 }} · Multa: R$ {{ pagamento.valor_multa|floatformat:2 }} · Desconto: R$ {{ pagamento.valor_desconto|floatformat:2 }}</p>{% endif %}
+        {% if pagamento.observacao %}<p class="text-xs opacity-70 sm:col-span-3">{{ pagamento.observacao }}</p>{% endif %}
+        {% if pagamento.comprovante_url %}<a class="text-xs text-blue-500 hover:underline sm:text-right" href="{{ pagamento.comprovante_url }}" target="_blank" rel="noopener">Abrir comprovante</a>{% endif %}
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+  {% endif %}
+  {% endwith %}
+
   <div class="flex flex-wrap gap-3">
     {% if pode_pagar %}
     <a href="{% url 'financeiro:pagar_pagar' conta.pk %}"

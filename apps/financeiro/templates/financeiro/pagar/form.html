@@ -15,7 +15,7 @@
   </div>
 
   <form method="post" class="card overflow-visible"
-        x-data="{ loading:false, tipoLancamento:'{{ form.tipo_lancamento.value|default:"fornecedor" }}', recorrente:{{ form.recorrente.value|yesno:"true,false" }} }"
+        x-data="{ loading:false, tipoLancamento:'{{ form.tipo_lancamento.value|default:"fornecedor" }}', recorrente:{{ form.recorrente.value|yesno:"true,false" }}, quitarAgora:{{ form.quitar_ao_lancar.value|yesno:"true,false" }} }"
         @submit="loading=true" novalidate>{% csrf_token %}
     <input type="hidden" name="tipo_lancamento" :value="tipoLancamento">
     {{ form.parcela }}{{ form.total_parcelas }}
@@ -63,7 +63,7 @@
 
       <div class="mb-4 grid grid-cols-2 gap-2 rounded-md border p-1" :style="temaClaro ? 'border-color:#dbe3ee;background:#f8fafc' : 'border-color:#3f3f46;background:#18181b'">
         <button type="button" @click="recorrente=false" class="rounded px-3 py-2 text-sm font-semibold" :style="!recorrente ? 'background:#059669;color:#fff' : ''">Título único</button>
-        <button type="button" @click="recorrente=true" class="rounded px-3 py-2 text-sm font-semibold" :style="recorrente ? 'background:#7c3aed;color:#fff' : ''">Título recorrente</button>
+        <button type="button" @click="recorrente=true;quitarAgora=false" class="rounded px-3 py-2 text-sm font-semibold" :style="recorrente ? 'background:#7c3aed;color:#fff' : ''">Título recorrente</button>
         <input type="hidden" name="recorrente" :value="recorrente ? 'on' : ''">
       </div>
 
@@ -134,7 +134,7 @@
       </div>
 
       <div class="mt-5 grid grid-cols-1 gap-4 sm:grid-cols-2">
-        <div><label class="mb-1 block text-sm font-medium">{{ form.forma_pagamento.label }}</label>{{ form.forma_pagamento|add_class:"form-input" }}{{ form.forma_pagamento.errors }}</div>
+        <div><label class="mb-1 block text-sm font-medium">{{ form.forma_pagamento_prevista.label }}</label>{{ form.forma_pagamento_prevista|add_class:"form-input" }}<p class="mt-1 text-xs opacity-60">Planejamento apenas; a forma real será confirmada na baixa.</p>{{ form.forma_pagamento_prevista.errors }}</div>
       </div>
 
       <div class="mt-5 w-full">
@@ -145,9 +145,36 @@
       </div>
     </section>
 
+    <section class="border-t p-5 sm:p-6" :style="temaClaro ? 'border-color:#e5e7eb' : 'border-color:#303038'">
+      <div class="mb-4 flex items-center gap-3"><span class="grid h-8 w-8 place-items-center rounded-md bg-amber-600 text-sm font-bold text-white">4</span><div><h3 class="text-sm font-semibold">Situação inicial do título</h3><p class="text-xs opacity-70">Registre somente a obrigação ou informe que ela já foi paga.</p></div></div>
+      <input type="hidden" name="quitar_ao_lancar" :value="quitarAgora ? 'on' : ''">
+
+      <div x-show="!recorrente" x-cloak>
+        <div class="grid grid-cols-2 gap-2 rounded-md border p-1" :style="temaClaro ? 'border-color:#dbe3ee;background:#f8fafc' : 'border-color:#3f3f46;background:#18181b'">
+          <button type="button" @click="quitarAgora=false" class="rounded px-3 py-2.5 text-sm font-semibold" :style="!quitarAgora ? 'background:#2563eb;color:#fff' : ''">Apenas lançar</button>
+          <button type="button" @click="quitarAgora=true" class="rounded px-3 py-2.5 text-sm font-semibold" :style="quitarAgora ? 'background:#059669;color:#fff' : ''">Lançar e quitar agora</button>
+        </div>
+
+        <div x-show="quitarAgora" x-cloak class="mt-4 rounded-md border border-emerald-500/30 bg-emerald-500/5 p-4">
+          <p class="mb-4 text-sm">O pagamento será registrado pelo valor integral do título. Confirme os dados utilizados:</p>
+          <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            {% include "financeiro/pagar/_field.html" with field=form.data_pagamento_imediato %}
+            {% include "financeiro/pagar/_field.html" with field=form.forma_pagamento_utilizada %}
+            {% include "financeiro/pagar/_field.html" with field=form.conta_bancaria_pagamento %}
+            {% include "financeiro/pagar/_field.html" with field=form.comprovante_url_pagamento %}
+          </div>
+          <p class="mt-3 text-xs opacity-65"><strong>Obrigatórios:</strong> data e forma utilizada. Conta bancária e comprovante são opcionais.</p>
+        </div>
+      </div>
+
+      <div x-show="recorrente" x-cloak class="rounded-md border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm">
+        Títulos recorrentes são lançados em aberto. Cada ocorrência deve ser quitada quando o pagamento realmente acontecer.
+      </div>
+    </section>
+
     <div class="flex justify-end gap-3 border-t px-5 py-4" :style="temaClaro ? 'border-color:#e5e7eb;background:#f8fafc' : 'border-color:#303038;background:#1c1c20'">
       <a href="{{ cancel_url }}" class="btn-secondary">Cancelar</a>
-      <button type="submit" class="btn-primary" :disabled="loading"><span x-show="!loading">Lançar título</span><span x-show="loading" x-cloak>Salvando...</span></button>
+      <button type="submit" class="btn-primary" :disabled="loading"><span x-show="!loading" x-text="quitarAgora && !recorrente ? 'Lançar e quitar' : 'Lançar título'"></span><span x-show="loading" x-cloak>Salvando...</span></button>
     </div>
   </form>
 </div>

@@ -116,10 +116,36 @@ class ContaPagarForm(forms.Form):
         widget=forms.DateInput(attrs={'type': 'date'}),
         help_text='Mês de competência da despesa (opcional).',
     )
-    forma_pagamento = forms.ModelChoiceField(
+    forma_pagamento_prevista = forms.ModelChoiceField(
         queryset=FormaPagamento.objects.none(),
         required=False,
-        label='Forma de pagamento',
+        label='Forma de pagamento prevista',
+        help_text='Opcional. Confirme ou altere a forma realmente utilizada ao quitar.',
+    )
+    quitar_ao_lancar = forms.BooleanField(
+        required=False,
+        label='Lançar e quitar agora',
+    )
+    data_pagamento_imediato = forms.DateField(
+        required=False,
+        initial=date.today,
+        label='Data do pagamento',
+        widget=forms.DateInput(attrs={'type': 'date'}),
+    )
+    forma_pagamento_utilizada = forms.ModelChoiceField(
+        queryset=FormaPagamento.objects.none(),
+        required=False,
+        label='Forma utilizada',
+    )
+    conta_bancaria_pagamento = forms.ModelChoiceField(
+        queryset=ContaBancaria.objects.none(),
+        required=False,
+        label='Conta bancária debitada',
+    )
+    comprovante_url_pagamento = forms.URLField(
+        required=False,
+        label='URL do comprovante',
+        widget=forms.URLInput(attrs={'placeholder': 'https://...'}),
     )
     plano_contas = CategoriaFinanceiraChoiceField(
         queryset=PlanoContas.objects.none(),
@@ -146,9 +172,16 @@ class ContaPagarForm(forms.Form):
                 .filter(ativo=True)
                 .order_by('nome')
             )
-            self.fields['forma_pagamento'].queryset = (
+            formas_pagamento = (
                 FormaPagamento.objects
                 .filter(empresa=filial.empresa, ativo=True)
+                .order_by('descricao')
+            )
+            self.fields['forma_pagamento_prevista'].queryset = formas_pagamento
+            self.fields['forma_pagamento_utilizada'].queryset = formas_pagamento
+            self.fields['conta_bancaria_pagamento'].queryset = (
+                ContaBancaria.objects.for_filial(filial)
+                .filter(ativo=True)
                 .order_by('descricao')
             )
             categorias = (
@@ -193,6 +226,7 @@ class ContaPagarForm(forms.Form):
         tipo = cleaned.get('tipo_lancamento')
         funcionario = cleaned.get('funcionario')
         recorrente = cleaned.get('recorrente')
+        quitar_ao_lancar = cleaned.get('quitar_ao_lancar')
         if tipo == ContaPagar.TipoLancamento.FORNECEDOR:
             cleaned['funcionario'] = None
         elif tipo == ContaPagar.TipoLancamento.FUNCIONARIO:
@@ -210,9 +244,27 @@ class ContaPagarForm(forms.Form):
                 self.add_error('frequencia_recorrencia', 'Informe a periodicidade.')
             if not cleaned.get('quantidade_recorrencias'):
                 self.add_error('quantidade_recorrencias', 'Informe quantos títulos devem ser gerados.')
+            if quitar_ao_lancar:
+                self.add_error('quitar_ao_lancar', 'Títulos recorrentes não podem ser quitados no lançamento.')
         else:
             cleaned['frequencia_recorrencia'] = ''
             cleaned['quantidade_recorrencias'] = 1
+        if quitar_ao_lancar:
+            data_pagamento = cleaned.get('data_pagamento_imediato')
+            if not data_pagamento:
+                self.add_error('data_pagamento_imediato', 'Informe a data do pagamento.')
+            elif emissao and data_pagamento < emissao:
+                self.add_error(
+                    'data_pagamento_imediato',
+                    'A data do pagamento não pode ser anterior à emissão.',
+                )
+            if not cleaned.get('forma_pagamento_utilizada'):
+                self.add_error('forma_pagamento_utilizada', 'Informe a forma realmente utilizada.')
+        else:
+            cleaned['data_pagamento_imediato'] = None
+            cleaned['forma_pagamento_utilizada'] = None
+            cleaned['conta_bancaria_pagamento'] = None
+            cleaned['comprovante_url_pagamento'] = ''
         return cleaned
 
 
@@ -260,7 +312,7 @@ class PagamentoContaPagarForm(forms.Form):
     )
     forma_pagamento = forms.ModelChoiceField(
         queryset=FormaPagamento.objects.none(),
-        label='Forma de pagamento',
+        label='Forma utilizada',
     )
     conta_bancaria = forms.ModelChoiceField(
         queryset=ContaBancaria.objects.none(),
@@ -282,6 +334,7 @@ class PagamentoContaPagarForm(forms.Form):
 
     def __init__(self, *args, filial=None, conta=None, **kwargs):
         super().__init__(*args, **kwargs)
+        self.conta = conta
         if filial:
             self.fields['forma_pagamento'].queryset = (
                 FormaPagamento.objects
@@ -295,10 +348,19 @@ class PagamentoContaPagarForm(forms.Form):
             )
         if conta:
             self.fields['valor_pago'].initial = conta.valor_saldo
+            self.fields['forma_pagamento'].initial = (
+                conta.forma_pagamento_prevista_id or conta.forma_pagamento_id
+            )
 
     def clean(self):
         cleaned = super().clean()
         cleaned.setdefault('valor_juros', Decimal('0'))
         cleaned.setdefault('valor_multa', Decimal('0'))
         cleaned.setdefault('valor_desconto', Decimal('0'))
+        data_pagamento = cleaned.get('data_pagamento')
+        if self.conta and data_pagamento and data_pagamento < self.conta.data_emissao:
+            self.add_error(
+                'data_pagamento',
+                'A data do pagamento não pode ser anterior à emissão.',
+            )
         return cleaned

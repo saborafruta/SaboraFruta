@@ -56,6 +56,13 @@
 
   <!-- ── Formulário de pagamento ── -->
   <div class="card p-6">
+    {% if conta.forma_pagamento_prevista %}
+    <div class="mb-5 rounded-md border border-blue-500/30 bg-blue-500/10 px-4 py-3 text-sm">
+      Forma prevista no lançamento:
+      <strong>{{ conta.forma_pagamento_prevista.descricao }}</strong>.
+      Confirme ou altere abaixo conforme o pagamento realmente realizado.
+    </div>
+    {% endif %}
     {% include "_form_generic.html" with form=form submit_label="Confirmar pagamento" cancel_url=cancel_url columns=1 %}
   </div>
 

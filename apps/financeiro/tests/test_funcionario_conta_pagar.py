@@ -9,7 +9,13 @@ from apps.cadastros.forms import FuncionarioForm
 from apps.cadastros.models import Funcionario
 from apps.core.models import Empresa, Filial
 from apps.financeiro.forms.pagar import ContaPagarForm
-from apps.financeiro.models import ContaPagar, PlanoContabil, PlanoContas
+from apps.financeiro.models import (
+    ContaPagar,
+    FormaPagamento,
+    PagamentoContaPagar,
+    PlanoContabil,
+    PlanoContas,
+)
 from apps.financeiro.services.pagar_service import ContaPagarService
 
 
@@ -38,6 +44,16 @@ class FuncionarioContaPagarTests(TestCase):
             empresa=cls.empresa, conta_contabil=cls.conta_contabil,
             codigo="3320100001", descricao="Salarios e Ordenados", tipo="D",
             nivel=3, aceita_lancamento=True,
+        )
+        cls.forma_prevista = FormaPagamento.objects.create(
+            empresa=cls.empresa,
+            descricao="Boleto",
+            tipo="boleto",
+        )
+        cls.forma_pix = FormaPagamento.objects.create(
+            empresa=cls.empresa,
+            descricao="Pix",
+            tipo="pix",
         )
 
     def dados_formulario(self, **extras):
@@ -99,7 +115,7 @@ class FuncionarioContaPagarTests(TestCase):
             valor_original=Decimal("1800.00"),
             data_emissao=date(2026, 8, 20),
             data_vencimento=date(2026, 8, 31),
-            competencia=date(2026, 8, 1),
+            data_competencia=date(2026, 8, 1),
             plano_contas=self.categoria,
             frequencia="mensal",
             quantidade=3,
@@ -108,10 +124,81 @@ class FuncionarioContaPagarTests(TestCase):
         self.assertEqual([conta.data_vencimento for conta in contas], [
             date(2026, 8, 31), date(2026, 9, 30), date(2026, 10, 31),
         ])
-        self.assertEqual([conta.competencia for conta in contas], [
+        self.assertEqual([conta.data_competencia for conta in contas], [
             date(2026, 8, 1), date(2026, 9, 1), date(2026, 10, 1),
         ])
         self.assertEqual([conta.parcela for conta in contas], [1, 2, 3])
         self.assertTrue(all(conta.total_parcelas == 3 for conta in contas))
         self.assertEqual(len({conta.grupo_recorrencia for conta in contas}), 1)
         self.assertIsNotNone(contas[0].grupo_recorrencia)
+
+    def test_forma_prevista_nao_quita_o_titulo(self):
+        conta = ContaPagarService.criar(
+            filial=self.filial,
+            funcionario=self.funcionario,
+            tipo_lancamento="funcionario",
+            valor_original=Decimal("1800.00"),
+            data_emissao=date(2026, 8, 20),
+            data_vencimento=date(2026, 8, 30),
+            plano_contas=self.categoria,
+            forma_pagamento_prevista=self.forma_prevista,
+        )
+
+        self.assertEqual(conta.forma_pagamento_prevista, self.forma_prevista)
+        self.assertIsNone(conta.forma_pagamento)
+        self.assertEqual(conta.valor_pago, Decimal("0"))
+        self.assertFalse(conta.pagamentos.exists())
+
+    def test_criar_e_quitar_registra_pagamento_integral(self):
+        conta = ContaPagarService.criar_e_quitar(
+            filial=self.filial,
+            funcionario=self.funcionario,
+            tipo_lancamento="funcionario",
+            valor_original=Decimal("1800.00"),
+            data_emissao=date(2026, 8, 20),
+            data_vencimento=date(2026, 8, 30),
+            plano_contas=self.categoria,
+            forma_pagamento_prevista=self.forma_prevista,
+            data_pagamento=date(2026, 8, 20),
+            forma_pagamento_utilizada=self.forma_pix,
+        )
+
+        self.assertEqual(conta.status, "pago")
+        self.assertEqual(conta.valor_pago, Decimal("1800.00"))
+        self.assertEqual(conta.valor_saldo, Decimal("0"))
+        self.assertEqual(conta.forma_pagamento, self.forma_pix)
+        pagamento = PagamentoContaPagar.objects.get(conta_pagar=conta)
+        self.assertEqual(pagamento.valor_pago, Decimal("1800.00"))
+        self.assertEqual(pagamento.forma_pagamento, self.forma_pix)
+
+    def test_pagamentos_parciais_preservam_formas_utilizadas(self):
+        conta = ContaPagarService.criar(
+            filial=self.filial,
+            funcionario=self.funcionario,
+            tipo_lancamento="funcionario",
+            valor_original=Decimal("1800.00"),
+            data_emissao=date(2026, 8, 20),
+            data_vencimento=date(2026, 8, 30),
+            plano_contas=self.categoria,
+            forma_pagamento_prevista=self.forma_prevista,
+        )
+        ContaPagarService.registrar_pagamento(
+            conta=conta,
+            data_pagamento=date(2026, 8, 20),
+            valor_pago=Decimal("800.00"),
+            forma_pagamento=self.forma_pix,
+            usuario=None,
+        )
+        ContaPagarService.registrar_pagamento(
+            conta=conta,
+            data_pagamento=date(2026, 8, 21),
+            valor_pago=Decimal("1000.00"),
+            forma_pagamento=self.forma_prevista,
+            usuario=None,
+        )
+
+        pagamentos = list(conta.pagamentos.order_by("data_pagamento"))
+        self.assertEqual(len(pagamentos), 2)
+        self.assertEqual(pagamentos[0].forma_pagamento, self.forma_pix)
+        self.assertEqual(pagamentos[1].forma_pagamento, self.forma_prevista)
+        self.assertEqual(conta.status, "pago")

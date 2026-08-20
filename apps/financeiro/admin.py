@@ -4,7 +4,7 @@ from apps.financeiro.models import (
     DocumentoFiscal, ItemDocumentoFiscal,
     FormaPagamento, CondicaoPagamento,
     ContaBancaria, PlanoContas, CentroCusto,
-    ContaReceber, ContaPagar,
+    ContaReceber, ContaPagar, PagamentoContaPagar,
     PIXCobranca, Boleto,
     ExtratoBancario, ConciliacaoBancaria, AgendaPagamento,
     DREConsolidado,
@@ -87,6 +87,13 @@ class CPAdmin(admin.ModelAdmin):
                     "data_vencimento", "status"]
     list_filter = ["filial", "status"]
     date_hierarchy = "data_vencimento"
+
+
+@admin.register(PagamentoContaPagar)
+class PagamentoContaPagarAdmin(admin.ModelAdmin):
+    list_display = ["conta_pagar", "data_pagamento", "valor_pago", "forma_pagamento", "filial"]
+    list_filter = ["filial", "forma_pagamento"]
+    date_hierarchy = "data_pagamento"
 
 
 admin.site.register(PIXCobranca)
