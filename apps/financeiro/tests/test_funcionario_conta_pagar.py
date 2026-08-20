@@ -18,7 +18,11 @@ from apps.cadastros.models import Fornecedor, Funcionario
 from apps.cadastros.views.fornecedor import FornecedorAjaxCreateView
 from apps.compras.models import EntradaNF
 from apps.core.models import Empresa, Filial, PerfilAcesso, Usuario
-from apps.financeiro.forms.pagar import ContaPagarForm, validar_comprovante
+from apps.financeiro.forms.pagar import (
+    ContaPagarForm,
+    PagamentoContaPagarForm,
+    validar_comprovante,
+)
 from apps.financeiro.models import (
     ContaPagar,
     FormaPagamento,
@@ -30,6 +34,7 @@ from apps.financeiro.services.pagar_service import ContaPagarService
 from apps.financeiro.views.pagar import (
     ComprovantePagamentoView,
     ContaPagarNotaFiscalLookupView,
+    ContaPagarPagamentoView,
 )
 
 
@@ -394,6 +399,79 @@ class FuncionarioContaPagarTests(TestCase):
         self.assertEqual(pagamentos[0].forma_pagamento, self.forma_pix)
         self.assertEqual(pagamentos[1].forma_pagamento, self.forma_prevista)
         self.assertEqual(conta.status, "pago")
+
+    def test_baixa_bloqueia_valor_acima_do_saldo_atualizado(self):
+        conta = ContaPagarService.criar(
+            filial=self.filial,
+            funcionario=self.funcionario,
+            tipo_lancamento="funcionario",
+            valor_original=Decimal("100.00"),
+            data_emissao=date(2026, 8, 20),
+            data_vencimento=date(2026, 8, 30),
+            plano_contas=self.categoria,
+        )
+        form = PagamentoContaPagarForm(
+            {
+                "data_pagamento": "2026-08-20",
+                "valor_pago": "111.00",
+                "valor_juros": "10.00",
+                "valor_multa": "0",
+                "valor_desconto": "0",
+                "forma_pagamento": self.forma_pix.pk,
+            },
+            filial=self.filial,
+            conta=conta,
+        )
+
+        self.assertFalse(form.is_valid())
+        self.assertIn("valor_pago", form.errors)
+
+    def test_baixa_guarda_referencia_da_transacao(self):
+        conta = ContaPagarService.criar(
+            filial=self.filial,
+            funcionario=self.funcionario,
+            tipo_lancamento="funcionario",
+            valor_original=Decimal("100.00"),
+            data_emissao=date(2026, 8, 20),
+            data_vencimento=date(2026, 8, 30),
+            plano_contas=self.categoria,
+        )
+        ContaPagarService.registrar_pagamento(
+            conta=conta,
+            data_pagamento=date(2026, 8, 20),
+            valor_pago=Decimal("100.00"),
+            forma_pagamento=self.forma_pix,
+            referencia_pagamento="PIX-E2E-123",
+            usuario=None,
+        )
+
+        pagamento = conta.pagamentos.get()
+        self.assertEqual(pagamento.referencia_pagamento, "PIX-E2E-123")
+
+    def test_tela_de_baixa_exibe_resumo_e_opcao_parcial(self):
+        conta = ContaPagarService.criar(
+            filial=self.filial,
+            funcionario=self.funcionario,
+            tipo_lancamento="funcionario",
+            valor_original=Decimal("100.00"),
+            data_emissao=date(2026, 8, 20),
+            data_vencimento=date(2026, 8, 30),
+            plano_contas=self.categoria,
+            forma_pagamento_prevista=self.forma_prevista,
+        )
+        request = RequestFactory().get(f"/financeiro/pagar/{conta.pk}/pagar/")
+        request.user = SimpleNamespace(
+            is_authenticated=True,
+            tem_permissao=lambda modulo, acao: True,
+        )
+        request.filial_ativa = self.filial
+
+        response = ContaPagarPagamentoView.as_view()(request, pk=conta.pk)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Resumo da baixa")
+        self.assertContains(response, "Pagamento parcial")
+        self.assertContains(response, "Referência da transação")
 
     def test_comprovante_valida_tipo_e_tamanho(self):
         invalido = SimpleUploadedFile(

@@ -154,6 +154,7 @@ class ContaPagarService:
         valor_desconto: Decimal = Decimal('0'),
         comprovante=None,
         comprovante_url: str = '',
+        referencia_pagamento: str = '',
         observacao: str = '',
     ) -> ContaPagar:
         """Registra o pagamento (total ou parcial) de uma conta a pagar."""
@@ -167,6 +168,17 @@ class ContaPagarService:
             raise DomainError('A data do pagamento não pode ser anterior à emissão.')
         if valor_pago <= Decimal('0'):
             raise DomainError('O valor pago deve ser maior que zero.')
+
+        saldo_atualizado = (
+            conta.valor_saldo
+            + (valor_juros or Decimal('0'))
+            + (valor_multa or Decimal('0'))
+            - (valor_desconto or Decimal('0'))
+        )
+        if saldo_atualizado <= Decimal('0'):
+            raise DomainError('O desconto não pode zerar ou ultrapassar o saldo do título.')
+        if valor_pago > saldo_atualizado:
+            raise DomainError('O valor pago não pode superar o saldo atualizado do título.')
 
         conta.valor_juros += valor_juros or Decimal('0')
         conta.valor_multa += valor_multa or Decimal('0')
@@ -212,6 +224,7 @@ class ContaPagarService:
             valor_desconto=valor_desconto or Decimal('0'),
             forma_pagamento=forma_pagamento,
             conta_bancaria=conta_bancaria,
+            referencia_pagamento=referencia_pagamento,
             comprovante_url=comprovante_url,
             comprovante_arquivo=comprovante,
             comprovante_nome_original=getattr(comprovante, 'name', '') if comprovante else '',

@@ -220,6 +220,7 @@ class PagamentoContaPagar(TimestampedModel):
     conta_bancaria = models.ForeignKey(
         ContaBancaria, on_delete=models.SET_NULL, null=True, blank=True, related_name='+',
     )
+    referencia_pagamento = models.CharField(max_length=100, blank=True)
     comprovante_url = models.URLField(max_length=500, blank=True)
     comprovante_arquivo = models.FileField(
         upload_to=caminho_comprovante_pagamento,

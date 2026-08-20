@@ -425,6 +425,7 @@ class ContaPagarPagamentoView(PermissaoRequiredMixin, View):
         return get_object_or_404(
             ContaPagar.objects.for_filial(_filial(request)).select_related(
                 'fornecedor', 'funcionario', 'forma_pagamento_prevista', 'forma_pagamento',
+                'plano_contas__conta_pai__conta_pai',
             ),
             pk=pk,
         )
@@ -472,6 +473,7 @@ class ContaPagarPagamentoView(PermissaoRequiredMixin, View):
                 valor_juros=d.get('valor_juros'),
                 valor_multa=d.get('valor_multa'),
                 valor_desconto=d.get('valor_desconto'),
+                referencia_pagamento=d.get('referencia_pagamento', ''),
                 comprovante=d.get('comprovante'),
                 observacao=d.get('observacao', ''),
             )

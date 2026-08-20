@@ -259,6 +259,7 @@
         <div><span class="block text-xs opacity-60">Forma utilizada</span><strong>{{ pagamento.forma_pagamento.descricao|default:"Não informada" }}</strong></div>
         <div><span class="block text-xs opacity-60">Conta debitada</span><strong>{{ pagamento.conta_bancaria.descricao|default:pagamento.conta_bancaria|default:"Não informada" }}</strong></div>
         {% if pagamento.valor_juros or pagamento.valor_multa or pagamento.valor_desconto %}<p class="sm:col-span-4 text-xs opacity-70">Juros: R$ {{ pagamento.valor_juros|floatformat:2 }} · Multa: R$ {{ pagamento.valor_multa|floatformat:2 }} · Desconto: R$ {{ pagamento.valor_desconto|floatformat:2 }}</p>{% endif %}
+        {% if pagamento.referencia_pagamento %}<p class="text-xs opacity-70 sm:col-span-4">Referência: <strong class="font-mono">{{ pagamento.referencia_pagamento }}</strong></p>{% endif %}
         {% if pagamento.observacao %}<p class="text-xs opacity-70 sm:col-span-2">{{ pagamento.observacao }}</p>{% endif %}
         {% if pagamento.comprovante_arquivo %}
         <div class="flex w-full gap-2 sm:col-span-2 sm:justify-end">

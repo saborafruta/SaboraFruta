@@ -1,70 +1,265 @@
 {% extends "_base.html" %}
+{% load widget_tweaks %}
 
 {% block title %}{{ title }}{% endblock %}
 {% block page_title %}{{ title }}{% endblock %}
 
 {% block content %}
-<div class="max-w-2xl mx-auto space-y-5">
+<div class="mx-auto max-w-6xl space-y-4"
+     x-data="paymentForm({
+       saldo: '{{ conta.valor_saldo|floatformat:2|escapejs }}',
+       valor: '{{ form.valor_pago.value|default:conta.valor_saldo|escapejs }}',
+       juros: '{{ form.valor_juros.value|default:0|escapejs }}',
+       multa: '{{ form.valor_multa.value|default:0|escapejs }}',
+       desconto: '{{ form.valor_desconto.value|default:0|escapejs }}'
+     })">
 
-  <!-- ── Breadcrumb ── -->
-  <div>
-    <p class="text-sm mb-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
-      <a href="{% url 'financeiro:pagar_list' %}"
-         :style="temaClaro ? 'color:#3b82f6;' : 'color:#60a5fa;'">Contas a Pagar</a>
-      <span class="mx-1">›</span>
-      <a href="{% url 'financeiro:pagar_detail' conta.pk %}"
-         :style="temaClaro ? 'color:#3b82f6;' : 'color:#60a5fa;'">#{{ conta.pk }}</a>
-      <span class="mx-1">›</span>
-      Pagamento
-    </p>
-    <h2 class="text-2xl font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
-      Registrar pagamento
-    </h2>
+  <div class="flex flex-wrap items-end justify-between gap-3">
+    <div>
+      <p class="mb-1 text-sm opacity-65">
+        <a href="{% url 'financeiro:pagar_list' %}" class="text-blue-500">Contas a Pagar</a>
+        <span class="mx-1">/</span>
+        <a href="{% url 'financeiro:pagar_detail' conta.pk %}" class="text-blue-500">Título #{{ conta.pk }}</a>
+      </p>
+      <h2 class="text-2xl font-semibold">Registrar pagamento</h2>
+      <p class="mt-1 text-sm opacity-65">Confira os dados e registre a forma como o pagamento realmente foi realizado.</p>
+    </div>
+    <a href="{% url 'financeiro:pagar_detail' conta.pk %}" class="btn-secondary">Voltar ao título</a>
   </div>
 
-  <!-- ── Resumo do título ── -->
-  <div class="card p-4">
-    <p class="text-xs font-semibold uppercase tracking-wide mb-3"
-       :style="temaClaro ? 'color:#6b7280;' : 'color:#9ca3af;'">Título</p>
-    <div class="grid grid-cols-2 sm:grid-cols-4 gap-4 text-sm">
-      <div>
-        <span class="block text-xs" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Beneficiario</span>
-        <strong :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
-          {{ conta.beneficiario_nome|truncatechars:28 }}
-        </strong>
+  <section class="card overflow-hidden">
+    <div class="grid grid-cols-2 gap-px sm:grid-cols-3 lg:grid-cols-6"
+         :style="temaClaro ? 'background:#e5e7eb' : 'background:#303038'">
+      <div class="col-span-2 p-4 sm:col-span-1 lg:col-span-2"
+           :style="temaClaro ? 'background:#fff' : 'background:#202024'">
+        <span class="block text-xs opacity-60">Beneficiário</span>
+        <strong class="mt-1 block truncate">{{ conta.beneficiario_nome }}</strong>
+        {% if conta.beneficiario_documento %}<span class="mt-1 block font-mono text-xs opacity-55">{{ conta.beneficiario_documento }}</span>{% endif %}
       </div>
-      <div>
-        <span class="block text-xs" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Vencimento</span>
-        <strong :style="{% if conta.status == 'vencido' %}temaClaro ? 'color:#be123c;' : 'color:#fca5a5;'{% else %}temaClaro ? 'color:#111827;' : 'color:#f8fafc;'{% endif %}">
-          {{ conta.data_vencimento|date:"d/m/Y" }}
-        </strong>
+      <div class="p-4" :style="temaClaro ? 'background:#fff' : 'background:#202024'">
+        <span class="block text-xs opacity-60">Vencimento</span>
+        <strong class="mt-1 block {% if conta.status == 'vencido' %}text-red-500{% endif %}">{{ conta.data_vencimento|date:"d/m/Y" }}</strong>
+        {% if conta.status == 'vencido' %}<span class="text-xs font-medium text-red-500">Vencido</span>{% endif %}
       </div>
-      <div>
-        <span class="block text-xs" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Valor original</span>
-        <strong :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
-          R$ {{ conta.valor_original|floatformat:2 }}
-        </strong>
+      <div class="p-4" :style="temaClaro ? 'background:#fff' : 'background:#202024'">
+        <span class="block text-xs opacity-60">Documento</span>
+        <strong class="mt-1 block truncate font-mono">{{ conta.documento_numero|default:"Não informado" }}</strong>
+        {% if conta.nota_fiscal_fornecedor %}<span class="text-xs opacity-55">NF {{ conta.nota_fiscal_fornecedor }}</span>{% endif %}
       </div>
-      <div>
-        <span class="block text-xs" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Saldo a pagar</span>
-        <strong :style="temaClaro ? 'color:#b45309;' : 'color:#fcd34d;'" class="text-base">
-          R$ {{ conta.valor_saldo|floatformat:2 }}
-        </strong>
+      <div class="p-4" :style="temaClaro ? 'background:#fff' : 'background:#202024'">
+        <span class="block text-xs opacity-60">Parcela</span>
+        <strong class="mt-1 block">{{ conta.parcela }} de {{ conta.total_parcelas }}</strong>
+      </div>
+      <div class="p-4" :style="temaClaro ? 'background:#fff' : 'background:#202024'">
+        <span class="block text-xs opacity-60">Saldo atual</span>
+        <strong class="mt-1 block text-base text-amber-500">R$ {{ conta.valor_saldo|floatformat:2 }}</strong>
       </div>
     </div>
-  </div>
-
-  <!-- ── Formulário de pagamento ── -->
-  <div class="card p-6">
-    {% if conta.forma_pagamento_prevista %}
-    <div class="mb-5 rounded-md border border-blue-500/30 bg-blue-500/10 px-4 py-3 text-sm">
-      Forma prevista no lançamento:
-      <strong>{{ conta.forma_pagamento_prevista.descricao }}</strong>.
-      Confirme ou altere abaixo conforme o pagamento realmente realizado.
+    {% if conta.plano_contas %}
+    <div class="border-t px-4 py-3 text-xs" :style="temaClaro ? 'border-color:#e5e7eb;background:#f8fafc' : 'border-color:#303038;background:#18181b'">
+      <span class="opacity-60">Categoria financeira:</span>
+      <strong class="ml-1">{{ conta.plano_contas.caminho_descricao }}</strong>
     </div>
     {% endif %}
-    {% include "_form_generic.html" with form=form submit_label="Confirmar pagamento" cancel_url=cancel_url columns=1 %}
-  </div>
+  </section>
 
+  <form method="post" enctype="multipart/form-data" @submit="loading=true" novalidate>
+    {% csrf_token %}
+    <div class="grid grid-cols-1 items-start gap-5 lg:grid-cols-[minmax(0,1fr)_19rem]">
+      <div class="card overflow-hidden">
+        {% if form.non_field_errors %}
+        <div class="m-5 rounded-md border border-red-300 bg-red-50 p-3 text-sm text-red-700">
+          {{ form.non_field_errors }}
+        </div>
+        {% endif %}
+
+        <section class="space-y-4 p-5 sm:p-6">
+          <div class="flex items-start gap-3">
+            <span class="grid h-8 w-8 shrink-0 place-items-center rounded-md bg-blue-600 text-sm font-bold text-white">1</span>
+            <div>
+              <h3 class="font-semibold">Valor e data da baixa</h3>
+              <p class="text-xs opacity-60">Escolha entre quitar o saldo atualizado ou registrar uma parte.</p>
+            </div>
+          </div>
+
+          <div class="grid grid-cols-2 gap-1 rounded-md border p-1 sm:max-w-md"
+               :style="temaClaro ? 'border-color:#dbe3ee;background:#f8fafc' : 'border-color:#3f3f46;background:#18181b'">
+            <button type="button" @click="modo='integral'; syncIntegral()"
+                    class="min-h-10 rounded px-3 text-sm font-semibold"
+                    :class="modo==='integral' ? 'bg-blue-600 text-white' : 'opacity-70'">Quitar integralmente</button>
+            <button type="button" @click="modo='parcial'"
+                    class="min-h-10 rounded px-3 text-sm font-semibold"
+                    :class="modo==='parcial' ? 'bg-blue-600 text-white' : 'opacity-70'">Pagamento parcial</button>
+          </div>
+
+          <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <div>
+              <label for="{{ form.data_pagamento.id_for_label }}" class="mb-1 block text-sm font-medium">Data do pagamento *</label>
+              {{ form.data_pagamento|add_class:"form-input" }}
+              {% if form.data_pagamento.errors %}<p class="mt-1 text-xs text-red-500">{{ form.data_pagamento.errors|join:", " }}</p>{% endif %}
+            </div>
+            <div>
+              <label for="{{ form.valor_pago.id_for_label }}" class="mb-1 block text-sm font-medium">Valor do pagamento (R$) *</label>
+              {{ form.valor_pago|add_class:"form-input text-lg font-semibold"|attr:"x-model:valor"|attr:"@input:modo='parcial'" }}
+              <p class="mt-1 text-xs opacity-60" x-show="modo==='parcial'">Informe quanto foi pago nesta baixa.</p>
+              {% if form.valor_pago.errors %}<p class="mt-1 text-xs text-red-500">{{ form.valor_pago.errors|join:", " }}</p>{% endif %}
+            </div>
+          </div>
+
+          <details class="rounded-md border" :style="temaClaro ? 'border-color:#dbe3ee' : 'border-color:#3f3f46'"
+                   {% if form.valor_juros.errors or form.valor_multa.errors or form.valor_desconto.errors %}open{% endif %}>
+            <summary class="cursor-pointer px-4 py-3 text-sm font-semibold">Juros, multa ou desconto</summary>
+            <div class="grid grid-cols-1 gap-4 border-t p-4 sm:grid-cols-3" :style="temaClaro ? 'border-color:#dbe3ee' : 'border-color:#3f3f46'">
+              <div>
+                <label for="{{ form.valor_juros.id_for_label }}" class="mb-1 block text-sm font-medium">Juros (R$)</label>
+                {{ form.valor_juros|add_class:"form-input"|attr:"x-model:juros"|attr:"@input:syncIntegral()" }}
+                {% if form.valor_juros.errors %}<p class="mt-1 text-xs text-red-500">{{ form.valor_juros.errors|join:", " }}</p>{% endif %}
+              </div>
+              <div>
+                <label for="{{ form.valor_multa.id_for_label }}" class="mb-1 block text-sm font-medium">Multa (R$)</label>
+                {{ form.valor_multa|add_class:"form-input"|attr:"x-model:multa"|attr:"@input:syncIntegral()" }}
+                {% if form.valor_multa.errors %}<p class="mt-1 text-xs text-red-500">{{ form.valor_multa.errors|join:", " }}</p>{% endif %}
+              </div>
+              <div>
+                <label for="{{ form.valor_desconto.id_for_label }}" class="mb-1 block text-sm font-medium">Desconto (R$)</label>
+                {{ form.valor_desconto|add_class:"form-input"|attr:"x-model:desconto"|attr:"@input:syncIntegral()" }}
+                {% if form.valor_desconto.errors %}<p class="mt-1 text-xs text-red-500">{{ form.valor_desconto.errors|join:", " }}</p>{% endif %}
+              </div>
+            </div>
+          </details>
+        </section>
+
+        <section class="space-y-4 border-t p-5 sm:p-6" :style="temaClaro ? 'border-color:#e5e7eb' : 'border-color:#303038'">
+          <div class="flex items-start gap-3">
+            <span class="grid h-8 w-8 shrink-0 place-items-center rounded-md bg-emerald-600 text-sm font-bold text-white">2</span>
+            <div>
+              <h3 class="font-semibold">Como foi pago</h3>
+              <p class="text-xs opacity-60">Esses dados alimentam a conferência e a conciliação financeira.</p>
+            </div>
+          </div>
+
+          {% if conta.forma_pagamento_prevista %}
+          <div class="rounded-md border border-blue-500/30 bg-blue-500/10 px-4 py-3 text-sm">
+            Forma prevista: <strong>{{ conta.forma_pagamento_prevista.descricao }}</strong>. Confirme ou altere conforme o pagamento realizado.
+          </div>
+          {% endif %}
+
+          <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <div>
+              <label for="{{ form.forma_pagamento.id_for_label }}" class="mb-1 block text-sm font-medium">Forma utilizada *</label>
+              {{ form.forma_pagamento|add_class:"form-input" }}
+              {% if form.forma_pagamento.errors %}<p class="mt-1 text-xs text-red-500">{{ form.forma_pagamento.errors|join:", " }}</p>{% endif %}
+            </div>
+            <div>
+              <label for="{{ form.conta_bancaria.id_for_label }}" class="mb-1 block text-sm font-medium">Conta debitada</label>
+              {{ form.conta_bancaria|add_class:"form-input" }}
+              <p class="mt-1 text-xs opacity-60">Selecione para refletir corretamente no fluxo e na conciliação.</p>
+              {% if form.conta_bancaria.errors %}<p class="mt-1 text-xs text-red-500">{{ form.conta_bancaria.errors|join:", " }}</p>{% endif %}
+            </div>
+            <div class="sm:col-span-2">
+              <label for="{{ form.referencia_pagamento.id_for_label }}" class="mb-1 block text-sm font-medium">Referência da transação <span class="text-xs font-normal opacity-55">(opcional)</span></label>
+              {{ form.referencia_pagamento|add_class:"form-input"|attr:"placeholder:ID do PIX, autenticação, nosso número ou NSU" }}
+              {% if form.referencia_pagamento.errors %}<p class="mt-1 text-xs text-red-500">{{ form.referencia_pagamento.errors|join:", " }}</p>{% endif %}
+            </div>
+          </div>
+        </section>
+
+        <section class="space-y-4 border-t p-5 sm:p-6" :style="temaClaro ? 'border-color:#e5e7eb' : 'border-color:#303038'">
+          <div class="flex items-start gap-3">
+            <span class="grid h-8 w-8 shrink-0 place-items-center rounded-md bg-violet-600 text-sm font-bold text-white">3</span>
+            <div>
+              <h3 class="font-semibold">Comprovante e observação</h3>
+              <p class="text-xs opacity-60">Anexe a evidência do pagamento para consulta futura.</p>
+            </div>
+          </div>
+
+          <div class="rounded-md border border-dashed p-4" :style="temaClaro ? 'border-color:#bfdbfe;background:#f8fafc' : 'border-color:#3f3f46;background:#18181b'">
+            <label for="{{ form.comprovante.id_for_label }}" class="mb-2 block text-sm font-semibold">Anexar comprovante ou tirar foto <span class="text-xs font-normal opacity-55">(opcional)</span></label>
+            {{ form.comprovante|add_class:"block min-h-12 w-full cursor-pointer text-sm file:mr-3 file:min-h-11 file:rounded-md file:border-0 file:bg-blue-600 file:px-4 file:py-2.5 file:font-semibold file:text-white"|attr:"@change:arquivoNome=$event.target.files[0]?.name||''" }}
+            <p class="mt-2 text-xs opacity-60" x-text="arquivoNome || 'PDF ou foto de até 10 MB. No celular, use câmera, galeria ou arquivos.'"></p>
+            {% if form.comprovante.errors %}<p class="mt-1 text-xs text-red-500">{{ form.comprovante.errors|join:", " }}</p>{% endif %}
+          </div>
+
+          <div>
+            <label for="{{ form.observacao.id_for_label }}" class="mb-1 block text-sm font-medium">Observação <span class="text-xs font-normal opacity-55">(opcional)</span></label>
+            {{ form.observacao|add_class:"form-input"|attr:"placeholder:Ex.: pagamento autorizado por, motivo da diferença ou informação para conferência" }}
+            {% if form.observacao.errors %}<p class="mt-1 text-xs text-red-500">{{ form.observacao.errors|join:", " }}</p>{% endif %}
+          </div>
+        </section>
+      </div>
+
+      <aside class="card overflow-hidden lg:sticky lg:top-5">
+        <div class="border-b px-5 py-4" :style="temaClaro ? 'border-color:#e5e7eb' : 'border-color:#303038'">
+          <h3 class="font-semibold">Resumo da baixa</h3>
+          <p class="mt-1 text-xs opacity-60" x-text="modo==='integral' ? 'Quitação integral' : 'Pagamento parcial'"></p>
+        </div>
+        <div class="space-y-3 px-5 py-4 text-sm">
+          <div class="flex justify-between gap-3"><span class="opacity-65">Saldo atual</span><strong x-text="money(saldo)"></strong></div>
+          <div class="flex justify-between gap-3" x-show="num(juros)>0"><span class="opacity-65">Juros</span><strong class="text-red-500" x-text="'+ '+money(juros)"></strong></div>
+          <div class="flex justify-between gap-3" x-show="num(multa)>0"><span class="opacity-65">Multa</span><strong class="text-red-500" x-text="'+ '+money(multa)"></strong></div>
+          <div class="flex justify-between gap-3" x-show="num(desconto)>0"><span class="opacity-65">Desconto</span><strong class="text-emerald-500" x-text="'- '+money(desconto)"></strong></div>
+          <div class="flex justify-between gap-3 border-t pt-3" :style="temaClaro ? 'border-color:#e5e7eb' : 'border-color:#303038'">
+            <span class="font-medium">Saldo atualizado</span><strong x-text="money(totalAtualizado())"></strong>
+          </div>
+          <div class="flex justify-between gap-3"><span class="opacity-65">Pagamento agora</span><strong class="text-blue-500" x-text="money(valor)"></strong></div>
+        </div>
+        <div class="border-t px-5 py-4" :style="temaClaro ? 'border-color:#e5e7eb;background:#f8fafc' : 'border-color:#303038;background:#18181b'">
+          <span class="block text-xs opacity-60">Saldo após esta baixa</span>
+          <strong class="mt-1 block text-2xl" :class="restante()>0.009 ? 'text-amber-500' : 'text-emerald-500'" x-text="money(restante())"></strong>
+          <p class="mt-2 text-xs opacity-65" x-show="restante()>0.009">O título continuará aberto para novas baixas.</p>
+          <p class="mt-2 text-xs font-medium text-emerald-600" x-show="restante()<=0.009 && !excede()">O título será marcado como pago.</p>
+          <p class="mt-2 text-xs font-medium text-red-500" x-show="excede()">O pagamento não pode ser maior que o saldo atualizado.</p>
+        </div>
+        <div class="grid grid-cols-1 gap-2 p-4">
+          <button type="submit" class="btn-primary min-h-12 justify-center" :disabled="loading || excede() || totalAtualizado()<=0">
+            <span x-show="!loading" x-text="modo==='integral' ? 'Confirmar quitação' : 'Registrar pagamento parcial'"></span>
+            <span x-show="loading" x-cloak>Registrando...</span>
+          </button>
+          <a href="{{ cancel_url }}" class="btn-secondary min-h-11 justify-center">Cancelar</a>
+        </div>
+      </aside>
+    </div>
+  </form>
 </div>
+
+<script>
+function paymentForm(initial) {
+  return {
+    loading: false,
+    modo: 'integral',
+    saldo: initial.saldo || '0',
+    valor: initial.valor || '0',
+    juros: initial.juros || '0',
+    multa: initial.multa || '0',
+    desconto: initial.desconto || '0',
+    arquivoNome: '',
+    init() {
+      if (this.num(this.valor) + 0.009 < this.totalAtualizado()) this.modo = 'parcial';
+      else this.syncIntegral();
+    },
+    num(value) {
+      const raw = String(value ?? '').trim();
+      if (!raw) return 0;
+      const normalized = raw.includes(',') ? raw.replace(/\./g, '').replace(',', '.') : raw;
+      const parsed = Number.parseFloat(normalized);
+      return Number.isFinite(parsed) ? parsed : 0;
+    },
+    money(value) {
+      return new Intl.NumberFormat('pt-BR', {style:'currency', currency:'BRL'}).format(this.num(value));
+    },
+    totalAtualizado() {
+      return Math.max(0, this.num(this.saldo) + this.num(this.juros) + this.num(this.multa) - this.num(this.desconto));
+    },
+    restante() {
+      return Math.max(0, this.totalAtualizado() - this.num(this.valor));
+    },
+    excede() {
+      return this.num(this.valor) > this.totalAtualizado() + 0.009;
+    },
+    syncIntegral() {
+      if (this.modo === 'integral') this.valor = this.totalAtualizado().toFixed(2);
+    }
+  };
+}
+</script>
 {% endblock %}

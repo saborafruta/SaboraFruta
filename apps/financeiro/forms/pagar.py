@@ -358,6 +358,12 @@ class PagamentoContaPagarForm(forms.Form):
         label='Conta bancária',
         help_text='Conta debitada no pagamento.',
     )
+    referencia_pagamento = forms.CharField(
+        max_length=100,
+        required=False,
+        label='Referência da transação',
+        help_text='ID do PIX, autenticação bancária, nosso número ou outra referência.',
+    )
     comprovante = forms.FileField(
         required=False,
         label='Comprovante',
@@ -401,4 +407,20 @@ class PagamentoContaPagarForm(forms.Form):
                 'data_pagamento',
                 'A data do pagamento não pode ser anterior à emissão.',
             )
+        valor_pago = cleaned.get('valor_pago')
+        juros = cleaned.get('valor_juros') or Decimal('0')
+        multa = cleaned.get('valor_multa') or Decimal('0')
+        desconto = cleaned.get('valor_desconto') or Decimal('0')
+        if self.conta:
+            saldo_atualizado = self.conta.valor_saldo + juros + multa - desconto
+            if saldo_atualizado <= Decimal('0'):
+                self.add_error(
+                    'valor_desconto',
+                    'O desconto não pode zerar ou ultrapassar o saldo do título.',
+                )
+            elif valor_pago and valor_pago > saldo_atualizado:
+                self.add_error(
+                    'valor_pago',
+                    f'O valor não pode superar o saldo atualizado de R$ {saldo_atualizado:.2f}.',
+                )
         return cleaned
