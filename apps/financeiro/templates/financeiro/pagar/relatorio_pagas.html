@@ -1,0 +1,100 @@
+{% extends "_base.html" %}
+
+{% block title %}Relatório de Contas Pagas{% endblock %}
+{% block page_title %}Relatório de Contas Pagas{% endblock %}
+
+{% block extra_head %}
+<style>
+  #relatorio-contas-pagas { color: #111827; }
+  @media print {
+    nav, header, aside, .no-print { display: none !important; }
+    body, main { background: #fff !important; }
+    #relatorio-contas-pagas { color: #000 !important; }
+    #relatorio-contas-pagas .report-box { border-color: #d1d5db !important; box-shadow: none !important; }
+    * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  }
+</style>
+{% endblock %}
+
+{% block content %}
+<div id="relatorio-contas-pagas" class="space-y-5">
+  <div class="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+    <div>
+      <p class="no-print mb-1 text-sm"><a href="{% url 'financeiro:pagar_pagas' %}" class="text-blue-600 hover:underline">Contas Pagas</a> › Relatório</p>
+      <h2 class="text-2xl font-semibold">Relatório de Contas Pagas</h2>
+      <p class="mt-1 text-sm text-gray-600">
+        {{ filial.nome_fantasia|default:filial.razao_social }}
+        {% if data_ini or data_fim %} · Pagamentos de {% if data_ini %}{{ data_ini }}{% else %}…{% endif %} até {% if data_fim %}{{ data_fim }}{% else %}…{% endif %}{% endif %}
+        {% if q %} · Busca: {{ q }}{% endif %}
+      </p>
+      <p class="mt-0.5 text-xs text-gray-500">Gerado em {{ gerado_em|date:"d/m/Y H:i" }} · {{ totais.quantidade|default:0 }} título{{ totais.quantidade|default:0|pluralize }}</p>
+    </div>
+    <div class="no-print flex gap-2">
+      <button type="button" onclick="window.print()" class="btn-secondary">Imprimir</button>
+      <button type="button" id="exportar-pagas-pdf" class="btn-primary">Exportar PDF</button>
+    </div>
+  </div>
+
+  <div class="report-box grid grid-cols-2 gap-3 rounded-lg border bg-white p-4 sm:grid-cols-4">
+    <div><span class="block text-xs uppercase text-gray-500">Total pago</span><strong class="text-lg text-emerald-700">R$ {{ totais.valor_pago|default:0|floatformat:2 }}</strong></div>
+    <div><span class="block text-xs uppercase text-gray-500">Títulos</span><strong class="text-lg">{{ totais.quantidade|default:0 }}</strong></div>
+    <div><span class="block text-xs uppercase text-gray-500">Juros e multas</span><strong class="text-lg">R$ {{ totais.acrescimos|default:0|floatformat:2 }}</strong></div>
+    <div><span class="block text-xs uppercase text-gray-500">Descontos</span><strong class="text-lg">R$ {{ totais.descontos|default:0|floatformat:2 }}</strong></div>
+  </div>
+
+  <div class="report-box overflow-hidden rounded-lg border bg-white">
+    <table class="w-full text-sm">
+      <thead class="bg-gray-50">
+        <tr class="border-b">
+          <th class="px-3 py-2 text-left text-xs uppercase text-gray-500">Pagamento</th>
+          <th class="px-3 py-2 text-left text-xs uppercase text-gray-500">Beneficiário / documento</th>
+          <th class="px-3 py-2 text-left text-xs uppercase text-gray-500">Categoria</th>
+          <th class="px-3 py-2 text-left text-xs uppercase text-gray-500">Forma / conta</th>
+          <th class="px-3 py-2 text-right text-xs uppercase text-gray-500">Pago</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for conta in contas %}
+          <tr class="border-b">
+            <td class="whitespace-nowrap px-3 py-2 font-semibold">{{ conta.data_pagamento|date:"d/m/Y" }}</td>
+            <td class="px-3 py-2">
+              <a href="{% url 'financeiro:pagar_detail' conta.pk %}" class="font-semibold text-blue-700 no-print">{{ conta.beneficiario_nome }}</a>
+              <span class="hidden font-semibold print:inline">{{ conta.beneficiario_nome }}</span>
+              <div class="text-xs text-gray-500">{% if conta.documento_numero %}Doc. {{ conta.documento_numero }}{% else %}Título #{{ conta.pk }}{% endif %}{% if conta.nota_fiscal_fornecedor %} · NF {{ conta.nota_fiscal_fornecedor }}{% endif %}</div>
+            </td>
+            <td class="px-3 py-2 text-xs">{{ conta.plano_contas.descricao|default:"Não classificada" }}</td>
+            <td class="px-3 py-2 text-xs">{{ conta.forma_pagamento|default:"Não informada" }}{% if conta.conta_bancaria %}<div class="text-gray-500">{{ conta.conta_bancaria }}</div>{% endif %}</td>
+            <td class="whitespace-nowrap px-3 py-2 text-right font-bold text-emerald-700">R$ {{ conta.valor_pago|floatformat:2 }}</td>
+          </tr>
+        {% empty %}
+          <tr><td colspan="5" class="px-4 py-10 text-center text-gray-500">Nenhuma conta paga encontrada.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+<script>
+document.getElementById('exportar-pagas-pdf').addEventListener('click', function () {
+  var button = this;
+  var hiddenElements = document.querySelectorAll('#relatorio-contas-pagas .no-print');
+  button.disabled = true;
+  button.textContent = 'Gerando PDF...';
+  hiddenElements.forEach(function (element) { element.style.display = 'none'; });
+  html2pdf().set({
+    margin: 8,
+    filename: 'contas-pagas-{{ gerado_em|date:"Y-m-d" }}.pdf',
+    image: { type: 'jpeg', quality: 0.96 },
+    html2canvas: { scale: 2, useCORS: true },
+    jsPDF: { unit: 'mm', format: 'a4', orientation: 'landscape' }
+  }).from(document.getElementById('relatorio-contas-pagas')).save().finally(function () {
+    hiddenElements.forEach(function (element) { element.style.display = ''; });
+    button.disabled = false;
+    button.textContent = 'Exportar PDF';
+  });
+});
+</script>
+{% endblock %}

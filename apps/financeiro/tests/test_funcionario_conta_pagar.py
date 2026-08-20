@@ -33,6 +33,9 @@ from apps.financeiro.models import (
 from apps.financeiro.services.pagar_service import ContaPagarService
 from apps.financeiro.views.pagar import (
     ComprovantePagamentoView,
+    ContaPagaListView,
+    ContaPagaRelatorioView,
+    ContaPagarCreateView,
     ContaPagarNotaFiscalLookupView,
     ContaPagarPagamentoView,
 )
@@ -367,6 +370,87 @@ class FuncionarioContaPagarTests(TestCase):
         pagamento = PagamentoContaPagar.objects.get(conta_pagar=conta)
         self.assertEqual(pagamento.valor_pago, Decimal("1800.00"))
         self.assertEqual(pagamento.forma_pagamento, self.forma_pix)
+
+    def test_contas_pagas_lista_somente_quitadas_com_link_para_detalhes(self):
+        paga = ContaPagarService.criar_e_quitar(
+            filial=self.filial,
+            funcionario=self.funcionario,
+            tipo_lancamento="funcionario",
+            documento_numero="PAGO-001",
+            valor_original=Decimal("1800.00"),
+            data_emissao=date(2026, 8, 20),
+            data_vencimento=date(2026, 8, 30),
+            plano_contas=self.categoria,
+            data_pagamento=date(2026, 8, 20),
+            forma_pagamento_utilizada=self.forma_pix,
+        )
+        ContaPagarService.criar(
+            filial=self.filial,
+            funcionario=self.funcionario,
+            tipo_lancamento="funcionario",
+            documento_numero="ABERTO-001",
+            valor_original=Decimal("500.00"),
+            data_emissao=date(2026, 8, 20),
+            data_vencimento=date(2026, 8, 30),
+            plano_contas=self.categoria,
+        )
+        request = RequestFactory().get("/financeiro/pagar/pagas/")
+        request.user = SimpleNamespace(
+            is_authenticated=True,
+            tem_permissao=lambda modulo, acao: True,
+        )
+        request.filial_ativa = self.filial
+
+        response = ContaPagaListView.as_view()(request)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "PAGO-001")
+        self.assertNotContains(response, "ABERTO-001")
+        self.assertContains(response, f'/financeiro/pagar/{paga.pk}/')
+        self.assertContains(response, "Nova conta paga")
+
+    def test_relatorio_de_contas_pagas_filtra_pela_data_do_pagamento(self):
+        ContaPagarService.criar_e_quitar(
+            filial=self.filial,
+            funcionario=self.funcionario,
+            tipo_lancamento="funcionario",
+            documento_numero="PAGO-AGOSTO",
+            valor_original=Decimal("100.00"),
+            data_emissao=date(2026, 8, 20),
+            data_vencimento=date(2026, 9, 10),
+            plano_contas=self.categoria,
+            data_pagamento=date(2026, 8, 20),
+            forma_pagamento_utilizada=self.forma_pix,
+        )
+        request = RequestFactory().get(
+            "/financeiro/pagar/pagas/relatorio/",
+            {"data_ini": "2026-08-01", "data_fim": "2026-08-31"},
+        )
+        request.user = SimpleNamespace(
+            is_authenticated=True,
+            tem_permissao=lambda modulo, acao: True,
+        )
+        request.filial_ativa = self.filial
+
+        response = ContaPagaRelatorioView.as_view()(request)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "PAGO-AGOSTO")
+        self.assertContains(response, "Relatório de Contas Pagas")
+
+    def test_nova_conta_paga_abre_com_quitacao_preselecionada(self):
+        request = RequestFactory().get("/financeiro/pagar/novo/?quitar=1", {"quitar": "1"})
+        request.user = SimpleNamespace(
+            is_authenticated=True,
+            tem_permissao=lambda modulo, acao: True,
+        )
+        request.filial_ativa = self.filial
+
+        response = ContaPagarCreateView.as_view()(request)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Nova Conta Paga")
+        self.assertContains(response, "quitarAgora:true")
 
     def test_pagamentos_parciais_preservam_formas_utilizadas(self):
         conta = ContaPagarService.criar(

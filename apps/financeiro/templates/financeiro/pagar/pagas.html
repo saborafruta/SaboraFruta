@@ -1,0 +1,159 @@
+{% extends "_base.html" %}
+
+{% block title %}Contas Pagas{% endblock %}
+{% block page_title %}Contas Pagas{% endblock %}
+
+{% block content %}
+<div class="space-y-5">
+  <div class="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+    <div>
+      <div class="mb-1 flex items-center gap-2 text-sm">
+        <a href="{% url 'financeiro:pagar_list' %}" class="text-blue-500 hover:underline">Contas a Pagar</a>
+        <span class="opacity-50">›</span>
+        <span class="opacity-70">Histórico</span>
+      </div>
+      <h2 class="text-2xl font-semibold">Contas Pagas</h2>
+      <p class="mt-1 text-sm opacity-70">Consulte pagamentos concluídos e abra qualquer título para ver a baixa completa.</p>
+    </div>
+    <div class="flex flex-wrap gap-2">
+      <a href="{% url 'financeiro:pagar_pagas_relatorio' %}{% if page_querystring %}?{{ page_querystring }}{% endif %}"
+         target="_blank" class="btn-secondary">Imprimir relatório</a>
+      {% if pode_criar %}
+        <a href="{% url 'financeiro:pagar_criar' %}?quitar=1" class="btn-primary">+ Nova conta paga</a>
+      {% endif %}
+    </div>
+  </div>
+
+  <div class="grid grid-cols-2 gap-3 lg:grid-cols-4">
+    <div class="card p-4">
+      <div class="text-xs font-semibold uppercase opacity-60">Total pago</div>
+      <div class="mt-1 text-xl font-bold text-emerald-500">R$ {{ totais.valor_pago|default:0|floatformat:2 }}</div>
+    </div>
+    <div class="card p-4">
+      <div class="text-xs font-semibold uppercase opacity-60">Títulos quitados</div>
+      <div class="mt-1 text-xl font-bold">{{ totais.quantidade|default:0 }}</div>
+    </div>
+    <div class="card p-4">
+      <div class="text-xs font-semibold uppercase opacity-60">Juros e multas</div>
+      <div class="mt-1 text-xl font-bold text-amber-500">R$ {{ totais.acrescimos|default:0|floatformat:2 }}</div>
+    </div>
+    <div class="card p-4">
+      <div class="text-xs font-semibold uppercase opacity-60">Descontos</div>
+      <div class="mt-1 text-xl font-bold text-blue-500">R$ {{ totais.descontos|default:0|floatformat:2 }}</div>
+    </div>
+  </div>
+
+  <form method="get" class="card grid grid-cols-1 gap-3 p-4 md:grid-cols-12">
+    <div class="md:col-span-5">
+      <label for="filtro-pagas" class="mb-1 block text-xs font-semibold opacity-70">Buscar</label>
+      <input id="filtro-pagas" type="search" name="q" value="{{ q }}" class="form-input"
+             placeholder="Beneficiário, CPF/CNPJ, documento, NF ou referência">
+    </div>
+    <div class="md:col-span-2">
+      <label for="data-ini" class="mb-1 block text-xs font-semibold opacity-70">Pago de</label>
+      <input id="data-ini" type="date" name="data_ini" value="{{ data_ini }}" class="form-input">
+    </div>
+    <div class="md:col-span-2">
+      <label for="data-fim" class="mb-1 block text-xs font-semibold opacity-70">Pago até</label>
+      <input id="data-fim" type="date" name="data_fim" value="{{ data_fim }}" class="form-input">
+    </div>
+    <div class="md:col-span-3">
+      <label for="ordenacao" class="mb-1 block text-xs font-semibold opacity-70">Ordenar</label>
+      <select id="ordenacao" name="ordenacao" class="form-input">
+        <option value="recentes" {% if ordenacao == 'recentes' %}selected{% endif %}>Pagamentos recentes</option>
+        <option value="antigas" {% if ordenacao == 'antigas' %}selected{% endif %}>Pagamentos antigos</option>
+        <option value="maior_valor" {% if ordenacao == 'maior_valor' %}selected{% endif %}>Maior valor</option>
+        <option value="menor_valor" {% if ordenacao == 'menor_valor' %}selected{% endif %}>Menor valor</option>
+        <option value="beneficiario" {% if ordenacao == 'beneficiario' %}selected{% endif %}>Beneficiário A-Z</option>
+      </select>
+    </div>
+    <div class="flex gap-2 md:col-span-12 md:justify-end">
+      <a href="{% url 'financeiro:pagar_pagas' %}" class="btn-secondary">Limpar</a>
+      <button type="submit" class="btn-primary">Filtrar</button>
+    </div>
+  </form>
+
+  <div class="space-y-3 md:hidden">
+    {% for conta in contas %}
+      <a href="{% url 'financeiro:pagar_detail' conta.pk %}" class="card block p-4 transition-opacity hover:opacity-85">
+        <div class="flex items-start justify-between gap-3">
+          <div class="min-w-0">
+            <div class="truncate font-semibold">{{ conta.beneficiario_nome }}</div>
+            <div class="mt-0.5 text-xs opacity-60">
+              {% if conta.documento_numero %}Doc. {{ conta.documento_numero }}{% else %}Título #{{ conta.pk }}{% endif %}
+              {% if conta.nota_fiscal_fornecedor %} · NF {{ conta.nota_fiscal_fornecedor }}{% endif %}
+            </div>
+          </div>
+          <span class="soft-pill is-green">Pago</span>
+        </div>
+        <div class="mt-4 grid grid-cols-2 gap-3 text-sm">
+          <div><span class="block text-xs opacity-60">Pagamento</span><strong>{{ conta.data_pagamento|date:"d/m/Y" }}</strong></div>
+          <div class="text-right"><span class="block text-xs opacity-60">Valor pago</span><strong class="text-emerald-500">R$ {{ conta.valor_pago|floatformat:2 }}</strong></div>
+          <div><span class="block text-xs opacity-60">Forma utilizada</span><strong>{{ conta.forma_pagamento|default:"Não informada" }}</strong></div>
+          <div class="text-right"><span class="block text-xs opacity-60">Categoria</span><strong>{{ conta.plano_contas.descricao|default:"Não classificada"|truncatechars:28 }}</strong></div>
+        </div>
+        <div class="mt-3 border-t pt-3 text-right text-xs font-semibold text-blue-500">Ver detalhes ›</div>
+      </a>
+    {% empty %}
+      <div class="card p-8 text-center opacity-70">Nenhuma conta paga encontrada para os filtros informados.</div>
+    {% endfor %}
+  </div>
+
+  <div class="hidden overflow-hidden rounded-lg border md:block"
+       :style="temaClaro ? 'background:#fff;border-color:#e5e7eb;' : 'background:#242426;border-color:#2f2f33;'">
+    <div class="overflow-x-auto">
+      <table class="w-full min-w-[980px] text-sm">
+        <thead :style="temaClaro ? 'background:#f8fafc;' : 'background:#1e1e20;'">
+          <tr class="border-b" :style="temaClaro ? 'border-color:#e5e7eb;' : 'border-color:#2f2f33;'">
+            <th class="px-4 py-3 text-left text-xs uppercase opacity-60">Pagamento</th>
+            <th class="px-4 py-3 text-left text-xs uppercase opacity-60">Beneficiário</th>
+            <th class="px-4 py-3 text-left text-xs uppercase opacity-60">Documento</th>
+            <th class="px-4 py-3 text-left text-xs uppercase opacity-60">Categoria financeira</th>
+            <th class="px-4 py-3 text-left text-xs uppercase opacity-60">Forma / conta</th>
+            <th class="px-4 py-3 text-right text-xs uppercase opacity-60">Valor pago</th>
+            <th class="w-28 px-4 py-3 text-right text-xs uppercase opacity-60">Detalhes</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for conta in contas %}
+            <tr class="cursor-pointer border-b transition-colors hover:bg-blue-500/5"
+                role="link" tabindex="0"
+                onclick="window.location.href='{% url 'financeiro:pagar_detail' conta.pk %}'"
+                onkeydown="if(event.key==='Enter'){window.location.href='{% url 'financeiro:pagar_detail' conta.pk %}'}"
+                :style="temaClaro ? 'border-color:#f1f5f9;' : 'border-color:#2f2f33;'">
+              <td class="whitespace-nowrap px-4 py-3 font-semibold">{{ conta.data_pagamento|date:"d/m/Y" }}</td>
+              <td class="px-4 py-3">
+                <a href="{% url 'financeiro:pagar_detail' conta.pk %}" class="font-semibold hover:text-blue-500 hover:underline">{{ conta.beneficiario_nome }}</a>
+                <div class="mt-0.5 text-xs opacity-60">{{ conta.beneficiario_documento|default:"Sem documento" }}</div>
+              </td>
+              <td class="px-4 py-3 text-xs">
+                {% if conta.documento_numero %}{{ conta.documento_numero }}{% else %}#{{ conta.pk }}{% endif %}
+                {% if conta.nota_fiscal_fornecedor %}<div class="mt-0.5 opacity-60">NF {{ conta.nota_fiscal_fornecedor }}</div>{% endif %}
+              </td>
+              <td class="max-w-[260px] px-4 py-3 text-xs">{{ conta.plano_contas.descricao|default:"Não classificada" }}</td>
+              <td class="px-4 py-3 text-xs">
+                {{ conta.forma_pagamento|default:"Não informada" }}
+                {% if conta.conta_bancaria %}<div class="mt-0.5 opacity-60">{{ conta.conta_bancaria }}</div>{% endif %}
+              </td>
+              <td class="whitespace-nowrap px-4 py-3 text-right font-bold text-emerald-500">R$ {{ conta.valor_pago|floatformat:2 }}</td>
+              <td class="px-4 py-3 text-right"><a href="{% url 'financeiro:pagar_detail' conta.pk %}" class="text-sm font-semibold text-blue-500 hover:underline">Abrir ›</a></td>
+            </tr>
+          {% empty %}
+            <tr><td colspan="7" class="px-4 py-12 text-center opacity-70">Nenhuma conta paga encontrada para os filtros informados.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  {% if page_obj.paginator.num_pages > 1 %}
+    <div class="flex items-center justify-between gap-3 text-sm">
+      <span class="opacity-70">Página {{ page_obj.number }} de {{ page_obj.paginator.num_pages }} · {{ page_obj.paginator.count }} registros</span>
+      <div class="flex gap-2">
+        {% if page_obj.has_previous %}<a class="btn-secondary" href="?{% if page_querystring %}{{ page_querystring }}&{% endif %}page={{ page_obj.previous_page_number }}">Anterior</a>{% endif %}
+        {% if page_obj.has_next %}<a class="btn-secondary" href="?{% if page_querystring %}{{ page_querystring }}&{% endif %}page={{ page_obj.next_page_number }}">Próxima</a>{% endif %}
+      </div>
+    </div>
+  {% endif %}
+</div>
+{% endblock %}

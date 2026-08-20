@@ -144,6 +144,109 @@ class ContaPagarListView(PermissaoRequiredMixin, View):
         })
 
 
+def _filtrar_contas_pagas(request):
+    """Retorna o historico de contas pagas da filial com os filtros da tela."""
+    qs = (
+        ContaPagar.objects.for_filial(_filial(request))
+        .filter(status=StatusContaPagar.PAGO)
+        .select_related(
+            'fornecedor', 'funcionario', 'forma_pagamento', 'conta_bancaria',
+            'plano_contas', 'conta_contabil',
+        )
+    )
+
+    q = request.GET.get('q', '').strip()
+    data_ini = request.GET.get('data_ini', '')
+    data_fim = request.GET.get('data_fim', '')
+    ordenacao = request.GET.get('ordenacao', 'recentes')
+
+    if q:
+        qs = qs.filter(
+            Q(fornecedor__razao_social__icontains=q)
+            | Q(fornecedor__nome_fantasia__icontains=q)
+            | Q(fornecedor__cpf_cnpj__icontains=q)
+            | Q(funcionario__nome__icontains=q)
+            | Q(funcionario__cpf__icontains=q)
+            | Q(documento_numero__icontains=q)
+            | Q(nota_fiscal_fornecedor__icontains=q)
+            | Q(pagamentos__referencia_pagamento__icontains=q)
+        ).distinct()
+    if data_ini:
+        qs = qs.filter(data_pagamento__gte=data_ini)
+    if data_fim:
+        qs = qs.filter(data_pagamento__lte=data_fim)
+
+    ordenacoes = {
+        'recentes': ('-data_pagamento', '-id'),
+        'antigas': ('data_pagamento', 'id'),
+        'maior_valor': ('-valor_pago', '-data_pagamento'),
+        'menor_valor': ('valor_pago', '-data_pagamento'),
+        'beneficiario': ('fornecedor__razao_social', 'funcionario__nome', '-data_pagamento'),
+    }
+    return qs.order_by(*ordenacoes.get(ordenacao, ordenacoes['recentes'])), {
+        'q': q,
+        'data_ini': data_ini,
+        'data_fim': data_fim,
+        'ordenacao': ordenacao,
+    }
+
+
+class ContaPagaListView(PermissaoRequiredMixin, View):
+    permissao_modulo = 'financeiro'
+    permissao_acao = 'ver'
+
+    def get(self, request):
+        qs, filtros = _filtrar_contas_pagas(request)
+        totais = qs.aggregate(
+            quantidade=Count('id'),
+            valor_original=Sum('valor_original'),
+            valor_pago=Sum('valor_pago'),
+            juros=Sum('valor_juros'),
+            multas=Sum('valor_multa'),
+            descontos=Sum('valor_desconto'),
+        )
+        totais['acrescimos'] = (totais['juros'] or 0) + (totais['multas'] or 0)
+        paginator = Paginator(qs, 40)
+        page_obj = paginator.get_page(request.GET.get('page', 1))
+        query = request.GET.copy()
+        query.pop('page', None)
+
+        return render(request, 'financeiro/pagar/pagas.html', {
+            'title': 'Contas Pagas',
+            'contas': page_obj,
+            'page_obj': page_obj,
+            'totais': totais,
+            'page_querystring': query.urlencode(),
+            'pode_criar': request.user.tem_permissao('financeiro', 'criar'),
+            **filtros,
+        })
+
+
+class ContaPagaRelatorioView(PermissaoRequiredMixin, View):
+    permissao_modulo = 'financeiro'
+    permissao_acao = 'ver'
+
+    def get(self, request):
+        qs, filtros = _filtrar_contas_pagas(request)
+        totais = qs.aggregate(
+            quantidade=Count('id'),
+            valor_original=Sum('valor_original'),
+            valor_pago=Sum('valor_pago'),
+            juros=Sum('valor_juros'),
+            multas=Sum('valor_multa'),
+            descontos=Sum('valor_desconto'),
+        )
+        totais['acrescimos'] = (totais['juros'] or 0) + (totais['multas'] or 0)
+        return render(request, 'financeiro/pagar/relatorio_pagas.html', {
+            'title': 'Relatorio de Contas Pagas',
+            'contas': list(qs),
+            'totais': totais,
+            'filial': _filial(request),
+            'gerado_em': timezone.localtime(),
+            **filtros,
+        })
+
+
 class ContaPagarRelatorioView(PermissaoRequiredMixin, View):
     """Relatório imprimível: agrupa os títulos (por padrão em aberto) por
     fornecedor, com a nota de entrada vinculada de cada título."""
@@ -251,16 +354,25 @@ class ContaPagarCreateView(PermissaoRequiredMixin, View):
     permissao_acao = 'criar'
 
     def _context(self, request, form):
+        cadastrando_pago = request.GET.get('quitar') == '1'
         return {
-            'title': 'Nova Conta a Pagar',
+            'title': 'Nova Conta Paga' if cadastrando_pago else 'Nova Conta a Pagar',
             'form': form,
-            'cancel_url': reverse('financeiro:pagar_list'),
+            'cancel_url': reverse(
+                'financeiro:pagar_pagas' if cadastrando_pago else 'financeiro:pagar_list'
+            ),
             'pode_criar_fornecedor': request.user.tem_permissao('cadastros', 'criar'),
         }
 
     def get(self, request):
         filial = _filial(request)
-        form = ContaPagarForm(filial=filial)
+        form = ContaPagarForm(
+            filial=filial,
+            initial={
+                'quitar_ao_lancar': request.GET.get('quitar') == '1',
+                'data_pagamento_imediato': timezone.localdate(),
+            },
+        )
         return render(request, 'financeiro/pagar/form.html', self._context(request, form))
 
     def post(self, request):
@@ -328,6 +440,8 @@ class ContaPagarCreateView(PermissaoRequiredMixin, View):
             messages.error(request, str(exc))
             return render(request, 'financeiro/pagar/form.html', self._context(request, form))
 
+        if d.get('quitar_ao_lancar'):
+            return redirect(reverse('financeiro:pagar_pagas'))
         return redirect(reverse('financeiro:pagar_list'))
 
 

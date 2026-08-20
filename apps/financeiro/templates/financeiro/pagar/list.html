@@ -18,6 +18,7 @@
       </p>
     </div>
     <div class="flex gap-2 flex-wrap">
+      <a href="{% url 'financeiro:pagar_pagas' %}" class="btn-secondary">Contas pagas</a>
       {% if pode_criar %}
         <a href="{% url 'financeiro:pagar_criar' %}" class="btn-primary">+ Novo título</a>
       {% endif %}
