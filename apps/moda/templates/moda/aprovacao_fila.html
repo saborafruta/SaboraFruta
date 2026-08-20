@@ -1,0 +1,310 @@
+{% extends "_base.html" %}
+{% block title %}{{ title }}{% endblock %}
+{% block page_title %}{{ title }}{% endblock %}
+
+{% block content %}
+<div class="space-y-5">
+
+  {# ── Cabeçalho ────────────────────────────────────────────────────── #}
+  <div>
+    <p class="text-sm mb-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+      <a href="{% url 'moda:comercial' %}" :style="temaClaro ? 'color:#3b82f6;' : 'color:#60a5fa;'">Comercial</a>
+      <span class="mx-1">›</span> Aprovação de pedido
+    </p>
+    <h2 class="text-2xl font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
+      Aprovação de pedido
+    </h2>
+    <p class="text-sm mt-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+      Liberação comercial e financeira, e o que já está com o cliente.
+      {% if resumo.mais_parado %}
+        O mais parado espera há <strong>{{ resumo.mais_parado }} dia{{ resumo.mais_parado|pluralize }}</strong>.
+      {% endif %}
+    </p>
+  </div>
+
+  {# ── Números ──────────────────────────────────────────────────────── #}
+  {% comment %}
+    Três esperas diferentes, e três números. Um total só ("12 pendências")
+    esconderia a única que é nossa culpa — a fila que espera a casa liberar.
+  {% endcomment %}
+  <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+    <div class="card p-4">
+      <p class="text-xs uppercase tracking-wider" style="color:#6b7280;">Esperando a casa</p>
+      <p class="text-2xl font-bold mt-1" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
+        {{ resumo.para_liberar }}
+      </p>
+      <p class="text-xs mt-0.5" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+        {{ resumo.prontos_para_liberar }} pronto(s) para liberar agora
+      </p>
+    </div>
+    <div class="card p-4">
+      <p class="text-xs uppercase tracking-wider" style="color:#6b7280;">Com o cliente</p>
+      <p class="text-2xl font-bold mt-1" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
+        {{ resumo.com_cliente }}
+      </p>
+      <p class="text-xs mt-0.5"
+         {% if resumo.cobrar %}style="color:#d97706;"{% else %}:style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'"{% endif %}>
+        {% if resumo.cobrar %}{{ resumo.cobrar }} para cobrar{% else %}nenhum atrasado{% endif %}
+      </p>
+    </div>
+    <div class="card p-4">
+      <p class="text-xs uppercase tracking-wider" style="color:#6b7280;">Pediram ajuste</p>
+      <p class="text-2xl font-bold mt-1"
+         {% if resumo.ajuste %}style="color:#dc2626;"{% else %}:style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'"{% endif %}>
+        {{ resumo.ajuste }}
+      </p>
+      <p class="text-xs mt-0.5" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+        o cliente respondeu e quer mudança
+      </p>
+    </div>
+    <div class="card p-4">
+      <p class="text-xs uppercase tracking-wider" style="color:#6b7280;">Parado na fila</p>
+      <p class="text-2xl font-bold mt-1" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
+        R$ {{ resumo.valor|floatformat:2 }}
+      </p>
+      <p class="text-xs mt-0.5" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+        {{ resumo.pecas }} peça(s) esperando decisão
+      </p>
+    </div>
+  </div>
+
+  <form method="get" class="flex gap-2">
+    <input type="search" name="q" value="{{ busca }}" placeholder="Cliente ou número do pedido"
+           class="form-input flex-1 max-w-sm">
+    <button type="submit" class="btn-secondary">Buscar</button>
+    {% if busca %}<a href="{% url 'moda:aprovacao-fila' %}" class="btn-secondary">Limpar</a>{% endif %}
+  </form>
+
+  {# ── 1. Pediram ajuste ────────────────────────────────────────────── #}
+  {% comment %}
+    Em cima, e não no fim: é a única fila em que o cliente já respondeu e
+    está esperando a confecção. Enterrar isso embaixo das outras é como o
+    pedido some por uma semana.
+  {% endcomment %}
+  {% if ajuste %}
+    <div class="card p-5 space-y-3" style="border-left:3px solid #dc2626;">
+      <div>
+        <h3 class="text-sm font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
+          O cliente pediu ajuste
+        </h3>
+        <p class="text-xs mt-0.5" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+          Resolva o que ele apontou e libere de novo.
+        </p>
+      </div>
+      {% for l in ajuste %}
+        <div class="rounded-lg p-3"
+             :style="temaClaro ? 'background:#f8fafc; border:1px solid #e5e7eb;' : 'background:#18181b; border:1px solid #303036;'">
+          <div class="flex flex-wrap items-start justify-between gap-3">
+            <div class="min-w-0">
+              <a href="{% url 'moda:pedido-detail' l.pedido.pk %}" class="font-mono text-sm font-bold"
+                 :style="temaClaro ? 'color:#3b82f6;' : 'color:#60a5fa;'">
+                #{{ l.pedido.numero|stringformat:"06d" }}
+              </a>
+              <span class="text-sm font-semibold ml-2" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
+                {{ l.pedido.cliente }}
+              </span>
+              <p class="text-xs mt-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+                Respondido {{ l.aprovacao.respondido_em|date:"d/m/Y H:i" }}
+                {% if l.aprovacao.respondido_por %} por {{ l.aprovacao.respondido_por }}{% endif %}
+              </p>
+              {% if l.aprovacao.motivo_ajuste %}
+                <p class="text-sm mt-2 p-2 rounded" style="background:rgba(220,38,38,.08); color:#dc2626;">
+                  “{{ l.aprovacao.motivo_ajuste }}”
+                </p>
+              {% else %}
+                {% comment %}
+                  Ajuste sem motivo escrito acontece: o cliente clicou e não
+                  digitou. Dizer isso é melhor do que a tela sugerir que o
+                  motivo se perdeu.
+                {% endcomment %}
+                <p class="text-xs mt-2" style="color:#d97706;">
+                  Sem motivo escrito — vale ligar para o cliente.
+                </p>
+              {% endif %}
+            </div>
+            <a href="{% url 'moda:pedido-aprovacao' l.pedido.pk %}" class="btn-secondary text-xs shrink-0">
+              Abrir aprovação
+            </a>
+          </div>
+        </div>
+      {% endfor %}
+    </div>
+  {% endif %}
+
+  {# ── 2. Esperando a casa ──────────────────────────────────────────── #}
+  <div class="card p-5 space-y-3">
+    <div>
+      <h3 class="text-sm font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
+        Esperando liberação da casa
+      </h3>
+      <p class="text-xs mt-0.5" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+        Confira preço, prazo e condição. Liberar é dizer “pode mostrar ao cliente”.
+      </p>
+    </div>
+
+    {% for l in para_liberar %}
+      <div class="rounded-lg p-3"
+           :style="temaClaro ? 'background:#f8fafc; border:1px solid #e5e7eb;' : 'background:#18181b; border:1px solid #303036;'">
+        <div class="flex flex-wrap items-start justify-between gap-3">
+          <div class="min-w-0">
+            <div class="flex flex-wrap items-center gap-2">
+              <a href="{% url 'moda:pedido-detail' l.pedido.pk %}" class="font-mono text-sm font-bold"
+                 :style="temaClaro ? 'color:#3b82f6;' : 'color:#60a5fa;'">
+                #{{ l.pedido.numero|stringformat:"06d" }}
+              </a>
+              <span class="text-sm font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
+                {{ l.pedido.cliente }}
+              </span>
+              {% include "moda/_status_pill.html" with status=l.pedido.status %}
+              {% if l.pedido.prioridade != 'normal' %}
+                <span class="text-[10px] font-bold px-1.5 py-0.5 rounded-full"
+                      {% if l.pedido.prioridade == 'urgente' %}style="background:rgba(220,38,38,.14); color:#dc2626;"
+                      {% else %}style="background:rgba(245,158,11,.16); color:#d97706;"{% endif %}>
+                  {{ l.pedido.get_prioridade_display|upper }}
+                </span>
+              {% endif %}
+            </div>
+
+            <p class="text-xs mt-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+              {{ l.pedido.quantidade_total }} peça(s) ·
+              R$ {{ l.pedido.valor_total|floatformat:2 }} ·
+              {% if l.pedido.data_prevista_entrega %}
+                entrega {{ l.pedido.data_prevista_entrega|date:"d/m/Y" }}
+              {% else %}
+                <span style="color:#d97706;">sem data de entrega</span>
+              {% endif %}
+              {% if l.dias_parado %}· aberto há {{ l.dias_parado }} dia{{ l.dias_parado|pluralize }}{% endif %}
+            </p>
+
+            {% comment %}
+              O que falta aparece ANTES de a pessoa clicar. Liberar um pedido
+              sem valor manda o cliente um link com preço zerado — e a
+              confecção só descobre quando ele responde perguntando quanto é.
+            {% endcomment %}
+            {% if l.faltas %}
+              <p class="text-xs mt-1" style="color:#d97706;">
+                Falta: {{ l.faltas|join:", " }}.
+              </p>
+            {% endif %}
+          </div>
+
+          <div class="flex items-center gap-2 shrink-0">
+            <a href="{% url 'moda:pedido-detail' l.pedido.pk %}" class="btn-secondary text-xs">Abrir</a>
+            {% if pode_liberar %}
+              {% if l.pode_liberar %}
+                <form method="post" action="{% url 'moda:pedido-liberar' l.pedido.pk %}">
+                  {% csrf_token %}
+                  {% comment %}
+                    `proximo` traz de volta para a fila: quem libera aqui vai
+                    liberar o próximo, e mandá-la para a tela do pedido a
+                    cada clique dobraria o trabalho.
+                  {% endcomment %}
+                  <input type="hidden" name="proximo" value="{{ request.get_full_path }}">
+                  <button type="submit" class="btn-primary text-xs">LIBERAR</button>
+                </form>
+              {% else %}
+                <a href="{% url 'moda:pedido-detail' l.pedido.pk %}" class="btn-secondary text-xs"
+                   style="color:#d97706;">Resolver pendência</a>
+              {% endif %}
+            {% endif %}
+          </div>
+        </div>
+      </div>
+    {% empty %}
+      <p class="text-sm" :style="temaClaro ? 'color:#94a3b8;' : 'color:#71717a;'">
+        {% if busca %}
+          Nenhum pedido esperando liberação para “{{ busca }}”.
+        {% else %}
+          Nada esperando a casa. Toda liberação em dia.
+        {% endif %}
+      </p>
+    {% endfor %}
+
+    {% if not pode_liberar %}
+      {% comment %}
+        Ver a fila é do comercial inteiro; liberar é de quem aprova. Dizer
+        isso evita a leitura de que a tela está quebrada.
+      {% endcomment %}
+      <p class="text-xs" :style="temaClaro ? 'color:#94a3b8;' : 'color:#71717a;'">
+        Seu perfil acompanha a fila, mas não libera pedido — isso é permissão
+        de aprovação.
+      </p>
+    {% endif %}
+  </div>
+
+  {# ── 3. Com o cliente ─────────────────────────────────────────────── #}
+  <div class="card p-5 space-y-3">
+    <div>
+      <h3 class="text-sm font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
+        Aguardando o cliente
+      </h3>
+      <p class="text-xs mt-0.5" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+        Já liberado e enviado. A produção começa quando ele aprovar.
+      </p>
+    </div>
+
+    {% for l in com_cliente %}
+      <div class="rounded-lg p-3 flex flex-wrap items-start justify-between gap-3"
+           :style="temaClaro ? 'background:#f8fafc; border:1px solid #e5e7eb;' : 'background:#18181b; border:1px solid #303036;'">
+        <div class="min-w-0">
+          <div class="flex flex-wrap items-center gap-2">
+            <a href="{% url 'moda:pedido-detail' l.pedido.pk %}" class="font-mono text-sm font-bold"
+               :style="temaClaro ? 'color:#3b82f6;' : 'color:#60a5fa;'">
+              #{{ l.pedido.numero|stringformat:"06d" }}
+            </a>
+            <span class="text-sm font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
+              {{ l.pedido.cliente }}
+            </span>
+            {% if l.cobrar %}
+              <span class="text-[10px] font-bold px-1.5 py-0.5 rounded-full"
+                    style="background:rgba(245,158,11,.16); color:#d97706;">COBRAR</span>
+            {% endif %}
+          </div>
+          <p class="text-xs mt-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+            Liberado {{ l.aprovacao.liberado_em|date:"d/m/Y H:i" }}
+            {% if l.aprovacao.liberado_por %} por {{ l.aprovacao.liberado_por }}{% endif %}
+            {% if l.dias_parado %}· sem resposta há {{ l.dias_parado }} dia{{ l.dias_parado|pluralize }}{% endif %}
+          </p>
+        </div>
+        <a href="{% url 'moda:pedido-aprovacao' l.pedido.pk %}" class="btn-secondary text-xs shrink-0">
+          Ver link do cliente
+        </a>
+      </div>
+    {% empty %}
+      <p class="text-sm" :style="temaClaro ? 'color:#94a3b8;' : 'color:#71717a;'">
+        Nenhum pedido esperando resposta do cliente.
+      </p>
+    {% endfor %}
+  </div>
+
+  {# ── 4. Aprovados recentes ────────────────────────────────────────── #}
+  {% if aprovados %}
+    <div class="card p-5 space-y-2">
+      <div>
+        <h3 class="text-sm font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
+          Aprovados pelo cliente
+        </h3>
+        <p class="text-xs mt-0.5" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+          Os últimos aceites — é o que autoriza cortar tecido.
+        </p>
+      </div>
+      {% for l in aprovados %}
+        <div class="flex flex-wrap items-center justify-between gap-2 text-sm py-1">
+          <span>
+            <a href="{% url 'moda:pedido-detail' l.pedido.pk %}" class="font-mono font-bold"
+               :style="temaClaro ? 'color:#3b82f6;' : 'color:#60a5fa;'">
+              #{{ l.pedido.numero|stringformat:"06d" }}
+            </a>
+            <span class="ml-2" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">{{ l.pedido.cliente }}</span>
+          </span>
+          <span class="text-xs" style="color:#059669;">
+            ✓ {{ l.aprovacao.respondido_em|date:"d/m/Y H:i" }}
+            {% if l.aprovacao.respondido_por %} · {{ l.aprovacao.respondido_por }}{% endif %}
+          </span>
+        </div>
+      {% endfor %}
+    </div>
+  {% endif %}
+
+</div>
+{% endblock %}

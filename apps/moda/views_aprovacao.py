@@ -10,6 +10,7 @@ from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 
 from .models import AprovacaoPedido, PedidoProducao
+from .services.aprovacao import FilaAprovacaoService
 from .services.fluxo_completo import FluxoCompletoService
 from .services.validacao import ValidacaoProducao
 from .views import ModaBaseView
@@ -94,4 +95,45 @@ class LiberarPedidoView(ModaBaseView):
                 request,
                 'Pedido liberado. Agora é só mandar o link ou o PDF para o cliente.',
             )
-        return redirect(reverse('moda:pedido-aprovacao', args=[pedido.pk]))
+        return redirect(self._destino(request, pedido))
+
+    @staticmethod
+    def _destino(request, pedido) -> str:
+        """
+        Volta para onde a pessoa estava.
+
+        Quem libera pela FILA quer liberar os próximos; mandá-la para a tela
+        de um pedido só a obrigaria a voltar a cada liberação. Só aceita
+        endereço de dentro do vertical: um `proximo` livre viraria redirect
+        aberto -- alguém manda um link que passa pelo sistema e sai num site
+        qualquer, com a cara de que foi o ERP que levou lá.
+        """
+        proximo = request.POST.get('proximo') or ''
+        if proximo.startswith('/moda/') and '//' not in proximo[1:]:
+            return proximo
+        return reverse('moda:pedido-aprovacao', args=[pedido.pk])
+
+
+class FilaAprovacaoView(ModaBaseView):
+    """
+    A fila do comercial: o que está esperando a casa e o que espera o cliente.
+
+    Endereço do menu (`comercial/aprovacao-pedido/`), que até agora devolvia
+    a tela de "em construção".
+    """
+
+    area = 'comercial'
+
+    def get(self, request):
+        busca = (request.GET.get('q') or '').strip()
+        dados = FilaAprovacaoService.montar(request.filial_ativa, busca=busca)
+
+        return render(request, 'moda/aprovacao_fila.html', {
+            'title': 'Aprovação de pedido',
+            'busca': busca,
+            # Liberar é permissão de APROVAR, não de editar: assumir preço e
+            # prazo perante o cliente é decisão de quem aprova. Sem ela, a
+            # fila continua visível -- ver a espera é do comercial inteiro.
+            'pode_liberar': request.user.tem_permissao('moda', 'aprovar'),
+            **dados,
+        })
