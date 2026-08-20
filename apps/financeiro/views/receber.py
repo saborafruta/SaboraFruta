@@ -18,6 +18,7 @@ from apps.financeiro.constants.enums import StatusContaReceber
 from apps.financeiro.forms.receber import BaixaContaReceberForm, ContaReceberForm
 from apps.financeiro.models.receber_pagar import ContaReceber
 from apps.financeiro.services.receber_service import ContaReceberService
+from apps.financeiro.services.dashboard_contas_service import DashboardContasService
 
 STATUS_CHOICES = StatusContaReceber.choices
 
@@ -139,6 +140,7 @@ class ContaReceberListView(PermissaoRequiredMixin, View):
             'pode_criar': pode_criar,
             'pode_editar': pode_editar,
             'today': timezone.localdate(),
+            'dashboard_contas': DashboardContasService.apurar(filial),
             **kpis,
         })
 

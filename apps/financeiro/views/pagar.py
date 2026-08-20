@@ -21,6 +21,7 @@ from apps.financeiro.forms.pagar import ContaPagarForm, PagamentoContaPagarForm
 from apps.financeiro.models.conta_bancaria import PlanoContas
 from apps.financeiro.models.receber_pagar import ContaPagar, PagamentoContaPagar
 from apps.financeiro.services.pagar_service import ContaPagarService
+from apps.financeiro.services.dashboard_contas_service import DashboardContasService
 
 STATUS_CHOICES = StatusContaPagar.choices
 
@@ -214,6 +215,7 @@ class ContaPagarListView(PermissaoRequiredMixin, View):
             'pode_criar': pode_criar,
             'pode_editar': pode_editar,
             'today': timezone.localdate(),
+            'dashboard_contas': DashboardContasService.apurar(filial),
             **categoria_contexto,
             **kpis,
         })
