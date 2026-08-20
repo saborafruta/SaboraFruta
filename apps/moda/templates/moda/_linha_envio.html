@@ -1,0 +1,56 @@
+{% comment %}
+  O identificador do pedido na fila de envio. Espera `l`.
+
+  Num parcial só porque as três seções mostram exatamente a mesma linha —
+  duas cópias divergiriam na primeira mudança, e aí o pedido travado
+  mostraria o prazo e o pronto não.
+{% endcomment %}
+<div class="flex flex-wrap items-center gap-2">
+  <a href="{% url 'moda:pedido-detail' l.pedido.pk %}" class="font-mono text-sm font-bold"
+     :style="temaClaro ? 'color:#3b82f6;' : 'color:#60a5fa;'">
+    #{{ l.pedido.numero|stringformat:"06d" }}
+  </a>
+  <span class="text-sm font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
+    {{ l.pedido.cliente }}
+  </span>
+  {% include "moda/_status_pill.html" with status=l.pedido.status %}
+  {% if l.pedido.prioridade != 'normal' %}
+    <span class="text-[10px] font-bold px-1.5 py-0.5 rounded-full"
+          {% if l.pedido.prioridade == 'urgente' %}style="background:rgba(220,38,38,.14); color:#dc2626;"
+          {% else %}style="background:rgba(245,158,11,.16); color:#d97706;"{% endif %}>
+      {{ l.pedido.get_prioridade_display|upper }}
+    </span>
+  {% endif %}
+  {% if l.parcial %}
+    {% comment %}
+      Envio parcial é normal — um produto ficou sem ficha e os outros dois
+      já desceram. Dizer "enviado" esconderia o que ficou para trás.
+    {% endcomment %}
+    <span class="text-[10px] font-bold px-1.5 py-0.5 rounded-full"
+          style="background:rgba(59,130,246,.14); color:#2563eb;">
+      {{ l.itens_enviados }} de {{ l.itens_total }} JÁ ENVIADO{{ l.itens_enviados|pluralize:"S" }}
+    </span>
+  {% endif %}
+</div>
+
+<p class="text-xs mt-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+  {{ l.pedido.quantidade_total }} peça(s) ·
+  {{ l.itens_total }} produto{{ l.itens_total|pluralize }} ·
+  {% comment %}
+    O prazo aqui não é enfeite: é ele que decide o que desce primeiro, e o
+    pedido sem data não é "no prazo" -- é indefinido, e aparece em laranja.
+  {% endcomment %}
+  {% if not l.pedido.data_prevista_entrega %}
+    <span style="color:#d97706;">sem data de entrega</span>
+  {% elif l.atrasado %}
+    <span style="color:#dc2626; font-weight:700;">
+      entrega vencida em {{ l.pedido.data_prevista_entrega|date:"d/m/Y" }}
+    </span>
+  {% elif l.apertado %}
+    <span style="color:#d97706; font-weight:700;">
+      entrega {{ l.pedido.data_prevista_entrega|date:"d/m/Y" }} — em {{ l.dias_para_entrega }} dia{{ l.dias_para_entrega|pluralize }}
+    </span>
+  {% else %}
+    entrega {{ l.pedido.data_prevista_entrega|date:"d/m/Y" }}
+  {% endif %}
+</p>

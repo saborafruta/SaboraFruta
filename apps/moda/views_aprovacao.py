@@ -12,6 +12,7 @@ from django.urls import reverse
 from .models import AprovacaoPedido, PedidoProducao
 from .services.aprovacao import FilaAprovacaoService
 from .services.arte import FilaArteService
+from .services.envio import EnvioProducaoService
 from .services.fluxo_completo import FluxoCompletoService
 from .services.validacao import ValidacaoProducao
 from .views import ModaBaseView
@@ -158,5 +159,30 @@ class FilaArteView(ModaBaseView):
             'title': 'Aprovação de arte',
             'busca': busca,
             'pode_liberar': request.user.tem_permissao('moda', 'aprovar'),
+            **dados,
+        })
+
+
+class EnvioProducaoView(ModaBaseView):
+    """
+    A passagem para a fábrica, vista da carteira inteira.
+
+    Endereço do menu (`comercial/envio-pedido/`), que até agora devolvia a
+    tela de "em construção". O botão de emitir continua sendo o mesmo
+    serviço da tela do pedido — aqui ele ganha a fila e o motivo da trava.
+    """
+
+    area = 'comercial'
+
+    def get(self, request):
+        busca = (request.GET.get('q') or '').strip()
+        dados = EnvioProducaoService.montar(request.filial_ativa, busca=busca)
+
+        return render(request, 'moda/envio_fila.html', {
+            'title': 'Envio de pedido',
+            'busca': busca,
+            # Emitir OP é `criar`, a mesma permissão da tela do pedido: quem
+            # não pode lá não pode aqui.
+            'pode_emitir': request.user.tem_permissao('moda', 'criar'),
             **dados,
         })

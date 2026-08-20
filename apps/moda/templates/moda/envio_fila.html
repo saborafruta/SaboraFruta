@@ -1,0 +1,225 @@
+{% extends "_base.html" %}
+{% block title %}{{ title }}{% endblock %}
+{% block page_title %}{{ title }}{% endblock %}
+
+{% block content %}
+<div class="space-y-5">
+
+  {# ── Cabeçalho ────────────────────────────────────────────────────── #}
+  <div>
+    <p class="text-sm mb-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+      <a href="{% url 'moda:comercial' %}" :style="temaClaro ? 'color:#3b82f6;' : 'color:#60a5fa;'">Comercial</a>
+      <span class="mx-1">›</span> Envio de pedido
+    </p>
+    <h2 class="text-2xl font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
+      Envio de pedido
+    </h2>
+    <p class="text-sm mt-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+      A passagem para a fábrica. Emitir a ordem é o momento em que o pedido
+      vira tecido cortado — daí não volta.
+    </p>
+  </div>
+
+  <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+    <div class="card p-4">
+      <p class="text-xs uppercase tracking-wider" style="color:#6b7280;">Prontos para enviar</p>
+      <p class="text-2xl font-bold mt-1" style="color:#059669;">{{ resumo.prontos }}</p>
+      <p class="text-xs mt-0.5" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+        {{ resumo.pecas_prontas }} peça(s) esperando a fábrica
+      </p>
+    </div>
+    <div class="card p-4">
+      <p class="text-xs uppercase tracking-wider" style="color:#6b7280;">Travados</p>
+      <p class="text-2xl font-bold mt-1"
+         {% if resumo.travados %}style="color:#dc2626;"{% else %}:style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'"{% endif %}>
+        {{ resumo.travados }}
+      </p>
+      <p class="text-xs mt-0.5" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+        alguma validação bloqueia
+      </p>
+    </div>
+    <div class="card p-4">
+      <p class="text-xs uppercase tracking-wider" style="color:#6b7280;">Já na fábrica</p>
+      <p class="text-2xl font-bold mt-1" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
+        {{ resumo.enviados }}
+      </p>
+      <p class="text-xs mt-0.5" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+        com ordem aberta para todo produto
+      </p>
+    </div>
+    <div class="card p-4">
+      <p class="text-xs uppercase tracking-wider" style="color:#6b7280;">Entrega vencida</p>
+      <p class="text-2xl font-bold mt-1"
+         {% if resumo.atrasados %}style="color:#dc2626;"{% else %}:style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'"{% endif %}>
+        {{ resumo.atrasados }}
+      </p>
+      <p class="text-xs mt-0.5" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+        e ainda não desceram para a fábrica
+      </p>
+    </div>
+  </div>
+
+  <form method="get" class="flex gap-2">
+    <input type="search" name="q" value="{{ busca }}" placeholder="Cliente ou número do pedido"
+           class="form-input flex-1 max-w-sm">
+    <button type="submit" class="btn-secondary">Buscar</button>
+    {% if busca %}<a href="{% url 'moda:envio-fila' %}" class="btn-secondary">Limpar</a>{% endif %}
+  </form>
+
+  {# ── 1. Prontos ───────────────────────────────────────────────────── #}
+  <div class="card p-5 space-y-3">
+    <div>
+      <h3 class="text-sm font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
+        Prontos para a fábrica
+      </h3>
+      <p class="text-xs mt-0.5" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+        Nenhuma das onze validações bloqueia. Emitir gera uma ordem por
+        produto — é ele que caminha pela fábrica, com ficha e roteiro próprios.
+      </p>
+    </div>
+
+    {% for l in prontos %}
+      <div class="rounded-lg p-3 flex flex-wrap items-start justify-between gap-3"
+           :style="temaClaro ? 'background:#f8fafc; border:1px solid #e5e7eb;' : 'background:#18181b; border:1px solid #303036;'">
+        <div class="min-w-0">
+          {% include "moda/_linha_envio.html" with l=l %}
+
+          {% if l.avisos %}
+            {% comment %}
+              Aviso não bloqueia, mas quem manda para a fábrica precisa ver:
+              é o tipo de coisa que vira retrabalho três dias depois.
+            {% endcomment %}
+            <p class="text-xs mt-1" style="color:#d97706;">
+              {% for a in l.avisos %}{{ a.label }}{% if not forloop.last %} · {% endif %}{% endfor %}
+            </p>
+          {% endif %}
+
+          {% if l.todas_concluidas %}
+            {% comment %}
+              Ordem CONCLUÍDA não impede emitir outra — o serviço só pula
+              item com ordem ABERTA. Sem este aviso, alguém emite a segunda
+              leva de uma peça que já foi feita.
+            {% endcomment %}
+            <p class="text-xs mt-1" style="color:#d97706;">
+              Este pedido já teve ordem concluída. Emitir agora cria uma nova leva.
+            </p>
+          {% endif %}
+        </div>
+
+        <div class="flex items-center gap-2 shrink-0">
+          <a href="{% url 'moda:pedido-fluxo' l.pedido.pk %}" class="btn-secondary text-xs">Conferir</a>
+          {% if pode_emitir %}
+            <form method="post" action="{% url 'moda:ordem-gerar' l.pedido.pk %}"
+                  onsubmit="return confirm('Emitir {{ l.falta_enviar }} ordem(ns) de produção do pedido #{{ l.pedido.numero|stringformat:"06d" }}? A partir daqui a fábrica começa a cortar.');">
+              {% csrf_token %}
+              <button type="submit" class="btn-primary text-xs">
+                EMITIR {{ l.falta_enviar }} OP{{ l.falta_enviar|pluralize }}
+              </button>
+            </form>
+          {% endif %}
+        </div>
+      </div>
+    {% empty %}
+      <p class="text-sm" :style="temaClaro ? 'color:#94a3b8;' : 'color:#71717a;'">
+        {% if busca %}
+          Nenhum pedido pronto para “{{ busca }}”.
+        {% else %}
+          Nenhum pedido pronto para descer agora.
+        {% endif %}
+      </p>
+    {% endfor %}
+
+    {% if not pode_emitir %}
+      <p class="text-xs" :style="temaClaro ? 'color:#94a3b8;' : 'color:#71717a;'">
+        Seu perfil acompanha a fila, mas não emite ordem de produção.
+      </p>
+    {% endif %}
+  </div>
+
+  {# ── 2. Travados ──────────────────────────────────────────────────── #}
+  <div class="card p-5 space-y-3" {% if travados %}style="border-left:3px solid #dc2626;"{% endif %}>
+    <div>
+      <h3 class="text-sm font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
+        Travados
+      </h3>
+      <p class="text-xs mt-0.5" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+        O motivo aparece aqui para você resolver os oito de uma vez, em vez
+        de descobrir um por tentativa.
+      </p>
+    </div>
+
+    {% for l in travados %}
+      <div class="rounded-lg p-3"
+           :style="temaClaro ? 'background:#f8fafc; border:1px solid #e5e7eb;' : 'background:#18181b; border:1px solid #303036;'">
+        <div class="flex flex-wrap items-start justify-between gap-3">
+          <div class="min-w-0">
+            {% include "moda/_linha_envio.html" with l=l %}
+          </div>
+          <a href="{% url 'moda:pedido-fluxo' l.pedido.pk %}" class="btn-secondary text-xs shrink-0">
+            Resolver
+          </a>
+        </div>
+
+        <div class="mt-2 space-y-1">
+          {% for b in l.bloqueios %}
+            <div class="text-xs">
+              <span class="font-semibold" style="color:#dc2626;">{{ b.label }}</span>
+              {% if b.motivo %}
+                <span :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">— {{ b.motivo }}</span>
+              {% endif %}
+              {% if b.onde_resolver %}
+                <span :style="temaClaro ? 'color:#94a3b8;' : 'color:#71717a;'">({{ b.onde_resolver }})</span>
+              {% endif %}
+              {% if b.detalhes %}
+                <p class="mt-0.5" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+                  {{ b.detalhes|join:", " }}
+                </p>
+              {% endif %}
+            </div>
+          {% endfor %}
+        </div>
+      </div>
+    {% empty %}
+      <p class="text-sm" :style="temaClaro ? 'color:#94a3b8;' : 'color:#71717a;'">
+        Nenhum pedido travado. Tudo que está aberto pode descer.
+      </p>
+    {% endfor %}
+  </div>
+
+  {# ── 3. Já na fábrica ─────────────────────────────────────────────── #}
+  {% if enviados %}
+    <div class="card p-5 space-y-2">
+      <div>
+        <h3 class="text-sm font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
+          Já na fábrica
+        </h3>
+        <p class="text-xs mt-0.5" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+          Todo produto com ordem aberta. Fica visível porque “sumiu da lista”
+          e “foi para a produção” não são a mesma coisa.
+        </p>
+      </div>
+      {% for l in enviados %}
+        <div class="flex flex-wrap items-center justify-between gap-2 py-1">
+          <span class="text-sm">
+            <a href="{% url 'moda:pedido-detail' l.pedido.pk %}" class="font-mono font-bold"
+               :style="temaClaro ? 'color:#3b82f6;' : 'color:#60a5fa;'">
+              #{{ l.pedido.numero|stringformat:"06d" }}
+            </a>
+            <span class="ml-2" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">{{ l.pedido.cliente }}</span>
+          </span>
+          <span class="flex flex-wrap gap-1">
+            {% for o in l.ordens %}
+              <a href="{% url 'moda:ordem-detail' o.pk %}"
+                 class="text-[11px] font-mono font-semibold px-1.5 py-0.5 rounded"
+                 :style="temaClaro ? 'background:#e5e7eb; color:#374151;' : 'background:#27272a; color:#d4d4d4;'">
+                {{ o.numero }}
+              </a>
+            {% endfor %}
+          </span>
+        </div>
+      {% endfor %}
+    </div>
+  {% endif %}
+
+</div>
+{% endblock %}
