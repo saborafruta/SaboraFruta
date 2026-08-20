@@ -271,6 +271,10 @@ class ItemPedidoProducaoForm(_FilialFormMixin, forms.ModelForm):
         super().__init__(*args, filial=filial, **kwargs)
         for nome in ('produto', 'modelo', 'cor', 'tecido'):
             self.fields[nome].required = False
+
+        # O select de produto passa a oferecer TAMBÉM o cadastro de
+        # produtos do ERP -- ver `_opcoes_de_produto`.
+        self._preparar_produto(filial)
         # Preço não é obrigatório aqui: o comercial monta a ficha antes de
         # fechar valor, e exigir agora travaria o cadastro do produto.
         self.fields['valor_unitario'].required = False
@@ -279,6 +283,94 @@ class ItemPedidoProducaoForm(_FilialFormMixin, forms.ModelForm):
         self.fields['gola'].required = False
         self.fields['manga'].required = False
 
+    def _preparar_produto(self, filial):
+        """
+        Um select, dois catálogos.
+
+        O PRODUTO DA CONFECÇÃO e o PRODUTO DO ERP são cadastros diferentes
+        de propósito: o do ERP é o que se vende, se estoca e vai na nota; o
+        da moda é o que se PRODUZ, com modelo, tecido e grade. Mas quem está
+        montando o pedido não quer saber disso -- quer achar a camisa que já
+        está cadastrada em Cadastros › Produtos.
+
+        Então o campo lista os dois, em grupos separados. Escolher um do ERP
+        TRAZ o produto para a confecção na hora (mesma importação da tela de
+        produtos, com o vínculo `produto_erp` gravado) e usa o resultado. Não
+        é cópia cega nem catálogo duplicado: é o mesmo produto, agora também
+        conhecido pela produção.
+        """
+        from apps.produtos.models import Produto
+
+        self.fields['produto'] = forms.ChoiceField(
+            required=False, label='Produto',
+            choices=self._opcoes_de_produto(filial),
+            widget=forms.Select(attrs={'class': 'form-input'}),
+            help_text=(
+                'Do catálogo da confecção ou do cadastro de produtos do ERP. '
+                'Sem produto, descreva o item abaixo.'
+            ),
+        )
+        if self.instance.pk and self.instance.produto_id:
+            self.initial['produto'] = f'moda:{self.instance.produto_id}'
+
+    def _opcoes_de_produto(self, filial) -> list:
+        from apps.moda.services.importar_produtos import ImportarProdutosService
+        from .models import ProdutoModa
+
+        da_moda = [
+            (f'moda:{p.pk}', f'{p.codigo} — {p.nome}' if p.codigo else p.nome)
+            for p in ProdutoModa.objects.for_filial(filial).filter(ativo=True)
+            .order_by('nome')
+        ] if filial else []
+
+        # Os do ERP que ainda não vieram. O serviço já sabe descartar os
+        # que têm vínculo ou código igual -- sem isso, o mesmo produto
+        # apareceria duas vezes na mesma lista.
+        do_erp = [
+            (f'erp:{p.pk}', f'{getattr(p, "codigo", "") or ""} — {p.descricao}'.strip(' —'))
+            for p in (ImportarProdutosService.disponiveis(filial) if filial else [])
+        ]
+
+        opcoes = [('', '--------- escolha ou descreva abaixo')]
+        if da_moda:
+            opcoes.append(('Catálogo da confecção', da_moda))
+        if do_erp:
+            opcoes.append(('Cadastro de produtos do ERP', do_erp))
+        return opcoes
+
+    def clean_produto(self):
+        """Resolve a escolha num `ProdutoModa` de verdade."""
+        from apps.core.services.exceptions import DomainError
+        from apps.moda.services.importar_produtos import ImportarProdutosService
+        from apps.produtos.models import Produto
+        from .models import ProdutoModa
+
+        valor = (self.cleaned_data.get('produto') or '').strip()
+        if not valor:
+            return None
+
+        origem, _, chave = valor.partition(':')
+        if not chave.isdigit():
+            raise forms.ValidationError('Produto inválido.')
+
+        if origem == 'moda':
+            produto = ProdutoModa.objects.for_filial(self.filial).filter(pk=chave).first()
+            if produto is None:
+                raise forms.ValidationError('Este produto não é desta filial.')
+            return produto
+
+        if origem == 'erp':
+            do_erp = Produto.objects.for_filial(self.filial).filter(pk=chave).first()
+            if do_erp is None:
+                raise forms.ValidationError('Este produto não é desta filial.')
+            try:
+                criados = ImportarProdutosService.importar(self.filial, [do_erp.pk])
+            except DomainError as erro:
+                raise forms.ValidationError(str(erro))
+            self.produto_importado = criados[0]
+            return criados[0]
+
+        raise forms.ValidationError('Produto inválido.')
     def clean(self):
         dados = super().clean()
         # Sem produto de catálogo nem descrição, o item apareceria na ficha

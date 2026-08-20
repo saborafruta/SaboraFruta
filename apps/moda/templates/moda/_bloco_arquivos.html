@@ -1,0 +1,113 @@
+  {% comment %}
+    ARTE E ARQUIVOS DO PEDIDO — o acervo, e não a aplicação.
+
+    A arte aplicada numa peça (técnica, local, arquivo) continua no item,
+    onde o chão de fábrica a lê. Aqui fica o que chega ANTES disso: o layout
+    que o cliente mandou, a planilha de nomes, a foto da camisa do ano
+    passado. Fica visível mesmo com o pedido vazio, porque é o primeiro
+    arquivo a chegar — e até agora ele não tinha onde ser guardado.
+  {% endcomment %}
+  <div class="card p-5 space-y-4" x-data="{ enviando: false }">
+    <div class="flex items-center justify-between gap-2 flex-wrap">
+      <div>
+        <h3 class="text-sm font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
+          Arte e arquivos
+        </h3>
+        <p class="text-xs mt-0.5" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+          {% if arquivos %}
+            {{ arquivos|length }} arquivo{{ arquivos|length|pluralize }} neste pedido.
+          {% else %}
+            Layout, referência do cliente, planilha de nomes — tudo que veio junto.
+          {% endif %}
+        </p>
+      </div>
+      <button type="button" class="btn-secondary text-sm" @click="enviando = !enviando"
+              x-text="enviando ? 'Fechar' : '+ Anexar arquivo'"></button>
+    </div>
+
+    {% if arquivos %}
+      <div class="grid gap-3 sm:grid-cols-3 lg:grid-cols-4">
+        {% for anexo in arquivos %}
+          <div class="rounded-lg overflow-hidden"
+               :style="temaClaro ? 'background:#f8fafc; border:1px solid #e5e7eb;' : 'background:#18181b; border:1px solid #303036;'">
+            <a href="{{ anexo.arquivo.url }}" target="_blank" rel="noopener" class="block">
+              {% comment %}
+                PNG/JPG/SVG viram prévia; PDF, CDR e AI o navegador não
+                desenha, e tentar deixaria um quadrado quebrado — pior do
+                que assumir que não há prévia e mostrar a extensão.
+              {% endcomment %}
+              {% if anexo.pode_pre_visualizar %}
+                <img src="{{ anexo.arquivo.url }}" alt="{{ anexo.descricao|default:anexo.nome_arquivo }}"
+                     class="w-full h-28 object-cover">
+              {% else %}
+                <div class="w-full h-28 flex flex-col items-center justify-center"
+                     :style="temaClaro ? 'background:#e5e7eb; color:#64748b;' : 'background:#27272a; color:#a1a1aa;'">
+                  <span class="text-2xl">📄</span>
+                  <span class="text-[10px] font-bold mt-1 uppercase">{{ anexo.extensao }}</span>
+                </div>
+              {% endif %}
+            </a>
+            <div class="p-2">
+              <p class="text-xs font-medium truncate" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'"
+                 title="{{ anexo.nome_arquivo }}">
+                {{ anexo.descricao|default:anexo.nome_arquivo }}
+              </p>
+              <p class="text-[10px] mt-0.5" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+                {{ anexo.get_tipo_display }} · {{ anexo.tamanho_legivel }}
+                {% if anexo.enviado_por %}· {{ anexo.enviado_por.nome }}{% endif %}
+              </p>
+              <div class="flex items-center gap-2 mt-1.5">
+                <a href="{{ anexo.arquivo.url }}" target="_blank" rel="noopener"
+                   class="text-[11px] underline"
+                   :style="temaClaro ? 'color:#3b82f6;' : 'color:#60a5fa;'">abrir</a>
+                <form method="post" action="{% url 'moda:pedido-arquivo-delete' pedido.pk anexo.pk %}"
+                      onsubmit="return confirm('Remover este arquivo do pedido?');">
+                  {% csrf_token %}
+                  <button type="submit" class="text-[11px]" style="color:#f87171;">remover</button>
+                </form>
+              </div>
+            </div>
+          </div>
+        {% endfor %}
+      </div>
+    {% else %}
+      <p class="text-sm" :style="temaClaro ? 'color:#94a3b8;' : 'color:#71717a;'">
+        Nenhum arquivo ainda. A arte que o cliente mandar entra aqui —
+        e vai junto na ficha de produção.
+      </p>
+    {% endif %}
+
+    <div x-show="enviando" x-cloak class="pt-3 border-t"
+         :style="temaClaro ? 'border-color:#e5e7eb;' : 'border-color:#303036;'">
+      <form method="post" action="{% url 'moda:pedido-arquivo-add' pedido.pk %}"
+            enctype="multipart/form-data" class="space-y-3 pt-3">
+        {% csrf_token %}
+        <div class="grid gap-3 sm:grid-cols-3">
+          <div class="sm:col-span-1">
+            <label class="block text-xs uppercase tracking-wider mb-1"
+                   :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Arquivos</label>
+            {% comment %}
+              `multiple` porque a arte quase nunca vem sozinha: vem o
+              escudo, o mockup da frente e o das costas, na mesma mensagem.
+            {% endcomment %}
+            <input type="file" name="arquivo" multiple required class="form-input w-full text-sm">
+          </div>
+          <div>
+            <label class="block text-xs uppercase tracking-wider mb-1"
+                   :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Tipo</label>
+            {{ form_arquivo.tipo }}
+          </div>
+          <div>
+            <label class="block text-xs uppercase tracking-wider mb-1"
+                   :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Descrição</label>
+            {{ form_arquivo.descricao }}
+          </div>
+        </div>
+        <div class="flex justify-end gap-2">
+          <button type="button" class="btn-secondary text-sm" @click="enviando = false">Cancelar</button>
+          <button type="submit" class="btn-primary text-sm">Anexar ao pedido</button>
+        </div>
+      </form>
+    </div>
+  </div>
+

@@ -173,54 +173,65 @@
   {% endif %}
 
 
-  <div class="flex flex-wrap items-start justify-between gap-3">
+  {% comment %}
+    CABEÇALHO EM DUAS FAIXAS: em cima quem é o pedido e em que pé ele
+    está; embaixo o que dá para fazer com ele. Antes era tudo na mesma
+    linha, e o botão de PDF disputava espaço com o nome do cliente --
+    numa tela em que a primeira pergunta é sempre "de quem é este pedido".
+  {% endcomment %}
+  <div class="space-y-3">
     <div>
       <p class="text-sm mb-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+        <a href="{% url 'moda:comercial' %}" :style="temaClaro ? 'color:#3b82f6;' : 'color:#60a5fa;'">Comercial</a>
+        <span class="mx-1">›</span>
         <a href="{% url 'moda:pedido-list' %}" :style="temaClaro ? 'color:#3b82f6;' : 'color:#60a5fa;'">Pedidos</a>
         <span class="mx-1">›</span> #{{ pedido.numero|stringformat:"06d" }}
       </p>
-      <div class="flex items-center gap-2 flex-wrap">
+      <div class="flex flex-wrap items-center gap-3">
         <h2 class="text-2xl font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">{{ pedido.cliente }}</h2>
-        {% comment %}
-          O PDF e' gerado na hora, nunca gravado: arquivo salvo no fechamento
-          envelhece na primeira alteracao de grade, arte ou valor, e passam a
-          existir duas versoes do mesmo pedido. Como a URL e' estavel, o link
-          continua valendo -- so devolve sempre o pedido de agora.
-        {% endcomment %}
-        <div class="flex flex-wrap gap-2 mt-2">
-          <a href="{% url 'moda:pedido-pdf' pedido.pk %}" target="_blank" rel="noopener"
-             class="btn-secondary text-sm">Abrir PDF do pedido</a>
-          {% comment %}
-            Finalizar só aparece enquanto o pedido é orçamento: depois de
-            confirmado o botão não teria o que fazer, e um botão que não faz
-            nada ensina o usuário a desconfiar dos outros.
-          {% endcomment %}
-          {% if pedido.status == 'orcamento' and itens %}
-            <form method="post" action="{% url 'moda:pedido-finalizar' pedido.pk %}">
-              {% csrf_token %}
-              <button type="submit" class="btn-primary text-sm">FINALIZAR PEDIDO</button>
-            </form>
-          {% elif pedido.status != 'cancelado' %}
-            <a href="?finalizado=1" class="btn-secondary text-sm">Enviar ao cliente</a>
-          {% endif %}
-        </div>
         {% include "moda/_status_pill.html" with status=pedido.status %}
+        {% if pedido.atrasado %}
+          <span class="text-xs font-bold px-2 py-0.5 rounded-full"
+                style="background:rgba(220,38,38,.14); color:#dc2626;">
+            ATRASADO desde {{ pedido.data_prevista_entrega|date:"d/m" }}
+          </span>
+        {% endif %}
       </div>
-    </div>
-    <a href="{% url 'moda:pedido-update' pedido.pk %}" class="btn-secondary">Editar</a>
-    <a href="{% url 'moda:qr-etiqueta' pedido.codigo_qr %}" class="btn-secondary">QR Code</a>
-    <a href="{% url 'moda:pedido-historico' pedido.pk %}" class="btn-secondary">Histórico</a>
-    <a href="{% url 'moda:pedido-fluxo' pedido.pk %}" class="btn-secondary">Fluxo</a>
-    <a href="{% url 'moda:pedido-aprovacao' pedido.pk %}" class="btn-secondary">Aprovação</a>
-  </div>
-
-  {% if pedido.atrasado %}
-    <div class="card p-4" style="border-left:3px solid #dc2626;">
-      <p class="text-sm font-semibold" style="color:#f87171;">
-        Entrega vencida em {{ pedido.data_prevista_entrega|date:"d/m/Y" }}.
+      <p class="text-sm mt-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+        {{ itens|length }} produto{{ itens|length|pluralize }} ·
+        {{ total_pecas }} peça{{ total_pecas|pluralize }} ·
+        {% if pedido.data_prevista_entrega %}entrega {{ pedido.data_prevista_entrega|date:"d/m/Y" }}
+        {% else %}<span style="color:#d97706;">sem data de entrega</span>{% endif %}
       </p>
     </div>
-  {% endif %}
+
+    {% comment %}
+      As ações em duas linhas: as que movem o pedido adiante em cima,
+      destacadas; as de consulta embaixo. Quinze botões do mesmo tamanho
+      é o mesmo que nenhum -- não dá para saber qual é o próximo passo.
+    {% endcomment %}
+    <div class="flex flex-wrap gap-2">
+      {% if pedido.status == 'orcamento' and itens %}
+        <form method="post" action="{% url 'moda:pedido-finalizar' pedido.pk %}">
+          {% csrf_token %}
+          <button type="submit" class="btn-primary text-sm">FINALIZAR PEDIDO</button>
+        </form>
+      {% elif pedido.status != 'cancelado' %}
+        <a href="?finalizado=1" class="btn-primary text-sm">Enviar ao cliente</a>
+      {% endif %}
+      <a href="{% url 'moda:pedido-pdf' pedido.pk %}" target="_blank" rel="noopener"
+         class="btn-secondary text-sm">Abrir PDF</a>
+      <a href="{% url 'moda:pedido-update' pedido.pk %}" class="btn-secondary text-sm">Editar</a>
+    </div>
+
+    <div class="flex flex-wrap gap-x-4 gap-y-1 text-xs">
+      {% for rotulo, endereco in atalhos %}
+        <a href="{{ endereco }}" class="underline"
+           :style="temaClaro ? 'color:#3b82f6;' : 'color:#60a5fa;'">{{ rotulo }}</a>
+      {% endfor %}
+    </div>
+  </div>
+
 
   <div class="grid gap-4 lg:grid-cols-3">
 
@@ -304,6 +315,120 @@
     </div>
 
   </div>
+
+  {% comment %}
+    ARTE E ARQUIVOS DO PEDIDO — o acervo, e não a aplicação.
+
+    A arte aplicada numa peça (técnica, local, arquivo) continua no item,
+    onde o chão de fábrica a lê. Aqui fica o que chega ANTES disso: o layout
+    que o cliente mandou, a planilha de nomes, a foto da camisa do ano
+    passado. Fica visível mesmo com o pedido vazio, porque é o primeiro
+    arquivo a chegar — e até agora ele não tinha onde ser guardado.
+  {% endcomment %}
+  <div class="card p-5 space-y-4" x-data="{ enviando: false }">
+    <div class="flex items-center justify-between gap-2 flex-wrap">
+      <div>
+        <h3 class="text-sm font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
+          Arte e arquivos
+        </h3>
+        <p class="text-xs mt-0.5" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+          {% if arquivos %}
+            {{ arquivos|length }} arquivo{{ arquivos|length|pluralize }} neste pedido.
+          {% else %}
+            Layout, referência do cliente, planilha de nomes — tudo que veio junto.
+          {% endif %}
+        </p>
+      </div>
+      <button type="button" class="btn-secondary text-sm" @click="enviando = !enviando"
+              x-text="enviando ? 'Fechar' : '+ Anexar arquivo'"></button>
+    </div>
+
+    {% if arquivos %}
+      <div class="grid gap-3 sm:grid-cols-3 lg:grid-cols-4">
+        {% for anexo in arquivos %}
+          <div class="rounded-lg overflow-hidden"
+               :style="temaClaro ? 'background:#f8fafc; border:1px solid #e5e7eb;' : 'background:#18181b; border:1px solid #303036;'">
+            <a href="{{ anexo.arquivo.url }}" target="_blank" rel="noopener" class="block">
+              {% comment %}
+                PNG/JPG/SVG viram prévia; PDF, CDR e AI o navegador não
+                desenha, e tentar deixaria um quadrado quebrado — pior do
+                que assumir que não há prévia e mostrar a extensão.
+              {% endcomment %}
+              {% if anexo.pode_pre_visualizar %}
+                <img src="{{ anexo.arquivo.url }}" alt="{{ anexo.descricao|default:anexo.nome_arquivo }}"
+                     class="w-full h-28 object-cover">
+              {% else %}
+                <div class="w-full h-28 flex flex-col items-center justify-center"
+                     :style="temaClaro ? 'background:#e5e7eb; color:#64748b;' : 'background:#27272a; color:#a1a1aa;'">
+                  <span class="text-2xl">📄</span>
+                  <span class="text-[10px] font-bold mt-1 uppercase">{{ anexo.extensao }}</span>
+                </div>
+              {% endif %}
+            </a>
+            <div class="p-2">
+              <p class="text-xs font-medium truncate" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'"
+                 title="{{ anexo.nome_arquivo }}">
+                {{ anexo.descricao|default:anexo.nome_arquivo }}
+              </p>
+              <p class="text-[10px] mt-0.5" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+                {{ anexo.get_tipo_display }} · {{ anexo.tamanho_legivel }}
+                {% if anexo.enviado_por %}· {{ anexo.enviado_por.nome }}{% endif %}
+              </p>
+              <div class="flex items-center gap-2 mt-1.5">
+                <a href="{{ anexo.arquivo.url }}" target="_blank" rel="noopener"
+                   class="text-[11px] underline"
+                   :style="temaClaro ? 'color:#3b82f6;' : 'color:#60a5fa;'">abrir</a>
+                <form method="post" action="{% url 'moda:pedido-arquivo-delete' pedido.pk anexo.pk %}"
+                      onsubmit="return confirm('Remover este arquivo do pedido?');">
+                  {% csrf_token %}
+                  <button type="submit" class="text-[11px]" style="color:#f87171;">remover</button>
+                </form>
+              </div>
+            </div>
+          </div>
+        {% endfor %}
+      </div>
+    {% else %}
+      <p class="text-sm" :style="temaClaro ? 'color:#94a3b8;' : 'color:#71717a;'">
+        Nenhum arquivo ainda. A arte que o cliente mandar entra aqui —
+        e vai junto na ficha de produção.
+      </p>
+    {% endif %}
+
+    <div x-show="enviando" x-cloak class="pt-3 border-t"
+         :style="temaClaro ? 'border-color:#e5e7eb;' : 'border-color:#303036;'">
+      <form method="post" action="{% url 'moda:pedido-arquivo-add' pedido.pk %}"
+            enctype="multipart/form-data" class="space-y-3 pt-3">
+        {% csrf_token %}
+        <div class="grid gap-3 sm:grid-cols-3">
+          <div class="sm:col-span-1">
+            <label class="block text-xs uppercase tracking-wider mb-1"
+                   :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Arquivos</label>
+            {% comment %}
+              `multiple` porque a arte quase nunca vem sozinha: vem o
+              escudo, o mockup da frente e o das costas, na mesma mensagem.
+            {% endcomment %}
+            <input type="file" name="arquivo" multiple required class="form-input w-full text-sm">
+          </div>
+          <div>
+            <label class="block text-xs uppercase tracking-wider mb-1"
+                   :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Tipo</label>
+            {{ form_arquivo.tipo }}
+          </div>
+          <div>
+            <label class="block text-xs uppercase tracking-wider mb-1"
+                   :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Descrição</label>
+            {{ form_arquivo.descricao }}
+          </div>
+        </div>
+        <div class="flex justify-end gap-2">
+          <button type="button" class="btn-secondary text-sm" @click="enviando = false">Cancelar</button>
+          <button type="submit" class="btn-primary text-sm">Anexar ao pedido</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
 
   {# ── Itens do pedido ─────────────────────────────────────────────── #}
   <div class="card p-5 space-y-4" x-data="{ novoItem: {% if abrir_form_item %}true{% else %}false{% endif %} }">
@@ -515,17 +640,111 @@
         {% endfor %}
       </div>
     {% else %}
-      <p class="text-sm" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
-        Nenhum produto no pedido ainda.
-      </p>
+      {% comment %}
+        Estado vazio que EXPLICA e oferece a saída. "Nenhum produto no
+        pedido ainda" sozinho deixa a pessoa procurando onde clicar --
+        e a grade, a arte e os valores só aparecem depois do primeiro
+        produto, o que faz a tela inteira parecer quebrada.
+      {% endcomment %}
+      <div class="rounded-lg p-6 text-center"
+           :style="temaClaro ? 'background:#f8fafc; border:1px dashed #cbd5e1;' : 'background:#18181b; border:1px dashed #3f3f46;'">
+        <p class="text-sm font-medium" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
+          O pedido ainda não tem produto.
+        </p>
+        <p class="text-xs mt-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+          Ao acrescentar o primeiro, você já lança a grade
+          (5 G, 10 M, 3 P…) e a arte no mesmo passo.
+        </p>
+        <button type="button" class="btn-primary text-sm mt-3" @click="novoItem = true">
+          + Adicionar produto
+        </button>
+      </div>
     {% endif %}
 
     <div x-show="novoItem" x-cloak class="pt-2 border-t" :style="temaClaro ? 'border-color:#e5e7eb;' : 'border-color:#303036;'">
-      <form method="post" action="{% url 'moda:pedido-item-add' pedido.pk %}" novalidate class="space-y-4 pt-4">
+      {% comment %}
+        `multipart` porque a arte entra por aqui. Sem o enctype, o
+        arquivo some no caminho e o formulário grava tudo menos ele --
+        em silêncio, que é o pior jeito de perder um dado.
+      {% endcomment %}
+      <form method="post" action="{% url 'moda:pedido-item-add' pedido.pk %}"
+            enctype="multipart/form-data" novalidate class="space-y-5 pt-4">
         {% csrf_token %}
         <div class="grid gap-4 sm:grid-cols-2">
           {% include "moda/_form_campos.html" with form=form_item %}
         </div>
+
+        {% comment %}
+          GRADE NO MESMO PASSO. Antes a tabela de grade só existia
+          depois do item salvo: quem estava com o cliente ao telefone
+          ("5 G, 10 M, 3 P") adicionava o produto, procurava a tabela
+          mais abaixo e digitava de novo. Aqui é um passo só.
+        {% endcomment %}
+        {% if tamanhos_disponiveis %}
+          <div class="rounded-lg p-4"
+               :style="temaClaro ? 'background:#f8fafc;' : 'background:#18181b;'">
+            <div class="flex items-baseline justify-between gap-2 flex-wrap">
+              <p class="text-xs font-semibold uppercase tracking-wider"
+                 :style="temaClaro ? 'color:#374151;' : 'color:#cbd5e1;'">Grade — quantidade por tamanho</p>
+              <p class="text-xs" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+                Deixe em branco para lançar depois. A quantidade do item
+                passa a ser a soma da grade.
+              </p>
+            </div>
+            <div class="grid grid-cols-4 sm:grid-cols-8 gap-2 mt-3">
+              {% for t in tamanhos_disponiveis %}
+                <div>
+                  <label class="block text-xs text-center font-bold mb-1"
+                         :style="temaClaro ? 'color:#374151;' : 'color:#cbd5e1;'"
+                         for="grade_{{ t.pk }}">{{ t.sigla }}</label>
+                  <input type="number" min="0" id="grade_{{ t.pk }}" name="grade_{{ t.pk }}"
+                         class="form-input w-full text-center text-sm" placeholder="0">
+                </div>
+              {% endfor %}
+            </div>
+          </div>
+        {% else %}
+          <p class="text-xs" style="color:#d97706;">
+            Nenhum tamanho cadastrado nesta filial — cadastre em
+            <a href="{% url 'moda:item' 'produtos' 'tamanhos' %}" class="underline">Produtos › Tamanhos</a>
+            para lançar a grade.
+          </p>
+        {% endif %}
+
+        {% comment %}
+          PERSONALIZAÇÃO no mesmo formulário: o que vai impresso na peça
+          é decidido junto com a peça, não depois. Fica opcional -- item
+          sem arte é comum, e exigir travaria o cadastro.
+        {% endcomment %}
+        <div class="rounded-lg p-4"
+             :style="temaClaro ? 'background:#f8fafc;' : 'background:#18181b;'">
+          <p class="text-xs font-semibold uppercase tracking-wider"
+             :style="temaClaro ? 'color:#374151;' : 'color:#cbd5e1;'">Personalização / arte (opcional)</p>
+          <div class="grid gap-3 sm:grid-cols-4 mt-3">
+            <div>
+              <label class="block text-xs mb-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Tipo</label>
+              <select name="arte_tipo" class="form-input w-full text-sm">
+                {% for valor, rotulo in tipos_arte %}<option value="{{ valor }}">{{ rotulo }}</option>{% endfor %}
+              </select>
+            </div>
+            <div>
+              <label class="block text-xs mb-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Técnica</label>
+              <select name="arte_tecnica" class="form-input w-full text-sm">
+                {% for valor, rotulo in tecnicas_arte %}<option value="{{ valor }}">{{ rotulo }}</option>{% endfor %}
+              </select>
+            </div>
+            <div>
+              <label class="block text-xs mb-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Local</label>
+              <input type="text" name="arte_local" class="form-input w-full text-sm"
+                     placeholder="Ex.: peito esquerdo">
+            </div>
+            <div>
+              <label class="block text-xs mb-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Arquivo</label>
+              <input type="file" name="arte_arquivo" class="form-input w-full text-sm">
+            </div>
+          </div>
+        </div>
+
         <div class="flex justify-end gap-2">
           <button type="button" class="btn-secondary text-sm" @click="novoItem = false">Cancelar</button>
           <button type="submit" class="btn-primary text-sm">Adicionar ao pedido</button>

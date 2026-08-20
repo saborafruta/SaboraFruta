@@ -17,6 +17,7 @@ from apps.core.services.exceptions import DadosInvalidosError
 
 from apps.core.services.exceptions import DomainError
 
+from .forms_arquivo import ArquivoPedidoForm
 from .forms_cliente import ClienteRapidoForm
 from .forms import (
     CorForm, GradeForm, ItemPedidoProducaoForm, PedidoProducaoForm,
@@ -24,7 +25,8 @@ from .forms import (
     ValoresPedidoForm, VisualItemPedidoForm,
 )
 from .models import (
-    Cor, Grade, ItemGrade, ItemGradePedido, ItemPedidoProducao, PedidoProducao,
+    ArquivoPedido, Cor, Grade, ItemGrade, ItemGradePedido, ItemPedidoProducao,
+    PedidoProducao,
     Personalizacao, PersonalizacaoIndividual, ProdutoCor, ProdutoModa,
     Tamanho, VisualItemPedido,
 )
@@ -414,6 +416,71 @@ class PedidoFormView(ModaBaseView):
         return redirect(reverse('moda:pedido-detail', args=[pedido.pk]))
 
 
+def contexto_do_pedido(request, pedido, **extra) -> dict:
+    """
+    Tudo que a tela do pedido precisa.
+
+    Vive fora da view porque DUAS views renderizam esta tela: a de
+    detalhe e a de adicionar item, quando o formulário volta com erro.
+    Enquanto eram dois contextos, o segundo trazia um terço das chaves e
+    a tela aparecia sem grade, sem valores e sem arquivos -- o que faz
+    um erro de digitação parecer perda de dados.
+    """
+    filial = _filial(request)
+    link_publico = request.build_absolute_uri(
+        reverse('moda_publico:pedido', args=[pedido.token_publico])
+    )
+    itens = pedido.itens.select_related(
+        'produto', 'modelo', 'cor', 'tecido', 'produto__tecido',
+    ).prefetch_related('personalizacoes', 'visuais__mockup').all()
+    contexto = {
+        'title': f'Pedido #{pedido.numero:06d}',
+        'pedido': pedido,
+        'status_choices': PedidoProducao.Status.choices,
+        'itens': itens,
+        'total_pecas': sum(i.quantidade for i in itens),
+        'form_item': ItemPedidoProducaoForm(filial=filial),
+        'form_arte': PersonalizacaoForm(),
+        'form_arquivo': ArquivoPedidoForm(),
+        'tipos_arte': Personalizacao.Tipo.choices,
+        'tecnicas_arte': Personalizacao.Tecnica.choices,
+        # Consultas do pedido: viram links de texto, e não mais cinco
+        # botões do mesmo peso das ações que movem o pedido adiante.
+        'atalhos': [
+            ('Histórico', reverse('moda:pedido-historico', args=[pedido.pk])),
+            ('Fluxo', reverse('moda:pedido-fluxo', args=[pedido.pk])),
+            ('Aprovação', reverse('moda:pedido-aprovacao', args=[pedido.pk])),
+            ('QR Code', reverse('moda:qr-etiqueta', args=[pedido.codigo_qr])),
+        ],
+        'arquivos': pedido.arquivos.select_related('enviado_por').all(),
+        'form_visual': VisualItemPedidoForm(filial=filial),
+        'tabela': GradePedidoService.montar_tabela(pedido),
+        'tamanhos_disponiveis': Tamanho.objects.for_filial(filial).filter(ativo=True),
+        'individuais': pedido.individuais.select_related('item', 'tamanho').all(),
+        'conferencia': IndividualService.conferir(pedido),
+        'form_individual': PersonalizacaoIndividualForm(
+            filial=filial, pedido=pedido,
+        ),
+        'form_valores': ValoresPedidoForm(
+            instance=pedido, filial=filial,
+        ),
+        'plano': FinanceiroPedidoService.planejar(pedido),
+        'contas': FinanceiroPedidoService.contas_do_pedido(pedido),
+        'valores_js': _valores_js(pedido, itens),
+        'finalizado': request.GET.get('finalizado') == '1',
+        'whatsapp_numero': whatsapp_numero(pedido),
+        # O link do cliente e' a PAGINA, nao o PDF: no celular o PDF
+        # abre no visualizador, e o status do pedido -- que e' o que ele
+        # volta para consultar -- fica de fora. O PDF continua a um
+        # toque, dentro da pagina.
+        'link_publico': link_publico,
+        'mensagem_whatsapp': mensagem_whatsapp(pedido, link_publico),
+    }
+
+    contexto.update(extra)
+    return contexto
+
+
 class PedidoDetailView(ModaBaseView):
     def get(self, request, pk):
         pedido = get_object_or_404(
@@ -421,44 +488,8 @@ class PedidoDetailView(ModaBaseView):
             .select_related('cliente', 'vendedor'),
             pk=pk,
         )
-        link_publico = request.build_absolute_uri(
-            reverse('moda_publico:pedido', args=[pedido.token_publico])
-        )
-        itens = pedido.itens.select_related(
-            'produto', 'modelo', 'cor', 'tecido', 'produto__tecido',
-        ).prefetch_related('personalizacoes', 'visuais__mockup').all()
-        return render(request, 'moda/pedido_detail.html', {
-            'title': f'Pedido #{pedido.numero:06d}',
-            'pedido': pedido,
-            'status_choices': PedidoProducao.Status.choices,
-            'itens': itens,
-            'total_pecas': sum(i.quantidade for i in itens),
-            'form_item': ItemPedidoProducaoForm(filial=_filial(request)),
-            'form_arte': PersonalizacaoForm(),
-            'form_visual': VisualItemPedidoForm(filial=_filial(request)),
-            'tabela': GradePedidoService.montar_tabela(pedido),
-            'tamanhos_disponiveis': Tamanho.objects.for_filial(_filial(request)).filter(ativo=True),
-            'individuais': pedido.individuais.select_related('item', 'tamanho').all(),
-            'conferencia': IndividualService.conferir(pedido),
-            'form_individual': PersonalizacaoIndividualForm(
-                filial=_filial(request), pedido=pedido,
-            ),
-            'form_valores': ValoresPedidoForm(
-                instance=pedido, filial=_filial(request),
-            ),
-            'plano': FinanceiroPedidoService.planejar(pedido),
-            'contas': FinanceiroPedidoService.contas_do_pedido(pedido),
-            'valores_js': _valores_js(pedido, itens),
-            'finalizado': request.GET.get('finalizado') == '1',
-            'whatsapp_numero': whatsapp_numero(pedido),
-            # O link do cliente e' a PAGINA, nao o PDF: no celular o PDF
-            # abre no visualizador, e o status do pedido -- que e' o que ele
-            # volta para consultar -- fica de fora. O PDF continua a um
-            # toque, dentro da pagina.
-            'link_publico': link_publico,
-            'mensagem_whatsapp': mensagem_whatsapp(pedido, link_publico),
-        })
-
+        return render(request, 'moda/pedido_detail.html',
+                      contexto_do_pedido(request, pedido))
 
 class PedidoFinalizarView(ModaBaseView):
     """
@@ -691,16 +722,12 @@ class ItemPedidoCreateView(ModaBaseView):
         if not form.is_valid():
             # Erros voltam na própria tela do pedido, com o formulário
             # preenchido — reabrir vazio faria o usuário digitar tudo de novo.
-            itens = pedido.itens.select_related('produto', 'modelo', 'cor', 'tecido').all()
-            return render(request, 'moda/pedido_detail.html', {
-                'title': f'Pedido #{pedido.numero:06d}',
-                'pedido': pedido,
-                'status_choices': PedidoProducao.Status.choices,
-                'itens': itens,
-                'total_pecas': sum(i.quantidade for i in itens),
-                'form_item': form,
-                'abrir_form_item': True,
-            })
+            # E com o contexto COMPLETO: antes vinham seis chaves, e a tela
+            # aparecia sem grade, sem valores e sem arquivos, o que faz um
+            # erro de digitação parecer perda de dados.
+            return render(request, 'moda/pedido_detail.html', contexto_do_pedido(
+                request, pedido, form_item=form, abrir_form_item=True,
+            ))
 
         item = form.save(commit=False)
         item.pedido = pedido
@@ -709,8 +736,71 @@ class ItemPedidoCreateView(ModaBaseView):
         ultima = pedido.itens.aggregate(models.Max('ordem'))['ordem__max'] or 0
         item.ordem = ultima + 10
         item.save()
-        messages.success(request, f'{item.nome_exibicao} adicionado ao pedido.')
+
+        recado = [f'{item.nome_exibicao} adicionado ao pedido.']
+        if getattr(form, 'produto_importado', None) is not None:
+            # Produto escolhido do cadastro do ERP: ele foi TRAZIDO para a
+            # confecção agora. Dizer isso evita a dúvida de por que ele
+            # passou a aparecer na tela de produtos de moda.
+            recado.append(
+                f'“{form.produto_importado.nome}” veio do cadastro de produtos '
+                f'e agora também está no catálogo da confecção.'
+            )
+        recado += self._grade_inicial(request, pedido, item)
+        recado += self._arte_inicial(request, item)
+
+        messages.success(request, ' '.join(recado))
         return redirect(reverse('moda:pedido-detail', args=[pedido.pk]))
+
+    @staticmethod
+    def _grade_inicial(request, pedido, item) -> list:
+        """
+        A grade lançada JUNTO com o produto.
+
+        Antes, a tabela de grade só existia depois de o item estar salvo --
+        e quem estava com o cliente ao telefone ("5 G, 10 M, 3 P") tinha de
+        adicionar o produto, procurar a tabela mais abaixo e digitar de novo.
+        Aqui os dois viram um passo só.
+        """
+        quantidades = {}
+        for chave, valor in request.POST.items():
+            if not chave.startswith('grade_'):
+                continue
+            tamanho_id = chave.removeprefix('grade_')
+            if not tamanho_id.isdigit():
+                continue
+            try:
+                qtd = int(valor or 0)
+            except (TypeError, ValueError):
+                continue
+            if qtd > 0:
+                quantidades[(item.pk, int(tamanho_id))] = qtd
+
+        if not quantidades:
+            return []
+
+        total = GradePedidoService.salvar_quantidades(pedido, quantidades)
+        # A quantidade do item passa a ser a soma da grade -- é o serviço
+        # que faz isso, e avisar aqui evita a leitura de que a quantidade
+        # digitada foi ignorada.
+        return [f'Grade lançada: {total} peça(s) no pedido.']
+
+    @staticmethod
+    def _arte_inicial(request, item) -> list:
+        """A arte anexada no mesmo passo, quando veio alguma."""
+        tem_arquivo = bool(request.FILES.get('arte_arquivo'))
+        local = (request.POST.get('arte_local') or '').strip()
+        if not tem_arquivo and not local:
+            return []
+
+        Personalizacao.objects.create(
+            item=item,
+            tipo=request.POST.get('arte_tipo') or Personalizacao.Tipo.ARTE,
+            tecnica=request.POST.get('arte_tecnica') or Personalizacao.Tecnica.SUBLIMACAO,
+            local=local,
+            arquivo=request.FILES.get('arte_arquivo'),
+        )
+        return ['Arte anexada ao item.']
 
 
 class ItemPedidoDeleteView(ModaBaseView):
@@ -1009,4 +1099,77 @@ class IndividualImportarView(ModaBaseView):
         if not resultado.criados and not resultado.erros:
             messages.info(request, 'Nenhuma linha com dados foi encontrada no arquivo.')
 
+        return redirect(reverse('moda:pedido-detail', args=[pedido.pk]))
+
+
+class PedidoArquivoAddView(ModaBaseView):
+    """
+    Anexa arquivo ao PEDIDO — a arte que chegou antes de existir item.
+
+    Fica no pedido, e não no item, porque é o que o cliente manda no começo:
+    o layout, a planilha de nomes, a foto da camisa do ano passado. Sem isto,
+    pedido recém-criado não tinha onde guardar a arte, e ela ficava no
+    celular de quem atendeu.
+    """
+
+    permissao_acao = 'editar'
+
+    def post(self, request, pk):
+        pedido = get_object_or_404(
+            PedidoProducao.objects.for_filial(_filial(request)), pk=pk,
+        )
+        destino = reverse('moda:pedido-detail', args=[pedido.pk])
+        arquivos = request.FILES.getlist('arquivo')
+
+        if not arquivos:
+            messages.error(request, 'Escolha ao menos um arquivo.')
+            return redirect(destino)
+
+        form = ArquivoPedidoForm(request.POST)
+        if not form.is_valid():
+            for campo, erros in form.errors.items():
+                messages.error(request, f'{campo}: {" ".join(erros)}')
+            return redirect(destino)
+
+        criados, recusados = [], []
+        for arquivo in arquivos:
+            # Um por um, e não em bloco: um arquivo com extensão recusada
+            # não pode derrubar os outros quatro que vieram junto.
+            individual = ArquivoPedidoForm(
+                request.POST, {'arquivo': arquivo}, instance=ArquivoPedido(pedido=pedido),
+            )
+            if not individual.is_valid():
+                recusados.append(arquivo.name)
+                continue
+            anexo = individual.save(commit=False)
+            anexo.pedido = pedido
+            anexo.enviado_por = request.user
+            anexo.save()
+            criados.append(anexo)
+
+        if criados:
+            messages.success(
+                request,
+                f'{len(criados)} arquivo(s) anexado(s) ao pedido #{pedido.numero:06d}.',
+            )
+        if recusados:
+            messages.error(
+                request,
+                'Não foi possível anexar: ' + ', '.join(recusados)
+                + ' — extensão não aceita.',
+            )
+        return redirect(destino)
+
+
+class PedidoArquivoDeleteView(ModaBaseView):
+    permissao_acao = 'editar'
+
+    def post(self, request, pk, arquivo_pk):
+        pedido = get_object_or_404(
+            PedidoProducao.objects.for_filial(_filial(request)), pk=pk,
+        )
+        anexo = get_object_or_404(ArquivoPedido, pk=arquivo_pk, pedido=pedido)
+        nome = anexo.descricao or anexo.nome_arquivo
+        anexo.delete()
+        messages.success(request, f'“{nome}” removido do pedido.')
         return redirect(reverse('moda:pedido-detail', args=[pedido.pk]))

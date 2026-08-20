@@ -1,4 +1,5 @@
 from .aprovacao import AprovacaoPedido
+from .arquivo import ArquivoPedido
 from .cadastros import Categoria, Colecao, Cor, Linha, Marca, Modelo, Tecido
 from .corte import ItemCorte, RegistroCorte
 from .encaixe import Encaixe
@@ -21,6 +22,7 @@ from .visual import MockupVisual, Posicao, VisualItemPedido
 
 __all__ = [
     'AprovacaoPedido',
+    'ArquivoPedido',
     'CapacidadeSetor',
     'Categoria',
     'Colecao',
