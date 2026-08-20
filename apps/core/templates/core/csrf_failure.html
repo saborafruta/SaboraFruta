@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Não foi possível enviar</title>
+  <style>
+    body { font-family: Inter, -apple-system, Segoe UI, Arial, sans-serif;
+           background:#f1f5f9; color:#0f172a; margin:0; min-height:100vh;
+           display:flex; align-items:center; justify-content:center; padding:24px; }
+    .cx { background:#fff; border-radius:18px; padding:28px; max-width:440px;
+          box-shadow:0 8px 30px rgba(15,23,42,.08); }
+    h1 { font-size:20px; margin:0 0 10px; }
+    p  { font-size:14px; line-height:1.6; color:#475569; margin:0 0 16px; }
+    a.botao { display:inline-block; background:#2563eb; color:#fff;
+              text-decoration:none; border-radius:12px; padding:12px 22px;
+              font-size:15px; font-weight:700; }
+    .obs { font-size:12px; color:#94a3b8; margin:14px 0 0; }
+  </style>
+</head>
+<body>
+  <div class="cx">
+    {% if publico %}
+      {% comment %}
+        Do lado do cliente, o texto não pode falar em CSRF nem em cookie: ele
+        não tem o que fazer com essa palavra. Diz o que aconteceu em termos
+        do que ele estava fazendo e oferece o botão.
+      {% endcomment %}
+      <h1>Não deu para enviar sua resposta</h1>
+      <p>
+        A página ficou aberta tempo demais e o envio expirou. Sua aprovação
+        <strong>não foi registrada</strong> — abra o pedido de novo e responda:
+        leva um instante.
+      </p>
+      <a class="botao" href="{{ destino }}">Abrir o pedido de novo</a>
+      <p class="obs">
+        Se acontecer outra vez, avise a confecção — eles conseguem registrar
+        sua resposta por lá.
+      </p>
+    {% else %}
+      <h1>Não foi possível enviar o formulário</h1>
+      <p>
+        A sessão desta página expirou, ou o navegador está bloqueando os
+        cookies do sistema. Nada foi gravado. Recarregue a tela e envie de
+        novo.
+      </p>
+      <a class="botao" href="{{ destino }}">Voltar e tentar de novo</a>
+    {% endif %}
+  </div>
+</body>
+</html>

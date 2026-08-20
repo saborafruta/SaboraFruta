@@ -19,6 +19,11 @@ DEBUG = env('DEBUG', default=False)
 ALLOWED_HOSTS = env.list('ALLOWED_HOSTS', default=['localhost', '127.0.0.1'])
 CSRF_TRUSTED_ORIGINS = env.list('CSRF_TRUSTED_ORIGINS', default=[])
 
+# Tela de falha de CSRF com saída, em vez do beco amarelo do Django. A
+# proteção é a mesma; muda o que a pessoa vê quando ela dispara -- e no link
+# público do pedido quem vê é o cliente da confecção.
+CSRF_FAILURE_VIEW = 'apps.core.views.errors.csrf_failure'
+
 # Apps
 DJANGO_APPS = [
     'django.contrib.admin',

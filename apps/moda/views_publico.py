@@ -23,7 +23,9 @@ destinatário delas.
 from django.http import Http404, HttpResponse
 from django.shortcuts import redirect, render
 from django.urls import reverse
+from django.utils.decorators import method_decorator
 from django.views import View
+from django.views.decorators.csrf import ensure_csrf_cookie
 
 from apps.core.middleware.audit import get_client_ip
 
@@ -118,8 +120,16 @@ def _prazo(pedido) -> str:
     return f'{atraso} dia' + ('s' if atraso > 1 else '') + ' em atraso'
 
 
+@method_decorator(ensure_csrf_cookie, name="dispatch")
 class PedidoOnlineView(View):
-    """A página que o cliente abre pelo link."""
+    """
+    A página que o cliente abre pelo link.
+
+    `ensure_csrf_cookie` porque o formulário de aprovação só é desenhado em
+    parte das visitas (pedido liberado, ainda sem resposta) -- e sem ele o
+    cookie de CSRF só nascia nessas. Quem abriu a página numa hora e
+    respondeu em outra podia cair num 403 sem ter feito nada de errado.
+    """
 
     def get(self, request, token):
         pedido = _buscar(token)
@@ -203,9 +213,18 @@ class PedidoResponderView(View):
                             AprovacaoPedido.Resposta.AJUSTE):
             raise Http404('Resposta inválida.')
 
+        # O NOME É A ASSINATURA do aceite. O formulário já o exige; chegar
+        # aqui vazio é chamada fora da tela, e gravar um aceite anônimo não
+        # serve no dia em que alguém pergunta quem aprovou.
+        nome = (request.POST.get('nome') or '').strip()
+        if not nome:
+            return redirect(
+                reverse('moda_publico:pedido', args=[token]) + '?falta=nome'
+            )
+
         aprovacao.responder(
             resposta=resposta,
-            nome=request.POST.get('nome', ''),
+            nome=nome,
             ip=get_client_ip(request),
             motivo=request.POST.get('motivo', '')[:2000],
         )
