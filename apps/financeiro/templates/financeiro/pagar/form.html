@@ -1,30 +1,175 @@
 {% extends "_base.html" %}
+{% load widget_tweaks %}
 
 {% block title %}{{ title }}{% endblock %}
 {% block page_title %}{{ title }}{% endblock %}
 
 {% block content %}
-<div class="max-w-2xl mx-auto space-y-5">
-
-  <!-- ── Breadcrumb ── -->
-  <div>
-    <p class="text-sm mb-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
-      <a href="{% url 'financeiro:pagar_list' %}"
-         :style="temaClaro ? 'color:#3b82f6;' : 'color:#60a5fa;'">Contas a Pagar</a>
-      <span class="mx-1">›</span>
-      Novo título
-    </p>
-    <h2 class="text-2xl font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
-      Novo lançamento manual
-    </h2>
-    <p class="text-sm mt-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
-      Registra um título a pagar sem vínculo com nota fiscal de entrada.
-    </p>
+<div class="mx-auto max-w-5xl space-y-4">
+  <div class="flex flex-wrap items-end justify-between gap-3">
+    <div>
+      <p class="mb-1 text-sm" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+        <a href="{% url 'financeiro:pagar_list' %}" :style="temaClaro ? 'color:#2563eb;' : 'color:#60a5fa;'">Contas a Pagar</a>
+        <span class="mx-1">/</span> Novo título
+      </p>
+      <h2 class="text-xl font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">Novo lançamento</h2>
+    </div>
+    <p class="text-sm" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Os campos com * são obrigatórios.</p>
   </div>
 
-  <div class="card p-6">
-    {% include "_form_generic.html" with form=form submit_label="Lançar título" cancel_url=cancel_url columns=1 %}
-  </div>
+  <form method="post" class="card overflow-visible" x-data="{ loading: false }" @submit="loading = true" novalidate>
+    {% csrf_token %}
 
+    {% if form.non_field_errors %}
+      <div class="m-5 rounded-md border border-red-300 bg-red-50 p-3 text-sm text-red-700 dark:border-red-800 dark:bg-red-950/30 dark:text-red-300">
+        {{ form.non_field_errors }}
+      </div>
+    {% endif %}
+
+    <section class="p-5 sm:p-6">
+      <div class="mb-4 flex items-center gap-3">
+        <span class="grid h-8 w-8 shrink-0 place-items-center rounded-md bg-blue-600 text-sm font-bold text-white">1</span>
+        <div>
+          <h3 class="text-sm font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f3f4f6;'">Documento e fornecedor</h3>
+          <p class="text-xs" :style="temaClaro ? 'color:#64748b;' : 'color:#9ca3af;'">Identificação da cobrança.</p>
+        </div>
+      </div>
+
+      <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
+        <div class="sm:col-span-2">
+          <label class="mb-1 block text-sm font-medium" :style="temaClaro ? 'color:#374151;' : 'color:#d1d5db;'">Fornecedor</label>
+          {% include "financeiro/pagar/_search_select.html" with field=form.fornecedor placeholder="Pesquisar por nome, razão social ou CNPJ" %}
+          {% if form.fornecedor.errors %}<p class="mt-1 text-xs text-red-500">{{ form.fornecedor.errors|join:", " }}</p>{% endif %}
+        </div>
+        <div>
+          <label for="{{ form.documento_numero.id_for_label }}" class="mb-1 block text-sm font-medium" :style="temaClaro ? 'color:#374151;' : 'color:#d1d5db;'">{{ form.documento_numero.label }}</label>
+          {{ form.documento_numero|add_class:"form-input"|attr:"placeholder:NF, boleto ou referência" }}
+          {% if form.documento_numero.errors %}<p class="mt-1 text-xs text-red-500">{{ form.documento_numero.errors|join:", " }}</p>{% endif %}
+        </div>
+        <div>
+          <label for="{{ form.nota_fiscal_fornecedor.id_for_label }}" class="mb-1 block text-sm font-medium" :style="temaClaro ? 'color:#374151;' : 'color:#d1d5db;'">{{ form.nota_fiscal_fornecedor.label }}</label>
+          {{ form.nota_fiscal_fornecedor|add_class:"form-input"|attr:"placeholder:Número da nota fiscal" }}
+          {% if form.nota_fiscal_fornecedor.errors %}<p class="mt-1 text-xs text-red-500">{{ form.nota_fiscal_fornecedor.errors|join:", " }}</p>{% endif %}
+        </div>
+      </div>
+    </section>
+
+    <section class="border-t p-5 sm:p-6" :style="temaClaro ? 'border-color:#e5e7eb;' : 'border-color:#303038;'">
+      <div class="mb-4 flex items-center gap-3">
+        <span class="grid h-8 w-8 shrink-0 place-items-center rounded-md bg-emerald-600 text-sm font-bold text-white">2</span>
+        <h3 class="text-sm font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f3f4f6;'">Valor, parcelas e datas</h3>
+      </div>
+      <div class="grid grid-cols-1 gap-4 sm:grid-cols-3">
+        {% include "financeiro/pagar/_field.html" with field=form.valor_original %}
+        {% include "financeiro/pagar/_field.html" with field=form.parcela %}
+        {% include "financeiro/pagar/_field.html" with field=form.total_parcelas %}
+        {% include "financeiro/pagar/_field.html" with field=form.data_emissao %}
+        {% include "financeiro/pagar/_field.html" with field=form.data_vencimento %}
+        {% include "financeiro/pagar/_field.html" with field=form.data_competencia %}
+      </div>
+    </section>
+
+    <section class="border-t p-5 sm:p-6" :style="temaClaro ? 'border-color:#e5e7eb;' : 'border-color:#303038;'">
+      <div class="mb-4 flex items-center gap-3">
+        <span class="grid h-8 w-8 shrink-0 place-items-center rounded-md bg-violet-600 text-sm font-bold text-white">3</span>
+        <div>
+          <h3 class="text-sm font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f3f4f6;'">Classificação financeira</h3>
+          <p class="text-xs" :style="temaClaro ? 'color:#64748b;' : 'color:#9ca3af;'">Grupo, subgrupo e categoria definem a conta contábil automaticamente.</p>
+        </div>
+      </div>
+      <div class="grid grid-cols-1 gap-4 lg:grid-cols-5">
+        <div class="lg:col-span-2">
+          <label for="{{ form.forma_pagamento.id_for_label }}" class="mb-1 block text-sm font-medium" :style="temaClaro ? 'color:#374151;' : 'color:#d1d5db;'">{{ form.forma_pagamento.label }}</label>
+          {{ form.forma_pagamento|add_class:"form-input" }}
+          {% if form.forma_pagamento.errors %}<p class="mt-1 text-xs text-red-500">{{ form.forma_pagamento.errors|join:", " }}</p>{% endif %}
+        </div>
+        <div class="lg:col-span-3">
+          <label class="mb-1 block text-sm font-medium" :style="temaClaro ? 'color:#374151;' : 'color:#d1d5db;'">
+            {{ form.plano_contas.label }}{% if form.plano_contas.field.required %} <span class="text-red-500">*</span>{% endif %}
+          </label>
+          {% include "financeiro/pagar/_search_select.html" with field=form.plano_contas placeholder="Pesquisar categoria ou conta contábil" %}
+          {% if form.plano_contas.errors %}<p class="mt-1 text-xs text-red-500">{{ form.plano_contas.errors|join:", " }}</p>{% endif %}
+        </div>
+        <div class="lg:col-span-5">
+          <label for="{{ form.observacao.id_for_label }}" class="mb-1 block text-sm font-medium" :style="temaClaro ? 'color:#374151;' : 'color:#d1d5db;'">{{ form.observacao.label }}</label>
+          {{ form.observacao|add_class:"form-input"|attr:"placeholder:Informações adicionais sobre o título" }}
+          {% if form.observacao.errors %}<p class="mt-1 text-xs text-red-500">{{ form.observacao.errors|join:", " }}</p>{% endif %}
+        </div>
+      </div>
+    </section>
+
+    <div class="flex flex-wrap justify-end gap-3 border-t px-5 py-4 sm:px-6" :style="temaClaro ? 'border-color:#e5e7eb; background:#f8fafc;' : 'border-color:#303038; background:#1c1c20;'">
+      <a href="{{ cancel_url }}" class="btn-secondary">Cancelar</a>
+      <button type="submit" class="btn-primary" :disabled="loading">
+        <span x-show="!loading">Lançar título</span>
+        <span x-show="loading" x-cloak>Salvando...</span>
+      </button>
+    </div>
+  </form>
 </div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+function financeSearchSelect(root) {
+  return {
+    value: root.dataset.initial || '',
+    query: '',
+    open: false,
+
+    init() {
+      const selected = this.options().find(option => option.dataset.value === this.value);
+      if (selected) this.query = selected.dataset.label;
+    },
+
+    options() {
+      return Array.from(root.querySelectorAll('[data-finance-option]'));
+    },
+
+    normalize(text) {
+      return (text || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
+    },
+
+    matches(option) {
+      return !this.query || this.normalize(option.dataset.search).includes(this.normalize(this.query));
+    },
+
+    visibleOptions() {
+      return this.options().filter(option => this.matches(option));
+    },
+
+    visibleCount() {
+      return this.visibleOptions().length;
+    },
+
+    select(option) {
+      this.value = option.dataset.value;
+      this.query = option.dataset.label;
+      this.open = false;
+    },
+
+    clear() {
+      this.value = '';
+      this.query = '';
+      this.open = true;
+    },
+
+    focusOption(direction) {
+      this.open = true;
+      this.$nextTick(() => {
+        const visible = this.visibleOptions();
+        if (!visible.length) return;
+        const current = document.activeElement;
+        const index = visible.indexOf(current);
+        const next = index < 0 ? (direction > 0 ? 0 : visible.length - 1) : Math.max(0, Math.min(visible.length - 1, index + direction));
+        visible[next].focus();
+      });
+    },
+
+    closeLater() {
+      setTimeout(() => { this.open = false; }, 180);
+    },
+  };
+}
+</script>
 {% endblock %}

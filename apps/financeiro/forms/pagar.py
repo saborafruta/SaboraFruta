@@ -16,10 +16,21 @@ VALOR_WIDGET = forms.NumberInput(attrs={
 })
 
 
+class FornecedorChoiceField(forms.ModelChoiceField):
+    def label_from_instance(self, fornecedor):
+        principal = fornecedor.nome_fantasia or fornecedor.razao_social
+        detalhes = []
+        if fornecedor.nome_fantasia and fornecedor.razao_social != principal:
+            detalhes.append(fornecedor.razao_social)
+        if fornecedor.cpf_cnpj:
+            detalhes.append(fornecedor.cpf_cnpj)
+        return f"{principal} - {' - '.join(detalhes)}" if detalhes else principal
+
+
 class ContaPagarForm(forms.Form):
     """Lançamento manual de conta a pagar."""
 
-    fornecedor = forms.ModelChoiceField(
+    fornecedor = FornecedorChoiceField(
         queryset=Fornecedor.objects.none(),
         required=False,
         label='Fornecedor',

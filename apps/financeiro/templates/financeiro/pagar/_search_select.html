@@ -1,0 +1,57 @@
+<div class="relative" x-data="financeSearchSelect($el)" x-init="init()"
+     data-initial="{{ field.value|default_if_none:'' }}">
+  <input type="hidden" name="{{ field.html_name }}" :value="value">
+  <div class="relative">
+    <input type="search"
+           class="form-input pr-20"
+           placeholder="{{ placeholder }}"
+           autocomplete="off"
+           x-model="query"
+           @focus="open = true"
+           @input="open = true; value = ''"
+           @keydown.escape="open = false"
+           @keydown.arrow-down.prevent="focusOption(1)"
+           @keydown.arrow-up.prevent="focusOption(-1)"
+           @blur="closeLater()"
+           aria-autocomplete="list"
+           :aria-expanded="open.toString()">
+    <button type="button"
+            x-show="query"
+            @mousedown.prevent="clear()"
+            class="absolute right-9 top-1/2 -translate-y-1/2 grid h-7 w-7 place-items-center rounded text-lg leading-none"
+            :style="temaClaro ? 'color:#64748b;' : 'color:#9ca3af;'"
+            title="Limpar seleção" aria-label="Limpar seleção">&times;</button>
+    <span class="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-xs"
+          :style="temaClaro ? 'color:#64748b;' : 'color:#9ca3af;'">&#9662;</span>
+  </div>
+
+  <div x-show="open" x-cloak
+       class="absolute z-50 mt-1 max-h-64 w-full overflow-y-auto rounded-md border p-1 shadow-xl"
+       :style="temaClaro ? 'background:#fff; border-color:#d1d5db;' : 'background:#18181b; border-color:#3f3f46;'"
+       role="listbox">
+    {% for value, label in field.field.choices %}
+      {% if value|stringformat:'s' %}
+        <button type="button"
+                data-finance-option
+                data-value="{{ value }}"
+                data-label="{{ label }}"
+                data-search="{{ label }}"
+                x-show="matches($el)"
+                @mousedown.prevent="select($el)"
+                @click="select($el)"
+                @keydown.arrow-down.prevent="focusOption(1)"
+                @keydown.arrow-up.prevent="focusOption(-1)"
+                @keydown.escape="open = false"
+                class="block w-full rounded px-3 py-2 text-left text-sm leading-5"
+                :style="value === $el.dataset.value
+                  ? (temaClaro ? 'background:#dbeafe; color:#1d4ed8;' : 'background:#1e3a5f; color:#bfdbfe;')
+                  : (temaClaro ? 'color:#1f2937;' : 'color:#e5e7eb;')"
+                role="option">
+          {{ label }}
+        </button>
+      {% endif %}
+    {% endfor %}
+    <p x-show="visibleCount() === 0" class="px-3 py-4 text-center text-sm"
+       :style="temaClaro ? 'color:#64748b;' : 'color:#9ca3af;'">Nenhum resultado encontrado.</p>
+  </div>
+</div>

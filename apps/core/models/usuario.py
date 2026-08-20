@@ -8,7 +8,7 @@ from django.contrib.auth.models import AbstractBaseUser, BaseUserManager, Permis
 from django.core.files.base import ContentFile
 from django.db import models
 from django.utils import timezone
-from PIL import Image
+from PIL import Image, ImageOps
 
 from .base import TimestampedModel
 
@@ -177,6 +177,7 @@ class Usuario(AbstractBaseUser, PermissionsMixin):
         try:
             arquivo.seek(0)
             imagem = Image.open(arquivo)
+            imagem = ImageOps.exif_transpose(imagem)
             imagem = imagem.convert('RGB')
 
             largura, altura = imagem.size
