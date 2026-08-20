@@ -32,8 +32,21 @@ from .services.pedido_pdf import PedidoPdfService
 
 # Status internos que não fazem sentido para quem está do lado de fora.
 # Cancelado aparece; orçamento não — pedido que ainda é proposta não deveria
-# ter link circulando.
+# ter link circulando POR ACIDENTE.
+#
+# MAS ORÇAMENTO LIBERADO ABRE. A tela de aprovação entrega o link e manda
+# enviar ao cliente; se a página recusasse, o vendedor mandaria um endereço
+# que responde 'Not Found' -- foi o que aconteceu. Liberação interna é uma
+# decisão explícita de alguém com permissão de aprovar: é ela que distingue
+# a proposta que vazou da proposta que a casa quis mostrar.
 STATUS_OCULTOS = ('orcamento',)
+
+
+def _pode_abrir(pedido) -> bool:
+    if pedido.status not in STATUS_OCULTOS:
+        return True
+    aprovacao = getattr(pedido, 'aprovacao', None)
+    return bool(aprovacao and aprovacao.liberado)
 
 # O que do acervo de arquivos aparece para o cliente. A escolha é por TIPO,
 # e não por arquivo: quem anexa não deveria ter de decidir, item a item, o
@@ -72,7 +85,7 @@ def _buscar(token: str) -> PedidoProducao:
 
     pedido = (
         PedidoProducao.all_objects
-        .select_related('cliente', 'filial', 'filial__empresa')
+        .select_related('cliente', 'filial', 'filial__empresa', 'aprovacao')
         .prefetch_related(
             'itens__produto', 'itens__modelo', 'itens__cor', 'itens__tecido',
             'itens__grade__tamanho', 'itens__personalizacoes',
@@ -82,7 +95,7 @@ def _buscar(token: str) -> PedidoProducao:
         .filter(token_publico=token)
         .first()
     )
-    if pedido is None or pedido.status in STATUS_OCULTOS:
+    if pedido is None or not _pode_abrir(pedido):
         raise Http404('Pedido não encontrado.')
     return pedido
 

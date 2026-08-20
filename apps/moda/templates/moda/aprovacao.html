@@ -106,10 +106,23 @@
       </div>
 
     {% else %}
-      <p class="text-sm mt-2" :style="temaClaro ? 'color:#94a3b8;' : 'color:#71717a;'">
-        Libere o pedido internamente primeiro. Até lá o cliente vê o pedido
-        pelo link, mas não tem o que aprovar.
-      </p>
+      {% comment %}
+        O QUE O LINK FAZ ANTES DA LIBERAÇÃO depende do status, e dizer
+        errado aqui custa uma mensagem no WhatsApp do cliente com um
+        endereço que responde "Not Found" -- foi o que aconteceu.
+      {% endcomment %}
+      {% if pedido.status == 'orcamento' %}
+        <p class="text-sm mt-2" style="color:#d97706;">
+          Enquanto for orçamento, o link <strong>não abre</strong> para o
+          cliente. Libere o pedido aqui — ou confirme o orçamento — e ele
+          passa a valer.
+        </p>
+      {% else %}
+        <p class="text-sm mt-2" :style="temaClaro ? 'color:#94a3b8;' : 'color:#71717a;'">
+          Libere o pedido internamente primeiro. Até lá o cliente vê o pedido
+          pelo link, mas não tem o que aprovar.
+        </p>
+      {% endif %}
     {% endif %}
   </div>
 
