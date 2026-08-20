@@ -18,6 +18,7 @@ from apps.core.services.exceptions import DomainError
 from apps.core.services.permissions import PermissaoRequiredMixin
 from apps.financeiro.constants.enums import StatusContaPagar
 from apps.financeiro.forms.pagar import ContaPagarForm, PagamentoContaPagarForm
+from apps.financeiro.models.conta_bancaria import PlanoContas
 from apps.financeiro.models.receber_pagar import ContaPagar, PagamentoContaPagar
 from apps.financeiro.services.pagar_service import ContaPagarService
 
@@ -34,6 +35,77 @@ PILL_STATUS = {
 
 def _filial(request):
     return request.filial_ativa
+
+
+def _categorias_financeiras_filtro(request):
+    """Monta os tres niveis e normaliza a selecao da categoria financeira."""
+    categorias_base = PlanoContas.objects.filter(
+        empresa=_filial(request).empresa,
+        tipo='D',
+    )
+    grupos = list(categorias_base.filter(nivel=1).order_by('codigo'))
+    subgrupos = list(
+        categorias_base.filter(nivel=2, conta_pai__isnull=False)
+        .select_related('conta_pai')
+        .order_by('codigo')
+    )
+    categorias = list(
+        categorias_base.filter(nivel=3, conta_pai__isnull=False)
+        .select_related('conta_pai__conta_pai')
+        .order_by('codigo')
+    )
+
+    grupo_id = request.GET.get('categoria_grupo', '').strip()
+    subgrupo_id = request.GET.get('categoria_subgrupo', '').strip()
+    categoria_id = request.GET.get('categoria_financeira', '').strip()
+
+    categoria_selecionada = next(
+        (categoria for categoria in categorias if str(categoria.pk) == categoria_id),
+        None,
+    )
+    if categoria_selecionada:
+        categoria_id = str(categoria_selecionada.pk)
+        subgrupo_id = str(categoria_selecionada.conta_pai_id)
+        grupo_id = str(categoria_selecionada.conta_pai.conta_pai_id or '')
+    else:
+        categoria_id = ''
+        subgrupo_selecionado = next(
+            (subgrupo for subgrupo in subgrupos if str(subgrupo.pk) == subgrupo_id),
+            None,
+        )
+        if subgrupo_selecionado:
+            subgrupo_id = str(subgrupo_selecionado.pk)
+            grupo_id = str(subgrupo_selecionado.conta_pai_id)
+        else:
+            subgrupo_id = ''
+            grupo_selecionado = next(
+                (grupo for grupo in grupos if str(grupo.pk) == grupo_id),
+                None,
+            )
+            grupo_id = str(grupo_selecionado.pk) if grupo_selecionado else ''
+
+    return {
+        'categoria_grupos': grupos,
+        'categoria_subgrupos': subgrupos,
+        'categorias_financeiras': categorias,
+        'categoria_grupo_filtro': grupo_id,
+        'categoria_subgrupo_filtro': subgrupo_id,
+        'categoria_financeira_filtro': categoria_id,
+        'categoria_financeira_selecionada': categoria_selecionada,
+    }
+
+
+def _aplicar_filtro_categoria_financeira(qs, categoria_contexto):
+    categoria_id = categoria_contexto['categoria_financeira_filtro']
+    subgrupo_id = categoria_contexto['categoria_subgrupo_filtro']
+    grupo_id = categoria_contexto['categoria_grupo_filtro']
+    if categoria_id:
+        return qs.filter(plano_contas_id=categoria_id)
+    if subgrupo_id:
+        return qs.filter(plano_contas__conta_pai_id=subgrupo_id)
+    if grupo_id:
+        return qs.filter(plano_contas__conta_pai__conta_pai_id=grupo_id)
+    return qs
 
 
 def _kpis(qs_base):
@@ -92,6 +164,7 @@ class ContaPagarListView(PermissaoRequiredMixin, View):
         q = request.GET.get('q', '').strip()
         data_ini = request.GET.get('data_ini', '')
         data_fim = request.GET.get('data_fim', '')
+        categoria_contexto = _categorias_financeiras_filtro(request)
 
         if status:
             qs = qs.filter(status=status)
@@ -108,6 +181,7 @@ class ContaPagarListView(PermissaoRequiredMixin, View):
             qs = qs.filter(data_vencimento__gte=data_ini)
         if data_fim:
             qs = qs.filter(data_vencimento__lte=data_fim)
+        qs = _aplicar_filtro_categoria_financeira(qs, categoria_contexto)
 
         totais_filtro = qs.aggregate(
             total_valor=Sum('valor_final'),
@@ -140,6 +214,7 @@ class ContaPagarListView(PermissaoRequiredMixin, View):
             'pode_criar': pode_criar,
             'pode_editar': pode_editar,
             'today': timezone.localdate(),
+            **categoria_contexto,
             **kpis,
         })
 
@@ -159,6 +234,7 @@ def _filtrar_contas_pagas(request):
     data_ini = request.GET.get('data_ini', '')
     data_fim = request.GET.get('data_fim', '')
     ordenacao = request.GET.get('ordenacao', 'recentes')
+    categoria_contexto = _categorias_financeiras_filtro(request)
 
     if q:
         qs = qs.filter(
@@ -175,6 +251,7 @@ def _filtrar_contas_pagas(request):
         qs = qs.filter(data_pagamento__gte=data_ini)
     if data_fim:
         qs = qs.filter(data_pagamento__lte=data_fim)
+    qs = _aplicar_filtro_categoria_financeira(qs, categoria_contexto)
 
     ordenacoes = {
         'recentes': ('-data_pagamento', '-id'),
@@ -188,6 +265,7 @@ def _filtrar_contas_pagas(request):
         'data_ini': data_ini,
         'data_fim': data_fim,
         'ordenacao': ordenacao,
+        **categoria_contexto,
     }
 
 
@@ -263,6 +341,7 @@ class ContaPagarRelatorioView(PermissaoRequiredMixin, View):
         q = request.GET.get('q', '').strip()
         data_ini = request.GET.get('data_ini', '')
         data_fim = request.GET.get('data_fim', '')
+        categoria_contexto = _categorias_financeiras_filtro(request)
 
         qs = (
             ContaPagar.objects.for_filial(filial)
@@ -289,6 +368,7 @@ class ContaPagarRelatorioView(PermissaoRequiredMixin, View):
             qs = qs.filter(data_vencimento__gte=data_ini)
         if data_fim:
             qs = qs.filter(data_vencimento__lte=data_fim)
+        qs = _aplicar_filtro_categoria_financeira(qs, categoria_contexto)
 
         titulos = list(qs)
 
@@ -346,6 +426,7 @@ class ContaPagarRelatorioView(PermissaoRequiredMixin, View):
             'total_geral_valor': total_geral_valor,
             'total_titulos': len(titulos),
             'gerado_em': timezone.localtime(),
+            **categoria_contexto,
         })
 
 

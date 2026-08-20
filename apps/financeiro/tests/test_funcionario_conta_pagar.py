@@ -36,6 +36,7 @@ from apps.financeiro.views.pagar import (
     ContaPagaListView,
     ContaPagaRelatorioView,
     ContaPagarCreateView,
+    ContaPagarListView,
     ContaPagarNotaFiscalLookupView,
     ContaPagarPagamentoView,
 )
@@ -451,6 +452,105 @@ class FuncionarioContaPagarTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "Nova Conta Paga")
         self.assertContains(response, "quitarAgora:true")
+
+    def test_contas_a_pagar_filtra_pelos_tres_niveis_da_categoria(self):
+        grupo = PlanoContas.objects.create(
+            empresa=self.empresa, codigo="300", descricao="Despesas Operacionais",
+            tipo="D", nivel=1, aceita_lancamento=False,
+        )
+        subgrupo = PlanoContas.objects.create(
+            empresa=self.empresa, conta_pai=grupo, codigo="30001",
+            descricao="Despesas com Pessoal", tipo="D", nivel=2,
+            aceita_lancamento=False,
+        )
+        categoria_folha = PlanoContas.objects.create(
+            empresa=self.empresa, conta_pai=subgrupo, conta_contabil=self.conta_contabil,
+            codigo="300010001", descricao="Folha de Pagamento", tipo="D", nivel=3,
+            aceita_lancamento=True,
+        )
+        categoria_beneficio = PlanoContas.objects.create(
+            empresa=self.empresa, conta_pai=subgrupo, conta_contabil=self.conta_contabil,
+            codigo="300010002", descricao="Benefícios", tipo="D", nivel=3,
+            aceita_lancamento=True,
+        )
+        ContaPagarService.criar(
+            filial=self.filial, funcionario=self.funcionario, tipo_lancamento="funcionario",
+            documento_numero="FOLHA-FILTRO", valor_original=Decimal("1800.00"),
+            data_emissao=date(2026, 8, 20), data_vencimento=date(2026, 8, 30),
+            plano_contas=categoria_folha,
+        )
+        ContaPagarService.criar(
+            filial=self.filial, funcionario=self.funcionario, tipo_lancamento="funcionario",
+            documento_numero="BENEFICIO-FILTRO", valor_original=Decimal("300.00"),
+            data_emissao=date(2026, 8, 20), data_vencimento=date(2026, 8, 30),
+            plano_contas=categoria_beneficio,
+        )
+        request = RequestFactory().get(
+            "/financeiro/pagar/",
+            {
+                "categoria_grupo": grupo.pk,
+                "categoria_subgrupo": subgrupo.pk,
+                "categoria_financeira": categoria_folha.pk,
+            },
+        )
+        request.user = SimpleNamespace(
+            is_authenticated=True,
+            tem_permissao=lambda modulo, acao: True,
+        )
+        request.filial_ativa = self.filial
+
+        response = ContaPagarListView.as_view()(request)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "FOLHA-FILTRO")
+        self.assertNotContains(response, "BENEFICIO-FILTRO")
+        self.assertContains(response, "Grupo da despesa")
+        self.assertContains(response, "Tipo de gasto")
+        self.assertContains(response, "Categoria específica")
+
+    def test_contas_pagas_filtra_por_grupo_financeiro(self):
+        grupo = PlanoContas.objects.create(
+            empresa=self.empresa, codigo="400", descricao="Custos de Produção",
+            tipo="D", nivel=1, aceita_lancamento=False,
+        )
+        subgrupo = PlanoContas.objects.create(
+            empresa=self.empresa, conta_pai=grupo, codigo="40001",
+            descricao="Materiais", tipo="D", nivel=2, aceita_lancamento=False,
+        )
+        categoria = PlanoContas.objects.create(
+            empresa=self.empresa, conta_pai=subgrupo, conta_contabil=self.conta_contabil,
+            codigo="400010001", descricao="Matéria-prima", tipo="D", nivel=3,
+            aceita_lancamento=True,
+        )
+        ContaPagarService.criar_e_quitar(
+            filial=self.filial, funcionario=self.funcionario, tipo_lancamento="funcionario",
+            documento_numero="MATERIAL-PAGO", valor_original=Decimal("450.00"),
+            data_emissao=date(2026, 8, 20), data_vencimento=date(2026, 8, 30),
+            plano_contas=categoria, data_pagamento=date(2026, 8, 20),
+            forma_pagamento_utilizada=self.forma_pix,
+        )
+        ContaPagarService.criar_e_quitar(
+            filial=self.filial, funcionario=self.funcionario, tipo_lancamento="funcionario",
+            documento_numero="OUTRA-CATEGORIA-PAGA", valor_original=Decimal("120.00"),
+            data_emissao=date(2026, 8, 20), data_vencimento=date(2026, 8, 30),
+            plano_contas=self.categoria, data_pagamento=date(2026, 8, 20),
+            forma_pagamento_utilizada=self.forma_pix,
+        )
+        request = RequestFactory().get(
+            "/financeiro/pagar/pagas/", {"categoria_grupo": grupo.pk},
+        )
+        request.user = SimpleNamespace(
+            is_authenticated=True,
+            tem_permissao=lambda modulo, acao: True,
+        )
+        request.filial_ativa = self.filial
+
+        response = ContaPagaListView.as_view()(request)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "MATERIAL-PAGO")
+        self.assertNotContains(response, "OUTRA-CATEGORIA-PAGA")
+        self.assertContains(response, "Filtro de classificação ativo")
 
     def test_pagamentos_parciais_preservam_formas_utilizadas(self):
         conta = ContaPagarService.criar(

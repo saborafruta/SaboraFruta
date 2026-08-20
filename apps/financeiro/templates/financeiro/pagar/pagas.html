@@ -67,6 +67,7 @@
         <option value="beneficiario" {% if ordenacao == 'beneficiario' %}selected{% endif %}>Beneficiário A-Z</option>
       </select>
     </div>
+    {% include "financeiro/pagar/_filtro_categoria_financeira.html" with filtro_id="contas-pagas" %}
     <div class="flex gap-2 md:col-span-12 md:justify-end">
       <a href="{% url 'financeiro:pagar_pagas' %}" class="btn-secondary">Limpar</a>
       <button type="submit" class="btn-primary">Filtrar</button>

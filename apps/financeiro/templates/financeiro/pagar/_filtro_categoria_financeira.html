@@ -1,0 +1,84 @@
+<div class="md:col-span-12 rounded-md border p-3"
+     data-categoria-financeira-filtro
+     :style="temaClaro ? 'border-color:#e2e8f0;background:#f8fafc' : 'border-color:#34343a;background:#1e1e20'">
+  <div class="mb-3 flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
+    <div>
+      <strong class="text-sm">Categoria financeira</strong>
+      <p class="text-xs opacity-60">Escolha até onde precisar: grupo, tipo de gasto ou categoria específica.</p>
+    </div>
+    {% if categoria_grupo_filtro %}
+      <span class="text-xs font-semibold text-emerald-500">Filtro de classificação ativo</span>
+    {% endif %}
+  </div>
+  <div class="grid grid-cols-1 gap-3 lg:grid-cols-3">
+    <div>
+      <label for="{{ filtro_id }}-categoria-grupo" class="mb-1 block text-xs font-semibold">
+        <span class="mr-1 text-violet-500">1.</span> Grupo da despesa
+      </label>
+      <select id="{{ filtro_id }}-categoria-grupo" name="categoria_grupo" class="form-input" data-categoria-grupo>
+        <option value="">Todos os grupos</option>
+        {% for grupo in categoria_grupos %}
+          <option value="{{ grupo.pk }}" {% if categoria_grupo_filtro == grupo.pk|stringformat:'s' %}selected{% endif %}>{{ grupo.descricao }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div>
+      <label for="{{ filtro_id }}-categoria-subgrupo" class="mb-1 block text-xs font-semibold">
+        <span class="mr-1 text-violet-500">2.</span> Tipo de gasto
+      </label>
+      <select id="{{ filtro_id }}-categoria-subgrupo" name="categoria_subgrupo" class="form-input disabled:opacity-50" data-categoria-subgrupo>
+        <option value="">Todos os tipos de gasto</option>
+        {% for subgrupo in categoria_subgrupos %}
+          <option value="{{ subgrupo.pk }}" data-grupo="{{ subgrupo.conta_pai_id }}" {% if categoria_subgrupo_filtro == subgrupo.pk|stringformat:'s' %}selected{% endif %}>{{ subgrupo.descricao }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div>
+      <label for="{{ filtro_id }}-categoria-especifica" class="mb-1 block text-xs font-semibold">
+        <span class="mr-1 text-violet-500">3.</span> Categoria específica
+      </label>
+      <select id="{{ filtro_id }}-categoria-especifica" name="categoria_financeira" class="form-input disabled:opacity-50" data-categoria-especifica>
+        <option value="">Todas as categorias específicas</option>
+        {% for categoria in categorias_financeiras %}
+          <option value="{{ categoria.pk }}" data-subgrupo="{{ categoria.conta_pai_id }}" {% if categoria_financeira_filtro == categoria.pk|stringformat:'s' %}selected{% endif %}>{{ categoria.descricao }}</option>
+        {% endfor %}
+      </select>
+    </div>
+  </div>
+</div>
+
+<script>
+(function () {
+  document.querySelectorAll('[data-categoria-financeira-filtro]').forEach(function (root) {
+    var grupo = root.querySelector('[data-categoria-grupo]');
+    var subgrupo = root.querySelector('[data-categoria-subgrupo]');
+    var categoria = root.querySelector('[data-categoria-especifica]');
+
+    function atualizarOpcoes(select, atributo, valorPai) {
+      Array.from(select.options).forEach(function (option, index) {
+        if (index === 0) return;
+        var visivel = !!valorPai && option.dataset[atributo] === valorPai;
+        option.hidden = !visivel;
+        option.disabled = !visivel;
+      });
+    }
+
+    function atualizarCategorias(preservar) {
+      atualizarOpcoes(categoria, 'subgrupo', subgrupo.value);
+      categoria.disabled = !subgrupo.value;
+      if (!preservar) categoria.value = '';
+    }
+
+    function atualizarSubgrupos(preservar) {
+      atualizarOpcoes(subgrupo, 'grupo', grupo.value);
+      subgrupo.disabled = !grupo.value;
+      if (!preservar) subgrupo.value = '';
+      atualizarCategorias(preservar);
+    }
+
+    grupo.addEventListener('change', function () { atualizarSubgrupos(false); });
+    subgrupo.addEventListener('change', function () { atualizarCategorias(false); });
+    atualizarSubgrupos(true);
+  });
+})();
+</script>
