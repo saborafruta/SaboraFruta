@@ -119,6 +119,7 @@ class ContaPagar(TimestampedModel):
     documento_id = models.BigIntegerField(null=True, blank=True)
     documento_numero = models.CharField(max_length=20, blank=True)
     nota_fiscal_fornecedor = models.CharField(max_length=20, blank=True)
+    chave_acesso_nfe = models.CharField(max_length=44, blank=True, db_index=True)
     parcela = models.PositiveSmallIntegerField(default=1)
     total_parcelas = models.PositiveSmallIntegerField(default=1)
     grupo_recorrencia = models.UUIDField(null=True, blank=True, db_index=True)

@@ -80,11 +80,12 @@ class ContaPagarForm(forms.Form):
         help_text='Número da NF, boleto ou outro documento de referência.',
     )
     nota_fiscal_fornecedor = forms.CharField(
-        max_length=20,
+        max_length=44,
         required=False,
-        label='NF do fornecedor',
-        help_text='Número da nota fiscal emitida pelo fornecedor.',
+        label='NF ou chave de acesso',
+        help_text='Digite o número da NF ou leia a chave de 44 dígitos.',
     )
+    chave_acesso_nfe = forms.CharField(required=False, widget=forms.HiddenInput)
     parcela = forms.IntegerField(
         min_value=1,
         initial=1,
@@ -235,6 +236,36 @@ class ContaPagarForm(forms.Form):
 
     def clean(self):
         cleaned = super().clean()
+        codigo_nota = ''.join(
+            caractere
+            for caractere in (cleaned.get('nota_fiscal_fornecedor') or '')
+            if caractere.isdigit()
+        )
+        chave_informada = ''.join(
+            caractere
+            for caractere in (cleaned.get('chave_acesso_nfe') or '')
+            if caractere.isdigit()
+        )
+        if len(codigo_nota) == 44:
+            chave_informada = codigo_nota
+        if chave_informada:
+            if len(chave_informada) != 44:
+                self.add_error('nota_fiscal_fornecedor', 'A chave da NF-e deve ter 44 dígitos.')
+            else:
+                cleaned['chave_acesso_nfe'] = chave_informada
+                cleaned['nota_fiscal_fornecedor'] = (
+                    chave_informada[25:34].lstrip('0') or chave_informada[25:34]
+                )
+        elif len(codigo_nota) > 20:
+            self.add_error(
+                'nota_fiscal_fornecedor',
+                'Informe o número da NF ou a chave completa com 44 dígitos.',
+            )
+        else:
+            cleaned['chave_acesso_nfe'] = ''
+            cleaned['nota_fiscal_fornecedor'] = (
+                cleaned.get('nota_fiscal_fornecedor') or ''
+            ).strip()
         parcela = cleaned.get('parcela')
         total = cleaned.get('total_parcelas')
         tipo = cleaned.get('tipo_lancamento')

@@ -8,7 +8,7 @@ from pathlib import Path
 from django.contrib import messages
 from django.core.paginator import Paginator
 from django.db.models import Count, Q, Sum
-from django.http import FileResponse, Http404
+from django.http import FileResponse, Http404, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.utils import timezone
@@ -286,6 +286,7 @@ class ContaPagarCreateView(PermissaoRequiredMixin, View):
                 data_emissao=data_emissao_automatica,
                 documento_numero=d.get('documento_numero', ''),
                 nota_fiscal_fornecedor=d.get('nota_fiscal_fornecedor', ''),
+                chave_acesso_nfe=d.get('chave_acesso_nfe', ''),
                 forma_pagamento_prevista=d.get('forma_pagamento_prevista'),
                 plano_contas=d.get('plano_contas'),
                 observacao=d.get('observacao', ''),
@@ -328,6 +329,59 @@ class ContaPagarCreateView(PermissaoRequiredMixin, View):
             return render(request, 'financeiro/pagar/form.html', self._context(request, form))
 
         return redirect(reverse('financeiro:pagar_list'))
+
+
+class ContaPagarNotaFiscalLookupView(PermissaoRequiredMixin, View):
+    permissao_modulo = 'financeiro'
+    permissao_acao = 'criar'
+
+    def get(self, request):
+        from apps.compras.models import EntradaNF
+
+        chave = ''.join(
+            caractere for caractere in request.GET.get('chave', '') if caractere.isdigit()
+        )
+        if len(chave) != 44:
+            return JsonResponse(
+                {'ok': False, 'erro': 'A chave da NF-e deve ter 44 dígitos.'},
+                status=400,
+            )
+
+        numero = chave[25:34].lstrip('0') or chave[25:34]
+        serie = chave[22:25].lstrip('0') or '1'
+        entrada = (
+            EntradaNF.objects.for_filial(_filial(request))
+            .filter(chave_acesso_nf=chave)
+            .select_related('fornecedor')
+            .first()
+        )
+        if not entrada:
+            return JsonResponse({
+                'ok': True,
+                'encontrada': False,
+                'chave': chave,
+                'numero_nf': numero,
+                'serie_nf': serie,
+            })
+
+        fornecedor = entrada.fornecedor
+        return JsonResponse({
+            'ok': True,
+            'encontrada': True,
+            'chave': chave,
+            'numero_nf': entrada.numero_nf or numero,
+            'serie_nf': entrada.serie_nf or serie,
+            'valor_total': str(entrada.valor_total or ''),
+            'fornecedor': {
+                'id': fornecedor.pk,
+                'label': str(fornecedor),
+                'search': ' '.join(filter(None, [
+                    fornecedor.razao_social,
+                    fornecedor.nome_fantasia,
+                    fornecedor.cpf_cnpj,
+                ])),
+            },
+        })
 
 
 class ContaPagarDetailView(PermissaoRequiredMixin, View):

@@ -6,7 +6,7 @@
 
 {% block content %}
 <div class="mx-auto max-w-5xl space-y-4"
-     x-data="{ loading:false, tipoLancamento:'{{ form.tipo_lancamento.value|default:"fornecedor" }}', recorrente:{{ form.recorrente.value|yesno:"true,false" }}, quitarAgora:{{ form.quitar_ao_lancar.value|yesno:"true,false" }}, fornecedorModal:false, fornecedorSalvando:false, fornecedorErro:'', cepConsultando:false }">
+     x-data="{ loading:false, tipoLancamento:'{{ form.tipo_lancamento.value|default:"fornecedor" }}', recorrente:{{ form.recorrente.value|yesno:"true,false" }}, quitarAgora:{{ form.quitar_ao_lancar.value|yesno:"true,false" }}, fornecedorModal:false, fornecedorSalvando:false, fornecedorErro:'', fornecedorTipo:'J', cepConsultando:false, notaFiscalFornecedor:'{{ form.nota_fiscal_fornecedor.value|default:""|escapejs }}', chaveAcessoNfe:'{{ form.chave_acesso_nfe.value|default:""|escapejs }}', notaFiscalStatus:'', scannerNfeAberto:false, scannerNfeErro:'', scannerNfe:null, scannerNfeScript:null, ultimoCodigoNfe:'' }">
   <div class="flex flex-wrap items-end justify-between gap-3">
     <div>
       <a href="{% url 'financeiro:pagar_list' %}" class="text-sm text-blue-500">Contas a Pagar /</a>
@@ -18,6 +18,7 @@
   <form method="post" enctype="multipart/form-data" class="card overflow-visible"
         @submit="loading=true" novalidate>{% csrf_token %}
     <input type="hidden" name="tipo_lancamento" :value="tipoLancamento">
+    <input type="hidden" name="chave_acesso_nfe" :value="chaveAcessoNfe">
     {{ form.parcela }}{{ form.total_parcelas }}
     {% if form.non_field_errors %}<div class="m-5 rounded-md border border-red-300 bg-red-50 p-3 text-sm text-red-700">{{ form.non_field_errors }}</div>{% endif %}
 
@@ -61,7 +62,24 @@
         </div>
 
         <div><label class="mb-1 block text-sm font-medium">{{ form.documento_numero.label }}</label>{{ form.documento_numero|add_class:"form-input"|attr:"placeholder:Boleto, recibo ou referência" }}{{ form.documento_numero.errors }}</div>
-        <div x-show="tipoLancamento==='fornecedor'" x-cloak><label class="mb-1 block text-sm font-medium">{{ form.nota_fiscal_fornecedor.label }}</label>{{ form.nota_fiscal_fornecedor|add_class:"form-input"|attr:"placeholder:Número da nota fiscal" }}{{ form.nota_fiscal_fornecedor.errors }}</div>
+        <div x-show="tipoLancamento==='fornecedor'" x-cloak>
+          <label class="mb-1 block text-sm font-medium">{{ form.nota_fiscal_fornecedor.label }}</label>
+          <div class="flex gap-2">
+            <input type="text" name="nota_fiscal_fornecedor" class="form-input min-w-0 flex-1 font-mono"
+                   maxlength="80" inputmode="numeric" autocomplete="off"
+                   placeholder="Número da NF ou chave de 44 dígitos"
+                   x-model="notaFiscalFornecedor"
+                   @keydown.enter.prevent="processarCodigoNfe($event.target.value, $data)"
+                   @paste="setTimeout(()=>processarCodigoNfe($event.target.value, $data), 0)">
+            <button type="button" @click="abrirScannerNfe($data)"
+                    class="btn-secondary shrink-0 px-3" title="Ler código da NF-e com a câmera"
+                    aria-label="Ler código da NF-e com a câmera">Câmera</button>
+          </div>
+          <p class="mt-1 text-xs opacity-60">Aceita leitor físico, chave copiada ou câmera do celular.</p>
+          <p x-show="notaFiscalStatus" x-text="notaFiscalStatus"
+             class="mt-1 text-xs font-medium text-emerald-600"></p>
+          {% if form.nota_fiscal_fornecedor.errors %}<p class="mt-1 text-xs text-red-500">{{ form.nota_fiscal_fornecedor.errors|join:", " }}</p>{% endif %}
+        </div>
       </div>
     </section>
 
@@ -205,7 +223,8 @@
         <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <div>
             <label class="mb-1 block text-sm font-medium">Tipo *</label>
-            <select name="tipo_pessoa" class="form-input" required>
+            <select name="tipo_pessoa" class="form-input" x-model="fornecedorTipo"
+                    @change="remascararCpfCnpjFornecedor($refs.documentoFornecedor, fornecedorTipo)" required>
               <option value="J">Pessoa jurídica</option>
               <option value="F">Pessoa física</option>
               <option value="E">Estrangeiro</option>
@@ -213,7 +232,10 @@
           </div>
           <div>
             <label class="mb-1 block text-sm font-medium">CPF/CNPJ</label>
-            <input name="cpf_cnpj" class="form-input" inputmode="numeric" maxlength="18" placeholder="Somente números ou formatado">
+            <input name="cpf_cnpj" x-ref="documentoFornecedor" class="form-input" inputmode="numeric"
+                   maxlength="18" placeholder="Digite ou cole com ou sem máscara"
+                   @input="mascararCpfCnpjFornecedor($event.target, fornecedorTipo)"
+                   @paste="colarCpfCnpjFornecedor($event, $data)">
           </div>
           <div class="sm:col-span-2">
             <label class="mb-1 block text-sm font-medium">Razão social / Nome *</label>
@@ -281,6 +303,28 @@
       </form>
     </div>
   </div>
+
+  <div x-show="scannerNfeAberto" x-cloak
+       class="fixed inset-0 z-[110] flex items-end justify-center bg-black/75 p-0 sm:items-center sm:p-5"
+       role="dialog" aria-modal="true" aria-labelledby="titulo-scanner-nfe">
+    <button type="button" class="absolute inset-0 h-full w-full cursor-default"
+            @click="fecharScannerNfe($data)" aria-label="Fechar leitor"></button>
+    <div class="relative z-10 w-full max-w-lg rounded-t-md border p-4 shadow-2xl sm:rounded-md sm:p-5"
+         :style="temaClaro ? 'background:#fff;border-color:#d1d5db;color:#111827' : 'background:#202024;border-color:#3f3f46;color:#f4f4f5'">
+      <div class="mb-4 flex items-center justify-between gap-3">
+        <div>
+          <h3 id="titulo-scanner-nfe" class="font-semibold">Ler código da NF-e</h3>
+          <p class="text-xs opacity-65">Aponte para o código de barras ou QR Code da nota.</p>
+        </div>
+        <button type="button" @click="fecharScannerNfe($data)"
+                class="grid h-9 w-9 place-items-center rounded text-2xl opacity-70 hover:bg-black/10"
+                aria-label="Fechar">&times;</button>
+      </div>
+      <div id="finance-nfe-camera-reader" class="min-h-64 overflow-hidden rounded-md bg-black"></div>
+      <p class="mt-3 text-xs opacity-65">Mantenha o código inteiro enquadrado e com boa iluminação.</p>
+      <p x-show="scannerNfeErro" x-text="scannerNfeErro" class="mt-2 text-sm text-red-500"></p>
+    </div>
+  </div>
 </div>
 {% endblock %}
 
@@ -329,12 +373,145 @@ async function cadastrarFornecedorRapido(state, form) {
       detail:{field:'fornecedor',value:data.id,label:data.label,search:data.search},
     }));
     form.reset();
+    state.fornecedorTipo='J';
     state.fornecedorModal=false;
   } catch(error) {
     state.fornecedorErro=error.message||'Não foi possível cadastrar o fornecedor.';
   } finally {
     state.fornecedorSalvando=false;
   }
+}
+
+function formatarCpfCnpjFornecedor(digitos, tipo) {
+  if(tipo==='F'){
+    return digitos
+      .replace(/(\d{3})(\d)/,'$1.$2')
+      .replace(/(\d{3})(\d)/,'$1.$2')
+      .replace(/(\d{3})(\d{1,2})$/,'$1-$2');
+  }
+  return digitos
+    .replace(/(\d{2})(\d)/,'$1.$2')
+    .replace(/(\d{3})(\d)/,'$1.$2')
+    .replace(/(\d{3})(\d)/,'$1/$2')
+    .replace(/(\d{4})(\d{1,2})$/,'$1-$2');
+}
+
+function mascararCpfCnpjFornecedor(input, tipo) {
+  const limite=tipo==='F'?11:14;
+  const digitos=(input.value||'').replace(/\D/g,'');
+  input.value=digitos.length>limite?digitos:formatarCpfCnpjFornecedor(digitos,tipo);
+}
+
+function remascararCpfCnpjFornecedor(input, tipo) {
+  if(!input)return;
+  mascararCpfCnpjFornecedor(input,tipo);
+}
+
+function colarCpfCnpjFornecedor(event, state) {
+  event.preventDefault();
+  const texto=event.clipboardData?.getData('text')||'';
+  const digitos=texto.replace(/\D/g,'');
+  if(digitos.length===11)state.fornecedorTipo='F';
+  else if(digitos.length===14)state.fornecedorTipo='J';
+  event.target.value=(digitos.length===11||digitos.length===14)
+    ?formatarCpfCnpjFornecedor(digitos,state.fornecedorTipo)
+    :digitos.slice(0,18);
+}
+
+function extrairChaveNfe(valor) {
+  const texto=String(valor||'');
+  const sequencia=texto.match(/\d{44}/);
+  if(sequencia)return sequencia[0];
+  const digitos=texto.replace(/\D/g,'');
+  return digitos.length===44?digitos:'';
+}
+
+async function processarCodigoNfe(valor, state) {
+  const chave=extrairChaveNfe(valor);
+  if(!chave){
+    if(String(valor||'').replace(/\D/g,'').length>20){
+      state.notaFiscalStatus='Código não reconhecido. Use o número da NF ou a chave com 44 dígitos.';
+    }
+    return;
+  }
+  if(chave===state.ultimoCodigoNfe)return;
+  state.ultimoCodigoNfe=chave;
+  state.chaveAcessoNfe=chave;
+  state.notaFiscalFornecedor=chave.slice(25,34).replace(/^0+/,'')||chave.slice(25,34);
+  state.notaFiscalStatus='Chave lida. Buscando dados da nota...';
+  try {
+    const response=await fetch('{% url "financeiro:pagar_nfe_consultar" %}?chave='+encodeURIComponent(chave), {
+      headers:{'X-Requested-With':'XMLHttpRequest'},
+    });
+    const data=await response.json();
+    if(!response.ok)throw new Error(data.erro||'Não foi possível consultar a nota.');
+    state.notaFiscalFornecedor=data.numero_nf||state.notaFiscalFornecedor;
+    if(data.encontrada){
+      window.dispatchEvent(new CustomEvent('finance-select-created', {
+        detail:{field:'fornecedor',value:data.fornecedor.id,label:data.fornecedor.label,search:data.fornecedor.search},
+      }));
+      const valor=document.querySelector('[name="valor_original"]');
+      if(valor&&data.valor_total&&!valor.value){
+        valor.value=String(data.valor_total);
+        valor.dispatchEvent(new Event('input',{bubbles:true}));
+      }
+      const documento=document.querySelector('[name="documento_numero"]');
+      if(documento&&!documento.value)documento.value='NF '+data.numero_nf+'/'+data.serie_nf;
+      state.notaFiscalStatus='Nota encontrada: fornecedor e dados disponíveis foram preenchidos.';
+    }else{
+      state.notaFiscalStatus='Chave lida e número da NF identificado. A nota ainda não está cadastrada em Compras.';
+    }
+  } catch(error) {
+    state.notaFiscalStatus=error.message||'Não foi possível consultar a nota.';
+  } finally {
+    setTimeout(()=>{state.ultimoCodigoNfe='';},1200);
+  }
+}
+
+function carregarScannerNfe(state) {
+  if(window.Html5Qrcode)return Promise.resolve();
+  if(state.scannerNfeScript)return state.scannerNfeScript;
+  state.scannerNfeScript=new Promise((resolve,reject)=>{
+    const script=document.createElement('script');
+    script.src='https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js';
+    script.onload=resolve;
+    script.onerror=()=>reject(new Error('Falha ao carregar o leitor da câmera.'));
+    document.head.appendChild(script);
+  });
+  return state.scannerNfeScript;
+}
+
+async function abrirScannerNfe(state) {
+  state.scannerNfeErro='';
+  state.scannerNfeAberto=true;
+  try {
+    await carregarScannerNfe(state);
+    await new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)));
+    state.scannerNfe=new window.Html5Qrcode('finance-nfe-camera-reader');
+    await state.scannerNfe.start(
+      {facingMode:'environment'},
+      {fps:10,qrbox:{width:Math.min(300,window.innerWidth-64),height:140},aspectRatio:1.7778},
+      async decodedText=>{
+        await fecharScannerNfe(state);
+        await processarCodigoNfe(decodedText,state);
+      },
+      ()=>{}
+    );
+  } catch(error) {
+    state.scannerNfeErro=location.protocol!=='https:'
+      ?'A câmera exige acesso por HTTPS.'
+      :'Não foi possível abrir a câmera. Autorize o acesso e tente novamente.';
+  }
+}
+
+async function fecharScannerNfe(state) {
+  const scanner=state.scannerNfe;
+  state.scannerNfe=null;
+  if(scanner){
+    try{if(scanner.isScanning)await scanner.stop();}catch(_){}
+    try{await scanner.clear();}catch(_){}
+  }
+  state.scannerNfeAberto=false;
 }
 
 async function consultarCepFornecedor(state, form) {

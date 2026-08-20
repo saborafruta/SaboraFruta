@@ -66,6 +66,16 @@
       </div>
       {% endif %}
 
+      {% if conta.chave_acesso_nfe %}
+      <div class="sm:col-span-2">
+        <span class="block text-xs font-medium mb-0.5"
+              :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Chave de acesso da NF-e</span>
+        <span class="block break-all font-mono text-xs" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
+          {{ conta.chave_acesso_nfe }}
+        </span>
+      </div>
+      {% endif %}
+
       <div>
         <span class="block text-xs font-medium mb-0.5"
               :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">{% if conta.grupo_recorrencia %}Recorrência{% else %}Parcela{% endif %}</span>

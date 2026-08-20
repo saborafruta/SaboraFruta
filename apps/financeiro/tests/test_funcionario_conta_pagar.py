@@ -11,11 +11,13 @@ from django.core.files.uploadedfile import SimpleUploadedFile
 from django.core.exceptions import ValidationError
 from django.http import Http404
 from django.test import RequestFactory, TestCase
+from django.utils import timezone
 
-from apps.cadastros.forms import FuncionarioForm
+from apps.cadastros.forms import FornecedorRapidoForm, FuncionarioForm
 from apps.cadastros.models import Fornecedor, Funcionario
 from apps.cadastros.views.fornecedor import FornecedorAjaxCreateView
-from apps.core.models import Empresa, Filial
+from apps.compras.models import EntradaNF
+from apps.core.models import Empresa, Filial, PerfilAcesso, Usuario
 from apps.financeiro.forms.pagar import ContaPagarForm, validar_comprovante
 from apps.financeiro.models import (
     ContaPagar,
@@ -25,7 +27,10 @@ from apps.financeiro.models import (
     PlanoContas,
 )
 from apps.financeiro.services.pagar_service import ContaPagarService
-from apps.financeiro.views.pagar import ComprovantePagamentoView
+from apps.financeiro.views.pagar import (
+    ComprovantePagamentoView,
+    ContaPagarNotaFiscalLookupView,
+)
 
 
 class FuncionarioContaPagarTests(TestCase):
@@ -107,7 +112,7 @@ class FuncionarioContaPagarTests(TestCase):
                 "tipo_pessoa": "J",
                 "razao_social": "Fornecedor Modal Ltda",
                 "nome_fantasia": "Fornecedor Modal",
-                "cpf_cnpj": "12.345.678/0001-90",
+                "cpf_cnpj": "11.222.333/0001-81",
                 "cep": "59022540",
                 "cidade": "Natal",
                 "uf": "RN",
@@ -127,7 +132,7 @@ class FuncionarioContaPagarTests(TestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertEqual(payload["label"], "Fornecedor Modal")
-        self.assertEqual(fornecedor.cpf_cnpj, "12345678000190")
+        self.assertEqual(fornecedor.cpf_cnpj, "11222333000181")
         self.assertEqual(fornecedor.codigo_municipio_ibge, "2408102")
         self.assertTrue(
             Fornecedor.objects.for_filial(self.filial).filter(pk=fornecedor.pk).exists()
@@ -138,7 +143,7 @@ class FuncionarioContaPagarTests(TestCase):
             filial=self.filial,
             tipo_pessoa="J",
             razao_social="Fornecedor Existente",
-            cpf_cnpj="12345678000190",
+            cpf_cnpj="11222333000181",
         )
         from apps.cadastros.services.replicacao_service import ReplicacaoCadastrosService
         ReplicacaoCadastrosService.sincronizar_fornecedor(existente)
@@ -147,7 +152,7 @@ class FuncionarioContaPagarTests(TestCase):
             {
                 "tipo_pessoa": "J",
                 "razao_social": "Fornecedor Repetido",
-                "cpf_cnpj": "12.345.678/0001-90",
+                "cpf_cnpj": "11.222.333/0001-81",
             },
             HTTP_X_REQUESTED_WITH="XMLHttpRequest",
         )
@@ -162,6 +167,113 @@ class FuncionarioContaPagarTests(TestCase):
 
         self.assertEqual(response.status_code, 400)
         self.assertIn("cpf_cnpj", payload["errors"])
+
+    def test_cadastro_rapido_aceita_cpf_com_mascara_e_valida_digitos(self):
+        valido = FornecedorRapidoForm(
+            {
+                "tipo_pessoa": "F",
+                "razao_social": "Pessoa Física",
+                "cpf_cnpj": "529.982.247-25",
+            },
+            filial=self.filial,
+        )
+        invalido = FornecedorRapidoForm(
+            {
+                "tipo_pessoa": "F",
+                "razao_social": "Pessoa Inválida",
+                "cpf_cnpj": "529.982.247-24",
+            },
+            filial=self.filial,
+        )
+
+        self.assertTrue(valido.is_valid(), valido.errors)
+        self.assertEqual(valido.cleaned_data["cpf_cnpj"], "52998224725")
+        self.assertFalse(invalido.is_valid())
+        self.assertIn("CPF inválido", invalido.errors["cpf_cnpj"][0])
+
+    def test_chave_nfe_preenche_numero_e_fica_guardada_no_formulario(self):
+        chave = "24260811222333000181550010000001231000001234"
+        form = ContaPagarForm(
+            self.dados_formulario(
+                nota_fiscal_fornecedor=chave,
+                chave_acesso_nfe="",
+            ),
+            filial=self.filial,
+        )
+
+        self.assertTrue(form.is_valid(), form.errors)
+        self.assertEqual(form.cleaned_data["chave_acesso_nfe"], chave)
+        self.assertEqual(form.cleaned_data["nota_fiscal_fornecedor"], "123")
+
+    def test_consulta_chave_nao_cadastrada_retorna_numero_da_nota(self):
+        chave = "24260811222333000181550010000001231000001234"
+        request = RequestFactory().get(
+            "/financeiro/pagar/nfe/consultar/",
+            {"chave": chave},
+            HTTP_X_REQUESTED_WITH="XMLHttpRequest",
+        )
+        request.user = SimpleNamespace(
+            is_authenticated=True,
+            tem_permissao=lambda modulo, acao: True,
+        )
+        request.filial_ativa = self.filial
+
+        response = ContaPagarNotaFiscalLookupView.as_view()(request)
+        payload = json.loads(response.content)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertFalse(payload["encontrada"])
+        self.assertEqual(payload["numero_nf"], "123")
+
+    def test_consulta_chave_cadastrada_retorna_fornecedor_e_valor(self):
+        chave = "24260811222333000181550010000001231000001234"
+        fornecedor = Fornecedor.objects.create(
+            filial=self.filial,
+            tipo_pessoa="J",
+            razao_social="Fornecedor da Nota Ltda",
+            nome_fantasia="Fornecedor da Nota",
+            cpf_cnpj="11222333000181",
+        )
+        perfil = PerfilAcesso.objects.create(
+            empresa=self.empresa,
+            nome="Operador de Compras",
+        )
+        usuario = Usuario.objects.create_user(
+            email="nota@example.com",
+            nome="Operador da Nota",
+            password="teste",
+            empresa=self.empresa,
+            perfil=perfil,
+        )
+        EntradaNF.objects.create(
+            filial=self.filial,
+            fornecedor=fornecedor,
+            numero_nf="123",
+            serie_nf="1",
+            chave_acesso_nf=chave,
+            data_emissao_nf=date(2026, 8, 20),
+            data_entrada=timezone.now(),
+            valor_total=Decimal("987.65"),
+            usuario=usuario,
+        )
+        request = RequestFactory().get(
+            "/financeiro/pagar/nfe/consultar/",
+            {"chave": chave},
+            HTTP_X_REQUESTED_WITH="XMLHttpRequest",
+        )
+        request.user = SimpleNamespace(
+            is_authenticated=True,
+            tem_permissao=lambda modulo, acao: True,
+        )
+        request.filial_ativa = self.filial
+
+        response = ContaPagarNotaFiscalLookupView.as_view()(request)
+        payload = json.loads(response.content)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(payload["encontrada"])
+        self.assertEqual(payload["fornecedor"]["id"], fornecedor.pk)
+        self.assertEqual(payload["valor_total"], "987.65")
 
     def test_servico_grava_funcionario_categoria_e_conta_contabil(self):
         conta = ContaPagarService.criar(
