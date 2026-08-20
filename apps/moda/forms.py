@@ -339,38 +339,25 @@ class ItemPedidoProducaoForm(_FilialFormMixin, forms.ModelForm):
         return opcoes
 
     def clean_produto(self):
-        """Resolve a escolha num `ProdutoModa` de verdade."""
+        """A escolha vira um `ProdutoModa` de verdade — importando, se preciso."""
         from apps.core.services.exceptions import DomainError
-        from apps.moda.services.importar_produtos import ImportarProdutosService
-        from apps.produtos.models import Produto
-        from .models import ProdutoModa
+        from apps.moda.services.importar_produtos import BuscaProdutos
 
-        valor = (self.cleaned_data.get('produto') or '').strip()
-        if not valor:
-            return None
+        # A resolução mora no serviço, e não aqui: a ficha técnica usa o
+        # MESMO campo, e duas cópias divergiriam -- uma delas passando a
+        # aceitar produto de outra filial, ou a importar duas vezes.
+        bruto = str(self.cleaned_data.get('produto') or '').strip()
+        try:
+            produto = BuscaProdutos.resolver(self.filial, bruto)
+        except DomainError as erro:
+            raise forms.ValidationError(str(erro))
 
-        origem, _, chave = valor.partition(':')
-        if not chave.isdigit():
-            raise forms.ValidationError('Produto inválido.')
+        # Guardado para a tela avisar que o produto foi TRAZIDO do
+        # cadastro do ERP -- senão ninguém entende por que ele passou a
+        # aparecer no catálogo da confecção.
+        self.produto_importado = produto if bruto.startswith('erp:') else None
+        return produto
 
-        if origem == 'moda':
-            produto = ProdutoModa.objects.for_filial(self.filial).filter(pk=chave).first()
-            if produto is None:
-                raise forms.ValidationError('Este produto não é desta filial.')
-            return produto
-
-        if origem == 'erp':
-            do_erp = Produto.objects.for_filial(self.filial).filter(pk=chave).first()
-            if do_erp is None:
-                raise forms.ValidationError('Este produto não é desta filial.')
-            try:
-                criados = ImportarProdutosService.importar(self.filial, [do_erp.pk])
-            except DomainError as erro:
-                raise forms.ValidationError(str(erro))
-            self.produto_importado = criados[0]
-            return criados[0]
-
-        raise forms.ValidationError('Produto inválido.')
     def clean(self):
         dados = super().clean()
         # Sem produto de catálogo nem descrição, o item apareceria na ficha
@@ -709,22 +696,61 @@ class FichaTecnicaForm(forms.ModelForm):
             produtos = produtos.filter(
                 models.Q(ficha__isnull=True) | models.Q(ficha=self.instance)
             )
-            self.fields['produto'].disabled = True
         else:
             produtos = produtos.filter(ficha__isnull=True)
-        self.fields['produto'].queryset = produtos
-        self.fields['produto'].empty_label = 'Escolha o produto'
 
-        # A lista vai inteira para a tela, que desenha o `<select>` à mão
-        # com o que cada produto traz junto (modelo, tecido, grade). O
-        # texto diz que a ficha "lê do produto" -- sem MOSTRAR o que ela
-        # lê, a frase não ajuda em nada.
+        # A lista ainda vai para a tela: é ela que conta quantos produtos
+        # existem e quantos já têm ficha, e é o que explica a tela vazia.
         self.produtos_disponiveis = list(produtos)
+
+        # O CAMPO É CAIXA DE BUSCA, e enxerga os DOIS catálogos: o da
+        # confecção e Cadastros › Produtos. Um select só com os produtos
+        # de moda fica VAZIO numa base recém-instalada -- a tela pedia um
+        # produto que não existia em lugar nenhum.
+        if not self.instance.pk:
+            self.fields['produto'] = forms.CharField(
+                # `required=False` de propósito: obrigatório aqui daria o
+                # "Este campo é obrigatório" genérico do Django, e quem lê
+                # não sabe qual campo é (ele é escondido). Quem cobra é o
+                # `clean_produto`, que diz "escolha o produto desta ficha".
+                required=False, label='Produto',
+                # CharField, e não ChoiceField: as opções chegam por busca,
+                # e um `choices` vazio recusaria a escolha ANTES de o
+                # `clean_produto` ver o valor -- com a mensagem inútil
+                # "faça uma escolha válida". Quem valida aqui é o clean.
+                widget=forms.HiddenInput(),
+            )
 
         for campo in self.fields.values():
             css = campo.widget.attrs.get('class', '')
             if 'form-input' not in css:
                 campo.widget.attrs['class'] = (css + ' form-input').strip()
+
+    def clean_produto(self):
+        """A escolha da caixa de busca vira um `ProdutoModa` de verdade."""
+        from apps.core.services.exceptions import DomainError
+        from apps.moda.services.importar_produtos import BuscaProdutos
+
+        if self.instance.pk:
+            # Na edição o produto não muda: a ficha É dele.
+            return self.instance.produto
+
+        bruto = str(self.data.get('produto') or '').strip()
+        if not bruto:
+            raise forms.ValidationError('Escolha o produto desta ficha.')
+        try:
+            produto = BuscaProdutos.resolver(self.filial, bruto)
+        except DomainError as erro:
+            raise forms.ValidationError(str(erro))
+
+        # Ficha é OneToOne. O produto pode ter ganhado ficha entre a
+        # abertura da tela e a gravação -- e o erro de integridade cru
+        # não diz nada a quem está preenchendo.
+        if getattr(produto, 'ficha', None) is not None:
+            raise forms.ValidationError(
+                f'“{produto.nome}” já tem ficha técnica. Abra a ficha dele para editar.'
+            )
+        return produto
 
 
 class MaterialFichaForm(forms.ModelForm):

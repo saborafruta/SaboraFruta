@@ -179,10 +179,10 @@ class FichaFormView(ModaBaseView):
         # QUÊ. Um select vazio sem explicação é o que trava a pessoa: ela
         # não sabe se falta cadastrar produto ou se todos já têm ficha.
         total_produtos = ProdutoModa.objects.filter(filial=filial).count()
-        do_erp = (
-            len(ImportarProdutosService.disponiveis(filial))
-            if not disponiveis else 0
-        )
+        # SEMPRE contado, e não só quando a confecção está vazia: o campo
+        # de produto lê os dois catálogos agora, então é o total dos dois
+        # que decide se há o que escolher.
+        do_erp = len(ImportarProdutosService.disponiveis(filial))
 
         return render(request, 'moda/ficha_form.html', {
             'title': 'Editar ficha técnica' if ficha else 'Nova ficha técnica',

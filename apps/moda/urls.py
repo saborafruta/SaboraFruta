@@ -28,6 +28,9 @@ app_name = 'moda'
 # Telas já implementadas — declaradas ANTES do catch-all, senão o
 # placeholder as engoliria. O endereço é o mesmo que o menu já aponta.
 ROTAS_PRONTAS: list = [
+    # Busca de produto por digitacao (ficha e item do pedido usam a mesma).
+    path('produtos/buscar/', views.ProdutoBuscaView.as_view(), name='produto-buscar'),
+
     # A tela do grupo Comercial e' o QUADRO de pedidos, nao mais o menu de
     # cartoes. Declarada aqui, antes do catch-all `<slug:grupo_slug>/`, que
     # senao devolveria a lista de telas do grupo neste mesmo endereco.

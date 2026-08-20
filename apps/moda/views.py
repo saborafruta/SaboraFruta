@@ -12,7 +12,7 @@ Quando uma tela fica pronta, o roteamento dela sai do catch-all em
 para o mesmo endereço.
 """
 from django.contrib import messages
-from django.http import Http404
+from django.http import Http404, JsonResponse
 from django.shortcuts import redirect, render
 from django.urls import NoReverseMatch, Resolver404, resolve, reverse
 from django.views import View
@@ -96,6 +96,31 @@ def itens_com_tela(grupo) -> set[str]:
         if getattr(achado.func, 'view_class', None) is not ItemView:
             prontos.add(item.slug)
     return prontos
+
+
+class ProdutoBuscaView(ModaBaseView):
+    """
+    Busca de produto por digitação, em JSON — os dois catálogos.
+
+    Fica em `views.py` de propósito: como o hub e os grupos, este arquivo
+    não declara área, então quem entra no vertical pode usar. A ficha é do
+    PCP e o item do pedido é do comercial, e os dois precisam do MESMO
+    campo -- prendê-lo a uma área trancaria a outra para fora.
+
+    NO SERVIDOR, e não filtrando uma lista embutida na página: o catálogo do
+    ERP passa de mil itens, e mandá-lo inteiro em toda abertura de
+    formulário pesaria em todo mundo para economizar uma consulta rápida.
+    """
+
+    def get(self, request):
+        from .services.importar_produtos import BuscaProdutos
+
+        produtos = BuscaProdutos.procurar(
+            request.filial_ativa,
+            termo=request.GET.get('q') or '',
+            sem_ficha=request.GET.get('sem_ficha') == '1',
+        )
+        return JsonResponse({'produtos': produtos})
 
 
 class HubView(ModaBaseView):

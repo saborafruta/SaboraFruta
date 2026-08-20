@@ -1,0 +1,190 @@
+{% comment %}
+  Campo de produto: caixa de busca, e os DOIS catálogos.
+
+  UM SELECT COM O CATÁLOGO INTEIRO é rolagem, não escolha — e pior: só
+  listava os produtos da confecção, que numa base recém-instalada estão
+  vazios. Aqui a busca é no servidor e traz também Cadastros › Produtos.
+
+  O QUE VAI PARA O SERVIDOR é `moda:<id>` ou `erp:<id>`, num campo
+  escondido. Escolher um do ERP TRAZ o produto para a confecção na hora, na
+  gravação — não é catálogo duplicado, é o mesmo produto passando a ser
+  conhecido pela produção.
+
+  Espera `nome_campo` (o `name` do input) e, opcional, `sem_ficha` e
+  `escolhido_json`.
+{% endcomment %}
+<div x-data="comboProduto({
+       url: '{% url 'moda:produto-buscar' %}',
+       semFicha: {% if sem_ficha %}true{% else %}false{% endif %},
+       escolhido: {{ escolhido_json|default:'null' }}
+     })"
+     @click.outside="aberto = false"
+     @keydown.escape="aberto = false"
+     class="relative">
+
+  <input type="hidden" name="{{ nome_campo }}" :value="escolhido ? escolhido.valor : ''">
+
+  <div class="relative">
+    <input type="text" class="form-input w-full pr-9" autocomplete="off"
+           x-model="termo"
+           @input.debounce.250ms="buscar()"
+           @focus="aberto = true; if (!resultados.length) buscar()"
+           @keydown.arrow-down.prevent="mover(1)"
+           @keydown.arrow-up.prevent="mover(-1)"
+           @keydown.enter.prevent="escolherDestacado()"
+           :style="escolhido ? 'border-color:#059669;' : ''"
+           placeholder="Digite o nome ou o código do produto">
+    <span class="absolute right-3 top-1/2 -translate-y-1/2 text-xs pointer-events-none"
+          :style="temaClaro ? 'color:#94a3b8;' : 'color:#71717a;'">
+      <span x-show="carregando">…</span>
+      <span x-show="!carregando && !escolhido">🔍</span>
+      <span x-show="!carregando && escolhido" style="color:#059669;">✓</span>
+    </span>
+  </div>
+
+  <template x-if="escolhido">
+    <p class="text-xs mt-1.5 flex flex-wrap items-center gap-2">
+      <span class="font-medium" style="color:#059669;" x-text="escolhido.nome"></span>
+      <template x-if="escolhido.codigo">
+        <span class="font-mono" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'"
+              x-text="escolhido.codigo"></span>
+      </template>
+      {% comment %}
+        Dizer DE ONDE ele veio importa: escolher um do ERP acrescenta o
+        produto ao catálogo da confecção na hora de salvar, e quem não for
+        avisado vai estranhar vê-lo aparecer na tela de produtos.
+      {% endcomment %}
+      <template x-if="escolhido.origem === 'erp'">
+        <span class="text-[10px] font-bold px-1.5 py-0.5 rounded-full"
+              style="background:rgba(37,99,235,.14); color:#2563eb;">
+          vem do cadastro de produtos
+        </span>
+      </template>
+      <button type="button" class="underline" style="color:#dc2626;" @click="limpar()">
+        trocar
+      </button>
+    </p>
+  </template>
+
+  <template x-if="!escolhido && termo.length >= 2 && !carregando && !resultados.length">
+    <p class="text-xs mt-1" style="color:#d97706;">
+      Nenhum produto encontrado com esse termo.
+    </p>
+  </template>
+
+  {# ── Lista ────────────────────────────────────────────────────────── #}
+  <div x-show="aberto && resultados.length" x-cloak
+       class="absolute z-30 left-0 right-0 mt-1 rounded-lg overflow-hidden shadow-lg max-h-72 overflow-y-auto"
+       :style="temaClaro ? 'background:#ffffff; border:1px solid #e5e7eb;' : 'background:#18181b; border:1px solid #3f3f46;'">
+    <template x-for="(p, i) in resultados" :key="p.valor">
+      <button type="button" class="w-full text-left px-3 py-2 block"
+              @click="escolher(p)"
+              @mouseenter="destaque = i"
+              :style="destaque === i
+                ? (temaClaro ? 'background:#eff6ff;' : 'background:#27272a;')
+                : ''">
+        <span class="text-sm font-medium block truncate"
+              :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
+          <span x-text="p.nome"></span>
+          <template x-if="p.origem === 'erp'">
+            <span class="text-[10px] font-bold ml-1" style="color:#2563eb;">ERP</span>
+          </template>
+        </span>
+        <span class="text-xs block truncate"
+              :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+          <span class="font-mono" x-text="p.codigo"></span>
+          <template x-if="p.tecido"><span x-text="' · ' + p.tecido"></span></template>
+          <template x-if="p.grade"><span x-text="' · grade ' + p.grade"></span></template>
+        </span>
+      </button>
+    </template>
+  </div>
+</div>
+
+{% comment %}
+  O componente vai JUNTO do campo, e não no `extra_js` de cada tela: assim o
+  `{% include %}` é tudo que uma tela precisa fazer para ter o campo. O
+  guarda evita registrar duas vezes quando a mesma tela usa dois campos.
+{% endcomment %}
+<script>
+if (!window.__comboProdutoRegistrado) {
+  window.__comboProdutoRegistrado = true;
+  document.addEventListener('alpine:init', () => {
+    Alpine.data('comboProduto', (config) => ({
+      url: config.url,
+      semFicha: !!config.semFicha,
+      escolhido: config.escolhido || null,
+      termo: config.escolhido ? config.escolhido.nome : '',
+      resultados: [],
+      aberto: false,
+      carregando: false,
+      destaque: 0,
+      // Cada busca leva um número. Resposta antiga que chega depois da nova
+      // é descartada — senão a lista pisca com o resultado do que a pessoa
+      // já terminou de digitar.
+      requisicao: 0,
+
+      init() {
+        if (this.escolhido) this.avisar();
+      },
+
+      async buscar() {
+        const minha = ++this.requisicao;
+        this.carregando = true;
+        try {
+          const alvo = `${this.url}?q=${encodeURIComponent(this.termo.trim())}`
+            + (this.semFicha ? '&sem_ficha=1' : '');
+          const resp = await fetch(alvo);
+          const dados = await resp.json();
+          if (minha !== this.requisicao) return;
+          this.resultados = dados.produtos || [];
+          this.destaque = 0;
+          this.aberto = true;
+        } catch (e) {
+          this.resultados = [];
+        } finally {
+          if (minha === this.requisicao) this.carregando = false;
+        }
+      },
+
+      escolher(produto) {
+        this.escolhido = produto;
+        this.termo = produto.nome;
+        this.aberto = false;
+        this.resultados = [];
+        this.avisar();
+      },
+
+      // A tela de fora mostra o que a ficha herda do produto (modelo,
+      // tecido, grade). Esses dados já vieram no resultado da busca, então
+      // o campo os entrega em vez de a tela ir buscá-los de novo.
+      avisar() {
+        window.dispatchEvent(new CustomEvent('produto-escolhido', {
+          detail: this.escolhido,
+        }));
+      },
+
+      limpar() {
+        this.escolhido = null;
+        this.termo = '';
+        this.resultados = [];
+        this.aberto = false;
+        this.avisar();
+        this.$nextTick(() => this.$el.querySelector('input[type=text]').focus());
+      },
+
+      mover(passo) {
+        if (!this.resultados.length) return;
+        const total = this.resultados.length;
+        this.destaque = (this.destaque + passo + total) % total;
+      },
+
+      escolherDestacado() {
+        if (this.aberto && this.resultados[this.destaque]) {
+          this.escolher(this.resultados[this.destaque]);
+        }
+      },
+    }));
+  });
+}
+</script>

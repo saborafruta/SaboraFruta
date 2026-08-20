@@ -9,14 +9,10 @@
   ajuda: sem ver O QUE ela lê, ninguém sabe se o produto está completo.
 {% endcomment %}
 <div class="space-y-5 max-w-4xl"
-     x-data="{
-       produto: '{{ form.produto.value|default:'' }}',
-       dados: {},
-       get atual() { return this.dados[this.produto] || null; }
-     }"
-     x-init="dados = JSON.parse(document.getElementById('dados-produtos').textContent)">
+     x-data="{ produto: null }"
+     @produto-escolhido.window="produto = $event.detail">
 
-  {{ produtos_json|json_script:"dados-produtos" }}
+
 
   {# ── Cabeçalho ────────────────────────────────────────────────────── #}
   <div class="card p-5">
@@ -36,7 +32,12 @@
   </div>
 
   {# ── Sem produto para escolher ────────────────────────────────────── #}
-  {% if not produtos and not ficha %}
+  {% comment %}
+    A tela vazia só aparece quando não há produto NEM na confecção nem no
+    cadastro do ERP. Enquanto o campo lia um catálogo só, base nova caía
+    aqui mesmo tendo mil produtos do outro lado.
+  {% endcomment %}
+  {% if not produtos and not do_erp and not ficha %}
     {% comment %}
       O select vazio sem explicação é o que trava a pessoa: ela não sabe se
       falta cadastrar produto, se todos já têm ficha, ou se o sistema
@@ -126,12 +127,13 @@
               ficha dele.
             </p>
           {% else %}
-            <select name="produto" required x-model="produto" class="form-input w-full">
-              <option value="">Escolha o produto</option>
-              {% for p in produtos %}
-                <option value="{{ p.pk }}">{{ p.codigo }} — {{ p.nome }}</option>
-              {% endfor %}
-            </select>
+            {% comment %}
+              CAIXA DE BUSCA, e não select: o catálogo do ERP passa de
+              mil itens, e o da confecção começa VAZIO numa base nova --
+              a tela pedia um produto que não existia em lugar nenhum.
+              O campo enxerga os dois e traz o do ERP ao salvar.
+            {% endcomment %}
+            {% include "moda/_combo_produto.html" with nome_campo="produto" sem_ficha=1 %}
           {% endif %}
           {% for erro in form.produto.errors %}
             <p class="text-xs mt-1" style="color:#dc2626;">{{ erro }}</p>
@@ -139,7 +141,7 @@
         </div>
 
         {# ── O que a ficha herda ─────────────────────────────────────── #}
-        <template x-if="atual">
+        <template x-if="produto">
           <div class="rounded-xl p-4"
                :style="temaClaro ? 'background:#f8fafc;' : 'background:#27272a;'">
             <p class="text-xs uppercase tracking-wider mb-2"
@@ -158,8 +160,8 @@
                     ANTES de a ficha descer para a fábrica sem tecido.
                   {% endcomment %}
                   <p class="font-semibold"
-                     :style="atual[campo] ? (temaClaro ? 'color:#111827;' : 'color:#f8fafc;') : 'color:#d97706;'"
-                     x-text="atual[campo] || 'não informado'"></p>
+                     :style="produto[campo] ? (temaClaro ? 'color:#111827;' : 'color:#f8fafc;') : 'color:#d97706;'"
+                     x-text="produto[campo] || 'não informado'"></p>
                 </div>
               </template>
             </div>

@@ -110,3 +110,132 @@ class ImportarProdutosService:
         """
         codigo = (getattr(produto, 'codigo', '') or '').strip().upper()
         return codigo[:30] if codigo else f'ERP{produto.pk}'
+
+
+class BuscaProdutos:
+    """
+    A busca que alimenta o campo de produto — os DOIS catálogos.
+
+    O produto da confecção e o produto do ERP são cadastros diferentes de
+    propósito (ver o topo deste arquivo). Mas quem está preenchendo uma
+    ficha ou um pedido não quer saber disso: quer achar a camisa que já está
+    cadastrada em Cadastros › Produtos.
+
+    Então o campo lista os dois, em grupos separados, e escolher um do ERP
+    TRAZ o produto para a confecção na hora — mesma importação da tela de
+    produtos, com o vínculo gravado. Não é catálogo duplicado: é o mesmo
+    produto, agora também conhecido pela produção.
+    """
+
+    LIMITE = 20
+
+    @classmethod
+    def procurar(cls, filial, termo: str = '', sem_ficha: bool = False,
+                 limite: int | None = None) -> list[dict]:
+        from django.db.models import Q
+
+        from apps.moda.models import ProdutoModa
+
+        termo = (termo or '').strip()
+        limite = limite or cls.LIMITE
+
+        da_moda = (
+            ProdutoModa.objects.for_filial(filial)
+            .filter(ativo=True)
+            .select_related('modelo', 'colecao', 'tecido', 'grade')
+            .order_by('codigo')
+        )
+        if sem_ficha:
+            # Ficha é OneToOne: oferecer produto que já tem ficha só renderia
+            # erro de integridade depois de a pessoa preencher tudo.
+            da_moda = da_moda.filter(ficha__isnull=True)
+        if termo:
+            da_moda = da_moda.filter(
+                Q(nome__icontains=termo)
+                | Q(codigo__icontains=termo)
+                | Q(referencia__icontains=termo)
+            )
+
+        achados = [cls.como_dicionario(p) for p in da_moda[:limite]]
+
+        # Os do ERP que ainda não vieram. Nenhum deles tem ficha -- não
+        # existem como produto de moda ainda --, então `sem_ficha` não muda
+        # nada aqui.
+        do_erp = ImportarProdutosService.disponiveis(filial)
+        if termo:
+            alvo = termo.lower()
+            do_erp = [
+                p for p in do_erp
+                if alvo in (p.descricao or '').lower()
+                or alvo in (getattr(p, 'codigo', '') or '').lower()
+            ]
+        achados += [cls.do_erp(p) for p in do_erp[:limite]]
+
+        return achados
+
+    @staticmethod
+    def como_dicionario(produto) -> dict:
+        """Produto da confecção, com o que a ficha vai herdar dele."""
+        return {
+            'valor': f'moda:{produto.pk}',
+            'nome': produto.nome,
+            'codigo': produto.codigo or '',
+            'origem': 'confeccao',
+            # É o que a tela da ficha mostra em "o que vem do cadastro deste
+            # produto": sem ver O QUE ela lê, a frase não ajuda ninguém.
+            'modelo': str(produto.modelo) if produto.modelo_id else '',
+            'colecao': str(produto.colecao) if produto.colecao_id else '',
+            'tecido': str(produto.tecido) if produto.tecido_id else '',
+            'grade': str(produto.grade) if produto.grade_id else '',
+        }
+
+    @staticmethod
+    def do_erp(produto) -> dict:
+        """
+        Produto do ERP, ainda sem correspondente na confecção.
+
+        Modelo, coleção, tecido e grade vêm vazios porque o ERP não os tem —
+        e é justamente isso que a pessoa precisa saber ANTES de escolher: o
+        produto entra, e esses campos ficam para ela preencher.
+        """
+        return {
+            'valor': f'erp:{produto.pk}',
+            'nome': produto.descricao or '',
+            'codigo': getattr(produto, 'codigo', '') or '',
+            'origem': 'erp',
+            'modelo': '', 'colecao': '', 'tecido': '', 'grade': '',
+        }
+
+    @staticmethod
+    def resolver(filial, valor: str):
+        """
+        A escolha vira um `ProdutoModa` de verdade — importando, se preciso.
+
+        Em um lugar só porque as duas telas que usam o campo (ficha e item
+        do pedido) precisam da mesma resolução: duas cópias divergiriam, e
+        uma delas passaria a gravar produto de outra filial.
+        """
+        from apps.moda.models import ProdutoModa
+        from apps.produtos.models import Produto
+
+        valor = (valor or '').strip()
+        if not valor:
+            return None
+
+        origem, _, chave = valor.partition(':')
+        if not chave.isdigit():
+            raise DomainError('Produto inválido.')
+
+        if origem == 'moda':
+            produto = ProdutoModa.objects.for_filial(filial).filter(pk=chave).first()
+            if produto is None:
+                raise DomainError('Este produto não é desta filial.')
+            return produto
+
+        if origem == 'erp':
+            do_erp = Produto.objects.for_filial(filial).filter(pk=chave).first()
+            if do_erp is None:
+                raise DomainError('Este produto não é desta filial.')
+            return ImportarProdutosService.importar(filial, [do_erp.pk])[0]
+
+        raise DomainError('Produto inválido.')
