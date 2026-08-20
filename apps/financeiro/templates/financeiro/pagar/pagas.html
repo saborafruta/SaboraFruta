@@ -68,7 +68,7 @@
       </select>
     </div>
     {% include "financeiro/pagar/_filtro_categoria_financeira.html" with filtro_id="contas-pagas" %}
-    <div class="flex gap-2 md:col-span-12 md:justify-end">
+    <div class="flex gap-2 md:col-span-12 md:justify-end" style="grid-column:1 / -1;">
       <a href="{% url 'financeiro:pagar_pagas' %}" class="btn-secondary">Limpar</a>
       <button type="submit" class="btn-primary">Filtrar</button>
     </div>
