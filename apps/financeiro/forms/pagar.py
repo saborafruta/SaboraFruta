@@ -116,11 +116,6 @@ class ContaPagarForm(forms.Form):
         label='Valor (R$)',
         widget=VALOR_WIDGET,
     )
-    data_emissao = forms.DateField(
-        label='Data de emissão',
-        widget=forms.DateInput(attrs={'type': 'date'}),
-        initial=date.today,
-    )
     data_vencimento = forms.DateField(
         label='Data de vencimento',
         widget=forms.DateInput(attrs={'type': 'date'}),
@@ -240,8 +235,6 @@ class ContaPagarForm(forms.Form):
 
     def clean(self):
         cleaned = super().clean()
-        emissao = cleaned.get('data_emissao')
-        vencimento = cleaned.get('data_vencimento')
         parcela = cleaned.get('parcela')
         total = cleaned.get('total_parcelas')
         tipo = cleaned.get('tipo_lancamento')
@@ -256,8 +249,6 @@ class ContaPagarForm(forms.Form):
                 self.add_error('funcionario', 'Selecione o funcionario que recebera este pagamento.')
         elif tipo == ContaPagar.TipoLancamento.ENCARGO:
             cleaned['fornecedor'] = None
-        if emissao and vencimento and vencimento < emissao:
-            self.add_error('data_vencimento', 'Vencimento não pode ser anterior à emissão.')
         if parcela and total and parcela > total:
             self.add_error('parcela', 'Parcela não pode ser maior que o total de parcelas.')
         if recorrente:
@@ -274,11 +265,6 @@ class ContaPagarForm(forms.Form):
             data_pagamento = cleaned.get('data_pagamento_imediato')
             if not data_pagamento:
                 self.add_error('data_pagamento_imediato', 'Informe a data do pagamento.')
-            elif emissao and data_pagamento < emissao:
-                self.add_error(
-                    'data_pagamento_imediato',
-                    'A data do pagamento não pode ser anterior à emissão.',
-                )
             if not cleaned.get('forma_pagamento_utilizada'):
                 self.add_error('forma_pagamento_utilizada', 'Informe a forma realmente utilizada.')
         else:

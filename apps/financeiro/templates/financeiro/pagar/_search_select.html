@@ -1,5 +1,5 @@
 <div class="relative" x-data="financeSearchSelect($el)" x-init="init()"
-     data-initial="{{ field.value|default_if_none:'' }}">
+     data-initial="{{ field.value|default_if_none:'' }}" data-field="{{ field.html_name }}">
   <input type="hidden" name="{{ field.html_name }}" :value="value">
   <div class="relative">
     <input type="search"

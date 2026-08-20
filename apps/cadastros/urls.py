@@ -30,6 +30,7 @@ urlpatterns = [
     path('fornecedores/exportar/pdf/', views.FornecedorExportPdfView.as_view(), name='fornecedor-export-pdf'),
     path('fornecedores/exportar/todos/csv/', views.FornecedorExportTodosCsvView.as_view(), name='fornecedor-export-todos-csv'),
     path('fornecedores/novo/', views.FornecedorCreateView.as_view(), name='fornecedor-create'),
+    path('fornecedores/ajax-create/', views.FornecedorAjaxCreateView.as_view(), name='fornecedor-ajax-create'),
     path('fornecedores/<int:pk>/inline-edit/', views.FornecedorInlineEditView.as_view(), name='fornecedor-inline-edit'),
     path('fornecedores/<int:pk>/', views.FornecedorUpdateView.as_view(), name='fornecedor-update'),
     path('fornecedores/<int:pk>/excluir/', views.FornecedorDeleteView.as_view(), name='fornecedor-delete'),

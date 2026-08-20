@@ -6,7 +6,7 @@
     consultar_cep_ajax,
 )
 from .fornecedor import (
-    FornecedorListView, FornecedorCreateView, FornecedorUpdateView,
+    FornecedorListView, FornecedorCreateView, FornecedorAjaxCreateView, FornecedorUpdateView,
     FornecedorDeleteView, FornecedorToggleAtivoView, FornecedorInlineEditView, FornecedorExportCsvView,
     FornecedorExportTodosCsvView, FornecedorExportPdfView,
 )
@@ -32,7 +32,7 @@ __all__ = [
     'ClienteExportTodosCsvView', 'ClienteExportPdfView',
     'ClienteImportCsvView', 'ClienteImportTemplateCsvView',
     'consultar_cep_ajax',
-    'FornecedorListView', 'FornecedorCreateView', 'FornecedorUpdateView',
+    'FornecedorListView', 'FornecedorCreateView', 'FornecedorAjaxCreateView', 'FornecedorUpdateView',
     'FornecedorDeleteView', 'FornecedorToggleAtivoView', 'FornecedorInlineEditView', 'FornecedorExportCsvView',
     'FornecedorExportTodosCsvView', 'FornecedorExportPdfView',
     'FuncionarioListView', 'FuncionarioCreateView', 'FuncionarioUpdateView',

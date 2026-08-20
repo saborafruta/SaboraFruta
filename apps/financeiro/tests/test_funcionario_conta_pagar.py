@@ -1,6 +1,7 @@
 from datetime import date
 from decimal import Decimal
 from importlib import import_module
+import json
 from pathlib import Path
 from types import SimpleNamespace
 from tempfile import TemporaryDirectory
@@ -12,7 +13,8 @@ from django.http import Http404
 from django.test import RequestFactory, TestCase
 
 from apps.cadastros.forms import FuncionarioForm
-from apps.cadastros.models import Funcionario
+from apps.cadastros.models import Fornecedor, Funcionario
+from apps.cadastros.views.fornecedor import FornecedorAjaxCreateView
 from apps.core.models import Empresa, Filial
 from apps.financeiro.forms.pagar import ContaPagarForm, validar_comprovante
 from apps.financeiro.models import (
@@ -71,7 +73,6 @@ class FuncionarioContaPagarTests(TestCase):
             "parcela": 1,
             "total_parcelas": 1,
             "valor_original": "1800.00",
-            "data_emissao": "2026-08-20",
             "data_vencimento": "2026-08-30",
             "plano_contas": self.categoria.pk,
         }
@@ -89,6 +90,78 @@ class FuncionarioContaPagarTests(TestCase):
             filial=self.filial,
         )
         self.assertTrue(form.is_valid(), form.errors)
+
+    def test_data_emissao_nao_e_exibida_nem_obrigatoria(self):
+        form = ContaPagarForm(
+            self.dados_formulario(data_vencimento="2020-01-10"),
+            filial=self.filial,
+        )
+
+        self.assertNotIn("data_emissao", form.fields)
+        self.assertTrue(form.is_valid(), form.errors)
+
+    def test_cadastro_rapido_cria_fornecedor_vinculado_a_filial(self):
+        request = RequestFactory().post(
+            "/cadastros/fornecedores/ajax-create/",
+            {
+                "tipo_pessoa": "J",
+                "razao_social": "Fornecedor Modal Ltda",
+                "nome_fantasia": "Fornecedor Modal",
+                "cpf_cnpj": "12.345.678/0001-90",
+                "cep": "59022540",
+                "cidade": "Natal",
+                "uf": "RN",
+                "codigo_municipio_ibge": "2408102",
+            },
+            HTTP_X_REQUESTED_WITH="XMLHttpRequest",
+        )
+        request.user = SimpleNamespace(
+            is_authenticated=True,
+            tem_permissao=lambda modulo, acao: True,
+        )
+        request.filial_ativa = self.filial
+
+        response = FornecedorAjaxCreateView.as_view()(request)
+        payload = json.loads(response.content)
+        fornecedor = Fornecedor.objects.get(pk=payload["id"])
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(payload["label"], "Fornecedor Modal")
+        self.assertEqual(fornecedor.cpf_cnpj, "12345678000190")
+        self.assertEqual(fornecedor.codigo_municipio_ibge, "2408102")
+        self.assertTrue(
+            Fornecedor.objects.for_filial(self.filial).filter(pk=fornecedor.pk).exists()
+        )
+
+    def test_cadastro_rapido_rejeita_cnpj_duplicado_na_filial(self):
+        existente = Fornecedor.objects.create(
+            filial=self.filial,
+            tipo_pessoa="J",
+            razao_social="Fornecedor Existente",
+            cpf_cnpj="12345678000190",
+        )
+        from apps.cadastros.services.replicacao_service import ReplicacaoCadastrosService
+        ReplicacaoCadastrosService.sincronizar_fornecedor(existente)
+        request = RequestFactory().post(
+            "/cadastros/fornecedores/ajax-create/",
+            {
+                "tipo_pessoa": "J",
+                "razao_social": "Fornecedor Repetido",
+                "cpf_cnpj": "12.345.678/0001-90",
+            },
+            HTTP_X_REQUESTED_WITH="XMLHttpRequest",
+        )
+        request.user = SimpleNamespace(
+            is_authenticated=True,
+            tem_permissao=lambda modulo, acao: True,
+        )
+        request.filial_ativa = self.filial
+
+        response = FornecedorAjaxCreateView.as_view()(request)
+        payload = json.loads(response.content)
+
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("cpf_cnpj", payload["errors"])
 
     def test_servico_grava_funcionario_categoria_e_conta_contabil(self):
         conta = ContaPagarService.criar(

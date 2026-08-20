@@ -250,34 +250,40 @@ class ContaPagarCreateView(PermissaoRequiredMixin, View):
     permissao_modulo = 'financeiro'
     permissao_acao = 'criar'
 
-    def get(self, request):
-        filial = _filial(request)
-        form = ContaPagarForm(filial=filial)
-        return render(request, 'financeiro/pagar/form.html', {
+    def _context(self, request, form):
+        return {
             'title': 'Nova Conta a Pagar',
             'form': form,
             'cancel_url': reverse('financeiro:pagar_list'),
-        })
+            'pode_criar_fornecedor': request.user.tem_permissao('cadastros', 'criar'),
+        }
+
+    def get(self, request):
+        filial = _filial(request)
+        form = ContaPagarForm(filial=filial)
+        return render(request, 'financeiro/pagar/form.html', self._context(request, form))
 
     def post(self, request):
         filial = _filial(request)
         form = ContaPagarForm(request.POST, request.FILES, filial=filial)
         if not form.is_valid():
-            return render(request, 'financeiro/pagar/form.html', {
-                'title': 'Nova Conta a Pagar',
-                'form': form,
-                'cancel_url': reverse('financeiro:pagar_list'),
-            })
+            return render(request, 'financeiro/pagar/form.html', self._context(request, form))
 
         d = form.cleaned_data
         try:
+            datas_relevantes = [
+                timezone.localdate(),
+                d['data_vencimento'],
+                d.get('data_pagamento_imediato'),
+            ]
+            data_emissao_automatica = min(data for data in datas_relevantes if data)
             dados_conta = dict(
                 filial=filial,
                 fornecedor=d.get('fornecedor'),
                 funcionario=d.get('funcionario'),
                 tipo_lancamento=d['tipo_lancamento'],
                 valor_original=d['valor_original'],
-                data_emissao=d['data_emissao'],
+                data_emissao=data_emissao_automatica,
                 documento_numero=d.get('documento_numero', ''),
                 nota_fiscal_fornecedor=d.get('nota_fiscal_fornecedor', ''),
                 forma_pagamento_prevista=d.get('forma_pagamento_prevista'),
@@ -319,11 +325,7 @@ class ContaPagarCreateView(PermissaoRequiredMixin, View):
                 messages.success(request, f'Conta a pagar #{conta.pk} lançada com sucesso.')
         except DomainError as exc:
             messages.error(request, str(exc))
-            return render(request, 'financeiro/pagar/form.html', {
-                'title': 'Nova Conta a Pagar',
-                'form': form,
-                'cancel_url': reverse('financeiro:pagar_list'),
-            })
+            return render(request, 'financeiro/pagar/form.html', self._context(request, form))
 
         return redirect(reverse('financeiro:pagar_list'))
 

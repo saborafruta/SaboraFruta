@@ -16,7 +16,7 @@ from reportlab.lib.pagesizes import A4, landscape
 from reportlab.lib.styles import getSampleStyleSheet
 from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle
 
-from apps.cadastros.forms import FornecedorForm
+from apps.cadastros.forms import FornecedorForm, FornecedorRapidoForm
 from apps.cadastros.models import Fornecedor
 from apps.cadastros.services.replicacao_service import ReplicacaoCadastrosService
 from apps.cadastros.views.audit import cadastro_log_context
@@ -313,6 +313,41 @@ class FornecedorCreateView(PermissaoRequiredMixin, View):
             'form': form,
             'title': 'Novo Fornecedor',
             'cancel_url': reverse_lazy('cadastros:fornecedor-list'),
+        })
+
+
+class FornecedorAjaxCreateView(PermissaoRequiredMixin, View):
+    """Cria um fornecedor no modal de contas a pagar e retorna a opção criada."""
+
+    permissao_modulo = 'cadastros'
+    permissao_acao = 'criar'
+
+    def post(self, request):
+        filial = request.filial_ativa
+        form = FornecedorRapidoForm(request.POST, filial=filial)
+        if not form.is_valid():
+            erros = {
+                campo: [erro['message'] for erro in mensagens]
+                for campo, mensagens in form.errors.get_json_data().items()
+            }
+            return JsonResponse({'ok': False, 'errors': erros}, status=400)
+
+        with transaction.atomic():
+            fornecedor = form.save(commit=False)
+            fornecedor.filial = filial
+            fornecedor.save()
+            ReplicacaoCadastrosService.sincronizar_fornecedor(fornecedor)
+
+        label = str(fornecedor)
+        documento = fornecedor.cpf_cnpj
+        search = ' '.join(filter(None, [
+            fornecedor.razao_social, fornecedor.nome_fantasia, documento,
+        ]))
+        return JsonResponse({
+            'ok': True,
+            'id': fornecedor.pk,
+            'label': label,
+            'search': search,
         })
 
 
