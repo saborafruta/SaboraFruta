@@ -1,0 +1,197 @@
+{% extends "_base.html" %}
+{% block title %}{{ title }}{% endblock %}
+{% block page_title %}{{ title }}{% endblock %}
+
+{% block content %}
+<div class="space-y-5">
+
+  {# ── Cabeçalho ────────────────────────────────────────────────────── #}
+  <div>
+    <p class="text-sm mb-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+      <a href="{% url 'moda:comercial' %}" :style="temaClaro ? 'color:#3b82f6;' : 'color:#60a5fa;'">Comercial</a>
+      <span class="mx-1">›</span> Aprovação de arte
+    </p>
+    <h2 class="text-2xl font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
+      Aprovação de arte
+    </h2>
+    <p class="text-sm mt-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+      Uma pergunta só: a arte existe, e o cliente já aceitou o layout?
+    </p>
+  </div>
+
+  <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+    <div class="card p-4">
+      <p class="text-xs uppercase tracking-wider" style="color:#6b7280;">Falta arte</p>
+      <p class="text-2xl font-bold mt-1"
+         {% if resumo.falta %}style="color:#dc2626;"{% else %}:style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'"{% endif %}>
+        {{ resumo.falta }}
+      </p>
+      <p class="text-xs mt-0.5" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+        {{ resumo.pecas_travadas }} peça(s) travadas por isso
+      </p>
+    </div>
+    <div class="card p-4">
+      <p class="text-xs uppercase tracking-wider" style="color:#6b7280;">Pronta, não enviada</p>
+      <p class="text-2xl font-bold mt-1" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
+        {{ resumo.pronta }}
+      </p>
+      <p class="text-xs mt-0.5" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+        o cliente ainda não viu
+      </p>
+    </div>
+    <div class="card p-4">
+      <p class="text-xs uppercase tracking-wider" style="color:#6b7280;">Aguardando aceite</p>
+      <p class="text-2xl font-bold mt-1" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
+        {{ resumo.enviada }}
+      </p>
+      <p class="text-xs mt-0.5" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+        layout com o cliente
+      </p>
+    </div>
+    <div class="card p-4">
+      <p class="text-xs uppercase tracking-wider" style="color:#6b7280;">Ajuste na arte</p>
+      <p class="text-2xl font-bold mt-1"
+         {% if resumo.ajuste %}style="color:#d97706;"{% else %}:style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'"{% endif %}>
+        {{ resumo.ajuste }}
+      </p>
+      <p class="text-xs mt-0.5" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+        o cliente quer mudança
+      </p>
+    </div>
+  </div>
+
+  <form method="get" class="flex gap-2">
+    <input type="search" name="q" value="{{ busca }}" placeholder="Cliente ou número do pedido"
+           class="form-input flex-1 max-w-sm">
+    <button type="submit" class="btn-secondary">Buscar</button>
+    {% if busca %}<a href="{% url 'moda:arte-fila' %}" class="btn-secondary">Limpar</a>{% endif %}
+  </form>
+
+  {# ── 1. Falta arte ────────────────────────────────────────────────── #}
+  {% comment %}
+    Em cima porque é o que TRAVA a fábrica: a peça declara personalização e
+    não há arquivo nem visual para aplicar. É a mesma regra que bloqueia a
+    liberação da produção — quem descobre isso aqui evita o corte descobrir
+    depois.
+  {% endcomment %}
+  <div class="card p-5 space-y-3" {% if falta %}style="border-left:3px solid #dc2626;"{% endif %}>
+    <div>
+      <h3 class="text-sm font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
+        Falta a arte
+      </h3>
+      <p class="text-xs mt-0.5" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+        Produto com personalização declarada e nenhum arquivo anexado. A
+        produção não é liberada assim.
+      </p>
+    </div>
+
+    {% for l in falta %}
+      <div class="rounded-lg p-3 flex flex-wrap items-start justify-between gap-3"
+           :style="temaClaro ? 'background:#f8fafc; border:1px solid #e5e7eb;' : 'background:#18181b; border:1px solid #303036;'">
+        <div class="min-w-0">
+          <div class="flex flex-wrap items-center gap-2">
+            <a href="{% url 'moda:pedido-detail' l.pedido.pk %}" class="font-mono text-sm font-bold"
+               :style="temaClaro ? 'color:#3b82f6;' : 'color:#60a5fa;'">
+              #{{ l.pedido.numero|stringformat:"06d" }}
+            </a>
+            <span class="text-sm font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
+              {{ l.pedido.cliente }}
+            </span>
+            {% include "moda/_status_pill.html" with status=l.pedido.status %}
+          </div>
+          <p class="text-xs mt-1" style="color:#dc2626;">
+            Sem arte: {{ l.sem_arte|join:", " }}
+          </p>
+          <p class="text-xs mt-0.5" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+            {{ l.pedido.quantidade_total }} peça(s) ·
+            {% if l.pedido.data_prevista_entrega %}
+              entrega {{ l.pedido.data_prevista_entrega|date:"d/m/Y" }}
+            {% else %}sem data de entrega{% endif %}
+            {% if l.dias_parado %}· aberto há {{ l.dias_parado }} dia{{ l.dias_parado|pluralize }}{% endif %}
+          </p>
+        </div>
+        <a href="{% url 'moda:pedido-detail' l.pedido.pk %}" class="btn-primary text-xs shrink-0">
+          Anexar arte
+        </a>
+      </div>
+    {% empty %}
+      <p class="text-sm" :style="temaClaro ? 'color:#94a3b8;' : 'color:#71717a;'">
+        Nenhum pedido travado por falta de arte.
+      </p>
+    {% endfor %}
+  </div>
+
+  {# ── 2. Ajuste pedido ─────────────────────────────────────────────── #}
+  {% if ajuste %}
+    <div class="card p-5 space-y-3" style="border-left:3px solid #d97706;">
+      <div>
+        <h3 class="text-sm font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
+          O cliente pediu ajuste
+        </h3>
+        <p class="text-xs mt-0.5" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+          Refaça o layout e mande de novo.
+        </p>
+      </div>
+      {% for l in ajuste %}
+        {% include "moda/_cartao_arte.html" with l=l mostrar_motivo=1 %}
+      {% endfor %}
+    </div>
+  {% endif %}
+
+  {# ── 3. Pronta, não enviada ───────────────────────────────────────── #}
+  <div class="card p-5 space-y-3">
+    <div>
+      <h3 class="text-sm font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
+        Arte pronta, ainda não enviada
+      </h3>
+      <p class="text-xs mt-0.5" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+        Confira o layout e libere — o cliente aceita pelo link.
+      </p>
+    </div>
+    {% for l in pronta %}
+      {% include "moda/_cartao_arte.html" with l=l liberar=1 %}
+    {% empty %}
+      <p class="text-sm" :style="temaClaro ? 'color:#94a3b8;' : 'color:#71717a;'">
+        Nenhuma arte parada esperando envio.
+      </p>
+    {% endfor %}
+  </div>
+
+  {# ── 4. Aguardando aceite ─────────────────────────────────────────── #}
+  <div class="card p-5 space-y-3">
+    <div>
+      <h3 class="text-sm font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
+        Aguardando aceite do cliente
+      </h3>
+      <p class="text-xs mt-0.5" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+        O layout está com ele. A produção começa depois do aceite.
+      </p>
+    </div>
+    {% for l in enviada %}
+      {% include "moda/_cartao_arte.html" with l=l link=1 %}
+    {% empty %}
+      <p class="text-sm" :style="temaClaro ? 'color:#94a3b8;' : 'color:#71717a;'">
+        Nenhum layout esperando resposta.
+      </p>
+    {% endfor %}
+  </div>
+
+  {# ── 5. Aceitas ───────────────────────────────────────────────────── #}
+  {% if aceita %}
+    <div class="card p-5 space-y-3">
+      <div>
+        <h3 class="text-sm font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
+          Layout aceito
+        </h3>
+        <p class="text-xs mt-0.5" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+          É o aceite que autoriza aplicar a arte na peça.
+        </p>
+      </div>
+      {% for l in aceita %}
+        {% include "moda/_cartao_arte.html" with l=l aceito=1 %}
+      {% endfor %}
+    </div>
+  {% endif %}
+
+</div>
+{% endblock %}

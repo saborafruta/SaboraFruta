@@ -1,0 +1,98 @@
+{% comment %}
+  Um pedido na fila da arte, com as miniaturas.
+
+  A MINIATURA É O PONTO DESTA TELA. Uma lista de números e nomes já existe
+  na fila de aprovação; aqui a pergunta é sobre o LAYOUT, e ninguém confere
+  layout lendo "Arte / estampa em Sublimação" — confere olhando.
+
+  Espera `l` (a linha) e, conforme a seção: `liberar`, `link`, `aceito`,
+  `mostrar_motivo`.
+{% endcomment %}
+<div class="rounded-lg p-3"
+     :style="temaClaro ? 'background:#f8fafc; border:1px solid #e5e7eb;' : 'background:#18181b; border:1px solid #303036;'">
+  <div class="flex flex-wrap items-start justify-between gap-3">
+    <div class="min-w-0">
+      <div class="flex flex-wrap items-center gap-2">
+        <a href="{% url 'moda:pedido-detail' l.pedido.pk %}" class="font-mono text-sm font-bold"
+           :style="temaClaro ? 'color:#3b82f6;' : 'color:#60a5fa;'">
+          #{{ l.pedido.numero|stringformat:"06d" }}
+        </a>
+        <span class="text-sm font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
+          {{ l.pedido.cliente }}
+        </span>
+        {% include "moda/_status_pill.html" with status=l.pedido.status %}
+      </div>
+
+      <p class="text-xs mt-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+        {{ l.artes|length }} arte(s) ·
+        {{ l.pedido.quantidade_total }} peça(s)
+        {% if aceito and l.aprovacao.respondido_em %}
+          · aceito {{ l.aprovacao.respondido_em|date:"d/m/Y H:i" }}
+          {% if l.aprovacao.respondido_por %}por {{ l.aprovacao.respondido_por }}{% endif %}
+        {% elif link and l.aprovacao.liberado_em %}
+          · enviado {{ l.aprovacao.liberado_em|date:"d/m/Y" }}
+        {% elif l.dias_parado %}
+          · aberto há {{ l.dias_parado }} dia{{ l.dias_parado|pluralize }}
+        {% endif %}
+      </p>
+
+      {% if mostrar_motivo %}
+        {% if l.aprovacao.motivo_ajuste %}
+          <p class="text-sm mt-2 p-2 rounded" style="background:rgba(217,119,6,.10); color:#b45309;">
+            “{{ l.aprovacao.motivo_ajuste }}”
+          </p>
+        {% else %}
+          {% comment %}
+            Ajuste sem motivo escrito acontece — o cliente clicou e não
+            digitou. Dizer isso é melhor do que a tela sugerir que o motivo
+            se perdeu no caminho.
+          {% endcomment %}
+          <p class="text-xs mt-2" style="color:#d97706;">
+            Sem motivo escrito — vale ligar para o cliente.
+          </p>
+        {% endif %}
+      {% endif %}
+    </div>
+
+    <div class="flex items-center gap-2 shrink-0">
+      <a href="{% url 'moda:pedido-detail' l.pedido.pk %}" class="btn-secondary text-xs">Abrir</a>
+      {% if liberar and pode_liberar %}
+        <form method="post" action="{% url 'moda:pedido-liberar' l.pedido.pk %}">
+          {% csrf_token %}
+          <input type="hidden" name="proximo" value="{{ request.get_full_path }}">
+          <button type="submit" class="btn-primary text-xs">ENVIAR AO CLIENTE</button>
+        </form>
+      {% endif %}
+      {% if link %}
+        <a href="{% url 'moda:pedido-aprovacao' l.pedido.pk %}" class="btn-secondary text-xs">
+          Ver link
+        </a>
+      {% endif %}
+    </div>
+  </div>
+
+  {# ── Miniaturas ───────────────────────────────────────────────────── #}
+  {% if l.artes %}
+    <div class="flex flex-wrap gap-2 mt-3">
+      {% for a in l.artes %}
+        <a href="{{ a.url }}" target="_blank" rel="noopener" class="block"
+           title="{{ a.origem }} · {{ a.nome }}">
+          {% comment %}
+            PNG/JPG/SVG viram prévia; PDF, CDR e AI o navegador não desenha,
+            e um quadrado quebrado é pior do que assumir que não há prévia.
+          {% endcomment %}
+          {% if a.imagem %}
+            <img src="{{ a.url }}" alt="{{ a.nome }}" class="rounded-lg"
+                 style="width:76px; height:76px; object-fit:contain; background:#fff; border:1px solid #e2e8f0;">
+          {% else %}
+            <div class="rounded-lg flex flex-col items-center justify-center"
+                 style="width:76px; height:76px; background:#f1f5f9; border:1px solid #e2e8f0; color:#64748b;">
+              <span style="font-size:18px;">📄</span>
+              <span class="text-[9px] font-bold mt-0.5 uppercase">{{ a.extensao }}</span>
+            </div>
+          {% endif %}
+        </a>
+      {% endfor %}
+    </div>
+  {% endif %}
+</div>

@@ -49,6 +49,7 @@ ROTAS_PRONTAS: list = [
     # Fila de aprovacao: o endereco do menu, que ate' agora caia no
     # placeholder de 'em construcao'.
     path('comercial/aprovacao-pedido/', vap.FilaAprovacaoView.as_view(), name='aprovacao-fila'),
+    path('comercial/aprovacao-arte/', vap.FilaArteView.as_view(), name='arte-fila'),
     path('comercial/orcamentos/<int:pk>/fechar/', vorc.OrcamentoFecharView.as_view(), name='orcamento-fechar'),
     path('comercial/pedidos/', vc.PedidoListView.as_view(), name='pedido-list'),
     path('comercial/pedidos/novo/', vc.PedidoFormView.as_view(), name='pedido-create'),

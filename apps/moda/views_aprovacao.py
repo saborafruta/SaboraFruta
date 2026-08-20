@@ -11,6 +11,7 @@ from django.urls import reverse
 
 from .models import AprovacaoPedido, PedidoProducao
 from .services.aprovacao import FilaAprovacaoService
+from .services.arte import FilaArteService
 from .services.fluxo_completo import FluxoCompletoService
 from .services.validacao import ValidacaoProducao
 from .views import ModaBaseView
@@ -134,6 +135,28 @@ class FilaAprovacaoView(ModaBaseView):
             # Liberar é permissão de APROVAR, não de editar: assumir preço e
             # prazo perante o cliente é decisão de quem aprova. Sem ela, a
             # fila continua visível -- ver a espera é do comercial inteiro.
+            'pode_liberar': request.user.tem_permissao('moda', 'aprovar'),
+            **dados,
+        })
+
+
+class FilaArteView(ModaBaseView):
+    """
+    A fila da arte: o que falta desenhar, o que espera aceite do layout.
+
+    Endereço do menu (`comercial/aprovacao-arte/`), que até agora devolvia a
+    tela de "em construção".
+    """
+
+    area = 'comercial'
+
+    def get(self, request):
+        busca = (request.GET.get('q') or '').strip()
+        dados = FilaArteService.montar(request.filial_ativa, busca=busca)
+
+        return render(request, 'moda/arte_fila.html', {
+            'title': 'Aprovação de arte',
+            'busca': busca,
             'pode_liberar': request.user.tem_permissao('moda', 'aprovar'),
             **dados,
         })
