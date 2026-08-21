@@ -1363,7 +1363,7 @@ def api_formas_pagamento(request):
     if request.method == 'GET':
         formas = list(
             FormaPagamento.objects.filter(empresa=empresa, filial=filial)
-            .values('id', 'descricao', 'tipo', 'ativo', 'taxa_administrativa', 'gera_parcelas', 'prazo_liquidacao_dias')
+            .values('id', 'descricao', 'tipo', 'ativo', 'taxa_administrativa', 'taxa_fixa', 'gera_parcelas', 'prazo_liquidacao_dias')
             .order_by('descricao')
         )
         tipos = [{'valor': v, 'label': l} for v, l in TipoFormaPagamento.choices]
@@ -1386,6 +1386,7 @@ def api_formas_pagamento(request):
             empresa=empresa, filial=filial,
             descricao=descricao, tipo=tipo,
             taxa_administrativa=data.get('taxa_administrativa', 0),
+            taxa_fixa=data.get('taxa_fixa', 0),
             gera_parcelas=bool(data.get('gera_parcelas', False)),
             prazo_liquidacao_dias=int(data.get('prazo_liquidacao_dias', 0)),
         )

@@ -1,4 +1,6 @@
 import json
+from decimal import Decimal, InvalidOperation
+
 from django.contrib import messages
 from django.http import JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
@@ -203,6 +205,8 @@ def formas_pagamento(request):
                     "gera_parcelas": origem.gera_parcelas,
                     "prazo_liquidacao_dias": origem.prazo_liquidacao_dias,
                     "taxa_administrativa": origem.taxa_administrativa,
+                    "taxa_fixa": origem.taxa_fixa,
+                    "movimenta_caixa": origem.movimenta_caixa,
                     "ativo": origem.ativo,
                 }
                 if forma:
@@ -267,6 +271,12 @@ def api_taxas_forma_pagamento(request, pk):
         taxa = data.get('taxa', 0)
         if not (1 <= parcelas <= 24):
             return JsonResponse({'erro': 'Parcelas deve ser entre 1 e 24'}, status=400)
+        try:
+            taxa = Decimal(str(taxa))
+        except (TypeError, ValueError, InvalidOperation):
+            return JsonResponse({'erro': 'Informe uma taxa valida'}, status=400)
+        if taxa < 0 or taxa > 100:
+            return JsonResponse({'erro': 'A taxa deve ficar entre 0% e 100%'}, status=400)
         obj, _ = TaxaParcelamento.objects.update_or_create(
             forma_pagamento=forma, parcelas=parcelas,
             defaults={'taxa': taxa},

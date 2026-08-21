@@ -98,6 +98,22 @@ class ContaReceberService:
         conta.valor_pago += valor_pago
         conta.valor_saldo = conta.valor_final - conta.valor_pago
 
+        if not conta.taxa_calculada_em:
+            calculo = forma_pagamento.calcular_taxa_recebimento(
+                conta.valor_pago,
+                conta.total_parcelas,
+            )
+            conta.taxa_percentual_aplicada = calculo['percentual']
+            conta.taxa_fixa_aplicada = calculo['fixa']
+            conta.taxa_calculada_em = timezone.now()
+        calculo = forma_pagamento.calcular_valores_taxa(
+            conta.valor_pago,
+            conta.taxa_percentual_aplicada,
+            conta.taxa_fixa_aplicada,
+        )
+        conta.valor_taxa_recebimento = calculo['taxa']
+        conta.valor_liquido_recebido = calculo['liquido']
+
         if conta.valor_saldo <= Decimal('0'):
             conta.valor_saldo = Decimal('0')
             conta.status = StatusContaReceber.PAGO

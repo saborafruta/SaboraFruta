@@ -45,6 +45,11 @@ class ContaReceber(TimestampedModel):
     valor_final = models.DecimalField(max_digits=14, decimal_places=2)
     valor_pago = models.DecimalField(max_digits=14, decimal_places=2, default=0)
     valor_saldo = models.DecimalField(max_digits=14, decimal_places=2)
+    taxa_percentual_aplicada = models.DecimalField(max_digits=7, decimal_places=4, default=0)
+    taxa_fixa_aplicada = models.DecimalField(max_digits=14, decimal_places=2, default=0)
+    valor_taxa_recebimento = models.DecimalField(max_digits=14, decimal_places=2, default=0)
+    valor_liquido_recebido = models.DecimalField(max_digits=14, decimal_places=2, default=0)
+    taxa_calculada_em = models.DateTimeField(null=True, blank=True)
 
     data_emissao = models.DateField()
     data_vencimento = models.DateField()
@@ -97,6 +102,12 @@ class ContaReceber(TimestampedModel):
 
     def __str__(self):
         return f"CR {self.documento_numero}/{self.parcela} – {self.cliente}"
+
+    @property
+    def valor_entrada_liquida(self):
+        if self.taxa_calculada_em:
+            return self.valor_liquido_recebido
+        return self.valor_pago
 
 
 class ContaPagar(TimestampedModel):

@@ -21,7 +21,7 @@
       {% if instance %}<input type="hidden" name="id" value="{{ instance.pk }}">{% endif %}
       <div>
         <h3 class="font-semibold">{% if instance %}Editar forma{% else %}Nova forma{% endif %}</h3>
-        <p class="text-xs text-gray-500 mt-1">O cadastro vale apenas para a filial selecionada no topo do sistema.</p>
+        <p class="text-xs text-gray-500 mt-1">Configure como e quando o valor líquido entra no caixa desta filial.</p>
       </div>
 
       <label class="block text-xs font-medium">Descrição {{ form.descricao|add_class:"form-input mt-1" }}</label>
@@ -36,6 +36,13 @@
         <label class="block text-xs font-medium">Liquidação em dias {{ form.prazo_liquidacao_dias|add_class:"form-input mt-1" }}</label>
         <label class="block text-xs font-medium">Taxa administrativa (%) {{ form.taxa_administrativa|add_class:"form-input mt-1" }}</label>
       </div>
+      <label class="block text-xs font-medium">
+        Taxa fixa por transação (R$)
+        {{ form.taxa_fixa|add_class:"form-input mt-1" }}
+        <span class="mt-1 block text-[11px] font-normal text-gray-500">Somada à taxa percentual. Deixe zero quando não houver cobrança fixa.</span>
+      </label>
+      {% if form.taxa_administrativa.errors %}<p class="text-xs text-red-600">{{ form.taxa_administrativa.errors|join:", " }}</p>{% endif %}
+      {% if form.taxa_fixa.errors %}<p class="text-xs text-red-600">{{ form.taxa_fixa.errors|join:", " }}</p>{% endif %}
 
       <label class="block text-xs font-medium">
         Conta bancaria padrao
@@ -64,8 +71,8 @@
     {% if instance %}
     <div class="card p-5 space-y-3 mt-4" x-data="taxasParcelamento({{ instance.pk }})">
       <div>
-        <h3 class="font-semibold">Taxas por parcela</h3>
-        <p class="text-xs text-gray-500 mt-1">Configure a taxa (%) cobrada por número de parcelas nesta forma de pagamento.</p>
+        <h3 class="font-semibold">Taxas por parcelamento</h3>
+        <p class="text-xs text-gray-500 mt-1">Quando existir uma taxa para a quantidade de parcelas, ela substitui o percentual padrão. A taxa fixa continua sendo aplicada.</p>
       </div>
 
       <div class="flex gap-2">
@@ -188,6 +195,8 @@
                   <div class="flex flex-wrap gap-1">
                     {% if forma.requer_tef %}<span class="soft-pill is-blue text-[10px]">TEF</span>{% endif %}
                     {% if forma.gera_parcelas %}<span class="soft-pill is-blue text-[10px]">Parcelas</span>{% endif %}
+                    {% if forma.taxa_administrativa > 0 %}<span class="soft-pill is-amber text-[10px]">{{ forma.taxa_administrativa|floatformat:2 }}%</span>{% endif %}
+                    {% if forma.taxa_fixa > 0 %}<span class="soft-pill is-amber text-[10px]">+ R$ {{ forma.taxa_fixa|floatformat:2 }}</span>{% endif %}
                     {% if not forma.movimenta_caixa %}<span class="soft-pill is-amber text-[10px]">Não soma no caixa</span>{% endif %}
                     {% if not forma.requer_tef and not forma.gera_parcelas and forma.movimenta_caixa %}<span class="text-xs text-gray-400">Padrão</span>{% endif %}
                   </div>

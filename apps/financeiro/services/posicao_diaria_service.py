@@ -29,6 +29,8 @@ class MovimentoDiario:
     forma_pagamento: str = "Nao informada"
     entrada: Decimal = ZERO
     saida: Decimal = ZERO
+    valor_bruto: Decimal = ZERO
+    valor_taxa: Decimal = ZERO
     referencia_url: str = ""
     excluido: bool = False
 
@@ -138,13 +140,15 @@ class PosicaoDiariaCaixaService:
             data_pagamento=self.data, valor_pago__gt=0,
         ).select_related("conta_bancaria", "cliente", "forma_pagamento")
         for item in recebimentos:
+            bruto = item.valor_pago or ZERO
+            taxa = item.valor_taxa_recebimento if item.taxa_calculada_em else ZERO
             movimentos.append(MovimentoDiario(
                 data=item.data_pagamento, conta=item.conta_bancaria,
                 descricao=f"Recebimento de {item.cliente}", contraparte=str(item.cliente),
                 origem="Conta a receber", origem_codigo="receber", registro_id=item.pk,
                 documento=item.documento_numero,
                 forma_pagamento=item.forma_pagamento.descricao if item.forma_pagamento else "Nao informada",
-                entrada=item.valor_pago or ZERO,
+                entrada=item.valor_entrada_liquida, valor_bruto=bruto, valor_taxa=taxa,
                 referencia_url=reverse("financeiro:receber_detail", args=[item.pk]),
             ))
 
@@ -179,7 +183,7 @@ class PosicaoDiariaCaixaService:
             )
             for item in vendas:
                 conta = item.conta_bancaria or item.forma_pagamento.conta_bancaria_padrao
-                valor = (item.valor or ZERO) - (item.troco or ZERO)
+                valor = item.valor_entrada_liquida
                 if not conta or conta.pk not in self.conta_ids or valor <= ZERO:
                     continue
                 cliente = str(item.venda_pdv.cliente) if item.venda_pdv.cliente else "Consumidor final"
@@ -188,7 +192,8 @@ class PosicaoDiariaCaixaService:
                     descricao=f"Venda #{item.venda_pdv.numero_venda} - {cliente}", contraparte=cliente,
                     origem="Venda PDV", origem_codigo="venda", registro_id=item.pk,
                     documento=str(item.venda_pdv.numero_venda), forma_pagamento=item.forma_pagamento.descricao,
-                    entrada=valor,
+                    entrada=valor, valor_bruto=item.valor_bruto_recebido,
+                    valor_taxa=item.valor_taxa if item.taxa_calculada_em else ZERO,
                 ))
         return sorted(movimentos, key=lambda m: (m.origem, m.descricao.casefold(), m.registro_id))
 
@@ -202,9 +207,9 @@ class PosicaoDiariaCaixaService:
         recebimentos = ContaReceber.objects.filter(
             filial=self.filial, conta_bancaria_id__in=self.conta_ids,
             data_pagamento__lt=self.data, valor_pago__gt=0,
-        ).values_list("conta_bancaria_id", "valor_pago")
-        for conta_id, valor in recebimentos.iterator():
-            _somar(saldos, conta_id, valor)
+        )
+        for item in recebimentos.iterator():
+            _somar(saldos, item.conta_bancaria_id, item.valor_entrada_liquida)
         pagamentos = PagamentoContaPagar.objects.filter(
             filial=self.filial, conta_bancaria_id__in=self.conta_ids,
             data_pagamento__lt=self.data, conta_pagar__excluido_em__isnull=True,
@@ -221,7 +226,7 @@ class PosicaoDiariaCaixaService:
             )
             for item in vendas.iterator():
                 conta = item.conta_bancaria or item.forma_pagamento.conta_bancaria_padrao
-                valor = (item.valor or ZERO) - (item.troco or ZERO)
+                valor = item.valor_entrada_liquida
                 if conta and conta.pk in self.conta_ids and valor > ZERO:
                     _somar(saldos, conta.pk, valor)
         except Exception:
@@ -233,7 +238,7 @@ class PosicaoDiariaCaixaService:
         for item in ContaReceber.objects.filter(
             filial=self.filial, data_pagamento=self.data, valor_pago__gt=0, conta_bancaria__isnull=True,
         ).select_related("cliente"):
-            itens.append({"descricao": f"Recebimento - {item.cliente}", "valor": item.valor_pago, "tipo": "entrada"})
+            itens.append({"descricao": f"Recebimento - {item.cliente}", "valor": item.valor_entrada_liquida, "tipo": "entrada"})
         for item in PagamentoContaPagar.objects.filter(
             filial=self.filial, data_pagamento=self.data, conta_bancaria__isnull=True,
             conta_pagar__excluido_em__isnull=True,
@@ -249,7 +254,7 @@ class PosicaoDiariaCaixaService:
                 forma_pagamento__conta_bancaria_padrao__isnull=True,
             ).exclude(venda_pdv__status="cancelada").select_related("venda_pdv", "forma_pagamento")
             for item in vendas:
-                valor = max((item.valor or ZERO) - (item.troco or ZERO), ZERO)
+                valor = item.valor_entrada_liquida
                 if valor:
                     itens.append({
                         "descricao": f"Venda #{item.venda_pdv.numero_venda} - {item.forma_pagamento.descricao}",

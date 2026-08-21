@@ -113,6 +113,24 @@ class PosicaoDiariaCaixaTests(TestCase):
         self.assertContains(response, reverse("financeiro:pagar_criar") + "?modal=1")
         self.assertContains(response, "Transferir entre contas")
 
+    def test_taxa_de_recebimento_reduz_entrada_e_exibe_bruto(self):
+        self.forma.taxa_administrativa = Decimal("2.00")
+        self.forma.taxa_fixa = Decimal("0.50")
+        self.forma.save(update_fields=["taxa_administrativa", "taxa_fixa"])
+        self._criar_cenario()
+
+        posicao = PosicaoDiariaCaixaService(self.filial, date(2026, 8, 21)).gerar()
+        venda = next(mov for mov in posicao["entradas"] if mov.origem_codigo == "venda")
+        self.assertEqual(venda.valor_bruto, Decimal("80.00"))
+        self.assertEqual(venda.valor_taxa, Decimal("2.10"))
+        self.assertEqual(venda.entrada, Decimal("77.90"))
+        self.assertEqual(posicao["total_entradas"], Decimal("107.90"))
+        self.assertEqual(posicao["total_fechamento"], Decimal("207.90"))
+
+        response = self.client.get(reverse("financeiro:posicao_diaria"), {"data": "2026-08-21"})
+        self.assertContains(response, "Bruto R$ 80,00")
+        self.assertContains(response, "taxa R$ 2,10")
+
     def test_admin_exclui_movimento_manual_sem_apagar_historico(self):
         movimento = ExtratoBancario.objects.create(
             filial=self.filial, conta_bancaria=self.banco, data_lancamento=date(2026, 8, 21),

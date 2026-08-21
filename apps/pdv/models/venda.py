@@ -173,6 +173,11 @@ class PagamentoVendaPDV(models.Model):
     )
     valor = models.DecimalField(max_digits=14, decimal_places=2)
     troco = models.DecimalField(max_digits=14, decimal_places=2, default=0)
+    taxa_percentual_aplicada = models.DecimalField(max_digits=7, decimal_places=4, default=0)
+    taxa_fixa_aplicada = models.DecimalField(max_digits=14, decimal_places=2, default=0)
+    valor_taxa = models.DecimalField(max_digits=14, decimal_places=2, default=0)
+    valor_liquido = models.DecimalField(max_digits=14, decimal_places=2, default=0)
+    taxa_calculada_em = models.DateTimeField(null=True, blank=True)
     tef_transacao = models.ForeignKey(
         "financeiro.TEFTransacao", on_delete=models.SET_NULL, null=True, blank=True,
     )
@@ -190,6 +195,31 @@ class PagamentoVendaPDV(models.Model):
         db_table = "pagamentos_venda_pdv"
         verbose_name = "Pagamento de venda PDV"
         verbose_name_plural = "Pagamentos de venda PDV"
+
+    def save(self, *args, **kwargs):
+        if self._state.adding and self.forma_pagamento_id and self.taxa_calculada_em is None:
+            from django.utils import timezone
+
+            calculo = self.forma_pagamento.calcular_taxa_recebimento(
+                (self.valor or 0) - (self.troco or 0),
+                self.numero_parcelas,
+            )
+            self.taxa_percentual_aplicada = calculo["percentual"]
+            self.taxa_fixa_aplicada = calculo["fixa"]
+            self.valor_taxa = calculo["taxa"]
+            self.valor_liquido = calculo["liquido"]
+            self.taxa_calculada_em = timezone.now()
+        super().save(*args, **kwargs)
+
+    @property
+    def valor_bruto_recebido(self):
+        return max((self.valor or 0) - (self.troco or 0), 0)
+
+    @property
+    def valor_entrada_liquida(self):
+        if self.taxa_calculada_em:
+            return self.valor_liquido
+        return self.valor_bruto_recebido
 
 
 class DevolucaoPDV(models.Model):

@@ -548,11 +548,15 @@ class VendaPDVService:
                 raise DadosInvalidosError("Forma de pagamento nao encontrada.")
 
             troco = max(Decimal("0.00"), valor_pgto - (valor_total - valor_pago))
+            numero_parcelas = int(pgto.get("numero_parcelas") or pgto.get("parcelas") or 1)
+            if not 1 <= numero_parcelas <= 24:
+                raise DadosInvalidosError("O numero de parcelas deve ficar entre 1 e 24.")
             PagamentoVendaPDV.objects.create(
                 venda_pdv=venda,
                 forma_pagamento=forma,
                 valor=valor_pgto,
                 troco=troco,
+                numero_parcelas=numero_parcelas,
             )
 
             # Boleto e Vale sao recebimentos a prazo: geram conta a receber.

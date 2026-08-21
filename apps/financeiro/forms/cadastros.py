@@ -255,6 +255,7 @@ class FormaPagamentoForm(forms.ModelForm):
             "movimenta_caixa",
             "prazo_liquidacao_dias",
             "taxa_administrativa",
+            "taxa_fixa",
             "conta_bancaria_padrao",
             "ativo",
         ]
@@ -267,6 +268,7 @@ class FormaPagamentoForm(forms.ModelForm):
             "movimenta_caixa": "Movimenta o caixa",
             "prazo_liquidacao_dias": "Liquidação em dias",
             "taxa_administrativa": "Taxa administrativa (%)",
+            "taxa_fixa": "Taxa fixa por transacao (R$)",
             "conta_bancaria_padrao": "Conta bancaria padrao",
             "ativo": "Ativo",
         }
@@ -278,6 +280,7 @@ class FormaPagamentoForm(forms.ModelForm):
         self.fields["codigo_sefaz"].required = False
         self.fields["conta_bancaria_padrao"].required = False
         self.fields["taxa_administrativa"].widget.attrs.setdefault("step", "0.01")
+        self.fields["taxa_fixa"].widget.attrs.update({"step": "0.01", "min": "0", "inputmode": "decimal"})
         self.fields["prazo_liquidacao_dias"].widget.attrs.setdefault("min", "0")
         if filial:
             self.fields["conta_bancaria_padrao"].queryset = (
@@ -292,6 +295,18 @@ class FormaPagamentoForm(forms.ModelForm):
         if self.filial and qs.exists():
             raise forms.ValidationError("Já existe forma de pagamento com esta descrição nesta filial.")
         return descricao
+
+    def clean_taxa_administrativa(self):
+        taxa = self.cleaned_data.get("taxa_administrativa") or 0
+        if taxa < 0 or taxa > 100:
+            raise forms.ValidationError("Informe uma taxa entre 0% e 100%.")
+        return taxa
+
+    def clean_taxa_fixa(self):
+        taxa = self.cleaned_data.get("taxa_fixa") or 0
+        if taxa < 0:
+            raise forms.ValidationError("A taxa fixa nao pode ser negativa.")
+        return taxa
 
     def save(self, commit=True):
         instance = super().save(commit=False)

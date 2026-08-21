@@ -1,4 +1,6 @@
 """Bloco 12 — Formas e condições de pagamento."""
+from decimal import Decimal, ROUND_HALF_UP
+
 from django.db import models
 from apps.core.models import Empresa, Filial
 from apps.core.models.base import ActiveModel
@@ -29,6 +31,12 @@ class FormaPagamento(ActiveModel):
     )
     prazo_liquidacao_dias = models.PositiveSmallIntegerField(default=0)
     taxa_administrativa = models.DecimalField(max_digits=5, decimal_places=2, default=0)
+    taxa_fixa = models.DecimalField(
+        max_digits=14,
+        decimal_places=2,
+        default=0,
+        help_text="Valor fixo descontado em cada transação recebida.",
+    )
     conta_bancaria_padrao = models.ForeignKey(
         "financeiro.ContaBancaria",
         on_delete=models.SET_NULL,
@@ -49,6 +57,34 @@ class FormaPagamento(ActiveModel):
 
     def __str__(self):
         return self.descricao
+
+    def percentual_para_parcelas(self, parcelas=1):
+        """Retorna a taxa da parcela quando configurada, ou a taxa padrão."""
+        parcelas = max(int(parcelas or 1), 1)
+        taxa_parcela = self.taxas_parcelamento.filter(parcelas=parcelas).values_list("taxa", flat=True).first()
+        return Decimal(taxa_parcela if taxa_parcela is not None else self.taxa_administrativa or 0)
+
+    @staticmethod
+    def calcular_valores_taxa(valor_bruto, percentual=0, taxa_fixa=0):
+        centavos = Decimal("0.01")
+        bruto = max(Decimal(valor_bruto or 0), Decimal("0"))
+        percentual = max(Decimal(percentual or 0), Decimal("0"))
+        fixa = max(Decimal(taxa_fixa or 0), Decimal("0"))
+        taxa = ((bruto * percentual / Decimal("100")) + fixa).quantize(centavos, rounding=ROUND_HALF_UP)
+        taxa = min(taxa, bruto)
+        return {
+            "percentual": percentual,
+            "fixa": fixa,
+            "taxa": taxa,
+            "liquido": (bruto - taxa).quantize(centavos, rounding=ROUND_HALF_UP),
+        }
+
+    def calcular_taxa_recebimento(self, valor_bruto, parcelas=1):
+        return self.calcular_valores_taxa(
+            valor_bruto,
+            self.percentual_para_parcelas(parcelas),
+            self.taxa_fixa,
+        )
 
 
 class TaxaParcelamento(models.Model):

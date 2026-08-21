@@ -38,15 +38,14 @@ def _saldo_calculado_conta(conta):
         ExtratoBancario.objects.filter(conta_bancaria=conta).aggregate(total=Sum('valor'))['total']
         or ZERO
     )
-    receber_total = (
-        ContaReceber.objects.filter(
+    receber_total = sum((
+        item.valor_entrada_liquida for item in ContaReceber.objects.filter(
             filial=conta.filial,
             conta_bancaria=conta,
             valor_pago__gt=0,
             data_pagamento__isnull=False,
-        ).aggregate(total=Sum('valor_pago'))['total']
-        or ZERO
-    )
+        )
+    ), ZERO)
     valor_pagamento = ExpressionWrapper(
         F('valor_pago') + F('valor_juros') + F('valor_multa') - F('valor_desconto'),
         output_field=DecimalField(max_digits=14, decimal_places=2),
@@ -73,7 +72,7 @@ def _saldo_calculado_conta(conta):
             'conta_bancaria', 'forma_pagamento__conta_bancaria_padrao',
         )
         venda_total = sum((
-            (item.valor or ZERO) - (item.troco or ZERO)
+            item.valor_entrada_liquida
             for item in pagamentos_venda
             if (item.conta_bancaria or item.forma_pagamento.conta_bancaria_padrao) == conta
         ), ZERO)
@@ -117,14 +116,14 @@ class DashboardContasService:
             sete=Sum('valor_saldo', filter=Q(status__in=status_receber, data_vencimento__gt=hoje, data_vencimento__lte=sete_dias)),
             trinta=Sum('valor_saldo', filter=Q(status__in=status_receber, data_vencimento__gt=sete_dias, data_vencimento__lte=trinta_dias)),
             futuro=Sum('valor_saldo', filter=Q(status__in=status_receber, data_vencimento__gt=trinta_dias)),
-            realizado_mes=Sum(
-                'valor_pago',
-                filter=Q(
-                    valor_pago__gt=0,
-                    data_pagamento__gte=inicio_mes,
-                    data_pagamento__lte=hoje,
-                ),
-            ),
+        )
+        recebimentos_mes_qs = receber_qs.filter(
+            valor_pago__gt=0,
+            data_pagamento__gte=inicio_mes,
+            data_pagamento__lte=hoje,
+        ).select_related('forma_pagamento')
+        receber['realizado_mes'] = sum(
+            (item.valor_entrada_liquida for item in recebimentos_mes_qs), ZERO
         )
         pagar = pagar_qs.aggregate(
             aberto=Sum('valor_saldo', filter=Q(status__in=status_pagar)),
@@ -184,21 +183,18 @@ class DashboardContasService:
         _adicionar_percentuais(maiores_clientes)
 
         formas_realizadas = []
-        recebimentos_por_forma = (
-            receber_qs.filter(
-                valor_pago__gt=0,
-                data_pagamento__gte=inicio_mes,
-                data_pagamento__lte=hoje,
+        recebimentos_por_forma = {}
+        for recebimento in recebimentos_mes_qs:
+            nome_forma = recebimento.forma_pagamento.descricao if recebimento.forma_pagamento else 'Não informada'
+            recebimentos_por_forma[nome_forma] = (
+                recebimentos_por_forma.get(nome_forma, ZERO) + recebimento.valor_entrada_liquida
             )
-            .values('forma_pagamento__descricao')
-            .annotate(total=Sum('valor_pago'))
-        )
-        for item in recebimentos_por_forma:
+        for nome_forma, total in recebimentos_por_forma.items():
             formas_realizadas.append({
-                'nome': item['forma_pagamento__descricao'] or 'Não informada',
+                'nome': nome_forma,
                 'natureza': 'Recebido',
                 'tipo': 'receber',
-                'total': item['total'] or ZERO,
+                'total': total,
             })
 
         pagamentos_por_forma = (

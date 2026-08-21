@@ -9,6 +9,7 @@ depois, fora do caixa.
 """
 from __future__ import annotations
 
+from collections import defaultdict
 from datetime import date, timedelta
 from decimal import Decimal
 
@@ -44,10 +45,11 @@ class FluxoCaixaService:
             data_movimentacao__date__gte=data_inicio, data_movimentacao__date__lte=data_fim,
         ).aggregate(total=Sum('valor'))['total'] or Decimal('0')
 
-        entradas_receber = ContaReceber.objects.filter(
+        recebimentos = ContaReceber.objects.filter(
             filial=filial, status=StatusContaReceber.PAGO,
             data_pagamento__gte=data_inicio, data_pagamento__lte=data_fim,
-        ).aggregate(total=Sum('valor_pago'))['total'] or Decimal('0')
+        )
+        entradas_receber = sum((item.valor_entrada_liquida for item in recebimentos), Decimal('0'))
 
         saidas_pagar = ContaPagar.objects.filter(
             filial=filial, status=StatusContaPagar.PAGO,
@@ -94,13 +96,12 @@ class FluxoCaixaService:
             ).annotate(dia=TruncDate('data_movimentacao')).values('dia')
             .annotate(total=Sum('valor')).values_list('dia', 'total')
         )
-        receber_por_dia = dict(
-            ContaReceber.objects.filter(
-                filial=filial, status=StatusContaReceber.PAGO,
-                data_pagamento__gte=data_inicio, data_pagamento__lte=data_fim,
-            ).values('data_pagamento').annotate(total=Sum('valor_pago'))
-            .values_list('data_pagamento', 'total')
-        )
+        receber_por_dia = defaultdict(lambda: Decimal('0'))
+        for item in ContaReceber.objects.filter(
+            filial=filial, status=StatusContaReceber.PAGO,
+            data_pagamento__gte=data_inicio, data_pagamento__lte=data_fim,
+        ):
+            receber_por_dia[item.data_pagamento] += item.valor_entrada_liquida
         pagar_por_dia = dict(
             ContaPagar.objects.filter(
                 filial=filial, status=StatusContaPagar.PAGO,

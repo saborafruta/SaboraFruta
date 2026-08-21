@@ -393,7 +393,7 @@ class ContaBancariaListView(PermissaoRequiredMixin, View):
                     historico=f"Recebimento - {item.cliente}",
                     origem="Conta a receber",
                     documento=item.documento_numero,
-                    entrada=item.valor_pago or Decimal("0"),
+                    entrada=item.valor_entrada_liquida,
                     saida=Decimal("0"),
                     referencia_url=reverse("financeiro:receber_detail", args=[item.pk]),
                     origem_codigo="receber",
@@ -445,7 +445,7 @@ class ContaBancariaListView(PermissaoRequiredMixin, View):
                     conta_destino = item.conta_bancaria or item.forma_pagamento.conta_bancaria_padrao
                     if not conta_destino or conta_destino.pk not in conta_ids:
                         continue
-                    valor = (item.valor or Decimal("0")) - (item.troco or Decimal("0"))
+                    valor = item.valor_entrada_liquida
                     if valor <= 0:
                         continue
                     movimentos.append(MovimentoBancario(
@@ -503,7 +503,7 @@ class ContaBancariaListView(PermissaoRequiredMixin, View):
             referencia_url = ""
             origem_label = "Manual" if item.origem == "manual" else "Extrato"
         elif origem == "receber":
-            valor = item.valor_pago or Decimal("0")
+            valor = item.valor_entrada_liquida
             descricao = f"Recebimento - {item.cliente}"
             documento = item.documento_numero
             data = item.data_pagamento
@@ -521,7 +521,7 @@ class ContaBancariaListView(PermissaoRequiredMixin, View):
             origem_label = "Conta a pagar"
         else:
             conta = item.conta_bancaria or item.forma_pagamento.conta_bancaria_padrao
-            valor = (item.valor or Decimal("0")) - (item.troco or Decimal("0"))
+            valor = item.valor_entrada_liquida
             descricao = f"Venda PDV #{item.venda_pdv.numero_venda} - {item.forma_pagamento.descricao}"
             documento = str(item.venda_pdv.numero_venda)
             data = timezone.localtime(item.venda_pdv.data_venda).date()
@@ -608,7 +608,7 @@ class ContaBancariaListView(PermissaoRequiredMixin, View):
         ).select_related("cliente")
         receber = Decimal("0")
         for item in receber_qs:
-            valor = item.valor_pago or Decimal("0")
+            valor = item.valor_entrada_liquida
             receber += valor
             itens.append(PendenciaContaBancaria(
                 origem="receber", registro_id=item.pk, data=item.data_pagamento,
@@ -638,7 +638,7 @@ class ContaBancariaListView(PermissaoRequiredMixin, View):
                 forma_pagamento__conta_bancaria_padrao__isnull=True,
             ).exclude(venda_pdv__status="cancelada").select_related("venda_pdv", "forma_pagamento")
             for item in vendas_qs:
-                valor = max((item.valor or Decimal("0")) - (item.troco or Decimal("0")), Decimal("0"))
+                valor = item.valor_entrada_liquida
                 if not valor:
                     continue
                 vendas += valor

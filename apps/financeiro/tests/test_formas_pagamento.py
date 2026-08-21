@@ -5,7 +5,8 @@ from django.urls import reverse
 
 from apps.core.models import Empresa, Filial, PerfilAcesso, Usuario
 from apps.financeiro.constants.enums import TipoFormaPagamento
-from apps.financeiro.models import FormaPagamento
+from apps.financeiro.models import FormaPagamento, TaxaParcelamento
+from apps.pdv.models import PagamentoVendaPDV, VendaPDV
 
 
 class FormasPagamentoFinanceiroTests(TestCase):
@@ -60,6 +61,7 @@ class FormasPagamentoFinanceiroTests(TestCase):
             "codigo_sefaz": "17",
             "prazo_liquidacao_dias": "0",
             "taxa_administrativa": "0.00",
+            "taxa_fixa": "0.35",
             "ativo": "on",
         })
 
@@ -67,6 +69,7 @@ class FormasPagamentoFinanceiroTests(TestCase):
         forma = FormaPagamento.objects.get(descricao="PIX")
         self.assertEqual(forma.filial, self.filial)
         self.assertEqual(forma.empresa, self.empresa)
+        self.assertEqual(forma.taxa_fixa, Decimal("0.35"))
 
     def test_replicar_forma_de_pagamento_para_outra_filial(self):
         forma = FormaPagamento.objects.create(
@@ -77,6 +80,7 @@ class FormasPagamentoFinanceiroTests(TestCase):
             codigo_sefaz="03",
             requer_tef=True,
             taxa_administrativa=Decimal("2.50"),
+            taxa_fixa=Decimal("0.40"),
         )
 
         response = self.client.post(reverse("financeiro:formas_pagamento"), {
@@ -93,3 +97,43 @@ class FormasPagamentoFinanceiroTests(TestCase):
         self.assertEqual(replica.tipo, TipoFormaPagamento.CARTAO_CREDITO)
         self.assertTrue(replica.requer_tef)
         self.assertEqual(replica.taxa_administrativa, Decimal("2.50"))
+        self.assertEqual(replica.taxa_fixa, Decimal("0.40"))
+
+    def test_pagamento_congela_taxa_e_valor_liquido(self):
+        forma = FormaPagamento.objects.create(
+            empresa=self.empresa,
+            filial=self.filial,
+            descricao="Cartao 3x",
+            tipo=TipoFormaPagamento.CARTAO_CREDITO,
+            taxa_administrativa=Decimal("2.00"),
+            taxa_fixa=Decimal("0.50"),
+        )
+        TaxaParcelamento.objects.create(
+            forma_pagamento=forma,
+            parcelas=3,
+            taxa=Decimal("3.00"),
+        )
+        venda = VendaPDV.objects.create(
+            filial=self.filial,
+            numero_venda=901,
+            status="finalizada",
+            valor_total=Decimal("100.00"),
+            valor_pago=Decimal("100.00"),
+            usuario=self.usuario,
+        )
+
+        pagamento = PagamentoVendaPDV.objects.create(
+            venda_pdv=venda,
+            forma_pagamento=forma,
+            valor=Decimal("100.00"),
+            numero_parcelas=3,
+        )
+
+        self.assertEqual(pagamento.taxa_percentual_aplicada, Decimal("3.00"))
+        self.assertEqual(pagamento.taxa_fixa_aplicada, Decimal("0.50"))
+        self.assertEqual(pagamento.valor_taxa, Decimal("3.50"))
+        self.assertEqual(pagamento.valor_liquido, Decimal("96.50"))
+        forma.taxa_administrativa = Decimal("9.00")
+        forma.save(update_fields=["taxa_administrativa"])
+        pagamento.refresh_from_db()
+        self.assertEqual(pagamento.valor_liquido, Decimal("96.50"))

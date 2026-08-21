@@ -129,7 +129,7 @@
     <h3 class="text-sm font-semibold uppercase tracking-wide mb-4"
         :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Resumo financeiro</h3>
 
-    <div class="grid grid-cols-2 sm:grid-cols-4 gap-4">
+    <div class="grid grid-cols-2 sm:grid-cols-4 {% if conta.taxa_calculada_em and conta.valor_taxa_recebimento > 0 %}lg:grid-cols-6{% endif %} gap-4">
       <div class="p-3 rounded-xl text-center"
            :style="temaClaro ? 'background:#f8fafc; border:1px solid #e5e7eb;' : 'background:#1e1e20; border:1px solid #2a2a2e;'">
         <p class="text-xs mb-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Valor original</p>
@@ -155,11 +155,29 @@
 
       <div class="p-3 rounded-xl text-center"
            :style="temaClaro ? 'background:#f0fdf4; border:1px solid #bbf7d0;' : 'background:rgba(34,197,94,0.08); border:1px solid rgba(34,197,94,0.2);'">
-        <p class="text-xs mb-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Recebido</p>
+        <p class="text-xs mb-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Recebido bruto</p>
         <p class="font-bold text-sm" :style="temaClaro ? 'color:#15803d;' : 'color:#86efac;'">
           R$ {{ conta.valor_pago|floatformat:2 }}
         </p>
       </div>
+
+      {% if conta.taxa_calculada_em and conta.valor_taxa_recebimento > 0 %}
+      <div class="p-3 rounded-xl text-center"
+           :style="temaClaro ? 'background:#fff7ed; border:1px solid #fed7aa;' : 'background:rgba(249,115,22,0.08); border:1px solid rgba(249,115,22,0.2);'">
+        <p class="text-xs mb-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Taxa descontada</p>
+        <p class="font-bold text-sm" :style="temaClaro ? 'color:#c2410c;' : 'color:#fdba74;'">
+          R$ {{ conta.valor_taxa_recebimento|floatformat:2 }}
+        </p>
+      </div>
+
+      <div class="p-3 rounded-xl text-center"
+           :style="temaClaro ? 'background:#ecfeff; border:1px solid #a5f3fc;' : 'background:rgba(6,182,212,0.08); border:1px solid rgba(6,182,212,0.2);'">
+        <p class="text-xs mb-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Líquido no caixa</p>
+        <p class="font-bold text-sm" :style="temaClaro ? 'color:#0e7490;' : 'color:#67e8f9;'">
+          R$ {{ conta.valor_entrada_liquida|floatformat:2 }}
+        </p>
+      </div>
+      {% endif %}
 
       <div class="p-3 rounded-xl text-center"
            :style="{% if conta.valor_saldo > 0 %}temaClaro ? 'background:#fffbeb; border:1px solid #fde68a;' : 'background:rgba(245,158,11,0.08); border:1px solid rgba(245,158,11,0.2);'{% else %}temaClaro ? 'background:#f0fdf4; border:1px solid #bbf7d0;' : 'background:rgba(34,197,94,0.08); border:1px solid rgba(34,197,94,0.2);'{% endif %}">
