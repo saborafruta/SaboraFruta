@@ -36,7 +36,7 @@
           <article x-data="{detalhes:false}"
                    x-show="visivel('{{ log.data|date:'Y-m-d' }}','{{ log.usuario|escapejs }}','{% for item in log.alteracoes %}{{ item.campo|escapejs }}|{% endfor %}')"
                    class="rounded-lg border border-blue-100 bg-blue-50/60 p-4 dark:border-blue-900/40 dark:bg-blue-950/15">
-            <div class="grid gap-3 text-sm sm:grid-cols-[1fr_1fr_1.2fr_.6fr_1.5fr]">
+            <div class="grid gap-3 text-sm sm:grid-cols-5">
               <div><span class="block text-[10px] font-semibold uppercase text-slate-500">Quando</span><strong>{{ log.data|date:"d/m/Y H:i" }}</strong></div>
               <div><span class="block text-[10px] font-semibold uppercase text-slate-500">Quem</span><strong>{{ log.usuario }}</strong></div>
               <div><span class="block text-[10px] font-semibold uppercase text-slate-500">O que fez</span><span class="soft-pill is-blue">{{ log.acao }}</span></div>
