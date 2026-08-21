@@ -1,21 +1,28 @@
 {% load widget_tweaks %}
-<div class="space-y-5" data-conta-detail data-conta-id="{{ conta.pk }}">
-  <header class="flex flex-wrap items-start justify-between gap-4">
+<div class="space-y-5" data-conta-detail data-conta-id="{{ conta.pk }}" x-data="{exclusaoAberta:false}">
+  <div class="flex flex-wrap items-start justify-between gap-4 border-b pb-4" style="border-color:rgba(148,163,184,.25)">
     <div class="min-w-0">
       <p class="text-xs font-semibold uppercase text-blue-500">{% if tipo_conta == 'pagar' %}Conta a pagar{% else %}Conta a receber{% endif %}</p>
       <div class="mt-1 flex flex-wrap items-center gap-2">
         <h2 class="text-xl font-semibold">{% if tipo_conta == 'pagar' %}{{ conta.beneficiario_nome }}{% else %}{{ conta.cliente.razao_social }}{% endif %}</h2>
-        <span class="soft-pill {% if conta.status == 'pago' %}is-green{% elif conta.status == 'vencido' %}is-red{% elif conta.status == 'aberto' %}is-blue{% elif conta.status == 'agendado' or conta.status == 'negociado' %}is-amber{% else %}is-slate{% endif %}" data-conta-status>{{ conta.get_status_display }}</span>
+        {% if conta.excluido %}<span class="soft-pill is-red">Excluído</span>{% else %}<span class="soft-pill {% if conta.status == 'pago' %}is-green{% elif conta.status == 'vencido' %}is-red{% elif conta.status == 'aberto' %}is-blue{% elif conta.status == 'agendado' or conta.status == 'negociado' %}is-amber{% else %}is-slate{% endif %}" data-conta-status>{{ conta.get_status_display }}</span>{% endif %}
       </div>
       <p class="mt-1 text-sm opacity-60">Título #{{ conta.pk }}{% if conta.documento_numero %} · Documento {{ conta.documento_numero }}{% endif %}</p>
     </div>
+    <div class="flex flex-wrap gap-2">
     {% if tipo_conta == 'pagar' and pode_editar_lancamento %}
       <button type="button" class="btn-primary inline-flex items-center gap-2" onclick="toggleEditarLancamento(this)" aria-label="Editar lançamento">
         <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536M9 11l6-6 4 4-6 6H9v-4zM5 19h14"/></svg>
         Editar lançamento
       </button>
     {% endif %}
-  </header>
+    {% if tipo_conta == 'pagar' and user_is_admin and not conta.excluido %}<button type="button" class="btn-secondary inline-flex items-center gap-2 text-rose-600" @click="exclusaoAberta=!exclusaoAberta" aria-label="Excluir título"><svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 6h18m-2 0l-1 14H6L5 6m3 0V4h8v2"/></svg>Excluir</button>{% endif %}
+    {% if tipo_conta == 'pagar' and user_is_admin and conta.excluido %}<form action="{% url 'financeiro:pagar_restaurar' conta.pk %}" onsubmit="return alterarExclusaoLancamento(event,this)">{% csrf_token %}<button type="submit" class="btn-primary">Restaurar título</button></form>{% endif %}
+    </div>
+  </div>
+
+  {% if tipo_conta == 'pagar' and user_is_admin and not conta.excluido %}<form x-show="exclusaoAberta" x-cloak action="{% url 'financeiro:pagar_excluir' conta.pk %}" onsubmit="return alterarExclusaoLancamento(event,this)" class="grid gap-3 rounded-lg border border-rose-300 bg-rose-50 p-4 text-slate-900 dark:border-rose-900/60 dark:bg-rose-950/20 dark:text-slate-100 sm:grid-cols-[1fr_auto]">{% csrf_token %}<label class="text-xs font-semibold">Motivo da exclusão <span class="text-rose-500">*</span><input name="motivo" required maxlength="300" class="form-input mt-1" placeholder="Informe o motivo para manter a auditoria completa"></label><button type="submit" class="btn-primary self-end bg-rose-600">Excluir título</button></form>{% endif %}
+  {% if conta.excluido %}<div class="rounded-lg border border-rose-300 bg-rose-50 p-4 text-sm text-rose-800 dark:border-rose-900/60 dark:bg-rose-950/20 dark:text-rose-200"><strong>Título excluído em {{ conta.excluido_em|date:"d/m/Y H:i" }}</strong>{% if conta.excluido_por %} por {{ conta.excluido_por.nome|default:conta.excluido_por }}{% endif %}.<br>{{ conta.motivo_exclusao }}</div>{% endif %}
 
   <section class="grid grid-cols-2 gap-3 sm:grid-cols-4">
     <div class="rounded-lg border p-3" style="border-color:rgba(148,163,184,.28)"><span class="block text-xs opacity-55">Valor original</span><strong class="mt-1 block text-lg" data-conta-valor="original">R$ {{ conta.valor_original|floatformat:2 }}</strong></div>
@@ -99,7 +106,7 @@
     </section>
   </div>
 
-  {% if tipo_conta == 'pagar' and pode_editar_lancamento and logs_edicao_lancamento %}
+  {% if tipo_conta == 'pagar' and user_is_admin and logs_edicao_lancamento %}
   <section class="rounded-lg border p-4" style="border-color:rgba(148,163,184,.28)">
     <h3 class="text-xs font-semibold uppercase opacity-55">Histórico de alterações</h3>
     <div class="mt-3 divide-y" style="border-color:rgba(148,163,184,.2)">

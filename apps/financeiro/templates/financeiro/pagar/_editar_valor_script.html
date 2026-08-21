@@ -45,4 +45,26 @@
       botao.textContent = 'Salvar alterações';
     }
   };
+
+  window.alterarExclusaoLancamento = async function (evento, formulario) {
+    evento.preventDefault();
+    const botao = formulario.querySelector('button[type="submit"]');
+    const textoOriginal = botao.textContent;
+    botao.disabled = true;
+    botao.textContent = 'Processando...';
+    try {
+      const resposta = await fetch(formulario.action, {
+        method: 'POST', body: new FormData(formulario),
+        headers: {'X-Requested-With': 'XMLHttpRequest'}
+      });
+      const dados = await resposta.json();
+      if (!resposta.ok || !dados.ok) throw new Error(dados.erro || 'Não foi possível concluir a ação.');
+      window.location.reload();
+    } catch (erro) {
+      window.alert(erro.message);
+      botao.disabled = false;
+      botao.textContent = textoOriginal;
+    }
+    return false;
+  };
 </script>

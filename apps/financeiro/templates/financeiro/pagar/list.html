@@ -33,6 +33,7 @@
     </div>
     <div class="flex gap-2 flex-wrap">
       {% include "financeiro/_dashboard_contas_modal.html" %}
+      {% if user_is_admin %}<a href="?{% if mostrar_excluidos %}{% else %}mostrar_excluidos=1{% endif %}" class="btn-secondary">{% if mostrar_excluidos %}Ocultar excluídos{% else %}Ver excluídos{% endif %}</a>{% endif %}
       <a href="{% url 'financeiro:pagar_pagas' %}" class="btn-secondary">Contas pagas</a>
       {% if pode_criar %}
         <a href="{% url 'financeiro:pagar_criar' %}" class="btn-primary">+ Novo título</a>
@@ -202,7 +203,7 @@
   <div class="md:hidden space-y-3">
     {% for c in contas %}
     <a href="{% url 'financeiro:pagar_detail' c.pk %}" @click.prevent="abrirDetalhe($el.href)"
-       class="card p-4 block space-y-3 hover:opacity-90 transition-opacity">
+       class="card p-4 block space-y-3 hover:opacity-90 transition-opacity {% if c.excluido %}opacity-60 grayscale{% endif %}">
       <div class="flex items-start justify-between gap-3">
         <div class="min-w-0">
           <div class="font-semibold truncate" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
@@ -213,9 +214,7 @@
             {% if c.grupo_recorrencia %}Recorrência{% else %}Parc.{% endif %} {{ c.parcela }}/{{ c.total_parcelas }}
           </div>
         </div>
-        <span class="soft-pill {{ pill_status|dict_get:c.status|default:'is-slate' }} flex-shrink-0">
-          {{ c.get_status_display }}
-        </span>
+        {% if c.excluido %}<span class="soft-pill is-red flex-shrink-0">Excluído</span>{% else %}<span class="soft-pill {{ pill_status|dict_get:c.status|default:'is-slate' }} flex-shrink-0">{{ c.get_status_display }}</span>{% endif %}
       </div>
       <div class="grid grid-cols-3 gap-2 text-xs">
         <div>
@@ -277,7 +276,7 @@
         </thead>
         <tbody>
           {% for c in contas %}
-          <tr class="table-row-hover border-b"
+          <tr class="table-row-hover border-b {% if c.excluido %}opacity-55 grayscale{% endif %}"
               :style="temaClaro ? 'border-color:#f1f5f9;' : 'border-color:#2a2a2e;'">
             <td class="px-4 py-3 font-mono text-xs" :style="temaClaro ? 'color:#94a3b8;' : 'color:#64748b;'">#{{ c.pk }}</td>
             <td class="px-4 py-3">
@@ -316,7 +315,9 @@
               {% endif %}
             </td>
             <td class="px-4 py-3 text-center">
-              {% if c.status == 'aberto' %}
+              {% if c.excluido %}
+                <span class="soft-pill is-red">Excluído</span>
+              {% elif c.status == 'aberto' %}
                 <span class="soft-pill is-blue">Aberto</span>
               {% elif c.status == 'pago' %}
                 <span class="soft-pill is-green">Pago</span>
@@ -337,7 +338,7 @@
                    :style="temaClaro ? 'background:#eff6ff; color:#1d4ed8;' : 'background:rgba(59,130,246,0.12); color:#93c5fd;'">
                   Detalhes
                 </a>
-                {% if pode_editar and c.status != 'pago' and c.status != 'cancelado' %}
+                {% if pode_editar and not c.excluido and c.status != 'pago' and c.status != 'cancelado' %}
                 <a href="{% url 'financeiro:pagar_pagar' c.pk %}"
                    class="text-xs px-2.5 py-1 rounded-lg font-semibold transition-all"
                    :style="temaClaro ? 'background:#faf5ff; color:#7e22ce;' : 'background:rgba(168,85,247,0.12); color:#d8b4fe;'">

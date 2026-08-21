@@ -16,6 +16,13 @@ from ..constants.enums import StatusContaReceber, StatusContaPagar, StatusPIX
 EXTENSOES_COMPROVANTE = ['pdf', 'jpg', 'jpeg', 'png', 'webp', 'heic', 'heif']
 
 
+class ContaPagarManager(FilialAwareManager):
+    """Oculta títulos excluídos das rotinas financeiras por padrão."""
+
+    def get_queryset(self):
+        return super().get_queryset().filter(excluido_em__isnull=True)
+
+
 def caminho_comprovante_pagamento(instancia, nome_original):
     """Usa nome imprevisível e separa os comprovantes por filial."""
     extensao = Path(nome_original).suffix.lower()
@@ -168,7 +175,15 @@ class ContaPagar(TimestampedModel):
     usuario_pagamento = models.ForeignKey(Usuario, on_delete=models.SET_NULL, null=True, blank=True,
                                           related_name="contas_pagar_pagas")
 
-    objects = FilialAwareManager()
+    excluido_em = models.DateTimeField(null=True, blank=True, db_index=True)
+    excluido_por = models.ForeignKey(
+        Usuario, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name="contas_pagar_excluidas",
+    )
+    motivo_exclusao = models.CharField(max_length=300, blank=True)
+
+    objects = ContaPagarManager()
+    all_objects = FilialAwareManager()
 
     class Meta:
         db_table = "contas_pagar"
@@ -202,6 +217,10 @@ class ContaPagar(TimestampedModel):
         if self.fornecedor_id:
             return self.fornecedor.cpf_cnpj
         return ""
+
+    @property
+    def excluido(self):
+        return self.excluido_em is not None
 
 
 class PagamentoContaPagar(TimestampedModel):

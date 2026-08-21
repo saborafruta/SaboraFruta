@@ -92,6 +92,8 @@ class RegistroAuditoria(models.Model):
         TRANSFERIR = 'transferir', 'Transferir'
         INVENTARIAR = 'inventariar', 'Inventariar'
         BAIXAR_VALIDADE = 'baixar_validade', 'Baixar validade'
+        EXCLUIR = 'excluir', 'Excluir'
+        RESTAURAR = 'restaurar', 'Restaurar'
 
     filial = models.ForeignKey(
         'core.Filial', on_delete=models.SET_NULL, null=True, blank=True,

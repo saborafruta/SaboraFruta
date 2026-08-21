@@ -30,6 +30,7 @@
       <p class="mt-1 text-sm opacity-70">Consulte pagamentos concluídos e abra qualquer título para ver a baixa completa.</p>
     </div>
     <div class="flex flex-wrap gap-2">
+      {% if user_is_admin %}<a href="?{% if mostrar_excluidos %}{% else %}mostrar_excluidos=1{% endif %}" class="btn-secondary">{% if mostrar_excluidos %}Ocultar excluídos{% else %}Ver excluídos{% endif %}</a>{% endif %}
       <a href="{% url 'financeiro:pagar_pagas_relatorio' %}{% if page_querystring %}?{{ page_querystring }}{% endif %}"
          target="_blank" class="btn-secondary">Imprimir relatório</a>
       {% if pode_criar %}
@@ -90,7 +91,7 @@
 
   <div class="space-y-3 md:hidden">
     {% for conta in contas %}
-      <a href="{% url 'financeiro:pagar_detail' conta.pk %}" @click.prevent="abrirDetalhe($el.href)" class="card block p-4 transition-opacity hover:opacity-85">
+      <a href="{% url 'financeiro:pagar_detail' conta.pk %}" @click.prevent="abrirDetalhe($el.href)" class="card block p-4 transition-opacity hover:opacity-85 {% if conta.excluido %}opacity-55 grayscale{% endif %}">
         <div class="flex items-start justify-between gap-3">
           <div class="min-w-0">
             <div class="truncate font-semibold">{{ conta.beneficiario_nome }}</div>
@@ -99,7 +100,7 @@
               {% if conta.nota_fiscal_fornecedor %} · NF {{ conta.nota_fiscal_fornecedor }}{% endif %}
             </div>
           </div>
-          <span class="soft-pill is-green">Pago</span>
+          {% if conta.excluido %}<span class="soft-pill is-red">Excluído</span>{% else %}<span class="soft-pill is-green">Pago</span>{% endif %}
         </div>
         <div class="mt-4 grid grid-cols-2 gap-3 text-sm">
           <div><span class="block text-xs opacity-60">Pagamento</span><strong>{{ conta.data_pagamento|date:"d/m/Y" }}</strong></div>
@@ -131,7 +132,7 @@
         </thead>
         <tbody>
           {% for conta in contas %}
-            <tr class="cursor-pointer border-b transition-colors hover:bg-blue-500/5"
+            <tr class="cursor-pointer border-b transition-colors hover:bg-blue-500/5 {% if conta.excluido %}opacity-55 grayscale{% endif %}"
                 role="link" tabindex="0"
                 @click="abrirDetalhe('{% url 'financeiro:pagar_detail' conta.pk %}')"
                 @keydown.enter.prevent="abrirDetalhe('{% url 'financeiro:pagar_detail' conta.pk %}')"

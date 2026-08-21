@@ -52,7 +52,11 @@ def _saldo_calculado_conta(conta):
         output_field=DecimalField(max_digits=14, decimal_places=2),
     )
     pagar_total = (
-        PagamentoContaPagar.objects.filter(filial=conta.filial, conta_bancaria=conta)
+        PagamentoContaPagar.objects.filter(
+            filial=conta.filial,
+            conta_bancaria=conta,
+            conta_pagar__excluido_em__isnull=True,
+        )
         .aggregate(total=Sum(valor_pagamento))['total']
         or ZERO
     )
@@ -142,6 +146,7 @@ class DashboardContasService:
         )
 
         pagamentos_mes_qs = PagamentoContaPagar.objects.for_filial(filial).filter(
+            conta_pagar__excluido_em__isnull=True,
             data_pagamento__gte=inicio_mes,
             data_pagamento__lte=hoje,
         )

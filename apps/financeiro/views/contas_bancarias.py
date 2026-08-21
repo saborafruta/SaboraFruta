@@ -100,6 +100,51 @@ class ContaBancariaListView(PermissaoRequiredMixin, View):
                 conta_modal_aberto=True,
             )
 
+        if acao in {"excluir_conta", "restaurar_conta"}:
+            if not _usuario_admin(request):
+                messages.error(request, "Apenas administradores podem excluir ou restaurar contas.")
+                return redirect(reverse("financeiro:contas_bancarias"))
+            conta = get_object_or_404(
+                ContaBancaria.objects.for_filial(filial), pk=request.POST.get("conta_id")
+            )
+            if acao == "excluir_conta":
+                motivo = (request.POST.get("motivo") or "").strip()
+                if not motivo:
+                    messages.error(request, "Informe o motivo da exclusao.")
+                    return redirect(reverse("financeiro:contas_bancarias") + f"?conta={conta.pk}")
+                antes = snapshot_modelo(conta, ["ativo"])
+                conta.ativo = False
+                conta.save(update_fields=["ativo", "updated_at"])
+                registrar_auditoria(
+                    request=request,
+                    modulo=RegistroAuditoria.Modulo.FINANCEIRO,
+                    acao=RegistroAuditoria.Acao.EXCLUIR,
+                    objeto=conta,
+                    descricao=f"Conta bancaria {conta.descricao or conta.banco_nome} excluida",
+                    justificativa=motivo,
+                    antes=antes,
+                    depois=snapshot_modelo(conta, ["ativo"]),
+                    metadados={"contas_envolvidas": [conta.pk]},
+                )
+                messages.success(request, "Conta excluida. O historico foi preservado.")
+                return redirect(reverse("financeiro:contas_bancarias"))
+            antes = snapshot_modelo(conta, ["ativo"])
+            conta.ativo = True
+            conta.save(update_fields=["ativo", "updated_at"])
+            registrar_auditoria(
+                request=request,
+                modulo=RegistroAuditoria.Modulo.FINANCEIRO,
+                acao=RegistroAuditoria.Acao.RESTAURAR,
+                objeto=conta,
+                descricao=f"Conta bancaria {conta.descricao or conta.banco_nome} restaurada",
+                justificativa=(request.POST.get("motivo") or "Conta restaurada pelo administrador.").strip(),
+                antes=antes,
+                depois=snapshot_modelo(conta, ["ativo"]),
+                metadados={"contas_envolvidas": [conta.pk]},
+            )
+            messages.success(request, "Conta restaurada.")
+            return redirect(reverse("financeiro:contas_bancarias") + f"?conta={conta.pk}")
+
         if acao == "lancar_movimento":
             form = MovimentoContaBancariaForm(request.POST, filial=filial)
             if form.is_valid():
@@ -192,18 +237,23 @@ class ContaBancariaListView(PermissaoRequiredMixin, View):
         data_ini = parse_date(request.GET.get("data_ini", "")) or hoje.replace(day=1)
         data_fim = parse_date(request.GET.get("data_fim", "")) or hoje
         conta_id = request.GET.get("conta", "")
+        mostrar_excluidas = request.GET.get("mostrar_excluidas") == "1" and _usuario_admin(request)
         origem = request.GET.get("origem", "")
         busca = (request.GET.get("q") or "").strip()
 
-        contas = list(ContaBancaria.objects.for_filial(filial).order_by("-ativo", "descricao", "banco_nome"))
+        contas_ativas = ContaBancaria.objects.for_filial(filial).filter(ativo=True)
+        contas_qs = ContaBancaria.objects.for_filial(filial) if mostrar_excluidas else contas_ativas
+        contas = list(contas_qs.order_by("descricao", "banco_nome"))
         conta_selecionada = None
         if conta_id:
             conta_selecionada = get_object_or_404(ContaBancaria.objects.for_filial(filial), pk=conta_id)
+            if not conta_selecionada.ativo and not mostrar_excluidas:
+                conta_selecionada = None
 
         movimentos = self._movimentos_periodo(
             request,
             filial=filial,
-            contas=contas,
+            contas=[conta_selecionada] if conta_selecionada else list(contas_ativas),
             data_ini=data_ini,
             data_fim=data_fim,
             conta=conta_selecionada,
@@ -216,7 +266,10 @@ class ContaBancariaListView(PermissaoRequiredMixin, View):
         saldos = {conta.pk: self._saldo_calculado(conta) for conta in contas}
         for conta_item in contas:
             conta_item.saldo_calculado = saldos.get(conta_item.pk, Decimal("0"))
-        saldo_total = sum(saldos.values(), Decimal("0"))
+        saldo_total = sum(
+            (saldos.get(conta.pk, Decimal("0")) for conta in contas if conta.ativo),
+            Decimal("0"),
+        )
 
         page_obj = Paginator(movimentos, 60).get_page(request.GET.get("page"))
 
@@ -259,6 +312,8 @@ class ContaBancariaListView(PermissaoRequiredMixin, View):
             modulo=RegistroAuditoria.Modulo.FINANCEIRO,
         ).select_related("usuario").order_by("-criado_em")
         logs = self._logs_bancarios(logs, conta_selecionada)
+        usuarios_log = sorted({log["usuario"] for log in logs})
+        campos_log = sorted({item["campo"] for log in logs for item in log["alteracoes"]})
 
         return render(request, self.template_name, {
             "title": "Contas Bancarias",
@@ -289,7 +344,10 @@ class ContaBancariaListView(PermissaoRequiredMixin, View):
             "pendencias": pendencias["items"],
             "direcionar_conta_form": DirecionarContaBancariaForm(filial=filial),
             "user_is_admin": _usuario_admin(request),
+            "mostrar_excluidas": mostrar_excluidas,
             "logs_bancarios": logs[:50],
+            "usuarios_log_bancario": usuarios_log,
+            "campos_log_bancario": campos_log,
         })
 
     def _movimentos_periodo(self, request, *, filial, contas, data_ini, data_fim, conta=None, origem="", busca=""):
@@ -347,6 +405,7 @@ class ContaBancariaListView(PermissaoRequiredMixin, View):
                 filial=filial,
                 conta_bancaria_id__in=conta_ids,
                 data_pagamento__range=(data_ini, data_fim),
+                conta_pagar__excluido_em__isnull=True,
             ).select_related("conta_bancaria", "conta_pagar__fornecedor", "conta_pagar__funcionario")
             if busca:
                 qs = qs.filter(conta_pagar__documento_numero__icontains=busca)
@@ -557,7 +616,7 @@ class ContaBancariaListView(PermissaoRequiredMixin, View):
             ))
 
         pagar_qs = PagamentoContaPagar.objects.filter(
-            filial=filial, conta_bancaria__isnull=True,
+            filial=filial, conta_bancaria__isnull=True, conta_pagar__excluido_em__isnull=True,
         ).select_related("conta_pagar__fornecedor", "conta_pagar__funcionario")
         pagar = Decimal("0")
         for item in pagar_qs:
