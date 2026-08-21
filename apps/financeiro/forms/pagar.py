@@ -6,6 +6,7 @@ from pathlib import Path
 from django import forms
 
 from apps.cadastros.models import Fornecedor, Funcionario
+from apps.financeiro.forms.cadastros import ContaBancariaChoiceField
 from apps.financeiro.models.conta_bancaria import ContaBancaria, PlanoContas
 from apps.financeiro.models.formas_pagamento import FormaPagamento
 from apps.financeiro.forms.plano_contas import CategoriaFinanceiraChoiceField
@@ -336,7 +337,7 @@ class ContaPagarEdicaoAdminForm(forms.Form):
         queryset=FormaPagamento.objects.none(), required=False,
         label='Forma utilizada',
     )
-    conta_bancaria = forms.ModelChoiceField(
+    conta_bancaria = ContaBancariaChoiceField(
         queryset=ContaBancaria.objects.none(), required=False,
         label='Conta bancaria',
     )
@@ -453,7 +454,7 @@ class PagamentoContaPagarForm(forms.Form):
         queryset=FormaPagamento.objects.none(),
         label='Forma utilizada',
     )
-    conta_bancaria = forms.ModelChoiceField(
+    conta_bancaria = ContaBancariaChoiceField(
         queryset=ContaBancaria.objects.none(),
         required=False,
         label='Conta bancária',
