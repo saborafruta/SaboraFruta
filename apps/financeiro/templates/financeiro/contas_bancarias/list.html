@@ -1,0 +1,201 @@
+{% extends "_base.html" %}
+{% load widget_tweaks %}
+
+{% block title %}Contas Bancarias{% endblock %}
+{% block page_title %}Contas Bancarias{% endblock %}
+
+{% block content %}
+<div class="max-w-7xl mx-auto space-y-5" x-data="{ movimentoModal: {{ movimento_modal_aberto|yesno:'true,false' }} }">
+  <div class="flex flex-col lg:flex-row lg:items-end lg:justify-between gap-3">
+    <div>
+      <a href="{% url 'financeiro:painel' %}" class="text-sm" :style="temaClaro ? 'color:#2563eb;' : 'color:#60a5fa;'">&lt; Voltar</a>
+      <h2 class="text-2xl font-semibold mt-4" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">Contas Bancarias</h2>
+      <p class="text-sm mt-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Cadastre contas, acompanhe saldo calculado e veja entradas e saidas reais.</p>
+    </div>
+    <div class="flex flex-wrap gap-2">
+      <a href="{% url 'financeiro:formas_pagamento' %}" class="btn-secondary">Formas de pagamento</a>
+      <a href="{% url 'financeiro:conciliacao_list' %}" class="btn-secondary">Conciliacao</a>
+      <button type="button" @click="movimentoModal = true" class="btn-primary">+ Movimento manual</button>
+    </div>
+  </div>
+
+  <section class="grid grid-cols-1 md:grid-cols-4 gap-4">
+    <div class="card p-4">
+      <p class="text-xs uppercase font-semibold" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Saldo bancario</p>
+      <strong class="block text-xl mt-1 {% if saldo_total < 0 %}text-red-600{% else %}text-emerald-600{% endif %}">R$ {{ saldo_total|floatformat:2 }}</strong>
+      <span class="text-xs" :style="temaClaro ? 'color:#94a3b8;' : 'color:#64748b;'">{{ contas|length }} conta{{ contas|length|pluralize }}</span>
+    </div>
+    <div class="card p-4">
+      <p class="text-xs uppercase font-semibold" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Entradas no periodo</p>
+      <strong class="block text-xl mt-1 text-emerald-600">R$ {{ entradas_periodo|floatformat:2 }}</strong>
+      <span class="text-xs" :style="temaClaro ? 'color:#94a3b8;' : 'color:#64748b;'">{{ data_ini|date:"d/m/Y" }} a {{ data_fim|date:"d/m/Y" }}</span>
+    </div>
+    <div class="card p-4">
+      <p class="text-xs uppercase font-semibold" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Saidas no periodo</p>
+      <strong class="block text-xl mt-1 text-rose-600">R$ {{ saidas_periodo|floatformat:2 }}</strong>
+      <span class="text-xs" :style="temaClaro ? 'color:#94a3b8;' : 'color:#64748b;'">Pagamentos e debitos</span>
+    </div>
+    <div class="card p-4">
+      <p class="text-xs uppercase font-semibold" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Sem conta definida</p>
+      <strong class="block text-xl mt-1 text-amber-600">R$ {{ sem_conta.total|floatformat:2 }}</strong>
+      <span class="text-xs" :style="temaClaro ? 'color:#94a3b8;' : 'color:#64748b;'">Vendas/baixas ainda sem banco</span>
+    </div>
+  </section>
+
+  <section class="grid grid-cols-1 xl:grid-cols-[390px_1fr] gap-5">
+    <div class="space-y-5">
+      <form method="post" class="card p-5 space-y-3">
+        {% csrf_token %}
+        <input type="hidden" name="acao" value="salvar_conta">
+        {% if conta_instance %}<input type="hidden" name="id" value="{{ conta_instance.pk }}">{% endif %}
+        <div>
+          <h3 class="font-semibold">{% if conta_instance %}Editar conta{% else %}Nova conta bancaria{% endif %}</h3>
+          <p class="text-xs text-gray-500 mt-1">Informe o essencial. Integracao bancaria pode ficar para depois.</p>
+        </div>
+        {% if conta_form.non_field_errors %}<div class="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">{{ conta_form.non_field_errors|join:", " }}</div>{% endif %}
+        <label class="block text-xs font-medium">Apelido {{ conta_form.descricao|add_class:"form-input mt-1" }}</label>
+        <div class="grid grid-cols-3 gap-2">
+          <label class="block text-xs font-medium">Codigo {{ conta_form.banco_codigo|add_class:"form-input mt-1" }}</label>
+          <label class="block text-xs font-medium col-span-2">Banco {{ conta_form.banco_nome|add_class:"form-input mt-1" }}</label>
+        </div>
+        <div class="grid grid-cols-3 gap-2">
+          <label class="block text-xs font-medium col-span-2">Agencia {{ conta_form.agencia|add_class:"form-input mt-1" }}</label>
+          <label class="block text-xs font-medium">Dig. {{ conta_form.agencia_digito|add_class:"form-input mt-1" }}</label>
+        </div>
+        <div class="grid grid-cols-3 gap-2">
+          <label class="block text-xs font-medium col-span-2">Conta {{ conta_form.conta|add_class:"form-input mt-1" }}</label>
+          <label class="block text-xs font-medium">Dig. {{ conta_form.conta_digito|add_class:"form-input mt-1" }}</label>
+        </div>
+        <div class="grid grid-cols-2 gap-2">
+          <label class="block text-xs font-medium">Tipo {{ conta_form.tipo_conta|add_class:"form-input mt-1" }}</label>
+          <label class="block text-xs font-medium">Saldo inicial {{ conta_form.saldo_inicial|add_class:"form-input mt-1" }}</label>
+        </div>
+        <label class="block text-xs font-medium">Chave Pix {{ conta_form.chave_pix|add_class:"form-input mt-1" }}</label>
+        <label class="inline-flex items-center gap-2 text-sm">{{ conta_form.ativo }} Conta ativa</label>
+        <div class="flex gap-2 pt-1">
+          <button type="submit" class="btn-primary flex-1 justify-center">Salvar conta</button>
+          {% if conta_instance %}<a href="{% url 'financeiro:contas_bancarias' %}" class="btn-secondary">Cancelar</a>{% endif %}
+        </div>
+      </form>
+
+      <div class="card overflow-hidden">
+        <div class="p-4 border-b" :style="temaClaro ? 'border-color:#e5e7eb;' : 'border-color:#303038;'"><h3 class="font-semibold">Contas cadastradas</h3></div>
+        <div class="divide-y" :style="temaClaro ? 'border-color:#e5e7eb;' : 'border-color:#303038;'">
+          {% for conta in contas %}
+            <a href="?conta={{ conta.pk }}" class="block p-4 hover:bg-black/5">
+              <div class="flex items-start justify-between gap-3">
+                <div class="min-w-0">
+                  <strong class="block truncate">{{ conta.descricao|default:conta.banco_nome|default:"Conta sem nome" }}</strong>
+                  <span class="block text-xs text-gray-500">{{ conta.banco_nome }} Ag. {{ conta.agencia|default:"-" }} Conta {{ conta.conta|default:"-" }}</span>
+                </div>
+                <span class="soft-pill {% if conta.ativo %}is-green{% else %}is-amber{% endif %}">{% if conta.ativo %}Ativa{% else %}Inativa{% endif %}</span>
+              </div>
+              <div class="flex items-center justify-between mt-3">
+                <span class="text-xs text-gray-500">Saldo calculado</span>
+                <strong class="{% if conta.saldo_calculado < 0 %}text-red-600{% else %}text-emerald-600{% endif %}">R$ {{ conta.saldo_calculado|floatformat:2 }}</strong>
+              </div>
+            </a>
+          {% empty %}
+            <div class="p-6 text-sm text-gray-500 text-center">Nenhuma conta bancaria cadastrada.</div>
+          {% endfor %}
+        </div>
+      </div>
+    </div>
+
+    <div class="space-y-4">
+      <form method="get" class="card p-4 grid grid-cols-1 md:grid-cols-6 gap-3">
+        <input type="text" name="q" value="{{ busca }}" class="form-input md:col-span-2" placeholder="Buscar historico ou documento">
+        <select name="conta" class="form-input">
+          <option value="">Todas as contas</option>
+          {% for conta in contas %}<option value="{{ conta.pk }}" {% if conta_id == conta.pk|stringformat:"s" %}selected{% endif %}>{{ conta.descricao|default:conta.banco_nome }}</option>{% endfor %}
+        </select>
+        <select name="origem" class="form-input">
+          <option value="">Todas as origens</option>
+          <option value="manual" {% if origem == "manual" %}selected{% endif %}>Manual/extrato</option>
+          <option value="venda" {% if origem == "venda" %}selected{% endif %}>Venda PDV</option>
+          <option value="receber" {% if origem == "receber" %}selected{% endif %}>Conta a receber</option>
+          <option value="pagar" {% if origem == "pagar" %}selected{% endif %}>Conta a pagar</option>
+        </select>
+        <input type="date" name="data_ini" value="{{ data_ini|date:'Y-m-d' }}" class="form-input">
+        <input type="date" name="data_fim" value="{{ data_fim|date:'Y-m-d' }}" class="form-input">
+        <div class="md:col-span-6 flex justify-end gap-2">
+          <a href="{% url 'financeiro:contas_bancarias' %}" class="btn-secondary">Limpar</a>
+          <button type="submit" class="btn-primary">Filtrar</button>
+        </div>
+      </form>
+
+      <div class="card overflow-hidden">
+        <div class="px-4 py-3 border-b flex items-center justify-between" :style="temaClaro ? 'border-color:#e5e7eb;' : 'border-color:#303038;'">
+          <div>
+            <h3 class="font-semibold">Movimentacao bancaria</h3>
+            <p class="text-xs text-gray-500">Vendas entram pela conta padrao da forma; baixas entram pela conta escolhida.</p>
+          </div>
+          <strong class="{% if saldo_periodo < 0 %}text-red-600{% else %}text-emerald-600{% endif %}">R$ {{ saldo_periodo|floatformat:2 }}</strong>
+        </div>
+        <div class="overflow-x-auto">
+          <table class="w-full text-sm">
+            <thead>
+              <tr class="text-left text-xs uppercase tracking-wide" :style="temaClaro ? 'background:#f8fafc;color:#64748b;' : 'background:#1f2937;color:#cbd5e1;'">
+                <th class="px-4 py-3">Data</th>
+                <th class="px-4 py-3">Historico</th>
+                <th class="px-4 py-3">Conta</th>
+                <th class="px-4 py-3">Origem</th>
+                <th class="px-4 py-3 text-right">Entrada</th>
+                <th class="px-4 py-3 text-right">Saida</th>
+                <th class="px-4 py-3 text-right">Acao</th>
+              </tr>
+            </thead>
+            <tbody class="divide-y" :style="temaClaro ? 'border-color:#e5e7eb;' : 'border-color:#303038;'">
+              {% for mov in page_obj.object_list %}
+                <tr>
+                  <td class="px-4 py-3 whitespace-nowrap">{{ mov.data|date:"d/m/Y" }}</td>
+                  <td class="px-4 py-3 min-w-[240px]">
+                    <strong class="block">{{ mov.historico }}</strong>
+                    {% if mov.documento %}<span class="text-xs text-gray-500">Doc. {{ mov.documento }}</span>{% endif %}
+                  </td>
+                  <td class="px-4 py-3">{{ mov.conta.descricao|default:mov.conta.banco_nome }}</td>
+                  <td class="px-4 py-3"><span class="soft-pill is-blue">{{ mov.origem }}</span></td>
+                  <td class="px-4 py-3 text-right text-emerald-600 font-semibold">{% if mov.entrada %}R$ {{ mov.entrada|floatformat:2 }}{% else %}-{% endif %}</td>
+                  <td class="px-4 py-3 text-right text-rose-600 font-semibold">{% if mov.saida %}R$ {{ mov.saida|floatformat:2 }}{% else %}-{% endif %}</td>
+                  <td class="px-4 py-3 text-right">{% if mov.referencia_url %}<a href="{{ mov.referencia_url }}" class="text-blue-600 font-medium">Abrir</a>{% else %}<span class="text-xs text-gray-400">-</span>{% endif %}</td>
+                </tr>
+              {% empty %}
+                <tr><td colspan="7" class="px-4 py-10 text-center text-gray-500">Nenhuma movimentacao no periodo.</td></tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <div x-show="movimentoModal" x-cloak class="fixed inset-0 z-50 flex items-center justify-center p-4" style="background:rgba(15,23,42,0.62);backdrop-filter:blur(5px);">
+    <div class="card w-full max-w-lg p-5 space-y-4" @click.stop>
+      <div class="flex items-start justify-between gap-3">
+        <div><h3 class="text-lg font-semibold">Movimento manual</h3><p class="text-xs text-gray-500 mt-1">Use para ajuste, aporte, saque ou transferencia.</p></div>
+        <button type="button" @click="movimentoModal = false" class="btn-secondary px-3">x</button>
+      </div>
+      <form method="post" class="space-y-3">
+        {% csrf_token %}
+        <input type="hidden" name="acao" value="lancar_movimento">
+        {% if movimento_form.non_field_errors %}<div class="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">{{ movimento_form.non_field_errors|join:", " }}</div>{% endif %}
+        <label class="block text-xs font-medium">Tipo {{ movimento_form.tipo|add_class:"form-input mt-1 w-full" }}</label>
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <label class="block text-xs font-medium">Conta origem {{ movimento_form.conta_origem|add_class:"form-input mt-1 w-full" }}</label>
+          <label class="block text-xs font-medium">Conta destino {{ movimento_form.conta_destino|add_class:"form-input mt-1 w-full" }}</label>
+        </div>
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <label class="block text-xs font-medium">Data {{ movimento_form.data_lancamento|add_class:"form-input mt-1 w-full" }}</label>
+          <label class="block text-xs font-medium">Valor {{ movimento_form.valor|add_class:"form-input mt-1 w-full" }}</label>
+        </div>
+        <label class="block text-xs font-medium">Historico {{ movimento_form.historico|add_class:"form-input mt-1 w-full" }}</label>
+        <label class="block text-xs font-medium">Documento {{ movimento_form.documento|add_class:"form-input mt-1 w-full" }}</label>
+        <div class="flex justify-end gap-2">
+          <button type="button" @click="movimentoModal = false" class="btn-secondary">Cancelar</button>
+          <button type="submit" class="btn-primary">Registrar</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+{% endblock %}

@@ -37,6 +37,12 @@
         <label class="block text-xs font-medium">Taxa administrativa (%) {{ form.taxa_administrativa|add_class:"form-input mt-1" }}</label>
       </div>
 
+      <label class="block text-xs font-medium">
+        Conta bancaria padrao
+        {{ form.conta_bancaria_padrao|add_class:"form-input mt-1" }}
+        <span class="block text-[11px] font-normal text-gray-500 mt-1">Usada para levar vendas desta forma para a visao bancaria.</span>
+      </label>
+
       <div class="grid grid-cols-1 sm:grid-cols-3 gap-2 pt-1">
         <label class="inline-flex items-center gap-2 text-sm">{{ form.requer_tef }} Usa TEF</label>
         <label class="inline-flex items-center gap-2 text-sm">{{ form.gera_parcelas }} Gera parcelas</label>
@@ -165,6 +171,7 @@
               <th class="px-3 py-2.5 w-[26%]">Descrição</th>
               <th class="px-3 py-2.5 w-[16%]">Tipo</th>
               <th class="px-3 py-2.5 w-[30%]">Configurações</th>
+              <th class="px-3 py-2.5 w-[12%]">Conta</th>
               <th class="px-3 py-2.5 w-[10%]">Status</th>
               <th class="px-3 py-2.5 w-[18%] text-right">Ações</th>
             </tr>
@@ -185,6 +192,7 @@
                     {% if not forma.requer_tef and not forma.gera_parcelas and forma.movimenta_caixa %}<span class="text-xs text-gray-400">Padrão</span>{% endif %}
                   </div>
                 </td>
+                <td class="px-3 py-2.5 text-xs truncate">{{ forma.conta_bancaria_padrao.descricao|default:"-" }}</td>
                 <td class="px-3 py-2.5">{% if forma.ativo %}<span class="soft-pill is-green">Ativo</span>{% else %}<span class="soft-pill is-amber">Inativo</span>{% endif %}</td>
                 <td class="px-3 py-2.5 text-right">
                   <div class="inline-flex items-center justify-end gap-1">
@@ -229,7 +237,7 @@
                 </td>
               </tr>
             {% empty %}
-              <tr><td colspan="5" class="px-4 py-8 text-center text-gray-500">Nenhuma forma de pagamento cadastrada nesta filial.</td></tr>
+              <tr><td colspan="6" class="px-4 py-8 text-center text-gray-500">Nenhuma forma de pagamento cadastrada nesta filial.</td></tr>
             {% endfor %}
           </tbody>
         </table>

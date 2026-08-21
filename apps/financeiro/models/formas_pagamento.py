@@ -29,6 +29,13 @@ class FormaPagamento(ActiveModel):
     )
     prazo_liquidacao_dias = models.PositiveSmallIntegerField(default=0)
     taxa_administrativa = models.DecimalField(max_digits=5, decimal_places=2, default=0)
+    conta_bancaria_padrao = models.ForeignKey(
+        "financeiro.ContaBancaria",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="formas_pagamento_padrao",
+    )
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:

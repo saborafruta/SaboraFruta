@@ -6,6 +6,7 @@ from apps.financeiro.views import receber as receber_views
 from apps.financeiro.views import pagar as pagar_views
 from apps.financeiro.views import plano_contas as pc_views
 from apps.financeiro.views import plano_contabil as plano_contabil_views
+from apps.financeiro.views.contas_bancarias import ContaBancariaListView
 from apps.financeiro.views import credito_cliente as cc_views
 from apps.financeiro.views.painel import PainelFinanceiroView
 from apps.financeiro.views.fluxo_caixa import FluxoCaixaView
@@ -19,6 +20,7 @@ urlpatterns = [
     # ── Gestão Financeira ───────────────────────────────────────────────────────
     path("painel/",       PainelFinanceiroView.as_view(), name="painel"),
     path("fluxo-caixa/",  FluxoCaixaView.as_view(),       name="fluxo_caixa"),
+    path("contas-bancarias/", ContaBancariaListView.as_view(), name="contas_bancarias"),
 
     # ── Conciliação Bancária ─────────────────────────────────────────────────────
     path("conciliacao/",                    ExtratoListView.as_view(),         name="conciliacao_list"),

@@ -4,10 +4,11 @@ from __future__ import annotations
 from datetime import timedelta
 from decimal import Decimal
 
-from django.db.models import Count, Q, Sum
+from django.db.models import Count, DecimalField, ExpressionWrapper, F, Q, Sum
 
 from apps.financeiro.constants.enums import StatusContaPagar, StatusContaReceber
 from apps.financeiro.models.conta_bancaria import ContaBancaria
+from apps.financeiro.models.extrato import ExtratoBancario
 from apps.financeiro.models.receber_pagar import ContaPagar, ContaReceber, PagamentoContaPagar
 
 
@@ -29,6 +30,57 @@ def _adicionar_percentuais(itens):
     for item in itens:
         item['percentual'] = _percentual(abs(item['total']), maior)
     return itens
+
+
+def _saldo_calculado_conta(conta):
+    saldo = conta.saldo_inicial or ZERO
+    extrato_total = (
+        ExtratoBancario.objects.filter(conta_bancaria=conta).aggregate(total=Sum('valor'))['total']
+        or ZERO
+    )
+    receber_total = (
+        ContaReceber.objects.filter(
+            filial=conta.filial,
+            conta_bancaria=conta,
+            valor_pago__gt=0,
+            data_pagamento__isnull=False,
+        ).aggregate(total=Sum('valor_pago'))['total']
+        or ZERO
+    )
+    valor_pagamento = ExpressionWrapper(
+        F('valor_pago') + F('valor_juros') + F('valor_multa') - F('valor_desconto'),
+        output_field=DecimalField(max_digits=14, decimal_places=2),
+    )
+    pagar_total = (
+        PagamentoContaPagar.objects.filter(filial=conta.filial, conta_bancaria=conta)
+        .aggregate(total=Sum(valor_pagamento))['total']
+        or ZERO
+    )
+    venda_total = ZERO
+    try:
+        from apps.pdv.models import PagamentoVendaPDV
+    except Exception:
+        PagamentoVendaPDV = None
+    if PagamentoVendaPDV:
+        valor_venda = ExpressionWrapper(
+            F('valor') - F('troco'),
+            output_field=DecimalField(max_digits=14, decimal_places=2),
+        )
+        venda_total = (
+            PagamentoVendaPDV.objects.filter(
+                venda_pdv__filial=conta.filial,
+                forma_pagamento__conta_bancaria_padrao=conta,
+                forma_pagamento__movimenta_caixa=True,
+            )
+            .exclude(venda_pdv__status='cancelada')
+            .aggregate(total=Sum(valor_venda))['total']
+            or ZERO
+        )
+    movimentos_total = extrato_total + receber_total - pagar_total + venda_total
+    if saldo == ZERO and movimentos_total == ZERO and (conta.saldo_atual or ZERO) != ZERO:
+        return conta.saldo_atual
+    saldo += movimentos_total
+    return saldo
 
 
 class DashboardContasService:
@@ -167,15 +219,17 @@ class DashboardContasService:
         _adicionar_percentuais(formas_realizadas)
 
         contas_bancarias_qs = ContaBancaria.objects.for_filial(filial).filter(ativo=True)
-        saldo_bancario_total = (
-            contas_bancarias_qs.aggregate(total=Sum('saldo_atual'))['total'] or ZERO
-        )
+        contas_com_saldo = [
+            (conta, _saldo_calculado_conta(conta))
+            for conta in contas_bancarias_qs
+        ]
+        saldo_bancario_total = sum((saldo for _, saldo in contas_com_saldo), ZERO)
         contas_bancarias = [
             {
                 'nome': conta.descricao or f'{conta.banco_nome} · {conta.agencia}/{conta.conta}',
-                'total': conta.saldo_atual,
+                'total': saldo,
             }
-            for conta in contas_bancarias_qs.order_by('-saldo_atual')[:5]
+            for conta, saldo in sorted(contas_com_saldo, key=lambda item: item[1], reverse=True)[:5]
         ]
         _adicionar_percentuais(contas_bancarias)
 
