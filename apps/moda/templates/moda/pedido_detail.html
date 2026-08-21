@@ -233,6 +233,50 @@
   </div>
 
 
+  {% comment %}
+    ÍNDICE FIXO. Esta tela tem oito seções e rola muito: produtos, grade,
+    pessoas, valores, financeiro e ordens. Sem um índice, achar a grade
+    de um pedido grande é rolar às cegas -- e voltar depois, de novo.
+
+    Os números ao lado não são enfeite: dizem o que já existe em cada
+    seção antes de ir até lá.
+  {% endcomment %}
+  <nav class="sticky top-0 z-20 -mx-1 px-1 py-2 overflow-x-auto"
+       :style="temaClaro
+         ? 'background:rgba(255,255,255,.92); backdrop-filter:blur(6px);'
+         : 'background:rgba(24,24,27,.92); backdrop-filter:blur(6px);'">
+    <div class="flex gap-2 whitespace-nowrap">
+      <a href="#arquivos" class="text-xs font-semibold px-2.5 py-1.5 rounded-lg"
+         :style="temaClaro ? 'background:#f1f5f9; color:#334155;' : 'background:#27272a; color:#d4d4d8;'">
+        Arte {% if arquivos %}<span class="opacity-70">{{ arquivos|length }}</span>{% endif %}
+      </a>
+      <a href="#produtos" class="text-xs font-semibold px-2.5 py-1.5 rounded-lg"
+         :style="temaClaro ? 'background:#f1f5f9; color:#334155;' : 'background:#27272a; color:#d4d4d8;'">
+        Produtos <span class="opacity-70">{{ itens|length }}</span>
+      </a>
+      {% if tabela.linhas %}
+        <a href="#grade" class="text-xs font-semibold px-2.5 py-1.5 rounded-lg"
+           :style="temaClaro ? 'background:#f1f5f9; color:#334155;' : 'background:#27272a; color:#d4d4d8;'">
+          Grade <span class="opacity-70">{{ total_pecas }} pç</span>
+        </a>
+      {% endif %}
+      {% if itens %}
+        <a href="#pessoas" class="text-xs font-semibold px-2.5 py-1.5 rounded-lg"
+           :style="temaClaro ? 'background:#f1f5f9; color:#334155;' : 'background:#27272a; color:#d4d4d8;'">
+          Pessoas <span class="opacity-70">{{ individuais|length }}/{{ conferencia.total_grade }}</span>
+        </a>
+        <a href="#valores" class="text-xs font-semibold px-2.5 py-1.5 rounded-lg"
+           :style="temaClaro ? 'background:#f1f5f9; color:#334155;' : 'background:#27272a; color:#d4d4d8;'">
+          Valores
+        </a>
+        <a href="#ordens" class="text-xs font-semibold px-2.5 py-1.5 rounded-lg"
+           :style="temaClaro ? 'background:#f1f5f9; color:#334155;' : 'background:#27272a; color:#d4d4d8;'">
+          Ordens {% if pedido.ordens.all %}<span class="opacity-70">{{ pedido.ordens.all|length }}</span>{% endif %}
+        </a>
+      {% endif %}
+    </div>
+  </nav>
+
   <div class="grid gap-4 lg:grid-cols-3">
 
     <div class="card p-5 space-y-3 lg:col-span-2">
@@ -293,24 +337,60 @@
       {% endif %}
     </div>
 
-    <div class="card p-5 space-y-3">
-      <h3 class="text-xs font-semibold uppercase tracking-widest pb-2 border-b"
-          :style="temaClaro ? 'color:#6b7280; border-color:#e5e7eb;' : 'color:#6b7280; border-color:#374151;'">
-        Situação
-      </h3>
+    <div class="card p-5 space-y-4">
+      <div>
+        <h3 class="text-xs font-semibold uppercase tracking-widest"
+            style="color:#6b7280;">Situação</h3>
+        <div class="mt-2">
+          {% include "moda/_status_pill.html" with status=pedido.status %}
+        </div>
+      </div>
+
+      {% comment %}
+        O QUE FALTA PARA PRODUZIR, aqui e não só na hora de emitir a OP.
+        As onze validações já existiam; ficavam na tela de fluxo, então a
+        pessoa só descobria o bloqueio ao clicar em emitir -- uma ida e
+        volta por pendência.
+      {% endcomment %}
+      {% if validacao.bloqueios %}
+        <div class="rounded-lg p-3" style="background:rgba(220,38,38,.10);">
+          <p class="text-xs font-semibold" style="color:#dc2626;">
+            {{ validacao.bloqueios|length }} pendência{{ validacao.bloqueios|length|pluralize }} para produzir
+          </p>
+          <ul class="mt-1 space-y-0.5">
+            {% for b in validacao.bloqueios|slice:":3" %}
+              <li class="text-xs" :style="temaClaro ? 'color:#374151;' : 'color:#d1d5db;'">
+                · {{ b.label }}
+              </li>
+            {% endfor %}
+          </ul>
+          <a href="{% url 'moda:pedido-fluxo' pedido.pk %}" class="text-xs underline mt-1 inline-block"
+             :style="temaClaro ? 'color:#3b82f6;' : 'color:#60a5fa;'">ver todas e resolver</a>
+        </div>
+      {% else %}
+        <div class="rounded-lg p-3" style="background:rgba(34,197,94,.10);">
+          <p class="text-xs font-semibold" style="color:#059669;">
+            Nada trava a produção deste pedido.
+          </p>
+        </div>
+      {% endif %}
+
       {% comment %}
         Troca de status em um clique, separada do formulário: quem está no
         chão de fábrica só quer carimbar a etapa, não reabrir o cadastro.
       {% endcomment %}
       <form method="post" action="{% url 'moda:pedido-status' pedido.pk %}" class="space-y-2">
         {% csrf_token %}
-        <label class="block text-sm font-medium" :style="temaClaro ? 'color:#374151;' : 'color:#d1d5db;'">Mudar status</label>
-        <select name="status" class="form-input w-full">
-          {% for valor, rotulo in status_choices %}
-            <option value="{{ valor }}" {% if pedido.status == valor %}selected{% endif %}>{{ rotulo }}</option>
-          {% endfor %}
-        </select>
-        <button type="submit" class="btn-primary w-full text-sm">Aplicar</button>
+        <label class="block text-xs uppercase tracking-wider"
+               :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Mudar status</label>
+        <div class="flex gap-2">
+          <select name="status" class="form-input flex-1 text-sm">
+            {% for valor, rotulo in status_choices %}
+              <option value="{{ valor }}" {% if pedido.status == valor %}selected{% endif %}>{{ rotulo }}</option>
+            {% endfor %}
+          </select>
+          <button type="submit" class="btn-secondary text-sm shrink-0">Aplicar</button>
+        </div>
       </form>
     </div>
 
@@ -321,7 +401,7 @@
 
 
   {# ── Itens do pedido ─────────────────────────────────────────────── #}
-  <div class="card p-5 space-y-4" x-data="{ novoItem: {% if abrir_form_item %}true{% else %}false{% endif %} }">
+  <div id="produtos" class="card p-5 space-y-4 scroll-mt-24" x-data="{ novoItem: {% if abrir_form_item %}true{% else %}false{% endif %} }">
     <div class="flex items-center justify-between gap-2 flex-wrap">
       <div>
         <h3 class="text-sm font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">Produtos do pedido</h3>
@@ -680,7 +760,7 @@
 
   {# ── Grade do pedido ──────────────────────────────────────────────── #}
   {% if tabela.linhas %}
-  <div class="card p-5 space-y-4">
+  <div id="grade" class="card p-5 space-y-4 scroll-mt-24">
     <div class="flex items-center justify-between gap-2 flex-wrap">
       <div>
         <h3 class="text-sm font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">Grade do pedido</h3>
@@ -848,7 +928,7 @@
   {{ vagas_json|json_script:"moda-vagas" }}
   {# ── Personalização por pessoa ────────────────────────────────────── #}
   {% if itens %}
-  <div class="card p-5 space-y-4" x-data="pessoasDoPedido('{% url 'moda:pedido-individual-add' pedido.pk %}', '/moda/comercial/pedidos/{{ pedido.pk }}/pessoas/')">
+  <div id="pessoas" class="card p-5 space-y-4 scroll-mt-24" x-data="pessoasDoPedido('{% url 'moda:pedido-individual-add' pedido.pk %}', '/moda/comercial/pedidos/{{ pedido.pk }}/pessoas/')">
     <div class="flex items-center justify-between gap-2 flex-wrap">
       <div>
         <h3 class="text-sm font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">Personalização por pessoa</h3>
@@ -1054,7 +1134,7 @@
     responder na hora — nenhum centavo dela chega ao contas a receber.
   {% endcomment %}
   {{ valores_js|json_script:"moda-valores" }}
-  <div class="card p-5 space-y-5"
+  <div id="valores" class="card p-5 space-y-5 scroll-mt-24"
        x-data="{
          d: JSON.parse(document.getElementById('moda-valores').textContent),
          n(v) { const x = parseFloat(v); return isNaN(x) ? 0 : x; },
@@ -1320,7 +1400,7 @@
     roteiro — que é tudo o que ela mostra.
   {% endcomment %}
   {% if itens %}
-    <div class="card p-5">
+    <div id="ordens" class="card p-5 scroll-mt-24">
       <div class="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h3 class="text-sm font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">Ordens de produção</h3>

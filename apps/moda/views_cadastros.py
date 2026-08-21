@@ -462,6 +462,11 @@ def contexto_do_pedido(request, pedido, **extra) -> dict:
         'tamanhos_disponiveis': Tamanho.objects.for_filial(filial).filter(ativo=True),
         'individuais': pedido.individuais.select_related('item', 'tamanho').all(),
         'conferencia': IndividualService.conferir(pedido),
+        # O QUE TRAVA A PRODUCAO, na propria tela do pedido. As onze
+        # validacoes ja' existiam, mas so' na tela de fluxo: a pessoa
+        # descobria o bloqueio ao clicar em emitir a OP -- uma ida e volta
+        # por pendencia.
+        'validacao': ValidacaoProducao.resumo(pedido),
         # As vagas de cada tamanho, por produto -- e' o que o campo de
         # tamanho da personalizacao filtra. A chave vai como TEXTO porque
         # e' assim que o `<select>` devolve o valor escolhido, e comparar
