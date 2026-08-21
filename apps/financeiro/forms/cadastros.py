@@ -38,6 +38,8 @@ class ContaBancariaForm(forms.ModelForm):
     def __init__(self, *args, filial=None, **kwargs):
         super().__init__(*args, **kwargs)
         self.filial = filial
+        self.fields["descricao"].required = True
+        self.fields["banco_codigo"].required = False
         self.fields["saldo_inicial"].widget.attrs.setdefault("step", "0.01")
         self.fields["saldo_inicial"].widget.attrs.setdefault("inputmode", "decimal")
 

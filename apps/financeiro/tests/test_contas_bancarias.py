@@ -64,6 +64,20 @@ class ContasBancariasViewTests(TestCase):
         self.assertEqual(conta.filial, self.filial)
         self.assertEqual(conta.saldo_atual, Decimal("100.00"))
 
+    def test_cria_conta_bancaria_apenas_com_apelido(self):
+        response = self.client.post(reverse("financeiro:contas_bancarias"), {
+            "acao": "salvar_conta",
+            "descricao": "Orenda",
+            "saldo_inicial": "0.00",
+            "ativo": "on",
+        })
+
+        self.assertEqual(response.status_code, 302)
+        conta = ContaBancaria.objects.get(descricao="Orenda")
+        self.assertEqual(conta.filial, self.filial)
+        self.assertEqual(conta.banco_codigo, "")
+        self.assertEqual(conta.saldo_atual, Decimal("0.00"))
+
     def test_movimento_manual_altera_saldo_calculado(self):
         conta = ContaBancaria.objects.create(
             filial=self.filial,

@@ -50,12 +50,13 @@
         {% if conta_instance %}<input type="hidden" name="id" value="{{ conta_instance.pk }}">{% endif %}
         <div>
           <h3 class="font-semibold">{% if conta_instance %}Editar conta{% else %}Nova conta bancaria{% endif %}</h3>
-          <p class="text-xs text-gray-500 mt-1">Informe o essencial. Integracao bancaria pode ficar para depois.</p>
+          <p class="text-xs text-gray-500 mt-1">Informe so o apelido para comecar. Dados bancarios podem ficar para depois.</p>
         </div>
         {% if conta_form.non_field_errors %}<div class="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">{{ conta_form.non_field_errors|join:", " }}</div>{% endif %}
-        <label class="block text-xs font-medium">Apelido {{ conta_form.descricao|add_class:"form-input mt-1" }}</label>
+        <label class="block text-xs font-medium">Apelido <span class="text-red-500">*</span> {{ conta_form.descricao|add_class:"form-input mt-1" }}</label>
+        {% if conta_form.descricao.errors %}<p class="text-xs text-red-500">{{ conta_form.descricao.errors|join:", " }}</p>{% endif %}
         <div class="grid grid-cols-3 gap-2">
-          <label class="block text-xs font-medium">Codigo {{ conta_form.banco_codigo|add_class:"form-input mt-1" }}</label>
+          <label class="block text-xs font-medium">Codigo do banco <span class="text-gray-400">(opcional)</span> {{ conta_form.banco_codigo|add_class:"form-input mt-1" }}<span class="mt-1 block text-[11px] text-gray-500">Ex.: 001 BB, 341 Itau, 033 Santander.</span></label>
           <label class="block text-xs font-medium col-span-2">Banco {{ conta_form.banco_nome|add_class:"form-input mt-1" }}</label>
         </div>
         <div class="grid grid-cols-3 gap-2">
