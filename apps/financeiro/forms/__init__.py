@@ -7,7 +7,7 @@ from .cadastros import (
     MovimentoContaBancariaForm,
     PlanoContasDespesaForm,
 )
-from .pagar import ContaPagarForm, PagamentoContaPagarForm
+from .pagar import ContaPagarEdicaoAdminForm, ContaPagarForm, PagamentoContaPagarForm
 from .plano_contas import PlanoContasForm
 from .receber import BaixaContaReceberForm, ContaReceberForm
 
@@ -20,6 +20,7 @@ __all__ = [
     "MovimentoContaBancariaForm",
     "PlanoContasDespesaForm",
     "ContaPagarForm",
+    "ContaPagarEdicaoAdminForm",
     "PagamentoContaPagarForm",
     "PlanoContasForm",
     "BaixaContaReceberForm",

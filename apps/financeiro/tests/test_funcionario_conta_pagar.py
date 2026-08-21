@@ -14,10 +14,10 @@ from django.test import RequestFactory, TestCase
 from django.utils import timezone
 
 from apps.cadastros.forms import FornecedorRapidoForm, FuncionarioForm
-from apps.cadastros.models import Fornecedor, Funcionario
+from apps.cadastros.models import Fornecedor, FornecedorFilial, Funcionario
 from apps.cadastros.views.fornecedor import FornecedorAjaxCreateView
 from apps.compras.models import EntradaNF
-from apps.core.models import Empresa, Filial, PerfilAcesso, Usuario
+from apps.core.models import Empresa, Filial, PerfilAcesso, RegistroAuditoria, Usuario
 from apps.financeiro.forms.pagar import (
     ContaPagarForm,
     PagamentoContaPagarForm,
@@ -25,6 +25,7 @@ from apps.financeiro.forms.pagar import (
 )
 from apps.financeiro.models import (
     ContaPagar,
+    ContaBancaria,
     FormaPagamento,
     PagamentoContaPagar,
     PlanoContabil,
@@ -36,6 +37,7 @@ from apps.financeiro.views.pagar import (
     ContaPagaListView,
     ContaPagaRelatorioView,
     ContaPagarCreateView,
+    ContaPagarEditarValorView,
     ContaPagarListView,
     ContaPagarNotaFiscalLookupView,
     ContaPagarPagamentoView,
@@ -729,3 +731,91 @@ class FuncionarioContaPagarTests(TestCase):
                 ComprovantePagamentoView.as_view()(
                     request_outra, pk=conta.pk, pagamento_pk=pagamento.pk,
                 )
+
+    def test_admin_edita_lancamento_pago_e_registra_log_completo(self):
+        perfil = PerfilAcesso.objects.create(
+            empresa=self.empresa, nome="Administrador financeiro", is_admin=True,
+        )
+        usuario = Usuario.objects.create_user(
+            email="admin-financeiro@eureka.com", nome="Administrador financeiro",
+            password="teste1234", empresa=self.empresa, filial=self.filial, perfil=perfil,
+        )
+        fornecedor_anterior = Fornecedor.objects.create(
+            filial=self.filial, tipo_pessoa="J", razao_social="Fornecedor anterior",
+            cpf_cnpj="11222333000144",
+        )
+        fornecedor_novo = Fornecedor.objects.create(
+            filial=self.filial, tipo_pessoa="J", razao_social="Fornecedor novo",
+            cpf_cnpj="22333444000155",
+        )
+        FornecedorFilial.objects.bulk_create([
+            FornecedorFilial(fornecedor=fornecedor_anterior, filial=self.filial),
+            FornecedorFilial(fornecedor=fornecedor_novo, filial=self.filial),
+        ])
+        conta_anterior = ContaBancaria.objects.create(
+            filial=self.filial, descricao="Conta anterior", banco_codigo="001",
+        )
+        conta_nova = ContaBancaria.objects.create(
+            filial=self.filial, descricao="Conta nova", banco_codigo="260",
+        )
+        conta = ContaPagarService.criar(
+            filial=self.filial, fornecedor=fornecedor_anterior,
+            tipo_lancamento=ContaPagar.TipoLancamento.FORNECEDOR,
+            valor_original=Decimal("100.00"), data_emissao=date(2026, 8, 20),
+            data_vencimento=date(2026, 8, 30), plano_contas=self.categoria,
+            forma_pagamento_prevista=self.forma_prevista,
+        )
+        ContaPagarService.registrar_pagamento(
+            conta=conta, data_pagamento=date(2026, 8, 20),
+            valor_pago=Decimal("100.00"), forma_pagamento=self.forma_pix,
+            conta_bancaria=conta_anterior, usuario=usuario,
+        )
+
+        request = RequestFactory().post(
+            f"/financeiro/pagar/{conta.pk}/editar-valor/",
+            {
+                "fornecedor": fornecedor_novo.pk,
+                "valor_original": "125.50",
+                "data_vencimento": "2026-09-15",
+                "data_competencia": "2026-09-01",
+                "forma_pagamento_prevista": self.forma_pix.pk,
+                "data_pagamento": "2026-08-21",
+                "forma_pagamento": self.forma_prevista.pk,
+                "conta_bancaria": conta_nova.pk,
+                "observacao": "Valor e dados conferidos com o fornecedor.",
+                "motivo": "Correcao conforme comprovante bancario.",
+            },
+        )
+        request.user = usuario
+        request.filial_ativa = self.filial
+
+        response = ContaPagarEditarValorView.as_view()(request, pk=conta.pk)
+
+        self.assertEqual(response.status_code, 200, response.content)
+        conta.refresh_from_db()
+        pagamento = conta.pagamentos.get()
+        self.assertEqual(conta.fornecedor, fornecedor_novo)
+        self.assertEqual(conta.valor_original, Decimal("125.50"))
+        self.assertEqual(conta.valor_pago, Decimal("125.50"))
+        self.assertEqual(conta.valor_saldo, Decimal("0.00"))
+        self.assertEqual(conta.data_vencimento, date(2026, 9, 15))
+        self.assertEqual(conta.data_competencia, date(2026, 9, 1))
+        self.assertEqual(conta.forma_pagamento_prevista, self.forma_pix)
+        self.assertEqual(conta.observacao, "Valor e dados conferidos com o fornecedor.")
+        self.assertEqual(pagamento.valor_pago, Decimal("125.50"))
+        self.assertEqual(pagamento.data_pagamento, date(2026, 8, 21))
+        self.assertEqual(pagamento.forma_pagamento, self.forma_prevista)
+        self.assertEqual(pagamento.conta_bancaria, conta_nova)
+        log = RegistroAuditoria.objects.get(
+            objeto_tipo=conta._meta.label_lower,
+            objeto_id=conta.pk,
+            acao=RegistroAuditoria.Acao.AJUSTAR,
+        )
+        self.assertEqual(log.usuario, usuario)
+        self.assertEqual(log.justificativa, "Correcao conforme comprovante bancario.")
+        self.assertEqual(
+            set(log.metadados["contas_envolvidas"]),
+            {conta_anterior.pk, conta_nova.pk},
+        )
+        self.assertEqual(log.dados_anteriores["fornecedor"], "Fornecedor anterior")
+        self.assertEqual(log.dados_novos["fornecedor"], "Fornecedor novo")

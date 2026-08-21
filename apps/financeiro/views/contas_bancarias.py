@@ -359,7 +359,10 @@ class ContaBancariaListView(PermissaoRequiredMixin, View):
                     documento=item.conta_pagar.documento_numero or item.referencia_pagamento,
                     entrada=Decimal("0"),
                     saida=item.valor_liquido,
-                    referencia_url=reverse("financeiro:pagar_detail", args=[item.conta_pagar_id]),
+                    referencia_url=(
+                        f'{reverse("financeiro:pagar_detail", args=[item.conta_pagar_id])}'
+                        f'?pagamento={item.pk}'
+                    ),
                     origem_codigo="pagar",
                     registro_id=item.pk,
                 ))
@@ -452,7 +455,10 @@ class ContaBancariaListView(PermissaoRequiredMixin, View):
             descricao = f"Pagamento - {item.conta_pagar.beneficiario_nome}"
             documento = item.conta_pagar.documento_numero or item.referencia_pagamento
             data = item.data_pagamento
-            referencia_url = reverse("financeiro:pagar_detail", args=[item.conta_pagar_id])
+            referencia_url = (
+                f'{reverse("financeiro:pagar_detail", args=[item.conta_pagar_id])}'
+                f'?pagamento={item.pk}'
+            )
             origem_label = "Conta a pagar"
         else:
             conta = item.conta_bancaria or item.forma_pagamento.conta_bancaria_padrao
@@ -486,10 +492,22 @@ class ContaBancariaListView(PermissaoRequiredMixin, View):
         return {
             "conta_bancaria": "Conta bancaria",
             "data_lancamento": "Data",
+            "data_pagamento": "Data do pagamento",
+            "data_vencimento": "Vencimento",
+            "data_competencia": "Competencia",
             "valor": "Valor",
+            "valor_original": "Valor do titulo",
+            "valor_final": "Valor final",
+            "valor_pago": "Valor pago",
+            "valor_saldo": "Saldo",
             "historico": "Historico",
             "documento": "Documento",
             "descricao": "Apelido",
+            "fornecedor": "Fornecedor",
+            "forma_pagamento": "Forma utilizada",
+            "forma_pagamento_prevista": "Forma prevista",
+            "observacao": "Observacao",
+            "status": "Status",
             "saldo_inicial": "Saldo inicial",
             "ativo": "Situacao",
         }.get(campo, campo.replace("_", " ").capitalize())

@@ -18,9 +18,13 @@ from django.views import View
 from apps.core.services.exceptions import DomainError
 from apps.core.services.permissions import PermissaoRequiredMixin
 from apps.core.models import RegistroAuditoria
-from apps.core.services.auditoria import registrar_auditoria, snapshot_modelo
+from apps.core.services.auditoria import registrar_auditoria
 from apps.financeiro.constants.enums import StatusContaPagar
-from apps.financeiro.forms.pagar import ContaPagarForm, PagamentoContaPagarForm
+from apps.financeiro.forms.pagar import (
+    ContaPagarEdicaoAdminForm,
+    ContaPagarForm,
+    PagamentoContaPagarForm,
+)
 from apps.financeiro.models.conta_bancaria import PlanoContas
 from apps.financeiro.models.receber_pagar import ContaPagar, PagamentoContaPagar
 from apps.financeiro.services.pagar_service import ContaPagarService
@@ -46,13 +50,70 @@ def _usuario_admin(request):
     return request.user.is_superuser or bool(perfil and perfil.is_admin)
 
 
-def _logs_edicao_valor(conta):
-    return RegistroAuditoria.objects.filter(
+CAMPOS_EDICAO_LANCAMENTO = {
+    'fornecedor': 'Fornecedor',
+    'valor_original': 'Valor do titulo',
+    'valor_final': 'Valor final',
+    'valor_pago': 'Valor pago',
+    'valor_saldo': 'Saldo',
+    'data_vencimento': 'Vencimento',
+    'data_competencia': 'Competencia',
+    'forma_pagamento_prevista': 'Forma prevista',
+    'data_pagamento': 'Data do pagamento',
+    'forma_pagamento': 'Forma utilizada',
+    'conta_bancaria': 'Conta bancaria',
+    'observacao': 'Observacao',
+    'status': 'Status',
+}
+
+
+def _nome_objeto(objeto):
+    if not objeto:
+        return 'Nao informado'
+    return getattr(objeto, 'descricao', None) or str(objeto)
+
+
+def _snapshot_edicao_lancamento(conta, pagamento=None):
+    pagamento = pagamento or conta.pagamentos.order_by(
+        '-data_pagamento', '-created_at', '-pk',
+    ).first()
+    return {
+        'fornecedor': _nome_objeto(conta.fornecedor),
+        'valor_original': str(conta.valor_original),
+        'valor_final': str(conta.valor_final),
+        'valor_pago': str(conta.valor_pago),
+        'valor_saldo': str(conta.valor_saldo),
+        'data_vencimento': conta.data_vencimento.isoformat(),
+        'data_competencia': conta.data_competencia.isoformat() if conta.data_competencia else 'Nao informado',
+        'forma_pagamento_prevista': _nome_objeto(conta.forma_pagamento_prevista),
+        'data_pagamento': pagamento.data_pagamento.isoformat() if pagamento else 'Nao informado',
+        'forma_pagamento': _nome_objeto(pagamento.forma_pagamento if pagamento else conta.forma_pagamento),
+        'conta_bancaria': _nome_objeto(pagamento.conta_bancaria if pagamento else conta.conta_bancaria),
+        'observacao': conta.observacao or 'Nao informado',
+        'status': conta.get_status_display(),
+    }
+
+
+def _logs_edicao_lancamento(conta):
+    logs = list(RegistroAuditoria.objects.filter(
         objeto_tipo=conta._meta.label_lower,
         objeto_id=conta.pk,
         modulo=RegistroAuditoria.Modulo.FINANCEIRO,
         acao=RegistroAuditoria.Acao.AJUSTAR,
-    ).select_related('usuario')[:20]
+    ).select_related('usuario')[:20])
+    for log in logs:
+        anteriores = log.dados_anteriores or {}
+        novos = log.dados_novos or {}
+        log.alteracoes_exibicao = [
+            {
+                'campo': CAMPOS_EDICAO_LANCAMENTO.get(campo, campo.replace('_', ' ').title()),
+                'antes': anteriores.get(campo, 'Nao informado'),
+                'depois': novos.get(campo, 'Nao informado'),
+            }
+            for campo in CAMPOS_EDICAO_LANCAMENTO
+            if anteriores.get(campo) != novos.get(campo)
+        ]
+    return logs
 
 
 def _categorias_financeiras_filtro(request):
@@ -621,6 +682,14 @@ class ContaPagarDetailView(PermissaoRequiredMixin, View):
             request.user.tem_permissao('financeiro', 'editar')
             and conta.status not in [StatusContaPagar.CANCELADO, StatusContaPagar.PAGO]
         )
+        pagamento_selecionado = None
+        pagamento_id = request.GET.get('pagamento', '').strip()
+        if pagamento_id.isdigit():
+            pagamento_selecionado = conta.pagamentos.filter(pk=int(pagamento_id)).first()
+        if pagamento_selecionado is None:
+            pagamento_selecionado = conta.pagamentos.order_by(
+                '-data_pagamento', '-created_at', '-pk',
+            ).first()
 
         context = {
             'title': f'Conta a Pagar #{conta.pk}',
@@ -629,8 +698,12 @@ class ContaPagarDetailView(PermissaoRequiredMixin, View):
             'pode_cancelar': pode_cancelar,
             'pill': PILL_STATUS.get(conta.status, 'is-slate'),
             'tipo_conta': 'pagar',
-            'pode_editar_valor': _usuario_admin(request) and conta.status != StatusContaPagar.CANCELADO,
-            'logs_edicao_valor': _logs_edicao_valor(conta),
+            'pode_editar_lancamento': _usuario_admin(request) and conta.status != StatusContaPagar.CANCELADO,
+            'pagamento_selecionado': pagamento_selecionado,
+            'edicao_lancamento_form': ContaPagarEdicaoAdminForm(
+                filial=filial, conta=conta, pagamento=pagamento_selecionado,
+            ),
+            'logs_edicao_lancamento': _logs_edicao_lancamento(conta),
         }
         if request.GET.get('modal') == '1':
             return render(request, 'financeiro/_detalhes_conta_modal.html', context)
@@ -644,47 +717,100 @@ class ContaPagarEditarValorView(PermissaoRequiredMixin, View):
     @transaction.atomic
     def post(self, request, pk):
         if not _usuario_admin(request):
-            return JsonResponse({'ok': False, 'erro': 'Somente administradores podem corrigir valores.'}, status=403)
-        conta = get_object_or_404(ContaPagar.objects.for_filial(_filial(request)), pk=pk)
-        motivo = request.POST.get('motivo', '').strip()
-        valor_texto = request.POST.get('novo_valor', '').strip()
-        if not motivo:
-            return JsonResponse({'ok': False, 'erro': 'Informe o motivo da alteracao.'}, status=400)
-        try:
-            normalizado = valor_texto.replace('.', '').replace(',', '.') if ',' in valor_texto else valor_texto
-            novo_valor = Decimal(normalizado)
-        except Exception:
-            return JsonResponse({'ok': False, 'erro': 'Informe um valor valido.'}, status=400)
+            return JsonResponse({'ok': False, 'erro': 'Somente administradores podem editar lancamentos.'}, status=403)
+        filial = _filial(request)
+        conta = get_object_or_404(
+            ContaPagar.objects.for_filial(filial).select_related(
+                'fornecedor', 'forma_pagamento', 'forma_pagamento_prevista', 'conta_bancaria',
+            ),
+            pk=pk,
+        )
+        if conta.status == StatusContaPagar.CANCELADO:
+            return JsonResponse({'ok': False, 'erro': 'Nao e possivel editar uma conta cancelada.'}, status=400)
+        pagamento = None
+        pagamento_id = request.POST.get('pagamento_id', '').strip()
+        if pagamento_id.isdigit():
+            pagamento = conta.pagamentos.filter(pk=int(pagamento_id)).first()
+            if pagamento is None:
+                return JsonResponse({'ok': False, 'erro': 'A baixa selecionada nao pertence a este titulo.'}, status=400)
+        form = ContaPagarEdicaoAdminForm(
+            request.POST, filial=filial, conta=conta, pagamento=pagamento,
+        )
+        if not form.is_valid():
+            erros = [mensagem for mensagens in form.errors.values() for mensagem in mensagens]
+            return JsonResponse({'ok': False, 'erro': ' '.join(erros)}, status=400)
 
-        antes = snapshot_modelo(conta, campos=[
-            'valor_original', 'valor_final', 'valor_pago', 'valor_saldo', 'status',
-        ])
+        dados = form.cleaned_data
+        pagamento = form.pagamento
+        antes = _snapshot_edicao_lancamento(conta, pagamento)
+        contas_envolvidas = set()
+        if pagamento and pagamento.conta_bancaria_id:
+            contas_envolvidas.add(pagamento.conta_bancaria_id)
         try:
-            conta, pagamento = ContaPagarService.corrigir_valor(conta, novo_valor)
+            if dados['valor_original'] != conta.valor_original:
+                conta, pagamento_ajustado = ContaPagarService.corrigir_valor(
+                    conta, dados['valor_original'], pagamento=pagamento,
+                )
+                pagamento = pagamento_ajustado or pagamento
         except DomainError as exc:
             return JsonResponse({'ok': False, 'erro': str(exc)}, status=400)
-        depois = snapshot_modelo(conta, campos=[
-            'valor_original', 'valor_final', 'valor_pago', 'valor_saldo', 'status',
-        ])
+
+        if conta.tipo_lancamento == ContaPagar.TipoLancamento.FORNECEDOR:
+            conta.fornecedor = dados.get('fornecedor')
+        conta.data_vencimento = dados['data_vencimento']
+        conta.data_competencia = dados.get('data_competencia')
+        conta.forma_pagamento_prevista = dados.get('forma_pagamento_prevista')
+        conta.observacao = dados.get('observacao', '').strip()
+
+        if pagamento:
+            pagamento = PagamentoContaPagar.objects.select_for_update().get(pk=pagamento.pk)
+            pagamento.data_pagamento = dados['data_pagamento']
+            pagamento.forma_pagamento = dados.get('forma_pagamento')
+            pagamento.conta_bancaria = dados.get('conta_bancaria')
+            pagamento.save(update_fields=[
+                'data_pagamento', 'forma_pagamento', 'conta_bancaria', 'updated_at',
+            ])
+            ultima_baixa = conta.pagamentos.order_by(
+                '-data_pagamento', '-created_at', '-pk',
+            ).first()
+            conta.data_pagamento = ultima_baixa.data_pagamento
+            conta.forma_pagamento = ultima_baixa.forma_pagamento
+            conta.conta_bancaria = ultima_baixa.conta_bancaria
+            if pagamento.conta_bancaria_id:
+                contas_envolvidas.add(pagamento.conta_bancaria_id)
+
+        if conta.status in (StatusContaPagar.ABERTO, StatusContaPagar.VENCIDO):
+            conta.status = (
+                StatusContaPagar.VENCIDO
+                if conta.data_vencimento < timezone.localdate()
+                else StatusContaPagar.ABERTO
+            )
+        conta.save()
+        conta.refresh_from_db()
+        depois = _snapshot_edicao_lancamento(conta, pagamento)
         registrar_auditoria(
             request=request,
             modulo=RegistroAuditoria.Modulo.FINANCEIRO,
             acao=RegistroAuditoria.Acao.AJUSTAR,
             objeto=conta,
             relacionado=pagamento,
-            descricao=f'Valor da conta a pagar #{conta.pk} corrigido',
-            justificativa=motivo,
+            descricao=f'Lancamento da conta a pagar #{conta.pk} editado',
+            justificativa=dados['motivo'].strip(),
             antes=antes,
             depois=depois,
             metadados={
-                'campo': 'valor_original',
+                'campos': [campo for campo in CAMPOS_EDICAO_LANCAMENTO if antes.get(campo) != depois.get(campo)],
                 'pagamento_ajustado_id': pagamento.pk if pagamento else None,
-                'contas_envolvidas': [pagamento.conta_bancaria_id] if pagamento and pagamento.conta_bancaria_id else [],
+                'contas_envolvidas': sorted(contas_envolvidas),
             },
         )
         return JsonResponse({
             'ok': True,
-            'mensagem': 'Valor corrigido e registrado no log.',
+            'mensagem': 'Lancamento atualizado e registrado no log.',
+            'detail_url': (
+                f"{reverse('financeiro:pagar_detail', args=[conta.pk])}?pagamento={pagamento.pk}"
+                if pagamento else reverse('financeiro:pagar_detail', args=[conta.pk])
+            ),
             'valor_original': f'{conta.valor_original:.2f}',
             'valor_final': f'{conta.valor_final:.2f}',
             'valor_pago': f'{conta.valor_pago:.2f}',

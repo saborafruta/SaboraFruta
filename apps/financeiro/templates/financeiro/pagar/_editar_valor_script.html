@@ -1,45 +1,48 @@
 <script>
-  window.toggleEditarValorConta = function (elemento) {
+  window.toggleEditarLancamento = function (elemento) {
     const detalhe = elemento.closest('[data-conta-detail]');
-    const painel = detalhe && detalhe.querySelector('[data-editar-valor-panel]');
+    const painel = detalhe && detalhe.querySelector('[data-editar-lancamento-panel]');
     if (!painel) return;
     painel.hidden = !painel.hidden;
-    if (!painel.hidden) painel.querySelector('input[name="novo_valor"]')?.focus();
+    if (!painel.hidden) {
+      painel.scrollIntoView({behavior: 'smooth', block: 'nearest'});
+      painel.querySelector('select, input, textarea')?.focus();
+    }
   };
 
-  window.salvarEdicaoValorConta = async function (evento, formulario) {
+  window.salvarEdicaoLancamento = async function (evento, formulario) {
     evento.preventDefault();
-    const feedback = formulario.querySelector('[data-editar-valor-feedback]');
+    const feedback = formulario.querySelector('[data-editar-lancamento-feedback]');
     const botao = formulario.querySelector('button[type="submit"]');
-    feedback.className = 'hidden text-sm sm:col-span-3';
+    const detalhe = formulario.closest('[data-conta-detail]');
+    feedback.className = 'hidden text-sm';
     botao.disabled = true;
     botao.textContent = 'Salvando...';
     try {
       const resposta = await fetch(formulario.action, {
-        method: 'POST', body: new FormData(formulario),
+        method: 'POST',
+        body: new FormData(formulario),
         headers: {'X-Requested-With': 'XMLHttpRequest'}
       });
       const dados = await resposta.json();
-      if (!resposta.ok || !dados.ok) throw new Error(dados.erro || 'Não foi possível corrigir o valor.');
-      const detalhe = formulario.closest('[data-conta-detail]');
-      const moeda = valor => 'R$ ' + Number(valor).toLocaleString('pt-BR', {minimumFractionDigits:2, maximumFractionDigits:2});
-      ['original', 'final', 'pago', 'saldo'].forEach(chave => {
-        detalhe.querySelectorAll(`[data-conta-valor="${chave}"]`).forEach(el => el.textContent = moeda(dados[`valor_${chave === 'pago' ? 'pago' : chave === 'saldo' ? 'saldo' : chave}`]));
-      });
-      detalhe.querySelectorAll('[data-conta-status]').forEach(el => {
-        el.textContent = dados.status;
-        const classe = {'Pago':'is-green', 'Aberto':'is-blue', 'Vencido':'is-red', 'Agendado':'is-amber', 'Cancelado':'is-slate'}[dados.status] || 'is-slate';
-        el.className = `soft-pill ${classe}`;
-      });
+      if (!resposta.ok || !dados.ok) throw new Error(dados.erro || 'Não foi possível editar o lançamento.');
       feedback.textContent = dados.mensagem;
-      feedback.className = 'text-sm text-emerald-500 sm:col-span-3';
-      formulario.querySelector('input[name="novo_valor"]').value = dados.valor_original.replace('.', ',');
+      feedback.className = 'text-sm text-emerald-500';
+
+      const separador = dados.detail_url.includes('?') ? '&' : '?';
+      const atualizada = await fetch(dados.detail_url + separador + 'modal=1', {
+        headers: {'X-Requested-With': 'XMLHttpRequest'}
+      });
+      if (atualizada.ok) {
+        const html = await atualizada.text();
+        detalhe.outerHTML = html;
+      }
     } catch (erro) {
       feedback.textContent = erro.message;
-      feedback.className = 'text-sm text-rose-500 sm:col-span-3';
+      feedback.className = 'text-sm text-rose-500';
     } finally {
       botao.disabled = false;
-      botao.textContent = 'Salvar correção';
+      botao.textContent = 'Salvar alterações';
     }
   };
 </script>

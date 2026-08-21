@@ -236,7 +236,7 @@ class ContaPagarService:
 
     @staticmethod
     @transaction.atomic
-    def corrigir_valor(conta: ContaPagar, novo_valor: Decimal):
+    def corrigir_valor(conta: ContaPagar, novo_valor: Decimal, pagamento=None):
         """Corrige o valor do titulo e mantem baixa e saldo coerentes."""
         conta = ContaPagar.objects.select_for_update().get(pk=conta.pk)
         novo_valor = Decimal(novo_valor).quantize(Decimal('0.01'))
@@ -248,9 +248,13 @@ class ContaPagarService:
         diferenca = novo_valor - conta.valor_original
         pagamento_ajustado = None
         if conta.status == StatusContaPagar.PAGO:
-            pagamento_ajustado = conta.pagamentos.select_for_update().order_by(
-                '-data_pagamento', '-created_at', '-pk'
-            ).first()
+            pagamentos = conta.pagamentos.select_for_update()
+            if pagamento is not None:
+                pagamento_ajustado = pagamentos.filter(pk=pagamento.pk).first()
+            if pagamento_ajustado is None:
+                pagamento_ajustado = pagamentos.order_by(
+                    '-data_pagamento', '-created_at', '-pk'
+                ).first()
             if not pagamento_ajustado:
                 raise DomainError('A conta esta paga, mas nao possui baixa para ajustar.')
             novo_pagamento = pagamento_ajustado.valor_pago + diferenca

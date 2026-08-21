@@ -1,23 +1,18 @@
+{% load widget_tweaks %}
 <div class="space-y-5" data-conta-detail data-conta-id="{{ conta.pk }}">
   <header class="flex flex-wrap items-start justify-between gap-4">
     <div class="min-w-0">
       <p class="text-xs font-semibold uppercase text-blue-500">{% if tipo_conta == 'pagar' %}Conta a pagar{% else %}Conta a receber{% endif %}</p>
       <div class="mt-1 flex flex-wrap items-center gap-2">
-        <h2 class="text-xl font-semibold">
-          {% if tipo_conta == 'pagar' %}
-            {{ conta.beneficiario_nome }}
-          {% else %}
-            {{ conta.cliente.razao_social }}
-          {% endif %}
-        </h2>
+        <h2 class="text-xl font-semibold">{% if tipo_conta == 'pagar' %}{{ conta.beneficiario_nome }}{% else %}{{ conta.cliente.razao_social }}{% endif %}</h2>
         <span class="soft-pill {% if conta.status == 'pago' %}is-green{% elif conta.status == 'vencido' %}is-red{% elif conta.status == 'aberto' %}is-blue{% elif conta.status == 'agendado' or conta.status == 'negociado' %}is-amber{% else %}is-slate{% endif %}" data-conta-status>{{ conta.get_status_display }}</span>
       </div>
       <p class="mt-1 text-sm opacity-60">Título #{{ conta.pk }}{% if conta.documento_numero %} · Documento {{ conta.documento_numero }}{% endif %}</p>
     </div>
-    {% if tipo_conta == 'pagar' and pode_editar_valor %}
-      <button type="button" class="btn-secondary inline-flex items-center gap-2" onclick="toggleEditarValorConta(this)" aria-label="Corrigir valor do título">
+    {% if tipo_conta == 'pagar' and pode_editar_lancamento %}
+      <button type="button" class="btn-primary inline-flex items-center gap-2" onclick="toggleEditarLancamento(this)" aria-label="Editar lançamento">
         <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536M9 11l6-6 4 4-6 6H9v-4zM5 19h14"/></svg>
-        Corrigir valor
+        Editar lançamento
       </button>
     {% endif %}
   </header>
@@ -29,23 +24,49 @@
     <div class="rounded-lg border p-3" style="border-color:rgba(59,130,246,.35)"><span class="block text-xs opacity-55">Saldo</span><strong class="mt-1 block text-lg {% if conta.valor_saldo > 0 %}text-rose-500{% else %}text-emerald-500{% endif %}" data-conta-valor="saldo">R$ {{ conta.valor_saldo|floatformat:2 }}</strong></div>
   </section>
 
-  {% if tipo_conta == 'pagar' and pode_editar_valor %}
-  <section hidden data-editar-valor-panel class="rounded-lg border border-blue-500/30 bg-blue-500/5 p-4">
+  {% if tipo_conta == 'pagar' and pode_editar_lancamento %}
+  <section hidden data-editar-lancamento-panel class="rounded-lg border border-blue-500/30 bg-blue-500/5 p-4 sm:p-5">
     <div class="flex items-start justify-between gap-3">
-      <div><h3 class="font-semibold">Corrigir valor do título</h3><p class="mt-1 text-xs opacity-65">A correção atualiza saldo e, se já estiver pago, a última baixa. Tudo fica no log.</p></div>
-      <button type="button" class="text-xl opacity-60 hover:opacity-100" onclick="toggleEditarValorConta(this)" aria-label="Fechar edição">&times;</button>
+      <div><h3 class="font-semibold">Editar lançamento</h3><p class="mt-1 text-xs opacity-65">Corrija os dados sem recriar o título. Todas as alterações ficam no log.</p></div>
+      <button type="button" class="flex h-8 w-8 items-center justify-center rounded-md opacity-60 hover:bg-black/5 hover:opacity-100 dark:hover:bg-white/10" onclick="toggleEditarLancamento(this)" aria-label="Fechar edição">&times;</button>
     </div>
-    <form class="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-[180px_1fr_auto]" action="{% url 'financeiro:pagar_editar_valor' conta.pk %}" onsubmit="salvarEdicaoValorConta(event,this)">
+    <form class="mt-5 space-y-5" action="{% url 'financeiro:pagar_editar_valor' conta.pk %}" onsubmit="salvarEdicaoLancamento(event,this)">
       {% csrf_token %}
-      <label class="text-xs font-medium">Novo valor (R$)<input class="form-input mt-1 w-full" name="novo_valor" value="{{ conta.valor_original|floatformat:2 }}" inputmode="decimal" required></label>
-      <label class="text-xs font-medium">Motivo da correção<input class="form-input mt-1 w-full" name="motivo" maxlength="300" placeholder="Ex.: valor digitado incorretamente" required></label>
-      <button type="submit" class="btn-primary self-end">Salvar correção</button>
-      <p class="hidden text-sm sm:col-span-3" data-editar-valor-feedback></p>
+      {% if pagamento_selecionado %}<input type="hidden" name="pagamento_id" value="{{ pagamento_selecionado.pk }}">{% endif %}
+      <div>
+        <p class="mb-3 text-xs font-semibold uppercase tracking-wide text-blue-500">Dados do título</p>
+        <div class="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+          {% if conta.tipo_lancamento == 'fornecedor' %}<label class="text-xs font-medium sm:col-span-2">Fornecedor{{ edicao_lancamento_form.fornecedor|add_class:"form-input mt-1 w-full" }}</label>{% endif %}
+          <label class="text-xs font-medium">Valor (R$){{ edicao_lancamento_form.valor_original|add_class:"form-input mt-1 w-full" }}</label>
+          <label class="text-xs font-medium">Vencimento{{ edicao_lancamento_form.data_vencimento|add_class:"form-input mt-1 w-full" }}</label>
+          <label class="text-xs font-medium">Competência{{ edicao_lancamento_form.data_competencia|add_class:"form-input mt-1 w-full" }}</label>
+          <label class="text-xs font-medium">Forma prevista{{ edicao_lancamento_form.forma_pagamento_prevista|add_class:"form-input mt-1 w-full" }}</label>
+        </div>
+      </div>
+      {% if conta.valor_pago > 0 %}
+      <div class="border-t pt-4" style="border-color:rgba(148,163,184,.24)">
+        <p class="mb-1 text-xs font-semibold uppercase tracking-wide text-emerald-500">Dados da baixa selecionada</p>
+        {% if pagamento_selecionado %}<p class="mb-3 text-xs opacity-60">Pagamento de {{ pagamento_selecionado.data_pagamento|date:"d/m/Y" }} no valor de R$ {{ pagamento_selecionado.valor_pago|floatformat:2 }}.</p>{% endif %}
+        <div class="grid grid-cols-1 gap-3 sm:grid-cols-3">
+          <label class="text-xs font-medium">Data do pagamento{{ edicao_lancamento_form.data_pagamento|add_class:"form-input mt-1 w-full" }}</label>
+          <label class="text-xs font-medium">Forma utilizada{{ edicao_lancamento_form.forma_pagamento|add_class:"form-input mt-1 w-full" }}</label>
+          <label class="text-xs font-medium">Conta bancária{{ edicao_lancamento_form.conta_bancaria|add_class:"form-input mt-1 w-full" }}</label>
+        </div>
+      </div>
+      {% endif %}
+      <div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
+        <label class="text-xs font-medium">Observação{{ edicao_lancamento_form.observacao|add_class:"form-input mt-1 w-full" }}</label>
+        <label class="text-xs font-medium">Motivo da alteração <span class="text-rose-500">*</span>{{ edicao_lancamento_form.motivo|add_class:"form-input mt-1 w-full" }}</label>
+      </div>
+      <div class="flex flex-col-reverse gap-2 border-t pt-4 sm:flex-row sm:items-center sm:justify-between" style="border-color:rgba(148,163,184,.24)">
+        <p class="hidden text-sm" data-editar-lancamento-feedback></p>
+        <div class="ml-auto flex gap-2"><button type="button" class="btn-secondary" onclick="toggleEditarLancamento(this)">Cancelar</button><button type="submit" class="btn-primary">Salvar alterações</button></div>
+      </div>
     </form>
   </section>
   {% endif %}
 
-  <div class="grid grid-cols-1 gap-4 lg:grid-cols-[1.25fr_.75fr]">
+  <div class="grid grid-cols-1 gap-4 lg:grid-cols-[1.35fr_.65fr]">
     <section class="rounded-lg border p-4" style="border-color:rgba(148,163,184,.28)">
       <h3 class="mb-4 text-xs font-semibold uppercase opacity-55">Dados do título</h3>
       <div class="grid grid-cols-2 gap-x-6 gap-y-4 text-sm sm:grid-cols-3">
@@ -54,14 +75,13 @@
         <div><span class="block text-xs opacity-55">Vencimento</span><strong>{{ conta.data_vencimento|date:"d/m/Y" }}</strong></div>
         <div><span class="block text-xs opacity-55">Pagamento</span><strong>{{ conta.data_pagamento|date:"d/m/Y"|default:"Não pago" }}</strong></div>
         {% if conta.data_competencia %}<div><span class="block text-xs opacity-55">Competência</span><strong>{{ conta.data_competencia|date:"m/Y" }}</strong></div>{% endif %}
-        {% if conta.nota_fiscal_fornecedor %}<div><span class="block text-xs opacity-55">NF do fornecedor</span><strong>{{ conta.nota_fiscal_fornecedor }}</strong></div>{% endif %}
         {% if conta.forma_pagamento_prevista %}<div><span class="block text-xs opacity-55">Forma prevista</span><strong>{{ conta.forma_pagamento_prevista.descricao }}</strong></div>{% endif %}
         {% if conta.forma_pagamento %}<div><span class="block text-xs opacity-55">Forma utilizada</span><strong>{{ conta.forma_pagamento.descricao }}</strong></div>{% endif %}
         {% if conta.conta_bancaria %}<div><span class="block text-xs opacity-55">Conta bancária</span><strong>{{ conta.conta_bancaria.descricao|default:conta.conta_bancaria }}</strong></div>{% endif %}
+        {% if conta.nota_fiscal_fornecedor %}<div><span class="block text-xs opacity-55">NF do fornecedor</span><strong>{{ conta.nota_fiscal_fornecedor }}</strong></div>{% endif %}
         {% if conta.plano_contas %}<div class="col-span-2 sm:col-span-3"><span class="block text-xs opacity-55">Categoria financeira</span><strong>{{ conta.plano_contas }}</strong></div>{% endif %}
         {% if conta.conta_contabil %}<div class="col-span-2 sm:col-span-3"><span class="block text-xs opacity-55">Conta contábil automática</span><strong>{{ conta.conta_contabil.classificacao }} - {{ conta.conta_contabil.descricao }}</strong></div>{% endif %}
       </div>
-      {% if conta.chave_acesso_nfe %}<div class="mt-4 border-t pt-3 text-xs" style="border-color:rgba(148,163,184,.2)"><span class="block opacity-55">Chave de acesso da NF-e</span><strong class="break-all font-mono">{{ conta.chave_acesso_nfe }}</strong></div>{% endif %}
       {% if conta.observacao %}<div class="mt-4 border-t pt-3 text-sm" style="border-color:rgba(148,163,184,.2)"><span class="block text-xs opacity-55">Observação</span><p class="mt-1 whitespace-pre-wrap">{{ conta.observacao }}</p></div>{% endif %}
     </section>
 
@@ -79,17 +99,17 @@
     </section>
   </div>
 
-  {% if tipo_conta == 'pagar' and pode_editar_valor and logs_edicao_valor %}
+  {% if tipo_conta == 'pagar' and pode_editar_lancamento and logs_edicao_lancamento %}
   <section class="rounded-lg border p-4" style="border-color:rgba(148,163,184,.28)">
-    <h3 class="text-xs font-semibold uppercase opacity-55">Log de correções</h3>
+    <h3 class="text-xs font-semibold uppercase opacity-55">Histórico de alterações</h3>
     <div class="mt-3 divide-y" style="border-color:rgba(148,163,184,.2)">
-      {% for log in logs_edicao_valor %}<div class="py-3 text-sm"><div class="flex flex-wrap justify-between gap-2"><strong>{{ log.objeto_descricao }}</strong><span class="text-xs opacity-55">{{ log.criado_em|date:"d/m/Y H:i" }} · {{ log.usuario.nome|default:log.usuario|default:"Sistema" }}</span></div><p class="mt-1 text-xs opacity-70">Motivo: {{ log.justificativa }}</p><p class="mt-1 text-xs"><span class="text-rose-500">R$ {{ log.dados_anteriores.valor_original }}</span> → <span class="text-emerald-500">R$ {{ log.dados_novos.valor_original }}</span></p></div>{% endfor %}
+      {% for log in logs_edicao_lancamento %}<div class="py-3 text-sm"><div class="flex flex-wrap justify-between gap-2"><strong>{{ log.objeto_descricao }}</strong><span class="text-xs opacity-55">{{ log.criado_em|date:"d/m/Y H:i" }} · {{ log.usuario.nome|default:log.usuario|default:"Sistema" }}</span></div><p class="mt-1 text-xs opacity-70">Motivo: {{ log.justificativa }}</p>{% if log.alteracoes_exibicao %}<div class="mt-2 grid gap-2 sm:grid-cols-2">{% for alteracao in log.alteracoes_exibicao %}<div class="rounded-md border p-2 text-xs" style="border-color:rgba(148,163,184,.22)"><strong class="mb-1 block">{{ alteracao.campo }}</strong><span class="text-rose-500">{{ alteracao.antes }}</span><span class="mx-1 opacity-50">&rarr;</span><span class="text-emerald-500">{{ alteracao.depois }}</span></div>{% endfor %}</div>{% endif %}</div>{% endfor %}
     </div>
   </section>
   {% endif %}
 
   <footer class="flex flex-col-reverse gap-2 border-t pt-4 sm:flex-row sm:items-center sm:justify-between" style="border-color:rgba(148,163,184,.25)">
-    {% if not pagina_completa %}<a href="{% if tipo_conta == 'pagar' %}{% url 'financeiro:pagar_detail' conta.pk %}{% else %}{% url 'financeiro:receber_detail' conta.pk %}{% endif %}" class="btn-secondary text-center">Abrir página completa</a>{% endif %}
+    <span class="text-xs opacity-55">Lançamento #{{ conta.pk }}</span>
     <div class="flex flex-col gap-2 sm:flex-row">
       {% if tipo_conta == 'pagar' and pode_pagar %}<a href="{% url 'financeiro:pagar_pagar' conta.pk %}" class="btn-primary text-center">Registrar pagamento</a>{% endif %}
       {% if tipo_conta == 'receber' and pode_baixar %}<a href="{% url 'financeiro:receber_baixar' conta.pk %}" class="btn-primary text-center">Registrar recebimento</a>{% endif %}

@@ -306,6 +306,107 @@ class ContaPagarForm(forms.Form):
         return cleaned
 
 
+class ContaPagarEdicaoAdminForm(forms.Form):
+    """Correcao administrativa de um titulo e da baixa selecionada."""
+
+    fornecedor = FornecedorChoiceField(
+        queryset=Fornecedor.objects.none(), required=False, label='Fornecedor',
+    )
+    valor_original = forms.DecimalField(
+        max_digits=14, decimal_places=2, min_value=Decimal('0.01'),
+        label='Valor do titulo (R$)', widget=VALOR_WIDGET,
+    )
+    data_vencimento = forms.DateField(
+        label='Vencimento',
+        widget=forms.DateInput(format='%Y-%m-%d', attrs={'type': 'date'}),
+    )
+    data_competencia = forms.DateField(
+        required=False, label='Competencia',
+        widget=forms.DateInput(format='%Y-%m-%d', attrs={'type': 'date'}),
+    )
+    forma_pagamento_prevista = forms.ModelChoiceField(
+        queryset=FormaPagamento.objects.none(), required=False,
+        label='Forma prevista',
+    )
+    data_pagamento = forms.DateField(
+        required=False, label='Data do pagamento',
+        widget=forms.DateInput(format='%Y-%m-%d', attrs={'type': 'date'}),
+    )
+    forma_pagamento = forms.ModelChoiceField(
+        queryset=FormaPagamento.objects.none(), required=False,
+        label='Forma utilizada',
+    )
+    conta_bancaria = forms.ModelChoiceField(
+        queryset=ContaBancaria.objects.none(), required=False,
+        label='Conta bancaria',
+    )
+    observacao = forms.CharField(
+        required=False, label='Observacao',
+        widget=forms.Textarea(attrs={'rows': 3}),
+    )
+    motivo = forms.CharField(
+        max_length=300, label='Motivo da alteracao',
+        widget=forms.Textarea(attrs={
+            'rows': 2,
+            'placeholder': 'Explique por que o lancamento esta sendo corrigido',
+        }),
+    )
+
+    def __init__(self, *args, filial=None, conta=None, pagamento=None, **kwargs):
+        self.conta = conta
+        self.pagamento = pagamento
+        if conta is not None:
+            if self.pagamento is None:
+                self.pagamento = conta.pagamentos.order_by(
+                    '-data_pagamento', '-created_at', '-pk',
+                ).first()
+            kwargs.setdefault('initial', {
+                'fornecedor': conta.fornecedor_id,
+                'valor_original': conta.valor_original,
+                'data_vencimento': conta.data_vencimento,
+                'data_competencia': conta.data_competencia,
+                'forma_pagamento_prevista': conta.forma_pagamento_prevista_id,
+                'data_pagamento': self.pagamento.data_pagamento if self.pagamento else None,
+                'forma_pagamento': self.pagamento.forma_pagamento_id if self.pagamento else conta.forma_pagamento_id,
+                'conta_bancaria': self.pagamento.conta_bancaria_id if self.pagamento else conta.conta_bancaria_id,
+                'observacao': conta.observacao,
+            })
+        super().__init__(*args, **kwargs)
+        if filial:
+            self.fields['fornecedor'].queryset = (
+                Fornecedor.objects.for_filial(filial)
+                .filter(ativo=True)
+                .order_by('razao_social')
+            )
+            formas = FormaPagamento.objects.filter(
+                empresa=filial.empresa, ativo=True,
+            ).order_by('descricao')
+            self.fields['forma_pagamento_prevista'].queryset = formas
+            self.fields['forma_pagamento'].queryset = formas
+            self.fields['conta_bancaria'].queryset = (
+                ContaBancaria.objects.for_filial(filial)
+                .filter(ativo=True)
+                .order_by('descricao', 'banco_nome')
+            )
+
+        if self.pagamento is None:
+            for nome in ('data_pagamento', 'forma_pagamento', 'conta_bancaria'):
+                self.fields.pop(nome)
+
+    def clean(self):
+        cleaned = super().clean()
+        if self.pagamento and not cleaned.get('data_pagamento'):
+            self.add_error('data_pagamento', 'Informe a data em que o pagamento ocorreu.')
+        if (
+            self.pagamento
+            and cleaned.get('data_pagamento')
+            and self.conta
+            and cleaned['data_pagamento'] < self.conta.data_emissao
+        ):
+            self.add_error('data_pagamento', 'A data do pagamento nao pode ser anterior a emissao.')
+        return cleaned
+
+
 class PagamentoContaPagarForm(forms.Form):
     """Registro de pagamento (baixa) de uma conta a pagar."""
 

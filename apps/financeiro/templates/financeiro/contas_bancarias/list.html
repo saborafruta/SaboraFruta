@@ -5,7 +5,25 @@
 {% block page_title %}Contas Bancarias{% endblock %}
 
 {% block content %}
-<div class="max-w-7xl mx-auto space-y-5" x-data="{ movimentoModal: {{ movimento_modal_aberto|yesno:'true,false' }}, contaModal: {{ conta_modal_aberto|yesno:'true,false' }}, editarMovimentoModal: {{ editar_movimento_modal_aberto|yesno:'true,false' }}, detalheMovimentoModal: {{ detalhe_movimento_modal_aberto|yesno:'true,false' }}, trocarContaMovimento: {{ trocar_conta_aberto|yesno:'true,false' }} }">
+<div class="max-w-7xl mx-auto space-y-5" x-data="{
+  movimentoModal: {{ movimento_modal_aberto|yesno:'true,false' }},
+  contaModal: {{ conta_modal_aberto|yesno:'true,false' }},
+  editarMovimentoModal: {{ editar_movimento_modal_aberto|yesno:'true,false' }},
+  detalheMovimentoModal: {{ detalhe_movimento_modal_aberto|yesno:'true,false' }},
+  trocarContaMovimento: {{ trocar_conta_aberto|yesno:'true,false' }},
+  detalheAberto: false, detalheCarregando: false, detalheHtml: '', detalheErro: '',
+  async abrirLancamento(url) {
+    this.detalheAberto = true; this.detalheCarregando = true; this.detalheErro = ''; this.detalheHtml = '';
+    document.body.style.overflow = 'hidden';
+    try {
+      const response = await fetch(url + (url.includes('?') ? '&' : '?') + 'modal=1', {headers:{'X-Requested-With':'XMLHttpRequest'}});
+      if (!response.ok) throw new Error('Não foi possível carregar o lançamento.');
+      this.detalheHtml = await response.text();
+    } catch (error) { this.detalheErro = error.message; }
+    finally { this.detalheCarregando = false; }
+  },
+  fecharDetalhe() { this.detalheAberto = false; document.body.style.overflow = ''; }
+}">
   <div class="flex flex-col lg:flex-row lg:items-end lg:justify-between gap-3">
     <div>
       <a href="{% url 'financeiro:painel' %}" class="text-sm" :style="temaClaro ? 'color:#2563eb;' : 'color:#60a5fa;'">&lt; Voltar</a>
@@ -121,7 +139,7 @@
             </thead>
             <tbody class="divide-y" :style="temaClaro ? 'border-color:#e5e7eb;' : 'border-color:#303038;'">
               {% for mov in page_obj.object_list %}
-                <tr class="cursor-pointer transition hover:bg-slate-50 dark:hover:bg-slate-800" onclick="window.location.href='?conta={{ mov.conta.pk }}&movimento_origem={{ mov.origem_codigo }}&movimento_id={{ mov.registro_id }}'">
+                <tr class="cursor-pointer transition hover:bg-slate-50 dark:hover:bg-slate-800" {% if mov.origem_codigo == 'pagar' %}@click="abrirLancamento('{{ mov.referencia_url|escapejs }}')"{% else %}onclick="window.location.href='?conta={{ mov.conta.pk }}&movimento_origem={{ mov.origem_codigo }}&movimento_id={{ mov.registro_id }}'"{% endif %}>
                   <td class="px-4 py-3 whitespace-nowrap">{{ mov.data|date:"d/m/Y" }}</td>
                   <td class="px-4 py-3 min-w-[240px]">
                     <strong class="block">{{ mov.historico }}</strong>
@@ -133,7 +151,7 @@
                   <td class="px-4 py-3 text-right text-rose-600 font-semibold">{% if mov.saida %}R$ {{ mov.saida|floatformat:2 }}{% else %}-{% endif %}</td>
                   <td class="px-4 py-3 text-right whitespace-nowrap">
                     <span class="inline-flex items-center gap-1">
-                      <a href="?conta={{ mov.conta.pk }}&movimento_origem={{ mov.origem_codigo }}&movimento_id={{ mov.registro_id }}" class="inline-flex h-9 w-9 items-center justify-center rounded-md text-blue-600 hover:bg-blue-500/10" onclick="event.stopPropagation()" title="Ver detalhes" aria-label="Ver detalhes"><svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12H9m12 0c0 4.97-4.03 9-9 9s-9-4.03-9-9 4.03-9 9-9 9 4.03 9 9z"/></svg></a>
+                      {% if mov.origem_codigo == 'pagar' %}<button type="button" class="inline-flex h-9 w-9 items-center justify-center rounded-md text-blue-600 hover:bg-blue-500/10" @click.stop="abrirLancamento('{{ mov.referencia_url|escapejs }}')" title="Abrir lançamento" aria-label="Abrir lançamento"><svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12H9m12 0c0 4.97-4.03 9-9 9s-9-4.03-9-9 4.03-9 9-9 9 4.03 9 9z"/></svg></button>{% else %}<a href="?conta={{ mov.conta.pk }}&movimento_origem={{ mov.origem_codigo }}&movimento_id={{ mov.registro_id }}" class="inline-flex h-9 w-9 items-center justify-center rounded-md text-blue-600 hover:bg-blue-500/10" onclick="event.stopPropagation()" title="Ver detalhes" aria-label="Ver detalhes"><svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12H9m12 0c0 4.97-4.03 9-9 9s-9-4.03-9-9 4.03-9 9-9 9 4.03 9 9z"/></svg></a>{% endif %}
                       {% if user_is_admin %}<a href="?conta={{ mov.conta.pk }}&movimento_origem={{ mov.origem_codigo }}&movimento_id={{ mov.registro_id }}&trocar_conta=1" class="inline-flex h-9 w-9 items-center justify-center rounded-md text-slate-500 hover:bg-slate-500/10 hover:text-blue-500" onclick="event.stopPropagation()" title="Trocar conta bancária" aria-label="Trocar conta bancária"><svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 7h11m0 0-3-3m3 3-3 3M17 17H6m0 0 3 3m-3-3 3-3"/></svg></a>{% endif %}
                     </span>
                   </td>
@@ -226,5 +244,6 @@
       </form>
     </div>
   </div>
+  {% include "financeiro/_detalhes_conta_shell.html" %}
 </div>
 {% endblock %}
