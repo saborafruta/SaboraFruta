@@ -62,20 +62,17 @@ def _saldo_calculado_conta(conta):
     except Exception:
         PagamentoVendaPDV = None
     if PagamentoVendaPDV:
-        valor_venda = ExpressionWrapper(
-            F('valor') - F('troco'),
-            output_field=DecimalField(max_digits=14, decimal_places=2),
+        pagamentos_venda = PagamentoVendaPDV.objects.filter(
+            venda_pdv__filial=conta.filial,
+            forma_pagamento__movimenta_caixa=True,
+        ).exclude(venda_pdv__status='cancelada').select_related(
+            'conta_bancaria', 'forma_pagamento__conta_bancaria_padrao',
         )
-        venda_total = (
-            PagamentoVendaPDV.objects.filter(
-                venda_pdv__filial=conta.filial,
-                forma_pagamento__conta_bancaria_padrao=conta,
-                forma_pagamento__movimenta_caixa=True,
-            )
-            .exclude(venda_pdv__status='cancelada')
-            .aggregate(total=Sum(valor_venda))['total']
-            or ZERO
-        )
+        venda_total = sum((
+            (item.valor or ZERO) - (item.troco or ZERO)
+            for item in pagamentos_venda
+            if (item.conta_bancaria or item.forma_pagamento.conta_bancaria_padrao) == conta
+        ), ZERO)
     movimentos_total = extrato_total + receber_total - pagar_total + venda_total
     if saldo == ZERO and movimentos_total == ZERO and (conta.saldo_atual or ZERO) != ZERO:
         return conta.saldo_atual

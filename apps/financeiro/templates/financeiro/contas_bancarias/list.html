@@ -5,7 +5,7 @@
 {% block page_title %}Contas Bancarias{% endblock %}
 
 {% block content %}
-<div class="max-w-7xl mx-auto space-y-5" x-data="{ movimentoModal: {{ movimento_modal_aberto|yesno:'true,false' }}, contaModal: {{ conta_modal_aberto|yesno:'true,false' }} }">
+<div class="max-w-7xl mx-auto space-y-5" x-data="{ movimentoModal: {{ movimento_modal_aberto|yesno:'true,false' }}, contaModal: {{ conta_modal_aberto|yesno:'true,false' }}, editarMovimentoModal: {{ editar_movimento_modal_aberto|yesno:'true,false' }} }">
   <div class="flex flex-col lg:flex-row lg:items-end lg:justify-between gap-3">
     <div>
       <a href="{% url 'financeiro:painel' %}" class="text-sm" :style="temaClaro ? 'color:#2563eb;' : 'color:#60a5fa;'">&lt; Voltar</a>
@@ -42,6 +42,16 @@
       <span class="text-xs" :style="temaClaro ? 'color:#94a3b8;' : 'color:#64748b;'">Vendas/baixas ainda sem banco</span>
     </div>
   </section>
+
+  {% if pendencias %}
+    <section class="card overflow-hidden border border-amber-200">
+      <div class="px-4 py-4 border-b flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between" :style="temaClaro ? 'border-color:#fde68a;' : 'border-color:#713f12;'">
+        <div><h3 class="font-semibold text-amber-700">Movimentacoes sem conta definida</h3><p class="text-xs text-gray-500">Direcione cada item para a conta correta. Isso atualiza o saldo e fica registrado no log.</p></div>
+        <strong class="text-amber-700">R$ {{ sem_conta.total|floatformat:2 }}</strong>
+      </div>
+      <div class="overflow-x-auto"><table class="w-full text-sm"><thead><tr class="text-left text-xs uppercase tracking-wide" :style="temaClaro ? 'background:#fffbeb;color:#92400e;' : 'background:#2b2110;color:#fde68a;'"><th class="px-4 py-3">Data</th><th class="px-4 py-3">Origem</th><th class="px-4 py-3">Descricao</th><th class="px-4 py-3">Documento</th><th class="px-4 py-3 text-right">Valor</th><th class="px-4 py-3">Direcionar para</th></tr></thead><tbody class="divide-y" :style="temaClaro ? 'border-color:#fef3c7;' : 'border-color:#713f12;'">{% for item in pendencias %}<tr><td class="px-4 py-3 whitespace-nowrap">{{ item.data|date:"d/m/Y" }}</td><td class="px-4 py-3"><span class="soft-pill is-amber">{{ item.origem|title }}</span></td><td class="px-4 py-3">{{ item.descricao }}</td><td class="px-4 py-3 text-gray-500">{{ item.documento|default:"-" }}</td><td class="px-4 py-3 text-right font-semibold">R$ {{ item.valor|floatformat:2 }}</td><td class="px-4 py-3">{% if user_is_admin %}<form method="post" class="flex min-w-[250px] gap-2">{% csrf_token %}<input type="hidden" name="acao" value="direcionar_pendencia"><input type="hidden" name="origem_pendencia" value="{{ item.origem }}"><input type="hidden" name="registro_id" value="{{ item.registro_id }}">{{ direcionar_conta_form.conta_bancaria|add_class:"form-input flex-1" }}<button type="submit" class="btn-primary">Salvar</button></form>{% else %}<span class="text-xs text-gray-500">Somente administradores</span>{% endif %}</td></tr>{% endfor %}</tbody></table></div>
+    </section>
+  {% endif %}
 
   <section class="card overflow-hidden">
     <div class="px-4 py-4 border-b flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between" :style="temaClaro ? 'border-color:#e5e7eb;' : 'border-color:#303038;'">
@@ -121,7 +131,7 @@
                   <td class="px-4 py-3"><span class="soft-pill is-blue">{{ mov.origem }}</span></td>
                   <td class="px-4 py-3 text-right text-emerald-600 font-semibold">{% if mov.entrada %}R$ {{ mov.entrada|floatformat:2 }}{% else %}-{% endif %}</td>
                   <td class="px-4 py-3 text-right text-rose-600 font-semibold">{% if mov.saida %}R$ {{ mov.saida|floatformat:2 }}{% else %}-{% endif %}</td>
-                  <td class="px-4 py-3 text-right">{% if mov.referencia_url %}<a href="{{ mov.referencia_url }}" class="text-blue-600 font-medium">Abrir</a>{% else %}<span class="text-xs text-gray-400">-</span>{% endif %}</td>
+                  <td class="px-4 py-3 text-right whitespace-nowrap">{% if mov.referencia_url %}<a href="{{ mov.referencia_url }}" class="text-blue-600 font-medium">Abrir</a>{% endif %}{% if user_is_admin and mov.movimento_manual_id %}<a href="?conta={{ mov.conta.pk }}&editar_movimento={{ mov.movimento_manual_id }}" class="ml-3 text-amber-600 font-medium">Editar</a>{% elif not mov.referencia_url %}<span class="text-xs text-gray-400">-</span>{% endif %}</td>
                 </tr>
               {% empty %}
                 <tr><td colspan="7" class="px-4 py-10 text-center text-gray-500">Nenhuma movimentacao no periodo.</td></tr>
@@ -131,6 +141,19 @@
         </div>
       </div>
   </section>
+
+  {% if user_is_admin %}
+    <section class="card overflow-hidden">
+      <div class="px-4 py-4 border-b" :style="temaClaro ? 'border-color:#e5e7eb;' : 'border-color:#303038;'"><h3 class="font-semibold">Log bancario{% if conta_selecionada %} - {{ conta_selecionada.descricao|default:conta_selecionada.banco_nome }}{% endif %}</h3><p class="text-xs text-gray-500">Alteracoes manuais e direcionamentos de conta, com usuario, data e motivo.</p></div>
+      <div class="divide-y" :style="temaClaro ? 'border-color:#e5e7eb;' : 'border-color:#303038;'">{% for log in logs_bancarios %}<div class="px-4 py-3 flex flex-col gap-1 sm:flex-row sm:items-start sm:justify-between"><div><strong class="text-sm">{{ log.get_acao_display }}: {{ log.objeto_descricao }}</strong>{% if log.justificativa %}<p class="mt-1 text-xs text-gray-500">{{ log.justificativa }}</p>{% endif %}</div><span class="text-xs text-gray-500">{{ log.criado_em|date:"d/m/Y H:i" }}{% if log.usuario %} · {{ log.usuario.nome }}{% endif %}</span></div>{% empty %}<p class="px-4 py-8 text-center text-sm text-gray-500">Nenhuma alteracao bancaria registrada ainda.</p>{% endfor %}</div>
+    </section>
+  {% endif %}
+
+  {% if user_is_admin and editar_movimento %}
+    <div x-show="editarMovimentoModal" x-cloak class="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto p-4" style="background:rgba(15,23,42,0.62);backdrop-filter:blur(5px);" @keydown.escape.window="editarMovimentoModal = false">
+      <div class="card my-auto w-full max-w-xl p-5 space-y-4" @click.stop><div class="flex items-start justify-between gap-3"><div><h3 class="text-lg font-semibold">Editar ajuste bancario</h3><p class="mt-1 text-xs text-gray-500">Somente administradores podem alterar um ajuste manual. Informe o motivo para auditoria.</p></div><button type="button" @click="editarMovimentoModal = false" class="btn-secondary px-3">x</button></div><form method="post" class="space-y-3">{% csrf_token %}<input type="hidden" name="acao" value="editar_movimento"><input type="hidden" name="movimento_id" value="{{ editar_movimento.pk }}">{% if editar_movimento_form.non_field_errors %}<div class="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">{{ editar_movimento_form.non_field_errors|join:", " }}</div>{% endif %}<label class="block text-xs font-medium">{{ editar_movimento_form.conta_bancaria.label }} {{ editar_movimento_form.conta_bancaria|add_class:"form-input mt-1 w-full" }}</label><div class="grid grid-cols-1 sm:grid-cols-2 gap-3"><label class="block text-xs font-medium">{{ editar_movimento_form.data_lancamento.label }} {{ editar_movimento_form.data_lancamento|add_class:"form-input mt-1 w-full" }}</label><label class="block text-xs font-medium">{{ editar_movimento_form.valor.label }} {{ editar_movimento_form.valor|add_class:"form-input mt-1 w-full" }}</label></div><label class="block text-xs font-medium">{{ editar_movimento_form.historico.label }} {{ editar_movimento_form.historico|add_class:"form-input mt-1 w-full" }}</label><label class="block text-xs font-medium">{{ editar_movimento_form.documento.label }} {{ editar_movimento_form.documento|add_class:"form-input mt-1 w-full" }}</label><label class="block text-xs font-medium">{{ editar_movimento_form.justificativa.label }} <span class="text-red-500">*</span>{{ editar_movimento_form.justificativa|add_class:"form-input mt-1 w-full" }}</label><div class="flex justify-end gap-2"><button type="button" @click="editarMovimentoModal = false" class="btn-secondary">Cancelar</button><button type="submit" class="btn-primary">Salvar alteracao</button></div></form></div>
+    </div>
+  {% endif %}
 
   <div x-show="contaModal" x-cloak class="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto p-4" style="background:rgba(15,23,42,0.62);backdrop-filter:blur(5px);" @keydown.escape.window="contaModal = false">
     <div class="card my-auto w-full max-w-2xl p-5 space-y-4" @click.stop>

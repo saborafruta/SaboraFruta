@@ -120,6 +120,38 @@ class MovimentoContaBancariaForm(forms.Form):
         return cleaned
 
 
+class DirecionarContaBancariaForm(forms.Form):
+    conta_bancaria = forms.ModelChoiceField(queryset=ContaBancaria.objects.none())
+
+    def __init__(self, *args, filial=None, **kwargs):
+        super().__init__(*args, **kwargs)
+        if filial:
+            self.fields["conta_bancaria"].queryset = (
+                ContaBancaria.objects.for_filial(filial)
+                .filter(ativo=True)
+                .order_by("descricao", "banco_nome")
+            )
+
+
+class EditarMovimentoBancarioForm(forms.Form):
+    conta_bancaria = forms.ModelChoiceField(queryset=ContaBancaria.objects.none(), label="Conta")
+    data_lancamento = forms.DateField(widget=forms.DateInput(attrs={"type": "date"}), label="Data")
+    valor = forms.DecimalField(max_digits=14, decimal_places=2, label="Valor")
+    historico = forms.CharField(max_length=200, label="Historico")
+    documento = forms.CharField(max_length=30, required=False, label="Documento")
+    justificativa = forms.CharField(max_length=300, label="Motivo da alteracao")
+
+    def __init__(self, *args, filial=None, **kwargs):
+        super().__init__(*args, **kwargs)
+        if filial:
+            self.fields["conta_bancaria"].queryset = (
+                ContaBancaria.objects.for_filial(filial)
+                .filter(ativo=True)
+                .order_by("descricao", "banco_nome")
+            )
+        self.fields["valor"].widget.attrs.update({"step": "0.01", "inputmode": "decimal"})
+
+
 class CentroCustoForm(forms.ModelForm):
     class Meta:
         model = CentroCusto

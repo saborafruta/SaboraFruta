@@ -166,6 +166,11 @@ class ItemVendaPDV(models.Model):
 class PagamentoVendaPDV(models.Model):
     venda_pdv = models.ForeignKey(VendaPDV, on_delete=models.CASCADE, related_name="pagamentos")
     forma_pagamento = models.ForeignKey("financeiro.FormaPagamento", on_delete=models.PROTECT)
+    # Permite corrigir uma venda especifica sem alterar a conta padrao da forma.
+    conta_bancaria = models.ForeignKey(
+        "financeiro.ContaBancaria", on_delete=models.SET_NULL,
+        null=True, blank=True, related_name="+",
+    )
     valor = models.DecimalField(max_digits=14, decimal_places=2)
     troco = models.DecimalField(max_digits=14, decimal_places=2, default=0)
     tef_transacao = models.ForeignKey(

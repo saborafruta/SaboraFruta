@@ -5,6 +5,8 @@ from django.urls import reverse
 from django.utils import timezone
 
 from apps.core.models import Empresa, Filial, PerfilAcesso, Usuario
+from apps.core.models import RegistroAuditoria
+from apps.cadastros.models import Cliente
 from apps.financeiro.constants.enums import TipoFormaPagamento
 from apps.financeiro.models import ContaBancaria, FormaPagamento
 from apps.financeiro.models.extrato import ExtratoBancario
@@ -138,3 +140,51 @@ class ContasBancariasViewTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "Venda PDV #1")
         self.assertContains(response, "R$ 80,00")
+
+    def test_admin_direciona_venda_sem_conta_e_registra_log(self):
+        conta = ContaBancaria.objects.create(
+            filial=self.filial, descricao="Banco Direcionado", banco_codigo="260", saldo_inicial=Decimal("0"),
+        )
+        forma = FormaPagamento.objects.create(
+            empresa=self.empresa, filial=self.filial, descricao="Dinheiro", tipo=TipoFormaPagamento.DINHEIRO,
+        )
+        venda = VendaPDV.objects.create(
+            filial=self.filial, numero_venda=2, status="finalizada", valor_total=Decimal("50.00"),
+            valor_pago=Decimal("50.00"), usuario=self.usuario,
+            data_venda=timezone.datetime(2026, 8, 20, 12, 0, tzinfo=timezone.get_current_timezone()),
+        )
+        pagamento = PagamentoVendaPDV.objects.create(venda_pdv=venda, forma_pagamento=forma, valor=Decimal("50.00"))
+
+        response = self.client.post(reverse("financeiro:contas_bancarias"), {
+            "acao": "direcionar_pendencia", "origem_pendencia": "venda", "registro_id": pagamento.pk,
+            "conta_bancaria": conta.pk,
+        })
+
+        self.assertEqual(response.status_code, 302)
+        pagamento.refresh_from_db()
+        self.assertEqual(pagamento.conta_bancaria, conta)
+        self.assertTrue(RegistroAuditoria.objects.filter(
+            acao=RegistroAuditoria.Acao.VINCULAR, relacionado_id=conta.pk,
+        ).exists())
+
+    def test_admin_edita_apenas_movimento_manual_com_log(self):
+        conta = ContaBancaria.objects.create(
+            filial=self.filial, descricao="Conta Ajuste", banco_codigo="001", saldo_inicial=Decimal("0"),
+        )
+        movimento = ExtratoBancario.objects.create(
+            filial=self.filial, conta_bancaria=conta, data_lancamento=timezone.localdate(),
+            historico="Ajuste inicial", valor=Decimal("10.00"), origem="manual",
+        )
+
+        response = self.client.post(reverse("financeiro:contas_bancarias"), {
+            "acao": "editar_movimento", "movimento_id": movimento.pk, "conta_bancaria": conta.pk,
+            "data_lancamento": timezone.localdate().isoformat(), "valor": "25.00",
+            "historico": "Ajuste corrigido", "documento": "AJ-1", "justificativa": "Valor digitado errado",
+        })
+
+        self.assertEqual(response.status_code, 302)
+        movimento.refresh_from_db()
+        self.assertEqual(movimento.valor, Decimal("25.00"))
+        self.assertTrue(RegistroAuditoria.objects.filter(
+            acao=RegistroAuditoria.Acao.AJUSTAR, objeto_id=movimento.pk,
+        ).exists())

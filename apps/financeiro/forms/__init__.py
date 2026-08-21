@@ -1,6 +1,8 @@
 from .cadastros import (
     CentroCustoForm,
     ContaBancariaForm,
+    DirecionarContaBancariaForm,
+    EditarMovimentoBancarioForm,
     FormaPagamentoForm,
     MovimentoContaBancariaForm,
     PlanoContasDespesaForm,
@@ -12,6 +14,8 @@ from .receber import BaixaContaReceberForm, ContaReceberForm
 __all__ = [
     "CentroCustoForm",
     "ContaBancariaForm",
+    "DirecionarContaBancariaForm",
+    "EditarMovimentoBancarioForm",
     "FormaPagamentoForm",
     "MovimentoContaBancariaForm",
     "PlanoContasDespesaForm",
