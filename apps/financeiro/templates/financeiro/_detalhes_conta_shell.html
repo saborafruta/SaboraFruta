@@ -1,0 +1,20 @@
+<template x-teleport="body">
+  <div x-show="detalheAberto" x-cloak
+       class="fixed inset-0 z-[100] flex items-center justify-center bg-slate-950/65 p-0 sm:p-5"
+       @keydown.escape.window="fecharDetalhe()" @click.self="fecharDetalhe()"
+       role="dialog" aria-modal="true" aria-label="Detalhes do título">
+    <section class="flex h-full w-full max-w-4xl flex-col overflow-hidden sm:h-auto sm:max-h-[calc(100vh-2.5rem)] sm:rounded-lg"
+             :style="temaClaro ? 'background:#ffffff;color:#172033' : 'background:#202024;color:#f8fafc'">
+      <header class="flex items-center justify-between gap-4 border-b px-4 py-3 sm:px-6"
+              :style="temaClaro ? 'border-color:#e5e7eb;background:#f8fafc' : 'border-color:#303038;background:#18181b'">
+        <div><strong>Detalhes do título</strong><p class="text-xs opacity-60">Consulte sem sair da listagem</p></div>
+        <button type="button" @click="fecharDetalhe()" class="flex h-9 w-9 items-center justify-center rounded-md border text-xl" aria-label="Fechar">&times;</button>
+      </header>
+      <div class="min-h-0 flex-1 overflow-y-auto p-4 sm:p-6">
+        <div x-show="detalheCarregando" class="flex min-h-52 items-center justify-center text-sm opacity-65">Carregando detalhes...</div>
+        <div x-show="detalheErro" class="rounded-md border border-rose-400/40 bg-rose-500/10 p-4 text-sm text-rose-500" x-text="detalheErro"></div>
+        <div x-show="!detalheCarregando && !detalheErro" x-html="detalheHtml"></div>
+      </div>
+    </section>
+  </div>
+</template>

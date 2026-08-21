@@ -605,13 +605,17 @@ class ContaPagarDetailView(PermissaoRequiredMixin, View):
             and conta.status not in [StatusContaPagar.CANCELADO, StatusContaPagar.PAGO]
         )
 
-        return render(request, 'financeiro/pagar/detail.html', {
+        context = {
             'title': f'Conta a Pagar #{conta.pk}',
             'conta': conta,
             'pode_pagar': pode_pagar,
             'pode_cancelar': pode_cancelar,
             'pill': PILL_STATUS.get(conta.status, 'is-slate'),
-        })
+            'tipo_conta': 'pagar',
+        }
+        if request.GET.get('modal') == '1':
+            return render(request, 'financeiro/_detalhes_conta_modal.html', context)
+        return render(request, 'financeiro/pagar/detail.html', context)
 
 
 class ContaPagarPagamentoView(PermissaoRequiredMixin, View):

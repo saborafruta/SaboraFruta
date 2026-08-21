@@ -10,6 +10,7 @@ from apps.financeiro.constants.enums import StatusContaPagar, StatusContaReceber
 from apps.financeiro.models import ContaBancaria, FormaPagamento, PlanoContas
 from apps.financeiro.models.receber_pagar import ContaPagar, ContaReceber
 from apps.financeiro.services.dashboard_contas_service import DashboardContasService
+from apps.financeiro.views.plano_contas import DEFAULT_TIPO
 
 
 class DashboardContasServiceTests(TestCase):
@@ -126,3 +127,21 @@ class DashboardContasServiceTests(TestCase):
         self.assertIn('Contas bancárias', html)
         self.assertIn('Categorias financeiras', html)
         self.assertIn('Cliente Alpha', html)
+        self.assertIn('Entenda os indicadores', html)
+        self.assertIn('Como ler esta visão', html)
+
+    def test_detalhes_do_titulo_renderizam_para_modal(self):
+        conta = self._pagar('250.00', date(2026, 8, 25))
+
+        html = render_to_string(
+            'financeiro/_detalhes_conta_modal.html',
+            {'conta': conta, 'tipo_conta': 'pagar', 'pode_pagar': True},
+        )
+
+        self.assertIn(f'Título #{conta.pk}', html)
+        self.assertIn('Resumo financeiro', html)
+        self.assertIn('Abrir página completa', html)
+        self.assertIn('Registrar pagamento', html)
+
+    def test_categorias_financeiras_abrem_em_despesas(self):
+        self.assertEqual(DEFAULT_TIPO, 'grupo_despesa')

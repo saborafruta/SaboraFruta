@@ -318,14 +318,18 @@ class ContaReceberDetailView(PermissaoRequiredMixin, View):
         pode_editar_prazo = pode_cancelar
         pill = PILL_STATUS.get(conta.status, 'is-slate')
 
-        return render(request, 'financeiro/receber/detail.html', {
+        context = {
             'title': f'Conta a Receber #{conta.pk}',
             'conta': conta,
             'pode_baixar': pode_baixar,
             'pode_cancelar': pode_cancelar,
             'pode_editar_prazo': pode_editar_prazo,
             'pill': pill,
-        })
+            'tipo_conta': 'receber',
+        }
+        if request.GET.get('modal') == '1':
+            return render(request, 'financeiro/_detalhes_conta_modal.html', context)
+        return render(request, 'financeiro/receber/detail.html', context)
 
 
 class ContaReceberBaixaView(PermissaoRequiredMixin, View):

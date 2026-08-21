@@ -18,7 +18,7 @@ TIPO_CONFIGS = {
     'outras_despesas':  {'tipo': 'D', 'nivel': 3, 'label': 'Categorias de Despesas','label_singular': 'Categoria de Despesa', 'pai_nivel': 2,    'aceita_lancamento': True},
 }
 
-DEFAULT_TIPO = 'grupo_receita'
+DEFAULT_TIPO = 'grupo_despesa'
 
 
 def _get_empresa(request):
