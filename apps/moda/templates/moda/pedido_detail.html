@@ -1311,7 +1311,10 @@ function gradePedido() {
       const colunas = {};
       let geral = 0;
 
-      this.$el.querySelectorAll('input[data-linha]').forEach((campo) => {
+      // `$root`, e nao `$el`: `somar()` e' chamado do @input de CADA
+      // campo, e ali o `$el` e' o proprio campo -- a soma varreria um
+      // input so' e os totais parariam no primeiro que fosse digitado.
+      this.$root.querySelectorAll('input[data-linha]').forEach((campo) => {
         // Campo vazio conta zero: durante a digitacao o usuario apaga o
         // valor antes de trocar, e NaN faria o total sumir no meio.
         const qtd = parseInt(campo.value, 10) || 0;

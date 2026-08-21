@@ -213,7 +213,7 @@
          class="fixed inset-0 z-50 flex items-start justify-center p-4 overflow-y-auto"
          style="background:rgba(0,0,0,.6);" @click.self="novoCliente = false">
       <div class="card p-5 w-full max-w-2xl my-8 space-y-4"
-           x-data="cadastroRapidoCliente('{% url 'moda:cliente-criar-json' %}')">
+           id="modal-novo-cliente" x-data="cadastroRapidoCliente('{% url 'moda:cliente-criar-json' %}')">
         <div class="flex items-start justify-between gap-3">
           <div>
             <h3 class="text-lg font-bold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
@@ -417,7 +417,9 @@ document.addEventListener('alpine:init', () => {
       this.resultados = [];
       this.avisos = [];
       this.aberto = false;
-      this.$nextTick(() => this.$el.querySelector('input[type=text]').focus());
+      // `$root` pelo mesmo motivo: chamado do botao 'trocar', o `$el`
+      // seria o proprio botao, e o foco iria para lugar nenhum.
+      this.$nextTick(() => this.$root.querySelector('input[type=text]').focus());
     },
 
     mover(passo) {
@@ -450,7 +452,14 @@ document.addEventListener('alpine:init', () => {
       const dados = new FormData();
       dados.append('csrfmiddlewaretoken',
         document.querySelector('[name=csrfmiddlewaretoken]').value);
-      this.$el.querySelectorAll('input, select, textarea').forEach((campo) => {
+      // OS CAMPOS SAO BUSCADOS PELO ID DO MODAL, e nao pelo elemento do
+      // Alpine. Dentro de um metodo, `$el` e' o elemento que disparou o
+      // evento -- o botao CADASTRAR --, entao a varredura rodava dentro
+      // do botao e achava zero campo: o cadastro ia VAZIO para o servidor
+      // com a tela inteira preenchida, e o erro que voltava falava de
+      // campo em branco. Um id nao depende de qual elemento chamou.
+      const modal = document.getElementById('modal-novo-cliente');
+      modal.querySelectorAll('input, select, textarea').forEach((campo) => {
         if (!campo.name) return;
         if (campo.type === 'checkbox') {
           if (campo.checked) dados.append(campo.name, 'on');

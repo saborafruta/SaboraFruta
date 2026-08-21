@@ -170,7 +170,8 @@ if (!window.__comboProdutoRegistrado) {
         this.resultados = [];
         this.aberto = false;
         this.avisar();
-        this.$nextTick(() => this.$el.querySelector('input[type=text]').focus());
+        // `$root`: chamado do botao 'trocar', o `$el` seria o botao.
+        this.$nextTick(() => this.$root.querySelector('input[type=text]').focus());
       },
 
       mover(passo) {
