@@ -198,7 +198,7 @@
                     {% if forma.taxa_administrativa > 0 %}<span class="soft-pill is-amber text-[10px]">{{ forma.taxa_administrativa|floatformat:2 }}%</span>{% endif %}
                     {% if forma.taxa_fixa > 0 %}<span class="soft-pill is-amber text-[10px]">+ R$ {{ forma.taxa_fixa|floatformat:2 }}</span>{% endif %}
                     {% if not forma.movimenta_caixa %}<span class="soft-pill is-amber text-[10px]">Não soma no caixa</span>{% endif %}
-                    {% if not forma.requer_tef and not forma.gera_parcelas and forma.movimenta_caixa %}<span class="text-xs text-gray-400">Padrão</span>{% endif %}
+                    {% if not forma.requer_tef and not forma.gera_parcelas and forma.movimenta_caixa and forma.taxa_administrativa == 0 and forma.taxa_fixa == 0 %}<span class="text-xs text-gray-400">Padrão</span>{% endif %}
                   </div>
                 </td>
                 <td class="px-3 py-2.5 text-xs truncate">{{ forma.conta_bancaria_padrao.descricao|default:"-" }}</td>
