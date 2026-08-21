@@ -284,6 +284,8 @@ class FormaPagamentoForm(forms.ModelForm):
         self.fields["taxa_administrativa"].widget.attrs.setdefault("step", "0.01")
         self.fields["taxa_fixa"].widget.attrs.update({"step": "0.01", "min": "0", "inputmode": "decimal"})
         self.fields["prazo_liquidacao_dias"].widget.attrs.setdefault("min", "0")
+        self.fields["prazo_compensacao_dias_uteis"].required = False
+        self.fields["prazo_compensacao_dias_uteis"].initial = 0
         self.fields["prazo_compensacao_dias_uteis"].widget.attrs.setdefault("min", "0")
         if filial:
             self.fields["conta_bancaria_padrao"].queryset = (

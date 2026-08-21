@@ -2,6 +2,7 @@ from decimal import Decimal
 
 from django.test import TestCase
 from django.urls import reverse
+from django.utils import timezone
 
 from apps.core.models import Empresa, Filial, PerfilAcesso, Usuario
 from apps.financeiro.constants.enums import TipoFormaPagamento
@@ -120,6 +121,7 @@ class FormasPagamentoFinanceiroTests(TestCase):
             valor_total=Decimal("100.00"),
             valor_pago=Decimal("100.00"),
             usuario=self.usuario,
+            data_venda=timezone.now(),
         )
 
         pagamento = PagamentoVendaPDV.objects.create(

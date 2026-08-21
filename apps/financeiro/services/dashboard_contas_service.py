@@ -5,6 +5,7 @@ from datetime import timedelta
 from decimal import Decimal
 
 from django.db.models import Count, DecimalField, ExpressionWrapper, F, Q, Sum
+from django.utils import timezone
 
 from apps.financeiro.constants.enums import StatusContaPagar, StatusContaReceber
 from apps.financeiro.models.conta_bancaria import ContaBancaria
@@ -43,7 +44,9 @@ def _saldo_calculado_conta(conta):
             filial=conta.filial,
             conta_bancaria=conta,
             valor_pago__gt=0,
-            data_pagamento__isnull=False,
+        ).filter(
+            Q(data_liquidacao_prevista__lte=timezone.localdate())
+            | Q(data_liquidacao_prevista__isnull=True, data_pagamento__lte=timezone.localdate())
         )
     ), ZERO)
     valor_pagamento = ExpressionWrapper(
@@ -73,6 +76,8 @@ def _saldo_calculado_conta(conta):
             | Q(data_liquidacao_prevista__isnull=True, venda_pdv__data_venda__date__lte=hoje),
             venda_pdv__filial=conta.filial,
             forma_pagamento__movimenta_caixa=True,
+        ).exclude(
+            forma_pagamento__tipo__in=('boleto', 'vale'),
         ).exclude(venda_pdv__status='cancelada').select_related(
             'conta_bancaria', 'forma_pagamento__conta_bancaria_padrao',
         )

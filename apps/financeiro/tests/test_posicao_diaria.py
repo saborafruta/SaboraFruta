@@ -6,10 +6,12 @@ from django.urls import reverse
 from django.utils import timezone
 
 from apps.core.models import Empresa, Filial, PerfilAcesso, RegistroAuditoria, Usuario
+from apps.cadastros.models import Cliente
 from apps.financeiro.constants.enums import StatusContaPagar, TipoFormaPagamento
 from apps.financeiro.models import ContaBancaria, FormaPagamento
 from apps.financeiro.models.extrato import ExtratoBancario
-from apps.financeiro.models.receber_pagar import ContaPagar, PagamentoContaPagar
+from apps.financeiro.models.receber_pagar import ContaPagar, ContaReceber, PagamentoContaPagar
+from apps.financeiro.services.receber_service import ContaReceberService
 from apps.financeiro.services.posicao_diaria_service import PosicaoDiariaCaixaService
 from apps.pdv.models import PagamentoVendaPDV, VendaPDV
 
@@ -130,6 +132,53 @@ class PosicaoDiariaCaixaTests(TestCase):
         response = self.client.get(reverse("financeiro:posicao_diaria"), {"data": "2026-08-21"})
         self.assertContains(response, "Bruto R$ 80,00")
         self.assertContains(response, "taxa R$ 2,10")
+
+    def test_venda_so_entra_na_data_de_compensacao(self):
+        self.forma.prazo_compensacao_dias_uteis = 1
+        self.forma.save(update_fields=["prazo_compensacao_dias_uteis"])
+        venda = VendaPDV.objects.create(
+            filial=self.filial, numero_venda=2, status="finalizada",
+            valor_total=Decimal("100.00"), valor_pago=Decimal("100.00"), usuario=self.usuario,
+            data_venda=datetime(2026, 8, 21, 12, tzinfo=timezone.get_current_timezone()),
+        )
+        PagamentoVendaPDV.objects.create(
+            venda_pdv=venda, forma_pagamento=self.forma, conta_bancaria=self.banco,
+            valor=Decimal("100.00"),
+        )
+
+        sexta = PosicaoDiariaCaixaService(self.filial, date(2026, 8, 21)).gerar(incluir_previstos=True)
+        segunda = PosicaoDiariaCaixaService(self.filial, date(2026, 8, 24)).gerar()
+        self.assertEqual(sexta["total_entradas"], Decimal("0"))
+        self.assertEqual(sexta["total_previsto"], Decimal("100.00"))
+        self.assertEqual(segunda["total_entradas"], Decimal("100.00"))
+
+    def test_baixa_de_boleto_compensa_no_proximo_dia_util(self):
+        self.forma.tipo = TipoFormaPagamento.BOLETO
+        self.forma.prazo_compensacao_dias_uteis = 1
+        self.forma.save(update_fields=["tipo", "prazo_compensacao_dias_uteis"])
+        cliente = Cliente.objects.create(
+            filial=self.filial, razao_social="Cliente boleto", tipo_pessoa="F", cpf_cnpj="12345678901",
+        )
+        conta = ContaReceber.objects.create(
+            filial=self.filial, cliente=cliente, valor_original=Decimal("80.00"),
+            valor_final=Decimal("80.00"), valor_saldo=Decimal("80.00"),
+            data_emissao=date(2026, 8, 20), data_vencimento=date(2026, 8, 21),
+        )
+        ContaReceberService.registrar_baixa(
+            conta, date(2026, 8, 21), Decimal("80.00"), self.forma, self.usuario,
+            conta_bancaria=self.banco,
+        )
+        conta.refresh_from_db()
+
+        self.assertEqual(conta.data_liquidacao_prevista, date(2026, 8, 24))
+        self.assertEqual(
+            PosicaoDiariaCaixaService(self.filial, date(2026, 8, 21)).gerar()["total_entradas"],
+            Decimal("0"),
+        )
+        self.assertEqual(
+            PosicaoDiariaCaixaService(self.filial, date(2026, 8, 24)).gerar()["total_entradas"],
+            Decimal("80.00"),
+        )
 
     def test_admin_exclui_movimento_manual_sem_apagar_historico(self):
         movimento = ExtratoBancario.objects.create(

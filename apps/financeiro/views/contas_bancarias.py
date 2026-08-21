@@ -381,14 +381,16 @@ class ContaBancariaListView(PermissaoRequiredMixin, View):
             qs = ContaReceber.objects.filter(
                 filial=filial,
                 conta_bancaria_id__in=conta_ids,
-                data_pagamento__range=(data_ini, data_fim),
                 valor_pago__gt=0,
+            ).filter(
+                Q(data_liquidacao_prevista__range=(data_ini, data_fim))
+                | Q(data_liquidacao_prevista__isnull=True, data_pagamento__range=(data_ini, data_fim))
             ).select_related("conta_bancaria", "cliente")
             if busca:
                 qs = qs.filter(cliente__nome__icontains=busca)
             for item in qs:
                 movimentos.append(MovimentoBancario(
-                    data=item.data_pagamento,
+                    data=item.data_liquidacao_prevista or item.data_pagamento,
                     conta=item.conta_bancaria,
                     historico=f"Recebimento - {item.cliente}",
                     origem="Conta a receber",
@@ -437,6 +439,8 @@ class ContaBancariaListView(PermissaoRequiredMixin, View):
                     | Q(data_liquidacao_prevista__isnull=True, venda_pdv__data_venda__date__range=(data_ini, data_fim)),
                     venda_pdv__filial=filial,
                     forma_pagamento__movimenta_caixa=True,
+                ).exclude(
+                    forma_pagamento__tipo__in=("boleto", "vale"),
                 ).exclude(venda_pdv__status="cancelada").select_related(
                     "venda_pdv", "forma_pagamento", "forma_pagamento__conta_bancaria_padrao", "conta_bancaria",
                 )
@@ -637,6 +641,8 @@ class ContaBancariaListView(PermissaoRequiredMixin, View):
                 forma_pagamento__movimenta_caixa=True,
                 conta_bancaria__isnull=True,
                 forma_pagamento__conta_bancaria_padrao__isnull=True,
+            ).exclude(
+                forma_pagamento__tipo__in=("boleto", "vale"),
             ).exclude(venda_pdv__status="cancelada").select_related("venda_pdv", "forma_pagamento")
             for item in vendas_qs:
                 valor = item.valor_entrada_liquida

@@ -12,6 +12,7 @@ from django.utils import timezone
 from apps.financeiro.models import ContaBancaria
 from apps.financeiro.models.extrato import ExtratoBancario
 from apps.financeiro.models.receber_pagar import ContaReceber, PagamentoContaPagar
+from apps.core.services.calendario import adicionar_dias_uteis_bancarios
 
 
 ZERO = Decimal("0")
@@ -141,13 +142,16 @@ class PosicaoDiariaCaixaService:
 
         recebimentos = ContaReceber.objects.filter(
             filial=self.filial, conta_bancaria_id__in=self.conta_ids,
-            data_pagamento=self.data, valor_pago__gt=0,
+            valor_pago__gt=0,
+        ).filter(
+            Q(data_liquidacao_prevista=self.data)
+            | Q(data_liquidacao_prevista__isnull=True, data_pagamento=self.data)
         ).select_related("conta_bancaria", "cliente", "forma_pagamento")
         for item in recebimentos:
             bruto = item.valor_pago or ZERO
             taxa = item.valor_taxa_recebimento if item.taxa_calculada_em else ZERO
             movimentos.append(MovimentoDiario(
-                data=item.data_pagamento, conta=item.conta_bancaria,
+                data=item.data_liquidacao_prevista or item.data_pagamento, conta=item.conta_bancaria,
                 descricao=f"Recebimento de {item.cliente}", contraparte=str(item.cliente),
                 origem="Conta a receber", origem_codigo="receber", registro_id=item.pk,
                 documento=item.documento_numero,
@@ -184,6 +188,8 @@ class PosicaoDiariaCaixaService:
                 | Q(data_liquidacao_prevista__isnull=True, venda_pdv__data_venda__date=self.data),
                 venda_pdv__filial=self.filial,
                 forma_pagamento__movimenta_caixa=True,
+            ).exclude(
+                forma_pagamento__tipo__in=("boleto", "vale"),
             ).exclude(venda_pdv__status="cancelada").select_related(
                 "venda_pdv__cliente", "forma_pagamento", "forma_pagamento__conta_bancaria_padrao", "conta_bancaria",
             )
@@ -212,7 +218,10 @@ class PosicaoDiariaCaixaService:
             _somar(saldos, conta_id, valor)
         recebimentos = ContaReceber.objects.filter(
             filial=self.filial, conta_bancaria_id__in=self.conta_ids,
-            data_pagamento__lt=self.data, valor_pago__gt=0,
+            valor_pago__gt=0,
+        ).filter(
+            Q(data_liquidacao_prevista__lt=self.data)
+            | Q(data_liquidacao_prevista__isnull=True, data_pagamento__lt=self.data)
         )
         for item in recebimentos.iterator():
             _somar(saldos, item.conta_bancaria_id, item.valor_entrada_liquida)
@@ -229,6 +238,8 @@ class PosicaoDiariaCaixaService:
                 | Q(data_liquidacao_prevista__isnull=True, venda_pdv__data_venda__date__lt=self.data),
                 venda_pdv__filial=self.filial,
                 forma_pagamento__movimenta_caixa=True,
+            ).exclude(
+                forma_pagamento__tipo__in=("boleto", "vale"),
             ).exclude(venda_pdv__status="cancelada").select_related(
                 "forma_pagamento__conta_bancaria_padrao", "conta_bancaria",
             )
@@ -244,7 +255,10 @@ class PosicaoDiariaCaixaService:
     def _pendencias_sem_conta_do_dia(self):
         itens = []
         for item in ContaReceber.objects.filter(
-            filial=self.filial, data_pagamento=self.data, valor_pago__gt=0, conta_bancaria__isnull=True,
+            filial=self.filial, valor_pago__gt=0, conta_bancaria__isnull=True,
+        ).filter(
+            Q(data_liquidacao_prevista=self.data)
+            | Q(data_liquidacao_prevista__isnull=True, data_pagamento=self.data)
         ).select_related("cliente"):
             itens.append({"descricao": f"Recebimento - {item.cliente}", "valor": item.valor_entrada_liquida, "tipo": "entrada"})
         for item in PagamentoContaPagar.objects.filter(
@@ -261,6 +275,8 @@ class PosicaoDiariaCaixaService:
                 forma_pagamento__movimenta_caixa=True,
                 conta_bancaria__isnull=True,
                 forma_pagamento__conta_bancaria_padrao__isnull=True,
+            ).exclude(
+                forma_pagamento__tipo__in=("boleto", "vale"),
             ).exclude(venda_pdv__status="cancelada").select_related("venda_pdv", "forma_pagamento")
             for item in vendas:
                 valor = item.valor_entrada_liquida
@@ -286,6 +302,8 @@ class PosicaoDiariaCaixaService:
             data_liquidacao_prevista__gt=self.data,
             data_liquidacao_prevista__lte=limite,
             forma_pagamento__movimenta_caixa=True,
+        ).exclude(
+            forma_pagamento__tipo__in=("boleto", "vale"),
         ).exclude(venda_pdv__status="cancelada").select_related(
             "venda_pdv__cliente", "forma_pagamento", "forma_pagamento__conta_bancaria_padrao", "conta_bancaria",
         ).order_by("data_liquidacao_prevista", "pk")
@@ -304,4 +322,31 @@ class PosicaoDiariaCaixaService:
                 "valor_taxa": item.valor_taxa,
                 "valor_liquido": item.valor_entrada_liquida,
             })
+        recebimentos = ContaReceber.objects.filter(
+            filial=self.filial,
+            status__in=("aberto", "vencido", "negociado"),
+            data_vencimento__lte=limite,
+            valor_saldo__gt=0,
+        ).select_related("cliente", "forma_pagamento", "conta_bancaria")
+        for item in recebimentos:
+            forma = item.forma_pagamento
+            prazo = forma.prazo_compensacao_dias_uteis if forma else 0
+            data_prevista = adicionar_dias_uteis_bancarios(item.data_vencimento, prazo, self.filial)
+            if data_prevista <= self.data:
+                continue
+            calculo = forma.calcular_taxa_recebimento(item.valor_saldo, item.total_parcelas) if forma else {
+                "taxa": ZERO, "liquido": item.valor_saldo,
+            }
+            itens.append({
+                "data": data_prevista,
+                "descricao": f"Conta a receber - {item.cliente}",
+                "forma": forma.descricao if forma else "Nao informada",
+                "conta": item.conta_bancaria.descricao if item.conta_bancaria else "Conta nao definida",
+                "bandeira": "",
+                "parcelas": item.total_parcelas,
+                "valor_bruto": item.valor_saldo,
+                "valor_taxa": calculo["taxa"],
+                "valor_liquido": calculo["liquido"],
+            })
+        itens.sort(key=lambda item: (item["data"], item["descricao"].casefold()))
         return itens

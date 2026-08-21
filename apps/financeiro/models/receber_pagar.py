@@ -54,6 +54,8 @@ class ContaReceber(TimestampedModel):
     data_emissao = models.DateField()
     data_vencimento = models.DateField()
     data_pagamento = models.DateField(null=True, blank=True)
+    prazo_compensacao_aplicado = models.PositiveSmallIntegerField(default=0)
+    data_liquidacao_prevista = models.DateField(null=True, blank=True, db_index=True)
 
     forma_pagamento = models.ForeignKey(FormaPagamento, on_delete=models.SET_NULL, null=True, blank=True)
     conta_bancaria = models.ForeignKey(ContaBancaria, on_delete=models.SET_NULL, null=True, blank=True)

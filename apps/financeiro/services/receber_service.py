@@ -8,6 +8,7 @@ from django.db import transaction
 from django.utils import timezone
 
 from apps.core.services.exceptions import DomainError
+from apps.core.services.calendario import adicionar_dias_uteis_bancarios
 from apps.financeiro.constants.enums import StatusContaReceber
 from apps.financeiro.models.receber_pagar import ContaReceber
 
@@ -123,6 +124,12 @@ class ContaReceberService:
 
         conta.data_pagamento = data_pagamento
         conta.forma_pagamento = forma_pagamento
+        conta.prazo_compensacao_aplicado = forma_pagamento.prazo_compensacao_dias_uteis or 0
+        conta.data_liquidacao_prevista = adicionar_dias_uteis_bancarios(
+            data_pagamento,
+            conta.prazo_compensacao_aplicado,
+            conta.filial,
+        )
         if conta_bancaria:
             conta.conta_bancaria = conta_bancaria
         conta.usuario_baixa = usuario
