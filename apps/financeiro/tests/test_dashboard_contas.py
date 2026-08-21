@@ -127,8 +127,9 @@ class DashboardContasServiceTests(TestCase):
         self.assertIn('Contas bancárias', html)
         self.assertIn('Categorias financeiras', html)
         self.assertIn('Cliente Alpha', html)
-        self.assertIn('Entenda os indicadores', html)
-        self.assertIn('Como ler esta visão', html)
+        self.assertIn('Explicar saldo projetado', html)
+        self.assertIn('Explicar valor a receber', html)
+        self.assertIn('Não inclui o saldo das contas bancárias', html)
 
     def test_detalhes_do_titulo_renderizam_para_modal(self):
         conta = self._pagar('250.00', date(2026, 8, 25))
