@@ -67,6 +67,8 @@ class PlanoContas(ActiveModel):
         ordering = ["codigo"]
 
     def __str__(self):
+        if self.descricao:
+            return self.descricao
         return f"{self.codigo} – {self.descricao}"
 
     @property
