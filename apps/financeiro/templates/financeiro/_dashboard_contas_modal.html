@@ -1,11 +1,14 @@
-<div x-data="{ aberto:false, ajuda:null }" x-effect="document.body.style.overflow = aberto ? 'hidden' : ''">
-  <button type="button" @click="aberto=true" class="btn-secondary whitespace-nowrap">Visão financeira</button>
+<div>
+  <style>
+    #financeiro-dashboard-dialog { border:0; margin:auto; padding:0; background:transparent; }
+    #financeiro-dashboard-dialog::backdrop { background:rgba(15,23,42,.66); backdrop-filter:blur(6px); -webkit-backdrop-filter:blur(6px); }
+    #financeiro-dashboard-dialog summary { list-style:none; cursor:pointer; }
+    #financeiro-dashboard-dialog summary::-webkit-details-marker { display:none; }
+  </style>
+  <button type="button" onclick="document.getElementById('financeiro-dashboard-dialog').showModal();document.body.style.overflow='hidden'" class="btn-secondary whitespace-nowrap">Visão financeira</button>
 
-  <template x-teleport="body">
-    <div x-show="aberto" x-cloak @keydown.escape.window="aberto=false"
-         class="fixed inset-0 flex items-center justify-center p-0 sm:p-5"
-         style="z-index:120;background:rgba(15,23,42,.66);backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px)"
-         role="dialog" aria-modal="true" aria-label="Visão financeira" @click.self="aberto=false">
+  <dialog id="financeiro-dashboard-dialog" aria-label="Visão financeira"
+          class="h-full w-full max-w-none sm:h-auto sm:w-[calc(100%-2.5rem)]">
       <section class="flex h-full w-full flex-col overflow-hidden shadow-2xl sm:h-auto sm:rounded-lg"
                :style="(temaClaro ? 'background:#f8fafc;color:#172033;' : 'background:#18181b;color:#f8fafc;') + 'max-height:calc(100vh - 2.5rem);max-width:72rem'">
         <div class="flex items-start justify-between gap-4 border-b px-4 py-4 text-white sm:px-6"
@@ -15,7 +18,7 @@
             <h2 class="mt-1 text-xl font-semibold text-white">Contas a pagar e receber</h2>
             <p class="mt-1 text-xs text-slate-300">Posição em {{ dashboard_contas.hoje|date:"d/m/Y" }} · valores da filial atual</p>
           </div>
-          <button type="button" @click="aberto=false" class="grid h-9 w-9 place-items-center rounded-md border border-white/30 text-xl text-white" aria-label="Fechar">×</button>
+          <button type="button" onclick="document.getElementById('financeiro-dashboard-dialog').close();document.body.style.overflow=''" class="grid h-9 w-9 place-items-center rounded-md border border-white/30 text-xl text-white" aria-label="Fechar">×</button>
         </div>
 
         <div class="flex-1 overflow-y-auto p-3 sm:p-5">
@@ -23,10 +26,10 @@
             <article class="rounded-lg border p-4" :style="temaClaro ? 'background:#fff1f2;border-color:#fecdd3' : 'background:rgba(190,24,93,.12);border-color:rgba(251,113,133,.28)'">
               <div class="flex items-center gap-1.5">
                 <span class="text-xs font-semibold uppercase opacity-65">Saldo projetado</span>
-                <div class="relative inline-flex">
-                  <button type="button" @click.stop="ajuda=ajuda==='saldo' ? null : 'saldo'" class="grid h-4 w-4 place-items-center rounded-full border text-[10px] font-bold" style="border-color:#3b82f6;color:#2563eb" aria-label="Explicar saldo projetado">i</button>
-                  <div x-show="ajuda==='saldo'" @click.outside="ajuda=null" class="absolute left-0 top-6 z-20 w-64 rounded-md p-3 text-xs font-normal shadow-xl" :style="temaClaro ? 'background:#172033;color:#fff' : 'background:#f8fafc;color:#172033'">Tudo que falta receber menos tudo que falta pagar. Não inclui o saldo das contas bancárias.</div>
-                </div>
+                <details class="relative inline-flex">
+                  <summary class="grid h-4 w-4 place-items-center rounded-full border text-[10px] font-bold" style="border-color:#3b82f6;color:#2563eb" aria-label="Explicar saldo projetado">i</summary>
+                  <div class="absolute left-0 top-6 z-20 w-64 rounded-md p-3 text-xs font-normal text-white shadow-xl" style="background:#172033">Tudo que falta receber menos tudo que falta pagar. Não inclui o saldo das contas bancárias.</div>
+                </details>
               </div>
               <strong class="mt-2 block text-xl" style="color:{% if dashboard_contas.saldo_projetado < 0 %}#e11d48{% else %}#0f766e{% endif %}">R$ {{ dashboard_contas.saldo_projetado|floatformat:2 }}</strong>
               <span class="text-xs opacity-60">Receber menos pagar em aberto</span>
@@ -34,10 +37,10 @@
             <article class="rounded-lg border p-4" :style="temaClaro ? 'background:#f0fdfa;border-color:#99f6e4' : 'background:rgba(13,148,136,.12);border-color:rgba(45,212,191,.28)'">
               <div class="flex items-center gap-1.5">
                 <span class="text-xs font-semibold uppercase opacity-65">A receber</span>
-                <div class="relative inline-flex">
-                  <button type="button" @click.stop="ajuda=ajuda==='receber' ? null : 'receber'" class="grid h-4 w-4 place-items-center rounded-full border text-[10px] font-bold" style="border-color:#3b82f6;color:#2563eb" aria-label="Explicar valor a receber">i</button>
-                  <div x-show="ajuda==='receber'" @click.outside="ajuda=null" class="absolute left-0 top-6 z-20 w-64 rounded-md p-3 text-xs font-normal shadow-xl" :style="temaClaro ? 'background:#172033;color:#fff' : 'background:#f8fafc;color:#172033'">Soma dos saldos ainda abertos a receber, inclusive títulos vencidos.</div>
-                </div>
+                <details class="relative inline-flex">
+                  <summary class="grid h-4 w-4 place-items-center rounded-full border text-[10px] font-bold" style="border-color:#3b82f6;color:#2563eb" aria-label="Explicar valor a receber">i</summary>
+                  <div class="absolute left-0 top-6 z-20 w-64 rounded-md p-3 text-xs font-normal text-white shadow-xl" style="background:#172033">Soma dos saldos ainda abertos a receber, inclusive títulos vencidos.</div>
+                </details>
               </div>
               <strong class="mt-2 block text-xl" style="color:#0f766e">R$ {{ dashboard_contas.receber.aberto|floatformat:2 }}</strong>
               <span class="text-xs opacity-60">{{ dashboard_contas.receber.qtd_aberto }} título{{ dashboard_contas.receber.qtd_aberto|pluralize }}</span>
@@ -45,10 +48,10 @@
             <article class="rounded-lg border p-4" :style="temaClaro ? 'background:#fff1f2;border-color:#fecdd3' : 'background:rgba(190,24,93,.12);border-color:rgba(251,113,133,.28)'">
               <div class="flex items-center gap-1.5">
                 <span class="text-xs font-semibold uppercase opacity-65">A pagar</span>
-                <div class="relative inline-flex">
-                  <button type="button" @click.stop="ajuda=ajuda==='pagar' ? null : 'pagar'" class="grid h-4 w-4 place-items-center rounded-full border text-[10px] font-bold" style="border-color:#3b82f6;color:#2563eb" aria-label="Explicar valor a pagar">i</button>
-                  <div x-show="ajuda==='pagar'" @click.outside="ajuda=null" class="absolute right-0 top-6 z-20 w-64 rounded-md p-3 text-xs font-normal shadow-xl" :style="temaClaro ? 'background:#172033;color:#fff' : 'background:#f8fafc;color:#172033'">Soma dos saldos ainda abertos a pagar, inclusive títulos vencidos.</div>
-                </div>
+                <details class="relative inline-flex">
+                  <summary class="grid h-4 w-4 place-items-center rounded-full border text-[10px] font-bold" style="border-color:#3b82f6;color:#2563eb" aria-label="Explicar valor a pagar">i</summary>
+                  <div class="absolute right-0 top-6 z-20 w-64 rounded-md p-3 text-xs font-normal text-white shadow-xl" style="background:#172033">Soma dos saldos ainda abertos a pagar, inclusive títulos vencidos.</div>
+                </details>
               </div>
               <strong class="mt-2 block text-xl" style="color:#be123c">R$ {{ dashboard_contas.pagar.aberto|floatformat:2 }}</strong>
               <span class="text-xs opacity-60">{{ dashboard_contas.pagar.qtd_aberto }} título{{ dashboard_contas.pagar.qtd_aberto|pluralize }}</span>
@@ -56,10 +59,10 @@
             <article class="rounded-lg border p-4" :style="temaClaro ? 'background:#eff6ff;border-color:#bfdbfe' : 'background:rgba(37,99,235,.12);border-color:rgba(96,165,250,.28)'">
               <div class="flex items-center gap-1.5">
                 <span class="text-xs font-semibold uppercase opacity-65">Realizado no mês</span>
-                <div class="relative inline-flex">
-                  <button type="button" @click.stop="ajuda=ajuda==='realizado' ? null : 'realizado'" class="grid h-4 w-4 place-items-center rounded-full border text-[10px] font-bold" style="border-color:#3b82f6;color:#2563eb" aria-label="Explicar resultado realizado">i</button>
-                  <div x-show="ajuda==='realizado'" @click.outside="ajuda=null" class="absolute right-0 top-6 z-20 w-64 rounded-md p-3 text-xs font-normal shadow-xl" :style="temaClaro ? 'background:#172033;color:#fff' : 'background:#f8fafc;color:#172033'">O que efetivamente entrou menos o que efetivamente saiu no mês atual.</div>
-                </div>
+                <details class="relative inline-flex">
+                  <summary class="grid h-4 w-4 place-items-center rounded-full border text-[10px] font-bold" style="border-color:#3b82f6;color:#2563eb" aria-label="Explicar resultado realizado">i</summary>
+                  <div class="absolute right-0 top-6 z-20 w-64 rounded-md p-3 text-xs font-normal text-white shadow-xl" style="background:#172033">O que efetivamente entrou menos o que efetivamente saiu no mês atual.</div>
+                </details>
               </div>
               <strong class="mt-2 block text-xl" style="color:{% if dashboard_contas.saldo_realizado_mes < 0 %}#e11d48{% else %}#0f766e{% endif %}">R$ {{ dashboard_contas.saldo_realizado_mes|floatformat:2 }}</strong>
               <span class="text-xs opacity-60">Recebimentos menos pagamentos</span>
@@ -113,6 +116,5 @@
           <div class="flex flex-wrap gap-2"><a href="{% url 'financeiro:fluxo_caixa' %}" class="btn-secondary">Fluxo de caixa</a><a href="{% url 'financeiro:receber_list' %}" class="btn-secondary">A receber</a><a href="{% url 'financeiro:pagar_list' %}" class="btn-secondary">A pagar</a></div>
         </div>
       </section>
-    </div>
-  </template>
+  </dialog>
 </div>
