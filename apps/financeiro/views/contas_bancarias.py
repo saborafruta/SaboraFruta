@@ -359,7 +359,7 @@ class ContaBancariaListView(PermissaoRequiredMixin, View):
                 filial=filial,
                 conta_bancaria_id__in=conta_ids,
                 data_lancamento__range=(data_ini, data_fim),
-            ).select_related("conta_bancaria")
+            ).exclude(status="excluido").select_related("conta_bancaria")
             if busca:
                 qs = qs.filter(historico__icontains=busca)
             for item in qs:

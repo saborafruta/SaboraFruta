@@ -739,6 +739,7 @@
       {% url 'financeiro:formas_pagamento' as formas_pagamento_url %}
       {% url 'financeiro:painel' as financeiro_painel_url %}
       {% url 'financeiro:fluxo_caixa' as fluxo_caixa_url %}
+      {% url 'financeiro:posicao_diaria' as posicao_diaria_url %}
       {% url 'financeiro:contas_bancarias' as contas_bancarias_url %}
       {% url 'financeiro:conciliacao_list' as conciliacao_url %}
       {% url 'produtos:tabela-list' as tabela_preco_url %}
@@ -778,6 +779,19 @@
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6"/>
         </svg>
         <span x-show="!collapsed">Fluxo de Caixa</span>
+      </a>
+
+      <!-- Posicao Diaria de Caixa -->
+      <a href="{{ posicao_diaria_url }}"
+         class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-all duration-150"
+         :class="collapsed ? 'justify-center' : ''"
+         :style="{% if '/financeiro/posicao-diaria' in request.path %}temaClaro ? 'background:#dbeafe; color:#1d4ed8; font-weight:600;' : 'background:#1e2a3a; color:#f8fafc;'{% else %}temaClaro ? 'color:#6b7280;' : 'color:#f8fafc;'{% endif %}"
+         {% if '/financeiro/posicao-diaria' not in request.path %}onmouseover="this.style.background=temaClaro?'#eff6ff':'#242426'; this.style.color=temaClaro?'#1d4ed8':'#d4d4d4';" onmouseout="this.style.background='transparent'; this.style.color=temaClaro?'#6b7280':'#f8fafc'; this.style.fontWeight='';"{% endif %}
+         title="Posição Diária de Caixa">
+        <svg class="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M4 5h16v14H4zM4 9h16M8 13h3m-3 3h5"/>
+        </svg>
+        <span x-show="!collapsed">Posição Diária</span>
       </a>
 
       <!-- Contas Bancarias -->
@@ -1565,6 +1579,7 @@
       {% url 'financeiro:formas_pagamento' as formas_pagamento_url %}
       {% url 'financeiro:painel' as financeiro_painel_url %}
       {% url 'financeiro:fluxo_caixa' as fluxo_caixa_url %}
+      {% url 'financeiro:posicao_diaria' as posicao_diaria_url %}
       {% url 'financeiro:contas_bancarias' as contas_bancarias_url %}
       {% url 'financeiro:conciliacao_list' as conciliacao_url %}
       {% url 'produtos:tabela-list' as tabela_preco_url %}
@@ -1598,6 +1613,15 @@
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6"/>
         </svg>
         Fluxo de Caixa
+      </a>
+
+      <a href="{{ posicao_diaria_url }}" @click="mobileOpen = false"
+         class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-all duration-150"
+         :style="{% if '/financeiro/posicao-diaria' in request.path %}temaClaro ? 'background:#dbeafe; color:#1d4ed8; font-weight:600;' : 'background:#1e2a3a; color:#f8fafc;'{% else %}temaClaro ? 'color:#6b7280;' : 'color:#f8fafc;'{% endif %}">
+        <svg class="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M4 5h16v14H4zM4 9h16M8 13h3m-3 3h5"/>
+        </svg>
+        Posição Diária
       </a>
 
       <a href="{{ contas_bancarias_url }}" @click="mobileOpen = false"

@@ -1,0 +1,183 @@
+{% extends "_base.html" %}
+{% load widget_tweaks %}
+
+{% block title %}Posição Diária de Caixa{% endblock %}
+{% block page_title %}Posição Diária de Caixa{% endblock %}
+
+{% block content %}
+<style>
+  .pc-account { border-left: 4px solid var(--pc-accent); background: color-mix(in srgb, var(--pc-accent) 7%, transparent); }
+  .pc-account.azul { --pc-accent:#2563eb; }
+  .pc-account.verde { --pc-accent:#0f766e; }
+  .pc-account.ambar { --pc-accent:#a16207; }
+  .pc-account.violeta { --pc-accent:#7c3aed; }
+  .pc-account.cinza { --pc-accent:#64748b; }
+  .pc-kpi { min-height: 112px; }
+  .pc-row { min-height: 76px; }
+  .pc-notice { border-color:#93c5fd; background:#eff6ff; color:#1e3a8a; }
+  .dark .pc-notice { border-color:#1d4ed8; background:rgba(30,58,138,.24); color:#dbeafe; }
+  @media (max-width: 640px) {
+    .pc-kpi { min-height: 96px; }
+    .pc-row { min-height: 88px; }
+  }
+</style>
+<div class="mx-auto max-w-7xl space-y-5" x-data="{
+  movimentoModal: {{ movimento_modal|yesno:'true,false' }},
+  detalheModal: {{ detalhe|yesno:'true,false' }},
+  editarModal: {{ editar_movimento|yesno:'true,false' }},
+  excluirModal: false,
+  mostrarExtrato: false
+}">
+  <header class="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+    <div>
+      <h2 class="text-2xl font-semibold">Posição Diária de Caixa</h2>
+      <p class="mt-1 text-sm text-gray-500">Confira o que entrou, o que saiu e onde o dinheiro terminou no dia.</p>
+    </div>
+    <div class="flex flex-wrap items-center gap-2">
+      <a href="{% url 'financeiro:receber_list' %}" class="btn-secondary">Contas a receber</a>
+      <a href="{% url 'financeiro:pagar_list' %}" class="btn-secondary">Contas a pagar</a>
+      <a href="{% url 'financeiro:contas_bancarias' %}" class="btn-secondary">Contas</a>
+      <button type="button" class="btn-primary" @click="movimentoModal=true">+ Movimento manual</button>
+    </div>
+  </header>
+
+  <section class="card p-4">
+    <form method="get" class="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+      <label class="block text-xs font-semibold uppercase text-gray-500">Dia da conferência
+        <input type="date" name="data" value="{{ data_referencia|date:'Y-m-d' }}" class="form-input mt-1 w-full sm:w-52">
+      </label>
+      <div class="flex flex-wrap gap-2">
+        {% if user_is_admin %}
+          {% if mostrar_excluidos %}<a href="?data={{ data_referencia|date:'Y-m-d' }}" class="btn-secondary">Ocultar excluídos</a>
+          {% else %}<a href="?data={{ data_referencia|date:'Y-m-d' }}&mostrar_excluidos=1" class="btn-secondary">Ver excluídos</a>{% endif %}
+        {% endif %}
+        <button type="submit" class="btn-primary">Atualizar dia</button>
+      </div>
+    </form>
+  </section>
+
+  <section class="grid grid-cols-2 gap-3 lg:grid-cols-5">
+    <div class="card pc-kpi col-span-2 border-l-4 border-amber-500 p-4 lg:col-span-1">
+      <p class="text-xs font-semibold uppercase text-gray-500">Saldo inicial</p>
+      <strong class="mt-2 block text-2xl text-amber-600">R$ {{ posicao.total_abertura|floatformat:2 }}</strong>
+      <span class="mt-1 block text-xs text-gray-500">Fechamento do dia anterior</span>
+    </div>
+    <div class="card pc-kpi border-l-4 border-emerald-500 p-4">
+      <p class="text-xs font-semibold uppercase text-gray-500">Entradas</p>
+      <strong class="mt-2 block text-xl text-emerald-600">R$ {{ posicao.total_entradas|floatformat:2 }}</strong>
+      <span class="mt-1 block text-xs text-gray-500">{{ posicao.entradas|length }} movimento{{ posicao.entradas|length|pluralize }}</span>
+    </div>
+    <div class="card pc-kpi border-l-4 border-rose-500 p-4">
+      <p class="text-xs font-semibold uppercase text-gray-500">Saídas</p>
+      <strong class="mt-2 block text-xl text-rose-600">R$ {{ posicao.total_saidas|floatformat:2 }}</strong>
+      <span class="mt-1 block text-xs text-gray-500">{{ posicao.saidas|length }} movimento{{ posicao.saidas|length|pluralize }}</span>
+    </div>
+    <div class="card pc-kpi border-l-4 border-slate-400 p-4">
+      <p class="text-xs font-semibold uppercase text-gray-500">Resultado do dia</p>
+      <strong class="mt-2 block text-xl {% if posicao.variacao_dia < 0 %}text-rose-600{% else %}text-emerald-600{% endif %}">R$ {{ posicao.variacao_dia|floatformat:2 }}</strong>
+      <span class="mt-1 block text-xs text-gray-500">Entradas menos saídas</span>
+    </div>
+    <div class="card pc-kpi col-span-2 border-l-4 border-blue-500 p-4 lg:col-span-1">
+      <p class="text-xs font-semibold uppercase text-gray-500">Saldo final</p>
+      <strong class="mt-2 block text-2xl {% if posicao.total_fechamento < 0 %}text-rose-600{% else %}text-blue-600{% endif %}">R$ {{ posicao.total_fechamento|floatformat:2 }}</strong>
+      <span class="mt-1 block text-xs text-gray-500">Soma de todas as contas</span>
+    </div>
+  </section>
+
+  {% if posicao.sem_conta %}
+    <a href="{% url 'financeiro:contas_bancarias' %}" class="block rounded-lg border border-amber-300 bg-amber-50 p-4 text-amber-900 dark:border-amber-800 dark:bg-amber-950/20 dark:text-amber-200">
+      <strong>{{ posicao.sem_conta|length }} movimento{{ posicao.sem_conta|length|pluralize }} sem conta definida neste dia.</strong>
+      <span class="mt-1 block text-xs opacity-80">Direcione-os para que o fechamento fique completo.</span>
+    </a>
+  {% endif %}
+  {% if not posicao.possui_caixa_dinheiro %}
+    <div class="pc-notice rounded-lg border p-4 text-sm">
+      <strong>Dinheiro físico ainda não está controlado.</strong> Cadastre uma conta com o apelido “Dinheiro em caixa” para somá-lo ao fechamento.
+      <a href="{% url 'financeiro:contas_bancarias' %}" class="ml-1 font-semibold underline">Cadastrar conta</a>
+    </div>
+  {% endif %}
+
+  <section>
+    <div class="mb-3 flex items-end justify-between gap-3">
+      <div><h3 class="text-lg font-semibold">Saldos por conta</h3><p class="text-xs text-gray-500">Abertura, movimentos do dia e fechamento individual.</p></div>
+      <span class="text-xs text-gray-500">{{ posicao.contas|length }} conta{{ posicao.contas|length|pluralize }}</span>
+    </div>
+    <div class="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+      {% for conta in posicao.contas %}
+        <a href="{% url 'financeiro:contas_bancarias' %}?conta={{ conta.pk }}" class="pc-account {{ conta.posicao_cor }} rounded-lg border border-slate-200 p-4 transition hover:-translate-y-0.5 hover:shadow-sm dark:border-slate-700">
+          <div class="flex items-start justify-between gap-3"><div><strong class="block">{{ conta.descricao|default:conta.banco_nome }}</strong><span class="text-xs text-gray-500">{{ conta.banco_nome|default:'Conta operacional' }}</span></div>{% if conta.eh_dinheiro %}<span class="soft-pill is-blue">Dinheiro</span>{% endif %}</div>
+          <div class="mt-4 grid grid-cols-2 gap-3 text-sm">
+            <div><span class="block text-xs text-gray-500">Abertura</span><strong>R$ {{ conta.posicao_abertura|floatformat:2 }}</strong></div>
+            <div class="text-right"><span class="block text-xs text-gray-500">Fechamento</span><strong class="{% if conta.posicao_fechamento < 0 %}text-rose-600{% else %}text-emerald-600{% endif %}">R$ {{ conta.posicao_fechamento|floatformat:2 }}</strong></div>
+          </div>
+          <div class="mt-3 flex justify-between border-t pt-3 text-xs text-gray-500 dark:border-slate-700"><span class="text-emerald-600">+ R$ {{ conta.posicao_entradas|floatformat:2 }}</span><span class="text-rose-600">- R$ {{ conta.posicao_saidas|floatformat:2 }}</span></div>
+        </a>
+      {% empty %}
+        <div class="col-span-full rounded-lg border border-dashed p-8 text-center text-sm text-gray-500">Nenhuma conta ativa. Cadastre ao menos uma conta para iniciar a conferência.</div>
+      {% endfor %}
+    </div>
+  </section>
+
+  <section class="grid gap-4 lg:grid-cols-2">
+    <div class="overflow-hidden rounded-lg border border-emerald-200 dark:border-emerald-900/60">
+      <div class="flex items-center justify-between bg-emerald-50 px-4 py-3 dark:bg-emerald-950/20"><div><h3 class="font-semibold text-emerald-800 dark:text-emerald-300">Entradas do dia</h3><p class="text-xs text-gray-500">Vendas, recebimentos e créditos manuais</p></div><strong class="text-emerald-600">R$ {{ posicao.total_entradas|floatformat:2 }}</strong></div>
+      <div class="divide-y dark:divide-slate-700">
+        {% for mov in posicao.entradas %}
+          <a href="?data={{ data_referencia|date:'Y-m-d' }}&origem={{ mov.origem_codigo }}&movimento={{ mov.registro_id }}" class="pc-row grid grid-cols-[1fr_auto] gap-3 p-4 transition hover:bg-emerald-500/5">
+            <div class="min-w-0"><strong class="block truncate text-sm">{{ mov.descricao }}</strong><span class="mt-1 block truncate text-xs text-gray-500">{{ mov.forma_pagamento }} · {{ mov.conta.descricao|default:mov.conta.banco_nome }}</span><span class="mt-1 block text-[11px] text-gray-400">{{ mov.origem }}{% if mov.documento %} · Doc. {{ mov.documento }}{% endif %}</span></div>
+            <strong class="whitespace-nowrap text-emerald-600">R$ {{ mov.entrada|floatformat:2 }}</strong>
+          </a>
+        {% empty %}<p class="p-8 text-center text-sm text-gray-500">Nenhuma entrada registrada.</p>{% endfor %}
+      </div>
+    </div>
+    <div class="overflow-hidden rounded-lg border border-rose-200 dark:border-rose-900/60">
+      <div class="flex items-center justify-between bg-rose-50 px-4 py-3 dark:bg-rose-950/20"><div><h3 class="font-semibold text-rose-800 dark:text-rose-300">Saídas do dia</h3><p class="text-xs text-gray-500">Pagamentos, despesas e débitos manuais</p></div><strong class="text-rose-600">R$ {{ posicao.total_saidas|floatformat:2 }}</strong></div>
+      <div class="divide-y dark:divide-slate-700">
+        {% for mov in posicao.saidas %}
+          <a href="?data={{ data_referencia|date:'Y-m-d' }}&origem={{ mov.origem_codigo }}&movimento={{ mov.registro_id }}" class="pc-row grid grid-cols-[1fr_auto] gap-3 p-4 transition hover:bg-rose-500/5">
+            <div class="min-w-0"><strong class="block truncate text-sm">{{ mov.descricao }}</strong><span class="mt-1 block truncate text-xs text-gray-500">{{ mov.forma_pagamento }} · {{ mov.conta.descricao|default:mov.conta.banco_nome }}</span><span class="mt-1 block text-[11px] text-gray-400">{{ mov.origem }}{% if mov.documento %} · Doc. {{ mov.documento }}{% endif %}</span></div>
+            <strong class="whitespace-nowrap text-rose-600">R$ {{ mov.saida|floatformat:2 }}</strong>
+          </a>
+        {% empty %}<p class="p-8 text-center text-sm text-gray-500">Nenhuma saída registrada.</p>{% endfor %}
+      </div>
+    </div>
+  </section>
+
+  <section class="overflow-hidden rounded-lg border border-slate-200 dark:border-slate-700">
+    <div class="border-b px-4 py-3 dark:border-slate-700"><h3 class="font-semibold">Conferência e somatórios</h3><p class="text-xs text-gray-500">Os mesmos movimentos vistos por forma de pagamento e por conta.</p></div>
+    <div class="grid md:grid-cols-2 xl:grid-cols-4">
+      <div class="p-4 xl:border-r dark:border-slate-700"><h4 class="text-sm font-semibold">Entradas por forma</h4>{% for item in posicao.totais_forma_entrada %}<div class="mt-3 flex justify-between gap-3 text-sm"><span class="truncate text-gray-500">{{ item.nome }}</span><strong>R$ {{ item.valor|floatformat:2 }}</strong></div>{% empty %}<p class="mt-3 text-sm text-gray-500">Sem entradas.</p>{% endfor %}</div>
+      <div class="border-t p-4 md:border-l md:border-t-0 xl:border-l-0 xl:border-r dark:border-slate-700"><h4 class="text-sm font-semibold">Saídas por forma</h4>{% for item in posicao.totais_forma_saida %}<div class="mt-3 flex justify-between gap-3 text-sm"><span class="truncate text-gray-500">{{ item.nome }}</span><strong>R$ {{ item.valor|floatformat:2 }}</strong></div>{% empty %}<p class="mt-3 text-sm text-gray-500">Sem saídas.</p>{% endfor %}</div>
+      <div class="border-t p-4 xl:border-r xl:border-t-0 dark:border-slate-700"><h4 class="text-sm font-semibold">Entradas por conta</h4>{% for item in posicao.totais_conta_entrada %}<div class="mt-3 flex justify-between gap-3 text-sm"><span class="truncate text-gray-500">{{ item.nome }}</span><strong>R$ {{ item.valor|floatformat:2 }}</strong></div>{% empty %}<p class="mt-3 text-sm text-gray-500">Sem entradas.</p>{% endfor %}</div>
+      <div class="border-t p-4 md:border-l xl:border-t-0 dark:border-slate-700"><h4 class="text-sm font-semibold">Saídas por conta</h4>{% for item in posicao.totais_conta_saida %}<div class="mt-3 flex justify-between gap-3 text-sm"><span class="truncate text-gray-500">{{ item.nome }}</span><strong>R$ {{ item.valor|floatformat:2 }}</strong></div>{% empty %}<p class="mt-3 text-sm text-gray-500">Sem saídas.</p>{% endfor %}</div>
+    </div>
+  </section>
+
+  <section class="overflow-hidden rounded-lg border border-slate-200 dark:border-slate-700">
+    <button type="button" class="flex w-full items-center justify-between p-4 text-left" @click="mostrarExtrato=!mostrarExtrato"><span><strong class="block">Extrato consolidado do dia</strong><small class="text-gray-500">Todos os movimentos em uma única sequência</small></span><span x-text="mostrarExtrato ? '−' : '+'" class="text-xl text-blue-600"></span></button>
+    <div x-show="mostrarExtrato" x-cloak class="overflow-x-auto border-t dark:border-slate-700">
+      <table class="w-full min-w-[760px] text-sm"><thead class="bg-slate-50 text-xs uppercase text-slate-500 dark:bg-slate-800"><tr><th class="px-4 py-3 text-left">Origem</th><th class="px-4 py-3 text-left">Descrição</th><th class="px-4 py-3 text-left">Conta / forma</th><th class="px-4 py-3 text-right">Entrada</th><th class="px-4 py-3 text-right">Saída</th></tr></thead><tbody class="divide-y dark:divide-slate-700">{% for mov in posicao.extrato %}<tr><td class="px-4 py-3">{{ mov.origem }}</td><td class="px-4 py-3"><strong>{{ mov.descricao }}</strong>{% if mov.documento %}<small class="block text-gray-500">Doc. {{ mov.documento }}</small>{% endif %}</td><td class="px-4 py-3">{{ mov.conta.descricao|default:mov.conta.banco_nome }}<small class="block text-gray-500">{{ mov.forma_pagamento }}</small></td><td class="px-4 py-3 text-right text-emerald-600">{% if mov.entrada %}R$ {{ mov.entrada|floatformat:2 }}{% else %}-{% endif %}</td><td class="px-4 py-3 text-right text-rose-600">{% if mov.saida %}R$ {{ mov.saida|floatformat:2 }}{% else %}-{% endif %}</td></tr>{% empty %}<tr><td colspan="5" class="p-8 text-center text-gray-500">Sem movimentos.</td></tr>{% endfor %}</tbody></table>
+    </div>
+  </section>
+
+  {% if mostrar_excluidos and posicao.excluidos %}
+    <section class="rounded-lg border border-dashed border-rose-300 p-4"><h3 class="font-semibold text-rose-600">Movimentos manuais excluídos</h3><div class="mt-3 space-y-2">{% for mov in posicao.excluidos %}<div class="flex flex-col gap-2 rounded border p-3 sm:flex-row sm:items-center sm:justify-between"><div><strong>{{ mov.descricao }}</strong><span class="block text-xs text-gray-500">{{ mov.conta.descricao|default:mov.conta.banco_nome }} · R$ {{ mov.valor|floatformat:2 }}</span></div><form method="post" class="flex gap-2">{% csrf_token %}<input type="hidden" name="acao" value="restaurar_movimento"><input type="hidden" name="movimento_id" value="{{ mov.registro_id }}"><input type="hidden" name="data_referencia" value="{{ data_referencia|date:'Y-m-d' }}"><input name="justificativa" required class="form-input" placeholder="Motivo da restauração"><button class="btn-secondary" type="submit">Restaurar</button></form></div>{% endfor %}</div></section>
+  {% endif %}
+
+  <div x-show="movimentoModal" x-cloak class="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto p-4" style="background:rgba(15,23,42,.68);backdrop-filter:blur(6px)" @keydown.escape.window="movimentoModal=false">
+    <div class="card my-auto w-full max-w-xl p-5" @click.stop><div class="flex items-start justify-between gap-3"><div><h3 class="text-lg font-semibold">Novo movimento manual</h3><p class="mt-1 text-xs text-gray-500">Crédito, débito ou transferência com reflexo imediato nas contas.</p></div><button type="button" class="btn-secondary px-3" @click="movimentoModal=false" aria-label="Fechar">×</button></div>
+      <form method="post" class="mt-5 space-y-3">{% csrf_token %}<input type="hidden" name="acao" value="lancar_movimento"><input type="hidden" name="data_referencia" value="{{ data_referencia|date:'Y-m-d' }}">{% if movimento_form.non_field_errors %}<div class="rounded border border-rose-300 bg-rose-50 p-3 text-sm text-rose-700">{{ movimento_form.non_field_errors|join:', ' }}</div>{% endif %}<label class="block text-xs font-semibold">Tipo {{ movimento_form.tipo|add_class:'form-input mt-1 w-full' }}</label><div class="grid gap-3 sm:grid-cols-2"><label class="block text-xs font-semibold">Conta de origem {{ movimento_form.conta_origem|add_class:'form-input mt-1 w-full' }}</label><label class="block text-xs font-semibold">Conta de destino {{ movimento_form.conta_destino|add_class:'form-input mt-1 w-full' }}</label></div><div class="grid gap-3 sm:grid-cols-2"><label class="block text-xs font-semibold">Data {{ movimento_form.data_lancamento|add_class:'form-input mt-1 w-full' }}</label><label class="block text-xs font-semibold">Valor {{ movimento_form.valor|add_class:'form-input mt-1 w-full' }}</label></div><label class="block text-xs font-semibold">Descrição {{ movimento_form.historico|add_class:'form-input mt-1 w-full' }}</label><label class="block text-xs font-semibold">Documento {{ movimento_form.documento|add_class:'form-input mt-1 w-full' }}</label><div class="flex justify-end gap-2 pt-2"><button type="button" class="btn-secondary" @click="movimentoModal=false">Cancelar</button><button type="submit" class="btn-primary">Registrar movimento</button></div></form>
+    </div>
+  </div>
+
+  {% if detalhe %}
+    <div x-show="detalheModal" x-cloak class="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto p-4" style="background:rgba(15,23,42,.68);backdrop-filter:blur(6px)" @keydown.escape.window="detalheModal=false">
+      <div class="card my-auto w-full max-w-3xl overflow-hidden" @click.stop><div class="flex items-start justify-between bg-slate-900 px-5 py-4 text-white"><div><span class="text-xs font-semibold uppercase text-blue-300">{{ detalhe.origem }}</span><h3 class="mt-1 text-lg font-semibold">{{ detalhe.descricao }}</h3></div><button type="button" class="rounded border border-white/30 px-3 py-2" @click="detalheModal=false" aria-label="Fechar">×</button></div><div class="p-5"><div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-4"><div><span class="text-xs text-gray-500">Valor</span><strong class="block {% if detalhe.valor < 0 %}text-rose-600{% else %}text-emerald-600{% endif %}">R$ {{ detalhe.valor|floatformat:2 }}</strong></div><div><span class="text-xs text-gray-500">Conta</span><strong class="block">{{ detalhe.conta.descricao|default:detalhe.conta.banco_nome }}</strong></div><div><span class="text-xs text-gray-500">Forma</span><strong class="block">{{ detalhe.forma_pagamento }}</strong></div><div><span class="text-xs text-gray-500">Documento</span><strong class="block">{{ detalhe.documento|default:'-' }}</strong></div></div><div class="mt-5 flex flex-wrap justify-end gap-2">{% if detalhe.referencia_url %}<a href="{{ detalhe.referencia_url }}" class="btn-secondary">Abrir lançamento de origem</a>{% endif %}{% if user_is_admin and detalhe.origem_codigo == 'manual' and not detalhe.excluido %}<a href="?data={{ data_referencia|date:'Y-m-d' }}&editar={{ detalhe.registro_id }}" class="btn-secondary">Editar</a><button type="button" class="btn-secondary text-rose-600" @click="excluirModal=true">Excluir</button>{% endif %}</div><form x-show="excluirModal" x-cloak method="post" class="mt-4 rounded-lg border border-rose-300 bg-rose-50 p-4 dark:border-rose-900 dark:bg-rose-950/20">{% csrf_token %}<input type="hidden" name="acao" value="excluir_movimento"><input type="hidden" name="movimento_id" value="{{ detalhe.registro_id }}"><input type="hidden" name="data_referencia" value="{{ data_referencia|date:'Y-m-d' }}"><label class="text-xs font-semibold">Motivo da exclusão <input name="justificativa" required class="form-input mt-1 w-full" placeholder="Explique a correção"></label><div class="mt-3 flex justify-end gap-2"><button type="button" class="btn-secondary" @click="excluirModal=false">Cancelar</button><button class="btn-primary bg-rose-600" type="submit">Confirmar exclusão</button></div></form></div></div>
+    </div>
+  {% endif %}
+
+  {% if editar_movimento %}
+    <div x-show="editarModal" x-cloak class="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto p-4" style="background:rgba(15,23,42,.68);backdrop-filter:blur(6px)" @keydown.escape.window="editarModal=false"><div class="card my-auto w-full max-w-xl p-5" @click.stop><div class="flex items-start justify-between"><div><h3 class="text-lg font-semibold">Corrigir movimento manual</h3><p class="mt-1 text-xs text-gray-500">A alteração exige motivo e ficará no log.</p></div><button type="button" class="btn-secondary px-3" @click="editarModal=false">×</button></div><form method="post" class="mt-5 space-y-3">{% csrf_token %}<input type="hidden" name="acao" value="editar_movimento"><input type="hidden" name="movimento_id" value="{{ editar_movimento.pk }}"><input type="hidden" name="data_referencia" value="{{ data_referencia|date:'Y-m-d' }}"><label class="block text-xs font-semibold">Conta {{ editar_form.conta_bancaria|add_class:'form-input mt-1 w-full' }}</label><div class="grid gap-3 sm:grid-cols-2"><label class="block text-xs font-semibold">Data {{ editar_form.data_lancamento|add_class:'form-input mt-1 w-full' }}</label><label class="block text-xs font-semibold">Valor {{ editar_form.valor|add_class:'form-input mt-1 w-full' }}</label></div><label class="block text-xs font-semibold">Descrição {{ editar_form.historico|add_class:'form-input mt-1 w-full' }}</label><label class="block text-xs font-semibold">Documento {{ editar_form.documento|add_class:'form-input mt-1 w-full' }}</label><label class="block text-xs font-semibold">Motivo <span class="text-rose-500">*</span>{{ editar_form.justificativa|add_class:'form-input mt-1 w-full' }}</label><div class="flex justify-end gap-2 pt-2"><button type="button" class="btn-secondary" @click="editarModal=false">Cancelar</button><button type="submit" class="btn-primary">Salvar correção</button></div></form></div></div>
+  {% endif %}
+</div>
+{% endblock %}
