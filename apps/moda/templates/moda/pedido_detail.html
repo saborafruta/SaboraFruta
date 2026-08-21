@@ -840,9 +840,15 @@
     </div>
   {% endif %}
 
+  {% comment %}
+    As vagas de cada tamanho, por produto: é o que o campo de tamanho
+    filtra. Vai por `json_script` e não interpolado no atributo -- nome
+    de produto tem aspas e acento, e no atributo quebraria o HTML.
+  {% endcomment %}
+  {{ vagas_json|json_script:"moda-vagas" }}
   {# ── Personalização por pessoa ────────────────────────────────────── #}
   {% if itens %}
-  <div class="card p-5 space-y-4" x-data="{ nova: false, importar: false }">
+  <div class="card p-5 space-y-4" x-data="pessoasDoPedido('{% url 'moda:pedido-individual-add' pedido.pk %}', '/moda/comercial/pedidos/{{ pedido.pk }}/pessoas/')">
     <div class="flex items-center justify-between gap-2 flex-wrap">
       <div>
         <h3 class="text-sm font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">Personalização por pessoa</h3>
@@ -911,8 +917,24 @@
                 <td class="px-2 py-2 font-mono" :style="temaClaro ? 'color:#374151;' : 'color:#d1d5db;'">{{ p.numero|default:"—" }}</td>
                 <td class="px-2 py-2 font-mono" :style="temaClaro ? 'color:#374151;' : 'color:#d1d5db;'">{{ p.tamanho.sigla }}</td>
                 <td class="px-2 py-2" :style="temaClaro ? 'color:#374151;' : 'color:#d1d5db;'">{{ p.item.nome_exibicao }}</td>
-                <td class="px-2 py-2 text-right">
-                  <form method="post" action="{% url 'moda:pedido-individual-delete' pedido.pk p.pk %}"
+                <td class="px-2 py-2 text-right whitespace-nowrap">
+                  {% comment %}
+                    EDITAR ao lado de remover: erro de digitação em nome
+                    ou número é o mais comum desta lista, e sem editar a
+                    saída era remover e cadastrar de novo -- que gasta a
+                    vaga da grade duas vezes no meio do caminho.
+                  {% endcomment %}
+                  <button type="button" class="text-xs font-semibold mr-3"
+                          :style="temaClaro ? 'color:#2563eb;' : 'color:#60a5fa;'"
+                          @click="editar({
+                            id: {{ p.pk }}, item: '{{ p.item_id }}',
+                            tamanho: '{{ p.tamanho_id }}',
+                            nome: '{{ p.nome|escapejs }}',
+                            numero: '{{ p.numero|escapejs }}',
+                            observacoes: '{{ p.observacoes|escapejs }}'
+                          })">editar</button>
+                  <form method="post" class="inline"
+                        action="{% url 'moda:pedido-individual-delete' pedido.pk p.pk %}"
                         onsubmit="return confirm('Remover {{ p.identificacao|escapejs }} da lista?');">
                     {% csrf_token %}
                     <button type="submit" class="text-xs font-semibold" style="color:#f87171;">remover</button>
@@ -929,15 +951,64 @@
       </p>
     {% endif %}
 
-    <div x-show="nova" x-cloak class="pt-3 border-t" :style="temaClaro ? 'border-color:#e5e7eb;' : 'border-color:#303036;'">
-      <form method="post" action="{% url 'moda:pedido-individual-add' pedido.pk %}" novalidate class="space-y-3 pt-3">
+    <div x-show="nova || editando" x-cloak class="pt-3 border-t" :style="temaClaro ? 'border-color:#e5e7eb;' : 'border-color:#303036;'">
+      {% comment %}
+        O `action` muda quando se está editando: mesma tela, mesmo
+        formulário, endereço diferente -- e é por isso que ele é montado
+        no Alpine em vez de fixo no HTML.
+      {% endcomment %}
+      <form method="post" :action="acao" novalidate class="space-y-3 pt-3">
         {% csrf_token %}
         <div class="grid gap-3 sm:grid-cols-2">
-          {% include "moda/_form_campos.html" with form=form_individual %}
+          <div>
+            <label class="block text-xs uppercase tracking-wider mb-1"
+                   :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Produto *</label>
+            <select name="item" class="form-input w-full" required x-model="item">
+              <option value="">---------</option>
+              {% for i in itens %}
+                <option value="{{ i.pk }}">{{ i.nome_exibicao }}</option>
+              {% endfor %}
+            </select>
+          </div>
+
+          <div>
+            <label class="block text-xs uppercase tracking-wider mb-1"
+                   :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Tamanho *</label>
+            {% comment %}
+              SÓ OS TAMANHOS COM VAGA NA GRADE, e a vaga aparece no
+              rótulo ("P — restam 2"). Oferecer o cartelão inteiro era
+              convidar a cadastrar gente num tamanho que o pedido não
+              pediu -- e isso só aparecia na conferência, com a lista já
+              digitada inteira.
+            {% endcomment %}
+            <select name="tamanho" class="form-input w-full" required x-model="tamanho">
+              <option value="">---------</option>
+              <template x-for="t in disponiveis" :key="t.id">
+                <option :value="t.id"
+                        x-text="t.sigla + ' — ' + (t.restam > 0 ? 'restam ' + t.restam : 'sem vaga')"
+                        :disabled="t.restam <= 0 && String(t.id) !== String(tamanho)"></option>
+              </template>
+            </select>
+            <p class="text-xs mt-1" x-show="item && !disponiveis.length"
+               style="color:#d97706;">
+              Este produto não tem grade lançada. Lance a grade acima para
+              poder personalizar peça a peça.
+            </p>
+            <p class="text-xs mt-1" x-show="item && disponiveis.length && !temVaga"
+               style="color:#d97706;">
+              Todas as peças deste produto já têm gente. Aumente a grade
+              para acrescentar mais alguém.
+            </p>
+          </div>
+
+          {% include "moda/_campo.html" with campo=form_individual.nome %}
+          {% include "moda/_campo.html" with campo=form_individual.numero %}
+          {% include "moda/_campo.html" with campo=form_individual.observacoes %}
         </div>
         <div class="flex justify-end gap-2">
-          <button type="button" class="btn-secondary text-sm" @click="nova = false">Cancelar</button>
-          <button type="submit" class="btn-primary text-sm">Adicionar pessoa</button>
+          <button type="button" class="btn-secondary text-sm" @click="cancelar()">Cancelar</button>
+          <button type="submit" class="btn-primary text-sm"
+                  x-text="editando ? 'Salvar alteração' : 'Adicionar pessoa'"></button>
         </div>
       </form>
     </div>
@@ -1327,6 +1398,67 @@
 {% block extra_js %}
 {{ block.super }}
 <script>
+// A lista de pessoas do pedido: quais tamanhos ainda cabem, e a edição.
+//
+// AS VAGAS VEM PRONTAS DO SERVIDOR (`moda-vagas`), calculadas a partir da
+// grade. A tela nao recalcula nada: se contasse por conta propria, a
+// primeira divergencia entre a conta do navegador e a do servidor
+// apareceria como "salvou mas nao devia" -- e ninguem saberia qual das
+// duas estava certa.
+function pessoasDoPedido(urlNova, urlBase) {
+  return {
+    nova: false,
+    importar: false,
+    editando: null,
+    item: '',
+    tamanho: '',
+    vagas: JSON.parse(document.getElementById('moda-vagas').textContent),
+
+    // Os tamanhos do produto escolhido. Sem produto, lista vazia: pedir
+    // o tamanho antes do produto nao faz sentido, porque a vaga e' por
+    // produto.
+    get disponiveis() {
+      return this.vagas[this.item] || [];
+    },
+
+    get temVaga() {
+      return this.disponiveis.some((t) => t.restam > 0);
+    },
+
+    // Editando, o POST vai para o endereco daquela pessoa; senao, para o
+    // de criar. Mesma tela, mesmo formulario.
+    get acao() {
+      return this.editando ? `${urlBase}${this.editando}/` : urlNova;
+    },
+
+    editar(pessoa) {
+      this.editando = pessoa.id;
+      this.nova = false;
+      this.importar = false;
+      this.item = String(pessoa.item);
+      this.tamanho = String(pessoa.tamanho);
+      this.$nextTick(() => {
+        const form = this.$root.querySelector('form[novalidate]');
+        if (!form) return;
+        form.nome.value = pessoa.nome;
+        form.numero.value = pessoa.numero;
+        form.observacoes.value = pessoa.observacoes;
+        form.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        form.nome.focus();
+      });
+    },
+
+    cancelar() {
+      this.editando = null;
+      this.nova = false;
+      this.item = '';
+      this.tamanho = '';
+      const form = this.$root.querySelector('form[novalidate]');
+      if (form) form.reset();
+    },
+  };
+}
+
 // Totais da grade recalculados enquanto se digita. E' conferencia visual:
 // quem grava a quantidade do item e' o servidor, no submit. Manter os dois
 // evita o pior dos mundos -- ou digitar as cegas, ou confiar num numero de

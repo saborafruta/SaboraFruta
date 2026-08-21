@@ -111,6 +111,58 @@ class IndividualService:
             'total_pessoas': sum(l.pessoas for l in linhas),
         }
 
+    # ── Vagas ────────────────────────────────────────────────────────────
+
+    @classmethod
+    def vagas(cls, pedido, ignorar=None) -> dict:
+        """
+        Quantas pessoas ainda cabem em cada tamanho de cada produto.
+
+        É A GRADE QUE MANDA. Se o pedido tem 3 camisas P e uma já foi
+        personalizada, sobram 2 — e oferecer P como se coubesse mais é
+        deixar a pessoa digitar uma lista que a fábrica não consegue
+        produzir, e descobrir isso só na conferência.
+
+        `ignorar` é a pessoa que está sendo EDITADA: a vaga dela não pode
+        contar contra ela mesma, senão corrigir o nome de quem ocupou a
+        última vaga viraria "não há mais vaga".
+
+        Devolve {item_id: [{'id', 'sigla', 'na_grade', 'pessoas',
+        'restam'}]}, com os tamanhos na ordem da grade.
+        """
+        ocupadas = {}
+        for p in pedido.individuais.all():
+            if ignorar is not None and p.pk == ignorar:
+                continue
+            chave = (p.item_id, p.tamanho_id)
+            ocupadas[chave] = ocupadas.get(chave, 0) + 1
+
+        por_item = {}
+        celulas = (
+            ItemGradePedido.objects
+            .filter(item__pedido=pedido, quantidade__gt=0)
+            .select_related('tamanho')
+            .order_by('item__ordem', 'tamanho__ordem', 'tamanho__sigla')
+        )
+        for celula in celulas:
+            pessoas = ocupadas.get((celula.item_id, celula.tamanho_id), 0)
+            por_item.setdefault(celula.item_id, []).append({
+                'id': celula.tamanho_id,
+                'sigla': celula.tamanho.sigla,
+                'na_grade': celula.quantidade,
+                'pessoas': pessoas,
+                'restam': max(celula.quantidade - pessoas, 0),
+            })
+        return por_item
+
+    @classmethod
+    def vaga_livre(cls, pedido, item_id, tamanho_id, ignorar=None) -> int:
+        """Quantas vagas restam naquela célula. Zero também é resposta."""
+        for linha in cls.vagas(pedido, ignorar=ignorar).get(item_id, []):
+            if linha['id'] == tamanho_id:
+                return linha['restam']
+        return 0
+
     # ── Importação ───────────────────────────────────────────────────────
 
     @staticmethod

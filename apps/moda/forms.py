@@ -594,19 +594,59 @@ class PersonalizacaoIndividualForm(_FilialFormMixin, forms.ModelForm):
         }
 
     def __init__(self, *args, filial=None, pedido=None, **kwargs):
-        from .models import Tamanho
+        from apps.moda.services.individual import IndividualService
+
         super().__init__(*args, filial=filial, **kwargs)
         self.pedido = pedido
-        if pedido is not None:
-            self.fields['item'].queryset = pedido.itens.all()
-        self.fields['tamanho'].queryset = Tamanho.objects.filter(filial=filial, ativo=True)
+
+        if pedido is None:
+            return
+
+        self.fields['item'].queryset = pedido.itens.all()
+
+        # SÓ OS TAMANHOS QUE ESTÃO NA GRADE. Oferecer o cartelão inteiro
+        # de tamanhos da filial é convidar a cadastrar gente num tamanho
+        # que o pedido não pediu -- e isso só aparece lá na conferência,
+        # depois da lista inteira digitada.
+        self.vagas = IndividualService.vagas(
+            pedido, ignorar=self.instance.pk if self.instance.pk else None,
+        )
+        ids = {linha['id'] for linhas in self.vagas.values() for linha in linhas}
+        if self.instance.pk and self.instance.tamanho_id:
+            # Na edição o tamanho atual continua na lista, senão a pessoa
+            # não conseguiria salvar sem trocar de tamanho.
+            ids.add(self.instance.tamanho_id)
+
+        self.fields['tamanho'].queryset = (
+            Tamanho.objects.filter(pk__in=ids).order_by('ordem', 'sigla')
+        )
 
     def clean(self):
+        from apps.moda.services.individual import IndividualService
+
         dados = super().clean()
         # Sem nome nem número a peça não é identificável na produção — é uma
         # linha que ninguém sabe de quem é.
         if not (dados.get('nome') or '').strip() and not (dados.get('numero') or '').strip():
             self.add_error('nome', 'Informe ao menos o nome ou o número.')
+
+        # A TRAVA DE VERDADE É AQUI. A tela já filtra os tamanhos, mas
+        # filtro de tela é conveniência: duas pessoas cadastrando ao mesmo
+        # tempo, ou um POST fora da tela, passariam da conta -- e a lista
+        # com mais gente que peça é descoberta na hora de cortar.
+        item = dados.get('item')
+        tamanho = dados.get('tamanho')
+        if item is not None and tamanho is not None and self.pedido is not None:
+            restam = IndividualService.vaga_livre(
+                self.pedido, item.pk, tamanho.pk,
+                ignorar=self.instance.pk if self.instance.pk else None,
+            )
+            if restam <= 0:
+                self.add_error('tamanho', (
+                    f'A grade não tem mais vaga em {tamanho.sigla} para '
+                    f'{item.nome_exibicao}. Aumente a grade ou remova '
+                    f'alguém desse tamanho.'
+                ))
         return dados
 
 # ══════════════════════════════════════════════════════════════════════
