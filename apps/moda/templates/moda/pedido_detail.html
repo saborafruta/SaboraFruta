@@ -794,31 +794,43 @@
       {% csrf_token %}
       <div class="overflow-x-auto">
         <table class="w-full text-sm">
+          {% comment %}
+            UMA RÉGUA SÓ PARA O CABEÇALHO. Todas as células têm a MESMA
+            altura fixa e o conteúdo ancorado embaixo (`justify-end`), e a
+            sigla usa a mesma classe de texto de "Produto" e "Total".
+
+            Sem isso, a altura de cada célula vinha do conteúdo dela: a
+            coluna cuja sigla tem duas letras, ou onde o "remover" ocupava
+            outra altura, empurrava a linha de base e as siglas ficavam em
+            alturas diferentes -- numa tabela em que conferir é ler a
+            coluna de cima a baixo.
+          {% endcomment %}
           <thead>
             <tr class="border-b" :style="temaClaro ? 'border-color:#e2e8f0;' : 'border-color:#2a2a2e;'">
-              <th class="text-left px-2 py-2 text-xs font-semibold uppercase" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Produto</th>
-              {% comment %}
-                LARGURA FIXA na coluna do tamanho, e o mesmo valor no
-                corpo: sem isso a largura vinha do conteúdo (a sigla "GG"
-                é maior que "M", e o botão "remover" empurra tudo), e a
-                sigla ficava fora de prumo com o campo de baixo -- numa
-                tabela em que a conferência é justamente ler a coluna.
-              {% endcomment %}
+              <th class="text-left px-2 align-bottom" style="height:56px;">
+                <span class="text-xs font-semibold uppercase tracking-wide"
+                      :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Produto</span>
+              </th>
+
               {% for t in tabela.colunas %}
-                <th class="px-1 py-2 align-bottom" style="width:84px;">
-                  <div class="flex flex-col items-center gap-0.5">
-                    <span class="text-xs font-bold uppercase"
-                          :style="temaClaro ? 'color:#374151;' : 'color:#cbd5e1;'">{{ t.sigla }}</span>
+                <th class="px-1 align-bottom" style="width:84px; height:56px;">
+                  <div class="flex flex-col items-center justify-end gap-1 h-full pb-1">
+                    <span class="text-xs font-semibold uppercase tracking-wide leading-none"
+                          :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">{{ t.sigla }}</span>
                     <form method="post" action="{% url 'moda:pedido-grade-tamanho-remove' pedido.pk t.pk %}"
                           onsubmit="return confirm('Remover a coluna {{ t.sigla|escapejs }} do pedido inteiro?');">
                       {% csrf_token %}
-                      <button type="submit" class="text-[10px] font-normal leading-none"
+                      <button type="submit" class="text-[10px] leading-none"
                               style="color:#f87171;" title="Remover a coluna {{ t.sigla }}">remover</button>
                     </form>
                   </div>
                 </th>
               {% endfor %}
-              <th class="px-2 py-2 text-right align-bottom text-xs font-semibold uppercase" style="width:88px;" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Total</th>
+
+              <th class="px-2 text-right align-bottom" style="width:88px; height:56px;">
+                <span class="text-xs font-semibold uppercase tracking-wide"
+                      :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Total</span>
+              </th>
             </tr>
           </thead>
           <tbody>
@@ -852,9 +864,11 @@
           </tbody>
           <tfoot>
             <tr style="border-top:2px solid rgba(127,127,127,.35);">
-              <td class="px-2 py-2 font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">Total por tamanho</td>
+              <td class="px-2 py-2 text-xs font-semibold uppercase tracking-wide"
+                  :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Total por tamanho</td>
               {% for t in tabela.colunas %}
-                <td class="px-1 py-2 text-center font-bold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'"
+                <td class="px-1 py-2 text-center font-bold" style="width:84px;"
+                    :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'"
                     x-text="totalColuna[{{ t.pk }}] ?? 0"></td>
               {% endfor %}
               {% comment %}
@@ -863,7 +877,7 @@
                 perde tempo conferindo se são a mesma coisa. Fica a soma
                 POR TAMANHO, que é a única que esta linha acrescenta.
               {% endcomment %}
-              <td class="px-2 py-2"></td>
+              <td class="px-2 py-2" style="width:88px;"></td>
             </tr>
           </tfoot>
         </table>
