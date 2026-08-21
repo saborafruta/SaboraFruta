@@ -31,7 +31,7 @@ class ClienteRapidoForm(forms.ModelForm):
     # de o `clean` ter chance de tirar a pontuação -- e o erro que aparece
     # ("no máximo 14 caracteres") não faz sentido nenhum para o usuário.
     cpf_cnpj = forms.CharField(
-        max_length=18, required=True, label='CPF / CNPJ',
+        max_length=18, required=False, label='CPF / CNPJ',
         widget=forms.TextInput(attrs={'maxlength': '18'}),
     )
 
@@ -67,9 +67,18 @@ class ClienteRapidoForm(forms.ModelForm):
         super().__init__(*args, **kwargs)
 
         self.fields['tipo_pessoa'].choices = TipoPessoa.choices
-        # Documento obrigatório: sem ele o pedido até nasce, mas trava na
-        # validação da produção e de novo na nota fiscal. Melhor cobrar aqui.
-        self.fields['razao_social'].required = True
+
+        # NENHUM CAMPO OBRIGATÓRIO AQUI. Este formulário existe para o
+        # cliente novo entrar no meio de um pedido, com o vendedor no
+        # telefone -- e campo obrigatório nessa hora é o que faz a pessoa
+        # desistir e digitar o nome do cliente na observação. O que
+        # faltar é completado depois, no cadastro geral.
+        #
+        # A ÚNICA COISA COBRADA é não gravar um cliente COMPLETAMENTE
+        # vazio (ver `clean`). Não é campo obrigatório: é a diferença
+        # entre um cadastro incompleto e um registro que não é ninguém.
+        for campo in self.fields.values():
+            campo.required = False
 
         for nome, campo in self.fields.items():
             if isinstance(campo.widget, forms.CheckboxInput):
@@ -90,9 +99,16 @@ class ClienteRapidoForm(forms.ModelForm):
         """
         bruto = self.cleaned_data.get('cpf_cnpj') or ''
         digitos = ''.join(c for c in bruto if c.isdigit())
+
+        # EM BRANCO PASSA: o documento deixou de ser obrigatório aqui.
+        # PREENCHIDO continua conferido -- documento pela metade não
+        # ajuda ninguém e volta como rejeição na primeira nota fiscal.
+        if not digitos:
+            return ''
         if len(digitos) not in (11, 14):
             raise forms.ValidationError(
-                'Informe um CPF (11 dígitos) ou CNPJ (14 dígitos).'
+                'Informe um CPF (11 dígitos) ou CNPJ (14 dígitos), '
+                'ou deixe em branco para completar depois.'
             )
         return digitos
 
@@ -107,5 +123,15 @@ class ClienteRapidoForm(forms.ModelForm):
                 'inscricao_estadual',
                 'Contribuinte de ICMS precisa de inscrição estadual — ou '
                 'desmarque a opção acima.',
+            )
+
+        # A ÚNICA TRAVA que sobrou. Cliente sem nome E sem documento não
+        # é um cadastro incompleto: é uma linha que não é ninguém, que
+        # aparece em branco na carteira, no pedido e na nota -- e que
+        # ninguém consegue nem procurar depois para corrigir.
+        if not (dados.get('razao_social') or '').strip() and not dados.get('cpf_cnpj'):
+            raise forms.ValidationError(
+                'Informe ao menos o nome ou o CPF/CNPJ do cliente. '
+                'O resto pode ficar para depois.'
             )
         return dados

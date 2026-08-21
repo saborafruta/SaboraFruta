@@ -238,9 +238,18 @@
             <div class="{% if campo.name == 'razao_social' %}sm:col-span-2{% endif %}">
               <label class="block text-xs uppercase tracking-wider mb-1"
                      :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
-                {{ campo.label }}{% if campo.field.required %} *{% endif %}
+                {{ campo.label }}
               </label>
-              {{ campo }}
+              {% comment %}
+                O erro do campo some no primeiro toque. Antes ele ficava
+                na tela depois de a pessoa corrigir -- ela via "este campo
+                é obrigatório" embaixo do campo JÁ preenchido, e concluía
+                que o sistema estava exigindo algo impossível.
+              {% endcomment %}
+              <div @input="erros['{{ campo.name }}'] = ''; erroGeral = ''"
+                   @change="erros['{{ campo.name }}'] = ''; erroGeral = ''">
+                {{ campo }}
+              </div>
               {% if campo.help_text %}
                 <p class="text-xs mt-1" :style="temaClaro ? 'color:#94a3b8;' : 'color:#71717a;'">
                   {{ campo.help_text }}
@@ -456,7 +465,13 @@ document.addEventListener('alpine:init', () => {
         if (!corpo.ok) {
           this.erros = Object.fromEntries(
             Object.entries(corpo.erros || {}).map(([c, e]) => [c, e.join(' ')]));
-          this.erroGeral = corpo.erro || '';
+          // `__all__` é o erro do formulário inteiro (ex.: sem nome e
+          // sem documento). Ele não tem campo onde aparecer, então vai
+          // para o aviso do topo -- senão o clique não faria nada.
+          // `__all__` já veio juntado pelo mapa acima: é o erro do
+          // formulário inteiro (ex.: sem nome e sem documento), que
+          // não tem campo onde aparecer e vai para o aviso do topo.
+          this.erroGeral = corpo.erro || this.erros.__all__ || '';
           return;
         }
         // Cadastrou: o cliente novo já entra escolhido no pedido, com o
