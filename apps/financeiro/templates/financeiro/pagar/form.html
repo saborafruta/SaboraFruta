@@ -9,7 +9,7 @@
      x-data="{ loading:false, tipoLancamento:'{{ form.tipo_lancamento.value|default:"fornecedor" }}', recorrente:{{ form.recorrente.value|yesno:"true,false" }}, quitarAgora:{{ form.quitar_ao_lancar.value|yesno:"true,false" }}, fornecedorModal:false, fornecedorSalvando:false, fornecedorErro:'', fornecedorTipo:'J', cepConsultando:false, notaFiscalFornecedor:'{{ form.nota_fiscal_fornecedor.value|default:""|escapejs }}', chaveAcessoNfe:'{{ form.chave_acesso_nfe.value|default:""|escapejs }}', notaFiscalStatus:'', scannerNfeAberto:false, scannerNfeErro:'', scannerNfe:null, scannerNfeScript:null, ultimoCodigoNfe:'' }">
   <div class="flex flex-wrap items-end justify-between gap-3">
     <div>
-      <a href="{% url 'financeiro:pagar_list' %}" class="text-sm text-blue-500">Contas a Pagar /</a>
+      {% if not modal_mode %}<a href="{% url 'financeiro:pagar_list' %}" class="text-sm text-blue-500">Contas a Pagar /</a>{% endif %}
       <h2 class="mt-1 text-xl font-semibold">Novo lançamento</h2>
     </div>
     <p class="text-sm" :style="temaClaro ? 'color:#64748b' : 'color:#94a3b8'">Os campos com * são obrigatórios.</p>
@@ -197,7 +197,7 @@
     </section>
 
     <div class="flex justify-end gap-3 border-t px-5 py-4" :style="temaClaro ? 'border-color:#e5e7eb;background:#f8fafc' : 'border-color:#303038;background:#1c1c20'">
-      <a href="{{ cancel_url }}" class="btn-secondary">Cancelar</a>
+      {% if modal_mode %}<button type="button" class="btn-secondary" onclick="window.parent.postMessage({type:'fechar-conta-pagar'}, window.location.origin)">Cancelar</button>{% else %}<a href="{{ cancel_url }}" class="btn-secondary">Cancelar</a>{% endif %}
       <button type="submit" class="btn-primary" :disabled="loading"><span x-show="!loading" x-text="quitarAgora && !recorrente ? 'Lançar e quitar' : 'Lançar título'"></span><span x-show="loading" x-cloak>Salvando...</span></button>
     </div>
   </form>

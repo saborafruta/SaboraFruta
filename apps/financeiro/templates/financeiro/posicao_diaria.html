@@ -22,6 +22,8 @@
   .pc-ledger.exit { --ledger:#be123c; --ledger-soft:#fff1f2; }
   .pc-ledger-head { border-bottom:2px solid var(--ledger); background:var(--ledger-soft); }
   .pc-ledger-title, .pc-ledger-total, .pc-ledger-value { color:var(--ledger); }
+  .pc-ledger-action { border:1px solid color-mix(in srgb, var(--ledger) 35%, transparent); color:var(--ledger); background:#fff; }
+  .pc-ledger-action:hover { border-color:var(--ledger); background:var(--ledger); color:#fff; }
   .pc-ledger-columns { display:grid; grid-template-columns:minmax(0,1fr) 180px 105px; gap:12px; border-bottom:1px solid #e2e8f0; background:#f8fafc; color:#64748b; }
   .pc-ledger-row { display:grid; grid-template-columns:minmax(0,1fr) 180px 105px; gap:12px; align-items:center; min-height:76px; border-bottom:1px solid #e2e8f0; }
   .pc-ledger-row:last-child { border-bottom:0; }
@@ -30,6 +32,7 @@
   .dark .pc-ledger.entry { --ledger-soft:rgba(6,78,59,.20); }
   .dark .pc-ledger.exit { --ledger-soft:rgba(136,19,55,.20); }
   .dark .pc-ledger-head, .dark .pc-ledger-columns { border-color:#475569; background:#27272a; }
+  .dark .pc-ledger-action { background:#18181b; }
   .dark .pc-ledger-columns { color:#cbd5e1; }
   .dark .pc-ledger-row { border-color:#3f3f46; }
   @media (max-width: 640px) {
@@ -42,11 +45,24 @@
 </style>
 <div class="mx-auto max-w-7xl space-y-5" x-data="{
   movimentoModal: {{ movimento_modal|yesno:'true,false' }},
+  contaPagarModal: false,
   detalheModal: {{ detalhe|yesno:'true,false' }},
   editarModal: {{ editar_movimento|yesno:'true,false' }},
   excluirModal: false,
-  mostrarExtrato: false
-}">
+  mostrarExtrato: false,
+  movimentoTipo: '{{ movimento_form.tipo.value|default:"credito"|escapejs }}',
+  abrirMovimento(tipo) {
+    this.movimentoTipo = tipo;
+    this.movimentoModal = true;
+    this.$nextTick(() => {
+      const campo = document.getElementById('id_tipo');
+      if (campo) {
+        campo.value = tipo;
+        campo.dispatchEvent(new Event('change', { bubbles: true }));
+      }
+    });
+  }
+}" @message.window="if ($event.origin === window.location.origin && $event.data && $event.data.type === 'conta-pagar-criada') { contaPagarModal=false; window.location.reload(); } else if ($event.origin === window.location.origin && $event.data && $event.data.type === 'fechar-conta-pagar') { contaPagarModal=false; }">
   <div class="pc-page-heading flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
     <div>
       <h2 class="text-2xl font-semibold">Posição Diária de Caixa</h2>
@@ -56,7 +72,7 @@
       <a href="{% url 'financeiro:receber_list' %}" class="btn-secondary">Contas a receber</a>
       <a href="{% url 'financeiro:pagar_list' %}" class="btn-secondary">Contas a pagar</a>
       <a href="{% url 'financeiro:contas_bancarias' %}" class="btn-secondary">Contas</a>
-      <button type="button" class="btn-primary" @click="movimentoModal=true">+ Movimento manual</button>
+      <button type="button" class="btn-secondary" @click="abrirMovimento('transferencia')">Transferir entre contas</button>
     </div>
   </div>
 
@@ -139,7 +155,7 @@
 
   <section class="grid items-start gap-5 lg:grid-cols-2">
     <div class="pc-ledger entry overflow-hidden rounded-lg shadow-sm">
-      <div class="pc-ledger-head flex items-center justify-between gap-4 px-4 py-4"><div><h3 class="pc-ledger-title text-lg font-semibold">Entradas</h3><p class="mt-0.5 text-xs text-gray-500">Vendas, recebimentos e créditos manuais</p></div><div class="text-right"><span class="block text-[11px] font-semibold uppercase text-gray-500">Total do dia</span><strong class="pc-ledger-total text-xl">R$ {{ posicao.total_entradas|floatformat:2 }}</strong></div></div>
+      <div class="pc-ledger-head flex items-center justify-between gap-4 px-4 py-4"><div><h3 class="pc-ledger-title text-lg font-semibold">Entradas</h3><p class="mt-0.5 text-xs text-gray-500">Vendas, recebimentos e créditos manuais</p></div><div class="flex flex-col items-end gap-2"><div class="text-right"><span class="block text-[11px] font-semibold uppercase text-gray-500">Total do dia</span><strong class="pc-ledger-total text-xl">R$ {{ posicao.total_entradas|floatformat:2 }}</strong></div><button type="button" class="pc-ledger-action rounded-md px-3 py-1.5 text-xs font-semibold transition" @click="abrirMovimento('credito')" aria-label="Adicionar entrada manual">+ Entrada</button></div></div>
       <div class="pc-ledger-columns px-4 py-2 text-[11px] font-semibold uppercase"><span>Descrição e origem</span><span>Forma / conta</span><span class="text-right">Valor</span></div>
       <div>
         {% for mov in posicao.entradas %}
@@ -152,7 +168,7 @@
       </div>
     </div>
     <div class="pc-ledger exit overflow-hidden rounded-lg shadow-sm">
-      <div class="pc-ledger-head flex items-center justify-between gap-4 px-4 py-4"><div><h3 class="pc-ledger-title text-lg font-semibold">Saídas</h3><p class="mt-0.5 text-xs text-gray-500">Pagamentos, despesas e débitos manuais</p></div><div class="text-right"><span class="block text-[11px] font-semibold uppercase text-gray-500">Total do dia</span><strong class="pc-ledger-total text-xl">R$ {{ posicao.total_saidas|floatformat:2 }}</strong></div></div>
+      <div class="pc-ledger-head flex items-center justify-between gap-4 px-4 py-4"><div><h3 class="pc-ledger-title text-lg font-semibold">Saídas</h3><p class="mt-0.5 text-xs text-gray-500">Pagamentos, despesas e débitos manuais</p></div><div class="flex flex-col items-end gap-2"><div class="text-right"><span class="block text-[11px] font-semibold uppercase text-gray-500">Total do dia</span><strong class="pc-ledger-total text-xl">R$ {{ posicao.total_saidas|floatformat:2 }}</strong></div><div class="flex flex-wrap justify-end gap-2"><button type="button" class="pc-ledger-action rounded-md px-3 py-1.5 text-xs font-semibold transition" @click="contaPagarModal=true" aria-label="Adicionar conta a pagar">+ Conta a pagar</button><button type="button" class="pc-ledger-action rounded-md px-3 py-1.5 text-xs font-semibold transition" @click="abrirMovimento('debito')" aria-label="Adicionar saída manual">+ Saída</button></div></div></div>
       <div class="pc-ledger-columns px-4 py-2 text-[11px] font-semibold uppercase"><span>Descrição e destino</span><span>Forma / conta</span><span class="text-right">Valor</span></div>
       <div>
         {% for mov in posicao.saidas %}
@@ -187,8 +203,15 @@
     <section class="rounded-lg border border-dashed border-rose-300 p-4"><h3 class="font-semibold text-rose-600">Movimentos manuais excluídos</h3><div class="mt-3 space-y-2">{% for mov in posicao.excluidos %}<div class="flex flex-col gap-2 rounded border p-3 sm:flex-row sm:items-center sm:justify-between"><div><strong>{{ mov.descricao }}</strong><span class="block text-xs text-gray-500">{{ mov.conta.descricao|default:mov.conta.banco_nome }} · R$ {{ mov.valor|floatformat:2 }}</span></div><form method="post" class="flex gap-2">{% csrf_token %}<input type="hidden" name="acao" value="restaurar_movimento"><input type="hidden" name="movimento_id" value="{{ mov.registro_id }}"><input type="hidden" name="data_referencia" value="{{ data_referencia|date:'Y-m-d' }}"><input name="justificativa" required class="form-input" placeholder="Motivo da restauração"><button class="btn-secondary" type="submit">Restaurar</button></form></div>{% endfor %}</div></section>
   {% endif %}
 
+  <div x-show="contaPagarModal" x-cloak class="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-6" style="background:rgba(15,23,42,.72);backdrop-filter:blur(7px)" @keydown.escape.window="contaPagarModal=false">
+    <div class="flex w-full max-w-5xl flex-col overflow-hidden rounded-lg border border-slate-300 bg-white shadow-2xl dark:border-slate-700 dark:bg-zinc-900" style="height:94vh" @click.stop>
+      <div class="flex items-center justify-between border-b border-slate-200 px-4 py-3 dark:border-slate-700"><div><h3 class="font-semibold">Nova conta a pagar</h3><p class="text-xs text-gray-500">O título será incluído sem sair da conferência.</p></div><button type="button" class="btn-secondary px-3" @click="contaPagarModal=false" aria-label="Fechar conta a pagar">×</button></div>
+      <template x-if="contaPagarModal"><iframe src="{% url 'financeiro:pagar_criar' %}?modal=1" title="Cadastrar conta a pagar" class="min-h-0 flex-1 w-full border-0 bg-white dark:bg-zinc-900"></iframe></template>
+    </div>
+  </div>
+
   <div x-show="movimentoModal" x-cloak class="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto p-4" style="background:rgba(15,23,42,.68);backdrop-filter:blur(6px)" @keydown.escape.window="movimentoModal=false">
-    <div class="card my-auto w-full max-w-xl p-5" @click.stop><div class="flex items-start justify-between gap-3"><div><h3 class="text-lg font-semibold">Novo movimento manual</h3><p class="mt-1 text-xs text-gray-500">Crédito, débito ou transferência com reflexo imediato nas contas.</p></div><button type="button" class="btn-secondary px-3" @click="movimentoModal=false" aria-label="Fechar">×</button></div>
+    <div class="card my-auto w-full max-w-xl p-5" @click.stop><div class="flex items-start justify-between gap-3"><div><h3 class="text-lg font-semibold" x-text="movimentoTipo === 'credito' ? 'Adicionar entrada' : (movimentoTipo === 'debito' ? 'Adicionar saída' : 'Transferir entre contas')">Novo movimento manual</h3><p class="mt-1 text-xs text-gray-500" x-text="movimentoTipo === 'credito' ? 'Registre um valor que entrou em uma conta.' : (movimentoTipo === 'debito' ? 'Registre um valor que saiu de uma conta.' : 'Movimente um valor entre duas contas sem alterar o total do caixa.')">Crédito, débito ou transferência com reflexo imediato nas contas.</p></div><button type="button" class="btn-secondary px-3" @click="movimentoModal=false" aria-label="Fechar">×</button></div>
       <form method="post" class="mt-5 space-y-3">{% csrf_token %}<input type="hidden" name="acao" value="lancar_movimento"><input type="hidden" name="data_referencia" value="{{ data_referencia|date:'Y-m-d' }}">{% if movimento_form.non_field_errors %}<div class="rounded border border-rose-300 bg-rose-50 p-3 text-sm text-rose-700">{{ movimento_form.non_field_errors|join:', ' }}</div>{% endif %}<label class="block text-xs font-semibold">Tipo {{ movimento_form.tipo|add_class:'form-input mt-1 w-full' }}</label><div class="grid gap-3 sm:grid-cols-2"><label class="block text-xs font-semibold">Conta de origem {{ movimento_form.conta_origem|add_class:'form-input mt-1 w-full' }}</label><label class="block text-xs font-semibold">Conta de destino {{ movimento_form.conta_destino|add_class:'form-input mt-1 w-full' }}</label></div><div class="grid gap-3 sm:grid-cols-2"><label class="block text-xs font-semibold">Data {{ movimento_form.data_lancamento|add_class:'form-input mt-1 w-full' }}</label><label class="block text-xs font-semibold">Valor {{ movimento_form.valor|add_class:'form-input mt-1 w-full' }}</label></div><label class="block text-xs font-semibold">Descrição {{ movimento_form.historico|add_class:'form-input mt-1 w-full' }}</label><label class="block text-xs font-semibold">Documento {{ movimento_form.documento|add_class:'form-input mt-1 w-full' }}</label><div class="flex justify-end gap-2 pt-2"><button type="button" class="btn-secondary" @click="movimentoModal=false">Cancelar</button><button type="submit" class="btn-primary">Registrar movimento</button></div></form>
     </div>
   </div>

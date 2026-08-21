@@ -107,6 +107,11 @@ class PosicaoDiariaCaixaTests(TestCase):
         self.assertContains(response, "Venda #1")
         self.assertContains(response, "Pagamento para")
         self.assertContains(response, "Contas a receber")
+        self.assertContains(response, "Adicionar entrada manual")
+        self.assertContains(response, "Adicionar saída manual")
+        self.assertContains(response, "Adicionar conta a pagar")
+        self.assertContains(response, reverse("financeiro:pagar_criar") + "?modal=1")
+        self.assertContains(response, "Transferir entre contas")
 
     def test_admin_exclui_movimento_manual_sem_apagar_historico(self):
         movimento = ExtratoBancario.objects.create(

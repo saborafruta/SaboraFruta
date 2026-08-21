@@ -13,7 +13,9 @@ from django.http import FileResponse, Http404, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.utils import timezone
+from django.utils.decorators import method_decorator
 from django.views import View
+from django.views.decorators.clickjacking import xframe_options_sameorigin
 
 from apps.core.services.exceptions import DomainError
 from apps.core.services.permissions import PermissaoRequiredMixin
@@ -523,6 +525,7 @@ class ContaPagarRelatorioView(PermissaoRequiredMixin, View):
         })
 
 
+@method_decorator(xframe_options_sameorigin, name='dispatch')
 class ContaPagarCreateView(PermissaoRequiredMixin, View):
     permissao_modulo = 'financeiro'
     permissao_acao = 'criar'
@@ -532,6 +535,7 @@ class ContaPagarCreateView(PermissaoRequiredMixin, View):
         return {
             'title': 'Nova Conta Paga' if cadastrando_pago else 'Nova Conta a Pagar',
             'form': form,
+            'modal_mode': request.GET.get('modal') == '1',
             'cancel_url': reverse(
                 'financeiro:pagar_pagas' if cadastrando_pago else 'financeiro:pagar_list'
             ),
@@ -614,6 +618,8 @@ class ContaPagarCreateView(PermissaoRequiredMixin, View):
             messages.error(request, str(exc))
             return render(request, 'financeiro/pagar/form.html', self._context(request, form))
 
+        if request.GET.get('modal') == '1':
+            return render(request, 'financeiro/pagar/modal_success.html')
         if d.get('quitar_ao_lancar'):
             return redirect(reverse('financeiro:pagar_pagas'))
         return redirect(reverse('financeiro:pagar_list'))
