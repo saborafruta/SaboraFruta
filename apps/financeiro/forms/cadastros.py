@@ -133,6 +133,7 @@ class ContaBancariaChoiceField(forms.ModelChoiceField):
 
 class DirecionarContaBancariaForm(forms.Form):
     conta_bancaria = ContaBancariaChoiceField(queryset=ContaBancaria.objects.none())
+    justificativa = forms.CharField(max_length=300, required=False, label="Motivo da alteracao")
 
     def __init__(self, *args, filial=None, **kwargs):
         super().__init__(*args, **kwargs)

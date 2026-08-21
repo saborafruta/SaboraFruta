@@ -188,3 +188,36 @@ class ContasBancariasViewTests(TestCase):
         self.assertTrue(RegistroAuditoria.objects.filter(
             acao=RegistroAuditoria.Acao.AJUSTAR, objeto_id=movimento.pk,
         ).exists())
+
+    def test_admin_transfere_movimento_de_venda_entre_contas_com_auditoria(self):
+        origem = ContaBancaria.objects.create(
+            filial=self.filial, descricao="Conta Origem", banco_codigo="001", saldo_inicial=Decimal("0"),
+        )
+        destino = ContaBancaria.objects.create(
+            filial=self.filial, descricao="Conta Destino", banco_codigo="341", saldo_inicial=Decimal("0"),
+        )
+        forma = FormaPagamento.objects.create(
+            empresa=self.empresa, filial=self.filial, descricao="Pix teste", tipo=TipoFormaPagamento.PIX,
+            codigo_sefaz="17", conta_bancaria_padrao=origem,
+        )
+        venda = VendaPDV.objects.create(
+            filial=self.filial, numero_venda=3, status="finalizada", valor_total=Decimal("45.00"),
+            valor_pago=Decimal("45.00"), usuario=self.usuario,
+            data_venda=timezone.datetime(2026, 8, 20, 12, 0, tzinfo=timezone.get_current_timezone()),
+        )
+        pagamento = PagamentoVendaPDV.objects.create(venda_pdv=venda, forma_pagamento=forma, valor=Decimal("45.00"))
+
+        response = self.client.post(reverse("financeiro:contas_bancarias"), {
+            "acao": "alterar_conta_movimento", "origem_movimento": "venda", "movimento_id": pagamento.pk,
+            "conta_bancaria": destino.pk, "justificativa": "Venda recebida na conta errada",
+        })
+
+        self.assertEqual(response.status_code, 302)
+        pagamento.refresh_from_db()
+        origem.refresh_from_db()
+        destino.refresh_from_db()
+        self.assertEqual(pagamento.conta_bancaria, destino)
+        self.assertEqual(origem.saldo_atual, Decimal("0.00"))
+        self.assertEqual(destino.saldo_atual, Decimal("45.00"))
+        log = RegistroAuditoria.objects.get(acao=RegistroAuditoria.Acao.AJUSTAR, objeto_id=pagamento.pk)
+        self.assertEqual(log.metadados["contas_envolvidas"], [destino.pk, origem.pk])

@@ -15,7 +15,7 @@ from django.views import View
 
 from apps.core.services.permissions import PermissaoRequiredMixin
 from apps.core.models import RegistroAuditoria
-from apps.core.services.auditoria import registrar_auditoria, snapshot_modelo
+from apps.core.services.auditoria import auditoria_para_objeto, registrar_auditoria, snapshot_modelo
 from apps.financeiro.forms import (
     ContaBancariaForm,
     DirecionarContaBancariaForm,
@@ -38,6 +38,8 @@ class MovimentoBancario:
     saida: Decimal
     referencia_url: str = ""
     movimento_manual_id: int | None = None
+    origem_codigo: str = ""
+    registro_id: int | None = None
 
     @property
     def valor(self):
@@ -75,9 +77,20 @@ class ContaBancariaListView(PermissaoRequiredMixin, View):
             instance = None
             if request.POST.get("id"):
                 instance = get_object_or_404(ContaBancaria.objects.for_filial(filial), pk=request.POST.get("id"))
+            antes = snapshot_modelo(instance) if instance else None
             form = ContaBancariaForm(request.POST, instance=instance, filial=filial)
             if form.is_valid():
                 conta = form.save()
+                registrar_auditoria(
+                    request=request,
+                    modulo=RegistroAuditoria.Modulo.FINANCEIRO,
+                    acao=RegistroAuditoria.Acao.EDITAR if instance else RegistroAuditoria.Acao.CRIAR,
+                    objeto=conta,
+                    descricao=f"Conta bancaria {conta.descricao or conta.banco_nome} {'editada' if instance else 'criada'}",
+                    antes=antes,
+                    depois=snapshot_modelo(conta),
+                    metadados={"contas_envolvidas": [conta.pk]},
+                )
                 messages.success(request, f"Conta {conta.descricao or conta.banco_nome} salva.")
                 return redirect(reverse("financeiro:contas_bancarias"))
             return self._render(
@@ -132,6 +145,31 @@ class ContaBancariaListView(PermissaoRequiredMixin, View):
                 return redirect(reverse("financeiro:contas_bancarias") + f"?conta={form.cleaned_data['conta_bancaria'].pk}")
             return self._render(request, editar_movimento=movimento, editar_movimento_form=form, editar_movimento_modal_aberto=True)
 
+        if acao == "alterar_conta_movimento":
+            if not _usuario_admin(request):
+                messages.error(request, "Apenas administradores podem alterar a conta de uma movimentacao.")
+                return redirect(reverse("financeiro:contas_bancarias"))
+            form = DirecionarContaBancariaForm(request.POST, filial=filial)
+            if form.is_valid():
+                conta = None
+                try:
+                    conta = self._alterar_conta_movimento(
+                        request,
+                        filial,
+                        request.POST.get("origem_movimento", ""),
+                        request.POST.get("movimento_id", ""),
+                        form.cleaned_data["conta_bancaria"],
+                        form.cleaned_data.get("justificativa") or "Conta bancaria corrigida.",
+                    )
+                except ValueError as exc:
+                    messages.error(request, str(exc))
+                else:
+                    messages.success(request, f"Movimentacao transferida para {conta.descricao or conta.banco_nome}.")
+                destino = f"?conta={conta.pk}" if conta else ""
+                return redirect(reverse("financeiro:contas_bancarias") + destino)
+            messages.error(request, "Escolha uma conta bancaria ativa.")
+            return redirect(reverse("financeiro:contas_bancarias"))
+
         messages.error(request, "Acao invalida.")
         return redirect(reverse("financeiro:contas_bancarias"))
 
@@ -146,6 +184,8 @@ class ContaBancariaListView(PermissaoRequiredMixin, View):
         editar_movimento=None,
         editar_movimento_form=None,
         editar_movimento_modal_aberto=False,
+        detalhe_movimento=None,
+        detalhe_movimento_modal_aberto=False,
     ):
         filial = request.filial_ativa
         hoje = timezone.localdate()
@@ -203,13 +243,22 @@ class ContaBancariaListView(PermissaoRequiredMixin, View):
                 filial=filial,
             )
 
+        if detalhe_movimento is None and request.GET.get("movimento_origem") and request.GET.get("movimento_id"):
+            try:
+                detalhe_movimento = self._detalhar_movimento(
+                    filial,
+                    request.GET["movimento_origem"],
+                    request.GET["movimento_id"],
+                )
+            except ValueError:
+                messages.error(request, "Movimentacao nao encontrada.")
+
         pendencias = self._pendencias_sem_conta(filial)
         logs = RegistroAuditoria.objects.filter(
             filial=filial,
             modulo=RegistroAuditoria.Modulo.FINANCEIRO,
         ).select_related("usuario").order_by("-criado_em")
-        if conta_selecionada:
-            logs = logs.filter(relacionado_tipo="financeiro.contabancaria", relacionado_id=conta_selecionada.pk)
+        logs = self._logs_bancarios(logs, conta_selecionada)
 
         return render(request, self.template_name, {
             "title": "Contas Bancarias",
@@ -223,6 +272,8 @@ class ContaBancariaListView(PermissaoRequiredMixin, View):
             "editar_movimento": editar_movimento,
             "editar_movimento_form": editar_movimento_form,
             "editar_movimento_modal_aberto": editar_movimento_modal_aberto or editar_movimento is not None,
+            "detalhe_movimento": detalhe_movimento,
+            "detalhe_movimento_modal_aberto": detalhe_movimento_modal_aberto or detalhe_movimento is not None,
             "page_obj": page_obj,
             "data_ini": data_ini,
             "data_fim": data_fim,
@@ -263,6 +314,8 @@ class ContaBancariaListView(PermissaoRequiredMixin, View):
                     entrada=max(valor, Decimal("0")),
                     saida=abs(min(valor, Decimal("0"))),
                     movimento_manual_id=item.pk if item.origem == "manual" else None,
+                    origem_codigo="manual",
+                    registro_id=item.pk,
                 ))
 
         if not origem or origem == "receber":
@@ -284,6 +337,8 @@ class ContaBancariaListView(PermissaoRequiredMixin, View):
                     entrada=item.valor_pago or Decimal("0"),
                     saida=Decimal("0"),
                     referencia_url=reverse("financeiro:receber_detail", args=[item.pk]),
+                    origem_codigo="receber",
+                    registro_id=item.pk,
                 ))
 
         if not origem or origem == "pagar":
@@ -304,6 +359,8 @@ class ContaBancariaListView(PermissaoRequiredMixin, View):
                     entrada=Decimal("0"),
                     saida=item.valor_liquido,
                     referencia_url=reverse("financeiro:pagar_detail", args=[item.conta_pagar_id]),
+                    origem_codigo="pagar",
+                    registro_id=item.pk,
                 ))
 
         if not origem or origem == "venda":
@@ -335,7 +392,9 @@ class ContaBancariaListView(PermissaoRequiredMixin, View):
                         origem="Venda PDV",
                         documento=str(item.venda_pdv.numero_venda),
                         entrada=valor,
-                        saida=Decimal("0"),
+                    saida=Decimal("0"),
+                    origem_codigo="venda",
+                    registro_id=item.pk,
                     ))
 
         return sorted(movimentos, key=lambda m: (m.data, m.origem, m.documento), reverse=True)
@@ -354,6 +413,111 @@ class ContaBancariaListView(PermissaoRequiredMixin, View):
         if not movimentos and (conta.saldo_inicial or Decimal("0")) == Decimal("0") and (conta.saldo_atual or Decimal("0")) != Decimal("0"):
             return conta.saldo_atual
         return (conta.saldo_inicial or Decimal("0")) + sum((m.valor for m in movimentos), Decimal("0"))
+
+    def _buscar_movimento_origem(self, filial, origem, registro_id):
+        if not registro_id or not str(registro_id).isdigit():
+            raise ValueError("Movimentacao invalida.")
+        registro_id = int(registro_id)
+        if origem == "manual":
+            return get_object_or_404(ExtratoBancario.objects.filter(filial=filial), pk=registro_id)
+        if origem == "receber":
+            return get_object_or_404(ContaReceber.objects.for_filial(filial), pk=registro_id)
+        if origem == "pagar":
+            return get_object_or_404(PagamentoContaPagar.objects.for_filial(filial), pk=registro_id)
+        if origem == "venda":
+            from apps.pdv.models import PagamentoVendaPDV
+            return get_object_or_404(PagamentoVendaPDV.objects.filter(venda_pdv__filial=filial), pk=registro_id)
+        raise ValueError("Origem de movimentacao invalida.")
+
+    def _detalhar_movimento(self, filial, origem, registro_id):
+        item = self._buscar_movimento_origem(filial, origem, registro_id)
+        conta = getattr(item, "conta_bancaria", None)
+        if origem == "manual":
+            valor = item.valor or Decimal("0")
+            descricao = item.historico or "Lancamento manual"
+            documento = item.documento
+            data = item.data_lancamento
+            referencia_url = ""
+            origem_label = "Manual" if item.origem == "manual" else "Extrato"
+        elif origem == "receber":
+            valor = item.valor_pago or Decimal("0")
+            descricao = f"Recebimento - {item.cliente}"
+            documento = item.documento_numero
+            data = item.data_pagamento
+            referencia_url = reverse("financeiro:receber_detail", args=[item.pk])
+            origem_label = "Conta a receber"
+        elif origem == "pagar":
+            valor = -(item.valor_liquido or Decimal("0"))
+            descricao = f"Pagamento - {item.conta_pagar.beneficiario_nome}"
+            documento = item.conta_pagar.documento_numero or item.referencia_pagamento
+            data = item.data_pagamento
+            referencia_url = reverse("financeiro:pagar_detail", args=[item.conta_pagar_id])
+            origem_label = "Conta a pagar"
+        else:
+            conta = item.conta_bancaria or item.forma_pagamento.conta_bancaria_padrao
+            valor = (item.valor or Decimal("0")) - (item.troco or Decimal("0"))
+            descricao = f"Venda PDV #{item.venda_pdv.numero_venda} - {item.forma_pagamento.descricao}"
+            documento = str(item.venda_pdv.numero_venda)
+            data = timezone.localtime(item.venda_pdv.data_venda).date()
+            referencia_url = ""
+            origem_label = "Venda PDV"
+
+        return {
+            "item": item,
+            "origem_codigo": origem,
+            "origem": origem_label,
+            "conta": conta,
+            "descricao": descricao,
+            "documento": documento,
+            "data": data,
+            "valor": valor,
+            "referencia_url": referencia_url,
+            "pode_editar_valor": origem == "manual" and item.origem == "manual",
+            "logs": self._logs_bancarios(auditoria_para_objeto(item, limit=50)),
+        }
+
+    @staticmethod
+    def _nome_campo_auditoria(campo):
+        return {
+            "conta_bancaria": "Conta bancaria",
+            "data_lancamento": "Data",
+            "valor": "Valor",
+            "historico": "Historico",
+            "documento": "Documento",
+            "descricao": "Apelido",
+            "saldo_inicial": "Saldo inicial",
+            "ativo": "Situacao",
+        }.get(campo, campo.replace("_", " ").capitalize())
+
+    def _logs_bancarios(self, logs, conta=None):
+        itens = []
+        for log in logs:
+            meta = log.metadados or {}
+            contas = set(meta.get("contas_envolvidas") or [])
+            if log.relacionado_tipo == "financeiro.contabancaria" and log.relacionado_id:
+                contas.add(log.relacionado_id)
+            if conta and conta.pk not in contas:
+                continue
+            anteriores = log.dados_anteriores or {}
+            novos = log.dados_novos or {}
+            alteracoes = []
+            for campo in sorted(set(anteriores) | set(novos)):
+                antes, depois = anteriores.get(campo), novos.get(campo)
+                if antes != depois:
+                    alteracoes.append({
+                        "campo": self._nome_campo_auditoria(campo),
+                        "antes": antes if antes not in (None, "") else "Nao informado",
+                        "depois": depois if depois not in (None, "") else "Nao informado",
+                    })
+            itens.append({
+                "data": log.criado_em,
+                "usuario": log.usuario.nome if log.usuario else "Sistema",
+                "acao": log.get_acao_display(),
+                "descricao": log.objeto_descricao,
+                "justificativa": log.justificativa,
+                "alteracoes": alteracoes,
+            })
+        return itens
 
     def _pendencias_sem_conta(self, filial):
         itens = []
@@ -451,9 +615,49 @@ class ContaBancariaListView(PermissaoRequiredMixin, View):
             justificativa="Conta bancaria definida posteriormente.",
             antes=antes,
             depois=snapshot_modelo(item, ["conta_bancaria"]),
+            metadados={"contas_envolvidas": [conta.pk], "origem_movimento": origem},
         )
         self._atualizar_saldo_conta(conta)
         return conta
+
+    @transaction.atomic
+    def _alterar_conta_movimento(self, request, filial, origem, registro_id, nova_conta, justificativa):
+        item = self._buscar_movimento_origem(filial, origem, registro_id)
+        conta_anterior = getattr(item, "conta_bancaria", None)
+        if origem == "venda":
+            conta_anterior = item.conta_bancaria or item.forma_pagamento.conta_bancaria_padrao
+        if conta_anterior and conta_anterior.pk == nova_conta.pk:
+            raise ValueError("A movimentacao ja esta nesta conta bancaria.")
+
+        antes = snapshot_modelo(item, ["conta_bancaria"])
+        item.conta_bancaria = nova_conta
+        update_fields = ["conta_bancaria"]
+        if hasattr(item, "updated_at"):
+            update_fields.append("updated_at")
+        item.save(update_fields=update_fields)
+        if origem == "pagar" and item.conta_pagar.pagamentos.count() == 1:
+            item.conta_pagar.conta_bancaria = nova_conta
+            item.conta_pagar.save(update_fields=["conta_bancaria", "updated_at"])
+
+        contas_envolvidas = [nova_conta.pk]
+        if conta_anterior:
+            contas_envolvidas.append(conta_anterior.pk)
+        registrar_auditoria(
+            request=request,
+            modulo=RegistroAuditoria.Modulo.FINANCEIRO,
+            acao=RegistroAuditoria.Acao.AJUSTAR,
+            objeto=item,
+            relacionado=nova_conta,
+            descricao=f"{origem.title()} transferido entre contas bancarias",
+            justificativa=justificativa,
+            antes=antes,
+            depois=snapshot_modelo(item, ["conta_bancaria"]),
+            metadados={"contas_envolvidas": contas_envolvidas, "origem_movimento": origem},
+        )
+        if conta_anterior:
+            self._atualizar_saldo_conta(conta_anterior)
+        self._atualizar_saldo_conta(nova_conta)
+        return nova_conta
 
     @transaction.atomic
     def _editar_movimento_manual(self, request, movimento, dados):
@@ -475,6 +679,7 @@ class ContaBancariaListView(PermissaoRequiredMixin, View):
             justificativa=dados["justificativa"],
             antes=antes,
             depois=snapshot_modelo(movimento, ["conta_bancaria", "data_lancamento", "valor", "historico", "documento"]),
+            metadados={"contas_envolvidas": [conta_anterior.pk, movimento.conta_bancaria_id]},
         )
         self._atualizar_saldo_conta(conta_anterior)
         if movimento.conta_bancaria_id != conta_anterior.pk:
@@ -512,6 +717,7 @@ class ContaBancariaListView(PermissaoRequiredMixin, View):
                 relacionado=conta,
                 descricao="Ajuste manual bancario criado",
                 depois=snapshot_modelo(movimento, ["conta_bancaria", "data_lancamento", "valor", "historico", "documento"]),
+                metadados={"contas_envolvidas": [conta.pk]},
             )
             return movimento
 
