@@ -2,9 +2,32 @@
   <style>
     #financeiro-dashboard-dialog { border:0; margin:auto; padding:0; background:transparent; }
     #financeiro-dashboard-dialog::backdrop { background:rgba(15,23,42,.66); backdrop-filter:blur(6px); -webkit-backdrop-filter:blur(6px); }
-    #financeiro-dashboard-dialog summary { list-style:none; cursor:pointer; }
-    #financeiro-dashboard-dialog summary::-webkit-details-marker { display:none; }
+    #financeiro-dashboard-dialog .finance-info { position:relative; display:inline-flex; }
+    #financeiro-dashboard-dialog .finance-info-tip {
+      pointer-events:none; visibility:hidden; opacity:0; transform:translateY(-2px);
+      transition:opacity .15s ease, transform .15s ease, visibility .15s;
+      max-width:min(16rem, calc(100vw - 2rem));
+    }
+    #financeiro-dashboard-dialog .finance-info:hover .finance-info-tip,
+    #financeiro-dashboard-dialog .finance-info:focus-within .finance-info-tip {
+      visibility:visible; opacity:1; transform:translateY(0);
+    }
+    #financeiro-dashboard-dialog .projecao-option[aria-pressed="true"] {
+      background:#172033; border-color:#172033; color:#fff;
+    }
   </style>
+  <script>
+    function alternarSaldoProjetado(botao, modo) {
+      const card = botao.closest('[data-projecao-card]');
+      card.querySelector('[data-projecao-sem]').hidden = modo !== 'sem';
+      card.querySelector('[data-projecao-com]').hidden = modo !== 'com';
+      card.querySelector('[data-legenda-sem]').hidden = modo !== 'sem';
+      card.querySelector('[data-legenda-com]').hidden = modo !== 'com';
+      card.querySelectorAll('.projecao-option').forEach(function (opcao) {
+        opcao.setAttribute('aria-pressed', opcao === botao ? 'true' : 'false');
+      });
+    }
+  </script>
   <button type="button" onclick="document.getElementById('financeiro-dashboard-dialog').showModal();document.body.style.overflow='hidden'" class="btn-secondary whitespace-nowrap">Visão financeira</button>
 
   <dialog id="financeiro-dashboard-dialog" aria-label="Visão financeira"
@@ -23,24 +46,30 @@
 
         <div class="flex-1 overflow-y-auto p-3 sm:p-5">
           <div class="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
-            <article class="rounded-lg border p-4" :style="temaClaro ? 'background:#fff1f2;border-color:#fecdd3' : 'background:rgba(190,24,93,.12);border-color:rgba(251,113,133,.28)'">
+            <article data-projecao-card class="rounded-lg border p-4" :style="temaClaro ? 'background:#fff1f2;border-color:#fecdd3' : 'background:rgba(190,24,93,.12);border-color:rgba(251,113,133,.28)'">
               <div class="flex items-center gap-1.5">
                 <span class="text-xs font-semibold uppercase opacity-65">Saldo projetado</span>
-                <details class="relative inline-flex">
-                  <summary class="grid h-4 w-4 place-items-center rounded-full border text-[10px] font-bold" style="border-color:#3b82f6;color:#2563eb" aria-label="Explicar saldo projetado">i</summary>
-                  <div class="absolute left-0 top-6 z-20 w-64 rounded-md p-3 text-xs font-normal text-white shadow-xl" style="background:#172033">Tudo que falta receber menos tudo que falta pagar. Não inclui o saldo das contas bancárias.</div>
-                </details>
+                <span class="finance-info">
+                  <span tabindex="0" onmousedown="event.preventDefault()" class="grid h-4 w-4 place-items-center rounded-full border text-[10px] font-bold" style="border-color:#3b82f6;color:#2563eb" aria-label="Explicar saldo projetado">i</span>
+                  <span class="finance-info-tip absolute left-0 top-6 z-20 w-64 rounded-md p-3 text-xs font-normal text-white shadow-xl" style="background:#172033">Sem bancos: tudo que falta receber menos tudo que falta pagar. Com bancos: soma também o saldo atual das contas bancárias ativas.</span>
+                </span>
               </div>
-              <strong class="mt-2 block text-xl" style="color:{% if dashboard_contas.saldo_projetado < 0 %}#e11d48{% else %}#0f766e{% endif %}">R$ {{ dashboard_contas.saldo_projetado|floatformat:2 }}</strong>
-              <span class="text-xs opacity-60">Receber menos pagar em aberto</span>
+              <strong data-projecao-sem class="mt-2 block text-xl" style="color:{% if dashboard_contas.saldo_projetado < 0 %}#e11d48{% else %}#0f766e{% endif %}">R$ {{ dashboard_contas.saldo_projetado|floatformat:2 }}</strong>
+              <strong data-projecao-com hidden class="mt-2 block text-xl" style="color:{% if dashboard_contas.saldo_projetado_com_bancos < 0 %}#e11d48{% else %}#0f766e{% endif %}">R$ {{ dashboard_contas.saldo_projetado_com_bancos|floatformat:2 }}</strong>
+              <span data-legenda-sem class="text-xs opacity-60">Sem saldos bancários</span>
+              <span data-legenda-com hidden class="text-xs opacity-60">Inclui R$ {{ dashboard_contas.saldo_bancario_total|floatformat:2 }} em bancos</span>
+              <div class="mt-3 inline-flex rounded-md border p-0.5 text-[11px]" :style="temaClaro ? 'border-color:#cbd5e1;background:#fff' : 'border-color:#475569;background:#202024'">
+                <button type="button" class="projecao-option rounded px-2 py-1" aria-pressed="true" onclick="alternarSaldoProjetado(this, 'sem')">Sem bancos</button>
+                <button type="button" class="projecao-option rounded px-2 py-1" aria-pressed="false" onclick="alternarSaldoProjetado(this, 'com')">Com bancos</button>
+              </div>
             </article>
             <article class="rounded-lg border p-4" :style="temaClaro ? 'background:#f0fdfa;border-color:#99f6e4' : 'background:rgba(13,148,136,.12);border-color:rgba(45,212,191,.28)'">
               <div class="flex items-center gap-1.5">
                 <span class="text-xs font-semibold uppercase opacity-65">A receber</span>
-                <details class="relative inline-flex">
-                  <summary class="grid h-4 w-4 place-items-center rounded-full border text-[10px] font-bold" style="border-color:#3b82f6;color:#2563eb" aria-label="Explicar valor a receber">i</summary>
-                  <div class="absolute left-0 top-6 z-20 w-64 rounded-md p-3 text-xs font-normal text-white shadow-xl" style="background:#172033">Soma dos saldos ainda abertos a receber, inclusive títulos vencidos.</div>
-                </details>
+                <span class="finance-info">
+                  <span tabindex="0" onmousedown="event.preventDefault()" class="grid h-4 w-4 place-items-center rounded-full border text-[10px] font-bold" style="border-color:#3b82f6;color:#2563eb" aria-label="Explicar valor a receber">i</span>
+                  <span class="finance-info-tip absolute left-0 top-6 z-20 w-64 rounded-md p-3 text-xs font-normal text-white shadow-xl" style="background:#172033">Soma dos saldos ainda abertos a receber, inclusive títulos vencidos.</span>
+                </span>
               </div>
               <strong class="mt-2 block text-xl" style="color:#0f766e">R$ {{ dashboard_contas.receber.aberto|floatformat:2 }}</strong>
               <span class="text-xs opacity-60">{{ dashboard_contas.receber.qtd_aberto }} título{{ dashboard_contas.receber.qtd_aberto|pluralize }}</span>
@@ -48,10 +77,10 @@
             <article class="rounded-lg border p-4" :style="temaClaro ? 'background:#fff1f2;border-color:#fecdd3' : 'background:rgba(190,24,93,.12);border-color:rgba(251,113,133,.28)'">
               <div class="flex items-center gap-1.5">
                 <span class="text-xs font-semibold uppercase opacity-65">A pagar</span>
-                <details class="relative inline-flex">
-                  <summary class="grid h-4 w-4 place-items-center rounded-full border text-[10px] font-bold" style="border-color:#3b82f6;color:#2563eb" aria-label="Explicar valor a pagar">i</summary>
-                  <div class="absolute right-0 top-6 z-20 w-64 rounded-md p-3 text-xs font-normal text-white shadow-xl" style="background:#172033">Soma dos saldos ainda abertos a pagar, inclusive títulos vencidos.</div>
-                </details>
+                <span class="finance-info">
+                  <span tabindex="0" onmousedown="event.preventDefault()" class="grid h-4 w-4 place-items-center rounded-full border text-[10px] font-bold" style="border-color:#3b82f6;color:#2563eb" aria-label="Explicar valor a pagar">i</span>
+                  <span class="finance-info-tip absolute right-0 top-6 z-20 w-64 rounded-md p-3 text-xs font-normal text-white shadow-xl" style="background:#172033">Soma dos saldos ainda abertos a pagar, inclusive títulos vencidos.</span>
+                </span>
               </div>
               <strong class="mt-2 block text-xl" style="color:#be123c">R$ {{ dashboard_contas.pagar.aberto|floatformat:2 }}</strong>
               <span class="text-xs opacity-60">{{ dashboard_contas.pagar.qtd_aberto }} título{{ dashboard_contas.pagar.qtd_aberto|pluralize }}</span>
@@ -59,10 +88,10 @@
             <article class="rounded-lg border p-4" :style="temaClaro ? 'background:#eff6ff;border-color:#bfdbfe' : 'background:rgba(37,99,235,.12);border-color:rgba(96,165,250,.28)'">
               <div class="flex items-center gap-1.5">
                 <span class="text-xs font-semibold uppercase opacity-65">Realizado no mês</span>
-                <details class="relative inline-flex">
-                  <summary class="grid h-4 w-4 place-items-center rounded-full border text-[10px] font-bold" style="border-color:#3b82f6;color:#2563eb" aria-label="Explicar resultado realizado">i</summary>
-                  <div class="absolute right-0 top-6 z-20 w-64 rounded-md p-3 text-xs font-normal text-white shadow-xl" style="background:#172033">O que efetivamente entrou menos o que efetivamente saiu no mês atual.</div>
-                </details>
+                <span class="finance-info">
+                  <span tabindex="0" onmousedown="event.preventDefault()" class="grid h-4 w-4 place-items-center rounded-full border text-[10px] font-bold" style="border-color:#3b82f6;color:#2563eb" aria-label="Explicar resultado realizado">i</span>
+                  <span class="finance-info-tip absolute right-0 top-6 z-20 w-64 rounded-md p-3 text-xs font-normal text-white shadow-xl" style="background:#172033">O que efetivamente entrou menos o que efetivamente saiu no mês atual.</span>
+                </span>
               </div>
               <strong class="mt-2 block text-xl" style="color:{% if dashboard_contas.saldo_realizado_mes < 0 %}#e11d48{% else %}#0f766e{% endif %}">R$ {{ dashboard_contas.saldo_realizado_mes|floatformat:2 }}</strong>
               <span class="text-xs opacity-60">Recebimentos menos pagamentos</span>
@@ -101,12 +130,12 @@
           </div>
 
           <div class="mt-3 rounded-lg border" :style="temaClaro ? 'background:#fff;border-color:#e2e8f0' : 'background:#202024;border-color:#303038'">
-            <div class="border-b px-4 py-4 sm:px-5" :style="temaClaro ? 'border-color:#e2e8f0' : 'border-color:#303038'"><h3 class="font-semibold">Distribuição financeira</h3><p class="text-xs opacity-60">Concentração por origem e destino do dinheiro</p></div>
+            <div class="border-b px-4 py-4 sm:px-5" :style="temaClaro ? 'border-color:#e2e8f0' : 'border-color:#303038'"><h3 class="font-semibold">Distribuição financeira</h3><p class="text-xs opacity-60">Janela operacional de 30 dias e movimentos efetivos do mês</p></div>
             <div class="grid grid-cols-1 lg:grid-cols-2">
-              <section class="border-b p-4 sm:p-5 lg:border-r" :style="temaClaro ? 'border-color:#e2e8f0' : 'border-color:#303038'"><h3 class="font-semibold">Maiores saldos a receber</h3><p class="mb-4 text-xs opacity-60">Concentração por cliente</p><div class="space-y-3">{% for item in dashboard_contas.maiores_clientes %}<div><div class="mb-1 flex justify-between gap-3 text-xs"><span class="truncate">{{ item.nome }}</span><strong>R$ {{ item.total|floatformat:2 }}</strong></div><div class="h-2 rounded-sm" :style="temaClaro ? 'background:#e2e8f0' : 'background:#303038'"><div class="h-full" style="width:{{ item.percentual }}%;background:#0f766e"></div></div></div>{% empty %}<p class="text-sm opacity-60">Nenhum saldo a receber em aberto.</p>{% endfor %}</div></section>
-              <section class="border-b p-4 sm:p-5" :style="temaClaro ? 'border-color:#e2e8f0' : 'border-color:#303038'"><h3 class="font-semibold">Formas de pagamento</h3><p class="mb-4 text-xs opacity-60">Previsão dos compromissos em aberto</p><div class="space-y-3">{% for item in dashboard_contas.maiores_formas %}<div><div class="mb-1 flex justify-between gap-3 text-xs"><span class="truncate">{{ item.nome }}</span><strong>R$ {{ item.total|floatformat:2 }}</strong></div><div class="h-2 rounded-sm" :style="temaClaro ? 'background:#e2e8f0' : 'background:#303038'"><div class="h-full" style="width:{{ item.percentual }}%;background:#475569"></div></div></div>{% empty %}<p class="text-sm opacity-60">Nenhuma forma prevista nos títulos em aberto.</p>{% endfor %}</div></section>
+              <section class="border-b p-4 sm:p-5 lg:border-r" :style="temaClaro ? 'border-color:#e2e8f0' : 'border-color:#303038'"><h3 class="font-semibold">Maiores saldos a receber</h3><p class="mb-4 text-xs opacity-60">Vencidos e a vencer nos próximos 30 dias</p><div class="space-y-3">{% for item in dashboard_contas.maiores_clientes %}<div><div class="mb-1 flex justify-between gap-3 text-xs"><span class="truncate">{{ item.nome }}</span><strong>R$ {{ item.total|floatformat:2 }}</strong></div><div class="h-2 rounded-sm" :style="temaClaro ? 'background:#e2e8f0' : 'background:#303038'"><div class="h-full" style="width:{{ item.percentual }}%;background:#0f766e"></div></div></div>{% empty %}<p class="text-sm opacity-60">Nenhum recebimento aberto nessa janela.</p>{% endfor %}</div></section>
+              <section class="border-b p-4 sm:p-5" :style="temaClaro ? 'border-color:#e2e8f0' : 'border-color:#303038'"><h3 class="font-semibold">Formas realizadas no mês</h3><p class="mb-4 text-xs opacity-60">Somente valores efetivamente pagos ou recebidos</p><div class="space-y-3">{% for item in dashboard_contas.formas_realizadas %}<div><div class="mb-1 flex justify-between gap-3 text-xs"><span class="truncate">{{ item.nome }} · {{ item.natureza }}</span><strong>R$ {{ item.total|floatformat:2 }}</strong></div><div class="h-2 rounded-sm" :style="temaClaro ? 'background:#e2e8f0' : 'background:#303038'"><div class="h-full" style="width:{{ item.percentual }}%;background:{% if item.tipo == 'receber' %}#0f766e{% else %}#be123c{% endif %}"></div></div></div>{% empty %}<p class="text-sm opacity-60">Nenhum pagamento ou recebimento realizado no mês.</p>{% endfor %}</div></section>
               <section class="border-b p-4 sm:p-5 lg:border-b-0 lg:border-r" :style="temaClaro ? 'border-color:#e2e8f0' : 'border-color:#303038'"><h3 class="font-semibold">Contas bancárias</h3><p class="mb-4 text-xs opacity-60">Saldo atual por conta cadastrada</p><div class="space-y-3">{% for item in dashboard_contas.contas_bancarias %}<div><div class="mb-1 flex justify-between gap-3 text-xs"><span class="truncate">{{ item.nome }}</span><strong style="color:{% if item.total < 0 %}#e11d48{% else %}#0f766e{% endif %}">R$ {{ item.total|floatformat:2 }}</strong></div><div class="h-2 rounded-sm" :style="temaClaro ? 'background:#e2e8f0' : 'background:#303038'"><div class="h-full" style="width:{{ item.percentual }}%;background:{% if item.total < 0 %}#e11d48{% else %}#0f766e{% endif %}"></div></div></div>{% empty %}<p class="text-sm opacity-60">Nenhuma conta bancária cadastrada.</p>{% endfor %}</div></section>
-              <section class="p-4 sm:p-5"><h3 class="font-semibold">Categorias financeiras</h3><p class="mb-4 text-xs opacity-60">Compromissos em aberto por classificação</p><div class="space-y-3">{% for item in dashboard_contas.maiores_categorias %}<div><div class="mb-1 flex justify-between gap-3 text-xs"><span class="truncate">{{ item.nome }}</span><strong>R$ {{ item.total|floatformat:2 }}</strong></div><div class="h-2 rounded-sm" :style="temaClaro ? 'background:#e2e8f0' : 'background:#303038'"><div class="h-full" style="width:{{ item.percentual }}%;background:#be123c"></div></div></div>{% empty %}<p class="text-sm opacity-60">Nenhum compromisso classificado em aberto.</p>{% endfor %}</div></section>
+              <section class="p-4 sm:p-5"><h3 class="font-semibold">Categorias financeiras</h3><p class="mb-4 text-xs opacity-60">Vencidos e a vencer nos próximos 30 dias</p><div class="space-y-3">{% for item in dashboard_contas.maiores_categorias %}<div><div class="mb-1 flex justify-between gap-3 text-xs"><span class="truncate">{{ item.nome }}</span><strong>R$ {{ item.total|floatformat:2 }}</strong></div><div class="h-2 rounded-sm" :style="temaClaro ? 'background:#e2e8f0' : 'background:#303038'"><div class="h-full" style="width:{{ item.percentual }}%;background:#be123c"></div></div></div>{% empty %}<p class="text-sm opacity-60">Nenhum compromisso classificado nessa janela.</p>{% endfor %}</div></section>
             </div>
           </div>
         </div>

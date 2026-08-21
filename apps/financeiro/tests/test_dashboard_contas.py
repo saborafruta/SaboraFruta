@@ -8,7 +8,7 @@ from apps.cadastros.models import Cliente
 from apps.core.models import Empresa, Filial
 from apps.financeiro.constants.enums import StatusContaPagar, StatusContaReceber
 from apps.financeiro.models import ContaBancaria, FormaPagamento, PlanoContas
-from apps.financeiro.models.receber_pagar import ContaPagar, ContaReceber
+from apps.financeiro.models.receber_pagar import ContaPagar, ContaReceber, PagamentoContaPagar
 from apps.financeiro.services.dashboard_contas_service import DashboardContasService
 from apps.financeiro.views.plano_contas import DEFAULT_TIPO
 
@@ -71,11 +71,12 @@ class DashboardContasServiceTests(TestCase):
             data_emissao=self.hoje,
             data_vencimento=vencimento,
             data_pagamento=self.hoje if status == StatusContaReceber.PAGO else None,
+            forma_pagamento=self.forma if pago else None,
             status=status,
         )
 
     def _pagar(self, valor, vencimento, status=StatusContaPagar.ABERTO, pago=0, categoria=True):
-        return ContaPagar.objects.create(
+        conta = ContaPagar.objects.create(
             filial=self.filial,
             plano_contas=self.categoria if categoria else None,
             forma_pagamento_prevista=self.forma,
@@ -88,6 +89,15 @@ class DashboardContasServiceTests(TestCase):
             data_pagamento=self.hoje if status == StatusContaPagar.PAGO else None,
             status=status,
         )
+        if pago:
+            PagamentoContaPagar.objects.create(
+                filial=self.filial,
+                conta_pagar=conta,
+                data_pagamento=self.hoje,
+                valor_pago=pago,
+                forma_pagamento=self.forma,
+            )
+        return conta
 
     def test_apura_saldos_agenda_e_concentracoes(self):
         self._receber('1000.00', date(2026, 8, 19), StatusContaReceber.VENCIDO)
@@ -102,14 +112,21 @@ class DashboardContasServiceTests(TestCase):
         self.assertEqual(painel['receber']['aberto'], Decimal('1500.00'))
         self.assertEqual(painel['pagar']['aberto'], Decimal('800.00'))
         self.assertEqual(painel['saldo_projetado'], Decimal('700.00'))
+        self.assertEqual(painel['saldo_bancario_total'], Decimal('2500.00'))
+        self.assertEqual(painel['saldo_projetado_com_bancos'], Decimal('3200.00'))
         self.assertEqual(painel['saldo_realizado_mes'], Decimal('200.00'))
         self.assertEqual(painel['receber']['vencido'], Decimal('1000.00'))
         self.assertEqual(painel['pagar']['sete'], Decimal('600.00'))
-        self.assertEqual(painel['pagar']['sem_categoria'], Decimal('200.00'))
+        self.assertEqual(painel['pagar']['sem_categoria'], Decimal('0'))
         self.assertEqual(painel['maiores_clientes'][0]['nome'], 'Cliente Alpha')
-        self.assertEqual(painel['maiores_formas'][0]['nome'], 'PIX')
+        self.assertEqual(painel['formas_realizadas'][0]['nome'], 'PIX')
+        self.assertEqual(painel['formas_realizadas'][0]['natureza'], 'Recebido')
+        self.assertEqual(painel['formas_realizadas'][0]['total'], Decimal('300.00'))
+        self.assertEqual(painel['formas_realizadas'][1]['natureza'], 'Pago')
+        self.assertEqual(painel['formas_realizadas'][1]['total'], Decimal('100.00'))
         self.assertEqual(painel['contas_bancarias'][0]['total'], Decimal('2500.00'))
         self.assertEqual(painel['maiores_categorias'][0]['nome'], 'Materia-prima')
+        self.assertEqual(painel['maiores_categorias'][0]['total'], Decimal('600.00'))
 
     def test_modal_renderiza_indicadores_e_atalhos(self):
         self._receber('150.00', date(2026, 8, 22))
@@ -123,13 +140,16 @@ class DashboardContasServiceTests(TestCase):
         self.assertIn('Visão financeira', html)
         self.assertIn('Contas a pagar e receber', html)
         self.assertIn('Agenda financeira', html)
-        self.assertIn('Formas de pagamento', html)
+        self.assertIn('Formas realizadas no mês', html)
         self.assertIn('Contas bancárias', html)
         self.assertIn('Categorias financeiras', html)
         self.assertIn('Cliente Alpha', html)
         self.assertIn('Explicar saldo projetado', html)
         self.assertIn('Explicar valor a receber', html)
-        self.assertIn('Não inclui o saldo das contas bancárias', html)
+        self.assertIn('Sem bancos', html)
+        self.assertIn('Com bancos', html)
+        self.assertIn('finance-info:hover', html)
+        self.assertNotIn('<details', html)
 
     def test_detalhes_do_titulo_renderizam_para_modal(self):
         conta = self._pagar('250.00', date(2026, 8, 25))

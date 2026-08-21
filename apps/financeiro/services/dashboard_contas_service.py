@@ -8,7 +8,7 @@ from django.db.models import Count, Q, Sum
 
 from apps.financeiro.constants.enums import StatusContaPagar, StatusContaReceber
 from apps.financeiro.models.conta_bancaria import ContaBancaria
-from apps.financeiro.models.receber_pagar import ContaPagar, ContaReceber
+from apps.financeiro.models.receber_pagar import ContaPagar, ContaReceber, PagamentoContaPagar
 
 
 ZERO = Decimal('0')
@@ -75,8 +75,22 @@ class DashboardContasService:
             sete=Sum('valor_saldo', filter=Q(status__in=status_pagar, data_vencimento__gt=hoje, data_vencimento__lte=sete_dias)),
             trinta=Sum('valor_saldo', filter=Q(status__in=status_pagar, data_vencimento__gt=sete_dias, data_vencimento__lte=trinta_dias)),
             futuro=Sum('valor_saldo', filter=Q(status__in=status_pagar, data_vencimento__gt=trinta_dias)),
-            realizado_mes=Sum('valor_pago', filter=Q(status=StatusContaPagar.PAGO, data_pagamento__gte=inicio_mes, data_pagamento__lte=hoje)),
-            sem_categoria=Sum('valor_saldo', filter=Q(status__in=status_pagar, plano_contas__isnull=True)),
+            sem_categoria=Sum(
+                'valor_saldo',
+                filter=Q(
+                    status__in=status_pagar,
+                    plano_contas__isnull=True,
+                    data_vencimento__lte=trinta_dias,
+                ),
+            ),
+        )
+
+        pagamentos_mes_qs = PagamentoContaPagar.objects.for_filial(filial).filter(
+            data_pagamento__gte=inicio_mes,
+            data_pagamento__lte=hoje,
+        )
+        pagar['realizado_mes'] = (
+            pagamentos_mes_qs.aggregate(total=Sum('valor_pago'))['total'] or ZERO
         )
 
         for dados in (receber, pagar):
@@ -99,7 +113,7 @@ class DashboardContasService:
             item['pagar_pct'] = _percentual(item['pagar'], maior_agenda)
 
         maiores_clientes = list(
-            receber_qs.filter(status__in=status_receber)
+            receber_qs.filter(status__in=status_receber, data_vencimento__lte=trinta_dias)
             .values('cliente__razao_social')
             .annotate(total=Sum('valor_saldo'))
             .order_by('-total')[:5]
@@ -108,39 +122,62 @@ class DashboardContasService:
             item['nome'] = item['cliente__razao_social'] or 'Cliente não identificado'
         _adicionar_percentuais(maiores_clientes)
 
-        formas_previstas_agrupadas = {}
-        formas_previstas = (
-            pagar_qs.filter(status__in=status_pagar)
-            .values('forma_pagamento_prevista__descricao', 'forma_pagamento__descricao')
-            .annotate(total=Sum('valor_saldo'))
-            .order_by('-total')
-        )
-        for item in formas_previstas:
-            nome = (
-                item['forma_pagamento_prevista__descricao']
-                or item['forma_pagamento__descricao']
-                or 'Não informada'
+        formas_realizadas = []
+        recebimentos_por_forma = (
+            receber_qs.filter(
+                valor_pago__gt=0,
+                data_pagamento__gte=inicio_mes,
+                data_pagamento__lte=hoje,
             )
-            formas_previstas_agrupadas[nome] = formas_previstas_agrupadas.get(nome, ZERO) + item['total']
-        maiores_formas = [
-            {'nome': nome, 'total': total}
-            for nome, total in sorted(
-                formas_previstas_agrupadas.items(), key=lambda registro: registro[1], reverse=True,
-            )[:5]
-        ]
-        _adicionar_percentuais(maiores_formas)
+            .values('forma_pagamento__descricao')
+            .annotate(total=Sum('valor_pago'))
+        )
+        for item in recebimentos_por_forma:
+            formas_realizadas.append({
+                'nome': item['forma_pagamento__descricao'] or 'Não informada',
+                'natureza': 'Recebido',
+                'tipo': 'receber',
+                'total': item['total'] or ZERO,
+            })
 
+        pagamentos_por_forma = (
+            pagamentos_mes_qs
+            .values('forma_pagamento__descricao')
+            .annotate(total=Sum('valor_pago'))
+        )
+        for item in pagamentos_por_forma:
+            formas_realizadas.append({
+                'nome': item['forma_pagamento__descricao'] or 'Não informada',
+                'natureza': 'Pago',
+                'tipo': 'pagar',
+                'total': item['total'] or ZERO,
+            })
+        formas_realizadas = sorted(
+            formas_realizadas,
+            key=lambda registro: registro['total'],
+            reverse=True,
+        )[:5]
+        _adicionar_percentuais(formas_realizadas)
+
+        contas_bancarias_qs = ContaBancaria.objects.for_filial(filial).filter(ativo=True)
+        saldo_bancario_total = (
+            contas_bancarias_qs.aggregate(total=Sum('saldo_atual'))['total'] or ZERO
+        )
         contas_bancarias = [
             {
                 'nome': conta.descricao or f'{conta.banco_nome} · {conta.agencia}/{conta.conta}',
                 'total': conta.saldo_atual,
             }
-            for conta in ContaBancaria.objects.for_filial(filial).filter(ativo=True).order_by('-saldo_atual')[:5]
+            for conta in contas_bancarias_qs.order_by('-saldo_atual')[:5]
         ]
         _adicionar_percentuais(contas_bancarias)
 
         maiores_categorias = list(
-            pagar_qs.filter(status__in=status_pagar, plano_contas__isnull=False)
+            pagar_qs.filter(
+                status__in=status_pagar,
+                plano_contas__isnull=False,
+                data_vencimento__lte=trinta_dias,
+            )
             .values('plano_contas__descricao')
             .annotate(total=Sum('valor_saldo'))
             .order_by('-total')[:5]
@@ -150,6 +187,7 @@ class DashboardContasService:
         _adicionar_percentuais(maiores_categorias)
 
         saldo_projetado = receber['aberto'] - pagar['aberto']
+        saldo_projetado_com_bancos = saldo_bancario_total + saldo_projetado
         saldo_realizado_mes = receber['realizado_mes'] - pagar['realizado_mes']
 
         return {
@@ -161,11 +199,13 @@ class DashboardContasService:
             'pagar': pagar,
             'saldo_projetado': saldo_projetado,
             'saldo_projetado_abs': abs(saldo_projetado),
+            'saldo_bancario_total': saldo_bancario_total,
+            'saldo_projetado_com_bancos': saldo_projetado_com_bancos,
             'saldo_realizado_mes': saldo_realizado_mes,
             'saldo_realizado_mes_abs': abs(saldo_realizado_mes),
             'agenda': agenda,
             'maiores_clientes': maiores_clientes,
-            'maiores_formas': maiores_formas,
+            'formas_realizadas': formas_realizadas,
             'contas_bancarias': contas_bancarias,
             'maiores_categorias': maiores_categorias,
         }
