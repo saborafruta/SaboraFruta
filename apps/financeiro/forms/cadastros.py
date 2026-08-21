@@ -120,8 +120,19 @@ class MovimentoContaBancariaForm(forms.Form):
         return cleaned
 
 
+class ContaBancariaChoiceField(forms.ModelChoiceField):
+    """Mostra o apelido operacional da conta nos seletores financeiros."""
+
+    def label_from_instance(self, conta):
+        apelido = (conta.descricao or "").strip()
+        banco = (conta.banco_nome or "").strip()
+        if apelido and banco and apelido.casefold() != banco.casefold():
+            return f"{apelido} ({banco})"
+        return apelido or banco or f"Conta #{conta.pk}"
+
+
 class DirecionarContaBancariaForm(forms.Form):
-    conta_bancaria = forms.ModelChoiceField(queryset=ContaBancaria.objects.none())
+    conta_bancaria = ContaBancariaChoiceField(queryset=ContaBancaria.objects.none())
 
     def __init__(self, *args, filial=None, **kwargs):
         super().__init__(*args, **kwargs)
@@ -134,7 +145,7 @@ class DirecionarContaBancariaForm(forms.Form):
 
 
 class EditarMovimentoBancarioForm(forms.Form):
-    conta_bancaria = forms.ModelChoiceField(queryset=ContaBancaria.objects.none(), label="Conta")
+    conta_bancaria = ContaBancariaChoiceField(queryset=ContaBancaria.objects.none(), label="Conta")
     data_lancamento = forms.DateField(widget=forms.DateInput(attrs={"type": "date"}), label="Data")
     valor = forms.DecimalField(max_digits=14, decimal_places=2, label="Valor")
     historico = forms.CharField(max_length=200, label="Historico")
