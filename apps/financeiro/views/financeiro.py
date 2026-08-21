@@ -204,6 +204,7 @@ def formas_pagamento(request):
                     "requer_tef": origem.requer_tef,
                     "gera_parcelas": origem.gera_parcelas,
                     "prazo_liquidacao_dias": origem.prazo_liquidacao_dias,
+                    "prazo_compensacao_dias_uteis": origem.prazo_compensacao_dias_uteis,
                     "taxa_administrativa": origem.taxa_administrativa,
                     "taxa_fixa": origem.taxa_fixa,
                     "movimenta_caixa": origem.movimenta_caixa,
@@ -259,7 +260,7 @@ def api_taxas_forma_pagamento(request, pk):
     forma = get_object_or_404(FormaPagamento.objects.filter(empresa=empresa, filial=filial), pk=pk)
 
     if request.method == 'GET':
-        taxas = list(forma.taxas_parcelamento.values('id', 'parcelas', 'taxa'))
+        taxas = list(forma.taxas_parcelamento.values('id', 'parcelas', 'bandeira', 'taxa'))
         return JsonResponse({'taxas': taxas})
 
     if not _pode_alterar_cadastros_financeiros(request):
@@ -268,6 +269,7 @@ def api_taxas_forma_pagamento(request, pk):
     if request.method == 'POST':
         data = json.loads(request.body)
         parcelas = int(data.get('parcelas', 0))
+        bandeira = FormaPagamento.normalizar_bandeira(data.get('bandeira', ''))
         taxa = data.get('taxa', 0)
         if not (1 <= parcelas <= 24):
             return JsonResponse({'erro': 'Parcelas deve ser entre 1 e 24'}, status=400)
@@ -278,10 +280,10 @@ def api_taxas_forma_pagamento(request, pk):
         if taxa < 0 or taxa > 100:
             return JsonResponse({'erro': 'A taxa deve ficar entre 0% e 100%'}, status=400)
         obj, _ = TaxaParcelamento.objects.update_or_create(
-            forma_pagamento=forma, parcelas=parcelas,
+            forma_pagamento=forma, parcelas=parcelas, bandeira=bandeira,
             defaults={'taxa': taxa},
         )
-        return JsonResponse({'id': obj.pk, 'parcelas': obj.parcelas, 'taxa': str(obj.taxa)})
+        return JsonResponse({'id': obj.pk, 'parcelas': obj.parcelas, 'bandeira': obj.bandeira, 'taxa': str(obj.taxa)})
 
     if request.method == 'DELETE':
         data = json.loads(request.body)

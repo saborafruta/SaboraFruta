@@ -582,7 +582,10 @@ def api_estado(request):
         formas = list(
             FormaPagamento.objects.filter(
                 empresa=request.filial_ativa.empresa, ativo=True
-            ).values('id', 'descricao', 'tipo', 'requer_tef', 'prazo_liquidacao_dias', 'movimenta_caixa')
+            ).values(
+                'id', 'descricao', 'tipo', 'requer_tef', 'gera_parcelas',
+                'prazo_liquidacao_dias', 'prazo_compensacao_dias_uteis', 'movimenta_caixa',
+            )
         )
     except Exception:
         formas = []
@@ -1363,7 +1366,10 @@ def api_formas_pagamento(request):
     if request.method == 'GET':
         formas = list(
             FormaPagamento.objects.filter(empresa=empresa, filial=filial)
-            .values('id', 'descricao', 'tipo', 'ativo', 'taxa_administrativa', 'taxa_fixa', 'gera_parcelas', 'prazo_liquidacao_dias')
+            .values(
+                'id', 'descricao', 'tipo', 'ativo', 'taxa_administrativa', 'taxa_fixa',
+                'gera_parcelas', 'prazo_liquidacao_dias', 'prazo_compensacao_dias_uteis',
+            )
             .order_by('descricao')
         )
         tipos = [{'valor': v, 'label': l} for v, l in TipoFormaPagamento.choices]
@@ -1389,6 +1395,7 @@ def api_formas_pagamento(request):
             taxa_fixa=data.get('taxa_fixa', 0),
             gera_parcelas=bool(data.get('gera_parcelas', False)),
             prazo_liquidacao_dias=int(data.get('prazo_liquidacao_dias', 0)),
+            prazo_compensacao_dias_uteis=int(data.get('prazo_compensacao_dias_uteis', 0)),
         )
         return JsonResponse({'id': forma.pk, 'descricao': forma.descricao, 'tipo': forma.tipo})
 

@@ -82,6 +82,8 @@
         <input type="date" name="data" value="{{ data_referencia|date:'Y-m-d' }}" class="form-input mt-1 w-full sm:w-52">
       </label>
       <div class="flex flex-wrap gap-2">
+        {% if mostrar_previstos %}<a href="?data={{ data_referencia|date:'Y-m-d' }}" class="btn-primary">Ocultar previstos</a>
+        {% else %}<a href="?data={{ data_referencia|date:'Y-m-d' }}&mostrar_previstos=1" class="btn-secondary">Ver recebimentos previstos</a>{% endif %}
         {% if user_is_admin %}
           {% if mostrar_excluidos %}<a href="?data={{ data_referencia|date:'Y-m-d' }}" class="btn-secondary">Ocultar excluídos</a>
           {% else %}<a href="?data={{ data_referencia|date:'Y-m-d' }}&mostrar_excluidos=1" class="btn-secondary">Ver excluídos</a>{% endif %}
@@ -118,6 +120,25 @@
       <span class="mt-1 block text-xs text-gray-500">Soma de todas as contas</span>
     </div>
   </section>
+
+  {% if mostrar_previstos %}
+  <section class="overflow-hidden rounded-lg border border-blue-200 bg-blue-50/40 dark:border-blue-900 dark:bg-blue-950/10">
+    <div class="flex flex-col gap-2 border-b border-blue-200 px-4 py-4 sm:flex-row sm:items-center sm:justify-between dark:border-blue-900">
+      <div><h3 class="font-semibold text-blue-950 dark:text-blue-100">Recebimentos previstos</h3><p class="text-xs text-blue-700 dark:text-blue-300">Vendas já realizadas que ainda serão compensadas. Não entram no saldo realizado acima.</p></div>
+      <div class="text-left sm:text-right"><span class="block text-[11px] font-semibold uppercase text-blue-600">Líquido previsto</span><strong class="text-xl text-blue-800 dark:text-blue-200">R$ {{ posicao.total_previsto|floatformat:2 }}</strong></div>
+    </div>
+    <div class="divide-y divide-blue-100 dark:divide-blue-900">
+      {% for item in posicao.previsoes %}
+      <div class="grid gap-2 px-4 py-3 text-sm sm:grid-cols-[105px_minmax(0,1fr)_190px_150px] sm:items-center">
+        <strong>{{ item.data|date:'d/m/Y' }}</strong>
+        <div class="min-w-0"><strong class="block truncate">{{ item.descricao }}</strong><small class="text-gray-500">{{ item.forma }}{% if item.bandeira %} · {{ item.bandeira|title }} {{ item.parcelas }}x{% endif %}</small></div>
+        <span class="text-gray-600 dark:text-gray-300">{{ item.conta }}</span>
+        <div class="text-left sm:text-right"><strong class="text-emerald-700 dark:text-emerald-400">R$ {{ item.valor_liquido|floatformat:2 }}</strong>{% if item.valor_taxa > 0 %}<small class="block text-gray-500">Bruto R$ {{ item.valor_bruto|floatformat:2 }} · taxa R$ {{ item.valor_taxa|floatformat:2 }}</small>{% endif %}</div>
+      </div>
+      {% empty %}<div class="p-6 text-center text-sm text-gray-500">Nenhum recebimento previsto nos próximos 45 dias.</div>{% endfor %}
+    </div>
+  </section>
+  {% endif %}
 
   {% if posicao.sem_conta %}
     <a href="{% url 'financeiro:contas_bancarias' %}" class="block rounded-lg border border-amber-300 bg-amber-50 p-4 text-amber-900 dark:border-amber-800 dark:bg-amber-950/20 dark:text-amber-200">

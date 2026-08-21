@@ -34,8 +34,9 @@
 
       <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <label class="block text-xs font-medium">Liquidação em dias {{ form.prazo_liquidacao_dias|add_class:"form-input mt-1" }}</label>
-        <label class="block text-xs font-medium">Taxa administrativa (%) {{ form.taxa_administrativa|add_class:"form-input mt-1" }}</label>
+        <label class="block text-xs font-medium">Compensação bancária (dias úteis) {{ form.prazo_compensacao_dias_uteis|add_class:"form-input mt-1" }}</label>
       </div>
+      <label class="block text-xs font-medium">Taxa administrativa padrão (%) {{ form.taxa_administrativa|add_class:"form-input mt-1" }}</label>
       <label class="block text-xs font-medium">
         Taxa fixa por transação (R$)
         {{ form.taxa_fixa|add_class:"form-input mt-1" }}
@@ -75,8 +76,16 @@
         <p class="text-xs text-gray-500 mt-1">Quando existir uma taxa para a quantidade de parcelas, ela substitui o percentual padrão. A taxa fixa continua sendo aplicada.</p>
       </div>
 
-      <div class="flex gap-2">
-        <div class="flex gap-2 flex-1">
+      <div class="flex flex-col gap-2 sm:flex-row">
+        <div class="grid flex-1 grid-cols-1 gap-2 sm:grid-cols-3">
+          <div>
+            <label class="block text-xs font-medium mb-1">Bandeira</label>
+            <select x-model="novaBandeira" class="form-input w-full">
+              <option value="">Padrão / sem bandeira</option>
+              <option value="mastercard">Mastercard</option><option value="visa">Visa</option>
+              <option value="elo">Elo</option><option value="amex">Amex</option><option value="hiper">Hiper</option>
+            </select>
+          </div>
           <div class="flex-1">
             <label class="block text-xs font-medium mb-1">Parcelas</label>
             <input type="number" x-model="novaParcelas" min="1" max="24" class="form-input w-full" placeholder="Ex: 1">
@@ -98,6 +107,7 @@
           <thead>
             <tr class="text-left text-xs uppercase tracking-wide text-gray-500">
               <th class="py-2 pr-4">Parcelas</th>
+              <th class="py-2 pr-4">Bandeira</th>
               <th class="py-2 pr-4">Taxa (%)</th>
               <th class="py-2 text-right">Remover</th>
             </tr>
@@ -106,6 +116,7 @@
             <template x-for="t in taxas" :key="t.id">
               <tr>
                 <td class="py-2 pr-4 font-medium" x-text="t.parcelas + 'x'"></td>
+                <td class="py-2 pr-4 capitalize" x-text="t.bandeira || 'Padrão'"></td>
                 <td class="py-2 pr-4" x-text="parseFloat(t.taxa).toFixed(2) + '%'"></td>
                 <td class="py-2 text-right">
                   <button type="button" @click="removerTaxa(t.id)" class="text-xs text-red-500 hover:text-red-700">Remover</button>
@@ -122,7 +133,7 @@
     function taxasParcelamento(formaId) {
       return {
         formaId, taxas: [], carregando: true, salvando: false,
-        novaParcelas: '', novaTaxa: '', erro: '',
+        novaParcelas: '', novaBandeira: '', novaTaxa: '', erro: '',
         async init() {
           await this.carregar();
         },
@@ -143,7 +154,7 @@
           const r = await fetch(`/financeiro/api/formas-pagamento/${this.formaId}/taxas/`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', 'X-CSRFToken': document.cookie.match(/csrftoken=([^;]+)/)?.[1] || '' },
-            body: JSON.stringify({ parcelas, taxa }),
+            body: JSON.stringify({ parcelas, bandeira: this.novaBandeira, taxa }),
           });
           const d = await r.json();
           if (d.erro) { this.erro = d.erro; }

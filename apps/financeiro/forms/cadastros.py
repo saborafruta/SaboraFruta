@@ -254,6 +254,7 @@ class FormaPagamentoForm(forms.ModelForm):
             "gera_parcelas",
             "movimenta_caixa",
             "prazo_liquidacao_dias",
+            "prazo_compensacao_dias_uteis",
             "taxa_administrativa",
             "taxa_fixa",
             "conta_bancaria_padrao",
@@ -267,6 +268,7 @@ class FormaPagamentoForm(forms.ModelForm):
             "gera_parcelas": "Gera parcelas",
             "movimenta_caixa": "Movimenta o caixa",
             "prazo_liquidacao_dias": "Liquidação em dias",
+            "prazo_compensacao_dias_uteis": "Compensacao bancaria (dias uteis)",
             "taxa_administrativa": "Taxa administrativa (%)",
             "taxa_fixa": "Taxa fixa por transacao (R$)",
             "conta_bancaria_padrao": "Conta bancaria padrao",
@@ -282,6 +284,7 @@ class FormaPagamentoForm(forms.ModelForm):
         self.fields["taxa_administrativa"].widget.attrs.setdefault("step", "0.01")
         self.fields["taxa_fixa"].widget.attrs.update({"step": "0.01", "min": "0", "inputmode": "decimal"})
         self.fields["prazo_liquidacao_dias"].widget.attrs.setdefault("min", "0")
+        self.fields["prazo_compensacao_dias_uteis"].widget.attrs.setdefault("min", "0")
         if filial:
             self.fields["conta_bancaria_padrao"].queryset = (
                 ContaBancaria.objects.for_filial(filial).filter(ativo=True).order_by("descricao", "banco_nome")

@@ -178,6 +178,8 @@ class PagamentoVendaPDV(models.Model):
     valor_taxa = models.DecimalField(max_digits=14, decimal_places=2, default=0)
     valor_liquido = models.DecimalField(max_digits=14, decimal_places=2, default=0)
     taxa_calculada_em = models.DateTimeField(null=True, blank=True)
+    prazo_compensacao_aplicado = models.PositiveSmallIntegerField(default=0)
+    data_liquidacao_prevista = models.DateField(null=True, blank=True, db_index=True)
     tef_transacao = models.ForeignKey(
         "financeiro.TEFTransacao", on_delete=models.SET_NULL, null=True, blank=True,
     )
@@ -203,12 +205,19 @@ class PagamentoVendaPDV(models.Model):
             calculo = self.forma_pagamento.calcular_taxa_recebimento(
                 (self.valor or 0) - (self.troco or 0),
                 self.numero_parcelas,
+                self.bandeira,
             )
             self.taxa_percentual_aplicada = calculo["percentual"]
             self.taxa_fixa_aplicada = calculo["fixa"]
             self.valor_taxa = calculo["taxa"]
             self.valor_liquido = calculo["liquido"]
             self.taxa_calculada_em = timezone.now()
+            self.prazo_compensacao_aplicado = self.forma_pagamento.prazo_compensacao_dias_uteis or 0
+            data_venda = timezone.localtime(self.venda_pdv.data_venda).date()
+            from apps.core.services.calendario import adicionar_dias_uteis_bancarios
+            self.data_liquidacao_prevista = adicionar_dias_uteis_bancarios(
+                data_venda, self.prazo_compensacao_aplicado, self.venda_pdv.filial,
+            )
         super().save(*args, **kwargs)
 
     @property

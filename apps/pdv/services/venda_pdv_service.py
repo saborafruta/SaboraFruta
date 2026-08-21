@@ -557,6 +557,7 @@ class VendaPDVService:
                 valor=valor_pgto,
                 troco=troco,
                 numero_parcelas=numero_parcelas,
+                bandeira=(pgto.get("bandeira") or "").strip(),
             )
 
             # Boleto e Vale sao recebimentos a prazo: geram conta a receber.

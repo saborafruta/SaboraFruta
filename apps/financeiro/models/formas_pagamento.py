@@ -30,6 +30,10 @@ class FormaPagamento(ActiveModel):
         ),
     )
     prazo_liquidacao_dias = models.PositiveSmallIntegerField(default=0)
+    prazo_compensacao_dias_uteis = models.PositiveSmallIntegerField(
+        default=0,
+        help_text="Dias uteis entre a transacao e o credito na conta bancaria.",
+    )
     taxa_administrativa = models.DecimalField(max_digits=5, decimal_places=2, default=0)
     taxa_fixa = models.DecimalField(
         max_digits=14,
@@ -58,10 +62,27 @@ class FormaPagamento(ActiveModel):
     def __str__(self):
         return self.descricao
 
-    def percentual_para_parcelas(self, parcelas=1):
+    @staticmethod
+    def normalizar_bandeira(bandeira=""):
+        valor = (bandeira or "").strip().casefold().replace(" ", "")
+        aliases = {
+            "master": "mastercard", "mastercard": "mastercard",
+            "visa": "visa", "elo": "elo",
+            "amex": "amex", "americanexpress": "amex",
+            "hiper": "hiper", "hipercard": "hiper",
+        }
+        return aliases.get(valor, valor[:20])
+
+    def percentual_para_parcelas(self, parcelas=1, bandeira=""):
         """Retorna a taxa da parcela quando configurada, ou a taxa padrão."""
         parcelas = max(int(parcelas or 1), 1)
-        taxa_parcela = self.taxas_parcelamento.filter(parcelas=parcelas).values_list("taxa", flat=True).first()
+        bandeira = self.normalizar_bandeira(bandeira)
+        taxas = self.taxas_parcelamento.filter(parcelas=parcelas)
+        taxa_parcela = None
+        if bandeira:
+            taxa_parcela = taxas.filter(bandeira=bandeira).values_list("taxa", flat=True).first()
+        if taxa_parcela is None:
+            taxa_parcela = taxas.filter(bandeira="").values_list("taxa", flat=True).first()
         return Decimal(taxa_parcela if taxa_parcela is not None else self.taxa_administrativa or 0)
 
     @staticmethod
@@ -79,10 +100,10 @@ class FormaPagamento(ActiveModel):
             "liquido": (bruto - taxa).quantize(centavos, rounding=ROUND_HALF_UP),
         }
 
-    def calcular_taxa_recebimento(self, valor_bruto, parcelas=1):
+    def calcular_taxa_recebimento(self, valor_bruto, parcelas=1, bandeira=""):
         return self.calcular_valores_taxa(
             valor_bruto,
-            self.percentual_para_parcelas(parcelas),
+            self.percentual_para_parcelas(parcelas, bandeira),
             self.taxa_fixa,
         )
 
@@ -92,12 +113,13 @@ class TaxaParcelamento(models.Model):
         FormaPagamento, on_delete=models.CASCADE, related_name="taxas_parcelamento"
     )
     parcelas = models.PositiveSmallIntegerField()
+    bandeira = models.CharField(max_length=20, blank=True, default="")
     taxa = models.DecimalField(max_digits=5, decimal_places=2, default=0)
 
     class Meta:
         db_table = "taxa_parcelamento"
-        unique_together = [("forma_pagamento", "parcelas")]
-        ordering = ["parcelas"]
+        unique_together = [("forma_pagamento", "parcelas", "bandeira")]
+        ordering = ["parcelas", "bandeira"]
 
     def __str__(self):
         return f"{self.forma_pagamento} — {self.parcelas}x — {self.taxa}%"

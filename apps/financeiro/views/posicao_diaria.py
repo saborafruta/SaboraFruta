@@ -75,8 +75,10 @@ class PosicaoDiariaCaixaView(PermissaoRequiredMixin, View):
     def _render(self, request, movimento_form=None, movimento_modal=False, editar_movimento=None, editar_form=None):
         data_referencia = parse_date(request.GET.get("data", "")) or timezone.localdate()
         mostrar_excluidos = request.GET.get("mostrar_excluidos") == "1" and _usuario_admin(request)
+        mostrar_previstos = request.GET.get("mostrar_previstos") == "1"
         posicao = PosicaoDiariaCaixaService(request.filial_ativa, data_referencia).gerar(
             incluir_excluidos=mostrar_excluidos,
+            incluir_previstos=mostrar_previstos,
         )
         detalhe = None
         movimento_id = request.GET.get("movimento")
@@ -103,4 +105,5 @@ class PosicaoDiariaCaixaView(PermissaoRequiredMixin, View):
             "movimento_form": movimento_form, "movimento_modal": movimento_modal,
             "editar_movimento": editar_movimento, "editar_form": editar_form, "detalhe": detalhe,
             "user_is_admin": _usuario_admin(request), "mostrar_excluidos": mostrar_excluidos,
+            "mostrar_previstos": mostrar_previstos,
         })

@@ -2,9 +2,10 @@ from __future__ import annotations
 
 from collections import defaultdict
 from dataclasses import dataclass
-from datetime import date
+from datetime import date, timedelta
 from decimal import Decimal
 
+from django.db.models import Q
 from django.urls import reverse
 from django.utils import timezone
 
@@ -59,7 +60,7 @@ class PosicaoDiariaCaixaService:
         )
         self.conta_ids = {conta.pk for conta in self.contas}
 
-    def gerar(self, *, incluir_excluidos=False):
+    def gerar(self, *, incluir_excluidos=False, incluir_previstos=False):
         movimentos = self._movimentos_do_dia(incluir_excluidos=incluir_excluidos)
         movimentos_ativos = [mov for mov in movimentos if not mov.excluido]
         entradas = [mov for mov in movimentos_ativos if mov.entrada > ZERO]
@@ -87,6 +88,7 @@ class PosicaoDiariaCaixaService:
         total_entradas = sum((m.entrada for m in entradas), ZERO)
         total_saidas = sum((m.saida for m in saidas), ZERO)
         total_fechamento = sum((c.posicao_fechamento for c in contas), ZERO)
+        previsoes = self._recebimentos_previstos() if incluir_previstos else []
         return {
             "contas": contas,
             "entradas": entradas,
@@ -104,6 +106,8 @@ class PosicaoDiariaCaixaService:
             "totais_conta_saida": self._agrupar(saidas, "conta", "saida"),
             "sem_conta": self._pendencias_sem_conta_do_dia(),
             "possui_caixa_dinheiro": any(conta.eh_dinheiro for conta in contas),
+            "previsoes": previsoes,
+            "total_previsto": sum((item["valor_liquido"] for item in previsoes), ZERO),
         }
 
     @staticmethod
@@ -176,7 +180,9 @@ class PosicaoDiariaCaixaService:
             PagamentoVendaPDV = None
         if PagamentoVendaPDV:
             vendas = PagamentoVendaPDV.objects.filter(
-                venda_pdv__filial=self.filial, venda_pdv__data_venda__date=self.data,
+                Q(data_liquidacao_prevista=self.data)
+                | Q(data_liquidacao_prevista__isnull=True, venda_pdv__data_venda__date=self.data),
+                venda_pdv__filial=self.filial,
                 forma_pagamento__movimenta_caixa=True,
             ).exclude(venda_pdv__status="cancelada").select_related(
                 "venda_pdv__cliente", "forma_pagamento", "forma_pagamento__conta_bancaria_padrao", "conta_bancaria",
@@ -188,7 +194,7 @@ class PosicaoDiariaCaixaService:
                     continue
                 cliente = str(item.venda_pdv.cliente) if item.venda_pdv.cliente else "Consumidor final"
                 movimentos.append(MovimentoDiario(
-                    data=timezone.localtime(item.venda_pdv.data_venda).date(), conta=conta,
+                    data=item.data_liquidacao_prevista or timezone.localtime(item.venda_pdv.data_venda).date(), conta=conta,
                     descricao=f"Venda #{item.venda_pdv.numero_venda} - {cliente}", contraparte=cliente,
                     origem="Venda PDV", origem_codigo="venda", registro_id=item.pk,
                     documento=str(item.venda_pdv.numero_venda), forma_pagamento=item.forma_pagamento.descricao,
@@ -219,7 +225,9 @@ class PosicaoDiariaCaixaService:
         try:
             from apps.pdv.models import PagamentoVendaPDV
             vendas = PagamentoVendaPDV.objects.filter(
-                venda_pdv__filial=self.filial, venda_pdv__data_venda__date__lt=self.data,
+                Q(data_liquidacao_prevista__lt=self.data)
+                | Q(data_liquidacao_prevista__isnull=True, venda_pdv__data_venda__date__lt=self.data),
+                venda_pdv__filial=self.filial,
                 forma_pagamento__movimenta_caixa=True,
             ).exclude(venda_pdv__status="cancelada").select_related(
                 "forma_pagamento__conta_bancaria_padrao", "conta_bancaria",
@@ -247,8 +255,9 @@ class PosicaoDiariaCaixaService:
         try:
             from apps.pdv.models import PagamentoVendaPDV
             vendas = PagamentoVendaPDV.objects.filter(
+                Q(data_liquidacao_prevista=self.data)
+                | Q(data_liquidacao_prevista__isnull=True, venda_pdv__data_venda__date=self.data),
                 venda_pdv__filial=self.filial,
-                venda_pdv__data_venda__date=self.data,
                 forma_pagamento__movimenta_caixa=True,
                 conta_bancaria__isnull=True,
                 forma_pagamento__conta_bancaria_padrao__isnull=True,
@@ -263,4 +272,36 @@ class PosicaoDiariaCaixaService:
                     })
         except Exception:
             pass
+        return itens
+
+    def _recebimentos_previstos(self):
+        """Mostra creditos futuros sem mistura-los ao saldo realizado."""
+        try:
+            from apps.pdv.models import PagamentoVendaPDV
+        except Exception:
+            return []
+        limite = self.data + timedelta(days=45)
+        vendas = PagamentoVendaPDV.objects.filter(
+            venda_pdv__filial=self.filial,
+            data_liquidacao_prevista__gt=self.data,
+            data_liquidacao_prevista__lte=limite,
+            forma_pagamento__movimenta_caixa=True,
+        ).exclude(venda_pdv__status="cancelada").select_related(
+            "venda_pdv__cliente", "forma_pagamento", "forma_pagamento__conta_bancaria_padrao", "conta_bancaria",
+        ).order_by("data_liquidacao_prevista", "pk")
+        itens = []
+        for item in vendas:
+            conta = item.conta_bancaria or item.forma_pagamento.conta_bancaria_padrao
+            cliente = str(item.venda_pdv.cliente) if item.venda_pdv.cliente else "Consumidor final"
+            itens.append({
+                "data": item.data_liquidacao_prevista,
+                "descricao": f"Venda #{item.venda_pdv.numero_venda} - {cliente}",
+                "forma": item.forma_pagamento.descricao,
+                "conta": conta.descricao if conta else "Conta nao definida",
+                "bandeira": item.bandeira,
+                "parcelas": item.numero_parcelas,
+                "valor_bruto": item.valor_bruto_recebido,
+                "valor_taxa": item.valor_taxa,
+                "valor_liquido": item.valor_entrada_liquida,
+            })
         return itens

@@ -6,7 +6,7 @@ from decimal import Decimal
 from django.contrib import messages
 from django.core.paginator import Paginator
 from django.db import transaction
-from django.db.models import Sum
+from django.db.models import Q, Sum
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.utils import timezone
@@ -433,8 +433,9 @@ class ContaBancariaListView(PermissaoRequiredMixin, View):
                 PagamentoVendaPDV = None
             if PagamentoVendaPDV:
                 qs = PagamentoVendaPDV.objects.filter(
+                    Q(data_liquidacao_prevista__range=(data_ini, data_fim))
+                    | Q(data_liquidacao_prevista__isnull=True, venda_pdv__data_venda__date__range=(data_ini, data_fim)),
                     venda_pdv__filial=filial,
-                    venda_pdv__data_venda__date__range=(data_ini, data_fim),
                     forma_pagamento__movimenta_caixa=True,
                 ).exclude(venda_pdv__status="cancelada").select_related(
                     "venda_pdv", "forma_pagamento", "forma_pagamento__conta_bancaria_padrao", "conta_bancaria",
@@ -449,7 +450,7 @@ class ContaBancariaListView(PermissaoRequiredMixin, View):
                     if valor <= 0:
                         continue
                     movimentos.append(MovimentoBancario(
-                        data=timezone.localtime(item.venda_pdv.data_venda).date(),
+                        data=item.data_liquidacao_prevista or timezone.localtime(item.venda_pdv.data_venda).date(),
                         conta=conta_destino,
                         historico=f"Venda PDV #{item.venda_pdv.numero_venda} - {item.forma_pagamento.descricao}",
                         origem="Venda PDV",

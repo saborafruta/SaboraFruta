@@ -3,7 +3,7 @@ from types import SimpleNamespace
 
 from django.test import SimpleTestCase
 
-from apps.core.services.calendario import proximo_dia_util
+from apps.core.services.calendario import adicionar_dias_uteis_bancarios, proximo_dia_util
 
 
 class CalendarioFinanceiroTests(SimpleTestCase):
@@ -33,3 +33,15 @@ class CalendarioFinanceiroTests(SimpleTestCase):
     def test_feriados_municipais_moveis_de_natal_avancam(self):
         self.assertEqual(proximo_dia_util(date(2026, 4, 3), self.filial), date(2026, 4, 4))
         self.assertEqual(proximo_dia_util(date(2026, 6, 4), self.filial), date(2026, 6, 5))
+
+    def test_compensacao_bancaria_nao_conta_sabado_e_domingo(self):
+        self.assertEqual(
+            adicionar_dias_uteis_bancarios(date(2026, 8, 21), 1, self.filial),
+            date(2026, 8, 24),
+        )
+
+    def test_compensacao_bancaria_pula_feriado(self):
+        self.assertEqual(
+            adicionar_dias_uteis_bancarios(date(2026, 9, 4), 1, self.filial),
+            date(2026, 9, 8),
+        )

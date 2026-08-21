@@ -1313,6 +1313,21 @@
             </div>
 
             <!-- Prazo em dias — só para Boleto/Vale -->
+            <template x-if="ehFormaCartao(formaPgtoSelecionada)">
+              <div style="display:grid;grid-template-columns:1fr 110px;gap:8px;margin-top:10px;padding-top:10px;border-top:1px solid #1e1e30;">
+                <label style="font-size:11px;color:#aaa;">Bandeira
+                  <select x-model="bandeiraPgto" style="display:block;width:100%;margin-top:5px;padding:9px;background:#13131e;border:1px solid #34344a;border-radius:8px;color:#fff;">
+                    <option value="">Selecionar</option><option value="mastercard">Mastercard</option><option value="visa">Visa</option><option value="elo">Elo</option><option value="amex">Amex</option><option value="hiper">Hiper</option>
+                  </select>
+                </label>
+                <label style="font-size:11px;color:#aaa;">Parcelas
+                  <select x-model="parcelasPgto" style="display:block;width:100%;margin-top:5px;padding:9px;background:#13131e;border:1px solid #34344a;border-radius:8px;color:#fff;">
+                    <template x-for="n in (formaPgtoSelecionada.gera_parcelas ? 12 : 1)" :key="n"><option :value="n" x-text="n + 'x'"></option></template>
+                  </select>
+                </label>
+              </div>
+            </template>
+
             <template x-if="ehFormaAPrazo(formaPgtoSelecionada)">
               <div style="margin-top:10px;padding-top:10px;border-top:1px solid #1e1e30;">
                 <div style="font-size:11px;font-weight:600;color:#f59e0b;margin-bottom:8px;text-transform:uppercase;letter-spacing:.07em;display:flex;align-items:center;gap:6px;">
@@ -2867,7 +2882,7 @@ function pdv() {
     _ultimoCodigoCamera: '',
     tabAtiva: 'todos', linhaAtiva: null,
 
-    formasPagamento: [], mostrarMaisFormas: false, formaPgtoSelecionada: null, valorPgto: '', prazoDiasPgto: '',
+    formasPagamento: [], mostrarMaisFormas: false, formaPgtoSelecionada: null, valorPgto: '', prazoDiasPgto: '', bandeiraPgto: '', parcelasPgto: 1,
 
     showModalCaixa: false, showModalCliente: false, showModalDelivery: false,
     showModalPendentes: false, showModalOrcamentos: false, showModalConfirmacao: false,
@@ -3327,6 +3342,11 @@ function pdv() {
       return t==='boleto' || t==='vale';
     },
 
+    ehFormaCartao(forma) {
+      const texto = ((forma?.tipo||'')+' '+(forma?.descricao||'')).toLowerCase();
+      return !!forma?.requer_tef || texto.includes('cart') || texto.includes('credito') || texto.includes('débito') || texto.includes('debito');
+    },
+
     selecionarFormaPgto(forma) {
       if (this.formaPgtoSelecionada?.id===forma.id) { this.formaPgtoSelecionada=null; return; }
       if (this.venda.pagamentos.length>0 && this.venda.restante<=0.001) {
@@ -3336,6 +3356,8 @@ function pdv() {
       this.formaPgtoSelecionada=forma;
       this.valorPgto=this.venda.restante>0.001?this.fmt2(this.venda.restante):'';
       this.prazoDiasPgto=this.ehFormaAPrazo(forma) ? String(forma.prazo_liquidacao_dias||30) : '';
+      this.bandeiraPgto='';
+      this.parcelasPgto=1;
       this.$nextTick(()=>this.$refs.inputValorPgto?.select());
     },
 
@@ -3344,6 +3366,8 @@ function pdv() {
       const valor = parseFloat(this.valorPgto)||parseFloat(this.venda.restante)||0;
       if (valor<=0) return;
       const aPrazo = this.ehFormaAPrazo(this.formaPgtoSelecionada);
+      const cartao = this.ehFormaCartao(this.formaPgtoSelecionada);
+      if (cartao && !this.bandeiraPgto) { this.toast_('Selecione a bandeira do cartão.','erro'); return; }
       if (aPrazo) {
         if (!this.venda.cliente.id) { this.toast_('Selecione um cliente para vendas no '+this.formaPgtoSelecionada.descricao+'.','erro'); return; }
         if (this.prazoDiasPgto==='' || parseInt(this.prazoDiasPgto)<0 || isNaN(parseInt(this.prazoDiasPgto))) { this.toast_('Informe o prazo em dias.','erro'); return; }
@@ -3355,8 +3379,9 @@ function pdv() {
       const troco = Math.max(0, valor-parseFloat(this.venda.restante));
       this.venda.pagamentos.push({ _id:Date.now()+Math.random(), forma_id:this.formaPgtoSelecionada.id,
         forma_descricao:this.formaPgtoSelecionada.descricao, forma_tipo:this.formaPgtoSelecionada.tipo, valor, troco,
-        prazo_dias: aPrazo ? parseInt(this.prazoDiasPgto) : null });
-      this.formaPgtoSelecionada=null; this.valorPgto=''; this.prazoDiasPgto=''; this.recalcularTotais();
+        prazo_dias: aPrazo ? parseInt(this.prazoDiasPgto) : null,
+        bandeira: cartao ? this.bandeiraPgto : '', numero_parcelas: cartao ? parseInt(this.parcelasPgto||1) : 1 });
+      this.formaPgtoSelecionada=null; this.valorPgto=''; this.prazoDiasPgto=''; this.bandeiraPgto=''; this.parcelasPgto=1; this.recalcularTotais();
     },
 
     removerPagamento(pgto) { this.venda.pagamentos=this.venda.pagamentos.filter(p=>p._id!==pgto._id); this.recalcularTotais(); },

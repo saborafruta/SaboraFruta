@@ -65,7 +65,12 @@ def _saldo_calculado_conta(conta):
     except Exception:
         PagamentoVendaPDV = None
     if PagamentoVendaPDV:
+        from django.db.models import Q
+        from django.utils import timezone
+        hoje = timezone.localdate()
         pagamentos_venda = PagamentoVendaPDV.objects.filter(
+            Q(data_liquidacao_prevista__lte=hoje)
+            | Q(data_liquidacao_prevista__isnull=True, venda_pdv__data_venda__date__lte=hoje),
             venda_pdv__filial=conta.filial,
             forma_pagamento__movimenta_caixa=True,
         ).exclude(venda_pdv__status='cancelada').select_related(
