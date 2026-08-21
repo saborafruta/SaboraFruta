@@ -199,3 +199,46 @@ class PosicaoDiariaCaixaTests(TestCase):
         ).exists())
         posicao = PosicaoDiariaCaixaService(self.filial, date(2026, 8, 21)).gerar()
         self.assertEqual(posicao["total_entradas"], Decimal("0"))
+
+    def test_periodo_consolida_movimentos_sem_duplicar_saldo_inicial(self):
+        ExtratoBancario.objects.create(
+            filial=self.filial, conta_bancaria=self.banco, data_lancamento=date(2026, 8, 19),
+            historico="Antes do periodo", valor=Decimal("10.00"), origem="manual",
+        )
+        ExtratoBancario.objects.create(
+            filial=self.filial, conta_bancaria=self.banco, data_lancamento=date(2026, 8, 20),
+            historico="Entrada no periodo", valor=Decimal("25.00"), origem="manual",
+        )
+        ExtratoBancario.objects.create(
+            filial=self.filial, conta_bancaria=self.banco, data_lancamento=date(2026, 8, 21),
+            historico="Saida no periodo", valor=Decimal("-5.00"), origem="manual",
+        )
+
+        posicao = PosicaoDiariaCaixaService(
+            self.filial, date(2026, 8, 21), data_inicio=date(2026, 8, 20),
+        ).gerar()
+
+        self.assertEqual(posicao["total_abertura"], Decimal("160.00"))
+        self.assertEqual(posicao["total_entradas"], Decimal("25.00"))
+        self.assertEqual(posicao["total_saidas"], Decimal("5.00"))
+        self.assertEqual(posicao["total_fechamento"], Decimal("180.00"))
+
+    def test_lancamento_manual_positivo_e_negativo_salva_na_posicao(self):
+        url = reverse("financeiro:posicao_diaria")
+        credito = self.client.post(url, {
+            "acao": "lancar_movimento", "tipo": "credito",
+            "conta_destino": self.banco.pk, "data_lancamento": "2026-08-21",
+            "data_referencia": "2026-08-21", "valor": "35.50", "historico": "Credito manual",
+        })
+        debito = self.client.post(url, {
+            "acao": "lancar_movimento", "tipo": "debito",
+            "conta_origem": self.banco.pk, "data_lancamento": "2026-08-21",
+            "data_referencia": "2026-08-21", "valor": "10.25", "historico": "Debito manual",
+        })
+
+        self.assertEqual(credito.status_code, 302)
+        self.assertEqual(debito.status_code, 302)
+        valores = list(ExtratoBancario.objects.filter(
+            filial=self.filial, historico__in=("Credito manual", "Debito manual"),
+        ).order_by("historico").values_list("valor", flat=True))
+        self.assertEqual(valores, [Decimal("35.50"), Decimal("-10.25")])
