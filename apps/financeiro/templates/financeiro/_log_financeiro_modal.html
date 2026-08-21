@@ -13,10 +13,11 @@
     Log bancário
   </button>
   <template x-teleport="body">
-    <div x-show="aberto" x-cloak class="fixed inset-0 z-[120] flex items-center justify-center p-3 sm:p-6"
-         style="background:rgba(15,23,42,.68);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px)"
+    <div x-show="aberto" x-cloak class="fixed inset-0 flex items-center justify-center p-3 sm:p-6"
+         style="z-index:10000;background:rgba(15,23,42,.72);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px)"
          @keydown.escape.window="aberto=false;document.body.style.overflow=''" @click.self="aberto=false;document.body.style.overflow=''">
-      <section class="flex max-h-[92vh] w-full max-w-5xl flex-col overflow-hidden rounded-lg bg-white text-slate-900 shadow-2xl dark:bg-[#202024] dark:text-slate-100">
+      <section role="dialog" aria-modal="true" aria-label="Log bancário"
+               class="flex max-h-[92vh] w-full max-w-4xl flex-col overflow-hidden rounded-lg bg-white text-slate-900 shadow-2xl dark:bg-[#202024] dark:text-slate-100">
         <div class="flex items-start justify-between gap-4 border-b border-blue-200 bg-blue-50 px-4 py-4 dark:border-blue-900/60 dark:bg-blue-950/30 sm:px-6">
           <div><h3 class="text-lg font-semibold">Log bancário{% if conta_selecionada %} · {{ conta_selecionada.descricao|default:conta_selecionada.banco_nome }}{% endif %}</h3><p class="mt-1 text-xs text-slate-500 dark:text-slate-400">Quem fez, quando fez, o que mudou e o motivo informado.</p></div>
           <button type="button" class="btn-secondary" @click="aberto=false;document.body.style.overflow=''">Fechar</button>
