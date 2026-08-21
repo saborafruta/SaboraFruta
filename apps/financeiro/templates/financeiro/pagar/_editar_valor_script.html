@@ -1,0 +1,45 @@
+<script>
+  window.toggleEditarValorConta = function (elemento) {
+    const detalhe = elemento.closest('[data-conta-detail]');
+    const painel = detalhe && detalhe.querySelector('[data-editar-valor-panel]');
+    if (!painel) return;
+    painel.hidden = !painel.hidden;
+    if (!painel.hidden) painel.querySelector('input[name="novo_valor"]')?.focus();
+  };
+
+  window.salvarEdicaoValorConta = async function (evento, formulario) {
+    evento.preventDefault();
+    const feedback = formulario.querySelector('[data-editar-valor-feedback]');
+    const botao = formulario.querySelector('button[type="submit"]');
+    feedback.className = 'hidden text-sm sm:col-span-3';
+    botao.disabled = true;
+    botao.textContent = 'Salvando...';
+    try {
+      const resposta = await fetch(formulario.action, {
+        method: 'POST', body: new FormData(formulario),
+        headers: {'X-Requested-With': 'XMLHttpRequest'}
+      });
+      const dados = await resposta.json();
+      if (!resposta.ok || !dados.ok) throw new Error(dados.erro || 'Não foi possível corrigir o valor.');
+      const detalhe = formulario.closest('[data-conta-detail]');
+      const moeda = valor => 'R$ ' + Number(valor).toLocaleString('pt-BR', {minimumFractionDigits:2, maximumFractionDigits:2});
+      ['original', 'final', 'pago', 'saldo'].forEach(chave => {
+        detalhe.querySelectorAll(`[data-conta-valor="${chave}"]`).forEach(el => el.textContent = moeda(dados[`valor_${chave === 'pago' ? 'pago' : chave === 'saldo' ? 'saldo' : chave}`]));
+      });
+      detalhe.querySelectorAll('[data-conta-status]').forEach(el => {
+        el.textContent = dados.status;
+        const classe = {'Pago':'is-green', 'Aberto':'is-blue', 'Vencido':'is-red', 'Agendado':'is-amber', 'Cancelado':'is-slate'}[dados.status] || 'is-slate';
+        el.className = `soft-pill ${classe}`;
+      });
+      feedback.textContent = dados.mensagem;
+      feedback.className = 'text-sm text-emerald-500 sm:col-span-3';
+      formulario.querySelector('input[name="novo_valor"]').value = dados.valor_original.replace('.', ',');
+    } catch (erro) {
+      feedback.textContent = erro.message;
+      feedback.className = 'text-sm text-rose-500 sm:col-span-3';
+    } finally {
+      botao.disabled = false;
+      botao.textContent = 'Salvar correção';
+    }
+  };
+</script>

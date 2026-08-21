@@ -15,7 +15,7 @@ from django.views import View
 
 from apps.core.services.permissions import PermissaoRequiredMixin
 from apps.core.models import RegistroAuditoria
-from apps.core.services.auditoria import auditoria_para_objeto, registrar_auditoria, snapshot_modelo
+from apps.core.services.auditoria import auditoria_para_objeto, auditoria_relacionada, registrar_auditoria, snapshot_modelo
 from apps.financeiro.forms import (
     ContaBancariaForm,
     DirecionarContaBancariaForm,
@@ -274,6 +274,7 @@ class ContaBancariaListView(PermissaoRequiredMixin, View):
             "editar_movimento_modal_aberto": editar_movimento_modal_aberto or editar_movimento is not None,
             "detalhe_movimento": detalhe_movimento,
             "detalhe_movimento_modal_aberto": detalhe_movimento_modal_aberto or detalhe_movimento is not None,
+            "trocar_conta_aberto": request.GET.get("trocar_conta") == "1",
             "page_obj": page_obj,
             "data_ini": data_ini,
             "data_fim": data_fim,
@@ -473,7 +474,11 @@ class ContaBancariaListView(PermissaoRequiredMixin, View):
             "valor": valor,
             "referencia_url": referencia_url,
             "pode_editar_valor": origem == "manual" and item.origem == "manual",
-            "logs": self._logs_bancarios(auditoria_para_objeto(item, limit=50)),
+            "logs": self._logs_bancarios(sorted(
+                [*auditoria_para_objeto(item, limit=50), *auditoria_relacionada(item, limit=50)],
+                key=lambda log: log.criado_em,
+                reverse=True,
+            )),
         }
 
     @staticmethod

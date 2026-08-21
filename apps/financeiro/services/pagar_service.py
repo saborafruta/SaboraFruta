@@ -236,6 +236,52 @@ class ContaPagarService:
 
     @staticmethod
     @transaction.atomic
+    def corrigir_valor(conta: ContaPagar, novo_valor: Decimal):
+        """Corrige o valor do titulo e mantem baixa e saldo coerentes."""
+        conta = ContaPagar.objects.select_for_update().get(pk=conta.pk)
+        novo_valor = Decimal(novo_valor).quantize(Decimal('0.01'))
+        if novo_valor <= Decimal('0'):
+            raise DomainError('O novo valor deve ser maior que zero.')
+        if conta.status == StatusContaPagar.CANCELADO:
+            raise DomainError('Nao e possivel alterar uma conta cancelada.')
+
+        diferenca = novo_valor - conta.valor_original
+        pagamento_ajustado = None
+        if conta.status == StatusContaPagar.PAGO:
+            pagamento_ajustado = conta.pagamentos.select_for_update().order_by(
+                '-data_pagamento', '-created_at', '-pk'
+            ).first()
+            if not pagamento_ajustado:
+                raise DomainError('A conta esta paga, mas nao possui baixa para ajustar.')
+            novo_pagamento = pagamento_ajustado.valor_pago + diferenca
+            if novo_pagamento <= Decimal('0'):
+                raise DomainError('A correcao deixaria a ultima baixa com valor invalido.')
+            pagamento_ajustado.valor_pago = novo_pagamento
+            pagamento_ajustado.save(update_fields=['valor_pago', 'updated_at'])
+            conta.valor_pago += diferenca
+
+        conta.valor_original = novo_valor
+        conta.valor_final = max(
+            novo_valor + conta.valor_juros + conta.valor_multa - conta.valor_desconto,
+            Decimal('0'),
+        )
+        if conta.valor_final < conta.valor_pago:
+            raise DomainError('O novo valor nao pode ser menor que o total ja pago.')
+
+        conta.valor_saldo = conta.valor_final - conta.valor_pago
+        if conta.valor_saldo == Decimal('0'):
+            conta.status = StatusContaPagar.PAGO
+        elif conta.data_vencimento < timezone.localdate():
+            conta.status = StatusContaPagar.VENCIDO
+        else:
+            conta.status = StatusContaPagar.ABERTO
+        conta.save(update_fields=[
+            'valor_original', 'valor_final', 'valor_pago', 'valor_saldo', 'status', 'updated_at',
+        ])
+        return conta, pagamento_ajustado
+
+    @staticmethod
+    @transaction.atomic
     def cancelar(conta: ContaPagar, motivo: str, usuario) -> ContaPagar:
         """Cancela uma conta a pagar ainda não paga."""
         if conta.status == StatusContaPagar.PAGO:

@@ -1,70 +1,92 @@
-<div class="space-y-5">
-  <div class="flex flex-wrap items-start justify-between gap-3">
-    <div>
-      <p class="text-xs font-semibold uppercase opacity-55">{% if tipo_conta == 'pagar' %}Conta a pagar{% else %}Conta a receber{% endif %}</p>
-      <h2 class="mt-1 text-xl font-semibold">Título #{{ conta.pk }}</h2>
-      <p class="mt-1 text-sm opacity-65">
-        {% if tipo_conta == 'pagar' %}{{ conta.beneficiario_nome }}{% else %}{{ conta.cliente.razao_social }}{% endif %}
-      </p>
+<div class="space-y-5" data-conta-detail data-conta-id="{{ conta.pk }}">
+  <header class="flex flex-wrap items-start justify-between gap-4">
+    <div class="min-w-0">
+      <p class="text-xs font-semibold uppercase text-blue-500">{% if tipo_conta == 'pagar' %}Conta a pagar{% else %}Conta a receber{% endif %}</p>
+      <div class="mt-1 flex flex-wrap items-center gap-2">
+        <h2 class="text-xl font-semibold">{{ conta.beneficiario_nome|default:conta.cliente.razao_social }}</h2>
+        <span class="soft-pill {% if conta.status == 'pago' %}is-green{% elif conta.status == 'vencido' %}is-red{% elif conta.status == 'aberto' %}is-blue{% elif conta.status == 'agendado' or conta.status == 'negociado' %}is-amber{% else %}is-slate{% endif %}" data-conta-status>{{ conta.get_status_display }}</span>
+      </div>
+      <p class="mt-1 text-sm opacity-60">Título #{{ conta.pk }}{% if conta.documento_numero %} · Documento {{ conta.documento_numero }}{% endif %}</p>
     </div>
-    <span class="soft-pill {% if conta.status == 'pago' %}is-green{% elif conta.status == 'vencido' %}is-red{% elif conta.status == 'aberto' %}is-blue{% elif conta.status == 'agendado' or conta.status == 'negociado' %}is-amber{% else %}is-slate{% endif %}">
-      {{ conta.get_status_display }}
-    </span>
-  </div>
+    {% if tipo_conta == 'pagar' and pode_editar_valor %}
+      <button type="button" class="btn-secondary inline-flex items-center gap-2" onclick="toggleEditarValorConta(this)" aria-label="Corrigir valor do título">
+        <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536M9 11l6-6 4 4-6 6H9v-4zM5 19h14"/></svg>
+        Corrigir valor
+      </button>
+    {% endif %}
+  </header>
 
-  <section class="rounded-lg border p-4" style="border-color:rgba(148,163,184,.28)">
-    <h3 class="mb-3 text-xs font-semibold uppercase opacity-55">Dados do título</h3>
-    <div class="grid grid-cols-2 gap-x-6 gap-y-4 text-sm sm:grid-cols-3">
-      <div><span class="block text-xs opacity-55">Documento</span><strong>{{ conta.documento_numero|default:"Não informado" }}</strong></div>
-      {% if conta.nota_fiscal_fornecedor %}<div><span class="block text-xs opacity-55">NF do fornecedor</span><strong>{{ conta.nota_fiscal_fornecedor }}</strong></div>{% endif %}
-      <div><span class="block text-xs opacity-55">Parcela</span><strong>{{ conta.parcela }} de {{ conta.total_parcelas }}</strong></div>
-      <div><span class="block text-xs opacity-55">Emissão</span><strong>{{ conta.data_emissao|date:"d/m/Y" }}</strong></div>
-      <div><span class="block text-xs opacity-55">Vencimento</span><strong>{{ conta.data_vencimento|date:"d/m/Y" }}</strong></div>
-      <div><span class="block text-xs opacity-55">Pagamento</span><strong>{{ conta.data_pagamento|date:"d/m/Y"|default:"Não pago" }}</strong></div>
-      {% if conta.data_competencia %}<div><span class="block text-xs opacity-55">Competência</span><strong>{{ conta.data_competencia|date:"m/Y" }}</strong></div>{% endif %}
-      {% if conta.forma_pagamento_prevista %}<div><span class="block text-xs opacity-55">Forma prevista</span><strong>{{ conta.forma_pagamento_prevista.descricao }}</strong></div>{% endif %}
-      {% if conta.forma_pagamento %}<div><span class="block text-xs opacity-55">Forma utilizada</span><strong>{{ conta.forma_pagamento.descricao }}</strong></div>{% endif %}
-      {% if conta.conta_bancaria %}<div><span class="block text-xs opacity-55">Conta bancária</span><strong>{{ conta.conta_bancaria.descricao|default:conta.conta_bancaria }}</strong></div>{% endif %}
-      {% if conta.plano_contas %}<div class="col-span-2 sm:col-span-3"><span class="block text-xs opacity-55">Categoria financeira</span><strong>{{ conta.plano_contas }}</strong></div>{% endif %}
-      {% if conta.conta_contabil %}<div class="col-span-2 sm:col-span-3"><span class="block text-xs opacity-55">Conta contábil automática</span><strong>{{ conta.conta_contabil.classificacao }} - {{ conta.conta_contabil.descricao }}</strong></div>{% endif %}
-    </div>
-    {% if conta.chave_acesso_nfe %}<div class="mt-4 border-t pt-3 text-xs" style="border-color:rgba(148,163,184,.2)"><span class="block opacity-55">Chave de acesso da NF-e</span><strong class="break-all font-mono">{{ conta.chave_acesso_nfe }}</strong></div>{% endif %}
-    {% if conta.observacao %}<div class="mt-4 border-t pt-3 text-sm" style="border-color:rgba(148,163,184,.2)"><span class="block text-xs opacity-55">Observação</span><p class="mt-1 whitespace-pre-wrap">{{ conta.observacao }}</p></div>{% endif %}
+  <section class="grid grid-cols-2 gap-3 sm:grid-cols-4">
+    <div class="rounded-lg border p-3" style="border-color:rgba(148,163,184,.28)"><span class="block text-xs opacity-55">Valor original</span><strong class="mt-1 block text-lg" data-conta-valor="original">R$ {{ conta.valor_original|floatformat:2 }}</strong></div>
+    <div class="rounded-lg border p-3" style="border-color:rgba(148,163,184,.28)"><span class="block text-xs opacity-55">Valor final</span><strong class="mt-1 block text-lg" data-conta-valor="final">R$ {{ conta.valor_final|floatformat:2 }}</strong></div>
+    <div class="rounded-lg border p-3" style="border-color:rgba(16,185,129,.35)"><span class="block text-xs opacity-55">Pago</span><strong class="mt-1 block text-lg text-emerald-500" data-conta-valor="pago">R$ {{ conta.valor_pago|floatformat:2 }}</strong></div>
+    <div class="rounded-lg border p-3" style="border-color:rgba(59,130,246,.35)"><span class="block text-xs opacity-55">Saldo</span><strong class="mt-1 block text-lg {% if conta.valor_saldo > 0 %}text-rose-500{% else %}text-emerald-500{% endif %}" data-conta-valor="saldo">R$ {{ conta.valor_saldo|floatformat:2 }}</strong></div>
   </section>
 
-  <section>
-    <h3 class="mb-3 text-xs font-semibold uppercase opacity-55">Resumo financeiro</h3>
-    <div class="grid grid-cols-2 gap-3 sm:grid-cols-4">
-      <div class="rounded-lg border p-3" style="border-color:rgba(148,163,184,.28)"><span class="block text-xs opacity-55">Original</span><strong>R$ {{ conta.valor_original|floatformat:2 }}</strong></div>
-      <div class="rounded-lg border p-3" style="border-color:rgba(148,163,184,.28)"><span class="block text-xs opacity-55">Valor final</span><strong>R$ {{ conta.valor_final|floatformat:2 }}</strong></div>
-      <div class="rounded-lg border p-3" style="border-color:rgba(16,185,129,.35)"><span class="block text-xs opacity-55">Pago</span><strong class="text-emerald-500">R$ {{ conta.valor_pago|floatformat:2 }}</strong></div>
-      <div class="rounded-lg border p-3" style="border-color:rgba(225,29,72,.3)"><span class="block text-xs opacity-55">Saldo</span><strong class="{% if conta.valor_saldo > 0 %}text-rose-500{% else %}text-emerald-500{% endif %}">R$ {{ conta.valor_saldo|floatformat:2 }}</strong></div>
+  {% if tipo_conta == 'pagar' and pode_editar_valor %}
+  <section hidden data-editar-valor-panel class="rounded-lg border border-blue-500/30 bg-blue-500/5 p-4">
+    <div class="flex items-start justify-between gap-3">
+      <div><h3 class="font-semibold">Corrigir valor do título</h3><p class="mt-1 text-xs opacity-65">A correção atualiza saldo e, se já estiver pago, a última baixa. Tudo fica no log.</p></div>
+      <button type="button" class="text-xl opacity-60 hover:opacity-100" onclick="toggleEditarValorConta(this)" aria-label="Fechar edição">&times;</button>
     </div>
+    <form class="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-[180px_1fr_auto]" action="{% url 'financeiro:pagar_editar_valor' conta.pk %}" onsubmit="salvarEdicaoValorConta(event,this)">
+      {% csrf_token %}
+      <label class="text-xs font-medium">Novo valor (R$)<input class="form-input mt-1 w-full" name="novo_valor" value="{{ conta.valor_original|floatformat:2 }}" inputmode="decimal" required></label>
+      <label class="text-xs font-medium">Motivo da correção<input class="form-input mt-1 w-full" name="motivo" maxlength="300" placeholder="Ex.: valor digitado incorretamente" required></label>
+      <button type="submit" class="btn-primary self-end">Salvar correção</button>
+      <p class="hidden text-sm sm:col-span-3" data-editar-valor-feedback></p>
+    </form>
   </section>
-
-  {% if tipo_conta == 'pagar' %}
-    {% with pagamentos=conta.pagamentos.all %}
-      {% if pagamentos %}
-      <section>
-        <h3 class="mb-3 text-xs font-semibold uppercase opacity-55">Histórico de pagamentos</h3>
-        <div class="divide-y rounded-lg border" style="border-color:rgba(148,163,184,.28)">
-          {% for pagamento in pagamentos %}
-          <div class="grid grid-cols-2 gap-3 p-3 text-sm sm:grid-cols-4">
-            <div><span class="block text-xs opacity-55">Data</span><strong>{{ pagamento.data_pagamento|date:"d/m/Y" }}</strong></div>
-            <div><span class="block text-xs opacity-55">Valor</span><strong>R$ {{ pagamento.valor_pago|floatformat:2 }}</strong></div>
-            <div><span class="block text-xs opacity-55">Forma</span><strong>{{ pagamento.forma_pagamento.descricao|default:"Não informada" }}</strong></div>
-            <div><span class="block text-xs opacity-55">Conta</span><strong>{{ pagamento.conta_bancaria.descricao|default:pagamento.conta_bancaria|default:"Não informada" }}</strong></div>
-          </div>
-          {% endfor %}
-        </div>
-      </section>
-      {% endif %}
-    {% endwith %}
   {% endif %}
 
-  <div class="flex flex-col-reverse gap-2 border-t pt-4 sm:flex-row sm:items-center sm:justify-between" style="border-color:rgba(148,163,184,.25)">
-    <a href="{% if tipo_conta == 'pagar' %}{% url 'financeiro:pagar_detail' conta.pk %}{% else %}{% url 'financeiro:receber_detail' conta.pk %}{% endif %}" class="btn-secondary text-center">Abrir página completa</a>
-    {% if tipo_conta == 'pagar' and pode_pagar %}<a href="{% url 'financeiro:pagar_pagar' conta.pk %}" class="btn-primary text-center">Registrar pagamento</a>{% endif %}
-    {% if tipo_conta == 'receber' and pode_baixar %}<a href="{% url 'financeiro:receber_baixar' conta.pk %}" class="btn-primary text-center">Registrar recebimento</a>{% endif %}
+  <div class="grid grid-cols-1 gap-4 lg:grid-cols-[1.25fr_.75fr]">
+    <section class="rounded-lg border p-4" style="border-color:rgba(148,163,184,.28)">
+      <h3 class="mb-4 text-xs font-semibold uppercase opacity-55">Dados do título</h3>
+      <div class="grid grid-cols-2 gap-x-6 gap-y-4 text-sm sm:grid-cols-3">
+        <div><span class="block text-xs opacity-55">Parcela</span><strong>{{ conta.parcela }} de {{ conta.total_parcelas }}</strong></div>
+        <div><span class="block text-xs opacity-55">Emissão</span><strong>{{ conta.data_emissao|date:"d/m/Y" }}</strong></div>
+        <div><span class="block text-xs opacity-55">Vencimento</span><strong>{{ conta.data_vencimento|date:"d/m/Y" }}</strong></div>
+        <div><span class="block text-xs opacity-55">Pagamento</span><strong>{{ conta.data_pagamento|date:"d/m/Y"|default:"Não pago" }}</strong></div>
+        {% if conta.data_competencia %}<div><span class="block text-xs opacity-55">Competência</span><strong>{{ conta.data_competencia|date:"m/Y" }}</strong></div>{% endif %}
+        {% if conta.nota_fiscal_fornecedor %}<div><span class="block text-xs opacity-55">NF do fornecedor</span><strong>{{ conta.nota_fiscal_fornecedor }}</strong></div>{% endif %}
+        {% if conta.forma_pagamento_prevista %}<div><span class="block text-xs opacity-55">Forma prevista</span><strong>{{ conta.forma_pagamento_prevista.descricao }}</strong></div>{% endif %}
+        {% if conta.forma_pagamento %}<div><span class="block text-xs opacity-55">Forma utilizada</span><strong>{{ conta.forma_pagamento.descricao }}</strong></div>{% endif %}
+        {% if conta.conta_bancaria %}<div><span class="block text-xs opacity-55">Conta bancária</span><strong>{{ conta.conta_bancaria.descricao|default:conta.conta_bancaria }}</strong></div>{% endif %}
+        {% if conta.plano_contas %}<div class="col-span-2 sm:col-span-3"><span class="block text-xs opacity-55">Categoria financeira</span><strong>{{ conta.plano_contas }}</strong></div>{% endif %}
+        {% if conta.conta_contabil %}<div class="col-span-2 sm:col-span-3"><span class="block text-xs opacity-55">Conta contábil automática</span><strong>{{ conta.conta_contabil.classificacao }} - {{ conta.conta_contabil.descricao }}</strong></div>{% endif %}
+      </div>
+      {% if conta.chave_acesso_nfe %}<div class="mt-4 border-t pt-3 text-xs" style="border-color:rgba(148,163,184,.2)"><span class="block opacity-55">Chave de acesso da NF-e</span><strong class="break-all font-mono">{{ conta.chave_acesso_nfe }}</strong></div>{% endif %}
+      {% if conta.observacao %}<div class="mt-4 border-t pt-3 text-sm" style="border-color:rgba(148,163,184,.2)"><span class="block text-xs opacity-55">Observação</span><p class="mt-1 whitespace-pre-wrap">{{ conta.observacao }}</p></div>{% endif %}
+    </section>
+
+    <section class="rounded-lg border p-4" style="border-color:rgba(148,163,184,.28)">
+      <h3 class="mb-4 text-xs font-semibold uppercase opacity-55">Pagamentos</h3>
+      <div class="space-y-3">
+        {% for pagamento in conta.pagamentos.all %}
+          <article class="rounded-md border p-3 text-sm" style="border-color:rgba(148,163,184,.22)">
+            <div class="flex items-start justify-between gap-3"><div><span class="block text-xs opacity-55">{{ pagamento.data_pagamento|date:"d/m/Y" }}</span><strong>{{ pagamento.forma_pagamento.descricao|default:"Forma não informada" }}</strong></div><strong class="whitespace-nowrap text-emerald-500">R$ {{ pagamento.valor_pago|floatformat:2 }}</strong></div>
+            <p class="mt-2 text-xs opacity-60">{{ pagamento.conta_bancaria.descricao|default:pagamento.conta_bancaria|default:"Conta não informada" }}</p>
+            {% if pagamento.comprovante_arquivo %}<div class="mt-3 flex gap-2"><a class="text-xs font-semibold text-blue-500" href="{% url 'financeiro:pagar_comprovante' conta.pk pagamento.pk %}" target="_blank">Visualizar</a><a class="text-xs font-semibold text-blue-500" href="{% url 'financeiro:pagar_comprovante' conta.pk pagamento.pk %}?download=1">Baixar</a></div>{% endif %}
+          </article>
+        {% empty %}<p class="text-sm opacity-60">Nenhum pagamento registrado.</p>{% endfor %}
+      </div>
+    </section>
   </div>
+
+  {% if tipo_conta == 'pagar' and pode_editar_valor and logs_edicao_valor %}
+  <section class="rounded-lg border p-4" style="border-color:rgba(148,163,184,.28)">
+    <h3 class="text-xs font-semibold uppercase opacity-55">Log de correções</h3>
+    <div class="mt-3 divide-y" style="border-color:rgba(148,163,184,.2)">
+      {% for log in logs_edicao_valor %}<div class="py-3 text-sm"><div class="flex flex-wrap justify-between gap-2"><strong>{{ log.objeto_descricao }}</strong><span class="text-xs opacity-55">{{ log.criado_em|date:"d/m/Y H:i" }} · {{ log.usuario.nome|default:log.usuario|default:"Sistema" }}</span></div><p class="mt-1 text-xs opacity-70">Motivo: {{ log.justificativa }}</p><p class="mt-1 text-xs"><span class="text-rose-500">R$ {{ log.dados_anteriores.valor_original }}</span> → <span class="text-emerald-500">R$ {{ log.dados_novos.valor_original }}</span></p></div>{% endfor %}
+    </div>
+  </section>
+  {% endif %}
+
+  <footer class="flex flex-col-reverse gap-2 border-t pt-4 sm:flex-row sm:items-center sm:justify-between" style="border-color:rgba(148,163,184,.25)">
+    {% if not pagina_completa %}<a href="{% if tipo_conta == 'pagar' %}{% url 'financeiro:pagar_detail' conta.pk %}{% else %}{% url 'financeiro:receber_detail' conta.pk %}{% endif %}" class="btn-secondary text-center">Abrir página completa</a>{% endif %}
+    <div class="flex flex-col gap-2 sm:flex-row">
+      {% if tipo_conta == 'pagar' and pode_pagar %}<a href="{% url 'financeiro:pagar_pagar' conta.pk %}" class="btn-primary text-center">Registrar pagamento</a>{% endif %}
+      {% if tipo_conta == 'receber' and pode_baixar %}<a href="{% url 'financeiro:receber_baixar' conta.pk %}" class="btn-primary text-center">Registrar recebimento</a>{% endif %}
+    </div>
+  </footer>
 </div>

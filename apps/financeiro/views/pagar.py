@@ -7,6 +7,7 @@ from pathlib import Path
 
 from django.contrib import messages
 from django.core.paginator import Paginator
+from django.db import transaction
 from django.db.models import Count, Q, Sum
 from django.http import FileResponse, Http404, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
@@ -16,6 +17,8 @@ from django.views import View
 
 from apps.core.services.exceptions import DomainError
 from apps.core.services.permissions import PermissaoRequiredMixin
+from apps.core.models import RegistroAuditoria
+from apps.core.services.auditoria import registrar_auditoria, snapshot_modelo
 from apps.financeiro.constants.enums import StatusContaPagar
 from apps.financeiro.forms.pagar import ContaPagarForm, PagamentoContaPagarForm
 from apps.financeiro.models.conta_bancaria import PlanoContas
@@ -36,6 +39,20 @@ PILL_STATUS = {
 
 def _filial(request):
     return request.filial_ativa
+
+
+def _usuario_admin(request):
+    perfil = getattr(request.user, 'perfil', None)
+    return request.user.is_superuser or bool(perfil and perfil.is_admin)
+
+
+def _logs_edicao_valor(conta):
+    return RegistroAuditoria.objects.filter(
+        objeto_tipo=conta._meta.label_lower,
+        objeto_id=conta.pk,
+        modulo=RegistroAuditoria.Modulo.FINANCEIRO,
+        acao=RegistroAuditoria.Acao.AJUSTAR,
+    ).select_related('usuario')[:20]
 
 
 def _categorias_financeiras_filtro(request):
@@ -612,10 +629,68 @@ class ContaPagarDetailView(PermissaoRequiredMixin, View):
             'pode_cancelar': pode_cancelar,
             'pill': PILL_STATUS.get(conta.status, 'is-slate'),
             'tipo_conta': 'pagar',
+            'pode_editar_valor': _usuario_admin(request) and conta.status != StatusContaPagar.CANCELADO,
+            'logs_edicao_valor': _logs_edicao_valor(conta),
         }
         if request.GET.get('modal') == '1':
             return render(request, 'financeiro/_detalhes_conta_modal.html', context)
         return render(request, 'financeiro/pagar/detail.html', context)
+
+
+class ContaPagarEditarValorView(PermissaoRequiredMixin, View):
+    permissao_modulo = 'financeiro'
+    permissao_acao = 'editar'
+
+    @transaction.atomic
+    def post(self, request, pk):
+        if not _usuario_admin(request):
+            return JsonResponse({'ok': False, 'erro': 'Somente administradores podem corrigir valores.'}, status=403)
+        conta = get_object_or_404(ContaPagar.objects.for_filial(_filial(request)), pk=pk)
+        motivo = request.POST.get('motivo', '').strip()
+        valor_texto = request.POST.get('novo_valor', '').strip()
+        if not motivo:
+            return JsonResponse({'ok': False, 'erro': 'Informe o motivo da alteracao.'}, status=400)
+        try:
+            normalizado = valor_texto.replace('.', '').replace(',', '.') if ',' in valor_texto else valor_texto
+            novo_valor = Decimal(normalizado)
+        except Exception:
+            return JsonResponse({'ok': False, 'erro': 'Informe um valor valido.'}, status=400)
+
+        antes = snapshot_modelo(conta, campos=[
+            'valor_original', 'valor_final', 'valor_pago', 'valor_saldo', 'status',
+        ])
+        try:
+            conta, pagamento = ContaPagarService.corrigir_valor(conta, novo_valor)
+        except DomainError as exc:
+            return JsonResponse({'ok': False, 'erro': str(exc)}, status=400)
+        depois = snapshot_modelo(conta, campos=[
+            'valor_original', 'valor_final', 'valor_pago', 'valor_saldo', 'status',
+        ])
+        registrar_auditoria(
+            request=request,
+            modulo=RegistroAuditoria.Modulo.FINANCEIRO,
+            acao=RegistroAuditoria.Acao.AJUSTAR,
+            objeto=conta,
+            relacionado=pagamento,
+            descricao=f'Valor da conta a pagar #{conta.pk} corrigido',
+            justificativa=motivo,
+            antes=antes,
+            depois=depois,
+            metadados={
+                'campo': 'valor_original',
+                'pagamento_ajustado_id': pagamento.pk if pagamento else None,
+                'contas_envolvidas': [pagamento.conta_bancaria_id] if pagamento and pagamento.conta_bancaria_id else [],
+            },
+        )
+        return JsonResponse({
+            'ok': True,
+            'mensagem': 'Valor corrigido e registrado no log.',
+            'valor_original': f'{conta.valor_original:.2f}',
+            'valor_final': f'{conta.valor_final:.2f}',
+            'valor_pago': f'{conta.valor_pago:.2f}',
+            'valor_saldo': f'{conta.valor_saldo:.2f}',
+            'status': conta.get_status_display(),
+        })
 
 
 class ContaPagarPagamentoView(PermissaoRequiredMixin, View):

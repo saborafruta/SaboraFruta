@@ -45,6 +45,7 @@ urlpatterns = [
     path("pagar/novo/",               pagar_views.ContaPagarCreateView.as_view(),    name="pagar_criar"),
     path("pagar/nfe/consultar/",       pagar_views.ContaPagarNotaFiscalLookupView.as_view(), name="pagar_nfe_consultar"),
     path("pagar/<int:pk>/",           pagar_views.ContaPagarDetailView.as_view(),    name="pagar_detail"),
+    path("pagar/<int:pk>/editar-valor/", pagar_views.ContaPagarEditarValorView.as_view(), name="pagar_editar_valor"),
     path("pagar/<int:pk>/pagar/",     pagar_views.ContaPagarPagamentoView.as_view(), name="pagar_pagar"),
     path(
         "pagar/<int:pk>/pagamentos/<int:pagamento_pk>/comprovante/",
