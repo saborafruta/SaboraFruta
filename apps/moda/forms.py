@@ -272,8 +272,8 @@ class ItemPedidoProducaoForm(_FilialFormMixin, forms.ModelForm):
         for nome in ('produto', 'modelo', 'cor', 'tecido'):
             self.fields[nome].required = False
 
-        # O select de produto passa a oferecer TAMBÉM o cadastro de
-        # produtos do ERP -- ver `_opcoes_de_produto`.
+        # O campo de produto é uma CAIXA DE BUSCA e enxerga os dois
+        # catálogos -- ver `_preparar_produto`.
         self._preparar_produto(filial)
         # Preço não é obrigatório aqui: o comercial monta a ficha antes de
         # fechar valor, e exigir agora travaria o cadastro do produto.
@@ -285,58 +285,29 @@ class ItemPedidoProducaoForm(_FilialFormMixin, forms.ModelForm):
 
     def _preparar_produto(self, filial):
         """
-        Um select, dois catálogos.
+        Uma caixa de busca, dois catálogos.
 
         O PRODUTO DA CONFECÇÃO e o PRODUTO DO ERP são cadastros diferentes
         de propósito: o do ERP é o que se vende, se estoca e vai na nota; o
         da moda é o que se PRODUZ, com modelo, tecido e grade. Mas quem está
-        montando o pedido não quer saber disso -- quer achar a camisa que já
-        está cadastrada em Cadastros › Produtos.
+        montando o pedido não quer saber disso -- quer digitar "camisa" e
+        achar a que já está cadastrada em Cadastros › Produtos.
 
-        Então o campo lista os dois, em grupos separados. Escolher um do ERP
-        TRAZ o produto para a confecção na hora (mesma importação da tela de
-        produtos, com o vínculo `produto_erp` gravado) e usa o resultado. Não
-        é cópia cega nem catálogo duplicado: é o mesmo produto, agora também
-        conhecido pela produção.
+        A busca é no servidor (`moda:produto-buscar`) e escolher um do ERP
+        TRAZ o produto para a confecção na gravação, com o vínculo
+        `produto_erp`. Não é catálogo duplicado: é o mesmo produto, agora
+        também conhecido pela produção.
         """
-        from apps.produtos.models import Produto
-
-        self.fields['produto'] = forms.ChoiceField(
+        self.fields['produto'] = forms.CharField(
             required=False, label='Produto',
-            choices=self._opcoes_de_produto(filial),
-            widget=forms.Select(attrs={'class': 'form-input'}),
-            help_text=(
-                'Do catálogo da confecção ou do cadastro de produtos do ERP. '
-                'Sem produto, descreva o item abaixo.'
-            ),
+            # CharField escondido: a escolha chega da caixa de busca, e
+            # quem valida é o `clean_produto`. Um `choices` fechado
+            # recusaria o valor antes disso, com a mensagem inútil
+            # "faça uma escolha válida".
+            widget=forms.HiddenInput(),
         )
         if self.instance.pk and self.instance.produto_id:
             self.initial['produto'] = f'moda:{self.instance.produto_id}'
-
-    def _opcoes_de_produto(self, filial) -> list:
-        from apps.moda.services.importar_produtos import ImportarProdutosService
-        from .models import ProdutoModa
-
-        da_moda = [
-            (f'moda:{p.pk}', f'{p.codigo} — {p.nome}' if p.codigo else p.nome)
-            for p in ProdutoModa.objects.for_filial(filial).filter(ativo=True)
-            .order_by('nome')
-        ] if filial else []
-
-        # Os do ERP que ainda não vieram. O serviço já sabe descartar os
-        # que têm vínculo ou código igual -- sem isso, o mesmo produto
-        # apareceria duas vezes na mesma lista.
-        do_erp = [
-            (f'erp:{p.pk}', f'{getattr(p, "codigo", "") or ""} — {p.descricao}'.strip(' —'))
-            for p in (ImportarProdutosService.disponiveis(filial) if filial else [])
-        ]
-
-        opcoes = [('', '--------- escolha ou descreva abaixo')]
-        if da_moda:
-            opcoes.append(('Catálogo da confecção', da_moda))
-        if do_erp:
-            opcoes.append(('Cadastro de produtos do ERP', do_erp))
-        return opcoes
 
     def clean_produto(self):
         """A escolha vira um `ProdutoModa` de verdade — importando, se preciso."""

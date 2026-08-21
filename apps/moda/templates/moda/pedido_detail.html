@@ -560,8 +560,43 @@
       <form method="post" action="{% url 'moda:pedido-item-add' pedido.pk %}"
             enctype="multipart/form-data" novalidate class="space-y-5 pt-4">
         {% csrf_token %}
+        {% comment %}
+          CAIXA DE BUSCA no produto: digitar mostra os nomes, e a lista
+          vem dos DOIS catálogos -- o da confecção e Cadastros › Produtos.
+          Um select fechado só mostrava o catálogo da confecção, que numa
+          base nova está vazio, e ainda obrigava a rolar mil linhas.
+
+          Os campos são desenhados um a um, e não pelo laço genérico,
+          porque o `produto` virou um input ESCONDIDO (o que vai ao
+          servidor é o id) -- o laço desenharia um rótulo com nada
+          embaixo dele.
+        {% endcomment %}
         <div class="grid gap-4 sm:grid-cols-2">
-          {% include "moda/_form_campos.html" with form=form_item %}
+          <div>
+            <label class="block text-xs uppercase tracking-wider mb-1"
+                   :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+              Produto
+            </label>
+            {% include "moda/_combo_produto.html" with nome_campo="produto" escolhido_json=produto_escolhido_json %}
+            <p class="text-xs mt-1" :style="temaClaro ? 'color:#94a3b8;' : 'color:#71717a;'">
+              Do catálogo da confecção ou do cadastro de produtos do ERP.
+              Sem produto, descreva o item ao lado.
+            </p>
+            {% for erro in form_item.produto.errors %}
+              <p class="text-xs mt-1" style="color:#dc2626;">{{ erro }}</p>
+            {% endfor %}
+          </div>
+          {% include "moda/_campo.html" with campo=form_item.descricao %}
+          {% include "moda/_campo.html" with campo=form_item.referencia %}
+          {% include "moda/_campo.html" with campo=form_item.modelo %}
+          {% include "moda/_campo.html" with campo=form_item.cor %}
+          {% include "moda/_campo.html" with campo=form_item.tecido %}
+          {% include "moda/_campo.html" with campo=form_item.gola %}
+          {% include "moda/_campo.html" with campo=form_item.manga %}
+          {% include "moda/_campo.html" with campo=form_item.acabamento %}
+          {% include "moda/_campo.html" with campo=form_item.quantidade %}
+          {% include "moda/_campo.html" with campo=form_item.valor_unitario %}
+          {% include "moda/_campo.html" with campo=form_item.observacoes %}
         </div>
 
         {% comment %}

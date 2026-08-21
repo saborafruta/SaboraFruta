@@ -440,6 +440,10 @@ def contexto_do_pedido(request, pedido, **extra) -> dict:
         'itens': itens,
         'total_pecas': sum(i.quantidade for i in itens),
         'form_item': ItemPedidoProducaoForm(filial=filial),
+        # O produto ja' escolhido, para a caixa de busca voltar preenchida
+        # quando o formulario recusa alguma coisa. Sem isso, um erro de
+        # digitacao em OUTRO campo faria a pessoa procurar o produto de novo.
+        'produto_escolhido_json': 'null',
         'form_arte': PersonalizacaoForm(),
         'form_arquivo': ArquivoPedidoForm(),
         'tipos_arte': Personalizacao.Tipo.choices,
