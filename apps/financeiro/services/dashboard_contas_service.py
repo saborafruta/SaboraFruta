@@ -64,7 +64,14 @@ class DashboardContasService:
             sete=Sum('valor_saldo', filter=Q(status__in=status_receber, data_vencimento__gt=hoje, data_vencimento__lte=sete_dias)),
             trinta=Sum('valor_saldo', filter=Q(status__in=status_receber, data_vencimento__gt=sete_dias, data_vencimento__lte=trinta_dias)),
             futuro=Sum('valor_saldo', filter=Q(status__in=status_receber, data_vencimento__gt=trinta_dias)),
-            realizado_mes=Sum('valor_pago', filter=Q(status=StatusContaReceber.PAGO, data_pagamento__gte=inicio_mes, data_pagamento__lte=hoje)),
+            realizado_mes=Sum(
+                'valor_pago',
+                filter=Q(
+                    valor_pago__gt=0,
+                    data_pagamento__gte=inicio_mes,
+                    data_pagamento__lte=hoje,
+                ),
+            ),
         )
         pagar = pagar_qs.aggregate(
             aberto=Sum('valor_saldo', filter=Q(status__in=status_pagar)),

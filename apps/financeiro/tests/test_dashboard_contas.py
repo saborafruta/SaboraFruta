@@ -70,7 +70,7 @@ class DashboardContasServiceTests(TestCase):
             valor_saldo=Decimal(str(valor)) - Decimal(str(pago)),
             data_emissao=self.hoje,
             data_vencimento=vencimento,
-            data_pagamento=self.hoje if status == StatusContaReceber.PAGO else None,
+            data_pagamento=self.hoje if pago else None,
             forma_pagamento=self.forma if pago else None,
             status=status,
         )
@@ -86,7 +86,7 @@ class DashboardContasServiceTests(TestCase):
             valor_saldo=Decimal(str(valor)) - Decimal(str(pago)),
             data_emissao=self.hoje,
             data_vencimento=vencimento,
-            data_pagamento=self.hoje if status == StatusContaPagar.PAGO else None,
+            data_pagamento=self.hoje if pago else None,
             status=status,
         )
         if pago:
@@ -150,6 +150,16 @@ class DashboardContasServiceTests(TestCase):
         self.assertIn('Com bancos', html)
         self.assertIn('finance-info:hover', html)
         self.assertNotIn('<details', html)
+
+    def test_realizado_do_mes_inclui_baixas_parciais(self):
+        self._receber('200.00', self.hoje, pago='50.00')
+        self._pagar('100.00', self.hoje, pago='30.00')
+
+        painel = DashboardContasService.apurar(self.filial, hoje=self.hoje)
+
+        self.assertEqual(painel['receber']['realizado_mes'], Decimal('50.00'))
+        self.assertEqual(painel['pagar']['realizado_mes'], Decimal('30.00'))
+        self.assertEqual(painel['saldo_realizado_mes'], Decimal('20.00'))
 
     def test_detalhes_do_titulo_renderizam_para_modal(self):
         conta = self._pagar('250.00', date(2026, 8, 25))
