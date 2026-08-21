@@ -7,7 +7,13 @@
   `ampliada` no topo da página, e não dentro de cada item: o overlay ocupa a
   tela inteira, então um por item ficaria preso ao card e recortado.
 {% endcomment %}
-<div class="max-w-4xl mx-auto space-y-5" x-data="{ ampliada: null }">
+{% comment %}
+  LARGURA CHEIA, como as telas do financeiro. Esta tela tem tabela de
+  grade, lista de pessoas e lista de contas -- tudo que ganha com espaço
+  horizontal. Presa em 4xl, a grade rolava de lado num monitor que tinha
+  o dobro da largura sobrando ao lado.
+{% endcomment %}
+<div class="space-y-5" x-data="{ ampliada: null }">
 
   {% comment %}
     Painel de conclusão + envio por WhatsApp.
@@ -284,7 +290,7 @@
           :style="temaClaro ? 'color:#6b7280; border-color:#e5e7eb;' : 'color:#6b7280; border-color:#374151;'">
         Cabeçalho
       </h3>
-      <div class="grid gap-3 sm:grid-cols-2 text-sm">
+      <div class="grid gap-3 sm:grid-cols-2 xl:grid-cols-3 text-sm">
         <div>
           <span class="block text-xs" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Cliente</span>
           <span class="font-medium" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">{{ pedido.cliente }}</span>
@@ -495,7 +501,7 @@
                     <form method="post" enctype="multipart/form-data"
                           action="{% url 'moda:pedido-visual-add' pedido.pk item.pk %}" novalidate class="space-y-3">
                       {% csrf_token %}
-                      <div class="grid gap-3 sm:grid-cols-2">
+                      <div class="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
                         {% include "moda/_form_campos.html" with form=form_visual %}
                       </div>
                       <div class="flex justify-end gap-2">
@@ -586,7 +592,7 @@
                     <form method="post" enctype="multipart/form-data"
                           action="{% url 'moda:pedido-arte-add' pedido.pk item.pk %}" novalidate class="space-y-3">
                       {% csrf_token %}
-                      <div class="grid gap-3 sm:grid-cols-2">
+                      <div class="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
                         {% include "moda/_form_campos.html" with form=form_arte %}
                       </div>
                       <div class="flex justify-end gap-2">
@@ -651,7 +657,7 @@
           servidor é o id) -- o laço desenharia um rótulo com nada
           embaixo dele.
         {% endcomment %}
-        <div class="grid gap-4 sm:grid-cols-2">
+        <div class="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
           <div>
             <label class="block text-xs uppercase tracking-wider mb-1"
                    :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
@@ -1039,7 +1045,7 @@
       {% endcomment %}
       <form method="post" :action="acao" novalidate class="space-y-3 pt-3">
         {% csrf_token %}
-        <div class="grid gap-3 sm:grid-cols-2">
+        <div class="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
           <div>
             <label class="block text-xs uppercase tracking-wider mb-1"
                    :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Produto *</label>
