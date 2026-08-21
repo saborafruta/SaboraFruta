@@ -68,8 +68,6 @@ def _saldo_calculado_conta(conta):
     except Exception:
         PagamentoVendaPDV = None
     if PagamentoVendaPDV:
-        from django.db.models import Q
-        from django.utils import timezone
         hoje = timezone.localdate()
         pagamentos_venda = PagamentoVendaPDV.objects.filter(
             Q(data_liquidacao_prevista__lte=hoje)
@@ -96,8 +94,6 @@ def _saldo_calculado_conta(conta):
 class DashboardContasService:
     @classmethod
     def apurar(cls, filial, hoje=None):
-        from django.utils import timezone
-
         hoje = hoje or timezone.localdate()
         inicio_mes = hoje.replace(day=1)
         sete_dias = hoje + timedelta(days=7)
