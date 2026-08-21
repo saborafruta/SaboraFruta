@@ -3,7 +3,13 @@
     <div class="min-w-0">
       <p class="text-xs font-semibold uppercase text-blue-500">{% if tipo_conta == 'pagar' %}Conta a pagar{% else %}Conta a receber{% endif %}</p>
       <div class="mt-1 flex flex-wrap items-center gap-2">
-        <h2 class="text-xl font-semibold">{{ conta.beneficiario_nome|default:conta.cliente.razao_social }}</h2>
+        <h2 class="text-xl font-semibold">
+          {% if tipo_conta == 'pagar' %}
+            {{ conta.beneficiario_nome }}
+          {% else %}
+            {{ conta.cliente.razao_social }}
+          {% endif %}
+        </h2>
         <span class="soft-pill {% if conta.status == 'pago' %}is-green{% elif conta.status == 'vencido' %}is-red{% elif conta.status == 'aberto' %}is-blue{% elif conta.status == 'agendado' or conta.status == 'negociado' %}is-amber{% else %}is-slate{% endif %}" data-conta-status>{{ conta.get_status_display }}</span>
       </div>
       <p class="mt-1 text-sm opacity-60">Título #{{ conta.pk }}{% if conta.documento_numero %} · Documento {{ conta.documento_numero }}{% endif %}</p>
