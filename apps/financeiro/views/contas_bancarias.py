@@ -56,7 +56,12 @@ class ContaBancariaListView(PermissaoRequiredMixin, View):
                 conta = form.save()
                 messages.success(request, f"Conta {conta.descricao or conta.banco_nome} salva.")
                 return redirect(reverse("financeiro:contas_bancarias"))
-            return self._render(request, conta_form=form, conta_instance=instance)
+            return self._render(
+                request,
+                conta_form=form,
+                conta_instance=instance,
+                conta_modal_aberto=True,
+            )
 
         if acao == "lancar_movimento":
             form = MovimentoContaBancariaForm(request.POST, filial=filial)
@@ -69,7 +74,15 @@ class ContaBancariaListView(PermissaoRequiredMixin, View):
         messages.error(request, "Acao invalida.")
         return redirect(reverse("financeiro:contas_bancarias"))
 
-    def _render(self, request, conta_form=None, conta_instance=None, movimento_form=None, movimento_modal_aberto=False):
+    def _render(
+        self,
+        request,
+        conta_form=None,
+        conta_instance=None,
+        movimento_form=None,
+        movimento_modal_aberto=False,
+        conta_modal_aberto=False,
+    ):
         filial = request.filial_ativa
         hoje = timezone.localdate()
         data_ini = parse_date(request.GET.get("data_ini", "")) or hoje.replace(day=1)
@@ -115,6 +128,8 @@ class ContaBancariaListView(PermissaoRequiredMixin, View):
             "contas": contas,
             "conta_form": conta_form,
             "conta_instance": conta_instance,
+            "conta_modal_aberto": conta_modal_aberto or conta_instance is not None,
+            "conta_selecionada": conta_selecionada,
             "movimento_form": movimento_form,
             "movimento_modal_aberto": movimento_modal_aberto,
             "page_obj": page_obj,
