@@ -676,17 +676,28 @@
           <thead>
             <tr class="border-b" :style="temaClaro ? 'border-color:#e2e8f0;' : 'border-color:#2a2a2e;'">
               <th class="text-left px-2 py-2 text-xs font-semibold uppercase" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Produto</th>
+              {% comment %}
+                LARGURA FIXA na coluna do tamanho, e o mesmo valor no
+                corpo: sem isso a largura vinha do conteúdo (a sigla "GG"
+                é maior que "M", e o botão "remover" empurra tudo), e a
+                sigla ficava fora de prumo com o campo de baixo -- numa
+                tabela em que a conferência é justamente ler a coluna.
+              {% endcomment %}
               {% for t in tabela.colunas %}
-                <th class="px-1 py-2 text-center text-xs font-semibold" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
-                  {{ t.sigla }}
-                  <form method="post" action="{% url 'moda:pedido-grade-tamanho-remove' pedido.pk t.pk %}"
-                        onsubmit="return confirm('Remover a coluna {{ t.sigla|escapejs }} do pedido inteiro?');">
-                    {% csrf_token %}
-                    <button type="submit" class="text-[10px] font-normal" style="color:#f87171;">remover</button>
-                  </form>
+                <th class="px-1 py-2 align-bottom" style="width:84px;">
+                  <div class="flex flex-col items-center gap-0.5">
+                    <span class="text-xs font-bold uppercase"
+                          :style="temaClaro ? 'color:#374151;' : 'color:#cbd5e1;'">{{ t.sigla }}</span>
+                    <form method="post" action="{% url 'moda:pedido-grade-tamanho-remove' pedido.pk t.pk %}"
+                          onsubmit="return confirm('Remover a coluna {{ t.sigla|escapejs }} do pedido inteiro?');">
+                      {% csrf_token %}
+                      <button type="submit" class="text-[10px] font-normal leading-none"
+                              style="color:#f87171;" title="Remover a coluna {{ t.sigla }}">remover</button>
+                    </form>
+                  </div>
                 </th>
               {% endfor %}
-              <th class="px-2 py-2 text-right text-xs font-semibold uppercase" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Total</th>
+              <th class="px-2 py-2 text-right align-bottom text-xs font-semibold uppercase" style="width:88px;" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Total</th>
             </tr>
           </thead>
           <tbody>
@@ -704,8 +715,9 @@
                   </div>
                 </td>
                 {% for celula in linha.celulas %}
-                  <td class="px-1 py-2 text-center">
-                    <input type="number" min="0" class="form-input text-center" style="width:60px; padding:4px;"
+                  <td class="px-1 py-2 text-center" style="width:84px;">
+                    <input type="number" min="0" class="form-input text-center w-full"
+                           style="padding:6px 4px;"
                            name="qtd_{{ linha.item.pk }}_{{ celula.tamanho.pk }}"
                            value="{{ celula.quantidade|default:0 }}"
                            data-linha="{{ linha.item.pk }}" data-coluna="{{ celula.tamanho.pk }}"
@@ -724,7 +736,13 @@
                 <td class="px-1 py-2 text-center font-bold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'"
                     x-text="totalColuna[{{ t.pk }}] ?? 0"></td>
               {% endfor %}
-              <td class="px-2 py-2 text-right text-lg font-bold" style="color:#22c55e;" x-text="totalGeral"></td>
+              {% comment %}
+                O total geral saía aqui e na coluna TOTAL de cada linha —
+                com um item só, dois números iguais lado a lado, e o olho
+                perde tempo conferindo se são a mesma coisa. Fica a soma
+                POR TAMANHO, que é a única que esta linha acrescenta.
+              {% endcomment %}
+              <td class="px-2 py-2"></td>
             </tr>
           </tfoot>
         </table>
@@ -1282,6 +1300,10 @@ function gradePedido() {
   return {
     totalLinha: {},
     totalColuna: {},
+    // O total geral saiu da tela (a coluna TOTAL de cada linha ja' o diz),
+    // mas continua somado: e' o numero que o campo de conferencia da
+    // personalizacao por pessoa compara, e recalcula-lo em dois lugares
+    // seria pedir para os dois divergirem.
     totalGeral: 0,
 
     somar() {
