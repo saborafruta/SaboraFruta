@@ -16,9 +16,28 @@
   .pc-row { min-height: 76px; }
   .pc-notice { border-color:#93c5fd; background:#eff6ff; color:#1e3a8a; }
   .dark .pc-notice { border-color:#1d4ed8; background:rgba(30,58,138,.24); color:#dbeafe; }
+  .pc-page-heading { background:transparent !important; color:inherit !important; }
+  .pc-ledger { --ledger:#475569; --ledger-soft:#f8fafc; border:1px solid #cbd5e1; background:#fff; }
+  .pc-ledger.entry { --ledger:#047857; --ledger-soft:#ecfdf5; }
+  .pc-ledger.exit { --ledger:#be123c; --ledger-soft:#fff1f2; }
+  .pc-ledger-head { border-bottom:2px solid var(--ledger); background:var(--ledger-soft); }
+  .pc-ledger-title, .pc-ledger-total, .pc-ledger-value { color:var(--ledger); }
+  .pc-ledger-columns { display:grid; grid-template-columns:minmax(0,1fr) 180px 105px; gap:12px; border-bottom:1px solid #e2e8f0; background:#f8fafc; color:#64748b; }
+  .pc-ledger-row { display:grid; grid-template-columns:minmax(0,1fr) 180px 105px; gap:12px; align-items:center; min-height:76px; border-bottom:1px solid #e2e8f0; }
+  .pc-ledger-row:last-child { border-bottom:0; }
+  .pc-ledger-row:hover { background:var(--ledger-soft); }
+  .dark .pc-ledger { border-color:#475569; background:#18181b; }
+  .dark .pc-ledger.entry { --ledger-soft:rgba(6,78,59,.20); }
+  .dark .pc-ledger.exit { --ledger-soft:rgba(136,19,55,.20); }
+  .dark .pc-ledger-head, .dark .pc-ledger-columns { border-color:#475569; background:#27272a; }
+  .dark .pc-ledger-columns { color:#cbd5e1; }
+  .dark .pc-ledger-row { border-color:#3f3f46; }
   @media (max-width: 640px) {
     .pc-kpi { min-height: 96px; }
     .pc-row { min-height: 88px; }
+    .pc-ledger-columns { display:none; }
+    .pc-ledger-row { grid-template-columns:minmax(0,1fr) auto; }
+    .pc-ledger-meta { grid-column:1 / -1; }
   }
 </style>
 <div class="mx-auto max-w-7xl space-y-5" x-data="{
@@ -28,7 +47,7 @@
   excluirModal: false,
   mostrarExtrato: false
 }">
-  <header class="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+  <div class="pc-page-heading flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
     <div>
       <h2 class="text-2xl font-semibold">Posição Diária de Caixa</h2>
       <p class="mt-1 text-sm text-gray-500">Confira o que entrou, o que saiu e onde o dinheiro terminou no dia.</p>
@@ -39,7 +58,7 @@
       <a href="{% url 'financeiro:contas_bancarias' %}" class="btn-secondary">Contas</a>
       <button type="button" class="btn-primary" @click="movimentoModal=true">+ Movimento manual</button>
     </div>
-  </header>
+  </div>
 
   <section class="card p-4">
     <form method="get" class="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
@@ -118,27 +137,31 @@
     </div>
   </section>
 
-  <section class="grid gap-4 lg:grid-cols-2">
-    <div class="overflow-hidden rounded-lg border border-emerald-200 dark:border-emerald-900/60">
-      <div class="flex items-center justify-between bg-emerald-50 px-4 py-3 dark:bg-emerald-950/20"><div><h3 class="font-semibold text-emerald-800 dark:text-emerald-300">Entradas do dia</h3><p class="text-xs text-gray-500">Vendas, recebimentos e créditos manuais</p></div><strong class="text-emerald-600">R$ {{ posicao.total_entradas|floatformat:2 }}</strong></div>
-      <div class="divide-y dark:divide-slate-700">
+  <section class="grid items-start gap-5 lg:grid-cols-2">
+    <div class="pc-ledger entry overflow-hidden rounded-lg shadow-sm">
+      <div class="pc-ledger-head flex items-center justify-between gap-4 px-4 py-4"><div><h3 class="pc-ledger-title text-lg font-semibold">Entradas</h3><p class="mt-0.5 text-xs text-gray-500">Vendas, recebimentos e créditos manuais</p></div><div class="text-right"><span class="block text-[11px] font-semibold uppercase text-gray-500">Total do dia</span><strong class="pc-ledger-total text-xl">R$ {{ posicao.total_entradas|floatformat:2 }}</strong></div></div>
+      <div class="pc-ledger-columns px-4 py-2 text-[11px] font-semibold uppercase"><span>Descrição e origem</span><span>Forma / conta</span><span class="text-right">Valor</span></div>
+      <div>
         {% for mov in posicao.entradas %}
-          <a href="?data={{ data_referencia|date:'Y-m-d' }}&origem={{ mov.origem_codigo }}&movimento={{ mov.registro_id }}" class="pc-row grid grid-cols-[1fr_auto] gap-3 p-4 transition hover:bg-emerald-500/5">
-            <div class="min-w-0"><strong class="block truncate text-sm">{{ mov.descricao }}</strong><span class="mt-1 block truncate text-xs text-gray-500">{{ mov.forma_pagamento }} · {{ mov.conta.descricao|default:mov.conta.banco_nome }}</span><span class="mt-1 block text-[11px] text-gray-400">{{ mov.origem }}{% if mov.documento %} · Doc. {{ mov.documento }}{% endif %}</span></div>
-            <strong class="whitespace-nowrap text-emerald-600">R$ {{ mov.entrada|floatformat:2 }}</strong>
+          <a href="?data={{ data_referencia|date:'Y-m-d' }}&origem={{ mov.origem_codigo }}&movimento={{ mov.registro_id }}" class="pc-ledger-row px-4 py-3 transition">
+            <div class="min-w-0"><strong class="block text-sm">{{ mov.descricao }}</strong><span class="mt-1 block text-[11px] text-gray-500">{{ mov.origem }}{% if mov.documento %} · Documento {{ mov.documento }}{% endif %}</span></div>
+            <span class="pc-ledger-meta min-w-0 text-xs"><strong class="block truncate font-medium">{{ mov.forma_pagamento }}</strong><span class="mt-1 block truncate text-gray-500">{{ mov.conta.descricao|default:mov.conta.banco_nome }}</span></span>
+            <strong class="pc-ledger-value whitespace-nowrap text-right text-base">+ R$ {{ mov.entrada|floatformat:2 }}</strong>
           </a>
-        {% empty %}<p class="p-8 text-center text-sm text-gray-500">Nenhuma entrada registrada.</p>{% endfor %}
+        {% empty %}<div class="flex min-h-32 flex-col items-center justify-center p-6 text-center"><strong class="text-sm text-slate-600 dark:text-slate-300">Nenhuma entrada neste dia</strong><span class="mt-1 text-xs text-gray-500">Vendas recebidas e créditos aparecerão aqui.</span></div>{% endfor %}
       </div>
     </div>
-    <div class="overflow-hidden rounded-lg border border-rose-200 dark:border-rose-900/60">
-      <div class="flex items-center justify-between bg-rose-50 px-4 py-3 dark:bg-rose-950/20"><div><h3 class="font-semibold text-rose-800 dark:text-rose-300">Saídas do dia</h3><p class="text-xs text-gray-500">Pagamentos, despesas e débitos manuais</p></div><strong class="text-rose-600">R$ {{ posicao.total_saidas|floatformat:2 }}</strong></div>
-      <div class="divide-y dark:divide-slate-700">
+    <div class="pc-ledger exit overflow-hidden rounded-lg shadow-sm">
+      <div class="pc-ledger-head flex items-center justify-between gap-4 px-4 py-4"><div><h3 class="pc-ledger-title text-lg font-semibold">Saídas</h3><p class="mt-0.5 text-xs text-gray-500">Pagamentos, despesas e débitos manuais</p></div><div class="text-right"><span class="block text-[11px] font-semibold uppercase text-gray-500">Total do dia</span><strong class="pc-ledger-total text-xl">R$ {{ posicao.total_saidas|floatformat:2 }}</strong></div></div>
+      <div class="pc-ledger-columns px-4 py-2 text-[11px] font-semibold uppercase"><span>Descrição e destino</span><span>Forma / conta</span><span class="text-right">Valor</span></div>
+      <div>
         {% for mov in posicao.saidas %}
-          <a href="?data={{ data_referencia|date:'Y-m-d' }}&origem={{ mov.origem_codigo }}&movimento={{ mov.registro_id }}" class="pc-row grid grid-cols-[1fr_auto] gap-3 p-4 transition hover:bg-rose-500/5">
-            <div class="min-w-0"><strong class="block truncate text-sm">{{ mov.descricao }}</strong><span class="mt-1 block truncate text-xs text-gray-500">{{ mov.forma_pagamento }} · {{ mov.conta.descricao|default:mov.conta.banco_nome }}</span><span class="mt-1 block text-[11px] text-gray-400">{{ mov.origem }}{% if mov.documento %} · Doc. {{ mov.documento }}{% endif %}</span></div>
-            <strong class="whitespace-nowrap text-rose-600">R$ {{ mov.saida|floatformat:2 }}</strong>
+          <a href="?data={{ data_referencia|date:'Y-m-d' }}&origem={{ mov.origem_codigo }}&movimento={{ mov.registro_id }}" class="pc-ledger-row px-4 py-3 transition">
+            <div class="min-w-0"><strong class="block text-sm">{{ mov.descricao }}</strong><span class="mt-1 block text-[11px] text-gray-500">{{ mov.origem }}{% if mov.documento %} · Documento {{ mov.documento }}{% endif %}</span></div>
+            <span class="pc-ledger-meta min-w-0 text-xs"><strong class="block truncate font-medium">{{ mov.forma_pagamento }}</strong><span class="mt-1 block truncate text-gray-500">{{ mov.conta.descricao|default:mov.conta.banco_nome }}</span></span>
+            <strong class="pc-ledger-value whitespace-nowrap text-right text-base">- R$ {{ mov.saida|floatformat:2 }}</strong>
           </a>
-        {% empty %}<p class="p-8 text-center text-sm text-gray-500">Nenhuma saída registrada.</p>{% endfor %}
+        {% empty %}<div class="flex min-h-32 flex-col items-center justify-center p-6 text-center"><strong class="text-sm text-slate-600 dark:text-slate-300">Nenhuma saída neste dia</strong><span class="mt-1 text-xs text-gray-500">Contas pagas e débitos aparecerão aqui.</span></div>{% endfor %}
       </div>
     </div>
   </section>
