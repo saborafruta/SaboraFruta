@@ -135,6 +135,7 @@ class ContaPagar(TimestampedModel):
     tipo_lancamento = models.CharField(
         max_length=12, choices=TipoLancamento.choices, default=TipoLancamento.FORNECEDOR,
     )
+    descricao_despesa = models.CharField(max_length=180, blank=True)
     documento_tipo = models.CharField(max_length=30, blank=True)
     documento_id = models.BigIntegerField(null=True, blank=True)
     documento_numero = models.CharField(max_length=20, blank=True)
@@ -230,6 +231,10 @@ class ContaPagar(TimestampedModel):
         if self.fornecedor_id:
             return self.fornecedor.cpf_cnpj
         return ""
+
+    @property
+    def descricao_exibicao(self):
+        return self.descricao_despesa.strip() or f"Pagamento para {self.beneficiario_nome}"
 
     @property
     def excluido(self):

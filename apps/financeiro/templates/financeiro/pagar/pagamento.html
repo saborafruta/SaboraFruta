@@ -33,7 +33,8 @@
       <div class="col-span-2 p-4 sm:col-span-1 lg:col-span-2"
            :style="temaClaro ? 'background:#fff' : 'background:#202024'">
         <span class="block text-xs opacity-60">Beneficiário</span>
-        <strong class="mt-1 block truncate">{{ conta.beneficiario_nome }}</strong>
+        <strong class="mt-1 block truncate">{{ conta.descricao_exibicao }}</strong>
+        <span class="mt-1 block text-xs opacity-60">{{ conta.beneficiario_nome }}</span>
         {% if conta.beneficiario_documento %}<span class="mt-1 block font-mono text-xs opacity-55">{{ conta.beneficiario_documento }}</span>{% endif %}
       </div>
       <div class="p-4" :style="temaClaro ? 'background:#fff' : 'background:#202024'">

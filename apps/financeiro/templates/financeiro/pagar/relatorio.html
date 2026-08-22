@@ -76,7 +76,8 @@
     <div class="px-4 py-3 border-b flex flex-wrap items-center justify-between gap-2"
          :style="temaClaro ? 'border-color:#e5e7eb; background:#f8fafc;' : 'border-color:#2a2a2e; background:#1e1e20;'">
       <div>
-        <div class="font-semibold text-base" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">{{ g.beneficiario_nome }}</div>
+        <div class="font-semibold text-base" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">{{ g.descricao_exibicao }}</div>
+        <div class="text-xs opacity-60">{{ g.beneficiario_nome }}{% if g.plano_contas.despesa_pessoal %} · Despesa pessoal{% endif %}</div>
         {% if g.beneficiario_documento %}<div class="text-xs font-mono" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">{{ g.beneficiario_documento }}</div>{% endif %}
       </div>
       <div class="text-right text-sm">

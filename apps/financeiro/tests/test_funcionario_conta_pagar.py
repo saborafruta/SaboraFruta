@@ -87,6 +87,7 @@ class FuncionarioContaPagarTests(TestCase):
 
     def dados_formulario(self, **extras):
         dados = {
+            "descricao_despesa": "Folha de pagamento",
             "tipo_lancamento": "funcionario",
             "funcionario": self.funcionario.pk,
             "documento_numero": "FOLHA-08/2026",
@@ -453,6 +454,7 @@ class FuncionarioContaPagarTests(TestCase):
         self.assertNotContains(get_response, 'Título recorrente')
 
         request = RequestFactory().post('/financeiro/pagar/despesa-paga/nova/?modal=1', {
+            'descricao_despesa': 'Adiantamento salarial',
             'tipo_lancamento': 'funcionario',
             'funcionario': self.funcionario.pk,
             'valor_original': '75.50',
@@ -873,6 +875,7 @@ class FuncionarioContaPagarTests(TestCase):
         request = RequestFactory().post(
             f"/financeiro/pagar/{conta.pk}/editar-valor/",
             {
+                "descricao_despesa": "Servicos administrativos",
                 "fornecedor": fornecedor_novo.pk,
                 "valor_original": "125.50",
                 "data_vencimento": "2026-09-15",

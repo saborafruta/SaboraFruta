@@ -8,7 +8,7 @@ from django.utils import timezone
 from apps.core.models import Empresa, Filial, PerfilAcesso, RegistroAuditoria, Usuario
 from apps.cadastros.models import Cliente
 from apps.financeiro.constants.enums import StatusContaPagar, TipoFormaPagamento
-from apps.financeiro.models import ContaBancaria, FormaPagamento
+from apps.financeiro.models import ContaBancaria, FormaPagamento, PlanoContas
 from apps.financeiro.models.extrato import ExtratoBancario
 from apps.financeiro.models.receber_pagar import ContaPagar, ContaReceber, PagamentoContaPagar
 from apps.financeiro.services.receber_service import ContaReceberService
@@ -77,6 +77,7 @@ class PosicaoDiariaCaixaTests(TestCase):
         conta_pagar = ContaPagar.objects.create(
             filial=self.filial, valor_original=Decimal("40.00"), valor_final=Decimal("40.00"),
             valor_pago=Decimal("40.00"), valor_saldo=Decimal("0.00"),
+            descricao_despesa="Compra de material de limpeza",
             data_emissao=date(2026, 8, 21), data_vencimento=date(2026, 8, 21),
             data_pagamento=date(2026, 8, 21), status=StatusContaPagar.PAGO, usuario=self.usuario,
         )
@@ -107,7 +108,7 @@ class PosicaoDiariaCaixaTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "Posição Diária de Caixa")
         self.assertContains(response, "Venda #1")
-        self.assertContains(response, "Pagamento para")
+        self.assertContains(response, "Compra de material de limpeza")
         self.assertContains(response, "Contas a receber")
         self.assertContains(response, "Adicionar entrada manual")
         self.assertContains(response, "Adicionar saída manual")
@@ -119,6 +120,50 @@ class PosicaoDiariaCaixaTests(TestCase):
         self.assertContains(response, 'aria-label="Ver dias anteriores"')
         self.assertContains(response, 'aria-label="Ver dias posteriores"')
         self.assertContains(response, "tituloPagarModal")
+
+    def test_despesa_pessoal_fica_destacada_e_somada_separadamente(self):
+        categoria = PlanoContas.objects.create(
+            empresa=self.empresa,
+            codigo="3900100001",
+            descricao="Compras Pessoais",
+            tipo="D",
+            nivel=3,
+            aceita_lancamento=True,
+            despesa_pessoal=True,
+        )
+        conta = ContaPagar.objects.create(
+            filial=self.filial,
+            descricao_despesa="Compra pessoal da sócia",
+            valor_original=Decimal("35.00"),
+            valor_final=Decimal("35.00"),
+            valor_pago=Decimal("35.00"),
+            valor_saldo=Decimal("0.00"),
+            data_emissao=date(2026, 8, 21),
+            data_vencimento=date(2026, 8, 21),
+            data_pagamento=date(2026, 8, 21),
+            status=StatusContaPagar.PAGO,
+            plano_contas=categoria,
+            usuario=self.usuario,
+        )
+        PagamentoContaPagar.objects.create(
+            filial=self.filial,
+            conta_pagar=conta,
+            data_pagamento=date(2026, 8, 21),
+            valor_pago=Decimal("35.00"),
+            forma_pagamento=self.forma,
+            conta_bancaria=self.banco,
+            usuario=self.usuario,
+        )
+
+        posicao = PosicaoDiariaCaixaService(self.filial, date(2026, 8, 21)).gerar()
+        self.assertEqual(posicao["total_despesas_pessoais"], Decimal("35.00"))
+        self.assertTrue(next(
+            m for m in posicao["saidas"] if m.descricao == "Compra pessoal da sócia"
+        ).despesa_pessoal)
+
+        response = self.client.get(reverse("financeiro:posicao_diaria"), {"data": "2026-08-21"})
+        self.assertContains(response, "Compra pessoal da sócia")
+        self.assertContains(response, "Despesas pessoais no período")
 
     def test_taxa_de_recebimento_reduz_entrada_e_exibe_bruto(self):
         self.forma.taxa_administrativa = Decimal("2.00")
@@ -184,6 +229,11 @@ class PosicaoDiariaCaixaTests(TestCase):
             PosicaoDiariaCaixaService(self.filial, date(2026, 8, 24)).gerar()["total_entradas"],
             Decimal("80.00"),
         )
+        response = self.client.get(reverse("financeiro:posicao_diaria"), {
+            "data": "2026-08-21", "previsao": "7d",
+        })
+        self.assertContains(response, "Ver título")
+        self.assertContains(response, reverse("financeiro:receber_detail", args=[conta.pk]))
 
     def test_admin_exclui_movimento_manual_sem_apagar_historico(self):
         movimento = ExtratoBancario.objects.create(

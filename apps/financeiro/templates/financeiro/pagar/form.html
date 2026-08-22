@@ -23,6 +23,12 @@
     {% if form.non_field_errors %}<div class="m-5 rounded-md border border-red-300 bg-red-50 p-3 text-sm text-red-700">{{ form.non_field_errors }}</div>{% endif %}
 
     <section class="p-5 sm:p-6">
+      <div class="mb-5">
+        <label class="mb-1 block text-sm font-semibold">Descrição da despesa *</label>
+        {{ form.descricao_despesa|add_class:"form-input" }}
+        <p class="mt-1 text-xs opacity-60">Exibida como nome principal do título e da movimentação financeira.</p>
+        {% if form.descricao_despesa.errors %}<p class="mt-1 text-xs text-red-500">{{ form.descricao_despesa.errors|join:", " }}</p>{% endif %}
+      </div>
       <div class="mb-4 flex items-center gap-3">
         <span class="grid h-8 w-8 place-items-center rounded-md bg-blue-600 text-sm font-bold text-white">1</span>
         <div><h3 class="text-sm font-semibold">Origem e beneficiário</h3><p class="text-xs opacity-70">Defina quem ou o que será pago.</p></div>

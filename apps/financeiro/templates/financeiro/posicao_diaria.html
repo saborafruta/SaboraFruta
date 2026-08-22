@@ -35,21 +35,30 @@
   .tema-escuro .pc-ledger-action { background:#18181b; }
   .tema-escuro .pc-ledger-columns { color:#cbd5e1; }
   .tema-escuro .pc-ledger-row { border-color:#3f3f46; color:#f8fafc; }
-  .pc-forecast { border:1px solid #bfdbfe; background:#f8fbff; color:#172554; }
-  .pc-forecast-head { border-color:#bfdbfe; background:#eff6ff; }
+  .pc-forecast { border:1px solid #93c5fd; background:#fff; color:#172554; box-shadow:0 8px 24px rgba(30,64,175,.08); }
+  .pc-forecast-head { border-color:#bfdbfe; background:#eaf2ff; }
   .pc-forecast-title { color:#172554; }
   .pc-forecast-copy { color:#1d4ed8; }
   .pc-forecast-value { color:#1e40af; }
   .pc-forecast-filter { border:1px solid #93c5fd; background:#fff; color:#1e40af; }
   .pc-forecast-filter.is-active { border-color:#1d4ed8; background:#1d4ed8; color:#fff; }
-  .tema-escuro .pc-forecast { border-color:#334155; background:#18181b; color:#f8fafc; }
-  .tema-escuro .pc-forecast-head { border-color:#334155; background:#202a3a; }
+  .tema-escuro .pc-forecast { border-color:#475569; background:#202024; color:#f8fafc; }
+  .tema-escuro .pc-forecast-head { border-color:#475569; background:#172033; }
   .tema-escuro .pc-forecast-title { color:#dbeafe; }
   .tema-escuro .pc-forecast-copy { color:#93c5fd; }
   .tema-escuro .pc-forecast-value { color:#bfdbfe; }
   .tema-escuro .pc-forecast-filter { border-color:#475569; background:#27272a; color:#dbeafe; }
   .tema-escuro .pc-forecast-filter.is-active { border-color:#60a5fa; background:#2563eb; color:#fff; }
   .tema-escuro .pc-forecast .text-gray-500, .tema-escuro .pc-forecast .text-gray-600 { color:#cbd5e1; }
+  .pc-summary-entry { background:#f0fdf4; }
+  .pc-summary-exit { background:#fff1f2; }
+  .pc-summary-account-in { background:#eff6ff; }
+  .pc-summary-account-out { background:#f5f3ff; }
+  .tema-escuro .pc-summary-entry { background:rgba(6,78,59,.20); }
+  .tema-escuro .pc-summary-exit { background:rgba(136,19,55,.20); }
+  .tema-escuro .pc-summary-account-in { background:rgba(30,58,138,.20); }
+  .tema-escuro .pc-summary-account-out { background:rgba(76,29,149,.20); }
+  .pc-personal-row { box-shadow:inset 4px 0 0 #d97706; background:rgba(245,158,11,.08); }
   .pc-month-strip { scrollbar-width:thin; scrollbar-color:#94a3b8 transparent; }
   .pc-day-today { border-color:#3b82f6; background:#eff6ff; color:#1d4ed8; box-shadow:0 0 0 2px #bfdbfe; }
   .tema-escuro .pc-day-today { background:rgba(30,58,138,.34); color:#dbeafe; box-shadow:0 0 0 2px #1d4ed8; }
@@ -240,8 +249,8 @@
       <div class="pc-ledger-columns px-4 py-2 text-[11px] font-semibold uppercase"><span>Descrição e destino</span><span>Forma / conta</span><span class="text-right">Valor</span></div>
       <div>
         {% for mov in posicao.saidas %}
-          <a href="{% if mov.origem_codigo == 'pagar' %}{{ mov.referencia_url }}{% else %}?data={{ data_referencia|date:'Y-m-d' }}&origem={{ mov.origem_codigo }}&movimento={{ mov.registro_id }}{% endif %}" {% if mov.origem_codigo == 'pagar' %}@click.prevent="abrirTituloPagar($el.href)"{% endif %} class="pc-ledger-row px-4 py-3 transition">
-            <div class="min-w-0"><strong class="block text-sm">{{ mov.descricao }}</strong><span class="mt-1 block text-[11px] text-gray-500">{{ mov.hora }} · {{ mov.origem }}{% if mov.documento %} · Documento {{ mov.documento }}{% endif %}</span></div>
+          <a href="{% if mov.origem_codigo == 'pagar' %}{{ mov.referencia_url }}{% else %}?data={{ data_referencia|date:'Y-m-d' }}&origem={{ mov.origem_codigo }}&movimento={{ mov.registro_id }}{% endif %}" {% if mov.origem_codigo == 'pagar' %}@click.prevent="abrirTituloPagar($el.href)"{% endif %} class="pc-ledger-row px-4 py-3 transition {% if mov.despesa_pessoal %}pc-personal-row{% endif %}">
+            <div class="min-w-0"><strong class="block text-sm">{{ mov.descricao }}</strong>{% if mov.despesa_pessoal %}<span class="mt-1 inline-flex rounded bg-amber-100 px-2 py-0.5 text-[10px] font-semibold text-amber-800 dark:bg-amber-950/60 dark:text-amber-200">Despesa pessoal</span>{% endif %}<span class="mt-1 block text-[11px] text-gray-500">{{ mov.hora }} · {{ mov.origem }}{% if mov.documento %} · Documento {{ mov.documento }}{% endif %}</span></div>
             <span class="pc-ledger-meta min-w-0 text-xs"><strong class="block truncate font-medium">{{ mov.forma_pagamento }}</strong><span class="mt-1 block truncate text-gray-500">{{ mov.conta.descricao|default:mov.conta.banco_nome }}</span></span>
             <strong class="pc-ledger-value whitespace-nowrap text-right text-base">- R$ {{ mov.saida|floatformat:2 }}</strong>
           </a>
@@ -253,11 +262,12 @@
   <section class="overflow-hidden rounded-lg border border-slate-200 dark:border-slate-700">
     <div class="border-b px-4 py-3 dark:border-slate-700"><h3 class="font-semibold">Conferência e somatórios</h3><p class="text-xs text-gray-500">Os mesmos movimentos vistos por forma de pagamento e por conta.</p></div>
     <div class="grid md:grid-cols-2 xl:grid-cols-4">
-      <div class="p-4 xl:border-r dark:border-slate-700"><h4 class="text-sm font-semibold">Entradas por forma</h4>{% for item in posicao.totais_forma_entrada %}<div class="mt-3 flex justify-between gap-3 text-sm"><span class="truncate text-gray-500">{{ item.nome }}</span><strong>R$ {{ item.valor|floatformat:2 }}</strong></div>{% empty %}<p class="mt-3 text-sm text-gray-500">Sem entradas.</p>{% endfor %}</div>
-      <div class="border-t p-4 md:border-l md:border-t-0 xl:border-l-0 xl:border-r dark:border-slate-700"><h4 class="text-sm font-semibold">Saídas por forma</h4>{% for item in posicao.totais_forma_saida %}<div class="mt-3 flex justify-between gap-3 text-sm"><span class="truncate text-gray-500">{{ item.nome }}</span><strong>R$ {{ item.valor|floatformat:2 }}</strong></div>{% empty %}<p class="mt-3 text-sm text-gray-500">Sem saídas.</p>{% endfor %}</div>
-      <div class="border-t p-4 xl:border-r xl:border-t-0 dark:border-slate-700"><h4 class="text-sm font-semibold">Entradas por conta</h4>{% for item in posicao.totais_conta_entrada %}<div class="mt-3 flex justify-between gap-3 text-sm"><span class="truncate text-gray-500">{{ item.nome }}</span><strong>R$ {{ item.valor|floatformat:2 }}</strong></div>{% empty %}<p class="mt-3 text-sm text-gray-500">Sem entradas.</p>{% endfor %}</div>
-      <div class="border-t p-4 md:border-l xl:border-t-0 dark:border-slate-700"><h4 class="text-sm font-semibold">Saídas por conta</h4>{% for item in posicao.totais_conta_saida %}<div class="mt-3 flex justify-between gap-3 text-sm"><span class="truncate text-gray-500">{{ item.nome }}</span><strong>R$ {{ item.valor|floatformat:2 }}</strong></div>{% empty %}<p class="mt-3 text-sm text-gray-500">Sem saídas.</p>{% endfor %}</div>
+      <div class="pc-summary-entry p-4 xl:border-r dark:border-slate-700"><h4 class="text-sm font-semibold">Entradas por forma</h4>{% for item in posicao.totais_forma_entrada %}<div class="mt-3 flex justify-between gap-3 text-sm"><span class="truncate text-gray-500">{{ item.nome }}</span><strong>R$ {{ item.valor|floatformat:2 }}</strong></div>{% empty %}<p class="mt-3 text-sm text-gray-500">Sem entradas.</p>{% endfor %}</div>
+      <div class="pc-summary-exit border-t p-4 md:border-l md:border-t-0 xl:border-l-0 xl:border-r dark:border-slate-700"><h4 class="text-sm font-semibold">Saídas por forma</h4>{% for item in posicao.totais_forma_saida %}<div class="mt-3 flex justify-between gap-3 text-sm"><span class="truncate text-gray-500">{{ item.nome }}</span><strong>R$ {{ item.valor|floatformat:2 }}</strong></div>{% empty %}<p class="mt-3 text-sm text-gray-500">Sem saídas.</p>{% endfor %}</div>
+      <div class="pc-summary-account-in border-t p-4 xl:border-r xl:border-t-0 dark:border-slate-700"><h4 class="text-sm font-semibold">Entradas por conta</h4>{% for item in posicao.totais_conta_entrada %}<div class="mt-3 flex justify-between gap-3 text-sm"><span class="truncate text-gray-500">{{ item.nome }}</span><strong>R$ {{ item.valor|floatformat:2 }}</strong></div>{% empty %}<p class="mt-3 text-sm text-gray-500">Sem entradas.</p>{% endfor %}</div>
+      <div class="pc-summary-account-out border-t p-4 md:border-l xl:border-t-0 dark:border-slate-700"><h4 class="text-sm font-semibold">Saídas por conta</h4>{% for item in posicao.totais_conta_saida %}<div class="mt-3 flex justify-between gap-3 text-sm"><span class="truncate text-gray-500">{{ item.nome }}</span><strong>R$ {{ item.valor|floatformat:2 }}</strong></div>{% empty %}<p class="mt-3 text-sm text-gray-500">Sem saídas.</p>{% endfor %}</div>
     </div>
+    {% if posicao.total_despesas_pessoais > 0 %}<div class="flex items-center justify-between gap-4 border-t border-amber-300 bg-amber-50 px-4 py-3 text-amber-900 dark:border-amber-800 dark:bg-amber-950/30 dark:text-amber-100"><span><strong class="block text-sm">Despesas pessoais no período</strong><small>Já incluídas nas saídas e no saldo final.</small></span><strong class="whitespace-nowrap text-lg">R$ {{ posicao.total_despesas_pessoais|floatformat:2 }}</strong></div>{% endif %}
   </section>
 
   <section class="overflow-hidden rounded-lg border border-slate-200 dark:border-slate-700">
@@ -273,7 +283,7 @@
       <div class="flex flex-wrap gap-2">{% for item in periodos_previsao %}<a href="{{ item.url }}" class="pc-forecast-filter rounded-md px-3 py-2 text-xs font-semibold {% if item.ativo %}is-active{% endif %}">{{ item.rotulo }}</a>{% endfor %}<button type="button" class="pc-forecast-filter rounded-md px-3 py-2 text-xs font-semibold" onclick="document.getElementById('previsao-personalizada').classList.toggle('hidden')">Personalizado</button></div>
       <form id="previsao-personalizada" method="get" class="hidden grid gap-3 rounded-lg bg-white/70 p-3 sm:grid-cols-[1fr_1fr_auto] dark:bg-slate-900/40"><input type="hidden" name="data" value="{{ data_referencia|date:'Y-m-d' }}"><input type="hidden" name="previsao" value="personalizado"><label class="text-xs font-semibold">De<input type="date" name="previsao_inicio" value="{{ previsao_inicio|date:'Y-m-d' }}" class="form-input mt-1 w-full" required></label><label class="text-xs font-semibold">Ate<input type="date" name="previsao_fim" value="{{ previsao_fim|date:'Y-m-d' }}" class="form-input mt-1 w-full" required></label><button class="btn-primary self-end" type="submit">Aplicar periodo</button></form>
     </div>
-    <div class="divide-y divide-blue-100 dark:divide-blue-900">{% for item in posicao.previsoes %}<div class="grid gap-2 px-4 py-3 text-sm sm:grid-cols-[105px_minmax(0,1fr)_190px_150px] sm:items-center"><strong>{{ item.data|date:'d/m/Y' }}</strong><div class="min-w-0"><strong class="block truncate">{{ item.descricao }}</strong><small class="text-gray-500">{{ item.forma }}{% if item.bandeira %} - {{ item.bandeira|title }} {{ item.parcelas }}x{% endif %}</small></div><span class="text-gray-600 dark:text-gray-300">{{ item.conta }}</span><div class="sm:text-right"><strong class="text-emerald-700 dark:text-emerald-400">R$ {{ item.valor_liquido|floatformat:2 }}</strong>{% if item.valor_taxa > 0 %}<small class="block text-gray-500">Bruto R$ {{ item.valor_bruto|floatformat:2 }} - taxa R$ {{ item.valor_taxa|floatformat:2 }}</small>{% endif %}</div></div>{% empty %}<div class="p-6 text-center text-sm text-gray-500">Nenhum recebimento previsto neste periodo.</div>{% endfor %}</div>
+    <div class="divide-y divide-blue-100 dark:divide-slate-700">{% for item in posicao.previsoes %}{% if item.referencia_url %}<button type="button" @click="abrirTituloPagar('{{ item.referencia_url }}')" class="grid w-full gap-2 px-4 py-3 text-left text-sm transition hover:bg-blue-50 focus:bg-blue-50 dark:hover:bg-blue-950/25 sm:grid-cols-[105px_minmax(0,1fr)_190px_150px] sm:items-center">{% else %}<div class="grid gap-2 px-4 py-3 text-sm sm:grid-cols-[105px_minmax(0,1fr)_190px_150px] sm:items-center">{% endif %}<strong>{{ item.data|date:'d/m/Y' }}</strong><div class="min-w-0"><strong class="block truncate">{{ item.descricao }}</strong><small class="text-gray-500">{{ item.forma }}{% if item.bandeira %} - {{ item.bandeira|title }} {{ item.parcelas }}x{% endif %}</small></div><span class="text-gray-600 dark:text-gray-300">{{ item.conta }}</span><div class="sm:text-right"><strong class="text-emerald-700 dark:text-emerald-400">R$ {{ item.valor_liquido|floatformat:2 }}</strong>{% if item.valor_taxa > 0 %}<small class="block text-gray-500">Bruto R$ {{ item.valor_bruto|floatformat:2 }} - taxa R$ {{ item.valor_taxa|floatformat:2 }}</small>{% endif %}{% if item.referencia_url %}<small class="mt-1 block font-semibold text-blue-600 dark:text-blue-300">Ver título</small>{% endif %}</div>{% if item.referencia_url %}</button>{% else %}</div>{% endif %}{% empty %}<div class="p-6 text-center text-sm text-gray-500">Nenhum recebimento previsto neste período.</div>{% endfor %}</div>
   </section>
 
   {% if mostrar_excluidos and posicao.excluidos %}

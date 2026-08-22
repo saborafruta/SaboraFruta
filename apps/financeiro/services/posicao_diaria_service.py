@@ -36,6 +36,7 @@ class MovimentoDiario:
     referencia_url: str = ""
     excluido: bool = False
     momento: datetime | None = None
+    despesa_pessoal: bool = False
 
     @property
     def valor(self):
@@ -116,6 +117,7 @@ class PosicaoDiariaCaixaService:
         total_entradas = sum((m.entrada for m in entradas), ZERO)
         total_saidas = sum((m.saida for m in saidas), ZERO)
         total_fechamento = sum((c.posicao_fechamento for c in contas), ZERO)
+        total_despesas_pessoais = sum((m.saida for m in saidas if m.despesa_pessoal), ZERO)
         previsoes = self._recebimentos_previstos(
             previsao_inicio or self.data,
             previsao_fim or (self.data + timedelta(days=7)),
@@ -135,6 +137,7 @@ class PosicaoDiariaCaixaService:
             "total_entradas": total_entradas,
             "total_saidas": total_saidas,
             "total_fechamento": total_fechamento,
+            "total_despesas_pessoais": total_despesas_pessoais,
             "variacao_dia": total_entradas - total_saidas,
             "totais_forma_entrada": self._agrupar(entradas, "forma_pagamento", "entrada"),
             "totais_forma_saida": self._agrupar(saidas, "forma_pagamento", "saida"),
@@ -205,11 +208,12 @@ class PosicaoDiariaCaixaService:
             data_pagamento__range=(self.data_inicio, self.data_fim), conta_pagar__excluido_em__isnull=True,
         ).select_related(
             "conta_bancaria", "forma_pagamento", "conta_pagar__fornecedor", "conta_pagar__funcionario",
+            "conta_pagar__plano_contas",
         )
         for item in pagamentos:
             movimentos.append(MovimentoDiario(
                 data=item.data_pagamento, conta=item.conta_bancaria,
-                descricao=f"Pagamento para {item.conta_pagar.beneficiario_nome}",
+                descricao=item.conta_pagar.descricao_exibicao,
                 contraparte=item.conta_pagar.beneficiario_nome,
                 origem="Conta a pagar", origem_codigo="pagar", registro_id=item.pk,
                 documento=item.conta_pagar.documento_numero or item.referencia_pagamento,
@@ -217,6 +221,10 @@ class PosicaoDiariaCaixaService:
                 saida=item.valor_liquido,
                 referencia_url=f'{reverse("financeiro:pagar_detail", args=[item.conta_pagar_id])}?pagamento={item.pk}',
                 momento=item.created_at,
+                despesa_pessoal=bool(
+                    item.conta_pagar.plano_contas_id
+                    and item.conta_pagar.plano_contas.despesa_pessoal
+                ),
             ))
 
         try:
@@ -307,7 +315,7 @@ class PosicaoDiariaCaixaService:
             filial=self.filial, data_pagamento__range=(self.data_inicio, self.data_fim), conta_bancaria__isnull=True,
             conta_pagar__excluido_em__isnull=True,
         ).select_related("conta_pagar__fornecedor", "conta_pagar__funcionario"):
-            itens.append({"descricao": f"Pagamento - {item.conta_pagar.beneficiario_nome}", "valor": item.valor_liquido, "tipo": "saida"})
+            itens.append({"descricao": item.conta_pagar.descricao_exibicao, "valor": item.valor_liquido, "tipo": "saida"})
         try:
             from apps.pdv.models import PagamentoVendaPDV
             vendas = PagamentoVendaPDV.objects.filter(
@@ -362,6 +370,31 @@ class PosicaoDiariaCaixaService:
                 "valor_bruto": item.valor_bruto_recebido,
                 "valor_taxa": item.valor_taxa,
                 "valor_liquido": item.valor_entrada_liquida,
+                "origem_codigo": "venda",
+                "registro_id": item.pk,
+                "referencia_url": "",
+            })
+        compensacoes = ContaReceber.objects.filter(
+            filial=self.filial,
+            status="pago",
+            data_liquidacao_prevista__range=(data_inicio, data_fim),
+            valor_pago__gt=0,
+        ).select_related("cliente", "forma_pagamento", "conta_bancaria")
+        for item in compensacoes:
+            itens.append({
+                "data": item.data_liquidacao_prevista,
+                "descricao": f"Conta a receber - {item.cliente}",
+                "forma": item.forma_pagamento.descricao if item.forma_pagamento else "Nao informada",
+                "conta": item.conta_bancaria.descricao if item.conta_bancaria else "Conta nao definida",
+                "conta_id": item.conta_bancaria_id,
+                "bandeira": "",
+                "parcelas": item.total_parcelas,
+                "valor_bruto": item.valor_pago,
+                "valor_taxa": item.valor_taxa_recebimento,
+                "valor_liquido": item.valor_entrada_liquida,
+                "origem_codigo": "receber",
+                "registro_id": item.pk,
+                "referencia_url": reverse("financeiro:receber_detail", args=[item.pk]),
             })
         recebimentos = ContaReceber.objects.filter(
             filial=self.filial,
@@ -389,6 +422,9 @@ class PosicaoDiariaCaixaService:
                 "valor_bruto": item.valor_saldo,
                 "valor_taxa": calculo["taxa"],
                 "valor_liquido": calculo["liquido"],
+                "origem_codigo": "receber",
+                "registro_id": item.pk,
+                "referencia_url": reverse("financeiro:receber_detail", args=[item.pk]),
             })
         itens.sort(key=lambda item: (item["data"], item["descricao"].casefold()))
         return itens

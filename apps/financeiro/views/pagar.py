@@ -54,6 +54,7 @@ def _usuario_admin(request):
 
 
 CAMPOS_EDICAO_LANCAMENTO = {
+    'descricao_despesa': 'Descrição da despesa',
     'fornecedor': 'Fornecedor',
     'valor_original': 'Valor do titulo',
     'valor_final': 'Valor final',
@@ -84,6 +85,7 @@ def _snapshot_edicao_lancamento(conta, pagamento=None):
         '-data_pagamento', '-created_at', '-pk',
     ).first()
     return {
+        'descricao_despesa': conta.descricao_exibicao,
         'fornecedor': _nome_objeto(conta.fornecedor),
         'valor_original': str(conta.valor_original),
         'valor_final': str(conta.valor_final),
@@ -265,7 +267,8 @@ class ContaPagarListView(PermissaoRequiredMixin, View):
             qs = qs.filter(status=status)
         if q:
             qs = qs.filter(
-                Q(fornecedor__razao_social__icontains=q)
+                Q(descricao_despesa__icontains=q)
+                | Q(fornecedor__razao_social__icontains=q)
                 | Q(fornecedor__nome_fantasia__icontains=q)
                 | Q(funcionario__nome__icontains=q)
                 | Q(funcionario__cpf__icontains=q)
@@ -338,7 +341,8 @@ def _filtrar_contas_pagas(request):
 
     if q:
         qs = qs.filter(
-            Q(fornecedor__razao_social__icontains=q)
+            Q(descricao_despesa__icontains=q)
+            | Q(fornecedor__razao_social__icontains=q)
             | Q(fornecedor__nome_fantasia__icontains=q)
             | Q(fornecedor__cpf_cnpj__icontains=q)
             | Q(funcionario__nome__icontains=q)
@@ -383,6 +387,7 @@ class ContaPagaListView(PermissaoRequiredMixin, View):
             juros=Sum('valor_juros'),
             multas=Sum('valor_multa'),
             descontos=Sum('valor_desconto'),
+            despesas_pessoais=Sum('valor_final', filter=Q(plano_contas__despesa_pessoal=True)),
         )
         totais['acrescimos'] = (totais['juros'] or 0) + (totais['multas'] or 0)
         paginator = Paginator(qs, 40)
@@ -415,6 +420,7 @@ class ContaPagaRelatorioView(PermissaoRequiredMixin, View):
             juros=Sum('valor_juros'),
             multas=Sum('valor_multa'),
             descontos=Sum('valor_desconto'),
+            despesas_pessoais=Sum('valor_final', filter=Q(plano_contas__despesa_pessoal=True)),
         )
         totais['acrescimos'] = (totais['juros'] or 0) + (totais['multas'] or 0)
         return render(request, 'financeiro/pagar/relatorio_pagas.html', {
@@ -461,7 +467,8 @@ class ContaPagarRelatorioView(PermissaoRequiredMixin, View):
             ])
         if q:
             qs = qs.filter(
-                Q(fornecedor__razao_social__icontains=q)
+                Q(descricao_despesa__icontains=q)
+                | Q(fornecedor__razao_social__icontains=q)
                 | Q(funcionario__nome__icontains=q)
                 | Q(documento_numero__icontains=q)
                 | Q(nota_fiscal_fornecedor__icontains=q)
@@ -576,6 +583,7 @@ class ContaPagarCreateView(PermissaoRequiredMixin, View):
             data_emissao_automatica = min(data for data in datas_relevantes if data)
             dados_conta = dict(
                 filial=filial,
+                descricao_despesa=d['descricao_despesa'],
                 fornecedor=d.get('fornecedor'),
                 funcionario=d.get('funcionario'),
                 tipo_lancamento=d['tipo_lancamento'],
@@ -693,6 +701,7 @@ class DespesaPagaCreateView(PermissaoRequiredMixin, View):
         try:
             conta = ContaPagarService.criar_e_quitar(
                 filial=filial,
+                descricao_despesa=d['descricao_despesa'],
                 fornecedor=d.get('fornecedor'),
                 funcionario=d.get('funcionario'),
                 tipo_lancamento=d['tipo_lancamento'],
@@ -890,6 +899,7 @@ class ContaPagarEditarValorView(PermissaoRequiredMixin, View):
 
         if conta.tipo_lancamento == ContaPagar.TipoLancamento.FORNECEDOR:
             conta.fornecedor = dados.get('fornecedor')
+        conta.descricao_despesa = dados['descricao_despesa'].strip()
         conta.data_vencimento = dados['data_vencimento']
         conta.data_competencia = dados.get('data_competencia')
         conta.forma_pagamento_prevista = dados.get('forma_pagamento_prevista')

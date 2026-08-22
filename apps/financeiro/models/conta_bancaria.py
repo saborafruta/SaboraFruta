@@ -58,6 +58,7 @@ class PlanoContas(ActiveModel):
     )
     nivel = models.PositiveSmallIntegerField(default=1)
     aceita_lancamento = models.BooleanField(default=True)
+    despesa_pessoal = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:

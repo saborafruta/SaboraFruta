@@ -58,6 +58,11 @@ class FuncionarioChoiceField(forms.ModelChoiceField):
 class ContaPagarForm(forms.Form):
     """Lançamento manual de conta a pagar."""
 
+    descricao_despesa = forms.CharField(
+        max_length=180,
+        label='Descrição da despesa',
+        widget=forms.TextInput(attrs={'placeholder': 'Ex.: Mensalidade do sistema de gestão'}),
+    )
     tipo_lancamento = forms.ChoiceField(
         choices=ContaPagar.TipoLancamento.choices,
         initial=ContaPagar.TipoLancamento.FORNECEDOR,
@@ -310,6 +315,11 @@ class ContaPagarForm(forms.Form):
 class DespesaPagaForm(forms.Form):
     """Registro direto de uma despesa que ja foi paga."""
 
+    descricao_despesa = forms.CharField(
+        max_length=180,
+        label='Descrição da despesa',
+        widget=forms.TextInput(attrs={'placeholder': 'Ex.: Gasolina, mensalidade do sistema ou material'}),
+    )
     tipo_lancamento = forms.ChoiceField(
         choices=(
             (ContaPagar.TipoLancamento.FORNECEDOR, 'Fornecedor'),
@@ -411,6 +421,9 @@ class DespesaPagaForm(forms.Form):
 class ContaPagarEdicaoAdminForm(forms.Form):
     """Correcao administrativa de um titulo e da baixa selecionada."""
 
+    descricao_despesa = forms.CharField(
+        max_length=180, label='Descrição da despesa',
+    )
     fornecedor = FornecedorChoiceField(
         queryset=Fornecedor.objects.none(), required=False, label='Fornecedor',
     )
@@ -463,6 +476,7 @@ class ContaPagarEdicaoAdminForm(forms.Form):
                     '-data_pagamento', '-created_at', '-pk',
                 ).first()
             kwargs.setdefault('initial', {
+                'descricao_despesa': conta.descricao_exibicao,
                 'fornecedor': conta.fornecedor_id,
                 'valor_original': conta.valor_original,
                 'data_vencimento': conta.data_vencimento,

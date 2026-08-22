@@ -39,7 +39,7 @@
     </div>
   </div>
 
-  <div class="grid grid-cols-2 gap-3 lg:grid-cols-4">
+  <div class="grid grid-cols-2 gap-3 lg:grid-cols-5">
     <div class="card p-4">
       <div class="text-xs font-semibold uppercase opacity-60">Total pago</div>
       <div class="mt-1 text-xl font-bold text-emerald-500">R$ {{ totais.valor_pago|default:0|floatformat:2 }}</div>
@@ -55,6 +55,11 @@
     <div class="card p-4">
       <div class="text-xs font-semibold uppercase opacity-60">Descontos</div>
       <div class="mt-1 text-xl font-bold text-blue-500">R$ {{ totais.descontos|default:0|floatformat:2 }}</div>
+    </div>
+    <div class="card border-amber-300 p-4 dark:border-amber-800">
+      <div class="text-xs font-semibold uppercase text-amber-700 dark:text-amber-300">Despesas pessoais</div>
+      <div class="mt-1 text-xl font-bold text-amber-600">R$ {{ totais.despesas_pessoais|default:0|floatformat:2 }}</div>
+      <div class="mt-1 text-xs opacity-60">Incluídas no total pago</div>
     </div>
   </div>
 
@@ -94,7 +99,9 @@
       <a href="{% url 'financeiro:pagar_detail' conta.pk %}" @click.prevent="abrirDetalhe($el.href)" class="card block p-4 transition-opacity hover:opacity-85 {% if conta.excluido %}opacity-55 grayscale{% endif %}">
         <div class="flex items-start justify-between gap-3">
           <div class="min-w-0">
-            <div class="truncate font-semibold">{{ conta.beneficiario_nome }}</div>
+            <div class="truncate font-semibold">{{ conta.descricao_exibicao }}</div>
+            <div class="mt-0.5 text-xs opacity-60">{{ conta.beneficiario_nome }}</div>
+            {% if conta.plano_contas.despesa_pessoal %}<span class="mt-1 inline-flex rounded bg-amber-100 px-2 py-0.5 text-[10px] font-semibold text-amber-800 dark:bg-amber-950/50 dark:text-amber-200">Pessoal</span>{% endif %}
             <div class="mt-0.5 text-xs opacity-60">
               {% if conta.documento_numero %}Doc. {{ conta.documento_numero }}{% else %}Título #{{ conta.pk }}{% endif %}
               {% if conta.nota_fiscal_fornecedor %} · NF {{ conta.nota_fiscal_fornecedor }}{% endif %}
@@ -122,7 +129,7 @@
         <thead :style="temaClaro ? 'background:#f8fafc;' : 'background:#1e1e20;'">
           <tr class="border-b" :style="temaClaro ? 'border-color:#e5e7eb;' : 'border-color:#2f2f33;'">
             <th class="px-4 py-3 text-left text-xs uppercase opacity-60">Pagamento</th>
-            <th class="px-4 py-3 text-left text-xs uppercase opacity-60">Beneficiário</th>
+            <th class="px-4 py-3 text-left text-xs uppercase opacity-60">Despesa / beneficiário</th>
             <th class="px-4 py-3 text-left text-xs uppercase opacity-60">Documento</th>
             <th class="px-4 py-3 text-left text-xs uppercase opacity-60">Categoria financeira</th>
             <th class="px-4 py-3 text-left text-xs uppercase opacity-60">Forma / conta</th>
@@ -139,8 +146,9 @@
                 :style="temaClaro ? 'border-color:#f1f5f9;' : 'border-color:#2f2f33;'">
               <td class="whitespace-nowrap px-4 py-3 font-semibold">{{ conta.data_pagamento|date:"d/m/Y" }}</td>
               <td class="px-4 py-3">
-                <a href="{% url 'financeiro:pagar_detail' conta.pk %}" @click.prevent.stop="abrirDetalhe($el.href)" class="font-semibold hover:text-blue-500 hover:underline">{{ conta.beneficiario_nome }}</a>
-                <div class="mt-0.5 text-xs opacity-60">{{ conta.beneficiario_documento|default:"Sem documento" }}</div>
+                <a href="{% url 'financeiro:pagar_detail' conta.pk %}" @click.prevent.stop="abrirDetalhe($el.href)" class="font-semibold hover:text-blue-500 hover:underline">{{ conta.descricao_exibicao }}</a>
+                <div class="mt-0.5 text-xs opacity-60">{{ conta.beneficiario_nome }} · {{ conta.beneficiario_documento|default:"Sem documento" }}</div>
+                {% if conta.plano_contas.despesa_pessoal %}<span class="mt-1 inline-flex rounded bg-amber-100 px-2 py-0.5 text-[10px] font-semibold text-amber-800 dark:bg-amber-950/50 dark:text-amber-200">Pessoal</span>{% endif %}
               </td>
               <td class="px-4 py-3 text-xs">
                 {% if conta.documento_numero %}{{ conta.documento_numero }}{% else %}#{{ conta.pk }}{% endif %}
