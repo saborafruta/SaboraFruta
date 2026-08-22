@@ -27,7 +27,7 @@ from apps.financeiro.forms.pagar import (
     ContaPagarForm,
     PagamentoContaPagarForm,
 )
-from apps.financeiro.models.conta_bancaria import PlanoContas
+from apps.financeiro.models.conta_bancaria import ContaBancaria, PlanoContas
 from apps.financeiro.models.receber_pagar import ContaPagar, PagamentoContaPagar
 from apps.financeiro.services.pagar_service import ContaPagarService
 from apps.financeiro.services.dashboard_contas_service import DashboardContasService
@@ -49,7 +49,7 @@ def _filial(request):
 
 def _usuario_admin(request):
     perfil = getattr(request.user, 'perfil', None)
-    return request.user.is_superuser or bool(perfil and perfil.is_admin)
+    return bool(getattr(request.user, 'is_superuser', False) or (perfil and perfil.is_admin))
 
 
 CAMPOS_EDICAO_LANCAMENTO = {
@@ -248,13 +248,19 @@ class ContaPagarListView(PermissaoRequiredMixin, View):
 
         kpis = _kpis(ContaPagar.objects.for_filial(filial))
 
-        status = request.GET.get('status', '')
+        status = request.GET.get('status', 'pendentes')
         q = request.GET.get('q', '').strip()
         data_ini = request.GET.get('data_ini', '')
         data_fim = request.GET.get('data_fim', '')
         categoria_contexto = _categorias_financeiras_filtro(request)
 
-        if status:
+        if status == 'pendentes':
+            qs = qs.filter(status__in=(
+                StatusContaPagar.ABERTO,
+                StatusContaPagar.VENCIDO,
+                StatusContaPagar.AGENDADO,
+            ))
+        elif status and status != 'todos':
             qs = qs.filter(status=status)
         if q:
             qs = qs.filter(
@@ -828,6 +834,16 @@ class ContaPagarEditarValorView(PermissaoRequiredMixin, View):
                 'contas_envolvidas': sorted(contas_envolvidas),
             },
         )
+        if contas_envolvidas:
+            # O saldo e materializado para consultas rapidas. Ao mover uma baixa,
+            # tanto a conta anterior quanto a nova precisam ser recompostas.
+            from apps.financeiro.views.contas_bancarias import ContaBancariaListView
+
+            atualizador = ContaBancariaListView()
+            for conta_bancaria in ContaBancaria.objects.for_filial(filial).filter(
+                pk__in=contas_envolvidas,
+            ):
+                atualizador._atualizar_saldo_conta(conta_bancaria)
         return JsonResponse({
             'ok': True,
             'mensagem': 'Lancamento atualizado e registrado no log.',

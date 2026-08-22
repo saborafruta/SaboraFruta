@@ -142,7 +142,8 @@
     </div>
     <div class="md:col-span-2">
       <select name="status" class="form-input">
-        <option value="">Todos os status</option>
+        <option value="pendentes" {% if status_filtro == 'pendentes' %}selected{% endif %}>Somente pendentes</option>
+        <option value="todos" {% if status_filtro == 'todos' %}selected{% endif %}>Todos os status</option>
         {% for val, label in status_choices %}
           <option value="{{ val }}" {% if status_filtro == val %}selected{% endif %}>{{ label }}</option>
         {% endfor %}

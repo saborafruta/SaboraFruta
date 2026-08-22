@@ -114,6 +114,10 @@ class PosicaoDiariaCaixaTests(TestCase):
         self.assertContains(response, "Adicionar conta a pagar")
         self.assertContains(response, reverse("financeiro:pagar_criar") + "?modal=1")
         self.assertContains(response, "Transferir entre contas")
+        self.assertEqual(len(response.context["dias_mes"]), 31)
+        self.assertContains(response, 'aria-label="Ver dias anteriores"')
+        self.assertContains(response, 'aria-label="Ver dias posteriores"')
+        self.assertContains(response, "tituloPagarModal")
 
     def test_taxa_de_recebimento_reduz_entrada_e_exibe_bruto(self):
         self.forma.taxa_administrativa = Decimal("2.00")
@@ -227,7 +231,7 @@ class PosicaoDiariaCaixaTests(TestCase):
         url = reverse("financeiro:posicao_diaria")
         credito = self.client.post(url, {
             "acao": "lancar_movimento", "tipo": "credito",
-            "conta_destino": self.banco.pk, "data_lancamento": "2026-08-21",
+            "conta_destino": self.banco.pk, "data_lancamento": "2020-01-01",
             "data_referencia": "2026-08-21", "valor": "35.50", "historico": "Credito manual",
         })
         debito = self.client.post(url, {
@@ -242,3 +246,6 @@ class PosicaoDiariaCaixaTests(TestCase):
             filial=self.filial, historico__in=("Credito manual", "Debito manual"),
         ).order_by("historico").values_list("valor", flat=True))
         self.assertEqual(valores, [Decimal("35.50"), Decimal("-10.25")])
+        self.assertFalse(ExtratoBancario.objects.filter(
+            filial=self.filial, historico__in=("Credito manual", "Debito manual"),
+        ).exclude(data_lancamento=timezone.localdate()).exists())

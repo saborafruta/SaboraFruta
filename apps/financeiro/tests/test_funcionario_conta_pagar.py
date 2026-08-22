@@ -770,6 +770,8 @@ class FuncionarioContaPagarTests(TestCase):
             valor_pago=Decimal("100.00"), forma_pagamento=self.forma_pix,
             conta_bancaria=conta_anterior, usuario=usuario,
         )
+        conta_anterior.saldo_atual = Decimal("-100.00")
+        conta_anterior.save(update_fields=["saldo_atual"])
 
         request = RequestFactory().post(
             f"/financeiro/pagar/{conta.pk}/editar-valor/",
@@ -806,6 +808,10 @@ class FuncionarioContaPagarTests(TestCase):
         self.assertEqual(pagamento.data_pagamento, date(2026, 8, 21))
         self.assertEqual(pagamento.forma_pagamento, self.forma_prevista)
         self.assertEqual(pagamento.conta_bancaria, conta_nova)
+        conta_anterior.refresh_from_db()
+        conta_nova.refresh_from_db()
+        self.assertEqual(conta_anterior.saldo_atual, Decimal("0.00"))
+        self.assertEqual(conta_nova.saldo_atual, Decimal("-125.50"))
         log = RegistroAuditoria.objects.get(
             objeto_tipo=conta._meta.label_lower,
             objeto_id=conta.pk,
