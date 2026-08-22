@@ -808,6 +808,10 @@
             `height:100%` não resolve contra a altura da célula e o
             `justify-end` não empurra nada. Medido no navegador, as siglas
             ficavam 24px ACIMA de "Produto" e "Total".
+
+            E o "remover" é um BOTÃO ligado a um form de fora (`form=`),
+            nunca um `<form>` aqui dentro -- veja o porquê no comentário
+            dos forms, embaixo do `</form>` da grade.
           {% endcomment %}
           <thead>
             <tr class="border-b" :style="temaClaro ? 'border-color:#e2e8f0;' : 'border-color:#2a2a2e;'">
@@ -824,13 +828,10 @@
                   <div class="flex flex-col items-center">
                     <span class="flex items-end h-[14px] text-xs font-semibold uppercase tracking-wide leading-none"
                           :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">{{ t.sigla }}</span>
-                    <form method="post" action="{% url 'moda:pedido-grade-tamanho-remove' pedido.pk t.pk %}"
-                          class="flex items-center h-[16px]"
-                          onsubmit="return confirm('Remover a coluna {{ t.sigla|escapejs }} do pedido inteiro?');">
-                      {% csrf_token %}
-                      <button type="submit" class="text-[10px] leading-none"
+                    <span class="flex items-center h-[16px]">
+                      <button type="submit" form="rmtam-{{ t.pk }}" class="text-[10px] leading-none"
                               style="color:#f87171;" title="Remover a coluna {{ t.sigla }}">remover</button>
-                    </form>
+                    </span>
                   </div>
                 </th>
               {% endfor %}
@@ -911,7 +912,26 @@
       </div>
     </form>
 
-    {% comment %} Forms fora da tabela: form aninhado é HTML inválido. {% endcomment %}
+    {% comment %}
+      Forms fora da tabela: form aninhado é HTML inválido -- e o estrago
+      não é teórico. O parser IGNORA a tag `<form>` aberta dentro de outro
+      form, então o elemento nem chega a existir; aí o primeiro `</form>`
+      zera o ponteiro interno e os `<form>` seguintes voltam a ser criados
+      normalmente. Resultado medido: de três colunas, só a PRIMEIRA perdia
+      o form, e o "remover" dela ficava ligado ao form de fora -- clicar
+      SALVAVA A GRADE em vez de remover o tamanho, e sem passar pelo
+      `confirm`. De lambuja, a célula sem o `<span>`/`<form>` da faixa
+      ficava 6px fora de prumo das vizinhas.
+
+      Por isso todo botão daqui é `type="submit" form="<id>"`, apontando
+      para um destes forms escondidos.
+    {% endcomment %}
+    {% for t in tabela.colunas %}
+      <form id="rmtam-{{ t.pk }}" method="post"
+            action="{% url 'moda:pedido-grade-tamanho-remove' pedido.pk t.pk %}"
+            onsubmit="return confirm('Remover a coluna {{ t.sigla|escapejs }} do pedido inteiro?');"
+            class="hidden">{% csrf_token %}</form>
+    {% endfor %}
     {% for linha in tabela.linhas %}
       <form id="dup-{{ linha.item.pk }}" method="post"
             action="{% url 'moda:pedido-item-duplicar' pedido.pk linha.item.pk %}" class="hidden">{% csrf_token %}</form>
