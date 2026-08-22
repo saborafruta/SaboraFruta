@@ -16,6 +16,7 @@ from __future__ import annotations
 
 from decimal import Decimal
 from io import BytesIO
+from xml.sax.saxutils import escape
 
 from django.utils import timezone
 from reportlab.lib import colors
@@ -34,6 +35,24 @@ BORDA = colors.HexColor('#d1d5db')
 FUNDO = colors.HexColor('#f8fafc')
 
 LARGURA_UTIL = A4[0] - 40 * mm
+
+# O QUE O PDF CONSEGUE DESENHAR. Não é a mesma lista de `pode_pre_visualizar`,
+# que é do NAVEGADOR: o SVG entra lá e não aqui, porque o `Image` do reportlab
+# lê bitmap pelo PIL. Sem esta lista o SVG caía na exceção de `_imagem` e
+# sumia -- funcionava, mas por acidente, e acidente não avisa quando muda.
+DESENHAVEIS = {'png', 'jpg', 'jpeg', 'gif', 'webp'}
+
+
+def esc(valor) -> str:
+    """
+    Texto do cadastro pronto para entrar num Paragraph.
+
+    O `Paragraph` do reportlab interpreta um dialeto de XML, então `&`, `<` e
+    `>` vindos do cadastro precisam ser escapados. Sem isso "L&R SPORTS LTDA"
+    saía impresso "L&R; SPORTS LTDA" -- o parser tentava ler `&R` como
+    entidade -- no documento que vai para o cliente.
+    """
+    return escape('' if valor is None else str(valor))
 
 
 def _estilos():
@@ -166,6 +185,7 @@ class PedidoPdfService:
 
         elementos += cls._cabecalho(pedido, e)
         elementos += cls._cliente(pedido, e)
+        elementos += cls._artes_do_pedido(pedido, e)
 
         for indice, item in enumerate(pedido.itens.all()):
             elementos += cls._item(pedido, item, e, indice)
@@ -190,9 +210,9 @@ class PedidoPdfService:
 
         logo = _imagem(getattr(filial, 'imagem', None), 30 * mm, 18 * mm)
         identificacao = [
-            Paragraph(f'<b>{empresa.razao_social}</b>', e['normal']),
+            Paragraph(f'<b>{esc(empresa.razao_social)}</b>', e['normal']),
             Paragraph(
-                f'CNPJ {empresa.cnpj or "—"}<br/>{filial}', e['pequeno'],
+                f'CNPJ {esc(empresa.cnpj) or "—"}<br/>{esc(filial)}', e['pequeno'],
             ),
         ]
         numero = [
@@ -248,17 +268,17 @@ class PedidoPdfService:
 
         dados = [
             [Paragraph('<b>Cliente</b>', e['celula']),
-             Paragraph(str(c.razao_social), e['celula']),
+             Paragraph(esc(c.razao_social), e['celula']),
              Paragraph('<b>CPF/CNPJ</b>', e['celula']),
-             Paragraph(getattr(c, 'cpf_cnpj', '') or '—', e['celula'])],
+             Paragraph(esc(getattr(c, 'cpf_cnpj', '')) or '—', e['celula'])],
             [Paragraph('<b>Contato</b>', e['celula']),
-             Paragraph(contato or '—', e['celula']),
+             Paragraph(esc(contato) or '—', e['celula']),
              Paragraph('<b>Telefone</b>', e['celula']),
-             Paragraph(telefone or '—', e['celula'])],
+             Paragraph(esc(telefone) or '—', e['celula'])],
             [Paragraph('<b>WhatsApp</b>', e['celula']),
-             Paragraph(whatsapp or '—', e['celula']),
+             Paragraph(esc(whatsapp) or '—', e['celula']),
              Paragraph('<b>E-mail</b>', e['celula']),
-             Paragraph(getattr(c, 'email', '') or '—', e['celula'])],
+             Paragraph(esc(getattr(c, 'email', '')) or '—', e['celula'])],
         ]
         larguras = [22 * mm, LARGURA_UTIL / 2 - 22 * mm, 22 * mm, LARGURA_UTIL / 2 - 22 * mm]
 
@@ -266,6 +286,66 @@ class PedidoPdfService:
             Paragraph('CLIENTE', e['secao']),
             _tabela(dados, larguras, cabecalho=False),
         ]
+
+    # ── Arte do pedido ───────────────────────────────────────────────────
+
+    @staticmethod
+    def _artes_do_pedido(pedido, e) -> list:
+        """
+        A ARTE, desenhada — logo depois do cliente, ainda na primeira página.
+
+        Era o que faltava no documento: o pedido guardava a arte desde o
+        primeiro contato, a página do link já a mostrava, e só o PDF saía sem
+        ela. Quem recebia o arquivo via a ficha inteira e nenhuma imagem da
+        peça que estava comprando.
+
+        SÓ O QUE O CLIENTE PODE VER. Este mesmo PDF é servido pelo link
+        público, então a regra de visibilidade é a do model — incluir o
+        acervo inteiro mandaria contrato e planilha de custo junto.
+        """
+        from ..models.arquivo import TIPOS_VISIVEIS_AO_CLIENTE
+
+        artes = [
+            a for a in pedido.arquivos.all()
+            if a.tipo in TIPOS_VISIVEIS_AO_CLIENTE and a.extensao in DESENHAVEIS
+        ]
+        if not artes:
+            return []
+
+        # Três por linha: menor que isso desperdiça a folha, maior que isso
+        # deixa a arte pequena demais para conferir escudo e numeração.
+        por_linha = 3
+        largura = LARGURA_UTIL / por_linha
+        blocos = [Paragraph('ARTE', e['secao'])]
+
+        for inicio in range(0, len(artes), por_linha):
+            faixa = artes[inicio:inicio + por_linha]
+            imagens, rotulos = [], []
+            for arte in faixa:
+                imagem = _imagem(arte.arquivo, largura - 6 * mm, 45 * mm)
+                # Arquivo que não abre vira o NOME, e não um buraco: o
+                # storage pode estar fora do ar, e some a imagem, não a
+                # informação de que ela existe.
+                imagens.append(imagem or Paragraph(esc(arte.nome_arquivo), e['pequeno']))
+                rotulos.append(Paragraph(
+                    arte.descricao or arte.nome_arquivo,
+                    ParagraphStyle('rot', parent=e['pequeno'], alignment=1),
+                ))
+            # A última linha não estica as imagens para preencher a folha.
+            while len(imagens) < por_linha:
+                imagens.append('')
+                rotulos.append('')
+
+            grade = Table([imagens, rotulos], colWidths=[largura] * por_linha)
+            grade.setStyle(TableStyle([
+                ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+                ('VALIGN', (0, 0), (-1, 0), 'MIDDLE'),
+                ('TOPPADDING', (0, 1), (-1, 1), 3),
+                ('BOTTOMPADDING', (0, 1), (-1, 1), 8),
+            ]))
+            blocos.append(grade)
+
+        return blocos
 
     # ── Produto, arte e grade ────────────────────────────────────────────
 
@@ -278,15 +358,15 @@ class PedidoPdfService:
             # por peça.
             blocos.append(PageBreak())
 
-        blocos.append(Paragraph(f'PRODUTO — {item.nome_exibicao}', e['secao']))
+        blocos.append(Paragraph(f'PRODUTO — {esc(item.nome_exibicao)}', e['secao']))
 
         dados = [
             ['Produto', 'Modelo', 'Cor', 'Tecido / Malha', 'Gola', 'Manga'],
             [
-                Paragraph(item.nome_exibicao, e['celula']),
-                Paragraph(str(item.modelo) if item.modelo_id else '—', e['celula']),
-                Paragraph(str(item.cor) if item.cor_id else '—', e['celula']),
-                Paragraph(item.tecido_exibicao or '—', e['celula']),
+                Paragraph(esc(item.nome_exibicao), e['celula']),
+                Paragraph(esc(item.modelo) if item.modelo_id else '—', e['celula']),
+                Paragraph(esc(item.cor) if item.cor_id else '—', e['celula']),
+                Paragraph(esc(item.tecido_exibicao) or '—', e['celula']),
                 Paragraph(item.get_gola_display() or '—', e['celula']),
                 Paragraph(item.get_manga_display() or '—', e['celula']),
             ],
@@ -295,7 +375,7 @@ class PedidoPdfService:
         blocos.append(_tabela(dados, [largura] * 6))
 
         if item.acabamento or item.observacoes:
-            texto = ' · '.join(x for x in (item.acabamento, item.observacoes) if x)
+            texto = ' · '.join(esc(x) for x in (item.acabamento, item.observacoes) if x)
             blocos.append(Spacer(1, 3))
             blocos.append(Paragraph(texto, e['pequeno']))
 
@@ -337,7 +417,30 @@ class PedidoPdfService:
             partes = [getattr(p, 'get_tipo_display', lambda: '')() or str(p)]
             if getattr(p, 'observacao', ''):
                 partes.append(p.observacao)
-            blocos.append(Paragraph(' — '.join(x for x in partes if x), e['normal']))
+            texto = Paragraph(' — '.join(esc(x) for x in partes if x), e['normal'])
+
+            # A ARTE APLICADA, desenhada ao lado do texto. Antes saía só
+            # "Arte / estampa — peito esquerdo": o chão de fábrica lia ONDE
+            # aplicar sem ver O QUE aplicar, e ia procurar a imagem no
+            # WhatsApp de quem atendeu.
+            arte = (
+                _imagem(p.arquivo, 26 * mm, 26 * mm)
+                if getattr(p, 'extensao', '') in DESENHAVEIS else None
+            )
+            if arte is None:
+                blocos.append(texto)
+                continue
+
+            linha = Table(
+                [[arte, texto]], colWidths=[28 * mm, LARGURA_UTIL - 28 * mm],
+            )
+            linha.setStyle(TableStyle([
+                ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+                ('LEFTPADDING', (0, 0), (0, 0), 0),
+                ('TOPPADDING', (0, 0), (-1, -1), 3),
+                ('BOTTOMPADDING', (0, 0), (-1, -1), 3),
+            ]))
+            blocos.append(linha)
 
         return blocos
 
@@ -377,10 +480,10 @@ class PedidoPdfService:
         for i, p in enumerate(pessoas, start=1):
             dados.append([
                 str(i),
-                Paragraph(p.nome or '—', e['celula']),
+                Paragraph(esc(p.nome) or '—', e['celula']),
                 p.numero or '—',
                 p.tamanho.sigla if p.tamanho_id else '—',
-                Paragraph(p.item.nome_exibicao if p.item_id else '—', e['celula']),
+                Paragraph(esc(p.item.nome_exibicao) if p.item_id else '—', e['celula']),
             ])
 
         larguras = [10 * mm, LARGURA_UTIL - 78 * mm, 18 * mm, 20 * mm, 30 * mm]
@@ -435,7 +538,9 @@ class PedidoPdfService:
             blocos += [
                 Spacer(1, 6),
                 Paragraph('OBSERVAÇÕES', e['secao']),
-                Paragraph(pedido.observacoes.replace('\n', '<br/>'), e['normal']),
+                # Escapa PRIMEIRO e só então troca a quebra de linha pelo
+                # <br/>: na ordem inversa o escape comeria a própria tag.
+                Paragraph(esc(pedido.observacoes).replace('\n', '<br/>'), e['normal']),
             ]
         return [KeepTogether(blocos)] if len(blocos) < 6 else blocos
 

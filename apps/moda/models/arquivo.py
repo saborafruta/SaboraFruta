@@ -31,6 +31,16 @@ EXTENSOES = [
 # arquivo, em vez de fingir uma prévia quebrada.
 COM_PREVIA = {'png', 'jpg', 'jpeg', 'gif', 'webp', 'svg'}
 
+# O QUE SAI DO ESCRITÓRIO. A escolha é por TIPO, e não arquivo a arquivo:
+# quem anexa não deveria ter de decidir, a cada upload, o que vaza para
+# fora -- e a decisão errada aqui manda contrato e planilha de custo para o
+# WhatsApp do cliente.
+#
+# Vive no MODEL, e não na view pública onde nasceu, porque agora há dois
+# leitores: a página do link e o PDF, que é o mesmo arquivo servido pelos
+# dois lados. Duas listas divergiriam, e a que ficasse para trás vazaria.
+TIPOS_VISIVEIS_AO_CLIENTE = ('arte', 'referencia')
+
 
 def caminho_do_arquivo(instancia, nome_original: str) -> str:
     """
@@ -56,6 +66,11 @@ class ArquivoPedido(models.Model):
         REFERENCIA = 'referencia', 'Referência do cliente'
         DOCUMENTO = 'documento', 'Documento'
         OUTRO = 'outro', 'Outro'
+
+    @property
+    def visivel_ao_cliente(self) -> bool:
+        """Se este arquivo pode sair do escritório."""
+        return self.tipo in TIPOS_VISIVEIS_AO_CLIENTE
 
     pedido = models.ForeignKey(
         'moda.PedidoProducao', on_delete=models.CASCADE, related_name='arquivos',
