@@ -76,10 +76,16 @@
           A divergência é mostrada POR TAMANHO e não só no total: o total
           pode fechar com dois erros que se cancelam — dois P a mais e dois G
           a menos somam zero, e o cliente recebe a caixa errada.
+
+          E o total por tamanho pode fechar com a camisa do Lucas faltando,
+          porque peça com nome não é intercambiável: a conferência PESSOA A
+          PESSOA responde a outra pergunta, e fica a um clique daqui.
         {% endcomment %}
         <p class="text-xs mt-0.5" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
           Compare com a grade da ordem, tamanho a tamanho.
         </p>
+        <a href="{% url 'moda:conferencia-pessoas' expedicao.pk %}"
+           class="btn-secondary text-xs mt-2 inline-block">Conferir pessoa a pessoa</a>
       </div>
       <p class="text-sm font-bold tabular-nums"
          {% if expedicao.conferencia_fecha %}style="color:#059669;"{% else %}style="color:#dc2626;"{% endif %}>

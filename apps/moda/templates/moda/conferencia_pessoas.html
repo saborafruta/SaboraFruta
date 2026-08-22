@@ -1,0 +1,130 @@
+{% extends "_base.html" %}
+{% block title %}{{ title }}{% endblock %}
+{% block page_title %}Conferência de Produtos para Entrega{% endblock %}
+{% block content %}
+<div class="space-y-5 max-w-3xl mx-auto" x-data="{ marcadas: {{ conferidas }} }">
+  <div>
+    <p class="text-sm mb-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+      <a href="{% url 'moda:expedicao-detail' expedicao.pk %}"
+         :style="temaClaro ? 'color:#3b82f6;' : 'color:#60a5fa;'">Expedição #{{ expedicao.numero|stringformat:"04d" }}</a>
+      {% if expedicao.pedido %}
+        <span class="mx-1">›</span> Pedido #{{ expedicao.pedido.numero|stringformat:"06d" }}
+      {% endif %}
+    </p>
+    <h2 class="text-2xl font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
+      Conferência de Produtos para Entrega
+    </h2>
+    <p class="text-sm mt-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+      Verifique os itens produzidos antes da liberação para entrega.
+      {% if expedicao.cliente %}Cliente: <strong>{{ expedicao.cliente }}</strong>.{% endif %}
+    </p>
+  </div>
+
+  {% if linhas %}
+    <form method="post" action="{% url 'moda:conferencia-pessoas-salvar' expedicao.pk %}">
+      {% csrf_token %}
+      <div class="card overflow-hidden">
+        <div class="overflow-x-auto">
+          <table class="w-full text-sm">
+            <thead>
+              <tr class="border-b" :style="temaClaro ? 'border-color:#e2e8f0;' : 'border-color:#2a2a2e;'">
+                <th class="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wide"
+                    :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Nome</th>
+                <th class="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wide"
+                    :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Número</th>
+                <th class="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wide"
+                    :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Tamanho</th>
+                <th class="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wide"
+                    :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Produto</th>
+                <th class="text-center px-4 py-3 text-xs font-semibold uppercase tracking-wide"
+                    :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Conferência</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for l in linhas %}
+                {% comment %}
+                  A LINHA INTEIRA é o alvo do toque, não a caixinha de 16px:
+                  quem confere está de pé, com o telefone numa mão e a peça
+                  na outra, e errar o alvo faz remarcar item errado.
+                {% endcomment %}
+                <tr class="border-b" :style="temaClaro ? 'border-color:#f1f5f9;' : 'border-color:#1e1e22;'">
+                  <td colspan="5" class="p-0">
+                    <label class="flex items-center gap-3 px-4 py-3 cursor-pointer w-full">
+                      <span class="flex-1 min-w-0 grid grid-cols-2 sm:grid-cols-4 gap-2 items-center">
+                        <span class="font-medium truncate" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
+                          {{ l.pessoa.nome|default:"—" }}
+                        </span>
+                        <span class="font-mono" :style="temaClaro ? 'color:#374151;' : 'color:#cbd5e1;'">
+                          {{ l.pessoa.numero|default:"—" }}
+                        </span>
+                        <span class="font-mono font-semibold" :style="temaClaro ? 'color:#374151;' : 'color:#cbd5e1;'">
+                          {{ l.pessoa.tamanho.sigla }}
+                        </span>
+                        <span class="truncate text-xs sm:text-sm" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+                          {{ l.pessoa.item.nome_exibicao|default:"—" }}
+                        </span>
+                      </span>
+                      <input type="checkbox" name="pessoa" value="{{ l.pessoa.pk }}"
+                             class="w-6 h-6 shrink-0"
+                             {% if l.conferido %}checked{% endif %}
+                             {% if travada or not pode_agir %}disabled{% endif %}
+                             @change="marcadas += $event.target.checked ? 1 : -1">
+                    </label>
+                  </td>
+                </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="flex flex-wrap items-center justify-between gap-3 mt-4">
+        {% comment %}
+          O contador acompanha o toque, sem esperar o servidor: quem confere
+          precisa saber quantas faltam SEM salvar a cada peça.
+        {% endcomment %}
+        <span class="soft-pill is-green text-sm">
+          Itens conferidos: <strong x-text="marcadas"></strong> de {{ total }}
+        </span>
+        {% if travada %}
+          <span class="text-sm" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+            Conferência fechada — a expedição já passou da separação.
+          </span>
+        {% elif pode_agir %}
+          <button type="submit" class="btn-primary">Confirmar Conferência</button>
+        {% endif %}
+      </div>
+    </form>
+
+    {% comment %}
+      O QR abre ESTA tela no celular. Aponta para a tela interna, então
+      pede login como qualquer outra -- ele poupa a digitação do endereço,
+      não a senha.
+    {% endcomment %}
+    <div class="card p-4 flex items-center gap-4">
+      <img src="{% url 'moda:conferencia-qr' expedicao.pk %}" alt="QR desta conferência"
+           style="width:96px; height:96px; background:#fff; padding:6px; border-radius:8px;">
+      <div class="min-w-0">
+        <p class="text-sm font-medium" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">Abrir no celular</p>
+        <p class="text-xs mt-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+          Aponte a câmera para conferir de pé, ao lado da caixa. A tela pede
+          login, como qualquer outra do sistema.
+        </p>
+      </div>
+    </div>
+  {% else %}
+    <div class="card p-10 text-center">
+      <p class="text-sm font-medium" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
+        Este pedido não tem personalização por pessoa.
+      </p>
+      <p class="text-sm mt-2" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+        A conferência peça a peça só existe quando há nome e número lançados.
+        Use a conferência por tamanho, na tela da expedição.
+      </p>
+      <a href="{% url 'moda:expedicao-detail' expedicao.pk %}" class="btn-primary text-sm mt-4 inline-block">
+        Ir para a expedição
+      </a>
+    </div>
+  {% endif %}
+</div>
+{% endblock %}
