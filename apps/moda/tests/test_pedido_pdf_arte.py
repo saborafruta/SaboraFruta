@@ -194,14 +194,57 @@ class ArteNoPdfTests(TestCase):
         self.filial.uf = ''
         self.filial.save(update_fields=['cidade', 'uf'])
 
-        bloco = bloco_empresa(self.filial, estilos_empresa())
-        texto = ' '.join(
-            celula.text for linha in bloco._cellvalues for celula in linha
-            if hasattr(celula, 'text')
-        )
+        texto = self._texto_do_bloco(bloco_empresa(self.filial, estilos_empresa()))
 
         self.assertNotIn('(/)', texto)
         self.assertIn('Confeccao Arte LTDA', texto)
+
+    def test_endereco_e_contato_caem_para_a_empresa_quando_a_filial_nao_tem(self):
+        """
+        Filial recém-criada vem só com nome e CNPJ, e o endereço está
+        cadastrado na EMPRESA. Sem a queda, o documento saía com o nome e
+        mais nada — enquanto o dado estava ali do lado.
+        """
+        from apps.moda.services.pdf_marca import bloco_empresa, estilos_empresa
+
+        self.empresa.endereco = 'Rua Meira Brandao'
+        self.empresa.numero = '206'
+        self.empresa.bairro = 'Barro Vermelho'
+        self.empresa.cidade = 'Natal'
+        self.empresa.uf = 'RN'
+        self.empresa.cep = '59000000'
+        self.empresa.email = 'contato@erk.com'
+        self.empresa.telefone = '(84) 98792-9443'
+        self.empresa.site = 'www.useerk.com'
+        self.empresa.save()
+
+        texto = self._texto_do_bloco(bloco_empresa(self.filial, estilos_empresa()))
+
+        self.assertIn('Rua Meira Brandao, 206, Barro Vermelho', texto)
+        self.assertIn('Natal - RN | CEP: 59000-000', texto)
+        self.assertIn('contato@erk.com', texto)
+        self.assertIn('www.useerk.com', texto)
+
+    def test_endereco_da_filial_vence_o_da_empresa(self):
+        """Filial com endereço próprio é OUTRO endereço, não um detalhe."""
+        from apps.moda.services.pdf_marca import bloco_empresa, estilos_empresa
+
+        self.empresa.cidade = 'Natal'
+        self.empresa.save(update_fields=['cidade'])
+        self.filial.cidade = 'Joao Pessoa'
+        self.filial.save(update_fields=['cidade'])
+
+        texto = self._texto_do_bloco(bloco_empresa(self.filial, estilos_empresa()))
+
+        self.assertIn('Joao Pessoa', texto)
+        self.assertNotIn('Natal', texto)
+
+    @staticmethod
+    def _texto_do_bloco(bloco) -> str:
+        return ' '.join(
+            celula.text for linha in bloco._cellvalues for celula in linha
+            if hasattr(celula, 'text')
+        )
 
     def test_a_regra_de_visibilidade_e_uma_so(self):
         """
