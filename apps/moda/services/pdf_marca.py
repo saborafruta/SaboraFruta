@@ -123,6 +123,19 @@ def desenhar_tarja(filial, titulo: str, subtitulo: str = ''):
     return desenhar
 
 
+def _campo(filial, empresa, nome: str) -> str:
+    """
+    O valor da FILIAL e, quando ela não tem, o da EMPRESA.
+
+    Endereço e contato existem nos dois cadastros. Uma filial recém-criada
+    costuma vir só com nome e CNPJ, e sem a queda o documento saía com o
+    nome e mais nada -- enquanto o endereço estava cadastrado ali do lado,
+    na empresa. O que a filial preenche continua vencendo: filial com
+    endereço próprio é outro endereço, não um detalhe.
+    """
+    return (getattr(filial, nome, '') or getattr(empresa, nome, '') or '').strip()
+
+
 def bloco_empresa(filial, e) -> Table:
     """
     Os dados da casa em duas colunas: identificação à esquerda, contato à
@@ -131,17 +144,31 @@ def bloco_empresa(filial, e) -> Table:
     Montado CAMPO A CAMPO, e não pelo `str(filial)`: aquele devolve
     "Eureka (/)" quando cidade e UF estão em branco, e um endereço com
     parênteses vazios num documento que vai para o cliente parece defeito.
+
+    O NOME E O CNPJ andam juntos, e por isso não caem para a empresa: o
+    nome de uma pessoa jurídica ao lado do CNPJ de outra é pior do que um
+    campo vazio -- num documento comercial, é erro de identificação.
     """
     empresa = filial.empresa
 
-    rua = ', '.join(x for x in [filial.endereco, filial.numero] if x)
-    if filial.bairro:
-        rua = f'{rua}, {filial.bairro}' if rua else filial.bairro
-    cidade = ' - '.join(x for x in [filial.cidade, filial.uf] if x)
-    if filial.cep:
+    endereco = _campo(filial, empresa, 'endereco')
+    numero = _campo(filial, empresa, 'numero')
+    bairro = _campo(filial, empresa, 'bairro')
+    municipio = _campo(filial, empresa, 'cidade')
+    uf = _campo(filial, empresa, 'uf')
+    codigo_postal = _campo(filial, empresa, 'cep')
+    telefone = _campo(filial, empresa, 'telefone')
+    email = _campo(filial, empresa, 'email')
+    site = (getattr(empresa, 'site', '') or '').strip()
+
+    rua = ', '.join(x for x in [endereco, numero] if x)
+    if bairro:
+        rua = f'{rua}, {bairro}' if rua else bairro
+    cidade = ' - '.join(x for x in [municipio, uf] if x)
+    if codigo_postal:
         cidade = (
-            f'{cidade} | CEP: {cep(filial.cep)}' if cidade
-            else f'CEP: {cep(filial.cep)}'
+            f'{cidade} | CEP: {cep(codigo_postal)}' if cidade
+            else f'CEP: {cep(codigo_postal)}'
         )
 
     esquerda = [f'<b>{esc(filial.razao_social)}</b>']
@@ -153,13 +180,10 @@ def bloco_empresa(filial, e) -> Table:
     direita = []
     if filial.cnpj:
         direita.append(f'CNPJ: {esc(cnpj(filial.cnpj))}')
-    if filial.email:
-        direita.append(esc(filial.email))
+    if email:
+        direita.append(esc(email))
     contato = ' '.join(
-        x for x in [
-            esc(filial.telefone),
-            f'<b>{esc(empresa.site)}</b>' if getattr(empresa, 'site', '') else '',
-        ] if x
+        x for x in [esc(telefone), f'<b>{esc(site)}</b>' if site else ''] if x
     )
     if contato:
         direita.append(contato)
