@@ -268,3 +268,74 @@ class PedidoConferenciaView(ModaBaseView):
             f'Este pedido tem {len(expedicoes)} expedições — escolha qual conferir.',
         )
         return redirect(reverse('moda:expedicao-list'))
+
+
+class ConferenciaFilaView(ModaBaseView):
+    """
+    A fila de quem confere — checagem antes de fechar o volume.
+
+    Não é a lista de expedições com um filtro por status: aquela responde
+    "onde está cada documento", e esta responde "o que falta conferir".
+    Por isso cada linha traz as DUAS contagens que hoje existem — a de
+    peças por tamanho, que fecha contra a ordem, e a de pessoas, que diz
+    se a peça de cada um foi separada.
+
+    AS DUAS PRECISAM APARECER JUNTAS porque uma pode fechar com a outra
+    aberta: a contagem por tamanho bate e ainda assim a camisa do Lucas
+    ficou para trás. Quem confere precisa ver isso sem abrir o documento.
+
+    Entram as expedições em CONFERÊNCIA e as que acabaram de sair da
+    produção: a fila de trabalho é o que chegou e o que está em cima da
+    bancada, não o que já foi embalado.
+    """
+
+    area = 'expedicao'
+
+    ETAPAS_DA_FILA = (
+        Expedicao.Status.PRODUCAO_CONCLUIDA,
+        Expedicao.Status.CONFERENCIA,
+    )
+
+    def get(self, request):
+        expedicoes = list(
+            Expedicao.objects.for_filial(_filial(request))
+            .filter(status__in=self.ETAPAS_DA_FILA)
+            .select_related('ordem__pedido__cliente', 'ordem__item')
+            .prefetch_related('conferencia', 'conferencia_pessoas')
+            .order_by('numero')
+        )
+
+        linhas = []
+        for expedicao in expedicoes:
+            pessoas = _pessoas(expedicao)
+            total_pessoas = pessoas.count()
+            conferidas = expedicao.conferencia_pessoas.count()
+            linhas.append({
+                'expedicao': expedicao,
+                'esperado': expedicao.quantidade_esperada,
+                'conferido': expedicao.quantidade_conferida,
+                'divergencia': expedicao.divergencia_conferencia,
+                'fecha': expedicao.conferencia_fecha,
+                'total_pessoas': total_pessoas,
+                'pessoas_conferidas': conferidas,
+                # Só é pendência de pessoa quando HÁ pessoas: pedido sem
+                # personalização individual não fica em falta por algo que
+                # nunca existiu.
+                'pessoas_faltando': (
+                    total_pessoas - conferidas if total_pessoas else 0
+                ),
+            })
+
+        return render(request, 'moda/conferencia_fila.html', {
+            'title': 'Conferência',
+            'linhas': linhas,
+            'resumo': {
+                'na_fila': len(linhas),
+                'aguardando': sum(
+                    1 for l in linhas
+                    if l['expedicao'].status == Expedicao.Status.PRODUCAO_CONCLUIDA
+                ),
+                'divergentes': sum(1 for l in linhas if not l['fecha']),
+                'pessoas_faltando': sum(1 for l in linhas if l['pessoas_faltando']),
+            },
+        })

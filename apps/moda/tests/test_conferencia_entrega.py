@@ -222,6 +222,62 @@ class ConferenciaEntregaTests(TestCase):
         self.assertIn(self.expedicao.codigo, contexto['link_entrega'])
         self.assertIn('/pedido/entrega/', contexto['link_entrega'])
 
+    # ── A fila de conferência ────────────────────────────────────────────
+
+    def _fila(self):
+        from django.http import HttpResponse
+        from django.test import RequestFactory
+
+        import apps.moda.views_conferencia as modulo
+
+        pedido = RequestFactory().get('/x/')
+        pedido.filial_ativa = self.filial
+        pedido.user = type('Dubl', (), {'tem_permissao': lambda self, *a: True})()
+        contexto = {}
+        original = modulo.render
+        modulo.render = lambda r, t, ctx: (contexto.update(ctx), HttpResponse(''))[1]
+        try:
+            modulo.ConferenciaFilaView().get(pedido)
+        finally:
+            modulo.render = original
+        return contexto
+
+    def test_a_fila_traz_a_expedicao_recem_saida_da_producao(self):
+        contexto = self._fila()
+
+        self.assertEqual(contexto['resumo']['na_fila'], 1)
+        self.assertEqual(contexto['resumo']['aguardando'], 1)
+
+    def test_expedicao_ja_embalada_sai_da_fila(self):
+        """A fila é o que está na bancada, não o que já foi fechado."""
+        self.expedicao.status = Expedicao.Status.EMBALAGEM
+        self.expedicao.save(update_fields=['status'])
+
+        self.assertEqual(self._fila()['resumo']['na_fila'], 0)
+
+    def test_a_fila_mostra_as_duas_contagens(self):
+        """
+        Peças por tamanho E pessoas: uma pode fechar com a outra aberta, e é
+        esse par que decide se a caixa pode ser fechada.
+        """
+        self._marcar(self.pessoas[0])
+
+        linha = self._fila()['linhas'][0]
+
+        self.assertEqual(linha['total_pessoas'], 3)
+        self.assertEqual(linha['pessoas_conferidas'], 1)
+        self.assertEqual(linha['pessoas_faltando'], 2)
+
+    def test_pedido_sem_personalizacao_nao_conta_como_falta(self):
+        """Não fica em falta por algo que nunca existiu."""
+        PersonalizacaoIndividual.objects.all().delete()
+
+        contexto = self._fila()
+
+        self.assertEqual(contexto['linhas'][0]['total_pessoas'], 0)
+        self.assertEqual(contexto['linhas'][0]['pessoas_faltando'], 0)
+        self.assertEqual(contexto['resumo']['pessoas_faltando'], 0)
+
     # ── Rotas ────────────────────────────────────────────────────────────
 
     def test_as_rotas_existem_e_apontam_para_as_views_certas(self):
@@ -234,6 +290,9 @@ class ConferenciaEntregaTests(TestCase):
             (reverse('moda:conferencia-pessoas-salvar', args=[1]), vc.ConferenciaPessoasSalvarView),
             (reverse('moda:conferencia-qr', args=[1]), vc.ConferenciaQrView),
             (reverse('moda:pedido-conferencia', args=[1]), vc.PedidoConferenciaView),
+            (reverse('moda:conferencia-fila'), vc.ConferenciaFilaView),
+            # A rota do MENU tem de cair na fila, e nao no placeholder.
+            (reverse('moda:item', args=['expedicao', 'conferencia']), vc.ConferenciaFilaView),
         ]
         for url, esperada in pares:
             self.assertIs(resolve(url).func.view_class, esperada)
