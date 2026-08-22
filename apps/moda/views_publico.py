@@ -62,10 +62,25 @@ def _blindar(resposta) -> None:
     `no-store` porque o documento traz dados do cliente e não pode ficar em
     cache de proxy; `noindex` porque um link vazado para rede social ou
     e-mail acabaria em buscador, e aí o token deixaria de ser segredo.
+
+    `same-origin` E NÃO `no-referrer` NO REFERRER-POLICY, apesar de o
+    segundo parecer mais seguro. Pela especificação do Fetch, requisição
+    que não é GET nem HEAD, saindo de uma página com política
+    `no-referrer`, manda `Origin: null` -- e o Django compara o `Origin`
+    com o host da requisição, não bate, e RECUSA como falha de CSRF.
+
+    Era isso que impedia o cliente de aprovar: ele clicava em APROVAR
+    PEDIDO e recebia "a página ficou aberta tempo demais", que é o texto
+    da falha de CSRF, tendo acabado de abrir a página. O GET funcionava, e
+    por isso o link parecia bom até a hora de responder.
+
+    `same-origin` guarda o que interessa: o endereço com o token não vai no
+    Referer para site nenhum de fora. Para o próprio domínio ele vai --
+    e é o próprio domínio que já tem o token.
     """
     resposta['Cache-Control'] = 'private, no-store'
     resposta['X-Robots-Tag'] = 'noindex, nofollow, noarchive'
-    resposta['Referrer-Policy'] = 'no-referrer'
+    resposta['Referrer-Policy'] = 'same-origin'
 
 
 def _buscar(token: str) -> PedidoProducao:
