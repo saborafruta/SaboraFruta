@@ -68,7 +68,7 @@ GRUPOS: tuple[Grupo, ...] = (
             Item('tamanhos', 'Tamanhos', 'P, M, G, numéricos e especiais.'),
             Item('grades', 'Grades', 'Combinações de tamanho usadas nos pedidos.'),
             Item('variantes', 'Variantes', 'Cruzamento de produto, cor e tamanho — é o nível que tem SKU.'),
-            Item('skus', 'SKUs', 'Código único de cada variante.'),
+            Item('skus', 'SKUs', 'Código único de cada variante, com o desenho em barras e a conferência do padrão.'),
         ),
     ),
     Grupo(

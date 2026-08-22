@@ -31,11 +31,12 @@ from .models import (
     Personalizacao, PersonalizacaoIndividual, ProdutoCor, ProdutoModa,
     Tamanho, Variante, VisualItemPedido,
 )
+from .services.barras import suportado, svg as barras_svg
 from .services.pedido_pdf import mensagem_whatsapp, whatsapp_numero
 from .services.validacao import ValidacaoProducao
 from .services import (
     FinanceiroPedidoService, GradePedidoService, IndividualService,
-    VarianteService,
+    VarianteService, montar_sku,
 )
 from .views import ModaBaseView
 
@@ -404,6 +405,175 @@ class VarianteToggleView(ModaBaseView):
         # adulterado tira o usuário do sistema.
         voltar = (request.POST.get('voltar') or '').lstrip('?')
         destino = reverse('moda:variante-list')
+        return redirect(f'{destino}?{voltar}' if voltar else destino)
+
+
+# ══════════════════════════════════════════════════════════════════════
+# SKUs
+# ══════════════════════════════════════════════════════════════════════
+
+def _sku_esperado(variante) -> str:
+    """O SKU que `montar_sku` produziria com os cadastros de HOJE."""
+    return montar_sku(
+        variante.produto.codigo,
+        variante.produto_cor.cor.sigla,
+        variante.tamanho.sigla,
+    )
+
+
+class SkuListView(ModaBaseView):
+    """
+    Os CÓDIGOS das variantes — conferência e leitura.
+
+    Não é a lista de variantes outra vez. Aquela responde QUAIS combinações
+    existem; esta responde se o código de cada uma está certo e se dá para
+    ler na pistola. Três coisas só aparecem aqui:
+
+    1. SKU FORA DO PADRÃO. `montar_sku` roda na hora de gerar a variante e
+       o resultado fica GRAVADO. Renomear depois a sigla de uma cor ou de
+       um tamanho não reescreve nada — o SKU antigo segue no banco
+       divergindo do padrão, em silêncio. Aqui ele é recalculado e a
+       diferença aparece, com o botão de acertar.
+
+    2. SKU REPETIDO ENTRE PRODUTOS. O `unique_together ('produto','sku')`
+       impede repetir dentro do mesmo produto, mas não entre produtos —
+       e duas peças diferentes com o mesmo código na etiqueta é erro de
+       expedição esperando acontecer.
+
+    3. SKU QUE NÃO VIRA BARRAS. O Code128 B cobre ASCII 32 a 126; fora
+       disso o desenho sai errado em silêncio, e o leitor devolve outro
+       código. Melhor dizer antes de a etiqueta ir para a prateleira.
+    """
+
+    def get(self, request):
+        filial = _filial(request)
+        busca = (request.GET.get('q') or '').strip()
+        filtro = (request.GET.get('filtro') or '').strip()
+
+        base = (
+            Variante.objects.filter(produto__filial=filial)
+            .select_related('produto', 'produto_cor__cor', 'tamanho')
+            .order_by('sku')
+        )
+        if busca:
+            base = base.filter(
+                Q(sku__icontains=busca) | Q(codigo_barras__icontains=busca)
+                | Q(produto__nome__icontains=busca)
+            )
+
+        # REPETIDO conta na filial INTEIRA, não no resultado filtrado: um
+        # SKU repetido continua repetido mesmo que a busca só traga um dos
+        # dois, e esconder o alerta por causa do filtro seria mentir.
+        repetidos = {
+            linha['sku']
+            for linha in (
+                Variante.objects.filter(produto__filial=filial)
+                .values('sku').annotate(n=Count('id')).filter(n__gt=1)
+            )
+        }
+
+        # A conferência é feita em Python, e não numa anotação de SQL, de
+        # propósito: refazer as regras de `montar_sku` em SQL criaria uma
+        # segunda implementação da mesma regra, e as duas iam divergir na
+        # primeira mudança. Aqui a fonte da verdade continua sendo uma só.
+        lista = list(base)
+        for v in lista:
+            v.sku_esperado = _sku_esperado(v)
+            v.divergente = bool(v.sku_esperado) and v.sku != v.sku_esperado
+            v.repetido = v.sku in repetidos
+            v.legivel = suportado(v.sku)
+
+        resumo = {
+            'total': len(lista),
+            'divergentes': sum(1 for v in lista if v.divergente),
+            'repetidos': sum(1 for v in lista if v.repetido),
+            'ilegiveis': sum(1 for v in lista if not v.legivel),
+            'sem_barras': sum(1 for v in lista if not v.codigo_barras),
+        }
+
+        if filtro == 'divergentes':
+            lista = [v for v in lista if v.divergente]
+        elif filtro == 'repetidos':
+            lista = [v for v in lista if v.repetido]
+        elif filtro == 'ilegiveis':
+            lista = [v for v in lista if not v.legivel]
+        elif filtro == 'sem_barras':
+            lista = [v for v in lista if not v.codigo_barras]
+
+        return render(request, 'moda/sku_list.html', {
+            'title': 'SKUs',
+            'page_obj': Paginator(lista, 40).get_page(request.GET.get('page')),
+            'page_querystring': _querystring_sem_pagina(request),
+            'resumo': resumo,
+            'busca': busca,
+            'filtro': filtro,
+            'tem_filtro': bool(busca or filtro),
+        })
+
+
+class SkuBarrasView(ModaBaseView):
+    """
+    O SKU desenhado em Code128, para a pistola do almoxarifado.
+
+    Servido por PK e não pelo código na URL: assim a filial é conferida no
+    banco, e ninguém desenha etiqueta de SKU de outra empresa passando a
+    string na mão.
+    """
+
+    def get(self, request, pk):
+        from django.http import Http404, HttpResponse
+
+        variante = get_object_or_404(
+            Variante.objects.filter(produto__filial=_filial(request)), pk=pk,
+        )
+        if not suportado(variante.sku):
+            # 404 é melhor do que um desenho que o leitor traduz para outro
+            # código — erro silencioso é o pior tipo aqui.
+            raise Http404('SKU não representável em barras.')
+        return HttpResponse(barras_svg(variante.sku), content_type='image/svg+xml')
+
+
+class SkuCorrigirView(ModaBaseView):
+    """Reescreve o SKU no padrão de hoje, quando o cadastro mudou depois."""
+
+    permissao_acao = 'editar'
+
+    def post(self, request, pk):
+        variante = get_object_or_404(
+            Variante.objects.select_related(
+                'produto', 'produto_cor__cor', 'tamanho',
+            ).filter(produto__filial=_filial(request)),
+            pk=pk,
+        )
+        novo = _sku_esperado(variante)
+
+        if not novo:
+            messages.error(
+                request,
+                'Não dá para montar o SKU: falta o código do produto ou a '
+                'sigla da cor e do tamanho.',
+            )
+        elif novo == variante.sku:
+            messages.info(request, f'O SKU {variante.sku} já está no padrão.')
+        elif Variante.objects.filter(
+            produto_id=variante.produto_id, sku=novo,
+        ).exclude(pk=variante.pk).exists():
+            # `unique_together ('produto','sku')` levantaria IntegrityError e
+            # devolveria uma tela de erro do Django. Dizer o que houve é bem
+            # melhor do que um 500 no meio da conferência.
+            messages.error(
+                request,
+                f'Já existe outra variante deste produto com o SKU {novo}. '
+                'Ajuste a sigla da cor ou do tamanho antes de corrigir.',
+            )
+        else:
+            antigo = variante.sku
+            variante.sku = novo
+            variante.save(update_fields=['sku'])
+            messages.success(request, f'SKU {antigo} corrigido para {novo}.')
+
+        voltar = (request.POST.get('voltar') or '').lstrip('?')
+        destino = reverse('moda:sku-list')
         return redirect(f'{destino}?{voltar}' if voltar else destino)
 
 

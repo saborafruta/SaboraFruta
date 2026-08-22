@@ -1,0 +1,182 @@
+{% extends "_base.html" %}
+{% block title %}{{ title }}{% endblock %}
+{% block page_title %}{{ title }}{% endblock %}
+{% block content %}
+<div class="space-y-5">
+  <div class="flex flex-wrap items-start justify-between gap-3">
+    <div>
+      <p class="text-sm mb-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+        <a href="{% url 'moda:grupo' 'produtos' %}" :style="temaClaro ? 'color:#3b82f6;' : 'color:#60a5fa;'">Produtos</a>
+        <span class="mx-1">›</span> SKUs
+      </p>
+      <h2 class="text-2xl font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">SKUs</h2>
+      <p class="text-sm mt-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+        O código único de cada variante, no padrão
+        <span class="font-mono">PRODUTO-COR-TAMANHO</span>, com o desenho em
+        barras que a pistola lê.
+      </p>
+    </div>
+    <a href="{% url 'moda:variante-list' %}" class="btn-secondary">Variantes</a>
+  </div>
+
+  {% comment %}
+    Os cartões são FILTROS, não enfeite: quem abre esta tela vem atrás do
+    que está errado, e o caminho mais curto é clicar no número.
+  {% endcomment %}
+  <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+    <a href="{% url 'moda:sku-list' %}" class="card p-4 block">
+      <p class="text-xs uppercase tracking-wide" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">SKUs</p>
+      <p class="text-2xl font-semibold mt-1" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">{{ resumo.total }}</p>
+    </a>
+    <a href="?filtro=divergentes" class="card p-4 block">
+      <p class="text-xs uppercase tracking-wide" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Fora do padrão</p>
+      <p class="text-2xl font-semibold mt-1" style="color:{% if resumo.divergentes %}#d97706{% else %}#059669{% endif %};">{{ resumo.divergentes }}</p>
+    </a>
+    <a href="?filtro=repetidos" class="card p-4 block">
+      <p class="text-xs uppercase tracking-wide" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Repetidos</p>
+      <p class="text-2xl font-semibold mt-1" style="color:{% if resumo.repetidos %}#dc2626{% else %}#059669{% endif %};">{{ resumo.repetidos }}</p>
+    </a>
+    <a href="?filtro=ilegiveis" class="card p-4 block">
+      <p class="text-xs uppercase tracking-wide" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Não viram barras</p>
+      <p class="text-2xl font-semibold mt-1" style="color:{% if resumo.ilegiveis %}#dc2626{% else %}#059669{% endif %};">{{ resumo.ilegiveis }}</p>
+    </a>
+  </div>
+
+  <form method="get" class="card p-4">
+    <div class="flex gap-2 flex-wrap">
+      <input type="text" name="q" value="{{ busca }}" class="form-input flex-1 min-w-[220px]"
+             placeholder="Buscar por SKU, código de barras ou nome do produto...">
+      <select name="filtro" class="form-input text-sm" style="max-width:200px;">
+        <option value="">Todos</option>
+        <option value="divergentes" {% if filtro == 'divergentes' %}selected{% endif %}>Fora do padrão</option>
+        <option value="repetidos" {% if filtro == 'repetidos' %}selected{% endif %}>Repetidos</option>
+        <option value="ilegiveis" {% if filtro == 'ilegiveis' %}selected{% endif %}>Não viram barras</option>
+        <option value="sem_barras" {% if filtro == 'sem_barras' %}selected{% endif %}>Sem código de barras</option>
+      </select>
+      <button type="submit" class="btn-primary">Buscar</button>
+      {% if tem_filtro %}<a href="{% url 'moda:sku-list' %}" class="btn-secondary">Limpar</a>{% endif %}
+    </div>
+  </form>
+
+  <div class="card overflow-hidden">
+    {% if page_obj.object_list %}
+      <div class="overflow-x-auto">
+        <table class="w-full text-sm">
+          <thead>
+            <tr class="border-b" :style="temaClaro ? 'border-color:#e2e8f0;' : 'border-color:#2a2a2e;'">
+              <th class="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wide"
+                  :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">SKU</th>
+              <th class="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wide"
+                  :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Barras</th>
+              <th class="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wide"
+                  :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Variante</th>
+              <th class="text-right px-4 py-3 text-xs font-semibold uppercase tracking-wide"
+                  :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Conferência</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for v in page_obj.object_list %}
+              <tr class="border-b" :style="temaClaro ? 'border-color:#f1f5f9;' : 'border-color:#1e1e22;'">
+                <td class="px-4 py-3 align-top">
+                  <span class="font-mono text-sm font-semibold"
+                        :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">{{ v.sku }}</span>
+                  {% if v.codigo_barras %}
+                    <span class="block font-mono text-xs mt-0.5"
+                          :style="temaClaro ? 'color:#94a3b8;' : 'color:#6b7280;'">EAN {{ v.codigo_barras }}</span>
+                  {% endif %}
+                </td>
+                <td class="px-4 py-3 align-top">
+                  {% comment %}
+                    O desenho vem do endereço da variante, e não do texto do
+                    SKU na URL: assim a filial é conferida no banco antes de
+                    desenhar. Quando o código não é representável em Code128
+                    a view devolve 404 -- por isso a coluna só pede a imagem
+                    quando `legivel`, para não deixar um ícone quebrado na
+                    tela em vez de um aviso.
+                  {% endcomment %}
+                  {% if v.legivel %}
+                    <img src="{% url 'moda:sku-barras' v.pk %}" alt="Código de barras de {{ v.sku }}"
+                         style="height:34px; background:#fff; padding:3px 5px; border-radius:4px;">
+                  {% else %}
+                    <span class="soft-pill is-red text-xs">não vira barras</span>
+                  {% endif %}
+                </td>
+                <td class="px-4 py-3 align-top">
+                  <a href="{% url 'moda:produto-detail' v.produto_id %}" class="font-medium"
+                     :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">{{ v.produto.nome }}</a>
+                  <span class="block text-xs mt-0.5" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+                    {{ v.produto_cor.cor.nome }} · {{ v.tamanho.sigla }}
+                  </span>
+                </td>
+                <td class="px-4 py-3 text-right align-top whitespace-nowrap">
+                  {% if v.repetido %}
+                    <span class="soft-pill is-red text-xs">repetido</span>
+                  {% endif %}
+                  {% if v.divergente %}
+                    <div class="text-xs mb-1" :style="temaClaro ? 'color:#b45309;' : 'color:#fbbf24;'">
+                      padrão de hoje: <span class="font-mono font-semibold">{{ v.sku_esperado }}</span>
+                    </div>
+                    <form method="post" action="{% url 'moda:sku-corrigir' v.pk %}" class="inline"
+                          onsubmit="return confirm('Trocar o SKU {{ v.sku|escapejs }} por {{ v.sku_esperado|escapejs }}?');">
+                      {% csrf_token %}
+                      <input type="hidden" name="voltar" value="{{ page_querystring }}{% if page_querystring %}&{% endif %}page={{ page_obj.number }}">
+                      <button type="submit" class="btn-secondary text-xs">Corrigir SKU</button>
+                    </form>
+                  {% elif not v.repetido and v.legivel %}
+                    <span class="soft-pill is-green text-xs">ok</span>
+                  {% endif %}
+                </td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+
+      {% if page_obj.paginator.num_pages > 1 %}
+        <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 px-5 py-3 text-sm"
+             :style="temaClaro ? 'border-top:1px solid #e2e8f0;' : 'border-top:1px solid #2a2a2e;'">
+          <div :style="temaClaro ? 'color:#6b7280;' : 'color:#94a3b8;'">
+            Página {{ page_obj.number }} de {{ page_obj.paginator.num_pages }}
+            <span :style="temaClaro ? 'color:#9ca3af;' : 'color:#6b7280;'">({{ page_obj.paginator.count }} SKUs)</span>
+          </div>
+          <div class="flex gap-2">
+            {% if page_obj.has_previous %}
+              <a href="?{% if page_querystring %}{{ page_querystring }}&{% endif %}page={{ page_obj.previous_page_number }}"
+                 class="btn-secondary">← Anterior</a>
+            {% endif %}
+            {% if page_obj.has_next %}
+              <a href="?{% if page_querystring %}{{ page_querystring }}&{% endif %}page={{ page_obj.next_page_number }}"
+                 class="btn-secondary">Próxima →</a>
+            {% endif %}
+          </div>
+        </div>
+      {% endif %}
+
+    {% else %}
+      <div class="p-10 text-center">
+        {% if tem_filtro %}
+          <p class="text-sm font-medium" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
+            {% if filtro == 'divergentes' %}Nenhum SKU fora do padrão.
+            {% elif filtro == 'repetidos' %}Nenhum SKU repetido.
+            {% elif filtro == 'ilegiveis' %}Todos os SKUs viram código de barras.
+            {% elif filtro == 'sem_barras' %}Todos os SKUs têm código de barras.
+            {% else %}Nenhum SKU encontrado com esse filtro.{% endif %}
+          </p>
+          <a href="{% url 'moda:sku-list' %}" class="btn-secondary text-sm mt-4 inline-block">Ver todos</a>
+        {% else %}
+          <p class="text-sm font-medium" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
+            Nenhum SKU ainda.
+          </p>
+          <p class="text-sm mt-2" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+            O SKU nasce junto com a variante. Defina a grade e as cores do
+            produto e use “Gerar variantes” na tela dele — cada combinação
+            ganha um código no padrão
+            <span class="font-mono">PRODUTO-COR-TAMANHO</span>.
+          </p>
+          <a href="{% url 'moda:produto-list' %}" class="btn-primary text-sm mt-4 inline-block">Ir para Produtos</a>
+        {% endif %}
+      </div>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}

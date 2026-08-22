@@ -245,6 +245,12 @@ ROTAS_PRONTAS: list = [
     # "em construção" -- foi exatamente o que estava acontecendo.
     path('produtos/variantes/', vc.VarianteListView.as_view(), name='variante-list'),
     path('produtos/variantes/<int:pk>/situacao/', vc.VarianteToggleView.as_view(), name='variante-toggle'),
+
+    # Os codigos das variantes: conferencia e leitura. Mesma regra de
+    # ordem -- antes do catch-all, senao cai no placeholder.
+    path('produtos/skus/', vc.SkuListView.as_view(), name='sku-list'),
+    path('produtos/skus/<int:pk>/barras.svg', vc.SkuBarrasView.as_view(), name='sku-barras'),
+    path('produtos/skus/<int:pk>/corrigir/', vc.SkuCorrigirView.as_view(), name='sku-corrigir'),
     # ── Cadastros de apoio: POR ÚLTIMO, e é o que importa nesta lista ──
     #
     # `<slug:grupo>/<slug:slug>/novo/` casa com QUASE TUDO: produtos/
