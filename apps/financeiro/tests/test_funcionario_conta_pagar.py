@@ -770,6 +770,8 @@ class FuncionarioContaPagarTests(TestCase):
             valor_pago=Decimal("100.00"), forma_pagamento=self.forma_pix,
             conta_bancaria=conta_anterior, usuario=usuario,
         )
+        conta_anterior.saldo_atual = Decimal("-100.00")
+        conta_anterior.save(update_fields=["saldo_atual"])
 
         request = RequestFactory().post(
             f"/financeiro/pagar/{conta.pk}/editar-valor/",

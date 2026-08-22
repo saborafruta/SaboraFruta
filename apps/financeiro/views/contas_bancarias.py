@@ -266,6 +266,9 @@ class ContaBancariaListView(PermissaoRequiredMixin, View):
         saldos = {conta.pk: self._saldo_calculado(conta) for conta in contas}
         for conta_item in contas:
             conta_item.saldo_calculado = saldos.get(conta_item.pk, Decimal("0"))
+            if conta_item.saldo_atual != conta_item.saldo_calculado:
+                conta_item.saldo_atual = conta_item.saldo_calculado
+                conta_item.save(update_fields=["saldo_atual", "updated_at"])
         saldo_total = sum(
             (saldos.get(conta.pk, Decimal("0")) for conta in contas if conta.ativo),
             Decimal("0"),
@@ -478,8 +481,6 @@ class ContaBancariaListView(PermissaoRequiredMixin, View):
             data_fim=data_max,
             conta=conta,
         )
-        if not movimentos and (conta.saldo_inicial or Decimal("0")) == Decimal("0") and (conta.saldo_atual or Decimal("0")) != Decimal("0"):
-            return conta.saldo_atual
         return (conta.saldo_inicial or Decimal("0")) + sum((m.valor for m in movimentos), Decimal("0"))
 
     def _buscar_movimento_origem(self, filial, origem, registro_id):
