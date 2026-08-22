@@ -142,6 +142,7 @@ ROTAS_PRONTAS: list = [
     # entrada porque e' o primeiro item do grupo.
     # Fila de quem confere -- endereco do menu, que caia no placeholder.
     path('expedicao/conferencia/', vcon.ConferenciaFilaView.as_view(), name='conferencia-fila'),
+    path('expedicao/embalagem/', vcon.EmbalagemFilaView.as_view(), name='embalagem-fila'),
     path('expedicao/separacao/', vex.ExpedicaoListView.as_view(), name='expedicao-list'),
     path('expedicao/buscar/', vex.ExpedicaoBuscarView.as_view(), name='expedicao-buscar'),
     path('expedicao/ordens/<int:pk>/', vex.ExpedicaoCriarView.as_view(), name='expedicao-criar'),

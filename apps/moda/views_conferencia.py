@@ -339,3 +339,70 @@ class ConferenciaFilaView(ModaBaseView):
                 'pessoas_faltando': sum(1 for l in linhas if l['pessoas_faltando']),
             },
         })
+
+
+class EmbalagemFilaView(ModaBaseView):
+    """
+    A fila de quem embala — volumes e etiquetas de envio.
+
+    A pergunta desta bancada é uma só: TODA PEÇA CONFERIDA ESTÁ DENTRO DE
+    UMA CAIXA? Por isso cada linha compara as peças nos volumes com as
+    conferidas, e não com a grade da ordem: o que se embala é o que foi
+    conferido, e a divergência contra a ordem é assunto da etapa anterior.
+
+    Peça conferida fora de volume é a que fica na bancada e viaja no pedido
+    seguinte -- some da caixa sem sumir do sistema, e o cliente reclama de
+    falta enquanto a tela mostra tudo certo.
+
+    VOLUME SEM PESO tem cartão próprio: transportadora cobra por peso, e
+    volume sem peso informado vira cotação errada ou recusa na coleta.
+
+    Entram as expedições em SEPARAÇÃO e em EMBALAGEM: o que foi separado
+    espera caixa, e o que está em embalagem está na bancada.
+    """
+
+    area = 'expedicao'
+
+    ETAPAS_DA_FILA = (
+        Expedicao.Status.SEPARACAO,
+        Expedicao.Status.EMBALAGEM,
+    )
+
+    def get(self, request):
+        expedicoes = list(
+            Expedicao.objects.for_filial(_filial(request))
+            .filter(status__in=self.ETAPAS_DA_FILA)
+            .select_related('ordem__pedido__cliente', 'ordem__item')
+            .prefetch_related('volumes', 'conferencia')
+            .order_by('numero')
+        )
+
+        linhas = []
+        for expedicao in expedicoes:
+            volumes = list(expedicao.volumes.all())
+            nos_volumes = expedicao.pecas_nos_volumes
+            conferidas = expedicao.quantidade_conferida
+            linhas.append({
+                'expedicao': expedicao,
+                'volumes': volumes,
+                'total_volumes': len(volumes),
+                'nos_volumes': nos_volumes,
+                'conferidas': conferidas,
+                'fora_de_caixa': conferidas - nos_volumes,
+                'fecha': expedicao.volumes_fecham,
+                'peso': expedicao.peso_total,
+                # Peso em branco é diferente de peso zero: o primeiro é
+                # cadastro que falta, o segundo seria um volume sem massa.
+                'sem_peso': sum(1 for v in volumes if v.peso_kg is None),
+            })
+
+        return render(request, 'moda/embalagem_fila.html', {
+            'title': 'Embalagem',
+            'linhas': linhas,
+            'resumo': {
+                'na_fila': len(linhas),
+                'sem_volume': sum(1 for l in linhas if not l['total_volumes']),
+                'nao_fecham': sum(1 for l in linhas if not l['fecha']),
+                'sem_peso': sum(1 for l in linhas if l['sem_peso']),
+            },
+        })

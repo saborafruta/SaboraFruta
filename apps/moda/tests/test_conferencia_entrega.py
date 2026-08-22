@@ -278,6 +278,96 @@ class ConferenciaEntregaTests(TestCase):
         self.assertEqual(contexto['linhas'][0]['pessoas_faltando'], 0)
         self.assertEqual(contexto['resumo']['pessoas_faltando'], 0)
 
+    # ── A fila de embalagem ──────────────────────────────────────────────
+
+    def _embalagem(self):
+        from django.http import HttpResponse
+        from django.test import RequestFactory
+
+        import apps.moda.views_conferencia as modulo
+
+        pedido = RequestFactory().get('/x/')
+        pedido.filial_ativa = self.filial
+        pedido.user = type('Dubl', (), {'tem_permissao': lambda self, *a: True})()
+        contexto = {}
+        original = modulo.render
+        modulo.render = lambda r, t, ctx: (contexto.update(ctx), HttpResponse(''))[1]
+        try:
+            modulo.EmbalagemFilaView().get(pedido)
+        finally:
+            modulo.render = original
+        return contexto
+
+    def _conferir_pecas(self, quantidade):
+        from apps.moda.models import ItemConferencia
+
+        ItemConferencia.objects.create(
+            expedicao=self.expedicao, tamanho=self.m, quantidade=quantidade,
+        )
+
+    def test_embalagem_so_pega_separacao_e_embalagem(self):
+        """
+        Produção concluída ainda não é assunto da bancada de embalagem —
+        aquilo está na fila de conferência.
+        """
+        self.assertEqual(self._embalagem()['resumo']['na_fila'], 0)
+
+        self.expedicao.status = Expedicao.Status.SEPARACAO
+        self.expedicao.save(update_fields=['status'])
+
+        self.assertEqual(self._embalagem()['resumo']['na_fila'], 1)
+
+    def test_peca_conferida_fora_de_caixa_e_apontada(self):
+        """
+        O risco da bancada: peça conferida que não entrou em volume fica
+        para trás e viaja no pedido seguinte — some da caixa sem sumir do
+        sistema.
+        """
+        from apps.moda.models import Volume
+
+        self.expedicao.status = Expedicao.Status.SEPARACAO
+        self.expedicao.save(update_fields=['status'])
+        self._conferir_pecas(3)
+        Volume.objects.create(expedicao=self.expedicao, quantidade=2)
+
+        linha = self._embalagem()['linhas'][0]
+
+        self.assertEqual(linha['conferidas'], 3)
+        self.assertEqual(linha['nos_volumes'], 2)
+        self.assertEqual(linha['fora_de_caixa'], 1)
+        self.assertFalse(linha['fecha'])
+
+    def test_tudo_em_caixa_fecha(self):
+        from apps.moda.models import Volume
+
+        self.expedicao.status = Expedicao.Status.SEPARACAO
+        self.expedicao.save(update_fields=['status'])
+        self._conferir_pecas(3)
+        Volume.objects.create(expedicao=self.expedicao, quantidade=3)
+
+        contexto = self._embalagem()
+
+        self.assertTrue(contexto['linhas'][0]['fecha'])
+        self.assertEqual(contexto['resumo']['nao_fecham'], 0)
+
+    def test_volume_sem_peso_e_apontado(self):
+        """Transportadora cobra por peso: sem peso, cotação errada."""
+        from decimal import Decimal
+
+        from apps.moda.models import Volume
+
+        self.expedicao.status = Expedicao.Status.EMBALAGEM
+        self.expedicao.save(update_fields=['status'])
+        Volume.objects.create(expedicao=self.expedicao, quantidade=1)
+        Volume.objects.create(
+            expedicao=self.expedicao, quantidade=2, peso_kg=Decimal('1.500'),
+        )
+
+        contexto = self._embalagem()
+
+        self.assertEqual(contexto['linhas'][0]['sem_peso'], 1)
+        self.assertEqual(contexto['resumo']['sem_peso'], 1)
+
     # ── Rotas ────────────────────────────────────────────────────────────
 
     def test_as_rotas_existem_e_apontam_para_as_views_certas(self):
@@ -293,6 +383,8 @@ class ConferenciaEntregaTests(TestCase):
             (reverse('moda:conferencia-fila'), vc.ConferenciaFilaView),
             # A rota do MENU tem de cair na fila, e nao no placeholder.
             (reverse('moda:item', args=['expedicao', 'conferencia']), vc.ConferenciaFilaView),
+            (reverse('moda:embalagem-fila'), vc.EmbalagemFilaView),
+            (reverse('moda:item', args=['expedicao', 'embalagem']), vc.EmbalagemFilaView),
         ]
         for url, esperada in pares:
             self.assertIs(resolve(url).func.view_class, esperada)
