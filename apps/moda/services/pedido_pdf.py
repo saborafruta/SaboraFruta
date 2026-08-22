@@ -16,7 +16,6 @@ from __future__ import annotations
 
 from decimal import Decimal
 from io import BytesIO
-from xml.sax.saxutils import escape
 
 from django.utils import timezone
 from reportlab.lib import colors
@@ -29,12 +28,15 @@ from reportlab.platypus import (
     Table, TableStyle,
 )
 
+from .pdf_marca import (
+    ALTURA_TARJA, LARGURA_UTIL, MARGEM, bloco_empresa, desenhar_tarja, esc,
+    estilos_empresa,
+)
+
 AZUL = colors.HexColor('#2563eb')
 CINZA = colors.HexColor('#64748b')
 BORDA = colors.HexColor('#d1d5db')
 FUNDO = colors.HexColor('#f8fafc')
-
-LARGURA_UTIL = A4[0] - 40 * mm
 
 # O QUE O PDF CONSEGUE DESENHAR. Não é a mesma lista de `pode_pre_visualizar`,
 # que é do NAVEGADOR: o SVG entra lá e não aqui, porque o `Image` do reportlab
@@ -43,21 +45,10 @@ LARGURA_UTIL = A4[0] - 40 * mm
 DESENHAVEIS = {'png', 'jpg', 'jpeg', 'gif', 'webp'}
 
 
-def esc(valor) -> str:
-    """
-    Texto do cadastro pronto para entrar num Paragraph.
-
-    O `Paragraph` do reportlab interpreta um dialeto de XML, então `&`, `<` e
-    `>` vindos do cadastro precisam ser escapados. Sem isso "L&R SPORTS LTDA"
-    saía impresso "L&R; SPORTS LTDA" -- o parser tentava ler `&R` como
-    entidade -- no documento que vai para o cliente.
-    """
-    return escape('' if valor is None else str(valor))
-
-
 def _estilos():
     base = getSampleStyleSheet()
     return {
+        **estilos_empresa(),
         'titulo': ParagraphStyle('t', parent=base['Title'], fontSize=16, spaceAfter=2),
         'secao': ParagraphStyle(
             's', parent=base['Heading2'], fontSize=10.5, textColor=AZUL,
@@ -175,8 +166,10 @@ class PedidoPdfService:
         buffer = BytesIO()
         doc = SimpleDocTemplate(
             buffer, pagesize=A4,
-            leftMargin=20 * mm, rightMargin=20 * mm,
-            topMargin=15 * mm, bottomMargin=18 * mm,
+            leftMargin=MARGEM, rightMargin=MARGEM,
+            # O topo abre ABAIXO da tarja, que é desenhada no canvas e não
+            # participa do fluxo -- senão o texto entraria por baixo dela.
+            topMargin=ALTURA_TARJA + 10 * mm, bottomMargin=18 * mm,
             title=f'Pedido {pedido.numero:06d}',
             author=str(pedido.filial),
         )
@@ -193,46 +186,32 @@ class PedidoPdfService:
         elementos += cls._personalizacao(pedido, e)
         elementos += cls._financeiro(pedido, e)
 
+        # A tarja e o rodapé são os dois desenhos de canvas da folha, e os
+        # dois valem em TODA página: a marca no topo e a identificação com
+        # QR embaixo. Uma função só chama os dois, na ordem em que se lê.
         rodape = cls._rodape(pedido, base_url, e)
-        doc.build(
-            elementos,
-            onFirstPage=lambda c, d: rodape(c, d),
-            onLaterPages=lambda c, d: rodape(c, d),
+        tarja = desenhar_tarja(
+            pedido.filial, 'PEDIDO DE PRODUÇÃO', f'#{pedido.numero:06d}',
         )
+
+        def moldura(canvas, doc_):
+            tarja(canvas, doc_)
+            rodape(canvas, doc_)
+
+        doc.build(elementos, onFirstPage=moldura, onLaterPages=moldura)
         return buffer.getvalue()
 
     # ── Cabeçalho ────────────────────────────────────────────────────────
 
     @staticmethod
     def _cabecalho(pedido, e) -> list:
-        filial = pedido.filial
-        empresa = filial.empresa
+        """
+        Os dados da casa, abaixo da tarja — o MESMO bloco do orçamento.
 
-        logo = _imagem(getattr(filial, 'imagem', None), 30 * mm, 18 * mm)
-        identificacao = [
-            Paragraph(f'<b>{esc(empresa.razao_social)}</b>', e['normal']),
-            Paragraph(
-                f'CNPJ {esc(empresa.cnpj) or "—"}<br/>{esc(filial)}', e['pequeno'],
-            ),
-        ]
-        numero = [
-            Paragraph(
-                f'<b>PEDIDO DE PRODUÇÃO</b><br/>'
-                f'<font size="15"><b>#{pedido.numero:06d}</b></font>',
-                ParagraphStyle('num', parent=e['normal'], alignment=2, leading=16),
-            ),
-        ]
-
-        topo = Table(
-            [[logo or '', identificacao, numero]],
-            colWidths=[32 * mm, LARGURA_UTIL - 32 * mm - 45 * mm, 45 * mm],
-        )
-        topo.setStyle(TableStyle([
-            ('VALIGN', (0, 0), (-1, -1), 'TOP'),
-            ('LEFTPADDING', (0, 0), (0, 0), 0),
-            ('RIGHTPADDING', (-1, 0), (-1, 0), 0),
-        ]))
-
+        A marca e o título saem no canvas (`desenhar_tarja`), e não aqui: a
+        faixa sangra até a borda da folha, e flowable nenhum alcança a
+        margem. Aqui fica só o que corre no fluxo.
+        """
         dados = [[
             Paragraph('<b>Data do pedido</b>', e['celula']),
             Paragraph('<b>Entrega prevista</b>', e['celula']),
@@ -250,7 +229,7 @@ class PedidoPdfService:
         largura = LARGURA_UTIL / 4
 
         return [
-            topo, Spacer(1, 8),
+            bloco_empresa(pedido.filial, e), Spacer(1, 12),
             _tabela(dados, [largura] * 4, cabecalho=False), Spacer(1, 4),
         ]
 
@@ -582,23 +561,23 @@ class PedidoPdfService:
             y = 10 * mm
 
             canvas.drawImage(
-                qr, 20 * mm, y - 2 * mm, width=16 * mm, height=16 * mm,
+                qr, MARGEM, y - 2 * mm, width=16 * mm, height=16 * mm,
                 preserveAspectRatio=True, mask='auto',
             )
             canvas.setFont('Helvetica-Bold', 8)
             canvas.setFillColor(colors.black)
-            canvas.drawString(39 * mm, y + 9 * mm, f'Pedido #{pedido.numero:06d}')
+            canvas.drawString(MARGEM + 19 * mm, y + 9 * mm, f'Pedido #{pedido.numero:06d}')
 
             canvas.setFont('Helvetica', 6.5)
             canvas.setFillColor(CINZA)
-            canvas.drawString(39 * mm, y + 5.5 * mm, f'Gerado em {gerado}')
-            canvas.drawString(39 * mm, y + 2.5 * mm, rodape_empresa[:110])
+            canvas.drawString(MARGEM + 19 * mm, y + 5.5 * mm, f'Gerado em {gerado}')
+            canvas.drawString(MARGEM + 19 * mm, y + 2.5 * mm, rodape_empresa[:110])
             canvas.drawRightString(
-                A4[0] - 20 * mm, y + 2.5 * mm, f'Página {canvas.getPageNumber()}',
+                A4[0] - MARGEM, y + 2.5 * mm, f'Página {canvas.getPageNumber()}',
             )
 
             canvas.setStrokeColor(BORDA)
-            canvas.line(20 * mm, y + 18 * mm, A4[0] - 20 * mm, y + 18 * mm)
+            canvas.line(MARGEM, y + 18 * mm, A4[0] - MARGEM, y + 18 * mm)
             canvas.restoreState()
 
         return desenhar

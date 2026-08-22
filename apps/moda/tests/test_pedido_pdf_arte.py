@@ -165,6 +165,44 @@ class ArteNoPdfTests(TestCase):
         self.assertTrue(pdf.startswith(b'%PDF'))
         self.assertGreater(len(pdf), 1000)
 
+    # ── Cabeçalho ────────────────────────────────────────────────────────
+
+    def test_pedido_e_orcamento_desenham_o_MESMO_cabecalho(self):
+        """
+        Os dois documentos são da mesma casa e têm de parecer da mesma casa.
+
+        Enquanto a tarja era código do orçamento, dar o mesmo cabeçalho ao
+        pedido significava copiar — e duas cópias divergem na primeira
+        mudança de cor. Isto quebra se alguém reintroduzir a segunda.
+        """
+        from apps.moda.services import orcamento_pdf, pdf_marca, pedido_pdf
+
+        self.assertIs(pedido_pdf.desenhar_tarja, pdf_marca.desenhar_tarja)
+        self.assertIs(orcamento_pdf.desenhar_tarja, pdf_marca.desenhar_tarja)
+        self.assertIs(pedido_pdf.bloco_empresa, pdf_marca.bloco_empresa)
+        self.assertIs(orcamento_pdf.bloco_empresa, pdf_marca.bloco_empresa)
+
+    def test_endereco_nao_sai_com_parenteses_vazio(self):
+        """
+        `str(filial)` devolve "Eureka (/)" quando cidade e UF estão em
+        branco, e era isso que ia impresso no cabeçalho. O bloco monta campo
+        a campo e omite o que falta.
+        """
+        from apps.moda.services.pdf_marca import bloco_empresa, estilos_empresa
+
+        self.filial.cidade = ''
+        self.filial.uf = ''
+        self.filial.save(update_fields=['cidade', 'uf'])
+
+        bloco = bloco_empresa(self.filial, estilos_empresa())
+        texto = ' '.join(
+            celula.text for linha in bloco._cellvalues for celula in linha
+            if hasattr(celula, 'text')
+        )
+
+        self.assertNotIn('(/)', texto)
+        self.assertIn('Confeccao Arte LTDA', texto)
+
     def test_a_regra_de_visibilidade_e_uma_so(self):
         """
         A página do link e o PDF leem a MESMA lista. Se alguém acrescentar um

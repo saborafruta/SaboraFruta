@@ -20,43 +20,28 @@ from __future__ import annotations
 
 from decimal import Decimal
 from io import BytesIO
-from xml.sax.saxutils import escape
 
 from reportlab.lib import colors
 from reportlab.lib.pagesizes import A4
 from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
 from reportlab.lib.units import mm
 from reportlab.platypus import (
-    Image, KeepTogether, Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle,
+    KeepTogether, Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle,
 )
 
-# Amostradas do modelo em PDF, não escolhidas a olho.
-VERMELHO = colors.HexColor('#eb4123')        # tarja do topo
-VERMELHO_TABELA = colors.HexColor('#eb2d46')  # cabeçalho da tabela e títulos
-FAIXA = colors.HexColor('#f5fafa')            # fundo do título de seção
-TEXTO = colors.HexColor('#333333')
-CINZA = colors.HexColor('#6b7280')
+# A tarja, o bloco da empresa e as cores vivem em `pdf_marca`: o pedido usa
+# o MESMO cabeçalho, e duas cópias divergiriam na primeira mudança de cor.
+from .pdf_marca import (
+    ALTURA_TARJA, FAIXA, LARGURA_UTIL, MARGEM, TEXTO, VERMELHO_TABELA,
+    bloco_empresa, desenhar_tarja, esc, estilos_empresa, logo as _logo,
+)
 
-MARGEM = 18 * mm
-ALTURA_TARJA = 26 * mm
-LARGURA_UTIL = A4[0] - 2 * MARGEM
+CINZA = colors.HexColor('#6b7280')
 
 MESES = (
     'janeiro', 'fevereiro', 'março', 'abril', 'maio', 'junho',
     'julho', 'agosto', 'setembro', 'outubro', 'novembro', 'dezembro',
 )
-
-
-def esc(valor) -> str:
-    """
-    Texto do usuário pronto para entrar num Paragraph.
-
-    O `Paragraph` do reportlab interpreta um dialeto de XML, então `&`, `<`
-    e `>` vindos do cadastro precisam ser escapados. Sem isso "L&R SPORTS"
-    sai impresso como "L&R; SPORTS" -- o parser tenta ler `&R` como
-    entidade e devolve lixo no documento que vai para o cliente.
-    """
-    return escape('' if valor is None else str(valor))
 
 
 def brl(valor) -> str:
@@ -68,47 +53,10 @@ def _por_extenso(data) -> str:
     return f'{data.day} de {MESES[data.month - 1]} de {data.year}'
 
 
-def _cep(valor: str) -> str:
-    digitos = ''.join(ch for ch in (valor or '') if ch.isdigit())
-    return f'{digitos[:5]}-{digitos[5:]}' if len(digitos) == 8 else (valor or '')
-
-
-def _cnpj(valor: str) -> str:
-    d = ''.join(ch for ch in (valor or '') if ch.isdigit())
-    if len(d) != 14:
-        return valor or ''
-    return f'{d[:2]}.{d[2:5]}.{d[5:8]}/{d[8:12]}-{d[12:]}'
-
-
-def _logo(filial, largura, altura):
-    """
-    A marca da filial, ou None quando o arquivo não abre.
-
-    Storage fora do ar não pode derrubar o orçamento inteiro: a folha sai
-    sem a marca, que é muito melhor do que não sair.
-    """
-    campo = getattr(filial, 'imagem', None)
-    if not campo:
-        return None
-    try:
-        campo.open('rb')
-        dados = BytesIO(campo.read())
-        campo.close()
-        return Image(dados, width=largura, height=altura, kind='proportional')
-    except Exception:
-        return None
-
-
 def _estilos():
     base = getSampleStyleSheet()
     return {
-        'empresa': ParagraphStyle(
-            'emp', parent=base['Normal'], fontSize=8.5, leading=12, textColor=TEXTO,
-        ),
-        'empresa_dir': ParagraphStyle(
-            'empd', parent=base['Normal'], fontSize=8.5, leading=12,
-            textColor=TEXTO, alignment=2,
-        ),
+        **estilos_empresa(),
         'secao': ParagraphStyle(
             'sec', parent=base['Normal'], fontSize=9, leading=12,
             textColor=VERMELHO_TABELA, fontName='Helvetica-Bold',
@@ -170,92 +118,16 @@ class OrcamentoPdfService:
         elementos += cls._observacoes(pedido, e)
         elementos += cls._assinatura(pedido, e)
 
-        tarja = cls._tarja(pedido)
+        tarja = desenhar_tarja(pedido.filial, 'ORÇAMENTO')
         doc.build(elementos, onFirstPage=tarja, onLaterPages=tarja)
         return buffer.getvalue()
-
-    # ── Tarja vermelha ───────────────────────────────────────────────────
-
-    @staticmethod
-    def _tarja(pedido):
-        """
-        A faixa do topo é desenhada no canvas, não como flowable.
-
-        Ela sangra de ponta a ponta da folha, e flowable nenhum alcança a
-        margem -- desenhar por cima é o único jeito de a cor chegar à borda.
-        """
-        filial = pedido.filial
-
-        def desenhar(canvas, doc):
-            canvas.saveState()
-            largura, altura = A4
-            canvas.setFillColor(VERMELHO)
-            canvas.rect(0, altura - ALTURA_TARJA, largura, ALTURA_TARJA, stroke=0, fill=1)
-
-            marca = _logo(filial, 34 * mm, 16 * mm)
-            fim_marca = MARGEM
-            if marca is not None:
-                l, a = marca.wrapOn(canvas, 34 * mm, 16 * mm)
-                marca.drawOn(canvas, MARGEM, altura - ALTURA_TARJA + (ALTURA_TARJA - a) / 2)
-                fim_marca = MARGEM + l
-
-            # "ORÇAMENTO" centralizado no espaço QUE SOBRA à direita da
-            # marca, como no modelo -- centralizar na folha inteira jogaria
-            # a palavra por cima do logo em marca larga.
-            canvas.setFillColor(colors.white)
-            canvas.setFont('Helvetica-Bold', 22)
-            centro = fim_marca + (largura - fim_marca - MARGEM) / 2
-            canvas.drawCentredString(centro, altura - ALTURA_TARJA / 2 - 7, 'ORÇAMENTO')
-            canvas.restoreState()
-
-        return desenhar
 
     # ── Dados da empresa ─────────────────────────────────────────────────
 
     @staticmethod
     def _empresa(pedido, e) -> list:
-        filial = pedido.filial
-        empresa = filial.empresa
-
-        rua = ', '.join(x for x in [filial.endereco, filial.numero] if x)
-        if filial.bairro:
-            rua = f'{rua}, {filial.bairro}' if rua else filial.bairro
-        cidade = ' - '.join(x for x in [filial.cidade, filial.uf] if x)
-        if filial.cep:
-            cidade = f'{cidade} | CEP: {_cep(filial.cep)}' if cidade else f'CEP: {_cep(filial.cep)}'
-
-        esquerda = [f'<b>{esc(filial.razao_social)}</b>']
-        if rua:
-            esquerda.append(esc(rua))
-        if cidade:
-            esquerda.append(esc(cidade))
-
-        direita = []
-        if filial.cnpj:
-            direita.append(f'CNPJ: {esc(_cnpj(filial.cnpj))}')
-        if filial.email:
-            direita.append(esc(filial.email))
-        contato = ' '.join(
-            x for x in [esc(filial.telefone),
-                        f'<b>{esc(empresa.site)}</b>' if empresa.site else '']
-            if x
-        )
-        if contato:
-            direita.append(contato)
-
-        bloco = Table(
-            [[Paragraph('<br/>'.join(esquerda), e['empresa']),
-              Paragraph('<br/>'.join(direita), e['empresa_dir'])]],
-            colWidths=[LARGURA_UTIL * 0.55, LARGURA_UTIL * 0.45],
-        )
-        bloco.setStyle(TableStyle([
-            ('VALIGN', (0, 0), (-1, -1), 'TOP'),
-            ('LEFTPADDING', (0, 0), (-1, -1), 0),
-            ('RIGHTPADDING', (0, 0), (-1, -1), 0),
-            ('TOPPADDING', (0, 0), (-1, -1), 0),
-            ('BOTTOMPADDING', (0, 0), (-1, -1), 0),
-        ]))
-        return [bloco, Spacer(1, 14)]
+        """O bloco da casa — o mesmo do pedido, montado em `pdf_marca`."""
+        return [bloco_empresa(pedido.filial, e), Spacer(1, 14)]
 
     # ── Título de seção ──────────────────────────────────────────────────
 
