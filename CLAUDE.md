@@ -27,7 +27,38 @@ O Railway pode estar configurado para fazer deploy de qualquer uma dessas branch
 O Railway faz **deploy automático a cada push** para o GitHub — na prática
 é o push que publica, não a chamada de API.
 
-Serviço que atende `saborafruta-production.up.railway.app`:
+> ## ⚠️ O serviço abaixo NÃO é a produção que o usuário usa
+>
+> O sistema real é **`ited.app.br`**, e ele está em **outro projeto
+> Railway** — não neste. Verificado em 22/08/2026 pela API:
+>
+> - os domínios deste serviço são só `saborafruta-production.up.railway.app`
+>   (`customDomains` vazio — `ited.app.br` não está aqui);
+> - o projeto `32ec3314…` tem **um único** ambiente (`production`) e um
+>   único app, então também não é caso de ambiente separado;
+> - o Postgres deste serviço está **vazio**: `moda_tamanhos`, `moda_grades`,
+>   `moda_itens_grade`, `moda_pedidos`, `moda_itens_pedido` e
+>   `moda_grade_pedido` todos com 0 linhas.
+>
+> Os dois deploys puxam do MESMO repositório GitHub. Por isso mudança de
+> **código** aparece em `ited.app.br` normalmente (conferido: o CSS servido
+> nos dois domínios tem sha256 idêntico), e é fácil concluir errado que
+> este serviço é a produção.
+>
+> A diferença aparece em **dado**: migration de dado, seed ou qualquer
+> consulta ao banco daqui fala com a base vazia, não com a do usuário.
+> Um `SELECT` que volta 0 aqui não significa que a tabela do usuário está
+> vazia — significa que se está olhando o banco errado.
+>
+> Conferir deploy pela API deste serviço também só diz que ESTE subiu.
+> Para confirmar que algo chegou em `ited.app.br`, olhe o próprio
+> `ited.app.br`.
+>
+> **Falta descobrir**: o projeto/serviço Railway de `ited.app.br` e um token
+> que o alcance. Sem isso não dá para inspecionar nem migrar o banco real.
+
+Serviço que atende `saborafruta-production.up.railway.app` (o vazio, veja
+o aviso acima):
 
 - **Service ID:** `6d6dc6a9-f00b-48b5-b760-5454cbe94352`
 - **Environment ID:** `d8db136f-064d-4125-bc0f-3708ac9cf7c7`
