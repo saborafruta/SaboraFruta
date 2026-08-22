@@ -35,9 +35,13 @@ class PosicaoDiariaCaixaView(PermissaoRequiredMixin, View):
         destino = reverse("financeiro:posicao_diaria") + f"?data={data_referencia.isoformat()}"
         auxiliar = ContaBancariaListView()
         if acao == "lancar_movimento":
+            data_referencia = timezone.localdate()
+            destino = reverse("financeiro:posicao_diaria") + f"?data={data_referencia.isoformat()}"
             form = MovimentoContaBancariaForm(request.POST, filial=filial)
             if form.is_valid():
-                auxiliar._salvar_movimento_manual(request, filial, form.cleaned_data)
+                dados = form.cleaned_data.copy()
+                dados["data_lancamento"] = timezone.localdate()
+                auxiliar._salvar_movimento_manual(request, filial, dados)
                 messages.success(request, "Movimento registrado na posicao diaria.")
                 return redirect(destino)
             return self._render(request, movimento_form=form, movimento_modal=True)
@@ -104,7 +108,7 @@ class PosicaoDiariaCaixaView(PermissaoRequiredMixin, View):
                 if mov.registro_id == int(movimento_id) and mov.origem_codigo == request.GET.get("origem")), None)
         if movimento_form is None:
             movimento_form = MovimentoContaBancariaForm(
-                filial=request.filial_ativa, initial={"data_lancamento": data_referencia},
+                filial=request.filial_ativa, initial={"data_lancamento": timezone.localdate()},
             )
         if editar_movimento is None and request.GET.get("editar") and _usuario_admin(request):
             editar_movimento = get_object_or_404(
@@ -119,6 +123,7 @@ class PosicaoDiariaCaixaView(PermissaoRequiredMixin, View):
             })
         return render(request, self.template_name, {
             "title": "Posicao Diaria de Caixa", "data_referencia": data_referencia, "posicao": posicao,
+            "hoje": timezone.localdate(),
             "movimento_form": movimento_form, "movimento_modal": movimento_modal,
             "editar_movimento": editar_movimento, "editar_form": editar_form, "detalhe": detalhe,
             "user_is_admin": _usuario_admin(request), "mostrar_excluidos": mostrar_excluidos,
@@ -126,7 +131,7 @@ class PosicaoDiariaCaixaView(PermissaoRequiredMixin, View):
             "periodo": periodo, "data_inicio": data_inicio, "data_fim": data_fim,
             "previsao_periodo": previsao_periodo,
             "previsao_inicio": previsao_inicio, "previsao_fim": previsao_fim,
-            "dias_uteis_semana": self._dias_uteis_semana(data_referencia),
+            "dias_mes": self._dias_mes(data_referencia),
             "periodos_movimento": self._links_periodo(data_referencia, periodo, "periodo"),
             "periodos_previsao": self._links_periodo(data_referencia, previsao_periodo, "previsao"),
         })
@@ -165,13 +170,18 @@ class PosicaoDiariaCaixaView(PermissaoRequiredMixin, View):
         return referencia, referencia + timedelta(days=6)
 
     @staticmethod
-    def _dias_uteis_semana(referencia):
-        segunda = referencia - timedelta(days=referencia.weekday())
-        nomes = ("Seg", "Ter", "Qua", "Qui", "Sex")
+    def _dias_mes(referencia):
+        nomes = ("Seg", "Ter", "Qua", "Qui", "Sex", "Sab", "Dom")
+        hoje = timezone.localdate()
+        ultimo = monthrange(referencia.year, referencia.month)[1]
         return [
-            {"data": segunda + timedelta(days=indice), "nome": nome,
-             "selecionado": segunda + timedelta(days=indice) == referencia}
-            for indice, nome in enumerate(nomes)
+            {
+                "data": referencia.replace(day=dia),
+                "nome": nomes[referencia.replace(day=dia).weekday()],
+                "selecionado": referencia.day == dia,
+                "hoje": referencia.replace(day=dia) == hoje,
+            }
+            for dia in range(1, ultimo + 1)
         ]
 
     @staticmethod
