@@ -190,6 +190,38 @@ class ConferenciaEntregaTests(TestCase):
 
         self.assertEqual(self.client.get(self._url_entrega()).status_code, 404)
 
+    # ── O link copiável ──────────────────────────────────────────────────
+
+    def test_a_tela_da_expedicao_oferece_o_link_de_entrega(self):
+        """
+        O endereço vai por WhatsApp: sem um campo de onde copiar, sobraria
+        digitar um token à mão, que é onde o erro acontece.
+        """
+        from django.test import RequestFactory
+
+        from apps.moda.views_expedicao import ExpedicaoDetailView
+
+        pedido = RequestFactory().get('/x/')
+        pedido.filial_ativa = self.filial
+        # A view pergunta a permissão ao usuário; aqui interessa o contexto,
+        # não o perfil, então um dublê que responde "pode" basta.
+        pedido.user = type('Dubl', (), {'tem_permissao': lambda self, *a: True})()
+        contexto = {}
+
+        import apps.moda.views_expedicao as modulo
+        from django.http import HttpResponse
+
+        original = modulo.render
+        modulo.render = lambda r, t, ctx: (contexto.update(ctx), HttpResponse(''))[1]
+        try:
+            ExpedicaoDetailView().get(pedido, self.expedicao.pk)
+        finally:
+            modulo.render = original
+
+        self.assertIn('link_entrega', contexto)
+        self.assertIn(self.expedicao.codigo, contexto['link_entrega'])
+        self.assertIn('/pedido/entrega/', contexto['link_entrega'])
+
     # ── Rotas ────────────────────────────────────────────────────────────
 
     def test_as_rotas_existem_e_apontam_para_as_views_certas(self):

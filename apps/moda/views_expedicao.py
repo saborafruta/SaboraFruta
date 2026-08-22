@@ -148,6 +148,13 @@ class ExpedicaoDetailView(ModaBaseView):
         return render(request, 'moda/expedicao_detail.html', {
             'title': f'Expedição #{expedicao.numero:04d}',
             'expedicao': expedicao,
+            # O link do aceite de entrega. Montado com `build_absolute_uri`
+            # e não fixado num setting: o endereço tem de apontar para o
+            # domínio de onde a tela foi aberta, senão o link copiado em
+            # homologação levaria o cliente para produção.
+            'link_entrega': request.build_absolute_uri(
+                reverse('moda_publico:entrega', args=[expedicao.codigo])
+            ),
             # Booleanos prontos: o template do Django nao chama metodo com
             # argumento, e espalhar a regra em `{% if status == 'x' or ... %}`
             # significaria repetir a ordem das etapas em dois lugares.
