@@ -692,27 +692,80 @@
           mais abaixo e digitava de novo. Aqui é um passo só.
         {% endcomment %}
         {% if tamanhos_disponiveis %}
-          <div class="rounded-lg p-4"
+          {% comment %}
+            A GRADE ESCOLHIDA decide quais tamanhos aparecem para lançar.
+            Antes vinham todos os tamanhos da filial num bloco só, e quem
+            lançava um infantil tinha de achar as siglas certas no meio das
+            de adulto.
+
+            Todos os blocos usam os MESMOS nomes de campo (`grade_<id>`),
+            porque é assim que a view lê. Por isso o que não está à vista
+            vai DESABILITADO: campo escondido por `display:none` continua
+            sendo enviado, e o navegador mandaria o mesmo `grade_<id>` duas
+            vezes -- o `request.POST` fica com o valor do último, que seria
+            o do bloco invisível (zero), apagando o que foi digitado.
+            `:disabled` tira o campo do envio, que é o mecanismo certo.
+
+            O padrão continua "Todos os tamanhos": abrir já filtrado por uma
+            grade esconderia tamanhos que hoje aparecem.
+          {% endcomment %}
+          <div class="rounded-lg p-4" x-data="{ gradeEscolhida: '{{ grade_escolhida }}' }"
                :style="temaClaro ? 'background:#f8fafc;' : 'background:#18181b;'">
             <div class="flex items-baseline justify-between gap-2 flex-wrap">
               <p class="text-xs font-semibold uppercase tracking-wider"
                  :style="temaClaro ? 'color:#374151;' : 'color:#cbd5e1;'">Grade — quantidade por tamanho</p>
+              {% if grades_disponiveis %}
+                <select name="grade_escolhida" x-model="gradeEscolhida"
+                        class="form-input text-sm" style="max-width:240px;">
+                  <option value="">Todos os tamanhos</option>
+                  {% for g in grades_disponiveis %}
+                    <option value="{{ g.pk }}">{{ g.nome }} — {{ g.get_tipo_display }}</option>
+                  {% endfor %}
+                </select>
+              {% endif %}
               <p class="text-xs" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
                 Deixe em branco para lançar depois. A quantidade do item
                 passa a ser a soma da grade.
               </p>
             </div>
-            <div class="grid grid-cols-4 sm:grid-cols-8 gap-2 mt-3">
+
+            {# Todos os tamanhos da filial — o de sempre, e o padrão. #}
+            <div class="grid grid-cols-4 sm:grid-cols-8 gap-2 mt-3" x-show="gradeEscolhida === ''">
               {% for t in tamanhos_disponiveis %}
                 <div>
                   <label class="block text-xs text-center font-bold mb-1"
                          :style="temaClaro ? 'color:#374151;' : 'color:#cbd5e1;'"
-                         for="grade_{{ t.pk }}">{{ t.sigla }}</label>
-                  <input type="number" min="0" id="grade_{{ t.pk }}" name="grade_{{ t.pk }}"
+                         for="gradetodos_{{ t.pk }}">{{ t.sigla }}</label>
+                  <input type="number" min="0" id="gradetodos_{{ t.pk }}" name="grade_{{ t.pk }}"
+                         :disabled="gradeEscolhida !== ''"
                          class="form-input w-full text-center text-sm" placeholder="0">
                 </div>
               {% endfor %}
             </div>
+
+            {# Um bloco por grade cadastrada, na ordem da ficha de produção. #}
+            {% for g in grades_disponiveis %}
+              <div class="grid grid-cols-4 sm:grid-cols-8 gap-2 mt-3" x-cloak
+                   x-show="gradeEscolhida === '{{ g.pk }}'">
+                {% for i in g.itens.all %}
+                  <div>
+                    <label class="block text-xs text-center font-bold mb-1"
+                           :style="temaClaro ? 'color:#374151;' : 'color:#cbd5e1;'"
+                           for="grade{{ g.pk }}_{{ i.tamanho.pk }}">{{ i.tamanho.sigla }}</label>
+                    <input type="number" min="0" id="grade{{ g.pk }}_{{ i.tamanho.pk }}"
+                           name="grade_{{ i.tamanho.pk }}"
+                           :disabled="gradeEscolhida !== '{{ g.pk }}'"
+                           class="form-input w-full text-center text-sm" placeholder="0">
+                  </div>
+                {% empty %}
+                  <p class="col-span-full text-xs" style="color:#d97706;">
+                    A grade {{ g.nome }} não tem tamanho nenhum.
+                    <a href="{% url 'moda:grade-update' g.pk %}" class="underline">Edite a grade</a>
+                    ou escolha “Todos os tamanhos”.
+                  </p>
+                {% endfor %}
+              </div>
+            {% endfor %}
           </div>
         {% else %}
           <p class="text-xs" style="color:#d97706;">

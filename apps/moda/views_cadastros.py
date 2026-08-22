@@ -460,6 +460,29 @@ def contexto_do_pedido(request, pedido, **extra) -> dict:
         'form_visual': VisualItemPedidoForm(filial=filial),
         'tabela': GradePedidoService.montar_tabela(pedido),
         'tamanhos_disponiveis': Tamanho.objects.for_filial(filial).filter(ativo=True),
+        # As grades cadastradas, para escolher no formulário do produto quais
+        # tamanhos entram. `ItemGrade` já ordena por `ordem`, então o prefetch
+        # devolve cada grade na ordem que vai para a ficha de produção.
+        'grades_disponiveis': (
+            Grade.objects.for_filial(filial).filter(ativo=True).prefetch_related(
+                Prefetch('itens', queryset=ItemGrade.objects.select_related('tamanho'))
+            )
+        ),
+        # Qual grade o <select> reabre marcada quando o formulário volta com
+        # erro. Em GET o POST é vazio e cai em "todos os tamanhos", que é o
+        # comportamento de sempre.
+        #
+        # SÓ DÍGITOS. O template usa este valor dentro de uma string
+        # JavaScript (`x-data="{ gradeEscolhida: '...' }"`), e ali o
+        # autoescape do Django NÃO protege: ele vira a aspa em `&#x27;`, mas
+        # o parser HTML decodifica de volta para `'` antes de o Alpine
+        # avaliar a expressão, o que deixaria fechar a string e injetar
+        # código. Peneirar na origem resolve, e o campo só pode mesmo ser
+        # um pk ou vazio.
+        'grade_escolhida': (
+            request.POST.get('grade_escolhida', '')
+            if request.POST.get('grade_escolhida', '').isdigit() else ''
+        ),
         'individuais': pedido.individuais.select_related('item', 'tamanho').all(),
         'conferencia': IndividualService.conferir(pedido),
         # O QUE TRAVA A PRODUCAO, na propria tela do pedido. As onze
