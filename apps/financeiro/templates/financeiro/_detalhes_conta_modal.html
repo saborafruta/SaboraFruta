@@ -48,6 +48,7 @@
       <div>
         <p class="mb-3 text-xs font-semibold uppercase tracking-wide text-blue-500">Dados do título</p>
         <div class="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+          <label class="text-xs font-medium sm:col-span-2 lg:col-span-3">Descrição da despesa{{ edicao_lancamento_form.descricao_despesa|add_class:"form-input mt-1 w-full" }}{% if edicao_lancamento_form.descricao_despesa.errors %}<span class="mt-1 block text-rose-500">{{ edicao_lancamento_form.descricao_despesa.errors|striptags }}</span>{% endif %}<span class="mt-1 block font-normal opacity-60">Este será o texto principal exibido no caixa, nas contas pagas e nos relatórios.</span></label>
           {% if conta.tipo_lancamento == 'fornecedor' %}<label class="text-xs font-medium sm:col-span-2">Fornecedor{{ edicao_lancamento_form.fornecedor|add_class:"form-input mt-1 w-full" }}</label>{% endif %}
           <label class="text-xs font-medium">Valor (R$){{ edicao_lancamento_form.valor_original|add_class:"form-input mt-1 w-full" }}</label>
           <label class="text-xs font-medium">Vencimento{{ edicao_lancamento_form.data_vencimento|add_class:"form-input mt-1 w-full" }}</label>
