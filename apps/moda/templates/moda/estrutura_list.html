@@ -1,0 +1,117 @@
+{% extends "_base.html" %}
+{% block title %}{{ title }}{% endblock %}
+{% block page_title %}{{ title }}{% endblock %}
+{% block content %}
+<div class="space-y-5">
+  <div>
+    <p class="text-sm mb-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+      <a href="{% url 'moda:grupo' 'engenharia' %}" :style="temaClaro ? 'color:#3b82f6;' : 'color:#60a5fa;'">Engenharia</a>
+      <span class="mx-1">›</span> Estrutura do Produto
+    </p>
+    <h2 class="text-2xl font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">Estrutura do Produto</h2>
+    <p class="text-sm mt-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+      Produto dentro de produto — o “Conjunto = Camisa + Calção”. Produzir o
+      conjunto passa a ser produzir as partes, e o custo dele sai da soma
+      delas. Materiais continuam na <strong>Ficha Técnica</strong>: tecido e
+      botão entram na peça, não são peças.
+    </p>
+  </div>
+
+  <form method="get" class="card p-4">
+    <div class="flex gap-2 flex-wrap">
+      <input type="text" name="q" value="{{ busca }}" class="form-input flex-1 min-w-[220px]"
+             placeholder="Buscar por nome, código ou referência...">
+      <select name="filtro" class="form-input text-sm" style="max-width:200px;">
+        <option value="">Todos os produtos</option>
+        <option value="compostos" {% if filtro == 'compostos' %}selected{% endif %}>Só compostos ({{ total_compostos }})</option>
+        <option value="soltos" {% if filtro == 'soltos' %}selected{% endif %}>Só peças soltas</option>
+      </select>
+      <button type="submit" class="btn-primary">Buscar</button>
+      {% if tem_filtro %}<a href="{% url 'moda:estrutura-list' %}" class="btn-secondary">Limpar</a>{% endif %}
+    </div>
+  </form>
+
+  <div class="card overflow-hidden">
+    {% if page_obj.object_list %}
+      <div class="overflow-x-auto">
+        <table class="w-full text-sm">
+          <thead>
+            <tr class="border-b" :style="temaClaro ? 'border-color:#e2e8f0;' : 'border-color:#2a2a2e;'">
+              <th class="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wide"
+                  :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Produto</th>
+              <th class="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wide"
+                  :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Composição</th>
+              <th class="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wide"
+                  :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Usado em</th>
+              <th class="text-right px-4 py-3"></th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for p in page_obj.object_list %}
+              <tr class="border-b" :style="temaClaro ? 'border-color:#f1f5f9;' : 'border-color:#1e1e22;'">
+                <td class="px-4 py-3">
+                  <span class="font-medium" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">{{ p.nome }}</span>
+                  <span class="block text-xs font-mono mt-0.5"
+                        :style="temaClaro ? 'color:#94a3b8;' : 'color:#6b7280;'">{{ p.codigo }}</span>
+                </td>
+                <td class="px-4 py-3">
+                  {% if p.qtd_componentes %}
+                    <span class="soft-pill is-blue text-xs">{{ p.qtd_componentes }} componente{{ p.qtd_componentes|pluralize }}</span>
+                  {% else %}
+                    <span class="text-xs" :style="temaClaro ? 'color:#94a3b8;' : 'color:#6b7280;'">peça solta</span>
+                  {% endif %}
+                </td>
+                <td class="px-4 py-3">
+                  {% if p.qtd_usos %}
+                    <span class="text-xs" :style="temaClaro ? 'color:#374151;' : 'color:#cbd5e1;'">
+                      compõe {{ p.qtd_usos }} produto{{ p.qtd_usos|pluralize }}
+                    </span>
+                  {% else %}
+                    <span class="text-xs" :style="temaClaro ? 'color:#94a3b8;' : 'color:#6b7280;'">—</span>
+                  {% endif %}
+                </td>
+                <td class="px-4 py-3 text-right whitespace-nowrap">
+                  <a href="{% url 'moda:estrutura-detail' p.pk %}" class="btn-secondary text-xs">
+                    {% if p.qtd_componentes %}Ver estrutura{% else %}Montar{% endif %}
+                  </a>
+                </td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+
+      {% if page_obj.paginator.num_pages > 1 %}
+        <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 px-5 py-3 text-sm"
+             :style="temaClaro ? 'border-top:1px solid #e2e8f0;' : 'border-top:1px solid #2a2a2e;'">
+          <div :style="temaClaro ? 'color:#6b7280;' : 'color:#94a3b8;'">
+            Página {{ page_obj.number }} de {{ page_obj.paginator.num_pages }}
+            <span :style="temaClaro ? 'color:#9ca3af;' : 'color:#6b7280;'">({{ page_obj.paginator.count }} produtos)</span>
+          </div>
+          <div class="flex gap-2">
+            {% if page_obj.has_previous %}
+              <a href="?{% if page_querystring %}{{ page_querystring }}&{% endif %}page={{ page_obj.previous_page_number }}" class="btn-secondary">← Anterior</a>
+            {% endif %}
+            {% if page_obj.has_next %}
+              <a href="?{% if page_querystring %}{{ page_querystring }}&{% endif %}page={{ page_obj.next_page_number }}" class="btn-secondary">Próxima →</a>
+            {% endif %}
+          </div>
+        </div>
+      {% endif %}
+    {% else %}
+      <div class="p-10 text-center">
+        {% if tem_filtro %}
+          <p class="text-sm" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Nenhum produto com esse filtro.</p>
+          <a href="{% url 'moda:estrutura-list' %}" class="btn-secondary text-sm mt-4 inline-block">Ver todos</a>
+        {% else %}
+          <p class="text-sm font-medium" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">Nenhum produto cadastrado ainda.</p>
+          <p class="text-sm mt-2" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+            A estrutura se monta sobre produtos que já existem no catálogo.
+          </p>
+          <a href="{% url 'moda:produto-list' %}" class="btn-primary text-sm mt-4 inline-block">Ir para Produtos</a>
+        {% endif %}
+      </div>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}

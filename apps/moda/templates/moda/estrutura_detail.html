@@ -1,0 +1,208 @@
+{% extends "_base.html" %}
+{% block title %}{{ title }}{% endblock %}
+{% block page_title %}{{ title }}{% endblock %}
+{% block content %}
+<div class="space-y-5 max-w-5xl">
+  <div class="flex flex-wrap items-start justify-between gap-3">
+    <div>
+      <p class="text-sm mb-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+        <a href="{% url 'moda:grupo' 'engenharia' %}" :style="temaClaro ? 'color:#3b82f6;' : 'color:#60a5fa;'">Engenharia</a>
+        <span class="mx-1">›</span>
+        <a href="{% url 'moda:estrutura-list' %}" :style="temaClaro ? 'color:#3b82f6;' : 'color:#60a5fa;'">Estrutura do Produto</a>
+        <span class="mx-1">›</span> {{ produto.nome }}
+      </p>
+      <h2 class="text-2xl font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">{{ produto.nome }}</h2>
+      <p class="text-xs font-mono mt-0.5" :style="temaClaro ? 'color:#94a3b8;' : 'color:#6b7280;'">{{ produto.codigo }}</p>
+    </div>
+    <a href="{% url 'moda:produto-detail' produto.pk %}" class="btn-secondary">Ver produto</a>
+  </div>
+
+  {% comment %}
+    O custo é somado na LEITURA, como o da ficha técnica. Gravado, ficaria
+    velho no instante em que alguém corrigisse o preço de um aviamento três
+    níveis abaixo -- e ninguém confia num custo que pode estar velho.
+  {% endcomment %}
+  <div class="grid gap-3 sm:grid-cols-3">
+    <div class="card p-4">
+      <p class="text-xs uppercase tracking-wide" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Materiais da peça</p>
+      <p class="text-xl font-semibold mt-1" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">R$ {{ custo_proprio|floatformat:2 }}</p>
+      <p class="text-xs mt-1" :style="temaClaro ? 'color:#94a3b8;' : 'color:#6b7280;'">da ficha técnica deste produto</p>
+    </div>
+    <div class="card p-4">
+      <p class="text-xs uppercase tracking-wide" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Custo com as partes</p>
+      <p class="text-xl font-semibold mt-1" :style="temaClaro ? 'color:#059669;' : 'color:#34d399;'">R$ {{ custo_total|floatformat:2 }}</p>
+      <p class="text-xs mt-1" :style="temaClaro ? 'color:#94a3b8;' : 'color:#6b7280;'">somando a estrutura inteira</p>
+    </div>
+    <div class="card p-4">
+      <p class="text-xs uppercase tracking-wide" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Componentes diretos</p>
+      <p class="text-xl font-semibold mt-1" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">{{ diretos|length }}</p>
+    </div>
+  </div>
+
+  {# ── Componentes diretos: o nível que ESTA tela edita ───────────────── #}
+  <div class="card p-5 space-y-4">
+    <div>
+      <h3 class="text-sm font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">Componentes diretos</h3>
+      <p class="text-xs mt-0.5" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+        Quantas unidades de cada peça entram em <strong>uma</strong> unidade de {{ produto.nome }}.
+      </p>
+    </div>
+
+    {% if diretos %}
+      <form method="post" action="{% url 'moda:estrutura-salvar' produto.pk %}">
+        {% csrf_token %}
+        <div class="overflow-x-auto">
+          <table class="w-full text-sm">
+            <thead>
+              <tr class="border-b" :style="temaClaro ? 'border-color:#e2e8f0;' : 'border-color:#2a2a2e;'">
+                <th class="text-left px-2 py-2 text-xs font-semibold uppercase tracking-wide"
+                    :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Componente</th>
+                <th class="px-2 py-2 text-xs font-semibold uppercase tracking-wide text-center"
+                    :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'" style="width:110px;">Qtd</th>
+                <th class="text-right px-2 py-2 text-xs font-semibold uppercase tracking-wide"
+                    :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'" style="width:120px;">Materiais</th>
+                <th class="px-2 py-2" style="width:90px;"></th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for elo in diretos %}
+                <tr class="border-b" :style="temaClaro ? 'border-color:#f1f5f9;' : 'border-color:#1e1e22;'">
+                  <td class="px-2 py-2">
+                    <a href="{% url 'moda:estrutura-detail' elo.componente.pk %}" class="font-medium"
+                       :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">{{ elo.componente.nome }}</a>
+                    <span class="block text-xs font-mono mt-0.5"
+                          :style="temaClaro ? 'color:#94a3b8;' : 'color:#6b7280;'">{{ elo.componente.codigo }}</span>
+                    {% if elo.observacao %}
+                      <span class="block text-xs mt-0.5" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">{{ elo.observacao }}</span>
+                    {% endif %}
+                  </td>
+                  <td class="px-2 py-2 text-center">
+                    <input type="text" name="qtd_{{ elo.pk }}" value="{{ elo.quantidade|floatformat:'-3' }}"
+                           class="form-input w-full text-center text-sm" style="padding:6px 4px;">
+                  </td>
+                  <td class="px-2 py-2 text-right" :style="temaClaro ? 'color:#374151;' : 'color:#cbd5e1;'">
+                    {% if elo.componente.ficha %}R$ {{ elo.componente.ficha.custo_estimado|floatformat:2 }}
+                    {% else %}<span :style="temaClaro ? 'color:#94a3b8;' : 'color:#6b7280;'">sem ficha</span>{% endif %}
+                  </td>
+                  <td class="px-2 py-2 text-right">
+                    {% comment %}
+                      Fora do form de salvar: form dentro de form é HTML
+                      inválido, e o parser descarta a tag aberta -- o botão
+                      acabaria salvando as quantidades em vez de remover.
+                    {% endcomment %}
+                    <button type="submit" form="rm-{{ elo.pk }}" class="text-xs font-semibold"
+                            style="color:#f87171;">remover</button>
+                  </td>
+                </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+        <div class="flex justify-end mt-4">
+          <button type="submit" class="btn-primary text-sm">Salvar quantidades</button>
+        </div>
+      </form>
+
+      {% for elo in diretos %}
+        <form id="rm-{{ elo.pk }}" method="post" class="hidden"
+              action="{% url 'moda:estrutura-remove' produto.pk elo.pk %}"
+              onsubmit="return confirm('Tirar {{ elo.componente.nome|escapejs }} da estrutura de {{ produto.nome|escapejs }}?');">{% csrf_token %}</form>
+      {% endfor %}
+    {% else %}
+      <p class="text-sm" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+        {{ produto.nome }} ainda é uma peça solta. Acrescente abaixo as peças
+        que o compõem.
+      </p>
+    {% endif %}
+  </div>
+
+  {# ── Acrescentar ─────────────────────────────────────────────────────── #}
+  <div class="card p-5">
+    <h3 class="text-sm font-semibold mb-3" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">Acrescentar componente</h3>
+    <form method="post" action="{% url 'moda:estrutura-add' produto.pk %}"
+          class="grid gap-3 sm:grid-cols-12 items-end">
+      {% csrf_token %}
+      <div class="sm:col-span-6">
+        <label class="block text-xs mb-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Produto *</label>
+        <select name="componente" class="form-input w-full text-sm" required>
+          <option value="">Escolha o componente...</option>
+          {% for c in candidatos %}
+            <option value="{{ c.pk }}">{{ c.nome }} · {{ c.codigo }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="sm:col-span-2">
+        <label class="block text-xs mb-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Quantidade</label>
+        <input type="text" name="quantidade" value="1" class="form-input w-full text-sm text-center">
+      </div>
+      <div class="sm:col-span-3">
+        <label class="block text-xs mb-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Observação</label>
+        <input type="text" name="observacao" class="form-input w-full text-sm" placeholder="Opcional">
+      </div>
+      <div class="sm:col-span-1">
+        <button type="submit" class="btn-primary text-sm w-full">Incluir</button>
+      </div>
+    </form>
+  </div>
+
+  {# ── A árvore inteira ────────────────────────────────────────────────── #}
+  {% if arvore %}
+    <div class="card p-5">
+      <div class="mb-3">
+        <h3 class="text-sm font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">Estrutura explodida</h3>
+        <p class="text-xs mt-0.5" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+          A quantidade já vem multiplicada pela cadeia — é o número que a
+          produção usa. Níveis abaixo do primeiro pertencem ao próprio dono:
+          clique para editá-los lá.
+        </p>
+      </div>
+      <div class="overflow-x-auto">
+        <table class="w-full text-sm">
+          <tbody>
+            {% for no in arvore %}
+              <tr class="border-b" :style="temaClaro ? 'border-color:#f1f5f9;' : 'border-color:#1e1e22;'">
+                <td class="px-2 py-2">
+                  <span style="display:inline-block; width:{% widthratio no.nivel 1 18 %}px;"></span>
+                  <span :style="temaClaro ? 'color:#94a3b8;' : 'color:#6b7280;'">└</span>
+                  <a href="{% url 'moda:estrutura-detail' no.produto.pk %}"
+                     :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">{{ no.produto.nome }}</a>
+                  {% if no.ciclo %}
+                    <span class="soft-pill is-red text-xs ml-2">ciclo — não descido</span>
+                  {% elif no.tem_filhos %}
+                    <span class="text-xs ml-2" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">tem estrutura própria</span>
+                  {% endif %}
+                </td>
+                <td class="px-2 py-2 text-center whitespace-nowrap" style="width:130px;">
+                  <span class="font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">{{ no.quantidade_total|floatformat:'-3' }}</span>
+                  <span class="text-xs" :style="temaClaro ? 'color:#94a3b8;' : 'color:#6b7280;'">un</span>
+                </td>
+                <td class="px-2 py-2 text-right whitespace-nowrap" style="width:120px;"
+                    :style="temaClaro ? 'color:#374151;' : 'color:#cbd5e1;'">
+                  R$ {{ no.custo_total|floatformat:2 }}
+                </td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  {% endif %}
+
+  {# ── Onde este produto é usado ───────────────────────────────────────── #}
+  {% if usado_em %}
+    <div class="card p-5">
+      <h3 class="text-sm font-semibold mb-2" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">Este produto compõe</h3>
+      <p class="text-xs mb-3" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+        Mudar a ficha desta peça muda o custo de todos eles.
+      </p>
+      <div class="flex flex-wrap gap-2">
+        {% for elo in usado_em %}
+          <a href="{% url 'moda:estrutura-detail' elo.pai.pk %}" class="soft-pill is-slate text-xs">
+            {{ elo.pai.nome }} <span class="opacity-70">({{ elo.quantidade|floatformat:'-3' }} un)</span>
+          </a>
+        {% endfor %}
+      </div>
+    </div>
+  {% endif %}
+</div>
+{% endblock %}

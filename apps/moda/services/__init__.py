@@ -1,4 +1,5 @@
 from .corte import CorteService
+from . import estrutura as EstruturaService
 from .expedicao import ExpedicaoService
 from .financeiro import FinanceiroPedidoService, Parcela
 from .fluxo import FluxoService
@@ -13,7 +14,8 @@ from .variantes import ResultadoGeracao, VarianteService, montar_sku
 from .wip import WipService
 
 __all__ = [
-    'CorteService', 'ExpedicaoService', 'FinanceiroPedidoService', 'FluxoService', 'GradePedidoService',
+    'CorteService', 'EstruturaService', 'ExpedicaoService',
+    'FinanceiroPedidoService', 'FluxoService', 'GradePedidoService',
     'IndividualService', 'KanbanService', 'NecessidadeService',
     'OrdemProducaoService', 'Parcela', 'PcpService',
     'QualidadeService', 'ResultadoGeracao', 'VarianteService', 'WipService',

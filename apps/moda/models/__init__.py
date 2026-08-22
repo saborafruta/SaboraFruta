@@ -3,6 +3,7 @@ from .arquivo import ArquivoPedido
 from .cadastros import Categoria, Colecao, Cor, Linha, Marca, Modelo, Tecido
 from .corte import ItemCorte, RegistroCorte
 from .encaixe import Encaixe
+from .estrutura import EstruturaProduto
 from .expedicao import Expedicao, ItemConferencia, Volume
 from .ficha import FichaTecnica, ImagemFicha, MaterialFicha
 from .fluxo import EtapaOrdem
@@ -29,6 +30,7 @@ __all__ = [
     'Cor',
     'Encaixe',
     'Etapa'[:5] + 'Ordem',
+    'EstruturaProduto',
     'Expedicao',
     'ItemConferencia',
     'Volume',
