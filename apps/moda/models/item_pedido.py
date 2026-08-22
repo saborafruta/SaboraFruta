@@ -48,8 +48,8 @@ class ItemPedidoProducao(models.Model):
         'moda.Tecido', on_delete=models.PROTECT, null=True, blank=True,
         related_name='itens_pedido', verbose_name='Tecido / Malha',
     )
-    # A GRADE DESTE ITEM, quando o pedido leva o mesmo produto em mais de
-    # uma (ex.: a mesma camisa em Adulto e em OverSize).
+    # A GRADE DE TAMANHO DESTE ITEM, quando o pedido leva o mesmo produto em
+    # mais de uma (ex.: a mesma camisa em Adulto e em OverSize).
     #
     # Precisa ser uma linha por grade, não uma linha só: a quantidade mora
     # em `ItemGradePedido`, com `unique_together ('item','tamanho')`, e as
@@ -58,11 +58,17 @@ class ItemPedidoProducao(models.Model):
     # colidiriam na mesma chave e um apagaria o outro. Separadas também é
     # como a produção lê: são cortes diferentes.
     #
+    # O NOME NÃO PODE SER `grade`: esse já é o acessor reverso de
+    # `ItemGradePedido.item` (`related_name='grade'`), que é por onde o
+    # resto do sistema lê as quantidades do item -- inclusive o prefetch
+    # `itens__grade__tamanho`. Chamar o campo de `grade` derruba o Django no
+    # system check (fields.E302/E303), antes mesmo de rodar migration.
+    #
     # SET_NULL para apagar uma grade do cadastro não levar junto o histórico
     # do pedido; nulo é o item lançado sem grade, que é o caso de sempre.
-    grade = models.ForeignKey(
+    grade_tamanho = models.ForeignKey(
         'moda.Grade', on_delete=models.SET_NULL, null=True, blank=True,
-        related_name='itens_pedido',
+        related_name='itens_pedido', verbose_name='Grade de tamanho',
     )
 
     # Gola e manga são do Modelo, mas ficam gravadas aqui também, e não só
@@ -127,8 +133,8 @@ class ItemPedidoProducao(models.Model):
         sem como saber qual é qual.
         """
         base = self.produto.nome if self.produto_id else (self.descricao or 'Item sem descrição')
-        if self.grade_id:
-            return f'{base} — {self.grade.nome}'
+        if self.grade_tamanho_id:
+            return f'{base} — {self.grade_tamanho.nome}'
         return base
 
     @property

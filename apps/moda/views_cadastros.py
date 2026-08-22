@@ -785,14 +785,14 @@ class ItemPedidoCreateView(ModaBaseView):
             item.pk = None
             item._state.adding = True
             item.pedido = pedido
-            item.grade = grade
+            item.grade_tamanho = grade
             item.ordem = ultima + posicao * 10
             item.save()
             pks.append(item.pk)
 
         criados = list(
             ItemPedidoProducao.objects.filter(pk__in=pks)
-            .select_related('grade', 'produto').order_by('ordem')
+            .select_related('grade_tamanho', 'produto').order_by('ordem')
         )
         item = criados[0]
         if len(criados) == 1:
@@ -800,7 +800,7 @@ class ItemPedidoCreateView(ModaBaseView):
         else:
             recado = [
                 f'{len(criados)} itens adicionados ao pedido, um por grade: '
-                f'{", ".join(i.grade.nome for i in criados)}.'
+                f'{", ".join(i.grade_tamanho.nome for i in criados)}.'
             ]
         if getattr(form, 'produto_importado', None) is not None:
             # Produto escolhido do cadastro do ERP: ele foi TRAZIDO para a
@@ -846,7 +846,7 @@ class ItemPedidoCreateView(ModaBaseView):
         """
         quantidades = {}
         for item in itens:
-            prefixo = f'grade_{item.grade_id}_' if item.grade_id else 'grade_'
+            prefixo = f'grade_{item.grade_tamanho_id}_' if item.grade_tamanho_id else 'grade_'
             for chave, valor in request.POST.items():
                 if not chave.startswith(prefixo):
                     continue
