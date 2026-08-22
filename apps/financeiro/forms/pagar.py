@@ -307,6 +307,107 @@ class ContaPagarForm(forms.Form):
         return cleaned
 
 
+class DespesaPagaForm(forms.Form):
+    """Registro direto de uma despesa que ja foi paga."""
+
+    tipo_lancamento = forms.ChoiceField(
+        choices=(
+            (ContaPagar.TipoLancamento.FORNECEDOR, 'Fornecedor'),
+            (ContaPagar.TipoLancamento.FUNCIONARIO, 'Funcionario'),
+        ),
+        initial=ContaPagar.TipoLancamento.FORNECEDOR,
+        widget=forms.HiddenInput,
+    )
+    fornecedor = FornecedorChoiceField(
+        queryset=Fornecedor.objects.none(), required=False, label='Fornecedor',
+    )
+    funcionario = FuncionarioChoiceField(
+        queryset=Funcionario.objects.none(), required=False, label='Funcionario',
+    )
+    valor_original = forms.DecimalField(
+        max_digits=14, decimal_places=2, min_value=Decimal('0.01'),
+        label='Valor pago (R$)', widget=VALOR_WIDGET,
+    )
+    plano_contas = CategoriaFinanceiraChoiceField(
+        queryset=PlanoContas.objects.none(), required=True,
+        label='Categoria especifica',
+    )
+    forma_pagamento_utilizada = forms.ModelChoiceField(
+        queryset=FormaPagamento.objects.none(), required=True,
+        label='Forma de pagamento',
+    )
+    conta_bancaria_pagamento = forms.ModelChoiceField(
+        queryset=ContaBancaria.objects.none(), required=False,
+        label='Conta usada',
+    )
+    observacao = forms.CharField(
+        widget=forms.Textarea(attrs={'rows': 3}), required=False,
+        label='Observacao',
+    )
+    comprovante_pagamento = forms.FileField(
+        required=False, label='Comprovante', widget=COMPROVANTE_WIDGET,
+        validators=[validar_comprovante],
+    )
+
+    def __init__(self, *args, filial=None, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.categoria_grupos = []
+        self.categoria_subgrupos = []
+        self.contas_contabeis = []
+        if not filial:
+            return
+
+        self.fields['fornecedor'].queryset = (
+            Fornecedor.objects.for_filial(filial).filter(ativo=True).order_by('razao_social')
+        )
+        self.fields['funcionario'].queryset = (
+            Funcionario.objects.for_filial(filial).filter(ativo=True).order_by('nome')
+        )
+        self.fields['forma_pagamento_utilizada'].queryset = (
+            FormaPagamento.objects.filter(empresa=filial.empresa, ativo=True).order_by('descricao')
+        )
+        self.fields['conta_bancaria_pagamento'].queryset = (
+            ContaBancaria.objects.for_filial(filial).filter(ativo=True).order_by('descricao')
+        )
+        self.fields['plano_contas'].queryset = (
+            PlanoContas.objects.filter(
+                empresa=filial.empresa, tipo='D', nivel=3, ativo=True,
+                aceita_lancamento=True, conta_contabil__isnull=False,
+            ).select_related('conta_pai__conta_pai', 'conta_contabil').order_by('codigo')
+        )
+        self.categoria_grupos = list(
+            PlanoContas.objects.filter(
+                empresa=filial.empresa, tipo='D', nivel=1, ativo=True,
+            ).order_by('codigo')
+        )
+        self.categoria_subgrupos = list(
+            PlanoContas.objects.filter(
+                empresa=filial.empresa, tipo='D', nivel=2, ativo=True,
+            ).select_related('conta_pai').order_by('codigo')
+        )
+        from apps.financeiro.models.plano_contabil import PlanoContabil
+        self.contas_contabeis = list(
+            PlanoContabil.objects.filter(
+                empresa=filial.empresa,
+                tipo_conta=PlanoContabil.TipoConta.ANALITICA,
+                ativo=True,
+            ).order_by('ordem')
+        )
+
+    def clean(self):
+        cleaned = super().clean()
+        tipo = cleaned.get('tipo_lancamento')
+        if tipo == ContaPagar.TipoLancamento.FUNCIONARIO:
+            cleaned['fornecedor'] = None
+            if not cleaned.get('funcionario'):
+                self.add_error('funcionario', 'Selecione o funcionario que recebeu o pagamento.')
+        else:
+            cleaned['funcionario'] = None
+            if not cleaned.get('fornecedor'):
+                self.add_error('fornecedor', 'Selecione o fornecedor que recebeu o pagamento.')
+        return cleaned
+
+
 class ContaPagarEdicaoAdminForm(forms.Form):
     """Correcao administrativa de um titulo e da baixa selecionada."""
 

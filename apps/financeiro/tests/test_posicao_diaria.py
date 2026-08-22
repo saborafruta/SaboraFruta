@@ -113,6 +113,7 @@ class PosicaoDiariaCaixaTests(TestCase):
         self.assertContains(response, "Adicionar saída manual")
         self.assertContains(response, "Adicionar conta a pagar")
         self.assertContains(response, reverse("financeiro:pagar_criar") + "?modal=1")
+        self.assertContains(response, reverse("financeiro:despesa_paga_criar") + "?modal=1")
         self.assertContains(response, "Transferir entre contas")
         self.assertEqual(len(response.context["dias_mes"]), 31)
         self.assertContains(response, 'aria-label="Ver dias anteriores"')

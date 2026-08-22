@@ -170,8 +170,8 @@ class DashboardContasServiceTests(TestCase):
         )
 
         self.assertIn(f'Título #{conta.pk}', html)
-        self.assertIn('Resumo financeiro', html)
-        self.assertIn('Abrir página completa', html)
+        self.assertIn('Dados do título', html)
+        self.assertIn('Valor original', html)
         self.assertIn('Registrar pagamento', html)
 
     def test_categorias_financeiras_abrem_em_despesas(self):
