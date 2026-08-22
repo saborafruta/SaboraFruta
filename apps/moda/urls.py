@@ -17,7 +17,7 @@ from . import (
     views_ordem as vo, views_pcp as vp,
     views_expedicao as vex, views_kanban as vk, views_necessidade as vn,
     views_alertas as val, views_aprovacao as vap, views_clientes as vcl,
-    views_orcamentos as vorc, views_estrutura as vest,
+    views_orcamentos as vorc, views_estrutura as vest, views_insumos as vins,
     views_comercial as vcom,
     views_dashboard as vd, views_historico as vh, views_qualidade as vq, views_qr as vqr,
     views_roteiro as vr, views_terminal as vt, views_wip as vw,
@@ -187,6 +187,9 @@ ROTAS_PRONTAS: list = [
     path('engenharia/estrutura-produto/<int:pk>/componentes/', vest.EstruturaAddView.as_view(), name='estrutura-add'),
     path('engenharia/estrutura-produto/<int:pk>/salvar/', vest.EstruturaSalvarView.as_view(), name='estrutura-salvar'),
     path('engenharia/estrutura-produto/<int:pk>/componentes/<int:elo_pk>/remover/', vest.EstruturaRemoveView.as_view(), name='estrutura-remove'),
+
+    # Aviamentos: leitura consolidada do que ja' esta' nas fichas.
+    path('engenharia/aviamentos/', vins.AviamentoListView.as_view(), name='aviamentos'),
 
     path('engenharia/ficha-tecnica/', vf.FichaListView.as_view(), name='ficha-list'),
     path('engenharia/ficha-tecnica/nova/', vf.FichaFormView.as_view(), name='ficha-create'),

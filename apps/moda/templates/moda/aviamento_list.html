@@ -1,0 +1,147 @@
+{% extends "_base.html" %}
+{% block title %}{{ title }}{% endblock %}
+{% block page_title %}{{ title }}{% endblock %}
+{% block content %}
+<div class="space-y-5">
+  <div>
+    <p class="text-sm mb-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+      <a href="{% url 'moda:grupo' 'engenharia' %}" :style="temaClaro ? 'color:#3b82f6;' : 'color:#60a5fa;'">Engenharia</a>
+      <span class="mx-1">›</span> Aviamentos
+    </p>
+    <h2 class="text-2xl font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">Aviamentos</h2>
+    <p class="text-sm mt-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+      Linhas, botões, zíperes e etiquetas usados nas fichas técnicas, reunidos
+      por aviamento. A ficha responde <em>o que entra nesta peça</em>; esta
+      tela responde o outro lado — <em>onde este aviamento é usado</em>.
+    </p>
+  </div>
+
+  {% comment %}
+    Os cartões são filtros. Quem abre esta tela normalmente vem atrás de um
+    dos dois problemas, e clicar no número é o caminho mais curto.
+  {% endcomment %}
+  <div class="grid gap-3 sm:grid-cols-3">
+    <a href="{% url 'moda:aviamentos' %}" class="card p-4 block">
+      <p class="text-xs uppercase tracking-wide" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Aviamentos</p>
+      <p class="text-2xl font-semibold mt-1" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">{{ resumo.total }}</p>
+    </a>
+    <a href="?filtro=sem_estoque" class="card p-4 block">
+      <p class="text-xs uppercase tracking-wide" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Sem vínculo com estoque</p>
+      <p class="text-2xl font-semibold mt-1" style="color:{% if resumo.sem_estoque %}#d97706{% else %}#059669{% endif %};">{{ resumo.sem_estoque }}</p>
+      <p class="text-xs mt-1" :style="temaClaro ? 'color:#94a3b8;' : 'color:#6b7280;'">sem saldo nem reserva</p>
+    </a>
+    <a href="?filtro=preco_divergente" class="card p-4 block">
+      <p class="text-xs uppercase tracking-wide" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Preço divergente</p>
+      <p class="text-2xl font-semibold mt-1" style="color:{% if resumo.preco_divergente %}#dc2626{% else %}#059669{% endif %};">{{ resumo.preco_divergente }}</p>
+      <p class="text-xs mt-1" :style="temaClaro ? 'color:#94a3b8;' : 'color:#6b7280;'">o mesmo item com dois custos</p>
+    </a>
+  </div>
+
+  <form method="get" class="card p-4">
+    <div class="flex gap-2 flex-wrap">
+      <input type="text" name="q" value="{{ busca }}" class="form-input flex-1 min-w-[220px]"
+             placeholder="Buscar por descrição, código ou produto...">
+      <select name="tipo" class="form-input text-sm" style="max-width:180px;">
+        <option value="">Todos os tipos</option>
+        {% for valor, rotulo in tipos %}
+          <option value="{{ valor }}" {% if tipo == valor %}selected{% endif %}>{{ rotulo }}</option>
+        {% endfor %}
+      </select>
+      <select name="filtro" class="form-input text-sm" style="max-width:200px;">
+        <option value="">Todos</option>
+        <option value="sem_estoque" {% if filtro == 'sem_estoque' %}selected{% endif %}>Sem vínculo com estoque</option>
+        <option value="preco_divergente" {% if filtro == 'preco_divergente' %}selected{% endif %}>Preço divergente</option>
+      </select>
+      <button type="submit" class="btn-primary">Buscar</button>
+      {% if tem_filtro %}<a href="{% url 'moda:aviamentos' %}" class="btn-secondary">Limpar</a>{% endif %}
+    </div>
+  </form>
+
+  <div class="space-y-3">
+    {% for a in aviamentos %}
+      <div class="card p-4" x-data="{ aberto: false }">
+        <div class="flex flex-wrap items-start justify-between gap-3">
+          <div class="min-w-0">
+            <div class="flex items-center gap-2 flex-wrap">
+              <span class="soft-pill is-slate text-xs">{{ a.tipo_rotulo }}</span>
+              <span class="font-medium" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">{{ a.descricao }}</span>
+              {% if a.codigo %}
+                <span class="font-mono text-xs" :style="temaClaro ? 'color:#94a3b8;' : 'color:#6b7280;'">{{ a.codigo }}</span>
+              {% endif %}
+            </div>
+            <p class="text-xs mt-1.5" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+              usado em {{ a.qtd_usos }} ficha{{ a.qtd_usos|pluralize }} ·
+              consumo somado {{ a.consumo_total|floatformat:'-4' }} {{ a.unidades|join:"/" }} ·
+              custo somado R$ {{ a.custo_total|floatformat:2 }}
+            </p>
+            <div class="flex flex-wrap gap-2 mt-2">
+              {% if a.sem_estoque %}
+                <span class="soft-pill is-amber text-xs">sem vínculo com estoque</span>
+              {% else %}
+                <span class="soft-pill is-green text-xs">estoque: {{ a.no_estoque }}</span>
+              {% endif %}
+              {% if a.preco_divergente %}
+                {% comment %}
+                  Os preços aparecem TODOS, e não só a contagem: quem vai
+                  corrigir precisa saber qual valor está certo, e a lista
+                  já mostra a diferença.
+                {% endcomment %}
+                <span class="soft-pill is-red text-xs">
+                  preços diferentes: {% for p in a.precos %}R$ {{ p|floatformat:2 }}{% if not forloop.last %} · {% endif %}{% endfor %}
+                </span>
+              {% endif %}
+            </div>
+          </div>
+          <button type="button" class="btn-secondary text-xs shrink-0" @click="aberto = !aberto"
+                  x-text="aberto ? 'Ocultar fichas' : 'Ver fichas'"></button>
+        </div>
+
+        <div x-show="aberto" x-cloak class="mt-3 pt-3"
+             :style="temaClaro ? 'border-top:1px solid #e5e7eb;' : 'border-top:1px solid #2a2a2e;'">
+          <table class="w-full text-sm">
+            <tbody>
+              {% for uso in a.usos %}
+                <tr class="border-b" :style="temaClaro ? 'border-color:#f1f5f9;' : 'border-color:#1e1e22;'">
+                  <td class="px-2 py-2">
+                    <a href="{% url 'moda:ficha-detail' uso.ficha.pk %}"
+                       :style="temaClaro ? 'color:#2563eb;' : 'color:#60a5fa;'">{{ uso.ficha.produto.nome }}</a>
+                    {% if uso.observacao %}
+                      <span class="block text-xs mt-0.5" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">{{ uso.observacao }}</span>
+                    {% endif %}
+                  </td>
+                  <td class="px-2 py-2 text-right whitespace-nowrap" :style="temaClaro ? 'color:#374151;' : 'color:#cbd5e1;'">
+                    {{ uso.consumo|floatformat:'-4' }} {{ uso.get_unidade_display }}
+                    {% if uso.perda %}
+                      <span class="text-xs" :style="temaClaro ? 'color:#94a3b8;' : 'color:#6b7280;'">+{{ uso.perda|floatformat:'-2' }}% perda</span>
+                    {% endif %}
+                  </td>
+                  <td class="px-2 py-2 text-right whitespace-nowrap" style="width:110px;"
+                      :style="temaClaro ? 'color:#374151;' : 'color:#cbd5e1;'">
+                    R$ {{ uso.custo_unitario|default:0|floatformat:2 }}
+                  </td>
+                </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    {% empty %}
+      <div class="card p-10 text-center">
+        {% if tem_filtro %}
+          <p class="text-sm" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Nenhum aviamento com esse filtro.</p>
+          <a href="{% url 'moda:aviamentos' %}" class="btn-secondary text-sm mt-4 inline-block">Ver todos</a>
+        {% else %}
+          <p class="text-sm font-medium" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
+            Nenhum aviamento lançado ainda.
+          </p>
+          <p class="text-sm mt-2" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+            Aviamento não se cadastra aqui: ele entra na <strong>ficha técnica</strong>
+            da peça, com consumo e custo. Esta tela reúne o que já foi lançado.
+          </p>
+          <a href="{% url 'moda:ficha-list' %}" class="btn-primary text-sm mt-4 inline-block">Ir para Ficha Técnica</a>
+        {% endif %}
+      </div>
+    {% endfor %}
+  </div>
+</div>
+{% endblock %}
