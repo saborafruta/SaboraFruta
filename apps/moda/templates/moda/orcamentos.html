@@ -172,6 +172,13 @@
                     {% endif %}
                   </td>
                   <td class="px-4 py-3 text-right whitespace-nowrap">
+                    {% comment %}
+                      O PDF do ORÇAMENTO, não o do pedido: aquele é a ficha
+                      da fábrica, com grade, arte e QR. Aqui a folha que vai
+                      para o cliente decidir a compra.
+                    {% endcomment %}
+                    <a href="{% url 'moda:pedido-orcamento-pdf' l.pedido.pk %}" target="_blank"
+                       class="btn-secondary text-xs">PDF</a>
                     <a href="{% url 'moda:pedido-update' l.pedido.pk %}"
                        class="btn-secondary text-xs">Editar</a>
                     {% if pode_fechar and l.pode_fechar %}

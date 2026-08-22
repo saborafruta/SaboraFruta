@@ -595,6 +595,39 @@ class PedidoPdfView(ModaBaseView):
         return resposta
 
 
+class OrcamentoPdfView(ModaBaseView):
+    """
+    O ORÇAMENTO em PDF — a folha comercial, no leiaute aprovado pela casa.
+
+    Documento separado do PDF do pedido: aquele é a ficha da fábrica, com
+    grade, arte e QR. Este é o que se manda para fechar negócio, e mandar a
+    ficha inteira para quem ainda não comprou expõe detalhe de produção e
+    afoga o preço, que é a única coisa que o cliente quer ver.
+
+    Inline, como a ficha: quem clica quer conferir antes de enviar.
+    """
+
+    def get(self, request, pk):
+        from django.http import HttpResponse
+
+        from .services.orcamento_pdf import OrcamentoPdfService
+
+        pedido = get_object_or_404(
+            PedidoProducao.objects.for_filial(_filial(request))
+            .select_related('cliente', 'filial', 'filial__empresa',
+                            'forma_pagamento', 'condicao_pagamento')
+            .prefetch_related('itens__produto', 'itens__cor', 'itens__tecido'),
+            pk=pk,
+        )
+        pdf = OrcamentoPdfService.gerar(pedido)
+
+        resposta = HttpResponse(pdf, content_type='application/pdf')
+        resposta['Content-Disposition'] = (
+            f'inline; filename="orcamento-{pedido.numero:06d}.pdf"'
+        )
+        return resposta
+
+
 # Os status que colocam o pedido na mão da fábrica. Chegar em qualquer
 # um deles é liberar produção, e cobra as onze validações.
 LIBERAM_PRODUCAO = (
