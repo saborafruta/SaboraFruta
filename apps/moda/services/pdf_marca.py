@@ -1,0 +1,179 @@
+"""
+A marca da casa nos documentos — tarja do topo e bloco da empresa.
+
+VIVE FORA dos dois serviços de PDF de propósito. O orçamento e o pedido têm
+o MESMO cabeçalho, e enquanto ele era código do orçamento, dar o mesmo
+cabeçalho ao pedido significava copiar. Duas cópias divergem na primeira
+mudança de cor ou de campo, e aí a casa passa a mandar dois documentos que
+não parecem da mesma empresa.
+
+As cores foram amostradas do PDF de referência aprovado, não escolhidas a
+olho.
+"""
+from __future__ import annotations
+
+from io import BytesIO
+from xml.sax.saxutils import escape
+
+from reportlab.lib import colors
+from reportlab.lib.pagesizes import A4
+from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
+from reportlab.lib.units import mm
+from reportlab.platypus import Image, Paragraph, Table, TableStyle
+
+VERMELHO = colors.HexColor('#eb4123')         # tarja do topo
+VERMELHO_TABELA = colors.HexColor('#eb2d46')  # cabeçalho de tabela e títulos
+FAIXA = colors.HexColor('#f5fafa')            # fundo do título de seção
+TEXTO = colors.HexColor('#333333')
+
+MARGEM = 18 * mm
+ALTURA_TARJA = 26 * mm
+LARGURA_UTIL = A4[0] - 2 * MARGEM
+
+
+def esc(valor) -> str:
+    """
+    Texto do cadastro pronto para entrar num Paragraph.
+
+    O `Paragraph` do reportlab interpreta um dialeto de XML, então `&`, `<` e
+    `>` vindos do cadastro precisam ser escapados. Sem isso "L&R SPORTS LTDA"
+    saía impresso "L&R; SPORTS LTDA" no documento que vai para o cliente.
+    """
+    return escape('' if valor is None else str(valor))
+
+
+def cep(valor: str) -> str:
+    digitos = ''.join(ch for ch in (valor or '') if ch.isdigit())
+    return f'{digitos[:5]}-{digitos[5:]}' if len(digitos) == 8 else (valor or '')
+
+
+def cnpj(valor: str) -> str:
+    d = ''.join(ch for ch in (valor or '') if ch.isdigit())
+    if len(d) != 14:
+        return valor or ''
+    return f'{d[:2]}.{d[2:5]}.{d[5:8]}/{d[8:12]}-{d[12:]}'
+
+
+def logo(filial, largura, altura):
+    """
+    A marca da filial, ou None quando o arquivo não abre.
+
+    Storage fora do ar não pode derrubar o documento inteiro: a folha sai sem
+    a marca, que é muito melhor do que não sair.
+    """
+    campo = getattr(filial, 'imagem', None)
+    if not campo:
+        return None
+    try:
+        campo.open('rb')
+        dados = BytesIO(campo.read())
+        campo.close()
+        return Image(dados, width=largura, height=altura, kind='proportional')
+    except Exception:
+        return None
+
+
+def estilos_empresa():
+    base = getSampleStyleSheet()
+    return {
+        'empresa': ParagraphStyle(
+            'emp', parent=base['Normal'], fontSize=8.5, leading=12, textColor=TEXTO,
+        ),
+        'empresa_dir': ParagraphStyle(
+            'empd', parent=base['Normal'], fontSize=8.5, leading=12,
+            textColor=TEXTO, alignment=2,
+        ),
+    }
+
+
+def desenhar_tarja(filial, titulo: str, subtitulo: str = ''):
+    """
+    Devolve o desenhador da faixa vermelha do topo, para o `onPage`.
+
+    Desenhada no CANVAS e não como flowable porque ela sangra de ponta a
+    ponta da folha, e flowable nenhum alcança a margem.
+    """
+    def desenhar(canvas, doc):
+        canvas.saveState()
+        largura, altura = A4
+        canvas.setFillColor(VERMELHO)
+        canvas.rect(0, altura - ALTURA_TARJA, largura, ALTURA_TARJA, stroke=0, fill=1)
+
+        marca = logo(filial, 34 * mm, 16 * mm)
+        fim_marca = MARGEM
+        if marca is not None:
+            l, a = marca.wrapOn(canvas, 34 * mm, 16 * mm)
+            marca.drawOn(canvas, MARGEM, altura - ALTURA_TARJA + (ALTURA_TARJA - a) / 2)
+            fim_marca = MARGEM + l
+
+        # O título é centralizado no espaço QUE SOBRA à direita da marca.
+        # Centralizar na folha inteira jogaria a palavra por cima do logo
+        # quando a marca é larga.
+        centro = fim_marca + (largura - fim_marca - MARGEM) / 2
+        base = altura - ALTURA_TARJA / 2
+
+        canvas.setFillColor(colors.white)
+        canvas.setFont('Helvetica-Bold', 22)
+        canvas.drawCentredString(centro, base - (2 if subtitulo else 7), titulo)
+        if subtitulo:
+            canvas.setFont('Helvetica-Bold', 12)
+            canvas.drawCentredString(centro, base - 16, subtitulo)
+        canvas.restoreState()
+
+    return desenhar
+
+
+def bloco_empresa(filial, e) -> Table:
+    """
+    Os dados da casa em duas colunas: identificação à esquerda, contato à
+    direita.
+
+    Montado CAMPO A CAMPO, e não pelo `str(filial)`: aquele devolve
+    "Eureka (/)" quando cidade e UF estão em branco, e um endereço com
+    parênteses vazios num documento que vai para o cliente parece defeito.
+    """
+    empresa = filial.empresa
+
+    rua = ', '.join(x for x in [filial.endereco, filial.numero] if x)
+    if filial.bairro:
+        rua = f'{rua}, {filial.bairro}' if rua else filial.bairro
+    cidade = ' - '.join(x for x in [filial.cidade, filial.uf] if x)
+    if filial.cep:
+        cidade = (
+            f'{cidade} | CEP: {cep(filial.cep)}' if cidade
+            else f'CEP: {cep(filial.cep)}'
+        )
+
+    esquerda = [f'<b>{esc(filial.razao_social)}</b>']
+    if rua:
+        esquerda.append(esc(rua))
+    if cidade:
+        esquerda.append(esc(cidade))
+
+    direita = []
+    if filial.cnpj:
+        direita.append(f'CNPJ: {esc(cnpj(filial.cnpj))}')
+    if filial.email:
+        direita.append(esc(filial.email))
+    contato = ' '.join(
+        x for x in [
+            esc(filial.telefone),
+            f'<b>{esc(empresa.site)}</b>' if getattr(empresa, 'site', '') else '',
+        ] if x
+    )
+    if contato:
+        direita.append(contato)
+
+    bloco = Table(
+        [[Paragraph('<br/>'.join(esquerda), e['empresa']),
+          Paragraph('<br/>'.join(direita), e['empresa_dir'])]],
+        colWidths=[LARGURA_UTIL * 0.55, LARGURA_UTIL * 0.45],
+    )
+    bloco.setStyle(TableStyle([
+        ('VALIGN', (0, 0), (-1, -1), 'TOP'),
+        ('LEFTPADDING', (0, 0), (-1, -1), 0),
+        ('RIGHTPADDING', (0, 0), (-1, -1), 0),
+        ('TOPPADDING', (0, 0), (-1, -1), 0),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 0),
+    ]))
+    return bloco

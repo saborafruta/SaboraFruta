@@ -50,14 +50,9 @@ def _pode_abrir(pedido) -> bool:
     aprovacao = getattr(pedido, 'aprovacao', None)
     return bool(aprovacao and aprovacao.liberado)
 
-# O que do acervo de arquivos aparece para o cliente. A escolha é por TIPO,
-# e não por arquivo: quem anexa não deveria ter de decidir, item a item, o
-# que vaza para fora -- e a decisão errada aqui manda contrato e planilha de
-# custo para o WhatsApp do cliente.
-TIPOS_VISIVEIS_AO_CLIENTE = (
-    ArquivoPedido.Tipo.ARTE,
-    ArquivoPedido.Tipo.REFERENCIA,
-)
+# A regra de o que sai do escritório mora no MODEL: a página do link e o PDF
+# são dois leitores do mesmo acervo, e duas listas divergiriam.
+from .models.arquivo import TIPOS_VISIVEIS_AO_CLIENTE  # noqa: E402
 
 
 def _blindar(resposta) -> None:
