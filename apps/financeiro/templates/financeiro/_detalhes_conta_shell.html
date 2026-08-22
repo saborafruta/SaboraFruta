@@ -1,6 +1,7 @@
 <template x-teleport="body">
   <div x-show="detalheAberto" x-cloak
-       class="fixed inset-0 z-[180] flex items-center justify-center p-0 sm:p-5"
+       class="fixed inset-0 flex items-center justify-center p-0 sm:p-5"
+       style="z-index:180"
        style="background:rgba(15,23,42,.82);backdrop-filter:blur(11px);-webkit-backdrop-filter:blur(11px)"
        @keydown.escape.window="fecharDetalhe()" @click.self="fecharDetalhe()"
        role="dialog" aria-modal="true" aria-label="Detalhes do título">
