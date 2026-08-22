@@ -468,21 +468,13 @@ def contexto_do_pedido(request, pedido, **extra) -> dict:
                 Prefetch('itens', queryset=ItemGrade.objects.select_related('tamanho'))
             )
         ),
-        # Qual grade o <select> reabre marcada quando o formulário volta com
-        # erro. Em GET o POST é vazio e cai em "todos os tamanhos", que é o
-        # comportamento de sempre.
-        #
-        # SÓ DÍGITOS. O template usa este valor dentro de uma string
-        # JavaScript (`x-data="{ gradeEscolhida: '...' }"`), e ali o
-        # autoescape do Django NÃO protege: ele vira a aspa em `&#x27;`, mas
-        # o parser HTML decodifica de volta para `'` antes de o Alpine
-        # avaliar a expressão, o que deixaria fechar a string e injetar
-        # código. Peneirar na origem resolve, e o campo só pode mesmo ser
-        # um pk ou vazio.
-        'grade_escolhida': (
-            request.POST.get('grade_escolhida', '')
-            if request.POST.get('grade_escolhida', '').isdigit() else ''
-        ),
+        # Quais grades reabrem marcadas quando o formulário volta com erro.
+        # Em GET o POST é vazio e cai em "todos os tamanhos", que é o
+        # comportamento de sempre. Vai para o template por `json_script`,
+        # que é escape seguro para dado que vira valor de JavaScript.
+        'grades_escolhidas': [
+            pk for pk in request.POST.getlist('grade_escolhida') if pk.isdigit()
+        ],
         'individuais': pedido.individuais.select_related('item', 'tamanho').all(),
         'conferencia': IndividualService.conferir(pedido),
         # O QUE TRAVA A PRODUCAO, na propria tela do pedido. As onze
@@ -769,15 +761,47 @@ class ItemPedidoCreateView(ModaBaseView):
                 request, pedido, form_item=form, abrir_form_item=True,
             ))
 
-        item = form.save(commit=False)
-        item.pedido = pedido
+        # UMA LINHA POR GRADE. Escolher Adulto e OverSize acrescenta dois
+        # itens, não um: a quantidade mora em `ItemGradePedido`, com
+        # `unique_together ('item','tamanho')`, e as grades compartilham os
+        # MESMOS registros de Tamanho -- num item só, o "G" de uma apagaria
+        # o "G" da outra. Sem grade escolhida, segue um item só, como antes.
+        grades = self._grades_escolhidas(request, _filial(request))
+
         # Última posição: o item novo entra no fim da ficha, como numa lista
         # escrita à mão.
         ultima = pedido.itens.aggregate(models.Max('ordem'))['ordem__max'] or 0
-        item.ordem = ultima + 10
-        item.save()
 
-        recado = [f'{item.nome_exibicao} adicionado ao pedido.']
+        pks = []
+        for posicao, grade in enumerate(grades or [None], start=1):
+            # `form.save(commit=False)` devolve sempre a MESMA instância, e
+            # é por isso que aqui se guarda a PK e não o objeto: guardar o
+            # objeto colocaria a mesma referência na lista várias vezes, e
+            # as duas grades acabariam gravando no mesmo item.
+            #
+            # Zerar a pk faz o `save()` seguinte INSERIR outra linha em vez
+            # de reescrever a anterior.
+            item = form.save(commit=False)
+            item.pk = None
+            item._state.adding = True
+            item.pedido = pedido
+            item.grade = grade
+            item.ordem = ultima + posicao * 10
+            item.save()
+            pks.append(item.pk)
+
+        criados = list(
+            ItemPedidoProducao.objects.filter(pk__in=pks)
+            .select_related('grade', 'produto').order_by('ordem')
+        )
+        item = criados[0]
+        if len(criados) == 1:
+            recado = [f'{item.nome_exibicao} adicionado ao pedido.']
+        else:
+            recado = [
+                f'{len(criados)} itens adicionados ao pedido, um por grade: '
+                f'{", ".join(i.grade.nome for i in criados)}.'
+            ]
         if getattr(form, 'produto_importado', None) is not None:
             # Produto escolhido do cadastro do ERP: ele foi TRAZIDO para a
             # confecção agora. Dizer isso evita a dúvida de por que ele
@@ -786,14 +810,22 @@ class ItemPedidoCreateView(ModaBaseView):
                 f'“{form.produto_importado.nome}” veio do cadastro de produtos '
                 f'e agora também está no catálogo da confecção.'
             )
-        recado += self._grade_inicial(request, pedido, item)
-        recado += self._arte_inicial(request, item)
+        recado += self._grade_inicial(request, pedido, criados)
+        recado += self._arte_inicial(request, criados)
 
         messages.success(request, ' '.join(recado))
         return redirect(reverse('moda:pedido-detail', args=[pedido.pk]))
 
     @staticmethod
-    def _grade_inicial(request, pedido, item) -> list:
+    def _grades_escolhidas(request, filial) -> list:
+        """As grades marcadas no formulário, na ordem em que estão cadastradas."""
+        ids = [pk for pk in request.POST.getlist('grade_escolhida') if pk.isdigit()]
+        if not ids:
+            return []
+        return list(Grade.objects.for_filial(filial).filter(pk__in=ids, ativo=True))
+
+    @staticmethod
+    def _grade_inicial(request, pedido, itens) -> list:
         """
         A grade lançada JUNTO com o produto.
 
@@ -801,20 +833,32 @@ class ItemPedidoCreateView(ModaBaseView):
         e quem estava com o cliente ao telefone ("5 G, 10 M, 3 P") tinha de
         adicionar o produto, procurar a tabela mais abaixo e digitar de novo.
         Aqui os dois viram um passo só.
+
+        Os campos vêm nomeados de dois jeitos, e é o formato que diz de quem
+        é a quantidade:
+
+            grade_<tamanho>            -> item sem grade ("Todos os tamanhos")
+            grade_<grade>_<tamanho>    -> item daquela grade
+
+        Por isso o `isdigit()` no resto da chave separa os dois: com o
+        prefixo curto, `grade_10_5` deixa `10_5`, que não é dígito e cai
+        fora -- senão a quantidade de uma grade vazaria para o item errado.
         """
         quantidades = {}
-        for chave, valor in request.POST.items():
-            if not chave.startswith('grade_'):
-                continue
-            tamanho_id = chave.removeprefix('grade_')
-            if not tamanho_id.isdigit():
-                continue
-            try:
-                qtd = int(valor or 0)
-            except (TypeError, ValueError):
-                continue
-            if qtd > 0:
-                quantidades[(item.pk, int(tamanho_id))] = qtd
+        for item in itens:
+            prefixo = f'grade_{item.grade_id}_' if item.grade_id else 'grade_'
+            for chave, valor in request.POST.items():
+                if not chave.startswith(prefixo):
+                    continue
+                tamanho_id = chave.removeprefix(prefixo)
+                if not tamanho_id.isdigit():
+                    continue
+                try:
+                    qtd = int(valor or 0)
+                except (TypeError, ValueError):
+                    continue
+                if qtd > 0:
+                    quantidades[(item.pk, int(tamanho_id))] = qtd
 
         if not quantidades:
             return []
@@ -826,21 +870,33 @@ class ItemPedidoCreateView(ModaBaseView):
         return [f'Grade lançada: {total} peça(s) no pedido.']
 
     @staticmethod
-    def _arte_inicial(request, item) -> list:
-        """A arte anexada no mesmo passo, quando veio alguma."""
+    def _arte_inicial(request, itens) -> list:
+        """
+        A arte anexada no mesmo passo, quando veio alguma.
+
+        Vai em TODOS os itens criados: com duas grades marcadas, Adulto e
+        OverSize são o mesmo produto com a mesma arte, e deixar a estampa
+        só na primeira linha mandaria a segunda para a produção sem arte.
+        """
         tem_arquivo = bool(request.FILES.get('arte_arquivo'))
         local = (request.POST.get('arte_local') or '').strip()
         if not tem_arquivo and not local:
             return []
 
-        Personalizacao.objects.create(
-            item=item,
-            tipo=request.POST.get('arte_tipo') or Personalizacao.Tipo.ARTE,
-            tecnica=request.POST.get('arte_tecnica') or Personalizacao.Tecnica.SUBLIMACAO,
-            local=local,
-            arquivo=request.FILES.get('arte_arquivo'),
-        )
-        return ['Arte anexada ao item.']
+        for item in itens:
+            Personalizacao.objects.create(
+                item=item,
+                tipo=request.POST.get('arte_tipo') or Personalizacao.Tipo.ARTE,
+                tecnica=request.POST.get('arte_tecnica') or Personalizacao.Tecnica.SUBLIMACAO,
+                local=local,
+                # O mesmo upload serve as duas gravações: `File.chunks()`
+                # volta ao início do arquivo antes de ler, então a segunda
+                # não sai vazia.
+                arquivo=request.FILES.get('arte_arquivo'),
+            )
+        if len(itens) == 1:
+            return ['Arte anexada ao item.']
+        return [f'Arte anexada aos {len(itens)} itens.']
 
 
 class ItemPedidoDeleteView(ModaBaseView):

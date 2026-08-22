@@ -48,6 +48,22 @@ class ItemPedidoProducao(models.Model):
         'moda.Tecido', on_delete=models.PROTECT, null=True, blank=True,
         related_name='itens_pedido', verbose_name='Tecido / Malha',
     )
+    # A GRADE DESTE ITEM, quando o pedido leva o mesmo produto em mais de
+    # uma (ex.: a mesma camisa em Adulto e em OverSize).
+    #
+    # Precisa ser uma linha por grade, não uma linha só: a quantidade mora
+    # em `ItemGradePedido`, com `unique_together ('item','tamanho')`, e as
+    # grades da casa compartilham os MESMOS registros de Tamanho (a sigla é
+    # única por filial). Num item só, "Adulto G = 5" e "OverSize G = 3"
+    # colidiriam na mesma chave e um apagaria o outro. Separadas também é
+    # como a produção lê: são cortes diferentes.
+    #
+    # SET_NULL para apagar uma grade do cadastro não levar junto o histórico
+    # do pedido; nulo é o item lançado sem grade, que é o caso de sempre.
+    grade = models.ForeignKey(
+        'moda.Grade', on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='itens_pedido',
+    )
 
     # Gola e manga são do Modelo, mas ficam gravadas aqui também, e não só
     # lidas por FK, por dois motivos:
@@ -102,10 +118,18 @@ class ItemPedidoProducao(models.Model):
 
     @property
     def nome_exibicao(self) -> str:
-        """O que aparece na ficha: o produto do catálogo ou a descrição livre."""
-        if self.produto_id:
-            return self.produto.nome
-        return self.descricao or 'Item sem descrição'
+        """
+        O que aparece na ficha: o produto do catálogo ou a descrição livre.
+
+        Com grade, ela entra no nome. O mesmo produto em Adulto e em
+        OverSize são duas linhas, e sem a grade no nome as duas sairiam
+        idênticas na tela, na tabela de grade e no seletor de copiar --
+        sem como saber qual é qual.
+        """
+        base = self.produto.nome if self.produto_id else (self.descricao or 'Item sem descrição')
+        if self.grade_id:
+            return f'{base} — {self.grade.nome}'
+        return base
 
     @property
     def subtotal(self) -> Decimal:
