@@ -368,6 +368,76 @@ class ConferenciaEntregaTests(TestCase):
         self.assertEqual(contexto['linhas'][0]['sem_peso'], 1)
         self.assertEqual(contexto['resumo']['sem_peso'], 1)
 
+    # ── A fila de entrega ────────────────────────────────────────────────
+
+    def _entrega_fila(self):
+        from django.http import HttpResponse
+        from django.test import RequestFactory
+
+        import apps.moda.views_conferencia as modulo
+
+        pedido = RequestFactory().get('/x/')
+        pedido.filial_ativa = self.filial
+        pedido.user = type('Dubl', (), {'tem_permissao': lambda self, *a: True})()
+        contexto = {}
+        original = modulo.render
+        modulo.render = lambda r, t, ctx: (contexto.update(ctx), HttpResponse(''))[1]
+        try:
+            modulo.EntregaFilaView().get(pedido)
+        finally:
+            modulo.render = original
+        return contexto
+
+    def _despachar(self, dias_atras=0):
+        from datetime import timedelta
+
+        from django.utils import timezone
+
+        self.expedicao.status = Expedicao.Status.DESPACHO
+        self.expedicao.data_despacho = timezone.now() - timedelta(days=dias_atras)
+        self.expedicao.save(update_fields=['status', 'data_despacho'])
+
+    def test_o_que_saiu_e_nao_confirmou_aparece_com_o_link(self):
+        """
+        A resposta mais comum para "saiu e não confirmou" é reenviar o link,
+        então ele vem pronto na própria linha.
+        """
+        self._despachar()
+
+        contexto = self._entrega_fila()
+
+        self.assertEqual(contexto['resumo']['a_caminho'], 1)
+        self.assertIn(self.expedicao.codigo, contexto['a_caminho'][0]['link'])
+
+    def test_uma_semana_sem_confirmacao_e_apontada(self):
+        self._despachar(dias_atras=8)
+        self.assertEqual(self._entrega_fila()['resumo']['atrasados'], 1)
+
+    def test_saiu_ontem_nao_e_atraso(self):
+        """Menos de uma semana ainda é trânsito normal."""
+        self._despachar(dias_atras=1)
+
+        contexto = self._entrega_fila()
+
+        self.assertEqual(contexto['resumo']['a_caminho'], 1)
+        self.assertEqual(contexto['resumo']['atrasados'], 0)
+        self.assertEqual(contexto['a_caminho'][0]['dias'], 1)
+
+    def test_entregue_sai_da_lista_de_aberto_e_vira_comprovante(self):
+        self._despachar()
+        self.expedicao.status = Expedicao.Status.ENTREGA
+        self.expedicao.recebido_por = 'Diego Macedo'
+        self.expedicao.data_entrega = self.expedicao.data_despacho
+        self.expedicao.save(update_fields=['status', 'recebido_por', 'data_entrega'])
+
+        contexto = self._entrega_fila()
+
+        self.assertEqual(contexto['resumo']['a_caminho'], 0)
+        self.assertEqual(contexto['resumo']['entregues'], 1)
+        self.assertEqual(
+            contexto['entregues'][0]['expedicao'].recebido_por, 'Diego Macedo',
+        )
+
     # ── Rotas ────────────────────────────────────────────────────────────
 
     def test_as_rotas_existem_e_apontam_para_as_views_certas(self):
@@ -385,6 +455,8 @@ class ConferenciaEntregaTests(TestCase):
             (reverse('moda:item', args=['expedicao', 'conferencia']), vc.ConferenciaFilaView),
             (reverse('moda:embalagem-fila'), vc.EmbalagemFilaView),
             (reverse('moda:item', args=['expedicao', 'embalagem']), vc.EmbalagemFilaView),
+            (reverse('moda:entrega-fila'), vc.EntregaFilaView),
+            (reverse('moda:item', args=['expedicao', 'entrega']), vc.EntregaFilaView),
         ]
         for url, esperada in pares:
             self.assertIs(resolve(url).func.view_class, esperada)

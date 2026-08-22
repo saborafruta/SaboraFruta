@@ -406,3 +406,69 @@ class EmbalagemFilaView(ModaBaseView):
                 'sem_peso': sum(1 for l in linhas if l['sem_peso']),
             },
         })
+
+
+class EntregaFilaView(ModaBaseView):
+    """
+    Saída e comprovação de entrega — a última bancada.
+
+    Duas listas na mesma tela, e elas não são a mesma coisa: o que SAIU e
+    ainda não teve confirmação, e o que já foi RECEBIDO. A primeira é
+    trabalho em aberto; a segunda é comprovante.
+
+    O SINAL QUE IMPORTA é há quantos dias a caixa saiu sem confirmação.
+    Despachada ontem é normal; despachada há uma semana sem ninguém assinar
+    quer dizer que ou o cliente não recebeu, ou recebeu e ninguém registrou
+    -- e as duas hipóteses viram discussão no dia em que ele reclamar.
+
+    Por isso cada linha em aberto traz o LINK do aceite pronto para copiar:
+    a resposta mais comum para "saiu e não confirmou" é reenviar o link.
+    """
+
+    area = 'expedicao'
+
+    def get(self, request):
+        base = (
+            Expedicao.objects.for_filial(_filial(request))
+            .select_related('ordem__pedido__cliente', 'ordem__item')
+            .prefetch_related('volumes')
+        )
+        hoje = timezone.localdate()
+
+        a_caminho = []
+        for expedicao in base.filter(status=Expedicao.Status.DESPACHO).order_by('numero'):
+            saiu_em = (
+                timezone.localtime(expedicao.data_despacho).date()
+                if expedicao.data_despacho else None
+            )
+            a_caminho.append({
+                'expedicao': expedicao,
+                'saiu_em': saiu_em,
+                'dias': (hoje - saiu_em).days if saiu_em else None,
+                'link': request.build_absolute_uri(
+                    reverse('moda_publico:entrega', args=[expedicao.codigo])
+                ),
+            })
+
+        entregues = [
+            {
+                'expedicao': e,
+                'recebido_em': e.data_entrega,
+            }
+            for e in base.filter(status=Expedicao.Status.ENTREGA).order_by('-data_entrega')[:50]
+        ]
+
+        return render(request, 'moda/entrega_fila.html', {
+            'title': 'Entrega',
+            'a_caminho': a_caminho,
+            'entregues': entregues,
+            'resumo': {
+                'a_caminho': len(a_caminho),
+                'entregues': len(entregues),
+                # Uma semana é o corte: menos que isso ainda é trânsito
+                # normal, mais que isso alguém precisa ligar.
+                'atrasados': sum(
+                    1 for l in a_caminho if l['dias'] is not None and l['dias'] >= 7
+                ),
+            },
+        })
