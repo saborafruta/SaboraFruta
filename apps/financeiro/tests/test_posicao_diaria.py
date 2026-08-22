@@ -164,6 +164,9 @@ class PosicaoDiariaCaixaTests(TestCase):
         response = self.client.get(reverse("financeiro:posicao_diaria"), {"data": "2026-08-21"})
         self.assertContains(response, "Compra pessoal da sócia")
         self.assertContains(response, "Despesas pessoais no período")
+        self.assertContains(response, 'class="pc-personal-badge"')
+        self.assertContains(response, 'class="pc-personal-summary')
+        self.assertContains(response, '<template x-teleport="body"><div x-show="tituloPagarModal"')
 
     def test_taxa_de_recebimento_reduz_entrada_e_exibe_bruto(self):
         self.forma.taxa_administrativa = Decimal("2.00")
