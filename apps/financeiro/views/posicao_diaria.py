@@ -93,6 +93,11 @@ class PosicaoDiariaCaixaView(PermissaoRequiredMixin, View):
         )
         mostrar_excluidos = request.GET.get("mostrar_excluidos") == "1" and _usuario_admin(request)
         mostrar_previstos = True
+        conta_filtro_texto = request.GET.get("conta", "").strip()
+        conta_filtro = int(conta_filtro_texto) if conta_filtro_texto.isdigit() else None
+        ordem_movimentos = request.GET.get("ordem", "horario")
+        if ordem_movimentos not in {"horario", "conta"}:
+            ordem_movimentos = "horario"
         posicao = PosicaoDiariaCaixaService(
             request.filial_ativa, data_fim, data_inicio=data_inicio,
         ).gerar(
@@ -100,6 +105,8 @@ class PosicaoDiariaCaixaView(PermissaoRequiredMixin, View):
             incluir_previstos=mostrar_previstos,
             previsao_inicio=previsao_inicio,
             previsao_fim=previsao_fim,
+            conta_filtro=conta_filtro,
+            ordem=ordem_movimentos,
         )
         detalhe = None
         movimento_id = request.GET.get("movimento")
@@ -134,6 +141,8 @@ class PosicaoDiariaCaixaView(PermissaoRequiredMixin, View):
             "dias_mes": self._dias_mes(data_referencia),
             "periodos_movimento": self._links_periodo(data_referencia, periodo, "periodo"),
             "periodos_previsao": self._links_periodo(data_referencia, previsao_periodo, "previsao"),
+            "conta_filtro": conta_filtro,
+            "ordem_movimentos": ordem_movimentos,
         })
 
     @staticmethod

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from collections import defaultdict
 from dataclasses import dataclass
-from datetime import date, timedelta
+from datetime import date, datetime, time, timedelta
 from decimal import Decimal
 
 from django.db.models import Q
@@ -35,10 +35,15 @@ class MovimentoDiario:
     valor_taxa: Decimal = ZERO
     referencia_url: str = ""
     excluido: bool = False
+    momento: datetime | None = None
 
     @property
     def valor(self):
         return self.entrada - self.saida
+
+    @property
+    def hora(self):
+        return timezone.localtime(self.momento).strftime("%H:%M") if self.momento else "--:--"
 
 
 def _somar(destino, conta_id, valor):
@@ -65,12 +70,29 @@ class PosicaoDiariaCaixaService:
 
     def gerar(
         self, *, incluir_excluidos=False, incluir_previstos=False,
-        previsao_inicio=None, previsao_fim=None,
+        previsao_inicio=None, previsao_fim=None, conta_filtro=None, ordem="horario",
     ):
         movimentos = self._movimentos_do_dia(incluir_excluidos=incluir_excluidos)
         movimentos_ativos = [mov for mov in movimentos if not mov.excluido]
-        entradas = [mov for mov in movimentos_ativos if mov.entrada > ZERO]
-        saidas = [mov for mov in movimentos_ativos if mov.saida > ZERO]
+        movimentos_exibidos = movimentos_ativos
+        if conta_filtro:
+            movimentos_exibidos = [mov for mov in movimentos_exibidos if mov.conta.pk == conta_filtro]
+        if ordem == "conta":
+            movimentos_exibidos = sorted(
+                movimentos_exibidos,
+                key=lambda mov: (
+                    (mov.conta.descricao or mov.conta.banco_nome or "").casefold(),
+                    -(mov.momento.timestamp() if mov.momento else 0),
+                ),
+            )
+        else:
+            movimentos_exibidos = sorted(
+                movimentos_exibidos,
+                key=lambda mov: mov.momento or timezone.make_aware(datetime.combine(mov.data, time.min)),
+                reverse=True,
+            )
+        entradas = [mov for mov in movimentos_exibidos if mov.entrada > ZERO]
+        saidas = [mov for mov in movimentos_exibidos if mov.saida > ZERO]
         saldo_anterior = self._saldos_antes_do_dia()
         por_conta_dia = defaultdict(lambda: ZERO)
         for mov in movimentos_ativos:
@@ -107,7 +129,7 @@ class PosicaoDiariaCaixaService:
             "contas": contas,
             "entradas": entradas,
             "saidas": saidas,
-            "extrato": sorted(movimentos_ativos, key=lambda m: (m.data, m.registro_id, m.origem_codigo)),
+            "extrato": movimentos_exibidos,
             "excluidos": [mov for mov in movimentos if mov.excluido],
             "total_abertura": total_abertura,
             "total_entradas": total_entradas,
@@ -154,6 +176,7 @@ class PosicaoDiariaCaixaService:
                 origem="Manual" if item.origem == "manual" else "Extrato bancario",
                 origem_codigo="manual", registro_id=item.pk, documento=item.documento,
                 entrada=max(valor, ZERO), saida=abs(min(valor, ZERO)), excluido=item.status == "excluido",
+                momento=item.created_at,
             ))
 
         recebimentos = ContaReceber.objects.filter(
@@ -174,6 +197,7 @@ class PosicaoDiariaCaixaService:
                 forma_pagamento=item.forma_pagamento.descricao if item.forma_pagamento else "Nao informada",
                 entrada=item.valor_entrada_liquida, valor_bruto=bruto, valor_taxa=taxa,
                 referencia_url=reverse("financeiro:receber_detail", args=[item.pk]),
+                momento=item.updated_at,
             ))
 
         pagamentos = PagamentoContaPagar.objects.filter(
@@ -192,6 +216,7 @@ class PosicaoDiariaCaixaService:
                 forma_pagamento=item.forma_pagamento.descricao if item.forma_pagamento else "Nao informada",
                 saida=item.valor_liquido,
                 referencia_url=f'{reverse("financeiro:pagar_detail", args=[item.conta_pagar_id])}?pagamento={item.pk}',
+                momento=item.created_at,
             ))
 
         try:
@@ -222,6 +247,7 @@ class PosicaoDiariaCaixaService:
                     documento=str(item.venda_pdv.numero_venda), forma_pagamento=item.forma_pagamento.descricao,
                     entrada=valor, valor_bruto=item.valor_bruto_recebido,
                     valor_taxa=item.valor_taxa if item.taxa_calculada_em else ZERO,
+                    momento=item.created_at,
                 ))
         return sorted(movimentos, key=lambda m: (m.origem, m.descricao.casefold(), m.registro_id))
 

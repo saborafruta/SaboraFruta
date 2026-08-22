@@ -64,6 +64,7 @@
 <div class="mx-auto max-w-7xl space-y-5" x-data="{
   movimentoModal: {{ movimento_modal|yesno:'true,false' }},
   contaPagarModal: false,
+  contaPagarQuitada: false,
   tituloPagarModal: false,
   tituloPagarCarregando: false,
   tituloPagarHtml: '',
@@ -201,6 +202,24 @@
     </div>
   </section>
 
+  <form method="get" class="card grid gap-3 p-4 sm:grid-cols-[minmax(220px,1fr)_minmax(220px,1fr)_auto] sm:items-end">
+    <input type="hidden" name="data" value="{{ data_referencia|date:'Y-m-d' }}">
+    <input type="hidden" name="periodo" value="{{ periodo }}">
+    <label class="block text-xs font-semibold">Visualizar conta
+      <select name="conta" class="form-input mt-1 w-full">
+        <option value="">Todas as contas</option>
+        {% for conta in posicao.contas %}<option value="{{ conta.pk }}" {% if conta_filtro == conta.pk %}selected{% endif %}>{{ conta.descricao|default:conta.banco_nome }}</option>{% endfor %}
+      </select>
+    </label>
+    <label class="block text-xs font-semibold">Ordenar movimentos
+      <select name="ordem" class="form-input mt-1 w-full">
+        <option value="horario" {% if ordem_movimentos == 'horario' %}selected{% endif %}>Horário de lançamento</option>
+        <option value="conta" {% if ordem_movimentos == 'conta' %}selected{% endif %}>Conta bancária</option>
+      </select>
+    </label>
+    <button type="submit" class="btn-secondary justify-center">Aplicar</button>
+  </form>
+
   <section class="grid items-start gap-5 lg:grid-cols-2">
     <div class="pc-ledger entry overflow-hidden rounded-lg shadow-sm">
       <div class="pc-ledger-head flex items-center justify-between gap-4 px-4 py-4"><div><h3 class="pc-ledger-title text-lg font-semibold">Entradas</h3><p class="mt-0.5 text-xs text-gray-500">Vendas, recebimentos e créditos manuais</p></div><div class="flex flex-col items-end gap-2"><div class="text-right"><span class="block text-[11px] font-semibold uppercase text-gray-500">Total do dia</span><strong class="pc-ledger-total text-xl">R$ {{ posicao.total_entradas|floatformat:2 }}</strong></div><button type="button" class="pc-ledger-action rounded-md px-3 py-1.5 text-xs font-semibold transition" @click="abrirMovimento('credito')" aria-label="Adicionar entrada manual">+ Entrada</button></div></div>
@@ -208,7 +227,7 @@
       <div>
         {% for mov in posicao.entradas %}
           <a href="{% if mov.origem_codigo == 'pagar' %}{{ mov.referencia_url }}{% else %}?data={{ data_referencia|date:'Y-m-d' }}&origem={{ mov.origem_codigo }}&movimento={{ mov.registro_id }}{% endif %}" {% if mov.origem_codigo == 'pagar' %}@click.prevent="abrirTituloPagar($el.href)"{% endif %} class="pc-ledger-row px-4 py-3 transition">
-            <div class="min-w-0"><strong class="block text-sm">{{ mov.descricao }}</strong><span class="mt-1 block text-[11px] text-gray-500">{{ mov.origem }}{% if mov.documento %} · Documento {{ mov.documento }}{% endif %}</span></div>
+            <div class="min-w-0"><strong class="block text-sm">{{ mov.descricao }}</strong><span class="mt-1 block text-[11px] text-gray-500">{{ mov.hora }} · {{ mov.origem }}{% if mov.documento %} · Documento {{ mov.documento }}{% endif %}</span></div>
             <span class="pc-ledger-meta min-w-0 text-xs"><strong class="block truncate font-medium">{{ mov.forma_pagamento }}</strong><span class="mt-1 block truncate text-gray-500">{{ mov.conta.descricao|default:mov.conta.banco_nome }}</span></span>
             <span class="pc-ledger-value whitespace-nowrap text-right"><strong class="block text-base">+ R$ {{ mov.entrada|floatformat:2 }}</strong>{% if mov.valor_taxa > 0 %}<small class="mt-1 block text-[10px] font-medium text-gray-500">Bruto R$ {{ mov.valor_bruto|floatformat:2 }} · taxa R$ {{ mov.valor_taxa|floatformat:2 }}</small>{% endif %}</span>
           </a>
@@ -216,12 +235,13 @@
       </div>
     </div>
     <div class="pc-ledger exit overflow-hidden rounded-lg shadow-sm">
-      <div class="pc-ledger-head flex items-center justify-between gap-4 px-4 py-4"><div><h3 class="pc-ledger-title text-lg font-semibold">Saídas</h3><p class="mt-0.5 text-xs text-gray-500">Pagamentos, despesas e débitos manuais</p></div><div class="flex flex-col items-end gap-2"><div class="text-right"><span class="block text-[11px] font-semibold uppercase text-gray-500">Total do dia</span><strong class="pc-ledger-total text-xl">R$ {{ posicao.total_saidas|floatformat:2 }}</strong></div><div class="flex flex-wrap justify-end gap-2"><button type="button" class="pc-ledger-action rounded-md px-3 py-1.5 text-xs font-semibold transition" @click="contaPagarModal=true" aria-label="Adicionar conta a pagar">+ Conta a pagar</button><button type="button" class="pc-ledger-action rounded-md px-3 py-1.5 text-xs font-semibold transition" @click="abrirMovimento('debito')" aria-label="Adicionar saída manual">+ Saída</button></div></div></div>
+      <span class="sr-only">Adicionar saída manual como despesa paga</span>
+      <div class="pc-ledger-head flex items-center justify-between gap-4 px-4 py-4"><div><h3 class="pc-ledger-title text-lg font-semibold">Saídas</h3><p class="mt-0.5 text-xs text-gray-500">Pagamentos e despesas classificadas</p></div><div class="flex flex-col items-end gap-2"><div class="text-right"><span class="block text-[11px] font-semibold uppercase text-gray-500">Total do dia</span><strong class="pc-ledger-total text-xl">R$ {{ posicao.total_saidas|floatformat:2 }}</strong></div><div class="flex flex-wrap justify-end gap-2"><button type="button" class="pc-ledger-action rounded-md px-3 py-1.5 text-xs font-semibold transition" @click="contaPagarQuitada=false; contaPagarModal=true" aria-label="Adicionar conta a pagar">+ Conta a pagar</button><button type="button" class="pc-ledger-action rounded-md px-3 py-1.5 text-xs font-semibold transition" @click="contaPagarQuitada=true; contaPagarModal=true" aria-label="Adicionar despesa paga">+ Despesa paga</button></div></div></div>
       <div class="pc-ledger-columns px-4 py-2 text-[11px] font-semibold uppercase"><span>Descrição e destino</span><span>Forma / conta</span><span class="text-right">Valor</span></div>
       <div>
         {% for mov in posicao.saidas %}
           <a href="{% if mov.origem_codigo == 'pagar' %}{{ mov.referencia_url }}{% else %}?data={{ data_referencia|date:'Y-m-d' }}&origem={{ mov.origem_codigo }}&movimento={{ mov.registro_id }}{% endif %}" {% if mov.origem_codigo == 'pagar' %}@click.prevent="abrirTituloPagar($el.href)"{% endif %} class="pc-ledger-row px-4 py-3 transition">
-            <div class="min-w-0"><strong class="block text-sm">{{ mov.descricao }}</strong><span class="mt-1 block text-[11px] text-gray-500">{{ mov.origem }}{% if mov.documento %} · Documento {{ mov.documento }}{% endif %}</span></div>
+            <div class="min-w-0"><strong class="block text-sm">{{ mov.descricao }}</strong><span class="mt-1 block text-[11px] text-gray-500">{{ mov.hora }} · {{ mov.origem }}{% if mov.documento %} · Documento {{ mov.documento }}{% endif %}</span></div>
             <span class="pc-ledger-meta min-w-0 text-xs"><strong class="block truncate font-medium">{{ mov.forma_pagamento }}</strong><span class="mt-1 block truncate text-gray-500">{{ mov.conta.descricao|default:mov.conta.banco_nome }}</span></span>
             <strong class="pc-ledger-value whitespace-nowrap text-right text-base">- R$ {{ mov.saida|floatformat:2 }}</strong>
           </a>
@@ -243,7 +263,7 @@
   <section class="overflow-hidden rounded-lg border border-slate-200 dark:border-slate-700">
     <button type="button" class="flex w-full items-center justify-between p-4 text-left" @click="mostrarExtrato=!mostrarExtrato"><span><strong class="block">Extrato consolidado do dia</strong><small class="text-gray-500">Todos os movimentos em uma única sequência</small></span><span x-text="mostrarExtrato ? '−' : '+'" class="text-xl text-blue-600"></span></button>
     <div x-show="mostrarExtrato" x-cloak class="overflow-x-auto border-t dark:border-slate-700">
-      <table class="w-full min-w-[760px] text-sm"><thead class="bg-slate-50 text-xs uppercase text-slate-500 dark:bg-slate-800"><tr><th class="px-4 py-3 text-left">Origem</th><th class="px-4 py-3 text-left">Descrição</th><th class="px-4 py-3 text-left">Conta / forma</th><th class="px-4 py-3 text-right">Entrada</th><th class="px-4 py-3 text-right">Saída</th></tr></thead><tbody class="divide-y dark:divide-slate-700">{% for mov in posicao.extrato %}<tr><td class="px-4 py-3">{{ mov.origem }}</td><td class="px-4 py-3"><strong>{{ mov.descricao }}</strong>{% if mov.documento %}<small class="block text-gray-500">Doc. {{ mov.documento }}</small>{% endif %}</td><td class="px-4 py-3">{{ mov.conta.descricao|default:mov.conta.banco_nome }}<small class="block text-gray-500">{{ mov.forma_pagamento }}</small></td><td class="px-4 py-3 text-right text-emerald-600">{% if mov.entrada %}R$ {{ mov.entrada|floatformat:2 }}{% else %}-{% endif %}</td><td class="px-4 py-3 text-right text-rose-600">{% if mov.saida %}R$ {{ mov.saida|floatformat:2 }}{% else %}-{% endif %}</td></tr>{% empty %}<tr><td colspan="5" class="p-8 text-center text-gray-500">Sem movimentos.</td></tr>{% endfor %}</tbody></table>
+      <table class="w-full min-w-[760px] text-sm"><thead class="bg-slate-50 text-xs uppercase text-slate-500 dark:bg-slate-800"><tr><th class="px-4 py-3 text-left">Horário</th><th class="px-4 py-3 text-left">Origem</th><th class="px-4 py-3 text-left">Descrição</th><th class="px-4 py-3 text-left">Conta / forma</th><th class="px-4 py-3 text-right">Entrada</th><th class="px-4 py-3 text-right">Saída</th></tr></thead><tbody class="divide-y dark:divide-slate-700">{% for mov in posicao.extrato %}<tr><td class="px-4 py-3 font-medium">{{ mov.hora }}</td><td class="px-4 py-3">{{ mov.origem }}</td><td class="px-4 py-3"><strong>{{ mov.descricao }}</strong>{% if mov.documento %}<small class="block text-gray-500">Doc. {{ mov.documento }}</small>{% endif %}</td><td class="px-4 py-3">{{ mov.conta.descricao|default:mov.conta.banco_nome }}<small class="block text-gray-500">{{ mov.forma_pagamento }}</small></td><td class="px-4 py-3 text-right text-emerald-600">{% if mov.entrada %}R$ {{ mov.entrada|floatformat:2 }}{% else %}-{% endif %}</td><td class="px-4 py-3 text-right text-rose-600">{% if mov.saida %}R$ {{ mov.saida|floatformat:2 }}{% else %}-{% endif %}</td></tr>{% empty %}<tr><td colspan="6" class="p-8 text-center text-gray-500">Sem movimentos.</td></tr>{% endfor %}</tbody></table>
     </div>
   </section>
 
@@ -260,12 +280,12 @@
     <section class="rounded-lg border border-dashed border-rose-300 p-4"><h3 class="font-semibold text-rose-600">Movimentos manuais excluídos</h3><div class="mt-3 space-y-2">{% for mov in posicao.excluidos %}<div class="flex flex-col gap-2 rounded border p-3 sm:flex-row sm:items-center sm:justify-between"><div><strong>{{ mov.descricao }}</strong><span class="block text-xs text-gray-500">{{ mov.conta.descricao|default:mov.conta.banco_nome }} · R$ {{ mov.valor|floatformat:2 }}</span></div><form method="post" class="flex gap-2">{% csrf_token %}<input type="hidden" name="acao" value="restaurar_movimento"><input type="hidden" name="movimento_id" value="{{ mov.registro_id }}"><input type="hidden" name="data_referencia" value="{{ data_referencia|date:'Y-m-d' }}"><input name="justificativa" required class="form-input" placeholder="Motivo da restauração"><button class="btn-secondary" type="submit">Restaurar</button></form></div>{% endfor %}</div></section>
   {% endif %}
 
-  <div x-show="contaPagarModal" x-cloak class="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-6" style="background:rgba(15,23,42,.72);backdrop-filter:blur(7px)" @keydown.escape.window="contaPagarModal=false">
+  <template x-teleport="body"><div x-show="contaPagarModal" x-cloak class="fixed inset-0 z-[100] flex items-center justify-center p-3 sm:p-6" style="background:rgba(15,23,42,.78);backdrop-filter:blur(8px)" @keydown.escape.window="contaPagarModal=false">
     <div class="flex w-full max-w-5xl flex-col overflow-hidden rounded-lg border border-slate-300 bg-white shadow-2xl dark:border-slate-700 dark:bg-zinc-900" style="height:94vh" @click.stop>
-      <div class="flex items-center justify-between border-b border-slate-200 px-4 py-3 dark:border-slate-700"><div><h3 class="font-semibold">Nova conta a pagar</h3><p class="text-xs text-gray-500">O título será incluído sem sair da conferência.</p></div><button type="button" class="btn-secondary px-3" @click="contaPagarModal=false" aria-label="Fechar conta a pagar">×</button></div>
-      <template x-if="contaPagarModal"><iframe src="{% url 'financeiro:pagar_criar' %}?modal=1" title="Cadastrar conta a pagar" class="min-h-0 flex-1 w-full border-0 bg-white dark:bg-zinc-900"></iframe></template>
+      <div class="flex items-center justify-between border-b border-slate-200 px-4 py-3 dark:border-slate-700"><div><h3 class="font-semibold" x-text="contaPagarQuitada ? 'Nova despesa paga' : 'Nova conta a pagar'"></h3><p class="text-xs text-gray-500" x-text="contaPagarQuitada ? 'Classifique a despesa e registre a quitação sem sair da conferência.' : 'O título será incluído sem sair da conferência.'"></p></div><button type="button" class="btn-secondary px-3" @click="contaPagarModal=false" aria-label="Fechar conta a pagar">×</button></div>
+      <template x-if="contaPagarModal"><iframe :src="contaPagarQuitada ? '{% url 'financeiro:pagar_criar' %}?modal=1&quitar=1' : '{% url 'financeiro:pagar_criar' %}?modal=1'" title="Cadastrar despesa" class="min-h-0 flex-1 w-full border-0 bg-white dark:bg-zinc-900"></iframe></template>
     </div>
-  </div>
+  </div></template>
 
   <div x-show="tituloPagarModal" x-cloak class="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto p-3 sm:p-6" style="background:rgba(15,23,42,.72);backdrop-filter:blur(7px)" @keydown.escape.window="fecharTituloPagar()">
     <div class="card my-auto w-full max-w-5xl overflow-hidden shadow-2xl" @click.stop>
@@ -274,12 +294,12 @@
     </div>
   </div>
 
-  <div x-show="movimentoModal" x-cloak class="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto p-4" style="background:rgba(15,23,42,.68);backdrop-filter:blur(6px)" @keydown.escape.window="movimentoModal=false">
+  <template x-teleport="body"><div x-show="movimentoModal" x-cloak class="fixed inset-0 z-[100] flex items-center justify-center overflow-y-auto p-4" style="background:rgba(15,23,42,.78);backdrop-filter:blur(8px)" @keydown.escape.window="movimentoModal=false">
     {% if movimento_form.errors %}<div class="fixed top-4 z-[60] max-w-lg rounded-lg border border-rose-300 bg-rose-50 p-3 text-sm text-rose-700 shadow-lg"><strong>Revise os campos do movimento:</strong>{% for campo in movimento_form %}{% for erro in campo.errors %}<span class="mt-1 block">{{ campo.label }}: {{ erro }}</span>{% endfor %}{% endfor %}</div>{% endif %}
     <div class="card my-auto w-full max-w-xl p-5" @click.stop><div class="flex items-start justify-between gap-3"><div><h3 class="text-lg font-semibold" x-text="movimentoTipo === 'credito' ? 'Adicionar entrada' : (movimentoTipo === 'debito' ? 'Adicionar saída' : 'Transferir entre contas')">Novo movimento manual</h3><p class="mt-1 text-xs text-gray-500" x-text="movimentoTipo === 'credito' ? 'Registre um valor que entrou em uma conta.' : (movimentoTipo === 'debito' ? 'Registre um valor que saiu de uma conta.' : 'Movimente um valor entre duas contas sem alterar o total do caixa.')">Crédito, débito ou transferência com reflexo imediato nas contas.</p></div><button type="button" class="btn-secondary px-3" @click="movimentoModal=false" aria-label="Fechar">×</button></div>
       <form method="post" class="mt-5 space-y-3" @change="if ($event.target.id === 'id_tipo') movimentoTipo=$event.target.value">{% csrf_token %}<input type="hidden" name="acao" value="lancar_movimento"><input type="hidden" name="data_referencia" value="{{ hoje|date:'Y-m-d' }}"><input type="hidden" name="data_lancamento" value="{{ hoje|date:'Y-m-d' }}">{% if movimento_form.non_field_errors %}<div class="rounded border border-rose-300 bg-rose-50 p-3 text-sm text-rose-700">{{ movimento_form.non_field_errors|join:', ' }}</div>{% endif %}<label class="block text-xs font-semibold">Tipo {{ movimento_form.tipo|add_class:'form-input mt-1 w-full' }}</label><div class="grid gap-3" :class="movimentoTipo === 'transferencia' ? 'sm:grid-cols-2' : 'sm:grid-cols-1'"><label x-show="movimentoTipo === 'debito' || movimentoTipo === 'transferencia'" class="block text-xs font-semibold">Conta de origem {{ movimento_form.conta_origem|add_class:'form-input mt-1 w-full' }}</label><label x-show="movimentoTipo === 'credito' || movimentoTipo === 'transferencia'" class="block text-xs font-semibold">Conta de destino {{ movimento_form.conta_destino|add_class:'form-input mt-1 w-full' }}</label></div><div class="grid gap-3 sm:grid-cols-[minmax(0,1fr)_auto]"><label class="block text-xs font-semibold">Valor {{ movimento_form.valor|add_class:'form-input mt-1 w-full' }}</label><div class="rounded-lg border border-slate-200 px-4 py-2 text-xs dark:border-slate-700"><span class="block opacity-60">Data do movimento</span><strong class="mt-1 block">Hoje, {{ hoje|date:'d/m/Y' }}</strong></div></div><label class="block text-xs font-semibold">Descrição {{ movimento_form.historico|add_class:'form-input mt-1 w-full' }}</label><label class="block text-xs font-semibold">Documento {{ movimento_form.documento|add_class:'form-input mt-1 w-full' }}</label><div class="flex justify-end gap-2 pt-2"><button type="button" class="btn-secondary" @click="movimentoModal=false">Cancelar</button><button type="submit" class="btn-primary">Registrar movimento</button></div></form>
     </div>
-  </div>
+  </div></template>
 
   {% if detalhe %}
     <div x-show="detalheModal" x-cloak class="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto p-4" style="background:rgba(15,23,42,.68);backdrop-filter:blur(6px)" @keydown.escape.window="detalheModal=false">
