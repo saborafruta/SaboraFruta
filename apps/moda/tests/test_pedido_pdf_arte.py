@@ -32,6 +32,11 @@ def _imagens(pdf: bytes) -> int:
     return len(re.findall(rb'/Subtype\s*/Image', pdf))
 
 
+def _paginas(pdf: bytes) -> int:
+    """`/Type /Pages` (o catálogo) não conta — só as páginas em si."""
+    return len(re.findall(rb'/Type\s*/Page[^s]', pdf))
+
+
 class ArteNoPdfTests(TestCase):
 
     @classmethod
@@ -164,6 +169,34 @@ class ArteNoPdfTests(TestCase):
 
         self.assertTrue(pdf.startswith(b'%PDF'))
         self.assertGreater(len(pdf), 1000)
+
+    # ── Produtos um abaixo do outro ──────────────────────────────────────
+
+    def test_varios_produtos_ocupam_a_mesma_folha(self):
+        """
+        Antes cada produto abria página nova a partir do segundo, e um
+        pedido de tres camisas virava tres folhas quase vazias. Agora o
+        seguinte ocupa o espaco que sobrou.
+        """
+        from apps.moda.models import ItemPedidoProducao
+
+        pedido = self._pedido()
+        for nome in ['Camisa Adulto', 'Camisa Baby Look', 'Calcao']:
+            ItemPedidoProducao.objects.create(
+                pedido=pedido, descricao=nome, quantidade=5,
+            )
+
+        self.assertEqual(_paginas(PedidoPdfService.gerar(pedido)), 1)
+
+    def test_um_produto_so_continua_numa_folha(self):
+        from apps.moda.models import ItemPedidoProducao
+
+        pedido = self._pedido()
+        ItemPedidoProducao.objects.create(
+            pedido=pedido, descricao='Camisa Adulto', quantidade=5,
+        )
+
+        self.assertEqual(_paginas(PedidoPdfService.gerar(pedido)), 1)
 
     # ── Cabeçalho ────────────────────────────────────────────────────────
 
