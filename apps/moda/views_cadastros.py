@@ -8,6 +8,7 @@ from decimal import Decimal, InvalidOperation
 
 from django.contrib import messages
 from django.db import models, transaction
+from django.core.paginator import Paginator
 from django.db.models import Count, Prefetch, Q
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
@@ -28,7 +29,7 @@ from .models import (
     ArquivoPedido, Cor, Grade, ItemGrade, ItemGradePedido, ItemPedidoProducao,
     PedidoProducao,
     Personalizacao, PersonalizacaoIndividual, ProdutoCor, ProdutoModa,
-    Tamanho, VisualItemPedido,
+    Tamanho, Variante, VisualItemPedido,
 )
 from .services.pedido_pdf import mensagem_whatsapp, whatsapp_numero
 from .services.validacao import ValidacaoProducao
@@ -288,6 +289,122 @@ class ProdutoGerarVariantesView(ModaBaseView):
         else:
             messages.success(request, resultado.mensagem)
         return redirect(reverse('moda:produto-detail', args=[produto.pk]))
+
+
+# ══════════════════════════════════════════════════════════════════════
+# VARIANTES
+# ══════════════════════════════════════════════════════════════════════
+
+def _querystring_sem_pagina(request) -> str:
+    """Os filtros da URL sem o `page`, para paginar sem perder o filtro."""
+    parametros = request.GET.copy()
+    parametros.pop('page', None)
+    return parametros.urlencode()
+
+
+class VarianteListView(ModaBaseView):
+    """
+    O cruzamento produto × cor × tamanho, de toda a filial.
+
+    A tela do produto já GERA as variantes dele. O que faltava era o lugar
+    de OLHAR o conjunto: achar o SKU que veio numa etiqueta sem ter de
+    lembrar de qual produto ele é, conferir se a grade rendeu o que devia,
+    e desativar a linha que a casa não produz mais.
+
+    Desativar é decisão de quem opera, e não do gerador: `VarianteService`
+    nunca apaga nada, justamente porque pode haver estoque ou produção em
+    andamento na variante. Esta tela é onde essa decisão cabe.
+    """
+
+    def get(self, request):
+        filial = _filial(request)
+        busca = (request.GET.get('q') or '').strip()
+        produto_id = (request.GET.get('produto') or '').strip()
+        cor_id = (request.GET.get('cor') or '').strip()
+        tamanho_id = (request.GET.get('tamanho') or '').strip()
+        situacao = (request.GET.get('situacao') or '').strip()
+
+        variantes = (
+            Variante.objects.filter(produto__filial=filial)
+            .select_related('produto', 'produto_cor__cor', 'tamanho')
+            # Ordem de LEITURA desta tela: produto, cor e a ordem da grade.
+            # A `Meta.ordering` do model começa pela cor porque foi feita
+            # para a lista de UM produto; aqui ela embaralharia produtos
+            # diferentes na mesma cor.
+            .order_by('produto__nome', 'produto_cor__cor__nome',
+                      'tamanho__ordem', 'tamanho__sigla')
+        )
+        if busca:
+            variantes = variantes.filter(
+                Q(sku__icontains=busca) | Q(codigo_barras__icontains=busca)
+                | Q(produto__nome__icontains=busca)
+                | Q(produto__codigo__icontains=busca)
+            )
+        if produto_id.isdigit():
+            variantes = variantes.filter(produto_id=produto_id)
+        if cor_id.isdigit():
+            variantes = variantes.filter(produto_cor__cor_id=cor_id)
+        if tamanho_id.isdigit():
+            variantes = variantes.filter(tamanho_id=tamanho_id)
+        if situacao == 'ativas':
+            variantes = variantes.filter(ativo=True)
+        elif situacao == 'inativas':
+            variantes = variantes.filter(ativo=False)
+
+        # O resumo conta o que o FILTRO devolveu, não a base inteira: número
+        # de topo que ignora o filtro embaixo dele faz a pessoa desconfiar
+        # da tela toda.
+        resumo = variantes.aggregate(
+            total=Count('id'),
+            ativas=Count('id', filter=Q(ativo=True)),
+            produtos=Count('produto_id', distinct=True),
+        )
+
+        return render(request, 'moda/variante_list.html', {
+            'title': 'Variantes',
+            'page_obj': Paginator(variantes, 60).get_page(request.GET.get('page')),
+            'page_querystring': _querystring_sem_pagina(request),
+            'resumo': resumo,
+            'busca': busca,
+            'produto_id': produto_id,
+            'cor_id': cor_id,
+            'tamanho_id': tamanho_id,
+            'situacao': situacao,
+            'tem_filtro': any([busca, produto_id, cor_id, tamanho_id, situacao]),
+            'produtos': (
+                ProdutoModa.objects.for_filial(filial)
+                .filter(variantes__isnull=False).distinct().order_by('nome')
+            ),
+            'cores': Cor.objects.for_filial(filial).filter(ativo=True),
+            'tamanhos': Tamanho.objects.for_filial(filial).filter(ativo=True),
+        })
+
+
+class VarianteToggleView(ModaBaseView):
+    """Liga e desliga a variante, sem apagar — pode haver estoque nela."""
+
+    permissao_acao = 'editar'
+
+    def post(self, request, pk):
+        variante = get_object_or_404(
+            Variante.objects.select_related('produto').filter(
+                produto__filial=_filial(request)),
+            pk=pk,
+        )
+        variante.ativo = not variante.ativo
+        variante.save(update_fields=['ativo'])
+        messages.success(
+            request,
+            f'SKU {variante.sku} {"reativado" if variante.ativo else "desativado"}.',
+        )
+
+        # Volta para a MESMA página e o MESMO filtro. O destino é montado
+        # aqui a partir do nosso próprio `reverse`, e não do Referer: o que
+        # vem do formulário entra só como querystring, então nem um valor
+        # adulterado tira o usuário do sistema.
+        voltar = (request.POST.get('voltar') or '').lstrip('?')
+        destino = reverse('moda:variante-list')
+        return redirect(f'{destino}?{voltar}' if voltar else destino)
 
 
 # ══════════════════════════════════════════════════════════════════════

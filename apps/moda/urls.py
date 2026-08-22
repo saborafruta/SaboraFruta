@@ -239,6 +239,12 @@ ROTAS_PRONTAS: list = [
     path('produtos/produtos/<int:pk>/editar/', vc.ProdutoFormView.as_view(), name='produto-update'),
     path('produtos/produtos/<int:pk>/cores/', vc.ProdutoCorAddView.as_view(), name='produto-cor-add'),
     path('produtos/produtos/<int:pk>/variantes/', vc.ProdutoGerarVariantesView.as_view(), name='produto-gerar-variantes'),
+
+    # A lista de variantes da filial inteira. Tem de vir ANTES da rota
+    # genérica `<slug:grupo>/<slug:slug>/`, senão cai no placeholder de
+    # "em construção" -- foi exatamente o que estava acontecendo.
+    path('produtos/variantes/', vc.VarianteListView.as_view(), name='variante-list'),
+    path('produtos/variantes/<int:pk>/situacao/', vc.VarianteToggleView.as_view(), name='variante-toggle'),
     # ── Cadastros de apoio: POR ÚLTIMO, e é o que importa nesta lista ──
     #
     # `<slug:grupo>/<slug:slug>/novo/` casa com QUASE TUDO: produtos/

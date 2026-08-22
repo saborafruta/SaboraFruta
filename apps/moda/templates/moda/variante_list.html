@@ -1,0 +1,189 @@
+{% extends "_base.html" %}
+{% block title %}{{ title }}{% endblock %}
+{% block page_title %}{{ title }}{% endblock %}
+{% block content %}
+<div class="space-y-5">
+  <div class="flex flex-wrap items-start justify-between gap-3">
+    <div>
+      <p class="text-sm mb-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+        <a href="{% url 'moda:grupo' 'produtos' %}" :style="temaClaro ? 'color:#3b82f6;' : 'color:#60a5fa;'">Produtos</a>
+        <span class="mx-1">›</span> Variantes
+      </p>
+      <h2 class="text-2xl font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">Variantes</h2>
+      <p class="text-sm mt-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+        O cruzamento produto × cor × tamanho — é o nível que tem SKU, e é
+        nele que a produção, o estoque e a etiqueta trabalham.
+      </p>
+    </div>
+    <a href="{% url 'moda:produto-list' %}" class="btn-secondary">Produtos</a>
+  </div>
+
+  {% comment %}
+    Os números contam o que o FILTRO devolveu, e não a base inteira: um
+    resumo que ignora o filtro logo abaixo dele faz duvidar da tela toda.
+  {% endcomment %}
+  <div class="grid gap-3 sm:grid-cols-3">
+    <div class="card p-4">
+      <p class="text-xs uppercase tracking-wide" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Variantes</p>
+      <p class="text-2xl font-semibold mt-1" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">{{ resumo.total }}</p>
+    </div>
+    <div class="card p-4">
+      <p class="text-xs uppercase tracking-wide" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Ativas</p>
+      <p class="text-2xl font-semibold mt-1" :style="temaClaro ? 'color:#059669;' : 'color:#34d399;'">{{ resumo.ativas }}</p>
+    </div>
+    <div class="card p-4">
+      <p class="text-xs uppercase tracking-wide" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Produtos</p>
+      <p class="text-2xl font-semibold mt-1" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">{{ resumo.produtos }}</p>
+    </div>
+  </div>
+
+  <form method="get" class="card p-4 space-y-3">
+    <div class="flex gap-2 flex-wrap">
+      <input type="text" name="q" value="{{ busca }}" class="form-input flex-1 min-w-[220px]"
+             placeholder="Buscar por SKU, código de barras, nome ou código do produto...">
+      <button type="submit" class="btn-primary">Buscar</button>
+      {% if tem_filtro %}<a href="{% url 'moda:variante-list' %}" class="btn-secondary">Limpar</a>{% endif %}
+    </div>
+    <div class="grid gap-2 sm:grid-cols-4">
+      <select name="produto" class="form-input text-sm">
+        <option value="">Todos os produtos</option>
+        {% for p in produtos %}
+          <option value="{{ p.pk }}" {% if produto_id == p.pk|stringformat:"s" %}selected{% endif %}>{{ p.nome }}</option>
+        {% endfor %}
+      </select>
+      <select name="cor" class="form-input text-sm">
+        <option value="">Todas as cores</option>
+        {% for c in cores %}
+          <option value="{{ c.pk }}" {% if cor_id == c.pk|stringformat:"s" %}selected{% endif %}>{{ c.nome }}</option>
+        {% endfor %}
+      </select>
+      <select name="tamanho" class="form-input text-sm">
+        <option value="">Todos os tamanhos</option>
+        {% for t in tamanhos %}
+          <option value="{{ t.pk }}" {% if tamanho_id == t.pk|stringformat:"s" %}selected{% endif %}>{{ t.sigla }}</option>
+        {% endfor %}
+      </select>
+      <select name="situacao" class="form-input text-sm">
+        <option value="">Ativas e inativas</option>
+        <option value="ativas" {% if situacao == 'ativas' %}selected{% endif %}>Só ativas</option>
+        <option value="inativas" {% if situacao == 'inativas' %}selected{% endif %}>Só inativas</option>
+      </select>
+    </div>
+  </form>
+
+  <div class="card overflow-hidden">
+    {% if page_obj.object_list %}
+      <div class="overflow-x-auto">
+        <table class="w-full text-sm">
+          <thead>
+            <tr class="border-b" :style="temaClaro ? 'border-color:#e2e8f0;' : 'border-color:#2a2a2e;'">
+              <th class="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wide"
+                  :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">SKU</th>
+              <th class="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wide"
+                  :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Produto</th>
+              <th class="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wide"
+                  :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Cor</th>
+              <th class="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wide"
+                  :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Tamanho</th>
+              <th class="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wide"
+                  :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Código de barras</th>
+              <th class="text-right px-4 py-3 text-xs font-semibold uppercase tracking-wide"
+                  :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Situação</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for v in page_obj.object_list %}
+              <tr class="border-b" :style="temaClaro ? 'border-color:#f1f5f9;' : 'border-color:#1e1e22;'">
+                <td class="px-4 py-3 font-mono text-xs font-semibold whitespace-nowrap"
+                    :style="temaClaro ? 'color:#1d4ed8;' : 'color:#60a5fa;'">{{ v.sku }}</td>
+                <td class="px-4 py-3">
+                  <a href="{% url 'moda:produto-detail' v.produto_id %}" class="font-medium"
+                     :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">{{ v.produto.nome }}</a>
+                  <span class="block text-xs font-mono mt-0.5"
+                        :style="temaClaro ? 'color:#94a3b8;' : 'color:#6b7280;'">{{ v.produto.codigo }}</span>
+                </td>
+                <td class="px-4 py-3 whitespace-nowrap">
+                  <span class="inline-flex items-center gap-2">
+                    {% comment %}
+                      A bolinha só sai quando a cor TEM hex cadastrado. Um
+                      quadrado cinza para toda cor sem hex daria a entender
+                      que a peça é cinza.
+                    {% endcomment %}
+                    {% if v.produto_cor.cor.hex_cor %}
+                      <span class="inline-block w-3.5 h-3.5 rounded-full shrink-0"
+                            style="background:{{ v.produto_cor.cor.hex_cor }}; border:1px solid rgba(127,127,127,.4);"></span>
+                    {% endif %}
+                    <span :style="temaClaro ? 'color:#374151;' : 'color:#cbd5e1;'">{{ v.produto_cor.cor.nome }}</span>
+                  </span>
+                </td>
+                <td class="px-4 py-3 font-mono text-xs font-semibold"
+                    :style="temaClaro ? 'color:#374151;' : 'color:#cbd5e1;'">{{ v.tamanho.sigla }}</td>
+                <td class="px-4 py-3 font-mono text-xs"
+                    :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">{{ v.codigo_barras|default:"—" }}</td>
+                <td class="px-4 py-3 text-right whitespace-nowrap">
+                  <form method="post" action="{% url 'moda:variante-toggle' v.pk %}" class="inline"
+                        onsubmit="return confirm('{% if v.ativo %}Desativar{% else %}Reativar{% endif %} o SKU {{ v.sku|escapejs }}?');">
+                    {% csrf_token %}
+                    <input type="hidden" name="voltar" value="{{ page_querystring }}{% if page_querystring %}&{% endif %}page={{ page_obj.number }}">
+                    {% if v.ativo %}
+                      <button type="submit" class="soft-pill is-green text-xs">Ativa</button>
+                    {% else %}
+                      <button type="submit" class="soft-pill is-slate text-xs">Inativa</button>
+                    {% endif %}
+                  </form>
+                </td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+
+      {% if page_obj.paginator.num_pages > 1 %}
+        <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 px-5 py-3 text-sm"
+             :style="temaClaro ? 'border-top:1px solid #e2e8f0;' : 'border-top:1px solid #2a2a2e;'">
+          <div :style="temaClaro ? 'color:#6b7280;' : 'color:#94a3b8;'">
+            Página {{ page_obj.number }} de {{ page_obj.paginator.num_pages }}
+            <span :style="temaClaro ? 'color:#9ca3af;' : 'color:#6b7280;'">({{ page_obj.paginator.count }} variantes)</span>
+          </div>
+          <div class="flex gap-2">
+            {% if page_obj.has_previous %}
+              <a href="?{% if page_querystring %}{{ page_querystring }}&{% endif %}page={{ page_obj.previous_page_number }}"
+                 class="btn-secondary">← Anterior</a>
+            {% endif %}
+            {% if page_obj.has_next %}
+              <a href="?{% if page_querystring %}{{ page_querystring }}&{% endif %}page={{ page_obj.next_page_number }}"
+                 class="btn-secondary">Próxima →</a>
+            {% endif %}
+          </div>
+        </div>
+      {% endif %}
+
+    {% else %}
+      {% comment %}
+        Vazio que EXPLICA e oferece a saída. Variante não se cadastra aqui:
+        ela nasce do produto, cruzando a grade com as cores. Sem dizer isso,
+        a tela parece quebrada para quem chegou pelo menu.
+      {% endcomment %}
+      <div class="p-10 text-center">
+        {% if tem_filtro %}
+          <p class="text-sm" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+            Nenhuma variante encontrada com esse filtro.
+          </p>
+          <a href="{% url 'moda:variante-list' %}" class="btn-secondary text-sm mt-4 inline-block">Limpar filtro</a>
+        {% else %}
+          <p class="text-sm font-medium" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
+            Nenhuma variante gerada ainda.
+          </p>
+          <p class="text-sm mt-2" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+            Variante não se cadastra aqui: ela nasce do produto. Defina a
+            <strong>grade</strong> e as <strong>cores</strong> do produto e
+            use “Gerar variantes” na tela dele — o sistema cruza os dois e
+            cria um SKU para cada combinação.
+          </p>
+          <a href="{% url 'moda:produto-list' %}" class="btn-primary text-sm mt-4 inline-block">Ir para Produtos</a>
+        {% endif %}
+      </div>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}
