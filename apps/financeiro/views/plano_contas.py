@@ -1,12 +1,17 @@
 """Views de Categorias Financeiras."""
 from django.contrib import messages
+from django.db import transaction
+from django.http import JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.views import View
 
 from apps.core.services.permissions import PermissaoRequiredMixin
+from apps.core.models import RegistroAuditoria
+from apps.core.services.auditoria import registrar_auditoria, snapshot_modelo
 from apps.financeiro.forms.plano_contas import PlanoContasForm
 from apps.financeiro.models.conta_bancaria import PlanoContas
+from apps.financeiro.models.plano_contabil import PlanoContabil
 
 # Configuracao dos 6 tipos de conta
 TIPO_CONFIGS = {
@@ -24,6 +29,104 @@ DEFAULT_TIPO = 'grupo_despesa'
 def _get_empresa(request):
     filial = request.filial_ativa
     return filial.empresa if filial else None
+
+
+def _proximo_codigo_categoria(empresa, nivel, conta_pai=None):
+    prefixo = conta_pai.codigo if conta_pai else ''
+    largura = 2 if nivel == 2 else 5
+    codigos = PlanoContas.objects.filter(
+        empresa=empresa, tipo='D', nivel=nivel, conta_pai=conta_pai,
+    ).values_list('codigo', flat=True)
+    numeros = []
+    for codigo in codigos:
+        sufixo = codigo[len(prefixo):] if prefixo and codigo.startswith(prefixo) else codigo
+        if sufixo.isdigit():
+            numeros.append(int(sufixo))
+    if nivel == 1:
+        candidato = str(max(numeros, default=299) + 1)
+    else:
+        candidato = f'{prefixo}{max(numeros, default=0) + 1:0{largura}d}'
+    while PlanoContas.objects.filter(empresa=empresa, codigo=candidato).exists():
+        numeros.append(int(candidato[len(prefixo):] or 0))
+        candidato = (
+            str(max(numeros) + 1) if nivel == 1
+            else f'{prefixo}{max(numeros) + 1:0{largura}d}'
+        )
+    return candidato[:20]
+
+
+class PlanoContasQuickCreateView(PermissaoRequiredMixin, View):
+    permissao_modulo = 'financeiro'
+    permissao_acao = 'criar'
+
+    @transaction.atomic
+    def post(self, request):
+        empresa = _get_empresa(request)
+        try:
+            nivel = int(request.POST.get('nivel', '0'))
+        except ValueError:
+            nivel = 0
+        descricao = request.POST.get('descricao', '').strip()
+        if nivel not in (1, 2, 3) or not descricao:
+            return JsonResponse({'erro': 'Informe o nome da nova categoria.'}, status=400)
+
+        conta_pai = None
+        if nivel > 1:
+            conta_pai = PlanoContas.objects.filter(
+                pk=request.POST.get('conta_pai'), empresa=empresa,
+                tipo='D', nivel=nivel - 1, ativo=True,
+            ).first()
+            if not conta_pai:
+                return JsonResponse({'erro': 'Selecione primeiro o nivel anterior.'}, status=400)
+
+        if PlanoContas.objects.filter(
+            empresa=empresa, tipo='D', nivel=nivel, conta_pai=conta_pai,
+            descricao__iexact=descricao,
+        ).exists():
+            return JsonResponse({'erro': 'Ja existe uma categoria com esse nome neste nivel.'}, status=400)
+
+        conta_contabil = None
+        if nivel == 3:
+            conta_contabil = PlanoContabil.objects.filter(
+                pk=request.POST.get('conta_contabil'), empresa=empresa,
+                tipo_conta=PlanoContabil.TipoConta.ANALITICA, ativo=True,
+            ).first()
+            if not conta_contabil:
+                return JsonResponse(
+                    {'erro': 'Selecione a conta contabil analitica desta categoria.'},
+                    status=400,
+                )
+
+        conta = PlanoContas.objects.create(
+            empresa=empresa,
+            conta_pai=conta_pai,
+            conta_contabil=conta_contabil,
+            codigo=_proximo_codigo_categoria(empresa, nivel, conta_pai),
+            descricao=descricao,
+            tipo='D',
+            nivel=nivel,
+            aceita_lancamento=nivel == 3,
+            ativo=True,
+        )
+        registrar_auditoria(
+            request=request,
+            modulo=RegistroAuditoria.Modulo.FINANCEIRO,
+            acao=RegistroAuditoria.Acao.CRIAR,
+            objeto=conta,
+            descricao=f'Categoria financeira criada: {conta.caminho_descricao}',
+            depois=snapshot_modelo(conta),
+            metadados={'origem': 'cadastro_rapido'},
+        )
+        return JsonResponse({
+            'ok': True,
+            'categoria': {
+                'id': conta.pk,
+                'descricao': conta.descricao,
+                'codigo': conta.codigo,
+                'pai_id': conta.conta_pai_id,
+                'nivel': conta.nivel,
+            },
+        })
 
 
 class PlanoContasListView(PermissaoRequiredMixin, View):

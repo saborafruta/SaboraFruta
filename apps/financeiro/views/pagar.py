@@ -25,6 +25,7 @@ from apps.financeiro.constants.enums import StatusContaPagar
 from apps.financeiro.forms.pagar import (
     ContaPagarEdicaoAdminForm,
     ContaPagarForm,
+    DespesaPagaForm,
     PagamentoContaPagarForm,
 )
 from apps.financeiro.models.conta_bancaria import ContaBancaria, PlanoContas
@@ -629,6 +630,108 @@ class ContaPagarCreateView(PermissaoRequiredMixin, View):
         if d.get('quitar_ao_lancar'):
             return redirect(reverse('financeiro:pagar_pagas'))
         return redirect(reverse('financeiro:pagar_list'))
+
+
+@method_decorator(xframe_options_sameorigin, name='dispatch')
+class DespesaPagaCreateView(PermissaoRequiredMixin, View):
+    """Cadastro curto de uma despesa que ja nasce integralmente quitada."""
+
+    permissao_modulo = 'financeiro'
+    permissao_acao = 'criar'
+
+    def _context(self, request, form):
+        return {
+            'title': 'Nova despesa paga',
+            'form': form,
+            'data_pagamento': timezone.localdate(),
+            'modal_mode': request.GET.get('modal') == '1',
+            'cancel_url': reverse('financeiro:pagar_pagas'),
+            'pode_criar_fornecedor': request.user.tem_permissao('cadastros', 'criar'),
+            'pode_criar_categoria': request.user.tem_permissao('financeiro', 'criar'),
+            'categoria_grupos_json': [
+                {'id': item.pk, 'descricao': item.descricao, 'codigo': item.codigo}
+                for item in form.categoria_grupos
+            ],
+            'categoria_subgrupos_json': [
+                {
+                    'id': item.pk, 'descricao': item.descricao,
+                    'codigo': item.codigo, 'pai_id': item.conta_pai_id,
+                }
+                for item in form.categoria_subgrupos
+            ],
+            'categorias_json': [
+                {
+                    'id': item.pk, 'descricao': item.descricao,
+                    'codigo': item.codigo, 'pai_id': item.conta_pai_id,
+                }
+                for item in form.fields['plano_contas'].queryset
+            ],
+            'contas_contabeis_json': [
+                {
+                    'id': item.pk,
+                    'label': f'{item.classificacao} - {item.descricao}',
+                }
+                for item in form.contas_contabeis
+            ],
+        }
+
+    def get(self, request):
+        form = DespesaPagaForm(filial=_filial(request))
+        return render(request, 'financeiro/pagar/despesa_paga_form.html', self._context(request, form))
+
+    def post(self, request):
+        filial = _filial(request)
+        form = DespesaPagaForm(request.POST, request.FILES, filial=filial)
+        if not form.is_valid():
+            return render(
+                request, 'financeiro/pagar/despesa_paga_form.html',
+                self._context(request, form),
+            )
+
+        d = form.cleaned_data
+        hoje = timezone.localdate()
+        try:
+            conta = ContaPagarService.criar_e_quitar(
+                filial=filial,
+                fornecedor=d.get('fornecedor'),
+                funcionario=d.get('funcionario'),
+                tipo_lancamento=d['tipo_lancamento'],
+                valor_original=d['valor_original'],
+                data_emissao=hoje,
+                data_vencimento=hoje,
+                data_competencia=hoje,
+                parcela=1,
+                total_parcelas=1,
+                forma_pagamento_prevista=d['forma_pagamento_utilizada'],
+                plano_contas=d['plano_contas'],
+                observacao=d.get('observacao', ''),
+                ajustar_vencimento_dia_util=False,
+                data_pagamento=hoje,
+                forma_pagamento_utilizada=d['forma_pagamento_utilizada'],
+                conta_bancaria_pagamento=d.get('conta_bancaria_pagamento'),
+                comprovante_pagamento=d.get('comprovante_pagamento'),
+                usuario=request.user,
+            )
+            registrar_auditoria(
+                request=request,
+                modulo=RegistroAuditoria.Modulo.FINANCEIRO,
+                acao=RegistroAuditoria.Acao.CRIAR,
+                objeto=conta,
+                descricao=f'Despesa paga #{conta.pk} registrada',
+                depois=snapshot_modelo(conta),
+                metadados={'origem': 'cadastro_despesa_paga'},
+            )
+        except DomainError as exc:
+            form.add_error(None, str(exc))
+            return render(
+                request, 'financeiro/pagar/despesa_paga_form.html',
+                self._context(request, form),
+            )
+
+        messages.success(request, f'Despesa paga #{conta.pk} registrada com sucesso.')
+        if request.GET.get('modal') == '1':
+            return render(request, 'financeiro/pagar/modal_success.html')
+        return redirect(reverse('financeiro:pagar_pagas'))
 
 
 class ContaPagarNotaFiscalLookupView(PermissaoRequiredMixin, View):

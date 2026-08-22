@@ -34,7 +34,7 @@
       <a href="{% url 'financeiro:pagar_pagas_relatorio' %}{% if page_querystring %}?{{ page_querystring }}{% endif %}"
          target="_blank" class="btn-secondary">Imprimir relatório</a>
       {% if pode_criar %}
-        <a href="{% url 'financeiro:pagar_criar' %}?quitar=1" class="btn-primary">+ Nova conta paga</a>
+        <a href="{% url 'financeiro:despesa_paga_criar' %}" class="btn-primary">+ Nova despesa paga</a>
       {% endif %}
     </div>
   </div>

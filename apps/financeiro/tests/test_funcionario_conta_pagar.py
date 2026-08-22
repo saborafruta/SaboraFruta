@@ -7,6 +7,7 @@ from types import SimpleNamespace
 from tempfile import TemporaryDirectory
 
 from django.apps import apps as django_apps
+from django.contrib.messages.storage.fallback import FallbackStorage
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.core.exceptions import ValidationError
 from django.http import Http404
@@ -20,6 +21,7 @@ from apps.compras.models import EntradaNF
 from apps.core.models import Empresa, Filial, PerfilAcesso, RegistroAuditoria, Usuario
 from apps.financeiro.forms.pagar import (
     ContaPagarForm,
+    DespesaPagaForm,
     PagamentoContaPagarForm,
     validar_comprovante,
 )
@@ -37,11 +39,13 @@ from apps.financeiro.views.pagar import (
     ContaPagaListView,
     ContaPagaRelatorioView,
     ContaPagarCreateView,
+    DespesaPagaCreateView,
     ContaPagarEditarValorView,
     ContaPagarListView,
     ContaPagarNotaFiscalLookupView,
     ContaPagarPagamentoView,
 )
+from apps.financeiro.views.plano_contas import PlanoContasQuickCreateView
 
 
 class FuncionarioContaPagarTests(TestCase):
@@ -410,7 +414,97 @@ class FuncionarioContaPagarTests(TestCase):
         self.assertContains(response, "PAGO-001")
         self.assertNotContains(response, "ABERTO-001")
         self.assertContains(response, f'/financeiro/pagar/{paga.pk}/')
-        self.assertContains(response, "Nova conta paga")
+        self.assertContains(response, "Nova despesa paga")
+
+    def test_despesa_paga_tem_formulario_curto_e_exige_beneficiario(self):
+        form = DespesaPagaForm(filial=self.filial)
+
+        self.assertNotIn('documento_numero', form.fields)
+        self.assertNotIn('data_vencimento', form.fields)
+        self.assertNotIn('recorrente', form.fields)
+        self.assertIn('valor_original', form.fields)
+        self.assertIn('forma_pagamento_utilizada', form.fields)
+
+        invalido = DespesaPagaForm({
+            'tipo_lancamento': 'funcionario',
+            'valor_original': '50.00',
+            'plano_contas': self.categoria.pk,
+            'forma_pagamento_utilizada': self.forma_pix.pk,
+        }, filial=self.filial)
+        self.assertFalse(invalido.is_valid())
+        self.assertIn('funcionario', invalido.errors)
+
+    def test_despesa_paga_nasce_quitada_com_data_de_hoje(self):
+        perfil = PerfilAcesso.objects.create(
+            empresa=self.empresa, nome='Admin despesa paga', is_admin=True,
+        )
+        usuario = Usuario.objects.create_user(
+            email='despesa-paga@teste.com', nome='Admin', password='teste',
+            empresa=self.empresa, filial=self.filial, perfil=perfil,
+        )
+        get_request = RequestFactory().get('/financeiro/pagar/despesa-paga/nova/')
+        get_request.user = usuario
+        get_request.filial_ativa = self.filial
+        get_response = DespesaPagaCreateView.as_view()(get_request)
+        self.assertEqual(get_response.status_code, 200)
+        self.assertContains(get_response, 'Registrar despesa paga')
+        self.assertContains(get_response, 'Hoje,')
+        self.assertNotContains(get_response, 'Data de vencimento')
+        self.assertNotContains(get_response, 'Título recorrente')
+
+        request = RequestFactory().post('/financeiro/pagar/despesa-paga/nova/?modal=1', {
+            'tipo_lancamento': 'funcionario',
+            'funcionario': self.funcionario.pk,
+            'valor_original': '75.50',
+            'plano_contas': self.categoria.pk,
+            'forma_pagamento_utilizada': self.forma_pix.pk,
+        })
+        request.user = usuario
+        request.filial_ativa = self.filial
+        request.session = {}
+        request._messages = FallbackStorage(request)
+
+        response = DespesaPagaCreateView.as_view()(request)
+        conta = ContaPagar.objects.order_by('-pk').first()
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(conta.status, 'pago')
+        self.assertEqual(conta.data_emissao, timezone.localdate())
+        self.assertEqual(conta.data_vencimento, timezone.localdate())
+        self.assertEqual(conta.data_pagamento, timezone.localdate())
+        self.assertEqual(conta.total_parcelas, 1)
+        self.assertEqual(conta.pagamentos.count(), 1)
+
+    def test_criacao_rapida_mantem_os_tres_niveis_e_vinculo_contabil(self):
+        perfil = PerfilAcesso.objects.create(
+            empresa=self.empresa, nome='Admin categorias rapidas', is_admin=True,
+        )
+        usuario = Usuario.objects.create_user(
+            email='categoria-rapida@teste.com', nome='Admin', password='teste',
+            empresa=self.empresa, filial=self.filial, perfil=perfil,
+        )
+
+        def criar(nivel, descricao, **dados):
+            request = RequestFactory().post('/financeiro/categorias-financeiras/criar-rapida/', {
+                'nivel': nivel, 'descricao': descricao, **dados,
+            })
+            request.user = usuario
+            request.filial_ativa = self.filial
+            response = PlanoContasQuickCreateView.as_view()(request)
+            self.assertEqual(response.status_code, 200, response.content)
+            return json.loads(response.content)['categoria']
+
+        grupo = criar(1, 'Despesas de teste')
+        subgrupo = criar(2, 'Tipo de teste', conta_pai=grupo['id'])
+        categoria = criar(
+            3, 'Categoria de teste', conta_pai=subgrupo['id'],
+            conta_contabil=self.conta_contabil.pk,
+        )
+        conta = PlanoContas.objects.get(pk=categoria['id'])
+
+        self.assertEqual(conta.conta_pai_id, subgrupo['id'])
+        self.assertEqual(conta.conta_contabil, self.conta_contabil)
+        self.assertTrue(conta.aceita_lancamento)
 
     def test_relatorio_de_contas_pagas_filtra_pela_data_do_pagamento(self):
         ContaPagarService.criar_e_quitar(
@@ -658,7 +752,10 @@ class FuncionarioContaPagarTests(TestCase):
         self.assertContains(response, "Resumo da baixa")
         self.assertContains(response, "Pagamento parcial")
         self.assertContains(response, "Referência da transação")
-        self.assertContains(response, 'value="2026-08-20"')
+        self.assertContains(
+            response,
+            f'value="{timezone.localdate().isoformat()}"',
+        )
 
     def test_comprovante_valida_tipo_e_tamanho(self):
         invalido = SimpleUploadedFile(

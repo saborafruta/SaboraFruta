@@ -45,6 +45,7 @@ urlpatterns = [
     path("pagar/pagas/",              pagar_views.ContaPagaListView.as_view(),       name="pagar_pagas"),
     path("pagar/pagas/relatorio/",    pagar_views.ContaPagaRelatorioView.as_view(),  name="pagar_pagas_relatorio"),
     path("pagar/novo/",               pagar_views.ContaPagarCreateView.as_view(),    name="pagar_criar"),
+    path("pagar/despesa-paga/nova/",  pagar_views.DespesaPagaCreateView.as_view(),  name="despesa_paga_criar"),
     path("pagar/nfe/consultar/",       pagar_views.ContaPagarNotaFiscalLookupView.as_view(), name="pagar_nfe_consultar"),
     path("pagar/<int:pk>/",           pagar_views.ContaPagarDetailView.as_view(),    name="pagar_detail"),
     path("pagar/<int:pk>/editar-valor/", pagar_views.ContaPagarEditarValorView.as_view(), name="pagar_editar_valor"),
@@ -61,6 +62,7 @@ urlpatterns = [
     # ── Categorias Financeiras ────────────────────────────────────────────────
     path("categorias-financeiras/",                       pc_views.PlanoContasListView.as_view(),        name="plano_contas_list"),
     path("categorias-financeiras/nova/",                  pc_views.PlanoContasCreateView.as_view(),      name="plano_contas_criar"),
+    path("categorias-financeiras/criar-rapida/",          pc_views.PlanoContasQuickCreateView.as_view(), name="plano_contas_criar_rapida"),
     path("categorias-financeiras/<int:pk>/editar/",       pc_views.PlanoContasEditView.as_view(),        name="plano_contas_editar"),
     path("categorias-financeiras/<int:pk>/toggle-ativo/", pc_views.PlanoContasToggleAtivoView.as_view(), name="plano_contas_toggle"),
     path("plano-contas/", RedirectView.as_view(pattern_name="financeiro:plano_contas_list")),

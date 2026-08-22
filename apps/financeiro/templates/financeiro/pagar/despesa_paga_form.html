@@ -1,0 +1,226 @@
+{% extends "_base.html" %}
+{% load widget_tweaks %}
+
+{% block title %}Nova despesa paga{% endblock %}
+{% block page_title %}Nova despesa paga{% endblock %}
+
+{% block content %}
+{{ categoria_grupos_json|json_script:"despesa-grupos-data" }}
+{{ categoria_subgrupos_json|json_script:"despesa-subgrupos-data" }}
+{{ categorias_json|json_script:"despesa-categorias-data" }}
+{{ contas_contabeis_json|json_script:"despesa-contas-data" }}
+
+<div class="mx-auto max-w-4xl space-y-4" x-data="despesaPagaPage()" x-init="init()">
+  <div class="flex flex-wrap items-end justify-between gap-3">
+    <div>
+      {% if not modal_mode %}<a href="{% url 'financeiro:pagar_pagas' %}" class="text-sm text-blue-500">Contas pagas /</a>{% endif %}
+      <h2 class="mt-1 text-xl font-semibold">Registrar despesa paga</h2>
+      <p class="mt-1 text-sm opacity-65">Um lançamento direto, já quitado e incluído no caixa.</p>
+    </div>
+    <div class="rounded-md border px-3 py-2 text-right">
+      <span class="block text-[11px] font-semibold uppercase opacity-55">Data do pagamento</span>
+      <strong class="text-sm">Hoje, {{ data_pagamento|date:"d/m/Y" }}</strong>
+    </div>
+  </div>
+
+  <form method="post" enctype="multipart/form-data" class="card overflow-visible" @submit="loading=true" novalidate>
+    {% csrf_token %}
+    <input type="hidden" name="tipo_lancamento" :value="tipoLancamento">
+    <input type="hidden" name="plano_contas" :value="categoriaId">
+
+    {% if form.non_field_errors %}
+      <div class="m-5 rounded-md border border-red-300 bg-red-50 p-3 text-sm text-red-700">{{ form.non_field_errors }}</div>
+    {% endif %}
+
+    <section class="p-5 sm:p-6">
+      <div class="mb-5 flex items-center gap-3">
+        <span class="grid h-8 w-8 place-items-center rounded-md bg-blue-600 text-sm font-bold text-white">1</span>
+        <div><h3 class="text-sm font-semibold">Quem recebeu?</h3><p class="text-xs opacity-65">Selecione fornecedor ou funcionário.</p></div>
+      </div>
+      <div class="mb-4 grid grid-cols-2 gap-1 rounded-md border p-1">
+        <button type="button" @click="tipoLancamento='fornecedor'" class="rounded px-3 py-2.5 text-sm font-semibold"
+                :class="tipoLancamento==='fornecedor' ? 'bg-blue-600 text-white' : ''">Fornecedor</button>
+        <button type="button" @click="tipoLancamento='funcionario'" class="rounded px-3 py-2.5 text-sm font-semibold"
+                :class="tipoLancamento==='funcionario' ? 'bg-blue-600 text-white' : ''">Funcionário</button>
+      </div>
+      <div x-show="tipoLancamento==='fornecedor'" x-cloak>
+        <label class="mb-1 block text-sm font-medium">Fornecedor *</label>
+        {% include "financeiro/pagar/_search_select.html" with field=form.fornecedor placeholder="Pesquisar fornecedor por nome, razão social ou CNPJ" %}
+        {% if form.fornecedor.errors %}<p class="mt-1 text-xs text-red-500">{{ form.fornecedor.errors|join:", " }}</p>{% endif %}
+      </div>
+      <div x-show="tipoLancamento==='funcionario'" x-cloak>
+        <label class="mb-1 block text-sm font-medium">Funcionário *</label>
+        {% include "financeiro/pagar/_search_select.html" with field=form.funcionario placeholder="Pesquisar funcionário por nome, cargo ou CPF" %}
+        {% if form.funcionario.errors %}<p class="mt-1 text-xs text-red-500">{{ form.funcionario.errors|join:", " }}</p>{% endif %}
+      </div>
+    </section>
+
+    <section class="border-t p-5 sm:p-6 dark:border-zinc-700">
+      <div class="mb-5 flex items-center gap-3">
+        <span class="grid h-8 w-8 place-items-center rounded-md bg-emerald-600 text-sm font-bold text-white">2</span>
+        <div><h3 class="text-sm font-semibold">Quanto e como foi pago?</h3><p class="text-xs opacity-65">Esses dados movimentam a conta e o relatório de contas pagas.</p></div>
+      </div>
+      <div class="grid grid-cols-1 gap-4 sm:grid-cols-3">
+        <div>
+          <label class="mb-1 block text-sm font-medium">Valor pago (R$) *</label>
+          {{ form.valor_original|add_class:"form-input"|attr:"placeholder:0,00" }}
+          {% if form.valor_original.errors %}<p class="mt-1 text-xs text-red-500">{{ form.valor_original.errors|join:", " }}</p>{% endif %}
+        </div>
+        <div>
+          <label class="mb-1 block text-sm font-medium">Forma de pagamento *</label>
+          {{ form.forma_pagamento_utilizada|add_class:"form-input" }}
+          {% if form.forma_pagamento_utilizada.errors %}<p class="mt-1 text-xs text-red-500">{{ form.forma_pagamento_utilizada.errors|join:", " }}</p>{% endif %}
+        </div>
+        <div>
+          <label class="mb-1 block text-sm font-medium">Conta usada</label>
+          {{ form.conta_bancaria_pagamento|add_class:"form-input" }}
+          <p class="mt-1 text-xs opacity-55">Pode ser direcionada depois.</p>
+        </div>
+      </div>
+    </section>
+
+    <section class="border-t p-5 sm:p-6 dark:border-zinc-700">
+      <div class="mb-5 flex items-center gap-3">
+        <span class="grid h-8 w-8 place-items-center rounded-md bg-violet-600 text-sm font-bold text-white">3</span>
+        <div><h3 class="text-sm font-semibold">Classifique a despesa</h3><p class="text-xs opacity-65">Escolha os três níveis. Use + quando a opção ainda não existir.</p></div>
+      </div>
+      <div class="grid grid-cols-1 gap-4 lg:grid-cols-3">
+        <div>
+          <div class="mb-1 flex items-center justify-between gap-2">
+            <label class="text-sm font-medium"><span class="text-violet-500">1.</span> Grupo da despesa *</label>
+            {% if pode_criar_categoria %}<button type="button" @click="abrirCategoria(1)" class="grid h-7 w-7 place-items-center rounded border text-lg text-blue-500 hover:bg-blue-500/10" title="Criar grupo" aria-label="Criar grupo">+</button>{% endif %}
+          </div>
+          <select x-model="grupoId" @change="subgrupoId=''; categoriaId=''" class="form-input">
+            <option value="">Selecione o grupo</option>
+            <template x-for="item in grupos" :key="item.id"><option :value="String(item.id)" x-text="item.descricao"></option></template>
+          </select>
+        </div>
+        <div>
+          <div class="mb-1 flex items-center justify-between gap-2">
+            <label class="text-sm font-medium"><span class="text-violet-500">2.</span> Tipo de gasto *</label>
+            {% if pode_criar_categoria %}<button type="button" @click="abrirCategoria(2)" :disabled="!grupoId" class="grid h-7 w-7 place-items-center rounded border text-lg text-blue-500 hover:bg-blue-500/10 disabled:cursor-not-allowed disabled:opacity-35" title="Criar tipo de gasto" aria-label="Criar tipo de gasto">+</button>{% endif %}
+          </div>
+          <select x-model="subgrupoId" @change="categoriaId=''" :disabled="!grupoId" class="form-input disabled:opacity-50">
+            <option value="">Selecione o tipo</option>
+            <template x-for="item in subgruposFiltrados" :key="item.id"><option :value="String(item.id)" x-text="item.descricao"></option></template>
+          </select>
+        </div>
+        <div>
+          <div class="mb-1 flex items-center justify-between gap-2">
+            <label class="text-sm font-medium"><span class="text-violet-500">3.</span> Categoria específica *</label>
+            {% if pode_criar_categoria %}<button type="button" @click="abrirCategoria(3)" :disabled="!subgrupoId" class="grid h-7 w-7 place-items-center rounded border text-lg text-blue-500 hover:bg-blue-500/10 disabled:cursor-not-allowed disabled:opacity-35" title="Criar categoria específica" aria-label="Criar categoria específica">+</button>{% endif %}
+          </div>
+          <select x-model="categoriaId" :disabled="!subgrupoId" class="form-input disabled:opacity-50">
+            <option value="">Selecione a categoria</option>
+            <template x-for="item in categoriasFiltradas" :key="item.id"><option :value="String(item.id)" x-text="item.descricao"></option></template>
+          </select>
+          {% if form.plano_contas.errors %}<p class="mt-1 text-xs text-red-500">{{ form.plano_contas.errors|join:", " }}</p>{% endif %}
+        </div>
+      </div>
+    </section>
+
+    <details class="border-t p-5 sm:p-6 dark:border-zinc-700">
+      <summary class="cursor-pointer text-sm font-semibold text-blue-500">Adicionar observação ou comprovante</summary>
+      <div class="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
+        <div><label class="mb-1 block text-sm font-medium">Observação</label>{{ form.observacao|add_class:"form-input"|attr:"placeholder:Informação útil para a conferência" }}</div>
+        <div><label class="mb-1 block text-sm font-medium">Comprovante</label>{{ form.comprovante_pagamento|add_class:"form-input" }}<p class="mt-1 text-xs opacity-55">Foto ou PDF de até 10 MB.</p></div>
+      </div>
+    </details>
+
+    <div class="flex flex-col-reverse gap-2 border-t p-5 sm:flex-row sm:justify-end dark:border-zinc-700">
+      <a href="{{ cancel_url }}" class="btn-secondary text-center">Cancelar</a>
+      <button type="submit" class="btn-primary" :disabled="loading" x-text="loading ? 'Registrando...' : 'Registrar despesa paga'"></button>
+    </div>
+  </form>
+
+  <div x-show="categoriaModal" x-cloak class="fixed inset-0 z-[140] flex items-end justify-center bg-slate-950/65 p-0 backdrop-blur-sm sm:items-center sm:p-5" role="dialog" aria-modal="true">
+    <button type="button" class="absolute inset-0" @click="categoriaModal=false" aria-label="Fechar"></button>
+    <div class="relative z-10 w-full max-w-lg rounded-t-md border bg-white p-5 shadow-2xl dark:border-zinc-700 dark:bg-zinc-900 sm:rounded-md">
+      <div class="mb-4 flex items-start justify-between gap-3">
+        <div><h3 class="font-semibold" x-text="tituloCategoria"></h3><p class="text-xs opacity-60">A nova opção será selecionada automaticamente.</p></div>
+        <button type="button" @click="categoriaModal=false" class="grid h-8 w-8 place-items-center rounded border" aria-label="Fechar">×</button>
+      </div>
+      <div x-show="categoriaErro" x-text="categoriaErro" class="mb-3 rounded border border-red-300 bg-red-50 p-3 text-sm text-red-700"></div>
+      <label class="mb-1 block text-sm font-medium">Nome *</label>
+      <input type="text" x-model="categoriaNome" @keydown.enter.prevent="salvarCategoria()" class="form-input" placeholder="Digite um nome claro e objetivo">
+      <div x-show="categoriaNivel===3" x-cloak class="mt-4">
+        <label class="mb-1 block text-sm font-medium">Conta contábil analítica *</label>
+        <select x-model="categoriaContaContabil" class="form-input">
+          <option value="">Selecione a conta contábil</option>
+          <template x-for="item in contasContabeis" :key="item.id"><option :value="String(item.id)" x-text="item.label"></option></template>
+        </select>
+        <p class="mt-1 text-xs opacity-55">Necessária para manter o plano contábil correto.</p>
+      </div>
+      <div class="mt-5 flex justify-end gap-2">
+        <button type="button" class="btn-secondary" @click="categoriaModal=false">Cancelar</button>
+        <button type="button" class="btn-primary" @click="salvarCategoria()" :disabled="categoriaSalvando" x-text="categoriaSalvando ? 'Criando...' : 'Criar e selecionar'"></button>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+function financeSearchSelect(root) {
+  return {
+    value:root.dataset.initial||'', query:'', open:false,
+    init(){const selected=this.options().find(option=>option.dataset.value===this.value);if(selected)this.query=selected.dataset.label;},
+    options(){return Array.from(root.querySelectorAll('[data-finance-option]'));},
+    normalize(text){return(text||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().replace(/[^a-z0-9]+/g,' ').trim();},
+    matches(option){return!this.query||this.normalize(option.dataset.search).includes(this.normalize(this.query));},
+    visibleOptions(){return this.options().filter(option=>this.matches(option));},
+    visibleCount(){return this.visibleOptions().length;},
+    select(option){this.value=option.dataset.value;this.query=option.dataset.label;this.open=false;},
+    clear(){this.value='';this.query='';this.open=true;},
+    focusOption(direction){this.open=true;this.$nextTick(()=>{const visible=this.visibleOptions();if(!visible.length)return;const index=visible.indexOf(document.activeElement);const next=index<0?(direction>0?0:visible.length-1):Math.max(0,Math.min(visible.length-1,index+direction));visible[next].focus();});},
+    closeLater(){setTimeout(()=>{this.open=false;},180);},
+  };
+}
+
+function despesaPagaPage() {
+  return {
+    loading:false,
+    tipoLancamento:'{{ form.tipo_lancamento.value|default:"fornecedor"|escapejs }}',
+    grupos:[], subgrupos:[], categorias:[], contasContabeis:[],
+    grupoId:'', subgrupoId:'', categoriaId:'{{ form.plano_contas.value|default_if_none:""|escapejs }}',
+    categoriaModal:false, categoriaNivel:1, categoriaNome:'', categoriaContaContabil:'', categoriaErro:'', categoriaSalvando:false,
+    init(){
+      this.grupos=JSON.parse(document.getElementById('despesa-grupos-data').textContent);
+      this.subgrupos=JSON.parse(document.getElementById('despesa-subgrupos-data').textContent);
+      this.categorias=JSON.parse(document.getElementById('despesa-categorias-data').textContent);
+      this.contasContabeis=JSON.parse(document.getElementById('despesa-contas-data').textContent);
+      if(this.categoriaId){const categoria=this.categorias.find(item=>String(item.id)===String(this.categoriaId));const subgrupo=categoria&&this.subgrupos.find(item=>item.id===categoria.pai_id);if(categoria&&subgrupo){this.subgrupoId=String(subgrupo.id);this.grupoId=String(subgrupo.pai_id);}}
+    },
+    get subgruposFiltrados(){return this.subgrupos.filter(item=>String(item.pai_id)===String(this.grupoId));},
+    get categoriasFiltradas(){return this.categorias.filter(item=>String(item.pai_id)===String(this.subgrupoId));},
+    get tituloCategoria(){return this.categoriaNivel===1?'Novo grupo da despesa':(this.categoriaNivel===2?'Novo tipo de gasto':'Nova categoria específica');},
+    abrirCategoria(nivel){
+      if(nivel===2&&!this.grupoId)return;
+      if(nivel===3&&!this.subgrupoId)return;
+      this.categoriaNivel=nivel;this.categoriaNome='';this.categoriaContaContabil='';this.categoriaErro='';this.categoriaModal=true;
+      this.$nextTick(()=>document.querySelector('[x-model="categoriaNome"]')?.focus());
+    },
+    async salvarCategoria(){
+      if(!this.categoriaNome.trim()){this.categoriaErro='Informe o nome da nova opção.';return;}
+      if(this.categoriaNivel===3&&!this.categoriaContaContabil){this.categoriaErro='Selecione a conta contábil analítica.';return;}
+      this.categoriaSalvando=true;this.categoriaErro='';
+      const dados=new FormData();
+      dados.append('csrfmiddlewaretoken',document.querySelector('[name=csrfmiddlewaretoken]').value);
+      dados.append('nivel',this.categoriaNivel);dados.append('descricao',this.categoriaNome.trim());
+      if(this.categoriaNivel===2)dados.append('conta_pai',this.grupoId);
+      if(this.categoriaNivel===3){dados.append('conta_pai',this.subgrupoId);dados.append('conta_contabil',this.categoriaContaContabil);}
+      try{
+        const response=await fetch('{% url "financeiro:plano_contas_criar_rapida" %}',{method:'POST',body:dados,headers:{'X-Requested-With':'XMLHttpRequest'}});
+        const data=await response.json();if(!response.ok)throw new Error(data.erro||'Não foi possível criar a categoria.');
+        const item=data.categoria;
+        if(item.nivel===1){this.grupos.push(item);this.grupoId=String(item.id);this.subgrupoId='';this.categoriaId='';}
+        if(item.nivel===2){this.subgrupos.push(item);this.subgrupoId=String(item.id);this.categoriaId='';}
+        if(item.nivel===3){this.categorias.push(item);this.categoriaId=String(item.id);}
+        this.categoriaModal=false;
+      }catch(error){this.categoriaErro=error.message||'Não foi possível criar a categoria.';}finally{this.categoriaSalvando=false;}
+    },
+  };
+}
+</script>
+{% endblock %}
