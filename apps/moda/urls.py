@@ -24,6 +24,7 @@ from . import (
     views_producao as vprod, views_eficiencia as vef, views_perdas as vperd,
     views_custo_real as vcr, views_estoque_tecido as vet,
     views_estoque_aviamento as vea, views_estoque_produto as vep,
+    views_estoque_semiacabado as ves,
 )
 
 app_name = 'moda'
@@ -152,6 +153,7 @@ ROTAS_PRONTAS: list = [
     path('estoque/tecidos/', vet.EstoqueTecidoView.as_view(), name='estoque-tecidos'),
     path('estoque/aviamentos/', vea.EstoqueAviamentoView.as_view(), name='estoque-aviamentos'),
     path('estoque/produtos/', vep.EstoqueProdutoView.as_view(), name='estoque-produtos'),
+    path('estoque/semiacabados/', ves.EstoqueSemiacabadoView.as_view(), name='estoque-semiacabados'),
 
     # Expedicao. Grupo proprio no menu; `separacao` e' o endereco de
     # entrada porque e' o primeiro item do grupo.
