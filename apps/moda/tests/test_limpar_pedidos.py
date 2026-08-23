@@ -264,3 +264,187 @@ class EstoqueTests(LimparPedidosBase):
         saida = self._rodar(filial=self.filial.pk)
 
         self.assertNotIn('NÃO devolve o tecido', saida)
+
+
+class DevolverEstoqueTests(LimparPedidosBase):
+    """
+    O caminho que mexe em OUTRO app — e por isso o mais arriscado daqui.
+
+    Devolver saldo à mão, com um `UPDATE`, daria um número que só este
+    comando entende. Ele chama os mesmos serviços das telas de estorno, e é
+    isso que estes testes conferem: o saldo volta ao que era ANTES do corte,
+    não a um valor que o comando inventou.
+    """
+
+    def setUp(self):
+        super().setUp()
+        from apps.produtos.models import Produto, UnidadeMedida
+
+        self.metro = UnidadeMedida.objects.create(
+            empresa=self.empresa, sigla='M', descricao='Metro',
+            tipo=UnidadeMedida.Tipo.COMPRIMENTO,
+        )
+        self.produto_estoque = Produto.objects.create(
+            filial=self.filial, codigo='TEC001', descricao='Malha Dry',
+            unidade_medida=self.metro,
+        )
+
+    def _saldo(self, atual='500', reservado='0'):
+        from apps.estoque.models.estoque import Estoque
+
+        return Estoque.objects.create(
+            produto=self.produto_estoque, filial=self.filial,
+            quantidade_atual=Decimal(atual),
+            quantidade_reservada=Decimal(reservado),
+            quantidade_disponivel=Decimal(atual) - Decimal(reservado),
+            custo_medio=Decimal('18'),
+        )
+
+    def _pedido_com_baixa(self, consumo='120'):
+        """Um pedido cujo corte já tirou tecido do estoque, pelo serviço real."""
+        from apps.moda.models import FichaTecnica, MaterialFicha
+        from apps.moda.services.integracao import IntegracaoService
+
+        self._n += 1
+        cliente = Cliente.objects.create(
+            filial=self.filial, razao_social=f'Cliente {self._n}',
+            cpf_cnpj=f'9234567890{self._n}',
+        )
+        produto = ProdutoModa.objects.create(
+            filial=self.filial, codigo=f'CAM{self._n:03d}', nome='Camisa',
+        )
+        ficha = FichaTecnica.objects.create(filial=self.filial, produto=produto)
+        MaterialFicha.objects.create(
+            ficha=ficha, tipo=MaterialFicha.Tipo.TECIDO_PRINCIPAL,
+            descricao='Malha Dry', unidade=MaterialFicha.Unidade.METRO,
+            consumo=Decimal('1'), custo_unitario=Decimal('18'),
+            produto_estoque=self.produto_estoque,
+        )
+        pedido = PedidoProducao.objects.create(
+            filial=self.filial, cliente=cliente, numero=self._n,
+        )
+        item = ItemPedidoProducao.objects.create(
+            pedido=pedido, produto=produto, descricao='Camisa', quantidade=100,
+        )
+        ordem = OrdemProducao.objects.create(
+            filial=self.filial, pedido=pedido, item=item,
+            numero=f'OP-{self._n:04d}', ano=2026, sequencial=self._n,
+            quantidade=100,
+        )
+        corte = RegistroCorte.objects.create(
+            filial=self.filial, ordem=ordem, numero=self._n,
+            status=RegistroCorte.Status.CORTADO, quantidade=100,
+            data=date(2026, 6, 1), consumo_real=Decimal(consumo),
+        )
+        # Pelo SERVIÇO, não à mão: é ele que grava a movimentação e mexe no
+        # saldo, e o teste precisa do estado que a produção produz.
+        IntegracaoService.baixar_estoque_do_corte(corte, usuario=self._usuario())
+        return pedido, ordem, corte
+
+    def _usuario(self):
+        from apps.core.models import PerfilAcesso, Usuario
+
+        if not hasattr(self, '_u'):
+            perfil = PerfilAcesso.objects.create(
+                empresa=self.empresa, nome=f'P{self._n}', is_admin=True,
+            )
+            self._u = Usuario.objects.create_user(
+                email=f'u{self._n}@t.local', nome='Op', password='x' * 12,
+                empresa=self.empresa, perfil=perfil, filial=self.filial,
+            )
+        return self._u
+
+    def _saldo_atual(self):
+        from apps.estoque.models.estoque import Estoque
+
+        return Estoque.objects.get(
+            produto=self.produto_estoque, filial=self.filial,
+        )
+
+    def test_devolve_o_tecido_que_o_corte_baixou(self):
+        self._saldo(atual='500')
+        self._pedido_com_baixa(consumo='120')
+
+        self.assertEqual(self._saldo_atual().quantidade_atual, Decimal('380'))
+
+        self._rodar(filial=self.filial.pk, confirmar=True,
+                    incluir_estoque=True, usuario=self._usuario().email)
+
+        self.assertEqual(self._saldo_atual().quantidade_atual, Decimal('500'))
+
+    def test_sem_a_bandeira_o_saldo_fica_errado_de_proposito(self):
+        """
+        Não é descuido: desfazer estoque é decisão de quem opera, e o comando
+        avisa em vez de decidir sozinho.
+        """
+        self._saldo(atual='500')
+        self._pedido_com_baixa(consumo='120')
+
+        self._rodar(filial=self.filial.pk, confirmar=True)
+
+        self.assertEqual(self._saldo_atual().quantidade_atual, Decimal('380'))
+
+    def test_apaga_as_movimentacoes_do_par(self):
+        """
+        Baixa e estorno existem para explicar um documento que está sendo
+        apagado junto. Sozinhas, viram ruído no extrato do produto.
+        """
+        from apps.estoque.models.estoque import MovimentacaoEstoque
+
+        self._saldo(atual='500')
+        _, ordem, _ = self._pedido_com_baixa()
+
+        self._rodar(filial=self.filial.pk, confirmar=True,
+                    incluir_estoque=True, usuario=self._usuario().email)
+
+        self.assertEqual(
+            MovimentacaoEstoque.objects.filter(
+                documento_tipo=MovimentacaoEstoque.DocumentoTipo.ORDEM_PRODUCAO,
+                documento_id=ordem.pk,
+            ).count(),
+            0,
+        )
+
+    def test_o_aviso_muda_quando_vai_devolver(self):
+        self._saldo(atual='500')
+        self._pedido_com_baixa()
+
+        sem = self._rodar(filial=self.filial.pk)
+        com = self._rodar(filial=self.filial.pk, incluir_estoque=True,
+                          usuario=self._usuario().email)
+
+        self.assertIn('ATENÇÃO', sem)
+        self.assertIn('NÃO devolve', sem)
+        self.assertIn('deixa o saldo como estava', com)
+
+    def test_tudo_liga_financeiro_e_estoque(self):
+        self._saldo(atual='500')
+        pedido, _, _ = self._pedido_com_baixa()
+        self._titulo(pedido)
+
+        self._rodar(filial=self.filial.pk, confirmar=True, tudo=True,
+                    usuario=self._usuario().email)
+
+        self.assertEqual(self._saldo_atual().quantidade_atual, Decimal('500'))
+        self.assertEqual(ContaReceber.objects.count(), 0)
+        self.assertEqual(PedidoProducao.objects.count(), 0)
+
+    def test_exige_usuario_para_devolver_estoque(self):
+        """
+        A movimentação de estorno é atribuída a alguém. Carimbar o primeiro
+        admin que aparecesse poria o nome de uma pessoa num lançamento que
+        ela não fez — melhor exigir do que forjar.
+        """
+        self._saldo(atual='500')
+        self._pedido_com_baixa()
+
+        with self.assertRaises(CommandError):
+            self._rodar(filial=self.filial.pk, confirmar=True, incluir_estoque=True)
+
+    def test_usuario_inexistente_para_o_comando(self):
+        self._saldo(atual='500')
+        self._pedido_com_baixa()
+
+        with self.assertRaises(CommandError):
+            self._rodar(filial=self.filial.pk, confirmar=True,
+                        incluir_estoque=True, usuario='ninguem@t.local')

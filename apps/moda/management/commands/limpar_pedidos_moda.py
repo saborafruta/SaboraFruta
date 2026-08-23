@@ -18,16 +18,22 @@ vez de um `delete()` no shell:
                corte NÃO devolve o tecido: o saldo continua reduzido, agora
                sem nenhum documento que explique por quê.
 
-O comando cuida do primeiro (com `--incluir-financeiro`) e AVISA sobre o
-segundo, porque desfazer movimentação de estoque é decisão de quem opera,
-não de um comando de limpeza.
+  RESERVA      a reserva ativa segura `quantidade_reservada`. Apagar a
+               linha deixa o material reservado para sempre, sem reserva
+               que explique.
+
+Com `--incluir-financeiro` e `--incluir-estoque` (ou `--tudo`) ele resolve
+os três: apaga os títulos, devolve o tecido e libera as reservas ANTES de
+apagar, usando os mesmos serviços das telas de estorno. Sem as bandeiras ele
+avisa e deixa como está — desfazer estoque é decisão de quem opera.
 
 NÃO APAGA NADA SEM `--confirmar`. Sem a bandeira ele só conta o que
 apagaria. E exige `--filial`: uma limpeza que varre o banco inteiro é a que
 alguém roda achando que está no ambiente de teste.
 
-    manage.py limpar_pedidos_moda --filial 1
-    manage.py limpar_pedidos_moda --filial 1 --confirmar --incluir-financeiro
+    manage.py limpar_pedidos_moda --filial 1              # ensaio
+    manage.py limpar_pedidos_moda --filial 1 --tudo --confirmar
+        --usuario voce@empresa.com.br
 """
 from django.core.management.base import BaseCommand, CommandError
 from django.db import transaction
@@ -68,10 +74,39 @@ class Command(BaseCommand):
             help='Apaga também as contas a receber geradas pelos pedidos. '
                  'Sem isto elas ficam órfãs e continuam no DRE.',
         )
+        parser.add_argument(
+            '--incluir-estoque', action='store_true',
+            help='Devolve ao estoque o que os cortes baixaram e libera as '
+                 'reservas, e depois apaga as movimentações. Sem isto o '
+                 'saldo fica errado para sempre.',
+        )
+        parser.add_argument(
+            '--usuario',
+            help='E-mail de quem responde pelo estorno. Obrigatório com '
+                 '--incluir-estoque: a movimentação de estoque é atribuída '
+                 'a alguém, e forjar essa atribuição seria pior que exigir.',
+        )
+        parser.add_argument(
+            '--tudo', action='store_true',
+            help='Atalho para --incluir-financeiro --incluir-estoque. '
+                 'É o que se quer quando o banco era só teste.',
+        )
 
     def handle(self, *args, **opcoes):
         filial = self._filial(opcoes['filial'])
         confirmar = opcoes['confirmar']
+        # `--tudo` liga os dois: é o que se quer quando o banco era só
+        # teste, e obrigar a lembrar de duas bandeiras é como se esquece uma.
+        if opcoes['tudo']:
+            opcoes['incluir_financeiro'] = True
+            opcoes['incluir_estoque'] = True
+
+        # O estorno grava movimentação, e movimentação tem dono. Pedir o
+        # usuário e' mais honesto que carimbar o primeiro admin que aparecer:
+        # o estorno vai aparecer no historico com o nome de alguem.
+        usuario = None
+        if opcoes['incluir_estoque']:
+            usuario = self._usuario(opcoes.get('usuario'))
 
         self.stdout.write(f'Filial: {filial} (id={filial.pk})')
         self.stdout.write('')
@@ -94,7 +129,7 @@ class Command(BaseCommand):
             self.stdout.write(self.style.SUCCESS('Nada a apagar nesta filial.'))
             return
 
-        self._avisar_estoque(filial)
+        self._avisar_estoque(filial, opcoes['incluir_estoque'])
 
         if not confirmar:
             self.stdout.write(self.style.WARNING(
@@ -105,6 +140,11 @@ class Command(BaseCommand):
         # Tudo numa transação: uma limpeza que morre no meio deixa ordem sem
         # pedido e expedição sem ordem, que é pior que não ter limpado.
         with transaction.atomic():
+            # O ESTOQUE VEM PRIMEIRO, enquanto corte e reserva ainda existem:
+            # depois de apagados não há mais de onde saber quanto devolver.
+            if opcoes['incluir_estoque']:
+                self._devolver_estoque(filial, usuario)
+
             if opcoes['incluir_financeiro']:
                 apagados, _ = titulos.delete()
                 self.stdout.write(f'  Contas a receber apagadas: {apagados}')
@@ -126,6 +166,20 @@ class Command(BaseCommand):
             raise CommandError(f'Filial {pk} não existe.')
 
     @staticmethod
+    def _usuario(email):
+        from apps.core.models import Usuario
+
+        if not email:
+            raise CommandError(
+                '--incluir-estoque exige --usuario <email>: o estorno grava '
+                'uma movimentação de estoque, e ela é atribuída a alguém.'
+            )
+        try:
+            return Usuario.objects.get(email=email)
+        except Usuario.DoesNotExist:
+            raise CommandError(f'Usuário {email} não existe.')
+
+    @staticmethod
     def _titulos(filial):
         """
         As contas a receber que os pedidos desta filial geraram.
@@ -145,25 +199,96 @@ class Command(BaseCommand):
             documento_id__in=ids,
         )
 
-    def _avisar_estoque(self, filial):
-        """
-        O tecido baixado pelo corte NÃO volta ao apagar o corte.
-
-        A movimentação vive no app de estoque e não tem chave estrangeira
-        para cá. Apagar o corte deixa o saldo reduzido sem documento que
-        explique — e é melhor a pessoa saber disso antes de digitar
-        `--confirmar` do que descobrir no próximo inventário.
-        """
-        baixados = RegistroCorte.objects.filter(
+    @staticmethod
+    def _cortes_baixados(filial):
+        return RegistroCorte.objects.filter(
             ordem__pedido__filial=filial, estoque_baixado_em__isnull=False,
-        ).count()
-        if not baixados:
+        )
+
+    @staticmethod
+    def _reservas_ativas(filial):
+        return ReservaMaterial.objects.filter(
+            ordem__pedido__filial=filial,
+            status=ReservaMaterial.Status.ATIVA,
+        )
+
+    def _avisar_estoque(self, filial, vai_devolver):
+        """
+        O estoque NÃO se conserta sozinho ao apagar corte e reserva.
+
+        São dois buracos diferentes e nenhum tem chave estrangeira para cá:
+        o corte baixado reduziu `quantidade_atual`, e a reserva ativa segura
+        `quantidade_reservada`. Apagar as linhas deixa os dois saldos errados
+        sem documento que explique — e é melhor a pessoa saber disso antes de
+        digitar `--confirmar` do que descobrir no próximo inventário.
+        """
+        baixados = self._cortes_baixados(filial).count()
+        reservas = self._reservas_ativas(filial).count()
+        if not baixados and not reservas:
             return
-        self.stdout.write(self.style.WARNING(
-            f'ATENÇÃO: {baixados} corte(s) já baixaram tecido do estoque.\n'
-            '  Apagar o corte NÃO devolve o tecido — o saldo continua\n'
-            '  reduzido, e sem documento que explique. Se quiser o estoque\n'
-            '  de volta, estorne os cortes ANTES (botão de estorno na tela\n'
-            '  do corte) e só depois rode este comando.'
-        ))
+
+        partes = []
+        if baixados:
+            partes.append(f'{baixados} corte(s) já baixaram tecido')
+        if reservas:
+            partes.append(f'{reservas} reserva(s) ativa(s) seguram material')
+
+        if vai_devolver:
+            self.stdout.write(self.style.SUCCESS(
+                f'Estoque: {" e ".join(partes)}.\n'
+                '  Com --incluir-estoque, o comando devolve tudo antes de\n'
+                '  apagar e deixa o saldo como estava.'
+            ))
+        else:
+            self.stdout.write(self.style.WARNING(
+                f'ATENÇÃO: {" e ".join(partes)}.\n'
+                '  Apagar NÃO devolve o tecido nem libera a reserva — os\n'
+                '  saldos ficam errados, e sem documento que explique.\n'
+                '  Use --incluir-estoque (ou --tudo) para devolver antes.'
+            ))
         self.stdout.write('')
+
+    def _devolver_estoque(self, filial, usuario):
+        """
+        Devolve o que os cortes baixaram e libera as reservas.
+
+        Usa os MESMOS serviços das telas (estorno do corte e cancelamento da
+        reserva), e não um `UPDATE` no saldo: eles conhecem custo médio,
+        tolerância e trava de baixa dupla, e reescrever essa conta aqui daria
+        um saldo que só este comando entende.
+
+        Depois de devolver, as movimentações do par (saída + entrada) são
+        apagadas: elas existem para explicar um documento que está sendo
+        apagado junto, e sozinhas viram ruído no extrato do produto.
+        """
+        from apps.estoque.models.estoque import MovimentacaoEstoque
+
+        from apps.moda.services.integracao import IntegracaoService
+        from apps.moda.services.necessidade import NecessidadeService
+
+        ordens = list(
+            OrdemProducao.objects.filter(pedido__filial=filial)
+            .values_list('pk', flat=True)
+        )
+
+        estornados = 0
+        for corte in self._cortes_baixados(filial).select_related('ordem'):
+            IntegracaoService.estornar_estoque_do_corte(corte, usuario=usuario)
+            estornados += 1
+        if estornados:
+            self.stdout.write(f'  Cortes estornados (tecido devolvido): {estornados}')
+
+        liberadas = 0
+        for reserva in self._reservas_ativas(filial):
+            NecessidadeService.cancelar_reserva(reserva, usuario=usuario)
+            liberadas += 1
+        if liberadas:
+            self.stdout.write(f'  Reservas liberadas: {liberadas}')
+
+        if ordens:
+            apagadas, _ = MovimentacaoEstoque.objects.filter(
+                documento_tipo=MovimentacaoEstoque.DocumentoTipo.ORDEM_PRODUCAO,
+                documento_id__in=ordens, filial=filial,
+            ).delete()
+            if apagadas:
+                self.stdout.write(f'  Movimentações de estoque apagadas: {apagadas}')
