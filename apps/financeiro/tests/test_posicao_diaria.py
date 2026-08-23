@@ -598,6 +598,33 @@ class PosicaoDiariaCaixaTests(TestCase):
         self.assertIn(">Cartao credito<", html)
         self.assertIn('data-max-parcelas="6"', html)
 
+    def test_edicao_de_entrada_manual_persiste_bandeira_do_cartao(self):
+        categoria = self._categoria_receita("Venda no cartao")
+        debito = FormaPagamento.objects.create(
+            empresa=self.empresa, filial=self.filial, descricao="Debito Visa",
+            tipo=TipoFormaPagamento.CARTAO_DEBITO,
+        )
+        movimento = ExtratoBancario.objects.create(
+            filial=self.filial, conta_bancaria=self.banco, forma_pagamento=self.forma,
+            plano_contas=categoria, data_lancamento=date(2026, 8, 22),
+            historico="Entrada de ontem", valor=Decimal("100.00"), origem="manual",
+        )
+
+        response = self.client.post(reverse("financeiro:posicao_diaria"), {
+            "acao": "editar_entrada", "origem": "manual", "movimento_id": movimento.pk,
+            "data_referencia": "2026-08-22", "valor": "100.00",
+            "forma_pagamento": debito.pk, "conta_bancaria": self.banco.pk,
+            "data_entrada": "2026-08-22", "descricao": "Entrada de ontem",
+            "plano_contas": categoria.pk, "bandeira": "visa", "numero_parcelas": "1",
+            "justificativa": "Informar bandeira do cartao",
+        })
+
+        self.assertEqual(response.status_code, 302)
+        movimento.refresh_from_db()
+        self.assertEqual(movimento.forma_pagamento, debito)
+        self.assertEqual(movimento.bandeira, "visa")
+        self.assertEqual(movimento.numero_parcelas, 1)
+
     def test_saida_manual_nao_pode_ser_corrigida_como_entrada(self):
         movimento = ExtratoBancario.objects.create(
             filial=self.filial, conta_bancaria=self.banco, forma_pagamento=self.forma,
