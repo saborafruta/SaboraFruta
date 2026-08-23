@@ -21,7 +21,7 @@ from . import (
     views_comercial as vcom,
     views_dashboard as vd, views_historico as vh, views_qualidade as vq, views_qr as vqr,
     views_roteiro as vr, views_terminal as vt, views_wip as vw,
-    views_producao as vprod,
+    views_producao as vprod, views_eficiencia as vef,
 )
 
 app_name = 'moda'
@@ -139,12 +139,13 @@ ROTAS_PRONTAS: list = [
     # ordem pendura na OP, que é a quem as etapas pertencem.
     path('producao/fluxo/', vx.PainelFluxoView.as_view(), name='fluxo-painel'),
 
+    # Indicadores -- os enderecos que o menu ja' aponta, para cairem na
+    # tela e nao no placeholder.
+    path('indicadores/producao/', vprod.ProducaoIndicadorView.as_view(), name='indicador-producao'),
+    path('indicadores/eficiencia/', vef.EficienciaIndicadorView.as_view(), name='indicador-eficiencia'),
+
     # Expedicao. Grupo proprio no menu; `separacao` e' o endereco de
     # entrada porque e' o primeiro item do grupo.
-    # Fila de quem confere -- endereco do menu, que caia no placeholder.
-    # Indicador de producao -- endereco do menu, que caia no placeholder.
-    path('indicadores/producao/', vprod.ProducaoIndicadorView.as_view(), name='indicador-producao'),
-
     path('expedicao/conferencia/', vcon.ConferenciaFilaView.as_view(), name='conferencia-fila'),
     path('expedicao/embalagem/', vcon.EmbalagemFilaView.as_view(), name='embalagem-fila'),
     path('expedicao/entrega/', vcon.EntregaFilaView.as_view(), name='entrega-fila'),
