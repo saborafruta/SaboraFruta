@@ -105,8 +105,7 @@ class PlanoContasLancamentosTests(TestCase):
         self.assertTrue(form.fields["plano_contas"].required)
         self.assertEqual(
             form.fields["plano_contas"].label_from_instance(self.despesa),
-            "Despesas comerciais > Despesas com vendas > "
-            "Despesas com fornecedores (331010001)",
+            "Despesas comerciais > Despesas com vendas > Despesas com fornecedores",
         )
 
     def test_conta_receber_lista_apenas_receitas_analiticas_ativas(self):

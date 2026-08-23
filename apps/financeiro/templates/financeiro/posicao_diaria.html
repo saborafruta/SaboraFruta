@@ -17,6 +17,8 @@
   .pc-notice { border-color:#93c5fd; background:#eff6ff; color:#1e3a8a; }
   .dark .pc-notice { border-color:#1d4ed8; background:rgba(30,58,138,.24); color:#dbeafe; }
   .pc-page-heading { background:transparent !important; color:inherit !important; }
+  .pc-private > :not(.pc-page-heading) { filter:blur(8px); pointer-events:none; user-select:none; }
+  .pc-privacy-icon { display:block; width:18px !important; height:18px !important; min-width:18px; }
   .pc-ledger { --ledger:#475569; --ledger-soft:#f8fafc; border:1px solid #cbd5e1; background:#fff; }
   .pc-ledger.entry { --ledger:#047857; --ledger-soft:#ecfdf5; }
   .pc-ledger.exit { --ledger:#be123c; --ledger-soft:#fff1f2; }
@@ -35,13 +37,28 @@
   .tema-escuro .pc-ledger-action { background:#18181b; }
   .tema-escuro .pc-ledger-columns { color:#cbd5e1; }
   .tema-escuro .pc-ledger-row { border-color:#3f3f46; color:#f8fafc; }
-  .pc-forecast { border:1px solid #93c5fd; background:#fff; color:#172554; box-shadow:0 8px 24px rgba(30,64,175,.08); }
-  .pc-forecast-head { border-color:#bfdbfe; background:#eaf2ff; }
+  .pc-forecast { border:1px solid #60a5fa; background:#fff; color:#0f172a; box-shadow:0 8px 24px rgba(30,64,175,.08); }
+  .pc-forecast-head { border-color:#93c5fd; background:#dbeafe; }
   .pc-forecast-title { color:#172554; }
-  .pc-forecast-copy { color:#1d4ed8; }
-  .pc-forecast-value { color:#1e40af; }
+  .pc-forecast-copy { color:#1e3a8a; }
+  .pc-forecast-value { color:#1d4ed8; }
   .pc-forecast-filter { border:1px solid #93c5fd; background:#fff; color:#1e40af; }
   .pc-forecast-filter.is-active { border-color:#1d4ed8; background:#1d4ed8; color:#fff; }
+  .pc-forecast-item { background:#fff; color:#0f172a; }
+  .pc-forecast-item:hover, .pc-forecast-item:focus { background:#eff6ff; outline:none; }
+  .pc-forecast-item.is-overdue { background:#fff1f2; box-shadow:inset 4px 0 0 #e11d48; }
+  .pc-forecast-item.is-overdue:hover, .pc-forecast-item.is-overdue:focus { background:#ffe4e6; }
+  .pc-forecast-date { color:#0f172a; }
+  .pc-forecast-account { color:#334155; }
+  .pc-forecast-muted { color:#475569; }
+  .pc-forecast-overdue { display:inline-flex; align-items:center; border:1px solid #fecdd3; border-radius:999px; background:#ffe4e6; padding:.15rem .5rem; color:#be123c; font-size:10px; font-weight:800; line-height:1.2; text-transform:uppercase; }
+  .pc-forecast-renegotiated { display:inline-flex; align-items:center; border:1px solid #fde68a; border-radius:999px; background:#fffbeb; padding:.15rem .5rem; color:#92400e; font-size:10px; font-weight:800; line-height:1.2; text-transform:uppercase; }
+  .pc-forecast-positive { color:#047857; font-weight:800; }
+  .pc-forecast-negative { color:#be123c; font-weight:800; }
+  .pc-fee-summary { background:#fff; }
+  .pc-fee-row { border-top:1px solid #e2e8f0; }
+  .pc-fee-row:first-child { border-top:0; }
+  .pc-fee-label { display:inline-flex; align-items:center; border:1px solid #fda4af; border-radius:4px; background:#fff1f2; padding:.2rem .45rem; color:#be123c; font-size:12px; font-weight:800; line-height:1.2; }
   .tema-escuro .pc-forecast { border-color:#475569; background:#202024; color:#f8fafc; }
   .tema-escuro .pc-forecast-head { border-color:#475569; background:#172033; }
   .tema-escuro .pc-forecast-title { color:#dbeafe; }
@@ -50,24 +67,37 @@
   .tema-escuro .pc-forecast-filter { border-color:#475569; background:#27272a; color:#dbeafe; }
   .tema-escuro .pc-forecast-filter.is-active { border-color:#60a5fa; background:#2563eb; color:#fff; }
   .tema-escuro .pc-forecast .text-gray-500, .tema-escuro .pc-forecast .text-gray-600 { color:#cbd5e1; }
-  .pc-forecast > div:last-child > button,
-  .pc-forecast > div:last-child > div { background:#fff; color:#172554; }
-  .pc-forecast > div:last-child > button:hover,
-  .pc-forecast > div:last-child > button:focus { background:#eff6ff; outline:none; }
-  .tema-escuro .pc-forecast > div:last-child > button,
-  .tema-escuro .pc-forecast > div:last-child > div { background:#202024; color:#f8fafc; }
-  .tema-escuro .pc-forecast > div:last-child > button:hover,
-  .tema-escuro .pc-forecast > div:last-child > button:focus { background:#17233b; }
+  .tema-escuro .pc-forecast-item { background:#202024; color:#f8fafc; }
+  .tema-escuro .pc-forecast-item:hover, .tema-escuro .pc-forecast-item:focus { background:#17233b; }
+  .tema-escuro .pc-forecast-item.is-overdue { background:#3b2930; box-shadow:inset 4px 0 0 #fb7185; }
+  .tema-escuro .pc-forecast-item.is-overdue:hover, .tema-escuro .pc-forecast-item.is-overdue:focus { background:#4a323a; }
+  .tema-escuro .pc-forecast-date, .tema-escuro .pc-forecast-account { color:#e2e8f0; }
+  .tema-escuro .pc-forecast-muted { color:#cbd5e1; }
+  .tema-escuro .pc-forecast-overdue { border-color:#9f1239; background:#4c1022; color:#fecdd3; }
+  .tema-escuro .pc-forecast-renegotiated { border-color:#92400e; background:#422006; color:#fde68a; }
+  .tema-escuro .pc-forecast-positive { color:#6ee7b7; }
+  .tema-escuro .pc-forecast-negative { color:#fda4af; }
+  .tema-escuro .pc-fee-summary { background:#202024; }
+  .tema-escuro .pc-fee-row { border-color:#3f3f46; }
+  .tema-escuro .pc-fee-label { border-color:#9f1239; background:#4c1022; color:#fecdd3; }
   .pc-summary-entry { background:#f0fdf4; color:#14532d; }
   .pc-summary-exit { background:#fff1f2; color:#881337; }
-  .pc-summary-account-in { background:#eff6ff; color:#1e3a8a; }
-  .pc-summary-account-out { background:#f5f3ff; color:#4c1d95; }
+  .pc-summary-section { display:grid; grid-template-columns:1fr; }
+  .pc-summary-section + .pc-summary-section { border-top:1px solid #cbd5e1; }
+  .pc-summary-section.entry { background:#f0fdf4; }
+  .pc-summary-section.exit { background:#fff1f2; }
+  .pc-summary-section.entry .pc-summary-card { color:#14532d; }
+  .pc-summary-section.exit .pc-summary-card { color:#881337; }
+  .pc-summary-card + .pc-summary-card { border-top:1px solid rgba(15,23,42,.16); }
   .pc-summary-entry .text-gray-500, .pc-summary-exit .text-gray-500,
-  .pc-summary-account-in .text-gray-500, .pc-summary-account-out .text-gray-500 { color:currentColor; opacity:.72; }
+  .pc-summary-card .text-gray-500 { color:currentColor; opacity:.72; }
   .tema-escuro .pc-summary-entry { background:#102a24; color:#a7f3d0; }
   .tema-escuro .pc-summary-exit { background:#321923; color:#fecdd3; }
-  .tema-escuro .pc-summary-account-in { background:#17233b; color:#bfdbfe; }
-  .tema-escuro .pc-summary-account-out { background:#261d3b; color:#ddd6fe; }
+  .tema-escuro .pc-summary-section.entry { background:#102a24; }
+  .tema-escuro .pc-summary-section.exit { background:#321923; }
+  .tema-escuro .pc-summary-section.entry .pc-summary-card { color:#a7f3d0; }
+  .tema-escuro .pc-summary-section.exit .pc-summary-card { color:#fecdd3; }
+  .tema-escuro .pc-summary-card + .pc-summary-card { border-color:rgba(203,213,225,.24); }
   .pc-personal-row { box-shadow:inset 4px 0 0 #d97706; background:#fffbeb; }
   .pc-personal-row:hover { background:#fef3c7; }
   .pc-personal-badge { display:inline-flex; margin-top:.3rem; border:1px solid #d97706; border-radius:999px; background:#fef3c7; padding:.15rem .5rem; color:#78350f; font-size:10px; font-weight:700; line-height:1.2; }
@@ -80,14 +110,27 @@
   .pc-day-today { border-color:#3b82f6; background:#eff6ff; color:#1d4ed8; box-shadow:0 0 0 2px #bfdbfe; }
   .tema-escuro .pc-day-today { background:rgba(30,58,138,.34); color:#dbeafe; box-shadow:0 0 0 2px #1d4ed8; }
   @media (max-width: 640px) {
-    .pc-kpi { min-height: 96px; }
+    .pc-kpi { min-height:78px; padding:.75rem !important; }
+    .pc-kpi p, .pc-ledger-head p, .pc-summary-card h4 + p { display:none; }
     .pc-row { min-height: 88px; }
     .pc-ledger-columns { display:none; }
     .pc-ledger-row { grid-template-columns:minmax(0,1fr) auto; }
     .pc-ledger-meta { grid-column:1 / -1; }
+    .pc-ledger-head { padding:.75rem; }
+    .pc-summary-card { padding:.75rem; }
+  }
+  @media (min-width: 768px) {
+    .pc-summary-section { grid-template-columns:1fr 1fr; }
+    .pc-summary-section + .pc-summary-section { border-top:0; border-left:1px solid #cbd5e1; }
+    .pc-summary-card + .pc-summary-card { border-top:0; border-left:1px solid rgba(15,23,42,.16); }
+    .tema-escuro .pc-summary-section + .pc-summary-section { border-left-color:#475569; }
   }
 </style>
-<div class="mx-auto max-w-7xl space-y-5" x-data="{
+<div class="mx-auto max-w-7xl space-y-5" :class="{'pc-private':ocultarValores}" x-data="{
+  ocultarValores:false,
+  previsoesAbertas:false,
+  contasAbertas: window.innerWidth >= 640,
+  taxasModal: false,
   movimentoModal: {{ movimento_modal|yesno:'true,false' }},
   contaPagarModal: false,
   contaPagarQuitada: false,
@@ -99,7 +142,6 @@
   entradaEdicao: {% if editar_entrada_form.errors %}true{% else %}false{% endif %},
   editarModal: {{ editar_movimento|yesno:'true,false' }},
   excluirModal: false,
-  mostrarExtrato: false,
   movimentoTipo: '{{ movimento_form.tipo.value|default:"credito"|escapejs }}',
   async abrirTituloPagar(url) {
     this.tituloPagarModal = true; this.tituloPagarCarregando = true;
@@ -132,10 +174,15 @@
       <p class="mt-1 text-sm text-gray-500">Confira o que entrou, o que saiu e onde o dinheiro terminou no dia.</p>
     </div>
     <div class="flex flex-wrap items-center gap-2">
-      <a href="{% url 'financeiro:receber_list' %}" class="btn-secondary">Contas a receber</a>
+      <a href="{% url 'financeiro:pagar_pagas' %}" class="btn-secondary">Contas Pagas</a>
       <a href="{% url 'financeiro:pagar_list' %}" class="btn-secondary">Contas a pagar</a>
+      <a href="{% url 'financeiro:receber_list' %}" class="btn-secondary">Contas a receber</a>
       <a href="{% url 'financeiro:contas_bancarias' %}" class="btn-secondary">Contas</a>
       <button type="button" class="btn-secondary" @click="abrirMovimento('transferencia')">Transferir entre contas</button>
+      <button type="button" class="btn-secondary flex h-9 w-9 items-center justify-center p-0" @click="ocultarValores=!ocultarValores" :aria-label="ocultarValores ? 'Mostrar informações' : 'Ocultar informações'" :title="ocultarValores ? 'Mostrar informações' : 'Ocultar informações'">
+        <svg x-show="!ocultarValores" class="pc-privacy-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2.1 12s3.6-7 9.9-7 9.9 7 9.9 7-3.6 7-9.9 7-9.9-7-9.9-7Z"/><circle cx="12" cy="12" r="3"/></svg>
+        <svg x-show="ocultarValores" x-cloak class="pc-privacy-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m3 3 18 18"/><path d="M10.6 5.1A10.8 10.8 0 0 1 12 5c6.3 0 9.9 7 9.9 7a15 15 0 0 1-2.1 3.1"/><path d="M6.6 6.6C3.7 8.5 2.1 12 2.1 12s3.6 7 9.9 7a10 10 0 0 0 4-.8"/><path d="M9.9 9.9a3 3 0 0 0 4.2 4.2"/></svg>
+      </button>
     </div>
   </div>
 
@@ -169,27 +216,27 @@
   <section class="grid grid-cols-2 gap-3 lg:grid-cols-5">
     <div class="card pc-kpi col-span-2 border-l-4 border-amber-500 p-4 lg:col-span-1">
       <p class="text-xs font-semibold uppercase text-gray-500">Saldo inicial</p>
-      <strong class="mt-2 block text-2xl text-amber-600">R$ {{ posicao.total_abertura|floatformat:2 }}</strong>
+      <strong class="pc-sensitive mt-2 block text-2xl text-amber-600">R$ {{ posicao.total_abertura|floatformat:2 }}</strong>
       <span class="mt-1 block text-xs text-gray-500">Fechamento do dia anterior</span>
     </div>
     <div class="card pc-kpi border-l-4 border-emerald-500 p-4">
       <p class="text-xs font-semibold uppercase text-gray-500">Entradas</p>
-      <strong class="mt-2 block text-xl text-emerald-600">R$ {{ posicao.total_entradas|floatformat:2 }}</strong>
+      <strong class="pc-sensitive mt-2 block text-xl text-emerald-600">R$ {{ posicao.total_entradas|floatformat:2 }}</strong>
       <span class="mt-1 block text-xs text-gray-500">{{ posicao.entradas|length }} movimento{{ posicao.entradas|length|pluralize }}</span>
     </div>
     <div class="card pc-kpi border-l-4 border-rose-500 p-4">
       <p class="text-xs font-semibold uppercase text-gray-500">Saídas</p>
-      <strong class="mt-2 block text-xl text-rose-600">R$ {{ posicao.total_saidas|floatformat:2 }}</strong>
+      <strong class="pc-sensitive mt-2 block text-xl text-rose-600">R$ {{ posicao.total_saidas|floatformat:2 }}</strong>
       <span class="mt-1 block text-xs text-gray-500">{{ posicao.saidas|length }} movimento{{ posicao.saidas|length|pluralize }}</span>
     </div>
     <div class="card pc-kpi border-l-4 border-slate-400 p-4">
       <p class="text-xs font-semibold uppercase text-gray-500">Resultado do dia</p>
-      <strong class="mt-2 block text-xl {% if posicao.variacao_dia < 0 %}text-rose-600{% else %}text-emerald-600{% endif %}">R$ {{ posicao.variacao_dia|floatformat:2 }}</strong>
+      <strong class="pc-sensitive mt-2 block text-xl {% if posicao.variacao_dia < 0 %}text-rose-600{% else %}text-emerald-600{% endif %}">R$ {{ posicao.variacao_dia|floatformat:2 }}</strong>
       <span class="mt-1 block text-xs text-gray-500">Entradas menos saídas</span>
     </div>
     <div class="card pc-kpi col-span-2 border-l-4 border-blue-500 p-4 lg:col-span-1">
       <p class="text-xs font-semibold uppercase text-gray-500">Saldo final</p>
-      <strong class="mt-2 block text-2xl {% if posicao.total_fechamento < 0 %}text-rose-600{% else %}text-blue-600{% endif %}">R$ {{ posicao.total_fechamento|floatformat:2 }}</strong>
+      <strong class="pc-sensitive mt-2 block text-2xl {% if posicao.total_fechamento < 0 %}text-rose-600{% else %}text-blue-600{% endif %}">R$ {{ posicao.total_fechamento|floatformat:2 }}</strong>
       <span class="mt-1 block text-xs text-gray-500">Soma de todas as contas</span>
     </div>
   </section>
@@ -207,6 +254,8 @@
     </div>
   {% endif %}
 
+  {% comment %} Os saldos por conta aparecem depois da conferência. {% endcomment %}
+  {% comment %}
   <section>
     <div class="mb-3 flex items-end justify-between gap-3">
       <div><h3 class="text-lg font-semibold">Saldos por conta</h3><p class="text-xs text-gray-500">Abertura, movimentos do dia e fechamento individual.</p></div>
@@ -229,6 +278,8 @@
     </div>
   </section>
 
+  {% endcomment %}
+
   <form method="get" class="card grid gap-3 p-4 sm:grid-cols-[minmax(220px,1fr)_minmax(220px,1fr)_auto] sm:items-end">
     <input type="hidden" name="data" value="{{ data_referencia|date:'Y-m-d' }}">
     <input type="hidden" name="periodo" value="{{ periodo }}">
@@ -240,8 +291,9 @@
     </label>
     <label class="block text-xs font-semibold">Ordenar movimentos
       <select name="ordem" class="form-input mt-1 w-full">
-        <option value="horario" {% if ordem_movimentos == 'horario' %}selected{% endif %}>Horário de lançamento</option>
-        <option value="conta" {% if ordem_movimentos == 'conta' %}selected{% endif %}>Conta bancária</option>
+        <option value="horario" {% if ordem_movimentos == 'horario' %}selected{% endif %}>Horário mais recente</option>
+        <option value="conta" {% if ordem_movimentos == 'conta' %}selected{% endif %}>Agrupar por conta bancária</option>
+        <option value="forma" {% if ordem_movimentos == 'forma' %}selected{% endif %}>Agrupar por forma de pagamento</option>
       </select>
     </label>
     <button type="submit" class="btn-secondary justify-center">Aplicar</button>
@@ -254,9 +306,9 @@
       <div>
         {% for mov in posicao.entradas %}
           <a href="{% if mov.origem_codigo == 'pagar' %}{{ mov.referencia_url }}{% else %}?data={{ data_referencia|date:'Y-m-d' }}&origem={{ mov.origem_codigo }}&movimento={{ mov.registro_id }}{% endif %}" {% if mov.origem_codigo == 'pagar' %}@click.prevent="abrirTituloPagar($el.href)"{% endif %} class="pc-ledger-row px-4 py-3 transition">
-            <div class="min-w-0"><strong class="block text-sm">{{ mov.descricao }}</strong><span class="mt-1 block text-[11px] text-gray-500">{{ mov.hora }} · {{ mov.origem }}{% if mov.documento %} · Documento {{ mov.documento }}{% endif %}</span></div>
+            <div class="min-w-0"><strong class="block text-sm">{{ mov.descricao }}</strong><span class="mt-1 block text-[11px] text-gray-500">{{ mov.hora }} · {{ mov.origem }}{% if mov.classificacao %} · {{ mov.classificacao }}{% endif %}{% if mov.documento %} · Documento {{ mov.documento }}{% endif %}</span></div>
             <span class="pc-ledger-meta min-w-0 text-xs"><strong class="block truncate font-medium">{{ mov.forma_pagamento }}</strong><span class="mt-1 block truncate text-gray-500">{{ mov.conta.descricao|default:mov.conta.banco_nome }}</span></span>
-            <span class="pc-ledger-value whitespace-nowrap text-right"><strong class="block text-base">+ R$ {{ mov.entrada|floatformat:2 }}</strong>{% if mov.valor_taxa > 0 %}<small class="mt-1 block text-[10px] font-medium text-gray-500">Bruto R$ {{ mov.valor_bruto|floatformat:2 }} · taxa R$ {{ mov.valor_taxa|floatformat:2 }}</small>{% endif %}</span>
+            <span class="pc-ledger-value whitespace-nowrap text-right"><strong class="block text-base">+ R$ {{ mov.entrada_bruta|floatformat:2 }}</strong>{% if mov.forma_pagamento != 'Sem forma vinculada' %}<span class="pc-fee-label mt-1">TAXA {{ mov.taxa_percentual|floatformat:2 }}%{% if mov.taxa_fixa > 0 %} + R$ {{ mov.taxa_fixa|floatformat:2 }}{% endif %}</span>{% endif %}</span>
           </a>
         {% empty %}<div class="flex min-h-32 flex-col items-center justify-center p-6 text-center"><strong class="text-sm text-slate-600 dark:text-slate-300">Nenhuma entrada neste dia</strong><span class="mt-1 text-xs text-gray-500">Vendas recebidas e créditos aparecerão aqui.</span></div>{% endfor %}
       </div>
@@ -268,45 +320,104 @@
       <div>
         {% for mov in posicao.saidas %}
           <a href="{% if mov.origem_codigo == 'pagar' %}{{ mov.referencia_url }}{% else %}?data={{ data_referencia|date:'Y-m-d' }}&origem={{ mov.origem_codigo }}&movimento={{ mov.registro_id }}{% endif %}" {% if mov.origem_codigo == 'pagar' %}@click.prevent="abrirTituloPagar($el.href)"{% endif %} class="pc-ledger-row px-4 py-3 transition {% if mov.despesa_pessoal %}pc-personal-row{% endif %}">
-            <div class="min-w-0"><strong class="block text-sm">{{ mov.descricao }}</strong>{% if mov.despesa_pessoal %}<span class="pc-personal-badge">Despesa pessoal</span>{% endif %}<span class="mt-1 block text-[11px] text-gray-500">{{ mov.hora }} · {{ mov.origem }}{% if mov.documento %} · Documento {{ mov.documento }}{% endif %}</span></div>
+            <div class="min-w-0"><strong class="block text-sm">{{ mov.descricao }}</strong>{% if mov.despesa_pessoal %}<span class="pc-personal-badge">Despesa pessoal</span>{% endif %}<span class="mt-1 block text-[11px] text-gray-500">{{ mov.hora }} · {{ mov.origem }}{% if mov.classificacao %} · {{ mov.classificacao }}{% endif %}{% if mov.documento %} · Documento {{ mov.documento }}{% endif %}</span></div>
             <span class="pc-ledger-meta min-w-0 text-xs"><strong class="block truncate font-medium">{{ mov.forma_pagamento }}</strong><span class="mt-1 block truncate text-gray-500">{{ mov.conta.descricao|default:mov.conta.banco_nome }}</span></span>
             <strong class="pc-ledger-value whitespace-nowrap text-right text-base">- R$ {{ mov.saida|floatformat:2 }}</strong>
           </a>
-        {% empty %}<div class="flex min-h-32 flex-col items-center justify-center p-6 text-center"><strong class="text-sm text-slate-600 dark:text-slate-300">Nenhuma saída neste dia</strong><span class="mt-1 text-xs text-gray-500">Contas pagas e débitos aparecerão aqui.</span></div>{% endfor %}
+        {% endfor %}
+        <button type="button" class="pc-ledger-row w-full px-4 py-3 text-left transition" @click="taxasModal=true" aria-label="Ver detalhes das taxas">
+          <div class="min-w-0"><strong class="block text-sm">Taxas do período</strong><span class="mt-1 block text-[11px] text-gray-500">Clique para ver valor original, taxa e valor final.</span></div>
+          <span class="pc-ledger-meta text-xs"><strong class="block">Formas de pagamento</strong><span class="mt-1 block text-gray-500">{{ posicao.transacoes_taxas|length }} transações</span></span>
+          <strong class="pc-ledger-value whitespace-nowrap text-right text-base">- R$ {{ posicao.total_taxas_entradas|floatformat:2 }}</strong>
+        </button>
       </div>
     </div>
   </section>
 
   <section class="overflow-hidden rounded-lg border border-slate-200 dark:border-slate-700">
     <div class="border-b px-4 py-3 dark:border-slate-700"><h3 class="font-semibold">Conferência e somatórios</h3><p class="text-xs text-gray-500">Os mesmos movimentos vistos por forma de pagamento e por conta.</p></div>
-    <div class="grid md:grid-cols-2 xl:grid-cols-4">
-      <div class="pc-summary-entry p-4 xl:border-r dark:border-slate-700"><h4 class="text-sm font-semibold">Entradas por forma</h4>{% for item in posicao.totais_forma_entrada %}<div class="mt-3 flex justify-between gap-3 text-sm"><span class="truncate text-gray-500">{{ item.nome }}</span><strong>R$ {{ item.valor|floatformat:2 }}</strong></div>{% empty %}<p class="mt-3 text-sm text-gray-500">Sem entradas.</p>{% endfor %}</div>
-      <div class="pc-summary-exit border-t p-4 md:border-l md:border-t-0 xl:border-l-0 xl:border-r dark:border-slate-700"><h4 class="text-sm font-semibold">Saídas por forma</h4>{% for item in posicao.totais_forma_saida %}<div class="mt-3 flex justify-between gap-3 text-sm"><span class="truncate text-gray-500">{{ item.nome }}</span><strong>R$ {{ item.valor|floatformat:2 }}</strong></div>{% empty %}<p class="mt-3 text-sm text-gray-500">Sem saídas.</p>{% endfor %}</div>
-      <div class="pc-summary-account-in border-t p-4 xl:border-r xl:border-t-0 dark:border-slate-700"><h4 class="text-sm font-semibold">Entradas por conta</h4>{% for item in posicao.totais_conta_entrada %}<div class="mt-3 flex justify-between gap-3 text-sm"><span class="truncate text-gray-500">{{ item.nome }}</span><strong>R$ {{ item.valor|floatformat:2 }}</strong></div>{% empty %}<p class="mt-3 text-sm text-gray-500">Sem entradas.</p>{% endfor %}</div>
-      <div class="pc-summary-account-out border-t p-4 md:border-l xl:border-t-0 dark:border-slate-700"><h4 class="text-sm font-semibold">Saídas por conta</h4>{% for item in posicao.totais_conta_saida %}<div class="mt-3 flex justify-between gap-3 text-sm"><span class="truncate text-gray-500">{{ item.nome }}</span><strong>R$ {{ item.valor|floatformat:2 }}</strong></div>{% empty %}<p class="mt-3 text-sm text-gray-500">Sem saídas.</p>{% endfor %}</div>
+    <div class="grid md:grid-cols-2">
+      <div class="pc-summary-section entry">
+        <div class="pc-summary-card p-4"><h4 class="text-sm font-semibold">Entradas por forma de pagamento</h4>{% for item in posicao.totais_forma_entrada %}<div class="mt-3 flex justify-between gap-3 text-sm"><span class="truncate text-gray-500">{{ item.nome }}</span><strong>R$ {{ item.valor|floatformat:2 }}</strong></div>{% empty %}<p class="mt-3 text-sm text-gray-500">Sem entradas.</p>{% endfor %}</div>
+        <div class="pc-summary-card p-4"><h4 class="text-sm font-semibold">Entradas por conta bancária</h4>{% for item in posicao.totais_conta_entrada %}<div class="mt-3 flex justify-between gap-3 text-sm"><span class="truncate text-gray-500">{{ item.nome }}</span><strong>R$ {{ item.valor|floatformat:2 }}</strong></div>{% empty %}<p class="mt-3 text-sm text-gray-500">Sem entradas.</p>{% endfor %}</div>
+      </div>
+      <div class="pc-summary-section exit">
+        <div class="pc-summary-card p-4"><h4 class="text-sm font-semibold">Saídas por forma de pagamento</h4>{% for item in posicao.totais_forma_saida %}<div class="mt-3 flex justify-between gap-3 text-sm"><span class="truncate text-gray-500">{{ item.nome }}</span><strong>R$ {{ item.valor|floatformat:2 }}</strong></div>{% empty %}<p class="mt-3 text-sm text-gray-500">Sem saídas.</p>{% endfor %}</div>
+        <div class="pc-summary-card p-4"><h4 class="text-sm font-semibold">Saídas por conta bancária</h4>{% for item in posicao.totais_conta_saida %}<div class="mt-3 flex justify-between gap-3 text-sm"><span class="truncate text-gray-500">{{ item.nome }}</span><strong>R$ {{ item.valor|floatformat:2 }}</strong></div>{% empty %}<p class="mt-3 text-sm text-gray-500">Sem saídas.</p>{% endfor %}</div>
+      </div>
     </div>
-    {% if posicao.total_despesas_pessoais > 0 %}<div class="pc-personal-summary flex items-center justify-between gap-4 border-t px-4 py-3"><span><strong class="block text-sm">Despesas pessoais no período</strong><small>Já incluídas nas saídas e no saldo final.</small></span><strong class="whitespace-nowrap text-lg">R$ {{ posicao.total_despesas_pessoais|floatformat:2 }}</strong></div>{% endif %}
+    {% if posicao.total_despesas_pessoais > 0 or meta_despesa_valor > 0 %}<div class="pc-personal-summary border-t px-4 py-3"><div class="flex flex-wrap items-center justify-between gap-4"><span><strong class="block text-sm">Despesas pessoais no período</strong><small>Já incluídas nas saídas e no saldo final. A meta acompanha sempre o mês inteiro.</small></span><span class="text-right"><strong class="pc-sensitive block whitespace-nowrap text-lg">R$ {{ posicao.total_despesas_pessoais|floatformat:2 }}</strong><small class="pc-sensitive block">Mês: R$ {{ meta_despesa_usado|floatformat:2 }} de R$ {{ meta_despesa_valor|floatformat:2 }}</small><a href="{% url 'financeiro:pagar_pagas' %}?categoria_grupo={{ grupo_despesa_pessoal_id }}" class="mt-1 inline-block text-xs font-bold underline">Ver mais nas contas pagas</a></span></div><div class="mt-3 h-3 overflow-hidden rounded-full bg-amber-200 dark:bg-slate-700"><div class="h-full rounded-full {% if meta_despesa_percentual > 100 %}bg-rose-500{% else %}bg-amber-500{% endif %}" style="width:{{ meta_despesa_percentual_barra|floatformat:0 }}%;{% if meta_despesa_percentual > 0 %}min-width:8px;{% endif %}"></div></div><div class="mt-1 flex justify-between text-xs font-semibold"><span>{{ meta_despesa_percentual|floatformat:1 }}% utilizado</span><span>Meta mensal</span></div></div>{% endif %}
   </section>
 
-  <section class="overflow-hidden rounded-lg border border-slate-200 dark:border-slate-700">
-    <button type="button" class="flex w-full items-center justify-between p-4 text-left" @click="mostrarExtrato=!mostrarExtrato"><span><strong class="block">Extrato consolidado do dia</strong><small class="text-gray-500">Todos os movimentos em uma única sequência</small></span><span x-text="mostrarExtrato ? '−' : '+'" class="text-xl text-blue-600"></span></button>
-    <div x-show="mostrarExtrato" x-cloak class="overflow-x-auto border-t dark:border-slate-700">
-      <table class="w-full min-w-[760px] text-sm"><thead class="bg-slate-50 text-xs uppercase text-slate-500 dark:bg-slate-800"><tr><th class="px-4 py-3 text-left">Horário</th><th class="px-4 py-3 text-left">Origem</th><th class="px-4 py-3 text-left">Descrição</th><th class="px-4 py-3 text-left">Conta / forma</th><th class="px-4 py-3 text-right">Entrada</th><th class="px-4 py-3 text-right">Saída</th></tr></thead><tbody class="divide-y dark:divide-slate-700">{% for mov in posicao.extrato %}<tr><td class="px-4 py-3 font-medium">{{ mov.hora }}</td><td class="px-4 py-3">{{ mov.origem }}</td><td class="px-4 py-3"><strong>{{ mov.descricao }}</strong>{% if mov.documento %}<small class="block text-gray-500">Doc. {{ mov.documento }}</small>{% endif %}</td><td class="px-4 py-3">{{ mov.conta.descricao|default:mov.conta.banco_nome }}<small class="block text-gray-500">{{ mov.forma_pagamento }}</small></td><td class="px-4 py-3 text-right text-emerald-600">{% if mov.entrada %}R$ {{ mov.entrada|floatformat:2 }}{% else %}-{% endif %}</td><td class="px-4 py-3 text-right text-rose-600">{% if mov.saida %}R$ {{ mov.saida|floatformat:2 }}{% else %}-{% endif %}</td></tr>{% empty %}<tr><td colspan="6" class="p-8 text-center text-gray-500">Sem movimentos.</td></tr>{% endfor %}</tbody></table>
+  <section class="pc-fee-summary overflow-hidden rounded-lg border border-slate-200 dark:border-slate-700">
+    <button type="button" class="flex w-full items-center justify-between gap-4 px-4 py-4 text-left transition hover:bg-rose-50 dark:hover:bg-rose-950/20" @click="taxasModal=true">
+      <span><strong class="block text-base">Taxas</strong><small class="text-gray-500">Resumo por forma de pagamento. Clique para abrir as transações.</small></span>
+      <strong class="pc-sensitive whitespace-nowrap text-xl text-rose-600">R$ {{ posicao.total_taxas_entradas|floatformat:2 }}</strong>
+    </button>
+    <div class="border-t dark:border-slate-700">
+      {% for taxa in posicao.taxas_por_forma %}<button type="button" class="pc-fee-row grid w-full grid-cols-[minmax(0,1fr)_auto] items-center gap-3 px-4 py-3 text-left hover:bg-slate-50 dark:hover:bg-zinc-800" @click="taxasModal=true"><span><strong class="block text-sm">{{ taxa.nome }}</strong><small class="text-gray-500">TAXA {{ taxa.percentual|floatformat:2 }}%{% if taxa.fixa > 0 %} + R$ {{ taxa.fixa|floatformat:2 }}{% endif %} · {{ taxa.quantidade }} transações</small></span><strong class="pc-sensitive text-rose-600">R$ {{ taxa.valor|floatformat:2 }}</strong></button>{% empty %}<div class="px-4 py-3 text-sm text-gray-500">Nenhuma forma de pagamento usada no período.</div>{% endfor %}
+    </div>
+  </section>
+
+  <section>
+    <div class="mb-3 flex items-end justify-between gap-3">
+      <div><h3 class="text-lg font-semibold">Saldos por conta</h3><p class="text-xs text-gray-500">Abertura, movimentos do dia e fechamento individual.</p></div>
+      <div class="flex items-center gap-2"><span class="text-xs text-gray-500">{{ posicao.contas|length }} conta{{ posicao.contas|length|pluralize }}</span><button type="button" class="btn-secondary px-3 py-1.5 text-xs sm:hidden" @click="contasAbertas=!contasAbertas" x-text="contasAbertas ? 'Ocultar' : 'Ver saldos'"></button></div>
+    </div>
+    <div x-show="contasAbertas" x-cloak class="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+      {% for conta in posicao.contas %}
+        <a href="{% url 'financeiro:contas_bancarias' %}?conta={{ conta.pk }}" class="pc-account {{ conta.posicao_cor }} rounded-lg border border-slate-200 p-4 transition hover:-translate-y-0.5 hover:shadow-sm dark:border-slate-700">
+          <div class="flex items-start justify-between gap-3"><div><strong class="block">{{ conta.descricao|default:conta.banco_nome }}</strong><span class="text-xs text-gray-500">{{ conta.banco_nome|default:'Conta operacional' }}</span></div>{% if conta.eh_dinheiro %}<span class="soft-pill is-blue">Dinheiro</span>{% endif %}</div>
+          <div class="mt-4 grid grid-cols-2 gap-3 text-sm">
+            <div><span class="block text-xs text-gray-500">Abertura</span><strong>R$ {{ conta.posicao_abertura|floatformat:2 }}</strong></div>
+            <div class="text-right"><span class="block text-xs text-gray-500">Fechamento</span><strong class="{% if conta.posicao_fechamento < 0 %}text-rose-600{% else %}text-emerald-600{% endif %}">R$ {{ conta.posicao_fechamento|floatformat:2 }}</strong></div>
+          </div>
+          <div class="mt-3 flex justify-between border-t pt-3 text-xs text-gray-500 dark:border-slate-700"><span class="text-emerald-600">+ R$ {{ conta.posicao_entradas|floatformat:2 }}</span><span class="text-rose-600">- R$ {{ conta.posicao_saidas|floatformat:2 }}</span></div>
+          {% if conta.posicao_prevista_entrada > 0 %}<div class="mt-2 rounded bg-blue-50 px-2 py-1.5 text-xs font-semibold text-blue-700 dark:bg-blue-950/30 dark:text-blue-300">+ R$ {{ conta.posicao_prevista_entrada|floatformat:2 }} previsto no filtro abaixo</div>{% endif %}
+        </a>
+      {% empty %}
+        <div class="col-span-full rounded-lg border border-dashed p-8 text-center text-sm text-gray-500">Nenhuma conta ativa. Cadastre ao menos uma conta para iniciar a conferência.</div>
+      {% endfor %}
     </div>
   </section>
 
   <section class="pc-forecast overflow-hidden rounded-lg">
     <div class="pc-forecast-head flex flex-col gap-3 border-b px-4 py-4">
-      <div class="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between"><div><h3 class="pc-forecast-title font-semibold">Recebimentos previstos</h3><p class="pc-forecast-copy text-xs">Contas a receber, boletos e cartões que ainda serão compensados. Não alteram o saldo realizado.</p></div><div class="sm:text-right"><span class="pc-forecast-copy block text-[11px] font-semibold uppercase">Líquido previsto</span><strong class="pc-forecast-value text-xl">R$ {{ posicao.total_previsto|floatformat:2 }}</strong></div></div>
-      <div class="flex flex-wrap gap-2">{% for item in periodos_previsao %}<a href="{{ item.url }}" class="pc-forecast-filter rounded-md px-3 py-2 text-xs font-semibold {% if item.ativo %}is-active{% endif %}">{{ item.rotulo }}</a>{% endfor %}<button type="button" class="pc-forecast-filter rounded-md px-3 py-2 text-xs font-semibold" onclick="document.getElementById('previsao-personalizada').classList.toggle('hidden')">Personalizado</button></div>
-      <form id="previsao-personalizada" method="get" class="hidden grid gap-3 rounded-lg bg-white/70 p-3 sm:grid-cols-[1fr_1fr_auto] dark:bg-slate-900/40"><input type="hidden" name="data" value="{{ data_referencia|date:'Y-m-d' }}"><input type="hidden" name="previsao" value="personalizado"><label class="text-xs font-semibold">De<input type="date" name="previsao_inicio" value="{{ previsao_inicio|date:'Y-m-d' }}" class="form-input mt-1 w-full" required></label><label class="text-xs font-semibold">Ate<input type="date" name="previsao_fim" value="{{ previsao_fim|date:'Y-m-d' }}" class="form-input mt-1 w-full" required></label><button class="btn-primary self-end" type="submit">Aplicar periodo</button></form>
+      <div class="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between"><div><h3 class="pc-forecast-title font-semibold">Recebimentos previstos</h3><p class="pc-forecast-copy text-xs">Contas a receber, boletos e cartões que ainda serão compensados.</p></div><div class="flex items-center gap-3 sm:text-right"><div><span class="pc-forecast-copy block text-[11px] font-semibold uppercase">Líquido previsto</span><strong class="pc-sensitive pc-forecast-value text-xl">R$ {{ posicao.total_previsto|floatformat:2 }}</strong></div><button type="button" class="pc-forecast-filter rounded-md px-3 py-2 text-xs font-semibold" @click="previsoesAbertas=!previsoesAbertas" x-text="previsoesAbertas ? 'Ocultar' : 'Ver mais'" :aria-label="previsoesAbertas ? 'Ocultar recebimentos previstos' : 'Ver recebimentos previstos'"></button></div></div>
+      <div x-show="previsoesAbertas" x-cloak class="space-y-3"><div class="flex flex-wrap gap-2">{% for item in periodos_previsao %}<a href="{{ item.url }}" class="pc-forecast-filter rounded-md px-3 py-2 text-xs font-semibold {% if item.ativo %}is-active{% endif %}">{{ item.rotulo }}</a>{% endfor %}<button type="button" class="pc-forecast-filter rounded-md px-3 py-2 text-xs font-semibold" onclick="document.getElementById('previsao-personalizada').classList.toggle('hidden')">Personalizado</button></div><form id="previsao-personalizada" method="get" class="hidden grid gap-3 rounded-lg bg-white/70 p-3 sm:grid-cols-[1fr_1fr_auto] dark:bg-slate-900/40"><input type="hidden" name="data" value="{{ data_referencia|date:'Y-m-d' }}"><input type="hidden" name="previsao" value="personalizado"><label class="text-xs font-semibold">De<input type="date" name="previsao_inicio" value="{{ previsao_inicio|date:'Y-m-d' }}" class="form-input mt-1 w-full" required></label><label class="text-xs font-semibold">Ate<input type="date" name="previsao_fim" value="{{ previsao_fim|date:'Y-m-d' }}" class="form-input mt-1 w-full" required></label><button class="btn-primary self-end" type="submit">Aplicar período</button></form></div>
     </div>
-    <div class="divide-y divide-blue-100 dark:divide-slate-700">{% for item in posicao.previsoes %}{% if item.referencia_url %}<button type="button" @click="abrirTituloPagar('{{ item.referencia_url }}')" class="grid w-full gap-2 px-4 py-3 text-left text-sm transition hover:bg-blue-50 focus:bg-blue-50 dark:hover:bg-blue-950/25 sm:grid-cols-[105px_minmax(0,1fr)_190px_150px] sm:items-center">{% else %}<div class="grid gap-2 px-4 py-3 text-sm sm:grid-cols-[105px_minmax(0,1fr)_190px_150px] sm:items-center">{% endif %}<strong>{{ item.data|date:'d/m/Y' }}</strong><div class="min-w-0"><strong class="block truncate">{{ item.descricao }}</strong><small class="text-gray-500">{{ item.forma }}{% if item.bandeira %} - {{ item.bandeira|title }} {{ item.parcelas }}x{% endif %}</small></div><span class="text-gray-600 dark:text-gray-300">{{ item.conta }}</span><div class="sm:text-right"><strong class="text-emerald-700 dark:text-emerald-400">R$ {{ item.valor_liquido|floatformat:2 }}</strong>{% if item.valor_taxa > 0 %}<small class="block text-gray-500">Bruto R$ {{ item.valor_bruto|floatformat:2 }} - taxa R$ {{ item.valor_taxa|floatformat:2 }}</small>{% endif %}{% if item.referencia_url %}<small class="mt-1 block font-semibold text-blue-600 dark:text-blue-300">Ver título</small>{% endif %}</div>{% if item.referencia_url %}</button>{% else %}</div>{% endif %}{% empty %}<div class="p-6 text-center text-sm text-gray-500">Nenhum recebimento previsto neste período.</div>{% endfor %}</div>
+    <div x-show="previsoesAbertas" x-cloak class="divide-y divide-blue-100 dark:divide-slate-700">
+      {% for item in posicao.previsoes %}
+        {% if item.referencia_url %}
+          <button type="button" @click="abrirTituloPagar('{{ item.referencia_url }}')" class="pc-forecast-item {% if item.atrasado %}is-overdue{% endif %} grid w-full gap-2 px-4 py-3 text-left text-sm transition sm:grid-cols-[105px_minmax(0,1fr)_190px_150px] sm:items-center">
+        {% else %}
+          <div class="pc-forecast-item {% if item.atrasado %}is-overdue{% endif %} grid gap-2 px-4 py-3 text-sm sm:grid-cols-[105px_minmax(0,1fr)_190px_150px] sm:items-center">
+        {% endif %}
+            <div><strong class="pc-forecast-date block">{{ item.data|date:'d/m/Y' }}</strong>{% if item.atrasado %}<span class="pc-forecast-overdue mt-1">Atrasado</span>{% elif item.renegociado %}<span class="pc-forecast-renegotiated mt-1">Renegociado</span>{% endif %}</div>
+            <div class="min-w-0"><strong class="block truncate">{{ item.descricao }}</strong><small class="pc-forecast-muted block truncate">{{ item.classificacao }} · {{ item.forma }}{% if item.bandeira %} - {{ item.bandeira|title }} {{ item.parcelas }}x{% endif %}</small></div>
+            <span class="pc-forecast-account">{{ item.conta }}</span>
+            <div class="sm:text-right"><strong class="{% if item.atrasado %}pc-forecast-negative{% else %}pc-forecast-positive{% endif %}">R$ {{ item.valor_liquido|floatformat:2 }}</strong><small class="pc-forecast-muted block">Taxa: {{ item.taxa_percentual|floatformat:2 }}%{% if item.taxa_fixa > 0 %} + R$ {{ item.taxa_fixa|floatformat:2 }}{% endif %} · - R$ {{ item.valor_taxa|floatformat:2 }}</small>{% if item.referencia_url %}<small class="mt-1 block font-bold {% if item.atrasado %}pc-forecast-negative{% else %}text-blue-700 dark:text-blue-300{% endif %}">{% if item.atrasado %}Alterar data{% else %}Ver título{% endif %}</small>{% endif %}</div>
+        {% if item.referencia_url %}</button>{% else %}</div>{% endif %}
+      {% empty %}
+        <div class="p-6 text-center text-sm text-gray-500">Nenhum recebimento previsto neste período.</div>
+      {% endfor %}
+    </div>
   </section>
 
   {% if mostrar_excluidos and posicao.excluidos %}
     <section class="rounded-lg border border-dashed border-rose-300 p-4"><h3 class="font-semibold text-rose-600">Movimentos manuais excluídos</h3><div class="mt-3 space-y-2">{% for mov in posicao.excluidos %}<div class="flex flex-col gap-2 rounded border p-3 sm:flex-row sm:items-center sm:justify-between"><div><strong>{{ mov.descricao }}</strong><span class="block text-xs text-gray-500">{{ mov.conta.descricao|default:mov.conta.banco_nome }} · R$ {{ mov.valor|floatformat:2 }}</span></div><form method="post" class="flex gap-2">{% csrf_token %}<input type="hidden" name="acao" value="restaurar_movimento"><input type="hidden" name="movimento_id" value="{{ mov.registro_id }}"><input type="hidden" name="data_referencia" value="{{ data_referencia|date:'Y-m-d' }}"><input name="justificativa" required class="form-input" placeholder="Motivo da restauração"><button class="btn-secondary" type="submit">Restaurar</button></form></div>{% endfor %}</div></section>
   {% endif %}
+
+  <template x-teleport="body"><div x-show="taxasModal" x-cloak class="fixed inset-0 z-[190] flex items-center justify-center overflow-y-auto p-3 sm:p-6" style="background:rgba(15,23,42,.82);backdrop-filter:blur(10px)" @keydown.escape.window="taxasModal=false" @click.self="taxasModal=false" role="dialog" aria-modal="true" aria-label="Detalhes das taxas">
+    <div class="card my-auto w-full max-w-5xl overflow-hidden" @click.stop>
+      <header class="flex items-start justify-between gap-4 bg-slate-900 px-5 py-4 text-white"><div><h3 class="text-lg font-semibold">Taxas do período</h3><p class="mt-1 text-xs text-slate-300">Valor original, desconto e valor final de cada entrada.</p></div><button type="button" class="btn-secondary h-9 w-9 p-0" @click="taxasModal=false" aria-label="Fechar">×</button></header>
+      <div class="max-h-[70vh] overflow-auto">
+        <div class="hidden grid-cols-[minmax(190px,1.4fr)_minmax(160px,1fr)_110px_110px_110px] gap-3 border-b bg-slate-50 px-5 py-2 text-xs font-bold uppercase text-slate-500 dark:border-slate-700 dark:bg-zinc-800 sm:grid"><span>Transação</span><span>Forma / conta</span><span class="text-right">Original</span><span class="text-right">Taxa</span><span class="text-right">Final</span></div>
+        {% for mov in posicao.transacoes_taxas %}<div class="grid gap-3 border-b px-5 py-4 last:border-b-0 dark:border-slate-700 sm:grid-cols-[minmax(190px,1.4fr)_minmax(160px,1fr)_110px_110px_110px] sm:items-center"><div><strong class="block text-sm">{{ mov.descricao }}</strong><small class="text-gray-500">{{ mov.data|date:'d/m/Y' }} · {{ mov.hora }} · {{ mov.origem }}</small></div><div><strong class="block text-sm">{{ mov.forma_pagamento }}</strong><small class="text-gray-500">{{ mov.conta.descricao|default:mov.conta.banco_nome }}</small></div><div class="flex justify-between sm:block sm:text-right"><span class="text-xs text-gray-500 sm:hidden">Original</span><strong class="pc-sensitive">R$ {{ mov.entrada_bruta|floatformat:2 }}</strong></div><div class="flex justify-between sm:block sm:text-right"><span class="text-xs text-gray-500 sm:hidden">Taxa</span><span><strong class="pc-sensitive block text-rose-600">R$ {{ mov.valor_taxa|floatformat:2 }}</strong><small class="text-gray-500">{{ mov.taxa_percentual|floatformat:2 }}%{% if mov.taxa_fixa > 0 %} + R$ {{ mov.taxa_fixa|floatformat:2 }}{% endif %}</small></span></div><div class="flex justify-between sm:block sm:text-right"><span class="text-xs text-gray-500 sm:hidden">Final</span><span><strong class="pc-sensitive block text-emerald-600">R$ {{ mov.valor_final_taxa|floatformat:2 }}</strong>{% if not mov.taxa_descontada %}<small class="text-gray-500">Informativa</small>{% endif %}</span></div></div>{% empty %}<div class="p-8 text-center text-sm text-gray-500">Nenhuma transação com forma de pagamento no período.</div>{% endfor %}
+      </div>
+      <footer class="flex items-center justify-between gap-4 border-t px-5 py-4 dark:border-slate-700"><span class="text-sm text-gray-500">Total descontado</span><strong class="pc-sensitive text-xl text-rose-600">R$ {{ posicao.total_taxas_entradas|floatformat:2 }}</strong></footer>
+    </div>
+  </div></template>
 
   <template x-teleport="body"><div x-show="contaPagarModal" x-cloak class="fixed inset-0 z-[100] flex items-center justify-center p-3 sm:p-6" style="background:rgba(15,23,42,.78);backdrop-filter:blur(8px)" @keydown.escape.window="contaPagarModal=false">
     <div class="flex w-full max-w-5xl flex-col overflow-hidden rounded-lg border border-slate-300 bg-white shadow-2xl dark:border-slate-700 dark:bg-zinc-900" style="height:94vh" @click.stop>
@@ -325,29 +436,34 @@
   <template x-teleport="body"><div x-show="movimentoModal" x-cloak class="fixed inset-0 z-[100] flex items-center justify-center overflow-y-auto p-4" style="background:rgba(15,23,42,.78);backdrop-filter:blur(8px)" @keydown.escape.window="movimentoModal=false">
     {% if movimento_form.errors %}<div class="fixed top-4 z-[60] max-w-lg rounded-lg border border-rose-300 bg-rose-50 p-3 text-sm text-rose-700 shadow-lg"><strong>Revise os campos do movimento:</strong>{% for campo in movimento_form %}{% for erro in campo.errors %}<span class="mt-1 block">{{ campo.label }}: {{ erro }}</span>{% endfor %}{% endfor %}</div>{% endif %}
     <div class="card my-auto w-full max-w-xl p-5" @click.stop><div class="flex items-start justify-between gap-3"><div><h3 class="text-lg font-semibold" x-text="movimentoTipo === 'credito' ? 'Adicionar entrada' : (movimentoTipo === 'debito' ? 'Adicionar saída' : 'Transferir entre contas')">Novo movimento manual</h3><p class="mt-1 text-xs text-gray-500" x-text="movimentoTipo === 'credito' ? 'Registre um valor que entrou em uma conta.' : (movimentoTipo === 'debito' ? 'Registre um valor que saiu de uma conta.' : 'Movimente um valor entre duas contas sem alterar o total do caixa.')">Crédito, débito ou transferência com reflexo imediato nas contas.</p></div><button type="button" class="btn-secondary px-3" @click="movimentoModal=false" aria-label="Fechar">×</button></div>
-      <form method="post" class="mt-5 space-y-3" @change="if ($event.target.id === 'id_tipo') movimentoTipo=$event.target.value">{% csrf_token %}<input type="hidden" name="acao" value="lancar_movimento"><input type="hidden" name="data_referencia" value="{{ hoje|date:'Y-m-d' }}"><input type="hidden" name="data_lancamento" value="{{ hoje|date:'Y-m-d' }}">{% if movimento_form.non_field_errors %}<div class="rounded border border-rose-300 bg-rose-50 p-3 text-sm text-rose-700">{{ movimento_form.non_field_errors|join:', ' }}</div>{% endif %}<label class="block text-xs font-semibold">Tipo {{ movimento_form.tipo|add_class:'form-input mt-1 w-full' }}</label><div class="grid gap-3" :class="movimentoTipo === 'transferencia' ? 'sm:grid-cols-2' : 'sm:grid-cols-1'"><label x-show="movimentoTipo === 'debito' || movimentoTipo === 'transferencia'" class="block text-xs font-semibold">Conta de origem {{ movimento_form.conta_origem|add_class:'form-input mt-1 w-full' }}</label><label x-show="movimentoTipo === 'credito' || movimentoTipo === 'transferencia'" class="block text-xs font-semibold">Conta de destino {{ movimento_form.conta_destino|add_class:'form-input mt-1 w-full' }}</label></div><div class="grid gap-3 sm:grid-cols-[minmax(0,1fr)_auto]"><label class="block text-xs font-semibold">Valor {{ movimento_form.valor|add_class:'form-input mt-1 w-full' }}</label><div class="rounded-lg border border-slate-200 px-4 py-2 text-xs dark:border-slate-700"><span class="block opacity-60">Data do movimento</span><strong class="mt-1 block">Hoje, {{ hoje|date:'d/m/Y' }}</strong></div></div><label x-show="movimentoTipo !== 'transferencia'" class="block text-xs font-semibold">Forma de pagamento {{ movimento_form.forma_pagamento|add_class:'form-input mt-1 w-full' }}</label><label class="block text-xs font-semibold">Descrição {{ movimento_form.historico|add_class:'form-input mt-1 w-full' }}</label><label class="block text-xs font-semibold">Documento {{ movimento_form.documento|add_class:'form-input mt-1 w-full' }}</label><div class="flex justify-end gap-2 pt-2"><button type="button" class="btn-secondary" @click="movimentoModal=false">Cancelar</button><button type="submit" class="btn-primary">Registrar movimento</button></div></form>
+      <form method="post" class="mt-5 space-y-3" @change="if ($event.target.id === 'id_tipo') movimentoTipo=$event.target.value">{% csrf_token %}<input type="hidden" name="acao" value="lancar_movimento"><input type="hidden" name="data_referencia" value="{{ hoje|date:'Y-m-d' }}"><input type="hidden" name="data_lancamento" value="{{ hoje|date:'Y-m-d' }}">{% if movimento_form.non_field_errors %}<div class="rounded border border-rose-300 bg-rose-50 p-3 text-sm text-rose-700">{{ movimento_form.non_field_errors|join:', ' }}</div>{% endif %}<label class="block text-xs font-semibold">Tipo {{ movimento_form.tipo|add_class:'form-input mt-1 w-full' }}</label><div class="grid gap-3" :class="movimentoTipo === 'transferencia' ? 'sm:grid-cols-2' : 'sm:grid-cols-1'"><label x-show="movimentoTipo === 'debito' || movimentoTipo === 'transferencia'" class="block text-xs font-semibold">Conta de origem {{ movimento_form.conta_origem|add_class:'form-input mt-1 w-full' }}</label><label x-show="movimentoTipo === 'credito' || movimentoTipo === 'transferencia'" class="block text-xs font-semibold">Conta de destino {{ movimento_form.conta_destino|add_class:'form-input mt-1 w-full' }}</label></div><div class="grid gap-3 sm:grid-cols-[minmax(0,1fr)_auto]"><label class="block text-xs font-semibold">Valor {{ movimento_form.valor|add_class:'form-input mt-1 w-full' }}</label><div class="rounded-lg border border-slate-200 px-4 py-2 text-xs dark:border-slate-700"><span class="block opacity-60">Data do movimento</span><strong class="mt-1 block">Hoje, {{ hoje|date:'d/m/Y' }}</strong></div></div><label class="block text-xs font-semibold">Forma de pagamento <span class="font-normal opacity-60" x-show="movimentoTipo === 'transferencia'">(para rastrear a origem)</span>{{ movimento_form.forma_pagamento|add_class:'form-input mt-1 w-full' }}</label><label x-show="movimentoTipo !== 'transferencia'" class="block text-xs font-semibold"><span x-text="movimentoTipo === 'debito' ? 'Classificação da despesa' : 'Classificação da receita'">Classificação financeira</span> <span class="text-rose-500">*</span><select name="plano_contas" class="form-input mt-1 w-full" data-classificacao-manual><option value="">Selecione</option>{% for categoria in movimento_form.plano_contas.field.queryset %}<option value="{{ categoria.pk }}" data-tipo="{{ categoria.tipo }}" {% if movimento_form.plano_contas.value|stringformat:'s' == categoria.pk|stringformat:'s' %}selected{% endif %}>{{ categoria.caminho_descricao }}</option>{% endfor %}</select>{% for erro in movimento_form.plano_contas.errors %}<span class="mt-1 block text-xs text-rose-600">{{ erro }}</span>{% endfor %}</label><label class="block text-xs font-semibold">Descrição {{ movimento_form.historico|add_class:'form-input mt-1 w-full' }}</label><label class="block text-xs font-semibold">Documento {{ movimento_form.documento|add_class:'form-input mt-1 w-full' }}</label><div class="flex justify-end gap-2 pt-2"><button type="button" class="btn-secondary" @click="movimentoModal=false">Cancelar</button><button type="submit" class="btn-primary">Registrar movimento</button></div></form>
     </div>
   </div></template>
 
   {% if detalhe %}
     <div x-show="detalheModal" x-cloak class="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto p-4" style="background:rgba(15,23,42,.68);backdrop-filter:blur(6px)" @keydown.escape.window="detalheModal=false">
-      <div class="card my-auto w-full max-w-3xl overflow-hidden" @click.stop>
+      <div class="card my-auto w-full max-w-3xl overflow-hidden" x-data="{historicoAberto:false}" @click.stop>
         <div class="flex items-start justify-between bg-slate-900 px-5 py-4 text-white">
           <div><span class="text-xs font-semibold uppercase text-blue-300">{{ detalhe.origem }}</span><h3 class="mt-1 text-lg font-semibold">{{ detalhe.descricao }}</h3></div>
           <button type="button" class="rounded border border-white/30 px-3 py-2" @click="detalheModal=false" aria-label="Fechar">×</button>
         </div>
         <div class="p-5">
-          <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
             <div><span class="text-xs text-gray-500">Valor</span><strong class="block {% if detalhe.valor < 0 %}text-rose-600{% else %}text-emerald-600{% endif %}">R$ {{ detalhe.valor|floatformat:2 }}</strong></div>
             <div><span class="text-xs text-gray-500">Conta</span><strong class="block">{{ detalhe.conta.descricao|default:detalhe.conta.banco_nome }}</strong></div>
             <div><span class="text-xs text-gray-500">Forma</span><strong class="block">{{ detalhe.forma_pagamento }}</strong></div>
+            <div><span class="text-xs text-gray-500">Classificação</span><strong class="block">{{ detalhe.classificacao|default:'Sem classificação' }}</strong></div>
             <div><span class="text-xs text-gray-500">Documento</span><strong class="block">{{ detalhe.documento|default:'-' }}</strong></div>
           </div>
           <div class="mt-5 flex flex-wrap justify-end gap-2">
             {% if detalhe.referencia_url %}<a href="{{ detalhe.referencia_url }}" class="btn-secondary">Abrir lançamento de origem</a>{% endif %}
-            {% if user_is_admin and detalhe.entrada and not detalhe.excluido %}<button type="button" class="btn-primary" @click="detalheModal=false; entradaEdicao=true">Editar entrada</button>{% endif %}
-            {% if user_is_admin and detalhe.origem_codigo == 'manual' and not detalhe.excluido %}<button type="button" class="btn-secondary text-rose-600" @click="excluirModal=true">Excluir</button>{% endif %}
+            {% if user_is_admin and detalhe.entrada and detalhe.editavel and not detalhe.excluido %}<button type="button" class="btn-primary" @click="detalheModal=false; entradaEdicao=true">Editar lançamento</button>{% endif %}
+            {% if user_is_admin and detalhe.origem_codigo == 'manual' and not detalhe.excluido %}{% if not detalhe.entrada %}<a href="?data={{ data_referencia|date:'Y-m-d' }}&editar={{ detalhe.registro_id }}" class="btn-primary">Editar lançamento</a>{% endif %}<button type="button" class="btn-secondary text-rose-600" @click="excluirModal=true">Excluir</button>{% endif %}
           </div>
+          <section class="mt-4 rounded-md border border-slate-200 p-3 dark:border-slate-700">
+            <div class="flex items-center justify-between gap-3"><div><h4 class="text-xs font-semibold uppercase opacity-60">Histórico de alterações</h4><p class="mt-1 text-xs opacity-55">{{ detalhe.historico_logs|length }} registro{{ detalhe.historico_logs|length|pluralize }}</p></div><button type="button" class="btn-secondary" @click="historicoAberto=!historicoAberto" x-text="historicoAberto ? 'Ocultar histórico' : 'Ver histórico'"></button></div>
+            <div x-show="historicoAberto" x-cloak class="mt-3 divide-y divide-slate-200 dark:divide-slate-700">{% for log in detalhe.historico_logs %}<article class="py-3 first:pt-0"><div class="flex flex-wrap justify-between gap-2"><strong class="text-sm">{{ log.acao }}</strong><span class="text-xs opacity-55">{{ log.data|date:'d/m/Y H:i' }} · {{ log.usuario }}</span></div>{% if log.justificativa %}<p class="mt-1 text-xs">Motivo: {{ log.justificativa }}</p>{% endif %}{% if log.alteracoes %}<div class="mt-2 grid gap-2 sm:grid-cols-2">{% for alteracao in log.alteracoes %}<div class="rounded border border-slate-200 p-2 text-xs dark:border-slate-700"><strong class="block">{{ alteracao.campo }}</strong><span class="text-rose-600">{{ alteracao.antes }}</span> <span aria-hidden="true">→</span> <span class="text-emerald-600">{{ alteracao.depois }}</span></div>{% endfor %}</div>{% elif log.descricao %}<p class="mt-1 text-xs opacity-65">{{ log.descricao }}</p>{% endif %}</article>{% empty %}<p class="py-3 text-sm opacity-60">Nenhuma alteração registrada para este lançamento.</p>{% endfor %}</div>
+          </section>
           <form x-show="excluirModal" x-cloak method="post" class="mt-4 rounded-lg border border-rose-300 bg-rose-50 p-4 dark:border-rose-900 dark:bg-rose-950/20">{% csrf_token %}<input type="hidden" name="acao" value="excluir_movimento"><input type="hidden" name="movimento_id" value="{{ detalhe.registro_id }}"><input type="hidden" name="data_referencia" value="{{ data_referencia|date:'Y-m-d' }}"><label class="text-xs font-semibold">Motivo da exclusão <input name="justificativa" required class="form-input mt-1 w-full" placeholder="Explique a correção"></label><div class="mt-3 flex justify-end gap-2"><button type="button" class="btn-secondary" @click="excluirModal=false">Cancelar</button><button class="btn-primary bg-rose-600" type="submit">Confirmar exclusão</button></div></form>
         </div>
       </div>
@@ -372,6 +488,7 @@
             <label class="block text-sm font-semibold">Data da entrada <span class="text-rose-500">*</span>{{ editar_entrada_form.data_entrada|add_class:'form-input mt-1 w-full' }}{% for erro in editar_entrada_form.data_entrada.errors %}<span class="mt-1 block text-xs text-rose-600">{{ erro }}</span>{% endfor %}</label>
             <label class="block text-sm font-semibold">Forma de pagamento <span class="text-rose-500">*</span>{{ editar_entrada_form.forma_pagamento|add_class:'form-input mt-1 w-full' }}{% for erro in editar_entrada_form.forma_pagamento.errors %}<span class="mt-1 block text-xs text-rose-600">{{ erro }}</span>{% endfor %}</label>
             <label class="block text-sm font-semibold">Conta de destino <span class="text-rose-500">*</span>{{ editar_entrada_form.conta_bancaria|add_class:'form-input mt-1 w-full' }}{% for erro in editar_entrada_form.conta_bancaria.errors %}<span class="mt-1 block text-xs text-rose-600">{{ erro }}</span>{% endfor %}</label>
+            {% if editar_entrada_form.plano_contas %}<div class="sm:col-span-2" data-classificacao-edicao><span class="mb-2 block text-sm font-semibold">Classificação da receita <span class="text-rose-500">*</span></span><div class="grid gap-2 sm:grid-cols-3"><label class="text-xs font-semibold">1. Grupo<select class="form-input mt-1 w-full" data-grupo><option value="">Selecione</option>{% for grupo in grupos_edicao %}<option value="{{ grupo.pk }}" {% if grupo_edicao_id == grupo.pk|stringformat:'s' %}selected{% endif %}>{{ grupo.descricao }}</option>{% endfor %}</select></label><label class="text-xs font-semibold">2. Tipo<select class="form-input mt-1 w-full" data-subgrupo><option value="">Selecione</option>{% for subgrupo in subgrupos_edicao %}<option value="{{ subgrupo.pk }}" data-grupo="{{ subgrupo.conta_pai_id }}" {% if subgrupo_edicao_id == subgrupo.pk|stringformat:'s' %}selected{% endif %}>{{ subgrupo.descricao }}</option>{% endfor %}</select></label><label class="text-xs font-semibold">3. Categoria<select class="form-input mt-1 w-full" data-categoria><option value="">Selecione</option>{% for categoria in categorias_edicao %}<option value="{{ categoria.pk }}" data-subgrupo="{{ categoria.conta_pai_id }}" {% if categoria_edicao_id == categoria.pk|stringformat:'s' %}selected{% endif %}>{{ categoria.descricao }}</option>{% endfor %}</select></label></div><span class="hidden">{{ editar_entrada_form.plano_contas }}</span>{% for erro in editar_entrada_form.plano_contas.errors %}<span class="mt-1 block text-xs text-rose-600">{{ erro }}</span>{% endfor %}</div>{% endif %}
           </div>
           {% if detalhe.origem_codigo == 'manual' %}<label class="block text-sm font-semibold">Descrição {{ editar_entrada_form.descricao|add_class:'form-input mt-1 w-full' }}{% for erro in editar_entrada_form.descricao.errors %}<span class="mt-1 block text-xs text-rose-600">{{ erro }}</span>{% endfor %}</label>{% endif %}
           <label class="block text-sm font-semibold">Motivo da alteração <span class="text-rose-500">*</span>{{ editar_entrada_form.justificativa|add_class:'form-input mt-1 w-full' }}{% for erro in editar_entrada_form.justificativa.errors %}<span class="mt-1 block text-xs text-rose-600">{{ erro }}</span>{% endfor %}</label>
@@ -383,7 +500,7 @@
   {% endif %}
 
   {% if editar_movimento %}
-    <div x-show="editarModal" x-cloak class="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto p-4" style="background:rgba(15,23,42,.68);backdrop-filter:blur(6px)" @keydown.escape.window="editarModal=false"><div class="card my-auto w-full max-w-xl p-5" @click.stop><div class="flex items-start justify-between"><div><h3 class="text-lg font-semibold">Corrigir movimento manual</h3><p class="mt-1 text-xs text-gray-500">A alteração exige motivo e ficará no log.</p></div><button type="button" class="btn-secondary px-3" @click="editarModal=false">×</button></div><form method="post" class="mt-5 space-y-3">{% csrf_token %}<input type="hidden" name="acao" value="editar_movimento"><input type="hidden" name="movimento_id" value="{{ editar_movimento.pk }}"><input type="hidden" name="data_referencia" value="{{ data_referencia|date:'Y-m-d' }}"><label class="block text-xs font-semibold">Conta {{ editar_form.conta_bancaria|add_class:'form-input mt-1 w-full' }}</label><div class="grid gap-3 sm:grid-cols-2"><label class="block text-xs font-semibold">Data {{ editar_form.data_lancamento|add_class:'form-input mt-1 w-full' }}</label><label class="block text-xs font-semibold">Valor {{ editar_form.valor|add_class:'form-input mt-1 w-full' }}</label></div><label class="block text-xs font-semibold">Descrição {{ editar_form.historico|add_class:'form-input mt-1 w-full' }}</label><label class="block text-xs font-semibold">Documento {{ editar_form.documento|add_class:'form-input mt-1 w-full' }}</label><label class="block text-xs font-semibold">Motivo <span class="text-rose-500">*</span>{{ editar_form.justificativa|add_class:'form-input mt-1 w-full' }}</label><div class="flex justify-end gap-2 pt-2"><button type="button" class="btn-secondary" @click="editarModal=false">Cancelar</button><button type="submit" class="btn-primary">Salvar correção</button></div></form></div></div>
+    <div x-show="editarModal" x-cloak class="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto p-4" style="background:rgba(15,23,42,.72);backdrop-filter:blur(7px)" @keydown.escape.window="editarModal=false"><div class="card my-auto w-full max-w-3xl overflow-hidden p-0" @click.stop><div class="flex items-start justify-between bg-slate-900 px-5 py-4 text-white"><div><span class="text-[11px] font-bold uppercase text-blue-300">{% if editar_movimento.valor < 0 %}Saída manual{% else %}Entrada manual{% endif %}</span><h3 class="mt-1 text-lg font-semibold">Editar {{ editar_movimento.historico }}</h3><p class="mt-1 text-xs text-slate-300">Os dados atuais já estão preenchidos. Todas as alterações ficarão registradas no log.</p></div><button type="button" class="rounded border border-slate-600 px-3 py-2" @click="editarModal=false" aria-label="Fechar">×</button></div><form method="post" class="space-y-5 p-5">{% csrf_token %}<input type="hidden" name="acao" value="editar_movimento"><input type="hidden" name="movimento_id" value="{{ editar_movimento.pk }}"><input type="hidden" name="data_referencia" value="{{ data_referencia|date:'Y-m-d' }}">{% if editar_form.errors %}<div class="rounded-lg border border-rose-300 bg-rose-50 p-3 text-sm text-rose-700">Revise os campos destacados antes de salvar.</div>{% endif %}<section><h4 class="mb-3 text-xs font-bold uppercase text-blue-500">Dados do movimento</h4><label class="block text-sm font-semibold">Descrição {{ editar_form.historico|add_class:'form-input mt-1 w-full' }}{% for erro in editar_form.historico.errors %}<span class="mt-1 block text-xs text-rose-600">{{ erro }}</span>{% endfor %}</label><div class="mt-3 grid gap-3 sm:grid-cols-3"><label class="block text-sm font-semibold">Valor (R$) <span class="text-rose-500">*</span>{{ editar_form.valor|add_class:'form-input mt-1 w-full' }}<span class="mt-1 block text-xs font-normal opacity-60">Informe o valor sem sinal negativo.</span>{% for erro in editar_form.valor.errors %}<span class="mt-1 block text-xs text-rose-600">{{ erro }}</span>{% endfor %}</label><label class="block text-sm font-semibold">Data <span class="text-rose-500">*</span>{{ editar_form.data_lancamento|add_class:'form-input mt-1 w-full' }}{% for erro in editar_form.data_lancamento.errors %}<span class="mt-1 block text-xs text-rose-600">{{ erro }}</span>{% endfor %}</label><label class="block text-sm font-semibold">Conta <span class="text-rose-500">*</span>{{ editar_form.conta_bancaria|add_class:'form-input mt-1 w-full' }}{% for erro in editar_form.conta_bancaria.errors %}<span class="mt-1 block text-xs text-rose-600">{{ erro }}</span>{% endfor %}</label></div></section><section class="border-t pt-4"><h4 class="mb-3 text-xs font-bold uppercase text-emerald-600">Classificação e pagamento</h4><div class="grid gap-3 sm:grid-cols-2"><label class="block text-sm font-semibold">Forma de pagamento {{ editar_form.forma_pagamento|add_class:'form-input mt-1 w-full' }}{% for erro in editar_form.forma_pagamento.errors %}<span class="mt-1 block text-xs text-rose-600">{{ erro }}</span>{% endfor %}</label><label class="block text-sm font-semibold">{{ editar_form.plano_contas.label }} <span class="text-rose-500">*</span>{{ editar_form.plano_contas|add_class:'form-input mt-1 w-full' }}{% for erro in editar_form.plano_contas.errors %}<span class="mt-1 block text-xs text-rose-600">{{ erro }}</span>{% endfor %}</label><label class="block text-sm font-semibold sm:col-span-2">Documento {{ editar_form.documento|add_class:'form-input mt-1 w-full' }}{% for erro in editar_form.documento.errors %}<span class="mt-1 block text-xs text-rose-600">{{ erro }}</span>{% endfor %}</label></div></section><section class="border-t pt-4"><label class="block text-sm font-semibold">Motivo da alteração <span class="text-rose-500">*</span>{{ editar_form.justificativa|add_class:'form-input mt-1 w-full' }}{% for erro in editar_form.justificativa.errors %}<span class="mt-1 block text-xs text-rose-600">{{ erro }}</span>{% endfor %}</label></section><div class="flex flex-col-reverse gap-2 border-t pt-4 sm:flex-row sm:justify-end"><button type="button" class="btn-secondary" @click="editarModal=false">Cancelar</button><button type="submit" class="btn-primary">Salvar alterações</button></div></form></div></div>
   {% endif %}
 </div>
 {% endblock %}
@@ -395,6 +512,116 @@
     const faixa = document.getElementById('dias-do-mes');
     const selecionado = faixa && faixa.querySelector('[data-dia-selecionado="1"]');
     if (faixa && selecionado) faixa.scrollLeft = selecionado.offsetLeft - faixa.clientWidth / 2 + selecionado.clientWidth / 2;
+
+    const tipoManual = document.getElementById('id_tipo');
+    const classificacaoManual = document.querySelector('[data-classificacao-manual]');
+    const filtrarClassificacaoManual = function () {
+      if (!tipoManual || !classificacaoManual) return;
+      const natureza = tipoManual.value === 'debito' ? 'D' : 'R';
+      Array.from(classificacaoManual.options).forEach(function (opcao, indice) {
+        if (!indice) return;
+        const visivel = opcao.dataset.tipo === natureza;
+        opcao.hidden = !visivel;
+        opcao.disabled = !visivel;
+      });
+      if (classificacaoManual.selectedOptions[0] && classificacaoManual.selectedOptions[0].disabled) {
+        classificacaoManual.value = '';
+      }
+    };
+    if (tipoManual) tipoManual.addEventListener('change', filtrarClassificacaoManual);
+    filtrarClassificacaoManual();
+
+    const acaoEditarMovimento = document.querySelector('input[name="acao"][value="editar_movimento"]');
+    const formEditarMovimento = acaoEditarMovimento && acaoEditarMovimento.form;
+    const categoriaMovimento = formEditarMovimento && formEditarMovimento.querySelector('select[name="plano_contas"]');
+    if (categoriaMovimento && !categoriaMovimento.dataset.compactada) {
+      categoriaMovimento.dataset.compactada = '1';
+      const registros = Array.from(categoriaMovimento.options).slice(1).map(function (opcao) {
+        const partes = opcao.textContent.split('>').map(function (parte) { return parte.trim(); });
+        return { valor: opcao.value, grupo: partes[0] || '', tipo: partes[1] || '', categoria: partes.slice(2).join(' > ') || partes[1] || partes[0] };
+      });
+      const selecionado = registros.find(function (item) { return item.valor === categoriaMovimento.value; });
+      const campoOriginal = categoriaMovimento.parentElement;
+      const bloco = document.createElement('div');
+      bloco.className = 'grid gap-2 sm:col-span-2 sm:grid-cols-3';
+      const tituloClassificacao = document.createElement('span');
+      tituloClassificacao.className = 'text-sm font-semibold sm:col-span-3';
+      const textoTitulo = Array.from(campoOriginal.childNodes).find(function (item) { return item.nodeType === 3 && item.textContent.trim(); });
+      tituloClassificacao.textContent = (textoTitulo ? textoTitulo.textContent.trim() : 'Classificação financeira') + ' *';
+      bloco.appendChild(tituloClassificacao);
+      const criarCampo = function (titulo) {
+        const label = document.createElement('label');
+        label.className = 'text-xs font-semibold';
+        label.append(document.createTextNode(titulo));
+        const select = document.createElement('select');
+        select.className = 'form-input mt-1 w-full';
+        label.appendChild(select);
+        bloco.appendChild(label);
+        return select;
+      };
+      const grupo = criarCampo('1. Grupo');
+      const tipo = criarCampo('2. Tipo');
+      const categoria = criarCampo('3. Categoria');
+      const preencher = function (select, placeholder, valores, atual) {
+        select.innerHTML = '';
+        const vazia = document.createElement('option');
+        vazia.value = ''; vazia.textContent = placeholder; select.appendChild(vazia);
+        Array.from(new Set(valores)).forEach(function (valor) {
+          const opcao = document.createElement('option');
+          opcao.value = valor; opcao.textContent = valor; opcao.selected = valor === atual;
+          select.appendChild(opcao);
+        });
+      };
+      const atualizarTipos = function (tipoAtual, categoriaAtual) {
+        const filtrados = registros.filter(function (item) { return item.grupo === grupo.value; });
+        preencher(tipo, 'Selecione o tipo', filtrados.map(function (item) { return item.tipo; }), tipoAtual);
+        const categorias = filtrados.filter(function (item) { return item.tipo === tipo.value; });
+        preencher(categoria, 'Selecione a categoria', categorias.map(function (item) { return item.categoria; }), categoriaAtual);
+        const registro = categorias.find(function (item) { return item.categoria === categoria.value; });
+        categoriaMovimento.value = registro ? registro.valor : '';
+      };
+      preencher(grupo, 'Selecione o grupo', registros.map(function (item) { return item.grupo; }), selecionado && selecionado.grupo);
+      atualizarTipos(selecionado && selecionado.tipo, selecionado && selecionado.categoria);
+      grupo.addEventListener('change', function () { atualizarTipos('', ''); });
+      tipo.addEventListener('change', function () { atualizarTipos(tipo.value, ''); });
+      categoria.addEventListener('change', function () {
+        const registro = registros.find(function (item) { return item.grupo === grupo.value && item.tipo === tipo.value && item.categoria === categoria.value; });
+        categoriaMovimento.value = registro ? registro.valor : '';
+      });
+      const errosClassificacao = Array.from(campoOriginal.querySelectorAll('.text-rose-600'));
+      campoOriginal.insertAdjacentElement('afterend', bloco);
+      errosClassificacao.forEach(function (erro) { erro.classList.add('sm:col-span-3'); bloco.appendChild(erro); });
+      campoOriginal.style.display = 'none';
+    }
+
+    document.querySelectorAll('[data-classificacao-edicao]').forEach(function (root) {
+      const grupo = root.querySelector('[data-grupo]');
+      const subgrupo = root.querySelector('[data-subgrupo]');
+      const categoria = root.querySelector('[data-categoria]');
+      const campo = root.querySelector('select[name="plano_contas"]');
+      const atualizar = function (select, atributo, valor) {
+        Array.from(select.options).forEach(function (opcao, indice) {
+          if (!indice) return;
+          const visivel = opcao.dataset[atributo] === valor;
+          opcao.hidden = !visivel;
+          opcao.disabled = !visivel;
+        });
+      };
+      const atualizarSubgrupos = function () {
+        atualizar(subgrupo, 'grupo', grupo.value);
+        if (subgrupo.selectedOptions[0] && subgrupo.selectedOptions[0].hidden) subgrupo.value = '';
+        atualizarCategorias();
+      };
+      const atualizarCategorias = function () {
+        atualizar(categoria, 'subgrupo', subgrupo.value);
+        if (categoria.selectedOptions[0] && categoria.selectedOptions[0].hidden) categoria.value = '';
+        campo.value = categoria.value;
+      };
+      grupo.addEventListener('change', atualizarSubgrupos);
+      subgrupo.addEventListener('change', atualizarCategorias);
+      categoria.addEventListener('change', function () { campo.value = categoria.value; });
+      atualizarSubgrupos();
+    });
   });
 </script>
 {% endblock %}

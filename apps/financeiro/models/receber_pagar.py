@@ -288,3 +288,33 @@ class PagamentoContaPagar(TimestampedModel):
 
     def __str__(self):
         return f'Pagamento CP #{self.conta_pagar_id} em {self.data_pagamento:%d/%m/%Y}'
+
+
+class MetaDespesaPessoal(TimestampedModel):
+    class TipoMeta(models.TextChoices):
+        VALOR_FIXO = "valor_fixo", "Valor fixo"
+        PERCENTUAL_MES_ANTERIOR = "percentual_mes_anterior", "% do faturamento do mes anterior"
+        PERCENTUAL_MEDIA_MESES = "percentual_media_meses", "% da media de faturamento"
+
+    filial = models.OneToOneField(
+        Filial,
+        on_delete=models.CASCADE,
+        related_name="meta_despesa_pessoal",
+    )
+    tipo_meta = models.CharField(
+        max_length=30,
+        choices=TipoMeta.choices,
+        default=TipoMeta.VALOR_FIXO,
+    )
+    valor_fixo = models.DecimalField(max_digits=14, decimal_places=2, default=0)
+    percentual = models.DecimalField(max_digits=7, decimal_places=4, default=0)
+    meses_media = models.PositiveSmallIntegerField(default=3)
+    ativo = models.BooleanField(default=True)
+
+    class Meta:
+        db_table = "metas_despesa_pessoal"
+        verbose_name = "Meta de despesa pessoal"
+        verbose_name_plural = "Metas de despesas pessoais"
+
+    def __str__(self):
+        return f"Meta de despesa pessoal - {self.filial}"

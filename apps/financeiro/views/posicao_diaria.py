@@ -18,9 +18,11 @@ from apps.financeiro.forms import (
     EditarMovimentoBancarioForm,
     MovimentoContaBancariaForm,
 )
+from apps.financeiro.models import PlanoContas
 from apps.financeiro.models.extrato import ExtratoBancario
 from apps.financeiro.services.posicao_diaria_service import PosicaoDiariaCaixaService
 from apps.financeiro.views.contas_bancarias import ContaBancariaListView, _usuario_admin
+from apps.financeiro.views.pagar import _contexto_meta_despesa_pessoal
 
 
 class PosicaoDiariaCaixaView(PermissaoRequiredMixin, View):
@@ -58,6 +60,14 @@ class PosicaoDiariaCaixaView(PermissaoRequiredMixin, View):
             if origem not in {"manual", "receber", "venda"} or not str(registro_id).isdigit():
                 messages.error(request, "Entrada financeira invalida.")
                 return redirect(destino)
+            if origem == "manual":
+                movimento_manual = get_object_or_404(
+                    ExtratoBancario.objects.filter(filial=filial, origem="manual"),
+                    pk=registro_id,
+                )
+                if movimento_manual.valor < 0:
+                    messages.error(request, "Saida manual nao pode ser editada.")
+                    return redirect(destino)
             form = EditarEntradaFinanceiraForm(request.POST, filial=filial, origem=origem)
             if form.is_valid():
                 self._editar_entrada_financeira(
@@ -75,7 +85,8 @@ class PosicaoDiariaCaixaView(PermissaoRequiredMixin, View):
             ExtratoBancario.objects.filter(filial=filial, origem="manual"), pk=request.POST.get("movimento_id"),
         )
         if acao == "editar_movimento":
-            form = EditarMovimentoBancarioForm(request.POST, filial=filial)
+            natureza = "saida" if movimento.valor < 0 else "entrada"
+            form = EditarMovimentoBancarioForm(request.POST, filial=filial, natureza=natureza)
             if form.is_valid():
                 auxiliar._editar_movimento_manual(request, movimento, form.cleaned_data)
                 messages.success(request, "Movimento corrigido e registrado no log.")
@@ -127,7 +138,7 @@ class PosicaoDiariaCaixaView(PermissaoRequiredMixin, View):
         conta_filtro_texto = request.GET.get("conta", "").strip()
         conta_filtro = int(conta_filtro_texto) if conta_filtro_texto.isdigit() else None
         ordem_movimentos = request.GET.get("ordem", "horario")
-        if ordem_movimentos not in {"horario", "conta"}:
+        if ordem_movimentos not in {"horario", "conta", "forma"}:
             ordem_movimentos = "horario"
         posicao = PosicaoDiariaCaixaService(
             request.filial_ativa, data_fim, data_inicio=data_inicio,
@@ -145,6 +156,11 @@ class PosicaoDiariaCaixaView(PermissaoRequiredMixin, View):
         if movimento_id and str(movimento_id).isdigit():
             detalhe = next((mov for mov in [*posicao["extrato"], *posicao["excluidos"]]
                 if mov.registro_id == int(movimento_id) and mov.origem_codigo == origem_detalhe), None)
+        if detalhe:
+            detalhe_completo = ContaBancariaListView()._detalhar_movimento(
+                request.filial_ativa, detalhe.origem_codigo, detalhe.registro_id,
+            )
+            detalhe.historico_logs = detalhe_completo["logs"]
         if movimento_form is None:
             movimento_form = MovimentoContaBancariaForm(
                 filial=request.filial_ativa, initial={"data_lancamento": timezone.localdate()},
@@ -155,11 +171,13 @@ class PosicaoDiariaCaixaView(PermissaoRequiredMixin, View):
                 pk=request.GET.get("editar"),
             )
         if editar_form is None and editar_movimento:
-            editar_form = EditarMovimentoBancarioForm(filial=request.filial_ativa, initial={
+            editar_natureza = "saida" if editar_movimento.valor < 0 else "entrada"
+            editar_form = EditarMovimentoBancarioForm(filial=request.filial_ativa, natureza=editar_natureza, initial={
                 "conta_bancaria": editar_movimento.conta_bancaria,
-                "data_lancamento": editar_movimento.data_lancamento, "valor": editar_movimento.valor,
+                "data_lancamento": editar_movimento.data_lancamento, "valor": abs(editar_movimento.valor),
                 "historico": editar_movimento.historico, "documento": editar_movimento.documento,
                 "forma_pagamento": editar_movimento.forma_pagamento,
+                "plano_contas": editar_movimento.plano_contas,
             })
         if detalhe and detalhe.entrada and _usuario_admin(request) and editar_entrada_form is None:
             item = ContaBancariaListView()._buscar_movimento_origem(
@@ -171,25 +189,52 @@ class PosicaoDiariaCaixaView(PermissaoRequiredMixin, View):
                 conta = item.conta_bancaria
                 data_entrada = item.data_lancamento
                 descricao = item.historico
+                plano_contas = item.plano_contas
             elif detalhe.origem_codigo == "receber":
                 valor = item.valor_pago
                 forma = item.forma_pagamento
                 conta = item.conta_bancaria
                 data_entrada = item.data_liquidacao_prevista or item.data_pagamento
                 descricao = ""
+                plano_contas = item.plano_contas
             else:
                 valor = item.valor_bruto_recebido
                 forma = item.forma_pagamento
                 conta = item.conta_bancaria or item.forma_pagamento.conta_bancaria_padrao
                 data_entrada = item.data_liquidacao_prevista or timezone.localdate()
                 descricao = ""
+                plano_contas = None
             editar_entrada_form = EditarEntradaFinanceiraForm(
                 filial=request.filial_ativa, origem=detalhe.origem_codigo,
                 initial={
                     "valor": valor, "forma_pagamento": forma, "conta_bancaria": conta,
                     "data_entrada": data_entrada, "descricao": descricao,
+                    "plano_contas": plano_contas,
                 },
             )
+        categorias_edicao = PlanoContas.objects.none()
+        grupos_edicao = PlanoContas.objects.none()
+        subgrupos_edicao = PlanoContas.objects.none()
+        categoria_edicao_id = ''
+        subgrupo_edicao_id = ''
+        grupo_edicao_id = ''
+        if editar_entrada_form and 'plano_contas' in editar_entrada_form.fields:
+            categorias_edicao = editar_entrada_form.fields['plano_contas'].queryset
+            subgrupos_edicao = PlanoContas.objects.filter(pk__in=categorias_edicao.values_list('conta_pai_id', flat=True))
+            grupos_edicao = PlanoContas.objects.filter(pk__in=subgrupos_edicao.values_list('conta_pai_id', flat=True))
+            categoria_edicao_id = str(editar_entrada_form['plano_contas'].value() or '')
+            categoria_selecionada = (
+                categorias_edicao.filter(pk=categoria_edicao_id)
+                .select_related('conta_pai__conta_pai').first()
+                if categoria_edicao_id else None
+            )
+            if categoria_selecionada:
+                subgrupo_edicao_id = str(categoria_selecionada.conta_pai_id)
+                grupo_edicao_id = str(categoria_selecionada.conta_pai.conta_pai_id)
+        meta_contexto = _contexto_meta_despesa_pessoal(request.filial_ativa, data_fim)
+        grupo_despesa_pessoal = PlanoContas.objects.filter(
+            empresa=request.filial_ativa.empresa, tipo='D', nivel=1, despesa_pessoal=True, ativo=True,
+        ).order_by('codigo', 'pk').first()
         return render(request, self.template_name, {
             "title": "Posicao Diaria de Caixa", "data_referencia": data_referencia, "posicao": posicao,
             "hoje": timezone.localdate(),
@@ -206,6 +251,14 @@ class PosicaoDiariaCaixaView(PermissaoRequiredMixin, View):
             "periodos_previsao": self._links_periodo(data_referencia, previsao_periodo, "previsao"),
             "conta_filtro": conta_filtro,
             "ordem_movimentos": ordem_movimentos,
+            "categorias_edicao": categorias_edicao,
+            "grupos_edicao": grupos_edicao,
+            "subgrupos_edicao": subgrupos_edicao,
+            "categoria_edicao_id": categoria_edicao_id,
+            "subgrupo_edicao_id": subgrupo_edicao_id,
+            "grupo_edicao_id": grupo_edicao_id,
+            "grupo_despesa_pessoal_id": grupo_despesa_pessoal.pk if grupo_despesa_pessoal else '',
+            **meta_contexto,
         })
 
     @staticmethod
@@ -217,16 +270,18 @@ class PosicaoDiariaCaixaView(PermissaoRequiredMixin, View):
         campos = ["conta_bancaria", "forma_pagamento"]
 
         if origem == "manual":
-            campos += ["data_lancamento", "valor", "historico"]
+            campos += ["plano_contas", "data_lancamento", "valor", "historico"]
             antes = snapshot_modelo(item, campos)
             item.conta_bancaria = dados["conta_bancaria"]
             item.forma_pagamento = dados["forma_pagamento"]
+            item.plano_contas = dados.get("plano_contas")
             item.data_lancamento = dados["data_entrada"]
             item.valor = dados["valor"]
             item.historico = dados.get("descricao") or item.historico
             item.save(update_fields=campos)
         elif origem == "receber":
             campos += [
+                "plano_contas", "conta_contabil",
                 "valor_pago", "valor_saldo", "status", "taxa_percentual_aplicada",
                 "taxa_fixa_aplicada", "valor_taxa_recebimento", "valor_liquido_recebido",
                 "taxa_calculada_em", "data_liquidacao_prevista",
@@ -237,6 +292,8 @@ class PosicaoDiariaCaixaView(PermissaoRequiredMixin, View):
             )
             item.conta_bancaria = dados["conta_bancaria"]
             item.forma_pagamento = dados["forma_pagamento"]
+            item.plano_contas = dados.get("plano_contas")
+            item.conta_contabil = item.plano_contas.conta_contabil if item.plano_contas else None
             item.valor_pago = dados["valor"]
             item.valor_saldo = max((item.valor_final or 0) - item.valor_pago, 0)
             item.status = "pago" if item.valor_saldo == 0 else "aberto"

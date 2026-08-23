@@ -1,6 +1,8 @@
 """Views de Contas a Pagar."""
 from __future__ import annotations
 
+from calendar import monthrange
+from datetime import timedelta
 from decimal import Decimal
 import mimetypes
 from pathlib import Path
@@ -13,6 +15,7 @@ from django.http import FileResponse, Http404, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.utils import timezone
+from django.utils.dateparse import parse_date
 from django.utils.decorators import method_decorator
 from django.views import View
 from django.views.decorators.clickjacking import xframe_options_sameorigin
@@ -26,10 +29,11 @@ from apps.financeiro.forms.pagar import (
     ContaPagarEdicaoAdminForm,
     ContaPagarForm,
     DespesaPagaForm,
+    MetaDespesaPessoalForm,
     PagamentoContaPagarForm,
 )
 from apps.financeiro.models.conta_bancaria import ContaBancaria, PlanoContas
-from apps.financeiro.models.receber_pagar import ContaPagar, PagamentoContaPagar
+from apps.financeiro.models.receber_pagar import ContaPagar, ContaReceber, MetaDespesaPessoal, PagamentoContaPagar
 from apps.financeiro.services.pagar_service import ContaPagarService
 from apps.financeiro.services.dashboard_contas_service import DashboardContasService
 
@@ -118,7 +122,16 @@ def _logs_edicao_lancamento(conta):
     for log in logs:
         anteriores = log.dados_anteriores or {}
         novos = log.dados_novos or {}
-        campos_log = sorted(set(anteriores) | set(novos))
+        campos_log = [
+            campo for campo in CAMPOS_EDICAO_LANCAMENTO
+            if campo in anteriores or campo in novos
+        ]
+        log.titulo_amigavel = {
+            RegistroAuditoria.Acao.CRIAR: 'Conta registrada',
+            RegistroAuditoria.Acao.AJUSTAR: 'Lancamento corrigido',
+            RegistroAuditoria.Acao.EXCLUIR: 'Conta excluida',
+            RegistroAuditoria.Acao.RESTAURAR: 'Conta restaurada',
+        }.get(log.acao, log.get_acao_display())
         log.alteracoes_exibicao = [
             {
                 'campo': CAMPOS_EDICAO_LANCAMENTO.get(campo, campo.replace('_', ' ').title()),
@@ -127,6 +140,7 @@ def _logs_edicao_lancamento(conta):
             }
             for campo in campos_log
             if anteriores.get(campo) != novos.get(campo)
+            and log.acao != RegistroAuditoria.Acao.CRIAR
         ]
         log.quantidade_alteracoes = len(log.alteracoes_exibicao)
     return logs
@@ -381,12 +395,193 @@ def _filtrar_contas_pagas(request):
     }
 
 
+def _limites_mes(referencia):
+    inicio = referencia.replace(day=1)
+    fim = referencia.replace(day=monthrange(referencia.year, referencia.month)[1])
+    return inicio, fim
+
+
+def _somar_faturamento(filial, inicio, fim):
+    total = ContaReceber.objects.for_filial(filial).filter(
+        status='pago',
+        data_pagamento__range=(inicio, fim),
+    ).aggregate(total=Sum('valor_pago'))['total'] or Decimal('0')
+    try:
+        from apps.pdv.models import PagamentoVendaPDV
+    except ImportError:
+        PagamentoVendaPDV = None
+    if PagamentoVendaPDV:
+        total += PagamentoVendaPDV.objects.filter(
+            venda_pdv__filial=filial,
+            venda_pdv__cancelado_em__isnull=True,
+            data_liquidacao_prevista__range=(inicio, fim),
+        ).exclude(
+            venda_pdv__status='cancelado',
+        ).aggregate(total=Sum('valor_liquido'))['total'] or Decimal('0')
+    return total
+
+
+def _mes_anterior(referencia):
+    primeiro = referencia.replace(day=1)
+    ultimo_mes_anterior = primeiro - timedelta(days=1)
+    return _limites_mes(ultimo_mes_anterior)
+
+
+def _valor_meta_despesa_pessoal(meta, filial, referencia):
+    if not meta or not meta.ativo:
+        return Decimal('0')
+    if meta.tipo_meta == MetaDespesaPessoal.TipoMeta.VALOR_FIXO:
+        return meta.valor_fixo or Decimal('0')
+    percentual = (meta.percentual or Decimal('0')) / Decimal('100')
+    if percentual <= 0:
+        return Decimal('0')
+    if meta.tipo_meta == MetaDespesaPessoal.TipoMeta.PERCENTUAL_MES_ANTERIOR:
+        inicio, fim = _mes_anterior(referencia)
+        return (_somar_faturamento(filial, inicio, fim) * percentual).quantize(Decimal('0.01'))
+
+    meses = max(2, min(int(meta.meses_media or 3), 24))
+    primeiro_mes_atual = referencia.replace(day=1)
+    cursor = primeiro_mes_atual
+    total = Decimal('0')
+    for _ in range(meses):
+        cursor = cursor - timedelta(days=1)
+        inicio, fim = _limites_mes(cursor)
+        total += _somar_faturamento(filial, inicio, fim)
+        cursor = inicio
+    return ((total / Decimal(meses)) * percentual).quantize(Decimal('0.01'))
+
+
+def _resumo_fornecedores(contas):
+    total = sum((conta.valor_pago or Decimal('0') for conta in contas), Decimal('0'))
+    grupos = {}
+    for conta in contas:
+        nome = conta.beneficiario_nome
+        grupo = grupos.setdefault(nome, {
+            'nome': nome, 'valor': Decimal('0'), 'quantidade': 0, 'contas': [],
+        })
+        grupo['valor'] += conta.valor_pago or Decimal('0')
+        grupo['quantidade'] += 1
+        grupo['contas'].append(conta)
+    resumo = []
+    for grupo in grupos.values():
+        percentual = (grupo['valor'] / total * Decimal('100')) if total else Decimal('0')
+        resumo.append({**grupo, 'percentual': percentual})
+    return sorted(resumo, key=lambda item: item['valor'], reverse=True), total
+
+
+def _resumo_categorias_pagas(contas, faturamento=Decimal('0')):
+    total = sum((conta.valor_pago or Decimal('0') for conta in contas), Decimal('0'))
+    grupos = {}
+    sem_classificacao = Decimal('0')
+    for conta in contas:
+        valor = conta.valor_pago or Decimal('0')
+        categoria = conta.plano_contas
+        if not categoria:
+            sem_classificacao += valor
+            continue
+        grupo = categoria
+        while grupo.conta_pai_id and grupo.conta_pai:
+            grupo = grupo.conta_pai
+        item = grupos.setdefault(grupo.pk, {
+            'nome': grupo.descricao, 'valor': Decimal('0'), 'quantidade': 0,
+        })
+        item['valor'] += valor
+        item['quantidade'] += 1
+    resumo = []
+    for item in grupos.values():
+        percentual = (item['valor'] / total * Decimal('100')) if total else Decimal('0')
+        impacto = (item['valor'] / faturamento * Decimal('100')) if faturamento else Decimal('0')
+        resumo.append({**item, 'percentual': percentual, 'impacto_faturamento': impacto})
+    resumo.sort(key=lambda item: item['valor'], reverse=True)
+    maior = resumo[0] if resumo else None
+    return {
+        'categorias_resumo': resumo,
+        'categorias_total': total,
+        'categorias_quantidade': len(resumo),
+        'categoria_maior': maior,
+        'categorias_sem_classificacao': sem_classificacao,
+        'categorias_sem_classificacao_percentual': (
+            sem_classificacao / total * Decimal('100') if total else Decimal('0')
+        ),
+        'categorias_faturamento': faturamento,
+    }
+
+
+def _periodo_fornecedores(request):
+    hoje = timezone.localdate()
+    periodo = request.GET.get('fornecedor_periodo', 'mes')
+    if periodo == 'hoje':
+        inicio = fim = hoje
+    elif periodo == '7':
+        inicio, fim = hoje - timedelta(days=6), hoje
+    elif periodo == '15':
+        inicio, fim = hoje - timedelta(days=14), hoje
+    elif periodo == '30':
+        inicio, fim = hoje - timedelta(days=29), hoje
+    elif periodo == 'todos':
+        inicio = fim = None
+    elif periodo == 'personalizado':
+        inicio = parse_date(request.GET.get('fornecedor_inicio', '')) or hoje.replace(day=1)
+        fim = parse_date(request.GET.get('fornecedor_fim', '')) or hoje
+        if inicio > fim:
+            inicio, fim = fim, inicio
+    else:
+        periodo = 'mes'
+        inicio, fim = hoje.replace(day=1), hoje
+    return periodo, inicio, fim
+
+
+def _contexto_meta_despesa_pessoal(filial, referencia=None):
+    hoje = referencia or timezone.localdate()
+    inicio_mes, fim_mes = _limites_mes(hoje)
+    meta = MetaDespesaPessoal.objects.filter(filial=filial).first()
+    usado = ContaPagar.objects.for_filial(filial).filter(
+        status=StatusContaPagar.PAGO,
+        data_pagamento__range=(inicio_mes, fim_mes),
+        plano_contas__despesa_pessoal=True,
+    ).aggregate(total=Sum('valor_pago'))['total'] or Decimal('0')
+    valor_meta = _valor_meta_despesa_pessoal(meta, filial, hoje)
+    percentual = (usado / valor_meta * Decimal('100')) if valor_meta > 0 else Decimal('0')
+    return {
+        'meta_despesa_pessoal': meta,
+        'meta_despesa_form': MetaDespesaPessoalForm(instance=meta),
+        'meta_despesa_valor': valor_meta,
+        'meta_despesa_usado': usado,
+        'meta_despesa_percentual': percentual,
+        'meta_despesa_percentual_barra': min(percentual, Decimal('100')),
+        'meta_despesa_mes': hoje,
+    }
+
+
 class ContaPagaListView(PermissaoRequiredMixin, View):
     permissao_modulo = 'financeiro'
     permissao_acao = 'ver'
 
+    def post(self, request):
+        if request.POST.get('acao') != 'salvar_meta_despesa_pessoal':
+            return redirect(reverse('financeiro:pagar_pagas'))
+        if not _usuario_admin(request):
+            messages.error(request, 'Apenas administradores podem configurar a meta.')
+            return redirect(reverse('financeiro:pagar_pagas'))
+        filial = _filial(request)
+        meta = MetaDespesaPessoal.objects.filter(filial=filial).first()
+        form = MetaDespesaPessoalForm(request.POST, instance=meta)
+        if form.is_valid():
+            meta = form.save(commit=False)
+            meta.filial = filial
+            meta.save()
+            messages.success(request, 'Meta de despesas pessoais salva.')
+            return redirect(reverse('financeiro:pagar_pagas'))
+
+        qs, filtros = _filtrar_contas_pagas(request)
+        return self._render(request, qs, filtros, meta_form=form)
+
     def get(self, request):
         qs, filtros = _filtrar_contas_pagas(request)
+        return self._render(request, qs, filtros)
+
+    def _render(self, request, qs, filtros, meta_form=None):
+        filial = _filial(request)
         totais = qs.aggregate(
             quantidade=Count('id'),
             valor_original=Sum('valor_original'),
@@ -397,10 +592,44 @@ class ContaPagaListView(PermissaoRequiredMixin, View):
             despesas_pessoais=Sum('valor_final', filter=Q(plano_contas__despesa_pessoal=True)),
         )
         totais['acrescimos'] = (totais['juros'] or 0) + (totais['multas'] or 0)
-        paginator = Paginator(qs, 40)
+        contas_filtradas = list(qs.select_related(
+            'plano_contas__conta_pai__conta_pai',
+        ))
+        datas = [conta.data_pagamento for conta in contas_filtradas if conta.data_pagamento]
+        inicio_analise = parse_date(filtros.get('data_ini') or '') or (min(datas) if datas else timezone.localdate())
+        fim_analise = parse_date(filtros.get('data_fim') or '') or (max(datas) if datas else timezone.localdate())
+        faturamento = _somar_faturamento(filial, inicio_analise, fim_analise)
+        categorias_contexto = _resumo_categorias_pagas(contas_filtradas, faturamento)
+
+        fornecedor_periodo, fornecedor_inicio, fornecedor_fim = _periodo_fornecedores(request)
+        fornecedor_qs = ContaPagar.objects.for_filial(filial).filter(status=StatusContaPagar.PAGO)
+        fornecedor_qs = _aplicar_filtro_categoria_financeira(fornecedor_qs, filtros)
+        busca_fornecedor = (filtros.get('q') or '').strip()
+        if busca_fornecedor:
+            fornecedor_qs = fornecedor_qs.filter(
+                Q(descricao_despesa__icontains=busca_fornecedor)
+                | Q(fornecedor__razao_social__icontains=busca_fornecedor)
+                | Q(fornecedor__nome_fantasia__icontains=busca_fornecedor)
+                | Q(funcionario__nome__icontains=busca_fornecedor)
+                | Q(documento_numero__icontains=busca_fornecedor)
+                | Q(nota_fiscal_fornecedor__icontains=busca_fornecedor)
+                | Q(pagamentos__referencia_pagamento__icontains=busca_fornecedor)
+            ).distinct()
+        if fornecedor_inicio:
+            fornecedor_qs = fornecedor_qs.filter(data_pagamento__gte=fornecedor_inicio)
+        if fornecedor_fim:
+            fornecedor_qs = fornecedor_qs.filter(data_pagamento__lte=fornecedor_fim)
+        contas_fornecedores = list(fornecedor_qs.select_related(
+            'fornecedor', 'funcionario', 'plano_contas',
+        ).order_by('-data_pagamento', '-id'))
+        fornecedores_resumo, total_fornecedores = _resumo_fornecedores(contas_fornecedores)
+        paginator = Paginator(contas_filtradas, 10)
         page_obj = paginator.get_page(request.GET.get('page', 1))
         query = request.GET.copy()
         query.pop('page', None)
+        meta_contexto = _contexto_meta_despesa_pessoal(filial)
+        if meta_form is not None:
+            meta_contexto['meta_despesa_form'] = meta_form
 
         return render(request, 'financeiro/pagar/pagas.html', {
             'title': 'Contas Pagas',
@@ -410,6 +639,15 @@ class ContaPagaListView(PermissaoRequiredMixin, View):
             'page_querystring': query.urlencode(),
             'pode_criar': request.user.tem_permissao('financeiro', 'criar'),
             'user_is_admin': _usuario_admin(request),
+            'fornecedores_resumo': fornecedores_resumo,
+            'total_fornecedores': total_fornecedores,
+            'fornecedor_periodo': fornecedor_periodo,
+            'fornecedor_inicio': fornecedor_inicio,
+            'fornecedor_fim': fornecedor_fim,
+            'analise_inicio': inicio_analise,
+            'analise_fim': fim_analise,
+            **categorias_contexto,
+            **meta_contexto,
             **filtros,
         })
 

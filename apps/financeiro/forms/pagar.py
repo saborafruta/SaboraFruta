@@ -10,7 +10,7 @@ from apps.financeiro.forms.cadastros import ContaBancariaChoiceField
 from apps.financeiro.models.conta_bancaria import ContaBancaria, PlanoContas
 from apps.financeiro.models.formas_pagamento import FormaPagamento
 from apps.financeiro.forms.plano_contas import CategoriaFinanceiraChoiceField
-from apps.financeiro.models.receber_pagar import ContaPagar
+from apps.financeiro.models.receber_pagar import ContaPagar, MetaDespesaPessoal
 
 VALOR_WIDGET = forms.NumberInput(attrs={
     'step': '0.01',
@@ -415,6 +415,44 @@ class DespesaPagaForm(forms.Form):
             cleaned['funcionario'] = None
             if not cleaned.get('fornecedor'):
                 self.add_error('fornecedor', 'Selecione o fornecedor que recebeu o pagamento.')
+        return cleaned
+
+
+class MetaDespesaPessoalForm(forms.ModelForm):
+    class Meta:
+        model = MetaDespesaPessoal
+        fields = ["tipo_meta", "valor_fixo", "percentual", "meses_media", "ativo"]
+        labels = {
+            "tipo_meta": "Tipo de meta",
+            "valor_fixo": "Valor fixo mensal (R$)",
+            "percentual": "Percentual do faturamento (%)",
+            "meses_media": "Meses para media",
+            "ativo": "Meta ativa",
+        }
+        widgets = {
+            "valor_fixo": forms.NumberInput(attrs={"step": "0.01", "inputmode": "decimal"}),
+            "percentual": forms.NumberInput(attrs={"step": "0.01", "inputmode": "decimal"}),
+            "meses_media": forms.NumberInput(attrs={"min": "2", "max": "24"}),
+        }
+
+    def clean(self):
+        cleaned = super().clean()
+        tipo_meta = cleaned.get("tipo_meta")
+        valor_fixo = cleaned.get("valor_fixo") or Decimal("0")
+        percentual = cleaned.get("percentual") or Decimal("0")
+        meses_media = cleaned.get("meses_media") or 3
+
+        if tipo_meta == MetaDespesaPessoal.TipoMeta.VALOR_FIXO:
+            if valor_fixo <= 0:
+                self.add_error("valor_fixo", "Informe um valor fixo maior que zero.")
+            cleaned["percentual"] = Decimal("0")
+            cleaned["meses_media"] = 3
+        else:
+            if percentual <= 0:
+                self.add_error("percentual", "Informe um percentual maior que zero.")
+            if meses_media < 2 or meses_media > 24:
+                self.add_error("meses_media", "Use entre 2 e 24 meses.")
+            cleaned["valor_fixo"] = Decimal("0")
         return cleaned
 
 
