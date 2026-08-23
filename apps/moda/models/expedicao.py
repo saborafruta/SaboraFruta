@@ -273,3 +273,40 @@ class Volume(models.Model):
             )
             self.numero = (ultimo or 0) + 1
         super().save(*args, **kwargs)
+
+
+class ConferenciaPessoa(models.Model):
+    """
+    Uma peça PERSONALIZADA conferida antes de sair — a camisa do João, a do
+    Pedro.
+
+    Convive com `ItemConferencia` e não a substitui: aquela conta QUANTAS
+    peças de cada tamanho saíram, e é o que fecha contra a ordem. Esta diz
+    QUAIS pessoas foram atendidas. Num pedido de time, as duas perguntas são
+    diferentes -- a contagem por tamanho fecha e ainda assim a camisa do
+    Lucas pode ter ficado para trás, porque a peça dele é única.
+
+    A LINHA EXISTIR É A CONFERÊNCIA. Desmarcar apaga o registro em vez de
+    gravar `False`, e assim `conferido_em`/`conferido_por` nunca contam a
+    história de uma conferência que foi desfeita.
+    """
+
+    expedicao = models.ForeignKey(
+        Expedicao, on_delete=models.CASCADE, related_name='conferencia_pessoas',
+    )
+    individual = models.ForeignKey(
+        'moda.PersonalizacaoIndividual', on_delete=models.CASCADE,
+        related_name='conferencias',
+    )
+    conferido_em = models.DateTimeField(auto_now_add=True)
+    conferido_por = models.CharField(max_length=80, blank=True)
+
+    class Meta:
+        db_table = 'moda_expedicao_conferencia_pessoa'
+        ordering = ['individual__ordem', 'individual_id']
+        unique_together = [('expedicao', 'individual')]
+        verbose_name = 'Pessoa conferida'
+        verbose_name_plural = 'Pessoas conferidas'
+
+    def __str__(self):
+        return f'{self.individual} conferido'

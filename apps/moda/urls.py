@@ -17,10 +17,11 @@ from . import (
     views_ordem as vo, views_pcp as vp,
     views_expedicao as vex, views_kanban as vk, views_necessidade as vn,
     views_alertas as val, views_aprovacao as vap, views_clientes as vcl,
-    views_orcamentos as vorc, views_estrutura as vest, views_insumos as vins, views_custos as vcus,
+    views_orcamentos as vorc, views_estrutura as vest, views_insumos as vins, views_custos as vcus, views_conferencia as vcon,
     views_comercial as vcom,
     views_dashboard as vd, views_historico as vh, views_qualidade as vq, views_qr as vqr,
     views_roteiro as vr, views_terminal as vt, views_wip as vw,
+    views_producao as vprod, views_eficiencia as vef, views_perdas as vperd,
 )
 
 app_name = 'moda'
@@ -89,6 +90,9 @@ ROTAS_PRONTAS: list = [
     path('comercial/pedidos/<int:pk>/pessoas/<int:individual_pk>/', vc.IndividualFormView.as_view(), name='pedido-individual-update'),
     path('comercial/pedidos/<int:pk>/pessoas/<int:individual_pk>/remover/', vc.IndividualDeleteView.as_view(), name='pedido-individual-delete'),
     path('comercial/pedidos/<int:pk>/pessoas/importar/', vc.IndividualImportarView.as_view(), name='pedido-individual-importar'),
+    # Atalho do pedido para a conferencia de entrega -- o botao que aparece
+    # quando o pedido esta' Pronto.
+    path('comercial/pedidos/<int:pk>/conferencia/', vcon.PedidoConferenciaView.as_view(), name='pedido-conferencia'),
 
     # Necessidade de materiais. Endereco do menu de PCP.
     path('pcp/necessidade-materiais/', vn.NecessidadeView.as_view(), name='necessidade'),
@@ -135,13 +139,26 @@ ROTAS_PRONTAS: list = [
     # ordem pendura na OP, que é a quem as etapas pertencem.
     path('producao/fluxo/', vx.PainelFluxoView.as_view(), name='fluxo-painel'),
 
+    # Indicadores -- os enderecos que o menu ja' aponta, para cairem na
+    # tela e nao no placeholder.
+    path('indicadores/producao/', vprod.ProducaoIndicadorView.as_view(), name='indicador-producao'),
+    path('indicadores/eficiencia/', vef.EficienciaIndicadorView.as_view(), name='indicador-eficiencia'),
+    path('indicadores/perdas/', vperd.PerdasIndicadorView.as_view(), name='indicador-perdas'),
+
     # Expedicao. Grupo proprio no menu; `separacao` e' o endereco de
     # entrada porque e' o primeiro item do grupo.
+    path('expedicao/conferencia/', vcon.ConferenciaFilaView.as_view(), name='conferencia-fila'),
+    path('expedicao/embalagem/', vcon.EmbalagemFilaView.as_view(), name='embalagem-fila'),
+    path('expedicao/entrega/', vcon.EntregaFilaView.as_view(), name='entrega-fila'),
     path('expedicao/separacao/', vex.ExpedicaoListView.as_view(), name='expedicao-list'),
     path('expedicao/buscar/', vex.ExpedicaoBuscarView.as_view(), name='expedicao-buscar'),
     path('expedicao/ordens/<int:pk>/', vex.ExpedicaoCriarView.as_view(), name='expedicao-criar'),
     path('expedicao/<int:pk>/', vex.ExpedicaoDetailView.as_view(), name='expedicao-detail'),
     path('expedicao/<int:pk>/conferir/', vex.ExpedicaoConferirView.as_view(), name='expedicao-conferir'),
+    # Conferencia PESSOA A PESSOA -- a lista que se abre no celular.
+    path('expedicao/<int:pk>/pessoas/', vcon.ConferenciaPessoasView.as_view(), name='conferencia-pessoas'),
+    path('expedicao/<int:pk>/pessoas/salvar/', vcon.ConferenciaPessoasSalvarView.as_view(), name='conferencia-pessoas-salvar'),
+    path('expedicao/<int:pk>/pessoas/qr.png', vcon.ConferenciaQrView.as_view(), name='conferencia-qr'),
     path('expedicao/<int:pk>/avancar/', vex.ExpedicaoAvancarView.as_view(), name='expedicao-avancar'),
     path('expedicao/<int:pk>/cancelar/', vex.ExpedicaoCancelarView.as_view(), name='expedicao-cancelar'),
     path('expedicao/<int:pk>/volumes/', vex.VolumeCriarView.as_view(), name='expedicao-volume-criar'),

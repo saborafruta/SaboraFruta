@@ -17,13 +17,18 @@ maior parte deles abre pelo WhatsApp, no celular.
 """
 from django.urls import path
 
-from . import views_publico
+from . import views_conferencia, views_publico
 
 app_name = 'moda_publico'
 
 urlpatterns = [
     # Nenhuma rota aqui aceita parâmetro além do token: não existe listagem,
     # busca nem paginação pública. O token é o escopo inteiro.
+    # ANTES das rotas de token: 'entrega/<codigo>/' tem dois segmentos e o
+    # '<str:token>/' nao casaria com ela de qualquer jeito, mas declarar
+    # primeiro deixa a intencao explicita para quem mexer depois.
+    path('entrega/<str:codigo>/', views_conferencia.EntregaPublicaView.as_view(), name='entrega'),
+
     path('<str:token>/', views_publico.PedidoOnlineView.as_view(), name='pedido'),
     path('<str:token>/pdf/', views_publico.PedidoPdfPublicoView.as_view(), name='pedido-pdf'),
     path('<str:token>/responder/', views_publico.PedidoResponderView.as_view(), name='pedido-responder'),

@@ -1,0 +1,143 @@
+{% extends "_base.html" %}
+{% block title %}{{ title }}{% endblock %}
+{% block page_title %}Conferência{% endblock %}
+{% block content %}
+<div class="space-y-5">
+  <div>
+    <p class="text-sm mb-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+      <a href="{% url 'moda:grupo' 'expedicao' %}" :style="temaClaro ? 'color:#3b82f6;' : 'color:#60a5fa;'">Expedição</a>
+      <span class="mx-1">›</span> Conferência
+    </p>
+    <h2 class="text-2xl font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">Conferência</h2>
+    <p class="text-sm mt-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+      Checagem antes de fechar o volume. O que saiu da produção e o que está
+      em cima da bancada — o que já foi embalado não aparece aqui.
+    </p>
+  </div>
+
+  <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+    <div class="card p-4">
+      <p class="text-xs uppercase tracking-wide" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Na fila</p>
+      <p class="text-2xl font-semibold mt-1" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">{{ resumo.na_fila }}</p>
+    </div>
+    <div class="card p-4">
+      <p class="text-xs uppercase tracking-wide" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Aguardando início</p>
+      <p class="text-2xl font-semibold mt-1" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">{{ resumo.aguardando }}</p>
+    </div>
+    <div class="card p-4">
+      <p class="text-xs uppercase tracking-wide" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Peças não fecham</p>
+      <p class="text-2xl font-semibold mt-1" style="color:{% if resumo.divergentes %}#dc2626{% else %}#059669{% endif %};">{{ resumo.divergentes }}</p>
+    </div>
+    <div class="card p-4">
+      <p class="text-xs uppercase tracking-wide" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Falta gente</p>
+      <p class="text-2xl font-semibold mt-1" style="color:{% if resumo.pessoas_faltando %}#d97706{% else %}#059669{% endif %};">{{ resumo.pessoas_faltando }}</p>
+      <p class="text-xs mt-1" :style="temaClaro ? 'color:#94a3b8;' : 'color:#6b7280;'">peça com nome não conferida</p>
+    </div>
+  </div>
+
+  <div class="card overflow-hidden">
+    {% if linhas %}
+      <div class="overflow-x-auto">
+        <table class="w-full text-sm">
+          <thead>
+            <tr class="border-b" :style="temaClaro ? 'border-color:#e2e8f0;' : 'border-color:#2a2a2e;'">
+              <th class="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wide"
+                  :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Expedição</th>
+              <th class="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wide"
+                  :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Cliente / produto</th>
+              <th class="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wide"
+                  :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Peças</th>
+              <th class="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wide"
+                  :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Pessoas</th>
+              <th class="text-right px-4 py-3"></th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for l in linhas %}
+              <tr class="border-b" :style="temaClaro ? 'border-color:#f1f5f9;' : 'border-color:#1e1e22;'">
+                <td class="px-4 py-3 whitespace-nowrap">
+                  <a href="{% url 'moda:expedicao-detail' l.expedicao.pk %}" class="font-mono font-semibold"
+                     :style="temaClaro ? 'color:#1d4ed8;' : 'color:#60a5fa;'">
+                    #{{ l.expedicao.numero|stringformat:"04d" }}
+                  </a>
+                  <span class="block text-xs mt-0.5" :style="temaClaro ? 'color:#94a3b8;' : 'color:#6b7280;'">
+                    {{ l.expedicao.get_status_display }}
+                  </span>
+                </td>
+                <td class="px-4 py-3">
+                  <span :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
+                    {{ l.expedicao.cliente|default:"—" }}
+                  </span>
+                  <span class="block text-xs mt-0.5" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+                    {{ l.expedicao.ordem.item.nome_exibicao|default:"—" }}
+                  </span>
+                </td>
+                {% comment %}
+                  AS DUAS CONTAGENS lado a lado. Uma pode fechar com a outra
+                  aberta -- as peças por tamanho batem e a camisa do Lucas
+                  ficou para trás -- e é justamente esse par que decide se a
+                  caixa pode ser fechada.
+                {% endcomment %}
+                <td class="px-4 py-3 whitespace-nowrap">
+                  <span class="font-semibold tabular-nums"
+                        style="color:{% if l.fecha %}#059669{% else %}#dc2626{% endif %};">
+                    {{ l.conferido }} / {{ l.esperado }}
+                  </span>
+                  {% if not l.fecha %}
+                    <span class="block text-xs" style="color:#dc2626;">
+                      {{ l.divergencia }} de diferença
+                    </span>
+                  {% endif %}
+                </td>
+                <td class="px-4 py-3 whitespace-nowrap">
+                  {% if l.total_pessoas %}
+                    <span class="font-semibold tabular-nums"
+                          style="color:{% if l.pessoas_faltando %}#d97706{% else %}#059669{% endif %};">
+                      {{ l.pessoas_conferidas }} / {{ l.total_pessoas }}
+                    </span>
+                    {% if l.pessoas_faltando %}
+                      <span class="block text-xs" style="color:#d97706;">
+                        falta{{ l.pessoas_faltando|pluralize:"m" }} {{ l.pessoas_faltando }}
+                      </span>
+                    {% endif %}
+                  {% else %}
+                    <span class="text-xs" :style="temaClaro ? 'color:#94a3b8;' : 'color:#6b7280;'">
+                      sem personalização
+                    </span>
+                  {% endif %}
+                </td>
+                <td class="px-4 py-3 text-right whitespace-nowrap">
+                  {% if l.total_pessoas %}
+                    <a href="{% url 'moda:conferencia-pessoas' l.expedicao.pk %}"
+                       class="btn-primary text-xs">Conferir</a>
+                  {% else %}
+                    <a href="{% url 'moda:expedicao-detail' l.expedicao.pk %}"
+                       class="btn-secondary text-xs">Conferir por tamanho</a>
+                  {% endif %}
+                </td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    {% else %}
+      {% comment %}
+        Fila vazia é BOA notícia, e a tela diz isso — "nenhum registro" faria
+        parecer que algo não carregou.
+      {% endcomment %}
+      <div class="p-10 text-center">
+        <p class="text-sm font-medium" :style="temaClaro ? 'color:#059669;' : 'color:#34d399;'">
+          Nada esperando conferência.
+        </p>
+        <p class="text-sm mt-2" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+          A fila enche quando uma ordem encerra a etapa de qualidade e a
+          expedição é aberta.
+        </p>
+        <a href="{% url 'moda:expedicao-list' %}" class="btn-secondary text-sm mt-4 inline-block">
+          Ver todas as expedições
+        </a>
+      </div>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}

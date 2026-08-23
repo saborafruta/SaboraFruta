@@ -67,6 +67,60 @@
     {% endif %}
   </div>
 
+  {# ── Link de entrega ──────────────────────────────────────────────── #}
+  {% comment %}
+    O ENDEREÇO PRECISA SER COPIÁVEL. Ele vai por WhatsApp, e sem um campo
+    de onde copiar sobraria digitar um token à mão — que é onde o erro
+    acontece. Mesmo desenho do link do cliente na tela do pedido.
+  {% endcomment %}
+  <div class="card p-5" x-data="{
+         copiado: false,
+         copiar() {
+           const campo = this.$refs.entrega;
+           campo.select();
+           if (navigator.clipboard) { navigator.clipboard.writeText(campo.value); }
+           else { document.execCommand('copy'); }
+           this.copiado = true;
+           setTimeout(() => this.copiado = false, 2000);
+         }
+       }">
+    <div class="flex flex-wrap items-baseline justify-between gap-2">
+      <h3 class="text-sm font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
+        Link de entrega — para o cliente
+      </h3>
+      {% if expedicao.entregue %}
+        <span class="soft-pill is-green text-xs">
+          Recebido por {{ expedicao.recebido_por }}
+        </span>
+      {% endif %}
+    </div>
+
+    <div class="flex gap-2 mt-3">
+      <input type="text" readonly x-ref="entrega" value="{{ link_entrega }}"
+             class="form-input w-full text-xs" style="font-family:monospace;">
+      <button type="button" class="btn-secondary text-sm shrink-0" @click="copiar()"
+              x-text="copiado ? 'Copiado!' : 'Copiar'"></button>
+      <a href="{{ link_entrega }}" target="_blank" rel="noopener"
+         class="btn-secondary text-sm shrink-0">Abrir</a>
+    </div>
+
+    <p class="text-xs mt-2" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+      {% if expedicao.entregue %}
+        A entrega já foi confirmada. A página agora serve de comprovante.
+      {% elif expedicao.status == 'despacho' %}
+        O cliente abre sem senha e confirma o recebimento. O nome dele fica
+        gravado como prova da entrega.
+      {% else %}
+        {% comment %}
+          Dizer AGORA que o botão só aparece no despacho evita o suporte de
+          "mandei o link e o cliente não achou onde confirmar".
+        {% endcomment %}
+        Pode mandar desde já: até o despacho a página mostra o andamento, e
+        o botão de confirmar recebimento só aparece quando a caixa sair.
+      {% endif %}
+    </p>
+  </div>
+
   {# ── Conferência ──────────────────────────────────────────────────── #}
   <div class="card p-5 space-y-3">
     <div class="flex flex-wrap items-baseline justify-between gap-2">
@@ -76,10 +130,16 @@
           A divergência é mostrada POR TAMANHO e não só no total: o total
           pode fechar com dois erros que se cancelam — dois P a mais e dois G
           a menos somam zero, e o cliente recebe a caixa errada.
+
+          E o total por tamanho pode fechar com a camisa do Lucas faltando,
+          porque peça com nome não é intercambiável: a conferência PESSOA A
+          PESSOA responde a outra pergunta, e fica a um clique daqui.
         {% endcomment %}
         <p class="text-xs mt-0.5" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
           Compare com a grade da ordem, tamanho a tamanho.
         </p>
+        <a href="{% url 'moda:conferencia-pessoas' expedicao.pk %}"
+           class="btn-secondary text-xs mt-2 inline-block">Conferir pessoa a pessoa</a>
       </div>
       <p class="text-sm font-bold tabular-nums"
          {% if expedicao.conferencia_fecha %}style="color:#059669;"{% else %}style="color:#dc2626;"{% endif %}>

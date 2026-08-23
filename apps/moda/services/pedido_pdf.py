@@ -24,8 +24,8 @@ from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
 from reportlab.lib.units import mm
 from reportlab.lib.utils import ImageReader
 from reportlab.platypus import (
-    Image, KeepTogether, PageBreak, Paragraph, SimpleDocTemplate, Spacer,
-    Table, TableStyle,
+    HRFlowable, Image, KeepTogether, PageBreak, Paragraph, SimpleDocTemplate,
+    Spacer, Table, TableStyle,
 )
 
 from .pdf_marca import (
@@ -330,12 +330,29 @@ class PedidoPdfService:
 
     @classmethod
     def _item(cls, pedido, item, e, indice) -> list:
+        """
+        Um produto: identificação, arte e grade.
+
+        UM ABAIXO DO OUTRO, e não uma folha por produto. Antes cada item
+        começava em página nova a partir do segundo, para a fábrica poder
+        destacar uma folha por peça -- só que um pedido de três camisas
+        virava três folhas quase vazias, e quem confere a ficha inteira
+        passava a folhear. Agora o produto seguinte ocupa o espaço que
+        sobrou.
+
+        O bloco vai em `KeepTogether`: cabendo, o produto fica inteiro na
+        mesma folha; não cabendo, desce todo para a próxima. O que não pode
+        é o título numa página e a grade na outra -- quem lê no chão de
+        fábrica perde a referência de qual peça está olhando.
+        """
         blocos = []
         if indice:
-            # Cada produto começa numa página nova a partir do segundo: a
-            # ficha vai para o chão de fábrica e é comum destacar uma folha
-            # por peça.
-            blocos.append(PageBreak())
+            # Uma régua fina separa um produto do outro, já que a quebra de
+            # página deixou de fazer esse papel.
+            blocos.append(Spacer(1, 10))
+            blocos.append(HRFlowable(
+                width='100%', thickness=0.5, color=BORDA, spaceAfter=6,
+            ))
 
         blocos.append(Paragraph(f'PRODUTO — {esc(item.nome_exibicao)}', e['secao']))
 
@@ -360,7 +377,7 @@ class PedidoPdfService:
 
         blocos += cls._arte(item, e)
         blocos += cls._grade(item, e)
-        return blocos
+        return [KeepTogether(blocos)]
 
     @staticmethod
     def _arte(item, e) -> list:

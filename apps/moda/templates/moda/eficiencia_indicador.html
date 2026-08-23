@@ -1,0 +1,242 @@
+{% extends "_base.html" %}
+{% block title %}{{ title }}{% endblock %}
+{% block page_title %}Eficiência{% endblock %}
+{% block content %}
+<div class="space-y-5">
+  <div class="flex flex-wrap items-start justify-between gap-3">
+    <div>
+      <p class="text-sm mb-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+        <a href="{% url 'moda:grupo' 'indicadores' %}" :style="temaClaro ? 'color:#3b82f6;' : 'color:#60a5fa;'">Indicadores</a>
+        <span class="mx-1">›</span> Eficiência
+      </p>
+      <h2 class="text-2xl font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">Eficiência</h2>
+      <p class="text-sm mt-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+        Minutos que a produção <strong>ganhou</strong> contra os minutos que o setor
+        <strong>tinha</strong>, desde {{ desde|date:"d/m/Y" }}.
+      </p>
+    </div>
+    <div class="flex gap-2">
+      {% for valor, rotulo in periodos %}
+        <a href="?dias={{ valor }}"
+           class="{% if dias == valor %}btn-primary{% else %}btn-secondary{% endif %} text-sm">{{ rotulo }}</a>
+      {% endfor %}
+    </div>
+  </div>
+
+  {% comment %}
+    O aviso de cadastro vem ANTES dos números, e não depois: sem capacidade
+    cadastrada a tela inteira mostra traço, e quem chega aqui precisa saber
+    que o problema é cadastro e não fábrica parada.
+  {% endcomment %}
+  {% if sem_capacidade %}
+    <div class="card p-4 flex flex-wrap items-center justify-between gap-3"
+         style="border-left:3px solid #f59e0b;">
+      <div>
+        <p class="text-sm font-medium" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
+          Nenhum setor tem capacidade cadastrada.
+        </p>
+        <p class="text-sm mt-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+          Sem os minutos que cada setor tem por semana não há com o que comparar o
+          que foi produzido.
+        </p>
+      </div>
+      <a href="{% url 'moda:pcp-capacidade' %}" class="btn-primary text-sm">Cadastrar capacidade</a>
+    </div>
+  {% endif %}
+
+  <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+    <div class="card p-4">
+      <p class="text-xs uppercase tracking-wide" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Uso da capacidade</p>
+      {% if resumo.uso is not None %}
+        {% comment %}
+          Um `style` fixo e um `:style` do Alpine na mesma tag brigam — o
+          binding substitui o atributo inteiro. Por isso o caso neutro (que
+          precisa saber o tema) fica num ramo separado dos coloridos, que
+          valem nos dois temas.
+        {% endcomment %}
+        {% if resumo.uso > 100 %}
+          <p class="text-2xl font-semibold mt-1" style="color:#dc2626;">{{ resumo.uso }}%</p>
+        {% elif resumo.uso >= 85 %}
+          <p class="text-2xl font-semibold mt-1" style="color:#f59e0b;">{{ resumo.uso }}%</p>
+        {% else %}
+          <p class="text-2xl font-semibold mt-1" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">{{ resumo.uso }}%</p>
+        {% endif %}
+        <p class="text-xs mt-1" :style="temaClaro ? 'color:#94a3b8;' : 'color:#6b7280;'">
+          {{ resumo.ganho }} de {{ resumo.disponivel }} min
+        </p>
+      {% else %}
+        <p class="text-2xl font-semibold mt-1" :style="temaClaro ? 'color:#94a3b8;' : 'color:#6b7280;'">—</p>
+        <p class="text-xs mt-1" :style="temaClaro ? 'color:#94a3b8;' : 'color:#6b7280;'">falta capacidade cadastrada</p>
+      {% endif %}
+    </div>
+
+    {% comment %}
+      Eficiência e uso são coisas diferentes e ficam lado a lado de
+      propósito: 130% de eficiência com 40% de uso é bancada que corre e
+      passa o dia parada esperando serviço.
+    {% endcomment %}
+    <div class="card p-4">
+      <p class="text-xs uppercase tracking-wide" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Eficiência</p>
+      {% if resumo.eficiencia is not None %}
+        <p class="text-2xl font-semibold mt-1"
+           style="color:{% if resumo.eficiencia >= 90 %}#059669{% elif resumo.eficiencia >= 70 %}#f59e0b{% else %}#dc2626{% endif %};">{{ resumo.eficiencia }}%</p>
+        <p class="text-xs mt-1" :style="temaClaro ? 'color:#94a3b8;' : 'color:#6b7280;'">padrão sobre tempo apontado</p>
+      {% else %}
+        <p class="text-2xl font-semibold mt-1" :style="temaClaro ? 'color:#94a3b8;' : 'color:#6b7280;'">—</p>
+        <p class="text-xs mt-1" :style="temaClaro ? 'color:#94a3b8;' : 'color:#6b7280;'">ninguém cronometrou o tempo</p>
+      {% endif %}
+    </div>
+
+    {% comment %}
+      O setor mais apertado é o que manda no prazo: ele satura primeiro e
+      segura a fábrica inteira, por mais folga que os outros tenham.
+    {% endcomment %}
+    <div class="card p-4">
+      <p class="text-xs uppercase tracking-wide" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Setor mais apertado</p>
+      {% if resumo.apertado %}
+        <p class="text-lg font-semibold mt-1" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">{{ resumo.apertado.label }}</p>
+        <p class="text-xs mt-1" :style="temaClaro ? 'color:#94a3b8;' : 'color:#6b7280;'">
+          {{ resumo.apertado.uso }}% da capacidade — manda no prazo
+        </p>
+      {% else %}
+        <p class="text-lg font-semibold mt-1" :style="temaClaro ? 'color:#94a3b8;' : 'color:#6b7280;'">—</p>
+      {% endif %}
+    </div>
+
+    <div class="card p-4">
+      <p class="text-xs uppercase tracking-wide" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Capacidade ociosa</p>
+      <p class="text-2xl font-semibold mt-1" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">{{ resumo.ocioso }}</p>
+      <p class="text-xs mt-1" :style="temaClaro ? 'color:#94a3b8;' : 'color:#6b7280;'">minutos que sobraram no período</p>
+    </div>
+  </div>
+
+  {% if resumo.sem_padrao %}
+    <div class="card p-4" style="border-left:3px solid #f59e0b;">
+      <p class="text-sm" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
+        <strong>{{ resumo.sem_padrao }}</strong> de {{ resumo.pecas }} peças ficaram de fora da conta
+        por não terem roteiro com tempo padrão.
+      </p>
+      <p class="text-sm mt-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+        Elas foram produzidas, mas não há minuto padrão com que comparar — contá-las
+        como zero derrubaria o indicador por falta de cadastro, e não por queda de ritmo.
+      </p>
+    </div>
+  {% endif %}
+
+  <div class="card overflow-hidden">
+    {% if linhas %}
+      <div class="overflow-x-auto">
+        <table class="w-full text-sm">
+          <thead>
+            <tr class="border-b" :style="temaClaro ? 'border-color:#e2e8f0;' : 'border-color:#2a2a2e;'">
+              <th class="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wide"
+                  :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Setor</th>
+              <th class="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wide"
+                  :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Uso da capacidade</th>
+              <th class="text-right px-4 py-3 text-xs font-semibold uppercase tracking-wide"
+                  :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Peças</th>
+              <th class="text-right px-4 py-3 text-xs font-semibold uppercase tracking-wide"
+                  :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Min. ganhos</th>
+              <th class="text-right px-4 py-3 text-xs font-semibold uppercase tracking-wide"
+                  :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Min. disponíveis</th>
+              <th class="text-right px-4 py-3 text-xs font-semibold uppercase tracking-wide"
+                  :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Eficiência</th>
+              <th class="text-right px-4 py-3 text-xs font-semibold uppercase tracking-wide"
+                  :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Ordens</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% comment %}
+              NA ORDEM DO FLUXO: corte, estampa, costura, acabamento. É a
+              peça descendo a fábrica, e um setor só se lê sabendo o que
+              veio antes dele.
+            {% endcomment %}
+            {% for l in linhas %}
+              <tr class="border-b" :style="temaClaro ? 'border-color:#f1f5f9;' : 'border-color:#1e1e22;'">
+                <td class="px-4 py-3 font-medium whitespace-nowrap"
+                    :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
+                  {{ l.label }}
+                  {% if l.sem_padrao %}
+                    <span class="block text-xs font-normal" style="color:#f59e0b;">
+                      {{ l.sem_padrao }} peça(s) sem roteiro
+                    </span>
+                  {% endif %}
+                </td>
+                <td class="px-4 py-3" style="min-width:190px;">
+                  {% if l.tem_capacidade %}
+                    <div class="flex items-center gap-2">
+                      <div class="flex-1" style="height:8px; border-radius:4px; background:rgba(127,127,127,.18);">
+                        <div style="height:8px; border-radius:4px; width:{{ l.barra }}%;
+                                    background:{% if l.estourou %}#dc2626{% elif l.uso >= 85 %}#f59e0b{% else %}#3b82f6{% endif %};"></div>
+                      </div>
+                      {% if l.estourou %}
+                        <span class="text-xs tabular-nums w-14 text-right" style="color:#dc2626;">{{ l.uso }}%</span>
+                      {% else %}
+                        <span class="text-xs tabular-nums w-14 text-right"
+                              :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">{{ l.uso }}%</span>
+                      {% endif %}
+                    </div>
+                    {% if l.estourou %}
+                      <span class="block text-xs mt-1" style="color:#dc2626;">
+                        passou da capacidade — hora extra ou cadastro desatualizado
+                      </span>
+                    {% endif %}
+                  {% else %}
+                    <span class="text-xs" style="color:#f59e0b;">capacidade não cadastrada</span>
+                  {% endif %}
+                </td>
+                <td class="px-4 py-3 text-right tabular-nums font-semibold"
+                    :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">{{ l.pecas }}</td>
+                <td class="px-4 py-3 text-right tabular-nums"
+                    :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">{{ l.ganho|floatformat:0 }}</td>
+                <td class="px-4 py-3 text-right tabular-nums"
+                    :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+                  {% if l.tem_capacidade %}{{ l.disponivel|floatformat:0 }}{% else %}—{% endif %}
+                </td>
+                <td class="px-4 py-3 text-right tabular-nums">
+                  {% if l.eficiencia is not None %}
+                    <span style="color:{% if l.eficiencia >= 90 %}#059669{% elif l.eficiencia >= 70 %}#f59e0b{% else %}#dc2626{% endif %};">{{ l.eficiencia }}%</span>
+                  {% else %}
+                    <span :style="temaClaro ? 'color:#94a3b8;' : 'color:#6b7280;'"
+                          title="Ninguém apontou o tempo gasto nesta etapa.">—</span>
+                  {% endif %}
+                </td>
+                <td class="px-4 py-3 text-right tabular-nums"
+                    :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">{{ l.ordens }}</td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    {% else %}
+      <div class="p-10 text-center">
+        <p class="text-sm font-medium" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
+          Nada a medir neste período.
+        </p>
+        <p class="text-sm mt-2" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+          Aparecem aqui os setores com capacidade cadastrada ou com etapa
+          <strong>concluída</strong> no período. Tente um intervalo maior.
+        </p>
+        <a href="{% url 'moda:pcp-capacidade' %}" class="btn-secondary text-sm mt-4 inline-block">
+          Capacidade dos setores
+        </a>
+      </div>
+    {% endif %}
+  </div>
+
+  {% comment %}
+    A régua fica na tela e não só no código: quem lê "62%" precisa saber de
+    onde veio o número, senão discute o valor em vez de discutir a fábrica.
+  {% endcomment %}
+  <div class="card p-4">
+    <p class="text-xs uppercase tracking-wide mb-2" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Como o número é feito</p>
+    <ul class="text-sm space-y-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+      <li><strong>Minutos ganhos</strong> = tempo padrão do roteiro × peças boas produzidas. Peça perdida não gera crédito.</li>
+      <li><strong>Minutos disponíveis</strong> = a capacidade cadastrada do setor, proporcional aos dias do período.</li>
+      <li><strong>Uso da capacidade</strong> = ganhos ÷ disponíveis. Depende só do roteiro, então vale mesmo sem cronômetro.</li>
+      <li><strong>Eficiência</strong> = ganhos ÷ tempo apontado, e só conta etapa em que alguém marcou o tempo.</li>
+      <li>Feriado não entra: os dias úteis saem da proporção da semana cadastrada.</li>
+    </ul>
+  </div>
+</div>
+{% endblock %}

@@ -1,0 +1,462 @@
+"""
+Conferência pessoa a pessoa e o aceite de entrega do cliente.
+
+Dois riscos concretos, e é neles que os testes se concentram:
+
+1. A conferência por tamanho FECHAR e a peça de alguém ter ficado para
+   trás. É o motivo de a conferência por pessoa existir, e o teste
+   `test_por_tamanho_fecha_e_uma_pessoa_falta` mostra o caso.
+
+2. O aceite público aceitar entrega que ainda não saiu, ou anônima. A
+   página é sem login: o que ela grava tem de ser exatamente quem recebeu
+   e quando, e nada mais.
+"""
+from django.test import Client, TestCase
+from django.urls import reverse
+
+from apps.cadastros.models import Cliente
+from apps.core.models import Empresa, Filial
+from apps.core.services.exceptions import DomainError
+from apps.moda.models import (
+    ConferenciaPessoa, Expedicao, ItemPedidoProducao, OrdemProducao,
+    PedidoProducao, PersonalizacaoIndividual, Tamanho,
+)
+
+ORIGEM = 'http://testserver'
+
+
+class ConferenciaEntregaTests(TestCase):
+
+    @classmethod
+    def setUpTestData(cls):
+        cls.empresa = Empresa.objects.create(
+            razao_social='Confeccao Entrega LTDA', nome_fantasia='Entrega',
+            cnpj='53345678000191',
+            regime_tributario=Empresa.RegimeTributario.SIMPLES_NACIONAL,
+            codigo_regime_tributario=1,
+        )
+        cls.filial = Filial.objects.create(
+            empresa=cls.empresa, razao_social='Confeccao Entrega LTDA',
+            cnpj='53345678000272', uf='RN', cidade='Natal', is_matriz=True,
+        )
+        cls.cliente = Cliente.objects.create(
+            filial=cls.filial, razao_social='Time do Bairro', cpf_cnpj='12345678901',
+        )
+        cls.m = Tamanho.objects.create(filial=cls.filial, sigla='M', ordem=30)
+        cls.g = Tamanho.objects.create(filial=cls.filial, sigla='G', ordem=40)
+
+    def setUp(self):
+        self.pedido = PedidoProducao.objects.create(
+            filial=self.filial, cliente=self.cliente, numero=11,
+            status=PedidoProducao.Status.PRONTO,
+        )
+        self.item = ItemPedidoProducao.objects.create(
+            pedido=self.pedido, descricao='Camisa de jogo', quantidade=3,
+        )
+        self.ordem = OrdemProducao.objects.create(
+            filial=self.filial, pedido=self.pedido, item=self.item,
+            numero='OP-0001', ano=2026, sequencial=1, quantidade=3,
+        )
+        self.expedicao = Expedicao.objects.create(
+            filial=self.filial, ordem=self.ordem,
+        )
+        self.pessoas = [
+            PersonalizacaoIndividual.objects.create(
+                pedido=self.pedido, item=self.item, tamanho=t,
+                nome=nome, numero=num, ordem=i * 10,
+            )
+            for i, (nome, num, t) in enumerate([
+                ('Joao Silva', '10', self.m),
+                ('Pedro Lima', '7', self.g),
+                ('Lucas Souza', '21', self.m),
+            ])
+        ]
+
+    def _marcar(self, *pessoas):
+        for p in pessoas:
+            ConferenciaPessoa.objects.create(expedicao=self.expedicao, individual=p)
+
+    # ── Por que a conferência por pessoa existe ──────────────────────────
+
+    def test_por_tamanho_fecha_e_uma_pessoa_falta(self):
+        """
+        O caso que motiva a tela: a contagem por tamanho pode fechar e a
+        camisa de alguém ter ficado para trás, porque peça com nome não é
+        intercambiável com nenhuma outra.
+        """
+        self._marcar(self.pessoas[0], self.pessoas[1])
+
+        conferidas = self.expedicao.conferencia_pessoas.count()
+
+        self.assertEqual(conferidas, 2)
+        self.assertEqual(len(self.pessoas), 3)
+        faltando = set(self.pessoas) - {
+            c.individual for c in self.expedicao.conferencia_pessoas.all()
+        }
+        self.assertEqual({p.nome for p in faltando}, {'Lucas Souza'})
+
+    def test_a_linha_existir_e_a_conferencia(self):
+        """Desmarcar apaga: não fica registro de conferência desfeita."""
+        self._marcar(self.pessoas[0])
+        self.expedicao.conferencia_pessoas.all().delete()
+
+        self.assertEqual(self.expedicao.conferencia_pessoas.count(), 0)
+
+    def test_nao_da_para_conferir_a_mesma_pessoa_duas_vezes(self):
+        from django.db import IntegrityError
+
+        self._marcar(self.pessoas[0])
+        with self.assertRaises(IntegrityError):
+            ConferenciaPessoa.objects.create(
+                expedicao=self.expedicao, individual=self.pessoas[0],
+            )
+
+    # ── Aceite público de entrega ────────────────────────────────────────
+
+    def _url_entrega(self):
+        return reverse('moda_publico:entrega', args=[self.expedicao.codigo])
+
+    def test_pagina_de_entrega_abre_pelo_codigo(self):
+        resposta = self.client.get(self._url_entrega())
+
+        self.assertEqual(resposta.status_code, 200)
+        self.assertEqual(resposta['Referrer-Policy'], 'same-origin')
+        self.assertEqual(resposta['Cache-Control'], 'private, no-store')
+
+    def test_codigo_inexistente_da_404(self):
+        url = reverse('moda_publico:entrega', args=['naoexisteisso123'])
+        self.assertEqual(self.client.get(url).status_code, 404)
+
+    def test_nao_aceita_entrega_que_ainda_nao_saiu(self):
+        """
+        A expedição está em Produção Concluída. Confirmar recebimento aqui
+        registraria entrega de caixa que não saiu da fábrica.
+        """
+        cliente_http = Client(enforce_csrf_checks=True)
+        cliente_http.get(self._url_entrega())
+        token = cliente_http.cookies['csrftoken'].value
+
+        cliente_http.post(
+            self._url_entrega(),
+            {'recebido_por': 'Fulano', 'csrfmiddlewaretoken': token},
+            HTTP_ORIGIN=ORIGEM,
+        )
+
+        self.expedicao.refresh_from_db()
+        self.assertFalse(self.expedicao.entregue)
+        self.assertEqual(self.expedicao.recebido_por, '')
+
+    def test_sem_nome_nao_grava_entrega_anonima(self):
+        """O nome é a prova da entrega — sem ele não há comprovante."""
+        self.expedicao.status = Expedicao.Status.DESPACHO
+        self.expedicao.save(update_fields=['status'])
+
+        cliente_http = Client(enforce_csrf_checks=True)
+        cliente_http.get(self._url_entrega())
+        token = cliente_http.cookies['csrftoken'].value
+
+        cliente_http.post(
+            self._url_entrega(),
+            {'recebido_por': '   ', 'csrfmiddlewaretoken': token},
+            HTTP_ORIGIN=ORIGEM,
+        )
+
+        self.expedicao.refresh_from_db()
+        self.assertFalse(self.expedicao.entregue)
+
+    def test_cliente_confirma_recebimento(self):
+        self.expedicao.status = Expedicao.Status.DESPACHO
+        self.expedicao.save(update_fields=['status'])
+
+        cliente_http = Client(enforce_csrf_checks=True)
+        cliente_http.get(self._url_entrega())
+        token = cliente_http.cookies['csrftoken'].value
+
+        resposta = cliente_http.post(
+            self._url_entrega(),
+            {'recebido_por': 'Diego Macedo', 'csrfmiddlewaretoken': token},
+            HTTP_ORIGIN=ORIGEM,
+        )
+
+        self.assertEqual(resposta.status_code, 302)
+        self.expedicao.refresh_from_db()
+        self.assertTrue(self.expedicao.entregue)
+        self.assertEqual(self.expedicao.recebido_por, 'Diego Macedo')
+        self.assertIsNotNone(self.expedicao.data_entrega)
+
+    def test_expedicao_cancelada_nao_tem_pagina_de_entrega(self):
+        self.expedicao.status = Expedicao.Status.CANCELADA
+        self.expedicao.save(update_fields=['status'])
+
+        self.assertEqual(self.client.get(self._url_entrega()).status_code, 404)
+
+    # ── O link copiável ──────────────────────────────────────────────────
+
+    def test_a_tela_da_expedicao_oferece_o_link_de_entrega(self):
+        """
+        O endereço vai por WhatsApp: sem um campo de onde copiar, sobraria
+        digitar um token à mão, que é onde o erro acontece.
+        """
+        from django.test import RequestFactory
+
+        from apps.moda.views_expedicao import ExpedicaoDetailView
+
+        pedido = RequestFactory().get('/x/')
+        pedido.filial_ativa = self.filial
+        # A view pergunta a permissão ao usuário; aqui interessa o contexto,
+        # não o perfil, então um dublê que responde "pode" basta.
+        pedido.user = type('Dubl', (), {'tem_permissao': lambda self, *a: True})()
+        contexto = {}
+
+        import apps.moda.views_expedicao as modulo
+        from django.http import HttpResponse
+
+        original = modulo.render
+        modulo.render = lambda r, t, ctx: (contexto.update(ctx), HttpResponse(''))[1]
+        try:
+            ExpedicaoDetailView().get(pedido, self.expedicao.pk)
+        finally:
+            modulo.render = original
+
+        self.assertIn('link_entrega', contexto)
+        self.assertIn(self.expedicao.codigo, contexto['link_entrega'])
+        self.assertIn('/pedido/entrega/', contexto['link_entrega'])
+
+    # ── A fila de conferência ────────────────────────────────────────────
+
+    def _fila(self):
+        from django.http import HttpResponse
+        from django.test import RequestFactory
+
+        import apps.moda.views_conferencia as modulo
+
+        pedido = RequestFactory().get('/x/')
+        pedido.filial_ativa = self.filial
+        pedido.user = type('Dubl', (), {'tem_permissao': lambda self, *a: True})()
+        contexto = {}
+        original = modulo.render
+        modulo.render = lambda r, t, ctx: (contexto.update(ctx), HttpResponse(''))[1]
+        try:
+            modulo.ConferenciaFilaView().get(pedido)
+        finally:
+            modulo.render = original
+        return contexto
+
+    def test_a_fila_traz_a_expedicao_recem_saida_da_producao(self):
+        contexto = self._fila()
+
+        self.assertEqual(contexto['resumo']['na_fila'], 1)
+        self.assertEqual(contexto['resumo']['aguardando'], 1)
+
+    def test_expedicao_ja_embalada_sai_da_fila(self):
+        """A fila é o que está na bancada, não o que já foi fechado."""
+        self.expedicao.status = Expedicao.Status.EMBALAGEM
+        self.expedicao.save(update_fields=['status'])
+
+        self.assertEqual(self._fila()['resumo']['na_fila'], 0)
+
+    def test_a_fila_mostra_as_duas_contagens(self):
+        """
+        Peças por tamanho E pessoas: uma pode fechar com a outra aberta, e é
+        esse par que decide se a caixa pode ser fechada.
+        """
+        self._marcar(self.pessoas[0])
+
+        linha = self._fila()['linhas'][0]
+
+        self.assertEqual(linha['total_pessoas'], 3)
+        self.assertEqual(linha['pessoas_conferidas'], 1)
+        self.assertEqual(linha['pessoas_faltando'], 2)
+
+    def test_pedido_sem_personalizacao_nao_conta_como_falta(self):
+        """Não fica em falta por algo que nunca existiu."""
+        PersonalizacaoIndividual.objects.all().delete()
+
+        contexto = self._fila()
+
+        self.assertEqual(contexto['linhas'][0]['total_pessoas'], 0)
+        self.assertEqual(contexto['linhas'][0]['pessoas_faltando'], 0)
+        self.assertEqual(contexto['resumo']['pessoas_faltando'], 0)
+
+    # ── A fila de embalagem ──────────────────────────────────────────────
+
+    def _embalagem(self):
+        from django.http import HttpResponse
+        from django.test import RequestFactory
+
+        import apps.moda.views_conferencia as modulo
+
+        pedido = RequestFactory().get('/x/')
+        pedido.filial_ativa = self.filial
+        pedido.user = type('Dubl', (), {'tem_permissao': lambda self, *a: True})()
+        contexto = {}
+        original = modulo.render
+        modulo.render = lambda r, t, ctx: (contexto.update(ctx), HttpResponse(''))[1]
+        try:
+            modulo.EmbalagemFilaView().get(pedido)
+        finally:
+            modulo.render = original
+        return contexto
+
+    def _conferir_pecas(self, quantidade):
+        from apps.moda.models import ItemConferencia
+
+        ItemConferencia.objects.create(
+            expedicao=self.expedicao, tamanho=self.m, quantidade=quantidade,
+        )
+
+    def test_embalagem_so_pega_separacao_e_embalagem(self):
+        """
+        Produção concluída ainda não é assunto da bancada de embalagem —
+        aquilo está na fila de conferência.
+        """
+        self.assertEqual(self._embalagem()['resumo']['na_fila'], 0)
+
+        self.expedicao.status = Expedicao.Status.SEPARACAO
+        self.expedicao.save(update_fields=['status'])
+
+        self.assertEqual(self._embalagem()['resumo']['na_fila'], 1)
+
+    def test_peca_conferida_fora_de_caixa_e_apontada(self):
+        """
+        O risco da bancada: peça conferida que não entrou em volume fica
+        para trás e viaja no pedido seguinte — some da caixa sem sumir do
+        sistema.
+        """
+        from apps.moda.models import Volume
+
+        self.expedicao.status = Expedicao.Status.SEPARACAO
+        self.expedicao.save(update_fields=['status'])
+        self._conferir_pecas(3)
+        Volume.objects.create(expedicao=self.expedicao, quantidade=2)
+
+        linha = self._embalagem()['linhas'][0]
+
+        self.assertEqual(linha['conferidas'], 3)
+        self.assertEqual(linha['nos_volumes'], 2)
+        self.assertEqual(linha['fora_de_caixa'], 1)
+        self.assertFalse(linha['fecha'])
+
+    def test_tudo_em_caixa_fecha(self):
+        from apps.moda.models import Volume
+
+        self.expedicao.status = Expedicao.Status.SEPARACAO
+        self.expedicao.save(update_fields=['status'])
+        self._conferir_pecas(3)
+        Volume.objects.create(expedicao=self.expedicao, quantidade=3)
+
+        contexto = self._embalagem()
+
+        self.assertTrue(contexto['linhas'][0]['fecha'])
+        self.assertEqual(contexto['resumo']['nao_fecham'], 0)
+
+    def test_volume_sem_peso_e_apontado(self):
+        """Transportadora cobra por peso: sem peso, cotação errada."""
+        from decimal import Decimal
+
+        from apps.moda.models import Volume
+
+        self.expedicao.status = Expedicao.Status.EMBALAGEM
+        self.expedicao.save(update_fields=['status'])
+        Volume.objects.create(expedicao=self.expedicao, quantidade=1)
+        Volume.objects.create(
+            expedicao=self.expedicao, quantidade=2, peso_kg=Decimal('1.500'),
+        )
+
+        contexto = self._embalagem()
+
+        self.assertEqual(contexto['linhas'][0]['sem_peso'], 1)
+        self.assertEqual(contexto['resumo']['sem_peso'], 1)
+
+    # ── A fila de entrega ────────────────────────────────────────────────
+
+    def _entrega_fila(self):
+        from django.http import HttpResponse
+        from django.test import RequestFactory
+
+        import apps.moda.views_conferencia as modulo
+
+        pedido = RequestFactory().get('/x/')
+        pedido.filial_ativa = self.filial
+        pedido.user = type('Dubl', (), {'tem_permissao': lambda self, *a: True})()
+        contexto = {}
+        original = modulo.render
+        modulo.render = lambda r, t, ctx: (contexto.update(ctx), HttpResponse(''))[1]
+        try:
+            modulo.EntregaFilaView().get(pedido)
+        finally:
+            modulo.render = original
+        return contexto
+
+    def _despachar(self, dias_atras=0):
+        from datetime import timedelta
+
+        from django.utils import timezone
+
+        self.expedicao.status = Expedicao.Status.DESPACHO
+        self.expedicao.data_despacho = timezone.now() - timedelta(days=dias_atras)
+        self.expedicao.save(update_fields=['status', 'data_despacho'])
+
+    def test_o_que_saiu_e_nao_confirmou_aparece_com_o_link(self):
+        """
+        A resposta mais comum para "saiu e não confirmou" é reenviar o link,
+        então ele vem pronto na própria linha.
+        """
+        self._despachar()
+
+        contexto = self._entrega_fila()
+
+        self.assertEqual(contexto['resumo']['a_caminho'], 1)
+        self.assertIn(self.expedicao.codigo, contexto['a_caminho'][0]['link'])
+
+    def test_uma_semana_sem_confirmacao_e_apontada(self):
+        self._despachar(dias_atras=8)
+        self.assertEqual(self._entrega_fila()['resumo']['atrasados'], 1)
+
+    def test_saiu_ontem_nao_e_atraso(self):
+        """Menos de uma semana ainda é trânsito normal."""
+        self._despachar(dias_atras=1)
+
+        contexto = self._entrega_fila()
+
+        self.assertEqual(contexto['resumo']['a_caminho'], 1)
+        self.assertEqual(contexto['resumo']['atrasados'], 0)
+        self.assertEqual(contexto['a_caminho'][0]['dias'], 1)
+
+    def test_entregue_sai_da_lista_de_aberto_e_vira_comprovante(self):
+        self._despachar()
+        self.expedicao.status = Expedicao.Status.ENTREGA
+        self.expedicao.recebido_por = 'Diego Macedo'
+        self.expedicao.data_entrega = self.expedicao.data_despacho
+        self.expedicao.save(update_fields=['status', 'recebido_por', 'data_entrega'])
+
+        contexto = self._entrega_fila()
+
+        self.assertEqual(contexto['resumo']['a_caminho'], 0)
+        self.assertEqual(contexto['resumo']['entregues'], 1)
+        self.assertEqual(
+            contexto['entregues'][0]['expedicao'].recebido_por, 'Diego Macedo',
+        )
+
+    # ── Rotas ────────────────────────────────────────────────────────────
+
+    def test_as_rotas_existem_e_apontam_para_as_views_certas(self):
+        from django.urls import resolve
+
+        from apps.moda import views_conferencia as vc
+
+        pares = [
+            (reverse('moda:conferencia-pessoas', args=[1]), vc.ConferenciaPessoasView),
+            (reverse('moda:conferencia-pessoas-salvar', args=[1]), vc.ConferenciaPessoasSalvarView),
+            (reverse('moda:conferencia-qr', args=[1]), vc.ConferenciaQrView),
+            (reverse('moda:pedido-conferencia', args=[1]), vc.PedidoConferenciaView),
+            (reverse('moda:conferencia-fila'), vc.ConferenciaFilaView),
+            # A rota do MENU tem de cair na fila, e nao no placeholder.
+            (reverse('moda:item', args=['expedicao', 'conferencia']), vc.ConferenciaFilaView),
+            (reverse('moda:embalagem-fila'), vc.EmbalagemFilaView),
+            (reverse('moda:item', args=['expedicao', 'embalagem']), vc.EmbalagemFilaView),
+            (reverse('moda:entrega-fila'), vc.EntregaFilaView),
+            (reverse('moda:item', args=['expedicao', 'entrega']), vc.EntregaFilaView),
+        ]
+        for url, esperada in pares:
+            self.assertIs(resolve(url).func.view_class, esperada)
