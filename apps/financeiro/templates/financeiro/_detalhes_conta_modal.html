@@ -110,7 +110,7 @@
         {% if conta.conta_bancaria %}<div><span class="block text-xs opacity-55">Conta bancária</span><strong>{{ conta.conta_bancaria.descricao|default:conta.conta_bancaria }}</strong></div>{% endif %}
         {% if conta.nota_fiscal_fornecedor %}<div><span class="block text-xs opacity-55">NF do fornecedor</span><strong>{{ conta.nota_fiscal_fornecedor }}</strong></div>{% endif %}
         {% if conta.plano_contas %}<div class="col-span-2 sm:col-span-3"><span class="block text-xs opacity-55">Categoria financeira</span><strong>{{ conta.plano_contas }}</strong></div>{% endif %}
-        {% if conta.conta_contabil %}<div class="col-span-2 sm:col-span-3"><span class="block text-xs opacity-55">Conta contábil automática</span><strong>{{ conta.conta_contabil.classificacao }} - {{ conta.conta_contabil.descricao }}</strong></div>{% endif %}
+        {% if conta.conta_contabil %}<div class="col-span-2 sm:col-span-3"><span class="block text-xs opacity-55">Conta contábil automática</span><strong>{{ conta.conta_contabil.descricao }}</strong></div>{% endif %}
       </div>
       {% if conta.observacao %}<div class="mt-4 border-t pt-3 text-sm" style="border-color:rgba(148,163,184,.2)"><span class="block text-xs opacity-55">Observação</span><p class="mt-1 whitespace-pre-wrap">{{ conta.observacao }}</p></div>{% endif %}
     </section>

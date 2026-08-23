@@ -194,8 +194,24 @@ class PosicaoDiariaCaixaTests(TestCase):
         self.assertEqual(posicao["taxas_por_forma"][0]["nome"], self.forma.descricao)
 
         response = self.client.get(reverse("financeiro:posicao_diaria"), {"data": "2026-08-21"})
-        self.assertContains(response, "Taxas: 2,00% + R$ 0,50")
-        self.assertContains(response, "Taxas descontadas das entradas")
+        self.assertContains(response, "Taxa aplicada: 2,00% + R$ 0,50")
+        self.assertContains(response, "Taxas das entradas")
+
+    def test_entrada_manual_exibe_percentual_configurado_sem_descontar_saldo(self):
+        self.forma.taxa_administrativa = Decimal("2.50")
+        self.forma.taxa_fixa = Decimal("0.30")
+        self.forma.save(update_fields=["taxa_administrativa", "taxa_fixa"])
+        self._criar_cenario()
+        ExtratoBancario.objects.create(
+            filial=self.filial, conta_bancaria=self.banco,
+            data_lancamento=date(2026, 8, 21), historico="Crédito manual com cartão",
+            valor=Decimal("25.00"), origem="manual", forma_pagamento=self.forma,
+        )
+
+        response = self.client.get(reverse("financeiro:posicao_diaria"), {"data": "2026-08-21"})
+
+        self.assertContains(response, "Taxa configurada: 2,50% + R$ 0,30")
+        self.assertContains(response, "Não descontada neste lançamento manual")
 
     def test_venda_so_entra_na_data_de_compensacao(self):
         self.forma.prazo_compensacao_dias_uteis = 1

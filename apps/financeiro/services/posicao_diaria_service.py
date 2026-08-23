@@ -36,6 +36,7 @@ class MovimentoDiario:
     valor_taxa: Decimal = ZERO
     taxa_percentual: Decimal = ZERO
     taxa_fixa: Decimal = ZERO
+    taxa_descontada: bool = False
     referencia_url: str = ""
     excluido: bool = False
     momento: datetime | None = None
@@ -183,15 +184,19 @@ class PosicaoDiariaCaixaService:
     def _agrupar_taxas(movimentos):
         grupos = {}
         for movimento in movimentos:
-            if movimento.valor_taxa <= ZERO:
+            if movimento.forma_pagamento == "Sem forma vinculada":
                 continue
             nome = movimento.forma_pagamento or "Sem forma vinculada"
             item = grupos.setdefault(nome, {
                 "nome": nome, "valor": ZERO, "bruto": ZERO, "quantidade": 0,
+                "percentual": ZERO, "fixa": ZERO, "descontada": False,
             })
             item["valor"] += movimento.valor_taxa
-            item["bruto"] += movimento.valor_bruto
+            item["bruto"] += movimento.valor_bruto or movimento.entrada
             item["quantidade"] += 1
+            item["percentual"] = max(item["percentual"], movimento.taxa_percentual)
+            item["fixa"] = max(item["fixa"], movimento.taxa_fixa)
+            item["descontada"] = item["descontada"] or movimento.taxa_descontada
         for item in grupos.values():
             item["percentual_efetivo"] = (
                 item["valor"] / item["bruto"] * Decimal("100") if item["bruto"] else ZERO
@@ -216,6 +221,8 @@ class PosicaoDiariaCaixaService:
                 forma_pagamento=(
                     item.forma_pagamento.descricao if item.forma_pagamento else "Sem forma vinculada"
                 ),
+                taxa_percentual=(item.forma_pagamento.taxa_administrativa if item.forma_pagamento else ZERO),
+                taxa_fixa=(item.forma_pagamento.taxa_fixa if item.forma_pagamento else ZERO),
                 entrada=max(valor, ZERO), saida=abs(min(valor, ZERO)), excluido=item.status == "excluido",
                 momento=item.created_at,
                 classificacao=(
@@ -244,6 +251,7 @@ class PosicaoDiariaCaixaService:
                 entrada=item.valor_entrada_liquida, valor_bruto=bruto, valor_taxa=taxa,
                 taxa_percentual=item.taxa_percentual_aplicada if item.taxa_calculada_em else ZERO,
                 taxa_fixa=item.taxa_fixa_aplicada if item.taxa_calculada_em else ZERO,
+                taxa_descontada=bool(item.taxa_calculada_em),
                 referencia_url=reverse("financeiro:receber_detail", args=[item.pk]),
                 momento=item.updated_at,
                 classificacao=item.plano_contas.caminho_descricao if item.plano_contas_id else "Conta a receber",
@@ -307,6 +315,7 @@ class PosicaoDiariaCaixaService:
                     valor_taxa=item.valor_taxa if item.taxa_calculada_em else ZERO,
                     taxa_percentual=item.taxa_percentual_aplicada if item.taxa_calculada_em else ZERO,
                     taxa_fixa=item.taxa_fixa_aplicada if item.taxa_calculada_em else ZERO,
+                    taxa_descontada=bool(item.taxa_calculada_em),
                     momento=item.created_at,
                     classificacao="Venda",
                 ))

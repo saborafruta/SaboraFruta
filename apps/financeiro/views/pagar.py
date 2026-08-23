@@ -603,6 +603,18 @@ class ContaPagaListView(PermissaoRequiredMixin, View):
 
         fornecedor_periodo, fornecedor_inicio, fornecedor_fim = _periodo_fornecedores(request)
         fornecedor_qs = ContaPagar.objects.for_filial(filial).filter(status=StatusContaPagar.PAGO)
+        fornecedor_qs = _aplicar_filtro_categoria_financeira(fornecedor_qs, filtros)
+        busca_fornecedor = (filtros.get('q') or '').strip()
+        if busca_fornecedor:
+            fornecedor_qs = fornecedor_qs.filter(
+                Q(descricao_despesa__icontains=busca_fornecedor)
+                | Q(fornecedor__razao_social__icontains=busca_fornecedor)
+                | Q(fornecedor__nome_fantasia__icontains=busca_fornecedor)
+                | Q(funcionario__nome__icontains=busca_fornecedor)
+                | Q(documento_numero__icontains=busca_fornecedor)
+                | Q(nota_fiscal_fornecedor__icontains=busca_fornecedor)
+                | Q(pagamentos__referencia_pagamento__icontains=busca_fornecedor)
+            ).distinct()
         if fornecedor_inicio:
             fornecedor_qs = fornecedor_qs.filter(data_pagamento__gte=fornecedor_inicio)
         if fornecedor_fim:

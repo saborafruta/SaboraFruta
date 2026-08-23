@@ -156,6 +156,11 @@ class PosicaoDiariaCaixaView(PermissaoRequiredMixin, View):
         if movimento_id and str(movimento_id).isdigit():
             detalhe = next((mov for mov in [*posicao["extrato"], *posicao["excluidos"]]
                 if mov.registro_id == int(movimento_id) and mov.origem_codigo == origem_detalhe), None)
+        if detalhe:
+            detalhe_completo = ContaBancariaListView()._detalhar_movimento(
+                request.filial_ativa, detalhe.origem_codigo, detalhe.registro_id,
+            )
+            detalhe.historico_logs = detalhe_completo["logs"]
         if movimento_form is None:
             movimento_form = MovimentoContaBancariaForm(
                 filial=request.filial_ativa, initial={"data_lancamento": timezone.localdate()},

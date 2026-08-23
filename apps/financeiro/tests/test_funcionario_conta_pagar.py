@@ -653,6 +653,7 @@ class FuncionarioContaPagarTests(TestCase):
         self.assertContains(response, "MATERIAL-PAGO")
         self.assertNotContains(response, "OUTRA-CATEGORIA-PAGA")
         self.assertContains(response, "Filtro de classificação ativo")
+        self.assertContains(response, "R$ 450,00 no período selecionado e na classificação filtrada")
 
     def test_pagamentos_parciais_preservam_formas_utilizadas(self):
         conta = ContaPagarService.criar(
