@@ -311,3 +311,93 @@ class PosicaoDiariaCaixaTests(TestCase):
         self.assertFalse(ExtratoBancario.objects.filter(
             filial=self.filial, historico__in=("Credito manual", "Debito manual"),
         ).exclude(data_lancamento=timezone.localdate()).exists())
+
+    def test_entrada_manual_salva_forma_e_pode_ser_corrigida_pelo_admin(self):
+        movimento = ExtratoBancario.objects.create(
+            filial=self.filial, conta_bancaria=self.banco, forma_pagamento=self.forma,
+            data_lancamento=date(2026, 8, 21), historico="Entrada manual",
+            valor=Decimal("25.00"), origem="manual", status="importado",
+        )
+
+        response = self.client.post(reverse("financeiro:posicao_diaria"), {
+            "acao": "editar_entrada", "origem": "manual", "movimento_id": movimento.pk,
+            "data_referencia": "2026-08-21", "valor": "31.50",
+            "forma_pagamento": self.forma.pk, "conta_bancaria": self.caixa.pk,
+            "data_entrada": "2026-08-20", "descricao": "Entrada corrigida",
+            "justificativa": "Conta e valor informados incorretamente",
+        })
+
+        self.assertEqual(response.status_code, 302)
+        movimento.refresh_from_db()
+        self.assertEqual(movimento.valor, Decimal("31.50"))
+        self.assertEqual(movimento.conta_bancaria, self.caixa)
+        self.assertEqual(movimento.forma_pagamento, self.forma)
+        self.assertEqual(movimento.data_lancamento, date(2026, 8, 20))
+        self.assertEqual(movimento.historico, "Entrada corrigida")
+        self.assertTrue(RegistroAuditoria.objects.filter(
+            objeto_tipo="financeiro.extratobancario", objeto_id=movimento.pk,
+            acao=RegistroAuditoria.Acao.AJUSTAR,
+        ).exists())
+
+    def test_corrige_recebimento_recalculando_taxa_liquido_e_saldo(self):
+        self.forma.taxa_administrativa = Decimal("2.00")
+        self.forma.taxa_fixa = Decimal("0.50")
+        self.forma.save(update_fields=["taxa_administrativa", "taxa_fixa"])
+        cliente = Cliente.objects.create(
+            filial=self.filial, razao_social="Cliente corrigido", tipo_pessoa="F",
+            cpf_cnpj="98765432100",
+        )
+        conta = ContaReceber.objects.create(
+            filial=self.filial, cliente=cliente, valor_original=Decimal("100.00"),
+            valor_final=Decimal("100.00"), valor_pago=Decimal("50.00"),
+            valor_saldo=Decimal("50.00"), data_emissao=date(2026, 8, 20),
+            data_vencimento=date(2026, 8, 21), data_pagamento=date(2026, 8, 21),
+            data_liquidacao_prevista=date(2026, 8, 21), forma_pagamento=self.forma,
+            conta_bancaria=self.banco,
+        )
+
+        response = self.client.post(reverse("financeiro:posicao_diaria"), {
+            "acao": "editar_entrada", "origem": "receber", "movimento_id": conta.pk,
+            "data_referencia": "2026-08-21", "valor": "80.00",
+            "forma_pagamento": self.forma.pk, "conta_bancaria": self.caixa.pk,
+            "data_entrada": "2026-08-22", "justificativa": "Baixa parcial corrigida",
+        })
+
+        self.assertEqual(response.status_code, 302)
+        conta.refresh_from_db()
+        self.assertEqual(conta.valor_pago, Decimal("80.00"))
+        self.assertEqual(conta.valor_saldo, Decimal("20.00"))
+        self.assertEqual(conta.valor_taxa_recebimento, Decimal("2.10"))
+        self.assertEqual(conta.valor_liquido_recebido, Decimal("77.90"))
+        self.assertEqual(conta.conta_bancaria, self.caixa)
+        self.assertEqual(conta.data_liquidacao_prevista, date(2026, 8, 22))
+
+    def test_corrige_entrada_de_venda_sem_duplicar_pagamento(self):
+        self.forma.taxa_administrativa = Decimal("1.00")
+        self.forma.save(update_fields=["taxa_administrativa"])
+        venda = VendaPDV.objects.create(
+            filial=self.filial, numero_venda=88, status="finalizada",
+            valor_total=Decimal("120.00"), valor_pago=Decimal("80.00"), usuario=self.usuario,
+            data_venda=datetime(2026, 8, 21, 12, tzinfo=timezone.get_current_timezone()),
+        )
+        pagamento = PagamentoVendaPDV.objects.create(
+            venda_pdv=venda, forma_pagamento=self.forma, conta_bancaria=self.banco,
+            valor=Decimal("80.00"),
+        )
+
+        response = self.client.post(reverse("financeiro:posicao_diaria"), {
+            "acao": "editar_entrada", "origem": "venda", "movimento_id": pagamento.pk,
+            "data_referencia": "2026-08-21", "valor": "100.00",
+            "forma_pagamento": self.forma.pk, "conta_bancaria": self.caixa.pk,
+            "data_entrada": "2026-08-22", "justificativa": "Valor recebido corrigido",
+        })
+
+        self.assertEqual(response.status_code, 302)
+        pagamento.refresh_from_db()
+        venda.refresh_from_db()
+        self.assertEqual(PagamentoVendaPDV.objects.filter(venda_pdv=venda).count(), 1)
+        self.assertEqual(pagamento.valor_bruto_recebido, Decimal("100.00"))
+        self.assertEqual(pagamento.valor_taxa, Decimal("1.00"))
+        self.assertEqual(pagamento.valor_liquido, Decimal("99.00"))
+        self.assertEqual(pagamento.conta_bancaria, self.caixa)
+        self.assertEqual(venda.valor_pago, Decimal("100.00"))

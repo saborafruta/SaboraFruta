@@ -168,7 +168,7 @@ class PosicaoDiariaCaixaService:
         manuais = ExtratoBancario.objects.filter(
             filial=self.filial, conta_bancaria_id__in=self.conta_ids,
             data_lancamento__range=(self.data_inicio, self.data_fim),
-        ).select_related("conta_bancaria")
+        ).select_related("conta_bancaria", "forma_pagamento")
         if not incluir_excluidos:
             manuais = manuais.exclude(status="excluido")
         for item in manuais:
@@ -178,6 +178,9 @@ class PosicaoDiariaCaixaService:
                 descricao=item.historico or "Lancamento manual", contraparte="Movimento manual",
                 origem="Manual" if item.origem == "manual" else "Extrato bancario",
                 origem_codigo="manual", registro_id=item.pk, documento=item.documento,
+                forma_pagamento=(
+                    item.forma_pagamento.descricao if item.forma_pagamento else "Sem forma vinculada"
+                ),
                 entrada=max(valor, ZERO), saida=abs(min(valor, ZERO)), excluido=item.status == "excluido",
                 momento=item.created_at,
             ))

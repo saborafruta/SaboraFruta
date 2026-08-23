@@ -1,4 +1,5 @@
 from django import forms
+from django.db.models import Q
 
 from apps.financeiro.models import CentroCusto, ContaBancaria, FormaPagamento, PlanoContas
 
@@ -90,12 +91,18 @@ class MovimentoContaBancariaForm(forms.Form):
     valor = forms.DecimalField(max_digits=14, decimal_places=2, min_value=0.01)
     historico = forms.CharField(max_length=200, required=False)
     documento = forms.CharField(max_length=30, required=False)
+    forma_pagamento = forms.ModelChoiceField(
+        queryset=FormaPagamento.objects.none(), required=False, label="Forma de pagamento",
+    )
 
     def __init__(self, *args, filial=None, **kwargs):
         super().__init__(*args, **kwargs)
         qs = ContaBancaria.objects.none()
         if filial:
             qs = ContaBancaria.objects.for_filial(filial).filter(ativo=True).order_by("descricao", "banco_nome")
+            self.fields["forma_pagamento"].queryset = FormaPagamento.objects.filter(
+                empresa=filial.empresa, ativo=True,
+            ).filter(Q(filial=filial) | Q(filial__isnull=True)).order_by("descricao")
         self.fields["conta_origem"].queryset = qs
         self.fields["conta_destino"].queryset = qs
         self.fields["valor"].widget.attrs.setdefault("step", "0.01")
@@ -151,6 +158,9 @@ class EditarMovimentoBancarioForm(forms.Form):
     valor = forms.DecimalField(max_digits=14, decimal_places=2, label="Valor")
     historico = forms.CharField(max_length=200, label="Historico")
     documento = forms.CharField(max_length=30, required=False, label="Documento")
+    forma_pagamento = forms.ModelChoiceField(
+        queryset=FormaPagamento.objects.none(), required=False, label="Forma de pagamento",
+    )
     justificativa = forms.CharField(max_length=300, label="Motivo da alteracao")
 
     def __init__(self, *args, filial=None, **kwargs):
@@ -161,7 +171,44 @@ class EditarMovimentoBancarioForm(forms.Form):
                 .filter(ativo=True)
                 .order_by("descricao", "banco_nome")
             )
+            self.fields["forma_pagamento"].queryset = FormaPagamento.objects.filter(
+                empresa=filial.empresa, ativo=True,
+            ).filter(Q(filial=filial) | Q(filial__isnull=True)).order_by("descricao")
         self.fields["valor"].widget.attrs.update({"step": "0.01", "inputmode": "decimal"})
+
+
+class EditarEntradaFinanceiraForm(forms.Form):
+    valor = forms.DecimalField(max_digits=14, decimal_places=2, min_value=0.01, label="Valor bruto")
+    forma_pagamento = forms.ModelChoiceField(
+        queryset=FormaPagamento.objects.none(), label="Forma de pagamento",
+    )
+    conta_bancaria = ContaBancariaChoiceField(
+        queryset=ContaBancaria.objects.none(), label="Conta bancaria",
+    )
+    data_entrada = forms.DateField(
+        widget=forms.DateInput(attrs={"type": "date"}), label="Data da entrada no caixa",
+    )
+    descricao = forms.CharField(max_length=200, required=False, label="Descricao")
+    justificativa = forms.CharField(
+        max_length=300, label="Motivo da alteracao",
+        widget=forms.Textarea(attrs={"rows": 2}),
+    )
+
+    def __init__(self, *args, filial=None, origem=None, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.origem = origem
+        if filial:
+            self.fields["conta_bancaria"].queryset = (
+                ContaBancaria.objects.for_filial(filial)
+                .filter(ativo=True)
+                .order_by("descricao", "banco_nome")
+            )
+            self.fields["forma_pagamento"].queryset = FormaPagamento.objects.filter(
+                empresa=filial.empresa, ativo=True,
+            ).filter(Q(filial=filial) | Q(filial__isnull=True)).order_by("descricao")
+        self.fields["valor"].widget.attrs.update({"step": "0.01", "inputmode": "decimal"})
+        if origem != "manual":
+            self.fields.pop("descricao")
 
 
 class CentroCustoForm(forms.ModelForm):
