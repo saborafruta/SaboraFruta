@@ -43,6 +43,8 @@ class MovimentoDiario:
     despesa_pessoal: bool = False
     classificacao: str = ""
     editavel: bool = True
+    bandeira: str = ""
+    numero_parcelas: int | None = None
 
     @property
     def valor(self):
@@ -258,7 +260,9 @@ class PosicaoDiariaCaixaService:
         movimentos = []
         manuais = ExtratoBancario.objects.filter(
             filial=self.filial, conta_bancaria_id__in=self.conta_ids,
-            data_lancamento__range=(self.data_inicio, self.data_fim),
+        ).filter(
+            Q(data_credito__range=(self.data_inicio, self.data_fim))
+            | Q(data_credito__isnull=True, data_lancamento__range=(self.data_inicio, self.data_fim)),
         ).select_related(
             "conta_bancaria", "forma_pagamento", "plano_contas",
             "plano_contas__conta_pai", "plano_contas__conta_pai__conta_pai",
@@ -267,17 +271,29 @@ class PosicaoDiariaCaixaService:
             manuais = manuais.exclude(status="excluido")
         for item in manuais:
             valor = item.valor or ZERO
+            taxa_descontada = bool(valor > ZERO and item.taxa_calculada_em)
+            entrada = item.valor_entrada_liquida if taxa_descontada else max(valor, ZERO)
             movimentos.append(MovimentoDiario(
-                data=item.data_lancamento, conta=item.conta_bancaria,
+                data=item.data_credito or item.data_lancamento, conta=item.conta_bancaria,
                 descricao=item.historico or "Lancamento manual", contraparte="Movimento manual",
                 origem="Manual" if item.origem == "manual" else "Extrato bancario",
                 origem_codigo="manual", registro_id=item.pk, documento=item.documento,
                 forma_pagamento=(
                     item.forma_pagamento.descricao if item.forma_pagamento else "Sem forma vinculada"
                 ),
-                taxa_percentual=(item.forma_pagamento.taxa_administrativa if item.forma_pagamento else ZERO),
-                taxa_fixa=(item.forma_pagamento.taxa_fixa if item.forma_pagamento else ZERO),
-                entrada=max(valor, ZERO), saida=abs(min(valor, ZERO)), excluido=item.status == "excluido",
+                taxa_percentual=(
+                    item.taxa_percentual_aplicada if taxa_descontada
+                    else (item.forma_pagamento.taxa_administrativa if item.forma_pagamento else ZERO)
+                ),
+                taxa_fixa=(
+                    item.taxa_fixa_aplicada if taxa_descontada
+                    else (item.forma_pagamento.taxa_fixa if item.forma_pagamento else ZERO)
+                ),
+                entrada=entrada, saida=abs(min(valor, ZERO)),
+                valor_bruto=max(valor, ZERO),
+                valor_taxa=item.valor_taxa if taxa_descontada else ZERO,
+                taxa_descontada=taxa_descontada,
+                excluido=item.status == "excluido",
                 momento=item.created_at,
                 classificacao=(
                     item.plano_contas.caminho_descricao
@@ -285,6 +301,8 @@ class PosicaoDiariaCaixaService:
                 ),
                 despesa_pessoal=bool(valor < ZERO and _eh_despesa_pessoal(item.plano_contas)),
                 editavel=valor > ZERO,
+                bandeira=item.bandeira,
+                numero_parcelas=item.numero_parcelas,
             ))
 
         recebimentos = ContaReceber.objects.filter(
@@ -310,6 +328,8 @@ class PosicaoDiariaCaixaService:
                 referencia_url=reverse("financeiro:receber_detail", args=[item.pk]),
                 momento=item.updated_at,
                 classificacao=item.plano_contas.caminho_descricao if item.plano_contas_id else "Conta a receber",
+                bandeira=item.bandeira_recebimento,
+                numero_parcelas=item.parcelas_recebimento,
             ))
 
         pagamentos = PagamentoContaPagar.objects.filter(
@@ -371,16 +391,22 @@ class PosicaoDiariaCaixaService:
                     taxa_descontada=bool(item.taxa_calculada_em),
                     momento=item.created_at,
                     classificacao="Venda",
+                    bandeira=item.bandeira,
+                    numero_parcelas=item.numero_parcelas,
                 ))
         return sorted(movimentos, key=lambda m: (m.origem, m.descricao.casefold(), m.registro_id))
 
     def _saldos_antes_do_dia(self):
         saldos = defaultdict(lambda: ZERO)
         manuais = ExtratoBancario.objects.filter(
-            filial=self.filial, conta_bancaria_id__in=self.conta_ids, data_lancamento__lt=self.data_inicio,
-        ).exclude(status="excluido").values_list("conta_bancaria_id", "valor")
-        for conta_id, valor in manuais.iterator():
-            _somar(saldos, conta_id, valor)
+            filial=self.filial, conta_bancaria_id__in=self.conta_ids,
+        ).filter(
+            Q(data_credito__lt=self.data_inicio)
+            | Q(data_credito__isnull=True, data_lancamento__lt=self.data_inicio),
+        ).exclude(status="excluido")
+        for item in manuais.iterator():
+            valor = item.valor_entrada_liquida if item.valor > ZERO else item.valor
+            _somar(saldos, item.conta_bancaria_id, valor)
         recebimentos = ContaReceber.objects.filter(
             filial=self.filial, conta_bancaria_id__in=self.conta_ids,
             valor_pago__gt=0,

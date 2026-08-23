@@ -298,6 +298,8 @@ class ContaBancariaListView(PermissaoRequiredMixin, View):
                     "historico": editar_movimento.historico,
                     "documento": editar_movimento.documento,
                     "forma_pagamento": editar_movimento.forma_pagamento,
+                    "bandeira": editar_movimento.bandeira,
+                    "numero_parcelas": editar_movimento.numero_parcelas,
                     "plano_contas": editar_movimento.plano_contas,
                 },
                 filial=filial,
@@ -366,14 +368,16 @@ class ContaBancariaListView(PermissaoRequiredMixin, View):
             qs = ExtratoBancario.objects.filter(
                 filial=filial,
                 conta_bancaria_id__in=conta_ids,
-                data_lancamento__range=(data_ini, data_fim),
+            ).filter(
+                Q(data_credito__range=(data_ini, data_fim))
+                | Q(data_credito__isnull=True, data_lancamento__range=(data_ini, data_fim)),
             ).exclude(status="excluido").select_related("conta_bancaria")
             if busca:
                 qs = qs.filter(historico__icontains=busca)
             for item in qs:
-                valor = item.valor or Decimal("0")
+                valor = item.valor_entrada_liquida if item.valor > 0 else (item.valor or Decimal("0"))
                 movimentos.append(MovimentoBancario(
-                    data=item.data_lancamento,
+                    data=item.data_credito or item.data_lancamento,
                     conta=item.conta_bancaria,
                     historico=item.historico or "Lancamento manual",
                     origem="Manual" if item.origem == "manual" else "Extrato",
@@ -477,7 +481,7 @@ class ContaBancariaListView(PermissaoRequiredMixin, View):
 
     def _saldo_calculado(self, conta):
         data_min = timezone.datetime.min.date()
-        data_max = timezone.datetime.max.date()
+        data_max = timezone.localdate()
         movimentos = self._movimentos_periodo(
             request=None,
             filial=conta.filial,
@@ -758,7 +762,13 @@ class ContaBancariaListView(PermissaoRequiredMixin, View):
     @transaction.atomic
     def _editar_movimento_manual(self, request, movimento, dados):
         conta_anterior = movimento.conta_bancaria
-        campos = ["conta_bancaria", "forma_pagamento", "plano_contas", "data_lancamento", "valor", "historico", "documento"]
+        campos = [
+            "conta_bancaria", "forma_pagamento", "plano_contas", "data_lancamento",
+            "data_credito", "valor", "historico", "documento", "bandeira",
+            "numero_parcelas", "taxa_percentual_aplicada", "taxa_fixa_aplicada",
+            "valor_taxa", "valor_liquido", "taxa_calculada_em",
+            "prazo_compensacao_aplicado",
+        ]
         antes = snapshot_modelo(movimento, campos)
         movimento.conta_bancaria = dados["conta_bancaria"]
         movimento.forma_pagamento = dados.get("forma_pagamento")
@@ -767,6 +777,9 @@ class ContaBancariaListView(PermissaoRequiredMixin, View):
         movimento.valor = dados["valor"]
         movimento.historico = dados["historico"]
         movimento.documento = dados["documento"]
+        movimento.bandeira = dados.get("bandeira", "")
+        movimento.numero_parcelas = dados.get("numero_parcelas")
+        movimento.recalcular_recebimento()
         movimento.save(update_fields=campos)
         registrar_auditoria(
             request=request,
@@ -795,10 +808,12 @@ class ContaBancariaListView(PermissaoRequiredMixin, View):
         historico = dados.get("historico") or dict(MovimentoContaBancariaForm.TIPO_CHOICES).get(tipo, "Movimento manual")
         documento = dados.get("documento") or ""
         forma_pagamento = dados.get("forma_pagamento")
+        bandeira = dados.get("bandeira", "")
+        numero_parcelas = dados.get("numero_parcelas")
         plano_contas = dados.get("plano_contas") if tipo != MovimentoContaBancariaForm.TIPO_TRANSFERENCIA else None
 
         def criar(conta, valor_movimento, texto):
-            movimento = ExtratoBancario.objects.create(
+            movimento = ExtratoBancario(
                 conta_bancaria=conta,
                 forma_pagamento=forma_pagamento,
                 plano_contas=plano_contas,
@@ -809,7 +824,11 @@ class ContaBancariaListView(PermissaoRequiredMixin, View):
                 valor=valor_movimento,
                 origem="manual",
                 status="importado",
+                bandeira=bandeira,
+                numero_parcelas=numero_parcelas,
             )
+            movimento.recalcular_recebimento()
+            movimento.save()
             conta.saldo_atual = self._saldo_calculado(conta)
             conta.save(update_fields=["saldo_atual", "updated_at"])
             registrar_auditoria(
@@ -821,7 +840,12 @@ class ContaBancariaListView(PermissaoRequiredMixin, View):
                 descricao="Ajuste manual bancario criado",
                 depois=snapshot_modelo(
                     movimento,
-                    ["conta_bancaria", "forma_pagamento", "plano_contas", "data_lancamento", "valor", "historico", "documento"],
+                    [
+                        "conta_bancaria", "forma_pagamento", "plano_contas", "data_lancamento",
+                        "data_credito", "valor", "historico", "documento", "bandeira",
+                        "numero_parcelas", "taxa_percentual_aplicada", "taxa_fixa_aplicada",
+                        "valor_taxa", "valor_liquido", "prazo_compensacao_aplicado",
+                    ],
                 ),
                 metadados={"contas_envolvidas": [conta.pk]},
             )

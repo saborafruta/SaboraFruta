@@ -397,6 +397,8 @@ class ContaReceberBaixaView(PermissaoRequiredMixin, View):
                 valor_multa=d.get('valor_multa'),
                 valor_desconto=d.get('valor_desconto'),
                 observacao=d.get('observacao', ''),
+                bandeira=d.get('bandeira', ''),
+                numero_parcelas=d.get('numero_parcelas'),
             )
             if conta.status == StatusContaReceber.PAGO:
                 messages.success(request, f'Conta #{pk} recebida integralmente. ✓')

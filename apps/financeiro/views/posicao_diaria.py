@@ -177,6 +177,8 @@ class PosicaoDiariaCaixaView(PermissaoRequiredMixin, View):
                 "data_lancamento": editar_movimento.data_lancamento, "valor": abs(editar_movimento.valor),
                 "historico": editar_movimento.historico, "documento": editar_movimento.documento,
                 "forma_pagamento": editar_movimento.forma_pagamento,
+                "bandeira": editar_movimento.bandeira,
+                "numero_parcelas": editar_movimento.numero_parcelas,
                 "plano_contas": editar_movimento.plano_contas,
             })
         if detalhe and detalhe.entrada and _usuario_admin(request) and editar_entrada_form is None:
@@ -190,6 +192,8 @@ class PosicaoDiariaCaixaView(PermissaoRequiredMixin, View):
                 data_entrada = item.data_lancamento
                 descricao = item.historico
                 plano_contas = item.plano_contas
+                bandeira = item.bandeira
+                numero_parcelas = item.numero_parcelas
             elif detalhe.origem_codigo == "receber":
                 valor = item.valor_pago
                 forma = item.forma_pagamento
@@ -197,6 +201,8 @@ class PosicaoDiariaCaixaView(PermissaoRequiredMixin, View):
                 data_entrada = item.data_liquidacao_prevista or item.data_pagamento
                 descricao = ""
                 plano_contas = item.plano_contas
+                bandeira = item.bandeira_recebimento
+                numero_parcelas = item.parcelas_recebimento
             else:
                 valor = item.valor_bruto_recebido
                 forma = item.forma_pagamento
@@ -204,12 +210,15 @@ class PosicaoDiariaCaixaView(PermissaoRequiredMixin, View):
                 data_entrada = item.data_liquidacao_prevista or timezone.localdate()
                 descricao = ""
                 plano_contas = None
+                bandeira = item.bandeira
+                numero_parcelas = item.numero_parcelas
             editar_entrada_form = EditarEntradaFinanceiraForm(
                 filial=request.filial_ativa, origem=detalhe.origem_codigo,
                 initial={
                     "valor": valor, "forma_pagamento": forma, "conta_bancaria": conta,
                     "data_entrada": data_entrada, "descricao": descricao,
                     "plano_contas": plano_contas,
+                    "bandeira": bandeira, "numero_parcelas": numero_parcelas,
                 },
             )
         categorias_edicao = PlanoContas.objects.none()
@@ -270,7 +279,12 @@ class PosicaoDiariaCaixaView(PermissaoRequiredMixin, View):
         campos = ["conta_bancaria", "forma_pagamento"]
 
         if origem == "manual":
-            campos += ["plano_contas", "data_lancamento", "valor", "historico"]
+            campos += [
+                "plano_contas", "data_lancamento", "data_credito", "valor", "historico",
+                "bandeira", "numero_parcelas", "taxa_percentual_aplicada",
+                "taxa_fixa_aplicada", "valor_taxa", "valor_liquido",
+                "taxa_calculada_em", "prazo_compensacao_aplicado",
+            ]
             antes = snapshot_modelo(item, campos)
             item.conta_bancaria = dados["conta_bancaria"]
             item.forma_pagamento = dados["forma_pagamento"]
@@ -278,6 +292,9 @@ class PosicaoDiariaCaixaView(PermissaoRequiredMixin, View):
             item.data_lancamento = dados["data_entrada"]
             item.valor = dados["valor"]
             item.historico = dados.get("descricao") or item.historico
+            item.bandeira = dados.get("bandeira", "")
+            item.numero_parcelas = dados.get("numero_parcelas")
+            item.recalcular_recebimento()
             item.save(update_fields=campos)
         elif origem == "receber":
             campos += [
@@ -285,10 +302,12 @@ class PosicaoDiariaCaixaView(PermissaoRequiredMixin, View):
                 "valor_pago", "valor_saldo", "status", "taxa_percentual_aplicada",
                 "taxa_fixa_aplicada", "valor_taxa_recebimento", "valor_liquido_recebido",
                 "taxa_calculada_em", "data_liquidacao_prevista",
+                "bandeira_recebimento", "parcelas_recebimento",
+                "prazo_compensacao_aplicado",
             ]
             antes = snapshot_modelo(item, campos)
             calculo = dados["forma_pagamento"].calcular_taxa_recebimento(
-                dados["valor"], item.total_parcelas,
+                dados["valor"], dados.get("numero_parcelas") or 1, dados.get("bandeira", ""),
             )
             item.conta_bancaria = dados["conta_bancaria"]
             item.forma_pagamento = dados["forma_pagamento"]
@@ -303,25 +322,34 @@ class PosicaoDiariaCaixaView(PermissaoRequiredMixin, View):
             item.valor_liquido_recebido = calculo["liquido"]
             item.taxa_calculada_em = timezone.now()
             item.data_liquidacao_prevista = dados["data_entrada"]
+            item.bandeira_recebimento = dados["forma_pagamento"].normalizar_bandeira(
+                dados.get("bandeira", "")
+            )
+            item.parcelas_recebimento = dados.get("numero_parcelas")
+            item.prazo_compensacao_aplicado = dados["forma_pagamento"].prazo_compensacao_dias_uteis or 0
             item.save(update_fields=[*campos, "updated_at"])
         else:
             campos += [
                 "valor", "taxa_percentual_aplicada", "taxa_fixa_aplicada", "valor_taxa",
                 "valor_liquido", "taxa_calculada_em", "data_liquidacao_prevista",
+                "bandeira", "numero_parcelas", "prazo_compensacao_aplicado",
             ]
             antes = snapshot_modelo(item, campos)
             calculo = dados["forma_pagamento"].calcular_taxa_recebimento(
-                dados["valor"], item.numero_parcelas, item.bandeira,
+                dados["valor"], dados.get("numero_parcelas") or 1, dados.get("bandeira", ""),
             )
             item.conta_bancaria = dados["conta_bancaria"]
             item.forma_pagamento = dados["forma_pagamento"]
             item.valor = dados["valor"] + (item.troco or 0)
+            item.bandeira = dados["forma_pagamento"].normalizar_bandeira(dados.get("bandeira", ""))
+            item.numero_parcelas = dados.get("numero_parcelas") or 1
             item.taxa_percentual_aplicada = calculo["percentual"]
             item.taxa_fixa_aplicada = calculo["fixa"]
             item.valor_taxa = calculo["taxa"]
             item.valor_liquido = calculo["liquido"]
             item.taxa_calculada_em = timezone.now()
             item.data_liquidacao_prevista = dados["data_entrada"]
+            item.prazo_compensacao_aplicado = dados["forma_pagamento"].prazo_compensacao_dias_uteis or 0
             item.save(update_fields=campos)
             venda = item.venda_pdv
             venda.valor_pago = sum((pagamento.valor_bruto_recebido for pagamento in venda.pagamentos.all()), 0)

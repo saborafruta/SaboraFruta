@@ -35,10 +35,15 @@ def _adicionar_percentuais(itens):
 
 def _saldo_calculado_conta(conta):
     saldo = conta.saldo_inicial or ZERO
-    extrato_total = (
-        ExtratoBancario.objects.filter(conta_bancaria=conta).aggregate(total=Sum('valor'))['total']
-        or ZERO
-    )
+    hoje = timezone.localdate()
+    extratos = ExtratoBancario.objects.filter(conta_bancaria=conta).filter(
+        Q(data_credito__lte=hoje)
+        | Q(data_credito__isnull=True, data_lancamento__lte=hoje)
+    ).exclude(status='excluido')
+    extrato_total = sum((
+        item.valor_entrada_liquida if item.valor > ZERO else item.valor
+        for item in extratos
+    ), ZERO)
     receber_total = sum((
         item.valor_entrada_liquida for item in ContaReceber.objects.filter(
             filial=conta.filial,

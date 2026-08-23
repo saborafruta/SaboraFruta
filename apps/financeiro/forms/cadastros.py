@@ -75,6 +75,16 @@ class ContaBancariaForm(forms.ModelForm):
         return instance
 
 
+BANDEIRAS_CARTAO = [
+    ("", "Não informar"),
+    ("visa", "Visa"),
+    ("mastercard", "Mastercard"),
+    ("elo", "Elo"),
+    ("amex", "Amex"),
+    ("hiper", "Hiper / Hipercard"),
+]
+
+
 class MovimentoContaBancariaForm(forms.Form):
     TIPO_CREDITO = "credito"
     TIPO_DEBITO = "debito"
@@ -94,6 +104,11 @@ class MovimentoContaBancariaForm(forms.Form):
     documento = forms.CharField(max_length=30, required=False)
     forma_pagamento = forms.ModelChoiceField(
         queryset=FormaPagamento.objects.none(), required=False, label="Forma de pagamento",
+    )
+    bandeira = forms.ChoiceField(choices=BANDEIRAS_CARTAO, required=False, label="Bandeira do cartão")
+    numero_parcelas = forms.IntegerField(
+        min_value=1, max_value=24, required=False, label="Parcelas da operação",
+        widget=forms.NumberInput(attrs={"min": "1", "max": "24"}),
     )
     plano_contas = CategoriaFinanceiraChoiceField(
         queryset=PlanoContas.objects.none(), required=False, label="Classificacao financeira",
@@ -185,6 +200,11 @@ class EditarMovimentoBancarioForm(forms.Form):
     forma_pagamento = forms.ModelChoiceField(
         queryset=FormaPagamento.objects.none(), required=False, label="Forma de pagamento",
     )
+    bandeira = forms.ChoiceField(choices=BANDEIRAS_CARTAO, required=False, label="Bandeira do cartão")
+    numero_parcelas = forms.IntegerField(
+        min_value=1, max_value=24, required=False, label="Parcelas da operação",
+        widget=forms.NumberInput(attrs={"min": "1", "max": "24"}),
+    )
     plano_contas = CategoriaFinanceiraChoiceField(
         queryset=PlanoContas.objects.none(), required=False, label="Classificacao financeira",
     )
@@ -234,6 +254,11 @@ class EditarEntradaFinanceiraForm(forms.Form):
     )
     conta_bancaria = ContaBancariaChoiceField(
         queryset=ContaBancaria.objects.none(), label="Conta bancaria",
+    )
+    bandeira = forms.ChoiceField(choices=BANDEIRAS_CARTAO, required=False, label="Bandeira do cartão")
+    numero_parcelas = forms.IntegerField(
+        min_value=1, max_value=24, required=False, label="Parcelas da operação",
+        widget=forms.NumberInput(attrs={"min": "1", "max": "24"}),
     )
     data_entrada = forms.DateField(
         input_formats=["%Y-%m-%d"],

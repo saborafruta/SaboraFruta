@@ -15,6 +15,15 @@ VALOR_WIDGET = forms.NumberInput(attrs={
     'data-decimal-places': '2',
 })
 
+BANDEIRAS_CARTAO = [
+    ('', 'Não informar'),
+    ('visa', 'Visa'),
+    ('mastercard', 'Mastercard'),
+    ('elo', 'Elo'),
+    ('amex', 'Amex'),
+    ('hiper', 'Hiper / Hipercard'),
+]
+
 
 class ContaReceberForm(forms.Form):
     """Lançamento manual de conta a receber."""
@@ -162,6 +171,18 @@ class BaixaContaReceberForm(forms.Form):
         queryset=FormaPagamento.objects.none(),
         label='Forma de recebimento',
     )
+    bandeira = forms.ChoiceField(
+        choices=BANDEIRAS_CARTAO,
+        required=False,
+        label='Bandeira do cartão (opcional)',
+    )
+    numero_parcelas = forms.IntegerField(
+        min_value=1,
+        max_value=24,
+        required=False,
+        label='Parcelas da operação (opcional)',
+        widget=forms.NumberInput(attrs={'min': '1', 'max': '24'}),
+    )
     conta_bancaria = forms.ModelChoiceField(
         queryset=ContaBancaria.objects.none(),
         required=False,
@@ -189,6 +210,8 @@ class BaixaContaReceberForm(forms.Form):
             )
         if conta:
             self.fields['valor_pago'].initial = conta.valor_saldo
+            self.fields['bandeira'].initial = conta.bandeira_recebimento
+            self.fields['numero_parcelas'].initial = conta.parcelas_recebimento
 
     def clean(self):
         cleaned = super().clean()

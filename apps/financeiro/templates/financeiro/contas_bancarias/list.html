@@ -231,6 +231,7 @@
           <label class="block text-xs font-medium">Valor {{ movimento_form.valor|add_class:"form-input mt-1 w-full" }}</label>
         </div>
         <label class="block text-xs font-medium">Forma de pagamento {{ movimento_form.forma_pagamento|add_class:"form-input mt-1 w-full" }}</label>
+        <div class="rounded-md border border-slate-200 p-3 dark:border-slate-700"><span class="mb-2 block text-xs font-semibold">Dados do cartao <span class="font-normal opacity-60">(opcional)</span></span><div class="grid grid-cols-1 gap-3 sm:grid-cols-2"><label class="block text-xs font-medium">Bandeira {{ movimento_form.bandeira|add_class:"form-input mt-1 w-full" }}</label><label class="block text-xs font-medium">Parcelas da operacao {{ movimento_form.numero_parcelas|add_class:"form-input mt-1 w-full" }}</label></div></div>
         <label class="block text-xs font-medium">Classificacao da entrada {{ movimento_form.plano_contas|add_class:"form-input mt-1 w-full" }}</label>
         <label class="block text-xs font-medium">Historico {{ movimento_form.historico|add_class:"form-input mt-1 w-full" }}</label>
         <label class="block text-xs font-medium">Documento {{ movimento_form.documento|add_class:"form-input mt-1 w-full" }}</label>
@@ -242,5 +243,6 @@
     </div>
   </div>
   {% include "financeiro/_detalhes_conta_shell.html" %}
+  {% if editar_movimento_form %}<template id="cartao-editar-ajuste"><div class="rounded-md border border-slate-200 p-3 dark:border-slate-700"><span class="mb-2 block text-xs font-semibold">Dados do cartao <span class="font-normal opacity-60">(opcional)</span></span><div class="grid grid-cols-1 gap-3 sm:grid-cols-2"><label class="block text-xs font-medium">Bandeira {{ editar_movimento_form.bandeira|add_class:"form-input mt-1 w-full" }}</label><label class="block text-xs font-medium">Parcelas da operacao {{ editar_movimento_form.numero_parcelas|add_class:"form-input mt-1 w-full" }}</label></div></div></template><script>document.addEventListener('DOMContentLoaded',function(){const marcador=document.querySelector('input[name="acao"][value="editar_movimento"]');const form=marcador&&marcador.closest('form');const forma=form&&form.querySelector('select[name="forma_pagamento"]');const template=document.getElementById('cartao-editar-ajuste');if(forma&&template)forma.closest('label').insertAdjacentElement('afterend',template.content.firstElementChild.cloneNode(true));});</script>{% endif %}
 </div>
 {% endblock %}

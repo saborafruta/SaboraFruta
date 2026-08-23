@@ -10,6 +10,7 @@ from apps.cadastros.models import Cliente
 from apps.financeiro.constants.enums import StatusContaPagar, StatusContaReceber, TipoFormaPagamento
 from apps.financeiro.models import ContaBancaria, FormaPagamento, PlanoContabil, PlanoContas
 from apps.financeiro.models.extrato import ExtratoBancario
+from apps.financeiro.models.formas_pagamento import TaxaParcelamento
 from apps.financeiro.models.receber_pagar import ContaPagar, ContaReceber, PagamentoContaPagar
 from apps.financeiro.services.receber_service import ContaReceberService
 from apps.financeiro.services.posicao_diaria_service import PosicaoDiariaCaixaService
@@ -299,6 +300,63 @@ class PosicaoDiariaCaixaTests(TestCase):
         })
         self.assertContains(response, "Ver título")
         self.assertContains(response, reverse("financeiro:receber_detail", args=[conta.pk]))
+
+    def test_baixa_de_cartao_usa_bandeira_e_parcelas_da_operacao(self):
+        self.forma.tipo = TipoFormaPagamento.CARTAO_CREDITO
+        self.forma.prazo_compensacao_dias_uteis = 1
+        self.forma.save(update_fields=["tipo", "prazo_compensacao_dias_uteis"])
+        TaxaParcelamento.objects.create(
+            forma_pagamento=self.forma, parcelas=3, bandeira="mastercard", taxa=Decimal("3.22"),
+        )
+        cliente = Cliente.objects.create(
+            filial=self.filial, razao_social="Cliente cartao", tipo_pessoa="F", cpf_cnpj="12345678909",
+        )
+        conta = ContaReceber.objects.create(
+            filial=self.filial, cliente=cliente, valor_original=Decimal("100.00"),
+            valor_final=Decimal("100.00"), valor_saldo=Decimal("100.00"),
+            data_emissao=date(2026, 8, 20), data_vencimento=date(2026, 8, 21),
+        )
+
+        ContaReceberService.registrar_baixa(
+            conta, date(2026, 8, 21), Decimal("100.00"), self.forma, self.usuario,
+            conta_bancaria=self.banco, bandeira="Mastercard", numero_parcelas=3,
+        )
+        conta.refresh_from_db()
+
+        self.assertEqual(conta.bandeira_recebimento, "mastercard")
+        self.assertEqual(conta.parcelas_recebimento, 3)
+        self.assertEqual(conta.taxa_percentual_aplicada, Decimal("3.2200"))
+        self.assertEqual(conta.valor_taxa_recebimento, Decimal("3.22"))
+        self.assertEqual(conta.valor_liquido_recebido, Decimal("96.78"))
+        self.assertEqual(conta.data_liquidacao_prevista, date(2026, 8, 24))
+
+    def test_entrada_manual_debito_calcula_taxa_da_bandeira_e_compensacao(self):
+        self.forma.tipo = TipoFormaPagamento.CARTAO_DEBITO
+        self.forma.prazo_compensacao_dias_uteis = 1
+        self.forma.save(update_fields=["tipo", "prazo_compensacao_dias_uteis"])
+        TaxaParcelamento.objects.create(
+            forma_pagamento=self.forma, parcelas=1, bandeira="visa", taxa=Decimal("1.11"),
+        )
+        movimento = ExtratoBancario(
+            filial=self.filial, conta_bancaria=self.banco, forma_pagamento=self.forma,
+            data_lancamento=date(2026, 8, 21), historico="Debito Visa",
+            valor=Decimal("100.00"), origem="manual", bandeira="visa", numero_parcelas=1,
+        )
+        movimento.recalcular_recebimento()
+        movimento.save()
+
+        self.assertEqual(movimento.taxa_percentual_aplicada, Decimal("1.11"))
+        self.assertEqual(movimento.valor_taxa, Decimal("1.11"))
+        self.assertEqual(movimento.valor_liquido, Decimal("98.89"))
+        self.assertEqual(movimento.data_credito, date(2026, 8, 24))
+        self.assertEqual(
+            PosicaoDiariaCaixaService(self.filial, date(2026, 8, 21)).gerar()["total_entradas"],
+            Decimal("0"),
+        )
+        segunda = PosicaoDiariaCaixaService(self.filial, date(2026, 8, 24)).gerar()
+        self.assertEqual(segunda["total_entradas"], Decimal("100.00"))
+        self.assertEqual(segunda["total_taxas_entradas"], Decimal("1.11"))
+        self.assertEqual(segunda["total_liquido_entradas"], Decimal("98.89"))
 
     def test_recebimento_previsto_atrasado_aparece_em_vermelho(self):
         cliente = Cliente.objects.create(
