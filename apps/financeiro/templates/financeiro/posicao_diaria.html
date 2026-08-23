@@ -17,7 +17,7 @@
   .pc-notice { border-color:#93c5fd; background:#eff6ff; color:#1e3a8a; }
   .dark .pc-notice { border-color:#1d4ed8; background:rgba(30,58,138,.24); color:#dbeafe; }
   .pc-page-heading { background:transparent !important; color:inherit !important; }
-  .pc-private .pc-sensitive { filter:blur(7px); user-select:none; }
+  .pc-private > :not(.pc-page-heading) { filter:blur(8px); pointer-events:none; user-select:none; }
   .pc-ledger { --ledger:#475569; --ledger-soft:#f8fafc; border:1px solid #cbd5e1; background:#fff; }
   .pc-ledger.entry { --ledger:#047857; --ledger-soft:#ecfdf5; }
   .pc-ledger.exit { --ledger:#be123c; --ledger-soft:#fff1f2; }
@@ -320,7 +320,7 @@
         <div class="pc-summary-card p-4"><h4 class="text-sm font-semibold">Saídas por conta bancária</h4>{% for item in posicao.totais_conta_saida %}<div class="mt-3 flex justify-between gap-3 text-sm"><span class="truncate text-gray-500">{{ item.nome }}</span><strong>R$ {{ item.valor|floatformat:2 }}</strong></div>{% empty %}<p class="mt-3 text-sm text-gray-500">Sem saídas.</p>{% endfor %}</div>
       </div>
     </div>
-    {% if posicao.total_despesas_pessoais > 0 %}<div class="pc-personal-summary flex flex-wrap items-center justify-between gap-4 border-t px-4 py-3"><span><strong class="block text-sm">Despesas pessoais no período</strong><small>Já incluídas nas saídas e no saldo final. Meta mensal: {{ meta_despesa_percentual|floatformat:1 }}% utilizada.</small></span><span class="text-right"><strong class="pc-sensitive block whitespace-nowrap text-lg">R$ {{ posicao.total_despesas_pessoais|floatformat:2 }}</strong><small class="pc-sensitive">Mês: R$ {{ meta_despesa_usado|floatformat:2 }} de R$ {{ meta_despesa_valor|floatformat:2 }}</small></span></div>{% endif %}
+    {% if posicao.total_despesas_pessoais > 0 %}<div class="pc-personal-summary border-t px-4 py-3"><div class="flex flex-wrap items-center justify-between gap-4"><span><strong class="block text-sm">Despesas pessoais no período</strong><small>Já incluídas nas saídas e no saldo final. Meta mensal: {{ meta_despesa_percentual|floatformat:1 }}% utilizada.</small></span><span class="text-right"><strong class="pc-sensitive block whitespace-nowrap text-lg">R$ {{ posicao.total_despesas_pessoais|floatformat:2 }}</strong><small class="pc-sensitive">Mês: R$ {{ meta_despesa_usado|floatformat:2 }} de R$ {{ meta_despesa_valor|floatformat:2 }}</small></span></div><div class="mt-3 h-2 overflow-hidden rounded-full bg-amber-200"><div class="h-full rounded-full {% if meta_despesa_percentual > 100 %}bg-rose-500{% else %}bg-amber-500{% endif %}" style="width:{{ meta_despesa_percentual_barra|floatformat:0 }}%"></div></div></div>{% endif %}
   </section>
 
   <section>
@@ -411,7 +411,7 @@
           <div class="mt-5 flex flex-wrap justify-end gap-2">
             {% if detalhe.referencia_url %}<a href="{{ detalhe.referencia_url }}" class="btn-secondary">Abrir lançamento de origem</a>{% endif %}
             {% if user_is_admin and detalhe.entrada and detalhe.editavel and not detalhe.excluido %}<button type="button" class="btn-primary" @click="detalheModal=false; entradaEdicao=true">Editar entrada</button>{% endif %}
-            {% if user_is_admin and detalhe.origem_codigo == 'manual' and not detalhe.excluido %}<button type="button" class="btn-secondary text-rose-600" @click="excluirModal=true">Excluir</button>{% endif %}
+            {% if user_is_admin and detalhe.origem_codigo == 'manual' and not detalhe.excluido %}<a href="?data={{ data_referencia|date:'Y-m-d' }}&editar={{ detalhe.registro_id }}" class="btn-secondary">Editar movimento</a><button type="button" class="btn-secondary text-rose-600" @click="excluirModal=true">Excluir</button>{% endif %}
           </div>
           <form x-show="excluirModal" x-cloak method="post" class="mt-4 rounded-lg border border-rose-300 bg-rose-50 p-4 dark:border-rose-900 dark:bg-rose-950/20">{% csrf_token %}<input type="hidden" name="acao" value="excluir_movimento"><input type="hidden" name="movimento_id" value="{{ detalhe.registro_id }}"><input type="hidden" name="data_referencia" value="{{ data_referencia|date:'Y-m-d' }}"><label class="text-xs font-semibold">Motivo da exclusão <input name="justificativa" required class="form-input mt-1 w-full" placeholder="Explique a correção"></label><div class="mt-3 flex justify-end gap-2"><button type="button" class="btn-secondary" @click="excluirModal=false">Cancelar</button><button class="btn-primary bg-rose-600" type="submit">Confirmar exclusão</button></div></form>
         </div>

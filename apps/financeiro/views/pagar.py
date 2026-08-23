@@ -518,7 +518,7 @@ class ContaPagaListView(PermissaoRequiredMixin, View):
         totais['acrescimos'] = (totais['juros'] or 0) + (totais['multas'] or 0)
         contas_filtradas = list(qs)
         fornecedores_resumo, total_fornecedores = _resumo_fornecedores(contas_filtradas)
-        paginator = Paginator(contas_filtradas, 40)
+        paginator = Paginator(contas_filtradas, 10)
         page_obj = paginator.get_page(request.GET.get('page', 1))
         query = request.GET.copy()
         query.pop('page', None)

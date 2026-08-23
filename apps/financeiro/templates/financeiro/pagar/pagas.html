@@ -31,6 +31,7 @@
       <p class="mt-1 text-sm opacity-70">Consulte pagamentos concluídos e abra qualquer título para ver a baixa completa.</p>
     </div>
     <div class="flex flex-wrap gap-2">
+      <a href="{% url 'financeiro:pagar_list' %}" class="btn-secondary">Contas a pagar</a>
       {% if user_is_admin %}<a href="?{% if mostrar_excluidos %}{% else %}mostrar_excluidos=1{% endif %}" class="btn-secondary">{% if mostrar_excluidos %}Ocultar excluídos{% else %}Ver excluídos{% endif %}</a>{% endif %}
       <a href="{% url 'financeiro:pagar_pagas_relatorio' %}{% if page_querystring %}?{{ page_querystring }}{% endif %}"
          target="_blank" class="btn-secondary">Imprimir relatório</a>
@@ -64,8 +65,8 @@
     </div>
   </div>
 
-  <div class="order-6 grid gap-3 lg:grid-cols-[.8fr_1.2fr]">
-    <section class="card p-3">
+  <div class="order-6 flex flex-col gap-3">
+    <section class="order-2 card p-3">
       <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div>
           <h3 class="text-base font-semibold">Meta de despesas pessoais</h3>
@@ -115,7 +116,7 @@
       {% endif %}
     </section>
 
-    <section class="card p-3">
+    <section class="order-1 card p-3">
       <div class="flex items-start justify-between gap-3">
         <div>
           <h3 class="text-base font-semibold">Gasto por fornecedor</h3>
@@ -253,6 +254,7 @@
 
   {% if page_obj.paginator.num_pages > 1 %}
     <div class="order-5 flex items-center justify-between gap-3 text-sm">
+      <span class="font-semibold text-blue-600">Há mais contas pagas para visualizar.</span>
       <span class="opacity-70">Página {{ page_obj.number }} de {{ page_obj.paginator.num_pages }} · {{ page_obj.paginator.count }} registros</span>
       <div class="flex gap-2">
         {% if page_obj.has_previous %}<a class="btn-secondary" href="?{% if page_querystring %}{{ page_querystring }}&{% endif %}page={{ page_obj.previous_page_number }}">Anterior</a>{% endif %}
