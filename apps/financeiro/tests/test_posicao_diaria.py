@@ -349,14 +349,15 @@ class PosicaoDiariaCaixaTests(TestCase):
         self.assertEqual(movimento.valor_taxa, Decimal("1.11"))
         self.assertEqual(movimento.valor_liquido, Decimal("98.89"))
         self.assertEqual(movimento.data_credito, date(2026, 8, 24))
-        self.assertEqual(
-            PosicaoDiariaCaixaService(self.filial, date(2026, 8, 21)).gerar()["total_entradas"],
-            Decimal("0"),
-        )
+        sexta = PosicaoDiariaCaixaService(self.filial, date(2026, 8, 21)).gerar()
+        self.assertEqual(sexta["total_entradas"], Decimal("100.00"))
+        entrada = next(m for m in sexta["entradas"] if m.registro_id == movimento.pk)
+        self.assertEqual(entrada.data, date(2026, 8, 21))
+        self.assertEqual(entrada.data_credito, date(2026, 8, 24))
+        self.assertEqual(sexta["total_fechamento"], Decimal("150.00"))
         segunda = PosicaoDiariaCaixaService(self.filial, date(2026, 8, 24)).gerar()
-        self.assertEqual(segunda["total_entradas"], Decimal("100.00"))
-        self.assertEqual(segunda["total_taxas_entradas"], Decimal("1.11"))
-        self.assertEqual(segunda["total_liquido_entradas"], Decimal("98.89"))
+        self.assertEqual(segunda["total_entradas"], Decimal("0"))
+        self.assertEqual(segunda["total_fechamento"], Decimal("248.89"))
 
     def test_recebimento_previsto_atrasado_aparece_em_vermelho(self):
         cliente = Cliente.objects.create(

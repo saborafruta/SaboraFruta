@@ -45,6 +45,7 @@ class MovimentoDiario:
     editavel: bool = True
     bandeira: str = ""
     numero_parcelas: int | None = None
+    data_credito: date | None = None
 
     @property
     def valor(self):
@@ -134,7 +135,10 @@ class PosicaoDiariaCaixaService:
         saldo_anterior = self._saldos_antes_do_dia()
         por_conta_dia = defaultdict(lambda: ZERO)
         for mov in movimentos_ativos:
-            por_conta_dia[mov.conta.pk] += mov.valor
+            if mov.origem_codigo != "manual":
+                por_conta_dia[mov.conta.pk] += mov.valor
+        for conta_id, valor in self._impactos_manuais_no_saldo().items():
+            por_conta_dia[conta_id] += valor
 
         contas = []
         for indice, conta in enumerate(self.contas):
@@ -260,9 +264,7 @@ class PosicaoDiariaCaixaService:
         movimentos = []
         manuais = ExtratoBancario.objects.filter(
             filial=self.filial, conta_bancaria_id__in=self.conta_ids,
-        ).filter(
-            Q(data_credito__range=(self.data_inicio, self.data_fim))
-            | Q(data_credito__isnull=True, data_lancamento__range=(self.data_inicio, self.data_fim)),
+            data_lancamento__range=(self.data_inicio, self.data_fim),
         ).select_related(
             "conta_bancaria", "forma_pagamento", "plano_contas",
             "plano_contas__conta_pai", "plano_contas__conta_pai__conta_pai",
@@ -274,7 +276,7 @@ class PosicaoDiariaCaixaService:
             taxa_descontada = bool(valor > ZERO and item.taxa_calculada_em)
             entrada = item.valor_entrada_liquida if taxa_descontada else max(valor, ZERO)
             movimentos.append(MovimentoDiario(
-                data=item.data_credito or item.data_lancamento, conta=item.conta_bancaria,
+                data=item.data_lancamento, conta=item.conta_bancaria,
                 descricao=item.historico or "Lancamento manual", contraparte="Movimento manual",
                 origem="Manual" if item.origem == "manual" else "Extrato bancario",
                 origem_codigo="manual", registro_id=item.pk, documento=item.documento,
@@ -303,6 +305,7 @@ class PosicaoDiariaCaixaService:
                 editavel=valor > ZERO,
                 bandeira=item.bandeira,
                 numero_parcelas=item.numero_parcelas,
+                data_credito=item.data_credito,
             ))
 
         recebimentos = ContaReceber.objects.filter(
@@ -395,6 +398,24 @@ class PosicaoDiariaCaixaService:
                     numero_parcelas=item.numero_parcelas,
                 ))
         return sorted(movimentos, key=lambda m: (m.origem, m.descricao.casefold(), m.registro_id))
+
+    def _impactos_manuais_no_saldo(self):
+        """Aplica no saldo bancario a data de credito sem ocultar a operacao original."""
+        impactos = defaultdict(lambda: ZERO)
+        manuais = ExtratoBancario.objects.filter(
+            filial=self.filial,
+            conta_bancaria_id__in=self.conta_ids,
+        ).filter(
+            Q(data_credito__range=(self.data_inicio, self.data_fim))
+            | Q(
+                data_credito__isnull=True,
+                data_lancamento__range=(self.data_inicio, self.data_fim),
+            ),
+        ).exclude(status="excluido")
+        for item in manuais.iterator():
+            valor = item.valor_entrada_liquida if item.valor > ZERO else item.valor
+            _somar(impactos, item.conta_bancaria_id, valor)
+        return impactos
 
     def _saldos_antes_do_dia(self):
         saldos = defaultdict(lambda: ZERO)
