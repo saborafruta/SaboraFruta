@@ -448,3 +448,97 @@ class DevolverEstoqueTests(LimparPedidosBase):
         with self.assertRaises(CommandError):
             self._rodar(filial=self.filial.pk, confirmar=True,
                         incluir_estoque=True, usuario='ninguem@t.local')
+
+
+class NaoSobraNadaTests(LimparPedidosBase):
+    """
+    Prova por VARREDURA, e não por leitura de chave estrangeira.
+
+    Conferir cobertura a olho, FK por FK, é como se esquece uma: o modelo que
+    ninguém lembrou fica na tabela apontando para um pedido que não existe
+    mais, e só aparece meses depois num relatório que não fecha.
+
+    Aqui o teste monta um pedido com TUDO que o comercial pendura nele, roda
+    a limpeza e depois varre as tabelas do vertical procurando sobra. Modelo
+    novo que entrar no fluxo e não for tratado quebra este teste — que é
+    exatamente o que se quer dele.
+    """
+
+    # O que NÃO é gerado pelo comercial: cadastro de apoio, engenharia e
+    # catálogo existem antes do pedido e continuam depois dele. Uma limpeza
+    # que levasse o cadastro de tamanhos junto seria outro problema.
+    CADASTROS = {
+        'Tamanho', 'Cor', 'Tecido', 'Marca', 'Modelo', 'Categoria', 'Colecao',
+        'Linha', 'Grade', 'ItemGrade', 'ProdutoModa', 'ProdutoCor', 'Variante',
+        'Operacao', 'Roteiro', 'OperacaoRoteiro', 'FichaTecnica',
+        'MaterialFicha', 'ImagemFicha', 'EstruturaProduto', 'Encaixe',
+        'CapacidadeSetor', 'Posicao',
+    }
+
+    def _pedido_com_tudo(self):
+        """Um pedido com cada coisa que o comercial sabe pendurar."""
+        from django.core.files.uploadedfile import SimpleUploadedFile
+
+        from apps.moda.models import (
+            AprovacaoPedido, ArquivoPedido, ItemGradePedido, Personalizacao,
+            PersonalizacaoIndividual, Tamanho,
+        )
+
+        pedido = self._pedido_completo(
+            com_corte=True, com_expedicao=True, com_inspecao=True,
+        )
+        item = pedido.itens.first()
+        tamanho = Tamanho.objects.create(filial=self.filial, sigla='M', ordem=30)
+
+        ItemGradePedido.objects.create(item=item, tamanho=tamanho, quantidade=10)
+        Personalizacao.objects.create(
+            item=item, tipo=Personalizacao.Tipo.ESCUDO, local='Peito',
+            arquivo=SimpleUploadedFile('escudo.png', b'\x89PNG\r\n\x1a\n'),
+        )
+        PersonalizacaoIndividual.objects.create(
+            pedido=pedido, item=item, tamanho=tamanho, nome='Joao', numero='10',
+        )
+        ArquivoPedido.objects.create(
+            pedido=pedido, tipo=ArquivoPedido.Tipo.ARTE,
+            arquivo=SimpleUploadedFile('arte.png', b'\x89PNG\r\n\x1a\n'),
+        )
+        AprovacaoPedido.objects.create(pedido=pedido)
+        self._titulo(pedido)
+        return pedido
+
+    def test_nao_sobra_nada_do_pedido_em_tabela_nenhuma(self):
+        from django.apps import apps as registro
+
+        self._pedido_com_tudo()
+
+        self._rodar(filial=self.filial.pk, confirmar=True, incluir_financeiro=True)
+
+        sobrou = {}
+        for modelo in registro.get_app_config('moda').get_models():
+            if modelo.__name__ in self.CADASTROS:
+                continue
+            gerente = getattr(modelo, 'all_objects', modelo._default_manager)
+            quantidade = gerente.count()
+            if quantidade:
+                sobrou[modelo.__name__] = quantidade
+
+        self.assertEqual(
+            sobrou, {},
+            'sobrou registro do comercial depois da limpeza — '
+            'algum modelo novo entrou no fluxo e não é tratado pelo comando',
+        )
+
+    def test_o_cadastro_de_apoio_continua_intacto(self):
+        """
+        Tamanho, cor e produto existem ANTES do pedido e continuam depois.
+        Uma limpeza que levasse o catálogo junto seria outro problema — e
+        bem pior, porque ele não se refaz sozinho.
+        """
+        from apps.moda.models import ProdutoModa, Tamanho
+
+        self._pedido_com_tudo()
+
+        self._rodar(filial=self.filial.pk, confirmar=True, incluir_financeiro=True)
+
+        self.assertEqual(Tamanho.objects.count(), 1)
+        self.assertEqual(ProdutoModa.objects.count(), 1)
