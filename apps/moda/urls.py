@@ -25,7 +25,7 @@ from . import (
     views_custo_real as vcr, views_estoque_tecido as vet,
     views_estoque_aviamento as vea, views_estoque_produto as vep,
     views_estoque_semiacabado as ves, views_estoque_acabado as veac,
-    views_estoque_lote as velo,
+    views_estoque_lote as velo, views_margem as vmar,
 )
 
 app_name = 'moda'
@@ -149,6 +149,7 @@ ROTAS_PRONTAS: list = [
     path('indicadores/eficiencia/', vef.EficienciaIndicadorView.as_view(), name='indicador-eficiencia'),
     path('indicadores/perdas/', vperd.PerdasIndicadorView.as_view(), name='indicador-perdas'),
     path('indicadores/custos/', vcr.CustoIndicadorView.as_view(), name='indicador-custos'),
+    path('indicadores/margens/', vmar.MargemIndicadorView.as_view(), name='indicador-margens'),
 
     # Estoque -- mesmo caso: o endereco ja' esta' no menu.
     path('estoque/tecidos/', vet.EstoqueTecidoView.as_view(), name='estoque-tecidos'),
