@@ -416,6 +416,10 @@ class FuncionarioContaPagarTests(TestCase):
         self.assertNotContains(response, "ABERTO-001")
         self.assertContains(response, f'/financeiro/pagar/{paga.pk}/')
         self.assertContains(response, "Nova despesa paga")
+        self.assertContains(response, "Análise por categoria financeira")
+        self.assertContains(response, "Maior categoria")
+        self.assertContains(response, "Gasto por fornecedor")
+        self.assertContains(response, "R$ 1800,00")
 
     def test_despesa_paga_tem_formulario_curto_e_exige_beneficiario(self):
         form = DespesaPagaForm(filial=self.filial)

@@ -41,7 +41,23 @@
     </div>
   </div>
 
-  <div class="order-4 flex flex-col gap-3">
+  <section class="order-4 card p-4">
+    <div class="flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
+      <div><h3 class="text-base font-semibold">Análise por categoria financeira</h3><p class="mt-1 text-xs opacity-65">Distribuição das contas exibidas pelos filtros acima.</p></div>
+      <span class="text-xs font-semibold opacity-60">{{ categorias_quantidade }} grupo{{ categorias_quantidade|pluralize }} utilizado{{ categorias_quantidade|pluralize }}</span>
+    </div>
+    <div class="mt-4 grid grid-cols-2 gap-2 lg:grid-cols-4">
+      <div class="rounded-md border p-3" style="border-color:rgba(148,163,184,.28)"><span class="block text-[11px] font-semibold uppercase opacity-55">Total analisado</span><strong class="mt-1 block text-lg">R$ {{ categorias_total|floatformat:2 }}</strong></div>
+      <div class="rounded-md border p-3" style="border-color:rgba(148,163,184,.28)"><span class="block text-[11px] font-semibold uppercase opacity-55">Categorias usadas</span><strong class="mt-1 block text-lg">{{ categorias_quantidade }}</strong></div>
+      <div class="rounded-md border p-3" style="border-color:rgba(148,163,184,.28)"><span class="block text-[11px] font-semibold uppercase opacity-55">Maior categoria</span><strong class="mt-1 block truncate text-sm">{{ categoria_maior.nome|default:"Sem dados" }}</strong>{% if categoria_maior %}<span class="mt-1 block text-xs opacity-65">{{ categoria_maior.percentual|floatformat:1 }}% · R$ {{ categoria_maior.valor|floatformat:2 }}</span>{% endif %}</div>
+      <div class="rounded-md border p-3 {% if categorias_sem_classificacao > 0 %}border-amber-300 bg-amber-50 text-amber-900 dark:border-amber-900 dark:bg-amber-950/20 dark:text-amber-100{% endif %}" style="border-color:rgba(148,163,184,.28)"><span class="block text-[11px] font-semibold uppercase opacity-55">Sem classificação</span><strong class="mt-1 block text-lg">R$ {{ categorias_sem_classificacao|floatformat:2 }}</strong><span class="text-xs opacity-65">{{ categorias_sem_classificacao_percentual|floatformat:1 }}% do total</span></div>
+    </div>
+    <div class="mt-4 grid gap-x-6 gap-y-3 lg:grid-cols-2">
+      {% for categoria in categorias_resumo %}<div><div class="flex items-center justify-between gap-3 text-sm"><span class="truncate font-semibold">{{ categoria.nome }}</span><strong class="whitespace-nowrap">R$ {{ categoria.valor|floatformat:2 }}</strong></div><div class="mt-1 flex items-center gap-2"><div class="h-2 flex-1 overflow-hidden rounded-full bg-slate-200 dark:bg-slate-800"><div class="h-full rounded-full bg-emerald-500" style="width:{{ categoria.percentual|floatformat:0 }}%;{% if categoria.percentual > 0 %}min-width:6px;{% endif %}"></div></div><span class="w-14 text-right text-xs opacity-65">{{ categoria.percentual|floatformat:1 }}%</span></div><span class="mt-0.5 block text-xs opacity-50">{{ categoria.quantidade }} conta{{ categoria.quantidade|pluralize }}</span></div>{% empty %}<p class="text-sm opacity-65">Nenhuma categoria encontrada para os filtros atuais.</p>{% endfor %}
+    </div>
+  </section>
+
+  <div class="order-5 flex flex-col gap-3">
     <section class="order-2 card p-3">
       <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div>
@@ -101,11 +117,11 @@
       </div>
       <div class="mt-4 space-y-3">
         {% for fornecedor in fornecedores_resumo %}
-          <div>
-            <div class="flex items-center justify-between gap-3 text-sm">
-              <span class="min-w-0 truncate font-semibold">{{ fornecedor.nome }}</span>
+          <div x-data="{aberto:false}" class="rounded-md border p-3" style="border-color:rgba(148,163,184,.22)">
+            <button type="button" class="flex w-full items-center justify-between gap-3 text-left text-sm" @click="aberto=!aberto" :aria-expanded="aberto">
+              <span class="flex min-w-0 items-center gap-2"><svg class="h-4 w-4 shrink-0 transition-transform" :class="{'rotate-90':aberto}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m9 18 6-6-6-6"/></svg><span class="truncate font-semibold">{{ fornecedor.nome }}</span></span>
               <span class="whitespace-nowrap font-bold">R$ {{ fornecedor.valor|floatformat:2 }}</span>
-            </div>
+            </button>
             <div class="mt-1 flex items-center gap-2">
               <div class="h-2 flex-1 overflow-hidden rounded-full bg-slate-200 dark:bg-slate-800">
                 <div class="h-full rounded-full bg-blue-500" style="width:{{ fornecedor.percentual|floatformat:0 }}%"></div>
@@ -113,6 +129,9 @@
               <span class="w-14 text-right text-xs opacity-70">{{ fornecedor.percentual|floatformat:1 }}%</span>
             </div>
             <div class="mt-0.5 text-xs opacity-55">{{ fornecedor.quantidade }} pagamento{{ fornecedor.quantidade|pluralize }}</div>
+            <div x-show="aberto" x-cloak class="mt-3 divide-y border-t pt-2" style="border-color:rgba(148,163,184,.22)">
+              {% for conta_fornecedor in fornecedor.contas %}<button type="button" class="flex w-full items-center justify-between gap-3 py-2 text-left text-xs hover:text-blue-500" @click="abrirDetalhe('{% url 'financeiro:pagar_detail' conta_fornecedor.pk %}')"><span><strong class="block">{{ conta_fornecedor.descricao_exibicao }}</strong><span class="opacity-55">{{ conta_fornecedor.data_pagamento|date:'d/m/Y' }} · {{ conta_fornecedor.plano_contas.descricao|default:'Sem classificação' }}</span></span><strong class="whitespace-nowrap">R$ {{ conta_fornecedor.valor_pago|floatformat:2 }}</strong></button>{% endfor %}
+            </div>
           </div>
         {% empty %}
           <p class="text-sm opacity-65">Nenhuma conta paga encontrada para montar o resumo.</p>

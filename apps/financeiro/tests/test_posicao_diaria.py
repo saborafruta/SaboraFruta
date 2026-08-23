@@ -455,6 +455,13 @@ class PosicaoDiariaCaixaTests(TestCase):
             origem="manual", status="importado",
         )
 
+        tela_edicao = self.client.get(reverse("financeiro:posicao_diaria"), {
+            "data": "2026-08-21", "editar": movimento.pk,
+        })
+        self.assertContains(tela_edicao, 'name="data_lancamento"')
+        self.assertContains(tela_edicao, 'value="2026-08-21"')
+        self.assertContains(tela_edicao, f'value="{categoria.pk}" selected')
+
         response = self.client.post(reverse("financeiro:posicao_diaria"), {
             "acao": "editar_movimento", "movimento_id": movimento.pk,
             "data_referencia": "2026-08-21", "valor": "31.50",

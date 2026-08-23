@@ -174,7 +174,11 @@ class DirecionarContaBancariaForm(forms.Form):
 
 class EditarMovimentoBancarioForm(forms.Form):
     conta_bancaria = ContaBancariaChoiceField(queryset=ContaBancaria.objects.none(), label="Conta")
-    data_lancamento = forms.DateField(widget=forms.DateInput(attrs={"type": "date"}), label="Data")
+    data_lancamento = forms.DateField(
+        input_formats=["%Y-%m-%d"],
+        widget=forms.DateInput(format="%Y-%m-%d", attrs={"type": "date"}),
+        label="Data",
+    )
     valor = forms.DecimalField(max_digits=14, decimal_places=2, min_value=0.01, label="Valor")
     historico = forms.CharField(max_length=200, label="Historico")
     documento = forms.CharField(max_length=30, required=False, label="Documento")

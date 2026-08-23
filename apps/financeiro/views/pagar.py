@@ -121,7 +121,16 @@ def _logs_edicao_lancamento(conta):
     for log in logs:
         anteriores = log.dados_anteriores or {}
         novos = log.dados_novos or {}
-        campos_log = sorted(set(anteriores) | set(novos))
+        campos_log = [
+            campo for campo in CAMPOS_EDICAO_LANCAMENTO
+            if campo in anteriores or campo in novos
+        ]
+        log.titulo_amigavel = {
+            RegistroAuditoria.Acao.CRIAR: 'Conta registrada',
+            RegistroAuditoria.Acao.AJUSTAR: 'Lancamento corrigido',
+            RegistroAuditoria.Acao.EXCLUIR: 'Conta excluida',
+            RegistroAuditoria.Acao.RESTAURAR: 'Conta restaurada',
+        }.get(log.acao, log.get_acao_display())
         log.alteracoes_exibicao = [
             {
                 'campo': CAMPOS_EDICAO_LANCAMENTO.get(campo, campo.replace('_', ' ').title()),
@@ -130,6 +139,7 @@ def _logs_edicao_lancamento(conta):
             }
             for campo in campos_log
             if anteriores.get(campo) != novos.get(campo)
+            and log.acao != RegistroAuditoria.Acao.CRIAR
         ]
         log.quantidade_alteracoes = len(log.alteracoes_exibicao)
     return logs
@@ -445,14 +455,53 @@ def _resumo_fornecedores(contas):
     grupos = {}
     for conta in contas:
         nome = conta.beneficiario_nome
-        grupo = grupos.setdefault(nome, {'nome': nome, 'valor': Decimal('0'), 'quantidade': 0})
+        grupo = grupos.setdefault(nome, {
+            'nome': nome, 'valor': Decimal('0'), 'quantidade': 0, 'contas': [],
+        })
         grupo['valor'] += conta.valor_pago or Decimal('0')
         grupo['quantidade'] += 1
+        grupo['contas'].append(conta)
     resumo = []
     for grupo in grupos.values():
         percentual = (grupo['valor'] / total * Decimal('100')) if total else Decimal('0')
         resumo.append({**grupo, 'percentual': percentual})
     return sorted(resumo, key=lambda item: item['valor'], reverse=True), total
+
+
+def _resumo_categorias_pagas(contas):
+    total = sum((conta.valor_pago or Decimal('0') for conta in contas), Decimal('0'))
+    grupos = {}
+    sem_classificacao = Decimal('0')
+    for conta in contas:
+        valor = conta.valor_pago or Decimal('0')
+        categoria = conta.plano_contas
+        if not categoria:
+            sem_classificacao += valor
+            continue
+        grupo = categoria
+        while grupo.conta_pai_id and grupo.conta_pai:
+            grupo = grupo.conta_pai
+        item = grupos.setdefault(grupo.pk, {
+            'nome': grupo.descricao, 'valor': Decimal('0'), 'quantidade': 0,
+        })
+        item['valor'] += valor
+        item['quantidade'] += 1
+    resumo = []
+    for item in grupos.values():
+        percentual = (item['valor'] / total * Decimal('100')) if total else Decimal('0')
+        resumo.append({**item, 'percentual': percentual})
+    resumo.sort(key=lambda item: item['valor'], reverse=True)
+    maior = resumo[0] if resumo else None
+    return {
+        'categorias_resumo': resumo,
+        'categorias_total': total,
+        'categorias_quantidade': len(resumo),
+        'categoria_maior': maior,
+        'categorias_sem_classificacao': sem_classificacao,
+        'categorias_sem_classificacao_percentual': (
+            sem_classificacao / total * Decimal('100') if total else Decimal('0')
+        ),
+    }
 
 
 def _contexto_meta_despesa_pessoal(filial, referencia=None):
@@ -516,8 +565,11 @@ class ContaPagaListView(PermissaoRequiredMixin, View):
             despesas_pessoais=Sum('valor_final', filter=Q(plano_contas__despesa_pessoal=True)),
         )
         totais['acrescimos'] = (totais['juros'] or 0) + (totais['multas'] or 0)
-        contas_filtradas = list(qs)
+        contas_filtradas = list(qs.select_related(
+            'plano_contas__conta_pai__conta_pai',
+        ))
         fornecedores_resumo, total_fornecedores = _resumo_fornecedores(contas_filtradas)
+        categorias_contexto = _resumo_categorias_pagas(contas_filtradas)
         paginator = Paginator(contas_filtradas, 10)
         page_obj = paginator.get_page(request.GET.get('page', 1))
         query = request.GET.copy()
@@ -536,6 +588,7 @@ class ContaPagaListView(PermissaoRequiredMixin, View):
             'user_is_admin': _usuario_admin(request),
             'fornecedores_resumo': fornecedores_resumo,
             'total_fornecedores': total_fornecedores,
+            **categorias_contexto,
             **meta_contexto,
             **filtros,
         })
