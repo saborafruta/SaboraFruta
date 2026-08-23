@@ -319,6 +319,12 @@ class ContaReceberDetailView(PermissaoRequiredMixin, View):
         pode_editar_prazo = pode_cancelar
         pill = PILL_STATUS.get(conta.status, 'is-slate')
 
+        prazo_retorno_url = request.META.get('HTTP_REFERER') or request.path
+        if not url_has_allowed_host_and_scheme(prazo_retorno_url, allowed_hosts={request.get_host()}):
+            prazo_retorno_url = request.path
+        if '?modal=1' in prazo_retorno_url:
+            prazo_retorno_url = request.path
+
         context = {
             'title': f'Conta a Receber #{conta.pk}',
             'conta': conta,
@@ -327,6 +333,7 @@ class ContaReceberDetailView(PermissaoRequiredMixin, View):
             'pode_editar_prazo': pode_editar_prazo,
             'pill': pill,
             'tipo_conta': 'receber',
+            'prazo_retorno_url': prazo_retorno_url,
         }
         if request.GET.get('modal') == '1':
             return render(request, 'financeiro/_detalhes_conta_modal.html', context)
