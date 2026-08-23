@@ -8,12 +8,22 @@ from apps.cadastros.models import Cliente
 from apps.financeiro.models.conta_bancaria import ContaBancaria, PlanoContas
 from apps.financeiro.models.formas_pagamento import FormaPagamento
 from apps.financeiro.forms.plano_contas import CategoriaFinanceiraChoiceField
+from apps.financeiro.forms.cartao import campo_parcelas, configurar_forma_pagamento, limpar_dados_cartao
 
 VALOR_WIDGET = forms.NumberInput(attrs={
     'step': '0.01',
     'inputmode': 'decimal',
     'data-decimal-places': '2',
 })
+
+BANDEIRAS_CARTAO = [
+    ('', 'Não informar'),
+    ('visa', 'Visa'),
+    ('mastercard', 'Mastercard'),
+    ('elo', 'Elo'),
+    ('amex', 'Amex'),
+    ('hiper', 'Hiper / Hipercard'),
+]
 
 
 class ContaReceberForm(forms.Form):
@@ -162,6 +172,12 @@ class BaixaContaReceberForm(forms.Form):
         queryset=FormaPagamento.objects.none(),
         label='Forma de recebimento',
     )
+    bandeira = forms.ChoiceField(
+        choices=BANDEIRAS_CARTAO,
+        required=False,
+        label='Bandeira do cartão (opcional)',
+    )
+    numero_parcelas = campo_parcelas()
     conta_bancaria = forms.ModelChoiceField(
         queryset=ContaBancaria.objects.none(),
         required=False,
@@ -177,11 +193,11 @@ class BaixaContaReceberForm(forms.Form):
     def __init__(self, *args, filial=None, conta=None, **kwargs):
         super().__init__(*args, **kwargs)
         if filial:
-            self.fields['forma_pagamento'].queryset = (
+            configurar_forma_pagamento(self, (
                 FormaPagamento.objects
                 .filter(empresa=filial.empresa, ativo=True)
                 .order_by('descricao')
-            )
+            ))
             self.fields['conta_bancaria'].queryset = (
                 ContaBancaria.objects.for_filial(filial)
                 .filter(ativo=True)
@@ -189,10 +205,12 @@ class BaixaContaReceberForm(forms.Form):
             )
         if conta:
             self.fields['valor_pago'].initial = conta.valor_saldo
+            self.fields['bandeira'].initial = conta.bandeira_recebimento
+            self.fields['numero_parcelas'].initial = conta.parcelas_recebimento
 
     def clean(self):
         cleaned = super().clean()
         cleaned.setdefault('valor_juros', Decimal('0'))
         cleaned.setdefault('valor_multa', Decimal('0'))
         cleaned.setdefault('valor_desconto', Decimal('0'))
-        return cleaned
+        return limpar_dados_cartao(self, cleaned)

@@ -1,5 +1,6 @@
 """Extrato bancário, conciliação e agenda de pagamentos."""
 from django.db import models
+from django.utils import timezone
 from apps.core.models import Filial, Usuario
 from apps.core.models.base import FilialManager as FilialAwareManager
 from .conta_bancaria import ContaBancaria, PlanoContas
@@ -25,6 +26,14 @@ class ExtratoBancario(models.Model):
     filial = models.ForeignKey(Filial, on_delete=models.PROTECT)
     data_lancamento = models.DateField()
     data_credito = models.DateField(null=True, blank=True)
+    bandeira = models.CharField(max_length=20, blank=True, default="")
+    numero_parcelas = models.PositiveSmallIntegerField(null=True, blank=True)
+    taxa_percentual_aplicada = models.DecimalField(max_digits=7, decimal_places=4, default=0)
+    taxa_fixa_aplicada = models.DecimalField(max_digits=14, decimal_places=2, default=0)
+    valor_taxa = models.DecimalField(max_digits=14, decimal_places=2, default=0)
+    valor_liquido = models.DecimalField(max_digits=14, decimal_places=2, default=0)
+    taxa_calculada_em = models.DateTimeField(null=True, blank=True)
+    prazo_compensacao_aplicado = models.PositiveSmallIntegerField(default=0)
     historico = models.CharField(max_length=200, blank=True)
     documento = models.CharField(max_length=30, blank=True)
     valor = models.DecimalField(max_digits=14, decimal_places=2,
@@ -47,6 +56,41 @@ class ExtratoBancario(models.Model):
         verbose_name_plural = "Extratos bancários"
         ordering = ["-data_lancamento"]
         indexes = [models.Index(fields=["conta_bancaria", "data_lancamento"])]
+
+    def recalcular_recebimento(self):
+        """Congela taxa e prazo usados por uma entrada manual."""
+        if (self.valor or 0) <= 0 or not self.forma_pagamento_id:
+            self.taxa_percentual_aplicada = 0
+            self.taxa_fixa_aplicada = 0
+            self.valor_taxa = 0
+            self.valor_liquido = max(self.valor or 0, 0)
+            self.taxa_calculada_em = None
+            self.prazo_compensacao_aplicado = 0
+            self.data_credito = None
+            return
+        calculo = self.forma_pagamento.calcular_taxa_recebimento(
+            self.valor,
+            self.numero_parcelas or 1,
+            self.bandeira,
+        )
+        self.taxa_percentual_aplicada = calculo["percentual"]
+        self.taxa_fixa_aplicada = calculo["fixa"]
+        self.valor_taxa = calculo["taxa"]
+        self.valor_liquido = calculo["liquido"]
+        self.taxa_calculada_em = timezone.now()
+        self.prazo_compensacao_aplicado = self.forma_pagamento.prazo_compensacao_dias_uteis or 0
+        from apps.core.services.calendario import adicionar_dias_uteis_bancarios
+        self.data_credito = adicionar_dias_uteis_bancarios(
+            self.data_lancamento,
+            self.prazo_compensacao_aplicado,
+            self.filial,
+        )
+
+    @property
+    def valor_entrada_liquida(self):
+        if (self.valor or 0) > 0 and self.taxa_calculada_em:
+            return self.valor_liquido
+        return self.valor
 
 
 class ConciliacaoBancaria(models.Model):

@@ -10,6 +10,7 @@ from apps.cadastros.models import Cliente
 from apps.financeiro.constants.enums import StatusContaPagar, StatusContaReceber, TipoFormaPagamento
 from apps.financeiro.models import ContaBancaria, FormaPagamento, PlanoContabil, PlanoContas
 from apps.financeiro.models.extrato import ExtratoBancario
+from apps.financeiro.models.formas_pagamento import TaxaParcelamento
 from apps.financeiro.models.receber_pagar import ContaPagar, ContaReceber, PagamentoContaPagar
 from apps.financeiro.services.receber_service import ContaReceberService
 from apps.financeiro.services.posicao_diaria_service import PosicaoDiariaCaixaService
@@ -188,8 +189,8 @@ class PosicaoDiariaCaixaTests(TestCase):
         self.assertEqual(venda.valor_taxa, Decimal("2.10"))
         self.assertEqual(venda.taxa_percentual, Decimal("2.00"))
         self.assertEqual(venda.entrada, Decimal("77.90"))
-        self.assertEqual(posicao["total_entradas"], Decimal("110.00"))
-        self.assertEqual(posicao["total_saidas"], Decimal("72.10"))
+        self.assertEqual(posicao["total_entradas"], Decimal("107.90"))
+        self.assertEqual(posicao["total_saidas"], Decimal("70.00"))
         self.assertEqual(posicao["variacao_dia"], Decimal("37.90"))
         self.assertEqual(posicao["total_fechamento"], Decimal("207.90"))
         self.assertEqual(posicao["total_taxas_entradas"], Decimal("2.10"))
@@ -197,8 +198,9 @@ class PosicaoDiariaCaixaTests(TestCase):
         self.assertEqual(posicao["taxas_por_forma"][0]["nome"], self.forma.descricao)
 
         response = self.client.get(reverse("financeiro:posicao_diaria"), {"data": "2026-08-21"})
-        self.assertContains(response, "TAXA 2,00% + R$ 0,50")
-        self.assertContains(response, "Taxas do período")
+        self.assertContains(response, "Original: R$ 80,00")
+        self.assertContains(response, "Taxa: R$ 2,10 (2,00%)")
+        self.assertContains(response, "Taxas descontadas nas entradas")
         self.assertContains(response, "Detalhamento das taxas")
         self.assertContains(response, "Taxas descontadas")
         self.assertNotContains(response, 'class="pc-fee-summary')
@@ -299,6 +301,64 @@ class PosicaoDiariaCaixaTests(TestCase):
         })
         self.assertContains(response, "Ver título")
         self.assertContains(response, reverse("financeiro:receber_detail", args=[conta.pk]))
+
+    def test_baixa_de_cartao_usa_bandeira_e_parcelas_da_operacao(self):
+        self.forma.tipo = TipoFormaPagamento.CARTAO_CREDITO
+        self.forma.prazo_compensacao_dias_uteis = 1
+        self.forma.save(update_fields=["tipo", "prazo_compensacao_dias_uteis"])
+        TaxaParcelamento.objects.create(
+            forma_pagamento=self.forma, parcelas=3, bandeira="mastercard", taxa=Decimal("3.22"),
+        )
+        cliente = Cliente.objects.create(
+            filial=self.filial, razao_social="Cliente cartao", tipo_pessoa="F", cpf_cnpj="12345678909",
+        )
+        conta = ContaReceber.objects.create(
+            filial=self.filial, cliente=cliente, valor_original=Decimal("100.00"),
+            valor_final=Decimal("100.00"), valor_saldo=Decimal("100.00"),
+            data_emissao=date(2026, 8, 20), data_vencimento=date(2026, 8, 21),
+        )
+
+        ContaReceberService.registrar_baixa(
+            conta, date(2026, 8, 21), Decimal("100.00"), self.forma, self.usuario,
+            conta_bancaria=self.banco, bandeira="Mastercard", numero_parcelas=3,
+        )
+        conta.refresh_from_db()
+
+        self.assertEqual(conta.bandeira_recebimento, "mastercard")
+        self.assertEqual(conta.parcelas_recebimento, 3)
+        self.assertEqual(conta.taxa_percentual_aplicada, Decimal("3.2200"))
+        self.assertEqual(conta.valor_taxa_recebimento, Decimal("3.22"))
+        self.assertEqual(conta.valor_liquido_recebido, Decimal("96.78"))
+        self.assertEqual(conta.data_liquidacao_prevista, date(2026, 8, 24))
+
+    def test_entrada_manual_debito_calcula_taxa_da_bandeira_e_compensacao(self):
+        self.forma.tipo = TipoFormaPagamento.CARTAO_DEBITO
+        self.forma.prazo_compensacao_dias_uteis = 1
+        self.forma.save(update_fields=["tipo", "prazo_compensacao_dias_uteis"])
+        TaxaParcelamento.objects.create(
+            forma_pagamento=self.forma, parcelas=1, bandeira="visa", taxa=Decimal("1.11"),
+        )
+        movimento = ExtratoBancario(
+            filial=self.filial, conta_bancaria=self.banco, forma_pagamento=self.forma,
+            data_lancamento=date(2026, 8, 21), historico="Debito Visa",
+            valor=Decimal("100.00"), origem="manual", bandeira="visa", numero_parcelas=1,
+        )
+        movimento.recalcular_recebimento()
+        movimento.save()
+
+        self.assertEqual(movimento.taxa_percentual_aplicada, Decimal("1.11"))
+        self.assertEqual(movimento.valor_taxa, Decimal("1.11"))
+        self.assertEqual(movimento.valor_liquido, Decimal("98.89"))
+        self.assertEqual(movimento.data_credito, date(2026, 8, 24))
+        sexta = PosicaoDiariaCaixaService(self.filial, date(2026, 8, 21)).gerar()
+        self.assertEqual(sexta["total_entradas"], Decimal("98.89"))
+        entrada = next(m for m in sexta["entradas"] if m.registro_id == movimento.pk)
+        self.assertEqual(entrada.data, date(2026, 8, 21))
+        self.assertEqual(entrada.data_credito, date(2026, 8, 24))
+        self.assertEqual(sexta["total_fechamento"], Decimal("150.00"))
+        segunda = PosicaoDiariaCaixaService(self.filial, date(2026, 8, 24)).gerar()
+        self.assertEqual(segunda["total_entradas"], Decimal("0"))
+        self.assertEqual(segunda["total_fechamento"], Decimal("248.89"))
 
     def test_recebimento_previsto_atrasado_aparece_em_vermelho(self):
         cliente = Cliente.objects.create(
@@ -477,9 +537,95 @@ class PosicaoDiariaCaixaTests(TestCase):
         self.assertEqual(response.status_code, 302)
         movimento = ExtratoBancario.objects.get(historico="Entrada classificada")
         self.assertEqual(movimento.plano_contas, categoria)
+        self.assertEqual(movimento.data_lancamento, date(2026, 8, 21))
         posicao = PosicaoDiariaCaixaService(self.filial, timezone.localdate()).gerar()
         entrada = next(mov for mov in posicao["entradas"] if mov.registro_id == movimento.pk)
         self.assertEqual(entrada.classificacao, "Emprestimo recebido")
+
+    def test_cartao_debito_ignora_parcelas_e_credito_respeita_maximo_cadastrado(self):
+        from apps.financeiro.forms.cadastros import MovimentoContaBancariaForm
+
+        debito = FormaPagamento.objects.create(
+            empresa=self.empresa, filial=self.filial, descricao="Debito",
+            tipo=TipoFormaPagamento.CARTAO_DEBITO,
+        )
+        credito = FormaPagamento.objects.create(
+            empresa=self.empresa, filial=self.filial, descricao="Credito",
+            tipo=TipoFormaPagamento.CARTAO_CREDITO, gera_parcelas=True,
+        )
+        TaxaParcelamento.objects.create(
+            forma_pagamento=credito, parcelas=6, bandeira="visa", taxa=Decimal("4.00"),
+        )
+        categoria = self._categoria_receita("Venda manual")
+        base = {
+            "tipo": "credito", "conta_destino": self.banco.pk,
+            "data_lancamento": "2026-08-21", "valor": "100.00",
+            "historico": "Cartao", "plano_contas": categoria.pk, "bandeira": "visa",
+        }
+
+        form_debito = MovimentoContaBancariaForm(
+            {**base, "forma_pagamento": debito.pk, "numero_parcelas": "12"},
+            filial=self.filial,
+        )
+        self.assertTrue(form_debito.is_valid(), form_debito.errors)
+        self.assertEqual(form_debito.cleaned_data["numero_parcelas"], 1)
+
+        form_credito = MovimentoContaBancariaForm(
+            {**base, "forma_pagamento": credito.pk, "numero_parcelas": "7"},
+            filial=self.filial,
+        )
+        self.assertFalse(form_credito.is_valid())
+        self.assertIn("numero_parcelas", form_credito.errors)
+
+    def test_forma_pagamento_manual_renderiza_opcoes_e_metadados_de_cartao(self):
+        from apps.financeiro.forms.cadastros import MovimentoContaBancariaForm
+
+        debito = FormaPagamento.objects.create(
+            empresa=self.empresa, filial=self.filial, descricao="Cartao debito",
+            tipo=TipoFormaPagamento.CARTAO_DEBITO,
+        )
+        credito = FormaPagamento.objects.create(
+            empresa=self.empresa, filial=self.filial, descricao="Cartao credito",
+            tipo=TipoFormaPagamento.CARTAO_CREDITO, gera_parcelas=True,
+        )
+        TaxaParcelamento.objects.create(
+            forma_pagamento=credito, parcelas=6, bandeira="visa", taxa=Decimal("4.00"),
+        )
+
+        html = str(MovimentoContaBancariaForm(filial=self.filial)["forma_pagamento"])
+
+        self.assertIn(">PIX<", html)
+        self.assertIn(">Cartao debito<", html)
+        self.assertIn('data-tipo="cartao_debito"', html)
+        self.assertIn(">Cartao credito<", html)
+        self.assertIn('data-max-parcelas="6"', html)
+
+    def test_edicao_de_entrada_manual_persiste_bandeira_do_cartao(self):
+        categoria = self._categoria_receita("Venda no cartao")
+        debito = FormaPagamento.objects.create(
+            empresa=self.empresa, filial=self.filial, descricao="Debito Visa",
+            tipo=TipoFormaPagamento.CARTAO_DEBITO,
+        )
+        movimento = ExtratoBancario.objects.create(
+            filial=self.filial, conta_bancaria=self.banco, forma_pagamento=self.forma,
+            plano_contas=categoria, data_lancamento=date(2026, 8, 22),
+            historico="Entrada de ontem", valor=Decimal("100.00"), origem="manual",
+        )
+
+        response = self.client.post(reverse("financeiro:posicao_diaria"), {
+            "acao": "editar_entrada", "origem": "manual", "movimento_id": movimento.pk,
+            "data_referencia": "2026-08-22", "valor": "100.00",
+            "forma_pagamento": debito.pk, "conta_bancaria": self.banco.pk,
+            "data_entrada": "2026-08-22", "descricao": "Entrada de ontem",
+            "plano_contas": categoria.pk, "bandeira": "visa", "numero_parcelas": "1",
+            "justificativa": "Informar bandeira do cartao",
+        })
+
+        self.assertEqual(response.status_code, 302)
+        movimento.refresh_from_db()
+        self.assertEqual(movimento.forma_pagamento, debito)
+        self.assertEqual(movimento.bandeira, "visa")
+        self.assertEqual(movimento.numero_parcelas, 1)
 
     def test_saida_manual_nao_pode_ser_corrigida_como_entrada(self):
         movimento = ExtratoBancario.objects.create(

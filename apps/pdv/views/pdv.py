@@ -3,7 +3,7 @@ import json
 from decimal import Decimal
 
 from django.db import transaction
-from django.db.models import Q, Sum
+from django.db.models import Max, Q, Sum
 from django.db.models.functions import Coalesce
 from django.http import JsonResponse
 from django.shortcuts import render
@@ -582,9 +582,10 @@ def api_estado(request):
         formas = list(
             FormaPagamento.objects.filter(
                 empresa=request.filial_ativa.empresa, ativo=True
-            ).values(
+            ).annotate(maximo_parcelas=Max('taxas_parcelamento__parcelas')).values(
                 'id', 'descricao', 'tipo', 'requer_tef', 'gera_parcelas',
                 'prazo_liquidacao_dias', 'prazo_compensacao_dias_uteis', 'movimenta_caixa',
+                'maximo_parcelas',
             )
         )
     except Exception:
@@ -1366,9 +1367,11 @@ def api_formas_pagamento(request):
     if request.method == 'GET':
         formas = list(
             FormaPagamento.objects.filter(empresa=empresa, filial=filial)
+            .annotate(maximo_parcelas=Max('taxas_parcelamento__parcelas'))
             .values(
                 'id', 'descricao', 'tipo', 'ativo', 'taxa_administrativa', 'taxa_fixa',
                 'gera_parcelas', 'prazo_liquidacao_dias', 'prazo_compensacao_dias_uteis',
+                'maximo_parcelas',
             )
             .order_by('descricao')
         )

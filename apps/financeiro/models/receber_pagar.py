@@ -50,6 +50,8 @@ class ContaReceber(TimestampedModel):
     valor_taxa_recebimento = models.DecimalField(max_digits=14, decimal_places=2, default=0)
     valor_liquido_recebido = models.DecimalField(max_digits=14, decimal_places=2, default=0)
     taxa_calculada_em = models.DateTimeField(null=True, blank=True)
+    bandeira_recebimento = models.CharField(max_length=20, blank=True, default="")
+    parcelas_recebimento = models.PositiveSmallIntegerField(null=True, blank=True)
 
     data_emissao = models.DateField()
     data_vencimento = models.DateField()

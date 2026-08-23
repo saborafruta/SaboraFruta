@@ -1317,12 +1317,12 @@
               <div style="display:grid;grid-template-columns:1fr 110px;gap:8px;margin-top:10px;padding-top:10px;border-top:1px solid #1e1e30;">
                 <label style="font-size:11px;color:#aaa;">Bandeira
                   <select x-model="bandeiraPgto" style="display:block;width:100%;margin-top:5px;padding:9px;background:#13131e;border:1px solid #34344a;border-radius:8px;color:#fff;">
-                    <option value="">Selecionar</option><option value="mastercard">Mastercard</option><option value="visa">Visa</option><option value="elo">Elo</option><option value="amex">Amex</option><option value="hiper">Hiper</option>
+                    <option value="">Não informar</option><option value="mastercard">Mastercard</option><option value="visa">Visa</option><option value="elo">Elo</option><option value="amex">Amex</option><option value="hiper">Hiper</option>
                   </select>
                 </label>
-                <label style="font-size:11px;color:#aaa;">Parcelas
+                <label x-show="formaPgtoSelecionada.tipo === 'cartao_credito'" style="font-size:11px;color:#aaa;">Parcelas
                   <select x-model="parcelasPgto" style="display:block;width:100%;margin-top:5px;padding:9px;background:#13131e;border:1px solid #34344a;border-radius:8px;color:#fff;">
-                    <template x-for="n in (formaPgtoSelecionada.gera_parcelas ? 12 : 1)" :key="n"><option :value="n" x-text="n + 'x'"></option></template>
+                    <template x-for="n in Math.max(parseInt(formaPgtoSelecionada.maximo_parcelas || 1), 1)" :key="n"><option :value="n" x-text="n === 1 ? 'A vista (1x)' : n + 'x'"></option></template>
                   </select>
                 </label>
               </div>
@@ -3367,7 +3367,6 @@ function pdv() {
       if (valor<=0) return;
       const aPrazo = this.ehFormaAPrazo(this.formaPgtoSelecionada);
       const cartao = this.ehFormaCartao(this.formaPgtoSelecionada);
-      if (cartao && !this.bandeiraPgto) { this.toast_('Selecione a bandeira do cartão.','erro'); return; }
       if (aPrazo) {
         if (!this.venda.cliente.id) { this.toast_('Selecione um cliente para vendas no '+this.formaPgtoSelecionada.descricao+'.','erro'); return; }
         if (this.prazoDiasPgto==='' || parseInt(this.prazoDiasPgto)<0 || isNaN(parseInt(this.prazoDiasPgto))) { this.toast_('Informe o prazo em dias.','erro'); return; }

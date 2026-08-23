@@ -73,6 +73,8 @@ class ContaReceberService:
         valor_multa: Decimal = Decimal('0'),
         valor_desconto: Decimal = Decimal('0'),
         observacao: str = '',
+        bandeira: str = '',
+        numero_parcelas: int | None = None,
     ) -> ContaReceber:
         """Registra o recebimento (total ou parcial) de uma conta a receber."""
         if conta.status == StatusContaReceber.CANCELADO:
@@ -99,19 +101,18 @@ class ContaReceberService:
         conta.valor_pago += valor_pago
         conta.valor_saldo = conta.valor_final - conta.valor_pago
 
-        if not conta.taxa_calculada_em:
-            calculo = forma_pagamento.calcular_taxa_recebimento(
-                conta.valor_pago,
-                conta.total_parcelas,
-            )
-            conta.taxa_percentual_aplicada = calculo['percentual']
-            conta.taxa_fixa_aplicada = calculo['fixa']
-            conta.taxa_calculada_em = timezone.now()
-        calculo = forma_pagamento.calcular_valores_taxa(
+        bandeira = forma_pagamento.normalizar_bandeira(bandeira)
+        parcelas_operacao = numero_parcelas or 1
+        calculo = forma_pagamento.calcular_taxa_recebimento(
             conta.valor_pago,
-            conta.taxa_percentual_aplicada,
-            conta.taxa_fixa_aplicada,
+            parcelas_operacao,
+            bandeira,
         )
+        conta.bandeira_recebimento = bandeira
+        conta.parcelas_recebimento = numero_parcelas or None
+        conta.taxa_percentual_aplicada = calculo['percentual']
+        conta.taxa_fixa_aplicada = calculo['fixa']
+        conta.taxa_calculada_em = timezone.now()
         conta.valor_taxa_recebimento = calculo['taxa']
         conta.valor_liquido_recebido = calculo['liquido']
 
