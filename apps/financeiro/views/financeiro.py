@@ -1,4 +1,5 @@
 import json
+from datetime import date
 from decimal import Decimal, InvalidOperation
 
 from django.contrib import messages
@@ -7,6 +8,7 @@ from django.shortcuts import get_object_or_404, redirect, render
 from django.core.paginator import Paginator
 from django.db.models import Sum
 from django.views.decorators.http import require_POST
+from django.utils import timezone
 from apps.core.models import Filial
 from apps.core.services.permissions import requer_permissao
 from apps.financeiro.forms import CentroCustoForm, FormaPagamentoForm, PlanoContasDespesaForm
@@ -306,9 +308,43 @@ def documentos_fiscais_list(request):
 
 @requer_permissao('financeiro', 'ver')
 def dre_view(request):
-    qs = DREConsolidado.objects.for_filial(_filial_ativa(request)).order_by(
-        "-competencia", "linha_producao",
-    )[:36]
+    """
+    DRE gerencial do mês, calculado na leitura a partir dos títulos.
+
+    NÃO lê o `DREConsolidado` gravado. Aquela tabela continua onde está
+    porque o Analytics a consome, mas ela é um retrato: nada a repopula
+    hoje, e mesmo repopulada ficaria velha assim que alguém corrigisse uma
+    baixa. Aqui a conta é refeita a cada abertura, sobre os títulos que
+    existem naquele momento.
+    """
+    from apps.financeiro.services.dre import (
+        DREService, mes_anterior as dre_mes_anterior,
+        primeiro_dia, proximo_mes as dre_proximo_mes,
+    )
+
+    hoje = timezone.localdate()
+    # `?mes=AAAA-MM` vem da barra de endereços e chega com qualquer coisa;
+    # o mês corrente é o padrão de quem só abriu a tela.
+    texto = (request.GET.get("mes") or "").strip()
+    try:
+        ano, mes = texto.split("-")
+        competencia = date(int(ano), int(mes), 1)
+    except (ValueError, TypeError):
+        competencia = primeiro_dia(hoje)
+
+    dados = DREService.painel(
+        _filial_ativa(request), competencia,
+        regime=(request.GET.get("regime") or "").strip(),
+    )
     return render(request, "financeiro/dre.html", {
-        "title": "DRE Consolidado", "dres": qs,
+        "title": "DRE Consolidado",
+        "mes_texto": competencia.strftime("%Y-%m"),
+        "mes_anterior_texto": (
+            dre_mes_anterior(competencia).strftime("%Y-%m")
+        ),
+        "mes_seguinte_texto": dre_proximo_mes(competencia).strftime("%Y-%m"),
+        # Navegar para o futuro num DRE não tem uso: o mês que ainda não
+        # aconteceu não tem resultado a mostrar.
+        "tem_seguinte": dre_proximo_mes(competencia) <= primeiro_dia(hoje),
+        **dados,
     })
