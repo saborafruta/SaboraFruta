@@ -443,6 +443,11 @@ class ContaPagarEdicaoAdminForm(forms.Form):
         queryset=FormaPagamento.objects.none(), required=False,
         label='Forma prevista',
     )
+    plano_contas = CategoriaFinanceiraChoiceField(
+        queryset=PlanoContas.objects.none(), required=False,
+        label='Categoria financeira',
+        help_text='A conta contabil vinculada sera atualizada automaticamente.',
+    )
     data_pagamento = forms.DateField(
         required=False, label='Data do pagamento',
         widget=forms.DateInput(format='%Y-%m-%d', attrs={'type': 'date'}),
@@ -482,6 +487,7 @@ class ContaPagarEdicaoAdminForm(forms.Form):
                 'data_vencimento': conta.data_vencimento,
                 'data_competencia': conta.data_competencia,
                 'forma_pagamento_prevista': conta.forma_pagamento_prevista_id,
+                'plano_contas': conta.plano_contas_id,
                 'data_pagamento': self.pagamento.data_pagamento if self.pagamento else None,
                 'forma_pagamento': self.pagamento.forma_pagamento_id if self.pagamento else conta.forma_pagamento_id,
                 'conta_bancaria': self.pagamento.conta_bancaria_id if self.pagamento else conta.conta_bancaria_id,
@@ -499,6 +505,14 @@ class ContaPagarEdicaoAdminForm(forms.Form):
             ).order_by('descricao')
             self.fields['forma_pagamento_prevista'].queryset = formas
             self.fields['forma_pagamento'].queryset = formas
+            self.fields['plano_contas'].queryset = (
+                PlanoContas.objects.filter(
+                    empresa=filial.empresa, tipo='D', nivel=3, ativo=True,
+                    aceita_lancamento=True, conta_contabil__isnull=False,
+                )
+                .select_related('conta_pai__conta_pai', 'conta_contabil')
+                .order_by('codigo')
+            )
             self.fields['conta_bancaria'].queryset = (
                 ContaBancaria.objects.for_filial(filial)
                 .filter(ativo=True)

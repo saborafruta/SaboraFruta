@@ -28,7 +28,7 @@ class MovimentoDiario:
     origem_codigo: str
     registro_id: int
     documento: str = ""
-    forma_pagamento: str = "Nao informada"
+    forma_pagamento: str = "Sem forma vinculada"
     entrada: Decimal = ZERO
     saida: Decimal = ZERO
     valor_bruto: Decimal = ZERO
@@ -158,7 +158,7 @@ class PosicaoDiariaCaixaService:
             chave = getattr(movimento, atributo)
             if atributo == "conta":
                 chave = chave.descricao or chave.banco_nome or f"Conta #{chave.pk}"
-            totais[chave or "Nao informada"] += getattr(movimento, campo_valor)
+            totais[chave or "Sem forma vinculada"] += getattr(movimento, campo_valor)
         return [{"nome": nome, "valor": valor} for nome, valor in sorted(
             totais.items(), key=lambda item: (-item[1], item[0].casefold())
         )]
@@ -168,7 +168,7 @@ class PosicaoDiariaCaixaService:
         manuais = ExtratoBancario.objects.filter(
             filial=self.filial, conta_bancaria_id__in=self.conta_ids,
             data_lancamento__range=(self.data_inicio, self.data_fim),
-        ).select_related("conta_bancaria")
+        ).select_related("conta_bancaria", "forma_pagamento")
         if not incluir_excluidos:
             manuais = manuais.exclude(status="excluido")
         for item in manuais:
@@ -178,6 +178,9 @@ class PosicaoDiariaCaixaService:
                 descricao=item.historico or "Lancamento manual", contraparte="Movimento manual",
                 origem="Manual" if item.origem == "manual" else "Extrato bancario",
                 origem_codigo="manual", registro_id=item.pk, documento=item.documento,
+                forma_pagamento=(
+                    item.forma_pagamento.descricao if item.forma_pagamento else "Sem forma vinculada"
+                ),
                 entrada=max(valor, ZERO), saida=abs(min(valor, ZERO)), excluido=item.status == "excluido",
                 momento=item.created_at,
             ))
@@ -197,7 +200,7 @@ class PosicaoDiariaCaixaService:
                 descricao=f"Recebimento de {item.cliente}", contraparte=str(item.cliente),
                 origem="Conta a receber", origem_codigo="receber", registro_id=item.pk,
                 documento=item.documento_numero,
-                forma_pagamento=item.forma_pagamento.descricao if item.forma_pagamento else "Nao informada",
+                forma_pagamento=item.forma_pagamento.descricao if item.forma_pagamento else "Sem forma vinculada",
                 entrada=item.valor_entrada_liquida, valor_bruto=bruto, valor_taxa=taxa,
                 referencia_url=reverse("financeiro:receber_detail", args=[item.pk]),
                 momento=item.updated_at,
@@ -217,7 +220,7 @@ class PosicaoDiariaCaixaService:
                 contraparte=item.conta_pagar.beneficiario_nome,
                 origem="Conta a pagar", origem_codigo="pagar", registro_id=item.pk,
                 documento=item.conta_pagar.documento_numero or item.referencia_pagamento,
-                forma_pagamento=item.forma_pagamento.descricao if item.forma_pagamento else "Nao informada",
+                forma_pagamento=item.forma_pagamento.descricao if item.forma_pagamento else "Sem forma vinculada",
                 saida=item.valor_liquido,
                 referencia_url=f'{reverse("financeiro:pagar_detail", args=[item.conta_pagar_id])}?pagamento={item.pk}',
                 momento=item.created_at,
@@ -384,7 +387,7 @@ class PosicaoDiariaCaixaService:
             itens.append({
                 "data": item.data_liquidacao_prevista,
                 "descricao": f"Conta a receber - {item.cliente}",
-                "forma": item.forma_pagamento.descricao if item.forma_pagamento else "Nao informada",
+                "forma": item.forma_pagamento.descricao if item.forma_pagamento else "Sem forma vinculada",
                 "conta": item.conta_bancaria.descricao if item.conta_bancaria else "Conta nao definida",
                 "conta_id": item.conta_bancaria_id,
                 "bandeira": "",
@@ -414,7 +417,7 @@ class PosicaoDiariaCaixaService:
             itens.append({
                 "data": data_prevista,
                 "descricao": f"Conta a receber - {item.cliente}",
-                "forma": forma.descricao if forma else "Nao informada",
+                "forma": forma.descricao if forma else "Sem forma vinculada",
                 "conta": item.conta_bancaria.descricao if item.conta_bancaria else "Conta nao definida",
                 "conta_id": item.conta_bancaria_id,
                 "bandeira": "",

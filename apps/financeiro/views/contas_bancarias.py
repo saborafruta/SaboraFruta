@@ -752,13 +752,15 @@ class ContaBancariaListView(PermissaoRequiredMixin, View):
     @transaction.atomic
     def _editar_movimento_manual(self, request, movimento, dados):
         conta_anterior = movimento.conta_bancaria
-        antes = snapshot_modelo(movimento, ["conta_bancaria", "data_lancamento", "valor", "historico", "documento"])
+        campos = ["conta_bancaria", "forma_pagamento", "data_lancamento", "valor", "historico", "documento"]
+        antes = snapshot_modelo(movimento, campos)
         movimento.conta_bancaria = dados["conta_bancaria"]
+        movimento.forma_pagamento = dados.get("forma_pagamento")
         movimento.data_lancamento = dados["data_lancamento"]
         movimento.valor = dados["valor"]
         movimento.historico = dados["historico"]
         movimento.documento = dados["documento"]
-        movimento.save(update_fields=["conta_bancaria", "data_lancamento", "valor", "historico", "documento"])
+        movimento.save(update_fields=campos)
         registrar_auditoria(
             request=request,
             modulo=RegistroAuditoria.Modulo.FINANCEIRO,
@@ -768,7 +770,7 @@ class ContaBancariaListView(PermissaoRequiredMixin, View):
             descricao="Ajuste manual bancario editado",
             justificativa=dados["justificativa"],
             antes=antes,
-            depois=snapshot_modelo(movimento, ["conta_bancaria", "data_lancamento", "valor", "historico", "documento"]),
+            depois=snapshot_modelo(movimento, campos),
             metadados={"contas_envolvidas": [conta_anterior.pk, movimento.conta_bancaria_id]},
         )
         self._atualizar_saldo_conta(conta_anterior)
@@ -785,10 +787,12 @@ class ContaBancariaListView(PermissaoRequiredMixin, View):
         data = dados["data_lancamento"]
         historico = dados.get("historico") or dict(MovimentoContaBancariaForm.TIPO_CHOICES).get(tipo, "Movimento manual")
         documento = dados.get("documento") or ""
+        forma_pagamento = dados.get("forma_pagamento")
 
         def criar(conta, valor_movimento, texto):
             movimento = ExtratoBancario.objects.create(
                 conta_bancaria=conta,
+                forma_pagamento=forma_pagamento,
                 filial=filial,
                 data_lancamento=data,
                 historico=texto,
@@ -806,7 +810,10 @@ class ContaBancariaListView(PermissaoRequiredMixin, View):
                 objeto=movimento,
                 relacionado=conta,
                 descricao="Ajuste manual bancario criado",
-                depois=snapshot_modelo(movimento, ["conta_bancaria", "data_lancamento", "valor", "historico", "documento"]),
+                depois=snapshot_modelo(
+                    movimento,
+                    ["conta_bancaria", "forma_pagamento", "data_lancamento", "valor", "historico", "documento"],
+                ),
                 metadados={"contas_envolvidas": [conta.pk]},
             )
             return movimento

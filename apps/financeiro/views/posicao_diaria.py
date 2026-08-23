@@ -13,7 +13,11 @@ from django.views import View
 from apps.core.models import RegistroAuditoria
 from apps.core.services.auditoria import registrar_auditoria, snapshot_modelo
 from apps.core.services.permissions import PermissaoRequiredMixin
-from apps.financeiro.forms import EditarMovimentoBancarioForm, MovimentoContaBancariaForm
+from apps.financeiro.forms import (
+    EditarEntradaFinanceiraForm,
+    EditarMovimentoBancarioForm,
+    MovimentoContaBancariaForm,
+)
 from apps.financeiro.models.extrato import ExtratoBancario
 from apps.financeiro.services.posicao_diaria_service import PosicaoDiariaCaixaService
 from apps.financeiro.views.contas_bancarias import ContaBancariaListView, _usuario_admin
@@ -48,6 +52,25 @@ class PosicaoDiariaCaixaView(PermissaoRequiredMixin, View):
         if not _usuario_admin(request):
             messages.error(request, "Apenas administradores podem editar, excluir ou restaurar movimentos.")
             return redirect(destino)
+        if acao == "editar_entrada":
+            origem = request.POST.get("origem")
+            registro_id = request.POST.get("movimento_id")
+            if origem not in {"manual", "receber", "venda"} or not str(registro_id).isdigit():
+                messages.error(request, "Entrada financeira invalida.")
+                return redirect(destino)
+            form = EditarEntradaFinanceiraForm(request.POST, filial=filial, origem=origem)
+            if form.is_valid():
+                self._editar_entrada_financeira(
+                    request, filial, origem, int(registro_id), form.cleaned_data, auxiliar,
+                )
+                messages.success(request, "Entrada corrigida e registrada no log financeiro.")
+                return redirect(destino)
+            return self._render(
+                request,
+                editar_entrada_form=form,
+                detalhe_forcado=(origem, int(registro_id)),
+                data_referencia_forcada=data_referencia,
+            )
         movimento = get_object_or_404(
             ExtratoBancario.objects.filter(filial=filial, origem="manual"), pk=request.POST.get("movimento_id"),
         )
@@ -80,8 +103,16 @@ class PosicaoDiariaCaixaView(PermissaoRequiredMixin, View):
         messages.error(request, "Acao invalida.")
         return redirect(destino)
 
-    def _render(self, request, movimento_form=None, movimento_modal=False, editar_movimento=None, editar_form=None):
-        data_referencia = parse_date(request.GET.get("data", "")) or timezone.localdate()
+    def _render(
+        self, request, movimento_form=None, movimento_modal=False, editar_movimento=None,
+        editar_form=None, editar_entrada_form=None, detalhe_forcado=None,
+        data_referencia_forcada=None,
+    ):
+        data_referencia = (
+            data_referencia_forcada
+            or parse_date(request.GET.get("data", ""))
+            or timezone.localdate()
+        )
         periodo = request.GET.get("periodo", "hoje")
         data_inicio, data_fim = self._resolver_periodo(
             periodo, data_referencia, request.GET.get("data_inicio"), request.GET.get("data_fim"),
@@ -109,10 +140,11 @@ class PosicaoDiariaCaixaView(PermissaoRequiredMixin, View):
             ordem=ordem_movimentos,
         )
         detalhe = None
-        movimento_id = request.GET.get("movimento")
+        origem_detalhe = detalhe_forcado[0] if detalhe_forcado else request.GET.get("origem")
+        movimento_id = detalhe_forcado[1] if detalhe_forcado else request.GET.get("movimento")
         if movimento_id and str(movimento_id).isdigit():
             detalhe = next((mov for mov in [*posicao["extrato"], *posicao["excluidos"]]
-                if mov.registro_id == int(movimento_id) and mov.origem_codigo == request.GET.get("origem")), None)
+                if mov.registro_id == int(movimento_id) and mov.origem_codigo == origem_detalhe), None)
         if movimento_form is None:
             movimento_form = MovimentoContaBancariaForm(
                 filial=request.filial_ativa, initial={"data_lancamento": timezone.localdate()},
@@ -127,12 +159,43 @@ class PosicaoDiariaCaixaView(PermissaoRequiredMixin, View):
                 "conta_bancaria": editar_movimento.conta_bancaria,
                 "data_lancamento": editar_movimento.data_lancamento, "valor": editar_movimento.valor,
                 "historico": editar_movimento.historico, "documento": editar_movimento.documento,
+                "forma_pagamento": editar_movimento.forma_pagamento,
             })
+        if detalhe and detalhe.entrada and _usuario_admin(request) and editar_entrada_form is None:
+            item = ContaBancariaListView()._buscar_movimento_origem(
+                request.filial_ativa, detalhe.origem_codigo, detalhe.registro_id,
+            )
+            if detalhe.origem_codigo == "manual":
+                valor = item.valor
+                forma = item.forma_pagamento
+                conta = item.conta_bancaria
+                data_entrada = item.data_lancamento
+                descricao = item.historico
+            elif detalhe.origem_codigo == "receber":
+                valor = item.valor_pago
+                forma = item.forma_pagamento
+                conta = item.conta_bancaria
+                data_entrada = item.data_liquidacao_prevista or item.data_pagamento
+                descricao = ""
+            else:
+                valor = item.valor_bruto_recebido
+                forma = item.forma_pagamento
+                conta = item.conta_bancaria or item.forma_pagamento.conta_bancaria_padrao
+                data_entrada = item.data_liquidacao_prevista or timezone.localdate()
+                descricao = ""
+            editar_entrada_form = EditarEntradaFinanceiraForm(
+                filial=request.filial_ativa, origem=detalhe.origem_codigo,
+                initial={
+                    "valor": valor, "forma_pagamento": forma, "conta_bancaria": conta,
+                    "data_entrada": data_entrada, "descricao": descricao,
+                },
+            )
         return render(request, self.template_name, {
             "title": "Posicao Diaria de Caixa", "data_referencia": data_referencia, "posicao": posicao,
             "hoje": timezone.localdate(),
             "movimento_form": movimento_form, "movimento_modal": movimento_modal,
             "editar_movimento": editar_movimento, "editar_form": editar_form, "detalhe": detalhe,
+            "editar_entrada_form": editar_entrada_form,
             "user_is_admin": _usuario_admin(request), "mostrar_excluidos": mostrar_excluidos,
             "mostrar_previstos": mostrar_previstos,
             "periodo": periodo, "data_inicio": data_inicio, "data_fim": data_fim,
@@ -144,6 +207,91 @@ class PosicaoDiariaCaixaView(PermissaoRequiredMixin, View):
             "conta_filtro": conta_filtro,
             "ordem_movimentos": ordem_movimentos,
         })
+
+    @staticmethod
+    def _editar_entrada_financeira(request, filial, origem, registro_id, dados, auxiliar):
+        item = auxiliar._buscar_movimento_origem(filial, origem, registro_id)
+        conta_anterior = getattr(item, "conta_bancaria", None)
+        if origem == "venda":
+            conta_anterior = item.conta_bancaria or item.forma_pagamento.conta_bancaria_padrao
+        campos = ["conta_bancaria", "forma_pagamento"]
+
+        if origem == "manual":
+            campos += ["data_lancamento", "valor", "historico"]
+            antes = snapshot_modelo(item, campos)
+            item.conta_bancaria = dados["conta_bancaria"]
+            item.forma_pagamento = dados["forma_pagamento"]
+            item.data_lancamento = dados["data_entrada"]
+            item.valor = dados["valor"]
+            item.historico = dados.get("descricao") or item.historico
+            item.save(update_fields=campos)
+        elif origem == "receber":
+            campos += [
+                "valor_pago", "valor_saldo", "status", "taxa_percentual_aplicada",
+                "taxa_fixa_aplicada", "valor_taxa_recebimento", "valor_liquido_recebido",
+                "taxa_calculada_em", "data_liquidacao_prevista",
+            ]
+            antes = snapshot_modelo(item, campos)
+            calculo = dados["forma_pagamento"].calcular_taxa_recebimento(
+                dados["valor"], item.total_parcelas,
+            )
+            item.conta_bancaria = dados["conta_bancaria"]
+            item.forma_pagamento = dados["forma_pagamento"]
+            item.valor_pago = dados["valor"]
+            item.valor_saldo = max((item.valor_final or 0) - item.valor_pago, 0)
+            item.status = "pago" if item.valor_saldo == 0 else "aberto"
+            item.taxa_percentual_aplicada = calculo["percentual"]
+            item.taxa_fixa_aplicada = calculo["fixa"]
+            item.valor_taxa_recebimento = calculo["taxa"]
+            item.valor_liquido_recebido = calculo["liquido"]
+            item.taxa_calculada_em = timezone.now()
+            item.data_liquidacao_prevista = dados["data_entrada"]
+            item.save(update_fields=[*campos, "updated_at"])
+        else:
+            campos += [
+                "valor", "taxa_percentual_aplicada", "taxa_fixa_aplicada", "valor_taxa",
+                "valor_liquido", "taxa_calculada_em", "data_liquidacao_prevista",
+            ]
+            antes = snapshot_modelo(item, campos)
+            calculo = dados["forma_pagamento"].calcular_taxa_recebimento(
+                dados["valor"], item.numero_parcelas, item.bandeira,
+            )
+            item.conta_bancaria = dados["conta_bancaria"]
+            item.forma_pagamento = dados["forma_pagamento"]
+            item.valor = dados["valor"] + (item.troco or 0)
+            item.taxa_percentual_aplicada = calculo["percentual"]
+            item.taxa_fixa_aplicada = calculo["fixa"]
+            item.valor_taxa = calculo["taxa"]
+            item.valor_liquido = calculo["liquido"]
+            item.taxa_calculada_em = timezone.now()
+            item.data_liquidacao_prevista = dados["data_entrada"]
+            item.save(update_fields=campos)
+            venda = item.venda_pdv
+            venda.valor_pago = sum((pagamento.valor_bruto_recebido for pagamento in venda.pagamentos.all()), 0)
+            venda.save(update_fields=["valor_pago", "updated_at"])
+
+        nova_conta = item.conta_bancaria
+        registrar_auditoria(
+            request=request,
+            modulo=RegistroAuditoria.Modulo.FINANCEIRO,
+            acao=RegistroAuditoria.Acao.AJUSTAR,
+            objeto=item,
+            relacionado=nova_conta,
+            descricao=f"Entrada de {origem} corrigida na posicao diaria",
+            justificativa=dados["justificativa"],
+            antes=antes,
+            depois=snapshot_modelo(item, campos),
+            metadados={
+                "contas_envolvidas": list(filter(None, [
+                    getattr(conta_anterior, "pk", None), nova_conta.pk,
+                ])),
+                "origem_movimento": origem,
+            },
+        )
+        if conta_anterior:
+            auxiliar._atualizar_saldo_conta(conta_anterior)
+        if not conta_anterior or conta_anterior.pk != nova_conta.pk:
+            auxiliar._atualizar_saldo_conta(nova_conta)
 
     @staticmethod
     def _resolver_periodo(periodo, referencia, inicio_texto=None, fim_texto=None):

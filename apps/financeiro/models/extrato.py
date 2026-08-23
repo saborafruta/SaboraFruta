@@ -8,6 +8,13 @@ from .receber_pagar import ContaPagar
 
 class ExtratoBancario(models.Model):
     conta_bancaria = models.ForeignKey(ContaBancaria, on_delete=models.PROTECT, related_name="extratos")
+    forma_pagamento = models.ForeignKey(
+        "financeiro.FormaPagamento",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="+",
+    )
     filial = models.ForeignKey(Filial, on_delete=models.PROTECT)
     data_lancamento = models.DateField()
     data_credito = models.DateField(null=True, blank=True)

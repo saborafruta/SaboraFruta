@@ -63,6 +63,8 @@ CAMPOS_EDICAO_LANCAMENTO = {
     'data_vencimento': 'Vencimento',
     'data_competencia': 'Competencia',
     'forma_pagamento_prevista': 'Forma prevista',
+    'plano_contas': 'Categoria financeira',
+    'conta_contabil': 'Conta contabil automatica',
     'data_pagamento': 'Data do pagamento',
     'forma_pagamento': 'Forma utilizada',
     'conta_bancaria': 'Conta bancaria',
@@ -94,6 +96,11 @@ def _snapshot_edicao_lancamento(conta, pagamento=None):
         'data_vencimento': conta.data_vencimento.isoformat(),
         'data_competencia': conta.data_competencia.isoformat() if conta.data_competencia else 'Nao informado',
         'forma_pagamento_prevista': _nome_objeto(conta.forma_pagamento_prevista),
+        'plano_contas': conta.plano_contas.caminho_descricao if conta.plano_contas else 'Nao informado',
+        'conta_contabil': (
+            f'{conta.conta_contabil.classificacao} - {conta.conta_contabil.descricao}'
+            if conta.conta_contabil else 'Nao informado'
+        ),
         'data_pagamento': pagamento.data_pagamento.isoformat() if pagamento else 'Nao informado',
         'forma_pagamento': _nome_objeto(pagamento.forma_pagamento if pagamento else conta.forma_pagamento),
         'conta_bancaria': _nome_objeto(pagamento.conta_bancaria if pagamento else conta.conta_bancaria),
@@ -903,6 +910,8 @@ class ContaPagarEditarValorView(PermissaoRequiredMixin, View):
         conta.data_vencimento = dados['data_vencimento']
         conta.data_competencia = dados.get('data_competencia')
         conta.forma_pagamento_prevista = dados.get('forma_pagamento_prevista')
+        conta.plano_contas = dados.get('plano_contas')
+        conta.conta_contabil = conta.plano_contas.conta_contabil if conta.plano_contas else None
         conta.observacao = dados.get('observacao', '').strip()
 
         if pagamento:
