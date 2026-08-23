@@ -542,6 +542,7 @@ def _contexto_meta_despesa_pessoal(filial, referencia=None):
     ).aggregate(total=Sum('valor_pago'))['total'] or Decimal('0')
     valor_meta = _valor_meta_despesa_pessoal(meta, filial, hoje)
     percentual = (usado / valor_meta * Decimal('100')) if valor_meta > 0 else Decimal('0')
+    disponivel = max(valor_meta - usado, Decimal('0'))
     return {
         'meta_despesa_pessoal': meta,
         'meta_despesa_form': MetaDespesaPessoalForm(instance=meta),
@@ -549,6 +550,7 @@ def _contexto_meta_despesa_pessoal(filial, referencia=None):
         'meta_despesa_usado': usado,
         'meta_despesa_percentual': percentual,
         'meta_despesa_percentual_barra': min(percentual, Decimal('100')),
+        'meta_despesa_disponivel': disponivel,
         'meta_despesa_mes': hoje,
     }
 
