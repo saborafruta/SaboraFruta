@@ -18,9 +18,11 @@ from apps.financeiro.forms import (
     EditarMovimentoBancarioForm,
     MovimentoContaBancariaForm,
 )
+from apps.financeiro.models import PlanoContas
 from apps.financeiro.models.extrato import ExtratoBancario
 from apps.financeiro.services.posicao_diaria_service import PosicaoDiariaCaixaService
 from apps.financeiro.views.contas_bancarias import ContaBancariaListView, _usuario_admin
+from apps.financeiro.views.pagar import _contexto_meta_despesa_pessoal
 
 
 class PosicaoDiariaCaixaView(PermissaoRequiredMixin, View):
@@ -203,6 +205,26 @@ class PosicaoDiariaCaixaView(PermissaoRequiredMixin, View):
                     "plano_contas": plano_contas,
                 },
             )
+        categorias_edicao = PlanoContas.objects.none()
+        grupos_edicao = PlanoContas.objects.none()
+        subgrupos_edicao = PlanoContas.objects.none()
+        categoria_edicao_id = ''
+        subgrupo_edicao_id = ''
+        grupo_edicao_id = ''
+        if editar_entrada_form and 'plano_contas' in editar_entrada_form.fields:
+            categorias_edicao = editar_entrada_form.fields['plano_contas'].queryset
+            subgrupos_edicao = PlanoContas.objects.filter(pk__in=categorias_edicao.values_list('conta_pai_id', flat=True))
+            grupos_edicao = PlanoContas.objects.filter(pk__in=subgrupos_edicao.values_list('conta_pai_id', flat=True))
+            categoria_edicao_id = str(editar_entrada_form['plano_contas'].value() or '')
+            categoria_selecionada = (
+                categorias_edicao.filter(pk=categoria_edicao_id)
+                .select_related('conta_pai__conta_pai').first()
+                if categoria_edicao_id else None
+            )
+            if categoria_selecionada:
+                subgrupo_edicao_id = str(categoria_selecionada.conta_pai_id)
+                grupo_edicao_id = str(categoria_selecionada.conta_pai.conta_pai_id)
+        meta_contexto = _contexto_meta_despesa_pessoal(request.filial_ativa, data_fim)
         return render(request, self.template_name, {
             "title": "Posicao Diaria de Caixa", "data_referencia": data_referencia, "posicao": posicao,
             "hoje": timezone.localdate(),
@@ -219,6 +241,13 @@ class PosicaoDiariaCaixaView(PermissaoRequiredMixin, View):
             "periodos_previsao": self._links_periodo(data_referencia, previsao_periodo, "previsao"),
             "conta_filtro": conta_filtro,
             "ordem_movimentos": ordem_movimentos,
+            "categorias_edicao": categorias_edicao,
+            "grupos_edicao": grupos_edicao,
+            "subgrupos_edicao": subgrupos_edicao,
+            "categoria_edicao_id": categoria_edicao_id,
+            "subgrupo_edicao_id": subgrupo_edicao_id,
+            "grupo_edicao_id": grupo_edicao_id,
+            **meta_contexto,
         })
 
     @staticmethod

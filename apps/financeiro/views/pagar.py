@@ -455,8 +455,8 @@ def _resumo_fornecedores(contas):
     return sorted(resumo, key=lambda item: item['valor'], reverse=True), total
 
 
-def _contexto_meta_despesa_pessoal(filial):
-    hoje = timezone.localdate()
+def _contexto_meta_despesa_pessoal(filial, referencia=None):
+    hoje = referencia or timezone.localdate()
     inicio_mes, fim_mes = _limites_mes(hoje)
     meta = MetaDespesaPessoal.objects.filter(filial=filial).first()
     usado = ContaPagar.objects.for_filial(filial).filter(

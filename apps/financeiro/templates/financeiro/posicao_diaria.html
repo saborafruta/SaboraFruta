@@ -17,6 +17,7 @@
   .pc-notice { border-color:#93c5fd; background:#eff6ff; color:#1e3a8a; }
   .dark .pc-notice { border-color:#1d4ed8; background:rgba(30,58,138,.24); color:#dbeafe; }
   .pc-page-heading { background:transparent !important; color:inherit !important; }
+  .pc-private .pc-sensitive { filter:blur(7px); user-select:none; }
   .pc-ledger { --ledger:#475569; --ledger-soft:#f8fafc; border:1px solid #cbd5e1; background:#fff; }
   .pc-ledger.entry { --ledger:#047857; --ledger-soft:#ecfdf5; }
   .pc-ledger.exit { --ledger:#be123c; --ledger-soft:#fff1f2; }
@@ -110,7 +111,9 @@
     .tema-escuro .pc-summary-section + .pc-summary-section { border-left-color:#475569; }
   }
 </style>
-<div class="mx-auto max-w-7xl space-y-5" x-data="{
+<div class="mx-auto max-w-7xl space-y-5" :class="{'pc-private':ocultarValores}" x-data="{
+  ocultarValores:false,
+  previsoesAbertas:false,
   movimentoModal: {{ movimento_modal|yesno:'true,false' }},
   contaPagarModal: false,
   contaPagarQuitada: false,
@@ -154,10 +157,11 @@
       <p class="mt-1 text-sm text-gray-500">Confira o que entrou, o que saiu e onde o dinheiro terminou no dia.</p>
     </div>
     <div class="flex flex-wrap items-center gap-2">
-      <a href="{% url 'financeiro:receber_list' %}" class="btn-secondary">Contas a receber</a>
       <a href="{% url 'financeiro:pagar_list' %}" class="btn-secondary">Contas a pagar</a>
+      <a href="{% url 'financeiro:receber_list' %}" class="btn-secondary">Contas a receber</a>
       <a href="{% url 'financeiro:contas_bancarias' %}" class="btn-secondary">Contas</a>
       <button type="button" class="btn-secondary" @click="abrirMovimento('transferencia')">Transferir entre contas</button>
+      <button type="button" class="btn-secondary px-3" @click="ocultarValores=!ocultarValores" :aria-label="ocultarValores ? 'Mostrar valores' : 'Ocultar valores'" :title="ocultarValores ? 'Mostrar valores' : 'Ocultar valores'"><span x-text="ocultarValores ? '◉' : '◌'"></span></button>
     </div>
   </div>
 
@@ -191,27 +195,27 @@
   <section class="grid grid-cols-2 gap-3 lg:grid-cols-5">
     <div class="card pc-kpi col-span-2 border-l-4 border-amber-500 p-4 lg:col-span-1">
       <p class="text-xs font-semibold uppercase text-gray-500">Saldo inicial</p>
-      <strong class="mt-2 block text-2xl text-amber-600">R$ {{ posicao.total_abertura|floatformat:2 }}</strong>
+      <strong class="pc-sensitive mt-2 block text-2xl text-amber-600">R$ {{ posicao.total_abertura|floatformat:2 }}</strong>
       <span class="mt-1 block text-xs text-gray-500">Fechamento do dia anterior</span>
     </div>
     <div class="card pc-kpi border-l-4 border-emerald-500 p-4">
       <p class="text-xs font-semibold uppercase text-gray-500">Entradas</p>
-      <strong class="mt-2 block text-xl text-emerald-600">R$ {{ posicao.total_entradas|floatformat:2 }}</strong>
+      <strong class="pc-sensitive mt-2 block text-xl text-emerald-600">R$ {{ posicao.total_entradas|floatformat:2 }}</strong>
       <span class="mt-1 block text-xs text-gray-500">{{ posicao.entradas|length }} movimento{{ posicao.entradas|length|pluralize }}</span>
     </div>
     <div class="card pc-kpi border-l-4 border-rose-500 p-4">
       <p class="text-xs font-semibold uppercase text-gray-500">Saídas</p>
-      <strong class="mt-2 block text-xl text-rose-600">R$ {{ posicao.total_saidas|floatformat:2 }}</strong>
+      <strong class="pc-sensitive mt-2 block text-xl text-rose-600">R$ {{ posicao.total_saidas|floatformat:2 }}</strong>
       <span class="mt-1 block text-xs text-gray-500">{{ posicao.saidas|length }} movimento{{ posicao.saidas|length|pluralize }}</span>
     </div>
     <div class="card pc-kpi border-l-4 border-slate-400 p-4">
       <p class="text-xs font-semibold uppercase text-gray-500">Resultado do dia</p>
-      <strong class="mt-2 block text-xl {% if posicao.variacao_dia < 0 %}text-rose-600{% else %}text-emerald-600{% endif %}">R$ {{ posicao.variacao_dia|floatformat:2 }}</strong>
+      <strong class="pc-sensitive mt-2 block text-xl {% if posicao.variacao_dia < 0 %}text-rose-600{% else %}text-emerald-600{% endif %}">R$ {{ posicao.variacao_dia|floatformat:2 }}</strong>
       <span class="mt-1 block text-xs text-gray-500">Entradas menos saídas</span>
     </div>
     <div class="card pc-kpi col-span-2 border-l-4 border-blue-500 p-4 lg:col-span-1">
       <p class="text-xs font-semibold uppercase text-gray-500">Saldo final</p>
-      <strong class="mt-2 block text-2xl {% if posicao.total_fechamento < 0 %}text-rose-600{% else %}text-blue-600{% endif %}">R$ {{ posicao.total_fechamento|floatformat:2 }}</strong>
+      <strong class="pc-sensitive mt-2 block text-2xl {% if posicao.total_fechamento < 0 %}text-rose-600{% else %}text-blue-600{% endif %}">R$ {{ posicao.total_fechamento|floatformat:2 }}</strong>
       <span class="mt-1 block text-xs text-gray-500">Soma de todas as contas</span>
     </div>
   </section>
@@ -316,7 +320,7 @@
         <div class="pc-summary-card p-4"><h4 class="text-sm font-semibold">Saídas por conta bancária</h4>{% for item in posicao.totais_conta_saida %}<div class="mt-3 flex justify-between gap-3 text-sm"><span class="truncate text-gray-500">{{ item.nome }}</span><strong>R$ {{ item.valor|floatformat:2 }}</strong></div>{% empty %}<p class="mt-3 text-sm text-gray-500">Sem saídas.</p>{% endfor %}</div>
       </div>
     </div>
-    {% if posicao.total_despesas_pessoais > 0 %}<div class="pc-personal-summary flex items-center justify-between gap-4 border-t px-4 py-3"><span><strong class="block text-sm">Despesas pessoais no período</strong><small>Já incluídas nas saídas e no saldo final.</small></span><strong class="whitespace-nowrap text-lg">R$ {{ posicao.total_despesas_pessoais|floatformat:2 }}</strong></div>{% endif %}
+    {% if posicao.total_despesas_pessoais > 0 %}<div class="pc-personal-summary flex flex-wrap items-center justify-between gap-4 border-t px-4 py-3"><span><strong class="block text-sm">Despesas pessoais no período</strong><small>Já incluídas nas saídas e no saldo final. Meta mensal: {{ meta_despesa_percentual|floatformat:1 }}% utilizada.</small></span><span class="text-right"><strong class="pc-sensitive block whitespace-nowrap text-lg">R$ {{ posicao.total_despesas_pessoais|floatformat:2 }}</strong><small class="pc-sensitive">Mês: R$ {{ meta_despesa_usado|floatformat:2 }} de R$ {{ meta_despesa_valor|floatformat:2 }}</small></span></div>{% endif %}
   </section>
 
   <section>
@@ -343,11 +347,10 @@
 
   <section class="pc-forecast overflow-hidden rounded-lg">
     <div class="pc-forecast-head flex flex-col gap-3 border-b px-4 py-4">
-      <div class="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between"><div><h3 class="pc-forecast-title font-semibold">Recebimentos previstos</h3><p class="pc-forecast-copy text-xs">Contas a receber, boletos e cartões que ainda serão compensados. Não alteram o saldo realizado.</p></div><div class="sm:text-right"><span class="pc-forecast-copy block text-[11px] font-semibold uppercase">Líquido previsto</span><strong class="pc-forecast-value text-xl">R$ {{ posicao.total_previsto|floatformat:2 }}</strong></div></div>
-      <div class="flex flex-wrap gap-2">{% for item in periodos_previsao %}<a href="{{ item.url }}" class="pc-forecast-filter rounded-md px-3 py-2 text-xs font-semibold {% if item.ativo %}is-active{% endif %}">{{ item.rotulo }}</a>{% endfor %}<button type="button" class="pc-forecast-filter rounded-md px-3 py-2 text-xs font-semibold" onclick="document.getElementById('previsao-personalizada').classList.toggle('hidden')">Personalizado</button></div>
-      <form id="previsao-personalizada" method="get" class="hidden grid gap-3 rounded-lg bg-white/70 p-3 sm:grid-cols-[1fr_1fr_auto] dark:bg-slate-900/40"><input type="hidden" name="data" value="{{ data_referencia|date:'Y-m-d' }}"><input type="hidden" name="previsao" value="personalizado"><label class="text-xs font-semibold">De<input type="date" name="previsao_inicio" value="{{ previsao_inicio|date:'Y-m-d' }}" class="form-input mt-1 w-full" required></label><label class="text-xs font-semibold">Ate<input type="date" name="previsao_fim" value="{{ previsao_fim|date:'Y-m-d' }}" class="form-input mt-1 w-full" required></label><button class="btn-primary self-end" type="submit">Aplicar periodo</button></form>
+      <div class="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between"><div><h3 class="pc-forecast-title font-semibold">Recebimentos previstos</h3><p class="pc-forecast-copy text-xs">Contas a receber, boletos e cartões que ainda serão compensados.</p></div><div class="flex items-center gap-3 sm:text-right"><div><span class="pc-forecast-copy block text-[11px] font-semibold uppercase">Líquido previsto</span><strong class="pc-sensitive pc-forecast-value text-xl">R$ {{ posicao.total_previsto|floatformat:2 }}</strong></div><button type="button" class="pc-forecast-filter rounded-md px-3 py-2 text-xs font-semibold" @click="previsoesAbertas=!previsoesAbertas" x-text="previsoesAbertas ? 'Ocultar' : 'Ver mais'" :aria-label="previsoesAbertas ? 'Ocultar recebimentos previstos' : 'Ver recebimentos previstos'"></button></div></div>
+      <div x-show="previsoesAbertas" x-cloak class="space-y-3"><div class="flex flex-wrap gap-2">{% for item in periodos_previsao %}<a href="{{ item.url }}" class="pc-forecast-filter rounded-md px-3 py-2 text-xs font-semibold {% if item.ativo %}is-active{% endif %}">{{ item.rotulo }}</a>{% endfor %}<button type="button" class="pc-forecast-filter rounded-md px-3 py-2 text-xs font-semibold" onclick="document.getElementById('previsao-personalizada').classList.toggle('hidden')">Personalizado</button></div><form id="previsao-personalizada" method="get" class="hidden grid gap-3 rounded-lg bg-white/70 p-3 sm:grid-cols-[1fr_1fr_auto] dark:bg-slate-900/40"><input type="hidden" name="data" value="{{ data_referencia|date:'Y-m-d' }}"><input type="hidden" name="previsao" value="personalizado"><label class="text-xs font-semibold">De<input type="date" name="previsao_inicio" value="{{ previsao_inicio|date:'Y-m-d' }}" class="form-input mt-1 w-full" required></label><label class="text-xs font-semibold">Ate<input type="date" name="previsao_fim" value="{{ previsao_fim|date:'Y-m-d' }}" class="form-input mt-1 w-full" required></label><button class="btn-primary self-end" type="submit">Aplicar período</button></form></div>
     </div>
-    <div class="divide-y divide-blue-100 dark:divide-slate-700">
+    <div x-show="previsoesAbertas" x-cloak class="divide-y divide-blue-100 dark:divide-slate-700">
       {% for item in posicao.previsoes %}
         {% if item.referencia_url %}
           <button type="button" @click="abrirTituloPagar('{{ item.referencia_url }}')" class="pc-forecast-item {% if item.atrasado %}is-overdue{% endif %} grid w-full gap-2 px-4 py-3 text-left text-sm transition sm:grid-cols-[105px_minmax(0,1fr)_190px_150px] sm:items-center">
@@ -386,7 +389,7 @@
   <template x-teleport="body"><div x-show="movimentoModal" x-cloak class="fixed inset-0 z-[100] flex items-center justify-center overflow-y-auto p-4" style="background:rgba(15,23,42,.78);backdrop-filter:blur(8px)" @keydown.escape.window="movimentoModal=false">
     {% if movimento_form.errors %}<div class="fixed top-4 z-[60] max-w-lg rounded-lg border border-rose-300 bg-rose-50 p-3 text-sm text-rose-700 shadow-lg"><strong>Revise os campos do movimento:</strong>{% for campo in movimento_form %}{% for erro in campo.errors %}<span class="mt-1 block">{{ campo.label }}: {{ erro }}</span>{% endfor %}{% endfor %}</div>{% endif %}
     <div class="card my-auto w-full max-w-xl p-5" @click.stop><div class="flex items-start justify-between gap-3"><div><h3 class="text-lg font-semibold" x-text="movimentoTipo === 'credito' ? 'Adicionar entrada' : (movimentoTipo === 'debito' ? 'Adicionar saída' : 'Transferir entre contas')">Novo movimento manual</h3><p class="mt-1 text-xs text-gray-500" x-text="movimentoTipo === 'credito' ? 'Registre um valor que entrou em uma conta.' : (movimentoTipo === 'debito' ? 'Registre um valor que saiu de uma conta.' : 'Movimente um valor entre duas contas sem alterar o total do caixa.')">Crédito, débito ou transferência com reflexo imediato nas contas.</p></div><button type="button" class="btn-secondary px-3" @click="movimentoModal=false" aria-label="Fechar">×</button></div>
-      <form method="post" class="mt-5 space-y-3" @change="if ($event.target.id === 'id_tipo') movimentoTipo=$event.target.value">{% csrf_token %}<input type="hidden" name="acao" value="lancar_movimento"><input type="hidden" name="data_referencia" value="{{ hoje|date:'Y-m-d' }}"><input type="hidden" name="data_lancamento" value="{{ hoje|date:'Y-m-d' }}">{% if movimento_form.non_field_errors %}<div class="rounded border border-rose-300 bg-rose-50 p-3 text-sm text-rose-700">{{ movimento_form.non_field_errors|join:', ' }}</div>{% endif %}<label class="block text-xs font-semibold">Tipo {{ movimento_form.tipo|add_class:'form-input mt-1 w-full' }}</label><div class="grid gap-3" :class="movimentoTipo === 'transferencia' ? 'sm:grid-cols-2' : 'sm:grid-cols-1'"><label x-show="movimentoTipo === 'debito' || movimentoTipo === 'transferencia'" class="block text-xs font-semibold">Conta de origem {{ movimento_form.conta_origem|add_class:'form-input mt-1 w-full' }}</label><label x-show="movimentoTipo === 'credito' || movimentoTipo === 'transferencia'" class="block text-xs font-semibold">Conta de destino {{ movimento_form.conta_destino|add_class:'form-input mt-1 w-full' }}</label></div><div class="grid gap-3 sm:grid-cols-[minmax(0,1fr)_auto]"><label class="block text-xs font-semibold">Valor {{ movimento_form.valor|add_class:'form-input mt-1 w-full' }}</label><div class="rounded-lg border border-slate-200 px-4 py-2 text-xs dark:border-slate-700"><span class="block opacity-60">Data do movimento</span><strong class="mt-1 block">Hoje, {{ hoje|date:'d/m/Y' }}</strong></div></div><label x-show="movimentoTipo !== 'transferencia'" class="block text-xs font-semibold">Forma de pagamento {{ movimento_form.forma_pagamento|add_class:'form-input mt-1 w-full' }}</label><label x-show="movimentoTipo === 'credito'" class="block text-xs font-semibold">Classificacao da entrada {{ movimento_form.plano_contas|add_class:'form-input mt-1 w-full' }}</label><label class="block text-xs font-semibold">Descrição {{ movimento_form.historico|add_class:'form-input mt-1 w-full' }}</label><label class="block text-xs font-semibold">Documento {{ movimento_form.documento|add_class:'form-input mt-1 w-full' }}</label><div class="flex justify-end gap-2 pt-2"><button type="button" class="btn-secondary" @click="movimentoModal=false">Cancelar</button><button type="submit" class="btn-primary">Registrar movimento</button></div></form>
+      <form method="post" class="mt-5 space-y-3" @change="if ($event.target.id === 'id_tipo') movimentoTipo=$event.target.value">{% csrf_token %}<input type="hidden" name="acao" value="lancar_movimento"><input type="hidden" name="data_referencia" value="{{ hoje|date:'Y-m-d' }}"><input type="hidden" name="data_lancamento" value="{{ hoje|date:'Y-m-d' }}">{% if movimento_form.non_field_errors %}<div class="rounded border border-rose-300 bg-rose-50 p-3 text-sm text-rose-700">{{ movimento_form.non_field_errors|join:', ' }}</div>{% endif %}<label class="block text-xs font-semibold">Tipo {{ movimento_form.tipo|add_class:'form-input mt-1 w-full' }}</label><div class="grid gap-3" :class="movimentoTipo === 'transferencia' ? 'sm:grid-cols-2' : 'sm:grid-cols-1'"><label x-show="movimentoTipo === 'debito' || movimentoTipo === 'transferencia'" class="block text-xs font-semibold">Conta de origem {{ movimento_form.conta_origem|add_class:'form-input mt-1 w-full' }}</label><label x-show="movimentoTipo === 'credito' || movimentoTipo === 'transferencia'" class="block text-xs font-semibold">Conta de destino {{ movimento_form.conta_destino|add_class:'form-input mt-1 w-full' }}</label></div><div class="grid gap-3 sm:grid-cols-[minmax(0,1fr)_auto]"><label class="block text-xs font-semibold">Valor {{ movimento_form.valor|add_class:'form-input mt-1 w-full' }}</label><div class="rounded-lg border border-slate-200 px-4 py-2 text-xs dark:border-slate-700"><span class="block opacity-60">Data do movimento</span><strong class="mt-1 block">Hoje, {{ hoje|date:'d/m/Y' }}</strong></div></div><label class="block text-xs font-semibold">Forma de pagamento <span class="font-normal opacity-60" x-show="movimentoTipo === 'transferencia'">(para rastrear a origem)</span>{{ movimento_form.forma_pagamento|add_class:'form-input mt-1 w-full' }}</label><label x-show="movimentoTipo === 'credito'" class="block text-xs font-semibold">Classificacao da entrada {{ movimento_form.plano_contas|add_class:'form-input mt-1 w-full' }}</label><label class="block text-xs font-semibold">Descrição {{ movimento_form.historico|add_class:'form-input mt-1 w-full' }}</label><label class="block text-xs font-semibold">Documento {{ movimento_form.documento|add_class:'form-input mt-1 w-full' }}</label><div class="flex justify-end gap-2 pt-2"><button type="button" class="btn-secondary" @click="movimentoModal=false">Cancelar</button><button type="submit" class="btn-primary">Registrar movimento</button></div></form>
     </div>
   </div></template>
 
@@ -434,7 +437,7 @@
             <label class="block text-sm font-semibold">Data da entrada <span class="text-rose-500">*</span>{{ editar_entrada_form.data_entrada|add_class:'form-input mt-1 w-full' }}{% for erro in editar_entrada_form.data_entrada.errors %}<span class="mt-1 block text-xs text-rose-600">{{ erro }}</span>{% endfor %}</label>
             <label class="block text-sm font-semibold">Forma de pagamento <span class="text-rose-500">*</span>{{ editar_entrada_form.forma_pagamento|add_class:'form-input mt-1 w-full' }}{% for erro in editar_entrada_form.forma_pagamento.errors %}<span class="mt-1 block text-xs text-rose-600">{{ erro }}</span>{% endfor %}</label>
             <label class="block text-sm font-semibold">Conta de destino <span class="text-rose-500">*</span>{{ editar_entrada_form.conta_bancaria|add_class:'form-input mt-1 w-full' }}{% for erro in editar_entrada_form.conta_bancaria.errors %}<span class="mt-1 block text-xs text-rose-600">{{ erro }}</span>{% endfor %}</label>
-            <label class="block text-sm font-semibold sm:col-span-2">Classificacao da entrada <span class="text-rose-500">*</span>{{ editar_entrada_form.plano_contas|add_class:'form-input mt-1 w-full' }}{% for erro in editar_entrada_form.plano_contas.errors %}<span class="mt-1 block text-xs text-rose-600">{{ erro }}</span>{% endfor %}</label>
+            {% if editar_entrada_form.plano_contas %}<div class="sm:col-span-2" data-classificacao-edicao><span class="mb-2 block text-sm font-semibold">Classificação da receita <span class="text-rose-500">*</span></span><div class="grid gap-2 sm:grid-cols-3"><label class="text-xs font-semibold">1. Grupo<select class="form-input mt-1 w-full" data-grupo><option value="">Selecione</option>{% for grupo in grupos_edicao %}<option value="{{ grupo.pk }}" {% if grupo_edicao_id == grupo.pk|stringformat:'s' %}selected{% endif %}>{{ grupo.descricao }}</option>{% endfor %}</select></label><label class="text-xs font-semibold">2. Tipo<select class="form-input mt-1 w-full" data-subgrupo><option value="">Selecione</option>{% for subgrupo in subgrupos_edicao %}<option value="{{ subgrupo.pk }}" data-grupo="{{ subgrupo.conta_pai_id }}" {% if subgrupo_edicao_id == subgrupo.pk|stringformat:'s' %}selected{% endif %}>{{ subgrupo.descricao }}</option>{% endfor %}</select></label><label class="text-xs font-semibold">3. Categoria<select class="form-input mt-1 w-full" data-categoria><option value="">Selecione</option>{% for categoria in categorias_edicao %}<option value="{{ categoria.pk }}" data-subgrupo="{{ categoria.conta_pai_id }}" {% if categoria_edicao_id == categoria.pk|stringformat:'s' %}selected{% endif %}>{{ categoria.descricao }}</option>{% endfor %}</select></label></div><span class="hidden">{{ editar_entrada_form.plano_contas }}</span>{% for erro in editar_entrada_form.plano_contas.errors %}<span class="mt-1 block text-xs text-rose-600">{{ erro }}</span>{% endfor %}</div>{% endif %}
           </div>
           {% if detalhe.origem_codigo == 'manual' %}<label class="block text-sm font-semibold">Descrição {{ editar_entrada_form.descricao|add_class:'form-input mt-1 w-full' }}{% for erro in editar_entrada_form.descricao.errors %}<span class="mt-1 block text-xs text-rose-600">{{ erro }}</span>{% endfor %}</label>{% endif %}
           <label class="block text-sm font-semibold">Motivo da alteração <span class="text-rose-500">*</span>{{ editar_entrada_form.justificativa|add_class:'form-input mt-1 w-full' }}{% for erro in editar_entrada_form.justificativa.errors %}<span class="mt-1 block text-xs text-rose-600">{{ erro }}</span>{% endfor %}</label>
@@ -458,6 +461,35 @@
     const faixa = document.getElementById('dias-do-mes');
     const selecionado = faixa && faixa.querySelector('[data-dia-selecionado="1"]');
     if (faixa && selecionado) faixa.scrollLeft = selecionado.offsetLeft - faixa.clientWidth / 2 + selecionado.clientWidth / 2;
+
+    document.querySelectorAll('[data-classificacao-edicao]').forEach(function (root) {
+      const grupo = root.querySelector('[data-grupo]');
+      const subgrupo = root.querySelector('[data-subgrupo]');
+      const categoria = root.querySelector('[data-categoria]');
+      const campo = root.querySelector('select[name="plano_contas"]');
+      const atualizar = function (select, atributo, valor) {
+        Array.from(select.options).forEach(function (opcao, indice) {
+          if (!indice) return;
+          const visivel = opcao.dataset[atributo] === valor;
+          opcao.hidden = !visivel;
+          opcao.disabled = !visivel;
+        });
+      };
+      const atualizarSubgrupos = function () {
+        atualizar(subgrupo, 'grupo', grupo.value);
+        if (subgrupo.selectedOptions[0] && subgrupo.selectedOptions[0].hidden) subgrupo.value = '';
+        atualizarCategorias();
+      };
+      const atualizarCategorias = function () {
+        atualizar(categoria, 'subgrupo', subgrupo.value);
+        if (categoria.selectedOptions[0] && categoria.selectedOptions[0].hidden) categoria.value = '';
+        campo.value = categoria.value;
+      };
+      grupo.addEventListener('change', atualizarSubgrupos);
+      subgrupo.addEventListener('change', atualizarCategorias);
+      categoria.addEventListener('change', function () { campo.value = categoria.value; });
+      atualizarSubgrupos();
+    });
   });
 </script>
 {% endblock %}

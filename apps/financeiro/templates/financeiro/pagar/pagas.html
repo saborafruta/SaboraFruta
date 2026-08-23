@@ -5,7 +5,7 @@
 {% block page_title %}Contas Pagas{% endblock %}
 
 {% block content %}
-<div class="space-y-5"
+<div class="flex flex-col gap-5"
      x-data="{
        detalheAberto:false, detalheCarregando:false, detalheHtml:'', detalheErro:'',
        async abrirDetalhe(url) {
@@ -64,8 +64,8 @@
     </div>
   </div>
 
-  <div class="grid gap-4 lg:grid-cols-[1.05fr_.95fr]">
-    <section class="card p-4">
+  <div class="order-6 grid gap-3 lg:grid-cols-[.8fr_1.2fr]">
+    <section class="card p-3">
       <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div>
           <h3 class="text-base font-semibold">Meta de despesas pessoais</h3>
@@ -115,7 +115,7 @@
       {% endif %}
     </section>
 
-    <section class="card p-4">
+    <section class="card p-3">
       <div class="flex items-start justify-between gap-3">
         <div>
           <h3 class="text-base font-semibold">Gasto por fornecedor</h3>
@@ -144,7 +144,7 @@
     </section>
   </div>
 
-  <form method="get" class="card grid grid-cols-1 gap-3 p-4 md:grid-cols-12">
+  <form method="get" class="order-3 card grid grid-cols-1 gap-3 p-4 md:grid-cols-12">
     <div class="md:col-span-5">
       <label for="filtro-pagas" class="mb-1 block text-xs font-semibold opacity-70">Buscar</label>
       <input id="filtro-pagas" type="search" name="q" value="{{ q }}" class="form-input"
@@ -175,7 +175,7 @@
     </div>
   </form>
 
-  <div class="space-y-3 md:hidden">
+  <div class="order-4 space-y-3 md:hidden">
     {% for conta in contas %}
       <a href="{% url 'financeiro:pagar_detail' conta.pk %}" @click.prevent="abrirDetalhe($el.href)" class="card block p-4 transition-opacity hover:opacity-85 {% if conta.excluido %}opacity-55 grayscale{% endif %}">
         <div class="flex items-start justify-between gap-3">
@@ -203,7 +203,7 @@
     {% endfor %}
   </div>
 
-  <div class="hidden overflow-hidden rounded-lg border md:block"
+  <div class="order-4 hidden overflow-hidden rounded-lg border md:block"
        :style="temaClaro ? 'background:#fff;border-color:#e5e7eb;' : 'background:#242426;border-color:#2f2f33;'">
     <div class="overflow-x-auto">
       <table class="w-full min-w-[980px] text-sm">
@@ -252,7 +252,7 @@
   </div>
 
   {% if page_obj.paginator.num_pages > 1 %}
-    <div class="flex items-center justify-between gap-3 text-sm">
+    <div class="order-5 flex items-center justify-between gap-3 text-sm">
       <span class="opacity-70">Página {{ page_obj.number }} de {{ page_obj.paginator.num_pages }} · {{ page_obj.paginator.count }} registros</span>
       <div class="flex gap-2">
         {% if page_obj.has_previous %}<a class="btn-secondary" href="?{% if page_querystring %}{{ page_querystring }}&{% endif %}page={{ page_obj.previous_page_number }}">Anterior</a>{% endif %}
