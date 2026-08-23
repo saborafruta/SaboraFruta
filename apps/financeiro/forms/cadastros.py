@@ -96,7 +96,7 @@ class MovimentoContaBancariaForm(forms.Form):
         queryset=FormaPagamento.objects.none(), required=False, label="Forma de pagamento",
     )
     plano_contas = CategoriaFinanceiraChoiceField(
-        queryset=PlanoContas.objects.none(), required=False, label="Classificacao da entrada",
+        queryset=PlanoContas.objects.none(), required=False, label="Classificacao financeira",
     )
 
     def __init__(self, *args, filial=None, **kwargs):
@@ -110,7 +110,7 @@ class MovimentoContaBancariaForm(forms.Form):
             self.fields["plano_contas"].queryset = (
                 PlanoContas.objects
                 .filter(
-                    empresa=filial.empresa, tipo="R", ativo=True,
+                    empresa=filial.empresa, ativo=True,
                     aceita_lancamento=True, nivel=3,
                 )
                 .select_related("conta_pai__conta_pai", "conta_contabil")
@@ -128,8 +128,13 @@ class MovimentoContaBancariaForm(forms.Form):
         destino = cleaned.get("conta_destino")
         if tipo == self.TIPO_CREDITO and not destino:
             self.add_error("conta_destino", "Escolha a conta que vai receber o valor.")
-        if tipo == self.TIPO_CREDITO and self.fields["plano_contas"].queryset.exists() and not cleaned.get("plano_contas"):
-            self.add_error("plano_contas", "Escolha a classificacao da entrada.")
+        categoria = cleaned.get("plano_contas")
+        if tipo in {self.TIPO_CREDITO, self.TIPO_DEBITO} and self.fields["plano_contas"].queryset.exists() and not categoria:
+            self.add_error("plano_contas", "Escolha a classificacao financeira.")
+        if categoria and tipo == self.TIPO_CREDITO and categoria.tipo != "R":
+            self.add_error("plano_contas", "Escolha uma categoria de receita.")
+        if categoria and tipo == self.TIPO_DEBITO and categoria.tipo != "D":
+            self.add_error("plano_contas", "Escolha uma categoria de despesa.")
         if tipo == self.TIPO_DEBITO and not origem:
             self.add_error("conta_origem", "Escolha a conta de onde o valor vai sair.")
         if tipo == self.TIPO_TRANSFERENCIA:
@@ -170,19 +175,24 @@ class DirecionarContaBancariaForm(forms.Form):
 class EditarMovimentoBancarioForm(forms.Form):
     conta_bancaria = ContaBancariaChoiceField(queryset=ContaBancaria.objects.none(), label="Conta")
     data_lancamento = forms.DateField(widget=forms.DateInput(attrs={"type": "date"}), label="Data")
-    valor = forms.DecimalField(max_digits=14, decimal_places=2, label="Valor")
+    valor = forms.DecimalField(max_digits=14, decimal_places=2, min_value=0.01, label="Valor")
     historico = forms.CharField(max_length=200, label="Historico")
     documento = forms.CharField(max_length=30, required=False, label="Documento")
     forma_pagamento = forms.ModelChoiceField(
         queryset=FormaPagamento.objects.none(), required=False, label="Forma de pagamento",
     )
     plano_contas = CategoriaFinanceiraChoiceField(
-        queryset=PlanoContas.objects.none(), required=False, label="Classificacao da entrada",
+        queryset=PlanoContas.objects.none(), required=False, label="Classificacao financeira",
     )
     justificativa = forms.CharField(max_length=300, label="Motivo da alteracao")
 
-    def __init__(self, *args, filial=None, **kwargs):
+    def __init__(self, *args, filial=None, natureza="entrada", **kwargs):
         super().__init__(*args, **kwargs)
+        self.natureza = natureza
+        tipo_categoria = "D" if natureza == "saida" else "R"
+        self.fields["plano_contas"].label = (
+            "Classificacao da despesa" if natureza == "saida" else "Classificacao da receita"
+        )
         if filial:
             self.fields["conta_bancaria"].queryset = (
                 ContaBancaria.objects.for_filial(filial)
@@ -195,7 +205,7 @@ class EditarMovimentoBancarioForm(forms.Form):
             self.fields["plano_contas"].queryset = (
                 PlanoContas.objects
                 .filter(
-                    empresa=filial.empresa, tipo="R", ativo=True,
+                    empresa=filial.empresa, tipo=tipo_categoria, ativo=True,
                     aceita_lancamento=True, nivel=3,
                 )
                 .select_related("conta_pai__conta_pai", "conta_contabil")
@@ -206,8 +216,10 @@ class EditarMovimentoBancarioForm(forms.Form):
     def clean(self):
         cleaned = super().clean()
         valor = cleaned.get("valor")
-        if valor and valor > 0 and self.fields["plano_contas"].queryset.exists() and not cleaned.get("plano_contas"):
-            self.add_error("plano_contas", "Escolha a classificacao da entrada.")
+        if valor is not None and self.natureza == "saida":
+            cleaned["valor"] = -abs(valor)
+        if valor and self.fields["plano_contas"].queryset.exists() and not cleaned.get("plano_contas"):
+            self.add_error("plano_contas", f"Escolha a classificacao da {self.natureza}.")
         return cleaned
 
 

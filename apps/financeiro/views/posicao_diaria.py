@@ -85,7 +85,8 @@ class PosicaoDiariaCaixaView(PermissaoRequiredMixin, View):
             ExtratoBancario.objects.filter(filial=filial, origem="manual"), pk=request.POST.get("movimento_id"),
         )
         if acao == "editar_movimento":
-            form = EditarMovimentoBancarioForm(request.POST, filial=filial)
+            natureza = "saida" if movimento.valor < 0 else "entrada"
+            form = EditarMovimentoBancarioForm(request.POST, filial=filial, natureza=natureza)
             if form.is_valid():
                 auxiliar._editar_movimento_manual(request, movimento, form.cleaned_data)
                 messages.success(request, "Movimento corrigido e registrado no log.")
@@ -165,9 +166,10 @@ class PosicaoDiariaCaixaView(PermissaoRequiredMixin, View):
                 pk=request.GET.get("editar"),
             )
         if editar_form is None and editar_movimento:
-            editar_form = EditarMovimentoBancarioForm(filial=request.filial_ativa, initial={
+            editar_natureza = "saida" if editar_movimento.valor < 0 else "entrada"
+            editar_form = EditarMovimentoBancarioForm(filial=request.filial_ativa, natureza=editar_natureza, initial={
                 "conta_bancaria": editar_movimento.conta_bancaria,
-                "data_lancamento": editar_movimento.data_lancamento, "valor": editar_movimento.valor,
+                "data_lancamento": editar_movimento.data_lancamento, "valor": abs(editar_movimento.valor),
                 "historico": editar_movimento.historico, "documento": editar_movimento.documento,
                 "forma_pagamento": editar_movimento.forma_pagamento,
                 "plano_contas": editar_movimento.plano_contas,

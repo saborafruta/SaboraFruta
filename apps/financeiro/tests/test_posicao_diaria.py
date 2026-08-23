@@ -272,6 +272,27 @@ class PosicaoDiariaCaixaTests(TestCase):
             aceita_lancamento=True,
             conta_contabil=conta_contabil,
         )
+
+    def _categoria_despesa(self, descricao="Despesa manual"):
+        conta_contabil = PlanoContabil.objects.create(
+            empresa=self.empresa,
+            codigo_referencia=900002,
+            classificacao="3.2.1.001",
+            tipo_conta=PlanoContabil.TipoConta.ANALITICA,
+            descricao=descricao,
+            data_inicio=date(2026, 1, 1),
+            nivel=4,
+            ordem=900002,
+        )
+        return PlanoContas.objects.create(
+            empresa=self.empresa,
+            codigo="320010001",
+            descricao=descricao,
+            tipo="D",
+            nivel=3,
+            aceita_lancamento=True,
+            conta_contabil=conta_contabil,
+        )
         vencimento = timezone.localdate() - timezone.timedelta(days=3)
         ContaReceber.objects.create(
             filial=self.filial, cliente=cliente, valor_original=Decimal("140.00"),
@@ -424,6 +445,33 @@ class PosicaoDiariaCaixaTests(TestCase):
         movimento.refresh_from_db()
         self.assertEqual(movimento.valor, Decimal("-25.00"))
         self.assertContains(response, "Saida manual nao pode ser editada.")
+
+    def test_saida_manual_pode_editar_todos_os_dados_e_classificacao(self):
+        categoria = self._categoria_despesa("Combustivel")
+        movimento = ExtratoBancario.objects.create(
+            filial=self.filial, conta_bancaria=self.banco, forma_pagamento=self.forma,
+            plano_contas=categoria, data_lancamento=date(2026, 8, 21),
+            historico="Gasolina", documento="CUPOM-1", valor=Decimal("-25.00"),
+            origem="manual", status="importado",
+        )
+
+        response = self.client.post(reverse("financeiro:posicao_diaria"), {
+            "acao": "editar_movimento", "movimento_id": movimento.pk,
+            "data_referencia": "2026-08-21", "valor": "31.50",
+            "forma_pagamento": self.forma.pk, "conta_bancaria": self.caixa.pk,
+            "data_lancamento": "2026-08-20", "historico": "Gasolina corrigida",
+            "documento": "CUPOM-2", "plano_contas": categoria.pk,
+            "justificativa": "Valor e conta informados incorretamente",
+        })
+
+        self.assertEqual(response.status_code, 302)
+        movimento.refresh_from_db()
+        self.assertEqual(movimento.valor, Decimal("-31.50"))
+        self.assertEqual(movimento.conta_bancaria, self.caixa)
+        self.assertEqual(movimento.data_lancamento, date(2026, 8, 20))
+        self.assertEqual(movimento.historico, "Gasolina corrigida")
+        self.assertEqual(movimento.documento, "CUPOM-2")
+        self.assertEqual(movimento.plano_contas, categoria)
 
     def test_corrige_recebimento_recalculando_taxa_liquido_e_saldo(self):
         self.forma.taxa_administrativa = Decimal("2.00")
