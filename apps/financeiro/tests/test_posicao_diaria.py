@@ -535,9 +535,45 @@ class PosicaoDiariaCaixaTests(TestCase):
         self.assertEqual(response.status_code, 302)
         movimento = ExtratoBancario.objects.get(historico="Entrada classificada")
         self.assertEqual(movimento.plano_contas, categoria)
+        self.assertEqual(movimento.data_lancamento, date(2026, 8, 21))
         posicao = PosicaoDiariaCaixaService(self.filial, timezone.localdate()).gerar()
         entrada = next(mov for mov in posicao["entradas"] if mov.registro_id == movimento.pk)
         self.assertEqual(entrada.classificacao, "Emprestimo recebido")
+
+    def test_cartao_debito_ignora_parcelas_e_credito_respeita_maximo_cadastrado(self):
+        from apps.financeiro.forms.cadastros import MovimentoContaBancariaForm
+
+        debito = FormaPagamento.objects.create(
+            empresa=self.empresa, filial=self.filial, descricao="Debito",
+            tipo=TipoFormaPagamento.CARTAO_DEBITO,
+        )
+        credito = FormaPagamento.objects.create(
+            empresa=self.empresa, filial=self.filial, descricao="Credito",
+            tipo=TipoFormaPagamento.CARTAO_CREDITO, gera_parcelas=True,
+        )
+        TaxaParcelamento.objects.create(
+            forma_pagamento=credito, parcelas=6, bandeira="visa", taxa=Decimal("4.00"),
+        )
+        categoria = self._categoria_receita("Venda manual")
+        base = {
+            "tipo": "credito", "conta_destino": self.banco.pk,
+            "data_lancamento": "2026-08-21", "valor": "100.00",
+            "historico": "Cartao", "plano_contas": categoria.pk, "bandeira": "visa",
+        }
+
+        form_debito = MovimentoContaBancariaForm(
+            {**base, "forma_pagamento": debito.pk, "numero_parcelas": "12"},
+            filial=self.filial,
+        )
+        self.assertTrue(form_debito.is_valid(), form_debito.errors)
+        self.assertEqual(form_debito.cleaned_data["numero_parcelas"], 1)
+
+        form_credito = MovimentoContaBancariaForm(
+            {**base, "forma_pagamento": credito.pk, "numero_parcelas": "7"},
+            filial=self.filial,
+        )
+        self.assertFalse(form_credito.is_valid())
+        self.assertIn("numero_parcelas", form_credito.errors)
 
     def test_saida_manual_nao_pode_ser_corrigida_como_entrada(self):
         movimento = ExtratoBancario.objects.create(

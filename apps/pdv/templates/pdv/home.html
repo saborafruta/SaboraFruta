@@ -1320,9 +1320,9 @@
                     <option value="">Não informar</option><option value="mastercard">Mastercard</option><option value="visa">Visa</option><option value="elo">Elo</option><option value="amex">Amex</option><option value="hiper">Hiper</option>
                   </select>
                 </label>
-                <label style="font-size:11px;color:#aaa;">Parcelas
+                <label x-show="formaPgtoSelecionada.tipo === 'cartao_credito'" style="font-size:11px;color:#aaa;">Parcelas
                   <select x-model="parcelasPgto" style="display:block;width:100%;margin-top:5px;padding:9px;background:#13131e;border:1px solid #34344a;border-radius:8px;color:#fff;">
-                    <template x-for="n in (formaPgtoSelecionada.gera_parcelas ? 12 : 1)" :key="n"><option :value="n" x-text="n + 'x'"></option></template>
+                    <template x-for="n in Math.max(parseInt(formaPgtoSelecionada.maximo_parcelas || 1), 1)" :key="n"><option :value="n" x-text="n === 1 ? 'A vista (1x)' : n + 'x'"></option></template>
                   </select>
                 </label>
               </div>

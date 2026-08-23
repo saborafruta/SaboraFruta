@@ -41,16 +41,18 @@ class PosicaoDiariaCaixaView(PermissaoRequiredMixin, View):
         destino = reverse("financeiro:posicao_diaria") + f"?data={data_referencia.isoformat()}"
         auxiliar = ContaBancariaListView()
         if acao == "lancar_movimento":
-            data_referencia = timezone.localdate()
-            destino = reverse("financeiro:posicao_diaria") + f"?data={data_referencia.isoformat()}"
             form = MovimentoContaBancariaForm(request.POST, filial=filial)
             if form.is_valid():
                 dados = form.cleaned_data.copy()
-                dados["data_lancamento"] = timezone.localdate()
+                data_referencia = dados["data_lancamento"]
+                destino = reverse("financeiro:posicao_diaria") + f"?data={data_referencia.isoformat()}"
                 auxiliar._salvar_movimento_manual(request, filial, dados)
                 messages.success(request, "Movimento registrado na posicao diaria.")
                 return redirect(destino)
-            return self._render(request, movimento_form=form, movimento_modal=True)
+            return self._render(
+                request, movimento_form=form, movimento_modal=True,
+                data_referencia_forcada=data_referencia,
+            )
         if not _usuario_admin(request):
             messages.error(request, "Apenas administradores podem editar, excluir ou restaurar movimentos.")
             return redirect(destino)
@@ -163,7 +165,7 @@ class PosicaoDiariaCaixaView(PermissaoRequiredMixin, View):
             detalhe.historico_logs = detalhe_completo["logs"]
         if movimento_form is None:
             movimento_form = MovimentoContaBancariaForm(
-                filial=request.filial_ativa, initial={"data_lancamento": timezone.localdate()},
+                filial=request.filial_ativa, initial={"data_lancamento": data_referencia},
             )
         if editar_movimento is None and request.GET.get("editar") and _usuario_admin(request):
             editar_movimento = get_object_or_404(

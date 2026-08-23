@@ -498,7 +498,7 @@
     </div>
   </div></template>
   <template id="cartao-movimento-manual">
-    <div data-cartao-opcional class="rounded-md border border-slate-200 p-3 dark:border-slate-700" x-show="movimentoTipo === 'credito'">
+      <div data-cartao-opcional class="rounded-md border border-slate-200 p-3 dark:border-slate-700">
       <span class="mb-2 block text-xs font-semibold">Dados do cartao <span class="font-normal opacity-60">(opcional)</span></span>
       <div class="grid gap-3 sm:grid-cols-2"><label class="block text-xs font-semibold">Bandeira {{ movimento_form.bandeira|add_class:'form-input mt-1 w-full' }}</label><label class="block text-xs font-semibold">Parcelas da operacao {{ movimento_form.numero_parcelas|add_class:'form-input mt-1 w-full' }}</label></div>
     </div>
@@ -602,11 +602,51 @@
       const form = marcador && marcador.closest('form');
       const template = document.getElementById(templateId);
       const forma = form && form.querySelector('select[name="forma_pagamento"]');
-      if (forma && template) forma.closest('label').insertAdjacentElement('afterend', template.content.firstElementChild.cloneNode(true));
+      if (!forma || !template) return;
+      const bloco = template.content.firstElementChild.cloneNode(true);
+      forma.closest('label').insertAdjacentElement('afterend', bloco);
+      const parcelas = bloco.querySelector('select[name="numero_parcelas"]');
+      const campoParcelas = parcelas && parcelas.closest('label');
+      const atualizar = function () {
+        const opcao = forma.selectedOptions[0];
+        const tipo = opcao ? opcao.dataset.tipo : '';
+        const cartao = tipo === 'cartao_debito' || tipo === 'cartao_credito';
+        bloco.style.display = cartao ? '' : 'none';
+        if (!parcelas) return;
+        campoParcelas.style.display = tipo === 'cartao_credito' ? '' : 'none';
+        if (tipo === 'cartao_debito') parcelas.value = '1';
+        if (!cartao) parcelas.value = '';
+        const maximo = parseInt((opcao && opcao.dataset.maxParcelas) || '1', 10);
+        Array.from(parcelas.options).forEach(function (item) {
+          const numero = parseInt(item.value || '0', 10);
+          item.hidden = numero > maximo;
+          item.disabled = numero > maximo;
+        });
+        if (parseInt(parcelas.value || '0', 10) > maximo) parcelas.value = '';
+      };
+      forma.addEventListener('change', atualizar);
+      atualizar();
     };
     inserirCartaoAposForma('form input[name="acao"][value="lancar_movimento"]', 'cartao-movimento-manual');
     inserirCartaoAposForma('form input[name="acao"][value="editar_entrada"]', 'cartao-editar-entrada');
     inserirCartaoAposForma('form input[name="acao"][value="editar_movimento"]', 'cartao-editar-manual');
+    const formManual = document.querySelector('form input[name="acao"][value="lancar_movimento"]')?.closest('form');
+    const dataManual = formManual && formManual.querySelector('input[name="data_lancamento"]');
+    if (dataManual) {
+      const referenciaManual = formManual.querySelector('input[name="data_referencia"]');
+      if (referenciaManual) referenciaManual.value = '{{ data_referencia|date:"Y-m-d" }}';
+      dataManual.type = 'date';
+      dataManual.value = '{{ data_referencia|date:"Y-m-d" }}';
+      dataManual.className = 'form-input mt-1 w-full';
+      const resumoData = Array.from(formManual.querySelectorAll('span')).find(function (item) {
+        return item.textContent.trim() === 'Data do movimento';
+      });
+      if (resumoData) {
+        const caixa = resumoData.parentElement;
+        caixa.innerHTML = '<span class="block text-xs font-semibold">Data do movimento</span>';
+        caixa.appendChild(dataManual);
+      }
+    }
     const faixa = document.getElementById('dias-do-mes');
     const selecionado = faixa && faixa.querySelector('[data-dia-selecionado="1"]');
     if (faixa && selecionado) faixa.scrollLeft = selecionado.offsetLeft - faixa.clientWidth / 2 + selecionado.clientWidth / 2;
@@ -628,6 +668,61 @@
     };
     if (tipoManual) tipoManual.addEventListener('change', filtrarClassificacaoManual);
     filtrarClassificacaoManual();
+
+    if (classificacaoManual && !classificacaoManual.dataset.compactada) {
+      classificacaoManual.dataset.compactada = '1';
+      const registros = Array.from(classificacaoManual.options).slice(1).map(function (opcao) {
+        const partes = opcao.textContent.split('>').map(function (parte) { return parte.trim(); });
+        return { valor: opcao.value, natureza: opcao.dataset.tipo, grupo: partes[0] || '', tipo: partes[1] || '', categoria: partes.slice(2).join(' > ') || partes[1] || partes[0] };
+      });
+      const selecionado = registros.find(function (item) { return item.valor === classificacaoManual.value; });
+      const campoOriginal = classificacaoManual.closest('label');
+      const bloco = document.createElement('div');
+      bloco.className = 'grid gap-2 sm:grid-cols-3';
+      const criarCampo = function (titulo) {
+        const label = document.createElement('label'); label.className = 'text-xs font-semibold';
+        label.append(document.createTextNode(titulo));
+        const select = document.createElement('select'); select.className = 'form-input mt-1 w-full';
+        label.appendChild(select); bloco.appendChild(label); return select;
+      };
+      const grupo = criarCampo('1. Grupo');
+      const tipo = criarCampo('2. Tipo');
+      const categoria = criarCampo('3. Categoria');
+      const preencher = function (select, placeholder, valores, atual) {
+        select.innerHTML = '<option value="">' + placeholder + '</option>';
+        Array.from(new Set(valores)).forEach(function (valor) {
+          const opcao = document.createElement('option'); opcao.value = valor; opcao.textContent = valor;
+          opcao.selected = valor === atual; select.appendChild(opcao);
+        });
+      };
+      const atualizarCategorias = function (tipoAtual, categoriaAtual) {
+        const natureza = tipoManual.value === 'debito' ? 'D' : 'R';
+        const filtrados = registros.filter(function (item) { return item.natureza === natureza && item.grupo === grupo.value; });
+        preencher(tipo, 'Selecione o tipo', filtrados.map(function (item) { return item.tipo; }), tipoAtual);
+        const finais = filtrados.filter(function (item) { return item.tipo === tipo.value; });
+        preencher(categoria, 'Selecione a categoria', finais.map(function (item) { return item.categoria; }), categoriaAtual);
+        const registro = finais.find(function (item) { return item.categoria === categoria.value; });
+        classificacaoManual.value = registro ? registro.valor : '';
+      };
+      const atualizarNatureza = function () {
+        const natureza = tipoManual.value === 'debito' ? 'D' : 'R';
+        const atuais = registros.filter(function (item) { return item.natureza === natureza; });
+        const atual = registros.find(function (item) { return item.valor === classificacaoManual.value; });
+        preencher(grupo, 'Selecione o grupo', atuais.map(function (item) { return item.grupo; }), atual && atual.natureza === natureza ? atual.grupo : '');
+        atualizarCategorias(atual && atual.tipo, atual && atual.categoria);
+      };
+      grupo.addEventListener('change', function () { atualizarCategorias('', ''); });
+      tipo.addEventListener('change', function () { atualizarCategorias(tipo.value, ''); });
+      categoria.addEventListener('change', function () {
+        const natureza = tipoManual.value === 'debito' ? 'D' : 'R';
+        const registro = registros.find(function (item) { return item.natureza === natureza && item.grupo === grupo.value && item.tipo === tipo.value && item.categoria === categoria.value; });
+        classificacaoManual.value = registro ? registro.valor : '';
+      });
+      tipoManual.addEventListener('change', atualizarNatureza);
+      campoOriginal.insertAdjacentElement('afterend', bloco);
+      campoOriginal.style.display = 'none';
+      atualizarNatureza();
+    }
 
     const acaoEditarMovimento = document.querySelector('input[name="acao"][value="editar_movimento"]');
     const formEditarMovimento = acaoEditarMovimento && acaoEditarMovimento.form;

@@ -3,6 +3,7 @@ from django.db.models import Q
 
 from apps.financeiro.models import CentroCusto, ContaBancaria, FormaPagamento, PlanoContas
 from apps.financeiro.forms.plano_contas import CategoriaFinanceiraChoiceField
+from apps.financeiro.forms.cartao import campo_parcelas, configurar_forma_pagamento, limpar_dados_cartao
 
 
 class ContaBancariaForm(forms.ModelForm):
@@ -106,10 +107,7 @@ class MovimentoContaBancariaForm(forms.Form):
         queryset=FormaPagamento.objects.none(), required=False, label="Forma de pagamento",
     )
     bandeira = forms.ChoiceField(choices=BANDEIRAS_CARTAO, required=False, label="Bandeira do cartão")
-    numero_parcelas = forms.IntegerField(
-        min_value=1, max_value=24, required=False, label="Parcelas da operação",
-        widget=forms.NumberInput(attrs={"min": "1", "max": "24"}),
-    )
+    numero_parcelas = campo_parcelas()
     plano_contas = CategoriaFinanceiraChoiceField(
         queryset=PlanoContas.objects.none(), required=False, label="Classificacao financeira",
     )
@@ -119,9 +117,9 @@ class MovimentoContaBancariaForm(forms.Form):
         qs = ContaBancaria.objects.none()
         if filial:
             qs = ContaBancaria.objects.for_filial(filial).filter(ativo=True).order_by("descricao", "banco_nome")
-            self.fields["forma_pagamento"].queryset = FormaPagamento.objects.filter(
+            configurar_forma_pagamento(self, FormaPagamento.objects.filter(
                 empresa=filial.empresa, ativo=True,
-            ).filter(Q(filial=filial) | Q(filial__isnull=True)).order_by("descricao")
+            ).filter(Q(filial=filial) | Q(filial__isnull=True)).order_by("descricao"))
             self.fields["plano_contas"].queryset = (
                 PlanoContas.objects
                 .filter(
@@ -159,7 +157,7 @@ class MovimentoContaBancariaForm(forms.Form):
                 self.add_error("conta_destino", "Escolha a conta de destino.")
             if origem and destino and origem.pk == destino.pk:
                 self.add_error("conta_destino", "A conta de destino deve ser diferente da origem.")
-        return cleaned
+        return limpar_dados_cartao(self, cleaned)
 
 
 class ContaBancariaChoiceField(forms.ModelChoiceField):
@@ -201,10 +199,7 @@ class EditarMovimentoBancarioForm(forms.Form):
         queryset=FormaPagamento.objects.none(), required=False, label="Forma de pagamento",
     )
     bandeira = forms.ChoiceField(choices=BANDEIRAS_CARTAO, required=False, label="Bandeira do cartão")
-    numero_parcelas = forms.IntegerField(
-        min_value=1, max_value=24, required=False, label="Parcelas da operação",
-        widget=forms.NumberInput(attrs={"min": "1", "max": "24"}),
-    )
+    numero_parcelas = campo_parcelas()
     plano_contas = CategoriaFinanceiraChoiceField(
         queryset=PlanoContas.objects.none(), required=False, label="Classificacao financeira",
     )
@@ -223,9 +218,9 @@ class EditarMovimentoBancarioForm(forms.Form):
                 .filter(ativo=True)
                 .order_by("descricao", "banco_nome")
             )
-            self.fields["forma_pagamento"].queryset = FormaPagamento.objects.filter(
+            configurar_forma_pagamento(self, FormaPagamento.objects.filter(
                 empresa=filial.empresa, ativo=True,
-            ).filter(Q(filial=filial) | Q(filial__isnull=True)).order_by("descricao")
+            ).filter(Q(filial=filial) | Q(filial__isnull=True)).order_by("descricao"))
             self.fields["plano_contas"].queryset = (
                 PlanoContas.objects
                 .filter(
@@ -244,7 +239,7 @@ class EditarMovimentoBancarioForm(forms.Form):
             cleaned["valor"] = -abs(valor)
         if valor and self.fields["plano_contas"].queryset.exists() and not cleaned.get("plano_contas"):
             self.add_error("plano_contas", f"Escolha a classificacao da {self.natureza}.")
-        return cleaned
+        return limpar_dados_cartao(self, cleaned)
 
 
 class EditarEntradaFinanceiraForm(forms.Form):
@@ -256,10 +251,7 @@ class EditarEntradaFinanceiraForm(forms.Form):
         queryset=ContaBancaria.objects.none(), label="Conta bancaria",
     )
     bandeira = forms.ChoiceField(choices=BANDEIRAS_CARTAO, required=False, label="Bandeira do cartão")
-    numero_parcelas = forms.IntegerField(
-        min_value=1, max_value=24, required=False, label="Parcelas da operação",
-        widget=forms.NumberInput(attrs={"min": "1", "max": "24"}),
-    )
+    numero_parcelas = campo_parcelas()
     data_entrada = forms.DateField(
         input_formats=["%Y-%m-%d"],
         widget=forms.DateInput(format="%Y-%m-%d", attrs={"type": "date"}),
@@ -283,9 +275,9 @@ class EditarEntradaFinanceiraForm(forms.Form):
                 .filter(ativo=True)
                 .order_by("descricao", "banco_nome")
             )
-            self.fields["forma_pagamento"].queryset = FormaPagamento.objects.filter(
+            configurar_forma_pagamento(self, FormaPagamento.objects.filter(
                 empresa=filial.empresa, ativo=True,
-            ).filter(Q(filial=filial) | Q(filial__isnull=True)).order_by("descricao")
+            ).filter(Q(filial=filial) | Q(filial__isnull=True)).order_by("descricao"))
             self.fields["plano_contas"].queryset = (
                 PlanoContas.objects
                 .filter(
@@ -305,7 +297,7 @@ class EditarEntradaFinanceiraForm(forms.Form):
         cleaned = super().clean()
         if "plano_contas" in self.fields and self.fields["plano_contas"].queryset.exists() and not cleaned.get("plano_contas"):
             self.add_error("plano_contas", "Escolha a classificacao da entrada.")
-        return cleaned
+        return limpar_dados_cartao(self, cleaned)
 
 
 class CentroCustoForm(forms.ModelForm):
