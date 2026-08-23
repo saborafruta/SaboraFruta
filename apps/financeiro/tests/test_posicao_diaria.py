@@ -319,6 +319,11 @@ class PosicaoDiariaCaixaTests(TestCase):
             valor=Decimal("25.00"), origem="manual", status="importado",
         )
 
+        detalhe = self.client.get(reverse("financeiro:posicao_diaria"), {
+            "data": "2026-08-21", "origem": "manual", "movimento": movimento.pk,
+        })
+        self.assertContains(detalhe, 'value="2026-08-21"')
+
         response = self.client.post(reverse("financeiro:posicao_diaria"), {
             "acao": "editar_entrada", "origem": "manual", "movimento_id": movimento.pk,
             "data_referencia": "2026-08-21", "valor": "31.50",

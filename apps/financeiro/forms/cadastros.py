@@ -186,7 +186,9 @@ class EditarEntradaFinanceiraForm(forms.Form):
         queryset=ContaBancaria.objects.none(), label="Conta bancaria",
     )
     data_entrada = forms.DateField(
-        widget=forms.DateInput(attrs={"type": "date"}), label="Data da entrada no caixa",
+        input_formats=["%Y-%m-%d"],
+        widget=forms.DateInput(format="%Y-%m-%d", attrs={"type": "date"}),
+        label="Data da entrada no caixa",
     )
     descricao = forms.CharField(max_length=200, required=False, label="Descricao")
     justificativa = forms.CharField(
