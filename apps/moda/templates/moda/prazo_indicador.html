@@ -1,0 +1,295 @@
+{% extends "_base.html" %}
+{% block title %}{{ title }}{% endblock %}
+{% block page_title %}Prazos{% endblock %}
+{% block content %}
+<div class="space-y-5">
+  <div class="flex flex-wrap items-start justify-between gap-3">
+    <div>
+      <p class="text-sm mb-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+        <a href="{% url 'moda:grupo' 'indicadores' %}" :style="temaClaro ? 'color:#3b82f6;' : 'color:#60a5fa;'">Indicadores</a>
+        <span class="mx-1">›</span> Prazos
+      </p>
+      <h2 class="text-2xl font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">Prazos</h2>
+      <p class="text-sm mt-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+        O que chegou na data combinada — e o que <strong>ainda dá para salvar</strong>.
+      </p>
+    </div>
+    <div class="flex gap-2">
+      {% for valor, rotulo in periodos %}
+        <a href="?dias={{ valor }}"
+           class="{% if dias == valor %}btn-primary{% else %}btn-secondary{% endif %} text-sm">{{ rotulo }}</a>
+      {% endfor %}
+    </div>
+  </div>
+
+  {% comment %}
+    ── O que ainda dá para consertar vem PRIMEIRO ─────────────────────────
+    O placar do que já foi entregue é histórico: não há mais nada a fazer
+    sobre ele. O pedido aberto que vai atrasar ainda pode ser puxado na
+    frente, e é ele que precisa da atenção de hoje.
+  {% endcomment %}
+  <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+    <div class="card p-4">
+      <p class="text-xs uppercase tracking-wide" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Atrasados agora</p>
+      {% if risco.atrasados %}
+        <p class="text-2xl font-semibold mt-1" style="color:#dc2626;">{{ risco.atrasados }}</p>
+        <p class="text-xs mt-1" :style="temaClaro ? 'color:#94a3b8;' : 'color:#6b7280;'">
+          {% if risco.pior %}o pior tem {{ risco.pior.atraso }} dia(s){% else %}pedidos em aberto{% endif %}
+        </p>
+      {% else %}
+        <p class="text-2xl font-semibold mt-1" style="color:#059669;">0</p>
+        <p class="text-xs mt-1" :style="temaClaro ? 'color:#94a3b8;' : 'color:#6b7280;'">nenhum pedido aberto vencido</p>
+      {% endif %}
+    </div>
+
+    <div class="card p-4">
+      <p class="text-xs uppercase tracking-wide" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Vencem em {{ janela }} dias</p>
+      {% if risco.vencem %}
+        <p class="text-2xl font-semibold mt-1" style="color:#f59e0b;">{{ risco.vencem }}</p>
+      {% else %}
+        <p class="text-2xl font-semibold mt-1" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">0</p>
+      {% endif %}
+      <p class="text-xs mt-1" :style="temaClaro ? 'color:#94a3b8;' : 'color:#6b7280;'">
+        ainda dá para puxar na frente
+      </p>
+    </div>
+
+    <div class="card p-4">
+      <p class="text-xs uppercase tracking-wide" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Entregas no prazo</p>
+      {% if placar.otd is None %}
+        <p class="text-2xl font-semibold mt-1" :style="temaClaro ? 'color:#94a3b8;' : 'color:#6b7280;'">—</p>
+        <p class="text-xs mt-1" :style="temaClaro ? 'color:#94a3b8;' : 'color:#6b7280;'">nada entregue com prazo no período</p>
+      {% else %}
+        {% if placar.otd >= 90 %}
+          <p class="text-2xl font-semibold mt-1" style="color:#059669;">{{ placar.otd }}%</p>
+        {% elif placar.otd >= 70 %}
+          <p class="text-2xl font-semibold mt-1" style="color:#f59e0b;">{{ placar.otd }}%</p>
+        {% else %}
+          <p class="text-2xl font-semibold mt-1" style="color:#dc2626;">{{ placar.otd }}%</p>
+        {% endif %}
+        <p class="text-xs mt-1" :style="temaClaro ? 'color:#94a3b8;' : 'color:#6b7280;'">
+          {{ placar.no_prazo }} de {{ placar.entregues }} entregue(s)
+        </p>
+      {% endif %}
+    </div>
+
+    {% comment %}
+      A média é SÓ dos atrasados: incluir quem chegou em dia dividiria o
+      atraso por quem não atrasou e faria trinta dias virar três.
+    {% endcomment %}
+    <div class="card p-4">
+      <p class="text-xs uppercase tracking-wide" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Atraso médio</p>
+      {% if placar.atraso_medio is None %}
+        <p class="text-2xl font-semibold mt-1" style="color:#059669;">—</p>
+        <p class="text-xs mt-1" :style="temaClaro ? 'color:#94a3b8;' : 'color:#6b7280;'">nenhuma entrega atrasada</p>
+      {% else %}
+        <p class="text-2xl font-semibold mt-1" style="color:#dc2626;">{{ placar.atraso_medio }} dias</p>
+        <p class="text-xs mt-1" :style="temaClaro ? 'color:#94a3b8;' : 'color:#6b7280;'">
+          entre as {{ placar.atrasados }} que atrasaram
+        </p>
+      {% endif %}
+    </div>
+  </div>
+
+  {% if placar.sem_prazo or placar.sem_data or risco.sem_prazo %}
+    <div class="card p-4" style="border-left:3px solid #f59e0b;">
+      {% if risco.sem_prazo or placar.sem_prazo %}
+        <p class="text-sm" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
+          <strong>{{ risco.sem_prazo }}</strong> pedido(s) abertos sem data combinada
+          {% if placar.sem_prazo %} e {{ placar.sem_prazo }} entregue(s) sem ela{% endif %}.
+        </p>
+        <p class="text-sm mt-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+          Não se pode estar atrasado contra uma data que não existe, então eles ficam
+          <strong>fora do placar</strong> — contá-los como "no prazo" inflaria o indicador
+          com pedido que ninguém prometeu. É também onde o atraso costuma se esconder.
+        </p>
+      {% endif %}
+      {% if placar.sem_data %}
+        <p class="text-sm {% if risco.sem_prazo or placar.sem_prazo %}mt-2{% endif %}"
+           :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+          <strong>{{ placar.sem_data }}</strong> pedido(s) marcados como entregues sem carimbo de
+          quando. Sem a data real não dá para dizer se chegaram no prazo, e chutar seria pior.
+        </p>
+      {% endif %}
+    </div>
+  {% endif %}
+
+  {% comment %}
+    ── Bloco 1: o que ainda dá para salvar ────────────────────────────────
+  {% endcomment %}
+  <div class="card overflow-hidden">
+    <div class="px-4 pt-4">
+      <h3 class="text-sm font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">Em aberto</h3>
+      <p class="text-xs mt-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+        Do mais urgente para o mais folgado. Sem data combinada vai para o fim —
+        ali não há urgência a calcular, e sim cadastro faltando.
+      </p>
+    </div>
+    {% if abertos %}
+      <div class="overflow-x-auto mt-3">
+        <table class="w-full text-sm">
+          <thead>
+            <tr class="border-b" :style="temaClaro ? 'border-color:#e2e8f0;' : 'border-color:#2a2a2e;'">
+              <th class="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wide whitespace-nowrap w-full"
+                  :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Pedido</th>
+              <th class="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wide whitespace-nowrap"
+                  :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Situação</th>
+              <th class="text-right px-4 py-3 text-xs font-semibold uppercase tracking-wide whitespace-nowrap"
+                  :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Combinado</th>
+              <th class="text-right px-4 py-3 text-xs font-semibold uppercase tracking-wide whitespace-nowrap"
+                  :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Faltam</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for a in abertos %}
+              <tr class="border-b" :style="temaClaro ? 'border-color:#f1f5f9;' : 'border-color:#1e1e22;'">
+                <td class="px-4 py-3">
+                  <a href="{% url 'moda:pedido-detail' a.pedido.pk %}" class="font-medium"
+                     :style="temaClaro ? 'color:#3b82f6;' : 'color:#60a5fa;'">Pedido {{ a.numero }}</a>
+                  <span class="block text-xs" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">{{ a.cliente }}</span>
+                </td>
+                <td class="px-4 py-3 whitespace-nowrap"
+                    :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">{{ a.status }}</td>
+                <td class="px-4 py-3 text-right tabular-nums whitespace-nowrap"
+                    :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+                  {% if a.prazo %}{{ a.prazo|date:"d/m/Y" }}{% else %}—{% endif %}
+                </td>
+                <td class="px-4 py-3 text-right tabular-nums font-semibold whitespace-nowrap">
+                  {% if a.dias is None %}
+                    <span style="color:#f59e0b;">sem data</span>
+                  {% elif a.atrasado %}
+                    <span style="color:#dc2626;">{{ a.atraso }} dia(s) atrás</span>
+                  {% elif a.vence_logo %}
+                    <span style="color:#f59e0b;">{{ a.dias }} dia(s)</span>
+                  {% else %}
+                    <span style="color:#059669;">{{ a.dias }} dias</span>
+                  {% endif %}
+                </td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    {% else %}
+      <div class="px-4 py-8 text-center">
+        <p class="text-sm" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+          Nenhum pedido em aberto.
+        </p>
+      </div>
+    {% endif %}
+  </div>
+
+  {% comment %}
+    ── Bloco 2: a distribuição, porque a média esconde a cauda ────────────
+    "Atraso médio de cinco dias" pode ser uma fábrica que atrasa cinco dias
+    sempre — ou uma que entrega quase tudo em dia e destruiu dois clientes
+    com trinta. São situações opostas e pedem providências opostas.
+  {% endcomment %}
+  {% if entregues %}
+    <div class="card overflow-hidden">
+      <div class="px-4 pt-4">
+        <h3 class="text-sm font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">Como os atrasos se distribuem</h3>
+        <p class="text-xs mt-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+          A média esconde a cauda: atrasar pouco em tudo e destruir dois clientes
+          dá o mesmo número, e pede o oposto.
+        </p>
+      </div>
+      <div class="p-4 space-y-3">
+        {% for f in faixas %}
+          <div>
+            <div class="flex items-baseline justify-between gap-2 mb-1">
+              <span class="text-sm" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">{{ f.label }}</span>
+              {% comment %}
+                `style` fixo e `:style` do Alpine na mesma tag brigam -- o
+                binding troca o atributo inteiro. A faixa vazia, que precisa
+                saber o tema, fica em ramo separado das coloridas.
+              {% endcomment %}
+              {% if f.boa %}
+                <span class="text-sm tabular-nums" style="color:#059669;">
+                  {{ f.pedidos }}{% if f.percentual is not None %} · {{ f.percentual }}%{% endif %}
+                </span>
+              {% elif f.pedidos %}
+                <span class="text-sm tabular-nums" style="color:#dc2626;">
+                  {{ f.pedidos }} · {{ f.percentual }}%
+                </span>
+              {% else %}
+                <span class="text-sm tabular-nums" :style="temaClaro ? 'color:#94a3b8;' : 'color:#6b7280;'">0</span>
+              {% endif %}
+            </div>
+            <div style="height:6px; border-radius:3px; background:rgba(127,127,127,.18);">
+              <div style="height:6px; border-radius:3px; width:{{ f.barra }}%;
+                          background:{% if f.boa %}#059669{% else %}#dc2626{% endif %};"></div>
+            </div>
+          </div>
+        {% endfor %}
+      </div>
+    </div>
+
+    <div class="card overflow-hidden">
+      <div class="px-4 pt-4">
+        <h3 class="text-sm font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">Entregas do período</h3>
+        <p class="text-xs mt-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+          Maior atraso primeiro. A janela é pela <strong>entrega real</strong>: do que saiu
+          no período, quanto chegou no prazo.
+        </p>
+      </div>
+      <div class="overflow-x-auto mt-3">
+        <table class="w-full text-sm">
+          <thead>
+            <tr class="border-b" :style="temaClaro ? 'border-color:#e2e8f0;' : 'border-color:#2a2a2e;'">
+              <th class="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wide whitespace-nowrap w-full"
+                  :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Pedido</th>
+              <th class="text-right px-4 py-3 text-xs font-semibold uppercase tracking-wide whitespace-nowrap"
+                  :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Combinado</th>
+              <th class="text-right px-4 py-3 text-xs font-semibold uppercase tracking-wide whitespace-nowrap"
+                  :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Entregue</th>
+              <th class="text-right px-4 py-3 text-xs font-semibold uppercase tracking-wide whitespace-nowrap"
+                  :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Desvio</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for e in entregues %}
+              <tr class="border-b" :style="temaClaro ? 'border-color:#f1f5f9;' : 'border-color:#1e1e22;'">
+                <td class="px-4 py-3">
+                  <a href="{% url 'moda:pedido-detail' e.pedido.pk %}" class="font-medium"
+                     :style="temaClaro ? 'color:#3b82f6;' : 'color:#60a5fa;'">Pedido {{ e.numero }}</a>
+                  <span class="block text-xs" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">{{ e.cliente }}</span>
+                </td>
+                <td class="px-4 py-3 text-right tabular-nums whitespace-nowrap"
+                    :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">{{ e.prometido|date:"d/m/Y" }}</td>
+                <td class="px-4 py-3 text-right tabular-nums whitespace-nowrap"
+                    :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">{{ e.real|date:"d/m/Y" }}</td>
+                <td class="px-4 py-3 text-right tabular-nums font-semibold whitespace-nowrap">
+                  {% if e.atrasado %}
+                    <span style="color:#dc2626;">+{{ e.desvio }} dia(s)</span>
+                  {% elif e.desvio == 0 %}
+                    <span style="color:#059669;">no dia</span>
+                  {% else %}
+                    <span style="color:#059669;">{{ e.adiantado }} dia(s) antes</span>
+                  {% endif %}
+                </td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  {% endif %}
+
+  <div class="card p-4">
+    <p class="text-xs uppercase tracking-wide mb-2" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Como o número é feito</p>
+    <ul class="text-sm space-y-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+      <li><strong>Antecipação não compensa atraso.</strong> Entregar dez dias adiantado para um cliente não
+        desfaz dez dias de atraso para outro — por isso o placar é contagem, não uma média com sinal.</li>
+      <li><strong>Atraso médio só sobre os atrasados.</strong> Incluir quem chegou em dia dividiria o atraso
+        por quem não atrasou e faria trinta dias virar três.</li>
+      <li><strong>A data real é o aceite do cliente</strong> na expedição; sem ele, a etapa de Entrega do fluxo.
+        Pedido com várias ordens só está entregue quando a última chega.</li>
+      <li><strong>Sem data combinada fica fora do placar.</strong> Não se pode atrasar contra uma data que
+        não existe, e contá-lo como "no prazo" inflaria o indicador.</li>
+      <li>A janela é pela <strong>entrega real</strong>. O Dashboard olha pela data prometida, que é outra
+        pergunta legítima — e por isso os dois números podem diferir.</li>
+    </ul>
+  </div>
+</div>
+{% endblock %}
