@@ -1,0 +1,249 @@
+{% extends "_base.html" %}
+{% block title %}{{ title }}{% endblock %}
+{% block page_title %}Lotes{% endblock %}
+{% block content %}
+{% comment %}
+  A busca filtra AO VIVO, como nas outras telas de estoque. Aqui ela é o
+  centro da tela e não um acessório: quem abre esta página costuma ter uma
+  reclamação na mão e precisa achar o rolo em segundos.
+{% endcomment %}
+<div class="space-y-5"
+     x-data="{
+       busca: '',
+       norm(valor) {
+         return (valor || '').toString().normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+       },
+       combina(linha) {
+         return !this.busca.trim() || this.norm(linha.dataset.busca).includes(this.norm(this.busca));
+       },
+       get visiveis() {
+         return [...this.$root.querySelectorAll('[data-busca]')].filter(l => this.combina(l)).length;
+       }
+     }">
+  <div class="flex flex-wrap items-start justify-between gap-3">
+    <div>
+      <p class="text-sm mb-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+        <a href="{% url 'moda:grupo' 'estoque' %}" :style="temaClaro ? 'color:#3b82f6;' : 'color:#60a5fa;'">Estoque</a>
+        <span class="mx-1">›</span> Lotes
+      </p>
+      <h2 class="text-2xl font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">Lotes</h2>
+      <p class="text-sm mt-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+        De que rolo saiu cada peça — e, no dia do defeito,
+        <strong>quem mais levou peça dele</strong>.
+      </p>
+    </div>
+    <a href="{% url 'moda:corte-list' %}" class="btn-secondary text-sm">Registros de corte</a>
+  </div>
+
+  <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+    {% comment %}
+      Um rolo ruim se anuncia antes da reclamação: corta pior e refuga mais
+      na costura. Por isso o suspeito vem primeiro, e não a contagem.
+    {% endcomment %}
+    <div class="card p-4">
+      <p class="text-xs uppercase tracking-wide" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Rolos suspeitos</p>
+      {% if resumo.suspeitos %}
+        <p class="text-2xl font-semibold mt-1" style="color:#dc2626;">{{ resumo.suspeitos }}</p>
+        <p class="text-xs mt-1" :style="temaClaro ? 'color:#94a3b8;' : 'color:#6b7280;'">
+          refugo de {{ suspeito }}% ou mais nas ordens que usaram
+        </p>
+      {% else %}
+        <p class="text-2xl font-semibold mt-1" style="color:#059669;">0</p>
+        <p class="text-xs mt-1" :style="temaClaro ? 'color:#94a3b8;' : 'color:#6b7280;'">nenhum acima de {{ suspeito }}% de refugo</p>
+      {% endif %}
+    </div>
+
+    <div class="card p-4">
+      <p class="text-xs uppercase tracking-wide" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Pior rolo</p>
+      {% if resumo.pior %}
+        <p class="text-lg font-semibold mt-1" style="color:#dc2626;">{{ resumo.pior.lote }}</p>
+        <p class="text-xs mt-1" :style="temaClaro ? 'color:#94a3b8;' : 'color:#6b7280;'">
+          {{ resumo.pior.percentual_perda }}% de refugo — {{ resumo.pior.tecido }}
+        </p>
+      {% else %}
+        <p class="text-lg font-semibold mt-1" style="color:#059669;">nenhum</p>
+      {% endif %}
+    </div>
+
+    <div class="card p-4">
+      <p class="text-xs uppercase tracking-wide" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Peças rastreáveis</p>
+      {% if resumo.cobertura is not None %}
+        <p class="text-2xl font-semibold mt-1"
+           style="{% if resumo.sem_rastro %}color:#f59e0b;{% else %}color:#059669;{% endif %}">{{ resumo.cobertura }}%</p>
+        <p class="text-xs mt-1" :style="temaClaro ? 'color:#94a3b8;' : 'color:#6b7280;'">
+          {{ resumo.pecas }} peça(s) ligadas a um rolo
+        </p>
+      {% else %}
+        <p class="text-2xl font-semibold mt-1" :style="temaClaro ? 'color:#94a3b8;' : 'color:#6b7280;'">—</p>
+        <p class="text-xs mt-1" :style="temaClaro ? 'color:#94a3b8;' : 'color:#6b7280;'">nenhum corte registrado</p>
+      {% endif %}
+    </div>
+
+    <div class="card p-4">
+      <p class="text-xs uppercase tracking-wide" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Lotes</p>
+      <p class="text-2xl font-semibold mt-1" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">{{ resumo.lotes }}</p>
+      <p class="text-xs mt-1" :style="temaClaro ? 'color:#94a3b8;' : 'color:#6b7280;'">{{ resumo.metros }} m consumidos</p>
+    </div>
+  </div>
+
+  <form method="get" class="flex flex-wrap items-center gap-2">
+    <input type="text" name="q" value="{{ busca }}" x-model="busca"
+           placeholder="Lote, tecido, ordem ou cliente" autocomplete="off"
+           class="form-input text-sm" style="max-width:320px;">
+    <button type="submit" class="btn-secondary text-sm">Buscar</button>
+    <span x-show="busca.trim()" x-cloak class="text-xs"
+          :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+      <span x-text="visiveis"></span> de {{ linhas|length }}
+    </span>
+    <button type="button" x-show="busca.trim()" x-cloak @click="busca = ''"
+            class="btn-secondary text-sm">Limpar busca</button>
+  </form>
+
+  {% comment %}
+    O furo da rastreabilidade, e ele não se conserta depois do fato: no dia
+    do defeito não há como saber se a peça veio do rolo suspeito.
+  {% endcomment %}
+  {% if sem_lote.cortes %}
+    <div class="card p-4" style="border-left:3px solid #f59e0b;">
+      <p class="text-sm" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
+        <strong>{{ sem_lote.cortes }}</strong> corte(s) sem lote informado —
+        {{ sem_lote.pecas }} peça(s) sem rastro.
+      </p>
+      <p class="text-sm mt-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+        Essas peças não aparecem em lote nenhum. No dia em que um rolo der
+        problema, não haverá como saber se elas vieram dele — e isso não se
+        conserta depois. O lote é o campo <strong>Lote</strong> no registro de corte.
+      </p>
+      <a href="{% url 'moda:corte-list' %}" class="btn-secondary text-sm mt-3 inline-block">
+        Registros de corte
+      </a>
+    </div>
+  {% endif %}
+
+  <div class="card overflow-hidden">
+    {% if linhas %}
+      <div class="overflow-x-auto">
+        <table class="w-full text-sm">
+          <thead>
+            <tr class="border-b" :style="temaClaro ? 'border-color:#e2e8f0;' : 'border-color:#2a2a2e;'">
+              <th class="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wide whitespace-nowrap w-full"
+                  :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Lote</th>
+              <th class="text-right px-4 py-3 text-xs font-semibold uppercase tracking-wide whitespace-nowrap"
+                  :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Refugo</th>
+              <th class="text-right px-4 py-3 text-xs font-semibold uppercase tracking-wide whitespace-nowrap"
+                  :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Aproveit.</th>
+              <th class="text-right px-4 py-3 text-xs font-semibold uppercase tracking-wide whitespace-nowrap"
+                  :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Peças</th>
+              <th class="text-right px-4 py-3 text-xs font-semibold uppercase tracking-wide whitespace-nowrap"
+                  :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Metros</th>
+              <th class="text-right px-4 py-3 text-xs font-semibold uppercase tracking-wide whitespace-nowrap"
+                  :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Pedidos</th>
+              <th class="text-right px-4 py-3 text-xs font-semibold uppercase tracking-wide whitespace-nowrap"
+                  :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Último corte</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% comment %}
+              Suspeitos primeiro, maior refugo no topo: quem abre a tela sem
+              um lote em mãos quer ver o rolo problemático de cara.
+            {% endcomment %}
+            {% for l in linhas %}
+              <tr class="border-b"
+                  data-busca="{{ l.lote }} {{ l.tecido }} {{ l.fornecedor }} {{ l.numeros|join:' ' }} {{ l.clientes|join:' ' }}"
+                  x-show="combina($el)" x-cloak
+                  :style="temaClaro ? 'border-color:#f1f5f9;' : 'border-color:#1e1e22;'">
+                <td class="px-4 py-3">
+                  <span class="font-medium" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">{{ l.lote }}</span>
+                  <span class="block text-xs" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+                    {{ l.tecido }}{% if l.fornecedor %} · {{ l.fornecedor }}{% endif %}
+                    · {{ l.cortes }} corte(s) · {{ l.qtd_ordens }} ordem(ns)
+                  </span>
+                  {% comment %}
+                    Os clientes ficam NA LINHA, e não atrás de um clique: é
+                    a resposta que a tela existe para dar, e ela precisa
+                    estar visível no momento em que se acha o lote.
+                  {% endcomment %}
+                  {% if l.clientes %}
+                    <span class="block text-xs mt-1" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
+                      {{ l.clientes|join:", " }}{% if l.clientes_a_mais %}
+                        <span :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+                          e mais {{ l.clientes_a_mais }}</span>{% endif %}
+                    </span>
+                  {% endif %}
+                </td>
+                <td class="px-4 py-3 text-right tabular-nums font-semibold whitespace-nowrap">
+                  {% if l.percentual_perda is None %}
+                    <span :style="temaClaro ? 'color:#94a3b8;' : 'color:#6b7280;'"
+                          title="Nenhuma etapa concluída nas ordens deste lote.">—</span>
+                  {% elif l.suspeito %}
+                    <span style="color:#dc2626;">{{ l.percentual_perda }}%</span>
+                    <span class="block text-xs" style="color:#dc2626;">{{ l.perda }} peça(s)</span>
+                  {% else %}
+                    <span style="color:#059669;">{{ l.percentual_perda }}%</span>
+                  {% endif %}
+                </td>
+                <td class="px-4 py-3 text-right tabular-nums whitespace-nowrap"
+                    :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+                  {% if l.aproveitamento is None %}—{% else %}{{ l.aproveitamento }}%{% endif %}
+                </td>
+                <td class="px-4 py-3 text-right tabular-nums whitespace-nowrap"
+                    :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">{{ l.pecas }}</td>
+                <td class="px-4 py-3 text-right tabular-nums whitespace-nowrap"
+                    :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">{{ l.metros }} m</td>
+                <td class="px-4 py-3 text-right tabular-nums whitespace-nowrap"
+                    :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+                  {{ l.qtd_pedidos }}
+                  {% if l.qtd_clientes %}
+                    <span class="block text-xs">{{ l.qtd_clientes }} cliente(s)</span>
+                  {% endif %}
+                </td>
+                <td class="px-4 py-3 text-right tabular-nums whitespace-nowrap"
+                    :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+                  {% if l.ultimo %}{{ l.ultimo|date:"d/m/Y" }}{% else %}—{% endif %}
+                </td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      <div x-show="busca.trim() && visiveis === 0" x-cloak class="p-10 text-center">
+        <p class="text-sm font-medium" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
+          Nenhum lote com <span x-text="'\u201c' + busca + '\u201d'"></span>.
+        </p>
+        <p class="text-sm mt-2" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+          A busca olha lote, tecido, fornecedor, número da ordem e nome do cliente.
+          Se a peça foi cortada sem lote, ela não aparece em rolo nenhum.
+        </p>
+        <button type="button" @click="busca = ''" class="btn-secondary text-sm mt-4">Limpar busca</button>
+      </div>
+    {% else %}
+      <div class="p-10 text-center">
+        <p class="text-sm font-medium" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
+          {% if busca %}Nenhum lote com esse recorte.{% else %}Nenhum lote registrado.{% endif %}
+        </p>
+        <p class="text-sm mt-2" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+          O lote é digitado no <strong>registro de corte</strong>, que é onde ele de fato
+          acontece: alguém pega o rolo, lê a etiqueta e anota.
+        </p>
+        <a href="{% url 'moda:corte-list' %}" class="btn-secondary text-sm mt-4 inline-block">
+          Registros de corte
+        </a>
+      </div>
+    {% endif %}
+  </div>
+
+  <div class="card p-4">
+    <p class="text-xs uppercase tracking-wide mb-2" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Como o número é feito</p>
+    <ul class="text-sm space-y-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+      <li>O caminho é <strong>lote → corte → ordem → pedido → cliente</strong>, lido de trás para a frente.
+        É por isso que dá para partir da reclamação e chegar ao rolo.</li>
+      <li><strong>O lote é texto digitado.</strong> "L-123" e "l-123 " viram o mesmo rolo (espaço e caixa somem);
+        "L 123" continua separado — juntar por semelhança esconderia o cadastro torto.</li>
+      <li><strong>Refugo</strong> é o das ordens que usaram o rolo, medido sobre o que passou pelas bancadas.
+        Vem só do apontamento das etapas, mesma fonte do indicador de perdas.</li>
+      <li><strong>Aproveitamento</strong> é ponderado pelo tecido gasto: um enfesto de 2 m não pesa igual a um de 200 m.</li>
+      <li>Só entra corte marcado como <strong>cortado</strong> — o planejado ainda não tirou pano do rolo.</li>
+    </ul>
+  </div>
+</div>
+{% endblock %}
