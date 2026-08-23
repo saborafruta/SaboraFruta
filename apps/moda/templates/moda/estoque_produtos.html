@@ -1,0 +1,233 @@
+{% extends "_base.html" %}
+{% block title %}{{ title }}{% endblock %}
+{% block page_title %}Produtos{% endblock %}
+{% block content %}
+<div class="space-y-5">
+  <div class="flex flex-wrap items-start justify-between gap-3">
+    <div>
+      <p class="text-sm mb-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+        <a href="{% url 'moda:grupo' 'estoque' %}" :style="temaClaro ? 'color:#3b82f6;' : 'color:#60a5fa;'">Estoque</a>
+        <span class="mx-1">›</span> Produtos
+      </p>
+      <h2 class="text-2xl font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">Produtos</h2>
+      <p class="text-sm mt-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+        Peça pronta no catálogo — o que há, <strong>o que está vindo</strong> e há
+        quanto tempo nada sai.
+      </p>
+    </div>
+    <a href="{% url 'moda:item' 'produtos' 'produtos' %}" class="btn-secondary text-sm">Catálogo</a>
+  </div>
+
+  {% comment %}
+    Numa confecção a maior parte do que sai é feito sob encomenda: a peça
+    nasce contra um pedido e vai embora, sem nunca virar estoque. Por isso
+    o card de destaque não é o saldo, e sim o dinheiro PRESO.
+  {% endcomment %}
+  <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+    <div class="card p-4">
+      <p class="text-xs uppercase tracking-wide" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Parado</p>
+      {% if resumo.parados %}
+        <p class="text-2xl font-semibold mt-1" style="color:#dc2626;">R$ {{ resumo.valor_parado }}</p>
+        <p class="text-xs mt-1" :style="temaClaro ? 'color:#94a3b8;' : 'color:#6b7280;'">
+          {{ resumo.parados }} produto(s) sem saída há {{ resumo.limite }}+ dias
+        </p>
+      {% else %}
+        <p class="text-2xl font-semibold mt-1" style="color:#059669;">R$ 0,00</p>
+        <p class="text-xs mt-1" :style="temaClaro ? 'color:#94a3b8;' : 'color:#6b7280;'">nada parado há {{ resumo.limite }}+ dias</p>
+      {% endif %}
+    </div>
+
+    <div class="card p-4">
+      <p class="text-xs uppercase tracking-wide" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Maior valor preso</p>
+      {% if resumo.pior %}
+        <p class="text-lg font-semibold mt-1" style="color:#dc2626;">{{ resumo.pior.nome }}</p>
+        <p class="text-xs mt-1" :style="temaClaro ? 'color:#94a3b8;' : 'color:#6b7280;'">
+          R$ {{ resumo.pior.valor }} — {{ resumo.pior.dias_parado }} dias sem sair
+        </p>
+      {% else %}
+        <p class="text-lg font-semibold mt-1" style="color:#059669;">nenhum</p>
+      {% endif %}
+    </div>
+
+    <div class="card p-4">
+      <p class="text-xs uppercase tracking-wide" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Em produção</p>
+      <p class="text-2xl font-semibold mt-1" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">{{ resumo.em_producao }}</p>
+      <p class="text-xs mt-1" :style="temaClaro ? 'color:#94a3b8;' : 'color:#6b7280;'">
+        peças em {{ resumo.ordens }} ordem(ns) aberta(s)
+      </p>
+    </div>
+
+    <div class="card p-4">
+      <p class="text-xs uppercase tracking-wide" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Em estoque</p>
+      <p class="text-2xl font-semibold mt-1" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">R$ {{ resumo.valor }}</p>
+      <p class="text-xs mt-1" :style="temaClaro ? 'color:#94a3b8;' : 'color:#6b7280;'">
+        {{ resumo.com_saldo }} de {{ resumo.produtos }} produto(s) com saldo
+      </p>
+    </div>
+  </div>
+
+  <form method="get" class="flex flex-wrap items-center gap-2">
+    <input type="text" name="q" value="{{ busca }}" placeholder="Buscar por nome, código ou referência"
+           class="form-input text-sm" style="max-width:300px;">
+    <button type="submit" class="btn-secondary text-sm">Buscar</button>
+    <span class="mx-1" :style="temaClaro ? 'color:#cbd5e1;' : 'color:#475569;'">|</span>
+    <a href="?{% if busca %}q={{ busca }}&{% endif %}filtro=parado"
+       class="{% if filtro == 'parado' %}btn-primary{% else %}btn-secondary{% endif %} text-sm">
+      Parado{% if resumo.parados %} ({{ resumo.parados }}){% endif %}
+    </a>
+    <a href="?{% if busca %}q={{ busca }}&{% endif %}filtro=com_saldo"
+       class="{% if filtro == 'com_saldo' %}btn-primary{% else %}btn-secondary{% endif %} text-sm">
+      Com saldo{% if resumo.com_saldo %} ({{ resumo.com_saldo }}){% endif %}
+    </a>
+    <a href="?{% if busca %}q={{ busca }}&{% endif %}filtro=em_producao"
+       class="{% if filtro == 'em_producao' %}btn-primary{% else %}btn-secondary{% endif %} text-sm">
+      Em produção
+    </a>
+    <a href="?{% if busca %}q={{ busca }}&{% endif %}filtro=sem_vinculo"
+       class="{% if filtro == 'sem_vinculo' %}btn-primary{% else %}btn-secondary{% endif %} text-sm">
+      Sem estoque{% if resumo.sem_vinculo %} ({{ resumo.sem_vinculo }}){% endif %}
+    </a>
+    {% if busca or filtro %}
+      <a href="?" class="btn-secondary text-sm">Limpar</a>
+    {% endif %}
+  </form>
+
+  {% if resumo.sem_vinculo %}
+    <div class="card p-4" style="border-left:3px solid #f59e0b;">
+      <p class="text-sm" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
+        <strong>{{ resumo.sem_vinculo }}</strong> produto(s) sem ligação com o catálogo do ERP.
+      </p>
+      <p class="text-sm mt-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+        Sem essa ligação não há de onde ler saldo — a linha mostra traço, e não zero.
+        Numa peça feita <strong>só sob encomenda</strong> isso é normal: ela nunca vira
+        estoque. Vale ligar só o que a fábrica realmente guarda pronto.
+      </p>
+    </div>
+  {% endif %}
+
+  <div class="card overflow-hidden">
+    {% if linhas %}
+      <div class="overflow-x-auto">
+        <table class="w-full text-sm">
+          <thead>
+            <tr class="border-b" :style="temaClaro ? 'border-color:#e2e8f0;' : 'border-color:#2a2a2e;'">
+              <th class="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wide"
+                  :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Produto</th>
+              <th class="text-right px-4 py-3 text-xs font-semibold uppercase tracking-wide"
+                  :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Valor parado</th>
+              <th class="text-right px-4 py-3 text-xs font-semibold uppercase tracking-wide"
+                  :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Sem sair há</th>
+              <th class="text-right px-4 py-3 text-xs font-semibold uppercase tracking-wide"
+                  :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Em estoque</th>
+              <th class="text-right px-4 py-3 text-xs font-semibold uppercase tracking-wide"
+                  :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Reservado</th>
+              <th class="text-right px-4 py-3 text-xs font-semibold uppercase tracking-wide"
+                  :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Em produção</th>
+              <th class="text-right px-4 py-3 text-xs font-semibold uppercase tracking-wide"
+                  :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">SKUs</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% comment %}
+              Pelo VALOR PARADO, do maior para o menor: a pergunta de
+              estoque acabado é "onde meu dinheiro está preso", e a resposta
+              tem de estar na primeira linha.
+            {% endcomment %}
+            {% for l in linhas %}
+              <tr class="border-b" :style="temaClaro ? 'border-color:#f1f5f9;' : 'border-color:#1e1e22;'">
+                <td class="px-4 py-3">
+                  <a href="{% url 'moda:produto-detail' l.produto.pk %}" class="font-medium"
+                     :style="temaClaro ? 'color:#3b82f6;' : 'color:#60a5fa;'">{{ l.nome }}</a>
+                  <span class="block text-xs" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+                    {{ l.codigo }}
+                    {% if l.modelo %} · {{ l.modelo }}{% endif %}
+                    {% if l.colecao %} · {{ l.colecao }}{% endif %}
+                  </span>
+                  {% if l.descontinuado %}
+                    <span class="block text-xs mt-1" style="color:#f59e0b;">descontinuado</span>
+                  {% endif %}
+                  {% if not l.ligado %}
+                    <span class="block text-xs mt-1" :style="temaClaro ? 'color:#94a3b8;' : 'color:#6b7280;'">
+                      sem estoque próprio — feito sob encomenda
+                    </span>
+                  {% endif %}
+                </td>
+                <td class="px-4 py-3 text-right tabular-nums font-semibold">
+                  {% if l.valor is None %}
+                    <span :style="temaClaro ? 'color:#94a3b8;' : 'color:#6b7280;'">—</span>
+                  {% elif l.dias_parado >= resumo.limite %}
+                    <span style="color:#dc2626;">R$ {{ l.valor }}</span>
+                  {% else %}
+                    <span :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">R$ {{ l.valor }}</span>
+                  {% endif %}
+                </td>
+                <td class="px-4 py-3 text-right tabular-nums">
+                  {% if l.dias_parado is None %}
+                    <span :style="temaClaro ? 'color:#94a3b8;' : 'color:#6b7280;'"
+                          title="Só há tempo parado onde há peça parada.">—</span>
+                  {% elif l.dias_parado >= resumo.limite %}
+                    <span style="color:#dc2626;">{{ l.dias_parado }} dias</span>
+                  {% else %}
+                    <span :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">{{ l.dias_parado }} dias</span>
+                  {% endif %}
+                </td>
+                <td class="px-4 py-3 text-right tabular-nums"
+                    :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
+                  {% if l.saldo is None %}
+                    <span :style="temaClaro ? 'color:#94a3b8;' : 'color:#6b7280;'">—</span>
+                  {% else %}{{ l.saldo|floatformat:0 }}{% endif %}
+                </td>
+                <td class="px-4 py-3 text-right tabular-nums"
+                    :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+                  {% if l.reservado is None %}—{% else %}{{ l.reservado|floatformat:0 }}{% endif %}
+                </td>
+                <td class="px-4 py-3 text-right tabular-nums">
+                  {% if l.em_producao %}
+                    <span style="color:#3b82f6;">{{ l.em_producao }}</span>
+                    <span class="block text-xs" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+                      {{ l.ordens }} ordem(ns)
+                    </span>
+                  {% else %}
+                    <span :style="temaClaro ? 'color:#94a3b8;' : 'color:#6b7280;'">—</span>
+                  {% endif %}
+                </td>
+                <td class="px-4 py-3 text-right tabular-nums"
+                    :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">{{ l.skus }}</td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    {% else %}
+      <div class="p-10 text-center">
+        <p class="text-sm font-medium" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
+          {% if busca or filtro %}Nada com esse recorte.{% else %}Nenhum produto ativo no catálogo.{% endif %}
+        </p>
+        <p class="text-sm mt-2" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+          Os produtos vêm do catálogo de confecção. É lá que se liga cada um ao
+          produto do ERP que guarda o saldo.
+        </p>
+        <a href="{% url 'moda:item' 'produtos' 'produtos' %}" class="btn-secondary text-sm mt-4 inline-block">
+          Ir para o catálogo
+        </a>
+      </div>
+    {% endif %}
+  </div>
+
+  <div class="card p-4">
+    <p class="text-xs uppercase tracking-wide mb-2" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Como o número é feito</p>
+    <ul class="text-sm space-y-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+      <li><strong>Sem sair há</strong> conta desde a última saída de estoque. Peça pronta que sobrou de um
+        pedido e nunca saiu é dinheiro preso, e o tempo é o único jeito de enxergá-la — ela não aparece em falta nenhuma.</li>
+      <li><strong>Em produção</strong> são as peças nas ordens ainda abertas. Sem essa coluna, um saldo baixo
+        parece problema quando há duzentas peças na costura.</li>
+      <li><strong>O saldo é do produto, não do SKU.</strong> A variante tem código de barras mas não tem estoque
+        próprio: a tela sabe que há trinta camisas, e não sabe quantas são M e quantas são G.</li>
+      <li><strong>Traço não é zero.</strong> Produto sem ligação com o ERP não tem saldo para ler — e numa peça
+        feita só sob encomenda isso é o normal, não um erro.</li>
+      <li>Só faz sentido falar em parado havendo peça parada: produto zerado há um ano não é dinheiro preso,
+        é produto que não se faz mais.</li>
+    </ul>
+  </div>
+</div>
+{% endblock %}
