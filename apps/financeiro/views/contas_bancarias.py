@@ -295,6 +295,8 @@ class ContaBancariaListView(PermissaoRequiredMixin, View):
                     "valor": editar_movimento.valor,
                     "historico": editar_movimento.historico,
                     "documento": editar_movimento.documento,
+                    "forma_pagamento": editar_movimento.forma_pagamento,
+                    "plano_contas": editar_movimento.plano_contas,
                 },
                 filial=filial,
             )
@@ -571,6 +573,7 @@ class ContaBancariaListView(PermissaoRequiredMixin, View):
             "fornecedor": "Fornecedor",
             "forma_pagamento": "Forma utilizada",
             "forma_pagamento_prevista": "Forma prevista",
+            "plano_contas": "Classificacao da entrada",
             "observacao": "Observacao",
             "status": "Status",
             "saldo_inicial": "Saldo inicial",
@@ -752,10 +755,11 @@ class ContaBancariaListView(PermissaoRequiredMixin, View):
     @transaction.atomic
     def _editar_movimento_manual(self, request, movimento, dados):
         conta_anterior = movimento.conta_bancaria
-        campos = ["conta_bancaria", "forma_pagamento", "data_lancamento", "valor", "historico", "documento"]
+        campos = ["conta_bancaria", "forma_pagamento", "plano_contas", "data_lancamento", "valor", "historico", "documento"]
         antes = snapshot_modelo(movimento, campos)
         movimento.conta_bancaria = dados["conta_bancaria"]
         movimento.forma_pagamento = dados.get("forma_pagamento")
+        movimento.plano_contas = dados.get("plano_contas") if dados["valor"] > 0 else None
         movimento.data_lancamento = dados["data_lancamento"]
         movimento.valor = dados["valor"]
         movimento.historico = dados["historico"]
@@ -788,11 +792,13 @@ class ContaBancariaListView(PermissaoRequiredMixin, View):
         historico = dados.get("historico") or dict(MovimentoContaBancariaForm.TIPO_CHOICES).get(tipo, "Movimento manual")
         documento = dados.get("documento") or ""
         forma_pagamento = dados.get("forma_pagamento")
+        plano_contas = dados.get("plano_contas") if tipo == MovimentoContaBancariaForm.TIPO_CREDITO else None
 
         def criar(conta, valor_movimento, texto):
             movimento = ExtratoBancario.objects.create(
                 conta_bancaria=conta,
                 forma_pagamento=forma_pagamento,
+                plano_contas=plano_contas if valor_movimento > 0 else None,
                 filial=filial,
                 data_lancamento=data,
                 historico=texto,
@@ -812,7 +818,7 @@ class ContaBancariaListView(PermissaoRequiredMixin, View):
                 descricao="Ajuste manual bancario criado",
                 depois=snapshot_modelo(
                     movimento,
-                    ["conta_bancaria", "forma_pagamento", "data_lancamento", "valor", "historico", "documento"],
+                    ["conta_bancaria", "forma_pagamento", "plano_contas", "data_lancamento", "valor", "historico", "documento"],
                 ),
                 metadados={"contas_envolvidas": [conta.pk]},
             )

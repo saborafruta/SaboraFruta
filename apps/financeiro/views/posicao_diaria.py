@@ -58,6 +58,14 @@ class PosicaoDiariaCaixaView(PermissaoRequiredMixin, View):
             if origem not in {"manual", "receber", "venda"} or not str(registro_id).isdigit():
                 messages.error(request, "Entrada financeira invalida.")
                 return redirect(destino)
+            if origem == "manual":
+                movimento_manual = get_object_or_404(
+                    ExtratoBancario.objects.filter(filial=filial, origem="manual"),
+                    pk=registro_id,
+                )
+                if movimento_manual.valor < 0:
+                    messages.error(request, "Saida manual nao pode ser editada.")
+                    return redirect(destino)
             form = EditarEntradaFinanceiraForm(request.POST, filial=filial, origem=origem)
             if form.is_valid():
                 self._editar_entrada_financeira(
@@ -127,7 +135,7 @@ class PosicaoDiariaCaixaView(PermissaoRequiredMixin, View):
         conta_filtro_texto = request.GET.get("conta", "").strip()
         conta_filtro = int(conta_filtro_texto) if conta_filtro_texto.isdigit() else None
         ordem_movimentos = request.GET.get("ordem", "horario")
-        if ordem_movimentos not in {"horario", "conta"}:
+        if ordem_movimentos not in {"horario", "conta", "forma"}:
             ordem_movimentos = "horario"
         posicao = PosicaoDiariaCaixaService(
             request.filial_ativa, data_fim, data_inicio=data_inicio,
@@ -160,6 +168,7 @@ class PosicaoDiariaCaixaView(PermissaoRequiredMixin, View):
                 "data_lancamento": editar_movimento.data_lancamento, "valor": editar_movimento.valor,
                 "historico": editar_movimento.historico, "documento": editar_movimento.documento,
                 "forma_pagamento": editar_movimento.forma_pagamento,
+                "plano_contas": editar_movimento.plano_contas,
             })
         if detalhe and detalhe.entrada and _usuario_admin(request) and editar_entrada_form is None:
             item = ContaBancariaListView()._buscar_movimento_origem(
@@ -171,23 +180,27 @@ class PosicaoDiariaCaixaView(PermissaoRequiredMixin, View):
                 conta = item.conta_bancaria
                 data_entrada = item.data_lancamento
                 descricao = item.historico
+                plano_contas = item.plano_contas
             elif detalhe.origem_codigo == "receber":
                 valor = item.valor_pago
                 forma = item.forma_pagamento
                 conta = item.conta_bancaria
                 data_entrada = item.data_liquidacao_prevista or item.data_pagamento
                 descricao = ""
+                plano_contas = item.plano_contas
             else:
                 valor = item.valor_bruto_recebido
                 forma = item.forma_pagamento
                 conta = item.conta_bancaria or item.forma_pagamento.conta_bancaria_padrao
                 data_entrada = item.data_liquidacao_prevista or timezone.localdate()
                 descricao = ""
+                plano_contas = None
             editar_entrada_form = EditarEntradaFinanceiraForm(
                 filial=request.filial_ativa, origem=detalhe.origem_codigo,
                 initial={
                     "valor": valor, "forma_pagamento": forma, "conta_bancaria": conta,
                     "data_entrada": data_entrada, "descricao": descricao,
+                    "plano_contas": plano_contas,
                 },
             )
         return render(request, self.template_name, {
@@ -217,16 +230,18 @@ class PosicaoDiariaCaixaView(PermissaoRequiredMixin, View):
         campos = ["conta_bancaria", "forma_pagamento"]
 
         if origem == "manual":
-            campos += ["data_lancamento", "valor", "historico"]
+            campos += ["plano_contas", "data_lancamento", "valor", "historico"]
             antes = snapshot_modelo(item, campos)
             item.conta_bancaria = dados["conta_bancaria"]
             item.forma_pagamento = dados["forma_pagamento"]
+            item.plano_contas = dados.get("plano_contas")
             item.data_lancamento = dados["data_entrada"]
             item.valor = dados["valor"]
             item.historico = dados.get("descricao") or item.historico
             item.save(update_fields=campos)
         elif origem == "receber":
             campos += [
+                "plano_contas", "conta_contabil",
                 "valor_pago", "valor_saldo", "status", "taxa_percentual_aplicada",
                 "taxa_fixa_aplicada", "valor_taxa_recebimento", "valor_liquido_recebido",
                 "taxa_calculada_em", "data_liquidacao_prevista",
@@ -237,6 +252,8 @@ class PosicaoDiariaCaixaView(PermissaoRequiredMixin, View):
             )
             item.conta_bancaria = dados["conta_bancaria"]
             item.forma_pagamento = dados["forma_pagamento"]
+            item.plano_contas = dados.get("plano_contas")
+            item.conta_contabil = item.plano_contas.conta_contabil if item.plano_contas else None
             item.valor_pago = dados["valor"]
             item.valor_saldo = max((item.valor_final or 0) - item.valor_pago, 0)
             item.status = "pago" if item.valor_saldo == 0 else "aberto"

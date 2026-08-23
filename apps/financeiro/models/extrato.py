@@ -2,7 +2,7 @@
 from django.db import models
 from apps.core.models import Filial, Usuario
 from apps.core.models.base import FilialManager as FilialAwareManager
-from .conta_bancaria import ContaBancaria
+from .conta_bancaria import ContaBancaria, PlanoContas
 from .receber_pagar import ContaPagar
 
 
@@ -14,6 +14,13 @@ class ExtratoBancario(models.Model):
         null=True,
         blank=True,
         related_name="+",
+    )
+    plano_contas = models.ForeignKey(
+        PlanoContas,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="extratos_classificados",
     )
     filial = models.ForeignKey(Filial, on_delete=models.PROTECT)
     data_lancamento = models.DateField()

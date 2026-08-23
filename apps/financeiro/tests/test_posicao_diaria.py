@@ -7,8 +7,8 @@ from django.utils import timezone
 
 from apps.core.models import Empresa, Filial, PerfilAcesso, RegistroAuditoria, Usuario
 from apps.cadastros.models import Cliente
-from apps.financeiro.constants.enums import StatusContaPagar, TipoFormaPagamento
-from apps.financeiro.models import ContaBancaria, FormaPagamento, PlanoContas
+from apps.financeiro.constants.enums import StatusContaPagar, StatusContaReceber, TipoFormaPagamento
+from apps.financeiro.models import ContaBancaria, FormaPagamento, PlanoContabil, PlanoContas
 from apps.financeiro.models.extrato import ExtratoBancario
 from apps.financeiro.models.receber_pagar import ContaPagar, ContaReceber, PagamentoContaPagar
 from apps.financeiro.services.receber_service import ContaReceberService
@@ -119,7 +119,6 @@ class PosicaoDiariaCaixaTests(TestCase):
         self.assertContains(response, "Compra de material de limpeza")
         self.assertContains(response, "Contas a receber")
         self.assertContains(response, "Adicionar entrada manual")
-        self.assertContains(response, "Adicionar saída manual")
         self.assertContains(response, "Adicionar conta a pagar")
         self.assertContains(response, reverse("financeiro:pagar_criar") + "?modal=1")
         self.assertContains(response, reverse("financeiro:despesa_paga_criar") + "?modal=1")
@@ -128,6 +127,7 @@ class PosicaoDiariaCaixaTests(TestCase):
         self.assertContains(response, 'aria-label="Ver dias anteriores"')
         self.assertContains(response, 'aria-label="Ver dias posteriores"')
         self.assertContains(response, "tituloPagarModal")
+        self.assertContains(response, "Agrupar por forma de pagamento")
 
     def test_despesa_pessoal_fica_destacada_e_somada_separadamente(self):
         categoria = PlanoContas.objects.create(
@@ -246,6 +246,50 @@ class PosicaoDiariaCaixaTests(TestCase):
         self.assertContains(response, "Ver título")
         self.assertContains(response, reverse("financeiro:receber_detail", args=[conta.pk]))
 
+    def test_recebimento_previsto_atrasado_aparece_em_vermelho(self):
+        cliente = Cliente.objects.create(
+            filial=self.filial, razao_social="Cliente atrasado", tipo_pessoa="F",
+            cpf_cnpj="12345678902",
+        )
+
+    def _categoria_receita(self, descricao="Venda manual"):
+        conta_contabil = PlanoContabil.objects.create(
+            empresa=self.empresa,
+            codigo_referencia=900001,
+            classificacao="3.1.1.001",
+            tipo_conta=PlanoContabil.TipoConta.ANALITICA,
+            descricao=descricao,
+            data_inicio=date(2026, 1, 1),
+            nivel=4,
+            ordem=900001,
+        )
+        return PlanoContas.objects.create(
+            empresa=self.empresa,
+            codigo="310010001",
+            descricao=descricao,
+            tipo="R",
+            nivel=3,
+            aceita_lancamento=True,
+            conta_contabil=conta_contabil,
+        )
+        vencimento = timezone.localdate() - timezone.timedelta(days=3)
+        ContaReceber.objects.create(
+            filial=self.filial, cliente=cliente, valor_original=Decimal("140.00"),
+            valor_final=Decimal("140.00"), valor_saldo=Decimal("140.00"),
+            data_emissao=vencimento, data_vencimento=vencimento,
+            status=StatusContaReceber.ABERTO, forma_pagamento=self.forma,
+            conta_bancaria=self.banco,
+        )
+
+        response = self.client.get(reverse("financeiro:posicao_diaria"), {
+            "data": timezone.localdate().isoformat(), "previsao": "hoje",
+        })
+
+        self.assertContains(response, "Cliente atrasado")
+        self.assertContains(response, "Atrasado")
+        self.assertContains(response, "Alterar data")
+        self.assertContains(response, "is-overdue")
+
     def test_admin_exclui_movimento_manual_sem_apagar_historico(self):
         movimento = ExtratoBancario.objects.create(
             filial=self.filial, conta_bancaria=self.banco, data_lancamento=date(2026, 8, 21),
@@ -343,6 +387,43 @@ class PosicaoDiariaCaixaTests(TestCase):
             objeto_tipo="financeiro.extratobancario", objeto_id=movimento.pk,
             acao=RegistroAuditoria.Acao.AJUSTAR,
         ).exists())
+
+    def test_entrada_manual_salva_e_exibe_classificacao_de_receita(self):
+        categoria = self._categoria_receita("Emprestimo recebido")
+
+        response = self.client.post(reverse("financeiro:posicao_diaria"), {
+            "acao": "lancar_movimento", "tipo": "credito",
+            "conta_destino": self.banco.pk, "data_lancamento": "2026-08-21",
+            "data_referencia": "2026-08-21", "valor": "75.00",
+            "historico": "Entrada classificada", "forma_pagamento": self.forma.pk,
+            "plano_contas": categoria.pk,
+        })
+
+        self.assertEqual(response.status_code, 302)
+        movimento = ExtratoBancario.objects.get(historico="Entrada classificada")
+        self.assertEqual(movimento.plano_contas, categoria)
+        posicao = PosicaoDiariaCaixaService(self.filial, timezone.localdate()).gerar()
+        entrada = next(mov for mov in posicao["entradas"] if mov.registro_id == movimento.pk)
+        self.assertEqual(entrada.classificacao, "Emprestimo recebido")
+
+    def test_saida_manual_nao_pode_ser_corrigida_como_entrada(self):
+        movimento = ExtratoBancario.objects.create(
+            filial=self.filial, conta_bancaria=self.banco, forma_pagamento=self.forma,
+            data_lancamento=date(2026, 8, 21), historico="Saida manual",
+            valor=Decimal("-25.00"), origem="manual", status="importado",
+        )
+
+        response = self.client.post(reverse("financeiro:posicao_diaria"), {
+            "acao": "editar_entrada", "origem": "manual", "movimento_id": movimento.pk,
+            "data_referencia": "2026-08-21", "valor": "31.50",
+            "forma_pagamento": self.forma.pk, "conta_bancaria": self.caixa.pk,
+            "data_entrada": "2026-08-20", "descricao": "Tentativa",
+            "justificativa": "Nao deve alterar",
+        }, follow=True)
+
+        movimento.refresh_from_db()
+        self.assertEqual(movimento.valor, Decimal("-25.00"))
+        self.assertContains(response, "Saida manual nao pode ser editada.")
 
     def test_corrige_recebimento_recalculando_taxa_liquido_e_saldo(self):
         self.forma.taxa_administrativa = Decimal("2.00")

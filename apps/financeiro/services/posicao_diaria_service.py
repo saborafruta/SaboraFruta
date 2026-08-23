@@ -11,6 +11,7 @@ from django.utils import timezone
 
 from apps.financeiro.models import ContaBancaria
 from apps.financeiro.models.extrato import ExtratoBancario
+from apps.financeiro.constants.enums import StatusContaReceber
 from apps.financeiro.models.receber_pagar import ContaReceber, PagamentoContaPagar
 from apps.core.services.calendario import adicionar_dias_uteis_bancarios
 
@@ -37,6 +38,8 @@ class MovimentoDiario:
     excluido: bool = False
     momento: datetime | None = None
     despesa_pessoal: bool = False
+    classificacao: str = ""
+    editavel: bool = True
 
     @property
     def valor(self):
@@ -83,6 +86,14 @@ class PosicaoDiariaCaixaService:
                 movimentos_exibidos,
                 key=lambda mov: (
                     (mov.conta.descricao or mov.conta.banco_nome or "").casefold(),
+                    -(mov.momento.timestamp() if mov.momento else 0),
+                ),
+            )
+        elif ordem == "forma":
+            movimentos_exibidos = sorted(
+                movimentos_exibidos,
+                key=lambda mov: (
+                    (mov.forma_pagamento or "").casefold(),
                     -(mov.momento.timestamp() if mov.momento else 0),
                 ),
             )
@@ -168,7 +179,7 @@ class PosicaoDiariaCaixaService:
         manuais = ExtratoBancario.objects.filter(
             filial=self.filial, conta_bancaria_id__in=self.conta_ids,
             data_lancamento__range=(self.data_inicio, self.data_fim),
-        ).select_related("conta_bancaria", "forma_pagamento")
+        ).select_related("conta_bancaria", "forma_pagamento", "plano_contas")
         if not incluir_excluidos:
             manuais = manuais.exclude(status="excluido")
         for item in manuais:
@@ -183,6 +194,11 @@ class PosicaoDiariaCaixaService:
                 ),
                 entrada=max(valor, ZERO), saida=abs(min(valor, ZERO)), excluido=item.status == "excluido",
                 momento=item.created_at,
+                classificacao=(
+                    item.plano_contas.caminho_descricao
+                    if item.plano_contas_id else ("Credito manual" if valor > ZERO else "Saida manual")
+                ),
+                editavel=valor > ZERO,
             ))
 
         recebimentos = ContaReceber.objects.filter(
@@ -191,7 +207,7 @@ class PosicaoDiariaCaixaService:
         ).filter(
             Q(data_liquidacao_prevista__range=(self.data_inicio, self.data_fim))
             | Q(data_liquidacao_prevista__isnull=True, data_pagamento__range=(self.data_inicio, self.data_fim))
-        ).select_related("conta_bancaria", "cliente", "forma_pagamento")
+        ).select_related("conta_bancaria", "cliente", "forma_pagamento", "plano_contas")
         for item in recebimentos:
             bruto = item.valor_pago or ZERO
             taxa = item.valor_taxa_recebimento if item.taxa_calculada_em else ZERO
@@ -204,6 +220,7 @@ class PosicaoDiariaCaixaService:
                 entrada=item.valor_entrada_liquida, valor_bruto=bruto, valor_taxa=taxa,
                 referencia_url=reverse("financeiro:receber_detail", args=[item.pk]),
                 momento=item.updated_at,
+                classificacao=item.plano_contas.caminho_descricao if item.plano_contas_id else "Conta a receber",
             ))
 
         pagamentos = PagamentoContaPagar.objects.filter(
@@ -227,6 +244,10 @@ class PosicaoDiariaCaixaService:
                 despesa_pessoal=bool(
                     item.conta_pagar.plano_contas_id
                     and item.conta_pagar.plano_contas.despesa_pessoal
+                ),
+                classificacao=(
+                    item.conta_pagar.plano_contas.caminho_descricao
+                    if item.conta_pagar.plano_contas_id else "Despesa sem classificacao"
                 ),
             ))
 
@@ -259,6 +280,7 @@ class PosicaoDiariaCaixaService:
                     entrada=valor, valor_bruto=item.valor_bruto_recebido,
                     valor_taxa=item.valor_taxa if item.taxa_calculada_em else ZERO,
                     momento=item.created_at,
+                    classificacao="Venda",
                 ))
         return sorted(movimentos, key=lambda m: (m.origem, m.descricao.casefold(), m.registro_id))
 
@@ -345,6 +367,7 @@ class PosicaoDiariaCaixaService:
 
     def _recebimentos_previstos(self, data_inicio, data_fim):
         """Mostra creditos futuros sem mistura-los ao saldo realizado."""
+        hoje = timezone.localdate()
         try:
             from apps.pdv.models import PagamentoVendaPDV
         except Exception:
@@ -365,6 +388,7 @@ class PosicaoDiariaCaixaService:
             itens.append({
                 "data": item.data_liquidacao_prevista,
                 "descricao": f"Venda #{item.venda_pdv.numero_venda} - {cliente}",
+                "classificacao": "Venda",
                 "forma": item.forma_pagamento.descricao,
                 "conta": conta.descricao if conta else "Conta nao definida",
                 "conta_id": conta.pk if conta else None,
@@ -376,17 +400,20 @@ class PosicaoDiariaCaixaService:
                 "origem_codigo": "venda",
                 "registro_id": item.pk,
                 "referencia_url": "",
+                "atrasado": False,
+                "renegociado": False,
             })
         compensacoes = ContaReceber.objects.filter(
             filial=self.filial,
             status="pago",
             data_liquidacao_prevista__range=(data_inicio, data_fim),
             valor_pago__gt=0,
-        ).select_related("cliente", "forma_pagamento", "conta_bancaria")
+        ).select_related("cliente", "forma_pagamento", "conta_bancaria", "plano_contas")
         for item in compensacoes:
             itens.append({
                 "data": item.data_liquidacao_prevista,
                 "descricao": f"Conta a receber - {item.cliente}",
+                "classificacao": item.plano_contas.caminho_descricao if item.plano_contas_id else "Conta a receber",
                 "forma": item.forma_pagamento.descricao if item.forma_pagamento else "Sem forma vinculada",
                 "conta": item.conta_bancaria.descricao if item.conta_bancaria else "Conta nao definida",
                 "conta_id": item.conta_bancaria_id,
@@ -398,18 +425,23 @@ class PosicaoDiariaCaixaService:
                 "origem_codigo": "receber",
                 "registro_id": item.pk,
                 "referencia_url": reverse("financeiro:receber_detail", args=[item.pk]),
+                "atrasado": False,
+                "renegociado": item.status == StatusContaReceber.NEGOCIADO,
             })
         recebimentos = ContaReceber.objects.filter(
             filial=self.filial,
             status__in=("aberto", "vencido", "negociado"),
             data_vencimento__lte=data_fim,
             valor_saldo__gt=0,
-        ).select_related("cliente", "forma_pagamento", "conta_bancaria")
+        ).select_related("cliente", "forma_pagamento", "conta_bancaria", "plano_contas")
         for item in recebimentos:
             forma = item.forma_pagamento
             prazo = forma.prazo_compensacao_dias_uteis if forma else 0
             data_prevista = adicionar_dias_uteis_bancarios(item.data_vencimento, prazo, self.filial)
-            if not data_inicio <= data_prevista <= data_fim:
+            atrasado = item.data_vencimento < hoje
+            if atrasado and data_inicio <= hoje <= data_fim:
+                data_prevista = item.data_vencimento
+            elif not data_inicio <= data_prevista <= data_fim:
                 continue
             calculo = forma.calcular_taxa_recebimento(item.valor_saldo, item.total_parcelas) if forma else {
                 "taxa": ZERO, "liquido": item.valor_saldo,
@@ -417,6 +449,7 @@ class PosicaoDiariaCaixaService:
             itens.append({
                 "data": data_prevista,
                 "descricao": f"Conta a receber - {item.cliente}",
+                "classificacao": item.plano_contas.caminho_descricao if item.plano_contas_id else "Conta a receber",
                 "forma": forma.descricao if forma else "Sem forma vinculada",
                 "conta": item.conta_bancaria.descricao if item.conta_bancaria else "Conta nao definida",
                 "conta_id": item.conta_bancaria_id,
@@ -428,6 +461,8 @@ class PosicaoDiariaCaixaService:
                 "origem_codigo": "receber",
                 "registro_id": item.pk,
                 "referencia_url": reverse("financeiro:receber_detail", args=[item.pk]),
+                "atrasado": atrasado,
+                "renegociado": item.status == StatusContaReceber.NEGOCIADO,
             })
-        itens.sort(key=lambda item: (item["data"], item["descricao"].casefold()))
+        itens.sort(key=lambda item: (0 if item.get("atrasado") else 1, item["data"], item["descricao"].casefold()))
         return itens
