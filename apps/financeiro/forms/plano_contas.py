@@ -84,4 +84,4 @@ class PlanoContasForm(forms.ModelForm):
 
 class CategoriaFinanceiraChoiceField(forms.ModelChoiceField):
     def label_from_instance(self, obj):
-        return f"{obj.caminho_descricao} ({obj.conta_contabil.classificacao})"
+        return obj.caminho_descricao

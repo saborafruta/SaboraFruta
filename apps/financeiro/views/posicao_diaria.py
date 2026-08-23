@@ -227,6 +227,9 @@ class PosicaoDiariaCaixaView(PermissaoRequiredMixin, View):
                 subgrupo_edicao_id = str(categoria_selecionada.conta_pai_id)
                 grupo_edicao_id = str(categoria_selecionada.conta_pai.conta_pai_id)
         meta_contexto = _contexto_meta_despesa_pessoal(request.filial_ativa, data_fim)
+        grupo_despesa_pessoal = PlanoContas.objects.filter(
+            empresa=request.filial_ativa.empresa, tipo='D', nivel=1, despesa_pessoal=True, ativo=True,
+        ).order_by('codigo', 'pk').first()
         return render(request, self.template_name, {
             "title": "Posicao Diaria de Caixa", "data_referencia": data_referencia, "posicao": posicao,
             "hoje": timezone.localdate(),
@@ -249,6 +252,7 @@ class PosicaoDiariaCaixaView(PermissaoRequiredMixin, View):
             "categoria_edicao_id": categoria_edicao_id,
             "subgrupo_edicao_id": subgrupo_edicao_id,
             "grupo_edicao_id": grupo_edicao_id,
+            "grupo_despesa_pessoal_id": grupo_despesa_pessoal.pk if grupo_despesa_pessoal else '',
             **meta_contexto,
         })
 

@@ -34,6 +34,8 @@ class MovimentoDiario:
     saida: Decimal = ZERO
     valor_bruto: Decimal = ZERO
     valor_taxa: Decimal = ZERO
+    taxa_percentual: Decimal = ZERO
+    taxa_fixa: Decimal = ZERO
     referencia_url: str = ""
     excluido: bool = False
     momento: datetime | None = None
@@ -129,6 +131,7 @@ class PosicaoDiariaCaixaService:
         total_saidas = sum((m.saida for m in saidas), ZERO)
         total_fechamento = sum((c.posicao_fechamento for c in contas), ZERO)
         total_despesas_pessoais = sum((m.saida for m in saidas if m.despesa_pessoal), ZERO)
+        taxas_por_forma = self._agrupar_taxas(entradas)
         previsoes = self._recebimentos_previstos(
             previsao_inicio or self.data,
             previsao_fim or (self.data + timedelta(days=7)),
@@ -149,6 +152,8 @@ class PosicaoDiariaCaixaService:
             "total_saidas": total_saidas,
             "total_fechamento": total_fechamento,
             "total_despesas_pessoais": total_despesas_pessoais,
+            "total_taxas_entradas": sum((m.valor_taxa for m in entradas), ZERO),
+            "taxas_por_forma": taxas_por_forma,
             "variacao_dia": total_entradas - total_saidas,
             "totais_forma_entrada": self._agrupar(entradas, "forma_pagamento", "entrada"),
             "totais_forma_saida": self._agrupar(saidas, "forma_pagamento", "saida"),
@@ -173,6 +178,25 @@ class PosicaoDiariaCaixaService:
         return [{"nome": nome, "valor": valor} for nome, valor in sorted(
             totais.items(), key=lambda item: (-item[1], item[0].casefold())
         )]
+
+    @staticmethod
+    def _agrupar_taxas(movimentos):
+        grupos = {}
+        for movimento in movimentos:
+            if movimento.valor_taxa <= ZERO:
+                continue
+            nome = movimento.forma_pagamento or "Sem forma vinculada"
+            item = grupos.setdefault(nome, {
+                "nome": nome, "valor": ZERO, "bruto": ZERO, "quantidade": 0,
+            })
+            item["valor"] += movimento.valor_taxa
+            item["bruto"] += movimento.valor_bruto
+            item["quantidade"] += 1
+        for item in grupos.values():
+            item["percentual_efetivo"] = (
+                item["valor"] / item["bruto"] * Decimal("100") if item["bruto"] else ZERO
+            )
+        return sorted(grupos.values(), key=lambda item: (-item["valor"], item["nome"].casefold()))
 
     def _movimentos_do_dia(self, *, incluir_excluidos=False):
         movimentos = []
@@ -218,6 +242,8 @@ class PosicaoDiariaCaixaService:
                 documento=item.documento_numero,
                 forma_pagamento=item.forma_pagamento.descricao if item.forma_pagamento else "Sem forma vinculada",
                 entrada=item.valor_entrada_liquida, valor_bruto=bruto, valor_taxa=taxa,
+                taxa_percentual=item.taxa_percentual_aplicada if item.taxa_calculada_em else ZERO,
+                taxa_fixa=item.taxa_fixa_aplicada if item.taxa_calculada_em else ZERO,
                 referencia_url=reverse("financeiro:receber_detail", args=[item.pk]),
                 momento=item.updated_at,
                 classificacao=item.plano_contas.caminho_descricao if item.plano_contas_id else "Conta a receber",
@@ -279,6 +305,8 @@ class PosicaoDiariaCaixaService:
                     documento=str(item.venda_pdv.numero_venda), forma_pagamento=item.forma_pagamento.descricao,
                     entrada=valor, valor_bruto=item.valor_bruto_recebido,
                     valor_taxa=item.valor_taxa if item.taxa_calculada_em else ZERO,
+                    taxa_percentual=item.taxa_percentual_aplicada if item.taxa_calculada_em else ZERO,
+                    taxa_fixa=item.taxa_fixa_aplicada if item.taxa_calculada_em else ZERO,
                     momento=item.created_at,
                     classificacao="Venda",
                 ))
@@ -396,6 +424,8 @@ class PosicaoDiariaCaixaService:
                 "parcelas": item.numero_parcelas,
                 "valor_bruto": item.valor_bruto_recebido,
                 "valor_taxa": item.valor_taxa,
+                "taxa_percentual": item.taxa_percentual_aplicada,
+                "taxa_fixa": item.taxa_fixa_aplicada,
                 "valor_liquido": item.valor_entrada_liquida,
                 "origem_codigo": "venda",
                 "registro_id": item.pk,
@@ -421,6 +451,8 @@ class PosicaoDiariaCaixaService:
                 "parcelas": item.total_parcelas,
                 "valor_bruto": item.valor_pago,
                 "valor_taxa": item.valor_taxa_recebimento,
+                "taxa_percentual": item.taxa_percentual_aplicada,
+                "taxa_fixa": item.taxa_fixa_aplicada,
                 "valor_liquido": item.valor_entrada_liquida,
                 "origem_codigo": "receber",
                 "registro_id": item.pk,
@@ -444,7 +476,7 @@ class PosicaoDiariaCaixaService:
             elif not data_inicio <= data_prevista <= data_fim:
                 continue
             calculo = forma.calcular_taxa_recebimento(item.valor_saldo, item.total_parcelas) if forma else {
-                "taxa": ZERO, "liquido": item.valor_saldo,
+                "percentual": ZERO, "fixa": ZERO, "taxa": ZERO, "liquido": item.valor_saldo,
             }
             itens.append({
                 "data": data_prevista,
@@ -457,6 +489,8 @@ class PosicaoDiariaCaixaService:
                 "parcelas": item.total_parcelas,
                 "valor_bruto": item.valor_saldo,
                 "valor_taxa": calculo["taxa"],
+                "taxa_percentual": calculo["percentual"],
+                "taxa_fixa": calculo["fixa"],
                 "valor_liquido": calculo["liquido"],
                 "origem_codigo": "receber",
                 "registro_id": item.pk,

@@ -53,6 +53,9 @@
   .pc-forecast-muted { color:#475569; }
   .pc-forecast-overdue { display:inline-flex; align-items:center; border:1px solid #fecdd3; border-radius:999px; background:#ffe4e6; padding:.15rem .5rem; color:#be123c; font-size:10px; font-weight:800; line-height:1.2; text-transform:uppercase; }
   .pc-forecast-renegotiated { display:inline-flex; align-items:center; border:1px solid #fde68a; border-radius:999px; background:#fffbeb; padding:.15rem .5rem; color:#92400e; font-size:10px; font-weight:800; line-height:1.2; text-transform:uppercase; }
+  .pc-forecast-positive { color:#047857; font-weight:800; }
+  .pc-forecast-negative { color:#be123c; font-weight:800; }
+  .pc-fee-summary { border-top:1px solid #cbd5e1; background:#f8fafc; }
   .tema-escuro .pc-forecast { border-color:#475569; background:#202024; color:#f8fafc; }
   .tema-escuro .pc-forecast-head { border-color:#475569; background:#172033; }
   .tema-escuro .pc-forecast-title { color:#dbeafe; }
@@ -69,6 +72,9 @@
   .tema-escuro .pc-forecast-muted { color:#cbd5e1; }
   .tema-escuro .pc-forecast-overdue { border-color:#9f1239; background:#4c1022; color:#fecdd3; }
   .tema-escuro .pc-forecast-renegotiated { border-color:#92400e; background:#422006; color:#fde68a; }
+  .tema-escuro .pc-forecast-positive { color:#6ee7b7; }
+  .tema-escuro .pc-forecast-negative { color:#fda4af; }
+  .tema-escuro .pc-fee-summary { border-color:#475569; background:#202024; }
   .pc-summary-entry { background:#f0fdf4; color:#14532d; }
   .pc-summary-exit { background:#fff1f2; color:#881337; }
   .pc-summary-section { display:grid; grid-template-columns:1fr; }
@@ -99,11 +105,14 @@
   .pc-day-today { border-color:#3b82f6; background:#eff6ff; color:#1d4ed8; box-shadow:0 0 0 2px #bfdbfe; }
   .tema-escuro .pc-day-today { background:rgba(30,58,138,.34); color:#dbeafe; box-shadow:0 0 0 2px #1d4ed8; }
   @media (max-width: 640px) {
-    .pc-kpi { min-height: 96px; }
+    .pc-kpi { min-height:78px; padding:.75rem !important; }
+    .pc-kpi p, .pc-ledger-head p, .pc-summary-card h4 + p { display:none; }
     .pc-row { min-height: 88px; }
     .pc-ledger-columns { display:none; }
     .pc-ledger-row { grid-template-columns:minmax(0,1fr) auto; }
     .pc-ledger-meta { grid-column:1 / -1; }
+    .pc-ledger-head { padding:.75rem; }
+    .pc-summary-card { padding:.75rem; }
   }
   @media (min-width: 768px) {
     .pc-summary-section { grid-template-columns:1fr 1fr; }
@@ -115,6 +124,7 @@
 <div class="mx-auto max-w-7xl space-y-5" :class="{'pc-private':ocultarValores}" x-data="{
   ocultarValores:false,
   previsoesAbertas:false,
+  contasAbertas: window.innerWidth >= 640,
   movimentoModal: {{ movimento_modal|yesno:'true,false' }},
   contaPagarModal: false,
   contaPagarQuitada: false,
@@ -292,7 +302,7 @@
           <a href="{% if mov.origem_codigo == 'pagar' %}{{ mov.referencia_url }}{% else %}?data={{ data_referencia|date:'Y-m-d' }}&origem={{ mov.origem_codigo }}&movimento={{ mov.registro_id }}{% endif %}" {% if mov.origem_codigo == 'pagar' %}@click.prevent="abrirTituloPagar($el.href)"{% endif %} class="pc-ledger-row px-4 py-3 transition">
             <div class="min-w-0"><strong class="block text-sm">{{ mov.descricao }}</strong><span class="mt-1 block text-[11px] text-gray-500">{{ mov.hora }} · {{ mov.origem }}{% if mov.classificacao %} · {{ mov.classificacao }}{% endif %}{% if mov.documento %} · Documento {{ mov.documento }}{% endif %}</span></div>
             <span class="pc-ledger-meta min-w-0 text-xs"><strong class="block truncate font-medium">{{ mov.forma_pagamento }}</strong><span class="mt-1 block truncate text-gray-500">{{ mov.conta.descricao|default:mov.conta.banco_nome }}</span></span>
-            <span class="pc-ledger-value whitespace-nowrap text-right"><strong class="block text-base">+ R$ {{ mov.entrada|floatformat:2 }}</strong>{% if mov.valor_taxa > 0 %}<small class="mt-1 block text-[10px] font-medium text-gray-500">Bruto R$ {{ mov.valor_bruto|floatformat:2 }} · taxa R$ {{ mov.valor_taxa|floatformat:2 }}</small>{% endif %}</span>
+            <span class="pc-ledger-value whitespace-nowrap text-right"><strong class="block text-base">+ R$ {{ mov.entrada|floatformat:2 }}</strong>{% if mov.valor_taxa > 0 %}<small class="mt-1 block text-[10px] font-semibold text-gray-600 dark:text-gray-300">Taxas: {{ mov.taxa_percentual|floatformat:2 }}%{% if mov.taxa_fixa > 0 %} + R$ {{ mov.taxa_fixa|floatformat:2 }}{% endif %}</small><small class="block text-[10px] text-gray-500">- R$ {{ mov.valor_taxa|floatformat:2 }} · bruto R$ {{ mov.valor_bruto|floatformat:2 }}</small>{% endif %}</span>
           </a>
         {% empty %}<div class="flex min-h-32 flex-col items-center justify-center p-6 text-center"><strong class="text-sm text-slate-600 dark:text-slate-300">Nenhuma entrada neste dia</strong><span class="mt-1 text-xs text-gray-500">Vendas recebidas e créditos aparecerão aqui.</span></div>{% endfor %}
       </div>
@@ -325,15 +335,16 @@
         <div class="pc-summary-card p-4"><h4 class="text-sm font-semibold">Saídas por conta bancária</h4>{% for item in posicao.totais_conta_saida %}<div class="mt-3 flex justify-between gap-3 text-sm"><span class="truncate text-gray-500">{{ item.nome }}</span><strong>R$ {{ item.valor|floatformat:2 }}</strong></div>{% empty %}<p class="mt-3 text-sm text-gray-500">Sem saídas.</p>{% endfor %}</div>
       </div>
     </div>
-    {% if posicao.total_despesas_pessoais > 0 or meta_despesa_valor > 0 %}<div class="pc-personal-summary border-t px-4 py-3"><div class="flex flex-wrap items-center justify-between gap-4"><span><strong class="block text-sm">Despesas pessoais no período</strong><small>Já incluídas nas saídas e no saldo final. A meta acompanha sempre o mês inteiro.</small></span><span class="text-right"><strong class="pc-sensitive block whitespace-nowrap text-lg">R$ {{ posicao.total_despesas_pessoais|floatformat:2 }}</strong><small class="pc-sensitive">Mês: R$ {{ meta_despesa_usado|floatformat:2 }} de R$ {{ meta_despesa_valor|floatformat:2 }}</small></span></div><div class="mt-3 h-3 overflow-hidden rounded-full bg-amber-200 dark:bg-slate-700"><div class="h-full rounded-full {% if meta_despesa_percentual > 100 %}bg-rose-500{% else %}bg-amber-500{% endif %}" style="width:{{ meta_despesa_percentual_barra|floatformat:0 }}%;{% if meta_despesa_percentual > 0 %}min-width:8px;{% endif %}"></div></div><div class="mt-1 flex justify-between text-xs font-semibold"><span>{{ meta_despesa_percentual|floatformat:1 }}% utilizado</span><span>Meta mensal</span></div></div>{% endif %}
+    {% if posicao.total_taxas_entradas > 0 %}<div class="pc-fee-summary px-4 py-3"><div class="flex flex-wrap items-center justify-between gap-3"><div><strong class="block text-sm">Taxas descontadas das entradas</strong><small class="text-gray-500">O saldo já considera os valores líquidos.</small></div><strong class="pc-sensitive text-lg text-rose-700 dark:text-rose-300">- R$ {{ posicao.total_taxas_entradas|floatformat:2 }}</strong></div><div class="mt-2 flex flex-wrap gap-2">{% for taxa in posicao.taxas_por_forma %}<span class="rounded-md border border-slate-300 bg-white px-2 py-1 text-xs dark:border-slate-600 dark:bg-zinc-900"><strong>{{ taxa.nome }}</strong>: R$ {{ taxa.valor|floatformat:2 }} <span class="opacity-60">({{ taxa.percentual_efetivo|floatformat:2 }}% efetivo)</span></span>{% endfor %}</div></div>{% endif %}
+    {% if posicao.total_despesas_pessoais > 0 or meta_despesa_valor > 0 %}<div class="pc-personal-summary border-t px-4 py-3"><div class="flex flex-wrap items-center justify-between gap-4"><span><strong class="block text-sm">Despesas pessoais no período</strong><small>Já incluídas nas saídas e no saldo final. A meta acompanha sempre o mês inteiro.</small></span><span class="text-right"><strong class="pc-sensitive block whitespace-nowrap text-lg">R$ {{ posicao.total_despesas_pessoais|floatformat:2 }}</strong><small class="pc-sensitive block">Mês: R$ {{ meta_despesa_usado|floatformat:2 }} de R$ {{ meta_despesa_valor|floatformat:2 }}</small><a href="{% url 'financeiro:pagar_pagas' %}?categoria_grupo={{ grupo_despesa_pessoal_id }}" class="mt-1 inline-block text-xs font-bold underline">Ver mais nas contas pagas</a></span></div><div class="mt-3 h-3 overflow-hidden rounded-full bg-amber-200 dark:bg-slate-700"><div class="h-full rounded-full {% if meta_despesa_percentual > 100 %}bg-rose-500{% else %}bg-amber-500{% endif %}" style="width:{{ meta_despesa_percentual_barra|floatformat:0 }}%;{% if meta_despesa_percentual > 0 %}min-width:8px;{% endif %}"></div></div><div class="mt-1 flex justify-between text-xs font-semibold"><span>{{ meta_despesa_percentual|floatformat:1 }}% utilizado</span><span>Meta mensal</span></div></div>{% endif %}
   </section>
 
   <section>
     <div class="mb-3 flex items-end justify-between gap-3">
       <div><h3 class="text-lg font-semibold">Saldos por conta</h3><p class="text-xs text-gray-500">Abertura, movimentos do dia e fechamento individual.</p></div>
-      <span class="text-xs text-gray-500">{{ posicao.contas|length }} conta{{ posicao.contas|length|pluralize }}</span>
+      <div class="flex items-center gap-2"><span class="text-xs text-gray-500">{{ posicao.contas|length }} conta{{ posicao.contas|length|pluralize }}</span><button type="button" class="btn-secondary px-3 py-1.5 text-xs sm:hidden" @click="contasAbertas=!contasAbertas" x-text="contasAbertas ? 'Ocultar' : 'Ver saldos'"></button></div>
     </div>
-    <div class="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+    <div x-show="contasAbertas" x-cloak class="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
       {% for conta in posicao.contas %}
         <a href="{% url 'financeiro:contas_bancarias' %}?conta={{ conta.pk }}" class="pc-account {{ conta.posicao_cor }} rounded-lg border border-slate-200 p-4 transition hover:-translate-y-0.5 hover:shadow-sm dark:border-slate-700">
           <div class="flex items-start justify-between gap-3"><div><strong class="block">{{ conta.descricao|default:conta.banco_nome }}</strong><span class="text-xs text-gray-500">{{ conta.banco_nome|default:'Conta operacional' }}</span></div>{% if conta.eh_dinheiro %}<span class="soft-pill is-blue">Dinheiro</span>{% endif %}</div>
@@ -365,7 +376,7 @@
             <div><strong class="pc-forecast-date block">{{ item.data|date:'d/m/Y' }}</strong>{% if item.atrasado %}<span class="pc-forecast-overdue mt-1">Atrasado</span>{% elif item.renegociado %}<span class="pc-forecast-renegotiated mt-1">Renegociado</span>{% endif %}</div>
             <div class="min-w-0"><strong class="block truncate">{{ item.descricao }}</strong><small class="pc-forecast-muted block truncate">{{ item.classificacao }} · {{ item.forma }}{% if item.bandeira %} - {{ item.bandeira|title }} {{ item.parcelas }}x{% endif %}</small></div>
             <span class="pc-forecast-account">{{ item.conta }}</span>
-            <div class="sm:text-right"><strong class="{% if item.atrasado %}text-rose-700 dark:text-rose-300{% else %}text-emerald-700 dark:text-emerald-400{% endif %}">R$ {{ item.valor_liquido|floatformat:2 }}</strong>{% if item.valor_taxa > 0 %}<small class="pc-forecast-muted block">Bruto R$ {{ item.valor_bruto|floatformat:2 }} - taxa R$ {{ item.valor_taxa|floatformat:2 }}</small>{% endif %}{% if item.referencia_url %}<small class="mt-1 block font-semibold {% if item.atrasado %}text-rose-700 dark:text-rose-300{% else %}text-blue-700 dark:text-blue-300{% endif %}">{% if item.atrasado %}Alterar data{% else %}Ver título{% endif %}</small>{% endif %}</div>
+            <div class="sm:text-right"><strong class="{% if item.atrasado %}pc-forecast-negative{% else %}pc-forecast-positive{% endif %}">R$ {{ item.valor_liquido|floatformat:2 }}</strong>{% if item.valor_taxa > 0 %}<small class="pc-forecast-muted block">Taxas: {{ item.taxa_percentual|floatformat:2 }}%{% if item.taxa_fixa > 0 %} + R$ {{ item.taxa_fixa|floatformat:2 }}{% endif %} · - R$ {{ item.valor_taxa|floatformat:2 }}</small>{% endif %}{% if item.referencia_url %}<small class="mt-1 block font-bold {% if item.atrasado %}pc-forecast-negative{% else %}text-blue-700 dark:text-blue-300{% endif %}">{% if item.atrasado %}Alterar data{% else %}Ver título{% endif %}</small>{% endif %}</div>
         {% if item.referencia_url %}</button>{% else %}</div>{% endif %}
       {% empty %}
         <div class="p-6 text-center text-sm text-gray-500">Nenhum recebimento previsto neste período.</div>

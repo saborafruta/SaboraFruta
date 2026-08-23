@@ -186,13 +186,16 @@ class PosicaoDiariaCaixaTests(TestCase):
         venda = next(mov for mov in posicao["entradas"] if mov.origem_codigo == "venda")
         self.assertEqual(venda.valor_bruto, Decimal("80.00"))
         self.assertEqual(venda.valor_taxa, Decimal("2.10"))
+        self.assertEqual(venda.taxa_percentual, Decimal("2.00"))
         self.assertEqual(venda.entrada, Decimal("77.90"))
         self.assertEqual(posicao["total_entradas"], Decimal("107.90"))
         self.assertEqual(posicao["total_fechamento"], Decimal("207.90"))
+        self.assertEqual(posicao["total_taxas_entradas"], Decimal("2.10"))
+        self.assertEqual(posicao["taxas_por_forma"][0]["nome"], self.forma.descricao)
 
         response = self.client.get(reverse("financeiro:posicao_diaria"), {"data": "2026-08-21"})
-        self.assertContains(response, "Bruto R$ 80,00")
-        self.assertContains(response, "taxa R$ 2,10")
+        self.assertContains(response, "Taxas: 2,00% + R$ 0,50")
+        self.assertContains(response, "Taxas descontadas das entradas")
 
     def test_venda_so_entra_na_data_de_compensacao(self):
         self.forma.prazo_compensacao_dias_uteis = 1

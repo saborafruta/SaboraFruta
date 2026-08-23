@@ -15,6 +15,7 @@ from django.http import FileResponse, Http404, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.utils import timezone
+from django.utils.dateparse import parse_date
 from django.utils.decorators import method_decorator
 from django.views import View
 from django.views.decorators.clickjacking import xframe_options_sameorigin
@@ -468,7 +469,7 @@ def _resumo_fornecedores(contas):
     return sorted(resumo, key=lambda item: item['valor'], reverse=True), total
 
 
-def _resumo_categorias_pagas(contas):
+def _resumo_categorias_pagas(contas, faturamento=Decimal('0')):
     total = sum((conta.valor_pago or Decimal('0') for conta in contas), Decimal('0'))
     grupos = {}
     sem_classificacao = Decimal('0')
@@ -489,7 +490,8 @@ def _resumo_categorias_pagas(contas):
     resumo = []
     for item in grupos.values():
         percentual = (item['valor'] / total * Decimal('100')) if total else Decimal('0')
-        resumo.append({**item, 'percentual': percentual})
+        impacto = (item['valor'] / faturamento * Decimal('100')) if faturamento else Decimal('0')
+        resumo.append({**item, 'percentual': percentual, 'impacto_faturamento': impacto})
     resumo.sort(key=lambda item: item['valor'], reverse=True)
     maior = resumo[0] if resumo else None
     return {
@@ -501,7 +503,32 @@ def _resumo_categorias_pagas(contas):
         'categorias_sem_classificacao_percentual': (
             sem_classificacao / total * Decimal('100') if total else Decimal('0')
         ),
+        'categorias_faturamento': faturamento,
     }
+
+
+def _periodo_fornecedores(request):
+    hoje = timezone.localdate()
+    periodo = request.GET.get('fornecedor_periodo', 'mes')
+    if periodo == 'hoje':
+        inicio = fim = hoje
+    elif periodo == '7':
+        inicio, fim = hoje - timedelta(days=6), hoje
+    elif periodo == '15':
+        inicio, fim = hoje - timedelta(days=14), hoje
+    elif periodo == '30':
+        inicio, fim = hoje - timedelta(days=29), hoje
+    elif periodo == 'todos':
+        inicio = fim = None
+    elif periodo == 'personalizado':
+        inicio = parse_date(request.GET.get('fornecedor_inicio', '')) or hoje.replace(day=1)
+        fim = parse_date(request.GET.get('fornecedor_fim', '')) or hoje
+        if inicio > fim:
+            inicio, fim = fim, inicio
+    else:
+        periodo = 'mes'
+        inicio, fim = hoje.replace(day=1), hoje
+    return periodo, inicio, fim
 
 
 def _contexto_meta_despesa_pessoal(filial, referencia=None):
@@ -568,8 +595,22 @@ class ContaPagaListView(PermissaoRequiredMixin, View):
         contas_filtradas = list(qs.select_related(
             'plano_contas__conta_pai__conta_pai',
         ))
-        fornecedores_resumo, total_fornecedores = _resumo_fornecedores(contas_filtradas)
-        categorias_contexto = _resumo_categorias_pagas(contas_filtradas)
+        datas = [conta.data_pagamento for conta in contas_filtradas if conta.data_pagamento]
+        inicio_analise = parse_date(filtros.get('data_ini') or '') or (min(datas) if datas else timezone.localdate())
+        fim_analise = parse_date(filtros.get('data_fim') or '') or (max(datas) if datas else timezone.localdate())
+        faturamento = _somar_faturamento(filial, inicio_analise, fim_analise)
+        categorias_contexto = _resumo_categorias_pagas(contas_filtradas, faturamento)
+
+        fornecedor_periodo, fornecedor_inicio, fornecedor_fim = _periodo_fornecedores(request)
+        fornecedor_qs = ContaPagar.objects.for_filial(filial).filter(status=StatusContaPagar.PAGO)
+        if fornecedor_inicio:
+            fornecedor_qs = fornecedor_qs.filter(data_pagamento__gte=fornecedor_inicio)
+        if fornecedor_fim:
+            fornecedor_qs = fornecedor_qs.filter(data_pagamento__lte=fornecedor_fim)
+        contas_fornecedores = list(fornecedor_qs.select_related(
+            'fornecedor', 'funcionario', 'plano_contas',
+        ).order_by('-data_pagamento', '-id'))
+        fornecedores_resumo, total_fornecedores = _resumo_fornecedores(contas_fornecedores)
         paginator = Paginator(contas_filtradas, 10)
         page_obj = paginator.get_page(request.GET.get('page', 1))
         query = request.GET.copy()
@@ -588,6 +629,11 @@ class ContaPagaListView(PermissaoRequiredMixin, View):
             'user_is_admin': _usuario_admin(request),
             'fornecedores_resumo': fornecedores_resumo,
             'total_fornecedores': total_fornecedores,
+            'fornecedor_periodo': fornecedor_periodo,
+            'fornecedor_inicio': fornecedor_inicio,
+            'fornecedor_fim': fornecedor_fim,
+            'analise_inicio': inicio_analise,
+            'analise_fim': fim_analise,
             **categorias_contexto,
             **meta_contexto,
             **filtros,

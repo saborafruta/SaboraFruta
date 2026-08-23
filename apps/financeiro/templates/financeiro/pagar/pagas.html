@@ -41,106 +41,7 @@
     </div>
   </div>
 
-  <section class="order-4 card p-4">
-    <div class="flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
-      <div><h3 class="text-base font-semibold">Análise por categoria financeira</h3><p class="mt-1 text-xs opacity-65">Distribuição das contas exibidas pelos filtros acima.</p></div>
-      <span class="text-xs font-semibold opacity-60">{{ categorias_quantidade }} grupo{{ categorias_quantidade|pluralize }} utilizado{{ categorias_quantidade|pluralize }}</span>
-    </div>
-    <div class="mt-4 grid grid-cols-2 gap-2 lg:grid-cols-4">
-      <div class="rounded-md border p-3" style="border-color:rgba(148,163,184,.28)"><span class="block text-[11px] font-semibold uppercase opacity-55">Total analisado</span><strong class="mt-1 block text-lg">R$ {{ categorias_total|floatformat:2 }}</strong></div>
-      <div class="rounded-md border p-3" style="border-color:rgba(148,163,184,.28)"><span class="block text-[11px] font-semibold uppercase opacity-55">Categorias usadas</span><strong class="mt-1 block text-lg">{{ categorias_quantidade }}</strong></div>
-      <div class="rounded-md border p-3" style="border-color:rgba(148,163,184,.28)"><span class="block text-[11px] font-semibold uppercase opacity-55">Maior categoria</span><strong class="mt-1 block truncate text-sm">{{ categoria_maior.nome|default:"Sem dados" }}</strong>{% if categoria_maior %}<span class="mt-1 block text-xs opacity-65">{{ categoria_maior.percentual|floatformat:1 }}% · R$ {{ categoria_maior.valor|floatformat:2 }}</span>{% endif %}</div>
-      <div class="rounded-md border p-3 {% if categorias_sem_classificacao > 0 %}border-amber-300 bg-amber-50 text-amber-900 dark:border-amber-900 dark:bg-amber-950/20 dark:text-amber-100{% endif %}" style="border-color:rgba(148,163,184,.28)"><span class="block text-[11px] font-semibold uppercase opacity-55">Sem classificação</span><strong class="mt-1 block text-lg">R$ {{ categorias_sem_classificacao|floatformat:2 }}</strong><span class="text-xs opacity-65">{{ categorias_sem_classificacao_percentual|floatformat:1 }}% do total</span></div>
-    </div>
-    <div class="mt-4 grid gap-x-6 gap-y-3 lg:grid-cols-2">
-      {% for categoria in categorias_resumo %}<div><div class="flex items-center justify-between gap-3 text-sm"><span class="truncate font-semibold">{{ categoria.nome }}</span><strong class="whitespace-nowrap">R$ {{ categoria.valor|floatformat:2 }}</strong></div><div class="mt-1 flex items-center gap-2"><div class="h-2 flex-1 overflow-hidden rounded-full bg-slate-200 dark:bg-slate-800"><div class="h-full rounded-full bg-emerald-500" style="width:{{ categoria.percentual|floatformat:0 }}%;{% if categoria.percentual > 0 %}min-width:6px;{% endif %}"></div></div><span class="w-14 text-right text-xs opacity-65">{{ categoria.percentual|floatformat:1 }}%</span></div><span class="mt-0.5 block text-xs opacity-50">{{ categoria.quantidade }} conta{{ categoria.quantidade|pluralize }}</span></div>{% empty %}<p class="text-sm opacity-65">Nenhuma categoria encontrada para os filtros atuais.</p>{% endfor %}
-    </div>
-  </section>
-
-  <div class="order-5 flex flex-col gap-3">
-    <section class="order-2 card p-3">
-      <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-        <div>
-          <h3 class="text-base font-semibold">Meta de despesas pessoais</h3>
-          <p class="mt-1 text-xs opacity-65">Acompanhamento do mes de {{ meta_despesa_mes|date:"m/Y" }}.</p>
-        </div>
-        <div class="text-left sm:text-right">
-          <span class="block text-xs font-semibold uppercase opacity-60">Utilizado</span>
-          <strong class="text-xl {% if meta_despesa_percentual > 100 %}text-rose-500{% else %}text-amber-600{% endif %}">R$ {{ meta_despesa_usado|floatformat:2 }}</strong>
-          <span class="mt-0.5 block text-xs opacity-65">de R$ {{ meta_despesa_valor|floatformat:2 }}</span>
-        </div>
-      </div>
-      <div class="mt-4 h-3 overflow-hidden rounded-full bg-slate-200 dark:bg-slate-800">
-        <div class="h-full rounded-full {% if meta_despesa_percentual > 100 %}bg-rose-500{% else %}bg-amber-500{% endif %}" style="width:{{ meta_despesa_percentual_barra|floatformat:0 }}%;{% if meta_despesa_percentual > 0 %}min-width:8px;{% endif %}"></div>
-      </div>
-      <div class="mt-2 flex items-center justify-between text-xs">
-        <span class="opacity-65">{{ meta_despesa_percentual|floatformat:1 }}% da meta usado</span>
-        {% if meta_despesa_pessoal and meta_despesa_pessoal.ativo %}<span class="font-semibold text-emerald-600">Meta ativa</span>{% else %}<span class="font-semibold text-slate-500">Sem meta ativa</span>{% endif %}
-      </div>
-      {% if user_is_admin %}
-      <form method="post" class="mt-4 grid grid-cols-1 gap-3 border-t pt-4 md:grid-cols-12" style="border-color:rgba(148,163,184,.24)">
-        {% csrf_token %}
-        <input type="hidden" name="acao" value="salvar_meta_despesa_pessoal">
-        <div class="md:col-span-4">
-          <label class="mb-1 block text-xs font-semibold opacity-70">Tipo</label>
-          {{ meta_despesa_form.tipo_meta|add_class:"form-input" }}
-          {% for erro in meta_despesa_form.tipo_meta.errors %}<span class="mt-1 block text-xs text-rose-500">{{ erro }}</span>{% endfor %}
-        </div>
-        <div class="md:col-span-3">
-          <label class="mb-1 block text-xs font-semibold opacity-70">Valor fixo</label>
-          {{ meta_despesa_form.valor_fixo|add_class:"form-input" }}
-          {% for erro in meta_despesa_form.valor_fixo.errors %}<span class="mt-1 block text-xs text-rose-500">{{ erro }}</span>{% endfor %}
-        </div>
-        <div class="md:col-span-2">
-          <label class="mb-1 block text-xs font-semibold opacity-70">%</label>
-          {{ meta_despesa_form.percentual|add_class:"form-input" }}
-          {% for erro in meta_despesa_form.percentual.errors %}<span class="mt-1 block text-xs text-rose-500">{{ erro }}</span>{% endfor %}
-        </div>
-        <div class="md:col-span-2">
-          <label class="mb-1 block text-xs font-semibold opacity-70">Meses</label>
-          {{ meta_despesa_form.meses_media|add_class:"form-input" }}
-          {% for erro in meta_despesa_form.meses_media.errors %}<span class="mt-1 block text-xs text-rose-500">{{ erro }}</span>{% endfor %}
-        </div>
-        <label class="flex items-end gap-2 text-xs font-semibold md:col-span-1">{{ meta_despesa_form.ativo }} Ativa</label>
-        {% if meta_despesa_form.non_field_errors %}<div class="rounded border border-rose-300 bg-rose-50 p-2 text-xs text-rose-700 md:col-span-12">{{ meta_despesa_form.non_field_errors|join:", " }}</div>{% endif %}
-        <div class="md:col-span-12 md:text-right"><button type="submit" class="btn-primary">Salvar meta</button></div>
-      </form>
-      {% endif %}
-    </section>
-
-    <section class="order-1 card p-3">
-      <div class="flex items-start justify-between gap-3">
-        <div>
-          <h3 class="text-base font-semibold">Gasto por fornecedor</h3>
-          <p class="mt-1 text-xs opacity-65">Percentual sobre o total filtrado de R$ {{ total_fornecedores|floatformat:2 }}.</p>
-        </div>
-      </div>
-      <div class="mt-4 space-y-3">
-        {% for fornecedor in fornecedores_resumo %}
-          <div x-data="{aberto:false}" class="rounded-md border p-3" style="border-color:rgba(148,163,184,.22)">
-            <button type="button" class="flex w-full items-center justify-between gap-3 text-left text-sm" @click="aberto=!aberto" :aria-expanded="aberto">
-              <span class="flex min-w-0 items-center gap-2"><svg class="h-4 w-4 shrink-0 transition-transform" :class="{'rotate-90':aberto}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m9 18 6-6-6-6"/></svg><span class="truncate font-semibold">{{ fornecedor.nome }}</span></span>
-              <span class="whitespace-nowrap font-bold">R$ {{ fornecedor.valor|floatformat:2 }}</span>
-            </button>
-            <div class="mt-1 flex items-center gap-2">
-              <div class="h-2 flex-1 overflow-hidden rounded-full bg-slate-200 dark:bg-slate-800">
-                <div class="h-full rounded-full bg-blue-500" style="width:{{ fornecedor.percentual|floatformat:0 }}%"></div>
-              </div>
-              <span class="w-14 text-right text-xs opacity-70">{{ fornecedor.percentual|floatformat:1 }}%</span>
-            </div>
-            <div class="mt-0.5 text-xs opacity-55">{{ fornecedor.quantidade }} pagamento{{ fornecedor.quantidade|pluralize }}</div>
-            <div x-show="aberto" x-cloak class="mt-3 divide-y border-t pt-2" style="border-color:rgba(148,163,184,.22)">
-              {% for conta_fornecedor in fornecedor.contas %}<button type="button" class="flex w-full items-center justify-between gap-3 py-2 text-left text-xs hover:text-blue-500" @click="abrirDetalhe('{% url 'financeiro:pagar_detail' conta_fornecedor.pk %}')"><span><strong class="block">{{ conta_fornecedor.descricao_exibicao }}</strong><span class="opacity-55">{{ conta_fornecedor.data_pagamento|date:'d/m/Y' }} · {{ conta_fornecedor.plano_contas.descricao|default:'Sem classificação' }}</span></span><strong class="whitespace-nowrap">R$ {{ conta_fornecedor.valor_pago|floatformat:2 }}</strong></button>{% endfor %}
-            </div>
-          </div>
-        {% empty %}
-          <p class="text-sm opacity-65">Nenhuma conta paga encontrada para montar o resumo.</p>
-        {% endfor %}
-      </div>
-    </section>
-  </div>
-
-  <form method="get" class="order-1 card grid grid-cols-1 gap-3 p-4 md:grid-cols-12">
+  <form method="get" class="card grid grid-cols-1 gap-3 p-4 md:grid-cols-12">
     <div class="md:col-span-5">
       <label for="filtro-pagas" class="mb-1 block text-xs font-semibold opacity-70">Buscar</label>
       <input id="filtro-pagas" type="search" name="q" value="{{ q }}" class="form-input"
@@ -171,7 +72,7 @@
     </div>
   </form>
 
-  <div class="order-2 space-y-3 md:hidden">
+  <div class="space-y-3 md:hidden">
     {% for conta in contas %}
       <a href="{% url 'financeiro:pagar_detail' conta.pk %}" @click.prevent="abrirDetalhe($el.href)" class="card block p-4 transition-opacity hover:opacity-85 {% if conta.excluido %}opacity-55 grayscale{% endif %}">
         <div class="flex items-start justify-between gap-3">
@@ -199,7 +100,7 @@
     {% endfor %}
   </div>
 
-  <div class="order-2 hidden overflow-hidden rounded-lg border md:block"
+  <div class="hidden overflow-hidden rounded-lg border md:block"
        :style="temaClaro ? 'background:#fff;border-color:#e5e7eb;' : 'background:#242426;border-color:#2f2f33;'">
     <div class="overflow-x-auto">
       <table class="w-full min-w-[980px] text-sm">
@@ -248,7 +149,7 @@
   </div>
 
   {% if page_obj.paginator.num_pages > 1 %}
-    <div class="order-3 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-blue-200 bg-blue-50 p-3 text-sm text-blue-800 dark:border-blue-900 dark:bg-blue-950/30 dark:text-blue-200">
+    <div class="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-blue-200 bg-blue-50 p-3 text-sm text-blue-800 dark:border-blue-900 dark:bg-blue-950/30 dark:text-blue-200">
       <span class="font-semibold text-blue-600">Há mais contas pagas para visualizar.</span>
       <span class="opacity-70">Página {{ page_obj.number }} de {{ page_obj.paginator.num_pages }} · {{ page_obj.paginator.count }} registros</span>
       <div class="flex gap-2">
@@ -257,6 +158,23 @@
       </div>
     </div>
   {% endif %}
+
+  <section class="card p-4">
+    <div class="flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between"><div><h3 class="text-base font-semibold">Análise por categoria financeira</h3><p class="mt-1 text-xs opacity-65">Ranking das contas dos filtros acima, comparado ao faturamento de {{ analise_inicio|date:'d/m/Y' }} a {{ analise_fim|date:'d/m/Y' }}.</p></div><strong class="text-sm">Faturamento: R$ {{ categorias_faturamento|floatformat:2 }}</strong></div>
+    <div class="mt-4 grid gap-2 sm:grid-cols-2 lg:grid-cols-4"><div class="rounded-md border p-3"><span class="block text-[11px] font-semibold uppercase opacity-55">Total pago</span><strong class="mt-1 block text-lg">R$ {{ categorias_total|floatformat:2 }}</strong></div><div class="rounded-md border p-3"><span class="block text-[11px] font-semibold uppercase opacity-55">Categorias usadas</span><strong class="mt-1 block text-lg">{{ categorias_quantidade }}</strong></div><div class="rounded-md border p-3"><span class="block text-[11px] font-semibold uppercase opacity-55">Maior categoria</span><strong class="mt-1 block truncate">{{ categoria_maior.nome|default:'Sem dados' }}</strong>{% if categoria_maior %}<span class="text-xs opacity-60">{{ categoria_maior.percentual|floatformat:1 }}% dos gastos</span>{% endif %}</div><div class="rounded-md border p-3"><span class="block text-[11px] font-semibold uppercase opacity-55">Sem classificação</span><strong class="mt-1 block text-lg">R$ {{ categorias_sem_classificacao|floatformat:2 }}</strong></div></div>
+    <div class="mt-4 space-y-3">{% for categoria in categorias_resumo %}<div class="grid grid-cols-[32px_minmax(0,1fr)_auto] items-center gap-3 rounded-md border p-3"><span class="flex h-7 w-7 items-center justify-center rounded-full bg-slate-900 text-xs font-bold text-white dark:bg-slate-100 dark:text-slate-900">{{ forloop.counter }}</span><div class="min-w-0"><div class="flex justify-between gap-3 text-sm"><strong class="truncate">{{ categoria.nome }}</strong><span>{{ categoria.percentual|floatformat:1 }}% dos gastos</span></div><div class="mt-2 h-2 overflow-hidden rounded-full bg-slate-200 dark:bg-slate-800"><div class="h-full rounded-full bg-emerald-500" style="width:{{ categoria.percentual|floatformat:0 }}%;min-width:6px"></div></div><span class="mt-1 block text-xs opacity-60">Impacto no faturamento: <strong>{{ categoria.impacto_faturamento|floatformat:1 }}%</strong> · {{ categoria.quantidade }} conta{{ categoria.quantidade|pluralize }}</span></div><strong class="whitespace-nowrap">R$ {{ categoria.valor|floatformat:2 }}</strong></div>{% empty %}<p class="text-sm opacity-65">Nenhuma categoria encontrada.</p>{% endfor %}</div>
+  </section>
+
+  <section class="card p-3">
+    <div class="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between"><div><h3 class="text-base font-semibold">Gasto por fornecedor</h3><p class="mt-1 text-xs opacity-65">R$ {{ total_fornecedores|floatformat:2 }} no período selecionado. Clique no fornecedor para listar as contas.</p></div><form method="get" class="flex flex-wrap items-end gap-2">{% if q %}<input type="hidden" name="q" value="{{ q }}">{% endif %}<label class="text-xs font-semibold">Período<select name="fornecedor_periodo" class="form-input mt-1" onchange="this.form.submit()"><option value="hoje" {% if fornecedor_periodo == 'hoje' %}selected{% endif %}>Hoje</option><option value="7" {% if fornecedor_periodo == '7' %}selected{% endif %}>7 dias</option><option value="15" {% if fornecedor_periodo == '15' %}selected{% endif %}>15 dias</option><option value="30" {% if fornecedor_periodo == '30' %}selected{% endif %}>30 dias</option><option value="mes" {% if fornecedor_periodo == 'mes' %}selected{% endif %}>Mês atual</option><option value="todos" {% if fornecedor_periodo == 'todos' %}selected{% endif %}>Todo período</option><option value="personalizado" {% if fornecedor_periodo == 'personalizado' %}selected{% endif %}>Personalizado</option></select></label>{% if fornecedor_periodo == 'personalizado' %}<label class="text-xs font-semibold">De<input type="date" name="fornecedor_inicio" value="{{ fornecedor_inicio|date:'Y-m-d' }}" class="form-input mt-1"></label><label class="text-xs font-semibold">Até<input type="date" name="fornecedor_fim" value="{{ fornecedor_fim|date:'Y-m-d' }}" class="form-input mt-1"></label><button class="btn-secondary" type="submit">Aplicar</button>{% endif %}</form></div>
+    <div class="mt-4 space-y-2">{% for fornecedor in fornecedores_resumo %}<div x-data="{aberto:false}" class="rounded-md border p-3"><button type="button" class="flex w-full items-center justify-between gap-3 text-left" @click="aberto=!aberto"><span class="min-w-0 truncate font-semibold">{{ fornecedor.nome }}</span><span class="whitespace-nowrap"><strong>R$ {{ fornecedor.valor|floatformat:2 }}</strong> <small class="opacity-60">{{ fornecedor.percentual|floatformat:1 }}%</small></span></button><div class="mt-2 h-2 overflow-hidden rounded-full bg-slate-200 dark:bg-slate-800"><div class="h-full rounded-full bg-blue-500" style="width:{{ fornecedor.percentual|floatformat:0 }}%"></div></div><div x-show="aberto" x-cloak class="mt-3 divide-y border-t">{% for conta_fornecedor in fornecedor.contas %}<button type="button" class="flex w-full items-center justify-between gap-3 py-2 text-left text-xs hover:text-blue-500" @click="abrirDetalhe('{% url 'financeiro:pagar_detail' conta_fornecedor.pk %}')"><span><strong class="block">{{ conta_fornecedor.descricao_exibicao }}</strong><span class="opacity-55">{{ conta_fornecedor.data_pagamento|date:'d/m/Y' }} · {{ conta_fornecedor.plano_contas.descricao|default:'Sem classificação' }}</span></span><strong>R$ {{ conta_fornecedor.valor_pago|floatformat:2 }}</strong></button>{% endfor %}</div></div>{% empty %}<p class="text-sm opacity-65">Nenhuma conta paga no período.</p>{% endfor %}</div>
+  </section>
+
+  <section class="card p-3">
+    <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between"><div><h3 class="text-base font-semibold">Meta de despesas pessoais</h3><p class="mt-1 text-xs opacity-65">Acompanhamento de {{ meta_despesa_mes|date:'m/Y' }}.</p></div><div class="sm:text-right"><strong class="text-xl {% if meta_despesa_percentual > 100 %}text-rose-500{% else %}text-amber-600{% endif %}">R$ {{ meta_despesa_usado|floatformat:2 }}</strong><span class="block text-xs opacity-65">de R$ {{ meta_despesa_valor|floatformat:2 }}</span></div></div>
+    <div class="mt-4 h-3 overflow-hidden rounded-full bg-slate-200 dark:bg-slate-800"><div class="h-full rounded-full {% if meta_despesa_percentual > 100 %}bg-rose-500{% else %}bg-amber-500{% endif %}" style="width:{{ meta_despesa_percentual_barra|floatformat:0 }}%;{% if meta_despesa_percentual > 0 %}min-width:8px;{% endif %}"></div></div><div class="mt-1 flex justify-between text-xs"><span>{{ meta_despesa_percentual|floatformat:1 }}% utilizado</span><span>{% if meta_despesa_pessoal.ativo %}Meta ativa{% else %}Sem meta ativa{% endif %}</span></div>
+    {% if user_is_admin %}<form method="post" class="mt-4 grid gap-3 border-t pt-4 md:grid-cols-12">{% csrf_token %}<input type="hidden" name="acao" value="salvar_meta_despesa_pessoal"><label class="text-xs font-semibold md:col-span-4">Tipo{{ meta_despesa_form.tipo_meta|add_class:'form-input mt-1' }}</label><label class="text-xs font-semibold md:col-span-3">Valor fixo{{ meta_despesa_form.valor_fixo|add_class:'form-input mt-1' }}</label><label class="text-xs font-semibold md:col-span-2">Percentual{{ meta_despesa_form.percentual|add_class:'form-input mt-1' }}</label><label class="text-xs font-semibold md:col-span-2">Meses{{ meta_despesa_form.meses_media|add_class:'form-input mt-1' }}</label><label class="flex items-end gap-2 text-xs font-semibold">{{ meta_despesa_form.ativo }} Ativa</label><div class="md:col-span-12 md:text-right"><button type="submit" class="btn-primary">Salvar meta</button></div></form>{% endif %}
+  </section>
   {% include "financeiro/_detalhes_conta_shell.html" %}
 </div>
 {% endblock %}
