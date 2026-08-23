@@ -1,0 +1,329 @@
+{% extends "_base.html" %}
+{% block title %}{{ title }}{% endblock %}
+{% block page_title %}Perdas{% endblock %}
+{% block content %}
+<div class="space-y-5">
+  <div class="flex flex-wrap items-start justify-between gap-3">
+    <div>
+      <p class="text-sm mb-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+        <a href="{% url 'moda:grupo' 'indicadores' %}" :style="temaClaro ? 'color:#3b82f6;' : 'color:#60a5fa;'">Indicadores</a>
+        <span class="mx-1">›</span> Perdas
+      </p>
+      <h2 class="text-2xl font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">Perdas</h2>
+      <p class="text-sm mt-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+        Refugo, retrabalho e sobra de tecido desde {{ desde|date:"d/m/Y" }} —
+        <strong>três perdas diferentes</strong>, que a tela não soma.
+      </p>
+    </div>
+    <div class="flex gap-2">
+      {% for valor, rotulo in periodos %}
+        <a href="?dias={{ valor }}"
+           class="{% if dias == valor %}btn-primary{% else %}btn-secondary{% endif %} text-sm">{{ rotulo }}</a>
+      {% endfor %}
+    </div>
+  </div>
+
+  <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+    <div class="card p-4">
+      <p class="text-xs uppercase tracking-wide" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Peças refugadas</p>
+      {% if refugo.pecas %}
+        <p class="text-2xl font-semibold mt-1" style="color:#dc2626;">{{ refugo.pecas }}</p>
+      {% else %}
+        <p class="text-2xl font-semibold mt-1" style="color:#059669;">0</p>
+      {% endif %}
+      <p class="text-xs mt-1" :style="temaClaro ? 'color:#94a3b8;' : 'color:#6b7280;'">
+        {% if refugo.percentual is not None %}{{ refugo.percentual }}% do que passou pelas bancadas{% else %}nada apontado no período{% endif %}
+      </p>
+    </div>
+
+    {% comment %}
+      Retrabalho fica AO LADO do refugo, nunca somado a ele: a peça voltou
+      para a linha e ainda vai ser vendida. Juntá-los faria a fábrica
+      parecer bem pior do que é.
+    {% endcomment %}
+    <div class="card p-4">
+      <p class="text-xs uppercase tracking-wide" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Peças em retrabalho</p>
+      {% comment %}
+        `style` fixo e `:style` do Alpine na mesma tag brigam — o binding
+        substitui o atributo inteiro. O caso zerado, que precisa saber o
+        tema, fica em ramo separado do colorido.
+      {% endcomment %}
+      {% if retrabalho.pecas %}
+        <p class="text-2xl font-semibold mt-1" style="color:#f59e0b;">{{ retrabalho.pecas }}</p>
+      {% else %}
+        <p class="text-2xl font-semibold mt-1" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">0</p>
+      {% endif %}
+      <p class="text-xs mt-1" :style="temaClaro ? 'color:#94a3b8;' : 'color:#6b7280;'">
+        voltaram para a linha — não são perda
+      </p>
+    </div>
+
+    <div class="card p-4">
+      <p class="text-xs uppercase tracking-wide" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Tecido perdido</p>
+      <p class="text-2xl font-semibold mt-1"
+         :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">{{ tecido.metros }} m</p>
+      <p class="text-xs mt-1" :style="temaClaro ? 'color:#94a3b8;' : 'color:#6b7280;'">
+        {% if tecido.aproveitamento is not None %}
+          aproveitamento médio de {{ tecido.aproveitamento }}%
+        {% else %}
+          ninguém mediu o aproveitamento
+        {% endif %}
+      </p>
+    </div>
+
+    {% comment %}
+      A pior bancada é a de maior PERCENTUAL: quem passa mil peças e perde
+      dez está melhor do que quem passa vinte e perde cinco, e um card que
+      mostrasse o maior número absoluto apontaria o setor errado.
+    {% endcomment %}
+    <div class="card p-4">
+      <p class="text-xs uppercase tracking-wide" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Onde mais se perde</p>
+      {% if refugo.pior %}
+        <p class="text-lg font-semibold mt-1" style="color:#dc2626;">{{ refugo.pior.label }}</p>
+        <p class="text-xs mt-1" :style="temaClaro ? 'color:#94a3b8;' : 'color:#6b7280;'">
+          {{ refugo.pior.percentual }}% do que passou por lá
+        </p>
+      {% else %}
+        <p class="text-lg font-semibold mt-1" style="color:#059669;">nenhuma perda</p>
+      {% endif %}
+    </div>
+  </div>
+
+  {% comment %}
+    ── Bloco 1: refugo por bancada ────────────────────────────────────────
+    Onde a peça morre. Na ordem do fluxo, porque perder no acabamento é
+    muito mais caro do que perder no corte: a peça já consumiu todas as
+    bancadas anteriores.
+  {% endcomment %}
+  <div class="card overflow-hidden">
+    <div class="px-4 pt-4">
+      <h3 class="text-sm font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">Refugo por bancada</h3>
+      <p class="text-xs mt-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+        Onde a peça morre. Quanto mais tarde no fluxo, mais cara a perda —
+        a peça já passou por todas as bancadas anteriores.
+      </p>
+    </div>
+    {% if refugo.linhas %}
+      <div class="overflow-x-auto mt-3">
+        <table class="w-full text-sm">
+          <thead>
+            <tr class="border-b" :style="temaClaro ? 'border-color:#e2e8f0;' : 'border-color:#2a2a2e;'">
+              <th class="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wide"
+                  :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Etapa</th>
+              <th class="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wide"
+                  :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Perda</th>
+              <th class="text-right px-4 py-3 text-xs font-semibold uppercase tracking-wide"
+                  :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Peças perdidas</th>
+              <th class="text-right px-4 py-3 text-xs font-semibold uppercase tracking-wide"
+                  :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Boas</th>
+              <th class="text-right px-4 py-3 text-xs font-semibold uppercase tracking-wide"
+                  :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">% perdido</th>
+              <th class="text-right px-4 py-3 text-xs font-semibold uppercase tracking-wide"
+                  :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Ordens</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for l in refugo.linhas %}
+              <tr class="border-b" :style="temaClaro ? 'border-color:#f1f5f9;' : 'border-color:#1e1e22;'">
+                <td class="px-4 py-3 font-medium whitespace-nowrap"
+                    :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">{{ l.label }}</td>
+                <td class="px-4 py-3" style="min-width:150px;">
+                  <div style="height:8px; border-radius:4px; background:rgba(127,127,127,.18);">
+                    <div style="height:8px; border-radius:4px; background:#dc2626; width:{{ l.barra }}%;"></div>
+                  </div>
+                </td>
+                <td class="px-4 py-3 text-right tabular-nums font-semibold">
+                  {% if l.perda %}
+                    <span style="color:#dc2626;">{{ l.perda }}</span>
+                  {% else %}
+                    <span :style="temaClaro ? 'color:#94a3b8;' : 'color:#6b7280;'">—</span>
+                  {% endif %}
+                </td>
+                <td class="px-4 py-3 text-right tabular-nums"
+                    :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">{{ l.produzido }}</td>
+                <td class="px-4 py-3 text-right tabular-nums"
+                    :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">{{ l.percentual }}%</td>
+                <td class="px-4 py-3 text-right tabular-nums"
+                    :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">{{ l.ordens }}</td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    {% else %}
+      <div class="px-4 py-8 text-center">
+        <p class="text-sm" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+          Nenhuma etapa concluída no período.
+        </p>
+      </div>
+    {% endif %}
+  </div>
+
+  <div class="grid gap-4 lg:grid-cols-2">
+    {% comment %}
+      ── Bloco 2: as causas ───────────────────────────────────────────────
+      É o único bloco que diz o que FAZER. O de cima mostra onde a peça
+      morre; este mostra por quê.
+    {% endcomment %}
+    <div class="card overflow-hidden">
+      <div class="px-4 pt-4">
+        <h3 class="text-sm font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">Por que reprovou</h3>
+        <p class="text-xs mt-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+          Pontos do checklist que mais reprovaram — a fila do que atacar primeiro.
+        </p>
+      </div>
+      {% if causas %}
+        <div class="p-4 space-y-3">
+          {% for c in causas %}
+            <div>
+              <div class="flex items-baseline justify-between gap-2 mb-1">
+                <span class="text-sm" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">{{ c.label }}</span>
+                <span class="text-sm tabular-nums font-semibold" style="color:#f59e0b;">{{ c.ocorrencias }}</span>
+              </div>
+              <div style="height:6px; border-radius:3px; background:rgba(127,127,127,.18);">
+                <div style="height:6px; border-radius:3px; background:#f59e0b; width:{{ c.barra }}%;"></div>
+              </div>
+            </div>
+          {% endfor %}
+        </div>
+      {% else %}
+        <div class="px-4 py-8 text-center">
+          <p class="text-sm" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+            Nenhum ponto do checklist reprovado no período.
+          </p>
+          <p class="text-xs mt-2" :style="temaClaro ? 'color:#94a3b8;' : 'color:#6b7280;'">
+            Este bloco se alimenta das inspeções de qualidade.
+          </p>
+        </div>
+      {% endif %}
+    </div>
+
+    <div class="card p-4">
+      <h3 class="text-sm font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">Retrabalho</h3>
+      <p class="text-xs mt-1 mb-3" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+        Não é perda — mas é bancada refazendo o que já tinha feito, e some
+        do custo se ninguém contar.
+      </p>
+      <div class="grid grid-cols-2 gap-3">
+        <div>
+          <p class="text-xs uppercase tracking-wide" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Peças</p>
+          <p class="text-xl font-semibold mt-1" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">{{ retrabalho.pecas }}</p>
+        </div>
+        <div>
+          <p class="text-xs uppercase tracking-wide" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Do inspecionado</p>
+          <p class="text-xl font-semibold mt-1" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
+            {% if retrabalho.percentual is not None %}{{ retrabalho.percentual }}%{% else %}—{% endif %}
+          </p>
+        </div>
+        <div>
+          <p class="text-xs uppercase tracking-wide" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Inspeções</p>
+          <p class="text-xl font-semibold mt-1" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">{{ retrabalho.inspecoes }}</p>
+        </div>
+        <div>
+          <p class="text-xs uppercase tracking-wide" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Com retrabalho</p>
+          <p class="text-xl font-semibold mt-1" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">{{ retrabalho.com_retrabalho }}</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  {% comment %}
+    ── Bloco 3: tecido ────────────────────────────────────────────────────
+    Metros, não peças. Duas perdas diferentes convivem aqui e a tela as
+    separa: aproveitamento se conserta no encaixe, variação na mesa.
+  {% endcomment %}
+  <div class="card overflow-hidden">
+    <div class="px-4 pt-4">
+      <h3 class="text-sm font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">Sobra de tecido</h3>
+      <p class="text-xs mt-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+        Em metros — não somável com peça. <strong>Aproveitamento</strong> é quanto do
+        tecido virou peça no risco (conserta-se no encaixe);
+        <strong>variação</strong> é o enfesto ter gasto mais do que a ficha previa
+        (conserta-se na mesa de corte).
+      </p>
+    </div>
+    {% if tecido.linhas %}
+      <div class="overflow-x-auto mt-3">
+        <table class="w-full text-sm">
+          <thead>
+            <tr class="border-b" :style="temaClaro ? 'border-color:#e2e8f0;' : 'border-color:#2a2a2e;'">
+              <th class="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wide"
+                  :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Tecido</th>
+              <th class="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wide"
+                  :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Perda</th>
+              <th class="text-right px-4 py-3 text-xs font-semibold uppercase tracking-wide"
+                  :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Metros perdidos</th>
+              <th class="text-right px-4 py-3 text-xs font-semibold uppercase tracking-wide"
+                  :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Aproveitamento</th>
+              <th class="text-right px-4 py-3 text-xs font-semibold uppercase tracking-wide"
+                  :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Gasto</th>
+              <th class="text-right px-4 py-3 text-xs font-semibold uppercase tracking-wide"
+                  :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Variação</th>
+              <th class="text-right px-4 py-3 text-xs font-semibold uppercase tracking-wide"
+                  :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Cortes</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for l in tecido.linhas %}
+              <tr class="border-b" :style="temaClaro ? 'border-color:#f1f5f9;' : 'border-color:#1e1e22;'">
+                <td class="px-4 py-3 font-medium"
+                    :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
+                  {{ l.label }}
+                  {% if l.sem_medida %}
+                    <span class="block text-xs font-normal" style="color:#f59e0b;">
+                      {{ l.sem_medida }} corte(s) sem aproveitamento medido
+                    </span>
+                  {% endif %}
+                </td>
+                <td class="px-4 py-3" style="min-width:150px;">
+                  <div style="height:8px; border-radius:4px; background:rgba(127,127,127,.18);">
+                    <div style="height:8px; border-radius:4px; background:#8b5cf6; width:{{ l.barra }}%;"></div>
+                  </div>
+                </td>
+                <td class="px-4 py-3 text-right tabular-nums font-semibold"
+                    :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">{{ l.perda_metros }} m</td>
+                <td class="px-4 py-3 text-right tabular-nums"
+                    :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+                  {% if l.aproveitamento is not None %}{{ l.aproveitamento }}%{% else %}—{% endif %}
+                </td>
+                <td class="px-4 py-3 text-right tabular-nums"
+                    :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">{{ l.consumo }} m</td>
+                <td class="px-4 py-3 text-right tabular-nums">
+                  {% if l.estourou %}
+                    <span style="color:#dc2626;">+{{ l.variacao }} m</span>
+                  {% else %}
+                    <span style="color:#059669;">{{ l.variacao }} m</span>
+                  {% endif %}
+                </td>
+                <td class="px-4 py-3 text-right tabular-nums"
+                    :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">{{ l.cortes }}</td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    {% else %}
+      <div class="px-4 py-8 text-center">
+        <p class="text-sm" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+          Nenhum corte registrado como cortado no período.
+        </p>
+        <a href="{% url 'moda:corte-list' %}" class="btn-secondary text-sm mt-3 inline-block">
+          Ir para Corte
+        </a>
+      </div>
+    {% endif %}
+  </div>
+
+  <div class="card p-4">
+    <p class="text-xs uppercase tracking-wide mb-2" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Como o número é feito</p>
+    <ul class="text-sm space-y-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+      <li><strong>Refugo</strong> sai só do apontamento das etapas. A inspeção de qualidade,
+        quando aplicada no fluxo, já grava a reprovação lá — somar as duas contaria a mesma peça duas vezes.</li>
+      <li><strong>Retrabalho</strong> nunca entra no refugo: a peça voltou para a linha e ainda vai ser vendida.</li>
+      <li><strong>% perdido</strong> é sobre o que passou por aquela bancada (boas + perdidas), não sobre o pedido inteiro.</li>
+      <li><strong>Aproveitamento médio</strong> é ponderado pelo tecido gasto — um corte de 200 m pesa cem vezes mais que um de 2 m.</li>
+      <li>Corte sem aproveitamento medido fica de fora da média, e não entra como 0%.</li>
+    </ul>
+  </div>
+</div>
+{% endblock %}
