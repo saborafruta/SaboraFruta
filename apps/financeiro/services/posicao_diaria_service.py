@@ -49,6 +49,16 @@ class MovimentoDiario:
         return self.entrada - self.saida
 
     @property
+    def entrada_bruta(self):
+        if self.taxa_descontada and self.valor_bruto > ZERO:
+            return self.valor_bruto
+        return self.entrada
+
+    @property
+    def valor_final_taxa(self):
+        return self.entrada
+
+    @property
     def hora(self):
         return timezone.localtime(self.momento).strftime("%H:%M") if self.momento else "--:--"
 
@@ -56,6 +66,17 @@ class MovimentoDiario:
 def _somar(destino, conta_id, valor):
     if conta_id:
         destino[conta_id] += valor or ZERO
+
+
+def _eh_despesa_pessoal(plano_contas):
+    atual = plano_contas
+    visitados = set()
+    while atual and atual.pk not in visitados:
+        visitados.add(atual.pk)
+        if atual.despesa_pessoal:
+            return True
+        atual = atual.conta_pai
+    return False
 
 
 class PosicaoDiariaCaixaService:
@@ -120,16 +141,21 @@ class PosicaoDiariaCaixaService:
             nome_base = " ".join(filter(None, [conta.descricao, conta.banco_nome, conta.tipo_conta])).casefold()
             eh_dinheiro = "dinheiro" in nome_base or "caixa" in nome_base
             conta.posicao_abertura = abertura
-            conta.posicao_entradas = sum((m.entrada for m in entradas if m.conta.pk == conta.pk), ZERO)
-            conta.posicao_saidas = sum((m.saida for m in saidas if m.conta.pk == conta.pk), ZERO)
+            entradas_conta = [m for m in entradas if m.conta.pk == conta.pk]
+            conta.posicao_entradas = sum((m.entrada_bruta for m in entradas_conta), ZERO)
+            conta.posicao_saidas = (
+                sum((m.saida for m in saidas if m.conta.pk == conta.pk), ZERO)
+                + sum((m.valor_taxa for m in entradas_conta), ZERO)
+            )
             conta.posicao_fechamento = fechamento
             conta.posicao_cor = "azul" if eh_dinheiro else self.CORES[indice % len(self.CORES)]
             conta.eh_dinheiro = eh_dinheiro
             contas.append(conta)
 
         total_abertura = sum((c.posicao_abertura for c in contas), ZERO)
-        total_entradas = sum((m.entrada for m in entradas), ZERO)
-        total_saidas = sum((m.saida for m in saidas), ZERO)
+        total_taxas_entradas = sum((m.valor_taxa for m in entradas), ZERO)
+        total_entradas = sum((m.entrada_bruta for m in entradas), ZERO)
+        total_saidas = sum((m.saida for m in saidas), ZERO) + total_taxas_entradas
         total_fechamento = sum((c.posicao_fechamento for c in contas), ZERO)
         total_despesas_pessoais = sum((m.saida for m in saidas if m.despesa_pessoal), ZERO)
         taxas_por_forma = self._agrupar_taxas(entradas)
@@ -153,13 +179,17 @@ class PosicaoDiariaCaixaService:
             "total_saidas": total_saidas,
             "total_fechamento": total_fechamento,
             "total_despesas_pessoais": total_despesas_pessoais,
-            "total_taxas_entradas": sum((m.valor_taxa for m in entradas), ZERO),
+            "total_taxas_entradas": total_taxas_entradas,
+            "transacoes_taxas": [
+                movimento for movimento in entradas
+                if movimento.forma_pagamento != "Sem forma vinculada"
+            ],
             "taxas_por_forma": taxas_por_forma,
             "variacao_dia": total_entradas - total_saidas,
-            "totais_forma_entrada": self._agrupar(entradas, "forma_pagamento", "entrada"),
-            "totais_forma_saida": self._agrupar(saidas, "forma_pagamento", "saida"),
-            "totais_conta_entrada": self._agrupar(entradas, "conta", "entrada"),
-            "totais_conta_saida": self._agrupar(saidas, "conta", "saida"),
+            "totais_forma_entrada": self._agrupar(entradas, "forma_pagamento", "entrada_bruta"),
+            "totais_forma_saida": self._agrupar_com_taxas(saidas, entradas, "forma_pagamento"),
+            "totais_conta_entrada": self._agrupar(entradas, "conta", "entrada_bruta"),
+            "totais_conta_saida": self._agrupar_com_taxas(saidas, entradas, "conta"),
             "sem_conta": self._pendencias_sem_conta_do_dia(),
             "data_inicio": self.data_inicio,
             "data_fim": self.data_fim,
@@ -176,6 +206,20 @@ class PosicaoDiariaCaixaService:
             if atributo == "conta":
                 chave = chave.descricao or chave.banco_nome or f"Conta #{chave.pk}"
             totais[chave or "Sem forma vinculada"] += getattr(movimento, campo_valor)
+        return [{"nome": nome, "valor": valor} for nome, valor in sorted(
+            totais.items(), key=lambda item: (-item[1], item[0].casefold())
+        )]
+
+    @classmethod
+    def _agrupar_com_taxas(cls, saidas, entradas, atributo):
+        totais = defaultdict(lambda: ZERO)
+        for item in cls._agrupar(saidas, atributo, "saida"):
+            totais[item["nome"]] += item["valor"]
+        for movimento in entradas:
+            chave = getattr(movimento, atributo)
+            if atributo == "conta":
+                chave = chave.descricao or chave.banco_nome or f"Conta #{chave.pk}"
+            totais[chave or "Sem forma vinculada"] += movimento.valor_taxa
         return [{"nome": nome, "valor": valor} for nome, valor in sorted(
             totais.items(), key=lambda item: (-item[1], item[0].casefold())
         )]
@@ -208,7 +252,10 @@ class PosicaoDiariaCaixaService:
         manuais = ExtratoBancario.objects.filter(
             filial=self.filial, conta_bancaria_id__in=self.conta_ids,
             data_lancamento__range=(self.data_inicio, self.data_fim),
-        ).select_related("conta_bancaria", "forma_pagamento", "plano_contas")
+        ).select_related(
+            "conta_bancaria", "forma_pagamento", "plano_contas",
+            "plano_contas__conta_pai", "plano_contas__conta_pai__conta_pai",
+        )
         if not incluir_excluidos:
             manuais = manuais.exclude(status="excluido")
         for item in manuais:
@@ -229,6 +276,7 @@ class PosicaoDiariaCaixaService:
                     item.plano_contas.caminho_descricao
                     if item.plano_contas_id else ("Credito manual" if valor > ZERO else "Saida manual")
                 ),
+                despesa_pessoal=bool(valor < ZERO and _eh_despesa_pessoal(item.plano_contas)),
                 editavel=valor > ZERO,
             ))
 
@@ -262,7 +310,8 @@ class PosicaoDiariaCaixaService:
             data_pagamento__range=(self.data_inicio, self.data_fim), conta_pagar__excluido_em__isnull=True,
         ).select_related(
             "conta_bancaria", "forma_pagamento", "conta_pagar__fornecedor", "conta_pagar__funcionario",
-            "conta_pagar__plano_contas",
+            "conta_pagar__plano_contas", "conta_pagar__plano_contas__conta_pai",
+            "conta_pagar__plano_contas__conta_pai__conta_pai",
         )
         for item in pagamentos:
             movimentos.append(MovimentoDiario(
@@ -275,10 +324,7 @@ class PosicaoDiariaCaixaService:
                 saida=item.valor_liquido,
                 referencia_url=f'{reverse("financeiro:pagar_detail", args=[item.conta_pagar_id])}?pagamento={item.pk}',
                 momento=item.created_at,
-                despesa_pessoal=bool(
-                    item.conta_pagar.plano_contas_id
-                    and item.conta_pagar.plano_contas.despesa_pessoal
-                ),
+                despesa_pessoal=_eh_despesa_pessoal(item.conta_pagar.plano_contas),
                 classificacao=(
                     item.conta_pagar.plano_contas.caminho_descricao
                     if item.conta_pagar.plano_contas_id else "Despesa sem classificacao"

@@ -188,14 +188,18 @@ class PosicaoDiariaCaixaTests(TestCase):
         self.assertEqual(venda.valor_taxa, Decimal("2.10"))
         self.assertEqual(venda.taxa_percentual, Decimal("2.00"))
         self.assertEqual(venda.entrada, Decimal("77.90"))
-        self.assertEqual(posicao["total_entradas"], Decimal("107.90"))
+        self.assertEqual(posicao["total_entradas"], Decimal("110.00"))
+        self.assertEqual(posicao["total_saidas"], Decimal("72.10"))
+        self.assertEqual(posicao["variacao_dia"], Decimal("37.90"))
         self.assertEqual(posicao["total_fechamento"], Decimal("207.90"))
         self.assertEqual(posicao["total_taxas_entradas"], Decimal("2.10"))
         self.assertEqual(posicao["taxas_por_forma"][0]["nome"], self.forma.descricao)
 
         response = self.client.get(reverse("financeiro:posicao_diaria"), {"data": "2026-08-21"})
-        self.assertContains(response, "Taxa aplicada: 2,00% + R$ 0,50")
-        self.assertContains(response, "Taxas das entradas")
+        self.assertContains(response, "TAXA 2,00% + R$ 0,50")
+        self.assertContains(response, "Taxas do período")
+        self.assertContains(response, "Valor original, desconto e valor final")
+        self.assertContains(response, "R$ 2,10")
 
     def test_entrada_manual_exibe_percentual_configurado_sem_descontar_saldo(self):
         self.forma.taxa_administrativa = Decimal("2.50")
@@ -210,8 +214,36 @@ class PosicaoDiariaCaixaTests(TestCase):
 
         response = self.client.get(reverse("financeiro:posicao_diaria"), {"data": "2026-08-21"})
 
-        self.assertContains(response, "Taxa configurada: 2,50% + R$ 0,30")
-        self.assertContains(response, "Não descontada neste lançamento manual")
+        self.assertContains(response, "TAXA 2,50% + R$ 0,30")
+        self.assertContains(response, "Informativa")
+
+    def test_saida_manual_herda_marcacao_de_despesa_pessoal_do_grupo(self):
+        grupo = PlanoContas.objects.create(
+            empresa=self.empresa, codigo="3900000000", descricao="Despesas Pessoais e Sócios",
+            tipo="D", nivel=1, aceita_lancamento=False, despesa_pessoal=True,
+        )
+        tipo = PlanoContas.objects.create(
+            empresa=self.empresa, conta_pai=grupo, codigo="3900100000",
+            descricao="Gastos Pessoais", tipo="D", nivel=2, aceita_lancamento=False,
+        )
+        categoria = PlanoContas.objects.create(
+            empresa=self.empresa, conta_pai=tipo, codigo="3900100001",
+            descricao="Compras Pessoais", tipo="D", nivel=3, aceita_lancamento=True,
+        )
+        ExtratoBancario.objects.create(
+            filial=self.filial, conta_bancaria=self.banco, forma_pagamento=self.forma,
+            plano_contas=categoria, data_lancamento=date(2026, 8, 21),
+            historico="Gasolina pessoal", valor=Decimal("-10.00"), origem="manual",
+        )
+
+        posicao = PosicaoDiariaCaixaService(self.filial, date(2026, 8, 21)).gerar()
+        movimento = next(m for m in posicao["saidas"] if m.descricao == "Gasolina pessoal")
+        self.assertTrue(movimento.despesa_pessoal)
+        self.assertEqual(posicao["total_despesas_pessoais"], Decimal("10.00"))
+
+        response = self.client.get(reverse("financeiro:posicao_diaria"), {"data": "2026-08-21"})
+        self.assertContains(response, "Gasolina pessoal")
+        self.assertContains(response, "Despesa pessoal")
 
     def test_venda_so_entra_na_data_de_compensacao(self):
         self.forma.prazo_compensacao_dias_uteis = 1
