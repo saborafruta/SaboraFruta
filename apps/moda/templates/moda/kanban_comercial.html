@@ -2,6 +2,14 @@
 {% block title %}Comercial — Moda{% endblock %}
 {% block page_title %}Comercial{% endblock %}
 
+{% comment %}
+  O quadro usa a TELA TODA. São nove colunas; presas nos 1280 px do padrão,
+  as últimas ficavam cortadas enquanto sobravam duzentos pixels vazios de
+  cada lado. Esta é a única tela do vertical que pede isso — as outras são
+  tabelas, e tabela larga demais é pior de ler.
+{% endcomment %}
+{% block largura_conteudo %}max-w-none{% endblock %}
+
 {% block extra_head %}
 {{ block.super }}
 <style>
@@ -46,6 +54,11 @@
      está. Com o teto, a lista rola por dentro e os títulos ficam. */
   .kc-lista { max-height: calc(100vh - 340px); overflow-y: auto; }
   .kc-raia.vazia .kc-lista { min-height: 140px; }
+
+  /* Cartão escondido pela busca ao vivo. `display:none` e não opacidade:
+     ele precisa sair do fluxo para a coluna encolher junto — o quadro se
+     fecha em volta do que sobrou, e a resposta aparece inteira na tela. */
+  .kc-card.oculto { display: none; }
 </style>
 {% endblock %}
 
@@ -102,8 +115,18 @@
   {# ── Filtros ──────────────────────────────────────────────────────── #}
   <form method="get" class="card p-4 flex flex-wrap items-end gap-3">
     <div class="flex-1 min-w-[180px]">
-      <label class="block text-xs font-semibold mb-1" :style="temaClaro ? 'color:#374151;' : 'color:#cbd5e1;'">Cliente ou número</label>
+      <label class="block text-xs font-semibold mb-1" :style="temaClaro ? 'color:#374151;' : 'color:#cbd5e1;'">
+        Cliente ou número
+        {% comment %}
+          O contador aparece só filtrando. Sem ele o quadro encolhe e não
+          há como saber se o cartão sumiu por causa da busca ou porque não
+          existe naquela coluna.
+        {% endcomment %}
+        <span id="kc-busca-conta" class="font-normal hidden"
+              :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'"></span>
+      </label>
       <input type="search" name="busca" value="{{ filtros.busca }}" class="form-input w-full"
+             id="kc-busca" autocomplete="off"
              placeholder="Ex.: INTERFORT, 000142">
     </div>
     <div>
@@ -192,6 +215,7 @@
                    data-pecas="{{ c.pedido.quantidade_total }}"
                    data-valor="{{ c.pedido.valor_total|stringformat:'.2f' }}"
                    data-atrasado="{% if c.atrasado %}1{% else %}0{% endif %}"
+                   data-busca="{{ c.pedido.cliente }} {{ c.pedido.numero|stringformat:'06d' }} {{ c.pedido.numero }} {{ c.pedido.contato_nome }}"
                    {% if pode_mover %}draggable="true"{% endif %}
                    :style="temaClaro ? 'background:#f8fafc; border:1px solid #e5e7eb;' : 'background:#18181b; border:1px solid #303036;'">
                 <div class="flex items-start justify-between gap-1">
@@ -305,7 +329,11 @@
 
 {% block extra_js %}
 {{ block.super }}
-{% if pode_mover %}
+{% comment %}
+  Sem `{% if pode_mover %}` em volta: a busca ao vivo vale para todo mundo,
+  inclusive para o perfil que só lê. A parte do arrasto fica inerte por si
+  -- sem cartão `draggable` e sem os seletores, nenhum ouvinte é ligado.
+{% endcomment %}
 <script>
 (function () {
   const csrf = document.querySelector('[name=csrfmiddlewaretoken]')?.value
@@ -352,7 +380,7 @@
   // quadro sem contador.
   function atualizarRaia(raia) {
     if (!raia) return;
-    const cartoes = [...raia.querySelectorAll('.kc-card')];
+    const cartoes = [...raia.querySelectorAll('.kc-card:not(.oculto)')];
     const pecas = cartoes.reduce((s, c) => s + (parseInt(c.dataset.pecas, 10) || 0), 0);
     const valor = cartoes.reduce((s, c) => s + (parseFloat(c.dataset.valor) || 0), 0);
     const atrasados = cartoes.filter((c) => c.dataset.atrasado === '1').length;
@@ -442,6 +470,43 @@
     });
   });
 
+  // ── Busca ao vivo ──────────────────────────────────────────────────
+  // Filtra no NAVEGADOR: o quadro ja' veio inteiro, e ir ao servidor a cada
+  // tecla so' acrescentaria espera. O `form` continua valendo -- Enter e o
+  // botao Filtrar ainda mandam `?busca=`, que e' o que faz o endereco poder
+  // ser guardado.
+  const campoBusca = document.getElementById('kc-busca');
+  const contaBusca = document.getElementById('kc-busca-conta');
+
+  // Tira o acento: sem isso "america" nao acha "América", e nome de cliente
+  // de confeccao quase sempre tem acento -- a busca pareceria quebrada.
+  function normalizar(valor) {
+    return (valor || '').toString()
+      .normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
+  }
+
+  function filtrar() {
+    const alvo = normalizar(campoBusca.value.trim());
+    const cartoes = [...document.querySelectorAll('.kc-card')];
+    cartoes.forEach((card) => {
+      const casa = !alvo || normalizar(card.dataset.busca).includes(alvo);
+      card.classList.toggle('oculto', !casa);
+    });
+    document.querySelectorAll('.kc-raia').forEach(atualizarRaia);
+
+    if (!alvo) { contaBusca.classList.add('hidden'); return; }
+    const visiveis = cartoes.filter((c) => !c.classList.contains('oculto')).length;
+    contaBusca.textContent = ` — ${visiveis} de ${cartoes.length}`;
+    contaBusca.classList.remove('hidden');
+  }
+
+  if (campoBusca) {
+    campoBusca.addEventListener('input', filtrar);
+    // Um `?busca=` na URL ja' veio filtrado do servidor; o campo preenchido
+    // nao deve esconder de novo o que ja' foi filtrado la'.
+    campoBusca.addEventListener('search', filtrar);
+  }
+
   document.addEventListener('change', (e) => {
     const select = e.target.closest('.kc-mover');
     if (!select || !select.value) return;
@@ -456,5 +521,4 @@
   });
 })();
 </script>
-{% endif %}
 {% endblock %}
