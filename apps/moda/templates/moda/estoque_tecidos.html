@@ -106,19 +106,19 @@
         <table class="w-full text-sm">
           <thead>
             <tr class="border-b" :style="temaClaro ? 'border-color:#e2e8f0;' : 'border-color:#2a2a2e;'">
-              <th class="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wide"
+              <th class="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wide whitespace-nowrap w-full"
                   :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Tecido</th>
-              <th class="text-right px-4 py-3 text-xs font-semibold uppercase tracking-wide"
+              <th class="text-right px-4 py-3 text-xs font-semibold uppercase tracking-wide whitespace-nowrap"
                   :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Cobertura</th>
-              <th class="text-right px-4 py-3 text-xs font-semibold uppercase tracking-wide"
+              <th class="text-right px-4 py-3 text-xs font-semibold uppercase tracking-wide whitespace-nowrap"
                   :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Disponível</th>
-              <th class="text-right px-4 py-3 text-xs font-semibold uppercase tracking-wide"
+              <th class="text-right px-4 py-3 text-xs font-semibold uppercase tracking-wide whitespace-nowrap"
                   :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Reservado</th>
-              <th class="text-right px-4 py-3 text-xs font-semibold uppercase tracking-wide"
+              <th class="text-right px-4 py-3 text-xs font-semibold uppercase tracking-wide whitespace-nowrap"
                   :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Consumo/dia</th>
-              <th class="text-right px-4 py-3 text-xs font-semibold uppercase tracking-wide"
+              <th class="text-right px-4 py-3 text-xs font-semibold uppercase tracking-wide whitespace-nowrap"
                   :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">No período</th>
-              <th class="text-right px-4 py-3 text-xs font-semibold uppercase tracking-wide"
+              <th class="text-right px-4 py-3 text-xs font-semibold uppercase tracking-wide whitespace-nowrap"
                   :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Valor parado</th>
             </tr>
           </thead>
@@ -146,7 +146,7 @@
                     <span class="block text-xs mt-1" style="color:#f59e0b;">sem produto de estoque ligado</span>
                   {% endif %}
                 </td>
-                <td class="px-4 py-3 text-right tabular-nums font-semibold">
+                <td class="px-4 py-3 text-right tabular-nums font-semibold whitespace-nowrap">
                   {% if l.cobertura is None %}
                     <span :style="temaClaro ? 'color:#94a3b8;' : 'color:#6b7280;'"
                           title="{% if not l.ligado %}Sem vínculo com estoque: o saldo é desconhecido.{% else %}Sem consumo no período: não há ritmo com que projetar.{% endif %}">—</span>
@@ -158,7 +158,7 @@
                     <span style="color:#059669;">{{ l.cobertura }} dias</span>
                   {% endif %}
                 </td>
-                <td class="px-4 py-3 text-right tabular-nums">
+                <td class="px-4 py-3 text-right tabular-nums whitespace-nowrap">
                   {% if l.disponivel is None %}
                     <span :style="temaClaro ? 'color:#94a3b8;' : 'color:#6b7280;'">—</span>
                   {% elif l.sem_saldo %}
@@ -167,20 +167,20 @@
                     <span :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">{{ l.disponivel }} m</span>
                   {% endif %}
                 </td>
-                <td class="px-4 py-3 text-right tabular-nums"
+                <td class="px-4 py-3 text-right tabular-nums whitespace-nowrap"
                     :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
                   {% if l.reservado is None %}—{% else %}{{ l.reservado }} m{% endif %}
                 </td>
-                <td class="px-4 py-3 text-right tabular-nums"
+                <td class="px-4 py-3 text-right tabular-nums whitespace-nowrap"
                     :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
                   {% if l.consumo_dia %}{{ l.consumo_dia }} m{% else %}—{% endif %}
                 </td>
-                <td class="px-4 py-3 text-right tabular-nums"
+                <td class="px-4 py-3 text-right tabular-nums whitespace-nowrap"
                     :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
                   {{ l.consumo }} m
                   {% if l.cortes %}<span class="block text-xs">{{ l.cortes }} corte(s)</span>{% endif %}
                 </td>
-                <td class="px-4 py-3 text-right tabular-nums"
+                <td class="px-4 py-3 text-right tabular-nums whitespace-nowrap"
                     :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
                   {% if l.valor is None %}—{% else %}R$ {{ l.valor }}{% endif %}
                 </td>

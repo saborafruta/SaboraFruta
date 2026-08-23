@@ -111,19 +111,19 @@
         <table class="w-full text-sm">
           <thead>
             <tr class="border-b" :style="temaClaro ? 'border-color:#e2e8f0;' : 'border-color:#2a2a2e;'">
-              <th class="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wide"
+              <th class="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wide whitespace-nowrap w-full"
                   :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Produto</th>
-              <th class="text-right px-4 py-3 text-xs font-semibold uppercase tracking-wide"
+              <th class="text-right px-4 py-3 text-xs font-semibold uppercase tracking-wide whitespace-nowrap"
                   :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Valor parado</th>
-              <th class="text-right px-4 py-3 text-xs font-semibold uppercase tracking-wide"
+              <th class="text-right px-4 py-3 text-xs font-semibold uppercase tracking-wide whitespace-nowrap"
                   :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Sem sair há</th>
-              <th class="text-right px-4 py-3 text-xs font-semibold uppercase tracking-wide"
+              <th class="text-right px-4 py-3 text-xs font-semibold uppercase tracking-wide whitespace-nowrap"
                   :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Em estoque</th>
-              <th class="text-right px-4 py-3 text-xs font-semibold uppercase tracking-wide"
+              <th class="text-right px-4 py-3 text-xs font-semibold uppercase tracking-wide whitespace-nowrap"
                   :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Reservado</th>
-              <th class="text-right px-4 py-3 text-xs font-semibold uppercase tracking-wide"
+              <th class="text-right px-4 py-3 text-xs font-semibold uppercase tracking-wide whitespace-nowrap"
                   :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Em produção</th>
-              <th class="text-right px-4 py-3 text-xs font-semibold uppercase tracking-wide"
+              <th class="text-right px-4 py-3 text-xs font-semibold uppercase tracking-wide whitespace-nowrap"
                   :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">SKUs</th>
             </tr>
           </thead>
@@ -152,7 +152,7 @@
                     </span>
                   {% endif %}
                 </td>
-                <td class="px-4 py-3 text-right tabular-nums font-semibold">
+                <td class="px-4 py-3 text-right tabular-nums font-semibold whitespace-nowrap">
                   {% if l.valor is None %}
                     <span :style="temaClaro ? 'color:#94a3b8;' : 'color:#6b7280;'">—</span>
                   {% elif l.dias_parado >= resumo.limite %}
@@ -161,7 +161,7 @@
                     <span :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">R$ {{ l.valor }}</span>
                   {% endif %}
                 </td>
-                <td class="px-4 py-3 text-right tabular-nums">
+                <td class="px-4 py-3 text-right tabular-nums whitespace-nowrap">
                   {% if l.dias_parado is None %}
                     <span :style="temaClaro ? 'color:#94a3b8;' : 'color:#6b7280;'"
                           title="Só há tempo parado onde há peça parada.">—</span>
@@ -171,17 +171,17 @@
                     <span :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">{{ l.dias_parado }} dias</span>
                   {% endif %}
                 </td>
-                <td class="px-4 py-3 text-right tabular-nums"
+                <td class="px-4 py-3 text-right tabular-nums whitespace-nowrap"
                     :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
                   {% if l.saldo is None %}
                     <span :style="temaClaro ? 'color:#94a3b8;' : 'color:#6b7280;'">—</span>
                   {% else %}{{ l.saldo|floatformat:0 }}{% endif %}
                 </td>
-                <td class="px-4 py-3 text-right tabular-nums"
+                <td class="px-4 py-3 text-right tabular-nums whitespace-nowrap"
                     :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
                   {% if l.reservado is None %}—{% else %}{{ l.reservado|floatformat:0 }}{% endif %}
                 </td>
-                <td class="px-4 py-3 text-right tabular-nums">
+                <td class="px-4 py-3 text-right tabular-nums whitespace-nowrap">
                   {% if l.em_producao %}
                     <span style="color:#3b82f6;">{{ l.em_producao }}</span>
                     <span class="block text-xs" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
@@ -191,7 +191,7 @@
                     <span :style="temaClaro ? 'color:#94a3b8;' : 'color:#6b7280;'">—</span>
                   {% endif %}
                 </td>
-                <td class="px-4 py-3 text-right tabular-nums"
+                <td class="px-4 py-3 text-right tabular-nums whitespace-nowrap"
                     :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">{{ l.skus }}</td>
               </tr>
             {% endfor %}

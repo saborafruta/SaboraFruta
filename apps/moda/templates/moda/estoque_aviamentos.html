@@ -106,19 +106,19 @@
         <table class="w-full text-sm">
           <thead>
             <tr class="border-b" :style="temaClaro ? 'border-color:#e2e8f0;' : 'border-color:#2a2a2e;'">
-              <th class="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wide"
+              <th class="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wide whitespace-nowrap w-full"
                   :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Aviamento</th>
-              <th class="text-right px-4 py-3 text-xs font-semibold uppercase tracking-wide"
+              <th class="text-right px-4 py-3 text-xs font-semibold uppercase tracking-wide whitespace-nowrap"
                   :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Falta</th>
-              <th class="text-right px-4 py-3 text-xs font-semibold uppercase tracking-wide"
+              <th class="text-right px-4 py-3 text-xs font-semibold uppercase tracking-wide whitespace-nowrap"
                   :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Ordens pedem</th>
-              <th class="text-right px-4 py-3 text-xs font-semibold uppercase tracking-wide"
+              <th class="text-right px-4 py-3 text-xs font-semibold uppercase tracking-wide whitespace-nowrap"
                   :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Livre</th>
-              <th class="text-right px-4 py-3 text-xs font-semibold uppercase tracking-wide"
+              <th class="text-right px-4 py-3 text-xs font-semibold uppercase tracking-wide whitespace-nowrap"
                   :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Em estoque</th>
-              <th class="text-right px-4 py-3 text-xs font-semibold uppercase tracking-wide"
+              <th class="text-right px-4 py-3 text-xs font-semibold uppercase tracking-wide whitespace-nowrap"
                   :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Reservado</th>
-              <th class="text-right px-4 py-3 text-xs font-semibold uppercase tracking-wide"
+              <th class="text-right px-4 py-3 text-xs font-semibold uppercase tracking-wide whitespace-nowrap"
                   :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Valor parado</th>
             </tr>
           </thead>
@@ -148,7 +148,7 @@
                     </span>
                   {% endif %}
                 </td>
-                <td class="px-4 py-3 text-right tabular-nums font-semibold">
+                <td class="px-4 py-3 text-right tabular-nums font-semibold whitespace-nowrap">
                   {% if l.falta is None %}
                     <span :style="temaClaro ? 'color:#94a3b8;' : 'color:#6b7280;'"
                           title="Sem vínculo com estoque não há saldo com que comparar.">—</span>
@@ -158,7 +158,7 @@
                     <span style="color:#059669;">ok</span>
                   {% endif %}
                 </td>
-                <td class="px-4 py-3 text-right tabular-nums"
+                <td class="px-4 py-3 text-right tabular-nums whitespace-nowrap"
                     :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
                   {% if l.previsto %}
                     {{ l.previsto|floatformat:2 }}
@@ -167,21 +167,21 @@
                     —
                   {% endif %}
                 </td>
-                <td class="px-4 py-3 text-right tabular-nums"
+                <td class="px-4 py-3 text-right tabular-nums whitespace-nowrap"
                     :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
                   {% if l.livre is None %}—{% else %}{{ l.livre|floatformat:2 }}{% endif %}
                 </td>
-                <td class="px-4 py-3 text-right tabular-nums"
+                <td class="px-4 py-3 text-right tabular-nums whitespace-nowrap"
                     :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
                   {% if l.saldo is None %}
                     <span :style="temaClaro ? 'color:#94a3b8;' : 'color:#6b7280;'">—</span>
                   {% else %}{{ l.saldo|floatformat:2 }}{% endif %}
                 </td>
-                <td class="px-4 py-3 text-right tabular-nums"
+                <td class="px-4 py-3 text-right tabular-nums whitespace-nowrap"
                     :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
                   {% if l.reservado is None %}—{% else %}{{ l.reservado|floatformat:2 }}{% endif %}
                 </td>
-                <td class="px-4 py-3 text-right tabular-nums"
+                <td class="px-4 py-3 text-right tabular-nums whitespace-nowrap"
                     :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
                   {% if l.valor is None %}—{% else %}R$ {{ l.valor }}{% endif %}
                 </td>
