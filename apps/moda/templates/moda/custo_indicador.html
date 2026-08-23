@@ -1,0 +1,226 @@
+{% extends "_base.html" %}
+{% block title %}{{ title }}{% endblock %}
+{% block page_title %}Custos{% endblock %}
+{% block content %}
+<div class="space-y-5">
+  <div class="flex flex-wrap items-start justify-between gap-3">
+    <div>
+      <p class="text-sm mb-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+        <a href="{% url 'moda:grupo' 'indicadores' %}" :style="temaClaro ? 'color:#3b82f6;' : 'color:#60a5fa;'">Indicadores</a>
+        <span class="mx-1">›</span> Custos
+      </p>
+      <h2 class="text-2xl font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">Custos</h2>
+      <p class="text-sm mt-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+        O que a ficha previa contra o que a ordem custou — só ordens
+        <strong>concluídas</strong> desde {{ desde|date:"d/m/Y" }}.
+      </p>
+    </div>
+    <div class="flex gap-2">
+      {% for valor, rotulo in periodos %}
+        <a href="?dias={{ valor }}"
+           class="{% if dias == valor %}btn-primary{% else %}btn-secondary{% endif %} text-sm">{{ rotulo }}</a>
+      {% endfor %}
+    </div>
+  </div>
+
+  <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+    <div class="card p-4">
+      <p class="text-xs uppercase tracking-wide" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Previsto pela ficha</p>
+      <p class="text-2xl font-semibold mt-1" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">R$ {{ resumo.previsto }}</p>
+      <p class="text-xs mt-1" :style="temaClaro ? 'color:#94a3b8;' : 'color:#6b7280;'">{{ resumo.ordens }} ordem(ns) concluída(s)</p>
+    </div>
+
+    <div class="card p-4">
+      <p class="text-xs uppercase tracking-wide" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Custou de verdade</p>
+      <p class="text-2xl font-semibold mt-1" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">R$ {{ resumo.real }}</p>
+      <p class="text-xs mt-1" :style="temaClaro ? 'color:#94a3b8;' : 'color:#6b7280;'">
+        {% if resumo.estimadas %}{{ resumo.estimadas }} com parte estimada{% else %}tudo medido{% endif %}
+      </p>
+    </div>
+
+    <div class="card p-4">
+      <p class="text-xs uppercase tracking-wide" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Diferença</p>
+      {% if resumo.variacao > 0 %}
+        <p class="text-2xl font-semibold mt-1" style="color:#dc2626;">+ R$ {{ resumo.variacao }}</p>
+      {% elif resumo.variacao < 0 %}
+        <p class="text-2xl font-semibold mt-1" style="color:#059669;">R$ {{ resumo.variacao }}</p>
+      {% else %}
+        <p class="text-2xl font-semibold mt-1" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">R$ 0,00</p>
+      {% endif %}
+      <p class="text-xs mt-1" :style="temaClaro ? 'color:#94a3b8;' : 'color:#6b7280;'">
+        {% if resumo.variacao_pct is not None %}{{ resumo.variacao_pct }}% sobre o previsto{% else %}sem base de comparação{% endif %}
+      </p>
+    </div>
+
+    {% comment %}
+      A pior ordem é a de maior variação em REAIS, não em percentual: a
+      pergunta aqui é onde o dinheiro sumiu, e 5% de uma ordem de mil peças
+      pesa mais do que 50% de uma de dez.
+    {% endcomment %}
+    <div class="card p-4">
+      <p class="text-xs uppercase tracking-wide" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Onde sumiu mais</p>
+      {% if resumo.pior and resumo.pior.estourou %}
+        <p class="text-lg font-semibold mt-1" style="color:#dc2626;">{{ resumo.pior.numero }}</p>
+        <p class="text-xs mt-1" :style="temaClaro ? 'color:#94a3b8;' : 'color:#6b7280;'">
+          + R$ {{ resumo.pior.variacao }} — {{ resumo.pior.produto }}
+        </p>
+      {% else %}
+        <p class="text-lg font-semibold mt-1" style="color:#059669;">nenhuma estourou</p>
+      {% endif %}
+    </div>
+  </div>
+
+  {% comment %}
+    Onde estourou é uma pergunta diferente de quanto estourou: tecido se
+    conserta no encaixe e na mesa, mão de obra se conserta na bancada.
+  {% endcomment %}
+  {% if linhas %}
+    <div class="grid gap-3 sm:grid-cols-2">
+      <div class="card p-4">
+        <p class="text-xs uppercase tracking-wide" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Diferença no tecido</p>
+        {% if resumo.tecido > 0 %}
+          <p class="text-xl font-semibold mt-1" style="color:#dc2626;">+ R$ {{ resumo.tecido }}</p>
+        {% else %}
+          <p class="text-xl font-semibold mt-1" style="color:#059669;">R$ {{ resumo.tecido }}</p>
+        {% endif %}
+        <p class="text-xs mt-1" :style="temaClaro ? 'color:#94a3b8;' : 'color:#6b7280;'">
+          metros da mesa de corte × preço da ficha
+        </p>
+      </div>
+      <div class="card p-4">
+        <p class="text-xs uppercase tracking-wide" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Diferença na mão de obra</p>
+        {% if resumo.obra > 0 %}
+          <p class="text-xl font-semibold mt-1" style="color:#dc2626;">+ R$ {{ resumo.obra }}</p>
+        {% else %}
+          <p class="text-xl font-semibold mt-1" style="color:#059669;">R$ {{ resumo.obra }}</p>
+        {% endif %}
+        <p class="text-xs mt-1" :style="temaClaro ? 'color:#94a3b8;' : 'color:#6b7280;'">
+          tempo apontado × taxa do roteiro
+        </p>
+      </div>
+    </div>
+  {% endif %}
+
+  {% if resumo.sem_ficha %}
+    <div class="card p-4" style="border-left:3px solid #f59e0b;">
+      <p class="text-sm" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
+        <strong>{{ resumo.sem_ficha }}</strong> ordem(ns) sem ficha técnica.
+      </p>
+      <p class="text-sm mt-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+        Sem ficha não há previsto de material com que comparar — a ordem entra
+        na lista com previsto zerado, e a diferença dela não significa nada.
+      </p>
+    </div>
+  {% endif %}
+
+  <div class="card overflow-hidden">
+    {% if linhas %}
+      <div class="overflow-x-auto">
+        <table class="w-full text-sm">
+          <thead>
+            <tr class="border-b" :style="temaClaro ? 'border-color:#e2e8f0;' : 'border-color:#2a2a2e;'">
+              <th class="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wide"
+                  :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Ordem</th>
+              <th class="text-right px-4 py-3 text-xs font-semibold uppercase tracking-wide"
+                  :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Peças boas</th>
+              <th class="text-right px-4 py-3 text-xs font-semibold uppercase tracking-wide"
+                  :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Previsto</th>
+              <th class="text-right px-4 py-3 text-xs font-semibold uppercase tracking-wide"
+                  :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Real</th>
+              <th class="text-right px-4 py-3 text-xs font-semibold uppercase tracking-wide"
+                  :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Diferença</th>
+              <th class="text-right px-4 py-3 text-xs font-semibold uppercase tracking-wide"
+                  :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">R$/peça prevista</th>
+              <th class="text-right px-4 py-3 text-xs font-semibold uppercase tracking-wide"
+                  :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">R$/peça real</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for l in linhas %}
+              <tr class="border-b" :style="temaClaro ? 'border-color:#f1f5f9;' : 'border-color:#1e1e22;'">
+                <td class="px-4 py-3">
+                  <a href="{% url 'moda:ordem-detail' l.ordem.pk %}" class="font-medium"
+                     :style="temaClaro ? 'color:#3b82f6;' : 'color:#60a5fa;'">{{ l.numero }}</a>
+                  <span class="block text-xs" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+                    {{ l.produto }} · {{ l.cliente }}
+                  </span>
+                  {% comment %}
+                    A bandeira do estimado fica NA LINHA, e não só na
+                    legenda: um número montado com metade de palpite não
+                    pode passar por medição só porque ninguém rolou a
+                    página até o rodapé.
+                  {% endcomment %}
+                  {% if l.estimado %}
+                    <span class="block text-xs mt-1" style="color:#f59e0b;">
+                      parte estimada —
+                      {% if not l.material.medido %}sem corte medido{% else %}aviamento pelo previsto{% endif %}
+                      {% if l.obra.estimado %}, tempo não apontado{% endif %}
+                    </span>
+                  {% endif %}
+                </td>
+                <td class="px-4 py-3 text-right tabular-nums"
+                    :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+                  {{ l.boas }}{% if l.boas != l.quantidade %} <span class="block text-xs" style="color:#dc2626;">de {{ l.quantidade }}</span>{% endif %}
+                </td>
+                <td class="px-4 py-3 text-right tabular-nums"
+                    :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">R$ {{ l.previsto }}</td>
+                <td class="px-4 py-3 text-right tabular-nums font-semibold"
+                    :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">R$ {{ l.real }}</td>
+                <td class="px-4 py-3 text-right tabular-nums">
+                  {% if l.estourou %}
+                    <span style="color:#dc2626;">+ R$ {{ l.variacao }}</span>
+                    <span class="block text-xs" style="color:#dc2626;">{{ l.variacao_pct }}%</span>
+                  {% elif l.variacao < 0 %}
+                    <span style="color:#059669;">R$ {{ l.variacao }}</span>
+                    <span class="block text-xs" style="color:#059669;">{{ l.variacao_pct }}%</span>
+                  {% else %}
+                    <span :style="temaClaro ? 'color:#94a3b8;' : 'color:#6b7280;'">—</span>
+                  {% endif %}
+                </td>
+                <td class="px-4 py-3 text-right tabular-nums"
+                    :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">R$ {{ l.unitario_previsto }}</td>
+                <td class="px-4 py-3 text-right tabular-nums font-semibold">
+                  {% if l.unitario_real is not None %}
+                    <span :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">R$ {{ l.unitario_real }}</span>
+                  {% else %}
+                    <span :style="temaClaro ? 'color:#94a3b8;' : 'color:#6b7280;'">—</span>
+                  {% endif %}
+                </td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    {% else %}
+      <div class="p-10 text-center">
+        <p class="text-sm font-medium" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
+          Nenhuma ordem concluída no período.
+        </p>
+        <p class="text-sm mt-2" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+          Só entra aqui ordem <strong>concluída</strong>: no meio da produção o
+          custo real ainda é parcial, e a ordem apareceria com uma economia que
+          não existe.
+        </p>
+        <a href="{% url 'moda:ordem-list' %}" class="btn-secondary text-sm mt-4 inline-block">
+          Ver ordens de produção
+        </a>
+      </div>
+    {% endif %}
+  </div>
+
+  <div class="card p-4">
+    <p class="text-xs uppercase tracking-wide mb-2" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">O que é medido e o que é estimado</p>
+    <ul class="text-sm space-y-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+      <li><strong>Tecido: medido.</strong> Os metros vêm da mesa de corte; o preço do metro, da ficha.</li>
+      <li><strong>Mão de obra: medida onde alguém cronometrou.</strong> Operação paga por hora usa o tempo apontado;
+        paga por peça custa o mesmo tenha demorado o que tiver.</li>
+      <li><strong>Aviamento: estimado, sempre.</strong> Não existe apontamento de quantos zíperes foram usados —
+        entra pelo previsto, e a linha diz que entrou.</li>
+      <li><strong>R$/peça real</strong> divide pelas peças <strong>boas</strong>: refugo não vira mercadoria,
+        mas o dinheiro dele já foi gasto.</li>
+      <li>Operação de setor que o fluxo não acompanha (modelagem) fica fora dos dois lados,
+        para não virar economia que ninguém produziu.</li>
+    </ul>
+  </div>
+</div>
+{% endblock %}
