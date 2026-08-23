@@ -129,19 +129,19 @@
         <table class="w-full text-sm">
           <thead>
             <tr class="border-b" :style="temaClaro ? 'border-color:#e2e8f0;' : 'border-color:#2a2a2e;'">
-              <th class="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wide"
+              <th class="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wide whitespace-nowrap"
                   :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Setor</th>
-              <th class="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wide"
+              <th class="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wide whitespace-nowrap"
                   :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Uso da capacidade</th>
-              <th class="text-right px-4 py-3 text-xs font-semibold uppercase tracking-wide"
+              <th class="text-right px-4 py-3 text-xs font-semibold uppercase tracking-wide whitespace-nowrap"
                   :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Peças</th>
-              <th class="text-right px-4 py-3 text-xs font-semibold uppercase tracking-wide"
+              <th class="text-right px-4 py-3 text-xs font-semibold uppercase tracking-wide whitespace-nowrap"
                   :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Min. ganhos</th>
-              <th class="text-right px-4 py-3 text-xs font-semibold uppercase tracking-wide"
+              <th class="text-right px-4 py-3 text-xs font-semibold uppercase tracking-wide whitespace-nowrap"
                   :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Min. disponíveis</th>
-              <th class="text-right px-4 py-3 text-xs font-semibold uppercase tracking-wide"
+              <th class="text-right px-4 py-3 text-xs font-semibold uppercase tracking-wide whitespace-nowrap"
                   :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Eficiência</th>
-              <th class="text-right px-4 py-3 text-xs font-semibold uppercase tracking-wide"
+              <th class="text-right px-4 py-3 text-xs font-semibold uppercase tracking-wide whitespace-nowrap"
                   :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Ordens</th>
             </tr>
           </thead>
@@ -185,15 +185,15 @@
                     <span class="text-xs" style="color:#f59e0b;">capacidade não cadastrada</span>
                   {% endif %}
                 </td>
-                <td class="px-4 py-3 text-right tabular-nums font-semibold"
+                <td class="px-4 py-3 text-right tabular-nums font-semibold whitespace-nowrap"
                     :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">{{ l.pecas }}</td>
-                <td class="px-4 py-3 text-right tabular-nums"
+                <td class="px-4 py-3 text-right tabular-nums whitespace-nowrap"
                     :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">{{ l.ganho|floatformat:0 }}</td>
-                <td class="px-4 py-3 text-right tabular-nums"
+                <td class="px-4 py-3 text-right tabular-nums whitespace-nowrap"
                     :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
                   {% if l.tem_capacidade %}{{ l.disponivel|floatformat:0 }}{% else %}—{% endif %}
                 </td>
-                <td class="px-4 py-3 text-right tabular-nums">
+                <td class="px-4 py-3 text-right tabular-nums whitespace-nowrap">
                   {% if l.eficiencia is not None %}
                     <span style="color:{% if l.eficiencia >= 90 %}#059669{% elif l.eficiencia >= 70 %}#f59e0b{% else %}#dc2626{% endif %};">{{ l.eficiencia }}%</span>
                   {% else %}
@@ -201,7 +201,7 @@
                           title="Ninguém apontou o tempo gasto nesta etapa.">—</span>
                   {% endif %}
                 </td>
-                <td class="px-4 py-3 text-right tabular-nums"
+                <td class="px-4 py-3 text-right tabular-nums whitespace-nowrap"
                     :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">{{ l.ordens }}</td>
               </tr>
             {% endfor %}

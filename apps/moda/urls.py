@@ -22,7 +22,10 @@ from . import (
     views_dashboard as vd, views_historico as vh, views_qualidade as vq, views_qr as vqr,
     views_roteiro as vr, views_terminal as vt, views_wip as vw,
     views_producao as vprod, views_eficiencia as vef, views_perdas as vperd,
-    views_custo_real as vcr,
+    views_custo_real as vcr, views_estoque_tecido as vet,
+    views_estoque_aviamento as vea, views_estoque_produto as vep,
+    views_estoque_semiacabado as ves, views_estoque_acabado as veac,
+    views_estoque_lote as velo, views_margem as vmar, views_prazo as vpz,
 )
 
 app_name = 'moda'
@@ -146,6 +149,16 @@ ROTAS_PRONTAS: list = [
     path('indicadores/eficiencia/', vef.EficienciaIndicadorView.as_view(), name='indicador-eficiencia'),
     path('indicadores/perdas/', vperd.PerdasIndicadorView.as_view(), name='indicador-perdas'),
     path('indicadores/custos/', vcr.CustoIndicadorView.as_view(), name='indicador-custos'),
+    path('indicadores/margens/', vmar.MargemIndicadorView.as_view(), name='indicador-margens'),
+    path('indicadores/prazos/', vpz.PrazoIndicadorView.as_view(), name='indicador-prazos'),
+
+    # Estoque -- mesmo caso: o endereco ja' esta' no menu.
+    path('estoque/tecidos/', vet.EstoqueTecidoView.as_view(), name='estoque-tecidos'),
+    path('estoque/aviamentos/', vea.EstoqueAviamentoView.as_view(), name='estoque-aviamentos'),
+    path('estoque/produtos/', vep.EstoqueProdutoView.as_view(), name='estoque-produtos'),
+    path('estoque/semiacabados/', ves.EstoqueSemiacabadoView.as_view(), name='estoque-semiacabados'),
+    path('estoque/acabados/', veac.EstoqueAcabadoView.as_view(), name='estoque-acabados'),
+    path('estoque/lotes/', velo.EstoqueLoteView.as_view(), name='estoque-lotes'),
 
     # Expedicao. Grupo proprio no menu; `separacao` e' o endereco de
     # entrada porque e' o primeiro item do grupo.

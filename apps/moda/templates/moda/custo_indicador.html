@@ -119,19 +119,19 @@
         <table class="w-full text-sm">
           <thead>
             <tr class="border-b" :style="temaClaro ? 'border-color:#e2e8f0;' : 'border-color:#2a2a2e;'">
-              <th class="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wide"
+              <th class="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wide whitespace-nowrap w-full"
                   :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Ordem</th>
-              <th class="text-right px-4 py-3 text-xs font-semibold uppercase tracking-wide"
+              <th class="text-right px-4 py-3 text-xs font-semibold uppercase tracking-wide whitespace-nowrap"
                   :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Peças boas</th>
-              <th class="text-right px-4 py-3 text-xs font-semibold uppercase tracking-wide"
+              <th class="text-right px-4 py-3 text-xs font-semibold uppercase tracking-wide whitespace-nowrap"
                   :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Previsto</th>
-              <th class="text-right px-4 py-3 text-xs font-semibold uppercase tracking-wide"
+              <th class="text-right px-4 py-3 text-xs font-semibold uppercase tracking-wide whitespace-nowrap"
                   :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Real</th>
-              <th class="text-right px-4 py-3 text-xs font-semibold uppercase tracking-wide"
+              <th class="text-right px-4 py-3 text-xs font-semibold uppercase tracking-wide whitespace-nowrap"
                   :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Diferença</th>
-              <th class="text-right px-4 py-3 text-xs font-semibold uppercase tracking-wide"
+              <th class="text-right px-4 py-3 text-xs font-semibold uppercase tracking-wide whitespace-nowrap"
                   :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">R$/peça prevista</th>
-              <th class="text-right px-4 py-3 text-xs font-semibold uppercase tracking-wide"
+              <th class="text-right px-4 py-3 text-xs font-semibold uppercase tracking-wide whitespace-nowrap"
                   :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">R$/peça real</th>
             </tr>
           </thead>
@@ -158,15 +158,15 @@
                     </span>
                   {% endif %}
                 </td>
-                <td class="px-4 py-3 text-right tabular-nums"
+                <td class="px-4 py-3 text-right tabular-nums whitespace-nowrap"
                     :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
                   {{ l.boas }}{% if l.boas != l.quantidade %} <span class="block text-xs" style="color:#dc2626;">de {{ l.quantidade }}</span>{% endif %}
                 </td>
-                <td class="px-4 py-3 text-right tabular-nums"
+                <td class="px-4 py-3 text-right tabular-nums whitespace-nowrap"
                     :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">R$ {{ l.previsto }}</td>
-                <td class="px-4 py-3 text-right tabular-nums font-semibold"
+                <td class="px-4 py-3 text-right tabular-nums font-semibold whitespace-nowrap"
                     :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">R$ {{ l.real }}</td>
-                <td class="px-4 py-3 text-right tabular-nums">
+                <td class="px-4 py-3 text-right tabular-nums whitespace-nowrap">
                   {% if l.estourou %}
                     <span style="color:#dc2626;">+ R$ {{ l.variacao }}</span>
                     <span class="block text-xs" style="color:#dc2626;">{{ l.variacao_pct }}%</span>
@@ -177,9 +177,9 @@
                     <span :style="temaClaro ? 'color:#94a3b8;' : 'color:#6b7280;'">—</span>
                   {% endif %}
                 </td>
-                <td class="px-4 py-3 text-right tabular-nums"
+                <td class="px-4 py-3 text-right tabular-nums whitespace-nowrap"
                     :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">R$ {{ l.unitario_previsto }}</td>
-                <td class="px-4 py-3 text-right tabular-nums font-semibold">
+                <td class="px-4 py-3 text-right tabular-nums font-semibold whitespace-nowrap">
                   {% if l.unitario_real is not None %}
                     <span :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">R$ {{ l.unitario_real }}</span>
                   {% else %}

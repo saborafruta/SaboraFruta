@@ -1,0 +1,252 @@
+{% extends "_base.html" %}
+{% block title %}{{ title }}{% endblock %}
+{% block page_title %}Semiacabados{% endblock %}
+{% block content %}
+<div class="space-y-5">
+  <div class="flex flex-wrap items-start justify-between gap-3">
+    <div>
+      <p class="text-sm mb-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+        <a href="{% url 'moda:grupo' 'estoque' %}" :style="temaClaro ? 'color:#3b82f6;' : 'color:#60a5fa;'">Estoque</a>
+        <span class="mx-1">›</span> Semiacabados
+      </p>
+      <h2 class="text-2xl font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">Semiacabados</h2>
+      <p class="text-sm mt-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+        Peça em processo é estoque — o que <strong>já consumiu tecido e bancada</strong>
+        e ainda não saiu.
+      </p>
+    </div>
+    <a href="{% url 'moda:item' 'indicadores' 'wip' %}" class="btn-secondary text-sm">Painel de WIP</a>
+  </div>
+
+  <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+    <div class="card p-4">
+      <p class="text-xs uppercase tracking-wide" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Parado no chão</p>
+      <p class="text-2xl font-semibold mt-1" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">R$ {{ resumo.valor }}</p>
+      <p class="text-xs mt-1" :style="temaClaro ? 'color:#94a3b8;' : 'color:#6b7280;'">
+        {{ resumo.pecas }} peça(s) em {{ resumo.ordens }} ordem(ns)
+      </p>
+    </div>
+
+    {% comment %}
+      Onde está mais DINHEIRO, e não mais peça: a pilha pequena no fim do
+      fluxo costuma pesar mais que a grande no começo, porque cada peça dela
+      já pagou tecido e duas ou três bancadas.
+    {% endcomment %}
+    <div class="card p-4">
+      <p class="text-xs uppercase tracking-wide" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Onde está mais dinheiro</p>
+      {% if resumo.mais_caro %}
+        <p class="text-lg font-semibold mt-1" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">{{ resumo.mais_caro.label }}</p>
+        <p class="text-xs mt-1" :style="temaClaro ? 'color:#94a3b8;' : 'color:#6b7280;'">
+          R$ {{ resumo.mais_caro.valor }} — {{ resumo.mais_caro.pecas }} peça(s)
+        </p>
+      {% else %}
+        <p class="text-lg font-semibold mt-1" :style="temaClaro ? 'color:#94a3b8;' : 'color:#6b7280;'">—</p>
+      {% endif %}
+    </div>
+
+    <div class="card p-4">
+      <p class="text-xs uppercase tracking-wide" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Encalhado</p>
+      {% if resumo.encalhadas %}
+        <p class="text-2xl font-semibold mt-1" style="color:#dc2626;">R$ {{ resumo.valor_encalhado }}</p>
+        <p class="text-xs mt-1" :style="temaClaro ? 'color:#94a3b8;' : 'color:#6b7280;'">
+          {{ resumo.encalhadas }} ordem(ns) paradas há {{ limite }}+ dias
+        </p>
+      {% else %}
+        <p class="text-2xl font-semibold mt-1" style="color:#059669;">R$ 0,00</p>
+        <p class="text-xs mt-1" :style="temaClaro ? 'color:#94a3b8;' : 'color:#6b7280;'">nada parado há {{ limite }}+ dias</p>
+      {% endif %}
+    </div>
+
+    <div class="card p-4">
+      <p class="text-xs uppercase tracking-wide" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Parada há mais tempo</p>
+      {% if resumo.mais_antiga %}
+        {% comment %}
+          `style` fixo e `:style` do Alpine na mesma tag brigam — o binding
+          troca o atributo inteiro. O caso normal, que precisa saber o tema,
+          fica em ramo separado do encalhado.
+        {% endcomment %}
+        {% if resumo.mais_antiga.encalhada %}
+          <p class="text-lg font-semibold mt-1" style="color:#dc2626;">{{ resumo.mais_antiga.numero }}</p>
+        {% else %}
+          <p class="text-lg font-semibold mt-1" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">{{ resumo.mais_antiga.numero }}</p>
+        {% endif %}
+        <p class="text-xs mt-1" :style="temaClaro ? 'color:#94a3b8;' : 'color:#6b7280;'">
+          {{ resumo.mais_antiga.dias }} dias em {{ resumo.mais_antiga.balde }}
+        </p>
+      {% else %}
+        <p class="text-lg font-semibold mt-1" style="color:#059669;">nada parado</p>
+      {% endif %}
+    </div>
+  </div>
+
+  {% comment %}
+    ── A peça ficando mais cara conforme desce a fábrica ───────────────────
+    Na ordem do fluxo, de propósito: a coluna R$/peça cresce linha a linha,
+    e é ela que mostra por que encalhar tarde dói mais.
+  {% endcomment %}
+  <div class="card overflow-hidden">
+    <div class="px-4 pt-4">
+      <h3 class="text-sm font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">Onde as peças estão</h3>
+      <p class="text-xs mt-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+        Na ordem do fluxo. O <strong>R$/peça</strong> cresce linha a linha — é o que
+        mostra por que encalhar no fim custa mais do que encalhar no começo.
+      </p>
+    </div>
+    {% if linhas %}
+      <div class="overflow-x-auto mt-3">
+        <table class="w-full text-sm">
+          <thead>
+            <tr class="border-b" :style="temaClaro ? 'border-color:#e2e8f0;' : 'border-color:#2a2a2e;'">
+              <th class="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wide whitespace-nowrap w-full"
+                  :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Etapa</th>
+              <th class="text-right px-4 py-3 text-xs font-semibold uppercase tracking-wide whitespace-nowrap"
+                  :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Peças</th>
+              <th class="text-right px-4 py-3 text-xs font-semibold uppercase tracking-wide whitespace-nowrap"
+                  :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Valor parado</th>
+              <th class="text-right px-4 py-3 text-xs font-semibold uppercase tracking-wide whitespace-nowrap"
+                  :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">R$/peça</th>
+              <th class="text-right px-4 py-3 text-xs font-semibold uppercase tracking-wide whitespace-nowrap"
+                  :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Ordens</th>
+              <th class="text-right px-4 py-3 text-xs font-semibold uppercase tracking-wide whitespace-nowrap"
+                  :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Mais antiga</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for l in linhas %}
+              <tr class="border-b" :style="temaClaro ? 'border-color:#f1f5f9;' : 'border-color:#1e1e22;'">
+                <td class="px-4 py-3">
+                  <span class="font-medium" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">{{ l.label }}</span>
+                  <span class="block text-xs" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+                    {{ l.setor }}{% if l.tambem %} · {{ l.tambem }}{% endif %}
+                  </span>
+                </td>
+                <td class="px-4 py-3 text-right tabular-nums font-semibold whitespace-nowrap"
+                    :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">{{ l.pecas }}</td>
+                <td class="px-4 py-3 text-right tabular-nums whitespace-nowrap"
+                    :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">R$ {{ l.valor }}</td>
+                <td class="px-4 py-3 text-right tabular-nums whitespace-nowrap"
+                    :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+                  {% if l.por_peca is None %}—{% else %}R$ {{ l.por_peca }}{% endif %}
+                </td>
+                <td class="px-4 py-3 text-right tabular-nums whitespace-nowrap"
+                    :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">{{ l.ordens }}</td>
+                <td class="px-4 py-3 text-right tabular-nums whitespace-nowrap">
+                  {% if l.dias is None %}
+                    <span :style="temaClaro ? 'color:#94a3b8;' : 'color:#6b7280;'">—</span>
+                  {% elif l.encalhado %}
+                    <span style="color:#dc2626;">{{ l.dias }} dias</span>
+                  {% else %}
+                    <span :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">{{ l.dias }} dias</span>
+                  {% endif %}
+                </td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    {% else %}
+      <div class="px-4 py-10 text-center">
+        <p class="text-sm font-medium" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
+          Nada em processo agora.
+        </p>
+        <p class="text-sm mt-2" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+          Aparece aqui a peça de toda ordem ainda aberta, no balde em que ela está.
+        </p>
+        <a href="{% url 'moda:ordem-list' %}" class="btn-secondary text-sm mt-4 inline-block">
+          Ver ordens de produção
+        </a>
+      </div>
+    {% endif %}
+  </div>
+
+  {% comment %}
+    ── O que destravar hoje ────────────────────────────────────────────────
+    A tabela de cima diz onde o dinheiro está; esta diz qual OP ir buscar.
+  {% endcomment %}
+  {% if paradas %}
+    <div class="card overflow-hidden">
+      <div class="px-4 pt-4">
+        <h3 class="text-sm font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">Paradas há mais tempo</h3>
+        <p class="text-xs mt-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+          A tabela acima diz onde o dinheiro está; esta diz qual ordem ir buscar.
+        </p>
+      </div>
+      <div class="overflow-x-auto mt-3">
+        <table class="w-full text-sm">
+          <thead>
+            <tr class="border-b" :style="temaClaro ? 'border-color:#e2e8f0;' : 'border-color:#2a2a2e;'">
+              <th class="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wide whitespace-nowrap w-full"
+                  :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Ordem</th>
+              <th class="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wide whitespace-nowrap"
+                  :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Onde está</th>
+              <th class="text-right px-4 py-3 text-xs font-semibold uppercase tracking-wide whitespace-nowrap"
+                  :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Parada há</th>
+              <th class="text-right px-4 py-3 text-xs font-semibold uppercase tracking-wide whitespace-nowrap"
+                  :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Peças</th>
+              <th class="text-right px-4 py-3 text-xs font-semibold uppercase tracking-wide whitespace-nowrap"
+                  :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Valor parado</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for p in paradas %}
+              <tr class="border-b" :style="temaClaro ? 'border-color:#f1f5f9;' : 'border-color:#1e1e22;'">
+                <td class="px-4 py-3">
+                  <a href="{% url 'moda:ordem-detail' p.ordem.pk %}" class="font-medium"
+                     :style="temaClaro ? 'color:#3b82f6;' : 'color:#60a5fa;'">{{ p.numero }}</a>
+                  <span class="block text-xs" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+                    {{ p.produto }} · {{ p.cliente }}
+                  </span>
+                  {% if p.sem_custo %}
+                    <span class="block text-xs mt-1" style="color:#f59e0b;">
+                      sem ficha ou roteiro — valor não calculado
+                    </span>
+                  {% endif %}
+                </td>
+                <td class="px-4 py-3 whitespace-nowrap"
+                    :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">{{ p.balde }}</td>
+                <td class="px-4 py-3 text-right tabular-nums font-semibold whitespace-nowrap">
+                  {% if p.encalhada %}
+                    <span style="color:#dc2626;">{{ p.dias }} dias</span>
+                  {% else %}
+                    <span :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">{{ p.dias }} dias</span>
+                  {% endif %}
+                </td>
+                <td class="px-4 py-3 text-right tabular-nums whitespace-nowrap"
+                    :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">{{ p.pecas }}</td>
+                <td class="px-4 py-3 text-right tabular-nums whitespace-nowrap"
+                    :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">R$ {{ p.valor }}</td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  {% endif %}
+
+  {% if sem_custo %}
+    <div class="card p-4" style="border-left:3px solid #f59e0b;">
+      <p class="text-sm" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
+        <strong>{{ sem_custo }}</strong> ordem(ns) sem ficha técnica ou roteiro.
+      </p>
+      <p class="text-sm mt-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+        As peças delas contam na quantidade, mas entram com valor zero — não há
+        de onde tirar o custo. O total parado no chão é, portanto, um piso.
+      </p>
+    </div>
+  {% endif %}
+
+  <div class="card p-4">
+    <p class="text-xs uppercase tracking-wide mb-2" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Como o número é feito</p>
+    <ul class="text-sm space-y-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+      <li><strong>Material entra no corte</strong>, de uma vez. É lá que o tecido deixa de ser rolo e vira peça.
+        O aviamento entra junto, e não no ponto em que é pregado — ninguém aponta quando um zíper é usado.</li>
+      <li><strong>Mão de obra entra setor a setor</strong>, conforme cada etapa é <strong>concluída</strong>.
+        Etapa em andamento ainda não gerou crédito: a peça está em cima da bancada, não saiu dela.</li>
+      <li><strong>Parada há</strong> conta do início da etapa atual; sem essa data, da conclusão da anterior;
+        sem nenhuma das duas, da emissão da ordem.</li>
+      <li>Uma peça aparece num balde só — os totais fecham com o que existe na fábrica.</li>
+      <li>Ordem sem ficha ou roteiro conta peça mas não valor, então o total é um <strong>piso</strong>.</li>
+    </ul>
+  </div>
+</div>
+{% endblock %}

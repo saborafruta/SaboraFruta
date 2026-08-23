@@ -1,0 +1,269 @@
+{% extends "_base.html" %}
+{% block title %}{{ title }}{% endblock %}
+{% block page_title %}Acabados{% endblock %}
+{% block content %}
+<div class="space-y-5">
+  <div class="flex flex-wrap items-start justify-between gap-3">
+    <div>
+      <p class="text-sm mb-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+        <a href="{% url 'moda:grupo' 'estoque' %}" :style="temaClaro ? 'color:#3b82f6;' : 'color:#60a5fa;'">Estoque</a>
+        <span class="mx-1">›</span> Acabados
+      </p>
+      <h2 class="text-2xl font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">Acabados</h2>
+      <p class="text-sm mt-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+        Peça pronta que ainda não saiu — <strong>o custo já foi todo pago</strong> e a
+        receita não entrou.
+      </p>
+    </div>
+    <a href="{% url 'moda:expedicao-list' %}" class="btn-secondary text-sm">Fila de expedição</a>
+  </div>
+
+  {% comment %}
+    A régua aqui é o PRAZO, e não a idade: no meio do fluxo não há data
+    prometida, aqui há. Pronta há dois dias com o prazo vencido é pior que
+    pronta há vinte com o prazo em três semanas.
+  {% endcomment %}
+  <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+    <div class="card p-4">
+      <p class="text-xs uppercase tracking-wide" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Atrasado</p>
+      {% if resumo.atrasadas %}
+        <p class="text-2xl font-semibold mt-1" style="color:#dc2626;">R$ {{ resumo.valor_atrasado }}</p>
+        <p class="text-xs mt-1" :style="temaClaro ? 'color:#94a3b8;' : 'color:#6b7280;'">
+          {{ resumo.atrasadas }} ordem(ns) pronta(s) e fora do prazo
+        </p>
+      {% else %}
+        <p class="text-2xl font-semibold mt-1" style="color:#059669;">R$ 0,00</p>
+        <p class="text-xs mt-1" :style="temaClaro ? 'color:#94a3b8;' : 'color:#6b7280;'">nada pronto fora do prazo</p>
+      {% endif %}
+    </div>
+
+    <div class="card p-4">
+      <p class="text-xs uppercase tracking-wide" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Maior atraso</p>
+      {% if resumo.pior %}
+        <p class="text-lg font-semibold mt-1" style="color:#dc2626;">{{ resumo.pior.numero }}</p>
+        <p class="text-xs mt-1" :style="temaClaro ? 'color:#94a3b8;' : 'color:#6b7280;'">
+          {{ resumo.pior.dias_atraso }} dia(s) — {{ resumo.pior.cliente }}
+        </p>
+      {% else %}
+        <p class="text-lg font-semibold mt-1" style="color:#059669;">nenhum</p>
+      {% endif %}
+    </div>
+
+    <div class="card p-4">
+      <p class="text-xs uppercase tracking-wide" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Pronto esperando</p>
+      <p class="text-2xl font-semibold mt-1" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">R$ {{ resumo.valor }}</p>
+      <p class="text-xs mt-1" :style="temaClaro ? 'color:#94a3b8;' : 'color:#6b7280;'">
+        {{ resumo.pecas }} peça(s) em {{ resumo.ordens }} ordem(ns)
+      </p>
+    </div>
+
+    {% comment %}
+      Despachado fica FORA do total: a carga já saiu do galpão. Somá-la
+      diria que há peça na prateleira que não está mais lá — mas ela também
+      não é do cliente ainda, então tem cartão próprio.
+    {% endcomment %}
+    <div class="card p-4">
+      <p class="text-xs uppercase tracking-wide" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">A caminho</p>
+      <p class="text-2xl font-semibold mt-1" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">{{ resumo.pecas_a_caminho }}</p>
+      <p class="text-xs mt-1" :style="temaClaro ? 'color:#94a3b8;' : 'color:#6b7280;'">
+        {% if resumo.a_caminho %}
+          despachadas, sem aceite — R$ {{ resumo.valor_a_caminho }}
+        {% else %}
+          nada despachado aguardando aceite
+        {% endif %}
+      </p>
+    </div>
+  </div>
+
+  {% comment %}
+    O achado da tela: a peça terminou, ninguém abriu o documento, e ela some
+    das duas filas — não está mais na produção e não entrou na expedição.
+  {% endcomment %}
+  {% if resumo.sem_documento %}
+    <div class="card p-4" style="border-left:3px solid #f59e0b;">
+      <p class="text-sm" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
+        <strong>{{ resumo.sem_documento }}</strong> ordem(ns) prontas sem expedição aberta —
+        {{ resumo.pecas_sem_documento }} peça(s).
+      </p>
+      <p class="text-sm mt-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+        A produção terminou e o documento não foi aberto. Elas não aparecem em
+        nenhuma fila — nem na de produção, nem na de expedição — e é onde a peça
+        costuma ficar esquecida mais tempo.
+      </p>
+    </div>
+  {% endif %}
+
+  {% if por_fila %}
+    <div class="card overflow-hidden">
+      <div class="px-4 pt-4">
+        <h3 class="text-sm font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">Onde estão as caixas</h3>
+        <p class="text-xs mt-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+          Na ordem do processo de saída. Despachado não entra: já saiu do galpão.
+        </p>
+      </div>
+      <div class="overflow-x-auto mt-3">
+        <table class="w-full text-sm">
+          <thead>
+            <tr class="border-b" :style="temaClaro ? 'border-color:#e2e8f0;' : 'border-color:#2a2a2e;'">
+              <th class="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wide whitespace-nowrap w-full"
+                  :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Etapa</th>
+              <th class="text-right px-4 py-3 text-xs font-semibold uppercase tracking-wide whitespace-nowrap"
+                  :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Ordens</th>
+              <th class="text-right px-4 py-3 text-xs font-semibold uppercase tracking-wide whitespace-nowrap"
+                  :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Peças</th>
+              <th class="text-right px-4 py-3 text-xs font-semibold uppercase tracking-wide whitespace-nowrap"
+                  :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Valor</th>
+              <th class="text-right px-4 py-3 text-xs font-semibold uppercase tracking-wide whitespace-nowrap"
+                  :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Atrasadas</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for f in por_fila %}
+              <tr class="border-b" :style="temaClaro ? 'border-color:#f1f5f9;' : 'border-color:#1e1e22;'">
+                <td class="px-4 py-3 font-medium" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
+                  {{ f.label }}
+                  {% if f.chave == 'sem_expedicao' %}
+                    <span class="block text-xs font-normal" style="color:#f59e0b;">fora das duas filas</span>
+                  {% endif %}
+                </td>
+                <td class="px-4 py-3 text-right tabular-nums whitespace-nowrap"
+                    :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">{{ f.ordens }}</td>
+                <td class="px-4 py-3 text-right tabular-nums font-semibold whitespace-nowrap"
+                    :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">{{ f.pecas }}</td>
+                <td class="px-4 py-3 text-right tabular-nums whitespace-nowrap"
+                    :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">R$ {{ f.valor }}</td>
+                <td class="px-4 py-3 text-right tabular-nums whitespace-nowrap">
+                  {% if f.atrasadas %}
+                    <span style="color:#dc2626;">{{ f.atrasadas }}</span>
+                  {% else %}
+                    <span :style="temaClaro ? 'color:#94a3b8;' : 'color:#6b7280;'">—</span>
+                  {% endif %}
+                </td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  {% endif %}
+
+  <div class="card overflow-hidden">
+    <div class="px-4 pt-4">
+      <h3 class="text-sm font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">O que despachar primeiro</h3>
+      <p class="text-xs mt-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+        Atrasadas no topo, maior atraso primeiro — depois pelo tempo parado.
+      </p>
+    </div>
+    {% if linhas %}
+      <div class="overflow-x-auto mt-3">
+        <table class="w-full text-sm">
+          <thead>
+            <tr class="border-b" :style="temaClaro ? 'border-color:#e2e8f0;' : 'border-color:#2a2a2e;'">
+              <th class="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wide whitespace-nowrap w-full"
+                  :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Ordem</th>
+              <th class="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wide whitespace-nowrap"
+                  :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Onde está</th>
+              <th class="text-right px-4 py-3 text-xs font-semibold uppercase tracking-wide whitespace-nowrap"
+                  :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Prazo</th>
+              <th class="text-right px-4 py-3 text-xs font-semibold uppercase tracking-wide whitespace-nowrap"
+                  :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Pronta há</th>
+              <th class="text-right px-4 py-3 text-xs font-semibold uppercase tracking-wide whitespace-nowrap"
+                  :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Peças</th>
+              <th class="text-right px-4 py-3 text-xs font-semibold uppercase tracking-wide whitespace-nowrap"
+                  :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Valor</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for l in linhas %}
+              <tr class="border-b" :style="temaClaro ? 'border-color:#f1f5f9;' : 'border-color:#1e1e22;'">
+                <td class="px-4 py-3">
+                  {% if l.expedicao %}
+                    <a href="{% url 'moda:expedicao-detail' l.expedicao.pk %}" class="font-medium"
+                       :style="temaClaro ? 'color:#3b82f6;' : 'color:#60a5fa;'">{{ l.numero }}</a>
+                  {% else %}
+                    <a href="{% url 'moda:ordem-detail' l.ordem.pk %}" class="font-medium"
+                       :style="temaClaro ? 'color:#3b82f6;' : 'color:#60a5fa;'">{{ l.numero }}</a>
+                  {% endif %}
+                  <span class="block text-xs" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+                    {{ l.produto }} · {{ l.cliente }}
+                  </span>
+                  {% if l.sem_custo %}
+                    <span class="block text-xs mt-1" style="color:#f59e0b;">
+                      sem ficha ou roteiro — valor não calculado
+                    </span>
+                  {% endif %}
+                </td>
+                <td class="px-4 py-3 whitespace-nowrap">
+                  {% if l.chave == 'sem_expedicao' %}
+                    <span style="color:#f59e0b;">{{ l.onde }}</span>
+                  {% else %}
+                    <span :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">{{ l.onde }}</span>
+                  {% endif %}
+                </td>
+                <td class="px-4 py-3 text-right tabular-nums whitespace-nowrap">
+                  {% if not l.prazo %}
+                    <span :style="temaClaro ? 'color:#94a3b8;' : 'color:#6b7280;'"
+                          title="O pedido não tem data prevista de entrega.">—</span>
+                  {% elif l.atrasada %}
+                    <span style="color:#dc2626;">{{ l.dias_atraso }} dia(s) atrás</span>
+                    <span class="block text-xs" style="color:#dc2626;">{{ l.prazo|date:"d/m/Y" }}</span>
+                  {% else %}
+                    <span :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">{{ l.prazo|date:"d/m/Y" }}</span>
+                  {% endif %}
+                </td>
+                <td class="px-4 py-3 text-right tabular-nums whitespace-nowrap"
+                    :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">{{ l.dias_pronta }} dia(s)</td>
+                <td class="px-4 py-3 text-right tabular-nums font-semibold whitespace-nowrap"
+                    :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">{{ l.pecas }}</td>
+                <td class="px-4 py-3 text-right tabular-nums whitespace-nowrap"
+                    :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">R$ {{ l.valor }}</td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    {% else %}
+      <div class="px-4 py-10 text-center">
+        <p class="text-sm font-medium" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
+          Nada pronto esperando saída.
+        </p>
+        <p class="text-sm mt-2" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+          Aparece aqui a ordem cuja produção terminou — a etapa de Qualidade
+          encerrada — e que ainda não foi entregue.
+        </p>
+        <a href="{% url 'moda:ordem-list' %}" class="btn-secondary text-sm mt-4 inline-block">
+          Ver ordens de produção
+        </a>
+      </div>
+    {% endif %}
+  </div>
+
+  {% if resumo.sem_custo %}
+    <div class="card p-4" style="border-left:3px solid #f59e0b;">
+      <p class="text-sm" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
+        <strong>{{ resumo.sem_custo }}</strong> ordem(ns) sem ficha técnica ou roteiro.
+      </p>
+      <p class="text-sm mt-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+        As peças contam na quantidade e entram com valor zero — não há de onde
+        tirar o custo. O total pronto é, portanto, um piso.
+      </p>
+    </div>
+  {% endif %}
+
+  <div class="card p-4">
+    <p class="text-xs uppercase tracking-wide mb-2" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Como o número é feito</p>
+    <ul class="text-sm space-y-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+      <li><strong>Pronta</strong> segue a mesma regra do botão de abrir expedição: etapa de Qualidade
+        encerrada, ou ausente do fluxo. Duas definições fariam a tela listar ordem que o botão recusa.</li>
+      <li><strong>Peças</strong> são o que a última bancada entregou, não a quantidade emitida — entre uma
+        coisa e outra morreu o que morreu.</li>
+      <li><strong>Valor</strong> é o custo cheio: material da ficha mais o roteiro inteiro. A peça passou por
+        tudo, então carrega tudo.</li>
+      <li><strong>Despachado não entra no total</strong> — a carga saiu do galpão. Continua sem aceite do
+        cliente, e por isso tem cartão próprio.</li>
+      <li>A fila ordena por <strong>atraso</strong> e só depois por tempo parado: o relógio que importa aqui é
+        o do cliente.</li>
+    </ul>
+  </div>
+</div>
+{% endblock %}

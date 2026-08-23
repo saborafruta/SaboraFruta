@@ -1,0 +1,274 @@
+{% extends "_base.html" %}
+{% block title %}{{ title }}{% endblock %}
+{% block page_title %}Aviamentos{% endblock %}
+{% block content %}
+{% comment %}
+  A busca filtra AO VIVO, no navegador: a lista ja' veio inteira na pagina,
+  e ir ao servidor a cada tecla so' acrescentaria espera. O `form` continua
+  valendo -- Enter e o botao ainda mandam `?q=`, que e' o que faz o endereco
+  poder ser guardado.
+
+  Mesmo padrao do seletor de filial (`core/auth/selecionar_filial.html`),
+  inclusive o `norm`: sem tirar o acento, "abada" nao acharia "ABADÁ", e
+  numa confeccao quase todo nome tem acento.
+{% endcomment %}
+<div class="space-y-5"
+     x-data="{
+       busca: '',
+       norm(valor) {
+         return (valor || '').toString().normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+       },
+       combina(linha) {
+         return !this.busca.trim() || this.norm(linha.dataset.busca).includes(this.norm(this.busca));
+       },
+       get visiveis() {
+         return [...this.$root.querySelectorAll('[data-busca]')].filter(l => this.combina(l)).length;
+       }
+     }">
+  <div class="flex flex-wrap items-start justify-between gap-3">
+    <div>
+      <p class="text-sm mb-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+        <a href="{% url 'moda:grupo' 'estoque' %}" :style="temaClaro ? 'color:#3b82f6;' : 'color:#60a5fa;'">Estoque</a>
+        <span class="mx-1">›</span> Aviamentos
+      </p>
+      <h2 class="text-2xl font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">Aviamentos</h2>
+      <p class="text-sm mt-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+        Linha, botão, zíper e etiqueta — o que há em estoque contra o que as
+        <strong>ordens abertas</strong> vão precisar.
+      </p>
+    </div>
+    <a href="{% url 'moda:necessidade' %}" class="btn-secondary text-sm">Reservar e comprar</a>
+  </div>
+
+  {% comment %}
+    Aviamento não tem consumo apontado — ninguém registra quantos zíperes
+    foram pregados. Por isso a régua aqui é a DEMANDA das ordens abertas, e
+    não um ritmo de gasto como na tela de tecidos.
+  {% endcomment %}
+  <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+    <div class="card p-4">
+      <p class="text-xs uppercase tracking-wide" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Faltando</p>
+      {% if resumo.faltando %}
+        <p class="text-2xl font-semibold mt-1" style="color:#dc2626;">{{ resumo.faltando }}</p>
+        <p class="text-xs mt-1" :style="temaClaro ? 'color:#94a3b8;' : 'color:#6b7280;'">não cobrem as ordens abertas</p>
+      {% else %}
+        <p class="text-2xl font-semibold mt-1" style="color:#059669;">0</p>
+        <p class="text-xs mt-1" :style="temaClaro ? 'color:#94a3b8;' : 'color:#6b7280;'">tudo coberto</p>
+      {% endif %}
+    </div>
+
+    <div class="card p-4">
+      <p class="text-xs uppercase tracking-wide" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Primeiro a parar</p>
+      {% if resumo.pior %}
+        <p class="text-lg font-semibold mt-1" style="color:#dc2626;">{{ resumo.pior.descricao }}</p>
+        <p class="text-xs mt-1" :style="temaClaro ? 'color:#94a3b8;' : 'color:#6b7280;'">
+          faltam {{ resumo.pior.falta|floatformat:2 }} {{ resumo.pior.unidades|join:" / " }}
+        </p>
+      {% else %}
+        <p class="text-lg font-semibold mt-1" style="color:#059669;">nenhum</p>
+      {% endif %}
+    </div>
+
+    <div class="card p-4">
+      <p class="text-xs uppercase tracking-wide" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Parado em aviamento</p>
+      <p class="text-2xl font-semibold mt-1" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">R$ {{ resumo.valor }}</p>
+      <p class="text-xs mt-1" :style="temaClaro ? 'color:#94a3b8;' : 'color:#6b7280;'">
+        {% if resumo.sem_vinculo %}fora {{ resumo.sem_vinculo }} sem saldo conhecido{% else %}saldo × custo médio{% endif %}
+      </p>
+    </div>
+
+    <div class="card p-4">
+      <p class="text-xs uppercase tracking-wide" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Aviamentos</p>
+      <p class="text-2xl font-semibold mt-1" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">{{ resumo.aviamentos }}</p>
+      <p class="text-xs mt-1" :style="temaClaro ? 'color:#94a3b8;' : 'color:#6b7280;'">consolidados das fichas</p>
+    </div>
+  </div>
+
+  <form method="get" class="flex flex-wrap items-center gap-2">
+    <input type="text" name="q" value="{{ busca }}" x-model="busca"
+           placeholder="Buscar por descrição ou código" autocomplete="off"
+           class="form-input text-sm" style="max-width:280px;">
+    <button type="submit" class="btn-secondary text-sm">Buscar</button>
+    {% comment %}
+      O contador so' aparece filtrando: sem ele a tabela encolhe e nao ha'
+      como saber se sumiu linha por causa da busca ou porque nao existe.
+    {% endcomment %}
+    <span x-show="busca.trim()" x-cloak class="text-xs"
+          :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+      <span x-text="visiveis"></span> de {{ linhas|length }}
+    </span>
+    <button type="button" x-show="busca.trim()" x-cloak @click="busca = ''"
+            class="btn-secondary text-sm">Limpar busca</button>
+    <span class="mx-1" :style="temaClaro ? 'color:#cbd5e1;' : 'color:#475569;'">|</span>
+    <a href="?{% if busca %}q={{ busca }}&{% endif %}filtro=faltando"
+       class="{% if filtro == 'faltando' %}btn-primary{% else %}btn-secondary{% endif %} text-sm">
+      Faltando{% if resumo.faltando %} ({{ resumo.faltando }}){% endif %}
+    </a>
+    <a href="?{% if busca %}q={{ busca }}&{% endif %}filtro=sem_vinculo"
+       class="{% if filtro == 'sem_vinculo' %}btn-primary{% else %}btn-secondary{% endif %} text-sm">
+      Sem estoque{% if resumo.sem_vinculo %} ({{ resumo.sem_vinculo }}){% endif %}
+    </a>
+    <a href="?{% if busca %}q={{ busca }}&{% endif %}filtro=preco_divergente"
+       class="{% if filtro == 'preco_divergente' %}btn-primary{% else %}btn-secondary{% endif %} text-sm">
+      Preço divergente{% if resumo.preco_divergente %} ({{ resumo.preco_divergente }}){% endif %}
+    </a>
+    {% if busca or filtro %}
+      <a href="?" class="btn-secondary text-sm">Limpar</a>
+    {% endif %}
+  </form>
+
+  {% if resumo.sem_vinculo %}
+    <div class="card p-4" style="border-left:3px solid #f59e0b;">
+      <p class="text-sm" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
+        <strong>{{ resumo.sem_vinculo }}</strong> aviamento(s) sem ligação com um produto de estoque.
+      </p>
+      <p class="text-sm mt-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+        Sem essa ligação o sistema não lê saldo nem reserva — a linha mostra traço,
+        e não zero, porque não há como saber quanto há. O vínculo é o campo
+        <strong>Produto no estoque</strong> na linha do material, dentro da ficha técnica.
+      </p>
+      <a href="{% url 'moda:aviamentos' %}" class="btn-secondary text-sm mt-3 inline-block">
+        Catálogo de aviamentos
+      </a>
+    </div>
+  {% endif %}
+
+  <div class="card overflow-hidden">
+    {% if linhas %}
+      <div class="overflow-x-auto">
+        <table class="w-full text-sm">
+          <thead>
+            <tr class="border-b" :style="temaClaro ? 'border-color:#e2e8f0;' : 'border-color:#2a2a2e;'">
+              <th class="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wide whitespace-nowrap w-full"
+                  :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Aviamento</th>
+              <th class="text-right px-4 py-3 text-xs font-semibold uppercase tracking-wide whitespace-nowrap"
+                  :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Falta</th>
+              <th class="text-right px-4 py-3 text-xs font-semibold uppercase tracking-wide whitespace-nowrap"
+                  :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Ordens pedem</th>
+              <th class="text-right px-4 py-3 text-xs font-semibold uppercase tracking-wide whitespace-nowrap"
+                  :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Livre</th>
+              <th class="text-right px-4 py-3 text-xs font-semibold uppercase tracking-wide whitespace-nowrap"
+                  :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Em estoque</th>
+              <th class="text-right px-4 py-3 text-xs font-semibold uppercase tracking-wide whitespace-nowrap"
+                  :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Reservado</th>
+              <th class="text-right px-4 py-3 text-xs font-semibold uppercase tracking-wide whitespace-nowrap"
+                  :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Valor parado</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% comment %}
+              O que FALTA primeiro, e dentro disso a maior falta no topo: a
+              tela existe para responder "o que preciso comprar", e a
+              resposta tem de estar na primeira linha.
+            {% endcomment %}
+            {% for l in linhas %}
+              <tr class="border-b"
+                  data-busca="{{ l.descricao }} {{ l.codigo }} {{ l.tipo_rotulo }}"
+                  x-show="combina($el)" x-cloak
+                  :style="temaClaro ? 'border-color:#f1f5f9;' : 'border-color:#1e1e22;'">
+                <td class="px-4 py-3">
+                  <span class="font-medium" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">{{ l.descricao }}</span>
+                  <span class="block text-xs" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+                    {{ l.tipo_rotulo }}
+                    {% if l.codigo %} · {{ l.codigo }}{% endif %}
+                    · {{ l.unidades|join:" / " }}
+                    · {{ l.fichas }} ficha(s)
+                  </span>
+                  {% if not l.ligado %}
+                    <span class="block text-xs mt-1" style="color:#f59e0b;">sem produto de estoque ligado</span>
+                  {% endif %}
+                  {% if l.preco_divergente %}
+                    <span class="block text-xs mt-1" style="color:#f59e0b;"
+                          title="O mesmo aviamento tem valores diferentes em fichas diferentes.">
+                      preço divergente entre fichas
+                    </span>
+                  {% endif %}
+                </td>
+                <td class="px-4 py-3 text-right tabular-nums font-semibold whitespace-nowrap">
+                  {% if l.falta is None %}
+                    <span :style="temaClaro ? 'color:#94a3b8;' : 'color:#6b7280;'"
+                          title="Sem vínculo com estoque não há saldo com que comparar.">—</span>
+                  {% elif l.falta %}
+                    <span style="color:#dc2626;">{{ l.falta|floatformat:2 }}</span>
+                  {% else %}
+                    <span style="color:#059669;">ok</span>
+                  {% endif %}
+                </td>
+                <td class="px-4 py-3 text-right tabular-nums whitespace-nowrap"
+                    :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+                  {% if l.previsto %}
+                    {{ l.previsto|floatformat:2 }}
+                    <span class="block text-xs">{{ l.ordens }} ordem(ns)</span>
+                  {% else %}
+                    —
+                  {% endif %}
+                </td>
+                <td class="px-4 py-3 text-right tabular-nums whitespace-nowrap"
+                    :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+                  {% if l.livre is None %}—{% else %}{{ l.livre|floatformat:2 }}{% endif %}
+                </td>
+                <td class="px-4 py-3 text-right tabular-nums whitespace-nowrap"
+                    :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
+                  {% if l.saldo is None %}
+                    <span :style="temaClaro ? 'color:#94a3b8;' : 'color:#6b7280;'">—</span>
+                  {% else %}{{ l.saldo|floatformat:2 }}{% endif %}
+                </td>
+                <td class="px-4 py-3 text-right tabular-nums whitespace-nowrap"
+                    :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+                  {% if l.reservado is None %}—{% else %}{{ l.reservado|floatformat:2 }}{% endif %}
+                </td>
+                <td class="px-4 py-3 text-right tabular-nums whitespace-nowrap"
+                    :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+                  {% if l.valor is None %}—{% else %}R$ {{ l.valor }}{% endif %}
+                </td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      {% comment %}
+        Vazio da BUSCA, diferente do vazio do servidor la' embaixo: aqui ha'
+        linha na pagina e nenhuma casa com o que se digitou.
+      {% endcomment %}
+      <div x-show="busca.trim() && visiveis === 0" x-cloak class="p-10 text-center">
+        <p class="text-sm font-medium" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
+          Nenhum aviamento com <span x-text="'“' + busca + '”'"></span> nesta lista.
+        </p>
+        <p class="text-sm mt-2" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+          A busca olha o que já está na tela. Se houver filtro ligado acima, ele
+          pode estar fora dele.
+        </p>
+        <button type="button" @click="busca = ''" class="btn-secondary text-sm mt-4">Limpar busca</button>
+      </div>
+    {% else %}
+      <div class="p-10 text-center">
+        <p class="text-sm font-medium" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
+          {% if busca or filtro %}Nada com esse recorte.{% else %}Nenhum aviamento nas fichas técnicas.{% endif %}
+        </p>
+        <p class="text-sm mt-2" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+          O aviamento não tem cadastro próprio: ele existe dentro da ficha da peça,
+          como uma linha de material. Esta tela consolida essas linhas.
+        </p>
+        <a href="{% url 'moda:aviamentos' %}" class="btn-secondary text-sm mt-4 inline-block">
+          Catálogo de aviamentos
+        </a>
+      </div>
+    {% endif %}
+  </div>
+
+  <div class="card p-4">
+    <p class="text-xs uppercase tracking-wide mb-2" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Como o número é feito</p>
+    <ul class="text-sm space-y-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+      <li><strong>Ordens pedem</strong> = consumo da ficha × quantidade de cada ordem aberta.
+        Aviamento não tem consumo apontado, então a régua é a demanda, e não um ritmo de gasto.</li>
+      <li><strong>Livre</strong> desconta a reserva feita para <em>outras</em> ordens, não a destas —
+        reservar separa material, não cria necessidade nova.</li>
+      <li><strong>Traço não é zero.</strong> Sem vínculo com estoque não há saldo com que comparar.</li>
+      <li><strong>Sem conversão de unidade.</strong> A ficha diz "2 un" e o produto de estoque tem a unidade dele;
+        os números são comparados como estão.</li>
+      <li>Duas linhas de ficha são o mesmo aviamento quando apontam para o mesmo produto de estoque —
+        e, sem vínculo, quando têm o mesmo código ou descrição.</li>
+    </ul>
+  </div>
+</div>
+{% endblock %}

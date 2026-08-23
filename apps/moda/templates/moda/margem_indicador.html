@@ -1,0 +1,236 @@
+{% extends "_base.html" %}
+{% block title %}{{ title }}{% endblock %}
+{% block page_title %}Margens{% endblock %}
+{% block content %}
+<div class="space-y-5">
+  <div class="flex flex-wrap items-start justify-between gap-3">
+    <div>
+      <p class="text-sm mb-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+        <a href="{% url 'moda:grupo' 'indicadores' %}" :style="temaClaro ? 'color:#3b82f6;' : 'color:#60a5fa;'">Indicadores</a>
+        <span class="mx-1">›</span> Margens
+      </p>
+      <h2 class="text-2xl font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">Margens</h2>
+      <p class="text-sm mt-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+        O que foi cobrado contra o que custou — ordens <strong>concluídas</strong>
+        desde {{ desde|date:"d/m/Y" }}.
+      </p>
+    </div>
+    <div class="flex gap-2">
+      {% for valor, rotulo in periodos %}
+        <a href="?dias={{ valor }}&visao={{ visao }}"
+           class="{% if dias == valor %}btn-primary{% else %}btn-secondary{% endif %} text-sm">{{ rotulo }}</a>
+      {% endfor %}
+    </div>
+  </div>
+
+  <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+    <div class="card p-4">
+      <p class="text-xs uppercase tracking-wide" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Margem real</p>
+      {% if resumo.margem_pct is None %}
+        <p class="text-2xl font-semibold mt-1" :style="temaClaro ? 'color:#94a3b8;' : 'color:#6b7280;'">—</p>
+        <p class="text-xs mt-1" :style="temaClaro ? 'color:#94a3b8;' : 'color:#6b7280;'">nada com preço no período</p>
+      {% else %}
+        {% if resumo.margem_pct < 0 %}
+          <p class="text-2xl font-semibold mt-1" style="color:#dc2626;">{{ resumo.margem_pct }}%</p>
+        {% elif resumo.margem_pct < magra %}
+          <p class="text-2xl font-semibold mt-1" style="color:#f59e0b;">{{ resumo.margem_pct }}%</p>
+        {% else %}
+          <p class="text-2xl font-semibold mt-1" style="color:#059669;">{{ resumo.margem_pct }}%</p>
+        {% endif %}
+        <p class="text-xs mt-1" :style="temaClaro ? 'color:#94a3b8;' : 'color:#6b7280;'">
+          R$ {{ resumo.margem }} sobre R$ {{ resumo.receita }}
+        </p>
+      {% endif %}
+    </div>
+
+    {% comment %}
+      A prevista fica ao lado da real de propósito: a diferença entre as
+      duas é o quanto a fábrica comeu do lucro que o comercial vendeu. Um
+      pedido pode ter sido bem precificado e ainda assim dar prejuízo.
+    {% endcomment %}
+    <div class="card p-4">
+      <p class="text-xs uppercase tracking-wide" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Margem prevista</p>
+      {% if resumo.margem_prevista_pct is None %}
+        <p class="text-2xl font-semibold mt-1" :style="temaClaro ? 'color:#94a3b8;' : 'color:#6b7280;'">—</p>
+      {% else %}
+        <p class="text-2xl font-semibold mt-1" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">{{ resumo.margem_prevista_pct }}%</p>
+      {% endif %}
+      <p class="text-xs mt-1" :style="temaClaro ? 'color:#94a3b8;' : 'color:#6b7280;'">
+        {% if resumo.erosao > 0 %}
+          a fábrica comeu R$ {{ resumo.erosao }}
+        {% else %}
+          custou o previsto ou menos
+        {% endif %}
+      </p>
+    </div>
+
+    <div class="card p-4">
+      <p class="text-xs uppercase tracking-wide" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">No prejuízo</p>
+      {% if resumo.prejuizo %}
+        <p class="text-2xl font-semibold mt-1" style="color:#dc2626;">{{ resumo.prejuizo }}</p>
+        <p class="text-xs mt-1" :style="temaClaro ? 'color:#94a3b8;' : 'color:#6b7280;'">
+          ordem(ns) — R$ {{ resumo.valor_prejuizo }}
+        </p>
+      {% else %}
+        <p class="text-2xl font-semibold mt-1" style="color:#059669;">0</p>
+        <p class="text-xs mt-1" :style="temaClaro ? 'color:#94a3b8;' : 'color:#6b7280;'">
+          {% if resumo.magras %}{{ resumo.magras }} com margem abaixo de {{ magra }}%{% else %}nenhuma no vermelho{% endif %}
+        </p>
+      {% endif %}
+    </div>
+
+    {% comment %}
+      A pior é a de menor margem PERCENTUAL: um pedido grande com margem
+      fina pode perder mais em reais e ainda assim estar melhor precificado
+      que um pequeno vendido no prejuízo.
+    {% endcomment %}
+    <div class="card p-4">
+      <p class="text-xs uppercase tracking-wide" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Pior margem</p>
+      {% if resumo.pior %}
+        <p class="text-lg font-semibold mt-1"
+           style="{% if resumo.pior.prejuizo %}color:#dc2626;{% else %}color:#f59e0b;{% endif %}">{{ resumo.pior.numero }}</p>
+        <p class="text-xs mt-1" :style="temaClaro ? 'color:#94a3b8;' : 'color:#6b7280;'">
+          {{ resumo.pior.margem_pct }}% — {{ resumo.pior.cliente }}
+        </p>
+      {% else %}
+        <p class="text-lg font-semibold mt-1" :style="temaClaro ? 'color:#94a3b8;' : 'color:#6b7280;'">—</p>
+      {% endif %}
+    </div>
+  </div>
+
+  {% if resumo.sem_preco or resumo.estimadas %}
+    <div class="card p-4" style="border-left:3px solid #f59e0b;">
+      {% if resumo.sem_preco %}
+        <p class="text-sm" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
+          <strong>{{ resumo.sem_preco }}</strong> ordem(ns) sem preço no item.
+        </p>
+        <p class="text-sm mt-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+          Amostra, reposição de garantia e orçamento ainda não valorado ficam
+          <strong>fora das médias</strong> — tratá-los como margem de −100% afundaria
+          o número de todo mundo. Eles aparecem no fim da lista, marcados.
+        </p>
+      {% endif %}
+      {% if resumo.estimadas %}
+        <p class="text-sm {% if resumo.sem_preco %}mt-2{% endif %}" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+          <strong>{{ resumo.estimadas }}</strong> ordem(ns) com parte do custo estimada —
+          aviamento sem apontamento, corte sem medida ou tempo não cronometrado.
+          A margem delas é tão firme quanto o custo que a sustenta.
+        </p>
+      {% endif %}
+    </div>
+  {% endif %}
+
+  <div class="flex flex-wrap gap-2">
+    {% for chave, rotulo in visoes %}
+      <a href="?dias={{ dias }}&visao={{ chave }}"
+         class="{% if visao == chave %}btn-primary{% else %}btn-secondary{% endif %} text-sm">{{ rotulo }}</a>
+    {% endfor %}
+  </div>
+
+  <div class="card overflow-hidden">
+    {% if itens %}
+      <div class="overflow-x-auto">
+        <table class="w-full text-sm">
+          <thead>
+            <tr class="border-b" :style="temaClaro ? 'border-color:#e2e8f0;' : 'border-color:#2a2a2e;'">
+              <th class="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wide whitespace-nowrap w-full"
+                  :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">{{ rotulo_coluna }}</th>
+              <th class="text-right px-4 py-3 text-xs font-semibold uppercase tracking-wide whitespace-nowrap"
+                  :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Margem</th>
+              <th class="text-right px-4 py-3 text-xs font-semibold uppercase tracking-wide whitespace-nowrap"
+                  :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Prevista</th>
+              <th class="text-right px-4 py-3 text-xs font-semibold uppercase tracking-wide whitespace-nowrap"
+                  :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Receita</th>
+              <th class="text-right px-4 py-3 text-xs font-semibold uppercase tracking-wide whitespace-nowrap"
+                  :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Custo real</th>
+              <th class="text-right px-4 py-3 text-xs font-semibold uppercase tracking-wide whitespace-nowrap"
+                  :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Peças</th>
+              <th class="text-right px-4 py-3 text-xs font-semibold uppercase tracking-wide whitespace-nowrap"
+                  :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">R$/peça</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% comment %}
+              Pior margem primeiro: a tela existe para achar o que está sendo
+              vendido barato demais, e isso tem de estar na primeira linha.
+              Sem preço vai para o fim, onde não atrapalha a leitura.
+            {% endcomment %}
+            {% for i in itens %}
+              <tr class="border-b" :style="temaClaro ? 'border-color:#f1f5f9;' : 'border-color:#1e1e22;'">
+                <td class="px-4 py-3">
+                  <span class="font-medium" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">{{ i.titulo }}</span>
+                  {% if i.subtitulo %}
+                    <span class="block text-xs" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">{{ i.subtitulo }}</span>
+                  {% endif %}
+                  {% if i.sem_preco %}
+                    <span class="block text-xs mt-1" style="color:#f59e0b;">
+                      sem preço — fora das médias
+                    </span>
+                  {% endif %}
+                </td>
+                <td class="px-4 py-3 text-right tabular-nums font-semibold whitespace-nowrap">
+                  {% if i.sem_preco %}
+                    <span :style="temaClaro ? 'color:#94a3b8;' : 'color:#6b7280;'">—</span>
+                  {% elif i.prejuizo %}
+                    <span style="color:#dc2626;">{{ i.margem_pct }}%</span>
+                    <span class="block text-xs" style="color:#dc2626;">R$ {{ i.margem }}</span>
+                  {% elif i.magra %}
+                    <span style="color:#f59e0b;">{{ i.margem_pct }}%</span>
+                    <span class="block text-xs" style="color:#f59e0b;">R$ {{ i.margem }}</span>
+                  {% else %}
+                    <span style="color:#059669;">{{ i.margem_pct }}%</span>
+                    <span class="block text-xs" style="color:#059669;">R$ {{ i.margem }}</span>
+                  {% endif %}
+                </td>
+                <td class="px-4 py-3 text-right tabular-nums whitespace-nowrap"
+                    :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+                  {% if i.sem_preco %}—{% else %}{{ i.margem_prevista_pct }}%{% endif %}
+                </td>
+                <td class="px-4 py-3 text-right tabular-nums whitespace-nowrap"
+                    :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">R$ {{ i.receita }}</td>
+                <td class="px-4 py-3 text-right tabular-nums whitespace-nowrap"
+                    :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">R$ {{ i.custo }}</td>
+                <td class="px-4 py-3 text-right tabular-nums whitespace-nowrap"
+                    :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">{{ i.pecas }}</td>
+                <td class="px-4 py-3 text-right tabular-nums whitespace-nowrap"
+                    :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+                  {% if i.sem_preco or i.por_peca is None %}—{% else %}R$ {{ i.por_peca }}{% endif %}
+                </td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    {% else %}
+      <div class="p-10 text-center">
+        <p class="text-sm font-medium" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
+          Nenhuma ordem concluída no período.
+        </p>
+        <p class="text-sm mt-2" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+          A margem só fecha com a ordem concluída: no meio da produção o custo
+          real ainda é parcial, e a margem apareceria melhor do que é.
+        </p>
+        <a href="{% url 'moda:ordem-list' %}" class="btn-secondary text-sm mt-4 inline-block">
+          Ver ordens de produção
+        </a>
+      </div>
+    {% endif %}
+  </div>
+
+  <div class="card p-4">
+    <p class="text-xs uppercase tracking-wide mb-2" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Como o número é feito</p>
+    <ul class="text-sm space-y-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+      <li><strong>Receita</strong> = preço do item × quantidade da ordem, menos o desconto do pedido rateado
+        entre as ordens dele. <strong>Frete fica de fora</strong>: é repasse, e o custo dele não está do
+        outro lado da conta.</li>
+      <li><strong>Custo real</strong> vem da tela de Custos, do mesmo serviço — os dois números não podem
+        divergir para a mesma ordem.</li>
+      <li><strong>Margem prevista</strong> usa o custo da ficha; a real usa o que a ordem custou. A diferença
+        é o quanto a fábrica comeu do lucro que o comercial vendeu.</li>
+      <li><strong>Sem preço não é prejuízo.</strong> Amostra e garantia ficam fora das médias.</li>
+      <li>Só ordem <strong>concluída</strong> entra: no meio da produção o custo é parcial e a margem
+        apareceria melhor do que é.</li>
+    </ul>
+  </div>
+</div>
+{% endblock %}

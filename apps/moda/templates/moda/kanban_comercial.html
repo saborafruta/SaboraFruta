@@ -11,6 +11,41 @@
   .kc-card.arrastando { opacity: .4; }
   .kc-card { cursor: grab; }
   .kc-card:active { cursor: grabbing; }
+
+  /* RAIA VAZIA ENCOLHE. São nove colunas, e numa confecção metade delas
+     costuma estar vazia a qualquer momento. Vazias com a largura das cheias
+     empurravam o trabalho de verdade para fora da tela — o usuário via
+     "Orçamento" e "Arte" e tinha de rolar para descobrir que Produção
+     existe. Encolhida, a coluna continua no lugar (a régua do processo não
+     muda) e devolve a largura para quem tem cartão. */
+  .kc-raia {
+    flex: 1 1 190px;
+    min-width: 190px;
+    transition: flex-basis .18s ease, min-width .18s ease;
+  }
+  .kc-raia.vazia { flex: 0 0 54px; min-width: 54px; }
+  .kc-raia.vazia .kc-cabecalho { flex-direction: column; align-items: center; gap: 6px; }
+  .kc-raia.vazia .kc-titulo {
+    writing-mode: vertical-rl;
+    transform: rotate(180deg);
+    white-space: nowrap;
+    max-height: 200px;
+    overflow: hidden;
+  }
+  .kc-raia.vazia .kc-resumo { display: none; }
+
+  /* Ela ABRE para receber o cartão: um alvo de 54 px é difícil de acertar
+     com o mouse, e errar o alvo num quadro que muda status de pedido é o
+     tipo de erro que ninguém consegue explicar depois. */
+  .kc-raia.vazia.recebendo { flex: 0 0 190px; min-width: 190px; }
+  .kc-raia.vazia.recebendo .kc-cabecalho { flex-direction: row; align-items: baseline; }
+  .kc-raia.vazia.recebendo .kc-titulo { writing-mode: horizontal-tb; transform: none; }
+
+  /* A coluna cheia rolava a PÁGINA inteira, e aí o cabeçalho das outras
+     saía de vista: no meio da rolagem não dava para saber em que raia se
+     está. Com o teto, a lista rola por dentro e os títulos ficam. */
+  .kc-lista { max-height: calc(100vh - 340px); overflow-y: auto; }
+  .kc-raia.vazia .kc-lista { min-height: 140px; }
 </style>
 {% endblock %}
 
@@ -110,35 +145,53 @@
   {% endif %}
 
   {# ── Quadro ───────────────────────────────────────────────────────── #}
+  {% comment %}
+    Sem `min-width` fixa no quadro. Ela obrigava a rolar SEMPRE, mesmo em
+    tela larga e com metade das colunas vazias — e o que ficava escondido à
+    direita era justamente Produção e Pronto, o fim do fluxo.
+  {% endcomment %}
   <div class="overflow-x-auto pb-3">
-    <div class="flex gap-3" style="min-width:1560px;">
+    <div class="flex gap-3 items-start">
       {% for r in raias %}
-        <div class="kc-raia card p-3 flex-1 space-y-2" data-coluna="{{ r.coluna.chave }}"
-             style="min-width:185px;">
-          <div class="flex items-baseline justify-between gap-2 pb-2 border-b"
+        <div class="kc-raia card p-3 space-y-2 {% if not r.total %}vazia{% endif %}"
+             data-coluna="{{ r.coluna.chave }}">
+          <div class="kc-cabecalho flex items-baseline justify-between gap-2 pb-2 border-b"
                :style="temaClaro ? 'border-color:#e5e7eb;' : 'border-color:#303036;'">
-            <h3 class="text-xs font-bold uppercase tracking-wider"
+            <h3 class="kc-titulo text-xs font-bold uppercase tracking-wider"
                 :style="temaClaro ? 'color:#374151;' : 'color:#cbd5e1;'"
                 title="{{ r.coluna.descricao }}">{{ r.coluna.label }}</h3>
-            <span class="text-xs font-bold tabular-nums" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
-              {{ r.total }}
-            </span>
+            <span class="kc-contador text-xs font-bold tabular-nums"
+                  :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">{{ r.total }}</span>
           </div>
 
-          <p class="text-[10px]" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+          {% comment %}
+            O resumo só existe havendo cartão. Antes um `&nbsp;` segurava a
+            altura das colunas vazias — agora elas encolhem, e a linha em
+            branco não tem mais o que alinhar.
+          {% endcomment %}
+          <p class="kc-resumo text-[10px]" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'"
+             data-resumo>
             {% if r.total %}
-              {{ r.pecas }} pç · R$ {{ r.valor|floatformat:0 }}
+              {{ r.pecas }} pç{% if r.valor %} · R$ {{ r.valor|floatformat:0 }}{% endif %}
               {% if r.atrasados %}
                 · <span style="color:#dc2626; font-weight:700;">{{ r.atrasados }} atras.</span>
               {% endif %}
-            {% else %}
-              &nbsp;
             {% endif %}
           </p>
 
-          <div class="space-y-2 min-h-[60px]" data-lista>
+          <div class="kc-lista space-y-2 min-h-[60px]" data-lista>
             {% for c in r.cartoes %}
+              {% comment %}
+                Peças, valor e atraso viajam no cartão porque o resumo da
+                coluna é RECALCULADO no navegador depois de cada movimento.
+                Sem isso o contador continuava mostrando o número de antes
+                até alguém recarregar — um quadro que mente logo depois de
+                obedecer é pior que um quadro sem contador.
+              {% endcomment %}
               <div class="kc-card rounded-lg p-2.5" data-pedido="{{ c.pedido.pk }}"
+                   data-pecas="{{ c.pedido.quantidade_total }}"
+                   data-valor="{{ c.pedido.valor_total|stringformat:'.2f' }}"
+                   data-atrasado="{% if c.atrasado %}1{% else %}0{% endif %}"
                    {% if pode_mover %}draggable="true"{% endif %}
                    :style="temaClaro ? 'background:#f8fafc; border:1px solid #e5e7eb;' : 'background:#18181b; border:1px solid #303036;'">
                 <div class="flex items-start justify-between gap-1">
@@ -187,9 +240,16 @@
                   {% endif %}
                 </div>
 
-                <p class="text-[11px] tabular-nums mt-0.5" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
-                  R$ {{ c.pedido.valor_total|floatformat:2 }}
-                </p>
+                {% comment %}
+                  "R$ 0,00" ocupava uma linha em todo orçamento ainda não
+                  valorado — que é a maioria da primeira coluna — sem dizer
+                  nada. Sem valor, a linha some.
+                {% endcomment %}
+                {% if c.pedido.valor_total %}
+                  <p class="text-[11px] tabular-nums mt-0.5" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+                    R$ {{ c.pedido.valor_total|floatformat:2 }}
+                  </p>
+                {% endif %}
 
                 {% if c.pediu_ajuste %}
                   <p class="text-[10px] mt-1 font-semibold" style="color:#dc2626;">
@@ -217,10 +277,6 @@
                   </select>
                 {% endif %}
               </div>
-            {% empty %}
-              <p class="text-[11px] text-center py-3" :style="temaClaro ? 'color:#cbd5e1;' : 'color:#52525b;'">
-                vazia
-              </p>
             {% endfor %}
           </div>
         </div>
@@ -284,6 +340,43 @@
       volta.appendChild(card);
       mostrar(erro.message, true);
     }
+    // Fora do try: o cartão volta para a origem quando o servidor recusa, e
+    // as duas raias precisam ser recontadas nos dois desfechos.
+    atualizarRaia(destino.closest('.kc-raia'));
+    atualizarRaia(volta.closest('.kc-raia'));
+  }
+
+  // O cabeçalho da coluna é RECALCULADO do que está na tela, e não guardado
+  // de um total do servidor: depois de mover um cartão, o número do servidor
+  // é o de antes. Um quadro que mente logo depois de obedecer é pior que um
+  // quadro sem contador.
+  function atualizarRaia(raia) {
+    if (!raia) return;
+    const cartoes = [...raia.querySelectorAll('.kc-card')];
+    const pecas = cartoes.reduce((s, c) => s + (parseInt(c.dataset.pecas, 10) || 0), 0);
+    const valor = cartoes.reduce((s, c) => s + (parseFloat(c.dataset.valor) || 0), 0);
+    const atrasados = cartoes.filter((c) => c.dataset.atrasado === '1').length;
+
+    raia.classList.toggle('vazia', cartoes.length === 0);
+    const contador = raia.querySelector('.kc-contador');
+    if (contador) contador.textContent = cartoes.length;
+
+    const resumo = raia.querySelector('[data-resumo]');
+    if (!resumo) return;
+    if (!cartoes.length) { resumo.textContent = ''; return; }
+    let texto = `${pecas} pç`;
+    // Sem separador de milhar, igual ao `floatformat:0` do servidor: com
+    // ele, o mesmo total virava "5.086" depois de um movimento e "5086" na
+    // recarga, e o número parecia ter mudado sem ter mudado.
+    if (valor) texto += ` · R$ ${Math.round(valor)}`;
+    resumo.textContent = texto;
+    if (atrasados) {
+      const marca = document.createElement('span');
+      marca.style.color = '#dc2626';
+      marca.style.fontWeight = '700';
+      marca.textContent = `${atrasados} atras.`;
+      resumo.append(' · ', marca);
+    }
   }
 
   // O seletor do celular lista as OUTRAS colunas. Depois de mover, a coluna
@@ -327,7 +420,13 @@
       e.dataTransfer.dropEffect = 'move';
       raia.classList.add('recebendo');
     });
-    raia.addEventListener('dragleave', () => raia.classList.remove('recebendo'));
+    // `dragleave` dispara também ao passar para um FILHO da raia. Antes isso
+    // só piscava um contorno; agora a raia vazia muda de largura ao receber,
+    // e o pisca-pisca viraria a coluna abrindo e fechando debaixo do cursor.
+    raia.addEventListener('dragleave', (e) => {
+      if (e.relatedTarget && raia.contains(e.relatedTarget)) return;
+      raia.classList.remove('recebendo');
+    });
 
     raia.addEventListener('drop', (e) => {
       e.preventDefault();

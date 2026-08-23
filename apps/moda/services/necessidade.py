@@ -39,6 +39,24 @@ from apps.moda.models import (
 ZERO = Decimal('0')
 
 
+def chave_do_material(material) -> str:
+    """
+    O que faz duas linhas de ficha serem o MESMO material.
+
+    Agrupa pelo produto de estoque quando ligado; senão pelo texto. Sem
+    isso, o mesmo tecido em duas fichas viraria duas linhas e o comprador
+    pediria duas vezes.
+
+    Solta, e não escondida dentro do cálculo, porque a tela de Estoque ›
+    Aviamentos junta as linhas dela por esta mesma chave: duas definições
+    da mesma regra divergem, e aí as duas telas discordam sobre quantos
+    zíperes diferentes existem.
+    """
+    if material.produto_estoque_id:
+        return f'p{material.produto_estoque_id}'
+    return f't{(material.codigo or material.descricao).strip().lower()}'
+
+
 @dataclass
 class Necessidade:
     """Uma linha do painel: um material e a situação dele."""
@@ -134,13 +152,7 @@ class NecessidadeService:
                 if not consumo:
                     continue
 
-                # Agrupa pelo produto de estoque quando ligado; senão pelo
-                # texto. Sem isso, o mesmo tecido em duas fichas viraria duas
-                # linhas e o comprador pediria duas vezes.
-                chave = (
-                    f'p{material.produto_estoque_id}' if material.produto_estoque_id
-                    else f't{(material.codigo or material.descricao).strip().lower()}'
-                )
+                chave = chave_do_material(material)
                 linha = linhas.get(chave)
                 if linha is None:
                     linha = Necessidade(
