@@ -21,20 +21,8 @@ from django.db.models import Q
 from django.shortcuts import render
 
 from .models import MaterialFicha
+from .services.estoque_aviamento import TIPOS_AVIAMENTO
 from .views import ModaBaseView
-
-# O que é aviamento, e o que é tecido. A divisão segue a ficha de papel:
-# tecido e forro são o corpo da peça; o resto é o que se prega nela.
-TIPOS_AVIAMENTO = [
-    MaterialFicha.Tipo.LINHA,
-    MaterialFicha.Tipo.ELASTICO,
-    MaterialFicha.Tipo.ZIPER,
-    MaterialFicha.Tipo.BOTAO,
-    MaterialFicha.Tipo.ETIQUETA,
-    MaterialFicha.Tipo.TAG,
-    MaterialFicha.Tipo.EMBALAGEM,
-    MaterialFicha.Tipo.AVIAMENTO,
-]
 
 
 def _chave(material) -> tuple:
