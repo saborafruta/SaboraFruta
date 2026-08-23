@@ -148,11 +148,8 @@ class PosicaoDiariaCaixaService:
             eh_dinheiro = "dinheiro" in nome_base or "caixa" in nome_base
             conta.posicao_abertura = abertura
             entradas_conta = [m for m in entradas if m.conta.pk == conta.pk]
-            conta.posicao_entradas = sum((m.entrada_bruta for m in entradas_conta), ZERO)
-            conta.posicao_saidas = (
-                sum((m.saida for m in saidas if m.conta.pk == conta.pk), ZERO)
-                + sum((m.valor_taxa for m in entradas_conta), ZERO)
-            )
+            conta.posicao_entradas = sum((m.entrada for m in entradas_conta), ZERO)
+            conta.posicao_saidas = sum((m.saida for m in saidas if m.conta.pk == conta.pk), ZERO)
             conta.posicao_fechamento = fechamento
             conta.posicao_cor = "azul" if eh_dinheiro else self.CORES[indice % len(self.CORES)]
             conta.eh_dinheiro = eh_dinheiro
@@ -160,15 +157,15 @@ class PosicaoDiariaCaixaService:
 
         total_abertura = sum((c.posicao_abertura for c in contas), ZERO)
         total_taxas_entradas = sum((m.valor_taxa for m in entradas), ZERO)
-        total_entradas = sum((m.entrada_bruta for m in entradas), ZERO)
-        total_liquido_entradas = sum((m.entrada for m in entradas), ZERO)
+        total_entradas = sum((m.entrada for m in entradas), ZERO)
+        total_liquido_entradas = total_entradas
         transacoes_taxas = [
             movimento for movimento in entradas
             if movimento.forma_pagamento != "Sem forma vinculada"
         ]
         total_bruto_transacoes_taxas = sum((m.entrada_bruta for m in transacoes_taxas), ZERO)
         total_liquido_transacoes_taxas = sum((m.entrada for m in transacoes_taxas), ZERO)
-        total_saidas = sum((m.saida for m in saidas), ZERO) + total_taxas_entradas
+        total_saidas = sum((m.saida for m in saidas), ZERO)
         total_fechamento = sum((c.posicao_fechamento for c in contas), ZERO)
         total_despesas_pessoais = sum((m.saida for m in saidas if m.despesa_pessoal), ZERO)
         taxas_por_forma = self._agrupar_taxas(entradas)
@@ -199,10 +196,10 @@ class PosicaoDiariaCaixaService:
             "transacoes_taxas": transacoes_taxas,
             "taxas_por_forma": taxas_por_forma,
             "variacao_dia": total_entradas - total_saidas,
-            "totais_forma_entrada": self._agrupar(entradas, "forma_pagamento", "entrada_bruta"),
-            "totais_forma_saida": self._agrupar_com_taxas(saidas, entradas, "forma_pagamento"),
-            "totais_conta_entrada": self._agrupar(entradas, "conta", "entrada_bruta"),
-            "totais_conta_saida": self._agrupar_com_taxas(saidas, entradas, "conta"),
+            "totais_forma_entrada": self._agrupar(entradas, "forma_pagamento", "entrada"),
+            "totais_forma_saida": self._agrupar(saidas, "forma_pagamento", "saida"),
+            "totais_conta_entrada": self._agrupar(entradas, "conta", "entrada"),
+            "totais_conta_saida": self._agrupar(saidas, "conta", "saida"),
             "sem_conta": self._pendencias_sem_conta_do_dia(),
             "data_inicio": self.data_inicio,
             "data_fim": self.data_fim,
