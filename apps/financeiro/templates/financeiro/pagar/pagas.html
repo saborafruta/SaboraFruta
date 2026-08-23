@@ -1,4 +1,5 @@
 {% extends "_base.html" %}
+{% load widget_tweaks %}
 
 {% block title %}Contas Pagas{% endblock %}
 {% block page_title %}Contas Pagas{% endblock %}
@@ -61,6 +62,86 @@
       <div class="mt-1 text-xl font-bold text-amber-600">R$ {{ totais.despesas_pessoais|default:0|floatformat:2 }}</div>
       <div class="mt-1 text-xs opacity-60">Incluídas no total pago</div>
     </div>
+  </div>
+
+  <div class="grid gap-4 lg:grid-cols-[1.05fr_.95fr]">
+    <section class="card p-4">
+      <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <div>
+          <h3 class="text-base font-semibold">Meta de despesas pessoais</h3>
+          <p class="mt-1 text-xs opacity-65">Acompanhamento do mes de {{ meta_despesa_mes|date:"m/Y" }}.</p>
+        </div>
+        <div class="text-left sm:text-right">
+          <span class="block text-xs font-semibold uppercase opacity-60">Utilizado</span>
+          <strong class="text-xl {% if meta_despesa_percentual > 100 %}text-rose-500{% else %}text-amber-600{% endif %}">R$ {{ meta_despesa_usado|floatformat:2 }}</strong>
+          <span class="mt-0.5 block text-xs opacity-65">de R$ {{ meta_despesa_valor|floatformat:2 }}</span>
+        </div>
+      </div>
+      <div class="mt-4 h-3 overflow-hidden rounded-full bg-slate-200 dark:bg-slate-800">
+        <div class="h-full rounded-full {% if meta_despesa_percentual > 100 %}bg-rose-500{% else %}bg-amber-500{% endif %}" style="width:{{ meta_despesa_percentual_barra|floatformat:0 }}%"></div>
+      </div>
+      <div class="mt-2 flex items-center justify-between text-xs">
+        <span class="opacity-65">{{ meta_despesa_percentual|floatformat:1 }}% da meta usado</span>
+        {% if meta_despesa_pessoal and meta_despesa_pessoal.ativo %}<span class="font-semibold text-emerald-600">Meta ativa</span>{% else %}<span class="font-semibold text-slate-500">Sem meta ativa</span>{% endif %}
+      </div>
+      {% if user_is_admin %}
+      <form method="post" class="mt-4 grid grid-cols-1 gap-3 border-t pt-4 md:grid-cols-12" style="border-color:rgba(148,163,184,.24)">
+        {% csrf_token %}
+        <input type="hidden" name="acao" value="salvar_meta_despesa_pessoal">
+        <div class="md:col-span-4">
+          <label class="mb-1 block text-xs font-semibold opacity-70">Tipo</label>
+          {{ meta_despesa_form.tipo_meta|add_class:"form-input" }}
+          {% for erro in meta_despesa_form.tipo_meta.errors %}<span class="mt-1 block text-xs text-rose-500">{{ erro }}</span>{% endfor %}
+        </div>
+        <div class="md:col-span-3">
+          <label class="mb-1 block text-xs font-semibold opacity-70">Valor fixo</label>
+          {{ meta_despesa_form.valor_fixo|add_class:"form-input" }}
+          {% for erro in meta_despesa_form.valor_fixo.errors %}<span class="mt-1 block text-xs text-rose-500">{{ erro }}</span>{% endfor %}
+        </div>
+        <div class="md:col-span-2">
+          <label class="mb-1 block text-xs font-semibold opacity-70">%</label>
+          {{ meta_despesa_form.percentual|add_class:"form-input" }}
+          {% for erro in meta_despesa_form.percentual.errors %}<span class="mt-1 block text-xs text-rose-500">{{ erro }}</span>{% endfor %}
+        </div>
+        <div class="md:col-span-2">
+          <label class="mb-1 block text-xs font-semibold opacity-70">Meses</label>
+          {{ meta_despesa_form.meses_media|add_class:"form-input" }}
+          {% for erro in meta_despesa_form.meses_media.errors %}<span class="mt-1 block text-xs text-rose-500">{{ erro }}</span>{% endfor %}
+        </div>
+        <label class="flex items-end gap-2 text-xs font-semibold md:col-span-1">{{ meta_despesa_form.ativo }} Ativa</label>
+        {% if meta_despesa_form.non_field_errors %}<div class="rounded border border-rose-300 bg-rose-50 p-2 text-xs text-rose-700 md:col-span-12">{{ meta_despesa_form.non_field_errors|join:", " }}</div>{% endif %}
+        <div class="md:col-span-12 md:text-right"><button type="submit" class="btn-primary">Salvar meta</button></div>
+      </form>
+      {% endif %}
+    </section>
+
+    <section class="card p-4">
+      <div class="flex items-start justify-between gap-3">
+        <div>
+          <h3 class="text-base font-semibold">Gasto por fornecedor</h3>
+          <p class="mt-1 text-xs opacity-65">Percentual sobre o total filtrado de R$ {{ total_fornecedores|floatformat:2 }}.</p>
+        </div>
+      </div>
+      <div class="mt-4 space-y-3">
+        {% for fornecedor in fornecedores_resumo %}
+          <div>
+            <div class="flex items-center justify-between gap-3 text-sm">
+              <span class="min-w-0 truncate font-semibold">{{ fornecedor.nome }}</span>
+              <span class="whitespace-nowrap font-bold">R$ {{ fornecedor.valor|floatformat:2 }}</span>
+            </div>
+            <div class="mt-1 flex items-center gap-2">
+              <div class="h-2 flex-1 overflow-hidden rounded-full bg-slate-200 dark:bg-slate-800">
+                <div class="h-full rounded-full bg-blue-500" style="width:{{ fornecedor.percentual|floatformat:0 }}%"></div>
+              </div>
+              <span class="w-14 text-right text-xs opacity-70">{{ fornecedor.percentual|floatformat:1 }}%</span>
+            </div>
+            <div class="mt-0.5 text-xs opacity-55">{{ fornecedor.quantidade }} pagamento{{ fornecedor.quantidade|pluralize }}</div>
+          </div>
+        {% empty %}
+          <p class="text-sm opacity-65">Nenhuma conta paga encontrada para montar o resumo.</p>
+        {% endfor %}
+      </div>
+    </section>
   </div>
 
   <form method="get" class="card grid grid-cols-1 gap-3 p-4 md:grid-cols-12">

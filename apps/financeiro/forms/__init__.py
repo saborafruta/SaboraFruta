@@ -12,6 +12,7 @@ from .pagar import (
     ContaPagarEdicaoAdminForm,
     ContaPagarForm,
     DespesaPagaForm,
+    MetaDespesaPessoalForm,
     PagamentoContaPagarForm,
 )
 from .plano_contas import PlanoContasForm
@@ -28,6 +29,7 @@ __all__ = [
     "PlanoContasDespesaForm",
     "ContaPagarForm",
     "DespesaPagaForm",
+    "MetaDespesaPessoalForm",
     "ContaPagarEdicaoAdminForm",
     "PagamentoContaPagarForm",
     "PlanoContasForm",

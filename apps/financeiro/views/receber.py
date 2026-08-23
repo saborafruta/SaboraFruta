@@ -10,6 +10,7 @@ from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.utils import timezone
 from django.utils.dateparse import parse_date
+from django.utils.http import url_has_allowed_host_and_scheme
 from django.views import View
 
 from apps.core.services.exceptions import DomainError
@@ -433,14 +434,17 @@ class ContaReceberEditarPrazoView(PermissaoRequiredMixin, View):
         conta = get_object_or_404(
             ContaReceber.objects.for_filial(filial), pk=pk
         )
+        destino = request.POST.get('next') or reverse('financeiro:receber_detail', args=[pk])
+        if not url_has_allowed_host_and_scheme(destino, allowed_hosts={request.get_host()}):
+            destino = reverse('financeiro:receber_detail', args=[pk])
         nova_data = parse_date(request.POST.get('data_vencimento', '').strip())
         motivo = request.POST.get('motivo', '').strip()
         if not nova_data:
             messages.error(request, 'Informe uma data de vencimento válida.')
-            return redirect(reverse('financeiro:receber_detail', args=[pk]))
+            return redirect(destino)
         try:
             ContaReceberService.alterar_prazo(conta, nova_data, motivo, request.user)
             messages.success(request, f'Prazo da conta #{pk} atualizado.')
         except DomainError as exc:
             messages.error(request, str(exc))
-        return redirect(reverse('financeiro:receber_detail', args=[pk]))
+        return redirect(destino)

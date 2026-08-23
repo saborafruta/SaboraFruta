@@ -8,7 +8,7 @@ from .fiscal import (
 from .formas_pagamento import FormaPagamento, CondicaoPagamento, TaxaParcelamento
 from .conta_bancaria import ContaBancaria, PlanoContas
 from .centro_custo import CentroCusto
-from .receber_pagar import ContaReceber, ContaPagar, PagamentoContaPagar
+from .receber_pagar import ContaReceber, ContaPagar, PagamentoContaPagar, MetaDespesaPessoal
 from .pix_boleto import PIXCobranca, Boleto, RemessaBancaria, RetornoBancario
 from .extrato import ExtratoBancario, ConciliacaoBancaria, AgendaPagamento
 from .tef import TEFConfiguracao, TEFTransacao
@@ -23,7 +23,7 @@ __all__ = [
     "CartaCorrecao","InutilizacaoNumeracao","LogIntegracaoFiscal","IdempotenciaFiscal",
     "FormaPagamento","CondicaoPagamento","TaxaParcelamento",
     "ContaBancaria","PlanoContas","CentroCusto",
-    "ContaReceber","ContaPagar","PagamentoContaPagar",
+    "ContaReceber","ContaPagar","PagamentoContaPagar","MetaDespesaPessoal",
     "PIXCobranca","Boleto","RemessaBancaria","RetornoBancario",
     "ExtratoBancario","ConciliacaoBancaria","AgendaPagamento",
     "TEFConfiguracao","TEFTransacao",

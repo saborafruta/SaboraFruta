@@ -1,6 +1,8 @@
 """Views de Contas a Pagar."""
 from __future__ import annotations
 
+from calendar import monthrange
+from datetime import timedelta
 from decimal import Decimal
 import mimetypes
 from pathlib import Path
@@ -26,10 +28,11 @@ from apps.financeiro.forms.pagar import (
     ContaPagarEdicaoAdminForm,
     ContaPagarForm,
     DespesaPagaForm,
+    MetaDespesaPessoalForm,
     PagamentoContaPagarForm,
 )
 from apps.financeiro.models.conta_bancaria import ContaBancaria, PlanoContas
-from apps.financeiro.models.receber_pagar import ContaPagar, PagamentoContaPagar
+from apps.financeiro.models.receber_pagar import ContaPagar, ContaReceber, MetaDespesaPessoal, PagamentoContaPagar
 from apps.financeiro.services.pagar_service import ContaPagarService
 from apps.financeiro.services.dashboard_contas_service import DashboardContasService
 
@@ -381,12 +384,128 @@ def _filtrar_contas_pagas(request):
     }
 
 
+def _limites_mes(referencia):
+    inicio = referencia.replace(day=1)
+    fim = referencia.replace(day=monthrange(referencia.year, referencia.month)[1])
+    return inicio, fim
+
+
+def _somar_faturamento(filial, inicio, fim):
+    total = ContaReceber.objects.for_filial(filial).filter(
+        status='pago',
+        data_pagamento__range=(inicio, fim),
+    ).aggregate(total=Sum('valor_pago'))['total'] or Decimal('0')
+    try:
+        from apps.pdv.models import PagamentoVendaPDV
+    except ImportError:
+        PagamentoVendaPDV = None
+    if PagamentoVendaPDV:
+        total += PagamentoVendaPDV.objects.filter(
+            venda_pdv__filial=filial,
+            venda_pdv__cancelado_em__isnull=True,
+            data_liquidacao_prevista__range=(inicio, fim),
+        ).exclude(
+            venda_pdv__status='cancelado',
+        ).aggregate(total=Sum('valor_liquido'))['total'] or Decimal('0')
+    return total
+
+
+def _mes_anterior(referencia):
+    primeiro = referencia.replace(day=1)
+    ultimo_mes_anterior = primeiro - timedelta(days=1)
+    return _limites_mes(ultimo_mes_anterior)
+
+
+def _valor_meta_despesa_pessoal(meta, filial, referencia):
+    if not meta or not meta.ativo:
+        return Decimal('0')
+    if meta.tipo_meta == MetaDespesaPessoal.TipoMeta.VALOR_FIXO:
+        return meta.valor_fixo or Decimal('0')
+    percentual = (meta.percentual or Decimal('0')) / Decimal('100')
+    if percentual <= 0:
+        return Decimal('0')
+    if meta.tipo_meta == MetaDespesaPessoal.TipoMeta.PERCENTUAL_MES_ANTERIOR:
+        inicio, fim = _mes_anterior(referencia)
+        return (_somar_faturamento(filial, inicio, fim) * percentual).quantize(Decimal('0.01'))
+
+    meses = max(2, min(int(meta.meses_media or 3), 24))
+    primeiro_mes_atual = referencia.replace(day=1)
+    cursor = primeiro_mes_atual
+    total = Decimal('0')
+    for _ in range(meses):
+        cursor = cursor - timedelta(days=1)
+        inicio, fim = _limites_mes(cursor)
+        total += _somar_faturamento(filial, inicio, fim)
+        cursor = inicio
+    return ((total / Decimal(meses)) * percentual).quantize(Decimal('0.01'))
+
+
+def _resumo_fornecedores(contas):
+    total = sum((conta.valor_pago or Decimal('0') for conta in contas), Decimal('0'))
+    grupos = {}
+    for conta in contas:
+        nome = conta.beneficiario_nome
+        grupo = grupos.setdefault(nome, {'nome': nome, 'valor': Decimal('0'), 'quantidade': 0})
+        grupo['valor'] += conta.valor_pago or Decimal('0')
+        grupo['quantidade'] += 1
+    resumo = []
+    for grupo in grupos.values():
+        percentual = (grupo['valor'] / total * Decimal('100')) if total else Decimal('0')
+        resumo.append({**grupo, 'percentual': percentual})
+    return sorted(resumo, key=lambda item: item['valor'], reverse=True), total
+
+
+def _contexto_meta_despesa_pessoal(filial):
+    hoje = timezone.localdate()
+    inicio_mes, fim_mes = _limites_mes(hoje)
+    meta = MetaDespesaPessoal.objects.filter(filial=filial).first()
+    usado = ContaPagar.objects.for_filial(filial).filter(
+        status=StatusContaPagar.PAGO,
+        data_pagamento__range=(inicio_mes, fim_mes),
+        plano_contas__despesa_pessoal=True,
+    ).aggregate(total=Sum('valor_pago'))['total'] or Decimal('0')
+    valor_meta = _valor_meta_despesa_pessoal(meta, filial, hoje)
+    percentual = (usado / valor_meta * Decimal('100')) if valor_meta > 0 else Decimal('0')
+    return {
+        'meta_despesa_pessoal': meta,
+        'meta_despesa_form': MetaDespesaPessoalForm(instance=meta),
+        'meta_despesa_valor': valor_meta,
+        'meta_despesa_usado': usado,
+        'meta_despesa_percentual': percentual,
+        'meta_despesa_percentual_barra': min(percentual, Decimal('100')),
+        'meta_despesa_mes': hoje,
+    }
+
+
 class ContaPagaListView(PermissaoRequiredMixin, View):
     permissao_modulo = 'financeiro'
     permissao_acao = 'ver'
 
+    def post(self, request):
+        if request.POST.get('acao') != 'salvar_meta_despesa_pessoal':
+            return redirect(reverse('financeiro:pagar_pagas'))
+        if not _usuario_admin(request):
+            messages.error(request, 'Apenas administradores podem configurar a meta.')
+            return redirect(reverse('financeiro:pagar_pagas'))
+        filial = _filial(request)
+        meta = MetaDespesaPessoal.objects.filter(filial=filial).first()
+        form = MetaDespesaPessoalForm(request.POST, instance=meta)
+        if form.is_valid():
+            meta = form.save(commit=False)
+            meta.filial = filial
+            meta.save()
+            messages.success(request, 'Meta de despesas pessoais salva.')
+            return redirect(reverse('financeiro:pagar_pagas'))
+
+        qs, filtros = _filtrar_contas_pagas(request)
+        return self._render(request, qs, filtros, meta_form=form)
+
     def get(self, request):
         qs, filtros = _filtrar_contas_pagas(request)
+        return self._render(request, qs, filtros)
+
+    def _render(self, request, qs, filtros, meta_form=None):
+        filial = _filial(request)
         totais = qs.aggregate(
             quantidade=Count('id'),
             valor_original=Sum('valor_original'),
@@ -397,10 +516,15 @@ class ContaPagaListView(PermissaoRequiredMixin, View):
             despesas_pessoais=Sum('valor_final', filter=Q(plano_contas__despesa_pessoal=True)),
         )
         totais['acrescimos'] = (totais['juros'] or 0) + (totais['multas'] or 0)
-        paginator = Paginator(qs, 40)
+        contas_filtradas = list(qs)
+        fornecedores_resumo, total_fornecedores = _resumo_fornecedores(contas_filtradas)
+        paginator = Paginator(contas_filtradas, 40)
         page_obj = paginator.get_page(request.GET.get('page', 1))
         query = request.GET.copy()
         query.pop('page', None)
+        meta_contexto = _contexto_meta_despesa_pessoal(filial)
+        if meta_form is not None:
+            meta_contexto['meta_despesa_form'] = meta_form
 
         return render(request, 'financeiro/pagar/pagas.html', {
             'title': 'Contas Pagas',
@@ -410,6 +534,9 @@ class ContaPagaListView(PermissaoRequiredMixin, View):
             'page_querystring': query.urlencode(),
             'pode_criar': request.user.tem_permissao('financeiro', 'criar'),
             'user_is_admin': _usuario_admin(request),
+            'fornecedores_resumo': fornecedores_resumo,
+            'total_fornecedores': total_fornecedores,
+            **meta_contexto,
             **filtros,
         })
 
