@@ -41,8 +41,11 @@ def campo_parcelas():
 
 
 def configurar_forma_pagamento(form, queryset):
-    form.fields["forma_pagamento"].queryset = queryset.prefetch_related("taxas_parcelamento")
-    form.fields["forma_pagamento"].widget = FormaPagamentoCartaoSelect()
+    campo = form.fields["forma_pagamento"]
+    campo.widget = FormaPagamentoCartaoSelect()
+    # ModelChoiceField repassa as opcoes ao widget quando o queryset e atribuido.
+    # A ordem importa: trocar o widget depois disso cria um <select> vazio.
+    campo.queryset = queryset.prefetch_related("taxas_parcelamento")
 
 
 def limpar_dados_cartao(form, cleaned):

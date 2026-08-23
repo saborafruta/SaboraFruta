@@ -575,6 +575,29 @@ class PosicaoDiariaCaixaTests(TestCase):
         self.assertFalse(form_credito.is_valid())
         self.assertIn("numero_parcelas", form_credito.errors)
 
+    def test_forma_pagamento_manual_renderiza_opcoes_e_metadados_de_cartao(self):
+        from apps.financeiro.forms.cadastros import MovimentoContaBancariaForm
+
+        debito = FormaPagamento.objects.create(
+            empresa=self.empresa, filial=self.filial, descricao="Cartao debito",
+            tipo=TipoFormaPagamento.CARTAO_DEBITO,
+        )
+        credito = FormaPagamento.objects.create(
+            empresa=self.empresa, filial=self.filial, descricao="Cartao credito",
+            tipo=TipoFormaPagamento.CARTAO_CREDITO, gera_parcelas=True,
+        )
+        TaxaParcelamento.objects.create(
+            forma_pagamento=credito, parcelas=6, bandeira="visa", taxa=Decimal("4.00"),
+        )
+
+        html = str(MovimentoContaBancariaForm(filial=self.filial)["forma_pagamento"])
+
+        self.assertIn(">PIX<", html)
+        self.assertIn(">Cartao debito<", html)
+        self.assertIn('data-tipo="cartao_debito"', html)
+        self.assertIn(">Cartao credito<", html)
+        self.assertIn('data-max-parcelas="6"', html)
+
     def test_saida_manual_nao_pode_ser_corrigida_como_entrada(self):
         movimento = ExtratoBancario.objects.create(
             filial=self.filial, conta_bancaria=self.banco, forma_pagamento=self.forma,
