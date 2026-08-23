@@ -21,6 +21,7 @@ from . import (
     views_comercial as vcom,
     views_dashboard as vd, views_historico as vh, views_qualidade as vq, views_qr as vqr,
     views_roteiro as vr, views_terminal as vt, views_wip as vw,
+    views_producao as vprod,
 )
 
 app_name = 'moda'
@@ -141,6 +142,9 @@ ROTAS_PRONTAS: list = [
     # Expedicao. Grupo proprio no menu; `separacao` e' o endereco de
     # entrada porque e' o primeiro item do grupo.
     # Fila de quem confere -- endereco do menu, que caia no placeholder.
+    # Indicador de producao -- endereco do menu, que caia no placeholder.
+    path('indicadores/producao/', vprod.ProducaoIndicadorView.as_view(), name='indicador-producao'),
+
     path('expedicao/conferencia/', vcon.ConferenciaFilaView.as_view(), name='conferencia-fila'),
     path('expedicao/embalagem/', vcon.EmbalagemFilaView.as_view(), name='embalagem-fila'),
     path('expedicao/entrega/', vcon.EntregaFilaView.as_view(), name='entrega-fila'),

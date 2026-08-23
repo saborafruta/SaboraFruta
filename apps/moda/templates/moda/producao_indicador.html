@@ -1,0 +1,131 @@
+{% extends "_base.html" %}
+{% block title %}{{ title }}{% endblock %}
+{% block page_title %}Produção{% endblock %}
+{% block content %}
+<div class="space-y-5">
+  <div class="flex flex-wrap items-start justify-between gap-3">
+    <div>
+      <p class="text-sm mb-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+        <a href="{% url 'moda:grupo' 'indicadores' %}" :style="temaClaro ? 'color:#3b82f6;' : 'color:#60a5fa;'">Indicadores</a>
+        <span class="mx-1">›</span> Produção
+      </p>
+      <h2 class="text-2xl font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">Produção</h2>
+      <p class="text-sm mt-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+        Volume produzido por etapa, contado por <strong>data de conclusão</strong> —
+        o que saiu da bancada desde {{ desde|date:"d/m/Y" }}.
+      </p>
+    </div>
+    <form method="get" class="flex gap-2">
+      {% for valor, rotulo in periodos %}
+        <a href="?dias={{ valor }}"
+           class="{% if dias == valor %}btn-primary{% else %}btn-secondary{% endif %} text-sm">{{ rotulo }}</a>
+      {% endfor %}
+    </form>
+  </div>
+
+  <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+    <div class="card p-4">
+      <p class="text-xs uppercase tracking-wide" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Peças produzidas</p>
+      <p class="text-2xl font-semibold mt-1" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">{{ resumo.produzido }}</p>
+      <p class="text-xs mt-1" :style="temaClaro ? 'color:#94a3b8;' : 'color:#6b7280;'">somando as etapas</p>
+    </div>
+    <div class="card p-4">
+      <p class="text-xs uppercase tracking-wide" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Peças perdidas</p>
+      <p class="text-2xl font-semibold mt-1" style="color:{% if resumo.perdido %}#dc2626{% else %}#059669{% endif %};">{{ resumo.perdido }}</p>
+      <p class="text-xs mt-1" :style="temaClaro ? 'color:#94a3b8;' : 'color:#6b7280;'">recebido menos entregue</p>
+    </div>
+    {% comment %}
+      O gargalo é a bancada que MENOS entregou: é ela que limita o que sai
+      da fábrica, por mais que as outras tenham corrido.
+    {% endcomment %}
+    <div class="card p-4">
+      <p class="text-xs uppercase tracking-wide" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Menor volume</p>
+      {% if resumo.menor %}
+        <p class="text-lg font-semibold mt-1" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">{{ resumo.menor.label }}</p>
+        <p class="text-xs mt-1" :style="temaClaro ? 'color:#94a3b8;' : 'color:#6b7280;'">{{ resumo.menor.produzido }} peças — limita a saída</p>
+      {% else %}
+        <p class="text-lg font-semibold mt-1" :style="temaClaro ? 'color:#94a3b8;' : 'color:#6b7280;'">—</p>
+      {% endif %}
+    </div>
+    <div class="card p-4">
+      <p class="text-xs uppercase tracking-wide" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Maior perda</p>
+      {% if resumo.pior_perda and resumo.pior_perda.perdido %}
+        <p class="text-lg font-semibold mt-1" style="color:#dc2626;">{{ resumo.pior_perda.label }}</p>
+        <p class="text-xs mt-1" :style="temaClaro ? 'color:#94a3b8;' : 'color:#6b7280;'">{{ resumo.pior_perda.percentual_perda }}% do que recebeu</p>
+      {% else %}
+        <p class="text-lg font-semibold mt-1" style="color:#059669;">nenhuma</p>
+      {% endif %}
+    </div>
+  </div>
+
+  <div class="card overflow-hidden">
+    {% if linhas %}
+      <div class="overflow-x-auto">
+        <table class="w-full text-sm">
+          <thead>
+            <tr class="border-b" :style="temaClaro ? 'border-color:#e2e8f0;' : 'border-color:#2a2a2e;'">
+              <th class="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wide"
+                  :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Etapa</th>
+              <th class="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wide"
+                  :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Volume</th>
+              <th class="text-right px-4 py-3 text-xs font-semibold uppercase tracking-wide"
+                  :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Recebeu</th>
+              <th class="text-right px-4 py-3 text-xs font-semibold uppercase tracking-wide"
+                  :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Entregou</th>
+              <th class="text-right px-4 py-3 text-xs font-semibold uppercase tracking-wide"
+                  :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Perdeu</th>
+              <th class="text-right px-4 py-3 text-xs font-semibold uppercase tracking-wide"
+                  :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Ordens</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% comment %}
+              NA ORDEM DO FLUXO, não por volume: o que se lê aqui é a peça
+              descendo a fábrica, e a queda de uma linha para a seguinte é
+              justamente o que se procura.
+            {% endcomment %}
+            {% for l in linhas %}
+              <tr class="border-b" :style="temaClaro ? 'border-color:#f1f5f9;' : 'border-color:#1e1e22;'">
+                <td class="px-4 py-3 font-medium whitespace-nowrap"
+                    :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">{{ l.label }}</td>
+                <td class="px-4 py-3" style="min-width:160px;">
+                  <div style="height:8px; border-radius:4px; background:rgba(127,127,127,.18);">
+                    <div style="height:8px; border-radius:4px; background:#3b82f6; width:{{ l.barra }}%;"></div>
+                  </div>
+                </td>
+                <td class="px-4 py-3 text-right tabular-nums"
+                    :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">{{ l.planejado }}</td>
+                <td class="px-4 py-3 text-right tabular-nums font-semibold"
+                    :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">{{ l.produzido }}</td>
+                <td class="px-4 py-3 text-right tabular-nums">
+                  {% if l.perdido %}
+                    <span style="color:#dc2626;">{{ l.perdido }}</span>
+                    <span class="block text-xs" style="color:#dc2626;">{{ l.percentual_perda }}%</span>
+                  {% else %}
+                    <span :style="temaClaro ? 'color:#94a3b8;' : 'color:#6b7280;'">—</span>
+                  {% endif %}
+                </td>
+                <td class="px-4 py-3 text-right tabular-nums"
+                    :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">{{ l.ordens }}</td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    {% else %}
+      <div class="p-10 text-center">
+        <p class="text-sm font-medium" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
+          Nenhuma etapa concluída neste período.
+        </p>
+        <p class="text-sm mt-2" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+          O volume é contado quando a etapa é <strong>concluída</strong> no fluxo
+          da ordem. Tente um período maior ou acompanhe o andamento em Produção.
+        </p>
+        <a href="{% url 'moda:grupo' 'producao' %}" class="btn-secondary text-sm mt-4 inline-block">
+          Ir para Produção
+        </a>
+      </div>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}
