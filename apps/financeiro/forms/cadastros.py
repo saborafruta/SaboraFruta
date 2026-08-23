@@ -111,7 +111,7 @@ class MovimentoContaBancariaForm(forms.Form):
                 PlanoContas.objects
                 .filter(
                     empresa=filial.empresa, tipo="R", ativo=True,
-                    aceita_lancamento=True, nivel=3, conta_contabil__isnull=False,
+                    aceita_lancamento=True, nivel=3,
                 )
                 .select_related("conta_pai__conta_pai", "conta_contabil")
                 .order_by("codigo")
@@ -196,7 +196,7 @@ class EditarMovimentoBancarioForm(forms.Form):
                 PlanoContas.objects
                 .filter(
                     empresa=filial.empresa, tipo="R", ativo=True,
-                    aceita_lancamento=True, nivel=3, conta_contabil__isnull=False,
+                    aceita_lancamento=True, nivel=3,
                 )
                 .select_related("conta_pai__conta_pai", "conta_contabil")
                 .order_by("codigo")
@@ -249,7 +249,7 @@ class EditarEntradaFinanceiraForm(forms.Form):
                 PlanoContas.objects
                 .filter(
                     empresa=filial.empresa, tipo="R", ativo=True,
-                    aceita_lancamento=True, nivel=3, conta_contabil__isnull=False,
+                    aceita_lancamento=True, nivel=3,
                 )
                 .select_related("conta_pai__conta_pai", "conta_contabil")
                 .order_by("codigo")
