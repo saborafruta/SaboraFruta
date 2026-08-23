@@ -542,3 +542,19 @@ class NaoSobraNadaTests(LimparPedidosBase):
 
         self.assertEqual(Tamanho.objects.count(), 1)
         self.assertEqual(ProdutoModa.objects.count(), 1)
+
+    def test_o_cliente_nao_e_apagado(self):
+        """
+        DECISÃO DO USUÁRIO, e não descuido: o cliente fica.
+
+        Ele vive em `cadastros`, compartilhado com PDV, fiscal e financeiro —
+        apagá-lo junto com o pedido teria alcance muito maior que este
+        vertical. Está aqui como teste para que a decisão não se desfaça
+        sozinha no dia em que alguém "completar" a limpeza.
+        """
+        pedido = self._pedido_com_tudo()
+        cliente = pedido.cliente
+
+        self._rodar(filial=self.filial.pk, confirmar=True, incluir_financeiro=True)
+
+        self.assertTrue(Cliente.objects.filter(pk=cliente.pk).exists())
