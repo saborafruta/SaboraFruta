@@ -2,7 +2,29 @@
 {% block title %}{{ title }}{% endblock %}
 {% block page_title %}Tecidos{% endblock %}
 {% block content %}
-<div class="space-y-5">
+{% comment %}
+  A busca filtra AO VIVO, no navegador: a lista ja' veio inteira na pagina,
+  e ir ao servidor a cada tecla so' acrescentaria espera. O `form` continua
+  valendo -- Enter e o botao ainda mandam `?q=`, que e' o que faz o endereco
+  poder ser guardado.
+
+  Mesmo padrao do seletor de filial (`core/auth/selecionar_filial.html`),
+  inclusive o `norm`: sem tirar o acento, "abada" nao acharia "ABADÁ", e
+  numa confeccao quase todo nome tem acento.
+{% endcomment %}
+<div class="space-y-5"
+     x-data="{
+       busca: '',
+       norm(valor) {
+         return (valor || '').toString().normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+       },
+       combina(linha) {
+         return !this.busca.trim() || this.norm(linha.dataset.busca).includes(this.norm(this.busca));
+       },
+       get visiveis() {
+         return [...this.$root.querySelectorAll('[data-busca]')].filter(l => this.combina(l)).length;
+       }
+     }">
   <div class="flex flex-wrap items-start justify-between gap-3">
     <div>
       <p class="text-sm mb-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
@@ -25,9 +47,20 @@
 
   <form method="get" class="flex flex-wrap gap-2">
     <input type="hidden" name="dias" value="{{ dias }}">
-    <input type="text" name="q" value="{{ busca }}" placeholder="Buscar tecido pelo nome"
+    <input type="text" name="q" value="{{ busca }}" x-model="busca"
+           placeholder="Buscar tecido pelo nome" autocomplete="off"
            class="form-input text-sm" style="max-width:280px;">
     <button type="submit" class="btn-secondary text-sm">Buscar</button>
+    {% comment %}
+      O contador so' aparece filtrando: sem ele a tabela encolhe e nao ha'
+      como saber se sumiu linha por causa da busca ou porque nao existe.
+    {% endcomment %}
+    <span x-show="busca.trim()" x-cloak class="text-xs"
+          :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+      <span x-text="visiveis"></span> de {{ linhas|length }}
+    </span>
+    <button type="button" x-show="busca.trim()" x-cloak @click="busca = ''"
+            class="btn-secondary text-sm">Limpar busca</button>
     {% if busca %}
       <a href="?dias={{ dias }}" class="btn-secondary text-sm">Limpar</a>
     {% endif %}
@@ -129,7 +162,10 @@
               o fim — é cadastro faltando, não urgência.
             {% endcomment %}
             {% for l in linhas %}
-              <tr class="border-b" :style="temaClaro ? 'border-color:#f1f5f9;' : 'border-color:#1e1e22;'">
+              <tr class="border-b"
+                  data-busca="{{ l.nome }} {{ l.composicao }} {{ l.fornecedor }}"
+                  x-show="combina($el)" x-cloak
+                  :style="temaClaro ? 'border-color:#f1f5f9;' : 'border-color:#1e1e22;'">
                 <td class="px-4 py-3">
                   <span class="font-medium" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">{{ l.nome }}</span>
                   <span class="block text-xs" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
@@ -188,6 +224,20 @@
             {% endfor %}
           </tbody>
         </table>
+      </div>
+      {% comment %}
+        Vazio da BUSCA, diferente do vazio do servidor la' embaixo: aqui ha'
+        linha na pagina e nenhuma casa com o que se digitou.
+      {% endcomment %}
+      <div x-show="busca.trim() && visiveis === 0" x-cloak class="p-10 text-center">
+        <p class="text-sm font-medium" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
+          Nenhum tecido com <span x-text="'“' + busca + '”'"></span> nesta lista.
+        </p>
+        <p class="text-sm mt-2" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+          A busca olha o que já está na tela. Se houver filtro ligado acima, ele
+          pode estar fora dele.
+        </p>
+        <button type="button" @click="busca = ''" class="btn-secondary text-sm mt-4">Limpar busca</button>
       </div>
     {% else %}
       <div class="p-10 text-center">
