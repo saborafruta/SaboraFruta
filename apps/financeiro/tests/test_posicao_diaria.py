@@ -100,6 +100,14 @@ class PosicaoDiariaCaixaTests(TestCase):
         self.assertEqual(saldos["Banco principal"], Decimal("170.00"))
         self.assertEqual(saldos["Dinheiro em caixa"], Decimal("40.00"))
         self.assertTrue(posicao["possui_caixa_dinheiro"])
+        self.assertIn(
+            "Sem forma vinculada",
+            {item["nome"] for item in posicao["totais_forma_entrada"]},
+        )
+        self.assertIn(
+            "Sem forma vinculada",
+            {item["nome"] for item in posicao["totais_forma_saida"]},
+        )
 
     def test_tela_exibe_entradas_saidas_e_atalhos(self):
         self._criar_cenario()

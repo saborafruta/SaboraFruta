@@ -857,6 +857,16 @@ class FuncionarioContaPagarTests(TestCase):
         conta_nova = ContaBancaria.objects.create(
             filial=self.filial, descricao="Conta nova", banco_codigo="260",
         )
+        conta_contabil_nova = PlanoContabil.objects.create(
+            empresa=self.empresa, codigo_referencia=8002, classificacao="3320200001",
+            tipo_conta="A", descricao="SERVICOS ADMINISTRATIVOS",
+            data_inicio=date(2015, 1, 1), nivel=5, ordem=2,
+        )
+        categoria_nova = PlanoContas.objects.create(
+            empresa=self.empresa, conta_contabil=conta_contabil_nova,
+            codigo="3320200001", descricao="Servicos Administrativos", tipo="D",
+            nivel=3, aceita_lancamento=True,
+        )
         conta = ContaPagarService.criar(
             filial=self.filial, fornecedor=fornecedor_anterior,
             tipo_lancamento=ContaPagar.TipoLancamento.FORNECEDOR,
@@ -881,6 +891,7 @@ class FuncionarioContaPagarTests(TestCase):
                 "data_vencimento": "2026-09-15",
                 "data_competencia": "2026-09-01",
                 "forma_pagamento_prevista": self.forma_pix.pk,
+                "plano_contas": categoria_nova.pk,
                 "data_pagamento": "2026-08-21",
                 "forma_pagamento": self.forma_prevista.pk,
                 "conta_bancaria": conta_nova.pk,
@@ -903,6 +914,8 @@ class FuncionarioContaPagarTests(TestCase):
         self.assertEqual(conta.data_vencimento, date(2026, 9, 15))
         self.assertEqual(conta.data_competencia, date(2026, 9, 1))
         self.assertEqual(conta.forma_pagamento_prevista, self.forma_pix)
+        self.assertEqual(conta.plano_contas, categoria_nova)
+        self.assertEqual(conta.conta_contabil, conta_contabil_nova)
         self.assertEqual(conta.observacao, "Valor e dados conferidos com o fornecedor.")
         self.assertEqual(pagamento.valor_pago, Decimal("125.50"))
         self.assertEqual(pagamento.data_pagamento, date(2026, 8, 21))
@@ -925,3 +938,5 @@ class FuncionarioContaPagarTests(TestCase):
         )
         self.assertEqual(log.dados_anteriores["fornecedor"], "Fornecedor anterior")
         self.assertEqual(log.dados_novos["fornecedor"], "Fornecedor novo")
+        self.assertEqual(log.dados_anteriores["plano_contas"], "Salarios e Ordenados")
+        self.assertEqual(log.dados_novos["plano_contas"], "Servicos Administrativos")
