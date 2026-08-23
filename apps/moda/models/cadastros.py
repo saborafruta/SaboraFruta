@@ -155,6 +155,22 @@ class Tecido(CadastroApoio):
         null=True, blank=True, related_name='tecidos_moda',
     )
 
+    # A ponte com o estoque real. Sem ela o tecido é só um nome de catálogo
+    # e não há de onde ler saldo -- a tela de Estoque › Tecidos consegue
+    # deduzir o vínculo pelas fichas dos produtos, mas só enquanto existir
+    # produto com ficha usando este tecido. Aqui o vínculo é do PRÓPRIO
+    # tecido, e vale mesmo para o rolo que ainda não entrou em ficha
+    # nenhuma.
+    produto_estoque = models.ForeignKey(
+        'produtos.Produto', on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='tecidos_moda',
+        verbose_name='Produto no estoque',
+        help_text=(
+            'Ligue para o sistema ler o saldo em metros. A unidade precisa '
+            'ser a mesma — não há conversão.'
+        ),
+    )
+
     class Meta(CadastroApoio.Meta):
         abstract = False
         db_table = 'moda_tecidos'

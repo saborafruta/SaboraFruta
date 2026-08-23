@@ -1,0 +1,221 @@
+{% extends "_base.html" %}
+{% block title %}{{ title }}{% endblock %}
+{% block page_title %}Tecidos{% endblock %}
+{% block content %}
+<div class="space-y-5">
+  <div class="flex flex-wrap items-start justify-between gap-3">
+    <div>
+      <p class="text-sm mb-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+        <a href="{% url 'moda:grupo' 'estoque' %}" :style="temaClaro ? 'color:#3b82f6;' : 'color:#60a5fa;'">Estoque</a>
+        <span class="mx-1">›</span> Tecidos
+      </p>
+      <h2 class="text-2xl font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">Tecidos</h2>
+      <p class="text-sm mt-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+        Saldo em rolo e <strong>quantos dias ele ainda aguenta</strong>, no ritmo
+        de consumo desde {{ desde|date:"d/m/Y" }}.
+      </p>
+    </div>
+    <div class="flex gap-2">
+      {% for valor, rotulo in periodos %}
+        <a href="?dias={{ valor }}{% if busca %}&q={{ busca }}{% endif %}"
+           class="{% if dias == valor %}btn-primary{% else %}btn-secondary{% endif %} text-sm">{{ rotulo }}</a>
+      {% endfor %}
+    </div>
+  </div>
+
+  <form method="get" class="flex flex-wrap gap-2">
+    <input type="hidden" name="dias" value="{{ dias }}">
+    <input type="text" name="q" value="{{ busca }}" placeholder="Buscar tecido pelo nome"
+           class="form-input text-sm" style="max-width:280px;">
+    <button type="submit" class="btn-secondary text-sm">Buscar</button>
+    {% if busca %}
+      <a href="?dias={{ dias }}" class="btn-secondary text-sm">Limpar</a>
+    {% endif %}
+  </form>
+
+  <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+    {% comment %}
+      A cobertura crítica vem primeiro porque é a única coisa nesta tela que
+      pede ação hoje: é o tecido que vai parar a linha antes de a próxima
+      compra chegar.
+    {% endcomment %}
+    <div class="card p-4">
+      <p class="text-xs uppercase tracking-wide" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Acabando</p>
+      {% if resumo.criticos %}
+        <p class="text-2xl font-semibold mt-1" style="color:#dc2626;">{{ resumo.criticos }}</p>
+        <p class="text-xs mt-1" :style="temaClaro ? 'color:#94a3b8;' : 'color:#6b7280;'">
+          menos de {{ resumo.limite }} dias de cobertura
+        </p>
+      {% else %}
+        <p class="text-2xl font-semibold mt-1" style="color:#059669;">0</p>
+        <p class="text-xs mt-1" :style="temaClaro ? 'color:#94a3b8;' : 'color:#6b7280;'">nenhum abaixo de {{ resumo.limite }} dias</p>
+      {% endif %}
+    </div>
+
+    <div class="card p-4">
+      <p class="text-xs uppercase tracking-wide" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Primeiro a acabar</p>
+      {% if resumo.pior %}
+        <p class="text-lg font-semibold mt-1" style="color:#dc2626;">{{ resumo.pior.nome }}</p>
+        <p class="text-xs mt-1" :style="temaClaro ? 'color:#94a3b8;' : 'color:#6b7280;'">
+          {{ resumo.pior.cobertura }} dia(s) — {{ resumo.pior.disponivel }} m
+        </p>
+      {% else %}
+        <p class="text-lg font-semibold mt-1" style="color:#059669;">nenhum apertado</p>
+      {% endif %}
+    </div>
+
+    <div class="card p-4">
+      <p class="text-xs uppercase tracking-wide" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Consumido no período</p>
+      <p class="text-2xl font-semibold mt-1" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">{{ resumo.consumo }} m</p>
+      <p class="text-xs mt-1" :style="temaClaro ? 'color:#94a3b8;' : 'color:#6b7280;'">medido na mesa de corte</p>
+    </div>
+
+    <div class="card p-4">
+      <p class="text-xs uppercase tracking-wide" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Parado em tecido</p>
+      <p class="text-2xl font-semibold mt-1" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">R$ {{ resumo.valor }}</p>
+      <p class="text-xs mt-1" :style="temaClaro ? 'color:#94a3b8;' : 'color:#6b7280;'">
+        {% if resumo.sem_vinculo %}fora {{ resumo.sem_vinculo }} sem saldo conhecido{% else %}saldo × custo médio{% endif %}
+      </p>
+    </div>
+  </div>
+
+  {% comment %}
+    O aviso de cadastro é destaque e não nota de rodapé: tecido sem vínculo
+    aparece na tela com traço em vez de saldo, e sem esta explicação quem
+    olha conclui que o sistema está quebrado.
+  {% endcomment %}
+  {% if resumo.sem_vinculo %}
+    <div class="card p-4" style="border-left:3px solid #f59e0b;">
+      <p class="text-sm" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
+        <strong>{{ resumo.sem_vinculo }}</strong> tecido(s) sem ligação com um produto de estoque.
+      </p>
+      <p class="text-sm mt-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+        Sem essa ligação não há de onde ler o saldo — a linha mostra traço, e não
+        zero, porque o sistema não sabe quanto há. Ligue no cadastro do tecido,
+        em <strong>Produto no estoque</strong>.
+      </p>
+      <a href="{% url 'moda:item' 'engenharia' 'materiais' %}" class="btn-secondary text-sm mt-3 inline-block">
+        Cadastro de tecidos
+      </a>
+    </div>
+  {% endif %}
+
+  <div class="card overflow-hidden">
+    {% if linhas %}
+      <div class="overflow-x-auto">
+        <table class="w-full text-sm">
+          <thead>
+            <tr class="border-b" :style="temaClaro ? 'border-color:#e2e8f0;' : 'border-color:#2a2a2e;'">
+              <th class="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wide"
+                  :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Tecido</th>
+              <th class="text-right px-4 py-3 text-xs font-semibold uppercase tracking-wide"
+                  :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Cobertura</th>
+              <th class="text-right px-4 py-3 text-xs font-semibold uppercase tracking-wide"
+                  :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Disponível</th>
+              <th class="text-right px-4 py-3 text-xs font-semibold uppercase tracking-wide"
+                  :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Reservado</th>
+              <th class="text-right px-4 py-3 text-xs font-semibold uppercase tracking-wide"
+                  :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Consumo/dia</th>
+              <th class="text-right px-4 py-3 text-xs font-semibold uppercase tracking-wide"
+                  :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">No período</th>
+              <th class="text-right px-4 py-3 text-xs font-semibold uppercase tracking-wide"
+                  :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Valor parado</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% comment %}
+              Ordenado pela COBERTURA, do mais apertado para o mais folgado:
+              é a fila de quem comprar primeiro. Tecido sem vínculo cai para
+              o fim — é cadastro faltando, não urgência.
+            {% endcomment %}
+            {% for l in linhas %}
+              <tr class="border-b" :style="temaClaro ? 'border-color:#f1f5f9;' : 'border-color:#1e1e22;'">
+                <td class="px-4 py-3">
+                  <span class="font-medium" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">{{ l.nome }}</span>
+                  <span class="block text-xs" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+                    {% if l.composicao %}{{ l.composicao }}{% endif %}
+                    {% if l.gramatura %} · {{ l.gramatura }} g/m²{% endif %}
+                    {% if l.largura_cm %} · {{ l.largura_cm }} cm{% endif %}
+                  </span>
+                  {% if l.deduzido %}
+                    <span class="block text-xs mt-1" style="color:#f59e0b;"
+                          title="O saldo veio do produto ligado na ficha técnica, e não do cadastro do tecido.">
+                      saldo deduzido pela ficha — confira o vínculo
+                    </span>
+                  {% elif not l.ligado %}
+                    <span class="block text-xs mt-1" style="color:#f59e0b;">sem produto de estoque ligado</span>
+                  {% endif %}
+                </td>
+                <td class="px-4 py-3 text-right tabular-nums font-semibold">
+                  {% if l.cobertura is None %}
+                    <span :style="temaClaro ? 'color:#94a3b8;' : 'color:#6b7280;'"
+                          title="{% if not l.ligado %}Sem vínculo com estoque: o saldo é desconhecido.{% else %}Sem consumo no período: não há ritmo com que projetar.{% endif %}">—</span>
+                  {% elif l.cobertura < resumo.limite %}
+                    <span style="color:#dc2626;">{{ l.cobertura }} dia(s)</span>
+                  {% elif l.cobertura < 30 %}
+                    <span style="color:#f59e0b;">{{ l.cobertura }} dias</span>
+                  {% else %}
+                    <span style="color:#059669;">{{ l.cobertura }} dias</span>
+                  {% endif %}
+                </td>
+                <td class="px-4 py-3 text-right tabular-nums">
+                  {% if l.disponivel is None %}
+                    <span :style="temaClaro ? 'color:#94a3b8;' : 'color:#6b7280;'">—</span>
+                  {% elif l.sem_saldo %}
+                    <span style="color:#dc2626;">0,00 m</span>
+                  {% else %}
+                    <span :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">{{ l.disponivel }} m</span>
+                  {% endif %}
+                </td>
+                <td class="px-4 py-3 text-right tabular-nums"
+                    :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+                  {% if l.reservado is None %}—{% else %}{{ l.reservado }} m{% endif %}
+                </td>
+                <td class="px-4 py-3 text-right tabular-nums"
+                    :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+                  {% if l.consumo_dia %}{{ l.consumo_dia }} m{% else %}—{% endif %}
+                </td>
+                <td class="px-4 py-3 text-right tabular-nums"
+                    :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+                  {{ l.consumo }} m
+                  {% if l.cortes %}<span class="block text-xs">{{ l.cortes }} corte(s)</span>{% endif %}
+                </td>
+                <td class="px-4 py-3 text-right tabular-nums"
+                    :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+                  {% if l.valor is None %}—{% else %}R$ {{ l.valor }}{% endif %}
+                </td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    {% else %}
+      <div class="p-10 text-center">
+        <p class="text-sm font-medium" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
+          {% if busca %}Nenhum tecido com esse nome.{% else %}Nenhum tecido cadastrado.{% endif %}
+        </p>
+        <p class="text-sm mt-2" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+          Os tecidos vêm do cadastro de Engenharia. É lá que se liga cada um ao
+          produto de estoque que guarda o saldo em metros.
+        </p>
+        <a href="{% url 'moda:item' 'engenharia' 'materiais' %}" class="btn-secondary text-sm mt-4 inline-block">
+          Cadastro de tecidos
+        </a>
+      </div>
+    {% endif %}
+  </div>
+
+  <div class="card p-4">
+    <p class="text-xs uppercase tracking-wide mb-2" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Como o número é feito</p>
+    <ul class="text-sm space-y-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+      <li><strong>Cobertura</strong> = disponível ÷ consumo por dia. É ela que diz se a linha para,
+        e não o saldo: 150 m são três meses a 50 m/mês e seis dias a 25 m/dia.</li>
+      <li><strong>Consumo</strong> sai da mesa de corte, não da ficha — a ficha é o que se
+        planejava gastar; aqui a pergunta é o que o rolo está perdendo de verdade.</li>
+      <li><strong>Traço não é zero.</strong> Sem vínculo com estoque o saldo é desconhecido;
+        sem consumo no período não há ritmo com que projetar cobertura.</li>
+      <li>O saldo é <strong>desta filial</strong>. O produto é do catálogo da empresa, mas o rolo está num lugar só.</li>
+    </ul>
+  </div>
+</div>
+{% endblock %}

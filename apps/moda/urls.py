@@ -22,7 +22,7 @@ from . import (
     views_dashboard as vd, views_historico as vh, views_qualidade as vq, views_qr as vqr,
     views_roteiro as vr, views_terminal as vt, views_wip as vw,
     views_producao as vprod, views_eficiencia as vef, views_perdas as vperd,
-    views_custo_real as vcr,
+    views_custo_real as vcr, views_estoque_tecido as vet,
 )
 
 app_name = 'moda'
@@ -146,6 +146,9 @@ ROTAS_PRONTAS: list = [
     path('indicadores/eficiencia/', vef.EficienciaIndicadorView.as_view(), name='indicador-eficiencia'),
     path('indicadores/perdas/', vperd.PerdasIndicadorView.as_view(), name='indicador-perdas'),
     path('indicadores/custos/', vcr.CustoIndicadorView.as_view(), name='indicador-custos'),
+
+    # Estoque -- mesmo caso: o endereco ja' esta' no menu.
+    path('estoque/tecidos/', vet.EstoqueTecidoView.as_view(), name='estoque-tecidos'),
 
     # Expedicao. Grupo proprio no menu; `separacao` e' o endereco de
     # entrada porque e' o primeiro item do grupo.
