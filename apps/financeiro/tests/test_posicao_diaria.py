@@ -171,7 +171,7 @@ class PosicaoDiariaCaixaTests(TestCase):
 
         response = self.client.get(reverse("financeiro:posicao_diaria"), {"data": "2026-08-21"})
         self.assertContains(response, "Compra pessoal da sócia")
-        self.assertContains(response, "Despesas pessoais no período")
+        self.assertContains(response, "Meta mensal de despesas pessoais")
         self.assertContains(response, 'class="pc-personal-badge"')
         self.assertContains(response, 'class="pc-personal-summary')
         self.assertContains(response, '<template x-teleport="body"><div x-show="tituloPagarModal"')
@@ -193,12 +193,15 @@ class PosicaoDiariaCaixaTests(TestCase):
         self.assertEqual(posicao["variacao_dia"], Decimal("37.90"))
         self.assertEqual(posicao["total_fechamento"], Decimal("207.90"))
         self.assertEqual(posicao["total_taxas_entradas"], Decimal("2.10"))
+        self.assertEqual(posicao["total_liquido_entradas"], Decimal("107.90"))
         self.assertEqual(posicao["taxas_por_forma"][0]["nome"], self.forma.descricao)
 
         response = self.client.get(reverse("financeiro:posicao_diaria"), {"data": "2026-08-21"})
         self.assertContains(response, "TAXA 2,00% + R$ 0,50")
         self.assertContains(response, "Taxas do período")
-        self.assertContains(response, "Valor original, desconto e valor final")
+        self.assertContains(response, "Detalhamento das taxas")
+        self.assertContains(response, "Taxas descontadas")
+        self.assertNotContains(response, 'class="pc-fee-summary')
         self.assertContains(response, "R$ 2,10")
 
     def test_entrada_manual_exibe_percentual_configurado_sem_descontar_saldo(self):

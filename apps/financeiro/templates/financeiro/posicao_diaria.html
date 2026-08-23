@@ -55,9 +55,6 @@
   .pc-forecast-renegotiated { display:inline-flex; align-items:center; border:1px solid #fde68a; border-radius:999px; background:#fffbeb; padding:.15rem .5rem; color:#92400e; font-size:10px; font-weight:800; line-height:1.2; text-transform:uppercase; }
   .pc-forecast-positive { color:#047857; font-weight:800; }
   .pc-forecast-negative { color:#be123c; font-weight:800; }
-  .pc-fee-summary { background:#fff; }
-  .pc-fee-row { border-top:1px solid #e2e8f0; }
-  .pc-fee-row:first-child { border-top:0; }
   .pc-fee-label { display:inline-flex; align-items:center; border:1px solid #fda4af; border-radius:4px; background:#fff1f2; padding:.2rem .45rem; color:#be123c; font-size:12px; font-weight:800; line-height:1.2; }
   .tema-escuro .pc-forecast { border-color:#475569; background:#202024; color:#f8fafc; }
   .tema-escuro .pc-forecast-head { border-color:#475569; background:#172033; }
@@ -77,8 +74,6 @@
   .tema-escuro .pc-forecast-renegotiated { border-color:#92400e; background:#422006; color:#fde68a; }
   .tema-escuro .pc-forecast-positive { color:#6ee7b7; }
   .tema-escuro .pc-forecast-negative { color:#fda4af; }
-  .tema-escuro .pc-fee-summary { background:#202024; }
-  .tema-escuro .pc-fee-row { border-color:#3f3f46; }
   .tema-escuro .pc-fee-label { border-color:#9f1239; background:#4c1022; color:#fecdd3; }
   .pc-summary-entry { background:#f0fdf4; color:#14532d; }
   .pc-summary-exit { background:#fff1f2; color:#881337; }
@@ -102,10 +97,56 @@
   .pc-personal-row:hover { background:#fef3c7; }
   .pc-personal-badge { display:inline-flex; margin-top:.3rem; border:1px solid #d97706; border-radius:999px; background:#fef3c7; padding:.15rem .5rem; color:#78350f; font-size:10px; font-weight:700; line-height:1.2; }
   .pc-personal-summary { border-color:#f59e0b; background:#fffbeb; color:#78350f; }
+  .pc-personal-metrics { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); border:1px solid #fcd34d; border-radius:6px; background:rgba(255,255,255,.68); }
+  .pc-personal-metric { min-width:0; padding:.7rem .85rem; }
+  .pc-personal-metric + .pc-personal-metric { border-left:1px solid #fde68a; }
+  .pc-personal-metric span { display:block; color:#92400e; font-size:10px; font-weight:700; text-transform:uppercase; }
+  .pc-personal-metric strong { display:block; margin-top:.15rem; font-size:15px; white-space:nowrap; }
+  .pc-personal-progress { height:10px; overflow:hidden; border-radius:999px; background:#fde68a; }
+  .pc-personal-progress > span { display:block; height:100%; border-radius:inherit; background:#d97706; }
+  .pc-personal-progress.is-over > span { background:#e11d48; }
+  .pc-personal-link { display:inline-flex; align-items:center; gap:.35rem; border:1px solid #d97706; border-radius:6px; padding:.45rem .7rem; color:#92400e; font-size:12px; font-weight:800; }
+  .pc-personal-link:hover { background:#fef3c7; }
+  .pc-fee-dialog { width:min(100%,820px); overflow:hidden; border:1px solid #cbd5e1; border-radius:8px; background:#fff; color:#0f172a; box-shadow:0 24px 70px rgba(15,23,42,.28); }
+  .pc-fee-dialog-head { display:flex; align-items:flex-start; justify-content:space-between; gap:1rem; padding:1.15rem 1.25rem; border-bottom:1px solid #e2e8f0; background:#fff; }
+  .pc-fee-dialog-head small { display:block; color:#64748b; font-size:10px; font-weight:800; text-transform:uppercase; }
+  .pc-fee-dialog-head h3 { margin-top:.2rem; font-size:18px; font-weight:750; }
+  .pc-fee-dialog-head p { margin-top:.2rem; color:#64748b; font-size:12px; }
+  .pc-fee-close { display:flex; width:36px; height:36px; flex:none; align-items:center; justify-content:center; border:1px solid #cbd5e1; border-radius:6px; color:#475569; font-size:20px; line-height:1; }
+  .pc-fee-close:hover { border-color:#64748b; background:#f8fafc; color:#0f172a; }
+  .pc-fee-totals { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); border-bottom:1px solid #e2e8f0; background:#f8fafc; }
+  .pc-fee-total { min-width:0; padding:.85rem 1.25rem; }
+  .pc-fee-total + .pc-fee-total { border-left:1px solid #e2e8f0; }
+  .pc-fee-total span { display:block; color:#64748b; font-size:10px; font-weight:800; text-transform:uppercase; }
+  .pc-fee-total strong { display:block; margin-top:.2rem; font-size:17px; white-space:nowrap; }
+  .pc-fee-grid { display:grid; grid-template-columns:minmax(0,1fr) 108px 108px 108px; gap:16px; align-items:center; }
+  .pc-fee-table-head { padding:.55rem 1.25rem; border-bottom:1px solid #e2e8f0; color:#64748b; font-size:10px; font-weight:800; text-transform:uppercase; }
+  .pc-fee-transaction { padding:1rem 1.25rem; border-bottom:1px solid #e2e8f0; }
+  .pc-fee-transaction:last-child { border-bottom:0; }
+  .pc-fee-main strong { display:block; font-size:14px; }
+  .pc-fee-main span { display:block; margin-top:.2rem; color:#64748b; font-size:11px; }
+  .pc-fee-number { text-align:right; }
+  .pc-fee-number > span { display:none; }
+  .pc-fee-number strong { display:block; white-space:nowrap; }
+  .pc-fee-number small { display:block; margin-top:.15rem; color:#64748b; font-size:10px; }
+  .pc-fee-informative { display:inline-flex !important; margin-top:.25rem !important; border:1px solid #cbd5e1; border-radius:4px; padding:.1rem .35rem; color:#64748b !important; font-size:9px !important; font-weight:700; text-transform:uppercase; }
   .tema-escuro .pc-personal-row { box-shadow:inset 4px 0 0 #f59e0b; background:#332612; }
   .tema-escuro .pc-personal-row:hover { background:#402e12; }
   .tema-escuro .pc-personal-badge { border-color:#fbbf24; background:#78350f; color:#fef3c7; }
   .tema-escuro .pc-personal-summary { border-color:#b45309; background:#2d2212; color:#fde68a; }
+  .tema-escuro .pc-personal-metrics { border-color:#92400e; background:rgba(24,24,27,.45); }
+  .tema-escuro .pc-personal-metric + .pc-personal-metric { border-color:#78350f; }
+  .tema-escuro .pc-personal-metric span { color:#fcd34d; }
+  .tema-escuro .pc-personal-progress { background:#3f3f46; }
+  .tema-escuro .pc-personal-link { border-color:#f59e0b; color:#fde68a; }
+  .tema-escuro .pc-personal-link:hover { background:#422006; }
+  .tema-escuro .pc-fee-dialog { border-color:#3f3f46; background:#18181b; color:#f8fafc; }
+  .tema-escuro .pc-fee-dialog-head { border-color:#3f3f46; background:#18181b; }
+  .tema-escuro .pc-fee-dialog-head small, .tema-escuro .pc-fee-dialog-head p, .tema-escuro .pc-fee-main span, .tema-escuro .pc-fee-number small { color:#a1a1aa; }
+  .tema-escuro .pc-fee-close { border-color:#52525b; color:#d4d4d8; }
+  .tema-escuro .pc-fee-close:hover { background:#27272a; color:#fff; }
+  .tema-escuro .pc-fee-totals { border-color:#3f3f46; background:#202024; }
+  .tema-escuro .pc-fee-total + .pc-fee-total, .tema-escuro .pc-fee-table-head, .tema-escuro .pc-fee-transaction { border-color:#3f3f46; }
   .pc-month-strip { scrollbar-width:thin; scrollbar-color:#94a3b8 transparent; }
   .pc-day-today { border-color:#3b82f6; background:#eff6ff; color:#1d4ed8; box-shadow:0 0 0 2px #bfdbfe; }
   .tema-escuro .pc-day-today { background:rgba(30,58,138,.34); color:#dbeafe; box-shadow:0 0 0 2px #1d4ed8; }
@@ -118,6 +159,18 @@
     .pc-ledger-meta { grid-column:1 / -1; }
     .pc-ledger-head { padding:.75rem; }
     .pc-summary-card { padding:.75rem; }
+    .pc-personal-metrics { grid-template-columns:1fr 1fr; }
+    .pc-personal-metric:last-child { grid-column:1 / -1; border-top:1px solid #fde68a; border-left:0; }
+    .pc-fee-dialog-head { padding:1rem; }
+    .pc-fee-totals { grid-template-columns:1fr 1fr; }
+    .pc-fee-total { padding:.7rem 1rem; }
+    .pc-fee-total:last-child { grid-column:1 / -1; border-top:1px solid #e2e8f0; border-left:0; }
+    .pc-fee-table-head { display:none; }
+    .pc-fee-grid { grid-template-columns:repeat(3,minmax(0,1fr)); gap:10px; }
+    .pc-fee-transaction { padding:1rem; }
+    .pc-fee-main { grid-column:1 / -1; padding-bottom:.2rem; }
+    .pc-fee-number { text-align:left; }
+    .pc-fee-number > span { display:block; margin-bottom:.15rem; color:#64748b; font-size:9px; font-weight:800; text-transform:uppercase; }
   }
   @media (min-width: 768px) {
     .pc-summary-section { grid-template-columns:1fr 1fr; }
@@ -346,17 +399,27 @@
         <div class="pc-summary-card p-4"><h4 class="text-sm font-semibold">Saídas por conta bancária</h4>{% for item in posicao.totais_conta_saida %}<div class="mt-3 flex justify-between gap-3 text-sm"><span class="truncate text-gray-500">{{ item.nome }}</span><strong>R$ {{ item.valor|floatformat:2 }}</strong></div>{% empty %}<p class="mt-3 text-sm text-gray-500">Sem saídas.</p>{% endfor %}</div>
       </div>
     </div>
-    {% if posicao.total_despesas_pessoais > 0 or meta_despesa_valor > 0 %}<div class="pc-personal-summary border-t px-4 py-3"><div class="flex flex-wrap items-center justify-between gap-4"><span><strong class="block text-sm">Despesas pessoais no período</strong><small>Já incluídas nas saídas e no saldo final. A meta acompanha sempre o mês inteiro.</small></span><span class="text-right"><strong class="pc-sensitive block whitespace-nowrap text-lg">R$ {{ posicao.total_despesas_pessoais|floatformat:2 }}</strong><small class="pc-sensitive block">Mês: R$ {{ meta_despesa_usado|floatformat:2 }} de R$ {{ meta_despesa_valor|floatformat:2 }}</small><a href="{% url 'financeiro:pagar_pagas' %}?categoria_grupo={{ grupo_despesa_pessoal_id }}" class="mt-1 inline-block text-xs font-bold underline">Ver mais nas contas pagas</a></span></div><div class="mt-3 h-3 overflow-hidden rounded-full bg-amber-200 dark:bg-slate-700"><div class="h-full rounded-full {% if meta_despesa_percentual > 100 %}bg-rose-500{% else %}bg-amber-500{% endif %}" style="width:{{ meta_despesa_percentual_barra|floatformat:0 }}%;{% if meta_despesa_percentual > 0 %}min-width:8px;{% endif %}"></div></div><div class="mt-1 flex justify-between text-xs font-semibold"><span>{{ meta_despesa_percentual|floatformat:1 }}% utilizado</span><span>Meta mensal</span></div></div>{% endif %}
-  </section>
-
-  <section class="pc-fee-summary overflow-hidden rounded-lg border border-slate-200 dark:border-slate-700">
-    <button type="button" class="flex w-full items-center justify-between gap-4 px-4 py-4 text-left transition hover:bg-rose-50 dark:hover:bg-rose-950/20" @click="taxasModal=true">
-      <span><strong class="block text-base">Taxas</strong><small class="text-gray-500">Resumo por forma de pagamento. Clique para abrir as transações.</small></span>
-      <strong class="pc-sensitive whitespace-nowrap text-xl text-rose-600">R$ {{ posicao.total_taxas_entradas|floatformat:2 }}</strong>
-    </button>
-    <div class="border-t dark:border-slate-700">
-      {% for taxa in posicao.taxas_por_forma %}<button type="button" class="pc-fee-row grid w-full grid-cols-[minmax(0,1fr)_auto] items-center gap-3 px-4 py-3 text-left hover:bg-slate-50 dark:hover:bg-zinc-800" @click="taxasModal=true"><span><strong class="block text-sm">{{ taxa.nome }}</strong><small class="text-gray-500">TAXA {{ taxa.percentual|floatformat:2 }}%{% if taxa.fixa > 0 %} + R$ {{ taxa.fixa|floatformat:2 }}{% endif %} · {{ taxa.quantidade }} transações</small></span><strong class="pc-sensitive text-rose-600">R$ {{ taxa.valor|floatformat:2 }}</strong></button>{% empty %}<div class="px-4 py-3 text-sm text-gray-500">Nenhuma forma de pagamento usada no período.</div>{% endfor %}
-    </div>
+    {% if posicao.total_despesas_pessoais > 0 or meta_despesa_valor > 0 %}
+      <div class="pc-personal-summary border-t px-4 py-4">
+        <div class="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+          <div class="min-w-0 lg:max-w-xs">
+            <strong class="block text-sm">Meta mensal de despesas pessoais</strong>
+            <small class="mt-1 block opacity-80">Acompanhamento do mês inteiro, independentemente do período selecionado.</small>
+            <a href="{% url 'financeiro:pagar_pagas' %}?categoria_grupo={{ grupo_despesa_pessoal_id }}" class="pc-personal-link mt-3">Ver lançamentos <span aria-hidden="true">→</span></a>
+          </div>
+          <div class="min-w-0 flex-1 lg:max-w-2xl">
+            <div class="pc-personal-metrics">
+              <div class="pc-personal-metric"><span>Usado no mês</span><strong class="pc-sensitive">R$ {{ meta_despesa_usado|floatformat:2 }}</strong></div>
+              <div class="pc-personal-metric"><span>Meta mensal</span><strong class="pc-sensitive">R$ {{ meta_despesa_valor|floatformat:2 }}</strong></div>
+              <div class="pc-personal-metric"><span>{% if meta_despesa_percentual > 100 %}Acima da meta{% else %}Ainda disponível{% endif %}</span><strong class="pc-sensitive">R$ {{ meta_despesa_disponivel|floatformat:2 }}</strong></div>
+            </div>
+            <div class="mt-3 flex items-center justify-between gap-3 text-xs font-bold"><span>{{ meta_despesa_percentual|floatformat:1 }}% utilizado</span><span>{% if meta_despesa_percentual > 100 %}Limite ultrapassado{% elif meta_despesa_percentual >= 80 %}Próximo do limite{% else %}Dentro da meta{% endif %}</span></div>
+            <div class="pc-personal-progress mt-2 {% if meta_despesa_percentual > 100 %}is-over{% endif %}" role="progressbar" aria-valuenow="{{ meta_despesa_percentual|floatformat:0 }}" aria-valuemin="0" aria-valuemax="100"><span style="width:{{ meta_despesa_percentual_barra|floatformat:0 }}%;{% if meta_despesa_percentual > 0 %}min-width:8px;{% endif %}"></span></div>
+            <small class="mt-2 block opacity-80">No período exibido: <strong class="pc-sensitive">R$ {{ posicao.total_despesas_pessoais|floatformat:2 }}</strong></small>
+          </div>
+        </div>
+      </div>
+    {% endif %}
   </section>
 
   <section>
@@ -409,13 +472,29 @@
   {% endif %}
 
   <template x-teleport="body"><div x-show="taxasModal" x-cloak class="fixed inset-0 z-[190] flex items-center justify-center overflow-y-auto p-3 sm:p-6" style="background:rgba(15,23,42,.82);backdrop-filter:blur(10px)" @keydown.escape.window="taxasModal=false" @click.self="taxasModal=false" role="dialog" aria-modal="true" aria-label="Detalhes das taxas">
-    <div class="card my-auto w-full max-w-5xl overflow-hidden" @click.stop>
-      <header class="flex items-start justify-between gap-4 bg-slate-900 px-5 py-4 text-white"><div><h3 class="text-lg font-semibold">Taxas do período</h3><p class="mt-1 text-xs text-slate-300">Valor original, desconto e valor final de cada entrada.</p></div><button type="button" class="btn-secondary h-9 w-9 p-0" @click="taxasModal=false" aria-label="Fechar">×</button></header>
-      <div class="max-h-[70vh] overflow-auto">
-        <div class="hidden grid-cols-[minmax(190px,1.4fr)_minmax(160px,1fr)_110px_110px_110px] gap-3 border-b bg-slate-50 px-5 py-2 text-xs font-bold uppercase text-slate-500 dark:border-slate-700 dark:bg-zinc-800 sm:grid"><span>Transação</span><span>Forma / conta</span><span class="text-right">Original</span><span class="text-right">Taxa</span><span class="text-right">Final</span></div>
-        {% for mov in posicao.transacoes_taxas %}<div class="grid gap-3 border-b px-5 py-4 last:border-b-0 dark:border-slate-700 sm:grid-cols-[minmax(190px,1.4fr)_minmax(160px,1fr)_110px_110px_110px] sm:items-center"><div><strong class="block text-sm">{{ mov.descricao }}</strong><small class="text-gray-500">{{ mov.data|date:'d/m/Y' }} · {{ mov.hora }} · {{ mov.origem }}</small></div><div><strong class="block text-sm">{{ mov.forma_pagamento }}</strong><small class="text-gray-500">{{ mov.conta.descricao|default:mov.conta.banco_nome }}</small></div><div class="flex justify-between sm:block sm:text-right"><span class="text-xs text-gray-500 sm:hidden">Original</span><strong class="pc-sensitive">R$ {{ mov.entrada_bruta|floatformat:2 }}</strong></div><div class="flex justify-between sm:block sm:text-right"><span class="text-xs text-gray-500 sm:hidden">Taxa</span><span><strong class="pc-sensitive block text-rose-600">R$ {{ mov.valor_taxa|floatformat:2 }}</strong><small class="text-gray-500">{{ mov.taxa_percentual|floatformat:2 }}%{% if mov.taxa_fixa > 0 %} + R$ {{ mov.taxa_fixa|floatformat:2 }}{% endif %}</small></span></div><div class="flex justify-between sm:block sm:text-right"><span class="text-xs text-gray-500 sm:hidden">Final</span><span><strong class="pc-sensitive block text-emerald-600">R$ {{ mov.valor_final_taxa|floatformat:2 }}</strong>{% if not mov.taxa_descontada %}<small class="text-gray-500">Informativa</small>{% endif %}</span></div></div>{% empty %}<div class="p-8 text-center text-sm text-gray-500">Nenhuma transação com forma de pagamento no período.</div>{% endfor %}
+    <div class="pc-fee-dialog my-auto" @click.stop>
+      <header class="pc-fee-dialog-head">
+        <div><small>Conferência de recebimentos</small><h3>Detalhamento das taxas</h3><p>Confira quanto entrou, quanto foi descontado e o valor líquido de cada transação.</p></div>
+        <button type="button" class="pc-fee-close" @click="taxasModal=false" aria-label="Fechar">×</button>
+      </header>
+      <div class="pc-fee-totals">
+        <div class="pc-fee-total"><span>Valor bruto</span><strong class="pc-sensitive">R$ {{ posicao.total_bruto_transacoes_taxas|floatformat:2 }}</strong></div>
+        <div class="pc-fee-total"><span>Taxas descontadas</span><strong class="pc-sensitive text-rose-600">R$ {{ posicao.total_taxas_entradas|floatformat:2 }}</strong></div>
+        <div class="pc-fee-total"><span>Valor líquido</span><strong class="pc-sensitive text-emerald-600">R$ {{ posicao.total_liquido_transacoes_taxas|floatformat:2 }}</strong></div>
       </div>
-      <footer class="flex items-center justify-between gap-4 border-t px-5 py-4 dark:border-slate-700"><span class="text-sm text-gray-500">Total descontado</span><strong class="pc-sensitive text-xl text-rose-600">R$ {{ posicao.total_taxas_entradas|floatformat:2 }}</strong></footer>
+      <div class="max-h-[62vh] overflow-auto">
+        <div class="pc-fee-grid pc-fee-table-head"><span>Transação e recebimento</span><span class="text-right">Bruto</span><span class="text-right">Taxa</span><span class="text-right">Líquido</span></div>
+        {% for mov in posicao.transacoes_taxas %}
+          <div class="pc-fee-grid pc-fee-transaction">
+            <div class="pc-fee-main"><strong>{{ mov.descricao }}</strong><span>{{ mov.data|date:'d/m/Y' }} às {{ mov.hora }} · {{ mov.forma_pagamento }} · {{ mov.conta.descricao|default:mov.conta.banco_nome }}</span></div>
+            <div class="pc-fee-number"><span>Bruto</span><strong class="pc-sensitive">R$ {{ mov.entrada_bruta|floatformat:2 }}</strong></div>
+            <div class="pc-fee-number"><span>Taxa</span><strong class="pc-sensitive text-rose-600">R$ {{ mov.valor_taxa|floatformat:2 }}</strong><small>{{ mov.taxa_percentual|floatformat:2 }}%{% if mov.taxa_fixa > 0 %} + R$ {{ mov.taxa_fixa|floatformat:2 }}{% endif %}</small></div>
+            <div class="pc-fee-number"><span>Líquido</span><strong class="pc-sensitive text-emerald-600">R$ {{ mov.valor_final_taxa|floatformat:2 }}</strong>{% if not mov.taxa_descontada %}<small class="pc-fee-informative">Informativa</small>{% endif %}</div>
+          </div>
+        {% empty %}
+          <div class="p-8 text-center text-sm text-gray-500">Nenhuma transação com forma de pagamento no período.</div>
+        {% endfor %}
+      </div>
     </div>
   </div></template>
 

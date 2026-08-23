@@ -155,6 +155,13 @@ class PosicaoDiariaCaixaService:
         total_abertura = sum((c.posicao_abertura for c in contas), ZERO)
         total_taxas_entradas = sum((m.valor_taxa for m in entradas), ZERO)
         total_entradas = sum((m.entrada_bruta for m in entradas), ZERO)
+        total_liquido_entradas = sum((m.entrada for m in entradas), ZERO)
+        transacoes_taxas = [
+            movimento for movimento in entradas
+            if movimento.forma_pagamento != "Sem forma vinculada"
+        ]
+        total_bruto_transacoes_taxas = sum((m.entrada_bruta for m in transacoes_taxas), ZERO)
+        total_liquido_transacoes_taxas = sum((m.entrada for m in transacoes_taxas), ZERO)
         total_saidas = sum((m.saida for m in saidas), ZERO) + total_taxas_entradas
         total_fechamento = sum((c.posicao_fechamento for c in contas), ZERO)
         total_despesas_pessoais = sum((m.saida for m in saidas if m.despesa_pessoal), ZERO)
@@ -176,14 +183,14 @@ class PosicaoDiariaCaixaService:
             "excluidos": [mov for mov in movimentos if mov.excluido],
             "total_abertura": total_abertura,
             "total_entradas": total_entradas,
+            "total_liquido_entradas": total_liquido_entradas,
+            "total_bruto_transacoes_taxas": total_bruto_transacoes_taxas,
+            "total_liquido_transacoes_taxas": total_liquido_transacoes_taxas,
             "total_saidas": total_saidas,
             "total_fechamento": total_fechamento,
             "total_despesas_pessoais": total_despesas_pessoais,
             "total_taxas_entradas": total_taxas_entradas,
-            "transacoes_taxas": [
-                movimento for movimento in entradas
-                if movimento.forma_pagamento != "Sem forma vinculada"
-            ],
+            "transacoes_taxas": transacoes_taxas,
             "taxas_por_forma": taxas_por_forma,
             "variacao_dia": total_entradas - total_saidas,
             "totais_forma_entrada": self._agrupar(entradas, "forma_pagamento", "entrada_bruta"),
