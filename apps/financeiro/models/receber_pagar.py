@@ -166,6 +166,7 @@ class ContaPagar(TimestampedModel):
     data_pagamento = models.DateField(null=True, blank=True)
     data_competencia = models.DateField(null=True, blank=True)
     ajustar_vencimento_dia_util = models.BooleanField(default=True)
+    antecipar_vencimento_dia_util = models.BooleanField(default=False)
 
     forma_pagamento = models.ForeignKey(
         FormaPagamento, on_delete=models.SET_NULL, null=True, blank=True, related_name='+',

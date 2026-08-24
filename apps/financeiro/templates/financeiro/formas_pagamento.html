@@ -128,7 +128,7 @@
             <td class="max-w-[220px] truncate px-3 py-2 font-semibold" title="{{ forma.descricao }}">{{ forma.descricao }}</td>
             <td class="whitespace-nowrap px-3 py-2 text-gray-500">{{ forma.get_tipo_display }}</td>
             <td class="max-w-[150px] truncate px-3 py-2 text-gray-500" title="{{ forma.conta_bancaria_padrao.descricao|default:'Sem conta' }}">{{ forma.conta_bancaria_padrao.descricao|default:"Sem conta" }}</td>
-            <td class="whitespace-nowrap px-3 py-2"><span class="text-green-700 dark:text-green-300">Receber {{ forma.taxa_administrativa|floatformat:2 }}%{% if forma.taxa_fixa > 0 %} + R$ {{ forma.taxa_fixa|floatformat:2 }}{% endif %}</span><span class="mx-1 text-gray-300">·</span><span class="text-red-700 dark:text-red-300">Pagar R$ {{ forma.tarifa_pagamento_fixa|floatformat:2 }}</span></td>
+            <td class="whitespace-nowrap px-3 py-2"><span class="text-green-700 dark:text-green-300">Receber {{ forma.taxa_administrativa|floatformat:2 }}%{% if forma.taxa_fixa > 0 %} + R$ {{ forma.taxa_fixa|floatformat:2 }}{% endif %}</span><span class="mx-1 text-gray-300">·</span><span class="font-semibold text-red-900 dark:text-red-300">Pagar R$ {{ forma.tarifa_pagamento_fixa|floatformat:2 }}</span></td>
             <td class="whitespace-nowrap px-3 py-2 text-gray-500">{% if forma.prazo_compensacao_dias_uteis %}{{ forma.prazo_compensacao_dias_uteis }}d úteis{% else %}Imediato{% endif %}</td>
             <td class="px-3 py-2">{% if forma.ativo %}<span class="soft-pill is-green">Ativa</span>{% else %}<span class="soft-pill is-amber">Inativa</span>{% endif %}</td>
             <td class="px-3 py-1.5">

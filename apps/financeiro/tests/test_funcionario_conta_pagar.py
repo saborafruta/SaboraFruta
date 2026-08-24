@@ -398,9 +398,40 @@ class FuncionarioContaPagarTests(TestCase):
             data_vencimento=date(2026, 8, 30),
             plano_contas=categoria_imposto,
             ajustar_vencimento_dia_util=True,
+            antecipar_vencimento_dia_util=True,
         )
 
         self.assertEqual(conta.data_vencimento, date(2026, 8, 28))
+
+    def test_dia_nao_util_avanca_quando_nao_antecipa(self):
+        conta = ContaPagarService.criar(
+            filial=self.filial,
+            funcionario=self.funcionario,
+            tipo_lancamento="funcionario",
+            valor_original=Decimal("100.00"),
+            data_emissao=date(2026, 8, 20),
+            data_vencimento=date(2026, 8, 30),
+            plano_contas=self.categoria,
+            ajustar_vencimento_dia_util=True,
+            antecipar_vencimento_dia_util=False,
+        )
+
+        self.assertEqual(conta.data_vencimento, date(2026, 8, 31))
+
+    def test_sem_calendario_de_dias_uteis_preserva_a_data(self):
+        conta = ContaPagarService.criar(
+            filial=self.filial,
+            funcionario=self.funcionario,
+            tipo_lancamento="funcionario",
+            valor_original=Decimal("100.00"),
+            data_emissao=date(2026, 8, 20),
+            data_vencimento=date(2026, 8, 30),
+            plano_contas=self.categoria,
+            ajustar_vencimento_dia_util=False,
+            antecipar_vencimento_dia_util=True,
+        )
+
+        self.assertEqual(conta.data_vencimento, date(2026, 8, 30))
 
     def test_forma_prevista_nao_quita_o_titulo(self):
         conta = ContaPagarService.criar(
@@ -825,6 +856,59 @@ class FuncionarioContaPagarTests(TestCase):
             response,
             f'value="{timezone.localdate().isoformat()}"',
         )
+
+    def test_baixa_preseleciona_conta_bancaria_vinculada_a_forma(self):
+        conta_bancaria = ContaBancaria.objects.create(
+            filial=self.filial,
+            descricao="ORENDA",
+            banco_codigo="001",
+        )
+        self.forma_prevista.conta_bancaria_padrao = conta_bancaria
+        self.forma_prevista.save(update_fields=["conta_bancaria_padrao"])
+        conta = ContaPagarService.criar(
+            filial=self.filial,
+            funcionario=self.funcionario,
+            tipo_lancamento="funcionario",
+            valor_original=Decimal("100.00"),
+            data_emissao=date(2026, 8, 20),
+            data_vencimento=date(2026, 8, 30),
+            plano_contas=self.categoria,
+            forma_pagamento_prevista=self.forma_prevista,
+        )
+
+        form = PagamentoContaPagarForm(filial=self.filial, conta=conta)
+
+        self.assertEqual(form.fields["conta_bancaria"].initial, conta_bancaria.pk)
+
+    def test_baixa_aplica_conta_vinculada_quando_nao_informada(self):
+        conta_bancaria = ContaBancaria.objects.create(
+            filial=self.filial,
+            descricao="ORENDA",
+            banco_codigo="001",
+        )
+        self.forma_pix.conta_bancaria_padrao = conta_bancaria
+        self.forma_pix.save(update_fields=["conta_bancaria_padrao"])
+        conta = ContaPagarService.criar(
+            filial=self.filial,
+            funcionario=self.funcionario,
+            tipo_lancamento="funcionario",
+            valor_original=Decimal("100.00"),
+            data_emissao=date(2026, 8, 20),
+            data_vencimento=date(2026, 8, 30),
+            plano_contas=self.categoria,
+        )
+        form = PagamentoContaPagarForm(
+            {
+                "data_pagamento": "2026-08-20",
+                "valor_pago": "100.00",
+                "forma_pagamento": self.forma_pix.pk,
+            },
+            filial=self.filial,
+            conta=conta,
+        )
+
+        self.assertTrue(form.is_valid(), form.errors)
+        self.assertEqual(form.cleaned_data["conta_bancaria"], conta_bancaria)
 
     def test_comprovante_valida_tipo_e_tamanho(self):
         invalido = SimpleUploadedFile(

@@ -6,7 +6,8 @@
 
 {% block content %}
 <div class="mx-auto max-w-5xl space-y-4"
-     x-data="{ loading:false, tipoLancamento:'{{ form.tipo_lancamento.value|default:"fornecedor" }}', recorrente:{{ form.recorrente.value|yesno:"true,false" }}, frequenciaRecorrencia:'{{ form.frequencia_recorrencia.value|default:"mensal" }}', quitarAgora:{{ form.quitar_ao_lancar.value|yesno:"true,false" }}, fornecedorModal:false, fornecedorSalvando:false, fornecedorErro:'', fornecedorTipo:'J', cepConsultando:false, notaFiscalFornecedor:'{{ form.nota_fiscal_fornecedor.value|default:""|escapejs }}', chaveAcessoNfe:'{{ form.chave_acesso_nfe.value|default:""|escapejs }}', notaFiscalStatus:'', scannerNfeAberto:false, scannerNfeErro:'', scannerNfe:null, scannerNfeScript:null, ultimoCodigoNfe:'' }">
+     x-data="{ loading:false, tipoLancamento:'{{ form.tipo_lancamento.value|default:"fornecedor" }}', recorrente:{{ form.recorrente.value|yesno:"true,false" }}, frequenciaRecorrencia:'{{ form.frequencia_recorrencia.value|default:"mensal" }}', ajustarDiaUtil:{{ form.ajustar_vencimento_dia_util.value|yesno:"true,false" }}, anteciparDiaUtil:{{ form.antecipar_vencimento_dia_util.value|yesno:"true,false" }}, quitarAgora:{{ form.quitar_ao_lancar.value|yesno:"true,false" }}, fornecedorModal:false, fornecedorSalvando:false, fornecedorErro:'', fornecedorTipo:'J', cepConsultando:false, notaFiscalFornecedor:'{{ form.nota_fiscal_fornecedor.value|default:""|escapejs }}', chaveAcessoNfe:'{{ form.chave_acesso_nfe.value|default:""|escapejs }}', notaFiscalStatus:'', scannerNfeAberto:false, scannerNfeErro:'', scannerNfe:null, scannerNfeScript:null, ultimoCodigoNfe:'' }"
+     @tax-category-selected.window="ajustarDiaUtil=true; anteciparDiaUtil=true">
   <div class="flex flex-wrap items-end justify-between gap-3">
     <div>
       {% if not modal_mode %}<a href="{% url 'financeiro:pagar_list' %}" class="text-sm text-blue-500">Contas a Pagar /</a>{% endif %}
@@ -112,10 +113,16 @@
         <div x-show="recorrente" x-cloak>{% include "financeiro/pagar/_field.html" with field=form.quantidade_recorrencias %}</div>
         <div x-show="recorrente && frequenciaRecorrencia === 'personalizada'" x-cloak>{% include "financeiro/pagar/_field.html" with field=form.intervalo_recorrencia_dias %}</div>
       </div>
-      <label class="mt-4 flex cursor-pointer items-start gap-3 rounded-md border px-4 py-3" :style="temaClaro ? 'border-color:#dbe3ee;background:#f8fafc' : 'border-color:#3f3f46;background:#18181b'">
-        {{ form.ajustar_vencimento_dia_util|add_class:"mt-0.5 h-4 w-4 accent-emerald-600" }}
-        <span><strong class="block text-sm">Ajustar vencimento para dia útil</strong><span class="block text-xs opacity-65">Impostos são antecipados para o dia útil anterior. As demais despesas seguem para o próximo dia permitido.</span></span>
-      </label>
+      <div class="mt-4 grid gap-3 sm:grid-cols-2">
+        <label class="flex cursor-pointer items-start gap-3 rounded-md border px-4 py-3" :style="temaClaro ? 'border-color:#dbe3ee;background:#f8fafc' : 'border-color:#3f3f46;background:#18181b'">
+          {{ form.ajustar_vencimento_dia_util|add_class:"mt-0.5 h-4 w-4 accent-emerald-600"|attr:"x-model:ajustarDiaUtil" }}
+          <span><strong class="block text-sm">Levar em conta apenas dias úteis</strong><span class="block text-xs opacity-65">Se cair em dia não útil, usa o próximo dia útil.</span></span>
+        </label>
+        <label class="flex items-start gap-3 rounded-md border px-4 py-3" :class="ajustarDiaUtil ? 'cursor-pointer' : 'cursor-not-allowed opacity-50'" :style="temaClaro ? 'border-color:#dbe3ee;background:#f8fafc' : 'border-color:#3f3f46;background:#18181b'">
+          {{ form.antecipar_vencimento_dia_util|add_class:"mt-0.5 h-4 w-4 accent-amber-600"|attr:"x-model:anteciparDiaUtil"|attr:":disabled:!ajustarDiaUtil" }}
+          <span><strong class="block text-sm">Antecipar para o dia útil anterior</strong><span class="block text-xs opacity-65">Use para impostos e obrigações que não podem passar do vencimento.</span></span>
+        </label>
+      </div>
       <div x-show="recorrente" x-cloak class="mt-4 rounded-md border border-violet-500/30 bg-violet-500/10 px-4 py-3 text-sm">
         O primeiro vencimento será a data informada acima. Os demais serão criados automaticamente conforme a periodicidade; a competência avançará junto quando preenchida.
       </div>
@@ -130,9 +137,9 @@
         <div class="grid grid-cols-1 gap-4 lg:grid-cols-3">
           <div>
             <label class="mb-1 block text-sm font-medium"><span class="mr-1 text-violet-400">1.</span> Grupo da despesa *</label>
-            <select x-model="grupoId" @change="subgrupoId=''; limparCategoria()" class="form-input">
+            <select x-model="grupoId" @change="subgrupoId=''; limparCategoria(); if ($event.target.selectedOptions[0]?.dataset.isTax === '1') $dispatch('tax-category-selected')" class="form-input">
               <option value="">Selecione o grupo</option>
-              {% for grupo in form.categoria_grupos %}<option value="{{ grupo.pk }}" data-group-code="{{ grupo.codigo }}">{{ grupo.descricao }}</option>{% endfor %}
+              {% for grupo in form.categoria_grupos %}<option value="{{ grupo.pk }}" data-group-code="{{ grupo.codigo }}" data-is-tax="{{ grupo.eh_imposto|yesno:'1,0' }}">{{ grupo.descricao }}</option>{% endfor %}
             </select>
             <p class="mt-1 text-xs opacity-60">Ex.: despesas administrativas ou custos.</p>
           </div>
@@ -153,7 +160,7 @@
             </div>
             <div x-show="open && subgrupoId" x-cloak class="absolute z-50 mt-1 max-h-64 w-full overflow-y-auto rounded-md border p-1 shadow-xl" :style="temaClaro ? 'background:#fff;border-color:#d1d5db' : 'background:#18181b;border-color:#3f3f46'">
               {% for categoria in form.plano_contas.field.queryset %}
-              <button type="button" data-category-option data-value="{{ categoria.pk }}" data-label="{{ categoria.descricao }}" data-code="{{ categoria.codigo }}" data-grupo="{{ categoria.conta_pai.conta_pai_id }}" data-subgrupo="{{ categoria.conta_pai_id }}"
+              <button type="button" data-category-option data-value="{{ categoria.pk }}" data-label="{{ categoria.descricao }}" data-code="{{ categoria.codigo }}" data-is-tax="{{ categoria.eh_imposto|yesno:'1,0' }}" data-grupo="{{ categoria.conta_pai.conta_pai_id }}" data-subgrupo="{{ categoria.conta_pai_id }}"
                       x-show="corresponde($el)" @mousedown.prevent="selecionar($el)" class="block w-full rounded px-3 py-2 text-left text-sm">
                 <span class="block font-medium">{{ categoria.descricao }}</span><span class="text-xs opacity-55">Código {{ categoria.codigo }}</span>
               </button>
@@ -558,7 +565,7 @@ function categoriaGuiada(root) {
     init(){const atual=this.opcoes().find(item=>item.dataset.value===this.categoriaId);if(atual){this.grupoId=atual.dataset.grupo;this.subgrupoId=atual.dataset.subgrupo;this.query=atual.dataset.label;}},
     corresponde(item){return item.dataset.grupo===this.grupoId&&item.dataset.subgrupo===this.subgrupoId&&(!this.query||this.normalizar(item.dataset.label+' '+item.dataset.code).includes(this.normalizar(this.query)));},
     opcoesVisiveis(){return this.opcoes().filter(item=>this.corresponde(item)).length;},
-    selecionar(item){this.categoriaId=item.dataset.value;this.query=item.dataset.label;this.open=false;},
+    selecionar(item){this.categoriaId=item.dataset.value;this.query=item.dataset.label;this.open=false;if(item.dataset.isTax==='1')window.dispatchEvent(new CustomEvent('tax-category-selected'));},
     limparCategoria(){this.categoriaId='';this.query='';this.open=false;},
     fecharDepois(){setTimeout(()=>{this.open=false;},180);},
     selecionarPessoal(){

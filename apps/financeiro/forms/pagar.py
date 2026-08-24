@@ -135,7 +135,12 @@ class ContaPagarForm(forms.Form):
     ajustar_vencimento_dia_util = forms.BooleanField(
         required=False,
         initial=True,
-        label='Ajustar vencimento para dia util',
+        label='Levar em conta apenas dias úteis',
+    )
+    antecipar_vencimento_dia_util = forms.BooleanField(
+        required=False,
+        initial=False,
+        label='Antecipar para o dia útil anterior',
     )
     data_competencia = forms.DateField(
         required=False,
@@ -316,6 +321,9 @@ class ContaPagarForm(forms.Form):
                 self.add_error('data_pagamento_imediato', 'Informe a data do pagamento.')
             if not cleaned.get('forma_pagamento_utilizada'):
                 self.add_error('forma_pagamento_utilizada', 'Informe a forma realmente utilizada.')
+            forma = cleaned.get('forma_pagamento_utilizada')
+            if forma and not cleaned.get('conta_bancaria_pagamento'):
+                cleaned['conta_bancaria_pagamento'] = forma.conta_bancaria_padrao
         else:
             cleaned['data_pagamento_imediato'] = None
             cleaned['forma_pagamento_utilizada'] = None
@@ -419,6 +427,9 @@ class DespesaPagaForm(forms.Form):
 
     def clean(self):
         cleaned = super().clean()
+        forma = cleaned.get('forma_pagamento_utilizada')
+        if forma and not cleaned.get('conta_bancaria_pagamento'):
+            cleaned['conta_bancaria_pagamento'] = forma.conta_bancaria_padrao
         tipo = cleaned.get('tipo_lancamento')
         if tipo == ContaPagar.TipoLancamento.FUNCIONARIO:
             cleaned['fornecedor'] = None
@@ -707,15 +718,21 @@ class PagamentoContaPagarForm(forms.Form):
             )
         if conta:
             self.fields['valor_pago'].initial = conta.valor_saldo
-            self.fields['forma_pagamento'].initial = (
-                conta.forma_pagamento_prevista_id or conta.forma_pagamento_id
-            )
+            forma_inicial = conta.forma_pagamento_prevista or conta.forma_pagamento
+            self.fields['forma_pagamento'].initial = forma_inicial
+            if conta.conta_bancaria_id:
+                self.fields['conta_bancaria'].initial = conta.conta_bancaria_id
+            elif forma_inicial and forma_inicial.conta_bancaria_padrao_id:
+                self.fields['conta_bancaria'].initial = forma_inicial.conta_bancaria_padrao_id
 
     def clean(self):
         cleaned = super().clean()
         cleaned.setdefault('valor_juros', Decimal('0'))
         cleaned.setdefault('valor_multa', Decimal('0'))
         cleaned.setdefault('valor_desconto', Decimal('0'))
+        forma = cleaned.get('forma_pagamento')
+        if forma and not cleaned.get('conta_bancaria'):
+            cleaned['conta_bancaria'] = forma.conta_bancaria_padrao
         data_pagamento = cleaned.get('data_pagamento')
         if self.conta and data_pagamento and data_pagamento < self.conta.data_emissao:
             self.add_error(

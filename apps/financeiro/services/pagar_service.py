@@ -42,6 +42,7 @@ class ContaPagarService:
         frequencia_recorrencia: str = '',
         intervalo_recorrencia_dias: int | None = None,
         ajustar_vencimento_dia_util: bool = False,
+        antecipar_vencimento_dia_util: bool = False,
     ) -> ContaPagar:
         """Cria um lançamento manual de conta a pagar."""
         conta_contabil = plano_contas.conta_contabil if plano_contas else None
@@ -56,7 +57,7 @@ class ContaPagarService:
         if ajustar_vencimento_dia_util:
             data_vencimento = (
                 dia_util_anterior_ou_mesmo(data_vencimento, filial)
-                if plano_contas and plano_contas.eh_imposto
+                if antecipar_vencimento_dia_util
                 else proximo_dia_util(data_vencimento, filial)
             )
         conta = ContaPagar(
@@ -84,6 +85,7 @@ class ContaPagarService:
             data_vencimento=data_vencimento,
             data_competencia=data_competencia,
             ajustar_vencimento_dia_util=ajustar_vencimento_dia_util,
+            antecipar_vencimento_dia_util=antecipar_vencimento_dia_util,
             forma_pagamento_prevista=forma_pagamento_prevista,
             plano_contas=plano_contas,
             conta_contabil=conta_contabil,

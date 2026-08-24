@@ -11,7 +11,10 @@
        valor: '{{ form.valor_pago.value|default:conta.valor_saldo|escapejs }}',
        juros: '{{ form.valor_juros.value|default:0|escapejs }}',
        multa: '{{ form.valor_multa.value|default:0|escapejs }}',
-       desconto: '{{ form.valor_desconto.value|default:0|escapejs }}'
+       desconto: '{{ form.valor_desconto.value|default:0|escapejs }}',
+       contasPorForma: {
+         {% for forma in form.fields.forma_pagamento.queryset %}'{{ forma.pk }}': '{{ forma.conta_bancaria_padrao_id|default_if_none:"" }}',{% endfor %}
+       }
      })">
 
   <div class="flex flex-wrap items-end justify-between gap-3">
@@ -233,10 +236,17 @@ function paymentForm(initial) {
     juros: initial.juros || '0',
     multa: initial.multa || '0',
     desconto: initial.desconto || '0',
+    contasPorForma: initial.contasPorForma || {},
     arquivoNome: '',
     init() {
       if (this.num(this.valor) + 0.009 < this.totalAtualizado()) this.modo = 'parcial';
       else this.syncIntegral();
+      this.$nextTick(() => {
+        const forma = document.getElementById('{{ form.forma_pagamento.id_for_label }}');
+        if (!forma) return;
+        forma.addEventListener('change', () => this.preencherContaVinculada(forma.value));
+        this.preencherContaVinculada(forma.value, false);
+      });
     },
     num(value) {
       const raw = String(value ?? '').trim();
@@ -259,6 +269,14 @@ function paymentForm(initial) {
     },
     syncIntegral() {
       if (this.modo === 'integral') this.valor = this.totalAtualizado().toFixed(2);
+    },
+    preencherContaVinculada(formaId, substituir = true) {
+      const contaId = this.contasPorForma[String(formaId)] || '';
+      const conta = document.getElementById('{{ form.conta_bancaria.id_for_label }}');
+      if (!conta || !contaId || (!substituir && conta.value)) return;
+      if (!Array.from(conta.options).some(option => option.value === String(contaId))) return;
+      conta.value = String(contaId);
+      conta.dispatchEvent(new Event('change', {bubbles: true}));
     }
   };
 }

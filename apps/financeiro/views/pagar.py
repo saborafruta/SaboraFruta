@@ -843,6 +843,7 @@ class ContaPagarCreateView(PermissaoRequiredMixin, View):
                 plano_contas=d.get('plano_contas'),
                 observacao=d.get('observacao', ''),
                 ajustar_vencimento_dia_util=d.get('ajustar_vencimento_dia_util', False),
+                antecipar_vencimento_dia_util=d.get('antecipar_vencimento_dia_util', False),
                 usuario=request.user,
             )
             if d['recorrente']:
