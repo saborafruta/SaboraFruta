@@ -461,10 +461,10 @@ class PosicaoDiariaCaixaService:
             filial=self.filial, conta_bancaria_id__in=self.conta_ids,
             data_pagamento__lt=self.data_inicio, conta_pagar__excluido_em__isnull=True,
         ).exclude(conta_pagar__documento_tipo__startswith="taxa_").values_list(
-            "conta_bancaria_id", "valor_pago", "valor_juros", "valor_multa", "valor_desconto",
+            "conta_bancaria_id", "valor_pago",
         )
-        for conta_id, pago, juros, multa, desconto in pagamentos.iterator():
-            _somar(saldos, conta_id, -((pago or ZERO) + (juros or ZERO) + (multa or ZERO) - (desconto or ZERO)))
+        for conta_id, pago in pagamentos.iterator():
+            _somar(saldos, conta_id, -(pago or ZERO))
         try:
             from apps.pdv.models import PagamentoVendaPDV
             vendas = PagamentoVendaPDV.objects.filter(

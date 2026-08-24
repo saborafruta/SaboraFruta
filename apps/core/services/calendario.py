@@ -79,6 +79,25 @@ def proximo_dia_util(data_original: date, filial) -> date:
     return data_ajustada
 
 
+def dia_util_anterior_ou_mesmo(data_original: date, filial) -> date:
+    """Antecipa fins de semana e feriados para o dia util anterior."""
+    empresa = getattr(filial, 'empresa', None)
+    uf = (getattr(filial, 'uf', '') or getattr(empresa, 'uf', '') or '').upper()
+    cidade = getattr(filial, 'cidade', '') or getattr(empresa, 'cidade', '') or ''
+    codigo_ibge = (
+        getattr(filial, 'codigo_municipio_ibge', '')
+        or getattr(empresa, 'codigo_municipio_ibge', '')
+        or ''
+    )
+    data_ajustada = data_original
+    while (
+        data_ajustada.weekday() >= 5
+        or data_ajustada in feriados(data_ajustada.year, uf, cidade, codigo_ibge)
+    ):
+        data_ajustada -= timedelta(days=1)
+    return data_ajustada
+
+
 def adicionar_dias_uteis_bancarios(data_original: date, dias: int, filial) -> date:
     """Soma dias de compensacao bancaria, excluindo fins de semana e feriados."""
     empresa = getattr(filial, 'empresa', None)

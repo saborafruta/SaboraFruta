@@ -111,6 +111,11 @@ class ContaPagarForm(forms.Form):
         required=False,
         label='Periodicidade',
     )
+    intervalo_recorrencia_dias = forms.IntegerField(
+        min_value=1, max_value=365, initial=30, required=False,
+        label='Intervalo em dias',
+        widget=forms.NumberInput(attrs={'min': '1', 'max': '365'}),
+    )
     quantidade_recorrencias = forms.IntegerField(
         min_value=2, max_value=60, initial=12, required=False,
         label='Quantidade de ocorrências',
@@ -130,7 +135,7 @@ class ContaPagarForm(forms.Form):
     ajustar_vencimento_dia_util = forms.BooleanField(
         required=False,
         initial=True,
-        label='Ajustar se cair em domingo ou feriado',
+        label='Ajustar vencimento para dia util',
     )
     data_competencia = forms.DateField(
         required=False,
@@ -198,6 +203,7 @@ class ContaPagarForm(forms.Form):
             formas_pagamento = (
                 FormaPagamento.objects
                 .filter(empresa=filial.empresa, ativo=True)
+                .select_related('conta_bancaria_padrao')
                 .order_by('descricao')
             )
             self.fields['forma_pagamento_prevista'].queryset = formas_pagamento
@@ -291,6 +297,11 @@ class ContaPagarForm(forms.Form):
         if recorrente:
             if not cleaned.get('frequencia_recorrencia'):
                 self.add_error('frequencia_recorrencia', 'Informe a periodicidade.')
+            if (
+                cleaned.get('frequencia_recorrencia') == ContaPagar.FrequenciaRecorrencia.PERSONALIZADA
+                and not cleaned.get('intervalo_recorrencia_dias')
+            ):
+                self.add_error('intervalo_recorrencia_dias', 'Informe o intervalo entre os titulos.')
             if not cleaned.get('quantidade_recorrencias'):
                 self.add_error('quantidade_recorrencias', 'Informe quantos títulos devem ser gerados.')
             if quitar_ao_lancar:
@@ -298,6 +309,7 @@ class ContaPagarForm(forms.Form):
         else:
             cleaned['frequencia_recorrencia'] = ''
             cleaned['quantidade_recorrencias'] = 1
+            cleaned['intervalo_recorrencia_dias'] = None
         if quitar_ao_lancar:
             data_pagamento = cleaned.get('data_pagamento_imediato')
             if not data_pagamento:
@@ -374,7 +386,8 @@ class DespesaPagaForm(forms.Form):
             Funcionario.objects.for_filial(filial).filter(ativo=True).order_by('nome')
         )
         self.fields['forma_pagamento_utilizada'].queryset = (
-            FormaPagamento.objects.filter(empresa=filial.empresa, ativo=True).order_by('descricao')
+            FormaPagamento.objects.filter(empresa=filial.empresa, ativo=True)
+            .select_related('conta_bancaria_padrao').order_by('descricao')
         )
         self.fields['conta_bancaria_pagamento'].queryset = (
             ContaBancaria.objects.for_filial(filial).filter(ativo=True).order_by('descricao')
@@ -546,7 +559,7 @@ class ContaPagarEdicaoAdminForm(forms.Form):
             )
             formas = FormaPagamento.objects.filter(
                 empresa=filial.empresa, ativo=True,
-            ).order_by('descricao')
+            ).select_related('conta_bancaria_padrao').order_by('descricao')
             self.fields['forma_pagamento_prevista'].queryset = formas
             self.fields['forma_pagamento'].queryset = formas
             self.fields['plano_contas'].queryset = (
@@ -684,6 +697,7 @@ class PagamentoContaPagarForm(forms.Form):
             self.fields['forma_pagamento'].queryset = (
                 FormaPagamento.objects
                 .filter(empresa=filial.empresa, ativo=True)
+                .select_related('conta_bancaria_padrao')
                 .order_by('descricao')
             )
             self.fields['conta_bancaria'].queryset = (

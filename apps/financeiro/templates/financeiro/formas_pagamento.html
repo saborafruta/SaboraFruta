@@ -105,30 +105,42 @@
   {% endif %}
 
   <section class="card overflow-hidden">
-    <div class="border-b border-gray-200 px-4 py-3 dark:border-zinc-700">
+    <div class="flex items-center justify-between border-b border-gray-200 px-3 py-2 dark:border-zinc-700">
       <h2 class="text-sm font-semibold">Formas da filial</h2>
-      <p class="mt-0.5 text-xs text-gray-500">Tarifas, conta e situação em uma visão compacta.</p>
+      <span class="text-xs text-gray-500">{{ formas|length }} cadastradas</span>
     </div>
-    <div class="hidden grid-cols-[minmax(190px,1.25fr)_minmax(140px,.75fr)_minmax(260px,1.35fr)_90px_92px] gap-3 border-b border-gray-200 bg-gray-50 px-4 py-2 text-xs font-semibold uppercase text-gray-500 dark:border-zinc-700 dark:bg-zinc-800 md:grid">
-      <span>Forma</span><span>Tipo / conta</span><span>Tarifas</span><span>Situação</span><span class="text-right">Ações</span>
-    </div>
-    <div class="divide-y divide-gray-200 dark:divide-zinc-700">
-      {% for forma in formas %}
-      <article class="grid gap-2 px-4 py-3 md:grid-cols-[minmax(190px,1.25fr)_minmax(140px,.75fr)_minmax(260px,1.35fr)_90px_92px] md:items-center md:gap-3">
-        <p class="truncate text-sm font-semibold" title="{{ forma.descricao }}">{{ forma.descricao }}</p>
-        <p class="text-xs text-gray-500">{{ forma.get_tipo_display }}<br>{{ forma.conta_bancaria_padrao.descricao|default:"Sem conta" }}</p>
-        <div class="flex flex-wrap gap-x-3 gap-y-1 text-xs">
-          <span class="text-green-700 dark:text-green-300">Receber {{ forma.taxa_administrativa|floatformat:2 }}%{% if forma.taxa_fixa > 0 %} + R$ {{ forma.taxa_fixa|floatformat:2 }}{% endif %}</span>
-          <span class="text-red-700 dark:text-red-300">Pagar R$ {{ forma.tarifa_pagamento_fixa|floatformat:2 }}</span>
-          {% if forma.prazo_compensacao_dias_uteis %}<span class="text-gray-500">Crédito em {{ forma.prazo_compensacao_dias_uteis }} dia(s) útil(eis)</span>{% endif %}
-        </div>
-        <div>{% if forma.ativo %}<span class="soft-pill is-green">Ativa</span>{% else %}<span class="soft-pill is-amber">Inativa</span>{% endif %}</div>
-        <div class="flex justify-end gap-1">
-          <a href="?editar={{ forma.pk }}" class="btn-secondary px-2" title="Editar" aria-label="Editar">Editar</a>
-          {% if forma.ativo %}<form method="post" onsubmit="return confirm('Inativar esta forma de pagamento?')">{% csrf_token %}<input type="hidden" name="acao" value="excluir"><input type="hidden" name="id" value="{{ forma.pk }}"><button type="submit" class="btn-secondary px-2" title="Inativar" aria-label="Inativar">×</button></form>{% endif %}
-        </div>
-      </article>
-      {% empty %}<p class="px-4 py-8 text-center text-sm text-gray-500">Nenhuma forma cadastrada.</p>{% endfor %}
+    <div class="overflow-x-auto">
+      <table class="w-full min-w-[680px] border-collapse text-left text-xs">
+        <thead class="bg-gray-50 text-gray-500 dark:bg-zinc-800">
+          <tr>
+            <th class="px-3 py-2 font-semibold">Forma</th>
+            <th class="px-3 py-2 font-semibold">Tipo</th>
+            <th class="px-3 py-2 font-semibold">Conta</th>
+            <th class="px-3 py-2 font-semibold">Tarifas</th>
+            <th class="px-3 py-2 font-semibold">Crédito</th>
+            <th class="px-3 py-2 font-semibold">Status</th>
+            <th class="px-3 py-2 text-right font-semibold">Ações</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-gray-200 dark:divide-zinc-700">
+          {% for forma in formas %}
+          <tr class="hover:bg-gray-50 dark:hover:bg-zinc-800/60">
+            <td class="max-w-[220px] truncate px-3 py-2 font-semibold" title="{{ forma.descricao }}">{{ forma.descricao }}</td>
+            <td class="whitespace-nowrap px-3 py-2 text-gray-500">{{ forma.get_tipo_display }}</td>
+            <td class="max-w-[150px] truncate px-3 py-2 text-gray-500" title="{{ forma.conta_bancaria_padrao.descricao|default:'Sem conta' }}">{{ forma.conta_bancaria_padrao.descricao|default:"Sem conta" }}</td>
+            <td class="whitespace-nowrap px-3 py-2"><span class="text-green-700 dark:text-green-300">Receber {{ forma.taxa_administrativa|floatformat:2 }}%{% if forma.taxa_fixa > 0 %} + R$ {{ forma.taxa_fixa|floatformat:2 }}{% endif %}</span><span class="mx-1 text-gray-300">·</span><span class="text-red-700 dark:text-red-300">Pagar R$ {{ forma.tarifa_pagamento_fixa|floatformat:2 }}</span></td>
+            <td class="whitespace-nowrap px-3 py-2 text-gray-500">{% if forma.prazo_compensacao_dias_uteis %}{{ forma.prazo_compensacao_dias_uteis }}d úteis{% else %}Imediato{% endif %}</td>
+            <td class="px-3 py-2">{% if forma.ativo %}<span class="soft-pill is-green">Ativa</span>{% else %}<span class="soft-pill is-amber">Inativa</span>{% endif %}</td>
+            <td class="px-3 py-1.5">
+              <div class="flex justify-end gap-1">
+                <a href="?editar={{ forma.pk }}" class="btn-secondary px-2 py-1" title="Editar forma">Editar</a>
+                {% if forma.ativo %}<form method="post" onsubmit="return confirm('Inativar esta forma de pagamento?')">{% csrf_token %}<input type="hidden" name="acao" value="excluir"><input type="hidden" name="id" value="{{ forma.pk }}"><button type="submit" class="btn-secondary px-2 py-1" title="Inativar forma" aria-label="Inativar forma">×</button></form>{% endif %}
+              </div>
+            </td>
+          </tr>
+          {% empty %}<tr><td colspan="7" class="px-4 py-8 text-center text-sm text-gray-500">Nenhuma forma cadastrada.</td></tr>{% endfor %}
+        </tbody>
+      </table>
     </div>
   </section>
 </div>

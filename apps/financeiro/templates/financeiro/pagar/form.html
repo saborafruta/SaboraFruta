@@ -6,7 +6,7 @@
 
 {% block content %}
 <div class="mx-auto max-w-5xl space-y-4"
-     x-data="{ loading:false, tipoLancamento:'{{ form.tipo_lancamento.value|default:"fornecedor" }}', recorrente:{{ form.recorrente.value|yesno:"true,false" }}, quitarAgora:{{ form.quitar_ao_lancar.value|yesno:"true,false" }}, fornecedorModal:false, fornecedorSalvando:false, fornecedorErro:'', fornecedorTipo:'J', cepConsultando:false, notaFiscalFornecedor:'{{ form.nota_fiscal_fornecedor.value|default:""|escapejs }}', chaveAcessoNfe:'{{ form.chave_acesso_nfe.value|default:""|escapejs }}', notaFiscalStatus:'', scannerNfeAberto:false, scannerNfeErro:'', scannerNfe:null, scannerNfeScript:null, ultimoCodigoNfe:'' }">
+     x-data="{ loading:false, tipoLancamento:'{{ form.tipo_lancamento.value|default:"fornecedor" }}', recorrente:{{ form.recorrente.value|yesno:"true,false" }}, frequenciaRecorrencia:'{{ form.frequencia_recorrencia.value|default:"mensal" }}', quitarAgora:{{ form.quitar_ao_lancar.value|yesno:"true,false" }}, fornecedorModal:false, fornecedorSalvando:false, fornecedorErro:'', fornecedorTipo:'J', cepConsultando:false, notaFiscalFornecedor:'{{ form.nota_fiscal_fornecedor.value|default:""|escapejs }}', chaveAcessoNfe:'{{ form.chave_acesso_nfe.value|default:""|escapejs }}', notaFiscalStatus:'', scannerNfeAberto:false, scannerNfeErro:'', scannerNfe:null, scannerNfeScript:null, ultimoCodigoNfe:'' }">
   <div class="flex flex-wrap items-end justify-between gap-3">
     <div>
       {% if not modal_mode %}<a href="{% url 'financeiro:pagar_list' %}" class="text-sm text-blue-500">Contas a Pagar /</a>{% endif %}
@@ -102,12 +102,19 @@
         {% include "financeiro/pagar/_field.html" with field=form.valor_original %}
         {% include "financeiro/pagar/_field.html" with field=form.data_vencimento %}
         {% include "financeiro/pagar/_field.html" with field=form.data_competencia %}
-        <div x-show="recorrente" x-cloak>{% include "financeiro/pagar/_field.html" with field=form.frequencia_recorrencia %}</div>
+        <div x-show="recorrente" x-cloak>
+          <label class="mb-1 block text-sm font-medium" for="{{ form.frequencia_recorrencia.id_for_label }}">{{ form.frequencia_recorrencia.label }}</label>
+          <select name="frequencia_recorrencia" id="{{ form.frequencia_recorrencia.id_for_label }}" x-model="frequenciaRecorrencia" class="form-input">
+            {% for value, label in form.frequencia_recorrencia.field.choices %}<option value="{{ value }}">{{ label }}</option>{% endfor %}
+          </select>
+          {% if form.frequencia_recorrencia.errors %}<p class="mt-1 text-xs text-red-500">{{ form.frequencia_recorrencia.errors|join:", " }}</p>{% endif %}
+        </div>
         <div x-show="recorrente" x-cloak>{% include "financeiro/pagar/_field.html" with field=form.quantidade_recorrencias %}</div>
+        <div x-show="recorrente && frequenciaRecorrencia === 'personalizada'" x-cloak>{% include "financeiro/pagar/_field.html" with field=form.intervalo_recorrencia_dias %}</div>
       </div>
       <label class="mt-4 flex cursor-pointer items-start gap-3 rounded-md border px-4 py-3" :style="temaClaro ? 'border-color:#dbe3ee;background:#f8fafc' : 'border-color:#3f3f46;background:#18181b'">
         {{ form.ajustar_vencimento_dia_util|add_class:"mt-0.5 h-4 w-4 accent-emerald-600" }}
-        <span><strong class="block text-sm">Ajustar se cair em domingo ou feriado</strong><span class="block text-xs opacity-65">O vencimento passa para o próximo dia permitido. Sábado conta normalmente; a competência não muda.</span></span>
+        <span><strong class="block text-sm">Ajustar vencimento para dia útil</strong><span class="block text-xs opacity-65">Impostos são antecipados para o dia útil anterior. As demais despesas seguem para o próximo dia permitido.</span></span>
       </label>
       <div x-show="recorrente" x-cloak class="mt-4 rounded-md border border-violet-500/30 bg-violet-500/10 px-4 py-3 text-sm">
         O primeiro vencimento será a data informada acima. Os demais serão criados automaticamente conforme a periodicidade; a competência avançará junto quando preenchida.

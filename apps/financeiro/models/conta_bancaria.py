@@ -1,4 +1,6 @@
 """Contas bancárias e plano de contas."""
+import unicodedata
+
 from django.db import models
 from apps.core.models import Empresa, Filial
 from apps.core.models.base import TimestampedModel, ActiveModel
@@ -80,3 +82,16 @@ class PlanoContas(ActiveModel):
             partes.append(atual.descricao)
             atual = atual.conta_pai
         return " > ".join(reversed(partes))
+
+    @property
+    def eh_imposto(self):
+        atual = self
+        while atual:
+            descricao = ''.join(
+                caractere for caractere in unicodedata.normalize('NFD', atual.descricao or '')
+                if unicodedata.category(caractere) != 'Mn'
+            ).casefold()
+            if 'imposto' in descricao or 'tribut' in descricao:
+                return True
+            atual = atual.conta_pai
+        return False

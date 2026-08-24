@@ -134,7 +134,7 @@
       <td>{{ v.cliente.nome_display|default:"Consumidor Final" }}</td>
       <td>{{ v.cliente.cpf_cnpj|default:"—" }}</td>
       <td>
-        {% for pg in v.pagamentos.all %}{{ pg.forma_pagamento.descricao }}{% if not forloop.last %}, {% endif %}{% empty %}—{% endfor %}
+        {% for pg in v.pagamentos.all %}{{ pg.forma_pagamento.descricao_com_conta }}{% if not forloop.last %}, {% endif %}{% empty %}—{% endfor %}
       </td>
       <td>
         {% if v.status == 'cancelada' %}

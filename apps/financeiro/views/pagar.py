@@ -850,6 +850,7 @@ class ContaPagarCreateView(PermissaoRequiredMixin, View):
                     **dados_conta,
                     quantidade=d['quantidade_recorrencias'],
                     frequencia=d['frequencia_recorrencia'],
+                    intervalo_dias=d.get('intervalo_recorrencia_dias'),
                     data_vencimento=d['data_vencimento'],
                     data_competencia=d.get('data_competencia'),
                 )

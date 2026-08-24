@@ -121,11 +121,13 @@ class ContaPagar(TimestampedModel):
         ENCARGO = "encargo", "Encargo ou beneficio"
 
     class FrequenciaRecorrencia(models.TextChoices):
+        DIARIA = "diaria", "Diaria"
         SEMANAL = "semanal", "Semanal"
         MENSAL = "mensal", "Mensal"
         TRIMESTRAL = "trimestral", "Trimestral"
         SEMESTRAL = "semestral", "Semestral"
         ANUAL = "anual", "Anual"
+        PERSONALIZADA = "personalizada", "Personalizada em dias"
 
     filial = models.ForeignKey(Filial, on_delete=models.PROTECT, related_name="contas_pagar")
     fornecedor = models.ForeignKey(Fornecedor, on_delete=models.PROTECT,
@@ -147,8 +149,9 @@ class ContaPagar(TimestampedModel):
     total_parcelas = models.PositiveSmallIntegerField(default=1)
     grupo_recorrencia = models.UUIDField(null=True, blank=True, db_index=True)
     frequencia_recorrencia = models.CharField(
-        max_length=12, choices=FrequenciaRecorrencia.choices, blank=True,
+        max_length=15, choices=FrequenciaRecorrencia.choices, blank=True,
     )
+    intervalo_recorrencia_dias = models.PositiveSmallIntegerField(null=True, blank=True)
 
     valor_original = models.DecimalField(max_digits=14, decimal_places=2)
     valor_juros = models.DecimalField(max_digits=14, decimal_places=2, default=0)
@@ -162,7 +165,7 @@ class ContaPagar(TimestampedModel):
     data_vencimento = models.DateField()
     data_pagamento = models.DateField(null=True, blank=True)
     data_competencia = models.DateField(null=True, blank=True)
-    ajustar_vencimento_dia_util = models.BooleanField(default=False)
+    ajustar_vencimento_dia_util = models.BooleanField(default=True)
 
     forma_pagamento = models.ForeignKey(
         FormaPagamento, on_delete=models.SET_NULL, null=True, blank=True, related_name='+',
@@ -288,7 +291,8 @@ class PagamentoContaPagar(TimestampedModel):
 
     @property
     def valor_liquido(self):
-        return self.valor_pago + self.valor_juros + self.valor_multa - self.valor_desconto
+        # valor_pago ja representa o desembolso efetivo, incluindo acrescimos e descontos.
+        return self.valor_pago
 
     def __str__(self):
         return f'Pagamento CP #{self.conta_pagar_id} em {self.data_pagamento:%d/%m/%Y}'

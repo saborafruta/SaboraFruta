@@ -207,6 +207,38 @@ class PosicaoDiariaCaixaTests(TestCase):
         self.assertNotContains(response, 'class="pc-fee-summary')
         self.assertContains(response, "R$ 2,10")
 
+    def test_pagamento_com_juros_nao_soma_o_juros_duas_vezes(self):
+        conta = ContaPagar.objects.create(
+            filial=self.filial,
+            valor_original=Decimal("90.00"),
+            valor_juros=Decimal("2.00"),
+            valor_final=Decimal("92.00"),
+            valor_pago=Decimal("92.00"),
+            valor_saldo=Decimal("0.00"),
+            descricao_despesa="Ajuda de custo",
+            data_emissao=date(2026, 8, 24),
+            data_vencimento=date(2026, 8, 24),
+            data_pagamento=date(2026, 8, 24),
+            status=StatusContaPagar.PAGO,
+            usuario=self.usuario,
+        )
+        PagamentoContaPagar.objects.create(
+            filial=self.filial,
+            conta_pagar=conta,
+            data_pagamento=date(2026, 8, 24),
+            valor_pago=Decimal("92.00"),
+            valor_juros=Decimal("2.00"),
+            forma_pagamento=self.forma,
+            conta_bancaria=self.banco,
+            usuario=self.usuario,
+        )
+
+        posicao = PosicaoDiariaCaixaService(self.filial, date(2026, 8, 24)).gerar()
+        movimento = next(mov for mov in posicao["saidas"] if mov.descricao == "Ajuda de custo")
+
+        self.assertEqual(movimento.saida, Decimal("92.00"))
+        self.assertEqual(posicao["total_saidas_bancarias"], Decimal("92.00"))
+
     def test_entrada_manual_exibe_percentual_configurado_sem_descontar_saldo(self):
         self.forma.taxa_administrativa = Decimal("2.50")
         self.forma.taxa_fixa = Decimal("0.30")
@@ -734,7 +766,7 @@ class PosicaoDiariaCaixaTests(TestCase):
 
         html = str(MovimentoContaBancariaForm(filial=self.filial)["forma_pagamento"])
 
-        self.assertIn(">PIX<", html)
+        self.assertIn(">PIX - Banco principal<", html)
         self.assertIn(">Cartao debito<", html)
         self.assertIn('data-tipo="cartao_debito"', html)
         self.assertIn(">Cartao credito<", html)

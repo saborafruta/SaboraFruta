@@ -4,7 +4,7 @@ from __future__ import annotations
 from datetime import timedelta
 from decimal import Decimal
 
-from django.db.models import Count, DecimalField, ExpressionWrapper, F, Q, Sum
+from django.db.models import Count, Q, Sum
 from django.utils import timezone
 
 from apps.financeiro.constants.enums import StatusContaPagar, StatusContaReceber
@@ -54,17 +54,13 @@ def _saldo_calculado_conta(conta):
             | Q(data_liquidacao_prevista__isnull=True, data_pagamento__lte=timezone.localdate())
         )
     ), ZERO)
-    valor_pagamento = ExpressionWrapper(
-        F('valor_pago') + F('valor_juros') + F('valor_multa') - F('valor_desconto'),
-        output_field=DecimalField(max_digits=14, decimal_places=2),
-    )
     pagar_total = (
         PagamentoContaPagar.objects.filter(
             filial=conta.filial,
             conta_bancaria=conta,
             conta_pagar__excluido_em__isnull=True,
         )
-        .aggregate(total=Sum(valor_pagamento))['total']
+        .aggregate(total=Sum('valor_pago'))['total']
         or ZERO
     )
     venda_total = ZERO

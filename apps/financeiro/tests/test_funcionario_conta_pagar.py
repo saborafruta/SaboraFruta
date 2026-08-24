@@ -340,6 +340,68 @@ class FuncionarioContaPagarTests(TestCase):
         self.assertEqual(len({conta.grupo_recorrencia for conta in contas}), 1)
         self.assertIsNotNone(contas[0].grupo_recorrencia)
 
+    def test_recorrencia_diaria_cria_um_titulo_por_dia(self):
+        contas = ContaPagarService.criar_recorrencia(
+            filial=self.filial,
+            funcionario=self.funcionario,
+            tipo_lancamento="funcionario",
+            valor_original=Decimal("100.00"),
+            data_emissao=date(2026, 8, 20),
+            data_vencimento=date(2026, 8, 24),
+            plano_contas=self.categoria,
+            frequencia="diaria",
+            quantidade=3,
+        )
+
+        self.assertEqual(
+            [conta.data_vencimento for conta in contas],
+            [date(2026, 8, 24), date(2026, 8, 25), date(2026, 8, 26)],
+        )
+
+    def test_recorrencia_personalizada_respeita_intervalo_em_dias(self):
+        contas = ContaPagarService.criar_recorrencia(
+            filial=self.filial,
+            funcionario=self.funcionario,
+            tipo_lancamento="funcionario",
+            valor_original=Decimal("100.00"),
+            data_emissao=date(2026, 8, 20),
+            data_vencimento=date(2026, 8, 24),
+            plano_contas=self.categoria,
+            frequencia="personalizada",
+            intervalo_dias=3,
+            quantidade=3,
+        )
+
+        self.assertEqual(
+            [conta.data_vencimento for conta in contas],
+            [date(2026, 8, 24), date(2026, 8, 27), date(2026, 8, 30)],
+        )
+        self.assertTrue(all(conta.intervalo_recorrencia_dias == 3 for conta in contas))
+
+    def test_imposto_pode_vencer_no_dia_util_anterior(self):
+        categoria_imposto = PlanoContas.objects.create(
+            empresa=self.empresa,
+            conta_contabil=self.conta_contabil,
+            codigo="9990100001",
+            descricao="Impostos municipais",
+            tipo="D",
+            nivel=3,
+            aceita_lancamento=True,
+        )
+
+        conta = ContaPagarService.criar(
+            filial=self.filial,
+            funcionario=self.funcionario,
+            tipo_lancamento="funcionario",
+            valor_original=Decimal("100.00"),
+            data_emissao=date(2026, 8, 20),
+            data_vencimento=date(2026, 8, 30),
+            plano_contas=categoria_imposto,
+            ajustar_vencimento_dia_util=True,
+        )
+
+        self.assertEqual(conta.data_vencimento, date(2026, 8, 28))
+
     def test_forma_prevista_nao_quita_o_titulo(self):
         conta = ContaPagarService.criar(
             filial=self.filial,

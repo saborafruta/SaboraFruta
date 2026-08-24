@@ -66,6 +66,14 @@ class FormaPagamento(ActiveModel):
         ]
 
     def __str__(self):
+        return self.descricao_com_conta
+
+    @property
+    def descricao_com_conta(self):
+        if self.conta_bancaria_padrao_id:
+            conta = self.conta_bancaria_padrao.descricao or self.conta_bancaria_padrao.banco_nome
+            if conta:
+                return f"{self.descricao} - {conta}"
         return self.descricao
 
     @staticmethod

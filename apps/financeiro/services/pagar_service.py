@@ -9,7 +9,7 @@ from django.db import transaction
 from django.utils import timezone
 from dateutil.relativedelta import relativedelta
 
-from apps.core.services.calendario import proximo_dia_util
+from apps.core.services.calendario import dia_util_anterior_ou_mesmo, proximo_dia_util
 from apps.core.services.exceptions import DomainError
 from apps.financeiro.constants.enums import StatusContaPagar
 from apps.financeiro.models.receber_pagar import ContaPagar, PagamentoContaPagar
@@ -40,6 +40,7 @@ class ContaPagarService:
         usuario=None,
         grupo_recorrencia=None,
         frequencia_recorrencia: str = '',
+        intervalo_recorrencia_dias: int | None = None,
         ajustar_vencimento_dia_util: bool = False,
     ) -> ContaPagar:
         """Cria um lançamento manual de conta a pagar."""
@@ -53,7 +54,11 @@ class ContaPagarService:
         if tipo_lancamento == ContaPagar.TipoLancamento.FORNECEDOR:
             funcionario = None
         if ajustar_vencimento_dia_util:
-            data_vencimento = proximo_dia_util(data_vencimento, filial)
+            data_vencimento = (
+                dia_util_anterior_ou_mesmo(data_vencimento, filial)
+                if plano_contas and plano_contas.eh_imposto
+                else proximo_dia_util(data_vencimento, filial)
+            )
         conta = ContaPagar(
             filial=filial,
             fornecedor=fornecedor,
@@ -67,6 +72,7 @@ class ContaPagarService:
             total_parcelas=total_parcelas,
             grupo_recorrencia=grupo_recorrencia,
             frequencia_recorrencia=frequencia_recorrencia,
+            intervalo_recorrencia_dias=intervalo_recorrencia_dias,
             valor_original=valor_original,
             valor_juros=Decimal('0'),
             valor_multa=Decimal('0'),
@@ -112,17 +118,23 @@ class ContaPagarService:
     @transaction.atomic
     def criar_recorrencia(
         *, quantidade: int, frequencia: str, data_vencimento: date,
+        intervalo_dias: int | None = None,
         data_competencia: date | None = None, **dados,
     ) -> list[ContaPagar]:
         if quantidade < 2 or quantidade > 60:
             raise DomainError('A recorrência deve gerar entre 2 e 60 títulos.')
         incrementos = {
+            ContaPagar.FrequenciaRecorrencia.DIARIA: relativedelta(days=1),
             ContaPagar.FrequenciaRecorrencia.SEMANAL: relativedelta(weeks=1),
             ContaPagar.FrequenciaRecorrencia.MENSAL: relativedelta(months=1),
             ContaPagar.FrequenciaRecorrencia.TRIMESTRAL: relativedelta(months=3),
             ContaPagar.FrequenciaRecorrencia.SEMESTRAL: relativedelta(months=6),
             ContaPagar.FrequenciaRecorrencia.ANUAL: relativedelta(years=1),
         }
+        if frequencia == ContaPagar.FrequenciaRecorrencia.PERSONALIZADA:
+            if not intervalo_dias or not 1 <= intervalo_dias <= 365:
+                raise DomainError('Informe um intervalo personalizado entre 1 e 365 dias.')
+            incrementos[frequencia] = relativedelta(days=intervalo_dias)
         incremento = incrementos.get(frequencia)
         if not incremento:
             raise DomainError('Periodicidade de recorrência inválida.')
@@ -139,6 +151,11 @@ class ContaPagarService:
                 total_parcelas=quantidade,
                 grupo_recorrencia=grupo,
                 frequencia_recorrencia=frequencia,
+                intervalo_recorrencia_dias=(
+                    intervalo_dias
+                    if frequencia == ContaPagar.FrequenciaRecorrencia.PERSONALIZADA
+                    else None
+                ),
             ))
         return contas
 
