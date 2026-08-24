@@ -281,12 +281,12 @@
     <div class="card pc-kpi border-l-4 border-rose-500 p-4">
       <p class="text-xs font-semibold uppercase text-gray-500">Saídas</p>
       <strong class="pc-sensitive mt-2 block text-xl text-rose-600">R$ {{ posicao.total_saidas|floatformat:2 }}</strong>
-      <span class="mt-1 block text-xs text-gray-500">{{ posicao.saidas|length }} movimento{{ posicao.saidas|length|pluralize }}</span>
+      <span class="mt-1 block text-xs text-gray-500">Despesas e taxas do período</span>
     </div>
     <div class="card pc-kpi border-l-4 border-slate-400 p-4">
       <p class="text-xs font-semibold uppercase text-gray-500">Resultado do dia</p>
       <strong class="pc-sensitive mt-2 block text-xl {% if posicao.variacao_dia < 0 %}text-rose-600{% else %}text-emerald-600{% endif %}">R$ {{ posicao.variacao_dia|floatformat:2 }}</strong>
-      <span class="mt-1 block text-xs text-gray-500">Entradas menos saídas</span>
+      <span class="mt-1 block text-xs text-gray-500">Entradas líquidas menos saídas bancárias</span>
     </div>
     <div class="card pc-kpi col-span-2 border-l-4 border-blue-500 p-4 lg:col-span-1">
       <p class="text-xs font-semibold uppercase text-gray-500">Saldo final</p>

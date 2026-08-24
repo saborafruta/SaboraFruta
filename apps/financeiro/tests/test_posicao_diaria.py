@@ -190,7 +190,8 @@ class PosicaoDiariaCaixaTests(TestCase):
         self.assertEqual(venda.taxa_percentual, Decimal("2.00"))
         self.assertEqual(venda.entrada, Decimal("77.90"))
         self.assertEqual(posicao["total_entradas"], Decimal("107.90"))
-        self.assertEqual(posicao["total_saidas"], Decimal("70.00"))
+        self.assertEqual(posicao["total_saidas"], Decimal("72.10"))
+        self.assertEqual(posicao["total_saidas_bancarias"], Decimal("70.00"))
         self.assertEqual(posicao["variacao_dia"], Decimal("37.90"))
         self.assertEqual(posicao["total_fechamento"], Decimal("207.90"))
         self.assertEqual(posicao["total_taxas_entradas"], Decimal("2.10"))
@@ -264,10 +265,16 @@ class PosicaoDiariaCaixaTests(TestCase):
         )
 
         sexta = PosicaoDiariaCaixaService(self.filial, date(2026, 8, 21)).gerar(incluir_previstos=True)
-        segunda = PosicaoDiariaCaixaService(self.filial, date(2026, 8, 24)).gerar()
+        segunda = PosicaoDiariaCaixaService(self.filial, date(2026, 8, 24)).gerar(
+            incluir_previstos=True,
+            previsao_inicio=date(2026, 8, 24),
+            previsao_fim=date(2026, 8, 24),
+        )
         self.assertEqual(sexta["total_entradas"], Decimal("0"))
         self.assertEqual(sexta["total_previsto"], Decimal("100.00"))
         self.assertEqual(segunda["total_entradas"], Decimal("100.00"))
+        self.assertEqual(segunda["total_previsto"], Decimal("0"))
+        self.assertEqual(segunda["previsoes"], [])
 
     def test_venda_paga_sem_conta_nao_desaparece_da_entrada(self):
         self.forma.conta_bancaria_padrao = None

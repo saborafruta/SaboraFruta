@@ -171,7 +171,8 @@ class PosicaoDiariaCaixaService:
         ]
         total_bruto_transacoes_taxas = sum((m.entrada_bruta for m in transacoes_taxas), ZERO)
         total_liquido_transacoes_taxas = sum((m.entrada for m in transacoes_taxas), ZERO)
-        total_saidas = sum((m.saida for m in saidas), ZERO)
+        total_saidas_bancarias = sum((m.saida for m in saidas), ZERO)
+        total_saidas = total_saidas_bancarias + total_taxas_entradas
         total_fechamento = sum((c.posicao_fechamento for c in contas), ZERO)
         total_despesas_pessoais = sum((m.saida for m in saidas if m.despesa_pessoal), ZERO)
         taxas_por_forma = self._agrupar_taxas(entradas)
@@ -179,6 +180,11 @@ class PosicaoDiariaCaixaService:
             previsao_inicio or self.data,
             previsao_fim or (self.data + timedelta(days=7)),
         ) if incluir_previstos else []
+        entradas_realizadas = {(item.origem_codigo, item.registro_id) for item in entradas}
+        previsoes = [
+            item for item in previsoes
+            if (item["origem_codigo"], item["registro_id"]) not in entradas_realizadas
+        ]
         previstos_por_conta = defaultdict(lambda: ZERO)
         for item in previsoes:
             _somar(previstos_por_conta, item.get("conta_id"), item["valor_liquido"])
@@ -196,12 +202,15 @@ class PosicaoDiariaCaixaService:
             "total_bruto_transacoes_taxas": total_bruto_transacoes_taxas,
             "total_liquido_transacoes_taxas": total_liquido_transacoes_taxas,
             "total_saidas": total_saidas,
+            "total_saidas_bancarias": total_saidas_bancarias,
             "total_fechamento": total_fechamento,
             "total_despesas_pessoais": total_despesas_pessoais,
             "total_taxas_entradas": total_taxas_entradas,
             "transacoes_taxas": transacoes_taxas,
             "taxas_por_forma": taxas_por_forma,
-            "variacao_dia": total_entradas - total_saidas,
+            # As taxas ja foram abatidas das entradas liquidas. Elas aparecem no
+            # total de saidas para classificacao, sem reduzir o caixa novamente.
+            "variacao_dia": total_entradas - total_saidas_bancarias,
             "totais_forma_entrada": self._agrupar(entradas, "forma_pagamento", "entrada"),
             "totais_forma_saida": self._agrupar(saidas, "forma_pagamento", "saida"),
             "totais_conta_entrada": self._agrupar(entradas, "conta", "entrada"),
