@@ -13,6 +13,7 @@ def sincronizar_taxa_extrato(sender, instance, **kwargs):
         data=instance.data_credito or instance.data_lancamento,
         valor=instance.valor_taxa if (instance.valor or 0) > 0 else 0,
         forma_pagamento=instance.forma_pagamento,
+        conta_bancaria=instance.conta_bancaria,
     )
 
 
@@ -23,6 +24,7 @@ def sincronizar_taxa_recebimento(sender, instance, **kwargs):
         data=instance.data_liquidacao_prevista or instance.data_pagamento,
         valor=instance.valor_taxa_recebimento,
         forma_pagamento=instance.forma_pagamento,
+        conta_bancaria=instance.conta_bancaria,
     )
 
 
@@ -33,4 +35,8 @@ def sincronizar_taxa_venda(sender, instance, **kwargs):
         data=instance.data_liquidacao_prevista,
         valor=instance.valor_taxa,
         forma_pagamento=instance.forma_pagamento,
+        conta_bancaria=(
+            instance.conta_bancaria
+            or instance.forma_pagamento.conta_bancaria_padrao
+        ),
     )

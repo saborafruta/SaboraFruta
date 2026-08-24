@@ -337,7 +337,7 @@ class PosicaoDiariaCaixaService:
         pagamentos = PagamentoContaPagar.objects.filter(
             filial=self.filial, conta_bancaria_id__in=self.conta_ids,
             data_pagamento__range=(self.data_inicio, self.data_fim), conta_pagar__excluido_em__isnull=True,
-        ).select_related(
+        ).exclude(conta_pagar__documento_tipo__startswith="taxa_").select_related(
             "conta_bancaria", "forma_pagamento", "conta_pagar__fornecedor", "conta_pagar__funcionario",
             "conta_pagar__plano_contas", "conta_pagar__plano_contas__conta_pai",
             "conta_pagar__plano_contas__conta_pai__conta_pai",
@@ -421,7 +421,9 @@ class PosicaoDiariaCaixaService:
         pagamentos = PagamentoContaPagar.objects.filter(
             filial=self.filial, conta_bancaria_id__in=self.conta_ids,
             data_pagamento__lt=self.data_inicio, conta_pagar__excluido_em__isnull=True,
-        ).values_list("conta_bancaria_id", "valor_pago", "valor_juros", "valor_multa", "valor_desconto")
+        ).exclude(conta_pagar__documento_tipo__startswith="taxa_").values_list(
+            "conta_bancaria_id", "valor_pago", "valor_juros", "valor_multa", "valor_desconto",
+        )
         for conta_id, pago, juros, multa, desconto in pagamentos.iterator():
             _somar(saldos, conta_id, -((pago or ZERO) + (juros or ZERO) + (multa or ZERO) - (desconto or ZERO)))
         try:
@@ -457,7 +459,9 @@ class PosicaoDiariaCaixaService:
         for item in PagamentoContaPagar.objects.filter(
             filial=self.filial, data_pagamento__range=(self.data_inicio, self.data_fim), conta_bancaria__isnull=True,
             conta_pagar__excluido_em__isnull=True,
-        ).select_related("conta_pagar__fornecedor", "conta_pagar__funcionario"):
+        ).exclude(conta_pagar__documento_tipo__startswith="taxa_").select_related(
+            "conta_pagar__fornecedor", "conta_pagar__funcionario",
+        ):
             itens.append({"descricao": item.conta_pagar.descricao_exibicao, "valor": item.valor_liquido, "tipo": "saida"})
         try:
             from apps.pdv.models import PagamentoVendaPDV

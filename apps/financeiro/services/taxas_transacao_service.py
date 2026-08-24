@@ -98,7 +98,10 @@ def _categoria_taxas(empresa):
 
 
 @transaction.atomic
-def sincronizar_taxa_transacao(*, origem, origem_id, filial, data, valor, forma_pagamento=None):
+def sincronizar_taxa_transacao(
+    *, origem, origem_id, filial, data, valor, forma_pagamento=None,
+    conta_bancaria=None,
+):
     documento_tipo = f"taxa_{origem}"
     existentes = ContaPagar.all_objects.filter(
         filial=filial, documento_tipo=documento_tipo, documento_id=origem_id,
@@ -128,7 +131,7 @@ def sincronizar_taxa_transacao(*, origem, origem_id, filial, data, valor, forma_
             "data_competencia": data.replace(day=1),
             "forma_pagamento": forma_pagamento,
             "forma_pagamento_prevista": forma_pagamento,
-            "conta_bancaria": None,
+            "conta_bancaria": conta_bancaria,
             "plano_contas": categoria,
             "conta_contabil": categoria.conta_contabil,
             "status": StatusContaPagar.PAGO,
@@ -145,7 +148,7 @@ def sincronizar_taxa_transacao(*, origem, origem_id, filial, data, valor, forma_
             "data_pagamento": data,
             "valor_pago": valor,
             "forma_pagamento": forma_pagamento,
-            "conta_bancaria": None,
+            "conta_bancaria": conta_bancaria,
             "referencia_pagamento": "Retida na liquidacao do recebimento",
             "observacao": "Sem segunda movimentacao bancaria; o credito ja entrou liquido.",
         },
