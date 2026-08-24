@@ -7,14 +7,18 @@ que é o campo que o vertical inteiro já lê. Uma coluna gravada seria uma
 segunda verdade sobre onde o pedido está, e na primeira liberação feita pela
 tela do pedido as duas divergiriam.
 
-ARRASTAR É MUDAR O STATUS DO PEDIDO, com as mesmas travas do caminho normal:
+ARRASTAR É MUDAR O STATUS DO PEDIDO:
 
-  · soltar em Produção cobra as onze validações (`ValidacaoProducao`), igual
-    ao select da tela do pedido — senão o quadro seria o atalho para pular
-    todas elas;
+  · soltar em Produção RODA as onze validações (`ValidacaoProducao`) e deixa
+    passar, devolvendo o que falta como aviso. O cartão diz onde o pedido
+    está; barrar o arrasto não fazia a ficha aparecer, só impedia o quadro
+    de contar a verdade sobre um pedido que já estava indo para a fábrica.
+    A cancela de verdade ficou onde o estrago existe: emitir a ordem, que é
+    o ato que corta tecido;
   · soltar em Pedido Confirmado o que ainda é orçamento passa pelo
     `OrcamentoService.fechar`, que é quem sabe o que falta para uma proposta
-    virar compromisso.
+    virar compromisso — ali a recusa continua, porque fechar orçamento não é
+    registrar onde o pedido está, é assumir um compromisso de preço.
 
 Uma coluna pode abrigar MAIS DE UM STATUS. "Produção" recolhe liberado, em
 produção e em acabamento porque, para o comercial, os três respondem a mesma
@@ -245,6 +249,7 @@ class KanbanComercialService:
                 'status': pedido.status,
                 'mudou': False,
                 'avisos': [],
+                'com_pendencia': False,
             }
 
         anterior = pedido.get_status_display()
@@ -258,9 +263,19 @@ class KanbanComercialService:
             from apps.moda.services.orcamentos import OrcamentoService
             OrcamentoService.fechar(pedido, usuario)
         else:
+            # PASSA, E DIZ O QUE FALTA. Antes isto era `exigir` e devolvia
+            # erro: o cartão voltava para a coluna anterior e o quadro ficava
+            # mostrando "Orçamento" para um pedido que a fábrica já ia fazer.
+            # A pendência não some por causa da trava — ela some quando
+            # alguém a lê, e para ler é preciso deixar a tela dizer.
             if destino in LIBERAM_PRODUCAO:
                 from apps.moda.services.validacao import ValidacaoProducao
-                ValidacaoProducao.exigir(pedido)
+                pendencias = ValidacaoProducao.pendencias(pedido)
+                if pendencias:
+                    avisos.append(
+                        f'Movido com {len(pendencias)} pendência(s) de produção: '
+                        + ' '.join(pendencias)
+                    )
 
             pedido.status = destino
             pedido.save(update_fields=['status', 'updated_at'])
@@ -274,6 +289,9 @@ class KanbanComercialService:
             'anterior': anterior,
             'atual': pedido.get_status_display(),
             'avisos': avisos,
+            # A tela pinta de âmbar em vez de verde: moveu, mas tem conta
+            # para acertar. Sem essa marca o aviso passa como confirmação.
+            'com_pendencia': bool(avisos),
         }
 
     @staticmethod

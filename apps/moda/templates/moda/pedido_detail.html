@@ -396,8 +396,14 @@
         volta por pendência.
       {% endcomment %}
       {% if validacao.bloqueios %}
-        <div class="rounded-lg p-3" style="background:rgba(220,38,38,.10);">
-          <p class="text-xs font-semibold" style="color:#dc2626;">
+        {% comment %}
+          ÂMBAR, NÃO VERMELHO. Mudar o status já não é barrado por isto — a
+          lista é o que falta acertar, não uma porta fechada. O vermelho
+          dizia "você não pode", e para um pedido que anda mesmo assim isso
+          era a tela discordando do que a pessoa acabou de fazer.
+        {% endcomment %}
+        <div class="rounded-lg p-3" style="background:rgba(217,119,6,.12);">
+          <p class="text-xs font-semibold" style="color:#d97706;">
             {{ validacao.bloqueios|length }} pendência{{ validacao.bloqueios|length|pluralize }} para produzir
           </p>
           <ul class="mt-1 space-y-0.5">
@@ -407,6 +413,9 @@
               </li>
             {% endfor %}
           </ul>
+          <p class="text-[11px] mt-1.5" :style="temaClaro ? 'color:#6b7280;' : 'color:#9ca3af;'">
+            Não impede mover o pedido. Impede emitir a ordem de produção.
+          </p>
           <a href="{% url 'moda:pedido-fluxo' pedido.pk %}" class="text-xs underline mt-1 inline-block"
              :style="temaClaro ? 'color:#3b82f6;' : 'color:#60a5fa;'">ver todas e resolver</a>
         </div>

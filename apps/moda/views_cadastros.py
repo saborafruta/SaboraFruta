@@ -949,23 +949,30 @@ class PedidoStatusView(ModaBaseView):
             messages.info(request, 'O pedido já estava nesse status.')
             return redirect(reverse('moda:pedido-detail', args=[pedido.pk]))
 
-        # O outro caminho até a produção: mudar o status à mão. Sem a
-        # mesma trava aqui, bastaria escolher "Liberado para Produção" no
-        # select para pular as onze validações inteiras.
+        # O OUTRO CAMINHO ATÉ A PRODUÇÃO, com a mesma regra do quadro: passa
+        # e diz o que falta. Recusar a troca de status não fazia a ficha
+        # aparecer — só impedia o sistema de registrar onde o pedido estava,
+        # e o pedido ia para a fábrica do mesmo jeito, agora sem rastro.
+        pendencias = []
         if novo in LIBERAM_PRODUCAO:
-            try:
-                ValidacaoProducao.exigir(pedido)
-            except DomainError as erro:
-                messages.error(request, str(erro))
-                return redirect(reverse('moda:pedido-detail', args=[pedido.pk]))
+            pendencias = ValidacaoProducao.pendencias(pedido)
 
         anterior = pedido.get_status_display()
         pedido.status = novo
         pedido.save(update_fields=['status', 'updated_at'])
-        messages.success(
-            request,
-            f'Pedido #{pedido.numero:06d}: {anterior} → {pedido.get_status_display()}.',
-        )
+        recado = f'Pedido #{pedido.numero:06d}: {anterior} → {pedido.get_status_display()}.'
+        if pendencias:
+            # `warning`, não `success`: a mudança valeu, mas sair da tela
+            # achando que está tudo certo é justamente o que se quer evitar.
+            # A lista completa, com onde resolver cada uma, continua no card
+            # de situação logo abaixo.
+            messages.warning(
+                request,
+                f'{recado} Faltam {len(pendencias)} item(ns) para produzir: '
+                + ' '.join(pendencias),
+            )
+        else:
+            messages.success(request, recado)
         return redirect(reverse('moda:pedido-detail', args=[pedido.pk]))
 
 

@@ -182,8 +182,9 @@
   {% if pode_mover %}
     <p class="text-xs" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
       Arraste o cartão para mudar o status do pedido. No celular, use o seletor
-      dentro do cartão. Soltar em <strong>Produção</strong> passa pelas mesmas
-      validações da tela do pedido.
+      dentro do cartão. Soltar em <strong>Produção</strong> não é barrado: o
+      pedido anda e o quadro avisa o que ficou pendente. A conferência com
+      cancela é a emissão da ordem, que é o que corta tecido.
     </p>
   {% else %}
     <p class="text-xs" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
@@ -367,9 +368,14 @@
   let arrastando = null;
   let origem = null;
 
-  function mostrar(texto, erro) {
+  // TRÊS DESFECHOS, TRÊS CORES. "moveu" e "moveu com pendência" pintados
+  // igual fariam a lista do que falta parecer o texto de confirmação de
+  // sempre — e ninguém lê o texto de confirmação de sempre.
+  const CORES = { ok: '#3b82f6', pendencia: '#d97706', erro: '#dc2626' };
+
+  function mostrar(texto, tom) {
     avisoTexto.textContent = texto;
-    aviso.style.borderLeftColor = erro ? '#dc2626' : '#3b82f6';
+    aviso.style.borderLeftColor = CORES[tom] || CORES.ok;
     aviso.classList.remove('hidden');
   }
 
@@ -386,11 +392,11 @@
       });
       const dados = await resp.json();
       if (!dados.ok) throw new Error(dados.erro || 'Não foi possível mover.');
-      mostrar(dados.mensagem, false);
+      mostrar(dados.mensagem, dados.com_pendencia ? 'pendencia' : 'ok');
       atualizarSeletor(card, coluna);
     } catch (erro) {
       volta.appendChild(card);
-      mostrar(erro.message, true);
+      mostrar(erro.message, 'erro');
     }
     // Fora do try: o cartão volta para a origem quando o servidor recusa, e
     // as duas raias precisam ser recontadas nos dois desfechos.

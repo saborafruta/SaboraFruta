@@ -3,12 +3,19 @@ As onze validações que precedem a liberação para a produção.
 
 O QUE ESTÁ EM JOGO: depois que a OP desce, a fábrica corta tecido. Um erro
 que passa daqui não volta com um `Ctrl+Z` — volta com rolo cortado errado,
-faccionista parado e prazo perdido. Por isso este é o único ponto do
-vertical com TRAVA de verdade, e não com aviso.
+faccionista parado e prazo perdido. Por isso EMITIR A ORDEM continua sendo
+trava de verdade: é o ato que gasta material.
 
-O contraste com o painel dos 23 passos é deliberado: lá é mapa, aqui é
-cancela. Lá o pedido pode pular etapa porque a confecção real pula; aqui
-não passa, e o motivo aparece escrito.
+MOVER O PEDIDO PARA PRODUÇÃO, NÃO. Arrastar o cartão ou trocar o status é
+dizer onde o pedido está, e a confecção real chega nesse ponto com coisa
+pendente todo dia — a ficha sai depois, o preço fecha depois. Travar o
+registro do fato não fazia a pendência sumir: fazia o quadro mentir sobre
+onde o pedido estava, e quem precisava andar aprendia a contornar. Agora
+passa, e a lista do que falta vai junto, escrita.
+
+O contraste com o painel dos 23 passos continua: lá é mapa, aqui é a lista
+do que falta — e o que ela alimenta (aviso ou cancela) é decidido por quem
+chama, conforme o estrago do ato.
 
 BLOQUEIO x AVISO. Nem todo problema impede: "materiais disponíveis OU compra
 autorizada" é uma condição com dois caminhos, e quem já emitiu o pedido de
@@ -106,6 +113,21 @@ class ValidacaoProducao:
             f'Não dá para liberar a produção — {len(bloqueios)} '
             f'pendência(s). {motivos}'
         )
+
+    @classmethod
+    def pendencias(cls, pedido) -> list[str]:
+        """
+        O que falta, em frases prontas — sem travar nada.
+
+        MESMA FONTE DE `exigir`. Quem só avisa e quem barra leem a mesma
+        checagem: uma segunda lista "das pendências brandas" divergiria da
+        primeira no dia em que alguém acrescentasse uma validação, e as duas
+        telas passariam a cobrar coisas diferentes do mesmo pedido.
+        """
+        return [
+            f'{c.label}: {c.motivo}'
+            for c in cls.checar(pedido) if c.bloqueia
+        ]
 
     # ── 1. Cliente ───────────────────────────────────────────────────────
 
