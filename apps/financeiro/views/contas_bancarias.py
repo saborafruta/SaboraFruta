@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import timedelta
 from decimal import Decimal
 
 from django.contrib import messages
@@ -25,6 +26,7 @@ from apps.financeiro.forms import (
 from apps.financeiro.models import ContaBancaria
 from apps.financeiro.models.extrato import ExtratoBancario
 from apps.financeiro.models.receber_pagar import ContaReceber, PagamentoContaPagar
+from apps.financeiro.services.posicao_diaria_service import PosicaoDiariaCaixaService
 
 
 @dataclass
@@ -270,6 +272,18 @@ class ContaBancariaListView(PermissaoRequiredMixin, View):
             if conta_item.saldo_atual != conta_item.saldo_calculado:
                 conta_item.saldo_atual = conta_item.saldo_calculado
                 conta_item.save(update_fields=["saldo_atual", "updated_at"])
+
+        previsao = PosicaoDiariaCaixaService(filial, hoje).gerar(
+            incluir_previstos=True,
+            previsao_inicio=hoje,
+            previsao_fim=hoje + timedelta(days=30),
+        )
+        previsoes_por_conta = {
+            conta.pk: conta.posicao_prevista_entrada for conta in previsao["contas"]
+        }
+        for conta_item in contas:
+            conta_item.previsto_30_dias = previsoes_por_conta.get(conta_item.pk, Decimal("0"))
+            conta_item.saldo_projetado = conta_item.saldo_calculado + conta_item.previsto_30_dias
         saldo_total = sum(
             (saldos.get(conta.pk, Decimal("0")) for conta in contas if conta.ativo),
             Decimal("0"),

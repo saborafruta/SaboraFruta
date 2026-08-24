@@ -272,6 +272,12 @@ class PosicaoDiariaCaixaTests(TestCase):
         )
         self.assertEqual(sexta["total_entradas"], Decimal("0"))
         self.assertEqual(sexta["total_previsto"], Decimal("100.00"))
+        conta_sexta = next(conta for conta in sexta["contas"] if conta.pk == self.banco.pk)
+        self.assertEqual(conta_sexta.posicao_prevista_entrada, Decimal("100.00"))
+        self.assertEqual(
+            conta_sexta.posicao_saldo_projetado,
+            conta_sexta.posicao_fechamento + Decimal("100.00"),
+        )
         self.assertEqual(segunda["total_entradas"], Decimal("100.00"))
         self.assertEqual(segunda["total_previsto"], Decimal("0"))
         self.assertEqual(segunda["previsoes"], [])

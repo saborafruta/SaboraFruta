@@ -11,6 +11,7 @@ from apps.financeiro.models import (
     PlanoContabil,
     PlanoContas,
 )
+from apps.financeiro.services.conta_bancaria_resolver import vincular_conta_bancaria
 
 
 ZERO = Decimal("0")
@@ -102,6 +103,7 @@ def sincronizar_taxa_transacao(
     *, origem, origem_id, filial, data, valor, forma_pagamento=None,
     conta_bancaria=None,
 ):
+    conta_bancaria = conta_bancaria or vincular_conta_bancaria(forma_pagamento)
     documento_tipo = f"taxa_{origem}"
     existentes = ContaPagar.all_objects.filter(
         filial=filial, documento_tipo=documento_tipo, documento_id=origem_id,

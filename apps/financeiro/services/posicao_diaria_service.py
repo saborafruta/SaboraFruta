@@ -190,6 +190,9 @@ class PosicaoDiariaCaixaService:
             _somar(previstos_por_conta, item.get("conta_id"), item["valor_liquido"])
         for conta in contas:
             conta.posicao_prevista_entrada = previstos_por_conta[conta.pk]
+            conta.posicao_saldo_projetado = (
+                conta.posicao_fechamento + conta.posicao_prevista_entrada
+            )
         return {
             "contas": contas,
             "entradas": entradas,
@@ -570,13 +573,15 @@ class PosicaoDiariaCaixaService:
             valor_pago__gt=0,
         ).select_related("cliente", "forma_pagamento", "conta_bancaria", "plano_contas")
         for item in compensacoes:
+            forma = item.forma_pagamento
+            conta = item.conta_bancaria or (forma.conta_bancaria_padrao if forma else None)
             itens.append({
                 "data": item.data_liquidacao_prevista,
                 "descricao": f"Conta a receber - {item.cliente}",
                 "classificacao": item.plano_contas.descricao if item.plano_contas_id else "Conta a receber",
                 "forma": item.forma_pagamento.descricao if item.forma_pagamento else "Sem forma vinculada",
-                "conta": item.conta_bancaria.descricao if item.conta_bancaria else "Conta nao definida",
-                "conta_id": item.conta_bancaria_id,
+                "conta": conta.descricao if conta else "Conta nao definida",
+                "conta_id": conta.pk if conta else None,
                 "bandeira": "",
                 "parcelas": item.total_parcelas,
                 "valor_bruto": item.valor_pago,
@@ -598,6 +603,7 @@ class PosicaoDiariaCaixaService:
         ).select_related("cliente", "forma_pagamento", "conta_bancaria", "plano_contas")
         for item in recebimentos:
             forma = item.forma_pagamento
+            conta = item.conta_bancaria or (forma.conta_bancaria_padrao if forma else None)
             prazo = forma.prazo_compensacao_dias_uteis if forma else 0
             data_prevista = adicionar_dias_uteis_bancarios(item.data_vencimento, prazo, self.filial)
             atrasado = item.data_vencimento < hoje
@@ -613,8 +619,8 @@ class PosicaoDiariaCaixaService:
                 "descricao": f"Conta a receber - {item.cliente}",
                 "classificacao": item.plano_contas.descricao if item.plano_contas_id else "Conta a receber",
                 "forma": forma.descricao if forma else "Sem forma vinculada",
-                "conta": item.conta_bancaria.descricao if item.conta_bancaria else "Conta nao definida",
-                "conta_id": item.conta_bancaria_id,
+                "conta": conta.descricao if conta else "Conta nao definida",
+                "conta_id": conta.pk if conta else None,
                 "bandeira": "",
                 "parcelas": item.total_parcelas,
                 "valor_bruto": item.valor_saldo,
