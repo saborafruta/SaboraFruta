@@ -6,7 +6,7 @@ from django.utils import timezone
 
 from apps.core.models import Empresa, Filial, PerfilAcesso, Usuario
 from apps.financeiro.constants.enums import TipoFormaPagamento
-from apps.financeiro.models import FormaPagamento, TaxaParcelamento
+from apps.financeiro.models import ContaBancaria, FormaPagamento, TaxaParcelamento
 from apps.pdv.models import PagamentoVendaPDV, VendaPDV
 
 
@@ -71,6 +71,42 @@ class FormasPagamentoFinanceiroTests(TestCase):
         self.assertEqual(forma.filial, self.filial)
         self.assertEqual(forma.empresa, self.empresa)
         self.assertEqual(forma.taxa_fixa, Decimal("0.35"))
+
+    def test_vincula_forma_a_conta_pelo_nome_sem_ambiguidade(self):
+        orenda = ContaBancaria.objects.create(
+            filial=self.filial, descricao="ORENDA", banco_nome="ORENDA",
+            banco_codigo="001",
+        )
+        nubank = ContaBancaria.objects.create(
+            filial=self.filial, descricao="NUBANK (KARLA)", banco_nome="NUBANK",
+            banco_codigo="260",
+        )
+
+        pix_orenda = FormaPagamento.objects.create(
+            empresa=self.empresa, filial=self.filial,
+            descricao="PIX MAQUININHA (ORENDA)", tipo=TipoFormaPagamento.PIX,
+        )
+        pix_karla = FormaPagamento.objects.create(
+            empresa=self.empresa, filial=self.filial,
+            descricao="PIX (KARLA)", tipo=TipoFormaPagamento.PIX,
+        )
+
+        pix_orenda.refresh_from_db()
+        pix_karla.refresh_from_db()
+        self.assertEqual(pix_orenda.conta_bancaria_padrao_id, orenda.pk)
+        self.assertEqual(pix_karla.conta_bancaria_padrao_id, nubank.pk)
+
+    def test_nao_vincula_forma_generica_sem_evidencia(self):
+        ContaBancaria.objects.create(
+            filial=self.filial, descricao="ORENDA", banco_nome="ORENDA",
+            banco_codigo="001",
+        )
+        forma = FormaPagamento.objects.create(
+            empresa=self.empresa, filial=self.filial,
+            descricao="CARTAO CREDITO", tipo=TipoFormaPagamento.CARTAO_CREDITO,
+        )
+        forma.refresh_from_db()
+        self.assertIsNone(forma.conta_bancaria_padrao_id)
 
     def test_replicar_forma_de_pagamento_para_outra_filial(self):
         forma = FormaPagamento.objects.create(

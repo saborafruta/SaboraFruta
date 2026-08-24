@@ -1,10 +1,56 @@
 <script>
+  window.inicializarClassificacaoEdicao = function (raiz) {
+    (raiz || document).querySelectorAll('[data-classificacao-pagar-edicao]').forEach(function (bloco) {
+      if (bloco.dataset.inicializado === '1') return;
+      bloco.dataset.inicializado = '1';
+      const grupo = bloco.querySelector('[data-categoria-grupo]');
+      const subgrupo = bloco.querySelector('[data-categoria-subgrupo]');
+      const categoria = bloco.querySelector('[data-categoria-especifica]');
+      const original = bloco.querySelector('[data-plano-contas-original] select');
+      if (!grupo || !subgrupo || !categoria || !original) return;
+
+      const filtrar = function (select, atributo, valor) {
+        Array.from(select.options).forEach(function (option, indice) {
+          if (indice === 0) return;
+          const visivel = Boolean(valor) && option.dataset[atributo] === valor;
+          option.hidden = !visivel;
+          option.disabled = !visivel;
+        });
+      };
+      const atualizarCategorias = function () {
+        filtrar(categoria, 'subgrupo', subgrupo.value);
+        if (categoria.selectedOptions[0]?.disabled) categoria.value = '';
+        original.value = categoria.value;
+      };
+      const atualizarSubgrupos = function () {
+        filtrar(subgrupo, 'grupo', grupo.value);
+        if (subgrupo.selectedOptions[0]?.disabled) subgrupo.value = '';
+        atualizarCategorias();
+      };
+
+      grupo.addEventListener('change', function () {
+        subgrupo.value = '';
+        categoria.value = '';
+        atualizarSubgrupos();
+      });
+      subgrupo.addEventListener('change', function () {
+        categoria.value = '';
+        atualizarCategorias();
+      });
+      categoria.addEventListener('change', function () {
+        original.value = categoria.value;
+      });
+      atualizarSubgrupos();
+    });
+  };
+
   window.toggleEditarLancamento = function (elemento) {
     const detalhe = elemento.closest('[data-conta-detail]');
     const painel = detalhe && detalhe.querySelector('[data-editar-lancamento-panel]');
     if (!painel) return;
     painel.hidden = !painel.hidden;
     if (!painel.hidden) {
+      window.inicializarClassificacaoEdicao(painel);
       painel.scrollIntoView({behavior: 'smooth', block: 'nearest'});
       painel.querySelector('select, input, textarea')?.focus();
     }

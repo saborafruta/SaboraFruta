@@ -201,8 +201,12 @@ class PagamentoVendaPDV(models.Model):
     def save(self, *args, **kwargs):
         if self._state.adding and self.forma_pagamento_id and self.taxa_calculada_em is None:
             from django.utils import timezone
+            from apps.financeiro.models import FormaPagamento
 
-            calculo = self.forma_pagamento.calcular_taxa_recebimento(
+            # A forma pode ter sido alterada durante uma venda ainda aberta. Consulte
+            # novamente para aplicar taxa e prazo que estao efetivamente salvos.
+            forma_pagamento = FormaPagamento.objects.get(pk=self.forma_pagamento_id)
+            calculo = forma_pagamento.calcular_taxa_recebimento(
                 (self.valor or 0) - (self.troco or 0),
                 self.numero_parcelas,
                 self.bandeira,
@@ -212,7 +216,7 @@ class PagamentoVendaPDV(models.Model):
             self.valor_taxa = calculo["taxa"]
             self.valor_liquido = calculo["liquido"]
             self.taxa_calculada_em = timezone.now()
-            self.prazo_compensacao_aplicado = self.forma_pagamento.prazo_compensacao_dias_uteis or 0
+            self.prazo_compensacao_aplicado = forma_pagamento.prazo_compensacao_dias_uteis or 0
             data_venda = timezone.localtime(self.venda_pdv.data_venda).date()
             from apps.core.services.calendario import adicionar_dias_uteis_bancarios
             self.data_liquidacao_prevista = adicionar_dias_uteis_bancarios(

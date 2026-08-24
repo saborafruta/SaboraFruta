@@ -190,7 +190,8 @@ class PosicaoDiariaCaixaTests(TestCase):
         self.assertEqual(venda.taxa_percentual, Decimal("2.00"))
         self.assertEqual(venda.entrada, Decimal("77.90"))
         self.assertEqual(posicao["total_entradas"], Decimal("107.90"))
-        self.assertEqual(posicao["total_saidas"], Decimal("70.00"))
+        self.assertEqual(posicao["total_saidas"], Decimal("72.10"))
+        self.assertEqual(posicao["total_saidas_bancarias"], Decimal("70.00"))
         self.assertEqual(posicao["variacao_dia"], Decimal("37.90"))
         self.assertEqual(posicao["total_fechamento"], Decimal("207.90"))
         self.assertEqual(posicao["total_taxas_entradas"], Decimal("2.10"))
@@ -200,9 +201,9 @@ class PosicaoDiariaCaixaTests(TestCase):
         response = self.client.get(reverse("financeiro:posicao_diaria"), {"data": "2026-08-21"})
         self.assertContains(response, "Original: R$ 80,00")
         self.assertContains(response, "Taxa: R$ 2,10 (2,00%)")
-        self.assertContains(response, "Taxas descontadas nas entradas")
+        self.assertContains(response, "Taxas por transação (Cartão, PIX e boleto)")
         self.assertContains(response, "Detalhamento das taxas")
-        self.assertContains(response, "Taxas descontadas")
+        self.assertContains(response, "Taxas por transação")
         self.assertNotContains(response, 'class="pc-fee-summary')
         self.assertContains(response, "R$ 2,10")
 
@@ -219,7 +220,7 @@ class PosicaoDiariaCaixaTests(TestCase):
 
         response = self.client.get(reverse("financeiro:posicao_diaria"), {"data": "2026-08-21"})
 
-        self.assertContains(response, "TAXA 2,50% + R$ 0,30")
+        self.assertNotContains(response, "TAXA 2,50% + R$ 0,30")
         self.assertContains(response, "Informativa")
 
     def test_saida_manual_herda_marcacao_de_despesa_pessoal_do_grupo(self):
@@ -264,10 +265,111 @@ class PosicaoDiariaCaixaTests(TestCase):
         )
 
         sexta = PosicaoDiariaCaixaService(self.filial, date(2026, 8, 21)).gerar(incluir_previstos=True)
-        segunda = PosicaoDiariaCaixaService(self.filial, date(2026, 8, 24)).gerar()
+        segunda = PosicaoDiariaCaixaService(self.filial, date(2026, 8, 24)).gerar(
+            incluir_previstos=True,
+            previsao_inicio=date(2026, 8, 24),
+            previsao_fim=date(2026, 8, 24),
+        )
         self.assertEqual(sexta["total_entradas"], Decimal("0"))
         self.assertEqual(sexta["total_previsto"], Decimal("100.00"))
+        conta_sexta = next(conta for conta in sexta["contas"] if conta.pk == self.banco.pk)
+        self.assertEqual(conta_sexta.posicao_prevista_entrada, Decimal("100.00"))
+        self.assertEqual(
+            conta_sexta.posicao_saldo_projetado,
+            conta_sexta.posicao_fechamento + Decimal("100.00"),
+        )
         self.assertEqual(segunda["total_entradas"], Decimal("100.00"))
+        self.assertEqual(segunda["total_previsto"], Decimal("0"))
+        self.assertEqual(segunda["previsoes"], [])
+
+    def test_venda_paga_sem_conta_nao_desaparece_da_entrada(self):
+        self.forma.conta_bancaria_padrao = None
+        self.forma.prazo_compensacao_dias_uteis = 1
+        self.forma.save(update_fields=["conta_bancaria_padrao", "prazo_compensacao_dias_uteis"])
+        venda = VendaPDV.objects.create(
+            filial=self.filial, numero_venda=3, status="finalizada",
+            valor_total=Decimal("95.00"), valor_pago=Decimal("95.00"), usuario=self.usuario,
+            data_venda=datetime(2026, 8, 24, 7, 33, tzinfo=timezone.get_current_timezone()),
+        )
+        pagamento = PagamentoVendaPDV.objects.create(
+            venda_pdv=venda, forma_pagamento=self.forma, valor=Decimal("95.00"),
+        )
+
+        posicao_venda = PosicaoDiariaCaixaService(self.filial, date(2026, 8, 24)).gerar()
+        posicao_liquidacao = PosicaoDiariaCaixaService(self.filial, date(2026, 8, 25)).gerar()
+
+        self.assertEqual(posicao_venda["total_entradas"], Decimal("0"))
+        entrada = next(
+            item for item in posicao_liquidacao["entradas"]
+            if item.registro_id == pagamento.pk
+        )
+        self.assertIsNone(entrada.conta)
+        self.assertEqual(entrada.entrada, Decimal("95.00"))
+        self.assertEqual(posicao_liquidacao["total_entradas"], Decimal("95.00"))
+
+    def test_recebimento_usa_conta_padrao_da_forma_quando_baixa_nao_informa_conta(self):
+        cliente = Cliente.objects.create(
+            filial=self.filial, razao_social="Cliente sem conta direta", tipo_pessoa="F",
+            cpf_cnpj="12345678908",
+        )
+        conta = ContaReceber.objects.create(
+            filial=self.filial, cliente=cliente, valor_original=Decimal("70.00"),
+            valor_final=Decimal("70.00"), valor_pago=Decimal("70.00"),
+            valor_saldo=Decimal("0.00"), data_emissao=date(2026, 8, 24),
+            data_vencimento=date(2026, 8, 24), data_pagamento=date(2026, 8, 24),
+            forma_pagamento=self.forma, status=StatusContaReceber.PAGO,
+        )
+
+        posicao = PosicaoDiariaCaixaService(self.filial, date(2026, 8, 24)).gerar()
+
+        entrada = next(item for item in posicao["entradas"] if item.registro_id == conta.pk)
+        self.assertEqual(entrada.conta, self.banco)
+        self.assertEqual(entrada.entrada, Decimal("70.00"))
+
+    def test_op_paga_entra_na_posicao_diaria(self):
+        cliente = Cliente.objects.create(
+            filial=self.filial, razao_social="Cliente OP", tipo_pessoa="F",
+            cpf_cnpj="12345678907",
+        )
+        conta = ContaReceber.objects.create(
+            filial=self.filial, cliente=cliente, valor_original=Decimal("150.00"),
+            valor_final=Decimal("150.00"), valor_pago=Decimal("150.00"),
+            valor_saldo=Decimal("0.00"), data_emissao=date(2026, 8, 24),
+            data_vencimento=date(2026, 8, 24), data_pagamento=date(2026, 8, 24),
+            data_liquidacao_prevista=date(2026, 8, 24), forma_pagamento=self.forma,
+            status=StatusContaReceber.PAGO, documento_tipo="pedido_moda", documento_id=123,
+        )
+
+        posicao = PosicaoDiariaCaixaService(self.filial, date(2026, 8, 24)).gerar()
+
+        entrada = next(item for item in posicao["entradas"] if item.registro_id == conta.pk)
+        self.assertEqual(entrada.entrada, Decimal("150.00"))
+        self.assertEqual(entrada.origem, "Conta a receber")
+
+    def test_venda_consulta_prazo_atual_da_forma_ao_registrar_pagamento(self):
+        self.forma.prazo_compensacao_dias_uteis = 1
+        self.forma.save(update_fields=["prazo_compensacao_dias_uteis"])
+        forma_desatualizada = FormaPagamento.objects.get(pk=self.forma.pk)
+        FormaPagamento.objects.filter(pk=self.forma.pk).update(
+            prazo_compensacao_dias_uteis=0,
+        )
+        venda = VendaPDV.objects.create(
+            filial=self.filial, numero_venda=90, status="finalizada",
+            valor_total=Decimal("95.00"), valor_pago=Decimal("95.00"), usuario=self.usuario,
+            data_venda=datetime(2026, 8, 24, 12, tzinfo=timezone.get_current_timezone()),
+        )
+
+        pagamento = PagamentoVendaPDV.objects.create(
+            venda_pdv=venda, forma_pagamento=forma_desatualizada,
+            conta_bancaria=self.banco, valor=Decimal("95.00"),
+        )
+
+        self.assertEqual(pagamento.prazo_compensacao_aplicado, 0)
+        self.assertEqual(pagamento.data_liquidacao_prevista, date(2026, 8, 24))
+        self.assertTrue(any(
+            item.registro_id == pagamento.pk
+            for item in PosicaoDiariaCaixaService(self.filial, date(2026, 8, 24)).gerar()["entradas"]
+        ))
 
     def test_baixa_de_boleto_compensa_no_proximo_dia_util(self):
         self.forma.tipo = TipoFormaPagamento.BOLETO
@@ -350,14 +452,27 @@ class PosicaoDiariaCaixaTests(TestCase):
         self.assertEqual(movimento.valor_taxa, Decimal("1.11"))
         self.assertEqual(movimento.valor_liquido, Decimal("98.89"))
         self.assertEqual(movimento.data_credito, date(2026, 8, 24))
+        taxa_paga = ContaPagar.objects.get(
+            documento_tipo="taxa_extrato", documento_id=movimento.pk,
+        )
+        self.assertEqual(taxa_paga.valor_pago, Decimal("1.11"))
+        self.assertEqual(taxa_paga.data_pagamento, date(2026, 8, 24))
+        self.assertEqual(taxa_paga.plano_contas.descricao, "Taxas por transacao")
+        self.assertEqual(taxa_paga.conta_bancaria_id, self.banco.pk)
+        pagamento_taxa = taxa_paga.pagamentos.get()
+        self.assertEqual(pagamento_taxa.conta_bancaria_id, self.banco.pk)
+
+        posicao = PosicaoDiariaCaixaService(self.filial, date(2026, 8, 24)).gerar()
+        self.assertNotIn(taxa_paga.descricao_despesa, [item.descricao for item in posicao["saidas"]])
+        self.assertFalse(posicao["sem_conta"])
         sexta = PosicaoDiariaCaixaService(self.filial, date(2026, 8, 21)).gerar()
-        self.assertEqual(sexta["total_entradas"], Decimal("98.89"))
-        entrada = next(m for m in sexta["entradas"] if m.registro_id == movimento.pk)
-        self.assertEqual(entrada.data, date(2026, 8, 21))
-        self.assertEqual(entrada.data_credito, date(2026, 8, 24))
+        self.assertEqual(sexta["total_entradas"], Decimal("0"))
+        self.assertFalse(any(m.registro_id == movimento.pk for m in sexta["entradas"]))
         self.assertEqual(sexta["total_fechamento"], Decimal("150.00"))
         segunda = PosicaoDiariaCaixaService(self.filial, date(2026, 8, 24)).gerar()
-        self.assertEqual(segunda["total_entradas"], Decimal("0"))
+        self.assertEqual(segunda["total_entradas"], Decimal("98.89"))
+        entrada = next(m for m in segunda["entradas"] if m.registro_id == movimento.pk)
+        self.assertEqual(entrada.data, date(2026, 8, 24))
         self.assertEqual(segunda["total_fechamento"], Decimal("248.89"))
 
     def test_recebimento_previsto_atrasado_aparece_em_vermelho(self):
@@ -472,7 +587,7 @@ class PosicaoDiariaCaixaTests(TestCase):
         url = reverse("financeiro:posicao_diaria")
         credito = self.client.post(url, {
             "acao": "lancar_movimento", "tipo": "credito",
-            "conta_destino": self.banco.pk, "data_lancamento": "2020-01-01",
+            "conta_destino": self.banco.pk, "data_lancamento": "2026-08-21",
             "data_referencia": "2026-08-21", "valor": "35.50", "historico": "Credito manual",
         })
         debito = self.client.post(url, {
@@ -489,7 +604,7 @@ class PosicaoDiariaCaixaTests(TestCase):
         self.assertEqual(valores, [Decimal("35.50"), Decimal("-10.25")])
         self.assertFalse(ExtratoBancario.objects.filter(
             filial=self.filial, historico__in=("Credito manual", "Debito manual"),
-        ).exclude(data_lancamento=timezone.localdate()).exists())
+        ).exclude(data_lancamento=date(2026, 8, 21)).exists())
 
     def test_entrada_manual_salva_forma_e_pode_ser_corrigida_pelo_admin(self):
         movimento = ExtratoBancario.objects.create(
@@ -538,9 +653,34 @@ class PosicaoDiariaCaixaTests(TestCase):
         movimento = ExtratoBancario.objects.get(historico="Entrada classificada")
         self.assertEqual(movimento.plano_contas, categoria)
         self.assertEqual(movimento.data_lancamento, date(2026, 8, 21))
-        posicao = PosicaoDiariaCaixaService(self.filial, timezone.localdate()).gerar()
+        posicao = PosicaoDiariaCaixaService(self.filial, date(2026, 8, 21)).gerar()
         entrada = next(mov for mov in posicao["entradas"] if mov.registro_id == movimento.pk)
         self.assertEqual(entrada.classificacao, "Emprestimo recebido")
+
+    def test_cards_exibem_apenas_ultima_categoria_financeira(self):
+        grupo = PlanoContas.objects.create(
+            empresa=self.empresa, codigo="310", descricao="Receitas financeiras",
+            tipo="R", nivel=1, aceita_lancamento=False,
+        )
+        tipo = PlanoContas.objects.create(
+            empresa=self.empresa, conta_pai=grupo, codigo="31001",
+            descricao="Capital e emprestimos", tipo="R", nivel=2,
+            aceita_lancamento=False,
+        )
+        categoria = self._categoria_receita("Emprestimos recebidos")
+        categoria.conta_pai = tipo
+        categoria.save(update_fields=["conta_pai"])
+        movimento = ExtratoBancario.objects.create(
+            filial=self.filial, conta_bancaria=self.banco, forma_pagamento=self.forma,
+            plano_contas=categoria, data_lancamento=date(2026, 8, 21),
+            historico="Emprestimo", valor=Decimal("100.00"), origem="manual",
+        )
+
+        posicao = PosicaoDiariaCaixaService(self.filial, date(2026, 8, 21)).gerar()
+        entrada = next(item for item in posicao["entradas"] if item.registro_id == movimento.pk)
+
+        self.assertEqual(entrada.classificacao, "Emprestimos recebidos")
+        self.assertNotIn("Receitas financeiras", entrada.classificacao)
 
     def test_cartao_debito_ignora_parcelas_e_credito_respeita_maximo_cadastrado(self):
         from apps.financeiro.forms.cadastros import MovimentoContaBancariaForm

@@ -513,6 +513,12 @@ class ContaPagarEdicaoAdminForm(forms.Form):
     def __init__(self, *args, filial=None, conta=None, pagamento=None, **kwargs):
         self.conta = conta
         self.pagamento = pagamento
+        self.categoria_grupos = []
+        self.categoria_subgrupos = []
+        self.categorias_especificas = []
+        self.categoria_grupo_id = ''
+        self.categoria_subgrupo_id = ''
+        self.categoria_especifica_id = ''
         if conta is not None:
             if self.pagamento is None:
                 self.pagamento = conta.pagamentos.order_by(
@@ -551,6 +557,32 @@ class ContaPagarEdicaoAdminForm(forms.Form):
                 .select_related('conta_pai__conta_pai', 'conta_contabil')
                 .order_by('codigo')
             )
+            categorias_base = PlanoContas.objects.filter(
+                empresa=filial.empresa, tipo='D', ativo=True,
+            )
+            self.categoria_grupos = list(
+                categorias_base.filter(nivel=1).order_by('codigo')
+            )
+            self.categoria_subgrupos = list(
+                categorias_base.filter(nivel=2)
+                .select_related('conta_pai')
+                .order_by('codigo')
+            )
+            self.categorias_especificas = list(self.fields['plano_contas'].queryset)
+
+            categoria_id = self.data.get('plano_contas') if self.is_bound else (
+                conta.plano_contas_id if conta else None
+            )
+            categoria = next(
+                (item for item in self.categorias_especificas if str(item.pk) == str(categoria_id)),
+                None,
+            )
+            if categoria:
+                self.categoria_especifica_id = str(categoria.pk)
+                self.categoria_subgrupo_id = str(categoria.conta_pai_id or '')
+                self.categoria_grupo_id = str(
+                    categoria.conta_pai.conta_pai_id if categoria.conta_pai_id else ''
+                )
             self.fields['conta_bancaria'].queryset = (
                 ContaBancaria.objects.for_filial(filial)
                 .filter(ativo=True)

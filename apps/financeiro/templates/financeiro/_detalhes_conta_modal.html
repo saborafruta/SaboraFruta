@@ -54,7 +54,17 @@
           <label class="text-xs font-medium">Vencimento{{ edicao_lancamento_form.data_vencimento|add_class:"form-input mt-1 w-full" }}</label>
           <label class="text-xs font-medium">Competência{{ edicao_lancamento_form.data_competencia|add_class:"form-input mt-1 w-full" }}</label>
           <label class="text-xs font-medium">Forma prevista{{ edicao_lancamento_form.forma_pagamento_prevista|add_class:"form-input mt-1 w-full" }}</label>
-          <label class="text-xs font-medium sm:col-span-2 lg:col-span-3">Categoria financeira{{ edicao_lancamento_form.plano_contas|add_class:"form-input mt-1 w-full" }}<span class="mt-1 block font-normal opacity-60">A conta contábil vinculada será atualizada automaticamente.</span></label>
+          <fieldset class="sm:col-span-2 lg:col-span-3" data-classificacao-pagar-edicao>
+            <legend class="text-xs font-medium">Classificação financeira</legend>
+            <div class="mt-2 grid grid-cols-1 gap-2 sm:grid-cols-3">
+              <label class="text-[11px] font-medium"><span class="mb-1 block text-blue-500">1. Grupo</span><select class="form-input w-full" data-categoria-grupo><option value="">Selecione o grupo</option>{% for grupo in edicao_lancamento_form.categoria_grupos %}<option value="{{ grupo.pk }}"{% if edicao_lancamento_form.categoria_grupo_id == grupo.pk|stringformat:'s' %} selected{% endif %}>{{ grupo.descricao }}</option>{% endfor %}</select></label>
+              <label class="text-[11px] font-medium"><span class="mb-1 block text-blue-500">2. Tipo</span><select class="form-input w-full" data-categoria-subgrupo><option value="">Selecione o tipo</option>{% for subgrupo in edicao_lancamento_form.categoria_subgrupos %}<option value="{{ subgrupo.pk }}" data-grupo="{{ subgrupo.conta_pai_id }}"{% if edicao_lancamento_form.categoria_subgrupo_id == subgrupo.pk|stringformat:'s' %} selected{% endif %}>{{ subgrupo.descricao }}</option>{% endfor %}</select></label>
+              <label class="text-[11px] font-medium"><span class="mb-1 block text-blue-500">3. Categoria</span><select class="form-input w-full" data-categoria-especifica><option value="">Selecione a categoria</option>{% for categoria in edicao_lancamento_form.categorias_especificas %}<option value="{{ categoria.pk }}" data-subgrupo="{{ categoria.conta_pai_id }}"{% if edicao_lancamento_form.categoria_especifica_id == categoria.pk|stringformat:'s' %} selected{% endif %}>{{ categoria.descricao }}</option>{% endfor %}</select></label>
+            </div>
+            <span class="hidden" data-plano-contas-original>{{ edicao_lancamento_form.plano_contas }}</span>
+            {% if edicao_lancamento_form.plano_contas.errors %}<span class="mt-1 block text-xs text-rose-500">{{ edicao_lancamento_form.plano_contas.errors|striptags }}</span>{% endif %}
+            <span class="mt-1 block text-xs opacity-60">A conta contábil vinculada será atualizada automaticamente.</span>
+          </fieldset>
         </div>
       </div>
       {% if conta.valor_pago > 0 %}

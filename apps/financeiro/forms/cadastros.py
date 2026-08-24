@@ -417,6 +417,9 @@ class FormaPagamentoForm(forms.ModelForm):
         self.filial = filial
         self.fields["codigo_sefaz"].required = False
         self.fields["conta_bancaria_padrao"].required = False
+        self.fields["conta_bancaria_padrao"].help_text = (
+            "Entradas, previsoes e taxas desta forma serao direcionadas automaticamente para esta conta."
+        )
         self.fields["taxa_administrativa"].widget.attrs.setdefault("step", "0.01")
         self.fields["taxa_fixa"].widget.attrs.update({"step": "0.01", "min": "0", "inputmode": "decimal"})
         self.fields["prazo_liquidacao_dias"].widget.attrs.setdefault("min", "0")
