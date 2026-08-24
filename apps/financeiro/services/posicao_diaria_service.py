@@ -22,7 +22,7 @@ ZERO = Decimal("0")
 @dataclass
 class MovimentoDiario:
     data: date
-    conta: ContaBancaria
+    conta: ContaBancaria | None
     descricao: str
     contraparte: str
     origem: str
@@ -107,12 +107,18 @@ class PosicaoDiariaCaixaService:
         movimentos_ativos = [mov for mov in movimentos if not mov.excluido]
         movimentos_exibidos = movimentos_ativos
         if conta_filtro:
-            movimentos_exibidos = [mov for mov in movimentos_exibidos if mov.conta.pk == conta_filtro]
+            movimentos_exibidos = [
+                mov for mov in movimentos_exibidos
+                if mov.conta and mov.conta.pk == conta_filtro
+            ]
         if ordem == "conta":
             movimentos_exibidos = sorted(
                 movimentos_exibidos,
                 key=lambda mov: (
-                    (mov.conta.descricao or mov.conta.banco_nome or "").casefold(),
+                    (
+                        (mov.conta.descricao or mov.conta.banco_nome or "").casefold()
+                        if mov.conta else "zz conta nao definida"
+                    ),
                     -(mov.momento.timestamp() if mov.momento else 0),
                 ),
             )
@@ -135,7 +141,8 @@ class PosicaoDiariaCaixaService:
         saldo_anterior = self._saldos_antes_do_dia()
         por_conta_dia = defaultdict(lambda: ZERO)
         for mov in movimentos_ativos:
-            por_conta_dia[mov.conta.pk] += mov.valor
+            if mov.conta:
+                por_conta_dia[mov.conta.pk] += mov.valor
 
         contas = []
         for indice, conta in enumerate(self.contas):
@@ -144,9 +151,11 @@ class PosicaoDiariaCaixaService:
             nome_base = " ".join(filter(None, [conta.descricao, conta.banco_nome, conta.tipo_conta])).casefold()
             eh_dinheiro = "dinheiro" in nome_base or "caixa" in nome_base
             conta.posicao_abertura = abertura
-            entradas_conta = [m for m in entradas if m.conta.pk == conta.pk]
+            entradas_conta = [m for m in entradas if m.conta and m.conta.pk == conta.pk]
             conta.posicao_entradas = sum((m.entrada for m in entradas_conta), ZERO)
-            conta.posicao_saidas = sum((m.saida for m in saidas if m.conta.pk == conta.pk), ZERO)
+            conta.posicao_saidas = sum(
+                (m.saida for m in saidas if m.conta and m.conta.pk == conta.pk), ZERO
+            )
             conta.posicao_fechamento = fechamento
             conta.posicao_cor = "azul" if eh_dinheiro else self.CORES[indice % len(self.CORES)]
             conta.eh_dinheiro = eh_dinheiro
@@ -211,7 +220,9 @@ class PosicaoDiariaCaixaService:
         for movimento in movimentos:
             chave = getattr(movimento, atributo)
             if atributo == "conta":
-                chave = chave.descricao or chave.banco_nome or f"Conta #{chave.pk}"
+                chave = (
+                    chave.descricao or chave.banco_nome or f"Conta #{chave.pk}"
+                ) if chave else "Conta nao definida"
             totais[chave or "Sem forma vinculada"] += getattr(movimento, campo_valor)
         return [{"nome": nome, "valor": valor} for nome, valor in sorted(
             totais.items(), key=lambda item: (-item[1], item[0].casefold())
@@ -225,7 +236,9 @@ class PosicaoDiariaCaixaService:
         for movimento in entradas:
             chave = getattr(movimento, atributo)
             if atributo == "conta":
-                chave = chave.descricao or chave.banco_nome or f"Conta #{chave.pk}"
+                chave = (
+                    chave.descricao or chave.banco_nome or f"Conta #{chave.pk}"
+                ) if chave else "Conta nao definida"
             totais[chave or "Sem forma vinculada"] += movimento.valor_taxa
         return [{"nome": nome, "valor": valor} for nome, valor in sorted(
             totais.items(), key=lambda item: (-item[1], item[0].casefold())
@@ -308,17 +321,25 @@ class PosicaoDiariaCaixaService:
             ))
 
         recebimentos = ContaReceber.objects.filter(
-            filial=self.filial, conta_bancaria_id__in=self.conta_ids,
-            valor_pago__gt=0,
+            filial=self.filial, valor_pago__gt=0,
         ).filter(
             Q(data_liquidacao_prevista__range=(self.data_inicio, self.data_fim))
             | Q(data_liquidacao_prevista__isnull=True, data_pagamento__range=(self.data_inicio, self.data_fim))
-        ).select_related("conta_bancaria", "cliente", "forma_pagamento", "plano_contas")
+        ).select_related(
+            "conta_bancaria", "cliente", "forma_pagamento",
+            "forma_pagamento__conta_bancaria_padrao", "plano_contas",
+        )
         for item in recebimentos:
             bruto = item.valor_pago or ZERO
             taxa = item.valor_taxa_recebimento if item.taxa_calculada_em else ZERO
+            conta = item.conta_bancaria or (
+                item.forma_pagamento.conta_bancaria_padrao
+                if item.forma_pagamento_id else None
+            )
+            if conta and conta.pk not in self.conta_ids:
+                conta = None
             movimentos.append(MovimentoDiario(
-                data=item.data_liquidacao_prevista or item.data_pagamento, conta=item.conta_bancaria,
+                data=item.data_liquidacao_prevista or item.data_pagamento, conta=conta,
                 descricao=f"Recebimento de {item.cliente}", contraparte=str(item.cliente),
                 origem="Conta a receber", origem_codigo="receber", registro_id=item.pk,
                 documento=item.documento_numero,
@@ -377,8 +398,10 @@ class PosicaoDiariaCaixaService:
             )
             for item in vendas:
                 conta = item.conta_bancaria or item.forma_pagamento.conta_bancaria_padrao
+                if conta and conta.pk not in self.conta_ids:
+                    conta = None
                 valor = item.valor_entrada_liquida
-                if not conta or conta.pk not in self.conta_ids or valor <= ZERO:
+                if valor <= ZERO:
                     continue
                 cliente = str(item.venda_pdv.cliente) if item.venda_pdv.cliente else "Consumidor final"
                 movimentos.append(MovimentoDiario(
@@ -410,14 +433,18 @@ class PosicaoDiariaCaixaService:
             valor = item.valor_entrada_liquida if item.valor > ZERO else item.valor
             _somar(saldos, item.conta_bancaria_id, valor)
         recebimentos = ContaReceber.objects.filter(
-            filial=self.filial, conta_bancaria_id__in=self.conta_ids,
-            valor_pago__gt=0,
+            filial=self.filial, valor_pago__gt=0,
         ).filter(
             Q(data_liquidacao_prevista__lt=self.data_inicio)
             | Q(data_liquidacao_prevista__isnull=True, data_pagamento__lt=self.data_inicio)
-        )
+        ).select_related("conta_bancaria", "forma_pagamento__conta_bancaria_padrao")
         for item in recebimentos.iterator():
-            _somar(saldos, item.conta_bancaria_id, item.valor_entrada_liquida)
+            conta = item.conta_bancaria or (
+                item.forma_pagamento.conta_bancaria_padrao
+                if item.forma_pagamento_id else None
+            )
+            if conta and conta.pk in self.conta_ids:
+                _somar(saldos, conta.pk, item.valor_entrada_liquida)
         pagamentos = PagamentoContaPagar.objects.filter(
             filial=self.filial, conta_bancaria_id__in=self.conta_ids,
             data_pagamento__lt=self.data_inicio, conta_pagar__excluido_em__isnull=True,

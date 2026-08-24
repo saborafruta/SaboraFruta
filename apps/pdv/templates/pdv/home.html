@@ -273,6 +273,21 @@
     display:flex; align-items:center; justify-content:center;
   }
   .impr-opt-icon svg { width:20px; height:20px; }
+  .impr-title { font-size:17px; font-weight:800; color:var(--pdv-t1); line-height:1.2; }
+  .impr-subtitle { font-size:12px; color:var(--pdv-t2); margin-top:4px; }
+  .impr-opt-title { font-size:13.5px; font-weight:700; color:var(--pdv-t1); }
+  .impr-opt-desc { font-size:11px; color:var(--pdv-t2); margin-top:2px; line-height:1.35; }
+  .impr-divider { height:1px; background:var(--pdv-divider); margin:4px; }
+  .impr-footer {
+    padding:16px 20px; margin:12px 0 0; display:flex; justify-content:center;
+    border-top:1px solid var(--pdv-divider);
+  }
+  .impr-skip {
+    padding:9px 32px; border-radius:9px; border:1px solid var(--pdv-bd4);
+    background:transparent; color:var(--pdv-t2); font-size:13px; font-weight:700;
+    cursor:pointer; font-family:inherit; transition:.15s;
+  }
+  .impr-skip:hover { background:var(--pdv-hover2); color:var(--pdv-t1); border-color:var(--pdv-bd); }
   .impr-badge {
     font-size:9px; font-weight:700; padding:2px 7px;
     border-radius:5px; margin-left:auto; flex-shrink:0; white-space:nowrap;
@@ -2670,8 +2685,8 @@
             <path d="M5 13l4 4L19 7"/>
           </svg>
         </div>
-        <div style="font-size:17px;font-weight:800;color:#e8e8f8;line-height:1.2;">Venda Finalizada!</div>
-        <div style="font-size:12px;color:#3a3a52;margin-top:4px;"
+        <div class="impr-title">Venda Finalizada!</div>
+        <div class="impr-subtitle"
              x-text="'#' + String(vendaFinalizadaData.numero||0).padStart(6,'0') + ' - deseja emitir um documento?'"></div>
       </div>
 
@@ -2684,8 +2699,8 @@
             </svg>
           </div>
           <div style="flex:1;min-width:0;">
-            <div style="font-size:13.5px;font-weight:700;color:#e8e8f8;">NFC-e</div>
-            <div style="font-size:11px;color:#3a3a52;margin-top:2px;">Nota Fiscal ao Consumidor Eletronica</div>
+            <div class="impr-opt-title">NFC-e</div>
+            <div class="impr-opt-desc">Nota Fiscal ao Consumidor Eletronica</div>
           </div>
           <span class="impr-badge" style="background:#c2410c;color:#f97316;">Fiscal</span>
         </button>
@@ -2697,8 +2712,8 @@
             </svg>
           </div>
           <div style="flex:1;min-width:0;">
-            <div style="font-size:13.5px;font-weight:700;color:#e8e8f8;">NF-e</div>
-            <div style="font-size:11px;color:#3a3a52;margin-top:2px;">Nota Fiscal Eletronica</div>
+            <div class="impr-opt-title">NF-e</div>
+            <div class="impr-opt-desc">Nota Fiscal Eletronica</div>
           </div>
           <span class="impr-badge" style="background:#064e3b;color:#34d399;">Fiscal</span>
         </button>
@@ -2710,13 +2725,13 @@
             </svg>
           </div>
           <div style="flex:1;min-width:0;">
-            <div style="font-size:13.5px;font-weight:700;color:#e8e8f8;">NFS-e</div>
-            <div style="font-size:11px;color:#3a3a52;margin-top:2px;">Nota Fiscal de Servico Eletronica</div>
+            <div class="impr-opt-title">NFS-e</div>
+            <div class="impr-opt-desc">Nota Fiscal de Servico Eletronica</div>
           </div>
           <span class="impr-badge" style="background:#1e3a5f;color:#60a5fa;">Fiscal</span>
         </button>
 
-        <div style="height:1px;background:#16162a;margin:4px 4px;"></div>
+        <div class="impr-divider"></div>
 
         <button class="impr-opt" @click="imprimirCupom('termica'); fecharModalImpressao()">
           <div class="impr-opt-icon" style="background:linear-gradient(135deg,#451a03,#b45309);">
@@ -2725,8 +2740,8 @@
             </svg>
           </div>
           <div style="flex:1;min-width:0;">
-            <div style="font-size:13.5px;font-weight:700;color:#e8e8f8;">Cupom nao Fiscal</div>
-            <div style="font-size:11px;color:#3a3a52;margin-top:2px;">Bobina 80mm / impressora de cupom</div>
+            <div class="impr-opt-title">Cupom nao Fiscal</div>
+            <div class="impr-opt-desc">Bobina 80mm / impressora de cupom</div>
           </div>
           <span class="impr-badge" style="background:#451a03;color:#f59e0b;">Cupom</span>
         </button>
@@ -2742,8 +2757,8 @@
             </svg>
           </div>
           <div style="flex:1;min-width:0;">
-            <div style="font-size:13.5px;font-weight:700;color:#e8e8f8;">Cupom em A4</div>
-            <div style="font-size:11px;color:#3a3a52;margin-top:2px;">Folha inteira / impressora comum</div>
+            <div class="impr-opt-title">Cupom em A4</div>
+            <div class="impr-opt-desc">Folha inteira / impressora comum</div>
           </div>
           <span class="impr-badge" style="background:#1e1b4b;color:#818cf8;">A4</span>
         </button>
@@ -2755,17 +2770,15 @@
             </svg>
           </div>
           <div style="flex:1;min-width:0;">
-            <div style="font-size:13.5px;font-weight:700;color:#e8e8f8;" x-text="compartilhandoCupom ? 'Preparando PDF...' : 'Enviar pelo WhatsApp'"></div>
-            <div style="font-size:11px;color:#3a3a52;margin-top:2px;">Compartilhar comprovante nao fiscal</div>
+            <div class="impr-opt-title" x-text="compartilhandoCupom ? 'Preparando PDF...' : 'Enviar pelo WhatsApp'"></div>
+            <div class="impr-opt-desc">Compartilhar comprovante nao fiscal</div>
           </div>
           <span class="impr-badge" style="background:#14532d;color:#4ade80;">PDF</span>
         </button>
       </div>
       <!-- Footer -->
-      <div style="padding:16px 20px;margin-top:8px;display:flex;justify-content:center;border-top:1px solid #16162a;margin:12px 0 0;">
-        <button @click="fecharModalImpressao()"
-                style="padding:9px 32px;border-radius:9px;border:1px solid #22223a;background:transparent;color:#555;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;transition:.15s;"
-                onmouseover="this.style.background='#16162a';this.style.color='#a0a0b8'" onmouseout="this.style.background='transparent';this.style.color='#555'">
+      <div class="impr-footer">
+        <button class="impr-skip" @click="fecharModalImpressao()">
           Pular &rarr; Nova Venda
         </button>
       </div>
@@ -3546,16 +3559,18 @@ function pdv() {
       const filialUf = '{{ filial_ativa.uf|escapejs }}';
       const filialTelefone = '{{ filial_ativa.telefone|escapejs }}';
       {% if parametros_sistema and parametros_sistema.logo_url %}
-      const logoUrl = '{{ parametros_sistema.logo_url|escapejs }}';
+      const logoUrlRaw = '{{ parametros_sistema.logo_url|escapejs }}';
       {% elif parametros_sistema and parametros_sistema.logo %}
-      const logoUrl = '{{ request.scheme }}://{{ request.get_host }}{{ parametros_sistema.logo.url }}';
+      const logoUrlRaw = '{{ parametros_sistema.logo.url|escapejs }}';
       {% elif filial_ativa and filial_ativa.imagem %}
-      const logoUrl = '{{ request.scheme }}://{{ request.get_host }}{{ filial_ativa.imagem.url }}';
+      const logoUrlRaw = '{{ filial_ativa.imagem.url|escapejs }}';
       {% elif empresa_logo_url %}
-      const logoUrl = '{{ empresa_logo_url|escapejs }}';
+      const logoUrlRaw = '{{ empresa_logo_url|escapejs }}';
       {% else %}
-      const logoUrl = '';
+      const logoUrlRaw = '';
       {% endif %}
+      let logoUrl = '';
+      try { logoUrl = logoUrlRaw ? new URL(logoUrlRaw, window.location.origin).href : ''; } catch (_) {}
       const agora = new Date().toLocaleString('pt-BR',{day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'});
       const fmt = n => parseFloat(n||0).toFixed(2).replace('.',',');
       const clienteNome = v.cliente ? v.cliente.nome : 'Consumidor Final';
@@ -3718,16 +3733,18 @@ function pdv() {
       const filialUf = '{{ filial_ativa.uf|escapejs }}';
       const filialTelefone = '{{ filial_ativa.telefone|escapejs }}';
       {% if parametros_sistema and parametros_sistema.logo_url %}
-      const logoUrl = '{{ parametros_sistema.logo_url|escapejs }}';
+      const logoUrlRaw = '{{ parametros_sistema.logo_url|escapejs }}';
       {% elif parametros_sistema and parametros_sistema.logo %}
-      const logoUrl = '{{ request.scheme }}://{{ request.get_host }}{{ parametros_sistema.logo.url }}';
+      const logoUrlRaw = '{{ parametros_sistema.logo.url|escapejs }}';
       {% elif filial_ativa and filial_ativa.imagem %}
-      const logoUrl = '{{ request.scheme }}://{{ request.get_host }}{{ filial_ativa.imagem.url }}';
+      const logoUrlRaw = '{{ filial_ativa.imagem.url|escapejs }}';
       {% elif empresa_logo_url %}
-      const logoUrl = '{{ empresa_logo_url|escapejs }}';
+      const logoUrlRaw = '{{ empresa_logo_url|escapejs }}';
       {% else %}
-      const logoUrl = '';
+      const logoUrlRaw = '';
       {% endif %}
+      let logoUrl = '';
+      try { logoUrl = logoUrlRaw ? new URL(logoUrlRaw, window.location.origin).href : ''; } catch (_) {}
       const agora = new Date().toLocaleString('pt-BR',{day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'});
       const numero = v.numero ? '#'+String(v.numero).padStart(6,'0') : '(não salva)';
       const fmt = n => parseFloat(n||0).toFixed(2).replace('.',',');
@@ -3799,7 +3816,7 @@ function pdv() {
 </head>
 <body>
 <div class="ticket">
-${logoUrl ? `<div style="text-align:center;margin-bottom:10px;"><img src="${logoUrl}" style="max-height:${a4 ? '70px' : '130px'};max-width:${a4 ? '180px' : '260px'};object-fit:contain;" /></div>` : ''}
+${logoUrl ? `<div style="text-align:center;margin-bottom:10px;"><img src="${logoUrl}" alt="Logo ${filial}" style="max-height:${a4 ? '70px' : '130px'};max-width:${a4 ? '180px' : '260px'};object-fit:contain;" /></div>` : ''}
 <h1>${filial}</h1>
 ${filialEndereco ? `<div class="sub">${filialEndereco}${filialNumero ? ', '+filialNumero : ''}${filialBairro ? ' - '+filialBairro : ''}</div>` : ''}
 ${filialCidade ? `<div class="sub">${filialCidade}${filialUf ? ' - '+filialUf : ''}</div>` : ''}
@@ -3843,7 +3860,24 @@ ${pgtoHtml ? `<hr class="sep">${pgtoHtml}` : ''}
       w.document.write(html);
       w.document.close();
       w.focus();
-      setTimeout(() => { w.print(); }, 400);
+      let impressaoIniciada = false;
+      const iniciarImpressao = () => {
+        if (impressaoIniciada || w.closed) return;
+        impressaoIniciada = true;
+        w.focus();
+        w.print();
+      };
+      const logo = w.document.querySelector('img');
+      if (logo && !logo.complete) {
+        logo.addEventListener('load', () => setTimeout(iniciarImpressao, 100), { once:true });
+        logo.addEventListener('error', () => {
+          logo.closest('div')?.remove();
+          setTimeout(iniciarImpressao, 100);
+        }, { once:true });
+        setTimeout(iniciarImpressao, 2500);
+      } else {
+        setTimeout(iniciarImpressao, 250);
+      }
     },
 
     _cupomPdfHtml() {

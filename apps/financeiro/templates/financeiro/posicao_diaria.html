@@ -108,8 +108,7 @@
   .pc-personal-link { display:inline-flex; align-items:center; gap:.35rem; border:1px solid #d97706; border-radius:6px; padding:.45rem .7rem; color:#92400e; font-size:12px; font-weight:800; }
   .pc-personal-link:hover { background:#fef3c7; }
   .pc-fee-dialog { width:min(100%,820px); overflow:hidden; border:1px solid #cbd5e1; border-radius:8px; background:#fff; color:#0f172a; box-shadow:0 24px 70px rgba(15,23,42,.28); }
-  .pc-fee-dialog-head { display:flex; align-items:flex-start; justify-content:space-between; gap:1rem; padding:1.15rem 1.25rem; border-bottom:1px solid #e2e8f0; background:#fff; }
-  .pc-fee-dialog-head small { display:block; color:#64748b; font-size:10px; font-weight:800; text-transform:uppercase; }
+  .pc-fee-dialog .pc-fee-dialog-head { display:flex; align-items:flex-start; justify-content:space-between; gap:1rem; padding:1.15rem 1.25rem; border-bottom:1px solid #e2e8f0; background:#fff !important; background-image:none !important; color:#0f172a !important; }
   .pc-fee-dialog-head h3 { margin-top:.2rem; font-size:18px; font-weight:750; }
   .pc-fee-dialog-head p { margin-top:.2rem; color:#64748b; font-size:12px; }
   .pc-fee-close { display:flex; width:36px; height:36px; flex:none; align-items:center; justify-content:center; border:1px solid #cbd5e1; border-radius:6px; color:#475569; font-size:20px; line-height:1; }
@@ -141,8 +140,8 @@
   .tema-escuro .pc-personal-link { border-color:#f59e0b; color:#fde68a; }
   .tema-escuro .pc-personal-link:hover { background:#422006; }
   .tema-escuro .pc-fee-dialog { border-color:#3f3f46; background:#18181b; color:#f8fafc; }
-  .tema-escuro .pc-fee-dialog-head { border-color:#3f3f46; background:#18181b; }
-  .tema-escuro .pc-fee-dialog-head small, .tema-escuro .pc-fee-dialog-head p, .tema-escuro .pc-fee-main span, .tema-escuro .pc-fee-number small { color:#a1a1aa; }
+  .tema-escuro .pc-fee-dialog .pc-fee-dialog-head { border-color:#3f3f46; background:#18181b !important; background-image:none !important; color:#f8fafc !important; }
+  .tema-escuro .pc-fee-dialog-head p, .tema-escuro .pc-fee-main span, .tema-escuro .pc-fee-number small { color:#a1a1aa; }
   .tema-escuro .pc-fee-close { border-color:#52525b; color:#d4d4d8; }
   .tema-escuro .pc-fee-close:hover { background:#27272a; color:#fff; }
   .tema-escuro .pc-fee-totals { border-color:#3f3f46; background:#202024; }
@@ -294,12 +293,6 @@
     </div>
   </section>
 
-  {% if posicao.sem_conta %}
-    <a href="{% url 'financeiro:contas_bancarias' %}" class="block rounded-lg border border-amber-300 bg-amber-50 p-4 text-amber-900 dark:border-amber-800 dark:bg-amber-950/20 dark:text-amber-200">
-      <strong>{{ posicao.sem_conta|length }} movimento{{ posicao.sem_conta|length|pluralize }} sem conta definida neste dia.</strong>
-      <span class="mt-1 block text-xs opacity-80">Direcione-os para que o fechamento fique completo.</span>
-    </a>
-  {% endif %}
   {% if not posicao.possui_caixa_dinheiro %}
     <div class="pc-notice rounded-lg border p-4 text-sm">
       <strong>Dinheiro físico ainda não está controlado.</strong> Cadastre uma conta com o apelido “Dinheiro em caixa” para somá-lo ao fechamento.
@@ -360,7 +353,7 @@
         {% for mov in posicao.entradas %}
           <a href="{% if mov.origem_codigo == 'pagar' %}{{ mov.referencia_url }}{% else %}?data={{ data_referencia|date:'Y-m-d' }}&origem={{ mov.origem_codigo }}&movimento={{ mov.registro_id }}{% endif %}" {% if mov.origem_codigo == 'pagar' %}@click.prevent="abrirTituloPagar($el.href)"{% endif %} class="pc-ledger-row px-4 py-3 transition">
             <div class="min-w-0"><strong class="block text-sm">{{ mov.descricao }}</strong><span class="mt-1 block text-[11px] text-gray-500">{{ mov.hora }} · {{ mov.origem }}{% if mov.classificacao %} · {{ mov.classificacao }}{% endif %}{% if mov.documento %} · Documento {{ mov.documento }}{% endif %}</span></div>
-            <span class="pc-ledger-meta min-w-0 text-xs"><strong class="block truncate font-medium">{{ mov.forma_pagamento }}</strong><span class="mt-1 block truncate text-gray-500">{{ mov.conta.descricao|default:mov.conta.banco_nome }}{% if mov.bandeira %} · {{ mov.bandeira|title }}{% endif %}{% if mov.numero_parcelas %} · {{ mov.numero_parcelas }}x{% endif %}</span></span>
+            <span class="pc-ledger-meta min-w-0 text-xs"><strong class="block truncate font-medium">{{ mov.forma_pagamento }}</strong><span class="mt-1 block truncate text-gray-500">{{ mov.conta.descricao|default:mov.conta.banco_nome|default:"Conta não definida" }}{% if mov.bandeira %} · {{ mov.bandeira|title }}{% endif %}{% if mov.numero_parcelas %} · {{ mov.numero_parcelas }}x{% endif %}</span></span>
             <span class="pc-ledger-value whitespace-nowrap text-right"><strong class="block text-base">+ R$ {{ mov.entrada|floatformat:2 }}</strong>{% if mov.taxa_descontada %}<small class="mt-1 block text-[11px] text-gray-500">Original: R$ {{ mov.entrada_bruta|floatformat:2 }}</small><small class="block text-[11px] font-semibold text-rose-600">Taxa: R$ {{ mov.valor_taxa|floatformat:2 }} ({{ mov.taxa_percentual|floatformat:2 }}%)</small>{% endif %}</span>
           </a>
         {% empty %}<div class="flex min-h-32 flex-col items-center justify-center p-6 text-center"><strong class="text-sm text-slate-600 dark:text-slate-300">Nenhuma entrada neste dia</strong><span class="mt-1 text-xs text-gray-500">Vendas recebidas e créditos aparecerão aqui.</span></div>{% endfor %}
@@ -374,7 +367,7 @@
         {% for mov in posicao.saidas %}
           <a href="{% if mov.origem_codigo == 'pagar' %}{{ mov.referencia_url }}{% else %}?data={{ data_referencia|date:'Y-m-d' }}&origem={{ mov.origem_codigo }}&movimento={{ mov.registro_id }}{% endif %}" {% if mov.origem_codigo == 'pagar' %}@click.prevent="abrirTituloPagar($el.href)"{% endif %} class="pc-ledger-row px-4 py-3 transition {% if mov.despesa_pessoal %}pc-personal-row{% endif %}">
             <div class="min-w-0"><strong class="block text-sm">{{ mov.descricao }}</strong>{% if mov.despesa_pessoal %}<span class="pc-personal-badge">Despesa pessoal</span>{% endif %}<span class="mt-1 block text-[11px] text-gray-500">{{ mov.hora }} · {{ mov.origem }}{% if mov.classificacao %} · {{ mov.classificacao }}{% endif %}{% if mov.documento %} · Documento {{ mov.documento }}{% endif %}</span></div>
-            <span class="pc-ledger-meta min-w-0 text-xs"><strong class="block truncate font-medium">{{ mov.forma_pagamento }}</strong><span class="mt-1 block truncate text-gray-500">{{ mov.conta.descricao|default:mov.conta.banco_nome }}</span></span>
+            <span class="pc-ledger-meta min-w-0 text-xs"><strong class="block truncate font-medium">{{ mov.forma_pagamento }}</strong><span class="mt-1 block truncate text-gray-500">{{ mov.conta.descricao|default:mov.conta.banco_nome|default:"Conta não definida" }}</span></span>
             <strong class="pc-ledger-value whitespace-nowrap text-right text-base">- R$ {{ mov.saida|floatformat:2 }}</strong>
           </a>
         {% endfor %}
@@ -473,10 +466,10 @@
 
   <template x-teleport="body"><div x-show="taxasModal" x-cloak class="fixed inset-0 z-[190] flex items-center justify-center overflow-y-auto p-3 sm:p-6" style="background:rgba(15,23,42,.82);backdrop-filter:blur(10px)" @keydown.escape.window="taxasModal=false" @click.self="taxasModal=false" role="dialog" aria-modal="true" aria-label="Detalhes das taxas">
     <div class="pc-fee-dialog my-auto" @click.stop>
-      <header class="pc-fee-dialog-head">
-        <div><small>Conferência de recebimentos</small><h3>Detalhamento das taxas</h3><p>Confira quanto entrou, quanto foi descontado e o valor líquido de cada transação.</p></div>
+      <div class="pc-fee-dialog-head">
+        <div><h3>Detalhamento das taxas</h3><p>Confira quanto entrou, quanto foi descontado e o valor líquido de cada transação.</p></div>
         <button type="button" class="pc-fee-close" @click="taxasModal=false" aria-label="Fechar">×</button>
-      </header>
+      </div>
       <div class="pc-fee-totals">
         <div class="pc-fee-total"><span>Valor bruto</span><strong class="pc-sensitive">R$ {{ posicao.total_bruto_transacoes_taxas|floatformat:2 }}</strong></div>
         <div class="pc-fee-total"><span>Taxas por transação</span><strong class="pc-sensitive text-rose-600">R$ {{ posicao.total_taxas_entradas|floatformat:2 }}</strong></div>
@@ -486,7 +479,7 @@
         <div class="pc-fee-grid pc-fee-table-head"><span>Transação e recebimento</span><span class="text-right">Bruto</span><span class="text-right">Taxa</span><span class="text-right">Líquido</span></div>
         {% for mov in posicao.transacoes_taxas %}
           <div class="pc-fee-grid pc-fee-transaction">
-            <div class="pc-fee-main"><strong>{{ mov.descricao }}</strong><span>{{ mov.data|date:'d/m/Y' }} às {{ mov.hora }} · {{ mov.forma_pagamento }}{% if mov.bandeira %} · {{ mov.bandeira|title }}{% endif %}{% if mov.numero_parcelas %} · {{ mov.numero_parcelas }}x{% endif %} · {{ mov.conta.descricao|default:mov.conta.banco_nome }}</span></div>
+            <div class="pc-fee-main"><strong>{{ mov.descricao }}</strong><span>{{ mov.data|date:'d/m/Y' }} às {{ mov.hora }} · {{ mov.forma_pagamento }}{% if mov.bandeira %} · {{ mov.bandeira|title }}{% endif %}{% if mov.numero_parcelas %} · {{ mov.numero_parcelas }}x{% endif %} · {{ mov.conta.descricao|default:mov.conta.banco_nome|default:"Conta não definida" }}</span></div>
             <div class="pc-fee-number"><span>Bruto</span><strong class="pc-sensitive">R$ {{ mov.entrada_bruta|floatformat:2 }}</strong></div>
             <div class="pc-fee-number"><span>Taxa</span><strong class="pc-sensitive text-rose-600">R$ {{ mov.valor_taxa|floatformat:2 }}</strong><small>{{ mov.taxa_percentual|floatformat:2 }}%{% if mov.taxa_fixa > 0 %} + R$ {{ mov.taxa_fixa|floatformat:2 }}{% endif %}</small></div>
             <div class="pc-fee-number"><span>Líquido</span><strong class="pc-sensitive text-emerald-600">R$ {{ mov.valor_final_taxa|floatformat:2 }}</strong>{% if not mov.taxa_descontada %}<small class="pc-fee-informative">Informativa</small>{% endif %}</div>

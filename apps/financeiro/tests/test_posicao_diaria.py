@@ -269,6 +269,50 @@ class PosicaoDiariaCaixaTests(TestCase):
         self.assertEqual(sexta["total_previsto"], Decimal("100.00"))
         self.assertEqual(segunda["total_entradas"], Decimal("100.00"))
 
+    def test_venda_paga_sem_conta_nao_desaparece_da_entrada(self):
+        self.forma.conta_bancaria_padrao = None
+        self.forma.prazo_compensacao_dias_uteis = 1
+        self.forma.save(update_fields=["conta_bancaria_padrao", "prazo_compensacao_dias_uteis"])
+        venda = VendaPDV.objects.create(
+            filial=self.filial, numero_venda=3, status="finalizada",
+            valor_total=Decimal("95.00"), valor_pago=Decimal("95.00"), usuario=self.usuario,
+            data_venda=datetime(2026, 8, 24, 7, 33, tzinfo=timezone.get_current_timezone()),
+        )
+        pagamento = PagamentoVendaPDV.objects.create(
+            venda_pdv=venda, forma_pagamento=self.forma, valor=Decimal("95.00"),
+        )
+
+        posicao_venda = PosicaoDiariaCaixaService(self.filial, date(2026, 8, 24)).gerar()
+        posicao_liquidacao = PosicaoDiariaCaixaService(self.filial, date(2026, 8, 25)).gerar()
+
+        self.assertEqual(posicao_venda["total_entradas"], Decimal("0"))
+        entrada = next(
+            item for item in posicao_liquidacao["entradas"]
+            if item.registro_id == pagamento.pk
+        )
+        self.assertIsNone(entrada.conta)
+        self.assertEqual(entrada.entrada, Decimal("95.00"))
+        self.assertEqual(posicao_liquidacao["total_entradas"], Decimal("95.00"))
+
+    def test_recebimento_usa_conta_padrao_da_forma_quando_baixa_nao_informa_conta(self):
+        cliente = Cliente.objects.create(
+            filial=self.filial, razao_social="Cliente sem conta direta", tipo_pessoa="F",
+            cpf_cnpj="12345678908",
+        )
+        conta = ContaReceber.objects.create(
+            filial=self.filial, cliente=cliente, valor_original=Decimal("70.00"),
+            valor_final=Decimal("70.00"), valor_pago=Decimal("70.00"),
+            valor_saldo=Decimal("0.00"), data_emissao=date(2026, 8, 24),
+            data_vencimento=date(2026, 8, 24), data_pagamento=date(2026, 8, 24),
+            forma_pagamento=self.forma, status=StatusContaReceber.PAGO,
+        )
+
+        posicao = PosicaoDiariaCaixaService(self.filial, date(2026, 8, 24)).gerar()
+
+        entrada = next(item for item in posicao["entradas"] if item.registro_id == conta.pk)
+        self.assertEqual(entrada.conta, self.banco)
+        self.assertEqual(entrada.entrada, Decimal("70.00"))
+
     def test_baixa_de_boleto_compensa_no_proximo_dia_util(self):
         self.forma.tipo = TipoFormaPagamento.BOLETO
         self.forma.prazo_compensacao_dias_uteis = 1
