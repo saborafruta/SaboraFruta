@@ -27,6 +27,7 @@ class Notificacao(TimestampedModel):
         MODA_SETOR_SOBRECARREGADO = 'moda_setor_sobrecarregado', 'Moda: setor sobrecarregado'
         MODA_REJEICAO_ALTA = 'moda_rejeicao_alta', 'Moda: alto índice de rejeição'
         MODA_APROVEITAMENTO_BAIXO = 'moda_aproveitamento_baixo', 'Moda: baixo aproveitamento de corte'
+        MODA_CLIENTE_AJUSTE = 'moda_cliente_ajuste', 'Moda: cliente pediu ajuste'
 
     filial = models.ForeignKey(
         'core.Filial',

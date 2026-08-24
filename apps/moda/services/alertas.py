@@ -19,6 +19,7 @@ em cima, com a razão de cada número, e são uma linha para mudar.
 """
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass
 from datetime import date, timedelta
 from decimal import Decimal
@@ -30,6 +31,8 @@ from apps.core.models import Notificacao
 from apps.moda.models import EtapaOrdem, Inspecao, PedidoProducao, RegistroCorte
 from apps.moda.services.necessidade import NecessidadeService
 from apps.moda.services.pcp import PcpService
+
+logger = logging.getLogger(__name__)
 
 CEM = Decimal('100')
 ZERO = Decimal('0')
@@ -87,6 +90,11 @@ REGRAS = {
               Notificacao.Tipo.MODA_REJEICAO_ALTA),
         Regra('aproveitamento_baixo', 'Baixo aproveitamento de corte', 'atencao',
               Notificacao.Tipo.MODA_APROVEITAMENTO_BAIXO),
+        # CRÍTICO, e não "atenção": enquanto ninguém refaz a arte o pedido
+        # não anda um passo, e do outro lado há um cliente que já respondeu
+        # esperando. Atraso de material a fábrica contorna; este não.
+        Regra('cliente_pediu_ajuste', 'Cliente pediu ajuste na arte', 'critico',
+              Notificacao.Tipo.MODA_CLIENTE_AJUSTE),
     ]
 }
 
@@ -131,6 +139,7 @@ class AlertaService:
             *cls._setores_sobrecarregados(filial, hoje),
             *cls._rejeicao_alta(filial, desde),
             *cls._aproveitamento_baixo(filial, desde),
+            *cls._ajustes_pedidos(filial),
         ]
         # Crítico primeiro: quem abre a tela no meio do turno lê as três
         # primeiras linhas, e elas têm que ser as que param a fábrica.
@@ -374,6 +383,50 @@ class AlertaService:
             ))
         return alertas
 
+    # ── 🔴 Cliente pediu ajuste na arte ──────────────────────────────────
+
+    @staticmethod
+    def _ajustes_pedidos(filial, pedido=None) -> list[Alerta]:
+        """
+        Pedidos cuja última palavra do cliente foi "ajuste".
+
+        É CONDIÇÃO, não evento: vale enquanto a resposta gravada for ajuste, e
+        para de valer sozinha quando o cliente aprova a arte nova. Por isso o
+        alerta some do sino sem ninguém clicar em nada — que é a regra deste
+        módulo inteiro.
+
+        `pedido` restringe a varredura a um só, para o caminho que publica o
+        alerta na hora em que o cliente responde, sem varrer a filial toda.
+        """
+        from apps.moda.models import AprovacaoPedido
+
+        pedidos = (
+            PedidoProducao.objects.for_filial(filial)
+            .exclude(status__in=PedidoProducao.STATUS_ENCERRADOS)
+            .filter(aprovacao__resposta=AprovacaoPedido.Resposta.AJUSTE)
+            .select_related('cliente', 'aprovacao')
+        )
+        if pedido is not None:
+            pedidos = pedidos.filter(pk=pedido.pk)
+
+        regra = REGRAS['cliente_pediu_ajuste']
+        alertas = []
+        for p in pedidos:
+            motivo = (p.aprovacao.motivo_ajuste or '').strip()
+            # O MOTIVO VAI NA NOTIFICAÇÃO, não só um "tem ajuste". Quem lê o
+            # sino no meio do turno decide dali se para o que está fazendo, e
+            # "trocar a cor da gola" e "refazer a arte toda" não pedem a mesma
+            # coisa. Sem o texto, todo alerta obriga a abrir o pedido.
+            quem = p.aprovacao.respondido_por or str(p.cliente)
+            alertas.append(Alerta(
+                regra,
+                f'Pedido #{p.numero:06d}: cliente pediu ajuste',
+                f'{quem} · {motivo}' if motivo else f'{quem} · sem motivo informado',
+                reverse('moda:pedido-detail', args=[p.pk]),
+                f'pedido:{p.pk}',
+            ))
+        return alertas
+
     # ── Sincronização com o sino ─────────────────────────────────────────
 
     @classmethod
@@ -389,25 +442,7 @@ class AlertaService:
         virar cinquenta notificações ao longo de cinquenta varreduras.
         """
         alertas = cls.detectar(filial, hoje)
-        vistos = set()
-
-        criados = atualizados = 0
-        for alerta in alertas:
-            _obj, novo = Notificacao.objects.update_or_create(
-                filial=filial,
-                tipo=alerta.regra.tipo,
-                referencia_tipo='moda_alerta',
-                referencia_id=f'{alerta.regra.chave}:{alerta.referencia}',
-                defaults={
-                    'titulo': alerta.titulo,
-                    'mensagem': alerta.mensagem[:500],
-                    'url': alerta.url,
-                    'ativa': True,
-                },
-            )
-            vistos.add((alerta.regra.tipo, f'{alerta.regra.chave}:{alerta.referencia}'))
-            criados += 1 if novo else 0
-            atualizados += 0 if novo else 1
+        criados, atualizados, vistos = cls.publicar(filial, alertas)
 
         # O que estava ativo e não apareceu nesta varredura: a condição
         # deixou de valer. Desativa em vez de apagar — o histórico de que o
@@ -427,3 +462,62 @@ class AlertaService:
             'atualizados': atualizados,
             'desligados': desligados,
         }
+
+    @staticmethod
+    def publicar(filial, alertas: list[Alerta]) -> tuple[int, int, set]:
+        """
+        Põe estes alertas no sino. Metade de cima da sincronização.
+
+        Separada porque tem DOIS chamadores com ritmos diferentes: a varredura
+        de hora em hora, que publica tudo e desliga o resto, e o evento, que
+        publica UM na hora em que acontece e não pode desligar nada — ele não
+        varreu a filial, então não sabe o que deixou de valer.
+
+        Compõem sem conflito porque a chave é a mesma: o evento cria, e a
+        varredura seguinte reconhece a mesma linha em vez de duplicar.
+        """
+        criados = atualizados = 0
+        vistos = set()
+        for alerta in alertas:
+            referencia = f'{alerta.regra.chave}:{alerta.referencia}'
+            _obj, novo = Notificacao.objects.update_or_create(
+                filial=filial,
+                tipo=alerta.regra.tipo,
+                referencia_tipo='moda_alerta',
+                referencia_id=referencia,
+                defaults={
+                    'titulo': alerta.titulo,
+                    'mensagem': alerta.mensagem[:500],
+                    'url': alerta.url,
+                    'ativa': True,
+                },
+            )
+            vistos.add((alerta.regra.tipo, referencia))
+            criados += 1 if novo else 0
+            atualizados += 0 if novo else 1
+        return criados, atualizados, vistos
+
+    @classmethod
+    def avisar_ajuste_do_cliente(cls, pedido) -> None:
+        """
+        Toca o sino na hora em que o cliente pede ajuste.
+
+        A varredura sozinha não serve aqui: ela roda de hora em hora, e o pedido
+        de ajuste é justamente o aviso que não pode esperar a próxima volta —
+        há um cliente parado esperando arte nova.
+
+        Reaproveita o detector em vez de montar a notificação à mão. Se o alerta
+        fosse escrito duas vezes, um dia o título mudaria num lugar só e o
+        sino passaria a mostrar duas versões do mesmo aviso.
+
+        NÃO ESTOURA. Isto roda no POST do cliente, na página pública: falhar
+        aqui viraria tela de erro para quem está do lado de fora por causa do
+        sino de quem está do lado de dentro. A resposta já está gravada, e a
+        varredura seguinte pega o que faltou.
+        """
+        try:
+            cls.publicar(pedido.filial, cls._ajustes_pedidos(pedido.filial, pedido))
+        except Exception:  # noqa: BLE001
+            logger.exception(
+                'Falha ao publicar o alerta de ajuste do pedido %s', pedido.pk,
+            )

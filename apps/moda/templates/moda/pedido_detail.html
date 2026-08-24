@@ -344,6 +344,34 @@
         </div>
       </div>
 
+      {% comment %}
+        O QUE O CLIENTE PEDIU FICA AQUI, e não só na tela de aprovação. Quem
+        abre o pedido via "Aguardando Aprovação" e não tinha como saber que já
+        havia resposta — e muito menos qual. Ia até a outra tela para ler uma
+        frase.
+
+        SEPARADO da observação do pedido, nunca misturado com ela: aquele campo
+        é recado entre a equipe, e alguém edita e salva. Despejar o texto do
+        cliente ali dentro faria a próxima gravação virar tudo uma coisa só,
+        sem dizer mais quem escreveu o quê.
+      {% endcomment %}
+      {% if aprovacao.pediu_ajuste %}
+        <div class="pt-2 rounded-lg p-3" style="border-left:3px solid #dc2626; background:rgba(220,38,38,.06);">
+          <span class="block text-xs mb-1 font-semibold" style="color:#dc2626;">
+            Cliente pediu ajuste
+          </span>
+          <p class="text-sm whitespace-pre-line" :style="temaClaro ? 'color:#374151;' : 'color:#d1d5db;'">
+            {% if aprovacao.motivo_ajuste %}{{ aprovacao.motivo_ajuste }}{% else %}<em>Sem motivo informado.</em>{% endif %}
+          </p>
+          <p class="text-xs mt-1.5" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+            {{ aprovacao.respondido_por|default:pedido.cliente }}
+            {% if aprovacao.respondido_em %} · {{ aprovacao.respondido_em|date:"d/m/Y H:i" }}{% endif %}
+            · <a href="{% url 'moda:pedido-aprovacao' pedido.pk %}"
+                 :style="temaClaro ? 'color:#3b82f6;' : 'color:#60a5fa;'">ver aprovação</a>
+          </p>
+        </div>
+      {% endif %}
+
       {% if pedido.observacoes %}
         <div class="pt-2">
           <span class="block text-xs mb-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Observações</span>

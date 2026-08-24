@@ -30,6 +30,7 @@ from django.views.decorators.csrf import ensure_csrf_cookie
 from apps.core.middleware.audit import get_client_ip
 
 from .models import AprovacaoPedido, ArquivoPedido, PedidoProducao
+from .services.alertas import AlertaService
 from .services.kanban_comercial import avancar_por_resposta
 from .services.pedido_pdf import PedidoPdfService
 
@@ -247,6 +248,12 @@ class PedidoResponderView(View):
         # Pedido de ajuste NÃO move: continua aguardando aprovação, que é o que
         # ele está fazendo. O quadro marca o cartão em vez de escondê-lo.
         avancar_por_resposta(pedido, aprovacao)
+
+        # O ajuste toca o sino de quem precisa refazer a arte. A varredura de
+        # alertas roda de hora em hora, e este é justamente o aviso que não
+        # pode esperar a próxima volta: há um cliente parado do outro lado.
+        if aprovacao.pediu_ajuste:
+            AlertaService.avisar_ajuste_do_cliente(pedido)
         # Redirect depois do POST: sem isso, atualizar a página reenviaria a
         # resposta, e o cliente veria "aprovado" virar "ajuste" sem entender.
         return redirect(reverse('moda_publico:pedido', args=[token]))

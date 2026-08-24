@@ -794,6 +794,12 @@ def contexto_do_pedido(request, pedido, **extra) -> dict:
         # toque, dentro da pagina.
         'link_publico': link_publico,
         'mensagem_whatsapp': mensagem_whatsapp(pedido, link_publico),
+        # A RESPOSTA DO CLIENTE, na tela do pedido. O motivo do ajuste só
+        # aparecia nas telas de aprovação: quem abria o pedido via o status
+        # "Aguardando Aprovação" e não tinha como saber que já havia resposta,
+        # muito menos o que o cliente pediu. Ia até a outra tela para ler uma
+        # frase.
+        'aprovacao': getattr(pedido, 'aprovacao', None),
     }
 
     contexto.update(extra)
