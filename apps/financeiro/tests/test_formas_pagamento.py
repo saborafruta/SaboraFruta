@@ -82,6 +82,43 @@ class FormasPagamentoFinanceiroTests(TestCase):
         self.assertNotContains(self.client.get(url), 'data-testid="form-forma-pagamento"')
         self.assertContains(self.client.get(url, {"novo": "1"}), 'data-testid="form-forma-pagamento"')
 
+    def test_cria_cartao_credito_com_bandeiras_e_parcelas(self):
+        response = self.client.post(reverse("financeiro:formas_pagamento"), {
+            "acao": "salvar",
+            "descricao": "CARTAO CREDITO",
+            "tipo": TipoFormaPagamento.CARTAO_CREDITO,
+            "prazo_liquidacao_dias": "0",
+            "taxa_administrativa": "0.00",
+            "taxa_fixa": "0.00",
+            "taxas_cartao_json": '[{"bandeira":"visa","parcelas":1,"taxa":"1.15"},{"bandeira":"mastercard","parcelas":6,"taxa":"3.49"}]',
+            "ativo": "on",
+        })
+
+        self.assertEqual(response.status_code, 302)
+        forma = FormaPagamento.objects.get(descricao="CARTAO CREDITO")
+        self.assertEqual(
+            list(forma.taxas_parcelamento.values_list("bandeira", "parcelas", "taxa")),
+            [("visa", 1, Decimal("1.15")), ("mastercard", 6, Decimal("3.49"))],
+        )
+
+    def test_cartao_debito_forca_uma_parcela_por_bandeira(self):
+        response = self.client.post(reverse("financeiro:formas_pagamento"), {
+            "acao": "salvar",
+            "descricao": "CARTAO DEBITO",
+            "tipo": TipoFormaPagamento.CARTAO_DEBITO,
+            "prazo_liquidacao_dias": "0",
+            "taxa_administrativa": "0.00",
+            "taxa_fixa": "0.00",
+            "taxas_cartao_json": '[{"bandeira":"elo","parcelas":12,"taxa":"0.95"}]',
+            "ativo": "on",
+        })
+
+        self.assertEqual(response.status_code, 302)
+        taxa = TaxaParcelamento.objects.get(forma_pagamento__descricao="CARTAO DEBITO")
+        self.assertEqual(taxa.bandeira, "elo")
+        self.assertEqual(taxa.parcelas, 1)
+        self.assertEqual(taxa.taxa, Decimal("0.95"))
+
     def test_pagamento_gera_uma_tarifa_bancaria_classificada(self):
         conta_bancaria = ContaBancaria.objects.create(
             filial=self.filial, descricao="ORENDA", banco_nome="ORENDA", banco_codigo="001",

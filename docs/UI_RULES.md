@@ -60,6 +60,9 @@ Toda tela deve:
 - Dias da semana em combos/promocoes devem ficar proximos da vigencia, em controle recolhivel/compacto, com todos os dias pre-selecionados por padrao, acoes de marcar/desmarcar todos e visual coerente nos temas claro/escuro.
 
 ## Cadastros com listagem
+- Nunca criar uma faixa, gradiente ou cabecalho colorido dentro do conteudo para repetir o titulo da pagina. O titulo oficial vem apenas de `page_title` no layout base.
+- Templates de pagina nao devem usar `<header>` para barras locais de titulo/acoes, pois o CSS global de cabecalho pode colori-las. Acoes locais devem ficar em um `<nav>` ou `<div>` neutro, compacto e sem repetir titulo/subtitulo.
+- Listagens operacionais devem usar tabela ou linhas compactas. Nao transformar cada registro em um card alto de largura total quando os dados cabem em colunas.
 - Quando a tela tiver cadastro e listagem no mesmo lugar, o cadastro deve ficar minimizado/acionavel no topo e a listagem abaixo.
 - O botao minimizado deve ser compacto, claro e com `+`; nao usar uma caixa horizontal gigante.
 - Deve haver respiro entre o botao/formulario e a listagem.

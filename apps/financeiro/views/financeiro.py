@@ -7,6 +7,7 @@ from django.http import JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.core.paginator import Paginator
 from django.db.models import Sum
+from django.db import transaction
 from django.views.decorators.http import require_POST
 from django.utils import timezone
 from apps.core.models import Filial
@@ -20,6 +21,44 @@ from apps.financeiro.models import (
 
 def _filial_ativa(request):
     return getattr(request, 'filial_ativa', None) or getattr(request, 'filial', None)
+
+
+def _salvar_taxas_cartao(forma, conteudo):
+    """Sincroniza as taxas informadas junto com o cadastro da forma."""
+    tipos_cartao = {"cartao_credito", "cartao_debito"}
+    if forma.tipo not in tipos_cartao:
+        forma.taxas_parcelamento.all().delete()
+        return
+
+    try:
+        linhas = json.loads(conteudo or "[]")
+    except (TypeError, ValueError, json.JSONDecodeError):
+        linhas = []
+
+    taxas = []
+    vistos = set()
+    for linha in linhas if isinstance(linhas, list) else []:
+        try:
+            bandeira = str(linha.get("bandeira") or "").strip().lower()[:20]
+            parcelas = 1 if forma.tipo == "cartao_debito" else int(linha.get("parcelas") or 1)
+            taxa = Decimal(str(linha.get("taxa") or "0"))
+        except (AttributeError, TypeError, ValueError, InvalidOperation):
+            continue
+        if not bandeira or not 1 <= parcelas <= 24 or not Decimal("0") <= taxa <= Decimal("100"):
+            continue
+        chave = (bandeira, parcelas)
+        if chave in vistos:
+            continue
+        vistos.add(chave)
+        taxas.append(TaxaParcelamento(
+            forma_pagamento=forma,
+            bandeira=bandeira,
+            parcelas=parcelas,
+            taxa=taxa,
+        ))
+
+    forma.taxas_parcelamento.all().delete()
+    TaxaParcelamento.objects.bulk_create(taxas)
 
 
 @requer_permissao('financeiro', 'ver')
@@ -232,7 +271,9 @@ def formas_pagamento(request):
                 )
             form = FormaPagamentoForm(request.POST, instance=obj, empresa=empresa, filial=filial)
             if form.is_valid():
-                form.save()
+                with transaction.atomic():
+                    forma = form.save()
+                    _salvar_taxas_cartao(forma, request.POST.get("taxas_cartao_json"))
                 messages.success(request, "Forma de pagamento salva.")
                 return redirect("financeiro:formas_pagamento")
             instance = obj
@@ -253,6 +294,11 @@ def formas_pagamento(request):
         or request.GET.get("novo")
         or (request.method == "POST" and request.POST.get("acao") == "salvar")
     )
+    taxas_iniciais = []
+    if instance:
+        taxas_iniciais = list(instance.taxas_parcelamento.values("bandeira", "parcelas", "taxa"))
+        for taxa in taxas_iniciais:
+            taxa["taxa"] = str(taxa["taxa"])
     return render(request, "financeiro/formas_pagamento.html", {
         "title": "Formas de pagamento",
         "form": form,
@@ -260,6 +306,7 @@ def formas_pagamento(request):
         "instance": instance,
         "filiais_destino": filiais_destino,
         "mostrar_form": mostrar_form,
+        "taxas_iniciais": taxas_iniciais,
     })
 
 
