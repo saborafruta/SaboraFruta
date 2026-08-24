@@ -218,6 +218,8 @@ class ContaPagar(TimestampedModel):
 
     @property
     def beneficiario_nome(self):
+        if self.documento_tipo.startswith("taxa_"):
+            return self.forma_pagamento.descricao if self.forma_pagamento_id else "Operadora financeira"
         if self.funcionario_id:
             return self.funcionario.nome
         if self.fornecedor_id:
