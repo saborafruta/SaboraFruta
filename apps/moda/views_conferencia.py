@@ -42,6 +42,39 @@ def _expedicao(request, pk) -> Expedicao:
     )
 
 
+def _quem(usuario) -> str:
+    """
+    O nome de quem confere, num lugar só.
+
+    `get_full_name()` NÃO existe neste `Usuario` -- e era o que estava aqui:
+    qualquer conferência salva estourava `AttributeError` antes de gravar. O
+    campo do modelo é `nome`, e o e-mail entra como último recurso para a
+    coluna nunca ficar vazia sem motivo.
+    """
+    return (getattr(usuario, 'nome', '') or getattr(usuario, 'email', '') or '')[:80]
+
+
+def _linhas_de_quantidade(expedicao) -> list[dict]:
+    """
+    O que deveria estar na caixa, tamanho a tamanho, com o que já foi contado.
+
+    POR QUANTIDADE E POR PESSOA SÃO PERGUNTAS DIFERENTES, e por isso as duas
+    aparecem. Pedido de uniforme com nome e número precisa da lista de
+    pessoas; pedido de 20 camisas lisas -- que é a maioria -- não tem pessoa
+    nenhuma, e antes caía numa tela vazia dizendo "não tem personalização",
+    como se não houvesse o que conferir.
+    """
+    conferido = {i.tamanho_id: i.quantidade for i in expedicao.conferencia.all()}
+    linhas = []
+    for celula in expedicao.grade_esperada:
+        linhas.append({
+            'tamanho': celula.tamanho,
+            'esperado': celula.quantidade,
+            'conferido': conferido.get(celula.tamanho_id, 0),
+        })
+    return linhas
+
+
 def _pessoas(expedicao):
     """
     As pessoas do PEDIDO desta expedição, na ordem em que foram lançadas.
@@ -72,6 +105,8 @@ class ConferenciaPessoasView(ModaBaseView):
         )
         pessoas = list(_pessoas(expedicao))
 
+        quantidades = _linhas_de_quantidade(expedicao)
+
         return render(request, 'moda/conferencia_pessoas.html', {
             'title': f'Conferência — Expedição #{expedicao.numero:04d}',
             'expedicao': expedicao,
@@ -80,6 +115,9 @@ class ConferenciaPessoasView(ModaBaseView):
             ],
             'total': len(pessoas),
             'conferidas': sum(1 for p in pessoas if p.pk in conferidas),
+            'quantidades': quantidades,
+            'esperado_total': sum(l['esperado'] for l in quantidades),
+            'conferido_total': sum(l['conferido'] for l in quantidades),
             # Depois da separação a conferência não se mexe mais: o que foi
             # separado saiu da bancada, e reabrir aqui daria uma conferência
             # que não corresponde à caixa.
@@ -89,18 +127,85 @@ class ConferenciaPessoasView(ModaBaseView):
 
 
 class ConferenciaPessoasSalvarView(ModaBaseView):
-    """Grava a marcação — o que veio marcado fica, o resto sai."""
+    """
+    Grava a conferência inteira num POST só: quantidade, pessoas e assinatura.
+
+    UM FORMULÁRIO, e não três. Quem confere está de pé ao lado da caixa com
+    o cliente esperando; salvar em três passos é três chances de sair da
+    tela no meio e deixar metade registrada. O que veio marcado fica, o que
+    não veio sai.
+    """
 
     area = 'expedicao'
     permissao_acao = 'editar'
 
     def post(self, request, pk):
         expedicao = _expedicao(request, pk)
+        volta = redirect(reverse('moda:conferencia-pessoas', args=[expedicao.pk]))
+
         if expedicao.passou_por(Expedicao.Status.SEPARACAO):
             messages.error(request, 'A conferência desta expedição já foi fechada.')
-            return redirect(reverse('moda:conferencia-pessoas', args=[expedicao.pk]))
+            return volta
 
+        contadas = self._quantidades(request, expedicao)
+        marcadas = self._pessoas(request, expedicao)
+        assinou = self._assinatura(request, expedicao)
+
+        partes = []
+        if contadas is not None:
+            partes.append(f'{contadas} peça(s) contada(s)')
+        if marcadas is not None:
+            partes.append(f'{marcadas} pessoa(s) conferida(s)')
+        if assinou:
+            partes.append(f'recebimento assinado por {expedicao.recebido_por}')
+
+        if partes:
+            messages.success(request, 'Conferência gravada: ' + ', '.join(partes) + '.')
+        return volta
+
+    # ── Por quantidade ───────────────────────────────────────────────────
+
+    @staticmethod
+    def _quantidades(request, expedicao):
+        """
+        As caixinhas por tamanho. Devolve o total contado, ou None se a tela
+        não mandou nenhuma -- que é diferente de mandar tudo zerado.
+
+        SÓ TAMANHOS DA GRADE entram. O `name` do campo vem do HTML, e um
+        `qtd_999` forjado gravaria conferência de um tamanho que não está
+        neste pedido.
+        """
+        validos = {c.tamanho_id for c in expedicao.grade_esperada}
+        quantidades = {}
+        for chave, valor in request.POST.items():
+            if not chave.startswith('qtd_'):
+                continue
+            id_tamanho = chave[4:]
+            if not id_tamanho.isdigit() or int(id_tamanho) not in validos:
+                continue
+            valor = (valor or '').strip()
+            quantidades[int(id_tamanho)] = int(valor) if valor.isdigit() else 0
+
+        if not quantidades:
+            return None
+
+        try:
+            return ExpedicaoService.conferir(
+                expedicao, quantidades,
+                {'conferido_por': _quem(request.user)},
+            )
+        except DomainError as erro:
+            messages.error(request, str(erro))
+            return None
+
+    # ── Por pessoa ───────────────────────────────────────────────────────
+
+    @staticmethod
+    def _pessoas(request, expedicao):
         validas = set(_pessoas(expedicao).values_list('id', flat=True))
+        if not validas:
+            return None
+
         marcadas = {
             int(v) for v in request.POST.getlist('pessoa') if v.isdigit()
         } & validas
@@ -112,19 +217,44 @@ class ConferenciaPessoasSalvarView(ModaBaseView):
         ja_tem = set(
             expedicao.conferencia_pessoas.values_list('individual_id', flat=True)
         )
-        quem = (request.user.get_full_name() or request.user.email or '')[:80]
+        quem = _quem(request.user)
         ConferenciaPessoa.objects.bulk_create([
             ConferenciaPessoa(
                 expedicao=expedicao, individual_id=pk_pessoa, conferido_por=quem,
             )
             for pk_pessoa in marcadas - ja_tem
         ])
+        return len(marcadas)
 
-        total = len(validas)
-        messages.success(
-            request, f'Conferência gravada: {len(marcadas)} de {total} peça(s).',
-        )
-        return redirect(reverse('moda:conferencia-pessoas', args=[expedicao.pk]))
+    # ── Assinatura ───────────────────────────────────────────────────────
+
+    @staticmethod
+    def _assinatura(request, expedicao) -> bool:
+        """
+        Só grava se o cliente assinou de fato.
+
+        Nome sem traço TAMBÉM vale: em entrega no balcão o cliente às vezes
+        só confere e diz o nome, e recusar isso empurraria a pessoa a
+        rabiscar qualquer coisa para o botão liberar -- que é pior registro
+        do que um nome honesto.
+        """
+        nome = (request.POST.get('recebido_por') or '').strip()
+        traco = request.POST.get('assinatura') or ''
+        if not nome and not traco:
+            return False
+        if not nome:
+            messages.error(request, 'Informe o nome de quem está recebendo.')
+            return False
+
+        try:
+            ExpedicaoService.assinar(
+                expedicao, nome, traco,
+                documento=request.POST.get('assinado_documento') or '',
+            )
+        except DomainError as erro:
+            messages.error(request, str(erro))
+            return False
+        return True
 
 
 class ConferenciaQrView(ModaBaseView):
@@ -227,13 +357,16 @@ class PedidoConferenciaView(ModaBaseView):
     """
     O atalho do PEDIDO para a conferência — o botão que aparece em "Pronto".
 
-    Quem está no pedido não deveria ter de saber que a expedição nasce da
-    ORDEM, nem procurar em Expedição > Separação qual das expedições é
-    daquele pedido. O caminho existia; o que faltava era a porta.
+    ABRE O QR, NÃO A LISTA. Quem está no pedido está no computador; quem
+    confere está de pé ao lado da caixa. Mandar direto para a lista abria a
+    conferência no aparelho errado, e a pessoa acabava digitando o endereço
+    no celular à mão ou conferindo de memória para marcar depois -- que é o
+    mesmo que não conferir. A tela do QR serve os dois: aponta a câmera, ou
+    clica em "conferir nesta tela".
 
-    Uma expedição: vai direto para a conferência dela. Mais de uma -- pedido
-    com vários produtos, cada um com sua ordem -- leva para a lista, porque
-    escolher por conta própria mandaria conferir a caixa errada.
+    Mais de uma expedição -- pedido com vários produtos, cada um com sua
+    ordem -- mostra um QR por caixa, em vez de escolher por conta própria e
+    mandar conferir a errada.
     """
 
     area = 'comercial'
@@ -248,6 +381,7 @@ class PedidoConferenciaView(ModaBaseView):
             Expedicao.objects.for_filial(_filial(request))
             .filter(ordem__pedido=pedido)
             .exclude(status=Expedicao.Status.CANCELADA)
+            .select_related('ordem__item')
             .order_by('numero')
         )
 
@@ -257,16 +391,11 @@ class PedidoConferenciaView(ModaBaseView):
             # que está travando e decide — o sistema informa, não impede.
             return self._perguntar(request, pedido)
 
-        if len(expedicoes) == 1:
-            return redirect(
-                reverse('moda:conferencia-pessoas', args=[expedicoes[0].pk])
-            )
-
-        messages.info(
-            request,
-            f'Este pedido tem {len(expedicoes)} expedições — escolha qual conferir.',
-        )
-        return redirect(reverse('moda:expedicao-list'))
+        return render(request, 'moda/conferencia_qr.html', {
+            'title': f'Conferir pedido #{pedido.numero:06d}',
+            'pedido': pedido,
+            'expedicoes': expedicoes,
+        })
 
     @staticmethod
     def _perguntar(request, pedido):

@@ -135,6 +135,13 @@ class OrdemProducaoService:
                 ano=ano,
                 sequencial=sequencial,
                 numero=OrdemProducao.montar_numero(ano, sequencial),
+                # O CÓDIGO DO QR TAMBÉM É MONTADO AQUI, pelo mesmo motivo do
+                # número: `bulk_create` não chama `save()`, e sem isto todas
+                # as ordens nasciam com o campo VAZIO. Com um produto só
+                # passava despercebido; no segundo produto do mesmo pedido a
+                # coluna é única e a emissão inteira estourava
+                # `UNIQUE constraint failed: moda_ordens_producao.codigo_qr`.
+                codigo_qr=OrdemProducao.gerar_codigo_qr(),
                 pedido=pedido,
                 item=item,
                 quantidade=item.quantidade,

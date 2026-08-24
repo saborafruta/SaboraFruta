@@ -185,8 +185,11 @@ class TelaDaPerguntaTests(ForcarBase):
         self.assertContains(resposta, 'O que acontece se prosseguir')
         self.assertContains(resposta, 'com o seu nome')
 
-    def test_com_expedicao_aberta_vai_direto_para_a_conferencia(self):
-        """O caminho normal não mudou: quem já tem expedição não vê pergunta."""
+    def test_com_expedicao_aberta_abre_o_qr_em_vez_da_pergunta(self):
+        """
+        Quem já tem expedição não vê a pergunta das pendências: vê o QR da
+        conferência, que é a porta para conferir ao lado da caixa.
+        """
         pedido = self._pedido_travado()
         item = pedido.itens.first()
         ordem = OrdemProducao.objects.create(
@@ -201,10 +204,12 @@ class TelaDaPerguntaTests(ForcarBase):
             reverse('moda:pedido-conferencia', args=[pedido.pk])
         )
 
-        self.assertRedirects(
-            resposta,
-            reverse('moda:conferencia-pessoas', args=[expedicao.pk]),
-            fetch_redirect_response=False,
+        self.assertEqual(resposta.status_code, 200)
+        self.assertNotContains(resposta, 'pendência(s) que travam a produção')
+        self.assertContains(resposta, expedicao.codigo)
+        # E o caminho para conferir ali mesmo continua à mão.
+        self.assertContains(
+            resposta, reverse('moda:conferencia-pessoas', args=[expedicao.pk])
         )
 
 

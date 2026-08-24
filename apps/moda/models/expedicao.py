@@ -27,6 +27,18 @@ def _token() -> str:
     return secrets.token_urlsafe(9)
 
 
+def caminho_da_assinatura(instancia, nome_original: str) -> str:
+    """
+    A assinatura vai para uma pasta com o CÓDIGO da expedição.
+
+    /media/ é servido sem login, então o endereço do arquivo precisa ser tão
+    difícil de adivinhar quanto o link da entrega -- e o código já é um
+    token opaco feito para isso. `moda/entregas/` sem o token daria
+    endereços sequenciais, e a assinatura de um cliente é dele.
+    """
+    return f'moda/entregas/{instancia.codigo}/{nome_original}'
+
+
 class Expedicao(FilialScopedModel):
     """O documento que acompanha a ordem da fábrica até o cliente."""
 
@@ -74,6 +86,19 @@ class Expedicao(FilialScopedModel):
     rastreio = models.CharField(max_length=60, blank=True)
     recebido_por = models.CharField(
         max_length=120, blank=True, help_text='Quem assinou o recebimento.',
+    )
+    # A ASSINATURA É IMAGEM, não um "aceito" booleano. O nome digitado prova
+    # que alguém digitou um nome; o traço é o que a pessoa reconhece como
+    # seu quando a entrega é contestada -- e contestação de entrega é
+    # exatamente o momento em que este registro é procurado.
+    assinatura = models.ImageField(
+        upload_to=caminho_da_assinatura, blank=True, null=True,
+        help_text='Traço do cliente no recebimento.',
+    )
+    assinado_em = models.DateTimeField(null=True, blank=True)
+    assinado_documento = models.CharField(
+        max_length=30, blank=True,
+        help_text='CPF ou RG de quem assinou, quando informado.',
     )
     observacao = models.TextField(blank=True)
 
@@ -196,6 +221,11 @@ class Expedicao(FilialScopedModel):
     @property
     def entregue(self) -> bool:
         return self.status == self.Status.ENTREGA
+
+    @property
+    def assinado(self) -> bool:
+        """Tem traço gravado -- não só um nome digitado."""
+        return bool(self.assinatura)
 
     @property
     def posicao(self) -> int:

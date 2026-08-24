@@ -1,0 +1,134 @@
+{% extends "_base.html" %}
+{% block title %}{{ title }}{% endblock %}
+{% block page_title %}Conferir para entrega{% endblock %}
+{% block content %}
+
+{% comment %}
+  A PORTA DA CONFERÊNCIA, e ela é o QR.
+
+  Quem confere não confere sentado nesta mesa: confere de pé, ao lado da
+  caixa, com a peça numa mão e o telefone na outra. Mandar direto para a
+  lista abria a tela no computador errado -- e a pessoa acabava digitando o
+  endereço no celular à mão, ou conferindo de memória e marcando depois,
+  que é o mesmo que não conferir.
+
+  Então esta tela é o crachá da conferência: o QR grande para apontar a
+  câmera, o botão para quem vai conferir aqui mesmo, e uma etiqueta que sai
+  na impressora e vai colada na caixa.
+
+  As cores do cartão são fixas (preto no branco), como a etiqueta da OP: o
+  que sai da impressora sai em papel branco, e câmera lê melhor QR preto em
+  fundo branco do que o inverso.
+{% endcomment %}
+<style>
+  @media print {
+    body * { visibility: hidden; }
+    .etiqueta, .etiqueta * { visibility: visible; }
+    .etiqueta { position: relative; border: none !important; box-shadow: none !important; }
+    .sem-impressao { display: none !important; }
+  }
+</style>
+
+<div class="space-y-5 max-w-2xl">
+
+  <div class="sem-impressao">
+    <p class="text-sm" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+      <a href="{% url 'moda:pedido-detail' pedido.pk %}"
+         :style="temaClaro ? 'color:#3b82f6;' : 'color:#60a5fa;'">‹ Voltar para o pedido</a>
+    </p>
+    <h2 class="text-2xl font-semibold mt-1" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
+      Conferir para entrega
+    </h2>
+    <p class="text-sm mt-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+      Pedido #{{ pedido.numero|stringformat:"06d" }} · {{ pedido.cliente }}
+      {% if expedicoes|length > 1 %}
+        · <strong>{{ expedicoes|length }} caixas</strong>, uma por produto — cada
+        uma tem o seu código.
+      {% endif %}
+    </p>
+  </div>
+
+  {% for e in expedicoes %}
+    <div class="etiqueta rounded-xl p-6 text-center"
+         style="background:#fff; color:#111827; border:1px solid #d1d5db;">
+
+      <p class="text-xs font-bold uppercase tracking-widest" style="color:#6b7280;">
+        Conferência de entrega
+      </p>
+
+      <img src="{% url 'moda:conferencia-qr' e.pk %}" alt="QR da conferência {{ e.codigo }}"
+           style="width:220px; height:220px; margin:12px auto; display:block;">
+
+      <p style="font-family:monospace; font-size:15px; font-weight:700; letter-spacing:1px;">
+        {{ e.codigo }}
+      </p>
+
+      <div style="margin-top:14px; text-align:left; display:inline-block;">
+        <p style="font-size:13px; margin:2px 0;">
+          <span style="color:#6b7280;">Pedido:</span>
+          <strong>#{{ pedido.numero|stringformat:"06d" }}</strong>
+        </p>
+        <p style="font-size:13px; margin:2px 0;">
+          <span style="color:#6b7280;">Cliente:</span> <strong>{{ pedido.cliente }}</strong>
+        </p>
+        <p style="font-size:13px; margin:2px 0;">
+          <span style="color:#6b7280;">Expedição:</span>
+          <strong>#{{ e.numero|stringformat:"04d" }}</strong>
+        </p>
+        <p style="font-size:13px; margin:2px 0;">
+          <span style="color:#6b7280;">Peças:</span>
+          <strong>{{ e.quantidade_esperada }}</strong>
+        </p>
+        {% if pedido.data_prevista_entrega %}
+          <p style="font-size:13px; margin:2px 0;">
+            <span style="color:#6b7280;">Entrega:</span>
+            <strong>{{ pedido.data_prevista_entrega|date:"d/m/Y" }}</strong>
+          </p>
+        {% endif %}
+      </div>
+
+      <p style="font-size:11px; color:#6b7280; margin-top:14px;">
+        Aponte a câmera do celular para conferir ao lado da caixa.
+      </p>
+    </div>
+
+    <div class="sem-impressao flex flex-wrap gap-2">
+      <a href="{% url 'moda:conferencia-pessoas' e.pk %}" class="btn-primary text-sm">
+        CONFERIR NESTA TELA
+      </a>
+      <button type="button" class="btn-secondary text-sm" onclick="window.print()">
+        IMPRIMIR ETIQUETA
+      </button>
+      <a href="{% url 'moda:conferencia-qr' e.pk %}" download="conferencia-{{ e.codigo }}.png"
+         class="btn-secondary text-sm">BAIXAR PNG</a>
+      <a href="{% url 'moda:expedicao-detail' e.pk %}" class="btn-secondary text-sm">
+        ABRIR EXPEDIÇÃO
+      </a>
+    </div>
+
+    {% comment %}
+      A conferência que já foi assinada não vira um QR mudo: quem chega aqui
+      depois precisa ver que a caixa já passou, e por quem — senão confere
+      de novo e a segunda passada apaga a primeira.
+    {% endcomment %}
+    {% if e.assinado or e.recebido_por %}
+      <div class="sem-impressao card p-3 text-sm" style="border-left:3px solid #059669;">
+        <p :style="temaClaro ? 'color:#374151;' : 'color:#cbd5e1;'">
+          Recebimento assinado por <strong>{{ e.recebido_por }}</strong>
+          {% if e.assinado_em %}em {{ e.assinado_em|date:"d/m/Y H:i" }}{% endif %}.
+        </p>
+      </div>
+    {% endif %}
+  {% endfor %}
+
+  <div class="sem-impressao card p-4 text-sm"
+       :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+    <p>
+      Quem escanear precisa estar logado, com permissão do módulo e na filial
+      certa — o código abre a tela, não substitui o acesso. A assinatura do
+      cliente é colhida na própria conferência.
+    </p>
+  </div>
+
+</div>
+{% endblock %}

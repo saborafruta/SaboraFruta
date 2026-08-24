@@ -14,6 +14,10 @@ o tipo de detalhe que faz o conferente desistir e anotar no papel.
 """
 from __future__ import annotations
 
+import base64
+import binascii
+
+from django.core.files.base import ContentFile
 from django.db import transaction
 from django.utils import timezone
 
@@ -123,6 +127,74 @@ class ExpedicaoService:
             expedicao.data_conferencia = timezone.now()
         expedicao.save()
         return total
+
+    # ── Assinatura do recebimento ────────────────────────────────────────
+
+    # Um traço de dedo em tela de celular não passa de uns poucos KB; o teto
+    # existe para o caso de alguém mandar uma FOTO no lugar do traço, que
+    # entraria no banco pela porta do formulário.
+    LIMITE_ASSINATURA = 400 * 1024
+    PREFIXO = 'data:image/png;base64,'
+
+    @staticmethod
+    @transaction.atomic
+    def assinar(expedicao: Expedicao, nome: str, traco: str, documento: str = ''):
+        """
+        Grava quem recebeu e o traço da assinatura.
+
+        NÃO AVANÇA O STATUS. Assinar a conferência é dizer "conferi isto
+        junto com vocês"; despachar e entregar continuam sendo atos da
+        expedição, com suas datas. Emendar as duas coisas faria uma
+        assinatura colhida na bancada marcar como entregue uma caixa que
+        ainda não saiu.
+
+        O TRAÇO CHEGA COMO data URL, do `<canvas>`. Decodificar aqui, e não
+        na view, mantém o formato aceito num lugar só -- a tela pública de
+        entrega vai querer o mesmo, e duas decodificações divergiriam no
+        limite de tamanho.
+        """
+        nome = (nome or '').strip()
+        if not nome:
+            raise DomainError('Informe o nome de quem está recebendo.')
+
+        if expedicao.cancelada:
+            raise DomainError('Expedição cancelada não recebe assinatura.')
+
+        expedicao.recebido_por = nome[:120]
+        expedicao.assinado_documento = (documento or '').strip()[:30]
+
+        imagem = ExpedicaoService._decodificar(traco)
+        if imagem is not None:
+            # `save=False`: o arquivo entra no storage e o registro é gravado
+            # UMA vez, junto com o nome -- senão um erro no meio deixaria
+            # assinatura sem nome ou nome sem assinatura.
+            expedicao.assinatura.save(
+                f'assinatura-{expedicao.codigo}.png', ContentFile(imagem), save=False,
+            )
+            expedicao.assinado_em = timezone.now()
+
+        expedicao.save(update_fields=[
+            'recebido_por', 'assinado_documento', 'assinatura', 'assinado_em',
+        ])
+        return expedicao
+
+    @classmethod
+    def _decodificar(cls, traco: str) -> bytes | None:
+        """A data URL do canvas vira bytes. Vazio é vazio, lixo é recusado."""
+        traco = (traco or '').strip()
+        if not traco:
+            return None
+        if not traco.startswith(cls.PREFIXO):
+            raise DomainError('Assinatura em formato não reconhecido.')
+        try:
+            imagem = base64.b64decode(traco[len(cls.PREFIXO):], validate=True)
+        except (binascii.Error, ValueError):
+            raise DomainError('Não foi possível ler a assinatura. Tente assinar de novo.')
+        if not imagem:
+            return None
+        if len(imagem) > cls.LIMITE_ASSINATURA:
+            raise DomainError('A assinatura ficou grande demais para ser guardada.')
+        return imagem
 
     # ── Volumes ──────────────────────────────────────────────────────────
 
