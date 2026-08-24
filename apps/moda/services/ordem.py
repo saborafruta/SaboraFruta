@@ -81,7 +81,7 @@ class OrdemProducaoService:
 
     @classmethod
     @transaction.atomic
-    def gerar_do_pedido(cls, pedido, usuario=None) -> list[OrdemProducao]:
+    def gerar_do_pedido(cls, pedido, usuario=None, forcar=False) -> list[OrdemProducao]:
         """
         Emite uma OP para cada item do pedido que ainda não tem uma aberta.
 
@@ -100,7 +100,13 @@ class OrdemProducaoService:
         # cortado, e daí não volta com um Ctrl+Z: as onze validações são
         # cobradas aqui, e não só na tela, porque a tela não é o único
         # caminho até este serviço.
-        ValidacaoProducao.exigir(pedido)
+        #
+        # `forcar` NÃO é um jeito mais fácil de emitir: é o desvio, e ele
+        # continua exigindo que alguém veja a lista do que está ignorando e
+        # diga que sim. O padrão é `False` de propósito -- quem chamar sem
+        # pensar recebe a trava, e não o atalho.
+        if not forcar:
+            ValidacaoProducao.exigir(pedido)
 
         itens = list(pedido.itens.all())
         if not itens:

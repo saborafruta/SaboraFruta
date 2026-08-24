@@ -97,6 +97,10 @@ ROTAS_PRONTAS: list = [
     # Atalho do pedido para a conferencia de entrega -- o botao que aparece
     # quando o pedido esta' Pronto.
     path('comercial/pedidos/<int:pk>/conferencia/', vcon.PedidoConferenciaView.as_view(), name='pedido-conferencia'),
+    # O desvio: abre a conferencia por cima das pendencias. POST, e nao GET,
+    # porque cria ordem e expedicao -- link que cria coisa e' link que o
+    # navegador dispara sozinho ao pre-carregar a pagina.
+    path('comercial/pedidos/<int:pk>/conferencia/forcar/', vcon.PedidoConferenciaForcarView.as_view(), name='pedido-conferencia-forcar'),
 
     # Necessidade de materiais. Endereco do menu de PCP.
     path('pcp/necessidade-materiais/', vn.NecessidadeView.as_view(), name='necessidade'),

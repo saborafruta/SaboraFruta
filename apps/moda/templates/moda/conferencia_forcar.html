@@ -1,0 +1,123 @@
+{% extends "_base.html" %}
+{% block title %}{{ title }}{% endblock %}
+{% block page_title %}Conferir para entrega{% endblock %}
+{% block content %}
+<div class="max-w-3xl mx-auto space-y-5">
+
+  <div>
+    <p class="text-sm mb-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+      <a href="{% url 'moda:pedido-detail' pedido.pk %}"
+         :style="temaClaro ? 'color:#3b82f6;' : 'color:#60a5fa;'">Pedido #{{ pedido.numero|stringformat:"06d" }}</a>
+      <span class="mx-1">›</span> Conferência
+    </p>
+    <h2 class="text-2xl font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
+      Este pedido ainda não passou pela produção
+    </h2>
+    <p class="text-sm mt-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+      A conferência nasce da ordem de produção, depois da qualidade. Você pode
+      abrir mesmo assim — abaixo está exatamente o que estará ignorando.
+    </p>
+  </div>
+
+  {% comment %}
+    A LISTA VEM ANTES DO BOTÃO, e completa. Um "tem certeza?" que não diz do
+    que se trata treina a pessoa a clicar em sim sem ler — e aí o aviso que
+    importa passa junto com os outros.
+  {% endcomment %}
+  {% if bloqueios %}
+    <div class="card p-5 space-y-3" style="border-left:3px solid #dc2626;">
+      <h3 class="text-sm font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
+        {{ bloqueios|length }} pendência(s) que travam a produção
+      </h3>
+      <ul class="space-y-3">
+        {% for c in bloqueios %}
+          <li class="flex gap-3">
+            <span style="color:#dc2626; font-weight:700;">•</span>
+            <div class="min-w-0">
+              <p class="text-sm font-medium" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
+                {{ c.label }}
+              </p>
+              {% if c.motivo %}
+                <p class="text-xs mt-0.5" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+                  {{ c.motivo }}
+                </p>
+              {% endif %}
+              {% comment %}
+                Os itens que falharam ficam à vista: "ficha técnica definida"
+                num pedido de seis produtos não diz QUAL deles está sem — e
+                sem isso a pessoa vai ter de procurar um por um.
+              {% endcomment %}
+              {% if c.detalhes %}
+                <p class="text-xs mt-0.5" style="color:#d97706;">
+                  {{ c.detalhes|join:", " }}
+                </p>
+              {% endif %}
+              {% if c.onde_resolver %}
+                <p class="text-xs mt-0.5" :style="temaClaro ? 'color:#94a3b8;' : 'color:#71717a;'">
+                  Resolve em: {{ c.onde_resolver }}
+                </p>
+              {% endif %}
+            </div>
+          </li>
+        {% endfor %}
+      </ul>
+    </div>
+  {% endif %}
+
+  {% if avisos %}
+    <div class="card p-5 space-y-2" style="border-left:3px solid #d97706;">
+      <h3 class="text-sm font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
+        Avisos — não travam, mas valem uma olhada
+      </h3>
+      {% for c in avisos %}
+        <p class="text-sm" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+          <strong>{{ c.label }}</strong>{% if c.motivo %} — {{ c.motivo }}{% endif %}
+        </p>
+      {% endfor %}
+    </div>
+  {% endif %}
+
+  <div class="card p-5 space-y-4">
+    <div>
+      <h3 class="text-sm font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
+        O que acontece se prosseguir
+      </h3>
+      <ul class="text-sm mt-2 space-y-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+        <li>· A ordem de produção é emitida <strong>sem passar pelas validações</strong>.</li>
+        <li>· A expedição abre <strong>sem a etapa de qualidade</strong> ter sido encerrada.</li>
+        <li>· Fica registrado na expedição e na ordem que foram abertas por cima
+          de {{ bloqueios|length }} pendência(s), <strong>com o seu nome</strong>.</li>
+      </ul>
+    </div>
+
+    {% if pode_forcar %}
+      <div class="flex flex-wrap gap-2">
+        <form method="post" action="{% url 'moda:pedido-conferencia-forcar' pedido.pk %}">
+          {% csrf_token %}
+          <button type="submit" class="btn-primary" style="background:#dc2626;">
+            Abrir conferência mesmo assim
+          </button>
+        </form>
+        <a href="{% url 'moda:pedido-detail' pedido.pk %}" class="btn-secondary">
+          Voltar e resolver
+        </a>
+      </div>
+    {% else %}
+      {% comment %}
+        Pular a validação da produção tem a mesma gravidade de liberar um
+        pedido: quem não pode liberar não pode contornar a liberação por
+        outra porta.
+      {% endcomment %}
+      <p class="text-sm" style="color:#d97706;">
+        Seu perfil não pode abrir a conferência por cima das pendências —
+        isso exige a permissão de <strong>aprovar</strong>. Peça a quem libera
+        pedidos, ou resolva as pendências acima.
+      </p>
+      <a href="{% url 'moda:pedido-detail' pedido.pk %}" class="btn-secondary inline-block">
+        Voltar ao pedido
+      </a>
+    {% endif %}
+  </div>
+
+</div>
+{% endblock %}

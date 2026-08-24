@@ -16,6 +16,7 @@ código da expedição — a mesma ideia do link de aprovação do pedido. Quem
 confere é a casa; quem assina o recebimento é quem recebeu.
 """
 from django.contrib import messages
+from django.db import transaction
 from django.http import Http404, HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
@@ -251,12 +252,10 @@ class PedidoConferenciaView(ModaBaseView):
         )
 
         if not expedicoes:
-            messages.error(
-                request,
-                'Este pedido ainda não tem expedição aberta. Ela nasce da ordem '
-                'de produção, depois que a etapa de qualidade é encerrada.',
-            )
-            return redirect(reverse('moda:pedido-detail', args=[pedido.pk]))
+            # ANTES ISTO ERA UM BECO: a mensagem explicava por que não dava e
+            # devolvia a pessoa ao pedido, sem caminho nenhum. Agora ela vê o
+            # que está travando e decide — o sistema informa, não impede.
+            return self._perguntar(request, pedido)
 
         if len(expedicoes) == 1:
             return redirect(
@@ -268,6 +267,132 @@ class PedidoConferenciaView(ModaBaseView):
             f'Este pedido tem {len(expedicoes)} expedições — escolha qual conferir.',
         )
         return redirect(reverse('moda:expedicao-list'))
+
+    @staticmethod
+    def _perguntar(request, pedido):
+        """
+        Mostra o que falta e pergunta se quer abrir mesmo assim.
+
+        Os alertas vêm da MESMA validação que trava a emissão da ordem
+        (`ValidacaoProducao`), e não de uma lista escrita à parte: duas
+        listas divergem, e aí a tela pede uma coisa e o botão cobra outra.
+        """
+        from .services.validacao import OK, ValidacaoProducao
+
+        checagens = ValidacaoProducao.checar(pedido)
+        return render(request, 'moda/conferencia_forcar.html', {
+            'title': f'Conferir pedido #{pedido.numero:06d}',
+            'pedido': pedido,
+            'bloqueios': [c for c in checagens if c.bloqueia],
+            'avisos': [
+                c for c in checagens
+                if not c.bloqueia and c.situacao != OK
+            ],
+            # Forçar cria ordem e expedição de peça que a fábrica não fez.
+            # Não é decisão de quem só consulta.
+            'pode_forcar': request.user.tem_permissao('moda', 'aprovar'),
+        })
+
+
+class PedidoConferenciaForcarView(ModaBaseView):
+    """
+    Abre a conferência por cima das pendências — o desvio, com dono.
+
+    Existe porque o caminho normal é longo e nem toda casa o percorre
+    inteiro: há pedido que sai da costura direto para a caixa, e a tela que
+    só sabia dizer "não" empurrava essa pessoa para o Django Admin, onde não
+    há validação nenhuma nem registro de quem fez o quê.
+
+    O desvio deixa RASTRO: a observação da expedição e a da ordem dizem que
+    foram abertas por cima de N pendências, com o nome de quem mandou e a
+    lista do que foi ignorado. Um atalho sem rastro é o que ninguém consegue
+    explicar seis meses depois.
+    """
+
+    area = 'comercial'
+    # `aprovar`, e não `criar`: pular a validação da produção é a mesma
+    # gravidade de liberar um pedido, e quem não pode liberar não pode
+    # contornar a liberação por outra porta.
+    permissao_acao = 'aprovar'
+
+    def post(self, request, pk):
+        from .models import PedidoProducao
+        from .services import ExpedicaoService
+        from .services.validacao import ValidacaoProducao
+
+        pedido = get_object_or_404(
+            PedidoProducao.objects.for_filial(_filial(request)), pk=pk,
+        )
+        bloqueios = [c for c in ValidacaoProducao.checar(pedido) if c.bloqueia]
+        marca = self._marca(request.user, bloqueios)
+
+        try:
+            with transaction.atomic():
+                ordens = self._ordens(pedido, request.user, marca)
+                expedicoes = [
+                    ExpedicaoService.criar(
+                        pedido.filial, ordem, usuario=request.user,
+                        forcar=True, observacao=marca,
+                    )
+                    for ordem in ordens
+                ]
+        except DomainError as erro:
+            messages.error(request, str(erro))
+            return redirect(reverse('moda:pedido-detail', args=[pedido.pk]))
+
+        messages.warning(
+            request,
+            f'Conferência aberta por cima de {len(bloqueios)} pendência(s). '
+            f'O registro ficou na expedição, com o seu nome.',
+        )
+        if len(expedicoes) == 1:
+            return redirect(
+                reverse('moda:conferencia-pessoas', args=[expedicoes[0].pk])
+            )
+        return redirect(reverse('moda:expedicao-list'))
+
+    @staticmethod
+    def _marca(usuario, bloqueios) -> str:
+        """O texto que fica gravado — o rastro do desvio."""
+        if not bloqueios:
+            return ''
+        itens = '; '.join(c.label for c in bloqueios)
+        quem = getattr(usuario, 'nome', None) or getattr(usuario, 'email', '?')
+        return (
+            f'Conferência aberta por {quem} por cima de {len(bloqueios)} '
+            f'pendência(s): {itens}.'
+        )
+
+    @staticmethod
+    def _ordens(pedido, usuario, marca):
+        """
+        As ordens do pedido — as que existem, ou as que forem criadas.
+
+        Reaproveita a ordem já aberta em vez de emitir outra: o pedido pode
+        estar travado só na expedição, e emitir de novo colocaria a mesma
+        peça duas vezes na fila da fábrica.
+        """
+        from .models import OrdemProducao
+        from .services import OrdemProducaoService
+
+        existentes = list(
+            OrdemProducao.objects.filter(pedido=pedido)
+            .exclude(status__in=OrdemProducao.STATUS_ENCERRADOS)
+        )
+        if existentes:
+            return existentes
+
+        criadas = OrdemProducaoService.gerar_do_pedido(
+            pedido, usuario=usuario, forcar=True,
+        )
+        if marca:
+            for ordem in criadas:
+                ordem.observacoes = (
+                    f'{ordem.observacoes}\n{marca}'.strip()
+                    if ordem.observacoes else marca
+                )
+                ordem.save(update_fields=['observacoes'])
+        return criadas
 
 
 class ConferenciaFilaView(ModaBaseView):

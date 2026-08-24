@@ -40,7 +40,7 @@ class ExpedicaoService:
 
     @staticmethod
     @transaction.atomic
-    def criar(filial, ordem, usuario=None) -> Expedicao:
+    def criar(filial, ordem, usuario=None, forcar=False, observacao='') -> Expedicao:
         """
         Abre a expedição de uma ordem cuja produção terminou.
 
@@ -61,13 +61,20 @@ class ExpedicaoService:
 
         etapas = list(ordem.etapas.all())
         qualidade = next((e for e in etapas if e.etapa == 'qualidade'), None)
-        if qualidade is not None and not qualidade.encerrada:
+        # `forcar` é o desvio explícito da tela do pedido, onde alguém já viu
+        # a lista do que está ignorando e disse que sim. O padrão continua
+        # travado: quem chamar sem pensar não abre expedição de peça que
+        # ainda está na costura.
+        if not forcar and qualidade is not None and not qualidade.encerrada:
             raise DomainError(
                 'A produção ainda não passou pela Qualidade — a expedição '
                 'começa depois dela.'
             )
 
-        return Expedicao.objects.create(filial=filial, ordem=ordem, criado_por=usuario)
+        return Expedicao.objects.create(
+            filial=filial, ordem=ordem, criado_por=usuario,
+            observacao=observacao,
+        )
 
     # ── Conferência ──────────────────────────────────────────────────────
 
