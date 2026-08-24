@@ -30,6 +30,7 @@ from django.views.decorators.csrf import ensure_csrf_cookie
 from apps.core.middleware.audit import get_client_ip
 
 from .models import AprovacaoPedido, ArquivoPedido, PedidoProducao
+from .services.kanban_comercial import avancar_por_resposta
 from .services.pedido_pdf import PedidoPdfService
 
 # Status internos que não fazem sentido para quem está do lado de fora.
@@ -238,6 +239,14 @@ class PedidoResponderView(View):
             ip=get_client_ip(request),
             motivo=request.POST.get('motivo', '')[:2000],
         )
+        # O SIM DO CLIENTE MOVE O CARTÃO SOZINHO. Antes o pedido ficava em
+        # "Aguardando Aprovação" mesmo depois de aprovado, esperando alguém de
+        # dentro arrastar — e a coluna virava depósito de pedido já resolvido,
+        # escondendo os que de fato esperavam resposta.
+        #
+        # Pedido de ajuste NÃO move: continua aguardando aprovação, que é o que
+        # ele está fazendo. O quadro marca o cartão em vez de escondê-lo.
+        avancar_por_resposta(pedido, aprovacao)
         # Redirect depois do POST: sem isso, atualizar a página reenviaria a
         # resposta, e o cliente veria "aprovado" virar "ajuste" sem entender.
         return redirect(reverse('moda_publico:pedido', args=[token]))

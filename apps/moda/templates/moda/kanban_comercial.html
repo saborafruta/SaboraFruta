@@ -59,6 +59,30 @@
      ele precisa sair do fluxo para a coluna encolher junto — o quadro se
      fecha em volta do que sobrou, e a resposta aparece inteira na tela. */
   .kc-card.oculto { display: none; }
+
+  /* CARTÃO COM PEDIDO DE AJUSTE PISCA. O cliente respondeu e está esperando
+     arte nova — e esse cartão fica na MESMA coluna dos que ainda não
+     responderam nada. Sem marca, ele se perde no meio deles, e o único jeito
+     de achar era abrir um por um.
+     A pulsação é no anel, nunca na borda: a borda vem do :style do Alpine
+     (tema claro/escuro) e estilo inline ganha da folha — animar `border`
+     aqui simplesmente não pegaria. */
+  .kc-card.kc-alerta { animation: kc-pisca 1.5s ease-in-out infinite; }
+  @keyframes kc-pisca {
+    0%, 100% { box-shadow: 0 0 0 0 rgba(220, 38, 38, 0); }
+    50%      { box-shadow: 0 0 0 3px rgba(220, 38, 38, .6); }
+  }
+
+  /* Quem pediu menos movimento no sistema operacional continua vendo o
+     alerta — parado. Piscar aqui é chamar atenção, não enfeite: apagar o
+     aviso junto com a animação esconderia justamente o cartão que precisa
+     ser visto. */
+  @media (prefers-reduced-motion: reduce) {
+    .kc-card.kc-alerta {
+      animation: none;
+      box-shadow: 0 0 0 2px rgba(220, 38, 38, .6);
+    }
+  }
 </style>
 {% endblock %}
 
@@ -211,7 +235,7 @@
                 até alguém recarregar — um quadro que mente logo depois de
                 obedecer é pior que um quadro sem contador.
               {% endcomment %}
-              <div class="kc-card rounded-lg p-2.5" data-pedido="{{ c.pedido.pk }}"
+              <div class="kc-card rounded-lg p-2.5{% if c.pediu_ajuste %} kc-alerta{% endif %}" data-pedido="{{ c.pedido.pk }}"
                    data-pecas="{{ c.pedido.quantidade_total }}"
                    data-valor="{{ c.pedido.valor_total|stringformat:'.2f' }}"
                    data-atrasado="{% if c.atrasado %}1{% else %}0{% endif %}"

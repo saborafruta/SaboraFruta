@@ -299,3 +299,55 @@ class KanbanComercialService:
             avisos.append('O financeiro deste pedido ainda não foi gerado.')
 
         return avisos
+
+
+# ══════════════════════════════════════════════════════════════════════
+# A RESPOSTA DO CLIENTE MOVE O CARTÃO
+# ══════════════════════════════════════════════════════════════════════
+
+# Até onde a resposta do cliente pode empurrar o pedido. Depois de
+# `confirmado` o cartão está na mão da fábrica, e aceite que chega tarde não
+# pode puxá-lo de volta para o comercial.
+POSICAO = {c.chave: i for i, c in enumerate(COLUNAS)}
+
+
+def posicao_do_pedido(pedido) -> int:
+    """Onde o pedido está NO QUADRO — não na ordem do enum de status.
+
+    As duas ordens são diferentes de propósito: no enum, `confirmado` vem
+    antes de `aguardando_arte`, porque foi escrito na sequência do cadastro.
+    No quadro ele vem DEPOIS da aprovação, porque é o cliente que confirma.
+    Usar o enum aqui faria "avançar" andar para trás.
+    """
+    chave = COLUNA_DO_STATUS.get(pedido.status)
+    return POSICAO.get(chave, -1)
+
+
+def avancar_por_resposta(pedido, aprovacao) -> bool:
+    """
+    Move o cartão quando o cliente aceita. Devolve se mexeu.
+
+    APROVOU: vai para "Pedido Confirmado" sozinho. Antes o cartão ficava em
+    "Aguardando Aprovação" mesmo depois do sim, e alguém tinha de arrastá-lo
+    à mão — trabalho que o sistema já sabia que era necessário, e que ficava
+    esquecido justamente nos dias corridos.
+
+    PEDIU AJUSTE: NÃO mexe. O pedido continua aguardando aprovação porque é
+    isso que ele está fazendo — esperando a arte nova e o novo sim. Movê-lo
+    para "Arte" pareceria mais organizado e apagaria o fato de haver um
+    cliente esperando resposta; o quadro marca o cartão em vez de escondê-lo.
+
+    SÓ AVANÇA, NUNCA VOLTA. Aceite que chega depois de a peça já estar na
+    produção não puxa o cartão de volta para o comercial: a fábrica já
+    passou por ali, e retroceder o status apagaria esse caminho.
+    """
+    if not aprovacao or not aprovacao.aprovado_pelo_cliente:
+        return False
+    if posicao_do_pedido(pedido) > POSICAO['aprovacao']:
+        return False
+    if pedido.status == S.CONFIRMADO:
+        return False
+
+    pedido.status = S.CONFIRMADO
+    pedido.save(update_fields=['status'])
+    return True
