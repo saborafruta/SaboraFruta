@@ -83,6 +83,27 @@
         </p>
       {% endif %}
 
+      {% comment %}
+        Mudou a arte DEPOIS do aceite? Acontece, e o beco era o mesmo daqui.
+        Mas aqui o custo é outro: o aceite registrado é o que vira prova no dia
+        em que o pedido dá problema, e reabrir apaga o que está na tela. Por
+        isso o aviso vem antes do botão e o botão diz o que faz — o registro
+        continua no histórico, mas quem clica precisa saber que está trocando
+        um aceite dado por um aceite a receber.
+      {% endcomment %}
+      <div class="mt-4 pt-4" :style="temaClaro ? 'border-top:1px solid #e5e7eb;' : 'border-top:1px solid #303036;'">
+        <p class="text-sm" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+          Mudou a arte depois do aceite? Pedir nova aprovação
+          <strong style="color:#d97706;">tira este aceite da tela</strong> e o
+          pedido volta a aguardar o cliente. O registro acima — nome, data e IP —
+          fica no
+          <a href="{% url 'moda:pedido-historico' pedido.pk %}"
+             :style="temaClaro ? 'color:#3b82f6;' : 'color:#60a5fa;'">histórico</a>.
+        </p>
+        {% include "moda/_reenviar_aprovacao.html" with rotulo="PEDIR NOVA APROVAÇÃO" %}
+        {% include "moda/_link_aprovacao.html" %}
+      </div>
+
     {% elif aprovacao.pediu_ajuste %}
       <p class="text-sm mt-2 font-semibold" style="color:#d97706;">
         Cliente pediu ajuste em {{ aprovacao.respondido_em|date:"d/m/Y H:i" }}
@@ -90,20 +111,36 @@
       </p>
       <p class="text-sm mt-2 p-3 rounded-lg"
          :style="temaClaro ? 'background:#fff7ed; color:#374151;' : 'background:#27272a; color:#e5e7eb;'">
-        {{ aprovacao.motivo_ajuste|linebreaksbr }}
+        {% if aprovacao.motivo_ajuste %}{{ aprovacao.motivo_ajuste|linebreaksbr }}{% else %}<em>Sem motivo informado.</em>{% endif %}
       </p>
+
+      {% comment %}
+        AQUI ERA UM BECO. A equipe refazia a arte e não tinha botão nenhum: o
+        link some desta tela depois que o cliente responde, o cartão continuava
+        piscando e o alerta ficava aceso, porque a resposta gravada seguia
+        sendo "ajuste" para sempre. Quem precisava seguir mandava o link de
+        outro lugar — e o pedido ficava parado no quadro do mesmo jeito.
+      {% endcomment %}
+      <div class="mt-4 pt-4" :style="temaClaro ? 'border-top:1px solid #e5e7eb;' : 'border-top:1px solid #303036;'">
+        <p class="text-sm font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
+          Refez a arte?
+        </p>
+        <p class="text-sm mt-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+          Reenvie para aprovação. O pedido volta a aguardar o cliente, e o que
+          ele pediu fica no
+          <a href="{% url 'moda:pedido-historico' pedido.pk %}"
+             :style="temaClaro ? 'color:#3b82f6;' : 'color:#60a5fa;'">histórico</a>.
+        </p>
+        {% include "moda/_reenviar_aprovacao.html" with rotulo="REENVIAR PARA APROVAÇÃO" %}
+        {% include "moda/_link_aprovacao.html" %}
+      </div>
 
     {% elif aprovacao.liberado %}
       <p class="text-sm mt-2" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
         Aguardando o cliente responder. Mande o link abaixo por WhatsApp ou
         e-mail — ele aprova ou pede ajuste na própria página.
       </p>
-      <div class="flex gap-2 mt-3">
-        <input type="text" readonly value="{{ link_publico }}"
-               class="form-input w-full text-xs" style="font-family:monospace;">
-        <a href="{{ link_publico }}" target="_blank" rel="noopener"
-           class="btn-secondary text-sm shrink-0">Abrir</a>
-      </div>
+      {% include "moda/_link_aprovacao.html" %}
 
     {% else %}
       {% comment %}

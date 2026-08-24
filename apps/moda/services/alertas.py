@@ -521,3 +521,30 @@ class AlertaService:
             logger.exception(
                 'Falha ao publicar o alerta de ajuste do pedido %s', pedido.pk,
             )
+
+    @staticmethod
+    def encerrar_ajuste_do_cliente(pedido) -> int:
+        """
+        Desliga na hora o alerta de ajuste deste pedido. Devolve quantos.
+
+        A condição deixou de valer quando a arte foi reenviada: não há mais
+        resposta de ajuste, há um cliente olhando a versão nova. A varredura
+        desligaria sozinha na próxima volta, mas até lá o sino apontaria para
+        um trabalho já feito — e alerta que continua aceso depois de resolvido
+        é exatamente o que ensina a ignorar o sino.
+
+        Desativa em vez de apagar, como a varredura: o histórico de que o
+        alerta existiu continua consultável.
+        """
+        regra = REGRAS['cliente_pediu_ajuste']
+        return (
+            Notificacao.objects
+            .filter(
+                filial=pedido.filial,
+                tipo=regra.tipo,
+                referencia_tipo='moda_alerta',
+                referencia_id=f'{regra.chave}:pedido:{pedido.pk}',
+                ativa=True,
+            )
+            .update(ativa=False)
+        )

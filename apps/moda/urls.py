@@ -71,6 +71,7 @@ ROTAS_PRONTAS: list = [
     path('comercial/pedidos/<int:pk>/fluxo/', vap.FluxoPedidoView.as_view(), name='pedido-fluxo'),
     path('comercial/pedidos/<int:pk>/aprovacao/', vap.AprovacaoPedidoView.as_view(), name='pedido-aprovacao'),
     path('comercial/pedidos/<int:pk>/aprovacao/liberar/', vap.LiberarPedidoView.as_view(), name='pedido-liberar'),
+    path('comercial/pedidos/<int:pk>/aprovacao/reenviar/', vap.ReenviarAprovacaoView.as_view(), name='pedido-reenviar'),
     path('comercial/pedidos/<int:pk>/finalizar/', vc.PedidoFinalizarView.as_view(), name='pedido-finalizar'),
     path('comercial/pedidos/<int:pk>/status/', vc.PedidoStatusView.as_view(), name='pedido-status'),
     path('comercial/pedidos/<int:pk>/valores/', vc.PedidoValoresView.as_view(), name='pedido-valores'),

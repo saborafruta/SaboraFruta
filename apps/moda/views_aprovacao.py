@@ -10,10 +10,12 @@ from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 
 from .models import AprovacaoPedido, PedidoProducao
+from .services.alertas import AlertaService
 from .services.aprovacao import FilaAprovacaoService
 from .services.arte import FilaArteService
 from .services.envio import EnvioProducaoService
 from .services.fluxo_completo import FluxoCompletoService
+from .services.pedido_pdf import mensagem_whatsapp, whatsapp_numero
 from .services.validacao import ValidacaoProducao
 from .views import ModaBaseView
 
@@ -63,14 +65,66 @@ class AprovacaoPedidoView(ModaBaseView):
 
     def get(self, request, pk):
         pedido = _pedido(request, pk)
+        link_publico = request.build_absolute_uri(
+            reverse('moda_publico:pedido', args=[pedido.token_publico])
+        )
         return render(request, 'moda/aprovacao.html', {
             'title': f'Aprovação do pedido #{pedido.numero:06d}',
             'pedido': pedido,
             'aprovacao': aprovacao_de(pedido),
-            'link_publico': request.build_absolute_uri(
-                reverse('moda_publico:pedido', args=[pedido.token_publico])
-            ),
+            'link_publico': link_publico,
+            # Reenviar é ação de APROVAR: descarta a resposta registrada e
+            # assume preço e prazo de novo perante o cliente. Quem não pode
+            # liberar não pode reabrir por outra porta.
+            'pode_reenviar': request.user.tem_permissao('moda', 'aprovar'),
+            # O WhatsApp já existe na tela do pedido; aqui é onde a pessoa
+            # está quando decide reenviar, e mandá-la de volta só para achar
+            # o botão é a ida e volta que o beco já custava.
+            'whatsapp_numero': whatsapp_numero(pedido),
+            'mensagem_whatsapp': mensagem_whatsapp(pedido, link_publico),
         })
+
+
+class ReenviarAprovacaoView(ModaBaseView):
+    """
+    Manda o pedido para o cliente de novo, numa rodada nova.
+
+    Exige `aprovar` pelo mesmo motivo que liberar: reenviar é assumir preço e
+    prazo perante o cliente outra vez, agora sobre uma arte que mudou. E
+    descarta a resposta anterior, que é registro — quem não pode liberar não
+    pode reabrir por outra porta.
+    """
+
+    area = 'comercial'
+    permissao_acao = 'aprovar'
+
+    def post(self, request, pk):
+        pedido = _pedido(request, pk)
+        aprovacao = aprovacao_de(pedido)
+
+        # Nunca respondeu: não há rodada para reabrir, e o link já está na
+        # tela. Reenviar aqui só recarimbaria a liberação sem motivo.
+        if aprovacao.aguardando_cliente:
+            messages.info(
+                request,
+                'Este pedido já está aguardando o cliente — o link continua valendo.',
+            )
+            return redirect('moda:pedido-aprovacao', pk=pedido.pk)
+
+        pediu_ajuste = aprovacao.pediu_ajuste
+        aprovacao.reenviar(request.user, request.POST.get('observacao', ''))
+
+        # O alerta do ajuste morre junto: a condição deixou de valer, e sino
+        # aceso depois de resolvido é o que ensina a ignorar o sino.
+        if pediu_ajuste:
+            AlertaService.encerrar_ajuste_do_cliente(pedido)
+
+        messages.success(
+            request,
+            'Pedido reaberto para aprovação. Mande o link para o cliente — a '
+            'resposta anterior fica no histórico.',
+        )
+        return redirect('moda:pedido-aprovacao', pk=pedido.pk)
 
 
 class LiberarPedidoView(ModaBaseView):

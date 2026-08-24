@@ -1,0 +1,22 @@
+{% comment %}
+  O link do cliente, com as três formas de mandar. Vira parcial porque agora
+  aparece em TRÊS estados da tela de aprovação — aguardando, ajustado e
+  aprovado — e link de aprovação escrito três vezes é o tipo de coisa que um
+  dia diverge num dos lugares sem ninguém perceber.
+
+  O WhatsApp só aparece se o cadastro tiver telefone: um `wa.me/` sem número
+  abre a tela de "número inválido" no celular, e quem clicou fica achando que
+  o link do pedido é que está quebrado.
+{% endcomment %}
+<div class="flex gap-2 mt-3">
+  <input type="text" readonly value="{{ link_publico }}"
+         class="form-input w-full text-xs" style="font-family:monospace;"
+         onfocus="this.select();">
+  <a href="{{ link_publico }}" target="_blank" rel="noopener"
+     class="btn-secondary text-sm shrink-0">Abrir</a>
+  {% if whatsapp_numero %}
+    <a href="https://wa.me/{{ whatsapp_numero }}?text={{ mensagem_whatsapp|urlencode }}"
+       target="_blank" rel="noopener"
+       class="btn-secondary text-sm shrink-0">WhatsApp</a>
+  {% endif %}
+</div>

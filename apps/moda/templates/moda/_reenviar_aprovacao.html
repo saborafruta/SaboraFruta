@@ -1,0 +1,23 @@
+{% comment %}
+  O botão que reabre a rodada. Um só parcial para os dois estados respondidos
+  — muda o rótulo, não o que acontece: `rotulo` vem do `include`.
+
+  SEM PERMISSÃO NÃO SOME A EXPLICAÇÃO. Botão que simplesmente não está lá faz
+  a pessoa procurar em todas as telas antes de desconfiar que é permissão. A
+  frase diz o que pedir e a quem.
+{% endcomment %}
+{% if pode_reenviar %}
+  <form method="post" action="{% url 'moda:pedido-reenviar' pedido.pk %}"
+        class="space-y-2 mt-3">
+    {% csrf_token %}
+    <input type="text" name="observacao" maxlength="500"
+           placeholder="O que mudou nesta versão (opcional)"
+           class="form-input w-full text-sm">
+    <button type="submit" class="btn-primary text-sm">{{ rotulo }}</button>
+  </form>
+{% else %}
+  <p class="text-sm mt-3" style="color:#d97706;">
+    Seu perfil não pode reenviar para aprovação — isso exige a permissão de
+    <strong>aprovar</strong>. Peça a quem libera pedidos.
+  </p>
+{% endif %}

@@ -110,3 +110,36 @@ class AprovacaoPedido(models.Model):
             'resposta', 'respondido_em', 'respondido_por', 'ip_resposta',
             'motivo_ajuste',
         ])
+
+    def reenviar(self, usuario, observacao: str = '') -> None:
+        """
+        Abre uma NOVA RODADA: a arte foi refeita, o cliente responde de novo.
+
+        Sem isto a tela era um beco. O cliente pedia ajuste, a equipe refazia a
+        arte — e não havia botão nenhum: o link sumia da tela (só aparece
+        enquanto está "aguardando"), o cartão seguia piscando e o alerta ficava
+        aceso para sempre, porque a resposta gravada continuava sendo "ajuste".
+
+        LIMPA A RESPOSTA ANTERIOR, e isso é seguro aqui: `AprovacaoPedido` é
+        auditado pelos signals do core, então motivo, nome, data e IP da rodada
+        anterior continuam na linha do tempo do pedido. O que o campo guarda é
+        a posição ATUAL do cliente, e a posição atual passou a ser "ainda não
+        respondeu esta versão".
+
+        RECARIMBA A LIBERAÇÃO com quem reenviou. Reenviar é assumir preço e
+        prazo de novo, perante o cliente, sobre uma arte que mudou — o passo 7
+        passa a falar desta rodada, e o nome que fica é o de quem decidiu.
+        """
+        self.resposta = self.Resposta.PENDENTE
+        self.respondido_em = None
+        self.respondido_por = ''
+        self.ip_resposta = None
+        self.motivo_ajuste = ''
+        self.liberado_em = timezone.now()
+        self.liberado_por = usuario
+        if observacao:
+            self.observacao_interna = observacao
+        self.save(update_fields=[
+            'resposta', 'respondido_em', 'respondido_por', 'ip_resposta',
+            'motivo_ajuste', 'liberado_em', 'liberado_por', 'observacao_interna',
+        ])
