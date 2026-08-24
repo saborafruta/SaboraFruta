@@ -348,6 +348,22 @@ def avancar_por_resposta(pedido, aprovacao) -> bool:
     if pedido.status == S.CONFIRMADO:
         return False
 
+    # Orçamento não vira pedido por atribuição de status: quem sabe o que
+    # falta para uma proposta virar compromisso é o serviço de orçamento, e
+    # trocar o status na mão aqui abriria a porta dos fundos que `mover`
+    # fecha do outro lado.
+    if pedido.status == S.ORCAMENTO:
+        from apps.moda.services.orcamentos import OrcamentoService
+        try:
+            OrcamentoService.fechar(pedido)
+        except DomainError:
+            # O SIM DO CLIENTE JÁ ESTÁ GRAVADO — e ele não pode virar tela de
+            # erro na cara de quem está do lado de fora por causa de um campo
+            # que falta aqui dentro. O cartão fica onde está, com a resposta
+            # registrada, e quem resolve a pendência fecha pela tela.
+            return False
+        return True
+
     pedido.status = S.CONFIRMADO
-    pedido.save(update_fields=['status'])
+    pedido.save(update_fields=['status', 'updated_at'])
     return True

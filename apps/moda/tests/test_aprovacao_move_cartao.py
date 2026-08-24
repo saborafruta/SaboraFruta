@@ -26,10 +26,16 @@ O que os testes cercam:
 """
 from django.test import TestCase
 from django.urls import reverse
+from django.utils import timezone
+
+from datetime import timedelta
+from decimal import Decimal
 
 from apps.cadastros.models import Cliente
 from apps.core.models import Empresa, Filial, PerfilAcesso, Usuario
-from apps.moda.models import AprovacaoPedido, PedidoProducao
+from apps.moda.models import (
+    AprovacaoPedido, ItemPedidoProducao, PedidoProducao, ProdutoModa,
+)
 
 S = PedidoProducao.Status
 R = AprovacaoPedido.Resposta
@@ -62,6 +68,19 @@ class RespostaBase(TestCase):
         aprovacao = AprovacaoPedido.objects.create(pedido=pedido)
         aprovacao.liberar(usuario=None)
         return pedido, aprovacao
+
+    def _completar(self, pedido):
+        """O que `OrcamentoService.faltas` cobra para fechar a proposta."""
+        produto = ProdutoModa.objects.create(
+            filial=self.filial, codigo=f'CAM{pedido.numero:03d}', nome='Camisa',
+        )
+        ItemPedidoProducao.objects.create(
+            pedido=pedido, produto=produto, descricao='Camisa',
+            quantidade=10, valor_unitario=Decimal('45'),
+        )
+        pedido.data_prevista_entrega = timezone.localdate() + timedelta(days=20)
+        pedido.save(update_fields=['data_prevista_entrega'])
+        return pedido
 
     def _responder(self, pedido, resposta, nome='Henry'):
         """Pelo link público, do jeito que o cliente responde de verdade."""
@@ -111,11 +130,49 @@ class AprovacaoAvancaTests(RespostaBase):
         vale igual.
         """
         pedido, _ = self._pedido(status=S.ORCAMENTO)
+        self._completar(pedido)
 
         self._responder(pedido, R.APROVADO)
 
         pedido.refresh_from_db()
         self.assertEqual(pedido.status, S.CONFIRMADO)
+
+    def test_orcamento_fecha_pelo_servico_de_orcamento(self):
+        """
+        E não por atribuição de status. Quem sabe o que falta para uma
+        proposta virar compromisso é aquele serviço; trocar o status na mão
+        aqui abriria a porta dos fundos que o quadro fecha do outro lado.
+        """
+        from unittest.mock import patch
+
+        from apps.moda.services.kanban_comercial import avancar_por_resposta
+
+        pedido, aprovacao = self._pedido(status=S.ORCAMENTO)
+        self._completar(pedido)
+        aprovacao.responder(resposta=R.APROVADO, nome='Henry')
+
+        with patch(
+            'apps.moda.services.orcamentos.OrcamentoService.fechar'
+        ) as fechar:
+            avancar_por_resposta(pedido, aprovacao)
+
+        fechar.assert_called_once_with(pedido)
+
+    def test_orcamento_incompleto_nao_fecha_e_nao_estoura(self):
+        """
+        O sim do cliente JÁ ESTÁ GRAVADO — e não pode virar tela de erro na
+        cara de quem está do lado de fora por causa de um campo que falta
+        aqui dentro. Fica na mesma coluna, com a resposta registrada.
+        """
+        pedido, aprovacao = self._pedido(status=S.ORCAMENTO)  # sem item, sem data
+
+        resposta = self._responder(pedido, R.APROVADO)
+
+        self.assertEqual(resposta.status_code, 302)
+        pedido.refresh_from_db()
+        aprovacao.refresh_from_db()
+        self.assertEqual(pedido.status, S.ORCAMENTO)
+        self.assertEqual(aprovacao.resposta, R.APROVADO)
 
 
 class AjusteNaoMoveTests(RespostaBase):
