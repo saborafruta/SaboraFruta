@@ -6,7 +6,7 @@
 
 {% block content %}
 <div class="mx-auto max-w-5xl space-y-4"
-     x-data="{ loading:false, tipoLancamento:'{{ form.tipo_lancamento.value|default:"fornecedor" }}', recorrente:{{ form.recorrente.value|yesno:"true,false" }}, frequenciaRecorrencia:'{{ form.frequencia_recorrencia.value|default:"mensal" }}', ajustarDiaUtil:{{ form.ajustar_vencimento_dia_util.value|yesno:"true,false" }}, anteciparDiaUtil:{{ form.antecipar_vencimento_dia_util.value|yesno:"true,false" }}, quitarAgora:{{ form.quitar_ao_lancar.value|yesno:"true,false" }}, fornecedorModal:false, fornecedorSalvando:false, fornecedorErro:'', fornecedorTipo:'J', cepConsultando:false, notaFiscalFornecedor:'{{ form.nota_fiscal_fornecedor.value|default:""|escapejs }}', chaveAcessoNfe:'{{ form.chave_acesso_nfe.value|default:""|escapejs }}', notaFiscalStatus:'', scannerNfeAberto:false, scannerNfeErro:'', scannerNfe:null, scannerNfeScript:null, ultimoCodigoNfe:'' }"
+     x-data="{ loading:false, tipoLancamento:'{{ form.tipo_lancamento.value|default:"fornecedor" }}', recorrente:{{ form.recorrente.value|yesno:"true,false" }}, frequenciaRecorrencia:'{{ form.frequencia_recorrencia.value|default:"mensal" }}', regraVencimentoMensal:'{{ form.regra_vencimento_mensal.value|default:"data_informada" }}', ajustarDiaUtil:{{ form.ajustar_vencimento_dia_util.value|yesno:"true,false" }}, anteciparDiaUtil:{{ form.antecipar_vencimento_dia_util.value|yesno:"true,false" }}, quitarAgora:{{ form.quitar_ao_lancar.value|yesno:"true,false" }}, fornecedorModal:false, fornecedorSalvando:false, fornecedorErro:'', fornecedorTipo:'J', cepConsultando:false, notaFiscalFornecedor:'{{ form.nota_fiscal_fornecedor.value|default:""|escapejs }}', chaveAcessoNfe:'{{ form.chave_acesso_nfe.value|default:""|escapejs }}', notaFiscalStatus:'', scannerNfeAberto:false, scannerNfeErro:'', scannerNfe:null, scannerNfeScript:null, ultimoCodigoNfe:'' }"
      @tax-category-selected.window="ajustarDiaUtil=true; anteciparDiaUtil=true">
   <div class="flex flex-wrap items-end justify-between gap-3">
     <div>
@@ -112,6 +112,14 @@
         </div>
         <div x-show="recorrente" x-cloak>{% include "financeiro/pagar/_field.html" with field=form.quantidade_recorrencias %}</div>
         <div x-show="recorrente && frequenciaRecorrencia === 'personalizada'" x-cloak>{% include "financeiro/pagar/_field.html" with field=form.intervalo_recorrencia_dias %}</div>
+        <div x-show="recorrente && ['mensal','trimestral','semestral','anual'].includes(frequenciaRecorrencia)" x-cloak>
+          <label class="mb-1 block text-sm font-medium" for="{{ form.regra_vencimento_mensal.id_for_label }}">{{ form.regra_vencimento_mensal.label }}</label>
+          <select name="regra_vencimento_mensal" id="{{ form.regra_vencimento_mensal.id_for_label }}" x-model="regraVencimentoMensal" class="form-input">
+            {% for value, label in form.regra_vencimento_mensal.field.choices %}<option value="{{ value }}">{{ label }}</option>{% endfor %}
+          </select>
+          {% if form.regra_vencimento_mensal.errors %}<p class="mt-1 text-xs text-red-500">{{ form.regra_vencimento_mensal.errors|join:", " }}</p>{% endif %}
+        </div>
+        <div x-show="recorrente && regraVencimentoMensal === 'dia_fixo'" x-cloak>{% include "financeiro/pagar/_field.html" with field=form.dia_vencimento_mensal %}</div>
       </div>
       <div class="mt-4 grid gap-3 sm:grid-cols-2">
         <label class="flex cursor-pointer items-start gap-3 rounded-md border px-4 py-3" :style="temaClaro ? 'border-color:#dbe3ee;background:#f8fafc' : 'border-color:#3f3f46;background:#18181b'">

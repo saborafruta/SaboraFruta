@@ -121,6 +121,17 @@ class ContaPagarForm(forms.Form):
         label='Quantidade de ocorrências',
         widget=forms.NumberInput(attrs={'min': '2', 'max': '60'}),
     )
+    regra_vencimento_mensal = forms.ChoiceField(
+        choices=ContaPagar.RegraVencimentoMensal.choices,
+        initial=ContaPagar.RegraVencimentoMensal.DATA_INFORMADA,
+        required=False,
+        label='Vencimento de cada mês',
+    )
+    dia_vencimento_mensal = forms.IntegerField(
+        min_value=1, max_value=31, required=False,
+        label='Dia do mês',
+        widget=forms.NumberInput(attrs={'min': '1', 'max': '31', 'placeholder': 'Ex.: 10'}),
+    )
     valor_original = forms.DecimalField(
         max_digits=14,
         decimal_places=2,
@@ -309,12 +320,30 @@ class ContaPagarForm(forms.Form):
                 self.add_error('intervalo_recorrencia_dias', 'Informe o intervalo entre os titulos.')
             if not cleaned.get('quantidade_recorrencias'):
                 self.add_error('quantidade_recorrencias', 'Informe quantos títulos devem ser gerados.')
+            frequencias_mensais = {
+                ContaPagar.FrequenciaRecorrencia.MENSAL,
+                ContaPagar.FrequenciaRecorrencia.TRIMESTRAL,
+                ContaPagar.FrequenciaRecorrencia.SEMESTRAL,
+                ContaPagar.FrequenciaRecorrencia.ANUAL,
+            }
+            if cleaned.get('frequencia_recorrencia') not in frequencias_mensais:
+                cleaned['regra_vencimento_mensal'] = ContaPagar.RegraVencimentoMensal.DATA_INFORMADA
+                cleaned['dia_vencimento_mensal'] = None
+            elif (
+                cleaned.get('regra_vencimento_mensal') == ContaPagar.RegraVencimentoMensal.DIA_FIXO
+                and not cleaned.get('dia_vencimento_mensal')
+            ):
+                self.add_error('dia_vencimento_mensal', 'Informe o dia do mês.')
+            elif cleaned.get('regra_vencimento_mensal') != ContaPagar.RegraVencimentoMensal.DIA_FIXO:
+                cleaned['dia_vencimento_mensal'] = None
             if quitar_ao_lancar:
                 self.add_error('quitar_ao_lancar', 'Títulos recorrentes não podem ser quitados no lançamento.')
         else:
             cleaned['frequencia_recorrencia'] = ''
             cleaned['quantidade_recorrencias'] = 1
             cleaned['intervalo_recorrencia_dias'] = None
+            cleaned['regra_vencimento_mensal'] = ContaPagar.RegraVencimentoMensal.DATA_INFORMADA
+            cleaned['dia_vencimento_mensal'] = None
         if quitar_ao_lancar:
             data_pagamento = cleaned.get('data_pagamento_imediato')
             if not data_pagamento:

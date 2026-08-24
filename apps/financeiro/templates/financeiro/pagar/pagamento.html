@@ -86,7 +86,7 @@
             </div>
           </div>
 
-          <div class="grid grid-cols-2 gap-1 rounded-md border p-1 sm:max-w-md"
+          <div class="grid grid-cols-3 gap-1 rounded-md border p-1 sm:max-w-xl"
                :style="temaClaro ? 'border-color:#dbe3ee;background:#f8fafc' : 'border-color:#3f3f46;background:#18181b'">
             <button type="button" @click="modo='integral'; syncIntegral()"
                     class="min-h-10 rounded px-3 text-sm font-semibold"
@@ -94,6 +94,9 @@
             <button type="button" @click="modo='parcial'"
                     class="min-h-10 rounded px-3 text-sm font-semibold"
                     :class="modo==='parcial' ? 'bg-blue-600 text-white' : 'opacity-70'">Pagamento parcial</button>
+            <button type="button" @click="modo='metade'; syncIntegral()"
+                    class="min-h-10 rounded px-3 text-sm font-semibold"
+                    :class="modo==='metade' ? 'bg-emerald-600 text-white' : 'opacity-70'">50% do saldo</button>
           </div>
 
           <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
@@ -195,7 +198,7 @@
       <aside class="card overflow-hidden lg:sticky lg:top-5">
         <div class="border-b px-5 py-4" :style="temaClaro ? 'border-color:#e5e7eb' : 'border-color:#303038'">
           <h3 class="font-semibold">Resumo da baixa</h3>
-          <p class="mt-1 text-xs opacity-60" x-text="modo==='integral' ? 'Quitação integral' : 'Pagamento parcial'"></p>
+          <p class="mt-1 text-xs opacity-60" x-text="modo==='integral' ? 'Quitação integral' : (modo==='metade' ? 'Metade do saldo atualizado' : 'Pagamento parcial')"></p>
         </div>
         <div class="space-y-3 px-5 py-4 text-sm">
           <div class="flex justify-between gap-3"><span class="opacity-65">Saldo atual</span><strong x-text="money(saldo)"></strong></div>
@@ -216,7 +219,7 @@
         </div>
         <div class="grid grid-cols-1 gap-2 p-4">
           <button type="submit" class="btn-primary min-h-12 justify-center" :disabled="loading || excede() || totalAtualizado()<=0">
-            <span x-show="!loading" x-text="modo==='integral' ? 'Confirmar quitação' : 'Registrar pagamento parcial'"></span>
+            <span x-show="!loading" x-text="modo==='integral' ? 'Confirmar quitação' : (modo==='metade' ? 'Registrar 50%' : 'Registrar pagamento parcial')"></span>
             <span x-show="loading" x-cloak>Registrando...</span>
           </button>
           <a href="{{ cancel_url }}" class="btn-secondary min-h-11 justify-center">Cancelar</a>
@@ -269,6 +272,7 @@ function paymentForm(initial) {
     },
     syncIntegral() {
       if (this.modo === 'integral') this.valor = this.totalAtualizado().toFixed(2);
+      if (this.modo === 'metade') this.valor = (this.totalAtualizado() / 2).toFixed(2);
     },
     preencherContaVinculada(formaId, substituir = true) {
       const contaId = this.contasPorForma[String(formaId)] || '';

@@ -340,6 +340,86 @@ class FuncionarioContaPagarTests(TestCase):
         self.assertEqual(len({conta.grupo_recorrencia for conta in contas}), 1)
         self.assertIsNotNone(contas[0].grupo_recorrencia)
 
+    def test_recorrencia_mensal_aplica_primeiro_e_ultimo_dia(self):
+        dados = {
+            "filial": self.filial,
+            "funcionario": self.funcionario,
+            "tipo_lancamento": "funcionario",
+            "valor_original": Decimal("100.00"),
+            "data_emissao": date(2026, 8, 1),
+            "data_vencimento": date(2026, 8, 15),
+            "plano_contas": self.categoria,
+            "frequencia": "mensal",
+            "quantidade": 2,
+        }
+
+        primeiros = ContaPagarService.criar_recorrencia(
+            **dados,
+            regra_vencimento_mensal=ContaPagar.RegraVencimentoMensal.PRIMEIRO_DIA,
+        )
+        ultimos = ContaPagarService.criar_recorrencia(
+            **dados,
+            regra_vencimento_mensal=ContaPagar.RegraVencimentoMensal.ULTIMO_DIA,
+        )
+
+        self.assertEqual(
+            [conta.data_vencimento for conta in primeiros],
+            [date(2026, 8, 1), date(2026, 9, 1)],
+        )
+        self.assertEqual(
+            [conta.data_vencimento for conta in ultimos],
+            [date(2026, 8, 31), date(2026, 9, 30)],
+        )
+
+    def test_recorrencia_mensal_dia_fixo_respeita_mes_curto(self):
+        contas = ContaPagarService.criar_recorrencia(
+            filial=self.filial,
+            funcionario=self.funcionario,
+            tipo_lancamento="funcionario",
+            valor_original=Decimal("100.00"),
+            data_emissao=date(2026, 8, 1),
+            data_vencimento=date(2026, 8, 31),
+            plano_contas=self.categoria,
+            frequencia="mensal",
+            quantidade=2,
+            regra_vencimento_mensal=ContaPagar.RegraVencimentoMensal.DIA_FIXO,
+            dia_vencimento_mensal=31,
+        )
+
+        self.assertEqual(
+            [conta.data_vencimento for conta in contas],
+            [date(2026, 8, 31), date(2026, 9, 30)],
+        )
+        self.assertTrue(all(conta.dia_vencimento_mensal == 31 for conta in contas))
+
+    def test_recorrencia_mensal_quinto_dia_util(self):
+        contas = ContaPagarService.criar_recorrencia(
+            filial=self.filial,
+            funcionario=self.funcionario,
+            tipo_lancamento="funcionario",
+            valor_original=Decimal("100.00"),
+            data_emissao=date(2026, 8, 1),
+            data_vencimento=date(2026, 8, 15),
+            plano_contas=self.categoria,
+            frequencia="mensal",
+            quantidade=2,
+            regra_vencimento_mensal=ContaPagar.RegraVencimentoMensal.QUINTO_DIA_UTIL,
+        )
+
+        self.assertEqual(
+            [conta.data_vencimento for conta in contas],
+            [date(2026, 8, 7), date(2026, 9, 8)],
+        )
+
+    def test_migration_cria_insumos_como_categoria_final(self):
+        migration = import_module("apps.financeiro.migrations.0048_criar_categoria_insumos")
+        migration.criar_insumos(django_apps, None)
+
+        categoria = PlanoContas.objects.get(empresa=self.empresa, descricao="Insumos", nivel=3)
+        self.assertTrue(categoria.aceita_lancamento)
+        self.assertEqual(categoria.conta_pai.descricao, "Mercadorias e Insumos")
+        self.assertEqual(categoria.conta_contabil.descricao, "Insumos")
+
     def test_recorrencia_diaria_cria_um_titulo_por_dia(self):
         contas = ContaPagarService.criar_recorrencia(
             filial=self.filial,

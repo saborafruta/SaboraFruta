@@ -129,6 +129,13 @@ class ContaPagar(TimestampedModel):
         ANUAL = "anual", "Anual"
         PERSONALIZADA = "personalizada", "Personalizada em dias"
 
+    class RegraVencimentoMensal(models.TextChoices):
+        DATA_INFORMADA = "data_informada", "Usar a data informada"
+        PRIMEIRO_DIA = "primeiro_dia", "Primeiro dia do mês"
+        ULTIMO_DIA = "ultimo_dia", "Último dia do mês"
+        DIA_FIXO = "dia_fixo", "Dia X do mês"
+        QUINTO_DIA_UTIL = "quinto_dia_util", "5º dia útil"
+
     filial = models.ForeignKey(Filial, on_delete=models.PROTECT, related_name="contas_pagar")
     fornecedor = models.ForeignKey(Fornecedor, on_delete=models.PROTECT,
                                     null=True, blank=True, related_name="contas_pagar")
@@ -152,6 +159,12 @@ class ContaPagar(TimestampedModel):
         max_length=15, choices=FrequenciaRecorrencia.choices, blank=True,
     )
     intervalo_recorrencia_dias = models.PositiveSmallIntegerField(null=True, blank=True)
+    regra_vencimento_mensal = models.CharField(
+        max_length=20,
+        choices=RegraVencimentoMensal.choices,
+        default=RegraVencimentoMensal.DATA_INFORMADA,
+    )
+    dia_vencimento_mensal = models.PositiveSmallIntegerField(null=True, blank=True)
 
     valor_original = models.DecimalField(max_digits=14, decimal_places=2)
     valor_juros = models.DecimalField(max_digits=14, decimal_places=2, default=0)

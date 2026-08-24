@@ -1,7 +1,8 @@
 """Serviços de negócio para Contas a Pagar."""
 from __future__ import annotations
 
-from datetime import date
+from calendar import monthrange
+from datetime import date, timedelta
 from decimal import Decimal
 import uuid
 
@@ -9,7 +10,11 @@ from django.db import transaction
 from django.utils import timezone
 from dateutil.relativedelta import relativedelta
 
-from apps.core.services.calendario import dia_util_anterior_ou_mesmo, proximo_dia_util
+from apps.core.services.calendario import (
+    adicionar_dias_uteis_bancarios,
+    dia_util_anterior_ou_mesmo,
+    proximo_dia_util,
+)
 from apps.core.services.exceptions import DomainError
 from apps.financeiro.constants.enums import StatusContaPagar
 from apps.financeiro.models.receber_pagar import ContaPagar, PagamentoContaPagar
@@ -41,6 +46,8 @@ class ContaPagarService:
         grupo_recorrencia=None,
         frequencia_recorrencia: str = '',
         intervalo_recorrencia_dias: int | None = None,
+        regra_vencimento_mensal: str = ContaPagar.RegraVencimentoMensal.DATA_INFORMADA,
+        dia_vencimento_mensal: int | None = None,
         ajustar_vencimento_dia_util: bool = False,
         antecipar_vencimento_dia_util: bool = False,
     ) -> ContaPagar:
@@ -74,6 +81,8 @@ class ContaPagarService:
             grupo_recorrencia=grupo_recorrencia,
             frequencia_recorrencia=frequencia_recorrencia,
             intervalo_recorrencia_dias=intervalo_recorrencia_dias,
+            regra_vencimento_mensal=regra_vencimento_mensal,
+            dia_vencimento_mensal=dia_vencimento_mensal,
             valor_original=valor_original,
             valor_juros=Decimal('0'),
             valor_multa=Decimal('0'),
@@ -121,7 +130,10 @@ class ContaPagarService:
     def criar_recorrencia(
         *, quantidade: int, frequencia: str, data_vencimento: date,
         intervalo_dias: int | None = None,
-        data_competencia: date | None = None, **dados,
+        data_competencia: date | None = None,
+        regra_vencimento_mensal: str = ContaPagar.RegraVencimentoMensal.DATA_INFORMADA,
+        dia_vencimento_mensal: int | None = None,
+        **dados,
     ) -> list[ContaPagar]:
         if quantidade < 2 or quantidade > 60:
             raise DomainError('A recorrência deve gerar entre 2 e 60 títulos.')
@@ -145,9 +157,25 @@ class ContaPagarService:
         contas = []
         for indice in range(quantidade):
             deslocamento = incremento * indice
+            vencimento_base = data_vencimento + deslocamento
+            if regra_vencimento_mensal == ContaPagar.RegraVencimentoMensal.PRIMEIRO_DIA:
+                vencimento_base = vencimento_base.replace(day=1)
+            elif regra_vencimento_mensal == ContaPagar.RegraVencimentoMensal.ULTIMO_DIA:
+                vencimento_base = vencimento_base.replace(
+                    day=monthrange(vencimento_base.year, vencimento_base.month)[1]
+                )
+            elif regra_vencimento_mensal == ContaPagar.RegraVencimentoMensal.DIA_FIXO:
+                if not dia_vencimento_mensal:
+                    raise DomainError('Informe o dia fixo do vencimento mensal.')
+                vencimento_base = vencimento_base.replace(
+                    day=min(dia_vencimento_mensal, monthrange(vencimento_base.year, vencimento_base.month)[1])
+                )
+            elif regra_vencimento_mensal == ContaPagar.RegraVencimentoMensal.QUINTO_DIA_UTIL:
+                inicio_mes = vencimento_base.replace(day=1) - timedelta(days=1)
+                vencimento_base = adicionar_dias_uteis_bancarios(inicio_mes, 5, dados['filial'])
             contas.append(ContaPagarService.criar(
                 **dados,
-                data_vencimento=data_vencimento + deslocamento,
+                data_vencimento=vencimento_base,
                 data_competencia=(data_competencia + deslocamento) if data_competencia else None,
                 parcela=indice + 1,
                 total_parcelas=quantidade,
@@ -158,6 +186,8 @@ class ContaPagarService:
                     if frequencia == ContaPagar.FrequenciaRecorrencia.PERSONALIZADA
                     else None
                 ),
+                regra_vencimento_mensal=regra_vencimento_mensal,
+                dia_vencimento_mensal=dia_vencimento_mensal,
             ))
         return contas
 
