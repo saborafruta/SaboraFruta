@@ -311,6 +311,83 @@ class ConferirPorQuantidadeTests(ConferenciaBase):
         self.assertNotIn(intruso.pk, gravados)
 
 
+class ArteNaConferenciaTests(ConferenciaBase):
+    """
+    A arte ao lado da contagem.
+
+    Sem ela a conferência é só aritmética: o número fecha e ninguém percebeu
+    que o escudo saiu na manga errada. Quem confere está com a peça na mão --
+    o que faltava na tela era o desenho ao lado dela.
+    """
+
+    def _anexar_arte(self, pedido):
+        from django.core.files.uploadedfile import SimpleUploadedFile
+
+        from apps.moda.models import ArquivoPedido
+
+        return ArquivoPedido.objects.create(
+            pedido=pedido, tipo=ArquivoPedido.Tipo.ARTE,
+            descricao='Escudo em curva',
+            arquivo=SimpleUploadedFile(
+                'escudo.png', base64.b64decode(PNG.split(',', 1)[1]),
+                content_type='image/png',
+            ),
+        )
+
+    def test_a_arte_do_pedido_aparece_na_conferencia(self):
+        pedido = self._pedido_com_grade()
+        arte = self._anexar_arte(pedido)
+        expedicao = self._expedicao(pedido)
+
+        resposta = self.client.get(
+            reverse('moda:conferencia-pessoas', args=[expedicao.pk])
+        )
+
+        self.assertContains(resposta, 'Arte do pedido')
+        self.assertContains(resposta, 'Escudo em curva')
+        self.assertContains(resposta, arte.arquivo.url)
+
+    def test_a_arte_aplicada_no_item_tambem_aparece(self):
+        """
+        As duas origens existem: o acervo do pedido e a arte APLICADA no
+        item, que é a que diz técnica e local. Mostrar só uma faria a tela
+        parecer vazia justamente nos pedidos em que a outra foi usada.
+        """
+        from django.core.files.uploadedfile import SimpleUploadedFile
+
+        from apps.moda.models import Personalizacao
+
+        pedido = self._pedido_com_grade()
+        Personalizacao.objects.create(
+            item=self.item, tecnica=Personalizacao.Tecnica.SILK, local='Peito',
+            arquivo=SimpleUploadedFile(
+                'aplicada.png', base64.b64decode(PNG.split(',', 1)[1]),
+                content_type='image/png',
+            ),
+        )
+        expedicao = self._expedicao(pedido)
+
+        resposta = self.client.get(
+            reverse('moda:conferencia-pessoas', args=[expedicao.pk])
+        )
+
+        self.assertContains(resposta, 'aplicada')
+
+    def test_sem_arte_a_tela_diz_que_nao_ha(self):
+        """
+        A ausência é informação: uma caixa vazia pareceria defeito da tela,
+        e quem confere não saberia se procura a arte ou segue sem ela.
+        """
+        pedido = self._pedido_com_grade()
+        expedicao = self._expedicao(pedido)
+
+        resposta = self.client.get(
+            reverse('moda:conferencia-pessoas', args=[expedicao.pk])
+        )
+
+        self.assertContains(resposta, 'Nenhuma arte anexada a este pedido')
+
+
 class AssinaturaTests(ConferenciaBase):
     """O traço do cliente, colhido na própria conferência."""
 

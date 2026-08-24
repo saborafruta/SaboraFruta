@@ -4,43 +4,67 @@
 {% block content %}
 
 {% comment %}
-  A TELA É PARA O CELULAR. Quem confere está de pé, ao lado da caixa, com a
-  peça numa mão e o telefone na outra. Por isso a linha inteira é o alvo do
-  toque, os campos são grandes e o contador fica sempre à vista.
+  A TELA É PARA O CELULAR, e ocupa a página toda no computador. Quem confere
+  está de pé ao lado da caixa, com a peça numa mão e o telefone na outra: a
+  linha inteira é alvo de toque, os campos são grandes e os contadores ficam
+  sempre à vista, numa barra que acompanha a rolagem.
+
+  A ARTE FICA DO LADO da contagem, e não numa aba. Sem ela a conferência é
+  só aritmética: o número fecha e ninguém percebeu que o escudo saiu na
+  manga errada. Quem confere está com a peça na mão -- o que faltava na tela
+  era o desenho ao lado dela.
 
   DUAS CONFERÊNCIAS, PORQUE SÃO DUAS PERGUNTAS. Por QUANTIDADE responde "o
   número de peças fecha com o pedido"; por PESSOA responde "a camisa do
   Lucas está aqui". A contagem por tamanho pode fechar com a peça do Lucas
   faltando, porque a dele tem nome e número e não é trocável por outra.
 
-  Antes só existia a segunda, e pedido sem personalização -- que é a maioria
-  -- caía numa tela vazia dizendo "não tem personalização por pessoa", como
-  se não houvesse nada a conferir.
-
-  A ASSINATURA FECHA O ATO. É colhida aqui, na frente do cliente, e não numa
-  tela à parte: separar seria contar com a pessoa abrir outro endereço com o
-  cliente esperando de pé.
+  A ASSINATURA FECHA O ATO, na frente do cliente, e não numa tela à parte:
+  separar seria contar com a pessoa abrir outro endereço com o cliente
+  esperando de pé.
 {% endcomment %}
-<div class="space-y-5 max-w-3xl mx-auto"
+<div class="space-y-4"
      x-data="conferenciaEntrega({ pessoas: {{ conferidas }}, contadas: {{ conferido_total }} })">
 
-  <div>
-    <p class="text-sm mb-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
-      <a href="{% url 'moda:expedicao-detail' expedicao.pk %}"
-         :style="temaClaro ? 'color:#3b82f6;' : 'color:#60a5fa;'">Expedição #{{ expedicao.numero|stringformat:"04d" }}</a>
-      {% if expedicao.pedido %}
-        <span class="mx-1">›</span>
-        <a href="{% url 'moda:pedido-detail' expedicao.pedido.pk %}"
-           :style="temaClaro ? 'color:#3b82f6;' : 'color:#60a5fa;'">Pedido #{{ expedicao.pedido.numero|stringformat:"06d" }}</a>
+  {# ── Cabeçalho ────────────────────────────────────────────────────── #}
+  <div class="flex flex-wrap items-start justify-between gap-3">
+    <div class="min-w-0">
+      <p class="text-sm mb-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+        <a href="{% url 'moda:expedicao-detail' expedicao.pk %}"
+           :style="temaClaro ? 'color:#3b82f6;' : 'color:#60a5fa;'">Expedição #{{ expedicao.numero|stringformat:"04d" }}</a>
+        {% if expedicao.pedido %}
+          <span class="mx-1">›</span>
+          <a href="{% url 'moda:pedido-detail' expedicao.pedido.pk %}"
+             :style="temaClaro ? 'color:#3b82f6;' : 'color:#60a5fa;'">Pedido #{{ expedicao.pedido.numero|stringformat:"06d" }}</a>
+        {% endif %}
+      </p>
+      <h2 class="text-2xl font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
+        Conferência de Produtos para Entrega
+      </h2>
+      <p class="text-sm mt-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+        {% if expedicao.cliente %}<strong>{{ expedicao.cliente }}</strong> ·{% endif %}
+        {{ esperado_total }} peça(s) previstas
+        {% if expedicao.pedido.data_prevista_entrega %}
+          · entrega {{ expedicao.pedido.data_prevista_entrega|date:"d/m/Y" }}
+        {% endif %}
+      </p>
+    </div>
+
+    <div class="flex flex-wrap items-center gap-2">
+      <span class="soft-pill text-sm"
+            :class="contadas == {{ esperado_total }} ? 'is-green' : 'is-amber'">
+        Peças: <strong x-text="contadas"></strong>/{{ esperado_total }}
+      </span>
+      {% if linhas %}
+        <span class="soft-pill text-sm"
+              :class="pessoas == {{ total }} ? 'is-green' : 'is-amber'">
+          Pessoas: <strong x-text="pessoas"></strong>/{{ total }}
+        </span>
       {% endif %}
-    </p>
-    <h2 class="text-2xl font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
-      Conferência de Produtos para Entrega
-    </h2>
-    <p class="text-sm mt-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
-      Verifique os itens produzidos antes da liberação para entrega.
-      {% if expedicao.cliente %}Cliente: <strong>{{ expedicao.cliente }}</strong>.{% endif %}
-    </p>
+      {% if travada %}
+        <span class="soft-pill text-sm">Fechada</span>
+      {% endif %}
+    </div>
   </div>
 
   {% if expedicao.recebido_por %}
@@ -62,244 +86,392 @@
         @submit="antesDeEnviar()">
     {% csrf_token %}
 
-    {# ── 1. Por quantidade ─────────────────────────────────────────── #}
-    <div class="card overflow-hidden">
-      <div class="px-4 py-3 border-b" :style="temaClaro ? 'border-color:#e2e8f0;' : 'border-color:#2a2a2e;'">
-        <h3 class="text-sm font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
-          Quantidade por tamanho
-        </h3>
-        <p class="text-xs mt-0.5" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
-          Conte as peças da caixa e lance o que encontrou. O que divergir da
-          coluna "pedido" fica registrado como divergência.
-        </p>
-      </div>
+    {% comment %}
+      DUAS COLUNAS no computador, uma no celular. A arte é consulta e a
+      contagem é digitação: lado a lado, olhar a arte não faz perder o lugar
+      na tabela — que é o que acontecia quando ela ficava numa aba.
+    {% endcomment %}
+    <div class="grid grid-cols-1 xl:grid-cols-3 gap-4">
 
-      {% if quantidades %}
-        <div class="overflow-x-auto">
-          <table class="w-full text-sm">
-            <thead>
-              <tr class="border-b" :style="temaClaro ? 'border-color:#e2e8f0;' : 'border-color:#2a2a2e;'">
-                <th class="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wide"
-                    :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Tamanho</th>
-                <th class="text-center px-4 py-3 text-xs font-semibold uppercase tracking-wide"
-                    :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Pedido</th>
-                <th class="text-center px-4 py-3 text-xs font-semibold uppercase tracking-wide"
-                    :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Conferido</th>
-              </tr>
-            </thead>
-            <tbody>
-              {% for l in quantidades %}
-                <tr class="border-b" :style="temaClaro ? 'border-color:#f1f5f9;' : 'border-color:#1e1e22;'">
-                  <td class="px-4 py-3 font-mono font-semibold"
-                      :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">{{ l.tamanho.sigla }}</td>
-                  <td class="px-4 py-3 text-center"
-                      :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">{{ l.esperado }}</td>
-                  <td class="px-4 py-3 text-center">
-                    <input type="number" min="0" name="qtd_{{ l.tamanho.pk }}"
-                           value="{{ l.conferido }}" inputmode="numeric"
-                           class="form-input text-center"
-                           style="width:88px; padding:8px 6px; font-size:16px;"
-                           {% if travada or not pode_agir %}disabled{% endif %}
-                           @input="recontar()">
-                  </td>
-                </tr>
-              {% endfor %}
-            </tbody>
-            <tfoot>
-              <tr style="border-top:2px solid rgba(127,127,127,.35);">
-                <td class="px-4 py-3 text-xs font-semibold uppercase tracking-wide"
-                    :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Total</td>
-                <td class="px-4 py-3 text-center font-bold"
-                    :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">{{ esperado_total }}</td>
-                <td class="px-4 py-3 text-center font-bold"
-                    :style="contadas == {{ esperado_total }} ? 'color:#059669;' : 'color:#d97706;'"
-                    x-text="contadas"></td>
-              </tr>
-            </tfoot>
-          </table>
-        </div>
+      {# ══ Coluna do trabalho ═════════════════════════════════════════ #}
+      <div class="xl:col-span-2 space-y-4">
 
-        {% comment %}
-          A divergência aparece na hora, e não depois de salvar: quem está
-          com a caixa aberta ainda pode recontar. Depois de fechada, a mesma
-          informação vira ocorrência para alguém resolver por e-mail.
-        {% endcomment %}
-        <div class="px-4 py-3" x-show="contadas != {{ esperado_total }}" x-cloak
-             style="background:rgba(217,119,6,.12);">
-          <p class="text-xs font-semibold" style="color:#d97706;"
-             x-text="contadas > {{ esperado_total }}
-               ? ('Sobram ' + (contadas - {{ esperado_total }}) + ' peça(s) em relação ao pedido.')
-               : ('Faltam ' + ({{ esperado_total }} - contadas) + ' peça(s) para fechar o pedido.')"></p>
-        </div>
-      {% else %}
-        <div class="p-6 text-center">
-          <p class="text-sm" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
-            Este item não tem grade lançada, então não há tamanho a contar.
-            Lance a grade no pedido para conferir peça por peça.
-          </p>
-        </div>
-      {% endif %}
-    </div>
-
-    {# ── 2. Por pessoa ─────────────────────────────────────────────── #}
-    {% if linhas %}
-      <div class="card overflow-hidden mt-4">
-        <div class="px-4 py-3 border-b" :style="temaClaro ? 'border-color:#e2e8f0;' : 'border-color:#2a2a2e;'">
-          <h3 class="text-sm font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
-            Peça a peça, por pessoa
-          </h3>
-          <p class="text-xs mt-0.5" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
-            A contagem por tamanho pode fechar e ainda faltar a camisa de
-            alguém — a peça com nome e número não é trocável por outra.
-          </p>
-        </div>
-        <div class="overflow-x-auto">
-          <table class="w-full text-sm">
-            <thead>
-              <tr class="border-b" :style="temaClaro ? 'border-color:#e2e8f0;' : 'border-color:#2a2a2e;'">
-                <th class="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wide"
-                    :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Nome</th>
-                <th class="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wide"
-                    :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Número</th>
-                <th class="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wide"
-                    :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Tamanho</th>
-                <th class="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wide"
-                    :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Produto</th>
-                <th class="text-center px-4 py-3 text-xs font-semibold uppercase tracking-wide"
-                    :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Conferência</th>
-              </tr>
-            </thead>
-            <tbody>
-              {% for l in linhas %}
-                {% comment %}
-                  A LINHA INTEIRA é o alvo do toque, não a caixinha de 16px:
-                  quem confere está de pé, com o telefone numa mão e a peça
-                  na outra, e errar o alvo faz remarcar item errado.
-                {% endcomment %}
-                <tr class="border-b" :style="temaClaro ? 'border-color:#f1f5f9;' : 'border-color:#1e1e22;'">
-                  <td colspan="5" class="p-0">
-                    <label class="flex items-center gap-3 px-4 py-3 cursor-pointer w-full">
-                      <span class="flex-1 min-w-0 grid grid-cols-2 sm:grid-cols-4 gap-2 items-center">
-                        <span class="font-medium truncate" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
-                          {{ l.pessoa.nome|default:"—" }}
-                        </span>
-                        <span class="font-mono" :style="temaClaro ? 'color:#374151;' : 'color:#cbd5e1;'">
-                          {{ l.pessoa.numero|default:"—" }}
-                        </span>
-                        <span class="font-mono font-semibold" :style="temaClaro ? 'color:#374151;' : 'color:#cbd5e1;'">
-                          {{ l.pessoa.tamanho.sigla }}
-                        </span>
-                        <span class="truncate text-xs sm:text-sm" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
-                          {{ l.pessoa.item.nome_exibicao|default:"—" }}
-                        </span>
-                      </span>
-                      <input type="checkbox" name="pessoa" value="{{ l.pessoa.pk }}"
-                             class="w-6 h-6 shrink-0"
-                             {% if l.conferido %}checked{% endif %}
-                             {% if travada or not pode_agir %}disabled{% endif %}
-                             @change="pessoas += $event.target.checked ? 1 : -1">
-                    </label>
-                  </td>
-                </tr>
-              {% endfor %}
-            </tbody>
-          </table>
-        </div>
-      </div>
-    {% endif %}
-
-    {# ── 3. A assinatura do cliente ────────────────────────────────── #}
-    {% if not travada and pode_agir %}
-      <div class="card p-4 mt-4">
-        <h3 class="text-sm font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
-          Assinatura do cliente
-        </h3>
-        <p class="text-xs mt-0.5" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
-          Quem está recebendo assina no quadro abaixo, com o dedo ou o mouse.
-          Fica gravado junto com a conferência.
-        </p>
-
-        <div class="grid sm:grid-cols-2 gap-3 mt-3">
-          <div>
-            <label class="form-label">Nome de quem recebeu</label>
-            <input type="text" name="recebido_por" class="form-input w-full"
-                   style="font-size:16px;" autocomplete="off"
-                   value="{{ expedicao.recebido_por }}"
-                   placeholder="Nome completo">
+        {# ── 1. Por quantidade ───────────────────────────────────── #}
+        <div class="card overflow-hidden">
+          <div class="px-4 py-3 border-b flex flex-wrap items-center justify-between gap-2"
+               :style="temaClaro ? 'border-color:#e2e8f0;' : 'border-color:#2a2a2e;'">
+            <div>
+              <h3 class="text-sm font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
+                Quantidade por tamanho
+              </h3>
+              <p class="text-xs mt-0.5" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+                Conte as peças da caixa e lance o que encontrou.
+              </p>
+            </div>
+            {% if quantidades and not travada and pode_agir %}
+              {% comment %}
+                O CASO COMUM É "VEIO TUDO". Digitar cinco números iguais aos
+                do pedido é trabalho que a tela pode poupar -- e quem quiser
+                conferir de verdade ainda corrige a linha que não bateu.
+              {% endcomment %}
+              <button type="button" class="text-xs font-semibold underline"
+                      :style="temaClaro ? 'color:#2563eb;' : 'color:#60a5fa;'"
+                      @click="conferirTudo()">marcar tudo como conferido</button>
+            {% endif %}
           </div>
-          <div>
-            <label class="form-label">CPF ou RG <span class="opacity-60">(opcional)</span></label>
-            <input type="text" name="assinado_documento" class="form-input w-full"
-                   style="font-size:16px;" autocomplete="off"
-                   value="{{ expedicao.assinado_documento }}"
-                   placeholder="Só se o cliente quiser registrar">
-          </div>
+
+          {% if quantidades %}
+            <div class="overflow-x-auto">
+              <table class="w-full text-sm">
+                <thead>
+                  <tr class="border-b" :style="temaClaro ? 'border-color:#e2e8f0;' : 'border-color:#2a2a2e;'">
+                    <th class="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wide"
+                        :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Tamanho</th>
+                    <th class="text-center px-4 py-3 text-xs font-semibold uppercase tracking-wide"
+                        :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Pedido</th>
+                    <th class="text-center px-4 py-3 text-xs font-semibold uppercase tracking-wide"
+                        :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Conferido</th>
+                    <th class="text-right px-4 py-3 text-xs font-semibold uppercase tracking-wide"
+                        :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Situação</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {% for l in quantidades %}
+                    <tr class="border-b" :style="temaClaro ? 'border-color:#f1f5f9;' : 'border-color:#1e1e22;'">
+                      <td class="px-4 py-2.5">
+                        <span class="text-sm font-bold uppercase tracking-wide"
+                              :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">{{ l.tamanho.sigla }}</span>
+                      </td>
+                      <td class="px-4 py-2.5 text-center"
+                          :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">{{ l.esperado }}</td>
+                      <td class="px-4 py-2.5 text-center">
+                        {% comment %}
+                          Os botões −/+ existem porque contar peça a peça com
+                          o telefone na mão é toque, não digitação: abrir o
+                          teclado numérico a cada tamanho é o que faz a
+                          pessoa desistir e lançar tudo de memória no fim.
+                        {% endcomment %}
+                        <div class="inline-flex items-center gap-1">
+                          <button type="button" class="btn-secondary"
+                                  style="padding:6px 10px; line-height:1;"
+                                  {% if travada or not pode_agir %}disabled{% endif %}
+                                  @click="somar('{{ l.tamanho.pk }}', -1)">−</button>
+                          <input type="number" min="0" name="qtd_{{ l.tamanho.pk }}"
+                                 value="{{ l.conferido }}" inputmode="numeric"
+                                 data-esperado="{{ l.esperado }}"
+                                 class="form-input text-center"
+                                 style="width:72px; padding:8px 4px; font-size:16px;"
+                                 {% if travada or not pode_agir %}disabled{% endif %}
+                                 @input="recontar()">
+                          <button type="button" class="btn-secondary"
+                                  style="padding:6px 10px; line-height:1;"
+                                  {% if travada or not pode_agir %}disabled{% endif %}
+                                  @click="somar('{{ l.tamanho.pk }}', 1)">+</button>
+                        </div>
+                      </td>
+                      {% comment %}
+                        A SITUAÇÃO É POR LINHA, e não só no total: o total
+                        pode fechar com dois erros que se cancelam -- dois P
+                        a mais e dois G a menos somam zero, e o cliente
+                        recebe a caixa errada mesmo com o rodapé verde.
+                      {% endcomment %}
+                      <td class="px-4 py-2.5 text-right text-xs font-semibold"
+                          x-html="rotulo('{{ l.tamanho.pk }}')"></td>
+                    </tr>
+                  {% endfor %}
+                </tbody>
+                <tfoot>
+                  <tr style="border-top:2px solid rgba(127,127,127,.35);">
+                    <td class="px-4 py-3 text-xs font-semibold uppercase tracking-wide"
+                        :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Total</td>
+                    <td class="px-4 py-3 text-center font-bold"
+                        :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">{{ esperado_total }}</td>
+                    <td class="px-4 py-3 text-center font-bold"
+                        :style="contadas == {{ esperado_total }} ? 'color:#059669;' : 'color:#d97706;'"
+                        x-text="contadas"></td>
+                    <td></td>
+                  </tr>
+                </tfoot>
+              </table>
+            </div>
+
+            {% comment %}
+              A divergência aparece na hora, e não depois de salvar: quem
+              está com a caixa aberta ainda pode recontar. Depois de
+              fechada, a mesma informação vira ocorrência para alguém
+              resolver por e-mail.
+            {% endcomment %}
+            <div class="px-4 py-3" x-show="contadas != {{ esperado_total }}" x-cloak
+                 style="background:rgba(217,119,6,.12);">
+              <p class="text-xs font-semibold" style="color:#d97706;"
+                 x-text="contadas > {{ esperado_total }}
+                   ? ('Sobram ' + (contadas - {{ esperado_total }}) + ' peça(s) em relação ao pedido.')
+                   : ('Faltam ' + ({{ esperado_total }} - contadas) + ' peça(s) para fechar o pedido.')"></p>
+            </div>
+          {% else %}
+            <div class="p-6 text-center">
+              <p class="text-sm" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+                Este item não tem grade lançada, então não há tamanho a contar.
+                Lance a grade no pedido para conferir peça por peça.
+              </p>
+            </div>
+          {% endif %}
         </div>
 
-        {% comment %}
-          FUNDO BRANCO FIXO no quadro da assinatura, nos dois temas: o traço
-          é gravado como imagem e vai ser aberto meses depois, fora desta
-          tela — traço branco em fundo escuro viraria um PNG invisível.
-        {% endcomment %}
-        <div class="mt-3">
-          <canvas id="assinatura-quadro"
-                  class="rounded-lg w-full"
-                  style="background:#fff; border:1px dashed #9ca3af; height:180px; touch-action:none;"></canvas>
-          <input type="hidden" name="assinatura" id="assinatura-dado">
-          <div class="flex items-center justify-between gap-3 mt-2">
-            <p class="text-xs" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
-              <span x-show="!assinou">Assine no quadro acima.</span>
-              <span x-show="assinou" x-cloak style="color:#059669;">Assinatura registrada.</span>
-            </p>
-            <button type="button" class="text-xs underline" style="color:#dc2626;"
-                    @click="limparAssinatura()">limpar</button>
-          </div>
-        </div>
-      </div>
-    {% endif %}
-
-    {# ── 4. Fechar ─────────────────────────────────────────────────── #}
-    <div class="flex flex-wrap items-center justify-between gap-3 mt-4">
-      {% comment %}
-        Os contadores acompanham o toque, sem esperar o servidor: quem
-        confere precisa saber quantas faltam SEM salvar a cada peça.
-      {% endcomment %}
-      <div class="flex flex-wrap gap-2">
-        <span class="soft-pill is-green text-sm">
-          Peças conferidas: <strong x-text="contadas"></strong> de {{ esperado_total }}
-        </span>
+        {# ── 2. Por pessoa ───────────────────────────────────────── #}
         {% if linhas %}
-          <span class="soft-pill is-green text-sm">
-            Itens conferidos: <strong x-text="pessoas"></strong> de {{ total }}
-          </span>
+          <div class="card overflow-hidden">
+            <div class="px-4 py-3 border-b flex flex-wrap items-center justify-between gap-2"
+                 :style="temaClaro ? 'border-color:#e2e8f0;' : 'border-color:#2a2a2e;'">
+              <div>
+                <h3 class="text-sm font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
+                  Peça a peça, por pessoa
+                </h3>
+                <p class="text-xs mt-0.5" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+                  A contagem por tamanho pode fechar e ainda faltar a camisa
+                  de alguém — peça com nome não é trocável por outra.
+                </p>
+              </div>
+              {% if not travada and pode_agir %}
+                <button type="button" class="text-xs font-semibold underline"
+                        :style="temaClaro ? 'color:#2563eb;' : 'color:#60a5fa;'"
+                        @click="marcarPessoas()">marcar todas</button>
+              {% endif %}
+            </div>
+
+            {% comment %}
+              A BUSCA aparece porque time de 60 pessoas não se acha rolando:
+              quem confere pega a peça, lê o nome bordado e precisa achar
+              aquela linha -- e é aí que se marca a linha errada.
+            {% endcomment %}
+            {% if linhas|length > 8 %}
+              <div class="px-4 py-3 border-b" :style="temaClaro ? 'border-color:#e2e8f0;' : 'border-color:#2a2a2e;'">
+                <input type="text" class="form-input w-full" x-model="filtro"
+                       style="font-size:16px;" autocomplete="off"
+                       placeholder="Buscar por nome ou número…">
+              </div>
+            {% endif %}
+
+            <div class="overflow-x-auto">
+              <table class="w-full text-sm">
+                <thead>
+                  <tr class="border-b" :style="temaClaro ? 'border-color:#e2e8f0;' : 'border-color:#2a2a2e;'">
+                    <th class="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wide"
+                        :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Nome</th>
+                    <th class="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wide"
+                        :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Número</th>
+                    <th class="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wide"
+                        :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Tamanho</th>
+                    <th class="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wide"
+                        :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Produto</th>
+                    <th class="text-center px-4 py-3 text-xs font-semibold uppercase tracking-wide"
+                        :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Conferência</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {% for l in linhas %}
+                    {% comment %}
+                      A LINHA INTEIRA é o alvo do toque, não a caixinha de
+                      16px: quem confere está de pé, com o telefone numa mão
+                      e a peça na outra, e errar o alvo remarca item errado.
+                    {% endcomment %}
+                    <tr class="border-b"
+                        x-show="mostra('{{ l.pessoa.nome|escapejs }} {{ l.pessoa.numero|escapejs }}')"
+                        :style="temaClaro ? 'border-color:#f1f5f9;' : 'border-color:#1e1e22;'">
+                      <td colspan="5" class="p-0">
+                        <label class="flex items-center gap-3 px-4 py-3 cursor-pointer w-full">
+                          <span class="flex-1 min-w-0 grid grid-cols-2 sm:grid-cols-4 gap-2 items-center">
+                            <span class="font-medium truncate" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
+                              {{ l.pessoa.nome|default:"—" }}
+                            </span>
+                            <span class="font-mono" :style="temaClaro ? 'color:#374151;' : 'color:#cbd5e1;'">
+                              {{ l.pessoa.numero|default:"—" }}
+                            </span>
+                            <span class="font-mono font-semibold" :style="temaClaro ? 'color:#374151;' : 'color:#cbd5e1;'">
+                              {{ l.pessoa.tamanho.sigla }}
+                            </span>
+                            <span class="truncate text-xs sm:text-sm" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+                              {{ l.pessoa.item.nome_exibicao|default:"—" }}
+                            </span>
+                          </span>
+                          <input type="checkbox" name="pessoa" value="{{ l.pessoa.pk }}"
+                                 class="w-6 h-6 shrink-0 pessoa-check"
+                                 {% if l.conferido %}checked{% endif %}
+                                 {% if travada or not pode_agir %}disabled{% endif %}
+                                 @change="pessoas += $event.target.checked ? 1 : -1">
+                        </label>
+                      </td>
+                    </tr>
+                  {% endfor %}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        {% endif %}
+
+        {# ── 3. A assinatura do cliente ──────────────────────────── #}
+        {% if not travada and pode_agir %}
+          <div class="card p-4">
+            <h3 class="text-sm font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
+              Assinatura do cliente
+            </h3>
+            <p class="text-xs mt-0.5" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+              Quem está recebendo assina no quadro abaixo, com o dedo ou o
+              mouse. Fica gravado junto com a conferência.
+            </p>
+
+            <div class="grid sm:grid-cols-2 gap-3 mt-3">
+              <div>
+                <label class="form-label">Nome de quem recebeu</label>
+                <input type="text" name="recebido_por" class="form-input w-full"
+                       style="font-size:16px;" autocomplete="off"
+                       value="{{ expedicao.recebido_por }}"
+                       placeholder="Nome completo">
+              </div>
+              <div>
+                <label class="form-label">CPF ou RG <span class="opacity-60">(opcional)</span></label>
+                <input type="text" name="assinado_documento" class="form-input w-full"
+                       style="font-size:16px;" autocomplete="off"
+                       value="{{ expedicao.assinado_documento }}"
+                       placeholder="Só se o cliente quiser registrar">
+              </div>
+            </div>
+
+            {% comment %}
+              FUNDO BRANCO FIXO no quadro da assinatura, nos dois temas: o
+              traço é gravado como imagem e vai ser aberto meses depois,
+              fora desta tela -- traço branco em fundo escuro viraria um PNG
+              invisível.
+            {% endcomment %}
+            <div class="mt-3">
+              <canvas id="assinatura-quadro"
+                      class="rounded-lg w-full"
+                      style="background:#fff; border:1px dashed #9ca3af; height:180px; touch-action:none;"></canvas>
+              <input type="hidden" name="assinatura" id="assinatura-dado">
+              <div class="flex items-center justify-between gap-3 mt-2">
+                <p class="text-xs" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+                  <span x-show="!assinou">Assine no quadro acima.</span>
+                  <span x-show="assinou" x-cloak style="color:#059669;">Assinatura registrada.</span>
+                </p>
+                <button type="button" class="text-xs underline" style="color:#dc2626;"
+                        @click="limparAssinatura()">limpar</button>
+              </div>
+            </div>
+          </div>
         {% endif %}
       </div>
-      {% if travada %}
-        <span class="text-sm" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
-          Conferência fechada — a expedição já passou da separação.
-        </span>
-      {% elif pode_agir %}
-        <button type="submit" class="btn-primary">Confirmar Conferência</button>
-      {% endif %}
+
+      {# ══ Coluna da consulta ═════════════════════════════════════════ #}
+      <div class="space-y-4">
+
+        {# ── A arte do pedido ────────────────────────────────────── #}
+        <div class="card overflow-hidden">
+          <div class="px-4 py-3 border-b" :style="temaClaro ? 'border-color:#e2e8f0;' : 'border-color:#2a2a2e;'">
+            <h3 class="text-sm font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
+              Arte do pedido
+            </h3>
+            <p class="text-xs mt-0.5" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+              Compare a peça com o que o cliente aprovou. Toque para ampliar.
+            </p>
+          </div>
+
+          {% if artes %}
+            <div class="p-3 grid grid-cols-2 gap-3">
+              {% for a in artes %}
+                {% if a.imagem %}
+                  <a href="{{ a.url }}" target="_blank" rel="noopener"
+                     class="block rounded-lg overflow-hidden"
+                     style="background:#fff;" title="{{ a.titulo }}">
+                    <img src="{{ a.url }}" alt="{{ a.titulo }}"
+                         style="width:100%; height:130px; object-fit:contain; padding:6px;">
+                  </a>
+                {% endif %}
+              {% endfor %}
+            </div>
+
+            {% comment %}
+              O que o navegador NÃO desenha vira link, e não miniatura
+              quebrada: CDR e AI são justamente os arquivos que o cliente
+              manda, e fingir uma prévia deles daria um quadrado cinza.
+            {% endcomment %}
+            <div class="px-4 pb-3 space-y-1.5">
+              {% for a in artes %}
+                {% if not a.imagem %}
+                  <a href="{{ a.url }}" target="_blank" rel="noopener"
+                     class="block text-xs truncate"
+                     :style="temaClaro ? 'color:#2563eb;' : 'color:#60a5fa;'">
+                    {{ a.titulo }}{% if a.tamanho %} · {{ a.tamanho }}{% endif %}
+                  </a>
+                {% endif %}
+              {% endfor %}
+            </div>
+          {% else %}
+            {% comment %}
+              A AUSÊNCIA É INFORMAÇÃO. Uma caixa vazia pareceria defeito da
+              tela; dito assim, quem confere sabe que não há com o que
+              comparar e decide se para para procurar a arte.
+            {% endcomment %}
+            <div class="p-6 text-center">
+              <p class="text-sm" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+                Nenhuma arte anexada a este pedido.
+              </p>
+              {% if expedicao.pedido %}
+                <a href="{% url 'moda:pedido-detail' expedicao.pedido.pk %}#arquivos"
+                   class="text-xs underline mt-2 inline-block"
+                   :style="temaClaro ? 'color:#2563eb;' : 'color:#60a5fa;'">anexar no pedido</a>
+              {% endif %}
+            </div>
+          {% endif %}
+        </div>
+
+        {# ── O QR desta conferência ──────────────────────────────── #}
+        <div class="card p-4 flex items-center gap-4">
+          <img src="{% url 'moda:conferencia-qr' expedicao.pk %}" alt="QR desta conferência"
+               style="width:88px; height:88px; background:#fff; padding:6px; border-radius:8px;">
+          <div class="min-w-0">
+            <p class="text-sm font-medium" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">Abrir no celular</p>
+            <p class="text-xs mt-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+              Aponte a câmera para conferir de pé, ao lado da caixa. A tela
+              pede login, como qualquer outra do sistema.
+            </p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    {% comment %}
+      A BARRA DE FECHAMENTO GRUDA NO PÉ DA TELA. Numa lista de 60 pessoas o
+      botão de salvar ficava a uma rolagem inteira de distância do último
+      item marcado -- e quem confere, de pé, sai da tela achando que salvou.
+    {% endcomment %}
+    <div class="sticky bottom-0 z-20 mt-4 py-3"
+         :style="temaClaro
+           ? 'background:rgba(255,255,255,.92); border-top:1px solid #e2e8f0;'
+           : 'background:rgba(17,17,20,.92); border-top:1px solid #2a2a2e;'"
+         style="backdrop-filter:blur(6px);">
+      <div class="flex flex-wrap items-center justify-between gap-3 px-1">
+        <div class="flex flex-wrap gap-2">
+          <span class="soft-pill text-sm"
+                :class="contadas == {{ esperado_total }} ? 'is-green' : 'is-amber'">
+            Peças conferidas: <strong x-text="contadas"></strong> de {{ esperado_total }}
+          </span>
+          {% if linhas %}
+            <span class="soft-pill text-sm"
+                  :class="pessoas == {{ total }} ? 'is-green' : 'is-amber'">
+              Itens conferidos: <strong x-text="pessoas"></strong> de {{ total }}
+            </span>
+          {% endif %}
+        </div>
+        {% if travada %}
+          <span class="text-sm" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+            Conferência fechada — a expedição já passou da separação.
+          </span>
+        {% elif pode_agir %}
+          <button type="submit" class="btn-primary">Confirmar Conferência</button>
+        {% endif %}
+      </div>
     </div>
   </form>
-
-  {% comment %}
-    O QR abre ESTA tela no celular. Aponta para a tela interna, então pede
-    login como qualquer outra -- ele poupa a digitação do endereço, não a
-    senha.
-  {% endcomment %}
-  <div class="card p-4 flex items-center gap-4">
-    <img src="{% url 'moda:conferencia-qr' expedicao.pk %}" alt="QR desta conferência"
-         style="width:96px; height:96px; background:#fff; padding:6px; border-radius:8px;">
-    <div class="min-w-0">
-      <p class="text-sm font-medium" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">Abrir no celular</p>
-      <p class="text-xs mt-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
-        Aponte a câmera para conferir de pé, ao lado da caixa. A tela pede
-        login, como qualquer outra do sistema.
-      </p>
-    </div>
-  </div>
 </div>
 
 <script>
@@ -307,6 +479,7 @@ document.addEventListener('alpine:init', () => {
   Alpine.data('conferenciaEntrega', (inicial) => ({
     pessoas: inicial.pessoas,
     contadas: inicial.contadas,
+    filtro: '',
     assinou: false,
     quadro: null,
     pincel: null,
@@ -316,17 +489,67 @@ document.addEventListener('alpine:init', () => {
       this.$nextTick(() => this.prepararQuadro());
     },
 
+    // ── Contagem ──────────────────────────────────────────────────────
+    campos() {
+      // `$root`: dentro de um metodo, `$el` seria o elemento que disparou o
+      // evento -- um botao -- e a varredura pegaria um campo so.
+      return this.$root.querySelectorAll('input[name^="qtd_"]');
+    },
+
     recontar() {
       let total = 0;
-      // `$root`: dentro de um metodo, `$el` seria o campo que disparou o
-      // evento, e a soma varreria um input so.
-      this.$root.querySelectorAll('input[name^="qtd_"]').forEach((campo) => {
+      this.campos().forEach((campo) => {
         const valor = parseInt(campo.value, 10);
         total += isNaN(valor) || valor < 0 ? 0 : valor;
       });
       this.contadas = total;
     },
 
+    somar(id, passo) {
+      const campo = this.$root.querySelector(`input[name="qtd_${id}"]`);
+      if (!campo || campo.disabled) return;
+      const valor = parseInt(campo.value, 10) || 0;
+      campo.value = Math.max(0, valor + passo);
+      this.recontar();
+    },
+
+    conferirTudo() {
+      this.campos().forEach((campo) => {
+        if (!campo.disabled) campo.value = campo.dataset.esperado || 0;
+      });
+      this.recontar();
+    },
+
+    // O rotulo compara com o esperado DA PROPRIA LINHA, lido do `data-`:
+    // uma segunda lista em JS poderia discordar do numero que a linha
+    // mostra, e a tela diria duas coisas sobre a mesma peca.
+    rotulo(id) {
+      const campo = this.$root.querySelector(`input[name="qtd_${id}"]`);
+      if (!campo) return '';
+      const esperado = parseInt(campo.dataset.esperado, 10) || 0;
+      const achado = parseInt(campo.value, 10) || 0;
+      if (achado === esperado) return '<span style="color:#059669;">ok</span>';
+      const diferenca = achado - esperado;
+      const texto = diferenca > 0 ? `+${diferenca}` : `${diferenca}`;
+      return `<span style="color:#d97706;">${texto}</span>`;
+    },
+
+    // ── Pessoas ───────────────────────────────────────────────────────
+    mostra(texto) {
+      const termo = this.filtro.trim().toLowerCase();
+      return !termo || texto.toLowerCase().includes(termo);
+    },
+
+    marcarPessoas() {
+      let marcadas = 0;
+      this.$root.querySelectorAll('.pessoa-check').forEach((campo) => {
+        if (!campo.disabled) campo.checked = true;
+        if (campo.checked) marcadas += 1;
+      });
+      this.pessoas = marcadas;
+    },
+
+    // ── Assinatura ────────────────────────────────────────────────────
     // O CANVAS PRECISA DA LARGURA REAL EM PIXELS, e nao da largura do CSS:
     // desenhar num canvas de 300px esticado para 700px sai borrado, e
     // assinatura borrada e justamente a que nao serve de prova.

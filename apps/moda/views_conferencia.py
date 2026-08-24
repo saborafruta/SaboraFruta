@@ -75,6 +75,57 @@ def _linhas_de_quantidade(expedicao) -> list[dict]:
     return linhas
 
 
+def _artes(expedicao) -> list[dict]:
+    """
+    A arte do pedido, para conferir a peça CONTRA o que foi aprovado.
+
+    Sem isso a conferência é só contagem: o número fecha e ninguém percebeu
+    que o escudo saiu na manga errada. Quem confere está com a peça na mão --
+    o que falta na tela é o desenho ao lado dela.
+
+    Vem das DUAS origens, porque as duas existem: o acervo do pedido (o
+    layout que o cliente mandou, a referência) e a arte APLICADA em cada
+    item, que é a que diz técnica e local. Mostrar só uma faria a tela
+    parecer vazia justamente nos pedidos em que a outra foi usada.
+
+    Só o que o navegador desenha vira miniatura. CDR, AI e PDF viram link --
+    um <img> apontando para eles dá um quadrado quebrado, que é pior do que
+    assumir que não há prévia.
+    """
+    pedido = expedicao.pedido
+    if pedido is None:
+        return []
+
+    artes = []
+    for arquivo in pedido.arquivos.all():
+        if not arquivo.arquivo:
+            continue
+        artes.append({
+            'url': arquivo.arquivo.url,
+            'titulo': arquivo.descricao or arquivo.nome_arquivo,
+            'detalhe': arquivo.get_tipo_display(),
+            'imagem': arquivo.pode_pre_visualizar,
+            'tamanho': arquivo.tamanho_legivel,
+        })
+
+    for item in pedido.itens.all():
+        for personalizacao in item.personalizacoes.all():
+            if not personalizacao.arquivo:
+                continue
+            artes.append({
+                'url': personalizacao.arquivo.url,
+                'titulo': personalizacao.nome_arquivo,
+                'detalhe': f'{item.nome_exibicao} · {personalizacao}',
+                'imagem': personalizacao.pode_pre_visualizar,
+                'tamanho': '',
+            })
+
+    # Imagem primeiro: a miniatura é o que serve para comparar, e empurrar
+    # os links para o fim deixa a comparação visível sem rolar.
+    artes.sort(key=lambda a: not a['imagem'])
+    return artes
+
+
 def _pessoas(expedicao):
     """
     As pessoas do PEDIDO desta expedição, na ordem em que foram lançadas.
@@ -116,6 +167,7 @@ class ConferenciaPessoasView(ModaBaseView):
             'total': len(pessoas),
             'conferidas': sum(1 for p in pessoas if p.pk in conferidas),
             'quantidades': quantidades,
+            'artes': _artes(expedicao),
             'esperado_total': sum(l['esperado'] for l in quantidades),
             'conferido_total': sum(l['conferido'] for l in quantidades),
             # Depois da separação a conferência não se mexe mais: o que foi
