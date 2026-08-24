@@ -101,7 +101,7 @@ def _categoria_taxas(empresa):
 @transaction.atomic
 def sincronizar_taxa_transacao(
     *, origem, origem_id, filial, data, valor, forma_pagamento=None,
-    conta_bancaria=None,
+    conta_bancaria=None, retida_na_entrada=True,
 ):
     conta_bancaria = conta_bancaria or vincular_conta_bancaria(forma_pagamento)
     documento_tipo = f"taxa_{origem}"
@@ -115,7 +115,16 @@ def sincronizar_taxa_transacao(
 
     categoria = _categoria_taxas(filial.empresa)
     descricao_forma = forma_pagamento.descricao if forma_pagamento else "recebimento"
-    descricao = f"Taxa por transacao - {descricao_forma}"
+    descricao = (
+        f"Taxa por transacao - {descricao_forma}"
+        if retida_na_entrada
+        else f"Tarifa de pagamento - {descricao_forma}"
+    )
+    observacao = (
+        "Taxa retida automaticamente na liquidacao do recebimento."
+        if retida_na_entrada
+        else "Tarifa cobrada automaticamente pelo banco ao realizar o pagamento."
+    )
     conta, _ = ContaPagar.all_objects.update_or_create(
         filial=filial,
         documento_tipo=documento_tipo,
@@ -137,7 +146,7 @@ def sincronizar_taxa_transacao(
             "plano_contas": categoria,
             "conta_contabil": categoria.conta_contabil,
             "status": StatusContaPagar.PAGO,
-            "observacao": "Taxa retida automaticamente na liquidacao do recebimento.",
+            "observacao": observacao,
             "excluido_em": None,
             "excluido_por": None,
             "motivo_exclusao": "",
@@ -151,8 +160,32 @@ def sincronizar_taxa_transacao(
             "valor_pago": valor,
             "forma_pagamento": forma_pagamento,
             "conta_bancaria": conta_bancaria,
-            "referencia_pagamento": "Retida na liquidacao do recebimento",
-            "observacao": "Sem segunda movimentacao bancaria; o credito ja entrou liquido.",
+            "referencia_pagamento": (
+                "Retida na liquidacao do recebimento"
+                if retida_na_entrada else "Tarifa bancaria do pagamento"
+            ),
+            "observacao": (
+                "Sem segunda movimentacao bancaria; o credito ja entrou liquido."
+                if retida_na_entrada else observacao
+            ),
         },
     )
     return conta
+
+
+def sincronizar_tarifa_pagamento(pagamento):
+    conta_pagar = pagamento.conta_pagar
+    if (conta_pagar.documento_tipo or "").startswith("taxa_"):
+        return None
+    forma = pagamento.forma_pagamento
+    valor = forma.tarifa_pagamento_fixa if forma else ZERO
+    return sincronizar_taxa_transacao(
+        origem="pagamento",
+        origem_id=pagamento.pk,
+        filial=pagamento.filial,
+        data=pagamento.data_pagamento,
+        valor=valor,
+        forma_pagamento=forma,
+        conta_bancaria=pagamento.conta_bancaria,
+        retida_na_entrada=False,
+    )

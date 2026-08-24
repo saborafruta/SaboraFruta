@@ -393,6 +393,7 @@ class FormaPagamentoForm(forms.ModelForm):
             "prazo_compensacao_dias_uteis",
             "taxa_administrativa",
             "taxa_fixa",
+            "tarifa_pagamento_fixa",
             "conta_bancaria_padrao",
             "ativo",
         ]
@@ -407,6 +408,7 @@ class FormaPagamentoForm(forms.ModelForm):
             "prazo_compensacao_dias_uteis": "Compensacao bancaria (dias uteis)",
             "taxa_administrativa": "Taxa administrativa (%)",
             "taxa_fixa": "Taxa fixa por transacao (R$)",
+            "tarifa_pagamento_fixa": "Tarifa ao pagar (R$)",
             "conta_bancaria_padrao": "Conta bancaria padrao",
             "ativo": "Ativo",
         }
@@ -422,6 +424,11 @@ class FormaPagamentoForm(forms.ModelForm):
         )
         self.fields["taxa_administrativa"].widget.attrs.setdefault("step", "0.01")
         self.fields["taxa_fixa"].widget.attrs.update({"step": "0.01", "min": "0", "inputmode": "decimal"})
+        self.fields["tarifa_pagamento_fixa"].required = False
+        self.fields["tarifa_pagamento_fixa"].initial = 0
+        self.fields["tarifa_pagamento_fixa"].widget.attrs.update(
+            {"step": "0.01", "min": "0", "inputmode": "decimal"}
+        )
         self.fields["prazo_liquidacao_dias"].widget.attrs.setdefault("min", "0")
         self.fields["prazo_compensacao_dias_uteis"].required = False
         self.fields["prazo_compensacao_dias_uteis"].initial = 0
@@ -451,6 +458,12 @@ class FormaPagamentoForm(forms.ModelForm):
         if taxa < 0:
             raise forms.ValidationError("A taxa fixa nao pode ser negativa.")
         return taxa
+
+    def clean_tarifa_pagamento_fixa(self):
+        tarifa = self.cleaned_data.get("tarifa_pagamento_fixa") or 0
+        if tarifa < 0:
+            raise forms.ValidationError("A tarifa de pagamento nao pode ser negativa.")
+        return tarifa
 
     def save(self, commit=True):
         instance = super().save(commit=False)

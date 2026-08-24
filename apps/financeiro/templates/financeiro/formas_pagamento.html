@@ -5,264 +5,133 @@
 {% block page_title %}Formas de pagamento{% endblock %}
 
 {% block content %}
-<div class="max-w-7xl mx-auto space-y-5">
-  <div class="flex flex-col lg:flex-row lg:items-end lg:justify-between gap-3">
+<div class="max-w-6xl mx-auto space-y-4">
+  <header class="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+    <div>
+      <h1 class="text-xl font-semibold">Formas de pagamento</h1>
+      <p class="mt-1 text-sm text-gray-500">Defina recebimento, liquidação e tarifas bancárias em um só lugar.</p>
+    </div>
     <div class="flex flex-wrap gap-2">
       <a href="{% url 'pdv:home' %}" class="btn-secondary">Abrir PDV</a>
       <a href="{% url 'financeiro:pagar_list' %}" class="btn-secondary">Contas a pagar</a>
       <a href="{% url 'financeiro:receber_list' %}" class="btn-secondary">Contas a receber</a>
+      {% if not mostrar_form %}<a href="?novo=1" class="btn-primary">+ Nova forma</a>{% endif %}
     </div>
-  </div>
+  </header>
 
-  <section class="grid grid-cols-1 xl:grid-cols-[430px_1fr] gap-5">
-    <form method="post" class="card p-5 space-y-3">
-      {% csrf_token %}
-      <input type="hidden" name="acao" value="salvar">
-      {% if instance %}<input type="hidden" name="id" value="{{ instance.pk }}">{% endif %}
+  {% if mostrar_form %}
+  <section class="card p-5" data-testid="form-forma-pagamento">
+    <div class="mb-5 flex items-start justify-between gap-3">
       <div>
-        <h3 class="font-semibold">{% if instance %}Editar forma{% else %}Nova forma{% endif %}</h3>
-        <p class="text-xs text-gray-500 mt-1">Configure como e quando o valor líquido entra no caixa desta filial.</p>
+        <p class="text-xs font-semibold uppercase text-blue-600">{% if instance %}Edição{% else %}Cadastro{% endif %}</p>
+        <h2 class="mt-1 text-lg font-semibold">{% if instance %}{{ instance.descricao }}{% else %}Nova forma de pagamento{% endif %}</h2>
+        <p class="mt-1 text-xs text-gray-500">As tarifas de recebimento reduzem a entrada. A tarifa ao pagar gera uma despesa bancária.</p>
       </div>
-
-      <label class="block text-xs font-medium">Descrição {{ form.descricao|add_class:"form-input mt-1" }}</label>
-      {% if form.descricao.errors %}<p class="text-xs text-red-600">{{ form.descricao.errors|join:", " }}</p>{% endif %}
-
-      <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
-        <label class="block text-xs font-medium">Tipo {{ form.tipo|add_class:"form-input mt-1" }}</label>
-        <label class="block text-xs font-medium">Código SEFAZ {{ form.codigo_sefaz|add_class:"form-input mt-1" }}</label>
-      </div>
-
-      <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
-        <label class="block text-xs font-medium">Liquidação em dias {{ form.prazo_liquidacao_dias|add_class:"form-input mt-1" }}</label>
-        <label class="block text-xs font-medium">Compensação bancária (dias úteis) {{ form.prazo_compensacao_dias_uteis|add_class:"form-input mt-1" }}</label>
-      </div>
-      <label class="block text-xs font-medium">Taxa administrativa padrão (%) {{ form.taxa_administrativa|add_class:"form-input mt-1" }}</label>
-      <label class="block text-xs font-medium">
-        Taxa fixa por transação (R$)
-        {{ form.taxa_fixa|add_class:"form-input mt-1" }}
-        <span class="mt-1 block text-[11px] font-normal text-gray-500">Somada à taxa percentual. Deixe zero quando não houver cobrança fixa.</span>
-      </label>
-      {% if form.taxa_administrativa.errors %}<p class="text-xs text-red-600">{{ form.taxa_administrativa.errors|join:", " }}</p>{% endif %}
-      {% if form.taxa_fixa.errors %}<p class="text-xs text-red-600">{{ form.taxa_fixa.errors|join:", " }}</p>{% endif %}
-
-      <label class="block text-xs font-medium">
-        Conta bancaria padrao
-        {{ form.conta_bancaria_padrao|add_class:"form-input mt-1" }}
-        <span class="block text-[11px] font-normal text-gray-500 mt-1">Usada para levar vendas desta forma para a visao bancaria.</span>
-      </label>
-
-      <div class="grid grid-cols-1 sm:grid-cols-3 gap-2 pt-1">
-        <label class="inline-flex items-center gap-2 text-sm">{{ form.requer_tef }} Usa TEF</label>
-        <label class="inline-flex items-center gap-2 text-sm">{{ form.gera_parcelas }} Gera parcelas</label>
-        <label class="inline-flex items-center gap-2 text-sm">{{ form.ativo }} Ativo</label>
-      </div>
-      <label class="inline-flex items-start gap-2 text-sm pt-1">
-        {{ form.movimenta_caixa }}
-        <span>Movimenta o caixa
-          <span class="block text-xs text-gray-500 mt-0.5">Desmarque para Doação/Permuta: dá baixa no estoque, mas não conta no caixa/financeiro.</span>
-        </span>
-      </label>
-
-      <div class="flex gap-2 pt-1">
-        <button type="submit" class="btn-primary justify-center flex-1">Salvar</button>
-        {% if instance %}<a href="{% url 'financeiro:formas_pagamento' %}" class="btn-secondary justify-center">Cancelar</a>{% endif %}
-      </div>
-    </form>
-
-    {% if instance %}
-    <div class="card p-5 space-y-3 mt-4" x-data="taxasParcelamento({{ instance.pk }})">
-      <div>
-        <h3 class="font-semibold">Taxas por parcelamento</h3>
-        <p class="text-xs text-gray-500 mt-1">Quando existir uma taxa para a quantidade de parcelas, ela substitui o percentual padrão. A taxa fixa continua sendo aplicada.</p>
-      </div>
-
-      <div class="flex flex-col gap-2 sm:flex-row">
-        <div class="grid flex-1 grid-cols-1 gap-2 sm:grid-cols-3">
-          <div>
-            <label class="block text-xs font-medium mb-1">Bandeira</label>
-            <select x-model="novaBandeira" class="form-input w-full">
-              <option value="">Padrão / sem bandeira</option>
-              <option value="mastercard">Mastercard</option><option value="visa">Visa</option>
-              <option value="elo">Elo</option><option value="amex">Amex</option><option value="hiper">Hiper</option>
-            </select>
-          </div>
-          <div class="flex-1">
-            <label class="block text-xs font-medium mb-1">Parcelas</label>
-            <input type="number" x-model="novaParcelas" min="1" max="24" class="form-input w-full" placeholder="Ex: 1">
-          </div>
-          <div class="flex-1">
-            <label class="block text-xs font-medium mb-1">Taxa (%)</label>
-            <input type="number" x-model="novaTaxa" step="0.01" min="0" class="form-input w-full" placeholder="Ex: 2.50">
-          </div>
-        </div>
-        <div class="flex items-end">
-          <button type="button" @click="salvarTaxa()" :disabled="salvando" class="btn-primary whitespace-nowrap">+ Adicionar</button>
-        </div>
-      </div>
-
-      <p x-show="erro" x-text="erro" class="text-xs text-red-600"></p>
-
-      <div class="overflow-x-auto" x-show="taxas.length > 0">
-        <table class="w-full text-sm">
-          <thead>
-            <tr class="text-left text-xs uppercase tracking-wide text-gray-500">
-              <th class="py-2 pr-4">Parcelas</th>
-              <th class="py-2 pr-4">Bandeira</th>
-              <th class="py-2 pr-4">Taxa (%)</th>
-              <th class="py-2 text-right">Remover</th>
-            </tr>
-          </thead>
-          <tbody class="divide-y divide-gray-200">
-            <template x-for="t in taxas" :key="t.id">
-              <tr>
-                <td class="py-2 pr-4 font-medium" x-text="t.parcelas + 'x'"></td>
-                <td class="py-2 pr-4 capitalize" x-text="t.bandeira || 'Padrão'"></td>
-                <td class="py-2 pr-4" x-text="parseFloat(t.taxa).toFixed(2) + '%'"></td>
-                <td class="py-2 text-right">
-                  <button type="button" @click="removerTaxa(t.id)" class="text-xs text-red-500 hover:text-red-700">Remover</button>
-                </td>
-              </tr>
-            </template>
-          </tbody>
-        </table>
-      </div>
-      <p x-show="taxas.length === 0 && !carregando" class="text-xs text-gray-400">Nenhuma taxa cadastrada ainda.</p>
+      <a href="{% url 'financeiro:formas_pagamento' %}" class="btn-secondary" aria-label="Fechar">Fechar</a>
     </div>
 
-    <script>
-    function taxasParcelamento(formaId) {
-      return {
-        formaId, taxas: [], carregando: true, salvando: false,
-        novaParcelas: '', novaBandeira: '', novaTaxa: '', erro: '',
-        async init() {
-          await this.carregar();
-        },
-        async carregar() {
-          this.carregando = true;
-          const r = await fetch(`/financeiro/api/formas-pagamento/${this.formaId}/taxas/`);
-          const d = await r.json();
-          this.taxas = d.taxas || [];
-          this.carregando = false;
-        },
-        async salvarTaxa() {
-          this.erro = '';
-          const parcelas = parseInt(this.novaParcelas);
-          const taxa = parseFloat(this.novaTaxa);
-          if (!parcelas || parcelas < 1) { this.erro = 'Informe o número de parcelas.'; return; }
-          if (isNaN(taxa) || taxa < 0) { this.erro = 'Informe uma taxa válida.'; return; }
-          this.salvando = true;
-          const r = await fetch(`/financeiro/api/formas-pagamento/${this.formaId}/taxas/`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json', 'X-CSRFToken': document.cookie.match(/csrftoken=([^;]+)/)?.[1] || '' },
-            body: JSON.stringify({ parcelas, bandeira: this.novaBandeira, taxa }),
-          });
-          const d = await r.json();
-          if (d.erro) { this.erro = d.erro; }
-          else { this.novaParcelas = ''; this.novaTaxa = ''; await this.carregar(); }
-          this.salvando = false;
-        },
-        async removerTaxa(id) {
-          if (!confirm('Remover esta taxa?')) return;
-          await fetch(`/financeiro/api/formas-pagamento/${this.formaId}/taxas/`, {
-            method: 'DELETE',
-            headers: { 'Content-Type': 'application/json', 'X-CSRFToken': document.cookie.match(/csrftoken=([^;]+)/)?.[1] || '' },
-            body: JSON.stringify({ id }),
-          });
-          await this.carregar();
-        },
-      };
-    }
-    </script>
-    {% endif %}
+    <div class="grid gap-5 {% if instance.tipo == 'cartao_credito' or instance.tipo == 'cartao_debito' %}xl:grid-cols-[minmax(0,1fr)_minmax(420px,0.9fr)]{% endif %}">
+      <form method="post" class="space-y-4">
+        {% csrf_token %}
+        <input type="hidden" name="acao" value="salvar">
+        {% if instance %}<input type="hidden" name="id" value="{{ instance.pk }}">{% endif %}
 
-    <div class="card overflow-hidden">
-      <div class="px-5 py-4 border-b border-gray-200 flex flex-col md:flex-row md:items-center md:justify-between gap-2">
-        <div>
-          <h3 class="font-semibold">Lista da filial</h3>
-          <p class="text-xs text-gray-500 mt-1">Replicar copia a forma para outras filiais da mesma empresa.</p>
+        <div class="grid gap-3 md:grid-cols-2">
+          <label class="block text-xs font-medium">Descrição {{ form.descricao|add_class:"form-input mt-1" }}</label>
+          <label class="block text-xs font-medium">Tipo {{ form.tipo|add_class:"form-input mt-1" }}</label>
         </div>
-      </div>
-      <div>
-        <table class="w-full text-sm table-fixed">
-          <thead>
-            <tr class="text-left text-xs uppercase tracking-wide text-gray-500">
-              <th class="px-3 py-2.5 w-[26%]">Descrição</th>
-              <th class="px-3 py-2.5 w-[16%]">Tipo</th>
-              <th class="px-3 py-2.5 w-[30%]">Configurações</th>
-              <th class="px-3 py-2.5 w-[12%]">Conta</th>
-              <th class="px-3 py-2.5 w-[10%]">Status</th>
-              <th class="px-3 py-2.5 w-[18%] text-right">Ações</th>
-            </tr>
-          </thead>
-          <tbody class="divide-y divide-gray-200">
-            {% for forma in formas %}
-              <tr>
-                <td class="px-3 py-2.5 font-medium truncate">{{ forma.descricao }}</td>
-                <td class="px-3 py-2.5 truncate">
-                  {{ forma.get_tipo_display }}
-                  {% if forma.codigo_sefaz %}<span class="block text-[10px] font-mono text-gray-400">SEFAZ {{ forma.codigo_sefaz }}</span>{% endif %}
-                </td>
-                <td class="px-3 py-2.5">
-                  <div class="flex flex-wrap gap-1">
-                    {% if forma.requer_tef %}<span class="soft-pill is-blue text-[10px]">TEF</span>{% endif %}
-                    {% if forma.gera_parcelas %}<span class="soft-pill is-blue text-[10px]">Parcelas</span>{% endif %}
-                    {% if forma.taxa_administrativa > 0 %}<span class="soft-pill is-amber text-[10px]">{{ forma.taxa_administrativa|floatformat:2 }}%</span>{% endif %}
-                    {% if forma.taxa_fixa > 0 %}<span class="soft-pill is-amber text-[10px]">+ R$ {{ forma.taxa_fixa|floatformat:2 }}</span>{% endif %}
-                    {% if not forma.movimenta_caixa %}<span class="soft-pill is-amber text-[10px]">Não soma no caixa</span>{% endif %}
-                    {% if not forma.requer_tef and not forma.gera_parcelas and forma.movimenta_caixa and forma.taxa_administrativa == 0 and forma.taxa_fixa == 0 %}<span class="text-xs text-gray-400">Padrão</span>{% endif %}
-                  </div>
-                </td>
-                <td class="px-3 py-2.5 text-xs truncate">{{ forma.conta_bancaria_padrao.descricao|default:"-" }}</td>
-                <td class="px-3 py-2.5">{% if forma.ativo %}<span class="soft-pill is-green">Ativo</span>{% else %}<span class="soft-pill is-amber">Inativo</span>{% endif %}</td>
-                <td class="px-3 py-2.5 text-right">
-                  <div class="inline-flex items-center justify-end gap-1">
-                    <a href="?editar={{ forma.pk }}" title="Editar"
-                       class="w-8 h-8 inline-flex items-center justify-center rounded-lg border border-gray-200 dark:border-zinc-700 hover:bg-gray-100 dark:hover:bg-zinc-800 transition-colors">
-                      <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/></svg>
-                    </a>
-                    {% if filiais_destino %}
-                      <details class="relative text-left">
-                        <summary title="Replicar para outra filial" class="w-8 h-8 inline-flex items-center justify-center rounded-lg border border-gray-200 dark:border-zinc-700 hover:bg-gray-100 dark:hover:bg-zinc-800 transition-colors list-none cursor-pointer">
-                          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 4h8a2 2 0 012 2v8a2 2 0 01-2 2h-8a2 2 0 01-2-2v-8a2 2 0 012-2z"/></svg>
-                        </summary>
-                        <form method="post" class="absolute right-0 z-20 mt-2 w-72 rounded-lg border border-gray-200 bg-white p-3 shadow-lg space-y-2 text-left dark:bg-zinc-900 dark:border-zinc-700">
-                          {% csrf_token %}
-                          <input type="hidden" name="acao" value="replicar">
-                          <input type="hidden" name="id" value="{{ forma.pk }}">
-                          <p class="text-xs font-semibold text-gray-600 dark:text-gray-300">Copiar para:</p>
-                          <div class="max-h-40 overflow-y-auto space-y-1">
-                            {% for filial in filiais_destino %}
-                              <label class="flex items-center gap-2 text-xs">
-                                <input type="checkbox" name="filiais_destino" value="{{ filial.pk }}">
-                                <span>{{ filial.nome_fantasia|default:filial.razao_social }}</span>
-                              </label>
-                            {% endfor %}
-                          </div>
-                          <button type="submit" class="btn-primary justify-center w-full text-xs">Confirmar replicação</button>
-                        </form>
-                      </details>
-                    {% endif %}
-                    {% if forma.ativo %}
-                      <form method="post" onsubmit="return confirm('Inativar esta forma de pagamento?')">
-                        {% csrf_token %}
-                        <input type="hidden" name="acao" value="excluir">
-                        <input type="hidden" name="id" value="{{ forma.pk }}">
-                        <button type="submit" title="Inativar"
-                                class="w-8 h-8 inline-flex items-center justify-center rounded-lg border border-gray-200 dark:border-zinc-700 hover:bg-red-50 hover:border-red-200 hover:text-red-600 dark:hover:bg-red-950/30 transition-colors">
-                          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18.36 6.64a9 9 0 11-12.73 0M12 3v9"/></svg>
-                        </button>
-                      </form>
-                    {% endif %}
-                  </div>
-                </td>
-              </tr>
-            {% empty %}
-              <tr><td colspan="6" class="px-4 py-8 text-center text-gray-500">Nenhuma forma de pagamento cadastrada nesta filial.</td></tr>
-            {% endfor %}
-          </tbody>
-        </table>
-      </div>
+        <div class="grid gap-3 md:grid-cols-3">
+          <label class="block text-xs font-medium">Taxa ao receber (%) {{ form.taxa_administrativa|add_class:"form-input mt-1" }}</label>
+          <label class="block text-xs font-medium">Taxa fixa ao receber (R$) {{ form.taxa_fixa|add_class:"form-input mt-1" }}</label>
+          <label class="block text-xs font-medium">Tarifa ao pagar (R$) {{ form.tarifa_pagamento_fixa|add_class:"form-input mt-1" }}</label>
+        </div>
+        {% if form.errors %}
+          <div class="rounded border border-red-200 bg-red-50 p-3 text-xs text-red-700">Revise os campos destacados antes de salvar.</div>
+        {% endif %}
+
+        <details class="rounded border border-gray-200 dark:border-zinc-700">
+          <summary class="cursor-pointer list-none px-4 py-3 text-sm font-semibold">Configurações avançadas <span class="ml-1 text-xs font-normal text-gray-500">Conta, prazos e integração</span></summary>
+          <div class="space-y-3 border-t border-gray-200 p-4 dark:border-zinc-700">
+            <div class="grid gap-3 md:grid-cols-3">
+              <label class="block text-xs font-medium">Código SEFAZ {{ form.codigo_sefaz|add_class:"form-input mt-1" }}</label>
+              <label class="block text-xs font-medium">Liquidação em dias {{ form.prazo_liquidacao_dias|add_class:"form-input mt-1" }}</label>
+              <label class="block text-xs font-medium">Compensação (dias úteis) {{ form.prazo_compensacao_dias_uteis|add_class:"form-input mt-1" }}</label>
+            </div>
+            <label class="block text-xs font-medium">Conta bancária padrão {{ form.conta_bancaria_padrao|add_class:"form-input mt-1" }}</label>
+            <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+              <label class="inline-flex items-center gap-2 text-sm">{{ form.requer_tef }} Usa TEF</label>
+              <label class="inline-flex items-center gap-2 text-sm">{{ form.gera_parcelas }} Gera parcelas</label>
+              <label class="inline-flex items-center gap-2 text-sm">{{ form.ativo }} Ativa</label>
+              <label class="inline-flex items-center gap-2 text-sm">{{ form.movimenta_caixa }} Movimenta caixa</label>
+            </div>
+          </div>
+        </details>
+
+        <div class="flex justify-end gap-2">
+          <a href="{% url 'financeiro:formas_pagamento' %}" class="btn-secondary">Cancelar</a>
+          <button type="submit" class="btn-primary">Salvar forma</button>
+        </div>
+      </form>
+
+      {% if instance.tipo == 'cartao_credito' or instance.tipo == 'cartao_debito' %}
+      <aside class="rounded border border-gray-200 p-4 dark:border-zinc-700" x-data="taxasParcelamento({{ instance.pk }})">
+        <h3 class="font-semibold">Taxas por bandeira{% if instance.tipo == 'cartao_credito' %} e parcelas{% endif %}</h3>
+        <p class="mt-1 text-xs text-gray-500">A configuração específica substitui o percentual padrão no recebimento.</p>
+        <div class="mt-4 grid gap-2 {% if instance.tipo == 'cartao_credito' %}sm:grid-cols-3{% else %}sm:grid-cols-2{% endif %}">
+          <label class="text-xs font-medium">Bandeira
+            <select x-model="novaBandeira" class="form-input mt-1 w-full"><option value="">Padrão / sem bandeira</option><option value="mastercard">Mastercard</option><option value="visa">Visa</option><option value="elo">Elo</option><option value="amex">Amex</option><option value="hiper">Hiper</option></select>
+          </label>
+          {% if instance.tipo == 'cartao_credito' %}<label class="text-xs font-medium">Parcelas<input type="number" x-model="novaParcelas" min="1" max="24" class="form-input mt-1 w-full"></label>{% else %}<input type="hidden" x-model="novaParcelas" value="1">{% endif %}
+          <label class="text-xs font-medium">Taxa (%)<input type="number" x-model="novaTaxa" step="0.01" min="0" class="form-input mt-1 w-full"></label>
+        </div>
+        <button type="button" @click="salvarTaxa()" class="btn-primary mt-3 w-full justify-center">Adicionar taxa</button>
+        <p x-show="erro" x-text="erro" class="mt-2 text-xs text-red-600"></p>
+        <div class="mt-4 divide-y divide-gray-200 dark:divide-zinc-700">
+          <template x-for="t in taxas" :key="t.id"><div class="flex items-center justify-between gap-3 py-2 text-sm"><div><span class="font-medium capitalize" x-text="t.bandeira || 'Padrão'"></span><span class="ml-2 text-gray-500" x-text="t.parcelas + 'x'"></span></div><div class="flex items-center gap-3"><strong x-text="parseFloat(t.taxa).toFixed(2) + '%'"></strong><button type="button" @click="removerTaxa(t.id)" class="text-xs text-red-600">Remover</button></div></div></template>
+          <p x-show="taxas.length === 0 && !carregando" class="py-4 text-center text-xs text-gray-500">Nenhuma taxa específica cadastrada.</p>
+        </div>
+      </aside>
+      {% endif %}
+    </div>
+  </section>
+  {% endif %}
+
+  <section class="card overflow-hidden">
+    <div class="border-b border-gray-200 px-5 py-4 dark:border-zinc-700">
+      <h2 class="font-semibold">Formas da filial</h2>
+      <p class="mt-1 text-xs text-gray-500">Clique em editar para alterar tarifas, conta e regras.</p>
+    </div>
+    <div class="divide-y divide-gray-200 dark:divide-zinc-700">
+      {% for forma in formas %}
+      <article class="grid gap-3 px-5 py-4 md:grid-cols-[minmax(190px,1.3fr)_minmax(150px,0.8fr)_minmax(260px,1.5fr)_auto] md:items-center">
+        <div class="min-w-0"><p class="truncate font-semibold" title="{{ forma.descricao }}">{{ forma.descricao }}</p><p class="mt-1 text-xs text-gray-500">{{ forma.get_tipo_display }} · {{ forma.conta_bancaria_padrao.descricao|default:"Sem conta vinculada" }}</p></div>
+        <div>{% if forma.ativo %}<span class="soft-pill is-green">Ativa</span>{% else %}<span class="soft-pill is-amber">Inativa</span>{% endif %}</div>
+        <div class="flex flex-wrap gap-2 text-xs">
+          <span class="rounded border border-green-200 bg-green-50 px-2 py-1 text-green-800 dark:border-green-900 dark:bg-green-950/30 dark:text-green-300">Receber: {{ forma.taxa_administrativa|floatformat:2 }}%{% if forma.taxa_fixa > 0 %} + R$ {{ forma.taxa_fixa|floatformat:2 }}{% endif %}</span>
+          <span class="rounded border border-red-200 bg-red-50 px-2 py-1 text-red-800 dark:border-red-900 dark:bg-red-950/30 dark:text-red-300">Pagar: R$ {{ forma.tarifa_pagamento_fixa|floatformat:2 }}</span>
+          {% if forma.prazo_compensacao_dias_uteis %}<span class="rounded border border-gray-200 px-2 py-1 dark:border-zinc-700">Crédito em {{ forma.prazo_compensacao_dias_uteis }} dia(s) útil(eis)</span>{% endif %}
+        </div>
+        <div class="flex justify-end gap-2">
+          <a href="?editar={{ forma.pk }}" class="btn-secondary">Editar</a>
+          {% if forma.ativo %}<form method="post" onsubmit="return confirm('Inativar esta forma de pagamento?')">{% csrf_token %}<input type="hidden" name="acao" value="excluir"><input type="hidden" name="id" value="{{ forma.pk }}"><button type="submit" class="btn-secondary" aria-label="Inativar">Inativar</button></form>{% endif %}
+        </div>
+      </article>
+      {% empty %}<p class="px-5 py-10 text-center text-sm text-gray-500">Nenhuma forma cadastrada.</p>{% endfor %}
     </div>
   </section>
 </div>
+
+{% if instance.tipo == 'cartao_credito' or instance.tipo == 'cartao_debito' %}
+<script>
+function taxasParcelamento(formaId) {
+  return {
+    formaId, taxas: [], carregando: true, novaParcelas: '{% if instance.tipo == "cartao_debito" %}1{% endif %}', novaBandeira: '', novaTaxa: '', erro: '',
+    async init() { await this.carregar(); },
+    async carregar() { const r = await fetch(`/financeiro/api/formas-pagamento/${this.formaId}/taxas/`); const d = await r.json(); this.taxas = d.taxas || []; this.carregando = false; },
+    async salvarTaxa() { this.erro = ''; const parcelas = parseInt(this.novaParcelas); const taxa = parseFloat(this.novaTaxa); if (!parcelas) { this.erro = 'Informe as parcelas.'; return; } if (isNaN(taxa) || taxa < 0) { this.erro = 'Informe uma taxa válida.'; return; } const r = await fetch(`/financeiro/api/formas-pagamento/${this.formaId}/taxas/`, {method: 'POST', headers: {'Content-Type': 'application/json', 'X-CSRFToken': document.cookie.match(/csrftoken=([^;]+)/)?.[1] || ''}, body: JSON.stringify({parcelas, bandeira: this.novaBandeira, taxa})}); const d = await r.json(); if (d.erro) this.erro = d.erro; else { this.novaTaxa = ''; await this.carregar(); } },
+    async removerTaxa(id) { if (!confirm('Remover esta taxa?')) return; await fetch(`/financeiro/api/formas-pagamento/${this.formaId}/taxas/`, {method: 'DELETE', headers: {'Content-Type': 'application/json', 'X-CSRFToken': document.cookie.match(/csrftoken=([^;]+)/)?.[1] || ''}, body: JSON.stringify({id})}); await this.carregar(); }
+  };
+}
+</script>
+{% endif %}
 {% endblock %}

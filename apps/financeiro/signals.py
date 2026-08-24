@@ -1,8 +1,13 @@
 from django.db.models.signals import post_save
 from django.dispatch import receiver
 
-from apps.financeiro.models import ContaReceber, ExtratoBancario, FormaPagamento
-from apps.financeiro.services.taxas_transacao_service import sincronizar_taxa_transacao
+from apps.financeiro.models import (
+    ContaReceber, ExtratoBancario, FormaPagamento, PagamentoContaPagar,
+)
+from apps.financeiro.services.taxas_transacao_service import (
+    sincronizar_tarifa_pagamento,
+    sincronizar_taxa_transacao,
+)
 from apps.financeiro.services.conta_bancaria_resolver import vincular_conta_bancaria
 from apps.pdv.models import PagamentoVendaPDV
 
@@ -49,3 +54,8 @@ def sincronizar_taxa_venda(sender, instance, **kwargs):
             or vincular_conta_bancaria(instance.forma_pagamento)
         ),
     )
+
+
+@receiver(post_save, sender=PagamentoContaPagar)
+def sincronizar_tarifa_saida(sender, instance, **kwargs):
+    sincronizar_tarifa_pagamento(instance)

@@ -41,6 +41,12 @@ class FormaPagamento(ActiveModel):
         default=0,
         help_text="Valor fixo descontado em cada transação recebida.",
     )
+    tarifa_pagamento_fixa = models.DecimalField(
+        max_digits=14,
+        decimal_places=2,
+        default=0,
+        help_text="Tarifa cobrada pelo banco quando esta forma é usada para pagar.",
+    )
     conta_bancaria_padrao = models.ForeignKey(
         "financeiro.ContaBancaria",
         on_delete=models.SET_NULL,

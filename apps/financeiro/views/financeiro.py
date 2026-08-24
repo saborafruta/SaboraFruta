@@ -209,6 +209,8 @@ def formas_pagamento(request):
                     "prazo_compensacao_dias_uteis": origem.prazo_compensacao_dias_uteis,
                     "taxa_administrativa": origem.taxa_administrativa,
                     "taxa_fixa": origem.taxa_fixa,
+                    "tarifa_pagamento_fixa": origem.tarifa_pagamento_fixa,
+                    "conta_bancaria_padrao": origem.conta_bancaria_padrao,
                     "movimenta_caixa": origem.movimenta_caixa,
                     "ativo": origem.ativo,
                 }
@@ -246,12 +248,18 @@ def formas_pagamento(request):
     filiais_destino = Filial.objects.filter(empresa=empresa).exclude(pk=filial.pk).order_by(
         "nome_fantasia", "razao_social"
     )
+    mostrar_form = bool(
+        instance
+        or request.GET.get("novo")
+        or (request.method == "POST" and request.POST.get("acao") == "salvar")
+    )
     return render(request, "financeiro/formas_pagamento.html", {
         "title": "Formas de pagamento",
         "form": form,
         "formas": formas,
         "instance": instance,
         "filiais_destino": filiais_destino,
+        "mostrar_form": mostrar_form,
     })
 
 

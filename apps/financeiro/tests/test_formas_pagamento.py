@@ -6,7 +6,11 @@ from django.utils import timezone
 
 from apps.core.models import Empresa, Filial, PerfilAcesso, Usuario
 from apps.financeiro.constants.enums import TipoFormaPagamento
-from apps.financeiro.models import ContaBancaria, FormaPagamento, TaxaParcelamento
+from apps.financeiro.constants.enums import StatusContaPagar
+from apps.financeiro.models import (
+    ContaBancaria, ContaPagar, FormaPagamento, PagamentoContaPagar,
+    TaxaParcelamento,
+)
 from apps.pdv.models import PagamentoVendaPDV, VendaPDV
 
 
@@ -71,6 +75,44 @@ class FormasPagamentoFinanceiroTests(TestCase):
         self.assertEqual(forma.filial, self.filial)
         self.assertEqual(forma.empresa, self.empresa)
         self.assertEqual(forma.taxa_fixa, Decimal("0.35"))
+        self.assertEqual(forma.tarifa_pagamento_fixa, Decimal("0.00"))
+
+    def test_formulario_so_aparece_quando_solicitado(self):
+        url = reverse("financeiro:formas_pagamento")
+        self.assertNotContains(self.client.get(url), 'data-testid="form-forma-pagamento"')
+        self.assertContains(self.client.get(url, {"novo": "1"}), 'data-testid="form-forma-pagamento"')
+
+    def test_pagamento_gera_uma_tarifa_bancaria_classificada(self):
+        conta_bancaria = ContaBancaria.objects.create(
+            filial=self.filial, descricao="ORENDA", banco_nome="ORENDA", banco_codigo="001",
+        )
+        forma = FormaPagamento.objects.create(
+            empresa=self.empresa, filial=self.filial, descricao="PIX (ORENDA)",
+            tipo=TipoFormaPagamento.PIX, conta_bancaria_padrao=conta_bancaria,
+            tarifa_pagamento_fixa=Decimal("0.50"),
+        )
+        hoje = timezone.localdate()
+        conta = ContaPagar.objects.create(
+            filial=self.filial, descricao_despesa="Fornecedor teste",
+            valor_original=Decimal("100.00"), valor_final=Decimal("100.00"),
+            valor_pago=Decimal("100.00"), valor_saldo=Decimal("0.00"),
+            data_emissao=hoje, data_vencimento=hoje, data_pagamento=hoje,
+            status=StatusContaPagar.PAGO,
+        )
+
+        pagamento = PagamentoContaPagar.objects.create(
+            filial=self.filial, conta_pagar=conta, data_pagamento=hoje,
+            valor_pago=Decimal("100.00"), forma_pagamento=forma,
+            conta_bancaria=conta_bancaria,
+        )
+
+        tarifa = ContaPagar.all_objects.get(
+            documento_tipo="taxa_pagamento", documento_id=pagamento.pk,
+        )
+        self.assertEqual(tarifa.valor_final, Decimal("0.50"))
+        self.assertEqual(tarifa.conta_bancaria, conta_bancaria)
+        self.assertEqual(tarifa.plano_contas.descricao, "Taxas por transacao")
+        self.assertEqual(tarifa.pagamentos.count(), 1)
 
     def test_vincula_forma_a_conta_pelo_nome_sem_ambiguidade(self):
         orenda = ContaBancaria.objects.create(
