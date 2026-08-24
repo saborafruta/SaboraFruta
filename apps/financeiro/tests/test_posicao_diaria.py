@@ -313,6 +313,51 @@ class PosicaoDiariaCaixaTests(TestCase):
         self.assertEqual(entrada.conta, self.banco)
         self.assertEqual(entrada.entrada, Decimal("70.00"))
 
+    def test_op_paga_entra_na_posicao_diaria(self):
+        cliente = Cliente.objects.create(
+            filial=self.filial, razao_social="Cliente OP", tipo_pessoa="F",
+            cpf_cnpj="12345678907",
+        )
+        conta = ContaReceber.objects.create(
+            filial=self.filial, cliente=cliente, valor_original=Decimal("150.00"),
+            valor_final=Decimal("150.00"), valor_pago=Decimal("150.00"),
+            valor_saldo=Decimal("0.00"), data_emissao=date(2026, 8, 24),
+            data_vencimento=date(2026, 8, 24), data_pagamento=date(2026, 8, 24),
+            data_liquidacao_prevista=date(2026, 8, 24), forma_pagamento=self.forma,
+            status=StatusContaReceber.PAGO, documento_tipo="pedido_moda", documento_id=123,
+        )
+
+        posicao = PosicaoDiariaCaixaService(self.filial, date(2026, 8, 24)).gerar()
+
+        entrada = next(item for item in posicao["entradas"] if item.registro_id == conta.pk)
+        self.assertEqual(entrada.entrada, Decimal("150.00"))
+        self.assertEqual(entrada.origem, "Conta a receber")
+
+    def test_venda_consulta_prazo_atual_da_forma_ao_registrar_pagamento(self):
+        self.forma.prazo_compensacao_dias_uteis = 1
+        self.forma.save(update_fields=["prazo_compensacao_dias_uteis"])
+        forma_desatualizada = FormaPagamento.objects.get(pk=self.forma.pk)
+        FormaPagamento.objects.filter(pk=self.forma.pk).update(
+            prazo_compensacao_dias_uteis=0,
+        )
+        venda = VendaPDV.objects.create(
+            filial=self.filial, numero_venda=90, status="finalizada",
+            valor_total=Decimal("95.00"), valor_pago=Decimal("95.00"), usuario=self.usuario,
+            data_venda=datetime(2026, 8, 24, 12, tzinfo=timezone.get_current_timezone()),
+        )
+
+        pagamento = PagamentoVendaPDV.objects.create(
+            venda_pdv=venda, forma_pagamento=forma_desatualizada,
+            conta_bancaria=self.banco, valor=Decimal("95.00"),
+        )
+
+        self.assertEqual(pagamento.prazo_compensacao_aplicado, 0)
+        self.assertEqual(pagamento.data_liquidacao_prevista, date(2026, 8, 24))
+        self.assertTrue(any(
+            item.registro_id == pagamento.pk
+            for item in PosicaoDiariaCaixaService(self.filial, date(2026, 8, 24)).gerar()["entradas"]
+        ))
+
     def test_baixa_de_boleto_compensa_no_proximo_dia_util(self):
         self.forma.tipo = TipoFormaPagamento.BOLETO
         self.forma.prazo_compensacao_dias_uteis = 1
@@ -598,6 +643,31 @@ class PosicaoDiariaCaixaTests(TestCase):
         posicao = PosicaoDiariaCaixaService(self.filial, date(2026, 8, 21)).gerar()
         entrada = next(mov for mov in posicao["entradas"] if mov.registro_id == movimento.pk)
         self.assertEqual(entrada.classificacao, "Emprestimo recebido")
+
+    def test_cards_exibem_apenas_ultima_categoria_financeira(self):
+        grupo = PlanoContas.objects.create(
+            empresa=self.empresa, codigo="310", descricao="Receitas financeiras",
+            tipo="R", nivel=1, aceita_lancamento=False,
+        )
+        tipo = PlanoContas.objects.create(
+            empresa=self.empresa, conta_pai=grupo, codigo="31001",
+            descricao="Capital e emprestimos", tipo="R", nivel=2,
+            aceita_lancamento=False,
+        )
+        categoria = self._categoria_receita("Emprestimos recebidos")
+        categoria.conta_pai = tipo
+        categoria.save(update_fields=["conta_pai"])
+        movimento = ExtratoBancario.objects.create(
+            filial=self.filial, conta_bancaria=self.banco, forma_pagamento=self.forma,
+            plano_contas=categoria, data_lancamento=date(2026, 8, 21),
+            historico="Emprestimo", valor=Decimal("100.00"), origem="manual",
+        )
+
+        posicao = PosicaoDiariaCaixaService(self.filial, date(2026, 8, 21)).gerar()
+        entrada = next(item for item in posicao["entradas"] if item.registro_id == movimento.pk)
+
+        self.assertEqual(entrada.classificacao, "Emprestimos recebidos")
+        self.assertNotIn("Receitas financeiras", entrada.classificacao)
 
     def test_cartao_debito_ignora_parcelas_e_credito_respeita_maximo_cadastrado(self):
         from apps.financeiro.forms.cadastros import MovimentoContaBancariaForm

@@ -310,7 +310,7 @@ class PosicaoDiariaCaixaService:
                 excluido=item.status == "excluido",
                 momento=item.created_at,
                 classificacao=(
-                    item.plano_contas.caminho_descricao
+                    item.plano_contas.descricao
                     if item.plano_contas_id else ("Credito manual" if valor > ZERO else "Saida manual")
                 ),
                 despesa_pessoal=bool(valor < ZERO and _eh_despesa_pessoal(item.plano_contas)),
@@ -350,7 +350,7 @@ class PosicaoDiariaCaixaService:
                 taxa_descontada=bool(item.taxa_calculada_em),
                 referencia_url=reverse("financeiro:receber_detail", args=[item.pk]),
                 momento=item.updated_at,
-                classificacao=item.plano_contas.caminho_descricao if item.plano_contas_id else "Conta a receber",
+                classificacao=item.plano_contas.descricao if item.plano_contas_id else "Conta a receber",
                 bandeira=item.bandeira_recebimento,
                 numero_parcelas=item.parcelas_recebimento,
             ))
@@ -376,7 +376,7 @@ class PosicaoDiariaCaixaService:
                 momento=item.created_at,
                 despesa_pessoal=_eh_despesa_pessoal(item.conta_pagar.plano_contas),
                 classificacao=(
-                    item.conta_pagar.plano_contas.caminho_descricao
+                    item.conta_pagar.plano_contas.descricao
                     if item.conta_pagar.plano_contas_id else "Despesa sem classificacao"
                 ),
             ))
@@ -564,7 +564,7 @@ class PosicaoDiariaCaixaService:
             itens.append({
                 "data": item.data_liquidacao_prevista,
                 "descricao": f"Conta a receber - {item.cliente}",
-                "classificacao": item.plano_contas.caminho_descricao if item.plano_contas_id else "Conta a receber",
+                "classificacao": item.plano_contas.descricao if item.plano_contas_id else "Conta a receber",
                 "forma": item.forma_pagamento.descricao if item.forma_pagamento else "Sem forma vinculada",
                 "conta": item.conta_bancaria.descricao if item.conta_bancaria else "Conta nao definida",
                 "conta_id": item.conta_bancaria_id,
@@ -602,7 +602,7 @@ class PosicaoDiariaCaixaService:
             itens.append({
                 "data": data_prevista,
                 "descricao": f"Conta a receber - {item.cliente}",
-                "classificacao": item.plano_contas.caminho_descricao if item.plano_contas_id else "Conta a receber",
+                "classificacao": item.plano_contas.descricao if item.plano_contas_id else "Conta a receber",
                 "forma": forma.descricao if forma else "Sem forma vinculada",
                 "conta": item.conta_bancaria.descricao if item.conta_bancaria else "Conta nao definida",
                 "conta_id": item.conta_bancaria_id,
