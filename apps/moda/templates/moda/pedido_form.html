@@ -2,7 +2,17 @@
 {% block title %}{{ title }}{% endblock %}
 {% block page_title %}{{ title }}{% endblock %}
 {% block content %}
-<div class="max-w-4xl mx-auto space-y-5 pb-24" x-data="{ novoCliente: false }"
+{% comment %}
+  `max-w-5xl` e não `4xl`: o formulário tem nove campos em três blocos, e
+  empilhados num vão estreito eles passavam da altura da tela — "Situação e
+  observações" ficava abaixo da dobra num notebook, e quem preenche não via
+  que existia. Mais largo, os blocos cabem em duas colunas e o pedido
+  inteiro aparece de uma vez.
+
+  Não é `max-w-none`: campo de formulário esticado por 1600 px é pior de
+  ler e de mirar. O quadro kanban pede a tela toda; formulário não.
+{% endcomment %}
+<div class="max-w-5xl mx-auto space-y-5 pb-24" x-data="{ novoCliente: false }"
      @cliente-criado.window="novoCliente = false">
 
   {# ── Cabeçalho ────────────────────────────────────────────────────── #}
@@ -48,6 +58,19 @@
       saber onde estava.
     {% endcomment %}
 
+    {% comment %}
+      DUAS COLUNAS a partir do desktop, e não três cartões empilhados. A
+      ordem de leitura continua a mesma — cliente, depois prazo, depois
+      situação —, mas o pedido inteiro cabe numa tela em vez de exigir
+      rolagem para descobrir que há um terceiro bloco.
+
+      Duas colunas explícitas, e não `grid-cols-2` nos cartões: o grid
+      colocaria Situação embaixo de Cliente, e a leitura viraria zigue-zague.
+      Aqui a esquerda é o cliente e a direita é o pedido.
+    {% endcomment %}
+    <div class="grid gap-4 lg:grid-cols-2 items-start">
+    <div class="space-y-4">
+
     {# ── 1. Cliente ───────────────────────────────────────────────────── #}
     <div class="card p-5 sm:p-6 space-y-4">
       <div class="flex items-center justify-between gap-3">
@@ -90,6 +113,9 @@
       </div>
     </div>
 
+    </div>{# fim da coluna do cliente #}
+    <div class="space-y-4">
+
     {# ── 2. Prazos ────────────────────────────────────────────────────── #}
     <div class="card p-5 sm:p-6 space-y-4">
       <div>
@@ -100,11 +126,17 @@
           A data de entrega é o que ordena a fila da fábrica.
         </p>
       </div>
-      <div class="grid gap-4 sm:grid-cols-3">
+      {% comment %}
+        As duas DATAS lado a lado, porque é uma contra a outra que elas se
+        leem — abriu hoje, entrega quando? O vendedor vai embaixo, sozinho:
+        em três colunas dentro de meia tela cada campo ficava com 170 px, e
+        seletor de data nesse tamanho é difícil de acertar.
+      {% endcomment %}
+      <div class="grid gap-4 sm:grid-cols-2">
         {% include "moda/_campo.html" with campo=form.data_pedido %}
         {% include "moda/_campo.html" with campo=form.data_prevista_entrega %}
-        {% include "moda/_campo.html" with campo=form.vendedor %}
       </div>
+      {% include "moda/_campo.html" with campo=form.vendedor %}
     </div>
 
     {# ── 3. Classificação ─────────────────────────────────────────────── #}
@@ -123,6 +155,9 @@
       </div>
       {% include "moda/_campo.html" with campo=form.observacoes %}
     </div>
+
+    </div>{# fim da coluna do pedido #}
+    </div>{# fim das duas colunas #}
 
     {# ── Auditoria ──────────────────────────────────────────────────── #}
     {% comment %}
@@ -190,7 +225,15 @@
        :style="temaClaro
          ? 'background:rgba(255,255,255,.92); border-top:1px solid #e5e7eb; backdrop-filter:blur(6px);'
          : 'background:rgba(24,24,27,.92); border-top:1px solid #303036; backdrop-filter:blur(6px);'">
-    <div class="max-w-4xl mx-auto flex items-center justify-between gap-3">
+    {% comment %}
+      Acompanha a largura do formulário: desalinhado, o botão de salvar
+      ficaria fora da coluna que ele salva.
+
+      `{% comment %}` e não `{#…#}`: a forma curta é de UMA linha só, e
+      quebrada em duas ela vira texto visível na tela — foi o que aconteceu
+      aqui até o render mostrar a frase impressa acima do rodapé.
+    {% endcomment %}
+    <div class="max-w-5xl mx-auto flex items-center justify-between gap-3">
       <p class="text-xs hidden sm:block" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
         <span style="color:#dc2626;">*</span> campos obrigatórios
       </p>

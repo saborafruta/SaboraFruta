@@ -803,7 +803,14 @@
 {% endif %}
 
         <main class="flex-1">
-          <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+          {% comment %}
+            A largura vira BLOCO para a página poder escolher. O padrão
+            continua `max-w-7xl`, então toda tela que não disser nada
+            renderiza igual a antes — mas um quadro kanban de nove colunas
+            não cabe em 1280 px, e antes ele era cortado no meio enquanto
+            sobrava tela dos dois lados.
+          {% endcomment %}
+          <div class="{% block largura_conteudo %}max-w-7xl{% endblock %} mx-auto px-4 sm:px-6 lg:px-8 py-8">
             {% include 'core/_messages.html' %}
             {% block global_back %}
               {% if request.resolver_match.url_name != 'dashboard' and request.GET.modal != '1' %}

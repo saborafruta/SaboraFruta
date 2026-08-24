@@ -1,8 +1,290 @@
 {% extends "_base.html" %}
 {% block title %}DRE Consolidado{% endblock %}
+{% block page_title %}DRE Consolidado{% endblock %}
+
 {% block content %}
-<div class="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-800 p-6 shadow-sm">
-  <h2 class="text-xl font-bold mb-2">{{ title|default:"DRE Consolidado" }}</h2>
-  <p class="text-sm text-gray-500">Página em construção. Use o <a href="/admin/" class="text-blue-600 underline">Django Admin</a> para gerenciar registros enquanto a UI desta seção é finalizada.</p>
+<style>
+  /* O app financeiro tema por CLASSE (`.tema-escuro`), e não por binding do
+     Alpine como o vertical de moda. Misturar os dois num arquivo só faria
+     metade da tela seguir uma regra e metade a outra. */
+  .dre-card { border:1px solid #e2e8f0; background:#fff; border-radius:12px; }
+  .tema-escuro .dre-card { border-color:#303036; background:#18181b; }
+  .dre-rotulo { color:#64748b; }
+  .tema-escuro .dre-rotulo { color:#94a3b8; }
+  .dre-forte { color:#0f172a; }
+  .tema-escuro .dre-forte { color:#f8fafc; }
+  .dre-tabela { width:100%; border-collapse:collapse; font-size:14px; }
+  .dre-tabela th, .dre-tabela td { padding:10px 14px; white-space:nowrap; }
+  .dre-tabela th { font-size:11px; text-transform:uppercase; letter-spacing:.05em; color:#64748b; }
+  .tema-escuro .dre-tabela th { color:#94a3b8; }
+  .dre-tabela td.nome, .dre-tabela th.nome { text-align:left; white-space:normal; width:100%; }
+  .dre-tabela td.valor, .dre-tabela th.valor { text-align:right; font-variant-numeric:tabular-nums; }
+  .dre-linha { border-top:1px solid #f1f5f9; }
+  .tema-escuro .dre-linha { border-color:#27272a; }
+  .dre-grupo > td { font-weight:600; }
+  /* A FILHA é recuada e mais fraca: é detalhe da linha de cima, e sem a
+     hierarquia visível a tabela vira uma lista plana em que a soma do
+     grupo parece mais uma categoria qualquer. */
+  .dre-filha > td { font-size:13px; color:#64748b; padding-top:4px; padding-bottom:4px; }
+  .tema-escuro .dre-filha > td { color:#a1a1aa; }
+  .dre-filha > td.nome { padding-left:34px; }
+  .dre-total { border-top:2px solid #cbd5e1; font-weight:700; }
+  .tema-escuro .dre-total { border-color:#52525b; }
+  .dre-positivo { color:#047857; }
+  .tema-escuro .dre-positivo { color:#34d399; }
+  .dre-negativo { color:#be123c; }
+  .tema-escuro .dre-negativo { color:#fb7185; }
+  .dre-alerta { border-left:3px solid #d97706; }
+  .dre-pill { border:1px solid #cbd5e1; border-radius:8px; padding:6px 12px; font-size:13px; color:#334155; }
+  .tema-escuro .dre-pill { border-color:#3f3f46; color:#d4d4d8; }
+  .dre-pill.ativo { border-color:#2563eb; background:#2563eb; color:#fff; }
+</style>
+
+<div class="space-y-5">
+
+  {# ── Cabeçalho e navegação de mês ──────────────────────────────────── #}
+  <div class="flex flex-wrap items-start justify-between gap-3">
+    <div>
+      <h2 class="text-2xl font-semibold dre-forte">DRE Consolidado</h2>
+      <p class="text-sm mt-1 dre-rotulo">
+        Resultado de <strong>{{ competencia|date:"F/Y" }}</strong> — calculado
+        agora, a partir dos títulos.
+      </p>
+    </div>
+    <div class="flex flex-wrap items-center gap-2">
+      {% comment %}
+        Os dois regimes lado a lado, e não um escondido num menu: a
+        diferença entre eles é material, e quem não souber que existe vai
+        ler um dos dois achando que é "o resultado".
+      {% endcomment %}
+      {% for chave, rotulo in regimes %}
+        <a href="?mes={{ mes_texto }}&regime={{ chave }}"
+           class="dre-pill {% if regime == chave %}ativo{% endif %}">{{ rotulo }}</a>
+      {% endfor %}
+      <span class="mx-1 dre-rotulo">|</span>
+      <a href="?mes={{ mes_anterior_texto }}&regime={{ regime }}" class="dre-pill">‹ Mês anterior</a>
+      {% if tem_seguinte %}
+        <a href="?mes={{ mes_seguinte_texto }}&regime={{ regime }}" class="dre-pill">Mês seguinte ›</a>
+      {% endif %}
+    </div>
+  </div>
+
+  {% comment %}
+    A explicação do regime fica NA TELA, não num manual: caixa e competência
+    dão números diferentes para o mesmo mês, e quem compara os dois sem
+    saber disso conclui que o sistema está errado.
+  {% endcomment %}
+  <div class="dre-card p-3">
+    <p class="text-xs dre-rotulo">
+      {% if regime == 'caixa' %}
+        <strong>Caixa:</strong> o que entrou e saiu de dinheiro no mês — só título
+        pago, pela data do pagamento. É o que bate com o extrato bancário.
+      {% else %}
+        <strong>Competência:</strong> o que foi do mês, tenha sido pago ou não —
+        todo título vivo, pela data de competência (ou o vencimento, quando ela
+        está em branco). É o que responde "este mês deu lucro?".
+      {% endif %}
+    </p>
+  </div>
+
+  {# ── Os quatro números ─────────────────────────────────────────────── #}
+  <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+    <div class="dre-card p-4">
+      <p class="text-xs uppercase tracking-wide dre-rotulo">Receitas</p>
+      <p class="text-2xl font-semibold mt-1 dre-forte">R$ {{ resumo.receita|floatformat:2 }}</p>
+      <p class="text-xs mt-1 dre-rotulo">no mês, no regime escolhido</p>
+    </div>
+    <div class="dre-card p-4">
+      <p class="text-xs uppercase tracking-wide dre-rotulo">Despesas</p>
+      <p class="text-2xl font-semibold mt-1 dre-forte">R$ {{ resumo.despesa|floatformat:2 }}</p>
+      <p class="text-xs mt-1 dre-rotulo">no mês, no regime escolhido</p>
+    </div>
+    <div class="dre-card p-4">
+      <p class="text-xs uppercase tracking-wide dre-rotulo">Resultado</p>
+      <p class="text-2xl font-semibold mt-1 {% if resumo.resultado < 0 %}dre-negativo{% else %}dre-positivo{% endif %}">
+        R$ {{ resumo.resultado|floatformat:2 }}
+      </p>
+      <p class="text-xs mt-1 dre-rotulo">
+        {% if resumo.margem is not None %}margem de {{ resumo.margem }}%{% else %}sem receita no mês{% endif %}
+      </p>
+    </div>
+    <div class="dre-card p-4">
+      <p class="text-xs uppercase tracking-wide dre-rotulo">Acumulado no ano</p>
+      <p class="text-2xl font-semibold mt-1 {% if resumo.resultado_ano < 0 %}dre-negativo{% else %}dre-positivo{% endif %}">
+        R$ {{ resumo.resultado_ano|floatformat:2 }}
+      </p>
+      <p class="text-xs mt-1 dre-rotulo">
+        {% if resumo.margem_ano is not None %}margem de {{ resumo.margem_ano }}%{% else %}sem receita no ano{% endif %}
+      </p>
+    </div>
+  </div>
+
+  {% comment %}
+    A REGRA MAIS IMPORTANTE DESTA TELA. Um DRE que descarta em silêncio o
+    que não foi classificado fecha bonito e está errado — e o erro cresce
+    junto com o descuido do cadastro. O aviso vem antes da tabela, com o
+    tamanho do buraco em reais e em porcento.
+  {% endcomment %}
+  {% if resumo.sem_categoria %}
+    <div class="dre-card dre-alerta p-4">
+      <p class="text-sm dre-forte">
+        <strong>R$ {{ resumo.sem_categoria|floatformat:2 }}</strong> sem categoria
+        financeira{% if resumo.sem_categoria_pct %} — {{ resumo.sem_categoria_pct }}% de
+        tudo que passou no mês{% endif %}.
+      </p>
+      <p class="text-sm mt-1 dre-rotulo">
+        Esse dinheiro está no total, mas não em nenhuma linha do relatório: não há
+        como saber de onde veio nem para onde foi. Enquanto ele existir, o DRE
+        fecha certo e explica errado — classifique os títulos em
+        <a href="{% url 'financeiro:plano_contas_list' %}" style="text-decoration:underline;">Categorias financeiras</a>.
+      </p>
+    </div>
+  {% endif %}
+
+  {# ── A tabela ──────────────────────────────────────────────────────── #}
+  <div class="dre-card" style="overflow-x:auto;">
+    <table class="dre-tabela">
+      <thead>
+        <tr>
+          <th class="nome">Conta</th>
+          <th class="valor">{{ competencia|date:"M/y" }}</th>
+          <th class="valor">Mês anterior</th>
+          <th class="valor">Variação</th>
+          <th class="valor">Acumulado no ano</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% if vazio %}
+          <tr>
+            <td class="nome" colspan="5" style="padding:40px; text-align:center;">
+              <p class="text-sm dre-forte">Nenhum título no período.</p>
+              <p class="text-sm mt-2 dre-rotulo">
+                {% if regime == 'caixa' %}
+                  No regime de caixa só entra título <strong>pago</strong>. Se houver
+                  contas em aberto neste mês, veja em Competência.
+                {% else %}
+                  Nenhum título com competência ou vencimento neste mês.
+                {% endif %}
+              </p>
+            </td>
+          </tr>
+        {% endif %}
+        {% for bloco in linhas %}{% if not vazio %}
+          <tr class="dre-linha">
+            <td class="nome" colspan="5" style="padding-top:16px;">
+              <span class="text-xs uppercase tracking-wider dre-rotulo">{{ bloco.rotulo }}</span>
+            </td>
+          </tr>
+
+          {% for l in bloco.linhas %}
+            <tr class="dre-linha dre-grupo">
+              <td class="nome dre-forte">
+                {% if l.codigo %}<span class="dre-rotulo" style="font-size:12px;">{{ l.codigo }}</span> {% endif %}
+                {{ l.descricao }}
+              </td>
+              <td class="valor dre-forte">{{ l.mes|floatformat:2 }}</td>
+              <td class="valor dre-rotulo">{{ l.anterior|floatformat:2 }}</td>
+              {% comment %}
+                A variação é pintada pelo que ela SIGNIFICA, e não pelo
+                sinal: receita subindo é boa, despesa subindo é ruim, e o
+                mesmo "+R$ 3.000" em verde nos dois lugares mentiria.
+              {% endcomment %}
+              <td class="valor">
+                {% if not l.anterior and not l.mes %}
+                  <span class="dre-rotulo">—</span>
+                {% elif bloco.chave == 'receita' %}
+                  <span class="{% if l.variacao < 0 %}dre-negativo{% elif l.variacao > 0 %}dre-positivo{% endif %}">
+                    {{ l.variacao|floatformat:2 }}{% if l.variacao_pct is not None %} ({{ l.variacao_pct }}%){% endif %}
+                  </span>
+                {% else %}
+                  <span class="{% if l.variacao > 0 %}dre-negativo{% elif l.variacao < 0 %}dre-positivo{% endif %}">
+                    {{ l.variacao|floatformat:2 }}{% if l.variacao_pct is not None %} ({{ l.variacao_pct }}%){% endif %}
+                  </span>
+                {% endif %}
+              </td>
+              <td class="valor dre-rotulo">{{ l.ano|floatformat:2 }}</td>
+            </tr>
+
+            {% for f in l.filhas %}
+              <tr class="dre-filha">
+                <td class="nome">
+                  {% if f.codigo %}{{ f.codigo }} · {% endif %}{{ f.descricao }}
+                </td>
+                <td class="valor">{{ f.total|floatformat:2 }}</td>
+                <td class="valor"></td>
+                <td class="valor"></td>
+                <td class="valor"></td>
+              </tr>
+            {% endfor %}
+          {% endfor %}
+
+          {% if bloco.sem_categoria.tem %}
+            <tr class="dre-linha dre-grupo">
+              <td class="nome" style="color:#d97706;">Sem categoria</td>
+              <td class="valor" style="color:#d97706;">{{ bloco.sem_categoria.mes|floatformat:2 }}</td>
+              <td class="valor dre-rotulo">{{ bloco.sem_categoria.anterior|floatformat:2 }}</td>
+              <td class="valor dre-rotulo">—</td>
+              <td class="valor dre-rotulo">{{ bloco.sem_categoria.ano|floatformat:2 }}</td>
+            </tr>
+          {% endif %}
+
+          <tr class="dre-total">
+            <td class="nome dre-forte">Total de {{ bloco.rotulo|lower }}</td>
+            <td class="valor dre-forte">{{ bloco.total_mes|floatformat:2 }}</td>
+            <td class="valor dre-rotulo">{{ bloco.total_anterior|floatformat:2 }}</td>
+            <td class="valor dre-rotulo">—</td>
+            <td class="valor dre-forte">{{ bloco.total_ano|floatformat:2 }}</td>
+          </tr>
+        {% endif %}{% empty %}
+          <tr>
+            <td class="nome" colspan="5" style="padding:40px; text-align:center;">
+              <p class="text-sm dre-forte">Nenhum título no período.</p>
+              <p class="text-sm mt-2 dre-rotulo">
+                {% if regime == 'caixa' %}
+                  No regime de caixa só entra título <strong>pago</strong>. Se houver
+                  contas em aberto no mês, veja em Competência.
+                {% else %}
+                  Nenhum título com competência ou vencimento neste mês.
+                {% endif %}
+              </p>
+            </td>
+          </tr>
+        {% endfor %}
+
+        {% if not vazio %}
+          <tr class="dre-total" style="border-top-width:3px;">
+            <td class="nome dre-forte" style="font-size:15px;">Resultado do período</td>
+            <td class="valor {% if resumo.resultado < 0 %}dre-negativo{% else %}dre-positivo{% endif %}"
+                style="font-size:15px;">{{ resumo.resultado|floatformat:2 }}</td>
+            <td class="valor {% if resumo.resultado_anterior < 0 %}dre-negativo{% else %}dre-positivo{% endif %}">
+              {{ resumo.resultado_anterior|floatformat:2 }}
+            </td>
+            <td class="valor {% if resumo.variacao_resultado < 0 %}dre-negativo{% else %}dre-positivo{% endif %}">
+              {{ resumo.variacao_resultado|floatformat:2 }}
+            </td>
+            <td class="valor {% if resumo.resultado_ano < 0 %}dre-negativo{% else %}dre-positivo{% endif %}"
+                style="font-size:15px;">{{ resumo.resultado_ano|floatformat:2 }}</td>
+          </tr>
+        {% endif %}
+      </tbody>
+    </table>
+  </div>
+
+  <div class="dre-card p-4">
+    <p class="text-xs uppercase tracking-wide mb-2 dre-rotulo">Como o número é feito</p>
+    <ul class="text-sm space-y-1 dre-rotulo">
+      <li><strong>Calculado agora</strong>, a partir dos títulos — não de um consolidado gravado, que ficaria
+        velho assim que alguém corrigisse uma baixa.</li>
+      <li><strong>As contas vêm da categoria financeira</strong> do título, agrupadas pela conta raiz. As linhas
+        recuadas são as subcategorias.</li>
+      <li><strong>Título cancelado fica de fora</strong> — nunca foi receita nem despesa. Recebimento devolvido
+        e conta a pagar excluída também.</li>
+      <li><strong>A variação é pintada pelo que significa:</strong> receita subindo é verde, despesa subindo é
+        vermelha. O mesmo valor nos dois lugares não quer dizer a mesma coisa.</li>
+      <li>Este é um DRE <strong>gerencial</strong>. Ele não separa CMV de despesa operacional nem calcula
+        EBITDA — para isso, cada categoria precisaria estar amarrada à conta contábil.</li>
+    </ul>
+  </div>
+
 </div>
 {% endblock %}
