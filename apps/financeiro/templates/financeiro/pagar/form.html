@@ -124,7 +124,8 @@
               <label class="flex items-center gap-2 rounded-md border px-3 py-2 text-sm"
                      :class="frequenciaRecorrencia === 'semanal' ? 'cursor-pointer' : 'cursor-not-allowed'"
                      :style="temaClaro ? 'border-color:#dbe3ee;background:#fff' : 'border-color:#3f3f46;background:#202024'">
-                {{ checkbox.tag|attr:":disabled:frequenciaRecorrencia !== 'semanal'" }}
+                {# BoundWidget.tag ja e HTML renderizado. Nao aplicar widget_tweaks aqui: causa 500 em producao. #}
+                {{ checkbox.tag }}
                 <span>{{ checkbox.choice_label }}</span>
               </label>
             {% endfor %}
@@ -584,6 +585,50 @@ async function consultarCepFornecedor(state, form) {
     state.cepConsultando=false;
   }
 }
+
+(function configurarRecorrenciaSemanalIntuitiva(){
+  function dataLocalISO(data){return `${data.getFullYear()}-${String(data.getMonth()+1).padStart(2,'0')}-${String(data.getDate()).padStart(2,'0')}`;}
+  function lerDataISO(valor){if(!valor)return null;const partes=valor.split('-').map(Number);return partes.length===3&&!partes.some(Number.isNaN)?new Date(partes[0],partes[1]-1,partes[2]):null;}
+  function indiceDiaSemana(checkbox){
+    const texto=((checkbox.value||'')+' '+(checkbox.closest('label')?.innerText||'')).normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase();
+    if(texto.includes('domingo')||texto.includes('dom'))return 0;
+    if(texto.includes('segunda')||texto.includes('seg'))return 1;
+    if(texto.includes('terca')||texto.includes('ter'))return 2;
+    if(texto.includes('quarta')||texto.includes('qua'))return 3;
+    if(texto.includes('quinta')||texto.includes('qui'))return 4;
+    if(texto.includes('sexta')||texto.includes('sex'))return 5;
+    if(texto.includes('sabado')||texto.includes('sab'))return 6;
+    return null;
+  }
+  function notificar(input){input.dispatchEvent(new Event('input',{bubbles:true}));input.dispatchEvent(new Event('change',{bubbles:true}));}
+  function proximaData(diaSemana, base){const data=new Date(base.getFullYear(),base.getMonth(),base.getDate());data.setDate(data.getDate()+((diaSemana-data.getDay()+7)%7));return data;}
+  function configurar(){
+    const frequencia=document.querySelector('[name="frequencia_recorrencia"]');
+    const vencimento=document.querySelector('[name="data_vencimento"]');
+    const checks=Array.from(document.querySelectorAll('[name="dias_semana_recorrencia"]'));
+    if(!frequencia||!vencimento||!checks.length)return;
+    const semanal=()=>frequencia.value==='semanal';
+    const marcados=()=>checks.filter(check=>check.checked);
+    function sugerir(check){
+      if(!semanal()||!check.checked)return;
+      const dia=indiceDiaSemana(check);
+      if(dia===null)return;
+      vencimento.value=dataLocalISO(proximaData(dia,lerDataISO(vencimento.value)||new Date()));
+      notificar(vencimento);
+    }
+    function marcarPelaData(){
+      if(!semanal()||marcados().length||!vencimento.value)return;
+      const data=lerDataISO(vencimento.value);
+      if(!data)return;
+      const alvo=checks.find(check=>indiceDiaSemana(check)===data.getDay());
+      if(alvo){alvo.checked=true;notificar(alvo);}
+    }
+    frequencia.addEventListener('change',()=>{if(semanal()){marcarPelaData();const primeiro=marcados()[0];if(primeiro&&!vencimento.value)sugerir(primeiro);}});
+    checks.forEach(check=>check.addEventListener('change',()=>sugerir(check)));
+    vencimento.addEventListener('change',marcarPelaData);
+  }
+  if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',configurar);else configurar();
+})();
 
 function categoriaGuiada(root) {
   return {
