@@ -1,0 +1,104 @@
+{% extends "_base.html" %}
+{% block title %}{{ title }} — Polpa{% endblock %}
+{% block page_title %}{{ title }}{% endblock %}
+{% block content %}
+
+{% comment %}
+  A LISTA É DE LOTES COM SALDO, na mesma ordem FEFO do estoque: quem imprime
+  etiqueta está com o pallet na mão, e o pallet que sai primeiro é o que
+  vence primeiro.
+
+  O QUE FALTA EM CADA UM aparece aqui, antes de imprimir — descobrir que o
+  produto não tem EAN depois de a folha sair da impressora é papel perdido.
+{% endcomment %}
+<div class="space-y-4">
+
+  <div>
+    <p class="text-sm mb-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+      <a href="{% url 'polpa:hub' %}" :style="temaClaro ? 'color:#3b82f6;' : 'color:#60a5fa;'">Polpa de Frutas</a>
+      <span class="mx-1">›</span>
+      <a href="{% url 'polpa:grupo' 'frio' %}" :style="temaClaro ? 'color:#3b82f6;' : 'color:#60a5fa;'">Cadeia de frio</a>
+    </p>
+    <h2 class="text-2xl font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">Etiquetas</h2>
+    <p class="text-sm mt-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+      Nome, código, lote, fabricação, validade, peso, barras e QR — o QR abre
+      a rastreabilidade do lote.
+    </p>
+  </div>
+
+  <form method="get" class="card p-3 flex flex-wrap items-end gap-3">
+    <div class="flex-1 min-w-[200px]">
+      <label class="form-label">Lote ou produto</label>
+      <input type="text" name="busca" value="{{ filtros.busca }}" class="form-input w-full"
+             autocomplete="off" placeholder="Ex.: PM260825, polpa de manga">
+    </div>
+    <button type="submit" class="btn-primary text-sm">Filtrar</button>
+  </form>
+
+  <div class="card overflow-hidden">
+    <div class="overflow-x-auto">
+      <table class="w-full text-sm">
+        <thead>
+          <tr class="border-b" :style="temaClaro ? 'border-color:#e2e8f0;' : 'border-color:#2a2a2e;'">
+            <th class="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wide"
+                :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Lote</th>
+            <th class="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wide"
+                :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Produto</th>
+            <th class="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wide"
+                :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Validade</th>
+            <th class="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wide"
+                :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Etiqueta</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for linha in linhas %}
+            <tr class="border-b" :style="temaClaro ? 'border-color:#f1f5f9;' : 'border-color:#1e1e22;'">
+              <td class="px-4 py-3 font-mono font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
+                {{ linha.lote.numero_lote }}
+              </td>
+              <td class="px-4 py-3" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
+                {{ linha.lote.produto }}
+                <span class="block text-xs" :style="temaClaro ? 'color:#94a3b8;' : 'color:#71717a;'">
+                  {{ linha.lote.quantidade_atual|floatformat:0 }} un
+                  {% if linha.peso %} · {{ linha.peso|floatformat:1 }} kg{% endif %}
+                </span>
+              </td>
+              <td class="px-4 py-3 text-xs">
+                {% if linha.lote.data_validade %}
+                  <span :style="temaClaro ? 'color:#374151;' : 'color:#cbd5e1;'">{{ linha.lote.data_validade|date:"d/m/Y" }}</span>
+                {% else %}
+                  <span style="color:#d97706;">sem validade</span>
+                {% endif %}
+              </td>
+              <td class="px-4 py-3 text-xs">
+                {% if linha.pendencias %}
+                  {% for p in linha.pendencias %}
+                    <span class="block" style="color:#d97706;">· {{ p }}</span>
+                  {% endfor %}
+                {% else %}
+                  <span style="color:#059669;">completa</span>
+                {% endif %}
+              </td>
+              <td class="px-4 py-3 text-right">
+                <a href="{% url 'polpa:etiqueta-lote' linha.lote.pk %}"
+                   class="btn-secondary text-xs">Gerar etiqueta</a>
+              </td>
+            </tr>
+          {% empty %}
+            <tr>
+              <td colspan="5" class="px-4 py-10 text-center">
+                <p class="text-sm" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+                  Nenhum lote com saldo. As etiquetas saem dos lotes que a
+                  produção gerou.
+                </p>
+              </td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+</div>
+{% endblock %}

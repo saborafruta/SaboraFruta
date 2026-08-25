@@ -123,6 +123,8 @@ GRUPOS: tuple[Grupo, ...] = (
                  'Temperatura fora, vencimento, capacidade e lote bloqueado.'),
             Item('tunel', 'Túnel de congelamento',
                  'Entrada, tempo e saída de cada carga no túnel.'),
+            Item('etiquetas', 'Etiquetas',
+                 'Nome, lote, validade, peso, barras e o QR da rastreabilidade.'),
             Item('estoque-frio', 'Estoque congelado',
                  'Saldo por lote e validade, dentro de cada câmara.'),
         ),

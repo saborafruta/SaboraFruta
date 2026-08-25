@@ -17,7 +17,7 @@ a página dá 404 (o `resolve` acha pelo padrão).
 from django.urls import path
 
 from . import (
-    views_armazenagem as varm, views_frio as vfrio,
+    views_armazenagem as varm, views_etiqueta as vetq, views_frio as vfrio,
     views, views_catalogo as vcat, views_ordem as vord,
     views_planejamento as vpla, views_processo as vproc,
     views_subproduto as vsub,
@@ -94,6 +94,14 @@ ROTAS_PRONTAS: list = [
     path('frio/estoque-frio/', varm.EstoqueFrioView.as_view(), name='estoque-frio'),
     path('frio/estoque-frio/<int:pk>/guardar/', varm.GuardarLoteView.as_view(), name='lote-guardar'),
     path('frio/estoque-frio/<int:pk>/bloquear/', varm.BloquearLoteView.as_view(), name='lote-bloquear'),
+    # ── Etiquetas ───────────────────────────────────────────────────────
+    # O único pedaço do sistema que sai da fábrica: vai colado no saco que
+    # chega ao supermercado, e é o que a fiscalização lê.
+    path('frio/etiquetas/', vetq.EtiquetaListView.as_view(), name='etiqueta-list'),
+    path('frio/etiquetas/<int:pk>/', vetq.EtiquetaLoteView.as_view(), name='etiqueta-lote'),
+    path('frio/etiquetas/<int:pk>/qr.png', vetq.QrLoteView.as_view(), name='etiqueta-qr'),
+    path('frio/etiquetas/<int:pk>/barras.svg', vetq.BarrasLoteView.as_view(), name='etiqueta-barras'),
+
     path('frio/temperatura/', vfrio.TemperaturaView.as_view(), name='temperatura'),
     path('frio/alertas/', vfrio.AlertasFrioView.as_view(), name='alertas-frio'),
     path('frio/camaras/', varm.CamaraListView.as_view(), name='camara-list'),

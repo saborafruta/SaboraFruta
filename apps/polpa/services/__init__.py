@@ -1,5 +1,6 @@
 from .armazenagem import ArmazenagemService
 from .catalogo import CatalogoService
+from .etiqueta import EtiquetaService
 from .frio import FrioService
 from .custo import CustoService
 from .ordem import OrdemPolpaService
@@ -10,7 +11,7 @@ from .subproduto import SubprodutoService
 from .recebimento import RecebimentoService
 
 __all__ = [
-    'ArmazenagemService', 'CatalogoService', 'FrioService',
+    'ArmazenagemService', 'CatalogoService', 'EtiquetaService', 'FrioService',
     'CustoService', 'OrdemPolpaService', 'PlanejamentoService',
     'ProcessoService', 'ReceitaService', 'RecebimentoService',
     'SubprodutoService',
