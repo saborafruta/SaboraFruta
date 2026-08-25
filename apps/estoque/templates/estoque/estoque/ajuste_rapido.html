@@ -37,7 +37,8 @@
   body.tema-claro .stock-count-photo { background: #dbeafe; border-color: #bfdbfe; color: #1d4ed8; }
   .stock-count-photo img { width: 100%; height: 100%; object-fit: cover; display: block; }
   .stock-count-photo span { position: absolute; left: .28rem; bottom: .28rem; border-radius: 999px; padding: .08rem .34rem; background: rgba(15,23,42,.78); color: #fff; font-size: .68rem; }
-  .stock-count-photo-empty { font-size: .9rem; }
+  .stock-count-photo-empty { gap: .18rem; font-size: .72rem; line-height: 1.05; text-align: center; }
+  .stock-count-photo-empty strong { display: block; font-size: 1.15rem; line-height: 1; }
   .stock-count-photo.is-broken img { display: none; }
   .stock-count-photo.is-broken::before { content: "Sem foto"; font-size: .62rem; text-transform: uppercase; letter-spacing: .03em; }
   .stock-count-name { color: #f8fafc; font-size: 1rem; font-weight: 900; line-height: 1.18; overflow-wrap: anywhere; }
@@ -46,7 +47,7 @@
   body.tema-claro .stock-count-meta { color: #64748b; }
   .stock-count-pill { display: inline-flex; min-height: 24px; align-items: center; border-radius: 999px; padding: .12rem .5rem; background: rgba(148,163,184,.12); color: #cbd5e1; font-weight: 800; }
   body.tema-claro .stock-count-pill { background: #f1f5f9; color: #475569; }
-  .stock-count-current { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .45rem; }
+  .stock-count-current { display: grid; grid-template-columns: minmax(0, 1fr); gap: .45rem; }
   .stock-count-current-box { border-radius: 10px; border: 1px solid rgba(148,163,184,.16); padding: .55rem; min-width: 0; }
   body.tema-claro .stock-count-current-box { border-color: #e2e8f0; background: #f8fafc; }
   .stock-count-current-label { color: #94a3b8; font-size: .68rem; font-weight: 900; text-transform: uppercase; }
@@ -79,6 +80,10 @@
   .stock-count-photo-head { display: flex; align-items: center; justify-content: space-between; gap: 1rem; padding: .85rem 1rem; color: #f8fafc; font-weight: 900; }
   .stock-count-photo-body { display: grid; place-items: center; min-height: 220px; padding: 1rem; color: #cbd5e1; }
   .stock-count-photo-body img { max-width: 100%; max-height: 68vh; object-fit: contain; border-radius: 12px; }
+  .stock-count-photo-actions { display: flex; align-items: center; justify-content: flex-end; gap: .55rem; padding: 0 1rem 1rem; }
+  .stock-count-photo-file { position: absolute; width: 1px; height: 1px; overflow: hidden; opacity: 0; pointer-events: none; }
+  .stock-count-photo-upload { cursor: pointer; }
+  .stock-count-photo-hint { margin-right: auto; color: #94a3b8; font-size: .78rem; }
   .stock-count-log { position: fixed; inset: 0; z-index: 75; display: grid; place-items: center; padding: 1rem; background: rgba(3,7,18,.70); }
   .stock-count-log[hidden] { display: none !important; }
   .stock-count-log-panel { width: min(94vw, 760px); max-height: min(88vh, 760px); overflow: auto; border-radius: 16px; background: #242426; border: 1px solid rgba(148,163,184,.22); box-shadow: 0 28px 80px rgba(0,0,0,.42); }
@@ -96,7 +101,7 @@
     .stock-count-filter { grid-template-columns: 1fr 1fr; }
     .stock-count-row { grid-template-columns: 82px minmax(0, 1fr); }
     .stock-count-adjust { grid-column: 1 / -1; }
-    .stock-count-current { grid-column: 1 / -1; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .stock-count-current { grid-column: 1 / -1; grid-template-columns: minmax(0, 1fr); }
   }
   @media (max-width: 720px) {
     .stock-count-page { gap: .58rem; }
@@ -214,7 +219,7 @@
     }
     .stock-count-current {
       grid-column: 1 / -1;
-      grid-template-columns: repeat(2, minmax(0, 1fr));
+      grid-template-columns: minmax(0, 1fr);
       gap: .38rem;
     }
     .stock-count-current-box {
@@ -354,12 +359,13 @@
                 data-photo-url="{{ produto.ajuste_rapido_foto_url|default:'' }}"
                 data-photo-title="{{ produto.descricao }}"
                 data-photo-id="{{ produto.codigo_replicacao }}"
-                aria-label="Ver foto de {{ produto.descricao }}">
+                data-photo-action="{% url 'produtos:produto-image-update' produto.pk %}"
+                aria-label="{% if produto.ajuste_rapido_foto_url %}Ver ou trocar{% else %}Adicionar{% endif %} foto de {{ produto.descricao }}">
           {% if produto.ajuste_rapido_foto_url %}
             <img src="{{ produto.ajuste_rapido_foto_url }}" alt="{{ produto.descricao }}" loading="lazy" onerror="this.closest('[data-photo]').classList.add('is-broken'); this.remove();">
             <span>#{{ produto.codigo_replicacao }}</span>
           {% else %}
-            #{{ produto.codigo_replicacao }}
+            <strong>+</strong> Foto
           {% endif %}
         </button>
         <div class="min-w-0">
@@ -373,12 +379,8 @@
         </div>
         <div class="stock-count-current">
           <div class="stock-count-current-box">
-            <div class="stock-count-current-label">Atual</div>
+            <div class="stock-count-current-label">Estoque atual</div>
             <div class="stock-count-current-value" data-current-display>{{ produto.estoque_quantidade_atual_display }}</div>
-          </div>
-          <div class="stock-count-current-box">
-            <div class="stock-count-current-label">Disponivel</div>
-            <div class="stock-count-current-value">{{ produto.estoque_quantidade_disponivel_display }}</div>
           </div>
         </div>
         <div class="stock-count-adjust">
@@ -434,6 +436,12 @@
       <button type="button" class="btn-secondary" data-close-photo>Fechar</button>
     </div>
     <div class="stock-count-photo-body" data-photo-body></div>
+    <form method="post" enctype="multipart/form-data" class="stock-count-photo-actions" data-photo-form>
+      {% csrf_token %}
+      <span class="stock-count-photo-hint" data-photo-hint>PNG, JPG, WEBP ou GIF.</span>
+      <label class="btn-primary stock-count-photo-upload" for="stock-count-photo-input" data-photo-upload-label>Adicionar foto</label>
+      <input id="stock-count-photo-input" class="stock-count-photo-file" type="file" name="imagem_produto" accept="image/png,image/jpeg,image/webp,image/gif" data-photo-input>
+    </form>
   </div>
 </div>
 
@@ -613,22 +621,36 @@
     const photoModal = document.querySelector('[data-photo-modal]');
     const photoTitle = document.querySelector('[data-photo-title]');
     const photoBody = document.querySelector('[data-photo-body]');
+    const photoForm = document.querySelector('[data-photo-form]');
+    const photoInput = document.querySelector('[data-photo-input]');
+    const photoUploadLabel = document.querySelector('[data-photo-upload-label]');
+    const closePhoto = () => {
+      if (photoModal) photoModal.hidden = true;
+      if (photoInput) photoInput.value = '';
+    };
     document.querySelectorAll('[data-photo]').forEach((button) => {
       button.addEventListener('click', () => {
-        if (!photoModal || !photoBody) return;
+        if (!photoModal || !photoBody || !photoForm) return;
         const title = button.dataset.photoTitle || 'Produto';
         const id = button.dataset.photoId || '';
         const url = button.dataset.photoUrl || '';
+        photoForm.action = button.dataset.photoAction || '';
         if (photoTitle) photoTitle.textContent = `${title} - #${id}`;
+        if (photoUploadLabel) photoUploadLabel.textContent = url ? 'Trocar foto' : 'Adicionar foto';
         photoBody.innerHTML = url
           ? `<img src="${escapeHtml(url)}" alt="${escapeHtml(title)}" onerror="this.parentElement.innerHTML='<div class=&quot;stock-count-empty&quot;>Foto cadastrada, mas o arquivo nao abriu neste dispositivo.</div>'">`
-          : '<div class="stock-count-empty">Este produto ainda nao tem foto cadastrada.</div>';
+          : '<div class="stock-count-empty">Sem foto. Toque em <strong>Adicionar foto</strong> para fotografar ou escolher uma imagem.</div>';
         photoModal.hidden = false;
       });
     });
-    document.querySelector('[data-close-photo]')?.addEventListener('click', () => { photoModal.hidden = true; });
+    photoInput?.addEventListener('change', () => {
+      if (!photoInput.files?.length || !photoForm?.action) return;
+      if (photoUploadLabel) photoUploadLabel.textContent = 'Enviando...';
+      photoForm.submit();
+    });
+    document.querySelector('[data-close-photo]')?.addEventListener('click', closePhoto);
     photoModal?.addEventListener('click', (event) => {
-      if (event.target === photoModal) photoModal.hidden = true;
+      if (event.target === photoModal) closePhoto();
     });
 
     const cameraModal = document.querySelector('[data-camera-modal]');

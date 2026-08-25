@@ -1964,7 +1964,6 @@ class AjusteRapidoEstoqueView(PermissaoRequiredMixin, View):
             produto.ajuste_rapido_contado = item.get('contado', self._decimal_to_value(produto.estoque_quantidade_atual))
             produto.estoque_quantidade_atual_value = self._decimal_to_value(produto.estoque_quantidade_atual)
             produto.estoque_quantidade_atual_display = EstoqueListView._formatar_quantidade(produto.estoque_quantidade_atual)
-            produto.estoque_quantidade_disponivel_display = EstoqueListView._formatar_quantidade(produto.estoque_quantidade_disponivel)
             produto.ajuste_rapido_foto_url = self._foto_url_segura(request, produto)
 
         querydict = request.GET.copy()
