@@ -18,6 +18,7 @@ from django.urls import path
 
 from . import (
     views_armazenagem as varm, views_etiqueta as vetq, views_frio as vfrio,
+    views_indicadores as vind,
     views, views_catalogo as vcat, views_ordem as vord,
     views_planejamento as vpla, views_processo as vproc,
     views_subproduto as vsub,
@@ -110,6 +111,10 @@ ROTAS_PRONTAS: list = [
     path('frio/lotes/<int:pk>/mover/', vfrio.MoverLoteView.as_view(), name='lote-mover'),
     path('frio/camaras/nova/', varm.CamaraFormView.as_view(), name='camara-create'),
     path('frio/camaras/<int:pk>/editar/', varm.CamaraFormView.as_view(), name='camara-update'),
+    # ── Indicadores ─────────────────────────────────────────────────────
+    # Nenhum número nasce lá: o painel junta o que já foi registrado por
+    # quem fez o trabalho.
+    path('indicadores/painel/', vind.PainelView.as_view(), name='painel'),
     path('indicadores/validade/', varm.ValidadeView.as_view(), name='validade'),
 
     # ── PPCP ────────────────────────────────────────────────────────────

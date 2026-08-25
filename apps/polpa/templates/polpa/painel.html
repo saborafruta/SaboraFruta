@@ -1,0 +1,418 @@
+{% extends "_base.html" %}
+{% block title %}{{ title }} — Polpa{% endblock %}
+{% block page_title %}{{ title }}{% endblock %}
+{% block content %}
+
+{% comment %}
+  CINCO PERGUNTAS, UMA TELA. Nenhum número nasce aqui — todos já foram
+  registrados por quem fez o trabalho, e o painel só junta. Um dashboard que
+  guarda os próprios totais é o primeiro lugar onde o sistema passa a
+  discordar de si mesmo.
+
+  ONDE NÃO HÁ MEDIÇÃO, A TELA DIZ "sem medição" — nunca zero. Zero é uma
+  afirmação ("não rendeu nada", "não girou") e é diferente de "ninguém
+  mediu". Confundir os dois é como um painel perde a confiança de quem
+  olha: basta um número obviamente errado.
+{% endcomment %}
+<div class="space-y-5">
+
+  <div class="flex flex-wrap items-start justify-between gap-3">
+    <div>
+      <p class="text-sm mb-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+        <a href="{% url 'polpa:hub' %}" :style="temaClaro ? 'color:#3b82f6;' : 'color:#60a5fa;'">Polpa de Frutas</a>
+        <span class="mx-1">›</span>
+        <a href="{% url 'polpa:grupo' 'indicadores' %}" :style="temaClaro ? 'color:#3b82f6;' : 'color:#60a5fa;'">Indicadores</a>
+      </p>
+      <h2 class="text-2xl font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">Painel industrial</h2>
+      <p class="text-sm mt-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+        Produção do dia · eficiência, custo, estoque e qualidade nos últimos
+        {{ dados.dias }} dias.
+      </p>
+    </div>
+    <div class="flex flex-wrap gap-2">
+      {% for janela in janelas %}
+        <a href="?dias={{ janela }}"
+           class="px-3 py-2 rounded-lg text-sm font-semibold"
+           :style="{{ dados.dias }} === {{ janela }}
+             ? 'background:#2563eb; color:#fff;'
+             : (temaClaro ? 'background:#f1f5f9; color:#334155;' : 'background:#1e1e22; color:#cbd5e1;')">
+          {{ janela }} dias
+        </a>
+      {% endfor %}
+    </div>
+  </div>
+
+  {# ══ PRODUÇÃO ═══════════════════════════════════════════════════ #}
+  <div>
+    <h3 class="text-sm font-bold uppercase tracking-wider mb-2"
+        :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Produção</h3>
+    <div class="grid grid-cols-2 lg:grid-cols-5 gap-3">
+      {% for bloco, rotulo in periodos %}
+        <div class="card p-4">
+          <p class="text-xs uppercase tracking-wider" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">{{ rotulo }}</p>
+          <p class="text-2xl font-bold mt-1" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
+            {{ bloco.unidades|floatformat:0 }}
+          </p>
+          <p class="text-[11px] mt-0.5" :style="temaClaro ? 'color:#94a3b8;' : 'color:#71717a;'">
+            un · {{ bloco.kg|floatformat:0 }} kg · {{ bloco.ordens }} OP(s)
+          </p>
+        </div>
+      {% endfor %}
+      <div class="card p-4">
+        <p class="text-xs uppercase tracking-wider" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">OPs abertas</p>
+        <p class="text-2xl font-bold mt-1" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
+          {{ dados.producao.abertas }}
+        </p>
+      </div>
+      <div class="card p-4">
+        <p class="text-xs uppercase tracking-wider" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Concluídas no mês</p>
+        <p class="text-2xl font-bold mt-1" style="color:#059669;">
+          {{ dados.producao.concluidas_mes }}
+        </p>
+      </div>
+    </div>
+  </div>
+
+  {# ══ EFICIÊNCIA ═════════════════════════════════════════════════ #}
+  <div>
+    <h3 class="text-sm font-bold uppercase tracking-wider mb-2"
+        :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Eficiência</h3>
+    <div class="grid grid-cols-2 lg:grid-cols-5 gap-3">
+      <div class="card p-4">
+        <p class="text-xs uppercase tracking-wider" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Rendimento do lote</p>
+        {% if dados.eficiencia.rendimento is not None %}
+          <p class="text-2xl font-bold mt-1"
+             style="color:{% if dados.eficiencia.rendimento >= 95 %}#059669{% else %}#d97706{% endif %};">
+            {{ dados.eficiencia.rendimento }}%
+          </p>
+          <p class="text-[11px] mt-0.5" :style="temaClaro ? 'color:#94a3b8;' : 'color:#71717a;'">
+            {{ dados.eficiencia.produzido|floatformat:0 }} de
+            {{ dados.eficiencia.planejado|floatformat:0 }} un
+          </p>
+        {% else %}
+          <p class="text-sm mt-2" :style="temaClaro ? 'color:#94a3b8;' : 'color:#71717a;'">sem ordem encerrada</p>
+        {% endif %}
+      </div>
+      <div class="card p-4">
+        <p class="text-xs uppercase tracking-wider" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Perda de processo</p>
+        {% if dados.eficiencia.perda_percentual is not None %}
+          <p class="text-2xl font-bold mt-1" style="color:#d97706;">{{ dados.eficiencia.perda_percentual }}%</p>
+          <p class="text-[11px] mt-0.5" :style="temaClaro ? 'color:#94a3b8;' : 'color:#71717a;'">
+            {{ dados.eficiencia.perda_processo|floatformat:0 }} de
+            {{ dados.eficiencia.entrada_processo|floatformat:0 }}
+          </p>
+        {% else %}
+          <p class="text-sm mt-2" :style="temaClaro ? 'color:#94a3b8;' : 'color:#71717a;'">sem etapa pesada</p>
+        {% endif %}
+      </div>
+      <div class="card p-4">
+        <p class="text-xs uppercase tracking-wider" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Produtividade</p>
+        {% if dados.eficiencia.produtividade is not None %}
+          <p class="text-2xl font-bold mt-1" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
+            {{ dados.eficiencia.produtividade|floatformat:0 }}
+          </p>
+          <p class="text-[11px] mt-0.5" :style="temaClaro ? 'color:#94a3b8;' : 'color:#71717a;'">un por hora de produção</p>
+        {% else %}
+          <p class="text-sm mt-2" :style="temaClaro ? 'color:#94a3b8;' : 'color:#71717a;'">sem tempo apontado</p>
+        {% endif %}
+      </div>
+      <div class="card p-4">
+        <p class="text-xs uppercase tracking-wider" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Capacidade usada</p>
+        {% if dados.eficiencia.capacidade %}
+          <p class="text-2xl font-bold mt-1"
+             style="color:{% if dados.eficiencia.capacidade.percentual > 100 %}#dc2626{% else %}#059669{% endif %};">
+            {{ dados.eficiencia.capacidade.percentual }}%
+          </p>
+          <p class="text-[11px] mt-0.5" :style="temaClaro ? 'color:#94a3b8;' : 'color:#71717a;'">
+            próximos 7 dias · {{ dados.eficiencia.capacidade.recursos }} recurso(s)
+          </p>
+        {% else %}
+          {% comment %}
+            Não dá para dizer que se usa 80% do que ninguém mediu — e alerta
+            por palpite é o que faz a fábrica desligar os alertas.
+          {% endcomment %}
+          <p class="text-sm mt-2" style="color:#d97706;">sem capacidade cadastrada</p>
+        {% endif %}
+      </div>
+      <div class="card p-4">
+        <p class="text-xs uppercase tracking-wider" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Tempo médio</p>
+        {% if dados.eficiencia.tempo_medio_minutos %}
+          <p class="text-2xl font-bold mt-1" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
+            {{ dados.eficiencia.tempo_medio_minutos }} min
+          </p>
+          {% if dados.eficiencia.minutos_parados %}
+            <p class="text-[11px] mt-0.5" style="color:#d97706;">
+              {{ dados.eficiencia.minutos_parados }} min parados no período
+            </p>
+          {% endif %}
+        {% else %}
+          <p class="text-sm mt-2" :style="temaClaro ? 'color:#94a3b8;' : 'color:#71717a;'">sem início/fim apontados</p>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+
+  {# ══ CUSTOS ═════════════════════════════════════════════════════ #}
+  <div>
+    <h3 class="text-sm font-bold uppercase tracking-wider mb-2"
+        :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Custos</h3>
+    <div class="grid grid-cols-2 lg:grid-cols-4 gap-3">
+      <div class="card p-4">
+        <p class="text-xs uppercase tracking-wider" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Custo por kg</p>
+        <p class="text-2xl font-bold mt-1" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
+          {% if dados.custos.por_kg is not None %}R$ {{ dados.custos.por_kg|floatformat:2 }}
+          {% else %}<span class="text-sm font-normal" :style="temaClaro ? 'color:#94a3b8;' : 'color:#71717a;'">sem peso</span>{% endif %}
+        </p>
+      </div>
+      <div class="card p-4">
+        <p class="text-xs uppercase tracking-wider" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Custo por unidade</p>
+        <p class="text-2xl font-bold mt-1" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
+          {% if dados.custos.por_unidade is not None %}R$ {{ dados.custos.por_unidade|floatformat:4 }}
+          {% else %}<span class="text-sm font-normal" :style="temaClaro ? 'color:#94a3b8;' : 'color:#71717a;'">sem produção</span>{% endif %}
+        </p>
+      </div>
+      <div class="card p-4">
+        <p class="text-xs uppercase tracking-wider" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Planejado × realizado</p>
+        {% if dados.custos.desvio is not None %}
+          <p class="text-2xl font-bold mt-1"
+             style="color:{% if dados.custos.desvio > 0 %}#dc2626{% else %}#059669{% endif %};">
+            {% if dados.custos.desvio > 0 %}+{% endif %}{{ dados.custos.desvio }}%
+          </p>
+          <p class="text-[11px] mt-0.5" :style="temaClaro ? 'color:#94a3b8;' : 'color:#71717a;'">
+            R$ {{ dados.custos.total_real|floatformat:2 }} contra
+            R$ {{ dados.custos.total_previsto|floatformat:2 }}
+          </p>
+        {% else %}
+          <p class="text-sm mt-2" :style="temaClaro ? 'color:#94a3b8;' : 'color:#71717a;'">sem base para comparar</p>
+        {% endif %}
+      </div>
+      <div class="card p-4">
+        <p class="text-xs uppercase tracking-wider" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Ordens custeadas</p>
+        <p class="text-2xl font-bold mt-1" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">{{ dados.custos.ordens }}</p>
+      </div>
+    </div>
+
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-3 mt-3">
+      <div class="card overflow-hidden">
+        <div class="px-4 py-3 border-b" :style="temaClaro ? 'border-color:#e2e8f0;' : 'border-color:#2a2a2e;'">
+          <h4 class="text-sm font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">Custo por produto</h4>
+        </div>
+        <table class="w-full text-sm">
+          <tbody>
+            {% for linha in dados.custos.por_produto %}
+              <tr class="border-b" :style="temaClaro ? 'border-color:#f1f5f9;' : 'border-color:#1e1e22;'">
+                <td class="px-4 py-2.5" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
+                  {{ linha.produto }}
+                  <span class="block text-[11px]" :style="temaClaro ? 'color:#94a3b8;' : 'color:#71717a;'">
+                    {{ linha.ordens }} OP(s) · {{ linha.unidades|floatformat:0 }} un
+                  </span>
+                </td>
+                <td class="px-4 py-2.5 text-right" :style="temaClaro ? 'color:#374151;' : 'color:#cbd5e1;'">
+                  R$ {{ linha.custo|floatformat:2 }}
+                  {% if linha.por_kg is not None %}
+                    <span class="block text-[11px]">R$ {{ linha.por_kg|floatformat:2 }}/kg</span>
+                  {% endif %}
+                </td>
+              </tr>
+            {% empty %}
+              <tr><td class="px-4 py-6 text-center text-sm"
+                      :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+                Nenhuma ordem encerrada no período.
+              </td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+
+      <div class="card overflow-hidden">
+        <div class="px-4 py-3 border-b" :style="temaClaro ? 'border-color:#e2e8f0;' : 'border-color:#2a2a2e;'">
+          <h4 class="text-sm font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
+            Custo da matéria-prima, mês a mês
+          </h4>
+          <p class="text-xs mt-0.5" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+            {% comment %}
+              Sai das ENTRADAS de estoque, que é onde o preço realmente pago
+              está. O `preco_custo` do cadastro é o número que alguém digitou
+              uma vez — serve de referência, não de histórico.
+            {% endcomment %}
+            Média ponderada do que foi pago nas entradas.
+          </p>
+        </div>
+        <table class="w-full text-sm">
+          <tbody>
+            {% for linha in dados.custos.materia_prima %}
+              <tr class="border-b" :style="temaClaro ? 'border-color:#f1f5f9;' : 'border-color:#1e1e22;'">
+                <td class="px-4 py-2.5" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">{{ linha.mes }}</td>
+                <td class="px-4 py-2.5 text-right" :style="temaClaro ? 'color:#374151;' : 'color:#cbd5e1;'">
+                  {{ linha.quantidade|floatformat:0 }} un
+                </td>
+                <td class="px-4 py-2.5 text-right font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
+                  R$ {{ linha.medio|floatformat:4 }}
+                </td>
+              </tr>
+            {% empty %}
+              <tr><td class="px-4 py-6 text-center text-sm"
+                      :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+                Nenhuma entrada de matéria-prima com valor no período.
+              </td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  {# ══ ESTOQUE ════════════════════════════════════════════════════ #}
+  <div>
+    <h3 class="text-sm font-bold uppercase tracking-wider mb-2"
+        :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Estoque</h3>
+    <div class="grid grid-cols-2 lg:grid-cols-5 gap-3">
+      <div class="card p-4">
+        <p class="text-xs uppercase tracking-wider" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Matéria-prima</p>
+        <p class="text-2xl font-bold mt-1" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
+          {{ dados.estoque.materia_prima.saldo|floatformat:0 }}
+        </p>
+        <p class="text-[11px] mt-0.5" :style="temaClaro ? 'color:#94a3b8;' : 'color:#71717a;'">
+          R$ {{ dados.estoque.materia_prima.valor|floatformat:2 }}
+        </p>
+      </div>
+      <div class="card p-4">
+        <p class="text-xs uppercase tracking-wider" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Produto acabado</p>
+        <p class="text-2xl font-bold mt-1" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
+          {{ dados.estoque.acabado.unidades|floatformat:0 }}
+        </p>
+        <p class="text-[11px] mt-0.5" :style="temaClaro ? 'color:#94a3b8;' : 'color:#71717a;'">
+          {{ dados.estoque.acabado.lotes }} lote(s) · {{ dados.estoque.acabado.peso|floatformat:0 }} kg
+        </p>
+      </div>
+      <div class="card p-4">
+        <p class="text-xs uppercase tracking-wider" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Perto da validade</p>
+        <p class="text-2xl font-bold mt-1"
+           style="color:{% if dados.estoque.acabado.vencendo %}#d97706{% else %}#64748b{% endif %};">
+          {{ dados.estoque.acabado.vencendo }}
+        </p>
+        <p class="text-[11px] mt-0.5" :style="temaClaro ? 'color:#94a3b8;' : 'color:#71717a;'">
+          + {{ dados.estoque.acabado.vencidos }} vencido(s)
+        </p>
+      </div>
+      <div class="card p-4">
+        <p class="text-xs uppercase tracking-wider" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Estoque parado</p>
+        <p class="text-2xl font-bold mt-1"
+           style="color:{% if dados.estoque.parados %}#d97706{% else %}#64748b{% endif %};">
+          {{ dados.estoque.parados|length }}
+        </p>
+        <p class="text-[11px] mt-0.5" :style="temaClaro ? 'color:#94a3b8;' : 'color:#71717a;'">
+          lote(s) sem saída há 30 dias
+        </p>
+      </div>
+      <div class="card p-4">
+        <p class="text-xs uppercase tracking-wider" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Giro</p>
+        {% if dados.estoque.giro.indice is not None %}
+          <p class="text-2xl font-bold mt-1" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
+            {{ dados.estoque.giro.indice }}×
+          </p>
+          <p class="text-[11px] mt-0.5" :style="temaClaro ? 'color:#94a3b8;' : 'color:#71717a;'">
+            consumo {{ dados.estoque.giro.consumo|floatformat:0 }} / saldo
+            {{ dados.estoque.giro.saldo|floatformat:0 }}
+          </p>
+        {% else %}
+          {% comment %}
+            "Não girou" e "não teve saída registrada" levam a decisões
+            opostas: a primeira manda parar de comprar, a segunda manda
+            conferir o apontamento.
+          {% endcomment %}
+          <p class="text-sm mt-2" :style="temaClaro ? 'color:#94a3b8;' : 'color:#71717a;'">sem saída no período</p>
+        {% endif %}
+      </div>
+    </div>
+
+    {% if dados.estoque.parados %}
+      <div class="card overflow-hidden mt-3">
+        <div class="px-4 py-3 border-b" :style="temaClaro ? 'border-color:#e2e8f0;' : 'border-color:#2a2a2e;'">
+          <h4 class="text-sm font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
+            Lotes parados
+          </h4>
+          <p class="text-xs mt-0.5" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+            É o estoque que ninguém vê: não vence hoje, não falta, e ocupa
+            câmara.
+          </p>
+        </div>
+        <table class="w-full text-sm">
+          <tbody>
+            {% for linha in dados.estoque.parados %}
+              <tr class="border-b" :style="temaClaro ? 'border-color:#f1f5f9;' : 'border-color:#1e1e22;'">
+                <td class="px-4 py-2.5 font-mono" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">{{ linha.lote.numero_lote }}</td>
+                <td class="px-4 py-2.5" :style="temaClaro ? 'color:#374151;' : 'color:#cbd5e1;'">{{ linha.lote.produto }}</td>
+                <td class="px-4 py-2.5 text-right" :style="temaClaro ? 'color:#374151;' : 'color:#cbd5e1;'">
+                  {{ linha.lote.quantidade_atual|floatformat:0 }} un
+                </td>
+                <td class="px-4 py-2.5 text-right text-xs" style="color:#d97706;">
+                  {% if linha.dias %}há {{ linha.dias }} dia(s) no estoque{% endif %}
+                </td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    {% endif %}
+  </div>
+
+  {# ══ QUALIDADE ══════════════════════════════════════════════════ #}
+  <div>
+    <h3 class="text-sm font-bold uppercase tracking-wider mb-2"
+        :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Qualidade</h3>
+    <div class="grid grid-cols-2 lg:grid-cols-5 gap-3">
+      <div class="card p-4">
+        <p class="text-xs uppercase tracking-wider" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Análises aprovadas</p>
+        <p class="text-2xl font-bold mt-1" style="color:#059669;">{{ dados.qualidade.aprovadas }}</p>
+        {% if dados.qualidade.taxa_aprovacao is not None %}
+          <p class="text-[11px] mt-0.5" :style="temaClaro ? 'color:#94a3b8;' : 'color:#71717a;'">
+            {{ dados.qualidade.taxa_aprovacao }}% do que foi analisado
+          </p>
+        {% endif %}
+      </div>
+      <div class="card p-4">
+        <p class="text-xs uppercase tracking-wider" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Reprovadas</p>
+        <p class="text-2xl font-bold mt-1"
+           style="color:{% if dados.qualidade.reprovadas %}#dc2626{% else %}#64748b{% endif %};">
+          {{ dados.qualidade.reprovadas }}
+        </p>
+        {% if dados.qualidade.pendentes %}
+          <p class="text-[11px] mt-0.5" style="color:#d97706;">
+            {{ dados.qualidade.pendentes }} pendente(s)
+          </p>
+        {% endif %}
+      </div>
+      <div class="card p-4">
+        {% comment %}
+          A INSPEÇÃO DO LOTE É OUTRA FONTE, e não se soma à análise: são
+          áreas diferentes que respondem por cada uma, e um número único
+          esconderia qual delas reprovou.
+        {% endcomment %}
+        <p class="text-xs uppercase tracking-wider" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Inspeções de lote</p>
+        <p class="text-2xl font-bold mt-1" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">{{ dados.qualidade.inspecoes }}</p>
+        <p class="text-[11px] mt-0.5" :style="temaClaro ? 'color:#94a3b8;' : 'color:#71717a;'">
+          {{ dados.qualidade.inspecoes_reprovadas }} reprovada(s) ·
+          {{ dados.qualidade.quarentena }} em quarentena
+        </p>
+      </div>
+      <div class="card p-4">
+        <p class="text-xs uppercase tracking-wider" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Lotes bloqueados</p>
+        <p class="text-2xl font-bold mt-1"
+           style="color:{% if dados.qualidade.bloqueados %}#dc2626{% else %}#64748b{% endif %};">
+          {{ dados.qualidade.bloqueados }}
+        </p>
+      </div>
+      <div class="card p-4">
+        <p class="text-xs uppercase tracking-wider" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Índice de perdas</p>
+        {% if dados.qualidade.indice_perdas is not None %}
+          <p class="text-2xl font-bold mt-1" style="color:#d97706;">{{ dados.qualidade.indice_perdas }}%</p>
+        {% else %}
+          <p class="text-sm mt-2" :style="temaClaro ? 'color:#94a3b8;' : 'color:#71717a;'">sem etapa pesada</p>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+
+</div>
+{% endblock %}
