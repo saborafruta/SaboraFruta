@@ -1,5 +1,6 @@
 from calendar import monthrange
 from datetime import timedelta
+from decimal import Decimal
 from urllib.parse import urlencode
 
 from django.contrib import messages
@@ -18,7 +19,8 @@ from apps.financeiro.forms import (
     EditarMovimentoBancarioForm,
     MovimentoContaBancariaForm,
 )
-from apps.financeiro.models import PlanoContas
+from apps.financeiro.constants.enums import StatusContaPagar
+from apps.financeiro.models import ContaPagar, PlanoContas
 from apps.financeiro.models.extrato import ExtratoBancario
 from apps.financeiro.services.posicao_diaria_service import PosicaoDiariaCaixaService
 from apps.financeiro.views.contas_bancarias import ContaBancariaListView, _usuario_admin
@@ -130,10 +132,15 @@ class PosicaoDiariaCaixaView(PermissaoRequiredMixin, View):
         data_inicio, data_fim = self._resolver_periodo(
             periodo, data_referencia, request.GET.get("data_inicio"), request.GET.get("data_fim"),
         )
-        previsao_periodo = request.GET.get("previsao", "7")
+        previsao_periodo = request.GET.get("previsao", "hoje")
         previsao_inicio, previsao_fim = self._resolver_previsao(
             previsao_periodo, data_referencia,
             request.GET.get("previsao_inicio"), request.GET.get("previsao_fim"),
+        )
+        pagar_previsao_periodo = request.GET.get("pagar_previsao", "hoje")
+        pagar_previsao_inicio, pagar_previsao_fim = self._resolver_previsao(
+            pagar_previsao_periodo, data_referencia,
+            request.GET.get("pagar_previsao_inicio"), request.GET.get("pagar_previsao_fim"),
         )
         mostrar_excluidos = request.GET.get("mostrar_excluidos") == "1" and _usuario_admin(request)
         mostrar_previstos = True
@@ -151,6 +158,37 @@ class PosicaoDiariaCaixaView(PermissaoRequiredMixin, View):
             previsao_fim=previsao_fim,
             conta_filtro=conta_filtro,
             ordem=ordem_movimentos,
+        )
+        contas_pagar_previstas = list(
+            ContaPagar.objects.filter(
+                filial=request.filial_ativa,
+                status__in=[
+                    StatusContaPagar.ABERTO,
+                    StatusContaPagar.VENCIDO,
+                    StatusContaPagar.AGENDADO,
+                ],
+                data_vencimento__range=(pagar_previsao_inicio, pagar_previsao_fim),
+                valor_saldo__gt=0,
+            )
+            .select_related(
+                "fornecedor", "funcionario", "forma_pagamento_prevista",
+                "conta_bancaria", "forma_pagamento_prevista__conta_bancaria_padrao",
+            )
+            .order_by("data_vencimento", "pk")
+        )
+        hoje = timezone.localdate()
+        for conta in contas_pagar_previstas:
+            conta.previsao_conta = conta.conta_bancaria or (
+                conta.forma_pagamento_prevista.conta_bancaria_padrao
+                if conta.forma_pagamento_prevista_id else None
+            )
+            conta.previsao_conta_nome = (
+                conta.previsao_conta.descricao or conta.previsao_conta.banco_nome
+                if conta.previsao_conta else "Conta não definida"
+            )
+            conta.previsao_atrasada = conta.data_vencimento < hoje
+        total_contas_pagar_previstas = sum(
+            (conta.valor_saldo for conta in contas_pagar_previstas), Decimal("0.00")
         )
         detalhe = None
         origem_detalhe = detalhe_forcado[0] if detalhe_forcado else request.GET.get("origem")
@@ -260,6 +298,14 @@ class PosicaoDiariaCaixaView(PermissaoRequiredMixin, View):
             "dias_mes": self._dias_mes(data_referencia),
             "periodos_movimento": self._links_periodo(data_referencia, periodo, "periodo"),
             "periodos_previsao": self._links_periodo(data_referencia, previsao_periodo, "previsao"),
+            "pagar_previsao_periodo": pagar_previsao_periodo,
+            "pagar_previsao_inicio": pagar_previsao_inicio,
+            "pagar_previsao_fim": pagar_previsao_fim,
+            "periodos_pagar_previsao": self._links_periodo(
+                data_referencia, pagar_previsao_periodo, "pagar_previsao",
+            ),
+            "contas_pagar_previstas": contas_pagar_previstas,
+            "total_contas_pagar_previstas": total_contas_pagar_previstas,
             "conta_filtro": conta_filtro,
             "ordem_movimentos": ordem_movimentos,
             "categorias_edicao": categorias_edicao,

@@ -78,6 +78,17 @@
   .tema-escuro .pc-forecast-renegotiated { border-color:#92400e; background:#422006; color:#fde68a; }
   .tema-escuro .pc-forecast-positive { color:#6ee7b7; }
   .tema-escuro .pc-forecast-negative { color:#fda4af; }
+  .pc-payables-forecast { border-color:#fda4af; }
+  .pc-payables-forecast .pc-forecast-head { border-color:#fecdd3; background:#fff1f2; }
+  .pc-payables-forecast .pc-forecast-title { color:#881337; }
+  .pc-payables-forecast .pc-forecast-copy { color:#9f1239; }
+  .pc-payables-forecast .pc-forecast-value { color:#be123c; }
+  .pc-payables-forecast .pc-forecast-filter { border-color:#fda4af; color:#9f1239; }
+  .pc-payables-forecast .pc-forecast-filter.is-active { border-color:#be123c; background:#be123c; color:#fff; }
+  .tema-escuro .pc-payables-forecast .pc-forecast-head { background:#321923; }
+  .tema-escuro .pc-payables-forecast .pc-forecast-title,
+  .tema-escuro .pc-payables-forecast .pc-forecast-copy,
+  .tema-escuro .pc-payables-forecast .pc-forecast-value { color:#fecdd3; }
   .tema-escuro .pc-fee-label { border-color:#9f1239; background:#4c1022; color:#fecdd3; }
   .pc-summary-entry { background:#f0fdf4; color:#14532d; }
   .pc-summary-exit { background:#fff1f2; color:#881337; }
@@ -185,6 +196,7 @@
 <div class="mx-auto max-w-7xl space-y-5" :class="{'pc-private':ocultarValores}" x-data="{
   ocultarValores:false,
   previsoesAbertas:false,
+  pagamentosPrevistosAbertos:false,
   contasAbertas: window.innerWidth >= 640,
   taxasModal: false,
   movimentoModal: {{ movimento_modal|yesno:'true,false' }},
@@ -419,6 +431,8 @@
     {% endif %}
   </section>
 
+  {% include "financeiro/partials/previsoes_posicao_diaria.html" %}
+
   <section>
     <div class="mb-3 flex items-end justify-between gap-3">
       <div><h3 class="text-lg font-semibold">Saldos por conta</h3><p class="text-xs text-gray-500">Abertura, movimentos do dia e fechamento individual.</p></div>
@@ -441,6 +455,8 @@
     </div>
   </section>
 
+  {% comment %}Bloco antigo substituído pelo componente de previsões acima.{% endcomment %}
+  {% comment %}
   <section class="pc-forecast overflow-hidden rounded-lg">
     <div class="pc-forecast-head flex flex-col gap-3 border-b px-4 py-4">
       <div class="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between"><div><h3 class="pc-forecast-title font-semibold">Recebimentos previstos</h3><p class="pc-forecast-copy text-xs">Contas a receber, boletos e cartões que ainda serão compensados.</p></div><div class="flex items-center gap-3 sm:text-right"><div><span class="pc-forecast-copy block text-[11px] font-semibold uppercase">Líquido previsto</span><strong class="pc-sensitive pc-forecast-value text-xl">R$ {{ posicao.total_previsto|floatformat:2 }}</strong></div><button type="button" class="pc-forecast-filter rounded-md px-3 py-2 text-xs font-semibold" @click="previsoesAbertas=!previsoesAbertas" x-text="previsoesAbertas ? 'Ocultar' : 'Ver mais'" :aria-label="previsoesAbertas ? 'Ocultar recebimentos previstos' : 'Ver recebimentos previstos'"></button></div></div>
@@ -463,6 +479,7 @@
       {% endfor %}
     </div>
   </section>
+  {% endcomment %}
 
   {% if mostrar_excluidos and posicao.excluidos %}
     <section class="rounded-lg border border-dashed border-rose-300 p-4"><h3 class="font-semibold text-rose-600">Movimentos manuais excluídos</h3><div class="mt-3 space-y-2">{% for mov in posicao.excluidos %}<div class="flex flex-col gap-2 rounded border p-3 sm:flex-row sm:items-center sm:justify-between"><div><strong>{{ mov.descricao }}</strong><span class="block text-xs text-gray-500">{{ mov.conta.descricao|default:mov.conta.banco_nome }} · R$ {{ mov.valor|floatformat:2 }}</span></div><form method="post" class="flex gap-2">{% csrf_token %}<input type="hidden" name="acao" value="restaurar_movimento"><input type="hidden" name="movimento_id" value="{{ mov.registro_id }}"><input type="hidden" name="data_referencia" value="{{ data_referencia|date:'Y-m-d' }}"><input name="justificativa" required class="form-input" placeholder="Motivo da restauração"><button class="btn-secondary" type="submit">Restaurar</button></form></div>{% endfor %}</div></section>

@@ -1,0 +1,45 @@
+<section class="pc-forecast overflow-hidden rounded-lg">
+  <div class="pc-forecast-head flex flex-col gap-3 border-b px-4 py-4">
+    <div class="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+      <div><h3 class="pc-forecast-title font-semibold">Recebimentos previstos</h3><p class="pc-forecast-copy text-xs">Contas a receber, boletos e cartões que ainda serão compensados.</p></div>
+      <div class="flex items-center gap-3 sm:text-right"><div><span class="pc-forecast-copy block text-[11px] font-semibold uppercase">Líquido previsto</span><strong class="pc-sensitive pc-forecast-value text-xl">R$ {{ posicao.total_previsto|floatformat:2 }}</strong></div><button type="button" class="pc-forecast-filter rounded-md px-3 py-2 text-xs font-semibold" @click="previsoesAbertas=!previsoesAbertas" x-text="previsoesAbertas ? 'Ocultar' : 'Ver mais'"></button></div>
+    </div>
+    <div x-show="previsoesAbertas" x-cloak class="space-y-3">
+      <div class="flex flex-wrap gap-2">{% for item in periodos_previsao %}<a href="{{ item.url }}" class="pc-forecast-filter rounded-md px-3 py-2 text-xs font-semibold {% if item.ativo %}is-active{% endif %}">{{ item.rotulo }}</a>{% endfor %}<button type="button" class="pc-forecast-filter rounded-md px-3 py-2 text-xs font-semibold" onclick="document.getElementById('previsao-personalizada').classList.toggle('hidden')">Personalizado</button></div>
+      <form id="previsao-personalizada" method="get" class="hidden grid gap-3 rounded-lg bg-white/70 p-3 sm:grid-cols-[1fr_1fr_auto] dark:bg-slate-900/40"><input type="hidden" name="data" value="{{ data_referencia|date:'Y-m-d' }}"><input type="hidden" name="previsao" value="personalizado"><label class="text-xs font-semibold">De<input type="date" name="previsao_inicio" value="{{ previsao_inicio|date:'Y-m-d' }}" class="form-input mt-1 w-full" required></label><label class="text-xs font-semibold">Até<input type="date" name="previsao_fim" value="{{ previsao_fim|date:'Y-m-d' }}" class="form-input mt-1 w-full" required></label><button class="btn-primary self-end" type="submit">Aplicar período</button></form>
+    </div>
+  </div>
+  <div x-show="previsoesAbertas" x-cloak class="divide-y divide-blue-100 dark:divide-slate-700">
+    {% for item in posicao.previsoes %}
+      {% if item.referencia_url %}<button type="button" @click="abrirTituloPagar('{{ item.referencia_url }}')" class="pc-forecast-item {% if item.atrasado %}is-overdue{% endif %} grid w-full gap-2 px-4 py-3 text-left text-sm transition sm:grid-cols-[105px_minmax(0,1fr)_190px_150px] sm:items-center">{% else %}<div class="pc-forecast-item {% if item.atrasado %}is-overdue{% endif %} grid gap-2 px-4 py-3 text-sm sm:grid-cols-[105px_minmax(0,1fr)_190px_150px] sm:items-center">{% endif %}
+        <div><strong class="pc-forecast-date block">{{ item.data|date:'d/m/Y' }}</strong>{% if item.atrasado %}<span class="pc-forecast-overdue mt-1">Atrasado</span>{% elif item.renegociado %}<span class="pc-forecast-renegotiated mt-1">Renegociado</span>{% endif %}</div>
+        <div class="min-w-0"><strong class="block truncate">{{ item.descricao }}</strong><small class="pc-forecast-muted block truncate">{{ item.classificacao }} · {{ item.forma }}{% if item.bandeira %} - {{ item.bandeira|title }} {{ item.parcelas }}x{% endif %}</small></div>
+        <span class="pc-forecast-account">{{ item.conta }}</span>
+        <div class="sm:text-right"><strong class="{% if item.atrasado %}pc-forecast-negative{% else %}pc-forecast-positive{% endif %}">R$ {{ item.valor_liquido|floatformat:2 }}</strong>{% if item.referencia_url %}<small class="mt-1 block font-bold {% if item.atrasado %}pc-forecast-negative{% else %}text-blue-700 dark:text-blue-300{% endif %}">{% if item.atrasado %}Alterar data{% else %}Ver título{% endif %}</small>{% endif %}</div>
+      {% if item.referencia_url %}</button>{% else %}</div>{% endif %}
+    {% empty %}<div class="p-6 text-center text-sm text-gray-500">Nenhum recebimento previsto neste período.</div>{% endfor %}
+  </div>
+</section>
+
+<section class="pc-forecast pc-payables-forecast overflow-hidden rounded-lg">
+  <div class="pc-forecast-head flex flex-col gap-3 border-b px-4 py-4">
+    <div class="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+      <div><h3 class="pc-forecast-title font-semibold">Contas a pagar previstas</h3><p class="pc-forecast-copy text-xs">Títulos em aberto com vencimento no período.</p></div>
+      <div class="flex items-center gap-3 sm:text-right"><div><span class="pc-forecast-copy block text-[11px] font-semibold uppercase">Total previsto</span><strong class="pc-sensitive pc-forecast-value text-xl">R$ {{ total_contas_pagar_previstas|floatformat:2 }}</strong></div><button type="button" class="pc-forecast-filter rounded-md px-3 py-2 text-xs font-semibold" @click="pagamentosPrevistosAbertos=!pagamentosPrevistosAbertos" x-text="pagamentosPrevistosAbertos ? 'Ocultar' : 'Ver mais'"></button></div>
+    </div>
+    <div x-show="pagamentosPrevistosAbertos" x-cloak class="space-y-3">
+      <div class="flex flex-wrap gap-2">{% for item in periodos_pagar_previsao %}<a href="{{ item.url }}" class="pc-forecast-filter rounded-md px-3 py-2 text-xs font-semibold {% if item.ativo %}is-active{% endif %}">{{ item.rotulo }}</a>{% endfor %}<button type="button" class="pc-forecast-filter rounded-md px-3 py-2 text-xs font-semibold" onclick="document.getElementById('pagar-previsao-personalizada').classList.toggle('hidden')">Personalizado</button></div>
+      <form id="pagar-previsao-personalizada" method="get" class="hidden grid gap-3 rounded-lg bg-white/70 p-3 sm:grid-cols-[1fr_1fr_auto] dark:bg-slate-900/40"><input type="hidden" name="data" value="{{ data_referencia|date:'Y-m-d' }}"><input type="hidden" name="pagar_previsao" value="personalizado"><label class="text-xs font-semibold">De<input type="date" name="pagar_previsao_inicio" value="{{ pagar_previsao_inicio|date:'Y-m-d' }}" class="form-input mt-1 w-full" required></label><label class="text-xs font-semibold">Até<input type="date" name="pagar_previsao_fim" value="{{ pagar_previsao_fim|date:'Y-m-d' }}" class="form-input mt-1 w-full" required></label><button class="btn-primary self-end" type="submit">Aplicar período</button></form>
+    </div>
+  </div>
+  <div x-show="pagamentosPrevistosAbertos" x-cloak class="divide-y divide-rose-100 dark:divide-slate-700">
+    {% for conta in contas_pagar_previstas %}
+      <a href="{% url 'financeiro:pagar_pagar' conta.pk %}" class="pc-forecast-item {% if conta.previsao_atrasada %}is-overdue{% endif %} grid gap-2 px-4 py-3 text-sm transition sm:grid-cols-[105px_minmax(0,1fr)_190px_150px] sm:items-center">
+        <div><strong class="pc-forecast-date block">{{ conta.data_vencimento|date:'d/m/Y' }}</strong>{% if conta.previsao_atrasada %}<span class="pc-forecast-overdue mt-1">Atrasada</span>{% endif %}</div>
+        <div class="min-w-0"><strong class="block truncate">{{ conta.descricao_exibicao }}</strong><small class="pc-forecast-muted block truncate">{{ conta.beneficiario_nome }} · {{ conta.forma_pagamento_prevista.descricao|default:'Forma não definida' }}</small></div>
+        <span class="pc-forecast-account">{{ conta.previsao_conta_nome }}</span>
+        <div class="sm:text-right"><strong class="pc-forecast-negative">R$ {{ conta.valor_saldo|floatformat:2 }}</strong><small class="mt-1 block font-bold pc-forecast-negative">Quitar</small></div>
+      </a>
+    {% empty %}<div class="p-6 text-center text-sm text-gray-500">Nenhuma conta a pagar prevista neste período.</div>{% endfor %}
+  </div>
+</section>

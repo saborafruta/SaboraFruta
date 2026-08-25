@@ -130,6 +130,60 @@ class PosicaoDiariaCaixaTests(TestCase):
         self.assertContains(response, "tituloPagarModal")
         self.assertContains(response, "Agrupar por forma de pagamento")
 
+    def test_previsoes_de_receber_e_pagar_abrem_em_hoje_antes_dos_saldos(self):
+        hoje = date(2026, 8, 24)
+        conta_hoje = ContaPagar.objects.create(
+            filial=self.filial,
+            descricao_despesa="Conta prevista hoje",
+            valor_original=Decimal("120.00"),
+            valor_final=Decimal("120.00"),
+            valor_pago=Decimal("0.00"),
+            valor_saldo=Decimal("120.00"),
+            data_emissao=hoje,
+            data_vencimento=hoje,
+            status=StatusContaPagar.ABERTO,
+            forma_pagamento_prevista=self.forma,
+            conta_bancaria=self.banco,
+            usuario=self.usuario,
+        )
+        conta_amanha = ContaPagar.objects.create(
+            filial=self.filial,
+            descricao_despesa="Conta prevista amanhã",
+            valor_original=Decimal("80.00"),
+            valor_final=Decimal("80.00"),
+            valor_pago=Decimal("0.00"),
+            valor_saldo=Decimal("80.00"),
+            data_emissao=hoje,
+            data_vencimento=date(2026, 8, 25),
+            status=StatusContaPagar.ABERTO,
+            usuario=self.usuario,
+        )
+
+        response = self.client.get(
+            reverse("financeiro:posicao_diaria"), {"data": hoje.isoformat()},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.context["previsao_periodo"], "hoje")
+        self.assertEqual(response.context["pagar_previsao_periodo"], "hoje")
+        self.assertEqual(
+            [conta.pk for conta in response.context["contas_pagar_previstas"]],
+            [conta_hoje.pk],
+        )
+        self.assertContains(response, reverse("financeiro:pagar_pagar", args=[conta_hoje.pk]))
+        html = response.content.decode()
+        self.assertLess(html.index("Recebimentos previstos"), html.index("Contas a pagar previstas"))
+        self.assertLess(html.index("Contas a pagar previstas"), html.index("Saldos por conta"))
+
+        response = self.client.get(
+            reverse("financeiro:posicao_diaria"),
+            {"data": hoje.isoformat(), "pagar_previsao": "7"},
+        )
+        self.assertEqual(
+            {conta.pk for conta in response.context["contas_pagar_previstas"]},
+            {conta_hoje.pk, conta_amanha.pk},
+        )
+
     def test_despesa_pessoal_fica_destacada_e_somada_separadamente(self):
         categoria = PlanoContas.objects.create(
             empresa=self.empresa,

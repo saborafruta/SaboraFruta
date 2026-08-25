@@ -151,6 +151,37 @@ class FormasPagamentoFinanceiroTests(TestCase):
         self.assertEqual(tarifa.plano_contas.descricao, "Taxas por transacao")
         self.assertEqual(tarifa.pagamentos.count(), 1)
 
+    def test_pagamento_em_boleto_aplica_tarifa_fixa_de_saida(self):
+        conta_bancaria = ContaBancaria.objects.create(
+            filial=self.filial, descricao="ORENDA", banco_nome="ORENDA", banco_codigo="001",
+        )
+        forma = FormaPagamento.objects.create(
+            empresa=self.empresa, filial=self.filial, descricao="BOLETO",
+            tipo=TipoFormaPagamento.BOLETO, conta_bancaria_padrao=conta_bancaria,
+            tarifa_pagamento_fixa=Decimal("0.50"),
+        )
+        hoje = timezone.localdate()
+        conta = ContaPagar.objects.create(
+            filial=self.filial, descricao_despesa="Fornecedor por boleto",
+            valor_original=Decimal("100.00"), valor_final=Decimal("100.00"),
+            valor_pago=Decimal("100.00"), valor_saldo=Decimal("0.00"),
+            data_emissao=hoje, data_vencimento=hoje, data_pagamento=hoje,
+            status=StatusContaPagar.PAGO,
+        )
+
+        pagamento = PagamentoContaPagar.objects.create(
+            filial=self.filial, conta_pagar=conta, data_pagamento=hoje,
+            valor_pago=Decimal("100.00"), forma_pagamento=forma,
+            conta_bancaria=conta_bancaria,
+        )
+
+        tarifa = ContaPagar.all_objects.get(
+            documento_tipo="taxa_pagamento", documento_id=pagamento.pk,
+        )
+        self.assertEqual(tarifa.valor_final, Decimal("0.50"))
+        self.assertEqual(tarifa.conta_bancaria, conta_bancaria)
+        self.assertEqual(tarifa.pagamentos.first().valor_pago, Decimal("0.50"))
+
     def test_vincula_forma_a_conta_pelo_nome_sem_ambiguidade(self):
         orenda = ContaBancaria.objects.create(
             filial=self.filial, descricao="ORENDA", banco_nome="ORENDA",
