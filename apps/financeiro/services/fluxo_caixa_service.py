@@ -24,10 +24,13 @@ TIPOS_ENTRADA_CAIXA = ['venda', 'suprimento', 'tef_entrada']
 TIPOS_SAIDA_CAIXA = ['sangria', 'cancelamento_venda', 'devolucao', 'troco', 'tef_saida']
 
 STATUS_RECEBER_PREVISTO = [
-    StatusContaReceber.ABERTO, StatusContaReceber.VENCIDO, StatusContaReceber.NEGOCIADO,
+    StatusContaReceber.ABERTO,
+    StatusContaReceber.PAGO_PARCIAL,
+    StatusContaReceber.VENCIDO,
+    StatusContaReceber.NEGOCIADO,
 ]
 STATUS_PAGAR_PREVISTO = [
-    StatusContaPagar.ABERTO, StatusContaPagar.VENCIDO, StatusContaPagar.AGENDADO,
+    StatusContaPagar.ABERTO, StatusContaPagar.PAGO_PARCIAL, StatusContaPagar.VENCIDO, StatusContaPagar.AGENDADO,
 ]
 
 

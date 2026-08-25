@@ -177,15 +177,15 @@ def sincronizar_tarifa_pagamento(pagamento):
     conta_pagar = pagamento.conta_pagar
     if (conta_pagar.documento_tipo or "").startswith("taxa_"):
         return None
-    forma = pagamento.forma_pagamento
-    valor = forma.tarifa_pagamento_fixa if forma else ZERO
+    forma_pagamento = pagamento.forma_pagamento
+    valor = forma_pagamento.tarifa_pagamento_fixa if forma_pagamento else ZERO
     return sincronizar_taxa_transacao(
         origem="pagamento",
         origem_id=pagamento.pk,
         filial=pagamento.filial,
         data=pagamento.data_pagamento,
         valor=valor,
-        forma_pagamento=forma,
+        forma_pagamento=forma_pagamento,
         conta_bancaria=pagamento.conta_bancaria,
         retida_na_entrada=False,
     )

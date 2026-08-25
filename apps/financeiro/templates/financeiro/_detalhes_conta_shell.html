@@ -15,7 +15,7 @@
       <div class="min-h-0 flex-1 overflow-y-auto p-4 sm:p-6">
         <div x-show="detalheCarregando" class="flex min-h-52 items-center justify-center text-sm opacity-65">Carregando detalhes...</div>
         <div x-show="detalheErro" class="rounded-md border border-rose-400/40 bg-rose-500/10 p-4 text-sm text-rose-500" x-text="detalheErro"></div>
-        <div x-show="!detalheCarregando && !detalheErro" x-html="detalheHtml"></div>
+        <div data-receber-detalhe-content x-show="!detalheCarregando && !detalheErro" x-html="detalheHtml"></div>
       </div>
     </section>
   </div>

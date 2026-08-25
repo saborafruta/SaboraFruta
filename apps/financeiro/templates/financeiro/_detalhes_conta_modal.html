@@ -1,4 +1,4 @@
-{% load widget_tweaks %}
+{% load widget_tweaks erp_extras %}
 <div class="space-y-5" data-conta-detail data-conta-id="{{ conta.pk }}" x-data="{exclusaoAberta:false,historicoAberto:false}">
   <div class="flex flex-wrap items-start justify-between gap-4 border-b pb-4" style="border-color:rgba(148,163,184,.25)">
     <div class="min-w-0">
@@ -6,7 +6,7 @@
       <div class="mt-1 flex flex-wrap items-center gap-2">
         <h2 class="text-xl font-semibold">{% if tipo_conta == 'pagar' %}{{ conta.descricao_exibicao }}{% else %}{{ conta.cliente.razao_social }}{% endif %}</h2>
         {% if tipo_conta == 'pagar' %}<p class="mt-1 text-sm opacity-65">Pago a {{ conta.beneficiario_nome }}</p>{% endif %}
-        {% if conta.excluido %}<span class="soft-pill is-red">Excluído</span>{% else %}<span class="soft-pill {% if conta.status == 'pago' %}is-green{% elif conta.status == 'vencido' %}is-red{% elif conta.status == 'aberto' %}is-blue{% elif conta.status == 'agendado' or conta.status == 'negociado' %}is-amber{% else %}is-slate{% endif %}" data-conta-status>{{ conta.get_status_display }}</span>{% endif %}
+        {% if conta.excluido %}<span class="soft-pill is-red">Excluído</span>{% else %}<span class="soft-pill {% if conta.status == 'pago' %}is-green{% elif conta.status == 'vencido' %}is-red{% elif conta.status == 'aberto' %}is-blue{% elif conta.status == 'pago_parcial' or conta.status == 'agendado' or conta.status == 'negociado' %}is-amber{% else %}is-slate{% endif %}" data-conta-status>{{ conta.get_status_display }}</span>{% endif %}
       </div>
       <p class="mt-1 text-sm opacity-60">Título #{{ conta.pk }}{% if conta.documento_numero %} · Documento {{ conta.documento_numero }}{% endif %}</p>
     </div>
@@ -29,7 +29,7 @@
     <div class="rounded-lg border p-3" style="border-color:rgba(148,163,184,.28)"><span class="block text-xs opacity-55">Valor original</span><strong class="mt-1 block text-lg" data-conta-valor="original">R$ {{ conta.valor_original|floatformat:2 }}</strong></div>
     <div class="rounded-lg border p-3" style="border-color:rgba(148,163,184,.28)"><span class="block text-xs opacity-55">Valor final</span><strong class="mt-1 block text-lg" data-conta-valor="final">R$ {{ conta.valor_final|floatformat:2 }}</strong></div>
     <div class="rounded-lg border p-3" style="border-color:rgba(16,185,129,.35)"><span class="block text-xs opacity-55">{% if tipo_conta == 'pagar' %}Pago{% else %}Recebido bruto{% endif %}</span><strong class="mt-1 block text-lg text-emerald-500" data-conta-valor="pago">R$ {{ conta.valor_pago|floatformat:2 }}</strong></div>
-    <div class="rounded-lg border p-3" style="border-color:rgba(59,130,246,.35)"><span class="block text-xs opacity-55">Saldo</span><strong class="mt-1 block text-lg {% if conta.valor_saldo > 0 %}text-rose-500{% else %}text-emerald-500{% endif %}" data-conta-valor="saldo">R$ {{ conta.valor_saldo|floatformat:2 }}</strong></div>
+    <div class="rounded-lg border p-3" style="border-color:rgba(59,130,246,.35)"><span class="block text-xs opacity-55">Valor restante</span><strong class="mt-1 block text-lg {% if conta.valor_saldo > 0 %}text-rose-500{% else %}text-emerald-500{% endif %}" data-conta-valor="saldo">R$ {{ conta.valor_saldo|floatformat:2 }}</strong></div>
     {% if tipo_conta == 'receber' and conta.taxa_calculada_em and conta.valor_taxa_recebimento > 0 %}
     <div class="rounded-lg border p-3" style="border-color:rgba(249,115,22,.35)"><span class="block text-xs opacity-55">Taxa descontada</span><strong class="mt-1 block text-lg text-orange-500">R$ {{ conta.valor_taxa_recebimento|floatformat:2 }}</strong></div>
     <div class="rounded-lg border p-3" style="border-color:rgba(6,182,212,.35)"><span class="block text-xs opacity-55">Líquido no caixa</span><strong class="mt-1 block text-lg text-cyan-500">R$ {{ conta.valor_entrada_liquida|floatformat:2 }}</strong></div>
@@ -94,7 +94,7 @@
   <section class="rounded-lg border border-rose-200 border-l-4 border-l-rose-400 bg-white p-4 text-slate-900 dark:border-rose-900/60 dark:border-l-rose-400 dark:bg-zinc-900 dark:text-slate-100">
     <div class="flex flex-col gap-1">
       <h3 class="font-semibold">Alterar data do recebimento</h3>
-      <p class="text-xs text-rose-700 dark:text-rose-200">Ao salvar, o titulo fica marcado como negociado e a observacao registra a data anterior e o motivo.</p>
+      <p class="text-xs text-rose-700 dark:text-rose-200">Ao salvar, o título fica marcado como adiado e a observação registra a data anterior e o motivo.</p>
     </div>
     <form method="post" action="{% url 'financeiro:receber_editar_prazo' conta.pk %}" class="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-[180px_1fr_auto]">
       {% csrf_token %}
@@ -122,11 +122,11 @@
         {% if conta.plano_contas %}<div class="col-span-2 sm:col-span-3"><span class="block text-xs opacity-55">Categoria financeira</span><strong>{{ conta.plano_contas }}</strong></div>{% endif %}
         {% if conta.conta_contabil %}<div class="col-span-2 sm:col-span-3"><span class="block text-xs opacity-55">Conta contábil automática</span><strong>{{ conta.conta_contabil.descricao }}</strong></div>{% endif %}
       </div>
-      {% if conta.observacao %}<div class="mt-4 border-t pt-3 text-sm" style="border-color:rgba(148,163,184,.2)"><span class="block text-xs opacity-55">Observação</span><p class="mt-1 whitespace-pre-wrap">{{ conta.observacao }}</p></div>{% endif %}
+      {% if conta.observacao %}<div class="mt-4 rounded-md border p-3 text-sm" style="border-color:rgba(59,130,246,.2);background:rgba(59,130,246,.05)"><span class="block text-xs font-semibold uppercase text-blue-500">Observação</span><p class="mt-2 whitespace-pre-wrap leading-relaxed">{{ conta.observacao|observacao_financeira }}</p></div>{% endif %}
     </section>
 
     <section class="rounded-lg border p-4" style="border-color:rgba(148,163,184,.28)">
-      <h3 class="mb-4 text-xs font-semibold uppercase opacity-55">Pagamentos</h3>
+      <h3 class="mb-4 text-xs font-semibold uppercase opacity-55">{% if tipo_conta == 'pagar' %}Pagamentos{% else %}Recebimentos{% endif %}</h3>
       <div class="space-y-3">
         {% if tipo_conta == 'pagar' %}
         {% for pagamento in pagamentos_detalhados %}
@@ -139,11 +139,21 @@
         {% else %}
         {% for pagamento in conta.pagamentos.all %}
           <article class="rounded-md border p-3 text-sm" style="border-color:rgba(148,163,184,.22)">
-            <div class="flex items-start justify-between gap-3"><div><span class="block text-xs opacity-55">{{ pagamento.data_pagamento|date:"d/m/Y" }}</span><strong>{{ pagamento.forma_pagamento.descricao_com_conta|default:"Forma não informada" }}</strong></div><strong class="whitespace-nowrap text-emerald-500">R$ {{ pagamento.valor_pago|floatformat:2 }}</strong></div>
+            <div class="flex items-start justify-between gap-3"><div><span class="block text-xs opacity-55">{{ pagamento.data_pagamento|date:"d/m/Y" }}</span><strong>{{ pagamento.forma_pagamento.descricao_com_conta|default:"Forma não informada" }}</strong></div><div class="text-right"><span class="block text-xs opacity-55">Recebido bruto</span><strong class="whitespace-nowrap text-emerald-500">R$ {{ pagamento.valor_pago|floatformat:2 }}</strong></div></div>
             <p class="mt-2 text-xs opacity-60">{{ pagamento.conta_bancaria.descricao|default:pagamento.conta_bancaria|default:"Conta não informada" }}</p>
-            {% if pagamento.comprovante_arquivo %}<div class="mt-3 flex gap-2"><a class="text-xs font-semibold text-blue-500" href="{% url 'financeiro:pagar_comprovante' conta.pk pagamento.pk %}" target="_blank">Visualizar</a><a class="text-xs font-semibold text-blue-500" href="{% url 'financeiro:pagar_comprovante' conta.pk pagamento.pk %}?download=1">Baixar</a></div>{% endif %}
+            <div class="mt-3 grid grid-cols-2 gap-3 border-t pt-3" style="border-color:rgba(148,163,184,.18)"><div><span class="block text-xs opacity-55">Taxa descontada</span><strong class="text-rose-600">R$ {{ pagamento.valor_taxa|floatformat:2 }}</strong></div><div class="text-right"><span class="block text-xs opacity-55">Líquido no caixa</span><strong>R$ {{ pagamento.valor_liquido|floatformat:2 }}</strong></div></div>
+            {% if pode_gerenciar_recebimentos %}
+            <div class="mt-3 flex flex-wrap items-center justify-end gap-2 border-t pt-3" style="border-color:rgba(148,163,184,.18)">
+              <button type="button" class="btn-secondary px-3 py-1 text-xs" @click="abrirRecebimentoTitulo('{% url 'financeiro:receber_pagamento_editar' conta.pk pagamento.pk %}')">Editar</button>
+              <form method="post" action="{% url 'financeiro:receber_pagamento_excluir' conta.pk pagamento.pk %}?modal=1" @submit.prevent="if(confirm('Excluir este recebimento e recalcular o título?')) enviarRecebimentoTitulo($event)">
+                {% csrf_token %}
+                <input type="hidden" name="motivo" value="Excluído pelo usuário no detalhe do título.">
+                <button type="submit" class="btn-secondary px-3 py-1 text-xs text-rose-600">Excluir</button>
+              </form>
+            </div>
+            {% endif %}
           </article>
-        {% empty %}<p class="text-sm opacity-60">Nenhum pagamento registrado.</p>{% endfor %}
+        {% empty %}<p class="text-sm opacity-60">Nenhum recebimento registrado.</p>{% endfor %}
         {% endif %}
       </div>
     </section>
@@ -161,8 +171,8 @@
   <footer class="flex flex-col-reverse gap-2 border-t pt-4 sm:flex-row sm:items-center sm:justify-between" style="border-color:rgba(148,163,184,.25)">
     <span class="text-xs opacity-55">Lançamento #{{ conta.pk }}</span>
     <div class="flex flex-col gap-2 sm:flex-row">
-      {% if tipo_conta == 'pagar' and pode_pagar %}<a href="{% url 'financeiro:pagar_pagar' conta.pk %}" class="btn-primary text-center">Registrar pagamento</a>{% endif %}
-      {% if tipo_conta == 'receber' and pode_baixar %}<a href="{% url 'financeiro:receber_baixar' conta.pk %}" class="btn-primary text-center">Registrar recebimento</a>{% endif %}
+      {% if tipo_conta == 'pagar' and pode_pagar %}<button type="button" class="btn-primary text-center" @click="abrirPagamentoTitulo('{% url 'financeiro:pagar_pagar' conta.pk %}')">Registrar pagamento</button>{% endif %}
+      {% if tipo_conta == 'receber' and pode_baixar %}<button type="button" class="btn-primary text-center" @click="abrirRecebimentoTitulo('{% url 'financeiro:receber_baixar' conta.pk %}')">Registrar recebimento</button>{% endif %}
     </div>
   </footer>
 </div>

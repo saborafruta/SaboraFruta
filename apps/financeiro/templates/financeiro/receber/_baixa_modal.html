@@ -1,0 +1,159 @@
+{% load widget_tweaks %}
+
+<div class="space-y-5"
+     x-data="{
+       enviando:false,
+       modo:'integral',
+       saldo:'{{ conta.valor_saldo|floatformat:2|escapejs }}',
+       valor:'{{ form.valor_pago.value|default:conta.valor_saldo|escapejs }}',
+       num(valor) {
+         const raw = String(valor ?? '').trim();
+         if (!raw) return 0;
+         const normalized = raw.includes(',') ? raw.replace(/\./g, '').replace(',', '.') : raw;
+         const parsed = Number.parseFloat(normalized);
+         return Number.isFinite(parsed) ? parsed : 0;
+       },
+       setModo(novoModo) {
+         this.modo = novoModo;
+         if (novoModo === 'integral') this.valor = this.num(this.saldo).toFixed(2);
+         if (novoModo === 'metade') this.valor = (this.num(this.saldo) / 2).toFixed(2);
+       },
+       atualizarCartao() {
+         const forma = this.$refs.forma;
+         const tipo = forma?.selectedOptions?.[0]?.dataset?.tipo || '';
+         const cartao = tipo === 'cartao_debito' || tipo === 'cartao_credito';
+         this.$refs.campoBandeira.style.display = cartao ? '' : 'none';
+         this.$refs.campoParcelas.style.display = tipo === 'cartao_credito' ? '' : 'none';
+         const contaId = forma?.selectedOptions?.[0]?.dataset?.conta || '';
+         if (contaId && Array.from(this.$refs.conta.options).some((option) => option.value === contaId)) {
+           this.$refs.conta.value = contaId;
+         }
+         if (tipo === 'cartao_debito') this.$refs.parcelas.value = '1';
+         if (!cartao) { this.$refs.bandeira.value = ''; this.$refs.parcelas.value = ''; }
+         const maximo = parseInt(forma?.selectedOptions?.[0]?.dataset?.maxParcelas || '1', 10);
+         Array.from(this.$refs.parcelas.options).forEach((item) => {
+           const numero = parseInt(item.value || '0', 10);
+           item.hidden = numero > maximo; item.disabled = numero > maximo;
+         });
+       },
+       init() { this.$nextTick(() => this.atualizarCartao()); }
+     }">
+  <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+    <div>
+      <p class="text-xs font-bold uppercase text-blue-600">Conta a receber</p>
+      <h2 class="mt-1 text-xl font-semibold">{% if editando_pagamento %}Editar recebimento{% else %}Registrar recebimento{% endif %}</h2>
+      <p class="mt-1 text-xs text-gray-500">{% if editando_pagamento %}Ajuste a baixa e recalcule o título sem sair da tela.{% else %}Baixe este título sem sair da posição diária.{% endif %}</p>
+    </div>
+    {% if modal_form %}
+    <button type="button" class="btn-secondary" @click="abrirTituloPagar('{% url 'financeiro:receber_detail' conta.pk %}')">Voltar ao título</button>
+    {% else %}
+    <a href="{% url 'financeiro:receber_detail' conta.pk %}" class="btn-secondary">Voltar ao título</a>
+    {% endif %}
+  </div>
+
+  <section class="grid gap-3 sm:grid-cols-4">
+    <div class="rounded-lg border border-slate-200 p-4">
+      <span class="block text-xs text-gray-500">Cliente</span>
+      <strong class="mt-1 block truncate">{{ conta.cliente.razao_social }}</strong>
+    </div>
+    <div class="rounded-lg border border-slate-200 p-4">
+      <span class="block text-xs text-gray-500">Vencimento</span>
+      <strong class="mt-1 block">{{ conta.data_vencimento|date:"d/m/Y" }}</strong>
+    </div>
+    <div class="rounded-lg border border-slate-200 p-4">
+      <span class="block text-xs text-gray-500">Valor restante</span>
+      <strong class="mt-1 block text-amber-600">R$ {{ conta.valor_saldo|floatformat:2 }}</strong>
+    </div>
+    <div class="rounded-lg border border-slate-200 p-4">
+      <span class="block text-xs text-gray-500">Parcela</span>
+      <strong class="mt-1 block">{{ conta.parcela }} de {{ conta.total_parcelas }}</strong>
+    </div>
+  </section>
+
+  <form method="post" action="{{ form_action_url }}" {% if modal_form %}@submit.prevent="enviando=true; enviarRecebimentoTitulo($event)"{% else %}@submit="enviando=true"{% endif %}>
+    {% csrf_token %}
+    {% if form.non_field_errors %}
+      <div class="mb-4 rounded-md border border-red-300 bg-red-50 p-3 text-sm text-red-700">{{ form.non_field_errors }}</div>
+    {% endif %}
+
+    <div class="grid gap-5 lg:grid-cols-[minmax(0,1fr)_18rem]">
+      <div class="space-y-4">
+        <section class="rounded-lg border border-slate-200 p-4">
+          <h3 class="font-semibold">Valor e data</h3>
+          <div class="mt-4 grid grid-cols-3 gap-1 rounded-md border border-slate-200 bg-slate-50 p-1">
+            <button type="button" @click="setModo('integral')" class="min-h-10 rounded px-3 text-sm font-semibold" :class="modo==='integral' ? 'bg-blue-600 text-white' : 'text-slate-600'">Receber tudo</button>
+            <button type="button" @click="modo='parcial'" class="min-h-10 rounded px-3 text-sm font-semibold" :class="modo==='parcial' ? 'bg-blue-600 text-white' : 'text-slate-600'">Parcial</button>
+            <button type="button" @click="setModo('metade')" class="min-h-10 rounded px-3 text-sm font-semibold" :class="modo==='metade' ? 'bg-emerald-600 text-white' : 'text-slate-600'">50%</button>
+          </div>
+          <div class="mt-4 grid gap-4 sm:grid-cols-2">
+            <label class="block text-sm font-medium">Data do recebimento *
+              {{ form.data_pagamento|add_class:"form-input mt-1 w-full" }}
+              {% if form.data_pagamento.errors %}<span class="mt-1 block text-xs text-red-500">{{ form.data_pagamento.errors|join:", " }}</span>{% endif %}
+            </label>
+            <label class="block text-sm font-medium">Valor recebido (R$) *
+              {{ form.valor_pago|add_class:"form-input mt-1 w-full text-lg font-semibold"|attr:"x-model:valor"|attr:"@input:modo='parcial'" }}
+              {% if form.valor_pago.errors %}<span class="mt-1 block text-xs text-red-500">{{ form.valor_pago.errors|join:", " }}</span>{% endif %}
+            </label>
+          </div>
+          <div class="mt-4 grid gap-4 sm:grid-cols-3">
+            <label class="block text-sm font-medium">Juros
+              {{ form.valor_juros|add_class:"form-input mt-1 w-full" }}
+              {% if form.valor_juros.errors %}<span class="mt-1 block text-xs text-red-500">{{ form.valor_juros.errors|join:", " }}</span>{% endif %}
+            </label>
+            <label class="block text-sm font-medium">Multa
+              {{ form.valor_multa|add_class:"form-input mt-1 w-full" }}
+              {% if form.valor_multa.errors %}<span class="mt-1 block text-xs text-red-500">{{ form.valor_multa.errors|join:", " }}</span>{% endif %}
+            </label>
+            <label class="block text-sm font-medium">Desconto
+              {{ form.valor_desconto|add_class:"form-input mt-1 w-full" }}
+              {% if form.valor_desconto.errors %}<span class="mt-1 block text-xs text-red-500">{{ form.valor_desconto.errors|join:", " }}</span>{% endif %}
+            </label>
+          </div>
+        </section>
+
+        <section class="rounded-lg border border-slate-200 p-4">
+          <h3 class="font-semibold">Como recebeu</h3>
+          <div class="mt-4 grid gap-4 sm:grid-cols-2">
+            <label class="block text-sm font-medium">Forma de recebimento *
+              {{ form.forma_pagamento|add_class:"form-input mt-1 w-full"|attr:"x-ref:forma"|attr:"@change:atualizarCartao()" }}
+              {% if form.forma_pagamento.errors %}<span class="mt-1 block text-xs text-red-500">{{ form.forma_pagamento.errors|join:", " }}</span>{% endif %}
+            </label>
+            <label class="block text-sm font-medium">Conta creditada
+              {{ form.conta_bancaria|add_class:"form-input mt-1 w-full"|attr:"x-ref:conta" }}
+              {% if form.conta_bancaria.errors %}<span class="mt-1 block text-xs text-red-500">{{ form.conta_bancaria.errors|join:", " }}</span>{% endif %}
+            </label>
+            <label class="block text-sm font-medium" x-ref="campoBandeira">Bandeira do cartão
+              {{ form.bandeira|add_class:"form-input mt-1 w-full"|attr:"x-ref:bandeira" }}
+              {% if form.bandeira.errors %}<span class="mt-1 block text-xs text-red-500">{{ form.bandeira.errors|join:", " }}</span>{% endif %}
+            </label>
+            <label class="block text-sm font-medium" x-ref="campoParcelas">Parcelas
+              {{ form.numero_parcelas|add_class:"form-input mt-1 w-full"|attr:"x-ref:parcelas" }}
+              {% if form.numero_parcelas.errors %}<span class="mt-1 block text-xs text-red-500">{{ form.numero_parcelas.errors|join:", " }}</span>{% endif %}
+            </label>
+          </div>
+        </section>
+
+        <section class="rounded-lg border border-slate-200 p-4">
+          <h3 class="font-semibold">Observação</h3>
+          <label class="mt-4 block text-sm font-medium">Observação
+            {{ form.observacao|add_class:"form-input mt-1 w-full"|attr:"placeholder:Informação para conferência futura" }}
+            {% if form.observacao.errors %}<span class="mt-1 block text-xs text-red-500">{{ form.observacao.errors|join:", " }}</span>{% endif %}
+          </label>
+        </section>
+      </div>
+
+      <aside class="h-fit rounded-lg border border-slate-200 bg-slate-50 p-4">
+        <span class="block text-xs font-bold uppercase text-gray-500">Resumo da baixa</span>
+        <div class="mt-4 space-y-3 text-sm">
+          <div class="flex justify-between gap-3"><span class="text-gray-500">Valor restante</span><strong>R$ {{ conta.valor_saldo|floatformat:2 }}</strong></div>
+          <div class="flex justify-between gap-3"><span class="text-gray-500">Forma prevista</span><strong class="text-right">{{ conta.forma_pagamento.descricao|default:"Não definida" }}</strong></div>
+          <div class="flex justify-between gap-3"><span class="text-gray-500">Conta prevista</span><strong class="text-right">{{ conta.conta_bancaria.descricao|default:"Não definida" }}</strong></div>
+        </div>
+        <button type="submit" class="btn-primary mt-5 min-h-11 w-full justify-center" :disabled="enviando">
+          <span x-show="!enviando">{% if editando_pagamento %}Salvar recebimento{% else %}Confirmar recebimento{% endif %}</span>
+          <span x-show="enviando" x-cloak>{% if editando_pagamento %}Salvando...{% else %}Registrando...{% endif %}</span>
+        </button>
+      </aside>
+    </div>
+  </form>
+</div>

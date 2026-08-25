@@ -8,6 +8,13 @@
 <div class="space-y-5"
      x-data="{
        detalheAberto:false, detalheCarregando:false, detalheHtml:'', detalheErro:'',
+       hidratarDetalhe() {
+         this.$nextTick(() => {
+           const alvo = document.querySelector('[data-receber-detalhe-content]');
+           if (!window.Alpine || !alvo) return;
+           Array.from(alvo.children).forEach((filho) => Alpine.initTree(filho));
+         });
+       },
        async abrirDetalhe(url) {
          this.detalheAberto = true; this.detalheCarregando = true; this.detalheErro = ''; this.detalheHtml = '';
          document.body.style.overflow = 'hidden';
@@ -15,8 +22,41 @@
            const response = await fetch(url + (url.includes('?') ? '&' : '?') + 'modal=1', {headers:{'X-Requested-With':'XMLHttpRequest'}});
            if (!response.ok) throw new Error('Não foi possível carregar os detalhes.');
            this.detalheHtml = await response.text();
+           this.hidratarDetalhe();
          } catch (error) { this.detalheErro = error.message; }
          finally { this.detalheCarregando = false; }
+       },
+       abrirTituloPagar(url) { return this.abrirDetalhe(url); },
+       async abrirPagamentoTitulo(url) {
+         this.detalheAberto = true; this.detalheCarregando = true; this.detalheErro = ''; this.detalheHtml = '';
+         document.body.style.overflow = 'hidden';
+         try {
+           const response = await fetch(url + (url.includes('?') ? '&' : '?') + 'modal=1', {headers:{'X-Requested-With':'XMLHttpRequest'}});
+           if (!response.ok) throw new Error('Não foi possível carregar o pagamento.');
+           this.detalheHtml = await response.text();
+           this.hidratarDetalhe();
+         } catch (error) { this.detalheErro = error.message; }
+         finally { this.detalheCarregando = false; }
+       },
+       async enviarPagamentoTitulo(event) {
+         const form = event.target;
+         this.detalheErro = '';
+         try {
+           const response = await fetch(form.action, {
+             method:'POST',
+             body:new FormData(form),
+             headers:{'X-Requested-With':'XMLHttpRequest'}
+           });
+           const html = await response.text();
+           if (!response.ok) {
+             this.detalheHtml = html;
+             this.hidratarDetalhe();
+             return;
+           }
+           window.location.href = window.location.href;
+         } catch (error) {
+           this.detalheErro = 'Não foi possível registrar o pagamento.';
+         }
        },
        fecharDetalhe() { this.detalheAberto = false; document.body.style.overflow = ''; }
      }">
@@ -134,13 +174,32 @@
   </div>
 
   <!-- ── Filtros ── -->
-  <form method="get" class="card p-4 grid grid-cols-1 md:grid-cols-12 gap-3">
+  <form method="get" class="card overflow-hidden p-0">
+    <div class="border-b px-4 py-3" :style="temaClaro ? 'border-color:#e2e8f0;background:#f8fafc' : 'border-color:#303038;background:#1e1e20'">
+      <div class="flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
+        <div>
+          <h3 class="text-sm font-semibold">Filtros da listagem</h3>
+          <p class="text-xs opacity-60">Refine por vencimento, status, fornecedor e classificação financeira.</p>
+        </div>
+        <div class="flex gap-2">
+          <button type="submit" class="btn-primary min-w-28 justify-center">Filtrar</button>
+          <a href="{% url 'financeiro:pagar_list' %}" class="btn-secondary px-3 flex items-center justify-center" title="Limpar filtros">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+            </svg>
+          </a>
+        </div>
+      </div>
+    </div>
+    <div class="grid grid-cols-1 gap-3 p-4 md:grid-cols-12">
     <div class="md:col-span-4">
+      <label class="mb-1 block text-xs font-semibold opacity-70">Buscar</label>
       <input type="text" name="q" value="{{ q }}"
              placeholder="Beneficiario, CPF/CNPJ ou documento..."
              class="form-input">
     </div>
     <div class="md:col-span-2">
+      <label class="mb-1 block text-xs font-semibold opacity-70">Status</label>
       <select name="status" class="form-input">
         <option value="pendentes" {% if status_filtro == 'pendentes' %}selected{% endif %}>Somente pendentes</option>
         <option value="todos" {% if status_filtro == 'todos' %}selected{% endif %}>Todos os status</option>
@@ -150,20 +209,27 @@
       </select>
     </div>
     <div class="md:col-span-2">
+      <label class="mb-1 block text-xs font-semibold opacity-70">Vencimento de</label>
       <input type="date" name="data_ini" value="{{ data_ini }}" class="form-input" title="Vencimento de">
     </div>
     <div class="md:col-span-2">
+      <label class="mb-1 block text-xs font-semibold opacity-70">Vencimento até</label>
       <input type="date" name="data_fim" value="{{ data_fim }}" class="form-input" title="Vencimento até">
     </div>
-    <div class="md:col-span-2 flex gap-2">
-      <button type="submit" class="btn-secondary w-full justify-center">Filtrar</button>
-      <a href="{% url 'financeiro:pagar_list' %}" class="btn-secondary px-3 flex items-center justify-center" title="Limpar filtros">
+    <div class="md:col-span-2">
+      <label class="mb-1 block text-xs font-semibold opacity-70">Relatório</label>
+      <a href="{% url 'financeiro:pagar_relatorio' %}{% if page_querystring %}?{{ page_querystring }}{% endif %}"
+         target="_blank"
+         class="btn-secondary flex min-h-10 items-center justify-center gap-2 px-3 py-1.5">
         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"/>
         </svg>
+        Imprimir
       </a>
     </div>
     {% include "financeiro/pagar/_filtro_categoria_financeira.html" with filtro_id="contas-abertas" %}
+    </div>
   </form>
 
   <!-- ── Totais da seleção + relatório ── -->
@@ -174,7 +240,7 @@
       <strong :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
         R$ {{ totais_filtro.total_saldo|floatformat:2 }}
       </strong>
-      em saldo
+      em valor restante
     </span>
     <span :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
       Valor total:
@@ -189,22 +255,13 @@
       </strong>
     </span>
     {% endif %}
-    <a href="{% url 'financeiro:pagar_relatorio' %}{% if page_querystring %}?{{ page_querystring }}{% endif %}"
-       target="_blank"
-       class="btn-secondary sm:ml-auto flex items-center gap-2 px-3 py-1.5">
-      <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-              d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"/>
-      </svg>
-      Imprimir relatório
-    </a>
   </div>
 
   <!-- ── Cards mobile ── -->
   <div class="md:hidden space-y-3">
     {% for c in contas %}
     <a href="{% url 'financeiro:pagar_detail' c.pk %}" @click.prevent="abrirDetalhe($el.href)"
-       class="card p-4 block space-y-3 hover:opacity-90 transition-opacity {% if c.excluido %}opacity-60 grayscale{% endif %}">
+       class="card p-4 block space-y-3 hover:opacity-90 transition-opacity {% if c.excluido %}opacity-60 grayscale{% elif c.data_vencimento < today and c.status != 'pago' and c.status != 'cancelado' %}border-l-4 border-l-rose-600 border-rose-300 bg-rose-100 dark:bg-rose-950/25{% endif %}">
       <div class="flex items-start justify-between gap-3">
         <div class="min-w-0">
           <div class="font-semibold truncate" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
@@ -220,18 +277,19 @@
       <div class="grid grid-cols-3 gap-2 text-xs">
         <div>
           <span :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Vencimento</span>
-          <div class="font-semibold">{{ c.data_vencimento|date:"d/m/Y" }}</div>
+          <div class="font-semibold {% if c.data_vencimento < today and c.status != 'pago' and c.status != 'cancelado' %}text-rose-600 dark:text-rose-300{% endif %}">{{ c.data_vencimento|date:"d/m/Y" }}</div>
         </div>
         <div>
           <span :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Valor</span>
           <div class="font-semibold">R$ {{ c.valor_final|floatformat:2 }}</div>
         </div>
         <div>
-          <span :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Saldo</span>
+          <span :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Valor restante</span>
           <div class="font-semibold"
                :style="temaClaro ? 'color:#b45309;' : 'color:#fcd34d;'">
             R$ {{ c.valor_saldo|floatformat:2 }}
           </div>
+          {% if c.valor_pago > 0 %}<div class="text-[10px] opacity-65">Pago R$ {{ c.valor_pago|floatformat:2 }}</div>{% endif %}
         </div>
       </div>
     </a>
@@ -270,14 +328,14 @@
             <th class="text-center px-4 py-3 text-xs font-semibold uppercase tracking-wide" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Parcela / recorrência</th>
             <th class="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wide" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Vencimento</th>
             <th class="text-right px-4 py-3 text-xs font-semibold uppercase tracking-wide" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Valor</th>
-            <th class="text-right px-4 py-3 text-xs font-semibold uppercase tracking-wide" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Saldo</th>
+            <th class="text-right px-4 py-3 text-xs font-semibold uppercase tracking-wide" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Valor restante</th>
             <th class="text-center px-4 py-3 text-xs font-semibold uppercase tracking-wide" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Status</th>
             <th class="text-center px-4 py-3 text-xs font-semibold uppercase tracking-wide" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Ações</th>
           </tr>
         </thead>
         <tbody>
           {% for c in contas %}
-          <tr class="table-row-hover border-b {% if c.excluido %}opacity-55 grayscale{% endif %}"
+          <tr class="table-row-hover border-b {% if c.excluido %}opacity-55 grayscale{% elif c.data_vencimento < today and c.status != 'pago' and c.status != 'cancelado' %}border-l-4 border-l-rose-600 bg-rose-100 dark:bg-rose-950/25{% endif %}"
               :style="temaClaro ? 'border-color:#f1f5f9;' : 'border-color:#2a2a2e;'">
             <td class="px-4 py-3 font-mono text-xs" :style="temaClaro ? 'color:#94a3b8;' : 'color:#64748b;'">#{{ c.pk }}</td>
             <td class="px-4 py-3">
@@ -299,10 +357,11 @@
               {{ c.parcela }}/{{ c.total_parcelas }}{% if c.grupo_recorrencia %}<span class="block text-[10px] opacity-70">{{ c.get_frequencia_recorrencia_display }}</span>{% endif %}
             </td>
             <td class="px-4 py-3 text-sm whitespace-nowrap">
-              {% if c.status == 'vencido' %}
+              {% if c.data_vencimento < today and c.status != 'pago' and c.status != 'cancelado' %}
                 <span :style="temaClaro ? 'color:#be123c;' : 'color:#fca5a5;'" class="font-semibold">
                   {{ c.data_vencimento|date:"d/m/Y" }}
                 </span>
+                <span class="ml-1 inline-flex rounded bg-rose-600 px-1.5 py-0.5 text-[10px] font-semibold text-white">Vencido</span>
               {% else %}
                 {{ c.data_vencimento|date:"d/m/Y" }}
               {% endif %}
@@ -313,6 +372,7 @@
             <td class="px-4 py-3 text-right font-semibold">
               {% if c.valor_saldo > 0 %}
                 <span :style="temaClaro ? 'color:#b45309;' : 'color:#fcd34d;'">R$ {{ c.valor_saldo|floatformat:2 }}</span>
+                {% if c.valor_pago > 0 %}<span class="block text-[10px] font-medium opacity-60">Pago R$ {{ c.valor_pago|floatformat:2 }}</span>{% endif %}
               {% else %}
                 <span :style="temaClaro ? 'color:#15803d;' : 'color:#86efac;'">—</span>
               {% endif %}
@@ -324,6 +384,8 @@
                 <span class="soft-pill is-blue">Aberto</span>
               {% elif c.status == 'pago' %}
                 <span class="soft-pill is-green">Pago</span>
+              {% elif c.status == 'pago_parcial' %}
+                <span class="soft-pill is-amber">Pago parcial</span>
               {% elif c.status == 'vencido' %}
                 <span class="soft-pill is-red">Vencido</span>
               {% elif c.status == 'cancelado' %}
@@ -342,7 +404,7 @@
                   Detalhes
                 </a>
                 {% if pode_editar and not c.excluido and c.status != 'pago' and c.status != 'cancelado' %}
-                <a href="{% url 'financeiro:pagar_pagar' c.pk %}"
+                <a href="{% url 'financeiro:pagar_pagar' c.pk %}" @click.prevent="abrirPagamentoTitulo($el.href)"
                    class="text-xs px-2.5 py-1 rounded-lg font-semibold transition-all"
                    :style="temaClaro ? 'background:#faf5ff; color:#7e22ce;' : 'background:rgba(168,85,247,0.12); color:#d8b4fe;'">
                   Pagar

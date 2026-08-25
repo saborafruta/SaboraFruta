@@ -30,14 +30,23 @@ class PainelFinanceiroView(PermissaoRequiredMixin, View):
         fluxo = FluxoCaixaService.apurar(filial, inicio_mes, hoje)
 
         receber_pendente = ContaReceber.objects.filter(
-            filial=filial, status__in=[StatusContaReceber.ABERTO, StatusContaReceber.VENCIDO],
+            filial=filial, status__in=[
+                StatusContaReceber.ABERTO,
+                StatusContaReceber.PAGO_PARCIAL,
+                StatusContaReceber.VENCIDO,
+            ],
         ).aggregate(total=Sum('valor_saldo'))['total'] or 0
         receber_vencido = ContaReceber.objects.filter(
             filial=filial, status=StatusContaReceber.VENCIDO,
         ).aggregate(total=Sum('valor_saldo'))['total'] or 0
 
         pagar_pendente = ContaPagar.objects.filter(
-            filial=filial, status__in=[StatusContaPagar.ABERTO, StatusContaPagar.VENCIDO, StatusContaPagar.AGENDADO],
+            filial=filial, status__in=[
+                StatusContaPagar.ABERTO,
+                StatusContaPagar.PAGO_PARCIAL,
+                StatusContaPagar.VENCIDO,
+                StatusContaPagar.AGENDADO,
+            ],
         ).aggregate(total=Sum('valor_saldo'))['total'] or 0
         pagar_vencido = ContaPagar.objects.filter(
             filial=filial, status=StatusContaPagar.VENCIDO,

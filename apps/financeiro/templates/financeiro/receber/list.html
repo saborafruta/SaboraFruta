@@ -7,7 +7,14 @@
 {% block content %}
 <div class="space-y-5"
      x-data="{
-       detalheAberto:false, detalheCarregando:false, detalheHtml:'', detalheErro:'',
+       detalheAberto:false, detalheCarregando:false, detalheHtml:'', detalheErro:'', criarAberto:false,
+       hidratarDetalhe() {
+         this.$nextTick(() => {
+           const alvo = document.querySelector('[data-receber-detalhe-content]');
+           if (!window.Alpine || !alvo) return;
+           Array.from(alvo.children).forEach((filho) => Alpine.initTree(filho));
+         });
+       },
        async abrirDetalhe(url) {
          this.detalheAberto = true; this.detalheCarregando = true; this.detalheErro = ''; this.detalheHtml = '';
          document.body.style.overflow = 'hidden';
@@ -15,11 +22,39 @@
            const response = await fetch(url + (url.includes('?') ? '&' : '?') + 'modal=1', {headers:{'X-Requested-With':'XMLHttpRequest'}});
            if (!response.ok) throw new Error('Não foi possível carregar os detalhes.');
            this.detalheHtml = await response.text();
+           this.hidratarDetalhe();
          } catch (error) { this.detalheErro = error.message; }
          finally { this.detalheCarregando = false; }
        },
+       abrirTituloPagar(url) { return this.abrirDetalhe(url); },
+       async abrirRecebimentoTitulo(url) {
+         this.detalheCarregando = true; this.detalheErro = '';
+         try {
+           const response = await fetch(url + (url.includes('?') ? '&' : '?') + 'modal=1', {headers:{'X-Requested-With':'XMLHttpRequest'}});
+           if (!response.ok) throw new Error('Não foi possível carregar o recebimento.');
+           this.detalheHtml = await response.text();
+           this.hidratarDetalhe();
+         } catch (error) { this.detalheErro = error.message; }
+         finally { this.detalheCarregando = false; }
+       },
+       async enviarRecebimentoTitulo(event) {
+         const form = event.target;
+         this.detalheErro = '';
+         try {
+           const response = await fetch(form.action, {
+             method: 'POST',
+             body: new FormData(form),
+             headers:{'X-Requested-With':'XMLHttpRequest'}
+           });
+           this.detalheHtml = await response.text();
+           this.hidratarDetalhe();
+         } catch (error) {
+           this.detalheErro = 'Não foi possível registrar o recebimento.';
+         }
+       },
        fecharDetalhe() { this.detalheAberto = false; document.body.style.overflow = ''; }
-     }">
+     }"
+     @message.window="if ($event.origin === window.location.origin && $event.data && $event.data.type === 'conta-receber-criada') { criarAberto=false; window.location.reload(); } else if ($event.origin === window.location.origin && $event.data && $event.data.type === 'fechar-conta-receber') { criarAberto=false; }">
 
   <!-- ── Cabeçalho ── -->
   <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
@@ -34,7 +69,7 @@
     <div class="flex gap-2 flex-wrap">
       {% include "financeiro/_dashboard_contas_modal.html" %}
       {% if pode_criar %}
-        <a href="{% url 'financeiro:receber_criar' %}" class="btn-primary">+ Novo título</a>
+        <button type="button" class="btn-primary" @click="criarAberto=true">+ Novo título</button>
       {% endif %}
     </div>
   </div>
@@ -140,7 +175,8 @@
     </div>
     <div class="md:col-span-2">
       <select name="status" class="form-input">
-        <option value="">Todos os status</option>
+        <option value="pendentes" {% if status_filtro == 'pendentes' %}selected{% endif %}>Somente pendentes</option>
+        <option value="todos" {% if status_filtro == 'todos' %}selected{% endif %}>Todos os status</option>
         {% for val, label in status_choices %}
           <option value="{{ val }}" {% if status_filtro == val %}selected{% endif %}>{{ label }}</option>
         {% endfor %}
@@ -170,7 +206,7 @@
       <strong :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
         R$ {{ totais_filtro.total_saldo|floatformat:2 }}
       </strong>
-      em saldo
+      em valor restante
     </span>
     <span :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
       Valor total:
@@ -210,6 +246,7 @@
             {% if c.documento_numero %}Doc. {{ c.documento_numero }} — {% endif %}
             Parc. {{ c.parcela }}/{{ c.total_parcelas }}
           </div>
+          {% if c.forma_pagamento or c.plano_contas %}<div class="mt-1 text-xs opacity-60">{{ c.forma_pagamento.descricao_com_conta|default:"Forma não definida" }}{% if c.plano_contas %} · {{ c.plano_contas.descricao }}{% endif %}</div>{% endif %}
         </div>
         <span class="soft-pill {{ pill_status|dict_get:c.status|default:'is-slate' }} flex-shrink-0">
           {{ c.get_status_display }}
@@ -225,7 +262,7 @@
           <div class="font-semibold">R$ {{ c.valor_final|floatformat:2 }}</div>
         </div>
         <div>
-          <span :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Saldo</span>
+          <span :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Valor restante</span>
           <div class="font-semibold"
                :style="{{ c.valor_saldo }} > 0 ? (temaClaro ? 'color:#b45309;' : 'color:#fcd34d;') : (temaClaro ? 'color:#15803d;' : 'color:#86efac;')">
             R$ {{ c.valor_saldo|floatformat:2 }}
@@ -268,7 +305,7 @@
             <th class="text-center px-4 py-3 text-xs font-semibold uppercase tracking-wide" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Parcela</th>
             <th class="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wide" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Vencimento</th>
             <th class="text-right px-4 py-3 text-xs font-semibold uppercase tracking-wide" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Valor</th>
-            <th class="text-right px-4 py-3 text-xs font-semibold uppercase tracking-wide" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Saldo</th>
+            <th class="text-right px-4 py-3 text-xs font-semibold uppercase tracking-wide" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Valor restante</th>
             <th class="text-center px-4 py-3 text-xs font-semibold uppercase tracking-wide" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Status</th>
             <th class="text-center px-4 py-3 text-xs font-semibold uppercase tracking-wide" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Ações</th>
           </tr>
@@ -282,6 +319,8 @@
               <div class="font-medium" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
                 {{ c.cliente.razao_social|truncatechars:38 }}
               </div>
+              <div class="mt-0.5 text-xs opacity-60">{{ c.forma_pagamento.descricao_com_conta|default:"Forma não definida" }}</div>
+              {% if c.plano_contas %}<span class="mt-1 inline-flex rounded bg-emerald-100 px-2 py-0.5 text-[10px] font-semibold text-emerald-800 dark:bg-emerald-950/50 dark:text-emerald-200">{{ c.plano_contas.descricao }}</span>{% endif %}
             </td>
             <td class="px-4 py-3 text-xs font-mono" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
               {{ c.documento_numero|default:"—" }}
@@ -304,6 +343,7 @@
             <td class="px-4 py-3 text-right font-semibold">
               {% if c.valor_saldo > 0 %}
                 <span :style="temaClaro ? 'color:#b45309;' : 'color:#fcd34d;'">R$ {{ c.valor_saldo|floatformat:2 }}</span>
+                {% if c.valor_pago > 0 %}<span class="block text-[10px] font-medium opacity-60">Recebido R$ {{ c.valor_pago|floatformat:2 }}</span>{% endif %}
               {% else %}
                 <span :style="temaClaro ? 'color:#15803d;' : 'color:#86efac;'">—</span>
               {% endif %}
@@ -311,6 +351,8 @@
             <td class="px-4 py-3 text-center">
               {% if c.status == 'aberto' %}
                 <span class="soft-pill is-blue">Aberto</span>
+              {% elif c.status == 'pago_parcial' %}
+                <span class="soft-pill is-amber">Pago parcial</span>
               {% elif c.status == 'pago' %}
                 <span class="soft-pill is-green">Pago</span>
               {% elif c.status == 'vencido' %}
@@ -318,7 +360,7 @@
               {% elif c.status == 'cancelado' %}
                 <span class="soft-pill is-slate">Cancelado</span>
               {% elif c.status == 'negociado' %}
-                <span class="soft-pill is-amber">Negociado</span>
+                <span class="soft-pill is-amber">Adiado</span>
               {% elif c.status == 'devolvido' %}
                 <span class="soft-pill is-purple">Devolvido</span>
               {% else %}
@@ -334,7 +376,7 @@
                   Detalhes
                 </a>
                 {% if pode_editar and c.status != 'pago' and c.status != 'cancelado' %}
-                <a href="{% url 'financeiro:receber_baixar' c.pk %}"
+                <a href="{% url 'financeiro:receber_baixar' c.pk %}" @click.prevent="detalheAberto=true; document.body.style.overflow='hidden'; abrirRecebimentoTitulo($el.href)"
                    class="text-xs px-2.5 py-1 rounded-lg font-semibold transition-all"
                    :style="temaClaro ? 'background:#f0fdf4; color:#15803d;' : 'background:rgba(34,197,94,0.12); color:#86efac;'"
                    title="Registrar recebimento">
@@ -380,5 +422,13 @@
   </div>
 
   {% include "financeiro/_detalhes_conta_shell.html" %}
+  <template x-teleport="body">
+    <div x-show="criarAberto" x-cloak class="fixed inset-0 z-[170] flex items-center justify-center p-3 sm:p-6" style="background:rgba(15,23,42,.78);backdrop-filter:blur(8px)" @keydown.escape.window="criarAberto=false">
+      <div class="flex w-full max-w-4xl flex-col overflow-hidden rounded-lg border border-slate-300 bg-white shadow-2xl dark:border-slate-700 dark:bg-zinc-900" style="height:92vh" @click.stop>
+        <div class="flex items-center justify-between border-b border-slate-200 px-4 py-3 dark:border-slate-700"><div><h3 class="font-semibold">Nova conta a receber</h3><p class="text-xs text-gray-500">O título será incluído sem sair da listagem.</p></div><button type="button" class="btn-secondary px-3" @click="criarAberto=false" aria-label="Fechar conta a receber">×</button></div>
+        <template x-if="criarAberto"><iframe src="{% url 'financeiro:receber_criar' %}?modal=1" title="Cadastrar conta a receber" class="min-h-0 flex-1 w-full border-0 bg-white dark:bg-zinc-900"></iframe></template>
+      </div>
+    </div>
+  </template>
 </div>
 {% endblock %}

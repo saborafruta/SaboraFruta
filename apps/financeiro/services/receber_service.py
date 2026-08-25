@@ -10,7 +10,7 @@ from django.utils import timezone
 from apps.core.services.exceptions import DomainError
 from apps.core.services.calendario import adicionar_dias_uteis_bancarios
 from apps.financeiro.constants.enums import StatusContaReceber
-from apps.financeiro.models.receber_pagar import ContaReceber
+from apps.financeiro.models.receber_pagar import ContaReceber, PagamentoContaReceber
 
 
 class ContaReceberService:
@@ -108,6 +108,11 @@ class ContaReceberService:
             parcelas_operacao,
             bandeira,
         )
+        calculo_baixa = forma_pagamento.calcular_taxa_recebimento(
+            valor_pago,
+            parcelas_operacao,
+            bandeira,
+        )
         conta.bandeira_recebimento = bandeira
         conta.parcelas_recebimento = numero_parcelas or None
         conta.taxa_percentual_aplicada = calculo['percentual']
@@ -120,8 +125,7 @@ class ContaReceberService:
             conta.valor_saldo = Decimal('0')
             conta.status = StatusContaReceber.PAGO
         else:
-            # Baixa parcial — mantém aberto
-            conta.status = StatusContaReceber.ABERTO
+            conta.status = StatusContaReceber.PAGO_PARCIAL
 
         conta.data_pagamento = data_pagamento
         conta.forma_pagamento = forma_pagamento
@@ -131,6 +135,7 @@ class ContaReceberService:
             conta.prazo_compensacao_aplicado,
             conta.filial,
         )
+        conta_bancaria = conta_bancaria or forma_pagamento.conta_bancaria_padrao
         if conta_bancaria:
             conta.conta_bancaria = conta_bancaria
         conta.usuario_baixa = usuario
@@ -140,7 +145,170 @@ class ContaReceberService:
             conta.observacao = f'{conta.observacao}\n{sufixo}'.strip() if conta.observacao else sufixo
 
         conta.save()
+        PagamentoContaReceber.objects.create(
+            filial=conta.filial,
+            conta_receber=conta,
+            data_pagamento=data_pagamento,
+            valor_pago=valor_pago,
+            valor_juros=valor_juros or Decimal('0'),
+            valor_multa=valor_multa or Decimal('0'),
+            valor_desconto=valor_desconto or Decimal('0'),
+            valor_taxa=calculo_baixa['taxa'],
+            valor_liquido=calculo_baixa['liquido'],
+            forma_pagamento=forma_pagamento,
+            conta_bancaria=conta_bancaria,
+            bandeira=bandeira,
+            numero_parcelas=numero_parcelas or None,
+            observacao=observacao,
+            usuario=usuario,
+        )
+        return ContaReceberService._recalcular_resumo(conta)
+
+    @staticmethod
+    def _recalcular_resumo(conta: ContaReceber) -> ContaReceber:
+        pagamentos = list(
+            conta.pagamentos.select_related('forma_pagamento', 'conta_bancaria')
+            .order_by('data_pagamento', 'created_at', 'pk')
+        )
+        total_pago = sum((p.valor_pago or Decimal('0') for p in pagamentos), Decimal('0'))
+        total_juros = sum((p.valor_juros or Decimal('0') for p in pagamentos), Decimal('0'))
+        total_multa = sum((p.valor_multa or Decimal('0') for p in pagamentos), Decimal('0'))
+        total_desconto = sum((p.valor_desconto or Decimal('0') for p in pagamentos), Decimal('0'))
+        total_taxa = sum((p.valor_taxa or Decimal('0') for p in pagamentos), Decimal('0'))
+        total_liquido = sum((p.valor_liquido or Decimal('0') for p in pagamentos), Decimal('0'))
+
+        conta.valor_juros = total_juros
+        conta.valor_multa = total_multa
+        conta.valor_desconto = total_desconto
+        conta.valor_final = max(
+            conta.valor_original + total_juros + total_multa - total_desconto,
+            Decimal('0'),
+        )
+        conta.valor_pago = total_pago
+        conta.valor_saldo = max(conta.valor_final - total_pago, Decimal('0'))
+        conta.valor_taxa_recebimento = total_taxa
+        conta.valor_liquido_recebido = total_liquido
+
+        ultimo = pagamentos[-1] if pagamentos else None
+        if ultimo:
+            conta.data_pagamento = ultimo.data_pagamento
+            conta.forma_pagamento = ultimo.forma_pagamento
+            conta.conta_bancaria = ultimo.conta_bancaria
+            conta.bandeira_recebimento = ultimo.bandeira
+            conta.parcelas_recebimento = ultimo.numero_parcelas
+            conta.taxa_percentual_aplicada = (
+                ultimo.forma_pagamento.calcular_taxa_recebimento(
+                    ultimo.valor_pago,
+                    ultimo.numero_parcelas or 1,
+                    ultimo.bandeira,
+                )['percentual']
+                if ultimo.forma_pagamento_id else Decimal('0')
+            )
+            conta.taxa_fixa_aplicada = (
+                ultimo.forma_pagamento.calcular_taxa_recebimento(
+                    ultimo.valor_pago,
+                    ultimo.numero_parcelas or 1,
+                    ultimo.bandeira,
+                )['fixa']
+                if ultimo.forma_pagamento_id else Decimal('0')
+            )
+            conta.taxa_calculada_em = timezone.now() if total_taxa else None
+            prazo = ultimo.forma_pagamento.prazo_compensacao_dias_uteis if ultimo.forma_pagamento_id else 0
+            conta.prazo_compensacao_aplicado = prazo or 0
+            conta.data_liquidacao_prevista = adicionar_dias_uteis_bancarios(
+                ultimo.data_pagamento,
+                conta.prazo_compensacao_aplicado,
+                conta.filial,
+            )
+            conta.status = (
+                StatusContaReceber.PAGO
+                if conta.valor_saldo <= Decimal('0')
+                else StatusContaReceber.PAGO_PARCIAL
+            )
+        else:
+            conta.data_pagamento = None
+            conta.valor_taxa_recebimento = Decimal('0')
+            conta.valor_liquido_recebido = Decimal('0')
+            conta.taxa_percentual_aplicada = Decimal('0')
+            conta.taxa_fixa_aplicada = Decimal('0')
+            conta.taxa_calculada_em = None
+            conta.bandeira_recebimento = ''
+            conta.parcelas_recebimento = None
+            conta.prazo_compensacao_aplicado = 0
+            conta.data_liquidacao_prevista = None
+            if conta.status != StatusContaReceber.NEGOCIADO:
+                conta.status = (
+                    StatusContaReceber.VENCIDO
+                    if conta.data_vencimento < timezone.localdate()
+                    else StatusContaReceber.ABERTO
+                )
+
+        conta.save()
         return conta
+
+    @staticmethod
+    @transaction.atomic
+    def editar_baixa(
+        pagamento: PagamentoContaReceber,
+        data_pagamento: date,
+        valor_pago: Decimal,
+        forma_pagamento,
+        usuario,
+        conta_bancaria=None,
+        valor_juros: Decimal = Decimal('0'),
+        valor_multa: Decimal = Decimal('0'),
+        valor_desconto: Decimal = Decimal('0'),
+        observacao: str = '',
+        bandeira: str = '',
+        numero_parcelas: int | None = None,
+    ) -> ContaReceber:
+        """Atualiza uma baixa individual e refaz o resumo do título."""
+        conta = pagamento.conta_receber
+        if conta.status == StatusContaReceber.CANCELADO:
+            raise DomainError('Não é possível alterar recebimento de uma conta cancelada.')
+
+        bandeira = forma_pagamento.normalizar_bandeira(bandeira)
+        parcelas_operacao = numero_parcelas or 1
+        calculo = forma_pagamento.calcular_taxa_recebimento(
+            valor_pago,
+            parcelas_operacao,
+            bandeira,
+        )
+        pagamento.data_pagamento = data_pagamento
+        pagamento.valor_pago = valor_pago
+        pagamento.valor_juros = valor_juros or Decimal('0')
+        pagamento.valor_multa = valor_multa or Decimal('0')
+        pagamento.valor_desconto = valor_desconto or Decimal('0')
+        pagamento.valor_taxa = calculo['taxa']
+        pagamento.valor_liquido = calculo['liquido']
+        pagamento.forma_pagamento = forma_pagamento
+        pagamento.conta_bancaria = conta_bancaria or forma_pagamento.conta_bancaria_padrao
+        pagamento.bandeira = bandeira
+        pagamento.numero_parcelas = numero_parcelas or None
+        pagamento.observacao = observacao
+        pagamento.usuario = usuario
+        pagamento.save()
+        return ContaReceberService._recalcular_resumo(conta)
+
+    @staticmethod
+    @transaction.atomic
+    def excluir_baixa(
+        pagamento: PagamentoContaReceber,
+        motivo: str,
+        usuario,
+    ) -> ContaReceber:
+        """Remove uma baixa individual e refaz saldo, status e taxas."""
+        conta = pagamento.conta_receber
+        if conta.status == StatusContaReceber.CANCELADO:
+            raise DomainError('Não é possível excluir recebimento de uma conta cancelada.')
+        resumo = (
+            f'[Recebimento excluído por {usuario} em {timezone.localdate():%d/%m/%Y}] '
+            f'{pagamento.data_pagamento:%d/%m/%Y} - R$ {pagamento.valor_pago}. {motivo}'
+        )
+        conta.observacao = f'{conta.observacao}\n{resumo}'.strip() if conta.observacao else resumo
+        conta.save(update_fields=['observacao', 'updated_at'])
+        pagamento.delete()
+        return ContaReceberService._recalcular_resumo(conta)
 
     @staticmethod
     @transaction.atomic
@@ -179,8 +347,9 @@ class ContaReceberService:
         conta.data_vencimento = nova_data_vencimento
         conta.status = StatusContaReceber.NEGOCIADO
 
+        usuario_nome = getattr(usuario, 'nome', '') or str(usuario).split('@')[0]
         sufixo = (
-            f'[Prazo alterado por {usuario} em {timezone.localdate():%d/%m/%Y}] '
+            f'[Prazo alterado por {usuario_nome} em {timezone.localdate():%d/%m/%Y}] '
             f'{data_anterior:%d/%m/%Y} → {nova_data_vencimento:%d/%m/%Y}.'
         )
         if motivo:

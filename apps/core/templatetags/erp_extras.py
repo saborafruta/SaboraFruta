@@ -1,4 +1,5 @@
 """Filtros e tags customizados."""
+import re
 from decimal import Decimal
 from typing import Any
 
@@ -182,3 +183,14 @@ def dict_get(d, key):
     if isinstance(d, dict):
         return d.get(key)
     return None
+
+
+@register.filter
+def observacao_financeira(valor):
+    """Remove e-mails de observações operacionais exibidas ao usuário."""
+    if not valor:
+        return ''
+    texto = str(valor)
+    texto = re.sub(r'\s*\([^)]*[\w.+-]+@[\w.-]+\.[A-Za-z]{2,}[^)]*\)', '', texto)
+    texto = re.sub(r'[\w.+-]+@[\w.-]+\.[A-Za-z]{2,}', '', texto)
+    return texto

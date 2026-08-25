@@ -18,15 +18,17 @@ class TipoFormaPagamento(models.TextChoices):
 
 class StatusContaReceber(models.TextChoices):
     ABERTO = "aberto", "Aberto"
+    PAGO_PARCIAL = "pago_parcial", "Pago parcial"
     PAGO = "pago", "Pago"
     VENCIDO = "vencido", "Vencido"
     CANCELADO = "cancelado", "Cancelado"
-    NEGOCIADO = "negociado", "Negociado"
+    NEGOCIADO = "negociado", "Adiado"
     DEVOLVIDO = "devolvido", "Devolvido"
 
 
 class StatusContaPagar(models.TextChoices):
     ABERTO = "aberto", "Aberto"
+    PAGO_PARCIAL = "pago_parcial", "Pago parcial"
     PAGO = "pago", "Pago"
     VENCIDO = "vencido", "Vencido"
     CANCELADO = "cancelado", "Cancelado"

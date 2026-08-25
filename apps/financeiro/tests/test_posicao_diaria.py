@@ -11,7 +11,9 @@ from apps.financeiro.constants.enums import StatusContaPagar, StatusContaReceber
 from apps.financeiro.models import ContaBancaria, FormaPagamento, PlanoContabil, PlanoContas
 from apps.financeiro.models.extrato import ExtratoBancario
 from apps.financeiro.models.formas_pagamento import TaxaParcelamento
-from apps.financeiro.models.receber_pagar import ContaPagar, ContaReceber, PagamentoContaPagar
+from apps.financeiro.models.receber_pagar import (
+    ContaPagar, ContaReceber, PagamentoContaPagar, PagamentoContaReceber,
+)
 from apps.financeiro.services.receber_service import ContaReceberService
 from apps.financeiro.services.posicao_diaria_service import PosicaoDiariaCaixaService
 from apps.pdv.models import PagamentoVendaPDV, VendaPDV
@@ -128,6 +130,9 @@ class PosicaoDiariaCaixaTests(TestCase):
         self.assertContains(response, 'aria-label="Ver dias anteriores"')
         self.assertContains(response, 'aria-label="Ver dias posteriores"')
         self.assertContains(response, "tituloPagarModal")
+        self.assertContains(response, "abrirPagamentoTitulo")
+        self.assertContains(response, "enviarPagamentoTitulo")
+        self.assertContains(response, "pc-reconcile")
         self.assertContains(response, "Agrupar por forma de pagamento")
 
     def test_previsoes_de_receber_e_pagar_abrem_em_hoje_antes_dos_saldos(self):
@@ -170,7 +175,9 @@ class PosicaoDiariaCaixaTests(TestCase):
             [conta.pk for conta in response.context["contas_pagar_previstas"]],
             [conta_hoje.pk],
         )
-        self.assertContains(response, reverse("financeiro:pagar_pagar", args=[conta_hoje.pk]))
+        self.assertContains(response, f"abrirTituloPagar('{reverse('financeiro:pagar_detail', args=[conta_hoje.pk])}')")
+        self.assertContains(response, "atualizarPrevisoes($el.href)")
+        self.assertContains(response, "pc-payables-forecast mt-5")
         html = response.content.decode()
         self.assertLess(html.index("Recebimentos previstos"), html.index("Contas a pagar previstas"))
         self.assertLess(html.index("Contas a pagar previstas"), html.index("Saldos por conta"))
@@ -183,6 +190,126 @@ class PosicaoDiariaCaixaTests(TestCase):
             {conta.pk for conta in response.context["contas_pagar_previstas"]},
             {conta_hoje.pk, conta_amanha.pk},
         )
+
+        parcial = self.client.get(
+            reverse("financeiro:posicao_diaria"),
+            {"data": hoje.isoformat(), "pagar_previsao": "7", "partial": "previsoes"},
+            HTTP_X_REQUESTED_WITH="XMLHttpRequest",
+        )
+        self.assertEqual(parcial.status_code, 200)
+        self.assertContains(parcial, "Conta prevista hoje")
+        self.assertContains(parcial, "Conta prevista amanhã")
+        self.assertNotContains(parcial, "Saldos por conta")
+
+    def test_pagamento_de_titulo_abre_e_valida_no_modal(self):
+        conta = ContaPagar.objects.create(
+            filial=self.filial,
+            descricao_despesa="Conta para pagar no modal",
+            valor_original=Decimal("90.00"),
+            valor_final=Decimal("90.00"),
+            valor_saldo=Decimal("90.00"),
+            data_emissao=date(2026, 8, 24),
+            data_vencimento=date(2026, 8, 25),
+            status=StatusContaPagar.ABERTO,
+            usuario=self.usuario,
+            forma_pagamento_prevista=self.forma,
+            conta_bancaria=self.banco,
+        )
+
+        url = reverse("financeiro:pagar_pagar", args=[conta.pk])
+        response = self.client.get(url, {"modal": "1"}, HTTP_X_REQUESTED_WITH="XMLHttpRequest")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Registrar pagamento")
+        self.assertContains(response, '@submit.prevent="enviando=true; enviarPagamentoTitulo($event)"')
+        self.assertContains(response, reverse("financeiro:pagar_detail", args=[conta.pk]))
+
+        response = self.client.post(
+            f"{url}?modal=1",
+            {},
+            HTTP_X_REQUESTED_WITH="XMLHttpRequest",
+        )
+
+        self.assertEqual(response.status_code, 400)
+        self.assertContains(response, "Registrar pagamento", status_code=400)
+
+    def test_recebimento_de_titulo_abre_e_valida_no_modal(self):
+        cliente = Cliente.objects.create(
+            filial=self.filial,
+            razao_social="Cliente modal receber",
+            tipo_pessoa="F",
+            cpf_cnpj="12345678906",
+        )
+        conta = ContaReceber.objects.create(
+            filial=self.filial,
+            cliente=cliente,
+            valor_original=Decimal("180.00"),
+            valor_final=Decimal("180.00"),
+            valor_saldo=Decimal("180.00"),
+            data_emissao=date(2026, 8, 22),
+            data_vencimento=date(2026, 8, 25),
+            status=StatusContaReceber.ABERTO,
+            forma_pagamento=self.forma,
+            conta_bancaria=self.banco,
+        )
+
+        detalhe = self.client.get(
+            reverse("financeiro:receber_detail", args=[conta.pk]),
+            {"modal": "1"},
+            HTTP_X_REQUESTED_WITH="XMLHttpRequest",
+        )
+        self.assertEqual(detalhe.status_code, 200)
+        self.assertContains(detalhe, "abrirRecebimentoTitulo")
+
+        url = reverse("financeiro:receber_baixar", args=[conta.pk])
+        response = self.client.get(url, {"modal": "1"}, HTTP_X_REQUESTED_WITH="XMLHttpRequest")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Registrar recebimento")
+        self.assertContains(response, "Receber tudo")
+        self.assertContains(response, "Parcial")
+        self.assertContains(response, '@submit.prevent="enviando=true; enviarRecebimentoTitulo($event)"')
+
+        response = self.client.post(
+            f"{url}?modal=1",
+            {},
+            HTTP_X_REQUESTED_WITH="XMLHttpRequest",
+        )
+
+        self.assertEqual(response.status_code, 400)
+        self.assertContains(response, "Registrar recebimento", status_code=400)
+
+        pagina = self.client.get(url)
+        self.assertEqual(pagina.status_code, 200)
+        self.assertContains(pagina, "Receber tudo")
+        self.assertNotContains(pagina, "?modal=1")
+
+    def test_lista_receber_mostra_adiado_e_abre_baixa_em_modal(self):
+        cliente = Cliente.objects.create(
+            filial=self.filial,
+            razao_social="Cliente adiado",
+            tipo_pessoa="F",
+            cpf_cnpj="12345678905",
+        )
+        ContaReceber.objects.create(
+            filial=self.filial,
+            cliente=cliente,
+            valor_original=Decimal("120.00"),
+            valor_final=Decimal("120.00"),
+            valor_saldo=Decimal("120.00"),
+            data_emissao=date(2026, 8, 20),
+            data_vencimento=date(2026, 8, 30),
+            status=StatusContaReceber.NEGOCIADO,
+            forma_pagamento=self.forma,
+            conta_bancaria=self.banco,
+        )
+
+        response = self.client.get(reverse("financeiro:receber_list"))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Adiado")
+        self.assertNotContains(response, "Negociado")
+        self.assertContains(response, "abrirRecebimentoTitulo($el.href)")
 
     def test_despesa_pessoal_fica_destacada_e_somada_separadamente(self):
         categoria = PlanoContas.objects.create(
@@ -293,7 +420,7 @@ class PosicaoDiariaCaixaTests(TestCase):
         self.assertEqual(movimento.saida, Decimal("92.00"))
         self.assertEqual(posicao["total_saidas_bancarias"], Decimal("92.00"))
 
-    def test_tarifa_de_pagamento_compoe_debito_bancario_e_detalhamento(self):
+    def test_tarifa_de_pagamento_aparece_no_detalhamento_sem_duplicar_saida(self):
         self.forma.tarifa_pagamento_fixa = Decimal("0.50")
         self.forma.save(update_fields=["tarifa_pagamento_fixa"])
         conta = ContaPagar.objects.create(
@@ -321,31 +448,37 @@ class PosicaoDiariaCaixaTests(TestCase):
 
         posicao = PosicaoDiariaCaixaService(self.filial, date(2026, 8, 24)).gerar()
         principal = next(mov for mov in posicao["saidas"] if mov.origem_codigo == "pagar")
-        tarifa = next(mov for mov in posicao["saidas"] if mov.origem_codigo == "taxa_pagamento")
 
         self.assertEqual(principal.saida, Decimal("100.00"))
-        self.assertEqual(tarifa.saida, Decimal("0.50"))
-        self.assertEqual(tarifa.valor_bruto, Decimal("100.00"))
-        self.assertEqual(tarifa.valor_taxa, Decimal("0.50"))
-        self.assertEqual(tarifa.valor_final_taxa, Decimal("100.50"))
-        self.assertEqual(posicao["total_saidas_bancarias"], Decimal("100.50"))
+        self.assertEqual(principal.valor_bruto, Decimal("100.00"))
+        self.assertEqual(principal.valor_taxa, Decimal("0.50"))
+        self.assertEqual(principal.valor_final_taxa, Decimal("100.00"))
+        self.assertTrue(principal.taxa_em_pagamento)
+        self.assertFalse(any(mov.origem_codigo == "taxa_pagamento" for mov in posicao["saidas"]))
+        self.assertEqual(posicao["total_saidas_bancarias"], Decimal("100.00"))
         self.assertEqual(posicao["total_taxas_pagamentos"], Decimal("0.50"))
         self.assertEqual(posicao["total_taxas_transacoes"], Decimal("0.50"))
-        self.assertEqual(posicao["total_saidas"], Decimal("100.50"))
+        self.assertEqual(posicao["total_saidas"], Decimal("100.00"))
 
         conta.refresh_from_db()
         self.assertEqual(conta.valor_pago, Decimal("100.00"))
         self.assertEqual(conta.valor_saldo, Decimal("0.00"))
+        self.assertFalse(ContaPagar.all_objects.filter(
+            documento_tipo="taxa_pagamento",
+            documento_id=conta.pagamentos.first().pk,
+        ).exists())
 
         response = self.client.get(reverse("financeiro:posicao_diaria"), {"data": "2026-08-24"})
         self.assertContains(response, "Taxas em pagamentos")
-        self.assertContains(response, "Total debitado")
-        self.assertContains(response, "R$ 100,50")
-        self.assertContains(response, "Tarifa bancaria")
+        self.assertContains(response, "Pago")
+        self.assertContains(response, "Fornecedor teste")
+        self.assertContains(response, "Taxa: R$ 0,50")
+        self.assertNotContains(response, "R$ 100,50")
+        self.assertNotContains(response, "Tarifa bancaria")
 
         dia_seguinte = PosicaoDiariaCaixaService(self.filial, date(2026, 8, 25)).gerar()
         saldo_banco = next(item for item in dia_seguinte["contas"] if item.pk == self.banco.pk)
-        self.assertEqual(saldo_banco.posicao_abertura, Decimal("-0.50"))
+        self.assertEqual(saldo_banco.posicao_abertura, Decimal("0.00"))
 
     def test_entrada_manual_exibe_percentual_configurado_sem_descontar_saldo(self):
         self.forma.taxa_administrativa = Decimal("2.50")
@@ -543,6 +676,94 @@ class PosicaoDiariaCaixaTests(TestCase):
         })
         self.assertContains(response, "Ver título")
         self.assertContains(response, reverse("financeiro:receber_detail", args=[conta.pk]))
+
+    def test_baixa_parcial_receber_cria_status_historico_e_conta_padrao(self):
+        cliente = Cliente.objects.create(
+            filial=self.filial, razao_social="Cliente parcial", tipo_pessoa="F", cpf_cnpj="12345678902",
+        )
+        conta = ContaReceber.objects.create(
+            filial=self.filial, cliente=cliente, valor_original=Decimal("500.00"),
+            valor_final=Decimal("500.00"), valor_saldo=Decimal("500.00"),
+            data_emissao=date(2026, 8, 20), data_vencimento=date(2026, 8, 26),
+        )
+
+        ContaReceberService.registrar_baixa(
+            conta, date(2026, 8, 25), Decimal("250.00"), self.forma, self.usuario,
+        )
+        conta.refresh_from_db()
+
+        self.assertEqual(conta.status, StatusContaReceber.PAGO_PARCIAL)
+        self.assertEqual(conta.valor_saldo, Decimal("250.00"))
+        self.assertEqual(conta.conta_bancaria, self.banco)
+        historico = PagamentoContaReceber.objects.get(conta_receber=conta)
+        self.assertEqual(historico.valor_pago, Decimal("250.00"))
+        self.assertEqual(historico.valor_liquido, Decimal("250.00"))
+        self.assertEqual(historico.conta_bancaria, self.banco)
+
+    def test_recebimentos_parciais_entram_na_posicao_por_baixa(self):
+        cliente = Cliente.objects.create(
+            filial=self.filial, razao_social="Cliente duas baixas", tipo_pessoa="F", cpf_cnpj="12345678912",
+        )
+        conta = ContaReceber.objects.create(
+            filial=self.filial, cliente=cliente, valor_original=Decimal("500.00"),
+            valor_final=Decimal("500.00"), valor_saldo=Decimal("500.00"),
+            data_emissao=date(2026, 8, 20), data_vencimento=date(2026, 8, 25),
+        )
+
+        ContaReceberService.registrar_baixa(
+            conta, date(2026, 8, 25), Decimal("250.00"), self.forma, self.usuario,
+        )
+        conta.refresh_from_db()
+        ContaReceberService.registrar_baixa(
+            conta, date(2026, 8, 26), Decimal("250.00"), self.forma, self.usuario,
+        )
+
+        self.assertEqual(
+            PosicaoDiariaCaixaService(self.filial, date(2026, 8, 25)).gerar()["total_entradas"],
+            Decimal("250.00"),
+        )
+        self.assertEqual(
+            PosicaoDiariaCaixaService(self.filial, date(2026, 8, 26)).gerar()["total_entradas"],
+            Decimal("250.00"),
+        )
+
+    def test_editar_e_excluir_baixa_recalcula_resumo_e_taxas(self):
+        self.forma.taxa_fixa = Decimal("2.00")
+        self.forma.save(update_fields=["taxa_fixa"])
+        cliente = Cliente.objects.create(
+            filial=self.filial, razao_social="Cliente recalculo", tipo_pessoa="F", cpf_cnpj="12345678913",
+        )
+        conta = ContaReceber.objects.create(
+            filial=self.filial, cliente=cliente, valor_original=Decimal("500.00"),
+            valor_final=Decimal("500.00"), valor_saldo=Decimal("500.00"),
+            data_emissao=date(2026, 8, 20), data_vencimento=date(2026, 8, 25),
+        )
+
+        ContaReceberService.registrar_baixa(
+            conta, date(2026, 8, 25), Decimal("250.00"), self.forma, self.usuario,
+        )
+        ContaReceberService.registrar_baixa(
+            conta, date(2026, 8, 26), Decimal("250.00"), self.forma, self.usuario,
+        )
+        primeira, segunda = list(PagamentoContaReceber.objects.filter(conta_receber=conta).order_by("data_pagamento"))
+
+        ContaReceberService.editar_baixa(
+            primeira, date(2026, 8, 25), Decimal("200.00"), self.forma, self.usuario,
+        )
+        conta.refresh_from_db()
+        self.assertEqual(conta.status, StatusContaReceber.PAGO_PARCIAL)
+        self.assertEqual(conta.valor_pago, Decimal("450.00"))
+        self.assertEqual(conta.valor_saldo, Decimal("50.00"))
+        self.assertEqual(conta.valor_taxa_recebimento, Decimal("4.00"))
+        self.assertEqual(conta.valor_liquido_recebido, Decimal("446.00"))
+
+        segunda.refresh_from_db()
+        ContaReceberService.excluir_baixa(segunda, "teste", self.usuario)
+        conta.refresh_from_db()
+        self.assertEqual(conta.status, StatusContaReceber.PAGO_PARCIAL)
+        self.assertEqual(conta.valor_pago, Decimal("200.00"))
+        self.assertEqual(conta.valor_saldo, Decimal("300.00"))
+        self.assertEqual(conta.valor_taxa_recebimento, Decimal("2.00"))
 
     def test_baixa_de_cartao_usa_bandeira_e_parcelas_da_operacao(self):
         self.forma.tipo = TipoFormaPagamento.CARTAO_CREDITO

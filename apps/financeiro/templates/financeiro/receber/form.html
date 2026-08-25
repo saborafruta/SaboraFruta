@@ -1,30 +1,173 @@
 {% extends "_base.html" %}
+{% load widget_tweaks %}
 
 {% block title %}{{ title }}{% endblock %}
 {% block page_title %}{{ title }}{% endblock %}
 
 {% block content %}
-<div class="max-w-2xl mx-auto space-y-5">
-
-  <!-- ── Breadcrumb ── -->
-  <div>
-    <p class="text-sm mb-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
-      <a href="{% url 'financeiro:receber_list' %}"
-         :style="temaClaro ? 'color:#3b82f6;' : 'color:#60a5fa;'">Contas a Receber</a>
-      <span class="mx-1">›</span>
-      Novo título
-    </p>
-    <h2 class="text-2xl font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
-      Novo lançamento manual
-    </h2>
-    <p class="text-sm mt-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
-      Registra um título a receber sem vínculo com pedido de venda.
-    </p>
+<div class="mx-auto max-w-4xl space-y-4"
+     x-data="{
+       loading:false,
+       receberAgora:false,
+       modoBaixa:'integral',
+       valorOriginal:'',
+       init() { this.valorOriginal = this.$refs.valorOriginal?.value || ''; },
+       normalizar(valor) { return String(valor || '').replace(/\./g, '').replace(',', '.'); },
+       arredondar(valor) { return Number(valor || 0).toFixed(2); },
+       aplicarModo(modo) {
+         this.modoBaixa = modo;
+         const valor = parseFloat(this.normalizar(this.$refs.valorOriginal?.value));
+         if (!this.$refs.valorRecebido || Number.isNaN(valor)) return;
+         if (modo === 'integral') this.$refs.valorRecebido.value = this.arredondar(valor);
+         if (modo === 'metade') this.$refs.valorRecebido.value = this.arredondar(valor / 2);
+       },
+       vincularConta() {
+         const contaId = this.$refs.formaRecebimento?.selectedOptions?.[0]?.dataset?.conta || '';
+         if (contaId && this.$refs.contaRecebimento && Array.from(this.$refs.contaRecebimento.options).some((option) => option.value === contaId)) {
+           this.$refs.contaRecebimento.value = contaId;
+         }
+       }
+     }">
+  <div class="flex flex-wrap items-end justify-between gap-3">
+    <div>
+      {% if not modal_mode %}<a href="{% url 'financeiro:receber_list' %}" class="text-sm text-blue-500">Contas a Receber /</a>{% endif %}
+      <h2 class="mt-1 text-xl font-semibold">Nova conta a receber</h2>
+      <p class="mt-1 text-sm opacity-65">Registre um título manual para acompanhar vencimento, baixa e previsão de entrada.</p>
+    </div>
+    <p class="text-sm opacity-65">Os campos com * são obrigatórios.</p>
   </div>
 
-  <div class="card p-6">
-    {% include "_form_generic.html" with form=form submit_label="Lançar título" cancel_url=cancel_url columns=1 %}
-  </div>
+  <form method="post" class="card overflow-hidden" @submit="loading=true" novalidate>
+    {% csrf_token %}
+    {% if form.non_field_errors %}<div class="m-5 rounded-md border border-red-300 bg-red-50 p-3 text-sm text-red-700">{{ form.non_field_errors }}</div>{% endif %}
 
+    <section class="p-5 sm:p-6">
+      <div class="mb-4 flex items-center gap-3">
+        <span class="grid h-8 w-8 place-items-center rounded-md bg-blue-600 text-sm font-bold text-white">1</span>
+        <div><h3 class="text-sm font-semibold">Cliente e referência</h3><p class="text-xs opacity-70">Identifique de quem será recebido e como localizar o título depois.</p></div>
+      </div>
+      <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
+        <div class="sm:col-span-2">
+          <label class="mb-1 block text-sm font-medium">Cliente <span class="text-rose-500">*</span></label>
+          {{ form.cliente|add_class:"form-input" }}
+          {% if form.cliente.errors %}<p class="mt-1 text-xs text-red-500">{{ form.cliente.errors|join:", " }}</p>{% endif %}
+        </div>
+        <div class="sm:col-span-2">
+          <label class="mb-1 block text-sm font-medium">{{ form.documento_numero.label }}</label>
+          {{ form.documento_numero|add_class:"form-input"|attr:"placeholder:NF, boleto, pedido ou referência interna" }}
+          <p class="mt-1 text-xs opacity-60">Use algo curto que ajude na conferência.</p>
+          {% if form.documento_numero.errors %}<p class="mt-1 text-xs text-red-500">{{ form.documento_numero.errors|join:", " }}</p>{% endif %}
+        </div>
+      </div>
+    </section>
+
+    <section class="border-t p-5 sm:p-6" :style="temaClaro ? 'border-color:#e5e7eb' : 'border-color:#303038'">
+      <div class="mb-4 flex items-center gap-3">
+        <span class="grid h-8 w-8 place-items-center rounded-md bg-emerald-600 text-sm font-bold text-white">2</span>
+        <div><h3 class="text-sm font-semibold">Valor, parcela e vencimento</h3><p class="text-xs opacity-70">Informe o valor a receber e quando ele deve cair.</p></div>
+      </div>
+      <div class="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <div class="lg:col-span-2">
+          <label class="mb-1 block text-sm font-medium">Valor (R$) <span class="text-rose-500">*</span></label>
+          {{ form.valor_original|add_class:"form-input"|attr:"x-ref:valorOriginal"|attr:"@input:valorOriginal=$event.target.value; if(receberAgora && modoBaixa !== 'parcial') aplicarModo(modoBaixa)" }}
+          {% if form.valor_original.errors %}<p class="mt-1 text-xs text-red-500">{{ form.valor_original.errors|join:", " }}</p>{% endif %}
+        </div>
+        <div>
+          <label class="mb-1 block text-sm font-medium">Parcela <span class="text-rose-500">*</span></label>
+          {{ form.parcela|add_class:"form-input" }}
+          {% if form.parcela.errors %}<p class="mt-1 text-xs text-red-500">{{ form.parcela.errors|join:", " }}</p>{% endif %}
+        </div>
+        <div>
+          <label class="mb-1 block text-sm font-medium">Total <span class="text-rose-500">*</span></label>
+          {{ form.total_parcelas|add_class:"form-input" }}
+          {% if form.total_parcelas.errors %}<p class="mt-1 text-xs text-red-500">{{ form.total_parcelas.errors|join:", " }}</p>{% endif %}
+        </div>
+        <div class="sm:col-span-1 lg:col-span-2">
+          <label class="mb-1 block text-sm font-medium">Emissão <span class="text-rose-500">*</span></label>
+          {{ form.data_emissao|add_class:"form-input" }}
+          {% if form.data_emissao.errors %}<p class="mt-1 text-xs text-red-500">{{ form.data_emissao.errors|join:", " }}</p>{% endif %}
+        </div>
+        <div class="sm:col-span-1 lg:col-span-2">
+          <label class="mb-1 block text-sm font-medium">Vencimento <span class="text-rose-500">*</span></label>
+          {{ form.data_vencimento|add_class:"form-input" }}
+          {% if form.data_vencimento.errors %}<p class="mt-1 text-xs text-red-500">{{ form.data_vencimento.errors|join:", " }}</p>{% endif %}
+        </div>
+      </div>
+    </section>
+
+    <section class="border-t p-5 sm:p-6" :style="temaClaro ? 'border-color:#e5e7eb' : 'border-color:#303038'">
+      <div class="mb-4 flex items-center gap-3">
+        <span class="grid h-8 w-8 place-items-center rounded-md bg-orange-600 text-sm font-bold text-white">4</span>
+        <div><h3 class="text-sm font-semibold">Situação inicial do título</h3><p class="text-xs opacity-70">Você pode só lançar a previsão ou já registrar o recebimento sem sair da tela.</p></div>
+      </div>
+      <input type="hidden" name="quitar_ao_lancar" :value="receberAgora ? 'on' : ''">
+      <input type="hidden" name="modo_baixa" x-model="modoBaixa">
+      <div class="grid grid-cols-2 gap-2 rounded-md border p-1" :style="temaClaro ? 'border-color:#dbe3ee;background:#f8fafc' : 'border-color:#303038;background:#18181b'">
+        <button type="button" class="rounded px-3 py-2 text-sm font-semibold transition" :class="!receberAgora ? 'bg-white shadow-sm dark:bg-slate-800' : 'opacity-70'" @click="receberAgora=false">Apenas lançar</button>
+        <button type="button" class="rounded px-3 py-2 text-sm font-semibold transition" :class="receberAgora ? 'bg-emerald-600 text-white shadow-sm' : 'opacity-70'" @click="receberAgora=true; aplicarModo(modoBaixa); $nextTick(() => vincularConta())">Lançar e receber agora</button>
+      </div>
+
+      <div x-show="receberAgora" x-cloak class="mt-4 space-y-4">
+        <div class="grid grid-cols-3 gap-2 rounded-md border p-1" :style="temaClaro ? 'border-color:#dbe3ee;background:#fff' : 'border-color:#303038;background:#202024'">
+          <button type="button" class="rounded px-3 py-2 text-sm font-semibold transition" :class="modoBaixa === 'integral' ? 'bg-emerald-600 text-white' : 'opacity-70'" @click="aplicarModo('integral')">Receber tudo</button>
+          <button type="button" class="rounded px-3 py-2 text-sm font-semibold transition" :class="modoBaixa === 'parcial' ? 'bg-emerald-600 text-white' : 'opacity-70'" @click="aplicarModo('parcial')">Parcial</button>
+          <button type="button" class="rounded px-3 py-2 text-sm font-semibold transition" :class="modoBaixa === 'metade' ? 'bg-emerald-600 text-white' : 'opacity-70'" @click="aplicarModo('metade')">50%</button>
+        </div>
+        <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
+          <div>
+            <label class="mb-1 block text-sm font-medium">Data do recebimento <span class="text-rose-500">*</span></label>
+            {{ form.data_pagamento_inicial|add_class:"form-input" }}
+            {% if form.data_pagamento_inicial.errors %}<p class="mt-1 text-xs text-red-500">{{ form.data_pagamento_inicial.errors|join:", " }}</p>{% endif %}
+          </div>
+          <div>
+            <label class="mb-1 block text-sm font-medium">Valor recebido (R$) <span class="text-rose-500">*</span></label>
+            {{ form.valor_pago_inicial|add_class:"form-input"|attr:"x-ref:valorRecebido"|attr:"@input:modoBaixa='parcial'" }}
+            {% if form.valor_pago_inicial.errors %}<p class="mt-1 text-xs text-red-500">{{ form.valor_pago_inicial.errors|join:", " }}</p>{% endif %}
+          </div>
+          <div>
+            <label class="mb-1 block text-sm font-medium">Forma de recebimento <span class="text-rose-500">*</span></label>
+            {{ form.forma_pagamento_utilizada|add_class:"form-input"|attr:"x-ref:formaRecebimento"|attr:"@change:vincularConta()" }}
+            {% if form.forma_pagamento_utilizada.errors %}<p class="mt-1 text-xs text-red-500">{{ form.forma_pagamento_utilizada.errors|join:", " }}</p>{% endif %}
+          </div>
+          <div>
+            <label class="mb-1 block text-sm font-medium">Conta creditada</label>
+            {{ form.conta_bancaria_recebimento|add_class:"form-input"|attr:"x-ref:contaRecebimento" }}
+            {% if form.conta_bancaria_recebimento.errors %}<p class="mt-1 text-xs text-red-500">{{ form.conta_bancaria_recebimento.errors|join:", " }}</p>{% endif %}
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="border-t p-5 sm:p-6" :style="temaClaro ? 'border-color:#e5e7eb' : 'border-color:#303038'">
+      <div class="mb-4 flex items-center gap-3">
+        <span class="grid h-8 w-8 place-items-center rounded-md bg-violet-600 text-sm font-bold text-white">3</span>
+        <div><h3 class="text-sm font-semibold">Como acompanhar no financeiro</h3><p class="text-xs opacity-70">Forma prevista e categoria deixam a posição diária organizada.</p></div>
+      </div>
+      <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
+        <div>
+          <label class="mb-1 block text-sm font-medium">{{ form.forma_pagamento.label }}</label>
+          {{ form.forma_pagamento|add_class:"form-input" }}
+          <p class="mt-1 text-xs opacity-60">A forma real ainda poderá ser confirmada ao receber.</p>
+          {% if form.forma_pagamento.errors %}<p class="mt-1 text-xs text-red-500">{{ form.forma_pagamento.errors|join:", " }}</p>{% endif %}
+        </div>
+        <div>
+          <label class="mb-1 block text-sm font-medium">Categoria financeira {% if form.plano_contas.field.required %}<span class="text-rose-500">*</span>{% endif %}</label>
+          {{ form.plano_contas|add_class:"form-input" }}
+          <p class="mt-1 text-xs opacity-60">A conta contábil será preenchida automaticamente.</p>
+          {% if form.plano_contas.errors %}<p class="mt-1 text-xs text-red-500">{{ form.plano_contas.errors|join:", " }}</p>{% endif %}
+        </div>
+        <div class="sm:col-span-2">
+          <label class="mb-1 block text-sm font-medium">Observação</label>
+          {{ form.observacao|add_class:"form-input w-full"|attr:"placeholder:Informação útil para conferência futura" }}
+          {% if form.observacao.errors %}<p class="mt-1 text-xs text-red-500">{{ form.observacao.errors|join:", " }}</p>{% endif %}
+        </div>
+      </div>
+    </section>
+
+    <div class="flex justify-end gap-3 border-t px-5 py-4" :style="temaClaro ? 'border-color:#e5e7eb;background:#f8fafc' : 'border-color:#303038;background:#1c1c20'">
+      {% if modal_mode %}<button type="button" class="btn-secondary" onclick="window.parent.postMessage({type:'fechar-conta-receber'}, window.location.origin)">Cancelar</button>{% else %}<a href="{{ cancel_url }}" class="btn-secondary">Cancelar</a>{% endif %}
+      <button type="submit" class="btn-primary" :disabled="loading"><span x-show="!loading" x-text="receberAgora ? 'Lançar e receber' : 'Lançar título'"></span><span x-show="loading" x-cloak>Salvando...</span></button>
+    </div>
+  </form>
 </div>
 {% endblock %}

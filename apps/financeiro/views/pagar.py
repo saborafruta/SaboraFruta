@@ -41,6 +41,7 @@ STATUS_CHOICES = StatusContaPagar.choices
 
 PILL_STATUS = {
     StatusContaPagar.ABERTO:    'is-blue',
+    StatusContaPagar.PAGO_PARCIAL: 'is-amber',
     StatusContaPagar.PAGO:      'is-green',
     StatusContaPagar.VENCIDO:   'is-red',
     StatusContaPagar.CANCELADO: 'is-slate',
@@ -222,14 +223,14 @@ def _kpis(qs_base):
     primeiro_dia_mes = hoje.replace(day=1)
 
     totais = qs_base.filter(
-        status__in=[StatusContaPagar.ABERTO, StatusContaPagar.VENCIDO, StatusContaPagar.AGENDADO]
+        status__in=[StatusContaPagar.ABERTO, StatusContaPagar.PAGO_PARCIAL, StatusContaPagar.VENCIDO, StatusContaPagar.AGENDADO]
     ).aggregate(
         total_aberto=Sum('valor_saldo'),
         qtd_aberto=Count('id'),
     )
 
     vencido = qs_base.filter(
-        status__in=[StatusContaPagar.ABERTO, StatusContaPagar.VENCIDO],
+        status__in=[StatusContaPagar.ABERTO, StatusContaPagar.PAGO_PARCIAL, StatusContaPagar.VENCIDO],
         data_vencimento__lt=hoje,
     ).aggregate(total_vencido=Sum('valor_saldo'))
 
@@ -239,7 +240,7 @@ def _kpis(qs_base):
     ).aggregate(total_mes=Sum('valor_pago'))
 
     vence_hoje = qs_base.filter(
-        status__in=[StatusContaPagar.ABERTO, StatusContaPagar.VENCIDO],
+        status__in=[StatusContaPagar.ABERTO, StatusContaPagar.PAGO_PARCIAL, StatusContaPagar.VENCIDO],
         data_vencimento=hoje,
     ).aggregate(total_hoje=Sum('valor_saldo'), qtd_hoje=Count('id'))
 
@@ -276,11 +277,14 @@ class ContaPagarListView(PermissaoRequiredMixin, View):
         q = request.GET.get('q', '').strip()
         data_ini = request.GET.get('data_ini', '')
         data_fim = request.GET.get('data_fim', '')
+        if not request.GET and status == 'pendentes':
+            data_fim = timezone.localdate().isoformat()
         categoria_contexto = _categorias_financeiras_filtro(request)
 
         if status == 'pendentes':
             qs = qs.filter(status__in=(
                 StatusContaPagar.ABERTO,
+                StatusContaPagar.PAGO_PARCIAL,
                 StatusContaPagar.VENCIDO,
                 StatusContaPagar.AGENDADO,
             ))
@@ -355,8 +359,11 @@ def _filtrar_contas_pagas(request):
     )
 
     q = request.GET.get('q', '').strip()
-    data_ini = request.GET.get('data_ini', '')
-    data_fim = request.GET.get('data_fim', '')
+    hoje = timezone.localdate()
+    inicio_mes = hoje.replace(day=1)
+    fim_mes = hoje.replace(day=monthrange(hoje.year, hoje.month)[1])
+    data_ini = request.GET.get('data_ini') or inicio_mes.isoformat()
+    data_fim = request.GET.get('data_fim') or fim_mes.isoformat()
     ordenacao = request.GET.get('ordenacao', 'recentes')
     categoria_contexto = _categorias_financeiras_filtro(request)
 
@@ -709,6 +716,7 @@ class ContaPagarRelatorioView(PermissaoRequiredMixin, View):
             # Sem status escolhido, o relatório foca nos títulos em aberto.
             qs = qs.filter(status__in=[
                 StatusContaPagar.ABERTO,
+                StatusContaPagar.PAGO_PARCIAL,
                 StatusContaPagar.VENCIDO,
                 StatusContaPagar.AGENDADO,
             ])
@@ -1193,8 +1201,9 @@ class ContaPagarEditarValorView(PermissaoRequiredMixin, View):
             if pagamento.conta_bancaria_id:
                 contas_envolvidas.add(pagamento.conta_bancaria_id)
 
-        if conta.status in (StatusContaPagar.ABERTO, StatusContaPagar.VENCIDO):
+        if conta.status in (StatusContaPagar.ABERTO, StatusContaPagar.PAGO_PARCIAL, StatusContaPagar.VENCIDO):
             conta.status = (
+                StatusContaPagar.PAGO_PARCIAL if conta.valor_pago > Decimal('0') and conta.valor_saldo > Decimal('0') else
                 StatusContaPagar.VENCIDO
                 if conta.data_vencimento < timezone.localdate()
                 else StatusContaPagar.ABERTO
@@ -1256,23 +1265,38 @@ class ContaPagarPagamentoView(PermissaoRequiredMixin, View):
             pk=pk,
         )
 
+    def _context(self, request, conta, form):
+        return {
+            'title': f'Pagar — #{conta.pk}',
+            'conta': conta,
+            'form': form,
+            'cancel_url': reverse('financeiro:pagar_detail', args=[conta.pk]),
+        }
+
+    def _render_form(self, request, conta, form, status=200):
+        template = (
+            'financeiro/pagar/_pagamento_modal.html'
+            if request.GET.get('modal') == '1'
+            else 'financeiro/pagar/pagamento.html'
+        )
+        return render(request, template, self._context(request, conta, form), status=status)
+
     def get(self, request, pk):
         conta = self._get_conta(request, pk)
         if conta.status in [StatusContaPagar.PAGO, StatusContaPagar.CANCELADO]:
+            if request.GET.get('modal') == '1':
+                return ContaPagarDetailView().get(request, pk)
             messages.warning(request, 'Esta conta não pode ser paga.')
             return redirect(reverse('financeiro:pagar_detail', args=[pk]))
 
         form = PagamentoContaPagarForm(filial=_filial(request), conta=conta)
-        return render(request, 'financeiro/pagar/pagamento.html', {
-            'title': f'Pagar — #{conta.pk}',
-            'conta': conta,
-            'form': form,
-            'cancel_url': reverse('financeiro:pagar_detail', args=[pk]),
-        })
+        return self._render_form(request, conta, form)
 
     def post(self, request, pk):
         conta = self._get_conta(request, pk)
         if conta.status in [StatusContaPagar.PAGO, StatusContaPagar.CANCELADO]:
+            if request.GET.get('modal') == '1':
+                return ContaPagarDetailView().get(request, pk)
             messages.warning(request, 'Esta conta não pode ser paga.')
             return redirect(reverse('financeiro:pagar_detail', args=[pk]))
 
@@ -1280,12 +1304,10 @@ class ContaPagarPagamentoView(PermissaoRequiredMixin, View):
             request.POST, request.FILES, filial=_filial(request), conta=conta,
         )
         if not form.is_valid():
-            return render(request, 'financeiro/pagar/pagamento.html', {
-                'title': f'Pagar — #{conta.pk}',
-                'conta': conta,
-                'form': form,
-                'cancel_url': reverse('financeiro:pagar_detail', args=[pk]),
-            })
+            return self._render_form(
+                request, conta, form,
+                status=400 if request.GET.get('modal') == '1' else 200,
+            )
 
         d = form.cleaned_data
         try:
@@ -1308,14 +1330,14 @@ class ContaPagarPagamentoView(PermissaoRequiredMixin, View):
             else:
                 messages.success(request, f'Pagamento parcial registrado. Saldo restante: R$ {conta.valor_saldo:,.2f}.')
         except DomainError as exc:
+            if request.GET.get('modal') == '1':
+                form.add_error(None, str(exc))
+                return self._render_form(request, conta, form, status=400)
             messages.error(request, str(exc))
-            return render(request, 'financeiro/pagar/pagamento.html', {
-                'title': f'Pagar — #{conta.pk}',
-                'conta': conta,
-                'form': form,
-                'cancel_url': reverse('financeiro:pagar_detail', args=[pk]),
-            })
+            return self._render_form(request, conta, form)
 
+        if request.GET.get('modal') == '1':
+            return ContaPagarDetailView().get(request, pk)
         return redirect(reverse('financeiro:pagar_detail', args=[pk]))
 
 

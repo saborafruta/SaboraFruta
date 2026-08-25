@@ -4,87 +4,14 @@
 {% block page_title %}{{ title }}{% endblock %}
 
 {% block content %}
-<div class="max-w-2xl mx-auto space-y-5">
-
-  <!-- ── Breadcrumb ── -->
-  <div>
-    <p class="text-sm mb-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
-      <a href="{% url 'financeiro:receber_list' %}"
-         :style="temaClaro ? 'color:#3b82f6;' : 'color:#60a5fa;'">Contas a Receber</a>
-      <span class="mx-1">›</span>
-      <a href="{% url 'financeiro:receber_detail' conta.pk %}"
-         :style="temaClaro ? 'color:#3b82f6;' : 'color:#60a5fa;'">#{{ conta.pk }}</a>
-      <span class="mx-1">›</span>
-      Recebimento
-    </p>
-    <h2 class="text-2xl font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
-      Registrar recebimento
-    </h2>
-  </div>
-
-  <!-- ── Resumo do título ── -->
-  <div class="card p-4">
-    <p class="text-xs font-semibold uppercase tracking-wide mb-3"
-       :style="temaClaro ? 'color:#6b7280;' : 'color:#9ca3af;'">Título</p>
-    <div class="grid grid-cols-2 sm:grid-cols-4 gap-4 text-sm">
-      <div>
-        <span class="block text-xs" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Cliente</span>
-        <strong :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
-          {{ conta.cliente.razao_social|truncatechars:30 }}
-        </strong>
-      </div>
-      <div>
-        <span class="block text-xs" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Vencimento</span>
-        <strong :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
-          {{ conta.data_vencimento|date:"d/m/Y" }}
-        </strong>
-      </div>
-      <div>
-        <span class="block text-xs" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Valor original</span>
-        <strong :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
-          R$ {{ conta.valor_original|floatformat:2 }}
-        </strong>
-      </div>
-      <div>
-        <span class="block text-xs" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Saldo a receber</span>
-        <strong :style="temaClaro ? 'color:#b45309;' : 'color:#fcd34d;'" class="text-base">
-          R$ {{ conta.valor_saldo|floatformat:2 }}
-        </strong>
-      </div>
-    </div>
-  </div>
-
-  <!-- ── Formulário de baixa ── -->
-  <div class="card p-6">
-    {% include "_form_generic.html" with form=form submit_label="Confirmar recebimento" cancel_url=cancel_url columns=1 %}
-  </div>
-
+<div class="mx-auto max-w-5xl space-y-5">
+  <p class="text-sm">
+    <a href="{% url 'financeiro:receber_list' %}" class="text-blue-600">Contas a Receber</a>
+    <span class="mx-1 opacity-50">/</span>
+    <a href="{% url 'financeiro:receber_detail' conta.pk %}" class="text-blue-600">Título #{{ conta.pk }}</a>
+    <span class="mx-1 opacity-50">/</span>
+    Recebimento
+  </p>
+  {% include "financeiro/receber/_baixa_modal.html" %}
 </div>
-<script>
-document.addEventListener('DOMContentLoaded', function () {
-  const form = document.querySelector('select[name="forma_pagamento"]')?.closest('form');
-  if (!form) return;
-  const forma = form.querySelector('select[name="forma_pagamento"]');
-  const bandeira = form.querySelector('select[name="bandeira"]');
-  const parcelas = form.querySelector('select[name="numero_parcelas"]');
-  const campoBandeira = bandeira?.closest('div');
-  const campoParcelas = parcelas?.closest('div');
-  const atualizar = function () {
-    const opcao = forma.selectedOptions[0];
-    const tipo = opcao?.dataset.tipo || '';
-    const cartao = tipo === 'cartao_debito' || tipo === 'cartao_credito';
-    if (campoBandeira) campoBandeira.style.display = cartao ? '' : 'none';
-    if (campoParcelas) campoParcelas.style.display = tipo === 'cartao_credito' ? '' : 'none';
-    if (tipo === 'cartao_debito') parcelas.value = '1';
-    if (!cartao) { bandeira.value = ''; parcelas.value = ''; }
-    const maximo = parseInt(opcao?.dataset.maxParcelas || '1', 10);
-    Array.from(parcelas.options).forEach(function (item) {
-      const numero = parseInt(item.value || '0', 10);
-      item.hidden = numero > maximo; item.disabled = numero > maximo;
-    });
-  };
-  forma.addEventListener('change', atualizar);
-  atualizar();
-});
-</script>
 {% endblock %}

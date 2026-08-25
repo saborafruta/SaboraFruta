@@ -102,11 +102,13 @@ class DashboardContasService:
 
         status_receber = [
             StatusContaReceber.ABERTO,
+            StatusContaReceber.PAGO_PARCIAL,
             StatusContaReceber.VENCIDO,
             StatusContaReceber.NEGOCIADO,
         ]
         status_pagar = [
             StatusContaPagar.ABERTO,
+            StatusContaPagar.PAGO_PARCIAL,
             StatusContaPagar.VENCIDO,
             StatusContaPagar.AGENDADO,
         ]

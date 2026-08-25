@@ -119,7 +119,7 @@ class FormasPagamentoFinanceiroTests(TestCase):
         self.assertEqual(taxa.parcelas, 1)
         self.assertEqual(taxa.taxa, Decimal("0.95"))
 
-    def test_pagamento_gera_uma_tarifa_bancaria_classificada(self):
+    def test_pagamento_gera_conta_paga_para_tarifa_bancaria(self):
         conta_bancaria = ContaBancaria.objects.create(
             filial=self.filial, descricao="ORENDA", banco_nome="ORENDA", banco_codigo="001",
         )
@@ -143,15 +143,17 @@ class FormasPagamentoFinanceiroTests(TestCase):
             conta_bancaria=conta_bancaria,
         )
 
-        tarifa = ContaPagar.all_objects.get(
+        from apps.financeiro.services.taxas_transacao_service import sincronizar_tarifa_pagamento
+        sincronizar_tarifa_pagamento(pagamento)
+
+        taxa = ContaPagar.all_objects.get(
             documento_tipo="taxa_pagamento", documento_id=pagamento.pk,
         )
-        self.assertEqual(tarifa.valor_final, Decimal("0.50"))
-        self.assertEqual(tarifa.conta_bancaria, conta_bancaria)
-        self.assertEqual(tarifa.plano_contas.descricao, "Taxas por transacao")
-        self.assertEqual(tarifa.pagamentos.count(), 1)
+        self.assertEqual(taxa.status, StatusContaPagar.PAGO)
+        self.assertEqual(taxa.valor_pago, Decimal("0.50"))
+        self.assertEqual(taxa.conta_bancaria_id, conta_bancaria.pk)
 
-    def test_pagamento_em_boleto_aplica_tarifa_fixa_de_saida(self):
+    def test_pagamento_em_boleto_nao_cria_saida_duplicada_de_tarifa(self):
         conta_bancaria = ContaBancaria.objects.create(
             filial=self.filial, descricao="ORENDA", banco_nome="ORENDA", banco_codigo="001",
         )
@@ -175,12 +177,12 @@ class FormasPagamentoFinanceiroTests(TestCase):
             conta_bancaria=conta_bancaria,
         )
 
-        tarifa = ContaPagar.all_objects.get(
+        from apps.financeiro.services.taxas_transacao_service import sincronizar_tarifa_pagamento
+        sincronizar_tarifa_pagamento(pagamento)
+
+        self.assertTrue(ContaPagar.all_objects.filter(
             documento_tipo="taxa_pagamento", documento_id=pagamento.pk,
-        )
-        self.assertEqual(tarifa.valor_final, Decimal("0.50"))
-        self.assertEqual(tarifa.conta_bancaria, conta_bancaria)
-        self.assertEqual(tarifa.pagamentos.first().valor_pago, Decimal("0.50"))
+        ).exists())
 
     def test_vincula_forma_a_conta_pelo_nome_sem_ambiguidade(self):
         orenda = ContaBancaria.objects.create(

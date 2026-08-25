@@ -114,6 +114,46 @@ class ContaReceber(TimestampedModel):
         return self.valor_pago
 
 
+class PagamentoContaReceber(TimestampedModel):
+    """Movimento individual de baixa de uma conta a receber."""
+
+    filial = models.ForeignKey(Filial, on_delete=models.PROTECT, related_name='pagamentos_contas_receber')
+    conta_receber = models.ForeignKey(ContaReceber, on_delete=models.CASCADE, related_name='pagamentos')
+    data_pagamento = models.DateField()
+    valor_pago = models.DecimalField(max_digits=14, decimal_places=2)
+    valor_juros = models.DecimalField(max_digits=14, decimal_places=2, default=0)
+    valor_multa = models.DecimalField(max_digits=14, decimal_places=2, default=0)
+    valor_desconto = models.DecimalField(max_digits=14, decimal_places=2, default=0)
+    valor_taxa = models.DecimalField(max_digits=14, decimal_places=2, default=0)
+    valor_liquido = models.DecimalField(max_digits=14, decimal_places=2, default=0)
+    forma_pagamento = models.ForeignKey(
+        FormaPagamento, on_delete=models.SET_NULL, null=True, blank=True, related_name='+',
+    )
+    conta_bancaria = models.ForeignKey(
+        ContaBancaria, on_delete=models.SET_NULL, null=True, blank=True, related_name='+',
+    )
+    bandeira = models.CharField(max_length=20, blank=True, default="")
+    numero_parcelas = models.PositiveSmallIntegerField(null=True, blank=True)
+    observacao = models.TextField(blank=True)
+    usuario = models.ForeignKey(
+        Usuario, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='pagamentos_contas_receber_registrados',
+    )
+
+    objects = FilialAwareManager()
+
+    class Meta:
+        db_table = 'pagamentos_contas_receber'
+        ordering = ['-data_pagamento', '-created_at']
+        indexes = [
+            models.Index(fields=['filial', 'data_pagamento']),
+            models.Index(fields=['conta_receber', 'data_pagamento']),
+        ]
+
+    def __str__(self):
+        return f'Recebimento CR #{self.conta_receber_id} em {self.data_pagamento:%d/%m/%Y}'
+
+
 class ContaPagar(TimestampedModel):
     class TipoLancamento(models.TextChoices):
         FORNECEDOR = "fornecedor", "Fornecedor ou outro"

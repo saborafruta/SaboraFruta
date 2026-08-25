@@ -1,8 +1,8 @@
 """Formulários de Contas a Receber."""
-from datetime import date
 from decimal import Decimal
 
 from django import forms
+from django.utils import timezone
 
 from apps.cadastros.models import Cliente
 from apps.financeiro.models.conta_bancaria import ContaBancaria, PlanoContas
@@ -60,12 +60,12 @@ class ContaReceberForm(forms.Form):
     )
     data_emissao = forms.DateField(
         label='Data de emissão',
-        widget=forms.DateInput(attrs={'type': 'date'}),
-        initial=date.today,
+        widget=forms.DateInput(format='%Y-%m-%d', attrs={'type': 'date'}),
+        initial=timezone.localdate,
     )
     data_vencimento = forms.DateField(
         label='Data de vencimento',
-        widget=forms.DateInput(attrs={'type': 'date'}),
+        widget=forms.DateInput(format='%Y-%m-%d', attrs={'type': 'date'}),
     )
     forma_pagamento = forms.ModelChoiceField(
         queryset=FormaPagamento.objects.none(),
@@ -83,6 +83,45 @@ class ContaReceberForm(forms.Form):
         required=False,
         label='Observação',
     )
+    quitar_ao_lancar = forms.BooleanField(
+        required=False,
+        initial=False,
+        label='Lançar e receber agora',
+    )
+    modo_baixa = forms.ChoiceField(
+        choices=[
+            ('integral', 'Receber tudo'),
+            ('parcial', 'Parcial'),
+            ('metade', '50%'),
+        ],
+        required=False,
+        initial='integral',
+        label='Tipo de recebimento',
+    )
+    data_pagamento_inicial = forms.DateField(
+        label='Data do recebimento',
+        widget=forms.DateInput(format='%Y-%m-%d', attrs={'type': 'date'}),
+        initial=timezone.localdate,
+        required=False,
+    )
+    valor_pago_inicial = forms.DecimalField(
+        max_digits=14,
+        decimal_places=2,
+        min_value=Decimal('0.01'),
+        required=False,
+        label='Valor recebido (R$)',
+        widget=VALOR_WIDGET,
+    )
+    forma_pagamento_utilizada = forms.ModelChoiceField(
+        queryset=FormaPagamento.objects.none(),
+        required=False,
+        label='Forma de recebimento',
+    )
+    conta_bancaria_recebimento = forms.ModelChoiceField(
+        queryset=ContaBancaria.objects.none(),
+        required=False,
+        label='Conta creditada',
+    )
 
     def __init__(self, *args, filial=None, **kwargs):
         super().__init__(*args, **kwargs)
@@ -95,6 +134,16 @@ class ContaReceberForm(forms.Form):
             self.fields['forma_pagamento'].queryset = (
                 FormaPagamento.objects
                 .filter(empresa=filial.empresa, ativo=True)
+                .order_by('descricao')
+            )
+            configurar_forma_pagamento(self, (
+                FormaPagamento.objects
+                .filter(empresa=filial.empresa, ativo=True)
+                .order_by('descricao')
+            ), field_name='forma_pagamento_utilizada')
+            self.fields['conta_bancaria_recebimento'].queryset = (
+                ContaBancaria.objects.for_filial(filial)
+                .filter(ativo=True)
                 .order_by('descricao')
             )
             categorias = (
@@ -123,6 +172,20 @@ class ContaReceberForm(forms.Form):
             self.add_error('data_vencimento', 'Vencimento não pode ser anterior à emissão.')
         if parcela and total and parcela > total:
             self.add_error('parcela', 'Parcela não pode ser maior que o total de parcelas.')
+        if cleaned.get('quitar_ao_lancar'):
+            valor_original = cleaned.get('valor_original')
+            valor_pago = cleaned.get('valor_pago_inicial')
+            if not cleaned.get('data_pagamento_inicial'):
+                self.add_error('data_pagamento_inicial', 'Informe a data do recebimento.')
+            if not cleaned.get('forma_pagamento_utilizada'):
+                self.add_error('forma_pagamento_utilizada', 'Informe a forma de recebimento.')
+            if cleaned.get('modo_baixa') == 'integral' and valor_original and not valor_pago:
+                valor_pago = valor_original
+                cleaned['valor_pago_inicial'] = valor_pago
+            if not valor_pago:
+                self.add_error('valor_pago_inicial', 'Informe o valor recebido.')
+            elif valor_original and valor_pago > valor_original:
+                self.add_error('valor_pago_inicial', 'O valor recebido não pode ser maior que o valor do título.')
         return cleaned
 
 
@@ -131,8 +194,8 @@ class BaixaContaReceberForm(forms.Form):
 
     data_pagamento = forms.DateField(
         label='Data do recebimento',
-        widget=forms.DateInput(attrs={'type': 'date'}),
-        initial=date.today,
+        widget=forms.DateInput(format='%Y-%m-%d', attrs={'type': 'date'}),
+        initial=timezone.localdate,
     )
     valor_pago = forms.DecimalField(
         max_digits=14,
@@ -190,8 +253,10 @@ class BaixaContaReceberForm(forms.Form):
         label='Observação',
     )
 
-    def __init__(self, *args, filial=None, conta=None, **kwargs):
+    def __init__(self, *args, filial=None, conta=None, pagamento=None, **kwargs):
         super().__init__(*args, **kwargs)
+        self.conta = conta
+        self.pagamento = pagamento
         if filial:
             configurar_forma_pagamento(self, (
                 FormaPagamento.objects
@@ -207,10 +272,38 @@ class BaixaContaReceberForm(forms.Form):
             self.fields['valor_pago'].initial = conta.valor_saldo
             self.fields['bandeira'].initial = conta.bandeira_recebimento
             self.fields['numero_parcelas'].initial = conta.parcelas_recebimento
+            if conta.forma_pagamento_id:
+                self.fields['forma_pagamento'].initial = conta.forma_pagamento_id
+                if conta.conta_bancaria_id:
+                    self.fields['conta_bancaria'].initial = conta.conta_bancaria_id
+                elif conta.forma_pagamento.conta_bancaria_padrao_id:
+                    self.fields['conta_bancaria'].initial = conta.forma_pagamento.conta_bancaria_padrao_id
+        if pagamento:
+            self.fields['data_pagamento'].initial = pagamento.data_pagamento
+            self.fields['valor_pago'].initial = pagamento.valor_pago
+            self.fields['valor_juros'].initial = pagamento.valor_juros
+            self.fields['valor_multa'].initial = pagamento.valor_multa
+            self.fields['valor_desconto'].initial = pagamento.valor_desconto
+            self.fields['forma_pagamento'].initial = pagamento.forma_pagamento_id
+            self.fields['conta_bancaria'].initial = pagamento.conta_bancaria_id
+            self.fields['bandeira'].initial = pagamento.bandeira
+            self.fields['numero_parcelas'].initial = pagamento.numero_parcelas
+            self.fields['observacao'].initial = pagamento.observacao
 
     def clean(self):
         cleaned = super().clean()
         cleaned.setdefault('valor_juros', Decimal('0'))
         cleaned.setdefault('valor_multa', Decimal('0'))
         cleaned.setdefault('valor_desconto', Decimal('0'))
-        return limpar_dados_cartao(self, cleaned)
+        cleaned = limpar_dados_cartao(self, cleaned)
+        valor_pago = cleaned.get('valor_pago')
+        if self.conta and valor_pago:
+            disponivel = self.conta.valor_saldo or Decimal('0')
+            if self.pagamento:
+                disponivel += self.pagamento.valor_pago or Decimal('0')
+            if valor_pago > disponivel:
+                self.add_error(
+                    'valor_pago',
+                    f'O valor recebido não pode passar do valor restante de R$ {disponivel:.2f}.',
+                )
+        return cleaned

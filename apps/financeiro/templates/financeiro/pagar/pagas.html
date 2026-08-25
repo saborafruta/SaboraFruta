@@ -6,14 +6,19 @@
 
 {% block content %}
 <style>
-  .paid-filter { border-top:3px solid #2563eb; }
-  .paid-list { border-color:#bfdbfe; }
-  .paid-list thead { background:#eff6ff !important; color:#1e3a8a; }
+  .paid-filter { border:1px solid #dbe3ee; }
+  .paid-list { border-color:#dbe3ee; }
+  .paid-list thead { background:#f8fafc !important; color:#334155; }
   .paid-analysis { border-left:4px solid #10b981; background:rgba(16,185,129,.045); }
   .paid-suppliers { border-left:4px solid #3b82f6; background:rgba(59,130,246,.045); }
   .paid-goal { border-left:4px solid #f59e0b; background:rgba(245,158,11,.055); }
   .paid-supplier-row { border-color:#bfdbfe; background:rgba(239,246,255,.55); }
-  .dark .paid-list thead { background:#172554 !important; color:#dbeafe; }
+  .paid-summary-card { border:1px solid #e2e8f0; background:#fff; border-radius:8px; }
+  .paid-pagination { border:1px solid #dbe3ee; background:#fff; color:#334155; border-radius:8px; }
+  .dark .paid-filter,
+  .dark .paid-summary-card,
+  .dark .paid-pagination { border-color:#303038; background:#242426; color:#e2e8f0; }
+  .dark .paid-list thead { background:#1e1e20 !important; color:#cbd5e1; }
   .dark .paid-supplier-row { border-color:#1e3a8a; background:rgba(30,58,138,.18); }
 </style>
 <div class="flex flex-col gap-5"
@@ -82,6 +87,21 @@
       <button type="submit" class="btn-primary">Filtrar</button>
     </div>
   </form>
+
+  <div class="grid grid-cols-1 gap-3 sm:grid-cols-3">
+    <div class="paid-summary-card p-4">
+      <span class="block text-xs font-semibold uppercase opacity-55">Pago no período</span>
+      <strong class="mt-1 block text-xl text-emerald-600 dark:text-emerald-300">R$ {{ categorias_total|floatformat:2 }}</strong>
+    </div>
+    <div class="paid-summary-card p-4">
+      <span class="block text-xs font-semibold uppercase opacity-55">Período carregado</span>
+      <strong class="mt-1 block text-sm">{{ analise_inicio|date:"d/m/Y" }} até {{ analise_fim|date:"d/m/Y" }}</strong>
+    </div>
+    <div class="paid-summary-card p-4">
+      <span class="block text-xs font-semibold uppercase opacity-55">Registros encontrados</span>
+      <strong class="mt-1 block text-xl">{{ page_obj.paginator.count }}</strong>
+    </div>
+  </div>
 
   <div class="space-y-3 md:hidden">
     {% for conta in contas %}
@@ -160,8 +180,8 @@
   </div>
 
   {% if page_obj.paginator.num_pages > 1 %}
-    <div class="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-blue-200 bg-blue-50 p-3 text-sm text-blue-800 dark:border-blue-900 dark:bg-blue-950/30 dark:text-blue-200">
-      <span class="font-semibold text-blue-600">Há mais contas pagas para visualizar.</span>
+    <div class="paid-pagination flex flex-wrap items-center justify-between gap-3 p-3 text-sm shadow-sm">
+      <span class="font-semibold">Mais resultados disponíveis</span>
       <span class="opacity-70">Página {{ page_obj.number }} de {{ page_obj.paginator.num_pages }} · {{ page_obj.paginator.count }} registros</span>
       <div class="flex gap-2">
         {% if page_obj.has_previous %}<a class="btn-secondary" href="?{% if page_querystring %}{{ page_querystring }}&{% endif %}page={{ page_obj.previous_page_number }}">Anterior</a>{% endif %}

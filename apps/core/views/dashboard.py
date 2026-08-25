@@ -811,7 +811,7 @@ class DashboardView(LoginRequiredMixin, TemplateView):
                 if filial.is_matriz
                 else ContaPagar.objects.filter(filial=filial)
             ).filter(
-                status__in=[StatusContaPagar.ABERTO, StatusContaPagar.VENCIDO, StatusContaPagar.AGENDADO],
+                status__in=[StatusContaPagar.ABERTO, StatusContaPagar.PAGO_PARCIAL, StatusContaPagar.VENCIDO, StatusContaPagar.AGENDADO],
             ).select_related('fornecedor')
 
             def _resumo(qs, nome_attr, fallback_nome):

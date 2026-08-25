@@ -251,7 +251,7 @@ class ContaPagarService:
             conta.valor_saldo = Decimal('0')
             conta.status = StatusContaPagar.PAGO
         else:
-            conta.status = StatusContaPagar.ABERTO
+            conta.status = StatusContaPagar.PAGO_PARCIAL
 
         conta.data_pagamento = data_pagamento
         conta.forma_pagamento = forma_pagamento
@@ -283,6 +283,8 @@ class ContaPagarService:
             usuario=usuario,
         )
         pagamento.save()
+        from apps.financeiro.services.taxas_transacao_service import sincronizar_tarifa_pagamento
+        sincronizar_tarifa_pagamento(pagamento)
         return conta
 
     @staticmethod
@@ -326,6 +328,8 @@ class ContaPagarService:
         conta.valor_saldo = conta.valor_final - conta.valor_pago
         if conta.valor_saldo == Decimal('0'):
             conta.status = StatusContaPagar.PAGO
+        elif conta.valor_pago > Decimal('0'):
+            conta.status = StatusContaPagar.PAGO_PARCIAL
         elif conta.data_vencimento < timezone.localdate():
             conta.status = StatusContaPagar.VENCIDO
         else:

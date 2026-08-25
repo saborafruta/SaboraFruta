@@ -108,6 +108,26 @@
   .tema-escuro .pc-summary-section.entry .pc-summary-card { color:#a7f3d0; }
   .tema-escuro .pc-summary-section.exit .pc-summary-card { color:#fecdd3; }
   .tema-escuro .pc-summary-card + .pc-summary-card { border-color:rgba(203,213,225,.24); }
+  .pc-reconcile { border:1px solid #cbd5e1; background:#fff; color:#0f172a; box-shadow:0 10px 30px rgba(15,23,42,.06); }
+  .pc-reconcile-head { border-bottom:1px solid #e2e8f0; background:linear-gradient(180deg,#fff,#f8fafc); }
+  .pc-reconcile-grid { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:12px; padding:12px; }
+  .pc-reconcile-tile { min-width:0; border:1px solid #dbe3ee; border-radius:8px; background:#fff; overflow:hidden; }
+  .pc-reconcile-tile.entry { border-color:#bbf7d0; background:#f0fdf4; color:#14532d; }
+  .pc-reconcile-tile.exit { border-color:#fecdd3; background:#fff1f2; color:#881337; }
+  .pc-reconcile-tile-head { display:flex; align-items:flex-start; justify-content:space-between; gap:.75rem; border-bottom:1px solid rgba(15,23,42,.08); padding:.8rem .9rem .7rem; }
+  .pc-reconcile-tile-head h4 { font-size:13px; font-weight:800; line-height:1.25; }
+  .pc-reconcile-count { flex:none; border:1px solid currentColor; border-radius:999px; padding:.15rem .45rem; font-size:10px; font-weight:800; opacity:.72; }
+  .pc-reconcile-list { display:grid; gap:8px; padding:.85rem .9rem .95rem; }
+  .pc-reconcile-row { display:grid; grid-template-columns:minmax(0,1fr) auto; gap:.8rem; align-items:baseline; font-size:13px; }
+  .pc-reconcile-row span { min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; opacity:.75; }
+  .pc-reconcile-row strong { white-space:nowrap; font-size:13px; }
+  .pc-reconcile-empty { padding:.85rem .9rem .95rem; font-size:13px; opacity:.65; }
+  .tema-escuro .pc-reconcile { border-color:#475569; background:#18181b; color:#f8fafc; }
+  .tema-escuro .pc-reconcile-head { border-color:#3f3f46; background:#202024; }
+  .tema-escuro .pc-reconcile-tile { border-color:#3f3f46; background:#202024; }
+  .tema-escuro .pc-reconcile-tile.entry { border-color:#166534; background:#102a24; color:#a7f3d0; }
+  .tema-escuro .pc-reconcile-tile.exit { border-color:#9f1239; background:#321923; color:#fecdd3; }
+  .tema-escuro .pc-reconcile-tile-head { border-color:rgba(203,213,225,.14); }
   .pc-personal-row { box-shadow:inset 4px 0 0 #d97706; background:#fffbeb; }
   .pc-personal-row:hover { background:#fef3c7; }
   .pc-personal-badge { display:inline-flex; margin-top:.3rem; border:1px solid #d97706; border-radius:999px; background:#fef3c7; padding:.15rem .5rem; color:#78350f; font-size:10px; font-weight:700; line-height:1.2; }
@@ -173,6 +193,7 @@
     .pc-ledger-meta { grid-column:1 / -1; }
     .pc-ledger-head { padding:.75rem; }
     .pc-summary-card { padding:.75rem; }
+    .pc-reconcile-grid { grid-template-columns:1fr; padding:10px; }
     .pc-personal-metrics { grid-template-columns:1fr 1fr; }
     .pc-personal-metric:last-child { grid-column:1 / -1; border-top:1px solid #fde68a; border-left:0; }
     .pc-fee-dialog-head { padding:1rem; }
@@ -192,6 +213,9 @@
     .pc-summary-card + .pc-summary-card { border-top:0; border-left:1px solid rgba(15,23,42,.16); }
     .tema-escuro .pc-summary-section + .pc-summary-section { border-left-color:#475569; }
   }
+  @media (min-width: 641px) and (max-width: 1180px) {
+    .pc-reconcile-grid { grid-template-columns:repeat(2,minmax(0,1fr)); }
+  }
 </style>
 <div class="mx-auto max-w-7xl space-y-5" :class="{'pc-private':ocultarValores}" x-data="{
   ocultarValores:false,
@@ -201,16 +225,25 @@
   taxasModal: false,
   movimentoModal: {{ movimento_modal|yesno:'true,false' }},
   contaPagarModal: false,
+  contaReceberModal: false,
   contaPagarQuitada: false,
   tituloPagarModal: false,
   tituloPagarCarregando: false,
   tituloPagarHtml: '',
   tituloPagarErro: '',
+  previsoesCarregando: false,
   detalheModal: {% if editar_entrada_form.errors %}false{% else %}{{ detalhe|yesno:'true,false' }}{% endif %},
   entradaEdicao: {% if editar_entrada_form.errors %}true{% else %}false{% endif %},
   editarModal: {{ editar_movimento|yesno:'true,false' }},
   excluirModal: false,
   movimentoTipo: '{{ movimento_form.tipo.value|default:"credito"|escapejs }}',
+  hidratarTituloPagar() {
+    this.$nextTick(() => {
+      const alvo = document.querySelector('[data-titulo-pagar-content]');
+      if (!window.Alpine || !alvo) return;
+      Array.from(alvo.children).forEach((filho) => Alpine.initTree(filho));
+    });
+  },
   async abrirTituloPagar(url) {
     this.tituloPagarModal = true; this.tituloPagarCarregando = true;
     this.tituloPagarHtml = ''; this.tituloPagarErro = '';
@@ -220,10 +253,81 @@
       const resposta = await fetch(url + separador + 'modal=1', {headers:{'X-Requested-With':'XMLHttpRequest'}});
       if (!resposta.ok) throw new Error('Não foi possível carregar o título.');
       this.tituloPagarHtml = await resposta.text();
+      this.hidratarTituloPagar();
     } catch (erro) { this.tituloPagarErro = erro.message; }
     finally { this.tituloPagarCarregando = false; }
   },
+  async abrirPagamentoTitulo(url) {
+    this.tituloPagarCarregando = true; this.tituloPagarErro = '';
+    try {
+      const separador = url.includes('?') ? '&' : '?';
+      const resposta = await fetch(url + separador + 'modal=1', {headers:{'X-Requested-With':'XMLHttpRequest'}});
+      if (!resposta.ok) throw new Error('Não foi possível carregar o pagamento.');
+      this.tituloPagarHtml = await resposta.text();
+      this.hidratarTituloPagar();
+    } catch (erro) { this.tituloPagarErro = erro.message; }
+    finally { this.tituloPagarCarregando = false; }
+  },
+  async abrirRecebimentoTitulo(url) {
+    this.tituloPagarCarregando = true; this.tituloPagarErro = '';
+    try {
+      const separador = url.includes('?') ? '&' : '?';
+      const resposta = await fetch(url + separador + 'modal=1', {headers:{'X-Requested-With':'XMLHttpRequest'}});
+      if (!resposta.ok) throw new Error('Não foi possível carregar o recebimento.');
+      this.tituloPagarHtml = await resposta.text();
+      this.hidratarTituloPagar();
+    } catch (erro) { this.tituloPagarErro = erro.message; }
+    finally { this.tituloPagarCarregando = false; }
+  },
+  async enviarPagamentoTitulo(event) {
+    const form = event.target;
+    this.tituloPagarErro = '';
+    try {
+      const resposta = await fetch(form.action, {
+        method: 'POST',
+        body: new FormData(form),
+        headers: {'X-Requested-With':'XMLHttpRequest'}
+      });
+      this.tituloPagarHtml = await resposta.text();
+      this.hidratarTituloPagar();
+      if (resposta.ok) this.atualizarPrevisoes(window.location.href);
+    } catch (erro) {
+      this.tituloPagarErro = 'Não foi possível registrar o pagamento.';
+    }
+  },
+  async enviarRecebimentoTitulo(event) {
+    const form = event.target;
+    this.tituloPagarErro = '';
+    try {
+      const resposta = await fetch(form.action, {
+        method: 'POST',
+        body: new FormData(form),
+        headers: {'X-Requested-With':'XMLHttpRequest'}
+      });
+      this.tituloPagarHtml = await resposta.text();
+      this.hidratarTituloPagar();
+      if (resposta.ok) this.atualizarPrevisoes(window.location.href);
+    } catch (erro) {
+      this.tituloPagarErro = 'Não foi possível registrar o recebimento.';
+    }
+  },
   fecharTituloPagar() { this.tituloPagarModal = false; document.body.style.overflow = ''; },
+  async atualizarPrevisoes(url) {
+    this.previsoesCarregando = true;
+    const destino = new URL(url, window.location.href);
+    destino.searchParams.set('partial', 'previsoes');
+    try {
+      const resposta = await fetch(destino.toString(), {headers:{'X-Requested-With':'XMLHttpRequest'}});
+      if (!resposta.ok) throw new Error('Não foi possível atualizar as previsões.');
+      const alvo = document.getElementById('previsoes-posicao-diaria');
+      alvo.innerHTML = await resposta.text();
+      if (window.Alpine) Alpine.initTree(alvo);
+      destino.searchParams.delete('partial');
+      window.history.replaceState({}, '', destino.toString());
+    } finally {
+      this.previsoesCarregando = false;
+    }
+  },
   abrirMovimento(tipo) {
     this.movimentoTipo = tipo;
     this.movimentoModal = true;
@@ -235,7 +339,7 @@
       }
     });
   }
-}" @message.window="if ($event.origin === window.location.origin && $event.data && $event.data.type === 'conta-pagar-criada') { contaPagarModal=false; window.location.reload(); } else if ($event.origin === window.location.origin && $event.data && $event.data.type === 'fechar-conta-pagar') { contaPagarModal=false; }">
+}" @message.window="if ($event.origin === window.location.origin && $event.data && $event.data.type === 'conta-pagar-criada') { contaPagarModal=false; window.location.reload(); } else if ($event.origin === window.location.origin && $event.data && $event.data.type === 'fechar-conta-pagar') { contaPagarModal=false; } else if ($event.origin === window.location.origin && $event.data && $event.data.type === 'conta-receber-criada') { contaReceberModal=false; window.location.reload(); } else if ($event.origin === window.location.origin && $event.data && $event.data.type === 'fechar-conta-receber') { contaReceberModal=false; }">
   <div class="pc-page-heading flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
     <div>
       <h2 class="text-2xl font-semibold">Posição Diária de Caixa</h2>
@@ -363,7 +467,7 @@
 
   <section class="grid items-start gap-5 lg:grid-cols-2">
     <div class="pc-ledger entry overflow-hidden rounded-lg shadow-sm">
-      <div class="pc-ledger-head flex items-center justify-between gap-4 px-4 py-4"><div><h3 class="pc-ledger-title text-lg font-semibold">Entradas</h3><p class="mt-0.5 text-xs text-gray-500">Vendas, recebimentos e créditos manuais</p></div><div class="flex flex-col items-end gap-2"><div class="text-right"><span class="block text-[11px] font-semibold uppercase text-gray-500">Total do dia</span><strong class="pc-ledger-total text-xl">R$ {{ posicao.total_entradas|floatformat:2 }}</strong></div><button type="button" class="pc-ledger-action rounded-md px-3 py-1.5 text-xs font-semibold transition" @click="abrirMovimento('credito')" aria-label="Adicionar entrada manual">+ Entrada</button></div></div>
+      <div class="pc-ledger-head flex items-center justify-between gap-4 px-4 py-4"><div><h3 class="pc-ledger-title text-lg font-semibold">Entradas</h3><p class="mt-0.5 text-xs text-gray-500">Vendas, recebimentos e créditos manuais</p></div><div class="flex flex-col items-end gap-2"><div class="text-right"><span class="block text-[11px] font-semibold uppercase text-gray-500">Total do dia</span><strong class="pc-ledger-total text-xl">R$ {{ posicao.total_entradas|floatformat:2 }}</strong></div><div class="flex flex-wrap justify-end gap-2"><button type="button" class="pc-ledger-action rounded-md px-3 py-1.5 text-xs font-semibold transition" @click="contaReceberModal=true" aria-label="Adicionar conta a receber">+ Conta a receber</button><button type="button" class="pc-ledger-action rounded-md px-3 py-1.5 text-xs font-semibold transition" @click="abrirMovimento('credito')" aria-label="Adicionar entrada manual">+ Entrada</button></div></div></div>
       <div class="pc-ledger-columns px-4 py-2 text-[11px] font-semibold uppercase"><span>Descrição e origem</span><span>Forma / conta</span><span class="text-right">Valor</span></div>
       <div>
         {% for mov in posicao.entradas %}
@@ -384,7 +488,7 @@
           <a href="{% if mov.origem_codigo == 'pagar' or mov.origem_codigo == 'taxa_pagamento' %}{{ mov.referencia_url }}{% else %}?data={{ data_referencia|date:'Y-m-d' }}&origem={{ mov.origem_codigo }}&movimento={{ mov.registro_id }}{% endif %}" {% if mov.origem_codigo == 'pagar' or mov.origem_codigo == 'taxa_pagamento' %}@click.prevent="abrirTituloPagar($el.href)"{% endif %} class="pc-ledger-row px-4 py-3 transition {% if mov.despesa_pessoal %}pc-personal-row{% endif %}">
             <div class="min-w-0"><strong class="block text-sm">{{ mov.descricao }}</strong>{% if mov.despesa_pessoal %}<span class="pc-personal-badge">Despesa pessoal</span>{% endif %}<span class="mt-1 block text-[11px] text-gray-500">{{ mov.hora }} · {{ mov.origem }}{% if mov.classificacao %} · {{ mov.classificacao }}{% endif %}{% if mov.documento %} · Documento {{ mov.documento }}{% endif %}</span></div>
             <span class="pc-ledger-meta min-w-0 text-xs"><strong class="block truncate font-medium">{{ mov.forma_pagamento }}</strong><span class="mt-1 block truncate text-gray-500">{{ mov.conta.descricao|default:mov.conta.banco_nome|default:"Conta não definida" }}</span></span>
-            <strong class="pc-ledger-value whitespace-nowrap text-right text-base">- R$ {{ mov.saida|floatformat:2 }}</strong>
+            <span class="pc-ledger-value whitespace-nowrap text-right"><strong class="block text-base">- R$ {{ mov.saida|floatformat:2 }}</strong>{% if mov.taxa_em_pagamento %}<small class="block text-[11px] font-semibold text-rose-600">Taxa: R$ {{ mov.valor_taxa|floatformat:2 }}</small>{% endif %}</span>
           </a>
         {% endfor %}
         <button type="button" class="pc-ledger-row w-full px-4 py-3 text-left transition" @click="taxasModal=true" aria-label="Ver detalhes das taxas">
@@ -396,16 +500,24 @@
     </div>
   </section>
 
-  <section class="overflow-hidden rounded-lg border border-slate-200 dark:border-slate-700">
-    <div class="border-b px-4 py-3 dark:border-slate-700"><h3 class="font-semibold">Conferência e somatórios</h3><p class="text-xs text-gray-500">Os mesmos movimentos vistos por forma de pagamento e por conta.</p></div>
-    <div class="grid md:grid-cols-2">
-      <div class="pc-summary-section entry">
-        <div class="pc-summary-card p-4"><h4 class="text-sm font-semibold">Entradas por forma de pagamento</h4>{% for item in posicao.totais_forma_entrada %}<div class="mt-3 flex justify-between gap-3 text-sm"><span class="truncate text-gray-500">{{ item.nome }}</span><strong>R$ {{ item.valor|floatformat:2 }}</strong></div>{% empty %}<p class="mt-3 text-sm text-gray-500">Sem entradas.</p>{% endfor %}</div>
-        <div class="pc-summary-card p-4"><h4 class="text-sm font-semibold">Entradas por conta bancária</h4>{% for item in posicao.totais_conta_entrada %}<div class="mt-3 flex justify-between gap-3 text-sm"><span class="truncate text-gray-500">{{ item.nome }}</span><strong>R$ {{ item.valor|floatformat:2 }}</strong></div>{% empty %}<p class="mt-3 text-sm text-gray-500">Sem entradas.</p>{% endfor %}</div>
+  <section class="pc-reconcile overflow-hidden rounded-lg">
+    <div class="pc-reconcile-head px-4 py-3"><h3 class="font-semibold">Conferência e somatórios</h3><p class="text-xs text-gray-500">Os mesmos movimentos vistos por forma de pagamento e por conta.</p></div>
+    <div class="pc-reconcile-grid">
+      <div class="pc-reconcile-tile entry">
+        <div class="pc-reconcile-tile-head"><h4>Entradas por forma de pagamento</h4><span class="pc-reconcile-count">{{ posicao.totais_forma_entrada|length }}</span></div>
+        {% if posicao.totais_forma_entrada %}<div class="pc-reconcile-list">{% for item in posicao.totais_forma_entrada %}<div class="pc-reconcile-row"><span title="{{ item.nome }}">{{ item.nome }}</span><strong>R$ {{ item.valor|floatformat:2 }}</strong></div>{% endfor %}</div>{% else %}<p class="pc-reconcile-empty">Sem entradas.</p>{% endif %}
       </div>
-      <div class="pc-summary-section exit">
-        <div class="pc-summary-card p-4"><h4 class="text-sm font-semibold">Saídas por forma de pagamento</h4>{% for item in posicao.totais_forma_saida %}<div class="mt-3 flex justify-between gap-3 text-sm"><span class="truncate text-gray-500">{{ item.nome }}</span><strong>R$ {{ item.valor|floatformat:2 }}</strong></div>{% empty %}<p class="mt-3 text-sm text-gray-500">Sem saídas.</p>{% endfor %}</div>
-        <div class="pc-summary-card p-4"><h4 class="text-sm font-semibold">Saídas por conta bancária</h4>{% for item in posicao.totais_conta_saida %}<div class="mt-3 flex justify-between gap-3 text-sm"><span class="truncate text-gray-500">{{ item.nome }}</span><strong>R$ {{ item.valor|floatformat:2 }}</strong></div>{% empty %}<p class="mt-3 text-sm text-gray-500">Sem saídas.</p>{% endfor %}</div>
+      <div class="pc-reconcile-tile entry">
+        <div class="pc-reconcile-tile-head"><h4>Entradas por conta bancária</h4><span class="pc-reconcile-count">{{ posicao.totais_conta_entrada|length }}</span></div>
+        {% if posicao.totais_conta_entrada %}<div class="pc-reconcile-list">{% for item in posicao.totais_conta_entrada %}<div class="pc-reconcile-row"><span title="{{ item.nome }}">{{ item.nome }}</span><strong>R$ {{ item.valor|floatformat:2 }}</strong></div>{% endfor %}</div>{% else %}<p class="pc-reconcile-empty">Sem entradas.</p>{% endif %}
+      </div>
+      <div class="pc-reconcile-tile exit">
+        <div class="pc-reconcile-tile-head"><h4>Saídas por forma de pagamento</h4><span class="pc-reconcile-count">{{ posicao.totais_forma_saida|length }}</span></div>
+        {% if posicao.totais_forma_saida %}<div class="pc-reconcile-list">{% for item in posicao.totais_forma_saida %}<div class="pc-reconcile-row"><span title="{{ item.nome }}">{{ item.nome }}</span><strong>R$ {{ item.valor|floatformat:2 }}</strong></div>{% endfor %}</div>{% else %}<p class="pc-reconcile-empty">Sem saídas.</p>{% endif %}
+      </div>
+      <div class="pc-reconcile-tile exit">
+        <div class="pc-reconcile-tile-head"><h4>Saídas por conta bancária</h4><span class="pc-reconcile-count">{{ posicao.totais_conta_saida|length }}</span></div>
+        {% if posicao.totais_conta_saida %}<div class="pc-reconcile-list">{% for item in posicao.totais_conta_saida %}<div class="pc-reconcile-row"><span title="{{ item.nome }}">{{ item.nome }}</span><strong>R$ {{ item.valor|floatformat:2 }}</strong></div>{% endfor %}</div>{% else %}<p class="pc-reconcile-empty">Sem saídas.</p>{% endif %}
       </div>
     </div>
     {% if posicao.total_despesas_pessoais > 0 or meta_despesa_valor > 0 %}
@@ -431,7 +543,9 @@
     {% endif %}
   </section>
 
-  {% include "financeiro/partials/previsoes_posicao_diaria.html" %}
+  <div id="previsoes-posicao-diaria" :class="{'opacity-60 pointer-events-none': previsoesCarregando}">
+    {% include "financeiro/partials/previsoes_posicao_diaria.html" %}
+  </div>
 
   <section>
     <div class="mb-3 flex items-end justify-between gap-3">
@@ -497,13 +611,13 @@
         <div class="pc-fee-total"><span>Total de taxas</span><strong class="pc-sensitive text-rose-600">R$ {{ posicao.total_taxas_transacoes|floatformat:2 }}</strong></div>
       </div>
       <div class="max-h-[62vh] overflow-auto">
-        <div class="pc-fee-grid pc-fee-table-head"><span>Transação</span><span class="text-right">Valor principal</span><span class="text-right">Taxa</span><span class="text-right">Valor final</span></div>
+        <div class="pc-fee-grid pc-fee-table-head"><span>Transação</span><span class="text-right">Valor principal</span><span class="text-right">Taxa</span><span class="text-right">Valor líquido</span></div>
         {% for mov in posicao.detalhes_taxas %}
           <div class="pc-fee-grid pc-fee-transaction">
             <div class="pc-fee-main"><strong>{{ mov.descricao }}</strong><span>{{ mov.data|date:'d/m/Y' }} às {{ mov.hora }} · {{ mov.forma_pagamento }}{% if mov.bandeira %} · {{ mov.bandeira|title }}{% endif %}{% if mov.numero_parcelas %} · {{ mov.numero_parcelas }}x{% endif %} · {{ mov.conta.descricao|default:mov.conta.banco_nome|default:"Conta não definida" }}</span></div>
             <div class="pc-fee-number"><span>{% if mov.taxa_em_pagamento %}Principal{% else %}Bruto{% endif %}</span><strong class="pc-sensitive">R$ {{ mov.valor_bruto|floatformat:2 }}</strong></div>
             <div class="pc-fee-number"><span>Taxa</span><strong class="pc-sensitive text-rose-600">R$ {{ mov.valor_taxa|floatformat:2 }}</strong><small>{{ mov.taxa_percentual|floatformat:2 }}%{% if mov.taxa_fixa > 0 %} + R$ {{ mov.taxa_fixa|floatformat:2 }}{% endif %}</small></div>
-            <div class="pc-fee-number"><span>{% if mov.taxa_em_pagamento %}Total debitado{% else %}Líquido{% endif %}</span><strong class="pc-sensitive text-emerald-600">R$ {{ mov.valor_final_taxa|floatformat:2 }}</strong>{% if not mov.taxa_descontada and not mov.taxa_em_pagamento %}<small class="pc-fee-informative">Informativa</small>{% endif %}</div>
+            <div class="pc-fee-number"><span>{% if mov.taxa_em_pagamento %}Pago{% else %}Líquido{% endif %}</span><strong class="pc-sensitive text-emerald-600">R$ {{ mov.valor_final_taxa|floatformat:2 }}</strong>{% if not mov.taxa_descontada and not mov.taxa_em_pagamento %}<small class="pc-fee-informative">Informativa</small>{% endif %}</div>
           </div>
         {% empty %}
           <div class="p-8 text-center text-sm text-gray-500">Nenhuma transação com forma de pagamento no período.</div>
@@ -518,6 +632,13 @@
     </div>
   </template>
 
+  <template x-teleport="body"><div x-show="contaReceberModal" x-cloak class="fixed inset-0 z-[100] flex items-center justify-center p-3 sm:p-6" style="background:rgba(15,23,42,.78);backdrop-filter:blur(8px)" @keydown.escape.window="contaReceberModal=false">
+    <div class="flex w-full max-w-4xl flex-col overflow-hidden rounded-lg border border-slate-300 bg-white shadow-2xl dark:border-slate-700 dark:bg-zinc-900" style="height:92vh" @click.stop>
+      <div class="flex items-center justify-between border-b border-slate-200 px-4 py-3 dark:border-slate-700"><div><h3 class="font-semibold">Nova conta a receber</h3><p class="text-xs text-gray-500">Cadastre o título sem sair da posição diária.</p></div><button type="button" class="btn-secondary px-3" @click="contaReceberModal=false" aria-label="Fechar conta a receber">×</button></div>
+      <template x-if="contaReceberModal"><iframe src="{% url 'financeiro:receber_criar' %}?modal=1" title="Cadastrar conta a receber" class="min-h-0 flex-1 w-full border-0 bg-white dark:bg-zinc-900"></iframe></template>
+    </div>
+  </div></template>
+
   <template x-teleport="body"><div x-show="contaPagarModal" x-cloak class="fixed inset-0 z-[100] flex items-center justify-center p-3 sm:p-6" style="background:rgba(15,23,42,.78);backdrop-filter:blur(8px)" @keydown.escape.window="contaPagarModal=false">
     <div class="flex w-full max-w-5xl flex-col overflow-hidden rounded-lg border border-slate-300 bg-white shadow-2xl dark:border-slate-700 dark:bg-zinc-900" style="height:94vh" @click.stop>
       <div class="flex items-center justify-between border-b border-slate-200 px-4 py-3 dark:border-slate-700"><div><h3 class="font-semibold" x-text="contaPagarQuitada ? 'Nova despesa paga' : 'Nova conta a pagar'"></h3><p class="text-xs text-gray-500" x-text="contaPagarQuitada ? 'Classifique a despesa e registre a quitação sem sair da conferência.' : 'O título será incluído sem sair da conferência.'"></p></div><button type="button" class="btn-secondary px-3" @click="contaPagarModal=false" aria-label="Fechar conta a pagar">×</button></div>
@@ -528,7 +649,7 @@
   <template x-teleport="body"><div x-show="tituloPagarModal" x-cloak class="fixed inset-0 flex items-center justify-center overflow-y-auto p-0 sm:p-5" style="z-index:180;background:rgba(15,23,42,.82);backdrop-filter:blur(11px);-webkit-backdrop-filter:blur(11px)" @keydown.escape.window="fecharTituloPagar()" @click.self="fecharTituloPagar()" role="dialog" aria-modal="true" aria-label="Detalhes do título">
     <div class="card my-auto flex h-full w-full max-w-5xl flex-col overflow-hidden shadow-2xl sm:h-auto sm:max-h-[calc(100vh-2rem)] sm:rounded-lg" @click.stop>
       <div class="flex items-center justify-between border-b px-4 py-3 text-white sm:px-6" style="border-color:#334155;background:#172033"><div><h3 class="font-semibold">Detalhes do título</h3><p class="text-xs opacity-60">Consulte e edite sem sair da posição diária.</p></div><button type="button" class="flex h-9 w-9 items-center justify-center rounded-md border border-white/30 text-xl text-white" @click="fecharTituloPagar()" aria-label="Fechar detalhes">&times;</button></div>
-      <div class="min-h-0 flex-1 overflow-y-auto p-4 sm:p-6"><div x-show="tituloPagarCarregando" class="py-16 text-center text-sm opacity-60">Carregando título...</div><div x-show="tituloPagarErro" class="rounded-lg border border-rose-300 bg-rose-50 p-4 text-rose-700" x-text="tituloPagarErro"></div><div x-html="tituloPagarHtml"></div></div>
+      <div class="min-h-0 flex-1 overflow-y-auto p-4 sm:p-6"><div x-show="tituloPagarCarregando" class="py-16 text-center text-sm opacity-60">Carregando título...</div><div x-show="tituloPagarErro" class="rounded-lg border border-rose-300 bg-rose-50 p-4 text-rose-700" x-text="tituloPagarErro"></div><div data-titulo-pagar-content x-html="tituloPagarHtml"></div></div>
     </div>
   </div></template>
 

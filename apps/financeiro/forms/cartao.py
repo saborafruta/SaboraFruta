@@ -21,6 +21,7 @@ class FormaPagamentoCartaoSelect(forms.Select):
             return option
         maximo = max((taxa.parcelas for taxa in forma.taxas_parcelamento.all()), default=1)
         option["attrs"]["data-tipo"] = forma.tipo
+        option["attrs"]["data-conta"] = forma.conta_bancaria_padrao_id or ""
         option["attrs"]["data-max-parcelas"] = str(
             maximo if forma.tipo == TipoFormaPagamento.CARTAO_CREDITO else 1
         )
@@ -40,12 +41,12 @@ def campo_parcelas():
     )
 
 
-def configurar_forma_pagamento(form, queryset):
-    campo = form.fields["forma_pagamento"]
+def configurar_forma_pagamento(form, queryset, field_name="forma_pagamento"):
+    campo = form.fields[field_name]
     campo.widget = FormaPagamentoCartaoSelect()
     # ModelChoiceField repassa as opcoes ao widget quando o queryset e atribuido.
     # A ordem importa: trocar o widget depois disso cria um <select> vazio.
-    campo.queryset = queryset.prefetch_related("taxas_parcelamento")
+    campo.queryset = queryset.select_related("conta_bancaria_padrao").prefetch_related("taxas_parcelamento")
 
 
 def limpar_dados_cartao(form, cleaned):

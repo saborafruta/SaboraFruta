@@ -9,10 +9,10 @@ from django.db.models import Q
 from django.urls import reverse
 from django.utils import timezone
 
-from apps.financeiro.models import ContaBancaria
+from apps.financeiro.models import ContaBancaria, ContaPagar
 from apps.financeiro.models.extrato import ExtratoBancario
 from apps.financeiro.constants.enums import StatusContaReceber
-from apps.financeiro.models.receber_pagar import ContaReceber, PagamentoContaPagar
+from apps.financeiro.models.receber_pagar import ContaReceber, PagamentoContaPagar, PagamentoContaReceber
 from apps.core.services.calendario import adicionar_dias_uteis_bancarios
 
 
@@ -61,7 +61,7 @@ class MovimentoDiario:
     @property
     def valor_final_taxa(self):
         if self.taxa_em_pagamento:
-            return self.valor_bruto + self.valor_taxa
+            return self.valor_bruto
         return self.entrada
 
     @property
@@ -343,39 +343,56 @@ class PosicaoDiariaCaixaService:
                 data_credito=item.data_credito,
             ))
 
-        recebimentos = ContaReceber.objects.filter(
-            filial=self.filial, valor_pago__gt=0,
-        ).filter(
-            Q(data_liquidacao_prevista__range=(self.data_inicio, self.data_fim))
-            | Q(data_liquidacao_prevista__isnull=True, data_pagamento__range=(self.data_inicio, self.data_fim))
+        recebimentos = PagamentoContaReceber.objects.filter(
+            filial=self.filial,
+            data_pagamento__lte=self.data_fim,
+            conta_receber__status__in=[
+                StatusContaReceber.PAGO,
+                StatusContaReceber.PAGO_PARCIAL,
+                StatusContaReceber.VENCIDO,
+                StatusContaReceber.NEGOCIADO,
+                StatusContaReceber.ABERTO,
+            ],
         ).select_related(
-            "conta_bancaria", "cliente", "forma_pagamento",
-            "forma_pagamento__conta_bancaria_padrao", "plano_contas",
+            "conta_bancaria", "conta_receber__cliente", "forma_pagamento",
+            "forma_pagamento__conta_bancaria_padrao", "conta_receber__plano_contas",
         )
         for item in recebimentos:
             bruto = item.valor_pago or ZERO
-            taxa = item.valor_taxa_recebimento if item.taxa_calculada_em else ZERO
+            taxa = item.valor_taxa or ZERO
+            liquido = item.valor_liquido if (item.valor_liquido or taxa) else max(bruto - taxa, ZERO)
+            forma = item.forma_pagamento
+            prazo = forma.prazo_compensacao_dias_uteis if forma else 0
+            data_movimento = adicionar_dias_uteis_bancarios(item.data_pagamento, prazo or 0, self.filial)
+            if not self.data_inicio <= data_movimento <= self.data_fim:
+                continue
             conta = item.conta_bancaria or (
-                item.forma_pagamento.conta_bancaria_padrao
-                if item.forma_pagamento_id else None
+                forma.conta_bancaria_padrao if forma else None
             )
             if conta and conta.pk not in self.conta_ids:
                 conta = None
+            titulo = item.conta_receber
             movimentos.append(MovimentoDiario(
-                data=item.data_liquidacao_prevista or item.data_pagamento, conta=conta,
-                descricao=f"Recebimento de {item.cliente}", contraparte=str(item.cliente),
-                origem="Conta a receber", origem_codigo="receber", registro_id=item.pk,
-                documento=item.documento_numero,
-                forma_pagamento=item.forma_pagamento.descricao if item.forma_pagamento else "Sem forma vinculada",
-                entrada=item.valor_entrada_liquida, valor_bruto=bruto, valor_taxa=taxa,
-                taxa_percentual=item.taxa_percentual_aplicada if item.taxa_calculada_em else ZERO,
-                taxa_fixa=item.taxa_fixa_aplicada if item.taxa_calculada_em else ZERO,
-                taxa_descontada=bool(item.taxa_calculada_em),
-                referencia_url=reverse("financeiro:receber_detail", args=[item.pk]),
+                data=data_movimento, conta=conta,
+                descricao=f"Recebimento de {titulo.cliente}", contraparte=str(titulo.cliente),
+                origem="Conta a receber", origem_codigo="receber", registro_id=titulo.pk,
+                documento=titulo.documento_numero,
+                forma_pagamento=forma.descricao if forma else "Sem forma vinculada",
+                entrada=liquido, valor_bruto=bruto, valor_taxa=taxa,
+                taxa_percentual=(
+                    forma.calcular_taxa_recebimento(bruto, item.numero_parcelas or 1, item.bandeira)["percentual"]
+                    if forma else ZERO
+                ),
+                taxa_fixa=(
+                    forma.calcular_taxa_recebimento(bruto, item.numero_parcelas or 1, item.bandeira)["fixa"]
+                    if forma else ZERO
+                ),
+                taxa_descontada=taxa > ZERO,
+                referencia_url=reverse("financeiro:receber_detail", args=[titulo.pk]),
                 momento=item.updated_at,
-                classificacao=item.plano_contas.descricao if item.plano_contas_id else "Conta a receber",
-                bandeira=item.bandeira_recebimento,
-                numero_parcelas=item.parcelas_recebimento,
+                classificacao=titulo.plano_contas.descricao if titulo.plano_contas_id else "Conta a receber",
+                bandeira=item.bandeira,
+                numero_parcelas=item.numero_parcelas,
             ))
 
         pagamentos = PagamentoContaPagar.objects.filter(
@@ -386,7 +403,24 @@ class PosicaoDiariaCaixaService:
             "conta_pagar__plano_contas", "conta_pagar__plano_contas__conta_pai",
             "conta_pagar__plano_contas__conta_pai__conta_pai",
         )
+        pagamentos_ids = [item.pk for item in pagamentos]
+        tarifas_legadas = {
+            conta.documento_id: conta.valor_pago or conta.valor_final or ZERO
+            for conta in ContaPagar.all_objects.filter(
+                filial=self.filial,
+                documento_tipo="taxa_pagamento",
+                documento_id__in=pagamentos_ids,
+                excluido_em__isnull=True,
+            )
+        }
         for item in pagamentos:
+            tarifa_pagamento = tarifas_legadas.get(item.pk)
+            if tarifa_pagamento is None:
+                tarifa_pagamento = (
+                    item.forma_pagamento.tarifa_pagamento_fixa
+                    if item.forma_pagamento_id else ZERO
+                )
+            tarifa_pagamento = tarifa_pagamento or ZERO
             movimentos.append(MovimentoDiario(
                 data=item.data_pagamento, conta=item.conta_bancaria,
                 descricao=item.conta_pagar.descricao_exibicao,
@@ -395,71 +429,16 @@ class PosicaoDiariaCaixaService:
                 documento=item.conta_pagar.documento_numero or item.referencia_pagamento,
                 forma_pagamento=item.forma_pagamento.descricao if item.forma_pagamento else "Sem forma vinculada",
                 saida=item.valor_liquido,
+                valor_bruto=item.valor_liquido,
+                valor_taxa=tarifa_pagamento,
+                taxa_fixa=tarifa_pagamento,
+                taxa_em_pagamento=tarifa_pagamento > ZERO,
                 referencia_url=f'{reverse("financeiro:pagar_detail", args=[item.conta_pagar_id])}?pagamento={item.pk}',
                 momento=item.created_at,
                 despesa_pessoal=_eh_despesa_pessoal(item.conta_pagar.plano_contas),
                 classificacao=(
                     item.conta_pagar.plano_contas.descricao
                     if item.conta_pagar.plano_contas_id else "Despesa sem classificacao"
-                ),
-            ))
-
-        tarifas_pagamento = list(PagamentoContaPagar.objects.filter(
-            filial=self.filial, conta_bancaria_id__in=self.conta_ids,
-            data_pagamento__range=(self.data_inicio, self.data_fim),
-            conta_pagar__excluido_em__isnull=True,
-            conta_pagar__documento_tipo="taxa_pagamento",
-        ).select_related(
-            "conta_bancaria", "forma_pagamento", "conta_pagar", "conta_pagar__plano_contas",
-        ))
-        pagamentos_origem_ids = [
-            item.conta_pagar.documento_id
-            for item in tarifas_pagamento
-            if item.conta_pagar.documento_id
-        ]
-        pagamentos_origem = {
-            item.pk: item
-            for item in PagamentoContaPagar.objects.filter(pk__in=pagamentos_origem_ids).select_related(
-                "conta_pagar__fornecedor", "conta_pagar__funcionario",
-            )
-        }
-        for item in tarifas_pagamento:
-            origem = pagamentos_origem.get(item.conta_pagar.documento_id)
-            principal = origem.valor_liquido if origem else ZERO
-            descricao = (
-                f"Tarifa bancaria - {origem.conta_pagar.descricao_exibicao}"
-                if origem else item.conta_pagar.descricao_exibicao
-            )
-            referencia_url = (
-                f'{reverse("financeiro:pagar_detail", args=[origem.conta_pagar_id])}?pagamento={origem.pk}'
-                if origem else ""
-            )
-            movimentos.append(MovimentoDiario(
-                data=item.data_pagamento,
-                conta=item.conta_bancaria,
-                descricao=descricao,
-                contraparte=(
-                    origem.conta_pagar.beneficiario_nome
-                    if origem else item.conta_pagar.beneficiario_nome
-                ),
-                origem="Tarifa bancaria",
-                origem_codigo="taxa_pagamento",
-                registro_id=item.pk,
-                documento=item.conta_pagar.documento_numero or item.referencia_pagamento,
-                forma_pagamento=(
-                    item.forma_pagamento.descricao
-                    if item.forma_pagamento else "Sem forma vinculada"
-                ),
-                saida=item.valor_liquido,
-                valor_bruto=principal,
-                valor_taxa=item.valor_liquido,
-                taxa_fixa=item.valor_liquido,
-                taxa_em_pagamento=True,
-                referencia_url=referencia_url,
-                momento=item.created_at,
-                classificacao=(
-                    item.conta_pagar.plano_contas.descricao
-                    if item.conta_pagar.plano_contas_id else "Tarifa bancaria"
                 ),
             ))
 
@@ -514,11 +493,9 @@ class PosicaoDiariaCaixaService:
         for item in manuais.iterator():
             valor = item.valor_entrada_liquida if item.valor > ZERO else item.valor
             _somar(saldos, item.conta_bancaria_id, valor)
-        recebimentos = ContaReceber.objects.filter(
-            filial=self.filial, valor_pago__gt=0,
-        ).filter(
-            Q(data_liquidacao_prevista__lt=self.data_inicio)
-            | Q(data_liquidacao_prevista__isnull=True, data_pagamento__lt=self.data_inicio)
+        recebimentos = PagamentoContaReceber.objects.filter(
+            filial=self.filial,
+            data_pagamento__lt=self.data_inicio,
         ).select_related("conta_bancaria", "forma_pagamento__conta_bancaria_padrao")
         for item in recebimentos.iterator():
             conta = item.conta_bancaria or (
@@ -526,14 +503,18 @@ class PosicaoDiariaCaixaService:
                 if item.forma_pagamento_id else None
             )
             if conta and conta.pk in self.conta_ids:
-                _somar(saldos, conta.pk, item.valor_entrada_liquida)
+                data_movimento = adicionar_dias_uteis_bancarios(
+                    item.data_pagamento,
+                    item.forma_pagamento.prazo_compensacao_dias_uteis if item.forma_pagamento_id else 0,
+                    self.filial,
+                )
+                if data_movimento < self.data_inicio:
+                    liquido = item.valor_liquido if (item.valor_liquido or item.valor_taxa) else max((item.valor_pago or ZERO) - (item.valor_taxa or ZERO), ZERO)
+                    _somar(saldos, conta.pk, liquido)
         pagamentos = PagamentoContaPagar.objects.filter(
             filial=self.filial, conta_bancaria_id__in=self.conta_ids,
             data_pagamento__lt=self.data_inicio, conta_pagar__excluido_em__isnull=True,
-        ).filter(
-            Q(conta_pagar__documento_tipo="taxa_pagamento")
-            | ~Q(conta_pagar__documento_tipo__startswith="taxa_")
-        ).values_list(
+        ).exclude(conta_pagar__documento_tipo__startswith="taxa_").values_list(
             "conta_bancaria_id", "valor_pago",
         )
         for conta_id, pago in pagamentos.iterator():
@@ -561,20 +542,24 @@ class PosicaoDiariaCaixaService:
 
     def _pendencias_sem_conta_do_dia(self):
         itens = []
-        for item in ContaReceber.objects.filter(
-            filial=self.filial, valor_pago__gt=0, conta_bancaria__isnull=True,
-        ).filter(
-            Q(data_liquidacao_prevista__range=(self.data_inicio, self.data_fim))
-            | Q(data_liquidacao_prevista__isnull=True, data_pagamento__range=(self.data_inicio, self.data_fim))
-        ).select_related("cliente"):
-            itens.append({"descricao": f"Recebimento - {item.cliente}", "valor": item.valor_entrada_liquida, "tipo": "entrada"})
+        for item in PagamentoContaReceber.objects.filter(
+            filial=self.filial,
+            data_pagamento__lte=self.data_fim,
+            conta_bancaria__isnull=True,
+            forma_pagamento__conta_bancaria_padrao__isnull=True,
+        ).select_related("conta_receber__cliente", "forma_pagamento"):
+            data_movimento = adicionar_dias_uteis_bancarios(
+                item.data_pagamento,
+                item.forma_pagamento.prazo_compensacao_dias_uteis if item.forma_pagamento_id else 0,
+                self.filial,
+            )
+            if self.data_inicio <= data_movimento <= self.data_fim:
+                liquido = item.valor_liquido if (item.valor_liquido or item.valor_taxa) else max((item.valor_pago or ZERO) - (item.valor_taxa or ZERO), ZERO)
+                itens.append({"descricao": f"Recebimento - {item.conta_receber.cliente}", "valor": liquido, "tipo": "entrada"})
         for item in PagamentoContaPagar.objects.filter(
             filial=self.filial, data_pagamento__range=(self.data_inicio, self.data_fim), conta_bancaria__isnull=True,
             conta_pagar__excluido_em__isnull=True,
-        ).filter(
-            Q(conta_pagar__documento_tipo="taxa_pagamento")
-            | ~Q(conta_pagar__documento_tipo__startswith="taxa_")
-        ).select_related(
+        ).exclude(conta_pagar__documento_tipo__startswith="taxa_").select_related(
             "conta_pagar__fornecedor", "conta_pagar__funcionario",
         ):
             itens.append({"descricao": item.conta_pagar.descricao_exibicao, "valor": item.valor_liquido, "tipo": "saida"})
@@ -642,38 +627,55 @@ class PosicaoDiariaCaixaService:
                 "atrasado": False,
                 "renegociado": False,
             })
-        compensacoes = ContaReceber.objects.filter(
+        compensacoes = PagamentoContaReceber.objects.filter(
             filial=self.filial,
-            status="pago",
-            data_liquidacao_prevista__range=(data_inicio, data_fim),
-            valor_pago__gt=0,
-        ).select_related("cliente", "forma_pagamento", "conta_bancaria", "plano_contas")
+            data_pagamento__lte=data_fim,
+            conta_receber__status__in=(StatusContaReceber.PAGO, StatusContaReceber.PAGO_PARCIAL),
+        ).select_related(
+            "conta_receber__cliente", "conta_receber__plano_contas",
+            "forma_pagamento", "conta_bancaria",
+        )
         for item in compensacoes:
             forma = item.forma_pagamento
             conta = item.conta_bancaria or (forma.conta_bancaria_padrao if forma else None)
+            data_prevista = adicionar_dias_uteis_bancarios(
+                item.data_pagamento,
+                forma.prazo_compensacao_dias_uteis if forma else 0,
+                self.filial,
+            )
+            if not data_inicio <= data_prevista <= data_fim:
+                continue
+            titulo = item.conta_receber
+            liquido = item.valor_liquido if (item.valor_liquido or item.valor_taxa) else max((item.valor_pago or ZERO) - (item.valor_taxa or ZERO), ZERO)
             itens.append({
-                "data": item.data_liquidacao_prevista,
-                "descricao": f"Conta a receber - {item.cliente}",
-                "classificacao": item.plano_contas.descricao if item.plano_contas_id else "Conta a receber",
-                "forma": item.forma_pagamento.descricao if item.forma_pagamento else "Sem forma vinculada",
+                "data": data_prevista,
+                "descricao": f"Conta a receber - {titulo.cliente}",
+                "classificacao": titulo.plano_contas.descricao if titulo.plano_contas_id else "Conta a receber",
+                "forma": forma.descricao if forma else "Sem forma vinculada",
                 "conta": conta.descricao if conta else "Conta nao definida",
                 "conta_id": conta.pk if conta else None,
-                "bandeira": "",
-                "parcelas": item.total_parcelas,
+                "bandeira": item.bandeira,
+                "parcelas": item.numero_parcelas,
                 "valor_bruto": item.valor_pago,
-                "valor_taxa": item.valor_taxa_recebimento,
-                "taxa_percentual": item.taxa_percentual_aplicada,
-                "taxa_fixa": item.taxa_fixa_aplicada,
-                "valor_liquido": item.valor_entrada_liquida,
+                "valor_taxa": item.valor_taxa,
+                "taxa_percentual": (
+                    forma.calcular_taxa_recebimento(item.valor_pago, item.numero_parcelas or 1, item.bandeira)["percentual"]
+                    if forma else ZERO
+                ),
+                "taxa_fixa": (
+                    forma.calcular_taxa_recebimento(item.valor_pago, item.numero_parcelas or 1, item.bandeira)["fixa"]
+                    if forma else ZERO
+                ),
+                "valor_liquido": liquido,
                 "origem_codigo": "receber",
-                "registro_id": item.pk,
-                "referencia_url": reverse("financeiro:receber_detail", args=[item.pk]),
+                "registro_id": titulo.pk,
+                "referencia_url": reverse("financeiro:receber_detail", args=[titulo.pk]),
                 "atrasado": False,
-                "renegociado": item.status == StatusContaReceber.NEGOCIADO,
+                "renegociado": titulo.status == StatusContaReceber.NEGOCIADO,
             })
         recebimentos = ContaReceber.objects.filter(
             filial=self.filial,
-            status__in=("aberto", "vencido", "negociado"),
+            status__in=("aberto", "pago_parcial", "vencido", "negociado"),
             data_vencimento__lte=data_fim,
             valor_saldo__gt=0,
         ).select_related("cliente", "forma_pagamento", "conta_bancaria", "plano_contas")

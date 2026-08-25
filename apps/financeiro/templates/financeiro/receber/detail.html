@@ -21,6 +21,8 @@
       </h2>
       {% if conta.status == 'aberto' %}
         <span class="soft-pill is-blue">Aberto</span>
+      {% elif conta.status == 'pago_parcial' %}
+        <span class="soft-pill is-amber">Pago parcial</span>
       {% elif conta.status == 'pago' %}
         <span class="soft-pill is-green">Pago</span>
       {% elif conta.status == 'vencido' %}
@@ -28,7 +30,7 @@
       {% elif conta.status == 'cancelado' %}
         <span class="soft-pill is-slate">Cancelado</span>
       {% elif conta.status == 'negociado' %}
-        <span class="soft-pill is-amber">Negociado</span>
+        <span class="soft-pill is-amber">Adiado</span>
       {% elif conta.status == 'devolvido' %}
         <span class="soft-pill is-purple">Devolvido</span>
       {% endif %}
@@ -181,7 +183,7 @@
 
       <div class="p-3 rounded-xl text-center"
            :style="{% if conta.valor_saldo > 0 %}temaClaro ? 'background:#fffbeb; border:1px solid #fde68a;' : 'background:rgba(245,158,11,0.08); border:1px solid rgba(245,158,11,0.2);'{% else %}temaClaro ? 'background:#f0fdf4; border:1px solid #bbf7d0;' : 'background:rgba(34,197,94,0.08); border:1px solid rgba(34,197,94,0.2);'{% endif %}">
-        <p class="text-xs mb-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Saldo</p>
+        <p class="text-xs mb-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Valor restante</p>
         <p class="font-bold text-sm"
            :style="{% if conta.valor_saldo > 0 %}temaClaro ? 'color:#b45309;' : 'color:#fcd34d;'{% else %}temaClaro ? 'color:#15803d;' : 'color:#86efac;'{% endif %}">
           R$ {{ conta.valor_saldo|floatformat:2 }}

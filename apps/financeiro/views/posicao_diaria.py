@@ -164,6 +164,7 @@ class PosicaoDiariaCaixaView(PermissaoRequiredMixin, View):
                 filial=request.filial_ativa,
                 status__in=[
                     StatusContaPagar.ABERTO,
+                    StatusContaPagar.PAGO_PARCIAL,
                     StatusContaPagar.VENCIDO,
                     StatusContaPagar.AGENDADO,
                 ],
@@ -284,7 +285,7 @@ class PosicaoDiariaCaixaView(PermissaoRequiredMixin, View):
         grupo_despesa_pessoal = PlanoContas.objects.filter(
             empresa=request.filial_ativa.empresa, tipo='D', nivel=1, despesa_pessoal=True, ativo=True,
         ).order_by('codigo', 'pk').first()
-        return render(request, self.template_name, {
+        context = {
             "title": "Posicao Diaria de Caixa", "data_referencia": data_referencia, "posicao": posicao,
             "hoje": timezone.localdate(),
             "movimento_form": movimento_form, "movimento_modal": movimento_modal,
@@ -316,7 +317,10 @@ class PosicaoDiariaCaixaView(PermissaoRequiredMixin, View):
             "grupo_edicao_id": grupo_edicao_id,
             "grupo_despesa_pessoal_id": grupo_despesa_pessoal.pk if grupo_despesa_pessoal else '',
             **meta_contexto,
-        })
+        }
+        if request.GET.get("partial") == "previsoes":
+            return render(request, "financeiro/partials/previsoes_posicao_diaria.html", context)
+        return render(request, self.template_name, context)
 
     @staticmethod
     def _editar_entrada_financeira(request, filial, origem, registro_id, dados, auxiliar):
@@ -363,7 +367,7 @@ class PosicaoDiariaCaixaView(PermissaoRequiredMixin, View):
             item.conta_contabil = item.plano_contas.conta_contabil if item.plano_contas else None
             item.valor_pago = dados["valor"]
             item.valor_saldo = max((item.valor_final or 0) - item.valor_pago, 0)
-            item.status = "pago" if item.valor_saldo == 0 else "aberto"
+            item.status = "pago" if item.valor_saldo == 0 else "pago_parcial"
             item.taxa_percentual_aplicada = calculo["percentual"]
             item.taxa_fixa_aplicada = calculo["fixa"]
             item.valor_taxa_recebimento = calculo["taxa"]

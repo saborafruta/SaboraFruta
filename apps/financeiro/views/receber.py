@@ -10,14 +10,16 @@ from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.utils import timezone
 from django.utils.dateparse import parse_date
+from django.utils.decorators import method_decorator
 from django.utils.http import url_has_allowed_host_and_scheme
 from django.views import View
+from django.views.decorators.clickjacking import xframe_options_sameorigin
 
 from apps.core.services.exceptions import DomainError
 from apps.core.services.permissions import PermissaoRequiredMixin
 from apps.financeiro.constants.enums import StatusContaReceber
 from apps.financeiro.forms.receber import BaixaContaReceberForm, ContaReceberForm
-from apps.financeiro.models.receber_pagar import ContaReceber
+from apps.financeiro.models.receber_pagar import ContaReceber, PagamentoContaReceber
 from apps.financeiro.services.receber_service import ContaReceberService
 from apps.financeiro.services.dashboard_contas_service import DashboardContasService
 
@@ -25,6 +27,7 @@ STATUS_CHOICES = StatusContaReceber.choices
 
 PILL_STATUS = {
     StatusContaReceber.ABERTO:     'is-blue',
+    StatusContaReceber.PAGO_PARCIAL: 'is-amber',
     StatusContaReceber.PAGO:       'is-green',
     StatusContaReceber.VENCIDO:    'is-red',
     StatusContaReceber.CANCELADO:  'is-slate',
@@ -42,14 +45,19 @@ def _kpis(qs_base):
     primeiro_dia_mes = hoje.replace(day=1)
 
     totais = qs_base.filter(
-        status__in=[StatusContaReceber.ABERTO, StatusContaReceber.VENCIDO, StatusContaReceber.NEGOCIADO]
+        status__in=[
+            StatusContaReceber.ABERTO,
+            StatusContaReceber.PAGO_PARCIAL,
+            StatusContaReceber.VENCIDO,
+            StatusContaReceber.NEGOCIADO,
+        ]
     ).aggregate(
         total_aberto=Sum('valor_saldo'),
         qtd_aberto=Count('id'),
     )
 
     vencido = qs_base.filter(
-        status__in=[StatusContaReceber.ABERTO, StatusContaReceber.VENCIDO],
+        status__in=[StatusContaReceber.ABERTO, StatusContaReceber.PAGO_PARCIAL, StatusContaReceber.VENCIDO],
         data_vencimento__lt=hoje,
     ).aggregate(total_vencido=Sum('valor_saldo'))
 
@@ -59,7 +67,7 @@ def _kpis(qs_base):
     ).aggregate(total_mes=Sum('valor_pago'))
 
     vence_hoje = qs_base.filter(
-        status__in=[StatusContaReceber.ABERTO, StatusContaReceber.VENCIDO],
+        status__in=[StatusContaReceber.ABERTO, StatusContaReceber.PAGO_PARCIAL, StatusContaReceber.VENCIDO],
         data_vencimento=hoje,
     ).aggregate(total_hoje=Sum('valor_saldo'), qtd_hoje=Count('id'))
 
@@ -84,19 +92,26 @@ class ContaReceberListView(PermissaoRequiredMixin, View):
 
         qs = (
             ContaReceber.objects.for_filial(filial)
-            .select_related('cliente', 'forma_pagamento')
+            .select_related('cliente', 'forma_pagamento', 'conta_bancaria', 'plano_contas')
             .order_by('data_vencimento', 'cliente__razao_social')
         )
 
         kpis = _kpis(qs)
 
         # Filtros
-        status = request.GET.get('status', '')
+        status = request.GET.get('status', 'pendentes')
         q = request.GET.get('q', '').strip()
         data_ini = request.GET.get('data_ini', '')
         data_fim = request.GET.get('data_fim', '')
 
-        if status:
+        if status == 'pendentes':
+            qs = qs.filter(status__in=[
+                StatusContaReceber.ABERTO,
+                StatusContaReceber.PAGO_PARCIAL,
+                StatusContaReceber.VENCIDO,
+                StatusContaReceber.NEGOCIADO,
+            ])
+        elif status and status != 'todos':
             qs = qs.filter(status=status)
         if q:
             qs = qs.filter(
@@ -174,6 +189,7 @@ class ContaReceberRelatorioView(PermissaoRequiredMixin, View):
             # Sem status escolhido, o relatório foca nos títulos em aberto.
             qs = qs.filter(status__in=[
                 StatusContaReceber.ABERTO,
+                StatusContaReceber.PAGO_PARCIAL,
                 StatusContaReceber.VENCIDO,
                 StatusContaReceber.NEGOCIADO,
             ])
@@ -244,28 +260,29 @@ class ContaReceberRelatorioView(PermissaoRequiredMixin, View):
         })
 
 
+@method_decorator(xframe_options_sameorigin, name='dispatch')
 class ContaReceberCreateView(PermissaoRequiredMixin, View):
     permissao_modulo = 'financeiro'
     permissao_acao = 'criar'
 
-    def get(self, request):
-        filial = _filial(request)
-        form = ContaReceberForm(filial=filial)
-        return render(request, 'financeiro/receber/form.html', {
+    def _context(self, request, form):
+        return {
             'title': 'Nova Conta a Receber',
             'form': form,
             'cancel_url': reverse('financeiro:receber_list'),
-        })
+            'modal_mode': request.GET.get('modal') == '1',
+        }
+
+    def get(self, request):
+        filial = _filial(request)
+        form = ContaReceberForm(filial=filial)
+        return render(request, 'financeiro/receber/form.html', self._context(request, form))
 
     def post(self, request):
         filial = _filial(request)
         form = ContaReceberForm(request.POST, filial=filial)
         if not form.is_valid():
-            return render(request, 'financeiro/receber/form.html', {
-                'title': 'Nova Conta a Receber',
-                'form': form,
-                'cancel_url': reverse('financeiro:receber_list'),
-            })
+            return render(request, 'financeiro/receber/form.html', self._context(request, form))
 
         d = form.cleaned_data
         try:
@@ -283,15 +300,25 @@ class ContaReceberCreateView(PermissaoRequiredMixin, View):
                 observacao=d.get('observacao', ''),
                 usuario=request.user,
             )
-            messages.success(request, f'Conta a receber #{conta.pk} lançada com sucesso.')
+            if d.get('quitar_ao_lancar'):
+                ContaReceberService.registrar_baixa(
+                    conta=conta,
+                    data_pagamento=d['data_pagamento_inicial'],
+                    valor_pago=d['valor_pago_inicial'],
+                    forma_pagamento=d['forma_pagamento_utilizada'],
+                    usuario=request.user,
+                    conta_bancaria=d.get('conta_bancaria_recebimento'),
+                    observacao='Recebimento registrado no lançamento manual.',
+                )
+                messages.success(request, f'Conta a receber #{conta.pk} lançada e recebida com sucesso.')
+            else:
+                messages.success(request, f'Conta a receber #{conta.pk} lançada com sucesso.')
         except DomainError as exc:
             messages.error(request, str(exc))
-            return render(request, 'financeiro/receber/form.html', {
-                'title': 'Nova Conta a Receber',
-                'form': form,
-                'cancel_url': reverse('financeiro:receber_list'),
-            })
+            return render(request, 'financeiro/receber/form.html', self._context(request, form))
 
+        if request.GET.get('modal') == '1':
+            return render(request, 'financeiro/receber/modal_success.html')
         return redirect(reverse('financeiro:receber_list'))
 
 
@@ -305,6 +332,8 @@ class ContaReceberDetailView(PermissaoRequiredMixin, View):
             ContaReceber.objects.for_filial(filial).select_related(
                 'cliente', 'forma_pagamento', 'conta_bancaria',
                 'plano_contas', 'usuario', 'usuario_baixa',
+            ).prefetch_related(
+                'pagamentos__forma_pagamento', 'pagamentos__conta_bancaria', 'pagamentos__usuario',
             ),
             pk=pk,
         )
@@ -317,6 +346,10 @@ class ContaReceberDetailView(PermissaoRequiredMixin, View):
             and conta.status not in [StatusContaReceber.CANCELADO, StatusContaReceber.PAGO]
         )
         pode_editar_prazo = pode_cancelar
+        pode_gerenciar_recebimentos = (
+            request.user.tem_permissao('financeiro', 'editar')
+            and conta.status != StatusContaReceber.CANCELADO
+        )
         pill = PILL_STATUS.get(conta.status, 'is-slate')
 
         prazo_retorno_url = request.META.get('HTTP_REFERER') or request.path
@@ -331,6 +364,7 @@ class ContaReceberDetailView(PermissaoRequiredMixin, View):
             'pode_baixar': pode_baixar,
             'pode_cancelar': pode_cancelar,
             'pode_editar_prazo': pode_editar_prazo,
+            'pode_gerenciar_recebimentos': pode_gerenciar_recebimentos,
             'pill': pill,
             'tipo_conta': 'receber',
             'prazo_retorno_url': prazo_retorno_url,
@@ -351,38 +385,54 @@ class ContaReceberBaixaView(PermissaoRequiredMixin, View):
             pk=pk,
         )
 
+    def _context(self, request, conta, form):
+        return {
+            'title': f'Receber — #{conta.pk}',
+            'conta': conta,
+            'form': form,
+            'cancel_url': reverse('financeiro:receber_detail', args=[conta.pk]),
+            'modal_form': request.GET.get('modal') == '1',
+            'form_action_url': f"{reverse('financeiro:receber_baixar', args=[conta.pk])}{'?modal=1' if request.GET.get('modal') == '1' else ''}",
+            'editando_pagamento': False,
+        }
+
+    def _render_form(self, request, conta, form, status=200):
+        template = (
+            'financeiro/receber/_baixa_modal.html'
+            if request.GET.get('modal') == '1'
+            else 'financeiro/receber/baixa.html'
+        )
+        return render(request, template, self._context(request, conta, form), status=status)
+
     def get(self, request, pk):
         conta = self._get_conta(request, pk)
         filial = _filial(request)
 
         if conta.status in [StatusContaReceber.PAGO, StatusContaReceber.CANCELADO]:
+            if request.GET.get('modal') == '1':
+                return ContaReceberDetailView().get(request, pk)
             messages.warning(request, 'Esta conta não pode ser baixada.')
             return redirect(reverse('financeiro:receber_detail', args=[pk]))
 
         form = BaixaContaReceberForm(filial=filial, conta=conta)
-        return render(request, 'financeiro/receber/baixa.html', {
-            'title': f'Receber — #{conta.pk}',
-            'conta': conta,
-            'form': form,
-            'cancel_url': reverse('financeiro:receber_detail', args=[pk]),
-        })
+        return self._render_form(request, conta, form)
 
     def post(self, request, pk):
         conta = self._get_conta(request, pk)
         filial = _filial(request)
 
         if conta.status in [StatusContaReceber.PAGO, StatusContaReceber.CANCELADO]:
+            if request.GET.get('modal') == '1':
+                return ContaReceberDetailView().get(request, pk)
             messages.warning(request, 'Esta conta não pode ser baixada.')
             return redirect(reverse('financeiro:receber_detail', args=[pk]))
 
         form = BaixaContaReceberForm(request.POST, filial=filial, conta=conta)
         if not form.is_valid():
-            return render(request, 'financeiro/receber/baixa.html', {
-                'title': f'Receber — #{conta.pk}',
-                'conta': conta,
-                'form': form,
-                'cancel_url': reverse('financeiro:receber_detail', args=[pk]),
-            })
+            return self._render_form(
+                request, conta, form,
+                status=400 if request.GET.get('modal') == '1' else 200,
+            )
 
         d = form.cleaned_data
         try:
@@ -403,16 +453,128 @@ class ContaReceberBaixaView(PermissaoRequiredMixin, View):
             if conta.status == StatusContaReceber.PAGO:
                 messages.success(request, f'Conta #{pk} recebida integralmente. ✓')
             else:
-                messages.success(request, f'Baixa parcial registrada. Saldo restante: R$ {conta.valor_saldo:,.2f}.')
+                messages.success(request, f'Baixa parcial registrada. Valor restante: R$ {conta.valor_saldo:,.2f}.')
+        except DomainError as exc:
+            if request.GET.get('modal') == '1':
+                form.add_error(None, str(exc))
+                return self._render_form(request, conta, form, status=400)
+            messages.error(request, str(exc))
+            return self._render_form(request, conta, form)
+
+        if request.GET.get('modal') == '1':
+            return ContaReceberDetailView().get(request, pk)
+        return redirect(reverse('financeiro:receber_detail', args=[pk]))
+
+
+class ContaReceberPagamentoEditView(PermissaoRequiredMixin, View):
+    permissao_modulo = 'financeiro'
+    permissao_acao = 'editar'
+
+    def _get_pagamento(self, request, pk, pagamento_pk):
+        filial = _filial(request)
+        return get_object_or_404(
+            PagamentoContaReceber.objects.for_filial(filial).select_related(
+                'conta_receber', 'conta_receber__cliente', 'forma_pagamento', 'conta_bancaria',
+            ),
+            pk=pagamento_pk,
+            conta_receber_id=pk,
+        )
+
+    def _context(self, request, pagamento, form):
+        conta = pagamento.conta_receber
+        return {
+            'title': f'Editar recebimento — #{conta.pk}',
+            'conta': conta,
+            'pagamento': pagamento,
+            'form': form,
+            'cancel_url': reverse('financeiro:receber_detail', args=[conta.pk]),
+            'modal_form': request.GET.get('modal') == '1',
+            'form_action_url': (
+                f"{reverse('financeiro:receber_pagamento_editar', args=[conta.pk, pagamento.pk])}"
+                f"{'?modal=1' if request.GET.get('modal') == '1' else ''}"
+            ),
+            'editando_pagamento': True,
+        }
+
+    def _render_form(self, request, pagamento, form, status=200):
+        template = (
+            'financeiro/receber/_baixa_modal.html'
+            if request.GET.get('modal') == '1'
+            else 'financeiro/receber/baixa.html'
+        )
+        return render(request, template, self._context(request, pagamento, form), status=status)
+
+    def get(self, request, pk, pagamento_pk):
+        pagamento = self._get_pagamento(request, pk, pagamento_pk)
+        form = BaixaContaReceberForm(
+            filial=_filial(request),
+            conta=pagamento.conta_receber,
+            pagamento=pagamento,
+        )
+        return self._render_form(request, pagamento, form)
+
+    def post(self, request, pk, pagamento_pk):
+        pagamento = self._get_pagamento(request, pk, pagamento_pk)
+        conta = pagamento.conta_receber
+        form = BaixaContaReceberForm(
+            request.POST,
+            filial=_filial(request),
+            conta=conta,
+            pagamento=pagamento,
+        )
+        if not form.is_valid():
+            return self._render_form(
+                request, pagamento, form,
+                status=400 if request.GET.get('modal') == '1' else 200,
+            )
+        d = form.cleaned_data
+        try:
+            ContaReceberService.editar_baixa(
+                pagamento=pagamento,
+                data_pagamento=d['data_pagamento'],
+                valor_pago=d['valor_pago'],
+                forma_pagamento=d['forma_pagamento'],
+                usuario=request.user,
+                conta_bancaria=d.get('conta_bancaria'),
+                valor_juros=d.get('valor_juros'),
+                valor_multa=d.get('valor_multa'),
+                valor_desconto=d.get('valor_desconto'),
+                observacao=d.get('observacao', ''),
+                bandeira=d.get('bandeira', ''),
+                numero_parcelas=d.get('numero_parcelas'),
+            )
+            messages.success(request, 'Recebimento atualizado.')
+        except DomainError as exc:
+            if request.GET.get('modal') == '1':
+                form.add_error(None, str(exc))
+                return self._render_form(request, pagamento, form, status=400)
+            messages.error(request, str(exc))
+            return self._render_form(request, pagamento, form)
+
+        if request.GET.get('modal') == '1':
+            return ContaReceberDetailView().get(request, pk)
+        return redirect(reverse('financeiro:receber_detail', args=[pk]))
+
+
+class ContaReceberPagamentoExcluirView(PermissaoRequiredMixin, View):
+    permissao_modulo = 'financeiro'
+    permissao_acao = 'editar'
+
+    def post(self, request, pk, pagamento_pk):
+        filial = _filial(request)
+        pagamento = get_object_or_404(
+            PagamentoContaReceber.objects.for_filial(filial).select_related('conta_receber'),
+            pk=pagamento_pk,
+            conta_receber_id=pk,
+        )
+        motivo = request.POST.get('motivo', '').strip() or 'Excluído pelo usuário.'
+        try:
+            ContaReceberService.excluir_baixa(pagamento, motivo, request.user)
+            messages.success(request, 'Recebimento excluído e título recalculado.')
         except DomainError as exc:
             messages.error(request, str(exc))
-            return render(request, 'financeiro/receber/baixa.html', {
-                'title': f'Receber — #{conta.pk}',
-                'conta': conta,
-                'form': form,
-                'cancel_url': reverse('financeiro:receber_detail', args=[pk]),
-            })
-
+        if request.GET.get('modal') == '1':
+            return ContaReceberDetailView().get(request, pk)
         return redirect(reverse('financeiro:receber_detail', args=[pk]))
 
 
