@@ -38,6 +38,8 @@
   .stock-count-photo img { width: 100%; height: 100%; object-fit: cover; display: block; }
   .stock-count-photo span { position: absolute; left: .28rem; bottom: .28rem; border-radius: 999px; padding: .08rem .34rem; background: rgba(15,23,42,.78); color: #fff; font-size: .68rem; }
   .stock-count-photo-empty { font-size: .9rem; }
+  .stock-count-photo.is-broken img { display: none; }
+  .stock-count-photo.is-broken::before { content: "Sem foto"; font-size: .62rem; text-transform: uppercase; letter-spacing: .03em; }
   .stock-count-name { color: #f8fafc; font-size: 1rem; font-weight: 900; line-height: 1.18; overflow-wrap: anywhere; }
   body.tema-claro .stock-count-name { color: #0f172a; }
   .stock-count-meta { display: flex; flex-wrap: wrap; gap: .28rem .65rem; margin-top: .38rem; color: #94a3b8; font-size: .82rem; }
@@ -68,7 +70,8 @@
   .stock-count-camera[hidden] { display: none !important; }
   .stock-count-camera-panel { width: min(94vw, 620px); border-radius: 16px; overflow: hidden; background: #111827; border: 1px solid rgba(148,163,184,.28); box-shadow: 0 28px 80px rgba(0,0,0,.45); }
   .stock-count-camera-head { display: flex; align-items: center; justify-content: space-between; gap: 1rem; padding: .85rem 1rem; color: #f8fafc; font-weight: 900; }
-  .stock-count-camera video { width: 100%; aspect-ratio: 4 / 3; object-fit: cover; background: #030712; display: block; }
+  .stock-count-camera-reader { width: 100%; min-height: 280px; background: #030712; }
+  .stock-count-camera-reader video { width: 100% !important; object-fit: cover; }
   .stock-count-camera-status { padding: .75rem 1rem 1rem; color: #cbd5e1; font-size: .9rem; }
   .stock-count-photo-modal { position: fixed; inset: 0; z-index: 82; display: grid; place-items: center; padding: 1rem; background: rgba(3,7,18,.76); }
   .stock-count-photo-modal[hidden] { display: none !important; }
@@ -346,14 +349,14 @@
                data-log-url="{% url 'estoque:ajuste-rapido-log' produto.pk %}"
                data-barcode="{{ produto.codigo_barras|default:'' }}">
         <button type="button"
-                class="stock-count-photo {% if not produto.foto_url %}stock-count-photo-empty{% endif %}"
+                class="stock-count-photo {% if not produto.ajuste_rapido_foto_url %}stock-count-photo-empty{% endif %}"
                 data-photo
-                data-photo-url="{{ produto.foto_url|default:'' }}"
+                data-photo-url="{{ produto.ajuste_rapido_foto_url|default:'' }}"
                 data-photo-title="{{ produto.descricao }}"
                 data-photo-id="{{ produto.codigo_replicacao }}"
                 aria-label="Ver foto de {{ produto.descricao }}">
-          {% if produto.foto_url %}
-            <img src="{{ produto.foto_url }}" alt="{{ produto.descricao }}">
+          {% if produto.ajuste_rapido_foto_url %}
+            <img src="{{ produto.ajuste_rapido_foto_url }}" alt="{{ produto.descricao }}" loading="lazy" onerror="this.closest('[data-photo]').classList.add('is-broken'); this.remove();">
             <span>#{{ produto.codigo_replicacao }}</span>
           {% else %}
             #{{ produto.codigo_replicacao }}
@@ -419,7 +422,7 @@
       <span>Leitor de codigo de barras</span>
       <button type="button" class="btn-secondary" data-close-camera>Fechar</button>
     </div>
-    <video muted playsinline data-camera-video></video>
+    <div id="stock-camera-reader" class="stock-count-camera-reader" data-camera-reader></div>
     <div class="stock-count-camera-status" data-camera-status>Aponte a camera para o codigo de barras.</div>
   </div>
 </div>
@@ -618,7 +621,7 @@
         const url = button.dataset.photoUrl || '';
         if (photoTitle) photoTitle.textContent = `${title} - #${id}`;
         photoBody.innerHTML = url
-          ? `<img src="${escapeHtml(url)}" alt="${escapeHtml(title)}">`
+          ? `<img src="${escapeHtml(url)}" alt="${escapeHtml(title)}" onerror="this.parentElement.innerHTML='<div class=&quot;stock-count-empty&quot;>Foto cadastrada, mas o arquivo nao abriu neste dispositivo.</div>'">`
           : '<div class="stock-count-empty">Este produto ainda nao tem foto cadastrada.</div>';
         photoModal.hidden = false;
       });
@@ -629,12 +632,10 @@
     });
 
     const cameraModal = document.querySelector('[data-camera-modal]');
-    const video = document.querySelector('[data-camera-video]');
     const cameraStatus = document.querySelector('[data-camera-status]');
-    let cameraStream = null;
-    let scanLoop = null;
-    let zxingReader = null;
-    let zxingLoadPromise = null;
+    let html5Scanner = null;
+    let scannerLoadPromise = null;
+    let lastScannedCode = '';
     function setCameraStatus(message) {
       if (cameraStatus) cameraStatus.textContent = message || '';
     }
@@ -643,28 +644,26 @@
       if (barcodeInput) barcodeInput.value = code;
       closeCamera().then(() => filterForm?.submit());
     }
-    function loadZxing() {
-      if (window.ZXing && window.ZXing.BrowserMultiFormatReader) return Promise.resolve(window.ZXing);
-      if (zxingLoadPromise) return zxingLoadPromise;
-      zxingLoadPromise = new Promise((resolve, reject) => {
+    function loadScanner() {
+      if (window.Html5Qrcode) return Promise.resolve();
+      if (scannerLoadPromise) return scannerLoadPromise;
+      scannerLoadPromise = new Promise((resolve, reject) => {
         const script = document.createElement('script');
-        script.src = 'https://unpkg.com/@zxing/library@0.21.3/umd/index.min.js';
+        script.src = 'https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js';
         script.async = true;
-        script.onload = () => window.ZXing ? resolve(window.ZXing) : reject(new Error('Biblioteca do leitor nao carregou.'));
+        script.onload = () => window.Html5Qrcode ? resolve() : reject(new Error('Biblioteca do leitor nao carregou.'));
         script.onerror = () => reject(new Error('Nao foi possivel carregar o leitor por camera.'));
         document.head.appendChild(script);
       });
-      return zxingLoadPromise;
+      return scannerLoadPromise;
     }
     async function closeCamera() {
-      if (scanLoop) window.cancelAnimationFrame(scanLoop);
-      scanLoop = null;
-      if (zxingReader) {
-        zxingReader.reset();
-        zxingReader = null;
+      const scanner = html5Scanner;
+      html5Scanner = null;
+      if (scanner) {
+        try { if (scanner.isScanning) await scanner.stop(); } catch (_) {}
+        try { await scanner.clear(); } catch (_) {}
       }
-      if (cameraStream) cameraStream.getTracks().forEach((track) => track.stop());
-      cameraStream = null;
       if (cameraModal) cameraModal.hidden = true;
     }
     async function openCamera() {
@@ -675,36 +674,28 @@
       try {
         cameraModal.hidden = false;
         setCameraStatus('Abrindo camera...');
-        if (!('BarcodeDetector' in window)) {
-          setCameraStatus('Leitor alternativo ativo. Aponte para o codigo e mantenha firme.');
-          const ZXing = await loadZxing();
-          zxingReader = new ZXing.BrowserMultiFormatReader();
-          zxingReader.decodeFromVideoDevice(null, video, (result) => {
-            if (result && result.text) submitBarcode(result.text);
-          });
-          return;
-        }
-        const detector = new BarcodeDetector({ formats: ['ean_13', 'ean_8', 'code_128', 'code_39', 'upc_a', 'upc_e'] });
-        cameraStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
-        video.srcObject = cameraStream;
-        await video.play();
-        setCameraStatus('Aponte a camera para o codigo de barras.');
-        const tick = async () => {
-          try {
-            const codes = await detector.detect(video);
-            if (codes.length) {
-              submitBarcode(codes[0].rawValue || '');
-              return;
-            }
-          } catch (e) {
-            // Continua tentando enquanto a camera estiver aberta.
-          }
-          scanLoop = window.requestAnimationFrame(tick);
-        };
-        tick();
+        await loadScanner();
+        await closeCamera();
+        cameraModal.hidden = false;
+        setCameraStatus('Aponte a camera para o codigo de barras e mantenha firme.');
+        html5Scanner = new window.Html5Qrcode('stock-camera-reader');
+        await html5Scanner.start(
+          { facingMode: 'environment' },
+          { fps: 10, qrbox: { width: 280, height: 130 }, aspectRatio: 1.7778 },
+          (decodedText) => {
+            const code = String(decodedText || '').trim();
+            if (!code || code === lastScannedCode) return;
+            lastScannedCode = code;
+            submitBarcode(code);
+            window.setTimeout(() => { lastScannedCode = ''; }, 1200);
+          },
+          () => {}
+        );
       } catch (e) {
         await closeCamera();
-        alert(e.message || 'Nao foi possivel abrir a camera.');
+        alert(location.protocol !== 'https:'
+          ? 'A camera exige acesso por HTTPS.'
+          : (e.message || 'Nao foi possivel abrir a camera. Autorize o acesso e tente novamente.'));
       }
     }
     document.querySelector('[data-open-camera]')?.addEventListener('click', openCamera);

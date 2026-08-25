@@ -1942,6 +1942,17 @@ class AjusteRapidoEstoqueView(PermissaoRequiredMixin, View):
 
         return qs.order_by('descricao', 'pk'), busca, barcode, status_conferencia
 
+    @staticmethod
+    def _foto_url_segura(request, produto):
+        url = (produto.foto_url or '').strip()
+        if not url:
+            return ''
+        if request.is_secure() and url.startswith('http://'):
+            return 'https://' + url[7:]
+        if url.startswith('/'):
+            return request.build_absolute_uri(url)
+        return url
+
     def get(self, request):
         qs, busca, barcode, status_conferencia = self._buscar_produtos(request)
         page_obj = Paginator(qs, 80).get_page(request.GET.get('page'))
@@ -1954,6 +1965,7 @@ class AjusteRapidoEstoqueView(PermissaoRequiredMixin, View):
             produto.estoque_quantidade_atual_value = self._decimal_to_value(produto.estoque_quantidade_atual)
             produto.estoque_quantidade_atual_display = EstoqueListView._formatar_quantidade(produto.estoque_quantidade_atual)
             produto.estoque_quantidade_disponivel_display = EstoqueListView._formatar_quantidade(produto.estoque_quantidade_disponivel)
+            produto.ajuste_rapido_foto_url = self._foto_url_segura(request, produto)
 
         querydict = request.GET.copy()
         querydict.pop('page', None)
