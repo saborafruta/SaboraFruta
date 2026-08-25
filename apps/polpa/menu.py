@@ -164,6 +164,10 @@ GRUPOS: tuple[Grupo, ...] = (
         (
             Item('painel', 'Painel',
                  'O dia da fábrica numa tela.'),
+            Item('hoje', 'Produção de hoje',
+                 'A tela de parede: meta, ritmo e o que está rodando agora.'),
+            Item('metas', 'Metas de produção',
+                 'O quanto a fábrica se compromete a produzir por dia.'),
             Item('rendimento-real', 'Rendimento real',
                  'O que a fruta rendeu contra o que deveria render.'),
             Item('custos', 'Custo por lote',

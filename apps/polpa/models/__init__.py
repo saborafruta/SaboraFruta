@@ -2,6 +2,7 @@ from .camara import Camara, LoteArmazenado
 from .catalogo import FichaProduto
 from .custo import CustoReceita
 from .fruta import Fruta
+from .meta import MetaProducao
 from .ordem import OrdemPolpa
 from .posicao import LeituraTemperatura, Posicao
 from .processo import ApontamentoEtapa, Etapa
@@ -13,7 +14,7 @@ from .subproduto import Subproduto
 
 __all__ = [
     'ApontamentoEtapa', 'Camara', 'CustoReceita', 'Etapa', 'EtapaReceita',
-    'LeituraTemperatura', 'LoteArmazenado', 'Posicao',
+    'LeituraTemperatura', 'LoteArmazenado', 'MetaProducao', 'Posicao',
     'FichaProduto', 'Fruta',
     'OrdemPolpa', 'Receita', 'Recebimento', 'Recurso', 'ReservaInsumo',
     'Subproduto',

@@ -1,0 +1,303 @@
+{% extends "_base.html" %}
+{% block title %}{{ title }} — Polpa{% endblock %}
+{% block page_title %}Produção de hoje{% endblock %}
+{% block content %}
+
+{% comment %}
+  TELA DE PAREDE. Fica aberta num monitor da produção: número grande, poucas
+  cores e nenhuma ação — quem lê está a três metros, de pé, com luva.
+
+  O RITMO IMPORTA TANTO QUANTO O TOTAL. Às 10h, 3.000 kg de uma meta de
+  10.000 podem ser ótimo ou péssimo. A barra mostra o esperado ATÉ AGORA
+  junto do produzido — sem isso, o número só vira cobrança às 17h, quando
+  não dá mais para reagir.
+{% endcomment %}
+<div class="space-y-4">
+
+  <div class="flex flex-wrap items-start justify-between gap-3">
+    <div>
+      <h2 class="text-2xl font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
+        {{ dados.dia|date:"l, d/m/Y"|capfirst }}
+      </h2>
+      <p class="text-sm mt-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+        Atualizado às {{ dados.agora|time:"H:i" }} · a tela se atualiza sozinha
+        a cada {{ segundos }} segundos.
+      </p>
+    </div>
+    <div class="flex flex-wrap gap-2">
+      <a href="{% url 'polpa:painel' %}" class="btn-secondary text-sm">Painel industrial</a>
+      {% if pode_agir %}
+        <a href="{% url 'polpa:meta-list' %}" class="btn-secondary text-sm">Metas</a>
+      {% endif %}
+    </div>
+  </div>
+
+  {# ══ A META ═════════════════════════════════════════════════════ #}
+  <div class="card p-5">
+    {% if dados.meta %}
+      <div class="flex flex-wrap items-end justify-between gap-4">
+        <div>
+          <p class="text-xs uppercase tracking-wider" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+            Produzido hoje
+          </p>
+          <p class="font-bold" style="font-size:56px; line-height:1.05;"
+             :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
+            {{ dados.kg|floatformat:0 }} <span style="font-size:24px;">kg</span>
+          </p>
+          <p class="text-sm mt-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+            {{ dados.unidades|floatformat:0 }} unidades ·
+            {{ dados.produzidas|length }} ordem(ns) fechada(s)
+          </p>
+        </div>
+        <div class="text-right">
+          <p class="text-xs uppercase tracking-wider" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+            Meta do dia
+          </p>
+          <p class="text-2xl font-bold mt-1" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
+            {{ dados.meta.meta_kg|floatformat:0 }} kg
+          </p>
+          {% if dados.meta.e_padrao %}
+            <p class="text-[11px] mt-0.5" :style="temaClaro ? 'color:#94a3b8;' : 'color:#71717a;'">
+              meta padrão
+            </p>
+          {% endif %}
+          <p class="font-bold mt-2" style="font-size:40px; line-height:1;
+             color:{% if dados.atingimento >= 100 %}#059669{% elif dados.atingimento >= 70 %}#d97706{% else %}#dc2626{% endif %};">
+            {{ dados.atingimento }}%
+          </p>
+        </div>
+      </div>
+
+      {# A barra: produzido contra o esperado até agora #}
+      <div class="mt-4">
+        <div class="relative rounded-full overflow-hidden"
+             style="height:26px; background:{% if temaClaro %}#e2e8f0{% else %}#27272a{% endif %};">
+          <div style="height:100%; width:{% if dados.atingimento > 100 %}100{% else %}{{ dados.atingimento|floatformat:0 }}{% endif %}%;
+                      background:{% if dados.atingimento >= 100 %}#059669{% elif dados.atingimento >= 70 %}#d97706{% else %}#dc2626{% endif %};
+                      transition:width .4s;"></div>
+          {% if dados.ritmo %}
+            {% comment %}
+              A MARCA DO ESPERADO fica em cima da barra: é ela que
+              transforma "85%" em "85% às 10h, quando deveria estar em 40%"
+              — ou o contrário, que é o caso que faz alguém agir.
+            {% endcomment %}
+            <div style="position:absolute; top:0; bottom:0;
+                        left:{{ dados.ritmo.percentual_do_turno|floatformat:0 }}%;
+                        width:3px; background:#111827; opacity:.65;"></div>
+          {% endif %}
+        </div>
+        {% if dados.ritmo %}
+          <p class="text-sm mt-2"
+             style="color:{% if dados.ritmo.no_ritmo %}#059669{% else %}#dc2626{% endif %};">
+            {% if dados.ritmo.no_ritmo %}
+              No ritmo: {{ dados.ritmo.diferenca|floatformat:0 }} kg acima do
+              esperado para as {{ dados.agora|time:"H:i" }}
+              ({{ dados.ritmo.esperado|floatformat:0 }} kg).
+            {% else %}
+              Atrasado: faltam
+              {{ dados.ritmo.diferenca|floatformat:0|slice:"1:" }} kg para o
+              esperado das {{ dados.agora|time:"H:i" }}
+              ({{ dados.ritmo.esperado|floatformat:0 }} kg).
+            {% endif %}
+          </p>
+        {% endif %}
+      </div>
+    {% else %}
+      {% comment %}
+        SEM META NÃO SE INVENTA UMA. Assumir zero faria qualquer produção
+        parecer infinita; assumir um número faria a fábrica ser cobrada por
+        uma meta que ninguém combinou.
+      {% endcomment %}
+      <p class="text-xs uppercase tracking-wider" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+        Produzido hoje
+      </p>
+      <p class="font-bold" style="font-size:56px; line-height:1.05;"
+         :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
+        {{ dados.kg|floatformat:0 }} <span style="font-size:24px;">kg</span>
+      </p>
+      <p class="text-sm mt-2" style="color:#d97706;">
+        Sem meta cadastrada — não dá para dizer se isso é muito ou pouco.
+        {% if pode_agir %}
+          <a href="{% url 'polpa:meta-list' %}" class="underline">cadastrar meta</a>
+        {% endif %}
+      </p>
+    {% endif %}
+  </div>
+
+  {# ══ OS NÚMEROS DO DIA ══════════════════════════════════════════ #}
+  <div class="grid grid-cols-2 lg:grid-cols-5 gap-3">
+    <div class="card p-4">
+      <p class="text-xs uppercase tracking-wider" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Planejadas</p>
+      <p class="text-3xl font-bold mt-1" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
+        {{ dados.planejadas|length }}
+      </p>
+    </div>
+    <div class="card p-4" {% if dados.em_producao %}style="border:1px solid #2563eb;"{% endif %}>
+      <p class="text-xs uppercase tracking-wider" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Em produção</p>
+      <p class="text-3xl font-bold mt-1" style="color:#2563eb;">{{ dados.em_producao|length }}</p>
+    </div>
+    <div class="card p-4" {% if dados.pausadas %}style="border:1px solid #dc2626;"{% endif %}>
+      <p class="text-xs uppercase tracking-wider" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Paradas</p>
+      <p class="text-3xl font-bold mt-1"
+         style="color:{% if dados.pausadas %}#dc2626{% else %}#64748b{% endif %};">
+        {{ dados.pausadas|length }}
+      </p>
+    </div>
+    <div class="card p-4">
+      <p class="text-xs uppercase tracking-wider" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Concluídas</p>
+      <p class="text-3xl font-bold mt-1" style="color:#059669;">{{ dados.produzidas|length }}</p>
+    </div>
+    <div class="card p-4">
+      <p class="text-xs uppercase tracking-wider" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Rendimento</p>
+      {% if dados.rendimento is not None %}
+        <p class="text-3xl font-bold mt-1"
+           style="color:{% if dados.rendimento >= 95 %}#059669{% else %}#d97706{% endif %};">
+          {{ dados.rendimento }}%
+        </p>
+      {% else %}
+        {% comment %}
+          Zero seria "não rendeu nada", e às 9h da manhã toda fábrica
+          apareceria em colapso.
+        {% endcomment %}
+        <p class="text-sm mt-2" :style="temaClaro ? 'color:#94a3b8;' : 'color:#71717a;'">sem ordem fechada</p>
+      {% endif %}
+    </div>
+  </div>
+
+  <div class="grid grid-cols-1 lg:grid-cols-3 gap-4">
+
+    {# ══ O GRÁFICO ═══════════════════════════════════════════════ #}
+    <div class="card p-4 lg:col-span-2">
+      <h3 class="text-sm font-semibold mb-3" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
+        Quilos fechados por hora
+      </h3>
+      {% if dados.por_hora %}
+        {% comment %}
+          POR HORA DE TÉRMINO, que é quando a produção existe de fato.
+          Ratear pelo tempo da ordem daria um gráfico bonito e falso:
+          mostraria produção em horas em que nada saiu da linha.
+
+          A ALTURA É RELATIVA À MAIOR BARRA, e não à meta: numa hora ruim
+          todas as barras ficariam invisíveis, e o gráfico deixaria de
+          mostrar a diferença entre as horas.
+        {% endcomment %}
+        <div class="flex items-end gap-2" style="height:180px;">
+          {% for barra in dados.por_hora %}
+            <div class="flex-1 flex flex-col items-center justify-end" style="height:100%;">
+              <span class="text-[11px] font-semibold mb-1"
+                    :style="temaClaro ? 'color:#374151;' : 'color:#cbd5e1;'">
+                {{ barra.kg|floatformat:0 }}
+              </span>
+              <div style="width:100%; height:{{ barra.altura }}%; min-height:4px;
+                          background:#2563eb; border-radius:6px 6px 0 0;"></div>
+              <span class="text-[11px] mt-1" :style="temaClaro ? 'color:#94a3b8;' : 'color:#71717a;'">
+                {{ barra.hora }}h
+              </span>
+            </div>
+          {% endfor %}
+        </div>
+      {% else %}
+        <p class="text-sm py-10 text-center" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+          Nenhuma ordem fechada hoje ainda.
+        </p>
+      {% endif %}
+    </div>
+
+    {# ══ PERDAS ══════════════════════════════════════════════════ #}
+    <div class="card p-4">
+      <h3 class="text-sm font-semibold mb-3" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
+        Perdas de hoje
+      </h3>
+      {% if dados.perdas.percentual is not None %}
+        <p class="text-3xl font-bold" style="color:#d97706;">{{ dados.perdas.percentual }}%</p>
+        <p class="text-sm mt-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+          {{ dados.perdas.perda|floatformat:0 }} de
+          {{ dados.perdas.entrada|floatformat:0 }} que entraram
+        </p>
+        {% if dados.perdas.maiores %}
+          <div class="mt-3 pt-3 border-t space-y-1.5"
+               :style="temaClaro ? 'border-color:#e2e8f0;' : 'border-color:#2a2a2e;'">
+            {% for p in dados.perdas.maiores %}
+              <p class="text-xs" :style="temaClaro ? 'color:#374151;' : 'color:#cbd5e1;'">
+                {{ p.etapa.get_etapa_display }}
+                <span class="float-right font-semibold" style="color:#d97706;">
+                  {{ p.perda|floatformat:0 }}
+                </span>
+              </p>
+            {% endfor %}
+          </div>
+        {% endif %}
+      {% else %}
+        <p class="text-sm py-6 text-center" :style="temaClaro ? 'color:#94a3b8;' : 'color:#71717a;'">
+          Nenhuma etapa pesada hoje.
+        </p>
+      {% endif %}
+    </div>
+  </div>
+
+  {# ══ O QUE ESTÁ RODANDO ═════════════════════════════════════════ #}
+  <div class="card overflow-hidden">
+    <div class="px-4 py-3 border-b" :style="temaClaro ? 'border-color:#e2e8f0;' : 'border-color:#2a2a2e;'">
+      <h3 class="text-sm font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
+        Rodando agora
+      </h3>
+    </div>
+    <table class="w-full text-sm">
+      <tbody>
+        {% for op in dados.em_producao %}
+          <tr class="border-b" :style="temaClaro ? 'border-color:#f1f5f9;' : 'border-color:#1e1e22;'">
+            <td class="px-4 py-3 font-mono font-semibold" :style="temaClaro ? 'color:#2563eb;' : 'color:#60a5fa;'">
+              {{ op.numero }}
+            </td>
+            <td class="px-4 py-3" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">{{ op.produto }}</td>
+            <td class="px-4 py-3 text-right" :style="temaClaro ? 'color:#374151;' : 'color:#cbd5e1;'">
+              {{ op.quantidade_planejada|floatformat:0 }} un
+            </td>
+            <td class="px-4 py-3 text-xs text-right" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+              {% if op.recurso %}{{ op.recurso.nome }}{% endif %}
+              {% if op.responsavel %}<span class="block">{{ op.responsavel.nome }}</span>{% endif %}
+            </td>
+            <td class="px-4 py-3 text-right">
+              <span class="soft-pill is-blue text-xs">{{ op.get_situacao_display }}</span>
+            </td>
+          </tr>
+        {% endfor %}
+        {% for op in dados.pausadas %}
+          <tr class="border-b" :style="temaClaro ? 'border-color:#f1f5f9;' : 'border-color:#1e1e22;'">
+            <td class="px-4 py-3 font-mono font-semibold" style="color:#dc2626;">{{ op.numero }}</td>
+            <td class="px-4 py-3" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">{{ op.produto }}</td>
+            <td class="px-4 py-3 text-right" :style="temaClaro ? 'color:#374151;' : 'color:#cbd5e1;'">
+              {{ op.quantidade_planejada|floatformat:0 }} un
+            </td>
+            <td class="px-4 py-3 text-xs text-right" style="color:#dc2626;">
+              {{ op.motivo_pausa }}
+              {% if op.pausada_em %}<span class="block">desde {{ op.pausada_em|date:"H:i" }}</span>{% endif %}
+            </td>
+            <td class="px-4 py-3 text-right">
+              <span class="soft-pill is-red text-xs">Parada</span>
+            </td>
+          </tr>
+        {% endfor %}
+        {% if not dados.em_producao and not dados.pausadas %}
+          <tr>
+            <td colspan="5" class="px-4 py-8 text-center text-sm"
+                :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+              Nenhuma ordem em produção neste momento.
+            </td>
+          </tr>
+        {% endif %}
+      </tbody>
+    </table>
+  </div>
+
+</div>
+
+{% comment %}
+  A TELA SE ATUALIZA SOZINHA porque fica num monitor sem teclado. Um minuto
+  é o intervalo em que a produção muda de verdade — a cada cinco segundos
+  seria piscada e consulta, sem informação nova.
+{% endcomment %}
+<script>
+  setTimeout(function () { window.location.reload(); }, {{ segundos }} * 1000);
+</script>
+{% endblock %}

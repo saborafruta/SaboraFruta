@@ -1,0 +1,134 @@
+{% extends "_base.html" %}
+{% block title %}{{ title }} — Polpa{% endblock %}
+{% block page_title %}{{ title }}{% endblock %}
+{% block content %}
+
+{% comment %}
+  DUAS METAS, UMA TELA. A PADRÃO vale todo dia sem meta própria; a do DIA
+  vale só naquele dia — sexta de feriado, manutenção, pico de safra. Sem a
+  distinção, a fábrica teria de cadastrar 365 metas iguais para poder mudar
+  uma.
+
+  A meta é em QUILO: é em quilo que a fruta entra, que a câmara enche e que
+  o custo é comparado entre produtos. Em unidades, pote de 100 g e balde de
+  10 kg cairiam no mesmo total.
+{% endcomment %}
+<div class="space-y-4">
+
+  <div class="flex flex-wrap items-start justify-between gap-3">
+    <div>
+      <p class="text-sm mb-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+        <a href="{% url 'polpa:hub' %}" :style="temaClaro ? 'color:#3b82f6;' : 'color:#60a5fa;'">Polpa de Frutas</a>
+        <span class="mx-1">›</span>
+        <a href="{% url 'polpa:grupo' 'indicadores' %}" :style="temaClaro ? 'color:#3b82f6;' : 'color:#60a5fa;'">Indicadores</a>
+      </p>
+      <h2 class="text-2xl font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">Metas de produção</h2>
+      <p class="text-sm mt-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+        É contra elas que o painel de hoje lê a produção.
+      </p>
+    </div>
+    <a href="{% url 'polpa:tempo-real' %}" class="btn-secondary text-sm">Produção de hoje</a>
+  </div>
+
+  {# ── A padrão ───────────────────────────────────────────────────── #}
+  <div class="card p-4" {% if not padrao %}style="border-left:3px solid #d97706;"{% endif %}>
+    <h3 class="text-sm font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">Meta padrão</h3>
+    {% if padrao %}
+      <p class="text-2xl font-bold mt-1" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
+        {{ padrao.meta_kg|floatformat:0 }} kg por dia
+      </p>
+      {% if padrao.observacao %}
+        <p class="text-xs mt-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">{{ padrao.observacao }}</p>
+      {% endif %}
+      {% if pode_agir %}
+        <form method="post" action="{% url 'polpa:meta-update' padrao.pk %}"
+              class="flex flex-wrap items-end gap-3 mt-3">
+          {% csrf_token %}
+          <div>
+            <label class="form-label">Nova meta padrão (kg)</label>
+            <input type="number" step="0.001" min="0" name="meta_kg" class="form-input"
+                   value="{{ padrao.meta_kg|floatformat:'0' }}">
+          </div>
+          <input type="hidden" name="data" value="">
+          <input type="text" name="observacao" class="form-input" style="width:220px;"
+                 value="{{ padrao.observacao }}" placeholder="Observação">
+          <button type="submit" class="btn-secondary text-sm">Atualizar</button>
+        </form>
+      {% endif %}
+    {% else %}
+      <p class="text-sm mt-2" style="color:#d97706;">
+        Sem meta padrão. Enquanto não houver uma, o painel de hoje não
+        consegue dizer se a produção está boa ou ruim — só mostra o total.
+      </p>
+    {% endif %}
+  </div>
+
+  {# ── Cadastrar ──────────────────────────────────────────────────── #}
+  {% if pode_agir %}
+    <div class="card p-4">
+      <h3 class="text-sm font-semibold mb-3" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
+        Nova meta
+      </h3>
+      {% if form.errors %}
+        <div class="mb-3 p-3 rounded-lg" style="background:rgba(220,38,38,.1);">
+          {% for campo in form %}
+            {% for erro in campo.errors %}
+              <p class="text-sm" style="color:#dc2626;">{{ campo.label }}: {{ erro }}</p>
+            {% endfor %}
+          {% endfor %}
+        </div>
+      {% endif %}
+      <form method="post" class="grid sm:grid-cols-4 gap-3 items-end">
+        {% csrf_token %}
+        {% for campo in form %}
+          <div>
+            <label class="form-label" for="{{ campo.id_for_label }}">{{ campo.label }}</label>
+            {{ campo }}
+            {% if campo.help_text %}
+              <p class="text-xs mt-1" :style="temaClaro ? 'color:#94a3b8;' : 'color:#71717a;'">{{ campo.help_text }}</p>
+            {% endif %}
+          </div>
+        {% endfor %}
+        <button type="submit" class="btn-primary">Gravar meta</button>
+      </form>
+    </div>
+  {% endif %}
+
+  {# ── As do dia ──────────────────────────────────────────────────── #}
+  <div class="card overflow-hidden">
+    <div class="px-4 py-3 border-b" :style="temaClaro ? 'border-color:#e2e8f0;' : 'border-color:#2a2a2e;'">
+      <h3 class="text-sm font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
+        Metas de dias específicos
+      </h3>
+      <p class="text-xs mt-0.5" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+        Substituem a padrão só naquele dia.
+      </p>
+    </div>
+    <table class="w-full text-sm">
+      <tbody>
+        {% for meta in metas %}
+          <tr class="border-b" :style="temaClaro ? 'border-color:#f1f5f9;' : 'border-color:#1e1e22;'">
+            <td class="px-4 py-3 font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
+              {{ meta.data|date:"d/m/Y" }}
+            </td>
+            <td class="px-4 py-3 text-right" :style="temaClaro ? 'color:#374151;' : 'color:#cbd5e1;'">
+              {{ meta.meta_kg|floatformat:0 }} kg
+            </td>
+            <td class="px-4 py-3 text-xs" :style="temaClaro ? 'color:#94a3b8;' : 'color:#71717a;'">
+              {{ meta.observacao }}
+            </td>
+          </tr>
+        {% empty %}
+          <tr>
+            <td class="px-4 py-8 text-center text-sm"
+                :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+              Nenhuma meta de dia específico — todos os dias usam a padrão.
+            </td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+</div>
+{% endblock %}

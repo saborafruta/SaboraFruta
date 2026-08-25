@@ -18,7 +18,7 @@ from django.urls import path
 
 from . import (
     views_armazenagem as varm, views_etiqueta as vetq, views_frio as vfrio,
-    views_indicadores as vind,
+    views_indicadores as vind, views_tempo_real as vtr,
     views, views_catalogo as vcat, views_ordem as vord,
     views_planejamento as vpla, views_processo as vproc,
     views_subproduto as vsub,
@@ -115,6 +115,11 @@ ROTAS_PRONTAS: list = [
     # Nenhum número nasce lá: o painel junta o que já foi registrado por
     # quem fez o trabalho.
     path('indicadores/painel/', vind.PainelView.as_view(), name='painel'),
+    # A TELA DE PAREDE: outro dono que o painel industrial -- este e' de
+    # quem esta' produzindo agora, e a pergunta e' "estamos no ritmo?".
+    path('indicadores/hoje/', vtr.TempoRealView.as_view(), name='tempo-real'),
+    path('indicadores/metas/', vtr.MetaListView.as_view(), name='meta-list'),
+    path('indicadores/metas/<int:pk>/', vtr.MetaUpdateView.as_view(), name='meta-update'),
     path('indicadores/validade/', varm.ValidadeView.as_view(), name='validade'),
 
     # ── PPCP ────────────────────────────────────────────────────────────

@@ -8,12 +8,13 @@ from .ordem import OrdemPolpaService
 from .planejamento import PlanejamentoService
 from .processo import ProcessoService
 from .receita import ReceitaService
+from .tempo_real import TempoRealService
 from .subproduto import SubprodutoService
 from .recebimento import RecebimentoService
 
 __all__ = [
     'ArmazenagemService', 'CatalogoService', 'EtiquetaService', 'FrioService', 'IndicadoresService',
     'CustoService', 'OrdemPolpaService', 'PlanejamentoService',
-    'ProcessoService', 'ReceitaService', 'RecebimentoService',
+    'ProcessoService', 'ReceitaService', 'RecebimentoService', 'TempoRealService',
     'SubprodutoService',
 ]
