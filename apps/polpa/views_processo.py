@@ -97,6 +97,8 @@ class ApontarEtapaView(PolpaBaseView):
         dados = {
             'quantidade_entrada': _numero(request.POST.get('quantidade_entrada')),
             'quantidade_saida': _numero(request.POST.get('quantidade_saida')),
+            'volume_entrada': _numero(request.POST.get('volume_entrada')),
+            'volume_saida': _numero(request.POST.get('volume_saida')),
             'temperatura': _numero(request.POST.get('temperatura')),
             'motivo_perda': (request.POST.get('motivo_perda') or '').strip()[:160],
             'observacao': (request.POST.get('observacao') or '').strip(),
@@ -122,6 +124,17 @@ class ApontarEtapaView(PolpaBaseView):
             ProcessoService.apontar(etapa, dados, request.user)
         except DomainError as erro:
             messages.error(request, str(erro))
+            return volta
+
+        if etapa.overrun is not None:
+            # O OVERRUN VOLTA NA MENSAGEM porque é o número que quem opera a
+            # batedeira ajusta na hora: fora da faixa, corrige na próxima
+            # batida — não no relatório do mês.
+            messages.success(
+                request,
+                f'{etapa.get_etapa_display()} apontada — overrun de '
+                f'{etapa.overrun}%.',
+            )
             return volta
 
         perda = etapa.perda

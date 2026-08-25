@@ -104,7 +104,8 @@ class ProcessoService:
             )
 
         for campo in (
-            'quantidade_entrada', 'quantidade_saida', 'temperatura',
+            'quantidade_entrada', 'quantidade_saida',
+            'volume_entrada', 'volume_saida', 'temperatura',
             'motivo_perda', 'observacao', 'equipamento', 'lote',
         ):
             if campo in dados:
@@ -177,6 +178,12 @@ class ProcessoService:
                 (entrada - saida) if entrada is not None and saida is not None else None
             ),
             'maiores_perdas': perdas[:3],
+            # O OVERRUN DA BATIDA, quando alguém mediu. É o número que
+            # decide quantos potes saem de 100 litros de base -- ou seja, a
+            # margem do sorvete.
+            'overrun': next(
+                (e.overrun for e in etapas if e.overrun is not None), None,
+            ),
             'proxima': next(
                 (e for e in etapas if e.situacao == SIT.PENDENTE), None,
             ),

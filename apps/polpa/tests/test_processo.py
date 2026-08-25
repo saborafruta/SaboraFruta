@@ -603,3 +603,182 @@ class ConsumoTests(FluxoDoAcaiTests):
 
         # 600×8 + 300×0,01 + 100×4 = 4.800 + 3 + 400
         self.assertEqual(consumo['custo_previsto'], Decimal('5203.00'))
+
+
+class FluxoDoSorveteTests(ProcessoBase):
+    """
+    Sorvete tem o caminho dele, e um número que só ele tem: o overrun.
+
+    100 litros de base que viram 180 têm 80% de ar incorporado — é o que
+    separa um sorvete cremoso de um bloco de gelo, e é o que decide quantos
+    potes saem de uma batida. Ou seja: a margem.
+    """
+
+    def setUp(self):
+        super().setUp()
+        self.sorvete = self._item(T.SORVETE, 'Sorvete de manga 2 L', 'SOR2L')
+        self.leite = self._item(T.LEITE, 'Leite integral', 'LEITE')
+
+    def _receita_sorvete(self, etapas=None, versao='1.0'):
+        receita = ReceitaService.criar(self.filial, self.sorvete, {
+            'descricao': 'Sorvete de manga', 'versao': versao,
+            'quantidade_produzida': Decimal('100'),
+            'rendimento_esperado': Decimal('98'),
+        })
+        ItemFichaTecnica.objects.create(
+            ficha=receita.ficha, materia_prima=self.leite,
+            quantidade=Decimal('60'), perda_prevista=Decimal('0'),
+        )
+        for i, (nome, canonica) in enumerate(
+            etapas or [('Bater na maquina', '')], start=1,
+        ):
+            EtapaReceita.objects.create(
+                receita=receita, ordem=i, nome=nome, etapa=canonica,
+            )
+        ReceitaService.ativar(receita)
+        return receita
+
+    def _op_sorvete(self, receita=None):
+        return OrdemPolpaService.criar(
+            self.filial, receita or self._receita_sorvete(),
+            {'quantidade_planejada': Decimal('100')}, self.usuario,
+        )
+
+    def test_o_sorvete_tem_o_caminho_dele(self):
+        op = self._op_sorvete()
+
+        etapas = set(op.etapas_processo.values_list('etapa', flat=True))
+
+        self.assertIn(Etapa.PESAGEM_INGREDIENTES, etapas)
+        self.assertIn(Etapa.PREPARO_CALDA, etapas)
+        self.assertIn(Etapa.MATURACAO, etapas)
+        self.assertIn(Etapa.SABORIZACAO, etapas)
+        self.assertIn(Etapa.ENDURECIMENTO, etapas)
+        # E não passa pelo que é da polpa.
+        self.assertNotIn(Etapa.DESPOLPAMENTO, etapas)
+        self.assertNotIn(Etapa.REFINO, etapas)
+
+    def test_o_fluxo_do_sorvete_tem_as_treze_pedidas(self):
+        from apps.polpa.models.processo import FLUXO_SORVETE
+
+        self.assertEqual(len(FLUXO_SORVETE), 13)
+
+    def test_overrun_e_inclusoes_sao_quando_aplicavel(self):
+        """
+        Massa de picolé não incorpora ar, e sorvete sem pedaço não tem
+        inclusão. As duas entram quando a receita declara.
+        """
+        op = self._op_sorvete()
+
+        etapas = set(op.etapas_processo.values_list('etapa', flat=True))
+
+        self.assertNotIn(Etapa.INCORPORACAO_AR, etapas)
+        self.assertNotIn(Etapa.INCLUSOES, etapas)
+
+    def test_a_receita_configura_as_etapas(self):
+        """
+        É isto que faz as etapas serem CONFIGURÁVEIS: a fábrica monta o
+        caminho dela na receita, em vez de aceitar o padrão do tipo.
+        """
+        receita = self._receita_sorvete([
+            ('Pesagem', Etapa.PESAGEM_INGREDIENTES),
+            ('Bater', Etapa.INCORPORACAO_AR),
+            ('Envase', Etapa.ENVASE),
+        ], versao='2.0')
+
+        op = self._op_sorvete(receita)
+
+        self.assertEqual(
+            list(op.etapas_processo.values_list('etapa', flat=True)),
+            [Etapa.PESAGEM_INGREDIENTES, Etapa.INCORPORACAO_AR, Etapa.ENVASE],
+        )
+
+    def test_o_overrun_sai_do_volume(self):
+        receita = self._receita_sorvete([
+            ('Bater', Etapa.INCORPORACAO_AR),
+        ], versao='3.0')
+        op = self._op_sorvete(receita)
+        etapa = op.etapas_processo.get(etapa=Etapa.INCORPORACAO_AR)
+
+        ProcessoService.apontar(etapa, {
+            'volume_entrada': Decimal('100'),
+            'volume_saida': Decimal('180'),
+        }, self.usuario)
+
+        etapa.refresh_from_db()
+        self.assertEqual(etapa.overrun, Decimal('80.00'))
+
+    def test_sem_medida_o_overrun_e_nulo(self):
+        """
+        Zero seria "não incorporou ar nenhum" — uma afirmação sobre o
+        produto, e não a ausência de medição.
+        """
+        receita = self._receita_sorvete([
+            ('Bater', Etapa.INCORPORACAO_AR),
+        ], versao='4.0')
+        op = self._op_sorvete(receita)
+        etapa = op.etapas_processo.get(etapa=Etapa.INCORPORACAO_AR)
+
+        self.assertIsNone(etapa.overrun)
+
+    def test_o_overrun_aparece_no_resumo_da_ordem(self):
+        receita = self._receita_sorvete([
+            ('Bater', Etapa.INCORPORACAO_AR),
+        ], versao='5.0')
+        op = self._op_sorvete(receita)
+        ProcessoService.apontar(
+            op.etapas_processo.get(etapa=Etapa.INCORPORACAO_AR),
+            {'volume_entrada': Decimal('100'), 'volume_saida': Decimal('150')},
+            self.usuario,
+        )
+
+        resumo = ProcessoService.resumo(op)
+
+        self.assertEqual(resumo['overrun'], Decimal('50.00'))
+
+    def test_a_polpa_nao_tem_overrun_no_resumo(self):
+        """Numa polpa o número não significa nada — e não deve aparecer."""
+        op = self._op()
+
+        self.assertIsNone(ProcessoService.resumo(op)['overrun'])
+
+    def test_o_volume_e_pedido_so_onde_importa(self):
+        receita = self._receita_sorvete([
+            ('Bater', Etapa.INCORPORACAO_AR),
+            ('Pesagem', Etapa.PESAGEM_INGREDIENTES),
+        ], versao='6.0')
+        op = self._op_sorvete(receita)
+
+        bater = op.etapas_processo.get(etapa=Etapa.INCORPORACAO_AR)
+        pesagem = op.etapas_processo.get(etapa=Etapa.PESAGEM_INGREDIENTES)
+
+        self.assertTrue(bater.exige_volume)
+        self.assertFalse(pesagem.exige_volume)
+
+    def test_apontar_volume_pela_tela(self):
+        receita = self._receita_sorvete([
+            ('Bater', Etapa.INCORPORACAO_AR),
+        ], versao='7.0')
+        op = self._op_sorvete(receita)
+        etapa = op.etapas_processo.get(etapa=Etapa.INCORPORACAO_AR)
+
+        self.client.post(reverse('polpa:etapa-apontar', args=[etapa.pk]), {
+            'volume_entrada': '100', 'volume_saida': '190',
+            'situacao': SIT.CONCLUIDA,
+        })
+
+        etapa.refresh_from_db()
+        self.assertEqual(etapa.overrun, Decimal('90.00'))
+
+    def test_a_temperatura_e_cobrada_nas_etapas_do_sorvete(self):
+        """
+        Pasteurização, maturação e endurecimento são temperatura controlada —
+        é o registro que a fiscalização pede e que o produto exige.
+        """
+        op = self._op_sorvete()
+
+        for qual in (Etapa.PASTEURIZACAO, Etapa.MATURACAO, Etapa.ENDURECIMENTO):
+            with self.subTest(etapa=qual):
+                etapa = op.etapas_processo.filter(etapa=qual).first()
+                if etapa:
+                    self.assertTrue(etapa.exige_temperatura)

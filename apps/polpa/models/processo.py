@@ -46,6 +46,7 @@ class Etapa(models.TextChoices):
     RECEPCAO = 'recepcao', 'Recepção da matéria-prima'
     PESAGEM = 'pesagem', 'Pesagem'
     INSPECAO = 'inspecao', 'Inspeção'
+    PESAGEM_INGREDIENTES = 'pesagem_ingredientes', 'Pesagem dos ingredientes'
     SELECAO = 'selecao', 'Seleção'
     LAVAGEM = 'lavagem', 'Lavagem'
     HIGIENIZACAO = 'higienizacao', 'Higienização'
@@ -56,11 +57,17 @@ class Etapa(models.TextChoices):
     PROCESSAMENTO = 'processamento', 'Processamento'
     REFINO = 'refino', 'Peneiramento / refino'
     FORMULACAO = 'formulacao', 'Formulação'
+    PREPARO_CALDA = 'preparo_calda', 'Preparação da calda/base'
     MISTURA = 'mistura', 'Mistura'
-    HOMOGENEIZACAO = 'homogeneizacao', 'Homogeneização'
     PASTEURIZACAO = 'pasteurizacao', 'Pasteurização'
+    HOMOGENEIZACAO = 'homogeneizacao', 'Homogeneização'
+    MATURACAO = 'maturacao', 'Maturação'
+    SABORIZACAO = 'saborizacao', 'Adição de saborizantes'
+    INCORPORACAO_AR = 'incorporacao_ar', 'Incorporação de ar (overrun)'
+    INCLUSOES = 'inclusoes', 'Adição de inclusões'
     RESFRIAMENTO = 'resfriamento', 'Resfriamento'
     ENVASE = 'envase', 'Envase'
+    ENDURECIMENTO = 'endurecimento', 'Endurecimento'
     SELAGEM = 'selagem', 'Selagem'
     IDENTIFICACAO = 'identificacao', 'Identificação do lote'
     CONGELAMENTO = 'congelamento', 'Congelamento rápido'
@@ -103,12 +110,23 @@ FLUXO_ACAI: tuple[str, ...] = (
     Etapa.CONGELAMENTO, Etapa.ARMAZENAMENTO, Etapa.LIBERACAO,
 )
 
+FLUXO_SORVETE: tuple[str, ...] = (
+    Etapa.PESAGEM_INGREDIENTES, Etapa.MISTURA, Etapa.PREPARO_CALDA,
+    Etapa.PASTEURIZACAO, Etapa.HOMOGENEIZACAO, Etapa.MATURACAO,
+    Etapa.SABORIZACAO, Etapa.CONGELAMENTO, Etapa.INCORPORACAO_AR,
+    Etapa.INCLUSOES, Etapa.ENVASE, Etapa.ENDURECIMENTO, Etapa.ARMAZENAMENTO,
+)
+
 # ETAPAS QUE NEM TODA FÁBRICA FAZ. Ficam de fora da lista que uma ordem
 # nova recebe, e entram quando a receita as declara: descascamento de
 # acerola não existe, e pasteurização de açaí é "quando aplicável" -- há
 # quem congele sem pasteurizar.
 OPCIONAIS = (
     Etapa.DESCASCAMENTO, Etapa.CORTE, Etapa.FORMULACAO, Etapa.PASTEURIZACAO,
+    # Overrun e inclusões são "quando aplicável" no sorvete: massa de
+    # picolé não incorpora ar, e sorvete sem pedaço não tem inclusão. A
+    # receita declara quando existem.
+    Etapa.INCORPORACAO_AR, Etapa.INCLUSOES,
 )
 
 _OPCIONAIS = {o.value for o in OPCIONAIS}
@@ -120,8 +138,12 @@ FLUXOS = {
     # seu: batem em quase tudo (mistura, homogeneização, resfriamento,
     # envase, congelamento) e é melhor começar de um caminho parecido do
     # que de uma lista genérica que ninguém reconhece.
-    'sorvete': FLUXO_ACAI,
-    'picole': FLUXO_ACAI,
+    'sorvete': FLUXO_SORVETE,
+    # Picolé compartilha o caminho do sorvete até a maturação e o
+    # saborizante; o que muda dele para a frente (moldagem, desmoldagem) só
+    # entra quando a fábrica disser como faz -- inventar etapa que ninguém
+    # confirmou é encher a tela de linha que não vai ser apontada.
+    'picole': FLUXO_SORVETE,
     'creme': FLUXO_ACAI,
     'mix': FLUXO_POLPA,
     'fruta_congelada': FLUXO_POLPA,
@@ -195,6 +217,20 @@ class ApontamentoEtapa(FilialScopedModel):
         help_text='Casca e caroço, fruta descartada na seleção, sobra de linha…',
     )
 
+    # VOLUME AO LADO DO PESO, e não no lugar dele. Sorvete se vende em
+    # litro e se produz em quilo: a mesma batida tem 100 kg de base e sai
+    # com 180 litros de sorvete. Guardar um só faria a fábrica converter de
+    # cabeça a cada apontamento -- e o overrun, que é a razão entre os dois,
+    # ficaria impossível de calcular.
+    volume_entrada = models.DecimalField(
+        max_digits=12, decimal_places=3, null=True, blank=True,
+        validators=[MinValueValidator(0)], help_text='Litros que entraram.',
+    )
+    volume_saida = models.DecimalField(
+        max_digits=12, decimal_places=3, null=True, blank=True,
+        validators=[MinValueValidator(0)], help_text='Litros que saíram.',
+    )
+
     temperatura = models.DecimalField(
         max_digits=6, decimal_places=2, null=True, blank=True,
         help_text='°C medidos nesta etapa.',
@@ -254,6 +290,37 @@ class ApontamentoEtapa(FilialScopedModel):
         return None if percentual is None else (Decimal('100') - percentual)
 
     @property
+    def overrun(self) -> Decimal | None:
+        """
+        Quanto de ar entrou, em percentual do que havia antes.
+
+        O NÚMERO QUE DEFINE O SORVETE. 100 litros de base que viram 180 têm
+        80% de overrun: é o que separa um sorvete cremoso de um bloco de
+        gelo, e é o que decide quantos potes saem de uma batida -- ou seja,
+        a margem. Sorvete artesanal fica entre 20% e 50%; industrial passa
+        de 100%.
+
+        Calculado pelo VOLUME quando ele existe, e pelo peso quando não:
+        overrun é ganho de volume, e medir por peso só funciona porque a
+        massa não muda — o ar não pesa.
+
+        `None` sem as duas medidas: zero seria "não incorporou ar nenhum",
+        que é uma afirmação sobre o produto, não a ausência de medição.
+        """
+        antes = self.volume_entrada or self.quantidade_entrada
+        depois = self.volume_saida or self.quantidade_saida
+        if not antes or depois is None or antes <= ZERO:
+            return None
+        return ((depois - antes) / antes * 100).quantize(Decimal('0.01'))
+
+    @property
+    def exige_volume(self) -> bool:
+        """Onde o litro é a medida que importa, não o quilo."""
+        return self.etapa in (
+            Etapa.INCORPORACAO_AR, Etapa.ENVASE, Etapa.MATURACAO,
+        )
+
+    @property
     def duracao_minutos(self) -> int | None:
         if not self.iniciada_em or not self.concluida_em:
             return None
@@ -275,5 +342,6 @@ class ApontamentoEtapa(FilialScopedModel):
         """
         return self.etapa in (
             Etapa.RECEPCAO, Etapa.CONGELAMENTO, Etapa.ARMAZENAMENTO,
-            Etapa.HOMOGENEIZACAO,
+            Etapa.HOMOGENEIZACAO, Etapa.PASTEURIZACAO, Etapa.MATURACAO,
+            Etapa.RESFRIAMENTO, Etapa.ENDURECIMENTO,
         )

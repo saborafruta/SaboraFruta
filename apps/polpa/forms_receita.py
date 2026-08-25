@@ -161,12 +161,13 @@ class EtapaReceitaForm(forms.ModelForm):
     class Meta:
         model = EtapaReceita
         fields = (
-            'ordem', 'nome', 'equipamento', 'tempo_minutos',
+            'ordem', 'nome', 'etapa', 'equipamento', 'tempo_minutos',
             'temperatura_min', 'temperatura_max', 'perda_percentual', 'instrucao',
         )
         widgets = {
             'ordem': forms.NumberInput(attrs={**ENTRADA, 'min': 1}),
             'nome': forms.TextInput(attrs={**ENTRADA, 'placeholder': 'Despolpa'}),
+            'etapa': forms.Select(attrs=SELECT),
             'equipamento': forms.TextInput(attrs={**ENTRADA, 'placeholder': 'Despolpadeira'}),
             'tempo_minutos': forms.NumberInput(attrs=ENTRADA),
             'temperatura_min': forms.NumberInput(attrs={**ENTRADA, 'step': '0.01'}),
@@ -180,6 +181,22 @@ class EtapaReceitaForm(forms.ModelForm):
         for campo in ('equipamento', 'tempo_minutos', 'temperatura_min',
                       'temperatura_max', 'instrucao'):
             self.fields[campo].required = False
+
+        # É AQUI QUE AS ETAPAS VIRAM CONFIGURÁVEIS. Escolher a etapa
+        # canônica faz esta linha da receita virar apontamento na ordem —
+        # e é assim que cada fábrica monta o seu caminho, em vez de aceitar
+        # o padrão do tipo de produto. Em branco, a linha continua valendo
+        # como instrução escrita.
+        from apps.polpa.models.processo import Etapa
+
+        self.fields['etapa'] = forms.ChoiceField(
+            label='Etapa do processo',
+            choices=[('', 'Só instrução — não vira apontamento')] + [
+                (e.value, e.label) for e in Etapa
+            ],
+            required=False, widget=forms.Select(attrs=SELECT),
+            help_text='Escolha para esta etapa ser apontada na ordem.',
+        )
 
     def clean(self):
         dados = super().clean()
