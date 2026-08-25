@@ -39,8 +39,6 @@
   .stock-count-photo span { position: absolute; left: .28rem; bottom: .28rem; border-radius: 999px; padding: .08rem .34rem; background: rgba(15,23,42,.78); color: #fff; font-size: .68rem; }
   .stock-count-photo-empty { gap: .18rem; font-size: .72rem; line-height: 1.05; text-align: center; }
   .stock-count-photo-empty strong { display: block; font-size: 1.15rem; line-height: 1; }
-  .stock-count-photo.is-broken img { display: none; }
-  .stock-count-photo.is-broken::before { content: "Sem foto"; font-size: .62rem; text-transform: uppercase; letter-spacing: .03em; }
   .stock-count-name { color: #f8fafc; font-size: 1rem; font-weight: 900; line-height: 1.18; overflow-wrap: anywhere; }
   body.tema-claro .stock-count-name { color: #0f172a; }
   .stock-count-meta { display: flex; flex-wrap: wrap; gap: .28rem .65rem; margin-top: .38rem; color: #94a3b8; font-size: .82rem; }
@@ -362,7 +360,7 @@
                 data-photo-action="{% url 'produtos:produto-image-update' produto.pk %}"
                 aria-label="{% if produto.ajuste_rapido_foto_url %}Ver ou trocar{% else %}Adicionar{% endif %} foto de {{ produto.descricao }}">
           {% if produto.ajuste_rapido_foto_url %}
-            <img src="{{ produto.ajuste_rapido_foto_url }}" alt="{{ produto.descricao }}" loading="lazy" onerror="this.closest('[data-photo]').classList.add('is-broken'); this.remove();">
+            <img src="{{ produto.ajuste_rapido_foto_url }}" alt="{{ produto.descricao }}" loading="lazy" onerror="const button=this.closest('[data-photo]'); button.dataset.photoUrl=''; button.classList.add('stock-count-photo-empty'); button.innerHTML='<strong>+</strong> Foto';">
             <span>#{{ produto.codigo_replicacao }}</span>
           {% else %}
             <strong>+</strong> Foto

@@ -1968,7 +1968,7 @@ class AjusteRapidoEstoqueView(PermissaoRequiredMixin, View):
 
         querydict = request.GET.copy()
         querydict.pop('page', None)
-        return render(request, self.template_name, {
+        response = render(request, self.template_name, {
             'page_obj': page_obj,
             'produtos': page_obj.object_list,
             'busca': busca,
@@ -1979,6 +1979,8 @@ class AjusteRapidoEstoqueView(PermissaoRequiredMixin, View):
             'itens_conferidos_total': sum(1 for item in sessao.values() if item.get('conferido')),
             'page_querystring': querydict.urlencode(),
         })
+        response['Cache-Control'] = 'private, no-store'
+        return response
 
 
 class AjusteRapidoEstoqueAtualizarView(AjusteRapidoEstoqueView):
