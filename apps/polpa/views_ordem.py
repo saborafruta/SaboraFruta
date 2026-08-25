@@ -15,7 +15,7 @@ from apps.core.services.exceptions import DomainError
 
 from .forms_ordem import OrdemPolpaForm
 from .models import OrdemPolpa
-from .services import OrdemPolpaService
+from .services import CustoService, OrdemPolpaService
 from .views import PolpaBaseView
 
 
@@ -119,6 +119,10 @@ class OrdemDetailView(PolpaBaseView):
                 ('Embalagem', necessidade['embalagens']),
             ],
             'validade_prevista': OrdemPolpaService.validade_do_lote(op),
+            # CUSTO PREVISTO CONTRA REALIZADO. O `op.ordem.custo_total` que a
+            # tela já mostrava soma fruta e pote na mesma linha e não tem com
+            # o que ser comparado — um número sozinho não diz se foi caro.
+            'custo': CustoService.comparar(op),
             'etapas': op.receita.etapas.all(),
             'proximos': op.proximos,
             'situacoes': OrdemPolpa.Situacao.choices,

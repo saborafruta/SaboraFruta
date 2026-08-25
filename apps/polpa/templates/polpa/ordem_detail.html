@@ -354,13 +354,126 @@
               </dd>
             </div>
           {% endif %}
-          {% if op.ordem.custo_total %}
-            <div class="flex justify-between gap-3">
-              <dt :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Custo do lote</dt>
-              <dd :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">R$ {{ op.ordem.custo_total|floatformat:2 }}</dd>
-            </div>
-          {% endif %}
         </dl>
+      </div>
+
+      {# ── Custo industrial ────────────────────────────────────── #}
+      <div class="card p-4">
+        <h3 class="text-sm font-semibold mb-1" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
+          Custo industrial
+        </h3>
+        {% comment %}
+          PREVISTO SEMPRE, REALIZADO SÓ DEPOIS DE PRODUZIR. Enquanto a batida
+          corre, mostrar zero na coluna do realizado faria a ordem parecer a
+          mais barata da fábrica — e é assim que alguém fecha um preço olhando
+          um custo que ainda não existe.
+        {% endcomment %}
+        <p class="text-xs mb-3" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+          {% if custo.concluida %}
+            O que a receita previa contra o que a batida custou.
+          {% else %}
+            Previsto pela receita — o realizado aparece quando a batida fechar.
+          {% endif %}
+        </p>
+
+        <div class="overflow-x-auto">
+          <table class="w-full text-sm">
+            <thead>
+              <tr :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+                <th class="text-left font-medium pb-2">Categoria</th>
+                <th class="text-right font-medium pb-2">Previsto</th>
+                {% if custo.concluida %}
+                  <th class="text-right font-medium pb-2">Realizado</th>
+                  <th class="text-right font-medium pb-2">Desvio</th>
+                {% endif %}
+              </tr>
+            </thead>
+            <tbody>
+              {% for linha in custo.linhas %}
+                <tr :style="temaClaro ? 'border-top:1px solid #f1f5f9;' : 'border-top:1px solid #27272a;'">
+                  <td class="py-1.5" :style="temaClaro ? 'color:#374151;' : 'color:#d1d5db;'">{{ linha.rotulo }}</td>
+                  <td class="py-1.5 text-right" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+                    {{ linha.previsto|floatformat:2 }}
+                  </td>
+                  {% if custo.concluida %}
+                    <td class="py-1.5 text-right font-medium" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
+                      {{ linha.realizado|floatformat:2 }}
+                    </td>
+                    <td class="py-1.5 text-right">
+                      {% if linha.desvio %}
+                        <span style="color:{% if linha.acima %}#dc2626{% else %}#059669{% endif %};">
+                          {% if linha.acima %}+{% endif %}{{ linha.desvio|floatformat:2 }}
+                          {% if linha.desvio_percentual is not None %}
+                            <span class="text-xs">({{ linha.desvio_percentual|floatformat:1 }}%)</span>
+                          {% endif %}
+                        </span>
+                      {% else %}
+                        <span :style="temaClaro ? 'color:#cbd5e1;' : 'color:#52525b;'">—</span>
+                      {% endif %}
+                    </td>
+                  {% endif %}
+                </tr>
+              {% endfor %}
+              <tr :style="temaClaro ? 'border-top:2px solid #e5e7eb;' : 'border-top:2px solid #303036;'">
+                <td class="py-2 font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">Total</td>
+                <td class="py-2 text-right font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
+                  {{ custo.previsto.total|floatformat:2 }}
+                </td>
+                {% if custo.concluida %}
+                  <td class="py-2 text-right font-bold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
+                    {{ custo.realizado.total|floatformat:2 }}
+                  </td>
+                  <td class="py-2 text-right font-semibold"
+                      style="color:{% if custo.desvio_total > 0 %}#dc2626{% elif custo.desvio_total < 0 %}#059669{% else %}#94a3b8{% endif %};">
+                    {% if custo.desvio_total > 0 %}+{% endif %}{{ custo.desvio_total|floatformat:2 }}
+                  </td>
+                {% endif %}
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        {% comment %}
+          AS QUATRO DIVISÕES vêm depois do total, porque é o total que se
+          confere; estas são as que viram preço. Um traço onde a conta não é
+          possível — zero ali seria lido como "de graça", e é assim que um
+          produto entra na tabela abaixo do custo.
+        {% endcomment %}
+        <div class="grid grid-cols-3 gap-2 mt-3 pt-3"
+             :style="temaClaro ? 'border-top:1px solid #f1f5f9;' : 'border-top:1px solid #27272a;'">
+          {% with divisoes=custo.realizado %}
+            <div class="text-center">
+              <span class="block text-xs" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Por unidade</span>
+              <strong :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
+                {% if custo.concluida and divisoes.por_unidade is not None %}
+                  {{ divisoes.por_unidade|floatformat:4 }}
+                {% elif custo.previsto.por_unidade is not None %}
+                  {{ custo.previsto.por_unidade|floatformat:4 }}
+                {% else %}—{% endif %}
+              </strong>
+            </div>
+            <div class="text-center">
+              <span class="block text-xs" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Por kg</span>
+              <strong :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
+                {% if custo.concluida and divisoes.por_kg is not None %}
+                  {{ divisoes.por_kg|floatformat:4 }}
+                {% elif custo.previsto.por_kg is not None %}
+                  {{ custo.previsto.por_kg|floatformat:4 }}
+                {% else %}—{% endif %}
+              </strong>
+            </div>
+            <div class="text-center">
+              <span class="block text-xs" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Por caixa</span>
+              <strong :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
+                {% if custo.concluida and divisoes.por_caixa is not None %}
+                  {{ divisoes.por_caixa|floatformat:2 }}
+                {% elif custo.previsto.por_caixa is not None %}
+                  {{ custo.previsto.por_caixa|floatformat:2 }}
+                {% else %}—{% endif %}
+              </strong>
+            </div>
+          {% endwith %}
+        </div>
       </div>
 
       {# ── O lote ──────────────────────────────────────────────── #}

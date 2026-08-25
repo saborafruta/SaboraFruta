@@ -296,6 +296,25 @@ class MovimentacaoService:
                     raise EstoqueInsuficienteError(
                         f'Estoque insuficiente. Atual: {estoque_atual}, solicitado: {quantidade}.'
                     )
+            # O VALOR DA SAIDA VEM DO CUSTO MEDIO quando nao ha lote de onde
+            # tira-lo. Sem isto `valor_total` ficava NULO nesta via, e todo
+            # consumo de item sem controle de lote saia do razao sem custo --
+            # a embalagem, principalmente. O custo da OP somava so' a fruta e
+            # ficava subestimado sem nada acusar, porque um total menor nao
+            # parece defeito, parece uma batida barata.
+            #
+            # Saida nao mexe em custo medio (o proprio metodo garante isso),
+            # entao preencher o valor aqui informa sem realimentar a media.
+            from apps.produtos.models import Produto
+
+            # `custo_medio or preco_custo` e' a mesma ordem que a receita usa
+            # para custear um item: a media quando existe, o cadastro quando o
+            # produto ainda nao foi comprado. Duas convencoes diferentes para
+            # a mesma pergunta dariam custos que nao batem entre as telas.
+            precos = Produto.objects.filter(pk=produto_id).values_list(
+                'preco_custo_medio', 'preco_custo',
+            ).first() or (None, None)
+            custo_medio = precos[0] or precos[1] or Decimal('0')
             return [
                 cls.registrar_movimentacao(
                     produto_id=produto_id,
@@ -303,6 +322,7 @@ class MovimentacaoService:
                     tipo_operacao=tipo_operacao,
                     quantidade=quantidade,
                     usuario_id=usuario_id,
+                    valor_unitario=custo_medio or None,
                     documento_tipo=documento_tipo,
                     documento_id=documento_id,
                     documento_numero=documento_numero,

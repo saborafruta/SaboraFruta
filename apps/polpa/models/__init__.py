@@ -1,4 +1,5 @@
 from .catalogo import FichaProduto
+from .custo import CustoReceita
 from .fruta import Fruta
 from .ordem import OrdemPolpa
 from .processo import ApontamentoEtapa, Etapa
@@ -8,6 +9,7 @@ from .recurso import Recurso
 from .reserva import ReservaInsumo
 
 __all__ = [
-    'ApontamentoEtapa', 'Etapa', 'EtapaReceita', 'FichaProduto', 'Fruta',
+    'ApontamentoEtapa', 'CustoReceita', 'Etapa', 'EtapaReceita',
+    'FichaProduto', 'Fruta',
     'OrdemPolpa', 'Receita', 'Recebimento', 'Recurso', 'ReservaInsumo',
 ]
