@@ -1,5 +1,28 @@
 # ERP iNoovaTed — Instruções para Claude
 
+## Regra anti-regressao: nunca subir estado antigo
+
+Antes de qualquer alteracao, commit ou push, sincronize com o GitHub e confirme
+que voce esta trabalhando em cima da versao mais recente:
+
+```bash
+git fetch origin main
+git rev-list --left-right --count HEAD...origin/main
+git status --short
+git diff
+```
+
+Se `origin/main` tiver commits que nao estao no checkout local, nao faca push.
+Atualize com `git pull --rebase origin main` ou use um worktree limpo baseado em
+`origin/main`.
+
+Nao sobrescreva arquivos com versoes antigas. Se o diff mostrar mudanca em
+arquivo que voce nao mexeu conscientemente, pare e investigue. Cada linha
+commitada precisa pertencer a tarefa atual.
+
+Proibido usar `git push --force` ou `git push --force-with-lease` sem
+autorizacao explicita.
+
 ## Regra de Deploy (IMPORTANTE)
 
 **Sempre que fizer `git push`, enviar para AMBAS as branches:**
