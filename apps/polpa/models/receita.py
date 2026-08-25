@@ -145,6 +145,15 @@ class EtapaReceita(TimestampedModel):
         default=1, help_text='A sequência importa: sanitizar depois de despolpar não sanitiza.',
     )
     nome = models.CharField(max_length=80)
+    # A ETAPA CANÔNICA, quando esta corresponde a uma das dezoito do
+    # processo. É o elo entre o PLANO (a receita) e o FATO (o apontamento
+    # da ordem): sem ele, "despolpa", "despolpamento" e "polpação" viram
+    # três etapas diferentes no relatório e o rendimento deixa de somar.
+    # Em branco continua valendo como instrução — só não vira apontamento.
+    etapa = models.CharField(
+        max_length=20, blank=True,
+        help_text='A etapa do processo de polpa que esta corresponde.',
+    )
     equipamento = models.CharField(
         max_length=80, blank=True,
         help_text='Despolpadeira, pasteurizador, envasadora, túnel…',

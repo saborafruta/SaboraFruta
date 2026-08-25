@@ -125,7 +125,30 @@
         </div>
       </div>
 
-      {# ── Etapas ──────────────────────────────────────────────── #}
+      {# ── Processo ────────────────────────────────────────────── #}
+      <div class="card p-4">
+        <div class="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <h3 class="text-sm font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
+              Processo produtivo
+            </h3>
+            <p class="text-xs mt-0.5" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+              {% comment %}
+                As dezoito etapas com o que aconteceu em cada uma: quem
+                executou, em qual equipamento, quanto entrou, quanto saiu e a
+                que temperatura. É onde se descobre ONDE a fruta se perde.
+              {% endcomment %}
+              Apontar recepção, despolpa, envase, congelamento — e ver onde a
+              fruta se perde.
+            </p>
+          </div>
+          <a href="{% url 'polpa:processo-ordem' op.pk %}" class="btn-primary text-sm">
+            Abrir processo
+          </a>
+        </div>
+      </div>
+
+      {# ── Etapas da receita ───────────────────────────────────── #}
       {% if etapas %}
         <div class="card overflow-hidden">
           <div class="px-4 py-3 border-b" :style="temaClaro ? 'border-color:#e2e8f0;' : 'border-color:#2a2a2e;'">

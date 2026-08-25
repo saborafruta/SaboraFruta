@@ -18,8 +18,8 @@ from django.urls import path
 
 from . import (
     views, views_catalogo as vcat, views_ordem as vord,
-    views_planejamento as vpla, views_receita as vrec_receita,
-    views_recebimento as vrec,
+    views_planejamento as vpla, views_processo as vproc,
+    views_receita as vrec_receita, views_recebimento as vrec,
 )
 
 app_name = 'polpa'
@@ -72,6 +72,14 @@ ROTAS_PRONTAS: list = [
     path('producao/ordens/<int:pk>/', vord.OrdemDetailView.as_view(), name='ordem-detail'),
     path('producao/ordens/<int:pk>/mover/', vord.MoverView.as_view(), name='ordem-mover'),
     path('producao/ordens/<int:pk>/concluir/', vord.ConcluirView.as_view(), name='ordem-concluir'),
+
+    # ── Processo produtivo ──────────────────────────────────────────────
+    # "Etapas" é a fila do que falta apontar; "Apontamento" é o mesmo quadro
+    # mostrando também o que já foi apontado, para conferir e corrigir.
+    path('producao/etapas/', vproc.FilaEtapasView.as_view(), name='processo-fila'),
+    path('producao/apontamento/', vproc.ApontamentoView.as_view(), name='processo-apontamento'),
+    path('producao/ordens/<int:pk>/processo/', vproc.ProcessoDaOrdemView.as_view(), name='processo-ordem'),
+    path('producao/etapas/<int:pk>/apontar/', vproc.ApontarEtapaView.as_view(), name='etapa-apontar'),
 
     # ── PPCP ────────────────────────────────────────────────────────────
     # Três olhares sobre a MESMA produção: o que produzir, quando e onde

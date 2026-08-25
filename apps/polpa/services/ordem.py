@@ -78,11 +78,19 @@ class OrdemPolpaService:
             usuario_abertura=usuario,
             observacao=dados.get('observacao') or '',
         )
-        return OrdemPolpa.objects.create(
+        op = OrdemPolpa.objects.create(
             filial=filial, ordem=ordem, receita=receita,
             responsavel=dados.get('responsavel') or usuario,
             observacao=dados.get('observacao') or '',
         )
+
+        # AS ETAPAS NASCEM COM A ORDEM. Criadas sob demanda, a OP mostraria
+        # só o que já foi tocado -- e "não iniciada" ficaria indistinguível
+        # de "não existe", que é justamente o que se quer saber.
+        from apps.polpa.services.processo import ProcessoService
+
+        ProcessoService.preparar(op)
+        return op
 
     @staticmethod
     def _proximo_numero(filial) -> str:

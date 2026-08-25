@@ -1,0 +1,150 @@
+{% extends "_base.html" %}
+{% block title %}{{ title }} — Polpa{% endblock %}
+{% block page_title %}{{ title }}{% endblock %}
+{% block content %}
+
+{% comment %}
+  A FILA DO CHÃO DE FÁBRICA: o que falta apontar, agrupado por ordem. Quem
+  está na linha pega a próxima etapa da SUA ordem, não a mais antiga do
+  sistema — por isso o agrupamento, e não uma lista corrida por data.
+
+  O APONTAMENTO É AQUI MESMO. Abrir a OP, rolar até o processo e voltar é o
+  atrito que faz o registro virar papel na prancheta para digitar no fim do
+  turno — e o fim do turno nunca tem o número certo.
+{% endcomment %}
+<div class="space-y-4" x-data="{ aberta: 0 }">
+
+  <div>
+    <p class="text-sm mb-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+      <a href="{% url 'polpa:hub' %}" :style="temaClaro ? 'color:#3b82f6;' : 'color:#60a5fa;'">Polpa de Frutas</a>
+      <span class="mx-1">›</span>
+      <a href="{% url 'polpa:grupo' 'producao' %}" :style="temaClaro ? 'color:#3b82f6;' : 'color:#60a5fa;'">Produção</a>
+    </p>
+    <h2 class="text-2xl font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">{{ title }}</h2>
+    <p class="text-sm mt-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+      {{ grupos|length }} ordem(ns) com etapa esperando apontamento.
+    </p>
+  </div>
+
+  <form method="get" class="card p-3 flex flex-wrap items-end gap-3">
+    <div>
+      <label class="form-label">Etapa</label>
+      <select name="etapa" class="form-select">
+        <option value="">Todas</option>
+        {% for valor, rotulo in etapas_disponiveis %}
+          <option value="{{ valor }}" {% if filtros.etapa == valor %}selected{% endif %}>{{ rotulo }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div>
+      <label class="form-label">Situação</label>
+      <select name="situacao" class="form-select">
+        <option value="">Pendentes e em andamento</option>
+        {% for valor, rotulo in situacoes %}
+          <option value="{{ valor }}" {% if filtros.situacao == valor %}selected{% endif %}>{{ rotulo }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <button type="submit" class="btn-primary text-sm">Filtrar</button>
+  </form>
+
+  <div class="space-y-3">
+    {% for grupo in grupos %}
+      <div class="card overflow-hidden">
+        <div class="px-4 py-3 border-b flex flex-wrap items-center justify-between gap-2"
+             :style="temaClaro ? 'border-color:#e2e8f0;' : 'border-color:#2a2a2e;'">
+          <div>
+            <a href="{% url 'polpa:processo-ordem' grupo.op.pk %}" class="font-mono font-semibold"
+               :style="temaClaro ? 'color:#2563eb;' : 'color:#60a5fa;'">{{ grupo.op.numero }}</a>
+            <span class="ml-2" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">{{ grupo.op.produto }}</span>
+          </div>
+          <span class="soft-pill is-amber text-xs">{{ grupo.op.get_situacao_display }}</span>
+        </div>
+
+        <table class="w-full text-sm">
+          <tbody>
+            {% for etapa in grupo.etapas %}
+              <tr class="border-b" :style="temaClaro ? 'border-color:#f1f5f9;' : 'border-color:#1e1e22;'">
+                <td class="px-4 py-2.5">
+                  <span class="font-medium" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">{{ etapa.get_etapa_display }}</span>
+                  {% if etapa.operador %}
+                    <span class="block text-xs" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">{{ etapa.operador }}</span>
+                  {% endif %}
+                </td>
+                <td class="px-2 py-2.5 text-right text-xs" :style="temaClaro ? 'color:#374151;' : 'color:#cbd5e1;'">
+                  {% if etapa.quantidade_saida is not None %}saiu {{ etapa.quantidade_saida|floatformat:0 }}{% endif %}
+                  {% if etapa.perda %}
+                    <span class="block" style="color:#d97706;">−{{ etapa.perda|floatformat:0 }}</span>
+                  {% endif %}
+                </td>
+                <td class="px-2 py-2.5 text-right">
+                  <span class="soft-pill text-xs"
+                        :class="'{{ etapa.situacao }}' === 'concluida' ? 'is-green' : 'is-slate'">
+                    {{ etapa.get_situacao_display }}
+                  </span>
+                </td>
+                <td class="px-4 py-2.5 text-right">
+                  {% if pode_agir %}
+                    <button type="button" class="text-xs font-semibold underline"
+                            :style="temaClaro ? 'color:#2563eb;' : 'color:#60a5fa;'"
+                            @click="aberta = aberta === {{ etapa.pk }} ? 0 : {{ etapa.pk }}">
+                      apontar
+                    </button>
+                  {% endif %}
+                </td>
+              </tr>
+              {% if pode_agir %}
+                <tr x-show="aberta === {{ etapa.pk }}" x-cloak>
+                  <td colspan="4" class="px-4 pb-3"
+                      :style="temaClaro ? 'background:#f8fafc;' : 'background:#131316;'">
+                    <form method="post" action="{% url 'polpa:etapa-apontar' etapa.pk %}"
+                          class="grid sm:grid-cols-5 gap-3 items-end pt-3">
+                      {% csrf_token %}
+                      <input type="hidden" name="voltar" value="{{ request.get_full_path }}">
+                      <div>
+                        <label class="form-label">Entrou</label>
+                        <input type="number" step="0.001" min="0" name="quantidade_entrada"
+                               class="form-input w-full" value="{{ etapa.quantidade_entrada|default_if_none:'' }}">
+                      </div>
+                      <div>
+                        <label class="form-label">Saiu</label>
+                        <input type="number" step="0.001" min="0" name="quantidade_saida"
+                               class="form-input w-full" value="{{ etapa.quantidade_saida|default_if_none:'' }}">
+                      </div>
+                      <div>
+                        <label class="form-label">
+                          °C{% if etapa.exige_temperatura %} <span style="color:#d97706;">*</span>{% endif %}
+                        </label>
+                        <input type="number" step="0.01" name="temperatura" class="form-input w-full"
+                               value="{{ etapa.temperatura|default_if_none:'' }}">
+                      </div>
+                      <div>
+                        <label class="form-label">Equipamento</label>
+                        <select name="equipamento" class="form-select w-full">
+                          <option value="">—</option>
+                          {% for r in recursos %}
+                            <option value="{{ r.pk }}" {% if etapa.equipamento_id == r.pk %}selected{% endif %}>{{ r.nome }}</option>
+                          {% endfor %}
+                        </select>
+                      </div>
+                      <button type="submit" class="btn-primary text-sm">Gravar</button>
+                    </form>
+                  </td>
+                </tr>
+              {% endif %}
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    {% empty %}
+      <div class="card p-10 text-center">
+        <p class="text-sm" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+          Nenhuma etapa esperando apontamento. As etapas nascem com a ordem —
+          abra uma ordem de produção para elas aparecerem aqui.
+        </p>
+      </div>
+    {% endfor %}
+  </div>
+
+</div>
+{% endblock %}
