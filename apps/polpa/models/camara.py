@@ -120,9 +120,17 @@ class LoteArmazenado(FilialScopedModel):
     camara = models.ForeignKey(
         Camara, on_delete=models.PROTECT, related_name='lotes',
     )
+    # A POSIÇÃO ESTRUTURADA quando a câmara foi mapeada; o texto livre
+    # quando não. Obrigar o cadastro de cada prateleira antes de guardar o
+    # primeiro lote trocaria um problema real (não saber onde está) por um
+    # pior (não registrar nada).
+    posicao = models.ForeignKey(
+        'polpa.Posicao', on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='lotes',
+    )
     endereco = models.CharField(
         max_length=40, blank=True,
-        help_text='Rua, bloco, prateleira — como a câmara é organizada.',
+        help_text='Endereço escrito à mão, para câmara ainda não mapeada.',
     )
 
     # A TEMPERATURA DA ENTRADA, medida na hora de guardar. Não é a da
@@ -166,6 +174,13 @@ class LoteArmazenado(FilialScopedModel):
         return ((self.lote.quantidade_atual or ZERO) * unitario).quantize(
             Decimal('0.001')
         )
+
+    @property
+    def onde(self) -> str:
+        """O endereço legível: a posição cadastrada ou o texto livre."""
+        if self.posicao_id:
+            return self.posicao.codigo or self.camara.nome
+        return self.endereco
 
     @property
     def dias_para_vencer(self) -> int | None:

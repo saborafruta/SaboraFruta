@@ -119,6 +119,8 @@ GRUPOS: tuple[Grupo, ...] = (
                  'Cadastro das câmaras, com faixa de temperatura e capacidade.'),
             Item('temperatura', 'Registro de temperatura',
                  'Leituras por câmara, com o desvio marcado.'),
+            Item('alertas', 'Alertas da cadeia de frio',
+                 'Temperatura fora, vencimento, capacidade e lote bloqueado.'),
             Item('tunel', 'Túnel de congelamento',
                  'Entrada, tempo e saída de cada carga no túnel.'),
             Item('estoque-frio', 'Estoque congelado',

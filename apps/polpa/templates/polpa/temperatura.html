@@ -1,0 +1,135 @@
+{% extends "_base.html" %}
+{% block title %}{{ title }} — Polpa{% endblock %}
+{% block page_title %}{{ title }}{% endblock %}
+{% block content %}
+
+{% comment %}
+  A TEMPERATURA ATUAL É A ÚLTIMA LEITURA, com a hora dela ao lado. Um campo
+  "temperatura atual" que alguém edita guarda o número digitado por último e
+  não diz quando — e "está a -18°C" sem data é uma afirmação sobre o passado
+  que se lê como presente.
+
+  CÂMARA SEM LEITURA NÃO É "TUDO BEM": é câmara que ninguém mede, e aparece
+  com o mesmo destaque de um desvio.
+{% endcomment %}
+<div class="space-y-4">
+
+  <div>
+    <p class="text-sm mb-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+      <a href="{% url 'polpa:hub' %}" :style="temaClaro ? 'color:#3b82f6;' : 'color:#60a5fa;'">Polpa de Frutas</a>
+      <span class="mx-1">›</span>
+      <a href="{% url 'polpa:grupo' 'frio' %}" :style="temaClaro ? 'color:#3b82f6;' : 'color:#60a5fa;'">Cadeia de frio</a>
+    </p>
+    <h2 class="text-2xl font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">Registro de temperatura</h2>
+    <p class="text-sm mt-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+      Cada câmara com a última medição e o quanto ela está fora da faixa.
+    </p>
+  </div>
+
+  {# ── O painel ───────────────────────────────────────────────────── #}
+  <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+    {% for linha in painel %}
+      <div class="card p-4"
+           style="{% if linha.fora_da_faixa %}border:1px solid #dc2626;{% elif linha.sem_leitura %}border:1px solid #d97706;{% endif %}">
+        <p class="text-sm font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
+          {{ linha.camara.nome }}
+        </p>
+        {% if linha.leitura %}
+          <p class="text-2xl font-bold mt-1"
+             style="color:{% if linha.fora_da_faixa %}#dc2626{% else %}#059669{% endif %};">
+            {{ linha.leitura.temperatura }}°C
+          </p>
+          <p class="text-[11px] mt-0.5" :style="temaClaro ? 'color:#94a3b8;' : 'color:#71717a;'">
+            {{ linha.leitura.medida_em|date:"d/m H:i" }}
+            {% if linha.leitura.medido_por %} · {{ linha.leitura.medido_por.nome }}{% endif %}
+          </p>
+          {% if linha.desvio %}
+            <p class="text-xs mt-1 font-semibold" style="color:#dc2626;">
+              {{ linha.desvio }}°C fora da faixa {{ linha.camara.faixa }}
+            </p>
+          {% elif linha.camara.faixa %}
+            <p class="text-xs mt-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+              dentro de {{ linha.camara.faixa }}
+            </p>
+          {% endif %}
+        {% else %}
+          <p class="text-sm mt-2" style="color:#d97706;">
+            Nunca medida — ninguém sabe a que temperatura o produto está.
+          </p>
+        {% endif %}
+        <a href="{% url 'polpa:camara-mapa' linha.camara.pk %}"
+           class="text-xs underline mt-2 inline-block"
+           :style="temaClaro ? 'color:#2563eb;' : 'color:#60a5fa;'">ver mapa</a>
+      </div>
+    {% empty %}
+      <div class="card p-8 text-center sm:col-span-2 lg:col-span-4">
+        <p class="text-sm" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+          Nenhuma câmara cadastrada.
+          <a href="{% url 'polpa:camara-list' %}" class="underline">cadastrar</a>
+        </p>
+      </div>
+    {% endfor %}
+  </div>
+
+  {# ── Registrar ──────────────────────────────────────────────────── #}
+  {% if pode_agir %}
+    <div class="card p-4">
+      <h3 class="text-sm font-semibold mb-3" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
+        Registrar leitura
+      </h3>
+      <form method="post" class="grid sm:grid-cols-4 gap-3 items-end">
+        {% csrf_token %}
+        {% for campo in form %}
+          <div>
+            <label class="form-label" for="{{ campo.id_for_label }}">
+              {{ campo.label }}{% if campo.name == 'medida_em' %} <span class="opacity-60">(vazio = agora)</span>{% endif %}
+            </label>
+            {{ campo }}
+          </div>
+        {% endfor %}
+        <button type="submit" class="btn-primary">Gravar leitura</button>
+      </form>
+    </div>
+  {% endif %}
+
+  {# ── Histórico ──────────────────────────────────────────────────── #}
+  <div class="card overflow-hidden">
+    <div class="px-4 py-3 border-b" :style="temaClaro ? 'border-color:#e2e8f0;' : 'border-color:#2a2a2e;'">
+      <h3 class="text-sm font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">Últimas leituras</h3>
+      <p class="text-xs mt-0.5" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+        É o registro que a fiscalização pede — e o que explica um lote que
+        chegou mole no cliente.
+      </p>
+    </div>
+    <table class="w-full text-sm">
+      <tbody>
+        {% for l in leituras %}
+          <tr class="border-b" :style="temaClaro ? 'border-color:#f1f5f9;' : 'border-color:#1e1e22;'">
+            <td class="px-4 py-2.5" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">{{ l.camara.nome }}</td>
+            <td class="px-4 py-2.5 text-right font-semibold"
+                style="color:{% if l.fora_da_faixa %}#dc2626{% else %}#059669{% endif %};">
+              {{ l.temperatura }}°C
+              {% if l.desvio %}
+                <span class="block text-[11px] font-normal">{{ l.desvio }}°C fora</span>
+              {% endif %}
+            </td>
+            <td class="px-4 py-2.5 text-xs text-right" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+              {{ l.medida_em|date:"d/m/Y H:i" }}
+              {% if l.medido_por %}<span class="block">{{ l.medido_por.nome }}</span>{% endif %}
+            </td>
+            <td class="px-4 py-2.5 text-xs" :style="temaClaro ? 'color:#94a3b8;' : 'color:#71717a;'">{{ l.observacao }}</td>
+          </tr>
+        {% empty %}
+          <tr>
+            <td colspan="4" class="px-4 py-8 text-center text-sm"
+                :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+              Nenhuma leitura registrada ainda.
+            </td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+</div>
+{% endblock %}

@@ -3,6 +3,7 @@ from .catalogo import FichaProduto
 from .custo import CustoReceita
 from .fruta import Fruta
 from .ordem import OrdemPolpa
+from .posicao import LeituraTemperatura, Posicao
 from .processo import ApontamentoEtapa, Etapa
 from .receita import EtapaReceita, Receita
 from .recebimento import Recebimento
@@ -12,7 +13,7 @@ from .subproduto import Subproduto
 
 __all__ = [
     'ApontamentoEtapa', 'Camara', 'CustoReceita', 'Etapa', 'EtapaReceita',
-    'LoteArmazenado',
+    'LeituraTemperatura', 'LoteArmazenado', 'Posicao',
     'FichaProduto', 'Fruta',
     'OrdemPolpa', 'Receita', 'Recebimento', 'Recurso', 'ReservaInsumo',
     'Subproduto',

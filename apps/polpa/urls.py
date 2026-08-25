@@ -17,7 +17,7 @@ a página dá 404 (o `resolve` acha pelo padrão).
 from django.urls import path
 
 from . import (
-    views_armazenagem as varm,
+    views_armazenagem as varm, views_frio as vfrio,
     views, views_catalogo as vcat, views_ordem as vord,
     views_planejamento as vpla, views_processo as vproc,
     views_subproduto as vsub,
@@ -94,7 +94,12 @@ ROTAS_PRONTAS: list = [
     path('frio/estoque-frio/', varm.EstoqueFrioView.as_view(), name='estoque-frio'),
     path('frio/estoque-frio/<int:pk>/guardar/', varm.GuardarLoteView.as_view(), name='lote-guardar'),
     path('frio/estoque-frio/<int:pk>/bloquear/', varm.BloquearLoteView.as_view(), name='lote-bloquear'),
+    path('frio/temperatura/', vfrio.TemperaturaView.as_view(), name='temperatura'),
+    path('frio/alertas/', vfrio.AlertasFrioView.as_view(), name='alertas-frio'),
     path('frio/camaras/', varm.CamaraListView.as_view(), name='camara-list'),
+    path('frio/camaras/<int:pk>/mapa/', vfrio.MapaCamaraView.as_view(), name='camara-mapa'),
+    path('frio/camaras/<int:pk>/posicoes/', vfrio.PosicaoCreateView.as_view(), name='posicao-create'),
+    path('frio/lotes/<int:pk>/mover/', vfrio.MoverLoteView.as_view(), name='lote-mover'),
     path('frio/camaras/nova/', varm.CamaraFormView.as_view(), name='camara-create'),
     path('frio/camaras/<int:pk>/editar/', varm.CamaraFormView.as_view(), name='camara-update'),
     path('indicadores/validade/', varm.ValidadeView.as_view(), name='validade'),

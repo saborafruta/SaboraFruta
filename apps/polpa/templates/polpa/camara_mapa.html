@@ -1,0 +1,128 @@
+{% extends "_base.html" %}
+{% block title %}{{ title }} — Polpa{% endblock %}
+{% block page_title %}{{ title }}{% endblock %}
+{% block content %}
+
+{% comment %}
+  O MAPA DA CÂMARA responde duas perguntas de quem está com o pallet na mão:
+  "onde tem lugar" e "o que está aqui". LIVRE É INFORMAÇÃO — uma lista só do
+  que está ocupado obrigaria a procurar de porta aberta, e cada minuto de
+  porta aberta é temperatura subindo em tudo lá dentro.
+{% endcomment %}
+<div class="space-y-4" x-data="{ movendo: 0, criando: false }">
+
+  <div class="flex flex-wrap items-start justify-between gap-3">
+    <div>
+      <p class="text-sm mb-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+        <a href="{% url 'polpa:camara-list' %}" :style="temaClaro ? 'color:#3b82f6;' : 'color:#60a5fa;'">‹ Câmaras frias</a>
+      </p>
+      <h2 class="text-2xl font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">{{ camara.nome }}</h2>
+      <p class="text-sm mt-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+        {{ camara.get_tipo_display }}
+        {% if camara.faixa %} · faixa {{ camara.faixa }}{% endif %}
+        {% if leitura %}
+          · última leitura
+          <strong style="color:{% if leitura.fora_da_faixa %}#dc2626{% else %}#059669{% endif %};">
+            {{ leitura.temperatura }}°C
+          </strong>
+          em {{ leitura.medida_em|date:"d/m H:i" }}
+        {% else %}
+          · <span style="color:#d97706;">nunca medida</span>
+        {% endif %}
+      </p>
+    </div>
+    <div class="flex flex-wrap gap-2">
+      <a href="{% url 'polpa:temperatura' %}" class="btn-secondary text-sm">Temperatura</a>
+      {% if pode_agir %}
+        <button type="button" class="btn-primary text-sm" @click="criando = !criando">
+          + Nova posição
+        </button>
+      {% endif %}
+    </div>
+  </div>
+
+  {% if pode_agir %}
+    <div x-show="criando" x-cloak class="card p-4">
+      <form method="post" action="{% url 'polpa:posicao-create' camara.pk %}"
+            class="grid sm:grid-cols-4 gap-3 items-end">
+        {% csrf_token %}
+        {% for campo in form %}
+          {% if campo.name != 'camara' and campo.name != 'ativo' %}
+            <div>
+              <label class="form-label" for="{{ campo.id_for_label }}">{{ campo.label }}</label>
+              {{ campo }}
+            </div>
+          {% endif %}
+        {% endfor %}
+        <input type="hidden" name="camara" value="{{ camara.pk }}">
+        <input type="hidden" name="ativo" value="on">
+        <button type="submit" class="btn-primary">Criar posição</button>
+      </form>
+      <p class="text-xs mt-2" :style="temaClaro ? 'color:#94a3b8;' : 'color:#71717a;'">
+        Preencha só os níveis que a câmara tem — corredor, rua, prateleira e
+        posição são texto porque no chão está escrito "Rua 3", não "3".
+      </p>
+    </div>
+  {% endif %}
+
+  <div class="card overflow-hidden">
+    <table class="w-full text-sm">
+      <thead>
+        <tr class="border-b" :style="temaClaro ? 'border-color:#e2e8f0;' : 'border-color:#2a2a2e;'">
+          <th class="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wide"
+              :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Posição</th>
+          <th class="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wide"
+              :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">O que está aqui</th>
+          <th class="text-right px-4 py-3 text-xs font-semibold uppercase tracking-wide"
+              :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Ocupação</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for linha in linhas %}
+          <tr class="border-b" :style="temaClaro ? 'border-color:#f1f5f9;' : 'border-color:#1e1e22;'">
+            <td class="px-4 py-3">
+              <span class="font-mono font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
+                {{ linha.posicao.codigo }}
+              </span>
+              {% if linha.posicao.observacao %}
+                <span class="block text-xs" :style="temaClaro ? 'color:#94a3b8;' : 'color:#71717a;'">{{ linha.posicao.observacao }}</span>
+              {% endif %}
+            </td>
+            <td class="px-4 py-3 text-xs">
+              {% for armazenado in linha.lotes %}
+                <span class="block" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
+                  <span class="font-mono">{{ armazenado.lote.numero_lote }}</span>
+                  · {{ armazenado.lote.produto }}
+                  · {{ armazenado.lote.quantidade_atual|floatformat:0 }} un
+                </span>
+              {% empty %}
+                <span style="color:#059669;">livre</span>
+              {% endfor %}
+            </td>
+            <td class="px-4 py-3 text-right text-xs">
+              {{ linha.peso|floatformat:0 }} kg
+              {% if linha.ocupacao is not None %}
+                <span class="block font-semibold"
+                      style="color:{% if linha.ocupacao > 100 %}#dc2626{% else %}#059669{% endif %};">
+                  {{ linha.ocupacao }}%
+                </span>
+              {% endif %}
+            </td>
+          </tr>
+        {% empty %}
+          <tr>
+            <td colspan="3" class="px-4 py-10 text-center">
+              <p class="text-sm" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+                Câmara ainda não mapeada. Sem posições, o lote é guardado com
+                endereço escrito à mão — funciona, mas ninguém consegue
+                perguntar "o que está na rua 3".
+              </p>
+            </td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+</div>
+{% endblock %}

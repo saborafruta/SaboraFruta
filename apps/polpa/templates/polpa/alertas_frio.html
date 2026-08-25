@@ -1,0 +1,178 @@
+{% extends "_base.html" %}
+{% block title %}{{ title }} — Polpa{% endblock %}
+{% block page_title %}{{ title }}{% endblock %}
+{% block content %}
+
+{% comment %}
+  SÃO LISTAS, E NÃO CONTADORES. "3 problemas" não faz ninguém se mexer; "o
+  lote PA-77 vence em 4 dias na Câmara 1" faz — e é a diferença entre um
+  painel que se olha e um que se ignora.
+
+  CADA ALERTA LEVA AO LUGAR DE RESOLVER. Alerta que só informa vira ruído na
+  segunda semana.
+{% endcomment %}
+<div class="space-y-4">
+
+  <div>
+    <p class="text-sm mb-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+      <a href="{% url 'polpa:hub' %}" :style="temaClaro ? 'color:#3b82f6;' : 'color:#60a5fa;'">Polpa de Frutas</a>
+      <span class="mx-1">›</span>
+      <a href="{% url 'polpa:grupo' 'frio' %}" :style="temaClaro ? 'color:#3b82f6;' : 'color:#60a5fa;'">Cadeia de frio</a>
+    </p>
+    <h2 class="text-2xl font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">Alertas da cadeia de frio</h2>
+    <p class="text-sm mt-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+      {% if resumo.total %}
+        {{ resumo.total }} ponto(s) pedindo decisão.
+      {% else %}
+        Nada pendente na cadeia de frio agora.
+      {% endif %}
+    </p>
+  </div>
+
+  {# ── 1. Temperatura ─────────────────────────────────────────────── #}
+  <div class="card overflow-hidden" {% if resumo.temperatura %}style="border-left:3px solid #dc2626;"{% endif %}>
+    <div class="px-4 py-3 border-b flex items-center justify-between gap-2"
+         :style="temaClaro ? 'border-color:#e2e8f0;' : 'border-color:#2a2a2e;'">
+      <h3 class="text-sm font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
+        Temperatura fora do padrão
+      </h3>
+      <a href="{% url 'polpa:temperatura' %}" class="text-xs underline"
+         :style="temaClaro ? 'color:#2563eb;' : 'color:#60a5fa;'">registrar leitura</a>
+    </div>
+    <table class="w-full text-sm">
+      <tbody>
+        {% for linha in alertas.temperatura %}
+          <tr class="border-b" :style="temaClaro ? 'border-color:#f1f5f9;' : 'border-color:#1e1e22;'">
+            <td class="px-4 py-2.5" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">{{ linha.camara.nome }}</td>
+            <td class="px-4 py-2.5 text-right">
+              {% if linha.sem_leitura %}
+                <span class="text-xs" style="color:#d97706;">nunca medida</span>
+              {% else %}
+                <span class="font-semibold" style="color:#dc2626;">
+                  {{ linha.leitura.temperatura }}°C
+                </span>
+                <span class="block text-[11px]" style="color:#dc2626;">
+                  {{ linha.desvio }}°C fora de {{ linha.camara.faixa }}
+                </span>
+              {% endif %}
+            </td>
+            <td class="px-4 py-2.5 text-xs text-right" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+              {% if linha.leitura %}{{ linha.leitura.medida_em|date:"d/m H:i" }}{% endif %}
+            </td>
+          </tr>
+        {% empty %}
+          <tr><td class="px-4 py-4 text-sm" style="color:#059669;">Todas as câmaras dentro da faixa.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  {# ── 2. Vencimento ──────────────────────────────────────────────── #}
+  <div class="card overflow-hidden" {% if resumo.vencimento %}style="border-left:3px solid #d97706;"{% endif %}>
+    <div class="px-4 py-3 border-b flex items-center justify-between gap-2"
+         :style="temaClaro ? 'border-color:#e2e8f0;' : 'border-color:#2a2a2e;'">
+      <h3 class="text-sm font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
+        Produto vencido ou perto do vencimento
+      </h3>
+      <a href="{% url 'polpa:validade' %}" class="text-xs underline"
+         :style="temaClaro ? 'color:#2563eb;' : 'color:#60a5fa;'">ver validade</a>
+    </div>
+    <table class="w-full text-sm">
+      <tbody>
+        {% for linha in alertas.vencimento %}
+          <tr class="border-b" :style="temaClaro ? 'border-color:#f1f5f9;' : 'border-color:#1e1e22;'">
+            <td class="px-4 py-2.5">
+              <span class="font-mono font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">{{ linha.lote.numero_lote }}</span>
+              <span class="block text-xs" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">{{ linha.lote.produto }}</span>
+            </td>
+            <td class="px-4 py-2.5 text-right text-xs" :style="temaClaro ? 'color:#374151;' : 'color:#cbd5e1;'">
+              {% if linha.camara %}{{ linha.camara.nome }}{% if linha.endereco %} · {{ linha.endereco }}{% endif %}
+              {% else %}<span style="color:#d97706;">sem endereço</span>{% endif %}
+            </td>
+            <td class="px-4 py-2.5 text-right text-xs">
+              <span class="font-semibold"
+                    style="color:{% if linha.situacao == 'vencido' %}#dc2626{% else %}#d97706{% endif %};">
+                {% if linha.situacao == 'vencido' %}vencido{% else %}faltam {{ linha.dias }} dia(s){% endif %}
+              </span>
+              <span class="block" :style="temaClaro ? 'color:#94a3b8;' : 'color:#71717a;'">
+                {{ linha.lote.quantidade_atual|floatformat:0 }} un
+              </span>
+            </td>
+          </tr>
+        {% empty %}
+          <tr><td class="px-4 py-4 text-sm" style="color:#059669;">Nada vencendo nos próximos {{ resumo.janela }} dias.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  {# ── 3. Capacidade ──────────────────────────────────────────────── #}
+  <div class="card overflow-hidden" {% if resumo.capacidade %}style="border-left:3px solid #dc2626;"{% endif %}>
+    <div class="px-4 py-3 border-b" :style="temaClaro ? 'border-color:#e2e8f0;' : 'border-color:#2a2a2e;'">
+      <h3 class="text-sm font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
+        Câmara acima da capacidade
+      </h3>
+      <p class="text-xs mt-0.5" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+        {% comment %}
+          Câmara sem capacidade cadastrada NÃO entra: não dá para afirmar que
+          estourou o que ninguém mediu, e alerta baseado em palpite é o que
+          faz a fábrica desligar os alertas.
+        {% endcomment %}
+        Só entram as câmaras com capacidade cadastrada.
+      </p>
+    </div>
+    <table class="w-full text-sm">
+      <tbody>
+        {% for linha in alertas.capacidade %}
+          <tr class="border-b" :style="temaClaro ? 'border-color:#f1f5f9;' : 'border-color:#1e1e22;'">
+            <td class="px-4 py-2.5" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">{{ linha.camara.nome }}</td>
+            <td class="px-4 py-2.5 text-right" :style="temaClaro ? 'color:#374151;' : 'color:#cbd5e1;'">
+              {{ linha.peso|floatformat:0 }} kg de {{ linha.camara.capacidade_kg|floatformat:0 }} kg
+            </td>
+            <td class="px-4 py-2.5 text-right font-bold" style="color:#dc2626;">{{ linha.ocupacao }}%</td>
+          </tr>
+        {% empty %}
+          <tr><td class="px-4 py-4 text-sm" style="color:#059669;">Nenhuma câmara acima da capacidade.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  {# ── 4. Bloqueados ──────────────────────────────────────────────── #}
+  <div class="card overflow-hidden" {% if resumo.bloqueados %}style="border-left:3px solid #64748b;"{% endif %}>
+    <div class="px-4 py-3 border-b" :style="temaClaro ? 'border-color:#e2e8f0;' : 'border-color:#2a2a2e;'">
+      <h3 class="text-sm font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
+        Lote bloqueado ocupando câmara
+      </h3>
+      <p class="text-xs mt-0.5" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+        Bloqueado com saldo é espaço parado esperando decisão: descarte,
+        reprocesso ou liberação.
+      </p>
+    </div>
+    <table class="w-full text-sm">
+      <tbody>
+        {% for lote in alertas.bloqueados %}
+          <tr class="border-b" :style="temaClaro ? 'border-color:#f1f5f9;' : 'border-color:#1e1e22;'">
+            <td class="px-4 py-2.5">
+              <span class="font-mono font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">{{ lote.numero_lote }}</span>
+              <span class="block text-xs" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">{{ lote.produto }}</span>
+            </td>
+            <td class="px-4 py-2.5 text-right text-xs" :style="temaClaro ? 'color:#374151;' : 'color:#cbd5e1;'">
+              {{ lote.quantidade_atual|floatformat:0 }} un
+              {% if lote.armazenamento_polpa %}
+                <span class="block">{{ lote.armazenamento_polpa.camara.nome }}</span>
+              {% endif %}
+            </td>
+            <td class="px-4 py-2.5 text-xs" :style="temaClaro ? 'color:#94a3b8;' : 'color:#71717a;'">
+              {{ lote.motivo_bloqueio }}
+            </td>
+          </tr>
+        {% empty %}
+          <tr><td class="px-4 py-4 text-sm" style="color:#059669;">Nenhum lote bloqueado ocupando espaço.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+</div>
+{% endblock %}
