@@ -9,7 +9,9 @@ A LISTA E' DELIBERADA. O recebimento entra porque e' o registro que decide
 quanto se paga ao produtor e com que custo a fruta entra -- exatamente o
 que alguem vai querer conferir seis meses depois. A ficha da fruta entra
 porque e' a regua que aprova ou recusa carga: mudar o Brix minimo em
-silencio muda o que a fabrica aceita.
+silencio muda o que a fabrica aceita. E a ficha do produto entra porque
+mudar a validade em dias muda o vencimento de tudo que for produzido dali
+para a frente.
 """
 from django.apps import AppConfig
 
@@ -22,7 +24,7 @@ class PolpaConfig(AppConfig):
     def ready(self):
         from apps.core.signals import register_for_audit
 
-        from .models import Fruta, Recebimento
+        from .models import FichaProduto, Fruta, Recebimento
 
-        for modelo in (Fruta, Recebimento):
+        for modelo in (FichaProduto, Fruta, Recebimento):
             register_for_audit(modelo, modulo='polpa')

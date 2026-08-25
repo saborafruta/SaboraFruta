@@ -16,7 +16,7 @@ a página dá 404 (o `resolve` acha pelo padrão).
 """
 from django.urls import path
 
-from . import views, views_recebimento as vrec
+from . import views, views_catalogo as vcat, views_recebimento as vrec
 
 app_name = 'polpa'
 
@@ -36,6 +36,18 @@ ROTAS_PRONTAS: list = [
     # A lista de recusas é a MESMA fila, filtrada — e não uma tela paralela
     # que amanhã mostraria outra contagem da mesma coisa.
     path('recebimento/recusas/', vrec.RecusasView.as_view(), name='recebimento-recusas'),
+
+    # ── Catálogo da fábrica ─────────────────────────────────────────────
+    # Três itens do menu, UMA tela: "Produtos" abre nos acabados,
+    # "Embalagens" nos materiais de embalagem, e a lista completa fica em
+    # `catalogo-list`. São o mesmo cadastro com exigências diferentes, e
+    # telas separadas dariam três lugares para procurar o mesmo item.
+    path('formulacao/produtos/', vcat.ProdutosAcabadosView.as_view(), name='produto-acabado-list'),
+    path('formulacao/embalagens/', vcat.EmbalagensView.as_view(), name='embalagem-list'),
+    path('formulacao/materias-primas/', vcat.MateriasPrimasView.as_view(), name='materia-prima-list'),
+    path('catalogo/', vcat.CatalogoListView.as_view(), name='catalogo-list'),
+    path('catalogo/novo/', vcat.CatalogoFormView.as_view(), name='catalogo-create'),
+    path('catalogo/<int:pk>/editar/', vcat.CatalogoFormView.as_view(), name='catalogo-update'),
 
     # ── Cadastro das frutas ─────────────────────────────────────────────
     path('formulacao/rendimento/', vrec.FrutaListView.as_view(), name='fruta-list'),

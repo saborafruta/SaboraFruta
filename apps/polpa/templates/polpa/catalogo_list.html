@@ -1,0 +1,183 @@
+{% extends "_base.html" %}
+{% block title %}{{ title }} — Polpa{% endblock %}
+{% block page_title %}{{ title }}{% endblock %}
+{% block content %}
+
+{% comment %}
+  UMA TELA PARA AS TRÊS CLASSES. Matéria-prima, embalagem e acabado são o
+  mesmo cadastro com exigências diferentes; três telas separadas dariam três
+  lugares para procurar um item cujo tipo a pessoa não lembra — que é o caso
+  de quem acabou de receber uma nota com quinze itens.
+
+  O NÚMERO QUE IMPORTA É O DE INCOMPLETOS. Catálogo cheio não diz nada se
+  metade dos acabados está sem validade: é esse item que gera lote sem
+  vencimento quando a produção rodar.
+{% endcomment %}
+<div class="space-y-4">
+
+  <div class="flex flex-wrap items-start justify-between gap-3">
+    <div>
+      <p class="text-sm mb-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+        <a href="{% url 'polpa:hub' %}" :style="temaClaro ? 'color:#3b82f6;' : 'color:#60a5fa;'">Polpa de Frutas</a>
+        <span class="mx-1">›</span>
+        <a href="{% url 'polpa:grupo' 'formulacao' %}" :style="temaClaro ? 'color:#3b82f6;' : 'color:#60a5fa;'">Formulação</a>
+      </p>
+      <h2 class="text-2xl font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">Produtos e insumos</h2>
+      <p class="text-sm mt-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+        {{ resumo.total }} item(ns) na fábrica
+        {% if resumo.pendentes %}
+          · <span style="color:#d97706;font-weight:600;">{{ resumo.pendentes }} com cadastro incompleto</span>
+        {% endif %}
+        {% if sem_ficha %}
+          · <span style="color:#d97706;">{{ sem_ficha }} produto(s) do ERP ainda sem ficha da fábrica</span>
+        {% endif %}
+      </p>
+    </div>
+    {% if pode_agir %}
+      <a href="{% url 'polpa:catalogo-create' %}" class="btn-primary text-sm">+ Novo item</a>
+    {% endif %}
+  </div>
+
+  {# ── Abas por classe ────────────────────────────────────────────── #}
+  <div class="flex flex-wrap gap-2">
+    <a href="{% url 'polpa:catalogo-list' %}"
+       class="px-3 py-2 rounded-lg text-sm font-semibold"
+       :style="'{{ classe }}' === ''
+         ? (temaClaro ? 'background:#2563eb; color:#fff;' : 'background:#2563eb; color:#fff;')
+         : (temaClaro ? 'background:#f1f5f9; color:#334155;' : 'background:#1e1e22; color:#cbd5e1;')">
+      Todos <span class="opacity-70">{{ resumo.total }}</span>
+    </a>
+    {% for valor, rotulo in classes %}
+      {% with dados=resumo.por_classe|default_if_none:'' %}
+        <a href="?classe={{ valor }}"
+           class="px-3 py-2 rounded-lg text-sm font-semibold"
+           :style="'{{ classe }}' === '{{ valor }}'
+             ? 'background:#2563eb; color:#fff;'
+             : (temaClaro ? 'background:#f1f5f9; color:#334155;' : 'background:#1e1e22; color:#cbd5e1;')">
+          {{ rotulo }}
+        </a>
+      {% endwith %}
+    {% endfor %}
+  </div>
+
+  <form method="get" class="card p-3 flex flex-wrap items-end gap-3">
+    <input type="hidden" name="classe" value="{{ classe }}">
+    <div class="flex-1 min-w-[200px]">
+      <label class="form-label">Descrição, código, barras ou sabor</label>
+      <input type="text" name="busca" value="{{ busca }}" class="form-input w-full"
+             autocomplete="off" placeholder="Ex.: polpa de manga, 7891234567890">
+    </div>
+    {% if tipos %}
+      <div>
+        <label class="form-label">Tipo</label>
+        <select name="tipo" class="form-select">
+          <option value="">Todos</option>
+          {% for t in tipos %}
+            <option value="{{ t.value }}" {% if tipo == t.value %}selected{% endif %}>{{ t.label }}</option>
+          {% endfor %}
+        </select>
+      </div>
+    {% endif %}
+    <button type="submit" class="btn-primary text-sm">Filtrar</button>
+    {% if busca or tipo %}
+      <a href="?classe={{ classe }}" class="btn-secondary text-sm">Limpar</a>
+    {% endif %}
+  </form>
+
+  <div class="card overflow-hidden">
+    <div class="overflow-x-auto">
+      <table class="w-full text-sm">
+        <thead>
+          <tr class="border-b" :style="temaClaro ? 'border-color:#e2e8f0;' : 'border-color:#2a2a2e;'">
+            <th class="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wide"
+                :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Item</th>
+            <th class="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wide"
+                :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Tipo</th>
+            <th class="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wide"
+                :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Embalagem</th>
+            <th class="text-center px-4 py-3 text-xs font-semibold uppercase tracking-wide"
+                :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Validade</th>
+            <th class="text-center px-4 py-3 text-xs font-semibold uppercase tracking-wide"
+                :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Conservação</th>
+            <th class="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wide"
+                :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Cadastro</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for linha in linhas %}
+            <tr class="border-b" :style="temaClaro ? 'border-color:#f1f5f9;' : 'border-color:#1e1e22;'">
+              <td class="px-4 py-3">
+                <a href="{% url 'polpa:catalogo-update' linha.ficha.pk %}" class="font-semibold"
+                   :style="temaClaro ? 'color:#2563eb;' : 'color:#60a5fa;'">{{ linha.ficha.nome_completo }}</a>
+                <span class="block text-xs" :style="temaClaro ? 'color:#94a3b8;' : 'color:#71717a;'">
+                  {% if linha.ficha.produto.codigo %}{{ linha.ficha.produto.codigo }} · {% endif %}
+                  {% if linha.ficha.produto.codigo_barras %}{{ linha.ficha.produto.codigo_barras }}{% else %}sem barras{% endif %}
+                  {% if linha.ficha.produto.unidade_medida %} · {{ linha.ficha.produto.unidade_medida.sigla }}{% endif %}
+                </span>
+              </td>
+              <td class="px-4 py-3" :style="temaClaro ? 'color:#374151;' : 'color:#cbd5e1;'">
+                {{ linha.ficha.get_tipo_display }}
+              </td>
+              <td class="px-4 py-3 text-xs" :style="temaClaro ? 'color:#374151;' : 'color:#cbd5e1;'">
+                {% if linha.ficha.produto.tipo_embalagem %}{{ linha.ficha.produto.tipo_embalagem }}{% endif %}
+                {% if linha.ficha.produto.quantidade_por_embalagem %}
+                  <span class="block">{{ linha.ficha.produto.quantidade_por_embalagem|floatformat:0 }} por caixa</span>
+                {% endif %}
+                {% if linha.ficha.caixas_por_pallet %}
+                  <span class="block">{{ linha.ficha.caixas_por_pallet }} caixas/pallet</span>
+                {% endif %}
+              </td>
+              <td class="px-4 py-3 text-center">
+                {% if linha.ficha.validade_dias %}
+                  <span class="font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">{{ linha.ficha.validade_dias }} dias</span>
+                {% else %}
+                  <span class="text-xs" :style="temaClaro ? 'color:#94a3b8;' : 'color:#71717a;'">—</span>
+                {% endif %}
+              </td>
+              <td class="px-4 py-3 text-center text-xs">
+                {% if linha.ficha.congelado %}
+                  <span class="soft-pill is-blue text-xs">Congelado</span>
+                {% else %}
+                  <span :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">{{ linha.ficha.produto.get_condicao_armazenamento_display }}</span>
+                {% endif %}
+                {% if linha.ficha.produto.temperatura_maxima is not None %}
+                  <span class="block mt-0.5" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+                    até {{ linha.ficha.produto.temperatura_maxima }}°C
+                  </span>
+                {% endif %}
+              </td>
+              <td class="px-4 py-3">
+                {% comment %}
+                  O QUE FALTA VEM ESCRITO, e não como um "incompleto" mudo:
+                  quem abre a lista precisa saber o que resolver, e a frase
+                  é a mesma que a gravação mostra.
+                {% endcomment %}
+                {% if linha.pendencias %}
+                  {% for p in linha.pendencias %}
+                    <span class="block text-xs" style="color:#d97706;">· {{ p }}</span>
+                  {% endfor %}
+                {% else %}
+                  <span class="text-xs" style="color:#059669;">completo</span>
+                {% endif %}
+              </td>
+            </tr>
+          {% empty %}
+            <tr>
+              <td colspan="6" class="px-4 py-10 text-center">
+                <p class="text-sm" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+                  {% if busca or tipo %}
+                    Nenhum item com esse filtro.
+                  {% else %}
+                    Nenhum item cadastrado nesta classe ainda.
+                  {% endif %}
+                </p>
+              </td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+</div>
+{% endblock %}

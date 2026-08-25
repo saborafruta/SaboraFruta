@@ -1,0 +1,201 @@
+{% extends "_base.html" %}
+{% block title %}{{ title }} — Polpa{% endblock %}
+{% block page_title %}{{ title }}{% endblock %}
+{% block content %}
+
+{% comment %}
+  UM FORMULÁRIO PARA DOIS CADASTROS: o produto do ERP (que a nota, o estoque
+  e o PDV leem) e a ficha da fábrica. Separar em duas telas daria, na
+  prática, produto sem ficha — porque a segunda tela é a que se esquece.
+
+  OS BLOCOS APARECEM CONFORME A CLASSE do item escolhido. Pedir validade de
+  um pallet ou paletização de um aroma é o que faz alguém digitar zero para
+  o formulário fechar — e zero digitado é pior que campo vazio, porque
+  parece resposta.
+{% endcomment %}
+<div class="space-y-4 max-w-4xl"
+     x-data="{
+       tipo: '{{ form.tipo.value|default:'' }}',
+       materiaPrima: {{ tipos_materia_prima }},
+       embalagem: {{ tipos_embalagem }},
+       acabado: {{ tipos_acabado }},
+       get classe() {
+         if (this.acabado.includes(this.tipo)) return 'acabado';
+         if (this.embalagem.includes(this.tipo)) return 'embalagem';
+         if (this.materiaPrima.includes(this.tipo)) return 'materia_prima';
+         return '';
+       },
+     }">
+
+  <p class="text-sm" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+    <a href="{% url 'polpa:catalogo-list' %}" :style="temaClaro ? 'color:#3b82f6;' : 'color:#60a5fa;'">‹ Produtos e insumos</a>
+  </p>
+
+  {% if not tem_unidade %}
+    {% comment %}
+      SEM UNIDADE CADASTRADA o item não salva, e um select vazio não explica
+      por quê. Dizer aqui é o que evita a pessoa preencher o formulário
+      inteiro para descobrir no botão.
+    {% endcomment %}
+    <div class="card p-3" style="border-left:3px solid #d97706;">
+      <p class="text-sm" style="color:#b45309;">
+        Esta filial ainda não tem unidade de medida cadastrada — sem ela o
+        item não entra no estoque. Cadastre em Cadastros › Produtos ›
+        Unidades antes de continuar.
+      </p>
+    </div>
+  {% endif %}
+
+  <form method="post" class="space-y-4">
+    {% csrf_token %}
+
+    {% comment %}
+      TODOS OS ERROS NUM LUGAR, além do erro ao lado de cada campo. Os
+      blocos abaixo desenham campo a campo por nome, e um campo que não
+      imprime o próprio erro -- as caixinhas de congelado/refrigerado eram
+      assim -- some com a mensagem: o formulário volta, nada muda na tela, e
+      quem preencheu conclui que o botão não funciona.
+    {% endcomment %}
+    {% if form.errors %}
+      <div class="card p-3" style="border-left:3px solid #dc2626;">
+        {% for erro in form.non_field_errors %}
+          <p class="text-sm" style="color:#dc2626;">{{ erro }}</p>
+        {% endfor %}
+        {% for campo in form %}
+          {% for erro in campo.errors %}
+            <p class="text-sm" style="color:#dc2626;">{{ campo.label }}: {{ erro }}</p>
+          {% endfor %}
+        {% endfor %}
+      </div>
+    {% endif %}
+
+    {# ── O que é ────────────────────────────────────────────────── #}
+    <div class="card p-4">
+      <h3 class="text-sm font-semibold mb-3" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">O que é este item</h3>
+      <div class="grid sm:grid-cols-2 gap-3">
+        <div>
+          <label class="form-label" for="{{ form.tipo.id_for_label }}">{{ form.tipo.label }}</label>
+          {% comment %}
+            O select é AGRUPADO por classe: a lista corrida de 32 tipos faria
+            procurar "pote" no meio dos aromas.
+          {% endcomment %}
+          <select name="tipo" id="{{ form.tipo.id_for_label }}" class="form-select w-full" x-model="tipo">
+            <option value="">Escolha…</option>
+            {% for grupo, tipos in tipos_por_classe %}
+              <optgroup label="{{ grupo }}">
+                {% for valor, rotulo in tipos %}
+                  <option value="{{ valor }}" {% if form.tipo.value == valor %}selected{% endif %}>{{ rotulo }}</option>
+                {% endfor %}
+              </optgroup>
+            {% endfor %}
+          </select>
+          {% if form.tipo.errors %}<p class="text-xs mt-1" style="color:#dc2626;">{{ form.tipo.errors.0 }}</p>{% endif %}
+        </div>
+        {% for campo in form %}
+          {% if campo.name == 'descricao' or campo.name == 'codigo' or campo.name == 'unidade_medida' %}
+            <div>
+              <label class="form-label" for="{{ campo.id_for_label }}">{{ campo.label }}</label>
+              {{ campo }}
+              {% if campo.errors %}<p class="text-xs mt-1" style="color:#dc2626;">{{ campo.errors.0 }}</p>{% endif %}
+            </div>
+          {% endif %}
+        {% endfor %}
+      </div>
+
+      <div class="grid sm:grid-cols-2 gap-3 mt-3" x-show="classe === 'acabado' || classe === 'materia_prima'" x-cloak>
+        {% for campo in form %}
+          {% if campo.name == 'sabor' or campo.name == 'fruta' %}
+            <div>
+              <label class="form-label" for="{{ campo.id_for_label }}">{{ campo.label }}</label>
+              {{ campo }}
+              {% if campo.help_text %}
+                <p class="text-xs mt-1" :style="temaClaro ? 'color:#94a3b8;' : 'color:#71717a;'">{{ campo.help_text }}</p>
+              {% endif %}
+            </div>
+          {% endif %}
+        {% endfor %}
+      </div>
+    </div>
+
+    {# ── Medidas e embalagem ────────────────────────────────────── #}
+    <div class="card p-4">
+      <h3 class="text-sm font-semibold mb-3" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">Medidas e embalagem</h3>
+      <div class="grid sm:grid-cols-3 gap-3">
+        {% for campo in form %}
+          {% if campo.name == 'volume_ml' or campo.name == 'peso_liquido' or campo.name == 'peso_bruto' or campo.name == 'tipo_embalagem' or campo.name == 'quantidade_por_embalagem' or campo.name == 'caixas_por_pallet' %}
+            <div>
+              <label class="form-label" for="{{ campo.id_for_label }}">{{ campo.label }}</label>
+              {{ campo }}
+              {% if campo.errors %}<p class="text-xs mt-1" style="color:#dc2626;">{{ campo.errors.0 }}</p>{% endif %}
+            </div>
+          {% endif %}
+        {% endfor %}
+      </div>
+    </div>
+
+    {# ── Conservação ────────────────────────────────────────────── #}
+    <div class="card p-4">
+      <h3 class="text-sm font-semibold mb-3" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">Conservação e validade</h3>
+      <div class="flex flex-wrap gap-4 mb-3">
+        {% for campo in form %}
+          {% if campo.name == 'congelado' or campo.name == 'refrigerado' %}
+            <label class="flex items-center gap-2 text-sm cursor-pointer"
+                   :style="temaClaro ? 'color:#374151;' : 'color:#cbd5e1;'">
+              {{ campo }} {{ campo.label }}
+            </label>
+          {% endif %}
+        {% endfor %}
+      </div>
+      <div class="grid sm:grid-cols-3 gap-3">
+        {% for campo in form %}
+          {% if campo.name == 'temperatura_minima' or campo.name == 'temperatura_maxima' or campo.name == 'validade_dias' %}
+            <div>
+              <label class="form-label" for="{{ campo.id_for_label }}">{{ campo.label }}</label>
+              {{ campo }}
+              {% if campo.errors %}<p class="text-xs mt-1" style="color:#dc2626;">{{ campo.errors.0 }}</p>{% endif %}
+            </div>
+          {% endif %}
+        {% endfor %}
+      </div>
+      {% comment %}
+        A VALIDADE EM DIAS é o que a produção usa para calcular a data do
+        lote. Dizer isso na tela é o que faz alguém preencher, em vez de
+        deixar em branco e digitar a data à mão a cada produção — que é
+        como sai lote com prazo errado para a rua.
+      {% endcomment %}
+      <p class="text-xs mt-2" x-show="classe === 'acabado'" x-cloak
+         :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+        A validade em dias é o que dá a data de vencimento de cada lote
+        produzido. Sem ela, o lote nasce sem vencimento.
+      </p>
+    </div>
+
+    {# ── Fiscal e preço ─────────────────────────────────────────── #}
+    <div class="card p-4">
+      <h3 class="text-sm font-semibold mb-3" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">Fiscal e preço</h3>
+      <div class="grid sm:grid-cols-3 gap-3">
+        {% for campo in form %}
+          {% if campo.name == 'codigo_barras' or campo.name == 'ncm' or campo.name == 'cest' or campo.name == 'registro_mapa' or campo.name == 'preco_custo' or campo.name == 'preco_venda' %}
+            <div>
+              <label class="form-label" for="{{ campo.id_for_label }}">{{ campo.label }}</label>
+              {{ campo }}
+              {% if campo.errors %}<p class="text-xs mt-1" style="color:#dc2626;">{{ campo.errors.0 }}</p>{% endif %}
+            </div>
+          {% endif %}
+        {% endfor %}
+      </div>
+    </div>
+
+    <div class="card p-4">
+      <label class="form-label" for="{{ form.observacao.id_for_label }}">Observação</label>
+      {{ form.observacao }}
+    </div>
+
+    <div class="flex flex-wrap gap-2">
+      <button type="submit" class="btn-primary">Gravar item</button>
+      <a href="{% url 'polpa:catalogo-list' %}" class="btn-secondary">Cancelar</a>
+    </div>
+  </form>
+
+</div>
+{% endblock %}

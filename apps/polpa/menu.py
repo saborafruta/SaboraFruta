@@ -68,6 +68,8 @@ GRUPOS: tuple[Grupo, ...] = (
         (
             Item('produtos', 'Produtos',
                  'Polpa, açaí, sorvete, picolé, mix e congelados do catálogo.'),
+            Item('materias-primas', 'Matérias-primas',
+                 'Fruta, açúcar, leite, gordura, estabilizante, aroma, corante.'),
             Item('receitas', 'Formulações',
                  'Percentual de fruta, água, açúcar e aditivos por produto.'),
             Item('rendimento', 'Rendimento padrão',
