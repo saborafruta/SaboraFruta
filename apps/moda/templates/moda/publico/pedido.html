@@ -151,6 +151,58 @@
           </div>
         {% endif %}
 
+        {# ── Nome e número, pessoa a pessoa ─────────────────────────── #}
+        {% if item.individuais.all %}
+          {% comment %}
+            O QUE O CLIENTE MAIS PRECISA CONFERIR, e o que a página não
+            mostrava. Ele aprovava a grade e a arte sem nunca ver a lista de
+            nomes -- e nome errado não é ajuste de tela, é peça refeita:
+            bordado não se apaga. Só ele sabe se o "João" do time é com ou
+            sem H, e se o 10 é do Pedro ou do Lucas.
+
+            Fica ANTES da arte de propósito: é texto, lê-se rápido, e é onde
+            o erro caro mora. A arte vem logo abaixo para a conferência
+            visual.
+          {% endcomment %}
+          <div>
+            <div class="flex flex-wrap items-baseline justify-between gap-2 mb-2">
+              <p class="text-xs font-bold uppercase tracking-wider" style="color:#64748b;">
+                Nomes e números
+              </p>
+              <p class="text-xs" style="color:#94a3b8;">
+                {{ item.individuais.all|length }} peça(s) personalizada(s) —
+                confira letra por letra
+              </p>
+            </div>
+
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
+              {% for pessoa in item.individuais.all %}
+                <div class="flex items-center gap-3 px-3 py-2 rounded-xl"
+                     style="background:#f8fafc; border:1px solid #eef2f7;">
+                  {% comment %}
+                    O NÚMERO PRIMEIRO e em destaque: na quadra é por ele que
+                    se procura a camisa, e é o campo em que um dígito trocado
+                    passa despercebido numa lista de sessenta.
+                  {% endcomment %}
+                  <span class="shrink-0 text-center font-bold rounded-lg"
+                        style="min-width:44px; padding:6px 8px; background:#fff;
+                               border:1px solid #e2e8f0; color:#0f172a; font-size:15px;">
+                    {{ pessoa.numero|default:"—" }}
+                  </span>
+                  <span class="min-w-0 flex-1">
+                    <span class="block text-sm font-semibold truncate" style="color:#0f172a;">
+                      {{ pessoa.nome|default:"Sem nome" }}
+                    </span>
+                    <span class="block text-xs" style="color:#64748b;">
+                      Tamanho {{ pessoa.tamanho.sigla }}
+                    </span>
+                  </span>
+                </div>
+              {% endfor %}
+            </div>
+          </div>
+        {% endif %}
+
         {# ── Arte ───────────────────────────────────────────────────── #}
         {% if item.visuais.all %}
           <div>
@@ -283,8 +335,10 @@
         {% else %}
           <p class="text-lg font-bold" style="color:#0f172a;">Confira e responda</p>
           <p class="text-sm mt-1 mb-4" style="color:#64748b;">
-            Confira produtos, grade e arte acima. A produção começa depois
-            da sua aprovação.
+            Confira produtos, grade{% if pedido.individuais.exists %}, nomes e
+            números{% endif %} e arte acima. A produção começa depois da sua
+            aprovação{% if pedido.individuais.exists %} — depois de bordado,
+            nome errado é peça refeita{% endif %}.
           </p>
 
           <form method="post" action="{% url 'moda_publico:pedido-responder' pedido.token_publico %}"

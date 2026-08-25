@@ -167,3 +167,85 @@ class AprovacaoPublicaTests(TestCase):
         )
 
         self.assertEqual(resposta.status_code, 404)
+
+
+class NomesENumerosNoLinkTests(AprovacaoPublicaTests):
+    """
+    A lista de nome e número na página do cliente.
+
+    Ele aprovava a grade e a arte sem nunca ver os nomes -- e nome errado
+    não é ajuste de tela, é peça refeita: bordado não se apaga. Só o cliente
+    sabe se o "João" do time é com ou sem H, e se o 10 é do Pedro ou do
+    Lucas. Se esta seção sumir, o erro caro volta a passar despercebido.
+    """
+
+    def _com_pessoas(self):
+        from apps.moda.models import (
+            ItemPedidoProducao, PersonalizacaoIndividual, Tamanho,
+        )
+
+        item = ItemPedidoProducao.objects.create(
+            pedido=self.pedido, descricao='Camisa de jogo', quantidade=2,
+        )
+        m = Tamanho.objects.create(filial=self.filial, sigla='M', ordem=30)
+        g = Tamanho.objects.create(filial=self.filial, sigla='G', ordem=40)
+        PersonalizacaoIndividual.objects.create(
+            pedido=self.pedido, item=item, tamanho=m,
+            nome='Joao Silva', numero='10', ordem=1,
+        )
+        PersonalizacaoIndividual.objects.create(
+            pedido=self.pedido, item=item, tamanho=g,
+            nome='Pedro Lima', numero='7', ordem=2,
+        )
+        return item
+
+    def test_a_lista_de_nomes_aparece_no_link(self):
+        self._com_pessoas()
+
+        resposta = self.client.get(self._url_pagina())
+
+        self.assertContains(resposta, 'Nomes e números')
+        self.assertContains(resposta, 'Joao Silva')
+        self.assertContains(resposta, 'Pedro Lima')
+
+    def test_o_numero_e_o_tamanho_vao_junto(self):
+        """
+        Nome sem número não dá para conferir: na quadra é pelo número que se
+        procura a camisa, e é nele que um dígito trocado passa despercebido.
+        """
+        self._com_pessoas()
+
+        resposta = self.client.get(self._url_pagina())
+
+        import re
+
+        pagina = resposta.content.decode()
+        # O número fica sozinho no seu proprio elemento — e' o destaque da
+        # linha. Espaco em volta e' formatacao do template, nao conteudo.
+        numeros = {n.strip() for n in re.findall(r'>\s*(\d{1,3})\s*<', pagina)}
+        self.assertIn('10', numeros)
+        self.assertIn('7', numeros)
+        self.assertContains(resposta, 'Tamanho M')
+        self.assertContains(resposta, 'Tamanho G')
+
+    def test_pedido_sem_personalizacao_nao_ganha_secao_vazia(self):
+        """
+        Camisa lisa não tem nome nenhum. Um bloco vazio faria o cliente
+        procurar o que não existe.
+        """
+        from apps.moda.models import ItemPedidoProducao
+
+        ItemPedidoProducao.objects.create(
+            pedido=self.pedido, descricao='Camisa lisa', quantidade=5,
+        )
+
+        resposta = self.client.get(self._url_pagina())
+
+        self.assertNotContains(resposta, 'Nomes e números')
+
+    def test_o_aviso_do_bordado_so_aparece_quando_ha_nomes(self):
+        self._com_pessoas()
+
+        resposta = self.client.get(self._url_pagina())
+
+        self.assertContains(resposta, 'nome errado é peça refeita')

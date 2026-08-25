@@ -103,6 +103,10 @@ def _buscar(token: str) -> PedidoProducao:
         .prefetch_related(
             'itens__produto', 'itens__modelo', 'itens__cor', 'itens__tecido',
             'itens__grade__tamanho', 'itens__personalizacoes',
+            # NOME E NUMERO DE CADA PESSOA. E' o que o cliente mais confere
+            # antes de aprovar -- um nome errado vira peca refeita, e ele e'
+            # o unico que sabe se "Joao" e' com ou sem H.
+            'itens__individuais__tamanho',
             'arquivos',
             'itens__visuais__mockup',
         )
