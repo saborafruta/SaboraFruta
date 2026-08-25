@@ -346,6 +346,7 @@
       <a href="{% url 'estoque:movimentacao-create' %}" class="btn-secondary">Movimentar</a>
     {% endif %}
     {% if permissoes_estoque.pode_ajustar %}
+      <a href="{% url 'estoque:ajuste-rapido' %}" class="btn-primary">Ajuste rapido</a>
       <a href="{% url 'estoque:ajuste' %}" class="btn-secondary">Ajuste manual</a>
     {% endif %}
     {% if permissoes_estoque.pode_transferir %}

@@ -18,6 +18,11 @@ urlpatterns = [
     # Operacoes
     path('movimentacoes/nova/', views.MovimentacaoManualView.as_view(), name='movimentacao-create'),
     path('ajuste/', views.AjusteEstoqueView.as_view(), name='ajuste'),
+    path('ajuste-rapido/', views.AjusteRapidoEstoqueView.as_view(), name='ajuste-rapido'),
+    path('ajuste-rapido/atualizar/', views.AjusteRapidoEstoqueAtualizarView.as_view(), name='ajuste-rapido-atualizar'),
+    path('ajuste-rapido/pdf/', views.AjusteRapidoEstoquePdfView.as_view(), name='ajuste-rapido-pdf'),
+    path('ajuste-rapido/limpar/', views.AjusteRapidoEstoqueLimparView.as_view(), name='ajuste-rapido-limpar'),
+    path('ajuste-rapido/produtos/<int:pk>/log/', views.AjusteRapidoEstoqueLogView.as_view(), name='ajuste-rapido-log'),
     path('transferencia/', views.TransferenciaView.as_view(), name='transferencia'),
 
     # Outras Movimentacoes

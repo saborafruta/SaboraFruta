@@ -1,6 +1,8 @@
 from .estoque import (
     EntradaCustoEstoqueListView, EstoqueInlineEditView, EstoqueKardexProdutoView, EstoqueListView,
-    MovimentacaoManualView, AjusteEstoqueView,
+    MovimentacaoManualView, AjusteEstoqueView, AjusteRapidoEstoqueAtualizarView,
+    AjusteRapidoEstoqueLimparView, AjusteRapidoEstoqueLogView, AjusteRapidoEstoquePdfView,
+    AjusteRapidoEstoqueView,
     RelatorioEstoqueView, ReposicaoListView, TransferenciaView, MovimentacaoListView,
 )
 from .inventario import (
@@ -27,7 +29,9 @@ from .outras_movimentacoes import (
 
 __all__ = [
     'EntradaCustoEstoqueListView', 'EstoqueInlineEditView', 'EstoqueKardexProdutoView', 'EstoqueListView',
-    'MovimentacaoManualView', 'AjusteEstoqueView',
+    'MovimentacaoManualView', 'AjusteEstoqueView', 'AjusteRapidoEstoqueAtualizarView',
+    'AjusteRapidoEstoqueLimparView', 'AjusteRapidoEstoqueLogView', 'AjusteRapidoEstoquePdfView',
+    'AjusteRapidoEstoqueView',
     'RelatorioEstoqueView', 'ReposicaoListView', 'TransferenciaView', 'MovimentacaoListView',
     'InventarioCancelView', 'InventarioCreateView', 'InventarioDetailView',
     'InventarioDivergenciasView',

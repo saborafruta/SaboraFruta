@@ -1,0 +1,441 @@
+{% extends "_base.html" %}
+
+{% block title %}Ajuste rapido de estoque - ERP iNoovaTed{% endblock %}
+
+{% block content %}
+<style>
+  .stock-count-page { max-width: 1280px; margin: 0 auto; display: grid; gap: 1rem; }
+  .stock-count-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 1rem; flex-wrap: wrap; }
+  .stock-count-title { font-size: clamp(1.35rem, 2.2vw, 2rem); line-height: 1.08; font-weight: 900; color: #f8fafc; }
+  .stock-count-subtitle { margin-top: .35rem; color: #94a3b8; font-size: .95rem; }
+  body.tema-claro .stock-count-title { color: #0f172a; }
+  body.tema-claro .stock-count-subtitle { color: #64748b; }
+  .stock-count-actions { display: flex; gap: .55rem; flex-wrap: wrap; justify-content: flex-end; }
+  .stock-count-summary { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: .75rem; }
+  .stock-count-summary-card { border-radius: 10px; border: 1px solid rgba(148,163,184,.18); padding: .85rem; background: #242426; }
+  body.tema-claro .stock-count-summary-card { background: #fff; border-color: #e2e8f0; box-shadow: 0 10px 24px rgba(15,23,42,.05); }
+  .stock-count-summary-label { color: #94a3b8; font-size: .72rem; text-transform: uppercase; font-weight: 900; letter-spacing: .04em; }
+  body.tema-claro .stock-count-summary-label { color: #64748b; }
+  .stock-count-summary-value { margin-top: .28rem; color: #f8fafc; font-size: 1.35rem; font-weight: 900; }
+  body.tema-claro .stock-count-summary-value { color: #0f172a; }
+  .stock-count-toolbar { position: sticky; top: .75rem; z-index: 18; border-radius: 14px; border: 1px solid rgba(148,163,184,.20); background: rgba(36,36,38,.96); padding: .85rem; box-shadow: 0 18px 45px rgba(0,0,0,.20); backdrop-filter: blur(10px); }
+  body.tema-claro .stock-count-toolbar { background: rgba(255,255,255,.96); border-color: #e2e8f0; box-shadow: 0 18px 45px rgba(15,23,42,.08); }
+  .stock-count-filter { display: grid; grid-template-columns: minmax(260px, 1.5fr) minmax(220px, 1fr) auto auto; gap: .65rem; align-items: end; }
+  .stock-count-field label { display: block; margin-bottom: .28rem; color: #94a3b8; font-size: .72rem; text-transform: uppercase; font-weight: 900; letter-spacing: .04em; }
+  body.tema-claro .stock-count-field label { color: #64748b; }
+  .stock-count-field input { min-height: 48px; font-size: 1rem; }
+  .stock-count-toggle { min-height: 48px; align-items: center; justify-content: center; white-space: nowrap; }
+  .stock-count-grid { display: grid; gap: .7rem; }
+  .stock-count-row { display: grid; grid-template-columns: 74px minmax(0, 1fr) minmax(260px, 360px) 176px; gap: .75rem; align-items: center; border-radius: 14px; border: 1px solid rgba(148,163,184,.18); padding: .8rem; background: #242426; transition: border-color .16s ease, background .16s ease, transform .16s ease; }
+  body.tema-claro .stock-count-row { background: #fff; border-color: #e2e8f0; box-shadow: 0 8px 22px rgba(15,23,42,.04); }
+  .stock-count-row.is-saved { border-color: rgba(34,197,94,.52); background: rgba(20,83,45,.18); }
+  body.tema-claro .stock-count-row.is-saved { background: #ecfdf5; border-color: #86efac; }
+  .stock-count-row.is-highlight { outline: 3px solid rgba(59,130,246,.38); }
+  .stock-count-id { display: grid; place-items: center; min-height: 56px; border-radius: 12px; background: rgba(59,130,246,.14); color: #bfdbfe; font-size: 1rem; font-weight: 900; }
+  body.tema-claro .stock-count-id { background: #dbeafe; color: #1d4ed8; }
+  .stock-count-name { color: #f8fafc; font-size: 1rem; font-weight: 900; line-height: 1.18; overflow-wrap: anywhere; }
+  body.tema-claro .stock-count-name { color: #0f172a; }
+  .stock-count-meta { display: flex; flex-wrap: wrap; gap: .28rem .65rem; margin-top: .38rem; color: #94a3b8; font-size: .82rem; }
+  body.tema-claro .stock-count-meta { color: #64748b; }
+  .stock-count-pill { display: inline-flex; min-height: 24px; align-items: center; border-radius: 999px; padding: .12rem .5rem; background: rgba(148,163,184,.12); color: #cbd5e1; font-weight: 800; }
+  body.tema-claro .stock-count-pill { background: #f1f5f9; color: #475569; }
+  .stock-count-current { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .45rem; }
+  .stock-count-current-box { border-radius: 10px; border: 1px solid rgba(148,163,184,.16); padding: .55rem; min-width: 0; }
+  body.tema-claro .stock-count-current-box { border-color: #e2e8f0; background: #f8fafc; }
+  .stock-count-current-label { color: #94a3b8; font-size: .68rem; font-weight: 900; text-transform: uppercase; }
+  body.tema-claro .stock-count-current-label { color: #64748b; }
+  .stock-count-current-value { margin-top: .2rem; color: #f8fafc; font-size: 1.05rem; font-weight: 900; }
+  body.tema-claro .stock-count-current-value { color: #0f172a; }
+  .stock-count-stepper { display: grid; grid-template-columns: 48px minmax(76px, 1fr) 48px; gap: .35rem; align-items: stretch; }
+  .stock-count-stepper button { min-height: 48px; border-radius: 11px; border: 1px solid rgba(96,165,250,.30); background: rgba(37,99,235,.15); color: #dbeafe; font-size: 1.4rem; font-weight: 900; cursor: pointer; }
+  body.tema-claro .stock-count-stepper button { background: #dbeafe; border-color: #bfdbfe; color: #1d4ed8; }
+  .stock-count-qty { min-height: 48px; text-align: center; font-size: 1.1rem !important; font-weight: 900; }
+  .stock-count-row-actions { display: grid; grid-template-columns: 1fr 1fr; gap: .4rem; margin-top: .45rem; }
+  .stock-count-row-actions button { min-height: 40px; justify-content: center; }
+  .stock-count-check.is-on { background: #16a34a !important; border-color: #16a34a !important; color: #fff !important; }
+  .stock-count-status { margin-top: .36rem; color: #94a3b8; font-size: .76rem; min-height: 18px; }
+  body.tema-claro .stock-count-status { color: #64748b; }
+  .stock-count-status.is-error { color: #fca5a5; }
+  body.tema-claro .stock-count-status.is-error { color: #b91c1c; }
+  .stock-count-empty { border-radius: 14px; border: 1px dashed rgba(148,163,184,.28); padding: 2rem; text-align: center; color: #94a3b8; background: rgba(148,163,184,.06); }
+  body.tema-claro .stock-count-empty { color: #64748b; background: #f8fafc; border-color: #cbd5e1; }
+  .stock-count-camera { position: fixed; inset: 0; z-index: 80; display: grid; place-items: center; padding: 1rem; background: rgba(3,7,18,.78); }
+  .stock-count-camera[hidden] { display: none !important; }
+  .stock-count-camera-panel { width: min(94vw, 620px); border-radius: 16px; overflow: hidden; background: #111827; border: 1px solid rgba(148,163,184,.28); box-shadow: 0 28px 80px rgba(0,0,0,.45); }
+  .stock-count-camera-head { display: flex; align-items: center; justify-content: space-between; gap: 1rem; padding: .85rem 1rem; color: #f8fafc; font-weight: 900; }
+  .stock-count-camera video { width: 100%; aspect-ratio: 4 / 3; object-fit: cover; background: #030712; display: block; }
+  .stock-count-log { position: fixed; inset: 0; z-index: 75; display: grid; place-items: center; padding: 1rem; background: rgba(3,7,18,.70); }
+  .stock-count-log[hidden] { display: none !important; }
+  .stock-count-log-panel { width: min(94vw, 760px); max-height: min(88vh, 760px); overflow: auto; border-radius: 16px; background: #242426; border: 1px solid rgba(148,163,184,.22); box-shadow: 0 28px 80px rgba(0,0,0,.42); }
+  body.tema-claro .stock-count-log-panel { background: #fff; border-color: #e2e8f0; }
+  .stock-count-log-head { position: sticky; top: 0; display: flex; align-items: center; justify-content: space-between; gap: .75rem; padding: 1rem; border-bottom: 1px solid rgba(148,163,184,.18); background: inherit; }
+  .stock-count-log-title { color: #f8fafc; font-weight: 900; }
+  body.tema-claro .stock-count-log-title { color: #0f172a; }
+  .stock-count-log-body { display: grid; gap: .5rem; padding: 1rem; }
+  .stock-count-log-item { border-radius: 10px; border: 1px solid rgba(148,163,184,.16); padding: .7rem; color: #cbd5e1; }
+  body.tema-claro .stock-count-log-item { color: #334155; border-color: #e2e8f0; background: #f8fafc; }
+  .stock-count-log-top { display: flex; justify-content: space-between; gap: .75rem; font-weight: 900; color: #f8fafc; }
+  body.tema-claro .stock-count-log-top { color: #0f172a; }
+  .stock-count-pagination { display: flex; justify-content: space-between; gap: .75rem; flex-wrap: wrap; align-items: center; }
+  @media (max-width: 1100px) {
+    .stock-count-filter { grid-template-columns: 1fr 1fr; }
+    .stock-count-row { grid-template-columns: 62px minmax(0, 1fr); }
+    .stock-count-adjust { grid-column: 1 / -1; }
+    .stock-count-current { grid-column: 1 / -1; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  }
+  @media (max-width: 720px) {
+    .stock-count-summary { grid-template-columns: 1fr; }
+    .stock-count-filter { grid-template-columns: 1fr; }
+    .stock-count-row { grid-template-columns: 1fr; }
+    .stock-count-id { justify-items: start; place-items: center start; padding-left: .9rem; min-height: 42px; }
+    .stock-count-current { grid-template-columns: 1fr; }
+    .stock-count-actions, .stock-count-actions a, .stock-count-actions button { width: 100%; justify-content: center; }
+    .stock-count-toolbar { top: .25rem; }
+  }
+</style>
+
+<div class="stock-count-page" data-stock-count-page>
+  <div class="stock-count-head">
+    <div>
+      <a href="{% url 'estoque:estoque-list' %}" class="text-sm font-semibold" style="color:#60a5fa;">&lt; Voltar</a>
+      <h1 class="stock-count-title">Ajuste rapido de estoque</h1>
+      <p class="stock-count-subtitle">Conferencia por produto com registro de movimentacao, PDF e historico.</p>
+    </div>
+    <div class="stock-count-actions">
+      <a href="{% url 'estoque:ajuste-rapido-pdf' %}" class="btn-secondary">Gerar PDF</a>
+      <form method="post" action="{% url 'estoque:ajuste-rapido-limpar' %}">
+        {% csrf_token %}
+        <button type="submit" class="btn-secondary">Limpar conferencia</button>
+      </form>
+      <a href="{% url 'estoque:movimentacao-list' %}" class="btn-secondary">Historico</a>
+    </div>
+  </div>
+
+  <div class="stock-count-summary">
+    <div class="stock-count-summary-card">
+      <div class="stock-count-summary-label">Produtos exibidos</div>
+      <div class="stock-count-summary-value">{{ page_obj.paginator.count }}</div>
+    </div>
+    <div class="stock-count-summary-card">
+      <div class="stock-count-summary-label">Editados na sessao</div>
+      <div class="stock-count-summary-value" data-session-edited>{{ itens_sessao_total }}</div>
+    </div>
+    <div class="stock-count-summary-card">
+      <div class="stock-count-summary-label">Conferidos</div>
+      <div class="stock-count-summary-value" data-session-checked>{{ itens_conferidos_total }}</div>
+    </div>
+  </div>
+
+  <div class="stock-count-toolbar">
+    <form method="get" class="stock-count-filter" data-stock-filter>
+      <div class="stock-count-field">
+        <label for="stock-q">Buscar produto</label>
+        <input id="stock-q" name="q" value="{{ busca }}" class="form-input" type="search" autocomplete="off" placeholder="Nome, ID, referencia, NCM, fornecedor...">
+      </div>
+      <div class="stock-count-field">
+        <label for="stock-barcode">Codigo de barras</label>
+        <input id="stock-barcode" name="barcode" value="{{ barcode }}" class="form-input" type="search" inputmode="numeric" autocomplete="off" placeholder="Bipe ou digite o codigo">
+      </div>
+      <label class="btn-secondary stock-count-toggle">
+        <input type="checkbox" name="conferidos" value="1" {% if somente_conferidos %}checked{% endif %}>
+        Conferidos
+      </label>
+      <div class="stock-count-actions">
+        <button type="button" class="btn-secondary stock-count-toggle" data-open-camera>Camera</button>
+        <button type="submit" class="btn-primary stock-count-toggle">Filtrar</button>
+      </div>
+    </form>
+  </div>
+
+  <input type="hidden" name="csrfmiddlewaretoken" value="{{ csrf_token }}" data-csrf-token>
+
+  <div class="stock-count-grid">
+    {% for produto in produtos %}
+      <article class="stock-count-row {% if produto.ajuste_rapido_conferido %}is-saved{% endif %}"
+               data-product-row
+               data-product-id="{{ produto.pk }}"
+               data-current="{{ produto.estoque_quantidade_atual_value }}"
+               data-update-url="{% url 'estoque:ajuste-rapido-atualizar' %}"
+               data-log-url="{% url 'estoque:ajuste-rapido-log' produto.pk %}"
+               data-barcode="{{ produto.codigo_barras|default:'' }}">
+        <div class="stock-count-id">#{{ produto.codigo_replicacao }}</div>
+        <div class="min-w-0">
+          <div class="stock-count-name" title="{{ produto.descricao }}">{{ produto.descricao }}</div>
+          <div class="stock-count-meta">
+            {% if produto.codigo %}<span class="stock-count-pill">Ref. {{ produto.codigo }}</span>{% endif %}
+            {% if produto.codigo_barras %}<span class="stock-count-pill">EAN {{ produto.codigo_barras }}</span>{% endif %}
+            {% if produto.unidade_medida_id %}<span class="stock-count-pill">{{ produto.unidade_medida.sigla }}</span>{% endif %}
+            {% if produto.categoria_id %}<span class="stock-count-pill">{{ produto.categoria.nome }}</span>{% endif %}
+          </div>
+        </div>
+        <div class="stock-count-current">
+          <div class="stock-count-current-box">
+            <div class="stock-count-current-label">Atual</div>
+            <div class="stock-count-current-value" data-current-display>{{ produto.estoque_quantidade_atual_display }}</div>
+          </div>
+          <div class="stock-count-current-box">
+            <div class="stock-count-current-label">Disponivel</div>
+            <div class="stock-count-current-value">{{ produto.estoque_quantidade_disponivel_display }}</div>
+          </div>
+        </div>
+        <div class="stock-count-adjust">
+          <div class="stock-count-stepper">
+            <button type="button" data-step="-1" aria-label="Diminuir">-</button>
+            <input type="text" inputmode="decimal" class="form-input stock-count-qty" value="{{ produto.ajuste_rapido_contado }}" data-qty>
+            <button type="button" data-step="1" aria-label="Somar">+</button>
+          </div>
+          <div class="stock-count-row-actions">
+            <button type="button" class="btn-secondary stock-count-check {% if produto.ajuste_rapido_conferido %}is-on{% endif %}" data-check>
+              {% if produto.ajuste_rapido_conferido %}Conferido{% else %}Check{% endif %}
+            </button>
+            <button type="button" class="btn-secondary" data-log>Log</button>
+          </div>
+          <div class="stock-count-status" data-status>{% if produto.ajuste_rapido_editado %}Atualizado nesta sessao.{% endif %}</div>
+        </div>
+      </article>
+    {% empty %}
+      <div class="stock-count-empty">Nenhum produto encontrado para os filtros informados.</div>
+    {% endfor %}
+  </div>
+
+  {% if page_obj.paginator.num_pages > 1 %}
+    <div class="stock-count-pagination">
+      <div class="stock-count-subtitle">Pagina {{ page_obj.number }} de {{ page_obj.paginator.num_pages }} - {{ page_obj.paginator.count }} produtos</div>
+      <div class="stock-count-actions">
+        {% if page_obj.has_previous %}
+          <a class="btn-secondary" href="?{% if page_querystring %}{{ page_querystring }}&{% endif %}page={{ page_obj.previous_page_number }}">Anterior</a>
+        {% endif %}
+        {% if page_obj.has_next %}
+          <a class="btn-secondary" href="?{% if page_querystring %}{{ page_querystring }}&{% endif %}page={{ page_obj.next_page_number }}">Proxima</a>
+        {% endif %}
+      </div>
+    </div>
+  {% endif %}
+</div>
+
+<div class="stock-count-camera" hidden data-camera-modal>
+  <div class="stock-count-camera-panel">
+    <div class="stock-count-camera-head">
+      <span>Leitor de codigo de barras</span>
+      <button type="button" class="btn-secondary" data-close-camera>Fechar</button>
+    </div>
+    <video muted playsinline data-camera-video></video>
+  </div>
+</div>
+
+<div class="stock-count-log" hidden data-log-modal>
+  <div class="stock-count-log-panel">
+    <div class="stock-count-log-head">
+      <div>
+        <div class="stock-count-log-title" data-log-title>Log do produto</div>
+        <div class="stock-count-subtitle" data-log-subtitle></div>
+      </div>
+      <button type="button" class="btn-secondary" data-close-log>Fechar</button>
+    </div>
+    <div class="stock-count-log-body" data-log-body></div>
+  </div>
+</div>
+
+<script>
+  (function () {
+    const csrf = document.querySelector('[data-csrf-token]')?.value || '';
+    const editedCounter = document.querySelector('[data-session-edited]');
+    const checkedCounter = document.querySelector('[data-session-checked]');
+    const filterForm = document.querySelector('[data-stock-filter]');
+    const barcodeInput = document.getElementById('stock-barcode');
+    const barcodeAtual = '{{ barcode|escapejs }}';
+
+    function parseQty(value) {
+      const normalized = String(value || '0').trim().replace(/\./g, '').replace(',', '.');
+      const parsed = Number(normalized);
+      return Number.isFinite(parsed) && parsed >= 0 ? parsed : 0;
+    }
+    function formatQty(value) {
+      const fixed = Number(value || 0).toFixed(3).replace(/\.?0+$/, '');
+      return fixed || '0';
+    }
+    function formatDisplay(value) {
+      return formatQty(value).replace('.', ',');
+    }
+    function setStatus(row, message, isError) {
+      const status = row.querySelector('[data-status]');
+      if (!status) return;
+      status.textContent = message || '';
+      status.classList.toggle('is-error', !!isError);
+    }
+    function setCounters(totals) {
+      if (!totals) return;
+      if (editedCounter) editedCounter.textContent = totals.editados;
+      if (checkedCounter) checkedCounter.textContent = totals.conferidos;
+    }
+    function saveRow(row, markChecked) {
+      const qty = row.querySelector('[data-qty]');
+      const form = new FormData();
+      form.append('produto_id', row.dataset.productId);
+      form.append('quantidade', qty.value);
+      form.append('conferido', markChecked ? '1' : '0');
+      setStatus(row, 'Salvando...');
+      return fetch(row.dataset.updateUrl, {
+        method: 'POST',
+        headers: { 'X-CSRFToken': csrf },
+        body: form,
+      })
+        .then((response) => response.json().then((data) => ({ response, data })))
+        .then(({ response, data }) => {
+          if (!response.ok || !data.ok) throw new Error(data.error || 'Nao foi possivel salvar.');
+          row.dataset.current = data.quantidade_atual;
+          const current = row.querySelector('[data-current-display]');
+          if (current) current.textContent = data.quantidade_atual_display;
+          row.classList.add('is-saved');
+          const check = row.querySelector('[data-check]');
+          if (check) {
+            check.classList.add('is-on');
+            check.textContent = 'Conferido';
+          }
+          setCounters(data.totais);
+          setStatus(row, data.movimento_id ? `Movimento #${data.movimento_id} registrado.` : 'Conferido sem diferenca.');
+        })
+        .catch((error) => {
+          setStatus(row, error.message, true);
+        });
+    }
+    function scheduleSave(row) {
+      window.clearTimeout(row._stockSaveTimer);
+      row._stockSaveTimer = window.setTimeout(() => saveRow(row, true), 450);
+    }
+    document.querySelectorAll('[data-product-row]').forEach((row) => {
+      const qty = row.querySelector('[data-qty]');
+      row.querySelectorAll('[data-step]').forEach((button) => {
+        button.addEventListener('click', () => {
+          const next = Math.max(0, parseQty(qty.value) + Number(button.dataset.step || 0));
+          qty.value = formatQty(next);
+          scheduleSave(row);
+        });
+      });
+      qty.addEventListener('keydown', (event) => {
+        if (event.key === 'Enter') {
+          event.preventDefault();
+          saveRow(row, true);
+          qty.blur();
+        }
+      });
+      qty.addEventListener('blur', () => saveRow(row, true));
+      row.querySelector('[data-check]')?.addEventListener('click', () => saveRow(row, true));
+      row.querySelector('[data-log]')?.addEventListener('click', () => openLog(row));
+    });
+
+    if (filterForm && barcodeInput) {
+      barcodeInput.addEventListener('keydown', (event) => {
+        if (event.key === 'Enter') {
+          event.preventDefault();
+          filterForm.submit();
+        }
+      });
+    }
+    if (barcodeAtual) {
+      const found = Array.from(document.querySelectorAll('[data-product-row]')).find((row) => row.dataset.barcode === barcodeAtual)
+        || document.querySelector('[data-product-row]');
+      if (found) {
+        found.classList.add('is-highlight');
+        found.scrollIntoView({ block: 'center', behavior: 'smooth' });
+        found.querySelector('[data-qty]')?.focus();
+      }
+    }
+
+    const logModal = document.querySelector('[data-log-modal]');
+    const logTitle = document.querySelector('[data-log-title]');
+    const logSubtitle = document.querySelector('[data-log-subtitle]');
+    const logBody = document.querySelector('[data-log-body]');
+    function escapeHtml(value) {
+      return String(value ?? '').replace(/[&<>"']/g, (char) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[char]);
+    }
+    function openLog(row) {
+      if (!logModal || !logBody) return;
+      logBody.innerHTML = '<div class="stock-count-empty">Carregando historico...</div>';
+      logModal.hidden = false;
+      fetch(row.dataset.logUrl)
+        .then((response) => response.json())
+        .then((data) => {
+          if (logTitle) logTitle.textContent = data.produto.descricao || 'Log do produto';
+          if (logSubtitle) logSubtitle.textContent = `ID ${data.produto.id}`;
+          if (!data.movimentacoes.length) {
+            logBody.innerHTML = '<div class="stock-count-empty">Nenhuma movimentacao encontrada.</div>';
+            return;
+          }
+          logBody.innerHTML = data.movimentacoes.map((item) => `
+            <div class="stock-count-log-item">
+              <div class="stock-count-log-top">
+                <span>${escapeHtml(item.tipo)}</span>
+                <span>${escapeHtml(item.data)}</span>
+              </div>
+              <div class="stock-count-meta">
+                <span>Qtd. ${escapeHtml(item.quantidade)}</span>
+                <span>${escapeHtml(item.anterior)} -> ${escapeHtml(item.posterior)}</span>
+                <span>${escapeHtml(item.usuario)}</span>
+                <span>${escapeHtml(item.documento)}</span>
+              </div>
+              ${item.observacao ? `<div class="stock-count-status">${escapeHtml(item.observacao)}</div>` : ''}
+            </div>
+          `).join('');
+        })
+        .catch(() => {
+          logBody.innerHTML = '<div class="stock-count-empty">Nao foi possivel carregar o log.</div>';
+        });
+    }
+    document.querySelector('[data-close-log]')?.addEventListener('click', () => { logModal.hidden = true; });
+    logModal?.addEventListener('click', (event) => {
+      if (event.target === logModal) logModal.hidden = true;
+    });
+
+    const cameraModal = document.querySelector('[data-camera-modal]');
+    const video = document.querySelector('[data-camera-video]');
+    let cameraStream = null;
+    let scanLoop = null;
+    async function closeCamera() {
+      if (scanLoop) window.cancelAnimationFrame(scanLoop);
+      scanLoop = null;
+      if (cameraStream) cameraStream.getTracks().forEach((track) => track.stop());
+      cameraStream = null;
+      if (cameraModal) cameraModal.hidden = true;
+    }
+    async function openCamera() {
+      if (!('BarcodeDetector' in window)) {
+        alert('Este navegador nao tem leitor por camera. Use o leitor fisico ou digite o codigo no campo.');
+        barcodeInput?.focus();
+        return;
+      }
+      try {
+        const detector = new BarcodeDetector({ formats: ['ean_13', 'ean_8', 'code_128', 'code_39', 'upc_a', 'upc_e'] });
+        cameraStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
+        video.srcObject = cameraStream;
+        await video.play();
+        cameraModal.hidden = false;
+        const tick = async () => {
+          try {
+            const codes = await detector.detect(video);
+            if (codes.length) {
+              const code = codes[0].rawValue || '';
+              if (barcodeInput) barcodeInput.value = code;
+              await closeCamera();
+              filterForm?.submit();
+              return;
+            }
+          } catch (e) {
+            // Continua tentando enquanto a camera estiver aberta.
+          }
+          scanLoop = window.requestAnimationFrame(tick);
+        };
+        tick();
+      } catch (e) {
+        await closeCamera();
+        alert('Nao foi possivel abrir a camera.');
+      }
+    }
+    document.querySelector('[data-open-camera]')?.addEventListener('click', openCamera);
+    document.querySelector('[data-close-camera]')?.addEventListener('click', closeCamera);
+    cameraModal?.addEventListener('click', (event) => {
+      if (event.target === cameraModal) closeCamera();
+    });
+  })();
+</script>
+{% endblock %}

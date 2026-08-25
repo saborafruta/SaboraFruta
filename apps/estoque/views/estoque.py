@@ -1847,6 +1847,298 @@ class AjusteEstoqueView(PermissaoRequiredMixin, View):
         })
 
 
+class AjusteRapidoEstoqueView(PermissaoRequiredMixin, View):
+    permissao_modulo = 'estoque'
+    permissao_acao = 'editar'
+    template_name = 'estoque/estoque/ajuste_rapido.html'
+    session_key = 'ajuste_rapido_estoque'
+
+    @staticmethod
+    def _decimal_from_text(value):
+        text = str(value or '').strip()
+        text = text.replace('.', '').replace(',', '.') if ',' in text else text
+        if not text:
+            return Decimal('0')
+        try:
+            quantidade = Decimal(text)
+        except (InvalidOperation, ValueError):
+            raise DomainError('Quantidade invalida.')
+        if quantidade < 0:
+            raise DomainError('Quantidade nao pode ser negativa.')
+        return quantidade.quantize(Decimal('0.001'))
+
+    @staticmethod
+    def _decimal_to_value(value):
+        value = Decimal(str(value or '0'))
+        return f'{value:.3f}'.rstrip('0').rstrip('.')
+
+    @staticmethod
+    def _session_items(request):
+        dados = request.session.get(AjusteRapidoEstoqueView.session_key, {})
+        return dados if isinstance(dados, dict) else {}
+
+    @classmethod
+    def _store_session_item(cls, request, produto, atual_anterior, contado, delta, saldo_final, movimento=None, conferido=True):
+        itens = cls._session_items(request)
+        agora = timezone.localtime().strftime('%d/%m/%Y %H:%M')
+        itens[str(produto.pk)] = {
+            'produto_pk': produto.pk,
+            'produto_id': produto.codigo_replicacao,
+            'codigo': produto.codigo or '',
+            'codigo_barras': produto.codigo_barras or '',
+            'descricao': produto.descricao,
+            'atual_anterior': cls._decimal_to_value(atual_anterior),
+            'contado': cls._decimal_to_value(contado),
+            'diferenca': cls._decimal_to_value(delta),
+            'saldo_final': cls._decimal_to_value(saldo_final),
+            'movimento_id': movimento.pk if movimento else '',
+            'conferido': bool(conferido),
+            'usuario': getattr(request.user, 'nome', '') or getattr(request.user, 'username', '') or str(request.user),
+            'data': agora,
+        }
+        request.session[cls.session_key] = itens
+        request.session.modified = True
+        return itens[str(produto.pk)]
+
+    @staticmethod
+    def _buscar_produtos(request):
+        qs = produtos_estoque_queryset(request.filial_ativa)
+        busca = request.GET.get('q', '').strip()
+        barcode = request.GET.get('barcode', '').strip()
+        somente_conferidos = request.GET.get('conferidos') == '1'
+
+        termo = barcode or busca
+        if termo:
+            filtro = (
+                Q(descricao__icontains=termo)
+                | Q(descricao_curta__icontains=termo)
+                | Q(descricao_pdv__icontains=termo)
+                | Q(codigo__icontains=termo)
+                | Q(codigo_barras__icontains=termo)
+                | Q(ncm__icontains=termo)
+                | Q(categoria__nome__icontains=termo)
+                | Q(subcategoria__nome__icontains=termo)
+                | Q(fornecedor__nome_fantasia__icontains=termo)
+                | Q(fornecedor__razao_social__icontains=termo)
+            )
+            codigo_limpo = termo.lstrip('0')
+            if codigo_limpo.isdigit():
+                codigo_int = int(codigo_limpo)
+                filtro |= Q(pk=codigo_int) | Q(id_externo=f'produto:{codigo_int}')
+            qs = qs.filter(filtro)
+
+        if somente_conferidos:
+            ids = [int(pk) for pk, item in AjusteRapidoEstoqueView._session_items(request).items() if item.get('conferido')]
+            qs = qs.filter(pk__in=ids) if ids else qs.none()
+
+        return qs.order_by('descricao', 'pk'), busca, barcode, somente_conferidos
+
+    def get(self, request):
+        qs, busca, barcode, somente_conferidos = self._buscar_produtos(request)
+        page_obj = Paginator(qs, 80).get_page(request.GET.get('page'))
+        sessao = self._session_items(request)
+        for produto in page_obj.object_list:
+            item = sessao.get(str(produto.pk), {})
+            produto.ajuste_rapido_conferido = bool(item.get('conferido'))
+            produto.ajuste_rapido_editado = str(produto.pk) in sessao
+            produto.ajuste_rapido_contado = item.get('contado', self._decimal_to_value(produto.estoque_quantidade_atual))
+            produto.estoque_quantidade_atual_value = self._decimal_to_value(produto.estoque_quantidade_atual)
+            produto.estoque_quantidade_atual_display = EstoqueListView._formatar_quantidade(produto.estoque_quantidade_atual)
+            produto.estoque_quantidade_disponivel_display = EstoqueListView._formatar_quantidade(produto.estoque_quantidade_disponivel)
+
+        querydict = request.GET.copy()
+        querydict.pop('page', None)
+        return render(request, self.template_name, {
+            'page_obj': page_obj,
+            'produtos': page_obj.object_list,
+            'busca': busca,
+            'barcode': barcode,
+            'somente_conferidos': somente_conferidos,
+            'itens_sessao': sessao,
+            'itens_sessao_total': len(sessao),
+            'itens_conferidos_total': sum(1 for item in sessao.values() if item.get('conferido')),
+            'page_querystring': querydict.urlencode(),
+        })
+
+
+class AjusteRapidoEstoqueAtualizarView(AjusteRapidoEstoqueView):
+    def post(self, request):
+        produto = get_object_or_404(
+            produtos_estoque_queryset(request.filial_ativa),
+            pk=request.POST.get('produto_id'),
+        )
+        try:
+            quantidade_contada = self._decimal_from_text(request.POST.get('quantidade'))
+        except DomainError as exc:
+            return JsonResponse({'ok': False, 'error': str(exc)}, status=400)
+        estoque = Estoque.objects.filter(produto=produto, filial=request.filial_ativa).first()
+        quantidade_atual = estoque.quantidade_atual if estoque else Decimal('0')
+        delta = quantidade_contada - quantidade_atual
+        movimento = None
+        if delta:
+            tipo = (
+                MovimentacaoEstoque.TipoOperacao.AJUSTE_MAIS
+                if delta > 0 else MovimentacaoEstoque.TipoOperacao.AJUSTE_MENOS
+            )
+            try:
+                movimento = MovimentacaoService.registrar_movimentacao(
+                    produto_id=produto.pk,
+                    filial_id=request.filial_ativa.pk,
+                    tipo_operacao=tipo,
+                    quantidade=abs(delta),
+                    usuario_id=request.user.pk,
+                    documento_tipo=MovimentacaoEstoque.DocumentoTipo.AJUSTE_MANUAL,
+                    documento_numero='AJUSTE-RAPIDO',
+                    observacao=(
+                        'Ajuste rapido de conferencia. '
+                        f'Contado: {self._decimal_to_value(quantidade_contada)}; '
+                        f'anterior: {self._decimal_to_value(quantidade_atual)}.'
+                    ),
+                    permitir_sem_lote=True,
+                )
+            except DomainError as exc:
+                return JsonResponse({'ok': False, 'error': str(exc)}, status=400)
+            _auditar_estoque(
+                request,
+                'ajustar',
+                movimento,
+                f'Ajuste rapido de estoque #{movimento.pk}',
+                justificativa='Conferencia rapida de estoque',
+                depois=snapshot_modelo(movimento),
+                relacionado=produto,
+                metadados={
+                    'quantidade_contada': str(quantidade_contada),
+                    'saldo_anterior': str(quantidade_atual),
+                    'saldo_posterior': str(movimento.quantidade_posterior),
+                    'origem': 'ajuste_rapido',
+                },
+            )
+            saldo_final = movimento.quantidade_posterior
+        else:
+            saldo_final = quantidade_atual
+
+        item = self._store_session_item(
+            request,
+            produto,
+            quantidade_atual,
+            quantidade_contada,
+            delta,
+            saldo_final,
+            movimento=movimento,
+            conferido=request.POST.get('conferido', '1') != '0',
+        )
+        return JsonResponse({
+            'ok': True,
+            'produto_id': produto.pk,
+            'quantidade_atual': self._decimal_to_value(saldo_final),
+            'quantidade_atual_display': EstoqueListView._formatar_quantidade(saldo_final),
+            'diferenca': self._decimal_to_value(delta),
+            'diferenca_display': EstoqueListView._formatar_quantidade(delta),
+            'movimento_id': movimento.pk if movimento else None,
+            'item': item,
+            'totais': {
+                'editados': len(self._session_items(request)),
+                'conferidos': sum(1 for item in self._session_items(request).values() if item.get('conferido')),
+            },
+        })
+
+
+class AjusteRapidoEstoqueLogView(AjusteRapidoEstoqueView):
+    def get(self, request, pk):
+        produto = get_object_or_404(produtos_estoque_queryset(request.filial_ativa), pk=pk)
+        movimentacoes = (
+            MovimentacaoEstoque.objects
+            .for_filial(request.filial_ativa)
+            .filter(produto=produto)
+            .select_related('usuario', 'lote')
+            .order_by('-data_movimentacao')[:18]
+        )
+        return JsonResponse({
+            'produto': {
+                'id': produto.codigo_replicacao,
+                'descricao': produto.descricao,
+            },
+            'movimentacoes': [
+                {
+                    'data': timezone.localtime(mov.data_movimentacao).strftime('%d/%m/%Y %H:%M') if mov.data_movimentacao else '-',
+                    'tipo': mov.get_tipo_operacao_display(),
+                    'quantidade': EstoqueListView._formatar_quantidade(mov.quantidade),
+                    'anterior': EstoqueListView._formatar_quantidade(mov.quantidade_anterior),
+                    'posterior': EstoqueListView._formatar_quantidade(mov.quantidade_posterior),
+                    'usuario': getattr(mov.usuario, 'nome', '') or str(mov.usuario) if mov.usuario_id else 'Sistema',
+                    'documento': mov.documento_numero or mov.get_documento_tipo_display() or '-',
+                    'observacao': mov.observacao or '',
+                }
+                for mov in movimentacoes
+            ],
+        })
+
+
+class AjusteRapidoEstoquePdfView(AjusteRapidoEstoqueView):
+    def get(self, request):
+        itens = list(self._session_items(request).values())
+        response = HttpResponse(content_type='application/pdf')
+        response['Content-Disposition'] = 'attachment; filename="ajuste_rapido_estoque.pdf"'
+        doc = SimpleDocTemplate(
+            response,
+            pagesize=landscape(A4),
+            rightMargin=22,
+            leftMargin=22,
+            topMargin=24,
+            bottomMargin=24,
+        )
+        styles = getSampleStyleSheet()
+        elements = [
+            Paragraph('Ajuste rapido de estoque', styles['Title']),
+            Paragraph(
+                f"Filial: {request.filial_ativa} | Usuario: {request.user} | Gerado em {timezone.localtime().strftime('%d/%m/%Y %H:%M')}",
+                styles['Normal'],
+            ),
+            Spacer(1, 10),
+        ]
+        data = [[
+            'ID', 'Codigo', 'Codigo barras', 'Produto', 'Anterior', 'Contado',
+            'Diferenca', 'Final', 'Conferido', 'Mov.'
+        ]]
+        for item in itens:
+            data.append([
+                item.get('produto_id', ''),
+                item.get('codigo', ''),
+                item.get('codigo_barras', ''),
+                item.get('descricao', ''),
+                item.get('atual_anterior', ''),
+                item.get('contado', ''),
+                item.get('diferenca', ''),
+                item.get('saldo_final', ''),
+                'Sim' if item.get('conferido') else 'Nao',
+                item.get('movimento_id', '') or '-',
+            ])
+        if len(data) == 1:
+            data.append(['-', '-', '-', 'Nenhum ajuste registrado nesta sessao.', '-', '-', '-', '-', '-', '-'])
+        table = Table(data, repeatRows=1, colWidths=[38, 58, 82, 235, 58, 58, 58, 58, 55, 42])
+        table.setStyle(TableStyle([
+            ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#111827')),
+            ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
+            ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+            ('FONTSIZE', (0, 0), (-1, -1), 7),
+            ('GRID', (0, 0), (-1, -1), 0.25, colors.HexColor('#d1d5db')),
+            ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, colors.HexColor('#f8fafc')]),
+            ('ALIGN', (4, 1), (9, -1), 'RIGHT'),
+            ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+        ]))
+        elements.append(table)
+        doc.build(elements)
+        return response
+
+
+class AjusteRapidoEstoqueLimparView(AjusteRapidoEstoqueView):
+    def post(self, request):
+        request.session.pop(self.session_key, None)
+        request.session.modified = True
+        messages.success(request, 'Conferencia limpa.')
+        return redirect('estoque:ajuste-rapido')
+
+
 class TransferenciaView(PermissaoRequiredMixin, View):
     permissao_modulo = 'estoque'
     permissao_acao = 'aprovar'
