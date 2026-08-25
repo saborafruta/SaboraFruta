@@ -181,8 +181,13 @@ class MontagemTests(ProcessoBase):
 
         self.assertEqual(op.etapas_processo.count(), antes)
 
-    def test_as_dezoito_estao_todas_no_vocabulario(self):
-        self.assertEqual(len(SEQUENCIA), 18)
+    def test_o_fluxo_da_polpa_tem_as_dezoito(self):
+        from apps.polpa.models.processo import FLUXO_POLPA
+
+        self.assertEqual(len(FLUXO_POLPA), 18)
+        # E todas elas existem no vocabulário comum — uma etapa fora dele
+        # não seria apontável e sumiria dos relatórios.
+        self.assertTrue(set(FLUXO_POLPA) <= set(SEQUENCIA))
 
 
 class ApontamentoTests(ProcessoBase):
@@ -442,3 +447,159 @@ class TelasProcessoTests(ProcessoBase):
         resposta = self.client.get(reverse('polpa:ordem-detail', args=[op.pk]))
 
         self.assertContains(resposta, reverse('polpa:processo-ordem', args=[op.pk]))
+
+
+class FluxoDoAcaiTests(ProcessoBase):
+    """
+    O açaí não passa pelo caminho da polpa.
+
+    Polpa despolpa e refina; açaí processa, mistura e resfria — e nenhum dos
+    dois faz o que o outro faz. Um fluxo único com "etapas que não se
+    aplicam" encheria a tela de linha morta, e linha morta é o que faz a
+    pessoa parar de olhar a lista.
+    """
+
+    def setUp(self):
+        super().setUp()
+        self.acai = self._item(T.ACAI, 'Acai tradicional 1 kg', 'ACAI1')
+        self.agua = self._item(T.AGUA, 'Agua tratada', 'AGUA')
+        self.acucar = self._item(T.ACUCAR, 'Xarope de acucar', 'XAR')
+
+    def _receita_acai(self, etapas=None, versao='1.0'):
+        receita = ReceitaService.criar(self.filial, self.acai, {
+            'descricao': 'Acai tradicional', 'versao': versao,
+            'quantidade_produzida': Decimal('1000'),
+            'rendimento_esperado': Decimal('95'),
+        })
+        for produto, quantidade in (
+            (self.manga, Decimal('600')),   # polpa de açaí, no papel de base
+            (self.agua, Decimal('300')),
+            (self.acucar, Decimal('100')),
+        ):
+            ItemFichaTecnica.objects.create(
+                ficha=receita.ficha, materia_prima=produto,
+                quantidade=quantidade, perda_prevista=Decimal('0'),
+            )
+        # Sem etapa nenhuma a receita não ativa (é uma das pendências da
+        # seção 2). A padrão é livre, sem etapa canônica — e é justamente
+        # esse caso que cai no fluxo do TIPO do produto.
+        for i, (nome, canonica) in enumerate(
+            etapas or [('Bater no tanque', '')], start=1,
+        ):
+            EtapaReceita.objects.create(
+                receita=receita, ordem=i, nome=nome, etapa=canonica,
+            )
+        ReceitaService.ativar(receita)
+        return receita
+
+    def _op_acai(self, receita=None):
+        return OrdemPolpaService.criar(
+            self.filial, receita or self._receita_acai(),
+            {'quantidade_planejada': Decimal('1000')}, self.usuario,
+        )
+
+    def test_a_ordem_de_acai_recebe_o_fluxo_do_acai(self):
+        op = self._op_acai()
+
+        etapas = list(op.etapas_processo.values_list('etapa', flat=True))
+
+        self.assertIn(Etapa.HIGIENIZACAO, etapas)
+        self.assertIn(Etapa.PROCESSAMENTO, etapas)
+        self.assertIn(Etapa.MISTURA, etapas)
+        self.assertIn(Etapa.RESFRIAMENTO, etapas)
+
+    def test_o_acai_nao_tem_as_etapas_da_polpa(self):
+        op = self._op_acai()
+
+        etapas = set(op.etapas_processo.values_list('etapa', flat=True))
+
+        self.assertNotIn(Etapa.DESPOLPAMENTO, etapas)
+        self.assertNotIn(Etapa.REFINO, etapas)
+        self.assertNotIn(Etapa.SANITIZACAO, etapas)
+
+    def test_a_pasteurizacao_e_quando_aplicavel(self):
+        """
+        Há quem congele sem pasteurizar. Entra na ordem quando a receita
+        declara, e fica fora do padrão para não virar linha morta.
+        """
+        sem = self._op_acai()
+        self.assertNotIn(
+            Etapa.PASTEURIZACAO,
+            set(sem.etapas_processo.values_list('etapa', flat=True)),
+        )
+
+        # Versão 2.0: o mesmo produto só tem uma receita por versão, e a
+        # 1.0 já foi criada acima.
+        com_receita = self._receita_acai([
+            ('Recepcao', Etapa.RECEPCAO),
+            ('Pasteurizacao', Etapa.PASTEURIZACAO),
+            ('Envase', Etapa.ENVASE),
+        ], versao='2.0')
+        com = OrdemPolpaService.criar(
+            self.filial, com_receita,
+            {'quantidade_planejada': Decimal('500')}, self.usuario,
+        )
+
+        self.assertIn(
+            Etapa.PASTEURIZACAO,
+            set(com.etapas_processo.values_list('etapa', flat=True)),
+        )
+
+    def test_o_fluxo_do_acai_tem_as_treze_pedidas(self):
+        from apps.polpa.models.processo import FLUXO_ACAI
+
+        self.assertEqual(len(FLUXO_ACAI), 13)
+
+    def test_produto_sem_ficha_cai_no_fluxo_da_polpa(self):
+        """
+        O padrão de quem não tem tipo é a polpa — começar de um caminho
+        conhecido é melhor que de uma lista vazia.
+        """
+        from apps.polpa.models.processo import FLUXO_POLPA, fluxo_do_tipo
+
+        self.assertEqual(fluxo_do_tipo('', com_opcionais=True), FLUXO_POLPA)
+
+
+class ConsumoTests(FluxoDoAcaiTests):
+    """O consumo dos ingredientes e o custo — previsto contra realizado."""
+
+    def test_o_previsto_sai_da_receita_e_escala_com_a_ordem(self):
+        receita = self._receita_acai()
+        op = OrdemPolpaService.criar(
+            self.filial, receita,
+            {'quantidade_planejada': Decimal('2000')}, self.usuario,
+        )
+
+        consumo = ProcessoService.consumo(op)
+
+        por_nome = {l['produto'].descricao: l for l in consumo['linhas']}
+        # A receita rende 1.000 com 300 de água; 2.000 pedem 600.
+        self.assertEqual(por_nome['Agua tratada']['previsto'], Decimal('600.000'))
+        self.assertEqual(por_nome['Xarope de acucar']['previsto'], Decimal('200.000'))
+
+    def test_sem_encerrar_o_realizado_e_nulo(self):
+        """
+        "Ainda não consumiu" é diferente de "consumiu nada" — zero faria a
+        diferença aparecer como economia de 100%.
+        """
+        op = self._op_acai()
+
+        consumo = ProcessoService.consumo(op)
+
+        self.assertFalse(consumo['consumiu'])
+        self.assertIsNone(consumo['custo_real'])
+        self.assertTrue(all(l['realizado'] is None for l in consumo['linhas']))
+
+    def test_o_custo_previsto_soma_os_ingredientes(self):
+        for produto, custo in (
+            (self.manga, Decimal('8')), (self.agua, Decimal('0.01')),
+            (self.acucar, Decimal('4')),
+        ):
+            produto.preco_custo_medio = custo
+            produto.save(update_fields=['preco_custo_medio'])
+
+        op = self._op_acai()
+        consumo = ProcessoService.consumo(op)
+
+        # 600×8 + 300×0,01 + 100×4 = 4.800 + 3 + 400
+        self.assertEqual(consumo['custo_previsto'], Decimal('5203.00'))

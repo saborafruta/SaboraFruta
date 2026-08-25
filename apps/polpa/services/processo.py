@@ -7,12 +7,12 @@ nascessem sob demanda, uma OP aberta mostraria só o que já foi tocado — e
 informação que quem acompanha a produção precisa.
 
 QUAIS ETAPAS uma ordem tem sai da RECEITA quando ela declara (a ficha
-técnica da seção 2 já lista as etapas do produto, e agora cada uma pode
-apontar para uma das dezoito canônicas). Sem isso, entra a lista padrão —
-as dezoito menos as três que nem toda fábrica faz (descascamento, corte e
-formulação). Criar as dezoito para todo produto encheria a tela de linhas
-que ninguém vai apontar, e etapa vazia por padrão é o que faz a pessoa
-parar de olhar a lista.
+técnica da seção 2 lista as etapas do produto, e cada uma pode apontar para
+uma etapa canônica). Sem isso, entra o FLUXO DO TIPO do produto: polpa passa
+por despolpamento e refino; açaí, por processamento, mistura e resfriamento.
+As etapas "quando aplicável" -- descascamento, corte, formulação e
+pasteurização -- ficam de fora do padrão e entram quando a receita as
+declara: linha vazia por padrão é o que faz a pessoa parar de olhar a lista.
 
 APONTAR NÃO REESCREVE A RECEITA. O que se grava aqui é o que aconteceu
 nesta batida; a fórmula continua onde estava. Um campo só para as duas
@@ -27,7 +27,7 @@ from django.utils import timezone
 
 from apps.core.services.exceptions import DomainError
 from apps.polpa.models import ApontamentoEtapa, OrdemPolpa
-from apps.polpa.models.processo import PADRAO, POSICAO, Etapa
+from apps.polpa.models.processo import POSICAO, Etapa, fluxo_do_produto
 
 ZERO = Decimal('0')
 SIT = ApontamentoEtapa.Situacao
@@ -50,7 +50,13 @@ class ProcessoService:
         existentes = set(
             op.etapas_processo.values_list('etapa', flat=True)
         )
-        escolhidas = ProcessoService._etapas_da_receita(op) or list(PADRAO)
+        # O CAMINHO SAI DO PRODUTO quando a receita não declara: polpa e
+        # açaí não passam pelas mesmas etapas, e uma lista única faria a
+        # tela do açaí mostrar despolpamento e refino, que ele não tem.
+        escolhidas = (
+            ProcessoService._etapas_da_receita(op)
+            or list(fluxo_do_produto(op.produto))
+        )
 
         novas = [
             ApontamentoEtapa(
@@ -192,6 +198,73 @@ class ProcessoService:
                 continue
             faltando.append(f'{etapa.get_etapa_display()} não foi apontada.')
         return faltando
+
+    @staticmethod
+    def consumo(op: OrdemPolpa) -> dict:
+        """
+        O que a receita mandava consumir, contra o que saiu do estoque.
+
+        PREVISTO E REALIZADO LADO A LADO. O previsto sai da receita
+        (quantidade × fator da ordem); o realizado sai das MOVIMENTAÇÕES da
+        OP, que é o que de fato baixou. Mostrar só o previsto seria mostrar
+        a intenção; só o realizado esconderia que se gastou 12% a mais de
+        açúcar do que a fórmula manda -- e é essa diferença que explica o
+        custo do lote ter estourado.
+
+        Enquanto a ordem não é encerrada não há movimentação, e o realizado
+        vem vazio: `None` e não zero, porque "ainda não consumiu" é
+        diferente de "consumiu nada".
+        """
+        from apps.estoque.models import MovimentacaoEstoque
+
+        ficha = op.ordem.ficha_tecnica
+        base = ficha.quantidade_produzida or ZERO
+        fator = (op.quantidade_planejada / base) if base else ZERO
+
+        movidos: dict = {}
+        for mov in MovimentacaoEstoque.objects.filter(
+            documento_tipo=MovimentacaoEstoque.DocumentoTipo.ORDEM_PRODUCAO,
+            documento_id=op.ordem_id,
+            tipo_operacao=MovimentacaoEstoque.TipoOperacao.PRODUCAO_SAIDA,
+        ):
+            movidos[mov.produto_id] = movidos.get(mov.produto_id, ZERO) + (
+                mov.quantidade or ZERO
+            )
+
+        linhas, custo_previsto, custo_real = [], ZERO, ZERO
+        for item in ficha.itens.select_related(
+            'materia_prima', 'materia_prima__unidade_medida',
+        ):
+            produto = item.materia_prima
+            previsto = (item.quantidade_com_perda() * fator).quantize(Decimal('0.001'))
+            realizado = movidos.get(produto.pk)
+            custo = produto.preco_custo_medio or produto.preco_custo or ZERO
+
+            custo_previsto += previsto * custo
+            if realizado is not None:
+                custo_real += realizado * custo
+
+            linhas.append({
+                'produto': produto,
+                'unidade': getattr(produto.unidade_medida, 'sigla', ''),
+                'previsto': previsto,
+                'realizado': realizado,
+                'diferenca': (
+                    (realizado - previsto) if realizado is not None else None
+                ),
+                'custo_previsto': (previsto * custo).quantize(Decimal('0.01')),
+                'custo_real': (
+                    (realizado * custo).quantize(Decimal('0.01'))
+                    if realizado is not None else None
+                ),
+            })
+
+        return {
+            'linhas': linhas,
+            'custo_previsto': custo_previsto.quantize(Decimal('0.01')),
+            'custo_real': custo_real.quantize(Decimal('0.01')) if movidos else None,
+            'consumiu': bool(movidos),
+        }
 
     @staticmethod
     def fila(filial, filtros: dict | None = None):

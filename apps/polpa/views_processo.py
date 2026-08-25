@@ -137,7 +137,7 @@ class ApontarEtapaView(PolpaBaseView):
 
 
 class ProcessoDaOrdemView(PolpaBaseView):
-    """O processo de uma ordem: as dezoito etapas e onde a fruta se perde."""
+    """O processo de uma ordem: as etapas dela e onde a fruta se perde."""
 
     area = 'producao'
 
@@ -155,6 +155,10 @@ class ProcessoDaOrdemView(PolpaBaseView):
             'title': f'Processo — {op.numero}',
             'op': op,
             'resumo': ProcessoService.resumo(op),
+            # PREVISTO x REALIZADO do consumo: é a diferença que explica o
+            # custo do lote ter estourado, e ela não aparece em lugar nenhum
+            # se as duas colunas não ficarem lado a lado.
+            'consumo': ProcessoService.consumo(op),
             'recursos': Recurso.objects.for_filial(_filial(request)).filter(ativo=True),
             'operadores': Usuario.objects.filter(
                 empresa=_filial(request).empresa, ativo=True,

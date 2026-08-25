@@ -81,6 +81,96 @@
     </div>
   {% endif %}
 
+  {# ── Consumo dos ingredientes ───────────────────────────────────── #}
+  <div class="card overflow-hidden">
+    <div class="px-4 py-3 border-b" :style="temaClaro ? 'border-color:#e2e8f0;' : 'border-color:#2a2a2e;'">
+      <h3 class="text-sm font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
+        Consumo dos ingredientes
+      </h3>
+      <p class="text-xs mt-0.5" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+        {% comment %}
+          PREVISTO E REALIZADO LADO A LADO. Só o previsto seria a intenção;
+          só o realizado esconderia que se gastou 12% a mais de açúcar do
+          que a fórmula manda — e é essa diferença que explica o custo do
+          lote ter estourado.
+        {% endcomment %}
+        O que a receita manda contra o que saiu do estoque.
+        {% if not consumo.consumiu %}
+          O realizado aparece quando a ordem for encerrada.
+        {% endif %}
+      </p>
+    </div>
+    <div class="overflow-x-auto">
+      <table class="w-full text-sm">
+        <thead>
+          <tr class="border-b" :style="temaClaro ? 'border-color:#e2e8f0;' : 'border-color:#2a2a2e;'">
+            <th class="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wide"
+                :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Ingrediente</th>
+            <th class="text-right px-4 py-3 text-xs font-semibold uppercase tracking-wide"
+                :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Previsto</th>
+            <th class="text-right px-4 py-3 text-xs font-semibold uppercase tracking-wide"
+                :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Realizado</th>
+            <th class="text-right px-4 py-3 text-xs font-semibold uppercase tracking-wide"
+                :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Diferença</th>
+            <th class="text-right px-4 py-3 text-xs font-semibold uppercase tracking-wide"
+                :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Custo</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for linha in consumo.linhas %}
+            <tr class="border-b" :style="temaClaro ? 'border-color:#f1f5f9;' : 'border-color:#1e1e22;'">
+              <td class="px-4 py-2.5" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">{{ linha.produto }}</td>
+              <td class="px-4 py-2.5 text-right" :style="temaClaro ? 'color:#374151;' : 'color:#cbd5e1;'">
+                {{ linha.previsto|floatformat:3 }} {{ linha.unidade }}
+              </td>
+              <td class="px-4 py-2.5 text-right font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
+                {% if linha.realizado is not None %}{{ linha.realizado|floatformat:3 }}{% else %}—{% endif %}
+              </td>
+              <td class="px-4 py-2.5 text-right">
+                {% if linha.diferenca %}
+                  <span style="color:{% if linha.diferenca > 0 %}#d97706{% else %}#059669{% endif %};">
+                    {{ linha.diferenca|floatformat:3 }}
+                  </span>
+                {% endif %}
+              </td>
+              <td class="px-4 py-2.5 text-right" :style="temaClaro ? 'color:#374151;' : 'color:#cbd5e1;'">
+                R$ {{ linha.custo_previsto|floatformat:2 }}
+                {% if linha.custo_real is not None %}
+                  <span class="block text-[11px]" :style="temaClaro ? 'color:#94a3b8;' : 'color:#71717a;'">
+                    real R$ {{ linha.custo_real|floatformat:2 }}
+                  </span>
+                {% endif %}
+              </td>
+            </tr>
+          {% empty %}
+            <tr>
+              <td colspan="5" class="px-4 py-6 text-center text-sm"
+                  :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+                A receita desta ordem não tem ingredientes lançados.
+              </td>
+            </tr>
+          {% endfor %}
+        </tbody>
+        <tfoot>
+          <tr style="border-top:2px solid rgba(127,127,127,.35);">
+            <td class="px-4 py-3 text-xs font-semibold uppercase tracking-wide"
+                :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Custo dos ingredientes</td>
+            <td colspan="3"></td>
+            <td class="px-4 py-3 text-right font-bold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
+              R$ {{ consumo.custo_previsto|floatformat:2 }}
+              {% if consumo.custo_real is not None %}
+                <span class="block text-[11px] font-normal"
+                      style="color:{% if consumo.custo_real > consumo.custo_previsto %}#d97706{% else %}#059669{% endif %};">
+                  real R$ {{ consumo.custo_real|floatformat:2 }}
+                </span>
+              {% endif %}
+            </td>
+          </tr>
+        </tfoot>
+      </table>
+    </div>
+  </div>
+
   {# ── As etapas ──────────────────────────────────────────────────── #}
   <div class="card overflow-hidden">
     <table class="w-full text-sm">

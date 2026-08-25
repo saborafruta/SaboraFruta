@@ -1,5 +1,5 @@
 """
-O processo da polpa: as dezoito etapas, e o que aconteceu em cada uma.
+O processo: as etapas de cada produto, e o que aconteceu em cada uma.
 
 DUAS COISAS DIFERENTES QUE TODO MUNDO CHAMA DE "ETAPA":
 
@@ -15,11 +15,15 @@ Misturar os dois é o erro clássico: a receita passa a ser reescrita a cada
 produção (e some a fórmula) ou o apontamento vira campo de texto (e some a
 conta). Por isso são dois modelos, ligados pela ETAPA CANÔNICA.
 
-AS DEZOITO SÃO UM VOCABULÁRIO FIXO, e não um cadastro livre. Cada fábrica
-pula algumas — descascamento e formulação são "quando aplicável" — mas o
-nome de cada uma precisa ser o mesmo em toda parte, senão "despolpa",
-"despolpamento" e "polpação" viram três etapas diferentes nos relatórios e o
-rendimento por etapa deixa de somar.
+O VOCABULÁRIO É FIXO, e não um cadastro livre: o nome de cada etapa precisa
+ser o mesmo em toda parte, senão "despolpa", "despolpamento" e "polpação"
+viram três etapas diferentes nos relatórios e o rendimento por etapa deixa
+de somar.
+
+O CAMINHO, PORÉM, É POR PRODUTO. Polpa passa por despolpamento e refino;
+açaí passa por processamento, mistura e resfriamento — e nenhum dos dois faz
+o que o outro faz. Um fluxo único com "etapas que não se aplicam" encheria a
+tela de linha morta, e linha morta faz a pessoa parar de olhar a lista.
 
 O RENDIMENTO NASCE DA DIFERENÇA entre o que entrou e o que saiu de cada
 etapa. É a única forma de responder "onde a fruta se perde" — um total de
@@ -37,20 +41,25 @@ ZERO = Decimal('0')
 
 
 class Etapa(models.TextChoices):
-    """As dezoito etapas do processo, na ordem em que acontecem."""
+    """O vocabulário das etapas, na ordem em que acontecem."""
 
-    RECEPCAO = 'recepcao', 'Recepção da fruta'
+    RECEPCAO = 'recepcao', 'Recepção da matéria-prima'
     PESAGEM = 'pesagem', 'Pesagem'
     INSPECAO = 'inspecao', 'Inspeção'
     SELECAO = 'selecao', 'Seleção'
     LAVAGEM = 'lavagem', 'Lavagem'
+    HIGIENIZACAO = 'higienizacao', 'Higienização'
     SANITIZACAO = 'sanitizacao', 'Sanitização'
     DESCASCAMENTO = 'descascamento', 'Descascamento'
     CORTE = 'corte', 'Corte'
     DESPOLPAMENTO = 'despolpamento', 'Despolpamento'
+    PROCESSAMENTO = 'processamento', 'Processamento'
     REFINO = 'refino', 'Peneiramento / refino'
     FORMULACAO = 'formulacao', 'Formulação'
+    MISTURA = 'mistura', 'Mistura'
     HOMOGENEIZACAO = 'homogeneizacao', 'Homogeneização'
+    PASTEURIZACAO = 'pasteurizacao', 'Pasteurização'
+    RESFRIAMENTO = 'resfriamento', 'Resfriamento'
     ENVASE = 'envase', 'Envase'
     SELAGEM = 'selagem', 'Selagem'
     IDENTIFICACAO = 'identificacao', 'Identificação do lote'
@@ -59,20 +68,82 @@ class Etapa(models.TextChoices):
     LIBERACAO = 'liberacao', 'Liberação pelo controle de qualidade'
 
 
-# A ORDEM É O PROCESSO. Vive numa tupla e não na ordem de declaração do
-# enum por acidente: é ela que numera as etapas de uma ordem nova, e a
+# A ORDEM É O PROCESSO. É ela que numera as etapas de uma ordem nova, e a
 # sequência importa — sanitizar depois de despolpar não sanitiza.
 SEQUENCIA: tuple[str, ...] = tuple(e.value for e in Etapa)
-
-# ETAPAS QUE NEM TODA FÁBRICA FAZ. Ficam de fora da lista padrão de uma
-# ordem nova, e entram quando a receita as declara. Criar as dezoito para
-# todo produto encheria a tela de linhas que ninguém vai apontar -- e etapa
-# vazia por padrão é o que faz a pessoa parar de olhar a lista.
-OPCIONAIS = (Etapa.DESCASCAMENTO, Etapa.CORTE, Etapa.FORMULACAO)
-
-PADRAO = tuple(e for e in SEQUENCIA if e not in {o.value for o in OPCIONAIS})
-
 POSICAO = {etapa: i for i, etapa in enumerate(SEQUENCIA)}
+
+
+# ══════════════════════════════════════════════════════════════════════
+# OS FLUXOS
+# ══════════════════════════════════════════════════════════════════════
+#
+# CADA PRODUTO TEM O SEU CAMINHO, e não é o mesmo. Polpa passa por
+# despolpamento e refino; açaí passa por processamento, mistura e
+# resfriamento -- e nenhum dos dois faz o que o outro faz. Um fluxo único
+# com "etapas que não se aplicam" encheria a tela de linha morta, e linha
+# morta é o que faz a pessoa parar de olhar a lista.
+#
+# A LISTA É POR TIPO DE PRODUTO (o `FichaProduto.Tipo` da seção 1), e a
+# receita continua podendo declarar a sua -- o cadastro manda, o padrão só
+# evita começar do zero.
+
+FLUXO_POLPA: tuple[str, ...] = (
+    Etapa.RECEPCAO, Etapa.PESAGEM, Etapa.INSPECAO, Etapa.SELECAO,
+    Etapa.LAVAGEM, Etapa.SANITIZACAO, Etapa.DESCASCAMENTO, Etapa.CORTE,
+    Etapa.DESPOLPAMENTO, Etapa.REFINO, Etapa.FORMULACAO,
+    Etapa.HOMOGENEIZACAO, Etapa.ENVASE, Etapa.SELAGEM, Etapa.IDENTIFICACAO,
+    Etapa.CONGELAMENTO, Etapa.ARMAZENAMENTO, Etapa.LIBERACAO,
+)
+
+FLUXO_ACAI: tuple[str, ...] = (
+    Etapa.RECEPCAO, Etapa.SELECAO, Etapa.HIGIENIZACAO, Etapa.PROCESSAMENTO,
+    Etapa.FORMULACAO, Etapa.MISTURA, Etapa.HOMOGENEIZACAO,
+    Etapa.PASTEURIZACAO, Etapa.RESFRIAMENTO, Etapa.ENVASE,
+    Etapa.CONGELAMENTO, Etapa.ARMAZENAMENTO, Etapa.LIBERACAO,
+)
+
+# ETAPAS QUE NEM TODA FÁBRICA FAZ. Ficam de fora da lista que uma ordem
+# nova recebe, e entram quando a receita as declara: descascamento de
+# acerola não existe, e pasteurização de açaí é "quando aplicável" -- há
+# quem congele sem pasteurizar.
+OPCIONAIS = (
+    Etapa.DESCASCAMENTO, Etapa.CORTE, Etapa.FORMULACAO, Etapa.PASTEURIZACAO,
+)
+
+_OPCIONAIS = {o.value for o in OPCIONAIS}
+
+FLUXOS = {
+    'polpa': FLUXO_POLPA,
+    'acai': FLUXO_ACAI,
+    # Sorvete, picolé e creme herdam o caminho do açaí enquanto não têm o
+    # seu: batem em quase tudo (mistura, homogeneização, resfriamento,
+    # envase, congelamento) e é melhor começar de um caminho parecido do
+    # que de uma lista genérica que ninguém reconhece.
+    'sorvete': FLUXO_ACAI,
+    'picole': FLUXO_ACAI,
+    'creme': FLUXO_ACAI,
+    'mix': FLUXO_POLPA,
+    'fruta_congelada': FLUXO_POLPA,
+}
+
+
+def fluxo_do_tipo(tipo: str, com_opcionais: bool = False) -> tuple[str, ...]:
+    """O caminho de um tipo de produto. Polpa é o padrão de quem não tem."""
+    fluxo = FLUXOS.get(tipo or '', FLUXO_POLPA)
+    if com_opcionais:
+        return fluxo
+    return tuple(e for e in fluxo if e not in _OPCIONAIS)
+
+
+def fluxo_do_produto(produto, com_opcionais: bool = False) -> tuple[str, ...]:
+    """O caminho deste produto, pela ficha da fábrica (seção 1)."""
+    ficha = getattr(produto, 'ficha_polpa', None)
+    return fluxo_do_tipo(getattr(ficha, 'tipo', ''), com_opcionais)
+
+
+# Compatibilidade: `PADRAO` era a lista única antes de existirem fluxos.
+PADRAO = fluxo_do_tipo('polpa')
 
 
 class ApontamentoEtapa(FilialScopedModel):
