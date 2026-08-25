@@ -27,6 +27,7 @@ from apps.core.models import Filial, LogSistema
 from apps.estoque.models import Estoque, LoteProduto, MovimentacaoEstoque
 from apps.estoque.services.movimentacao_service import MovimentacaoService
 from apps.produtos.forms import ProdutoForm
+from apps.produtos.forms.produto import LIMITE_IMAGEM_PRODUTO_BYTES, LIMITE_IMAGEM_PRODUTO_MB
 from apps.produtos.models import CategoriaProduto, ClasseFiscal, MarcaProduto, Produto, ProdutoFilial, UnidadeMedida
 from apps.produtos.services.replicacao_service import ReplicacaoProdutoService
 
@@ -2084,8 +2085,8 @@ class ProdutoImagemUpdateView(PermissaoRequiredMixin, View):
         if not imagem:
             messages.warning(request, 'Selecione uma imagem para atualizar o produto.')
             return redirect(destino)
-        if getattr(imagem, 'size', 0) > 4 * 1024 * 1024:
-            messages.error(request, 'A imagem deve ter ate 4 MB.')
+        if getattr(imagem, 'size', 0) > LIMITE_IMAGEM_PRODUTO_BYTES:
+            messages.error(request, f'A imagem deve ter ate {LIMITE_IMAGEM_PRODUTO_MB} MB.')
             return redirect(destino)
         content_type = getattr(imagem, 'content_type', '')
         if content_type and content_type not in {'image/jpeg', 'image/png', 'image/webp', 'image/gif'}:

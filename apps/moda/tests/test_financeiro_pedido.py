@@ -58,7 +58,7 @@ class FinanceiroPedidoEntradaTests(TestCase):
             dias_primeira_parcela=0,
         )
 
-    def _pedido(self, entrada=Decimal("0"), forma=None, conta=None):
+    def _pedido(self, entrada=Decimal("0"), forma=None, conta=None, entrega=date(2026, 9, 5)):
         produto = ProdutoModa.objects.create(
             filial=self.filial,
             codigo=f"CAM{ProdutoModa.objects.count() + 1:03d}",
@@ -69,7 +69,7 @@ class FinanceiroPedidoEntradaTests(TestCase):
             cliente=self.cliente,
             numero=PedidoProducao.objects.count() + 1,
             data_pedido=date(2026, 8, 25),
-            data_prevista_entrega=date(2026, 9, 5),
+            data_prevista_entrega=entrega,
             entrada=entrada,
             forma_pagamento=forma,
             conta_bancaria_entrada=conta,
@@ -104,6 +104,31 @@ class FinanceiroPedidoEntradaTests(TestCase):
         self.assertEqual(saldo.status, StatusContaReceber.ABERTO)
         self.assertEqual(saldo.valor_original, Decimal("800.00"))
         self.assertEqual(saldo.valor_pago, Decimal("0"))
+        self.assertEqual(saldo.data_vencimento, date(2026, 9, 5))
+
+    def test_saldo_respeita_limite_de_trinta_dias_da_data_do_pedido(self):
+        pedido = self._pedido(
+            entrada=Decimal("200.00"),
+            forma=self.forma,
+            entrega=date(2026, 10, 20),
+        )
+
+        FinanceiroPedidoService.gerar(pedido)
+
+        saldo = ContaReceber.objects.get(parcela=2)
+        self.assertEqual(saldo.data_vencimento, date(2026, 9, 24))
+
+    def test_sem_previsao_de_entrega_saldo_vence_no_limite_de_trinta_dias(self):
+        pedido = self._pedido(
+            entrada=Decimal("200.00"),
+            forma=self.forma,
+            entrega=None,
+        )
+
+        FinanceiroPedidoService.gerar(pedido)
+
+        saldo = ContaReceber.objects.get(parcela=2)
+        self.assertEqual(saldo.data_vencimento, date(2026, 9, 24))
 
     def test_sem_entrada_nao_exige_forma_e_nao_cria_pagamento(self):
         pedido = self._pedido(entrada=Decimal("0.00"))

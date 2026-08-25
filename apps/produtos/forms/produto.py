@@ -10,6 +10,9 @@ from apps.produtos.models import (
     CategoriaProduto, ClasseFiscal, LinhaProducao, MarcaProduto, Produto, UnidadeMedida,
 )
 
+LIMITE_IMAGEM_PRODUTO_MB = 30
+LIMITE_IMAGEM_PRODUTO_BYTES = LIMITE_IMAGEM_PRODUTO_MB * 1024 * 1024
+
 
 def _queryset_com_atual(queryset, current_id):
     filtro = Q(pk__in=queryset.values('pk'))
@@ -522,8 +525,10 @@ class ProdutoForm(forms.ModelForm):
         imagem = self.cleaned_data.get('imagem_produto')
         if not imagem:
             return imagem
-        if getattr(imagem, 'size', 0) > 4 * 1024 * 1024:
-            raise forms.ValidationError('Imagem deve ter no maximo 4 MB.')
+        if getattr(imagem, 'size', 0) > LIMITE_IMAGEM_PRODUTO_BYTES:
+            raise forms.ValidationError(
+                f'Imagem deve ter no maximo {LIMITE_IMAGEM_PRODUTO_MB} MB.'
+            )
         content_type = getattr(imagem, 'content_type', '')
         if content_type not in {'image/png', 'image/jpeg', 'image/webp', 'image/gif'}:
             raise forms.ValidationError('Use imagem PNG, JPG, WEBP ou GIF.')

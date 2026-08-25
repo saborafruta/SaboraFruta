@@ -26,6 +26,7 @@ from apps.financeiro.models.receber_pagar import ContaReceber
 from apps.financeiro.services.receber_service import ContaReceberService
 
 CENTAVO = Decimal('0.01')
+PRAZO_LIMITE_SALDO_DIAS = 30
 
 
 @dataclass(frozen=True)
@@ -65,8 +66,8 @@ class FinanceiroPedidoService:
         o que o teste consegue conferir sem banco.
 
         A entrada, quando existe, é a parcela 1 e já será baixada na geração.
-        O saldo é dividido pela condição de pagamento; sem condição, sai
-        numa parcela só.
+        O saldo parte da previsão de entrega, limitado a 30 dias do pedido.
+        A condição de pagamento só divide esse saldo em parcelas.
         """
         parcelas: list[Parcela] = []
         entrada = pedido.entrada or Decimal('0')
@@ -92,12 +93,7 @@ class FinanceiroPedidoService:
         intervalo = cond.intervalo_dias if cond else 0
         primeira = cond.dias_primeira_parcela if cond else 0
 
-        # Sem condição de pagamento, o saldo vence na entrega. É o costume da
-        # confecção, e evita o efeito colateral bobo de nascer uma conta já
-        # vencida no dia seguinte só porque ninguém escolheu a condição.
-        base_data = pedido.data_pedido if cond else (
-            pedido.data_prevista_entrega or pedido.data_pedido
-        )
+        base_data = cls._data_base_saldo(pedido)
 
         # Arredondamento para baixo em todas menos a última: assim a soma
         # nunca ultrapassa o saldo, e a diferença de centavos fica visível
@@ -115,6 +111,18 @@ class FinanceiroPedidoService:
                 rotulo=f'Parcela {i + 1}/{quantidade}',
             ))
         return parcelas
+
+    @classmethod
+    def _data_base_saldo(cls, pedido) -> date:
+        """
+        O saldo deve acompanhar a entrega esperada, mas não pode ficar sem
+        limite. Se a entrega passar de 30 dias, o financeiro cobra no limite.
+        """
+        limite = pedido.data_pedido + timedelta(days=PRAZO_LIMITE_SALDO_DIAS)
+        prevista = pedido.data_prevista_entrega
+        if not prevista:
+            return limite
+        return min(prevista, limite)
 
     # ── Geração ──────────────────────────────────────────────────────────
 
