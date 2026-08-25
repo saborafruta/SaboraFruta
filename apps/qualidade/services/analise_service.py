@@ -2,7 +2,7 @@
 from django.db import transaction
 from apps.qualidade.models import AnaliseQualidade
 from apps.qualidade.constants.enums import ResultadoAnalise, AcaoReprovacao
-from apps.estoque.constants.enums import StatusLote
+from apps.estoque.models import LoteProduto
 
 
 class AnaliseQualidadeService:
@@ -46,19 +46,33 @@ class AnaliseQualidadeService:
 
     @staticmethod
     def _aplicar_resultado(analise: AnaliseQualidade):
-        """Atualiza status do lote conforme resultado da análise."""
+        """
+        Atualiza o status do lote conforme o resultado da análise.
+
+        USA `LoteProduto.Status`, e não um enum próprio. Este método apontava
+        para `apps.estoque.constants.enums.StatusLote`, que nunca existiu: o
+        módulo inteiro estourava no import, então nem aprovar nem reprovar
+        jamais rodaram. Não havia `StatusLote.APROVADO` para restaurar --
+        lote liberado é ATIVO, que é o estado que o FEFO enxerga.
+
+        RESSALVA TAMBÉM LIBERA. É o caso em que a qualidade aceita um desvio
+        conscientemente; deixar o lote bloqueado transformaria a ressalva numa
+        reprovação com outro nome.
+        """
         if not analise.lote:
             return
         lote = analise.lote
-        if analise.resultado == ResultadoAnalise.APROVADO:
-            lote.status = StatusLote.APROVADO
+        if analise.resultado in (
+            ResultadoAnalise.APROVADO, ResultadoAnalise.APROVADO_COM_RESSALVA,
+        ):
+            lote.status = LoteProduto.Status.ATIVO
             lote.motivo_bloqueio = ""
         elif analise.resultado == ResultadoAnalise.REPROVADO:
-            lote.status = StatusLote.BLOQUEADO
+            lote.status = LoteProduto.Status.BLOQUEADO
             lote.motivo_bloqueio = (
-                f"Reprovado em análise #{analise.id}. Ação: {analise.acao_reprovacao}. "
-                f"{analise.observacao}"
-            )
-        elif analise.resultado == ResultadoAnalise.APROVADO_COM_RESSALVA:
-            lote.status = StatusLote.APROVADO
+                f"Reprovado em análise #{analise.id}. "
+                f"Ação: {analise.acao_reprovacao}. {analise.observacao}"
+            ).strip()
+        else:
+            return
         lote.save(update_fields=["status", "motivo_bloqueio", "updated_at"])

@@ -1,0 +1,180 @@
+{% extends "_base.html" %}
+{% block title %}{{ title }}{% endblock %}
+{% block page_title %}Qualidade{% endblock %}
+{% block content %}
+<div class="space-y-5 max-w-4xl">
+
+  <div>
+    <p class="text-sm mb-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+      <a href="{% url 'qualidade:checklist_list' %}"
+         :style="temaClaro ? 'color:#3b82f6;' : 'color:#60a5fa;'">‹ Checklists</a>
+    </p>
+    <h2 class="text-2xl font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
+      {{ analise.get_tipo_analise_display }}
+      {% if analise.lote %} · lote {{ analise.lote.numero_lote }}{% endif %}
+    </h2>
+    <p class="text-sm mt-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+      {{ analise.data_analise|date:"d/m/Y H:i" }} · {{ analise.responsavel_tecnico }}
+    </p>
+  </div>
+
+  {% if encerrada %}
+    <div class="card p-4"
+         style="border-left:4px solid {% if analise.resultado == 'reprovado' %}#dc2626{% else %}#059669{% endif %};">
+      <p class="text-sm font-semibold"
+         style="color:{% if analise.resultado == 'reprovado' %}#dc2626{% else %}#059669{% endif %};">
+        {{ analise.get_resultado_display }}
+      </p>
+      {% if analise.observacao %}
+        <p class="text-sm mt-1" :style="temaClaro ? 'color:#374151;' : 'color:#d1d5db;'">{{ analise.observacao }}</p>
+      {% endif %}
+    </div>
+  {% else %}
+    {% comment %}
+      O PLACAR ANTES DA LISTA. Numa conferência de quinze linhas, o que se
+      quer saber ao voltar à tela é quanto falta — não reler tudo.
+    {% endcomment %}
+    <div class="card p-4 flex flex-wrap gap-6">
+      <div>
+        <span class="block text-xs" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Conformes</span>
+        <strong class="text-lg" style="color:#059669;">{{ resumo.conformes }}</strong>
+      </div>
+      <div>
+        <span class="block text-xs" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Não conformes</span>
+        <strong class="text-lg" style="color:#dc2626;">{{ resumo.nao_conformes }}</strong>
+      </div>
+      <div>
+        <span class="block text-xs" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">A conferir</span>
+        <strong class="text-lg" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">{{ resumo.pendentes }}</strong>
+      </div>
+      {% if resumo.sem_acao %}
+        <div>
+          <span class="block text-xs" style="color:#d97706;">Sem ação corretiva</span>
+          <strong class="text-lg" style="color:#d97706;">{{ resumo.sem_acao|length }}</strong>
+        </div>
+      {% endif %}
+    </div>
+  {% endif %}
+
+  <form method="post" action="{% url 'qualidade:checklist_salvar' analise.pk %}">
+    {% csrf_token %}
+    <div class="space-y-3">
+      {% for item in itens %}
+        <div class="card p-4"
+             style="border-left:3px solid {% if item.situacao == 'nao_conforme' %}#dc2626{% elif item.situacao == 'conforme' %}#059669{% else %}#94a3b8{% endif %};">
+
+          <div class="flex flex-wrap items-baseline justify-between gap-2">
+            <span class="font-medium" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
+              {{ item.nome_parametro }}
+              {% if item.obrigatorio %}<span style="color:#dc2626;">*</span>{% endif %}
+            </span>
+            {% if item.faixa %}
+              <span class="text-xs" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+                exigido: {{ item.faixa }}
+              </span>
+            {% endif %}
+          </div>
+
+          {% if encerrada %}
+            <p class="text-sm mt-2" :style="temaClaro ? 'color:#374151;' : 'color:#d1d5db;'">
+              {{ item.valor|default:"—" }} {{ item.unidade_medida }}
+              <span class="ml-2 text-xs font-semibold"
+                    style="color:{% if item.situacao == 'nao_conforme' %}#dc2626{% elif item.situacao == 'conforme' %}#059669{% else %}#94a3b8{% endif %};">
+                {{ item.get_situacao_display }}
+              </span>
+            </p>
+          {% else %}
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-2 mt-2">
+              <input type="text" name="valor_{{ item.pk }}"
+                     value="{% if item.valor_numero is not None %}{{ item.valor_numero }}{% else %}{{ item.valor_texto }}{% endif %}"
+                     placeholder="Valor medido{% if item.unidade_medida %} ({{ item.unidade_medida }}){% endif %}"
+                     class="form-input w-full text-sm">
+              {% comment %}
+                O SELETOR EXISTE PARA O SUBJETIVO. Aparência, odor e textura
+                não têm faixa; o serviço não inventa veredito para eles, então
+                é aqui que a pessoa marca. Onde há faixa numérica, o valor
+                digitado decide e este campo pode ficar em branco.
+              {% endcomment %}
+              <select name="situacao_{{ item.pk }}" class="form-input w-full text-sm">
+                {% for valor, rotulo in situacoes %}
+                  <option value="{{ valor }}" {% if item.situacao == valor %}selected{% endif %}>{{ rotulo }}</option>
+                {% endfor %}
+              </select>
+            </div>
+            <input type="text" name="obs_{{ item.pk }}" value="{{ item.observacao }}"
+                   placeholder="Observação (opcional)"
+                   class="form-input w-full text-sm mt-2">
+          {% endif %}
+
+          {% if item.situacao == 'nao_conforme' or item.acao_corretiva %}
+            <div class="mt-2 pt-2" :style="temaClaro ? 'border-top:1px solid #f1f5f9;' : 'border-top:1px solid #27272a;'">
+              {% if encerrada %}
+                <p class="text-xs" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+                  <strong style="color:#d97706;">Ação corretiva:</strong>
+                  {{ item.acao_corretiva|default:"não registrada" }}
+                  {% if item.acao_responsavel %} — {{ item.acao_responsavel }}{% endif %}
+                  {% if item.acao_em %} · {{ item.acao_em|date:"d/m/Y H:i" }}{% endif %}
+                </p>
+              {% else %}
+                <input type="text" name="acao_{{ item.pk }}" value="{{ item.acao_corretiva }}"
+                       placeholder="Ação corretiva — o que foi feito"
+                       class="form-input w-full text-sm" style="border-color:#d97706;">
+                {% if item.acao_responsavel %}
+                  <p class="text-xs mt-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+                    Registrada por {{ item.acao_responsavel }}
+                    {% if item.acao_em %} em {{ item.acao_em|date:"d/m/Y H:i" }}{% endif %}
+                  </p>
+                {% endif %}
+              {% endif %}
+            </div>
+          {% endif %}
+        </div>
+      {% endfor %}
+    </div>
+
+    {% if not encerrada and pode_registrar %}
+      <button type="submit" class="btn-secondary text-sm mt-4">GRAVAR CONFERÊNCIA</button>
+    {% endif %}
+  </form>
+
+  {% if not encerrada %}
+    {% comment %}
+      FECHAR É OUTRO FORMULÁRIO, e outra permissão. Medir é uma coisa; assinar
+      que o lote pode sair é outra — e é a assinatura que libera ou bloqueia
+      material.
+    {% endcomment %}
+    <div class="card p-5 space-y-3">
+      <h3 class="text-sm font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
+        Fechar o laudo
+      </h3>
+      {% if resumo.obrigatorios_pendentes %}
+        <p class="text-sm" style="color:#d97706;">
+          Faltam {{ resumo.obrigatorios_pendentes }} parâmetro(s) obrigatório(s).
+          Fechar com pendência é assinar que se conferiu o que não se conferiu.
+        </p>
+      {% else %}
+        <p class="text-sm" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+          {% if resumo.nao_conformes %}
+            Há {{ resumo.nao_conformes }} item(ns) não conforme(s) — fechar vai
+            <strong style="color:#dc2626;">reprovar</strong> o laudo e bloquear o lote.
+          {% else %}
+            Tudo conforme. Fechar vai aprovar o laudo e liberar o lote.
+          {% endif %}
+        </p>
+      {% endif %}
+
+      <form method="post" action="{% url 'qualidade:checklist_concluir' analise.pk %}" class="space-y-2">
+        {% csrf_token %}
+        <input type="text" name="observacao" maxlength="500"
+               placeholder="Observação do laudo (opcional)"
+               class="form-input w-full text-sm">
+        <button type="submit" class="btn-primary text-sm"
+                {% if resumo.obrigatorios_pendentes %}disabled{% endif %}>
+          FECHAR LAUDO
+        </button>
+      </form>
+    </div>
+  {% endif %}
+
+</div>
+{% endblock %}

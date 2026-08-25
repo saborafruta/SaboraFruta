@@ -1,0 +1,102 @@
+{% extends "_base.html" %}
+{% block title %}{{ title }}{% endblock %}
+{% block page_title %}Qualidade{% endblock %}
+{% block content %}
+<div class="space-y-5 max-w-4xl">
+
+  <div>
+    <h2 class="text-2xl font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
+      Checklists de qualidade
+    </h2>
+    <p class="text-sm mt-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+      A conferência de um produto numa etapa. Os itens saem do
+      <a href="{% url 'qualidade:analise_list' %}"
+         :style="temaClaro ? 'color:#3b82f6;' : 'color:#60a5fa;'">cadastro de parâmetros</a>.
+    </p>
+  </div>
+
+  {% if pode_registrar %}
+    <div class="card p-5">
+      <h3 class="text-sm font-semibold mb-3" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
+        Abrir conferência
+      </h3>
+      <form method="post" action="{% url 'qualidade:checklist_abrir' %}"
+            class="grid grid-cols-1 sm:grid-cols-3 gap-2">
+        {% csrf_token %}
+        <input type="number" name="produto" placeholder="ID do produto"
+               class="form-input w-full text-sm" required>
+        <select name="etapa" class="form-input w-full text-sm">
+          {% for valor, rotulo in etapas %}
+            <option value="{{ valor }}">{{ rotulo }}</option>
+          {% endfor %}
+        </select>
+        {% comment %}
+          O LOTE É OPCIONAL de propósito: no recebimento a fruta é conferida
+          ANTES de virar lote — é a conferência que decide se ela entra.
+          Exigi-lo obrigaria a criar o lote para poder reprová-lo.
+        {% endcomment %}
+        <input type="number" name="lote" placeholder="ID do lote (opcional)"
+               class="form-input w-full text-sm">
+        <button type="submit" class="btn-primary text-sm sm:col-span-3">
+          ABRIR CHECKLIST
+        </button>
+      </form>
+    </div>
+  {% endif %}
+
+  <div class="card p-5">
+    <h3 class="text-sm font-semibold mb-3" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
+      Em conferência ({{ abertas|length }})
+    </h3>
+    {% for a in abertas %}
+      <a href="{% url 'qualidade:checklist_detail' a.pk %}"
+         class="flex items-center justify-between gap-3 py-2.5"
+         :style="temaClaro ? 'border-top:1px solid #f1f5f9;' : 'border-top:1px solid #27272a;'">
+        <div class="min-w-0">
+          <div class="text-sm font-medium" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
+            {{ a.get_tipo_analise_display }}
+            {% if a.lote %} · {{ a.lote.produto.descricao }} (lote {{ a.lote.numero_lote }}){% endif %}
+          </div>
+          <div class="text-xs" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+            {{ a.data_analise|date:"d/m/Y H:i" }} · {{ a.responsavel_tecnico }}
+            · {{ a.itens.all|length }} item(ns)
+          </div>
+        </div>
+        <span class="text-xs shrink-0" style="color:#3b82f6;">conferir</span>
+      </a>
+    {% empty %}
+      <p class="text-sm py-4" :style="temaClaro ? 'color:#94a3b8;' : 'color:#71717a;'">
+        Nenhuma conferência aberta.
+      </p>
+    {% endfor %}
+  </div>
+
+  {% if fechadas %}
+    <div class="card p-5">
+      <h3 class="text-sm font-semibold mb-3" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
+        Encerradas
+      </h3>
+      {% for a in fechadas %}
+        <a href="{% url 'qualidade:checklist_detail' a.pk %}"
+           class="flex items-center justify-between gap-3 py-2.5"
+           :style="temaClaro ? 'border-top:1px solid #f1f5f9;' : 'border-top:1px solid #27272a;'">
+          <div class="min-w-0">
+            <div class="text-sm" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
+              {{ a.get_tipo_analise_display }}
+              {% if a.lote %} · lote {{ a.lote.numero_lote }}{% endif %}
+            </div>
+            <div class="text-xs" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+              {{ a.data_analise|date:"d/m/Y H:i" }} · {{ a.responsavel_tecnico }}
+            </div>
+          </div>
+          <span class="text-xs font-semibold shrink-0"
+                style="color:{% if a.resultado == 'reprovado' %}#dc2626{% else %}#059669{% endif %};">
+            {{ a.get_resultado_display }}
+          </span>
+        </a>
+      {% endfor %}
+    </div>
+  {% endif %}
+
+</div>
+{% endblock %}
