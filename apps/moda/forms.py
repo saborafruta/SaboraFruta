@@ -193,7 +193,7 @@ class ValoresPedidoForm(forms.ModelForm):
         model = PedidoProducao
         fields = [
             'desconto', 'acrescimo', 'frete', 'entrada',
-            'forma_pagamento', 'condicao_pagamento',
+            'forma_pagamento', 'conta_bancaria_entrada', 'condicao_pagamento',
         ]
         # `x-model.number` liga cada campo ao Alpine da tela, para o total
         # fechar enquanto o usuário digita em vez de só depois de salvar.
@@ -210,6 +210,7 @@ class ValoresPedidoForm(forms.ModelForm):
         from apps.financeiro.models.formas_pagamento import (
             CondicaoPagamento, FormaPagamento,
         )
+        from apps.financeiro.models.conta_bancaria import ContaBancaria
 
         super().__init__(*args, **kwargs)
         self.filial = filial
@@ -221,8 +222,13 @@ class ValoresPedidoForm(forms.ModelForm):
         self.fields['condicao_pagamento'].queryset = CondicaoPagamento.objects.filter(
             empresa=empresa, ativo=True,
         ).order_by('descricao')
+        self.fields['conta_bancaria_entrada'].queryset = (
+            ContaBancaria.objects.for_filial(filial).filter(ativo=True).order_by('descricao')
+            if filial else ContaBancaria.objects.none()
+        )
 
         self.fields['forma_pagamento'].empty_label = 'Não informada'
+        self.fields['conta_bancaria_entrada'].empty_label = 'Usar conta da forma'
         self.fields['condicao_pagamento'].empty_label = 'À vista'
 
         for campo in self.fields.values():
@@ -239,6 +245,23 @@ class ValoresPedidoForm(forms.ModelForm):
             valor = dados.get(campo)
             if valor is not None and valor < 0:
                 self.add_error(campo, 'Não pode ser negativo.')
+
+        entrada = dados.get('entrada') or 0
+        forma_pagamento = dados.get('forma_pagamento')
+        conta_bancaria = dados.get('conta_bancaria_entrada')
+        if entrada > 0:
+            if not forma_pagamento:
+                self.add_error(
+                    'forma_pagamento',
+                    'Informe a forma de pagamento para lançar a entrada no caixa.',
+                )
+            if not conta_bancaria and forma_pagamento and forma_pagamento.conta_bancaria_padrao_id:
+                dados['conta_bancaria_entrada'] = forma_pagamento.conta_bancaria_padrao
+            elif not conta_bancaria:
+                self.add_error(
+                    'conta_bancaria_entrada',
+                    'Informe a conta bancária da entrada ou configure uma conta padrão na forma.',
+                )
 
         return dados
 

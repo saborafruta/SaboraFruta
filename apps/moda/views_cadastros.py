@@ -17,6 +17,7 @@ from django.views import View
 from apps.core.services.exceptions import DadosInvalidosError
 
 from apps.core.services.exceptions import DomainError
+from apps.financeiro.models.formas_pagamento import FormaPagamento
 
 from .forms_arquivo import ArquivoPedidoForm
 from .forms_cliente import ClienteRapidoForm
@@ -783,6 +784,15 @@ def contexto_do_pedido(request, pedido, **extra) -> dict:
         'form_valores': ValoresPedidoForm(
             instance=pedido, filial=filial,
         ),
+        'contas_por_forma_pagamento': {
+            str(forma.pk): forma.conta_bancaria_padrao_id
+            for forma in FormaPagamento.objects.filter(
+                Q(filial=filial) | Q(filial__isnull=True),
+                empresa=filial.empresa,
+                ativo=True,
+                conta_bancaria_padrao__isnull=False,
+            )
+        },
         'plano': FinanceiroPedidoService.planejar(pedido),
         'contas': FinanceiroPedidoService.contas_do_pedido(pedido),
         'valores_js': _valores_js(pedido, itens),

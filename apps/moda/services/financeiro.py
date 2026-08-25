@@ -7,10 +7,9 @@ e o financeiro recebe R$ 12.380, alguém vai passar uma tarde procurando os
 R$ 20 — então o arredondamento das parcelas é resolvido aqui dentro, com a
 última parcela absorvendo a diferença.
 
-A entrada vira a primeira conta, com vencimento na data do pedido, e não um
-pagamento já baixado. O sistema não sabe se o cliente pagou; marcar como
-pago seria inventar um recebimento. Ela nasce em aberto e o financeiro dá a
-baixa quando o dinheiro entrar de verdade.
+A entrada informada no pedido já é dinheiro recebido: vira uma conta
+recebida e baixada na data do pedido, pela forma/conta bancaria escolhida.
+Só o saldo restante nasce como contas em aberto.
 """
 from __future__ import annotations
 
@@ -24,6 +23,7 @@ from django.utils import timezone
 from apps.core.services.exceptions import DomainError
 from apps.financeiro.constants.enums import StatusContaReceber
 from apps.financeiro.models.receber_pagar import ContaReceber
+from apps.financeiro.services.receber_service import ContaReceberService
 
 CENTAVO = Decimal('0.01')
 
@@ -64,8 +64,9 @@ class FinanceiroPedidoService:
         Monta o plano sem gravar nada -- é o que a tela mostra na prévia e
         o que o teste consegue conferir sem banco.
 
-        A entrada, quando existe, é a parcela 1. O saldo é dividido pela
-        condição de pagamento; sem condição, sai numa parcela só.
+        A entrada, quando existe, é a parcela 1 e já será baixada na geração.
+        O saldo é dividido pela condição de pagamento; sem condição, sai
+        numa parcela só.
         """
         parcelas: list[Parcela] = []
         entrada = pedido.entrada or Decimal('0')
@@ -76,7 +77,7 @@ class FinanceiroPedidoService:
                 numero=1,
                 valor=entrada.quantize(CENTAVO),
                 vencimento=pedido.data_pedido,
-                rotulo='Entrada',
+                rotulo='Entrada recebida',
             ))
 
         if saldo > 0:
@@ -127,8 +128,9 @@ class FinanceiroPedidoService:
             raise DomainError('Não há valor a receber neste pedido.')
 
         total = len(plano)
-        contas = [
-            ContaReceber(
+        contas = []
+        for p in plano:
+            conta = ContaReceber(
                 filial=pedido.filial,
                 cliente=pedido.cliente,
                 documento_tipo=cls.DOCUMENTO_TIPO,
@@ -146,13 +148,31 @@ class FinanceiroPedidoService:
                 observacao=f'Pedido de produção #{pedido.numero:06d} — {p.rotulo}',
                 usuario=usuario,
             )
-            for p in plano
-        ]
-        ContaReceber.objects.bulk_create(contas)
+            conta.save()
+            if cls._eh_entrada(pedido, p):
+                ContaReceberService.registrar_baixa(
+                    conta,
+                    pedido.data_pedido,
+                    p.valor,
+                    pedido.forma_pagamento,
+                    usuario,
+                    conta_bancaria=cls._conta_entrada(pedido),
+                    observacao=f'Entrada do pedido #{pedido.numero:06d}',
+                )
+                conta.refresh_from_db()
+            contas.append(conta)
 
         pedido.financeiro_gerado_em = timezone.now()
         pedido.save(update_fields=['financeiro_gerado_em', 'updated_at'])
         return contas
+
+    @classmethod
+    def _eh_entrada(cls, pedido, parcela: Parcela) -> bool:
+        return (pedido.entrada or Decimal('0')) > 0 and parcela.numero == 1
+
+    @classmethod
+    def _conta_entrada(cls, pedido):
+        return pedido.conta_bancaria_entrada or pedido.forma_pagamento.conta_bancaria_padrao
 
     @classmethod
     def _validar(cls, pedido) -> None:
@@ -170,6 +190,16 @@ class FinanceiroPedidoService:
                 'O pedido está sem valor. Preencha o valor unitário dos '
                 'produtos antes de gerar o financeiro.'
             )
+
+        if (pedido.entrada or Decimal('0')) > 0:
+            if not pedido.forma_pagamento_id:
+                raise DomainError(
+                    'Informe a forma de pagamento da entrada antes de gerar o financeiro.'
+                )
+            if not cls._conta_entrada(pedido):
+                raise DomainError(
+                    'Informe a conta bancária da entrada ou configure uma conta padrão na forma de pagamento.'
+                )
 
     # ── Cancelamento ─────────────────────────────────────────────────────
 

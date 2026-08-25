@@ -1,4 +1,5 @@
 {% extends "_base.html" %}
+{% load widget_tweaks %}
 {% block title %}{{ title }}{% endblock %}
 {% block page_title %}Pedido #{{ pedido.numero|stringformat:"06d" }}{% endblock %}
 
@@ -1320,9 +1321,11 @@
     responder na hora — nenhum centavo dela chega ao contas a receber.
   {% endcomment %}
   {{ valores_js|json_script:"moda-valores" }}
+  {{ contas_por_forma_pagamento|json_script:"moda-contas-por-forma" }}
   <div id="valores" class="card p-5 space-y-5 scroll-mt-24"
        x-data="{
          d: JSON.parse(document.getElementById('moda-valores').textContent),
+         contasPorForma: JSON.parse(document.getElementById('moda-contas-por-forma').textContent),
          n(v) { const x = parseFloat(v); return isNaN(x) ? 0 : x; },
          get subtotal() { return this.d.itens.reduce((s, i) => s + i.qtd * this.n(i.unit), 0); },
          get total() {
@@ -1331,6 +1334,13 @@
          },
          get saldo() { const s = this.total - this.n(this.d.entrada); return s > 0 ? s : 0; },
          get qtdTotal() { return this.d.itens.reduce((s, i) => s + i.qtd, 0); },
+         ajustarContaEntrada() {
+           const forma = this.$refs.formaPagamentoEntrada;
+           const conta = this.$refs.contaBancariaEntrada;
+           if (!forma || !conta || conta.value) return;
+           const padrao = this.contasPorForma[forma.value];
+           if (padrao) conta.value = String(padrao);
+         },
          brl(v) { return v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }); }
        }">
 
@@ -1430,7 +1440,18 @@
           <div>
             <label class="block text-xs font-semibold mb-1"
                    :style="temaClaro ? 'color:#374151;' : 'color:#cbd5e1;'">Forma de pagamento</label>
-            {{ form_valores.forma_pagamento }}
+            {{ form_valores.forma_pagamento|attr:"x-ref:formaPagamentoEntrada"|attr:"@change:ajustarContaEntrada()" }}
+            <p class="text-xs mt-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+              Obrigatória quando houver entrada; também define a conta padrão.
+            </p>
+          </div>
+          <div x-show="n(d.entrada) > 0" x-cloak>
+            <label class="block text-xs font-semibold mb-1"
+                   :style="temaClaro ? 'color:#374151;' : 'color:#cbd5e1;'">Conta bancária da entrada</label>
+            {{ form_valores.conta_bancaria_entrada|attr:"x-ref:contaBancariaEntrada"|attr:"@focus:ajustarContaEntrada()" }}
+            <p class="text-xs mt-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+              Se ficar em branco, o sistema usa a conta padrão da forma de pagamento.
+            </p>
           </div>
           <div>
             <label class="block text-xs font-semibold mb-1"
@@ -1567,8 +1588,8 @@
           </button>
           <p class="text-xs mt-1.5" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
             {% if plano %}
-              Cria as contas a receber no financeiro. Salve os valores antes,
-              se acabou de alterá-los.
+              Lança a entrada recebida no caixa/banco e cria contas a receber
+              apenas para o saldo. Salve os valores antes, se acabou de alterá-los.
             {% else %}
               Lance o valor unitário dos produtos e salve para liberar.
             {% endif %}

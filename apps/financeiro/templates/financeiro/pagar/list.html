@@ -9,6 +9,7 @@
      x-data="{
        detalheAberto:false, detalheCarregando:false, detalheHtml:'', detalheErro:'',
        loteModal:false, loteAcao:'', loteTitulo:'',
+       loteCategoriaQuery:'', loteCategoriaId:'', loteCategoriaLabel:'',
        hidratarDetalhe() {
          this.$nextTick(() => {
            const alvo = document.querySelector('[data-receber-detalhe-content]');
@@ -59,7 +60,13 @@
            this.detalheErro = 'Não foi possível registrar o pagamento.';
          }
        },
-       abrirLote(acao, titulo) { this.loteAcao = acao; this.loteTitulo = titulo; this.loteModal = true; },
+       abrirLote(acao, titulo) {
+         this.loteAcao = acao; this.loteTitulo = titulo; this.loteModal = true;
+         this.loteCategoriaQuery = ''; this.loteCategoriaId = ''; this.loteCategoriaLabel = '';
+       },
+       selecionarCategoriaLote(id, label) {
+         this.loteCategoriaId = id; this.loteCategoriaLabel = label; this.loteCategoriaQuery = label;
+       },
        fecharDetalhe() { this.detalheAberto = false; document.body.style.overflow = ''; }
      }">
 
@@ -517,7 +524,42 @@
           <div x-show="loteAcao === 'editar'" x-cloak class="grid gap-4 sm:grid-cols-2">
             <div><label class="mb-1 block text-sm font-medium">{{ bulk_edit_form.data_vencimento.label }}</label>{{ bulk_edit_form.data_vencimento|add_class:"form-input" }}</div>
             <div><label class="mb-1 block text-sm font-medium">{{ bulk_edit_form.forma_pagamento_prevista.label }}</label>{{ bulk_edit_form.forma_pagamento_prevista|add_class:"form-input" }}</div>
-            <div class="sm:col-span-2"><label class="mb-1 block text-sm font-medium">{{ bulk_edit_form.plano_contas.label }}</label>{{ bulk_edit_form.plano_contas|add_class:"form-input" }}</div>
+            <div class="sm:col-span-2">
+              <label class="mb-1 block text-sm font-medium">{{ bulk_edit_form.plano_contas.label }}</label>
+              <input type="hidden" name="plano_contas" :value="loteCategoriaId">
+              <div class="relative">
+                <input type="search"
+                       x-model="loteCategoriaQuery"
+                       @input="loteCategoriaId=''; loteCategoriaLabel=''"
+                       class="form-input"
+                       autocomplete="off"
+                       placeholder="Buscar por grupo, tipo ou despesa">
+                <button type="button"
+                        x-show="loteCategoriaId"
+                        x-cloak
+                        class="absolute right-2 top-1/2 -translate-y-1/2 rounded border px-2 py-1 text-xs"
+                        @click="loteCategoriaQuery=''; loteCategoriaId=''; loteCategoriaLabel=''">
+                  Limpar
+                </button>
+              </div>
+              <div class="mt-2 max-h-52 overflow-y-auto rounded-lg border"
+                   :style="temaClaro ? 'border-color:#d1d5db;background:#fff' : 'border-color:#3f3f46;background:#18181b'">
+                <button type="button"
+                        class="block w-full px-3 py-2 text-left text-sm hover:bg-blue-500 hover:text-white"
+                        @click="selecionarCategoriaLote('', '')">
+                  Não alterar categoria
+                </button>
+                {% for categoria in bulk_edit_form.plano_contas.field.queryset %}
+                  <button type="button"
+                          class="block w-full px-3 py-2 text-left text-sm hover:bg-blue-500 hover:text-white"
+                          data-search="{{ categoria.caminho_descricao|lower }}"
+                          x-show="!loteCategoriaQuery || $el.dataset.search.includes(loteCategoriaQuery.toLowerCase())"
+                          @click="selecionarCategoriaLote('{{ categoria.pk }}', '{{ categoria.caminho_descricao|escapejs }}')">
+                    {{ categoria.caminho_descricao }}
+                  </button>
+                {% endfor %}
+              </div>
+            </div>
             <div class="sm:col-span-2"><label class="mb-1 block text-sm font-medium">{{ bulk_edit_form.observacao.label }}</label>{{ bulk_edit_form.observacao|add_class:"form-input" }}</div>
           </div>
 

@@ -112,6 +112,11 @@ class PedidoProducao(ComCodigoQr, FilialScopedModel):
         'financeiro.FormaPagamento', on_delete=models.SET_NULL,
         null=True, blank=True, related_name='pedidos_moda',
     )
+    conta_bancaria_entrada = models.ForeignKey(
+        'financeiro.ContaBancaria', on_delete=models.SET_NULL,
+        null=True, blank=True, related_name='pedidos_moda_entradas',
+        help_text='Conta onde a entrada do pedido foi recebida.',
+    )
     condicao_pagamento = models.ForeignKey(
         'financeiro.CondicaoPagamento', on_delete=models.SET_NULL,
         null=True, blank=True, related_name='pedidos_moda',
