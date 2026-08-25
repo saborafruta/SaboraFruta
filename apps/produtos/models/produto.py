@@ -1,5 +1,8 @@
 """Modelo de Produto com dados comerciais, fiscais, industriais e logisticos."""
 from decimal import Decimal, ROUND_HALF_UP
+from urllib.parse import unquote, urlparse
+
+from django.core.files.storage import default_storage
 from django.db import models
 
 from apps.core.models.base import FilialManager, FilialScopedModel, TimestampedModel
@@ -323,6 +326,30 @@ class Produto(FilialScopedModel):
         if self.codigo:
             return f'[{self.codigo}] {self.descricao}'
         return self.descricao
+
+    @property
+    def foto_url_resolvida(self):
+        """Retorna uma URL vigente para fotos armazenadas no bucket privado."""
+        valor = (self.foto_url or '').strip()
+        if not valor:
+            return ''
+
+        parsed = urlparse(valor)
+        nome_arquivo = ''
+        if not parsed.scheme and not parsed.netloc:
+            nome_arquivo = valor.lstrip('/')
+        elif (
+            parsed.path.lstrip('/').startswith('produtos/imagens/')
+            and any(chave.lower().startswith('x-amz-') for chave in parsed.query.split('&'))
+        ):
+            nome_arquivo = unquote(parsed.path.lstrip('/'))
+
+        if not nome_arquivo:
+            return valor
+        try:
+            return default_storage.url(nome_arquivo)
+        except (NotImplementedError, ValueError):
+            return valor
 
     @property
     def codigo_replicacao(self):

@@ -773,7 +773,7 @@ class EstoqueKardexProdutoView(PermissaoRequiredMixin, View):
                 'descricao': produto.descricao,
                 'codigo': produto.codigo or '-',
                 'codigo_barras': produto.codigo_barras or '-',
-                'foto_url': produto.foto_url or '',
+                'foto_url': produto.foto_url_resolvida,
                 'unidade': produto.unidade_medida.sigla if produto.unidade_medida_id else '-',
                 'categoria': produto.categoria.nome if produto.categoria_id else '-',
                 'fornecedor': str(produto.fornecedor) if produto.fornecedor_id else '-',
@@ -1944,7 +1944,7 @@ class AjusteRapidoEstoqueView(PermissaoRequiredMixin, View):
 
     @staticmethod
     def _foto_url_segura(request, produto):
-        url = (produto.foto_url or '').strip()
+        url = produto.foto_url_resolvida
         if not url:
             return ''
         if request.is_secure() and url.startswith('http://'):

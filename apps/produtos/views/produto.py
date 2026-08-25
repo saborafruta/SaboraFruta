@@ -192,7 +192,7 @@ def _gravar_imagem_produto(produto, imagem):
         extensao = 'jpg'
     caminho = f'produtos/imagens/{uuid.uuid4().hex}.{extensao}'
     caminho_salvo = default_storage.save(caminho, imagem)
-    produto.foto_url = default_storage.url(caminho_salvo)
+    produto.foto_url = caminho_salvo
 
 
 def _proximo_codigo_produto():
@@ -1509,7 +1509,7 @@ class ProdutoCreateView(PermissaoRequiredMixin, View):
         error_fields, error_steps_json = _produto_form_feedback(form)
         imagem_preview_url = ''
         if produto and produto.foto_url:
-            imagem_preview_url = produto.foto_url
+            imagem_preview_url = produto.foto_url_resolvida
         elif form.initial.get('foto_url'):
             imagem_preview_url = form.initial.get('foto_url')
         return {
@@ -1683,7 +1683,7 @@ class ProdutoUpdateView(PermissaoRequiredMixin, View):
             'cancel_url': reverse_lazy('produtos:produto-list'),
             'error_fields': error_fields,
             'error_steps_json': error_steps_json,
-            'imagem_preview_url': produto.foto_url or '',
+            'imagem_preview_url': produto.foto_url_resolvida,
             'subcategorias_form_json': _subcategorias_form_json(request.user.empresa, request.filial_ativa),
         }
         context.update(_produto_log_context(produto, usuario_padrao=request.user))
