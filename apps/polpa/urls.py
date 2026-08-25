@@ -19,6 +19,7 @@ from django.urls import path
 from . import (
     views, views_catalogo as vcat, views_ordem as vord,
     views_planejamento as vpla, views_processo as vproc,
+    views_subproduto as vsub,
     views_receita as vrec_receita, views_recebimento as vrec,
 )
 
@@ -79,6 +80,11 @@ ROTAS_PRONTAS: list = [
     path('producao/etapas/', vproc.FilaEtapasView.as_view(), name='processo-fila'),
     path('producao/apontamento/', vproc.ApontamentoView.as_view(), name='processo-apontamento'),
     path('producao/ordens/<int:pk>/processo/', vproc.ProcessoDaOrdemView.as_view(), name='processo-ordem'),
+
+    # SUBPRODUTOS NA TELA DA ORDEM: quem sabe que saíram 500 kg de casca
+    # é quem estava na linha, olhando aquela ordem.
+    path('producao/ordens/<int:pk>/subprodutos/', vsub.subproduto_registrar, name='subproduto-registrar'),
+    path('producao/ordens/<int:pk>/subprodutos/<int:subproduto_pk>/excluir/', vsub.subproduto_excluir, name='subproduto-excluir'),
     path('producao/etapas/<int:pk>/apontar/', vproc.ApontarEtapaView.as_view(), name='etapa-apontar'),
 
     # ── PPCP ────────────────────────────────────────────────────────────

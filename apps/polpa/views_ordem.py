@@ -14,8 +14,10 @@ from django.urls import reverse
 from apps.core.services.exceptions import DomainError
 
 from .forms_ordem import OrdemPolpaForm
-from .models import OrdemPolpa
-from .services import CustoService, OrdemPolpaService
+from apps.produtos.models import Produto
+
+from .models import FichaProduto, OrdemPolpa, Subproduto
+from .services import CustoService, OrdemPolpaService, SubprodutoService
 from .views import PolpaBaseView
 
 
@@ -123,6 +125,17 @@ class OrdemDetailView(PolpaBaseView):
             # tela já mostrava soma fruta e pote na mesma linha e não tem com
             # o que ser comparado — um número sozinho não diz se foi caro.
             'custo': CustoService.comparar(op),
+            # SUBPRODUTOS: o que saiu da batida além do produto. Fica aqui, e
+            # não numa tela de "resíduos", porque quem sabe que saíram 500 kg
+            # de casca é quem estava na linha olhando esta ordem.
+            'subprodutos': SubprodutoService.resumo(op),
+            'tipos_subproduto': Subproduto.Tipo.choices,
+            'destinos_subproduto': Subproduto.Destino.choices,
+            # Só o que NÃO é acabado: um subproduto que aponta para o próprio
+            # produto da ordem creditaria a batida duas vezes.
+            'produtos_subproduto': Produto.objects.for_filial(
+                _filial(request),
+            ).exclude(ficha_polpa__classe=FichaProduto.Classe.ACABADO)[:200],
             'etapas': op.receita.etapas.all(),
             'proximos': op.proximos,
             'situacoes': OrdemPolpa.Situacao.choices,

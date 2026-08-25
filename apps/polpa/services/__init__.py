@@ -4,10 +4,12 @@ from .ordem import OrdemPolpaService
 from .planejamento import PlanejamentoService
 from .processo import ProcessoService
 from .receita import ReceitaService
+from .subproduto import SubprodutoService
 from .recebimento import RecebimentoService
 
 __all__ = [
     'CatalogoService',
     'CustoService', 'OrdemPolpaService', 'PlanejamentoService',
     'ProcessoService', 'ReceitaService', 'RecebimentoService',
+    'SubprodutoService',
 ]
