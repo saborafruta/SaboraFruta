@@ -91,11 +91,22 @@
   input[type=number]::-webkit-outer-spin-button,
   input[type=number]::-webkit-inner-spin-button { -webkit-appearance: none; }
   .tab-pill { background: var(--pdv-t1); color: var(--pdv-bg); border-radius:6px; font-weight:600; }
-  .forma-btn { display:flex; flex-direction:column; align-items:center; justify-content:center; gap:7px;
-               padding:14px 6px 12px; border-radius:14px; background: var(--pdv-card);
+  /* `min-width:0` E `minmax(0,1fr)` NA GRADE: item de grid tem largura
+     minima AUTOMATICA, entao um nome comprido -- "(LINK DE PAGAMENTO)
+     CARTAO CREDITO" -- estica a coluna alem do painel, e a segunda coluna
+     de formas sai da tela. Era esse o defeito: as formas nao sumiram,
+     estavam empurradas para fora. */
+  .forma-btn { display:flex; flex-direction:column; align-items:center; justify-content:flex-start; gap:7px;
+               padding:12px 8px 11px; border-radius:14px; background: var(--pdv-card);
                border:2px solid var(--pdv-bd2); cursor:pointer; transition:.2s;
                font-size:11px; font-weight:700; color: var(--pdv-t3); width:100%; text-align:center;
-               letter-spacing:.01em; min-height:78px; }
+               letter-spacing:.01em; min-height:92px; min-width:0; overflow:hidden; }
+  /* O NOME QUEBRA EM DUAS LINHAS em vez de virar reticencia numa linha so.
+     Cortar "CARTAO CREDITO" em "CARTAO CR..." obriga quem opera o caixa a
+     abrir cada botao para descobrir qual e' -- e no caixa isso e' fila. */
+  .forma-nome { display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical;
+                overflow:hidden; line-height:1.2; max-width:100%; width:100%;
+                overflow-wrap:anywhere; text-align:center; }
   .forma-btn:hover { background: var(--pdv-hover); border-color: var(--pdv-bd); color: var(--pdv-t7); }
   .forma-btn.selected { border-color:#f15a24; background:rgba(241,90,36,.12);
                         color: var(--pdv-t1); box-shadow:0 0 0 1px rgba(241,90,36,.25),0 4px 16px rgba(241,90,36,.15); }
@@ -596,7 +607,7 @@
     .cart-item-controls::-webkit-scrollbar { display:none; }
     .cart-item-controls .btn-action { flex:0 0 auto;min-height:32px !important; }
     .cart-item-controls .item-obs-btn { width:38px;min-width:38px;padding-left:0 !important;padding-right:0 !important; }
-    #pdv-right-panel .forma-btn { min-height:70px;padding:10px 5px 9px;border-radius:10px; }
+    #pdv-right-panel .forma-btn { min-height:84px;padding:10px 6px 9px;border-radius:10px; }
     #pdv-right-panel .forma-icon { width:32px;height:32px;border-radius:9px; }
     #pdv-right-panel { overflow-y:auto !important;padding-bottom:10px; }
   }
@@ -619,7 +630,7 @@
     .prod-card-qty button { touch-action:manipulation; }
     .prod-card-qty button { width:31px; }
     .prod-card-qty span { min-width:28px; }
-    #pdv-right-panel .forma-btn span { white-space:normal !important; }
+    #pdv-right-panel .forma-nome { -webkit-line-clamp:3; }
   }
 </style>
 <script>
@@ -1282,20 +1293,29 @@
 
       <!-- Grid de formas -->
       <div style="padding:10px 12px;flex-shrink:0;border-bottom:1px solid #1a1a28;">
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:7px;margin-bottom:6px;">
+        <div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:7px;margin-bottom:6px;">
           <template x-for="forma in formasPagamentoVisiveis" :key="forma.id">
             <button @click="selecionarFormaPgto(forma)" class="forma-btn"
+                    :title="forma.descricao"
                     :class="formaPgtoSelecionada?.id===forma.id ? 'selected' : ''">
               <div class="forma-icon" :style="corFormaPgtoIconNovo(forma)">
                 <span x-html="svgFormaPgto(forma)"></span>
               </div>
-              <span x-text="forma.descricao" style="max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;line-height:1.2;"></span>
+              <span class="forma-nome" x-text="forma.descricao"></span>
             </button>
           </template>
         </div>
-        <button x-show="formasPagamento.length>6" @click="mostrarMaisFormas=!mostrarMaisFormas"
-                style="width:100%;padding:5px;background:transparent;border:none;color:#555;font-size:11px;cursor:pointer;text-align:center;display:flex;align-items:center;justify-content:center;gap:4px;"
-                x-text="mostrarMaisFormas ? '▲ Menos opções' : '▾ Mais opções'"></button>
+
+        <!-- QUANTAS FICARAM DE FORA, e nao so' "mais opcoes": o botao antigo
+             nao dizia se escondia uma forma ou oito, e quem procurava o Pix
+             nao sabia se valia a pena clicar. -->
+        <button x-show="formasPagamento.length>6" x-cloak @click="mostrarMaisFormas=!mostrarMaisFormas"
+                style="width:100%;padding:7px;background:transparent;border:1px solid #1e1e30;border-radius:9px;color:#8a8aa0;font-size:11px;font-weight:700;cursor:pointer;text-align:center;display:flex;align-items:center;justify-content:center;gap:4px;transition:.15s;"
+                onmouseover="this.style.borderColor='#f15a24';this.style.color='#e5e5f0'"
+                onmouseout="this.style.borderColor='#1e1e30';this.style.color='#8a8aa0'"
+                x-text="mostrarMaisFormas
+                  ? '▲ Menos opções'
+                  : ('▾ Mais ' + (formasPagamento.length - 6) + ' forma(s) de pagamento')"></button>
 
         <!-- Input valor quando forma selecionada -->
         <template x-if="formaPgtoSelecionada">
