@@ -443,5 +443,8 @@ Etapa de Combos e Promocoes encerrada em 18/05/2026. Foco atual: estoque, dentro
 - Previsoes de recebimentos e pagamentos iniciam em `Hoje`, ficam antes dos saldos bancarios e sao recolhiveis.
 - Pagamentos previstos abrem diretamente a quitacao da conta.
 - Saidas PIX ORENDA e boleto possuem tarifa de R$ 0,50 reforcada por migration idempotente.
+- Correcao posterior: a tarifa de pagamento e uma saida bancaria separada, sem aumentar o valor ou o saldo da conta a pagar. Um pagamento principal de R$ 100,00 com tarifa de R$ 0,50 quita R$ 100,00 e debita R$ 100,50 da conta.
+- A posicao diaria inclui `taxa_pagamento` em saidas, saldos bancarios e detalhamento consolidado de taxas. Taxas retidas de entradas continuam sem gerar segunda saida.
+- Teste de regressao: `test_tarifa_de_pagamento_compoe_debito_bancario_e_detalhamento`.
 - Antes de continuar o financeiro, ler o resumo acima e `docs/UI_RULES.md`, especialmente as regras que proíbem cabecalho local colorido/degradê e listagens altas.
 - Nao retomar cadastro de funcionarios nesta frente; o usuario encerrou explicitamente esse assunto.

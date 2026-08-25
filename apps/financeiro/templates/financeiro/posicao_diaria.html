@@ -381,16 +381,16 @@
       <div class="pc-ledger-columns px-4 py-2 text-[11px] font-semibold uppercase"><span>Descrição e destino</span><span>Forma / conta</span><span class="text-right">Valor</span></div>
       <div>
         {% for mov in posicao.saidas %}
-          <a href="{% if mov.origem_codigo == 'pagar' %}{{ mov.referencia_url }}{% else %}?data={{ data_referencia|date:'Y-m-d' }}&origem={{ mov.origem_codigo }}&movimento={{ mov.registro_id }}{% endif %}" {% if mov.origem_codigo == 'pagar' %}@click.prevent="abrirTituloPagar($el.href)"{% endif %} class="pc-ledger-row px-4 py-3 transition {% if mov.despesa_pessoal %}pc-personal-row{% endif %}">
+          <a href="{% if mov.origem_codigo == 'pagar' or mov.origem_codigo == 'taxa_pagamento' %}{{ mov.referencia_url }}{% else %}?data={{ data_referencia|date:'Y-m-d' }}&origem={{ mov.origem_codigo }}&movimento={{ mov.registro_id }}{% endif %}" {% if mov.origem_codigo == 'pagar' or mov.origem_codigo == 'taxa_pagamento' %}@click.prevent="abrirTituloPagar($el.href)"{% endif %} class="pc-ledger-row px-4 py-3 transition {% if mov.despesa_pessoal %}pc-personal-row{% endif %}">
             <div class="min-w-0"><strong class="block text-sm">{{ mov.descricao }}</strong>{% if mov.despesa_pessoal %}<span class="pc-personal-badge">Despesa pessoal</span>{% endif %}<span class="mt-1 block text-[11px] text-gray-500">{{ mov.hora }} · {{ mov.origem }}{% if mov.classificacao %} · {{ mov.classificacao }}{% endif %}{% if mov.documento %} · Documento {{ mov.documento }}{% endif %}</span></div>
             <span class="pc-ledger-meta min-w-0 text-xs"><strong class="block truncate font-medium">{{ mov.forma_pagamento }}</strong><span class="mt-1 block truncate text-gray-500">{{ mov.conta.descricao|default:mov.conta.banco_nome|default:"Conta não definida" }}</span></span>
             <strong class="pc-ledger-value whitespace-nowrap text-right text-base">- R$ {{ mov.saida|floatformat:2 }}</strong>
           </a>
         {% endfor %}
         <button type="button" class="pc-ledger-row w-full px-4 py-3 text-left transition" @click="taxasModal=true" aria-label="Ver detalhes das taxas">
-          <div class="min-w-0"><strong class="block text-sm">Taxas por transação (Cartão, PIX e boleto)</strong><span class="mt-1 block text-[11px] text-gray-500">Retidas antes da liquidação; não geram uma segunda saída bancária.</span></div>
-          <span class="pc-ledger-meta text-xs"><strong class="block">Formas de pagamento</strong><span class="mt-1 block text-gray-500">{{ posicao.transacoes_taxas|length }} transações</span></span>
-          <strong class="pc-ledger-value whitespace-nowrap text-right text-base">- R$ {{ posicao.total_taxas_entradas|floatformat:2 }}</strong>
+          <div class="min-w-0"><strong class="block text-sm">Taxas por transação (Cartão, PIX e boleto)</strong><span class="mt-1 block text-[11px] text-gray-500">Descontadas nos recebimentos e cobradas nos pagamentos.</span></div>
+          <span class="pc-ledger-meta text-xs"><strong class="block">Formas de pagamento</strong><span class="mt-1 block text-gray-500">{{ posicao.detalhes_taxas|length }} transações</span></span>
+          <strong class="pc-ledger-value whitespace-nowrap text-right text-base">- R$ {{ posicao.total_taxas_transacoes|floatformat:2 }}</strong>
         </button>
       </div>
     </div>
@@ -488,22 +488,22 @@
   <template x-teleport="body"><div x-show="taxasModal" x-cloak class="fixed inset-0 z-[190] flex items-center justify-center overflow-y-auto p-3 sm:p-6" style="background:rgba(15,23,42,.82);backdrop-filter:blur(10px)" @keydown.escape.window="taxasModal=false" @click.self="taxasModal=false" role="dialog" aria-modal="true" aria-label="Detalhes das taxas">
     <div class="pc-fee-dialog my-auto" @click.stop>
       <div class="pc-fee-dialog-head">
-        <div><h3>Detalhamento das taxas</h3><p>Confira quanto entrou, quanto foi descontado e o valor líquido de cada transação.</p></div>
+        <div><h3>Detalhamento das taxas</h3><p>Taxas descontadas dos recebimentos e cobradas nos pagamentos.</p></div>
         <button type="button" class="pc-fee-close" @click="taxasModal=false" aria-label="Fechar">×</button>
       </div>
       <div class="pc-fee-totals">
-        <div class="pc-fee-total"><span>Valor bruto</span><strong class="pc-sensitive">R$ {{ posicao.total_bruto_transacoes_taxas|floatformat:2 }}</strong></div>
-        <div class="pc-fee-total"><span>Taxas por transação</span><strong class="pc-sensitive text-rose-600">R$ {{ posicao.total_taxas_entradas|floatformat:2 }}</strong></div>
-        <div class="pc-fee-total"><span>Valor líquido</span><strong class="pc-sensitive text-emerald-600">R$ {{ posicao.total_liquido_transacoes_taxas|floatformat:2 }}</strong></div>
+        <div class="pc-fee-total"><span>Taxas em recebimentos</span><strong class="pc-sensitive text-rose-600">R$ {{ posicao.total_taxas_entradas|floatformat:2 }}</strong></div>
+        <div class="pc-fee-total"><span>Taxas em pagamentos</span><strong class="pc-sensitive text-rose-600">R$ {{ posicao.total_taxas_pagamentos|floatformat:2 }}</strong></div>
+        <div class="pc-fee-total"><span>Total de taxas</span><strong class="pc-sensitive text-rose-600">R$ {{ posicao.total_taxas_transacoes|floatformat:2 }}</strong></div>
       </div>
       <div class="max-h-[62vh] overflow-auto">
-        <div class="pc-fee-grid pc-fee-table-head"><span>Transação e recebimento</span><span class="text-right">Bruto</span><span class="text-right">Taxa</span><span class="text-right">Líquido</span></div>
-        {% for mov in posicao.transacoes_taxas %}
+        <div class="pc-fee-grid pc-fee-table-head"><span>Transação</span><span class="text-right">Valor principal</span><span class="text-right">Taxa</span><span class="text-right">Valor final</span></div>
+        {% for mov in posicao.detalhes_taxas %}
           <div class="pc-fee-grid pc-fee-transaction">
             <div class="pc-fee-main"><strong>{{ mov.descricao }}</strong><span>{{ mov.data|date:'d/m/Y' }} às {{ mov.hora }} · {{ mov.forma_pagamento }}{% if mov.bandeira %} · {{ mov.bandeira|title }}{% endif %}{% if mov.numero_parcelas %} · {{ mov.numero_parcelas }}x{% endif %} · {{ mov.conta.descricao|default:mov.conta.banco_nome|default:"Conta não definida" }}</span></div>
-            <div class="pc-fee-number"><span>Bruto</span><strong class="pc-sensitive">R$ {{ mov.entrada_bruta|floatformat:2 }}</strong></div>
+            <div class="pc-fee-number"><span>{% if mov.taxa_em_pagamento %}Principal{% else %}Bruto{% endif %}</span><strong class="pc-sensitive">R$ {{ mov.valor_bruto|floatformat:2 }}</strong></div>
             <div class="pc-fee-number"><span>Taxa</span><strong class="pc-sensitive text-rose-600">R$ {{ mov.valor_taxa|floatformat:2 }}</strong><small>{{ mov.taxa_percentual|floatformat:2 }}%{% if mov.taxa_fixa > 0 %} + R$ {{ mov.taxa_fixa|floatformat:2 }}{% endif %}</small></div>
-            <div class="pc-fee-number"><span>Líquido</span><strong class="pc-sensitive text-emerald-600">R$ {{ mov.valor_final_taxa|floatformat:2 }}</strong>{% if not mov.taxa_descontada %}<small class="pc-fee-informative">Informativa</small>{% endif %}</div>
+            <div class="pc-fee-number"><span>{% if mov.taxa_em_pagamento %}Total debitado{% else %}Líquido{% endif %}</span><strong class="pc-sensitive text-emerald-600">R$ {{ mov.valor_final_taxa|floatformat:2 }}</strong>{% if not mov.taxa_descontada and not mov.taxa_em_pagamento %}<small class="pc-fee-informative">Informativa</small>{% endif %}</div>
           </div>
         {% empty %}
           <div class="p-8 text-center text-sm text-gray-500">Nenhuma transação com forma de pagamento no período.</div>

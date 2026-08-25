@@ -37,6 +37,7 @@ class MovimentoDiario:
     taxa_percentual: Decimal = ZERO
     taxa_fixa: Decimal = ZERO
     taxa_descontada: bool = False
+    taxa_em_pagamento: bool = False
     referencia_url: str = ""
     excluido: bool = False
     momento: datetime | None = None
@@ -59,6 +60,8 @@ class MovimentoDiario:
 
     @property
     def valor_final_taxa(self):
+        if self.taxa_em_pagamento:
+            return self.valor_bruto + self.valor_taxa
         return self.entrada
 
     @property
@@ -169,6 +172,10 @@ class PosicaoDiariaCaixaService:
             movimento for movimento in entradas
             if movimento.forma_pagamento != "Sem forma vinculada"
         ]
+        taxas_pagamentos = [movimento for movimento in saidas if movimento.taxa_em_pagamento]
+        detalhes_taxas = transacoes_taxas + taxas_pagamentos
+        total_taxas_pagamentos = sum((m.valor_taxa for m in taxas_pagamentos), ZERO)
+        total_taxas_transacoes = total_taxas_entradas + total_taxas_pagamentos
         total_bruto_transacoes_taxas = sum((m.entrada_bruta for m in transacoes_taxas), ZERO)
         total_liquido_transacoes_taxas = sum((m.entrada for m in transacoes_taxas), ZERO)
         total_saidas_bancarias = sum((m.saida for m in saidas), ZERO)
@@ -209,7 +216,11 @@ class PosicaoDiariaCaixaService:
             "total_fechamento": total_fechamento,
             "total_despesas_pessoais": total_despesas_pessoais,
             "total_taxas_entradas": total_taxas_entradas,
+            "total_taxas_pagamentos": total_taxas_pagamentos,
+            "total_taxas_transacoes": total_taxas_transacoes,
             "transacoes_taxas": transacoes_taxas,
+            "taxas_pagamentos": taxas_pagamentos,
+            "detalhes_taxas": detalhes_taxas,
             "taxas_por_forma": taxas_por_forma,
             # As taxas ja foram abatidas das entradas liquidas. Elas aparecem no
             # total de saidas para classificacao, sem reduzir o caixa novamente.
@@ -393,6 +404,65 @@ class PosicaoDiariaCaixaService:
                 ),
             ))
 
+        tarifas_pagamento = list(PagamentoContaPagar.objects.filter(
+            filial=self.filial, conta_bancaria_id__in=self.conta_ids,
+            data_pagamento__range=(self.data_inicio, self.data_fim),
+            conta_pagar__excluido_em__isnull=True,
+            conta_pagar__documento_tipo="taxa_pagamento",
+        ).select_related(
+            "conta_bancaria", "forma_pagamento", "conta_pagar", "conta_pagar__plano_contas",
+        ))
+        pagamentos_origem_ids = [
+            item.conta_pagar.documento_id
+            for item in tarifas_pagamento
+            if item.conta_pagar.documento_id
+        ]
+        pagamentos_origem = {
+            item.pk: item
+            for item in PagamentoContaPagar.objects.filter(pk__in=pagamentos_origem_ids).select_related(
+                "conta_pagar__fornecedor", "conta_pagar__funcionario",
+            )
+        }
+        for item in tarifas_pagamento:
+            origem = pagamentos_origem.get(item.conta_pagar.documento_id)
+            principal = origem.valor_liquido if origem else ZERO
+            descricao = (
+                f"Tarifa bancaria - {origem.conta_pagar.descricao_exibicao}"
+                if origem else item.conta_pagar.descricao_exibicao
+            )
+            referencia_url = (
+                f'{reverse("financeiro:pagar_detail", args=[origem.conta_pagar_id])}?pagamento={origem.pk}'
+                if origem else ""
+            )
+            movimentos.append(MovimentoDiario(
+                data=item.data_pagamento,
+                conta=item.conta_bancaria,
+                descricao=descricao,
+                contraparte=(
+                    origem.conta_pagar.beneficiario_nome
+                    if origem else item.conta_pagar.beneficiario_nome
+                ),
+                origem="Tarifa bancaria",
+                origem_codigo="taxa_pagamento",
+                registro_id=item.pk,
+                documento=item.conta_pagar.documento_numero or item.referencia_pagamento,
+                forma_pagamento=(
+                    item.forma_pagamento.descricao
+                    if item.forma_pagamento else "Sem forma vinculada"
+                ),
+                saida=item.valor_liquido,
+                valor_bruto=principal,
+                valor_taxa=item.valor_liquido,
+                taxa_fixa=item.valor_liquido,
+                taxa_em_pagamento=True,
+                referencia_url=referencia_url,
+                momento=item.created_at,
+                classificacao=(
+                    item.conta_pagar.plano_contas.descricao
+                    if item.conta_pagar.plano_contas_id else "Tarifa bancaria"
+                ),
+            ))
+
         try:
             from apps.pdv.models import PagamentoVendaPDV
         except Exception:
@@ -460,7 +530,10 @@ class PosicaoDiariaCaixaService:
         pagamentos = PagamentoContaPagar.objects.filter(
             filial=self.filial, conta_bancaria_id__in=self.conta_ids,
             data_pagamento__lt=self.data_inicio, conta_pagar__excluido_em__isnull=True,
-        ).exclude(conta_pagar__documento_tipo__startswith="taxa_").values_list(
+        ).filter(
+            Q(conta_pagar__documento_tipo="taxa_pagamento")
+            | ~Q(conta_pagar__documento_tipo__startswith="taxa_")
+        ).values_list(
             "conta_bancaria_id", "valor_pago",
         )
         for conta_id, pago in pagamentos.iterator():
@@ -498,7 +571,10 @@ class PosicaoDiariaCaixaService:
         for item in PagamentoContaPagar.objects.filter(
             filial=self.filial, data_pagamento__range=(self.data_inicio, self.data_fim), conta_bancaria__isnull=True,
             conta_pagar__excluido_em__isnull=True,
-        ).exclude(conta_pagar__documento_tipo__startswith="taxa_").select_related(
+        ).filter(
+            Q(conta_pagar__documento_tipo="taxa_pagamento")
+            | ~Q(conta_pagar__documento_tipo__startswith="taxa_")
+        ).select_related(
             "conta_pagar__fornecedor", "conta_pagar__funcionario",
         ):
             itens.append({"descricao": item.conta_pagar.descricao_exibicao, "valor": item.valor_liquido, "tipo": "saida"})

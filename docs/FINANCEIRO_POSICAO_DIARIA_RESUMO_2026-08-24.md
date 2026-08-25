@@ -55,6 +55,10 @@ As tarifas de saida sao lancadas separadamente como despesa bancaria. No detalhe
 - O card da entrada mostra valor liquido em destaque e, como apoio, valor original e taxa em reais.
 - A taxa de entrada nao deve gerar uma segunda saida bancaria, pois ja foi retida antes da liquidacao.
 - Taxas de saida sao despesas bancarias reais e adicionais ao pagamento.
+- A tarifa de saida nao altera o valor nem o saldo do titulo: uma conta de R$ 100,00 continua quitada por R$ 100,00.
+- A tarifa e registrada como movimento bancario separado, vinculado ao pagamento principal. Exemplo: principal de R$ 100,00 + tarifa PIX de R$ 0,50 = debito bancario total de R$ 100,50.
+- O total de saidas, o saldo da conta bancaria e o detalhamento de taxas incluem essa tarifa separada.
+- O detalhamento consolida taxas retidas nos recebimentos e taxas cobradas nos pagamentos, preservando principal, taxa e valor final de cada operacao.
 - Regras ORENDA reforcadas em producao: pagar com `PIX (ORENDA)` cobra R$ 0,50; pagar boleto cobra R$ 0,50.
 - Receber em `PIX (ORENDA)` cobra 0,99%; receber boleto cobra R$ 4,50, conforme configuracao da forma.
 - Taxas devem ser classificadas contabilmente como despesa bancaria, sem duplicar impacto no saldo.
@@ -104,7 +108,7 @@ As tarifas de saida sao lancadas separadamente como despesa bancaria. No detalhe
 - Fazer QA autenticado ponta a ponta de venda, OP paga e conta a receber, comparando data da operacao com data de liquidacao.
 - Confirmar visualmente em producao o atalho de 50% e o preenchimento automatico da conta em todos os formularios de pagamento.
 - Validar com uma quitacao real que juros/multa nao sejam somados duas vezes.
-- Conferir uma saida PIX ORENDA e uma saida por boleto para confirmar a tarifa de R$ 0,50 no saldo bancario e no historico contabil.
+- Fazer QA visual em producao de uma saida PIX ORENDA e uma saida por boleto; a regra automatizada de R$ 0,50 no saldo bancario e no consolidado de taxas possui cobertura de teste.
 - Fazer QA responsivo da posicao diaria no tema claro e escuro.
 
 ## Arquivos principais
