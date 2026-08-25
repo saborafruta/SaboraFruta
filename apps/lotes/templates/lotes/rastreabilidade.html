@@ -108,6 +108,143 @@
       </div>
     </div>
 
+    {% comment %}
+      AS DUAS PERGUNTAS, ANTES DA LINHA DO TEMPO. Quem abre esta tela com o
+      telefone tocando precisa de duas respostas em segundos: de quem veio, e
+      para quem foi. O caminho detalhado continua abaixo, para quem for
+      explicar depois — mas ele não pode ser a primeira coisa na tela.
+    {% endcomment %}
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-6">
+
+      <div class="card p-5" style="border-left:4px solid #f59e0b;">
+        <h4 class="font-semibold text-sm" :style="temaClaro ? 'color:#111827;' : 'color:#f0f0f0;'">
+          De onde veio este produto?
+        </h4>
+        <p class="text-xs mt-0.5 mb-3" :style="temaClaro ? 'color:#6b7280;' : 'color:#94a3b8;'">
+          Os lotes que de fato entraram — não a receita.
+        </p>
+
+        {% if resumo.fornecedores %}
+          <div class="flex flex-wrap gap-1.5 mb-3">
+            {% for f in resumo.fornecedores %}
+              <span class="text-xs px-2 py-1 rounded-full"
+                    style="background:rgba(245,158,11,0.12); color:#f59e0b;">
+                {{ f.razao_social|default:f.nome_fantasia }}
+              </span>
+            {% endfor %}
+          </div>
+        {% endif %}
+
+        {% for elo in origem %}
+          {% if elo.nivel > 0 %}
+            <div class="flex items-start gap-2 py-1.5"
+                 style="padding-left: {{ elo.nivel }}rem;"
+                 :style="temaClaro ? 'border-top:1px solid #f3f4f6;' : 'border-top:1px solid #232326;'">
+              <span class="text-xs mt-0.5" style="color:#f59e0b;">└</span>
+              <div class="min-w-0 flex-1">
+                <div class="text-sm font-medium" :style="temaClaro ? 'color:#111827;' : 'color:#f0f0f0;'">
+                  {{ elo.lote.produto.descricao }}
+                </div>
+                <div class="text-xs" :style="temaClaro ? 'color:#6b7280;' : 'color:#94a3b8;'">
+                  Lote <strong>{{ elo.lote.numero_lote }}</strong>
+                  {% if elo.quantidade %} · {{ elo.quantidade|floatformat:3 }} consumido{% endif %}
+                  {% if elo.lote.data_validade %} · vence {{ elo.lote.data_validade|date:"d/m/Y" }}{% endif %}
+                </div>
+                {% if elo.fornecedor or elo.documento %}
+                  <div class="text-xs mt-0.5" style="color:#f59e0b;">
+                    {% if elo.fornecedor %}{{ elo.fornecedor }}{% endif %}
+                    {% if elo.documento %} · NF {{ elo.documento }}{% endif %}
+                    {% if elo.recebimento %} · recebido {{ elo.recebimento.data|date:"d/m/Y" }}{% endif %}
+                  </div>
+                {% endif %}
+              </div>
+              <a href="?lote={{ elo.lote.pk }}" class="text-xs shrink-0" style="color:#3b82f6;">rastrear</a>
+            </div>
+          {% endif %}
+        {% endfor %}
+
+        {% if resumo.lotes_origem == 0 %}
+          <p class="text-xs py-2" :style="temaClaro ? 'color:#9ca3af;' : 'color:#64748b;'">
+            {% if ordem_producao %}
+              Esta ordem não registrou consumo por lote — a baixa foi feita sem
+              lote, e o caminho para trás termina aqui.
+            {% else %}
+              Lote de entrada: não veio de produção, então não há cadeia acima
+              dele.
+            {% endif %}
+          </p>
+        {% endif %}
+      </div>
+
+      <div class="card p-5" style="border-left:4px solid #10b981;">
+        <h4 class="font-semibold text-sm" :style="temaClaro ? 'color:#111827;' : 'color:#f0f0f0;'">
+          Onde foi parar?
+        </h4>
+        <p class="text-xs mt-0.5 mb-3" :style="temaClaro ? 'color:#6b7280;' : 'color:#94a3b8;'">
+          As ordens que consumiram, o que produziram e para quem foi.
+        </p>
+
+        {% if resumo.clientes %}
+          <div class="flex flex-wrap gap-1.5 mb-3">
+            {% for c in resumo.clientes %}
+              <span class="text-xs px-2 py-1 rounded-full"
+                    style="background:rgba(16,185,129,0.12); color:#10b981;">
+                {{ c.cliente.razao_social|default:c.cliente.nome_fantasia }}
+              </span>
+            {% endfor %}
+          </div>
+        {% endif %}
+
+        {% for elo in destino %}
+          {% if elo.nivel > 0 %}
+            <div class="flex items-start gap-2 py-1.5"
+                 style="padding-left: {{ elo.nivel }}rem;"
+                 :style="temaClaro ? 'border-top:1px solid #f3f4f6;' : 'border-top:1px solid #232326;'">
+              <span class="text-xs mt-0.5" style="color:#10b981;">└</span>
+              <div class="min-w-0 flex-1">
+                {% if elo.via == 'venda' %}
+                  <div class="text-sm font-medium" style="color:#10b981;">
+                    {{ elo.separacao.separacao.pedido.cliente }}
+                  </div>
+                  <div class="text-xs" :style="temaClaro ? 'color:#6b7280;' : 'color:#94a3b8;'">
+                    Pedido {{ elo.separacao.separacao.pedido }}
+                    {% if elo.quantidade %} · {{ elo.quantidade|floatformat:3 }}{% endif %}
+                  </div>
+                {% else %}
+                  <div class="text-sm font-medium" :style="temaClaro ? 'color:#111827;' : 'color:#f0f0f0;'">
+                    {{ elo.lote.produto.descricao }}
+                  </div>
+                  <div class="text-xs" :style="temaClaro ? 'color:#6b7280;' : 'color:#94a3b8;'">
+                    Lote <strong>{{ elo.lote.numero_lote }}</strong>
+                    {% if elo.quantidade %} · {{ elo.quantidade|floatformat:3 }} produzido{% endif %}
+                    {% if elo.lote.data_validade %} · vence {{ elo.lote.data_validade|date:"d/m/Y" }}{% endif %}
+                  </div>
+                {% endif %}
+              </div>
+              {% if elo.via != 'venda' %}
+                <a href="?lote={{ elo.lote.pk }}" class="text-xs shrink-0" style="color:#3b82f6;">rastrear</a>
+              {% endif %}
+            </div>
+          {% endif %}
+        {% endfor %}
+
+        {% if resumo.lotes_destino == 0 and not resumo.clientes %}
+          {% comment %}
+            SILÊNCIO AQUI SERIA PERIGOSO: "nenhum destino" pode significar que o
+            lote está parado na câmara ou que ele saiu por um caminho que não
+            grava lote. As duas coisas pedem providências opostas, e a tela não
+            pode deixar as duas com a mesma cara.
+          {% endcomment %}
+          <p class="text-xs py-2" :style="temaClaro ? 'color:#9ca3af;' : 'color:#64748b;'">
+            Nenhuma saída com lote registrada. O lote pode estar parado em
+            estoque — ou ter saído por uma via que não grava lote, como a venda
+            no PDV com estoque forçado.
+          </p>
+        {% endif %}
+      </div>
+
+    </div>
+
     <!-- Linha de rastreio vertical -->
     <div class="relative pl-6 space-y-6">
       <div class="absolute left-2.5 top-0 bottom-0 w-px" :style="temaClaro ? 'background:#e5e7eb;' : 'background:#2a2a2e;'"></div>

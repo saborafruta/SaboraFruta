@@ -4,9 +4,7 @@ from django.shortcuts import render
 from django.views import View
 
 from apps.core.services.permissions import PermissaoRequiredMixin
-from apps.compras.models import ItemEntradaNF
 from apps.estoque.models import LoteProduto, MovimentacaoEstoque
-from apps.vendas.models import ItemSeparacao
 
 
 class LoteRastreabilidadeView(PermissaoRequiredMixin, View):
@@ -56,70 +54,47 @@ class LoteRastreabilidadeView(PermissaoRequiredMixin, View):
         })
 
     def _montar_rastreio(self, lote):
-        # Origem via compra
-        item_entrada = (
-            ItemEntradaNF.objects
-            .filter(lote_gerado=lote)
-            .select_related(
-                'entrada', 'entrada__fornecedor',
-                'produto',
-            )
-            .order_by('-entrada__data_entrada', '-pk')
-            .first()
-        )
+        """
+        As duas travessias, mais o que a tela já mostrava.
 
-        # Origem via produção
-        ordem_producao = None
+        `componentes_consumidos` CONTINUA SENDO A FICHA, e continua rotulado
+        como BOM: serve para conferir a formulação contra o que saiu. O que
+        ele nunca foi é resposta de recall -- a ficha diz "manga", e o recall
+        precisa do lote e do produtor. Essa resposta agora vem do
+        `RastreioService`, ao lado, em vez de no lugar.
+        """
+        from apps.lotes.models import InspecaoLote
+        from apps.lotes.services.rastreio import RastreioService
+
+        origem = RastreioService.de_onde_veio(lote)
+        destino = RastreioService.para_onde_foi(lote)
+
+        # O primeiro elo é o próprio lote; a tela já o mostra no cabeçalho.
+        elo_raiz = origem[0] if origem else None
+        ordem_producao = elo_raiz.ordem if elo_raiz else None
+        item_entrada = elo_raiz.entrada if elo_raiz else None
+        recebimento = elo_raiz.recebimento if elo_raiz else None
+
         apontamentos = []
         componentes_consumidos = []
-        if lote.ordem_producao_id:
+        if ordem_producao is not None:
             try:
-                from apps.producao.models import OrdemProducao, ApontamentoProducao
-                ordem_producao = (
-                    OrdemProducao.objects
-                    .select_related('ficha_tecnica', 'produto_acabado', 'usuario_abertura', 'usuario_encerramento')
-                    .get(pk=lote.ordem_producao_id)
-                )
+                from apps.producao.models import ApontamentoProducao
                 apontamentos = list(
                     ApontamentoProducao.objects
                     .filter(ordem_producao=ordem_producao)
                     .select_related('operador')
                     .order_by('data_hora_inicio')
                 )
-                if ordem_producao.ficha_tecnica_id:
-                    componentes_consumidos = list(
-                        ordem_producao.ficha_tecnica.itens
-                        .select_related('materia_prima')
-                        .all()
-                    )
-            except Exception:
-                pass
-        else:
-            # Busca OP pelo related_name (ordens_origem)
-            op_qs = lote.ordens_origem.select_related(
-                'ficha_tecnica', 'produto_acabado', 'usuario_abertura', 'usuario_encerramento'
-            ).order_by('-created_at')
-            if op_qs.exists():
-                ordem_producao = op_qs.first()
-                try:
-                    from apps.producao.models import ApontamentoProducao
-                    apontamentos = list(
-                        ApontamentoProducao.objects
-                        .filter(ordem_producao=ordem_producao)
-                        .select_related('operador')
-                        .order_by('data_hora_inicio')
-                    )
-                    if ordem_producao.ficha_tecnica_id:
-                        componentes_consumidos = list(
-                            ordem_producao.ficha_tecnica.itens
-                            .select_related('materia_prima')
-                            .all()
-                        )
-                except Exception:
-                    pass
+            except Exception:  # noqa: BLE001
+                apontamentos = []
+            if ordem_producao.ficha_tecnica_id:
+                componentes_consumidos = list(
+                    ordem_producao.ficha_tecnica.itens
+                    .select_related('materia_prima')
+                    .all()
+                )
 
-        # Inspeções
-        from apps.lotes.models import InspecaoLote
         inspecoes = list(
             InspecaoLote.objects
             .filter(lote=lote)
@@ -127,7 +102,6 @@ class LoteRastreabilidadeView(PermissaoRequiredMixin, View):
             .order_by('-data_inspecao')
         )
 
-        # Movimentações de estoque
         movimentacoes = list(
             MovimentacaoEstoque.objects
             .filter(lote=lote)
@@ -135,39 +109,23 @@ class LoteRastreabilidadeView(PermissaoRequiredMixin, View):
             .order_by('-created_at')[:30]
         )
 
-        # Destino: separações (saídas para clientes)
-        itens_separacao = list(
-            ItemSeparacao.objects
-            .filter(lote=lote)
-            .select_related(
-                'separacao',
-                'separacao__pedido',
-                'separacao__pedido__cliente',
-                'separacao__usuario_separador',
-                'item_pedido',
-            )
-            .order_by('-separacao__data_inicio')
-        )
-
-        clientes_atendidos = {}
-        for item in itens_separacao:
-            cliente = item.separacao.pedido.cliente
-            if cliente.pk not in clientes_atendidos:
-                clientes_atendidos[cliente.pk] = {
-                    'cliente': cliente,
-                    'pedidos': [],
-                    'quantidade_total': 0,
-                }
-            clientes_atendidos[cliente.pk]['pedidos'].append(item.separacao.pedido)
-            clientes_atendidos[cliente.pk]['quantidade_total'] += float(item.quantidade_separada)
+        itens_separacao = [e.separacao for e in destino if e.separacao is not None]
+        resumo = RastreioService.resumo(origem, destino)
 
         return {
+            'origem': origem,
+            'destino': destino,
+            'resumo': resumo,
+            # A lista de clientes vem do resumo agora, e não de um agrupamento
+            # próprio da view: a mesma pergunta respondida em dois lugares é
+            # a que diverge no dia em que alguém corrige um dos dois.
+            'clientes_atendidos': resumo['clientes'],
             'item_entrada': item_entrada,
+            'recebimento': recebimento,
             'ordem_producao': ordem_producao,
             'apontamentos': apontamentos,
             'componentes_consumidos': componentes_consumidos,
             'inspecoes': inspecoes,
             'movimentacoes': movimentacoes,
             'itens_separacao': itens_separacao,
-            'clientes_atendidos': list(clientes_atendidos.values()),
         }
