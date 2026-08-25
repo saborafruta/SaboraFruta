@@ -52,7 +52,7 @@
   .stock-count-current-value { margin-top: .2rem; color: #f8fafc; font-size: 1.05rem; font-weight: 900; }
   body.tema-claro .stock-count-current-value { color: #0f172a; }
   .stock-count-stepper { display: grid; grid-template-columns: 48px minmax(76px, 1fr) 48px; gap: .35rem; align-items: stretch; }
-  .stock-count-stepper button { min-height: 48px; border-radius: 11px; border: 1px solid rgba(96,165,250,.30); background: rgba(37,99,235,.15); color: #dbeafe; font-size: 1.4rem; font-weight: 900; cursor: pointer; }
+  .stock-count-stepper button { min-height: 48px; border-radius: 11px; border: 1px solid rgba(96,165,250,.30); background: rgba(37,99,235,.15); color: #dbeafe; font-size: 1.4rem; font-weight: 900; cursor: pointer; touch-action: manipulation; -webkit-user-select: none; user-select: none; }
   body.tema-claro .stock-count-stepper button { background: #dbeafe; border-color: #bfdbfe; color: #1d4ed8; }
   .stock-count-qty { min-height: 48px; text-align: center; font-size: 1.1rem !important; font-weight: 900; }
   .stock-count-row-actions { display: grid; grid-template-columns: 1fr 1fr; gap: .4rem; margin-top: .45rem; }
@@ -96,13 +96,181 @@
     .stock-count-current { grid-column: 1 / -1; grid-template-columns: repeat(2, minmax(0, 1fr)); }
   }
   @media (max-width: 720px) {
-    .stock-count-summary { grid-template-columns: 1fr; }
-    .stock-count-filter { grid-template-columns: 1fr; }
-    .stock-count-row { grid-template-columns: 1fr; }
-    .stock-count-photo { width: 100%; height: 96px; }
-    .stock-count-current { grid-template-columns: 1fr; }
-    .stock-count-actions, .stock-count-actions a, .stock-count-actions button { width: 100%; justify-content: center; }
-    .stock-count-toolbar { top: .25rem; }
+    .stock-count-page { gap: .58rem; }
+    .stock-count-head { display: grid; gap: .55rem; }
+    .stock-count-title { font-size: 1.28rem; line-height: 1.04; }
+    .stock-count-subtitle { margin-top: .2rem; font-size: .78rem; line-height: 1.25; }
+    .stock-count-head > .stock-count-actions {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      width: 100%;
+      gap: .38rem;
+    }
+    .stock-count-head > .stock-count-actions form { min-width: 0; }
+    .stock-count-head > .stock-count-actions a,
+    .stock-count-head > .stock-count-actions button {
+      width: 100%;
+      min-height: 36px;
+      justify-content: center;
+      padding: .4rem .38rem;
+      font-size: .72rem;
+      border-radius: 8px;
+      white-space: normal;
+      text-align: center;
+      line-height: 1.1;
+    }
+    .stock-count-summary {
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: .42rem;
+    }
+    .stock-count-summary-card {
+      min-height: 58px;
+      padding: .5rem .48rem;
+      border-radius: 9px;
+    }
+    .stock-count-summary-label {
+      font-size: .54rem;
+      line-height: 1.05;
+      letter-spacing: .02em;
+    }
+    .stock-count-summary-value {
+      margin-top: .18rem;
+      font-size: 1rem;
+      line-height: 1;
+    }
+    .stock-count-toolbar {
+      position: static;
+      padding: .6rem;
+      border-radius: 12px;
+      box-shadow: none;
+    }
+    .stock-count-filter {
+      grid-template-columns: 1fr;
+      gap: .45rem;
+    }
+    .stock-count-field label {
+      margin-bottom: .18rem;
+      font-size: .58rem;
+      letter-spacing: .03em;
+    }
+    .stock-count-field input,
+    .stock-count-field select {
+      min-height: 40px;
+      padding: .42rem .58rem;
+      font-size: .88rem;
+      border-radius: 9px;
+    }
+    .stock-count-filter .stock-count-actions {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: .42rem;
+    }
+    .stock-count-filter .stock-count-actions button {
+      width: 100%;
+      min-height: 40px;
+      justify-content: center;
+      padding: .42rem .55rem;
+      font-size: .84rem;
+    }
+    .stock-count-help {
+      margin-top: .42rem;
+      font-size: .68rem;
+      line-height: 1.25;
+    }
+    .stock-count-grid { gap: .5rem; }
+    .stock-count-row {
+      grid-template-columns: 58px minmax(0, 1fr);
+      gap: .5rem;
+      padding: .55rem;
+      border-radius: 12px;
+    }
+    .stock-count-photo {
+      width: 58px;
+      height: 58px;
+      border-radius: 11px;
+      align-self: start;
+    }
+    .stock-count-photo span {
+      font-size: .56rem;
+      padding: .04rem .24rem;
+    }
+    .stock-count-photo-empty { font-size: .78rem; }
+    .stock-count-name {
+      font-size: .9rem;
+      line-height: 1.12;
+    }
+    .stock-count-meta {
+      gap: .2rem .28rem;
+      margin-top: .28rem;
+      font-size: .66rem;
+    }
+    .stock-count-pill {
+      min-height: 20px;
+      padding: .08rem .36rem;
+      font-size: .62rem;
+    }
+    .stock-count-current {
+      grid-column: 1 / -1;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: .38rem;
+    }
+    .stock-count-current-box {
+      padding: .42rem .48rem;
+      border-radius: 9px;
+    }
+    .stock-count-current-label { font-size: .56rem; }
+    .stock-count-current-value {
+      margin-top: .1rem;
+      font-size: .92rem;
+      line-height: 1.05;
+    }
+    .stock-count-adjust { grid-column: 1 / -1; }
+    .stock-count-stepper {
+      grid-template-columns: 44px minmax(0, 1fr) 44px;
+      gap: .34rem;
+    }
+    .stock-count-stepper button {
+      min-height: 42px;
+      border-radius: 10px;
+      font-size: 1.18rem;
+    }
+    .stock-count-qty {
+      min-height: 42px;
+      font-size: 1rem !important;
+      border-radius: 10px;
+    }
+    .stock-count-row-actions {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: .34rem;
+      margin-top: .36rem;
+    }
+    .stock-count-row-actions button {
+      min-height: 36px;
+      padding: .35rem .45rem;
+      font-size: .78rem;
+      border-radius: 9px;
+    }
+    .stock-count-status {
+      margin-top: .28rem;
+      min-height: 14px;
+      font-size: .62rem;
+      line-height: 1.2;
+    }
+    .stock-count-pagination .stock-count-actions {
+      width: 100%;
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+    .stock-count-pagination .stock-count-actions a {
+      width: 100%;
+      justify-content: center;
+    }
+  }
+  @media (max-width: 380px) {
+    .stock-count-summary-label { font-size: .5rem; }
+    .stock-count-summary-value { font-size: .92rem; }
+    .stock-count-row { grid-template-columns: 52px minmax(0, 1fr); }
+    .stock-count-photo { width: 52px; height: 52px; }
   }
 </style>
 
@@ -350,6 +518,14 @@
     document.querySelectorAll('[data-product-row]').forEach((row) => {
       const qty = row.querySelector('[data-qty]');
       row.querySelectorAll('[data-step]').forEach((button) => {
+        button.addEventListener('dblclick', (event) => event.preventDefault());
+        button.addEventListener('touchend', (event) => {
+          const now = Date.now();
+          if (button._lastTouchEnd && now - button._lastTouchEnd < 350) {
+            event.preventDefault();
+          }
+          button._lastTouchEnd = now;
+        }, { passive: false });
         button.addEventListener('click', () => {
           const next = Math.max(0, parseQty(qty.value) + Number(button.dataset.step || 0));
           qty.value = formatQty(next);
