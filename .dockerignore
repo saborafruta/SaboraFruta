@@ -38,6 +38,9 @@ htmlcov/
 # Media e arquivos locais
 media/
 staticfiles/
+db.sqlite3
+outputs/
+tmp/
 
 # Backups e temporários
 apps_backup_*/
