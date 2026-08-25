@@ -33,6 +33,7 @@ from collections import defaultdict
 from decimal import Decimal
 
 from django.db import transaction
+from django.urls import reverse
 from django.utils import timezone
 
 from apps.core.services.exceptions import DomainError
@@ -464,7 +465,77 @@ class OrdemPolpaService:
         op.situacao = S.PRODUZIDA
         op.liberada_qualidade_em = timezone.now()
         op.save(update_fields=['situacao', 'liberada_qualidade_em', 'updated_at'])
+
+        # O RENDIMENTO DA BATIDA VIRA ALERTA, e não linha de log. É o
+        # indicador que a fábrica de fruta cobra todo dia, e até agora o aviso
+        # ia para onde ninguém olha.
+        cls.avisar_rendimento(op)
+
         return op
+
+    # ── Alerta de rendimento ─────────────────────────────────────────────
+
+    @classmethod
+    def avisar_rendimento(cls, op: OrdemPolpa) -> bool:
+        """
+        Toca o sino quando a batida rendeu abaixo do piso da receita.
+
+        O AVISO EXISTIA E NÃO CHEGAVA A NINGUÉM. `op_service` já comparava o
+        rendimento com um mínimo — mas escrevia `logger.warning`, e log é onde
+        ninguém olha. Um indicador que a fábrica cobra todo dia precisa ir para
+        onde a fábrica olha.
+
+        O PISO VEM DA RECEITA, não de uma constante. Manga não rende como
+        acerola, e um número fixo no código faria metade dos produtos alertar
+        sempre e a outra metade nunca.
+
+        É EVENTO, e não condição: o rendimento de uma batida encerrada não muda
+        mais. Por isso não entra em varredura nem se desliga sozinho — ele
+        conta um fato que aconteceu, e some quando alguém o lê.
+
+        NÃO ESTOURA. Roda dentro do encerramento da ordem: falhar aqui
+        impediria fechar uma batida que já aconteceu, e o que se perde ao
+        travar é o registro dela.
+        """
+        from apps.core.models import Notificacao
+        from apps.polpa.services.processo import ProcessoService
+
+        try:
+            resumo = ProcessoService.resumo(op)
+            if not resumo.get('rendimento_abaixo'):
+                return False
+
+            real = resumo['rendimento']
+            esperado = resumo['rendimento_esperado']
+            entrada = resumo.get('entrada')
+            saida = resumo.get('saida')
+            perda = resumo.get('perda_total')
+
+            detalhe = f'esperado {esperado}%'
+            if entrada is not None and saida is not None:
+                detalhe = (
+                    f'{entrada} entraram, {saida} saíram, '
+                    f'{perda} de perda · {detalhe}'
+                )
+
+            Notificacao.objects.update_or_create(
+                filial=op.filial,
+                tipo=Notificacao.Tipo.POLPA_RENDIMENTO_BAIXO,
+                referencia_tipo='polpa_ordem',
+                referencia_id=str(op.pk),
+                defaults={
+                    'titulo': f'{op.numero}: rendimento de {real}%',
+                    'mensagem': detalhe[:500],
+                    'url': reverse('polpa:ordem-detail', args=[op.pk]),
+                    'ativa': True,
+                },
+            )
+            return True
+        except Exception:  # noqa: BLE001
+            logger.exception(
+                'Falha ao avisar rendimento da ordem de polpa %s', op.pk,
+            )
+            return False
 
     @staticmethod
     def validade_do_lote(op: OrdemPolpa):

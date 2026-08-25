@@ -57,6 +57,22 @@ class Receita(FilialScopedModel):
         validators=[MinValueValidator(0)],
         help_text='% do que entra que vira produto. Ex.: manga ≈ 60%.',
     )
+    # O LIMITE É EM PONTOS, e não um mínimo absoluto: assim ele acompanha o
+    # esperado. Quem corrigir o rendimento da manga de 60% para 58% não
+    # precisa lembrar de mexer no piso -- e piso esquecido é alerta que para
+    # de tocar sem ninguém perceber.
+    #
+    # Fruta varia com a safra, com a chuva e com o produtor. Uma tolerância
+    # zerada faria a tela gritar todo dia, e alerta que grita todo dia é
+    # alerta que ninguém lê.
+    desvio_tolerado = models.DecimalField(
+        max_digits=5, decimal_places=2, default=Decimal('5'),
+        validators=[MinValueValidator(0)],
+        help_text=(
+            'Quantos pontos percentuais abaixo do esperado ainda são normais. '
+            'Esperado 60% com tolerância 5 alerta abaixo de 55%.'
+        ),
+    )
 
     # ── Processo ─────────────────────────────────────────────────────────
     temperatura_processo_min = models.DecimalField(
@@ -97,6 +113,20 @@ class Receita(FilialScopedModel):
         from apps.producao.models import FichaTecnica
 
         return self.ficha.status == FichaTecnica.Status.ATIVA
+
+    @property
+    def rendimento_minimo(self):
+        """
+        Abaixo disto a batida vira alerta. `None` quando não há esperado.
+
+        Calculado, e não gravado: gravar os dois deixaria o piso parado no dia
+        em que alguém corrigisse o esperado -- e um piso desatualizado é pior
+        que nenhum, porque continua parecendo que alguém o revisou.
+        """
+        if self.rendimento_esperado is None:
+            return None
+        piso = self.rendimento_esperado - (self.desvio_tolerado or Decimal('0'))
+        return max(piso, Decimal('0'))
 
     @property
     def rendimento_por_etapa(self) -> Decimal:

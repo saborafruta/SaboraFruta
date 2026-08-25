@@ -43,16 +43,34 @@
           {% if resumo.saida is not None %}{{ resumo.saida|floatformat:0 }}{% else %}—{% endif %}
         </p>
       </div>
-      <div class="card px-4 py-3 text-center">
+      <div class="card px-4 py-3 text-center"
+           {% if resumo.rendimento_abaixo %}style="border:1px solid #dc2626;"{% endif %}>
         <p class="text-xs uppercase tracking-wider" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Rendimento</p>
+        {% comment %}
+          A COR VEM DO VEREDITO, não da existência do número. Antes ficava
+          verde sempre que houvesse rendimento — e uma batida que rendeu 30%
+          aparecia verde, dizendo "tudo certo" no dia em que a fruta chegou
+          ruim. Sem esperado cadastrado fica cinza: não há contra o que
+          comparar, e verde ali seria uma aprovação que ninguém deu.
+        {% endcomment %}
         <p class="text-lg font-bold mt-0.5"
-           style="color:{% if resumo.rendimento %}#059669{% else %}#94a3b8{% endif %};">
+           style="color:{% if resumo.rendimento_abaixo %}#dc2626{% elif resumo.rendimento_dentro %}#059669{% else %}#94a3b8{% endif %};">
           {% if resumo.rendimento is not None %}{{ resumo.rendimento }}%{% else %}—{% endif %}
         </p>
-        {% if op.receita.rendimento_esperado %}
+        {% if resumo.rendimento_esperado %}
           <p class="text-[11px] mt-0.5" :style="temaClaro ? 'color:#94a3b8;' : 'color:#71717a;'">
-            esperado {{ op.receita.rendimento_esperado }}%
+            esperado {{ resumo.rendimento_esperado }}%
+            {% if resumo.rendimento_desvio is not None %}
+              <span style="color:{% if resumo.rendimento_abaixo %}#dc2626{% else %}#059669{% endif %};">
+                ({% if resumo.rendimento_desvio > 0 %}+{% endif %}{{ resumo.rendimento_desvio }})
+              </span>
+            {% endif %}
           </p>
+          {% if resumo.rendimento_abaixo %}
+            <p class="text-[11px] mt-0.5 font-semibold" style="color:#dc2626;">
+              abaixo do piso de {{ resumo.rendimento_minimo }}%
+            </p>
+          {% endif %}
         {% endif %}
       </div>
       {% if resumo.overrun is not None %}

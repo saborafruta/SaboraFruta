@@ -25,8 +25,9 @@ def dashboard_operacional(request):
     linhas = LinhaProducao.objects.filter(ativo=True)
     blocos = []
     for linha in linhas:
+        # A OP chega à linha PELO PRODUTO — ela não tem `linha_producao`.
         ops_abertas = OrdemProducao.objects.for_filial(request.filial).filter(
-            linha_producao=linha,
+            produto_acabado__linha_producao=linha,
             status__in=[StatusOP.ABERTA, StatusOP.EM_PRODUCAO],
         ).count()
         alertas = AlertaVencimento.objects.for_filial(request.filial).filter(

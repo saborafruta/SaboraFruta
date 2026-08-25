@@ -29,6 +29,11 @@ class Notificacao(TimestampedModel):
         MODA_APROVEITAMENTO_BAIXO = 'moda_aproveitamento_baixo', 'Moda: baixo aproveitamento de corte'
         MODA_CLIENTE_AJUSTE = 'moda_cliente_ajuste', 'Moda: cliente pediu ajuste'
 
+        # Vertical de polpa. Rendimento abaixo do piso da receita é o
+        # indicador que a fábrica de fruta cobra todo dia — e até agora
+        # o aviso só ia para o log, onde ninguém olha.
+        POLPA_RENDIMENTO_BAIXO = 'polpa_rendimento_baixo', 'Polpa: rendimento abaixo do esperado'
+
     filial = models.ForeignKey(
         'core.Filial',
         on_delete=models.CASCADE,

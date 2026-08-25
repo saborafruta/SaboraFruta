@@ -178,6 +178,11 @@ class ProcessoService:
                 (entrada - saida) if entrada is not None and saida is not None else None
             ),
             'maiores_perdas': perdas[:3],
+            # PLANEJADO CONTRA REAL, aqui e não numa segunda função: o real já
+            # é calculado três linhas acima, e uma comparação que recalculasse
+            # o real por conta própria seria a segunda definição que um dia
+            # diverge da primeira.
+            **ProcessoService._comparar_rendimento(op, rendimento),
             # O OVERRUN DA BATIDA, quando alguém mediu. É o número que
             # decide quantos potes saem de 100 litros de base -- ou seja, a
             # margem do sorvete.
@@ -187,6 +192,46 @@ class ProcessoService:
             'proxima': next(
                 (e for e in etapas if e.situacao == SIT.PENDENTE), None,
             ),
+        }
+
+    # ── Planejado contra real ────────────────────────────────────────────
+
+    @staticmethod
+    def _comparar_rendimento(op: OrdemPolpa, rendimento) -> dict:
+        """
+        O rendimento real contra o que a receita prometeu.
+
+        SÃO OS QUATRO NÚMEROS QUE A FÁBRICA COBRA: entraram 1.000 kg de manga,
+        saíram 850, perdeu 150, rendeu 85%. O real já vem calculado de cima;
+        aqui entra o outro lado da comparação.
+
+        NÃO É O `rendimento_lote`. Aquele é produzido sobre planejado, em
+        UNIDADE: 5.000 picolés previstos, 4.850 feitos. Este é peso: quanto da
+        fruta virou produto. Os dois convivem porque respondem perguntas
+        diferentes, e somá-los ou compará-los entre si não significa nada.
+
+        `dentro` é NULO, e não `True`, quando falta base de comparação. Uma
+        receita sem rendimento esperado não está "dentro do limite" -- ela não
+        tem limite, e mostrar verde ali seria afirmar uma aprovação que
+        ninguém deu.
+        """
+        receita = getattr(op, 'receita', None)
+        esperado = getattr(receita, 'rendimento_esperado', None)
+        minimo = getattr(receita, 'rendimento_minimo', None)
+
+        desvio = None
+        dentro = None
+        if rendimento is not None and esperado is not None:
+            desvio = (rendimento - esperado).quantize(Decimal('0.01'))
+        if rendimento is not None and minimo is not None:
+            dentro = rendimento >= minimo
+
+        return {
+            'rendimento_esperado': esperado,
+            'rendimento_minimo': minimo,
+            'rendimento_desvio': desvio,
+            'rendimento_dentro': dentro,
+            'rendimento_abaixo': dentro is False,
         }
 
     @staticmethod
