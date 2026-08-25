@@ -318,10 +318,25 @@
               {{ op.quantidade_produzida|floatformat:0 }} un
             </dd>
           </div>
-          {% if op.ordem.rendimento %}
+          {% if op.rendimento_lote is not None %}
+            {% comment %}
+              O RENDIMENTO DO LOTE, com as parcelas à vista: planejado,
+              produzido e a diferença. Só o percentual faria a pessoa
+              procurar de onde ele saiu — e é a diferença em unidades que
+              vira conversa com quem produziu.
+            {% endcomment %}
             <div class="flex justify-between gap-3">
-              <dt :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Rendimento</dt>
-              <dd :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">{{ op.ordem.rendimento }}%</dd>
+              <dt :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Perda do lote</dt>
+              <dd style="color:{% if op.perda_producao %}#d97706{% else %}#059669{% endif %};">
+                {{ op.perda_producao|floatformat:0 }} un
+              </dd>
+            </div>
+            <div class="flex justify-between gap-3">
+              <dt class="font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">Rendimento do lote</dt>
+              <dd class="font-bold"
+                  style="color:{% if op.rendimento_lote >= 95 %}#059669{% else %}#d97706{% endif %};">
+                {{ op.rendimento_lote }}%
+              </dd>
             </div>
           {% endif %}
           {% if op.ordem.custo_total %}

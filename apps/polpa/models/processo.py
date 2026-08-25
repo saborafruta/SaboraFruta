@@ -67,10 +67,14 @@ class Etapa(models.TextChoices):
     INCLUSOES = 'inclusoes', 'Adição de inclusões'
     RESFRIAMENTO = 'resfriamento', 'Resfriamento'
     ENVASE = 'envase', 'Envase'
+    INSERCAO_PALITO = 'insercao_palito', 'Inserção do palito'
     ENDURECIMENTO = 'endurecimento', 'Endurecimento'
     SELAGEM = 'selagem', 'Selagem'
     IDENTIFICACAO = 'identificacao', 'Identificação do lote'
     CONGELAMENTO = 'congelamento', 'Congelamento rápido'
+    DESENFORME = 'desenforme', 'Desenforme'
+    EMBALAGEM = 'embalagem', 'Embalagem'
+    EMPACOTAMENTO = 'empacotamento', 'Empacotamento'
     ARMAZENAMENTO = 'armazenamento', 'Armazenamento em câmara fria'
     LIBERACAO = 'liberacao', 'Liberação pelo controle de qualidade'
 
@@ -117,19 +121,33 @@ FLUXO_SORVETE: tuple[str, ...] = (
     Etapa.INCLUSOES, Etapa.ENVASE, Etapa.ENDURECIMENTO, Etapa.ARMAZENAMENTO,
 )
 
+FLUXO_PICOLE: tuple[str, ...] = (
+    Etapa.PREPARO_CALDA, Etapa.FORMULACAO, Etapa.MISTURA, Etapa.ENVASE,
+    Etapa.INSERCAO_PALITO, Etapa.CONGELAMENTO, Etapa.DESENFORME,
+    Etapa.EMBALAGEM, Etapa.EMPACOTAMENTO, Etapa.ARMAZENAMENTO,
+)
+
 # ETAPAS QUE NEM TODA FÁBRICA FAZ. Ficam de fora da lista que uma ordem
 # nova recebe, e entram quando a receita as declara: descascamento de
 # acerola não existe, e pasteurização de açaí é "quando aplicável" -- há
 # quem congele sem pasteurizar.
-OPCIONAIS = (
-    Etapa.DESCASCAMENTO, Etapa.CORTE, Etapa.FORMULACAO, Etapa.PASTEURIZACAO,
-    # Overrun e inclusões são "quando aplicável" no sorvete: massa de
-    # picolé não incorpora ar, e sorvete sem pedaço não tem inclusão. A
-    # receita declara quando existem.
-    Etapa.INCORPORACAO_AR, Etapa.INCLUSOES,
-)
+# O QUE É "QUANDO APLICÁVEL" DEPENDE DO FLUXO, e não é o mesmo em todos:
+# formulação é opcional numa polpa (a de manga pura não formula nada) e
+# OBRIGATÓRIA num picolé, que é calda formulada por definição. Uma lista
+# única faria o picolé nascer sem a etapa que ele mais tem.
+OPCIONAIS_POR_FLUXO = {
+    'polpa': (Etapa.DESCASCAMENTO, Etapa.CORTE, Etapa.FORMULACAO),
+    'acai': (Etapa.PASTEURIZACAO,),
+    # Massa de picolé não incorpora ar, e sorvete sem pedaço não tem
+    # inclusão -- a receita declara quando existem.
+    'sorvete': (Etapa.INCORPORACAO_AR, Etapa.INCLUSOES),
+    'picole': (),
+}
 
-_OPCIONAIS = {o.value for o in OPCIONAIS}
+# A união, para quem precisa saber o que é opcional em algum lugar.
+OPCIONAIS = tuple({
+    etapa for lista in OPCIONAIS_POR_FLUXO.values() for etapa in lista
+})
 
 FLUXOS = {
     'polpa': FLUXO_POLPA,
@@ -139,11 +157,7 @@ FLUXOS = {
     # envase, congelamento) e é melhor começar de um caminho parecido do
     # que de uma lista genérica que ninguém reconhece.
     'sorvete': FLUXO_SORVETE,
-    # Picolé compartilha o caminho do sorvete até a maturação e o
-    # saborizante; o que muda dele para a frente (moldagem, desmoldagem) só
-    # entra quando a fábrica disser como faz -- inventar etapa que ninguém
-    # confirmou é encher a tela de linha que não vai ser apontada.
-    'picole': FLUXO_SORVETE,
+    'picole': FLUXO_PICOLE,
     'creme': FLUXO_ACAI,
     'mix': FLUXO_POLPA,
     'fruta_congelada': FLUXO_POLPA,
@@ -152,10 +166,12 @@ FLUXOS = {
 
 def fluxo_do_tipo(tipo: str, com_opcionais: bool = False) -> tuple[str, ...]:
     """O caminho de um tipo de produto. Polpa é o padrão de quem não tem."""
-    fluxo = FLUXOS.get(tipo or '', FLUXO_POLPA)
+    chave = tipo if tipo in FLUXOS else 'polpa'
+    fluxo = FLUXOS[chave]
     if com_opcionais:
         return fluxo
-    return tuple(e for e in fluxo if e not in _OPCIONAIS)
+    opcionais = {e.value for e in OPCIONAIS_POR_FLUXO.get(chave, ())}
+    return tuple(e for e in fluxo if e not in opcionais)
 
 
 def fluxo_do_produto(produto, com_opcionais: bool = False) -> tuple[str, ...]:

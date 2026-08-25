@@ -782,3 +782,168 @@ class FluxoDoSorveteTests(ProcessoBase):
                 etapa = op.etapas_processo.filter(etapa=qual).first()
                 if etapa:
                     self.assertTrue(etapa.exige_temperatura)
+
+
+class FluxoDoPicoleTests(ProcessoBase):
+    """
+    Picolé tem o caminho dele, e o rendimento que a fábrica conta é por
+    UNIDADE: 5.000 planejados, 4.850 feitos, 150 perdidos, 97%.
+    """
+
+    def setUp(self):
+        super().setUp()
+        self.picole = self._item(T.PICOLE, 'Picole de manga', 'PIC')
+        self.acucar = self._item(T.ACUCAR, 'Acucar cristal', 'ACU')
+
+    def _receita_picole(self, etapas=None, versao='1.0'):
+        receita = ReceitaService.criar(self.filial, self.picole, {
+            'descricao': 'Picole de manga', 'versao': versao,
+            'quantidade_produzida': Decimal('5000'),
+            'rendimento_esperado': Decimal('97'),
+        })
+        ItemFichaTecnica.objects.create(
+            ficha=receita.ficha, materia_prima=self.acucar,
+            quantidade=Decimal('120'), perda_prevista=Decimal('0'),
+        )
+        for i, (nome, canonica) in enumerate(
+            etapas or [('Bater a calda', '')], start=1,
+        ):
+            EtapaReceita.objects.create(
+                receita=receita, ordem=i, nome=nome, etapa=canonica,
+            )
+        ReceitaService.ativar(receita)
+        return receita
+
+    def _op_picole(self, receita=None, quantidade=Decimal('5000')):
+        return OrdemPolpaService.criar(
+            self.filial, receita or self._receita_picole(),
+            {'quantidade_planejada': quantidade}, self.usuario,
+        )
+
+    def test_o_picole_tem_o_caminho_dele(self):
+        op = self._op_picole()
+
+        etapas = list(op.etapas_processo.values_list('etapa', flat=True))
+
+        self.assertIn(Etapa.INSERCAO_PALITO, etapas)
+        self.assertIn(Etapa.DESENFORME, etapas)
+        self.assertIn(Etapa.EMBALAGEM, etapas)
+        self.assertIn(Etapa.EMPACOTAMENTO, etapas)
+        # E não passa pelo que é do sorvete de pote.
+        self.assertNotIn(Etapa.INCORPORACAO_AR, etapas)
+        self.assertNotIn(Etapa.MATURACAO, etapas)
+
+    def test_o_fluxo_do_picole_tem_as_dez_pedidas(self):
+        from apps.polpa.models.processo import FLUXO_PICOLE
+
+        self.assertEqual(len(FLUXO_PICOLE), 10)
+
+    def test_a_formulacao_e_obrigatoria_no_picole(self):
+        """
+        Formulação é opcional numa polpa (a de manga pura não formula nada) e
+        obrigatória num picolé, que é calda formulada por definição. Uma
+        lista única de opcionais faria o picolé nascer sem a etapa que ele
+        mais tem.
+        """
+        picole = self._op_picole()
+        polpa = self._op()
+
+        self.assertIn(
+            Etapa.FORMULACAO,
+            set(picole.etapas_processo.values_list('etapa', flat=True)),
+        )
+        self.assertNotIn(
+            Etapa.FORMULACAO,
+            set(polpa.etapas_processo.values_list('etapa', flat=True)),
+        )
+
+    def test_a_sequencia_do_picole_e_a_do_processo(self):
+        """Palito antes do congelamento; desenforme depois — nunca o contrário."""
+        op = self._op_picole()
+
+        etapas = list(op.etapas_processo.values_list('etapa', flat=True))
+
+        self.assertLess(
+            etapas.index(Etapa.INSERCAO_PALITO),
+            etapas.index(Etapa.CONGELAMENTO),
+        )
+        self.assertLess(
+            etapas.index(Etapa.CONGELAMENTO),
+            etapas.index(Etapa.DESENFORME),
+        )
+
+
+class RendimentoDoLoteTests(ProcessoBase):
+    """
+    O rendimento por LOTE: o número que a fábrica cobra no fim do dia.
+
+    Não é o mesmo do processo. O do processo é peso (1.000 kg de manga viram
+    600 kg de polpa); este é unidade (5.000 picolés planejados, 4.850
+    feitos). Chamá-los pelo mesmo nome faria alguém comparar um com o outro.
+    """
+
+    def _produzida(self, planejada, produzida):
+        from apps.estoque.models import Estoque, LoteProduto
+        from django.utils import timezone
+        from datetime import timedelta
+
+        receita = self._receita()
+        op = OrdemPolpaService.criar(
+            self.filial, receita, {'quantidade_planejada': planejada}, self.usuario,
+        )
+        # Estoque para o encerramento poder consumir.
+        estoque, _ = Estoque.objects.get_or_create(
+            produto=self.manga, filial=self.filial,
+        )
+        estoque.quantidade_atual = Decimal('99999')
+        estoque.quantidade_reservada = Decimal('0')
+        estoque.atualizar_disponivel()
+        estoque.save()
+        LoteProduto.objects.create(
+            filial=self.filial, produto=self.manga, numero_lote='L-MP',
+            quantidade_inicial=Decimal('99999'), quantidade_atual=Decimal('99999'),
+            data_validade=timezone.localdate() + timedelta(days=90),
+            status=LoteProduto.Status.ATIVO,
+        )
+        OrdemPolpaService.mover(op, OrdemPolpa.Situacao.LIBERADA, self.usuario)
+        OrdemPolpaService.mover(op, OrdemPolpa.Situacao.EM_PRODUCAO, self.usuario)
+        OrdemPolpaService.concluir(op, self.usuario, produzida)
+        op.refresh_from_db()
+        return op
+
+    def test_o_exemplo_do_roteiro(self):
+        """5.000 planejados, 4.850 feitos, 150 de perda, 97%."""
+        op = self._produzida(Decimal('5000'), Decimal('4850'))
+
+        self.assertEqual(op.quantidade_planejada, Decimal('5000'))
+        self.assertEqual(op.quantidade_produzida, Decimal('4850'))
+        self.assertEqual(op.perda_producao, Decimal('150'))
+        self.assertEqual(op.rendimento_lote, Decimal('97.00'))
+
+    def test_antes_de_produzir_nao_ha_rendimento(self):
+        """
+        Zero seria "não perdeu nada", e uma ordem que nem começou apareceria
+        como perfeita.
+        """
+        op = OrdemPolpaService.criar(
+            self.filial, self._receita(),
+            {'quantidade_planejada': Decimal('5000')}, self.usuario,
+        )
+
+        self.assertIsNone(op.rendimento_lote)
+        self.assertIsNone(op.perda_producao)
+
+    def test_produzir_mais_que_o_planejado_nao_da_perda_negativa(self):
+        op = self._produzida(Decimal('1000'), Decimal('1050'))
+
+        self.assertEqual(op.perda_producao, Decimal('0'))
+        self.assertEqual(op.rendimento_lote, Decimal('105.00'))
+
+    def test_a_tela_mostra_as_parcelas_do_rendimento(self):
+        op = self._produzida(Decimal('5000'), Decimal('4850'))
+
+        resposta = self.client.get(reverse('polpa:ordem-detail', args=[op.pk]))
+
+        self.assertContains(resposta, 'Rendimento do lote')
+        self.assertContains(resposta, 'Perda do lote')
+        self.assertContains(resposta, '97,00%')

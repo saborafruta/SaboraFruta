@@ -94,6 +94,13 @@
               </td>
               <td class="px-4 py-3 text-right font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
                 {% if op.quantidade_produzida %}{{ op.quantidade_produzida|floatformat:0 }}{% else %}—{% endif %}
+                {% if op.rendimento_lote is not None %}
+                  <span class="block text-[11px] font-normal"
+                        style="color:{% if op.rendimento_lote >= 95 %}#059669{% else %}#d97706{% endif %};">
+                    {{ op.rendimento_lote }}%
+                    {% if op.perda_producao %} · −{{ op.perda_producao|floatformat:0 }}{% endif %}
+                  </span>
+                {% endif %}
               </td>
               <td class="px-4 py-3 text-xs">
                 {% if op.lote %}

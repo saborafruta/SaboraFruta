@@ -26,10 +26,14 @@ para o status que a OP do ERP entende, e é ele que o resto do sistema lê.
 Dois estados podem mapear para o mesmo: pausada e em qualidade continuam
 sendo "em produção" para o ERP, porque a OP de fato não terminou.
 """
+from decimal import Decimal
+
 from django.conf import settings
 from django.db import models
 
 from apps.core.models.base import FilialManager, FilialScopedModel
+
+ZERO = Decimal('0')
 
 
 class OrdemPolpa(FilialScopedModel):
@@ -206,6 +210,46 @@ class OrdemPolpa(FilialScopedModel):
         if hasattr(base, 'date'):
             base = base.date()
         return ficha.validade_a_partir_de(base)
+
+    # ── O rendimento do lote ─────────────────────────────────────────────
+
+    @property
+    def perda_producao(self):
+        """
+        Quantas unidades faltaram para a ordem fechar o planejado.
+
+        É A PERDA QUE A FÁBRICA CONTA no fim do dia: planejou 5.000 picolés,
+        saíram 4.850, perdeu 150. Diferente da perda POR ETAPA (que é peso
+        de fruta virando casca) -- esta é unidade de produto que não existiu.
+
+        `None` enquanto a ordem não produziu: zero seria "não perdeu nada",
+        e uma ordem que ainda nem começou apareceria como perfeita.
+        """
+        if self.situacao != self.Situacao.PRODUZIDA:
+            return None
+        planejada = self.quantidade_planejada or ZERO
+        produzida = self.quantidade_produzida or ZERO
+        return max(planejada - produzida, ZERO)
+
+    @property
+    def rendimento_lote(self):
+        """
+        Produzido sobre planejado, em percentual — o rendimento DO LOTE.
+
+        NÃO É O MESMO RENDIMENTO DO PROCESSO. O do processo é peso: 1.000 kg
+        de manga viram 600 kg de polpa (60%). Este é unidade: 5.000 picolés
+        planejados, 4.850 feitos (97%). Os dois convivem porque respondem
+        perguntas diferentes -- "quanto a fruta rendeu" e "a ordem entregou
+        o que prometeu" -- e chamá-los pelo mesmo nome faria alguém comparar
+        um com o outro.
+        """
+        if self.situacao != self.Situacao.PRODUZIDA:
+            return None
+        planejada = self.quantidade_planejada or ZERO
+        if planejada <= ZERO:
+            return None
+        produzida = self.quantidade_produzida or ZERO
+        return (produzida / planejada * 100).quantize(Decimal('0.01'))
 
     @property
     def atrasada(self) -> bool:
