@@ -246,9 +246,59 @@
         {% if produto_estoque %} · {{ a_baixar }} de {{ produto_estoque }}{% endif %}
       </p>
       {% comment %}
+        DE QUAIS ROLOS SAIU. É a resposta que o sistema não tinha: o único
+        lote guardado era o texto digitado no campo acima, que o estoque
+        nunca soube o que era. Sem esta lista, rastrear um defeito de tecido
+        até a peça entregue começava por um telefonema.
+      {% endcomment %}
+      {% if consumos_lote %}
+        <div class="mt-3 rounded-lg overflow-hidden"
+             :style="temaClaro ? 'border:1px solid #e5e7eb;' : 'border:1px solid #303036;'">
+          <p class="text-xs px-3 py-2 font-semibold"
+             :style="temaClaro ? 'background:#f8fafc; color:#64748b;' : 'background:#18181b; color:#94a3b8;'">
+            Saiu por FEFO, destes lotes
+          </p>
+          {% for c in consumos_lote %}
+            <div class="flex items-center justify-between px-3 py-2 text-sm"
+                 :style="temaClaro ? 'border-top:1px solid #f1f5f9;' : 'border-top:1px solid #27272a;'">
+              {% if c.lote %}
+                <span :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
+                  <strong>{{ c.lote.numero_lote }}</strong>
+                  {% if c.lote.data_validade %}
+                    <span class="text-xs" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+                      · vence {{ c.lote.data_validade|date:"d/m/Y" }}
+                    </span>
+                  {% endif %}
+                  {% if c.lote.fornecedor %}
+                    <span class="text-xs" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+                      · {{ c.lote.fornecedor }}
+                    </span>
+                  {% endif %}
+                </span>
+              {% else %}
+                {% comment %}
+                  O pedaço sem rastro aparece, e não some: é justamente ele
+                  que precisa de alguém — some da lista, some do problema.
+                {% endcomment %}
+                <span style="color:#d97706;">Sem lote</span>
+              {% endif %}
+              <span class="font-mono text-xs shrink-0"
+                    :style="temaClaro ? 'color:#374151;' : 'color:#d1d5db;'">
+                {{ c.quantidade }}
+              </span>
+            </div>
+          {% endfor %}
+        </div>
+      {% endif %}
+
+      {% comment %}
         O estorno existe porque corte é cancelado de verdade: enfesto
         errado, tecido trocado. Sem ele, a saída seria um ajuste manual —
         que é a redigitação que este caminho veio eliminar.
+
+        E ele devolve PARA OS MESMOS LOTES da lista acima. Voltar por FEFO
+        jogaria o tecido no rolo que vence primeiro, que raramente é de onde
+        ele saiu.
       {% endcomment %}
       <form method="post" action="{% url 'moda:corte-estoque' corte.pk %}" class="mt-3">
         {% csrf_token %}

@@ -48,12 +48,23 @@ class MovimentacaoService:
         produto_id: int,
         filial_id: int,
         quantidade: Decimal,
+        permitir_parcial: bool = False,
     ) -> list[ConsumoLote]:
         """
         Retorna lotes a consumir respeitando FEFO. Exclui lotes vencidos,
         bloqueados, esgotados ou com quantidade zero.
 
         Levanta EstoqueInsuficienteError se soma dos lotes disponíveis < quantidade.
+
+        `permitir_parcial` devolve o que os lotes cobrem em vez de recusar. É
+        para o consumo que JÁ ACONTECEU no mundo físico -- o corte que comeu o
+        rolo -- onde recusar o registro não desfaz o consumo, só deixa o
+        sistema mais errado do que já estava. Quem VAI tirar material (venda,
+        separação) continua batendo na recusa, que é o padrão.
+
+        A ordenação FEFO mora só aqui. Um chamador que precise de parcial e
+        montasse a própria consulta duplicaria essa ordem -- e no dia em que
+        uma das duas mudasse, metade do sistema consumiria pelo lote errado.
         """
         hoje = timezone.localdate()
 
@@ -86,7 +97,7 @@ class MovimentacaoService:
             ))
             restante -= consumir
 
-        if restante > 0:
+        if restante > 0 and not permitir_parcial:
             total_disponivel = quantidade - restante
             raise EstoqueInsuficienteError(
                 f'Estoque insuficiente. Solicitado: {quantidade}, '

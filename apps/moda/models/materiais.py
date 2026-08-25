@@ -165,3 +165,55 @@ class ItemRequisicao(models.Model):
 
     def __str__(self):
         return f'{self.descricao}: {self.quantidade} {self.unidade}'.strip()
+
+
+class ConsumoLoteCorte(models.Model):
+    """
+    Qual lote REAL de matéria-prima cada corte comeu, e quanto.
+
+    O elo que faltava. `RegistroCorte.lote` é texto livre: o chão de fábrica
+    digita o número do rolo, e o estoque nunca soube que rolo era esse. Do
+    outro lado, a baixa do corte mexia no saldo do produto sem tocar em lote
+    nenhum -- num tecido com lote, `Estoque.quantidade_atual` caía e
+    `LoteProduto.quantidade_atual` ficava cheio. Os dois números divergiam em
+    silêncio, e quem fosse rastrear um defeito de tecido não tinha por onde
+    começar.
+
+    NÃO É UMA SEGUNDA VERDADE sobre o saldo -- esse continua sendo a
+    `MovimentacaoEstoque`, que é o razão. Isto é a ALOCAÇÃO: de qual lote saiu
+    cada pedaço deste corte. É o que o razão não consegue responder sozinho,
+    porque ele é indexado pelo DOCUMENTO, e uma ordem pode ter vários enfestos
+    -- estornar um corte pelo razão devolveria tecido dos outros.
+
+    `lote` nulo é consumo que os lotes não cobriram. Guardado assim, e não
+    omitido, porque o pedaço sem rastro é justamente o que precisa aparecer.
+    """
+
+    corte = models.ForeignKey(
+        'moda.RegistroCorte', on_delete=models.CASCADE, related_name='consumos_lote',
+    )
+    lote = models.ForeignKey(
+        'estoque.LoteProduto', on_delete=models.PROTECT, null=True, blank=True,
+        related_name='consumos_corte',
+        help_text='Vazio quando os lotes não cobriram o consumo.',
+    )
+    quantidade = models.DecimalField(max_digits=12, decimal_places=4)
+    # Copiado na gravação: é o custo daquele rolo NAQUELE dia, e o custo do
+    # lote pode ser corrigido depois sem mudar o que a peça custou.
+    custo_unitario = models.DecimalField(max_digits=14, decimal_places=4, default=0)
+
+    criado_em = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = 'moda_consumos_lote_corte'
+        ordering = ['pk']
+        verbose_name = 'Consumo de lote no corte'
+        verbose_name_plural = 'Consumos de lote no corte'
+        indexes = [
+            models.Index(fields=['corte']),
+            models.Index(fields=['lote']),
+        ]
+
+    def __str__(self):
+        onde = self.lote.numero_lote if self.lote_id else 'sem lote'
+        return f'{self.quantidade} de {onde}'

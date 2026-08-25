@@ -11,7 +11,9 @@ from .grade import Grade, ItemGrade, Tamanho
 from .grade_pedido import ItemGradePedido
 from .individual import PersonalizacaoIndividual
 from .item_pedido import ItemPedidoProducao
-from .materiais import ItemRequisicao, RequisicaoMaterial, ReservaMaterial
+from .materiais import (
+    ConsumoLoteCorte, ItemRequisicao, RequisicaoMaterial, ReservaMaterial,
+)
 from .ordem import OrdemProducao
 from .pcp import CapacidadeSetor
 from .pedido import PedidoProducao
@@ -62,6 +64,7 @@ __all__ = [
     'RegistroCorte',
     'RequisicaoMaterial',
     'ReservaMaterial',
+    'ConsumoLoteCorte',
     'Roteiro',
     'Tamanho',
     'Tecido',

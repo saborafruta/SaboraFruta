@@ -133,6 +133,12 @@ class CorteDetailView(ModaBaseView):
             ],
             'produto_estoque': produto_estoque,
             'a_baixar': a_baixar,
+            # De quais rolos saiu — o rastro que o campo de texto
+            # `corte.lote` nunca deu, porque o estoque não sabia o que
+            # aquele número era.
+            'consumos_lote': corte.consumos_lote.select_related(
+                'lote', 'lote__fornecedor',
+            ).all(),
             'impedimento_baixa': impedimento,
             'pode_baixar': (
                 not impedimento
@@ -202,21 +208,42 @@ class CorteEstoqueView(ModaBaseView):
 
         try:
             if estornar:
-                produto, quantidade = IntegracaoService.estornar_estoque_do_corte(
+                baixa = IntegracaoService.estornar_estoque_do_corte(
                     corte, request.user,
                 )
                 messages.success(
                     request,
-                    f'Estorno feito: {quantidade} devolvido(s) ao estoque de {produto}.',
+                    f'Estorno feito: {baixa.quantidade} devolvido(s) ao estoque '
+                    f'de {baixa.produto}, nos mesmos lotes de onde saiu.',
                 )
             else:
-                produto, quantidade = IntegracaoService.baixar_estoque_do_corte(
+                baixa = IntegracaoService.baixar_estoque_do_corte(
                     corte, request.user,
                 )
-                messages.success(
-                    request,
-                    f'Baixa registrada: {quantidade} de {produto} saíram do estoque.',
-                )
+                # De quais rolos saiu, na mensagem: quem baixa o estoque quer
+                # ver a alocação AGORA, e não abrir outra tela para conferir se
+                # o FEFO pegou o lote que estava na bancada.
+                rastreados = baixa.rastreados
+                if rastreados:
+                    lotes = ', '.join(
+                        f'{c.lote.numero_lote} ({c.quantidade})' for c in rastreados
+                    )
+                    messages.success(
+                        request,
+                        f'Baixa registrada: {baixa.quantidade} de {baixa.produto} '
+                        f'saíram do estoque. Por FEFO, de: {lotes}.',
+                    )
+                else:
+                    messages.success(
+                        request,
+                        f'Baixa registrada: {baixa.quantidade} de {baixa.produto} '
+                        f'saíram do estoque.',
+                    )
+                # AVISO SEPARADO da confirmação, e em amarelo: a baixa deu
+                # certo, mas ficou sem rastro. Enfiar isso na mensagem de
+                # sucesso faria a falha de cadastro passar como detalhe.
+                if baixa.aviso:
+                    messages.warning(request, baixa.aviso)
         except DomainError as erro:
             messages.error(request, str(erro))
         return redirect(reverse('moda:corte-detail', args=[corte.pk]))

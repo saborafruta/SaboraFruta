@@ -25,6 +25,7 @@ botão só propaga. E é reversível — cancelar o corte estorna.
 """
 from __future__ import annotations
 
+from dataclasses import dataclass, field
 from decimal import Decimal
 
 from django.db import transaction
@@ -33,6 +34,26 @@ from django.utils import timezone
 from apps.core.services.exceptions import DomainError
 
 ZERO = Decimal('0')
+
+
+@dataclass
+class BaixaDoCorte:
+    """
+    O que a baixa (ou o estorno) fez, com os lotes à vista.
+
+    Devolve objeto, e não a tupla `(produto, quantidade)` de antes, porque
+    agora há o que contar: de quais rolos saiu cada pedaço, e se sobrou consumo
+    sem lote. O aviso é texto pronto para a tela — quem chama não remonta a
+    frase a partir dos números, e todas as telas dizem a mesma coisa.
+    """
+    produto: object
+    quantidade: Decimal
+    consumos: list = field(default_factory=list)
+    aviso: str = ''
+
+    @property
+    def rastreados(self) -> list:
+        return [c for c in self.consumos if c.lote_id]
 
 
 class IntegracaoService:
@@ -179,16 +200,31 @@ class IntegracaoService:
 
     @classmethod
     @transaction.atomic
-    def baixar_estoque_do_corte(cls, corte, usuario):
+    def baixar_estoque_do_corte(cls, corte, usuario) -> BaixaDoCorte:
         """
-        Dá baixa no tecido que o corte consumiu.
+        Dá baixa no tecido que o corte consumiu, POR FEFO.
 
-        Idempotente pelo carimbo: dois cliques no botão não tiram o tecido
-        duas vezes. É a proteção que importa aqui — estoque baixado a mais
-        não aparece como erro, aparece como "sumiu material".
+        Antes chamava `registrar_movimentacao(permitir_sem_lote=True)`: o saldo
+        do produto caía e nenhum lote era tocado. Num tecido com lote,
+        `Estoque.quantidade_atual` descia e `LoteProduto.quantidade_atual`
+        ficava cheio — os dois números divergiam em silêncio, e quem fosse
+        rastrear um defeito de tecido não tinha por onde começar.
+
+        Agora a seleção é a mesma do resto do ERP (`selecionar_lotes_fifo`):
+        vence primeiro, sai primeiro. Um corte pode comer vários rolos, então
+        sai um lançamento por lote — e cada pedaço fica ligado ao rolo de onde
+        veio.
+
+        O QUE FALTAR NOS LOTES ainda é registrado, sem lote e com aviso. O
+        tecido JÁ FOI CORTADO no mundo físico: recusar o lançamento não devolve
+        o rolo, só deixa o sistema mais errado do que já estava. O aviso sobe
+        para a tela para alguém acertar o cadastro do lote.
+
+        Idempotente pelo carimbo: dois cliques não tiram o tecido duas vezes.
         """
         from apps.estoque.models.estoque import MovimentacaoEstoque
         from apps.estoque.services.movimentacao_service import MovimentacaoService
+        from apps.moda.models import ConsumoLoteCorte
 
         if corte.estoque_baixado_em:
             raise DomainError('O estoque deste corte já foi baixado.')
@@ -202,34 +238,92 @@ class IntegracaoService:
         if problema:
             raise DomainError(problema)
 
-        MovimentacaoService.registrar_movimentacao(
-            produto_id=produto.pk,
-            filial_id=corte.filial_id,
-            tipo_operacao=MovimentacaoEstoque.TipoOperacao.PRODUCAO_SAIDA,
-            quantidade=quantidade,
-            usuario_id=usuario.pk,
-            documento_tipo=MovimentacaoEstoque.DocumentoTipo.ORDEM_PRODUCAO,
-            documento_id=corte.ordem_id,
-            documento_numero=corte.ordem.numero,
-            observacao=(
-                f'Corte #{corte.numero:04d} — consumo real de tecido'
-            ),
-            permitir_sem_lote=True,
+        consumos = MovimentacaoService.selecionar_lotes_fifo(
+            produto.pk, corte.filial_id, quantidade, permitir_parcial=True,
         )
+        coberto = sum((c.quantidade for c in consumos), ZERO)
+        sem_lote = quantidade - coberto
+
+        comum = {
+            'produto_id': produto.pk,
+            'filial_id': corte.filial_id,
+            'tipo_operacao': MovimentacaoEstoque.TipoOperacao.PRODUCAO_SAIDA,
+            'usuario_id': usuario.pk,
+            'documento_tipo': MovimentacaoEstoque.DocumentoTipo.ORDEM_PRODUCAO,
+            'documento_id': corte.ordem_id,
+            'documento_numero': corte.ordem.numero,
+        }
+
+        for consumo in consumos:
+            MovimentacaoService.registrar_movimentacao(
+                quantidade=consumo.quantidade,
+                lote_id=consumo.lote_id,
+                valor_unitario=consumo.custo_unitario,
+                observacao=(
+                    f'Corte #{corte.numero:04d} — FEFO: lote {consumo.numero_lote}'
+                ),
+                **comum,
+            )
+            ConsumoLoteCorte.objects.create(
+                corte=corte, lote_id=consumo.lote_id,
+                quantidade=consumo.quantidade,
+                custo_unitario=consumo.custo_unitario,
+            )
+
+        aviso = ''
+        if sem_lote > ZERO:
+            MovimentacaoService.registrar_movimentacao(
+                quantidade=sem_lote,
+                observacao=(
+                    f'Corte #{corte.numero:04d} — consumo sem lote: os lotes '
+                    f'vigentes não cobriram esta quantidade'
+                ),
+                permitir_sem_lote=True,
+                **comum,
+            )
+            ConsumoLoteCorte.objects.create(
+                corte=corte, lote=None, quantidade=sem_lote,
+            )
+            if consumos:
+                aviso = (
+                    f'{sem_lote} saiu SEM LOTE — os lotes vigentes cobriram '
+                    f'apenas {coberto} de {quantidade}. Confira o cadastro de '
+                    f'lotes deste tecido.'
+                )
+            else:
+                aviso = (
+                    f'{quantidade} saiu SEM LOTE: este tecido não tem lote '
+                    f'vigente cadastrado, então não há o que rastrear.'
+                )
 
         corte.estoque_baixado_em = timezone.now()
         corte.save(update_fields=['estoque_baixado_em'])
-        return produto, quantidade
+        return BaixaDoCorte(
+            produto=produto,
+            quantidade=quantidade,
+            consumos=list(corte.consumos_lote.select_related('lote')),
+            aviso=aviso,
+        )
 
     @classmethod
     @transaction.atomic
-    def estornar_estoque_do_corte(cls, corte, usuario):
+    def estornar_estoque_do_corte(cls, corte, usuario) -> BaixaDoCorte:
         """
-        Devolve ao estoque o que a baixa tirou.
+        Devolve ao estoque o que a baixa tirou, PARA OS MESMOS LOTES.
+
+        Voltar por FEFO seria errado no sentido contrário: FEFO escolhe de onde
+        TIRAR, e devolver pelo mesmo critério jogaria o tecido no rolo que
+        vence primeiro — que raramente é de onde ele saiu. Em duas rodadas de
+        baixa e estorno o saldo total fecharia e os lotes estariam todos
+        trocados, com cara de certo.
+
+        Por isso a devolução lê o que ESTE corte alocou. Não dá para ler do
+        razão: ele é indexado pelo DOCUMENTO, e uma ordem pode ter vários
+        enfestos — estornar um devolveria tecido dos outros.
 
         Existe porque corte é cancelado de verdade: enfesto errado, tecido
-        trocado. Sem estorno, a única saída seria um ajuste manual — que é
-        exatamente a redigitação que este trabalho veio eliminar.
+        trocado. Sem estorno, a saída seria um ajuste manual — exatamente a
+        redigitação que este trabalho veio eliminar.
         """
         from apps.estoque.models.estoque import MovimentacaoEstoque
         from apps.estoque.services.movimentacao_service import MovimentacaoService
@@ -241,19 +335,51 @@ class IntegracaoService:
         if problema:
             raise DomainError(problema)
 
-        MovimentacaoService.registrar_movimentacao(
-            produto_id=produto.pk,
-            filial_id=corte.filial_id,
-            tipo_operacao=MovimentacaoEstoque.TipoOperacao.PRODUCAO_ENTRADA,
-            quantidade=quantidade,
-            usuario_id=usuario.pk,
-            documento_tipo=MovimentacaoEstoque.DocumentoTipo.ORDEM_PRODUCAO,
-            documento_id=corte.ordem_id,
-            documento_numero=corte.ordem.numero,
-            observacao=f'Estorno da baixa do corte #{corte.numero:04d}',
-            permitir_sem_lote=True,
-        )
+        alocados = list(corte.consumos_lote.select_related('lote'))
+        comum = {
+            'produto_id': produto.pk,
+            'filial_id': corte.filial_id,
+            'tipo_operacao': MovimentacaoEstoque.TipoOperacao.PRODUCAO_ENTRADA,
+            'usuario_id': usuario.pk,
+            'documento_tipo': MovimentacaoEstoque.DocumentoTipo.ORDEM_PRODUCAO,
+            'documento_id': corte.ordem_id,
+            'documento_numero': corte.ordem.numero,
+        }
 
+        devolvido = ZERO
+        for alocado in alocados:
+            onde = alocado.lote.numero_lote if alocado.lote_id else 'sem lote'
+            MovimentacaoService.registrar_movimentacao(
+                quantidade=alocado.quantidade,
+                lote_id=alocado.lote_id,
+                valor_unitario=alocado.custo_unitario,
+                observacao=(
+                    f'Estorno do corte #{corte.numero:04d} — devolvido a {onde}'
+                ),
+                permitir_sem_lote=alocado.lote_id is None,
+                **comum,
+            )
+            devolvido += alocado.quantidade
+
+        if not alocados:
+            # Baixa feita ANTES desta mudança não tem alocação gravada.
+            # Devolver o total sem lote é o único caminho honesto: o sistema
+            # nunca soube de que rolo aquilo saiu, e escolher um agora poria
+            # tecido no lugar errado com cara de rastreio.
+            MovimentacaoService.registrar_movimentacao(
+                quantidade=quantidade,
+                observacao=(
+                    f'Estorno do corte #{corte.numero:04d} — baixa antiga, '
+                    f'sem lote registrado'
+                ),
+                permitir_sem_lote=True,
+                **comum,
+            )
+            devolvido = quantidade
+
+        corte.consumos_lote.all().delete()
         corte.estoque_baixado_em = None
         corte.save(update_fields=['estoque_baixado_em'])
-        return produto, quantidade
+        return BaixaDoCorte(
+            produto=produto, quantidade=devolvido, consumos=[], aviso='',
+        )
