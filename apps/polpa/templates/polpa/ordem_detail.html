@@ -79,6 +79,14 @@
                     :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Insumo</th>
                 <th class="text-right px-4 py-3 text-xs font-semibold uppercase tracking-wide"
                     :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Necessário</th>
+                {% comment %}
+                  SEPARADO vem antes de "em estoque" de propósito: "em estoque"
+                  já vem descontado desta própria reserva, e quem lê as duas na
+                  ordem inversa conclui que o material sumiu — quando ele está
+                  justamente guardado para esta batida.
+                {% endcomment %}
+                <th class="text-right px-4 py-3 text-xs font-semibold uppercase tracking-wide"
+                    :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Separado</th>
                 <th class="text-right px-4 py-3 text-xs font-semibold uppercase tracking-wide"
                     :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Em estoque</th>
                 <th class="text-right px-4 py-3 text-xs font-semibold uppercase tracking-wide"
@@ -89,7 +97,7 @@
               {% for grupo, linhas in bloco_necessidade %}
                 {% if linhas %}
                   <tr>
-                    <td colspan="4" class="px-4 pt-3 pb-1 text-xs font-bold uppercase tracking-wider"
+                    <td colspan="5" class="px-4 pt-3 pb-1 text-xs font-bold uppercase tracking-wider"
                         :style="temaClaro ? 'color:#94a3b8;' : 'color:#71717a;'">{{ grupo }}</td>
                   </tr>
                   {% for linha in linhas %}
@@ -97,6 +105,13 @@
                       <td class="px-4 py-2.5" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">{{ linha.produto }}</td>
                       <td class="px-4 py-2.5 text-right font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
                         {{ linha.necessario|floatformat:3 }} {{ linha.unidade }}
+                      </td>
+                      <td class="px-4 py-2.5 text-right">
+                        {% if linha.reservado %}
+                          <span class="font-semibold" style="color:#0891b2;">{{ linha.reservado|floatformat:3 }}</span>
+                        {% else %}
+                          <span :style="temaClaro ? 'color:#cbd5e1;' : 'color:#52525b;'">—</span>
+                        {% endif %}
                       </td>
                       <td class="px-4 py-2.5 text-right" :style="temaClaro ? 'color:#374151;' : 'color:#cbd5e1;'">
                         {{ linha.disponivel|floatformat:3 }}
@@ -114,7 +129,7 @@
               {% endfor %}
               {% if not necessidade.ingredientes and not necessidade.embalagens %}
                 <tr>
-                  <td colspan="4" class="px-4 py-8 text-center text-sm"
+                  <td colspan="5" class="px-4 py-8 text-center text-sm"
                       :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
                     A receita desta ordem não tem insumos lançados.
                   </td>

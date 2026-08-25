@@ -122,6 +122,12 @@ class OrdemPolpa(FilialScopedModel):
         help_text='Soma das pausas — o tempo que a linha ficou parada.',
     )
 
+    # Carimbo de que os insumos já foram separados para esta ordem. A
+    # pergunta "isto já aconteceu?" precisa de resposta no banco: inferir
+    # pelas reservas faria uma reserva cancelada de propósito -- para liberar
+    # fruta a uma batida mais urgente -- ser refeita na próxima despausada.
+    insumos_reservados_em = models.DateTimeField(null=True, blank=True, editable=False)
+
     # ── Qualidade ────────────────────────────────────────────────────────
     enviada_qualidade_em = models.DateTimeField(null=True, blank=True)
     liberada_qualidade_em = models.DateTimeField(null=True, blank=True)
@@ -250,6 +256,10 @@ class OrdemPolpa(FilialScopedModel):
             return None
         produzida = self.quantidade_produzida or ZERO
         return (produzida / planejada * 100).quantize(Decimal('0.01'))
+
+    @property
+    def insumo_reservado(self) -> bool:
+        return self.insumos_reservados_em is not None
 
     @property
     def atrasada(self) -> bool:

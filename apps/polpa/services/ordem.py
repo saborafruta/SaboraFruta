@@ -28,6 +28,8 @@ estoque é de fato consumido — não dá para baixar o que não existe.
 """
 from __future__ import annotations
 
+import logging
+from collections import defaultdict
 from decimal import Decimal
 
 from django.db import transaction
@@ -35,8 +37,10 @@ from django.utils import timezone
 
 from apps.core.services.exceptions import DomainError
 from apps.estoque.models import Estoque
-from apps.polpa.models import FichaProduto, OrdemPolpa, Receita
+from apps.polpa.models import FichaProduto, OrdemPolpa, Receita, ReservaInsumo
 from apps.producao.models import FichaTecnica, OrdemProducao
+
+logger = logging.getLogger(__name__)
 
 ZERO = Decimal('0')
 S = OrdemPolpa.Situacao
@@ -136,6 +140,16 @@ class OrdemPolpaService:
         fator = op.quantidade_planejada / base
         ingredientes, embalagens, faltas = [], [], []
 
+        # O QUE JÁ ESTÁ SEPARADO, por insumo. Sem esta coluna a tela mostra
+        # "em estoque" já descontado da própria reserva desta ordem, e quem
+        # olha conclui que o material sumiu -- quando ele está justamente
+        # guardado para esta batida.
+        reservado: dict[int, Decimal] = defaultdict(lambda: ZERO)
+        for reserva in ReservaInsumo.all_objects.filter(
+            ordem=op, status=ReservaInsumo.Status.ATIVA,
+        ):
+            reservado[reserva.produto_id] += reserva.quantidade
+
         for item in ficha.itens.select_related(
             'materia_prima', 'materia_prima__unidade_medida',
             'materia_prima__ficha_polpa',
@@ -151,6 +165,7 @@ class OrdemPolpaService:
                 'necessario': necessario,
                 'disponivel': disponivel,
                 'falta': falta,
+                'reservado': reservado[produto.pk],
             }
             ficha_produto = getattr(produto, 'ficha_polpa', None)
             if ficha_produto and ficha_produto.classe == FichaProduto.Classe.EMBALAGEM:
@@ -173,6 +188,130 @@ class OrdemPolpaService:
         if estoque is None:
             return ZERO
         return estoque.quantidade_disponivel or ZERO
+
+    # ── Reserva de matéria-prima ─────────────────────────────────────────
+
+    @classmethod
+    @transaction.atomic
+    def reservar_insumos(cls, op: OrdemPolpa, usuario=None) -> list:
+        """
+        Separa o insumo desta ordem. Chamado quando a batida começa.
+
+        LÊ A `necessidade()`, e não a ficha de novo. Ela já sabe aplicar o
+        fator da quantidade planejada e a perda prevista de cada linha;
+        recalcular aqui daria uma segunda definição da mesma conta, e no dia
+        em que as duas divergissem a reserva separaria uma quantidade e a
+        produção cobraria outra.
+
+        RESERVA O QUE DÁ, e não tudo ou nada. Faltar o pote não é motivo para
+        deixar a fruta solta na câmara -- e o que falta continua aparecendo em
+        `necessidade()['faltas']`, que é a tela que existe para isso.
+
+        NÃO RESERVA O QUE NÃO EXISTE. Reserva maior que o saldo é uma promessa
+        que a câmara não cumpre, e ela sumiria do disponível de todas as
+        outras batidas do dia.
+
+        Idempotente pelo carimbo: despausar não separa tudo de novo.
+        """
+        from apps.estoque.services.movimentacao_service import MovimentacaoService
+
+        necessidade = cls.necessidade(op)
+        linhas = necessidade['ingredientes'] + necessidade['embalagens']
+
+        ja_reservado: dict[int, Decimal] = defaultdict(lambda: ZERO)
+        for reserva in ReservaInsumo.all_objects.filter(
+            ordem=op, status=ReservaInsumo.Status.ATIVA,
+        ):
+            ja_reservado[reserva.produto_id] += reserva.quantidade
+
+        criadas = []
+        for linha in linhas:
+            produto = linha['produto']
+            falta = linha['necessario'] - ja_reservado[produto.pk]
+            if falta <= ZERO:
+                continue
+
+            fatia = min(falta, cls._saldo(produto, op.filial))
+            if fatia <= ZERO:
+                continue
+
+            MovimentacaoService.reservar_estoque(
+                produto_id=produto.pk,
+                filial_id=op.filial_id,
+                quantidade=fatia,
+            )
+            criadas.append(ReservaInsumo.objects.create(
+                filial=op.filial, ordem=op, produto=produto,
+                quantidade=fatia, criado_por=usuario,
+                observacao='Separado no início da batida.',
+            ))
+            ja_reservado[produto.pk] += fatia
+
+        return criadas
+
+    @classmethod
+    def reservar_ao_iniciar(cls, op: OrdemPolpa, usuario=None) -> list:
+        """
+        A separação do início da batida, com carimbo e sem poder estourar.
+
+        NÃO PROPAGA ERRO. Isto roda quando alguém põe a ordem em produção: um
+        problema de estoque não pode impedir a fábrica de registrar que a
+        linha ligou. A batida vai acontecer de qualquer jeito -- o que se
+        perde ao travar é o registro dela, e é o registro que explica o dia
+        depois.
+
+        O carimbo só é posto quando a separação rodou até o fim. Falhou, fica
+        sem carimbo, e a próxima entrada em produção tenta de novo.
+        """
+        if op.insumos_reservados_em:
+            return []
+        try:
+            criadas = cls.reservar_insumos(op, usuario)
+        except Exception:  # noqa: BLE001
+            logger.exception(
+                'Falha ao reservar insumo da ordem de polpa %s', op.pk,
+            )
+            return []
+
+        op.insumos_reservados_em = timezone.now()
+        op.save(update_fields=['insumos_reservados_em', 'updated_at'])
+        return criadas
+
+    @staticmethod
+    def liberar_reservas(op: OrdemPolpa, status: str) -> int:
+        """
+        Desfaz as reservas ativas desta ordem. Devolve quantas.
+
+        CHAMADA NA CONCLUSÃO E NO CANCELAMENTO, por razões diferentes:
+
+          · CONCLUIU -- `OrdemProducaoService.encerrar` acabou de baixar o
+            insumo de verdade, por FEFO. Se a reserva continuasse de pé, o
+            mesmo material estaria reservado E consumido, e o disponível
+            ficaria negativo sem nada errado ter acontecido. Não é limpeza:
+            é a outra metade da conta;
+
+          · CANCELOU -- a fruta volta a ser de todo mundo. Reserva de uma
+            batida que não vai acontecer some do disponível para sempre, e
+            ninguém desconfia de um número que só encolhe.
+
+        `status` diz qual das duas foi, porque a diferença importa seis meses
+        depois: consumida virou produto, cancelada voltou para a câmara.
+        """
+        from apps.estoque.services.movimentacao_service import MovimentacaoService
+
+        reservas = list(ReservaInsumo.all_objects.filter(
+            ordem=op, status=ReservaInsumo.Status.ATIVA,
+        ))
+        for reserva in reservas:
+            MovimentacaoService.liberar_reserva(
+                produto_id=reserva.produto_id,
+                filial_id=reserva.filial_id,
+                quantidade=reserva.quantidade,
+                tolerar_ausente=True,
+            )
+            reserva.status = status
+            reserva.save(update_fields=['status'])
+        return len(reservas)
 
     # ── Movimento de estado ──────────────────────────────────────────────
 
@@ -229,6 +368,10 @@ class OrdemPolpaService:
             if not motivo:
                 raise DomainError('Informe o motivo do cancelamento.')
             op.observacao = f'{op.observacao}\nCancelada: {motivo}'.strip()
+            # A FRUTA VOLTA A SER DE TODO MUNDO. Reserva de uma batida que
+            # não vai acontecer some do disponível para sempre, e ninguém
+            # desconfia de um número que só encolhe.
+            cls.liberar_reservas(op, ReservaInsumo.Status.CANCELADA)
 
         elif destino == S.PRODUZIDA:
             raise DomainError(
@@ -243,6 +386,14 @@ class OrdemPolpaService:
         op.ordem.status = OrdemPolpa.STATUS_DO_ERP[destino]
         op.ordem.save()
         op.save()
+
+        # SEPARAR A MATÉRIA-PRIMA QUANDO A BATIDA COMEÇA. Depois do save, para
+        # a ordem já estar em produção quando a reserva é gravada -- e nunca
+        # antes, porque reserva feita para uma transição que ainda pode falhar
+        # seguraria fruta de uma batida que não começou.
+        if destino == S.EM_PRODUCAO:
+            cls.reservar_ao_iniciar(op, usuario)
+
         return op
 
     @classmethod
@@ -290,6 +441,13 @@ class OrdemPolpaService:
         # aceitar o encerramento -- em qualidade, para o ERP, ela está.
         op.ordem.status = OrdemProducao.Status.EM_PRODUCAO
         op.ordem.save(update_fields=['status'])
+
+        # A RESERVA MORRE ANTES DE O CONSUMO NASCER, e a ordem importa. O
+        # `encerrar` abaixo baixa o insumo de verdade; se a reserva ainda
+        # estivesse de pé, o mesmo material ficaria reservado E consumido, e o
+        # disponível iria a negativo sem nada errado ter acontecido. Liberar
+        # depois deixaria essa janela aberta dentro da própria transação.
+        cls.liberar_reservas(op, ReservaInsumo.Status.CONSUMIDA)
 
         try:
             OrdemProducaoService.encerrar(
