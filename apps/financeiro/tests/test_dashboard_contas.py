@@ -174,5 +174,25 @@ class DashboardContasServiceTests(TestCase):
         self.assertIn('Valor original', html)
         self.assertIn('Registrar pagamento', html)
 
+    def test_detalhes_do_pagamento_exibem_tarifa_e_debito_bancario(self):
+        conta = self._pagar('994.99', date(2026, 8, 31), pago='500.00')
+        pagamento = conta.pagamentos.get()
+        pagamento.valor_tarifa_bancaria = Decimal('0.50')
+        pagamento.valor_debito_bancario = Decimal('500.50')
+
+        html = render_to_string(
+            'financeiro/_detalhes_conta_modal.html',
+            {
+                'conta': conta,
+                'tipo_conta': 'pagar',
+                'pagamentos_detalhados': [pagamento],
+            },
+        )
+
+        self.assertIn('Pago ao fornecedor', html)
+        self.assertIn('Tarifa bancária', html)
+        self.assertIn('Total debitado da conta', html)
+        self.assertIn('R$ 500,50', html)
+
     def test_categorias_financeiras_abrem_em_despesas(self):
         self.assertEqual(DEFAULT_TIPO, 'grupo_despesa')

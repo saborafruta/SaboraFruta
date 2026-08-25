@@ -128,6 +128,15 @@
     <section class="rounded-lg border p-4" style="border-color:rgba(148,163,184,.28)">
       <h3 class="mb-4 text-xs font-semibold uppercase opacity-55">Pagamentos</h3>
       <div class="space-y-3">
+        {% if tipo_conta == 'pagar' %}
+        {% for pagamento in pagamentos_detalhados %}
+          <article class="rounded-md border p-3 text-sm" style="border-color:rgba(148,163,184,.22)">
+            <div class="flex items-start justify-between gap-3"><div><span class="block text-xs opacity-55">{{ pagamento.data_pagamento|date:"d/m/Y" }}</span><strong>{{ pagamento.forma_pagamento.descricao_com_conta|default:"Forma não informada" }}</strong><p class="mt-1 text-xs opacity-60">{{ pagamento.conta_bancaria.descricao|default:pagamento.conta_bancaria|default:"Conta não informada" }}</p></div><div class="text-right"><span class="block text-xs opacity-55">Pago ao fornecedor</span><strong class="whitespace-nowrap text-emerald-500">R$ {{ pagamento.valor_pago|floatformat:2 }}</strong></div></div>
+            <div class="mt-3 grid grid-cols-2 gap-3 border-t pt-3" style="border-color:rgba(148,163,184,.18)"><div><span class="block text-xs opacity-55">Tarifa bancária</span><strong class="text-rose-600">R$ {{ pagamento.valor_tarifa_bancaria|floatformat:2 }}</strong></div><div class="text-right"><span class="block text-xs opacity-55">Total debitado da conta</span><strong>R$ {{ pagamento.valor_debito_bancario|floatformat:2 }}</strong></div></div>
+            {% if pagamento.comprovante_arquivo %}<div class="mt-3 flex gap-2"><a class="text-xs font-semibold text-blue-500" href="{% url 'financeiro:pagar_comprovante' conta.pk pagamento.pk %}" target="_blank">Visualizar</a><a class="text-xs font-semibold text-blue-500" href="{% url 'financeiro:pagar_comprovante' conta.pk pagamento.pk %}?download=1">Baixar</a></div>{% endif %}
+          </article>
+        {% empty %}<p class="text-sm opacity-60">Nenhum pagamento registrado.</p>{% endfor %}
+        {% else %}
         {% for pagamento in conta.pagamentos.all %}
           <article class="rounded-md border p-3 text-sm" style="border-color:rgba(148,163,184,.22)">
             <div class="flex items-start justify-between gap-3"><div><span class="block text-xs opacity-55">{{ pagamento.data_pagamento|date:"d/m/Y" }}</span><strong>{{ pagamento.forma_pagamento.descricao_com_conta|default:"Forma não informada" }}</strong></div><strong class="whitespace-nowrap text-emerald-500">R$ {{ pagamento.valor_pago|floatformat:2 }}</strong></div>
@@ -135,6 +144,7 @@
             {% if pagamento.comprovante_arquivo %}<div class="mt-3 flex gap-2"><a class="text-xs font-semibold text-blue-500" href="{% url 'financeiro:pagar_comprovante' conta.pk pagamento.pk %}" target="_blank">Visualizar</a><a class="text-xs font-semibold text-blue-500" href="{% url 'financeiro:pagar_comprovante' conta.pk pagamento.pk %}?download=1">Baixar</a></div>{% endif %}
           </article>
         {% empty %}<p class="text-sm opacity-60">Nenhum pagamento registrado.</p>{% endfor %}
+        {% endif %}
       </div>
     </section>
   </div>

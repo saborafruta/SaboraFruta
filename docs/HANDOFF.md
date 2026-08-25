@@ -1,5 +1,12 @@
 # HANDOFF.md
 
+## Correcao de tarifa em pagamentos (2026-08-25)
+
+- Pagamentos de contas a pagar mantem o valor pago ao fornecedor separado da tarifa bancaria.
+- A tarifa de saida configurada na forma de pagamento gera uma conta paga propria e vinculada a mesma conta bancaria.
+- O detalhe do titulo agora exibe `Pago ao fornecedor`, `Tarifa bancaria` e `Total debitado da conta`.
+- Exemplo: pagar R$ 500,00 por PIX ORENDA com tarifa de R$ 0,50 mantem R$ 494,99 de saldo no titulo de R$ 994,99 e debita R$ 500,50 da conta ORENDA.
+
 ## Estado atual
 - multiempresa
 - multifilial
@@ -426,3 +433,15 @@ Etapa de Combos e Promocoes encerrada em 18/05/2026. Foco atual: estoque, dentro
   - quando houver multiplas opcoes promocionais, o PDV deve mostrar modal e sugerir o menor preco, sem aplicar tudo automaticamente.
 - Produto tipo servico nao baixa estoque.
 - Venda finalizada sem estoque suficiente deve falhar e fazer rollback da venda inteira.
+
+## Handoff - financeiro e posicao diaria em 24/08/2026
+
+- O resumo funcional, tecnico, visual e de producao desta rodada esta em `docs/FINANCEIRO_POSICAO_DIARIA_RESUMO_2026-08-24.md`.
+- Ultimo estado funcional implantado: commit `570dd5b1`, deploy Railway `6ced0330-f685-4fc1-8e90-d81699fab056`, status `SUCCESS`.
+- Migration `financeiro.0049_reforcar_tarifas_saida_orenda` aplicada no PostgreSQL de producao.
+- Suite de fechamento: 40 testes de posicao diaria e formas de pagamento passaram.
+- Previsoes de recebimentos e pagamentos iniciam em `Hoje`, ficam antes dos saldos bancarios e sao recolhiveis.
+- Pagamentos previstos abrem diretamente a quitacao da conta.
+- Saidas PIX ORENDA e boleto possuem tarifa de R$ 0,50 reforcada por migration idempotente.
+- Antes de continuar o financeiro, ler o resumo acima e `docs/UI_RULES.md`, especialmente as regras que proíbem cabecalho local colorido/degradê e listagens altas.
+- Nao retomar cadastro de funcionarios nesta frente; o usuario encerrou explicitamente esse assunto.

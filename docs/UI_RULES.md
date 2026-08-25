@@ -143,3 +143,18 @@ Toda tela deve:
 - Evitar mensagens tecnicas ao usuario quando a operacao principal salvou corretamente.
 - Log de promocoes deve usar titulo curto `Log`.
 - Log de dias da semana deve mostrar nomes dos dias, nao numeros.
+
+## Financeiro e posicao diaria
+- Nunca criar faixa colorida, degradê ou segundo cabecalho dentro do conteudo ou do modal. O titulo oficial vem do layout base; modais usam cabecalho neutro, compacto e coerente com o tema.
+- Nao repetir o padrao de cabecalho laranja em degradê que foi recusado pelo usuario. Esta regra vale para paginas, listagens, detalhes, taxas e modais.
+- No tema claro, textos, valores e alertas precisam ter contraste forte. Evitar cinza claro sobre fundo claro, verde lavado e vermelho rosado de baixa leitura.
+- Valores positivos usam verde legivel; valores negativos e vencidos usam vermelho escuro legivel. Uma linha atrasada pode ter fundo vermelho claro, mas o texto deve permanecer escuro.
+- Listagens financeiras devem ser compactas. Preferir tabela ou linhas densas a cards altos de largura total.
+- Em cards, resumos e modais, mostrar visualmente apenas a categoria final. A hierarquia completa fica em formularios de edicao, historico ou tooltip.
+- O controle de privacidade com icone de olho deve ocultar ou desfocar todos os valores financeiros da tela, nao apenas os KPIs.
+- A forma de pagamento deve mostrar a conta bancaria vinculada quando houver. A conta deve vir pre-selecionada nos formularios, mas continuar editavel.
+- Dados de bandeira e parcelas so aparecem para cartao. Debito nao exibe parcelas; credito limita as parcelas ao maximo configurado.
+- Taxa deve ser apresentada com o nome curto `Taxa`. Quando houver detalhamento, mostrar valor bruto, taxa em reais e valor liquido, sem faixas decorativas ou secoes redundantes.
+- Entrada com prazo de compensacao aparece no caixa somente na data prevista de liquidacao, e nao na data original da venda.
+- Recebimentos e pagamentos previstos ficam compactos, recolhiveis e com filtro padrao `Hoje`.
+- No mobile, priorizar nesta ordem: resumo do dia, entradas/saidas, conferencia, previsoes e saldos. Reduzir informacao secundaria e evitar rolagem horizontal.

@@ -1081,6 +1081,23 @@ class ContaPagarDetailView(PermissaoRequiredMixin, View):
                 '-data_pagamento', '-created_at', '-pk',
             ).first()
 
+        pagamentos_detalhados = list(conta.pagamentos.all())
+        tarifas_por_pagamento = {
+            tarifa.documento_id: tarifa.valor_pago
+            for tarifa in ContaPagar.all_objects.for_filial(filial).filter(
+                documento_tipo='taxa_pagamento',
+                documento_id__in=[pagamento.pk for pagamento in pagamentos_detalhados],
+                excluido_em__isnull=True,
+            )
+        }
+        for pagamento in pagamentos_detalhados:
+            pagamento.valor_tarifa_bancaria = tarifas_por_pagamento.get(
+                pagamento.pk, Decimal('0.00'),
+            )
+            pagamento.valor_debito_bancario = (
+                pagamento.valor_pago + pagamento.valor_tarifa_bancaria
+            )
+
         context = {
             'title': f'Conta a Pagar #{conta.pk}',
             'conta': conta,
@@ -1091,6 +1108,7 @@ class ContaPagarDetailView(PermissaoRequiredMixin, View):
             'pode_editar_lancamento': _usuario_admin(request) and not conta.excluido and conta.status != StatusContaPagar.CANCELADO,
             'user_is_admin': _usuario_admin(request),
             'pagamento_selecionado': pagamento_selecionado,
+            'pagamentos_detalhados': pagamentos_detalhados,
             'edicao_lancamento_form': ContaPagarEdicaoAdminForm(
                 filial=filial, conta=conta, pagamento=pagamento_selecionado,
             ),
