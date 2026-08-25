@@ -21,6 +21,16 @@ VALOR_WIDGET = forms.NumberInput(attrs={
 EXTENSOES_COMPROVANTE = {'.pdf', '.jpg', '.jpeg', '.png', '.webp', '.heic', '.heif'}
 LIMITE_COMPROVANTE = 10 * 1024 * 1024
 
+DIAS_SEMANA_CHOICES = (
+    ('0', 'Segunda-feira'),
+    ('1', 'Terça-feira'),
+    ('2', 'Quarta-feira'),
+    ('3', 'Quinta-feira'),
+    ('4', 'Sexta-feira'),
+    ('5', 'Sábado'),
+    ('6', 'Domingo'),
+)
+
 
 def validar_comprovante(arquivo):
     if not arquivo:
@@ -115,6 +125,12 @@ class ContaPagarForm(forms.Form):
         min_value=1, max_value=365, initial=30, required=False,
         label='Intervalo em dias',
         widget=forms.NumberInput(attrs={'min': '1', 'max': '365'}),
+    )
+    dias_semana_recorrencia = forms.MultipleChoiceField(
+        choices=DIAS_SEMANA_CHOICES,
+        required=False,
+        label='Dias da semana',
+        widget=forms.CheckboxSelectMultiple,
     )
     quantidade_recorrencias = forms.IntegerField(
         min_value=2, max_value=60, initial=12, required=False,
@@ -318,6 +334,13 @@ class ContaPagarForm(forms.Form):
                 and not cleaned.get('intervalo_recorrencia_dias')
             ):
                 self.add_error('intervalo_recorrencia_dias', 'Informe o intervalo entre os titulos.')
+            if cleaned.get('frequencia_recorrencia') == ContaPagar.FrequenciaRecorrencia.SEMANAL:
+                dias_semana = cleaned.get('dias_semana_recorrencia') or []
+                if not dias_semana:
+                    data_vencimento = cleaned.get('data_vencimento')
+                    cleaned['dias_semana_recorrencia'] = [str(data_vencimento.weekday())] if data_vencimento else []
+            else:
+                cleaned['dias_semana_recorrencia'] = []
             if not cleaned.get('quantidade_recorrencias'):
                 self.add_error('quantidade_recorrencias', 'Informe quantos títulos devem ser gerados.')
             frequencias_mensais = {
@@ -342,6 +365,7 @@ class ContaPagarForm(forms.Form):
             cleaned['frequencia_recorrencia'] = ''
             cleaned['quantidade_recorrencias'] = 1
             cleaned['intervalo_recorrencia_dias'] = None
+            cleaned['dias_semana_recorrencia'] = []
             cleaned['regra_vencimento_mensal'] = ContaPagar.RegraVencimentoMensal.DATA_INFORMADA
             cleaned['dia_vencimento_mensal'] = None
         if quitar_ao_lancar:
@@ -784,4 +808,91 @@ class PagamentoContaPagarForm(forms.Form):
                     'valor_pago',
                     f'O valor não pode superar o saldo atualizado de R$ {saldo_atualizado:.2f}.',
                 )
+        return cleaned
+
+
+class ContaPagarBulkEditForm(forms.Form):
+    data_vencimento = forms.DateField(
+        required=False,
+        label='Novo vencimento',
+        widget=forms.DateInput(attrs={'type': 'date'}),
+    )
+    plano_contas = CategoriaFinanceiraChoiceField(
+        queryset=PlanoContas.objects.none(),
+        required=False,
+        label='Categoria financeira',
+    )
+    forma_pagamento_prevista = forms.ModelChoiceField(
+        queryset=FormaPagamento.objects.none(),
+        required=False,
+        label='Forma prevista',
+    )
+    observacao = forms.CharField(
+        required=False,
+        label='Adicionar observação',
+        widget=forms.Textarea(attrs={'rows': 2}),
+    )
+
+    def __init__(self, *args, filial=None, **kwargs):
+        super().__init__(*args, **kwargs)
+        if not filial:
+            return
+        self.fields['plano_contas'].queryset = PlanoContas.objects.filter(
+            empresa=filial.empresa,
+            tipo='D',
+            nivel=3,
+            ativo=True,
+            aceita_lancamento=True,
+            conta_contabil__isnull=False,
+        ).select_related('conta_pai__conta_pai', 'conta_contabil').order_by('codigo')
+        self.fields['forma_pagamento_prevista'].queryset = FormaPagamento.objects.filter(
+            empresa=filial.empresa,
+            ativo=True,
+        ).order_by('descricao')
+
+    def clean(self):
+        cleaned = super().clean()
+        if not any(cleaned.get(campo) for campo in ('data_vencimento', 'plano_contas', 'forma_pagamento_prevista', 'observacao')):
+            raise forms.ValidationError('Informe pelo menos um campo para alterar em lote.')
+        return cleaned
+
+
+class ContaPagarBulkPagamentoForm(forms.Form):
+    data_pagamento = forms.DateField(
+        label='Data do pagamento',
+        initial=date.today,
+        widget=forms.DateInput(format='%Y-%m-%d', attrs={'type': 'date'}),
+    )
+    forma_pagamento = forms.ModelChoiceField(
+        queryset=FormaPagamento.objects.none(),
+        label='Forma utilizada',
+    )
+    conta_bancaria = ContaBancariaChoiceField(
+        queryset=ContaBancaria.objects.none(),
+        required=False,
+        label='Conta bancária',
+    )
+    observacao = forms.CharField(
+        required=False,
+        label='Observação',
+        widget=forms.Textarea(attrs={'rows': 2}),
+    )
+
+    def __init__(self, *args, filial=None, **kwargs):
+        super().__init__(*args, **kwargs)
+        if not filial:
+            return
+        self.fields['forma_pagamento'].queryset = FormaPagamento.objects.filter(
+            empresa=filial.empresa,
+            ativo=True,
+        ).select_related('conta_bancaria_padrao').order_by('descricao')
+        self.fields['conta_bancaria'].queryset = ContaBancaria.objects.for_filial(filial).filter(
+            ativo=True,
+        ).order_by('descricao')
+
+    def clean(self):
+        cleaned = super().clean()
+        forma = cleaned.get('forma_pagamento')
+        if forma and not cleaned.get('conta_bancaria'):
+            cleaned['conta_bancaria'] = forma.conta_bancaria_padrao
         return cleaned

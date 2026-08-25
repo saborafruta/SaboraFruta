@@ -26,6 +26,8 @@ from apps.core.models import RegistroAuditoria
 from apps.core.services.auditoria import registrar_auditoria, snapshot_modelo
 from apps.financeiro.constants.enums import StatusContaPagar
 from apps.financeiro.forms.pagar import (
+    ContaPagarBulkEditForm,
+    ContaPagarBulkPagamentoForm,
     ContaPagarEdicaoAdminForm,
     ContaPagarForm,
     DespesaPagaForm,
@@ -218,6 +220,63 @@ def _aplicar_filtro_categoria_financeira(qs, categoria_contexto):
     return qs
 
 
+def _filtrar_contas_pagar_abertas(request, manager=None, params=None):
+    filial = _filial(request)
+    params = params or request.GET
+    manager = manager or ContaPagar.objects
+    qs = (
+        manager.for_filial(filial)
+        .select_related('fornecedor', 'funcionario', 'forma_pagamento', 'forma_pagamento_prevista', 'plano_contas')
+        .order_by('data_vencimento')
+    )
+    status = params.get('status', 'pendentes')
+    q = params.get('q', '').strip()
+    data_ini = params.get('data_ini', '')
+    data_fim = params.get('data_fim', '')
+    if not params and status == 'pendentes':
+        data_fim = timezone.localdate().isoformat()
+
+    categoria_contexto = _categorias_financeiras_filtro(request)
+    if params is not request.GET:
+        original_get = request.GET
+        request.GET = params
+        try:
+            categoria_contexto = _categorias_financeiras_filtro(request)
+        finally:
+            request.GET = original_get
+
+    if status == 'pendentes':
+        qs = qs.filter(status__in=(
+            StatusContaPagar.ABERTO,
+            StatusContaPagar.PAGO_PARCIAL,
+            StatusContaPagar.VENCIDO,
+            StatusContaPagar.AGENDADO,
+        ))
+    elif status and status != 'todos':
+        qs = qs.filter(status=status)
+    if q:
+        qs = qs.filter(
+            Q(descricao_despesa__icontains=q)
+            | Q(fornecedor__razao_social__icontains=q)
+            | Q(fornecedor__nome_fantasia__icontains=q)
+            | Q(funcionario__nome__icontains=q)
+            | Q(funcionario__cpf__icontains=q)
+            | Q(documento_numero__icontains=q)
+            | Q(nota_fiscal_fornecedor__icontains=q)
+        )
+    if data_ini:
+        qs = qs.filter(data_vencimento__gte=data_ini)
+    if data_fim:
+        qs = qs.filter(data_vencimento__lte=data_fim)
+    qs = _aplicar_filtro_categoria_financeira(qs, categoria_contexto)
+    return qs, categoria_contexto, {
+        'status': status,
+        'q': q,
+        'data_ini': data_ini,
+        'data_fim': data_fim,
+    }
+
+
 def _kpis(qs_base):
     hoje = timezone.localdate()
     primeiro_dia_mes = hoje.replace(day=1)
@@ -265,46 +324,8 @@ class ContaPagarListView(PermissaoRequiredMixin, View):
         mostrar_excluidos = request.GET.get('mostrar_excluidos') == '1' and _usuario_admin(request)
         manager = ContaPagar.all_objects if mostrar_excluidos else ContaPagar.objects
 
-        qs = (
-            manager.for_filial(filial)
-            .select_related('fornecedor', 'funcionario', 'forma_pagamento')
-            .order_by('data_vencimento')
-        )
-
         kpis = _kpis(ContaPagar.objects.for_filial(filial))
-
-        status = request.GET.get('status', 'pendentes')
-        q = request.GET.get('q', '').strip()
-        data_ini = request.GET.get('data_ini', '')
-        data_fim = request.GET.get('data_fim', '')
-        if not request.GET and status == 'pendentes':
-            data_fim = timezone.localdate().isoformat()
-        categoria_contexto = _categorias_financeiras_filtro(request)
-
-        if status == 'pendentes':
-            qs = qs.filter(status__in=(
-                StatusContaPagar.ABERTO,
-                StatusContaPagar.PAGO_PARCIAL,
-                StatusContaPagar.VENCIDO,
-                StatusContaPagar.AGENDADO,
-            ))
-        elif status and status != 'todos':
-            qs = qs.filter(status=status)
-        if q:
-            qs = qs.filter(
-                Q(descricao_despesa__icontains=q)
-                | Q(fornecedor__razao_social__icontains=q)
-                | Q(fornecedor__nome_fantasia__icontains=q)
-                | Q(funcionario__nome__icontains=q)
-                | Q(funcionario__cpf__icontains=q)
-                | Q(documento_numero__icontains=q)
-                | Q(nota_fiscal_fornecedor__icontains=q)
-            )
-        if data_ini:
-            qs = qs.filter(data_vencimento__gte=data_ini)
-        if data_fim:
-            qs = qs.filter(data_vencimento__lte=data_fim)
-        qs = _aplicar_filtro_categoria_financeira(qs, categoria_contexto)
+        qs, categoria_contexto, filtros = _filtrar_contas_pagar_abertas(request, manager)
 
         totais_filtro = qs.aggregate(
             total_valor=Sum('valor_final'),
@@ -327,10 +348,10 @@ class ContaPagarListView(PermissaoRequiredMixin, View):
             'page_obj': page_obj,
             'contas': page_obj,
             'status_choices': STATUS_CHOICES,
-            'status_filtro': status,
-            'q': q,
-            'data_ini': data_ini,
-            'data_fim': data_fim,
+            'status_filtro': filtros['status'],
+            'q': filtros['q'],
+            'data_ini': filtros['data_ini'],
+            'data_fim': filtros['data_fim'],
             'totais_filtro': totais_filtro,
             'page_querystring': page_querystring,
             'pill_status': PILL_STATUS,
@@ -340,6 +361,8 @@ class ContaPagarListView(PermissaoRequiredMixin, View):
             'mostrar_excluidos': mostrar_excluidos,
             'today': timezone.localdate(),
             'dashboard_contas': DashboardContasService.apurar(filial),
+            'bulk_edit_form': ContaPagarBulkEditForm(filial=filial),
+            'bulk_pagamento_form': ContaPagarBulkPagamentoForm(filial=filial),
             **categoria_contexto,
             **kpis,
         })
@@ -860,6 +883,7 @@ class ContaPagarCreateView(PermissaoRequiredMixin, View):
                     quantidade=d['quantidade_recorrencias'],
                     frequencia=d['frequencia_recorrencia'],
                     intervalo_dias=d.get('intervalo_recorrencia_dias'),
+                    dias_semana=d.get('dias_semana_recorrencia'),
                     regra_vencimento_mensal=d.get('regra_vencimento_mensal'),
                     dia_vencimento_mensal=d.get('dia_vencimento_mensal'),
                     data_vencimento=d['data_vencimento'],
@@ -895,8 +919,8 @@ class ContaPagarCreateView(PermissaoRequiredMixin, View):
         if request.GET.get('modal') == '1':
             return render(request, 'financeiro/pagar/modal_success.html')
         if d.get('quitar_ao_lancar'):
-            return redirect(reverse('financeiro:pagar_pagas'))
-        return redirect(reverse('financeiro:pagar_list'))
+            return redirect(f"{reverse('financeiro:pagar_criar')}?quitar=1")
+        return redirect(reverse('financeiro:pagar_criar'))
 
 
 @method_decorator(xframe_options_sameorigin, name='dispatch')
@@ -1000,6 +1024,143 @@ class DespesaPagaCreateView(PermissaoRequiredMixin, View):
         if request.GET.get('modal') == '1':
             return render(request, 'financeiro/pagar/modal_success.html')
         return redirect(reverse('financeiro:pagar_pagas'))
+
+
+class ContaPagarBulkActionView(PermissaoRequiredMixin, View):
+    permissao_modulo = 'financeiro'
+    permissao_acao = 'editar'
+
+    def _ids_escopo(self, request):
+        escopo = request.POST.get('escopo_lote', 'selecionados')
+        if escopo == 'filtro':
+            qs, _, _ = _filtrar_contas_pagar_abertas(request, ContaPagar.objects, request.POST)
+            return list(qs.values_list('pk', flat=True))
+        campo = 'ids_pagina' if escopo == 'pagina' else 'titulo_ids'
+        return [
+            int(valor)
+            for valor in request.POST.getlist(campo)
+            if str(valor).isdigit()
+        ]
+
+    def _redirect_list(self, request):
+        query = request.POST.get('page_querystring', '').strip()
+        url = reverse('financeiro:pagar_list')
+        return redirect(f'{url}?{query}' if query else url)
+
+    @transaction.atomic
+    def post(self, request):
+        filial = _filial(request)
+        acao = request.POST.get('acao_lote')
+        ids = self._ids_escopo(request)
+        if not ids:
+            messages.error(request, 'Selecione pelo menos um título para a ação em lote.')
+            return self._redirect_list(request)
+
+        contas = list(
+            ContaPagar.objects.for_filial(filial)
+            .select_for_update()
+            .filter(pk__in=ids)
+            .exclude(status__in=[StatusContaPagar.PAGO, StatusContaPagar.CANCELADO])
+            .order_by('data_vencimento', 'pk')
+        )
+        if not contas:
+            messages.warning(request, 'Nenhum título aberto foi encontrado para essa ação.')
+            return self._redirect_list(request)
+
+        if acao == 'editar':
+            form = ContaPagarBulkEditForm(request.POST, filial=filial)
+            if not form.is_valid():
+                messages.error(request, ' '.join(m for erros in form.errors.values() for m in erros))
+                return self._redirect_list(request)
+            d = form.cleaned_data
+            for conta in contas:
+                antes = _snapshot_edicao_lancamento(conta)
+                if d.get('data_vencimento'):
+                    conta.data_vencimento = d['data_vencimento']
+                    if conta.valor_pago > Decimal('0') and conta.valor_saldo > Decimal('0'):
+                        conta.status = StatusContaPagar.PAGO_PARCIAL
+                    elif conta.data_vencimento < timezone.localdate():
+                        conta.status = StatusContaPagar.VENCIDO
+                    else:
+                        conta.status = StatusContaPagar.ABERTO
+                if d.get('plano_contas'):
+                    conta.plano_contas = d['plano_contas']
+                    conta.conta_contabil = d['plano_contas'].conta_contabil
+                if d.get('forma_pagamento_prevista'):
+                    conta.forma_pagamento_prevista = d['forma_pagamento_prevista']
+                if d.get('observacao'):
+                    sufixo = f'[Edição em lote {timezone.localdate():%d/%m/%Y}] {d["observacao"].strip()}'
+                    conta.observacao = f'{conta.observacao}\n{sufixo}'.strip() if conta.observacao else sufixo
+                conta.save()
+                registrar_auditoria(
+                    request=request,
+                    modulo=RegistroAuditoria.Modulo.FINANCEIRO,
+                    acao=RegistroAuditoria.Acao.AJUSTAR,
+                    objeto=conta,
+                    descricao=f'Título a pagar #{conta.pk} editado em lote',
+                    justificativa='Edição em lote de contas a pagar.',
+                    antes=antes,
+                    depois=_snapshot_edicao_lancamento(conta),
+                    metadados={'origem': 'acao_em_lote'},
+                )
+            messages.success(request, f'{len(contas)} título(s) editado(s) em lote.')
+            return self._redirect_list(request)
+
+        if acao == 'excluir':
+            if not _usuario_admin(request):
+                messages.error(request, 'Somente administradores podem apagar títulos em lote.')
+                return self._redirect_list(request)
+            motivo = request.POST.get('motivo_lote', '').strip() or 'Exclusão em lote.'
+            for conta in contas:
+                antes = snapshot_modelo(conta, ['excluido_em', 'excluido_por', 'motivo_exclusao'])
+                conta.excluido_em = timezone.now()
+                conta.excluido_por = request.user
+                conta.motivo_exclusao = motivo
+                conta.save(update_fields=['excluido_em', 'excluido_por', 'motivo_exclusao', 'updated_at'])
+                registrar_auditoria(
+                    request=request,
+                    modulo=RegistroAuditoria.Modulo.FINANCEIRO,
+                    acao=RegistroAuditoria.Acao.EXCLUIR,
+                    objeto=conta,
+                    descricao=f'Título a pagar #{conta.pk} excluído em lote',
+                    justificativa=motivo,
+                    antes=antes,
+                    depois=snapshot_modelo(conta, ['excluido_em', 'excluido_por', 'motivo_exclusao']),
+                    metadados={'origem': 'acao_em_lote'},
+                )
+            messages.success(request, f'{len(contas)} título(s) apagado(s) em lote.')
+            return self._redirect_list(request)
+
+        if acao == 'quitar':
+            form = ContaPagarBulkPagamentoForm(request.POST, filial=filial)
+            if not form.is_valid():
+                messages.error(request, ' '.join(m for erros in form.errors.values() for m in erros))
+                return self._redirect_list(request)
+            d = form.cleaned_data
+            quitados = 0
+            erros = []
+            for conta in contas:
+                try:
+                    ContaPagarService.registrar_pagamento(
+                        conta=conta,
+                        data_pagamento=d['data_pagamento'],
+                        valor_pago=conta.valor_saldo,
+                        forma_pagamento=d['forma_pagamento'],
+                        conta_bancaria=d.get('conta_bancaria'),
+                        usuario=request.user,
+                        observacao=d.get('observacao', '') or 'Quitado em lote.',
+                    )
+                    quitados += 1
+                except DomainError as exc:
+                    erros.append(f'#{conta.pk}: {exc}')
+            if quitados:
+                messages.success(request, f'{quitados} título(s) quitado(s) em lote.')
+            if erros:
+                messages.warning(request, 'Alguns títulos não foram quitados: ' + '; '.join(erros[:5]))
+            return self._redirect_list(request)
+
+        messages.error(request, 'Ação em lote inválida.')
+        return self._redirect_list(request)
 
 
 class ContaPagarNotaFiscalLookupView(PermissaoRequiredMixin, View):

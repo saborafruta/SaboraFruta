@@ -46,6 +46,7 @@ class ContaPagarService:
         grupo_recorrencia=None,
         frequencia_recorrencia: str = '',
         intervalo_recorrencia_dias: int | None = None,
+        dias_semana_recorrencia: str = '',
         regra_vencimento_mensal: str = ContaPagar.RegraVencimentoMensal.DATA_INFORMADA,
         dia_vencimento_mensal: int | None = None,
         ajustar_vencimento_dia_util: bool = False,
@@ -81,6 +82,7 @@ class ContaPagarService:
             grupo_recorrencia=grupo_recorrencia,
             frequencia_recorrencia=frequencia_recorrencia,
             intervalo_recorrencia_dias=intervalo_recorrencia_dias,
+            dias_semana_recorrencia=dias_semana_recorrencia,
             regra_vencimento_mensal=regra_vencimento_mensal,
             dia_vencimento_mensal=dia_vencimento_mensal,
             valor_original=valor_original,
@@ -130,6 +132,7 @@ class ContaPagarService:
     def criar_recorrencia(
         *, quantidade: int, frequencia: str, data_vencimento: date,
         intervalo_dias: int | None = None,
+        dias_semana: list[str] | tuple[str, ...] | None = None,
         data_competencia: date | None = None,
         regra_vencimento_mensal: str = ContaPagar.RegraVencimentoMensal.DATA_INFORMADA,
         dia_vencimento_mensal: int | None = None,
@@ -155,9 +158,23 @@ class ContaPagarService:
 
         grupo = uuid.uuid4()
         contas = []
+        vencimentos_semanais = None
+        if frequencia == ContaPagar.FrequenciaRecorrencia.SEMANAL and dias_semana:
+            dias = sorted({int(dia) for dia in dias_semana if str(dia).isdigit() and 0 <= int(dia) <= 6})
+            if dias:
+                vencimentos_semanais = []
+                cursor = data_vencimento
+                while len(vencimentos_semanais) < quantidade:
+                    if cursor.weekday() in dias:
+                        vencimentos_semanais.append(cursor)
+                    cursor += timedelta(days=1)
         for indice in range(quantidade):
             deslocamento = incremento * indice
-            vencimento_base = data_vencimento + deslocamento
+            vencimento_base = (
+                vencimentos_semanais[indice]
+                if vencimentos_semanais
+                else data_vencimento + deslocamento
+            )
             if regra_vencimento_mensal == ContaPagar.RegraVencimentoMensal.PRIMEIRO_DIA:
                 vencimento_base = vencimento_base.replace(day=1)
             elif regra_vencimento_mensal == ContaPagar.RegraVencimentoMensal.ULTIMO_DIA:
@@ -176,7 +193,11 @@ class ContaPagarService:
             contas.append(ContaPagarService.criar(
                 **dados,
                 data_vencimento=vencimento_base,
-                data_competencia=(data_competencia + deslocamento) if data_competencia else None,
+                data_competencia=(
+                    data_competencia + relativedelta(days=(vencimento_base - data_vencimento).days)
+                    if data_competencia and vencimentos_semanais
+                    else (data_competencia + deslocamento) if data_competencia else None
+                ),
                 parcela=indice + 1,
                 total_parcelas=quantidade,
                 grupo_recorrencia=grupo,
@@ -185,6 +206,11 @@ class ContaPagarService:
                     intervalo_dias
                     if frequencia == ContaPagar.FrequenciaRecorrencia.PERSONALIZADA
                     else None
+                ),
+                dias_semana_recorrencia=(
+                    ','.join(str(dia) for dia in dias_semana)
+                    if frequencia == ContaPagar.FrequenciaRecorrencia.SEMANAL and dias_semana
+                    else ''
                 ),
                 regra_vencimento_mensal=regra_vencimento_mensal,
                 dia_vencimento_mensal=dia_vencimento_mensal,

@@ -199,6 +199,7 @@ class ContaPagar(TimestampedModel):
         max_length=15, choices=FrequenciaRecorrencia.choices, blank=True,
     )
     intervalo_recorrencia_dias = models.PositiveSmallIntegerField(null=True, blank=True)
+    dias_semana_recorrencia = models.CharField(max_length=20, blank=True)
     regra_vencimento_mensal = models.CharField(
         max_length=20,
         choices=RegraVencimentoMensal.choices,

@@ -112,6 +112,19 @@
         </div>
         <div x-show="recorrente" x-cloak>{% include "financeiro/pagar/_field.html" with field=form.quantidade_recorrencias %}</div>
         <div x-show="recorrente && frequenciaRecorrencia === 'personalizada'" x-cloak>{% include "financeiro/pagar/_field.html" with field=form.intervalo_recorrencia_dias %}</div>
+        <div x-show="recorrente && frequenciaRecorrencia === 'semanal'" x-cloak class="lg:col-span-3">
+          <label class="mb-2 block text-sm font-medium">{{ form.dias_semana_recorrencia.label }}</label>
+          <div class="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+            {% for checkbox in form.dias_semana_recorrencia %}
+              <label class="flex items-center gap-2 rounded-md border px-3 py-2 text-sm" :style="temaClaro ? 'border-color:#dbe3ee;background:#f8fafc' : 'border-color:#3f3f46;background:#18181b'">
+                {{ checkbox.tag }}
+                <span>{{ checkbox.choice_label }}</span>
+              </label>
+            {% endfor %}
+          </div>
+          <p class="mt-1 text-xs opacity-60">Se nenhum dia for marcado, o sistema usa o mesmo dia da semana da primeira data de vencimento.</p>
+          {% if form.dias_semana_recorrencia.errors %}<p class="mt-1 text-xs text-red-500">{{ form.dias_semana_recorrencia.errors|join:", " }}</p>{% endif %}
+        </div>
         <div x-show="recorrente && ['mensal','trimestral','semestral','anual'].includes(frequenciaRecorrencia)" x-cloak>
           <label class="mb-1 block text-sm font-medium" for="{{ form.regra_vencimento_mensal.id_for_label }}">{{ form.regra_vencimento_mensal.label }}</label>
           <select name="regra_vencimento_mensal" id="{{ form.regra_vencimento_mensal.id_for_label }}" x-model="regraVencimentoMensal" class="form-input">
