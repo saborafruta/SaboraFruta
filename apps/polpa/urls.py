@@ -17,8 +17,8 @@ a página dá 404 (o `resolve` acha pelo padrão).
 from django.urls import path
 
 from . import (
-    views, views_catalogo as vcat, views_receita as vrec_receita,
-    views_recebimento as vrec,
+    views, views_catalogo as vcat, views_ordem as vord,
+    views_receita as vrec_receita, views_recebimento as vrec,
 )
 
 app_name = 'polpa'
@@ -64,6 +64,13 @@ ROTAS_PRONTAS: list = [
     path('formulacao/receitas/<int:pk>/etapas/<int:etapa_pk>/remover/', vrec_receita.EtapaRemoveView.as_view(), name='receita-etapa-remove'),
     path('formulacao/receitas/<int:pk>/nova-versao/', vrec_receita.NovaVersaoView.as_view(), name='receita-nova-versao'),
     path('formulacao/receitas/<int:pk>/ativar/', vrec_receita.AtivarView.as_view(), name='receita-ativar'),
+
+    # ── Ordens de produção ──────────────────────────────────────────────
+    path('producao/ordens/', vord.OrdemListView.as_view(), name='ordem-list'),
+    path('producao/ordens/nova/', vord.OrdemFormView.as_view(), name='ordem-create'),
+    path('producao/ordens/<int:pk>/', vord.OrdemDetailView.as_view(), name='ordem-detail'),
+    path('producao/ordens/<int:pk>/mover/', vord.MoverView.as_view(), name='ordem-mover'),
+    path('producao/ordens/<int:pk>/concluir/', vord.ConcluirView.as_view(), name='ordem-concluir'),
 
     # ── Cadastro das frutas ─────────────────────────────────────────────
     path('formulacao/rendimento/', vrec.FrutaListView.as_view(), name='fruta-list'),

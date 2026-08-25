@@ -1,0 +1,347 @@
+{% extends "_base.html" %}
+{% block title %}{{ title }} — Polpa{% endblock %}
+{% block page_title %}{{ title }}{% endblock %}
+{% block content %}
+
+{% comment %}
+  A ORDEM INTEIRA NUMA TELA: onde ela está, o que precisa, o que a receita
+  manda fazer e como se encerra. Quem acompanha produção não navega entre
+  telas com a linha rodando.
+{% endcomment %}
+<div class="space-y-4" x-data="{ acao: '', encerrando: false }">
+
+  {# ── Cabeçalho ───────────────────────────────────────────────────── #}
+  <div class="flex flex-wrap items-start justify-between gap-3">
+    <div>
+      <p class="text-sm mb-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+        <a href="{% url 'polpa:ordem-list' %}" :style="temaClaro ? 'color:#3b82f6;' : 'color:#60a5fa;'">‹ Ordens de produção</a>
+      </p>
+      <h2 class="text-2xl font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
+        {{ op.numero }}
+      </h2>
+      <p class="text-sm mt-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+        {{ op.produto }} · receita v{{ op.receita.versao }} ·
+        {{ op.quantidade_planejada|floatformat:0 }} un planejadas
+        {% if op.responsavel %} · {{ op.responsavel }}{% endif %}
+      </p>
+    </div>
+    <div class="flex flex-wrap items-center gap-2">
+      {% if op.situacao == 'produzida' %}
+        <span class="soft-pill is-green">{{ op.get_situacao_display }}</span>
+      {% elif op.situacao == 'cancelada' %}
+        <span class="soft-pill is-slate">{{ op.get_situacao_display }}</span>
+      {% elif op.situacao == 'pausada' %}
+        <span class="soft-pill is-red">{{ op.get_situacao_display }}</span>
+      {% else %}
+        <span class="soft-pill is-amber">{{ op.get_situacao_display }}</span>
+      {% endif %}
+      {% if op.atrasada %}
+        <span class="soft-pill is-red">Atrasada</span>
+      {% endif %}
+    </div>
+  </div>
+
+  {% if op.situacao == 'pausada' and op.motivo_pausa %}
+    <div class="card p-3" style="border-left:3px solid #dc2626;">
+      <p class="text-sm" style="color:#dc2626;">
+        Parada desde {{ op.pausada_em|date:"d/m/Y H:i" }} — {{ op.motivo_pausa }}
+      </p>
+    </div>
+  {% endif %}
+
+  <div class="grid grid-cols-1 xl:grid-cols-3 gap-4">
+
+    {# ══ Coluna do trabalho ═══════════════════════════════════════ #}
+    <div class="xl:col-span-2 space-y-4">
+
+      {# ── Necessidade ─────────────────────────────────────────── #}
+      <div class="card overflow-hidden">
+        <div class="px-4 py-3 border-b" :style="temaClaro ? 'border-color:#e2e8f0;' : 'border-color:#2a2a2e;'">
+          <h3 class="text-sm font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
+            Necessidade de insumos
+          </h3>
+          <p class="text-xs mt-0.5" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+            {% comment %}
+              CALCULADA, NÃO GRAVADA: sai da versão da receita presa nesta OP
+              e da quantidade planejada, e por isso dá sempre o mesmo número.
+              Uma cópia gravada seria uma terceira verdade.
+            {% endcomment %}
+            Pela receita v{{ op.receita.versao }}, para
+            {{ op.quantidade_planejada|floatformat:0 }} unidades.
+          </p>
+        </div>
+
+        <div class="overflow-x-auto">
+          <table class="w-full text-sm">
+            <thead>
+              <tr class="border-b" :style="temaClaro ? 'border-color:#e2e8f0;' : 'border-color:#2a2a2e;'">
+                <th class="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wide"
+                    :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Insumo</th>
+                <th class="text-right px-4 py-3 text-xs font-semibold uppercase tracking-wide"
+                    :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Necessário</th>
+                <th class="text-right px-4 py-3 text-xs font-semibold uppercase tracking-wide"
+                    :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Em estoque</th>
+                <th class="text-right px-4 py-3 text-xs font-semibold uppercase tracking-wide"
+                    :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Falta</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for grupo, linhas in bloco_necessidade %}
+                {% if linhas %}
+                  <tr>
+                    <td colspan="4" class="px-4 pt-3 pb-1 text-xs font-bold uppercase tracking-wider"
+                        :style="temaClaro ? 'color:#94a3b8;' : 'color:#71717a;'">{{ grupo }}</td>
+                  </tr>
+                  {% for linha in linhas %}
+                    <tr class="border-b" :style="temaClaro ? 'border-color:#f1f5f9;' : 'border-color:#1e1e22;'">
+                      <td class="px-4 py-2.5" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">{{ linha.produto }}</td>
+                      <td class="px-4 py-2.5 text-right font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
+                        {{ linha.necessario|floatformat:3 }} {{ linha.unidade }}
+                      </td>
+                      <td class="px-4 py-2.5 text-right" :style="temaClaro ? 'color:#374151;' : 'color:#cbd5e1;'">
+                        {{ linha.disponivel|floatformat:3 }}
+                      </td>
+                      <td class="px-4 py-2.5 text-right">
+                        {% if linha.falta %}
+                          <span class="font-semibold" style="color:#d97706;">{{ linha.falta|floatformat:3 }}</span>
+                        {% else %}
+                          <span style="color:#059669;">ok</span>
+                        {% endif %}
+                      </td>
+                    </tr>
+                  {% endfor %}
+                {% endif %}
+              {% endfor %}
+              {% if not necessidade.ingredientes and not necessidade.embalagens %}
+                <tr>
+                  <td colspan="4" class="px-4 py-8 text-center text-sm"
+                      :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+                    A receita desta ordem não tem insumos lançados.
+                  </td>
+                </tr>
+              {% endif %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      {# ── Etapas ──────────────────────────────────────────────── #}
+      {% if etapas %}
+        <div class="card overflow-hidden">
+          <div class="px-4 py-3 border-b" :style="temaClaro ? 'border-color:#e2e8f0;' : 'border-color:#2a2a2e;'">
+            <h3 class="text-sm font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
+              Como produzir
+            </h3>
+            <p class="text-xs mt-0.5" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+              As etapas da receita v{{ op.receita.versao }} — a que esta ordem
+              está usando, e não a versão de hoje.
+            </p>
+          </div>
+          <table class="w-full text-sm">
+            <tbody>
+              {% for etapa in etapas %}
+                <tr class="border-b" :style="temaClaro ? 'border-color:#f1f5f9;' : 'border-color:#1e1e22;'">
+                  <td class="px-4 py-2.5 w-10 text-center font-bold"
+                      :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">{{ etapa.ordem }}</td>
+                  <td class="px-4 py-2.5">
+                    <span class="font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">{{ etapa.nome }}</span>
+                    {% if etapa.instrucao %}
+                      <span class="block text-xs mt-0.5" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">{{ etapa.instrucao }}</span>
+                    {% endif %}
+                  </td>
+                  <td class="px-4 py-2.5 text-xs text-right" :style="temaClaro ? 'color:#374151;' : 'color:#cbd5e1;'">
+                    {{ etapa.equipamento }}
+                    {% if etapa.faixa_temperatura %}<span class="block">{{ etapa.faixa_temperatura }}</span>{% endif %}
+                    {% if etapa.tempo_minutos %}<span class="block">{{ etapa.tempo_minutos }} min</span>{% endif %}
+                  </td>
+                </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      {% endif %}
+
+      {# ── Encerramento ────────────────────────────────────────── #}
+      {% if pode_encerrar and op.situacao == 'em_producao' or pode_encerrar and op.situacao == 'qualidade' %}
+        <div class="card p-4">
+          <h3 class="text-sm font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">Encerrar como produzida</h3>
+          <p class="text-xs mt-0.5 mb-3" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+            {% comment %}
+              Dizer o que o botão FAZ antes de clicar: baixa insumo, cria
+              lote e dá entrada no estoque. "Encerrar" sozinho não avisa que
+              o estoque vai se mexer.
+            {% endcomment %}
+            Isto consome os insumos do estoque (FEFO), cria o lote do produto
+            e dá entrada dele —
+            {% if validade_prevista %}
+              com validade até <strong>{{ validade_prevista|date:"d/m/Y" }}</strong>.
+            {% else %}
+              <strong style="color:#d97706;">sem validade</strong>, porque o
+              produto não tem prazo cadastrado.
+            {% endif %}
+          </p>
+          <form method="post" action="{% url 'polpa:ordem-concluir' op.pk %}"
+                class="grid sm:grid-cols-4 gap-3 items-end"
+                onsubmit="return confirm('Encerrar a ordem, consumir o estoque e criar o lote?');">
+            {% csrf_token %}
+            <div>
+              <label class="form-label">Quantidade produzida</label>
+              <input type="number" step="0.001" min="0" name="quantidade" class="form-input w-full"
+                     value="{{ op.quantidade_planejada|floatformat:'3' }}">
+            </div>
+            <div>
+              <label class="form-label">Peso de saída (kg)</label>
+              <input type="number" step="0.001" min="0" name="peso_saida" class="form-input w-full"
+                     placeholder="opcional">
+            </div>
+            <div>
+              <label class="form-label">Número do lote</label>
+              <input type="text" name="numero_lote" class="form-input w-full"
+                     placeholder="deixe vazio para gerar">
+            </div>
+            <button type="submit" class="btn-primary">Encerrar produção</button>
+          </form>
+        </div>
+      {% endif %}
+    </div>
+
+    {# ══ Coluna da situação ══════════════════════════════════════ #}
+    <div class="space-y-4">
+
+      <div class="card p-4">
+        <h3 class="text-sm font-semibold mb-3" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">Situação</h3>
+
+        {% comment %}
+          A RÉGUA MOSTRA O CAMINHO INTEIRO, com a etapa atual marcada: quem
+          abre a OP no meio do dia precisa ver onde ela está sem ler um
+          histórico.
+        {% endcomment %}
+        <div class="space-y-1.5">
+          {% for valor, rotulo in situacoes %}
+            {% if valor != 'cancelada' %}
+              <div class="flex items-center gap-2 text-sm">
+                <span class="w-2 h-2 rounded-full shrink-0"
+                      style="background:{% if op.situacao == valor %}#2563eb{% else %}#94a3b8{% endif %};"></span>
+                <span :style="'{{ op.situacao }}' === '{{ valor }}'
+                        ? (temaClaro ? 'color:#111827; font-weight:600;' : 'color:#f8fafc; font-weight:600;')
+                        : (temaClaro ? 'color:#94a3b8;' : 'color:#71717a;')">{{ rotulo }}</span>
+              </div>
+            {% endif %}
+          {% endfor %}
+        </div>
+
+        {% if pode_agir and proximos %}
+          <div class="mt-4 pt-3 border-t space-y-2"
+               :style="temaClaro ? 'border-color:#e2e8f0;' : 'border-color:#2a2a2e;'">
+            {% for valor, rotulo in proximos %}
+              {% if valor == 'pausada' or valor == 'cancelada' %}
+                <button type="button" class="btn-secondary text-sm w-full"
+                        @click="acao = acao === '{{ valor }}' ? '' : '{{ valor }}'">{{ rotulo }}</button>
+                <form method="post" action="{% url 'polpa:ordem-mover' op.pk %}"
+                      x-show="acao === '{{ valor }}'" x-cloak class="space-y-2">
+                  {% csrf_token %}
+                  <input type="hidden" name="destino" value="{{ valor }}">
+                  <input type="text" name="motivo" class="form-input w-full text-sm"
+                         placeholder="{% if valor == 'pausada' %}Por que a linha parou?{% else %}Motivo do cancelamento{% endif %}">
+                  <button type="submit" class="btn-primary text-sm w-full">Confirmar {{ rotulo|lower }}</button>
+                </form>
+              {% elif valor != 'produzida' %}
+                <form method="post" action="{% url 'polpa:ordem-mover' op.pk %}">
+                  {% csrf_token %}
+                  <input type="hidden" name="destino" value="{{ valor }}">
+                  <button type="submit" class="btn-primary text-sm w-full">{{ rotulo }}</button>
+                </form>
+              {% endif %}
+            {% endfor %}
+          </div>
+        {% endif %}
+      </div>
+
+      <div class="card p-4">
+        <h3 class="text-sm font-semibold mb-3" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">Datas e resultado</h3>
+        <dl class="space-y-2 text-sm">
+          <div class="flex justify-between gap-3">
+            <dt :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Aberta em</dt>
+            <dd :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">{{ op.ordem.created_at|date:"d/m/Y H:i" }}</dd>
+          </div>
+          <div class="flex justify-between gap-3">
+            <dt :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Prevista</dt>
+            <dd :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
+              {{ op.ordem.data_fim_prevista|date:"d/m/Y H:i"|default:"—" }}
+            </dd>
+          </div>
+          <div class="flex justify-between gap-3">
+            <dt :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Início real</dt>
+            <dd :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
+              {{ op.ordem.data_inicio_real|date:"d/m/Y H:i"|default:"—" }}
+            </dd>
+          </div>
+          <div class="flex justify-between gap-3">
+            <dt :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Término</dt>
+            <dd :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
+              {{ op.ordem.data_fim_real|date:"d/m/Y H:i"|default:"—" }}
+            </dd>
+          </div>
+          {% if op.minutos_parados %}
+            <div class="flex justify-between gap-3">
+              <dt :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Tempo parado</dt>
+              <dd style="color:#d97706;">{{ op.minutos_parados }} min</dd>
+            </div>
+          {% endif %}
+          <div class="flex justify-between gap-3 pt-2 border-t"
+               :style="temaClaro ? 'border-color:#e2e8f0;' : 'border-color:#2a2a2e;'">
+            <dt :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Produzido</dt>
+            <dd class="font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
+              {{ op.quantidade_produzida|floatformat:0 }} un
+            </dd>
+          </div>
+          {% if op.ordem.rendimento %}
+            <div class="flex justify-between gap-3">
+              <dt :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Rendimento</dt>
+              <dd :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">{{ op.ordem.rendimento }}%</dd>
+            </div>
+          {% endif %}
+          {% if op.ordem.custo_total %}
+            <div class="flex justify-between gap-3">
+              <dt :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Custo do lote</dt>
+              <dd :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">R$ {{ op.ordem.custo_total|floatformat:2 }}</dd>
+            </div>
+          {% endif %}
+        </dl>
+      </div>
+
+      {# ── O lote ──────────────────────────────────────────────── #}
+      <div class="card p-4">
+        <h3 class="text-sm font-semibold mb-3" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">Lote</h3>
+        {% if op.lote %}
+          <p class="text-sm font-mono font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
+            {{ op.lote.numero_lote }}
+          </p>
+          <p class="text-sm mt-1" :style="temaClaro ? 'color:#374151;' : 'color:#cbd5e1;'">
+            {{ op.lote.quantidade_inicial|floatformat:0 }} un ·
+            fabricado em {{ op.lote.data_fabricacao|date:"d/m/Y" }}
+          </p>
+          {% if op.lote.data_validade %}
+            <p class="text-sm mt-1" style="color:#059669;">
+              Válido até {{ op.lote.data_validade|date:"d/m/Y" }}
+            </p>
+          {% else %}
+            <p class="text-sm mt-1" style="color:#d97706;">
+              Sem validade — o produto não tinha prazo cadastrado quando o
+              lote foi criado.
+            </p>
+          {% endif %}
+        {% else %}
+          <p class="text-sm" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+            O lote nasce no encerramento da ordem.
+            {% if validade_prevista %}
+              Se encerrada hoje, venceria em {{ validade_prevista|date:"d/m/Y" }}.
+            {% endif %}
+          </p>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+
+</div>
+{% endblock %}

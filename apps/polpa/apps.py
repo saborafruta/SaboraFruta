@@ -24,7 +24,11 @@ class PolpaConfig(AppConfig):
     def ready(self):
         from apps.core.signals import register_for_audit
 
-        from .models import EtapaReceita, FichaProduto, Fruta, Receita, Recebimento
+        from .models import (
+            EtapaReceita, FichaProduto, Fruta, OrdemPolpa, Receita, Recebimento,
+        )
 
-        for modelo in (EtapaReceita, FichaProduto, Fruta, Receita, Recebimento):
+        for modelo in (
+            EtapaReceita, FichaProduto, Fruta, OrdemPolpa, Receita, Recebimento,
+        ):
             register_for_audit(modelo, modulo='polpa')

@@ -1,0 +1,66 @@
+{% extends "_base.html" %}
+{% block title %}{{ title }} — Polpa{% endblock %}
+{% block page_title %}{{ title }}{% endblock %}
+{% block content %}
+<div class="space-y-4 max-w-3xl">
+
+  <p class="text-sm" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+    <a href="{% url 'polpa:ordem-list' %}" :style="temaClaro ? 'color:#3b82f6;' : 'color:#60a5fa;'">‹ Ordens de produção</a>
+  </p>
+
+  {% if not tem_receita %}
+    {% comment %}
+      Sem receita ATIVA não há o que produzir, e um select vazio não explica
+      por quê: a receita pode existir em rascunho, e é justamente isso que a
+      pessoa precisa saber para ir ativá-la.
+    {% endcomment %}
+    <div class="card p-3" style="border-left:3px solid #d97706;">
+      <p class="text-sm" style="color:#b45309;">
+        Nenhuma receita ativa. A ordem produz por uma versão ativa — se a
+        receita existe em rascunho,
+        <a href="{% url 'polpa:receita-list' %}" class="underline">ative-a em Formulações</a>.
+      </p>
+    </div>
+  {% endif %}
+
+  <form method="post" class="space-y-4">
+    {% csrf_token %}
+
+    {% comment %}
+      TODOS OS ERROS NUM LUGAR, além do erro ao lado de cada campo: campo
+      desenhado por nome que não imprime o próprio erro some com a mensagem,
+      e quem preencheu conclui que o botão não funciona.
+    {% endcomment %}
+    {% if form.errors %}
+      <div class="card p-3" style="border-left:3px solid #dc2626;">
+        {% for erro in form.non_field_errors %}
+          <p class="text-sm" style="color:#dc2626;">{{ erro }}</p>
+        {% endfor %}
+        {% for campo in form %}
+          {% for erro in campo.errors %}
+            <p class="text-sm" style="color:#dc2626;">{{ campo.label }}: {{ erro }}</p>
+          {% endfor %}
+        {% endfor %}
+      </div>
+    {% endif %}
+
+    <div class="card p-4 space-y-3">
+      {% for campo in form %}
+        <div>
+          <label class="form-label" for="{{ campo.id_for_label }}">{{ campo.label }}</label>
+          {{ campo }}
+          {% if campo.help_text %}
+            <p class="text-xs mt-1" :style="temaClaro ? 'color:#94a3b8;' : 'color:#71717a;'">{{ campo.help_text }}</p>
+          {% endif %}
+        </div>
+      {% endfor %}
+    </div>
+
+    <div class="flex flex-wrap gap-2">
+      <button type="submit" class="btn-primary">Gravar</button>
+      <a href="{% url 'polpa:ordem-list' %}" class="btn-secondary">Cancelar</a>
+    </div>
+  </form>
+
+</div>
+{% endblock %}

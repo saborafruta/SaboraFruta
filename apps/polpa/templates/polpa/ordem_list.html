@@ -1,0 +1,148 @@
+{% extends "_base.html" %}
+{% block title %}{{ title }} — Polpa{% endblock %}
+{% block page_title %}{{ title }}{% endblock %}
+{% block content %}
+
+{% comment %}
+  A FILA ABRE NO QUE ESTÁ ABERTO. Quem entra aqui quer saber o que está
+  rodando, o que parou e o que atrasou — a ordem encerrada é consulta, e
+  enchia a primeira tela com o que já acabou.
+
+  PARADA E ATRASADA GRITAM. São as duas que custam dinheiro agora: linha
+  parada é gente esperando, e OP atrasada é entrega prometida que não sai.
+{% endcomment %}
+<div class="space-y-4">
+
+  <div class="flex flex-wrap items-start justify-between gap-3">
+    <div>
+      <p class="text-sm mb-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+        <a href="{% url 'polpa:hub' %}" :style="temaClaro ? 'color:#3b82f6;' : 'color:#60a5fa;'">Polpa de Frutas</a>
+        <span class="mx-1">›</span>
+        <a href="{% url 'polpa:grupo' 'producao' %}" :style="temaClaro ? 'color:#3b82f6;' : 'color:#60a5fa;'">Produção</a>
+      </p>
+      <h2 class="text-2xl font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">Ordens de produção</h2>
+      <p class="text-sm mt-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+        {{ painel.total }} ordem(ns)
+        {% if painel.paradas %}
+          · <span style="color:#dc2626;font-weight:600;">{{ painel.paradas }} parada(s)</span>
+        {% endif %}
+        {% if painel.atrasadas %}
+          · <span style="color:#d97706;font-weight:600;">{{ painel.atrasadas }} atrasada(s)</span>
+        {% endif %}
+      </p>
+    </div>
+    {% if pode_agir %}
+      <a href="{% url 'polpa:ordem-create' %}" class="btn-primary text-sm">+ Nova ordem</a>
+    {% endif %}
+  </div>
+
+  <form method="get" class="card p-3 flex flex-wrap items-end gap-3">
+    <div class="flex-1 min-w-[200px]">
+      <label class="form-label">Número ou produto</label>
+      <input type="text" name="busca" value="{{ filtros.busca }}" class="form-input w-full"
+             autocomplete="off" placeholder="Ex.: OP-2026-000012, polpa de manga">
+    </div>
+    <div>
+      <label class="form-label">Situação</label>
+      <select name="situacao" class="form-select">
+        <option value="">Em aberto</option>
+        {% for valor, rotulo in situacoes %}
+          <option value="{{ valor }}" {% if filtros.situacao == valor %}selected{% endif %}>{{ rotulo }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <label class="flex items-center gap-2 text-sm cursor-pointer"
+           :style="temaClaro ? 'color:#374151;' : 'color:#cbd5e1;'">
+      <input type="checkbox" name="todas" value="1" {% if todas %}checked{% endif %}> Incluir encerradas
+    </label>
+    <button type="submit" class="btn-primary text-sm">Filtrar</button>
+  </form>
+
+  <div class="card overflow-hidden">
+    <div class="overflow-x-auto">
+      <table class="w-full text-sm">
+        <thead>
+          <tr class="border-b" :style="temaClaro ? 'border-color:#e2e8f0;' : 'border-color:#2a2a2e;'">
+            <th class="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wide"
+                :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Ordem</th>
+            <th class="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wide"
+                :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Produto</th>
+            <th class="text-right px-4 py-3 text-xs font-semibold uppercase tracking-wide"
+                :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Planejado</th>
+            <th class="text-right px-4 py-3 text-xs font-semibold uppercase tracking-wide"
+                :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Produzido</th>
+            <th class="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wide"
+                :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Lote / validade</th>
+            <th class="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wide"
+                :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Situação</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for op in ordens %}
+            <tr class="border-b" :style="temaClaro ? 'border-color:#f1f5f9;' : 'border-color:#1e1e22;'">
+              <td class="px-4 py-3">
+                <a href="{% url 'polpa:ordem-detail' op.pk %}" class="font-semibold font-mono"
+                   :style="temaClaro ? 'color:#2563eb;' : 'color:#60a5fa;'">{{ op.numero }}</a>
+                <span class="block text-xs" :style="temaClaro ? 'color:#94a3b8;' : 'color:#71717a;'">
+                  v{{ op.receita.versao }}
+                  {% if op.responsavel %} · {{ op.responsavel }}{% endif %}
+                </span>
+              </td>
+              <td class="px-4 py-3" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">{{ op.produto }}</td>
+              <td class="px-4 py-3 text-right" :style="temaClaro ? 'color:#374151;' : 'color:#cbd5e1;'">
+                {{ op.quantidade_planejada|floatformat:0 }}
+              </td>
+              <td class="px-4 py-3 text-right font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
+                {% if op.quantidade_produzida %}{{ op.quantidade_produzida|floatformat:0 }}{% else %}—{% endif %}
+              </td>
+              <td class="px-4 py-3 text-xs">
+                {% if op.lote %}
+                  <span class="font-mono" :style="temaClaro ? 'color:#374151;' : 'color:#cbd5e1;'">{{ op.lote.numero_lote }}</span>
+                  {% if op.lote.data_validade %}
+                    <span class="block" style="color:#059669;">até {{ op.lote.data_validade|date:"d/m/Y" }}</span>
+                  {% else %}
+                    <span class="block" style="color:#d97706;">sem validade</span>
+                  {% endif %}
+                {% else %}
+                  <span :style="temaClaro ? 'color:#94a3b8;' : 'color:#71717a;'">—</span>
+                {% endif %}
+              </td>
+              <td class="px-4 py-3">
+                {% if op.situacao == 'produzida' %}
+                  <span class="soft-pill is-green text-xs">{{ op.get_situacao_display }}</span>
+                {% elif op.situacao == 'cancelada' %}
+                  <span class="soft-pill is-slate text-xs">{{ op.get_situacao_display }}</span>
+                {% elif op.situacao == 'pausada' %}
+                  <span class="soft-pill is-red text-xs">{{ op.get_situacao_display }}</span>
+                  {% if op.motivo_pausa %}
+                    <span class="block text-[11px] mt-0.5" style="color:#dc2626;">{{ op.motivo_pausa }}</span>
+                  {% endif %}
+                {% else %}
+                  <span class="soft-pill is-amber text-xs">{{ op.get_situacao_display }}</span>
+                {% endif %}
+                {% if op.atrasada %}
+                  <span class="block text-[11px] mt-0.5" style="color:#d97706;">atrasada</span>
+                {% endif %}
+              </td>
+            </tr>
+          {% empty %}
+            <tr>
+              <td colspan="6" class="px-4 py-10 text-center">
+                <p class="text-sm" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+                  {% if filtros.busca or filtros.situacao %}
+                    Nenhuma ordem com esse filtro.
+                  {% else %}
+                    Nenhuma ordem em aberto. Uma ordem nasce de uma receita
+                    ativa e diz quanto produzir.
+                  {% endif %}
+                </p>
+              </td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+</div>
+{% endblock %}
