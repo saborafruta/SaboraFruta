@@ -1905,7 +1905,9 @@ class AjusteRapidoEstoqueView(PermissaoRequiredMixin, View):
         qs = produtos_estoque_queryset(request.filial_ativa)
         busca = request.GET.get('q', '').strip()
         barcode = request.GET.get('barcode', '').strip()
-        somente_conferidos = request.GET.get('conferidos') == '1'
+        status_conferencia = request.GET.get('status_conferencia', 'todos')
+        if status_conferencia not in {'todos', 'conferidos', 'pendentes'}:
+            status_conferencia = 'todos'
 
         termo = barcode or busca
         if termo:
@@ -1927,14 +1929,21 @@ class AjusteRapidoEstoqueView(PermissaoRequiredMixin, View):
                 filtro |= Q(pk=codigo_int) | Q(id_externo=f'produto:{codigo_int}')
             qs = qs.filter(filtro)
 
-        if somente_conferidos:
-            ids = [int(pk) for pk, item in AjusteRapidoEstoqueView._session_items(request).items() if item.get('conferido')]
-            qs = qs.filter(pk__in=ids) if ids else qs.none()
+        if status_conferencia in {'conferidos', 'pendentes'}:
+            ids_conferidos = [
+                int(pk)
+                for pk, item in AjusteRapidoEstoqueView._session_items(request).items()
+                if item.get('conferido')
+            ]
+            if status_conferencia == 'conferidos':
+                qs = qs.filter(pk__in=ids_conferidos) if ids_conferidos else qs.none()
+            elif ids_conferidos:
+                qs = qs.exclude(pk__in=ids_conferidos)
 
-        return qs.order_by('descricao', 'pk'), busca, barcode, somente_conferidos
+        return qs.order_by('descricao', 'pk'), busca, barcode, status_conferencia
 
     def get(self, request):
-        qs, busca, barcode, somente_conferidos = self._buscar_produtos(request)
+        qs, busca, barcode, status_conferencia = self._buscar_produtos(request)
         page_obj = Paginator(qs, 80).get_page(request.GET.get('page'))
         sessao = self._session_items(request)
         for produto in page_obj.object_list:
@@ -1953,7 +1962,7 @@ class AjusteRapidoEstoqueView(PermissaoRequiredMixin, View):
             'produtos': page_obj.object_list,
             'busca': busca,
             'barcode': barcode,
-            'somente_conferidos': somente_conferidos,
+            'status_conferencia': status_conferencia,
             'itens_sessao': sessao,
             'itens_sessao_total': len(sessao),
             'itens_conferidos_total': sum(1 for item in sessao.values() if item.get('conferido')),

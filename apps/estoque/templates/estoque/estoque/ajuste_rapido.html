@@ -20,19 +20,24 @@
   body.tema-claro .stock-count-summary-value { color: #0f172a; }
   .stock-count-toolbar { position: sticky; top: .75rem; z-index: 18; border-radius: 14px; border: 1px solid rgba(148,163,184,.20); background: rgba(36,36,38,.96); padding: .85rem; box-shadow: 0 18px 45px rgba(0,0,0,.20); backdrop-filter: blur(10px); }
   body.tema-claro .stock-count-toolbar { background: rgba(255,255,255,.96); border-color: #e2e8f0; box-shadow: 0 18px 45px rgba(15,23,42,.08); }
-  .stock-count-filter { display: grid; grid-template-columns: minmax(260px, 1.5fr) minmax(220px, 1fr) auto auto; gap: .65rem; align-items: end; }
+  .stock-count-filter { display: grid; grid-template-columns: minmax(260px, 1.4fr) minmax(220px, 1fr) minmax(170px, .65fr) auto; gap: .65rem; align-items: end; }
   .stock-count-field label { display: block; margin-bottom: .28rem; color: #94a3b8; font-size: .72rem; text-transform: uppercase; font-weight: 900; letter-spacing: .04em; }
   body.tema-claro .stock-count-field label { color: #64748b; }
   .stock-count-field input { min-height: 48px; font-size: 1rem; }
   .stock-count-toggle { min-height: 48px; align-items: center; justify-content: center; white-space: nowrap; }
   .stock-count-grid { display: grid; gap: .7rem; }
-  .stock-count-row { display: grid; grid-template-columns: 74px minmax(0, 1fr) minmax(260px, 360px) 176px; gap: .75rem; align-items: center; border-radius: 14px; border: 1px solid rgba(148,163,184,.18); padding: .8rem; background: #242426; transition: border-color .16s ease, background .16s ease, transform .16s ease; }
+  .stock-count-help { margin-top: .6rem; color: #cbd5e1; font-size: .86rem; line-height: 1.35; }
+  body.tema-claro .stock-count-help { color: #475569; }
+  .stock-count-row { display: grid; grid-template-columns: 88px minmax(0, 1fr) minmax(260px, 360px) 176px; gap: .75rem; align-items: center; border-radius: 14px; border: 1px solid rgba(148,163,184,.18); padding: .8rem; background: #242426; transition: border-color .16s ease, background .16s ease, transform .16s ease; }
   body.tema-claro .stock-count-row { background: #fff; border-color: #e2e8f0; box-shadow: 0 8px 22px rgba(15,23,42,.04); }
   .stock-count-row.is-saved { border-color: rgba(34,197,94,.52); background: rgba(20,83,45,.18); }
   body.tema-claro .stock-count-row.is-saved { background: #ecfdf5; border-color: #86efac; }
   .stock-count-row.is-highlight { outline: 3px solid rgba(59,130,246,.38); }
-  .stock-count-id { display: grid; place-items: center; min-height: 56px; border-radius: 12px; background: rgba(59,130,246,.14); color: #bfdbfe; font-size: 1rem; font-weight: 900; }
-  body.tema-claro .stock-count-id { background: #dbeafe; color: #1d4ed8; }
+  .stock-count-photo { position: relative; display: grid; place-items: center; width: 76px; height: 76px; border-radius: 14px; border: 1px solid rgba(96,165,250,.28); overflow: hidden; background: rgba(59,130,246,.14); color: #bfdbfe; font-weight: 900; cursor: zoom-in; }
+  body.tema-claro .stock-count-photo { background: #dbeafe; border-color: #bfdbfe; color: #1d4ed8; }
+  .stock-count-photo img { width: 100%; height: 100%; object-fit: cover; display: block; }
+  .stock-count-photo span { position: absolute; left: .28rem; bottom: .28rem; border-radius: 999px; padding: .08rem .34rem; background: rgba(15,23,42,.78); color: #fff; font-size: .68rem; }
+  .stock-count-photo-empty { font-size: .9rem; }
   .stock-count-name { color: #f8fafc; font-size: 1rem; font-weight: 900; line-height: 1.18; overflow-wrap: anywhere; }
   body.tema-claro .stock-count-name { color: #0f172a; }
   .stock-count-meta { display: flex; flex-wrap: wrap; gap: .28rem .65rem; margin-top: .38rem; color: #94a3b8; font-size: .82rem; }
@@ -64,6 +69,13 @@
   .stock-count-camera-panel { width: min(94vw, 620px); border-radius: 16px; overflow: hidden; background: #111827; border: 1px solid rgba(148,163,184,.28); box-shadow: 0 28px 80px rgba(0,0,0,.45); }
   .stock-count-camera-head { display: flex; align-items: center; justify-content: space-between; gap: 1rem; padding: .85rem 1rem; color: #f8fafc; font-weight: 900; }
   .stock-count-camera video { width: 100%; aspect-ratio: 4 / 3; object-fit: cover; background: #030712; display: block; }
+  .stock-count-camera-status { padding: .75rem 1rem 1rem; color: #cbd5e1; font-size: .9rem; }
+  .stock-count-photo-modal { position: fixed; inset: 0; z-index: 82; display: grid; place-items: center; padding: 1rem; background: rgba(3,7,18,.76); }
+  .stock-count-photo-modal[hidden] { display: none !important; }
+  .stock-count-photo-panel { width: min(94vw, 680px); max-height: min(90vh, 760px); overflow: auto; border-radius: 16px; background: #111827; border: 1px solid rgba(148,163,184,.28); box-shadow: 0 28px 80px rgba(0,0,0,.45); }
+  .stock-count-photo-head { display: flex; align-items: center; justify-content: space-between; gap: 1rem; padding: .85rem 1rem; color: #f8fafc; font-weight: 900; }
+  .stock-count-photo-body { display: grid; place-items: center; min-height: 220px; padding: 1rem; color: #cbd5e1; }
+  .stock-count-photo-body img { max-width: 100%; max-height: 68vh; object-fit: contain; border-radius: 12px; }
   .stock-count-log { position: fixed; inset: 0; z-index: 75; display: grid; place-items: center; padding: 1rem; background: rgba(3,7,18,.70); }
   .stock-count-log[hidden] { display: none !important; }
   .stock-count-log-panel { width: min(94vw, 760px); max-height: min(88vh, 760px); overflow: auto; border-radius: 16px; background: #242426; border: 1px solid rgba(148,163,184,.22); box-shadow: 0 28px 80px rgba(0,0,0,.42); }
@@ -79,7 +91,7 @@
   .stock-count-pagination { display: flex; justify-content: space-between; gap: .75rem; flex-wrap: wrap; align-items: center; }
   @media (max-width: 1100px) {
     .stock-count-filter { grid-template-columns: 1fr 1fr; }
-    .stock-count-row { grid-template-columns: 62px minmax(0, 1fr); }
+    .stock-count-row { grid-template-columns: 82px minmax(0, 1fr); }
     .stock-count-adjust { grid-column: 1 / -1; }
     .stock-count-current { grid-column: 1 / -1; grid-template-columns: repeat(2, minmax(0, 1fr)); }
   }
@@ -87,7 +99,7 @@
     .stock-count-summary { grid-template-columns: 1fr; }
     .stock-count-filter { grid-template-columns: 1fr; }
     .stock-count-row { grid-template-columns: 1fr; }
-    .stock-count-id { justify-items: start; place-items: center start; padding-left: .9rem; min-height: 42px; }
+    .stock-count-photo { width: 100%; height: 96px; }
     .stock-count-current { grid-template-columns: 1fr; }
     .stock-count-actions, .stock-count-actions a, .stock-count-actions button { width: 100%; justify-content: center; }
     .stock-count-toolbar { top: .25rem; }
@@ -136,15 +148,22 @@
         <label for="stock-barcode">Codigo de barras</label>
         <input id="stock-barcode" name="barcode" value="{{ barcode }}" class="form-input" type="search" inputmode="numeric" autocomplete="off" placeholder="Bipe ou digite o codigo">
       </div>
-      <label class="btn-secondary stock-count-toggle">
-        <input type="checkbox" name="conferidos" value="1" {% if somente_conferidos %}checked{% endif %}>
-        Conferidos
-      </label>
+      <div class="stock-count-field">
+        <label for="stock-status">Conferencia</label>
+        <select id="stock-status" name="status_conferencia" class="form-input">
+          <option value="todos" {% if status_conferencia == 'todos' %}selected{% endif %}>Todos</option>
+          <option value="pendentes" {% if status_conferencia == 'pendentes' %}selected{% endif %}>Nao conferidos</option>
+          <option value="conferidos" {% if status_conferencia == 'conferidos' %}selected{% endif %}>Conferidos</option>
+        </select>
+      </div>
       <div class="stock-count-actions">
-        <button type="button" class="btn-secondary stock-count-toggle" data-open-camera>Camera</button>
+        <button type="button" class="btn-secondary stock-count-toggle" data-open-camera>Ler codigo</button>
         <button type="submit" class="btn-primary stock-count-toggle">Filtrar</button>
       </div>
     </form>
+    <div class="stock-count-help">
+      Ao tocar em <strong>+</strong> ou <strong>-</strong>, ou digitar uma quantidade e sair do campo, o ajuste salva automaticamente. O botao <strong>Conferir</strong> marca o item quando a quantidade ja esta correta.
+    </div>
   </div>
 
   <input type="hidden" name="csrfmiddlewaretoken" value="{{ csrf_token }}" data-csrf-token>
@@ -158,7 +177,20 @@
                data-update-url="{% url 'estoque:ajuste-rapido-atualizar' %}"
                data-log-url="{% url 'estoque:ajuste-rapido-log' produto.pk %}"
                data-barcode="{{ produto.codigo_barras|default:'' }}">
-        <div class="stock-count-id">#{{ produto.codigo_replicacao }}</div>
+        <button type="button"
+                class="stock-count-photo {% if not produto.foto_url %}stock-count-photo-empty{% endif %}"
+                data-photo
+                data-photo-url="{{ produto.foto_url|default:'' }}"
+                data-photo-title="{{ produto.descricao }}"
+                data-photo-id="{{ produto.codigo_replicacao }}"
+                aria-label="Ver foto de {{ produto.descricao }}">
+          {% if produto.foto_url %}
+            <img src="{{ produto.foto_url }}" alt="{{ produto.descricao }}">
+            <span>#{{ produto.codigo_replicacao }}</span>
+          {% else %}
+            #{{ produto.codigo_replicacao }}
+          {% endif %}
+        </button>
         <div class="min-w-0">
           <div class="stock-count-name" title="{{ produto.descricao }}">{{ produto.descricao }}</div>
           <div class="stock-count-meta">
@@ -186,11 +218,11 @@
           </div>
           <div class="stock-count-row-actions">
             <button type="button" class="btn-secondary stock-count-check {% if produto.ajuste_rapido_conferido %}is-on{% endif %}" data-check>
-              {% if produto.ajuste_rapido_conferido %}Conferido{% else %}Check{% endif %}
+              {% if produto.ajuste_rapido_conferido %}Conferido{% else %}Conferir{% endif %}
             </button>
-            <button type="button" class="btn-secondary" data-log>Log</button>
+            <button type="button" class="btn-secondary" data-log>Historico</button>
           </div>
-          <div class="stock-count-status" data-status>{% if produto.ajuste_rapido_editado %}Atualizado nesta sessao.{% endif %}</div>
+          <div class="stock-count-status" data-status>{% if produto.ajuste_rapido_editado %}Atualizado nesta sessao.{% else %}Salva automaticamente ao alterar.{% endif %}</div>
         </div>
       </article>
     {% empty %}
@@ -220,6 +252,17 @@
       <button type="button" class="btn-secondary" data-close-camera>Fechar</button>
     </div>
     <video muted playsinline data-camera-video></video>
+    <div class="stock-count-camera-status" data-camera-status>Aponte a camera para o codigo de barras.</div>
+  </div>
+</div>
+
+<div class="stock-count-photo-modal" hidden data-photo-modal>
+  <div class="stock-count-photo-panel">
+    <div class="stock-count-photo-head">
+      <span data-photo-title>Foto do produto</span>
+      <button type="button" class="btn-secondary" data-close-photo>Fechar</button>
+    </div>
+    <div class="stock-count-photo-body" data-photo-body></div>
   </div>
 </div>
 
@@ -227,7 +270,7 @@
   <div class="stock-count-log-panel">
     <div class="stock-count-log-head">
       <div>
-        <div class="stock-count-log-title" data-log-title>Log do produto</div>
+        <div class="stock-count-log-title" data-log-title>Historico do produto</div>
         <div class="stock-count-subtitle" data-log-subtitle></div>
       </div>
       <button type="button" class="btn-secondary" data-close-log>Fechar</button>
@@ -246,7 +289,8 @@
     const barcodeAtual = '{{ barcode|escapejs }}';
 
     function parseQty(value) {
-      const normalized = String(value || '0').trim().replace(/\./g, '').replace(',', '.');
+      const raw = String(value || '0').trim();
+      const normalized = raw.includes(',') ? raw.replace(/\./g, '').replace(',', '.') : raw;
       const parsed = Number(normalized);
       return Number.isFinite(parsed) && parsed >= 0 ? parsed : 0;
     }
@@ -293,7 +337,7 @@
             check.textContent = 'Conferido';
           }
           setCounters(data.totais);
-          setStatus(row, data.movimento_id ? `Movimento #${data.movimento_id} registrado.` : 'Conferido sem diferenca.');
+          setStatus(row, data.movimento_id ? `Salvo automaticamente. Movimento #${data.movimento_id}.` : 'Conferido sem diferenca de estoque.');
         })
         .catch((error) => {
           setStatus(row, error.message, true);
@@ -356,8 +400,8 @@
       fetch(row.dataset.logUrl)
         .then((response) => response.json())
         .then((data) => {
-          if (logTitle) logTitle.textContent = data.produto.descricao || 'Log do produto';
-          if (logSubtitle) logSubtitle.textContent = `ID ${data.produto.id}`;
+          if (logTitle) logTitle.textContent = data.produto.descricao || 'Historico do produto';
+          if (logSubtitle) logSubtitle.textContent = `Produto #${data.produto.id} - ultimas movimentacoes`;
           if (!data.movimentacoes.length) {
             logBody.innerHTML = '<div class="stock-count-empty">Nenhuma movimentacao encontrada.</div>';
             return;
@@ -369,10 +413,10 @@
                 <span>${escapeHtml(item.data)}</span>
               </div>
               <div class="stock-count-meta">
-                <span>Qtd. ${escapeHtml(item.quantidade)}</span>
-                <span>${escapeHtml(item.anterior)} -> ${escapeHtml(item.posterior)}</span>
-                <span>${escapeHtml(item.usuario)}</span>
-                <span>${escapeHtml(item.documento)}</span>
+                <span>Quantidade: ${escapeHtml(item.quantidade)}</span>
+                <span>Saldo: ${escapeHtml(item.anterior)} -> ${escapeHtml(item.posterior)}</span>
+                <span>Usuario: ${escapeHtml(item.usuario)}</span>
+                <span>Origem: ${escapeHtml(item.documento)}</span>
               </div>
               ${item.observacao ? `<div class="stock-count-status">${escapeHtml(item.observacao)}</div>` : ''}
             </div>
@@ -387,37 +431,93 @@
       if (event.target === logModal) logModal.hidden = true;
     });
 
+    const photoModal = document.querySelector('[data-photo-modal]');
+    const photoTitle = document.querySelector('[data-photo-title]');
+    const photoBody = document.querySelector('[data-photo-body]');
+    document.querySelectorAll('[data-photo]').forEach((button) => {
+      button.addEventListener('click', () => {
+        if (!photoModal || !photoBody) return;
+        const title = button.dataset.photoTitle || 'Produto';
+        const id = button.dataset.photoId || '';
+        const url = button.dataset.photoUrl || '';
+        if (photoTitle) photoTitle.textContent = `${title} - #${id}`;
+        photoBody.innerHTML = url
+          ? `<img src="${escapeHtml(url)}" alt="${escapeHtml(title)}">`
+          : '<div class="stock-count-empty">Este produto ainda nao tem foto cadastrada.</div>';
+        photoModal.hidden = false;
+      });
+    });
+    document.querySelector('[data-close-photo]')?.addEventListener('click', () => { photoModal.hidden = true; });
+    photoModal?.addEventListener('click', (event) => {
+      if (event.target === photoModal) photoModal.hidden = true;
+    });
+
     const cameraModal = document.querySelector('[data-camera-modal]');
     const video = document.querySelector('[data-camera-video]');
+    const cameraStatus = document.querySelector('[data-camera-status]');
     let cameraStream = null;
     let scanLoop = null;
+    let zxingReader = null;
+    let zxingLoadPromise = null;
+    function setCameraStatus(message) {
+      if (cameraStatus) cameraStatus.textContent = message || '';
+    }
+    function submitBarcode(code) {
+      if (!code) return;
+      if (barcodeInput) barcodeInput.value = code;
+      closeCamera().then(() => filterForm?.submit());
+    }
+    function loadZxing() {
+      if (window.ZXing && window.ZXing.BrowserMultiFormatReader) return Promise.resolve(window.ZXing);
+      if (zxingLoadPromise) return zxingLoadPromise;
+      zxingLoadPromise = new Promise((resolve, reject) => {
+        const script = document.createElement('script');
+        script.src = 'https://unpkg.com/@zxing/library@0.21.3/umd/index.min.js';
+        script.async = true;
+        script.onload = () => window.ZXing ? resolve(window.ZXing) : reject(new Error('Biblioteca do leitor nao carregou.'));
+        script.onerror = () => reject(new Error('Nao foi possivel carregar o leitor por camera.'));
+        document.head.appendChild(script);
+      });
+      return zxingLoadPromise;
+    }
     async function closeCamera() {
       if (scanLoop) window.cancelAnimationFrame(scanLoop);
       scanLoop = null;
+      if (zxingReader) {
+        zxingReader.reset();
+        zxingReader = null;
+      }
       if (cameraStream) cameraStream.getTracks().forEach((track) => track.stop());
       cameraStream = null;
       if (cameraModal) cameraModal.hidden = true;
     }
     async function openCamera() {
-      if (!('BarcodeDetector' in window)) {
-        alert('Este navegador nao tem leitor por camera. Use o leitor fisico ou digite o codigo no campo.');
-        barcodeInput?.focus();
+      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+        alert('Este navegador nao liberou acesso a camera. Use o leitor fisico ou digite o codigo no campo.');
         return;
       }
       try {
+        cameraModal.hidden = false;
+        setCameraStatus('Abrindo camera...');
+        if (!('BarcodeDetector' in window)) {
+          setCameraStatus('Leitor alternativo ativo. Aponte para o codigo e mantenha firme.');
+          const ZXing = await loadZxing();
+          zxingReader = new ZXing.BrowserMultiFormatReader();
+          zxingReader.decodeFromVideoDevice(null, video, (result) => {
+            if (result && result.text) submitBarcode(result.text);
+          });
+          return;
+        }
         const detector = new BarcodeDetector({ formats: ['ean_13', 'ean_8', 'code_128', 'code_39', 'upc_a', 'upc_e'] });
         cameraStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
         video.srcObject = cameraStream;
         await video.play();
-        cameraModal.hidden = false;
+        setCameraStatus('Aponte a camera para o codigo de barras.');
         const tick = async () => {
           try {
             const codes = await detector.detect(video);
             if (codes.length) {
-              const code = codes[0].rawValue || '';
-              if (barcodeInput) barcodeInput.value = code;
-              await closeCamera();
-              filterForm?.submit();
+              submitBarcode(codes[0].rawValue || '');
               return;
             }
           } catch (e) {
@@ -428,7 +528,7 @@
         tick();
       } catch (e) {
         await closeCamera();
-        alert('Nao foi possivel abrir a camera.');
+        alert(e.message || 'Nao foi possivel abrir a camera.');
       }
     }
     document.querySelector('[data-open-camera]')?.addEventListener('click', openCamera);
