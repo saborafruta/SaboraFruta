@@ -16,7 +16,10 @@ a página dá 404 (o `resolve` acha pelo padrão).
 """
 from django.urls import path
 
-from . import views, views_catalogo as vcat, views_recebimento as vrec
+from . import (
+    views, views_catalogo as vcat, views_receita as vrec_receita,
+    views_recebimento as vrec,
+)
 
 app_name = 'polpa'
 
@@ -48,6 +51,19 @@ ROTAS_PRONTAS: list = [
     path('catalogo/', vcat.CatalogoListView.as_view(), name='catalogo-list'),
     path('catalogo/novo/', vcat.CatalogoFormView.as_view(), name='catalogo-create'),
     path('catalogo/<int:pk>/editar/', vcat.CatalogoFormView.as_view(), name='catalogo-update'),
+
+    # ── Formulações ─────────────────────────────────────────────────────
+    # `receitas` é o endereço do menu; as ações da ficha penduram nele.
+    path('formulacao/receitas/', vrec_receita.ReceitaListView.as_view(), name='receita-list'),
+    path('formulacao/receitas/nova/', vrec_receita.ReceitaFormView.as_view(), name='receita-create'),
+    path('formulacao/receitas/<int:pk>/', vrec_receita.ReceitaDetailView.as_view(), name='receita-detail'),
+    path('formulacao/receitas/<int:pk>/editar/', vrec_receita.ReceitaFormView.as_view(), name='receita-update'),
+    path('formulacao/receitas/<int:pk>/itens/', vrec_receita.ItemAddView.as_view(), name='receita-item-add'),
+    path('formulacao/receitas/<int:pk>/itens/<int:item_pk>/remover/', vrec_receita.ItemRemoveView.as_view(), name='receita-item-remove'),
+    path('formulacao/receitas/<int:pk>/etapas/', vrec_receita.EtapaAddView.as_view(), name='receita-etapa-add'),
+    path('formulacao/receitas/<int:pk>/etapas/<int:etapa_pk>/remover/', vrec_receita.EtapaRemoveView.as_view(), name='receita-etapa-remove'),
+    path('formulacao/receitas/<int:pk>/nova-versao/', vrec_receita.NovaVersaoView.as_view(), name='receita-nova-versao'),
+    path('formulacao/receitas/<int:pk>/ativar/', vrec_receita.AtivarView.as_view(), name='receita-ativar'),
 
     # ── Cadastro das frutas ─────────────────────────────────────────────
     path('formulacao/rendimento/', vrec.FrutaListView.as_view(), name='fruta-list'),

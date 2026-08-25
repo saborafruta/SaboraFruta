@@ -1,0 +1,428 @@
+{% extends "_base.html" %}
+{% block title %}{{ title }} — Polpa{% endblock %}
+{% block page_title %}{{ title }}{% endblock %}
+{% block content %}
+
+{% comment %}
+  A FICHA INTEIRA NUMA TELA: cabeçalho, ingredientes, embalagem, etapas e
+  custos. Separar em abas faria a pessoa fechar a receita sem ver o custo que
+  ela acabou de mudar — e o custo é justamente o que se olha ao mexer numa
+  fórmula.
+
+  O CUSTO FICA À DIREITA, sempre visível: cada linha lançada muda o número,
+  e é a mudança que interessa, não o total isolado.
+{% endcomment %}
+<div class="space-y-4" x-data="{ versionando: false }">
+
+  {# ── Cabeçalho ───────────────────────────────────────────────────── #}
+  <div class="flex flex-wrap items-start justify-between gap-3">
+    <div>
+      <p class="text-sm mb-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+        <a href="{% url 'polpa:receita-list' %}" :style="temaClaro ? 'color:#3b82f6;' : 'color:#60a5fa;'">‹ Formulações</a>
+      </p>
+      <h2 class="text-2xl font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
+        {{ receita.produto }}
+      </h2>
+      <p class="text-sm mt-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+        Versão {{ receita.versao }} ·
+        rende {{ receita.ficha.quantidade_produzida|floatformat:0 }} un por batida
+        {% if receita.ficha.tempo_producao_minutos %}
+          · {{ receita.ficha.tempo_producao_minutos }} min
+        {% endif %}
+      </p>
+    </div>
+    <div class="flex flex-wrap items-center gap-2">
+      {% if receita.ativa %}
+        <span class="soft-pill is-green">Ativa</span>
+      {% else %}
+        <span class="soft-pill is-amber">{{ receita.ficha.get_status_display }}</span>
+      {% endif %}
+      {% if pode_agir %}
+        <a href="{% url 'polpa:receita-update' receita.pk %}" class="btn-secondary text-sm">Editar cabeçalho</a>
+      {% endif %}
+      {% if pode_ativar and not receita.ativa %}
+        <form method="post" action="{% url 'polpa:receita-ativar' receita.pk %}">
+          {% csrf_token %}
+          <button type="submit" class="btn-primary text-sm">Ativar esta versão</button>
+        </form>
+      {% endif %}
+      {% if pode_agir %}
+        <button type="button" class="btn-secondary text-sm" @click="versionando = !versionando">
+          Nova versão
+        </button>
+      {% endif %}
+    </div>
+  </div>
+
+  {% comment %}
+    VERSÃO É REGISTRO, NÃO EDIÇÃO. Mudar a receita que já produziu lotes
+    apagaria a explicação do que foi feito neles — a fórmula de hoje diria
+    uma coisa e o produto na câmara seria outro.
+  {% endcomment %}
+  <div x-show="versionando" x-cloak class="card p-4">
+    <form method="post" action="{% url 'polpa:receita-nova-versao' receita.pk %}"
+          class="flex flex-wrap items-end gap-3">
+      {% csrf_token %}
+      <div>
+        <label class="form-label">Número da nova versão</label>
+        <input type="text" name="versao" class="form-input" placeholder="deixe vazio para a próxima">
+      </div>
+      <button type="submit" class="btn-primary text-sm">Criar cópia em rascunho</button>
+      <p class="text-xs flex-1 min-w-[220px]" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+        A cópia leva ingredientes e etapas. A versão atual continua valendo
+        até alguém ativar a nova.
+      </p>
+    </form>
+  </div>
+
+  {% if pendencias %}
+    <div class="card p-3" style="border-left:3px solid #d97706;">
+      <p class="text-xs font-bold uppercase tracking-wider mb-1" style="color:#d97706;">
+        Falta para esta receita poder produzir
+      </p>
+      {% for p in pendencias %}
+        <p class="text-sm" style="color:#b45309;">· {{ p }}</p>
+      {% endfor %}
+    </div>
+  {% endif %}
+
+  <div class="grid grid-cols-1 xl:grid-cols-3 gap-4">
+
+    {# ══ Coluna da receita ═══════════════════════════════════════ #}
+    <div class="xl:col-span-2 space-y-4">
+
+      {# ── Ingredientes ────────────────────────────────────────── #}
+      <div class="card overflow-hidden">
+        <div class="px-4 py-3 border-b" :style="temaClaro ? 'border-color:#e2e8f0;' : 'border-color:#2a2a2e;'">
+          <h3 class="text-sm font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">Ingredientes</h3>
+          <p class="text-xs mt-0.5" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+            {% comment %}
+              A PARTICIPAÇÃO É SOBRE OS INGREDIENTES, não sobre tudo: somar o
+              pote na base faria "60% de fruta" virar 58% porque a embalagem
+              entrou na conta — e é o percentual de fruta que o rótulo declara.
+            {% endcomment %}
+            Base de {{ base|floatformat:3 }} — o percentual é sobre os
+            ingredientes, sem a embalagem.
+          </p>
+        </div>
+        <div class="overflow-x-auto">
+          <table class="w-full text-sm">
+            <thead>
+              <tr class="border-b" :style="temaClaro ? 'border-color:#e2e8f0;' : 'border-color:#2a2a2e;'">
+                <th class="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wide"
+                    :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Insumo</th>
+                <th class="text-right px-4 py-3 text-xs font-semibold uppercase tracking-wide"
+                    :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Quantidade</th>
+                <th class="text-right px-4 py-3 text-xs font-semibold uppercase tracking-wide"
+                    :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Perda</th>
+                <th class="text-right px-4 py-3 text-xs font-semibold uppercase tracking-wide"
+                    :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Com perda</th>
+                <th class="text-right px-4 py-3 text-xs font-semibold uppercase tracking-wide"
+                    :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Participação</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for linha in ingredientes %}
+                <tr class="border-b" :style="temaClaro ? 'border-color:#f1f5f9;' : 'border-color:#1e1e22;'">
+                  <td class="px-4 py-3" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
+                    {{ linha.item.materia_prima }}
+                    {% if linha.item.observacao %}
+                      <span class="block text-xs" :style="temaClaro ? 'color:#94a3b8;' : 'color:#71717a;'">{{ linha.item.observacao }}</span>
+                    {% endif %}
+                  </td>
+                  <td class="px-4 py-3 text-right" :style="temaClaro ? 'color:#374151;' : 'color:#cbd5e1;'">
+                    {{ linha.item.quantidade|floatformat:3 }}
+                    {% if linha.item.materia_prima.unidade_medida %}{{ linha.item.materia_prima.unidade_medida.sigla }}{% endif %}
+                  </td>
+                  <td class="px-4 py-3 text-right" :style="temaClaro ? 'color:#374151;' : 'color:#cbd5e1;'">
+                    {% if linha.item.perda_prevista %}{{ linha.item.perda_prevista }}%{% else %}—{% endif %}
+                  </td>
+                  <td class="px-4 py-3 text-right font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
+                    {{ linha.item.quantidade_com_perda|floatformat:3 }}
+                  </td>
+                  <td class="px-4 py-3 text-right font-semibold" style="color:#059669;">
+                    {{ linha.participacao }}%
+                  </td>
+                  <td class="px-4 py-3 text-right">
+                    {% if pode_agir %}
+                      <form method="post" action="{% url 'polpa:receita-item-remove' receita.pk linha.item.pk %}"
+                            onsubmit="return confirm('Remover {{ linha.item.materia_prima|escapejs }} da receita?');">
+                        {% csrf_token %}
+                        <button type="submit" class="text-xs underline" style="color:#dc2626;">remover</button>
+                      </form>
+                    {% endif %}
+                  </td>
+                </tr>
+              {% empty %}
+                <tr>
+                  <td colspan="6" class="px-4 py-8 text-center text-sm"
+                      :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+                    Nenhum ingrediente lançado ainda.
+                  </td>
+                </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+
+        {% if pode_agir %}
+          <form method="post" action="{% url 'polpa:receita-item-add' receita.pk %}"
+                class="p-4 border-t grid sm:grid-cols-5 gap-3 items-end"
+                :style="temaClaro ? 'border-color:#e2e8f0;' : 'border-color:#2a2a2e;'">
+            {% csrf_token %}
+            {% for campo in form_item %}
+              <div{% if campo.name == 'materia_prima' %} class="sm:col-span-2"{% endif %}>
+                <label class="form-label" for="{{ campo.id_for_label }}">{{ campo.label }}</label>
+                {{ campo }}
+              </div>
+            {% endfor %}
+            <button type="submit" class="btn-primary text-sm">Lançar</button>
+          </form>
+        {% endif %}
+      </div>
+
+      {# ── Embalagem ───────────────────────────────────────────── #}
+      {% if embalagens %}
+        <div class="card overflow-hidden">
+          <div class="px-4 py-3 border-b" :style="temaClaro ? 'border-color:#e2e8f0;' : 'border-color:#2a2a2e;'">
+            <h3 class="text-sm font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">Materiais de embalagem</h3>
+            <p class="text-xs mt-0.5" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+              Separados dos ingredientes porque são outra compra, com outro
+              fornecedor — quando o custo sobe, a primeira pergunta é qual dos
+              dois subiu.
+            </p>
+          </div>
+          <div class="overflow-x-auto">
+            <table class="w-full text-sm">
+              <tbody>
+                {% for item in embalagens %}
+                  <tr class="border-b" :style="temaClaro ? 'border-color:#f1f5f9;' : 'border-color:#1e1e22;'">
+                    <td class="px-4 py-3" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">{{ item.materia_prima }}</td>
+                    <td class="px-4 py-3 text-right" :style="temaClaro ? 'color:#374151;' : 'color:#cbd5e1;'">
+                      {{ item.quantidade|floatformat:3 }}
+                      {% if item.materia_prima.unidade_medida %}{{ item.materia_prima.unidade_medida.sigla }}{% endif %}
+                    </td>
+                    <td class="px-4 py-3 text-right">
+                      {% if pode_agir %}
+                        <form method="post" action="{% url 'polpa:receita-item-remove' receita.pk item.pk %}">
+                          {% csrf_token %}
+                          <button type="submit" class="text-xs underline" style="color:#dc2626;">remover</button>
+                        </form>
+                      {% endif %}
+                    </td>
+                  </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      {% endif %}
+
+      {# ── Etapas ──────────────────────────────────────────────── #}
+      <div class="card overflow-hidden">
+        <div class="px-4 py-3 border-b" :style="temaClaro ? 'border-color:#e2e8f0;' : 'border-color:#2a2a2e;'">
+          <h3 class="text-sm font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">Etapas do processo</h3>
+          <p class="text-xs mt-0.5" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+            {% comment %}
+              Pasteurizar a 92°C por 30 s e a 85°C por 2 min são produtos
+              diferentes, com validades diferentes. Num campo de texto livre
+              essa instrução se perde quando quem sabia sai de férias.
+            {% endcomment %}
+            A sequência, o equipamento, o tempo e a temperatura de cada uma.
+          </p>
+        </div>
+        <div class="overflow-x-auto">
+          <table class="w-full text-sm">
+            <tbody>
+              {% for etapa in etapas %}
+                <tr class="border-b" :style="temaClaro ? 'border-color:#f1f5f9;' : 'border-color:#1e1e22;'">
+                  <td class="px-4 py-3 w-10 text-center font-bold"
+                      :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">{{ etapa.ordem }}</td>
+                  <td class="px-4 py-3">
+                    <span class="font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">{{ etapa.nome }}</span>
+                    {% if etapa.instrucao %}
+                      <span class="block text-xs mt-0.5" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">{{ etapa.instrucao }}</span>
+                    {% endif %}
+                  </td>
+                  <td class="px-4 py-3 text-xs" :style="temaClaro ? 'color:#374151;' : 'color:#cbd5e1;'">
+                    {{ etapa.equipamento|default:"—" }}
+                  </td>
+                  <td class="px-4 py-3 text-xs text-right" :style="temaClaro ? 'color:#374151;' : 'color:#cbd5e1;'">
+                    {% if etapa.tempo_minutos %}{{ etapa.tempo_minutos }} min{% endif %}
+                    {% if etapa.faixa_temperatura %}
+                      <span class="block">{{ etapa.faixa_temperatura }}</span>
+                    {% endif %}
+                  </td>
+                  <td class="px-4 py-3 text-xs text-right">
+                    {% if etapa.perda_percentual %}
+                      <span style="color:#d97706;">−{{ etapa.perda_percentual }}%</span>
+                    {% endif %}
+                  </td>
+                  <td class="px-4 py-3 text-right">
+                    {% if pode_agir %}
+                      <form method="post" action="{% url 'polpa:receita-etapa-remove' receita.pk etapa.pk %}">
+                        {% csrf_token %}
+                        <button type="submit" class="text-xs underline" style="color:#dc2626;">remover</button>
+                      </form>
+                    {% endif %}
+                  </td>
+                </tr>
+              {% empty %}
+                <tr>
+                  <td colspan="6" class="px-4 py-8 text-center text-sm"
+                      :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+                    Nenhuma etapa lançada — a instrução do processo ainda está
+                    só na cabeça de quem opera.
+                  </td>
+                </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+
+        {% if pode_agir %}
+          <form method="post" action="{% url 'polpa:receita-etapa-add' receita.pk %}"
+                class="p-4 border-t grid sm:grid-cols-4 gap-3 items-end"
+                :style="temaClaro ? 'border-color:#e2e8f0;' : 'border-color:#2a2a2e;'">
+            {% csrf_token %}
+            {% for campo in form_etapa %}
+              <div{% if campo.name == 'instrucao' %} class="sm:col-span-4"{% endif %}>
+                <label class="form-label" for="{{ campo.id_for_label }}">{{ campo.label }}</label>
+                {{ campo }}
+              </div>
+            {% endfor %}
+            <button type="submit" class="btn-primary text-sm">Acrescentar etapa</button>
+          </form>
+        {% endif %}
+      </div>
+    </div>
+
+    {# ══ Coluna dos números ══════════════════════════════════════ #}
+    <div class="space-y-4">
+
+      {# ── Custos ──────────────────────────────────────────────── #}
+      <div class="card p-4">
+        <h3 class="text-sm font-semibold mb-3" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">Custo da batida</h3>
+        <dl class="space-y-2 text-sm">
+          <div class="flex justify-between gap-3">
+            <dt :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Matéria-prima</dt>
+            <dd :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">R$ {{ custos.materia_prima|floatformat:2 }}</dd>
+          </div>
+          <div class="flex justify-between gap-3">
+            <dt :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Embalagem</dt>
+            <dd :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">R$ {{ custos.embalagem|floatformat:2 }}</dd>
+          </div>
+          <div class="flex justify-between gap-3">
+            <dt :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Mão de obra e indireto</dt>
+            <dd :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">R$ {{ custos.processo|floatformat:2 }}</dd>
+          </div>
+          <div class="flex justify-between gap-3 pt-2 border-t"
+               :style="temaClaro ? 'border-color:#e2e8f0;' : 'border-color:#2a2a2e;'">
+            <dt class="font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">Total da batida</dt>
+            <dd class="font-bold" style="color:#059669;">R$ {{ custos.total|floatformat:2 }}</dd>
+          </div>
+        </dl>
+
+        <dl class="space-y-2 text-sm mt-4 pt-3 border-t"
+            :style="temaClaro ? 'border-color:#e2e8f0;' : 'border-color:#2a2a2e;'">
+          {% comment %}
+            ONDE A CONTA NÃO É POSSÍVEL, a tela diz — não mostra zero. Zero
+            seria lido como "de graça", e é assim que um produto entra na
+            tabela de preço abaixo do custo.
+          {% endcomment %}
+          <div class="flex justify-between gap-3">
+            <dt :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Por unidade</dt>
+            <dd :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
+              {% if custos.por_unidade is not None %}R$ {{ custos.por_unidade|floatformat:4 }}
+              {% else %}<span style="color:#d97706;">sem quantidade por batida</span>{% endif %}
+            </dd>
+          </div>
+          <div class="flex justify-between gap-3">
+            <dt :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Por kg</dt>
+            <dd :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
+              {% if custos.por_kg is not None %}R$ {{ custos.por_kg|floatformat:4 }}
+              {% else %}<span style="color:#d97706;">sem peso no produto</span>{% endif %}
+            </dd>
+          </div>
+          <div class="flex justify-between gap-3">
+            <dt :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Por caixa</dt>
+            <dd :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
+              {% if custos.por_caixa is not None %}R$ {{ custos.por_caixa|floatformat:2 }}
+              {% else %}<span style="color:#d97706;">sem qtd por caixa</span>{% endif %}
+            </dd>
+          </div>
+        </dl>
+      </div>
+
+      {# ── Rendimento ──────────────────────────────────────────── #}
+      <div class="card p-4">
+        <h3 class="text-sm font-semibold mb-3" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">Rendimento</h3>
+        <dl class="space-y-2 text-sm">
+          <div class="flex justify-between gap-3">
+            <dt :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Esperado</dt>
+            <dd :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
+              {% if receita.rendimento_esperado %}{{ receita.rendimento_esperado }}%
+              {% else %}<span style="color:#d97706;">não definido</span>{% endif %}
+            </dd>
+          </div>
+          <div class="flex justify-between gap-3">
+            <dt :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Real</dt>
+            <dd :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
+              {% if real.percentual is not None %}
+                {{ real.percentual }}%
+                <span class="block text-xs" :style="temaClaro ? 'color:#94a3b8;' : 'color:#71717a;'">
+                  {{ real.ordens }} ordem(ns) encerrada(s)
+                </span>
+              {% else %}
+                {% comment %}
+                  Sem ordem encerrada não há real. Zero seria lido como
+                  rendimento péssimo, e receita nova nasceria parecendo
+                  problema.
+                {% endcomment %}
+                <span :style="temaClaro ? 'color:#94a3b8;' : 'color:#71717a;'">ainda não produzido</span>
+              {% endif %}
+            </dd>
+          </div>
+          {% if real.perda is not None %}
+            <div class="flex justify-between gap-3">
+              <dt :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Perda real</dt>
+              <dd style="color:#d97706;">{{ real.perda }}%</dd>
+            </div>
+          {% endif %}
+          {% if desvio is not None %}
+            <div class="flex justify-between gap-3 pt-2 border-t"
+                 :style="temaClaro ? 'border-color:#e2e8f0;' : 'border-color:#2a2a2e;'">
+              <dt class="font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">Desvio</dt>
+              <dd class="font-bold" style="color:{% if desvio < 0 %}#dc2626{% else %}#059669{% endif %};">
+                {{ desvio }} p.p.
+              </dd>
+            </div>
+          {% endif %}
+        </dl>
+
+        {% if receita.etapas.exists %}
+          {% comment %}
+            AS PERDAS DAS ETAPAS SE COMPÕEM, não se somam: perder 25% na
+            despolpa e 5% no envase não dá 70% de rendimento, dá 71,25%. Ver
+            as duas contas lado a lado revela a estimativa feita de cabeça.
+          {% endcomment %}
+          <p class="text-xs mt-3 pt-3 border-t"
+             :style="temaClaro ? 'border-color:#e2e8f0; color:#64748b;' : 'border-color:#2a2a2e; color:#94a3b8;'">
+            Pelas perdas das etapas, esta receita renderia
+            <strong>{{ receita.rendimento_por_etapa }}%</strong>.
+          </p>
+        {% endif %}
+      </div>
+
+      {% if receita.observacoes_tecnicas %}
+        <div class="card p-4">
+          <h3 class="text-sm font-semibold mb-2" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">Observações técnicas</h3>
+          <p class="text-sm whitespace-pre-line" :style="temaClaro ? 'color:#374151;' : 'color:#cbd5e1;'">{{ receita.observacoes_tecnicas }}</p>
+        </div>
+      {% endif %}
+    </div>
+  </div>
+
+</div>
+{% endblock %}
