@@ -1,0 +1,121 @@
+{% extends "_base.html" %}
+{% block title %}{{ title }} — Polpa{% endblock %}
+{% block page_title %}{{ title }}{% endblock %}
+{% block content %}
+
+{% comment %}
+  A RÉGUA DA FÁBRICA numa tela. É daqui que sai o que aprova ou reprova
+  carga na balança e o que a polpa deveria render — fruta sem régua não
+  reprova nada, e por isso a coluna diz isso em voz alta em vez de mostrar
+  um traço que se confunde com "tudo certo".
+{% endcomment %}
+<div class="space-y-4">
+
+  <div class="flex flex-wrap items-start justify-between gap-3">
+    <div>
+      <p class="text-sm mb-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+        <a href="{% url 'polpa:hub' %}" :style="temaClaro ? 'color:#3b82f6;' : 'color:#60a5fa;'">Polpa de Frutas</a>
+        <span class="mx-1">›</span>
+        <a href="{% url 'polpa:grupo' 'formulacao' %}" :style="temaClaro ? 'color:#3b82f6;' : 'color:#60a5fa;'">Formulação</a>
+      </p>
+      <h2 class="text-2xl font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">{{ title }}</h2>
+      <p class="text-sm mt-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+        O que aceitar na balança e quanto cada fruta deve render de polpa.
+      </p>
+    </div>
+    {% if pode_agir %}
+      <a href="{% url 'polpa:fruta-create' %}" class="btn-primary text-sm">+ Nova fruta</a>
+    {% endif %}
+  </div>
+
+  <div class="card overflow-hidden">
+    <div class="overflow-x-auto">
+      <table class="w-full text-sm">
+        <thead>
+          <tr class="border-b" :style="temaClaro ? 'border-color:#e2e8f0;' : 'border-color:#2a2a2e;'">
+            <th class="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wide"
+                :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Fruta</th>
+            <th class="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wide"
+                :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Produto no catálogo</th>
+            <th class="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wide"
+                :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Régua</th>
+            <th class="text-right px-4 py-3 text-xs font-semibold uppercase tracking-wide"
+                :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Rendimento</th>
+            <th class="text-center px-4 py-3 text-xs font-semibold uppercase tracking-wide"
+                :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Safra</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for f in frutas %}
+            <tr class="border-b" :style="temaClaro ? 'border-color:#f1f5f9;' : 'border-color:#1e1e22;'">
+              <td class="px-4 py-3">
+                <span class="font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">{{ f.nome }}</span>
+                {% if f.variedade %}
+                  <span class="block text-xs" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">{{ f.variedade }}</span>
+                {% endif %}
+                {% if not f.ativo %}<span class="soft-pill is-slate text-xs mt-1">inativa</span>{% endif %}
+              </td>
+              <td class="px-4 py-3">
+                {% if f.produto %}
+                  <span :style="temaClaro ? 'color:#374151;' : 'color:#cbd5e1;'">{{ f.produto }}</span>
+                {% else %}
+                  {% comment %}
+                    Sem produto no catálogo a carga não vira lote — e é
+                    melhor descobrir isso aqui do que na hora de aprovar,
+                    com o caminhão parado na porta.
+                  {% endcomment %}
+                  <span class="text-xs" style="color:#d97706;">sem vínculo — não gera lote</span>
+                {% endif %}
+              </td>
+              <td class="px-4 py-3">
+                {% if f.tem_regua %}
+                  <span class="text-xs" :style="temaClaro ? 'color:#374151;' : 'color:#cbd5e1;'">
+                    {% if f.brix_minimo %}Brix ≥ {{ f.brix_minimo }}{% endif %}
+                    {% if f.ph_maximo %} · pH ≤ {{ f.ph_maximo }}{% endif %}
+                    {% if f.impureza_maxima %} · imp. ≤ {{ f.impureza_maxima }}%{% endif %}
+                  </span>
+                {% else %}
+                  <span class="text-xs" style="color:#d97706;">sem régua</span>
+                {% endif %}
+              </td>
+              <td class="px-4 py-3 text-right font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
+                {% if f.rendimento_esperado %}
+                  {{ f.rendimento_esperado }}%
+                {% else %}
+                  <span class="text-xs font-normal" style="color:#d97706;">não definido</span>
+                {% endif %}
+              </td>
+              <td class="px-4 py-3 text-center">
+                {% if f.safra_inicio and f.safra_fim %}
+                  <span class="text-xs" :style="temaClaro ? 'color:#374151;' : 'color:#cbd5e1;'">
+                    {{ f.get_safra_inicio_display }} a {{ f.get_safra_fim_display }}
+                  </span>
+                {% else %}
+                  <span class="text-xs" :style="temaClaro ? 'color:#94a3b8;' : 'color:#71717a;'">ano todo</span>
+                {% endif %}
+              </td>
+              <td class="px-4 py-3 text-right">
+                {% if pode_agir %}
+                  <a href="{% url 'polpa:fruta-update' f.pk %}" class="text-xs font-semibold underline"
+                     :style="temaClaro ? 'color:#2563eb;' : 'color:#60a5fa;'">editar</a>
+                {% endif %}
+              </td>
+            </tr>
+          {% empty %}
+            <tr>
+              <td colspan="6" class="px-4 py-10 text-center">
+                <p class="text-sm" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+                  Nenhuma fruta cadastrada. Sem ela não há régua para aprovar
+                  carga nem rendimento para comparar a perda.
+                </p>
+              </td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+</div>
+{% endblock %}

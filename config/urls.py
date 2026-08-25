@@ -34,6 +34,7 @@ urlpatterns = [
     path('mapas/', include('apps.mapas.urls', namespace='mapas')),
     path('food-service/', include('apps.food_service.urls', namespace='food_service')),
     path('moda/', include('apps.moda.urls', namespace='moda')),
+    path('polpa/', include('apps.polpa.urls', namespace='polpa')),
     path('cardapio/', include('apps.food_service.urls_publico', namespace='food_service_publico')),
     # PDF do pedido de moda pelo link que vai no WhatsApp do cliente.
     # Fora de /moda/ porque o cliente nao tem login nem filial ativa.

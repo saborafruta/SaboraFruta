@@ -1,0 +1,41 @@
+{% extends "_base.html" %}
+{% block title %}{{ title }} — Polpa{% endblock %}
+{% block page_title %}{{ title }}{% endblock %}
+{% block content %}
+<div class="space-y-5 max-w-2xl">
+
+  <p class="text-sm" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+    <a href="{% url 'polpa:hub' %}" :style="temaClaro ? 'color:#3b82f6;' : 'color:#60a5fa;'">Polpa de Frutas</a>
+    <span class="mx-1">›</span>
+    <a href="{% url 'polpa:grupo' grupo.slug %}" :style="temaClaro ? 'color:#3b82f6;' : 'color:#60a5fa;'">{{ grupo.label }}</a>
+    <span class="mx-1">›</span> {{ item.label }}
+  </p>
+
+  {% comment %}
+    NOMEAR O QUE VEM é diferente de um "em breve" vazio: quem abre descobre
+    se o que procura está planejado ou se precisa pedir — e o mapa do
+    módulo fica conferível antes de o módulo existir.
+  {% endcomment %}
+  <div class="card p-8 text-center">
+    <span class="inline-flex w-12 h-12 rounded-xl items-center justify-center mb-3"
+          style="background:rgba(245,158,11,.14); color:#f59e0b;">
+      {% include "polpa/_icones.html" with icone=grupo.icone classe="w-6 h-6" %}
+    </span>
+    <h2 class="text-xl font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">{{ item.label }}</h2>
+    <p class="text-sm mt-2" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">{{ item.descricao }}</p>
+    <p class="text-xs mt-4 inline-block px-2 py-1 rounded-full"
+       style="background:rgba(245,158,11,.14); color:#d97706;">
+      Tela em construção
+    </p>
+    <p class="text-xs mt-4" :style="temaClaro ? 'color:#94a3b8;' : 'color:#71717a;'">
+      O endereço já é o definitivo — quando a tela ficar pronta, este mesmo
+      link abre nela.
+    </p>
+  </div>
+
+  <a href="{% url 'polpa:grupo' grupo.slug %}" class="btn-secondary text-sm inline-block">
+    ‹ Voltar para {{ grupo.label }}
+  </a>
+
+</div>
+{% endblock %}

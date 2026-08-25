@@ -1,0 +1,112 @@
+{% extends "_base.html" %}
+{% block title %}{{ title }}{% endblock %}
+{% block page_title %}Polpa de Frutas{% endblock %}
+{% block content %}
+
+{% comment %}
+  A PORTA DO VERTICAL mostra o processo, e não uma lista de menus. Quem
+  abre isto de manhã tem duas perguntas: "o que entrou hoje" e "onde eu
+  clico". A régua do fluxo responde a segunda mostrando a fábrica inteira
+  na ordem em que ela acontece — e é ela que o dono da fábrica corrige
+  quando o mapa está errado, antes de qualquer tela existir.
+{% endcomment %}
+<div class="space-y-5">
+
+  <div>
+    <h2 class="text-2xl font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
+      Polpa de Frutas
+    </h2>
+    <p class="text-sm mt-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+      Da balança ao caminhão frigorífico: {{ total_itens }} telas, em
+      {{ grupos|length }} etapas do processo.
+    </p>
+  </div>
+
+  {# ── O dia da balança ───────────────────────────────────────────── #}
+  <div class="grid grid-cols-2 lg:grid-cols-5 gap-3">
+    <div class="card p-4">
+      <p class="text-xs uppercase tracking-wider" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Cargas hoje</p>
+      <p class="text-2xl font-bold mt-1" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">{{ resumo.cargas }}</p>
+    </div>
+    <div class="card p-4">
+      <p class="text-xs uppercase tracking-wider" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Na fila</p>
+      {% comment %}
+        Carga em fila é caminhão parado no pátio, com fruta esquentando.
+        Fica em âmbar quando existe — zero não precisa gritar.
+      {% endcomment %}
+      <p class="text-2xl font-bold mt-1"
+         style="color:{% if resumo.aguardando %}#d97706{% else %}#64748b{% endif %};">
+        {{ resumo.aguardando }}
+      </p>
+    </div>
+    <div class="card p-4">
+      <p class="text-xs uppercase tracking-wider" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Kg aceitos</p>
+      <p class="text-2xl font-bold mt-1" style="color:#059669;">{{ resumo.kg_aceitos|floatformat:0 }}</p>
+    </div>
+    <div class="card p-4">
+      <p class="text-xs uppercase tracking-wider" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Polpa prevista</p>
+      <p class="text-2xl font-bold mt-1" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">{{ resumo.polpa_prevista|floatformat:0 }}</p>
+      <p class="text-[11px] mt-0.5" :style="temaClaro ? 'color:#94a3b8;' : 'color:#71717a;'">kg, pelo rendimento padrão</p>
+    </div>
+    <div class="card p-4">
+      <p class="text-xs uppercase tracking-wider" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Recusadas</p>
+      <p class="text-2xl font-bold mt-1"
+         style="color:{% if resumo.recusadas %}#dc2626{% else %}#64748b{% endif %};">
+        {{ resumo.recusadas }}
+      </p>
+    </div>
+  </div>
+
+  {# ── A régua do processo ────────────────────────────────────────── #}
+  <div class="card p-4">
+    <p class="text-xs font-bold uppercase tracking-wider mb-3"
+       :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">O caminho da fruta</p>
+    <div class="flex flex-wrap items-center gap-2">
+      {% for etapa in etapas %}
+        <span class="text-xs font-semibold px-2.5 py-1.5 rounded-lg"
+              :style="temaClaro ? 'background:#f1f5f9; color:#334155;' : 'background:#1e1e22; color:#cbd5e1;'">
+          {{ etapa }}
+        </span>
+        {% if not forloop.last %}
+          <span class="text-xs" :style="temaClaro ? 'color:#cbd5e1;' : 'color:#3f3f46;'">›</span>
+        {% endif %}
+      {% endfor %}
+    </div>
+  </div>
+
+  {# ── Os grupos ──────────────────────────────────────────────────── #}
+  <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+    {% for grupo in grupos %}
+      <a href="{% url 'polpa:grupo' grupo.slug %}"
+         class="card p-4 block transition-transform hover:-translate-y-0.5">
+        <div class="flex items-start gap-3">
+          <span class="shrink-0 w-10 h-10 rounded-lg flex items-center justify-center"
+                :style="temaClaro ? 'background:#eff6ff; color:#2563eb;' : 'background:rgba(37,99,235,.14); color:#60a5fa;'">
+            {% include "polpa/_icones.html" with icone=grupo.icone classe="w-5 h-5" %}
+          </span>
+          <div class="min-w-0">
+            <h3 class="font-semibold text-sm" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">{{ grupo.label }}</h3>
+            <p class="text-xs mt-1 leading-relaxed" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">{{ grupo.descricao }}</p>
+            <p class="text-[11px] mt-1.5" :style="temaClaro ? 'color:#94a3b8;' : 'color:#71717a;'">
+              {{ grupo.itens|length }} tela(s)
+            </p>
+          </div>
+        </div>
+      </a>
+    {% empty %}
+      {% comment %}
+        Perfil sem nenhuma área do vertical veria uma página em branco e
+        concluiria que o módulo está quebrado. Dizer o que aconteceu é o
+        que faz a pessoa procurar quem libera, em vez de abrir chamado.
+      {% endcomment %}
+      <div class="card p-8 text-center sm:col-span-2 lg:col-span-3">
+        <p class="text-sm" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+          Seu perfil ainda não tem acesso a nenhuma área da Polpa de Frutas.
+          Peça a liberação a quem administra os perfis.
+        </p>
+      </div>
+    {% endfor %}
+  </div>
+
+</div>
+{% endblock %}

@@ -1,0 +1,305 @@
+{% extends "_base.html" %}
+{% block title %}{{ title }} — Polpa{% endblock %}
+{% block page_title %}{{ title }}{% endblock %}
+{% block content %}
+
+{% comment %}
+  O ROMANEIO INTEIRO NUMA TELA: pesagem, classificação e decisão. As três
+  juntas porque são um ato só — o caminhão está na porta, e mandar a pessoa
+  navegar entre telas com o motorista esperando é o que faz a decisão ser
+  tomada de cabeça e digitada depois.
+{% endcomment %}
+<div class="space-y-4" x-data="{ recusando: false, cancelando: false }">
+
+  {# ── Cabeçalho ───────────────────────────────────────────────────── #}
+  <div class="flex flex-wrap items-start justify-between gap-3">
+    <div>
+      <p class="text-sm mb-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+        <a href="{% url 'polpa:recebimento-list' %}" :style="temaClaro ? 'color:#3b82f6;' : 'color:#60a5fa;'">‹ Recebimento de fruta</a>
+      </p>
+      <h2 class="text-2xl font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
+        Romaneio #{{ recebimento.numero|stringformat:"05d" }}
+      </h2>
+      <p class="text-sm mt-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+        {{ recebimento.fruta }} · {{ recebimento.produtor }} ·
+        {{ recebimento.data|date:"d/m/Y" }}{% if recebimento.hora_chegada %} às {{ recebimento.hora_chegada|time:"H:i" }}{% endif %}
+      </p>
+    </div>
+    <div class="flex flex-wrap items-center gap-2">
+      {% if recebimento.status == 'aprovado' %}
+        <span class="soft-pill is-green">Aprovado</span>
+      {% elif recebimento.status == 'recusado' %}
+        <span class="soft-pill is-red">Recusado</span>
+      {% elif recebimento.status == 'cancelado' %}
+        <span class="soft-pill is-slate">Cancelado</span>
+      {% else %}
+        <span class="soft-pill is-amber">{{ recebimento.get_status_display }}</span>
+      {% endif %}
+      {% if recebimento.editavel and pode_agir %}
+        <a href="{% url 'polpa:recebimento-update' recebimento.pk %}" class="btn-secondary text-sm">Editar</a>
+      {% endif %}
+    </div>
+  </div>
+
+  <div class="grid grid-cols-1 xl:grid-cols-3 gap-4">
+
+    {# ══ Coluna do trabalho ═══════════════════════════════════════ #}
+    <div class="xl:col-span-2 space-y-4">
+
+      {# ── Pesagem ─────────────────────────────────────────────── #}
+      <div class="card p-4">
+        <h3 class="text-sm font-semibold mb-3" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">Pesagem</h3>
+        <div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
+          <div>
+            <p class="text-xs uppercase tracking-wider" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Bruto</p>
+            <p class="text-lg font-bold mt-0.5" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">{{ recebimento.peso_bruto|floatformat:0 }} kg</p>
+          </div>
+          <div>
+            <p class="text-xs uppercase tracking-wider" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Tara</p>
+            <p class="text-lg font-bold mt-0.5" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">{{ recebimento.tara|floatformat:0 }} kg</p>
+          </div>
+          <div>
+            <p class="text-xs uppercase tracking-wider" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Desconto</p>
+            <p class="text-lg font-bold mt-0.5"
+               style="color:{% if recebimento.desconto_kg %}#d97706{% else %}#64748b{% endif %};">
+              {{ recebimento.desconto_kg|floatformat:0 }} kg
+              {% if recebimento.desconto_kg %}
+                <span class="block text-[11px] font-normal">{{ recebimento.percentual_desconto }}% do líquido</span>
+              {% endif %}
+            </p>
+          </div>
+          <div>
+            <p class="text-xs uppercase tracking-wider" style="color:#059669;">Aceito</p>
+            <p class="text-lg font-bold mt-0.5" style="color:#059669;">{{ recebimento.peso_aceito|floatformat:0 }} kg</p>
+          </div>
+        </div>
+
+        <div class="grid grid-cols-2 sm:grid-cols-3 gap-3 mt-4 pt-4 border-t"
+             :style="temaClaro ? 'border-color:#e2e8f0;' : 'border-color:#2a2a2e;'">
+          <div>
+            <p class="text-xs uppercase tracking-wider" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">R$/kg</p>
+            <p class="text-sm font-semibold mt-0.5" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">{{ recebimento.preco_kg|floatformat:4 }}</p>
+          </div>
+          <div>
+            <p class="text-xs uppercase tracking-wider" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Total ao produtor</p>
+            <p class="text-sm font-semibold mt-0.5" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">R$ {{ recebimento.valor_total|floatformat:2 }}</p>
+          </div>
+          <div>
+            {% comment %}
+              O RENDIMENTO PREVISTO aparece já na balança: é o número que
+              transforma "40 toneladas de manga" em "24 toneladas de polpa",
+              que é o que o PCP precisa para prometer entrega. Sem a régua
+              cadastrada a tela DIZ que não há — em vez de mostrar zero, que
+              seria lido como fruta que não rende nada.
+            {% endcomment %}
+            <p class="text-xs uppercase tracking-wider" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Polpa prevista</p>
+            {% if recebimento.rendimento_previsto %}
+              <p class="text-sm font-semibold mt-0.5" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
+                {{ recebimento.rendimento_previsto|floatformat:0 }} kg
+                <span class="font-normal opacity-70">({{ recebimento.fruta.rendimento_esperado }}%)</span>
+              </p>
+            {% else %}
+              <p class="text-sm mt-0.5" style="color:#d97706;">
+                sem rendimento padrão
+                <a href="{% url 'polpa:fruta-list' %}" class="underline">definir</a>
+              </p>
+            {% endif %}
+          </div>
+        </div>
+      </div>
+
+      {# ── Classificação ───────────────────────────────────────── #}
+      <div class="card p-4">
+        <div class="flex flex-wrap items-baseline justify-between gap-2 mb-3">
+          <h3 class="text-sm font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">Classificação</h3>
+          {% if recebimento.classificado %}
+            <p class="text-xs" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+              por {{ recebimento.classificado_por|default:"—" }} em {{ recebimento.classificado_em|date:"d/m/Y H:i" }}
+            </p>
+          {% endif %}
+        </div>
+
+        {% if recebimento.editavel and pode_agir %}
+          <form method="post" action="{% url 'polpa:recebimento-classificar' recebimento.pk %}">
+            {% csrf_token %}
+            <div class="grid grid-cols-2 sm:grid-cols-3 gap-3">
+              {% for campo in form %}
+                <div>
+                  <label class="form-label" for="{{ campo.id_for_label }}">{{ campo.label }}</label>
+                  {{ campo }}
+                  {% if campo.errors %}<p class="text-xs mt-1" style="color:#dc2626;">{{ campo.errors.0 }}</p>{% endif %}
+                </div>
+              {% endfor %}
+            </div>
+            <button type="submit" class="btn-primary text-sm mt-3">Gravar classificação</button>
+          </form>
+        {% else %}
+          <div class="grid grid-cols-2 sm:grid-cols-3 gap-3">
+            {% for rotulo, valor in medicoes %}
+              <div>
+                <p class="text-xs uppercase tracking-wider" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">{{ rotulo }}</p>
+                <p class="text-sm font-semibold mt-0.5" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">{{ valor|default:"—" }}</p>
+              </div>
+            {% endfor %}
+          </div>
+        {% endif %}
+
+        {% comment %}
+          O DESVIO NÃO TRAVA, MAS APARECE. Brix meio ponto abaixo pode ser
+          aceito para um produto que leva açúcar — quem decide é quem está
+          na balança. O que o sistema garante é que a decisão fica tomada
+          COM o desvio à vista, e não apesar dele.
+        {% endcomment %}
+        {% if reprovacoes %}
+          <div class="mt-3 p-3 rounded-lg" style="background:rgba(217,119,6,.12);">
+            <p class="text-xs font-bold uppercase tracking-wider mb-1" style="color:#d97706;">Fora da régua da fruta</p>
+            {% for problema in reprovacoes %}
+              <p class="text-sm" style="color:#b45309;">· {{ problema }}</p>
+            {% endfor %}
+          </div>
+        {% elif recebimento.classificado %}
+          <p class="text-xs mt-3" style="color:#059669;">Dentro da régua cadastrada para {{ recebimento.fruta }}.</p>
+        {% endif %}
+      </div>
+
+      {# ── A decisão ───────────────────────────────────────────── #}
+      {% if recebimento.encerrado %}
+        <div class="card p-4" style="border-left:3px solid {% if recebimento.status == 'aprovado' %}#059669{% else %}#dc2626{% endif %};">
+          <p class="text-sm" :style="temaClaro ? 'color:#374151;' : 'color:#cbd5e1;'">
+            {{ recebimento.get_status_display }}
+            {% if recebimento.decidido_por %}por <strong>{{ recebimento.decidido_por }}</strong>{% endif %}
+            {% if recebimento.decidido_em %}em {{ recebimento.decidido_em|date:"d/m/Y H:i" }}{% endif %}.
+          </p>
+          {% if recebimento.motivo_recusa %}
+            <p class="text-sm mt-1" style="color:#dc2626;">{{ recebimento.motivo_recusa }}</p>
+          {% endif %}
+          {% if recebimento.lote %}
+            <p class="text-sm mt-2" :style="temaClaro ? 'color:#374151;' : 'color:#cbd5e1;'">
+              Lote de matéria-prima <strong class="font-mono">{{ recebimento.lote.numero_lote }}</strong>
+              com {{ recebimento.lote.quantidade_inicial|floatformat:0 }} kg
+              (saldo atual {{ recebimento.lote.quantidade_atual|floatformat:0 }} kg).
+            </p>
+          {% endif %}
+        </div>
+      {% elif pode_decidir %}
+        <div class="card p-4">
+          <h3 class="text-sm font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">Decidir a carga</h3>
+
+          {% if pendencias %}
+            {% comment %}
+              O QUE FALTA VEM ESCRITO ANTES do botão, e não como erro depois
+              do clique: quem está com o caminhão na porta precisa saber o
+              que resolver, não descobrir tentando.
+            {% endcomment %}
+            <div class="mt-2 p-3 rounded-lg" style="background:rgba(217,119,6,.12);">
+              <p class="text-xs font-bold uppercase tracking-wider mb-1" style="color:#d97706;">
+                Falta para aprovar
+              </p>
+              {% for pendencia in pendencias %}
+                <p class="text-sm" style="color:#b45309;">· {{ pendencia }}</p>
+              {% endfor %}
+            </div>
+          {% endif %}
+
+          <div class="flex flex-wrap gap-2 mt-3">
+            <form method="post" action="{% url 'polpa:recebimento-aprovar' recebimento.pk %}"
+                  onsubmit="return confirm('Aprovar a carga e criar o lote de matéria-prima?');">
+              {% csrf_token %}
+              <button type="submit" class="btn-primary" {% if pendencias %}disabled style="opacity:.5;cursor:not-allowed;"{% endif %}>
+                Aprovar e criar lote
+              </button>
+            </form>
+            <button type="button" class="btn-secondary" @click="recusando = !recusando">Recusar carga</button>
+            <button type="button" class="btn-secondary" @click="cancelando = !cancelando">Cancelar romaneio</button>
+          </div>
+
+          <div x-show="recusando" x-cloak class="mt-3">
+            <form method="post" action="{% url 'polpa:recebimento-recusar' recebimento.pk %}">
+              {% csrf_token %}
+              <label class="form-label">Motivo da recusa</label>
+              <textarea name="motivo" rows="2" class="form-input w-full"
+                        placeholder="Ex.: fruta fermentada, 12% de impureza, chegou a 34°C"></textarea>
+              <p class="text-xs mt-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+                É o que o produtor vai receber como explicação.
+              </p>
+              <button type="submit" class="btn-primary text-sm mt-2" style="background:#dc2626;">Confirmar recusa</button>
+            </form>
+          </div>
+
+          <div x-show="cancelando" x-cloak class="mt-3">
+            <form method="post" action="{% url 'polpa:recebimento-cancelar' recebimento.pk %}">
+              {% csrf_token %}
+              <label class="form-label">Motivo do cancelamento</label>
+              <input type="text" name="motivo" class="form-input w-full"
+                     placeholder="Ex.: romaneio digitado em duplicidade">
+              <button type="submit" class="btn-secondary text-sm mt-2">Cancelar romaneio</button>
+            </form>
+          </div>
+        </div>
+      {% endif %}
+    </div>
+
+    {# ══ Coluna da consulta ═══════════════════════════════════════ #}
+    <div class="space-y-4">
+      <div class="card p-4">
+        <h3 class="text-sm font-semibold mb-3" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">O veículo</h3>
+        <dl class="space-y-2 text-sm">
+          <div class="flex justify-between gap-3">
+            <dt :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Placa</dt>
+            <dd class="font-mono" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">{{ recebimento.placa|default:"—" }}</dd>
+          </div>
+          <div class="flex justify-between gap-3">
+            <dt :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Motorista</dt>
+            <dd class="text-right" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">{{ recebimento.motorista|default:"—" }}</dd>
+          </div>
+          <div class="flex justify-between gap-3">
+            <dt :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Nota fiscal</dt>
+            <dd :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">{{ recebimento.nota_fiscal|default:"—" }}</dd>
+          </div>
+        </dl>
+      </div>
+
+      <div class="card p-4">
+        <h3 class="text-sm font-semibold mb-3" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">A régua desta fruta</h3>
+        {% if recebimento.fruta.tem_regua %}
+          <dl class="space-y-2 text-sm">
+            {% if recebimento.fruta.brix_minimo %}
+              <div class="flex justify-between gap-3">
+                <dt :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Brix mínimo</dt>
+                <dd :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">{{ recebimento.fruta.brix_minimo }}</dd>
+              </div>
+            {% endif %}
+            {% if recebimento.fruta.ph_maximo %}
+              <div class="flex justify-between gap-3">
+                <dt :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">pH máximo</dt>
+                <dd :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">{{ recebimento.fruta.ph_maximo }}</dd>
+              </div>
+            {% endif %}
+            {% if recebimento.fruta.impureza_maxima %}
+              <div class="flex justify-between gap-3">
+                <dt :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Impureza máxima</dt>
+                <dd :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">{{ recebimento.fruta.impureza_maxima }}%</dd>
+              </div>
+            {% endif %}
+          </dl>
+        {% else %}
+          <p class="text-sm" style="color:#d97706;">
+            Sem régua cadastrada — nenhuma carga desta fruta pode ser
+            reprovada por medição.
+          </p>
+          <a href="{% url 'polpa:fruta-list' %}" class="text-xs underline mt-2 inline-block"
+             :style="temaClaro ? 'color:#2563eb;' : 'color:#60a5fa;'">definir a régua</a>
+        {% endif %}
+      </div>
+
+      {% if recebimento.observacao %}
+        <div class="card p-4">
+          <h3 class="text-sm font-semibold mb-2" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">Observação</h3>
+          <p class="text-sm" :style="temaClaro ? 'color:#374151;' : 'color:#cbd5e1;'">{{ recebimento.observacao }}</p>
+        </div>
+      {% endif %}
+    </div>
+  </div>
+
+</div>
+{% endblock %}

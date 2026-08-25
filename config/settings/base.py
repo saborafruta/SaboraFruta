@@ -65,6 +65,7 @@ LOCAL_APPS = [
     'apps.mapas',
     'apps.food_service',
     'apps.moda',
+    'apps.polpa',
 ]
 
 INSTALLED_APPS = DJANGO_APPS + THIRD_PARTY_APPS + LOCAL_APPS
@@ -99,6 +100,7 @@ TEMPLATES = [
                 'apps.core.context_processors.parametros_sistema',
                 'apps.core.context_processors.notificacoes_context',
                 'apps.moda.context_processors.moda_menu',
+                'apps.polpa.context_processors.polpa_menu',
             ],
         },
     },

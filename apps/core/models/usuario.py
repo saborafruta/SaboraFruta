@@ -218,30 +218,42 @@ class Usuario(AbstractBaseUser, PermissionsMixin):
         try:
             perm = perfil.permissoes.get(modulo=modulo)
         except Permissao.DoesNotExist:
-            if self._guarda_chuva_moda(perfil, modulo):
-                return self.tem_permissao('moda', acao)
+            umbrela = self._guarda_chuva_vertical(perfil, modulo)
+            if umbrela:
+                return self.tem_permissao(umbrela, acao)
             return False
         return getattr(perm, f'pode_{acao}', False)
 
-    @staticmethod
-    def _guarda_chuva_moda(perfil, modulo: str) -> bool:
+    # Verticais que quebram o módulo em ÁREAS (`moda_corte`, `polpa_frio`).
+    # Está aqui, e não em cada vertical, porque quem responde a pergunta é o
+    # usuário: espalhar a lista faria o vertical seguinte esquecer de se
+    # registrar e trancar para fora quem só tem o módulo guarda-chuva.
+    VERTICAIS_COM_AREA = ('moda', 'polpa')
+
+    @classmethod
+    def _guarda_chuva_vertical(cls, perfil, modulo: str) -> str | None:
         """
-        Perfil ANTIGO consultando uma área do vertical Moda.
+        Perfil que tem o VERTICAL mas não a área — devolve o módulo pai.
 
-        As áreas (`moda_corte`, `moda_pcp`...) nasceram depois de `moda`.
-        Sem esta regra, o dia em que elas entraram trancaria para fora todo
-        perfil já existente -- nenhum deles tem linha de área, e todos
-        passariam a receber 'não'.
+        As áreas (`moda_corte`, `polpa_recebimento`...) nascem depois do
+        módulo. Sem esta regra, o dia em que elas entram tranca para fora
+        todo perfil já existente: nenhum tem linha de área, e todos passam a
+        receber 'não'. Vale igual para o vertical novo -- conceder `polpa`
+        na tela de perfis precisa bastar para entrar, senão a pessoa recebe
+        um menu que não abre nada e conclui que o módulo está quebrado.
 
-        A condição é a que separa os dois mundos: só cai no guarda-chuva
-        quem NÃO tem nenhuma área cadastrada. Perfil novo, montado com as
-        áreas, responde pela área e ponto -- senão o Comercial, que tem
+        A condição separa os dois mundos: só cai no guarda-chuva quem NÃO
+        tem nenhuma área daquele vertical cadastrada. Perfil montado com as
+        áreas responde pela área e ponto -- senão o Comercial, que tem
         `moda` com tudo por causa da própria área, herdaria o corte inteiro
         por não ter linha de corte.
         """
-        if not modulo.startswith('moda_'):
-            return False
-        return not perfil.permissoes.filter(modulo__startswith='moda_').exists()
+        pai = modulo.split('_', 1)[0]
+        if pai == modulo or pai not in cls.VERTICAIS_COM_AREA:
+            return None
+        if perfil.permissoes.filter(modulo__startswith=f'{pai}_').exists():
+            return None
+        return pai
 
     def pode_acessar_filial(self, filial) -> bool:
         """Permite acesso apenas a filiais da mesma empresa (perfil admin acessa qualquer filial)."""

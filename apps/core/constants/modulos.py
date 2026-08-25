@@ -86,6 +86,18 @@ MODULOS = [
         prefixos=('/moda/',),
         segmentos=(seg.MODA_CONFECCAO,),
     ),
+    Modulo(
+        'polpa', 'Polpa de Frutas',
+        'Recebimento de fruta, formulação, produção, cadeia de frio e '
+        'rastreabilidade — polpa, açaí, sorvete e congelados.',
+        prefixos=('/polpa/',),
+        # A indústria alimentícia entra junto: quem faz creme, base
+        # congelada ou mix de frutas tem a mesma cadeia (recebimento com
+        # classificação, formulação, congelamento e lote rastreável), e
+        # deixá-la de fora obrigaria a liberar o módulo na mão em toda
+        # empresa que não se cadastrou como "polpa de frutas".
+        segmentos=(seg.POLPA_FRUTAS, seg.INDUSTRIA_ALIMENTICIA),
+    ),
 ]
 
 MODULOS_POR_CHAVE = {m.chave: m for m in MODULOS}

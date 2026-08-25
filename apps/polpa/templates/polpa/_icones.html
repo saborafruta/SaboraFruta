@@ -1,0 +1,38 @@
+{% comment %}
+  Ícones dos grupos, num arquivo só para hub, grupo e sidebar usarem o
+  mesmo desenho. Recebe `icone` (chave declarada em menu.py) e `classe`.
+{% endcomment %}
+{% if icone == 'balanca' %}
+  <svg class="{{ classe|default:'w-5 h-5' }}" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.6" d="M12 4v16m-7-3h14M7 7l-3 6h6L7 7zm10 0l-3 6h6l-3-6zM9 4h6"/>
+  </svg>
+{% elif icone == 'frasco' %}
+  <svg class="{{ classe|default:'w-5 h-5' }}" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.6" d="M9 3h6M10 3v6L5 18a2 2 0 001.7 3h10.6A2 2 0 0019 18l-5-9V3M7.5 14h9"/>
+  </svg>
+{% elif icone == 'engrenagem' %}
+  <svg class="{{ classe|default:'w-5 h-5' }}" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.6" d="M10.3 4.3a1 1 0 011-.8h1.4a1 1 0 011 .8l.2 1.4 1.5.9 1.3-.6a1 1 0 011.2.3l1 1.2a1 1 0 010 1.2l-.8 1.2.4 1.6 1.4.5a1 1 0 01.7 1v1.3a1 1 0 01-.7 1l-1.4.5-.4 1.6.8 1.2a1 1 0 010 1.2l-1 1.2a1 1 0 01-1.2.3l-1.3-.6-1.5.9-.2 1.4a1 1 0 01-1 .8h-1.4a1 1 0 01-1-.8l-.2-1.4-1.5-.9-1.3.6a1 1 0 01-1.2-.3l-1-1.2a1 1 0 010-1.2l.8-1.2-.4-1.6-1.4-.5a1 1 0 01-.7-1v-1.3a1 1 0 01.7-1l1.4-.5.4-1.6-.8-1.2a1 1 0 010-1.2l1-1.2a1 1 0 011.2-.3l1.3.6 1.5-.9.2-1.4z"/>
+    <circle cx="12" cy="12" r="2.6" stroke-width="1.6"/>
+  </svg>
+{% elif icone == 'floco' %}
+  <svg class="{{ classe|default:'w-5 h-5' }}" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.6" d="M12 2v20M2 12h20M4.9 4.9l14.2 14.2M19.1 4.9L4.9 19.1M12 6l-2.2-2.2M12 6l2.2-2.2M12 18l-2.2 2.2M12 18l2.2 2.2M6 12l-2.2-2.2M6 12l-2.2 2.2M18 12l2.2-2.2M18 12l2.2 2.2"/>
+  </svg>
+{% elif icone == 'escudo' %}
+  <svg class="{{ classe|default:'w-5 h-5' }}" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.6" d="M12 3l8 3v6c0 5-3.4 8.4-8 9.6C7.4 20.4 4 17 4 12V6l8-3zm-2.5 8.5l2 2 4-4"/>
+  </svg>
+{% elif icone == 'caminhao' %}
+  <svg class="{{ classe|default:'w-5 h-5' }}" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.6" d="M9 17a2 2 0 11-4 0 2 2 0 014 0zm10 0a2 2 0 11-4 0 2 2 0 014 0zM13 16V6a1 1 0 00-1-1H4a1 1 0 00-1 1v10a1 1 0 001 1h1m8 0h2m4 0h1a1 1 0 001-1v-4.6a1 1 0 00-.3-.7L18 8h-5"/>
+  </svg>
+{% elif icone == 'grafico' %}
+  <svg class="{{ classe|default:'w-5 h-5' }}" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.6" d="M9 19v-6m4 6V7m4 12v-9M4 21h16a1 1 0 001-1V4a1 1 0 00-1-1H4a1 1 0 00-1 1v16a1 1 0 001 1z"/>
+  </svg>
+{% else %}
+  <svg class="{{ classe|default:'w-5 h-5' }}" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.6" d="M4 6h16M4 12h16M4 18h16"/>
+  </svg>
+{% endif %}

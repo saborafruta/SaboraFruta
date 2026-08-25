@@ -1,0 +1,147 @@
+{% extends "_base.html" %}
+{% block title %}{{ title }} — Polpa{% endblock %}
+{% block page_title %}{{ title }}{% endblock %}
+{% block content %}
+
+{% comment %}
+  A FILA DA BALANÇA. Quem abre esta tela tem caminhão no pátio, então o que
+  está em aberto vem primeiro e o botão de abrir romaneio fica no alto, ao
+  alcance sem rolar. Carga parada é fruta esquentando — por isso a coluna
+  de situação é a mais destacada da tabela.
+{% endcomment %}
+<div class="space-y-4">
+
+  <div class="flex flex-wrap items-start justify-between gap-3">
+    <div>
+      <p class="text-sm mb-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+        <a href="{% url 'polpa:hub' %}" :style="temaClaro ? 'color:#3b82f6;' : 'color:#60a5fa;'">Polpa de Frutas</a>
+        <span class="mx-1">›</span>
+        <a href="{% url 'polpa:grupo' 'recebimento' %}" :style="temaClaro ? 'color:#3b82f6;' : 'color:#60a5fa;'">Recebimento</a>
+      </p>
+      <h2 class="text-2xl font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">{{ title }}</h2>
+      <p class="text-sm mt-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+        Hoje: {{ resumo.cargas }} carga(s), {{ resumo.kg_aceitos|floatformat:0 }} kg aceitos
+        {% if resumo.aguardando %}
+          · <span style="color:#d97706;font-weight:600;">{{ resumo.aguardando }} aguardando decisão</span>
+        {% endif %}
+      </p>
+    </div>
+    {% if pode_agir %}
+      <a href="{% url 'polpa:recebimento-create' %}" class="btn-primary text-sm">
+        + Novo recebimento
+      </a>
+    {% endif %}
+  </div>
+
+  {% if not so_recusas %}
+    <form method="get" class="card p-3 flex flex-wrap items-end gap-3">
+      <div class="flex-1 min-w-[200px]">
+        <label class="form-label">Produtor, fruta, nota ou placa</label>
+        <input type="text" name="busca" value="{{ filtros.busca }}" class="form-input w-full"
+               autocomplete="off" placeholder="Ex.: Sítio Boa Vista, manga, ABC1D23">
+      </div>
+      <div>
+        <label class="form-label">Situação</label>
+        <select name="status" class="form-select">
+          <option value="">Todas</option>
+          {% for valor, rotulo in situacoes %}
+            <option value="{{ valor }}" {% if filtros.status == valor %}selected{% endif %}>{{ rotulo }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div>
+        <label class="form-label">Fruta</label>
+        <select name="fruta" class="form-select">
+          <option value="">Todas</option>
+          {% for f in frutas %}
+            <option value="{{ f.pk }}" {% if filtros.fruta == f.pk|stringformat:"s" %}selected{% endif %}>{{ f }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <button type="submit" class="btn-primary text-sm">Filtrar</button>
+      {% if tem_filtro %}
+        <a href="{% url 'polpa:recebimento-list' %}" class="btn-secondary text-sm">Limpar</a>
+      {% endif %}
+    </form>
+  {% endif %}
+
+  <div class="card overflow-hidden">
+    <div class="overflow-x-auto">
+      <table class="w-full text-sm">
+        <thead>
+          <tr class="border-b" :style="temaClaro ? 'border-color:#e2e8f0;' : 'border-color:#2a2a2e;'">
+            <th class="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wide"
+                :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Romaneio</th>
+            <th class="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wide"
+                :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Fruta</th>
+            <th class="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wide"
+                :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Produtor</th>
+            <th class="text-right px-4 py-3 text-xs font-semibold uppercase tracking-wide"
+                :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Líquido</th>
+            <th class="text-right px-4 py-3 text-xs font-semibold uppercase tracking-wide"
+                :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Aceito</th>
+            <th class="text-right px-4 py-3 text-xs font-semibold uppercase tracking-wide"
+                :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Valor</th>
+            <th class="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wide"
+                :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Situação</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for r in recebimentos %}
+            <tr class="border-b" :style="temaClaro ? 'border-color:#f1f5f9;' : 'border-color:#1e1e22;'">
+              <td class="px-4 py-3">
+                <a href="{% url 'polpa:recebimento-detail' r.pk %}" class="font-semibold"
+                   :style="temaClaro ? 'color:#2563eb;' : 'color:#60a5fa;'">#{{ r.numero|stringformat:"05d" }}</a>
+                <span class="block text-xs" :style="temaClaro ? 'color:#94a3b8;' : 'color:#71717a;'">{{ r.data|date:"d/m/Y" }}</span>
+              </td>
+              <td class="px-4 py-3" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">{{ r.fruta }}</td>
+              <td class="px-4 py-3 truncate" :style="temaClaro ? 'color:#374151;' : 'color:#cbd5e1;'">{{ r.produtor }}</td>
+              <td class="px-4 py-3 text-right" :style="temaClaro ? 'color:#374151;' : 'color:#cbd5e1;'">{{ r.peso_liquido|floatformat:0 }} kg</td>
+              <td class="px-4 py-3 text-right font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
+                {{ r.peso_aceito|floatformat:0 }} kg
+                {% comment %}
+                  O DESCONTO APARECE JUNTO do peso aceito, e não numa coluna
+                  distante: é a diferença entre o que a balança marcou e o
+                  que se paga, e é sobre ela que o produtor liga.
+                {% endcomment %}
+                {% if r.desconto_kg %}
+                  <span class="block text-[11px]" style="color:#d97706;">−{{ r.desconto_kg|floatformat:0 }} kg</span>
+                {% endif %}
+              </td>
+              <td class="px-4 py-3 text-right" :style="temaClaro ? 'color:#374151;' : 'color:#cbd5e1;'">R$ {{ r.valor_total|floatformat:2 }}</td>
+              <td class="px-4 py-3">
+                {% if r.status == 'aprovado' %}
+                  <span class="soft-pill is-green text-xs">Aprovado</span>
+                  {% if r.lote %}
+                    <span class="block text-[11px] mt-1 font-mono" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">{{ r.lote.numero_lote }}</span>
+                  {% endif %}
+                {% elif r.status == 'recusado' %}
+                  <span class="soft-pill is-red text-xs">Recusado</span>
+                {% elif r.status == 'cancelado' %}
+                  <span class="soft-pill is-slate text-xs">Cancelado</span>
+                {% else %}
+                  <span class="soft-pill is-amber text-xs">{{ r.get_status_display }}</span>
+                {% endif %}
+              </td>
+            </tr>
+          {% empty %}
+            <tr>
+              <td colspan="7" class="px-4 py-10 text-center">
+                <p class="text-sm" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+                  {% if tem_filtro %}
+                    Nenhuma carga com esse filtro.
+                  {% else %}
+                    Nenhuma carga registrada ainda. O primeiro romaneio começa
+                    pela balança: peso bruto, tara e a fruta que chegou.
+                  {% endif %}
+                </p>
+              </td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+</div>
+{% endblock %}

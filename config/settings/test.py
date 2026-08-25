@@ -34,6 +34,7 @@ LOCAL_APP_LABELS = [
     'mapas',
     'moda',
     'pdv',
+    'polpa',
     'producao',
     'produtos',
     'qualidade',

@@ -1,0 +1,138 @@
+{% extends "_base.html" %}
+{% block title %}{{ title }} — Polpa{% endblock %}
+{% block page_title %}{{ title }}{% endblock %}
+{% block content %}
+
+{% comment %}
+  O ROMANEIO SALVA COM POUCO. Fruta, produtor e data bastam: o caminhão
+  entra na balança antes de alguém ter a nota em mãos, e exigir tudo de uma
+  vez faz a pesagem ser anotada em papel para digitar depois — que é
+  exatamente o registro que se perde.
+
+  A CONTA DO PESO APARECE ENQUANTO SE DIGITA. Bruto − tara − desconto é
+  aritmética que a pessoa faria na calculadora do celular com o motorista
+  esperando; a tela faz na hora e mostra o valor a pagar junto, porque é o
+  número que os dois lados querem ver antes de assinar.
+{% endcomment %}
+<div class="space-y-4 max-w-3xl"
+     x-data="{
+       bruto: {{ form.peso_bruto.value|default:0 }},
+       tara: {{ form.tara.value|default:0 }},
+       desconto: {{ form.desconto_kg.value|default:0 }},
+       preco: {{ form.preco_kg.value|default:0 }},
+       get liquido() { return Math.max(this.bruto - this.tara, 0); },
+       get aceito() { return Math.max(this.liquido - this.desconto, 0); },
+       get valor() { return this.aceito * this.preco; },
+       moeda(v) { return v.toLocaleString('pt-BR', {minimumFractionDigits:2, maximumFractionDigits:2}); },
+     }">
+
+  <p class="text-sm" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+    <a href="{% url 'polpa:recebimento-list' %}" :style="temaClaro ? 'color:#3b82f6;' : 'color:#60a5fa;'">‹ Recebimento de fruta</a>
+  </p>
+
+  <form method="post" class="space-y-4">
+    {% csrf_token %}
+
+    {% if form.non_field_errors %}
+      <div class="card p-3" style="border-left:3px solid #dc2626;">
+        {% for erro in form.non_field_errors %}
+          <p class="text-sm" style="color:#dc2626;">{{ erro }}</p>
+        {% endfor %}
+      </div>
+    {% endif %}
+
+    <div class="card p-4">
+      <h3 class="text-sm font-semibold mb-3" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">A carga</h3>
+      <div class="grid sm:grid-cols-2 gap-3">
+        {% for campo in form %}
+          {% if campo.name == 'fruta' or campo.name == 'produtor' or campo.name == 'data' or campo.name == 'hora_chegada' %}
+            <div>
+              <label class="form-label" for="{{ campo.id_for_label }}">{{ campo.label }}</label>
+              {{ campo }}
+              {% if campo.errors %}<p class="text-xs mt-1" style="color:#dc2626;">{{ campo.errors.0 }}</p>{% endif %}
+            </div>
+          {% endif %}
+        {% endfor %}
+      </div>
+    </div>
+
+    <div class="card p-4">
+      <h3 class="text-sm font-semibold mb-3" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">O veículo</h3>
+      <div class="grid sm:grid-cols-3 gap-3">
+        {% for campo in form %}
+          {% if campo.name == 'placa' or campo.name == 'motorista' or campo.name == 'nota_fiscal' %}
+            <div>
+              <label class="form-label" for="{{ campo.id_for_label }}">
+                {{ campo.label }} <span class="opacity-60">(opcional)</span>
+              </label>
+              {{ campo }}
+              {% if campo.errors %}<p class="text-xs mt-1" style="color:#dc2626;">{{ campo.errors.0 }}</p>{% endif %}
+            </div>
+          {% endif %}
+        {% endfor %}
+      </div>
+    </div>
+
+    <div class="card p-4">
+      <h3 class="text-sm font-semibold mb-3" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">A balança</h3>
+      <div class="grid sm:grid-cols-4 gap-3">
+        <div>
+          <label class="form-label" for="{{ form.peso_bruto.id_for_label }}">Peso bruto (kg)</label>
+          <input type="number" step="0.001" min="0" name="peso_bruto" id="{{ form.peso_bruto.id_for_label }}"
+                 class="form-input w-full" x-model.number="bruto" value="{{ form.peso_bruto.value|default:0 }}">
+          {% if form.peso_bruto.errors %}<p class="text-xs mt-1" style="color:#dc2626;">{{ form.peso_bruto.errors.0 }}</p>{% endif %}
+        </div>
+        <div>
+          <label class="form-label" for="{{ form.tara.id_for_label }}">Tara (kg)</label>
+          <input type="number" step="0.001" min="0" name="tara" id="{{ form.tara.id_for_label }}"
+                 class="form-input w-full" x-model.number="tara" value="{{ form.tara.value|default:0 }}">
+          {% if form.tara.errors %}<p class="text-xs mt-1" style="color:#dc2626;">{{ form.tara.errors.0 }}</p>{% endif %}
+        </div>
+        <div>
+          <label class="form-label" for="{{ form.desconto_kg.id_for_label }}">Desconto (kg)</label>
+          <input type="number" step="0.001" min="0" name="desconto_kg" id="{{ form.desconto_kg.id_for_label }}"
+                 class="form-input w-full" x-model.number="desconto" value="{{ form.desconto_kg.value|default:0 }}">
+          {% if form.desconto_kg.errors %}<p class="text-xs mt-1" style="color:#dc2626;">{{ form.desconto_kg.errors.0 }}</p>{% endif %}
+        </div>
+        <div>
+          <label class="form-label" for="{{ form.preco_kg.id_for_label }}">R$ por kg</label>
+          <input type="number" step="0.0001" min="0" name="preco_kg" id="{{ form.preco_kg.id_for_label }}"
+                 class="form-input w-full" x-model.number="preco" value="{{ form.preco_kg.value|default:0 }}">
+          {% if form.preco_kg.errors %}<p class="text-xs mt-1" style="color:#dc2626;">{{ form.preco_kg.errors.0 }}</p>{% endif %}
+        </div>
+      </div>
+
+      <div class="grid grid-cols-3 gap-3 mt-4">
+        <div class="rounded-xl p-3 text-center"
+             :style="temaClaro ? 'background:#f8fafc;' : 'background:#18181b;'">
+          <p class="text-xs uppercase tracking-wider" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Líquido</p>
+          <p class="text-xl font-bold mt-1" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'"
+             x-text="moeda(liquido) + ' kg'"></p>
+        </div>
+        <div class="rounded-xl p-3 text-center"
+             :style="temaClaro ? 'background:#f0fdf4;' : 'background:rgba(34,197,94,.08);'">
+          <p class="text-xs uppercase tracking-wider" style="color:#059669;">Aceito</p>
+          <p class="text-xl font-bold mt-1" style="color:#059669;" x-text="moeda(aceito) + ' kg'"></p>
+        </div>
+        <div class="rounded-xl p-3 text-center"
+             :style="temaClaro ? 'background:#f8fafc;' : 'background:#18181b;'">
+          <p class="text-xs uppercase tracking-wider" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">A pagar</p>
+          <p class="text-xl font-bold mt-1" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'"
+             x-text="'R$ ' + moeda(valor)"></p>
+        </div>
+      </div>
+    </div>
+
+    <div class="card p-4">
+      <label class="form-label" for="{{ form.observacao.id_for_label }}">Observação</label>
+      {{ form.observacao }}
+    </div>
+
+    <div class="flex flex-wrap gap-2">
+      <button type="submit" class="btn-primary">Gravar romaneio</button>
+      <a href="{% url 'polpa:recebimento-list' %}" class="btn-secondary">Cancelar</a>
+    </div>
+  </form>
+
+</div>
+{% endblock %}
