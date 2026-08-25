@@ -86,7 +86,20 @@
                   </span>
                 {% endif %}
               </td>
-              <td class="px-3 py-3 text-right" :style="temaClaro ? 'color:#374151;' : 'color:#cbd5e1;'">{{ linha.estoque|floatformat:0 }}</td>
+              <td class="px-3 py-3 text-right" :style="temaClaro ? 'color:#374151;' : 'color:#cbd5e1;'">
+                {{ linha.estoque|floatformat:0 }}
+                {% comment %}
+                  O RESERVADO EXPLICA UM DISPONÍVEL BAIXO. Ele não entra na
+                  conta — o disponível já é o físico menos ele — mas "estoque
+                  0" com 300 caixas no galpão parece defeito do sistema até
+                  alguém ver que as 300 são de outro cliente.
+                {% endcomment %}
+                {% if linha.reservado %}
+                  <span class="block text-[11px]" style="color:#0891b2;">
+                    {{ linha.reservado|floatformat:0 }} reservado
+                  </span>
+                {% endif %}
+              </td>
               <td class="px-3 py-3 text-right" :style="temaClaro ? 'color:#374151;' : 'color:#cbd5e1;'">
                 {% if linha.em_producao %}{{ linha.em_producao|floatformat:0 }}{% else %}—{% endif %}
               </td>

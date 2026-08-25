@@ -81,6 +81,7 @@ class PlanejamentoService:
         producao = cls._em_producao(filial)
         media = cls._media_diaria(filial)
         receitas = cls._receitas_ativas(filial)
+        reservados = cls._reservados(filial)
 
         linhas = []
         for ficha in fichas:
@@ -98,6 +99,7 @@ class PlanejamentoService:
                 'unidade': getattr(produto.unidade_medida, 'sigla', ''),
                 'pedidos': em_aberto,
                 'estoque': estoque,
+                'reservado': reservados.get(produto.pk, ZERO),
                 'minimo': minimo,
                 'previsao': previsao,
                 'media_diaria': diaria,
@@ -128,6 +130,23 @@ class PlanejamentoService:
         )
         return {
             l['produto_id']: max(l['falta'] or ZERO, ZERO) for l in linhas
+        }
+
+    @staticmethod
+    def _reservados(filial) -> dict:
+        """
+        Quanto de cada produto está separado para alguém.
+
+        NÃO ENTRA NA CONTA -- `quantidade_disponivel` já é o físico menos o
+        reservado, e descontar de novo tiraria duas vezes. Serve para a tela
+        EXPLICAR um disponível baixo: "estoque 0" com 300 caixas no galpão
+        parece defeito do sistema até alguém ver que as 300 são de outro
+        cliente.
+        """
+        return {
+            e.produto_id: e.quantidade_reservada or ZERO
+            for e in Estoque.objects.filter(filial=filial)
+            if e.quantidade_reservada
         }
 
     @staticmethod
