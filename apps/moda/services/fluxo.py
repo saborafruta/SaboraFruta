@@ -123,6 +123,20 @@ class FluxoService:
 
         etapa.atualizado_por = usuario
         etapa.save()
+
+        # SEPARAR MATERIAL QUANDO A PRODUÇÃO COMEÇA. Vale para a PRIMEIRA
+        # etapa que entra em andamento, seja ela qual for -- e não para a
+        # primeira do roteiro. Roteiro se pula: se a reserva dependesse de uma
+        # etapa específica, uma OP que começasse pelo corte direto produziria
+        # a peça inteira sem nunca separar material.
+        #
+        # Fica aqui, e não na view, porque é regra de produção: há duas telas
+        # que apontam etapa (o fluxo e o terminal do chão de fábrica), e a
+        # segunda a implementar esqueceria.
+        if 'status' in alterados and etapa.status == EtapaOrdem.Status.EM_ANDAMENTO:
+            from apps.moda.services.necessidade import NecessidadeService
+            NecessidadeService.reservar_ao_iniciar(etapa.ordem, usuario)
+
         return alterados
 
     _INVALIDO = object()

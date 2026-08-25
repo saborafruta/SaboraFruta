@@ -70,6 +70,13 @@ class OrdemProducao(ComCodigoQr, FilialScopedModel):
 
     # ── Os quatro campos que a OP governa ────────────────────────────────
     quantidade = models.PositiveIntegerField()
+
+    # Carimbo de que a matéria-prima já foi separada para esta ordem. Mesmo
+    # papel do `estoque_baixado_em` do corte: a pergunta "isto já aconteceu?"
+    # precisa de resposta no banco, não de uma inferência a partir das
+    # reservas -- reserva cancelada de propósito não pode fazer o sistema
+    # reservar tudo de novo no apontamento seguinte.
+    material_reservado_em = models.DateTimeField(null=True, blank=True, editable=False)
     prazo = models.DateField(null=True, blank=True)
     prioridade = models.CharField(
         max_length=10, choices=Prioridade.choices, default=Prioridade.NORMAL,

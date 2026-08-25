@@ -90,6 +90,37 @@ class CorteFormView(ModaBaseView):
 
         novo.save()
         messages.success(request, f'Corte #{novo.numero:04d} salvo.')
+
+        # BAIXA AUTOMÁTICA AO CORTAR. O botão era esquecido, e entre o corte e
+        # o clique o sistema achava que havia 200 m de um rolo que já tinha
+        # virado peça — e o painel de necessidade lê esse saldo.
+        #
+        # Não trava a gravação: se o consumo real não foi digitado, ou o
+        # tecido não está ligado ao estoque, o corte é salvo do mesmo jeito e
+        # o botão continua na tela.
+        baixa = IntegracaoService.baixar_ao_cortar(novo, request.user)
+        if baixa:
+            messages.success(
+                request,
+                f'Baixa automática: {baixa.quantidade} de {baixa.produto} '
+                f'saíram do estoque.',
+            )
+            if baixa.aviso:
+                messages.warning(request, baixa.aviso)
+        elif (
+            novo.status == RegistroCorte.Status.CORTADO
+            and not novo.estoque_baixado_em
+        ):
+            # Dizer POR QUE não baixou, e não só ficar em silêncio: silêncio
+            # aqui é a pessoa descobrir semanas depois que o estoque nunca
+            # desceu deste corte.
+            _p, _q, motivo = IntegracaoService.material_do_corte(novo)
+            if motivo:
+                messages.warning(
+                    request,
+                    f'Estoque não baixado — {motivo[0].lower()}{motivo[1:]} '
+                    f'Resolva e use o botão na tela do corte.',
+                )
         return redirect(reverse('moda:corte-detail', args=[novo.pk]))
 
     @staticmethod
@@ -195,9 +226,10 @@ class CorteEstoqueView(ModaBaseView):
     """
     Dá baixa (ou estorna) o tecido que este corte consumiu.
 
-    Um botão, e não automático ao marcar cortado: mexer no estoque de
-    outro módulo é efeito colateral grande demais para acontecer sem
-    alguém mandar. O consumo continua digitado uma vez só, aqui no corte.
+    A baixa hoje é automática ao marcar o corte como cortado. Este botão
+    é a segunda porta, para o que o automático não alcança: corte marcado
+    antes de alguém digitar o consumo real, ou tecido ainda não ligado a
+    um produto de estoque. E é por aqui que se estorna.
     """
 
     permissao_acao = 'editar'

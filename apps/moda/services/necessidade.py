@@ -25,16 +25,20 @@ aparecer.
 """
 from __future__ import annotations
 
+import logging
 from collections import defaultdict
 from dataclasses import dataclass, field
 from decimal import Decimal
 
 from django.db import transaction
+from django.utils import timezone
 
 from apps.core.services.exceptions import DomainError
 from apps.moda.models import (
     ItemRequisicao, OrdemProducao, RequisicaoMaterial, ReservaMaterial,
 )
+
+logger = logging.getLogger(__name__)
 
 ZERO = Decimal('0')
 
@@ -286,6 +290,102 @@ class NecessidadeService:
         )
         reserva.status = ReservaMaterial.Status.CANCELADA
         reserva.save(update_fields=['status'])
+
+    # ── Reserva ao começar a produzir ────────────────────────────────────
+
+    @classmethod
+    @transaction.atomic
+    def reservar_da_ordem(cls, ordem, usuario) -> list[ReservaMaterial]:
+        """
+        Separa a matéria-prima desta ordem. Chamado quando a produção começa.
+
+        QUANDO A PRODUÇÃO COMEÇA, e não quando a OP é emitida. Reservar na
+        emissão seguraria material de ordem que fica semanas na fila, e
+        material reservado não aparece como disponível — a OP parada
+        esconderia estoque da OP urgente que entrou depois.
+
+        RESERVA O QUE DÁ, e não tudo ou nada. Faltar aviamento não é motivo
+        para deixar o tecido solto: o que está separado fica separado, e o
+        déficit continua aparecendo no painel de necessidade, que é a tela
+        que existe para isso.
+
+        SEM ESTOQUE, NÃO RESERVA -- e não reserva negativo. Uma reserva maior
+        que o saldo é uma promessa que o almoxarifado não pode cumprir, e ela
+        sumiria da conta de disponível de todas as outras ordens.
+
+        Idempotente pelo carimbo: apontar a segunda etapa não reserva de novo.
+        """
+        from apps.estoque.models import Estoque
+        from apps.estoque.services.movimentacao_service import MovimentacaoService
+
+        ficha = ordem.ficha
+        if ficha is None:
+            return []
+
+        ja_reservado: dict[int, Decimal] = defaultdict(lambda: ZERO)
+        for reserva in ReservaMaterial.all_objects.filter(
+            ordem=ordem, status=ReservaMaterial.Status.ATIVA,
+        ):
+            ja_reservado[reserva.produto_id] += reserva.quantidade
+
+        criadas = []
+        for material in ficha.materiais.exclude(produto_estoque__isnull=True):
+            precisa = (material.consumo or ZERO) * ordem.quantidade
+            falta = precisa - ja_reservado[material.produto_estoque_id]
+            if falta <= ZERO:
+                continue
+
+            disponivel = Estoque.objects.filter(
+                produto_id=material.produto_estoque_id, filial_id=ordem.filial_id,
+            ).values_list('quantidade_disponivel', flat=True).first() or ZERO
+            fatia = min(falta, disponivel)
+            if fatia <= ZERO:
+                continue
+
+            MovimentacaoService.reservar_estoque(
+                produto_id=material.produto_estoque_id,
+                filial_id=ordem.filial_id,
+                quantidade=fatia,
+            )
+            criadas.append(ReservaMaterial.objects.create(
+                filial_id=ordem.filial_id, ordem=ordem,
+                produto_id=material.produto_estoque_id,
+                material=material, quantidade=fatia, criado_por=usuario,
+                observacao='Separado automaticamente no início da produção.',
+            ))
+            ja_reservado[material.produto_estoque_id] += fatia
+
+        return criadas
+
+    @classmethod
+    def reservar_ao_iniciar(cls, ordem, usuario) -> list[ReservaMaterial]:
+        """
+        A reserva do início da produção, com o carimbo e sem poder estourar.
+
+        NÃO PROPAGA ERRO, de propósito. Isto roda dentro do apontamento da
+        etapa: quem está no terminal do chão de fábrica marcando que começou a
+        cortar não pode receber um erro de estoque na cara e ficar sem
+        registrar o apontamento. O trabalho aconteceu de qualquer jeito; o que
+        se perde ao travar é o registro dele.
+
+        O carimbo só é posto quando a reserva rodou até o fim. Falhou, fica
+        sem carimbo — e o próximo apontamento tenta de novo, que é o
+        comportamento certo para um erro transitório de banco.
+        """
+        if ordem.material_reservado_em:
+            return []
+        try:
+            criadas = cls.reservar_da_ordem(ordem, usuario)
+        except Exception:  # noqa: BLE001
+            logger.exception(
+                'Falha ao reservar material da ordem %s no início da produção',
+                ordem.pk,
+            )
+            return []
+
+        ordem.material_reservado_em = timezone.now()
+        ordem.save(update_fields=['material_reservado_em'])
+        return criadas
 
     # ── Requisição ───────────────────────────────────────────────────────
 

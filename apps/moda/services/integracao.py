@@ -18,13 +18,24 @@ O SEGUNDO É PIOR QUE REDIGITAÇÃO: é número errado. O painel de necessidade
 lê esse saldo, e um saldo alto demais esconde a falta de material até o
 corte parar.
 
-POR QUE A BAIXA É UM BOTÃO, e não automática ao marcar o corte como cortado:
-mexer no estoque de outro módulo é efeito colateral grande para acontecer
-sem alguém mandar. O consumo continua sendo digitado UMA vez, no corte; o
-botão só propaga. E é reversível — cancelar o corte estorna.
+A BAIXA ERA UM BOTÃO, e passou a ser automática ao marcar o corte como
+cortado. A razão original — mexer no estoque de outro módulo é efeito
+colateral grande para acontecer sem alguém mandar — perdia para a prática: o
+botão era esquecido, e entre o corte e o clique o sistema achava que havia
+200 m de um rolo que já tinha virado peça. Um saldo errado por horas custa
+mais que o efeito colateral, porque o painel de necessidade lê esse saldo.
+
+O botão continua existindo, para o que o automático não consegue: corte
+marcado como cortado ANTES de alguém digitar o consumo real, ou tecido ainda
+não ligado a um produto de estoque. Nesses casos a marcação passa e a baixa
+fica pendente, avisando — travar a marcação puniria o chão de fábrica por um
+cadastro que não é dele.
+
+E continua reversível: o estorno devolve aos MESMOS lotes.
 """
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass, field
 from decimal import Decimal
 
@@ -32,6 +43,8 @@ from django.db import transaction
 from django.utils import timezone
 
 from apps.core.services.exceptions import DomainError
+
+logger = logging.getLogger(__name__)
 
 ZERO = Decimal('0')
 
@@ -304,6 +317,38 @@ class IntegracaoService:
             consumos=list(corte.consumos_lote.select_related('lote')),
             aviso=aviso,
         )
+
+    @classmethod
+    def baixar_ao_cortar(cls, corte, usuario) -> BaixaDoCorte | None:
+        """
+        A baixa automática, disparada ao marcar o corte como cortado.
+
+        NÃO ESTOURA E NÃO TRAVA A MARCAÇÃO. Se o consumo real ainda não foi
+        digitado, ou se o tecido não está ligado a um produto de estoque, a
+        marcação passa e a baixa fica pendente — o botão continua na tela para
+        quando o cadastro estiver resolvido. Travar o "cortado" por causa
+        disso puniria o chão de fábrica por um cadastro que não é dele, e o
+        registro do que aconteceu na mesa é mais valioso que o saldo em dia.
+
+        Devolve `None` quando não havia o que baixar, para quem chama saber a
+        diferença entre "baixou" e "não deu" sem inspecionar exceção.
+        """
+        if corte.estoque_baixado_em:
+            return None
+        if corte.status != corte.Status.CORTADO:
+            return None
+
+        _produto, _quantidade, problema = cls.material_do_corte(corte)
+        if problema:
+            return None
+
+        try:
+            return cls.baixar_estoque_do_corte(corte, usuario)
+        except DomainError:
+            logger.exception(
+                'Falha na baixa automática do corte %s', corte.pk,
+            )
+            return None
 
     @classmethod
     @transaction.atomic
