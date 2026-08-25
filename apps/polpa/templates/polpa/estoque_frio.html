@@ -1,0 +1,272 @@
+{% extends "_base.html" %}
+{% block title %}{{ title }} — Polpa{% endblock %}
+{% block page_title %}{{ title }}{% endblock %}
+{% block content %}
+
+{% comment %}
+  FEFO É A ORDEM DA LISTA, não uma preferência. O que vence primeiro sai
+  primeiro; ordenar por qualquer outra coisa aqui seria oferecer o lote
+  errado para quem está separando — e o sistema já consome nessa ordem, então
+  a tela precisa mostrar na mesma.
+
+  O QUE VENCEU CONTINUA NA LISTA, em vermelho. Sumir com ele esconderia
+  justamente o que precisa de decisão: alguém tem de bloquear, descartar ou
+  reprocessar, e lote vencido invisível é lote vencido que sai na carga.
+{% endcomment %}
+<div class="space-y-4" x-data="{ movendo: 0 }">
+
+  <div class="flex flex-wrap items-start justify-between gap-3">
+    <div>
+      <p class="text-sm mb-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+        <a href="{% url 'polpa:hub' %}" :style="temaClaro ? 'color:#3b82f6;' : 'color:#60a5fa;'">Polpa de Frutas</a>
+        <span class="mx-1">›</span>
+        <a href="{% url 'polpa:grupo' 'frio' %}" :style="temaClaro ? 'color:#3b82f6;' : 'color:#60a5fa;'">Cadeia de frio</a>
+      </p>
+      <h2 class="text-2xl font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">Estoque congelado</h2>
+      <p class="text-sm mt-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+        {{ resumo.lotes }} lote(s) com saldo · {{ resumo.peso|floatformat:0 }} kg
+      </p>
+    </div>
+    <a href="{% url 'polpa:camara-list' %}" class="btn-secondary text-sm">Câmaras</a>
+  </div>
+
+  {# ── O que pede decisão ─────────────────────────────────────────── #}
+  <div class="grid grid-cols-2 lg:grid-cols-5 gap-3">
+    <div class="card p-4">
+      <p class="text-xs uppercase tracking-wider" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Lotes</p>
+      <p class="text-2xl font-bold mt-1" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">{{ resumo.lotes }}</p>
+    </div>
+    <div class="card p-4">
+      {% comment %}
+        VENCIDO E VENCENDO SÃO OS NÚMEROS QUE IMPORTAM. Saldo total não faz
+        ninguém se mexer; "3 lotes vencem em 30 dias" faz.
+      {% endcomment %}
+      <p class="text-xs uppercase tracking-wider" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Vencidos</p>
+      <p class="text-2xl font-bold mt-1"
+         style="color:{% if resumo.vencidos %}#dc2626{% else %}#64748b{% endif %};">{{ resumo.vencidos }}</p>
+    </div>
+    <div class="card p-4">
+      <p class="text-xs uppercase tracking-wider" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Vencem em {{ resumo.janela }}d</p>
+      <p class="text-2xl font-bold mt-1"
+         style="color:{% if resumo.vencendo %}#d97706{% else %}#64748b{% endif %};">{{ resumo.vencendo }}</p>
+    </div>
+    <div class="card p-4">
+      <p class="text-xs uppercase tracking-wider" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Sem endereço</p>
+      <p class="text-2xl font-bold mt-1"
+         style="color:{% if resumo.sem_endereco %}#d97706{% else %}#64748b{% endif %};">{{ resumo.sem_endereco }}</p>
+    </div>
+    <div class="card p-4">
+      <p class="text-xs uppercase tracking-wider" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Fora da faixa</p>
+      <p class="text-2xl font-bold mt-1"
+         style="color:{% if resumo.fora_da_faixa %}#dc2626{% else %}#64748b{% endif %};">{{ resumo.fora_da_faixa }}</p>
+    </div>
+  </div>
+
+  <form method="get" class="card p-3 flex flex-wrap items-end gap-3">
+    <div class="flex-1 min-w-[200px]">
+      <label class="form-label">Lote ou produto</label>
+      <input type="text" name="busca" value="{{ filtros.busca }}" class="form-input w-full"
+             autocomplete="off" placeholder="Ex.: PM260825, polpa de manga">
+    </div>
+    <div>
+      <label class="form-label">Câmara</label>
+      <select name="camara" class="form-select">
+        <option value="">Todas</option>
+        {% for c in camaras %}
+          <option value="{{ c.pk }}" {% if filtros.camara == c.pk|stringformat:"s" %}selected{% endif %}>{{ c.nome }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div>
+      <label class="form-label">Situação</label>
+      <select name="situacao" class="form-select">
+        <option value="">Todas</option>
+        {% for valor, rotulo in situacoes %}
+          <option value="{{ valor }}" {% if filtros.situacao == valor %}selected{% endif %}>{{ rotulo }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <label class="flex items-center gap-2 text-sm cursor-pointer"
+           :style="temaClaro ? 'color:#374151;' : 'color:#cbd5e1;'">
+      <input type="checkbox" name="sem_endereco" value="1" {% if filtros.sem_endereco %}checked{% endif %}>
+      Só sem endereço
+    </label>
+    <button type="submit" class="btn-primary text-sm">Filtrar</button>
+    {% if tem_filtro %}
+      <a href="{% url 'polpa:estoque-frio' %}" class="btn-secondary text-sm">Limpar</a>
+    {% endif %}
+  </form>
+
+  <div class="card overflow-hidden">
+    <div class="overflow-x-auto">
+      <table class="w-full text-sm">
+        <thead>
+          <tr class="border-b" :style="temaClaro ? 'border-color:#e2e8f0;' : 'border-color:#2a2a2e;'">
+            <th class="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wide"
+                :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Lote</th>
+            <th class="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wide"
+                :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Produto</th>
+            <th class="text-right px-4 py-3 text-xs font-semibold uppercase tracking-wide"
+                :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Saldo</th>
+            <th class="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wide"
+                :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Onde está</th>
+            <th class="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wide"
+                :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Validade</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for linha in linhas %}
+            <tr class="border-b" :style="temaClaro ? 'border-color:#f1f5f9;' : 'border-color:#1e1e22;'">
+              <td class="px-4 py-3">
+                <span class="font-mono font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">{{ linha.lote.numero_lote }}</span>
+                <span class="block text-xs" :style="temaClaro ? 'color:#94a3b8;' : 'color:#71717a;'">
+                  fab. {{ linha.lote.data_fabricacao|date:"d/m/Y"|default:"—" }}
+                </span>
+                {% if linha.lote.status == 'bloqueado' %}
+                  <span class="soft-pill is-red text-xs mt-1">bloqueado</span>
+                {% endif %}
+              </td>
+              <td class="px-4 py-3" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">{{ linha.lote.produto }}</td>
+              <td class="px-4 py-3 text-right font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
+                {{ linha.lote.quantidade_atual|floatformat:0 }}
+                {% if linha.peso %}
+                  <span class="block text-[11px] font-normal" :style="temaClaro ? 'color:#94a3b8;' : 'color:#71717a;'">
+                    {{ linha.peso|floatformat:1 }} kg
+                  </span>
+                {% endif %}
+              </td>
+              <td class="px-4 py-3 text-xs">
+                {% if linha.camara %}
+                  <span :style="temaClaro ? 'color:#374151;' : 'color:#cbd5e1;'">{{ linha.camara.nome }}</span>
+                  {% if linha.endereco %}
+                    <span class="block font-mono" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">{{ linha.endereco }}</span>
+                  {% endif %}
+                  {% if linha.fora_da_faixa %}
+                    {% comment %}
+                      A câmara não alcança a temperatura que o produto exige.
+                      A resposta já existia nos dois cadastros — só faltava
+                      cruzá-los, e ninguém faz essa pergunta até o produto
+                      chegar mole no cliente.
+                    {% endcomment %}
+                    <span class="block font-semibold" style="color:#dc2626;">fora da faixa da câmara</span>
+                  {% endif %}
+                {% else %}
+                  <span style="color:#d97706;">sem endereço</span>
+                {% endif %}
+              </td>
+              <td class="px-4 py-3 text-xs">
+                {% if linha.lote.data_validade %}
+                  <span :style="temaClaro ? 'color:#374151;' : 'color:#cbd5e1;'">{{ linha.lote.data_validade|date:"d/m/Y" }}</span>
+                  <span class="block font-semibold"
+                        style="color:{% if linha.situacao == 'vencido' %}#dc2626{% elif linha.situacao == 'vencendo' %}#d97706{% else %}#059669{% endif %};">
+                    {% if linha.situacao == 'vencido' %}
+                      vencido há {{ linha.dias|floatformat:0|slice:"1:" }} dia(s)
+                    {% else %}
+                      faltam {{ linha.dias }} dia(s)
+                    {% endif %}
+                  </span>
+                {% else %}
+                  <span style="color:#d97706;">sem validade</span>
+                {% endif %}
+              </td>
+              <td class="px-4 py-3 text-right">
+                {% if pode_agir %}
+                  <button type="button" class="text-xs font-semibold underline"
+                          :style="temaClaro ? 'color:#2563eb;' : 'color:#60a5fa;'"
+                          @click="movendo = movendo === {{ linha.lote.pk }} ? 0 : {{ linha.lote.pk }}">
+                    {% if linha.camara %}mover{% else %}guardar{% endif %}
+                  </button>
+                {% endif %}
+              </td>
+            </tr>
+            {% if pode_agir %}
+              <tr x-show="movendo === {{ linha.lote.pk }}" x-cloak>
+                <td colspan="6" class="px-4 pb-3"
+                    :style="temaClaro ? 'background:#f8fafc;' : 'background:#131316;'">
+                  <form method="post" action="{% url 'polpa:lote-guardar' linha.lote.pk %}"
+                        class="grid sm:grid-cols-4 gap-3 items-end pt-3">
+                    {% csrf_token %}
+                    <input type="hidden" name="voltar" value="{{ request.get_full_path }}">
+                    <div>
+                      <label class="form-label">Câmara</label>
+                      <select name="camara" class="form-select w-full" required>
+                        {% for c in camaras %}
+                          <option value="{{ c.pk }}"
+                                  {% if linha.camara and linha.camara.pk == c.pk %}selected{% endif %}>
+                            {{ c.nome }}{% if c.faixa %} ({{ c.faixa }}){% endif %}
+                          </option>
+                        {% endfor %}
+                      </select>
+                    </div>
+                    <div>
+                      <label class="form-label">Endereço</label>
+                      <input type="text" name="endereco" class="form-input w-full"
+                             value="{{ linha.endereco }}" placeholder="Rua 3, bloco B">
+                    </div>
+                    <div>
+                      <label class="form-label">Temperatura na entrada (°C)</label>
+                      <input type="number" step="0.01" name="temperatura_entrada" class="form-input w-full">
+                    </div>
+                    <button type="submit" class="btn-primary text-sm">Gravar</button>
+                  </form>
+                </td>
+              </tr>
+            {% endif %}
+          {% empty %}
+            <tr>
+              <td colspan="6" class="px-4 py-10 text-center">
+                <p class="text-sm" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+                  {% if tem_filtro %}
+                    Nenhum lote com esse filtro.
+                  {% else %}
+                    Nenhum lote de produto acabado com saldo. Os lotes nascem
+                    no encerramento das ordens de produção.
+                  {% endif %}
+                </p>
+              </td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  {# ── Ocupação das câmaras ───────────────────────────────────────── #}
+  {% if por_camara %}
+    <div class="card overflow-hidden">
+      <div class="px-4 py-3 border-b" :style="temaClaro ? 'border-color:#e2e8f0;' : 'border-color:#2a2a2e;'">
+        <h3 class="text-sm font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">Ocupação das câmaras</h3>
+      </div>
+      <table class="w-full text-sm">
+        <tbody>
+          {% for linha in por_camara %}
+            <tr class="border-b" :style="temaClaro ? 'border-color:#f1f5f9;' : 'border-color:#1e1e22;'">
+              <td class="px-4 py-3">
+                <span class="font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">{{ linha.camara.nome }}</span>
+                {% if linha.camara.faixa %}
+                  <span class="block text-xs" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">{{ linha.camara.faixa }}</span>
+                {% endif %}
+              </td>
+              <td class="px-4 py-3 text-right" :style="temaClaro ? 'color:#374151;' : 'color:#cbd5e1;'">
+                {{ linha.lotes }} lote(s) · {{ linha.peso|floatformat:0 }} kg
+              </td>
+              <td class="px-4 py-3 text-right">
+                {% if linha.ocupacao is not None %}
+                  <span class="font-semibold"
+                        style="color:{% if linha.ocupacao > 100 %}#dc2626{% else %}#059669{% endif %};">
+                    {{ linha.ocupacao }}%
+                  </span>
+                {% else %}
+                  <span class="text-xs" style="color:#d97706;">sem capacidade cadastrada</span>
+                {% endif %}
+              </td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  {% endif %}
+
+</div>
+{% endblock %}

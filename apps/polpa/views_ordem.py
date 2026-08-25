@@ -16,7 +16,7 @@ from apps.core.services.exceptions import DomainError
 from .forms_ordem import OrdemPolpaForm
 from apps.produtos.models import Produto
 
-from .models import FichaProduto, OrdemPolpa, Subproduto
+from .models import Camara, FichaProduto, OrdemPolpa, Subproduto
 from .services import CustoService, OrdemPolpaService, SubprodutoService
 from .views import PolpaBaseView
 
@@ -121,6 +121,9 @@ class OrdemDetailView(PolpaBaseView):
                 ('Embalagem', necessidade['embalagens']),
             ],
             'validade_prevista': OrdemPolpaService.validade_do_lote(op),
+            # AS CÂMARAS NO ENCERRAMENTO: é ali que se decide onde o lote
+            # vai ficar, com o produto ainda na mão de quem produziu.
+            'camaras': Camara.objects.for_filial(_filial(request)).filter(ativo=True),
             # CUSTO PREVISTO CONTRA REALIZADO. O `op.ordem.custo_total` que a
             # tela já mostrava soma fruta e pote na mesma linha e não tem com
             # o que ser comparado — um número sozinho não diz se foi caro.
@@ -206,10 +209,26 @@ class ConcluirView(PolpaBaseView):
             messages.error(request, 'Quantidade inválida.')
             return volta
 
+        camara = None
+        if request.POST.get('camara'):
+            camara = get_object_or_404(
+                Camara.objects.for_filial(_filial(request)),
+                pk=request.POST['camara'],
+            )
+
         try:
             OrdemPolpaService.concluir(
                 op, request.user, quantidade, peso_saida,
                 request.POST.get('numero_lote') or '',
+                camara=camara,
+                armazenagem={
+                    'endereco': request.POST.get('endereco') or '',
+                    'temperatura_entrada': (
+                        Decimal(request.POST['temperatura_entrada'])
+                        if (request.POST.get('temperatura_entrada') or '').strip()
+                        else None
+                    ),
+                },
             )
         except DomainError as erro:
             messages.error(request, str(erro))

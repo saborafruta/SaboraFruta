@@ -17,6 +17,7 @@ a página dá 404 (o `resolve` acha pelo padrão).
 from django.urls import path
 
 from . import (
+    views_armazenagem as varm,
     views, views_catalogo as vcat, views_ordem as vord,
     views_planejamento as vpla, views_processo as vproc,
     views_subproduto as vsub,
@@ -86,6 +87,17 @@ ROTAS_PRONTAS: list = [
     path('producao/ordens/<int:pk>/subprodutos/', vsub.subproduto_registrar, name='subproduto-registrar'),
     path('producao/ordens/<int:pk>/subprodutos/<int:subproduto_pk>/excluir/', vsub.subproduto_excluir, name='subproduto-excluir'),
     path('producao/etapas/<int:pk>/apontar/', vproc.ApontarEtapaView.as_view(), name='etapa-apontar'),
+
+    # ── Cadeia de frio ──────────────────────────────────────────────────
+    # O estoque de produto acabado: onde cada lote está e quando vence. O
+    # saldo continua sendo do ERP -- aqui mora a localização e o prazo.
+    path('frio/estoque-frio/', varm.EstoqueFrioView.as_view(), name='estoque-frio'),
+    path('frio/estoque-frio/<int:pk>/guardar/', varm.GuardarLoteView.as_view(), name='lote-guardar'),
+    path('frio/estoque-frio/<int:pk>/bloquear/', varm.BloquearLoteView.as_view(), name='lote-bloquear'),
+    path('frio/camaras/', varm.CamaraListView.as_view(), name='camara-list'),
+    path('frio/camaras/nova/', varm.CamaraFormView.as_view(), name='camara-create'),
+    path('frio/camaras/<int:pk>/editar/', varm.CamaraFormView.as_view(), name='camara-update'),
+    path('indicadores/validade/', varm.ValidadeView.as_view(), name='validade'),
 
     # ── PPCP ────────────────────────────────────────────────────────────
     # Três olhares sobre a MESMA produção: o que produzir, quando e onde

@@ -237,6 +237,32 @@
               <input type="text" name="numero_lote" class="form-input w-full"
                      placeholder="deixe vazio para gerar">
             </div>
+            {% comment %}
+              A CÂMARA É ESCOLHIDA AQUI, com o produto ainda na mão de quem
+              produziu. Guardar depois, noutra tela, é o que faz o lote
+              existir no sistema e ninguém saber onde ele está na madrugada
+              da separação. Sem escolha, o lote entra sem localização e
+              aparece na lista de "sem endereço" — jogá-lo na primeira
+              câmara ativa daria um endereço errado com cara de certo.
+            {% endcomment %}
+            <div>
+              <label class="form-label">Câmara</label>
+              <select name="camara" class="form-select w-full">
+                <option value="">Guardar depois</option>
+                {% for c in camaras %}
+                  <option value="{{ c.pk }}">{{ c.nome }}{% if c.faixa %} ({{ c.faixa }}){% endif %}</option>
+                {% endfor %}
+              </select>
+            </div>
+            <div>
+              <label class="form-label">Endereço</label>
+              <input type="text" name="endereco" class="form-input w-full"
+                     placeholder="Rua 3, bloco B">
+            </div>
+            <div>
+              <label class="form-label">Temperatura na entrada (°C)</label>
+              <input type="number" step="0.01" name="temperatura_entrada" class="form-input w-full">
+            </div>
             <button type="submit" class="btn-primary">Encerrar produção</button>
           </form>
         </div>
@@ -607,6 +633,19 @@
             {{ op.lote.quantidade_inicial|floatformat:0 }} un ·
             fabricado em {{ op.lote.data_fabricacao|date:"d/m/Y" }}
           </p>
+          {% if op.lote.armazenamento_polpa %}
+            <p class="text-sm mt-1" :style="temaClaro ? 'color:#374151;' : 'color:#cbd5e1;'">
+              Guardado em <strong>{{ op.lote.armazenamento_polpa.camara }}</strong>
+              {% if op.lote.armazenamento_polpa.endereco %}
+                · {{ op.lote.armazenamento_polpa.endereco }}
+              {% endif %}
+            </p>
+          {% else %}
+            <p class="text-sm mt-1" style="color:#d97706;">
+              Sem endereço — ninguém sabe em que câmara ele está.
+              <a href="{% url 'polpa:estoque-frio' %}" class="underline">guardar</a>
+            </p>
+          {% endif %}
           {% if op.lote.data_validade %}
             <p class="text-sm mt-1" style="color:#059669;">
               Válido até {{ op.lote.data_validade|date:"d/m/Y" }}

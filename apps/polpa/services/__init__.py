@@ -1,3 +1,4 @@
+from .armazenagem import ArmazenagemService
 from .catalogo import CatalogoService
 from .custo import CustoService
 from .ordem import OrdemPolpaService
@@ -8,7 +9,7 @@ from .subproduto import SubprodutoService
 from .recebimento import RecebimentoService
 
 __all__ = [
-    'CatalogoService',
+    'ArmazenagemService', 'CatalogoService',
     'CustoService', 'OrdemPolpaService', 'PlanejamentoService',
     'ProcessoService', 'ReceitaService', 'RecebimentoService',
     'SubprodutoService',

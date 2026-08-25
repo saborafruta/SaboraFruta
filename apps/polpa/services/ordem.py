@@ -417,6 +417,7 @@ class OrdemPolpaService:
     def concluir(
         cls, op: OrdemPolpa, usuario, quantidade: Decimal,
         peso_saida: Decimal | None = None, numero_lote: str = '',
+        camara=None, armazenagem: dict | None = None,
     ) -> OrdemPolpa:
         """
         Fecha a produção: consome insumo, cria o lote e dá a validade.
@@ -465,6 +466,15 @@ class OrdemPolpaService:
         op.situacao = S.PRODUZIDA
         op.liberada_qualidade_em = timezone.now()
         op.save(update_fields=['situacao', 'liberada_qualidade_em', 'updated_at'])
+
+        # O LOTE VAI PARA A CÂMARA no mesmo ato. Guardar depois, noutra
+        # tela, é o que faz o lote existir no sistema e ninguém saber onde
+        # ele está na madrugada da separação. Sem câmara escolhida o lote
+        # fica sem localização e aparece na lista de "sem endereço" -- jogá-lo
+        # na primeira câmara ativa daria um endereço errado com cara de certo.
+        from apps.polpa.services.armazenagem import ArmazenagemService
+
+        ArmazenagemService.guardar_da_ordem(op, camara, armazenagem)
 
         # O RENDIMENTO DA BATIDA VIRA ALERTA, e não linha de log. É o
         # indicador que a fábrica de fruta cobra todo dia, e até agora o aviso

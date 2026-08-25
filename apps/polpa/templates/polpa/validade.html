@@ -1,0 +1,123 @@
+{% extends "_base.html" %}
+{% block title %}{{ title }} — Polpa{% endblock %}
+{% block page_title %}{{ title }}{% endblock %}
+{% block content %}
+
+{% comment %}
+  A FILA DO QUE DECIDIR. Dentro da janela ainda dá para vender com desconto,
+  reprocessar ou remanejar; depois dela sobra o descarte — e a diferença
+  entre as duas coisas é ter olhado a tempo.
+
+  O VENCIDO VEM PRIMEIRO, e não some da lista: é dele que alguém precisa
+  cuidar hoje. Esconder o vencido é como ele sai na carga.
+{% endcomment %}
+<div class="space-y-4" x-data="{ bloqueando: 0 }">
+
+  <div class="flex flex-wrap items-start justify-between gap-3">
+    <div>
+      <p class="text-sm mb-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+        <a href="{% url 'polpa:hub' %}" :style="temaClaro ? 'color:#3b82f6;' : 'color:#60a5fa;'">Polpa de Frutas</a>
+        <span class="mx-1">›</span>
+        <a href="{% url 'polpa:grupo' 'frio' %}" :style="temaClaro ? 'color:#3b82f6;' : 'color:#60a5fa;'">Cadeia de frio</a>
+      </p>
+      <h2 class="text-2xl font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">Validade</h2>
+      <p class="text-sm mt-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+        {{ resumo.vencidos }} vencido(s) · {{ resumo.vencendo }} vencendo em
+        {{ resumo.janela }} dias
+      </p>
+    </div>
+    <div class="flex flex-wrap gap-2">
+      <a href="?dias=7" class="btn-secondary text-sm">7 dias</a>
+      <a href="?dias=30" class="btn-secondary text-sm">30 dias</a>
+      <a href="?dias=90" class="btn-secondary text-sm">90 dias</a>
+    </div>
+  </div>
+
+  <div class="card overflow-hidden">
+    <div class="overflow-x-auto">
+      <table class="w-full text-sm">
+        <thead>
+          <tr class="border-b" :style="temaClaro ? 'border-color:#e2e8f0;' : 'border-color:#2a2a2e;'">
+            <th class="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wide"
+                :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Lote</th>
+            <th class="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wide"
+                :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Produto</th>
+            <th class="text-right px-4 py-3 text-xs font-semibold uppercase tracking-wide"
+                :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Saldo</th>
+            <th class="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wide"
+                :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Vence</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for lote in lotes %}
+            <tr class="border-b" :style="temaClaro ? 'border-color:#f1f5f9;' : 'border-color:#1e1e22;'">
+              <td class="px-4 py-3 font-mono font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
+                {{ lote.numero_lote }}
+                {% if lote.status == 'bloqueado' %}
+                  <span class="soft-pill is-red text-xs ml-1">bloqueado</span>
+                {% endif %}
+              </td>
+              <td class="px-4 py-3" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">{{ lote.produto }}</td>
+              <td class="px-4 py-3 text-right font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
+                {{ lote.quantidade_atual|floatformat:0 }}
+              </td>
+              <td class="px-4 py-3 text-xs">
+                <span :style="temaClaro ? 'color:#374151;' : 'color:#cbd5e1;'">{{ lote.data_validade|date:"d/m/Y" }}</span>
+                <span class="block font-semibold"
+                      style="color:{% if lote.data_validade < hoje %}#dc2626{% else %}#d97706{% endif %};">
+                  {% if lote.data_validade < hoje %}vencido{% else %}vence em breve{% endif %}
+                </span>
+              </td>
+              <td class="px-4 py-3 text-right">
+                {% if pode_agir and lote.status != 'bloqueado' %}
+                  <button type="button" class="text-xs font-semibold underline"
+                          style="color:#dc2626;"
+                          @click="bloqueando = bloqueando === {{ lote.pk }} ? 0 : {{ lote.pk }}">
+                    bloquear
+                  </button>
+                {% endif %}
+              </td>
+            </tr>
+            {% if pode_agir %}
+              <tr x-show="bloqueando === {{ lote.pk }}" x-cloak>
+                <td colspan="5" class="px-4 pb-3"
+                    :style="temaClaro ? 'background:#f8fafc;' : 'background:#131316;'">
+                  {% comment %}
+                    BLOQUEAR NÃO É EXCLUIR: o lote continua existindo, com
+                    saldo e história — o que muda é que ele para de ser
+                    oferecido na separação. Apagar seria perder o rastro
+                    justamente do lote que deu problema.
+                  {% endcomment %}
+                  <form method="post" action="{% url 'polpa:lote-bloquear' lote.pk %}"
+                        class="flex flex-wrap items-end gap-3 pt-3">
+                    {% csrf_token %}
+                    <input type="hidden" name="voltar" value="{{ request.get_full_path }}">
+                    <div class="flex-1 min-w-[240px]">
+                      <label class="form-label">Motivo do bloqueio</label>
+                      <input type="text" name="motivo" class="form-input w-full"
+                             placeholder="Ex.: vencido, aguardando descarte">
+                    </div>
+                    <button type="submit" class="btn-primary text-sm" style="background:#dc2626;">
+                      Bloquear lote
+                    </button>
+                  </form>
+                </td>
+              </tr>
+            {% endif %}
+          {% empty %}
+            <tr>
+              <td colspan="5" class="px-4 py-10 text-center">
+                <p class="text-sm" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+                  Nada vencendo nos próximos {{ dias }} dias.
+                </p>
+              </td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+</div>
+{% endblock %}
