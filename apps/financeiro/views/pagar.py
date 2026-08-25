@@ -277,6 +277,36 @@ def _filtrar_contas_pagar_abertas(request, manager=None, params=None):
     }
 
 
+def _periodos_datas_contas_pagar(request, data_ini, data_fim):
+    hoje = timezone.localdate()
+    ontem = hoje - timedelta(days=1)
+    inicio_mes = hoje.replace(day=1)
+    fim_mes = hoje.replace(day=monthrange(hoje.year, hoje.month)[1])
+    opcoes = [
+        ('hoje', 'Hoje', hoje, hoje),
+        ('ontem', 'Ontem', ontem, ontem),
+        ('7_dias', '7 dias', hoje, hoje + timedelta(days=7)),
+        ('15_dias', '15 dias', hoje, hoje + timedelta(days=15)),
+        ('este_mes', 'Este mês', inicio_mes, fim_mes),
+        ('30_dias', '30 dias', hoje, hoje + timedelta(days=30)),
+        ('6_meses', '6 meses', hoje, hoje + timedelta(days=182)),
+        ('1_ano', '1 ano', hoje, hoje + timedelta(days=365)),
+    ]
+    periodos = []
+    for slug, label, inicio, fim in opcoes:
+        qd = request.GET.copy()
+        qd.pop('page', None)
+        qd['data_ini'] = inicio.isoformat()
+        qd['data_fim'] = fim.isoformat()
+        periodos.append({
+            'slug': slug,
+            'label': label,
+            'url': f"{reverse('financeiro:pagar_list')}?{qd.urlencode()}",
+            'active': data_ini == inicio.isoformat() and data_fim == fim.isoformat(),
+        })
+    return periodos
+
+
 def _kpis(qs_base):
     hoje = timezone.localdate()
     primeiro_dia_mes = hoje.replace(day=1)
@@ -352,6 +382,7 @@ class ContaPagarListView(PermissaoRequiredMixin, View):
             'q': filtros['q'],
             'data_ini': filtros['data_ini'],
             'data_fim': filtros['data_fim'],
+            'periodos_datas': _periodos_datas_contas_pagar(request, filtros['data_ini'], filtros['data_fim']),
             'totais_filtro': totais_filtro,
             'page_querystring': page_querystring,
             'pill_status': PILL_STATUS,

@@ -112,17 +112,24 @@
         </div>
         <div x-show="recorrente" x-cloak>{% include "financeiro/pagar/_field.html" with field=form.quantidade_recorrencias %}</div>
         <div x-show="recorrente && frequenciaRecorrencia === 'personalizada'" x-cloak>{% include "financeiro/pagar/_field.html" with field=form.intervalo_recorrencia_dias %}</div>
-        <div x-show="recorrente && frequenciaRecorrencia === 'semanal'" x-cloak class="lg:col-span-3">
-          <label class="mb-2 block text-sm font-medium">{{ form.dias_semana_recorrencia.label }}</label>
+        <div x-show="recorrente" x-cloak class="lg:col-span-3 rounded-md border p-3"
+             :class="frequenciaRecorrencia === 'semanal' ? '' : 'opacity-55'"
+             :style="temaClaro ? 'border-color:#dbe3ee;background:#f8fafc' : 'border-color:#3f3f46;background:#18181b'">
+          <div class="mb-2 flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
+            <label class="block text-sm font-semibold">{{ form.dias_semana_recorrencia.label }}</label>
+            <span class="text-xs opacity-65" x-text="frequenciaRecorrencia === 'semanal' ? 'Marque um ou mais dias.' : 'Disponível ao selecionar periodicidade semanal.'"></span>
+          </div>
           <div class="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
             {% for checkbox in form.dias_semana_recorrencia %}
-              <label class="flex items-center gap-2 rounded-md border px-3 py-2 text-sm" :style="temaClaro ? 'border-color:#dbe3ee;background:#f8fafc' : 'border-color:#3f3f46;background:#18181b'">
-                {{ checkbox.tag }}
+              <label class="flex items-center gap-2 rounded-md border px-3 py-2 text-sm"
+                     :class="frequenciaRecorrencia === 'semanal' ? 'cursor-pointer' : 'cursor-not-allowed'"
+                     :style="temaClaro ? 'border-color:#dbe3ee;background:#fff' : 'border-color:#3f3f46;background:#202024'">
+                {{ checkbox.tag|attr:":disabled:frequenciaRecorrencia !== 'semanal'" }}
                 <span>{{ checkbox.choice_label }}</span>
               </label>
             {% endfor %}
           </div>
-          <p class="mt-1 text-xs opacity-60">Se nenhum dia for marcado, o sistema usa o mesmo dia da semana da primeira data de vencimento.</p>
+          <p class="mt-2 text-xs opacity-60">Para lançar em todo sábado, por exemplo, selecione "Semanal" em periodicidade e marque "Sábado". Se nenhum dia for marcado, o sistema usa o mesmo dia da primeira data de vencimento.</p>
           {% if form.dias_semana_recorrencia.errors %}<p class="mt-1 text-xs text-red-500">{{ form.dias_semana_recorrencia.errors|join:", " }}</p>{% endif %}
         </div>
         <div x-show="recorrente && ['mensal','trimestral','semestral','anual'].includes(frequenciaRecorrencia)" x-cloak>
