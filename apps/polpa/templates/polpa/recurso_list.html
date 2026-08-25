@@ -1,0 +1,96 @@
+{% extends "_base.html" %}
+{% block title %}{{ title }} — Polpa{% endblock %}
+{% block page_title %}{{ title }}{% endblock %}
+{% block content %}
+
+{% comment %}
+  A CAPACIDADE É O QUE FAZ O PLANEJAMENTO EXISTIR. Sem saber quanto a
+  despolpadeira faz por dia, "programar para terça" é palpite — e por isso a
+  coluna diz em voz alta quando ela não está cadastrada, em vez de mostrar
+  um traço que se confunde com zero.
+{% endcomment %}
+<div class="space-y-4">
+
+  <div class="flex flex-wrap items-start justify-between gap-3">
+    <div>
+      <p class="text-sm mb-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+        <a href="{% url 'polpa:hub' %}" :style="temaClaro ? 'color:#3b82f6;' : 'color:#60a5fa;'">Polpa de Frutas</a>
+        <span class="mx-1">›</span>
+        <a href="{% url 'polpa:grupo' 'pcp' %}" :style="temaClaro ? 'color:#3b82f6;' : 'color:#60a5fa;'">Planejamento</a>
+      </p>
+      <h2 class="text-2xl font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">Linhas e máquinas</h2>
+      <p class="text-sm mt-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+        A capacidade de cada recurso e a carga dos próximos 7 dias.
+      </p>
+    </div>
+    {% if pode_agir %}
+      <a href="{% url 'polpa:recurso-create' %}" class="btn-primary text-sm">+ Novo recurso</a>
+    {% endif %}
+  </div>
+
+  <div class="card overflow-hidden">
+    <div class="overflow-x-auto">
+      <table class="w-full text-sm">
+        <thead>
+          <tr class="border-b" :style="temaClaro ? 'border-color:#e2e8f0;' : 'border-color:#2a2a2e;'">
+            <th class="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wide"
+                :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Recurso</th>
+            <th class="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wide"
+                :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Linha do ERP</th>
+            <th class="text-right px-4 py-3 text-xs font-semibold uppercase tracking-wide"
+                :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Capacidade/dia</th>
+            <th class="text-right px-4 py-3 text-xs font-semibold uppercase tracking-wide"
+                :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Turno</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for r in recursos %}
+            <tr class="border-b" :style="temaClaro ? 'border-color:#f1f5f9;' : 'border-color:#1e1e22;'">
+              <td class="px-4 py-3">
+                <span class="font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">{{ r.nome }}</span>
+                <span class="block text-xs" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">{{ r.get_tipo_display }}</span>
+                {% if not r.ativo %}<span class="soft-pill is-slate text-xs mt-1">inativo</span>{% endif %}
+              </td>
+              <td class="px-4 py-3" :style="temaClaro ? 'color:#374151;' : 'color:#cbd5e1;'">
+                {{ r.linha_producao|default:"—" }}
+              </td>
+              <td class="px-4 py-3 text-right font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
+                {% if r.capacidade_dia %}
+                  {{ r.capacidade_dia|floatformat:0 }}
+                {% else %}
+                  <span class="text-xs font-normal" style="color:#d97706;">não cadastrada</span>
+                {% endif %}
+              </td>
+              <td class="px-4 py-3 text-right" :style="temaClaro ? 'color:#374151;' : 'color:#cbd5e1;'">
+                {{ r.horas_dia|floatformat:0 }} h
+                {% if r.setup_minutos %}
+                  <span class="block text-[11px]" :style="temaClaro ? 'color:#94a3b8;' : 'color:#71717a;'">
+                    setup {{ r.setup_minutos }} min
+                  </span>
+                {% endif %}
+              </td>
+              <td class="px-4 py-3 text-right">
+                {% if pode_agir %}
+                  <a href="{% url 'polpa:recurso-update' r.pk %}" class="text-xs font-semibold underline"
+                     :style="temaClaro ? 'color:#2563eb;' : 'color:#60a5fa;'">editar</a>
+                {% endif %}
+              </td>
+            </tr>
+          {% empty %}
+            <tr>
+              <td colspan="5" class="px-4 py-10 text-center">
+                <p class="text-sm" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+                  Nenhuma linha ou máquina cadastrada. Sem capacidade, o
+                  calendário não sabe responder se a programação cabe no dia.
+                </p>
+              </td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+</div>
+{% endblock %}

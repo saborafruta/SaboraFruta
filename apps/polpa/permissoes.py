@@ -44,6 +44,7 @@ MODULOS_DE_AREA = [modulo_da_area(a) for a in AREAS]
 # deixa de estreitá-la.
 AREA_POR_MODULO = {
     'apps.polpa.views_recebimento': 'recebimento',
+    'apps.polpa.views_planejamento': 'producao',
     # `views.py` (hub, grupos e telas em construção) fica de fora de
     # propósito: é a navegação do vertical, e quem entra em qualquer área
     # precisa dela.
@@ -52,6 +53,10 @@ AREA_POR_MODULO = {
 # Grupo do menu → área, para o hub não oferecer porta que dá 403.
 AREA_POR_GRUPO = {
     'recebimento': 'recebimento',
+    # O PCP é a mesma área da produção: quem planeja o dia é quem toca o
+    # dia. Uma área própria daria um perfil a mais para administrar sem
+    # nenhum posto de trabalho correspondente na fábrica.
+    'pcp': 'producao',
     'formulacao': 'formulacao',
     'producao': 'producao',
     'frio': 'frio',

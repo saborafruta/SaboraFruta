@@ -1,0 +1,147 @@
+{% extends "_base.html" %}
+{% block title %}{{ title }} — Polpa{% endblock %}
+{% block page_title %}{{ title }}{% endblock %}
+{% block content %}
+
+{% comment %}
+  A CONTA APARECE INTEIRA, coluna a coluna: pedidos + mínimo + previsão −
+  estoque − em produção. Mostrar só o resultado ("produzir 1.200") faz a
+  pessoa não confiar no número — e com razão, porque ela não tem como
+  conferir. Com as parcelas à vista, ela discute a previsão, não o sistema.
+{% endcomment %}
+<div class="space-y-4">
+
+  <div class="flex flex-wrap items-start justify-between gap-3">
+    <div>
+      <p class="text-sm mb-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+        <a href="{% url 'polpa:hub' %}" :style="temaClaro ? 'color:#3b82f6;' : 'color:#60a5fa;'">Polpa de Frutas</a>
+        <span class="mx-1">›</span>
+        <a href="{% url 'polpa:grupo' 'pcp' %}" :style="temaClaro ? 'color:#3b82f6;' : 'color:#60a5fa;'">Planejamento</a>
+      </p>
+      <h2 class="text-2xl font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">Necessidade de produção</h2>
+      <p class="text-sm mt-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+        {{ a_produzir|length }} produto(s) precisam de produção nos próximos
+        {{ horizonte }} dias.
+      </p>
+    </div>
+    <div class="flex flex-wrap gap-2">
+      {% for dias, rotulo in horizontes %}
+        <a href="?horizonte={{ dias }}"
+           class="px-3 py-2 rounded-lg text-sm font-semibold"
+           :style="{{ horizonte }} === {{ dias }}
+             ? 'background:#2563eb; color:#fff;'
+             : (temaClaro ? 'background:#f1f5f9; color:#334155;' : 'background:#1e1e22; color:#cbd5e1;')">
+          {{ rotulo }}
+        </a>
+      {% endfor %}
+    </div>
+  </div>
+
+  <div class="card overflow-hidden">
+    <div class="overflow-x-auto">
+      <table class="w-full text-sm">
+        <thead>
+          <tr class="border-b" :style="temaClaro ? 'border-color:#e2e8f0;' : 'border-color:#2a2a2e;'">
+            <th class="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wide"
+                :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Produto</th>
+            <th class="text-right px-3 py-3 text-xs font-semibold uppercase tracking-wide"
+                :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Pedidos</th>
+            <th class="text-right px-3 py-3 text-xs font-semibold uppercase tracking-wide"
+                :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Mínimo</th>
+            <th class="text-right px-3 py-3 text-xs font-semibold uppercase tracking-wide"
+                :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Previsão</th>
+            <th class="text-right px-3 py-3 text-xs font-semibold uppercase tracking-wide"
+                :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Estoque</th>
+            <th class="text-right px-3 py-3 text-xs font-semibold uppercase tracking-wide"
+                :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Em produção</th>
+            <th class="text-right px-4 py-3 text-xs font-semibold uppercase tracking-wide"
+                :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Produzir</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for linha in linhas %}
+            <tr class="border-b" :style="temaClaro ? 'border-color:#f1f5f9;' : 'border-color:#1e1e22;'">
+              <td class="px-4 py-3">
+                <span class="font-medium" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">{{ linha.produto }}</span>
+                {% if linha.sem_historico %}
+                  {% comment %}
+                    Produto sem histórico não ganha previsão inventada: é
+                    assim que se enche a câmara de item que ninguém pediu.
+                    Dizer isso explica por que a coluna está zerada.
+                  {% endcomment %}
+                  <span class="block text-[11px]" style="color:#d97706;">sem histórico de venda</span>
+                {% endif %}
+                {% if not linha.receita %}
+                  <span class="block text-[11px]" style="color:#d97706;">sem receita ativa — não dá para abrir ordem</span>
+                {% endif %}
+              </td>
+              <td class="px-3 py-3 text-right" :style="temaClaro ? 'color:#374151;' : 'color:#cbd5e1;'">{{ linha.pedidos|floatformat:0 }}</td>
+              <td class="px-3 py-3 text-right" :style="temaClaro ? 'color:#374151;' : 'color:#cbd5e1;'">{{ linha.minimo|floatformat:0 }}</td>
+              <td class="px-3 py-3 text-right" :style="temaClaro ? 'color:#374151;' : 'color:#cbd5e1;'">
+                {{ linha.previsao|floatformat:0 }}
+                {% if linha.media_diaria %}
+                  <span class="block text-[11px]" :style="temaClaro ? 'color:#94a3b8;' : 'color:#71717a;'">
+                    {{ linha.media_diaria|floatformat:2 }}/dia
+                  </span>
+                {% endif %}
+              </td>
+              <td class="px-3 py-3 text-right" :style="temaClaro ? 'color:#374151;' : 'color:#cbd5e1;'">{{ linha.estoque|floatformat:0 }}</td>
+              <td class="px-3 py-3 text-right" :style="temaClaro ? 'color:#374151;' : 'color:#cbd5e1;'">
+                {% if linha.em_producao %}{{ linha.em_producao|floatformat:0 }}{% else %}—{% endif %}
+              </td>
+              <td class="px-4 py-3 text-right">
+                {% if linha.necessidade %}
+                  <span class="font-bold" style="color:#d97706;">{{ linha.necessidade|floatformat:0 }} {{ linha.unidade }}</span>
+                {% else %}
+                  <span class="text-xs" style="color:#059669;">coberto</span>
+                {% endif %}
+              </td>
+              <td class="px-4 py-3 text-right">
+                {% if pode_agir and linha.necessidade and linha.receita %}
+                  {% comment %}
+                    A ORDEM NASCE PLANEJADA. Sugerir é uma coisa, autorizar
+                    consumo é outra — geração automática parece eficiência
+                    até a semana em que a fábrica produz por uma sugestão
+                    errada e ninguém sabe quem mandou.
+                  {% endcomment %}
+                  <form method="post" action="{% url 'polpa:planejamento-gerar' %}"
+                        class="flex items-center gap-2 justify-end">
+                    {% csrf_token %}
+                    <input type="hidden" name="receita" value="{{ linha.receita.pk }}">
+                    <input type="hidden" name="horizonte" value="{{ horizonte }}">
+                    <input type="number" name="quantidade" step="0.001" min="0"
+                           value="{{ linha.necessidade|floatformat:'0' }}"
+                           class="form-input text-right" style="width:100px;">
+                    <button type="submit" class="btn-primary text-xs">Abrir OP</button>
+                  </form>
+                {% endif %}
+              </td>
+            </tr>
+          {% empty %}
+            <tr>
+              <td colspan="8" class="px-4 py-10 text-center">
+                <p class="text-sm" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+                  Nenhum produto acabado cadastrado — a necessidade se calcula
+                  sobre eles.
+                </p>
+              </td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="card p-4">
+    <p class="text-xs" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+      <strong>Como a conta é feita:</strong> pedidos em aberto + estoque mínimo
+      + previsão − estoque disponível − o que já está em produção. O último
+      termo é o que evita produzir de novo o que já está na linha. A previsão
+      é a média diária dos últimos 90 dias faturados, projetada no horizonte
+      escolhido.
+    </p>
+  </div>
+
+</div>
+{% endblock %}

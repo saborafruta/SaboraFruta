@@ -18,7 +18,8 @@ from django.urls import path
 
 from . import (
     views, views_catalogo as vcat, views_ordem as vord,
-    views_receita as vrec_receita, views_recebimento as vrec,
+    views_planejamento as vpla, views_receita as vrec_receita,
+    views_recebimento as vrec,
 )
 
 app_name = 'polpa'
@@ -71,6 +72,18 @@ ROTAS_PRONTAS: list = [
     path('producao/ordens/<int:pk>/', vord.OrdemDetailView.as_view(), name='ordem-detail'),
     path('producao/ordens/<int:pk>/mover/', vord.MoverView.as_view(), name='ordem-mover'),
     path('producao/ordens/<int:pk>/concluir/', vord.ConcluirView.as_view(), name='ordem-concluir'),
+
+    # ── PPCP ────────────────────────────────────────────────────────────
+    # Três olhares sobre a MESMA produção: o que produzir, quando e onde
+    # está. Nenhum guarda estado próprio — por isso não podem discordar.
+    path('pcp/planejamento/', vpla.PlanejamentoView.as_view(), name='planejamento'),
+    path('pcp/planejamento/gerar/', vpla.GerarOrdemView.as_view(), name='planejamento-gerar'),
+    path('pcp/calendario/', vpla.CalendarioView.as_view(), name='calendario'),
+    path('pcp/calendario/<int:pk>/programar/', vpla.ProgramarView.as_view(), name='ordem-programar'),
+    path('pcp/quadro/', vpla.KanbanView.as_view(), name='kanban'),
+    path('pcp/recursos/', vpla.RecursoListView.as_view(), name='recurso-list'),
+    path('pcp/recursos/novo/', vpla.RecursoFormView.as_view(), name='recurso-create'),
+    path('pcp/recursos/<int:pk>/editar/', vpla.RecursoFormView.as_view(), name='recurso-update'),
 
     # ── Cadastro das frutas ─────────────────────────────────────────────
     path('formulacao/rendimento/', vrec.FrutaListView.as_view(), name='fruta-list'),

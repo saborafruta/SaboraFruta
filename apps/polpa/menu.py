@@ -79,6 +79,21 @@ GRUPOS: tuple[Grupo, ...] = (
         ),
     ),
     Grupo(
+        'pcp', 'Planejamento',
+        'O que produzir, quando e em qual linha — antes de a fábrica ligar.',
+        'calendario',
+        (
+            Item('planejamento', 'Necessidade de produção',
+                 'Estoque, pedidos, mínimo e previsão viram o que falta produzir.'),
+            Item('calendario', 'Calendário',
+                 'As ordens dia a dia, com a carga de cada recurso.'),
+            Item('quadro', 'Quadro da produção',
+                 'Onde está cada ordem, da planejada à produzida.'),
+            Item('recursos', 'Linhas e máquinas',
+                 'Capacidade por dia — sem ela, "cabe?" não tem resposta.'),
+        ),
+    ),
+    Grupo(
         'producao', 'Produção',
         'Da seleção ao envase, batida por batida.',
         'engrenagem',

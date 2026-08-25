@@ -1,0 +1,180 @@
+{% extends "_base.html" %}
+{% block title %}{{ title }} — Polpa{% endblock %}
+{% block page_title %}{{ title }}{% endblock %}
+{% block content %}
+
+{% comment %}
+  DUAS SEMANAS, E NÃO O MÊS INTEIRO. Numa grade de 30 dias cada dia fica tão
+  pequeno que a ordem some dentro dele — e é a ordem que se quer ver. Duas
+  semanas é o horizonte em que a fábrica de fato decide.
+
+  AS NÃO PROGRAMADAS FICAM À VISTA, embaixo: ordem sem dia marcado é a que
+  ninguém lembra de fazer, e escondê-la numa aba é como ela vira atraso.
+{% endcomment %}
+<div class="space-y-4">
+
+  <div class="flex flex-wrap items-start justify-between gap-3">
+    <div>
+      <p class="text-sm mb-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+        <a href="{% url 'polpa:hub' %}" :style="temaClaro ? 'color:#3b82f6;' : 'color:#60a5fa;'">Polpa de Frutas</a>
+        <span class="mx-1">›</span>
+        <a href="{% url 'polpa:grupo' 'pcp' %}" :style="temaClaro ? 'color:#3b82f6;' : 'color:#60a5fa;'">Planejamento</a>
+      </p>
+      <h2 class="text-2xl font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">Calendário de produção</h2>
+      <p class="text-sm mt-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+        {{ inicio|date:"d/m" }} a {{ fim|date:"d/m/Y" }}
+      </p>
+    </div>
+    <div class="flex flex-wrap gap-2">
+      <a href="?de={{ anterior }}" class="btn-secondary text-sm">‹ Anterior</a>
+      <a href="{% url 'polpa:calendario' %}" class="btn-secondary text-sm">Hoje</a>
+      <a href="?de={{ proximo }}" class="btn-secondary text-sm">Próximo ›</a>
+    </div>
+  </div>
+
+  {# ── A grade ────────────────────────────────────────────────────── #}
+  <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-7 gap-2">
+    {% for dia in dias %}
+      <div class="card p-2"
+           :style="{% if dia.hoje %}'border:2px solid #2563eb;'{% else %}''{% endif %}">
+        <div class="flex items-baseline justify-between gap-2 mb-2">
+          <span class="text-xs font-bold uppercase tracking-wide"
+                :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+            {{ dia.dia|date:"D d/m" }}
+          </span>
+          {% if dia.carga %}
+            <span class="text-[11px] font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
+              {{ dia.carga|floatformat:0 }}
+            </span>
+          {% endif %}
+        </div>
+
+        <div class="space-y-1.5">
+          {% for op in dia.ordens %}
+            <a href="{% url 'polpa:ordem-detail' op.pk %}"
+               class="block rounded-lg px-2 py-1.5"
+               :style="temaClaro ? 'background:#f1f5f9;' : 'background:#1e1e22;'">
+              <span class="block text-[11px] font-mono font-semibold"
+                    :style="temaClaro ? 'color:#2563eb;' : 'color:#60a5fa;'">{{ op.numero }}</span>
+              <span class="block text-xs truncate" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
+                {{ op.produto }}
+              </span>
+              <span class="block text-[11px]" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+                {{ op.quantidade_planejada|floatformat:0 }} un
+                {% if op.recurso %} · {{ op.recurso.nome }}{% endif %}
+              </span>
+              {% if op.situacao == 'pausada' %}
+                <span class="block text-[10px] font-bold" style="color:#dc2626;">PARADA</span>
+              {% endif %}
+            </a>
+          {% empty %}
+            <p class="text-[11px] py-2 text-center" :style="temaClaro ? 'color:#cbd5e1;' : 'color:#3f3f46;'">—</p>
+          {% endfor %}
+        </div>
+      </div>
+    {% endfor %}
+  </div>
+
+  {# ── Capacidade ─────────────────────────────────────────────────── #}
+  <div class="card overflow-hidden">
+    <div class="px-4 py-3 border-b" :style="temaClaro ? 'border-color:#e2e8f0;' : 'border-color:#2a2a2e;'">
+      <h3 class="text-sm font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
+        Carga por recurso no período
+      </h3>
+      <p class="text-xs mt-0.5" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+        {{ capacidade.dias }} dia(s) de janela.
+        {% if capacidade.sem_recurso %}
+          <span style="color:#d97706;">
+            {{ capacidade.sem_recurso|floatformat:0 }} un programadas sem recurso definido.
+          </span>
+        {% endif %}
+      </p>
+    </div>
+    <table class="w-full text-sm">
+      <tbody>
+        {% for linha in capacidade.linhas %}
+          <tr class="border-b" :style="temaClaro ? 'border-color:#f1f5f9;' : 'border-color:#1e1e22;'">
+            <td class="px-4 py-3" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
+              {{ linha.recurso.nome }}
+              <span class="block text-xs" :style="temaClaro ? 'color:#94a3b8;' : 'color:#71717a;'">{{ linha.recurso.get_tipo_display }}</span>
+            </td>
+            <td class="px-4 py-3 text-right" :style="temaClaro ? 'color:#374151;' : 'color:#cbd5e1;'">
+              {{ linha.programado|floatformat:0 }} programado
+            </td>
+            <td class="px-4 py-3 text-right">
+              {% if linha.ocupacao is not None %}
+                <span class="font-semibold"
+                      style="color:{% if linha.estourou %}#dc2626{% else %}#059669{% endif %};">
+                  {{ linha.ocupacao }}%
+                </span>
+                <span class="block text-[11px]" :style="temaClaro ? 'color:#94a3b8;' : 'color:#71717a;'">
+                  de {{ linha.disponivel|floatformat:0 }}
+                </span>
+              {% else %}
+                {% comment %}
+                  Sem capacidade cadastrada, 0% seria lido como livre e 100%
+                  como lotado — as duas leituras erradas levam à decisão
+                  errada. A tela diz que não sabe.
+                {% endcomment %}
+                <span class="text-xs" style="color:#d97706;">sem capacidade cadastrada</span>
+              {% endif %}
+            </td>
+          </tr>
+        {% empty %}
+          <tr>
+            <td class="px-4 py-6 text-center text-sm" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+              Nenhum recurso cadastrado — sem eles, "cabe?" não tem resposta.
+              <a href="{% url 'polpa:recurso-list' %}" class="underline">cadastrar</a>
+            </td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  {# ── Sem data ───────────────────────────────────────────────────── #}
+  {% if sem_data %}
+    <div class="card overflow-hidden" style="border-left:3px solid #d97706;">
+      <div class="px-4 py-3 border-b" :style="temaClaro ? 'border-color:#e2e8f0;' : 'border-color:#2a2a2e;'">
+        <h3 class="text-sm font-semibold" style="color:#d97706;">Sem data programada</h3>
+        <p class="text-xs mt-0.5" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+          Ordem sem dia marcado é a que ninguém lembra de fazer.
+        </p>
+      </div>
+      <table class="w-full text-sm">
+        <tbody>
+          {% for op in sem_data %}
+            <tr class="border-b" :style="temaClaro ? 'border-color:#f1f5f9;' : 'border-color:#1e1e22;'">
+              <td class="px-4 py-3">
+                <a href="{% url 'polpa:ordem-detail' op.pk %}" class="font-mono font-semibold"
+                   :style="temaClaro ? 'color:#2563eb;' : 'color:#60a5fa;'">{{ op.numero }}</a>
+                <span class="block text-xs" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+                  {{ op.produto }} · {{ op.quantidade_planejada|floatformat:0 }} un
+                </span>
+              </td>
+              <td class="px-4 py-3">
+                {% if pode_agir %}
+                  <form method="post" action="{% url 'polpa:ordem-programar' op.pk %}"
+                        class="flex flex-wrap items-center gap-2 justify-end">
+                    {% csrf_token %}
+                    <input type="hidden" name="voltar" value="{{ request.get_full_path }}">
+                    <input type="date" name="dia" class="form-input" style="width:150px;">
+                    <select name="recurso" class="form-select" style="width:170px;">
+                      <option value="">Sem recurso</option>
+                      {% for r in recursos %}
+                        <option value="{{ r.pk }}">{{ r.nome }}</option>
+                      {% endfor %}
+                    </select>
+                    <button type="submit" class="btn-primary text-xs">Programar</button>
+                  </form>
+                {% endif %}
+              </td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  {% endif %}
+
+</div>
+{% endblock %}

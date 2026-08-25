@@ -1,0 +1,79 @@
+{% extends "_base.html" %}
+{% block title %}{{ title }} — Polpa{% endblock %}
+{% block page_title %}{{ title }}{% endblock %}
+{% block content %}
+
+{% comment %}
+  O QUADRO É UMA LEITURA, não um segundo lugar onde a ordem vive. As colunas
+  são as situações da OP — as mesmas da tela da ordem, vindas do mesmo
+  modelo. Um quadro com estado próprio seria a segunda verdade sobre onde a
+  produção está.
+
+  CANCELADA NÃO É COLUNA: não é um lugar do fluxo, é a saída dele, e ficaria
+  acumulando cartão morto no fim do quadro.
+{% endcomment %}
+<div class="space-y-4">
+
+  <div>
+    <p class="text-sm mb-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+      <a href="{% url 'polpa:hub' %}" :style="temaClaro ? 'color:#3b82f6;' : 'color:#60a5fa;'">Polpa de Frutas</a>
+      <span class="mx-1">›</span>
+      <a href="{% url 'polpa:grupo' 'pcp' %}" :style="temaClaro ? 'color:#3b82f6;' : 'color:#60a5fa;'">Planejamento</a>
+    </p>
+    <h2 class="text-2xl font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">Quadro da produção</h2>
+    <p class="text-sm mt-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+      Onde está cada ordem agora. Clique no cartão para abrir e mudar a situação.
+    </p>
+  </div>
+
+  <div class="overflow-x-auto pb-2">
+    <div class="flex gap-3" style="min-width:max-content;">
+      {% for coluna in colunas %}
+        <div class="card p-3" style="width:250px; flex-shrink:0;">
+          <div class="flex items-baseline justify-between gap-2 mb-3">
+            <h3 class="text-sm font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">{{ coluna.label }}</h3>
+            <span class="text-xs font-bold" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">{{ coluna.total }}</span>
+          </div>
+          {% if coluna.quantidade %}
+            <p class="text-[11px] mb-2" :style="temaClaro ? 'color:#94a3b8;' : 'color:#71717a;'">
+              {{ coluna.quantidade|floatformat:0 }} un
+            </p>
+          {% endif %}
+
+          <div class="space-y-2">
+            {% for op in coluna.ordens %}
+              <a href="{% url 'polpa:ordem-detail' op.pk %}"
+                 class="block rounded-lg p-2.5"
+                 :style="temaClaro ? 'background:#f8fafc; border:1px solid #eef2f7;' : 'background:#18181b; border:1px solid #27272a;'">
+                <span class="block text-[11px] font-mono font-semibold"
+                      :style="temaClaro ? 'color:#2563eb;' : 'color:#60a5fa;'">{{ op.numero }}</span>
+                <span class="block text-sm truncate" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">{{ op.produto }}</span>
+                <span class="block text-[11px] mt-0.5" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+                  {{ op.quantidade_planejada|floatformat:0 }} un
+                  {% if op.recurso %} · {{ op.recurso.nome }}{% endif %}
+                </span>
+                {% if op.ordem.data_inicio_prevista %}
+                  <span class="block text-[11px]" :style="temaClaro ? 'color:#94a3b8;' : 'color:#71717a;'">
+                    {{ op.ordem.data_inicio_prevista|date:"d/m" }}
+                  </span>
+                {% else %}
+                  <span class="block text-[11px]" style="color:#d97706;">sem data</span>
+                {% endif %}
+                {% if op.situacao == 'pausada' and op.motivo_pausa %}
+                  <span class="block text-[10px] mt-1 font-semibold" style="color:#dc2626;">{{ op.motivo_pausa }}</span>
+                {% endif %}
+                {% if op.atrasada %}
+                  <span class="block text-[10px] mt-1 font-bold" style="color:#d97706;">ATRASADA</span>
+                {% endif %}
+              </a>
+            {% empty %}
+              <p class="text-[11px] py-3 text-center" :style="temaClaro ? 'color:#cbd5e1;' : 'color:#3f3f46;'">vazio</p>
+            {% endfor %}
+          </div>
+        </div>
+      {% endfor %}
+    </div>
+  </div>
+
+</div>
+{% endblock %}

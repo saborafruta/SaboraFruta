@@ -93,6 +93,14 @@ class OrdemPolpa(FilialScopedModel):
         default=Situacao.PLANEJADA, db_index=True,
     )
 
+    # O RECURSO EM QUE ELA VAI RODAR. Nulo é "ainda não programada": o
+    # planejamento é que preenche, e uma OP sem recurso aparece na lista de
+    # não programadas em vez de sumir dentro de uma linha qualquer.
+    recurso = models.ForeignKey(
+        'polpa.Recurso', on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='ordens',
+    )
+
     responsavel = models.ForeignKey(
         settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True,
         related_name='ordens_polpa',
