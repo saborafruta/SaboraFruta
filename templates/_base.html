@@ -209,6 +209,35 @@
     }
     .form-input::placeholder { color: #4a4a50; }
     select.form-input option { background: #242426; color: #e5e5e5; }
+
+    /* `.form-label` e `.form-select` eram CLASSES FANTASMA: 71 rotulos e 21
+       selects em 25 telas pediam por elas e nao havia definicao nenhuma. O
+       rotulo caia INLINE, ao lado do campo em vez de acima, e o select vinha
+       com a aparencia nativa do browser -- largura pelo texto da maior opcao,
+       o que deixava dois filtros lado a lado com tamanhos completamente
+       diferentes. Definidas aqui, junto de `.form-input`, para os tres
+       andarem juntos daqui em diante. */
+    .form-label {
+      display: block; margin-bottom: 6px;
+      font-size: 12px; font-weight: 500; line-height: 1.25;
+      color: #a1a1aa; letter-spacing: 0.01em;
+    }
+    .form-select {
+      display: block; width: 100%; border-radius: 8px;
+      border: 1px solid #2a2a2e; background-color: #18181a; color: #e5e5e5;
+      font-size: 14px; padding: 9px 34px 9px 12px;
+      transition: border-color 0.15s, box-shadow 0.15s; outline: none;
+      cursor: pointer;
+      /* Seta propria: `appearance:none` apaga a nativa, e sem repor uma o
+         campo perde o unico sinal visual de que e' um select. */
+      appearance: none; -webkit-appearance: none; -moz-appearance: none;
+      background-image: url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='%2394a3b8' stroke-width='1.75' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M4 6l4 4 4-4'/%3E%3C/svg%3E");
+      background-repeat: no-repeat; background-position: right 11px center;
+      background-size: 15px 15px;
+    }
+    .form-select:focus { border-color: #3b82f6; box-shadow: 0 0 0 3px rgba(59,130,246,0.18); }
+    .form-select option { background: #242426; color: #e5e5e5; }
+    .form-select:disabled { opacity: 0.55; cursor: not-allowed; }
     input[type="number"] { appearance: textfield; -moz-appearance: textfield; }
     input[type="number"]::-webkit-outer-spin-button,
     input[type="number"]::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
@@ -235,6 +264,15 @@
     body.tema-claro .form-input { background: #fff; border-color: #d1d5db; color: #111827; box-shadow: 0 1px 2px rgba(0,0,0,0.04); }
     body.tema-claro .form-input::placeholder { color: #9ca3af; }
     body.tema-claro select.form-input option { background: #fff; color: #111827; }
+    body.tema-claro .form-label { color: #4b5563; }
+    /* So' `background-color`: usar o atalho `background` apagaria a seta. */
+    body.tema-claro .form-select {
+      background-color: #fff; border-color: #d1d5db; color: #111827;
+      box-shadow: 0 1px 2px rgba(0,0,0,0.04);
+      background-image: url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='%236b7280' stroke-width='1.75' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M4 6l4 4 4-4'/%3E%3C/svg%3E");
+    }
+    body.tema-claro .form-select option { background: #fff; color: #111827; }
+    body.tema-claro .form-select:focus { border-color: #e8824a; box-shadow: 0 0 0 3px rgba(232,130,74,0.16); }
     body.tema-claro .form-input:focus { border-color: #e8824a; box-shadow: 0 0 0 3px rgba(232,130,74,0.16); }
     body.tema-claro .table-row-hover:hover { background: #f3f4f6 !important; }
     body.tema-claro table tr:hover { background: #f3f4f6 !important; }
