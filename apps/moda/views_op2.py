@@ -3,7 +3,7 @@ from copy import copy
 from datetime import date
 
 from django.contrib import messages
-from django.db import transaction
+from django.db import IntegrityError, transaction
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.utils import timezone
@@ -130,9 +130,13 @@ class Op2CreateView(ModaBaseView):
         return render(request, 'moda/op2_create.html', self._context(request))
 
     def post(self, request):
+        cliente_id = request.POST.get('cliente')
+        if not cliente_id:
+            messages.error(request, 'Selecione um cliente na lista antes de salvar a OP.')
+            return render(request, 'moda/op2_create.html', self._context(request))
         cliente = get_object_or_404(
             Cliente.objects.for_filial(_filial(request)).filter(ativo=True),
-            pk=request.POST.get('cliente'),
+            pk=cliente_id,
         )
         indices = self._indices_itens(request)
         if not indices:
@@ -723,7 +727,7 @@ class Op2EstruturaOpcaoView(ModaBaseView):
                 raise ValueError('Ação inválida.')
         except ValueError as erro:
             messages.error(request, str(erro))
-        return redirect(reverse('moda:op2-estrutura-opcoes'))
+        return redirect(reverse('moda:op2-tipos-peca'))
 
     @staticmethod
     def _base_query(request):
@@ -739,11 +743,14 @@ class Op2EstruturaOpcaoView(ModaBaseView):
         valor = (request.POST.get('valor') or '').strip()
         if not tipo_peca or not tipo_label or not campo or not valor:
             raise ValueError('Informe tipo, nome do tipo, campo e opção.')
-        OpcaoEstruturaOP2.objects.create(
-            filial=_filial(request), tipo_peca=tipo_peca, tipo_label=tipo_label,
-            campo=campo, valor=valor, ordem=int(request.POST.get('ordem') or 0),
-            ativo=True,
-        )
+        try:
+            OpcaoEstruturaOP2.objects.create(
+                filial=_filial(request), tipo_peca=tipo_peca, tipo_label=tipo_label,
+                campo=campo, valor=valor, ordem=int(request.POST.get('ordem') or 0),
+                ativo=True,
+            )
+        except IntegrityError:
+            raise ValueError('Essa opção já existe para este tipo de peça e campo.')
         messages.success(request, 'Opção cadastrada.')
 
     def _editar(self, request):
@@ -784,7 +791,7 @@ class Op2EstruturaOpcaoView(ModaBaseView):
             })
             tipo['campos'].setdefault(opcao.campo, []).append(opcao)
         return {
-            'title': 'Opções da OP 2.0',
+            'title': 'Tipos de peça',
             'tipos': tipos.values(),
             'opcoes': opcoes,
             'padrao': OP2_ESTRUTURA_OPCOES,

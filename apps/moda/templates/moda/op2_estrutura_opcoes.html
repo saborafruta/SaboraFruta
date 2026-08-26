@@ -7,11 +7,12 @@
   <div>
     <p class="text-sm mb-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
       <a href="{% url 'moda:grupo' 'produtos' %}" :style="temaClaro ? 'color:#3b82f6;' : 'color:#60a5fa;'">Modelos de Produção</a>
-      <span class="mx-1">›</span> Opções da OP 2.0
+      <span class="mx-1">›</span> Tipos de peça
     </p>
-    <h2 class="text-2xl font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">Opções da OP 2.0</h2>
+    <h2 class="text-2xl font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">Tipos de peça</h2>
     <p class="text-sm mt-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
-      Cadastre, edite, inative ou remova as opções que aparecem na sobreposição ao adicionar modelo na OP.
+      Cada tipo de peça concentra as opções da planilha que aparecem na sobreposição da OP.
+      Edite, inative ou remova opções para montar padrões reutilizáveis.
     </p>
   </div>
 
@@ -19,11 +20,11 @@
     {% csrf_token %}
     <input type="hidden" name="acao" value="criar">
     <label class="text-xs font-bold uppercase tracking-wide md:col-span-1">
-      Tipo
+      Chave do tipo
       <input name="tipo_peca" class="form-input w-full mt-1" placeholder="camisa">
     </label>
     <label class="text-xs font-bold uppercase tracking-wide md:col-span-1">
-      Nome do tipo
+      Tipo de peça
       <input name="tipo_label" class="form-input w-full mt-1" placeholder="Camisa">
     </label>
     <label class="text-xs font-bold uppercase tracking-wide md:col-span-1">
@@ -39,7 +40,7 @@
         Ordem
         <input name="ordem" type="number" min="0" class="form-input w-full mt-1" value="0">
       </label>
-      <button class="btn-primary">Cadastrar</button>
+      <button class="btn-primary">Cadastrar opção</button>
     </div>
   </form>
 
@@ -47,7 +48,7 @@
     <section class="card p-4">
       <div class="flex items-center justify-between mb-3">
         <div>
-          <h3 class="text-lg font-bold">{{ tipo.label }}</h3>
+          <h3 class="text-lg font-bold">Tipo de peça: {{ tipo.label }}</h3>
           <p class="text-xs opacity-70">{{ tipo.slug }}</p>
         </div>
       </div>

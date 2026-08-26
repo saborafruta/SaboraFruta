@@ -67,7 +67,7 @@ GRUPOS: tuple[Grupo, ...] = (
             Item('cores', 'Cores', 'Cartela de cores da confecção.'),
             Item('tamanhos', 'Tamanhos', 'P, M, G, numéricos e especiais.'),
             Item('grades', 'Grades', 'Combinações de tamanho usadas nos pedidos.'),
-            Item('opcoes-op-2', 'Opções da OP 2.0', 'Malha, gola, manga, etiquetas e demais escolhas da sobreposição.'),
+            Item('tipos-peca', 'Tipos de peça', 'Padrões de camisa, agasalho, calções e suas opções da planilha.'),
             Item('variantes', 'Variantes', 'Cruzamento de produto, cor e tamanho — é o nível que tem SKU.'),
             Item('skus', 'SKUs', 'Código único de cada variante, com o desenho em barras e a conferência do padrão.'),
         ),

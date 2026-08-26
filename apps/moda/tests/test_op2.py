@@ -6,7 +6,7 @@ from django.http import QueryDict
 from django.urls import reverse
 
 from apps.cadastros.models import Cliente
-from apps.core.models import Empresa, Filial
+from apps.core.models import Empresa, Filial, PerfilAcesso, Usuario
 from apps.moda.models import Grade, ItemGrade, ItemPedidoProducao, PedidoProducao, ProdutoModa, Tamanho
 from apps.moda.services.op2_estrutura import juntar_observacoes_item
 from apps.moda.services.kanban_comercial import COLUNAS
@@ -24,6 +24,9 @@ class Op2Tests(TestCase):
         cls.filial = Filial.objects.create(
             empresa=empresa, razao_social='OP 2 LTDA', cnpj='53345678000272',
             uf='RN', cidade='Natal', is_matriz=True,
+        )
+        cls.perfil = PerfilAcesso.objects.create(
+            empresa=empresa, nome='Administrador OP 2', is_admin=True,
         )
         cls.cliente = Cliente.objects.create(
             filial=cls.filial, tipo_pessoa='J', razao_social='Cliente OP 2', ativo=True,
@@ -126,6 +129,32 @@ class Op2Tests(TestCase):
         self.assertEqual(Op2CreateView._indices_itens(request), [0, 1])
         self.assertEqual(Op2CreateView._dados_item(request, 0)['produto'], f'moda:{self.produto.pk}')
         self.assertEqual(Op2CreateView._dados_item(request, 1)['quantidade'], '3')
+
+    def test_post_da_nova_op_sem_cliente_nao_estoura_500(self):
+        self.client.force_login(self._usuario())
+        session = self.client.session
+        session['filial_id'] = self.filial.pk
+        session.save()
+
+        resposta = self.client.post(reverse('moda:op2-create'), {'cliente': ''})
+
+        self.assertEqual(resposta.status_code, 200)
+        self.assertContains(resposta, 'Selecione um cliente')
+
+    def _usuario(self):
+        user, _ = Usuario.objects.get_or_create(
+            email='op2@teste.local',
+            defaults={
+                'nome': 'Usuario OP 2',
+                'empresa': self.filial.empresa,
+                'filial': self.filial,
+                'perfil': self.perfil,
+            },
+        )
+        user.is_staff = True
+        user.is_superuser = True
+        user.save()
+        return user
 
     def test_quantidades_indexadas_da_nova_op_somam_grade_do_item_correto(self):
         item = self._item(quantidade=7)
