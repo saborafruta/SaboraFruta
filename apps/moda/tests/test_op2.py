@@ -290,6 +290,18 @@ class Op2Tests(TestCase):
         self.assertContains(resposta, 'quantidadeDraftGrade(grade.id,tamanhoId)')
         self.assertContains(resposta, 'Cada grade selecionada possui suas próprias quantidades')
 
+    def test_clique_no_modelo_atualiza_draft_sem_chamada_indireta(self):
+        self.client.force_login(self._usuario())
+        session = self.client.session
+        session['filial_id'] = self.filial.pk
+        session.save()
+
+        resposta = self.client.get(reverse('moda:op2-create'))
+
+        self.assertContains(resposta, 'this.draft.produto_id=String(id)')
+        self.assertContains(resposta, 'this.draft.nome=nome')
+        self.assertNotContains(resposta, 'const escolherProduto=estado.escolherProduto.bind')
+
     def test_nova_op_mostra_previa_de_anexos_e_mockups(self):
         self.client.force_login(self._usuario())
         session = self.client.session

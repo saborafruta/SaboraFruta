@@ -129,7 +129,6 @@ function op2Nova(){return{clientes:JSON.parse(document.getElementById('op2-clien
 function op2NovaMelhorada(){
   const estado=op2Nova();
   const criarDraft=estado.novoDraft.bind(estado);
-  const escolherProduto=estado.escolherProduto.bind(estado);
   estado.novoDraft=function(){
     const draft=criarDraft();
     draft.gradePorGrade={};
@@ -145,8 +144,18 @@ function op2NovaMelhorada(){
     };
   };
   estado.escolherProduto=function(id,nome,codigo,info){
-    escolherProduto(id,nome,codigo,info);
+    const grade=this.gradeMap[id]||{};
+    this.draft.produto_id=String(id);
+    this.draft.nome=nome;
+    this.draft.codigo=codigo;
+    this.draft.info=info;
+    this.draft.grade_id=String(grade.grade_id||'');
+    this.draft.grade_nome=grade.grade||'';
+    if(grade.grade_id&&!this.draft.grades.includes(String(grade.grade_id))){
+      this.draft.grades=[String(grade.grade_id)];
+    }
     this.draft.grades.forEach(gradeId=>this.garantirGrade(gradeId));
+    this.somarDraftGrade();
   };
   estado.alternarGrade=function(id){
     id=String(id);
