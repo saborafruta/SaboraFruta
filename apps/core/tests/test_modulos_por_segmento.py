@@ -81,3 +81,60 @@ class ModulosPorSegmentoTests(TestCase):
 
         self.assertEqual(modulo_da_url('/food-service/mesas/'), 'food_service')
         self.assertNotIn('food_service', modulos_ativos(filial))
+
+
+class RetiradaDaLiberacaoManualTests(TestCase):
+    """
+    A migração `0054`, exercitada.
+
+    A concessão pelo segmento sozinha não limpava tela nenhuma: a marca
+    manual em `modulos_extras` -- posta em massa pela `0047` -- continuava
+    valendo por cima. Era herança de migração, não escolha de ninguém.
+    """
+
+    def _empresa(self, segmento, extras, cnpj):
+        return Empresa.objects.create(
+            razao_social='Empresa Extras LTDA', nome_fantasia='Extras',
+            cnpj=cnpj, segmento=segmento, modulos_extras=extras,
+            regime_tributario=Empresa.RegimeTributario.SIMPLES_NACIONAL,
+            codigo_regime_tributario=1,
+        )
+
+    def test_retira_de_quem_nao_e_padaria_e_preserva_o_resto(self):
+        from importlib import import_module
+
+        from django.apps import apps as registro
+
+        # O nome do modulo comeca com digito -- `import` normal nao resolve.
+        migracao = import_module(
+            'apps.core.migrations.0054_food_service_so_padaria',
+        )
+
+        fabrica = self._empresa(
+            seg.INDUSTRIA_ALIMENTICIA, ['food_service', 'polpa'],
+            '96345678000191',
+        )
+        padaria = self._empresa(
+            seg.PADARIAS, ['food_service'], '96345678000272',
+        )
+
+        migracao.retirar(registro, None)
+
+        fabrica.refresh_from_db()
+        padaria.refresh_from_db()
+        # A fábrica perde o salão e mantém o que tinha alem dele.
+        self.assertEqual(fabrica.modulos_extras, ['polpa'])
+        self.assertNotIn('food_service', modulos_disponiveis(fabrica))
+        # A padaria não é tocada -- ali a marca e' redundante, e mexer sem
+        # necessidade so' cria risco.
+        self.assertEqual(padaria.modulos_extras, ['food_service'])
+        self.assertIn('food_service', modulos_disponiveis(padaria))
+
+    def test_a_liberacao_manual_continua_possivel_depois(self):
+        """A porta segue aberta -- so' passa a ser escolha, com dono e data."""
+        fabrica = self._empresa(seg.INDUSTRIA_ALIMENTICIA, [], '96345678000353')
+
+        fabrica.modulos_extras = ['food_service']
+        fabrica.save(update_fields=['modulos_extras'])
+
+        self.assertIn('food_service', modulos_disponiveis(fabrica))
