@@ -1,0 +1,192 @@
+{% extends "_base.html" %}
+{% block title %}{{ title }} — Polpa{% endblock %}
+{% block page_title %}{{ title }}{% endblock %}
+{% block content %}
+
+{% comment %}
+  A BANCADA. Quem abre esta tela tem amostra na mão e caminhão no pátio, então
+  a análise acontece AQUI — não atrás de mais um clique para entrar na carga.
+  Cada romaneio traz seus seis campos e grava direto pela rota que já existia.
+
+  A RÉGUA DA FRUTA FICA AO LADO DO CAMPO. Brix mínimo, pH máximo e impureza
+  máxima são o que decide aceitar ou devolver; deixá-los noutra tela obriga a
+  decorar número, e número decorado é o que vira aceite errado. O desvio
+  aparece ENQUANTO SE DIGITA, e não depois de gravar: com o caminhão na porta
+  ainda dá para recusar, meia hora depois já não dá.
+{% endcomment %}
+<div class="space-y-4">
+
+  <div class="flex flex-wrap items-start justify-between gap-3">
+    <div>
+      <p class="text-sm" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+        <a href="{% url 'polpa:hub' %}" :style="temaClaro ? 'color:#3b82f6;' : 'color:#60a5fa;'">Polpa de Frutas</a>
+        <span class="mx-1">›</span>
+        <a href="{% url 'polpa:grupo' 'recebimento' %}" :style="temaClaro ? 'color:#3b82f6;' : 'color:#60a5fa;'">Recebimento</a>
+      </p>
+      <h2 class="text-2xl font-semibold mt-1" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">{{ title }}</h2>
+      <p class="text-sm mt-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+        {{ aguardando|length }} carga(s) esperando análise
+        {% if medidas %}· {{ medidas|length }} medida(s), aguardando decisão{% endif %}
+      </p>
+    </div>
+    <a href="{% url 'polpa:recebimento-list' %}" class="btn-secondary text-sm">Todos os romaneios</a>
+  </div>
+
+  {% for carga in aguardando %}
+    <div class="card p-4"
+         x-data="{
+           brix: null, ph: null, impureza: null,
+           limiteBrix: {{ carga.fruta.brix_minimo|default_if_none:'null' }},
+           limitePh: {{ carga.fruta.ph_maximo|default_if_none:'null' }},
+           limiteImpureza: {{ carga.fruta.impureza_maxima|default_if_none:'null' }},
+           get desvios() {
+             const fora = [];
+             if (this.limiteBrix !== null && this.brix !== null && this.brix !== '' && Number(this.brix) < this.limiteBrix)
+               fora.push('Brix abaixo do mínimo ' + this.limiteBrix + ' — fruta verde.');
+             if (this.limitePh !== null && this.ph !== null && this.ph !== '' && Number(this.ph) > this.limitePh)
+               fora.push('pH acima do máximo ' + this.limitePh + ' — acidez baixa demais.');
+             if (this.limiteImpureza !== null && this.impureza !== null && this.impureza !== '' && Number(this.impureza) > this.limiteImpureza)
+               fora.push('Impureza acima do limite ' + this.limiteImpureza + '%.');
+             return fora;
+           },
+         }">
+
+      <div class="flex flex-wrap items-baseline justify-between gap-2 mb-3">
+        <div>
+          <a href="{% url 'polpa:recebimento-detail' carga.pk %}" class="font-semibold"
+             :style="temaClaro ? 'color:#2563eb;' : 'color:#60a5fa;'">#{{ carga.numero|stringformat:"05d" }}</a>
+          <span class="ml-2 font-medium" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">{{ carga.fruta }}</span>
+          <span class="ml-2 text-sm" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">{{ carga.produtor }}</span>
+        </div>
+        <div class="text-sm" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+          {{ carga.peso_liquido|floatformat:0 }} kg líquidos · {{ carga.data|date:"d/m/Y" }}
+        </div>
+      </div>
+
+      {% if pode_agir %}
+        <form method="post" action="{% url 'polpa:recebimento-classificar' carga.pk %}"
+              class="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3">
+          {% csrf_token %}
+          {# Diz de onde veio, para a gravacao devolver a pessoa a esta fila. #}
+          <input type="hidden" name="voltar" value="fila">
+
+          <div>
+            <label class="form-label" for="temp-{{ carga.pk }}">Temp. (°C)</label>
+            <input type="number" step="0.01" name="temperatura_chegada" id="temp-{{ carga.pk }}"
+                   class="form-input w-full" value="{{ carga.temperatura_chegada|default_if_none:'' }}">
+          </div>
+
+          <div>
+            <label class="form-label" for="brix-{{ carga.pk }}">Brix</label>
+            <input type="number" step="0.01" name="brix" id="brix-{{ carga.pk }}"
+                   class="form-input w-full" x-model="brix" value="{{ carga.brix|default_if_none:'' }}">
+            {% if carga.fruta.brix_minimo %}
+              <p class="text-[11px] mt-1" :style="temaClaro ? 'color:#94a3b8;' : 'color:#71717a;'">mín. {{ carga.fruta.brix_minimo }}</p>
+            {% endif %}
+          </div>
+
+          <div>
+            <label class="form-label" for="ph-{{ carga.pk }}">pH</label>
+            <input type="number" step="0.01" name="ph" id="ph-{{ carga.pk }}"
+                   class="form-input w-full" x-model="ph" value="{{ carga.ph|default_if_none:'' }}">
+            {% if carga.fruta.ph_maximo %}
+              <p class="text-[11px] mt-1" :style="temaClaro ? 'color:#94a3b8;' : 'color:#71717a;'">máx. {{ carga.fruta.ph_maximo }}</p>
+            {% endif %}
+          </div>
+
+          <div>
+            <label class="form-label" for="acidez-{{ carga.pk }}">Acidez</label>
+            <input type="number" step="0.001" name="acidez" id="acidez-{{ carga.pk }}"
+                   class="form-input w-full" value="{{ carga.acidez|default_if_none:'' }}">
+          </div>
+
+          <div>
+            <label class="form-label" for="imp-{{ carga.pk }}">Impureza %</label>
+            <input type="number" step="0.01" name="impureza" id="imp-{{ carga.pk }}"
+                   class="form-input w-full" x-model="impureza" value="{{ carga.impureza|default_if_none:'' }}">
+            {% if carga.fruta.impureza_maxima %}
+              <p class="text-[11px] mt-1" :style="temaClaro ? 'color:#94a3b8;' : 'color:#71717a;'">máx. {{ carga.fruta.impureza_maxima }}%</p>
+            {% endif %}
+          </div>
+
+          <div>
+            <label class="form-label" for="dan-{{ carga.pk }}">Danificada %</label>
+            <input type="number" step="0.01" name="danificada" id="dan-{{ carga.pk }}"
+                   class="form-input w-full" value="{{ carga.danificada|default_if_none:'' }}">
+          </div>
+
+          {% comment %}
+            O AVISO NÃO TRAVA O BOTÃO. Quem decide é a pessoa na bancada: manga
+            com Brix meio ponto abaixo pode servir a um produto que leva açúcar,
+            e travar aqui faria alguém digitar outro número para conseguir
+            seguir — que é justamente o registro que não se quer.
+          {% endcomment %}
+          <div class="col-span-2 md:col-span-3 xl:col-span-6" x-show="desvios.length" x-cloak>
+            <div class="rounded-lg p-3" style="background:rgba(217,119,6,.10);border-left:3px solid #d97706;">
+              <template x-for="aviso in desvios" :key="aviso">
+                <p class="text-xs" style="color:#b45309;" x-text="aviso"></p>
+              </template>
+            </div>
+          </div>
+
+          <div class="col-span-2 md:col-span-3 xl:col-span-6 flex flex-wrap gap-2">
+            <button type="submit" class="btn-primary text-sm">Gravar análise</button>
+            <a href="{% url 'polpa:recebimento-detail' carga.pk %}" class="btn-secondary text-sm">Abrir romaneio</a>
+          </div>
+        </form>
+      {% else %}
+        <p class="text-sm" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+          Você pode ver a fila, mas não registrar análise.
+        </p>
+      {% endif %}
+    </div>
+  {% empty %}
+    <div class="card p-4">
+      <p class="text-sm text-center py-8" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+        Nenhuma carga esperando análise. Toda fruta pesada já foi medida.
+      </p>
+    </div>
+  {% endfor %}
+
+  {% if medidas %}
+    {% comment %}
+      MEDIDAS, ESPERANDO DECISÃO. Aparecem separadas porque a espera é de outra
+      pessoa: aprovar ou recusar exige a permissão de decidir, que quem
+      classifica normalmente não tem. Sem esta lista, a carga já analisada ficaria
+      parada sem ninguém saber que ela está esperando.
+    {% endcomment %}
+    <div class="card overflow-hidden">
+      <div class="p-4 pb-2">
+        <h3 class="text-sm font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">Medidas, aguardando decisão</h3>
+      </div>
+      <div class="overflow-x-auto">
+        <table class="w-full text-sm">
+          <tbody>
+            {% for carga in medidas %}
+              <tr class="border-t" :style="temaClaro ? 'border-color:#f1f5f9;' : 'border-color:#1e1e22;'">
+                <td class="px-4 py-3">
+                  <a href="{% url 'polpa:recebimento-detail' carga.pk %}" class="font-semibold"
+                     :style="temaClaro ? 'color:#2563eb;' : 'color:#60a5fa;'">#{{ carga.numero|stringformat:"05d" }}</a>
+                </td>
+                <td class="px-4 py-3" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">{{ carga.fruta }}</td>
+                <td class="px-4 py-3 truncate" :style="temaClaro ? 'color:#374151;' : 'color:#cbd5e1;'">{{ carga.produtor }}</td>
+                <td class="px-4 py-3 text-right" :style="temaClaro ? 'color:#374151;' : 'color:#cbd5e1;'">{{ carga.peso_liquido|floatformat:0 }} kg</td>
+                <td class="px-4 py-3">
+                  {% with desvios=carga.reprovacoes %}
+                    {% if desvios %}
+                      <span class="soft-pill is-amber text-xs" title="{{ desvios|join:' ' }}">{{ desvios|length }} desvio(s)</span>
+                    {% else %}
+                      <span class="soft-pill is-green text-xs">Dentro da régua</span>
+                    {% endif %}
+                  {% endwith %}
+                </td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  {% endif %}
+
+</div>
+{% endblock %}

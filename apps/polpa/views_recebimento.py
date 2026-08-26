@@ -88,6 +88,52 @@ class RecusasView(PolpaBaseView):
         })
 
 
+class ClassificacaoFilaView(PolpaBaseView):
+    """
+    A bancada do laboratorio: as cargas esperando analise.
+
+    A CLASSIFICACAO POR ROMANEIO JA' EXISTIA, dentro da tela do romaneio. O que
+    faltava era a FILA -- e a fila e' que e' o trabalho de quem classifica. Sem
+    ela, descobrir o que falta medir exigia abrir a lista de recebimentos,
+    entrar em cada carga e olhar se ja' tinha analise. Com caminhao no patio,
+    isso e' tempo que ninguem tem.
+
+    A MESMA FILA DE SEMPRE, filtrada -- e nao uma consulta paralela. Duas
+    consultas da mesma coisa divergem no dia em que alguem acrescenta um
+    status, e ai' as duas telas respondem numeros diferentes para a mesma
+    pergunta.
+
+    DUAS LISTAS, PORQUE SAO DUAS ESPERAS. Em cima o que falta medir, que e' o
+    trabalho de quem abre esta tela. Embaixo o que ja' foi medido e espera
+    DECISAO -- que e' de outra pessoa, com outra permissao. Misturar as duas
+    esconde a carga parada esperando alguem que nem sabe que ela existe.
+    """
+
+    area = 'recebimento'
+
+    def get(self, request):
+        filial = _filial(request)
+        abertas = (
+            RecebimentoService.fila(filial)
+            .filter(status__in=Recebimento.ABERTOS)
+            .order_by('data', 'numero')
+        )
+        # `classificado` e' propriedade (olha `classificado_em`), entao a
+        # divisao acontece aqui e nao no banco. Sao as cargas abertas do
+        # periodo: um punhado, nao uma tabela inteira.
+        aguardando, medidas = [], []
+        for carga in abertas:
+            (medidas if carga.classificado else aguardando).append(carga)
+
+        return render(request, 'polpa/classificacao_fila.html', {
+            'title': 'Classificação',
+            'aguardando': aguardando,
+            'medidas': medidas,
+            'resumo': RecebimentoService.resumo(filial),
+            'pode_agir': request.user.tem_permissao('polpa_recebimento', 'editar'),
+        })
+
+
 class RecebimentoFormView(PolpaBaseView):
     """Abre ou corrige o romaneio."""
 
@@ -173,7 +219,14 @@ class ClassificarView(PolpaBaseView):
 
     def post(self, request, pk):
         recebimento = _recebimento(request, pk)
-        volta = redirect(reverse('polpa:recebimento-detail', args=[pk]))
+        # QUEM VEIO DA FILA VOLTA PARA A FILA. Sao varias cargas em sequencia
+        # na bancada; despejar a pessoa na tela de UM romaneio a cada analise
+        # gravada faria ela navegar de volta seis vezes por manha. Quem veio da
+        # tela do romaneio continua voltando para la'.
+        if request.POST.get('voltar') == 'fila':
+            volta = redirect(reverse('polpa:recebimento-classificacao'))
+        else:
+            volta = redirect(reverse('polpa:recebimento-detail', args=[pk]))
 
         form = ClassificacaoForm(request.POST, instance=recebimento)
         if not form.is_valid():

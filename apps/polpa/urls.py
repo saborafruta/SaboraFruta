@@ -42,6 +42,10 @@ ROTAS_PRONTAS: list = [
 
     # A lista de recusas é a MESMA fila, filtrada — e não uma tela paralela
     # que amanhã mostraria outra contagem da mesma coisa.
+    # O endereco e' o que o menu ja' aponta: assim que esta rota resolve
+    # para uma view que nao e' a `ItemView`, o selo "em construcao" some
+    # sozinho do hub -- ele e' descoberto por resolucao, nao por lista.
+    path('recebimento/classificacao/', vrec.ClassificacaoFilaView.as_view(), name='recebimento-classificacao'),
     path('recebimento/recusas/', vrec.RecusasView.as_view(), name='recebimento-recusas'),
 
     # ── Catálogo da fábrica ─────────────────────────────────────────────
