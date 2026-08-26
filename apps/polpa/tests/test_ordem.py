@@ -590,3 +590,127 @@ class ATelaDaOrdemTests(OrdemBase):
 
         for resto in ('{#', '#}', '{%', '%}'):
             self.assertNotIn(resto, html, f'vazou "{resto}" no HTML')
+
+
+class ATelaDeBatidasTests(OrdemBase):
+    """
+    Cada batelada com sua formulação, rendimento e lote de saída.
+
+    NÃO EXISTE REGISTRO POR BATIDA no sistema, e a tela não inventa um: ela lê
+    a ordem, que aponta a receita, guarda planejado e produzido e gera o lote.
+    Quantas batidas ela vale é conta, não registro — e por isso o divisor
+    aparece ao lado do número na tela.
+    """
+
+    def test_ordem_planejada_ainda_nao_e_batelada(self):
+        """
+        Nada foi misturado: nao ha' rendimento nem lote. Enche-la aqui faria a
+        tela prometer producao que nao aconteceu.
+        """
+        self._op()
+
+        resposta = self.client.get(reverse('polpa:batida-list'))
+
+        self.assertEqual(resposta.status_code, 200)
+        self.assertEqual(len(resposta.context['linhas']), 0)
+
+    def test_ordem_em_producao_vira_batelada(self):
+        op = self._op()
+        op.situacao = S.EM_PRODUCAO
+        op.save(update_fields=['situacao'])
+
+        resposta = self.client.get(reverse('polpa:batida-list'))
+
+        self.assertEqual(len(resposta.context['linhas']), 1)
+
+    def test_o_numero_de_batidas_sai_da_divisao(self):
+        """
+        2.500 unidades numa receita que rende 1.000 por execucao sao TRES
+        batidas: a terceira roda incompleta, mas roda.
+        """
+        op = self._op(quantidade=Decimal('2500'))
+        op.situacao = S.EM_PRODUCAO
+        op.save(update_fields=['situacao'])
+
+        linha = self.client.get(reverse('polpa:batida-list')).context['linhas'][0]
+
+        self.assertEqual(linha['batidas'], 3)
+        self.assertEqual(linha['por_batida'], Decimal('1000'))
+
+    def test_receita_com_rendimento_zerado_nao_estoura(self):
+        """
+        DIVISAO POR ZERO derrubaria a tela inteira por causa de UMA receita mal
+        preenchida. `quantidade_produzida` e' NOT NULL no banco, entao o caso
+        que existe de verdade e' o zero -- e ele passa por
+        `ReceitaService.ativar`, que so' cobra o campo na ATIVACAO. A linha
+        mostra travessao, que e' honesto: nao da' para dividir por zero.
+        """
+        op = self._op()
+        op.situacao = S.EM_PRODUCAO
+        op.save(update_fields=['situacao'])
+        ficha = op.receita.ficha
+        ficha.quantidade_produzida = Decimal('0')
+        ficha.save(update_fields=['quantidade_produzida'])
+
+        resposta = self.client.get(reverse('polpa:batida-list'))
+
+        self.assertEqual(resposta.status_code, 200)
+        self.assertEqual(resposta.context['linhas'][0]['batidas'], 0)
+
+    def test_rendimento_abaixo_do_esperado_e_marcado(self):
+        """
+        E' o que se procura nesta tela: a batelada que rendeu menos do que a
+        receita promete e' onde o dinheiro sumiu, e some no meio das outras sem
+        a marca.
+        """
+        op = self._op(quantidade=Decimal('1000'))
+        op.situacao = S.PRODUZIDA
+        op.save(update_fields=['situacao'])
+        op.ordem.quantidade_produzida = Decimal('500')   # 50% de 1000
+        op.ordem.save(update_fields=['quantidade_produzida'])
+
+        linha = self.client.get(reverse('polpa:batida-list')).context['linhas'][0]
+
+        self.assertEqual(linha['rendimento'], Decimal('50.00'))
+        self.assertTrue(linha['abaixo'])
+
+    def test_rendimento_dentro_do_esperado_nao_e_marcado(self):
+        op = self._op(quantidade=Decimal('1000'))
+        op.situacao = S.PRODUZIDA
+        op.save(update_fields=['situacao'])
+        op.ordem.quantidade_produzida = Decimal('900')   # 90% > 60% esperado
+        op.ordem.save(update_fields=['quantidade_produzida'])
+
+        linha = self.client.get(reverse('polpa:batida-list')).context['linhas'][0]
+
+        self.assertFalse(linha['abaixo'])
+
+    def test_o_resumo_conta_as_bateladas_abaixo(self):
+        op = self._op(quantidade=Decimal('1000'))
+        op.situacao = S.PRODUZIDA
+        op.save(update_fields=['situacao'])
+        op.ordem.quantidade_produzida = Decimal('500')
+        op.ordem.save(update_fields=['quantidade_produzida'])
+
+        resumo = self.client.get(reverse('polpa:batida-list')).context['resumo']
+
+        self.assertEqual(resumo['bateladas'], 1)
+        self.assertEqual(resumo['abaixo'], 1)
+
+    def test_a_rota_do_menu_abre_a_tela_de_verdade(self):
+        from django.urls import resolve
+
+        from apps.polpa.views import ItemView
+
+        endereco = reverse('polpa:item', args=['producao', 'batidas'])
+
+        self.assertIsNot(
+            getattr(resolve(endereco).func, 'view_class', None), ItemView,
+        )
+        self.assertEqual(endereco, reverse('polpa:batida-list'))
+
+    def test_a_tela_nao_vaza_sintaxe_de_template(self):
+        html = self.client.get(reverse('polpa:batida-list')).content.decode()
+
+        for resto in ('{#', '#}', '{%', '%}'):
+            self.assertNotIn(resto, html, f'vazou "{resto}" no HTML')

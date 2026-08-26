@@ -1,0 +1,178 @@
+{% extends "_base.html" %}
+{% block title %}{{ title }} — Polpa{% endblock %}
+{% block page_title %}{{ title }}{% endblock %}
+{% block content %}
+
+{% comment %}
+  CADA BATELADA COM O QUE ELA ENTREGOU. A lista de ordens responde "o que está
+  na fila"; esta responde outra coisa — o que já foi misturado, quanto rendeu e
+  em que lote saiu.
+
+  O QUE SE PROCURA AQUI É A BATELADA QUE RENDEU MENOS do que a receita promete:
+  é onde o dinheiro sumiu, e ela some no meio das outras sem uma marca. Por
+  isso o rendimento abaixo do esperado é o único número destacado da tabela.
+{% endcomment %}
+<div class="space-y-4">
+
+  <div class="flex flex-wrap items-start justify-between gap-3">
+    <div>
+      <p class="text-sm" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+        <a href="{% url 'polpa:hub' %}" :style="temaClaro ? 'color:#3b82f6;' : 'color:#60a5fa;'">Polpa de Frutas</a>
+        <span class="mx-1">›</span>
+        <a href="{% url 'polpa:grupo' 'producao' %}" :style="temaClaro ? 'color:#3b82f6;' : 'color:#60a5fa;'">Produção</a>
+      </p>
+      <h2 class="text-2xl font-semibold mt-1" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">{{ title }}</h2>
+      <p class="text-sm mt-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+        {{ resumo.bateladas }} batelada(s) · {{ resumo.batidas }} batida(s)
+        {% if resumo.rendimento_medio %}
+          · rendimento médio {{ resumo.rendimento_medio|floatformat:1 }}%
+        {% endif %}
+        {% if resumo.abaixo %}
+          · <span style="color:#d97706;font-weight:600;">{{ resumo.abaixo }} abaixo do esperado</span>
+        {% endif %}
+      </p>
+    </div>
+    <a href="{% url 'polpa:ordem-list' %}" class="btn-secondary text-sm">Fila de produção</a>
+  </div>
+
+  <form method="get" class="card p-3 flex flex-wrap items-end gap-3">
+    <div class="flex-1 min-w-[200px]">
+      <label class="form-label">Ordem ou produto</label>
+      <input type="text" name="busca" value="{{ filtros.busca }}" class="form-input w-full"
+             autocomplete="off" placeholder="Ex.: OP-0012, polpa de manga">
+    </div>
+    <div class="w-full sm:w-56">
+      <label class="form-label">Situação</label>
+      <select name="situacao" class="form-select">
+        <option value="">Todas as executadas</option>
+        {% for valor, rotulo in situacoes %}
+          <option value="{{ valor }}" {% if filtros.situacao == valor %}selected{% endif %}>{{ rotulo }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="flex items-center gap-2">
+      <button type="submit" class="btn-primary text-sm">Filtrar</button>
+      {% if tem_filtro %}
+        <a href="{% url 'polpa:batida-list' %}" class="btn-secondary text-sm">Limpar</a>
+      {% endif %}
+    </div>
+  </form>
+
+  <div class="card overflow-hidden">
+    <div class="overflow-x-auto">
+      <table class="w-full text-sm">
+        <thead>
+          <tr class="border-b" :style="temaClaro ? 'border-color:#e2e8f0;' : 'border-color:#2a2a2e;'">
+            <th class="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wide"
+                :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Ordem</th>
+            <th class="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wide"
+                :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Formulação</th>
+            <th class="text-right px-4 py-3 text-xs font-semibold uppercase tracking-wide"
+                :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Batidas</th>
+            <th class="text-right px-4 py-3 text-xs font-semibold uppercase tracking-wide"
+                :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Planejado</th>
+            <th class="text-right px-4 py-3 text-xs font-semibold uppercase tracking-wide"
+                :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Produzido</th>
+            <th class="text-right px-4 py-3 text-xs font-semibold uppercase tracking-wide"
+                :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Rendimento</th>
+            <th class="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wide"
+                :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Lote de saída</th>
+            <th class="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wide"
+                :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Situação</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for linha in linhas %}
+            <tr class="border-b" :style="temaClaro ? 'border-color:#f1f5f9;' : 'border-color:#1e1e22;'">
+              <td class="px-4 py-3">
+                <a href="{% url 'polpa:ordem-detail' linha.op.pk %}" class="font-semibold"
+                   :style="temaClaro ? 'color:#2563eb;' : 'color:#60a5fa;'">{{ linha.op.numero }}</a>
+                {% if linha.op.responsavel %}
+                  <span class="block text-xs" :style="temaClaro ? 'color:#94a3b8;' : 'color:#71717a;'">{{ linha.op.responsavel }}</span>
+                {% endif %}
+              </td>
+              <td class="px-4 py-3" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
+                {{ linha.op.produto }}
+                <span class="block text-xs" :style="temaClaro ? 'color:#94a3b8;' : 'color:#71717a;'">
+                  {{ linha.op.receita.ficha.descricao }} · v{{ linha.op.receita.ficha.versao }}
+                </span>
+              </td>
+              {% comment %}
+                O DIVISOR FICA AO LADO do número calculado: batidas é conta, não
+                registro, e número derivado sem mostrar de onde veio é número
+                que ninguém confere.
+              {% endcomment %}
+              <td class="px-4 py-3 text-right" :style="temaClaro ? 'color:#374151;' : 'color:#cbd5e1;'">
+                {% if linha.batidas %}
+                  {{ linha.batidas }}
+                  <span class="block text-[11px]" :style="temaClaro ? 'color:#94a3b8;' : 'color:#71717a;'">
+                    rende {{ linha.por_batida|floatformat:"-3" }} cada
+                  </span>
+                {% else %}
+                  <span :style="temaClaro ? 'color:#94a3b8;' : 'color:#71717a;'" title="A receita não tem rendimento por batida">—</span>
+                {% endif %}
+              </td>
+              <td class="px-4 py-3 text-right" :style="temaClaro ? 'color:#374151;' : 'color:#cbd5e1;'">
+                {{ linha.op.quantidade_planejada|floatformat:"-3" }}
+              </td>
+              <td class="px-4 py-3 text-right font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
+                {{ linha.op.quantidade_produzida|floatformat:"-3" }}
+              </td>
+              <td class="px-4 py-3 text-right">
+                {% if linha.rendimento is None %}
+                  <span :style="temaClaro ? 'color:#94a3b8;' : 'color:#71717a;'" title="Só depois de produzida">—</span>
+                {% elif linha.abaixo %}
+                  <span style="color:#d97706;font-weight:600;">{{ linha.rendimento|floatformat:1 }}%</span>
+                  <span class="block text-[11px]" style="color:#d97706;">esperado {{ linha.esperado|floatformat:1 }}%</span>
+                {% else %}
+                  <span style="color:#059669;font-weight:600;">{{ linha.rendimento|floatformat:1 }}%</span>
+                {% endif %}
+              </td>
+              <td class="px-4 py-3">
+                {% if linha.op.lote %}
+                  <span class="font-mono text-xs" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">{{ linha.op.lote.numero_lote }}</span>
+                  {% if linha.op.validade %}
+                    <span class="block text-[11px]" :style="temaClaro ? 'color:#94a3b8;' : 'color:#71717a;'">vence {{ linha.op.validade|date:"d/m/Y" }}</span>
+                  {% endif %}
+                {% else %}
+                  <span :style="temaClaro ? 'color:#94a3b8;' : 'color:#71717a;'" title="O lote nasce quando a ordem é concluída">—</span>
+                {% endif %}
+              </td>
+              <td class="px-4 py-3">
+                {% if linha.op.situacao == 'produzida' %}
+                  <span class="soft-pill is-green text-xs">Produzida</span>
+                {% elif linha.op.situacao == 'pausada' %}
+                  <span class="soft-pill is-amber text-xs">Pausada</span>
+                {% else %}
+                  <span class="soft-pill is-slate text-xs">{{ linha.op.get_situacao_display }}</span>
+                {% endif %}
+              </td>
+            </tr>
+          {% empty %}
+            <tr>
+              <td colspan="8" class="px-4 py-14 text-center">
+                <p class="text-sm max-w-md mx-auto" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+                  {% if tem_filtro %}
+                    Nenhuma batelada com esse filtro.
+                  {% else %}
+                    Nenhuma batelada ainda. Uma ordem vira batelada quando entra em
+                    produção — antes disso nada foi misturado.
+                  {% endif %}
+                </p>
+                <div class="mt-4">
+                  {% if tem_filtro %}
+                    <a href="{% url 'polpa:batida-list' %}" class="btn-secondary text-sm">Limpar filtros</a>
+                  {% else %}
+                    <a href="{% url 'polpa:ordem-list' %}" class="btn-primary text-sm">Ver a fila de produção</a>
+                  {% endif %}
+                </div>
+              </td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+</div>
+{% endblock %}

@@ -21,6 +21,9 @@ from .services import CustoService, OrdemPolpaService, SubprodutoService
 from .views import PolpaBaseView
 
 
+ZERO = Decimal('0')
+
+
 def _filial(request):
     return request.filial_ativa
 
@@ -60,6 +63,109 @@ class OrdemListView(PolpaBaseView):
             'painel': OrdemPolpaService.painel(_filial(request)),
             'pode_agir': request.user.tem_permissao('polpa_producao', 'criar'),
         })
+
+
+class BatidasView(PolpaBaseView):
+    """
+    Cada batelada com sua formulacao, rendimento e lote de saida.
+
+    NAO EXISTE REGISTRO POR BATIDA no sistema, e esta tela nao inventa um. O
+    que existe e' a ORDEM: ela aponta a receita, guarda planejado e produzido,
+    e gera um lote. Quantas batidas ela vale sai de dividir o planejado pelo
+    que a receita rende por execucao -- a mesma conta que a tela de abrir ordem
+    mostra ao vivo.
+
+    Registrar batida a batida seria outra coisa: exigiria o operador apontar
+    cada execucao separada, e so' faz sentido quando a fabrica precisa
+    diferenciar a batida 2 da 3 -- rastrear um defeito que apareceu no meio da
+    ordem, por exemplo. Nao e' o que existe hoje, e fingir que existe daria uma
+    tela que mostra numeros que ninguem registrou.
+
+    E' A MESMA `fila()` da lista de ordens, filtrada -- e nao uma consulta
+    paralela: duas consultas da mesma coisa divergem no dia em que alguem
+    acrescenta uma situacao.
+
+    SO' O QUE JA' VIROU EXECUCAO. Ordem planejada e ordem liberada ainda nao
+    sao batelada: nada foi misturado, nao ha' rendimento nem lote. Enche-las
+    aqui faria a tela prometer producao que nao aconteceu.
+    """
+
+    area = 'producao'
+
+    EXECUTADAS = (
+        OrdemPolpa.Situacao.EM_PRODUCAO,
+        OrdemPolpa.Situacao.PAUSADA,
+        OrdemPolpa.Situacao.QUALIDADE,
+        OrdemPolpa.Situacao.PRODUZIDA,
+    )
+
+    def get(self, request):
+        filial = _filial(request)
+        filtros = {
+            'busca': (request.GET.get('busca') or '').strip(),
+            'situacao': (request.GET.get('situacao') or '').strip(),
+        }
+        ordens = OrdemPolpaService.fila(filial, filtros)
+        if not filtros['situacao']:
+            ordens = ordens.filter(situacao__in=self.EXECUTADAS)
+        ordens = ordens.order_by('-ordem__data_inicio_prevista', '-id')[:200]
+
+        linhas = [self._linha(op) for op in ordens]
+        produzidas = [l for l in linhas if l['rendimento'] is not None]
+        return render(request, 'polpa/batida_list.html', {
+            'title': 'Batidas',
+            'linhas': linhas,
+            'filtros': filtros,
+            'tem_filtro': bool(filtros['busca'] or filtros['situacao']),
+            'situacoes': [
+                (s.value, s.label)
+                for s in OrdemPolpa.Situacao
+                if s in self.EXECUTADAS
+            ],
+            'resumo': {
+                'bateladas': len(linhas),
+                'batidas': sum(l['batidas'] for l in linhas),
+                'rendimento_medio': (
+                    sum(l['rendimento'] for l in produzidas) / len(produzidas)
+                    if produzidas else None
+                ),
+                'abaixo': sum(1 for l in produzidas if l['abaixo']),
+            },
+        })
+
+    @staticmethod
+    def _linha(op) -> dict:
+        """
+        Uma batelada na tela.
+
+        `batidas` e' DERIVADO, e por isso vem com o divisor ao lado na tela:
+        numero calculado sem mostrar de onde veio e' numero que ninguem
+        confere. Receita sem `quantidade_produzida` devolve zero em vez de
+        estourar -- e a tela mostra travessao, que e' honesto: nao da' para
+        dividir por um rendimento que ninguem preencheu.
+        """
+        import math
+
+        por_batida = op.receita.ficha.quantidade_produzida or ZERO
+        planejada = op.quantidade_planejada or ZERO
+        batidas = (
+            math.ceil(planejada / por_batida) if por_batida > ZERO else 0
+        )
+        rendimento = op.rendimento_lote
+        esperado = op.receita.rendimento_esperado
+        return {
+            'op': op,
+            'por_batida': por_batida,
+            'batidas': batidas,
+            'rendimento': rendimento,
+            # ABAIXO DO ESPERADO e' o que se procura numa tela de bateladas:
+            # a batelada que rendeu menos do que a receita promete e' onde o
+            # dinheiro sumiu, e ela some no meio das outras sem a marca.
+            'abaixo': bool(
+                rendimento is not None and esperado and rendimento < esperado
+            ),
+            'esperado': esperado,
+        }
 
 
 class OrdemFormView(PolpaBaseView):
