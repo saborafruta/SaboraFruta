@@ -21,6 +21,48 @@ SELECT = {'class': 'form-select w-full'}
 C = FichaProduto.Classe
 
 
+class UnidadeRapidaForm(forms.Form):
+    """
+    O minimo para destravar a ficha: sigla e descricao.
+
+    A UNIDADE E' DA EMPRESA, mas so' aparece na tela pela FILIAL -- o queryset
+    e' `for_filial`, que passa pelo vinculo. Criar a unidade sem criar o vinculo
+    faria ela nascer invisivel: o cadastro grava, o select continua vazio, e
+    quem clicou conclui que o botao nao funciona.
+
+    SIGLA REPETIDA E' RECUSADA. `unique_together` ja' barra no banco, mas o erro
+    cru de integridade nao diz o que fazer; e sigla duplicada e' o comeco de
+    "KG" e "Kg" convivendo, com o estoque somando em duas unidades que sao a
+    mesma coisa.
+    """
+
+    sigla = forms.CharField(label='Sigla', max_length=6)
+    descricao = forms.CharField(label='Descrição', max_length=40)
+    tipo = forms.ChoiceField(
+        label='Grandeza', required=False,
+        choices=[('', 'Não informar')] + list(UnidadeMedida.Tipo.choices),
+    )
+
+    def __init__(self, *args, empresa=None, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.empresa = empresa
+
+    def clean_sigla(self):
+        sigla = (self.cleaned_data.get('sigla') or '').strip().upper()
+        if not sigla:
+            raise forms.ValidationError('Informe a sigla.')
+        if self.empresa and UnidadeMedida.objects.filter(
+            empresa=self.empresa, sigla__iexact=sigla,
+        ).exists():
+            raise forms.ValidationError(
+                f'A unidade "{sigla}" ja existe. Procure na lista.'
+            )
+        return sigla
+
+    def clean_descricao(self):
+        return (self.cleaned_data.get('descricao') or '').strip()
+
+
 class ItemCatalogoForm(forms.Form):
     """Cadastro de matéria-prima, embalagem ou produto acabado."""
 

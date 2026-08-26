@@ -9,12 +9,14 @@ acabou de receber uma nota com quinze itens.
 import json
 
 from django.contrib import messages
+from django.db import transaction
+from django.http import JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 
 from apps.core.services.exceptions import DomainError
 
-from .forms_catalogo import ItemCatalogoForm
+from .forms_catalogo import ItemCatalogoForm, UnidadeRapidaForm
 from .models import FichaProduto
 from .services import CatalogoService
 from .views import PolpaBaseView
@@ -71,6 +73,54 @@ class EmbalagensView(CatalogoListView):
 
 class MateriasPrimasView(CatalogoListView):
     classe_padrao = FichaProduto.Classe.MATERIA_PRIMA
+
+
+class UnidadeAjaxCreateView(PolpaBaseView):
+    """
+    Cadastra a unidade SEM SAIR da ficha, e devolve a opcao pronta.
+
+    A tela ja' avisava que sem unidade o item nao salva e dizia onde resolver --
+    "Cadastros > Produtos > Unidades". Mas mandar embora no meio do formulario
+    e' perder o que ja' foi digitado: volta-se para uma ficha em branco, e a
+    segunda tentativa e' a que nao acontece.
+
+    O VINCULO DE FILIAL VEM JUNTO. A unidade e' da EMPRESA, mas a ficha lista
+    por `for_filial`, que passa pelo vinculo. Gravar so' a unidade a faria
+    nascer invisivel: o cadastro funciona, o select continua vazio, e quem
+    clicou conclui que o botao esta' quebrado.
+    """
+
+    area = 'formulacao'
+    permissao_acao = 'criar'
+
+    def post(self, request):
+        from apps.produtos.models import UnidadeMedida, UnidadeMedidaFilial
+
+        filial = _filial(request)
+        form = UnidadeRapidaForm(request.POST, empresa=request.user.empresa)
+        if not form.is_valid():
+            return JsonResponse(
+                {
+                    'ok': False,
+                    'errors': {
+                        campo: [e['message'] for e in mensagens]
+                        for campo, mensagens in form.errors.get_json_data().items()
+                    },
+                },
+                status=400,
+            )
+
+        with transaction.atomic():
+            unidade = UnidadeMedida.objects.create(
+                empresa=request.user.empresa,
+                sigla=form.cleaned_data['sigla'],
+                descricao=form.cleaned_data['descricao'],
+                tipo=form.cleaned_data.get('tipo') or '',
+            )
+            UnidadeMedidaFilial.objects.create(
+                unidade=unidade, filial=filial, ativo=True,
+            )
+        return JsonResponse({'ok': True, 'id': unidade.pk, 'label': str(unidade)})
 
 
 class CatalogoFormView(PolpaBaseView):

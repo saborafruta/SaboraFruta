@@ -456,3 +456,93 @@ class ATelaGuiaOPreenchimentoTests(CatalogoBase):
         html = self.client.get(reverse('polpa:catalogo-create')).content.decode()
 
         self.assertIn('title="Obrigatorio"', html)
+
+
+class UnidadeRelampagoTests(CatalogoBase):
+    """
+    Cadastrar a unidade sem sair da ficha.
+
+    A tela já avisava que sem unidade o item não salva e dizia onde resolver.
+    Mas mandar embora no meio do formulário é perder o que já foi digitado —
+    volta-se para uma ficha em branco, e a segunda tentativa é a que não
+    acontece.
+    """
+
+    def _criar(self, **dados):
+        return self.client.post(reverse('polpa:unidade-ajax-create'), dados)
+
+    def test_cria_a_unidade_e_devolve_a_opcao_pronta(self):
+        import json
+
+        resposta = self._criar(sigla='CX', descricao='Caixa')
+
+        corpo = json.loads(resposta.content)
+        unidade = UnidadeMedida.objects.get(sigla='CX')
+        self.assertEqual(resposta.status_code, 200)
+        self.assertEqual(corpo['id'], unidade.pk)
+        self.assertIn('CX', corpo['label'])
+
+    def test_a_unidade_nasce_VISIVEL_nesta_filial(self):
+        """
+        A unidade e' da EMPRESA, mas a ficha lista por `for_filial`, que passa
+        pelo vinculo. Sem criar o vinculo ela nasceria invisivel: o cadastro
+        grava, o select continua vazio, e quem clicou conclui que o botao esta'
+        quebrado.
+        """
+        self._criar(sigla='CX', descricao='Caixa')
+
+        visiveis = UnidadeMedida.objects.for_filial(self.filial)
+        self.assertTrue(visiveis.filter(sigla='CX').exists())
+
+    def test_a_sigla_vai_para_maiuscula(self):
+        """"kg" e "KG" convivendo e' o estoque somando em duas unidades iguais."""
+        self._criar(sigla='kg', descricao='Quilograma')
+
+        self.assertTrue(UnidadeMedida.objects.filter(sigla='KG').exists())
+
+    def test_sigla_repetida_e_recusada_com_recado(self):
+        """
+        `unique_together` ja' barra no banco, mas o erro cru de integridade nao
+        diz o que fazer.
+        """
+        self._criar(sigla='CX', descricao='Caixa')
+        resposta = self._criar(sigla='cx', descricao='Caixa de papelao')
+
+        self.assertEqual(resposta.status_code, 400)
+        self.assertEqual(UnidadeMedida.objects.filter(sigla__iexact='CX').count(), 1)
+
+    def test_sem_sigla_nao_grava(self):
+        antes = UnidadeMedida.objects.count()
+
+        resposta = self._criar(sigla='   ', descricao='Alguma coisa')
+
+        self.assertEqual(resposta.status_code, 400)
+        self.assertEqual(UnidadeMedida.objects.count(), antes)
+
+    def test_a_ficha_oferece_o_botao_no_proprio_campo(self):
+        """
+        A saida do beco fica NO CAMPO, e nao so' no aviso do topo: e' onde a
+        pessoa esta' olhando quando descobre que falta.
+        """
+        resposta = self.client.get(reverse('polpa:catalogo-create'))
+
+        self.assertContains(resposta, 'Nova unidade de medida')
+        self.assertContains(resposta, reverse('polpa:unidade-ajax-create'))
+
+    def test_a_unidade_criada_pode_ser_usada_na_ficha(self):
+        """A volta do favor: criada, ela precisa gravar o item."""
+        import json
+
+        criada = json.loads(self._criar(sigla='CX', descricao='Caixa').content)
+
+        resposta = self.client.post(reverse('polpa:catalogo-create'), {
+            'tipo': T.CAIXA, 'descricao': 'Caixa de papelao 5 kg',
+            'unidade_medida': criada['id'],
+        })
+
+        self.assertEqual(resposta.status_code, 302)
+        self.assertTrue(
+            FichaProduto.objects.filter(
+                produto__descricao='Caixa de papelao 5 kg',
+            ).exists()
+        )

@@ -154,6 +154,8 @@ ROTAS_PRONTAS: list = [
     path('formulacao/rendimento/nova/', vrec.FrutaFormView.as_view(), name='fruta-create'),
     # Cadastro relampago da fruta, chamado de dentro do romaneio.
     path('frutas/ajax-create/', vrec.FrutaAjaxCreateView.as_view(), name='fruta-ajax-create'),
+    # Cadastro relampago da unidade, chamado de dentro da ficha do item.
+    path('unidades/ajax-create/', vcat.UnidadeAjaxCreateView.as_view(), name='unidade-ajax-create'),
     path('formulacao/rendimento/<int:pk>/editar/', vrec.FrutaFormView.as_view(), name='fruta-update'),
 ]
 
