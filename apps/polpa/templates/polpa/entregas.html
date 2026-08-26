@@ -1,0 +1,211 @@
+{% extends "_base.html" %}
+{% block title %}{{ title }} — Polpa{% endblock %}
+{% block page_title %}{{ title }}{% endblock %}
+{% block content %}
+
+{% comment %}
+  A CORRENTE SÓ FECHA AQUI. O túnel prova o congelamento, a câmara prova o
+  armazenamento, o baú prova a saída — e sem a medição na porta do cliente
+  a cadeia termina no portão da fábrica, que é justamente o trecho que o
+  cliente contesta.
+
+  POR ISSO A LINHA MOSTRA AS DUAS TEMPERATURAS: "saiu a -19 e chegou a -12"
+  é a frase que explica o problema; só a segunda metade não explica nada.
+
+  NOME É PROVA, "SIM" NÃO É. Quem assina responde por ter recebido o
+  produto naquele estado — e é a única coisa que a tela exige.
+{% endcomment %}
+<div class="space-y-4">
+
+  <div>
+    <p class="text-sm mb-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+      <a href="{% url 'polpa:hub' %}" :style="temaClaro ? 'color:#3b82f6;' : 'color:#60a5fa;'">Polpa de Frutas</a>
+      <span class="mx-1">›</span>
+      <a href="{% url 'polpa:grupo' 'expedicao' %}" :style="temaClaro ? 'color:#3b82f6;' : 'color:#60a5fa;'">Expedição</a>
+    </p>
+    <h2 class="text-2xl font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">Entregas</h2>
+    <p class="text-sm mt-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+      Quem recebeu, quando e em que temperatura — o último elo da cadeia de frio.
+    </p>
+  </div>
+
+  <div class="grid grid-cols-2 lg:grid-cols-4 gap-3">
+    <div class="card p-4">
+      <p class="text-[11px] uppercase tracking-wide" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Na rua</p>
+      <p class="text-3xl font-bold mt-1" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">{{ resumo.na_rua }}</p>
+    </div>
+    <div class="card p-4">
+      <p class="text-[11px] uppercase tracking-wide" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Entregues hoje</p>
+      <p class="text-3xl font-bold mt-1" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">{{ resumo.entregues }}</p>
+    </div>
+    <div class="card p-4" style="{% if resumo.nao_entregues %}border:1px solid #d97706;{% endif %}">
+      <p class="text-[11px] uppercase tracking-wide" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Não entregues</p>
+      <p class="text-3xl font-bold mt-1"
+         style="color:{% if resumo.nao_entregues %}#d97706{% else %}#059669{% endif %};">{{ resumo.nao_entregues }}</p>
+    </div>
+    <div class="card p-4" style="{% if resumo.fora_da_faixa %}border:1px solid #dc2626;{% endif %}">
+      <p class="text-[11px] uppercase tracking-wide" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Chegaram fora da faixa</p>
+      <p class="text-3xl font-bold mt-1"
+         style="color:{% if resumo.fora_da_faixa %}#dc2626{% else %}#059669{% endif %};">{{ resumo.fora_da_faixa }}</p>
+      {% if resumo.sem_medicao %}
+        <p class="text-[11px] mt-1" style="color:#d97706;">
+          {{ resumo.sem_medicao }} entregue(s) sem medição
+        </p>
+      {% endif %}
+    </div>
+  </div>
+
+  <div class="card p-4">
+    <form method="get" class="flex flex-wrap items-end gap-3">
+      <div class="flex-1" style="min-width:220px;">
+        <label class="form-label" for="busca">Cliente, motorista ou placa</label>
+        <input type="text" name="busca" id="busca" class="form-input"
+               value="{{ filtros.busca }}" placeholder="Ex.: Mercado Central, NOP1A23">
+      </div>
+      <button type="submit" class="btn-primary">Filtrar</button>
+      {% if filtros.busca %}
+        <a href="{% url 'polpa:entregas' %}" class="btn-secondary text-sm">Limpar</a>
+      {% endif %}
+    </form>
+  </div>
+
+  {# ── As paradas ─────────────────────────────────────────────────── #}
+  {% for l in linhas %}
+    <div class="card overflow-hidden"
+         style="{% if l.fora_da_faixa %}border:1px solid #dc2626;{% elif l.nao_entregue %}border:1px solid #d97706;{% endif %}">
+      <div class="px-4 py-3 border-b flex flex-wrap items-baseline justify-between gap-2"
+           :style="temaClaro ? 'border-color:#e2e8f0;' : 'border-color:#2a2a2e;'">
+        <div>
+          <h3 class="text-sm font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
+            {{ l.parada.cliente_nome }}
+          </h3>
+          <p class="text-xs mt-0.5" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+            <a href="{% url 'polpa:carregamento-carga' l.romaneio.pk %}" class="underline"
+               :style="temaClaro ? 'color:#2563eb;' : 'color:#60a5fa;'">{{ l.romaneio }}</a>
+            {% if l.romaneio.motorista_nome %} · {{ l.romaneio.motorista_nome }}{% endif %}
+            {% if l.romaneio.veiculo_placa %} · {{ l.romaneio.veiculo_placa }}{% endif %}
+            {% if l.pedido %} · pedido {{ l.pedido.numero_pedido }}{% endif %}
+          </p>
+        </div>
+        <div class="text-right">
+          {% if l.entregue %}
+            <span class="soft-pill is-green text-xs">entregue</span>
+          {% elif l.nao_entregue %}
+            <span class="soft-pill is-amber text-xs">{{ l.ficha.get_ocorrencia_display }}</span>
+          {% else %}
+            <span class="soft-pill is-blue text-xs">na rua</span>
+          {% endif %}
+        </div>
+      </div>
+
+      {# ── A prova ──────────────────────────────────────────────── #}
+      <div class="px-4 py-3 grid grid-cols-1 sm:grid-cols-3 gap-3 text-sm">
+        <div>
+          <p class="text-[11px] uppercase tracking-wide" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Recebido por</p>
+          {% if l.ficha.recebido_por %}
+            <p class="font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">{{ l.ficha.recebido_por }}</p>
+            {% if l.ficha.documento %}
+              <p class="text-[11px]" :style="temaClaro ? 'color:#94a3b8;' : 'color:#71717a;'">{{ l.ficha.documento }}</p>
+            {% endif %}
+          {% else %}
+            <p class="text-xs mt-1" :style="temaClaro ? 'color:#94a3b8;' : 'color:#71717a;'">—</p>
+          {% endif %}
+        </div>
+        <div>
+          <p class="text-[11px] uppercase tracking-wide" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Quando</p>
+          <p class="text-sm mt-0.5" :style="temaClaro ? 'color:#374151;' : 'color:#cbd5e1;'">
+            {{ l.ficha.entregue_em|date:"d/m/Y H:i"|default:"—" }}
+          </p>
+        </div>
+        <div>
+          <p class="text-[11px] uppercase tracking-wide" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Temperatura</p>
+          {% if l.temperatura is not None %}
+            <p class="font-semibold"
+               style="color:{% if l.fora_da_faixa %}#dc2626{% else %}#059669{% endif %};">
+              {{ l.temperatura }}°C
+              {% if l.exigida is not None %}
+                <span class="text-[11px] font-normal">(exige {{ l.exigida }})</span>
+              {% endif %}
+            </p>
+          {% elif l.entregue %}
+            {# Entregue sem medição: a cadeia fica sem a última prova. #}
+            <p class="text-xs mt-1" style="color:#d97706;">não medida</p>
+          {% else %}
+            <p class="text-xs mt-1" :style="temaClaro ? 'color:#94a3b8;' : 'color:#71717a;'">—</p>
+          {% endif %}
+          {% if l.saida is not None %}
+            <p class="text-[11px] mt-0.5" :style="temaClaro ? 'color:#94a3b8;' : 'color:#71717a;'">
+              saiu da fábrica a {{ l.saida }}°C
+            </p>
+          {% endif %}
+        </div>
+      </div>
+
+      {% if l.ficha.observacao %}
+        <p class="px-4 pb-3 text-xs" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+          {{ l.ficha.observacao }}
+        </p>
+      {% endif %}
+
+      {# ── Registrar ────────────────────────────────────────────── #}
+      {% if pode_agir and l.pendente %}
+        <div class="px-4 py-3 border-t" :style="temaClaro ? 'border-color:#e2e8f0;' : 'border-color:#2a2a2e;'">
+          <form method="post" class="flex flex-wrap items-end gap-3">
+            {% csrf_token %}
+            <input type="hidden" name="acao" value="entregar">
+            <input type="hidden" name="parada" value="{{ l.parada.pk }}">
+            <div>
+              <label class="form-label text-[11px]" for="quem-{{ l.parada.pk }}">Quem recebeu</label>
+              <input type="text" name="recebido_por" id="quem-{{ l.parada.pk }}"
+                     class="form-input" style="width:190px;" placeholder="Nome de quem assinou">
+            </div>
+            <div>
+              <label class="form-label text-[11px]" for="doc-{{ l.parada.pk }}">Documento</label>
+              <input type="text" name="documento" id="doc-{{ l.parada.pk }}"
+                     class="form-input" style="width:140px;">
+            </div>
+            <div>
+              <label class="form-label text-[11px]" for="temp-{{ l.parada.pk }}">
+                °C na entrega{% if l.exigida is not None %}
+                  <span class="opacity-60">(exige {{ l.exigida }})</span>
+                {% endif %}
+              </label>
+              <input type="text" inputmode="decimal" name="temperatura"
+                     id="temp-{{ l.parada.pk }}" class="form-input" style="width:110px;">
+            </div>
+            <button type="submit" class="btn-primary text-sm">Registrar entrega</button>
+          </form>
+
+          <form method="post" class="flex flex-wrap items-end gap-3 mt-3">
+            {% csrf_token %}
+            <input type="hidden" name="acao" value="nao-entregar">
+            <input type="hidden" name="parada" value="{{ l.parada.pk }}">
+            <div>
+              <label class="form-label text-[11px]" for="ocor-{{ l.parada.pk }}">Não entregue porque</label>
+              <select name="ocorrencia" id="ocor-{{ l.parada.pk }}" class="form-input" style="width:230px;">
+                <option value="">—</option>
+                {% for valor, rotulo in ocorrencias %}
+                  <option value="{{ valor }}">{{ rotulo }}</option>
+                {% endfor %}
+              </select>
+            </div>
+            <div class="flex-1" style="min-width:200px;">
+              <label class="form-label text-[11px]" for="obs-{{ l.parada.pk }}">O que aconteceu</label>
+              <input type="text" name="observacao" id="obs-{{ l.parada.pk }}" class="form-input">
+            </div>
+            <button type="submit" class="btn-secondary text-sm">Registrar ocorrência</button>
+          </form>
+        </div>
+      {% endif %}
+    </div>
+  {% empty %}
+    <div class="card p-10 text-center">
+      <p class="text-sm" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+        Nenhuma entrega na rua. As paradas aparecem aqui quando a carga é
+        despachada no Carregamento.
+      </p>
+    </div>
+  {% endfor %}
+
+</div>
+{% endblock %}

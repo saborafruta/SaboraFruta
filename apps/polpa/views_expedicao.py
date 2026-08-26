@@ -15,9 +15,11 @@ from django.utils import timezone
 
 from apps.core.services.exceptions import DomainError
 from apps.logistica.models import ItemRomaneioCarga, RomaneioCarga
+from apps.polpa.models import EntregaFria
 from apps.vendas.models import PedidoVenda
 
 from .services.carregamento import CarregamentoService
+from .services.entrega import EntregaService
 from .services.separacao import SeparacaoPolpaService
 from .views import PolpaBaseView
 
@@ -205,3 +207,86 @@ def _numero(valor):
         return Decimal(texto)
     except InvalidOperation:
         return None
+
+
+class EntregasView(PolpaBaseView):
+    """As entregas da rua: quem recebeu, quando e em que temperatura."""
+
+    area = 'expedicao'
+
+    def get(self, request):
+        filtros = {'busca': (request.GET.get('busca') or '').strip()}
+        linhas = EntregaService.paradas(_filial(request), filtros)
+        return render(request, 'polpa/entregas.html', {
+            'title': 'Entregas',
+            'linhas': linhas,
+            'filtros': filtros,
+            'resumo': EntregaService.resumo(linhas),
+            'ocorrencias': EntregaFria.Ocorrencia.choices,
+            'pode_agir': request.user.tem_permissao('polpa_expedicao', 'editar'),
+        })
+
+    def post(self, request):
+        volta = redirect(reverse('polpa:entregas'))
+        if not request.user.tem_permissao('polpa_expedicao', 'editar'):
+            messages.error(request, 'Sem permissão para registrar entrega.')
+            return volta
+
+        parada = get_object_or_404(
+            ItemRomaneioCarga.objects.filter(romaneio__filial=_filial(request))
+            .select_related('romaneio'),
+            pk=request.POST.get('parada'),
+        )
+        temperatura = _numero(request.POST.get('temperatura'))
+
+        try:
+            if request.POST.get('acao') == 'entregar':
+                EntregaService.entregar(parada, {
+                    'recebido_por': request.POST.get('recebido_por'),
+                    'documento': request.POST.get('documento'),
+                    'temperatura': temperatura,
+                    'observacao': request.POST.get('observacao'),
+                }, request.user)
+                messages.success(
+                    request, f'{parada.cliente_nome}: entrega registrada.',
+                )
+                _avisar_entrega(request, parada, temperatura)
+            elif request.POST.get('acao') == 'nao-entregar':
+                EntregaService.nao_entregar(parada, {
+                    'ocorrencia': request.POST.get('ocorrencia'),
+                    'observacao': request.POST.get('observacao'),
+                    'temperatura': temperatura,
+                }, request.user)
+                messages.warning(
+                    request,
+                    f'{parada.cliente_nome}: não entregue — a ocorrência ficou '
+                    'registrada.',
+                )
+            else:
+                messages.error(request, 'Ação desconhecida.')
+        except DomainError as erro:
+            messages.error(request, str(erro))
+
+        return volta
+
+
+def _avisar_entrega(request, parada, temperatura):
+    """
+    Chegou acima do que o produto exige? A tela diz na hora.
+
+    O motorista ainda está na porta do cliente quando isso aparece — e é o
+    único momento em que alguém pode fazer alguma coisa a respeito.
+    """
+    exigida = EntregaService.temperatura_exigida(parada)
+    if temperatura is None:
+        messages.warning(
+            request,
+            'Entrega sem temperatura medida — a cadeia de frio fica sem a '
+            'última prova.',
+        )
+        return
+    if exigida is not None and temperatura > exigida:
+        messages.warning(
+            request,
+            f'Chegou a {temperatura}°C — o produto exige {exigida}°C ou menos.',
+        )
