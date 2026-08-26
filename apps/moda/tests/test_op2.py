@@ -2,6 +2,7 @@ import json
 import re
 from decimal import Decimal
 
+from django.core.files.uploadedfile import SimpleUploadedFile
 from django.template.loader import get_template
 from django.test import TestCase
 from django.http import QueryDict
@@ -10,8 +11,8 @@ from django.urls import reverse
 from apps.cadastros.models import Cliente
 from apps.core.models import Empresa, Filial, PerfilAcesso, Usuario
 from apps.moda.models import (
-    Grade, ItemGrade, ItemPedidoProducao, OpcaoEstruturaOP2,
-    PedidoProducao, ProdutoModa, Tamanho,
+    ArquivoPedido, Grade, ItemGrade, ItemPedidoProducao, OpcaoEstruturaOP2,
+    PedidoProducao, ProdutoModa, Tamanho, VisualItemPedido,
 )
 from apps.moda.forms_cliente import ClienteRapidoForm
 from apps.moda.services.op2_estrutura import juntar_observacoes_item
@@ -275,6 +276,84 @@ class Op2Tests(TestCase):
         self.assertContains(resposta, 'quantidadeDraftGrade')
         self.assertContains(resposta, '.op2-qty-btn')
         self.assertContains(resposta, 'op2NovaMelhorada()')
+
+    def test_cada_grade_da_nova_op_tem_quantidades_independentes(self):
+        self.client.force_login(self._usuario())
+        session = self.client.session
+        session['filial_id'] = self.filial.pk
+        session.save()
+
+        resposta = self.client.get(reverse('moda:op2-create'))
+
+        self.assertContains(resposta, 'gradePorGrade')
+        self.assertContains(resposta, 'gradesSelecionadas()')
+        self.assertContains(resposta, 'quantidadeDraftGrade(grade.id,tamanhoId)')
+        self.assertContains(resposta, 'Cada grade selecionada possui suas próprias quantidades')
+
+    def test_nova_op_mostra_previa_de_anexos_e_mockups(self):
+        self.client.force_login(self._usuario())
+        session = self.client.session
+        session['filial_id'] = self.filial.pk
+        session.save()
+
+        resposta = self.client.get(reverse('moda:op2-create'))
+
+        self.assertContains(resposta, 'previewAnexos($event)')
+        self.assertContains(resposta, "previewMockup('frente',$event)")
+        self.assertContains(resposta, 'anexosPreview')
+        self.assertContains(resposta, 'mockupsPreview.frente')
+
+    def test_nova_op_salva_anexo_e_mockup_e_exibe_na_op(self):
+        self.client.force_login(self._usuario())
+        session = self.client.session
+        session['filial_id'] = self.filial.pk
+        session.save()
+        imagem = b'\x89PNG\r\n\x1a\nconteudo-de-teste'
+
+        resposta = self.client.post(reverse('moda:op2-create'), {
+            'cliente': str(self.cliente.pk),
+            'item_0_produto_id': str(self.produto.pk),
+            'item_0_quantidade': '2',
+            'item_0_valor_unitario': '10',
+            'arquivo': SimpleUploadedFile('arte.png', imagem, content_type='image/png'),
+            'mockup_frente_camisa': SimpleUploadedFile(
+                'frente.png', imagem, content_type='image/png',
+            ),
+        })
+
+        criado = PedidoProducao.objects.exclude(pk=self.pedido.pk).get()
+        self.assertRedirects(resposta, reverse('moda:op2-detail', args=[criado.pk]))
+        self.assertEqual(ArquivoPedido.objects.filter(pedido=criado).count(), 2)
+        visual = VisualItemPedido.objects.get(item__pedido=criado)
+        detalhe = self.client.get(reverse('moda:op2-detail', args=[criado.pk]))
+        self.assertContains(detalhe, visual.url_imagem)
+
+        for arquivo in ArquivoPedido.objects.filter(pedido=criado):
+            arquivo.arquivo.delete(save=False)
+        visual.imagem.delete(save=False)
+
+    def test_nova_op_pode_salvar_e_abrir_orcamento_pdf(self):
+        self.client.force_login(self._usuario())
+        session = self.client.session
+        session['filial_id'] = self.filial.pk
+        session.save()
+
+        resposta = self.client.post(reverse('moda:op2-create'), {
+            'cliente': str(self.cliente.pk),
+            'item_0_produto_id': str(self.produto.pk),
+            'item_0_quantidade': '2',
+            'item_0_valor_unitario': '25.50',
+            'destino': 'pdf',
+        })
+
+        criado = PedidoProducao.objects.exclude(pk=self.pedido.pk).get()
+        url_pdf = reverse('moda:pedido-orcamento-pdf', args=[criado.pk])
+        self.assertRedirects(resposta, url_pdf, fetch_redirect_response=False)
+
+        pdf = self.client.get(url_pdf)
+        self.assertEqual(pdf.status_code, 200)
+        self.assertEqual(pdf['Content-Type'], 'application/pdf')
+        self.assertTrue(pdf.content.startswith(b'%PDF-'))
 
     def test_tipos_de_peca_abre_um_tipo_por_vez(self):
         self.client.force_login(self._usuario())

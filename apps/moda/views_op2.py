@@ -231,6 +231,8 @@ class Op2CreateView(ModaBaseView):
                 self._salvar_mockups_do_item(request, pedido, primeiro_item)
 
         messages.success(request, f'Rascunho #{pedido.numero:06d} criado.')
+        if request.POST.get('destino') == 'pdf':
+            return redirect(reverse('moda:pedido-orcamento-pdf', args=[pedido.pk]))
         return _voltar(pedido)
 
     @staticmethod
