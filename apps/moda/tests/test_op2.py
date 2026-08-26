@@ -9,7 +9,10 @@ from django.urls import reverse
 
 from apps.cadastros.models import Cliente
 from apps.core.models import Empresa, Filial, PerfilAcesso, Usuario
-from apps.moda.models import Grade, ItemGrade, ItemPedidoProducao, PedidoProducao, ProdutoModa, Tamanho
+from apps.moda.models import (
+    Grade, ItemGrade, ItemPedidoProducao, OpcaoEstruturaOP2,
+    PedidoProducao, ProdutoModa, Tamanho,
+)
 from apps.moda.forms_cliente import ClienteRapidoForm
 from apps.moda.services.op2_estrutura import juntar_observacoes_item
 from apps.moda.services.kanban_comercial import COLUNAS
@@ -257,6 +260,62 @@ class Op2Tests(TestCase):
         )
         self.assertEqual(cliente.nome_fantasia, '')
         self.assertEqual(cliente.celular, '84999990000')
+
+    def test_grade_da_nova_op_tem_controles_grandes_e_digitacao_explicita(self):
+        self.client.force_login(self._usuario())
+        session = self.client.session
+        session['filial_id'] = self.filial.pk
+        session.save()
+
+        resposta = self.client.get(reverse('moda:op2-create'))
+
+        self.assertContains(resposta, 'class="op2-size-grid"')
+        self.assertContains(resposta, 'op2-qty-input')
+        self.assertContains(resposta, 'definirDraftGrade')
+        self.assertContains(resposta, 'quantidadeDraftGrade')
+        self.assertContains(resposta, '.op2-qty-btn')
+        self.assertContains(resposta, 'op2NovaMelhorada()')
+
+    def test_tipos_de_peca_abre_um_tipo_por_vez(self):
+        self.client.force_login(self._usuario())
+        session = self.client.session
+        session['filial_id'] = self.filial.pk
+        session.save()
+
+        resposta = self.client.get(
+            reverse('moda:op2-tipos-peca'),
+            {'tipo': 'agasalho'},
+        )
+
+        self.assertEqual(resposta.status_code, 200)
+        self.assertEqual(resposta.context['tipo_selecionado']['slug'], 'agasalho')
+        self.assertContains(resposta, 'Adicionar opção em Agasalho')
+        self.assertContains(resposta, 'class="tipo-option-row"')
+        self.assertContains(resposta, 'Opções ativas / total')
+
+    def test_edicao_do_tipo_atualiza_nome_de_todas_as_opcoes(self):
+        self.client.force_login(self._usuario())
+        session = self.client.session
+        session['filial_id'] = self.filial.pk
+        session.save()
+        self.client.get(reverse('moda:op2-tipos-peca'))
+
+        resposta = self.client.post(reverse('moda:op2-tipos-peca'), {
+            'acao': 'editar_tipo',
+            'tipo_peca': 'agasalho',
+            'tipo_atual': 'agasalho',
+            'tipo_label': 'Agasalho esportivo',
+        })
+
+        self.assertRedirects(
+            resposta,
+            f"{reverse('moda:op2-tipos-peca')}?tipo=agasalho",
+        )
+        labels = set(OpcaoEstruturaOP2.objects.filter(
+            filial=self.filial,
+            tipo_peca='agasalho',
+        ).values_list('tipo_label', flat=True))
+        self.assertEqual(labels, {'Agasalho esportivo'})
 
     def _usuario(self):
         user, _ = Usuario.objects.get_or_create(

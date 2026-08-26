@@ -718,9 +718,16 @@ class Op2EstruturaOpcaoView(ModaBaseView):
     def post(self, request):
         sincronizar_opcoes_padrao(_filial(request))
         acao = request.POST.get('acao') or ''
+        tipo_atual = (
+            request.POST.get('tipo_atual')
+            or request.POST.get('tipo_peca')
+            or ''
+        ).strip()
         try:
             if acao == 'criar':
                 self._criar(request)
+            elif acao == 'editar_tipo':
+                self._editar_tipo(request)
             elif acao == 'editar':
                 self._editar(request)
             elif acao == 'inativar':
@@ -733,7 +740,10 @@ class Op2EstruturaOpcaoView(ModaBaseView):
                 raise ValueError('Ação inválida.')
         except ValueError as erro:
             messages.error(request, str(erro))
-        return redirect(reverse('moda:op2-tipos-peca'))
+        destino = reverse('moda:op2-tipos-peca')
+        if tipo_atual:
+            destino = f'{destino}?tipo={tipo_atual}'
+        return redirect(destino)
 
     @staticmethod
     def _base_query(request):
@@ -745,7 +755,7 @@ class Op2EstruturaOpcaoView(ModaBaseView):
     def _criar(self, request):
         tipo_peca = (request.POST.get('tipo_peca') or '').strip()
         tipo_label = (request.POST.get('tipo_label') or '').strip()
-        campo = (request.POST.get('campo') or '').strip()
+        campo = self._normalizar_campo(request.POST.get('campo'))
         valor = (request.POST.get('valor') or '').strip()
         if not tipo_peca or not tipo_label or not campo or not valor:
             raise ValueError('Informe tipo, nome do tipo, campo e opção.')
@@ -759,17 +769,38 @@ class Op2EstruturaOpcaoView(ModaBaseView):
             raise ValueError('Essa opção já existe para este tipo de peça e campo.')
         messages.success(request, 'Opção cadastrada.')
 
+    def _editar_tipo(self, request):
+        tipo_peca = (request.POST.get('tipo_peca') or '').strip()
+        tipo_label = (request.POST.get('tipo_label') or '').strip()
+        if not tipo_peca or not tipo_label:
+            raise ValueError('Informe o nome do tipo de peça.')
+        atualizadas = self._base_query(request).filter(
+            tipo_peca=tipo_peca,
+        ).update(tipo_label=tipo_label, updated_at=timezone.now())
+        if not atualizadas:
+            raise ValueError('Tipo de peça não encontrado.')
+        messages.success(request, f'Tipo “{tipo_label}” atualizado.')
+
     def _editar(self, request):
         opcao = self._opcao(request)
         valor = (request.POST.get('valor') or '').strip()
         if not valor:
             raise ValueError('A opção não pode ficar vazia.')
         opcao.tipo_label = (request.POST.get('tipo_label') or opcao.tipo_label).strip()
-        opcao.campo = (request.POST.get('campo') or opcao.campo).strip()
+        opcao.campo = self._normalizar_campo(
+            request.POST.get('campo') or opcao.campo
+        )
         opcao.valor = valor
         opcao.ordem = int(request.POST.get('ordem') or 0)
-        opcao.save(update_fields=['tipo_label', 'campo', 'valor', 'ordem', 'updated_at'])
+        try:
+            opcao.save(update_fields=['tipo_label', 'campo', 'valor', 'ordem', 'updated_at'])
+        except IntegrityError:
+            raise ValueError('Essa opção já existe neste campo.')
         messages.success(request, 'Opção atualizada.')
+
+    @staticmethod
+    def _normalizar_campo(campo):
+        return '_'.join((campo or '').strip().lower().split())
 
     def _ativo(self, request, ativo):
         opcao = self._opcao(request)
@@ -794,11 +825,27 @@ class Op2EstruturaOpcaoView(ModaBaseView):
                 'slug': opcao.tipo_peca,
                 'label': opcao.tipo_label,
                 'campos': {},
+                'total': 0,
+                'ativos': 0,
             })
             tipo['campos'].setdefault(opcao.campo, []).append(opcao)
+            tipo['total'] += 1
+            tipo['ativos'] += int(opcao.ativo)
+        lista_tipos = list(tipos.values())
+        slug_selecionado = (request.GET.get('tipo') or '').strip()
+        tipo_selecionado = next(
+            (tipo for tipo in lista_tipos if tipo['slug'] == slug_selecionado),
+            lista_tipos[0] if lista_tipos else None,
+        )
+        for tipo in lista_tipos:
+            tipo['selecionado'] = tipo is tipo_selecionado
         return {
             'title': 'Tipos de peça',
-            'tipos': tipos.values(),
+            'tipos': lista_tipos,
+            'tipo_selecionado': tipo_selecionado,
+            'campos_disponiveis': (
+                list(tipo_selecionado['campos']) if tipo_selecionado else []
+            ),
             'opcoes': opcoes,
             'padrao': OP2_ESTRUTURA_OPCOES,
         }
