@@ -1,0 +1,267 @@
+{% extends "_base.html" %}
+{% block title %}{{ title }} — Polpa{% endblock %}
+{% block page_title %}{{ title }}{% endblock %}
+{% block content %}
+
+{% comment %}
+  DUAS TABELAS, E NÃO UMA. Subproduto tem destino e pode render caixa; perda
+  sumiu e só deixa custo. Os dois pesam igual na balança e são o oposto um do
+  outro no resultado — juntá-los num total só somaria bagaço vendido com polpa
+  derramada.
+
+  É TELA DE LEITURA. O apontamento continua na ordem, com quem estava na linha
+  no dia: mandar essa pessoa procurar outro menu é como o registro deixa de ser
+  feito.
+{% endcomment %}
+<div class="space-y-4">
+
+  <div class="flex flex-wrap items-start justify-between gap-3">
+    <div>
+      <p class="text-sm" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+        <a href="{% url 'polpa:hub' %}" :style="temaClaro ? 'color:#3b82f6;' : 'color:#60a5fa;'">Polpa de Frutas</a>
+        <span class="mx-1">›</span>
+        <a href="{% url 'polpa:grupo' 'producao' %}" :style="temaClaro ? 'color:#3b82f6;' : 'color:#60a5fa;'">Produção</a>
+      </p>
+      <h2 class="text-2xl font-semibold mt-1" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">{{ title }}</h2>
+      <p class="text-sm mt-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+        O que saiu da fruta e não virou produto. Apontado na ordem, consultado aqui.
+      </p>
+    </div>
+    <a href="{% url 'polpa:ordem-list' %}" class="btn-secondary text-sm">Ordens de produção</a>
+  </div>
+
+  {% comment %}
+    OS DOIS RESULTADOS FICAM SEPARADOS e nomeados. O de subproduto pode ser
+    positivo — casca vendida é receita. O de perda é sempre custo.
+  {% endcomment %}
+  <div class="grid sm:grid-cols-2 xl:grid-cols-4 gap-3">
+    <div class="card p-3">
+      <p class="text-xs uppercase tracking-wider" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Subproduto</p>
+      <p class="text-xl font-bold mt-1" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
+        {{ resumo.kg_subproduto|floatformat:"-3" }} kg
+      </p>
+      <p class="text-[11px] mt-1" :style="temaClaro ? 'color:#94a3b8;' : 'color:#71717a;'">
+        {{ resumo.subprodutos }} registro(s)
+      </p>
+    </div>
+    <div class="card p-3">
+      <p class="text-xs uppercase tracking-wider" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Resultado do subproduto</p>
+      {% if resumo.resultado >= 0 %}
+        <p class="text-xl font-bold mt-1" style="color:#059669;">R$ {{ resumo.resultado|floatformat:2 }}</p>
+      {% else %}
+        <p class="text-xl font-bold mt-1" style="color:#d97706;">R$ {{ resumo.resultado|floatformat:2 }}</p>
+      {% endif %}
+      <p class="text-[11px] mt-1" :style="temaClaro ? 'color:#94a3b8;' : 'color:#71717a;'">
+        recebido − custo de destinação
+      </p>
+    </div>
+    <div class="card p-3">
+      <p class="text-xs uppercase tracking-wider" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Perda</p>
+      <p class="text-xl font-bold mt-1" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
+        {{ resumo.kg_perdido|floatformat:"-3" }} kg
+      </p>
+      <p class="text-[11px] mt-1" :style="temaClaro ? 'color:#94a3b8;' : 'color:#71717a;'">
+        {{ resumo.perdas }} registro(s) · R$ {{ resumo.custo_perdido|floatformat:2 }}
+      </p>
+    </div>
+    <div class="card p-3">
+      {% comment %}
+        PERDA EVITÁVEL é a única sobre a qual dá para agir — misturá-la com a
+        inevitável faria a fábrica perseguir casca de manga. E o pendente de
+        crédito é a lacuna que faz alguém comprar ração que já está no pátio.
+      {% endcomment %}
+      <p class="text-xs uppercase tracking-wider" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Sobre o que agir</p>
+      <p class="text-xl font-bold mt-1" style="color:#d97706;">{{ resumo.evitaveis }}</p>
+      <p class="text-[11px] mt-1" :style="temaClaro ? 'color:#94a3b8;' : 'color:#71717a;'">
+        perda(s) evitável(is)
+        {% if resumo.pendentes %}
+          · <span style="color:#d97706;">{{ resumo.pendentes }} sem crédito no estoque</span>
+        {% endif %}
+      </p>
+    </div>
+  </div>
+
+  <form method="get" class="card p-3 flex flex-wrap items-end gap-3">
+    <div class="flex-1 min-w-[200px]">
+      <label class="form-label">Ordem, produto, destinatário ou motivo</label>
+      <input type="text" name="busca" value="{{ filtros.busca }}" class="form-input w-full"
+             autocomplete="off" placeholder="Ex.: OP-0012, casca, prefeitura">
+    </div>
+    <div class="w-full sm:w-48">
+      <label class="form-label">Tipo</label>
+      <select name="tipo" class="form-select">
+        <option value="">Todos</option>
+        {% for valor, rotulo in tipos %}
+          <option value="{{ valor }}" {% if filtros.tipo == valor %}selected{% endif %}>{{ rotulo }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="w-full sm:w-48">
+      <label class="form-label">Destino</label>
+      <select name="destino" class="form-select">
+        <option value="">Todos</option>
+        {% for valor, rotulo in destinos %}
+          <option value="{{ valor }}" {% if filtros.destino == valor %}selected{% endif %}>{{ rotulo }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="flex items-center gap-2">
+      <button type="submit" class="btn-primary text-sm">Filtrar</button>
+      {% if tem_filtro %}
+        <a href="{% url 'polpa:perda-list' %}" class="btn-secondary text-sm">Limpar</a>
+      {% endif %}
+    </div>
+  </form>
+
+  {% if so_subproduto %}
+    <div class="card p-3" style="border-left:3px solid #d97706;">
+      <p class="text-sm" style="color:#b45309;">
+        Tipo e destino são do subproduto — a lista de perdas fica de fora
+        enquanto esses filtros estiverem aplicados.
+      </p>
+    </div>
+  {% endif %}
+
+  <div class="card overflow-hidden">
+    <div class="p-4 pb-2">
+      <h3 class="text-sm font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">Subprodutos — saíram com destino</h3>
+      <p class="text-xs mt-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+        Casca, caroço, bagaço. Reaproveitar é o melhor destino; descartar é o pior.
+      </p>
+    </div>
+    <div class="overflow-x-auto">
+      <table class="w-full text-sm">
+        <thead>
+          <tr class="border-b" :style="temaClaro ? 'border-color:#e2e8f0;' : 'border-color:#2a2a2e;'">
+            <th class="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wide" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Ordem</th>
+            <th class="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wide" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">O que saiu</th>
+            <th class="text-right px-4 py-3 text-xs font-semibold uppercase tracking-wide" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Quantidade</th>
+            <th class="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wide" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Destino</th>
+            <th class="text-right px-4 py-3 text-xs font-semibold uppercase tracking-wide" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Resultado</th>
+            <th class="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wide" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Data</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for s in subprodutos %}
+            <tr class="border-b" :style="temaClaro ? 'border-color:#f1f5f9;' : 'border-color:#1e1e22;'">
+              <td class="px-4 py-3">
+                <a href="{% url 'polpa:ordem-detail' s.ordem_id %}" class="font-semibold"
+                   :style="temaClaro ? 'color:#2563eb;' : 'color:#60a5fa;'">{{ s.ordem.numero }}</a>
+              </td>
+              <td class="px-4 py-3" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
+                {{ s.rotulo }}
+                <span class="block text-xs" :style="temaClaro ? 'color:#94a3b8;' : 'color:#71717a;'">{{ s.get_tipo_display }}</span>
+              </td>
+              <td class="px-4 py-3 text-right" :style="temaClaro ? 'color:#374151;' : 'color:#cbd5e1;'">
+                {{ s.quantidade|floatformat:"-3" }} {{ s.unidade }}
+              </td>
+              <td class="px-4 py-3">
+                {% if s.destino == 'descarte' %}
+                  <span class="soft-pill is-red text-xs">{{ s.get_destino_display }}</span>
+                {% else %}
+                  <span class="soft-pill is-green text-xs">{{ s.get_destino_display }}</span>
+                {% endif %}
+                {% if s.destinatario %}
+                  <span class="block text-[11px] mt-1" :style="temaClaro ? 'color:#94a3b8;' : 'color:#71717a;'">{{ s.destinatario }}</span>
+                {% endif %}
+                {% if s.pendente_de_credito %}
+                  <span class="block text-[11px] mt-1" style="color:#d97706;">fica na casa, sem crédito no estoque</span>
+                {% endif %}
+              </td>
+              <td class="px-4 py-3 text-right font-semibold">
+                {% if s.resultado > 0 %}
+                  <span style="color:#059669;">R$ {{ s.resultado|floatformat:2 }}</span>
+                {% elif s.resultado < 0 %}
+                  <span style="color:#d97706;">R$ {{ s.resultado|floatformat:2 }}</span>
+                {% else %}
+                  <span :style="temaClaro ? 'color:#94a3b8;' : 'color:#71717a;'">—</span>
+                {% endif %}
+              </td>
+              <td class="px-4 py-3" :style="temaClaro ? 'color:#374151;' : 'color:#cbd5e1;'">{{ s.data|date:"d/m/Y" }}</td>
+            </tr>
+          {% empty %}
+            <tr>
+              <td colspan="6" class="px-4 py-10 text-center">
+                <p class="text-sm max-w-md mx-auto" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+                  {% if tem_filtro %}
+                    Nenhum subproduto com esse filtro.
+                  {% else %}
+                    Nenhum subproduto apontado. O registro é feito na ordem, por quem
+                    estava na linha — é lá que se sabe quanta casca saiu.
+                  {% endif %}
+                </p>
+              </td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="card overflow-hidden">
+    <div class="p-4 pb-2">
+      <h3 class="text-sm font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">Perdas — sumiram</h3>
+      <p class="text-xs mt-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+        Não têm destino nem voltam. O que elas deixam é custo.
+      </p>
+    </div>
+    <div class="overflow-x-auto">
+      <table class="w-full text-sm">
+        <thead>
+          <tr class="border-b" :style="temaClaro ? 'border-color:#e2e8f0;' : 'border-color:#2a2a2e;'">
+            <th class="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wide" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Ordem</th>
+            <th class="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wide" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Produto</th>
+            <th class="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wide" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Motivo</th>
+            <th class="text-right px-4 py-3 text-xs font-semibold uppercase tracking-wide" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Quantidade</th>
+            <th class="text-right px-4 py-3 text-xs font-semibold uppercase tracking-wide" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Custo</th>
+            <th class="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wide" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Evitável</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for p in perdas %}
+            <tr class="border-b" :style="temaClaro ? 'border-color:#f1f5f9;' : 'border-color:#1e1e22;'">
+              <td class="px-4 py-3 font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">{{ p.ordem_producao.numero }}</td>
+              <td class="px-4 py-3" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">{{ p.produto }}</td>
+              <td class="px-4 py-3" :style="temaClaro ? 'color:#374151;' : 'color:#cbd5e1;'">
+                {{ p.get_tipo_perda_display }}
+                {% if p.motivo_detalhado %}
+                  <span class="block text-xs" :style="temaClaro ? 'color:#94a3b8;' : 'color:#71717a;'">{{ p.motivo_detalhado|truncatechars:60 }}</span>
+                {% endif %}
+              </td>
+              <td class="px-4 py-3 text-right" :style="temaClaro ? 'color:#374151;' : 'color:#cbd5e1;'">
+                {{ p.quantidade|floatformat:"-3" }} {{ p.unidade_medida }}
+              </td>
+              <td class="px-4 py-3 text-right font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
+                {% if p.impacto_custo %}R$ {{ p.impacto_custo|floatformat:2 }}{% else %}—{% endif %}
+              </td>
+              <td class="px-4 py-3">
+                {% if p.perda_evitavel %}
+                  <span class="soft-pill is-amber text-xs">Evitável</span>
+                {% else %}
+                  <span class="soft-pill is-slate text-xs">Do processo</span>
+                {% endif %}
+              </td>
+            </tr>
+          {% empty %}
+            <tr>
+              <td colspan="6" class="px-4 py-10 text-center">
+                <p class="text-sm max-w-md mx-auto" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+                  {% if so_subproduto %}
+                    Filtro de tipo ou destino aplicado — limpe para ver as perdas.
+                  {% elif tem_filtro %}
+                    Nenhuma perda com esse filtro.
+                  {% else %}
+                    Nenhuma perda registrada. Ela é apontada no processo da ordem,
+                    junto da etapa em que aconteceu.
+                  {% endif %}
+                </p>
+              </td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+</div>
+{% endblock %}

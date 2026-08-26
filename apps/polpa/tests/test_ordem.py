@@ -714,3 +714,151 @@ class ATelaDeBatidasTests(OrdemBase):
 
         for resto in ('{#', '#}', '{%', '%}'):
             self.assertNotIn(resto, html, f'vazou "{resto}" no HTML')
+
+
+class ATelaDePerdasTests(OrdemBase):
+    """
+    O que saiu da fruta e não virou produto — as duas metades.
+
+    Subproduto tem destino e pode render caixa; perda sumiu e só deixa custo.
+    Os dois pesam igual na balança e são o oposto um do outro no resultado.
+    """
+
+    def _subproduto(self, **campos):
+        from apps.polpa.models import Subproduto
+
+        dados = {
+            'filial': self.filial, 'ordem': self.op,
+            'tipo': Subproduto.Tipo.CASCA, 'quantidade': Decimal('120'),
+            'unidade': 'KG', 'destino': Subproduto.Destino.VENDA,
+            'valor_recebido': Decimal('60'), 'custo_destinacao': Decimal('0'),
+            'data': timezone.localdate(),
+        }
+        dados.update(campos)
+        return Subproduto.objects.create(**dados)
+
+    def _perda(self, **campos):
+        from apps.producao.constants.enums import TipoPerda
+        from apps.producao.models import PerdaProducao
+
+        dados = {
+            'ordem_producao': self.op.ordem,
+            'tipo_perda': TipoPerda.PROCESSO,
+            'produto': self.acabado,
+            'quantidade': Decimal('30'), 'unidade_medida': 'KG',
+            'impacto_custo': Decimal('45'), 'perda_evitavel': True,
+            'usuario_registro': self.usuario,
+        }
+        dados.update(campos)
+        return PerdaProducao.objects.create(**dados)
+
+    def setUp(self):
+        super().setUp()
+        self.op = self._op()
+
+    def test_a_tela_mostra_as_duas_metades_separadas(self):
+        self._subproduto()
+        self._perda()
+
+        resposta = self.client.get(reverse('polpa:perda-list'))
+
+        self.assertEqual(resposta.status_code, 200)
+        self.assertEqual(len(resposta.context['subprodutos']), 1)
+        self.assertEqual(len(resposta.context['perdas']), 1)
+
+    def test_o_resultado_do_subproduto_nao_se_mistura_com_o_custo_da_perda(self):
+        """
+        Casca vendida e' receita; polpa derramada e' custo. Somar os dois num
+        numero so' e' exatamente a conta que nao se quer.
+        """
+        self._subproduto(valor_recebido=Decimal('60'))
+        self._perda(impacto_custo=Decimal('45'))
+
+        resumo = self.client.get(reverse('polpa:perda-list')).context['resumo']
+
+        self.assertEqual(resumo['resultado'], Decimal('60'))
+        self.assertEqual(resumo['custo_perdido'], Decimal('45'))
+
+    def test_descarte_com_custo_de_destinacao_da_resultado_negativo(self):
+        """Bagaco no caminhao da prefeitura pesa igual e e' o oposto de bagaco vendido."""
+        from apps.polpa.models import Subproduto
+
+        self._subproduto(
+            destino=Subproduto.Destino.DESCARTE,
+            valor_recebido=Decimal('0'), custo_destinacao=Decimal('80'),
+        )
+
+        resumo = self.client.get(reverse('polpa:perda-list')).context['resumo']
+
+        self.assertEqual(resumo['resultado'], Decimal('-80'))
+
+    def test_perda_inevitavel_nao_entra_no_que_se_pode_agir(self):
+        """
+        Misturar a evitavel com a do processo faria a fabrica perseguir casca
+        de manga.
+        """
+        self._perda(perda_evitavel=True)
+        self._perda(perda_evitavel=False)
+
+        resumo = self.client.get(reverse('polpa:perda-list')).context['resumo']
+
+        self.assertEqual(resumo['perdas'], 2)
+        self.assertEqual(resumo['evitaveis'], 1)
+
+    def test_o_filtro_de_destino_avisa_que_esconde_as_perdas(self):
+        """
+        Tipo e destino sao do subproduto. Filtrar perda por eles devolveria
+        vazio sempre, e daria a impressao de que nao ha' perda registrada.
+        """
+        from apps.polpa.models import Subproduto
+
+        self._subproduto()
+        self._perda()
+
+        resposta = self.client.get(
+            reverse('polpa:perda-list'),
+            {'destino': Subproduto.Destino.VENDA},
+        )
+
+        self.assertTrue(resposta.context['so_subproduto'])
+        self.assertEqual(len(resposta.context['perdas']), 0)
+        self.assertContains(resposta, 'a lista de perdas fica de fora')
+
+    def test_o_resumo_bate_com_o_que_a_tabela_mostra(self):
+        """
+        Somado sobre o que a tela JA' CARREGOU. Somar de novo no banco daria,
+        com filtro aplicado, um total no topo e outro na tabela -- divergencia
+        que ninguem consegue explicar depois.
+        """
+        from apps.polpa.models import Subproduto
+
+        self._subproduto(tipo=Subproduto.Tipo.CASCA, quantidade=Decimal('100'))
+        self._subproduto(tipo=Subproduto.Tipo.SEMENTE, quantidade=Decimal('50'))
+
+        resposta = self.client.get(
+            reverse('polpa:perda-list'), {'tipo': Subproduto.Tipo.CASCA},
+        )
+
+        self.assertEqual(len(resposta.context['subprodutos']), 1)
+        self.assertEqual(resposta.context['resumo']['kg_subproduto'], Decimal('100'))
+
+    def test_a_rota_do_menu_abre_a_tela_de_verdade(self):
+        from django.urls import resolve
+
+        from apps.polpa.views import ItemView
+
+        endereco = reverse('polpa:item', args=['producao', 'perdas'])
+
+        self.assertIsNot(
+            getattr(resolve(endereco).func, 'view_class', None), ItemView,
+        )
+        self.assertEqual(endereco, reverse('polpa:perda-list'))
+
+    def test_a_tela_nao_vaza_sintaxe_de_template(self):
+        self._subproduto()
+        self._perda()
+
+        html = self.client.get(reverse('polpa:perda-list')).content.decode()
+
+        for resto in ('{#', '#}', '{%', '%}'):
+            self.assertNotIn(resto, html, f'vazou "{resto}" no HTML')

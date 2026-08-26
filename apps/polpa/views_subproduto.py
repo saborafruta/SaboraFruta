@@ -6,13 +6,15 @@ saíram 500 kg de casca é quem estava na linha, no dia, olhando aquela ordem �
 mandá-lo procurar outro menu é como o apontamento deixa de ser feito.
 """
 from django.contrib import messages
-from django.shortcuts import get_object_or_404, redirect
+from django.shortcuts import get_object_or_404, redirect, render
 from django.views.decorators.http import require_POST
 
 from apps.core.services.exceptions import DomainError
 from apps.core.services.permissions import requer_permissao
 from apps.polpa.models import OrdemPolpa, Subproduto
+from apps.polpa.services.perdas import PerdasService
 from apps.polpa.services.subproduto import SubprodutoService
+from apps.polpa.views import PolpaBaseView
 
 
 def _ordem(request, pk) -> OrdemPolpa:
@@ -80,3 +82,51 @@ def subproduto_excluir(request, pk, subproduto_pk):
     subproduto.delete()
     messages.success(request, 'Registro removido.')
     return redirect('polpa:ordem-detail', pk=op.pk)
+
+
+class PerdasView(PolpaBaseView):
+    """
+    O que saiu da fruta e nao virou produto — subproduto e perda, lado a lado.
+
+    E' TELA DE LEITURA, e o registro continua na ordem. Quem sabe que sairam
+    500 kg de casca e' quem estava na linha, no dia, olhando aquela ordem;
+    mandar essa pessoa procurar outro menu e' como o apontamento deixa de ser
+    feito. Aqui se CONSULTA o que ja' foi apontado.
+
+    AS DUAS METADES FICAM SEPARADAS, e a separacao e' dinheiro: subproduto tem
+    destino e pode ate' render caixa; perda sumiu e so' deixa custo. Somar os
+    dois num numero so' juntaria bagaco vendido com polpa derramada.
+
+    Junto numa tela porque a pergunta e' "onde foi parar a fruta que nao virou
+    polpa", e ela nao se responde olhando metade: o rendimento que falta esta'
+    repartido entre as duas.
+    """
+
+    area = 'producao'
+
+    def get(self, request):
+        filial = request.filial_ativa
+        filtros = {
+            'busca': (request.GET.get('busca') or '').strip(),
+            'tipo': (request.GET.get('tipo') or '').strip(),
+            'destino': (request.GET.get('destino') or '').strip(),
+        }
+        subprodutos = list(PerdasService.subprodutos(filial, filtros)[:200])
+        # Tipo e destino sao do subproduto; filtrar perda por eles devolveria
+        # vazio sempre e daria a impressao de que nao ha' perda registrada.
+        perdas = (
+            []
+            if filtros['tipo'] or filtros['destino']
+            else list(PerdasService.perdas(filial, filtros)[:200])
+        )
+        return render(request, 'polpa/perdas.html', {
+            'title': 'Perdas e refugo',
+            'subprodutos': subprodutos,
+            'perdas': perdas,
+            'filtros': filtros,
+            'tem_filtro': any(filtros.values()),
+            'so_subproduto': bool(filtros['tipo'] or filtros['destino']),
+            'tipos': Subproduto.Tipo.choices,
+            'destinos': Subproduto.Destino.choices,
+            'resumo': PerdasService.resumo(subprodutos, perdas),
+        })
