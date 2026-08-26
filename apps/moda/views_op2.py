@@ -235,6 +235,11 @@ class Op2CreateView(ModaBaseView):
 
     @staticmethod
     def _context(request):
+        tamanhos = list(
+            Tamanho.objects.for_filial(_filial(request)).filter(
+                ativo=True,
+            ).order_by('tipo', 'ordem', 'sigla')
+        )
         modelos = list(
             ProdutoModa.objects.for_filial(_filial(request)).filter(
                 ativo=True,
@@ -277,9 +282,10 @@ class Op2CreateView(ModaBaseView):
                 ).prefetch_related('itens__tamanho').order_by('tipo', 'nome')
             ],
             'estrutura_opcoes': opcoes_estrutura_filial(_filial(request)),
-            'tamanhos': Tamanho.objects.for_filial(_filial(request)).filter(
-                ativo=True,
-            ).order_by('tipo', 'ordem', 'sigla'),
+            'tamanhos': tamanhos,
+            'tamanhos_labels': {
+                str(tamanho.pk): tamanho.sigla for tamanho in tamanhos
+            },
             'tipos_arte': Personalizacao.Tipo.choices,
             'tecnicas_arte': Personalizacao.Tecnica.choices,
             'tipos_arquivo': ArquivoPedido.Tipo.choices,

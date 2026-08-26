@@ -1,3 +1,5 @@
+import json
+import re
 from decimal import Decimal
 
 from django.template.loader import get_template
@@ -180,6 +182,33 @@ class Op2Tests(TestCase):
         self.assertEqual(resposta.status_code, 200)
         self.assertContains(resposta, 'op2-clientes')
         self.assertContains(resposta, cliente_antigo.razao_social)
+
+    def test_nova_op_renderiza_mapa_de_tamanhos_como_json_valido(self):
+        tamanho = Tamanho.objects.create(
+            filial=self.filial,
+            sigla="G'Especial",
+            ordem=10,
+        )
+        tamanho.refresh_from_db()
+        self.client.force_login(self._usuario())
+        session = self.client.session
+        session['filial_id'] = self.filial.pk
+        session.save()
+
+        resposta = self.client.get(reverse('moda:op2-create'))
+        html = resposta.content.decode()
+        bloco = re.search(
+            r'<script id="op2-tamanhos-labels" type="application/json">(.*?)</script>',
+            html,
+            re.DOTALL,
+        )
+
+        self.assertIsNotNone(bloco)
+        self.assertEqual(json.loads(bloco.group(1)), {str(tamanho.pk): tamanho.sigla})
+        self.assertContains(
+            resposta,
+            "tamanhoLabels:JSON.parse(document.getElementById('op2-tamanhos-labels').textContent)",
+        )
 
     def _usuario(self):
         user, _ = Usuario.objects.get_or_create(
