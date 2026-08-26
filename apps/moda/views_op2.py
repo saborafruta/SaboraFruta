@@ -95,6 +95,62 @@ def _observacoes_pedido(request):
     return observacoes
 
 
+def _dados_modal_item(item, estrutura_opcoes):
+    """Serializa um item para o mesmo editor completo usado ao adicioná-lo."""
+    texto = (item.observacoes or '').strip()
+    marcador = 'Estrutura da peça:'
+    observacoes = texto
+    estrutura_tipo = next(iter(estrutura_opcoes), 'camisa')
+    estrutura = {}
+    if marcador in texto:
+        observacoes, bloco = texto.split(marcador, 1)
+        observacoes = observacoes.strip()
+        linhas = [linha.strip() for linha in bloco.splitlines() if linha.strip()]
+        rotulos = {
+            str(grupo.get('label') or slug).strip().casefold(): slug
+            for slug, grupo in estrutura_opcoes.items()
+        }
+        for linha in linhas:
+            if ':' not in linha:
+                continue
+            chave, valor = (parte.strip() for parte in linha.split(':', 1))
+            if chave.casefold() == 'tipo de peça':
+                estrutura_tipo = rotulos.get(valor.casefold(), estrutura_tipo)
+                continue
+            campo = '_'.join(chave.casefold().split())
+            estrutura[campo] = valor
+
+    arte = item.personalizacoes.first()
+    grade_id = str(item.grade_tamanho_id or '')
+    quantidades = {
+        str(linha.tamanho_id): linha.quantidade for linha in item.grade.all()
+    }
+    return {
+        'item_id': str(item.pk),
+        'produto_id': str(item.produto_id or ''),
+        'nome': item.nome_exibicao,
+        'codigo': item.produto.codigo if item.produto_id else '',
+        'info': ' · '.join(filter(None, [
+            item.produto.codigo if item.produto_id else '',
+            item.referencia,
+            item.grade_tamanho.nome if item.grade_tamanho_id else '',
+        ])),
+        'quantidade': item.quantidade,
+        'valor_unitario': str(item.valor_unitario),
+        'referencia': item.referencia,
+        'acabamento': item.acabamento,
+        'estrutura_tipo': estrutura_tipo,
+        'estrutura': estrutura,
+        'arte_tipo': arte.tipo if arte else '',
+        'arte_tecnica': arte.tecnica if arte else '',
+        'arte_local': arte.local if arte else '',
+        'arte_observacoes': arte.observacoes if arte else '',
+        'item_observacoes': observacoes,
+        'grades': [grade_id] if grade_id else [],
+        'gradePorGrade': {grade_id: quantidades} if grade_id else {},
+    }
+
+
 def _sincronizar_status(pedido):
     """A OP acompanha o item pendente menos avançado, sem esconder atrasos."""
     itens = list(pedido.itens.all())
@@ -190,6 +246,7 @@ class Op2CreateView(ModaBaseView):
                 item.observacoes = juntar_observacoes_item(
                     request.POST.get(f'item_{indice}_item_observacoes') or '',
                     self._post_item(request, indice),
+                    opcoes_estrutura_filial(_filial(request)),
                 )
                 item.save()
                 primeiro_item = primeiro_item or item
@@ -422,6 +479,15 @@ class Op2DetailView(ModaBaseView):
             reverse('moda_publico:pedido', args=[pedido.token_publico])
         )
         eventos = HistoricoService.do_pedido(pedido)
+        estrutura_opcoes = opcoes_estrutura_filial(_filial(request))
+        grades = list(
+            Grade.objects.for_filial(_filial(request)).filter(ativo=True)
+            .prefetch_related('itens__tamanho').order_by('tipo', 'nome')
+        )
+        tamanhos = list(
+            Tamanho.objects.for_filial(_filial(request)).filter(ativo=True)
+            .order_by('tipo', 'ordem', 'sigla')
+        )
         return render(request, 'moda/op2_detail.html', {
             'title': f'OP 2.0 #{pedido.numero:06d}',
             'pedido': pedido,
@@ -429,6 +495,7 @@ class Op2DetailView(ModaBaseView):
             'modelos': modelos,
             'modelos_grade': {
                 str(produto.pk): {
+                    'grade_id': str(produto.grade_id or ''),
                     'grade': produto.grade.nome if produto.grade_id else '',
                     'tamanhos': [
                         str(i.tamanho_id) for i in produto.grade.itens.all()
@@ -436,7 +503,25 @@ class Op2DetailView(ModaBaseView):
                 }
                 for produto in modelos
             },
-            'estrutura_opcoes': opcoes_estrutura_filial(_filial(request)),
+            'grades_json': [
+                {
+                    'id': str(grade.pk),
+                    'nome': grade.nome,
+                    'tipo': grade.get_tipo_display(),
+                    'resumo': grade.resumo,
+                    'tamanhos': [str(item.tamanho_id) for item in grade.itens.all()],
+                }
+                for grade in grades
+            ],
+            'tamanhos_labels': {
+                str(tamanho.pk): tamanho.sigla for tamanho in tamanhos
+            },
+            'itens_modal_json': {
+                str(item.pk): _dados_modal_item(item, estrutura_opcoes)
+                for item in itens
+            },
+            'estrutura_opcoes': estrutura_opcoes,
+            'estrutura_tipo_padrao': next(iter(estrutura_opcoes), 'camisa'),
             'status_choices': status_choices_kanban(),
             'status_atual': status_destino_kanban(pedido.status),
             'item_status_choices': ItemPedidoProducao.StatusFluxo.choices,
@@ -495,36 +580,45 @@ class Op2ActionView(ModaBaseView):
         messages.success(request, 'Rascunho salvo.')
 
     def _acao_adicionar_item(self, request, pedido):
-        dados = request.POST.copy()
-        produto_id = dados.get('produto_id')
-        dados['produto'] = f'moda:{produto_id}' if produto_id else ''
-        dados['observacoes'] = request.POST.get('observacoes') or ''
-        form = ItemPedidoProducaoForm(dados, filial=_filial(request))
-        if not form.is_valid():
-            raise ValueError('Produto: ' + '; '.join(
-                erro for erros in form.errors.values() for erro in erros
-            ))
-        item = form.save(commit=False)
-        item.pedido = pedido
-        item.ordem = (pedido.itens.count() + 1) * 10
-        item.status_fluxo = (
-            ItemPedidoProducao.StatusFluxo.ORCAMENTO
-            if pedido.status == PedidoProducao.Status.ORCAMENTO
-            else ItemPedidoProducao.StatusFluxo.APROVADO
-        )
-        item.observacoes = juntar_observacoes_item(item.observacoes, request.POST)
-        item.save()
-        Op2CreateView._copiar_grade_do_modelo(item)
-        Op2CreateView._salvar_mockups_do_item(request, pedido, item)
-        if request.POST.get('arte_tecnica') or request.POST.get('arte_local'):
-            Personalizacao.objects.create(
-                item=item,
-                tipo=request.POST.get('arte_tipo') or Personalizacao.Tipo.ARTE,
-                tecnica=request.POST.get('arte_tecnica') or Personalizacao.Tecnica.SUBLIMACAO,
-                local=(request.POST.get('arte_local') or '').strip(),
-                observacoes=(request.POST.get('arte_observacoes') or '').strip(),
+        grades = self._grades_selecionadas(request)
+        alvos = grades or [None]
+        criados = []
+        for grade in alvos:
+            dados = request.POST.copy()
+            produto_id = dados.get('produto_id')
+            dados['produto'] = f'moda:{produto_id}' if produto_id else ''
+            dados['observacoes'] = request.POST.get('item_observacoes') or ''
+            quantidades = self._quantidades_grade_modal(request, grade) if grade else {}
+            if grade:
+                dados['quantidade'] = str(sum(quantidades.values()))
+            form = ItemPedidoProducaoForm(dados, filial=_filial(request))
+            if not form.is_valid():
+                raise ValueError('Produto: ' + '; '.join(
+                    erro for erros in form.errors.values() for erro in erros
+                ))
+            item = form.save(commit=False)
+            item.pedido = pedido
+            item.ordem = (pedido.itens.count() + 1) * 10
+            item.status_fluxo = (
+                ItemPedidoProducao.StatusFluxo.ORCAMENTO
+                if pedido.status == PedidoProducao.Status.ORCAMENTO
+                else ItemPedidoProducao.StatusFluxo.APROVADO
             )
-        messages.success(request, f'{item.nome_exibicao} adicionado.')
+            item.grade_tamanho = grade
+            item.observacoes = juntar_observacoes_item(
+                item.observacoes, request.POST, opcoes_estrutura_filial(_filial(request)),
+            )
+            item.save()
+            if grade:
+                self._substituir_grade(item, grade, quantidades)
+            self._salvar_personalizacao(request, item)
+            Op2CreateView._salvar_mockups_do_item(request, pedido, item)
+            criados.append(item)
+        GradePedidoService.recalcular_pedido(pedido)
+        if len(criados) == 1:
+            messages.success(request, f'{criados[0].nome_exibicao} adicionado.')
+        else:
+            messages.success(request, f'{len(criados)} itens adicionados, um para cada grade.')
 
     def _acao_visual_item(self, request, pedido):
         item = get_object_or_404(pedido.itens, pk=request.POST.get('item_id'))
@@ -566,7 +660,21 @@ class Op2ActionView(ModaBaseView):
 
     def _acao_editar_item(self, request, pedido):
         item = get_object_or_404(pedido.itens, pk=request.POST.get('item_id'))
-        quantidade = int(request.POST.get('quantidade') or item.quantidade or 1)
+        produto_id = request.POST.get('produto_id')
+        if produto_id:
+            item.produto = get_object_or_404(
+                ProdutoModa.objects.for_filial(_filial(request)).filter(ativo=True),
+                pk=produto_id,
+            )
+        grades = self._grades_selecionadas(request)
+        if len(grades) > 1:
+            raise ValueError('Ao editar, mantenha somente uma grade por produto.')
+        grade = grades[0] if grades else None
+        quantidades = self._quantidades_grade_modal(request, grade) if grade else {}
+        quantidade = (
+            sum(quantidades.values()) if grade
+            else int(request.POST.get('quantidade') or item.quantidade or 1)
+        )
         if quantidade < 1:
             raise ValueError('A quantidade precisa ser pelo menos 1.')
         entregue = min(item.quantidade_entregue, quantidade)
@@ -575,13 +683,86 @@ class Op2ActionView(ModaBaseView):
         item.valor_unitario = request.POST.get('valor_unitario') or 0
         item.referencia = (request.POST.get('referencia') or '').strip()
         item.acabamento = (request.POST.get('acabamento') or '').strip()
-        item.observacoes = (request.POST.get('observacoes') or '').strip()
+        item.grade_tamanho = grade
+        item.observacoes = juntar_observacoes_item(
+            request.POST.get('item_observacoes') or '', request.POST,
+            opcoes_estrutura_filial(_filial(request)),
+        )
         item.save(update_fields=[
-            'quantidade', 'quantidade_entregue', 'valor_unitario', 'referencia',
-            'acabamento', 'observacoes',
+            'produto', 'grade_tamanho', 'quantidade', 'quantidade_entregue',
+            'valor_unitario', 'referencia', 'acabamento', 'observacoes',
         ])
+        if grade:
+            self._substituir_grade(item, grade, quantidades)
+        else:
+            item.grade.all().delete()
+        self._salvar_personalizacao(request, item)
+        GradePedidoService.recalcular_pedido(pedido)
         _sincronizar_status(pedido)
         messages.success(request, 'Produto atualizado.')
+
+    @staticmethod
+    def _salvar_personalizacao(request, item):
+        arte = item.personalizacoes.first()
+        if not any(request.POST.get(campo) for campo in (
+            'arte_tipo', 'arte_tecnica', 'arte_local', 'arte_observacoes',
+        )):
+            if arte:
+                arte.delete()
+            return
+        arte = arte or Personalizacao(item=item)
+        arte.tipo = request.POST.get('arte_tipo') or Personalizacao.Tipo.ARTE
+        arte.tecnica = (
+            request.POST.get('arte_tecnica') or Personalizacao.Tecnica.SUBLIMACAO
+        )
+        arte.local = (request.POST.get('arte_local') or '').strip()
+        arte.observacoes = (request.POST.get('arte_observacoes') or '').strip()
+        arte.save()
+
+    @staticmethod
+    def _grades_selecionadas(request):
+        ids = list(dict.fromkeys(
+            valor for valor in request.POST.getlist('grades') if str(valor).isdigit()
+        ))
+        if not ids:
+            return []
+        grades = {
+            str(grade.pk): grade
+            for grade in Grade.objects.for_filial(_filial(request)).filter(
+                ativo=True, pk__in=ids,
+            ).prefetch_related('itens__tamanho')
+        }
+        if len(grades) != len(ids):
+            raise ValueError('Uma das grades selecionadas não está disponível.')
+        return [grades[grade_id] for grade_id in ids]
+
+    @staticmethod
+    def _quantidades_grade_modal(request, grade):
+        prefixo = f'grade_{grade.pk}_'
+        quantidades = {}
+        for linha in grade.itens.all():
+            valor = request.POST.get(f'{prefixo}{linha.tamanho_id}', '0')
+            try:
+                quantidade = int(valor or 0)
+            except (TypeError, ValueError):
+                raise ValueError('Grade: informe apenas números nas quantidades.')
+            if quantidade < 0:
+                raise ValueError('Grade: quantidade não pode ser negativa.')
+            quantidades[linha.tamanho_id] = quantidade
+        if not quantidades or sum(quantidades.values()) < 1:
+            raise ValueError(f'Informe ao menos uma peça na grade {grade.nome}.')
+        return quantidades
+
+    @staticmethod
+    def _substituir_grade(item, grade, quantidades):
+        item.grade.all().delete()
+        ItemGradePedido.objects.bulk_create([
+            ItemGradePedido(item=item, tamanho_id=tamanho_id, quantidade=quantidade)
+            for tamanho_id, quantidade in quantidades.items()
+        ])
+        item.grade_tamanho = grade
+        item.quantidade = sum(quantidades.values())
+        item.save(update_fields=['grade_tamanho', 'quantidade'])
 
     def _acao_status(self, request, pedido):
         novo = request.POST.get('status')

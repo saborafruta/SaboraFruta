@@ -12,7 +12,7 @@ from apps.cadastros.models import Cliente
 from apps.core.models import Empresa, Filial, PerfilAcesso, Usuario
 from apps.moda.models import (
     ArquivoPedido, Grade, ItemGrade, ItemPedidoProducao, OpcaoEstruturaOP2,
-    PedidoProducao, ProdutoModa, Tamanho, VisualItemPedido,
+    PedidoProducao, Personalizacao, ProdutoModa, Tamanho, VisualItemPedido,
 )
 from apps.moda.forms_cliente import ClienteRapidoForm
 from apps.moda.services.op2_estrutura import juntar_observacoes_item
@@ -381,7 +381,138 @@ class Op2Tests(TestCase):
         self.assertContains(resposta, 'class="op2-item-tools"')
         self.assertContains(resposta, 'Detalhes técnicos')
         self.assertContains(resposta, 'x-show="gradeEdit"')
-        self.assertContains(resposta, 'x-data="{edit:false,detalhes:false,gradeEdit:false}"')
+        self.assertContains(resposta, 'x-data="{detalhes:false,gradeEdit:false}"')
+        self.assertContains(resposta, 'op2-detail-itens')
+        self.assertContains(resposta, 'op2WorkspaceCompleto()')
+        self.assertContains(resposta, "abrirEditarProduto('")
+        self.assertContains(resposta, 'abrirNovoProduto()')
+
+    def test_editor_completo_atualiza_estrutura_impressao_e_grade(self):
+        tamanho_p = Tamanho.objects.create(filial=self.filial, sigla='P', ordem=10)
+        tamanho_m = Tamanho.objects.create(filial=self.filial, sigla='M', ordem=20)
+        grade = Grade.objects.create(filial=self.filial, nome='Adulto')
+        ItemGrade.objects.create(grade=grade, tamanho=tamanho_p, ordem=10)
+        ItemGrade.objects.create(grade=grade, tamanho=tamanho_m, ordem=20)
+        self.produto.grade = grade
+        self.produto.save(update_fields=['grade'])
+        item = self._item(quantidade=1)
+        self.client.force_login(self._usuario())
+        session = self.client.session
+        session['filial_id'] = self.filial.pk
+        session.save()
+
+        resposta = self.client.post(reverse('moda:op2-action', args=[self.pedido.pk]), {
+            'acao': 'editar_item',
+            'item_id': str(item.pk),
+            'produto_id': str(self.produto.pk),
+            'grades': str(grade.pk),
+            f'grade_{grade.pk}_{tamanho_p.pk}': '2',
+            f'grade_{grade.pk}_{tamanho_m.pk}': '3',
+            'valor_unitario': '59.90',
+            'referencia': 'REF-EDITADA',
+            'acabamento': 'Barra reforçada',
+            'estrutura_tipo': 'camisa',
+            'estrutura_malha': 'DRYTECH',
+            'estrutura_gola': 'POLO',
+            'arte_tipo': 'arte',
+            'arte_tecnica': 'silk',
+            'arte_local': 'Peito',
+            'arte_observacoes': 'Duas cores',
+            'item_observacoes': 'Observação livre',
+        })
+
+        self.assertRedirects(resposta, reverse('moda:op2-detail', args=[self.pedido.pk]))
+        item.refresh_from_db()
+        self.assertEqual(item.quantidade, 5)
+        self.assertEqual(item.grade_tamanho, grade)
+        self.assertIn('Malha: DRYTECH', item.observacoes)
+        self.assertIn('Gola: POLO', item.observacoes)
+        self.assertEqual(
+            list(item.grade.order_by('tamanho__ordem').values_list('quantidade', flat=True)),
+            [2, 3],
+        )
+        arte = Personalizacao.objects.get(item=item)
+        self.assertEqual((arte.tecnica, arte.local, arte.observacoes), ('silk', 'Peito', 'Duas cores'))
+
+    def test_editor_completo_adiciona_um_item_por_grade(self):
+        tamanho = Tamanho.objects.create(filial=self.filial, sigla='G', ordem=10)
+        adulto = Grade.objects.create(filial=self.filial, nome='Adulto')
+        oversized = Grade.objects.create(filial=self.filial, nome='OverSized')
+        ItemGrade.objects.create(grade=adulto, tamanho=tamanho, ordem=10)
+        ItemGrade.objects.create(grade=oversized, tamanho=tamanho, ordem=10)
+        self.client.force_login(self._usuario())
+        session = self.client.session
+        session['filial_id'] = self.filial.pk
+        session.save()
+
+        resposta = self.client.post(reverse('moda:op2-action', args=[self.pedido.pk]), {
+            'acao': 'adicionar_item',
+            'produto_id': str(self.produto.pk),
+            'grades': [str(adulto.pk), str(oversized.pk)],
+            f'grade_{adulto.pk}_{tamanho.pk}': '2',
+            f'grade_{oversized.pk}_{tamanho.pk}': '4',
+            'quantidade': '6',
+            'valor_unitario': '40',
+            'estrutura_tipo': 'camisa',
+        })
+
+        self.assertRedirects(resposta, reverse('moda:op2-detail', args=[self.pedido.pk]))
+        adicionados = list(self.pedido.itens.order_by('grade_tamanho__nome'))
+        self.assertEqual(len(adicionados), 2)
+        self.assertEqual(
+            [(item.grade_tamanho.nome, item.quantidade) for item in adicionados],
+            [('Adulto', 2), ('OverSized', 4)],
+        )
+
+    def test_editor_completo_mantem_quantidade_quando_item_nao_tem_grade(self):
+        self.client.force_login(self._usuario())
+        session = self.client.session
+        session['filial_id'] = self.filial.pk
+        session.save()
+
+        resposta = self.client.post(reverse('moda:op2-action', args=[self.pedido.pk]), {
+            'acao': 'adicionar_item',
+            'produto_id': str(self.produto.pk),
+            'quantidade': '7',
+            'valor_unitario': '35',
+            'estrutura_tipo': 'camisa',
+        })
+
+        self.assertRedirects(resposta, reverse('moda:op2-detail', args=[self.pedido.pk]))
+        item = self.pedido.itens.get()
+        self.assertEqual(item.quantidade, 7)
+        self.assertIsNone(item.grade_tamanho)
+        self.assertFalse(item.grade.exists())
+
+    def test_editor_completo_remove_personalizacao_ao_limpar_os_campos(self):
+        item = self._item(quantidade=2)
+        Personalizacao.objects.create(
+            item=item,
+            tipo=Personalizacao.Tipo.ARTE,
+            tecnica=Personalizacao.Tecnica.SUBLIMACAO,
+            local='Peito',
+            observacoes='Arte antiga',
+        )
+        self.client.force_login(self._usuario())
+        session = self.client.session
+        session['filial_id'] = self.filial.pk
+        session.save()
+
+        resposta = self.client.post(reverse('moda:op2-action', args=[self.pedido.pk]), {
+            'acao': 'editar_item',
+            'item_id': str(item.pk),
+            'produto_id': str(self.produto.pk),
+            'quantidade': '2',
+            'valor_unitario': '50',
+            'estrutura_tipo': 'camisa',
+            'arte_tipo': '',
+            'arte_tecnica': '',
+            'arte_local': '',
+            'arte_observacoes': '',
+        })
+
+        self.assertRedirects(resposta, reverse('moda:op2-detail', args=[self.pedido.pk]))
+        self.assertFalse(Personalizacao.objects.filter(item=item).exists())
 
     def test_tipos_de_peca_abre_um_tipo_por_vez(self):
         self.client.force_login(self._usuario())

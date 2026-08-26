@@ -146,10 +146,10 @@ def opcoes_estrutura_filial(filial, incluir_inativas=False):
     return grupos
 
 
-def estrutura_resumo(post) -> str:
+def estrutura_resumo(post, grupos=None) -> str:
     """Monta um resumo legível das escolhas de estrutura enviadas pelo form."""
     tipo = (post.get('estrutura_tipo') or '').strip()
-    grupos = OP2_ESTRUTURA_OPCOES
+    grupos = grupos or OP2_ESTRUTURA_OPCOES
     grupo = grupos.get(tipo)
     if not grupo:
         return ''
@@ -162,10 +162,10 @@ def estrutura_resumo(post) -> str:
     return '\n'.join(linhas) if len(linhas) > 1 else ''
 
 
-def juntar_observacoes_item(observacoes: str, post) -> str:
+def juntar_observacoes_item(observacoes: str, post, grupos=None) -> str:
     """Acrescenta a estrutura escolhida às observações do item."""
     partes = [(observacoes or '').strip()]
-    estrutura = estrutura_resumo(post)
+    estrutura = estrutura_resumo(post, grupos)
     if estrutura:
         partes.append('Estrutura da peça:\n' + estrutura)
     return '\n\n'.join(parte for parte in partes if parte)
