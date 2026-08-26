@@ -2280,6 +2280,22 @@ class ProdutoExportPdfView(PermissaoRequiredMixin, View):
         return _produto_pdf_response(_produto_queryset_filtrado(request), request.user.empresa)
 
 
+# Entradas em que o vínculo do item ainda pode ser desfeito. É O MESMO
+# CONJUNTO que estava escrito à mão dentro do método — trazido para cá com
+# nome, para a intenção ficar dita uma vez.
+#
+# São os valores literais de `EntradaNF.Status`, e não o enum: `produtos` não
+# importa `compras` em tempo de módulo (o próprio método faz o import tarde,
+# de propósito), e criar essa dependência por causa de três strings seria
+# pagar caro por pouco.
+#
+# Entrada EFETIVADA fica de fora de propósito: o item já virou estoque e
+# movimentação, e soltá-lo deixaria um lançamento sem produto.
+ENTRADAS_ABERTAS = (
+    'rascunho', 'aguardando_conferencia', 'aguardando_vinculos',
+)
+
+
 class ProdutoFornecedorVinculoDeleteView(PermissaoRequiredMixin, View):
     """Desativa (soft-delete) um vínculo de fornecedor de um produto."""
     permissao_modulo = 'produtos'
@@ -2287,22 +2303,36 @@ class ProdutoFornecedorVinculoDeleteView(PermissaoRequiredMixin, View):
 
     def post(self, request, pk, vinculo_pk):
         from apps.produtos.models import ProdutoFornecedorEquivalencia
-        produto = get_object_or_404(Produto, pk=pk, empresa=request.empresa)
+        # `filial__empresa`, e não `empresa`: `Produto` não tem esse campo — é
+        # `FilialScopedModel`, e a empresa vem pela filial. E a empresa sai do
+        # USUÁRIO: `request.empresa` não é preenchido por middleware nenhum.
+        #
+        # Com os dois errados, esta linha levantava `FieldError` ANTES de
+        # qualquer outra coisa: o botão "remover vínculo" do formulário do
+        # produto devolvia 500, sempre.
+        produto = get_object_or_404(
+            Produto, pk=pk, filial__empresa=request.user.empresa,
+        )
         vinculo = get_object_or_404(ProdutoFornecedorEquivalencia, pk=vinculo_pk, produto=produto)
 
         vinculo.ativo = False
         vinculo.save(update_fields=['ativo', 'updated_at'])
 
-        # Libera itens de entrada abertos que ainda estão vinculados a este produto via este vínculo
-        try:
-            from apps.compras.models import ItemEntradaNF
-            ItemEntradaNF.objects.filter(
-                produto=produto,
-                entrada__status__in=['rascunho', 'aguardando_conferencia', 'aguardando_vinculos'],
-                fornecedor_cnpj=vinculo.fornecedor_cnpj_xml,
-            ).update(produto=None)
-        except Exception:
-            pass
+        # Libera itens de entrada abertos que ainda estão vinculados a este
+        # produto via este vínculo.
+        #
+        # O FORNECEDOR ESTÁ NA ENTRADA, não no item. Este filtro pedia
+        # `ItemEntradaNF.fornecedor_cnpj`, campo que não existe: levantava
+        # `FieldError` em toda execução, e o `except: pass` engolia. Resultado:
+        # desativar o vínculo nunca liberava item nenhum, e ninguém ficava
+        # sabendo.
+        #
+        # O PAR CNPJ↔CNPJ É EXATO porque as duas pontas vêm da mesma origem:
+        # `vinculo.fornecedor_cnpj_xml` é gravado A PARTIR de
+        # `entrada.emitente_cnpj_xml`. Não há formato a normalizar. É o mesmo
+        # pareamento que `entrada_produto_service` já faz no sentido inverso,
+        # inclusive somando a chave estrangeira quando ela existe.
+        self._liberar_itens_de_entrada(produto, vinculo)
 
         LogSistema.objects.create(
             filial=request.filial_ativa,
@@ -2315,3 +2345,67 @@ class ProdutoFornecedorVinculoDeleteView(PermissaoRequiredMixin, View):
 
         messages.success(request, 'Vínculo de fornecedor removido.')
         return redirect('produtos:produto-update', pk=produto.pk)
+
+    @staticmethod
+    def _liberar_itens_de_entrada(produto, vinculo) -> int:
+        """
+        Solta o produto dos itens de entrada AINDA ABERTOS deste fornecedor.
+
+        SÓ ENTRADA ABERTA. Item de entrada efetivada já virou estoque e
+        movimentação: soltá-lo deixaria um lançamento sem produto, e o custo
+        daquela compra pararia de bater com o que entrou.
+
+        SEM IDENTIFICAR O FORNECEDOR, NÃO MEXE. Vínculo sem CNPJ e sem chave
+        estrangeira não diz de quem é; um filtro só por produto soltaria itens
+        de TODOS os fornecedores, que é o oposto de "via este vínculo".
+
+        UM A UM, PELO SERVIÇO, e não num `.update()` de queryset. Desvincular
+        não é só zerar o produto: `desvincular_item_de_produto` carimba o item
+        com o marcador que IMPEDE O REVÍNCULO AUTOMÁTICO, limpa as marcas de
+        divergência e recalcula a conferência. Sem o carimbo, o próximo
+        reprocessamento reataria o item ao mesmo produto — e a desativação do
+        vínculo seria desfeita sozinha.
+
+        São itens de entradas abertas de um produto e um fornecedor: um punhado
+        de linhas. A consulta única sairia mais barata e faria a coisa errada.
+
+        NÃO DERRUBA A DESATIVAÇÃO. O vínculo já foi desativado quando isto
+        roda; um erro aqui não pode desfazer aquilo. Mas VAI PARA O LOG -- foi
+        um `except: pass` mudo que escondeu o defeito anterior por tempo
+        indeterminado.
+        """
+        import logging
+
+        from django.db.models import Q
+
+        from apps.compras.models import ItemEntradaNF
+        from apps.compras.services.entrada_produto_service import (
+            desvincular_item_de_produto,
+        )
+
+        por_fornecedor = Q()
+        if vinculo.fornecedor_cnpj_xml:
+            por_fornecedor |= Q(
+                entrada__emitente_cnpj_xml=vinculo.fornecedor_cnpj_xml,
+            )
+        if vinculo.fornecedor_id:
+            por_fornecedor |= Q(entrada__fornecedor_id=vinculo.fornecedor_id)
+        if not por_fornecedor:
+            return 0
+
+        try:
+            itens = list(
+                ItemEntradaNF.objects.filter(
+                    por_fornecedor,
+                    produto=produto,
+                    entrada__status__in=ENTRADAS_ABERTAS,
+                ).select_related('entrada')
+            )
+            for item in itens:
+                desvincular_item_de_produto(item)
+            return len(itens)
+        except Exception:  # noqa: BLE001 — não derruba a desativação
+            logging.getLogger(__name__).exception(
+                'Falha ao liberar itens de entrada do vínculo %s', vinculo.pk,
+            )
+            return 0
