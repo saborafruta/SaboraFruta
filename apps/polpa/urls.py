@@ -21,7 +21,7 @@ from . import (
     views_indicadores as vind, views_tempo_real as vtr,
     views, views_catalogo as vcat, views_ordem as vord,
     views_planejamento as vpla, views_processo as vproc,
-    views_subproduto as vsub,
+    views_etapa as veta, views_subproduto as vsub,
     views_receita as vrec_receita, views_recebimento as vrec,
 )
 
@@ -131,6 +131,16 @@ ROTAS_PRONTAS: list = [
     path('pcp/calendario/<int:pk>/programar/', vpla.ProgramarView.as_view(), name='ordem-programar'),
     path('pcp/quadro/', vpla.KanbanView.as_view(), name='kanban'),
     path('pcp/recursos/', vpla.RecursoListView.as_view(), name='recurso-list'),
+
+    # AS ETAPAS QUE A CASA CRIA. Fica em PCP, ao lado de linhas e
+    # máquinas: é cadastro de como a fábrica é, não operação do dia.
+    # O CAMINHO CASA COM O SLUG DO MENU (`pcp/etapas-processo`): e' assim
+    # que o hub descobre que a tela existe -- ele resolve a rota do item e
+    # checa se caiu no placeholder. Divergir aqui deixaria o selo "em breve"
+    # numa tela pronta.
+    path('pcp/etapas-processo/', veta.EtapaListView.as_view(), name='etapa-list'),
+    path('pcp/etapas-processo/nova/', veta.EtapaFormView.as_view(), name='etapa-nova'),
+    path('pcp/etapas-processo/<int:pk>/', veta.EtapaFormView.as_view(), name='etapa-editar'),
     path('pcp/recursos/novo/', vpla.RecursoFormView.as_view(), name='recurso-create'),
     path('pcp/recursos/<int:pk>/editar/', vpla.RecursoFormView.as_view(), name='recurso-update'),
 

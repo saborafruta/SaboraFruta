@@ -1,0 +1,111 @@
+{% extends "_base.html" %}
+{% block title %}{{ title }} — Polpa{% endblock %}
+{% block page_title %}{{ title }}{% endblock %}
+{% block content %}
+<div class="space-y-5">
+
+  <div class="flex flex-wrap items-start justify-between gap-3">
+    <div>
+      <h2 class="text-xl font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
+        Etapas do processo
+      </h2>
+      <p class="text-sm mt-1 max-w-2xl" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+        As etapas próprias desta fábrica, além das do vocabulário comum. Elas
+        recebem apontamento como as outras — pesam, perdem e entram no
+        rendimento.
+      </p>
+    </div>
+    {% if pode_agir %}
+      <a href="{% url 'polpa:etapa-nova' %}" class="btn-primary text-sm shrink-0">NOVA ETAPA</a>
+    {% endif %}
+  </div>
+
+  <div class="grid grid-cols-1 lg:grid-cols-3 gap-4">
+
+    <div class="lg:col-span-2 space-y-3">
+      {% for etapa in etapas %}
+        <div class="card p-4"
+             style="border-left:3px solid {% if etapa.ativo %}#059669{% else %}#94a3b8{% endif %};">
+          <div class="flex flex-wrap items-start justify-between gap-3">
+            <div class="min-w-0">
+              <div class="flex items-center gap-2 flex-wrap">
+                <strong :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">{{ etapa.nome }}</strong>
+                <span class="text-xs font-mono px-1.5 py-0.5 rounded"
+                      :style="temaClaro ? 'background:#f1f5f9; color:#64748b;' : 'background:#27272a; color:#94a3b8;'">
+                  {{ etapa.codigo }}
+                </span>
+                {% if not etapa.ativo %}
+                  <span class="text-xs" style="color:#94a3b8;">inativa</span>
+                {% endif %}
+              </div>
+              <p class="text-xs mt-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+                Entra na posição <strong>{{ etapa.sequencia }}</strong>
+                {% if etapa.exige_peso %} · pede peso{% endif %}
+                {% if etapa.exige_temperatura %} · pede temperatura{% endif %}
+              </p>
+              {% if etapa.instrucao %}
+                <p class="text-xs mt-1 whitespace-pre-line" :style="temaClaro ? 'color:#94a3b8;' : 'color:#71717a;'">
+                  {{ etapa.instrucao }}
+                </p>
+              {% endif %}
+              {% comment %}
+                QUANTAS ORDENS JÁ A APONTARAM. É a pergunta que a pessoa faz
+                antes de mexer: etapa com histórico não se apaga, porque os
+                apontamentos ficariam sem nome e sem posição.
+              {% endcomment %}
+              <p class="text-xs mt-1" style="color:#0891b2;">
+                {% if etapa.usos %}
+                  apontada em {{ etapa.usos }} ordem(ns) — desative em vez de apagar
+                {% else %}
+                  ainda não apontada em nenhuma ordem
+                {% endif %}
+              </p>
+            </div>
+            {% if pode_agir %}
+              <a href="{% url 'polpa:etapa-editar' etapa.pk %}"
+                 class="btn-secondary text-xs shrink-0">Editar</a>
+            {% endif %}
+          </div>
+        </div>
+      {% empty %}
+        <div class="card p-8 text-center">
+          <p class="text-sm" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+            Nenhuma etapa própria cadastrada — o processo usa só o vocabulário
+            comum, ao lado.
+          </p>
+          <p class="text-sm mt-2" :style="temaClaro ? 'color:#94a3b8;' : 'color:#71717a;'">
+            Cadastre aqui o que a sua indústria faz e a lista comum não tem:
+            fermentação, defumação, apuração de ponto.
+          </p>
+        </div>
+      {% endfor %}
+    </div>
+
+    {% comment %}
+      A RÉGUA FICA À VISTA, e não numa ajuda escondida. A sequência é o campo
+      que decide se a etapa nova serve para alguma coisa: sem saber em que
+      posição está o envase, a pessoa chuta — e uma fermentação no fim da fila
+      não descreve fábrica nenhuma.
+    {% endcomment %}
+    <div class="card p-4">
+      <h3 class="text-sm font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
+        O vocabulário comum
+      </h3>
+      <p class="text-xs mt-1 mb-3" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+        As posições já ocupadas. Escolha um número entre duas delas para
+        encaixar a sua no meio do processo.
+      </p>
+      <div class="space-y-0.5 overflow-y-auto" style="max-height:24rem;">
+        {% for linha in regua %}
+          <div class="flex items-baseline gap-2 text-xs">
+            <span class="font-mono shrink-0 w-6 text-right"
+                  :style="temaClaro ? 'color:#94a3b8;' : 'color:#71717a;'">{{ linha.posicao }}</span>
+            <span :style="temaClaro ? 'color:#374151;' : 'color:#cbd5e1;'">{{ linha.nome }}</span>
+          </div>
+        {% endfor %}
+      </div>
+    </div>
+
+  </div>
+</div>
+{% endblock %}

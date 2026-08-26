@@ -91,6 +91,8 @@ GRUPOS: tuple[Grupo, ...] = (
                  'Onde está cada ordem, da planejada à produzida.'),
             Item('recursos', 'Linhas e máquinas',
                  'Capacidade por dia — sem ela, "cabe?" não tem resposta.'),
+            Item('etapas-processo', 'Etapas do processo',
+                 'O que a sua indústria faz e a lista comum não tem.'),
         ),
     ),
     Grupo(

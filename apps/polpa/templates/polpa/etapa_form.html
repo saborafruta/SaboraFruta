@@ -1,0 +1,93 @@
+{% extends "_base.html" %}
+{% block title %}{{ title }} — Polpa{% endblock %}
+{% block page_title %}{{ title }}{% endblock %}
+{% block content %}
+<div class="grid grid-cols-1 lg:grid-cols-3 gap-4 items-start">
+
+  <div class="lg:col-span-2 space-y-4">
+    <p class="text-sm" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+      <a href="{% url 'polpa:etapa-list' %}" :style="temaClaro ? 'color:#3b82f6;' : 'color:#60a5fa;'">‹ Etapas do processo</a>
+    </p>
+
+    <form method="post" class="space-y-4">
+      {% csrf_token %}
+
+      {% if form.non_field_errors %}
+        <div class="card p-3" style="border-left:3px solid #dc2626;">
+          {% for erro in form.non_field_errors %}
+            <p class="text-sm" style="color:#dc2626;">{{ erro }}</p>
+          {% endfor %}
+        </div>
+      {% endif %}
+
+      {% comment %}
+        OS CAMPOS SÃO DESENHADOS PELO LAÇO, e não escritos à mão: um campo novo
+        no formulário aparece aqui sozinho. Escrever a lista no template é como
+        se perde campo — ele existe no form, não aparece na tela, e ninguém
+        entende por que nunca é preenchido.
+      {% endcomment %}
+      <div class="card p-4 space-y-3">
+        {% for campo in form %}
+          <div>
+            <label class="form-label" for="{{ campo.id_for_label }}">{{ campo.label }}</label>
+            {{ campo }}
+            {% if campo.help_text %}
+              <p class="text-xs mt-1" :style="temaClaro ? 'color:#94a3b8;' : 'color:#71717a;'">{{ campo.help_text }}</p>
+            {% endif %}
+            {% for erro in campo.errors %}
+              <p class="text-xs mt-1" style="color:#dc2626;">{{ erro }}</p>
+            {% endfor %}
+          </div>
+        {% endfor %}
+      </div>
+
+      <div class="flex flex-wrap gap-2">
+        <button type="submit" class="btn-primary text-sm">GRAVAR</button>
+        <a href="{% url 'polpa:etapa-list' %}" class="btn-secondary text-sm">Cancelar</a>
+      </div>
+    </form>
+
+    {% if etapa %}
+      {% comment %}
+        POR QUE NÃO HÁ BOTÃO DE APAGAR. O código da etapa está gravado nos
+        apontamentos; sem cadastro eles perdem nome e posição, e viram
+        "fermentacao" em minúscula no fim de um relatório que alguém vai ler
+        seis meses depois. Um botão ausente sem explicação, porém, vira
+        chamado de suporte.
+      {% endcomment %}
+      <div class="card p-4" style="border-left:3px solid #d97706;">
+        <p class="text-sm" :style="temaClaro ? 'color:#374151;' : 'color:#d1d5db;'">
+          Para tirar esta etapa de circulação, desmarque <strong>Ativo</strong>
+          acima. Não existe apagar: o código dela já está nos apontamentos das
+          ordens, e sem o cadastro eles perderiam nome e posição no histórico.
+        </p>
+      </div>
+    {% endif %}
+  </div>
+
+  {% comment %}
+    A RÉGUA FICA AO LADO DO CAMPO que ela explica. A sequência é o que decide
+    se a etapa nova serve para alguma coisa — e ninguém sabe de cabeça em que
+    posição está o envase.
+  {% endcomment %}
+  <div class="card p-4">
+    <h3 class="text-sm font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
+      Onde ela entra
+    </h3>
+    <p class="text-xs mt-1 mb-3" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+      As posições do vocabulário comum. Escolha um número entre duas delas
+      para encaixar a sua no meio do processo.
+    </p>
+    <div class="space-y-0.5 overflow-y-auto" style="max-height:26rem;">
+      {% for linha in regua %}
+        <div class="flex items-baseline gap-2 text-xs">
+          <span class="font-mono shrink-0 w-6 text-right"
+                :style="temaClaro ? 'color:#94a3b8;' : 'color:#71717a;'">{{ linha.posicao }}</span>
+          <span :style="temaClaro ? 'color:#374151;' : 'color:#cbd5e1;'">{{ linha.nome }}</span>
+        </div>
+      {% endfor %}
+    </div>
+  </div>
+
+</div>
+{% endblock %}
