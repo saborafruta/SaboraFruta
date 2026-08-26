@@ -10,6 +10,7 @@ from django.urls import reverse
 from apps.cadastros.models import Cliente
 from apps.core.models import Empresa, Filial, PerfilAcesso, Usuario
 from apps.moda.models import Grade, ItemGrade, ItemPedidoProducao, PedidoProducao, ProdutoModa, Tamanho
+from apps.moda.forms_cliente import ClienteRapidoForm
 from apps.moda.services.op2_estrutura import juntar_observacoes_item
 from apps.moda.services.kanban_comercial import COLUNAS
 from apps.moda.views_op2 import Op2CreateView, _sincronizar_status
@@ -209,6 +210,53 @@ class Op2Tests(TestCase):
             resposta,
             "tamanhoLabels:JSON.parse(document.getElementById('op2-tamanhos-labels').textContent)",
         )
+
+    def test_cadastro_rapido_da_op_exibe_dados_essenciais_com_um_nome(self):
+        self.client.force_login(self._usuario())
+        session = self.client.session
+        session['filial_id'] = self.filial.pk
+        session.save()
+
+        resposta = self.client.get(reverse('moda:op2-create'))
+
+        self.assertEqual(
+            [nome for nome in ClienteRapidoForm().fields if nome in {
+                'razao_social', 'nome_fantasia',
+            }],
+            ['razao_social'],
+        )
+        for nome in (
+            'tipo_pessoa', 'razao_social', 'cpf_cnpj', 'inscricao_estadual',
+            'contribuinte_icms', 'contato_nome', 'celular', 'telefone',
+            'email', 'cidade', 'uf',
+        ):
+            self.assertContains(resposta, f'name="{nome}"')
+        self.assertNotContains(resposta, 'name="nome_fantasia"')
+
+    def test_cadastro_rapido_salva_cliente_sem_nome_fantasia(self):
+        self.client.force_login(self._usuario())
+        session = self.client.session
+        session['filial_id'] = self.filial.pk
+        session.save()
+
+        resposta = self.client.post(reverse('moda:cliente-criar-json'), {
+            'tipo_pessoa': 'F',
+            'razao_social': 'Maria da Silva',
+            'cpf_cnpj': '12345678901',
+            'contato_nome': 'Maria',
+            'celular': '84999990000',
+            'email': 'maria@example.com',
+            'cidade': 'Natal',
+            'uf': 'RN',
+        })
+
+        self.assertEqual(resposta.status_code, 200)
+        cliente = Cliente.objects.get(
+            filial=self.filial,
+            razao_social='Maria da Silva',
+        )
+        self.assertEqual(cliente.nome_fantasia, '')
+        self.assertEqual(cliente.celular, '84999990000')
 
     def _usuario(self):
         user, _ = Usuario.objects.get_or_create(

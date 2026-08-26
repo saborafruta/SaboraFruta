@@ -93,7 +93,30 @@
       </div>
     </div>
   </div>
-  <div x-show="modalCliente" x-cloak class="fixed inset-0 z-50 flex items-center justify-center p-4" style="background:rgba(0,0,0,.68)" @click.self="modalCliente=false"><form x-ref="novo" @submit.prevent="salvarCliente" class="card p-5 w-full max-w-3xl overflow-y-auto" style="max-height:92vh">{% csrf_token %}<input type="hidden" name="tipo_pessoa" value="J"><div class="flex justify-between items-center mb-4"><h2 class="text-xl font-bold">Novo cliente</h2><button type="button" @click="modalCliente=false" class="text-2xl">×</button></div><label class="text-sm"><span class="block mb-1">Nome / Razão social</span><input name="razao_social" class="form-input w-full" required><small style="color:#ef4444" x-text="erros.razao_social || ''"></small></label><p x-show="erro" x-text="erro" class="mt-3 text-sm" style="color:#ef4444"></p><div class="flex justify-end gap-2 mt-5"><button type="button" class="btn-secondary" @click="modalCliente=false">Cancelar</button><button class="btn-primary" :disabled="salvando" x-text="salvando?'Salvando...':'Salvar cliente'"></button></div></form></div>
+  <div x-show="modalCliente" x-cloak class="fixed inset-0 z-50 flex items-center justify-center p-4" style="background:rgba(0,0,0,.68)" @click.self="modalCliente=false">
+    <form x-ref="novo" @submit.prevent="salvarCliente" class="card p-5 w-full max-w-3xl overflow-y-auto" style="max-height:92vh">
+      {% csrf_token %}
+      <div class="flex justify-between items-start gap-3 mb-4">
+        <div><h2 class="text-xl font-bold">Novo cliente</h2><p class="text-xs opacity-70 mt-1">Cadastro simplificado para usar imediatamente nesta OP. Os demais dados podem ser completados depois.</p></div>
+        <button type="button" @click="modalCliente=false" class="text-2xl">×</button>
+      </div>
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        {% for campo in form_cliente %}
+          <div class="{% if campo.name == 'razao_social' %}sm:col-span-2{% endif %}">
+            <label class="block text-sm">
+              <span class="block mb-1">{{ campo.label }}</span>
+              {{ campo }}
+            </label>
+            {% if campo.help_text %}<small class="block mt-1 opacity-60">{{ campo.help_text }}</small>{% endif %}
+            <small class="block mt-1" style="color:#ef4444" x-text="erros['{{ campo.name }}'] || ''"></small>
+          </div>
+        {% endfor %}
+      </div>
+      <small class="block mt-3" style="color:#ef4444" x-text="erros.__all__ || ''"></small>
+      <p x-show="erro" x-text="erro" class="mt-3 text-sm" style="color:#ef4444"></p>
+      <div class="flex justify-end gap-2 mt-5"><button type="button" class="btn-secondary" @click="modalCliente=false">Cancelar</button><button class="btn-primary" :disabled="salvando" x-text="salvando?'Salvando...':'Salvar cliente'"></button></div>
+    </form>
+  </div>
 </div>
 <script>
 function recolherSidebarOp2(){localStorage.setItem('sidebar-collapsed','true');document.body.classList.add('sidebar-collapsed');let aplicar=()=>{let r=document.getElementById('sidebar-root');if(r&&window.Alpine){try{Alpine.$data(r).collapsed=true}catch(e){}}};aplicar();setTimeout(aplicar,60);setTimeout(aplicar,240)}

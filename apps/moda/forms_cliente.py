@@ -38,13 +38,12 @@ class ClienteRapidoForm(forms.ModelForm):
     class Meta:
         model = Cliente
         fields = [
-            'tipo_pessoa', 'razao_social', 'nome_fantasia', 'cpf_cnpj',
+            'tipo_pessoa', 'razao_social', 'cpf_cnpj',
             'inscricao_estadual', 'contribuinte_icms',
             'contato_nome', 'celular', 'telefone', 'email', 'cidade', 'uf',
         ]
         labels = {
-            'razao_social': 'Nome / Razão social',
-            'nome_fantasia': 'Nome fantasia',
+            'razao_social': 'Nome do cliente / Razão social',
             'cpf_cnpj': 'CPF / CNPJ',
             'inscricao_estadual': 'Inscrição estadual',
             'contribuinte_icms': 'Contribuinte de ICMS',
@@ -88,6 +87,9 @@ class ClienteRapidoForm(forms.ModelForm):
 
         self.fields['cpf_cnpj'].widget.attrs['placeholder'] = 'Só números'
         self.fields['celular'].widget.attrs['placeholder'] = '(84) 99999-0000'
+        self.fields['razao_social'].widget.attrs['placeholder'] = (
+            'Nome da pessoa ou da empresa'
+        )
 
     def clean_cpf_cnpj(self):
         """
