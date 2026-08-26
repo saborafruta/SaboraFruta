@@ -93,3 +93,5 @@ class MenuFavoritosTemplateTests(SimpleTestCase):
         self.assertIn('request.user.menu_favoritos', template)
         self.assertIn('@media (hover: hover) and (pointer: fine)', template)
         self.assertIn('.sidebar-favorite-toggle:not(.is-favorite)', template)
+        self.assertIn('.sidebar-mobile .sidebar-favorite-toggle', template)
+        self.assertIn('class="sidebar-mobile fixed inset-y-0', template)
