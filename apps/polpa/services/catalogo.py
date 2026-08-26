@@ -69,16 +69,7 @@ class CatalogoService:
             if campo in dados and dados[campo] is not None:
                 setattr(produto, campo, dados[campo])
 
-        # A CLASSE SAI DA TABELA DE TIPOS, com queda para o enum. Ler so' o
-        # enum aqui fazia todo tipo criado pela fabrica chegar sem classe -- e
-        # como `classe` e' obrigatoria, o `full_clean` logo abaixo recusava o
-        # cadastro inteiro com "este campo nao pode ser nulo", sem dizer que o
-        # problema era o tipo.
-        from apps.polpa.models import TipoItem
-
-        classe = dados.get('classe') or TipoItem.classe_do_codigo(
-            filial, dados.get('tipo'),
-        )
+        classe = dados.get('classe') or FichaProduto.CLASSE_DO_TIPO.get(dados.get('tipo'))
         CatalogoService._aplicar_regras(produto, classe, dados)
         produto.save()
 

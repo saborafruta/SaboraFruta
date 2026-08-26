@@ -116,11 +116,7 @@ class FichaProduto(FilialScopedModel):
     )
 
     classe = models.CharField(max_length=20, choices=Classe.choices, db_index=True)
-    # SEM `choices` DE PROPOSITO. A lista em uso agora e' `TipoItem`, e o
-    # servico chama `full_clean`: mantido o enum aqui, todo tipo criado pela
-    # fabrica seria recusado como "opcao invalida". O enum continua vivo
-    # como SEMENTE da tabela e como queda para leitura sem filial.
-    tipo = models.CharField(max_length=20, db_index=True)
+    tipo = models.CharField(max_length=20, choices=Tipo.choices, db_index=True)
 
     # ── Identidade do acabado ────────────────────────────────────────────
     sabor = models.CharField(
@@ -176,17 +172,17 @@ class FichaProduto(FilialScopedModel):
         verbose_name_plural = 'Fichas de produto'
 
     def __str__(self):
-        return f'{self.produto} ({self.tipo_nome})'
+        return f'{self.produto} ({self.get_tipo_display()})'
 
     def clean(self):
         """O tipo tem de pertencer à classe — senão a tela filtra errado."""
         from django.core.exceptions import ValidationError
 
-        esperada = self._classe_esperada()
+        esperada = self.CLASSE_DO_TIPO.get(self.tipo)
         if esperada and self.classe and esperada != self.classe:
             raise ValidationError({
                 'tipo': (
-                    f'{self.tipo_nome} é '
+                    f'{self.get_tipo_display()} é '
                     f'{FichaProduto.Classe(esperada).label.lower()}, '
                     f'não {FichaProduto.Classe(self.classe).label.lower()}.'
                 ),
@@ -197,27 +193,8 @@ class FichaProduto(FilialScopedModel):
         # informação em dois níveis, e deixar as duas soltas abriria a porta
         # para um "pote" cadastrado como matéria-prima.
         if not self.classe and self.tipo:
-            self.classe = self._classe_esperada()
+            self.classe = self.CLASSE_DO_TIPO.get(self.tipo, '')
         super().save(*args, **kwargs)
-
-    def _classe_esperada(self) -> str:
-        """A classe que este tipo determina, pela tabela ou pelo enum."""
-        from apps.polpa.models.tipo_item import TipoItem
-
-        return TipoItem.classe_do_codigo(self.filial_id and self.filial, self.tipo)
-
-    @property
-    def tipo_nome(self) -> str:
-        """
-        O rotulo do tipo para exibir.
-
-        Substitui `get_tipo_display()`, que morreu junto com o `choices`: sem
-        ele o Django devolveria o codigo cru -- "polpa_base" no lugar de
-        "Polpa-base" -- em toda tela que mostra o tipo.
-        """
-        from apps.polpa.models.tipo_item import TipoItem
-
-        return TipoItem.nome_do_codigo(self.filial_id and self.filial, self.tipo)
 
     # ── Leituras ─────────────────────────────────────────────────────────
 

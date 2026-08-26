@@ -13,7 +13,7 @@ formulário fechar.
 """
 from django import forms
 
-from apps.polpa.models import FichaProduto, Fruta, TipoItem
+from apps.polpa.models import FichaProduto, Fruta
 from apps.produtos.models import UnidadeMedida
 
 ENTRADA = {'class': 'form-input w-full'}
@@ -21,108 +21,12 @@ SELECT = {'class': 'form-select w-full'}
 C = FichaProduto.Classe
 
 
-class TipoRapidoForm(forms.Form):
-    """
-    Um tipo de item novo: nome e classe.
-
-    A CLASSE E' OBRIGATORIA e vem das tres fixas. Ela nao e' rotulo: decide o
-    que a ficha pergunta, o que a receita separa como materia-prima ou
-    embalagem, o que o custo soma em cada categoria e onde o item aparece no
-    menu. Tipo sem classe seria um item que o sistema nao sabe processar --
-    entraria no catalogo e sumiria de todo o resto.
-
-    O CODIGO SAI DO NOME e nao e' pedido. E' identificador tecnico, gravado na
-    ficha e nunca mais alterado; deixar alguem digita-lo produziria "Pote
-    Vidro", "pote-vidro" e "POTE_VIDRO" como tres tipos diferentes.
-    """
-
-    nome = forms.CharField(label='Nome', max_length=60)
-    classe = forms.ChoiceField(label='Classe', choices=[])
-
-    def __init__(self, *args, filial=None, **kwargs):
-        super().__init__(*args, **kwargs)
-        self.filial = filial
-        self.fields['classe'].choices = FichaProduto.Classe.choices
-
-    def clean_nome(self):
-        nome = (self.cleaned_data.get('nome') or '').strip()
-        if not nome:
-            raise forms.ValidationError('Informe o nome do tipo.')
-        if self.filial and TipoItem.objects.filter(
-            filial=self.filial, nome__iexact=nome,
-        ).exists():
-            raise forms.ValidationError(
-                f'O tipo "{nome}" ja existe. Procure na lista.'
-            )
-        return nome
-
-    def codigo(self) -> str:
-        """
-        Slug do nome, encurtado ao limite do campo e desempatado por sufixo.
-
-        SEM DESEMPATE, "Pote 500 ml" e "Pote 500ml" colidiriam na
-        `unique_together` e o cadastro estouraria com erro de integridade -- que
-        nao diz nada a quem clicou.
-        """
-        from django.utils.text import slugify
-
-        base = slugify(self.cleaned_data['nome']).replace('-', '_')[:20] or 'tipo'
-        codigo, n = base, 2
-        while TipoItem.objects.filter(filial=self.filial, codigo=codigo).exists():
-            sufixo = f'_{n}'
-            codigo = f'{base[:20 - len(sufixo)]}{sufixo}'
-            n += 1
-        return codigo
-
-
-class UnidadeRapidaForm(forms.Form):
-    """
-    O minimo para destravar a ficha: sigla e descricao.
-
-    A UNIDADE E' DA EMPRESA, mas so' aparece na tela pela FILIAL -- o queryset
-    e' `for_filial`, que passa pelo vinculo. Criar a unidade sem criar o vinculo
-    faria ela nascer invisivel: o cadastro grava, o select continua vazio, e
-    quem clicou conclui que o botao nao funciona.
-
-    SIGLA REPETIDA E' RECUSADA. `unique_together` ja' barra no banco, mas o erro
-    cru de integridade nao diz o que fazer; e sigla duplicada e' o comeco de
-    "KG" e "Kg" convivendo, com o estoque somando em duas unidades que sao a
-    mesma coisa.
-    """
-
-    sigla = forms.CharField(label='Sigla', max_length=6)
-    descricao = forms.CharField(label='Descrição', max_length=40)
-    tipo = forms.ChoiceField(
-        label='Grandeza', required=False,
-        choices=[('', 'Não informar')] + list(UnidadeMedida.Tipo.choices),
-    )
-
-    def __init__(self, *args, empresa=None, **kwargs):
-        super().__init__(*args, **kwargs)
-        self.empresa = empresa
-
-    def clean_sigla(self):
-        sigla = (self.cleaned_data.get('sigla') or '').strip().upper()
-        if not sigla:
-            raise forms.ValidationError('Informe a sigla.')
-        if self.empresa and UnidadeMedida.objects.filter(
-            empresa=self.empresa, sigla__iexact=sigla,
-        ).exists():
-            raise forms.ValidationError(
-                f'A unidade "{sigla}" ja existe. Procure na lista.'
-            )
-        return sigla
-
-    def clean_descricao(self):
-        return (self.cleaned_data.get('descricao') or '').strip()
-
-
 class ItemCatalogoForm(forms.Form):
     """Cadastro de matéria-prima, embalagem ou produto acabado."""
 
     # ── O que é ──────────────────────────────────────────────────────────
     tipo = forms.ChoiceField(
-        label='Tipo', choices=[],
+        label='Tipo', choices=FichaProduto.Tipo.choices,
         widget=forms.Select(attrs=SELECT),
     )
     descricao = forms.CharField(
@@ -238,13 +142,6 @@ class ItemCatalogoForm(forms.Form):
         # `---------`, o padrao do Django, nao diz nada -- e num select
         # obrigatorio parece campo carregando, e nao campo por escolher.
         self.fields['unidade_medida'].empty_label = 'Selecione a unidade'
-
-        # AS OPCOES SAEM DA TABELA, e nao mais do enum: e' o que permite a
-        # fabrica criar tipo proprio. Semeadas na leitura, entao filial nova
-        # ja' abre com os trinta e cinco de sistema.
-        self.fields['tipo'].choices = [('', 'Escolha…')] + [
-            (t.codigo, t.nome) for t in TipoItem.da_filial(filial)
-        ]
 
         if ficha is not None and not self.is_bound:
             self.initial.update(self._do_registro(ficha))

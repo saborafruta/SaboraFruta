@@ -72,8 +72,8 @@
         <label class="form-label">Tipo</label>
         <select name="tipo" class="form-select">
           <option value="">Todos</option>
-          {% for codigo, nome in tipos %}
-            <option value="{{ codigo }}" {% if tipo == codigo %}selected{% endif %}>{{ nome }}</option>
+          {% for t in tipos %}
+            <option value="{{ t.value }}" {% if tipo == t.value %}selected{% endif %}>{{ t.label }}</option>
           {% endfor %}
         </select>
       </div>
@@ -116,7 +116,7 @@
                 </span>
               </td>
               <td class="px-4 py-3" :style="temaClaro ? 'color:#374151;' : 'color:#cbd5e1;'">
-                {{ linha.ficha.tipo_nome }}
+                {{ linha.ficha.get_tipo_display }}
               </td>
               <td class="px-4 py-3 text-xs" :style="temaClaro ? 'color:#374151;' : 'color:#cbd5e1;'">
                 {% if linha.ficha.produto.tipo_embalagem %}{{ linha.ficha.produto.tipo_embalagem }}{% endif %}

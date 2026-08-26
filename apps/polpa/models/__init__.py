@@ -13,7 +13,6 @@ from .recurso import Recurso
 from .requisicao import ItemRequisicaoInsumo, RequisicaoInsumo
 from .reserva import ReservaInsumo
 from .subproduto import Subproduto
-from .tipo_item import TipoItem
 
 __all__ = [
     'ApontamentoEtapa', 'Camara', 'CustoReceita', 'Etapa', 'EtapaProcesso',
@@ -21,5 +20,5 @@ __all__ = [
     'LeituraTemperatura', 'LoteArmazenado', 'MetaProducao', 'Posicao',
     'FichaProduto', 'Fruta',
     'OrdemPolpa', 'Receita', 'Recebimento', 'Recurso', 'ReservaInsumo',
-    'RequisicaoInsumo', 'ItemRequisicaoInsumo', 'Subproduto', 'TipoItem',
+    'RequisicaoInsumo', 'ItemRequisicaoInsumo', 'Subproduto',
 ]
