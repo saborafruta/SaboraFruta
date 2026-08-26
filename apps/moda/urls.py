@@ -276,6 +276,7 @@ ROTAS_PRONTAS: list = [
     path('produtos/grades/', vc.GradeListView.as_view(), name='grade-list'),
     path('produtos/grades/nova/', vc.GradeFormView.as_view(), name='grade-create'),
     path('produtos/grades/<int:pk>/', vc.GradeFormView.as_view(), name='grade-update'),
+    path('produtos/opcoes-op-2/', vop2.Op2EstruturaOpcaoView.as_view(), name='op2-estrutura-opcoes'),
 
     path('produtos/cores/', vc.CorListView.as_view(), name='cor-list'),
     path('produtos/cores/nova/', vc.CorFormView.as_view(), name='cor-create'),

@@ -1,0 +1,88 @@
+{% extends "_base.html" %}
+{% block title %}{{ title }} — Moda{% endblock %}
+{% block page_title %}{{ title }}{% endblock %}
+
+{% block content %}
+<div class="space-y-5 max-w-7xl mx-auto">
+  <div>
+    <p class="text-sm mb-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+      <a href="{% url 'moda:grupo' 'produtos' %}" :style="temaClaro ? 'color:#3b82f6;' : 'color:#60a5fa;'">Modelos de Produção</a>
+      <span class="mx-1">›</span> Opções da OP 2.0
+    </p>
+    <h2 class="text-2xl font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">Opções da OP 2.0</h2>
+    <p class="text-sm mt-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+      Cadastre, edite, inative ou remova as opções que aparecem na sobreposição ao adicionar modelo na OP.
+    </p>
+  </div>
+
+  <form method="post" class="card p-4 grid gap-3 md:grid-cols-6 items-end">
+    {% csrf_token %}
+    <input type="hidden" name="acao" value="criar">
+    <label class="text-xs font-bold uppercase tracking-wide md:col-span-1">
+      Tipo
+      <input name="tipo_peca" class="form-input w-full mt-1" placeholder="camisa">
+    </label>
+    <label class="text-xs font-bold uppercase tracking-wide md:col-span-1">
+      Nome do tipo
+      <input name="tipo_label" class="form-input w-full mt-1" placeholder="Camisa">
+    </label>
+    <label class="text-xs font-bold uppercase tracking-wide md:col-span-1">
+      Campo
+      <input name="campo" class="form-input w-full mt-1" placeholder="malha">
+    </label>
+    <label class="text-xs font-bold uppercase tracking-wide md:col-span-2">
+      Opção
+      <input name="valor" class="form-input w-full mt-1" placeholder="DRY">
+    </label>
+    <div class="grid grid-cols-[80px_1fr] gap-2">
+      <label class="text-xs font-bold uppercase tracking-wide">
+        Ordem
+        <input name="ordem" type="number" min="0" class="form-input w-full mt-1" value="0">
+      </label>
+      <button class="btn-primary">Cadastrar</button>
+    </div>
+  </form>
+
+  {% for tipo in tipos %}
+    <section class="card p-4">
+      <div class="flex items-center justify-between mb-3">
+        <div>
+          <h3 class="text-lg font-bold">{{ tipo.label }}</h3>
+          <p class="text-xs opacity-70">{{ tipo.slug }}</p>
+        </div>
+      </div>
+      <div class="space-y-4">
+        {% for campo, opcoes in tipo.campos.items %}
+          <div>
+            <h4 class="text-xs font-bold uppercase tracking-wide mb-2" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">{{ campo }}</h4>
+            <div class="grid gap-2">
+              {% for opcao in opcoes %}
+                <form method="post" class="grid gap-2 md:grid-cols-[120px_120px_1fr_80px_auto_auto_auto] items-center rounded-lg p-2"
+                      :style="temaClaro ? 'background:#f8fafc;' : 'background:#111827;'">
+                  {% csrf_token %}
+                  <input type="hidden" name="acao" value="editar">
+                  <input type="hidden" name="opcao_id" value="{{ opcao.pk }}">
+                  <input name="tipo_label" class="form-input" value="{{ opcao.tipo_label }}">
+                  <input name="campo" class="form-input" value="{{ opcao.campo }}">
+                  <input name="valor" class="form-input" value="{{ opcao.valor }}">
+                  <input name="ordem" type="number" min="0" class="form-input" value="{{ opcao.ordem }}">
+                  <button class="btn-secondary text-sm">Salvar</button>
+                  <button class="btn-secondary text-sm" name="acao" value="{% if opcao.ativo %}inativar{% else %}ativar{% endif %}">
+                    {% if opcao.ativo %}Inativar{% else %}Ativar{% endif %}
+                  </button>
+                  <button class="btn-secondary text-sm" name="acao" value="remover" style="color:#ef4444">Remover</button>
+                  {% if not opcao.ativo %}
+                    <span class="text-xs md:col-span-7" style="color:#f59e0b">Inativa — não aparece na OP.</span>
+                  {% endif %}
+                </form>
+              {% endfor %}
+            </div>
+          </div>
+        {% endfor %}
+      </div>
+    </section>
+  {% empty %}
+    <div class="card p-6 text-center">Nenhuma opção cadastrada ainda.</div>
+  {% endfor %}
+</div>
+{% endblock %}

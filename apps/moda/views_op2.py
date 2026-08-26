@@ -16,13 +16,16 @@ from .forms_arquivo import ArquivoPedidoForm
 from .forms_cliente import ClienteRapidoForm
 from .models import (
     AprovacaoPedido, ArquivoPedido, Grade, ItemGradePedido, ItemPedidoProducao,
-    PedidoProducao, Personalizacao, PersonalizacaoIndividual, Posicao, ProdutoModa, Tamanho,
-    VisualItemPedido,
+    OpcaoEstruturaOP2, PedidoProducao, Personalizacao, PersonalizacaoIndividual,
+    Posicao, ProdutoModa, Tamanho, VisualItemPedido,
 )
 from .services.historico import HistoricoService
 from .services.grade_pedido import GradePedidoService
 from .services.kanban_comercial import status_choices_kanban, status_destino_kanban
-from .services.op2_estrutura import OP2_ESTRUTURA_OPCOES, juntar_observacoes_item
+from .services.op2_estrutura import (
+    OP2_ESTRUTURA_OPCOES, juntar_observacoes_item, opcoes_estrutura_filial,
+    sincronizar_opcoes_padrao,
+)
 from .services.pedido_pdf import whatsapp_numero
 from .views import ModaBaseView
 
@@ -269,7 +272,7 @@ class Op2CreateView(ModaBaseView):
                     ativo=True,
                 ).prefetch_related('itens__tamanho').order_by('tipo', 'nome')
             ],
-            'estrutura_opcoes': OP2_ESTRUTURA_OPCOES,
+            'estrutura_opcoes': opcoes_estrutura_filial(_filial(request)),
             'tamanhos': Tamanho.objects.for_filial(_filial(request)).filter(
                 ativo=True,
             ).order_by('tipo', 'ordem', 'sigla'),
@@ -421,7 +424,7 @@ class Op2DetailView(ModaBaseView):
                 }
                 for produto in modelos
             },
-            'estrutura_opcoes': OP2_ESTRUTURA_OPCOES,
+            'estrutura_opcoes': opcoes_estrutura_filial(_filial(request)),
             'status_choices': status_choices_kanban(),
             'status_atual': status_destino_kanban(pedido.status),
             'item_status_choices': ItemPedidoProducao.StatusFluxo.choices,
@@ -635,6 +638,7 @@ class Op2ActionView(ModaBaseView):
             )
         messages.success(request, f'{len(arquivos)} arquivo(s) anexado(s).')
 
+
     def _acao_individual(self, request, pedido):
         form = PersonalizacaoIndividualForm(
             request.POST, filial=_filial(request), pedido=pedido,
@@ -691,3 +695,97 @@ class Op2ActionView(ModaBaseView):
             copia.pk = None; copia.pedido = novo; copia.item = mapa[pessoa.item_id]; copia.save()
         messages.success(request, f'OP duplicada como rascunho #{novo.numero:06d}.')
         return _voltar(novo)
+
+
+class Op2EstruturaOpcaoView(ModaBaseView):
+    area = 'produtos'
+    permissao_acao = 'editar'
+
+    def get(self, request):
+        sincronizar_opcoes_padrao(_filial(request))
+        return render(request, 'moda/op2_estrutura_opcoes.html', self._context(request))
+
+    def post(self, request):
+        sincronizar_opcoes_padrao(_filial(request))
+        acao = request.POST.get('acao') or ''
+        try:
+            if acao == 'criar':
+                self._criar(request)
+            elif acao == 'editar':
+                self._editar(request)
+            elif acao == 'inativar':
+                self._ativo(request, False)
+            elif acao == 'ativar':
+                self._ativo(request, True)
+            elif acao == 'remover':
+                self._remover(request)
+            else:
+                raise ValueError('Ação inválida.')
+        except ValueError as erro:
+            messages.error(request, str(erro))
+        return redirect(reverse('moda:op2-estrutura-opcoes'))
+
+    @staticmethod
+    def _base_query(request):
+        return OpcaoEstruturaOP2.objects.for_filial(_filial(request))
+
+    def _opcao(self, request):
+        return get_object_or_404(self._base_query(request), pk=request.POST.get('opcao_id'))
+
+    def _criar(self, request):
+        tipo_peca = (request.POST.get('tipo_peca') or '').strip()
+        tipo_label = (request.POST.get('tipo_label') or '').strip()
+        campo = (request.POST.get('campo') or '').strip()
+        valor = (request.POST.get('valor') or '').strip()
+        if not tipo_peca or not tipo_label or not campo or not valor:
+            raise ValueError('Informe tipo, nome do tipo, campo e opção.')
+        OpcaoEstruturaOP2.objects.create(
+            filial=_filial(request), tipo_peca=tipo_peca, tipo_label=tipo_label,
+            campo=campo, valor=valor, ordem=int(request.POST.get('ordem') or 0),
+            ativo=True,
+        )
+        messages.success(request, 'Opção cadastrada.')
+
+    def _editar(self, request):
+        opcao = self._opcao(request)
+        valor = (request.POST.get('valor') or '').strip()
+        if not valor:
+            raise ValueError('A opção não pode ficar vazia.')
+        opcao.tipo_label = (request.POST.get('tipo_label') or opcao.tipo_label).strip()
+        opcao.campo = (request.POST.get('campo') or opcao.campo).strip()
+        opcao.valor = valor
+        opcao.ordem = int(request.POST.get('ordem') or 0)
+        opcao.save(update_fields=['tipo_label', 'campo', 'valor', 'ordem', 'updated_at'])
+        messages.success(request, 'Opção atualizada.')
+
+    def _ativo(self, request, ativo):
+        opcao = self._opcao(request)
+        opcao.ativo = ativo
+        opcao.save(update_fields=['ativo', 'updated_at'])
+        messages.success(request, 'Opção ativada.' if ativo else 'Opção inativada.')
+
+    def _remover(self, request):
+        opcao = self._opcao(request)
+        opcao.delete()
+        messages.success(request, 'Opção removida.')
+
+    @staticmethod
+    def _context(request):
+        opcoes = list(
+            OpcaoEstruturaOP2.objects.for_filial(_filial(request))
+            .order_by('tipo_label', 'campo', 'ordem', 'valor')
+        )
+        tipos = {}
+        for opcao in opcoes:
+            tipo = tipos.setdefault(opcao.tipo_peca, {
+                'slug': opcao.tipo_peca,
+                'label': opcao.tipo_label,
+                'campos': {},
+            })
+            tipo['campos'].setdefault(opcao.campo, []).append(opcao)
+        return {
+            'title': 'Opções da OP 2.0',
+            'tipos': tipos.values(),
+            'opcoes': opcoes,
+            'padrao': OP2_ESTRUTURA_OPCOES,
+        }

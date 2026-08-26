@@ -53,6 +53,36 @@ def _por_extenso(data) -> str:
     return f'{data.day} de {MESES[data.month - 1]} de {data.year}'
 
 
+def _grade_resumo(item) -> str:
+    linhas = [
+        f'{grade.tamanho.sigla} {grade.quantidade}'
+        for grade in item.grade.all()
+        if grade.quantidade
+    ]
+    if not linhas:
+        return ''
+    prefixo = item.grade_tamanho.nome if item.grade_tamanho_id else 'Grade'
+    return f'{prefixo}: ' + ', '.join(linhas)
+
+
+def _estrutura_resumo_item(item, limite=220) -> str:
+    texto = (item.observacoes or '').strip()
+    marcador = 'Estrutura da peça:'
+    if marcador not in texto:
+        return ''
+    estrutura = texto.split(marcador, 1)[1]
+    partes = []
+    for linha in estrutura.splitlines():
+        linha = linha.strip()
+        if not linha or linha == marcador:
+            continue
+        partes.append(linha)
+    resumo = '; '.join(partes)
+    if len(resumo) > limite:
+        resumo = resumo[:limite - 1].rstrip() + '…'
+    return resumo
+
+
 def _estilos():
     base = getSampleStyleSheet()
     return {
@@ -200,9 +230,19 @@ class OrcamentoPdfService:
             ]
             if detalhes:
                 partes.append(', '.join(detalhes))
+            extras = []
+            grade = _grade_resumo(item)
+            estrutura = _estrutura_resumo_item(item)
+            if grade:
+                extras.append(f'<font size="7"><b>Grade:</b> {esc(grade)}</font>')
+            if estrutura:
+                extras.append(f'<font size="7"><b>Estrutura:</b> {esc(estrutura)}</font>')
+            descricao = ' — '.join(partes)
+            if extras:
+                descricao += '<br/>' + '<br/>'.join(extras)
             linhas.append([
                 Paragraph(str(indice), e['td_centro']),
-                Paragraph(' — '.join(partes), e['td']),
+                Paragraph(descricao, e['td']),
                 Paragraph(str(item.quantidade), e['td_centro']),
                 Paragraph(brl(unitario), e['td_centro']),
                 Paragraph(brl(unitario * item.quantidade), e['td_centro']),

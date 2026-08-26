@@ -15,6 +15,7 @@ from .materiais import (
     ConsumoLoteCorte, ItemRequisicao, RequisicaoMaterial, ReservaMaterial,
 )
 from .ordem import OrdemProducao
+from .op2_config import OpcaoEstruturaOP2
 from .pcp import CapacidadeSetor
 from .pedido import PedidoProducao
 from .personalizacao import Personalizacao
@@ -51,6 +52,7 @@ __all__ = [
     'MockupVisual',
     'Linha',
     'Operacao',
+    'OpcaoEstruturaOP2',
     'OrdemProducao',
     'OperacaoRoteiro',
     'Marca',

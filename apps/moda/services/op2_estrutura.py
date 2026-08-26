@@ -94,6 +94,58 @@ OP2_ESTRUTURA_OPCOES = {
 }
 
 
+def _normalizar_slug(texto: str) -> str:
+    return (texto or '').strip().lower().replace(' ', '_')
+
+
+def sincronizar_opcoes_padrao(filial):
+    """Garante que a filial tenha as opções-base da planilha para edição."""
+    if filial is None:
+        return
+    from apps.moda.models import OpcaoEstruturaOP2
+
+    if OpcaoEstruturaOP2.objects.for_filial(filial).exists():
+        return
+
+    for tipo_peca, grupo in OP2_ESTRUTURA_OPCOES.items():
+        tipo_label = grupo.get('label') or tipo_peca.title()
+        for campo, valores in grupo.get('campos', {}).items():
+            for ordem, valor in enumerate(valores, start=1):
+                valor = (valor or '').strip()
+                if not valor:
+                    continue
+                OpcaoEstruturaOP2.objects.get_or_create(
+                    filial=filial,
+                    tipo_peca=tipo_peca,
+                    campo=campo,
+                    valor=valor,
+                    defaults={'tipo_label': tipo_label, 'ordem': ordem, 'ativo': True},
+                )
+
+
+def opcoes_estrutura_filial(filial, incluir_inativas=False):
+    """Devolve as opções editáveis no mesmo formato usado pela OP."""
+    if filial is None:
+        return OP2_ESTRUTURA_OPCOES
+    from apps.moda.models import OpcaoEstruturaOP2
+
+    todas = OpcaoEstruturaOP2.objects.for_filial(filial)
+    if not todas.exists():
+        return OP2_ESTRUTURA_OPCOES
+    qs = todas
+    if not incluir_inativas:
+        qs = qs.filter(ativo=True)
+
+    grupos = {}
+    for opcao in qs.order_by('tipo_label', 'campo', 'ordem', 'valor'):
+        grupo = grupos.setdefault(opcao.tipo_peca, {
+            'label': opcao.tipo_label or opcao.tipo_peca.title(),
+            'campos': {},
+        })
+        grupo['campos'].setdefault(opcao.campo, []).append(opcao.valor)
+    return grupos
+
+
 def estrutura_resumo(post) -> str:
     """Monta um resumo legível das escolhas de estrutura enviadas pelo form."""
     tipo = (post.get('estrutura_tipo') or '').strip()
