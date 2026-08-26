@@ -75,10 +75,16 @@ MODULOS = [
         prefixos=('/food-service/',),
         # Deixou de ser universal: mesa e comanda não fazem sentido numa
         # distribuidora ou num atacado, e o menu delas ficava poluído.
+        #
+        # E deixou também a Indústria Alimentícia: fábrica atende pedido,
+        # não mesa. Ela entrou junto porque padaria e fábrica de alimento
+        # parecem vizinhas no papel, mas o salão é da padaria — a fábrica
+        # de polpa recebia um menu inteiro que nunca ia abrir.
+        #
         # Para conceder a outro ramo, acrescente o segmento aqui — ou ligue
-        # na mão pela Central, que é o caminho para quem não se encaixa em
-        # nenhum destes.
-        segmentos=(seg.PADARIAS, seg.INDUSTRIA_ALIMENTICIA),
+        # na mão pela Central (`Empresa.modulos_extras`), que é o caminho
+        # para a empresa que não se encaixa no vertical mas usa o módulo.
+        segmentos=(seg.PADARIAS,),
     ),
     Modulo(
         'moda', 'Moda / Confecção',
