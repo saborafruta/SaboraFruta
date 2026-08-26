@@ -1,0 +1,158 @@
+{% extends "_base.html" %}
+{% block title %}{{ title }} — Polpa{% endblock %}
+{% block page_title %}{{ title }}{% endblock %}
+{% block content %}
+
+{% comment %}
+  ESTA É A FOLHA QUE VAI PARA A CÂMARA. Por isso ela mostra endereço e dias
+  de validade, e não preço: quem separa não precisa saber quanto o pedido
+  vale — precisa saber em qual rua está o lote e quantos dias ele tem.
+
+  ANTES DE FECHAR, é sugestão; depois, é o documento. Reexibir a sugestão
+  sobre uma separação já fechada faria a tela discordar do que o
+  faturamento vai ler.
+{% endcomment %}
+<div class="space-y-4">
+
+  <div class="flex flex-wrap items-start justify-between gap-3">
+    <div>
+      <p class="text-sm mb-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+        <a href="{% url 'polpa:hub' %}" :style="temaClaro ? 'color:#3b82f6;' : 'color:#60a5fa;'">Polpa de Frutas</a>
+        <span class="mx-1">›</span>
+        <a href="{% url 'polpa:separacao' %}" :style="temaClaro ? 'color:#3b82f6;' : 'color:#60a5fa;'">Separação</a>
+      </p>
+      <h2 class="text-2xl font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
+        Pedido {{ pedido.numero_pedido }}
+      </h2>
+      <p class="text-sm mt-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+        {{ pedido.cliente.nome_fantasia|default:pedido.cliente.razao_social }}
+        {% if pedido.data_entrega_prevista %}
+          · entrega em {{ pedido.data_entrega_prevista|date:"d/m/Y" }}
+        {% else %}
+          · <span style="color:#d97706;">sem data de entrega</span>
+        {% endif %}
+      </p>
+    </div>
+
+    {% if separacao %}
+      <div class="card p-3 text-sm" style="border:1px solid #059669;">
+        <p class="font-semibold" style="color:#059669;">Separação {{ separacao.numero }}</p>
+        <p class="text-xs mt-0.5" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+          {{ separacao.data_inicio|date:"d/m/Y H:i" }}
+          {% if separacao.usuario_separador %} · {{ separacao.usuario_separador.nome }}{% endif %}
+        </p>
+      </div>
+    {% elif pode_agir %}
+      <form method="post"
+            onsubmit="return confirm('Fechar a separação deste pedido? Os lotes ficam presos ao pedido.');">
+        {% csrf_token %}
+        <button type="submit" class="btn-primary">Fechar separação</button>
+      </form>
+    {% endif %}
+  </div>
+
+  {# ── As linhas ──────────────────────────────────────────────────── #}
+  {% for linha in linhas %}
+    <div class="card overflow-hidden">
+      <div class="px-4 py-3 border-b flex flex-wrap items-baseline justify-between gap-2"
+           :style="temaClaro ? 'border-color:#e2e8f0;' : 'border-color:#2a2a2e;'">
+        <div>
+          <h3 class="text-sm font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
+            {{ linha.produto.descricao }}
+          </h3>
+          <p class="text-xs mt-0.5" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+            pedido {{ linha.quantidade|floatformat:"-3" }}
+            {{ linha.produto.unidade_medida.sigla|default:"" }}
+            {% if linha.atendida %} · já atendido {{ linha.atendida|floatformat:"-3" }}{% endif %}
+          </p>
+        </div>
+        {% if linha.falta %}
+          {# Falta saldo é o que trava o caminhão — precisa saltar aos olhos. #}
+          <span class="text-sm font-semibold" style="color:#dc2626;">
+            faltam {{ linha.falta|floatformat:"-3" }}
+          </span>
+        {% endif %}
+      </div>
+
+      {% if linha.sem_lote %}
+        <p class="px-4 py-6 text-sm" style="color:#d97706;">
+          Produto sem controle de lote — sai do saldo geral, sem rastro de
+          lote. A separação do ERP não prende lote nenhum a ele.
+        </p>
+      {% else %}
+        <table class="w-full text-sm">
+          <thead>
+            <tr class="border-b" :style="temaClaro ? 'border-color:#e2e8f0;' : 'border-color:#2a2a2e;'">
+              <th class="text-left px-4 py-2 text-xs font-semibold uppercase tracking-wide"
+                  :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Lote</th>
+              <th class="text-left px-4 py-2 text-xs font-semibold uppercase tracking-wide"
+                  :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Onde está</th>
+              <th class="text-left px-4 py-2 text-xs font-semibold uppercase tracking-wide"
+                  :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Validade</th>
+              <th class="text-right px-4 py-2 text-xs font-semibold uppercase tracking-wide"
+                  :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Tirar</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for e in linha.escolhidos %}
+              <tr class="border-b" :style="temaClaro ? 'border-color:#f1f5f9;' : 'border-color:#1e1e22;'">
+                <td class="px-4 py-2.5 font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
+                  {{ e.lote.numero_lote }}
+                </td>
+                <td class="px-4 py-2.5 text-xs">
+                  {% if e.onde %}
+                    <span :style="temaClaro ? 'color:#374151;' : 'color:#cbd5e1;'">{{ e.onde }}</span>
+                  {% else %}
+                    {# Sem endereço a separação vira procura, de porta aberta. #}
+                    <span style="color:#d97706;">sem endereço — procure na câmara</span>
+                  {% endif %}
+                </td>
+                <td class="px-4 py-2.5 text-xs">
+                  {% if e.lote.data_validade %}
+                    <span :style="temaClaro ? 'color:#374151;' : 'color:#cbd5e1;'">
+                      {{ e.lote.data_validade|date:"d/m/Y" }}
+                    </span>
+                    {% if e.dias is not None %}
+                      <span class="block"
+                            style="color:{% if e.dias < 0 %}#dc2626{% elif e.dias <= 30 %}#d97706{% else %}#64748b{% endif %};">
+                        {{ e.dias }} dia{{ e.dias|pluralize }}
+                      </span>
+                    {% endif %}
+                  {% else %}
+                    <span style="color:#d97706;">sem validade</span>
+                  {% endif %}
+                </td>
+                <td class="px-4 py-2.5 text-right font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
+                  {{ e.quantidade|floatformat:"-3" }}
+                </td>
+              </tr>
+            {% empty %}
+              <tr>
+                <td colspan="4" class="px-4 py-6 text-center text-sm" style="color:#d97706;">
+                  Nenhum lote disponível. Lote vencido ou bloqueado não entra
+                  na separação — e é assim que ele deixa de sair por engano.
+                </td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      {% endif %}
+    </div>
+  {% empty %}
+    <div class="card p-10 text-center">
+      <p class="text-sm" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+        Este pedido não tem item de produto acabado deste vertical.
+      </p>
+    </div>
+  {% endfor %}
+
+  <div class="card p-4">
+    <p class="text-xs" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+      Fechar a separação prende cada lote ao item do pedido — é o que o
+      faturamento vai usar e o que responde, num recall, qual lote foi para
+      qual cliente. A baixa do estoque continua acontecendo no faturamento.
+    </p>
+  </div>
+
+</div>
+{% endblock %}

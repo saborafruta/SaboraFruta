@@ -18,6 +18,7 @@ from django.urls import path
 
 from . import (
     views_armazenagem as varm, views_etiqueta as vetq, views_frio as vfrio,
+    views_expedicao as vexp,
     views_indicadores as vind, views_tempo_real as vtr,
     views, views_catalogo as vcat, views_ordem as vord,
     views_planejamento as vpla, views_processo as vproc,
@@ -104,6 +105,10 @@ ROTAS_PRONTAS: list = [
     path('producao/ordens/<int:pk>/subprodutos/', vsub.subproduto_registrar, name='subproduto-registrar'),
     path('producao/ordens/<int:pk>/subprodutos/<int:subproduto_pk>/excluir/', vsub.subproduto_excluir, name='subproduto-excluir'),
     path('producao/etapas/<int:pk>/apontar/', vproc.ApontarEtapaView.as_view(), name='etapa-apontar'),
+
+    # ── Expedição ───────────────────────────────────────────────────────
+    path('expedicao/separacao/', vexp.SeparacaoListView.as_view(), name='separacao'),
+    path('expedicao/separacao/<int:pk>/', vexp.SeparacaoPedidoView.as_view(), name='separacao-pedido'),
 
     # ── Cadeia de frio ──────────────────────────────────────────────────
     # O estoque de produto acabado: onde cada lote está e quando vence. O

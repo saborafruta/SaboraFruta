@@ -1,0 +1,128 @@
+{% extends "_base.html" %}
+{% block title %}{{ title }} — Polpa{% endblock %}
+{% block page_title %}{{ title }}{% endblock %}
+{% block content %}
+
+{% comment %}
+  ORDENADO PELA ENTREGA, não pela data do pedido: quem separa trabalha
+  contra a data em que o caminhão sai. Pedido sem data de entrega vai para
+  o fim da lista — e não some, porque sumir é como ele atrasa.
+
+  A LISTA NÃO MOSTRA VALOR. Quem entra na câmara não precisa saber quanto o
+  pedido vale; precisa saber o que falta separar e para quando.
+{% endcomment %}
+<div class="space-y-4">
+
+  <div>
+    <p class="text-sm mb-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+      <a href="{% url 'polpa:hub' %}" :style="temaClaro ? 'color:#3b82f6;' : 'color:#60a5fa;'">Polpa de Frutas</a>
+      <span class="mx-1">›</span>
+      <a href="{% url 'polpa:grupo' 'expedicao' %}" :style="temaClaro ? 'color:#3b82f6;' : 'color:#60a5fa;'">Expedição</a>
+    </p>
+    <h2 class="text-2xl font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">Separação</h2>
+    <p class="text-sm mt-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+      O que sai primeiro é o que vence primeiro (FEFO) — com o endereço de
+      cada lote dentro da câmara.
+    </p>
+  </div>
+
+  <div class="grid grid-cols-3 gap-3">
+    <div class="card p-4">
+      <p class="text-[11px] uppercase tracking-wide" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Pedidos na fila</p>
+      <p class="text-3xl font-bold mt-1" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">{{ resumo.pedidos }}</p>
+    </div>
+    <div class="card p-4">
+      <p class="text-[11px] uppercase tracking-wide" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Ainda a separar</p>
+      <p class="text-3xl font-bold mt-1" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">{{ resumo.a_separar }}</p>
+    </div>
+    <div class="card p-4" style="{% if resumo.atrasados %}border:1px solid #dc2626;{% endif %}">
+      <p class="text-[11px] uppercase tracking-wide" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Entrega vencida</p>
+      <p class="text-3xl font-bold mt-1"
+         style="color:{% if resumo.atrasados %}#dc2626{% else %}#059669{% endif %};">{{ resumo.atrasados }}</p>
+    </div>
+  </div>
+
+  <div class="card p-4">
+    <form method="get" class="flex flex-wrap items-end gap-3">
+      <div class="flex-1" style="min-width:220px;">
+        <label class="form-label" for="busca">Pedido ou cliente</label>
+        <input type="text" name="busca" id="busca" class="form-input"
+               value="{{ filtros.busca }}" placeholder="Ex.: 001234, Mercado Central">
+      </div>
+      <button type="submit" class="btn-primary">Filtrar</button>
+      {% if filtros.busca %}
+        <a href="{% url 'polpa:separacao' %}" class="btn-secondary text-sm">Limpar</a>
+      {% endif %}
+    </form>
+  </div>
+
+  <div class="card overflow-hidden">
+    <div class="overflow-x-auto">
+      <table class="w-full text-sm">
+        <thead>
+          <tr class="border-b" :style="temaClaro ? 'border-color:#e2e8f0;' : 'border-color:#2a2a2e;'">
+            <th class="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wide"
+                :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Pedido</th>
+            <th class="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wide"
+                :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Cliente</th>
+            <th class="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wide"
+                :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Entrega</th>
+            <th class="text-right px-4 py-3 text-xs font-semibold uppercase tracking-wide"
+                :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">A separar</th>
+            <th class="text-center px-4 py-3 text-xs font-semibold uppercase tracking-wide"
+                :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Situação</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for l in linhas %}
+            <tr class="border-b" :style="temaClaro ? 'border-color:#f1f5f9;' : 'border-color:#1e1e22;'">
+              <td class="px-4 py-3">
+                <a href="{% url 'polpa:separacao-pedido' l.pedido.pk %}" class="font-semibold underline"
+                   :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">{{ l.pedido.numero_pedido }}</a>
+                <span class="block text-xs" :style="temaClaro ? 'color:#94a3b8;' : 'color:#71717a;'">
+                  {{ l.itens }} item{{ l.itens|pluralize:"ns" }} do vertical
+                </span>
+              </td>
+              <td class="px-4 py-3" :style="temaClaro ? 'color:#374151;' : 'color:#cbd5e1;'">
+                {{ l.pedido.cliente.nome_fantasia|default:l.pedido.cliente.razao_social }}
+              </td>
+              <td class="px-4 py-3 text-xs">
+                {% if l.pedido.data_entrega_prevista %}
+                  <span style="{% if l.atrasado %}color:#dc2626;font-weight:600;{% endif %}"
+                        :style="temaClaro ? 'color:#374151;' : 'color:#cbd5e1;'">
+                    {{ l.pedido.data_entrega_prevista|date:"d/m/Y" }}
+                  </span>
+                  {% if l.atrasado %}<span class="block" style="color:#dc2626;">venceu</span>{% endif %}
+                {% else %}
+                  {# Sem data não é "para qualquer dia": é o que ninguém combinou. #}
+                  <span style="color:#d97706;">sem data de entrega</span>
+                {% endif %}
+              </td>
+              <td class="px-4 py-3 text-right font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
+                {{ l.pendente|floatformat:"-3" }}
+              </td>
+              <td class="px-4 py-3 text-center">
+                {% if l.separacao %}
+                  <span class="soft-pill is-green text-xs">{{ l.separacao.numero }}</span>
+                {% else %}
+                  <span class="soft-pill is-slate text-xs">a separar</span>
+                {% endif %}
+              </td>
+            </tr>
+          {% empty %}
+            <tr>
+              <td colspan="5" class="px-4 py-10 text-center">
+                <p class="text-sm" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+                  Nenhum pedido confirmado com produto deste vertical. A
+                  separação começa quando o pedido de venda é confirmado.
+                </p>
+              </td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+</div>
+{% endblock %}
