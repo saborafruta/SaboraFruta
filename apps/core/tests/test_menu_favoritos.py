@@ -91,3 +91,5 @@ class MenuFavoritosTemplateTests(SimpleTestCase):
         self.assertEqual(template.count('sidebar-favorites-nav'), 2)
         self.assertIn('core/js/sidebar_favorites.js', template)
         self.assertIn('request.user.menu_favoritos', template)
+        self.assertIn('@media (hover: hover) and (pointer: fine)', template)
+        self.assertIn('.sidebar-favorite-toggle:not(.is-favorite)', template)

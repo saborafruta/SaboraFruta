@@ -60,6 +60,7 @@
     line-height: 1;
     cursor: pointer;
     border-radius: 6px;
+    transition: opacity 0.15s, transform 0.15s, background 0.15s, color 0.15s;
   }
   .sidebar-favorite-toggle:hover,
   .sidebar-favorite-toggle:focus-visible {
@@ -70,6 +71,21 @@
   .sidebar-favorite-toggle.is-favorite {
     color: #f59e0b;
     text-shadow: 0 1px 8px rgba(245, 158, 11, 0.22);
+  }
+  @media (hover: hover) and (pointer: fine) {
+    .sidebar-favoritable-link > .sidebar-favorite-toggle:not(.is-favorite) {
+      visibility: hidden;
+      opacity: 0;
+      pointer-events: none;
+      transform: translateX(4px);
+    }
+    .sidebar-favoritable-link:hover > .sidebar-favorite-toggle:not(.is-favorite),
+    .sidebar-favoritable-link:focus-within > .sidebar-favorite-toggle:not(.is-favorite) {
+      visibility: visible;
+      opacity: 1;
+      pointer-events: auto;
+      transform: translateX(0);
+    }
   }
   .sidebar-favorites-panel {
     margin: 2px 4px 8px;
