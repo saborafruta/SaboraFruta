@@ -2,7 +2,7 @@ from .produto import (
     ProdutoListView, ProdutoFiscalListView, ProdutoCreateView, ProdutoDuplicarView, ProdutoUpdateView, ProdutoDeleteView,
     ProdutoToggleAtivoView, ProdutoExportCsvView, ProdutoExportPdfView,
     ProdutoExportTodosCsvView, ProdutoLogExportCsvView, ProdutoLogExportPdfView,
-    ProdutoLogItemsView, ProdutoInlineEditView, ProdutoImagemUpdateView,
+    ProdutoLogItemsView, ProdutoInlineEditView, ProdutoImagemUpdateView, ProdutoImagemView,
     ProdutoFornecedorVinculoDeleteView,
 )
 from .categoria import (
@@ -32,7 +32,7 @@ __all__ = [
     'ProdutoListView', 'ProdutoFiscalListView', 'ProdutoCreateView', 'ProdutoDuplicarView', 'ProdutoUpdateView', 'ProdutoDeleteView',
     'ProdutoToggleAtivoView', 'ProdutoExportCsvView', 'ProdutoExportPdfView',
     'ProdutoExportTodosCsvView', 'ProdutoLogExportCsvView', 'ProdutoLogExportPdfView',
-    'ProdutoLogItemsView', 'ProdutoInlineEditView', 'ProdutoImagemUpdateView',
+    'ProdutoLogItemsView', 'ProdutoInlineEditView', 'ProdutoImagemUpdateView', 'ProdutoImagemView',
     'CategoriaListView', 'CategoriaCreateView', 'CategoriaUpdateView',
     'MarcaListView', 'MarcaCreateView', 'MarcaUpdateView',
     'UnidadeListView', 'UnidadeCreateView', 'UnidadeUpdateView',

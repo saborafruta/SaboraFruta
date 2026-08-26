@@ -987,9 +987,9 @@
     <tr class="table-row-hover" data-inline-url="{% url 'estoque:estoque-inline-edit' p.pk %}">
       <td class="px-4 py-3">
         <div class="estoque-product-cell">
-          <button type="button" class="estoque-thumb-trigger" data-action="{% url 'produtos:produto-image-update' p.pk %}" data-image="{{ p.foto_url_resolvida }}" data-name="{{ p.descricao }}">
+          <button type="button" class="estoque-thumb-trigger" data-action="{% url 'produtos:produto-image-update' p.pk %}" data-image="{% if p.foto_url %}{% url 'produtos:produto-image-file' p.pk %}{% endif %}" data-name="{{ p.descricao }}">
             {% if p.foto_url %}
-              <img src="{{ p.foto_url_resolvida }}" alt="{{ p.descricao }}" class="estoque-thumb">
+              <img src="{% url 'produtos:produto-image-file' p.pk %}" alt="{{ p.descricao }}" class="estoque-thumb">
             {% else %}
               <span class="estoque-thumb-empty">+</span>
             {% endif %}

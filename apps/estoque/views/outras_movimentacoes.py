@@ -439,7 +439,10 @@ class ProdutoEstoqueSearchJsonView(PermissaoRequiredMixin, View):
                 'unidade': str(p.unidade_medida) if p.unidade_medida_id else '',
                 'controla_lote': p.controla_lote,
                 'codigo_barras': p.codigo_barras or '',
-                'foto_url': p.foto_url_resolvida,
+                'foto_url': (
+                    reverse('produtos:produto-image-file', kwargs={'pk': p.pk})
+                    if p.foto_url else ''
+                ),
                 'estoque': saldos.get(p.pk, 0),
                 # Peso ja resolvido pela hierarquia (peso_bruto ->
                 # peso_liquido -> unidade em peso): a tela precisa somar

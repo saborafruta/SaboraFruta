@@ -29,6 +29,7 @@ urlpatterns = [
     path('<int:pk>/log/exportar/pdf/', views.ProdutoLogExportPdfView.as_view(), name='produto-log-export-pdf'),
     path('<int:pk>/log/registros/', views.ProdutoLogItemsView.as_view(), name='produto-log-items'),
     path('<int:pk>/inline-editar/', views.ProdutoInlineEditView.as_view(), name='produto-inline-edit'),
+    path('<int:pk>/foto/', views.ProdutoImagemView.as_view(), name='produto-image-file'),
     path('<int:pk>/imagem/', views.ProdutoImagemUpdateView.as_view(), name='produto-image-update'),
     path('<int:pk>/excluir/', views.ProdutoDeleteView.as_view(), name='produto-delete'),
     path('<int:pk>/toggle-ativo/', views.ProdutoToggleAtivoView.as_view(), name='produto-toggle-ativo'),

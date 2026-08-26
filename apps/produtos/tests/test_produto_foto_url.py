@@ -1,13 +1,19 @@
+from pathlib import Path
+from types import SimpleNamespace
 from unittest.mock import patch
 
 from django.core.files.uploadedfile import SimpleUploadedFile
-from django.test import SimpleTestCase
+from django.http import Http404
+from django.test import RequestFactory, SimpleTestCase
 
 from apps.produtos.models import Produto
-from apps.produtos.views.produto import _gravar_imagem_produto
+from apps.produtos.views.produto import ProdutoImagemView, _gravar_imagem_produto
 
 
 class ProdutoFotoUrlTests(SimpleTestCase):
+    def setUp(self):
+        self.factory = RequestFactory()
+
     def test_renova_url_assinada_antiga_do_bucket(self):
         produto = Produto(
             foto_url=(
@@ -60,3 +66,31 @@ class ProdutoFotoUrlTests(SimpleTestCase):
 
         self.assertEqual(produto.foto_url, 'produtos/imagens/nova.jpg')
         storage_save.assert_called_once()
+
+    @patch('apps.produtos.views.produto.get_object_or_404')
+    def test_endpoint_estavel_renova_destino_sem_cache(self, get_object):
+        get_object.return_value = SimpleNamespace(
+            foto_url_resolvida='https://bucket.example/camisa.jpg?assinatura=nova',
+        )
+
+        response = ProdutoImagemView.as_view()(self.factory.get('/produtos/1/foto/'), pk=1)
+
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(response['Location'], get_object.return_value.foto_url_resolvida)
+        self.assertIn('no-store', response['Cache-Control'])
+
+    @patch('apps.produtos.views.produto.get_object_or_404')
+    def test_endpoint_estavel_retorna_404_quando_produto_nao_tem_foto(self, get_object):
+        get_object.return_value = SimpleNamespace(foto_url_resolvida='')
+
+        with self.assertRaises(Http404):
+            ProdutoImagemView.as_view()(self.factory.get('/produtos/1/foto/'), pk=1)
+
+    def test_falha_da_miniatura_nao_apaga_url_do_zoom(self):
+        template = (
+            Path(__file__).resolve().parents[3]
+            / 'apps/estoque/templates/estoque/estoque/ajuste_rapido.html'
+        ).read_text(encoding='utf-8')
+
+        self.assertIn('data-photo-thumbnail', template)
+        self.assertNotIn("button.dataset.photoUrl=''", template)

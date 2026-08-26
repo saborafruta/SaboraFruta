@@ -10,10 +10,10 @@ from django.core.paginator import Paginator
 from django.db import transaction
 from django.db.models import Case, DecimalField, F, FilteredRelation, IntegerField, Max, OuterRef, Q, Subquery, Sum, Value, When
 from django.db.models.functions import Cast, Coalesce
-from django.http import HttpResponse, JsonResponse
+from django.http import Http404, HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.template.loader import render_to_string
-from django.urls import reverse_lazy
+from django.urls import reverse, reverse_lazy
 from django.utils import timezone
 from django.views import View
 from reportlab.lib import colors
@@ -1509,7 +1509,7 @@ class ProdutoCreateView(PermissaoRequiredMixin, View):
         error_fields, error_steps_json = _produto_form_feedback(form)
         imagem_preview_url = ''
         if produto and produto.foto_url:
-            imagem_preview_url = produto.foto_url_resolvida
+            imagem_preview_url = reverse('produtos:produto-image-file', kwargs={'pk': produto.pk})
         elif form.initial.get('foto_url'):
             imagem_preview_url = form.initial.get('foto_url')
         return {
@@ -1683,7 +1683,10 @@ class ProdutoUpdateView(PermissaoRequiredMixin, View):
             'cancel_url': reverse_lazy('produtos:produto-list'),
             'error_fields': error_fields,
             'error_steps_json': error_steps_json,
-            'imagem_preview_url': produto.foto_url_resolvida,
+            'imagem_preview_url': (
+                reverse('produtos:produto-image-file', kwargs={'pk': produto.pk})
+                if produto.foto_url else ''
+            ),
             'subcategorias_form_json': _subcategorias_form_json(request.user.empresa, request.filial_ativa),
         }
         context.update(_produto_log_context(produto, usuario_padrao=request.user))
@@ -2105,6 +2108,20 @@ class ProdutoImagemUpdateView(PermissaoRequiredMixin, View):
         )
         messages.success(request, 'Imagem do produto atualizada.')
         return redirect(destino)
+
+
+class ProdutoImagemView(View):
+    """Entrega um endereco estavel e renova a assinatura do bucket a cada acesso."""
+
+    def get(self, request, pk):
+        produto = get_object_or_404(Produto.objects.all(), pk=pk)
+        destino = produto.foto_url_resolvida
+        if not destino:
+            raise Http404('Produto sem imagem cadastrada.')
+        response = redirect(destino)
+        response['Cache-Control'] = 'private, no-store, max-age=0'
+        response['Pragma'] = 'no-cache'
+        return response
 
 
 class ProdutoLogExportCsvView(PermissaoRequiredMixin, View):
