@@ -7,7 +7,7 @@ partir de um numero agregado, sem ver a ordem que ele resume.
 """
 from django.shortcuts import render
 
-from .services import IndicadoresService
+from .services import CustoService, IndicadoresService
 from .services.rendimento import RendimentoService
 from .views import PolpaBaseView
 
@@ -71,4 +71,33 @@ class RendimentoRealView(PolpaBaseView):
             'title': 'Rendimento real',
             'janelas': JANELAS,
             **RendimentoService.painel(request.filial_ativa, dias),
+        })
+
+
+class CustoPorLoteView(PolpaBaseView):
+    """
+    Matéria-prima, embalagem e processo dentro do custo de cada lote.
+
+    A TELA DA ORDEM PERGUNTA "esta batida custou o que devia?"; esta
+    pergunta "qual lote está custando caro?" — e essa atravessa as ordens.
+    As contas são as mesmas: quem soma é o `CustoService`, aqui e lá.
+    """
+
+    area = 'indicadores'
+
+    def get(self, request):
+        try:
+            dias = int(request.GET.get('dias') or 90)
+        except ValueError:
+            dias = 90
+        if dias not in JANELAS:
+            dias = 90
+
+        linhas = CustoService.por_lote(request.filial_ativa, dias)
+        return render(request, 'polpa/custo_lote.html', {
+            'title': 'Custo por lote',
+            'dias': dias,
+            'janelas': JANELAS,
+            'linhas': linhas,
+            'resumo': CustoService.resumo_lotes(linhas),
         })

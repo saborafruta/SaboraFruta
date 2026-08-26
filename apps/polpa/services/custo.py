@@ -277,3 +277,130 @@ class CustoService:
                 if por_unidade is not None and por_caixa_qtd > ZERO else None
             ),
         }
+
+    # ── O custo lote a lote ──────────────────────────────────────────────
+    #
+    # A TELA DE INDICADOR PERGUNTA O CONTRÁRIO DA TELA DA ORDEM. Lá a
+    # pergunta é "esta batida custou o que devia?"; aqui é "qual lote está
+    # custando caro?" -- e essa atravessa as ordens. As contas são as
+    # mesmas: este bloco só as percorre, nunca recalcula. Um segundo lugar
+    # somando custo daria dois custos para o mesmo lote.
+
+    # As categorias que não são fruta nem embalagem: o que a fábrica chama
+    # de PROCESSO. Separá-las uma a uma num indicador daria seis colunas
+    # que ninguém compara; juntas, elas respondem "quanto custa transformar".
+    PROCESSO = ('mao_de_obra', 'indireto', 'extras', 'perdas')
+
+    @classmethod
+    def por_lote(cls, filial, dias: int = 90, limite: int = 60) -> list[dict]:
+        """
+        Cada lote produzido na janela com o que ele custou.
+
+        SÓ ORDEM CONCLUÍDA. Ordem em andamento tem custo parcial -- ela
+        consumiu fruta e ainda não gerou produto, e apareceria como o lote
+        mais caro da fábrica justamente por estar no meio do caminho.
+        """
+        from datetime import timedelta
+
+        from django.utils import timezone
+
+        desde = timezone.now() - timedelta(days=dias)
+        ordens = [
+            op for op in (
+                OrdemPolpa.objects.for_filial(filial)
+                .filter(situacao=OrdemPolpa.Situacao.PRODUZIDA)
+                .select_related(
+                    'ordem', 'ordem__produto_acabado', 'ordem__ficha_tecnica',
+                    'ordem__lote_gerado', 'receita', 'receita__ficha',
+                )
+            )
+            if op.ordem.data_fim_real and op.ordem.data_fim_real >= desde
+        ]
+        ordens.sort(key=lambda op: op.ordem.data_fim_real, reverse=True)
+
+        linhas = []
+        for op in ordens[:limite]:
+            comparacao = cls.comparar(op)
+            realizado = comparacao['realizado']
+            total = realizado['total'] or ZERO
+
+            processo = sum(
+                (realizado.get(chave) or ZERO for chave in cls.PROCESSO), ZERO,
+            )
+            linhas.append({
+                'op': op,
+                'lote': op.lote,
+                'produto': op.ordem.produto_acabado,
+                'quando': op.ordem.data_fim_real,
+                'quantidade': op.quantidade_produzida,
+                'total': realizado['total'],
+                'por_kg': realizado['por_kg'],
+                'por_unidade': realizado['por_unidade'],
+                'por_caixa': realizado['por_caixa'],
+                'materia_prima': realizado['materia_prima'],
+                'embalagem': realizado['embalagem'],
+                'processo': processo.quantize(REAL),
+                # A FATIA EM PERCENTUAL é o que deixa dois lotes de tamanhos
+                # diferentes comparáveis: R$ 3.000 de fruta não dizem nada
+                # sozinhos; 78% do custo do lote dizem.
+                'fatias': cls._fatias(
+                    total, realizado['materia_prima'],
+                    realizado['embalagem'], processo,
+                ),
+                'desvio': comparacao['desvio_total'],
+                'desvio_percentual': comparacao['desvio_total_percentual'],
+                'acima': bool(
+                    comparacao['desvio_total'] is not None
+                    and comparacao['desvio_total'] > ZERO
+                ),
+            })
+        return linhas
+
+    @staticmethod
+    def _fatias(total, mp, embalagem, processo) -> dict:
+        """
+        Quanto por cento do lote é fruta, embalagem e processo.
+
+        `None` sem total: dividir por zero não é "zero por cento", é conta
+        que não existe -- e uma barra desenhada com ela mentiria em silêncio.
+        """
+        if not total or total <= ZERO:
+            return {'materia_prima': None, 'embalagem': None, 'processo': None}
+        return {
+            'materia_prima': ((mp or ZERO) / total * 100).quantize(REAL),
+            'embalagem': ((embalagem or ZERO) / total * 100).quantize(REAL),
+            'processo': ((processo or ZERO) / total * 100).quantize(REAL),
+        }
+
+    @classmethod
+    def resumo_lotes(cls, linhas: list[dict]) -> dict:
+        """
+        O topo da tela: o que a janela inteira custou e a média por quilo.
+
+        A MÉDIA É PONDERADA PELO PESO, e não a média das médias: um lote de
+        20 kg não pode puxar o custo por quilo da fábrica tanto quanto um de
+        2.000. Média de médias é como um lote pequeno e caro vira alarme.
+        """
+        total = sum((l['total'] or ZERO for l in linhas), ZERO)
+        mp = sum((l['materia_prima'] or ZERO for l in linhas), ZERO)
+        embalagem = sum((l['embalagem'] or ZERO for l in linhas), ZERO)
+        processo = sum((l['processo'] or ZERO for l in linhas), ZERO)
+
+        peso = ZERO
+        for linha in linhas:
+            if linha['por_kg'] and linha['por_kg'] > ZERO and linha['total']:
+                peso += linha['total'] / linha['por_kg']
+
+        acima = [l for l in linhas if l['acima']]
+        return {
+            'lotes': len(linhas),
+            'total': total.quantize(REAL),
+            'materia_prima': mp.quantize(REAL),
+            'embalagem': embalagem.quantize(REAL),
+            'processo': processo.quantize(REAL),
+            'fatias': cls._fatias(total, mp, embalagem, processo),
+            # `None` sem peso: zero seria "custa nada por quilo".
+            'por_kg': (total / peso).quantize(CENTAVO) if peso > ZERO else None,
+            'acima_do_previsto': len(acima),
+            'desvio': sum((l['desvio'] or ZERO for l in acima), ZERO).quantize(REAL),
+        }
