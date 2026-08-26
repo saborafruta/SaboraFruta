@@ -4,174 +4,98 @@
 {% block largura_conteudo %}max-w-none{% endblock %}
 {% block content %}
 {{ modelos_grade|json_script:"op2-modelos-grade" }}
-{{ estrutura_opcoes|json_script:"op2-estrutura-opcoes" }}
+{{ grades_json|json_script:"op2-grades" }}
 {{ clientes_json|json_script:"op2-clientes" }}
 <style>
-.op2-shell{margin:-.75rem}
-.op2-work{display:grid;grid-template-columns:minmax(0,1fr) 340px;gap:12px}
-.op2-band{border:1px solid rgba(148,163,184,.22);border-radius:10px;padding:12px}
-.op2-label{display:block;margin-bottom:4px;font-size:10px;text-transform:uppercase;letter-spacing:.06em;color:#64748b;font-weight:800}
-.op2-card{border:1px solid rgba(148,163,184,.22);border-radius:10px;padding:10px}
-.op2-mock{aspect-ratio:4/3;border-radius:10px;background:linear-gradient(145deg,rgba(37,99,235,.16),rgba(15,23,42,.05));display:flex;align-items:center;justify-content:center;color:#64748b;font-weight:800;font-size:12px}
-.op2-results{position:absolute;left:0;right:0;top:100%;z-index:40;max-height:240px;overflow:auto;border:1px solid rgba(148,163,184,.35);border-radius:10px;margin-top:4px;background:var(--card-bg,#18181b)}
-.op2-stepper{display:grid;grid-template-columns:36px minmax(0,1fr) 36px;gap:4px;align-items:center}
-.op2-plus{min-height:78px;border:1px dashed rgba(148,163,184,.45);border-radius:10px;display:flex;align-items:center;justify-content:center;text-align:center;cursor:pointer}
-@media(max-width:1023px){.op2-work{grid-template-columns:minmax(0,1fr) 300px}}
-@media(max-width:767px){.op2-work{display:block}.op2-aside{margin-top:12px}.op2-grid-compact{grid-template-columns:1fr!important}}
+.op2-shell{margin:-.75rem}.op2-work{display:grid;grid-template-columns:minmax(0,1fr) 300px;gap:12px}.op2-band{border:1px solid rgba(148,163,184,.22);border-radius:10px;padding:12px}.op2-label{display:block;margin-bottom:4px;font-size:10px;text-transform:uppercase;letter-spacing:.06em;color:#64748b;font-weight:800}.op2-card{border:1px solid rgba(148,163,184,.22);border-radius:10px;padding:10px}.op2-results{position:absolute;left:0;right:0;top:100%;z-index:40;max-height:240px;overflow:auto;border:1px solid rgba(148,163,184,.35);border-radius:10px;margin-top:4px;background:var(--card-bg,#18181b)}.op2-plus{min-height:78px;border:1px dashed rgba(148,163,184,.45);border-radius:10px;display:flex;align-items:center;justify-content:center;text-align:center;cursor:pointer}.op2-modal-grid{display:grid;grid-template-columns:330px minmax(0,1fr);gap:12px}.op2-model-list{max-height:58vh;overflow:auto}.op2-grade-chip{border:1px solid rgba(148,163,184,.28);border-radius:10px;padding:8px;text-align:left}.op2-grade-chip.is-on{border-color:#3b82f6;background:rgba(59,130,246,.13)}.op2-stepper{display:grid;grid-template-columns:36px minmax(0,1fr) 36px;gap:4px;align-items:center}
+@media(max-width:1023px){.op2-work{grid-template-columns:minmax(0,1fr)}.op2-aside{display:grid;grid-template-columns:1fr 1fr;gap:12px}.op2-modal-grid{grid-template-columns:1fr}}
+@media(max-width:767px){.op2-aside{display:block}.op2-grid-compact{grid-template-columns:1fr!important}.op2-model-list{max-height:240px}}
 </style>
 <div class="op2-shell" x-data="op2Nova()" x-init="recolherSidebar()">
-  <form method="post" enctype="multipart/form-data" class="space-y-3" @submit="if(!clienteId){alert('Selecione um cliente.');$event.preventDefault()}">
+  <form method="post" enctype="multipart/form-data" class="space-y-3" @submit="validarAntesDeSalvar">
     {% csrf_token %}
+    <template x-for="(item,idx) in itens" :key="item.uid">
+      <div>
+        <input type="hidden" :name="`item_${idx}_produto_id`" :value="item.produto_id">
+        <input type="hidden" :name="`item_${idx}_grade_id`" :value="item.grade_id">
+        <input type="hidden" :name="`item_${idx}_descricao`" :value="item.descricao">
+        <input type="hidden" :name="`item_${idx}_quantidade`" :value="item.quantidade">
+        <input type="hidden" :name="`item_${idx}_valor_unitario`" :value="item.valor_unitario">
+        <input type="hidden" :name="`item_${idx}_referencia`" :value="item.referencia">
+        <input type="hidden" :name="`item_${idx}_acabamento`" :value="item.acabamento">
+        <input type="hidden" :name="`item_${idx}_arte_tipo`" :value="item.arte_tipo">
+        <input type="hidden" :name="`item_${idx}_arte_tecnica`" :value="item.arte_tecnica">
+        <input type="hidden" :name="`item_${idx}_arte_local`" :value="item.arte_local">
+        <input type="hidden" :name="`item_${idx}_arte_observacoes`" :value="item.arte_observacoes">
+        <input type="hidden" :name="`item_${idx}_item_observacoes`" :value="item.item_observacoes">
+        <input type="hidden" :name="`item_${idx}_estrutura_tipo`" :value="item.estrutura_tipo">
+        <template x-for="estrutura in item.estruturaCampos" :key="estrutura.campo">
+          <input type="hidden" :name="`item_${idx}_estrutura_${estrutura.campo}`" :value="estrutura.valor">
+        </template>
+        <template x-for="linha in item.gradeQuantidades" :key="linha.tamanho_id">
+          <input type="hidden" :name="`item_${idx}_grade_${linha.tamanho_id}`" :value="linha.quantidade">
+        </template>
+      </div>
+    </template>
     <header class="card p-3 flex flex-wrap items-center justify-between gap-2 sticky top-0 z-30">
-      <div class="min-w-0">
-        <a href="{% url 'moda:comercial' %}" class="text-xs font-bold" style="color:#3b82f6">← Comercial</a>
-        <h1 class="text-lg md:text-xl font-bold truncate">Nova OP 2.0</h1>
-        <p class="text-xs" :style="temaClaro?'color:#64748b':'color:#94a3b8'">Preencha cliente, modelo, impressão, grade, anexos e observações em uma tela.</p>
-      </div>
-      <div class="flex items-center gap-2">
-        <span class="px-3 py-1 rounded-full text-xs font-bold" style="color:#d97706;background:rgba(245,158,11,.14)">ORÇAMENTO</span>
-        <button type="button" class="btn-secondary opacity-70" title="Salve o rascunho para gerar o PDF">Abrir orçamento PDF</button>
-        <button class="btn-primary">Salvar rascunho e abrir OP →</button>
-      </div>
+      <div class="min-w-0"><a href="{% url 'moda:comercial' %}" class="text-xs font-bold" style="color:#3b82f6">← Comercial</a><h1 class="text-lg md:text-xl font-bold truncate">Nova OP 2.0</h1><p class="text-xs" :style="temaClaro?'color:#64748b':'color:#94a3b8'">Cliente, modelos, impressão, grades, anexos e observações em uma tela limpa.</p></div>
+      <div class="flex items-center gap-2"><span class="px-3 py-1 rounded-full text-xs font-bold" style="color:#d97706;background:rgba(245,158,11,.14)">ORÇAMENTO</span><button type="button" class="btn-secondary opacity-70" title="Disponível depois de salvar">Abrir orçamento PDF</button><button class="btn-primary">Salvar rascunho e abrir OP →</button></div>
     </header>
-
     <div class="op2-work">
       <main class="card p-3 space-y-3">
         <section class="op2-band">
-          <div class="flex items-center justify-between gap-2 mb-2">
-            <h2 class="font-bold">1. Cliente</h2>
-            {% if pode_criar_cliente %}<button type="button" class="btn-secondary text-sm" style="color:#16a34a;border-color:rgba(22,163,74,.45)" @click="modalCliente=true">+ Cadastrar cliente</button>{% endif %}
-          </div>
+          <div class="flex items-center justify-between gap-2 mb-2"><h2 class="font-bold">1. Cliente</h2>{% if pode_criar_cliente %}<button type="button" class="btn-secondary text-sm" style="color:#16a34a;border-color:rgba(22,163,74,.45)" @click="modalCliente=true">+ Cadastrar cliente</button>{% endif %}</div>
           <input type="hidden" name="cliente" x-model="clienteId">
           <div class="grid md:grid-cols-4 gap-2 op2-grid-compact">
-            <label class="md:col-span-2 relative"><span class="op2-label">Pesquisar cliente</span><input type="search" x-model="buscaCliente" @input="clienteId=''" class="form-input w-full" placeholder="Digite e selecione o cliente"><div class="op2-results" x-show="!clienteId && clienteResultados().length" x-cloak><template x-for="cliente in clienteResultados()" :key="cliente.id"><button type="button" class="block w-full text-left px-3 py-2 hover:bg-blue-500/10" @click="selecionarCliente(cliente)"><strong x-text="cliente.nome"></strong><small class="block opacity-70" x-text="[cliente.documento, cliente.contato, cliente.telefone].filter(Boolean).join(' · ')"></small></button></template></div></label>
+            <label class="md:col-span-2 relative"><span class="op2-label">Pesquisar cliente</span><input type="search" x-model="buscaCliente" @input="clienteId=''" class="form-input w-full" placeholder="Digite nome, documento ou telefone e clique no cliente"><div class="op2-results" x-show="!clienteId && clienteResultados().length" x-cloak><template x-for="cliente in clienteResultados()" :key="cliente.id"><button type="button" class="block w-full text-left px-3 py-2 hover:bg-blue-500/10" @click="selecionarCliente(cliente)"><strong x-text="cliente.nome"></strong><small class="block opacity-70" x-text="[cliente.documento, cliente.contato, cliente.telefone].filter(Boolean).join(' · ')"></small></button></template></div></label>
             <label><span class="op2-label">Contato</span><input name="contato_nome" x-model="contatoNome" class="form-input w-full" placeholder="Pessoa de contato"></label>
             <label><span class="op2-label">WhatsApp</span><input name="contato_telefone" x-model="contatoTelefone" class="form-input w-full" placeholder="55 84 99999-0000"></label>
-            <div class="md:col-span-4 space-y-2">
-              <div class="flex items-center justify-between"><span class="op2-label">Outros contatos</span><button type="button" class="btn-secondary text-xs" @click="contatos.push({nome:'',telefone:''})">+ Contato</button></div>
-              <template x-for="(contato,idx) in contatos" :key="idx">
-                <div class="grid md:grid-cols-[1fr_1fr_auto] gap-2">
-                  <input name="contato_extra_nome" x-model="contato.nome" class="form-input" placeholder="Nome do contato extra">
-                  <input name="contato_extra_telefone" x-model="contato.telefone" class="form-input" placeholder="WhatsApp / telefone extra">
-                  <button type="button" class="btn-secondary" @click="contatos.splice(idx,1)">Remover</button>
-                </div>
-              </template>
-            </div>
+            <div class="md:col-span-4 space-y-2"><div class="flex items-center justify-between"><span class="op2-label">Outros contatos</span><button type="button" class="btn-secondary text-xs" @click="contatos.push({nome:'',telefone:''})">+ Contato</button></div><template x-for="(contato,idx) in contatos" :key="idx"><div class="grid md:grid-cols-[1fr_1fr_auto] gap-2"><input name="contato_extra_nome" x-model="contato.nome" class="form-input" placeholder="Nome do contato extra"><input name="contato_extra_telefone" x-model="contato.telefone" class="form-input" placeholder="WhatsApp / telefone extra"><button type="button" class="btn-secondary" @click="contatos.splice(idx,1)">Remover</button></div></template></div>
           </div>
         </section>
-
         <section class="op2-band">
-          <div class="flex items-center justify-between gap-2 mb-2">
-            <div><h2 class="font-bold">2 e 3. Modelo de produção e impressão</h2><p class="text-xs opacity-70">A seleção abre em sobreposição, usando os modelos de produção.</p></div>
-            <button type="button" class="btn-primary" @click="modalProduto=true">Selecionar modelo</button>
-          </div>
-          <input type="hidden" name="produto_id" x-model="produtoId">
-          <div class="grid md:grid-cols-4 gap-2 op2-grid-compact">
-            <div class="op2-card md:col-span-2"><span class="op2-label">Modelo escolhido</span><strong x-text="produtoNome || 'Nenhum modelo selecionado'"></strong><p class="text-xs mt-1 opacity-70" x-text="produtoInfo || 'Escolha o modelo de produção para continuar.'"></p><p class="text-xs mt-1" style="color:#3b82f6" x-show="gradeNome" x-text="'Grade: '+gradeNome"></p></div>
-            <label><span class="op2-label">Quantidade total</span><input name="quantidade" type="number" min="1" x-model.number="quantidade" class="form-input w-full"></label>
-            <label><span class="op2-label">Valor unitário</span><input name="valor_unitario" type="number" min="0" step=".01" x-model.number="valor" class="form-input w-full"></label>
-            <label><span class="op2-label">Referência</span><input name="referencia" class="form-input w-full"></label>
-            <label><span class="op2-label">Acabamento</span><input name="acabamento" class="form-input w-full"></label>
-            <label><span class="op2-label">Tipo de impressão</span><select name="arte_tipo" class="form-input w-full"><option value="">Selecione...</option>{% for v,l in tipos_arte %}<option value="{{ v }}">{{ l }}</option>{% endfor %}</select></label>
-            <label><span class="op2-label">Técnica</span><select name="arte_tecnica" class="form-input w-full"><option value="">Selecione...</option>{% for v,l in tecnicas_arte %}<option value="{{ v }}">{{ l }}</option>{% endfor %}</select></label>
-            <label><span class="op2-label">Local</span><input name="arte_local" class="form-input w-full" placeholder="Peito, costas, manga..."></label>
-            <label class="md:col-span-2"><span class="op2-label">Detalhes da impressão</span><textarea name="arte_observacoes" rows="2" class="form-input w-full"></textarea></label>
-            <label class="md:col-span-2"><span class="op2-label">Descrição do produto</span><textarea name="item_observacoes" rows="2" class="form-input w-full"></textarea></label>
-          </div>
-          <div class="mt-3 pt-3" style="border-top:1px solid rgba(148,163,184,.22)">
-            <div class="flex flex-wrap items-center justify-between gap-2 mb-2">
-              <div><h3 class="font-bold text-sm">Estrutura da peça</h3><p class="text-xs opacity-70">Opções importadas da planilha enviada.</p></div>
-              <label class="w-full sm:w-60"><span class="op2-label">Tipo de peça</span><select name="estrutura_tipo" x-model="estruturaTipo" class="form-input w-full">{% for tipo, grupo in estrutura_opcoes.items %}<option value="{{ tipo }}">{{ grupo.label }}</option>{% endfor %}</select></label>
-            </div>
-            {% for tipo, grupo in estrutura_opcoes.items %}
-              <div class="grid sm:grid-cols-2 lg:grid-cols-4 gap-2" x-show="estruturaTipo === '{{ tipo }}'">
-                {% for campo, opcoes in grupo.campos.items %}
-                  <label><span class="op2-label">{{ campo|cut:"_"|title }}</span><select name="estrutura_{{ campo }}" class="form-input w-full" :disabled="estruturaTipo !== '{{ tipo }}'"><option value="">Selecione...</option>{% for opcao in opcoes %}<option value="{{ opcao }}">{{ opcao }}</option>{% endfor %}</select></label>
-                {% endfor %}
-              </div>
-            {% endfor %}
+          <div class="flex items-center justify-between gap-2 mb-2"><div><h2 class="font-bold">2 e 3. Modelos, personalização e impressão</h2><p class="text-xs opacity-70">A estrutura da peça e os detalhes aparecem só na sobreposição de adicionar modelo.</p></div><button type="button" class="btn-primary" @click="abrirModalItem()">+ Adicionar modelo</button></div>
+          <div class="space-y-2">
+            <template x-for="(item,idx) in itens" :key="item.uid">
+              <article class="op2-card grid lg:grid-cols-[minmax(0,1.2fr)_minmax(0,.9fr)_auto] gap-3 items-center">
+                <div class="min-w-0"><div class="flex flex-wrap items-center gap-2"><strong class="truncate" x-text="item.nome"></strong><span class="px-2 py-1 rounded-full text-xs font-bold" style="color:#d97706;background:rgba(245,158,11,.14)">Orçamento</span></div><p class="text-xs opacity-70 mt-1" x-text="[item.codigo, item.grade_nome, item.referencia].filter(Boolean).join(' · ')"></p></div>
+                <div class="grid grid-cols-3 gap-2 text-sm"><div><span class="op2-label">Peças</span><strong x-text="item.quantidade"></strong></div><div><span class="op2-label">Unitário</span><strong x-text="moeda(item.valor_unitario)"></strong></div><div><span class="op2-label">Total</span><strong x-text="moeda(item.quantidade * item.valor_unitario)"></strong></div></div>
+                <div class="flex gap-2 justify-end"><button type="button" class="btn-secondary text-sm" @click="editarItem(idx)">Editar</button><button type="button" class="btn-secondary text-sm" style="color:#ef4444" @click="itens.splice(idx,1)">Excluir</button></div>
+              </article>
+            </template>
+            <div x-show="!itens.length" class="text-center p-8 rounded-lg" style="border:1px dashed #64748b"><p class="font-bold">Nenhum modelo ainda</p><p class="text-sm opacity-70 mt-1">Clique em “Adicionar modelo” para escolher o modelo, estrutura, impressão e grade.</p><button type="button" class="btn-primary mt-3" @click="abrirModalItem()">Adicionar modelo</button></div>
           </div>
         </section>
-
-        <section class="op2-band">
-          <h2 class="font-bold mb-2">4. Grade e personalização</h2>
-          <p class="text-xs opacity-70 mb-2" x-show="gradeNome" x-text="'Tamanhos trazidos da grade cadastrada: '+gradeNome"></p>
-          {% regroup tamanhos by get_tipo_display as grupos_tamanho %}
-          <div id="op2-grade-create" class="space-y-3">
-            {% for grupo in grupos_tamanho %}
-              <div><h3 class="text-xs font-bold mb-2" style="color:#3b82f6">{{ grupo.grouper }}</h3><div class="grid grid-cols-2 md:grid-cols-5 xl:grid-cols-8 gap-2 mb-3">
-                {% for tamanho in grupo.list %}<label x-show="tamanhoVisivel('{{ tamanho.pk }}')"><span class="op2-label">{{ tamanho.sigla }}</span><div class="op2-stepper"><button type="button" class="btn-secondary" @click="alterarGrade('grade_{{ tamanho.pk }}',-1)">−</button><input name="grade_{{ tamanho.pk }}" type="number" min="0" value="0" class="form-input w-full text-center" @input="somarGrade"><button type="button" class="btn-secondary" @click="alterarGrade('grade_{{ tamanho.pk }}',1)">+</button></div></label>{% endfor %}
-              </div></div>
-            {% endfor %}
-          </div>
-          <div class="grid md:grid-cols-4 gap-2 op2-grid-compact">
-            <label><span class="op2-label">Tamanho</span><select name="pessoa_tamanho" class="form-input w-full"><option value="">Tamanho da pessoa...</option>{% for tamanho in tamanhos %}<option value="{{ tamanho.pk }}">{{ tamanho.sigla }}</option>{% endfor %}</select></label>
-            <label><span class="op2-label">Nome</span><input name="pessoa_nome" class="form-input w-full" placeholder="EDUARDO"></label>
-            <label><span class="op2-label">Número</span><input name="pessoa_numero" class="form-input w-full" placeholder="10"></label>
-            <label><span class="op2-label">Detalhe</span><input name="pessoa_observacoes" class="form-input w-full"></label>
-          </div>
-        </section>
-
         <section class="op2-band">
           <h2 class="font-bold mb-2">5 e 6. Anexos e observações gerais</h2>
-          <div class="grid md:grid-cols-4 gap-2 op2-grid-compact">
-            <input type="file" name="arquivo" multiple class="form-input md:col-span-2">
-            <select name="tipo_arquivo" class="form-input">{% for v,l in tipos_arquivo %}<option value="{{ v }}">{{ l }}</option>{% endfor %}</select>
-            <input name="descricao_arquivo" class="form-input" placeholder="Descrição dos arquivos">
-            <textarea name="observacoes" rows="3" class="form-input md:col-span-4" placeholder="Observações gerais da OP"></textarea>
-          </div>
+          <div class="grid md:grid-cols-4 gap-2 op2-grid-compact"><input type="file" name="arquivo" multiple class="form-input md:col-span-2"><select name="tipo_arquivo" class="form-input">{% for v,l in tipos_arquivo %}<option value="{{ v }}">{{ l }}</option>{% endfor %}</select><input name="descricao_arquivo" class="form-input" placeholder="Descrição dos arquivos"><textarea name="observacoes" rows="3" class="form-input md:col-span-4" placeholder="Observações gerais da OP"></textarea></div>
         </section>
       </main>
-
       <aside class="op2-aside space-y-3">
-        <section class="card p-3">
-          <h2 class="font-bold mb-2">Mockups da arte</h2>
-          <div class="grid grid-cols-2 gap-2"><label class="op2-plus"><input type="file" name="mockup_frente_camisa" accept="image/*" class="hidden"><span>+ Frente<br><small class="opacity-60">Inserir imagem</small></span></label><label class="op2-plus"><input type="file" name="mockup_costas_camisa" accept="image/*" class="hidden"><span>+ Costas<br><small class="opacity-60">Inserir imagem</small></span></label></div>
-        </section>
-        <section class="card p-3 sticky top-24">
-          <h2 class="font-bold mb-2">Resumo de conferência</h2>
-          <dl class="space-y-2 text-sm"><div class="flex justify-between"><dt>Status</dt><dd class="font-bold" style="color:#d97706">Orçamento</dd></div><div class="flex justify-between"><dt>Produtos</dt><dd class="font-bold">1</dd></div><div class="flex justify-between"><dt>Peças</dt><dd class="font-bold" x-text="quantidade || 0"></dd></div><div class="flex justify-between"><dt>Total</dt><dd class="font-bold" x-text="'R$ '+total()"></dd></div></dl>
-        </section>
+        <section class="card p-3"><h2 class="font-bold mb-2">Mockups da arte</h2><div class="grid grid-cols-2 gap-2"><label class="op2-plus"><input type="file" name="mockup_frente_camisa" accept="image/*" class="hidden"><span>+ Frente<br><small class="opacity-60">Inserir imagem</small></span></label><label class="op2-plus"><input type="file" name="mockup_costas_camisa" accept="image/*" class="hidden"><span>+ Costas<br><small class="opacity-60">Inserir imagem</small></span></label></div><p class="text-xs opacity-60 mt-2">No primeiro salvamento, estes mockups ficam ligados ao primeiro item; depois dá para anexar por produto na OP.</p></section>
+        <section class="card p-3 sticky top-24"><h2 class="font-bold mb-2">Resumo de conferência</h2><dl class="space-y-2 text-sm"><div class="flex justify-between"><dt>Status</dt><dd class="font-bold" style="color:#d97706">Orçamento</dd></div><div class="flex justify-between"><dt>Produtos</dt><dd class="font-bold" x-text="itens.length"></dd></div><div class="flex justify-between"><dt>Peças</dt><dd class="font-bold" x-text="totalPecas()"></dd></div><div class="flex justify-between"><dt>Total</dt><dd class="font-bold" x-text="moeda(totalValor())"></dd></div></dl></section>
       </aside>
     </div>
   </form>
-
   <div x-show="modalProduto" x-cloak class="fixed inset-0 z-50 flex items-center justify-center p-3" style="background:rgba(0,0,0,.72)" @click.self="modalProduto=false">
-    <div class="card p-4 w-full max-w-5xl overflow-y-auto" style="max-height:94vh">
-      <div class="flex justify-between gap-2 mb-3"><div><h2 class="text-xl font-bold">Selecionar modelo de produção</h2><p class="text-xs opacity-70">Busca por qualquer termo, sem exigir ordem exata.</p></div><button type="button" class="text-2xl" @click="modalProduto=false">×</button></div>
-      <input type="search" x-model="buscaProduto" class="form-input w-full mb-3" placeholder="Buscar modelo, código ou referência">
-      <div class="grid sm:grid-cols-2 lg:grid-cols-3 gap-2">
-        {% for modelo in modelos %}
-          <button type="button" class="op2-card text-left" :class="produtoId==='{{ modelo.pk }}'?'ring-2 ring-blue-500':''" x-show="combina(buscaProduto, '{{ modelo.nome|escapejs }} {{ modelo.codigo|escapejs }} {{ modelo.referencia|escapejs }} {{ modelo.modelo|escapejs }} {{ modelo.tecido|escapejs }}')" @click="escolherProduto('{{ modelo.pk }}','{{ modelo.nome|escapejs }}','{{ modelo.codigo|escapejs }}{% if modelo.referencia %} · {{ modelo.referencia|escapejs }}{% endif %}{% if modelo.tecido %} · {{ modelo.tecido|escapejs }}{% endif %}')">
-            <strong>{{ modelo.nome }}</strong>
-            <small class="block mt-1 opacity-70">{{ modelo.codigo }}{% if modelo.referencia %} · {{ modelo.referencia }}{% endif %}{% if modelo.tecido %} · {{ modelo.tecido }}{% endif %}</small>
-          </button>
-        {% endfor %}
-      </div>
-      <div class="op2-card mt-3" x-show="produtoId">
-        <span class="op2-label">Pré-definição do modelo</span>
-        <strong x-text="produtoNome"></strong>
-        <p class="text-xs opacity-70 mt-1" x-text="produtoInfo"></p>
-        <p class="text-xs mt-1" style="color:#3b82f6" x-show="gradeNome" x-text="'Grade cadastrada: '+gradeNome"></p>
-        <p class="text-xs opacity-70 mt-2">Revise os campos de impressão, estrutura e grade na tela. Eles continuam editáveis antes de salvar.</p>
-        <div class="text-right mt-2"><button type="button" class="btn-primary" @click="modalProduto=false">Usar este modelo</button></div>
+    <div class="card p-4 w-full max-w-7xl overflow-y-auto" style="max-height:94vh">
+      <div class="flex justify-between gap-2 mb-3"><div><h2 class="text-xl font-bold" x-text="editandoIdx===null?'Adicionar modelo à OP':'Editar modelo da OP'"></h2><p class="text-xs opacity-70">Escolha o modelo e complete a estrutura, impressão e grades ainda nesta sobreposição.</p></div><button type="button" class="text-2xl" @click="modalProduto=false">×</button></div>
+      <div class="op2-modal-grid">
+        <aside><input type="search" x-model="buscaProduto" class="form-input w-full mb-2" placeholder="Buscar modelo, código, referência, tecido ou grade"><div class="op2-model-list space-y-2">{% for modelo in modelos %}<button type="button" class="op2-card text-left w-full" :class="draft.produto_id==='{{ modelo.pk }}'?'ring-2 ring-blue-500':''" x-show="combina(buscaProduto, '{{ modelo.nome|escapejs }} {{ modelo.codigo|escapejs }} {{ modelo.referencia|escapejs }} {{ modelo.modelo|escapejs }} {{ modelo.tecido|escapejs }} {% if modelo.grade %}{{ modelo.grade.nome|escapejs }} {{ modelo.grade.resumo|escapejs }}{% endif %}')" @click="escolherProduto('{{ modelo.pk }}','{{ modelo.nome|escapejs }}','{{ modelo.codigo|escapejs }}','{{ modelo.codigo|escapejs }}{% if modelo.referencia %} · {{ modelo.referencia|escapejs }}{% endif %}{% if modelo.tecido %} · {{ modelo.tecido|escapejs }}{% endif %}')"><strong>{{ modelo.nome }}</strong><small class="block mt-1 opacity-70">{{ modelo.codigo }}{% if modelo.referencia %} · {{ modelo.referencia }}{% endif %}{% if modelo.grade %} · {{ modelo.grade.nome }}{% endif %}</small></button>{% endfor %}</div></aside>
+        <main class="space-y-3">
+          <section class="op2-card"><div class="grid md:grid-cols-4 gap-2 op2-grid-compact"><div class="md:col-span-2"><span class="op2-label">Modelo escolhido</span><strong x-text="draft.nome || 'Nenhum modelo selecionado'"></strong><p class="text-xs opacity-70" x-text="draft.info || 'Selecione um modelo à esquerda.'"></p></div><label><span class="op2-label">Quantidade total</span><input type="number" min="1" x-model.number="draft.quantidade" class="form-input w-full"></label><label><span class="op2-label">Valor unitário</span><input type="number" min="0" step=".01" x-model.number="draft.valor_unitario" class="form-input w-full"></label></div></section>
+          <section class="op2-card"><div class="flex flex-wrap items-center justify-between gap-2 mb-2"><div><h3 class="font-bold text-sm">Estrutura da peça</h3><p class="text-xs opacity-70">Aqui ficam as opções da planilha; não poluem a tela principal.</p></div><label class="w-full sm:w-60"><span class="op2-label">Tipo de peça</span><select x-model="draft.estrutura_tipo" class="form-input w-full">{% for tipo, grupo in estrutura_opcoes.items %}<option value="{{ tipo }}">{{ grupo.label }}</option>{% endfor %}</select></label></div>{% for tipo, grupo in estrutura_opcoes.items %}<div class="grid sm:grid-cols-2 lg:grid-cols-4 gap-2" x-show="draft.estrutura_tipo === '{{ tipo }}'">{% for campo, opcoes in grupo.campos.items %}<label><span class="op2-label">{{ campo|cut:"_"|title }}</span><select class="form-input w-full" x-model="draft.estrutura['{{ campo }}']"><option value="">Selecione...</option>{% for opcao in opcoes %}<option value="{{ opcao }}">{{ opcao }}</option>{% endfor %}</select></label>{% endfor %}</div>{% endfor %}</section>
+          <section class="op2-card"><h3 class="font-bold text-sm mb-2">Impressão e dados do item</h3><div class="grid md:grid-cols-4 gap-2 op2-grid-compact"><label><span class="op2-label">Referência</span><input x-model="draft.referencia" class="form-input w-full"></label><label><span class="op2-label">Acabamento</span><input x-model="draft.acabamento" class="form-input w-full"></label><label><span class="op2-label">Tipo de impressão</span><select x-model="draft.arte_tipo" class="form-input w-full"><option value="">Selecione...</option>{% for v,l in tipos_arte %}<option value="{{ v }}">{{ l }}</option>{% endfor %}</select></label><label><span class="op2-label">Técnica</span><select x-model="draft.arte_tecnica" class="form-input w-full"><option value="">Selecione...</option>{% for v,l in tecnicas_arte %}<option value="{{ v }}">{{ l }}</option>{% endfor %}</select></label><label><span class="op2-label">Local</span><input x-model="draft.arte_local" class="form-input w-full" placeholder="Peito, costas, manga..."></label><label class="md:col-span-2"><span class="op2-label">Detalhes da impressão</span><textarea x-model="draft.arte_observacoes" rows="2" class="form-input w-full"></textarea></label><label class="md:col-span-4"><span class="op2-label">Descrição / observações do produto</span><textarea x-model="draft.item_observacoes" rows="2" class="form-input w-full"></textarea></label></div></section>
+          <section class="op2-card"><h3 class="font-bold text-sm mb-2">Grade do item</h3><p class="text-xs opacity-70 mb-2">Pode selecionar uma ou mais grades. Ao adicionar, cada grade vira um item separado para produção/conferência.</p><div class="grid sm:grid-cols-2 lg:grid-cols-4 gap-2 mb-3"><template x-for="grade in grades" :key="grade.id"><button type="button" class="op2-grade-chip" :class="draft.grades.includes(grade.id)?'is-on':''" @click="alternarGrade(grade.id)"><strong x-text="grade.nome"></strong><small class="block opacity-70" x-text="grade.resumo"></small></button></template></div><div class="grid grid-cols-2 md:grid-cols-5 xl:grid-cols-8 gap-2">{% for tamanho in tamanhos %}<label x-show="tamanhoAtivo('{{ tamanho.pk }}')"><span class="op2-label">{{ tamanho.sigla }}</span><div class="op2-stepper"><button type="button" class="btn-secondary" @click="alterarDraftGrade('{{ tamanho.pk }}',-1)">−</button><input type="number" min="0" inputmode="numeric" x-model.number="draft.grade['{{ tamanho.pk }}']" @input="somarDraftGrade" class="form-input w-full text-center"><button type="button" class="btn-secondary" @click="alterarDraftGrade('{{ tamanho.pk }}',1)">+</button></div></label>{% endfor %}</div></section>
+          <div class="flex justify-end gap-2 sticky bottom-0 p-2" :style="temaClaro?'background:#fff':'background:#1f1f21'"><button type="button" class="btn-secondary" @click="modalProduto=false">Cancelar</button><button type="button" class="btn-primary" @click="salvarDraft()" x-text="editandoIdx===null?'Adicionar à OP':'Salvar alterações'"></button></div>
+        </main>
       </div>
     </div>
   </div>
-
-  <div x-show="modalCliente" x-cloak class="fixed inset-0 z-50 flex items-center justify-center p-4" style="background:rgba(0,0,0,.68)" @click.self="modalCliente=false">
-    <form x-ref="novo" @submit.prevent="salvarCliente" class="card p-5 w-full max-w-3xl overflow-y-auto" style="max-height:92vh">
-      {% csrf_token %}
-      <div class="flex justify-between items-center mb-4"><h2 class="text-xl font-bold">Novo cliente</h2><button type="button" @click="modalCliente=false" class="text-2xl">×</button></div>
-      <input type="hidden" name="tipo_pessoa" value="J">
-      <div class="grid gap-3"><label class="text-sm"><span class="block mb-1">Nome / Razão social</span><input name="razao_social" class="form-input w-full" required><small style="color:#ef4444" x-text="erros.razao_social || ''"></small></label></div>
-      <p x-show="erro" x-text="erro" class="mt-3 text-sm" style="color:#ef4444"></p>
-      <div class="flex justify-end gap-2 mt-5"><button type="button" class="btn-secondary" @click="modalCliente=false">Cancelar</button><button class="btn-primary" :disabled="salvando" x-text="salvando?'Salvando...':'Salvar cliente'"></button></div>
-    </form>
-  </div>
+  <div x-show="modalCliente" x-cloak class="fixed inset-0 z-50 flex items-center justify-center p-4" style="background:rgba(0,0,0,.68)" @click.self="modalCliente=false"><form x-ref="novo" @submit.prevent="salvarCliente" class="card p-5 w-full max-w-3xl overflow-y-auto" style="max-height:92vh">{% csrf_token %}<input type="hidden" name="tipo_pessoa" value="J"><div class="flex justify-between items-center mb-4"><h2 class="text-xl font-bold">Novo cliente</h2><button type="button" @click="modalCliente=false" class="text-2xl">×</button></div><label class="text-sm"><span class="block mb-1">Nome / Razão social</span><input name="razao_social" class="form-input w-full" required><small style="color:#ef4444" x-text="erros.razao_social || ''"></small></label><p x-show="erro" x-text="erro" class="mt-3 text-sm" style="color:#ef4444"></p><div class="flex justify-end gap-2 mt-5"><button type="button" class="btn-secondary" @click="modalCliente=false">Cancelar</button><button class="btn-primary" :disabled="salvando" x-text="salvando?'Salvando...':'Salvar cliente'"></button></div></form></div>
 </div>
 <script>
 function recolherSidebarOp2(){localStorage.setItem('sidebar-collapsed','true');document.body.classList.add('sidebar-collapsed');let aplicar=()=>{let r=document.getElementById('sidebar-root');if(r&&window.Alpine){try{Alpine.$data(r).collapsed=true}catch(e){}}};aplicar();setTimeout(aplicar,60);setTimeout(aplicar,240)}
-function op2Nova(){return{clientes:JSON.parse(document.getElementById('op2-clientes').textContent),buscaCliente:'',clienteId:'',contatoNome:'',contatoTelefone:'',contatos:[],buscaProduto:'',produtoId:'',produtoNome:'',produtoInfo:'',gradeNome:'',gradeTamanhos:[],gradeMap:JSON.parse(document.getElementById('op2-modelos-grade').textContent),estruturaTipo:'camisa',modalProduto:false,modalCliente:false,salvando:false,erro:'',erros:{},quantidade:1,valor:0,recolherSidebar(){recolherSidebarOp2()},combina(q,t){let termos=(q||'').toLowerCase().trim().split(/\s+/).filter(Boolean);t=(t||'').toLowerCase();return termos.every(x=>t.includes(x))},clienteResultados(){let q=this.buscaCliente;return this.clientes.filter(c=>this.combina(q,c.texto)).slice(0,12)},selecionarCliente(cliente){this.clienteId=cliente.id;this.buscaCliente=cliente.nome+(cliente.telefone?' · '+cliente.telefone:'');this.contatoNome=cliente.contato||'';this.contatoTelefone=cliente.telefone||''},escolherProduto(id,nome,info){let grade=this.gradeMap[id]||{};this.produtoId=id;this.produtoNome=nome;this.produtoInfo=info;this.gradeNome=grade.grade||'';this.gradeTamanhos=(grade.tamanhos||[]).map(String);this.$nextTick(()=>this.limparGradeOculta())},tamanhoVisivel(id){return !this.gradeTamanhos.length||this.gradeTamanhos.includes(String(id))},alterarGrade(name,delta){let i=document.querySelector(`[name="${name}"]`);if(!i)return;i.value=Math.max(0,Number(i.value||0)+delta);this.somarGrade()},limparGradeOculta(){document.querySelectorAll('#op2-grade-create input[name^="grade_"]').forEach(i=>{let id=i.name.replace('grade_','');if(!this.tamanhoVisivel(id))i.value=0});this.somarGrade()},somarGrade(){let total=0;document.querySelectorAll('#op2-grade-create input[name^="grade_"]').forEach(i=>{if(i.offsetParent!==null)total+=Number(i.value||0)});if(total>0)this.quantidade=total},total(){return (Number(this.quantidade||0)*Number(this.valor||0)).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2})},async salvarCliente(){this.salvando=true;this.erro='';this.erros={};try{let r=await fetch('{% url "moda:cliente-criar-json" %}',{method:'POST',headers:{'X-Requested-With':'XMLHttpRequest'},body:new FormData(this.$refs.novo)});let d=await r.json();if(!r.ok||!d.ok){this.erros=Object.fromEntries(Object.entries(d.erros||{}).map(([k,v])=>[k,v.join(' ')]));this.erro=d.erro||'';return}this.clientes.unshift({...d.cliente,texto:[d.cliente.nome,d.cliente.documento,d.cliente.contato,d.cliente.telefone].filter(Boolean).join(' ')});this.selecionarCliente(this.clientes[0]);this.modalCliente=false}catch(e){this.erro='Não foi possível cadastrar agora.'}finally{this.salvando=false}}}}
+function op2Nova(){return{clientes:JSON.parse(document.getElementById('op2-clientes').textContent),gradeMap:JSON.parse(document.getElementById('op2-modelos-grade').textContent),grades:JSON.parse(document.getElementById('op2-grades').textContent),itens:[],draft:{},editandoIdx:null,buscaCliente:'',clienteId:'',contatoNome:'',contatoTelefone:'',contatos:[],buscaProduto:'',modalProduto:false,modalCliente:false,salvando:false,erro:'',erros:{},recolherSidebar(){recolherSidebarOp2()},novoDraft(){return{uid:Date.now()+Math.random(),produto_id:'',nome:'',codigo:'',info:'',descricao:'',grade_id:'',grade_nome:'',grades:[],quantidade:1,valor_unitario:0,referencia:'',acabamento:'',arte_tipo:'',arte_tecnica:'',arte_local:'',arte_observacoes:'',item_observacoes:'',estrutura_tipo:'camisa',estrutura:{},grade:{}}},abrirModalItem(){this.editandoIdx=null;this.draft=this.novoDraft();this.buscaProduto='';this.modalProduto=true},editarItem(idx){this.editandoIdx=idx;this.draft=JSON.parse(JSON.stringify(this.itens[idx]));this.modalProduto=true},combina(q,t){let termos=(q||'').toLowerCase().trim().split(/\s+/).filter(Boolean);t=(t||'').toLowerCase();return termos.every(x=>t.includes(x))},clienteResultados(){return this.clientes.filter(c=>this.combina(this.buscaCliente,c.texto)).slice(0,12)},selecionarCliente(cliente){this.clienteId=cliente.id;this.buscaCliente=cliente.nome+(cliente.telefone?' · '+cliente.telefone:'');this.contatoNome=cliente.contato||'';this.contatoTelefone=cliente.telefone||''},escolherProduto(id,nome,codigo,info){let grade=this.gradeMap[id]||{};this.draft.produto_id=id;this.draft.nome=nome;this.draft.codigo=codigo;this.draft.info=info;this.draft.grade_id=grade.grade_id||'';this.draft.grade_nome=grade.grade||'';if(grade.grade_id&&!this.draft.grades.includes(String(grade.grade_id)))this.draft.grades=[String(grade.grade_id)];this.somarDraftGrade()},alternarGrade(id){id=String(id);this.draft.grades=this.draft.grades.includes(id)?this.draft.grades.filter(x=>x!==id):[...this.draft.grades,id];this.somarDraftGrade()},tamanhoAtivo(id){if(!this.draft.grades.length)return true;return this.grades.some(g=>this.draft.grades.includes(g.id)&&(g.tamanhos||[]).map(String).includes(String(id)))},alterarDraftGrade(id,delta){let atual=Number(this.draft.grade[id]||0);this.draft.grade[id]=Math.max(0,atual+delta);this.somarDraftGrade()},somarDraftGrade(){let total=0;Object.entries(this.draft.grade||{}).forEach(([id,q])=>{if(this.tamanhoAtivo(id))total+=Number(q||0)});if(total>0)this.draft.quantidade=total},gradeSelecionada(id){return this.grades.find(g=>g.id===String(id))||null},montarItemParaGrade(gradeId){let item=JSON.parse(JSON.stringify(this.draft));let grade=this.gradeSelecionada(gradeId);item.uid=Date.now()+Math.random();item.grade_id=grade?grade.id:'';item.grade_nome=grade?grade.nome:'';item.gradeQuantidades=Object.entries(item.grade||{}).filter(([id,q])=>Number(q||0)>0&&(!grade||grade.tamanhos.map(String).includes(String(id)))).map(([id,q])=>({tamanho_id:id,quantidade:Number(q||0)}));let total=item.gradeQuantidades.reduce((s,l)=>s+l.quantidade,0);if(total>0)item.quantidade=total;item.estruturaCampos=Object.entries(item.estrutura||{}).filter(([,valor])=>valor).map(([campo,valor])=>({campo,valor}));return item},salvarDraft(){if(!this.draft.produto_id){alert('Selecione um modelo de produção.');return}this.somarDraftGrade();let grades=this.draft.grades.length?this.draft.grades:[''];let novos=grades.map(g=>this.montarItemParaGrade(g));if(this.editandoIdx===null){this.itens.push(...novos)}else{this.itens.splice(this.editandoIdx,1,...novos)}this.modalProduto=false},validarAntesDeSalvar(e){if(!this.clienteId){alert('Selecione um cliente.');e.preventDefault();return}if(!this.itens.length){alert('Adicione ao menos um modelo de produção.');e.preventDefault();return}},totalPecas(){return this.itens.reduce((s,i)=>s+Number(i.quantidade||0),0)},totalValor(){return this.itens.reduce((s,i)=>s+(Number(i.quantidade||0)*Number(i.valor_unitario||0)),0)},moeda(v){return 'R$ '+Number(v||0).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2})},async salvarCliente(){this.salvando=true;this.erro='';this.erros={};try{let r=await fetch('{% url "moda:cliente-criar-json" %}',{method:'POST',headers:{'X-Requested-With':'XMLHttpRequest'},body:new FormData(this.$refs.novo)});let d=await r.json();if(!r.ok||!d.ok){this.erros=Object.fromEntries(Object.entries(d.erros||{}).map(([k,v])=>[k,v.join(' ')]));this.erro=d.erro||'';return}this.clientes.unshift({...d.cliente,texto:[d.cliente.nome,d.cliente.documento,d.cliente.contato,d.cliente.telefone].filter(Boolean).join(' ')});this.selecionarCliente(this.clientes[0]);this.modalCliente=false}catch(e){this.erro='Não foi possível cadastrar agora.'}finally{this.salvando=false}}}}
 </script>
 {% endblock %}

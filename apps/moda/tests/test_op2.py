@@ -113,6 +113,37 @@ class Op2Tests(TestCase):
             {(item.pk, tamanho_p.pk): 0, (item.pk, tamanho_m.pk): 3},
         )
 
+    def test_nova_op_aceita_itens_indexados_com_mais_de_um_modelo(self):
+        post = QueryDict('', mutable=True)
+        post.update({
+            'item_0_produto_id': str(self.produto.pk),
+            'item_0_quantidade': '2',
+            'item_1_produto_id': str(self.produto.pk),
+            'item_1_quantidade': '3',
+        })
+        request = type('Request', (), {'POST': post})()
+
+        self.assertEqual(Op2CreateView._indices_itens(request), [0, 1])
+        self.assertEqual(Op2CreateView._dados_item(request, 0)['produto'], f'moda:{self.produto.pk}')
+        self.assertEqual(Op2CreateView._dados_item(request, 1)['quantidade'], '3')
+
+    def test_quantidades_indexadas_da_nova_op_somam_grade_do_item_correto(self):
+        item = self._item(quantidade=7)
+        tamanho_p = Tamanho.objects.create(filial=self.filial, sigla='PP', ordem=5)
+        tamanho_m = Tamanho.objects.create(filial=self.filial, sigla='GG', ordem=30)
+        post = QueryDict('', mutable=True)
+        post.update({
+            f'item_2_grade_{tamanho_p.pk}': '1',
+            f'item_2_grade_{tamanho_m.pk}': '4',
+        })
+        request = type('Request', (), {'POST': post})()
+
+        self.assertEqual(Op2CreateView._total_grade(request, 2), 5)
+        self.assertEqual(
+            Op2CreateView._quantidades_grade(request, item, prefixos=('item_2_grade_',)),
+            {(item.pk, tamanho_p.pk): 1, (item.pk, tamanho_m.pk): 4},
+        )
+
     def test_estrutura_da_planilha_entra_nas_observacoes_do_item(self):
         post = QueryDict('', mutable=True)
         post.update({
