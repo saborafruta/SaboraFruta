@@ -111,3 +111,5 @@ class ProdutoFotoUrlTests(SimpleTestCase):
 
         self.assertIn('data-photo-thumbnail', template)
         self.assertNotIn("button.dataset.photoUrl=''", template)
+        self.assertIn('Quantidade atual', template)
+        self.assertIn('Quantidade apos ajuste', template)

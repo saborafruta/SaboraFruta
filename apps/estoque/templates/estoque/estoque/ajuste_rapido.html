@@ -53,8 +53,12 @@
   body.tema-claro .stock-count-current-box { border-color: #e2e8f0; background: #f8fafc; }
   .stock-count-current-label { color: #94a3b8; font-size: .68rem; font-weight: 900; text-transform: uppercase; }
   body.tema-claro .stock-count-current-label { color: #64748b; }
-  .stock-count-current-value { margin-top: .2rem; color: #f8fafc; font-size: 1.05rem; font-weight: 900; }
+  .stock-count-current-value { display: flex; align-items: baseline; gap: .3rem; margin-top: .2rem; color: #f8fafc; font-size: 1.05rem; font-weight: 900; }
+  .stock-count-current-unit { color: #94a3b8; font-size: .64rem; font-weight: 800; }
   body.tema-claro .stock-count-current-value { color: #0f172a; }
+  body.tema-claro .stock-count-current-unit { color: #64748b; }
+  .stock-count-adjust-label { margin-bottom: .32rem; color: #cbd5e1; font-size: .68rem; font-weight: 900; text-transform: uppercase; }
+  body.tema-claro .stock-count-adjust-label { color: #475569; }
   .stock-count-stepper { display: grid; grid-template-columns: 48px minmax(76px, 1fr) 48px; gap: .35rem; align-items: stretch; }
   .stock-count-stepper button { min-height: 48px; border-radius: 11px; border: 1px solid rgba(96,165,250,.30); background: rgba(37,99,235,.15); color: #dbeafe; font-size: 1.4rem; font-weight: 900; cursor: pointer; touch-action: manipulation; -webkit-user-select: none; user-select: none; }
   body.tema-claro .stock-count-stepper button { background: #dbeafe; border-color: #bfdbfe; color: #1d4ed8; }
@@ -224,16 +228,35 @@
       gap: .38rem;
     }
     .stock-count-current-box {
-      padding: .42rem .48rem;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: .75rem;
+      min-height: 38px;
+      padding: .38rem .58rem;
       border-radius: 9px;
+      background: rgba(148,163,184,.07);
     }
-    .stock-count-current-label { font-size: .56rem; }
+    .stock-count-current-label {
+      font-size: .6rem;
+      text-transform: none;
+    }
     .stock-count-current-value {
-      margin-top: .1rem;
-      font-size: .92rem;
+      margin-top: 0;
+      font-size: 1rem;
       line-height: 1.05;
     }
-    .stock-count-adjust { grid-column: 1 / -1; }
+    .stock-count-current-unit { font-size: .58rem; }
+    .stock-count-adjust {
+      grid-column: 1 / -1;
+      padding-top: .46rem;
+      border-top: 1px solid rgba(148,163,184,.14);
+    }
+    .stock-count-adjust-label {
+      margin-bottom: .3rem;
+      font-size: .6rem;
+      text-transform: none;
+    }
     .stock-count-stepper {
       grid-template-columns: 44px minmax(0, 1fr) 44px;
       gap: .34rem;
@@ -381,11 +404,15 @@
         </div>
         <div class="stock-count-current">
           <div class="stock-count-current-box">
-            <div class="stock-count-current-label">Estoque atual</div>
-            <div class="stock-count-current-value" data-current-display>{{ produto.estoque_quantidade_atual_display }}</div>
+            <div class="stock-count-current-label">Quantidade atual</div>
+            <div class="stock-count-current-value">
+              <span data-current-display>{{ produto.estoque_quantidade_atual_display }}</span>
+              {% if produto.unidade_medida_id %}<span class="stock-count-current-unit">{{ produto.unidade_medida.sigla }}</span>{% endif %}
+            </div>
           </div>
         </div>
         <div class="stock-count-adjust">
+          <div class="stock-count-adjust-label">Quantidade apos ajuste</div>
           <div class="stock-count-stepper">
             <button type="button" data-step="-1" aria-label="Diminuir">-</button>
             <input type="text" inputmode="decimal" class="form-input stock-count-qty" value="{{ produto.ajuste_rapido_contado }}" data-qty>
