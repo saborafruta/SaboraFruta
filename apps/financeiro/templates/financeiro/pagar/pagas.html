@@ -6,20 +6,35 @@
 
 {% block content %}
 <style>
-  .paid-filter { border:1px solid #dbe3ee; }
-  .paid-list { border-color:#dbe3ee; }
-  .paid-list thead { background:#f8fafc !important; color:#334155; }
-  .paid-analysis { border-left:4px solid #10b981; background:rgba(16,185,129,.045); }
-  .paid-suppliers { border-left:4px solid #3b82f6; background:rgba(59,130,246,.045); }
-  .paid-goal { border-left:4px solid #f59e0b; background:rgba(245,158,11,.055); }
-  .paid-supplier-row { border-color:#bfdbfe; background:rgba(239,246,255,.55); }
-  .paid-summary-card { border:1px solid #e2e8f0; background:#fff; border-radius:8px; }
-  .paid-pagination { border:1px solid #dbe3ee; background:#fff; color:#334155; border-radius:8px; }
-  .dark .paid-filter,
-  .dark .paid-summary-card,
-  .dark .paid-pagination { border-color:#303038; background:#242426; color:#e2e8f0; }
-  .dark .paid-list thead { background:#1e1e20 !important; color:#cbd5e1; }
-  .dark .paid-supplier-row { border-color:#1e3a8a; background:rgba(30,58,138,.18); }
+  /* ESCURO E' A BASE, CLARO E' A SOBRESCRITA -- a mesma convencao do
+     `_base.html`, que tem setenta e cinco regras `body.tema-claro` e nenhuma
+     de tema escuro.
+
+     ESTAS REGRAS ESTAVAM AO CONTRARIO, e com a sobrescrita presa em `.dark`:
+     uma classe que ESTE APP NUNCA ADICIONA -- ele alterna `tema-claro` e
+     `tema-escuro`. Resultado: o bloco escuro nao casava com nada, as cores
+     claras valiam sempre, e no tema escuro os cartoes de resumo ficavam
+     brancos com texto cinza-claro em cima. O `!important` do cabecalho ainda
+     atropelava o `:style` que a propria tabela ja' fazia certo. */
+  .paid-filter { border:1px solid #303038; }
+  .paid-list { border-color:#303038; }
+  .paid-list thead { background:#1e1e20; color:#cbd5e1; }
+  .paid-analysis { border-left:4px solid #10b981; background:rgba(16,185,129,.10); }
+  .paid-suppliers { border-left:4px solid #3b82f6; background:rgba(59,130,246,.10); }
+  .paid-goal { border-left:4px solid #f59e0b; background:rgba(245,158,11,.10); }
+  .paid-supplier-row { border-color:#1e3a8a; background:rgba(30,58,138,.18); }
+  .paid-summary-card { border:1px solid #303038; background:#242426; color:#e2e8f0; border-radius:8px; }
+  .paid-pagination { border:1px solid #303038; background:#242426; color:#e2e8f0; border-radius:8px; }
+
+  body.tema-claro .paid-filter { border-color:#dbe3ee; }
+  body.tema-claro .paid-list { border-color:#dbe3ee; }
+  body.tema-claro .paid-list thead { background:#f8fafc; color:#334155; }
+  body.tema-claro .paid-analysis { background:rgba(16,185,129,.045); }
+  body.tema-claro .paid-suppliers { background:rgba(59,130,246,.045); }
+  body.tema-claro .paid-goal { background:rgba(245,158,11,.055); }
+  body.tema-claro .paid-supplier-row { border-color:#bfdbfe; background:rgba(239,246,255,.55); }
+  body.tema-claro .paid-summary-card,
+  body.tema-claro .paid-pagination { border-color:#e2e8f0; background:#fff; color:#334155; }
 </style>
 <div class="flex flex-col gap-5"
      x-data="{

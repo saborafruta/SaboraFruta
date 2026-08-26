@@ -19,7 +19,11 @@
   .pc-kpi { min-height: 112px; }
   .pc-row { min-height: 76px; }
   .pc-notice { border-color:#93c5fd; background:#eff6ff; color:#1e3a8a; }
-  .dark .pc-notice { border-color:#1d4ed8; background:rgba(30,58,138,.24); color:#dbeafe; }
+  /* `body.tema-escuro`, e nao `.dark`: este app NUNCA adiciona a classe
+     `dark` -- ele alterna `tema-claro` e `tema-escuro`. Com o seletor
+     errado o bloco inteiro nao casava com nada, e as cores claras valiam
+     tambem no tema escuro. */
+  body.tema-escuro .pc-notice { border-color:#1d4ed8; background:rgba(30,58,138,.24); color:#dbeafe; }
   .pc-page-heading { background:transparent !important; color:inherit !important; }
   .pc-private > :not(.pc-page-heading) { filter:blur(8px); pointer-events:none; user-select:none; }
   .pc-privacy-icon { display:block; width:18px !important; height:18px !important; min-width:18px; }

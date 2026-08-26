@@ -18,7 +18,11 @@
     gap:1rem; align-items:start; border:1px solid #dbe3ee; border-radius:8px;
     padding:1rem; background:#fff; transition:border-color .15s, box-shadow .15s, background .15s;
   }
-  .dark .conference-item { background:#171717; border-color:#334155; }
+  /* `body.tema-escuro`, e nao `.dark`: este app NUNCA adiciona a classe
+     `dark` -- ele alterna `tema-claro` e `tema-escuro`. Com o seletor
+     errado o bloco inteiro nao casava com nada, e as cores claras valiam
+     tambem no tema escuro. */
+  body.tema-escuro .conference-item { background:#171717; border-color:#334155; }
   .conference-item.is-confirmed { border-color:#22c55e; box-shadow:0 0 0 2px rgba(34,197,94,.1); }
   .conference-check {
     width:38px; height:38px; display:grid; place-items:center; border:2px solid #94a3b8;
@@ -28,10 +32,10 @@
   .conference-check span { font-size:1.35rem; font-weight:900; line-height:1; }
   .conference-check:has(input:checked) { border-color:#16a34a; background:#16a34a; color:#fff; }
   .conference-product-name { font-weight:800; color:#111827; }
-  .dark .conference-product-name { color:#f8fafc; }
+  body.tema-escuro .conference-product-name { color:#f8fafc; }
   .conference-meta { margin-top:.35rem; color:#64748b; font-size:.8rem; }
   .conference-sent { display:inline-flex; margin-top:.7rem; padding:.3rem .55rem; border-radius:6px; background:#eff6ff; color:#1d4ed8; font-size:.82rem; font-weight:700; }
-  .dark .conference-sent { background:rgba(37,99,235,.18); color:#93c5fd; }
+  body.tema-escuro .conference-sent { background:rgba(37,99,235,.18); color:#93c5fd; }
   .conference-options { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:.5rem; }
   .conference-option input { position:absolute; opacity:0; pointer-events:none; }
   .conference-option span {
@@ -39,7 +43,7 @@
     padding:.55rem .45rem; border:1px solid #cbd5e1; border-radius:7px; cursor:pointer;
     color:#475569; font-size:.78rem; font-weight:750; text-align:center; background:#fff;
   }
-  .dark .conference-option span { background:#111827; border-color:#475569; color:#cbd5e1; }
+  body.tema-escuro .conference-option span { background:#111827; border-color:#475569; color:#cbd5e1; }
   .conference-option.is-ok input:checked + span { border-color:#16a34a; background:#dcfce7; color:#166534; }
   .conference-option.is-missing input:checked + span { border-color:#d97706; background:#fef3c7; color:#92400e; }
   .conference-option.is-swapped input:checked + span { border-color:#2563eb; background:#dbeafe; color:#1d4ed8; }
@@ -48,7 +52,7 @@
     display:none; grid-template-columns:180px minmax(220px,1fr); gap:.75rem; margin-top:.8rem;
     padding:.8rem; border-left:3px solid #94a3b8; background:#f8fafc; border-radius:0 7px 7px 0;
   }
-  .dark .conference-details { background:#0f172a; }
+  body.tema-escuro .conference-details { background:#0f172a; }
   .conference-item[data-occurrence="faltante"] .conference-details,
   .conference-item[data-occurrence="devolvido"] .conference-details { display:grid; }
   .conference-item[data-occurrence="trocado"] .conference-details {
@@ -62,29 +66,29 @@
   .return-field { display:none; }
   .conference-item[data-occurrence="devolvido"] .return-field { display:block; }
   .conference-field label { display:block; margin-bottom:.3rem; color:#475569; font-size:.72rem; font-weight:750; text-transform:uppercase; }
-  .dark .conference-field label { color:#94a3b8; }
+  body.tema-escuro .conference-field label { color:#94a3b8; }
   .conference-quantity-control {
     display:grid; grid-template-columns:40px minmax(92px,1fr) 40px; align-items:stretch;
     border:1px solid #cbd5e1; border-radius:7px; overflow:hidden; background:#fff;
   }
-  .dark .conference-quantity-control { border-color:#475569; background:#111827; }
+  body.tema-escuro .conference-quantity-control { border-color:#475569; background:#111827; }
   .conference-quantity-control button {
     border:0; background:#eff6ff; color:#1d4ed8; font-size:1.15rem; font-weight:900;
   }
-  .dark .conference-quantity-control button { background:#1e3a5f; color:#bfdbfe; }
+  body.tema-escuro .conference-quantity-control button { background:#1e3a5f; color:#bfdbfe; }
   .conference-quantity-control input {
     min-width:0; border:0 !important; border-left:1px solid #cbd5e1 !important;
     border-right:1px solid #cbd5e1 !important; border-radius:0 !important;
     text-align:center; font-weight:800;
   }
-  .dark .conference-quantity-control input { border-color:#475569 !important; }
+  body.tema-escuro .conference-quantity-control input { border-color:#475569 !important; }
   .conference-limit { margin-top:.3rem; color:#64748b; font-size:.72rem; }
   .conference-swap-summary {
     grid-column:1 / -1; display:flex; align-items:center; gap:.45rem; min-height:38px;
     padding:.55rem .7rem; border:1px solid #bfdbfe; border-radius:7px;
     background:#eff6ff; color:#1e3a8a; font-size:.8rem; font-weight:700;
   }
-  .dark .conference-swap-summary { border-color:#1e40af; background:rgba(30,58,95,.55); color:#bfdbfe; }
+  body.tema-escuro .conference-swap-summary { border-color:#1e40af; background:rgba(30,58,95,.55); color:#bfdbfe; }
   .conference-swap-summary strong { font-size:.92rem; }
   .replacement-search { position:relative; }
   .replacement-results {
@@ -92,15 +96,15 @@
     max-height:240px; overflow:auto; border:1px solid #cbd5e1; border-radius:7px;
     background:#fff; box-shadow:0 12px 28px rgba(15,23,42,.16);
   }
-  .dark .replacement-results { background:#111827; border-color:#475569; }
+  body.tema-escuro .replacement-results { background:#111827; border-color:#475569; }
   .replacement-results.is-open { display:block; }
   .replacement-result {
     display:block; width:100%; padding:.7rem .8rem; border:0; border-bottom:1px solid #e2e8f0;
     background:transparent; color:#0f172a; text-align:left; cursor:pointer;
   }
-  .dark .replacement-result { color:#f8fafc; border-color:#334155; }
+  body.tema-escuro .replacement-result { color:#f8fafc; border-color:#334155; }
   .replacement-result:hover, .replacement-result:focus { background:#eff6ff; outline:none; }
-  .dark .replacement-result:hover, .dark .replacement-result:focus { background:#1e3a5f; }
+  body.tema-escuro .replacement-result:hover, body.tema-escuro .replacement-result:focus { background:#1e3a5f; }
   .replacement-result small { display:block; margin-top:.15rem; color:#64748b; }
   .replacement-empty { padding:.8rem; color:#64748b; font-size:.82rem; }
   .conference-empty { padding:2rem; text-align:center; color:#64748b; }
