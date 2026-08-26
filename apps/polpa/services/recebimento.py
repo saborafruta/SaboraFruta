@@ -24,6 +24,7 @@ from __future__ import annotations
 from decimal import Decimal
 
 from django.db import transaction
+from django.db.models import Q
 from django.utils import timezone
 
 from apps.core.services.exceptions import DomainError
@@ -240,7 +241,6 @@ class RecebimentoService:
             qs = qs.filter(fruta_id=filtros['fruta'])
         if filtros.get('busca'):
             termo = filtros['busca']
-            from django.db.models import Q
             qs = qs.filter(
                 Q(produtor__razao_social__icontains=termo)
                 | Q(produtor__nome_fantasia__icontains=termo)
@@ -249,6 +249,100 @@ class RecebimentoService:
                 | Q(placa__icontains=termo)
             )
         return qs
+
+    @staticmethod
+    def historico_por_produtor(filial, busca: str = '') -> list[dict]:
+        """
+        O que cada produtor entregou, e como a fruta dele se comportou.
+
+        SOMADO EM PYTHON, DE PROPOSITO. `peso_liquido` e `peso_aceito` sao
+        propriedades do modelo -- bruto menos tara, menos o desconto da
+        classificacao. Refazer essa conta em SQL para poder usar `Sum` criaria
+        uma SEGUNDA DEFINICAO do mesmo calculo, e no dia em que a regra do
+        desconto mudar so' uma das duas muda. Sao as cargas de uma filial, lidas
+        de uma vez com `select_related`: uma passada, e a conta continua morando
+        num lugar so'.
+
+        O QUE ESTA TABELA RESPONDE e' de quem comprar. Volume diz pouco sozinho:
+        um produtor que entrega muito e leva 8% de desconto por impureza sai
+        mais caro que um que entrega menos e limpo. Por isso as taxas de recusa
+        e de desconto ficam ao lado do volume, e nao numa tela de relatorio.
+
+        CARGA ABERTA NAO CONTA como entregue. Ela ainda pode voltar no caminhao,
+        e soma-la faria o historico prometer fruta que talvez nao tenha chegado.
+        Mas conta como recusa quando for recusada -- por isso o denominador da
+        taxa e' tudo que foi DECIDIDO.
+        """
+        cargas = (
+            Recebimento.objects.for_filial(filial)
+            .select_related('produtor', 'fruta')
+            .order_by('-data', '-numero')
+        )
+        if busca:
+            cargas = cargas.filter(
+                Q(produtor__razao_social__icontains=busca)
+                | Q(produtor__nome_fantasia__icontains=busca)
+                | Q(produtor__cpf_cnpj__icontains=busca)
+            )
+
+        por_produtor: dict[int, dict] = {}
+        for carga in cargas:
+            linha = por_produtor.setdefault(carga.produtor_id, {
+                'produtor': carga.produtor,
+                'cargas': 0, 'decididas': 0, 'recusadas': 0, 'abertas': 0,
+                'kg_liquido': ZERO, 'kg_aceito': ZERO, 'kg_desconto': ZERO,
+                'valor': ZERO, 'polpa_prevista': ZERO,
+                'brix_soma': ZERO, 'brix_n': 0,
+                'frutas': set(), 'ultima': None,
+            })
+            linha['cargas'] += 1
+            linha['frutas'].add(str(carga.fruta))
+            if linha['ultima'] is None:
+                linha['ultima'] = carga.data
+
+            if carga.brix is not None:
+                linha['brix_soma'] += carga.brix
+                linha['brix_n'] += 1
+
+            if carga.status == S.RECUSADO:
+                linha['decididas'] += 1
+                linha['recusadas'] += 1
+                continue
+            if carga.status != S.APROVADO:
+                linha['abertas'] += 1
+                continue
+
+            linha['decididas'] += 1
+            linha['kg_liquido'] += carga.peso_liquido
+            linha['kg_aceito'] += carga.peso_aceito
+            linha['kg_desconto'] += carga.desconto_kg
+            linha['valor'] += carga.valor_total
+            linha['polpa_prevista'] += carga.rendimento_previsto
+
+        for linha in por_produtor.values():
+            linha['frutas'] = sorted(linha['frutas'])
+            linha['brix_medio'] = (
+                (linha['brix_soma'] / linha['brix_n']).quantize(Decimal('0.01'))
+                if linha['brix_n'] else None
+            )
+            linha['taxa_recusa'] = (
+                (Decimal(linha['recusadas']) / linha['decididas'] * 100).quantize(Decimal('0.1'))
+                if linha['decididas'] else ZERO
+            )
+            linha['taxa_desconto'] = (
+                (linha['kg_desconto'] / linha['kg_liquido'] * 100).quantize(Decimal('0.1'))
+                if linha['kg_liquido'] > ZERO else ZERO
+            )
+            linha['preco_medio'] = (
+                (linha['valor'] / linha['kg_aceito']).quantize(Decimal('0.0001'))
+                if linha['kg_aceito'] > ZERO else ZERO
+            )
+
+        # Maior volume aceito primeiro: e' de quem a fabrica mais depende, e
+        # portanto onde um problema de qualidade custa mais caro.
+        return sorted(
+            por_produtor.values(), key=lambda l: l['kg_aceito'], reverse=True,
+        )
 
     @staticmethod
     def resumo(filial, dia=None) -> dict:

@@ -7,6 +7,8 @@ o mínimo preenchido, e a decisão (aprovar/recusar) fica a um clique do
 detalhe: cada campo a mais exigido na porta é um romaneio anotado em papel
 para ser digitado depois — e é esse que se perde.
 """
+from decimal import Decimal
+
 from django.contrib import messages
 from django.http import JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
@@ -85,6 +87,40 @@ class RecusasView(PolpaBaseView):
             'frutas': Fruta.objects.for_filial(_filial(request)).filter(ativo=True),
             'resumo': RecebimentoService.resumo(_filial(request)),
             'pode_agir': False,
+        })
+
+
+class ProdutoresView(PolpaBaseView):
+    """
+    De quem a fabrica compra, e como a fruta de cada um se comporta.
+
+    NAO E' O CADASTRO DE FORNECEDOR -- esse ja' existe em `cadastros` e nao
+    precisa de copia. Esta tela responde outra pergunta: DE QUEM COMPRAR.
+    Volume sozinho diz pouco; um produtor que entrega muito e leva 8% de
+    desconto por impureza sai mais caro que um que entrega menos e limpo. Por
+    isso as taxas de recusa e de desconto ficam ao lado do volume, e nao
+    escondidas num relatorio que ninguem abre na hora de negociar.
+
+    So' aparece quem JA' ENTREGOU. Listar o cadastro inteiro encheria a tela de
+    fornecedor de embalagem e de manutencao -- que nao sao produtores de fruta,
+    e cuja unica coisa em comum com eles e' a tabela onde moram.
+    """
+
+    area = 'recebimento'
+
+    def get(self, request):
+        filial = _filial(request)
+        busca = (request.GET.get('busca') or '').strip()
+        linhas = RecebimentoService.historico_por_produtor(filial, busca)
+        return render(request, 'polpa/produtores.html', {
+            'title': 'Produtores',
+            'linhas': linhas,
+            'busca': busca,
+            'total': {
+                'produtores': len(linhas),
+                'kg_aceito': sum((l['kg_aceito'] for l in linhas), Decimal('0')),
+                'valor': sum((l['valor'] for l in linhas), Decimal('0')),
+            },
         })
 
 

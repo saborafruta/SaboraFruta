@@ -46,6 +46,7 @@ ROTAS_PRONTAS: list = [
     # para uma view que nao e' a `ItemView`, o selo "em construcao" some
     # sozinho do hub -- ele e' descoberto por resolucao, nao por lista.
     path('recebimento/classificacao/', vrec.ClassificacaoFilaView.as_view(), name='recebimento-classificacao'),
+    path('recebimento/produtores/', vrec.ProdutoresView.as_view(), name='recebimento-produtores'),
     path('recebimento/recusas/', vrec.RecusasView.as_view(), name='recebimento-recusas'),
 
     # ── Catálogo da fábrica ─────────────────────────────────────────────
