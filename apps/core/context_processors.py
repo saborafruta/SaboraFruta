@@ -1,5 +1,4 @@
 """Context processors: disponibilizam dados em todos os templates."""
-from apps.core.models import Filial
 from apps.core.services.modulos import modulos_ativos
 
 
@@ -51,19 +50,14 @@ def filial_context(request):
     ctx['modulos_ativos'] = modulos_ativos(ctx['filial_ativa'])
     try:
         user = request.user
-        qs = Filial.objects.filter(ativo=True)
-        perfil = getattr(user, 'perfil', None)
-        is_admin = user.is_superuser or (perfil is not None and perfil.is_admin)
+        # Mesma lista da tela de escolha e do middleware -- ver
+        # `Usuario.filiais_permitidas`. O seletor do cabecalho oferecendo
+        # mais que a tela de escolha e' a mesma falha por outra porta.
+        qs = user.filiais_permitidas()
         if user.is_superuser and ctx['filial_ativa']:
+            # Superuser troca dentro da empresa em que esta; a Central e' o
+            # caminho para pular de empresa.
             qs = qs.filter(empresa_id=ctx['filial_ativa'].empresa_id)
-        elif not user.is_superuser:
-            qs = qs.filter(empresa=user.empresa)
-        if not is_admin:
-            acessos_ids = list(user.acessos_filiais.filter(ativo=True).values_list('filial_id', flat=True))
-            if acessos_ids:
-                qs = qs.filter(pk__in=acessos_ids)
-            elif user.filial_id:
-                qs = qs.filter(pk=user.filial_id)
         ctx['filiais_disponiveis'] = list(qs.order_by('nome_fantasia', 'razao_social'))
     except Exception:
         pass

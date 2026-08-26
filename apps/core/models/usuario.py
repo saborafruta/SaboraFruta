@@ -256,17 +256,52 @@ class Usuario(AbstractBaseUser, PermissionsMixin):
             return None
         return pai
 
+    def filiais_permitidas(self):
+        """
+        As unidades que este login pode abrir. UMA REGRA SO', e todo mundo
+        pergunta aqui.
+
+        Ela existia em tres lugares -- a tela de escolha, o middleware e o
+        seletor do cabecalho -- e os tres discordavam. Discordancia em regra
+        de acesso nao aparece como erro: aparece como unidade a mais na
+        lista, que a pessoa clica e entra.
+
+        A ORDEM IMPORTA. Vinculo explicito (`UsuarioFilialAcesso`) vem antes
+        do perfil: se alguem se deu ao trabalho de dizer em quais unidades
+        este login trabalha, essa e' a fronteira -- inclusive para perfil
+        administrador, que responde pelo QUE a pessoa faz, nao por ONDE.
+        Era exatamente aqui que o login de uma filial via as tres.
+
+        Sem nenhum vinculo, o admin da empresa continua enxergando tudo --
+        senao a mudanca trancaria para fora quem foi cadastrado antes de o
+        vinculo existir. E `filial` sozinha e' a unidade padrao de quem nao
+        e' admin.
+        """
+        from apps.core.models.empresa import Filial
+
+        qs = Filial.objects.filter(ativo=True)
+        if self.is_superuser:
+            return qs
+        qs = qs.filter(empresa_id=self.empresa_id)
+
+        acessos = self.acessos_filiais.filter(ativo=True).values_list(
+            'filial_id', flat=True,
+        )
+        if acessos:
+            return qs.filter(pk__in=list(acessos))
+
+        perfil = getattr(self, 'perfil', None)
+        if perfil is not None and perfil.is_admin:
+            return qs
+        if self.filial_id:
+            return qs.filter(pk=self.filial_id)
+        return qs.none()
+
     def pode_acessar_filial(self, filial) -> bool:
-        """Permite acesso apenas a filiais da mesma empresa (perfil admin acessa qualquer filial)."""
+        """A mesma lista de `filiais_permitidas`, respondida para uma unidade."""
         if self.is_superuser:
             return True
-        if self.perfil.is_admin:
-            return filial.empresa_id == self.empresa_id
-        if self.acessos_filiais.filter(filial_id=filial.id, ativo=True).exists():
-            return True
-        return filial.empresa_id == self.empresa_id and (
-            self.filial_id is None or self.filial_id == filial.id
-        )
+        return self.filiais_permitidas().filter(pk=filial.pk).exists()
 
     def perfil_para_filial(self, filial):
         if not filial:

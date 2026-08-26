@@ -8,7 +8,7 @@ from django.views import View
 from django.views.decorators.http import require_POST
 
 from apps.core.forms import LoginForm
-from apps.core.models import Empresa, Filial
+from apps.core.models import Empresa
 from apps.core.services.auth_service import AuthService
 from apps.core.services.exceptions import DomainError
 
@@ -48,19 +48,10 @@ class LoginView(View):
 
 
 def _filiais_permitidas(user):
-    qs = Filial.objects.filter(ativo=True)
-    if user.is_superuser:
-        return qs.order_by('nome_fantasia', 'razao_social')
-    qs = qs.filter(empresa=user.empresa)
-    perfil = getattr(user, 'perfil', None)
-    if perfil and perfil.is_admin:
-        return qs.order_by('nome_fantasia', 'razao_social')
-    acessos_ids = list(user.acessos_filiais.filter(ativo=True).values_list('filial_id', flat=True))
-    if acessos_ids:
-        return qs.filter(pk__in=acessos_ids).order_by('nome_fantasia', 'razao_social')
-    if user.filial_id:
-        return qs.filter(pk=user.filial_id).order_by('nome_fantasia', 'razao_social')
-    return qs.none()
+    # A regra mora no usuario -- ver `Usuario.filiais_permitidas`. Quando ela
+    # vivia aqui tambem, a tela de escolha oferecia unidade que o vinculo do
+    # login nao dava, e clicar entrava.
+    return user.filiais_permitidas().order_by('nome_fantasia', 'razao_social')
 
 
 @login_required
