@@ -28,6 +28,12 @@ def normalizar_caminho_favorito(valor):
 
 
 class MenuFavoritosView(LoginRequiredMixin, View):
+    def handle_no_permission(self):
+        return JsonResponse(
+            {'ok': False, 'erro': 'Sua sessao expirou. Entre novamente.'},
+            status=401,
+        )
+
     def post(self, request):
         try:
             dados = json.loads(request.body or '{}')

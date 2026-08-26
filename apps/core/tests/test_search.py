@@ -36,8 +36,9 @@ class SearchNormalizationTests(SimpleTestCase):
     def test_matches_only_at_word_start(self):
         self.assertEqual(self.search('aba'), [1])
 
-    def test_single_character_only_matches_start_of_product_name(self):
-        self.assertEqual(self.search('a'), [1, 6])
+    def test_single_character_matches_an_exact_word(self):
+        self.products.append({'pk': 8, 'name': 'CAMISA POLO TAM P', 'code': '80'})
+        self.assertEqual(self.search('polo p'), [8])
 
     def test_complete_term_can_match_later_word(self):
         self.assertEqual(self.search('amarela'), [7])
@@ -60,6 +61,17 @@ class SearchNormalizationTests(SimpleTestCase):
             queryset, 'bege polo', fields=('nome', 'referencia'),
         )
         self.assertEqual(len(result.filters), 2)
+
+    def test_queryset_search_treats_single_character_as_exact_word(self):
+        queryset = _FakeQuerySet()
+        result = filter_queryset_by_terms(
+            queryset, 'polo p', fields=('nome', 'referencia'),
+        )
+
+        self.assertEqual(len(result.filters), 2)
+        one_letter_lookups = str(result.filters[1])
+        self.assertIn('nome__iregex', one_letter_lookups)
+        self.assertIn('referencia__iregex', one_letter_lookups)
 
 
 class _FakeQuerySet:

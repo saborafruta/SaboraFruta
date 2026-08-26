@@ -39,6 +39,20 @@
     }
   }
 
+  function readJsonResponse(response) {
+    var contentType = response.headers.get('content-type') || '';
+    if (contentType.indexOf('application/json') === -1) {
+      throw new Error(
+        response.status === 401 || response.status === 403
+          ? 'Sua sessao expirou. Recarregue a pagina e tente novamente.'
+          : 'O servidor ficou indisponivel por alguns instantes. Tente novamente.'
+      );
+    }
+    return response.json().then(function (data) {
+      return { response: response, data: data };
+    });
+  }
+
   function start() {
     var root = document.getElementById('sidebar-root');
     if (!root || root.dataset.favoritesReady === 'true') return;
@@ -113,16 +127,18 @@
         method: 'POST',
         credentials: 'same-origin',
         headers: {
+          'Accept': 'application/json',
           'Content-Type': 'application/json',
+          'X-Requested-With': 'XMLHttpRequest',
           'X-CSRFToken': csrf
         },
         body: JSON.stringify({ caminho: path, favorito: shouldFavorite })
-      }).then(function (response) {
-        return response.json().then(function (data) {
-          if (!response.ok || !data.ok) throw new Error(data.erro || 'Nao foi possivel salvar.');
-          favorites = data.favoritos;
-          favoriteSet = new Set(favorites);
-        });
+      }).then(readJsonResponse).then(function (result) {
+        if (!result.response.ok || !result.data.ok) {
+          throw new Error(result.data.erro || 'Nao foi possivel salvar.');
+        }
+        favorites = result.data.favoritos;
+        favoriteSet = new Set(favorites);
       }).catch(function (error) {
         if (wasFavorite) favoriteSet.add(path); else favoriteSet.delete(path);
         favorites = favorites.filter(function (item) { return item !== path; });

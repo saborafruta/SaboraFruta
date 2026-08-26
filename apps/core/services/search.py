@@ -25,12 +25,18 @@ def filter_queryset_by_terms(
     *,
     fields: Sequence[str],
 ) -> QuerySet:
-    """Exige todas as palavras, em qualquer ordem e em qualquer campo."""
+    """Exige os termos em qualquer ordem/campo; uma letra casa palavra exata."""
 
     for term in normalize_search_text(query).split():
         term_filter = Q()
         for field in fields:
-            term_filter |= Q(**{f'{field}__icontains': term})
+            lookup = 'iregex' if len(term) == 1 else 'icontains'
+            value = (
+                rf'(^|[^0-9A-Za-zÀ-ÿ]){re.escape(term)}([^0-9A-Za-zÀ-ÿ]|$)'
+                if lookup == 'iregex'
+                else term
+            )
+            term_filter |= Q(**{f'{field}__{lookup}': value})
         queryset = queryset.filter(term_filter)
     return queryset
 
@@ -68,8 +74,12 @@ def _candidate_rank(
         if not name:
             continue
         words = name.split()
-        if len(query_terms) == 1 and len(query_terms[0]) == 1:
-            matches = bool(words and words[0].startswith(query_terms[0]))
+        if any(len(term) == 1 for term in query_terms):
+            matches = all(
+                term in words if len(term) == 1
+                else any(word.startswith(term) for word in words)
+                for term in query_terms
+            )
         else:
             matches = all(any(word.startswith(term) for word in words) for term in query_terms)
         if not matches:

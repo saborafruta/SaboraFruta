@@ -14,7 +14,11 @@ from django.views.decorators.http import require_GET, require_POST
 from apps.cadastros.models import Cliente
 from apps.core.services.exceptions import DadosInvalidosError, EstoqueInsuficienteError
 from apps.core.services.permissions import requer_permissao
-from apps.core.services.search import normalize_search_text, ranked_search_ids
+from apps.core.services.search import (
+    filter_queryset_by_terms,
+    normalize_search_text,
+    ranked_search_ids,
+)
 from apps.financeiro.models import FormaPagamento, TaxaParcelamento
 from apps.financeiro.constants.enums import TipoFormaPagamento
 from apps.fiscal.integrations.focusnfe.exceptions import FocusNFeNetworkError, FocusNFeServerError
@@ -243,16 +247,15 @@ def buscar_produto(request):
         qs = qs.filter(linha_producao_id=linha_id)
 
     if q:
-        for term in normalize_search_text(q).split():
-            term_filter = (
-                Q(descricao_pdv__icontains=term)
-                | (Q(descricao_pdv='') & Q(descricao__icontains=term))
-                | Q(codigo__icontains=term)
-                | Q(codigo_barras__icontains=term)
-            )
-            if term.isdigit():
-                term_filter |= Q(pk=int(term))
-            qs = qs.filter(term_filter)
+        base_qs = qs
+        qs = filter_queryset_by_terms(
+            base_qs,
+            q,
+            fields=('descricao_pdv', 'descricao', 'codigo', 'codigo_barras'),
+        )
+        normalized_q = normalize_search_text(q).replace(' ', '')
+        if normalized_q.isdigit():
+            qs = base_qs.filter(Q(pk=int(normalized_q)) | Q(pk__in=qs.values('pk')))
 
         candidates = (
             {

@@ -69,7 +69,9 @@ class MenuFavoritosViewTests(SimpleTestCase):
     def test_exige_autenticacao(self):
         response = self._post('/financeiro/', True, autenticado=False)
 
-        self.assertEqual(response.status_code, 302)
+        self.assertEqual(response.status_code, 401)
+        self.assertEqual(response['Content-Type'], 'application/json')
+        self.assertFalse(json.loads(response.content)['ok'])
         self.usuario.save.assert_not_called()
 
     def test_normaliza_query_e_rejeita_caminho_relativo(self):
@@ -99,3 +101,15 @@ class MenuFavoritosTemplateTests(SimpleTestCase):
         self.assertIn('class="sidebar-mobile fixed inset-y-0', template)
         self.assertIn("record.nav.closest('.sidebar-mobile')", script)
         self.assertIn('if (!record.mobileReadonly)', script)
+        self.assertIn("'Accept': 'application/json'", script)
+        self.assertIn('readJsonResponse', script)
+
+    def test_produtos_principais_nao_ficam_ativos_dentro_de_moda(self):
+        raiz = Path(__file__).resolve().parents[1]
+        template = (raiz / 'templates' / 'core' / '_sidebar.html').read_text(encoding='utf-8')
+
+        self.assertNotIn('produtos_url in request.path', template)
+        self.assertEqual(
+            template.count("request.resolver_match.namespace == 'produtos'"),
+            2,
+        )
