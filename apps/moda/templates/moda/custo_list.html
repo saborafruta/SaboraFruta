@@ -18,7 +18,7 @@
 
   <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
     <a href="{% url 'moda:custos' %}" class="card p-4 block">
-      <p class="text-xs uppercase tracking-wide" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Produtos</p>
+      <p class="text-xs uppercase tracking-wide" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Modelos de Produção</p>
       <p class="text-2xl font-semibold mt-1" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">{{ resumo.total }}</p>
     </a>
     {% comment %}
@@ -151,7 +151,7 @@
           <p class="text-sm mt-2" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
             O custo se forma na ficha técnica do produto: material, consumo e preço.
           </p>
-          <a href="{% url 'moda:produto-list' %}" class="btn-primary text-sm mt-4 inline-block">Ir para Produtos</a>
+          <a href="{% url 'moda:produto-list' %}" class="btn-primary text-sm mt-4 inline-block">Ir para Modelos de Produção</a>
         {% endif %}
       </div>
     {% endfor %}

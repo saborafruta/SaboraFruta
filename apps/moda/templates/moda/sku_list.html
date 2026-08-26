@@ -6,7 +6,7 @@
   <div class="flex flex-wrap items-start justify-between gap-3">
     <div>
       <p class="text-sm mb-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
-        <a href="{% url 'moda:grupo' 'produtos' %}" :style="temaClaro ? 'color:#3b82f6;' : 'color:#60a5fa;'">Produtos</a>
+        <a href="{% url 'moda:grupo' 'produtos' %}" :style="temaClaro ? 'color:#3b82f6;' : 'color:#60a5fa;'">Modelos de Produção</a>
         <span class="mx-1">›</span> SKUs
       </p>
       <h2 class="text-2xl font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">SKUs</h2>
@@ -173,7 +173,7 @@
             ganha um código no padrão
             <span class="font-mono">PRODUTO-COR-TAMANHO</span>.
           </p>
-          <a href="{% url 'moda:produto-list' %}" class="btn-primary text-sm mt-4 inline-block">Ir para Produtos</a>
+          <a href="{% url 'moda:produto-list' %}" class="btn-primary text-sm mt-4 inline-block">Ir para Modelos de Produção</a>
         {% endif %}
       </div>
     {% endif %}

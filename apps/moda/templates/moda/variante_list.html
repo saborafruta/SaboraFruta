@@ -6,7 +6,7 @@
   <div class="flex flex-wrap items-start justify-between gap-3">
     <div>
       <p class="text-sm mb-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
-        <a href="{% url 'moda:grupo' 'produtos' %}" :style="temaClaro ? 'color:#3b82f6;' : 'color:#60a5fa;'">Produtos</a>
+        <a href="{% url 'moda:grupo' 'produtos' %}" :style="temaClaro ? 'color:#3b82f6;' : 'color:#60a5fa;'">Modelos de Produção</a>
         <span class="mx-1">›</span> Variantes
       </p>
       <h2 class="text-2xl font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">Variantes</h2>
@@ -15,7 +15,7 @@
         nele que a produção, o estoque e a etiqueta trabalham.
       </p>
     </div>
-    <a href="{% url 'moda:produto-list' %}" class="btn-secondary">Produtos</a>
+    <a href="{% url 'moda:produto-list' %}" class="btn-secondary">Modelos de Produção</a>
   </div>
 
   {% comment %}
@@ -32,7 +32,7 @@
       <p class="text-2xl font-semibold mt-1" :style="temaClaro ? 'color:#059669;' : 'color:#34d399;'">{{ resumo.ativas }}</p>
     </div>
     <div class="card p-4">
-      <p class="text-xs uppercase tracking-wide" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Produtos</p>
+      <p class="text-xs uppercase tracking-wide" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Modelos de Produção</p>
       <p class="text-2xl font-semibold mt-1" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">{{ resumo.produtos }}</p>
     </div>
   </div>
@@ -180,7 +180,7 @@
             use “Gerar variantes” na tela dele — o sistema cruza os dois e
             cria um SKU para cada combinação.
           </p>
-          <a href="{% url 'moda:produto-list' %}" class="btn-primary text-sm mt-4 inline-block">Ir para Produtos</a>
+          <a href="{% url 'moda:produto-list' %}" class="btn-primary text-sm mt-4 inline-block">Ir para Modelos de Produção</a>
         {% endif %}
       </div>
     {% endif %}
