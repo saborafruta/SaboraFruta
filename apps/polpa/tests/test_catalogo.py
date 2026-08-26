@@ -28,7 +28,7 @@ from django.urls import reverse
 
 from apps.core.models import Empresa, Filial, PerfilAcesso, Usuario
 from apps.core.services.exceptions import DomainError
-from apps.polpa.models import FichaProduto, Fruta
+from apps.polpa.models import FichaProduto, Fruta, TipoItem
 from apps.polpa.services import CatalogoService
 from apps.produtos.models import Produto, UnidadeMedida, UnidadeMedidaFilial
 
@@ -546,3 +546,168 @@ class UnidadeRelampagoTests(CatalogoBase):
                 produto__descricao='Caixa de papelao 5 kg',
             ).exists()
         )
+
+
+class TipoItemVirouCadastroTests(CatalogoBase):
+    """
+    O tipo saiu do enum e virou tabela.
+
+    Os 35 cobriam polpa, açaí e sorvete — mas cada fábrica tem o seu: xarope,
+    cobertura, insumo de limpeza, pote de vidro retornável. Enquanto a lista
+    vivia no código, acrescentar um exigia deploy, e o que acontece na prática é
+    cadastrar tudo como "Outro ingrediente", que é onde a informação morre.
+    """
+
+    def _criar(self, **dados):
+        return self.client.post(reverse('polpa:tipo-ajax-create'), dados)
+
+    # ── A semeadura ──────────────────────────────────────────────────────
+
+    def test_a_filial_nasce_com_os_tipos_de_sistema(self):
+        """
+        Semeados NA LEITURA e nao por migracao de dados: migracao cuidaria das
+        filiais de hoje e deixaria a de amanha com a lista vazia -- e lista
+        vazia aqui e' a tela do catalogo sem opcao nenhuma.
+        """
+        self.assertEqual(TipoItem.objects.filter(filial=self.filial).count(), 0)
+
+        tipos = TipoItem.da_filial(self.filial)
+
+        self.assertEqual(tipos.count(), len(FichaProduto.CLASSE_DO_TIPO))
+        self.assertTrue(all(t.sistema for t in tipos))
+
+    def test_semear_duas_vezes_nao_duplica(self):
+        """Duas abas abrindo a tela ao mesmo tempo e' o caso normal."""
+        TipoItem.da_filial(self.filial)
+        antes = TipoItem.objects.filter(filial=self.filial).count()
+
+        TipoItem.garantir_padroes(self.filial)
+
+        self.assertEqual(TipoItem.objects.filter(filial=self.filial).count(), antes)
+
+    def test_cada_tipo_semeado_leva_a_classe_certa(self):
+        TipoItem.da_filial(self.filial)
+
+        pote = TipoItem.objects.get(filial=self.filial, codigo=T.POTE)
+        polpa = TipoItem.objects.get(filial=self.filial, codigo=T.POLPA)
+
+        self.assertEqual(pote.classe, FichaProduto.Classe.EMBALAGEM)
+        self.assertEqual(polpa.classe, FichaProduto.Classe.ACABADO)
+
+    # ── O tipo criado pela fábrica ───────────────────────────────────────
+
+    def test_cria_o_tipo_e_devolve_a_opcao_pronta(self):
+        import json
+
+        resposta = self._criar(nome='Xarope de guaraná',
+                               classe=FichaProduto.Classe.MATERIA_PRIMA)
+
+        corpo = json.loads(resposta.content)
+        self.assertEqual(resposta.status_code, 200)
+        self.assertEqual(corpo['label'], 'Xarope de guaraná')
+        self.assertEqual(corpo['classe'], FichaProduto.Classe.MATERIA_PRIMA)
+
+    def test_o_codigo_sai_do_nome(self):
+        """
+        Identificador tecnico nao se pede: deixar alguem digitar produziria
+        "Pote Vidro", "pote-vidro" e "POTE_VIDRO" como tres tipos.
+        """
+        self._criar(nome='Pote de vidro', classe=FichaProduto.Classe.EMBALAGEM)
+
+        tipo = TipoItem.objects.get(filial=self.filial, nome='Pote de vidro')
+        self.assertEqual(tipo.codigo, 'pote_de_vidro')
+
+    def test_nome_repetido_e_recusado(self):
+        self._criar(nome='Xarope', classe=FichaProduto.Classe.MATERIA_PRIMA)
+        resposta = self._criar(nome='xarope', classe=FichaProduto.Classe.ACABADO)
+
+        self.assertEqual(resposta.status_code, 400)
+        self.assertEqual(
+            TipoItem.objects.filter(filial=self.filial, nome__iexact='xarope').count(), 1,
+        )
+
+    def test_sem_classe_nao_grava(self):
+        """
+        Tipo sem classe seria um item que o sistema nao sabe processar: entraria
+        no catalogo e sumiria da receita, do custo e do menu.
+        """
+        resposta = self._criar(nome='Coisa solta', classe='')
+
+        self.assertEqual(resposta.status_code, 400)
+        self.assertFalse(TipoItem.objects.filter(nome='Coisa solta').exists())
+
+    def test_o_tipo_novo_nao_vaza_para_outra_filial(self):
+        """
+        Tipo e' vocabulario da operacao: a fabrica de sorvete nao precisa
+        herdar "pote de vidro retornavel" que a de polpa inventou.
+        """
+        outra = Filial.objects.create(
+            empresa=self.empresa, razao_social='Segunda', cnpj='55545678000299',
+            uf='RN', cidade='Mossoro',
+        )
+        self._criar(nome='Xarope', classe=FichaProduto.Classe.MATERIA_PRIMA)
+
+        self.assertFalse(
+            TipoItem.objects.filter(filial=outra, nome='Xarope').exists()
+        )
+
+    # ── A ponta que importa: a ficha aceita o tipo novo ──────────────────
+
+    def test_a_ficha_grava_com_tipo_criado_pela_fabrica(self):
+        """
+        O SERVICO CHAMA `full_clean`. Com o `choices` do enum ainda no campo,
+        todo tipo proprio seria recusado como "opcao invalida" -- e o cadastro
+        inteiro nao serviria para nada.
+        """
+        import json
+
+        criado = json.loads(self._criar(
+            nome='Xarope de guaraná', classe=FichaProduto.Classe.MATERIA_PRIMA,
+        ).content)
+
+        resposta = self.client.post(reverse('polpa:catalogo-create'), {
+            'tipo': criado['id'], 'descricao': 'Xarope guaraná 1 L',
+            'unidade_medida': self.unidade.pk,
+        })
+
+        ficha = FichaProduto.objects.get(produto__descricao='Xarope guaraná 1 L')
+        self.assertEqual(resposta.status_code, 302)
+        self.assertEqual(ficha.tipo, criado['id'])
+
+    def test_a_classe_da_ficha_sai_do_tipo_criado(self):
+        """
+        `classe` sustenta custo, receita e ordem. Derivada errado, o item entra
+        no catalogo e some de todo o resto.
+        """
+        import json
+
+        criado = json.loads(self._criar(
+            nome='Cobertura', classe=FichaProduto.Classe.MATERIA_PRIMA,
+        ).content)
+
+        self.client.post(reverse('polpa:catalogo-create'), {
+            'tipo': criado['id'], 'descricao': 'Cobertura de chocolate',
+            'unidade_medida': self.unidade.pk,
+        })
+
+        ficha = FichaProduto.objects.get(produto__descricao='Cobertura de chocolate')
+        self.assertEqual(ficha.classe, FichaProduto.Classe.MATERIA_PRIMA)
+
+    def test_o_nome_do_tipo_aparece_na_tela_e_nao_o_codigo(self):
+        """
+        `get_tipo_display()` morreu junto com o `choices`. Sem o substituto, a
+        lista mostraria "polpa_base" no lugar de "Polpa-base".
+        """
+        self.client.post(reverse('polpa:catalogo-create'), {
+            'tipo': T.POLPA_BASE, 'descricao': 'Polpa-base de manga',
+            'unidade_medida': self.unidade.pk,
+        })
+
+        ficha = FichaProduto.objects.get(produto__descricao='Polpa-base de manga')
+        self.assertEqual(ficha.tipo_nome, 'Polpa-base')
+
+    def test_a_ficha_oferece_o_botao_de_tipo_novo(self):
+        resposta = self.client.get(reverse('polpa:catalogo-create'))
+
+        self.assertContains(resposta, 'Novo tipo de item')
+        self.assertContains(resposta, reverse('polpa:tipo-ajax-create'))

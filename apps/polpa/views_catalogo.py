@@ -16,8 +16,10 @@ from django.urls import reverse
 
 from apps.core.services.exceptions import DomainError
 
-from .forms_catalogo import ItemCatalogoForm, UnidadeRapidaForm
-from .models import FichaProduto
+from .forms_catalogo import (
+    ItemCatalogoForm, TipoRapidoForm, UnidadeRapidaForm,
+)
+from .models import FichaProduto, TipoItem
 from .services import CatalogoService
 from .views import PolpaBaseView
 
@@ -53,7 +55,10 @@ class CatalogoListView(PolpaBaseView):
             'busca': busca,
             'tipo': tipo,
             'classes': FichaProduto.Classe.choices,
-            'tipos': FichaProduto.TIPOS_POR_CLASSE.get(classe, ()),
+            'tipos': [
+                (t.codigo, t.nome)
+                for t in TipoItem.por_classe(_filial(request)).get(classe, ())
+            ],
             'resumo': CatalogoService.resumo(_filial(request)),
             # PRODUTO DO ERP SEM FICHA existe de verdade (entra por XML de
             # compra ou foi cadastrado antes do vertical). Mostrar a
@@ -73,6 +78,59 @@ class EmbalagensView(CatalogoListView):
 
 class MateriasPrimasView(CatalogoListView):
     classe_padrao = FichaProduto.Classe.MATERIA_PRIMA
+
+
+class TipoAjaxCreateView(PolpaBaseView):
+    """
+    Cadastra um tipo de item SEM SAIR da ficha, e devolve a opcao pronta.
+
+    A lista dos trinta e cinco cobria polpa, acai e sorvete -- mas cada fabrica
+    tem o seu: xarope, cobertura, insumo de limpeza, pote de vidro retornavel.
+    Enquanto ela vivia no enum, acrescentar um exigia deploy, e o que acontece
+    na pratica e' cadastrar tudo como "Outro ingrediente" -- que e' onde a
+    informacao morre.
+
+    O TIPO NASCE NA FILIAL de quem criou. Tipo e' vocabulario da operacao: a
+    fabrica de sorvete nao precisa herdar "pote de vidro retornavel" que a de
+    polpa inventou, e uma lista comum cresceria com o que ninguem usa.
+    """
+
+    area = 'formulacao'
+    permissao_acao = 'criar'
+
+    def post(self, request):
+        from .models import TipoItem
+
+        filial = _filial(request)
+        form = TipoRapidoForm(request.POST, filial=filial)
+        if not form.is_valid():
+            return JsonResponse(
+                {
+                    'ok': False,
+                    'errors': {
+                        campo: [e['message'] for e in mensagens]
+                        for campo, mensagens in form.errors.get_json_data().items()
+                    },
+                },
+                status=400,
+            )
+
+        # Semeia antes de criar: sem isto, o primeiro tipo proprio de uma filial
+        # nova entraria numa lista que ainda nao tem os de sistema, e o codigo
+        # dele poderia colidir com um deles na primeira leitura.
+        TipoItem.garantir_padroes(filial)
+        tipo = TipoItem.objects.create(
+            filial=filial,
+            codigo=form.codigo(),
+            nome=form.cleaned_data['nome'],
+            classe=form.cleaned_data['classe'],
+            sistema=False,
+            ativo=True,
+        )
+        return JsonResponse({
+            'ok': True, 'id': tipo.codigo, 'label': tipo.nome,
+            'classe': tipo.classe,
+        })
 
 
 class UnidadeAjaxCreateView(PolpaBaseView):
@@ -172,28 +230,32 @@ class CatalogoFormView(PolpaBaseView):
     def _tela(request, form, ficha):
         from apps.produtos.models import UnidadeMedida
 
+        from .models import TipoItem
+
+        agrupados = TipoItem.por_classe(_filial(request))
         return render(request, 'polpa/catalogo_form.html', {
+            # As tres classes alimentam o modal de tipo novo.
+            'classes': FichaProduto.Classe.choices,
             'title': str(ficha.produto) if ficha else 'Novo item',
             'form': form,
             'ficha': ficha,
+            # OS GRUPOS SAEM DA TABELA. Antes vinham do enum; agora incluem
+            # tambem o que a fabrica criou, e por isso a lista tem de ser
+            # montada por filial.
             'tipos_por_classe': [
-                (
-                    FichaProduto.Classe(classe).label,
-                    [(t.value, t.label) for t in tipos],
-                )
-                for classe, tipos in FichaProduto.TIPOS_POR_CLASSE.items()
+                (FichaProduto.Classe(classe).label,
+                 [(t.codigo, t.nome) for t in tipos])
+                for classe, tipos in agrupados.items() if tipos
             ],
             # AS LISTAS VÃO PARA O JAVASCRIPT EM JSON, saindo da MESMA
-            # tabela que o modelo usa: a tela mostra os blocos conforme a
+            # consulta dos grupos acima: a tela mostra os blocos conforme a
             # classe do tipo escolhido, e uma segunda lista escrita no
             # template discordaria dela na primeira mudança.
             **{
-                f'tipos_{chave}': json.dumps([t.value for t in tipos])
-                for chave, tipos in (
-                    ('materia_prima', FichaProduto.TIPOS_POR_CLASSE[FichaProduto.Classe.MATERIA_PRIMA]),
-                    ('embalagem', FichaProduto.TIPOS_POR_CLASSE[FichaProduto.Classe.EMBALAGEM]),
-                    ('acabado', FichaProduto.TIPOS_POR_CLASSE[FichaProduto.Classe.ACABADO]),
+                f'tipos_{chave}': json.dumps(
+                    [t.codigo for t in agrupados.get(chave, ())]
                 )
+                for chave in ('materia_prima', 'embalagem', 'acabado')
             },
             # SEM UNIDADE CADASTRADA o item não salva, e o select vazio não
             # explica por quê. A tela diz, e diz onde resolver.

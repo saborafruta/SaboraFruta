@@ -29,6 +29,48 @@
        modalUnidade: false, salvando: false, erroUnidade: '',
        nova: { sigla: '', descricao: '', tipo: '' },
 
+       modalTipo: false, erroTipo: '',
+       novoTipo: { nome: '', classe: '' },
+
+       /* Cria o tipo, seleciona e -- a parte que se esquece -- REGISTRA A
+          CLASSE DELE nas listas que decidem quais blocos aparecem. Sem isso o
+          tipo recem-criado ficaria selecionado com `classe` vazia, e a ficha
+          continuaria escondendo tudo, como se nada tivesse sido escolhido. */
+       async criarTipo() {
+         if (this.salvando) return;
+         this.salvando = true; this.erroTipo = '';
+         try {
+           const corpo = new FormData();
+           corpo.append('csrfmiddlewaretoken', document.querySelector('[name=csrfmiddlewaretoken]').value);
+           Object.entries(this.novoTipo).forEach(([k, v]) => corpo.append(k, v));
+           const r = await fetch('{% url 'polpa:tipo-ajax-create' %}', {
+             method: 'POST', body: corpo, headers: { 'X-Requested-With': 'XMLHttpRequest' },
+           });
+           const json = await r.json();
+           if (!r.ok || !json.ok) {
+             this.erroTipo = Object.values(json.errors || {}).flat().join(' ') || 'Nao foi possivel gravar.';
+             return;
+           }
+           const listas = {
+             materia_prima: this.materiaPrima,
+             embalagem: this.embalagem,
+             acabado: this.acabado,
+           };
+           if (listas[json.classe]) listas[json.classe].push(json.id);
+
+           const select = document.querySelector('#{{ form.tipo.id_for_label }}');
+           select.add(new Option(json.label, json.id, true, true));
+           this.tipo = json.id;
+           select.dispatchEvent(new Event('change', { bubbles: true }));
+           this.modalTipo = false;
+           this.novoTipo = { nome: '', classe: '' };
+         } catch (e) {
+           this.erroTipo = 'Falha de rede. Tente de novo.';
+         } finally {
+           this.salvando = false;
+         }
+       },
+
        /* Cria a unidade e JA' DEIXA SELECIONADA. Criar e mandar procurar na
           lista seria metade do favor, ainda mais num select que ate' agora
           estava vazio. */
@@ -122,8 +164,10 @@
       <h3 class="text-sm font-semibold mb-3" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">O que é este item</h3>
       <div class="grid sm:grid-cols-2 xl:grid-cols-4 gap-3">
         <div>
-          <label class="form-label" for="{{ form.tipo.id_for_label }}">
-            {{ form.tipo.label }} <span style="color:#dc2626;" title="Obrigatorio">*</span>
+          <label class="form-label flex items-center justify-between gap-2" for="{{ form.tipo.id_for_label }}">
+            <span>{{ form.tipo.label }} <span style="color:#dc2626;" title="Obrigatorio">*</span></span>
+            <button type="button" class="text-xs font-medium" @click="modalTipo = true"
+                    :style="temaClaro ? 'color:#2563eb;' : 'color:#60a5fa;'">+ Novo</button>
           </label>
           {% comment %}
             O select é AGRUPADO por classe: a lista corrida de 32 tipos faria
@@ -287,6 +331,55 @@
     conversao pertencem ao cadastro completo -- pedir aqui obrigaria quem esta'
     fichando um pote a decidir se "UN" converte para peso ou volume.
   {% endcomment %}
+  {% comment %}
+    A CLASSE E' O QUE O MODAL PRECISA ARRANCAR. Nome sozinho nao serve: sao as
+    tres classes que decidem o que a ficha pergunta, o que a receita separa e o
+    que o custo soma. Por isso ela e' obrigatoria aqui, com a explicacao ao
+    lado -- quem esta' criando "Xarope" precisa saber que a escolha entre
+    matéria-prima e acabado muda o resto do sistema, e nao so' um rotulo.
+  {% endcomment %}
+  <template x-if="modalTipo">
+    <div class="fixed inset-0 z-50 flex items-center justify-center p-4"
+         style="background:rgba(0,0,0,.55);" @click.self="modalTipo = false"
+         @keydown.escape.window="modalTipo = false">
+      <div class="card w-full max-w-md p-4">
+        <h3 class="text-base font-semibold mb-1" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">Novo tipo de item</h3>
+        <p class="text-xs mb-3" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+          Vale para esta filial e entra na lista junto dos tipos do sistema.
+        </p>
+        <div class="space-y-3">
+          <div>
+            <label class="form-label">Nome <span style="color:#dc2626;">*</span></label>
+            <input type="text" class="form-input w-full" placeholder="Xarope de guaraná" maxlength="60"
+                   x-model="novoTipo.nome" @keydown.enter.prevent="criarTipo()">
+          </div>
+          <div>
+            <label class="form-label">Classe <span style="color:#dc2626;">*</span></label>
+            <select class="form-select w-full" x-model="novoTipo.classe">
+              <option value="">Escolha…</option>
+              {% for valor, rotulo in classes %}
+                <option value="{{ valor }}">{{ rotulo }}</option>
+              {% endfor %}
+            </select>
+            <p class="text-xs mt-1" :style="temaClaro ? 'color:#94a3b8;' : 'color:#71717a;'">
+              Matéria-prima entra na receita; embalagem é o que envolve o produto;
+              acabado é o que sai para venda. A classe decide o que a ficha pede.
+            </p>
+          </div>
+        </div>
+        <div class="flex items-center gap-2 mt-4">
+          <button type="button" class="btn-primary text-sm"
+                  :disabled="salvando || !novoTipo.nome.trim() || !novoTipo.classe"
+                  @click="criarTipo()">
+            <span x-text="salvando ? 'Gravando...' : 'Gravar tipo'"></span>
+          </button>
+          <button type="button" class="btn-secondary text-sm" @click="modalTipo = false">Cancelar</button>
+        </div>
+        <p x-show="erroTipo" x-text="erroTipo" class="text-xs mt-3" style="color:#dc2626;"></p>
+      </div>
+    </div>
+  </template>
+
   <template x-if="modalUnidade">
     <div class="fixed inset-0 z-50 flex items-center justify-center p-4"
          style="background:rgba(0,0,0,.55);" @click.self="modalUnidade = false"
