@@ -1,0 +1,211 @@
+{% extends "_base.html" %}
+{% block title %}{{ title }} — Polpa{% endblock %}
+{% block page_title %}{{ title }}{% endblock %}
+{% block content %}
+
+{% comment %}
+  CONFERIR NÃO É DESPACHAR, e por isso são dois lugares diferentes na tela:
+  cada parada tem o seu botão de "subiu", e o despacho é um bloco à parte,
+  com a temperatura no mesmo formulário. Um botão só para as duas coisas
+  transformaria uma conferência interrompida em caminhão despachado pela
+  metade.
+
+  A MEDIÇÃO É PEDIDA JUNTO COM O DESPACHO porque depois não vem mais: é a
+  última temperatura conhecida antes de o produto sumir de vista, e a
+  próxima é a do cliente — que já não dá para corrigir.
+
+  O QUE FALTA APARECE, MAS NÃO SEGURA O CAMINHÃO: quem está na doca às 4h
+  sabe o que está fazendo, e software que trava vira software que a fábrica
+  aprende a contornar.
+{% endcomment %}
+<div class="space-y-4">
+
+  <div>
+    <p class="text-sm mb-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+      <a href="{% url 'polpa:hub' %}" :style="temaClaro ? 'color:#3b82f6;' : 'color:#60a5fa;'">Polpa de Frutas</a>
+      <span class="mx-1">›</span>
+      <a href="{% url 'polpa:carregamento' %}" :style="temaClaro ? 'color:#3b82f6;' : 'color:#60a5fa;'">Carregamento</a>
+    </p>
+    <h2 class="text-2xl font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">{{ romaneio }}</h2>
+    <p class="text-sm mt-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+      {{ romaneio.motorista_nome|default:"sem motorista" }}
+      {% if romaneio.veiculo_placa %} · {{ romaneio.veiculo_placa }}{% endif %}
+      {% if romaneio.transportadora %} · {{ romaneio.transportadora }}{% endif %}
+      {% if romaneio.destino_rota %} · {{ romaneio.destino_rota }}{% endif %}
+    </p>
+  </div>
+
+  {# ── O baú ──────────────────────────────────────────────────────── #}
+  <div class="grid grid-cols-1 lg:grid-cols-3 gap-3">
+    <div class="card p-4"
+         style="{% if fora_da_faixa %}border:1px solid #dc2626;{% elif temperatura is None %}border:1px solid #d97706;{% endif %}">
+      <p class="text-[11px] uppercase tracking-wide" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Baú na saída</p>
+      {% if temperatura is not None %}
+        <p class="text-3xl font-bold mt-1"
+           style="color:{% if fora_da_faixa %}#dc2626{% else %}#059669{% endif %};">{{ temperatura }}°C</p>
+        <p class="text-[11px] mt-0.5" :style="temaClaro ? 'color:#94a3b8;' : 'color:#71717a;'">
+          {{ ficha.medida_em|date:"d/m H:i" }}
+          {% if ficha.medido_por %} · {{ ficha.medido_por.nome }}{% endif %}
+        </p>
+      {% else %}
+        <p class="text-sm mt-2" style="color:#d97706;">
+          Ainda não medido — é a última prova da cadeia de frio.
+        </p>
+      {% endif %}
+    </div>
+
+    <div class="card p-4">
+      <p class="text-[11px] uppercase tracking-wide" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">A carga exige</p>
+      {% if exigida is not None %}
+        <p class="text-3xl font-bold mt-1" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">{{ exigida }}°C</p>
+        <p class="text-[11px] mt-0.5" :style="temaClaro ? 'color:#94a3b8;' : 'color:#71717a;'">
+          o mais exigente entre os produtos que estão dentro
+        </p>
+      {% else %}
+        {# Sem cadastro não se inventa um limite — dizer isso é a resposta. #}
+        <p class="text-sm mt-2" style="color:#d97706;">
+          Nenhum produto da carga declara temperatura no cadastro.
+        </p>
+      {% endif %}
+    </div>
+
+    <div class="card p-4">
+      <p class="text-[11px] uppercase tracking-wide" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Saída</p>
+      {% if ficha.saida_em %}
+        <p class="text-3xl font-bold mt-1" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
+          {{ ficha.saida_em|date:"H:i" }}
+        </p>
+        <p class="text-[11px] mt-0.5" :style="temaClaro ? 'color:#94a3b8;' : 'color:#71717a;'">
+          {{ ficha.saida_em|date:"d/m/Y" }}
+        </p>
+      {% else %}
+        <p class="text-sm mt-2" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+          Ainda na doca.
+        </p>
+      {% endif %}
+    </div>
+  </div>
+
+  {# ── O que falta ────────────────────────────────────────────────── #}
+  {% if pendencias and na_doca %}
+    <div class="card p-4" style="border:1px solid #d97706;">
+      <p class="text-sm font-semibold mb-2" style="color:#d97706;">Antes de fechar a porta</p>
+      <ul class="text-sm space-y-1" :style="temaClaro ? 'color:#374151;' : 'color:#cbd5e1;'">
+        {% for p in pendencias %}<li>· {{ p }}</li>{% endfor %}
+      </ul>
+    </div>
+  {% endif %}
+
+  {# ── As paradas ─────────────────────────────────────────────────── #}
+  <div class="card overflow-hidden">
+    <div class="px-4 py-3 border-b" :style="temaClaro ? 'border-color:#e2e8f0;' : 'border-color:#2a2a2e;'">
+      <h3 class="text-sm font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">Conferência da carga</h3>
+      <p class="text-xs mt-0.5" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+        Cada parada marcada quando sobe no caminhão. Dá para desmarcar —
+        errar a linha é o engano mais comum da doca.
+      </p>
+    </div>
+    <div class="overflow-x-auto">
+      <table class="w-full text-sm">
+        <tbody>
+          {% for p in paradas %}
+            <tr class="border-b" :style="temaClaro ? 'border-color:#f1f5f9;' : 'border-color:#1e1e22;'">
+              <td class="px-4 py-3">
+                <span class="font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
+                  {{ p.item.cliente_nome }}
+                </span>
+                {% if p.pedido %}
+                  <a href="{% url 'polpa:separacao-pedido' p.pedido.pk %}"
+                     class="block text-xs underline"
+                     :style="temaClaro ? 'color:#2563eb;' : 'color:#60a5fa;'">
+                    pedido {{ p.pedido.numero_pedido }}
+                  </a>
+                {% endif %}
+              </td>
+              <td class="px-4 py-3 text-xs" :style="temaClaro ? 'color:#374151;' : 'color:#cbd5e1;'">
+                {% if p.item.peso_kg %}{{ p.item.peso_kg|floatformat:"-3" }} kg{% endif %}
+                {% if p.item.volumes %}
+                  <span class="block">{{ p.item.volumes|floatformat:"-0" }} volume(s)</span>
+                {% endif %}
+              </td>
+              <td class="px-4 py-3 text-xs">
+                {% if p.separacao %}
+                  <span class="soft-pill is-green text-xs">{{ p.separacao.numero }}</span>
+                {% elif p.sem_separacao %}
+                  {# Sem separação a carga sobe sem lote identificado — e num
+                     recall ninguém sabe o que foi para quem. #}
+                  <span style="color:#d97706;">sem separação fechada</span>
+                {% endif %}
+              </td>
+              <td class="px-4 py-3 text-right">
+                {% if pode_agir and na_doca %}
+                  <form method="post" class="inline">
+                    {% csrf_token %}
+                    <input type="hidden" name="acao" value="conferir">
+                    <input type="hidden" name="item" value="{{ p.item.pk }}">
+                    <input type="hidden" name="carregada" value="{% if p.carregada %}0{% else %}1{% endif %}">
+                    <button type="submit"
+                            class="{% if p.carregada %}btn-secondary{% else %}btn-primary{% endif %} text-sm">
+                      {% if p.carregada %}Desmarcar{% else %}Subiu no caminhão{% endif %}
+                    </button>
+                  </form>
+                {% elif p.carregada %}
+                  <span class="soft-pill is-green text-xs">carregada</span>
+                {% endif %}
+              </td>
+            </tr>
+          {% empty %}
+            <tr>
+              <td class="px-4 py-8 text-center text-sm"
+                  :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+                Esta carga não tem paradas — monte o romaneio na Logística.
+              </td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  {# ── Fechar a porta ─────────────────────────────────────────────── #}
+  {% if pode_agir and na_doca %}
+    <div class="card p-4">
+      <h3 class="text-sm font-semibold mb-1" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
+        Fechar a porta
+      </h3>
+      <p class="text-xs mb-3" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+        A temperatura vai junto porque depois não vem mais — a próxima
+        medição conhecida é a do cliente.
+      </p>
+      <form method="post" class="flex flex-wrap items-end gap-3"
+            onsubmit="return confirm('Despachar esta carga? O romaneio vai para em rota.');">
+        {% csrf_token %}
+        <input type="hidden" name="acao" value="despachar">
+        <div>
+          <label class="form-label" for="temperatura">
+            Temperatura do baú (°C){% if exigida is not None %}
+              <span class="opacity-60">exige {{ exigida }} ou menos</span>
+            {% endif %}
+          </label>
+          <input type="text" inputmode="decimal" name="temperatura" id="temperatura"
+                 class="form-input" style="width:140px;"
+                 value="{{ temperatura|default_if_none:'' }}" placeholder="-18">
+        </div>
+        <button type="submit" class="btn-primary">Despachar carga</button>
+      </form>
+
+      <form method="post" class="mt-3">
+        {% csrf_token %}
+        <input type="hidden" name="acao" value="medir">
+        <input type="hidden" name="temperatura" id="temperatura-so-medir">
+        <button type="submit" class="text-xs underline"
+                :style="temaClaro ? 'color:#2563eb;' : 'color:#60a5fa;'"
+                onclick="document.getElementById('temperatura-so-medir').value = document.getElementById('temperatura').value;">
+          Só registrar a medição, sem despachar
+        </button>
+      </form>
+    </div>
+  {% endif %}
+
+</div>
+{% endblock %}

@@ -1,4 +1,5 @@
 from .camara import Camara, LoteArmazenado
+from .carga import CargaFria
 from .catalogo import FichaProduto
 from .custo import CustoReceita
 from .etapa_customizada import EtapaProcesso
@@ -15,7 +16,7 @@ from .reserva import ReservaInsumo
 from .subproduto import Subproduto
 
 __all__ = [
-    'ApontamentoEtapa', 'Camara', 'CustoReceita', 'Etapa', 'EtapaProcesso',
+    'ApontamentoEtapa', 'Camara', 'CargaFria', 'CustoReceita', 'Etapa', 'EtapaProcesso',
     'EtapaReceita',
     'LeituraTemperatura', 'LoteArmazenado', 'MetaProducao', 'Posicao',
     'FichaProduto', 'Fruta',

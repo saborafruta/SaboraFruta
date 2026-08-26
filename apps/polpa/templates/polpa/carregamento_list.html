@@ -1,0 +1,135 @@
+{% extends "_base.html" %}
+{% block title %}{{ title }} — Polpa{% endblock %}
+{% block page_title %}{{ title }}{% endblock %}
+{% block content %}
+
+{% comment %}
+  A DOCA PRIMEIRO, o que já saiu depois. Quem abre esta tela está com um
+  caminhão encostado — e a carga que saiu hoje continua na lista só para
+  responder "a que temperatura ela foi", que é a pergunta que chega depois.
+
+  BAÚ SEM MEDIÇÃO aparece em âmbar com o mesmo peso de um desvio: é a
+  última prova da cadeia de frio, e ela some quando o caminhão sai.
+{% endcomment %}
+<div class="space-y-4">
+
+  <div>
+    <p class="text-sm mb-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+      <a href="{% url 'polpa:hub' %}" :style="temaClaro ? 'color:#3b82f6;' : 'color:#60a5fa;'">Polpa de Frutas</a>
+      <span class="mx-1">›</span>
+      <a href="{% url 'polpa:grupo' 'expedicao' %}" :style="temaClaro ? 'color:#3b82f6;' : 'color:#60a5fa;'">Expedição</a>
+    </p>
+    <h2 class="text-2xl font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">Carregamento</h2>
+    <p class="text-sm mt-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+      Conferência da carga e a temperatura do baú na hora de fechar a porta.
+    </p>
+  </div>
+
+  <div class="grid grid-cols-3 gap-3">
+    <div class="card p-4">
+      <p class="text-[11px] uppercase tracking-wide" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Na doca</p>
+      <p class="text-3xl font-bold mt-1" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">{{ resumo.na_doca }}</p>
+    </div>
+    <div class="card p-4" style="{% if resumo.sem_medicao %}border:1px solid #d97706;{% endif %}">
+      <p class="text-[11px] uppercase tracking-wide" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Baú sem medição</p>
+      <p class="text-3xl font-bold mt-1"
+         style="color:{% if resumo.sem_medicao %}#d97706{% else %}#059669{% endif %};">{{ resumo.sem_medicao }}</p>
+    </div>
+    <div class="card p-4">
+      <p class="text-[11px] uppercase tracking-wide" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Saíram hoje</p>
+      <p class="text-3xl font-bold mt-1" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">{{ resumo.sairam }}</p>
+    </div>
+  </div>
+
+  <div class="card p-4">
+    <form method="get" class="flex flex-wrap items-end gap-3">
+      <div class="flex-1" style="min-width:220px;">
+        <label class="form-label" for="busca">Motorista, placa ou rota</label>
+        <input type="text" name="busca" id="busca" class="form-input"
+               value="{{ filtros.busca }}" placeholder="Ex.: NOP1A23, Zona Norte">
+      </div>
+      <button type="submit" class="btn-primary">Filtrar</button>
+      {% if filtros.busca %}
+        <a href="{% url 'polpa:carregamento' %}" class="btn-secondary text-sm">Limpar</a>
+      {% endif %}
+    </form>
+  </div>
+
+  <div class="card overflow-hidden">
+    <div class="overflow-x-auto">
+      <table class="w-full text-sm">
+        <thead>
+          <tr class="border-b" :style="temaClaro ? 'border-color:#e2e8f0;' : 'border-color:#2a2a2e;'">
+            <th class="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wide"
+                :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Carga</th>
+            <th class="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wide"
+                :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Motorista / veículo</th>
+            <th class="text-center px-4 py-3 text-xs font-semibold uppercase tracking-wide"
+                :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Paradas</th>
+            <th class="text-right px-4 py-3 text-xs font-semibold uppercase tracking-wide"
+                :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Baú</th>
+            <th class="text-center px-4 py-3 text-xs font-semibold uppercase tracking-wide"
+                :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Situação</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for l in linhas %}
+            <tr class="border-b" :style="temaClaro ? 'border-color:#f1f5f9;' : 'border-color:#1e1e22;'">
+              <td class="px-4 py-3">
+                <a href="{% url 'polpa:carregamento-carga' l.romaneio.pk %}" class="font-semibold underline"
+                   :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">{{ l.romaneio }}</a>
+                <span class="block text-xs" :style="temaClaro ? 'color:#94a3b8;' : 'color:#71717a;'">
+                  {{ l.romaneio.data|date:"d/m/Y" }}
+                  {% if l.romaneio.destino_rota %} · {{ l.romaneio.destino_rota }}{% endif %}
+                </span>
+              </td>
+              <td class="px-4 py-3 text-xs" :style="temaClaro ? 'color:#374151;' : 'color:#cbd5e1;'">
+                {{ l.romaneio.motorista_nome|default:"—" }}
+                <span class="block">
+                  {% if l.romaneio.veiculo_placa %}
+                    {{ l.romaneio.veiculo_placa }}
+                  {% else %}
+                    <span style="color:#d97706;">sem placa</span>
+                  {% endif %}
+                </span>
+              </td>
+              <td class="px-4 py-3 text-center" :style="temaClaro ? 'color:#374151;' : 'color:#cbd5e1;'">
+                {{ l.carregadas }} / {{ l.paradas }}
+              </td>
+              <td class="px-4 py-3 text-right">
+                {% if l.temperatura is not None %}
+                  <span class="font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
+                    {{ l.temperatura }}°C
+                  </span>
+                {% else %}
+                  {# Sem medição não é "estava frio": é a prova que não existe. #}
+                  <span class="text-xs" style="color:#d97706;">não medido</span>
+                {% endif %}
+              </td>
+              <td class="px-4 py-3 text-center">
+                {% if l.na_doca %}
+                  <span class="soft-pill is-blue text-xs">na doca</span>
+                {% else %}
+                  <span class="soft-pill is-green text-xs">
+                    saiu {{ l.ficha.saida_em|date:"H:i" }}
+                  </span>
+                {% endif %}
+              </td>
+            </tr>
+          {% empty %}
+            <tr>
+              <td colspan="5" class="px-4 py-10 text-center">
+                <p class="text-sm" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+                  Nenhuma carga na doca. O carregamento começa quando um
+                  romaneio de carga é montado na Logística.
+                </p>
+              </td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+</div>
+{% endblock %}

@@ -109,6 +109,8 @@ ROTAS_PRONTAS: list = [
     # ── Expedição ───────────────────────────────────────────────────────
     path('expedicao/separacao/', vexp.SeparacaoListView.as_view(), name='separacao'),
     path('expedicao/separacao/<int:pk>/', vexp.SeparacaoPedidoView.as_view(), name='separacao-pedido'),
+    path('expedicao/carregamento/', vexp.CarregamentoListView.as_view(), name='carregamento'),
+    path('expedicao/carregamento/<int:pk>/', vexp.CarregamentoView.as_view(), name='carregamento-carga'),
 
     # ── Cadeia de frio ──────────────────────────────────────────────────
     # O estoque de produto acabado: onde cada lote está e quando vence. O
