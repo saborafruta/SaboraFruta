@@ -65,6 +65,7 @@ ROTAS_PRONTAS: list = [
     path('comercial/pedidos/novo/', vc.PedidoFormView.as_view(), name='pedido-create'),
     path('comercial/op-2/novo/', vop2.Op2CreateView.as_view(), name='op2-create'),
     path('comercial/op-2/<int:pk>/', vop2.Op2DetailView.as_view(), name='op2-detail'),
+    path('comercial/op-2/<int:pk>/anexos.zip', vop2.Op2AnexosZipView.as_view(), name='op2-anexos-zip'),
     path('comercial/op-2/<int:pk>/acao/', vop2.Op2ActionView.as_view(), name='op2-action'),
     path('comercial/pedidos/<int:pk>/', vc.PedidoDetailView.as_view(), name='pedido-detail'),
     path('comercial/pedidos/<int:pk>/editar/', vc.PedidoFormView.as_view(), name='pedido-update'),

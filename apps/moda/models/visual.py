@@ -81,10 +81,7 @@ class VisualItemPedido(models.Model):
 
     class Meta:
         db_table = 'moda_visuais_item'
-        ordering = ['posicao']
-        # Uma vista por posição por item: duas "frentes da camisa" no mesmo
-        # item seriam contraditórias na hora de produzir.
-        unique_together = [('item', 'posicao')]
+        ordering = ['posicao', 'id']
         verbose_name = 'Visual do item'
         verbose_name_plural = 'Visuais do item'
 

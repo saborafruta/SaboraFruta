@@ -15,7 +15,10 @@ from django.test import TestCase
 
 from apps.cadastros.models import Cliente
 from apps.core.models import Empresa, Filial
-from apps.moda.models import ArquivoPedido, PedidoProducao
+from apps.moda.models import (
+    ArquivoPedido, ItemPedidoProducao, PedidoProducao, VisualItemPedido,
+)
+from apps.moda.services.orcamento_pdf import OrcamentoPdfService
 from apps.moda.services.pedido_pdf import PedidoPdfService
 
 
@@ -106,27 +109,55 @@ class ArteNoPdfTests(TestCase):
 
         self.assertEqual(_imagens(PedidoPdfService.gerar(pedido)), antes + 4)
 
+    def test_varios_mockups_da_mesma_posicao_entram_no_pdf(self):
+        pedido = self._pedido()
+        item = ItemPedidoProducao.objects.create(
+            pedido=pedido, descricao='Camisa', quantidade=5,
+        )
+        antes = _imagens(PedidoPdfService.gerar(pedido))
+        visuais = []
+        for indice, cor in enumerate([
+            (200, 0, 0), (0, 200, 0), (0, 0, 200), (200, 200, 0), (120, 30, 180),
+        ]):
+            visuais.append(VisualItemPedido.objects.create(
+                item=item,
+                posicao='frente_camisa',
+                imagem=SimpleUploadedFile(
+                    f'frente-{indice}.png', _png(cor), content_type='image/png',
+                ),
+            ))
+
+        self.assertEqual(_imagens(PedidoPdfService.gerar(pedido)), antes + 5)
+        for visual in visuais:
+            visual.imagem.delete(save=False)
+
+    def test_orcamento_tambem_exibe_todos_os_anexos(self):
+        pedido = self._pedido()
+        antes = _imagens(OrcamentoPdfService.gerar(pedido))
+        self._anexar(
+            pedido, ArquivoPedido.Tipo.DOCUMENTO,
+            nome='documento.png', cor=(15, 80, 180),
+        )
+
+        self.assertEqual(_imagens(OrcamentoPdfService.gerar(pedido)), antes + 1)
+
     # ── O que NÃO pode ir ────────────────────────────────────────────────
 
-    def test_documento_interno_nao_entra_no_pdf(self):
-        """
-        O PDF vai para o cliente pelo link público. Documento é interno --
-        contrato, planilha de custo -- e não pode sair junto.
-        """
+    def test_documento_anexado_tambem_entra_no_pdf(self):
         pedido = self._pedido()
         antes = _imagens(PedidoPdfService.gerar(pedido))
 
         self._anexar(pedido, ArquivoPedido.Tipo.DOCUMENTO, nome='contrato.png')
 
-        self.assertEqual(_imagens(PedidoPdfService.gerar(pedido)), antes)
+        self.assertEqual(_imagens(PedidoPdfService.gerar(pedido)), antes + 1)
 
-    def test_outro_tambem_fica_de_fora(self):
+    def test_outro_anexo_tambem_entra_no_pdf(self):
         pedido = self._pedido()
         antes = _imagens(PedidoPdfService.gerar(pedido))
 
         self._anexar(pedido, ArquivoPedido.Tipo.OUTRO, nome='recado.png')
 
-        self.assertEqual(_imagens(PedidoPdfService.gerar(pedido)), antes)
+        self.assertEqual(_imagens(PedidoPdfService.gerar(pedido)), antes + 1)
 
     def test_arquivo_que_nao_e_imagem_nao_quebra_o_pdf(self):
         """

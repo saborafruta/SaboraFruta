@@ -36,7 +36,8 @@
           {% else %}<span class="soft-pill is-red text-xs shrink-0">Descontinuado</span>{% endif %}
         </div>
         <p class="text-xs mt-2" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
-          {% if p.tecido %}{{ p.tecido.nome }}{% endif %}
+          {% if p.tipo_impressao %}<strong>{{ p.get_tipo_impressao_display }}</strong>{% endif %}
+          {% if p.tecido %}{% if p.tipo_impressao %} · {% endif %}{{ p.tecido.nome }}{% endif %}
           {% if p.grade %} · grade {{ p.grade.nome }}{% endif %}
         </p>
         <p class="text-xs mt-1.5 font-semibold" :style="temaClaro ? 'color:#2563eb;' : 'color:#60a5fa;'">

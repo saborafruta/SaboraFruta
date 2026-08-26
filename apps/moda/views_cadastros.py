@@ -241,6 +241,7 @@ class ProdutoDetailView(ModaBaseView):
         # cadastros, e a tela só precisa do par rótulo/valor.
         ficha = [
             ('Código', produto.codigo),
+            ('Tipo de impressão', produto.get_tipo_impressao_display()),
             ('Referência', produto.referencia),
             ('Status', produto.get_status_display()),
             ('Categoria', produto.categoria),
@@ -966,7 +967,12 @@ class OrcamentoPdfView(ModaBaseView):
             PedidoProducao.objects.for_filial(_filial(request))
             .select_related('cliente', 'filial', 'filial__empresa',
                             'forma_pagamento', 'condicao_pagamento')
-            .prefetch_related('itens__produto', 'itens__cor', 'itens__tecido'),
+            .prefetch_related(
+                'itens__produto', 'itens__cor', 'itens__tecido',
+                'itens__grade__tamanho', 'itens__personalizacoes',
+                'itens__visuais__mockup', 'individuais__tamanho',
+                'individuais__item', 'arquivos',
+            ),
             pk=pk,
         )
         pdf = OrcamentoPdfService.gerar(pedido)

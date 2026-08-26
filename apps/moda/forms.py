@@ -95,7 +95,7 @@ class ProdutoModaForm(_FilialFormMixin, forms.ModelForm):
     class Meta:
         model = ProdutoModa
         fields = [
-            'codigo', 'referencia', 'nome', 'descricao',
+            'codigo', 'nome', 'tipo_impressao', 'referencia', 'descricao',
             'categoria', 'colecao', 'linha', 'modelo', 'marca',
             'tecido', 'grade', 'status',
             'foto', 'desenho_tecnico', 'ficha_tecnica',

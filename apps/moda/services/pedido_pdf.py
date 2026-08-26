@@ -278,15 +278,19 @@ class PedidoPdfService:
         ela. Quem recebia o arquivo via a ficha inteira e nenhuma imagem da
         peça que estava comprando.
 
-        SÓ O QUE O CLIENTE PODE VER. Este mesmo PDF é servido pelo link
-        público, então a regra de visibilidade é a do model — incluir o
-        acervo inteiro mandaria contrato e planilha de custo junto.
+        Todos os anexos entram no índice do documento. Imagens são exibidas;
+        formatos que o ReportLab não desenha aparecem pelo nome para que
+        nenhum arquivo anexado fique invisível na conferência.
         """
-        from ..models.arquivo import TIPOS_VISIVEIS_AO_CLIENTE
-
+        nomes_visuais = {
+            visual.imagem.name
+            for item in pedido.itens.all()
+            for visual in item.visuais.all()
+            if visual.imagem
+        }
         artes = [
-            a for a in pedido.arquivos.all()
-            if a.tipo in TIPOS_VISIVEIS_AO_CLIENTE and a.extensao in DESENHAVEIS
+            anexo for anexo in pedido.arquivos.all()
+            if not anexo.arquivo or anexo.arquivo.name not in nomes_visuais
         ]
         if not artes:
             return []
@@ -295,13 +299,16 @@ class PedidoPdfService:
         # deixa a arte pequena demais para conferir escudo e numeração.
         por_linha = 3
         largura = LARGURA_UTIL / por_linha
-        blocos = [Paragraph('ARTE', e['secao'])]
+        blocos = [Paragraph('ANEXOS E ARTES', e['secao'])]
 
         for inicio in range(0, len(artes), por_linha):
             faixa = artes[inicio:inicio + por_linha]
             imagens, rotulos = [], []
             for arte in faixa:
-                imagem = _imagem(arte.arquivo, largura - 6 * mm, 45 * mm)
+                imagem = (
+                    _imagem(arte.arquivo, largura - 6 * mm, 45 * mm)
+                    if arte.extensao in DESENHAVEIS else None
+                )
                 # Arquivo que não abre vira o NOME, e não um buraco: o
                 # storage pode estar fora do ar, e some a imagem, não a
                 # informação de que ela existe.
@@ -375,9 +382,13 @@ class PedidoPdfService:
             blocos.append(Spacer(1, 3))
             blocos.append(Paragraph(texto, e['pequeno']))
 
+        quantidade_visuais = len(item.visuais.all())
         blocos += cls._arte(item, e)
         blocos += cls._grade(item, e)
-        return [KeepTogether(blocos)]
+        # Um item pode ter quantas fotos forem necessárias. Não tente manter
+        # um item inteiro numa única página quando a galeria já tem mais de
+        # uma linha, pois isso ultrapassa a altura útil do PDF.
+        return blocos if quantidade_visuais > 3 else [KeepTogether(blocos)]
 
     @staticmethod
     def _arte(item, e) -> list:
@@ -388,32 +399,39 @@ class PedidoPdfService:
 
         blocos = [Paragraph('ARTE', e['secao'])]
 
-        # As imagens em linha, com a posição embaixo: é assim que a ficha de
-        # papel mostra frente e costas lado a lado.
-        celulas, rotulos = [], []
-        for visual in visuais[:4]:
-            imagem = _imagem(
-                getattr(visual.mockup, 'imagem', None) if visual.mockup_id else None,
-                38 * mm, 38 * mm,
-            )
-            celulas.append(imagem or Paragraph('—', e['pequeno']))
-            rotulos.append(Paragraph(visual.get_posicao_display(), e['pequeno']))
-
-        if celulas:
-            largura = LARGURA_UTIL / max(len(celulas), 1)
-            grade = Table([celulas, rotulos], colWidths=[largura] * len(celulas))
+        # Sem limite fixo: cada nova frente/costas vira mais uma célula e,
+        # quando necessário, uma nova linha no PDF.
+        por_linha = 3
+        largura = LARGURA_UTIL / por_linha
+        for inicio in range(0, len(visuais), por_linha):
+            faixa = visuais[inicio:inicio + por_linha]
+            celulas, rotulos = [], []
+            for visual in faixa:
+                campo = visual.imagem or (
+                    getattr(visual.mockup, 'imagem', None) if visual.mockup_id else None
+                )
+                imagem = _imagem(campo, largura - 6 * mm, 42 * mm)
+                celulas.append(imagem or Paragraph('—', e['pequeno']))
+                rotulos.append(Paragraph(visual.get_posicao_display(), e['pequeno']))
+            while len(celulas) < por_linha:
+                celulas.append('')
+                rotulos.append('')
+            grade = Table([celulas, rotulos], colWidths=[largura] * por_linha)
             grade.setStyle(TableStyle([
                 ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
                 ('VALIGN', (0, 0), (-1, 0), 'MIDDLE'),
                 ('TOPPADDING', (0, 1), (-1, 1), 2),
+                ('BOTTOMPADDING', (0, 1), (-1, 1), 5),
             ]))
-            blocos.append(grade)
+            # Imagem e legenda viajam juntas; a linha inteira desce para a
+            # página seguinte se não houver espaço suficiente.
+            blocos.append(KeepTogether([grade]))
 
         for p in personalizacoes:
-            partes = [getattr(p, 'get_tipo_display', lambda: '')() or str(p)]
-            if getattr(p, 'observacao', ''):
-                partes.append(p.observacao)
-            texto = Paragraph(' — '.join(esc(x) for x in partes if x), e['normal'])
+            partes = [getattr(p, 'get_tecnica_display', lambda: '')() or str(p)]
+            if getattr(p, 'observacoes', ''):
+                partes.append(p.observacoes)
+            texto = Paragraph(' - '.join(esc(x) for x in partes if x), e['normal'])
 
             # A ARTE APLICADA, desenhada ao lado do texto. Antes saía só
             # "Arte / estampa — peito esquerdo": o chão de fábrica lia ONDE

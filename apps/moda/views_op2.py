@@ -1,9 +1,12 @@
 """Workspace da OP 2.0. A tela antiga continua disponível sem alterações."""
 from copy import copy
 from datetime import date
+from io import BytesIO
+from zipfile import ZIP_DEFLATED, ZipFile
 
 from django.contrib import messages
 from django.db import IntegrityError, transaction
+from django.http import HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.utils import timezone
@@ -21,6 +24,7 @@ from .models import (
 )
 from .services.historico import HistoricoService
 from .services.grade_pedido import GradePedidoService
+from .services.individual import IndividualService
 from .services.kanban_comercial import status_choices_kanban, status_destino_kanban
 from .services.op2_estrutura import (
     OP2_ESTRUTURA_OPCOES, juntar_observacoes_item, opcoes_estrutura_filial,
@@ -137,14 +141,11 @@ def _dados_modal_item(item, estrutura_opcoes):
         ])),
         'quantidade': item.quantidade,
         'valor_unitario': str(item.valor_unitario),
-        'referencia': item.referencia,
-        'acabamento': item.acabamento,
+        'tipo_impressao': (
+            arte.tecnica if arte else getattr(item.produto, 'tipo_impressao', '')
+        ),
         'estrutura_tipo': estrutura_tipo,
         'estrutura': estrutura,
-        'arte_tipo': arte.tipo if arte else '',
-        'arte_tecnica': arte.tecnica if arte else '',
-        'arte_local': arte.local if arte else '',
-        'arte_observacoes': arte.observacoes if arte else '',
         'item_observacoes': observacoes,
         'grades': [grade_id] if grade_id else [],
         'gradePorGrade': {grade_id: quantidades} if grade_id else {},
@@ -258,22 +259,19 @@ class Op2CreateView(ModaBaseView):
                 if quantidades:
                     GradePedidoService.salvar_quantidades(pedido, quantidades)
 
-                if (
-                    request.POST.get(f'item_{indice}_arte_tipo')
-                    or request.POST.get(f'item_{indice}_arte_tecnica')
-                    or request.POST.get(f'item_{indice}_arte_local')
-                ):
+                chave_tipo = f'item_{indice}_tipo_impressao'
+                tipo_impressao = (
+                    request.POST.get(chave_tipo)
+                    if chave_tipo in request.POST else (
+                        request.POST.get(f'item_{indice}_arte_tecnica')
+                        or getattr(item.produto, 'tipo_impressao', '')
+                    )
+                )
+                if tipo_impressao:
                     Personalizacao.objects.create(
                         item=item,
-                        tipo=request.POST.get(f'item_{indice}_arte_tipo') or Personalizacao.Tipo.ARTE,
-                        tecnica=(
-                            request.POST.get(f'item_{indice}_arte_tecnica')
-                            or Personalizacao.Tecnica.SUBLIMACAO
-                        ),
-                        local=(request.POST.get(f'item_{indice}_arte_local') or '').strip(),
-                        observacoes=(
-                            request.POST.get(f'item_{indice}_arte_observacoes') or ''
-                        ).strip(),
+                        tipo=Personalizacao.Tipo.ARTE,
+                        tecnica=tipo_impressao,
                     )
 
             arquivos = request.FILES.getlist('arquivo')
@@ -322,6 +320,8 @@ class Op2CreateView(ModaBaseView):
                 str(produto.pk): {
                     'grade_id': str(produto.grade_id or ''),
                     'grade': produto.grade.nome if produto.grade_id else '',
+                    'tipo_impressao': produto.tipo_impressao,
+                    'tipo_impressao_label': produto.get_tipo_impressao_display(),
                     'tamanhos': [
                         str(i.tamanho_id) for i in produto.grade.itens.all()
                     ] if produto.grade_id else [],
@@ -345,8 +345,7 @@ class Op2CreateView(ModaBaseView):
             'tamanhos_labels': {
                 str(tamanho.pk): tamanho.sigla for tamanho in tamanhos
             },
-            'tipos_arte': Personalizacao.Tipo.choices,
-            'tecnicas_arte': Personalizacao.Tecnica.choices,
+            'tipos_impressao': ProdutoModa.TipoImpressao.choices,
             'tipos_arquivo': ArquivoPedido.Tipo.choices,
             'prioridades': PedidoProducao.Prioridade.choices,
         }
@@ -497,6 +496,8 @@ class Op2DetailView(ModaBaseView):
                 str(produto.pk): {
                     'grade_id': str(produto.grade_id or ''),
                     'grade': produto.grade.nome if produto.grade_id else '',
+                    'tipo_impressao': produto.tipo_impressao,
+                    'tipo_impressao_label': produto.get_tipo_impressao_display(),
                     'tamanhos': [
                         str(i.tamanho_id) for i in produto.grade.itens.all()
                     ] if produto.grade_id else [],
@@ -525,8 +526,7 @@ class Op2DetailView(ModaBaseView):
             'status_choices': status_choices_kanban(),
             'status_atual': status_destino_kanban(pedido.status),
             'item_status_choices': ItemPedidoProducao.StatusFluxo.choices,
-            'tipos_arte': Personalizacao.Tipo.choices,
-            'tecnicas_arte': Personalizacao.Tecnica.choices,
+            'tipos_impressao': ProdutoModa.TipoImpressao.choices,
             'form_item': ItemPedidoProducaoForm(filial=_filial(request)),
             'form_individual': PersonalizacaoIndividualForm(
                 filial=_filial(request), pedido=pedido,
@@ -543,11 +543,60 @@ class Op2DetailView(ModaBaseView):
             ),
             'total_entregue': sum(i.quantidade_entregue for i in itens),
             'total_pendente': sum(i.quantidade_pendente for i in itens),
+            'vagas_individuais': IndividualService.vagas(pedido),
             'posicoes_mockup': [
                 (Posicao.FRENTE_CAMISA, Posicao.FRENTE_CAMISA.label),
                 (Posicao.COSTAS_CAMISA, Posicao.COSTAS_CAMISA.label),
             ],
         })
+
+
+class Op2AnexosZipView(ModaBaseView):
+    area = 'comercial'
+
+    def get(self, request, pk):
+        pedido = _pedido(request, pk)
+        buffer = BytesIO()
+        usados = set()
+
+        def adicionar(zip_file, campo, pasta, nome):
+            if not campo or not getattr(campo, 'name', ''):
+                return
+            chave = campo.name
+            if chave in usados:
+                return
+            usados.add(chave)
+            base = (nome or campo.name.rsplit('/', 1)[-1]).replace('\\', '-').replace('/', '-')
+            caminho = f'{pasta}/{base}'
+            sufixo = 2
+            while caminho in zip_file.namelist():
+                raiz, ponto, extensao = base.rpartition('.')
+                caminho = f'{pasta}/{raiz or base}-{sufixo}{ponto}{extensao}'
+                sufixo += 1
+            try:
+                campo.open('rb')
+                zip_file.writestr(caminho, campo.read())
+                campo.close()
+            except (OSError, ValueError):
+                return
+
+        with ZipFile(buffer, 'w', ZIP_DEFLATED) as pacote:
+            for anexo in pedido.arquivos.all():
+                adicionar(pacote, anexo.arquivo, 'anexos', anexo.nome_arquivo)
+            for item in pedido.itens.prefetch_related('visuais'):
+                for indice, visual in enumerate(item.visuais.all(), start=1):
+                    campo = visual.imagem or (
+                        visual.mockup.imagem if visual.mockup_id else None
+                    )
+                    extensao = campo.name.rsplit('.', 1)[-1] if campo and '.' in campo.name else 'png'
+                    nome = f'{item.nome_exibicao}-{visual.get_posicao_display()}-{indice}.{extensao}'
+                    adicionar(pacote, campo, 'fotos', nome)
+
+        resposta = HttpResponse(buffer.getvalue(), content_type='application/zip')
+        resposta['Content-Disposition'] = (
+            f'attachment; filename="anexos-op-{pedido.numero:06d}.zip"'
+        )
+        return resposta
 
 
 class Op2ActionView(ModaBaseView):
@@ -628,10 +677,10 @@ class Op2ActionView(ModaBaseView):
         upload = request.FILES.get('imagem')
         if not upload:
             raise ValueError('Selecione uma imagem para o mockup.')
-        visual, _ = VisualItemPedido.objects.update_or_create(
+        visual = VisualItemPedido.objects.create(
             item=item,
             posicao=posicao,
-            defaults={'imagem': upload},
+            imagem=upload,
         )
         ArquivoPedido.objects.create(
             pedido=pedido,
@@ -681,8 +730,10 @@ class Op2ActionView(ModaBaseView):
         item.quantidade = quantidade
         item.quantidade_entregue = entregue
         item.valor_unitario = request.POST.get('valor_unitario') or 0
-        item.referencia = (request.POST.get('referencia') or '').strip()
-        item.acabamento = (request.POST.get('acabamento') or '').strip()
+        if 'referencia' in request.POST:
+            item.referencia = (request.POST.get('referencia') or '').strip()
+        if 'acabamento' in request.POST:
+            item.acabamento = (request.POST.get('acabamento') or '').strip()
         item.grade_tamanho = grade
         item.observacoes = juntar_observacoes_item(
             request.POST.get('item_observacoes') or '', request.POST,
@@ -704,19 +755,22 @@ class Op2ActionView(ModaBaseView):
     @staticmethod
     def _salvar_personalizacao(request, item):
         arte = item.personalizacoes.first()
-        if not any(request.POST.get(campo) for campo in (
-            'arte_tipo', 'arte_tecnica', 'arte_local', 'arte_observacoes',
-        )):
+        tipo_impressao = (
+            request.POST.get('tipo_impressao')
+            if 'tipo_impressao' in request.POST else (
+                request.POST.get('arte_tecnica')
+                or getattr(item.produto, 'tipo_impressao', '')
+            )
+        )
+        if not tipo_impressao:
             if arte:
                 arte.delete()
             return
         arte = arte or Personalizacao(item=item)
-        arte.tipo = request.POST.get('arte_tipo') or Personalizacao.Tipo.ARTE
-        arte.tecnica = (
-            request.POST.get('arte_tecnica') or Personalizacao.Tecnica.SUBLIMACAO
-        )
-        arte.local = (request.POST.get('arte_local') or '').strip()
-        arte.observacoes = (request.POST.get('arte_observacoes') or '').strip()
+        arte.tipo = Personalizacao.Tipo.ARTE
+        arte.tecnica = tipo_impressao
+        arte.local = ''
+        arte.observacoes = ''
         arte.save()
 
     @staticmethod

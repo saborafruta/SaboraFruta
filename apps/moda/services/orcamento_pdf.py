@@ -26,7 +26,8 @@ from reportlab.lib.pagesizes import A4
 from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
 from reportlab.lib.units import mm
 from reportlab.platypus import (
-    KeepTogether, Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle,
+    KeepTogether, PageBreak, Paragraph, SimpleDocTemplate, Spacer, Table,
+    TableStyle,
 )
 
 # A tarja, o bloco da empresa e as cores vivem em `pdf_marca`: o pedido usa
@@ -109,6 +110,15 @@ def _estilos():
             'tdd', parent=base['Normal'], fontSize=8.5, leading=12,
             textColor=TEXTO, alignment=2,
         ),
+        'celula': ParagraphStyle(
+            'cel', parent=base['Normal'], fontSize=8, leading=10, textColor=TEXTO,
+        ),
+        'normal': ParagraphStyle(
+            'nor', parent=base['Normal'], fontSize=8.5, leading=11, textColor=TEXTO,
+        ),
+        'pequeno': ParagraphStyle(
+            'peq', parent=base['Normal'], fontSize=7, leading=9, textColor=CINZA,
+        ),
         'obs': ParagraphStyle(
             'obs', parent=base['Normal'], fontSize=8.5, leading=13,
             textColor=TEXTO, leftIndent=10, bulletIndent=2,
@@ -145,6 +155,23 @@ class OrcamentoPdfService:
         elementos += cls._empresa(pedido, e)
         elementos += cls._cliente(pedido, e)
         elementos += cls._itens(pedido, e)
+        # O orçamento também precisa permitir a conferência completa antes
+        # da aprovação: anexos/fotos e a lista de nomes por tamanho.
+        from .pedido_pdf import PedidoPdfService
+        itens = list(pedido.itens.all())
+        tem_midia = pedido.arquivos.exists() or any(
+            item.visuais.exists() or item.personalizacoes.exists()
+            for item in itens
+        )
+        # Fotos são altas e não devem tentar ocupar o pouco espaço que sobra
+        # depois da tabela comercial. Uma folha nova evita imagens cortadas e
+        # legendas órfãs quando há várias frentes/costas.
+        if tem_midia:
+            elementos.append(PageBreak())
+        elementos += PedidoPdfService._artes_do_pedido(pedido, e)
+        for item in itens:
+            elementos += PedidoPdfService._arte(item, e)
+        elementos += PedidoPdfService._personalizacao(pedido, e)
         elementos += cls._observacoes(pedido, e)
         elementos += cls._assinatura(pedido, e)
 

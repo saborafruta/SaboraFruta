@@ -17,6 +17,17 @@ from apps.core.models.base import ActiveModel, FilialManager, FilialScopedModel
 class ProdutoModa(FilialScopedModel, ActiveModel):
     """Produto do catálogo de confecção."""
 
+    class TipoImpressao(models.TextChoices):
+        SUBLIMACAO = 'sublimacao', 'Sublimação'
+        SILK = 'silk', 'Silk'
+        BORDADO = 'bordado', 'Bordado'
+        DTF = 'dtf', 'DTF'
+        DTG = 'dtg', 'DTG'
+        TRANSFER = 'transfer', 'Transfer'
+        PATCH = 'patch', 'Patch'
+        SEM_IMPRESSAO = 'sem_impressao', 'Sem impressão'
+        OUTRO = 'outro', 'Outro'
+
     class Status(models.TextChoices):
         RASCUNHO = 'rascunho', 'Rascunho'
         ATIVO = 'ativo', 'Ativo'
@@ -32,6 +43,11 @@ class ProdutoModa(FilialScopedModel, ActiveModel):
         help_text='Referência comercial/do cliente, quando difere do código.',
     )
     nome = models.CharField(max_length=120)
+    tipo_impressao = models.CharField(
+        'Tipo de impressão', max_length=20, choices=TipoImpressao.choices,
+        blank=True,
+        help_text='Padrão de impressão carregado automaticamente ao usar este modelo na OP.',
+    )
     descricao = models.TextField(blank=True)
 
     # De onde este produto veio, quando foi trazido do catálogo do ERP.

@@ -1,6 +1,8 @@
 import json
 import re
 from decimal import Decimal
+from io import BytesIO
+from zipfile import ZipFile
 
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.template.loader import get_template
@@ -11,8 +13,9 @@ from django.urls import reverse
 from apps.cadastros.models import Cliente
 from apps.core.models import Empresa, Filial, PerfilAcesso, Usuario
 from apps.moda.models import (
-    ArquivoPedido, Grade, ItemGrade, ItemPedidoProducao, OpcaoEstruturaOP2,
-    PedidoProducao, Personalizacao, ProdutoModa, Tamanho, VisualItemPedido,
+    ArquivoPedido, Grade, ItemGrade, ItemGradePedido, ItemPedidoProducao,
+    OpcaoEstruturaOP2, PedidoProducao, Personalizacao,
+    PersonalizacaoIndividual, ProdutoModa, Tamanho, VisualItemPedido,
 )
 from apps.moda.forms_cliente import ClienteRapidoForm
 from apps.moda.services.op2_estrutura import juntar_observacoes_item
@@ -386,6 +389,80 @@ class Op2Tests(TestCase):
         self.assertContains(resposta, 'op2WorkspaceCompleto()')
         self.assertContains(resposta, "abrirEditarProduto('")
         self.assertContains(resposta, 'abrirNovoProduto()')
+        self.assertContains(resposta, 'rel="noopener"')
+        self.assertContains(resposta, 'op2-order-header')
+
+    def test_nova_op_abre_orcamento_em_nova_aba(self):
+        self.client.force_login(self._usuario())
+        session = self.client.session
+        session['filial_id'] = self.filial.pk
+        session.save()
+
+        resposta = self.client.get(reverse('moda:op2-create'))
+
+        self.assertContains(resposta, 'formtarget="_blank"')
+
+    def test_modelo_carrega_tipo_de_impressao_no_editor(self):
+        self.produto.tipo_impressao = ProdutoModa.TipoImpressao.SILK
+        self.produto.save(update_fields=['tipo_impressao'])
+        self.client.force_login(self._usuario())
+        session = self.client.session
+        session['filial_id'] = self.filial.pk
+        session.save()
+
+        resposta = self.client.get(reverse('moda:op2-detail', args=[self.pedido.pk]))
+
+        self.assertContains(resposta, '"tipo_impressao": "silk"')
+        self.assertContains(resposta, 'name="tipo_impressao"')
+
+    def test_mockup_permite_varias_imagens_na_mesma_posicao_e_download_zip(self):
+        item = self._item(quantidade=2)
+        self.client.force_login(self._usuario())
+        session = self.client.session
+        session['filial_id'] = self.filial.pk
+        session.save()
+        imagem = b'\x89PNG\r\n\x1a\nconteudo-de-teste'
+
+        for indice in range(2):
+            resposta = self.client.post(reverse('moda:op2-action', args=[self.pedido.pk]), {
+                'acao': 'visual_item',
+                'item_id': str(item.pk),
+                'posicao': 'frente_camisa',
+                'imagem': SimpleUploadedFile(
+                    f'frente-{indice}.png', imagem, content_type='image/png',
+                ),
+            })
+            self.assertRedirects(
+                resposta, reverse('moda:op2-detail', args=[self.pedido.pk]),
+            )
+
+        self.assertEqual(VisualItemPedido.objects.filter(item=item).count(), 2)
+        pacote = self.client.get(reverse('moda:op2-anexos-zip', args=[self.pedido.pk]))
+        self.assertEqual(pacote.status_code, 200)
+        self.assertEqual(pacote['Content-Type'], 'application/zip')
+        with ZipFile(BytesIO(pacote.content)) as zip_file:
+            self.assertEqual(len(zip_file.namelist()), 2)
+
+        for visual in VisualItemPedido.objects.filter(item=item):
+            visual.imagem.delete(save=False)
+
+    def test_personalizacao_risca_e_bloqueia_tamanho_esgotado(self):
+        tamanho = Tamanho.objects.create(filial=self.filial, sigla='M', ordem=10)
+        item = self._item(quantidade=1)
+        ItemGradePedido.objects.create(item=item, tamanho=tamanho, quantidade=1)
+        PersonalizacaoIndividual.objects.create(
+            pedido=self.pedido, item=item, tamanho=tamanho, nome='SILVA',
+        )
+        self.client.force_login(self._usuario())
+        session = self.client.session
+        session['filial_id'] = self.filial.pk
+        session.save()
+
+        resposta = self.client.get(reverse('moda:op2-detail', args=[self.pedido.pk]))
+
+        self.assertContains(resposta, '.op2-vaga.is-esgotada')
+        self.assertContains(resposta, '"restam": 0')
+        self.assertContains(resposta, ':disabled="vaga.restam<=0"')
 
     def test_editor_completo_atualiza_estrutura_impressao_e_grade(self):
         tamanho_p = Tamanho.objects.create(filial=self.filial, sigla='P', ordem=10)
@@ -432,7 +509,7 @@ class Op2Tests(TestCase):
             [2, 3],
         )
         arte = Personalizacao.objects.get(item=item)
-        self.assertEqual((arte.tecnica, arte.local, arte.observacoes), ('silk', 'Peito', 'Duas cores'))
+        self.assertEqual((arte.tecnica, arte.local, arte.observacoes), ('silk', '', ''))
 
     def test_editor_completo_adiciona_um_item_por_grade(self):
         tamanho = Tamanho.objects.create(filial=self.filial, sigla='G', ordem=10)
