@@ -26,6 +26,7 @@ from reportlab.lib.styles import getSampleStyleSheet
 from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle
 
 from apps.core.services.permissions import PermissaoRequiredMixin
+from apps.core.services.search import filter_queryset_by_terms
 from apps.cadastros.models import Fornecedor
 from apps.core.models import Filial, LogSistema
 from apps.estoque.models import Estoque, LoteProduto, MovimentacaoEstoque
@@ -248,17 +249,25 @@ def _produto_queryset_filtrado(request, incluir_inativos_por_padrao=False):
         ),
     )
     if busca:
-        filtro_busca = (
-            Q(codigo__icontains=busca)
-            | Q(codigo_barras__icontains=busca)
-            | Q(descricao__icontains=busca)
-            | Q(ncm__icontains=busca)
-        )
         busca_codigo = busca.lstrip('0')
         if busca_codigo.isdigit():
             codigo_int = int(busca_codigo)
-            filtro_busca |= Q(pk=codigo_int) | Q(id_externo=f'produto:{codigo_int}')
-        qs = qs.filter(filtro_busca)
+            qs = qs.filter(
+                Q(pk=codigo_int) | Q(id_externo=f'produto:{codigo_int}')
+                | Q(codigo__icontains=busca) | Q(codigo_barras__icontains=busca)
+                | Q(descricao__icontains=busca) | Q(ncm__icontains=busca)
+            )
+        else:
+            qs = filter_queryset_by_terms(
+                qs,
+                busca,
+                fields=(
+                    'codigo', 'codigo_barras', 'descricao', 'descricao_curta',
+                    'descricao_pdv', 'ncm', 'categoria__nome',
+                    'subcategoria__nome', 'marca__nome',
+                    'fornecedor__nome_fantasia', 'fornecedor__razao_social',
+                ),
+            )
     if categoria_id:
         categoria = CategoriaProduto.objects.for_filial(request.filial_ativa).filter(
             pk=categoria_id,

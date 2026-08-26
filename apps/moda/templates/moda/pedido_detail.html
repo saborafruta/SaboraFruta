@@ -438,8 +438,11 @@
                :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Mudar status</label>
         <div class="flex gap-2">
           <select name="status" class="form-input flex-1 text-sm">
+            {% if not status_select_atual %}
+              <option value="" selected disabled>{{ pedido.get_status_display }} (fora do Kanban)</option>
+            {% endif %}
             {% for valor, rotulo in status_choices %}
-              <option value="{{ valor }}" {% if pedido.status == valor %}selected{% endif %}>{{ rotulo }}</option>
+              <option value="{{ valor }}" {% if status_select_atual == valor %}selected{% endif %}>{{ rotulo }}</option>
             {% endfor %}
           </select>
           <button type="submit" class="btn-secondary text-sm shrink-0">Aplicar</button>
@@ -462,8 +465,11 @@
           {{ itens|length }} item{{ itens|length|pluralize:"ns" }} · {{ total_pecas }} peça{{ total_pecas|pluralize }} no total
         </p>
       </div>
-      <button type="button" class="btn-primary text-sm" @click="novoItem = !novoItem"
-              x-text="novoItem ? 'Fechar' : '+ Adicionar produto'"></button>
+      {% if itens %}
+        <button type="button" class="btn-primary text-sm" @click="novoItem = true">
+          + Adicionar produto
+        </button>
+      {% endif %}
     </div>
 
     {% if itens %}
@@ -684,7 +690,20 @@
       </div>
     {% endif %}
 
-    <div x-show="novoItem" x-cloak class="pt-2 border-t" :style="temaClaro ? 'border-color:#e5e7eb;' : 'border-color:#303036;'">
+    <div x-show="novoItem" x-cloak
+         @keydown.escape.window="novoItem = false" @click.self="novoItem = false"
+         class="fixed inset-0 z-[90] flex items-start justify-center overflow-y-auto p-3 sm:p-6"
+         style="background:rgba(3,7,18,.78); backdrop-filter:blur(4px);">
+      <div class="w-full max-w-6xl rounded-xl shadow-2xl p-4 sm:p-6 my-auto"
+           :style="temaClaro ? 'background:#fff; border:1px solid #e5e7eb;' : 'background:#242426; border:1px solid #3f3f46;'">
+        <div class="flex items-start justify-between gap-3 mb-4 pb-3 border-b"
+             :style="temaClaro ? 'border-color:#e5e7eb;' : 'border-color:#3f3f46;'">
+          <div>
+            <h3 class="text-lg font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">Adicionar produto ao pedido</h3>
+            <p class="text-xs mt-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Pesquise, defina a grade e inclua a arte sem sair desta tela.</p>
+          </div>
+          <button type="button" class="btn-secondary text-sm" @click="novoItem = false" aria-label="Fechar">Fechar</button>
+        </div>
       {% comment %}
         `multipart` porque a arte entra por aqui. Sem o enctype, o
         arquivo some no caminho e o formulário grava tudo menos ele --
@@ -888,6 +907,7 @@
           <button type="submit" class="btn-primary text-sm">Adicionar ao pedido</button>
         </div>
       </form>
+      </div>
     </div>
   </div>
 

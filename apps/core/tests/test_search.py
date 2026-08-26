@@ -2,7 +2,11 @@ from django.db import models
 from django.test import SimpleTestCase
 
 from apps.core.db_lookups import AccentInsensitiveIContains
-from apps.core.services.search import normalize_search_text, ranked_search_ids
+from apps.core.services.search import (
+    filter_queryset_by_terms,
+    normalize_search_text,
+    ranked_search_ids,
+)
 
 
 class SearchNormalizationTests(SimpleTestCase):
@@ -49,3 +53,18 @@ class SearchNormalizationTests(SimpleTestCase):
     def test_global_icontains_lookup_is_registered(self):
         self.assertIs(models.CharField().get_lookup('icontains'), AccentInsensitiveIContains)
         self.assertIs(models.TextField().get_lookup('icontains'), AccentInsensitiveIContains)
+
+    def test_queryset_search_requires_every_word_without_requiring_order(self):
+        queryset = _FakeQuerySet()
+        result = filter_queryset_by_terms(
+            queryset, 'bege polo', fields=('nome', 'referencia'),
+        )
+        self.assertEqual(len(result.filters), 2)
+
+
+class _FakeQuerySet:
+    def __init__(self, filters=None):
+        self.filters = filters or []
+
+    def filter(self, condition):
+        return _FakeQuerySet([*self.filters, condition])

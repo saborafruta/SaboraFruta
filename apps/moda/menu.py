@@ -51,11 +51,11 @@ GRUPOS: tuple[Grupo, ...] = (
         ),
     ),
     Grupo(
-        'produtos', 'Produtos',
+        'produtos', 'Modelos de Produção',
         'O catálogo: do modelo à variante que vai para a etiqueta.',
         'camiseta',
         (
-            Item('produtos', 'Produtos', 'Itens vendáveis do catálogo.'),
+            Item('produtos', 'Modelos de Produção', 'Padrões técnicos reutilizados nos pedidos e na fábrica.'),
             Item('modelos', 'Modelos', 'Modelagem base reaproveitada entre produtos.'),
             Item('colecoes', 'Coleções', 'Agrupamento por temporada ou campanha.'),
             Item('categorias', 'Categorias', 'Classificação do catálogo.'),

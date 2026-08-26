@@ -8,6 +8,7 @@ from decimal import Decimal, InvalidOperation
 
 from django.contrib import messages
 from django.db import models, transaction
+from django.db.models.deletion import ProtectedError
 from django.core.paginator import Paginator
 from django.db.models import Count, Prefetch, Q
 from django.shortcuts import get_object_or_404, redirect, render
@@ -17,6 +18,7 @@ from django.views import View
 from apps.core.services.exceptions import DadosInvalidosError
 
 from apps.core.services.exceptions import DomainError
+from apps.core.services.search import filter_queryset_by_terms
 from apps.financeiro.models.formas_pagamento import FormaPagamento
 
 from .forms_arquivo import ArquivoPedidoForm
@@ -35,6 +37,7 @@ from .models import (
 from .services.barras import suportado, svg as barras_svg
 from .services.pedido_pdf import mensagem_whatsapp, whatsapp_numero
 from .services.validacao import ValidacaoProducao
+from .services.kanban_comercial import status_choices_kanban, status_destino_kanban
 from .services import (
     FinanceiroPedidoService, GradePedidoService, IndividualService,
     VarianteService, montar_sku,
@@ -187,12 +190,12 @@ class ProdutoListView(ModaBaseView):
             .annotate(qtd_variantes=Count('variantes', distinct=True))
         )
         if busca:
-            produtos = produtos.filter(
-                Q(nome__icontains=busca) | Q(codigo__icontains=busca)
-                | Q(referencia__icontains=busca)
+            produtos = filter_queryset_by_terms(
+                produtos, busca,
+                fields=('nome', 'codigo', 'referencia', 'descricao'),
             )
         return render(request, 'moda/produto_list.html', {
-            'title': 'Produtos de Moda',
+            'title': 'Modelos de Produção',
             'produtos': produtos,
             'busca': busca,
         })
@@ -204,7 +207,7 @@ class ProdutoFormView(ModaBaseView):
     def get(self, request, pk=None):
         produto = get_object_or_404(ProdutoModa.objects.for_filial(_filial(request)), pk=pk) if pk else None
         return render(request, 'moda/produto_form.html', {
-            'title': f'{produto.codigo}' if produto else 'Novo Produto',
+            'title': f'{produto.codigo}' if produto else 'Novo Modelo de Produção',
             'produto': produto,
             'form': ProdutoModaForm(instance=produto, filial=_filial(request)),
         })
@@ -216,13 +219,13 @@ class ProdutoFormView(ModaBaseView):
         )
         if not form.is_valid():
             return render(request, 'moda/produto_form.html', {
-                'title': 'Novo Produto' if produto is None else produto.codigo,
+                'title': 'Novo Modelo de Produção' if produto is None else produto.codigo,
                 'produto': produto, 'form': form,
             })
         produto = form.save(commit=False)
         produto.filial = _filial(request)
         produto.save()
-        messages.success(request, f'Produto {produto.codigo} salvo.')
+        messages.success(request, f'Modelo de produção {produto.codigo} salvo.')
         return redirect(reverse('moda:produto-detail', args=[produto.pk]))
 
 
@@ -261,6 +264,46 @@ class ProdutoDetailView(ModaBaseView):
             'cores_disponiveis': Cor.objects.for_filial(_filial(request)).filter(ativo=True),
             'previa': VarianteService.previa(produto),
         })
+
+
+class ProdutoToggleView(ModaBaseView):
+    permissao_acao = 'editar'
+
+    def post(self, request, pk):
+        produto = get_object_or_404(
+            ProdutoModa.all_objects.filter(filial=_filial(request)), pk=pk,
+        )
+        produto.ativo = not produto.ativo
+        produto.status = (
+            ProdutoModa.Status.DESCONTINUADO
+            if not produto.ativo else ProdutoModa.Status.ATIVO
+        )
+        produto.save(update_fields=['ativo', 'status'])
+        messages.success(
+            request,
+            f'Modelo de produção {"reativado" if produto.ativo else "inativado"}.',
+        )
+        return redirect(reverse('moda:produto-detail', args=[produto.pk]))
+
+
+class ProdutoDeleteView(ModaBaseView):
+    permissao_acao = 'excluir'
+
+    def post(self, request, pk):
+        produto = get_object_or_404(
+            ProdutoModa.all_objects.filter(filial=_filial(request)), pk=pk,
+        )
+        codigo = produto.codigo
+        try:
+            produto.delete()
+        except ProtectedError:
+            messages.error(
+                request,
+                'Este modelo já está em uso e não pode ser removido. Inative-o para preservar o histórico.',
+            )
+            return redirect(reverse('moda:produto-detail', args=[pk]))
+        messages.success(request, f'Modelo de produção {codigo} removido.')
+        return redirect(reverse('moda:produto-list'))
 
 
 class ProdutoCorAddView(ModaBaseView):
@@ -724,7 +767,8 @@ def contexto_do_pedido(request, pedido, **extra) -> dict:
     contexto = {
         'title': f'Pedido #{pedido.numero:06d}',
         'pedido': pedido,
-        'status_choices': PedidoProducao.Status.choices,
+        'status_choices': status_choices_kanban(),
+        'status_select_atual': status_destino_kanban(pedido.status),
         'itens': itens,
         'total_pecas': sum(i.quantidade for i in itens),
         'form_item': ItemPedidoProducaoForm(filial=filial),
@@ -951,7 +995,8 @@ class PedidoStatusView(ModaBaseView):
         pedido = get_object_or_404(PedidoProducao.objects.for_filial(_filial(request)), pk=pk)
         novo = (request.POST.get('status') or '').strip()
 
-        if novo not in PedidoProducao.Status.values:
+        permitidos = {valor for valor, _ in status_choices_kanban()}
+        if novo not in permitidos:
             messages.error(request, 'Status inválido.')
             return redirect(reverse('moda:pedido-detail', args=[pedido.pk]))
 

@@ -82,6 +82,19 @@ COLUNAS: list[Coluna] = [
 COLUNAS_POR_CHAVE = {c.chave: c for c in COLUNAS}
 COLUNA_DO_STATUS = {s: c.chave for c in COLUNAS for s in c.status}
 
+
+def status_choices_kanban() -> list[tuple[str, str]]:
+    """Destinos exibidos no detalhe do pedido, iguais às colunas do Kanban."""
+
+    return [(coluna.destino, coluna.label) for coluna in COLUNAS]
+
+
+def status_destino_kanban(status_atual: str) -> str:
+    """Representa estados internos pela coluna visível correspondente."""
+
+    chave = COLUNA_DO_STATUS.get(status_atual)
+    return COLUNAS_POR_CHAVE[chave].destino if chave else ''
+
 # Os status que colocam o pedido na mão da fábrica. Mesma lista da tela do
 # pedido: chegar em qualquer um deles cobra as onze validações.
 LIBERAM_PRODUCAO = (S.LIBERADO_PRODUCAO, S.EM_PRODUCAO)

@@ -63,10 +63,17 @@ class PermissaoRequiredMixin:
 
     def dispatch(self, request, *args, **kwargs):
         if not request.user.is_authenticated:
+            if _is_api_request(request):
+                return JsonResponse(
+                    {'error': 'Sessão expirada. Recarregue a página e faça login novamente.'},
+                    status=401,
+                )
             return redirect('core:login')
         if self.permissao_modulo and not request.user.tem_permissao(
             self.permissao_modulo, self.permissao_acao,
         ):
+            if _is_api_request(request):
+                return JsonResponse({'error': PERMISSION_DENIED_MESSAGE}, status=403)
             messages.error(request, PERMISSION_DENIED_MESSAGE)
             return redirect('core:dashboard')
         return super().dispatch(request, *args, **kwargs)

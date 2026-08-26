@@ -8,7 +8,7 @@
   <div class="flex flex-wrap items-start justify-between gap-3">
     <div>
       <p class="text-sm mb-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
-        <a href="{% url 'moda:produto-list' %}" :style="temaClaro ? 'color:#3b82f6;' : 'color:#60a5fa;'">Produtos</a>
+        <a href="{% url 'moda:produto-list' %}" :style="temaClaro ? 'color:#3b82f6;' : 'color:#60a5fa;'">Modelos de Produção</a>
         <span class="mx-1">›</span> {{ produto.codigo }}
       </p>
       <h2 class="text-2xl font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">{{ produto.nome }}</h2>
@@ -30,6 +30,15 @@
       <a href="{% url 'moda:ficha-create' %}" class="btn-secondary">Criar ficha técnica</a>
     {% endif %}
     <a href="{% url 'moda:produto-update' produto.pk %}" class="btn-secondary">Editar</a>
+    <form method="post" action="{% url 'moda:produto-toggle' produto.pk %}">
+      {% csrf_token %}
+      <button type="submit" class="btn-secondary">{% if produto.ativo %}Inativar{% else %}Reativar{% endif %}</button>
+    </form>
+    <form method="post" action="{% url 'moda:produto-delete' produto.pk %}"
+          onsubmit="return confirm('Remover definitivamente este modelo de produção? Esta ação não pode ser desfeita.');">
+      {% csrf_token %}
+      <button type="submit" class="btn-secondary" style="color:#dc2626;">Remover</button>
+    </form>
   </div>
 
   <div class="grid gap-4 lg:grid-cols-3">

@@ -1,6 +1,8 @@
 """Views de consulta e operacoes de estoque."""
 import csv
 import json
+import logging
+import re
 from datetime import timedelta
 from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
 from urllib.parse import urlencode
@@ -29,6 +31,7 @@ from apps.compras.services.entrada_custo_service import EntradaCustoService
 from apps.core.services.auditoria import auditoria_para_objeto, auditoria_relacionada, registrar_auditoria, snapshot_modelo
 from apps.core.services.exceptions import DomainError
 from apps.core.services.permissions import PERMISSION_DENIED_MESSAGE, PermissaoRequiredMixin
+from apps.core.services.search import filter_queryset_by_terms
 from apps.estoque.forms import AjusteEstoqueForm, MovimentacaoManualForm, TransferenciaForm
 from apps.estoque.models import Estoque, Inventario, LoteProduto, MovimentacaoEstoque
 from apps.estoque.services.movimentacao_service import MovimentacaoService
@@ -43,6 +46,9 @@ from apps.produtos.services.prontidao_comercial_service import (
     anexar_prontidao_produtos,
     avaliar_produtos_para_venda,
 )
+
+
+logger = logging.getLogger(__name__)
 
 
 def _auditar_estoque(request, acao, objeto, descricao='', justificativa='', antes=None, depois=None, relacionado=None, metadados=None):
@@ -1912,25 +1918,29 @@ class AjusteRapidoEstoqueView(PermissaoRequiredMixin, View):
         if status_conferencia not in {'todos', 'conferidos', 'pendentes'}:
             status_conferencia = 'todos'
 
-        termo = barcode or busca
-        if termo:
+        if barcode:
             filtro = (
-                Q(descricao__icontains=termo)
-                | Q(descricao_curta__icontains=termo)
-                | Q(descricao_pdv__icontains=termo)
-                | Q(codigo__icontains=termo)
-                | Q(codigo_barras__icontains=termo)
-                | Q(ncm__icontains=termo)
-                | Q(categoria__nome__icontains=termo)
-                | Q(subcategoria__nome__icontains=termo)
-                | Q(fornecedor__nome_fantasia__icontains=termo)
-                | Q(fornecedor__razao_social__icontains=termo)
+                Q(codigo_barras=barcode)
+                | Q(codigo=barcode)
             )
-            codigo_limpo = termo.lstrip('0')
+            if barcode.isdigit():
+                filtro |= Q(codigo_barras__regex=rf'^0*{re.escape(barcode.lstrip("0") or "0")}$')
+            codigo_limpo = barcode.lstrip('0')
             if codigo_limpo.isdigit():
                 codigo_int = int(codigo_limpo)
                 filtro |= Q(pk=codigo_int) | Q(id_externo=f'produto:{codigo_int}')
             qs = qs.filter(filtro)
+        elif busca:
+            qs = filter_queryset_by_terms(
+                qs,
+                busca,
+                fields=(
+                    'descricao', 'descricao_curta', 'descricao_pdv', 'codigo',
+                    'codigo_barras', 'ncm', 'categoria__nome',
+                    'subcategoria__nome', 'fornecedor__nome_fantasia',
+                    'fornecedor__razao_social',
+                ),
+            )
 
         if status_conferencia in {'conferidos', 'pendentes'}:
             ids_conferidos = [
@@ -1983,6 +1993,17 @@ class AjusteRapidoEstoqueView(PermissaoRequiredMixin, View):
 
 class AjusteRapidoEstoqueAtualizarView(AjusteRapidoEstoqueView):
     def post(self, request):
+        try:
+            with transaction.atomic():
+                return self._atualizar(request)
+        except Exception:
+            logger.exception('Falha inesperada no ajuste rapido de estoque')
+            return JsonResponse({
+                'ok': False,
+                'error': 'Não foi possível salvar o ajuste. Nenhuma alteração foi aplicada; tente novamente.',
+            }, status=500)
+
+    def _atualizar(self, request):
         produto = get_object_or_404(
             produtos_estoque_queryset(request.filial_ativa),
             pk=request.POST.get('produto_id'),

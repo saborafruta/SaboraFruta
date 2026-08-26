@@ -5,6 +5,8 @@ import unicodedata
 from collections.abc import Iterable, Mapping, Sequence
 from typing import Any
 
+from django.db.models import Q, QuerySet
+
 
 _NON_ALNUM_RE = re.compile(r'[^a-z0-9]+')
 
@@ -15,6 +17,22 @@ def normalize_search_text(value: Any) -> str:
     decomposed = unicodedata.normalize('NFKD', str(value or ''))
     without_marks = ''.join(char for char in decomposed if not unicodedata.combining(char))
     return _NON_ALNUM_RE.sub(' ', without_marks.casefold()).strip()
+
+
+def filter_queryset_by_terms(
+    queryset: QuerySet,
+    query: str,
+    *,
+    fields: Sequence[str],
+) -> QuerySet:
+    """Exige todas as palavras, em qualquer ordem e em qualquer campo."""
+
+    for term in normalize_search_text(query).split():
+        term_filter = Q()
+        for field in fields:
+            term_filter |= Q(**{f'{field}__icontains': term})
+        queryset = queryset.filter(term_filter)
+    return queryset
 
 
 def _candidate_rank(

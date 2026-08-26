@@ -520,6 +520,17 @@
       if (editedCounter) editedCounter.textContent = totals.editados;
       if (checkedCounter) checkedCounter.textContent = totals.conferidos;
     }
+    async function readJsonResponse(response) {
+      const contentType = response.headers.get('content-type') || '';
+      if (!contentType.includes('application/json')) {
+        if (response.status === 403) {
+          throw new Error('Sua sessão ou validação de segurança expirou. Recarregue a página e tente novamente.');
+        }
+        throw new Error('O servidor não conseguiu concluir o ajuste. Recarregue a página; se persistir, avise o suporte.');
+      }
+      const data = await response.json();
+      return { response, data };
+    }
     function saveRow(row, markChecked) {
       const qty = row.querySelector('[data-qty]');
       const form = new FormData();
@@ -529,12 +540,17 @@
       setStatus(row, 'Salvando...');
       return fetch(row.dataset.updateUrl, {
         method: 'POST',
-        headers: { 'X-CSRFToken': csrf },
+        credentials: 'same-origin',
+        headers: {
+          'X-CSRFToken': csrf,
+          'Accept': 'application/json',
+          'X-Requested-With': 'XMLHttpRequest',
+        },
         body: form,
       })
-        .then((response) => response.json().then((data) => ({ response, data })))
+        .then(readJsonResponse)
         .then(({ response, data }) => {
-          if (!response.ok || !data.ok) throw new Error(data.error || 'Nao foi possivel salvar.');
+          if (!response.ok || !data.ok) throw new Error(data.error || data.erro || 'Nao foi possivel salvar.');
           row.dataset.current = data.quantidade_atual;
           const current = row.querySelector('[data-current-display]');
           if (current) current.textContent = data.quantidade_atual_display;
@@ -613,9 +629,12 @@
       if (!logModal || !logBody) return;
       logBody.innerHTML = '<div class="stock-count-empty">Carregando historico...</div>';
       logModal.hidden = false;
-      fetch(row.dataset.logUrl)
-        .then((response) => response.json())
-        .then((data) => {
+      fetch(row.dataset.logUrl, {
+        credentials: 'same-origin',
+        headers: { 'Accept': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
+      })
+        .then(readJsonResponse)
+        .then(({ data }) => {
           if (logTitle) logTitle.textContent = data.produto.descricao || 'Historico do produto';
           if (logSubtitle) logSubtitle.textContent = `Produto #${data.produto.id} - ultimas movimentacoes`;
           if (!data.movimentacoes.length) {
@@ -735,10 +754,27 @@
         await closeCamera();
         cameraModal.hidden = false;
         setCameraStatus('Aponte a camera para o codigo de barras e mantenha firme.');
-        html5Scanner = new window.Html5Qrcode('stock-camera-reader');
+        const supported = window.Html5QrcodeSupportedFormats;
+        const formatsToSupport = supported ? [
+          supported.EAN_13, supported.EAN_8, supported.UPC_A,
+          supported.UPC_E, supported.CODE_128, supported.CODE_39,
+        ] : undefined;
+        html5Scanner = new window.Html5Qrcode('stock-camera-reader', {
+          formatsToSupport,
+          verbose: false,
+        });
         await html5Scanner.start(
-          { facingMode: 'environment' },
-          { fps: 10, qrbox: { width: 280, height: 130 }, aspectRatio: 1.7778 },
+          { facingMode: { ideal: 'environment' } },
+          {
+            fps: 18,
+            qrbox: (width, height) => ({
+              width: Math.max(220, Math.min(380, Math.floor(width * .88))),
+              height: Math.max(110, Math.min(190, Math.floor(height * .44))),
+            }),
+            aspectRatio: 1.7778,
+            disableFlip: false,
+            experimentalFeatures: { useBarCodeDetectorIfSupported: true },
+          },
           (decodedText) => {
             const code = String(decodedText || '').trim();
             if (!code || code === lastScannedCode) return;
@@ -746,7 +782,7 @@
             submitBarcode(code);
             window.setTimeout(() => { lastScannedCode = ''; }, 1200);
           },
-          () => {}
+          () => setCameraStatus('Lendo… centralize todo o código dentro do quadro e evite reflexos.')
         );
       } catch (e) {
         await closeCamera();

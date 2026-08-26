@@ -23,6 +23,7 @@ from __future__ import annotations
 from django.db import transaction
 
 from apps.core.services.exceptions import DomainError
+from apps.core.services.search import filter_queryset_by_terms, normalize_search_text
 
 
 class ImportarProdutosService:
@@ -132,8 +133,6 @@ class BuscaProdutos:
     @classmethod
     def procurar(cls, filial, termo: str = '', sem_ficha: bool = False,
                  limite: int | None = None) -> list[dict]:
-        from django.db.models import Q
-
         from apps.moda.models import ProdutoModa
 
         termo = (termo or '').strip()
@@ -150,10 +149,9 @@ class BuscaProdutos:
             # erro de integridade depois de a pessoa preencher tudo.
             da_moda = da_moda.filter(ficha__isnull=True)
         if termo:
-            da_moda = da_moda.filter(
-                Q(nome__icontains=termo)
-                | Q(codigo__icontains=termo)
-                | Q(referencia__icontains=termo)
+            da_moda = filter_queryset_by_terms(
+                da_moda, termo,
+                fields=('nome', 'codigo', 'referencia', 'descricao'),
             )
 
         achados = [cls.como_dicionario(p) for p in da_moda[:limite]]
@@ -163,11 +161,16 @@ class BuscaProdutos:
         # nada aqui.
         do_erp = ImportarProdutosService.disponiveis(filial)
         if termo:
-            alvo = termo.lower()
+            termos = normalize_search_text(termo).split()
             do_erp = [
                 p for p in do_erp
-                if alvo in (p.descricao or '').lower()
-                or alvo in (getattr(p, 'codigo', '') or '').lower()
+                if all(
+                    token in normalize_search_text(
+                        f'{p.descricao or ""} {getattr(p, "codigo", "") or ""} '
+                        f'{getattr(p, "codigo_barras", "") or ""}'
+                    )
+                    for token in termos
+                )
             ]
         achados += [cls.do_erp(p) for p in do_erp[:limite]]
 

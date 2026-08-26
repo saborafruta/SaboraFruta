@@ -286,6 +286,8 @@ ROTAS_PRONTAS: list = [
     path('produtos/produtos/novo/', vc.ProdutoFormView.as_view(), name='produto-create'),
     path('produtos/produtos/<int:pk>/', vc.ProdutoDetailView.as_view(), name='produto-detail'),
     path('produtos/produtos/<int:pk>/editar/', vc.ProdutoFormView.as_view(), name='produto-update'),
+    path('produtos/produtos/<int:pk>/situacao/', vc.ProdutoToggleView.as_view(), name='produto-toggle'),
+    path('produtos/produtos/<int:pk>/remover/', vc.ProdutoDeleteView.as_view(), name='produto-delete'),
     path('produtos/produtos/<int:pk>/cores/', vc.ProdutoCorAddView.as_view(), name='produto-cor-add'),
     path('produtos/produtos/<int:pk>/variantes/', vc.ProdutoGerarVariantesView.as_view(), name='produto-gerar-variantes'),
 

@@ -5,7 +5,7 @@
 <div class="max-w-3xl mx-auto space-y-5">
   <div>
     <p class="text-sm mb-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
-      <a href="{% url 'moda:produto-list' %}" :style="temaClaro ? 'color:#3b82f6;' : 'color:#60a5fa;'">Produtos</a>
+      <a href="{% url 'moda:produto-list' %}" :style="temaClaro ? 'color:#3b82f6;' : 'color:#60a5fa;'">Modelos de Produção</a>
       <span class="mx-1">›</span> {{ title }}
     </p>
     <h2 class="text-2xl font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">{{ title }}</h2>
@@ -20,7 +20,7 @@
     </div>
     <div class="flex gap-3 justify-end">
       <a href="{% url 'moda:produto-list' %}" class="btn-secondary">Cancelar</a>
-      <button type="submit" class="btn-primary">Salvar produto</button>
+      <button type="submit" class="btn-primary">Salvar modelo</button>
     </div>
   </form>
 </div>

@@ -7,11 +7,11 @@
     <div>
       <p class="text-sm mb-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
         <a href="{% url 'moda:grupo' 'produtos' %}" :style="temaClaro ? 'color:#3b82f6;' : 'color:#60a5fa;'">Produtos</a>
-        <span class="mx-1">›</span> Produtos
+        <span class="mx-1">›</span> Modelos de Produção
       </p>
-      <h2 class="text-2xl font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">Produtos de Moda</h2>
+      <h2 class="text-2xl font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">Modelos de Produção</h2>
     </div>
-    <a href="{% url 'moda:produto-create' %}" class="btn-primary">+ Novo produto</a>
+    <a href="{% url 'moda:produto-create' %}" class="btn-primary">+ Novo modelo</a>
   </div>
 
   <form method="get" class="card p-4">
@@ -46,7 +46,7 @@
     {% empty %}
       <div class="card p-8 text-center sm:col-span-2 lg:col-span-3">
         <p class="text-sm" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
-          {% if busca %}Nenhum produto encontrado para "{{ busca }}".{% else %}Nenhum produto cadastrado ainda.{% endif %}
+          {% if busca %}Nenhum modelo encontrado para "{{ busca }}".{% else %}Nenhum modelo de produção cadastrado ainda.{% endif %}
         </p>
       </div>
     {% endfor %}
