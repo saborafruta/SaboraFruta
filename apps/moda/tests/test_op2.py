@@ -141,6 +141,28 @@ class Op2Tests(TestCase):
         self.assertEqual(resposta.status_code, 200)
         self.assertContains(resposta, 'Selecione um cliente')
 
+    def test_busca_da_op_encontra_cliente_antigo_sem_vinculo_novo(self):
+        cliente_antigo = Cliente.objects.create(
+            filial=self.filial,
+            tipo_pessoa='F',
+            razao_social='Diego Macedo',
+            celular='849944149438',
+            ativo=True,
+        )
+        self.client.force_login(self._usuario())
+        session = self.client.session
+        session['filial_id'] = self.filial.pk
+        session.save()
+
+        resposta = self.client.get(
+            reverse('moda:cliente-buscar'),
+            {'q': 'Macedo Diego'},
+        )
+
+        self.assertEqual(resposta.status_code, 200)
+        self.assertContains(resposta, cliente_antigo.razao_social)
+        self.assertEqual(resposta.json()['clientes'][0]['id'], cliente_antigo.pk)
+
     def _usuario(self):
         user, _ = Usuario.objects.get_or_create(
             email='op2@teste.local',

@@ -11,12 +11,24 @@ class ClienteManager(FilialManager):
     def for_filial(self, filial):
         if filial is None:
             return self.get_queryset().none()
-        return self.get_queryset().filter(filiais_vinculo__filial=filial, filiais_vinculo__ativo=True).distinct()
+        # Clientes antigos podem ter sido cadastrados antes da tabela de
+        # vinculos. A filial original continua sendo um vinculo valido e não
+        # pode fazer o cliente desaparecer das buscas do ERP.
+        return self.get_queryset().filter(
+            models.Q(filial=filial)
+            | models.Q(filiais_vinculo__filial=filial, filiais_vinculo__ativo=True)
+        ).distinct()
 
     def for_empresa(self, empresa):
         if empresa is None:
             return self.get_queryset().none()
-        return self.get_queryset().filter(filiais_vinculo__filial__empresa=empresa, filiais_vinculo__ativo=True).distinct()
+        return self.get_queryset().filter(
+            models.Q(filial__empresa=empresa)
+            | models.Q(
+                filiais_vinculo__filial__empresa=empresa,
+                filiais_vinculo__ativo=True,
+            )
+        ).distinct()
 
 
 class Cliente(CoordenadaMixin, FilialScopedModel):

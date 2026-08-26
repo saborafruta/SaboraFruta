@@ -146,17 +146,24 @@ class BuscaClientes:
 
         termo = (termo or '').strip()
         if termo:
-            # O documento é guardado só com dígitos; quem digita cola com
-            # ponto e barra. Sem tirar a pontuação, procurar pelo CNPJ
-            # copiado da nota não acha nada.
-            digitos = ''.join(c for c in termo if c.isdigit())
-            filtro = (
-                Q(razao_social__icontains=termo)
-                | Q(nome_fantasia__icontains=termo)
-            )
-            if digitos:
-                filtro |= Q(cpf_cnpj__contains=digitos)
-            consulta = consulta.filter(filtro)
+            # Cada palavra pode aparecer em qualquer campo e em qualquer
+            # ordem. Assim "diego macedo", "macedo diego" e partes do
+            # telefone/documento encontram o mesmo cadastro.
+            for parte in termo.split():
+                digitos = ''.join(c for c in parte if c.isdigit())
+                filtro = (
+                    Q(razao_social__icontains=parte)
+                    | Q(nome_fantasia__icontains=parte)
+                    | Q(contato_nome__icontains=parte)
+                    | Q(cidade__icontains=parte)
+                )
+                if digitos:
+                    filtro |= (
+                        Q(cpf_cnpj__contains=digitos)
+                        | Q(celular__icontains=digitos)
+                        | Q(telefone__icontains=digitos)
+                    )
+                consulta = consulta.filter(filtro)
 
         return list(consulta.order_by('razao_social')[:(limite or BuscaClientes.LIMITE)])
 
