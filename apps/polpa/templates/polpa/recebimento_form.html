@@ -44,7 +44,11 @@
            const resposta = await fetch(url, { method: 'POST', body: corpo, headers: { 'X-Requested-With': 'XMLHttpRequest' } });
            const json = await resposta.json();
            if (!resposta.ok || !json.ok) {
-             this.erro = Object.values(json.errors || {}).flat().join(' ') || 'Nao foi possivel gravar.';
+             /* `mensagem` ja' vem com o NOME do campo; `errors` e' a queda para
+                quem ainda nao devolve a versao pronta. */
+             this.erro = json.mensagem
+               || Object.values(json.errors || {}).flat().join(' ')
+               || 'Nao foi possivel gravar.';
              return;
            }
            const select = document.querySelector(seletor);
@@ -264,7 +268,7 @@
           </p>
           <div class="space-y-3">
             <div>
-              <label class="form-label">Nome / Razao social <span style="color:#dc2626;">*</span></label>
+              <label class="form-label">Nome / Razão social <span style="color:#dc2626;">*</span></label>
               <input type="text" class="form-input w-full" placeholder="Sitio Boa Vista" x-model="novoProdutor.razao_social">
             </div>
             <div class="grid grid-cols-2 gap-3">

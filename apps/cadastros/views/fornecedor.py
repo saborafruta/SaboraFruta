@@ -330,7 +330,24 @@ class FornecedorAjaxCreateView(PermissaoRequiredMixin, View):
                 campo: [erro['message'] for erro in mensagens]
                 for campo, mensagens in form.errors.get_json_data().items()
             }
-            return JsonResponse({'ok': False, 'errors': erros}, status=400)
+            # A MENSAGEM DIZ QUAL CAMPO. Quem chama isto de um modal so' recebe
+            # o texto cru, e "Este campo e' obrigatorio" sem o nome do campo e'
+            # inutil quando o campo faltando nem aparece na tela -- foi
+            # exatamente o que aconteceu com `tipo_pessoa` no cadastro
+            # relampago de produtor.
+            return JsonResponse(
+                {
+                    'ok': False,
+                    'errors': erros,
+                    'mensagem': ' '.join(
+                        f'{form.fields[campo].label or campo}: {texto}'
+                        if campo in form.fields else texto
+                        for campo, textos in erros.items()
+                        for texto in textos
+                    ),
+                },
+                status=400,
+            )
 
         with transaction.atomic():
             fornecedor = form.save(commit=False)

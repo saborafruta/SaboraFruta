@@ -109,6 +109,40 @@ class FornecedorRapidoForm(forms.ModelForm):
     def __init__(self, *args, filial=None, **kwargs):
         super().__init__(*args, **kwargs)
         self.filial = filial
+        # SO' O NOME E' OBRIGATORIO. `tipo_pessoa` vinha obrigatorio por ser
+        # `CharField` com `choices` e sem `blank`, e o cadastro relampago nao
+        # pergunta isso -- quem esta' com o caminhao na balanca digita o nome do
+        # produtor e segue. O formulario recusava com "Este campo e'
+        # obrigatorio" sem dizer QUAL campo, porque o campo nem aparece na tela.
+        self.fields['tipo_pessoa'].required = False
+        # O ROTULO AGORA E' TEXTO QUE O USUARIO LE. Ele entra na mensagem de
+        # erro devolvida ao modal, e o padrao do Django vinha do nome do campo:
+        # "Razao social", sem acento. Dito aqui e nao no modelo, porque mexer em
+        # `verbose_name` gera migration so' para trocar texto.
+        self.fields['razao_social'].label = 'Razão social'
+        self.fields['cpf_cnpj'].label = 'CPF / CNPJ'
+        self.fields['telefone'].label = 'Telefone'
+
+    def clean_tipo_pessoa(self):
+        """
+        Deduz do documento quando ninguem informou.
+
+        Onze digitos e' CPF, catorze e' CNPJ -- a mesma leitura que
+        `_limpar_e_validar_documento` ja' faz quando o tipo vem vazio. Sem
+        deduzir, gravaria string vazia num campo com `choices`, que e' dado
+        invalido silencioso: nao estoura, mas nenhuma tela sabe mostrar.
+
+        SEM DOCUMENTO ASSUME FISICA. Produtor rural sem CPF a mao e' o caso
+        normal aqui, e pessoa e' o palpite certo com mais frequencia -- o
+        cadastro completo corrige depois, se for empresa.
+        """
+        informado = (self.cleaned_data.get('tipo_pessoa') or '').strip()
+        if informado:
+            return informado
+        digitos = _digitos_documento(self.data.get('cpf_cnpj'))
+        if len(digitos) == 14:
+            return 'J'
+        return 'F'
 
     def clean_cpf_cnpj(self):
         valor = _limpar_e_validar_documento(

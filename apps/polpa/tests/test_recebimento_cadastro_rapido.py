@@ -162,3 +162,87 @@ class TelaDoRomaneioTests(CadastroRapidoBase):
         resposta = self.client.get(reverse('polpa:recebimento-create'))
 
         self.assertContains(resposta, 'Goiaba')
+
+
+class ProdutorRelampagoTests(CadastroRapidoBase):
+    """
+    Cadastrar produtor com o mínimo — que é o nome.
+
+    O QUE ACONTECIA: clicar em "Gravar produtor" com o nome preenchido devolvia
+    "Este campo é obrigatório." e nada mais. O campo faltando era `tipo_pessoa`
+    — obrigatório por ser `CharField` com `choices` e sem `blank`, e que o modal
+    nem mostra. Mensagem sem o nome do campo, sobre um campo invisível: não
+    havia como descobrir olhando a tela.
+    """
+
+    def _criar(self, **dados):
+        return self.client.post(
+            reverse('cadastros:fornecedor-ajax-create'), dados,
+        )
+
+    def test_so_o_nome_basta(self):
+        from apps.cadastros.models import Fornecedor
+
+        resposta = self._criar(razao_social='Sitio Boa Vista')
+
+        self.assertEqual(resposta.status_code, 200)
+        self.assertTrue(
+            Fornecedor.objects.filter(razao_social='Sitio Boa Vista').exists()
+        )
+
+    def test_sem_documento_assume_pessoa_fisica(self):
+        """
+        Gravar string vazia num campo com `choices` e' dado invalido silencioso:
+        nao estoura, mas nenhuma tela sabe mostrar. Produtor rural sem CPF a
+        mao e' o caso normal, e pessoa e' o palpite certo mais vezes.
+        """
+        from apps.cadastros.models import Fornecedor
+
+        self._criar(razao_social='Sitio Boa Vista')
+
+        produtor = Fornecedor.objects.get(razao_social='Sitio Boa Vista')
+        self.assertEqual(produtor.tipo_pessoa, 'F')
+
+    def test_cnpj_deduz_pessoa_juridica(self):
+        """Catorze digitos e' CNPJ -- a mesma leitura que o validador ja' faz."""
+        from apps.cadastros.models import Fornecedor
+
+        self._criar(razao_social='Fazenda LTDA', cpf_cnpj='11.222.333/0001-81')
+
+        produtor = Fornecedor.objects.get(razao_social='Fazenda LTDA')
+        self.assertEqual(produtor.tipo_pessoa, 'J')
+
+    def test_cpf_deduz_pessoa_fisica(self):
+        from apps.cadastros.models import Fornecedor
+
+        self._criar(razao_social='Jose da Silva', cpf_cnpj='529.982.247-25')
+
+        produtor = Fornecedor.objects.get(razao_social='Jose da Silva')
+        self.assertEqual(produtor.tipo_pessoa, 'F')
+
+    def test_sem_nome_ainda_recusa(self):
+        """O nome continua obrigatorio -- e' a unica coisa que sobrou."""
+        resposta = self._criar(razao_social='')
+
+        self.assertEqual(resposta.status_code, 400)
+
+    def test_a_mensagem_de_erro_diz_qual_campo(self):
+        """
+        "Este campo e' obrigatorio" sozinho e' inutil num modal: quem clicou nao
+        tem como saber qual campo, ainda mais quando ele nao esta' na tela.
+        """
+        import json
+
+        resposta = self._criar(razao_social='')
+
+        corpo = json.loads(resposta.content)
+        self.assertIn('mensagem', corpo)
+        self.assertIn('Razão social', corpo['mensagem'])
+
+    def test_documento_invalido_continua_sendo_recusado(self):
+        """Relaxar o tipo nao pode relaxar a validacao do documento."""
+        resposta = self._criar(
+            razao_social='Jose Errado', cpf_cnpj='529.982.247-24',
+        )
+
+        self.assertEqual(resposta.status_code, 400)
