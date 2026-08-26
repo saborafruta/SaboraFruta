@@ -18,7 +18,7 @@ O QUE ESTES TESTES CERCAM:
   · AS DUAS FONTES DE QUALIDADE CONVIVEM. Análise (Brix, pH) e inspeção de
     lote respondem por áreas diferentes — somá-las esconderia qual reprovou.
 """
-from datetime import timedelta
+from datetime import date, datetime, timedelta
 from decimal import Decimal
 
 from django.test import TestCase
@@ -326,6 +326,40 @@ class EstoqueTests(PainelBase):
         self.assertTrue(any(
             p['lote'].produto == self.acabado for p in parados
         ))
+
+    def test_os_dias_parados_nao_erram_por_causa_do_fuso(self):
+        """
+        `localdate()` é data LOCAL e `created_at` é gravado em UTC. Comparar
+        os dois direto erra por um dia das 21h à meia-noite, quando a data UTC
+        já virou e a local não.
+
+        E erra para MENOS: o lote mais parado aparece mais novo do que é —
+        justamente o que esta lista existe para não deixar acontecer. Este
+        teste fixa o relógio nesse intervalo, que é onde o defeito mora.
+        """
+        from unittest.mock import patch
+
+        self._produzir(produzida=Decimal('1000'))
+        lote = LoteProduto.objects.get(produto=self.acabado)
+
+        # 22h em São Paulo do dia 10 — em UTC já é dia 11.
+        local = timezone.get_current_timezone()
+        nascimento = timezone.make_aware(
+            datetime(2026, 6, 10, 22, 0), local,
+        )
+        LoteProduto.objects.filter(pk=lote.pk).update(created_at=nascimento)
+
+        # E "hoje", localmente, é o dia 12: o lote está parado há 2 dias.
+        with patch.object(
+            timezone, 'localdate', return_value=date(2026, 6, 12),
+        ):
+            parados = IndicadoresService.estoque(self.filial)['parados']
+
+        linha = next(p for p in parados if p['lote'].pk == lote.pk)
+        self.assertEqual(
+            linha['dias'], 2,
+            'a idade sai da data LOCAL dos dois lados — pela UTC daria 1',
+        )
 
     def test_o_giro_mostra_as_duas_parcelas(self):
         self._produzir(produzida=Decimal('1000'))

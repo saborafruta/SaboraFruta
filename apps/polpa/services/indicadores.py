@@ -464,8 +464,15 @@ class IndicadoresService:
                 continue
             parados.append({
                 'lote': lote,
+                # `localtime` antes de `.date()`: `localdate()` e' data LOCAL
+                # e `created_at` e' gravado em UTC. Comparar os dois direto
+                # erra por um dia das 21h a` meia-noite, quando a data UTC ja'
+                # virou e a local nao -- e erra para MENOS, deixando o lote
+                # mais parado parecer mais novo do que e'. Justamente o que
+                # esta lista existe para nao deixar acontecer.
                 'dias': (
-                    (timezone.localdate() - lote.created_at.date()).days
+                    (timezone.localdate()
+                     - timezone.localtime(lote.created_at).date()).days
                     if lote.created_at else None
                 ),
             })
