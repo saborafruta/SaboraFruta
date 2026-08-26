@@ -2,13 +2,15 @@ from decimal import Decimal
 
 from django.template.loader import get_template
 from django.test import TestCase
+from django.http import QueryDict
 from django.urls import reverse
 
 from apps.cadastros.models import Cliente
 from apps.core.models import Empresa, Filial
-from apps.moda.models import ItemPedidoProducao, PedidoProducao, ProdutoModa
+from apps.moda.models import Grade, ItemGrade, ItemPedidoProducao, PedidoProducao, ProdutoModa, Tamanho
+from apps.moda.services.op2_estrutura import juntar_observacoes_item
 from apps.moda.services.kanban_comercial import COLUNAS
-from apps.moda.views_op2 import _sincronizar_status
+from apps.moda.views_op2 import Op2CreateView, _sincronizar_status
 
 
 class Op2Tests(TestCase):
@@ -76,3 +78,54 @@ class Op2Tests(TestCase):
     def test_kanban_nao_oferece_coluna_aguardando_material(self):
         self.assertNotIn('material', [coluna.chave for coluna in COLUNAS])
         self.assertIn('Pronto para retirada', [coluna.label for coluna in COLUNAS])
+
+    def test_op2_carrega_grade_cadastrada_do_modelo_de_producao(self):
+        tamanho_p = Tamanho.objects.create(filial=self.filial, sigla='P', ordem=10)
+        tamanho_m = Tamanho.objects.create(filial=self.filial, sigla='M', ordem=20)
+        grade = Grade.objects.create(filial=self.filial, nome='Adulto')
+        ItemGrade.objects.create(grade=grade, tamanho=tamanho_p, ordem=10)
+        ItemGrade.objects.create(grade=grade, tamanho=tamanho_m, ordem=20)
+        self.produto.grade = grade
+        self.produto.save(update_fields=['grade'])
+        item = self._item(quantidade=12)
+
+        criadas = Op2CreateView._copiar_grade_do_modelo(item)
+
+        self.assertEqual(criadas, 2)
+        self.assertEqual(
+            list(item.grade.order_by('tamanho__ordem').values_list('tamanho__sigla', 'quantidade')),
+            [('P', 0), ('M', 0)],
+        )
+        item.refresh_from_db()
+        self.assertEqual(item.quantidade, 12)
+
+    def test_quantidades_da_nova_op_ignoram_zeros_ate_usuario_preencher(self):
+        item = self._item(quantidade=7)
+        tamanho_p = Tamanho.objects.create(filial=self.filial, sigla='P', ordem=10)
+        tamanho_m = Tamanho.objects.create(filial=self.filial, sigla='M', ordem=20)
+        post = QueryDict('', mutable=True)
+        post.update({f'grade_{tamanho_p.pk}': '0', f'grade_{tamanho_m.pk}': '3'})
+        request = type('Request', (), {'POST': post})()
+
+        self.assertEqual(Op2CreateView._quantidades_grade(request, item), {(item.pk, tamanho_m.pk): 3})
+        self.assertEqual(
+            Op2CreateView._quantidades_grade(request, item, incluir_zeros=True),
+            {(item.pk, tamanho_p.pk): 0, (item.pk, tamanho_m.pk): 3},
+        )
+
+    def test_estrutura_da_planilha_entra_nas_observacoes_do_item(self):
+        post = QueryDict('', mutable=True)
+        post.update({
+            'estrutura_tipo': 'camisa',
+            'estrutura_malha': 'DRYTECH',
+            'estrutura_gola': 'POLO',
+            'estrutura_manga': 'CURTA',
+        })
+
+        resumo = juntar_observacoes_item('Observação livre', post)
+
+        self.assertIn('Observação livre', resumo)
+        self.assertIn('Estrutura da peça', resumo)
+        self.assertIn('Malha: DRYTECH', resumo)
+        self.assertIn('Gola: POLO', resumo)
+        self.assertIn('Manga: CURTA', resumo)
