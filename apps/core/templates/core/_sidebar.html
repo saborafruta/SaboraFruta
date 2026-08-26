@@ -44,6 +44,85 @@
   body:not(.tema-claro) .sidebar-scroll::-webkit-scrollbar-thumb:hover {
     background: rgba(148, 163, 184, 0.5);
   }
+  .sidebar-favoritable-link {
+    min-width: 0;
+  }
+  .sidebar-favorite-toggle {
+    width: 24px;
+    height: 24px;
+    margin-left: auto;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex: 0 0 24px;
+    color: #94a3b8;
+    font-size: 18px;
+    line-height: 1;
+    cursor: pointer;
+    border-radius: 6px;
+  }
+  .sidebar-favorite-toggle:hover,
+  .sidebar-favorite-toggle:focus-visible {
+    background: rgba(245, 158, 11, 0.12);
+    color: #d97706;
+    outline: none;
+  }
+  .sidebar-favorite-toggle.is-favorite {
+    color: #f59e0b;
+    text-shadow: 0 1px 8px rgba(245, 158, 11, 0.22);
+  }
+  .sidebar-favorites-panel {
+    margin: 2px 4px 8px;
+    padding-bottom: 8px;
+    border-bottom: 1px solid rgba(148, 163, 184, 0.22);
+  }
+  .sidebar-favorites-heading {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    padding: 7px 8px 5px;
+    color: #d97706;
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+  }
+  .sidebar-favorites-list {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+  .sidebar-favorite-row {
+    display: flex;
+    align-items: center;
+    min-width: 0;
+    border-radius: 8px;
+  }
+  .sidebar-favorite-link {
+    min-width: 0;
+    flex: 1 1 auto;
+    padding: 8px 6px 8px 9px;
+    overflow: hidden;
+    color: inherit;
+    font-size: 13px;
+    font-weight: 600;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .sidebar-favorite-row:hover {
+    background: rgba(245, 158, 11, 0.09);
+  }
+  body.tema-claro .sidebar-favorite-row { color: #4b5563; }
+  body:not(.tema-claro) .sidebar-favorite-row { color: #e5e7eb; }
+  .sidebar-favorites-status {
+    padding: 2px 8px 0;
+    color: #ef4444;
+    font-size: 10px;
+  }
+  .sidebar-favorites-status:empty { display: none; }
+  body.sidebar-collapsed .sidebar-desktop .sidebar-favorites-panel,
+  body.sidebar-collapsed .sidebar-desktop .sidebar-favorite-toggle {
+    display: none;
+  }
   aside nav > a > svg:first-child,
   aside nav > div > button > svg:first-child {
     box-sizing: content-box;
@@ -272,7 +351,10 @@
 {% load static erp_extras %}
 
 <!-- SIDEBAR DESKTOP + DRAWER MOBILE -->
-<div x-data="{
+<div id="sidebar-root"
+     data-favorites-url="{% url 'core:menu-favoritos' %}"
+     data-csrf-token="{{ csrf_token }}"
+     x-data="{
   collapsed: localStorage.getItem('sidebar-collapsed') === 'true',
   mobileOpen: false,
   secoes: (function(){
@@ -333,7 +415,7 @@
   <!-- SIDEBAR DESKTOP -->
   <aside
     :class="collapsed ? 'w-16' : 'w-64'"
-    class="hidden lg:flex flex-col transition-all duration-200 flex-shrink-0 fixed left-0 top-0 bottom-0 z-50"
+    class="sidebar-desktop hidden lg:flex flex-col transition-all duration-200 flex-shrink-0 fixed left-0 top-0 bottom-0 z-50"
     :style="temaClaro ? 'background:#ffffff; border-right:none; border-radius:0; box-shadow:4px 0 20px rgba(96,165,250,0.15); height:100dvh; max-height:100dvh;' : 'background:#161618; border-right:none; border-radius:0; box-shadow:4px 0 16px rgba(0,0,0,0.4); height:100dvh; max-height:100dvh;'"
   >
     <!-- Logo / Toggle -->
@@ -358,7 +440,7 @@
     </div>
 
     <!-- Nav desktop -->
-    <nav class="sidebar-scroll flex-1 overflow-y-auto overflow-x-hidden py-3 px-2 space-y-0.5">
+    <nav class="sidebar-scroll sidebar-favorites-nav flex-1 overflow-y-auto overflow-x-hidden py-3 px-2 space-y-0.5">
       {% url 'core:dashboard' as dashboard_url %}
       {% url 'cadastros:cliente-list' as clientes_url %}
       {% url 'cadastros:fornecedor-list' as fornecedores_url %}
@@ -1360,7 +1442,7 @@
     </div>
 
     <!-- Nav mobile -->
-    <nav class="sidebar-scroll flex-1 overflow-y-auto overflow-x-hidden py-3 px-2 space-y-0.5">
+    <nav class="sidebar-scroll sidebar-favorites-nav flex-1 overflow-y-auto overflow-x-hidden py-3 px-2 space-y-0.5">
       {% url 'core:dashboard' as dashboard_url %}
       {% url 'cadastros:cliente-list' as clientes_url %}
       {% url 'cadastros:fornecedor-list' as fornecedores_url %}
@@ -2096,4 +2178,5 @@
 
 </div>
 
-
+{{ request.user.menu_favoritos|default_if_none:''|json_script:"sidebar-favorites-data" }}
+<script src="{% static 'core/js/sidebar_favorites.js' %}" defer></script>
