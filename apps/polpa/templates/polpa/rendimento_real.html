@@ -1,0 +1,328 @@
+{% extends "_base.html" %}
+{% block title %}{{ title }} — Polpa{% endblock %}
+{% block page_title %}{{ title }}{% endblock %}
+{% block content %}
+
+{% comment %}
+  O NÚMERO QUE PAGA A CONTA. Dois pontos abaixo do esperado numa fábrica
+  que processa 40 toneladas por dia são 800 kg de polpa que alguém comprou,
+  descascou, pagou e não vendeu — e que não aparecem em lugar nenhum do
+  balanço até virarem prejuízo do mês.
+
+  POR ISSO O DESVIO VEM EM QUILO ao lado dos pontos percentuais: "menos 2,3
+  pontos" é abstrato; "1.150 kg de fruta que não viraram polpa" é a
+  conversa que a fábrica tem de verdade.
+
+  O PIOR PRIMEIRO. Quem abre esta tela quer saber onde está perdendo, não
+  ler a lista inteira em ordem alfabética.
+{% endcomment %}
+<div class="space-y-4">
+
+  <div class="flex flex-wrap items-start justify-between gap-3">
+    <div>
+      <p class="text-sm mb-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+        <a href="{% url 'polpa:hub' %}" :style="temaClaro ? 'color:#3b82f6;' : 'color:#60a5fa;'">Polpa de Frutas</a>
+        <span class="mx-1">›</span>
+        <a href="{% url 'polpa:grupo' 'indicadores' %}" :style="temaClaro ? 'color:#3b82f6;' : 'color:#60a5fa;'">Indicadores</a>
+      </p>
+      <h2 class="text-2xl font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">Rendimento real</h2>
+      <p class="text-sm mt-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+        Peso de fruta que entrou contra peso de produto que saiu — nos últimos {{ dias }} dias.
+      </p>
+    </div>
+    <div class="flex gap-1">
+      {% for j in janelas %}
+        <a href="?dias={{ j }}"
+           class="{% if j == dias %}btn-primary{% else %}btn-secondary{% endif %} text-sm">{{ j }}d</a>
+      {% endfor %}
+    </div>
+  </div>
+
+  {# ── A fábrica inteira ──────────────────────────────────────────── #}
+  <div class="grid grid-cols-2 lg:grid-cols-4 gap-3">
+    <div class="card p-4">
+      <p class="text-[11px] uppercase tracking-wide" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Rendimento real</p>
+      {% if resumo.real is not None %}
+        <p class="text-3xl font-bold mt-1"
+           style="color:{% if resumo.abaixo %}#dc2626{% else %}#059669{% endif %};">{{ resumo.real }}%</p>
+        <p class="text-[11px] mt-0.5" :style="temaClaro ? 'color:#94a3b8;' : 'color:#71717a;'">
+          {{ resumo.ordens }} ordem(ns) encerrada(s)
+        </p>
+      {% else %}
+        {# Zero seria "a fábrica não rendeu nada" — fábrica sem ordem fechada
+           apareceria em colapso. #}
+        <p class="text-sm mt-2" :style="temaClaro ? 'color:#94a3b8;' : 'color:#71717a;'">
+          nenhuma ordem encerrada na janela
+        </p>
+      {% endif %}
+    </div>
+
+    <div class="card p-4">
+      <p class="text-[11px] uppercase tracking-wide" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Deveria render</p>
+      {% if resumo.esperado is not None %}
+        <p class="text-3xl font-bold mt-1" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">{{ resumo.esperado }}%</p>
+        <p class="text-[11px] mt-0.5" :style="temaClaro ? 'color:#94a3b8;' : 'color:#71717a;'">
+          ponderado pelo peso de cada receita
+        </p>
+      {% else %}
+        <p class="text-sm mt-2" style="color:#d97706;">
+          Nenhuma receita da janela declara rendimento esperado.
+        </p>
+      {% endif %}
+    </div>
+
+    <div class="card p-4" style="{% if resumo.abaixo %}border:1px solid #dc2626;{% endif %}">
+      <p class="text-[11px] uppercase tracking-wide" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Desvio</p>
+      {% if resumo.desvio is not None %}
+        <p class="text-3xl font-bold mt-1"
+           style="color:{% if resumo.abaixo %}#dc2626{% else %}#059669{% endif %};">
+          {% if resumo.desvio > 0 %}+{% endif %}{{ resumo.desvio }}
+          <span class="text-base font-normal">pontos</span>
+        </p>
+      {% else %}
+        <p class="text-sm mt-2" :style="temaClaro ? 'color:#94a3b8;' : 'color:#71717a;'">—</p>
+      {% endif %}
+    </div>
+
+    <div class="card p-4" style="{% if resumo.kg_perdidos %}border:1px solid #dc2626;{% endif %}">
+      <p class="text-[11px] uppercase tracking-wide" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Fruta que não virou polpa</p>
+      {% if resumo.kg_perdidos %}
+        <p class="text-3xl font-bold mt-1" style="color:#dc2626;">
+          {{ resumo.kg_perdidos|floatformat:"-1" }}<span class="text-base font-normal"> kg</span>
+        </p>
+        <p class="text-[11px] mt-0.5" :style="temaClaro ? 'color:#94a3b8;' : 'color:#71717a;'">
+          comprada, descascada e não vendida
+        </p>
+      {% else %}
+        <p class="text-3xl font-bold mt-1" style="color:#059669;">—</p>
+        <p class="text-[11px] mt-0.5" :style="temaClaro ? 'color:#94a3b8;' : 'color:#71717a;'">
+          nada abaixo do esperado
+        </p>
+      {% endif %}
+    </div>
+  </div>
+
+  {% if resumo.sem_regua %}
+    <div class="card p-3" style="border:1px solid #d97706;">
+      <p class="text-xs" style="color:#d97706;">
+        {{ resumo.sem_regua }} ordem(ns) da janela vieram de receita sem
+        rendimento esperado — elas entram no real, mas não têm régua contra
+        a qual ser comparadas.
+      </p>
+    </div>
+  {% endif %}
+
+  {# ── Por fruta ──────────────────────────────────────────────────── #}
+  <div class="card overflow-hidden">
+    <div class="px-4 py-3 border-b" :style="temaClaro ? 'border-color:#e2e8f0;' : 'border-color:#2a2a2e;'">
+      <h3 class="text-sm font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">Por fruta</h3>
+      <p class="text-xs mt-0.5" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+        Contra a régua do cadastro de cada fruta — manga ≈ 60%, e assim por diante.
+      </p>
+    </div>
+    <div class="overflow-x-auto">
+      <table class="w-full text-sm">
+        <thead>
+          <tr class="border-b" :style="temaClaro ? 'border-color:#e2e8f0;' : 'border-color:#2a2a2e;'">
+            <th class="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wide"
+                :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Fruta</th>
+            <th class="text-right px-4 py-3 text-xs font-semibold uppercase tracking-wide"
+                :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Entrou</th>
+            <th class="text-right px-4 py-3 text-xs font-semibold uppercase tracking-wide"
+                :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Saiu</th>
+            <th class="text-right px-4 py-3 text-xs font-semibold uppercase tracking-wide"
+                :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Real / esperado</th>
+            <th class="text-right px-4 py-3 text-xs font-semibold uppercase tracking-wide"
+                :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Desvio</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for l in frutas %}
+            <tr class="border-b" :style="temaClaro ? 'border-color:#f1f5f9;' : 'border-color:#1e1e22;'">
+              <td class="px-4 py-3">
+                <span class="font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">{{ l.fruta.nome }}</span>
+                <span class="block text-xs" :style="temaClaro ? 'color:#94a3b8;' : 'color:#71717a;'">
+                  {{ l.ordens }} ordem(ns)
+                </span>
+              </td>
+              <td class="px-4 py-3 text-right" :style="temaClaro ? 'color:#374151;' : 'color:#cbd5e1;'">
+                {{ l.entrada|floatformat:"-1" }} kg
+              </td>
+              <td class="px-4 py-3 text-right" :style="temaClaro ? 'color:#374151;' : 'color:#cbd5e1;'">
+                {{ l.saida|floatformat:"-1" }} kg
+              </td>
+              <td class="px-4 py-3 text-right font-semibold"
+                  style="color:{% if l.abaixo %}#dc2626{% elif l.sem_esperado %}#d97706{% else %}#059669{% endif %};">
+                {{ l.real }}%
+                {% if l.sem_esperado %}
+                  {# Sem régua não é "no alvo": é cadastro faltando. #}
+                  <span class="block text-[11px] font-normal">fruta sem rendimento cadastrado</span>
+                {% else %}
+                  <span class="block text-[11px] font-normal"
+                        :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">de {{ l.esperado }}%</span>
+                {% endif %}
+              </td>
+              <td class="px-4 py-3 text-right">
+                {% if l.desvio is not None %}
+                  <span class="font-semibold"
+                        style="color:{% if l.abaixo %}#dc2626{% else %}#059669{% endif %};">
+                    {% if l.desvio > 0 %}+{% endif %}{{ l.desvio }}
+                  </span>
+                  {% if l.kg_perdidos %}
+                    <span class="block text-[11px]" style="color:#dc2626;">
+                      {{ l.kg_perdidos|floatformat:"-1" }} kg de fruta
+                    </span>
+                  {% endif %}
+                {% else %}
+                  <span class="text-xs" :style="temaClaro ? 'color:#94a3b8;' : 'color:#71717a;'">—</span>
+                {% endif %}
+              </td>
+            </tr>
+          {% empty %}
+            <tr>
+              <td colspan="5" class="px-4 py-8 text-center text-sm"
+                  :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+                Nenhuma ordem encerrada com fruta identificada na janela.
+              </td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% if misturadas or sem_fruta %}
+      <p class="px-4 py-3 text-xs border-t" style="color:#d97706;"
+         :style="temaClaro ? 'border-color:#e2e8f0;' : 'border-color:#2a2a2e;'">
+        {% if misturadas %}
+          {{ misturadas }} ordem(ns) ficaram de fora deste quadro por
+          consumirem mais de uma fruta — os dois pesos entram no mesmo
+          tanque, e repartir por chute daria um número com cara de medição.
+        {% endif %}
+        {% if sem_fruta %}
+          {{ sem_fruta }} ordem(ns) sem fruta vinculada no catálogo.
+        {% endif %}
+      </p>
+    {% endif %}
+  </div>
+
+  {# ── Por produto ────────────────────────────────────────────────── #}
+  <div class="card overflow-hidden">
+    <div class="px-4 py-3 border-b" :style="temaClaro ? 'border-color:#e2e8f0;' : 'border-color:#2a2a2e;'">
+      <h3 class="text-sm font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">Por produto</h3>
+      <p class="text-xs mt-0.5" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+        Contra o rendimento que a receita ativa promete.
+      </p>
+    </div>
+    <div class="overflow-x-auto">
+      <table class="w-full text-sm">
+        <tbody>
+          {% for l in produtos %}
+            <tr class="border-b" :style="temaClaro ? 'border-color:#f1f5f9;' : 'border-color:#1e1e22;'">
+              <td class="px-4 py-3">
+                {% if l.receita %}
+                  <a href="{% url 'polpa:receita-detail' l.receita.pk %}" class="font-semibold underline"
+                     :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">{{ l.produto.descricao }}</a>
+                {% else %}
+                  <span class="font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">{{ l.produto.descricao }}</span>
+                {% endif %}
+                <span class="block text-xs" :style="temaClaro ? 'color:#94a3b8;' : 'color:#71717a;'">
+                  {{ l.ordens }} ordem(ns) · {{ l.entrada|floatformat:"-1" }} kg de fruta
+                </span>
+              </td>
+              <td class="px-4 py-3 text-right font-semibold"
+                  style="color:{% if l.abaixo %}#dc2626{% elif l.sem_esperado %}#d97706{% else %}#059669{% endif %};">
+                {{ l.real }}%
+                {% if l.sem_esperado %}
+                  <span class="block text-[11px] font-normal">receita sem rendimento esperado</span>
+                {% else %}
+                  <span class="block text-[11px] font-normal"
+                        :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">de {{ l.esperado }}%</span>
+                {% endif %}
+              </td>
+              <td class="px-4 py-3 text-right" style="width:150px;">
+                {% if l.desvio is not None %}
+                  <span class="font-semibold"
+                        style="color:{% if l.abaixo %}#dc2626{% else %}#059669{% endif %};">
+                    {% if l.desvio > 0 %}+{% endif %}{{ l.desvio }} pontos
+                  </span>
+                  {% if l.kg_perdidos %}
+                    <span class="block text-[11px]" style="color:#dc2626;">
+                      {{ l.kg_perdidos|floatformat:"-1" }} kg
+                    </span>
+                  {% endif %}
+                {% endif %}
+              </td>
+            </tr>
+          {% empty %}
+            <tr>
+              <td class="px-4 py-8 text-center text-sm"
+                  :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+                Nenhuma ordem encerrada com peso dos dois lados na janela.
+              </td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  {# ── Batida por batida ──────────────────────────────────────────── #}
+  <div class="card overflow-hidden">
+    <div class="px-4 py-3 border-b" :style="temaClaro ? 'border-color:#e2e8f0;' : 'border-color:#2a2a2e;'">
+      <h3 class="text-sm font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">Batida por batida</h3>
+      <p class="text-xs mt-0.5" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+        A média esconde o dia ruim. Aqui cada ordem aparece com o seu.
+      </p>
+    </div>
+    <div class="overflow-x-auto">
+      <table class="w-full text-sm">
+        <thead>
+          <tr class="border-b" :style="temaClaro ? 'border-color:#e2e8f0;' : 'border-color:#2a2a2e;'">
+            <th class="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wide"
+                :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Ordem</th>
+            <th class="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wide"
+                :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Encerrada</th>
+            <th class="text-right px-4 py-3 text-xs font-semibold uppercase tracking-wide"
+                :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Entrou / saiu</th>
+            <th class="text-right px-4 py-3 text-xs font-semibold uppercase tracking-wide"
+                :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Rendimento</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for l in ordens %}
+            <tr class="border-b" :style="temaClaro ? 'border-color:#f1f5f9;' : 'border-color:#1e1e22;'">
+              <td class="px-4 py-2.5">
+                <a href="{% url 'polpa:processo-ordem' l.op.pk %}" class="font-semibold underline"
+                   :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">{{ l.op.numero }}</a>
+                <span class="block text-xs" :style="temaClaro ? 'color:#94a3b8;' : 'color:#71717a;'">{{ l.produto }}</span>
+              </td>
+              <td class="px-4 py-2.5 text-xs" :style="temaClaro ? 'color:#374151;' : 'color:#cbd5e1;'">
+                {{ l.quando|date:"d/m/Y H:i" }}
+              </td>
+              <td class="px-4 py-2.5 text-right text-xs" :style="temaClaro ? 'color:#374151;' : 'color:#cbd5e1;'">
+                {{ l.entrada|floatformat:"-1" }} → {{ l.saida|floatformat:"-1" }} kg
+              </td>
+              <td class="px-4 py-2.5 text-right font-semibold"
+                  style="color:{% if l.abaixo %}#dc2626{% elif l.sem_esperado %}#d97706{% else %}#059669{% endif %};">
+                {{ l.real }}%
+                {% if l.desvio is not None %}
+                  <span class="block text-[11px] font-normal">
+                    {% if l.desvio > 0 %}+{% endif %}{{ l.desvio }} contra a receita
+                  </span>
+                {% endif %}
+              </td>
+            </tr>
+          {% empty %}
+            <tr>
+              <td colspan="4" class="px-4 py-8 text-center text-sm"
+                  :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+                Nenhuma ordem encerrada na janela.
+              </td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+</div>
+{% endblock %}

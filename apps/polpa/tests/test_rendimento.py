@@ -1,50 +1,41 @@
 """
-Perdas e rendimento: planejado contra real, e o alerta que chegava a ninguém.
+Rendimento real: o que a fruta rendeu contra o que deveria render.
 
-Os quatro números da especificação já eram calculados: entraram 1.000 kg de
-manga, saíram 850, perdeu 150, rendeu 85%. O que faltava era o outro lado da
-comparação e a consequência.
+O QUE ESTES TESTES CERCAM:
 
-`Receita.rendimento_esperado` existia (manga ≈ 60%) e nada o confrontava com o
-real. E não havia limite configurável em lugar nenhum: o único que existia era
-uma constante de 80% no serviço genérico, que escrevia `logger.warning` — log
-é onde ninguém olha.
+  · PESO CONTRA PESO, e não produzido contra planejado. "Cumpri a meta?" é
+    outra pergunta e já tem tela. Rendimento de polpa é quanto da FRUTA
+    virou PRODUTO — 1.000 kg de manga que viram 600 kg de polpa rendem 60%,
+    tenha a ordem pedido 500 ou 5.000;
 
-O que os testes cercam:
+  · O DESVIO VEM EM QUILO. "Menos 2,3 pontos" é abstrato; "1.150 kg de
+    fruta que não viraram polpa" é a conversa que a fábrica tem;
 
-  · O REAL É PESO, o do lote é unidade. São perguntas diferentes — "quanto a
-    fruta rendeu" e "a ordem entregou o que prometeu" — e compará-las entre si
-    não significa nada;
-  · O PISO VEM DA RECEITA, em pontos abaixo do esperado. Manga não rende como
-    acerola, e um número fixo no código faria metade dos produtos alertar
-    sempre e a outra metade nunca;
-  · SEM ESPERADO NÃO HÁ VEREDITO. `dentro` é nulo, e não verdadeiro: mostrar
-    verde ali seria afirmar uma aprovação que ninguém deu;
-  · O ALERTA VAI PARA O SINO, com os quatro números na mensagem — quem lê
-    decide dali se para a linha;
-  · FALHA NO AVISO NÃO IMPEDE FECHAR A BATIDA. Ela já aconteceu.
+  · SEM RÉGUA NÃO É "NO ALVO". Receita ou fruta sem rendimento cadastrado
+    aparece como cadastro faltando — nunca como resultado bom;
+
+  · A ATRIBUIÇÃO POR FRUTA É HONESTA OU NÃO EXISTE. Receita com duas frutas
+    fica de fora do quadro por fruta: os dois pesos entraram no mesmo
+    tanque, e repartir por chute daria um número com cara de medição;
+
+  · SEM ORDEM ENCERRADA O RESULTADO É `None`. Zero se leria como "a fábrica
+    não rendeu nada".
 """
 from datetime import timedelta
 from decimal import Decimal
-from unittest.mock import patch
 
 from django.test import TestCase
+from django.urls import reverse
 from django.utils import timezone
 
-from apps.core.models import (
-    Empresa, Filial, Notificacao, PerfilAcesso, Usuario,
-)
-from apps.estoque.models import Estoque, LoteProduto
-from apps.polpa.models import Etapa, EtapaReceita, FichaProduto, OrdemPolpa
-from apps.polpa.services import CatalogoService, OrdemPolpaService, ReceitaService
-from apps.polpa.services.processo import ProcessoService
-from apps.producao.models import ItemFichaTecnica
+from apps.core.models import Empresa, Filial, PerfilAcesso, Usuario
+from apps.polpa.models import EtapaReceita, FichaProduto, Fruta, OrdemPolpa
+from apps.polpa.services import CatalogoService, ReceitaService
+from apps.polpa.services.rendimento import RendimentoService
+from apps.producao.models import ItemFichaTecnica, OrdemProducao
 from apps.produtos.models import UnidadeMedida, UnidadeMedidaFilial
 
 T = FichaProduto.Tipo
-S = OrdemPolpa.Situacao
-ZERO = Decimal('0')
-TIPO_ALERTA = Notificacao.Tipo.POLPA_RENDIMENTO_BAIXO
 
 
 class RendimentoBase(TestCase):
@@ -53,12 +44,12 @@ class RendimentoBase(TestCase):
     def setUpTestData(cls):
         cls.empresa = Empresa.objects.create(
             razao_social='Polpas Rendimento LTDA', nome_fantasia='Rendimento',
-            cnpj='43345678000191', segmento='polpa_frutas',
+            cnpj='83145678000191', segmento='polpa_frutas',
             regime_tributario=Empresa.RegimeTributario.SIMPLES_NACIONAL,
             codigo_regime_tributario=1,
         )
         cls.filial = Filial.objects.create(
-            empresa=cls.empresa, razao_social='Matriz', cnpj='43345678000272',
+            empresa=cls.empresa, razao_social='Matriz', cnpj='83145678000272',
             uf='RN', cidade='Natal', is_matriz=True,
         )
         cls.unidade = UnidadeMedida.objects.create(
@@ -70,324 +61,297 @@ class RendimentoBase(TestCase):
             empresa=cls.empresa, nome='Admin', is_admin=True,
         )
         cls.usuario = Usuario.objects.create_user(
-            email='chefe@rend.local', nome='Chefe', password='x' * 12,
+            email='chefe@rendimento.local', nome='Chefe', password='x' * 12,
             empresa=cls.empresa, perfil=perfil, filial=cls.filial,
         )
 
     def setUp(self):
-        self.acabado = self._item(
-            T.POLPA, 'Polpa de manga 100 g', validade_dias=180,
-            peso_liquido=Decimal('0.100'),
+        self.client.force_login(self.usuario)
+
+    # ── Fixtures ─────────────────────────────────────────────────────────
+
+    def _fruta(self, nome='Manga', rendimento=Decimal('60')):
+        return Fruta.objects.create(
+            filial=self.filial, nome=nome, rendimento_esperado=rendimento,
         )
-        self.manga = self._item(T.FRUTA, 'Manga in natura', custo=Decimal('1.50'))
-        self.pote = self._item(T.POTE, 'Pote 100 g', custo=Decimal('0.20'))
 
-    def _item(self, tipo, descricao, custo=Decimal('0'), **extras):
-        dados = {
-            'tipo': tipo, 'descricao': descricao, 'codigo': descricao[:10],
-            'unidade_medida': self.unidade, 'preco_custo': custo,
-        }
-        dados.update(extras)
-        return CatalogoService.salvar(self.filial, dados).produto
-
-    def _receita(self, esperado='60', tolerado='5'):
-        receita = ReceitaService.criar(self.filial, self.acabado, {
-            'descricao': 'Polpa de manga 100 g', 'versao': '1.0',
-            'quantidade_produzida': Decimal('1000'),
-            'rendimento_esperado': Decimal(esperado) if esperado else None,
+    def _mp(self, codigo='MANGA', fruta=None):
+        ficha = CatalogoService.salvar(self.filial, {
+            'tipo': T.FRUTA, 'descricao': f'Fruta {codigo}', 'codigo': codigo,
+            'unidade_medida': self.unidade,
         })
-        if tolerado is not None:
-            receita.desvio_tolerado = Decimal(tolerado)
-            receita.save(update_fields=['desvio_tolerado'])
-        ItemFichaTecnica.objects.create(
-            ficha=receita.ficha, materia_prima=self.manga,
-            quantidade=Decimal('1200'), perda_prevista=ZERO,
-        )
-        ItemFichaTecnica.objects.create(
-            ficha=receita.ficha, materia_prima=self.pote,
-            quantidade=Decimal('10000'), perda_prevista=ZERO,
-        )
+        if fruta is not None:
+            ficha.fruta = fruta
+            ficha.save(update_fields=['fruta'])
+        return ficha.produto
+
+    def _acabado(self, codigo='PM1'):
+        return CatalogoService.salvar(self.filial, {
+            'tipo': T.POLPA, 'descricao': f'Polpa {codigo}', 'codigo': codigo,
+            'unidade_medida': self.unidade, 'validade_dias': 180,
+        }).produto
+
+    def _receita(self, acabado, materias, esperado=Decimal('60'), versao='1.0'):
+        receita = ReceitaService.criar(self.filial, acabado, {
+            'descricao': f'Receita {acabado.codigo}', 'versao': versao,
+            'quantidade_produzida': Decimal('1000'),
+            'rendimento_esperado': esperado,
+        })
+        for mp in materias:
+            ItemFichaTecnica.objects.create(
+                ficha=receita.ficha, materia_prima=mp,
+                quantidade=Decimal('100'), perda_prevista=Decimal('0'),
+            )
         EtapaReceita.objects.create(receita=receita, ordem=1, nome='Despolpa')
         ReceitaService.ativar(receita)
         return receita
 
-    def _estoque(self, produto, quantidade):
-        estoque, _ = Estoque.objects.get_or_create(
-            produto=produto, filial=self.filial,
+    def _ordem(self, receita, entrada, saida, dias_atras=1):
+        fim = timezone.now() - timedelta(days=dias_atras)
+        ordem = OrdemProducao.objects.create(
+            filial=self.filial,
+            numero=f'OP{OrdemProducao.objects.count() + 1:04d}',
+            ficha_tecnica=receita.ficha,
+            produto_acabado=receita.ficha.produto_acabado,
+            quantidade_planejada=Decimal('1000'),
+            quantidade_produzida=Decimal('1000'),
+            status=OrdemProducao.Status.ENCERRADA,
+            peso_entrada_mp=entrada, peso_saida_produzido=saida,
+            data_fim_real=fim, usuario_abertura=self.usuario,
         )
-        estoque.quantidade_atual = Decimal(quantidade)
-        estoque.quantidade_reservada = ZERO
-        estoque.atualizar_disponivel()
-        estoque.save()
-        LoteProduto.objects.create(
-            filial=self.filial, produto=produto,
-            numero_lote=f'L-{produto.pk}', quantidade_inicial=Decimal(quantidade),
-            quantidade_atual=Decimal(quantidade), custo_unitario=produto.preco_custo,
-            data_validade=timezone.localdate() + timedelta(days=365),
-            status=LoteProduto.Status.ATIVO,
-        )
-
-    def _op(self, receita, quantidade='1000'):
-        self._estoque(self.manga, '50000')
-        self._estoque(self.pote, '500000')
-        return OrdemPolpaService.criar(
-            self.filial, receita,
-            {'quantidade_planejada': Decimal(quantidade)}, self.usuario,
+        return OrdemPolpa.objects.create(
+            filial=self.filial, ordem=ordem, receita=receita,
+            situacao=OrdemPolpa.Situacao.PRODUZIDA,
         )
 
-    def _pesar(self, op, entrada='1000', saida='850'):
-        """
-        O exemplo da especificação: 1.000 kg de manga entram, 850 saem.
 
-        A entrada é da PRIMEIRA etapa e a saída da ÚLTIMA — é assim que o
-        resumo lê, porque as perdas se compõem pelo caminho.
-        """
-        etapas = list(op.etapas_processo.all())
-        ProcessoService.apontar(etapas[0], {
-            'quantidade_entrada': entrada, 'quantidade_saida': entrada,
-        }, self.usuario)
-        ProcessoService.apontar(etapas[-1], {
-            'quantidade_entrada': saida, 'quantidade_saida': saida,
-        }, self.usuario)
+class ResumoTests(RendimentoBase):
+    """A fábrica inteira."""
 
-    def _produzir(self, op, quantidade):
-        """A batida inteira: libera, produz e conclui."""
-        OrdemPolpaService.mover(op, S.LIBERADA, self.usuario)
-        OrdemPolpaService.mover(op, S.EM_PRODUCAO, self.usuario)
-        return OrdemPolpaService.concluir(
-            op, self.usuario, quantidade=Decimal(quantidade),
+    def test_sem_ordem_encerrada_o_real_e_nulo(self):
+        """Zero se leria como "a fábrica não rendeu nada"."""
+        resumo = RendimentoService.resumo(self.filial)
+
+        self.assertIsNone(resumo['real'])
+        self.assertEqual(resumo['ordens'], 0)
+
+    def test_o_real_e_peso_que_saiu_sobre_peso_que_entrou(self):
+        receita = self._receita(self._acabado(), [self._mp()])
+        self._ordem(receita, Decimal('1000'), Decimal('600'))
+
+        resumo = RendimentoService.resumo(self.filial)
+
+        self.assertEqual(resumo['real'], Decimal('60.00'))
+        self.assertEqual(resumo['esperado'], Decimal('60.00'))
+        self.assertEqual(resumo['desvio'], Decimal('0.00'))
+
+    def test_abaixo_do_esperado_vira_quilo_de_fruta(self):
+        """
+        "Menos 2 pontos" é abstrato; 20 kg de fruta comprada, descascada e
+        não vendida é a conversa real.
+        """
+        receita = self._receita(self._acabado(), [self._mp()])
+        self._ordem(receita, Decimal('1000'), Decimal('580'))
+
+        resumo = RendimentoService.resumo(self.filial)
+
+        self.assertEqual(resumo['real'], Decimal('58.00'))
+        self.assertEqual(resumo['desvio'], Decimal('-2.00'))
+        self.assertEqual(resumo['kg_perdidos'], Decimal('20.000'))
+        self.assertTrue(resumo['abaixo'])
+
+    def test_acima_do_esperado_nao_gera_perda(self):
+        receita = self._receita(self._acabado(), [self._mp()])
+        self._ordem(receita, Decimal('1000'), Decimal('650'))
+
+        resumo = RendimentoService.resumo(self.filial)
+
+        self.assertEqual(resumo['desvio'], Decimal('5.00'))
+        self.assertIsNone(resumo['kg_perdidos'])
+        self.assertFalse(resumo['abaixo'])
+
+    def test_o_esperado_da_fabrica_e_ponderado_pelo_peso(self):
+        """
+        Uma receita rodada uma vez não pode pesar o mesmo que a que roda
+        todo dia — a média simples faria o alvo da fábrica flutuar sozinho.
+        """
+        muita = self._receita(
+            self._acabado('PM1'), [self._mp('MG')], esperado=Decimal('60'),
         )
+        pouca = self._receita(
+            self._acabado('PM2'), [self._mp('AC')], esperado=Decimal('30'),
+        )
+        self._ordem(muita, Decimal('9000'), Decimal('5400'))
+        self._ordem(pouca, Decimal('1000'), Decimal('300'))
 
-    def _alertas(self):
-        return Notificacao.objects.filter(filial=self.filial, tipo=TIPO_ALERTA)
+        resumo = RendimentoService.resumo(self.filial)
 
+        # (9000×60% + 1000×30%) / 10000 = 57%
+        self.assertEqual(resumo['esperado'], Decimal('57.00'))
 
-class OsQuatroNumerosTests(RendimentoBase):
-
-    def test_o_exemplo_da_especificacao(self):
-        """1.000 kg entram, 850 saem, 150 de perda, 85% de rendimento."""
-        receita = self._receita()
-        op = self._op(receita)
-        self._pesar(op, entrada='1000', saida='850')
-
-        resumo = ProcessoService.resumo(op)
-
-        self.assertEqual(resumo['entrada'], Decimal('1000.000'))
-        self.assertEqual(resumo['saida'], Decimal('850.000'))
-        self.assertEqual(resumo['perda_total'], Decimal('150.000'))
-        self.assertEqual(resumo['rendimento'], Decimal('85.00'))
-
-    def test_o_rendimento_do_processo_nao_e_o_do_lote(self):
+    def test_ordem_sem_peso_de_entrada_fica_de_fora(self):
         """
-        Um é peso (quanto da fruta virou produto), o outro é unidade (a ordem
-        entregou o que prometeu). Compará-los entre si não significa nada.
+        Ordem que ninguém pesou entra com zero na entrada — e dividir por
+        ela inventaria uma perda que ninguém teve.
         """
-        receita = self._receita()
-        op = self._op(receita, quantidade='1000')
-        self._pesar(op, entrada='1000', saida='850')
+        receita = self._receita(self._acabado(), [self._mp()])
+        self._ordem(receita, Decimal('1000'), Decimal('600'))
+        self._ordem(receita, Decimal('0'), Decimal('600'))
 
-        resumo = ProcessoService.resumo(op)
+        self.assertEqual(RendimentoService.resumo(self.filial)['ordens'], 1)
 
-        self.assertEqual(resumo['rendimento'], Decimal('85.00'))
-        # O do lote só existe depois de produzida — e conta outra coisa.
-        self.assertIsNone(op.rendimento_lote)
+    def test_fora_da_janela_nao_entra(self):
+        receita = self._receita(self._acabado(), [self._mp()])
+        self._ordem(receita, Decimal('1000'), Decimal('600'), dias_atras=200)
 
+        self.assertEqual(RendimentoService.resumo(self.filial)['ordens'], 0)
 
-class PlanejadoContraRealTests(RendimentoBase):
-
-    def test_o_resumo_traz_o_esperado_ao_lado_do_real(self):
-        receita = self._receita(esperado='60')
-        op = self._op(receita)
-        self._pesar(op, entrada='1000', saida='850')
-
-        resumo = ProcessoService.resumo(op)
-
-        self.assertEqual(resumo['rendimento_esperado'], Decimal('60.00'))
-        self.assertEqual(resumo['rendimento_desvio'], Decimal('25.00'))
-
-    def test_desvio_negativo_quando_rende_menos(self):
-        receita = self._receita(esperado='60')
-        op = self._op(receita)
-        self._pesar(op, entrada='1000', saida='500')
-
-        resumo = ProcessoService.resumo(op)
-
-        self.assertEqual(resumo['rendimento'], Decimal('50.00'))
-        self.assertEqual(resumo['rendimento_desvio'], Decimal('-10.00'))
-
-    def test_o_piso_vem_da_receita(self):
-        """Esperado 60 com tolerância 5 alerta abaixo de 55."""
-        receita = self._receita(esperado='60', tolerado='5')
-
-        self.assertEqual(receita.rendimento_minimo, Decimal('55.00'))
-
-    def test_dentro_do_piso_nao_alerta(self):
-        receita = self._receita(esperado='60', tolerado='5')
-        op = self._op(receita)
-        self._pesar(op, entrada='1000', saida='560')  # 56%
-
-        resumo = ProcessoService.resumo(op)
-
-        self.assertTrue(resumo['rendimento_dentro'])
-        self.assertFalse(resumo['rendimento_abaixo'])
-
-    def test_abaixo_do_piso_marca(self):
-        receita = self._receita(esperado='60', tolerado='5')
-        op = self._op(receita)
-        self._pesar(op, entrada='1000', saida='540')  # 54%
-
-        resumo = ProcessoService.resumo(op)
-
-        self.assertFalse(resumo['rendimento_dentro'])
-        self.assertTrue(resumo['rendimento_abaixo'])
-
-    def test_tolerancia_maior_aceita_mais(self):
-        """A tolerância é o que a fábrica ajusta, e ela muda o veredito."""
-        receita = self._receita(esperado='60', tolerado='10')
-        op = self._op(receita)
-        self._pesar(op, entrada='1000', saida='540')  # 54%, piso 50
-
-        self.assertTrue(ProcessoService.resumo(op)['rendimento_dentro'])
-
-    def test_sem_esperado_nao_ha_veredito(self):
-        """
-        Receita sem rendimento esperado não está "dentro do limite" — ela não
-        tem limite, e verde ali seria uma aprovação que ninguém deu.
-
-        `ReceitaService.ativar` já recusa receita sem esperado — regra certa,
-        e é dela que vem o cenário alcançável: alguém limpa o campo DEPOIS de
-        a receita estar ativa, com ordens já rodando.
-        """
-        receita = self._receita(esperado='60')
-        op = self._op(receita)
+    def test_receita_sem_rendimento_esperado_e_contada_como_sem_regua(self):
+        """Sem régua não é "no alvo": é cadastro faltando."""
+        # A receita só ATIVA com rendimento declarado (é regra da seção 2);
+        # sem régua é o caso da receita antiga, de antes dessa exigência.
+        receita = self._receita(self._acabado(), [self._mp()])
         receita.rendimento_esperado = None
         receita.save(update_fields=['rendimento_esperado'])
-        self._pesar(op, entrada='1000', saida='850')
+        self._ordem(receita, Decimal('1000'), Decimal('600'))
 
-        resumo = ProcessoService.resumo(op)
+        resumo = RendimentoService.resumo(self.filial)
 
-        self.assertIsNone(resumo['rendimento_dentro'])
-        self.assertIsNone(resumo['rendimento_desvio'])
-        self.assertFalse(resumo['rendimento_abaixo'])
-
-    def test_sem_pesagem_nao_ha_veredito(self):
-        receita = self._receita()
-        op = self._op(receita)
-
-        resumo = ProcessoService.resumo(op)
-
-        self.assertIsNone(resumo['rendimento'])
-        self.assertIsNone(resumo['rendimento_dentro'])
+        self.assertEqual(resumo['sem_regua'], 1)
+        self.assertIsNone(resumo['esperado'])
+        self.assertIsNone(resumo['desvio'])
 
 
-class AlertaNoSinoTests(RendimentoBase):
+class PorFrutaTests(RendimentoBase):
+    """A régua do cadastro de cada fruta."""
 
-    def test_rendimento_abaixo_do_piso_toca_o_sino(self):
+    def test_a_fruta_e_comparada_com_a_regua_dela(self):
+        fruta = self._fruta(rendimento=Decimal('60'))
+        receita = self._receita(
+            self._acabado(), [self._mp('MG', fruta)], esperado=Decimal('55'),
+        )
+        self._ordem(receita, Decimal('1000'), Decimal('570'))
+
+        dados = RendimentoService.por_fruta(self.filial)
+
+        linha = dados['linhas'][0]
+        self.assertEqual(linha['fruta'], fruta)
+        self.assertEqual(linha['real'], Decimal('57.00'))
+        # Contra a régua da FRUTA (60), não a da receita (55).
+        self.assertEqual(linha['esperado'], Decimal('60.00'))
+        self.assertEqual(linha['desvio'], Decimal('-3.00'))
+
+    def test_receita_com_duas_frutas_fica_de_fora_e_e_contada(self):
         """
-        O aviso existia e ia para o log, onde ninguém olha. Um indicador que a
-        fábrica cobra todo dia precisa ir para onde a fábrica olha.
+        Os dois pesos entraram no mesmo tanque: repartir por chute daria um
+        número com cara de medição.
         """
-        receita = self._receita(esperado='60', tolerado='5')
-        op = self._op(receita)
-        self._pesar(op, entrada='1000', saida='540')
+        manga = self._fruta('Manga')
+        acerola = self._fruta('Acerola', Decimal('40'))
+        receita = self._receita(
+            self._acabado(), [self._mp('MG', manga), self._mp('AC', acerola)],
+        )
+        self._ordem(receita, Decimal('1000'), Decimal('600'))
 
-        self._produzir(op, '540')
+        dados = RendimentoService.por_fruta(self.filial)
 
-        alerta = self._alertas().get()
-        self.assertTrue(alerta.ativa)
-        self.assertIn('54', alerta.titulo)
+        self.assertEqual(dados['linhas'], [])
+        self.assertEqual(dados['misturadas'], 1)
 
-    def test_a_mensagem_leva_os_quatro_numeros(self):
-        """Quem lê o sino decide dali se para a linha."""
-        receita = self._receita(esperado='60', tolerado='5')
-        op = self._op(receita)
-        self._pesar(op, entrada='1000', saida='540')
+    def test_materia_prima_sem_fruta_vinculada_e_contada_a_parte(self):
+        receita = self._receita(self._acabado(), [self._mp('MG')])
+        self._ordem(receita, Decimal('1000'), Decimal('600'))
 
-        self._produzir(op, '540')
+        dados = RendimentoService.por_fruta(self.filial)
 
-        mensagem = self._alertas().get().mensagem
-        self.assertIn('1000', mensagem)
-        self.assertIn('540', mensagem)
-        self.assertIn('460', mensagem)   # a perda
-        self.assertIn('60', mensagem)    # o esperado
+        self.assertEqual(dados['linhas'], [])
+        self.assertEqual(dados['sem_fruta'], 1)
 
-    def test_dentro_do_piso_nao_toca(self):
-        receita = self._receita(esperado='60', tolerado='5')
-        op = self._op(receita)
-        self._pesar(op, entrada='1000', saida='600')
+    def test_fruta_sem_rendimento_cadastrado_aparece_sem_regua(self):
+        fruta = self._fruta(rendimento=None)
+        receita = self._receita(self._acabado(), [self._mp('MG', fruta)])
+        self._ordem(receita, Decimal('1000'), Decimal('600'))
 
-        self._produzir(op, '600')
+        linha = RendimentoService.por_fruta(self.filial)['linhas'][0]
 
-        self.assertEqual(self._alertas().count(), 0)
+        self.assertTrue(linha['sem_esperado'])
+        self.assertIsNone(linha['desvio'])
 
-    def test_o_alerta_leva_a_ordem(self):
-        receita = self._receita(esperado='60', tolerado='5')
-        op = self._op(receita)
-        self._pesar(op, entrada='1000', saida='540')
 
-        self._produzir(op, '540')
+class PorProdutoTests(RendimentoBase):
+    """Cada produto contra a receita dele."""
 
-        self.assertIn(str(op.pk), self._alertas().get().url)
+    def test_o_pior_vem_primeiro(self):
+        """Quem abre a tela quer saber onde está perdendo."""
+        bom = self._receita(self._acabado('PM1'), [self._mp('MG')])
+        ruim = self._receita(self._acabado('PM2'), [self._mp('AC')])
+        self._ordem(bom, Decimal('1000'), Decimal('600'))
+        self._ordem(ruim, Decimal('1000'), Decimal('500'))
 
-    def test_falha_no_aviso_nao_impede_fechar_a_batida(self):
-        """A batida já aconteceu — o que se perde ao travar é o registro."""
-        receita = self._receita(esperado='60', tolerado='5')
-        op = self._op(receita)
-        self._pesar(op, entrada='1000', saida='540')
+        linhas = RendimentoService.por_produto(self.filial)
 
-        with patch.object(
-            ProcessoService, 'resumo', side_effect=RuntimeError('banco fora'),
-        ):
-            self._produzir(op, '540')
+        self.assertEqual(linhas[0]['produto'], ruim.ficha.produto_acabado)
+        self.assertEqual(linhas[0]['desvio'], Decimal('-10.00'))
 
-        op.refresh_from_db()
-        self.assertEqual(op.situacao, S.PRODUZIDA)
+    def test_as_ordens_do_mesmo_produto_somam(self):
+        receita = self._receita(self._acabado(), [self._mp()])
+        self._ordem(receita, Decimal('1000'), Decimal('600'))
+        self._ordem(receita, Decimal('1000'), Decimal('500'))
+
+        linha = RendimentoService.por_produto(self.filial)[0]
+
+        self.assertEqual(linha['ordens'], 2)
+        self.assertEqual(linha['real'], Decimal('55.00'))
+
+
+class PorOrdemTests(RendimentoBase):
+    """A média esconde o dia ruim."""
+
+    def test_cada_batida_com_o_seu_rendimento(self):
+        receita = self._receita(self._acabado(), [self._mp()])
+        self._ordem(receita, Decimal('1000'), Decimal('600'), dias_atras=2)
+        self._ordem(receita, Decimal('1000'), Decimal('500'), dias_atras=1)
+
+        linhas = RendimentoService.por_ordem(self.filial)
+
+        # Mais recente primeiro.
+        self.assertEqual(linhas[0]['real'], Decimal('50.00'))
+        self.assertEqual(linhas[1]['real'], Decimal('60.00'))
 
 
 class TelaTests(RendimentoBase):
-    """A tela dizia verde para qualquer rendimento."""
+    """A tela."""
 
-    def setUp(self):
-        super().setUp()
-        self.client.force_login(self.usuario)
+    def test_a_tela_abre(self):
+        receita = self._receita(self._acabado(), [self._mp()])
+        op = self._ordem(receita, Decimal('1000'), Decimal('580'))
 
-    def _abrir(self, op):
-        from django.urls import reverse
-        return self.client.get(reverse('polpa:processo-ordem', args=[op.pk]))
-
-    def test_abaixo_do_piso_a_tela_marca_em_vermelho(self):
-        receita = self._receita(esperado='60', tolerado='5')
-        op = self._op(receita)
-        self._pesar(op, entrada='1000', saida='300')  # 30%
-
-        resposta = self._abrir(op)
+        resposta = self.client.get(reverse('polpa:rendimento-real'))
 
         self.assertEqual(resposta.status_code, 200)
-        self.assertContains(resposta, 'abaixo do piso de 55')
-        self.assertContains(resposta, '#dc2626')
+        self.assertContains(resposta, op.numero)
+        self.assertContains(resposta, '58,00%')
 
-    def test_dentro_do_piso_nao_marca(self):
-        receita = self._receita(esperado='60', tolerado='5')
-        op = self._op(receita)
-        self._pesar(op, entrada='1000', saida='600')
+    def test_a_tela_nao_e_o_placeholder_em_construcao(self):
+        resposta = self.client.get(
+            reverse('polpa:item', args=['indicadores', 'rendimento-real']),
+        )
 
-        self.assertNotContains(self._abrir(op), 'abaixo do piso')
+        self.assertEqual(resposta.status_code, 200)
+        self.assertNotContains(resposta, 'Tela em construção')
 
-    def test_a_tela_mostra_o_desvio(self):
-        receita = self._receita(esperado='60', tolerado='5')
-        op = self._op(receita)
-        self._pesar(op, entrada='1000', saida='850')
+    def test_a_janela_muda_pela_url(self):
+        receita = self._receita(self._acabado(), [self._mp()])
+        self._ordem(receita, Decimal('1000'), Decimal('600'), dias_atras=45)
 
-        # Sem o separador decimal na asserção: o projeto é pt-BR e a
-        # localização troca o ponto pela vírgula na renderização.
-        self.assertContains(self._abrir(op), '+25')
+        curta = self.client.get(reverse('polpa:rendimento-real'), {'dias': 7})
+        longa = self.client.get(reverse('polpa:rendimento-real'), {'dias': 90})
 
-    def test_nada_de_tag_vaza_para_a_tela(self):
-        receita = self._receita()
-        op = self._op(receita)
-        self._pesar(op)
+        self.assertEqual(curta.context['resumo']['ordens'], 0)
+        self.assertEqual(longa.context['resumo']['ordens'], 1)
 
-        corpo = self._abrir(op).content.decode()
+    def test_janela_invalida_cai_no_padrao(self):
+        resposta = self.client.get(reverse('polpa:rendimento-real'), {'dias': 'x'})
 
-        for marca in ('{%', '%}', '{#', '#}', 'endcomment'):
-            self.assertNotIn(marca, corpo, f'tag {marca} vazou para a tela')
+        self.assertEqual(resposta.status_code, 200)
+        self.assertEqual(resposta.context['dias'], RendimentoService.JANELA)

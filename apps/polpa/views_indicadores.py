@@ -8,6 +8,7 @@ partir de um numero agregado, sem ver a ordem que ele resume.
 from django.shortcuts import render
 
 from .services import IndicadoresService
+from .services.rendimento import RendimentoService
 from .views import PolpaBaseView
 
 # As janelas que a fabrica usa: a semana (o que aconteceu), o mes (o que
@@ -44,4 +45,30 @@ class PainelView(PolpaBaseView):
                 (producao['semana'], 'Semana'),
                 (producao['mes'], 'Mes'),
             ],
+        })
+
+
+class RendimentoRealView(PolpaBaseView):
+    """
+    O que a fruta rendeu contra o que deveria render.
+
+    TELA DE LEITURA, como o painel: quem abre está decidindo o que
+    investigar, não operando. O caminho para agir é a ordem — e cada linha
+    leva até ela.
+    """
+
+    area = 'indicadores'
+
+    def get(self, request):
+        try:
+            dias = int(request.GET.get('dias') or RendimentoService.JANELA)
+        except ValueError:
+            dias = RendimentoService.JANELA
+        if dias not in JANELAS:
+            dias = RendimentoService.JANELA
+
+        return render(request, 'polpa/rendimento_real.html', {
+            'title': 'Rendimento real',
+            'janelas': JANELAS,
+            **RendimentoService.painel(request.filial_ativa, dias),
         })

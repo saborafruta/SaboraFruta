@@ -139,6 +139,7 @@ ROTAS_PRONTAS: list = [
     # ── Indicadores ─────────────────────────────────────────────────────
     # Nenhum número nasce lá: o painel junta o que já foi registrado por
     # quem fez o trabalho.
+    path('indicadores/rendimento-real/', vind.RendimentoRealView.as_view(), name='rendimento-real'),
     path('indicadores/painel/', vind.PainelView.as_view(), name='painel'),
     # A TELA DE PAREDE: outro dono que o painel industrial -- este e' de
     # quem esta' produzindo agora, e a pergunta e' "estamos no ritmo?".
