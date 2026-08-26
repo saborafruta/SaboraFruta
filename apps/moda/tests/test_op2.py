@@ -355,6 +355,22 @@ class Op2Tests(TestCase):
         self.assertEqual(pdf['Content-Type'], 'application/pdf')
         self.assertTrue(pdf.content.startswith(b'%PDF-'))
 
+    def test_detalhe_da_op_exibe_produto_compacto_e_total_no_cabecalho(self):
+        self._item(quantidade=4)
+        self.client.force_login(self._usuario())
+        session = self.client.session
+        session['filial_id'] = self.filial.pk
+        session.save()
+
+        resposta = self.client.get(reverse('moda:op2-detail', args=[self.pedido.pk]))
+
+        self.assertContains(resposta, 'class="op2-order-total"')
+        self.assertContains(resposta, 'Total do pedido')
+        self.assertContains(resposta, 'class="op2-item-tools"')
+        self.assertContains(resposta, 'Detalhes técnicos')
+        self.assertContains(resposta, 'x-show="gradeEdit"')
+        self.assertContains(resposta, 'x-data="{edit:false,detalhes:false,gradeEdit:false}"')
+
     def test_tipos_de_peca_abre_um_tipo_por_vez(self):
         self.client.force_login(self._usuario())
         session = self.client.session
