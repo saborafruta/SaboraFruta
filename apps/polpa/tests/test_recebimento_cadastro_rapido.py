@@ -131,6 +131,30 @@ class TelaDoRomaneioTests(CadastroRapidoBase):
         self.assertContains(resposta, 'Selecione o produtor')
         self.assertNotContains(resposta, '---------')
 
+    def test_os_totais_ficam_no_painel_junto_do_botao_de_gravar(self):
+        """
+        Os tres numeros ficavam no fim do cartao da balanca e SUMIAM DA TELA
+        quando ela rolava para conferir a carga -- justamente o que o produtor e
+        o conferente querem ver antes de assinar. Agora moram no painel lateral,
+        colados no botao de gravar. O teste prende os quatro ao MESMO bloco: se
+        alguem devolver os totais para dentro do formulario, isto reprova.
+        """
+        import re
+
+        resposta = self.client.get(reverse('polpa:recebimento-create'))
+        html = resposta.content.decode()
+        # O menu lateral do `_base.html` tambem e' um <aside> e vem antes:
+        # o painel do romaneio e' o que carrega o botao de gravar.
+        paineis = re.findall(r'<aside[ >].*?</aside>', html, re.S)
+        bloco = next((p for p in paineis if 'Gravar romaneio' in p), '')
+
+        self.assertEqual(resposta.status_code, 200)
+        self.assertTrue(
+            bloco, f'painel do romaneio nao encontrado ({len(paineis)} aside no HTML)',
+        )
+        for pedaco in ('Líquido', 'Aceito', 'A pagar', 'Gravar romaneio'):
+            self.assertIn(pedaco, bloco)
+
     def test_a_fruta_recem_criada_aparece_na_lista_do_romaneio(self):
         """A volta do favor: criada, ela precisa estar selecionavel."""
         self.client.post(reverse('polpa:fruta-ajax-create'), {'nome': 'Goiaba'})
