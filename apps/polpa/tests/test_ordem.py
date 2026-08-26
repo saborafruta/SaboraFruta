@@ -1308,3 +1308,211 @@ class ATelaDeNaoConformidadesTests(OrdemBase):
 
         for resto in ('{#', '#}', '{%', '%}'):
             self.assertNotIn(resto, html, f'vazou "{resto}" no HTML')
+
+
+class OLaudoTests(OrdemBase):
+    """
+    O laudo é o documento que a fábrica assina dizendo que o lote foi
+    analisado, deu determinado resultado, e que ela responde por isso.
+
+    GERADO, E NÃO GUARDADO: o PDF é montado na hora a partir da análise. As
+    regras do documento vivem no serviço, e é lá que os testes batem — separar
+    `dados()` do `pdf()` existe justamente para não precisar abrir binário para
+    conferir regra.
+    """
+
+    def _analise(self, resultado=None, **campos):
+        from apps.qualidade.constants.enums import ResultadoAnalise, TipoAnalise
+        from apps.qualidade.models import AnaliseQualidade
+
+        dados = {
+            'filial': self.filial, 'tipo_analise': TipoAnalise.PRODUTO_ACABADO,
+            'parametros': {}, 'responsavel_tecnico': self.usuario,
+            'data_analise': timezone.now(),
+            'resultado': resultado or ResultadoAnalise.APROVADO,
+        }
+        dados.update(campos)
+        return AnaliseQualidade.objects.create(**dados)
+
+    def _parametro(self, analise, **campos):
+        from apps.qualidade.models import ItemAnalise
+
+        dados = {
+            'analise': analise, 'nome_parametro': 'Brix',
+            'valor_numero': Decimal('14'), 'valor_minimo': Decimal('12'),
+            'situacao': ItemAnalise.Situacao.CONFORME,
+        }
+        dados.update(campos)
+        return ItemAnalise.objects.create(**dados)
+
+    # ── A regra que o documento impõe ────────────────────────────────────
+
+    def test_analise_pendente_nao_vira_laudo(self):
+        """
+        Assinar que o lote foi analisado quando ninguem concluiu e o oposto do
+        que o documento serve para fazer.
+        """
+        from apps.core.services.exceptions import DomainError
+        from apps.qualidade.constants.enums import ResultadoAnalise
+        from apps.qualidade.services.laudo_service import LaudoService
+
+        analise = self._analise(resultado=ResultadoAnalise.PENDENTE)
+
+        self.assertFalse(LaudoService.pode_emitir(analise))
+        with self.assertRaises(DomainError):
+            LaudoService.dados(analise)
+
+    def test_reprovado_tambem_gera_laudo(self):
+        """
+        Laudo nao e certificado de aprovacao: e o registro da analise. O lote
+        reprovado precisa do documento tanto quanto o aprovado, porque e ele
+        que acompanha a devolucao.
+        """
+        from apps.qualidade.constants.enums import ResultadoAnalise
+        from apps.qualidade.services.laudo_service import LaudoService
+
+        analise = self._analise(resultado=ResultadoAnalise.REPROVADO)
+
+        self.assertTrue(LaudoService.pode_emitir(analise))
+
+    def test_o_desvio_sem_tratativa_sai_marcado_e_nao_omitido(self):
+        """
+        Omitir seria o sistema ajudando a esconder. E justamente o desvio, com
+        a acao ao lado, que prova que a fabrica viu e tratou.
+        """
+        from apps.qualidade.models import ItemAnalise
+        from apps.qualidade.services.laudo_service import LaudoService
+
+        analise = self._analise()
+        self._parametro(
+            analise, nome_parametro='pH',
+            situacao=ItemAnalise.Situacao.NAO_CONFORME, acao_corretiva='',
+        )
+
+        dados = LaudoService.dados(analise)
+
+        self.assertEqual(len(dados['nao_conformes']), 1)
+        self.assertEqual(len(dados['desvios_sem_acao']), 1)
+
+    def test_o_numero_do_laudo_e_derivado_e_estavel(self):
+        """
+        Contador proprio precisaria de tabela e daria buracos quando alguem
+        gerasse e nao usasse. Derivado, aponta de volta para a analise.
+        """
+        from apps.qualidade.services.laudo_service import LaudoService
+
+        analise = self._analise()
+
+        numero = LaudoService.numero(analise)
+        self.assertEqual(numero, LaudoService.numero(analise))
+        self.assertIn(str(analise.pk), numero)
+
+    def test_analise_sem_checklist_usa_os_parametros_livres(self):
+        """Laudo de analise antiga sairia em branco sem esta queda."""
+        from apps.qualidade.services.laudo_service import LaudoService
+
+        analise = self._analise(parametros={'brix': 12.5, 'ph': 3.8})
+
+        dados = LaudoService.dados(analise)
+
+        self.assertEqual(dados['parametros_livres'], {'brix': 12.5, 'ph': 3.8})
+
+    def test_com_checklist_os_parametros_livres_ficam_de_fora(self):
+        """Mostrar os dois diria a mesma medicao duas vezes, em dois formatos."""
+        from apps.qualidade.services.laudo_service import LaudoService
+
+        analise = self._analise(parametros={'brix': 12.5})
+        self._parametro(analise)
+
+        dados = LaudoService.dados(analise)
+
+        self.assertEqual(dados['parametros_livres'], {})
+        self.assertEqual(len(dados['itens']), 1)
+
+    # ── O PDF e a tela ───────────────────────────────────────────────────
+
+    def test_o_pdf_sai_pdf(self):
+        analise = self._analise()
+        self._parametro(analise)
+
+        resposta = self.client.get(
+            reverse('polpa:qualidade-laudo-pdf', args=[analise.pk]),
+        )
+
+        self.assertEqual(resposta.status_code, 200)
+        self.assertEqual(resposta['Content-Type'], 'application/pdf')
+        self.assertTrue(resposta.content.startswith(b'%PDF'))
+
+    def test_pdf_de_pendente_avisa_em_vez_de_entregar_papel_em_branco(self):
+        from apps.qualidade.constants.enums import ResultadoAnalise
+
+        analise = self._analise(resultado=ResultadoAnalise.PENDENTE)
+
+        resposta = self.client.get(
+            reverse('polpa:qualidade-laudo-pdf', args=[analise.pk]), follow=True,
+        )
+
+        self.assertContains(resposta, 'conclua a análise')
+
+    def test_laudo_de_outra_filial_nao_sai(self):
+        analise = self._analise()
+        outra = Filial.objects.create(
+            empresa=self.empresa, razao_social='Segunda',
+            cnpj='13345678000515', uf='RN', cidade='Mossoro',
+        )
+        analise.filial = outra
+        analise.save(update_fields=['filial'])
+
+        resposta = self.client.get(
+            reverse('polpa:qualidade-laudo-pdf', args=[analise.pk]),
+        )
+
+        self.assertEqual(resposta.status_code, 404)
+
+    def test_a_lista_esconde_pendentes_mas_diz_quantas_sao(self):
+        """Sem o aviso, quem procura o laudo conclui que a analise sumiu."""
+        from apps.qualidade.constants.enums import ResultadoAnalise
+
+        self._analise(resultado=ResultadoAnalise.PENDENTE)
+        self._analise(resultado=ResultadoAnalise.APROVADO)
+
+        resposta = self.client.get(reverse('polpa:qualidade-laudos'))
+
+        self.assertEqual(len(resposta.context['linhas']), 1)
+        self.assertEqual(resposta.context['pendentes'], 1)
+        self.assertContains(resposta, 'ainda pendente')
+
+    def test_a_lista_avisa_do_desvio_sem_tratativa_antes_de_emitir(self):
+        """O cliente vai perguntar; e melhor descobrir aqui."""
+        from apps.qualidade.models import ItemAnalise
+
+        analise = self._analise()
+        self._parametro(
+            analise, situacao=ItemAnalise.Situacao.NAO_CONFORME,
+            acao_corretiva='',
+        )
+
+        resposta = self.client.get(reverse('polpa:qualidade-laudos'))
+
+        self.assertEqual(resposta.context['linhas'][0]['sem_acao'], 1)
+        self.assertContains(resposta, 'vai sair no laudo')
+
+    def test_a_rota_do_menu_abre_a_tela_de_verdade(self):
+        from django.urls import resolve
+
+        from apps.polpa.views import ItemView
+
+        endereco = reverse('polpa:item', args=['qualidade', 'laudos'])
+
+        self.assertIsNot(
+            getattr(resolve(endereco).func, 'view_class', None), ItemView,
+        )
+        self.assertEqual(endereco, reverse('polpa:qualidade-laudos'))
+
+    def test_a_tela_nao_vaza_sintaxe_de_template(self):
+        self._analise()
+
+        html = self.client.get(reverse('polpa:qualidade-laudos')).content.decode()
+
+        for resto in ('{#', '#}', '{%', '%}'):
+            self.assertNotIn(resto, html, 'vazou sintaxe de template no HTML')

@@ -66,6 +66,99 @@ class OrdemListView(PolpaBaseView):
         })
 
 
+class LaudosView(PolpaBaseView):
+    """
+    O boletim do lote, pronto para acompanhar a carga.
+
+    O SISTEMA GERA, e nao guarda. O PDF e' montado na hora a partir da analise:
+    guardar o arquivo exigiria armazenamento e criaria a pergunta "qual versao
+    vale". O campo `laudo_pdf_url` continua para o caso oposto -- laudo de
+    laboratorio externo, que veio pronto de fora.
+
+    ANALISE PENDENTE NAO APARECE. Assinar que o lote foi analisado quando
+    ninguem concluiu e' o oposto do que o documento serve para fazer, e a
+    regra vive no servico, nao aqui.
+    """
+
+    area = 'qualidade'
+
+    def get(self, request):
+        from apps.qualidade.constants.enums import ResultadoAnalise
+        from apps.qualidade.models import AnaliseQualidade
+        from apps.qualidade.services.laudo_service import LaudoService
+
+        filial = _filial(request)
+        busca = (request.GET.get('busca') or '').strip()
+        analises = (
+            AnaliseQualidade.objects.for_filial(filial)
+            .filter(resultado__in=LaudoService.EMITIVEIS)
+            .select_related('lote', 'lote__produto', 'responsavel_tecnico')
+            .prefetch_related('itens')
+        )
+        if busca:
+            analises = analises.filter(
+                Q(lote__numero_lote__icontains=busca)
+                | Q(lote__produto__descricao__icontains=busca)
+            )
+        analises = list(analises[:200])
+
+        return render(request, 'polpa/laudos.html', {
+            'title': 'Laudos',
+            'linhas': [
+                {
+                    'analise': a,
+                    'numero': LaudoService.numero(a),
+                    'sem_acao': sum(
+                        1 for i in a.itens.all()
+                        if i.situacao == 'nao_conforme'
+                        and not i.acao_corretiva.strip()
+                    ),
+                    'externo': bool(a.laudo_pdf_url),
+                }
+                for a in analises
+            ],
+            'busca': busca,
+            'pendentes': (
+                AnaliseQualidade.objects.for_filial(filial)
+                .filter(resultado=ResultadoAnalise.PENDENTE)
+                .count()
+            ),
+        })
+
+
+class LaudoPdfView(PolpaBaseView):
+    """Devolve o PDF do laudo de uma analise."""
+
+    area = 'qualidade'
+
+    def get(self, request, pk):
+        from django.http import HttpResponse
+
+        from apps.qualidade.models import AnaliseQualidade
+        from apps.qualidade.services.laudo_service import LaudoService
+
+        analise = get_object_or_404(
+            AnaliseQualidade.objects.for_filial(_filial(request))
+            .select_related('lote', 'lote__produto', 'responsavel_tecnico'),
+            pk=pk,
+        )
+        try:
+            conteudo = LaudoService.pdf(analise)
+        except DomainError as erro:
+            # ANALISE PENDENTE cai aqui. Mensagem e volta para a lista, e nao
+            # um PDF vazio -- documento em branco seria pior que erro.
+            messages.error(request, str(erro))
+            return redirect(reverse('polpa:qualidade-laudos'))
+
+        resposta = HttpResponse(conteudo, content_type='application/pdf')
+        # `inline` porque quem clica quer CONFERIR antes de mandar; salvar e'
+        # um passo do visualizador, e forcar download inverte a ordem.
+        resposta['Content-Disposition'] = (
+            f'inline; filename="{LaudoService.numero(analise)}.pdf"'
+        )
+        return resposta
+
+
 class NaoConformidadesView(PolpaBaseView):
     """
     Desvio registrado, com a acao tomada e quem tomou.

@@ -1,0 +1,132 @@
+{% extends "_base.html" %}
+{% block title %}{{ title }} — Polpa{% endblock %}
+{% block page_title %}{{ title }}{% endblock %}
+{% block content %}
+
+{% comment %}
+  O LAUDO É GERADO NA HORA, a partir da análise. Não há arquivo guardado, e por
+  isso não há "qual versão vale" — o laudo é sempre o que a análise diz agora.
+
+  ANÁLISE PENDENTE NÃO ENTRA NA LISTA. Assinar que o lote foi analisado quando
+  ninguém concluiu é o oposto do que o documento serve para fazer. O aviso no
+  topo diz quantas estão nesse estado, para a pessoa não concluir que sumiram.
+{% endcomment %}
+<div class="space-y-4">
+
+  <div>
+    <p class="text-sm" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+      <a href="{% url 'polpa:hub' %}" :style="temaClaro ? 'color:#3b82f6;' : 'color:#60a5fa;'">Polpa de Frutas</a>
+      <span class="mx-1">›</span>
+      <a href="{% url 'polpa:grupo' 'qualidade' %}" :style="temaClaro ? 'color:#3b82f6;' : 'color:#60a5fa;'">Qualidade</a>
+    </p>
+    <h2 class="text-2xl font-semibold mt-1" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">{{ title }}</h2>
+    <p class="text-sm mt-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+      O boletim do lote, montado a partir da análise. Confira antes de mandar com a carga.
+    </p>
+  </div>
+
+  {% if pendentes %}
+    <div class="card p-3" style="border-left:3px solid #d97706;">
+      <p class="text-sm" style="color:#b45309;">
+        {{ pendentes }} análise(s) ainda pendente(s) — elas não aparecem aqui.
+        Laudo de análise não concluída não certifica nada;
+        <a href="{% url 'polpa:qualidade-analises' %}" class="underline">conclua a análise</a> primeiro.
+      </p>
+    </div>
+  {% endif %}
+
+  <form method="get" class="card p-3 flex flex-wrap items-end gap-3">
+    <div class="flex-1 min-w-[220px]">
+      <label class="form-label">Lote ou produto</label>
+      <input type="text" name="busca" value="{{ busca }}" class="form-input w-full"
+             autocomplete="off" placeholder="Ex.: LT-0012, polpa de manga">
+    </div>
+    <div class="flex items-center gap-2">
+      <button type="submit" class="btn-primary text-sm">Filtrar</button>
+      {% if busca %}
+        <a href="{% url 'polpa:qualidade-laudos' %}" class="btn-secondary text-sm">Limpar</a>
+      {% endif %}
+    </div>
+  </form>
+
+  <div class="card overflow-hidden">
+    <div class="overflow-x-auto">
+      <table class="w-full text-sm">
+        <thead>
+          <tr class="border-b" :style="temaClaro ? 'border-color:#e2e8f0;' : 'border-color:#2a2a2e;'">
+            <th class="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wide" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Laudo</th>
+            <th class="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wide" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Lote / Produto</th>
+            <th class="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wide" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Resultado</th>
+            <th class="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wide" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Responsável</th>
+            <th class="text-right px-4 py-3 text-xs font-semibold uppercase tracking-wide" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Emitir</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for linha in linhas %}
+            <tr class="border-b" :style="temaClaro ? 'border-color:#f1f5f9;' : 'border-color:#1e1e22;'">
+              <td class="px-4 py-3">
+                <span class="font-mono text-xs font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">{{ linha.numero }}</span>
+                <span class="block text-[11px]" :style="temaClaro ? 'color:#94a3b8;' : 'color:#71717a;'">
+                  {{ linha.analise.data_analise|date:"d/m/Y" }}
+                  {% if linha.externo %} · há PDF externo anexado{% endif %}
+                </span>
+              </td>
+              <td class="px-4 py-3">
+                {% if linha.analise.lote %}
+                  <span class="font-mono text-xs" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">{{ linha.analise.lote.numero_lote }}</span>
+                  <span class="block text-xs" :style="temaClaro ? 'color:#94a3b8;' : 'color:#71717a;'">{{ linha.analise.lote.produto }}</span>
+                {% else %}
+                  <span :style="temaClaro ? 'color:#94a3b8;' : 'color:#71717a;'">sem lote</span>
+                {% endif %}
+              </td>
+              <td class="px-4 py-3">
+                {% if linha.analise.resultado == 'aprovado' %}
+                  <span class="soft-pill is-green text-xs">Aprovado</span>
+                {% elif linha.analise.resultado == 'aprovado_com_ressalva' %}
+                  <span class="soft-pill is-amber text-xs">Com ressalva</span>
+                {% else %}
+                  <span class="soft-pill is-red text-xs">Reprovado</span>
+                {% endif %}
+                {% comment %}
+                  O AVISO É ANTES DE EMITIR, e não depois. O desvio sem
+                  tratativa vai sair impresso no laudo — o cliente vai
+                  perguntar, e é melhor descobrir isso aqui.
+                {% endcomment %}
+                {% if linha.sem_acao %}
+                  <span class="block text-[11px] mt-1" style="color:#dc2626;">
+                    {{ linha.sem_acao }} desvio(s) sem tratativa — vai sair no laudo
+                  </span>
+                {% endif %}
+              </td>
+              <td class="px-4 py-3" :style="temaClaro ? 'color:#374151;' : 'color:#cbd5e1;'">
+                {{ linha.analise.responsavel_tecnico }}
+              </td>
+              <td class="px-4 py-3 text-right">
+                <a href="{% url 'polpa:qualidade-laudo-pdf' linha.analise.pk %}"
+                   target="_blank" rel="noopener" class="btn-secondary text-xs">Abrir PDF</a>
+              </td>
+            </tr>
+          {% empty %}
+            <tr>
+              <td colspan="5" class="px-4 py-14 text-center">
+                <p class="text-sm max-w-md mx-auto" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+                  {% if busca %}
+                    Nenhum laudo com esse filtro.
+                  {% else %}
+                    Nenhuma análise concluída ainda. O laudo nasce da análise —
+                    é ela que diz o que o documento vai certificar.
+                  {% endif %}
+                </p>
+                <div class="mt-4">
+                  <a href="{% url 'polpa:qualidade-analises' %}" class="btn-primary text-sm">Ver análises</a>
+                </div>
+              </td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+</div>
+{% endblock %}

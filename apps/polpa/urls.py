@@ -82,6 +82,8 @@ ROTAS_PRONTAS: list = [
     # Endereco que o menu ja' aponta: assim que resolve para uma view que
     # nao e' a `ItemView`, o selo "em construcao" some sozinho do hub.
     path('qualidade/analises/', vord.AnalisesQualidadeView.as_view(), name='qualidade-analises'),
+    path('qualidade/laudos/', vord.LaudosView.as_view(), name='qualidade-laudos'),
+    path('qualidade/laudos/<int:pk>/pdf/', vord.LaudoPdfView.as_view(), name='qualidade-laudo-pdf'),
     path('qualidade/nao-conformidades/', vord.NaoConformidadesView.as_view(), name='qualidade-nao-conformidades'),
     path('qualidade/rastreabilidade/', vord.RastreabilidadeView.as_view(), name='qualidade-rastreabilidade'),
     path('producao/ordens/', vord.OrdemListView.as_view(), name='ordem-list'),
