@@ -368,7 +368,83 @@ class FrutaListView(PolpaBaseView):
             'frutas': frutas,
             'mes': timezone.localdate().month,
             'pode_agir': request.user.tem_permissao('polpa_formulacao', 'criar'),
+            # EXCLUIR E' PERMISSAO PROPRIA, e nao a de criar: apagar cadastro
+            # e' irreversivel, e quem cadastra nem sempre e' quem pode apagar.
+            'pode_excluir': request.user.tem_permissao('polpa_formulacao', 'excluir'),
         })
+
+
+class FrutaToggleAtivoView(PolpaBaseView):
+    """
+    Liga e desliga a fruta, sem apagar nada.
+
+    INATIVAR E' O CAMINHO NORMAL, e excluir e' a excecao. Fruta que saiu de
+    linha continua no historico de todos os romaneios que ela pesou, e some da
+    lista de escolha sem levar o passado junto -- que e' exatamente o que
+    "excluir" faria se o banco deixasse.
+    """
+
+    area = 'formulacao'
+    permissao_acao = 'editar'
+
+    def post(self, request, pk):
+        fruta = get_object_or_404(
+            Fruta.objects.for_filial(_filial(request)), pk=pk,
+        )
+        fruta.ativo = not fruta.ativo
+        fruta.save(update_fields=['ativo', 'updated_at'])
+        messages.success(
+            request,
+            f'{fruta} {"reativada" if fruta.ativo else "inativada"}.',
+        )
+        return redirect(reverse('polpa:fruta-list'))
+
+
+class FrutaDeleteView(PolpaBaseView):
+    """
+    Apaga a fruta -- so' quando ela nunca foi usada.
+
+    `Recebimento.fruta` E' `PROTECT`, e com razao: apagar a fruta de um
+    romaneio ja' pesado deixaria o registro sem dizer o que entrou, e o
+    historico de rendimento do produtor perderia a referencia.
+
+    A TELA PERGUNTA ANTES DE O BANCO RECUSAR. Deixar o `ProtectedError`
+    acontecer daria um quinhentos ou um erro cru; contar as cargas antes
+    permite dizer o que fazer -- inativar -- em vez de so' dizer que nao pode.
+    """
+
+    area = 'formulacao'
+    permissao_acao = 'excluir'
+
+    def post(self, request, pk):
+        fruta = get_object_or_404(
+            Fruta.objects.for_filial(_filial(request)), pk=pk,
+        )
+        cargas = fruta.recebimentos.count()
+        if cargas:
+            messages.error(
+                request,
+                f'{fruta} já pesou {cargas} carga(s) e não pode ser excluída — '
+                f'o histórico ficaria sem dizer o que entrou. Inative-a: ela '
+                f'some da lista de escolha e o passado continua de pé.',
+            )
+            return redirect(reverse('polpa:fruta-list'))
+
+        # A FICHA DO CATALOGO aponta com `SET_NULL`, entao o item nao some
+        # junto -- ele so' deixa de dizer qual fruta representa. Vale avisar,
+        # porque quem apaga aqui nao esta' pensando no catalogo.
+        fichas = fruta.produtos.count()
+        nome = str(fruta)
+        fruta.delete()
+        if fichas:
+            messages.warning(
+                request,
+                f'{nome} excluída. {fichas} item(ns) do catálogo ficaram sem '
+                f'fruta vinculada.',
+            )
+        else:
+            messages.success(request, f'{nome} excluída.')
+        return redirect(reverse('polpa:fruta-list'))
 
 
 class FrutaAjaxCreateView(PolpaBaseView):

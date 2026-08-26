@@ -637,3 +637,159 @@ class ATelaDoRecursoTests(PolpaBase):
 
         for nome in RecursoForm(filial=self.filial).fields:
             self.assertIn(f'name="{nome}"', html, f'campo "{nome}" sumiu da tela')
+
+
+class AcoesDaFrutaTests(PolpaBase):
+    """
+    Editar, inativar e excluir — e a do meio é a normal.
+
+    INATIVAR TIRA DA LISTA DE ESCOLHA e deixa o passado de pé. Excluir some com
+    o cadastro, e por isso só vale para fruta que nunca pesou carga:
+    `Recebimento.fruta` é `PROTECT`, e apagar a fruta de um romaneio já pesado
+    deixaria o registro sem dizer o que entrou.
+    """
+
+    def _fruta(self, nome='Maracuja', ativo=True):
+        from apps.polpa.models import Fruta
+
+        return Fruta.objects.create(filial=self.filial, nome=nome, ativo=ativo)
+
+    def _carga(self, fruta):
+        from django.utils import timezone
+
+        from apps.polpa.models import Recebimento
+
+        return Recebimento.objects.create(
+            filial=self.filial, numero=1, fruta=fruta, produtor=self.produtor,
+            data=timezone.localdate(), peso_bruto=Decimal('100'),
+            tara=Decimal('10'), preco_kg=Decimal('2'),
+            status=Recebimento.Status.PESAGEM,
+        )
+
+    # ── Inativar ─────────────────────────────────────────────────────────
+
+    def test_inativar_nao_apaga_nada(self):
+        fruta = self._fruta()
+
+        self.client.post(reverse('polpa:fruta-toggle-ativo', args=[fruta.pk]))
+
+        fruta.refresh_from_db()
+        self.assertFalse(fruta.ativo)
+
+    def test_o_mesmo_botao_reativa(self):
+        fruta = self._fruta(ativo=False)
+
+        self.client.post(reverse('polpa:fruta-toggle-ativo', args=[fruta.pk]))
+
+        fruta.refresh_from_db()
+        self.assertTrue(fruta.ativo)
+
+    def test_inativar_fruta_com_carga_e_permitido(self):
+        """
+        E o caminho recomendado: a carga ja pesada continua apontando para ela,
+        e a fruta some da lista de escolha.
+        """
+        fruta = self._fruta()
+        self._carga(fruta)
+
+        self.client.post(reverse('polpa:fruta-toggle-ativo', args=[fruta.pk]))
+
+        fruta.refresh_from_db()
+        self.assertFalse(fruta.ativo)
+
+    # ── Excluir ──────────────────────────────────────────────────────────
+
+    def test_excluir_fruta_que_nunca_pesou_carga(self):
+        from apps.polpa.models import Fruta
+
+        fruta = self._fruta()
+
+        self.client.post(reverse('polpa:fruta-delete', args=[fruta.pk]))
+
+        self.assertFalse(Fruta.objects.filter(pk=fruta.pk).exists())
+
+    def test_fruta_com_carga_nao_e_excluida_e_a_tela_diz_o_que_fazer(self):
+        """
+        Deixar o `ProtectedError` acontecer daria um quinhentos ou um erro cru.
+        Contar as cargas antes permite dizer o que fazer: inativar.
+        """
+        from apps.polpa.models import Fruta
+
+        fruta = self._fruta()
+        self._carga(fruta)
+
+        resposta = self.client.post(
+            reverse('polpa:fruta-delete', args=[fruta.pk]), follow=True,
+        )
+
+        self.assertTrue(Fruta.objects.filter(pk=fruta.pk).exists())
+        self.assertContains(resposta, 'Inative-a')
+
+    def test_a_lista_desliga_o_botao_de_excluir_de_quem_tem_carga(self):
+        """
+        Desligado com o motivo, e nao escondido: sumir faria parecer falta de
+        permissao, e nao uma regra sobre aquela fruta.
+        """
+        fruta = self._fruta()
+        self._carga(fruta)
+
+        resposta = self.client.get(reverse('polpa:fruta-list'))
+
+        self.assertContains(resposta, 'inative em vez de excluir', status_code=200)
+
+    def test_excluir_avisa_quando_o_catalogo_perde_o_vinculo(self):
+        """
+        `FichaProduto.fruta` e `SET_NULL`: o item nao some junto, so deixa de
+        dizer qual fruta representa. Quem apaga aqui nao esta pensando no
+        catalogo.
+        """
+        from apps.polpa.models import FichaProduto
+
+        fruta = self._fruta()
+        # A ficha e criada AQUI, e o teste nao se pula. Teste que se pula
+        # quando o cenario nao aparece sozinho nao prova nada -- e este
+        # cobre justamente o efeito colateral que ninguem espera.
+        ficha = FichaProduto.objects.create(
+            filial=self.filial, produto=self._produto(),
+            classe=FichaProduto.Classe.MATERIA_PRIMA,
+            tipo=FichaProduto.Tipo.FRUTA, fruta=fruta,
+        )
+
+        resposta = self.client.post(
+            reverse('polpa:fruta-delete', args=[fruta.pk]), follow=True,
+        )
+
+        ficha.refresh_from_db()
+        self.assertIsNone(ficha.fruta_id)
+        self.assertContains(resposta, 'sem fruta vinculada')
+
+    # ── Escopo ───────────────────────────────────────────────────────────
+
+    def test_fruta_de_outra_filial_nao_e_tocavel(self):
+        from apps.core.models import Filial
+        from apps.polpa.models import Fruta
+
+        outra = Filial.objects.create(
+            empresa=self.empresa, razao_social='Segunda',
+            cnpj='73345678000596', uf='RN', cidade='Mossoro',
+        )
+        alheia = Fruta.objects.create(filial=outra, nome='Alheia', ativo=True)
+
+        excluir = self.client.post(reverse('polpa:fruta-delete', args=[alheia.pk]))
+        toggle = self.client.post(
+            reverse('polpa:fruta-toggle-ativo', args=[alheia.pk]),
+        )
+
+        alheia.refresh_from_db()
+        self.assertEqual(excluir.status_code, 404)
+        self.assertEqual(toggle.status_code, 404)
+        self.assertTrue(Fruta.objects.filter(pk=alheia.pk).exists())
+        self.assertTrue(alheia.ativo)
+
+    def test_a_tela_nao_vaza_sintaxe_de_template(self):
+        self._fruta()
+
+        html = self.client.get(reverse('polpa:fruta-list')).content.decode()
+
+        for resto in ('{#', '#}', '{%', '%}'):
+            self.assertNotIn(resto, html, 'vazou sintaxe de template no HTML')

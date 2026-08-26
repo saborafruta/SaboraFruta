@@ -43,7 +43,8 @@
                 :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Rendimento</th>
             <th class="text-center px-4 py-3 text-xs font-semibold uppercase tracking-wide"
                 :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Safra</th>
-            <th></th>
+            <th class="text-center px-4 py-3 text-xs font-semibold uppercase tracking-wide"
+                :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Ações</th>
           </tr>
         </thead>
         <tbody>
@@ -95,10 +96,77 @@
                   <span class="text-xs" :style="temaClaro ? 'color:#94a3b8;' : 'color:#71717a;'">ano todo</span>
                 {% endif %}
               </td>
-              <td class="px-4 py-3 text-right">
+              {% comment %}
+                TRES ACOES, E A DO MEIO E' A NORMAL. Inativar tira a fruta da
+                lista de escolha e deixa o passado de pe'; excluir some com o
+                cadastro, e por isso so' aparece para fruta que nunca pesou
+                carga -- `Recebimento.fruta` e' `PROTECT`, e o banco recusaria
+                de qualquer forma. Melhor a tela dizer antes.
+              {% endcomment %}
+              <td class="px-4 py-3">
                 {% if pode_agir %}
-                  <a href="{% url 'polpa:fruta-update' f.pk %}" class="text-xs font-semibold underline"
-                     :style="temaClaro ? 'color:#2563eb;' : 'color:#60a5fa;'">editar</a>
+                  <div class="flex items-center justify-center gap-1">
+                    <a href="{% url 'polpa:fruta-update' f.pk %}" title="Editar"
+                       class="p-2 rounded-md inline-flex" :style="temaClaro ? 'color:#2563eb;' : 'color:#60a5fa;'">
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                           stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                        <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
+                        <path d="M18.5 2.5a2.12 2.12 0 0 1 3 3L12 15l-4 1 1-4Z"/>
+                      </svg>
+                      <span class="sr-only">Editar {{ f }}</span>
+                    </a>
+
+                    <form method="post" action="{% url 'polpa:fruta-toggle-ativo' f.pk %}"
+                          onsubmit="return confirm('{% if f.ativo %}Inativar{% else %}Reativar{% endif %} {{ f|escapejs }}?');">
+                      {% csrf_token %}
+                      <button type="submit" class="p-2 rounded-md inline-flex"
+                              title="{% if f.ativo %}Inativar{% else %}Reativar{% endif %}"
+                              style="color:{% if f.ativo %}#059669{% else %}#94a3b8{% endif %};">
+                        {% if f.ativo %}
+                          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                               stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                            <circle cx="12" cy="12" r="10"/><path d="m9 12 2 2 4-4"/>
+                          </svg>
+                        {% else %}
+                          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                               stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                            <circle cx="12" cy="12" r="10"/><path d="m15 9-6 6m0-6 6 6"/>
+                          </svg>
+                        {% endif %}
+                        <span class="sr-only">{% if f.ativo %}Inativar{% else %}Reativar{% endif %} {{ f }}</span>
+                      </button>
+                    </form>
+
+                    {% if pode_excluir %}
+                      {% if f.recebimentos.exists %}
+                        {% comment %}
+                          BOTAO DESLIGADO, E NAO ESCONDIDO: sumir faria parecer
+                          falta de permissao. Desligado com o motivo no `title`
+                          explica por que aquela fruta e' diferente das outras.
+                        {% endcomment %}
+                        <span class="p-2 rounded-md inline-flex" style="color:#52525b;cursor:not-allowed;"
+                              title="Já pesou carga — inative em vez de excluir">
+                          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                               stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                            <path d="M3 6h18M8 6V4h8v2m-9 0 1 14h8l1-14"/>
+                          </svg>
+                        </span>
+                      {% else %}
+                        <form method="post" action="{% url 'polpa:fruta-delete' f.pk %}"
+                              onsubmit="return confirm('Excluir {{ f|escapejs }}? Isto não pode ser desfeito.');">
+                          {% csrf_token %}
+                          <button type="submit" class="p-2 rounded-md inline-flex" title="Excluir"
+                                  style="color:#dc2626;">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                 stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                              <path d="M3 6h18M8 6V4h8v2m-9 0 1 14h8l1-14"/>
+                            </svg>
+                            <span class="sr-only">Excluir {{ f }}</span>
+                          </button>
+                        </form>
+                      {% endif %}
+                    {% endif %}
+                  </div>
                 {% endif %}
               </td>
             </tr>

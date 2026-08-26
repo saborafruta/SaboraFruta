@@ -166,6 +166,8 @@ ROTAS_PRONTAS: list = [
     # Cadastro relampago da fruta, chamado de dentro do romaneio.
     path('frutas/ajax-create/', vrec.FrutaAjaxCreateView.as_view(), name='fruta-ajax-create'),
     path('formulacao/rendimento/<int:pk>/editar/', vrec.FrutaFormView.as_view(), name='fruta-update'),
+    path('formulacao/rendimento/<int:pk>/toggle-ativo/', vrec.FrutaToggleAtivoView.as_view(), name='fruta-toggle-ativo'),
+    path('formulacao/rendimento/<int:pk>/excluir/', vrec.FrutaDeleteView.as_view(), name='fruta-delete'),
 ]
 
 urlpatterns = [
