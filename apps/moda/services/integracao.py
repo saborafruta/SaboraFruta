@@ -113,7 +113,10 @@ class IntegracaoService:
             numero_pedido=cls._proximo_numero_compra(requisicao.filial),
             data_emissao=timezone.now(),
             status=PedidoCompra.Status.RASCUNHO,
-            observacoes=(
+            # `observacao`, singular: o campo do modelo. Com o plural o
+            # `PedidoCompra()` recusava o kwarg e o botao estourava em
+            # TypeError -- caminho sem teste, entao ninguem tinha visto.
+            observacao=(
                 f'Gerado da requisição de material #{requisicao.numero:04d} '
                 f'do vertical Moda.'
             ),
@@ -159,8 +162,11 @@ class IntegracaoService:
 
         ano = timezone.localdate().year
         prefixo = f'MOD{ano}'
+        # `objects`: `PedidoCompra` nao declara `all_objects`, e a chamada
+        # estourava AttributeError -- o segundo defeito deste caminho, que
+        # nunca foi exercitado por teste nem por clique.
         ultimo = (
-            PedidoCompra.all_objects
+            PedidoCompra.objects
             .filter(filial=filial, numero_pedido__startswith=prefixo)
             .order_by('-numero_pedido')
             .values_list('numero_pedido', flat=True)

@@ -9,6 +9,7 @@ from .processo import ApontamentoEtapa, Etapa
 from .receita import EtapaReceita, Receita
 from .recebimento import Recebimento
 from .recurso import Recurso
+from .requisicao import ItemRequisicaoInsumo, RequisicaoInsumo
 from .reserva import ReservaInsumo
 from .subproduto import Subproduto
 
@@ -17,5 +18,5 @@ __all__ = [
     'LeituraTemperatura', 'LoteArmazenado', 'MetaProducao', 'Posicao',
     'FichaProduto', 'Fruta',
     'OrdemPolpa', 'Receita', 'Recebimento', 'Recurso', 'ReservaInsumo',
-    'Subproduto',
+    'RequisicaoInsumo', 'ItemRequisicaoInsumo', 'Subproduto',
 ]

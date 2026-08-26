@@ -182,7 +182,12 @@ class EstoqueSemiacabadoService:
         ]
         if anteriores:
             return max((hoje - max(anteriores)).days, 0)
-        return max((hoje - ordem.emitida_em.date()).days, 0)
+        # `localtime` antes de `.date()`: `hoje` e' data LOCAL e
+        # `emitida_em` e' gravado em UTC. Comparar os dois direto errava por
+        # um dia nas tres horas em que a data UTC ja' virou e a local nao --
+        # e o erro era para MENOS, deixando a ordem mais esquecida parecer
+        # mais nova do que e'.
+        return max((hoje - timezone.localtime(ordem.emitida_em).date()).days, 0)
 
     # ── Cabeçalho ────────────────────────────────────────────────────────
 
