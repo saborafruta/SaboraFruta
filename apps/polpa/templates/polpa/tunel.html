@@ -1,0 +1,332 @@
+{% extends "_base.html" %}
+{% block title %}{{ title }} — Polpa{% endblock %}
+{% block page_title %}{{ title }}{% endblock %}
+{% block content %}
+
+{% comment %}
+  A TELA É DE QUEM ESTÁ NA PORTA DO TÚNEL. A pergunta dele não é "como vai
+  a ordem 123" — é "o que está aqui dentro, há quanto tempo, e o que já
+  passou do tempo". Por isso o DENTRO vem primeiro, com o relógio de cada
+  carga, e a ação de tirar fica na própria linha: quem opera está de luva e
+  não vai navegar até a ordem para apontar uma etapa.
+
+  O TEMPO ALVO VEM DA RECEITA. Carga sem alvo não aparece como "em dia":
+  aparece como cadastro faltando, em âmbar — inventar um tempo padrão
+  cobraria a fábrica por uma regra que ninguém combinou.
+{% endcomment %}
+<div class="space-y-4">
+
+  <div>
+    <p class="text-sm mb-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+      <a href="{% url 'polpa:hub' %}" :style="temaClaro ? 'color:#3b82f6;' : 'color:#60a5fa;'">Polpa de Frutas</a>
+      <span class="mx-1">›</span>
+      <a href="{% url 'polpa:grupo' 'frio' %}" :style="temaClaro ? 'color:#3b82f6;' : 'color:#60a5fa;'">Cadeia de frio</a>
+    </p>
+    <h2 class="text-2xl font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">Túnel de congelamento</h2>
+    <p class="text-sm mt-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+      Entrada, tempo e saída de cada carga — e a temperatura em que ela saiu.
+    </p>
+  </div>
+
+  {# ── Os números do turno ────────────────────────────────────────── #}
+  <div class="grid grid-cols-2 lg:grid-cols-5 gap-3">
+    <div class="card p-4">
+      <p class="text-[11px] uppercase tracking-wide" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">No túnel agora</p>
+      <p class="text-3xl font-bold mt-1" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">{{ resumo.dentro }}</p>
+    </div>
+    <div class="card p-4" style="{% if resumo.passaram_do_tempo %}border:1px solid #dc2626;{% endif %}">
+      <p class="text-[11px] uppercase tracking-wide" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Passaram do tempo</p>
+      <p class="text-3xl font-bold mt-1"
+         style="color:{% if resumo.passaram_do_tempo %}#dc2626{% else %}#059669{% endif %};">
+        {{ resumo.passaram_do_tempo }}
+      </p>
+    </div>
+    <div class="card p-4">
+      <p class="text-[11px] uppercase tracking-wide" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Saíram hoje</p>
+      <p class="text-3xl font-bold mt-1" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">{{ resumo.saidas_hoje }}</p>
+    </div>
+    <div class="card p-4">
+      <p class="text-[11px] uppercase tracking-wide" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Tempo médio</p>
+      {% if resumo.tempo_medio is not None %}
+        <p class="text-3xl font-bold mt-1" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
+          {{ resumo.tempo_medio }}<span class="text-base font-normal"> min</span>
+        </p>
+      {% else %}
+        {# Sem saída não há média — zero se leria como "congelou na hora". #}
+        <p class="text-sm mt-2" :style="temaClaro ? 'color:#94a3b8;' : 'color:#71717a;'">nenhuma saída hoje</p>
+      {% endif %}
+    </div>
+    <div class="card p-4" style="{% if resumo.fora_da_faixa_hoje %}border:1px solid #dc2626;{% endif %}">
+      <p class="text-[11px] uppercase tracking-wide" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Saíram fora da faixa</p>
+      <p class="text-3xl font-bold mt-1"
+         style="color:{% if resumo.fora_da_faixa_hoje %}#dc2626{% else %}#059669{% endif %};">
+        {{ resumo.fora_da_faixa_hoje }}
+      </p>
+    </div>
+  </div>
+
+  {# ── Os túneis e a temperatura deles ────────────────────────────── #}
+  {% if tuneis %}
+    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+      {% for t in tuneis %}
+        <div class="card p-4"
+             style="{% if t.fora_da_faixa %}border:1px solid #dc2626;{% elif t.sem_leitura %}border:1px solid #d97706;{% endif %}">
+          <p class="text-sm font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">{{ t.camara.nome }}</p>
+          {% if t.leitura %}
+            <p class="text-2xl font-bold mt-1"
+               style="color:{% if t.fora_da_faixa %}#dc2626{% else %}#059669{% endif %};">{{ t.leitura.temperatura }}°C</p>
+            <p class="text-[11px] mt-0.5" :style="temaClaro ? 'color:#94a3b8;' : 'color:#71717a;'">
+              {{ t.leitura.medida_em|date:"d/m H:i" }}{% if t.camara.faixa %} · faixa {{ t.camara.faixa }}{% endif %}
+            </p>
+          {% else %}
+            {# Túnel que ninguém mede explica a carga que saiu no tempo e mole. #}
+            <p class="text-sm mt-2" style="color:#d97706;">Nunca medido</p>
+          {% endif %}
+          <a href="{% url 'polpa:temperatura' %}" class="text-xs underline mt-2 inline-block"
+             :style="temaClaro ? 'color:#2563eb;' : 'color:#60a5fa;'">registrar leitura</a>
+        </div>
+      {% endfor %}
+    </div>
+  {% endif %}
+
+  {# ── Dentro do túnel ────────────────────────────────────────────── #}
+  <div class="card overflow-hidden">
+    <div class="px-4 py-3 border-b" :style="temaClaro ? 'border-color:#e2e8f0;' : 'border-color:#2a2a2e;'">
+      <h3 class="text-sm font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">No túnel agora</h3>
+      <p class="text-xs mt-0.5" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+        O relógio corre desde a hora da entrada. Vermelho é carga que passou
+        do tempo da receita.
+      </p>
+    </div>
+    <div class="overflow-x-auto">
+      <table class="w-full text-sm">
+        <thead>
+          <tr class="border-b" :style="temaClaro ? 'border-color:#e2e8f0;' : 'border-color:#2a2a2e;'">
+            <th class="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wide"
+                :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Carga</th>
+            <th class="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wide"
+                :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Entrada</th>
+            <th class="text-right px-4 py-3 text-xs font-semibold uppercase tracking-wide"
+                :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Tempo</th>
+            <th class="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wide"
+                :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Registrar saída</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for c in dentro %}
+            <tr class="border-b align-top" :style="temaClaro ? 'border-color:#f1f5f9;' : 'border-color:#1e1e22;'">
+              <td class="px-4 py-3">
+                <a href="{% url 'polpa:processo-ordem' c.ordem.pk %}" class="font-semibold underline"
+                   :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">{{ c.ordem.numero }}</a>
+                <span class="block text-xs" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">{{ c.produto }}</span>
+                {% if c.lote %}
+                  <span class="block text-[11px]" :style="temaClaro ? 'color:#94a3b8;' : 'color:#71717a;'">lote {{ c.lote.numero_lote }}</span>
+                {% endif %}
+              </td>
+              <td class="px-4 py-3 text-xs" :style="temaClaro ? 'color:#374151;' : 'color:#cbd5e1;'">
+                {{ c.etapa.iniciada_em|date:"d/m H:i" }}
+                {% if c.etapa.operador %}<span class="block">{{ c.etapa.operador.nome }}</span>{% endif %}
+                {% if c.etapa.equipamento %}<span class="block">{{ c.etapa.equipamento }}</span>{% endif %}
+                {% if c.etapa.quantidade_entrada %}
+                  <span class="block">entrou {{ c.etapa.quantidade_entrada }}</span>
+                {% endif %}
+              </td>
+              <td class="px-4 py-3 text-right">
+                <span class="text-xl font-bold"
+                      style="color:{% if c.excedido %}#dc2626{% elif c.sem_alvo %}#d97706{% else %}#059669{% endif %};">
+                  {{ c.minutos }}<span class="text-xs font-normal"> min</span>
+                </span>
+                {% if c.excedido %}
+                  <span class="block text-[11px] font-semibold" style="color:#dc2626;">
+                    {{ c.excedido }} min além dos {{ c.alvo_minutos }}
+                  </span>
+                {% elif c.sem_alvo %}
+                  {# Sem alvo não é "em dia": é a receita sem tempo declarado. #}
+                  <span class="block text-[11px]" style="color:#d97706;">sem tempo na receita</span>
+                {% else %}
+                  <span class="block text-[11px]" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+                    faltam {{ c.restante }} de {{ c.alvo_minutos }} min
+                  </span>
+                {% endif %}
+              </td>
+              <td class="px-4 py-3">
+                {% if pode_agir %}
+                  <form method="post" class="flex flex-wrap items-end gap-2">
+                    {% csrf_token %}
+                    <input type="hidden" name="acao" value="sair">
+                    <input type="hidden" name="etapa" value="{{ c.etapa.pk }}">
+                    <div>
+                      <label class="form-label text-[11px]" for="saida-{{ c.etapa.pk }}">Saiu (qtd.)</label>
+                      <input type="text" inputmode="decimal" name="quantidade_saida"
+                             id="saida-{{ c.etapa.pk }}" class="form-input" style="width:100px;"
+                             value="{{ c.etapa.quantidade_entrada|default_if_none:'' }}">
+                    </div>
+                    <div>
+                      <label class="form-label text-[11px]" for="temp-{{ c.etapa.pk }}">
+                        °C{% if c.alvo.faixa %} <span class="opacity-60">({{ c.alvo.faixa }})</span>{% endif %}
+                      </label>
+                      <input type="text" inputmode="decimal" name="temperatura"
+                             id="temp-{{ c.etapa.pk }}" class="form-input" style="width:90px;">
+                    </div>
+                    <button type="submit" class="btn-primary text-sm">Tirar do túnel</button>
+                  </form>
+                {% endif %}
+              </td>
+            </tr>
+          {% empty %}
+            <tr>
+              <td colspan="4" class="px-4 py-10 text-center text-sm"
+                  :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+                Nenhuma carga no túnel. As ordens prontas para congelar estão
+                na fila abaixo.
+              </td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  {# ── A fila para entrar ─────────────────────────────────────────── #}
+  <div class="card overflow-hidden">
+    <div class="px-4 py-3 border-b" :style="temaClaro ? 'border-color:#e2e8f0;' : 'border-color:#2a2a2e;'">
+      <h3 class="text-sm font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">Esperando para entrar</h3>
+      <p class="text-xs mt-0.5" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+        Ordens abertas cujo congelamento ainda não começou.
+      </p>
+    </div>
+    <div class="overflow-x-auto">
+      <table class="w-full text-sm">
+        <tbody>
+          {% for c in esperando %}
+            <tr class="border-b align-top" :style="temaClaro ? 'border-color:#f1f5f9;' : 'border-color:#1e1e22;'">
+              <td class="px-4 py-3">
+                <a href="{% url 'polpa:processo-ordem' c.ordem.pk %}" class="font-semibold underline"
+                   :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">{{ c.ordem.numero }}</a>
+                <span class="block text-xs" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">{{ c.produto }}</span>
+              </td>
+              <td class="px-4 py-3 text-xs" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+                {% if c.alvo_minutos %}
+                  {{ c.alvo_minutos }} min pela receita
+                  {% if c.alvo.faixa %}<span class="block">saída em {{ c.alvo.faixa }}</span>{% endif %}
+                {% else %}
+                  <span style="color:#d97706;">receita sem tempo de congelamento</span>
+                {% endif %}
+              </td>
+              <td class="px-4 py-3">
+                {% if pode_agir %}
+                  <form method="post" class="flex flex-wrap items-end gap-2 justify-end">
+                    {% csrf_token %}
+                    <input type="hidden" name="acao" value="entrar">
+                    <input type="hidden" name="etapa" value="{{ c.etapa.pk }}">
+                    <div>
+                      <label class="form-label text-[11px]" for="ent-{{ c.etapa.pk }}">Entrou (qtd.)</label>
+                      <input type="text" inputmode="decimal" name="quantidade_entrada"
+                             id="ent-{{ c.etapa.pk }}" class="form-input" style="width:100px;">
+                    </div>
+                    <div>
+                      <label class="form-label text-[11px]" for="eq-{{ c.etapa.pk }}">Túnel / equipamento</label>
+                      <select name="equipamento" id="eq-{{ c.etapa.pk }}" class="form-input" style="width:170px;">
+                        <option value="">—</option>
+                        {% for r in recursos %}
+                          <option value="{{ r.pk }}">{{ r.nome }}</option>
+                        {% endfor %}
+                      </select>
+                    </div>
+                    <button type="submit" class="btn-secondary text-sm">Pôr no túnel</button>
+                  </form>
+                {% endif %}
+              </td>
+            </tr>
+          {% empty %}
+            <tr>
+              <td class="px-4 py-8 text-center text-sm"
+                  :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+                Nenhuma ordem aberta esperando congelamento.
+              </td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  {# ── O que já passou ────────────────────────────────────────────── #}
+  <div class="card overflow-hidden">
+    <div class="px-4 py-3 border-b" :style="temaClaro ? 'border-color:#e2e8f0;' : 'border-color:#2a2a2e;'">
+      <h3 class="text-sm font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">Últimas passagens</h3>
+      <p class="text-xs mt-0.5" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+        É o registro que prova o congelamento de cada lote — tempo e
+        temperatura de saída, com quem operou.
+      </p>
+    </div>
+    <div class="overflow-x-auto">
+      <table class="w-full text-sm">
+        <thead>
+          <tr class="border-b" :style="temaClaro ? 'border-color:#e2e8f0;' : 'border-color:#2a2a2e;'">
+            <th class="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wide"
+                :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Carga</th>
+            <th class="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wide"
+                :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Entrada → saída</th>
+            <th class="text-right px-4 py-3 text-xs font-semibold uppercase tracking-wide"
+                :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Tempo</th>
+            <th class="text-right px-4 py-3 text-xs font-semibold uppercase tracking-wide"
+                :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Saída</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for c in saidas %}
+            <tr class="border-b" :style="temaClaro ? 'border-color:#f1f5f9;' : 'border-color:#1e1e22;'">
+              <td class="px-4 py-2.5">
+                <a href="{% url 'polpa:processo-ordem' c.ordem.pk %}" class="font-semibold underline"
+                   :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">{{ c.ordem.numero }}</a>
+                <span class="block text-xs" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">{{ c.produto }}</span>
+              </td>
+              <td class="px-4 py-2.5 text-xs" :style="temaClaro ? 'color:#374151;' : 'color:#cbd5e1;'">
+                {{ c.etapa.iniciada_em|date:"d/m H:i"|default:"—" }} → {{ c.etapa.concluida_em|date:"d/m H:i"|default:"—" }}
+                {% if c.etapa.operador %}<span class="block">{{ c.etapa.operador.nome }}</span>{% endif %}
+              </td>
+              <td class="px-4 py-2.5 text-right font-semibold"
+                  style="color:{% if c.excedido %}#dc2626{% else %}inherit{% endif %};">
+                {% if c.minutos is not None %}
+                  {{ c.minutos }} min
+                  {% if c.excedido %}<span class="block text-[11px] font-normal">{{ c.excedido }} min além</span>{% endif %}
+                {% else %}
+                  <span class="text-xs font-normal" style="color:#d97706;">sem hora registrada</span>
+                {% endif %}
+              </td>
+              <td class="px-4 py-2.5 text-right">
+                {% if c.etapa.temperatura is not None %}
+                  <span class="font-semibold"
+                        style="color:{% if c.temperatura_fora %}#dc2626{% else %}#059669{% endif %};">
+                    {{ c.etapa.temperatura }}°C
+                  </span>
+                  {% if c.temperatura_fora %}
+                    <span class="block text-[11px]" style="color:#dc2626;">fora de {{ c.alvo.faixa }}</span>
+                  {% endif %}
+                {% else %}
+                  {# Sem medida não é "saiu certo": é medição que faltou. #}
+                  <span class="text-xs" style="color:#d97706;">não medida</span>
+                {% endif %}
+                {% if c.etapa.quantidade_saida %}
+                  <span class="block text-[11px]" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+                    {{ c.etapa.quantidade_saida }} de saída
+                  </span>
+                {% endif %}
+              </td>
+            </tr>
+          {% empty %}
+            <tr>
+              <td colspan="4" class="px-4 py-8 text-center text-sm"
+                  :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+                Nenhuma carga passou pelo túnel ainda.
+              </td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+</div>
+{% endblock %}

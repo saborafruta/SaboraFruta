@@ -15,8 +15,11 @@ from django.urls import reverse
 from apps.core.services.exceptions import DomainError
 
 from .forms_posicao import LeituraForm, PosicaoForm
-from .models import Camara, LeituraTemperatura, LoteArmazenado, Posicao
-from .services import FrioService
+from .models import (
+    ApontamentoEtapa, Camara, LeituraTemperatura, LoteArmazenado, Posicao,
+    Recurso,
+)
+from .services import FrioService, TunelService
 from .views import PolpaBaseView
 
 
@@ -177,3 +180,98 @@ class MoverLoteView(PolpaBaseView):
             f'{posicao.camara.nome} {posicao.codigo}.',
         )
         return volta
+
+
+class TunelView(PolpaBaseView):
+    """
+    O túnel de congelamento: fila, o que está dentro e o que já saiu.
+
+    A TELA É DE QUEM ESTÁ NA PORTA DO TÚNEL, e a pergunta dele não é "como
+    vai a ordem 123" — é "o que está aqui dentro e o que já passou do
+    tempo". Por isso o que está dentro vem primeiro, com o relógio de cada
+    carga, e as duas ações (pôr e tirar) ficam na própria linha: quem opera
+    está de luva e não vai navegar até a ordem para apontar uma etapa.
+    """
+
+    area = 'frio'
+
+    def get(self, request):
+        painel = TunelService.painel(_filial(request))
+        return render(request, 'polpa/tunel.html', {
+            'title': 'Túnel de congelamento',
+            **painel,
+            'recursos': Recurso.objects.for_filial(_filial(request)).filter(
+                ativo=True,
+            ),
+            'pode_agir': request.user.tem_permissao('polpa_frio', 'editar'),
+        })
+
+    def post(self, request):
+        volta = redirect(reverse('polpa:tunel'))
+        if not request.user.tem_permissao('polpa_frio', 'editar'):
+            messages.error(request, 'Sem permissão para movimentar o túnel.')
+            return volta
+
+        etapa = get_object_or_404(
+            ApontamentoEtapa.objects.for_filial(_filial(request))
+            .select_related('ordem', 'ordem__ordem'),
+            pk=request.POST.get('etapa'),
+        )
+        acao = request.POST.get('acao')
+
+        try:
+            if acao == 'entrar':
+                TunelService.entrar(etapa, {
+                    'quantidade_entrada': _numero(request.POST.get('quantidade_entrada')),
+                    'equipamento': _recurso(request, request.POST.get('equipamento')),
+                    'observacao': (request.POST.get('observacao') or '').strip(),
+                }, request.user)
+                messages.success(
+                    request, f'{etapa.ordem.numero} entrou no túnel.',
+                )
+            elif acao == 'sair':
+                linha = TunelService.sair(etapa, {
+                    'quantidade_saida': _numero(request.POST.get('quantidade_saida')),
+                    'temperatura': _numero(request.POST.get('temperatura')),
+                    'motivo_perda': (request.POST.get('motivo_perda') or '').strip(),
+                    'observacao': (request.POST.get('observacao') or '').strip(),
+                }, request.user)
+                minutos = linha.duracao_minutos
+                messages.success(
+                    request,
+                    f'{etapa.ordem.numero} saiu do túnel'
+                    + (f' após {minutos} min.' if minutos is not None else '.'),
+                )
+                # A TEMPERATURA DE SAÍDA FORA DA FAIXA VOLTA NA TELA: é o
+                # número que prova o congelamento, e descobrir o desvio no
+                # relatório do mês é descobrir tarde demais.
+                alvo = TunelService.alvo(etapa.ordem)
+                if TunelService._fora_da_faixa(linha.temperatura, alvo):
+                    messages.warning(
+                        request,
+                        f'Saiu a {linha.temperatura}°C — fora de {alvo["faixa"]} '
+                        'que a receita manda.',
+                    )
+            else:
+                messages.error(request, 'Ação desconhecida.')
+        except DomainError as erro:
+            messages.error(request, str(erro))
+
+        return volta
+
+
+def _numero(valor):
+    """Decimal do que veio do formulário — vazio é `None`, não zero."""
+    texto = (valor or '').strip().replace(',', '.')
+    if not texto:
+        return None
+    try:
+        return Decimal(texto)
+    except InvalidOperation:
+        return None
+
+
+def _recurso(request, pk):
+    if not pk:
+        return None
+    return Recurso.objects.for_filial(_filial(request)).filter(pk=pk).first()

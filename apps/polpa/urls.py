@@ -119,6 +119,7 @@ ROTAS_PRONTAS: list = [
     path('frio/etiquetas/<int:pk>/qr.png', vetq.QrLoteView.as_view(), name='etiqueta-qr'),
     path('frio/etiquetas/<int:pk>/barras.svg', vetq.BarrasLoteView.as_view(), name='etiqueta-barras'),
 
+    path('frio/tunel/', vfrio.TunelView.as_view(), name='tunel'),
     path('frio/temperatura/', vfrio.TemperaturaView.as_view(), name='temperatura'),
     path('frio/alertas/', vfrio.AlertasFrioView.as_view(), name='alertas-frio'),
     path('frio/camaras/', varm.CamaraListView.as_view(), name='camara-list'),

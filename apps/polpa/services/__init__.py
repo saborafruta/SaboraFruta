@@ -11,6 +11,7 @@ from .planejamento import PlanejamentoService
 from .processo import ProcessoService
 from .receita import ReceitaService
 from .tempo_real import TempoRealService
+from .tunel import TunelService
 from .perdas import PerdasService
 from .subproduto import SubprodutoService
 from .recebimento import RecebimentoService
@@ -20,5 +21,5 @@ __all__ = [
     'CompraService', 'PerdasService',
     'CustoService', 'MargemService', 'OrdemPolpaService', 'PlanejamentoService',
     'ProcessoService', 'ReceitaService', 'RecebimentoService', 'TempoRealService',
-    'SubprodutoService',
+    'SubprodutoService', 'TunelService',
 ]
