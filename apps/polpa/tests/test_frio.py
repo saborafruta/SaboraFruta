@@ -215,6 +215,46 @@ class TemperaturaTests(FrioBase):
 
         self.assertEqual(FrioService.temperatura_atual(self.camara), recente)
 
+    def test_duas_leituras_na_mesma_hora_a_ultima_gravada_vence(self):
+        """
+        O empate NÃO é hipótese de laboratório: a hora é digitada, e quem
+        registra a leitura das 8h e corrige o valor logo depois grava duas com
+        o mesmo `medida_em`. Sem desempate o banco devolve qualquer uma — e
+        num painel de cadeia de frio isso é mostrar a temperatura velha como
+        se fosse a de agora.
+
+        O teste ao lado só pegou isto por acidente: no Windows o relógio de
+        `timezone.now()` tem resolução de ~15 ms, e duas chamadas seguidas
+        caem no mesmo instante. Num relógio mais fino ele passaria com o bug
+        de pé.
+        """
+        as_oito = timezone.now().replace(hour=8, minute=0, second=0, microsecond=0)
+
+        FrioService.registrar_leitura(
+            self.camara, Decimal('-20'), self.usuario,
+            dados={'medida_em': as_oito},
+        )
+        correcao = FrioService.registrar_leitura(
+            self.camara, Decimal('-21'), self.usuario,
+            dados={'medida_em': as_oito},
+        )
+
+        self.assertEqual(FrioService.temperatura_atual(self.camara), correcao)
+
+    def test_a_lista_da_camara_tambem_desempata(self):
+        """A ordenação padrão do modelo tinha a mesma ambiguidade."""
+        as_oito = timezone.now().replace(hour=8, minute=0, second=0, microsecond=0)
+        FrioService.registrar_leitura(
+            self.camara, Decimal('-20'), self.usuario,
+            dados={'medida_em': as_oito},
+        )
+        correcao = FrioService.registrar_leitura(
+            self.camara, Decimal('-21'), self.usuario,
+            dados={'medida_em': as_oito},
+        )
+
+        self.assertEqual(self.camara.leituras.first(), correcao)
+
     def test_a_leitura_dentro_da_faixa_nao_tem_desvio(self):
         leitura = FrioService.registrar_leitura(
             self.camara, Decimal('-20'), self.usuario,

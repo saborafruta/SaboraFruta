@@ -99,8 +99,19 @@ class FrioService:
 
     @staticmethod
     def temperatura_atual(camara: Camara):
-        """A última leitura desta câmara — ou `None` se nunca mediram."""
-        return camara.leituras.order_by('-medida_em').first()
+        """
+        A última leitura desta câmara — ou `None` se nunca mediram.
+
+        DESEMPATA PELO `-pk`, e o empate não é hipótese de laboratório: quem
+        registra a leitura das 8h e corrige o valor logo depois grava duas com
+        o MESMO `medida_em`, porque a hora é digitada. Sem desempate o banco
+        devolve qualquer uma das duas — e num painel de cadeia de fria isso é
+        mostrar a temperatura velha como se fosse a de agora.
+
+        `-pk` é a ordem de gravação: entre duas medições da mesma hora, a
+        última a ser registrada é a que corrige a anterior.
+        """
+        return camara.leituras.order_by('-medida_em', '-pk').first()
 
     @classmethod
     def painel_temperatura(cls, filial) -> list[dict]:

@@ -125,7 +125,10 @@ class LeituraTemperatura(FilialScopedModel):
 
     class Meta:
         db_table = 'polpa_leituras_temperatura'
-        ordering = ['-medida_em']
+        # O `-pk` desempata medições da mesma hora — a hora é digitada, e duas
+        # leituras das 8h sem desempate saem em ordem arbitrária, fazendo a
+        # lista mostrar a correção antes do valor corrigido.
+        ordering = ['-medida_em', '-pk']
         indexes = [
             models.Index(fields=['filial', 'camara', '-medida_em']),
         ]
