@@ -747,7 +747,17 @@
         <svg class="w-3 h-3 flex-shrink-0 transition-transform duration-200" :class="secoes.financeiro ? '' : '-rotate-90'" :style="temaClaro ? 'color:#9ca3af;' : 'color:#555570;'" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M19 9l-7 7-7-7"/></svg>
       </button>
       <div class="my-2 mx-3" x-show="collapsed" :style="temaClaro ? 'border-top:1px solid #e5e5e5;' : 'border-top:1px solid #2a2a2e;'"></div>
-      <div x-show="collapsed || secoes.financeiro">
+      <style>
+        .finance-menu { display: flex; flex-direction: column; }
+        .finance-menu > a { order: 100; }
+        .finance-menu > .finance-order-1 { order: 1; }
+        .finance-menu > .finance-order-2 { order: 2; }
+        .finance-menu > .finance-order-3 { order: 3; }
+        .finance-menu > .finance-order-4 { order: 4; }
+        .finance-menu > .finance-order-5 { order: 5; }
+        .finance-menu > .finance-order-6 { order: 6; }
+      </style>
+      <div class="finance-menu" x-show="collapsed || secoes.financeiro">
 
       {% url 'financeiro:receber_list' as financeiro_url %}
       {% url 'financeiro:pagar_list' as pagar_url %}
@@ -801,7 +811,7 @@
 
       <!-- Posicao Diaria de Caixa -->
       <a href="{{ posicao_diaria_url }}"
-         class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-all duration-150"
+         class="finance-order-1 flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-all duration-150"
          :class="collapsed ? 'justify-center' : ''"
          :style="{% if '/financeiro/posicao-diaria' in request.path %}temaClaro ? 'background:#dbeafe; color:#1d4ed8; font-weight:600;' : 'background:#1e2a3a; color:#f8fafc;'{% else %}temaClaro ? 'color:#6b7280;' : 'color:#f8fafc;'{% endif %}"
          {% if '/financeiro/posicao-diaria' not in request.path %}onmouseover="this.style.background=temaClaro?'#eff6ff':'#242426'; this.style.color=temaClaro?'#1d4ed8':'#d4d4d4';" onmouseout="this.style.background='transparent'; this.style.color=temaClaro?'#6b7280':'#f8fafc'; this.style.fontWeight='';"{% endif %}
@@ -840,7 +850,7 @@
 
       <!-- Contas a Receber -->
       <a href="{{ financeiro_url }}"
-         class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-all duration-150"
+         class="finance-order-3 flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-all duration-150"
          :class="collapsed ? 'justify-center' : ''"
          :style="{% if '/financeiro/receber' in request.path %}temaClaro ? 'background:#dbeafe; color:#1d4ed8; font-weight:600;' : 'background:#1e2a3a; color:#f8fafc;'{% else %}temaClaro ? 'color:#6b7280;' : 'color:#f8fafc;'{% endif %}"
          {% if '/financeiro/receber' not in request.path %}onmouseover="this.style.background=temaClaro?'#eff6ff':'#242426'; this.style.color=temaClaro?'#1d4ed8':'#d4d4d4';" onmouseout="this.style.background='transparent'; this.style.color=temaClaro?'#6b7280':'#f8fafc'; this.style.fontWeight='';"{% endif %}
@@ -853,7 +863,7 @@
 
       <!-- Contas a Pagar -->
       <a href="{{ pagar_url }}"
-         class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-all duration-150"
+         class="finance-order-2 flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-all duration-150"
          :class="collapsed ? 'justify-center' : ''"
          :style="{% if '/financeiro/pagar' in request.path and '/financeiro/pagar/pagas' not in request.path %}temaClaro ? 'background:#dbeafe; color:#1d4ed8; font-weight:600;' : 'background:#1e2a3a; color:#f8fafc;'{% else %}temaClaro ? 'color:#6b7280;' : 'color:#f8fafc;'{% endif %}"
          {% if '/financeiro/pagar' not in request.path or '/financeiro/pagar/pagas' in request.path %}onmouseover="this.style.background=temaClaro?'#eff6ff':'#242426'; this.style.color=temaClaro?'#1d4ed8':'#d4d4d4';" onmouseout="this.style.background='transparent'; this.style.color=temaClaro?'#6b7280':'#f8fafc'; this.style.fontWeight='';"{% endif %}
@@ -865,7 +875,7 @@
       </a>
 
       <a href="{{ pagas_url }}"
-         class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-all duration-150"
+         class="finance-order-4 flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-all duration-150"
          :class="collapsed ? 'justify-center' : ''"
          :style="{% if '/financeiro/pagar/pagas' in request.path %}temaClaro ? 'background:#dcfce7; color:#15803d; font-weight:600;' : 'background:#173127; color:#f8fafc;'{% else %}temaClaro ? 'color:#6b7280;' : 'color:#f8fafc;'{% endif %}"
          title="Contas Pagas">
@@ -875,7 +885,7 @@
 
       <!-- Categorias Financeiras -->
       <a href="{{ plano_contas_url }}"
-         class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-all duration-150"
+         class="finance-order-6 flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-all duration-150"
          :class="collapsed ? 'justify-center' : ''"
          :style="{% if '/financeiro/categorias-financeiras' in request.path %}temaClaro ? 'background:#dbeafe; color:#1d4ed8; font-weight:600;' : 'background:#1e2a3a; color:#f8fafc;'{% else %}temaClaro ? 'color:#6b7280;' : 'color:#f8fafc;'{% endif %}"
          {% if '/financeiro/categorias-financeiras' not in request.path %}onmouseover="this.style.background=temaClaro?'#eff6ff':'#242426'; this.style.color=temaClaro?'#1d4ed8':'#d4d4d4';" onmouseout="this.style.background='transparent'; this.style.color=temaClaro?'#6b7280':'#f8fafc'; this.style.fontWeight='';"{% endif %}
@@ -901,7 +911,7 @@
 
       <!-- Formas de Pagamento -->
       <a href="{{ formas_pagamento_url }}"
-         class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-all duration-150"
+         class="finance-order-5 flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-all duration-150"
          :class="collapsed ? 'justify-center' : ''"
          :style="{% if '/financeiro/formas-pagamento' in request.path %}temaClaro ? 'background:#dbeafe; color:#1d4ed8; font-weight:600;' : 'background:#1e2a3a; color:#f8fafc;'{% else %}temaClaro ? 'color:#6b7280;' : 'color:#f8fafc;'{% endif %}"
          {% if '/financeiro/formas-pagamento' not in request.path %}onmouseover="this.style.background=temaClaro?'#eff6ff':'#242426'; this.style.color=temaClaro?'#1d4ed8':'#d4d4d4';" onmouseout="this.style.background='transparent'; this.style.color=temaClaro?'#6b7280':'#f8fafc'; this.style.fontWeight='';"{% endif %}
@@ -1623,7 +1633,7 @@
         <span :class="temaClaro ? 'sidebar-section-label' : 'text-xs font-medium uppercase tracking-widest'" :style="temaClaro ? '' : 'color:#f8fafc; letter-spacing:0.1em;'">Financeiro</span>
         <svg class="w-3 h-3 flex-shrink-0 transition-transform duration-200" :class="secoes.financeiro ? '' : '-rotate-90'" :style="temaClaro ? 'color:#9ca3af;' : 'color:#555570;'" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M19 9l-7 7-7-7"/></svg>
       </button>
-      <div x-show="secoes.financeiro">
+      <div class="finance-menu" x-show="secoes.financeiro">
 
       {% url 'financeiro:receber_list' as financeiro_url %}
       {% url 'financeiro:pagar_list' as pagar_url %}
@@ -1670,7 +1680,7 @@
       </a>
 
       <a href="{{ posicao_diaria_url }}" @click="mobileOpen = false"
-         class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-all duration-150"
+         class="finance-order-1 flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-all duration-150"
          :style="{% if '/financeiro/posicao-diaria' in request.path %}temaClaro ? 'background:#dbeafe; color:#1d4ed8; font-weight:600;' : 'background:#1e2a3a; color:#f8fafc;'{% else %}temaClaro ? 'color:#6b7280;' : 'color:#f8fafc;'{% endif %}">
         <svg class="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M4 5h16v14H4zM4 9h16M8 13h3m-3 3h5"/>
@@ -1699,7 +1709,7 @@
       </a>
 
       <a href="{{ financeiro_url }}" @click="mobileOpen = false"
-         class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-all duration-150"
+         class="finance-order-3 flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-all duration-150"
          :style="{% if '/financeiro/receber' in request.path %}temaClaro ? 'background:#dbeafe; color:#1d4ed8; font-weight:600;' : 'background:#1e2a3a; color:#f8fafc;'{% else %}temaClaro ? 'color:#6b7280;' : 'color:#f8fafc;'{% endif %}"
          {% if '/financeiro/receber' not in request.path %}onmouseover="this.style.background=temaClaro?'#eff6ff':'#242426'; this.style.color=temaClaro?'#1d4ed8':'#d4d4d4';" onmouseout="this.style.background='transparent'; this.style.color=temaClaro?'#6b7280':'#f8fafc'; this.style.fontWeight='';"{% endif %}>
         <svg class="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1709,7 +1719,7 @@
       </a>
 
       <a href="{{ pagar_url }}" @click="mobileOpen = false"
-         class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-all duration-150"
+         class="finance-order-2 flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-all duration-150"
          :style="{% if '/financeiro/pagar' in request.path and '/financeiro/pagar/pagas' not in request.path %}temaClaro ? 'background:#dbeafe; color:#1d4ed8; font-weight:600;' : 'background:#1e2a3a; color:#f8fafc;'{% else %}temaClaro ? 'color:#6b7280;' : 'color:#f8fafc;'{% endif %}"
          {% if '/financeiro/pagar' not in request.path or '/financeiro/pagar/pagas' in request.path %}onmouseover="this.style.background=temaClaro?'#eff6ff':'#242426'; this.style.color=temaClaro?'#1d4ed8':'#d4d4d4';" onmouseout="this.style.background='transparent'; this.style.color=temaClaro?'#6b7280':'#f8fafc'; this.style.fontWeight='';"{% endif %}>
         <svg class="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1719,7 +1729,7 @@
       </a>
 
       <a href="{{ pagas_url }}" @click="mobileOpen = false"
-         class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-all duration-150"
+         class="finance-order-4 flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-all duration-150"
          :style="{% if '/financeiro/pagar/pagas' in request.path %}temaClaro ? 'background:#dcfce7; color:#15803d; font-weight:600;' : 'background:#173127; color:#f8fafc;'{% else %}temaClaro ? 'color:#6b7280;' : 'color:#f8fafc;'{% endif %}">
         <span class="w-5 text-center text-base flex-shrink-0">✓</span>
         Contas Pagas
@@ -1727,7 +1737,7 @@
 
       <!-- Categorias Financeiras -->
       <a href="{{ plano_contas_url }}" @click="mobileOpen = false"
-         class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-all duration-150"
+         class="finance-order-6 flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-all duration-150"
          :style="{% if '/financeiro/categorias-financeiras' in request.path %}temaClaro ? 'background:#dbeafe; color:#1d4ed8; font-weight:600;' : 'background:#1e2a3a; color:#f8fafc;'{% else %}temaClaro ? 'color:#6b7280;' : 'color:#f8fafc;'{% endif %}"
          {% if '/financeiro/categorias-financeiras' not in request.path %}onmouseover="this.style.background=temaClaro?'#eff6ff':'#242426'; this.style.color=temaClaro?'#1d4ed8':'#d4d4d4';" onmouseout="this.style.background='transparent'; this.style.color=temaClaro?'#6b7280':'#f8fafc'; this.style.fontWeight='';"{% endif %}>
         <svg class="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1748,7 +1758,7 @@
 
       <!-- Formas de Pagamento (mobile) -->
       <a href="{{ formas_pagamento_url }}" @click="mobileOpen = false"
-         class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-all duration-150"
+         class="finance-order-5 flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-all duration-150"
          :style="{% if '/financeiro/formas-pagamento' in request.path %}temaClaro ? 'background:#dbeafe; color:#1d4ed8; font-weight:600;' : 'background:#1e2a3a; color:#f8fafc;'{% else %}temaClaro ? 'color:#6b7280;' : 'color:#f8fafc;'{% endif %}"
          {% if '/financeiro/formas-pagamento' not in request.path %}onmouseover="this.style.background=temaClaro?'#eff6ff':'#242426'; this.style.color=temaClaro?'#1d4ed8':'#d4d4d4';" onmouseout="this.style.background='transparent'; this.style.color=temaClaro?'#6b7280':'#f8fafc'; this.style.fontWeight='';"{% endif %}>
         <svg class="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
