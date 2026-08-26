@@ -76,6 +76,14 @@
         var active = favoriteSet.has(record.path);
         record.toggle.textContent = active ? '\u2605' : '\u2606';
         record.toggle.classList.toggle('is-favorite', active);
+        if (record.mobileReadonly) {
+          record.toggle.removeAttribute('role');
+          record.toggle.removeAttribute('tabindex');
+          record.toggle.removeAttribute('aria-pressed');
+          record.toggle.setAttribute('aria-hidden', 'true');
+          record.toggle.title = active ? 'Favorito' : '';
+          return;
+        }
         record.toggle.setAttribute('aria-pressed', active ? 'true' : 'false');
         record.toggle.setAttribute(
           'aria-label',
@@ -132,19 +140,22 @@
       record.anchor.classList.add('sidebar-favoritable-link');
       var toggle = document.createElement('span');
       toggle.className = 'sidebar-favorite-toggle';
-      toggle.setAttribute('role', 'button');
-      toggle.setAttribute('tabindex', '0');
-      toggle.addEventListener('click', function (event) {
-        event.preventDefault();
-        event.stopPropagation();
-        toggleFavorite(record.path, record.nav);
-      });
-      toggle.addEventListener('keydown', function (event) {
-        if (event.key !== 'Enter' && event.key !== ' ') return;
-        event.preventDefault();
-        event.stopPropagation();
-        toggleFavorite(record.path, record.nav);
-      });
+      record.mobileReadonly = Boolean(record.nav.closest('.sidebar-mobile'));
+      if (!record.mobileReadonly) {
+        toggle.setAttribute('role', 'button');
+        toggle.setAttribute('tabindex', '0');
+        toggle.addEventListener('click', function (event) {
+          event.preventDefault();
+          event.stopPropagation();
+          toggleFavorite(record.path, record.nav);
+        });
+        toggle.addEventListener('keydown', function (event) {
+          if (event.key !== 'Enter' && event.key !== ' ') return;
+          event.preventDefault();
+          event.stopPropagation();
+          toggleFavorite(record.path, record.nav);
+        });
+      }
       record.anchor.appendChild(toggle);
       record.toggle = toggle;
     });
@@ -185,20 +196,25 @@
 
           var remove = document.createElement('span');
           remove.className = 'sidebar-favorite-toggle is-favorite';
-          remove.setAttribute('role', 'button');
-          remove.setAttribute('tabindex', '0');
-          remove.setAttribute('aria-label', 'Remover dos favoritos: ' + record.label);
-          remove.title = 'Remover dos favoritos';
           remove.textContent = '\u2605';
-          remove.addEventListener('click', function (event) {
-            event.preventDefault();
-            toggleFavorite(record.path, nav);
-          });
-          remove.addEventListener('keydown', function (event) {
-            if (event.key !== 'Enter' && event.key !== ' ') return;
-            event.preventDefault();
-            toggleFavorite(record.path, nav);
-          });
+          if (nav.closest('.sidebar-mobile')) {
+            remove.setAttribute('aria-hidden', 'true');
+            remove.title = 'Favorito';
+          } else {
+            remove.setAttribute('role', 'button');
+            remove.setAttribute('tabindex', '0');
+            remove.setAttribute('aria-label', 'Remover dos favoritos: ' + record.label);
+            remove.title = 'Remover dos favoritos';
+            remove.addEventListener('click', function (event) {
+              event.preventDefault();
+              toggleFavorite(record.path, nav);
+            });
+            remove.addEventListener('keydown', function (event) {
+              if (event.key !== 'Enter' && event.key !== ' ') return;
+              event.preventDefault();
+              toggleFavorite(record.path, nav);
+            });
+          }
           row.appendChild(remove);
           list.appendChild(row);
         });

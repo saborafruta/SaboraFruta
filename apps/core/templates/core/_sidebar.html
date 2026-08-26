@@ -72,8 +72,12 @@
     color: #f59e0b;
     text-shadow: 0 1px 8px rgba(245, 158, 11, 0.22);
   }
-  .sidebar-mobile .sidebar-favorite-toggle {
+  .sidebar-mobile .sidebar-favorite-toggle:not(.is-favorite) {
     display: none;
+  }
+  .sidebar-mobile .sidebar-favorite-toggle.is-favorite {
+    display: inline-flex;
+    pointer-events: none;
   }
   @media (hover: hover) and (pointer: fine) {
     .sidebar-favoritable-link > .sidebar-favorite-toggle:not(.is-favorite) {
