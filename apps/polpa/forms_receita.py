@@ -80,6 +80,10 @@ class ReceitaForm(forms.Form):
             Produto.objects.for_filial(filial).filter(pk__in=list(acabados))
             if filial else Produto.objects.none()
         )
+        # `---------`, o padrao do Django, nao diz nada -- e num select vazio,
+        # que e' o caso enquanto nao houver acabado cadastrado, parece campo
+        # carregando em vez de campo sem opcao.
+        self.fields['produto'].empty_label = 'Selecione o produto acabado'
 
         if receita is not None:
             ficha = receita.ficha

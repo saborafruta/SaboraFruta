@@ -1,0 +1,18 @@
+{% comment %}
+  Um campo da receita: rótulo, marca de obrigatório, widget, ajuda e erro.
+
+  EXTRAÍDO PORQUE SE REPETE SEIS VEZES. Os campos agora vivem em quatro cartões
+  diferentes, e copiar este bloco em cada um garantiria que o próximo ajuste
+  pegasse quatro cópias e esquecesse a quinta — foi assim que o erro de campo
+  sumiu de alguns blocos desta tela antes.
+{% endcomment %}
+<label class="form-label" for="{{ campo.id_for_label }}">
+  {{ campo.label }}{% if campo.field.required %} <span style="color:#dc2626;" title="Obrigatório">*</span>{% endif %}
+</label>
+{{ campo }}
+{% if campo.help_text %}
+  <p class="text-xs mt-1" :style="temaClaro ? 'color:#94a3b8;' : 'color:#71717a;'">{{ campo.help_text }}</p>
+{% endif %}
+{% if campo.errors %}
+  <p class="text-xs mt-1" style="color:#dc2626;">{{ campo.errors.0 }}</p>
+{% endif %}

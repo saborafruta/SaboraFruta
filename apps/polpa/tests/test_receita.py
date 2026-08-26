@@ -487,3 +487,70 @@ class TelasReceitaTests(ReceitaBase):
 
         self.assertEqual(resposta.status_code, 200)
         self.assertContains(resposta, 'acima de 300%')
+
+
+class ATelaDaReceitaTests(ReceitaBase):
+    """A tela do cabeçalho da receita."""
+
+    def test_a_tela_abre_e_agrupa_os_campos(self):
+        """
+        Onze campos numa coluna so' deixavam "Temperatura minima" a seis
+        rolagens de "Rende por batida", sem nada dizer que uma depende da outra.
+        """
+        resposta = self.client.get(reverse('polpa:receita-create'))
+
+        self.assertEqual(resposta.status_code, 200)
+        for titulo in (
+            'Que produto é este', 'O que sai de uma batida',
+            'Condição do processo', 'Custo fixo da batida',
+        ):
+            self.assertContains(resposta, titulo)
+
+    def test_o_select_vazio_diz_o_que_fazer(self):
+        resposta = self.client.get(reverse('polpa:receita-create'))
+
+        self.assertContains(resposta, 'Selecione o produto acabado')
+        self.assertNotContains(resposta, '---------')
+
+    def test_os_campos_obrigatorios_estao_marcados(self):
+        resposta = self.client.get(reverse('polpa:receita-create'))
+
+        self.assertContains(resposta, 'title="Obrigatório"')
+
+
+class NenhumaTelaDePolpaVazaSintaxeDeTemplateTests(ReceitaBase):
+    """
+    Guarda contra o defeito que eu mesmo enviei em 26/08/2026.
+
+    Escrevi um comentário `{# ... #}` de VÁRIAS LINHAS dentro de um `<label>`.
+    Django só trata `{# #}` como comentário quando ele cabe numa linha; em
+    várias, o texto vaza e é RENDERIZADO NA TELA — apareceu no meio do rótulo
+    do campo Unidade, em produção.
+
+    Os testes que eu tinha não pegaram porque só perguntavam "o botão está
+    lá?" (`assertContains`), e isso passa com a tela inteira suja em volta.
+    Este pergunta o contrário: sobrou alguma sintaxe de template no HTML?
+    """
+
+    TELAS = (
+        'polpa:receita-create',
+        'polpa:catalogo-create',
+        'polpa:recebimento-create',
+        'polpa:recebimento-list',
+        'polpa:recebimento-classificacao',
+        'polpa:recebimento-produtores',
+        'polpa:catalogo-list',
+        'polpa:receita-list',
+    )
+
+    def test_nenhuma_tela_renderiza_sintaxe_de_template(self):
+        for nome in self.TELAS:
+            with self.subTest(tela=nome):
+                html = self.client.get(reverse(nome)).content.decode()
+                # `{%` e `{#` nunca deveriam sobreviver à renderização. O Alpine
+                # usa `{{ }}` em alguns lugares, então esse par fica de fora.
+                for resto in ('{#', '#}', '{%', '%}'):
+                    self.assertNotIn(
+                        resto, html,
+                        f'{nome} vazou "{resto}" no HTML renderizado',
+                    )

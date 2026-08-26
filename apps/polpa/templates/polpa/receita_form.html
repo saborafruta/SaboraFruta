@@ -2,11 +2,28 @@
 {% block title %}{{ title }} — Polpa{% endblock %}
 {% block page_title %}{{ title }}{% endblock %}
 {% block content %}
-<div class="space-y-4 max-w-3xl">
 
-  <p class="text-sm" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
-    <a href="{% url 'polpa:receita-list' %}" :style="temaClaro ? 'color:#3b82f6;' : 'color:#60a5fa;'">‹ Formulações</a>
-  </p>
+{% comment %}
+  A RECEITA É QUATRO PERGUNTAS, e não onze campos em fila. Empilhados numa
+  coluna só, "Temperatura mínima" ficava a seis rolagens de "Rende por batida"
+  sem nada dizer que uma depende da outra — e metade da página ficava vazia à
+  direita enquanto isso.
+
+  Agrupados, cada cartão responde uma coisa: que produto é este, quanto sai de
+  uma batida, em que condição o processo roda, e quanto a batida custa antes
+  de qualquer insumo.
+{% endcomment %}
+<div class="space-y-4">
+
+  <div>
+    <p class="text-sm" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+      <a href="{% url 'polpa:receita-list' %}" :style="temaClaro ? 'color:#3b82f6;' : 'color:#60a5fa;'">‹ Formulações</a>
+    </p>
+    <h2 class="text-2xl font-semibold mt-1" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">{{ title }}</h2>
+    <p class="text-sm mt-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+      Este é o cabeçalho da receita. Os insumos entram depois, na tela da formulação.
+    </p>
+  </div>
 
   {% if not tem_produto %}
     {% comment %}
@@ -43,21 +60,78 @@
       </div>
     {% endif %}
 
-    <div class="card p-4 space-y-3">
-      {% for campo in form %}
-        <div>
-          <label class="form-label" for="{{ campo.id_for_label }}">{{ campo.label }}</label>
-          {{ campo }}
-          {% if campo.help_text %}
-            <p class="text-xs mt-1" :style="temaClaro ? 'color:#94a3b8;' : 'color:#71717a;'">{{ campo.help_text }}</p>
-          {% endif %}
-        </div>
-      {% endfor %}
-    </div>
+    <div class="grid xl:grid-cols-[minmax(0,1fr)_320px] gap-4 items-start">
+      <div class="space-y-4">
 
-    <div class="flex flex-wrap gap-2">
-      <button type="submit" class="btn-primary">Gravar</button>
-      <a href="{% url 'polpa:receita-list' %}" class="btn-secondary">Cancelar</a>
+        <div class="card p-4">
+          <h3 class="text-sm font-semibold mb-3" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">Que produto é este</h3>
+          <div class="grid sm:grid-cols-2 lg:grid-cols-4 gap-3">
+            {% for campo in form %}
+              {% if campo.name == 'produto' %}
+                <div class="sm:col-span-2">{% include "polpa/_campo_receita.html" %}</div>
+              {% elif campo.name == 'descricao' or campo.name == 'versao' %}
+                <div>{% include "polpa/_campo_receita.html" %}</div>
+              {% endif %}
+            {% endfor %}
+          </div>
+        </div>
+
+        <div class="card p-4">
+          <h3 class="text-sm font-semibold mb-3" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">O que sai de uma batida</h3>
+          <div class="grid sm:grid-cols-3 gap-3">
+            {% for campo in form %}
+              {% if campo.name == 'quantidade_produzida' or campo.name == 'rendimento_esperado' or campo.name == 'tempo_producao_minutos' %}
+                <div>{% include "polpa/_campo_receita.html" %}</div>
+              {% endif %}
+            {% endfor %}
+          </div>
+        </div>
+
+        <div class="card p-4">
+          <h3 class="text-sm font-semibold mb-3" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">Condição do processo</h3>
+          <div class="grid sm:grid-cols-2 gap-3">
+            {% for campo in form %}
+              {% if campo.name == 'temperatura_processo_min' or campo.name == 'temperatura_processo_max' %}
+                <div>{% include "polpa/_campo_receita.html" %}</div>
+              {% endif %}
+            {% endfor %}
+          </div>
+        </div>
+
+        <div class="card p-4">
+          <label class="form-label" for="{{ form.observacoes_tecnicas.id_for_label }}">
+            {{ form.observacoes_tecnicas.label }}
+          </label>
+          {{ form.observacoes_tecnicas }}
+        </div>
+
+      </div>
+
+      {% comment %}
+        CUSTO DA BATIDA FICA DE LADO, e não no meio dos campos de processo: é
+        dinheiro, não é receita. São os dois valores que a batida consome sem
+        ser insumo, e é sobre eles que a margem do produto se apoia depois —
+        insumo o sistema calcula sozinho pela formulação; estes dois só existem
+        se alguém digitar.
+      {% endcomment %}
+      <aside class="space-y-3 xl:sticky xl:top-4">
+        <div class="card p-4 space-y-3">
+          <p class="text-xs uppercase tracking-wider font-semibold"
+             :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Custo fixo da batida</p>
+          {% for campo in form %}
+            {% if campo.name == 'custo_mao_obra_padrao' or campo.name == 'custo_indireto_padrao' %}
+              <div>{% include "polpa/_campo_receita.html" %}</div>
+            {% endif %}
+          {% endfor %}
+          <p class="text-[11px]" :style="temaClaro ? 'color:#94a3b8;' : 'color:#71717a;'">
+            O custo dos insumos não entra aqui — ele sai da formulação, item a item.
+          </p>
+          <div class="flex flex-wrap gap-2 pt-1">
+            <button type="submit" class="btn-primary flex-1 justify-center">Gravar</button>
+            <a href="{% url 'polpa:receita-list' %}" class="btn-secondary">Cancelar</a>
+          </div>
+        </div>
+      </aside>
     </div>
   </form>
 
