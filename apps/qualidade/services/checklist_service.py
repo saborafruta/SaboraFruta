@@ -140,17 +140,46 @@ class ChecklistService:
             if 'observacao' in dados:
                 item.observacao = (dados['observacao'] or '')[:300]
 
-            acao = (dados.get('acao_corretiva') or '').strip()
-            if acao and acao != item.acao_corretiva:
-                item.acao_corretiva = acao
-                item.acao_responsavel = usuario
-                item.acao_em = timezone.now()
+            cls.registrar_acao(
+                item, dados.get('acao_corretiva'), usuario, salvar=False,
+            )
 
             item.save()
             alterados.append(item)
 
         cls._espelhar_no_json(analise)
         return alterados
+
+    @staticmethod
+    def registrar_acao(item: ItemAnalise, texto, usuario=None,
+                       salvar: bool = True) -> bool:
+        """
+        Escreve a ação corretiva de um desvio, carimbando QUEM e QUANDO.
+
+        EXTRAÍDO DE `preencher` PARA TER UM DONO SÓ. A tela de não
+        conformidades registra a ação item a item, sem passar pelo checklist
+        inteiro; copiar as três atribuições lá faria existirem duas definições
+        de "registrar ação" — e no dia em que uma ganhasse, por exemplo, um
+        campo de prazo, a outra continuaria gravando frase sem dono.
+
+        Guardar só o texto deixaria a auditoria com uma frase sem responsável,
+        que é o primeiro registro que a fiscalização pede.
+
+        TEXTO IGUAL AO QUE JÁ ESTÁ NÃO RECARIMBA. Reabrir a tela e salvar sem
+        mudar nada moveria a data da ação para hoje, e a auditoria perderia
+        quando o desvio foi de fato tratado.
+        """
+        acao = (texto or '').strip()
+        if not acao or acao == item.acao_corretiva:
+            return False
+        item.acao_corretiva = acao[:500]
+        item.acao_responsavel = usuario
+        item.acao_em = timezone.now()
+        if salvar:
+            item.save(update_fields=[
+                'acao_corretiva', 'acao_responsavel', 'acao_em',
+            ])
+        return True
 
     @staticmethod
     def _guardar_valor(item: ItemAnalise, bruto) -> None:

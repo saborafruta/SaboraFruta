@@ -1135,3 +1135,176 @@ class ATelaDeRastreabilidadeTests(OrdemBase):
 
         for resto in ('{#', '#}', '{%', '%}'):
             self.assertNotIn(resto, html, f'vazou "{resto}" no HTML')
+
+
+class ATelaDeNaoConformidadesTests(OrdemBase):
+    """
+    Desvio anotado sem tratativa é pior que desvio não anotado: dá a impressão
+    de que alguém cuidou.
+    """
+
+    def _desvio(self, parametro='Brix', acao='', **campos):
+        from apps.qualidade.constants.enums import ResultadoAnalise, TipoAnalise
+        from apps.qualidade.models import AnaliseQualidade, ItemAnalise
+
+        analise = AnaliseQualidade.objects.create(
+            filial=self.filial, tipo_analise=TipoAnalise.PRODUTO_ACABADO,
+            parametros={}, resultado=ResultadoAnalise.REPROVADO,
+            responsavel_tecnico=self.usuario, data_analise=timezone.now(),
+        )
+        dados = {
+            'analise': analise, 'nome_parametro': parametro,
+            'situacao': ItemAnalise.Situacao.NAO_CONFORME,
+            'valor_numero': Decimal('9'), 'valor_minimo': Decimal('12'),
+            'acao_corretiva': acao,
+        }
+        dados.update(campos)
+        return ItemAnalise.objects.create(**dados)
+
+    # ── A fila ───────────────────────────────────────────────────────────
+
+    def test_a_fila_abre_pelos_sem_tratativa(self):
+        """E' a fila de trabalho; o que ja' foi tratado e' consulta."""
+        self._desvio(parametro='Brix', acao='')
+        self._desvio(parametro='pH', acao='Lote reprocessado')
+
+        resposta = self.client.get(reverse('polpa:qualidade-nao-conformidades'))
+
+        itens = resposta.context['itens']
+        self.assertEqual(len(itens), 1)
+        self.assertEqual(itens[0].nome_parametro, 'Brix')
+
+    def test_da_para_ver_as_ja_tratadas(self):
+        self._desvio(parametro='pH', acao='Lote reprocessado')
+
+        resposta = self.client.get(
+            reverse('polpa:qualidade-nao-conformidades'), {'situacao': 'tratadas'},
+        )
+
+        self.assertEqual(len(resposta.context['itens']), 1)
+
+    def test_o_resumo_conta_todos_e_nao_so_o_filtro(self):
+        """
+        O topo responde "quanto falta". Um total que muda com o filtro nao
+        responde isso.
+        """
+        self._desvio(parametro='Brix', acao='')
+        self._desvio(parametro='pH', acao='Reprocessado')
+
+        resposta = self.client.get(reverse('polpa:qualidade-nao-conformidades'))
+
+        self.assertEqual(len(resposta.context['itens']), 1)
+        self.assertEqual(resposta.context['resumo']['total'], 2)
+        self.assertEqual(resposta.context['resumo']['sem_acao'], 1)
+        self.assertEqual(resposta.context['resumo']['tratadas'], 1)
+
+    def test_conforme_nao_e_desvio(self):
+        from apps.qualidade.models import ItemAnalise
+
+        self._desvio(situacao=ItemAnalise.Situacao.CONFORME)
+
+        resposta = self.client.get(reverse('polpa:qualidade-nao-conformidades'))
+
+        self.assertEqual(len(resposta.context['itens']), 0)
+
+    # ── A tratativa ──────────────────────────────────────────────────────
+
+    def test_registrar_a_tratativa_carimba_quem_e_quando(self):
+        """
+        Guardar so' o texto deixaria a auditoria com uma frase sem dono -- e
+        responsavel e' o primeiro registro que a fiscalizacao pede.
+        """
+        desvio = self._desvio()
+
+        self.client.post(reverse('polpa:qualidade-nao-conformidades'), {
+            'item': desvio.pk, 'acao_corretiva': 'Carga devolvida ao produtor',
+        })
+
+        desvio.refresh_from_db()
+        self.assertEqual(desvio.acao_corretiva, 'Carga devolvida ao produtor')
+        self.assertEqual(desvio.acao_responsavel_id, self.usuario.pk)
+        self.assertIsNotNone(desvio.acao_em)
+
+    def test_tratativa_vazia_nao_grava_e_avisa(self):
+        """Sem o que foi feito, o desvio segue em aberto."""
+        desvio = self._desvio()
+
+        resposta = self.client.post(
+            reverse('polpa:qualidade-nao-conformidades'),
+            {'item': desvio.pk, 'acao_corretiva': '   '},
+            follow=True,
+        )
+
+        desvio.refresh_from_db()
+        self.assertEqual(desvio.acao_corretiva, '')
+        self.assertContains(resposta, 'Escreva o que foi feito')
+
+    def test_texto_igual_ao_que_ja_esta_nao_recarimba_a_data(self):
+        """
+        Reabrir a tela e salvar sem mudar nada moveria a data para hoje, e a
+        auditoria perderia QUANDO o desvio foi de fato tratado.
+        """
+        desvio = self._desvio(acao='Reprocessado')
+        desvio.acao_em = timezone.now() - timedelta(days=3)
+        desvio.save(update_fields=['acao_em'])
+        antes = desvio.acao_em
+
+        self.client.post(reverse('polpa:qualidade-nao-conformidades'), {
+            'item': desvio.pk, 'acao_corretiva': 'Reprocessado',
+        })
+
+        desvio.refresh_from_db()
+        self.assertEqual(desvio.acao_em, antes)
+
+    def test_desvio_de_outra_filial_nao_e_tratavel(self):
+        """
+        `ItemAnalise` nao tem filial propria -- ela pendura na analise. Sem o
+        recorte, um id colado a mao trataria desvio de outra unidade.
+        """
+        from apps.qualidade.constants.enums import ResultadoAnalise, TipoAnalise
+        from apps.qualidade.models import AnaliseQualidade, ItemAnalise
+
+        outra = Filial.objects.create(
+            empresa=self.empresa, razao_social='Segunda',
+            cnpj='13345678000434', uf='RN', cidade='Mossoro',
+        )
+        analise = AnaliseQualidade.objects.create(
+            filial=outra, tipo_analise=TipoAnalise.PRODUTO_ACABADO,
+            parametros={}, resultado=ResultadoAnalise.REPROVADO,
+            responsavel_tecnico=self.usuario, data_analise=timezone.now(),
+        )
+        alheio = ItemAnalise.objects.create(
+            analise=analise, nome_parametro='Brix',
+            situacao=ItemAnalise.Situacao.NAO_CONFORME,
+        )
+
+        resposta = self.client.post(
+            reverse('polpa:qualidade-nao-conformidades'),
+            {'item': alheio.pk, 'acao_corretiva': 'Nao deveria gravar'},
+        )
+
+        alheio.refresh_from_db()
+        self.assertEqual(resposta.status_code, 404)
+        self.assertEqual(alheio.acao_corretiva, '')
+
+    def test_a_rota_do_menu_abre_a_tela_de_verdade(self):
+        from django.urls import resolve
+
+        from apps.polpa.views import ItemView
+
+        endereco = reverse('polpa:item', args=['qualidade', 'nao-conformidades'])
+
+        self.assertIsNot(
+            getattr(resolve(endereco).func, 'view_class', None), ItemView,
+        )
+        self.assertEqual(endereco, reverse('polpa:qualidade-nao-conformidades'))
+
+    def test_a_tela_nao_vaza_sintaxe_de_template(self):
+        self._desvio()
+
+        html = self.client.get(
+            reverse('polpa:qualidade-nao-conformidades'),
+        ).content.decode()
+
+        for resto in ('{#', '#}', '{%', '%}'):
+            self.assertNotIn(resto, html, f'vazou "{resto}" no HTML')

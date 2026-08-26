@@ -1,0 +1,152 @@
+{% extends "_base.html" %}
+{% block title %}{{ title }} — Polpa{% endblock %}
+{% block page_title %}{{ title }}{% endblock %}
+{% block content %}
+
+{% comment %}
+  DESVIO ANOTADO SEM TRATATIVA É PIOR QUE DESVIO NÃO ANOTADO: dá a impressão de
+  que alguém cuidou. Por isso a fila abre pelos que estão em branco, e o que já
+  foi tratado é consulta.
+
+  A TRATATIVA SE ESCREVE AQUI. Quem cuida da qualidade trabalha percorrendo a
+  lista de desvios, não lote a lote — diferente do apontamento de subproduto,
+  que fica na ordem porque quem sabe é quem estava na linha naquele dia.
+{% endcomment %}
+<div class="space-y-4">
+
+  <div>
+    <p class="text-sm" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+      <a href="{% url 'polpa:hub' %}" :style="temaClaro ? 'color:#3b82f6;' : 'color:#60a5fa;'">Polpa de Frutas</a>
+      <span class="mx-1">›</span>
+      <a href="{% url 'polpa:grupo' 'qualidade' %}" :style="temaClaro ? 'color:#3b82f6;' : 'color:#60a5fa;'">Qualidade</a>
+    </p>
+    <h2 class="text-2xl font-semibold mt-1" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">{{ title }}</h2>
+    <p class="text-sm mt-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+      O que saiu da faixa, o que foi feito a respeito e quem fez.
+    </p>
+  </div>
+
+  <div class="grid sm:grid-cols-3 gap-3">
+    <div class="card p-3">
+      <p class="text-xs uppercase tracking-wider" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Sem tratativa</p>
+      <p class="text-xl font-bold mt-1" style="color:#dc2626;">{{ resumo.sem_acao }}</p>
+      <p class="text-[11px] mt-1" :style="temaClaro ? 'color:#94a3b8;' : 'color:#71717a;'">
+        {% if resumo.obrigatorios_sem_acao %}
+          {{ resumo.obrigatorios_sem_acao }} em parâmetro obrigatório
+        {% else %}
+          nenhum em parâmetro obrigatório
+        {% endif %}
+      </p>
+    </div>
+    <div class="card p-3">
+      <p class="text-xs uppercase tracking-wider" style="color:#059669;">Tratadas</p>
+      <p class="text-xl font-bold mt-1" style="color:#059669;">{{ resumo.tratadas }}</p>
+      <p class="text-[11px] mt-1" :style="temaClaro ? 'color:#94a3b8;' : 'color:#71717a;'">com ação e responsável</p>
+    </div>
+    <div class="card p-3">
+      <p class="text-xs uppercase tracking-wider" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Total de desvios</p>
+      <p class="text-xl font-bold mt-1" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">{{ resumo.total }}</p>
+      <p class="text-[11px] mt-1" :style="temaClaro ? 'color:#94a3b8;' : 'color:#71717a;'">na filial, desde sempre</p>
+    </div>
+  </div>
+
+  <form method="get" class="card p-3 flex flex-wrap items-end gap-3">
+    <div class="flex-1 min-w-[200px]">
+      <label class="form-label">Parâmetro, lote, produto ou tratativa</label>
+      <input type="text" name="busca" value="{{ filtros.busca }}" class="form-input w-full"
+             autocomplete="off" placeholder="Ex.: Brix, LT-0012, reprocessado">
+    </div>
+    <div class="w-full sm:w-52">
+      <label class="form-label">Mostrar</label>
+      <select name="situacao" class="form-select">
+        <option value="pendentes" {% if filtros.situacao == 'pendentes' %}selected{% endif %}>Sem tratativa</option>
+        <option value="tratadas" {% if filtros.situacao == 'tratadas' %}selected{% endif %}>Já tratadas</option>
+        <option value="todas" {% if filtros.situacao == 'todas' %}selected{% endif %}>Todas</option>
+      </select>
+    </div>
+    <div class="flex items-center gap-2">
+      <button type="submit" class="btn-primary text-sm">Filtrar</button>
+      {% if filtros.busca %}
+        <a href="{% url 'polpa:qualidade-nao-conformidades' %}" class="btn-secondary text-sm">Limpar</a>
+      {% endif %}
+    </div>
+  </form>
+
+  {% for item in itens %}
+    <div class="card p-4">
+      <div class="flex flex-wrap items-baseline justify-between gap-2">
+        <div>
+          <span class="font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">{{ item.nome_parametro }}</span>
+          {% if item.obrigatorio %}
+            <span class="soft-pill is-slate text-xs ml-2">obrigatório</span>
+          {% endif %}
+          <span class="block text-xs mt-1" :style="temaClaro ? 'color:#94a3b8;' : 'color:#71717a;'">
+            {% if item.analise.lote %}
+              lote {{ item.analise.lote.numero_lote }} · {{ item.analise.lote.produto }}
+            {% elif item.analise.ordem_producao %}
+              {{ item.analise.ordem_producao.numero }}
+            {% endif %}
+            · {{ item.analise.data_analise|date:"d/m/Y" }}
+            · medido por {{ item.analise.responsavel_tecnico }}
+          </span>
+        </div>
+        {% comment %}
+          O VALOR AO LADO DA FAIXA. "Brix 9" sozinho não é desvio; "Brix 9,
+          mínimo 12" é. Sem a faixa, quem lê depois não sabe o tamanho do
+          problema — nem se ele ainda é problema, se a régua mudou.
+        {% endcomment %}
+        <div class="text-right">
+          <p class="text-lg font-bold" style="color:#dc2626;">{{ item.valor }}</p>
+          {% if item.faixa %}
+            <p class="text-[11px]" :style="temaClaro ? 'color:#94a3b8;' : 'color:#71717a;'">exigido {{ item.faixa }}</p>
+          {% endif %}
+        </div>
+      </div>
+
+      {% if item.observacao %}
+        <p class="text-xs mt-2" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">{{ item.observacao }}</p>
+      {% endif %}
+
+      {% if item.acao_corretiva %}
+        <div class="mt-3 rounded-lg p-3" style="background:rgba(16,185,129,.10);border-left:3px solid #10b981;">
+          <p class="text-sm" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">{{ item.acao_corretiva }}</p>
+          <p class="text-[11px] mt-1" style="color:#059669;">
+            {{ item.acao_responsavel|default:"sem responsável registrado" }}
+            {% if item.acao_em %} · {{ item.acao_em|date:"d/m/Y H:i" }}{% endif %}
+          </p>
+        </div>
+      {% elif pode_agir %}
+        <form method="post" class="mt-3 flex flex-wrap items-end gap-2">
+          {% csrf_token %}
+          <input type="hidden" name="item" value="{{ item.pk }}">
+          <div class="flex-1 min-w-[240px]">
+            <label class="form-label" for="acao-{{ item.pk }}">O que foi feito</label>
+            <input type="text" name="acao_corretiva" id="acao-{{ item.pk }}" maxlength="500"
+                   class="form-input w-full" autocomplete="off"
+                   placeholder="Ex.: lote reprocessado; carga devolvida ao produtor">
+          </div>
+          <button type="submit" class="btn-primary text-sm">Registrar tratativa</button>
+        </form>
+      {% else %}
+        <p class="text-xs mt-3" style="color:#d97706;">
+          Sem tratativa registrada. Você pode ver os desvios, mas não tratá-los.
+        </p>
+      {% endif %}
+    </div>
+  {% empty %}
+    <div class="card p-4">
+      <p class="text-sm text-center py-10 max-w-md mx-auto" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+        {% if filtros.busca %}
+          Nenhum desvio com esse filtro.
+        {% elif filtros.situacao == 'tratadas' %}
+          Nenhuma tratativa registrada ainda.
+        {% else %}
+          Nenhum desvio sem tratativa. Todo não conforme registrado já tem ação
+          e responsável.
+        {% endif %}
+      </p>
+    </div>
+  {% endfor %}
+
+</div>
+{% endblock %}

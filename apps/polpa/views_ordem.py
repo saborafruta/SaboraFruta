@@ -66,6 +66,74 @@ class OrdemListView(PolpaBaseView):
         })
 
 
+class NaoConformidadesView(PolpaBaseView):
+    """
+    Desvio registrado, com a acao tomada e quem tomou.
+
+    O DESVIO SEM ACAO E' O MOTIVO DESTA TELA. `ItemAnalise` ja' guardava a acao
+    corretiva com responsavel e data; o que nao existia era a lista dos que
+    ficaram em branco. Desvio anotado sem tratativa e' PIOR que desvio nao
+    anotado: da' a impressao de que alguem cuidou.
+
+    A ACAO SE REGISTRA AQUI, e nao na tela do lote -- ao contrario do
+    apontamento de subproduto, que fica na ordem. A diferenca e' quem faz: o
+    subproduto quem sabe e' quem estava na linha naquele dia; a tratativa de um
+    desvio e' de quem cuida da qualidade, e essa pessoa trabalha percorrendo a
+    LISTA de desvios, nao lote a lote.
+
+    SEM ACAO PRIMEIRO. E' a fila de trabalho; o que ja' foi tratado e'
+    consulta, e vem quando se pede.
+    """
+
+    area = 'qualidade'
+    permissao_acao = 'ver'
+
+    def get(self, request):
+        from apps.qualidade.services.analise_service import (
+            NaoConformidadeService,
+        )
+
+        filial = _filial(request)
+        filtros = {
+            'busca': (request.GET.get('busca') or '').strip(),
+            'situacao': (request.GET.get('situacao') or '').strip() or 'pendentes',
+        }
+        return render(request, 'polpa/nao_conformidades.html', {
+            'title': 'Não conformidades',
+            'itens': list(NaoConformidadeService.fila(filial, filtros)[:200]),
+            'filtros': filtros,
+            'resumo': NaoConformidadeService.resumo(filial),
+            'pode_agir': request.user.tem_permissao('polpa_qualidade', 'editar'),
+        })
+
+    def post(self, request):
+        """Grava a tratativa de UM desvio e volta para a fila."""
+        from apps.qualidade.models import ItemAnalise
+        from apps.qualidade.services.checklist_service import ChecklistService
+
+        if not request.user.tem_permissao('polpa_qualidade', 'editar'):
+            messages.error(request, 'Você pode ver os desvios, mas não tratá-los.')
+            return redirect(reverse('polpa:qualidade-nao-conformidades'))
+
+        # O ITEM E' BUSCADO PELA FILIAL DA ANALISE. `ItemAnalise` nao tem
+        # filial propria -- ela pendura na analise --, e sem este recorte um id
+        # colado a mao trataria desvio de outra unidade.
+        item = get_object_or_404(
+            ItemAnalise.objects.filter(analise__filial=_filial(request)),
+            pk=request.POST.get('item'),
+        )
+        gravou = ChecklistService.registrar_acao(
+            item, request.POST.get('acao_corretiva'), request.user,
+        )
+        if gravou:
+            messages.success(request, 'Tratativa registrada.')
+        else:
+            messages.warning(
+                request, 'Escreva o que foi feito — sem isso o desvio segue em aberto.',
+            )
+        return redirect(reverse('polpa:qualidade-nao-conformidades'))
+
+
 class RastreabilidadeView(PolpaBaseView):
     """
     Do produtor ao cliente e de volta — o caminho do recall.

@@ -88,6 +88,76 @@ class PainelQualidadeService:
         }
 
 
+class NaoConformidadeService:
+    """
+    Os desvios registrados, com a acao tomada e quem tomou.
+
+    O DESVIO SEM ACAO E' O MOTIVO DESTA TELA. `ItemAnalise` ja' guarda a acao
+    corretiva com responsavel e data desde que foi criado, mas nada listava os
+    que ficaram em branco -- e desvio anotado sem tratativa e' pior que desvio
+    nao anotado: da' a impressao de que alguem cuidou.
+    """
+
+    @staticmethod
+    def fila(filial, filtros: dict | None = None):
+        from django.db.models import Q
+
+        from apps.qualidade.models import ItemAnalise
+
+        filtros = filtros or {}
+        qs = (
+            ItemAnalise.objects
+            .filter(
+                analise__filial=filial,
+                situacao=ItemAnalise.Situacao.NAO_CONFORME,
+            )
+            .select_related(
+                'analise', 'analise__lote', 'analise__lote__produto',
+                'analise__ordem_producao', 'analise__responsavel_tecnico',
+                'acao_responsavel',
+            )
+            .order_by('-analise__data_analise', 'ordem')
+        )
+        # SEM ACAO PRIMEIRO quando ninguem pediu outra coisa: e' a fila de
+        # trabalho, e o que ja' foi tratado e' consulta.
+        if filtros.get('situacao') == 'tratadas':
+            qs = qs.exclude(acao_corretiva='')
+        elif filtros.get('situacao') != 'todas':
+            qs = qs.filter(acao_corretiva='')
+        if filtros.get('busca'):
+            termo = filtros['busca']
+            qs = qs.filter(
+                Q(nome_parametro__icontains=termo)
+                | Q(analise__lote__numero_lote__icontains=termo)
+                | Q(analise__lote__produto__descricao__icontains=termo)
+                | Q(acao_corretiva__icontains=termo)
+            )
+        return qs
+
+    @staticmethod
+    def resumo(filial) -> dict:
+        """
+        Conta sobre TODOS os desvios da filial, e nao sobre o que o filtro
+        deixou passar: o topo responde "quanto falta", e um total que muda com
+        o filtro nao responde isso.
+        """
+        from apps.qualidade.models import ItemAnalise
+
+        itens = list(
+            ItemAnalise.objects.filter(
+                analise__filial=filial,
+                situacao=ItemAnalise.Situacao.NAO_CONFORME,
+            )
+        )
+        sem_acao = [i for i in itens if not i.acao_corretiva.strip()]
+        return {
+            'total': len(itens),
+            'sem_acao': len(sem_acao),
+            'tratadas': len(itens) - len(sem_acao),
+            'obrigatorios_sem_acao': sum(1 for i in sem_acao if i.obrigatorio),
+        }
+
+
 class AnaliseQualidadeService:
 
     @staticmethod
