@@ -17,6 +17,13 @@ from .cadastros import Modelo
 class ItemPedidoProducao(models.Model):
     """Uma peça pedida, com as especificações combinadas com o cliente."""
 
+    class StatusFluxo(models.TextChoices):
+        ORCAMENTO = 'orcamento', 'Orçamento'
+        APROVADO = 'aprovado', 'Pedido aprovado'
+        PRODUCAO = 'producao', 'Produção'
+        PRONTO = 'pronto', 'Pronto para retirada'
+        ENTREGUE = 'entregue', 'Entregue'
+
     pedido = models.ForeignKey(
         'moda.PedidoProducao', on_delete=models.CASCADE, related_name='itens',
     )
@@ -86,6 +93,11 @@ class ItemPedidoProducao(models.Model):
     )
 
     quantidade = models.PositiveIntegerField(default=1)
+    status_fluxo = models.CharField(
+        max_length=15, choices=StatusFluxo.choices,
+        default=StatusFluxo.ORCAMENTO, db_index=True,
+    )
+    quantidade_entregue = models.PositiveIntegerField(default=0)
 
     # Preço fechado com o cliente para ESTA peça neste pedido. Fica no item
     # e não no produto porque confecção negocia por pedido: o mesmo modelo
@@ -141,6 +153,14 @@ class ItemPedidoProducao(models.Model):
     def subtotal(self) -> Decimal:
         """Quantidade × valor unitário. Base de tudo na seção de valores."""
         return (self.valor_unitario or Decimal('0')) * self.quantidade
+
+    @property
+    def quantidade_pendente(self) -> int:
+        return max(0, self.quantidade - self.quantidade_entregue)
+
+    @property
+    def entrega_parcial(self) -> bool:
+        return 0 < self.quantidade_entregue < self.quantidade
 
     @property
     def tecido_exibicao(self) -> str:

@@ -189,13 +189,19 @@ class PedidoPdfPublicoView(View):
     def get(self, request, token):
         pedido = _buscar(token)
         base = f'{request.scheme}://{request.get_host()}'
-        pdf = PedidoPdfService.gerar(pedido, base_url=base)
+        if pedido.status == PedidoProducao.Status.ORCAMENTO:
+            from .services.orcamento_pdf import OrcamentoPdfService
+            pdf = OrcamentoPdfService.gerar(pedido)
+            nome = f'ORC-{pedido.numero:06d}.pdf'
+        else:
+            pdf = PedidoPdfService.gerar(pedido, base_url=base)
+            nome = f'PED-{pedido.numero:06d}.pdf'
 
         resposta = HttpResponse(pdf, content_type='application/pdf')
         # Inline: o cliente abre no navegador do celular sem baixar nada,
         # que é o comportamento esperado de um link no WhatsApp.
         resposta['Content-Disposition'] = (
-            f'inline; filename="PED-{pedido.numero:06d}.pdf"'
+            f'inline; filename="{nome}"'
         )
         _blindar(resposta)
         return resposta

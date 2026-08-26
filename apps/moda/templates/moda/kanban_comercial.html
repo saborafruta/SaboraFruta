@@ -112,7 +112,7 @@
           {% if cancelados %}· {{ cancelados }} cancelado(s), fora do quadro{% endif %}
         </p>
       </div>
-      <a href="{% url 'moda:pedido-create' %}" class="btn-primary">+ Novo pedido</a>
+      <a href="{% url 'moda:op2-create' %}" class="btn-primary">+ Nova OP 2.0</a>
     </div>
   </div>
 
@@ -244,8 +244,11 @@
                    {% if pode_mover %}draggable="true"{% endif %}
                    :style="temaClaro ? 'background:#f8fafc; border:1px solid #e5e7eb;' : 'background:#18181b; border:1px solid #303036;'">
                 <div class="flex items-start justify-between gap-1">
-                  <a href="{% url 'moda:pedido-detail' c.pedido.pk %}" class="font-mono text-xs font-bold"
+                  <a href="{% url 'moda:op2-detail' c.pedido.pk %}" class="font-mono text-xs font-bold"
                      :style="temaClaro ? 'color:#3b82f6;' : 'color:#60a5fa;'">#{{ c.pedido.numero|stringformat:"06d" }}</a>
+                  {% if c.pedido.entrega_parcial %}
+                    <span class="text-[9px] font-bold px-1.5 py-0.5 rounded-full shrink-0" style="background:rgba(249,115,22,.14);color:#f97316">PARCIAL</span>
+                  {% endif %}
                   {% if c.pedido.prioridade != 'normal' %}
                     <span class="text-[9px] font-bold px-1.5 py-0.5 rounded-full shrink-0"
                           {% if c.pedido.prioridade == 'urgente' %}style="background:rgba(220,38,38,.14); color:#dc2626;"
@@ -343,7 +346,7 @@
           Nenhum pedido ainda. Cadastre o cliente em
           <a href="{% url 'moda:clientes' %}" :style="temaClaro ? 'color:#3b82f6;' : 'color:#60a5fa;'">Clientes</a>
           e abra o primeiro em
-          <a href="{% url 'moda:pedido-create' %}" :style="temaClaro ? 'color:#3b82f6;' : 'color:#60a5fa;'">Novo pedido</a>.
+          <a href="{% url 'moda:op2-create' %}" :style="temaClaro ? 'color:#3b82f6;' : 'color:#60a5fa;'">Nova OP 2.0</a>.
         {% endif %}
       </p>
     </div>

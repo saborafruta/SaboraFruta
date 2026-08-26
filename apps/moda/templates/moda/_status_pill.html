@@ -9,11 +9,11 @@
 {% if status == 'orcamento' %}
   <span class="soft-pill is-slate text-xs">Orçamento</span>
 {% elif status == 'confirmado' %}
-  <span class="soft-pill is-blue text-xs">Pedido Confirmado</span>
+  <span class="soft-pill is-blue text-xs">Pedido aprovado</span>
 {% elif status == 'aguardando_arte' %}
-  <span class="soft-pill is-yellow text-xs">Aguardando Arte</span>
+  <span class="soft-pill is-blue text-xs">Pedido aprovado</span>
 {% elif status == 'aguardando_material' %}
-  <span class="soft-pill is-yellow text-xs">Aguardando Material</span>
+  <span class="soft-pill is-purple text-xs">Produção</span>
 {% elif status == 'liberado_producao' %}
   <span class="soft-pill is-blue text-xs">Liberado para Produção</span>
 {% elif status == 'em_producao' %}
@@ -21,7 +21,7 @@
 {% elif status == 'em_acabamento' %}
   <span class="soft-pill is-purple text-xs">Em Acabamento</span>
 {% elif status == 'pronto' %}
-  <span class="soft-pill is-green text-xs">Pronto</span>
+  <span class="soft-pill is-green text-xs">Pronto para retirada</span>
 {% elif status == 'entregue' %}
   <span class="soft-pill is-green text-xs">Entregue</span>
 {% elif status == 'cancelado' %}

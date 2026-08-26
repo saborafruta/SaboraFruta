@@ -1,0 +1,45 @@
+{% extends "_base.html" %}
+{% block title %}Nova OP 2.0{% endblock %}
+{% block page_title %}Nova OP 2.0{% endblock %}
+{% block largura_conteudo %}max-w-none{% endblock %}
+{% block content %}
+<div class="max-w-4xl mx-auto" x-data="op2Cliente()">
+  <div class="card p-6 md:p-8">
+    <div class="flex items-start justify-between gap-4 mb-6">
+      <div>
+        <a href="{% url 'moda:comercial' %}" class="text-sm" style="color:#3b82f6;">← Comercial</a>
+        <h1 class="text-2xl font-bold mt-2" :style="temaClaro ? 'color:#111827' : 'color:#f8fafc'">Criar rascunho da OP 2.0</h1>
+        <p class="text-sm mt-1" :style="temaClaro ? 'color:#64748b' : 'color:#94a3b8'">Escolha o cliente. O número e o rascunho são criados imediatamente.</p>
+      </div>
+      <span class="px-3 py-1 rounded-full text-xs font-bold" style="color:#d97706;background:rgba(245,158,11,.14)">ORÇAMENTO</span>
+    </div>
+    <form method="post" class="space-y-4">
+      {% csrf_token %}
+      <div>
+        <label class="block text-sm font-semibold mb-2">Cliente</label>
+        <input type="search" x-model="busca" class="form-input w-full mb-2" placeholder="Digite nome, CPF/CNPJ ou contato">
+        <select name="cliente" x-ref="cliente" required class="form-input w-full" size="8">
+          {% for cliente in clientes %}<option value="{{ cliente.pk }}" x-show="combina('{{ cliente|escapejs }} {{ cliente.cpf_cnpj|escapejs }} {{ cliente.contato_nome|escapejs }}')">{{ cliente }}{% if cliente.cpf_cnpj %} · {{ cliente.cpf_cnpj }}{% endif %}</option>{% endfor %}
+        </select>
+      </div>
+      <div class="flex flex-wrap justify-between gap-2">
+        {% if pode_criar_cliente %}<button type="button" class="btn-secondary" @click="modal=true">+ Cadastrar cliente</button>{% endif %}
+        <button class="btn-primary">Criar rascunho e continuar →</button>
+      </div>
+    </form>
+  </div>
+
+  <div x-show="modal" x-cloak class="fixed inset-0 z-50 flex items-center justify-center p-4" style="background:rgba(0,0,0,.68)" @click.self="modal=false">
+    <form x-ref="novo" @submit.prevent="salvarCliente" class="card p-5 w-full max-w-3xl overflow-y-auto" style="max-height:92vh">
+      {% csrf_token %}
+      <div class="flex justify-between items-center mb-4"><h2 class="text-xl font-bold">Novo cliente</h2><button type="button" @click="modal=false" class="text-2xl">×</button></div>
+      <div class="grid sm:grid-cols-2 gap-3">{% for campo in form_cliente %}<label class="text-sm {% if campo.name == 'razao_social' or campo.name == 'nome_fantasia' %}sm:col-span-2{% endif %}"><span class="block mb-1">{{ campo.label }}</span>{{ campo }}<small style="color:#ef4444" x-text="erros['{{ campo.name }}'] || ''"></small></label>{% endfor %}</div>
+      <p x-show="erro" x-text="erro" class="mt-3 text-sm" style="color:#ef4444"></p>
+      <div class="flex justify-end gap-2 mt-5"><button type="button" class="btn-secondary" @click="modal=false">Cancelar</button><button class="btn-primary" :disabled="salvando" x-text="salvando?'Salvando...':'Salvar cliente'"></button></div>
+    </form>
+  </div>
+</div>
+<script>
+function op2Cliente(){return{busca:'',modal:false,salvando:false,erro:'',erros:{},combina(t){let q=this.busca.toLowerCase().trim().split(/\s+/);t=t.toLowerCase();return q.every(x=>t.includes(x))},async salvarCliente(){this.salvando=true;this.erro='';this.erros={};try{let r=await fetch('{% url "moda:cliente-criar-json" %}',{method:'POST',headers:{'X-Requested-With':'XMLHttpRequest'},body:new FormData(this.$refs.novo)});let d=await r.json();if(!r.ok||!d.ok){this.erros=Object.fromEntries(Object.entries(d.erros||{}).map(([k,v])=>[k,v.join(' ')]));this.erro=d.erro||'';return}let o=new Option(d.cliente.nome,d.cliente.id,true,true);this.$refs.cliente.add(o);this.modal=false}catch(e){this.erro='Não foi possível cadastrar agora.'}finally{this.salvando=false}}}}
+</script>
+{% endblock %}

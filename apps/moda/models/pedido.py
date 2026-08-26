@@ -31,7 +31,7 @@ class PedidoProducao(ComCodigoQr, FilialScopedModel):
         # alimenta o select da tela, e um select fora de ordem faria o
         # usuário procurar "Em Produção" no meio da lista.
         ORCAMENTO = 'orcamento', 'Orçamento'
-        CONFIRMADO = 'confirmado', 'Pedido Confirmado'
+        CONFIRMADO = 'confirmado', 'Pedido aprovado'
         AGUARDANDO_ARTE = 'aguardando_arte', 'Aguardando Arte'
         # O aceite do CLIENTE, que é outra coisa da aprovação interna: a
         # arte foi enviada e a bola está do lado de lá. Sem este status o
@@ -42,7 +42,7 @@ class PedidoProducao(ComCodigoQr, FilialScopedModel):
         LIBERADO_PRODUCAO = 'liberado_producao', 'Liberado para Produção'
         EM_PRODUCAO = 'em_producao', 'Em Produção'
         EM_ACABAMENTO = 'em_acabamento', 'Em Acabamento'
-        PRONTO = 'pronto', 'Pronto'
+        PRONTO = 'pronto', 'Pronto para retirada'
         ENTREGUE = 'entregue', 'Entregue'
         CANCELADO = 'cancelado', 'Cancelado'
 
@@ -224,3 +224,10 @@ class PedidoProducao(ComCodigoQr, FilialScopedModel):
     @property
     def financeiro_gerado(self) -> bool:
         return self.financeiro_gerado_em is not None
+
+    @property
+    def entrega_parcial(self) -> bool:
+        itens = list(self.itens.all())
+        return bool(itens) and any(i.quantidade_entregue for i in itens) and any(
+            i.quantidade_pendente for i in itens
+        )

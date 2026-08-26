@@ -18,7 +18,7 @@
         {{ total }} pedido{{ total|pluralize }} nesta filial.
       </p>
     </div>
-    <a href="{% url 'moda:pedido-create' %}" class="btn-primary">+ Novo pedido</a>
+    <div class="flex gap-2"><a href="{% url 'moda:pedido-create' %}" class="btn-secondary">Versão anterior</a><a href="{% url 'moda:op2-create' %}" class="btn-primary">+ Nova OP 2.0</a></div>
   </div>
 
   {% comment %}
@@ -78,7 +78,7 @@
           {% for p in pedidos %}
             <tr class="border-b" :style="temaClaro ? 'border-color:#f1f5f9;' : 'border-color:#1e1e22;'">
               <td class="px-4 py-3">
-                <a href="{% url 'moda:pedido-detail' p.pk %}" class="font-mono font-semibold"
+                <a href="{% url 'moda:op2-detail' p.pk %}" class="font-mono font-semibold"
                    :style="temaClaro ? 'color:#1d4ed8;' : 'color:#60a5fa;'">#{{ p.numero|stringformat:"06d" }}</a>
                 <div class="text-xs mt-0.5" :style="temaClaro ? 'color:#94a3b8;' : 'color:#64748b;'">{{ p.data_pedido|date:"d/m/Y" }}</div>
               </td>
