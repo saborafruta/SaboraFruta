@@ -16,7 +16,7 @@ from .forms_arquivo import ArquivoPedidoForm
 from .forms_cliente import ClienteRapidoForm
 from .models import (
     AprovacaoPedido, ArquivoPedido, ItemGradePedido, ItemPedidoProducao, PedidoProducao,
-    Personalizacao, PersonalizacaoIndividual, ProdutoModa, Tamanho, VisualItemPedido,
+    Personalizacao, PersonalizacaoIndividual, Posicao, ProdutoModa, Tamanho, VisualItemPedido,
 )
 from .services.historico import HistoricoService
 from .services.grade_pedido import GradePedidoService
@@ -54,6 +54,41 @@ def _mensagem_op2(pedido, link):
         f'Olá, {cliente}!\n\nA arte e os dados da OP #{pedido.numero:06d} estão prontos para aprovação.\n'
         f'Confira e responda pelo link:\n{link}\n\nPrazo previsto: {entrega}.'
     )
+
+
+def _cliente_json(cliente):
+    return {
+        'id': str(cliente.pk),
+        'nome': cliente.nome_display,
+        'documento': cliente.cpf_cnpj or '',
+        'contato': cliente.contato_nome or '',
+        'telefone': cliente.celular or cliente.telefone or '',
+        'texto': ' '.join(filter(None, [
+            cliente.nome_display,
+            cliente.razao_social,
+            cliente.nome_fantasia,
+            cliente.cpf_cnpj,
+            cliente.contato_nome,
+            cliente.celular,
+            cliente.telefone,
+        ])),
+    }
+
+
+def _observacoes_pedido(request):
+    observacoes = (request.POST.get('observacoes') or '').strip()
+    extras = []
+    nomes = request.POST.getlist('contato_extra_nome')
+    telefones = request.POST.getlist('contato_extra_telefone')
+    for nome, telefone in zip(nomes, telefones):
+        nome = (nome or '').strip()
+        telefone = (telefone or '').strip()
+        if nome or telefone:
+            extras.append(f'- {nome or "Contato"}: {telefone}')
+    if extras:
+        bloco = 'Contatos extras:\n' + '\n'.join(extras)
+        return '\n\n'.join(parte for parte in (observacoes, bloco) if parte)
+    return observacoes
 
 
 def _sincronizar_status(pedido):
@@ -133,7 +168,7 @@ class Op2CreateView(ModaBaseView):
                 data_pedido=timezone.localdate(),
                 data_prevista_entrega=data_prevista_entrega,
                 prioridade=request.POST.get('prioridade') or PedidoProducao.Prioridade.NORMAL,
-                observacoes=(request.POST.get('observacoes') or '').strip(),
+                observacoes=_observacoes_pedido(request),
             )
             item = form.save(commit=False)
             item.pedido = pedido
@@ -179,6 +214,7 @@ class Op2CreateView(ModaBaseView):
                     descricao=(request.POST.get('descricao_arquivo') or '').strip(),
                     enviado_por=request.user,
                 )
+            self._salvar_mockups_do_item(request, pedido, item)
 
         messages.success(request, f'Rascunho #{pedido.numero:06d} criado.')
         return _voltar(pedido)
@@ -192,11 +228,15 @@ class Op2CreateView(ModaBaseView):
                 'grade__itens__tamanho',
             ).order_by('nome')
         )
+        clientes = list(
+            Cliente.objects.for_filial(_filial(request)).filter(
+                ativo=True,
+            ).order_by('razao_social')
+        )
         return {
             'title': 'Nova OP 2.0',
-            'clientes': Cliente.objects.for_filial(_filial(request)).filter(
-                ativo=True,
-            ).order_by('razao_social'),
+            'clientes': clientes,
+            'clientes_json': [_cliente_json(cliente) for cliente in clientes],
             'form_cliente': ClienteRapidoForm(),
             'pode_criar_cliente': request.user.tem_permissao('cadastros', 'criar'),
             'modelos': modelos,
@@ -258,6 +298,29 @@ class Op2CreateView(ModaBaseView):
         except ValueError:
             raise ValueError('Data de entrega inválida.')
 
+    @staticmethod
+    def _salvar_mockups_do_item(request, pedido, item):
+        campos = {
+            'mockup_frente_camisa': Posicao.FRENTE_CAMISA,
+            'mockup_costas_camisa': Posicao.COSTAS_CAMISA,
+        }
+        for campo, posicao in campos.items():
+            upload = request.FILES.get(campo)
+            if not upload:
+                continue
+            visual, _ = VisualItemPedido.objects.update_or_create(
+                item=item,
+                posicao=posicao,
+                defaults={'imagem': upload},
+            )
+            ArquivoPedido.objects.create(
+                pedido=pedido,
+                arquivo=visual.imagem,
+                tipo=ArquivoPedido.Tipo.ARTE,
+                descricao=visual.get_posicao_display(),
+                enviado_por=request.user,
+            )
+
 
 class Op2DetailView(ModaBaseView):
     area = 'comercial'
@@ -316,6 +379,10 @@ class Op2DetailView(ModaBaseView):
             ),
             'total_entregue': sum(i.quantidade_entregue for i in itens),
             'total_pendente': sum(i.quantidade_pendente for i in itens),
+            'posicoes_mockup': [
+                (Posicao.FRENTE_CAMISA, Posicao.FRENTE_CAMISA.label),
+                (Posicao.COSTAS_CAMISA, Posicao.COSTAS_CAMISA.label),
+            ],
         })
 
 
@@ -342,7 +409,7 @@ class Op2ActionView(ModaBaseView):
         entrega = (request.POST.get('data_prevista_entrega') or '').strip()
         pedido.data_prevista_entrega = date.fromisoformat(entrega) if entrega else None
         pedido.prioridade = request.POST.get('prioridade') or pedido.prioridade
-        pedido.observacoes = (request.POST.get('observacoes') or '').strip()
+        pedido.observacoes = _observacoes_pedido(request)
         pedido.contato_nome = (request.POST.get('contato_nome') or '').strip()
         pedido.contato_telefone = (request.POST.get('contato_telefone') or '').strip()
         pedido.save()
@@ -369,6 +436,7 @@ class Op2ActionView(ModaBaseView):
         item.observacoes = juntar_observacoes_item(item.observacoes, request.POST)
         item.save()
         Op2CreateView._copiar_grade_do_modelo(item)
+        Op2CreateView._salvar_mockups_do_item(request, pedido, item)
         if request.POST.get('arte_tecnica') or request.POST.get('arte_local'):
             Personalizacao.objects.create(
                 item=item,
@@ -378,6 +446,28 @@ class Op2ActionView(ModaBaseView):
                 observacoes=(request.POST.get('arte_observacoes') or '').strip(),
             )
         messages.success(request, f'{item.nome_exibicao} adicionado.')
+
+    def _acao_visual_item(self, request, pedido):
+        item = get_object_or_404(pedido.itens, pk=request.POST.get('item_id'))
+        posicao = request.POST.get('posicao')
+        if posicao not in Posicao.values:
+            raise ValueError('Posição do mockup inválida.')
+        upload = request.FILES.get('imagem')
+        if not upload:
+            raise ValueError('Selecione uma imagem para o mockup.')
+        visual, _ = VisualItemPedido.objects.update_or_create(
+            item=item,
+            posicao=posicao,
+            defaults={'imagem': upload},
+        )
+        ArquivoPedido.objects.create(
+            pedido=pedido,
+            arquivo=visual.imagem,
+            tipo=ArquivoPedido.Tipo.ARTE,
+            descricao=f'Mockup · {item.nome_exibicao} · {visual.get_posicao_display()}',
+            enviado_por=request.user,
+        )
+        messages.success(request, 'Mockup salvo junto aos anexos da OP.')
 
     def _acao_grade_item(self, request, pedido):
         item = get_object_or_404(pedido.itens, pk=request.POST.get('item_id'))
