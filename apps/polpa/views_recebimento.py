@@ -429,10 +429,43 @@ class FrutaFormView(PolpaBaseView):
     def _buscar(request, pk):
         return get_object_or_404(Fruta.objects.for_filial(_filial(request)), pk=pk)
 
+    # OS GRUPOS VIVEM AQUI, e o template recolhe o que sobrar num ultimo
+    # cartao. Assim campo novo no formulario continua aparecendo sozinho na
+    # tela -- que era a propriedade do laco antigo, e a que se perde quando
+    # alguem escreve a lista de campos no template.
+    # A DICA VIAJA COM O GRUPO, e nao pelo indice dele no laco: presa ao
+    # `forloop.counter`, ela mudaria de cartao no dia em que alguem
+    # reordenasse os grupos -- e explicaria a regua embaixo do nome da fruta.
+    GRUPOS = (
+        ('Que fruta é', '', ('nome', 'variedade', 'produto')),
+        (
+            'A régua que decide aceitar a carga',
+            'É o que a Classificação compara em cada carga. Em branco significa '
+            '“não exijo” — e nenhum desvio será apontado para esta fruta.',
+            ('brix_minimo', 'ph_maximo', 'impureza_maxima'),
+        ),
+        (
+            'Rendimento e safra',
+            'O rendimento estima quanta polpa cada carga aceita vai dar.',
+            ('rendimento_esperado', 'safra_inicio', 'safra_fim'),
+        ),
+    )
+
     @staticmethod
     def _tela(request, form, fruta):
+        agrupados = [
+            nome
+            for _titulo, _dica, campos in FrutaFormView.GRUPOS
+            for nome in campos
+        ]
         return render(request, 'polpa/fruta_form.html', {
             'title': str(fruta) if fruta else 'Nova fruta',
             'form': form,
             'fruta': fruta,
+            'grupos': [
+                (titulo, dica,
+                 [form[nome] for nome in campos if nome in form.fields])
+                for titulo, dica, campos in FrutaFormView.GRUPOS
+            ],
+            'campos_agrupados': agrupados,
         })

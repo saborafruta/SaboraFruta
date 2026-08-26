@@ -87,6 +87,23 @@ class FrutaForm(forms.ModelForm):
             'rendimento_esperado', 'safra_inicio', 'safra_fim',
             'ativo', 'observacao',
         )
+        # OS ROTULOS SAO DITOS AQUI, e nao no modelo: mudar `verbose_name`
+        # gera migration so' para trocar texto. O padrao do Django vinha do
+        # nome do campo -- "Ph maximo", "Brix minimo", sem acento e com caixa
+        # errada num termo tecnico que a etiqueta do laboratorio escreve "pH".
+        labels = {
+            'nome': 'Nome',
+            'variedade': 'Variedade',
+            'produto': 'Produto no catálogo',
+            'brix_minimo': 'Brix mínimo',
+            'ph_maximo': 'pH máximo',
+            'impureza_maxima': 'Impureza máxima (%)',
+            'rendimento_esperado': 'Rendimento esperado (%)',
+            'safra_inicio': 'Safra começa em',
+            'safra_fim': 'Safra termina em',
+            'ativo': 'Fruta ativa',
+            'observacao': 'Observação',
+        }
         widgets = {
             'nome': forms.TextInput(attrs={**ENTRADA, 'placeholder': 'Manga'}),
             'variedade': forms.TextInput(attrs={**ENTRADA, 'placeholder': 'Tommy'}),

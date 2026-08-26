@@ -2,11 +2,30 @@
 {% block title %}{{ title }} — Polpa{% endblock %}
 {% block page_title %}{{ title }}{% endblock %}
 {% block content %}
-<div class="space-y-4 max-w-2xl">
 
-  <p class="text-sm" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
-    <a href="{% url 'polpa:fruta-list' %}" :style="temaClaro ? 'color:#3b82f6;' : 'color:#60a5fa;'">‹ Frutas e rendimento padrão</a>
-  </p>
+{% comment %}
+  A FICHA DA FRUTA É TRÊS PERGUNTAS. Empilhados numa coluna só, os onze campos
+  não diziam que "Brix mínimo", "pH máximo" e "Impureza máxima" são a MESMA
+  coisa — a régua que a classificação usa para aceitar ou devolver a carga.
+  Juntos e nomeados, dizem.
+
+  OS CAMPOS CONTINUAM VINDO DO FORMULÁRIO, não de uma lista escrita aqui. Os
+  grupos moram na view, e o último cartão recolhe tudo que não estiver em grupo
+  nenhum — então campo novo aparece na tela sozinho, como antes. Escrever a
+  lista no template é como se perde campo: ele existe no form, não aparece na
+  tela, e ninguém entende por que nunca é preenchido.
+{% endcomment %}
+<div class="space-y-4">
+
+  <div>
+    <p class="text-sm" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+      <a href="{% url 'polpa:fruta-list' %}" :style="temaClaro ? 'color:#3b82f6;' : 'color:#60a5fa;'">‹ Frutas e rendimento padrão</a>
+    </p>
+    <h2 class="text-2xl font-semibold mt-1" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">{{ title }}</h2>
+    <p class="text-sm mt-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+      Só o nome é obrigatório. O resto pode entrar depois, quando o laboratório medir.
+    </p>
+  </div>
 
   <form method="post" class="space-y-4">
     {% csrf_token %}
@@ -19,30 +38,64 @@
       </div>
     {% endif %}
 
-    {% comment %}
-      OS CAMPOS SÃO DESENHADOS UM A UM pelo laço, e não escritos à mão: um
-      campo novo no formulário aparece aqui sozinho. Escrever a lista no
-      template é como se perde campo — ele existe no form, não aparece na
-      tela, e ninguém entende por que nunca é preenchido.
-    {% endcomment %}
-    <div class="card p-4 space-y-3">
-      {% for campo in form %}
-        <div>
-          <label class="form-label" for="{{ campo.id_for_label }}">{{ campo.label }}</label>
-          {{ campo }}
-          {% if campo.help_text %}
-            <p class="text-xs mt-1" :style="temaClaro ? 'color:#94a3b8;' : 'color:#71717a;'">{{ campo.help_text }}</p>
-          {% endif %}
-          {% if campo.errors %}
-            <p class="text-xs mt-1" style="color:#dc2626;">{{ campo.errors.0 }}</p>
-          {% endif %}
-        </div>
-      {% endfor %}
-    </div>
+    <div class="grid xl:grid-cols-[minmax(0,1fr)_320px] gap-4 items-start">
+      <div class="space-y-4">
 
-    <div class="flex flex-wrap gap-2">
-      <button type="submit" class="btn-primary">Gravar</button>
-      <a href="{% url 'polpa:fruta-list' %}" class="btn-secondary">Cancelar</a>
+        {% comment %}
+          DIZER PARA QUE SERVE é o que faz alguém preencher. Sem a régua, a
+          classificação aceita qualquer número sem apontar desvio — e o defeito
+          só aparece no produto, semanas depois.
+        {% endcomment %}
+        {% for titulo, dica, campos in grupos %}
+          <div class="card p-4">
+            <h3 class="text-sm font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">{{ titulo }}</h3>
+            {% if dica %}
+              <p class="text-xs mt-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">{{ dica }}</p>
+            {% endif %}
+            <div class="grid sm:grid-cols-3 gap-3 mt-3">
+              {% for campo in campos %}
+                <div>{% include "polpa/_campo_receita.html" %}</div>
+              {% endfor %}
+            </div>
+          </div>
+        {% endfor %}
+
+        {% comment %}
+          O QUE SOBROU. Campo novo no formulário cai aqui sem ninguém mexer no
+          template — é o que substitui o laço antigo sem perder a garantia.
+        {% endcomment %}
+        <div class="card p-4">
+          <div class="grid sm:grid-cols-2 gap-3">
+            {% for campo in form %}
+              {% if campo.name not in campos_agrupados %}
+                <div{% if campo.name == 'observacao' %} class="sm:col-span-2"{% endif %}>
+                  {% include "polpa/_campo_receita.html" %}
+                </div>
+              {% endif %}
+            {% endfor %}
+          </div>
+        </div>
+
+      </div>
+
+      <aside class="xl:sticky xl:top-4">
+        <div class="card p-4 space-y-3">
+          <p class="text-xs uppercase tracking-wider font-semibold"
+             :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">O que esta ficha decide</p>
+          <p class="text-xs" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+            A <strong>régua</strong> aponta o desvio na hora da classificação, com o
+            caminhão ainda no pátio.
+          </p>
+          <p class="text-xs" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+            O <strong>rendimento</strong> estima quanta polpa cada carga aceita vai dar —
+            é dele que sai a previsão de produção.
+          </p>
+          <div class="flex flex-wrap gap-2 pt-1">
+            <button type="submit" class="btn-primary flex-1 justify-center">Gravar</button>
+            <a href="{% url 'polpa:fruta-list' %}" class="btn-secondary">Cancelar</a>
+          </div>
+        </div>
+      </aside>
     </div>
   </form>
 

@@ -529,3 +529,63 @@ class PermissaoTests(PolpaBase):
         usuario = self._perfil(polpa=('ver',))
 
         self.assertFalse(usuario.tem_permissao('food_service', 'ver'))
+
+
+class ATelaDaFrutaTests(PolpaBase):
+    """A ficha da fruta — três perguntas, e não onze campos em fila."""
+
+    def test_a_regua_aparece_junta_e_nomeada(self):
+        """
+        Empilhados, "Brix mínimo", "pH máximo" e "Impureza máxima" nao diziam
+        que sao a MESMA coisa: a regua que a classificacao usa para aceitar ou
+        devolver a carga.
+        """
+        resposta = self.client.get(reverse('polpa:fruta-create'))
+
+        self.assertEqual(resposta.status_code, 200)
+        self.assertContains(resposta, 'A régua que decide aceitar a carga')
+        self.assertContains(resposta, 'Que fruta é')
+        self.assertContains(resposta, 'Rendimento e safra')
+
+    def test_os_rotulos_tecnicos_saem_certos(self):
+        """
+        O padrao do Django vinha do nome do campo: "Ph maximo", sem acento e
+        com caixa errada num termo que a etiqueta do laboratorio escreve "pH".
+        """
+        resposta = self.client.get(reverse('polpa:fruta-create'))
+
+        self.assertContains(resposta, 'pH máximo')
+        self.assertContains(resposta, 'Brix mínimo')
+        self.assertNotContains(resposta, 'Ph maximo')
+
+    def test_campo_fora_de_grupo_nao_some_da_tela(self):
+        """
+        A GARANTIA QUE O LACO ANTIGO DAVA. Agrupar por lista escrita a mao e'
+        como se perde campo: ele existe no formulario, nao aparece na tela, e
+        ninguem entende por que nunca e' preenchido. O ultimo cartao recolhe o
+        que nao esta' em grupo nenhum -- `observacao` e `ativo` provam isso, e
+        um campo novo cairia ali do mesmo jeito.
+        """
+        from apps.polpa.forms import FrutaForm
+        from apps.polpa.views_recebimento import FrutaFormView
+
+        agrupados = {
+            nome
+            for _t, _d, campos in FrutaFormView.GRUPOS
+            for nome in campos
+        }
+        sobras = set(FrutaForm(filial=self.filial).fields) - agrupados
+        self.assertTrue(sobras, 'o teste so vale se houver campo fora de grupo')
+
+        html = self.client.get(reverse('polpa:fruta-create')).content.decode()
+        for nome in sobras:
+            self.assertIn(f'name="{nome}"', html, f'campo "{nome}" sumiu da tela')
+
+    def test_todo_campo_do_formulario_chega_na_tela(self):
+        """A mesma garantia, dita pelo total: nenhum campo pode faltar."""
+        from apps.polpa.forms import FrutaForm
+
+        html = self.client.get(reverse('polpa:fruta-create')).content.decode()
+
+        for nome in FrutaForm(filial=self.filial).fields:
+            self.assertIn(f'name="{nome}"', html, f'campo "{nome}" sumiu da tela')
