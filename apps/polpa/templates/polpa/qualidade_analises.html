@@ -1,0 +1,190 @@
+{% extends "_base.html" %}
+{% block title %}{{ title }} — Polpa{% endblock %}
+{% block page_title %}{{ title }}{% endblock %}
+{% block content %}
+
+{% comment %}
+  REPROVAR É METADE DA DECISÃO. A outra metade é dizer o que fazer com o
+  material — bloquear, descartar, reprocessar, devolver ao fornecedor. Sem
+  isso o lote fica parado sem dono, e ninguém sabe se pode mexer nele.
+
+  Por isso "reprovada sem ação" é a única linha destacada desta tela: é o único
+  estado em que alguém precisa fazer algo agora.
+{% endcomment %}
+<div class="space-y-4">
+
+  <div class="flex flex-wrap items-start justify-between gap-3">
+    <div>
+      <p class="text-sm" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+        <a href="{% url 'polpa:hub' %}" :style="temaClaro ? 'color:#3b82f6;' : 'color:#60a5fa;'">Polpa de Frutas</a>
+        <span class="mx-1">›</span>
+        <a href="{% url 'polpa:grupo' 'qualidade' %}" :style="temaClaro ? 'color:#3b82f6;' : 'color:#60a5fa;'">Qualidade</a>
+      </p>
+      <h2 class="text-2xl font-semibold mt-1" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">{{ title }}</h2>
+      <p class="text-sm mt-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+        O que prova que o lote pode sair. A análise é preenchida no lote ou na ordem — aqui se vê o que falta e o que barrou.
+      </p>
+    </div>
+  </div>
+
+  <div class="grid sm:grid-cols-2 xl:grid-cols-4 gap-3">
+    <div class="card p-3">
+      <p class="text-xs uppercase tracking-wider" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Pendentes</p>
+      <p class="text-xl font-bold mt-1" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">{{ resumo.pendentes }}</p>
+      <p class="text-[11px] mt-1" :style="temaClaro ? 'color:#94a3b8;' : 'color:#71717a;'">aguardando conclusão</p>
+    </div>
+    <div class="card p-3">
+      <p class="text-xs uppercase tracking-wider" style="color:#059669;">Aprovadas</p>
+      <p class="text-xl font-bold mt-1" style="color:#059669;">{{ resumo.aprovadas }}</p>
+      <p class="text-[11px] mt-1" :style="temaClaro ? 'color:#94a3b8;' : 'color:#71717a;'">
+        {% if resumo.ressalva %}+ {{ resumo.ressalva }} com ressalva{% else %}sem ressalva{% endif %}
+      </p>
+    </div>
+    <div class="card p-3">
+      <p class="text-xs uppercase tracking-wider" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Reprovadas</p>
+      <p class="text-xl font-bold mt-1" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">{{ resumo.reprovadas }}</p>
+      <p class="text-[11px] mt-1" :style="temaClaro ? 'color:#94a3b8;' : 'color:#71717a;'">de {{ resumo.total }} análise(s)</p>
+    </div>
+    <div class="card p-3">
+      <p class="text-xs uppercase tracking-wider" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Sobre o que agir</p>
+      <p class="text-xl font-bold mt-1" style="color:#dc2626;">{{ resumo.sem_acao }}</p>
+      <p class="text-[11px] mt-1" :style="temaClaro ? 'color:#94a3b8;' : 'color:#71717a;'">
+        reprovada(s) sem ação definida
+      </p>
+    </div>
+  </div>
+
+  <form method="get" class="card p-3 flex flex-wrap items-end gap-3">
+    <div class="flex-1 min-w-[200px]">
+      <label class="form-label">Lote, produto, ordem ou observação</label>
+      <input type="text" name="busca" value="{{ filtros.busca }}" class="form-input w-full"
+             autocomplete="off" placeholder="Ex.: LT-0012, polpa de manga">
+    </div>
+    <div class="w-full sm:w-52">
+      <label class="form-label">Resultado</label>
+      <select name="resultado" class="form-select">
+        <option value="">Todos</option>
+        {% for valor, rotulo in resultados %}
+          <option value="{{ valor }}" {% if filtros.resultado == valor %}selected{% endif %}>{{ rotulo }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="w-full sm:w-52">
+      <label class="form-label">Tipo</label>
+      <select name="tipo" class="form-select">
+        <option value="">Todos</option>
+        {% for valor, rotulo in tipos %}
+          <option value="{{ valor }}" {% if filtros.tipo == valor %}selected{% endif %}>{{ rotulo }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="flex items-center gap-2">
+      <button type="submit" class="btn-primary text-sm">Filtrar</button>
+      {% if tem_filtro %}
+        <a href="{% url 'polpa:qualidade-analises' %}" class="btn-secondary text-sm">Limpar</a>
+      {% endif %}
+    </div>
+  </form>
+
+  <div class="card overflow-hidden">
+    <div class="overflow-x-auto">
+      <table class="w-full text-sm">
+        <thead>
+          <tr class="border-b" :style="temaClaro ? 'border-color:#e2e8f0;' : 'border-color:#2a2a2e;'">
+            <th class="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wide" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Lote / Ordem</th>
+            <th class="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wide" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Tipo</th>
+            <th class="text-right px-4 py-3 text-xs font-semibold uppercase tracking-wide" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Checklist</th>
+            <th class="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wide" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Resultado</th>
+            <th class="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wide" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">O que foi feito</th>
+            <th class="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wide" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Responsável</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for linha in linhas %}
+            <tr class="border-b" :style="temaClaro ? 'border-color:#f1f5f9;' : 'border-color:#1e1e22;'">
+              <td class="px-4 py-3">
+                {% if linha.analise.lote %}
+                  <span class="font-mono text-xs font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">{{ linha.analise.lote.numero_lote }}</span>
+                  <span class="block text-xs" :style="temaClaro ? 'color:#94a3b8;' : 'color:#71717a;'">{{ linha.analise.lote.produto }}</span>
+                {% elif linha.analise.ordem_producao %}
+                  <span class="font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">{{ linha.analise.ordem_producao.numero }}</span>
+                  <span class="block text-xs" :style="temaClaro ? 'color:#94a3b8;' : 'color:#71717a;'">sem lote ainda</span>
+                {% else %}
+                  <span :style="temaClaro ? 'color:#94a3b8;' : 'color:#71717a;'">—</span>
+                {% endif %}
+              </td>
+              <td class="px-4 py-3" :style="temaClaro ? 'color:#374151;' : 'color:#cbd5e1;'">
+                {{ linha.analise.get_tipo_analise_display }}
+                <span class="block text-xs" :style="temaClaro ? 'color:#94a3b8;' : 'color:#71717a;'">{{ linha.analise.data_analise|date:"d/m/Y H:i" }}</span>
+              </td>
+              {% comment %}
+                O CHECKLIST DIZ SE A ANÁLISE ESTÁ INTEIRA. Item pendente é
+                medição que ninguém fez; não conforme sem ação corretiva é
+                desvio anotado e esquecido.
+              {% endcomment %}
+              <td class="px-4 py-3 text-right" :style="temaClaro ? 'color:#374151;' : 'color:#cbd5e1;'">
+                {% if linha.itens %}
+                  {{ linha.itens }} item(ns)
+                  {% if linha.pendentes %}
+                    <span class="block text-[11px]" style="color:#d97706;">{{ linha.pendentes }} sem medir</span>
+                  {% endif %}
+                  {% if linha.sem_acao_corretiva %}
+                    <span class="block text-[11px]" style="color:#dc2626;">{{ linha.sem_acao_corretiva }} desvio(s) sem ação</span>
+                  {% endif %}
+                {% else %}
+                  <span :style="temaClaro ? 'color:#94a3b8;' : 'color:#71717a;'" title="Análise sem checklist — parâmetros no campo livre">—</span>
+                {% endif %}
+              </td>
+              <td class="px-4 py-3">
+                {% if linha.analise.resultado == 'aprovado' %}
+                  <span class="soft-pill is-green text-xs">Aprovado</span>
+                {% elif linha.analise.resultado == 'aprovado_com_ressalva' %}
+                  <span class="soft-pill is-amber text-xs">Com ressalva</span>
+                {% elif linha.analise.resultado == 'reprovado' %}
+                  <span class="soft-pill is-red text-xs">Reprovado</span>
+                {% else %}
+                  <span class="soft-pill is-slate text-xs">Pendente</span>
+                {% endif %}
+              </td>
+              <td class="px-4 py-3">
+                {% if linha.barrada_sem_decisao %}
+                  <span style="color:#dc2626;font-weight:600;">Sem ação definida</span>
+                  <span class="block text-[11px]" style="color:#dc2626;">o lote está barrado e ninguém decidiu o destino</span>
+                {% elif linha.analise.acao_reprovacao %}
+                  <span :style="temaClaro ? 'color:#374151;' : 'color:#cbd5e1;'">{{ linha.analise.get_acao_reprovacao_display }}</span>
+                {% else %}
+                  <span :style="temaClaro ? 'color:#94a3b8;' : 'color:#71717a;'">—</span>
+                {% endif %}
+              </td>
+              <td class="px-4 py-3" :style="temaClaro ? 'color:#374151;' : 'color:#cbd5e1;'">
+                {{ linha.analise.responsavel_tecnico }}
+              </td>
+            </tr>
+          {% empty %}
+            <tr>
+              <td colspan="6" class="px-4 py-14 text-center">
+                <p class="text-sm max-w-md mx-auto" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+                  {% if tem_filtro %}
+                    Nenhuma análise com esse filtro.
+                  {% else %}
+                    Nenhuma análise registrada. Ela nasce no lote ou na ordem —
+                    é lá que estão o material e o contexto para medir.
+                  {% endif %}
+                </p>
+                <div class="mt-4">
+                  {% if tem_filtro %}
+                    <a href="{% url 'polpa:qualidade-analises' %}" class="btn-secondary text-sm">Limpar filtros</a>
+                  {% else %}
+                    <a href="{% url 'polpa:ordem-list' %}" class="btn-primary text-sm">Ver ordens de produção</a>
+                  {% endif %}
+                </div>
+              </td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+</div>
+{% endblock %}

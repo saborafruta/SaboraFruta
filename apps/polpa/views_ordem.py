@@ -65,6 +65,52 @@ class OrdemListView(PolpaBaseView):
         })
 
 
+class AnalisesQualidadeView(PolpaBaseView):
+    """
+    A fila da qualidade: o que falta analisar e o que ficou barrado.
+
+    A ANALISE JA' EXISTIA -- modelo, checklist por produto e etapa, itens com
+    acao corretiva, e o servico que aprova ou reprova o lote. O que faltava era
+    a FILA, e a fila e' o trabalho de quem cuida da qualidade: sem ela,
+    descobrir o que esta' pendente exigia abrir lote por lote.
+
+    O QUE A TELA PROCURA e' o lote REPROVADO SEM ACAO. Reprovar e' metade da
+    decisao; a outra metade e' dizer o que fazer com o material -- bloquear,
+    descartar, reprocessar, devolver ao fornecedor. Sem isso o lote fica parado
+    sem dono, e ninguem sabe se pode mexer nele. E' a unica linha destacada.
+
+    A ANALISE NAO SE FAZ AQUI. Preencher checklist e concluir sao acoes da tela
+    do lote e da ordem, onde estao o material e o contexto -- esta responde
+    "o que falta" e "o que barrou".
+    """
+
+    area = 'qualidade'
+
+    def get(self, request):
+        from apps.qualidade.constants.enums import ResultadoAnalise, TipoAnalise
+        from apps.qualidade.services.analise_service import (
+            PainelQualidadeService,
+        )
+
+        filtros = {
+            'busca': (request.GET.get('busca') or '').strip(),
+            'resultado': (request.GET.get('resultado') or '').strip(),
+            'tipo': (request.GET.get('tipo') or '').strip(),
+        }
+        analises = list(
+            PainelQualidadeService.fila(_filial(request), filtros)[:200]
+        )
+        return render(request, 'polpa/qualidade_analises.html', {
+            'title': 'Análises de qualidade',
+            'linhas': [PainelQualidadeService.linha(a) for a in analises],
+            'filtros': filtros,
+            'tem_filtro': any(filtros.values()),
+            'resultados': ResultadoAnalise.choices,
+            'tipos': TipoAnalise.choices,
+            'resumo': PainelQualidadeService.resumo(analises),
+        })
+
+
 class BatidasView(PolpaBaseView):
     """
     Cada batelada com sua formulacao, rendimento e lote de saida.

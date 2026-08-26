@@ -5,6 +5,89 @@ from apps.qualidade.constants.enums import ResultadoAnalise, AcaoReprovacao
 from apps.estoque.models import LoteProduto
 
 
+class PainelQualidadeService:
+    """
+    A fila da qualidade: o que falta analisar e o que ficou barrado.
+
+    NAO E' UMA SEGUNDA CONSULTA sobre `AnaliseQualidade`. E' a mesma tabela,
+    recortada -- e o recorte vive aqui, e nao na view, porque a mesma pergunta
+    vai ser feita pelo painel do vertical mais tarde e duas consultas divergem
+    no dia em que alguem acrescenta um resultado.
+
+    O QUE ESTA TELA PROCURA e' o lote REPROVADO SEM ACAO. Reprovar e' metade da
+    decisao: a outra metade e' dizer o que fazer com o material -- bloquear,
+    descartar, reprocessar, devolver. Sem isso o lote fica parado sem dono, e
+    ninguem sabe se pode mexer nele. E' a unica linha que a tela destaca.
+    """
+
+    @staticmethod
+    def fila(filial, filtros: dict | None = None):
+        from django.db.models import Q
+
+        filtros = filtros or {}
+        qs = (
+            AnaliseQualidade.objects.for_filial(filial)
+            .select_related(
+                'lote', 'lote__produto', 'ordem_producao', 'responsavel_tecnico',
+            )
+            .prefetch_related('itens')
+        )
+        if filtros.get('resultado'):
+            qs = qs.filter(resultado=filtros['resultado'])
+        if filtros.get('tipo'):
+            qs = qs.filter(tipo_analise=filtros['tipo'])
+        if filtros.get('busca'):
+            termo = filtros['busca']
+            qs = qs.filter(
+                Q(lote__numero_lote__icontains=termo)
+                | Q(lote__produto__descricao__icontains=termo)
+                | Q(ordem_producao__numero__icontains=termo)
+                | Q(observacao__icontains=termo)
+            )
+        return qs
+
+    @staticmethod
+    def resumo(analises) -> dict:
+        """
+        Somado sobre o que a tela JA' CARREGOU, e nao numa consulta nova: com
+        filtro aplicado, as duas dariam numeros diferentes para a mesma tela.
+        """
+        analises = list(analises)
+        R = ResultadoAnalise
+        reprovadas = [a for a in analises if a.resultado == R.REPROVADO]
+        return {
+            'total': len(analises),
+            'pendentes': sum(1 for a in analises if a.resultado == R.PENDENTE),
+            'aprovadas': sum(1 for a in analises if a.resultado == R.APROVADO),
+            'ressalva': sum(
+                1 for a in analises if a.resultado == R.APROVADO_COM_RESSALVA
+            ),
+            'reprovadas': len(reprovadas),
+            # REPROVADA SEM ACAO e' o lote barrado que ninguem decidiu o que
+            # fazer -- fica parado sem dono, e ninguem sabe se pode mexer.
+            'sem_acao': sum(1 for a in reprovadas if not a.acao_reprovacao),
+        }
+
+    @staticmethod
+    def linha(analise) -> dict:
+        """Uma analise na tela, com o estado do checklist dela."""
+        itens = list(analise.itens.all())
+        nao_conformes = [i for i in itens if i.situacao == 'nao_conforme']
+        return {
+            'analise': analise,
+            'itens': len(itens),
+            'nao_conformes': len(nao_conformes),
+            'pendentes': sum(1 for i in itens if i.situacao == 'pendente'),
+            'sem_acao_corretiva': sum(
+                1 for i in nao_conformes if not i.acao_corretiva.strip()
+            ),
+            'barrada_sem_decisao': (
+                analise.resultado == ResultadoAnalise.REPROVADO
+                and not analise.acao_reprovacao
+            ),
+        }
+
+
 class AnaliseQualidadeService:
 
     @staticmethod

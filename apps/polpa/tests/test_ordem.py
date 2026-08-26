@@ -862,3 +862,140 @@ class ATelaDePerdasTests(OrdemBase):
 
         for resto in ('{#', '#}', '{%', '%}'):
             self.assertNotIn(resto, html, f'vazou "{resto}" no HTML')
+
+
+class ATelaDeQualidadeTests(OrdemBase):
+    """
+    A fila da qualidade.
+
+    REPROVAR É METADE DA DECISÃO. A outra metade é dizer o que fazer com o
+    material — bloquear, descartar, reprocessar, devolver. Sem isso o lote fica
+    parado sem dono, e ninguém sabe se pode mexer nele. É o único estado que a
+    tela destaca.
+    """
+
+    def _analise(self, **campos):
+        from apps.qualidade.constants.enums import ResultadoAnalise, TipoAnalise
+        from apps.qualidade.models import AnaliseQualidade
+
+        dados = {
+            'filial': self.filial,
+            'tipo_analise': TipoAnalise.PRODUTO_ACABADO,
+            'parametros': {'brix': 12.5},
+            'resultado': ResultadoAnalise.PENDENTE,
+            'responsavel_tecnico': self.usuario,
+            'data_analise': timezone.now(),
+        }
+        dados.update(campos)
+        return AnaliseQualidade.objects.create(**dados)
+
+    def test_a_fila_lista_as_analises_da_filial(self):
+        self._analise()
+
+        resposta = self.client.get(reverse('polpa:qualidade-analises'))
+
+        self.assertEqual(resposta.status_code, 200)
+        self.assertEqual(len(resposta.context['linhas']), 1)
+
+    def test_reprovada_sem_acao_e_o_que_a_tela_destaca(self):
+        """
+        E' o lote barrado que ninguem decidiu o que fazer: fica parado sem
+        dono, e ninguem sabe se pode mexer nele.
+        """
+        from apps.qualidade.constants.enums import ResultadoAnalise
+
+        self._analise(resultado=ResultadoAnalise.REPROVADO, acao_reprovacao='')
+
+        resposta = self.client.get(reverse('polpa:qualidade-analises'))
+
+        self.assertEqual(resposta.context['resumo']['sem_acao'], 1)
+        self.assertTrue(resposta.context['linhas'][0]['barrada_sem_decisao'])
+        self.assertContains(resposta, 'Sem ação definida')
+
+    def test_reprovada_com_acao_nao_e_destacada(self):
+        """Decidido nao e' pendencia -- destacar tudo e' nao destacar nada."""
+        from apps.qualidade.constants.enums import AcaoReprovacao, ResultadoAnalise
+
+        self._analise(
+            resultado=ResultadoAnalise.REPROVADO,
+            acao_reprovacao=AcaoReprovacao.DESCARTE,
+        )
+
+        resposta = self.client.get(reverse('polpa:qualidade-analises'))
+
+        self.assertEqual(resposta.context['resumo']['sem_acao'], 0)
+        self.assertFalse(resposta.context['linhas'][0]['barrada_sem_decisao'])
+
+    def test_aprovada_com_ressalva_conta_separada_da_aprovada(self):
+        """
+        Sao resultados diferentes: ressalva libera o lote MAS registra desvio.
+        Somar as duas esconderia quantos lotes sairam com pendencia.
+        """
+        from apps.qualidade.constants.enums import ResultadoAnalise
+
+        self._analise(resultado=ResultadoAnalise.APROVADO)
+        self._analise(resultado=ResultadoAnalise.APROVADO_COM_RESSALVA)
+
+        resumo = self.client.get(reverse('polpa:qualidade-analises')).context['resumo']
+
+        self.assertEqual(resumo['aprovadas'], 1)
+        self.assertEqual(resumo['ressalva'], 1)
+
+    def test_o_checklist_mostra_o_que_falta_medir(self):
+        """
+        Item pendente e' medicao que ninguem fez; nao conforme sem acao
+        corretiva e' desvio anotado e esquecido.
+        """
+        from apps.qualidade.models import ItemAnalise
+
+        analise = self._analise()
+        ItemAnalise.objects.create(
+            analise=analise, nome_parametro='Brix',
+            situacao=ItemAnalise.Situacao.PENDENTE, obrigatorio=True,
+        )
+        ItemAnalise.objects.create(
+            analise=analise, nome_parametro='pH',
+            situacao=ItemAnalise.Situacao.NAO_CONFORME, acao_corretiva='',
+        )
+
+        linha = self.client.get(
+            reverse('polpa:qualidade-analises'),
+        ).context['linhas'][0]
+
+        self.assertEqual(linha['itens'], 2)
+        self.assertEqual(linha['pendentes'], 1)
+        self.assertEqual(linha['sem_acao_corretiva'], 1)
+
+    def test_o_filtro_por_resultado_recorta_a_fila(self):
+        from apps.qualidade.constants.enums import ResultadoAnalise
+
+        self._analise(resultado=ResultadoAnalise.APROVADO)
+        self._analise(resultado=ResultadoAnalise.REPROVADO)
+
+        resposta = self.client.get(
+            reverse('polpa:qualidade-analises'),
+            {'resultado': ResultadoAnalise.REPROVADO},
+        )
+
+        self.assertEqual(len(resposta.context['linhas']), 1)
+        self.assertEqual(resposta.context['resumo']['total'], 1)
+
+    def test_a_rota_do_menu_abre_a_tela_de_verdade(self):
+        from django.urls import resolve
+
+        from apps.polpa.views import ItemView
+
+        endereco = reverse('polpa:item', args=['qualidade', 'analises'])
+
+        self.assertIsNot(
+            getattr(resolve(endereco).func, 'view_class', None), ItemView,
+        )
+        self.assertEqual(endereco, reverse('polpa:qualidade-analises'))
+
+    def test_a_tela_nao_vaza_sintaxe_de_template(self):
+        self._analise()
+
+        html = self.client.get(reverse('polpa:qualidade-analises')).content.decode()
+
+        for resto in ('{#', '#}', '{%', '%}'):
+            self.assertNotIn(resto, html, f'vazou "{resto}" no HTML')
