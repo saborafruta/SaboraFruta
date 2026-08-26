@@ -2,11 +2,40 @@
 {% block title %}{{ title }} — Polpa{% endblock %}
 {% block page_title %}{{ title }}{% endblock %}
 {% block content %}
-<div class="space-y-4 max-w-3xl">
 
-  <p class="text-sm" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
-    <a href="{% url 'polpa:ordem-list' %}" :style="temaClaro ? 'color:#3b82f6;' : 'color:#60a5fa;'">‹ Ordens de produção</a>
-  </p>
+{% comment %}
+  A ORDEM É DUAS PERGUNTAS: o que produzir e quando. Empilhados numa coluna
+  dentro de um `max-w-3xl`, os seis campos não separavam o que é obrigatório do
+  que pode ficar em branco — e metade da página ficava vazia à direita.
+
+  E O NÚMERO DE BATIDAS APARECE ENQUANTO SE DIGITA. É ele que diz se a ordem é
+  razoável: "3 batidas" e "47 batidas" são conversas diferentes, e até agora só
+  se descobria depois de gravar, na tela da ordem.
+{% endcomment %}
+<div class="space-y-4"
+     x-data="{
+       receita: '',
+       quantidade: null,
+       rende: {{ rende_por_batida }},
+       produtos: {{ produto_da_receita }},
+       get porBatida() { return Number(this.rende[this.receita] || 0); },
+       get produto() { return this.produtos[this.receita] || ''; },
+       get batidas() {
+         if (!this.porBatida || !this.quantidade) return 0;
+         return Math.ceil(Number(this.quantidade) / this.porBatida);
+       },
+       numero(v) { return Number(v).toLocaleString('pt-BR', {maximumFractionDigits: 3}); },
+     }">
+
+  <div>
+    <p class="text-sm" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+      <a href="{% url 'polpa:ordem-list' %}" :style="temaClaro ? 'color:#3b82f6;' : 'color:#60a5fa;'">‹ Ordens de produção</a>
+    </p>
+    <h2 class="text-2xl font-semibold mt-1" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">{{ title }}</h2>
+    <p class="text-sm mt-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+      A ordem produz por uma versão ativa da receita. Os insumos são reservados quando ela começa.
+    </p>
+  </div>
 
   {% if not tem_receita %}
     {% comment %}
@@ -44,21 +73,76 @@
       </div>
     {% endif %}
 
-    <div class="card p-4 space-y-3">
-      {% for campo in form %}
-        <div>
-          <label class="form-label" for="{{ campo.id_for_label }}">{{ campo.label }}</label>
-          {{ campo }}
-          {% if campo.help_text %}
-            <p class="text-xs mt-1" :style="temaClaro ? 'color:#94a3b8;' : 'color:#71717a;'">{{ campo.help_text }}</p>
-          {% endif %}
-        </div>
-      {% endfor %}
-    </div>
+    <div class="grid xl:grid-cols-[minmax(0,1fr)_320px] gap-4 items-start">
+      <div class="space-y-4">
 
-    <div class="flex flex-wrap gap-2">
-      <button type="submit" class="btn-primary">Gravar</button>
-      <a href="{% url 'polpa:ordem-list' %}" class="btn-secondary">Cancelar</a>
+        {% for titulo, dica, campos in grupos %}
+          <div class="card p-4">
+            <h3 class="text-sm font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">{{ titulo }}</h3>
+            {% if dica %}
+              <p class="text-xs mt-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">{{ dica }}</p>
+            {% endif %}
+            <div class="grid sm:grid-cols-3 gap-3 mt-3">
+              {% for campo in campos %}
+                <div{% if campo.name == 'receita' %} class="sm:col-span-2"{% endif %}>
+                  {% include "polpa/_campo.html" %}
+                </div>
+              {% endfor %}
+            </div>
+          </div>
+        {% endfor %}
+
+        {% comment %}
+          O QUE SOBROU. Campo novo no formulário cai aqui sem ninguém mexer no
+          template — é o que substitui o laço antigo sem perder a garantia.
+        {% endcomment %}
+        <div class="card p-4">
+          <div class="grid gap-3">
+            {% for campo in form %}
+              {% if campo.name not in campos_agrupados %}
+                <div>{% include "polpa/_campo.html" %}</div>
+              {% endif %}
+            {% endfor %}
+          </div>
+        </div>
+
+      </div>
+
+      <aside class="xl:sticky xl:top-4">
+        <div class="card p-4 space-y-3">
+          <p class="text-xs uppercase tracking-wider font-semibold"
+             :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Como isso vira produção</p>
+
+          <div class="rounded-xl p-3" :style="temaClaro ? 'background:#f8fafc;' : 'background:#18181b;'"
+               x-show="batidas > 0" x-cloak>
+            <p class="text-xs uppercase tracking-wider" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Batidas</p>
+            <p class="text-2xl font-bold mt-1" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'"
+               x-text="batidas"></p>
+            <p class="text-[11px] mt-1" :style="temaClaro ? 'color:#94a3b8;' : 'color:#71717a;'"
+               x-text="'a receita rende ' + numero(porBatida) + ' por execução'"></p>
+          </div>
+
+          <p class="text-xs" x-show="produto" x-cloak
+             :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+            Produz <strong x-text="produto"></strong>.
+          </p>
+
+          <p class="text-xs" x-show="!batidas" x-cloak
+             :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+            Escolha a receita e a quantidade para ver em quantas batidas isso se divide.
+          </p>
+
+          <p class="text-[11px]" :style="temaClaro ? 'color:#94a3b8;' : 'color:#71717a;'">
+            Os insumos só são reservados quando a ordem começa — abrir a ordem não
+            tira nada do estoque.
+          </p>
+
+          <div class="flex flex-wrap gap-2 pt-1">
+            <button type="submit" class="btn-primary flex-1 justify-center">Gravar</button>
+            <a href="{% url 'polpa:ordem-list' %}" class="btn-secondary">Cancelar</a>
+          </div>
+        </div>
+      </aside>
     </div>
   </form>
 

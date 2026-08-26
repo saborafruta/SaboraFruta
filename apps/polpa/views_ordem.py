@@ -89,14 +89,50 @@ class OrdemFormView(PolpaBaseView):
         messages.success(request, f'Ordem {op.numero} aberta, em planejamento.')
         return redirect(reverse('polpa:ordem-detail', args=[op.pk]))
 
+    GRUPOS = (
+        ('O que produzir', '', ('receita', 'quantidade_planejada')),
+        (
+            'Quando e quem',
+            'Datas e responsável podem ficar em branco — a ordem nasce assim '
+            'e se ajusta quando a produção começa.',
+            ('responsavel', 'data_inicio_prevista', 'data_fim_prevista'),
+        ),
+    )
+
     @staticmethod
     def _tela(request, form):
+        import json
+
+        receitas = form.fields['receita'].queryset
+        agrupados = [
+            nome
+            for _titulo, _dica, campos in OrdemFormView.GRUPOS
+            for nome in campos
+        ]
         return render(request, 'polpa/ordem_form.html', {
             'title': 'Nova ordem de produção',
             'form': form,
             # SEM RECEITA ATIVA não há o que produzir, e um select vazio não
             # diz por quê — a pessoa conclui que a tela está quebrada.
-            'tem_receita': form.fields['receita'].queryset.exists(),
+            'tem_receita': receitas.exists(),
+            'grupos': [
+                (titulo, dica,
+                 [form[nome] for nome in campos if nome in form.fields])
+                for titulo, dica, campos in OrdemFormView.GRUPOS
+            ],
+            'campos_agrupados': agrupados,
+            # QUANTAS BATIDAS a quantidade pedida vira. É o número que diz se a
+            # ordem é razoável — "3 batidas" e "47 batidas" são conversas
+            # diferentes, e hoje só se descobria depois de gravar. Sai do mesmo
+            # `quantidade_produzida` da ficha que a produção usa para dividir a
+            # ordem, então a tela e o serviço não discordam.
+            'rende_por_batida': json.dumps({
+                str(r.pk): str(r.ficha.quantidade_produzida or 0)
+                for r in receitas
+            }),
+            'produto_da_receita': json.dumps({
+                str(r.pk): str(r.ficha.produto_acabado) for r in receitas
+            }),
         })
 
 

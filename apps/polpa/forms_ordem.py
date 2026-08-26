@@ -16,14 +16,19 @@ SELECT = {'class': 'form-select w-full'}
 
 
 class OrdemPolpaForm(forms.Form):
+    # `x-model` FICA NO WIDGET, e nao no template: os campos sao desenhados
+    # pelo parcial generico, que nao sabe -- nem deve saber -- que esta tela
+    # calcula batidas. Atributo de HTML e' o que `attrs` existe para carregar.
     receita = forms.ModelChoiceField(
         label='Receita', queryset=Receita.objects.none(),
-        widget=forms.Select(attrs=SELECT),
+        widget=forms.Select(attrs={**SELECT, 'x-model': 'receita'}),
         help_text='Só aparecem as versões ativas.',
     )
     quantidade_planejada = forms.DecimalField(
         label='Quantidade a produzir', min_value=0,
-        widget=forms.NumberInput(attrs={**ENTRADA, 'step': '0.001'}),
+        widget=forms.NumberInput(attrs={
+            **ENTRADA, 'step': '0.001', 'x-model.number': 'quantidade',
+        }),
     )
     responsavel = forms.ModelChoiceField(
         label='Responsável', queryset=Usuario.objects.none(), required=False,
@@ -57,6 +62,9 @@ class OrdemPolpaForm(forms.Form):
             if filial else Usuario.objects.none()
         )
         self.fields['responsavel'].empty_label = 'Quem abriu'
+        # `---------` nao diz nada, e num select vazio -- que e' o caso
+        # enquanto nao houver receita ATIVA -- parece campo carregando.
+        self.fields['receita'].empty_label = 'Selecione a receita'
 
     def clean(self):
         dados = super().clean()

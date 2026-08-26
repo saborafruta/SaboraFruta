@@ -523,3 +523,70 @@ class TelasOrdemTests(OrdemBase):
 
         self.assertEqual(resposta.status_code, 200)
         self.assertContains(resposta, 'antes do início')
+
+
+class ATelaDaOrdemTests(OrdemBase):
+    """A ficha da ordem — duas perguntas, e o número de batidas à vista."""
+
+    def test_os_grupos_separam_o_obrigatorio_do_opcional(self):
+        resposta = self.client.get(reverse('polpa:ordem-create'))
+
+        self.assertEqual(resposta.status_code, 200)
+        self.assertContains(resposta, 'O que produzir')
+        self.assertContains(resposta, 'Quando e quem')
+
+    def test_o_select_vazio_diz_o_que_fazer(self):
+        resposta = self.client.get(reverse('polpa:ordem-create'))
+
+        self.assertContains(resposta, 'Selecione a receita')
+        self.assertNotContains(resposta, '---------')
+
+    def test_a_tela_recebe_o_rendimento_por_batida_de_cada_receita(self):
+        """
+        E' o que permite mostrar as batidas ENQUANTO SE DIGITA. Sai do mesmo
+        `quantidade_produzida` da ficha que a producao usa para dividir a
+        ordem, entao a tela e o servico nao discordam.
+        """
+        import json
+
+        resposta = self.client.get(reverse('polpa:ordem-create'))
+
+        rende = json.loads(resposta.context['rende_por_batida'])
+        self.assertIn(str(self.receita.pk), rende)
+        # Comparado pelo VALOR, e nao pelo texto: "1000" e "1000.000" sao o
+        # mesmo numero, e prender o teste ao formato o faria reprovar por causa
+        # das casas decimais que o banco devolve.
+        self.assertEqual(
+            Decimal(rende[str(self.receita.pk)]),
+            self.receita.ficha.quantidade_produzida,
+        )
+
+    def test_os_campos_ficam_ligados_ao_calculo(self):
+        """
+        Sem `x-model` no widget, o painel de batidas ficaria mudo -- os campos
+        sao desenhados pelo parcial generico, que nao sabe desta tela.
+        """
+        html = self.client.get(reverse('polpa:ordem-create')).content.decode()
+
+        self.assertIn('x-model="receita"', html)
+        self.assertIn('x-model.number="quantidade"', html)
+
+    def test_todo_campo_do_formulario_chega_na_tela(self):
+        """
+        A GARANTIA DO LACO ANTIGO: agrupar por lista escrita a mao e' como se
+        perde campo -- ele existe no form, nao aparece na tela, e ninguem
+        entende por que nunca e' preenchido.
+        """
+        from apps.polpa.forms_ordem import OrdemPolpaForm
+
+        html = self.client.get(reverse('polpa:ordem-create')).content.decode()
+
+        for nome in OrdemPolpaForm(filial=self.filial).fields:
+            self.assertIn(f'name="{nome}"', html, f'campo "{nome}" sumiu da tela')
+
+    def test_a_tela_nao_vaza_sintaxe_de_template(self):
+        """A mesma guarda das outras telas, pelo defeito que ja' foi para producao."""
+        html = self.client.get(reverse('polpa:ordem-create')).content.decode()
+
+        for resto in ('{#', '#}', '{%', '%}'):
+            self.assertNotIn(resto, html, f'vazou "{resto}" no HTML')
