@@ -163,6 +163,24 @@ class Op2Tests(TestCase):
         self.assertContains(resposta, cliente_antigo.razao_social)
         self.assertEqual(resposta.json()['clientes'][0]['id'], cliente_antigo.pk)
 
+    def test_nova_op_embute_clientes_como_fallback_da_busca(self):
+        cliente_antigo = Cliente.objects.create(
+            filial=self.filial,
+            tipo_pessoa='F',
+            razao_social='Diego Macedo',
+            ativo=True,
+        )
+        self.client.force_login(self._usuario())
+        session = self.client.session
+        session['filial_id'] = self.filial.pk
+        session.save()
+
+        resposta = self.client.get(reverse('moda:op2-create'))
+
+        self.assertEqual(resposta.status_code, 200)
+        self.assertContains(resposta, 'op2-clientes')
+        self.assertContains(resposta, cliente_antigo.razao_social)
+
     def _usuario(self):
         user, _ = Usuario.objects.get_or_create(
             email='op2@teste.local',
