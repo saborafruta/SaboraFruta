@@ -71,3 +71,57 @@ class SeletorDeTemaEscuroTests(SimpleTestCase):
 
         self.assertIn("classList.toggle('tema-escuro'", base)
         self.assertIn("classList.toggle('tema-claro'", base)
+
+
+class EstrategiaDoDarkDoTailwindTests(SimpleTestCase):
+    """
+    Os utilitários `dark:` têm de obedecer o TEMA DO APP, não o do sistema.
+
+    Sem `darkMode` na config, o Tailwind compila todo `dark:` dentro de
+    `@media (prefers-color-scheme: dark)` — e aí os 222 `dark:` espalhados por
+    31 templates seguem o Windows, não o botão de tema do ERP. Quem usa o
+    sistema no escuro com o SO no claro vê todos errados, e o contrário também.
+
+    O TESTE OLHA O CSS COMPILADO, e não só a config. É onde mora a armadilha:
+    mudar `tailwind.config.js` sem rodar `npm run build:css` não muda nada, e o
+    navegador continua lendo o arquivo antigo. Config certa com CSS velho é
+    exatamente o estado que engana quem revisa.
+    """
+
+    CSS = 'static/css/tailwind-built.css'
+    CONFIG = 'tailwind.config.js'
+
+    def test_a_config_liga_o_dark_na_classe_do_app(self):
+        config = open(self.CONFIG, encoding='utf-8').read()
+
+        self.assertIn('darkMode', config)
+        self.assertIn('tema-escuro', config)
+
+    def test_o_css_compilado_usa_a_classe_e_nao_o_sistema(self):
+        """
+        Se isto reprovar depois de mexer na config, falta rodar:
+            npm run build:css
+        """
+        css = open(self.CSS, encoding='utf-8').read()
+
+        self.assertNotIn(
+            'prefers-color-scheme:dark', css,
+            'O CSS compilado ainda liga o tema escuro no sistema operacional — '
+            'rode `npm run build:css`.',
+        )
+        self.assertIn(
+            '.tema-escuro', css,
+            'O CSS compilado não tem regra ligada à classe de tema do app.',
+        )
+
+    def test_os_utilitarios_dark_sobreviveram_a_troca(self):
+        """
+        A troca de estratégia reescreve TODOS os seletores `dark:`. Um punhado
+        deles sumir passaria despercebido — a tela só ficaria com a cor errada.
+        """
+        css = open(self.CSS, encoding='utf-8').read()
+
+        # `dark\:` é como o Tailwind escapa o prefixo no seletor compilado.
+        self.assertGreater(css.count(r'.dark\:'), 50)
+        # e cada um tem de estar preso à classe do app
+        self.assertGreater(css.count(':is(.tema-escuro *)'), 50)

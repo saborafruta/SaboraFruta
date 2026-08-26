@@ -1,4 +1,15 @@
 module.exports = {
+  // O TEMA ESCURO DESTE APP NAO E' O DO SISTEMA OPERACIONAL. Sem esta linha o
+  // Tailwind usa a estrategia `media`, e compila todo `dark:` dentro de
+  // `@media (prefers-color-scheme: dark)` -- ou seja, os 222 utilitarios
+  // `dark:` espalhados por 31 templates obedeciam o Windows, e nao o botao de
+  // tema do proprio ERP. Quem usava o sistema no escuro com o SO no claro via
+  // todos eles errados, e o contrario tambem.
+  //
+  // `tema-escuro` e' a classe que o `_base.html` alterna, no <html> e no
+  // <body>. `.dark` nunca existiu aqui -- era so' a convencao copiada da
+  // documentacao do Tailwind.
+  darkMode: ['class', '.tema-escuro'],
   content: [
     './templates/**/*.html',
     './apps/**/templates/**/*.html',
