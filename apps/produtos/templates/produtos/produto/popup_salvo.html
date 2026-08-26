@@ -1,0 +1,51 @@
+{% comment %}
+  Fim do caminho do "Cadastro" da conferencia de entrada.
+
+  Quem chegou aqui estava conferindo uma nota, viu o produto errado na linha e
+  abriu o cadastro em `?popup=1` para corrigir. Redirecionar para a lista de
+  produtos -- que e' o que o fluxo normal faz -- jogaria essa pessoa para fora
+  da nota que ela estava conferindo, e ela teria que achar o lugar de novo.
+
+  Entao esta pagina nao navega: avisa a janela que abriu e se fecha. A
+  conferencia escuta `entradaProdutoAtualizado` e atualiza a linha sozinha.
+
+  DOIS CANAIS porque sao dois jeitos de abrir. `postMessage` atende o popup de
+  verdade (`window.open`), e o `CustomEvent` no `opener` atende quem embutiu a
+  tela num iframe da propria conferencia. Quem nao tem nenhum dos dois -- link
+  colado direto no navegador -- ainda ve a confirmacao em texto abaixo, em vez
+  de uma pagina em branco.
+{% endcomment %}
+<div style="padding:32px;text-align:center;font-family:system-ui,sans-serif">
+  <p style="font-size:15px;font-weight:600;margin:0 0 6px">Produto atualizado.</p>
+  <p style="font-size:13px;opacity:.7;margin:0">
+    {{ produto.descricao }} — pode voltar para a conferencia.
+  </p>
+</div>
+
+<script id="entrada-produto-atualizado-payload" type="application/json">
+  {"tipo": "entradaProdutoAtualizado", "produtoId": {{ produto.pk }}}
+</script>
+<script>
+  (function () {
+    var payload = JSON.parse(
+      document.getElementById('entrada-produto-atualizado-payload').textContent
+    );
+    try {
+      if (window.opener && !window.opener.closed) {
+        window.opener.postMessage(payload, window.location.origin);
+        window.opener.dispatchEvent(
+          new CustomEvent('entradaProdutoAtualizado', { detail: payload })
+        );
+      } else if (window.parent && window.parent !== window) {
+        window.parent.postMessage(payload, window.location.origin);
+      }
+    } catch (e) {
+      /* Janela de origem de outra aba ou ja' fechada: nada a avisar. */
+    }
+    // So' fecha o que ELE mesmo abriu; aba comum ignora `close()` e fica na
+    // mensagem acima, que e' o comportamento certo para link colado.
+    if (window.opener && !window.opener.closed) {
+      setTimeout(function () { window.close(); }, 400);
+    }
+  })();
+</script>

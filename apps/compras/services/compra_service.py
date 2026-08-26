@@ -461,6 +461,21 @@ class CompraService:
     @staticmethod
     def avaliar_diferenca_item(item) -> tuple[str, str, bool]:
         if not item.produto_id:
+            # DESVINCULADO A MAO NAO E' "SEM EQUIVALENCIA". Os dois estados
+            # sao "item sem produto", mas so' um deles e' surpresa. Quando o
+            # conferente clicou em desvincular, dizer a ele que o produto esta'
+            # sem equivalencia interna e' repetir de volta o que ele acabou de
+            # mandar fazer, com cara de problema novo. Continua bloqueante --
+            # a nota nao efetiva com item solto -- so' muda o que se le'.
+            from apps.compras.services.entrada_produto_service import (
+                MARCADOR_VINCULO_REMOVIDO,
+            )
+            if MARCADOR_VINCULO_REMOVIDO in (item.observacao or ''):
+                return (
+                    'produto_desvinculado',
+                    'Item desvinculado na conferencia. Vincule o produto certo.',
+                    True,
+                )
             return 'produto_sem_vinculo', 'Produto sem equivalencia interna.', True
 
         quantidade_recebida = item.quantidade_recebida

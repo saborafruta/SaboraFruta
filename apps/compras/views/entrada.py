@@ -1,4 +1,5 @@
 """Views de Entrada de Mercadoria."""
+import logging
 from decimal import Decimal, InvalidOperation
 
 from django.contrib import messages
@@ -25,8 +26,8 @@ from apps.compras.services.entrada_financeiro_service import (
 from apps.compras.services.entrada_estorno_service import calcular_impacto_estorno_entrada, estornar_entrada
 from apps.compras.services.entrada_produto_service import (
     criar_produto_e_vincular_item, desvincular_item_de_produto,
-    reprocessar_vinculos_automaticos, sugerir_produtos_para_item,
-    vincular_item_a_produto,
+    reprocessar_vinculos_automaticos, sincronizar_vinculos_da_conferencia,
+    sugerir_produtos_para_item, vincular_item_a_produto,
 )
 from apps.compras.services.entrada_xml_service import (
     EntradaXMLDuplicadaError,
@@ -65,6 +66,9 @@ def _bool_parametros(data, nome: str, padrao: bool = False) -> bool:
     if nome not in data:
         return padrao
     return str(data.get(nome)).strip().lower() in {'1', 'true', 'on', 'sim'}
+
+
+logger = logging.getLogger(__name__)
 
 
 def _entrada_aberta(entrada):
@@ -695,6 +699,18 @@ class EntradaNFConferenciaView(EntradaNFDetailView):
 
     def get(self, request, pk):
         entrada = self.get_entrada(request, pk)
+        # Poe a nota em dia antes de mostra-la: solta item cuja equivalencia
+        # foi desativada e amarra o que ja' da' para amarrar. Nunca derruba a
+        # tela -- conferencia que nao abre e' pior do que conferencia
+        # desatualizada, e o botao de reprocessar continua ali para forcar.
+        if _entrada_aberta(entrada):
+            try:
+                sincronizar_vinculos_da_conferencia(entrada)
+                entrada.refresh_from_db()
+            except Exception:  # noqa: BLE001
+                logger.exception(
+                    'Falha ao sincronizar vinculos da entrada %s', entrada.pk,
+                )
         itens = entrada.itens.select_related('produto', 'produto__unidade_medida').all()
         custo_por_item = {}
         custos_criticos = set()

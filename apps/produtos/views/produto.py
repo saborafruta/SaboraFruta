@@ -2,6 +2,8 @@
 import csv
 import io
 import json
+import logging
+import re
 import uuid
 from decimal import Decimal
 from urllib.request import urlopen
@@ -10,7 +12,7 @@ from django.contrib import messages
 from django.core.files.base import ContentFile
 from django.core.files.storage import default_storage
 from django.core.paginator import Paginator
-from django.db import transaction
+from django.db import IntegrityError, transaction
 from django.db.models import Case, DecimalField, F, FilteredRelation, IntegerField, Max, OuterRef, Q, Subquery, Sum, Value, When
 from django.db.models.functions import Cast, Coalesce
 from django.http import FileResponse, Http404, HttpResponse, JsonResponse
@@ -33,7 +35,10 @@ from apps.estoque.models import Estoque, LoteProduto, MovimentacaoEstoque
 from apps.estoque.services.movimentacao_service import MovimentacaoService
 from apps.produtos.forms import ProdutoForm
 from apps.produtos.forms.produto import LIMITE_IMAGEM_PRODUTO_BYTES, LIMITE_IMAGEM_PRODUTO_MB
-from apps.produtos.models import CategoriaProduto, ClasseFiscal, MarcaProduto, Produto, ProdutoFilial, UnidadeMedida
+from apps.produtos.models import (
+    CategoriaProduto, ClasseFiscal, MarcaProduto, Produto, ProdutoFilial,
+    ProdutoFornecedorEquivalencia, UnidadeMedida,
+)
 from apps.produtos.services.replicacao_service import ReplicacaoProdutoService
 
 
@@ -1653,6 +1658,49 @@ class ProdutoDuplicarView(ProdutoCreateView):
         )
 
 
+def _vinculos_fornecedor(produto):
+    """
+    Os produtos de nota que ja' foram associados a este produto interno.
+
+    NUNCA DERRUBA A TELA. O cadastro do produto e' a tela mais usada do modulo;
+    ela nao pode deixar de abrir porque a consulta dos vinculos falhou. Em
+    banco com schema parcial -- migration a meio caminho -- era exatamente isso
+    que acontecia. Sem vinculos a tela mostra o estado vazio, que ja' existe no
+    template.
+    """
+    if not produto or not produto.pk:
+        return []
+    try:
+        return list(
+            ProdutoFornecedorEquivalencia.objects
+            .select_related('fornecedor')
+            .filter(produto=produto, ativo=True)
+            .order_by('fornecedor__razao_social', 'codigo_fornecedor')
+        )
+    except Exception:  # noqa: BLE001 -- a tela abre de qualquer jeito
+        logging.getLogger(__name__).exception(
+            'Falha ao carregar vinculos de fornecedor do produto %s', produto.pk,
+        )
+        return []
+
+
+def _campo_do_erro_de_banco(erro):
+    """
+    Traduz `null value in column "aliquota_cbs"` no rotulo que o usuario ve.
+
+    O ERP ganhou campos fiscais novos (CBS, IBS, IS) com NOT NULL. Formulario
+    salvo de tela antiga, ou banco a frente do codigo, batia num IntegrityError
+    cru: quinhentos na cara de quem so' queria corrigir a descricao, sem dizer
+    QUAL campo faltou. O nome da coluna esta na mensagem do proprio banco.
+    """
+    texto = str(erro)
+    achado = re.search(r'column "(\w+)"', texto) or re.search(r"column '(\w+)'", texto)
+    if not achado:
+        return None, None
+    coluna = achado.group(1)
+    return coluna, PRODUTO_AUDIT_FIELDS.get(coluna)
+
+
 class ProdutoUpdateView(PermissaoRequiredMixin, View):
     permissao_modulo = 'produtos'
     permissao_acao = 'editar'
@@ -1701,9 +1749,25 @@ class ProdutoUpdateView(PermissaoRequiredMixin, View):
                 if produto.foto_url else ''
             ),
             'subcategorias_form_json': _subcategorias_form_json(request.user.empresa, request.filial_ativa),
+            # O template ja' desenhava as duas coisas ha' tempo -- a tabela de
+            # vinculos e o modo popup. Faltava so' quem enchesse o contexto.
+            'vinculos_fornecedor': _vinculos_fornecedor(produto),
+            'popup_mode': self._popup(request),
         }
         context.update(_produto_log_context(produto, usuario_padrao=request.user))
         return context
+
+    @staticmethod
+    def _popup(request):
+        """
+        A conferencia de entrada abre esta tela em `?popup=1`.
+
+        Ali o usuario esta' no meio de conferir uma nota e so' quer corrigir o
+        cadastro do produto da linha. Sair da conferencia para isso perderia o
+        lugar dele na nota; por isso a tela abre sem menu nem cabecalho, e ao
+        salvar avisa a janela de origem em vez de redirecionar.
+        """
+        return str(request.GET.get('popup', '')) == '1'
 
     def get(self, request, pk):
         produto = get_object_or_404(
@@ -1737,40 +1801,92 @@ class ProdutoUpdateView(PermissaoRequiredMixin, View):
             estoque_atual=estoque_atual,
         )
         if form.is_valid():
-            with transaction.atomic():
-                ativo_filial = form.cleaned_data.get('ativo', True)
-                produto = form.save(commit=False)
-                produto.ativo = True
-                _salvar_imagem_produto(form, produto)
-                produto.calcular_margem()
-                produto.save()
-                _definir_status_produto_filial(produto, request.filial_ativa, ativo_filial)
-                snapshot_depois = _produto_audit_snapshot(produto)
-                changes = _produto_audit_changes(snapshot_antes, snapshot_depois)
-                if status_filial_antes != ativo_filial:
-                    changes.append({
-                        'campo': 'Ativo nesta filial',
-                        'antes': _sim_nao(status_filial_antes),
-                        'depois': _sim_nao(ativo_filial),
-                    })
-                if changes:
-                    _registrar_produto_log(
-                        request,
-                        produto,
-                        'Produto editado',
-                        f'{len(changes)} campo(s) alterado(s).',
-                        changes=changes,
-                    )
+            try:
+                with transaction.atomic():
+                    ativo_filial = form.cleaned_data.get('ativo', True)
+                    produto = form.save(commit=False)
+                    produto.ativo = True
+                    _salvar_imagem_produto(form, produto)
+                    produto.calcular_margem()
+                    produto.save()
+                    _definir_status_produto_filial(produto, request.filial_ativa, ativo_filial)
+                    snapshot_depois = _produto_audit_snapshot(produto)
+                    changes = _produto_audit_changes(snapshot_antes, snapshot_depois)
+                    if status_filial_antes != ativo_filial:
+                        changes.append({
+                            'campo': 'Ativo nesta filial',
+                            'antes': _sim_nao(status_filial_antes),
+                            'depois': _sim_nao(ativo_filial),
+                        })
+                    if changes:
+                        _registrar_produto_log(
+                            request,
+                            produto,
+                            'Produto editado',
+                            f'{len(changes)} campo(s) alterado(s).',
+                            changes=changes,
+                        )
+            except IntegrityError as erro:
+                # NAO E' QUINHENTOS, E' UM CAMPO FALTANDO. O banco diz qual
+                # coluna recusou; devolver isso como erro de formulario e' a
+                # diferenca entre "tente de novo" e "preencha a Aliquota CBS".
+                return self._erro_ao_salvar(request, form, produto, erro)
+            except Exception as erro:  # noqa: BLE001
+                return self._erro_ao_salvar(request, form, produto, erro)
+
+            # FORA DA TRANSACAO DE PROPOSITO. O ajuste de estoque fala com o
+            # modulo de movimentacao, que pode recusar por inventario aberto ou
+            # lote travado. Dentro do `atomic` essa recusa desfazia A EDICAO
+            # INTEIRA: quem so' queria corrigir a descricao perdia o trabalho
+            # por causa de um campo que nem preencheu.
+            try:
                 self.ajustar_estoque(
                     request,
                     produto,
                     form.cleaned_data.get('estoque_quantidade'),
                     estoque_atual,
                 )
+            except Exception:  # noqa: BLE001
+                logging.getLogger(__name__).exception(
+                    'Falha ao ajustar estoque do produto %s', produto.pk,
+                )
+                messages.warning(
+                    request,
+                    'Produto salvo, mas o estoque nao pode ser ajustado agora.',
+                )
             _sincronizar_produto_sem_quebrar(request, produto)
+            if self._popup(request):
+                return render(
+                    request,
+                    'produtos/produto/popup_salvo.html',
+                    {'produto': produto},
+                )
             messages.success(request, 'Produto atualizado.')
             return redirect('produtos:produto-list')
         return render(request, self.template_name, self.get_context(request, form, produto))
+
+    def _erro_ao_salvar(self, request, form, produto, erro):
+        """Devolve o formulario com o motivo, em vez de estourar em 500."""
+        logging.getLogger(__name__).exception(
+            'Falha ao salvar o produto %s', getattr(produto, 'pk', None),
+        )
+        coluna, rotulo = _campo_do_erro_de_banco(erro)
+        if rotulo:
+            mensagem = f'{rotulo}: obrigatorio para este produto. Informe 0,00 se nao se aplica.'
+            if coluna in form.fields:
+                form.add_error(coluna, mensagem)
+            else:
+                form.add_error(None, mensagem)
+        elif coluna:
+            form.add_error(
+                None,
+                f'O campo "{coluna}" e obrigatorio. Informe 0,00 se nao se aplica.',
+            )
+        else:
+            form.add_error(None, 'Nao foi possivel salvar o produto. Tente novamente.')
+        return render(
+            request, self.template_name, self.get_context(request, form, produto),
+        )
 
 
 class ProdutoDeleteView(PermissaoRequiredMixin, View):

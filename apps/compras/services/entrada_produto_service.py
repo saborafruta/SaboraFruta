@@ -337,92 +337,67 @@ def reprocessar_vinculos_automaticos(entrada) -> dict[str, int]:
     return {'vinculados': vinculados, 'pendentes': pendentes}
 
 
-def _produto_existente_para_item(entrada, item, ean: str) -> Produto | None:
-    produtos_filial = (
-        Produto.objects.for_filial(entrada.filial)
-        .filter(ativo=True)
-        .select_related('unidade_medida')
+def _equivalencias_do_item(entrada, item):
+    """As equivalencias que ligariam ESTE produto a ESTE fornecedor."""
+    por_fornecedor = Q()
+    if entrada.emitente_cnpj_xml:
+        por_fornecedor |= Q(fornecedor_cnpj_xml=entrada.emitente_cnpj_xml)
+    if entrada.fornecedor_id and not entrada.fornecedor_pendente:
+        por_fornecedor |= Q(fornecedor_id=entrada.fornecedor_id)
+    if not por_fornecedor:
+        return ProdutoFornecedorEquivalencia.objects.none()
+    return ProdutoFornecedorEquivalencia.objects.filter(
+        por_fornecedor, produto_id=item.produto_id,
     )
-    if ean:
-        produto = (
-            produtos_filial
-            .filter(
-                Q(codigo_barras=ean)
-                | Q(codigos_barras__ean=ean, codigos_barras__ativo=True)
-            )
-            .distinct()
-            .first()
-        )
-        if produto:
-            return produto
-
-    codigo_fornecedor = (item.codigo_produto_fornecedor or '').strip()
-    filtro_vinculo = Q()
-    if codigo_fornecedor:
-        filtro_vinculo |= Q(codigo_fornecedor=codigo_fornecedor)
-    if ean:
-        filtro_vinculo |= Q(ean_utilizado=ean)
-    if not filtro_vinculo:
-        return None
-
-    filtro_fornecedor = Q(fornecedor_cnpj_xml=entrada.emitente_cnpj_xml)
-    if not entrada.fornecedor_pendente:
-        filtro_fornecedor |= Q(fornecedor=entrada.fornecedor)
-
-    equivalencia = (
-        ProdutoFornecedorEquivalencia.objects
-        .filter(filtro_fornecedor, filtro_vinculo, ativo=True)
-        .filter(
-            produto__ativo=True,
-            produto__filiais_vinculo__filial=entrada.filial,
-            produto__filiais_vinculo__ativo=True,
-        )
-        .select_related('produto', 'produto__unidade_medida')
-        .first()
-    )
-    return equivalencia.produto if equivalencia else None
 
 
 @transaction.atomic
-def reprocessar_vinculos_automaticos(entrada) -> dict[str, int]:
-    """Tenta vincular itens pendentes por identificadores seguros ja cadastrados."""
-    from apps.compras.services.compra_service import CompraService
-    from apps.compras.services.entrada_xml_service import resolver_produto
+def sincronizar_vinculos_da_conferencia(entrada) -> dict[str, int]:
+    """
+    Poe a nota em dia com os vinculos ANTES de mostra-la ao conferente.
 
-    vinculados = 0
-    pendentes = 0
+    Duas correcoes, nesta ordem, porque a segunda depende da primeira.
+
+    1. SOLTA O QUE PERDEU A JUSTIFICATIVA. Desativar a equivalencia no cadastro
+       do produto so' cuidava das notas abertas naquele instante. Nota
+       importada depois continuava exibindo o item preso a um produto cuja
+       ligacao ja' foi desfeita -- e o conferente nao tinha como saber que
+       aquele vinculo nao valia mais.
+
+    2. AMARRA O QUE PASSOU A TER COMO. `reprocessar_vinculos_automaticos` ja'
+       fazia isso, mas so' por botao: quem nao clicasse via a nota com itens
+       pendentes que o sistema ja' sabia resolver.
+
+    SO' MEXE NO QUE VEIO DE EQUIVALENCIA. Item sem equivalencia nenhuma foi
+    amarrado por outro caminho -- EAN do proprio produto, escolha manual antes
+    de a regra existir -- e solta-lo destruiria trabalho alheio. A condicao e'
+    estreita de proposito: EXISTE equivalencia para este par e TODAS estao
+    inativas.
+
+    O MARCADOR SOBREVIVE. Item que o conferente desvinculou a mao ja' vem com o
+    carimbo, e o passo 2 respeita o carimbo -- passar por aqui nao desfaz a
+    decisao dele.
+    """
+    soltos = 0
     itens = (
         entrada.itens
         .select_for_update()
-        .filter(produto__isnull=True)
+        .filter(produto__isnull=False)
+        .select_related('produto')
         .order_by('numero_item')
     )
     for item in itens:
-        resolvido = resolver_produto(
-            filial=entrada.filial,
-            ean=item.ean_xml,
-            codigo_fornecedor=item.codigo_produto_fornecedor,
-            fornecedor=None if entrada.fornecedor_pendente else entrada.fornecedor,
-            fornecedor_cnpj_xml=entrada.emitente_cnpj_xml,
-        )
-        if not resolvido.produto:
-            pendentes += 1
-            CompraService.atualizar_diferenca_item(item)
+        equivalencias = _equivalencias_do_item(entrada, item)
+        if not equivalencias.exists():
             continue
-        vincular_item_a_produto(
-            entrada=entrada,
-            item=item,
-            produto=resolvido.produto,
-            fator_conversao=resolvido.fator_conversao,
-            unidade_estoque=resolvido.unidade_estoque or resolvido.produto.unidade_medida.sigla,
-            numero_lote=item.numero_lote,
-            data_validade=item.data_validade,
-            origem_equivalencia=ProdutoFornecedorEquivalencia.Origem.XML,
-        )
-        vinculados += 1
+        if equivalencias.filter(ativo=True).exists():
+            continue
+        desvincular_item_de_produto(item)
+        soltos += 1
 
-    CompraService._atualizar_status_conferencia(entrada)
-    return {'vinculados': vinculados, 'pendentes': pendentes}
+    resultado = reprocessar_vinculos_automaticos(entrada)
+    resultado['soltos'] = soltos
+    return resultado
 
 
 def _produto_existente_para_item(entrada, item, ean: str) -> Produto | None:
