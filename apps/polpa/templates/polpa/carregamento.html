@@ -132,8 +132,10 @@
                 {% if p.separacao %}
                   <span class="soft-pill is-green text-xs">{{ p.separacao.numero }}</span>
                 {% elif p.sem_separacao %}
-                  {# Sem separação a carga sobe sem lote identificado — e num
-                     recall ninguém sabe o que foi para quem. #}
+                  {% comment %}
+                    Sem separação a carga sobe sem lote identificado — e num
+                    recall ninguém sabe o que foi para quem.
+                  {% endcomment %}
                   <span style="color:#d97706;">sem separação fechada</span>
                 {% endif %}
               </td>

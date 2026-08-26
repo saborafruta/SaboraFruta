@@ -309,10 +309,12 @@
                 {% endif %}
                 {% if permissoes_compras.pode_editar and item.produto_id %}
                   <button type="button" class="btn-secondary mt-2 px-3 py-1.5 text-xs" data-lote-open="lote-modal-{{ item.pk }}">Editar</button>
-                  {# Corrigir o cadastro do produto e recusar o vinculo sao as
-                     duas saidas de quem confere e ve produto errado na linha.
-                     Sem elas so' restava trocar por outro produto -- que exige
-                     saber qual e' o certo, e muitas vezes o certo e' nenhum. #}
+                  {% comment %}
+                    Corrigir o cadastro do produto e recusar o vinculo sao as
+                    duas saidas de quem confere e ve produto errado na linha.
+                    Sem elas so' restava trocar por outro produto -- que exige
+                    saber qual e' o certo, e muitas vezes o certo e' nenhum.
+                  {% endcomment %}
                   <div class="mt-2 flex flex-wrap items-center gap-2">
                     <a href="{% url 'produtos:produto-update' item.produto_id %}?popup=1"
                        data-product-edit-open

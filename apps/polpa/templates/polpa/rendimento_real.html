@@ -49,8 +49,10 @@
           {{ resumo.ordens }} ordem(ns) encerrada(s)
         </p>
       {% else %}
-        {# Zero seria "a fábrica não rendeu nada" — fábrica sem ordem fechada
-           apareceria em colapso. #}
+        {% comment %}
+          Zero seria "a fábrica não rendeu nada" — fábrica sem ordem fechada
+          apareceria em colapso.
+        {% endcomment %}
         <p class="text-sm mt-2" :style="temaClaro ? 'color:#94a3b8;' : 'color:#71717a;'">
           nenhuma ordem encerrada na janela
         </p>

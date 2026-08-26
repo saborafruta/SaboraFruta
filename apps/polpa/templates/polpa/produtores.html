@@ -100,8 +100,10 @@
               {% endcomment %}
               <td class="px-4 py-3 text-right">
                 {% if linha.taxa_desconto >= 5 %}
-                  {# Cinco por cento e' onde o desconto deixa de ser ruido e vira
-                     conversa com o produtor. O numero fica visivel sozinho. #}
+                  {% comment %}
+                    Cinco por cento e' onde o desconto deixa de ser ruido e vira
+                    conversa com o produtor. O numero fica visivel sozinho.
+                  {% endcomment %}
                   <span style="color:#d97706;font-weight:600;">{{ linha.taxa_desconto|floatformat:1 }}%</span>
                 {% else %}
                   <span :style="temaClaro ? 'color:#374151;' : 'color:#cbd5e1;'">{{ linha.taxa_desconto|floatformat:1 }}%</span>

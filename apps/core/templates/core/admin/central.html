@@ -499,8 +499,10 @@
                   {% for mv in modulos_verticais %}
                     <label class="flex items-start gap-2 text-sm cursor-pointer">
                       {% if mv.pelo_segmento %}
-                        {# Concedido pelo segmento: marcado e travado, senão o
-                           admin desmarcaria aqui sem efeito nenhum. #}
+                        {% comment %}
+                          Concedido pelo segmento: marcado e travado, senão o
+                          admin desmarcaria aqui sem efeito nenhum.
+                        {% endcomment %}
                         <input type="checkbox" checked disabled class="mt-0.5">
                       {% else %}
                         <input type="checkbox" name="modulo_extra" value="{{ mv.chave }}"

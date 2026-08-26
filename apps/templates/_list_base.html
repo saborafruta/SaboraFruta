@@ -1,6 +1,6 @@
 {% extends "_base.html" %}
 
-{#
+{% comment %}
   Template base para listagens com busca, filtros e tabela.
   Blocos:
     list_title      - título
@@ -10,7 +10,7 @@
     table_head      - thead
     table_body      - tbody
     pagination      - paginação
-#}
+{% endcomment %}
 
 {% block title %}{% block list_title %}Listagem{% endblock %} — ERP iNoovaTed{% endblock %}
 
