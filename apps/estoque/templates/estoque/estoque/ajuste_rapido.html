@@ -363,7 +363,7 @@
                 data-photo-action="{% url 'produtos:produto-image-update' produto.pk %}"
                 aria-label="{% if produto.ajuste_rapido_foto_url %}Ver ou trocar{% else %}Adicionar{% endif %} foto de {{ produto.descricao }}">
           {% if produto.ajuste_rapido_foto_url %}
-            <img src="{{ produto.ajuste_rapido_foto_url }}" alt="" loading="lazy" data-photo-thumbnail>
+            <img src="{{ produto.ajuste_rapido_foto_url }}?v=thumb" alt="" loading="lazy" data-photo-thumbnail>
             <span class="stock-count-photo-id">#{{ produto.codigo_replicacao }}</span>
             <span class="stock-count-photo-fallback"><strong>+</strong>Abrir foto</span>
           {% else %}

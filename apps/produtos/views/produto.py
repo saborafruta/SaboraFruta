@@ -1,21 +1,25 @@
 """CRUD de Produto."""
 import csv
+import io
 import json
 import uuid
 from decimal import Decimal
+from urllib.request import urlopen
 
 from django.contrib import messages
+from django.core.files.base import ContentFile
 from django.core.files.storage import default_storage
 from django.core.paginator import Paginator
 from django.db import transaction
 from django.db.models import Case, DecimalField, F, FilteredRelation, IntegerField, Max, OuterRef, Q, Subquery, Sum, Value, When
 from django.db.models.functions import Cast, Coalesce
-from django.http import Http404, HttpResponse, JsonResponse
+from django.http import FileResponse, Http404, HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.template.loader import render_to_string
 from django.urls import reverse, reverse_lazy
 from django.utils import timezone
 from django.views import View
+from PIL import Image, ImageOps
 from reportlab.lib import colors
 from reportlab.lib.pagesizes import A4, landscape
 from reportlab.lib.styles import getSampleStyleSheet
@@ -2111,16 +2115,67 @@ class ProdutoImagemUpdateView(PermissaoRequiredMixin, View):
 
 
 class ProdutoImagemView(View):
-    """Entrega um endereco estavel e renova a assinatura do bucket a cada acesso."""
+    """Entrega variantes leves da foto pelo mesmo dominio da aplicacao."""
 
-    def get(self, request, pk):
-        produto = get_object_or_404(Produto.objects.all(), pk=pk)
+    variantes = {
+        'thumb': (320, 76),
+        'zoom': (1400, 86),
+    }
+
+    @classmethod
+    def _nome_derivada(cls, original, variante):
+        base = original.rsplit('.', 1)[0]
+        limite, _ = cls.variantes[variante]
+        return f'{base}__{limite}px.jpg'
+
+    @classmethod
+    def _converter(cls, arquivo, variante):
+        limite, qualidade = cls.variantes[variante]
+        with Image.open(arquivo) as original:
+            imagem = ImageOps.exif_transpose(original)
+            imagem.thumbnail((limite, limite), Image.Resampling.LANCZOS)
+            if imagem.mode in {'RGBA', 'LA'} or (
+                imagem.mode == 'P' and 'transparency' in imagem.info
+            ):
+                rgba = imagem.convert('RGBA')
+                fundo = Image.new('RGB', rgba.size, 'white')
+                fundo.paste(rgba, mask=rgba.getchannel('A'))
+                imagem = fundo
+            elif imagem.mode != 'RGB':
+                imagem = imagem.convert('RGB')
+            saida = io.BytesIO()
+            imagem.save(saida, format='JPEG', quality=qualidade, optimize=True)
+            saida.seek(0)
+            return saida
+
+    @classmethod
+    def _arquivo_otimizado(cls, produto, variante):
+        nome_original = produto.foto_storage_name
+        if nome_original:
+            nome_derivada = cls._nome_derivada(nome_original, variante)
+            if not default_storage.exists(nome_derivada):
+                with default_storage.open(nome_original, 'rb') as original:
+                    convertido = cls._converter(original, variante)
+                nome_derivada = default_storage.save(
+                    nome_derivada,
+                    ContentFile(convertido.getvalue()),
+                )
+            return default_storage.open(nome_derivada, 'rb')
+
         destino = produto.foto_url_resolvida
         if not destino:
             raise Http404('Produto sem imagem cadastrada.')
-        response = redirect(destino)
+        with urlopen(destino, timeout=20) as resposta:
+            return cls._converter(io.BytesIO(resposta.read()), variante)
+
+    def get(self, request, pk):
+        produto = get_object_or_404(Produto.objects.all(), pk=pk)
+        variante = 'thumb' if request.GET.get('v') == 'thumb' else 'zoom'
+        arquivo = self._arquivo_otimizado(produto, variante)
+        response = FileResponse(arquivo, content_type='image/jpeg')
         response['Cache-Control'] = 'private, no-store, max-age=0'
         response['Pragma'] = 'no-cache'
+        response['Content-Disposition'] = 'inline; filename="produto.jpg"'
         return response
 
 

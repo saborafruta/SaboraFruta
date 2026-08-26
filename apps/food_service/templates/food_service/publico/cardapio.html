@@ -115,7 +115,7 @@
     <div class="cp-strip">
       {% for produto in promocoes %}
       <div class="cp-strip-card">
-        <img src="{% url 'produtos:produto-image-file' produto.pk %}" onerror="this.style.visibility='hidden'" alt="">
+        <img src="{% url 'produtos:produto-image-file' produto.pk %}?v=thumb" onerror="this.style.visibility='hidden'" alt="">
         <div class="nome">{{ produto.descricao }}</div>
         <div style="padding:0 8px 8px; font-size:11px;">
           <span class="cp-preco-riscado">R$ {{ produto.preco_venda|floatformat:2 }}</span>
@@ -131,7 +131,7 @@
     <div class="cp-strip">
       {% for produto in mais_vendidos %}
       <div class="cp-strip-card">
-        <img src="{% url 'produtos:produto-image-file' produto.pk %}" onerror="this.style.visibility='hidden'" alt="">
+        <img src="{% url 'produtos:produto-image-file' produto.pk %}?v=thumb" onerror="this.style.visibility='hidden'" alt="">
         <div class="nome">{{ produto.descricao }}</div>
       </div>
       {% endfor %}
@@ -143,7 +143,7 @@
       {% for produto in produtos %}
       <div class="cp-card" data-nome="{{ produto.descricao|lower }}" data-categoria="{{ produto.categoria.nome|default:'Outros' }}"
            x-show="passaFiltro('{{ produto.descricao|lower|escapejs }}', '{{ produto.categoria.nome|default:"Outros"|escapejs }}')">
-        <img src="{% url 'produtos:produto-image-file' produto.pk %}" onerror="this.style.visibility='hidden'" alt="">
+        <img src="{% url 'produtos:produto-image-file' produto.pk %}?v=thumb" onerror="this.style.visibility='hidden'" alt="">
         <div class="cp-card-info">
           <div class="cp-card-nome">{{ produto.descricao }}</div>
           <div class="cp-card-preco">R$ {{ produto.preco_venda|floatformat:2 }}</div>

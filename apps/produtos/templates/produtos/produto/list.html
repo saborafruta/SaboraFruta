@@ -686,7 +686,7 @@
         <div class="flex items-center gap-2 min-w-0">
           {% if p.foto_url_resolvida %}
             <button type="button" class="produto-thumb-trigger" data-action="{% url 'produtos:produto-image-update' p.pk %}" data-image="{% url 'produtos:produto-image-file' p.pk %}" data-name="{{ p.descricao }}">
-              <img src="{% url 'produtos:produto-image-file' p.pk %}" alt="{{ p.descricao }}" class="produto-thumb">
+              <img src="{% url 'produtos:produto-image-file' p.pk %}?v=thumb" alt="{{ p.descricao }}" class="produto-thumb">
             </button>
           {% else %}
             <button type="button" class="produto-thumb-trigger" data-action="{% url 'produtos:produto-image-update' p.pk %}" data-image="" data-name="{{ p.descricao }}">

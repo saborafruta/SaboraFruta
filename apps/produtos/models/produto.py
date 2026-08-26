@@ -328,8 +328,8 @@ class Produto(FilialScopedModel):
         return self.descricao
 
     @property
-    def foto_url_resolvida(self):
-        """Retorna uma URL vigente para fotos armazenadas no bucket privado."""
+    def foto_storage_name(self):
+        """Extrai a chave estavel de uma foto salva no storage da aplicacao."""
         valor = (self.foto_url or '').strip()
         if not valor:
             return ''
@@ -344,6 +344,15 @@ class Produto(FilialScopedModel):
         ):
             nome_arquivo = unquote(parsed.path.lstrip('/'))
 
+        return nome_arquivo
+
+    @property
+    def foto_url_resolvida(self):
+        """Retorna uma URL vigente para fotos armazenadas no bucket privado."""
+        valor = (self.foto_url or '').strip()
+        if not valor:
+            return ''
+        nome_arquivo = self.foto_storage_name
         if not nome_arquivo:
             return valor
         try:
