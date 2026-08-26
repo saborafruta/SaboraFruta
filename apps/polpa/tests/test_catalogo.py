@@ -385,3 +385,74 @@ class TelasCatalogoTests(CatalogoBase):
 
         self.assertEqual(ficha.fruta, fruta)
         self.assertIn(ficha, fruta.produtos.all())
+
+
+class ATelaGuiaOPreenchimentoTests(CatalogoBase):
+    """
+    A ficha muda conforme a classe — e a tela tem que mudar junto.
+
+    O comentário no topo de `catalogo_form.html` já prometia isto; a tela não
+    cumpria. Ela pedia paletização de aroma e validade de pallet, e é assim que
+    alguém digita zero só para o formulário fechar. Zero digitado é pior que
+    campo vazio, porque parece resposta.
+    """
+
+    def test_o_rotulo_do_tipo_nao_repete_o_titulo_do_cartao(self):
+        """
+        "O que é este item" aparecia duas vezes coladas -- como titulo do
+        cartao e como rotulo do campo logo abaixo.
+        """
+        html = self.client.get(reverse('polpa:catalogo-create')).content.decode()
+
+        self.assertEqual(html.count('O que é este item'), 1)
+
+    def test_o_select_de_unidade_diz_o_que_fazer(self):
+        html = self.client.get(reverse('polpa:catalogo-create')).content.decode()
+
+        self.assertIn('Selecione a unidade', html)
+        self.assertNotIn('---------', html)
+
+    def test_medidas_e_embalagem_so_para_acabado_e_embalagem(self):
+        """Fruta a granel nao tem caixa por pallet."""
+        html = self.client.get(reverse('polpa:catalogo-create')).content.decode()
+
+        self.assertIn(
+            "x-show=\"classe === 'acabado' || classe === 'embalagem'\"", html,
+        )
+
+    def test_conservacao_so_para_o_que_precisa_de_frio(self):
+        """Pote e rotulo nao tem cadeia de frio; fruta e polpa tem."""
+        html = self.client.get(reverse('polpa:catalogo-create')).content.decode()
+
+        self.assertIn(
+            "x-show=\"classe === 'acabado' || classe === 'materia_prima'\"", html,
+        )
+
+    def test_esconder_bloco_nao_impede_gravar_a_ficha_inteira(self):
+        """
+        O CAMPO ESCONDIDO CONTINUA NO DOM e e' enviado. Este teste e' o que
+        garante que a mudanca visual nao virou perda de dado: um acabado com
+        todos os campos preenchidos tem que gravar igual a antes.
+        """
+        resposta = self.client.post(reverse('polpa:catalogo-create'), {
+            'tipo': T.POLPA, 'descricao': 'Polpa de goiaba 100 g',
+            'codigo': 'PGO100', 'unidade_medida': self.unidade.pk,
+            'validade_dias': '365', 'peso_liquido': '0.100',
+            'peso_bruto': '0.110', 'quantidade_por_embalagem': '50',
+            'caixas_por_pallet': '40',
+            'congelado': 'on', 'temperatura_maxima': '-18',
+        })
+
+        ficha = FichaProduto.objects.get(produto__descricao='Polpa de goiaba 100 g')
+        self.assertEqual(resposta.status_code, 302)
+        self.assertEqual(ficha.caixas_por_pallet, 40)
+        self.assertEqual(ficha.validade_dias, 365)
+
+    def test_os_campos_obrigatorios_estao_marcados(self):
+        """
+        Tres dos vinte campos sao obrigatorios. Sem marca, descobre-se quais no
+        botao -- depois de preencher os outros dezessete.
+        """
+        html = self.client.get(reverse('polpa:catalogo-create')).content.decode()
+
+        self.assertIn('title="Obrigatorio"', html)

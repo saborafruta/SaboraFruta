@@ -13,7 +13,7 @@
   o formulário fechar — e zero digitado é pior que campo vazio, porque
   parece resposta.
 {% endcomment %}
-<div class="space-y-4 max-w-4xl"
+<div class="space-y-4"
      x-data="{
        tipo: '{{ form.tipo.value|default:'' }}',
        materiaPrima: {{ tipos_materia_prima }},
@@ -27,9 +27,20 @@
        },
      }">
 
-  <p class="text-sm" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
-    <a href="{% url 'polpa:catalogo-list' %}" :style="temaClaro ? 'color:#3b82f6;' : 'color:#60a5fa;'">‹ Produtos e insumos</a>
-  </p>
+  <div>
+    <p class="text-sm" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+      <a href="{% url 'polpa:catalogo-list' %}" :style="temaClaro ? 'color:#3b82f6;' : 'color:#60a5fa;'">‹ Produtos e insumos</a>
+    </p>
+    <h2 class="text-2xl font-semibold mt-1" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">{{ title }}</h2>
+    {% comment %}
+      A PRIMEIRA PERGUNTA MANDA NO RESTO da tela, e dizer isso evita que a
+      pessoa comece pelo campo errado -- descricao vazia e tipo por escolher
+      eram o estado em que este formulario abria.
+    {% endcomment %}
+    <p class="text-sm mt-1" x-show="!classe" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+      Comece pelo tipo: é ele que decide o que mais o item precisa ter.
+    </p>
+  </div>
 
   {% if not tem_unidade %}
     {% comment %}
@@ -72,9 +83,11 @@
     {# ── O que é ────────────────────────────────────────────────── #}
     <div class="card p-4">
       <h3 class="text-sm font-semibold mb-3" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">O que é este item</h3>
-      <div class="grid sm:grid-cols-2 gap-3">
+      <div class="grid sm:grid-cols-2 xl:grid-cols-4 gap-3">
         <div>
-          <label class="form-label" for="{{ form.tipo.id_for_label }}">{{ form.tipo.label }}</label>
+          <label class="form-label" for="{{ form.tipo.id_for_label }}">
+            {{ form.tipo.label }} <span style="color:#dc2626;" title="Obrigatorio">*</span>
+          </label>
           {% comment %}
             O select é AGRUPADO por classe: a lista corrida de 32 tipos faria
             procurar "pote" no meio dos aromas.
@@ -94,7 +107,9 @@
         {% for campo in form %}
           {% if campo.name == 'descricao' or campo.name == 'codigo' or campo.name == 'unidade_medida' %}
             <div>
-              <label class="form-label" for="{{ campo.id_for_label }}">{{ campo.label }}</label>
+              <label class="form-label" for="{{ campo.id_for_label }}">
+                {{ campo.label }}{% if campo.field.required %} <span style="color:#dc2626;" title="Obrigatorio">*</span>{% endif %}
+              </label>
               {{ campo }}
               {% if campo.errors %}<p class="text-xs mt-1" style="color:#dc2626;">{{ campo.errors.0 }}</p>{% endif %}
             </div>
@@ -117,10 +132,23 @@
       </div>
     </div>
 
+    {% comment %}
+      OS BLOCOS SO' APARECEM PARA QUEM OS USA -- que e' o que o comentario no
+      topo deste arquivo ja' prometia e a tela nao cumpria: ela pedia
+      paletizacao de aroma e validade de pallet, e e' assim que alguem digita
+      zero so' para o formulario fechar. Zero digitado e' pior que campo vazio,
+      porque parece resposta.
+
+      Enquanto o tipo nao for escolhido, nada disto aparece: a primeira
+      pergunta manda no resto da tela.
+
+      Os campos escondidos continuam no DOM e sao enviados vazios -- todos sao
+      opcionais, entao esconder nao trava o salvamento.
+    {% endcomment %}
     {# ── Medidas e embalagem ────────────────────────────────────── #}
-    <div class="card p-4">
+    <div class="card p-4" x-show="classe === 'acabado' || classe === 'embalagem'" x-cloak>
       <h3 class="text-sm font-semibold mb-3" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">Medidas e embalagem</h3>
-      <div class="grid sm:grid-cols-3 gap-3">
+      <div class="grid sm:grid-cols-3 xl:grid-cols-6 gap-3">
         {% for campo in form %}
           {% if campo.name == 'volume_ml' or campo.name == 'peso_liquido' or campo.name == 'peso_bruto' or campo.name == 'tipo_embalagem' or campo.name == 'quantidade_por_embalagem' or campo.name == 'caixas_por_pallet' %}
             <div>
@@ -134,7 +162,7 @@
     </div>
 
     {# ── Conservação ────────────────────────────────────────────── #}
-    <div class="card p-4">
+    <div class="card p-4" x-show="classe === 'acabado' || classe === 'materia_prima'" x-cloak>
       <h3 class="text-sm font-semibold mb-3" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">Conservação e validade</h3>
       <div class="flex flex-wrap gap-4 mb-3">
         {% for campo in form %}
@@ -171,9 +199,9 @@
     </div>
 
     {# ── Fiscal e preço ─────────────────────────────────────────── #}
-    <div class="card p-4">
+    <div class="card p-4" x-show="classe" x-cloak>
       <h3 class="text-sm font-semibold mb-3" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">Fiscal e preço</h3>
-      <div class="grid sm:grid-cols-3 gap-3">
+      <div class="grid sm:grid-cols-3 xl:grid-cols-6 gap-3">
         {% for campo in form %}
           {% if campo.name == 'codigo_barras' or campo.name == 'ncm' or campo.name == 'cest' or campo.name == 'registro_mapa' or campo.name == 'preco_custo' or campo.name == 'preco_venda' %}
             <div>
@@ -186,14 +214,28 @@
       </div>
     </div>
 
-    <div class="card p-4">
+    <div class="card p-4" x-show="classe" x-cloak>
       <label class="form-label" for="{{ form.observacao.id_for_label }}">Observação</label>
       {{ form.observacao }}
     </div>
 
-    <div class="flex flex-wrap gap-2">
-      <button type="submit" class="btn-primary">Gravar item</button>
-      <a href="{% url 'polpa:catalogo-list' %}" class="btn-secondary">Cancelar</a>
+    {% comment %}
+      A ACAO FICA GRUDADA NO PE DA TELA. Sao cinco blocos: com o botao so' la'
+      embaixo, quem corrige um campo do meio precisa rolar ate' o fim para
+      gravar, e rolar de volta para conferir. O aviso ao lado diz o que falta
+      -- e some quando nao falta nada.
+    {% endcomment %}
+    <div class="sticky bottom-0 -mx-1 px-1 pt-3 pb-3"
+         :style="temaClaro
+           ? 'background:linear-gradient(to top, #f8fafc 60%, transparent);'
+           : 'background:linear-gradient(to top, #0f0f11 60%, transparent);'">
+      <div class="card p-3 flex flex-wrap items-center gap-3">
+        <button type="submit" class="btn-primary">Gravar item</button>
+        <a href="{% url 'polpa:catalogo-list' %}" class="btn-secondary">Cancelar</a>
+        <p class="text-xs" x-show="!classe" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+          Escolha o tipo do item para liberar o resto da ficha.
+        </p>
+      </div>
     </div>
   </form>
 

@@ -26,7 +26,7 @@ class ItemCatalogoForm(forms.Form):
 
     # ── O que é ──────────────────────────────────────────────────────────
     tipo = forms.ChoiceField(
-        label='O que é este item', choices=FichaProduto.Tipo.choices,
+        label='Tipo', choices=FichaProduto.Tipo.choices,
         widget=forms.Select(attrs=SELECT),
     )
     descricao = forms.CharField(
@@ -139,6 +139,9 @@ class ItemCatalogoForm(forms.Form):
             else Fruta.objects.none()
         )
         self.fields['fruta'].empty_label = 'Nenhuma'
+        # `---------`, o padrao do Django, nao diz nada -- e num select
+        # obrigatorio parece campo carregando, e nao campo por escolher.
+        self.fields['unidade_medida'].empty_label = 'Selecione a unidade'
 
         if ficha is not None and not self.is_bound:
             self.initial.update(self._do_registro(ficha))
