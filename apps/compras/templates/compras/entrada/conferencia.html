@@ -309,6 +309,22 @@
                 {% endif %}
                 {% if permissoes_compras.pode_editar and item.produto_id %}
                   <button type="button" class="btn-secondary mt-2 px-3 py-1.5 text-xs" data-lote-open="lote-modal-{{ item.pk }}">Editar</button>
+                  {# Corrigir o cadastro do produto e recusar o vinculo sao as
+                     duas saidas de quem confere e ve produto errado na linha.
+                     Sem elas so' restava trocar por outro produto -- que exige
+                     saber qual e' o certo, e muitas vezes o certo e' nenhum. #}
+                  <div class="mt-2 flex flex-wrap items-center gap-2">
+                    <a href="{% url 'produtos:produto-update' item.produto_id %}?popup=1"
+                       data-product-edit-open
+                       class="btn-secondary px-3 py-1.5 text-xs"
+                       title="Editar o cadastro deste produto sem sair da conferencia">Cadastro</a>
+                    <form method="post" id="entrada-desvincular-form-{{ item.pk }}"
+                          action="{% url 'compras:entrada-desvincular-item' entrada.pk item.pk %}"
+                          onsubmit="return confirm('Desvincular este item? Ele nao sera revinculado automaticamente.');">
+                      {% csrf_token %}
+                      <button type="submit" class="px-3 py-1.5 text-xs rounded-md border border-amber-500/40 text-amber-700 dark:text-amber-400 hover:bg-amber-50 dark:hover:bg-amber-950/30">Desvincular</button>
+                    </form>
+                  </div>
                 {% endif %}
               </td>
               <td class="px-4 py-3">

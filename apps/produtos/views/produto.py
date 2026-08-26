@@ -2388,6 +2388,7 @@ class ProdutoFornecedorVinculoDeleteView(PermissaoRequiredMixin, View):
         from django.db.models import Q
 
         from apps.compras.models import ItemEntradaNF
+        from apps.compras.services.compra_service import CompraService
         from apps.compras.services.entrada_produto_service import (
             desvincular_item_de_produto,
         )
@@ -2412,6 +2413,12 @@ class ProdutoFornecedorVinculoDeleteView(PermissaoRequiredMixin, View):
             )
             for item in itens:
                 desvincular_item_de_produto(item)
+            # A entrada nao pode seguir dizendo que esta pronta para conferir
+            # com item sem produto. `desvincular_item_de_produto` e' de escopo
+            # de ITEM e nao recalcula isso; quem tem a visao da entrada e' este
+            # laco. Uma vez por entrada, e nao por item: sao N gravacoes.
+            for entrada in {item.entrada for item in itens}:
+                CompraService._atualizar_status_conferencia(entrada)
             return len(itens)
         except Exception:  # noqa: BLE001 — não derruba a desativação
             logging.getLogger(__name__).exception(

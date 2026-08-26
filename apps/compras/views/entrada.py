@@ -24,8 +24,9 @@ from apps.compras.services.entrada_financeiro_service import (
 )
 from apps.compras.services.entrada_estorno_service import calcular_impacto_estorno_entrada, estornar_entrada
 from apps.compras.services.entrada_produto_service import (
-    criar_produto_e_vincular_item, reprocessar_vinculos_automaticos,
-    sugerir_produtos_para_item, vincular_item_a_produto,
+    criar_produto_e_vincular_item, desvincular_item_de_produto,
+    reprocessar_vinculos_automaticos, sugerir_produtos_para_item,
+    vincular_item_a_produto,
 )
 from apps.compras.services.entrada_xml_service import (
     EntradaXMLDuplicadaError,
@@ -941,6 +942,62 @@ class EntradaNFVincularItemView(PermissaoRequiredMixin, View):
             metadados={'produto_id': produto.pk, 'fator_conversao': str(fator)},
         )
         messages.success(request, 'Produto vinculado e equivalencia salva para proximas entradas.')
+        return redirect('compras:entrada-conferencia', pk=pk)
+
+
+class EntradaNFDesvincularItemView(PermissaoRequiredMixin, View):
+    """
+    Solta o item do produto na tela de conferencia. E' o inverso de
+    `EntradaNFVincularItemView`.
+
+    E' O UNICO JEITO DE DESFAZER UM VINCULO AUTOMATICO. O reprocessamento
+    vincula por EAN e por codigo do fornecedor; quando ele acerta o produto
+    errado -- EAN reaproveitado, codigo repetido entre itens -- o conferente
+    nao tinha como recusar. Trocar por outro produto so' resolve se ele souber
+    qual e' o certo; muitas vezes o certo e' "nenhum, ainda".
+
+    E O MARCADOR E' O QUE FAZ ISSO DURAR. `desvincular_item_de_produto` carimba
+    o item; sem o carimbo, o proximo reprocessamento -- que a propria tela de
+    conferencia dispara -- reataria o item ao mesmo produto errado, e o
+    conferente veria seu clique ser desfeito sozinho.
+
+    O carimbo cede em um caso so': se o produto passar a ter o EAN da nota
+    DEPOIS do desvinculo, o revinculo volta a valer. Ali a identificacao deixou
+    de ser palpite.
+    """
+    permissao_modulo = 'compras'
+    permissao_acao = 'editar'
+
+    def post(self, request, pk, item_id):
+        entrada = get_object_or_404(EntradaNF.objects.for_filial(request.filial_ativa), pk=pk)
+        if not _entrada_aberta(entrada):
+            messages.error(request, 'Entrada efetivada nao permite desvincular item.')
+            return redirect('compras:entrada-detail', pk=entrada.pk)
+        item = get_object_or_404(entrada.itens.all(), pk=item_id)
+        if not item.produto_id:
+            messages.info(request, 'Item ja esta sem produto vinculado.')
+            return redirect('compras:entrada-conferencia', pk=pk)
+
+        antes = snapshot_modelo(item)
+        descricao_produto = item.produto.descricao
+        desvincular_item_de_produto(item)
+        # O item ficou sem produto: a entrada nao pode seguir dizendo que esta
+        # pronta para conferir. Mesma chamada que a view de vincular faz.
+        CompraService._atualizar_status_conferencia(entrada)
+        item.refresh_from_db()
+        _auditar_entrada(
+            request,
+            'desvincular',
+            entrada,
+            f'Item {item.numero_item} desvinculado do produto {descricao_produto}',
+            antes=antes,
+            depois=snapshot_modelo(item),
+            relacionado=item,
+        )
+        messages.success(
+            request,
+            'Item desvinculado. Ele nao sera revinculado automaticamente.',
+        )
         return redirect('compras:entrada-conferencia', pk=pk)
 
 
