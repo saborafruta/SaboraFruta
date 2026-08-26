@@ -27,7 +27,9 @@ from django.utils import timezone
 
 from apps.core.services.exceptions import DomainError
 from apps.polpa.models import ApontamentoEtapa, OrdemPolpa
-from apps.polpa.models.processo import POSICAO, Etapa, fluxo_do_produto
+from apps.polpa.models.processo import (
+    POSICAO, Etapa, etapa_customizada, fluxo_do_produto,
+)
 
 ZERO = Decimal('0')
 SIT = ApontamentoEtapa.Situacao
@@ -61,7 +63,7 @@ class ProcessoService:
         novas = [
             ApontamentoEtapa(
                 filial=op.filial, ordem=op, etapa=etapa,
-                sequencia=POSICAO.get(etapa, 99),
+                sequencia=ProcessoService._posicao(etapa, op.filial_id),
             )
             for etapa in escolhidas if etapa not in existentes
         ]
@@ -84,7 +86,24 @@ class ProcessoService:
         declaradas = [
             e.etapa for e in op.receita.etapas.all() if e.etapa
         ]
-        return sorted(set(declaradas), key=lambda e: POSICAO.get(e, 99))
+        return sorted(
+            set(declaradas),
+            key=lambda e: ProcessoService._posicao(e, op.filial_id),
+        )
+
+    @staticmethod
+    def _posicao(codigo: str, filial_id) -> int:
+        """
+        Onde a etapa entra na fila.
+
+        Etapa criada pela casa usa a `sequencia` do cadastro: sem ela toda
+        etapa nova cairia no fim, e uma fermentação DEPOIS do congelamento
+        não descreve fábrica nenhuma.
+        """
+        if codigo in POSICAO:
+            return POSICAO[codigo]
+        custom = etapa_customizada(codigo, filial_id)
+        return custom.sequencia if custom else 99
 
     # ── Apontamento ──────────────────────────────────────────────────────
 
@@ -248,7 +267,7 @@ class ProcessoService:
         for etapa in op.etapas_processo.all():
             if etapa.situacao != SIT.PENDENTE:
                 continue
-            faltando.append(f'{etapa.get_etapa_display()} não foi apontada.')
+            faltando.append(f'{etapa.rotulo} não foi apontada.')
         return faltando
 
     @staticmethod

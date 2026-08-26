@@ -85,6 +85,26 @@ SEQUENCIA: tuple[str, ...] = tuple(e.value for e in Etapa)
 POSICAO = {etapa: i for i, etapa in enumerate(SEQUENCIA)}
 
 
+def etapa_customizada(codigo: str, filial_id):
+    """
+    A etapa que a indústria criou para este código, se houver.
+
+    O VOCABULÁRIO COMUM VEM PRIMEIRO, sempre: um código canônico nunca é
+    procurado na tabela da casa. É o que impede uma filial redefinir
+    "pasteurizacao" e fazer o mesmo código significar duas coisas no mesmo
+    banco -- que é como um indicador deixa de somar.
+    """
+    if not codigo or codigo in POSICAO or not filial_id:
+        return None
+    from apps.polpa.models.etapa_customizada import EtapaProcesso
+
+    return (
+        EtapaProcesso.all_objects
+        .filter(filial_id=filial_id, codigo=codigo, ativo=True)
+        .first()
+    )
+
+
 # ══════════════════════════════════════════════════════════════════════
 # OS FLUXOS
 # ══════════════════════════════════════════════════════════════════════
@@ -275,7 +295,24 @@ class ApontamentoEtapa(FilialScopedModel):
         verbose_name_plural = 'Etapas apontadas'
 
     def __str__(self):
-        return f'{self.ordem.numero} — {self.get_etapa_display()}'
+        return f'{self.ordem.numero} — {self.rotulo}'
+
+    @property
+    def customizada(self):
+        return etapa_customizada(self.etapa, self.filial_id)
+
+    @property
+    def rotulo(self) -> str:
+        """
+        O nome que a tela mostra.
+
+        `get_etapa_display()` devolve o CÓDIGO CRU quando o valor não está em
+        `choices` — e uma etapa criada pela casa apareceria como
+        "fermentacao", sem acento e em minúscula, no meio de nomes escritos
+        por gente.
+        """
+        custom = self.customizada
+        return custom.nome if custom else self.get_etapa_display()
 
     # ── Leituras ─────────────────────────────────────────────────────────
 
@@ -356,6 +393,11 @@ class ApontamentoEtapa(FilialScopedModel):
         burocracia; deixar de cobrar no congelamento é perder o registro que
         a fiscalização pede.
         """
+        # A etapa criada pela casa diz por si o que exige: quem cadastrou
+        # sabe se aquela fermentação precisa de termômetro.
+        custom = self.customizada
+        if custom is not None:
+            return custom.exige_temperatura
         return self.etapa in (
             Etapa.RECEPCAO, Etapa.CONGELAMENTO, Etapa.ARMAZENAMENTO,
             Etapa.HOMOGENEIZACAO, Etapa.PASTEURIZACAO, Etapa.MATURACAO,
