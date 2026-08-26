@@ -28,6 +28,8 @@ from django.utils import timezone
 
 from apps.core.services.exceptions import DomainError
 from apps.estoque.models import LoteProduto
+from apps.estoque.models.estoque import MovimentacaoEstoque
+from apps.estoque.services.movimentacao_service import MovimentacaoService
 from apps.polpa.models import Recebimento
 
 ZERO = Decimal('0')
@@ -104,10 +106,42 @@ class RecebimentoService:
             fornecedor=recebimento.produtor,
             numero_nota_entrada=recebimento.nota_fiscal,
             quantidade_inicial=recebimento.peso_aceito,
-            quantidade_atual=recebimento.peso_aceito,
+            # ZERO AQUI: quem enche o lote é a movimentação abaixo. Gravar o
+            # peso nos dois lugares somaria duas vezes, porque a entrada faz
+            # `quantidade_atual = F(...) + quantidade`. É o mesmo padrão do
+            # `op_service` ao criar o lote do produto acabado.
+            quantidade_atual=ZERO,
             custo_unitario=recebimento.preco_kg,
             status=LoteProduto.Status.ATIVO,
         )
+
+        # A FRUTA PRECISA ENTRAR NO SALDO, e não só existir como lote. Sem
+        # isto, `LoteProduto.quantidade_atual` subia e `Estoque` ficava em
+        # zero: os dois números divergiam desde o primeiro recebimento. E é o
+        # `Estoque` que a sugestão de compra, o planejamento e a reserva leem
+        # -- a fábrica receberia mil quilos de acerola e o sistema continuaria
+        # mandando comprar acerola.
+        #
+        # `MovimentacaoService` é quem pode mexer em saldo, aqui como em todo
+        # o resto do ERP; e a movimentação é o lançamento que a
+        # rastreabilidade e o custo do lote leem depois.
+        MovimentacaoService.registrar_movimentacao(
+            produto_id=produto.pk,
+            filial_id=recebimento.filial_id,
+            tipo_operacao=MovimentacaoEstoque.TipoOperacao.ENTRADA,
+            quantidade=recebimento.peso_aceito,
+            usuario_id=usuario.pk if usuario else None,
+            lote_id=lote.pk,
+            valor_unitario=recebimento.preco_kg,
+            documento_tipo=MovimentacaoEstoque.DocumentoTipo.OUTRAS,
+            documento_id=recebimento.pk,
+            documento_numero=recebimento.nota_fiscal or str(recebimento.numero),
+            observacao=(
+                f'Recebimento #{recebimento.numero} — '
+                f'{recebimento.fruta} de {recebimento.produtor}'
+            ),
+        )
+        lote.refresh_from_db()
 
         # O DESVIO NÃO SE PERDE. Aceitar não apaga o problema, e quem for
         # processar precisa saber que a fruta entrou fora da régua — o
