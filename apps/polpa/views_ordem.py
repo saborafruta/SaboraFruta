@@ -8,6 +8,7 @@ a primeira tela com o que já acabou.
 from decimal import Decimal, InvalidOperation
 
 from django.contrib import messages
+from django.db.models import Q
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 
@@ -62,6 +63,80 @@ class OrdemListView(PolpaBaseView):
             'situacoes': OrdemPolpa.Situacao.choices,
             'painel': OrdemPolpaService.painel(_filial(request)),
             'pode_agir': request.user.tem_permissao('polpa_producao', 'criar'),
+        })
+
+
+class RastreabilidadeView(PolpaBaseView):
+    """
+    Do produtor ao cliente e de volta — o caminho do recall.
+
+    UMA TELA, DUAS PERGUNTAS, e as duas comecam no mesmo lugar: um lote.
+
+        "De onde veio este produto?"  acabado -> OP -> lotes de MP -> produtor
+        "Onde foi parar esta fruta?"  MP -> OPs -> acabados -> clientes
+
+    A TRAVESSIA JA' EXISTIA em `lotes/rastreio.py`, recursiva e com trava de
+    profundidade. Faltava a porta: sem tela, o rastro so' era alcancavel por
+    quem soubesse chamar o servico no shell -- e quando o telefone toca nao ha'
+    tempo para isso.
+
+    SEM LOTE ESCOLHIDO A TELA E' UMA BUSCA, e nao uma lista de tudo. Rastro de
+    lote aleatorio nao serve para nada; quem abre esta tela ja' sabe qual lote
+    esta' sob suspeita, e o que precisa e' achar ele rapido.
+
+    AS PONTAS PRIMEIRO, o caminho depois. Quando o telefone toca a pergunta e'
+    "de quem veio" e "para quem foi" -- os degraus do meio importam para
+    explicar depois, e nao para decidir agora.
+    """
+
+    area = 'qualidade'
+
+    def get(self, request):
+        from apps.estoque.models import LoteProduto
+        from apps.lotes.services.rastreio import RastreioService
+
+        filial = _filial(request)
+        busca = (request.GET.get('busca') or '').strip()
+        lote_id = (request.GET.get('lote') or '').strip()
+
+        lote = None
+        if lote_id.isdigit():
+            lote = (
+                LoteProduto.objects.for_filial(filial)
+                .select_related('produto', 'fornecedor')
+                .filter(pk=int(lote_id))
+                .first()
+            )
+
+        candidatos = []
+        if lote is None and busca:
+            candidatos = list(
+                LoteProduto.objects.for_filial(filial)
+                .select_related('produto')
+                .filter(
+                    Q(numero_lote__icontains=busca)
+                    | Q(produto__descricao__icontains=busca)
+                )
+                .order_by('-created_at')[:40]
+            )
+
+        origem = destino = []
+        resumo = None
+        if lote is not None:
+            origem = RastreioService.de_onde_veio(lote)
+            destino = RastreioService.para_onde_foi(lote)
+            resumo = RastreioService.resumo(origem, destino)
+
+        return render(request, 'polpa/rastreabilidade.html', {
+            'title': 'Rastreabilidade',
+            'busca': busca,
+            'lote': lote,
+            'candidatos': candidatos,
+            # O ELO DE NIVEL 0 E' O PROPRIO LOTE, e aparece no cabecalho da
+            # tela -- repeti-lo nas duas listas diria a mesma coisa tres vezes.
+            'origem': [e for e in origem if e.nivel > 0],
+            'destino': [e for e in destino if e.nivel > 0],
+            'resumo': resumo,
         })
 
 

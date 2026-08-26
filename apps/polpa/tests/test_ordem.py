@@ -999,3 +999,139 @@ class ATelaDeQualidadeTests(OrdemBase):
 
         for resto in ('{#', '#}', '{%', '%}'):
             self.assertNotIn(resto, html, f'vazou "{resto}" no HTML')
+
+
+class ATelaDeRastreabilidadeTests(OrdemBase):
+    """
+    A porta do recall.
+
+    A TRAVESSIA JÁ ERA TESTADA em `test_fluxo_completo`, ponta a ponta: da
+    fruta na balança ao cliente que a recebeu. O que estes testes cobrem é o
+    que a TELA tem de próprio — achar o lote, escolher, e não deixar vazar lote
+    de outra filial.
+    """
+
+    def _lote(self, numero='LT-0001', produto=None, filial=None):
+        from apps.estoque.models import LoteProduto
+
+        return LoteProduto.objects.create(
+            filial=filial or self.filial, produto=produto or self.acabado,
+            numero_lote=numero, quantidade_inicial=Decimal('100'),
+            quantidade_atual=Decimal('100'), custo_unitario=Decimal('1'),
+            data_validade=timezone.localdate() + timedelta(days=180),
+            status=LoteProduto.Status.ATIVO,
+        )
+
+    def test_sem_busca_a_tela_nao_lista_tudo(self):
+        """
+        Rastro de lote aleatorio nao serve para nada, e quem chega aqui ja'
+        sabe qual lote esta' em questao.
+        """
+        self._lote()
+
+        resposta = self.client.get(reverse('polpa:qualidade-rastreabilidade'))
+
+        self.assertEqual(resposta.status_code, 200)
+        self.assertEqual(len(resposta.context['candidatos']), 0)
+        self.assertIsNone(resposta.context['lote'])
+
+    def test_acha_o_lote_pelo_numero(self):
+        self._lote(numero='LT-4471')
+
+        resposta = self.client.get(
+            reverse('polpa:qualidade-rastreabilidade'), {'busca': '4471'},
+        )
+
+        self.assertEqual(len(resposta.context['candidatos']), 1)
+
+    def test_acha_o_lote_pelo_produto(self):
+        """Quem liga reclamando diz o produto, nao o numero do lote."""
+        self._lote(numero='LT-0002')
+
+        resposta = self.client.get(
+            reverse('polpa:qualidade-rastreabilidade'),
+            {'busca': self.acabado.descricao[:10]},
+        )
+
+        self.assertGreaterEqual(len(resposta.context['candidatos']), 1)
+
+    def test_escolher_o_lote_monta_o_rastro(self):
+        lote = self._lote()
+
+        resposta = self.client.get(
+            reverse('polpa:qualidade-rastreabilidade'), {'lote': lote.pk},
+        )
+
+        self.assertEqual(resposta.context['lote'], lote)
+        self.assertIsNotNone(resposta.context['resumo'])
+        self.assertContains(resposta, 'De onde veio')
+        self.assertContains(resposta, 'Para onde foi')
+
+    def test_o_proprio_lote_nao_se_repete_nas_listas(self):
+        """
+        O elo de nivel 0 e' o proprio lote, e ele ja' esta' no cabecalho --
+        repeti-lo nas duas colunas diria a mesma coisa tres vezes.
+        """
+        lote = self._lote()
+
+        resposta = self.client.get(
+            reverse('polpa:qualidade-rastreabilidade'), {'lote': lote.pk},
+        )
+
+        for elo in resposta.context['origem'] + resposta.context['destino']:
+            self.assertGreater(elo.nivel, 0)
+
+    def test_lote_de_outra_filial_nao_e_rastreavel(self):
+        """
+        Rastro atravessa fornecedor e cliente. Vazar por filial mostraria a
+        carteira de outra unidade para quem so' queria conferir um lote.
+        """
+        outra = Filial.objects.create(
+            empresa=self.empresa, razao_social='Segunda',
+            cnpj='13345678000353', uf='RN', cidade='Mossoro',
+        )
+        alheio = self._lote(numero='LT-ALHEIO', filial=outra)
+
+        resposta = self.client.get(
+            reverse('polpa:qualidade-rastreabilidade'), {'lote': alheio.pk},
+        )
+
+        self.assertIsNone(resposta.context['lote'])
+
+    def test_lote_inexistente_nao_derruba_a_tela(self):
+        resposta = self.client.get(
+            reverse('polpa:qualidade-rastreabilidade'), {'lote': '999999'},
+        )
+
+        self.assertEqual(resposta.status_code, 200)
+        self.assertIsNone(resposta.context['lote'])
+
+    def test_lote_com_texto_no_lugar_do_numero_nao_derruba(self):
+        """`?lote=abc` chega de link colado errado; nao pode virar erro 500."""
+        resposta = self.client.get(
+            reverse('polpa:qualidade-rastreabilidade'), {'lote': 'abc'},
+        )
+
+        self.assertEqual(resposta.status_code, 200)
+
+    def test_a_rota_do_menu_abre_a_tela_de_verdade(self):
+        from django.urls import resolve
+
+        from apps.polpa.views import ItemView
+
+        endereco = reverse('polpa:item', args=['qualidade', 'rastreabilidade'])
+
+        self.assertIsNot(
+            getattr(resolve(endereco).func, 'view_class', None), ItemView,
+        )
+        self.assertEqual(endereco, reverse('polpa:qualidade-rastreabilidade'))
+
+    def test_a_tela_nao_vaza_sintaxe_de_template(self):
+        lote = self._lote()
+
+        html = self.client.get(
+            reverse('polpa:qualidade-rastreabilidade'), {'lote': lote.pk},
+        ).content.decode()
+
+        for resto in ('{#', '#}', '{%', '%}'):
+            self.assertNotIn(resto, html, f'vazou "{resto}" no HTML')

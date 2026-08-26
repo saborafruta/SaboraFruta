@@ -1,0 +1,189 @@
+{% extends "_base.html" %}
+{% block title %}{{ title }} — Polpa{% endblock %}
+{% block page_title %}{{ title }}{% endblock %}
+{% block content %}
+
+{% comment %}
+  AS PONTAS PRIMEIRO, O CAMINHO DEPOIS. Quando o telefone toca a pergunta é "de
+  quem veio" e "para quem foi" — os degraus do meio importam para explicar
+  depois, e não para decidir agora. Por isso fornecedores e clientes ficam no
+  topo, em blocos, e a cadeia completa vem embaixo.
+
+  A INDENTAÇÃO SAI DO NÍVEL do elo. O serviço devolve lista achatada com
+  `nivel` justamente para isso: árvore aninhada em template Django exigiria
+  recursão por include, que é mais código para o mesmo desenho.
+{% endcomment %}
+<div class="space-y-4">
+
+  <div>
+    <p class="text-sm" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+      <a href="{% url 'polpa:hub' %}" :style="temaClaro ? 'color:#3b82f6;' : 'color:#60a5fa;'">Polpa de Frutas</a>
+      <span class="mx-1">›</span>
+      <a href="{% url 'polpa:grupo' 'qualidade' %}" :style="temaClaro ? 'color:#3b82f6;' : 'color:#60a5fa;'">Qualidade</a>
+    </p>
+    <h2 class="text-2xl font-semibold mt-1" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">{{ title }}</h2>
+    <p class="text-sm mt-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+      Do produtor ao cliente e de volta. Comece pelo lote sob suspeita.
+    </p>
+  </div>
+
+  <form method="get" class="card p-3 flex flex-wrap items-end gap-3">
+    <div class="flex-1 min-w-[220px]">
+      <label class="form-label">Número do lote ou produto</label>
+      <input type="text" name="busca" value="{{ busca }}" class="form-input w-full"
+             autocomplete="off" autofocus placeholder="Ex.: LT-0012, polpa de manga">
+    </div>
+    <div class="flex items-center gap-2">
+      <button type="submit" class="btn-primary text-sm">Procurar</button>
+      {% if lote or busca %}
+        <a href="{% url 'polpa:qualidade-rastreabilidade' %}" class="btn-secondary text-sm">Limpar</a>
+      {% endif %}
+    </div>
+  </form>
+
+  {% if not lote %}
+    {% if candidatos %}
+      <div class="card overflow-hidden">
+        <div class="p-4 pb-2">
+          <h3 class="text-sm font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
+            {{ candidatos|length }} lote(s) encontrado(s)
+          </h3>
+        </div>
+        <div class="overflow-x-auto">
+          <table class="w-full text-sm">
+            <tbody>
+              {% for candidato in candidatos %}
+                <tr class="border-t" :style="temaClaro ? 'border-color:#f1f5f9;' : 'border-color:#1e1e22;'">
+                  <td class="px-4 py-3">
+                    <a href="?lote={{ candidato.pk }}" class="font-mono text-xs font-semibold"
+                       :style="temaClaro ? 'color:#2563eb;' : 'color:#60a5fa;'">{{ candidato.numero_lote }}</a>
+                  </td>
+                  <td class="px-4 py-3" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">{{ candidato.produto }}</td>
+                  <td class="px-4 py-3 text-right" :style="temaClaro ? 'color:#374151;' : 'color:#cbd5e1;'">
+                    {{ candidato.quantidade_atual|floatformat:"-3" }}
+                  </td>
+                  <td class="px-4 py-3" :style="temaClaro ? 'color:#374151;' : 'color:#cbd5e1;'">
+                    {% if candidato.data_validade %}vence {{ candidato.data_validade|date:"d/m/Y" }}{% endif %}
+                  </td>
+                  <td class="px-4 py-3 text-right">
+                    <a href="?lote={{ candidato.pk }}" class="btn-secondary text-xs">Rastrear</a>
+                  </td>
+                </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    {% else %}
+      <div class="card p-4">
+        <p class="text-sm text-center py-10 max-w-md mx-auto" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+          {% if busca %}
+            Nenhum lote com esse número ou produto.
+          {% else %}
+            Procure o lote sob suspeita. A tela não lista tudo de propósito —
+            rastro de lote aleatório não serve para nada, e quem chega aqui já
+            sabe qual lote está em questão.
+          {% endif %}
+        </p>
+      </div>
+    {% endif %}
+
+  {% else %}
+
+    <div class="card p-4">
+      <div class="flex flex-wrap items-baseline justify-between gap-2">
+        <div>
+          <p class="text-xs uppercase tracking-wider" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Lote sob rastreio</p>
+          <p class="text-xl font-bold mt-1 font-mono" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">{{ lote.numero_lote }}</p>
+          <p class="text-sm mt-1" :style="temaClaro ? 'color:#374151;' : 'color:#cbd5e1;'">{{ lote.produto }}</p>
+        </div>
+        <div class="text-sm text-right" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+          {{ lote.quantidade_atual|floatformat:"-3" }} em estoque
+          {% if lote.data_validade %}
+            <span class="block">vence {{ lote.data_validade|date:"d/m/Y" }}</span>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+
+    <div class="grid lg:grid-cols-2 gap-4 items-start">
+      {% comment %}
+        DE QUEM VEIO. Num recall de matéria-prima é esta coluna que dá o
+        telefone para ligar — e a nota, que é o que o produtor reconhece.
+      {% endcomment %}
+      <div class="card p-4">
+        <h3 class="text-sm font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">De onde veio</h3>
+        <p class="text-xs mt-1 mb-3" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+          {{ resumo.lotes_origem }} lote(s) de matéria-prima atrás deste.
+        </p>
+        {% if resumo.fornecedores %}
+          <div class="flex flex-wrap gap-2 mb-3">
+            {% for fornecedor in resumo.fornecedores %}
+              <span class="soft-pill is-slate text-xs">{{ fornecedor }}</span>
+            {% endfor %}
+          </div>
+        {% endif %}
+        {% for elo in origem %}
+          <div class="border-l-2 pl-3 py-2" style="margin-left:{{ elo.nivel }}rem;border-color:#3b82f6;">
+            <p class="text-sm font-mono font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">{{ elo.lote.numero_lote }}</p>
+            <p class="text-xs" :style="temaClaro ? 'color:#374151;' : 'color:#cbd5e1;'">{{ elo.lote.produto }}</p>
+            <p class="text-[11px] mt-1" :style="temaClaro ? 'color:#94a3b8;' : 'color:#71717a;'">
+              {% if elo.quantidade %}{{ elo.quantidade|floatformat:"-3" }} consumidos · {% endif %}
+              {% if elo.fornecedor %}{{ elo.fornecedor }}{% endif %}
+              {% if elo.documento %} · NF {{ elo.documento }}{% endif %}
+              {% if elo.ordem %} · {{ elo.ordem.numero }}{% endif %}
+            </p>
+          </div>
+        {% empty %}
+          <p class="text-sm py-4" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+            Nada atrás deste lote. Ele entrou por compra ou recebimento, e é a
+            ponta da corrente.
+          </p>
+        {% endfor %}
+      </div>
+
+      {% comment %}
+        PARA ONDE FOI. É a coluna do recall de produto acabado: quem recebeu, e
+        quanto. Sem ela, o recall vira "avise todo mundo".
+      {% endcomment %}
+      <div class="card p-4">
+        <h3 class="text-sm font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">Para onde foi</h3>
+        <p class="text-xs mt-1 mb-3" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+          {{ resumo.lotes_destino }} lote(s) produzido(s) a partir deste.
+        </p>
+        {% if resumo.clientes %}
+          <div class="space-y-2 mb-3">
+            {% for registro in resumo.clientes %}
+              <div class="rounded-lg p-2" :style="temaClaro ? 'background:#f8fafc;' : 'background:#18181b;'">
+                <p class="text-sm font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">{{ registro.cliente }}</p>
+                <p class="text-[11px]" :style="temaClaro ? 'color:#94a3b8;' : 'color:#71717a;'">
+                  {{ registro.quantidade_total|floatformat:"-3" }} em
+                  {{ registro.pedidos|length }} pedido(s)
+                </p>
+              </div>
+            {% endfor %}
+          </div>
+        {% endif %}
+        {% for elo in destino %}
+          <div class="border-l-2 pl-3 py-2" style="margin-left:{{ elo.nivel }}rem;border-color:#10b981;">
+            <p class="text-sm font-mono font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">{{ elo.lote.numero_lote }}</p>
+            <p class="text-xs" :style="temaClaro ? 'color:#374151;' : 'color:#cbd5e1;'">{{ elo.lote.produto }}</p>
+            <p class="text-[11px] mt-1" :style="temaClaro ? 'color:#94a3b8;' : 'color:#71717a;'">
+              {% if elo.quantidade %}{{ elo.quantidade|floatformat:"-3" }} · {% endif %}
+              {% if elo.ordem %}{{ elo.ordem.numero }}{% endif %}
+              {% if elo.via == 'venda' %}saiu em venda{% endif %}
+            </p>
+          </div>
+        {% empty %}
+          <p class="text-sm py-4" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+            Este lote ainda não virou outro produto nem saiu em venda. O que
+            existe dele está no estoque.
+          </p>
+        {% endfor %}
+      </div>
+    </div>
+
+  {% endif %}
+
+</div>
+{% endblock %}
