@@ -8,13 +8,16 @@ detalhe: cada campo a mais exigido na porta é um romaneio anotado em papel
 para ser digitado depois — e é esse que se perde.
 """
 from django.contrib import messages
+from django.http import JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.utils import timezone
 
 from apps.core.services.exceptions import DomainError
 
-from .forms import ClassificacaoForm, FrutaForm, RecebimentoForm
+from .forms import (
+    ClassificacaoForm, FrutaForm, FrutaRapidaForm, RecebimentoForm,
+)
 from .models import Fruta, Recebimento
 from .services import RecebimentoService
 from .views import PolpaBaseView
@@ -277,6 +280,40 @@ class FrutaListView(PolpaBaseView):
             'mes': timezone.localdate().month,
             'pode_agir': request.user.tem_permissao('polpa_formulacao', 'criar'),
         })
+
+
+class FrutaAjaxCreateView(PolpaBaseView):
+    """
+    Cadastra a fruta SEM SAIR do romaneio, e devolve a opcao pronta.
+
+    A tela de novo recebimento era um beco: os dois selects vinham vazios numa
+    filial nova, os campos sao obrigatorios, e nao havia como criar fruta dali.
+    O caminho era abandonar o romaneio -- perdendo o que ja' foi digitado --,
+    ir ao cadastro, voltar e comecar de novo. Com o motorista esperando na
+    balanca, o que acontece de verdade e' a pesagem ir para um papel.
+    """
+
+    area = 'recebimento'
+    permissao_acao = 'criar'
+
+    def post(self, request):
+        filial = _filial(request)
+        form = FrutaRapidaForm(request.POST, filial=filial)
+        if not form.is_valid():
+            return JsonResponse(
+                {
+                    'ok': False,
+                    'errors': {
+                        campo: [erro['message'] for erro in mensagens]
+                        for campo, mensagens in form.errors.get_json_data().items()
+                    },
+                },
+                status=400,
+            )
+        fruta = form.save(commit=False)
+        fruta.filial = filial
+        fruta.save()
+        return JsonResponse({'ok': True, 'id': fruta.pk, 'label': str(fruta)})
 
 
 class FrutaFormView(PolpaBaseView):

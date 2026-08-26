@@ -24,11 +24,64 @@
        get aceito() { return Math.max(this.liquido - this.desconto, 0); },
        get valor() { return this.aceito * this.preco; },
        moeda(v) { return v.toLocaleString('pt-BR', {minimumFractionDigits:2, maximumFractionDigits:2}); },
+
+       modal: null, salvando: false, erro: '',
+       novaFruta: { nome: '', variedade: '' },
+       novoProdutor: { razao_social: '', cpf_cnpj: '', telefone: '' },
+
+       abrir(qual) { this.modal = qual; this.erro = ''; },
+       fechar() { this.modal = null; this.erro = ''; },
+
+       /* Cria o cadastro e JA' DEIXA SELECIONADO no romaneio. Criar e depois
+          obrigar a procurar na lista seria metade do favor. */
+       async criar(url, dados, seletor) {
+         if (this.salvando) return;
+         this.salvando = true; this.erro = '';
+         try {
+           const corpo = new FormData();
+           corpo.append('csrfmiddlewaretoken', document.querySelector('[name=csrfmiddlewaretoken]').value);
+           Object.entries(dados).forEach(([k, v]) => corpo.append(k, v));
+           const resposta = await fetch(url, { method: 'POST', body: corpo, headers: { 'X-Requested-With': 'XMLHttpRequest' } });
+           const json = await resposta.json();
+           if (!resposta.ok || !json.ok) {
+             this.erro = Object.values(json.errors || {}).flat().join(' ') || 'Nao foi possivel gravar.';
+             return;
+           }
+           const select = document.querySelector(seletor);
+           const opcao = new Option(json.label, json.id, true, true);
+           select.add(opcao);
+           select.dispatchEvent(new Event('change', { bubbles: true }));
+           this.fechar();
+           Object.keys(dados).forEach(k => { dados[k] = ''; });
+         } catch (e) {
+           this.erro = 'Falha de rede. Tente de novo.';
+         } finally {
+           this.salvando = false;
+         }
+       },
      }">
 
-  <p class="text-sm" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
-    <a href="{% url 'polpa:recebimento-list' %}" :style="temaClaro ? 'color:#3b82f6;' : 'color:#60a5fa;'">‹ Recebimento de fruta</a>
-  </p>
+  <div class="flex flex-wrap items-start justify-between gap-3">
+    <div>
+      <p class="text-sm" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+        <a href="{% url 'polpa:recebimento-list' %}" :style="temaClaro ? 'color:#3b82f6;' : 'color:#60a5fa;'">‹ Recebimento de fruta</a>
+      </p>
+      <h2 class="text-2xl font-semibold mt-1" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">{{ title }}</h2>
+      <p class="text-sm mt-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+        Fruta, produtor e data ja' gravam o romaneio — o resto entra depois.
+      </p>
+    </div>
+    {% comment %}
+      AS DUAS SAIDAS DO BECO. Fruta e produtor sao obrigatorios, e numa filial
+      nova os dois selects vem vazios: nao havia como criar nenhum dos dois
+      daqui. Sair para o cadastro perdia o que ja' foi digitado, com o
+      motorista esperando na balanca.
+    {% endcomment %}
+    <div class="flex flex-wrap items-center gap-2">
+      <button type="button" class="btn-secondary text-sm" @click="abrir('fruta')">+ Nova fruta</button>
+      <button type="button" class="btn-secondary text-sm" @click="abrir('produtor')">+ Novo produtor</button>
+    </div>
+  </div>
 
   <form method="post" class="space-y-4">
     {% csrf_token %}
@@ -47,7 +100,9 @@
         {% for campo in form %}
           {% if campo.name == 'fruta' or campo.name == 'produtor' or campo.name == 'data' or campo.name == 'hora_chegada' %}
             <div>
-              <label class="form-label" for="{{ campo.id_for_label }}">{{ campo.label }}</label>
+              <label class="form-label" for="{{ campo.id_for_label }}">
+                {{ campo.label }}{% if campo.field.required %} <span style="color:#dc2626;" title="Obrigatorio">*</span>{% endif %}
+              </label>
               {{ campo }}
               {% if campo.errors %}<p class="text-xs mt-1" style="color:#dc2626;">{{ campo.errors.0 }}</p>{% endif %}
             </div>
@@ -133,6 +188,78 @@
       <a href="{% url 'polpa:recebimento-list' %}" class="btn-secondary">Cancelar</a>
     </div>
   </form>
+
+  {% comment %}
+    Um modal por cadastro, com O MINIMO de campos. Fruta pede nome e variedade;
+    a ficha tecnica -- brix, pH, rendimento -- e' trabalho da formulacao, com a
+    tabela do laboratorio na mao. Pedir aqueles numeros a quem esta' na balanca
+    e' garantir numero inventado, e brix inventado vira criterio de aceite
+    errado la' na classificacao.
+  {% endcomment %}
+  <template x-if="modal">
+    <div class="fixed inset-0 z-50 flex items-center justify-center p-4"
+         style="background:rgba(0,0,0,.55);" @click.self="fechar()" @keydown.escape.window="fechar()">
+      <div class="card w-full max-w-md p-4">
+
+        <div x-show="modal === 'fruta'">
+          <h3 class="text-base font-semibold mb-1" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">Nova fruta</h3>
+          <p class="text-xs mb-3" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+            So' o nome ja' basta. A ficha tecnica se completa depois, na formulacao.
+          </p>
+          <div class="space-y-3">
+            <div>
+              <label class="form-label">Nome <span style="color:#dc2626;">*</span></label>
+              <input type="text" class="form-input w-full" placeholder="Manga"
+                     x-model="novaFruta.nome" @keydown.enter.prevent="criar('{% url 'polpa:fruta-ajax-create' %}', novaFruta, '#{{ form.fruta.id_for_label }}')">
+            </div>
+            <div>
+              <label class="form-label">Variedade</label>
+              <input type="text" class="form-input w-full" placeholder="Tommy (opcional)" x-model="novaFruta.variedade">
+            </div>
+          </div>
+          <div class="flex items-center gap-2 mt-4">
+            <button type="button" class="btn-primary text-sm" :disabled="salvando || !novaFruta.nome.trim()"
+                    @click="criar('{% url 'polpa:fruta-ajax-create' %}', novaFruta, '#{{ form.fruta.id_for_label }}')">
+              <span x-text="salvando ? 'Gravando...' : 'Gravar fruta'"></span>
+            </button>
+            <button type="button" class="btn-secondary text-sm" @click="fechar()">Cancelar</button>
+          </div>
+        </div>
+
+        <div x-show="modal === 'produtor'">
+          <h3 class="text-base font-semibold mb-1" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">Novo produtor</h3>
+          <p class="text-xs mb-3" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+            O documento pode entrar depois, mas sem ele a nota do produtor nao fecha com o lote.
+          </p>
+          <div class="space-y-3">
+            <div>
+              <label class="form-label">Nome / Razao social <span style="color:#dc2626;">*</span></label>
+              <input type="text" class="form-input w-full" placeholder="Sitio Boa Vista" x-model="novoProdutor.razao_social">
+            </div>
+            <div class="grid grid-cols-2 gap-3">
+              <div>
+                <label class="form-label">CPF / CNPJ</label>
+                <input type="text" class="form-input w-full" x-model="novoProdutor.cpf_cnpj">
+              </div>
+              <div>
+                <label class="form-label">Telefone</label>
+                <input type="text" class="form-input w-full" x-model="novoProdutor.telefone">
+              </div>
+            </div>
+          </div>
+          <div class="flex items-center gap-2 mt-4">
+            <button type="button" class="btn-primary text-sm" :disabled="salvando || !novoProdutor.razao_social.trim()"
+                    @click="criar('{% url 'cadastros:fornecedor-ajax-create' %}', novoProdutor, '#{{ form.produtor.id_for_label }}')">
+              <span x-text="salvando ? 'Gravando...' : 'Gravar produtor'"></span>
+            </button>
+            <button type="button" class="btn-secondary text-sm" @click="fechar()">Cancelar</button>
+          </div>
+        </div>
+
+        <p x-show="erro" x-text="erro" class="text-xs mt-3" style="color:#dc2626;"></p>
+      </div>
+    </div>
+  </template>
 
 </div>
 {% endblock %}

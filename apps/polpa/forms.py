@@ -23,6 +23,61 @@ ENTRADA = {'class': 'form-input w-full'}
 SELECT = {'class': 'form-select w-full'}
 
 
+class FrutaRapidaForm(forms.ModelForm):
+    """
+    O minimo para destravar o romaneio: nome e variedade.
+
+    QUEM ABRE ISTO TEM CAMINHAO NA BALANCA. A ficha completa da fruta -- brix,
+    pH, impureza, rendimento, safra -- e' trabalho de quem cuida da formulacao,
+    com a tabela do laboratorio na mao, e nao de quem esta' pesando carga. Pedir
+    aqueles campos agora e' garantir que alguem invente numero para o formulario
+    deixar salvar, e numero inventado de brix vira criterio de aceite errado la'
+    na classificacao.
+
+    Entao a fruta nasce so' com identidade, e a ficha se completa depois na tela
+    de formulacao. Os limites ficam nulos ate' la', que e' honesto: significa
+    "ninguem mediu ainda", e nao "o limite e' zero".
+    """
+
+    class Meta:
+        model = Fruta
+        fields = ('nome', 'variedade')
+        widgets = {
+            'nome': forms.TextInput(attrs={**ENTRADA, 'placeholder': 'Manga'}),
+            'variedade': forms.TextInput(attrs={**ENTRADA, 'placeholder': 'Tommy (opcional)'}),
+        }
+
+    def __init__(self, *args, filial=None, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.filial = filial
+        self.fields['variedade'].required = False
+
+    def clean_nome(self):
+        nome = (self.cleaned_data.get('nome') or '').strip()
+        if not nome:
+            raise forms.ValidationError('Informe o nome da fruta.')
+        return nome
+
+    def clean(self):
+        # MESMO NOME E MESMA VARIEDADE JA' CADASTRADOS. Sem isto, quem nao
+        # encontrou "Manga" na lista por causa de um acento cria a segunda
+        # "Manga" -- e o historico de rendimento da fruta nasce partido em dois.
+        limpos = super().clean()
+        nome = (limpos.get('nome') or '').strip()
+        variedade = (limpos.get('variedade') or '').strip()
+        if nome and self.filial:
+            existe = (
+                Fruta.objects.for_filial(self.filial)
+                .filter(nome__iexact=nome, variedade__iexact=variedade)
+                .exists()
+            )
+            if existe:
+                raise forms.ValidationError(
+                    'Esta fruta ja esta cadastrada. Procure na lista.'
+                )
+        return limpos
+
+
 class FrutaForm(forms.ModelForm):
     class Meta:
         model = Fruta
@@ -107,6 +162,12 @@ class RecebimentoForm(forms.ModelForm):
         # -- que é exatamente o registro que se perde.
         for campo in ('placa', 'motorista', 'nota_fiscal', 'hora_chegada'):
             self.fields[campo].required = False
+
+        # `---------` e' o rotulo padrao do Django e nao diz nada. Num select
+        # obrigatorio e vazio -- filial nova, sem fruta cadastrada -- ele fica
+        # ainda pior: parece campo carregando, e nao campo sem opcao.
+        self.fields['fruta'].empty_label = 'Selecione a fruta'
+        self.fields['produtor'].empty_label = 'Selecione o produtor'
 
     def clean(self):
         dados = super().clean()

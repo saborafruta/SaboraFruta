@@ -147,6 +147,8 @@ ROTAS_PRONTAS: list = [
     # ── Cadastro das frutas ─────────────────────────────────────────────
     path('formulacao/rendimento/', vrec.FrutaListView.as_view(), name='fruta-list'),
     path('formulacao/rendimento/nova/', vrec.FrutaFormView.as_view(), name='fruta-create'),
+    # Cadastro relampago da fruta, chamado de dentro do romaneio.
+    path('frutas/ajax-create/', vrec.FrutaAjaxCreateView.as_view(), name='fruta-ajax-create'),
     path('formulacao/rendimento/<int:pk>/editar/', vrec.FrutaFormView.as_view(), name='fruta-update'),
 ]
 
