@@ -1,10 +1,10 @@
 {% comment %}
-  Um campo da receita: rótulo, marca de obrigatório, widget, ajuda e erro.
+  Um campo de formulário: rótulo, marca de obrigatório, widget, ajuda e erro.
 
-  EXTRAÍDO PORQUE SE REPETE SEIS VEZES. Os campos agora vivem em quatro cartões
+  EXTRAÍDO PORQUE SE REPETE. Os campos vivem em vários cartões, em três telas
   diferentes, e copiar este bloco em cada um garantiria que o próximo ajuste
   pegasse quatro cópias e esquecesse a quinta — foi assim que o erro de campo
-  sumiu de alguns blocos desta tela antes.
+  sumiu de alguns blocos antes.
 {% endcomment %}
 <label class="form-label" for="{{ campo.id_for_label }}">
   {{ campo.label }}{% if campo.field.required %} <span style="color:#dc2626;" title="Obrigatório">*</span>{% endif %}

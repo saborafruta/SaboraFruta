@@ -233,10 +233,35 @@ class RecursoFormView(PolpaBaseView):
     def _buscar(request, pk):
         return get_object_or_404(Recurso.objects.for_filial(_filial(request)), pk=pk)
 
+    # OS GRUPOS MORAM AQUI e o template recolhe o que sobrar num ultimo
+    # cartao. Assim campo novo no formulario continua aparecendo na tela
+    # sozinho -- que era a propriedade do laco antigo, e a que se perde quando
+    # alguem escreve a lista de campos no template.
+    GRUPOS = (
+        ('Que recurso é', '', ('nome', 'tipo', 'linha_producao')),
+        (
+            'Quanto ele dá por dia',
+            'É daqui que sai a capacidade do planejamento: sem estes números, '
+            'a fábrica aparece com folga infinita e toda ordem cabe em qualquer dia.',
+            ('capacidade_dia', 'horas_dia', 'setup_minutos'),
+        ),
+    )
+
     @staticmethod
     def _tela(request, form, recurso):
+        agrupados = [
+            nome
+            for _titulo, _dica, campos in RecursoFormView.GRUPOS
+            for nome in campos
+        ]
         return render(request, 'polpa/recurso_form.html', {
             'title': str(recurso) if recurso else 'Novo recurso',
             'form': form,
             'recurso': recurso,
+            'grupos': [
+                (titulo, dica,
+                 [form[nome] for nome in campos if nome in form.fields])
+                for titulo, dica, campos in RecursoFormView.GRUPOS
+            ],
+            'campos_agrupados': agrupados,
         })

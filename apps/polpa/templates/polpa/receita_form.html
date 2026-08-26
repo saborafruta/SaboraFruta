@@ -68,9 +68,9 @@
           <div class="grid sm:grid-cols-2 lg:grid-cols-4 gap-3">
             {% for campo in form %}
               {% if campo.name == 'produto' %}
-                <div class="sm:col-span-2">{% include "polpa/_campo_receita.html" %}</div>
+                <div class="sm:col-span-2">{% include "polpa/_campo.html" %}</div>
               {% elif campo.name == 'descricao' or campo.name == 'versao' %}
-                <div>{% include "polpa/_campo_receita.html" %}</div>
+                <div>{% include "polpa/_campo.html" %}</div>
               {% endif %}
             {% endfor %}
           </div>
@@ -81,7 +81,7 @@
           <div class="grid sm:grid-cols-3 gap-3">
             {% for campo in form %}
               {% if campo.name == 'quantidade_produzida' or campo.name == 'rendimento_esperado' or campo.name == 'tempo_producao_minutos' %}
-                <div>{% include "polpa/_campo_receita.html" %}</div>
+                <div>{% include "polpa/_campo.html" %}</div>
               {% endif %}
             {% endfor %}
           </div>
@@ -92,7 +92,7 @@
           <div class="grid sm:grid-cols-2 gap-3">
             {% for campo in form %}
               {% if campo.name == 'temperatura_processo_min' or campo.name == 'temperatura_processo_max' %}
-                <div>{% include "polpa/_campo_receita.html" %}</div>
+                <div>{% include "polpa/_campo.html" %}</div>
               {% endif %}
             {% endfor %}
           </div>
@@ -120,7 +120,7 @@
              :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Custo fixo da batida</p>
           {% for campo in form %}
             {% if campo.name == 'custo_mao_obra_padrao' or campo.name == 'custo_indireto_padrao' %}
-              <div>{% include "polpa/_campo_receita.html" %}</div>
+              <div>{% include "polpa/_campo.html" %}</div>
             {% endif %}
           {% endfor %}
           <p class="text-[11px]" :style="temaClaro ? 'color:#94a3b8;' : 'color:#71717a;'">

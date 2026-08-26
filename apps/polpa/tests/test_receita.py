@@ -541,6 +541,11 @@ class NenhumaTelaDePolpaVazaSintaxeDeTemplateTests(ReceitaBase):
         'polpa:recebimento-produtores',
         'polpa:catalogo-list',
         'polpa:receita-list',
+        # As telas de ficha entraram depois. A guarda so' vale para o que ela
+        # lista, entao tela nova precisa entrar aqui -- ou o vazamento volta a
+        # passar despercebido, que foi exatamente o que aconteceu.
+        'polpa:fruta-create',
+        'polpa:recurso-create',
     )
 
     def test_nenhuma_tela_renderiza_sintaxe_de_template(self):

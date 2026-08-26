@@ -15,6 +15,21 @@ class RecursoForm(forms.ModelForm):
             'nome', 'tipo', 'linha_producao', 'capacidade_dia', 'horas_dia',
             'setup_minutos', 'ativo', 'observacao',
         )
+        # ROTULOS DITOS AQUI, e nao no modelo: mexer em `verbose_name` gera
+        # migration so' para trocar texto. O padrao do Django vinha do nome do
+        # campo -- "Linha producao", "Capacidade dia", "Horas dia" -- sem
+        # acento e sem a unidade, que e' o que a pessoa precisa saber para
+        # digitar o numero certo.
+        labels = {
+            'nome': 'Nome',
+            'tipo': 'Tipo',
+            'linha_producao': 'Linha de produção do ERP',
+            'capacidade_dia': 'Capacidade por dia',
+            'horas_dia': 'Horas por dia',
+            'setup_minutos': 'Setup (minutos)',
+            'ativo': 'Recurso ativo',
+            'observacao': 'Observação',
+        }
         widgets = {
             'nome': forms.TextInput(attrs={**ENTRADA, 'placeholder': 'Despolpadeira 1'}),
             'tipo': forms.Select(attrs=SELECT),
@@ -36,7 +51,7 @@ class RecursoForm(forms.ModelForm):
             if filial else LinhaProducao.objects.none()
         )
         self.fields['linha_producao'].required = False
-        self.fields['linha_producao'].empty_label = 'Sem vinculo'
+        self.fields['linha_producao'].empty_label = 'Sem vínculo'
 
     def save(self, commit=True):
         recurso = super().save(commit=False)

@@ -589,3 +589,51 @@ class ATelaDaFrutaTests(PolpaBase):
 
         for nome in FrutaForm(filial=self.filial).fields:
             self.assertIn(f'name="{nome}"', html, f'campo "{nome}" sumiu da tela')
+
+
+class ATelaDoRecursoTests(PolpaBase):
+    """A ficha do recurso — duas perguntas, e não oito campos em fila."""
+
+    def test_os_grupos_aparecem(self):
+        resposta = self.client.get(reverse('polpa:recurso-create'))
+
+        self.assertEqual(resposta.status_code, 200)
+        self.assertContains(resposta, 'Que recurso é')
+        self.assertContains(resposta, 'Quanto ele dá por dia')
+
+    def test_os_rotulos_saem_com_acento_e_com_unidade(self):
+        """
+        O padrao do Django vinha do nome do campo: "Linha producao",
+        "Capacidade dia", "Setup minutos" -- sem acento e sem a unidade, que e'
+        o que a pessoa precisa para digitar o numero certo.
+        """
+        resposta = self.client.get(reverse('polpa:recurso-create'))
+
+        self.assertContains(resposta, 'Linha de produção do ERP')
+        self.assertContains(resposta, 'Setup (minutos)')
+        self.assertNotContains(resposta, 'Linha producao')
+
+    def test_a_caixa_de_marcar_fica_na_linha(self):
+        """
+        Rotulo em cima e caixa solta embaixo -- como o laco antigo desenhava --
+        lia como campo vazio, e nao como opcao ja' marcada.
+        """
+        html = self.client.get(reverse('polpa:recurso-create')).content.decode()
+
+        marca = html.index('name="ativo"')
+        # o rótulo tem de vir ANTES no mesmo <label>, envolvendo a caixa
+        trecho = html[max(0, marca - 400):marca]
+        self.assertIn('cursor-pointer', trecho)
+
+    def test_todo_campo_do_formulario_chega_na_tela(self):
+        """
+        A GARANTIA DO LACO ANTIGO. Agrupar por lista escrita a mao e' como se
+        perde campo: ele existe no form, nao aparece na tela, e ninguem entende
+        por que nunca e' preenchido.
+        """
+        from apps.polpa.forms_recurso import RecursoForm
+
+        html = self.client.get(reverse('polpa:recurso-create')).content.decode()
+
+        for nome in RecursoForm(filial=self.filial).fields:
+            self.assertIn(f'name="{nome}"', html, f'campo "{nome}" sumiu da tela')

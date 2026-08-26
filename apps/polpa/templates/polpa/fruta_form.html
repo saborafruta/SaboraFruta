@@ -54,7 +54,7 @@
             {% endif %}
             <div class="grid sm:grid-cols-3 gap-3 mt-3">
               {% for campo in campos %}
-                <div>{% include "polpa/_campo_receita.html" %}</div>
+                <div>{% include "polpa/_campo.html" %}</div>
               {% endfor %}
             </div>
           </div>
@@ -69,7 +69,7 @@
             {% for campo in form %}
               {% if campo.name not in campos_agrupados %}
                 <div{% if campo.name == 'observacao' %} class="sm:col-span-2"{% endif %}>
-                  {% include "polpa/_campo_receita.html" %}
+                  {% include "polpa/_campo.html" %}
                 </div>
               {% endif %}
             {% endfor %}
