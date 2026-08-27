@@ -14,7 +14,7 @@ from apps.cadastros.models import Cliente
 from apps.core.models import Empresa, Filial, PerfilAcesso, Usuario
 from apps.moda.models import (
     ArquivoPedido, Grade, ItemGrade, ItemGradePedido, ItemPedidoProducao,
-    OpcaoEstruturaOP2, PedidoProducao, Personalizacao,
+    OpcaoEstruturaOP2, OrdemProducao, PedidoProducao, Personalizacao,
     PersonalizacaoIndividual, ProdutoModa, Tamanho, VisualItemPedido,
 )
 from apps.moda.forms_cliente import ClienteRapidoForm
@@ -324,6 +324,57 @@ class Op2Tests(TestCase):
             'if(this.draft.grades.length)this.draft.quantidade=this.totalGrades()',
         )
 
+    def test_editor_da_op_permite_selecionar_varias_grades(self):
+        self._item(quantidade=5)
+        self.client.force_login(self._usuario())
+        session = self.client.session
+        session['filial_id'] = self.filial.pk
+        session.save()
+
+        resposta = self.client.get(reverse('moda:op2-detail', args=[self.pedido.pk]))
+
+        self.assertContains(
+            resposta,
+            'this.draft.grades=[...this.draft.grades,id]',
+        )
+        self.assertNotContains(
+            resposta,
+            "if(this.modoItem==='editar'){this.draft.grades=[id]",
+        )
+
+    def test_grade_e_personalizacao_ficam_dentro_de_cada_produto(self):
+        item = self._item(quantidade=5)
+        self.client.force_login(self._usuario())
+        session = self.client.session
+        session['filial_id'] = self.filial.pk
+        session.save()
+
+        resposta = self.client.get(reverse('moda:op2-detail', args=[self.pedido.pk]))
+
+        self.assertContains(resposta, 'op2-item-personalizacao')
+        self.assertContains(resposta, f'name="item" value="{item.pk}"')
+        self.assertContains(resposta, 'Adicionar nome / número')
+        self.assertNotContains(resposta, '4. Grade e personalização individual')
+
+    def test_financeiro_inicia_com_total_da_op_e_permite_edicao(self):
+        item = self._item(quantidade=5)
+        item.valor_unitario = Decimal('12.50')
+        item.save(update_fields=['valor_unitario'])
+        self.client.force_login(self._usuario())
+        session = self.client.session
+        session['filial_id'] = self.filial.pk
+        session.save()
+
+        resposta = self.client.get(reverse('moda:op2-detail', args=[self.pedido.pk]))
+
+        self.assertContains(resposta, 'id="op2-valor-total"')
+        self.assertContains(
+            resposta,
+            "Number(JSON.parse(document.getElementById('op2-valor-total').textContent)||0)",
+        )
+        self.assertContains(resposta, 'O valor atual da OP já vem preenchido e pode ser editado.')
+        self.assertContains(resposta, 'name="valor_total"')
+
     def test_clique_no_modelo_atualiza_draft_sem_chamada_indireta(self):
         self.client.force_login(self._usuario())
         session = self.client.session
@@ -439,7 +490,10 @@ class Op2Tests(TestCase):
         self.assertContains(resposta, 'class="op2-item-tools"')
         self.assertContains(resposta, 'Detalhes técnicos')
         self.assertContains(resposta, 'x-show="gradeEdit"')
-        self.assertContains(resposta, 'x-data="{detalhes:false,gradeEdit:false}"')
+        self.assertContains(
+            resposta,
+            'x-data="{detalhes:false,gradeEdit:false,personalizar:false,tamanhoIndividual:\'\'}"',
+        )
         self.assertContains(resposta, 'op2-detail-itens')
         self.assertContains(resposta, 'op2WorkspaceCompleto()')
         self.assertContains(resposta, "abrirEditarProduto('")
@@ -629,6 +683,66 @@ class Op2Tests(TestCase):
             [(item.grade_tamanho.nome, item.quantidade) for item in adicionados],
             [('Adulto', 2), ('OverSized', 4)],
         )
+
+    def test_editor_completo_adiciona_nova_linha_ao_incluir_outra_grade(self):
+        tamanho = Tamanho.objects.create(filial=self.filial, sigla='G1', ordem=10)
+        adulto = Grade.objects.create(filial=self.filial, nome='Adulto')
+        oversized = Grade.objects.create(filial=self.filial, nome='OverSized')
+        ItemGrade.objects.create(grade=adulto, tamanho=tamanho, ordem=10)
+        ItemGrade.objects.create(grade=oversized, tamanho=tamanho, ordem=10)
+        item = self._item(quantidade=2)
+        item.grade_tamanho = adulto
+        item.save(update_fields=['grade_tamanho'])
+        ItemGradePedido.objects.create(item=item, tamanho=tamanho, quantidade=2)
+        self.client.force_login(self._usuario())
+        session = self.client.session
+        session['filial_id'] = self.filial.pk
+        session.save()
+
+        resposta = self.client.post(reverse('moda:op2-action', args=[self.pedido.pk]), {
+            'acao': 'editar_item',
+            'item_id': str(item.pk),
+            'produto_id': str(self.produto.pk),
+            'grades': [str(adulto.pk), str(oversized.pk)],
+            f'grade_{adulto.pk}_{tamanho.pk}': '2',
+            f'grade_{oversized.pk}_{tamanho.pk}': '4',
+            'quantidade': '6',
+            'valor_unitario': '40',
+            'estrutura_tipo': 'camisa',
+        })
+
+        self.assertRedirects(resposta, reverse('moda:op2-detail', args=[self.pedido.pk]))
+        itens = list(self.pedido.itens.order_by('grade_tamanho__nome'))
+        self.assertEqual(
+            [(linha.grade_tamanho.nome, linha.quantidade) for linha in itens],
+            [('Adulto', 2), ('OverSized', 4)],
+        )
+
+    def test_excluir_item_com_ordem_de_producao_nao_retorna_erro_500(self):
+        item = self._item(quantidade=3)
+        ordem = OrdemProducao.objects.create(
+            filial=self.filial,
+            pedido=self.pedido,
+            item=item,
+            ano=2026,
+            sequencial=4,
+            quantidade=3,
+        )
+        self.client.force_login(self._usuario())
+        session = self.client.session
+        session['filial_id'] = self.filial.pk
+        session.save()
+
+        resposta = self.client.post(
+            reverse('moda:op2-action', args=[self.pedido.pk]),
+            {'acao': 'remover_item', 'item_id': str(item.pk)},
+            follow=True,
+        )
+
+        self.assertEqual(resposta.status_code, 200)
+        self.assertTrue(ItemPedidoProducao.objects.filter(pk=item.pk).exists())
+        self.assertContains(resposta, ordem.numero)
+        self.assertContains(resposta, 'não pode ser excluído')
 
     def test_editor_completo_mantem_quantidade_quando_item_nao_tem_grade(self):
         self.client.force_login(self._usuario())

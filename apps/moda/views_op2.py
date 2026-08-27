@@ -9,6 +9,7 @@ from zipfile import ZIP_DEFLATED, ZipFile
 
 from django.contrib import messages
 from django.db import IntegrityError, transaction
+from django.db.models.deletion import ProtectedError
 from django.db.models import Q
 from django.http import HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
@@ -626,7 +627,8 @@ class Op2DetailView(ModaBaseView):
         itens = list(pedido.itens.select_related(
             'produto', 'modelo', 'cor', 'tecido', 'grade_tamanho',
         ).prefetch_related(
-            'grade__tamanho', 'personalizacoes', 'visuais__mockup', 'individuais__tamanho',
+            'grade__tamanho', 'personalizacoes', 'visuais__mockup',
+            'individuais__tamanho', 'ordens',
         ))
         modelos = list(
             ProdutoModa.objects.for_filial(_filial(request)).filter(
@@ -968,7 +970,21 @@ class Op2ActionView(ModaBaseView):
 
     def _acao_remover_item(self, request, pedido):
         item = get_object_or_404(pedido.itens, pk=request.POST.get('item_id'))
-        item.delete()
+        ordens = list(item.ordens.only('numero'))
+        if ordens:
+            numeros = ', '.join(ordem.numero for ordem in ordens[:3])
+            raise DomainError(
+                f'Este produto não pode ser excluído porque já gerou a ordem '
+                f'de produção {numeros}. O vínculo é preservado para manter o '
+                f'histórico da fábrica.'
+            )
+        try:
+            item.delete()
+        except ProtectedError as erro:
+            raise DomainError(
+                'Este produto já possui movimentações vinculadas e não pode ser '
+                'excluído. O vínculo foi preservado para manter o histórico.'
+            ) from erro
         _sincronizar_status(pedido)
         messages.success(request, 'Produto removido.')
 
@@ -981,17 +997,25 @@ class Op2ActionView(ModaBaseView):
                 pk=produto_id,
             )
         grades = self._grades_selecionadas(request)
-        if len(grades) > 1:
-            raise ValueError('Ao editar, mantenha somente uma grade por produto.')
-        grade = grades[0] if grades else None
-        quantidades = self._quantidades_grade_modal(request, grade) if grade else {}
+        quantidades_por_grade = {
+            grade.pk: self._quantidades_grade_modal(request, grade)
+            for grade in grades
+        }
+        total_geral = sum(
+            sum(quantidades.values()) for quantidades in quantidades_por_grade.values()
+        )
+        grade = next(
+            (grade for grade in grades if grade.pk == item.grade_tamanho_id),
+            grades[0] if grades else None,
+        )
+        quantidades = quantidades_por_grade.get(grade.pk, {}) if grade else {}
         quantidade = (
             sum(quantidades.values()) if grade
             else int(request.POST.get('quantidade') or item.quantidade or 1)
         )
-        if grade and request.POST.get('quantidade') and int(request.POST['quantidade']) != quantidade:
+        if grades and request.POST.get('quantidade') and int(request.POST['quantidade']) != total_geral:
             raise ValueError(
-                f'A quantidade total deve ser igual à soma da grade ({quantidade}).'
+                f'A quantidade total deve ser igual à soma das grades ({total_geral}).'
             )
         if quantidade < 1:
             raise ValueError('A quantidade precisa ser pelo menos 1.')
@@ -1017,9 +1041,34 @@ class Op2ActionView(ModaBaseView):
         else:
             item.grade.all().delete()
         self._salvar_personalizacao(request, item)
+        adicionais = []
+        for grade_adicional in grades:
+            if grade and grade_adicional.pk == grade.pk:
+                continue
+            novo_item = copy(item)
+            novo_item.pk = None
+            novo_item.grade_tamanho = grade_adicional
+            novo_item.quantidade = sum(
+                quantidades_por_grade[grade_adicional.pk].values()
+            )
+            novo_item.quantidade_entregue = 0
+            novo_item.ordem = (pedido.itens.count() + 1) * 10
+            novo_item.save()
+            self._substituir_grade(
+                novo_item, grade_adicional,
+                quantidades_por_grade[grade_adicional.pk],
+            )
+            self._salvar_personalizacao(request, novo_item)
+            adicionais.append(novo_item)
         GradePedidoService.recalcular_pedido(pedido)
         _sincronizar_status(pedido)
-        messages.success(request, 'Produto atualizado.')
+        if adicionais:
+            messages.success(
+                request,
+                f'Produto atualizado em {len(grades)} grades, uma linha para cada grade.',
+            )
+        else:
+            messages.success(request, 'Produto atualizado.')
 
     @staticmethod
     def _salvar_personalizacao(request, item):
