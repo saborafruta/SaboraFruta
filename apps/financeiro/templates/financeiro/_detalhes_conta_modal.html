@@ -67,6 +67,30 @@
           </fieldset>
         </div>
       </div>
+      {% if conta.valor_pago <= 0 %}
+      <div class="border-t pt-4" style="border-color:rgba(148,163,184,.24)" data-recorrencia-pagar-edicao>
+        <label class="flex cursor-pointer items-start gap-3 rounded-md border border-violet-500/30 bg-violet-500/5 p-3 text-sm">
+          {{ edicao_lancamento_form.editar_recorrencia|add_class:"mt-0.5 h-4 w-4 accent-violet-600" }}
+          <span><strong class="block">Reprogramar recorrência</strong><span class="mt-1 block text-xs opacity-65">Atualiza este título e os próximos em aberto. Também permite transformar um título único em recorrente.</span></span>
+        </label>
+        <div hidden data-recorrencia-campos class="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+          <label class="text-xs font-medium">Periodicidade{{ edicao_lancamento_form.frequencia_recorrencia|add_class:"form-input mt-1 w-full" }}</label>
+          <label class="text-xs font-medium">Ocorrências a partir deste título{{ edicao_lancamento_form.quantidade_recorrencias|add_class:"form-input mt-1 w-full" }}</label>
+          <label class="text-xs font-medium" data-intervalo-recorrencia-edicao>Intervalo em dias{{ edicao_lancamento_form.intervalo_recorrencia_dias|add_class:"form-input mt-1 w-full" }}</label>
+          <fieldset hidden data-dias-recorrencia-edicao class="sm:col-span-2 lg:col-span-3">
+            <legend class="text-xs font-medium">Dias da semana</legend>
+            <div class="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-4">
+              {% for checkbox in edicao_lancamento_form.dias_semana_recorrencia %}
+              <label class="flex items-center gap-2 rounded-md border px-3 py-2 text-xs">{{ checkbox.tag }}<span>{{ checkbox.choice_label }}</span></label>
+              {% endfor %}
+            </div>
+          </fieldset>
+          <label class="text-xs font-medium" data-regra-mensal-edicao>Vencimento de cada mês{{ edicao_lancamento_form.regra_vencimento_mensal|add_class:"form-input mt-1 w-full" }}</label>
+          <label class="text-xs font-medium" data-dia-mensal-edicao>Dia do mês{{ edicao_lancamento_form.dia_vencimento_mensal|add_class:"form-input mt-1 w-full" }}</label>
+          <p class="text-xs opacity-65 sm:col-span-2 lg:col-span-3">Ocorrências excedentes são removidas de forma recuperável. Títulos que já possuem baixa ficam protegidos.</p>
+        </div>
+      </div>
+      {% endif %}
       {% if conta.valor_pago > 0 %}
       <div class="border-t pt-4" style="border-color:rgba(148,163,184,.24)">
         <p class="mb-1 text-xs font-semibold uppercase tracking-wide text-emerald-500">Dados da baixa selecionada</p>

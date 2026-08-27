@@ -1364,6 +1364,7 @@ class ContaPagarEditarValorView(PermissaoRequiredMixin, View):
                 )
                 pagamento = pagamento_ajustado or pagamento
         except DomainError as exc:
+            transaction.set_rollback(True)
             return JsonResponse({'ok': False, 'erro': str(exc)}, status=400)
 
         if conta.tipo_lancamento == ContaPagar.TipoLancamento.FORNECEDOR:
@@ -1401,6 +1402,24 @@ class ContaPagarEditarValorView(PermissaoRequiredMixin, View):
                 else StatusContaPagar.ABERTO
             )
         conta.save()
+        recorrencia_atualizada = []
+        if dados.get('editar_recorrencia'):
+            try:
+                recorrencia_atualizada = ContaPagarService.reprogramar_recorrencia(
+                    conta=conta,
+                    quantidade=dados['quantidade_recorrencias'],
+                    frequencia=dados['frequencia_recorrencia'],
+                    data_vencimento=dados['data_vencimento'],
+                    data_competencia=dados.get('data_competencia'),
+                    intervalo_dias=dados.get('intervalo_recorrencia_dias'),
+                    dias_semana=dados.get('dias_semana_recorrencia'),
+                    regra_vencimento_mensal=dados.get('regra_vencimento_mensal'),
+                    dia_vencimento_mensal=dados.get('dia_vencimento_mensal'),
+                    usuario=request.user,
+                )
+            except DomainError as exc:
+                transaction.set_rollback(True)
+                return JsonResponse({'ok': False, 'erro': str(exc)}, status=400)
         conta.refresh_from_db()
         depois = _snapshot_edicao_lancamento(conta, pagamento)
         registrar_auditoria(
@@ -1417,6 +1436,8 @@ class ContaPagarEditarValorView(PermissaoRequiredMixin, View):
                 'campos': [campo for campo in CAMPOS_EDICAO_LANCAMENTO if antes.get(campo) != depois.get(campo)],
                 'pagamento_ajustado_id': pagamento.pk if pagamento else None,
                 'contas_envolvidas': sorted(contas_envolvidas),
+                'recorrencia_reprogramada': bool(recorrencia_atualizada),
+                'quantidade_recorrencias': len(recorrencia_atualizada),
             },
         )
         if contas_envolvidas:
@@ -1431,7 +1452,11 @@ class ContaPagarEditarValorView(PermissaoRequiredMixin, View):
                 atualizador._atualizar_saldo_conta(conta_bancaria)
         return JsonResponse({
             'ok': True,
-            'mensagem': 'Lancamento atualizado e registrado no log.',
+            'mensagem': (
+                f'Lancamento e {len(recorrencia_atualizada)} ocorrencias atualizados.'
+                if recorrencia_atualizada
+                else 'Lancamento atualizado e registrado no log.'
+            ),
             'detail_url': (
                 f"{reverse('financeiro:pagar_detail', args=[conta.pk])}?pagamento={pagamento.pk}"
                 if pagamento else reverse('financeiro:pagar_detail', args=[conta.pk])

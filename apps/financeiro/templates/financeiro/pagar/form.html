@@ -6,7 +6,7 @@
 
 {% block content %}
 <div class="mx-auto max-w-5xl space-y-4"
-     x-data="{ loading:false, tipoLancamento:'{{ form.tipo_lancamento.value|default:"fornecedor" }}', recorrente:{{ form.recorrente.value|yesno:"true,false" }}, frequenciaRecorrencia:'{{ form.frequencia_recorrencia.value|default:"mensal" }}', regraVencimentoMensal:'{{ form.regra_vencimento_mensal.value|default:"data_informada" }}', ajustarDiaUtil:{{ form.ajustar_vencimento_dia_util.value|yesno:"true,false" }}, anteciparDiaUtil:{{ form.antecipar_vencimento_dia_util.value|yesno:"true,false" }}, quitarAgora:{{ form.quitar_ao_lancar.value|yesno:"true,false" }}, fornecedorModal:false, fornecedorSalvando:false, fornecedorErro:'', fornecedorTipo:'J', cepConsultando:false, notaFiscalFornecedor:'{{ form.nota_fiscal_fornecedor.value|default:""|escapejs }}', chaveAcessoNfe:'{{ form.chave_acesso_nfe.value|default:""|escapejs }}', notaFiscalStatus:'', scannerNfeAberto:false, scannerNfeErro:'', scannerNfe:null, scannerNfeScript:null, ultimoCodigoNfe:'' }"
+     x-data="{ loading:false, tipoLancamento:'{{ form.tipo_lancamento.value|default:"fornecedor" }}', recorrente:{{ form.recorrente.value|yesno:"true,false" }}, frequenciaRecorrencia:'{{ form.frequencia_recorrencia.value|default:"mensal" }}', regraVencimentoMensal:'{{ form.regra_vencimento_mensal.value|default:"data_informada" }}', ajustarDiaUtil:{{ form.ajustar_vencimento_dia_util.value|yesno:"true,false" }}, anteciparDiaUtil:{{ form.antecipar_vencimento_dia_util.value|yesno:"true,false" }}, quitarAgora:{{ form.quitar_ao_lancar.value|yesno:"true,false" }}, fornecedorModal:false, fornecedorSalvando:false, fornecedorErro:'', fornecedorTipo:'J', cepConsultando:false, notaFiscalFornecedor:'{{ form.nota_fiscal_fornecedor.value|default:""|escapejs }}', chaveAcessoNfe:'{{ form.chave_acesso_nfe.value|default:""|escapejs }}', notaFiscalStatus:'', scannerNfeAberto:false, scannerNfeErro:'', scannerNfe:null, scannerNfeScript:null, ultimoCodigoNfe:'', conferenciaAberta:false, conferenciaResumo:{} }"
      @tax-category-selected.window="ajustarDiaUtil=true; anteciparDiaUtil=true">
   <div class="flex flex-wrap items-end justify-between gap-3">
     <div>
@@ -17,7 +17,7 @@
   </div>
 
   <form method="post" enctype="multipart/form-data" class="card overflow-visible"
-        @submit="loading=true" novalidate>{% csrf_token %}
+        @submit.prevent="abrirConferenciaLancamento($data, $el)" novalidate>{% csrf_token %}
     <input type="hidden" name="tipo_lancamento" :value="tipoLancamento">
     <input type="hidden" name="chave_acesso_nfe" :value="chaveAcessoNfe">
     {{ form.parcela }}{{ form.total_parcelas }}
@@ -112,8 +112,7 @@
         </div>
         <div x-show="recorrente" x-cloak>{% include "financeiro/pagar/_field.html" with field=form.quantidade_recorrencias %}</div>
         <div x-show="recorrente && frequenciaRecorrencia === 'personalizada'" x-cloak>{% include "financeiro/pagar/_field.html" with field=form.intervalo_recorrencia_dias %}</div>
-        <div x-show="recorrente" x-cloak class="lg:col-span-3 rounded-md border p-3"
-             :class="frequenciaRecorrencia === 'semanal' ? '' : 'opacity-55'"
+        <div x-show="recorrente && frequenciaRecorrencia === 'semanal'" x-cloak class="lg:col-span-3 rounded-md border p-3"
              :style="temaClaro ? 'border-color:#dbe3ee;background:#f8fafc' : 'border-color:#3f3f46;background:#18181b'">
           <div class="mb-2 flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
             <label class="block text-sm font-semibold">{{ form.dias_semana_recorrencia.label }}</label>
@@ -251,6 +250,34 @@
     </div>
   </form>
 
+  <div x-show="conferenciaAberta" x-cloak @keydown.escape.window="conferenciaAberta=false"
+       class="fixed inset-0 z-[120] flex items-end justify-center bg-black/70 p-0 sm:items-center sm:p-5"
+       role="dialog" aria-modal="true" aria-labelledby="titulo-conferencia-lancamento">
+    <button type="button" class="absolute inset-0 h-full w-full cursor-default"
+            @click="conferenciaAberta=false" aria-label="Voltar e ajustar"></button>
+    <div class="relative z-10 w-full max-w-xl rounded-t-md border p-5 shadow-2xl sm:rounded-md sm:p-6"
+         :style="temaClaro ? 'background:#fff;border-color:#d1d5db;color:#111827' : 'background:#202024;border-color:#3f3f46;color:#f4f4f5'">
+      <h3 id="titulo-conferencia-lancamento" class="text-lg font-semibold">Confira antes de lançar</h3>
+      <p class="mt-1 text-sm opacity-70">Revise os dados principais. O lançamento só será gravado após a confirmação.</p>
+      <dl class="mt-5 grid grid-cols-1 gap-3 rounded-md border p-4 sm:grid-cols-2"
+          :style="temaClaro ? 'border-color:#e5e7eb;background:#f8fafc' : 'border-color:#3f3f46;background:#18181b'">
+        <div class="sm:col-span-2"><dt class="text-xs uppercase opacity-60">Descrição</dt><dd class="font-semibold" x-text="conferenciaResumo.descricao"></dd></div>
+        <div><dt class="text-xs uppercase opacity-60">Beneficiário</dt><dd x-text="conferenciaResumo.beneficiario"></dd></div>
+        <div><dt class="text-xs uppercase opacity-60">Valor</dt><dd class="font-semibold" x-text="conferenciaResumo.valor"></dd></div>
+        <div><dt class="text-xs uppercase opacity-60">Primeiro vencimento</dt><dd x-text="conferenciaResumo.vencimento"></dd></div>
+        <div><dt class="text-xs uppercase opacity-60">Tipo</dt><dd x-text="conferenciaResumo.tipo"></dd></div>
+        <div class="sm:col-span-2" x-show="recorrente"><dt class="text-xs uppercase opacity-60">Recorrência</dt><dd x-text="conferenciaResumo.recorrencia"></dd></div>
+      </dl>
+      <div class="mt-5 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+        <button type="button" class="btn-secondary" @click="conferenciaAberta=false">Voltar e ajustar</button>
+        <button type="button" class="btn-primary" :disabled="loading"
+                @click="confirmarLancamento($data)">
+          <span x-show="!loading">Confirmar e lançar</span><span x-show="loading" x-cloak>Salvando...</span>
+        </button>
+      </div>
+    </div>
+  </div>
+
   <div x-show="fornecedorModal" x-cloak @keydown.escape.window="fornecedorModal=false"
        class="fixed inset-0 z-[100] flex items-end justify-center bg-black/65 p-0 sm:items-center sm:p-5"
        role="dialog" aria-modal="true" aria-labelledby="titulo-fornecedor-rapido">
@@ -379,6 +406,58 @@
 
 {% block extra_js %}
 <script>
+function valorCampo(form, nome) {
+  return form.elements[nome]?.value?.trim?.() || '';
+}
+
+function rotuloCampoSelecionado(form, nome, fallback='Não informado') {
+  const campo=form.elements[nome];
+  if(!campo)return fallback;
+  if(campo.tagName==='SELECT')return campo.selectedOptions[0]?.text?.trim()||fallback;
+  const valor=campo.value||'';
+  const raiz=campo.closest('[data-field]')||form;
+  const opcao=Array.from(raiz.querySelectorAll('[data-finance-option]'))
+    .find(item=>item.dataset.value===String(valor));
+  return opcao?.dataset.label||fallback;
+}
+
+function formatarDataConferencia(valor) {
+  if(!valor)return 'Não informada';
+  const [ano,mes,dia]=valor.split('-');
+  return ano&&mes&&dia?`${dia}/${mes}/${ano}`:valor;
+}
+
+function abrirConferenciaLancamento(state, form) {
+  if(!form.reportValidity())return;
+  const beneficiario=state.tipoLancamento==='fornecedor'
+    ?rotuloCampoSelecionado(form,'fornecedor','Sem fornecedor cadastrado')
+    :rotuloCampoSelecionado(form,'funcionario',state.tipoLancamento==='encargo'?'Encargo geral':'Não informado');
+  const valor=valorCampo(form,'valor_original')||'0,00';
+  const frequencia=rotuloCampoSelecionado(form,'frequencia_recorrencia','');
+  const quantidade=valorCampo(form,'quantidade_recorrencias');
+  const dias=Array.from(form.querySelectorAll('[name="dias_semana_recorrencia"]:checked'))
+    .map(item=>item.closest('label')?.innerText?.trim()).filter(Boolean);
+  state.conferenciaResumo={
+    descricao:valorCampo(form,'descricao_despesa')||'Não informada',
+    beneficiario,
+    valor:`R$ ${valor}`,
+    vencimento:formatarDataConferencia(valorCampo(form,'data_vencimento')),
+    tipo:state.quitarAgora&&!state.recorrente?'Título único, com quitação':'Título '+(state.recorrente?'recorrente':'único'),
+    recorrencia:state.recorrente
+      ?`${quantidade} ocorrências — ${frequencia}${state.frequenciaRecorrencia==='semanal'&&dias.length?' — '+dias.join(', '):''}`
+      :'',
+  };
+  state.conferenciaAberta=true;
+}
+
+function confirmarLancamento(state) {
+  if(state.loading)return;
+  state.loading=true;
+  state.conferenciaAberta=false;
+  const form=document.querySelector('form.card');
+  if(form)form.submit();
+}
+
 function financeSearchSelect(root) {
   return {
     value:root.dataset.initial||'', query:'', open:false,

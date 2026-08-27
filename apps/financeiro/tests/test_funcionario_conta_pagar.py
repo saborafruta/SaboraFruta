@@ -438,6 +438,69 @@ class FuncionarioContaPagarTests(TestCase):
             [date(2026, 8, 24), date(2026, 8, 25), date(2026, 8, 26)],
         )
 
+    def test_recorrencia_diaria_em_dias_uteis_nao_repete_vencimentos(self):
+        contas = ContaPagarService.criar_recorrencia(
+            filial=self.filial,
+            funcionario=self.funcionario,
+            tipo_lancamento="funcionario",
+            valor_original=Decimal("100.00"),
+            data_emissao=date(2026, 9, 1),
+            data_vencimento=date(2026, 9, 4),
+            plano_contas=self.categoria,
+            frequencia="diaria",
+            quantidade=5,
+            ajustar_vencimento_dia_util=True,
+        )
+
+        vencimentos = [conta.data_vencimento for conta in contas]
+        self.assertEqual(len(vencimentos), len(set(vencimentos)))
+        self.assertEqual(vencimentos, [
+            date(2026, 9, 4), date(2026, 9, 5), date(2026, 9, 8),
+            date(2026, 9, 9), date(2026, 9, 10),
+        ])
+
+    def test_recorrencia_aceita_limite_de_365_ocorrencias(self):
+        contas = ContaPagarService.criar_recorrencia(
+            filial=self.filial,
+            funcionario=self.funcionario,
+            tipo_lancamento="funcionario",
+            valor_original=Decimal("10.00"),
+            data_emissao=date(2026, 1, 1),
+            data_vencimento=date(2026, 1, 1),
+            plano_contas=self.categoria,
+            frequencia="diaria",
+            quantidade=365,
+        )
+
+        self.assertEqual(len(contas), 365)
+        self.assertTrue(all(conta.total_parcelas == 365 for conta in contas))
+
+    def test_titulo_unico_pode_ser_transformado_em_recorrencia(self):
+        conta = ContaPagarService.criar(
+            filial=self.filial,
+            funcionario=self.funcionario,
+            tipo_lancamento="funcionario",
+            valor_original=Decimal("100.00"),
+            data_emissao=date(2026, 8, 20),
+            data_vencimento=date(2026, 8, 24),
+            plano_contas=self.categoria,
+        )
+
+        contas = ContaPagarService.reprogramar_recorrencia(
+            conta=conta,
+            quantidade=3,
+            frequencia="semanal",
+            data_vencimento=date(2026, 8, 24),
+            dias_semana=["0", "2", "4"],
+        )
+
+        self.assertEqual(
+            [item.data_vencimento for item in contas],
+            [date(2026, 8, 24), date(2026, 8, 26), date(2026, 8, 28)],
+        )
+        self.assertEqual(len({item.grupo_recorrencia for item in contas}), 1)
+        self.assertTrue(all(item.total_parcelas == 3 for item in contas))
+
     def test_recorrencia_personalizada_respeita_intervalo_em_dias(self):
         contas = ContaPagarService.criar_recorrencia(
             filial=self.filial,

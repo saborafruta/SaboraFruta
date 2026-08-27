@@ -22,6 +22,23 @@ from apps.financeiro.models.receber_pagar import ContaPagar, PagamentoContaPagar
 
 class ContaPagarService:
 
+    LIMITE_RECORRENCIAS = 365
+
+    @staticmethod
+    def _ajustar_data_vencimento(
+        data_vencimento: date,
+        filial,
+        ajustar_vencimento_dia_util: bool,
+        antecipar_vencimento_dia_util: bool,
+    ) -> date:
+        if not ajustar_vencimento_dia_util:
+            return data_vencimento
+        return (
+            dia_util_anterior_ou_mesmo(data_vencimento, filial)
+            if antecipar_vencimento_dia_util
+            else proximo_dia_util(data_vencimento, filial)
+        )
+
     @staticmethod
     @transaction.atomic
     def criar(
@@ -62,12 +79,12 @@ class ContaPagarService:
             fornecedor = None
         if tipo_lancamento == ContaPagar.TipoLancamento.FORNECEDOR:
             funcionario = None
-        if ajustar_vencimento_dia_util:
-            data_vencimento = (
-                dia_util_anterior_ou_mesmo(data_vencimento, filial)
-                if antecipar_vencimento_dia_util
-                else proximo_dia_util(data_vencimento, filial)
-            )
+        data_vencimento = ContaPagarService._ajustar_data_vencimento(
+            data_vencimento,
+            filial,
+            ajustar_vencimento_dia_util,
+            antecipar_vencimento_dia_util,
+        )
         conta = ContaPagar(
             filial=filial,
             fornecedor=fornecedor,
@@ -138,8 +155,10 @@ class ContaPagarService:
         dia_vencimento_mensal: int | None = None,
         **dados,
     ) -> list[ContaPagar]:
-        if quantidade < 2 or quantidade > 60:
-            raise DomainError('A recorrência deve gerar entre 2 e 60 títulos.')
+        if quantidade < 2 or quantidade > ContaPagarService.LIMITE_RECORRENCIAS:
+            raise DomainError(
+                f'A recorrência deve gerar entre 2 e {ContaPagarService.LIMITE_RECORRENCIAS} títulos.'
+            )
         incrementos = {
             ContaPagar.FrequenciaRecorrencia.DIARIA: relativedelta(days=1),
             ContaPagar.FrequenciaRecorrencia.SEMANAL: relativedelta(weeks=1),
@@ -158,22 +177,25 @@ class ContaPagarService:
 
         grupo = uuid.uuid4()
         contas = []
-        vencimentos_semanais = None
-        if frequencia == ContaPagar.FrequenciaRecorrencia.SEMANAL and dias_semana:
-            dias = sorted({int(dia) for dia in dias_semana if str(dia).isdigit() and 0 <= int(dia) <= 6})
-            if dias:
-                vencimentos_semanais = []
-                cursor = data_vencimento
-                while len(vencimentos_semanais) < quantidade:
-                    if cursor.weekday() in dias:
-                        vencimentos_semanais.append(cursor)
-                    cursor += timedelta(days=1)
-        for indice in range(quantidade):
-            deslocamento = incremento * indice
-            vencimento_base = (
-                vencimentos_semanais[indice]
-                if vencimentos_semanais
-                else data_vencimento + deslocamento
+        dias = sorted({
+            int(dia) for dia in (dias_semana or [])
+            if str(dia).isdigit() and 0 <= int(dia) <= 6
+        })
+        vencimentos = ContaPagarService._gerar_vencimentos_recorrencia(
+            quantidade=quantidade,
+            frequencia=frequencia,
+            data_vencimento=data_vencimento,
+            intervalo_dias=intervalo_dias,
+            dias_semana=dias,
+            filial=dados['filial'],
+            ajustar_vencimento_dia_util=dados.get('ajustar_vencimento_dia_util', False),
+            antecipar_vencimento_dia_util=dados.get('antecipar_vencimento_dia_util', False),
+        )
+        for indice, (vencimento_original, vencimento_base) in enumerate(vencimentos):
+            deslocamento_competencia = (
+                relativedelta(days=(vencimento_original - data_vencimento).days)
+                if frequencia == ContaPagar.FrequenciaRecorrencia.SEMANAL and dias
+                else incremento * indice
             )
             if regra_vencimento_mensal == ContaPagar.RegraVencimentoMensal.PRIMEIRO_DIA:
                 vencimento_base = vencimento_base.replace(day=1)
@@ -194,9 +216,8 @@ class ContaPagarService:
                 **dados,
                 data_vencimento=vencimento_base,
                 data_competencia=(
-                    data_competencia + relativedelta(days=(vencimento_base - data_vencimento).days)
-                    if data_competencia and vencimentos_semanais
-                    else (data_competencia + deslocamento) if data_competencia else None
+                    data_competencia + deslocamento_competencia
+                    if data_competencia else None
                 ),
                 parcela=indice + 1,
                 total_parcelas=quantidade,
@@ -208,14 +229,221 @@ class ContaPagarService:
                     else None
                 ),
                 dias_semana_recorrencia=(
-                    ','.join(str(dia) for dia in dias_semana)
-                    if frequencia == ContaPagar.FrequenciaRecorrencia.SEMANAL and dias_semana
+                    ','.join(str(dia) for dia in dias)
+                    if frequencia == ContaPagar.FrequenciaRecorrencia.SEMANAL and dias
                     else ''
                 ),
                 regra_vencimento_mensal=regra_vencimento_mensal,
                 dia_vencimento_mensal=dia_vencimento_mensal,
             ))
         return contas
+
+    @staticmethod
+    def _gerar_vencimentos_recorrencia(
+        *, quantidade: int, frequencia: str, data_vencimento: date,
+        filial, intervalo_dias: int | None = None,
+        dias_semana: list[int] | tuple[int, ...] | None = None,
+        ajustar_vencimento_dia_util: bool = False,
+        antecipar_vencimento_dia_util: bool = False,
+    ) -> list[tuple[date, date]]:
+        """Retorna datas de origem e finais sem repetir vencimentos ajustados."""
+        incrementos = {
+            ContaPagar.FrequenciaRecorrencia.DIARIA: relativedelta(days=1),
+            ContaPagar.FrequenciaRecorrencia.SEMANAL: relativedelta(weeks=1),
+            ContaPagar.FrequenciaRecorrencia.MENSAL: relativedelta(months=1),
+            ContaPagar.FrequenciaRecorrencia.TRIMESTRAL: relativedelta(months=3),
+            ContaPagar.FrequenciaRecorrencia.SEMESTRAL: relativedelta(months=6),
+            ContaPagar.FrequenciaRecorrencia.ANUAL: relativedelta(years=1),
+            ContaPagar.FrequenciaRecorrencia.PERSONALIZADA: relativedelta(
+                days=intervalo_dias or 1
+            ),
+        }
+        incremento = incrementos[frequencia]
+        dias = set(dias_semana or [])
+        resultados = []
+        vencimentos_usados = set()
+        cursor = data_vencimento
+        indice = 0
+        tentativas = 0
+        limite_tentativas = max(quantidade * 400, 1000)
+        while len(resultados) < quantidade and tentativas < limite_tentativas:
+            if frequencia == ContaPagar.FrequenciaRecorrencia.SEMANAL and dias:
+                candidato = cursor
+                cursor += timedelta(days=1)
+                if candidato.weekday() not in dias:
+                    tentativas += 1
+                    continue
+            else:
+                candidato = data_vencimento + (incremento * indice)
+                indice += 1
+            ajustado = ContaPagarService._ajustar_data_vencimento(
+                candidato,
+                filial,
+                ajustar_vencimento_dia_util,
+                antecipar_vencimento_dia_util,
+            )
+            if ajustado not in vencimentos_usados:
+                resultados.append((candidato, ajustado))
+                vencimentos_usados.add(ajustado)
+            tentativas += 1
+        if len(resultados) != quantidade:
+            raise DomainError('Não foi possível gerar vencimentos únicos para esta recorrência.')
+        return resultados
+
+    @staticmethod
+    @transaction.atomic
+    def reprogramar_recorrencia(
+        *, conta: ContaPagar, quantidade: int, frequencia: str,
+        data_vencimento: date, data_competencia: date | None = None,
+        intervalo_dias: int | None = None,
+        dias_semana: list[str] | tuple[str, ...] | None = None,
+        regra_vencimento_mensal: str = ContaPagar.RegraVencimentoMensal.DATA_INFORMADA,
+        dia_vencimento_mensal: int | None = None,
+        usuario=None,
+    ) -> list[ContaPagar]:
+        """Recria, de forma recuperável, a série a partir do título editado."""
+        if quantidade < 2 or quantidade > ContaPagarService.LIMITE_RECORRENCIAS:
+            raise DomainError(
+                f'A recorrência deve ter entre 2 e {ContaPagarService.LIMITE_RECORRENCIAS} ocorrências.'
+            )
+        if conta.valor_pago > 0 or conta.status == StatusContaPagar.PAGO:
+            raise DomainError('Não é possível reprogramar a partir de um título que já possui baixa.')
+        if conta.valor_juros or conta.valor_multa or conta.valor_desconto:
+            raise DomainError('Remova juros, multa ou desconto antes de reprogramar a recorrência.')
+
+        grupo = conta.grupo_recorrencia or uuid.uuid4()
+        serie = list(
+            ContaPagar.all_objects.select_for_update()
+            .filter(filial=conta.filial, grupo_recorrencia=grupo, excluido_em__isnull=True)
+            .order_by('parcela', 'data_vencimento', 'pk')
+        ) if conta.grupo_recorrencia else [
+            ContaPagar.all_objects.select_for_update().get(pk=conta.pk)
+        ]
+        inicio = next((indice for indice, item in enumerate(serie) if item.pk == conta.pk), 0)
+        anteriores = serie[:inicio]
+        alvos = serie[inicio:]
+        if any(item.valor_pago > 0 or item.status == StatusContaPagar.PAGO for item in alvos):
+            raise DomainError('Há títulos com baixa nesta parte da série. Reprograme a partir do próximo título em aberto.')
+        if any(item.valor_juros or item.valor_multa or item.valor_desconto for item in alvos):
+            raise DomainError('Há títulos com ajustes de valor nesta parte da série. Corrija-os antes de reprogramar.')
+
+        dias = sorted({
+            int(dia) for dia in (dias_semana or [])
+            if str(dia).isdigit() and 0 <= int(dia) <= 6
+        })
+        vencimentos = ContaPagarService._gerar_vencimentos_recorrencia(
+            quantidade=quantidade,
+            frequencia=frequencia,
+            data_vencimento=data_vencimento,
+            intervalo_dias=intervalo_dias,
+            dias_semana=dias,
+            filial=conta.filial,
+            ajustar_vencimento_dia_util=conta.ajustar_vencimento_dia_util,
+            antecipar_vencimento_dia_util=conta.antecipar_vencimento_dia_util,
+        )
+        incrementos_competencia = {
+            ContaPagar.FrequenciaRecorrencia.DIARIA: relativedelta(days=1),
+            ContaPagar.FrequenciaRecorrencia.SEMANAL: relativedelta(weeks=1),
+            ContaPagar.FrequenciaRecorrencia.MENSAL: relativedelta(months=1),
+            ContaPagar.FrequenciaRecorrencia.TRIMESTRAL: relativedelta(months=3),
+            ContaPagar.FrequenciaRecorrencia.SEMESTRAL: relativedelta(months=6),
+            ContaPagar.FrequenciaRecorrencia.ANUAL: relativedelta(years=1),
+            ContaPagar.FrequenciaRecorrencia.PERSONALIZADA: relativedelta(
+                days=intervalo_dias or 1
+            ),
+        }
+        total = len(anteriores) + quantidade
+        atualizadas = []
+        campos_copiados = (
+            'fornecedor', 'funcionario', 'tipo_lancamento', 'descricao_despesa',
+            'documento_tipo', 'documento_id', 'documento_numero',
+            'nota_fiscal_fornecedor', 'chave_acesso_nfe',
+            'forma_pagamento_prevista', 'plano_contas', 'conta_contabil',
+            'observacao', 'ajustar_vencimento_dia_util',
+            'antecipar_vencimento_dia_util',
+        )
+        for indice, (vencimento_original, vencimento_final) in enumerate(vencimentos):
+            if indice < len(alvos):
+                item = alvos[indice]
+                for campo in campos_copiados:
+                    setattr(item, campo, getattr(conta, campo))
+                item.valor_original = conta.valor_original
+                item.valor_final = conta.valor_original
+                item.valor_pago = Decimal('0')
+                item.valor_saldo = conta.valor_original
+            else:
+                item = ContaPagar(
+                    filial=conta.filial,
+                    data_emissao=conta.data_emissao,
+                    valor_original=conta.valor_original,
+                    valor_final=conta.valor_original,
+                    valor_pago=Decimal('0'),
+                    valor_saldo=conta.valor_original,
+                    usuario=usuario or conta.usuario,
+                )
+                for campo in campos_copiados:
+                    setattr(item, campo, getattr(conta, campo))
+
+            if regra_vencimento_mensal == ContaPagar.RegraVencimentoMensal.PRIMEIRO_DIA:
+                vencimento_final = vencimento_final.replace(day=1)
+            elif regra_vencimento_mensal == ContaPagar.RegraVencimentoMensal.ULTIMO_DIA:
+                vencimento_final = vencimento_final.replace(
+                    day=monthrange(vencimento_final.year, vencimento_final.month)[1]
+                )
+            elif regra_vencimento_mensal == ContaPagar.RegraVencimentoMensal.DIA_FIXO:
+                if not dia_vencimento_mensal:
+                    raise DomainError('Informe o dia fixo do vencimento mensal.')
+                vencimento_final = vencimento_final.replace(
+                    day=min(dia_vencimento_mensal, monthrange(vencimento_final.year, vencimento_final.month)[1])
+                )
+            elif regra_vencimento_mensal == ContaPagar.RegraVencimentoMensal.QUINTO_DIA_UTIL:
+                inicio_mes = vencimento_final.replace(day=1) - timedelta(days=1)
+                vencimento_final = adicionar_dias_uteis_bancarios(inicio_mes, 5, conta.filial)
+            vencimento_final = ContaPagarService._ajustar_data_vencimento(
+                vencimento_final,
+                conta.filial,
+                conta.ajustar_vencimento_dia_util,
+                conta.antecipar_vencimento_dia_util,
+            )
+            item.data_vencimento = vencimento_final
+            item.data_competencia = (
+                data_competencia + (
+                    relativedelta(days=(vencimento_original - data_vencimento).days)
+                    if frequencia == ContaPagar.FrequenciaRecorrencia.SEMANAL and dias
+                    else incrementos_competencia[frequencia] * indice
+                )
+                if data_competencia else None
+            )
+            item.parcela = len(anteriores) + indice + 1
+            item.total_parcelas = total
+            item.grupo_recorrencia = grupo
+            item.frequencia_recorrencia = frequencia
+            item.intervalo_recorrencia_dias = (
+                intervalo_dias if frequencia == ContaPagar.FrequenciaRecorrencia.PERSONALIZADA else None
+            )
+            item.dias_semana_recorrencia = (
+                ','.join(str(dia) for dia in dias)
+                if frequencia == ContaPagar.FrequenciaRecorrencia.SEMANAL else ''
+            )
+            item.regra_vencimento_mensal = regra_vencimento_mensal
+            item.dia_vencimento_mensal = dia_vencimento_mensal
+            item.status = (
+                StatusContaPagar.VENCIDO
+                if item.data_vencimento < timezone.localdate()
+                else StatusContaPagar.ABERTO
+            )
+            item.save()
+            atualizadas.append(item)
+
+        for item in alvos[quantidade:]:
+            item.excluido_em = timezone.now()
+            item.excluido_por = usuario
+            item.motivo_exclusao = 'Removido ao reprogramar a recorrência.'
+            item.save(update_fields=['excluido_em', 'excluido_por', 'motivo_exclusao', 'updated_at'])
+        for item in anteriores:
+            item.total_parcelas = total
+            item.save(update_fields=['total_parcelas', 'updated_at'])
+        return atualizadas
 
     @staticmethod
     @transaction.atomic

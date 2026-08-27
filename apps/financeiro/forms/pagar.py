@@ -124,7 +124,7 @@ class ContaPagarForm(forms.Form):
     intervalo_recorrencia_dias = forms.IntegerField(
         min_value=1, max_value=365, initial=30, required=False,
         label='Intervalo em dias',
-        widget=forms.NumberInput(attrs={'min': '1', 'max': '365'}),
+        widget=forms.NumberInput(attrs={'min': '1', 'max': '365', 'onwheel': 'this.blur()'}),
     )
     dias_semana_recorrencia = forms.MultipleChoiceField(
         choices=DIAS_SEMANA_CHOICES,
@@ -133,9 +133,9 @@ class ContaPagarForm(forms.Form):
         widget=forms.CheckboxSelectMultiple,
     )
     quantidade_recorrencias = forms.IntegerField(
-        min_value=2, max_value=60, initial=12, required=False,
+        min_value=2, max_value=365, initial=12, required=False,
         label='Quantidade de ocorrências',
-        widget=forms.NumberInput(attrs={'min': '2', 'max': '60'}),
+        widget=forms.NumberInput(attrs={'min': '2', 'max': '365', 'onwheel': 'this.blur()'}),
     )
     regra_vencimento_mensal = forms.ChoiceField(
         choices=ContaPagar.RegraVencimentoMensal.choices,
@@ -563,6 +563,43 @@ class ContaPagarEdicaoAdminForm(forms.Form):
         label='Categoria financeira',
         help_text='A conta contabil vinculada sera atualizada automaticamente.',
     )
+    editar_recorrencia = forms.BooleanField(
+        required=False,
+        label='Reprogramar este título e os próximos da recorrência',
+    )
+    frequencia_recorrencia = forms.ChoiceField(
+        choices=ContaPagar.FrequenciaRecorrencia.choices,
+        initial=ContaPagar.FrequenciaRecorrencia.MENSAL,
+        required=False,
+        label='Periodicidade',
+    )
+    quantidade_recorrencias = forms.IntegerField(
+        min_value=2, max_value=365, initial=2, required=False,
+        label='Ocorrências a partir deste título',
+        widget=forms.NumberInput(attrs={'min': '2', 'max': '365', 'onwheel': 'this.blur()'}),
+    )
+    intervalo_recorrencia_dias = forms.IntegerField(
+        min_value=1, max_value=365, initial=30, required=False,
+        label='Intervalo em dias',
+        widget=forms.NumberInput(attrs={'min': '1', 'max': '365', 'onwheel': 'this.blur()'}),
+    )
+    dias_semana_recorrencia = forms.MultipleChoiceField(
+        choices=DIAS_SEMANA_CHOICES,
+        required=False,
+        label='Dias da semana',
+        widget=forms.CheckboxSelectMultiple,
+    )
+    regra_vencimento_mensal = forms.ChoiceField(
+        choices=ContaPagar.RegraVencimentoMensal.choices,
+        initial=ContaPagar.RegraVencimentoMensal.DATA_INFORMADA,
+        required=False,
+        label='Vencimento de cada mês',
+    )
+    dia_vencimento_mensal = forms.IntegerField(
+        min_value=1, max_value=31, required=False,
+        label='Dia do mês',
+        widget=forms.NumberInput(attrs={'min': '1', 'max': '31', 'onwheel': 'this.blur()'}),
+    )
     data_pagamento = forms.DateField(
         required=False, label='Data do pagamento',
         widget=forms.DateInput(format='%Y-%m-%d', attrs={'type': 'date'}),
@@ -609,6 +646,19 @@ class ContaPagarEdicaoAdminForm(forms.Form):
                 'data_competencia': conta.data_competencia,
                 'forma_pagamento_prevista': conta.forma_pagamento_prevista_id,
                 'plano_contas': conta.plano_contas_id,
+                'frequencia_recorrencia': (
+                    conta.frequencia_recorrencia or ContaPagar.FrequenciaRecorrencia.MENSAL
+                ),
+                'quantidade_recorrencias': max(
+                    2, (conta.total_parcelas or 1) - (conta.parcela or 1) + 1,
+                ),
+                'intervalo_recorrencia_dias': conta.intervalo_recorrencia_dias or 30,
+                'dias_semana_recorrencia': (
+                    conta.dias_semana_recorrencia.split(',')
+                    if conta.dias_semana_recorrencia else []
+                ),
+                'regra_vencimento_mensal': conta.regra_vencimento_mensal,
+                'dia_vencimento_mensal': conta.dia_vencimento_mensal,
                 'data_pagamento': self.pagamento.data_pagamento if self.pagamento else None,
                 'forma_pagamento': self.pagamento.forma_pagamento_id if self.pagamento else conta.forma_pagamento_id,
                 'conta_bancaria': self.pagamento.conta_bancaria_id if self.pagamento else conta.conta_bancaria_id,
@@ -672,6 +722,37 @@ class ContaPagarEdicaoAdminForm(forms.Form):
 
     def clean(self):
         cleaned = super().clean()
+        if cleaned.get('editar_recorrencia'):
+            frequencia = cleaned.get('frequencia_recorrencia')
+            if not frequencia:
+                self.add_error('frequencia_recorrencia', 'Informe a periodicidade.')
+            if not cleaned.get('quantidade_recorrencias'):
+                self.add_error('quantidade_recorrencias', 'Informe a quantidade de ocorrências.')
+            if (
+                frequencia == ContaPagar.FrequenciaRecorrencia.PERSONALIZADA
+                and not cleaned.get('intervalo_recorrencia_dias')
+            ):
+                self.add_error('intervalo_recorrencia_dias', 'Informe o intervalo entre os títulos.')
+            if frequencia == ContaPagar.FrequenciaRecorrencia.SEMANAL:
+                dias = cleaned.get('dias_semana_recorrencia') or []
+                if not dias and cleaned.get('data_vencimento'):
+                    cleaned['dias_semana_recorrencia'] = [str(cleaned['data_vencimento'].weekday())]
+            else:
+                cleaned['dias_semana_recorrencia'] = []
+            frequencias_mensais = {
+                ContaPagar.FrequenciaRecorrencia.MENSAL,
+                ContaPagar.FrequenciaRecorrencia.TRIMESTRAL,
+                ContaPagar.FrequenciaRecorrencia.SEMESTRAL,
+                ContaPagar.FrequenciaRecorrencia.ANUAL,
+            }
+            if frequencia not in frequencias_mensais:
+                cleaned['regra_vencimento_mensal'] = ContaPagar.RegraVencimentoMensal.DATA_INFORMADA
+                cleaned['dia_vencimento_mensal'] = None
+            elif (
+                cleaned.get('regra_vencimento_mensal') == ContaPagar.RegraVencimentoMensal.DIA_FIXO
+                and not cleaned.get('dia_vencimento_mensal')
+            ):
+                self.add_error('dia_vencimento_mensal', 'Informe o dia do mês.')
         if self.pagamento and not cleaned.get('data_pagamento'):
             self.add_error('data_pagamento', 'Informe a data em que o pagamento ocorreu.')
         if (
