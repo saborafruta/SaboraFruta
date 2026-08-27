@@ -162,21 +162,23 @@
     background: var(--kc-accent);
   }
 
-  /* RAIA VAZIA ENCOLHE. São nove colunas, e numa confecção metade delas
-     costuma estar vazia a qualquer momento. Vazias com a largura das cheias
-     empurravam o trabalho de verdade para fora da tela — o usuário via
-     "Orçamento" e "Arte" e tinha de rolar para descobrir que Produção
-     existe. Encolhida, a coluna continua no lugar (a régua do processo não
-     muda) e devolve a largura para quem tem cartão. */
+  /* RAIA VAZIA ENCOLHE SÓ NA LARGURA. São nove colunas, e numa confecção
+     metade delas costuma estar vazia a qualquer momento. Mantê-las estreitas
+     deixa o fluxo visível, mas todas acompanham a altura da maior raia: assim
+     a coluna inteira continua sendo um alvo de arraste, inclusive para um
+     cartão que esteja no fim de uma coluna longa. */
+  .kc-board { align-items: stretch; }
   .kc-raia {
     flex: 1 1 214px;
     min-width: 214px;
+    align-self: stretch;
+    display: flex;
+    flex-direction: column;
     transition: flex-basis .18s ease, min-width .18s ease;
   }
   .kc-raia.vazia {
     flex: 0 0 126px;
     min-width: 126px;
-    align-self: flex-start;
     padding-bottom: 9px;
   }
   .kc-raia.vazia .kc-cabecalho {
@@ -192,6 +194,7 @@
   }
   .kc-raia.vazia .kc-resumo { display: none; }
   .kc-raia.vazia .kc-lista {
+    flex: 1 1 auto;
     min-height: 42px;
     display: grid;
     place-items: center;
@@ -220,7 +223,7 @@
   /* A coluna cheia rolava a PÁGINA inteira, e aí o cabeçalho das outras
      saía de vista: no meio da rolagem não dava para saber em que raia se
      está. Com o teto, a lista rola por dentro e os títulos ficam. */
-  .kc-lista { max-height: calc(100vh - 340px); overflow-y: auto; }
+  .kc-lista { flex: 1 1 auto; max-height: calc(100vh - 340px); overflow-y: auto; }
 
   /* Cartão escondido pela busca ao vivo. `display:none` e não opacidade:
      ele precisa sair do fluxo para a coluna encolher junto — o quadro se
@@ -366,7 +369,7 @@
     direita era justamente Produção e Pronto, o fim do fluxo.
   {% endcomment %}
   <div class="overflow-x-auto pb-3">
-    <div class="kc-board flex gap-3 items-start">
+    <div class="kc-board flex gap-3 items-stretch">
       {% for r in raias %}
         <div class="kc-raia p-3 space-y-2 {% if not r.total %}vazia{% endif %}"
              data-coluna="{{ r.coluna.chave }}">

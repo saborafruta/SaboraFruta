@@ -340,9 +340,12 @@ class AlertaNaTelaTests(RespostaBase):
         for coluna in ('orcamento', 'aprovacao', 'confirmado', 'producao', 'pronto', 'entregue'):
             self.assertContains(resposta, f'.kc-raia[data-coluna="{coluna}"]')
 
-    def test_coluna_vazia_e_compacta_e_expande_para_receber_cartao(self):
+    def test_colunas_igualam_altura_e_vazia_expande_para_receber_cartao(self):
         resposta = self._quadro()
 
+        self.assertContains(resposta, '.kc-board { align-items: stretch; }')
+        self.assertContains(resposta, 'align-self: stretch;')
+        self.assertContains(resposta, 'class="kc-board flex gap-3 items-stretch"')
         self.assertContains(resposta, "content: 'Sem pedidos'")
         self.assertContains(
             resposta, '.kc-raia.vazia .kc-contador { display: none; }',
