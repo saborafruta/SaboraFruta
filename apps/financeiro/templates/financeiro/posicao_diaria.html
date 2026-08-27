@@ -681,6 +681,7 @@
             <div><span class="text-xs text-gray-500">Documento</span><strong class="block">{{ detalhe.documento|default:'-' }}</strong></div>
           </div>
           <div class="mt-5 flex flex-wrap justify-end gap-2">
+            {% if detalhe.op_url %}<a href="{{ detalhe.op_url }}" target="_blank" rel="noopener noreferrer" class="btn-secondary">Ver mais informações da OP</a>{% endif %}
             {% if detalhe.referencia_url %}<a href="{{ detalhe.referencia_url }}" class="btn-secondary">Abrir lançamento de origem</a>{% endif %}
             {% if user_is_admin and detalhe.entrada and detalhe.editavel and not detalhe.excluido %}<button type="button" class="btn-primary" @click="detalheModal=false; entradaEdicao=true">Editar lançamento</button>{% endif %}
             {% if user_is_admin and detalhe.origem_codigo == 'manual' and not detalhe.excluido %}{% if not detalhe.entrada %}<a href="?data={{ data_referencia|date:'Y-m-d' }}&editar={{ detalhe.registro_id }}" class="btn-primary">Editar lançamento</a>{% endif %}<button type="button" class="btn-secondary text-rose-600" @click="excluirModal=true">Excluir</button>{% endif %}

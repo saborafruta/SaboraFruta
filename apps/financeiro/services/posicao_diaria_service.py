@@ -47,6 +47,7 @@ class MovimentoDiario:
     bandeira: str = ""
     numero_parcelas: int | None = None
     data_credito: date | None = None
+    op_url: str = ""
 
     @property
     def valor(self):
@@ -83,6 +84,30 @@ def _eh_despesa_pessoal(plano_contas):
             return True
         atual = atual.conta_pai
     return False
+
+
+def _contexto_titulo_receber(titulo):
+    """Traduz a origem contábil para a origem comercial exibida ao usuário."""
+    cliente = str(titulo.cliente)
+    classificacao = (
+        titulo.plano_contas.descricao
+        if titulo.plano_contas_id else "Conta a receber"
+    )
+    if titulo.documento_tipo == "pedido_moda" and titulo.documento_id:
+        numero = titulo.documento_numero or str(titulo.documento_id)
+        numero_exibicao = f"{int(numero):06d}" if str(numero).isdigit() else str(numero)
+        return {
+            "descricao": f"Venda OP #{numero_exibicao} - {cliente}",
+            "origem": "Venda",
+            "classificacao": "Venda de OP",
+            "op_url": reverse("moda:op2-detail", args=[titulo.documento_id]),
+        }
+    return {
+        "descricao": f"Recebimento de {cliente}",
+        "origem": "Conta a receber",
+        "classificacao": classificacao,
+        "op_url": "",
+    }
 
 
 class PosicaoDiariaCaixaService:
@@ -372,10 +397,11 @@ class PosicaoDiariaCaixaService:
             if conta and conta.pk not in self.conta_ids:
                 conta = None
             titulo = item.conta_receber
+            contexto_titulo = _contexto_titulo_receber(titulo)
             movimentos.append(MovimentoDiario(
                 data=data_movimento, conta=conta,
-                descricao=f"Recebimento de {titulo.cliente}", contraparte=str(titulo.cliente),
-                origem="Conta a receber", origem_codigo="receber", registro_id=titulo.pk,
+                descricao=contexto_titulo["descricao"], contraparte=str(titulo.cliente),
+                origem=contexto_titulo["origem"], origem_codigo="receber", registro_id=titulo.pk,
                 documento=titulo.documento_numero,
                 forma_pagamento=forma.descricao if forma else "Sem forma vinculada",
                 entrada=liquido, valor_bruto=bruto, valor_taxa=taxa,
@@ -390,9 +416,10 @@ class PosicaoDiariaCaixaService:
                 taxa_descontada=taxa > ZERO,
                 referencia_url=reverse("financeiro:receber_detail", args=[titulo.pk]),
                 momento=item.updated_at,
-                classificacao=titulo.plano_contas.descricao if titulo.plano_contas_id else "Conta a receber",
+                classificacao=contexto_titulo["classificacao"],
                 bandeira=item.bandeira,
                 numero_parcelas=item.numero_parcelas,
+                op_url=contexto_titulo["op_url"],
             ))
 
         pagamentos = PagamentoContaPagar.objects.filter(

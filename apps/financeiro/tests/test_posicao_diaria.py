@@ -617,7 +617,42 @@ class PosicaoDiariaCaixaTests(TestCase):
 
         entrada = next(item for item in posicao["entradas"] if item.registro_id == conta.pk)
         self.assertEqual(entrada.entrada, Decimal("150.00"))
-        self.assertEqual(entrada.origem, "Conta a receber")
+        self.assertEqual(entrada.origem, "Venda")
+        self.assertEqual(entrada.classificacao, "Venda de OP")
+        self.assertEqual(entrada.op_url, reverse("moda:op2-detail", args=[123]))
+
+    def test_recebimento_de_op_exibe_venda_e_abre_op_em_nova_aba(self):
+        hoje = timezone.localdate()
+        cliente = Cliente.objects.create(
+            filial=self.filial, razao_social="Cliente venda OP", tipo_pessoa="F",
+            cpf_cnpj="12345678906",
+        )
+        conta = ContaReceber.objects.create(
+            filial=self.filial, cliente=cliente, valor_original=Decimal("100.00"),
+            valor_final=Decimal("100.00"), valor_saldo=Decimal("100.00"),
+            data_emissao=hoje, data_vencimento=hoje, forma_pagamento=self.forma,
+            status=StatusContaReceber.ABERTO, documento_tipo="pedido_moda",
+            documento_id=3, documento_numero="3",
+        )
+        ContaReceberService.registrar_baixa(
+            conta, hoje, Decimal("100.00"), self.forma, self.usuario,
+            conta_bancaria=self.banco,
+        )
+
+        posicao = PosicaoDiariaCaixaService(self.filial, hoje).gerar()
+        movimento = next(item for item in posicao["entradas"] if item.registro_id == conta.pk)
+        op_url = reverse("moda:op2-detail", args=[3])
+
+        self.assertEqual(movimento.origem, "Venda")
+        self.assertEqual(movimento.classificacao, "Venda de OP")
+        self.assertEqual(movimento.descricao, "Venda OP #000003 - Cliente venda OP")
+        self.assertEqual(movimento.op_url, op_url)
+
+        response = self.client.get(reverse("financeiro:posicao_diaria"), {
+            "data": hoje.isoformat(), "origem": "receber", "movimento": conta.pk,
+        })
+        self.assertContains(response, "Ver mais informações da OP")
+        self.assertContains(response, f'href="{op_url}" target="_blank"')
 
     def test_venda_consulta_prazo_atual_da_forma_ao_registrar_pagamento(self):
         self.forma.prazo_compensacao_dias_uteis = 1
