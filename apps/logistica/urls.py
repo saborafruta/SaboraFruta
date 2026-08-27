@@ -1,6 +1,6 @@
 from django.urls import path
 
-from apps.logistica import views
+from apps.logistica import views, views_viagem
 
 app_name = "logistica"
 
@@ -19,6 +19,15 @@ urlpatterns = [
     path("ordens-coleta/<int:pk>/editar/", views.OrdemColetaUpdateView.as_view(), name="ordem-coleta-update"),
     path("ordens-coleta/<int:pk>/itens/novo/", views.ItemOrdemColetaCreateView.as_view(), name="ordem-coleta-item-create"),
     path("ordens-coleta/<int:pk>/itens/<int:item_pk>/remover/", views.ItemOrdemColetaDeleteView.as_view(), name="ordem-coleta-item-delete"),
+    # ── Viagem e carga ───────────────────────────────────────────────
+    path("viagens/", views_viagem.ViagemListView.as_view(), name="viagem-list"),
+    path("viagens/nova/", views_viagem.ViagemCreateView.as_view(), name="viagem-create"),
+    path("viagens/<int:pk>/", views_viagem.ViagemDetailView.as_view(), name="viagem-detail"),
+    path("viagens/<int:pk>/editar/", views_viagem.ViagemUpdateView.as_view(), name="viagem-update"),
+    path("viagens/<int:pk>/status/", views_viagem.ViagemMudarStatusView.as_view(), name="viagem-status"),
+    path("viagens/<int:pk>/fechar-carga/", views_viagem.ViagemFecharCargaView.as_view(), name="viagem-fechar-carga"),
+    path("viagens/<int:pk>/cancelar/", views_viagem.ViagemCancelarView.as_view(), name="viagem-cancelar"),
+
     path("manifestos/", views.ManifestoCargaListView.as_view(), name="manifesto-list"),
     path("manifestos/novo/", views.ManifestoCargaCreateView.as_view(), name="manifesto-create"),
     path("manifestos/<int:pk>/", views.ManifestoCargaDetailView.as_view(), name="manifesto-detail"),

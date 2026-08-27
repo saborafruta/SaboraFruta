@@ -61,6 +61,20 @@ class ViagemService:
 
     # ── Montar ───────────────────────────────────────────────────────────
 
+    @staticmethod
+    def proximo_numero(filial) -> int:
+        """
+        O próximo número da filial.
+
+        A TELA MOSTRA, MAS NÃO PEDE. Deixar digitar produz número repetido, que
+        só bate na unique depois de a pessoa já ter preenchido tudo.
+        """
+        ultimo = (
+            Viagem.objects.filter(filial=filial)
+            .order_by('-numero').values_list('numero', flat=True).first()
+        )
+        return (ultimo or 0) + 1
+
     @classmethod
     @transaction.atomic
     def criar(cls, filial, dados: dict, usuario=None) -> Viagem:
@@ -71,20 +85,37 @@ class ViagemService:
         da pessoa já ter preenchido tudo, e inventar numeração à mão não é
         trabalho de quem monta carga.
         """
-        ultimo = (
-            Viagem.objects.filter(filial=filial)
-            .order_by('-numero').values_list('numero', flat=True).first()
-        )
+        motorista, veiculo = dados.get('motorista'), dados.get('veiculo')
+        # O CADASTRO PREENCHE E O TEXTO FICA: a viagem de dois anos atras
+        # continua dizendo quem levou, mesmo que o cadastro mude depois.
+        nome_motorista = (dados.get('motorista_nome') or '').strip()
+        if motorista and not nome_motorista:
+            nome_motorista = motorista.nome
+        documento_motorista = (dados.get('motorista_documento') or '').strip()
+        if motorista and not documento_motorista:
+            documento_motorista = motorista.cpf or ''
+        placa = (dados.get('veiculo_placa') or '').strip().upper()
+        if veiculo and not placa:
+            placa = (veiculo.placa or '').upper()
+        descricao_veiculo = (dados.get('veiculo_descricao') or '').strip()
+        if veiculo and not descricao_veiculo:
+            descricao_veiculo = veiculo.descricao or ' '.join(
+                p for p in (veiculo.marca, veiculo.modelo) if p
+            )
         return Viagem.objects.create(
             filial=filial,
-            numero=(ultimo or 0) + 1,
+            numero=cls.proximo_numero(filial),
             data_saida=dados.get('data_saida') or timezone.localdate(),
-            responsavel=usuario,
+            hora_saida=dados.get('hora_saida'),
+            previsao_retorno=dados.get('previsao_retorno'),
+            responsavel=dados.get('responsavel') or usuario,
             vendedor=dados.get('vendedor'),
-            motorista_nome=(dados.get('motorista_nome') or '').strip(),
-            motorista_documento=(dados.get('motorista_documento') or '').strip(),
-            veiculo_placa=(dados.get('veiculo_placa') or '').strip().upper(),
-            veiculo_descricao=(dados.get('veiculo_descricao') or '').strip(),
+            motorista=motorista,
+            motorista_nome=nome_motorista,
+            motorista_documento=documento_motorista,
+            veiculo=veiculo,
+            veiculo_placa=placa,
+            veiculo_descricao=descricao_veiculo,
             transportadora=dados.get('transportadora'),
             rota=(dados.get('rota') or '').strip(),
             uf_origem=(dados.get('uf_origem') or getattr(filial, 'uf', '') or '').upper(),
@@ -212,7 +243,11 @@ class ViagemService:
                 saldo.quantidade_remetida = (saldo.quantidade_remetida or ZERO) + item.quantidade
                 saldo.save(update_fields=['quantidade_remetida', 'updated_at'])
 
-        viagem.status = Viagem.Status.EM_ROTA
+        # NAO VAI DIRETO PARA A ESTRADA. A mercadoria baixou do estoque, mas o
+        # documento ainda nao existe -- e o caminhao nao pode sair sem ele.
+        # Esse intervalo tem status proprio justamente para ninguem confundir
+        # "carga pronta" com "pode sair".
+        viagem.status = Viagem.Status.AGUARDANDO_DOCUMENTOS
         viagem.save(update_fields=['status', 'updated_at'])
         return viagem
 
@@ -313,8 +348,8 @@ class ViagemService:
         mercadoria da empresa que está na rua — exatamente o que a
         fiscalização pede para ver. Quebra e perda saem por baixa declarada.
         """
-        if viagem.status == Viagem.Status.ENCERRADA:
-            raise DadosInvalidosError('Esta viagem já foi encerrada.')
+        if viagem.status == Viagem.Status.FINALIZADA:
+            raise DadosInvalidosError('Esta viagem já foi finalizada.')
         if viagem.status == Viagem.Status.CANCELADA:
             raise DadosInvalidosError('Viagem cancelada não encerra.')
 
@@ -324,7 +359,7 @@ class ViagemService:
                 'A carga não fecha: ' + ' '.join(pendencias)
                 + ' Registre venda, bonificação, retorno ou baixa.'
             )
-        viagem.status = Viagem.Status.ENCERRADA
+        viagem.status = Viagem.Status.FINALIZADA
         viagem.data_retorno = viagem.data_retorno or timezone.localdate()
         viagem.save(update_fields=['status', 'data_retorno', 'updated_at'])
         return viagem
@@ -407,6 +442,65 @@ class ViagemService:
             por_cliente.values(),
             key=lambda linha: (linha['rotulo'], str(linha['cliente'])),
         )
+
+    # ── Andar no ciclo ───────────────────────────────────────────────────
+
+    @classmethod
+    @transaction.atomic
+    def mudar_status(cls, viagem: Viagem, destino: str, usuario=None) -> Viagem:
+        """
+        Move a viagem uma etapa.
+
+        RECUSA O SALTO. Sem isto o status vira enfeite: alguém marca
+        "Finalizada" numa viagem que nunca saiu, e a prestação de contas deixa
+        de significar coisa alguma.
+        """
+        if destino == viagem.status:
+            return viagem
+        if not viagem.pode_ir_para(destino):
+            rotulos = dict(Viagem.Status.choices)
+            possiveis = ', '.join(r for _, r in viagem.proximos_status()) or 'nenhuma'
+            raise DadosInvalidosError(
+                f'Uma viagem em "{rotulos[viagem.status]}" não vai direto para '
+                f'"{rotulos.get(destino, destino)}". Daqui ela pode ir para: {possiveis}.'
+            )
+        # Finalizar tem regra propria -- e' onde o saldo da rua e' cobrado.
+        if destino == Viagem.Status.FINALIZADA:
+            return cls.encerrar(viagem)
+
+        campos = ['status', 'updated_at']
+        viagem.status = destino
+        if destino == Viagem.Status.AGUARDANDO_CONFERENCIA and not viagem.data_retorno:
+            viagem.data_retorno = timezone.localdate()
+            campos.append('data_retorno')
+        viagem.save(update_fields=campos)
+        return viagem
+
+    @classmethod
+    @transaction.atomic
+    def cancelar(cls, viagem: Viagem, motivo: str = '') -> Viagem:
+        """
+        Cancela a viagem.
+
+        SÓ ANTES DE SAIR. Depois que a mercadoria deixou o estabelecimento há
+        documento emitido e estoque movimentado; desfazer isso é cancelamento
+        de nota e devolução, não um clique nesta tela.
+        """
+        if viagem.status in Viagem.STATUS_ENCERRADOS:
+            raise DadosInvalidosError('Esta viagem já está encerrada.')
+        if viagem.saiu:
+            raise DadosInvalidosError(
+                'A carga já saiu: cancele os documentos fiscais e registre o '
+                'retorno da mercadoria antes de cancelar a viagem.'
+            )
+        viagem.status = Viagem.Status.CANCELADA
+        if motivo:
+            quebra = chr(10)
+            viagem.observacao = (
+                f'{viagem.observacao}{quebra}[Cancelamento] {motivo}'.strip()
+            )
+        viagem.save(update_fields=['status', 'observacao', 'updated_at'])
+        return viagem
 
     # ── Guardas ──────────────────────────────────────────────────────────
 

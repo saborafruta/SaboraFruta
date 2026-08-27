@@ -389,7 +389,7 @@ class PrestacaoDeContasTests(ViagemBase):
         ViagemService.encerrar(self.viagem)
 
         self.viagem.refresh_from_db()
-        self.assertEqual(self.viagem.status, Viagem.Status.ENCERRADA)
+        self.assertEqual(self.viagem.status, Viagem.Status.FINALIZADA)
 
     def test_a_conciliacao_mostra_a_conta_linha_a_linha(self):
         ViagemService.registrar_saida_do_saldo(
@@ -573,3 +573,226 @@ class ViagemDoExemploTests(ViagemBase):
         self.assertEqual(
             ViagemService.resumo(self.viagem)['em_poder'], Decimal('200.000'),
         )
+
+
+class CicloDeVidaTests(ViagemBase):
+    """
+    As etapas da viagem, e o que não se pode pular.
+
+    Entre fechar a carga e o veículo sair há um intervalo em que a mercadoria
+    já baixou do estoque mas o documento ainda não foi autorizado. Um status só
+    para "em rota" esconderia esse intervalo, e ninguém saberia dizer se o
+    caminhão pode ou não sair.
+    """
+
+    def setUp(self):
+        self.viagem = self._viagem(vendedor=self.usuario)
+
+    def _com_carga(self):
+        produto = self._produto()
+        ViagemService.adicionar_item(self.viagem, {
+            'natureza': self.remessa, 'produto': produto,
+            'quantidade': '10', 'valor_unitario': '4',
+        })
+        return produto
+
+    # ── O caminho normal ─────────────────────────────────────────────────
+
+    def test_a_viagem_nasce_em_rascunho(self):
+        self.assertEqual(self.viagem.status, Viagem.Status.RASCUNHO)
+
+    def test_fechar_a_carga_para_em_aguardando_documentos(self):
+        """
+        A mercadoria baixou do estoque, mas o documento ainda não existe -- e o
+        caminhão não pode sair sem ele.
+        """
+        self._com_carga()
+        ViagemService.mudar_status(self.viagem, Viagem.Status.EM_PREPARACAO)
+
+        ViagemService.fechar_carga(self.viagem, usuario=self.usuario)
+
+        self.assertEqual(self.viagem.status, Viagem.Status.AGUARDANDO_DOCUMENTOS)
+
+    def test_o_ciclo_inteiro_ate_finalizar(self):
+        produto = self._com_carga()
+        ViagemService.mudar_status(self.viagem, Viagem.Status.EM_PREPARACAO)
+        ViagemService.fechar_carga(self.viagem, usuario=self.usuario)
+
+        for destino in (
+            Viagem.Status.DOCUMENTOS_EMITIDOS,
+            Viagem.Status.MDFE_AUTORIZADO,
+            Viagem.Status.EM_TRANSITO,
+            Viagem.Status.EM_VENDAS,
+            Viagem.Status.RETORNANDO,
+            Viagem.Status.AGUARDANDO_CONFERENCIA,
+        ):
+            ViagemService.mudar_status(self.viagem, destino)
+            self.assertEqual(self.viagem.status, destino)
+
+        ViagemService.registrar_retorno(
+            self.viagem, produto, Decimal('10'), usuario=self.usuario,
+        )
+        ViagemService.mudar_status(self.viagem, Viagem.Status.FINALIZADA)
+
+        self.viagem.refresh_from_db()
+        self.assertEqual(self.viagem.status, Viagem.Status.FINALIZADA)
+
+    def test_carga_que_nao_precisa_de_mdfe_sai_direto(self):
+        """Nem toda carga exige manifesto; forçar a etapa travaria a saída."""
+        self._com_carga()
+        ViagemService.mudar_status(self.viagem, Viagem.Status.EM_PREPARACAO)
+        ViagemService.fechar_carga(self.viagem, usuario=self.usuario)
+        ViagemService.mudar_status(self.viagem, Viagem.Status.DOCUMENTOS_EMITIDOS)
+
+        ViagemService.mudar_status(self.viagem, Viagem.Status.EM_TRANSITO)
+
+        self.assertEqual(self.viagem.status, Viagem.Status.EM_TRANSITO)
+
+    def test_transito_e_vendas_alternam(self):
+        """O veículo roda, para, vende, roda de novo."""
+        self.viagem.status = Viagem.Status.EM_TRANSITO
+        self.viagem.save(update_fields=['status'])
+
+        ViagemService.mudar_status(self.viagem, Viagem.Status.EM_VENDAS)
+        ViagemService.mudar_status(self.viagem, Viagem.Status.EM_TRANSITO)
+
+        self.assertEqual(self.viagem.status, Viagem.Status.EM_TRANSITO)
+
+    # ── O que não se pode pular ──────────────────────────────────────────
+
+    def test_nao_da_para_finalizar_uma_viagem_que_nunca_saiu(self):
+        """
+        Sem transição válida o status vira enfeite, e a prestação de contas
+        deixa de significar coisa alguma.
+        """
+        with self.assertRaises(DadosInvalidosError) as erro:
+            ViagemService.mudar_status(self.viagem, Viagem.Status.FINALIZADA)
+
+        self.assertIn('não vai direto para', str(erro.exception))
+
+    def test_o_erro_diz_para_onde_da_para_ir(self):
+        with self.assertRaises(DadosInvalidosError) as erro:
+            ViagemService.mudar_status(self.viagem, Viagem.Status.EM_TRANSITO)
+
+        self.assertIn('Em preparação', str(erro.exception))
+
+    def test_viagem_finalizada_nao_anda_mais(self):
+        self.viagem.status = Viagem.Status.FINALIZADA
+        self.viagem.save(update_fields=['status'])
+
+        with self.assertRaises(DadosInvalidosError):
+            ViagemService.mudar_status(self.viagem, Viagem.Status.EM_TRANSITO)
+
+    def test_repetir_o_status_atual_nao_e_erro(self):
+        """Clicar duas vezes no mesmo botão não pode virar mensagem de erro."""
+        antes = self.viagem.status
+
+        ViagemService.mudar_status(self.viagem, antes)
+
+        self.assertEqual(self.viagem.status, antes)
+
+    # ── A carga só muda enquanto nada saiu ───────────────────────────────
+
+    def test_em_preparacao_a_carga_ainda_muda(self):
+        produto = self._produto()
+        ViagemService.mudar_status(self.viagem, Viagem.Status.EM_PREPARACAO)
+
+        item = ViagemService.adicionar_item(self.viagem, {
+            'natureza': self.remessa, 'produto': produto, 'quantidade': '5',
+        })
+
+        self.assertIsNotNone(item.pk)
+
+    def test_depois_de_aguardar_documentos_a_carga_nao_muda(self):
+        produto = self._com_carga()
+        ViagemService.mudar_status(self.viagem, Viagem.Status.EM_PREPARACAO)
+        ViagemService.fechar_carga(self.viagem, usuario=self.usuario)
+
+        with self.assertRaises(DadosInvalidosError):
+            ViagemService.adicionar_item(self.viagem, {
+                'natureza': self.remessa, 'produto': produto, 'quantidade': '1',
+            })
+
+    # ── Cancelar ─────────────────────────────────────────────────────────
+
+    def test_viagem_que_nao_saiu_cancela(self):
+        ViagemService.cancelar(self.viagem, motivo='Cliente desmarcou')
+
+        self.assertEqual(self.viagem.status, Viagem.Status.CANCELADA)
+        self.assertIn('Cliente desmarcou', self.viagem.observacao)
+
+    def test_carga_que_ja_saiu_nao_cancela_com_um_clique(self):
+        """
+        Há documento emitido e estoque movimentado: desfazer isso é
+        cancelamento de nota e devolução, não um clique nesta tela.
+        """
+        self._com_carga()
+        ViagemService.mudar_status(self.viagem, Viagem.Status.EM_PREPARACAO)
+        ViagemService.fechar_carga(self.viagem, usuario=self.usuario)
+
+        with self.assertRaises(DadosInvalidosError) as erro:
+            ViagemService.cancelar(self.viagem)
+
+        self.assertIn('já saiu', str(erro.exception))
+
+    # ── Os campos que a tela pede ────────────────────────────────────────
+
+    def test_previsao_e_retorno_sao_campos_diferentes(self):
+        """
+        Guardar só um faz a viagem atrasada parecer no prazo: a data muda
+        quando ela volta, e some a informação de que deveria ter voltado antes.
+        """
+        from datetime import date, time
+
+        viagem = ViagemService.criar(self.filial, {
+            'motorista_nome': 'Seu Zé', 'veiculo_placa': 'ABC1D23',
+            'hora_saida': time(6, 30),
+            'previsao_retorno': date(2026, 9, 10),
+        }, usuario=self.usuario)
+
+        self.assertEqual(viagem.hora_saida, time(6, 30))
+        self.assertEqual(viagem.previsao_retorno, date(2026, 9, 10))
+        self.assertIsNone(viagem.data_retorno)
+
+    def test_escolher_do_cadastro_preenche_nome_e_placa(self):
+        from apps.cadastros.models import Motorista, Veiculo
+
+        motorista = Motorista.objects.create(
+            filial=self.filial, nome='João da Silva', cpf='12345678901',
+        )
+        veiculo = Veiculo.objects.create(
+            filial=self.filial, placa='ABC1D23', marca='Volvo', modelo='FH 460',
+        )
+
+        viagem = ViagemService.criar(self.filial, {
+            'motorista': motorista, 'veiculo': veiculo,
+        }, usuario=self.usuario)
+
+        self.assertEqual(viagem.motorista_nome, 'João da Silva')
+        self.assertEqual(viagem.motorista_documento, '12345678901')
+        self.assertEqual(viagem.veiculo_placa, 'ABC1D23')
+        self.assertIn('Volvo', viagem.veiculo_descricao)
+
+    def test_o_texto_digitado_vence_o_cadastro(self):
+        """
+        Quem digitou por cima teve um motivo -- placa de reboque, motorista
+        substituto. Sobrescrever com o cadastro apagaria a correção.
+        """
+        from apps.cadastros.models import Motorista
+
+        motorista = Motorista.objects.create(
+            filial=self.filial, nome='João da Silva', cpf='12345678901',
+        )
+
+        viagem = ViagemService.criar(self.filial, {
+            'motorista': motorista, 'motorista_nome': 'João (substituto)',
+        }, usuario=self.usuario)
+
+        self.assertEqual(viagem.motorista_nome, 'João (substituto)')
+
+    def test_a_viagem_diz_para_onde_pode_ir(self):
+        """A tela mostra só os botões que levam a algum lugar."""
+        destinos = dict(self.viagem.proximos_status())
+
+        self.assertIn(Viagem.Status.EM_PREPARACAO, destinos)
+        self.assertNotIn(Viagem.Status.FINALIZADA, destinos)

@@ -1,0 +1,129 @@
+{% extends "_base.html" %}
+{% block title %}Viagens{% endblock %}
+{% block page_title %}Viagens{% endblock %}
+{% block content %}
+<div class="space-y-5">
+
+  <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+    <div>
+      <h2 class="text-2xl font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">Viagens</h2>
+      <p class="text-sm mt-0.5" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+        Venda já fechada, venda fora do estabelecimento e bonificação no mesmo caminhão.
+      </p>
+    </div>
+    {% if pode_agir %}
+      <a href="{% url 'logistica:viagem-create' %}" class="btn-primary">+ Nova Viagem</a>
+    {% endif %}
+  </div>
+
+  <div class="grid grid-cols-2 lg:grid-cols-4 gap-4">
+    <div class="card p-4">
+      <p class="text-xs font-medium uppercase tracking-wide" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Viagens</p>
+      <p class="text-lg font-bold mt-0.5" :style="temaClaro ? 'color:#1d4ed8;' : 'color:#93c5fd;'">{{ kpis.total }}</p>
+    </div>
+    <div class="card p-4">
+      <p class="text-xs font-medium uppercase tracking-wide" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Na estrada</p>
+      <p class="text-lg font-bold mt-0.5" :style="temaClaro ? 'color:#1d4ed8;' : 'color:#93c5fd;'">{{ kpis.na_estrada }}</p>
+    </div>
+    {% comment %}
+      "Aguardando documentos" tem destaque proprio: e' o intervalo em que a
+      mercadoria ja' baixou do estoque mas o caminhao ainda nao pode sair.
+    {% endcomment %}
+    <div class="card p-4" :style="temaClaro ? 'border-color:#f59e0b;' : 'border-color:#b45309;'">
+      <p class="text-xs font-medium uppercase tracking-wide" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Aguardando documentos</p>
+      <p class="text-lg font-bold mt-0.5" style="color:#f59e0b;">{{ kpis.aguardando_documentos }}</p>
+    </div>
+    <div class="card p-4">
+      <p class="text-xs font-medium uppercase tracking-wide" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">A conferir</p>
+      <p class="text-lg font-bold mt-0.5" :style="temaClaro ? 'color:#b45309;' : 'color:#fcd34d;'">{{ kpis.aguardando_conferencia }}</p>
+    </div>
+  </div>
+
+  <form method="get" class="card p-4 grid grid-cols-1 md:grid-cols-12 gap-3">
+    <div class="md:col-span-6">
+      <label for="q" class="block text-[11px] font-semibold uppercase tracking-wide mb-1"
+             :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Buscar</label>
+      <input id="q" name="q" value="{{ busca }}" class="form-input"
+             placeholder="Número, motorista, placa ou rota...">
+    </div>
+    <div class="md:col-span-4">
+      <label for="status" class="block text-[11px] font-semibold uppercase tracking-wide mb-1"
+             :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Etapa</label>
+      <select id="status" name="status" class="form-input">
+        <option value="">Todas as etapas</option>
+        {% for valor, rotulo in status_choices %}
+          <option value="{{ valor }}" {% if valor == status_filtro %}selected{% endif %}>{{ rotulo }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="md:col-span-2 flex gap-2 md:items-end md:pb-px">
+      <button type="submit" class="btn-secondary w-full justify-center">Filtrar</button>
+      <a href="{% url 'logistica:viagem-list' %}" class="btn-secondary px-3 flex items-center justify-center" title="Limpar">✕</a>
+    </div>
+  </form>
+
+  <div class="card overflow-hidden">
+    <div class="overflow-x-auto">
+      <table class="w-full text-sm">
+        <thead>
+          <tr :style="temaClaro ? 'border-bottom:1px solid #e5e7eb;background:#f8fafc;' : 'border-bottom:1px solid #2a2a2e;background:#1e1e20;'">
+            <th class="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wide" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Número</th>
+            <th class="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wide" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Saída</th>
+            <th class="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wide" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Etapa</th>
+            <th class="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wide" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Motorista / Placa</th>
+            <th class="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wide" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Rota</th>
+            <th class="text-right px-4 py-3 text-xs font-semibold uppercase tracking-wide" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Itens</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for viagem in viagens %}
+            <tr class="table-row-hover border-b" :style="temaClaro ? 'border-color:#f1f5f9;' : 'border-color:#2a2a2e;'">
+              <td class="px-4 py-3">
+                <a class="font-semibold hover:underline" :style="temaClaro ? 'color:#1d4ed8;' : 'color:#93c5fd;'"
+                   href="{% url 'logistica:viagem-detail' viagem.pk %}">#{{ viagem.numero|stringformat:"06d" }}</a>
+              </td>
+              <td class="px-4 py-3" :style="temaClaro ? 'color:#374151;' : 'color:#d1d5db;'">
+                {{ viagem.data_saida|date:"d/m/Y" }}{% if viagem.hora_saida %} · {{ viagem.hora_saida|time:"H:i" }}{% endif %}
+              </td>
+              <td class="px-4 py-3">
+                <span class="soft-pill {% if viagem.status == 'finalizada' %}is-green{% elif viagem.status == 'cancelada' %}is-red{% elif viagem.status == 'aguardando_documentos' %}is-amber{% elif viagem.saiu %}is-blue{% else %}is-slate{% endif %}">
+                  {{ viagem.get_status_display }}
+                </span>
+              </td>
+              <td class="px-4 py-3" :style="temaClaro ? 'color:#374151;' : 'color:#d1d5db;'">
+                {{ viagem.motorista_nome|default:"—" }}
+                {% if viagem.veiculo_placa %}<span class="font-mono text-xs ml-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">{{ viagem.veiculo_placa }}</span>{% endif %}
+              </td>
+              <td class="px-4 py-3" :style="temaClaro ? 'color:#374151;' : 'color:#d1d5db;'">{{ viagem.rota|default:"—" }}</td>
+              <td class="px-4 py-3 text-right" :style="temaClaro ? 'color:#374151;' : 'color:#d1d5db;'">{{ viagem.qtd_itens }}</td>
+            </tr>
+          {% empty %}
+            <tr>
+              <td colspan="6" class="px-4 py-12 text-center" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+                {% if busca or status_filtro %}
+                  Nenhuma viagem com esse filtro.
+                {% else %}
+                  Nenhuma viagem ainda. A primeira começa em "Nova Viagem".
+                {% endif %}
+              </td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% if page_obj.paginator.num_pages > 1 %}
+      <div class="flex items-center justify-between gap-3 px-5 py-3 text-sm border-t"
+           :style="temaClaro ? 'border-color:#e2e8f0;' : 'border-color:#2a2a2e;'">
+        <span :style="temaClaro ? 'color:#6b7280;' : 'color:#94a3b8;'">
+          Página {{ page_obj.number }} de {{ page_obj.paginator.num_pages }} ({{ page_obj.paginator.count }} viagens)
+        </span>
+        <div class="flex gap-2">
+          {% if page_obj.has_previous %}<a href="?q={{ busca }}&status={{ status_filtro }}&page={{ page_obj.previous_page_number }}" class="btn-secondary">← Anterior</a>{% endif %}
+          {% if page_obj.has_next %}<a href="?q={{ busca }}&status={{ status_filtro }}&page={{ page_obj.next_page_number }}" class="btn-secondary">Próxima →</a>{% endif %}
+        </div>
+      </div>
+    {% endif %}
+  </div>
+
+</div>
+{% endblock %}

@@ -45,26 +45,71 @@ class Viagem(FilialScopedModel):
     """A saída de um veículo, com tudo que ele leva."""
 
     class Status(models.TextChoices):
-        # Ainda montando a carga; nada saiu, nada foi emitido.
-        PLANEJAMENTO = 'planejamento', 'Em planejamento'
-        # Carga fechada e documentos emitidos; o veículo pode sair.
-        EM_ROTA = 'em_rota', 'Em rota'
-        # Voltou e está sendo conferida: o que vendeu, o que retorna.
-        EM_CONFERENCIA = 'em_conferencia', 'Em conferência'
-        # Conferida e fechada. O saldo de carga zerou.
-        ENCERRADA = 'encerrada', 'Encerrada'
+        """
+        O ciclo de uma viagem, do papel à prestação de contas.
+
+        SÃO ETAPAS DE VERDADE, e não rótulos. Entre fechar a carga e o veículo
+        sair há um intervalo em que a mercadoria já baixou do estoque mas o
+        documento ainda não foi autorizado — e é justamente aí que as coisas
+        dão errado. Um status só para "em rota" esconderia esse intervalo, e
+        ninguém saberia dizer se o caminhão pode ou não sair.
+        """
+
+        RASCUNHO = 'rascunho', 'Rascunho'
+        EM_PREPARACAO = 'em_preparacao', 'Em preparação'
+        AGUARDANDO_DOCUMENTOS = 'aguardando_documentos', 'Aguardando documentos fiscais'
+        DOCUMENTOS_EMITIDOS = 'documentos_emitidos', 'Documentos emitidos'
+        MDFE_AUTORIZADO = 'mdfe_autorizado', 'MDF-e autorizado'
+        EM_TRANSITO = 'em_transito', 'Em trânsito'
+        EM_VENDAS = 'em_vendas', 'Em vendas'
+        RETORNANDO = 'retornando', 'Retornando'
+        AGUARDANDO_CONFERENCIA = 'aguardando_conferencia', 'Aguardando conferência'
+        FINALIZADA = 'finalizada', 'Finalizada'
         CANCELADA = 'cancelada', 'Cancelada'
 
-    # Depois de sair, mexer na carga é reescrever o que o documento já disse.
-    STATUS_EDITAVEIS = (Status.PLANEJAMENTO,)
-    STATUS_ABERTOS = (Status.PLANEJAMENTO, Status.EM_ROTA, Status.EM_CONFERENCIA)
+    # Enquanto nada saiu do estoque e nenhum documento existe, a carga é livre.
+    STATUS_EDITAVEIS = (Status.RASCUNHO, Status.EM_PREPARACAO)
+    # Depois que a carga fechou, mexer nela é reescrever o que o documento já
+    # disse -- a correção passa a ser por baixa, retorno ou cancelamento.
+    STATUS_ENCERRADOS = (Status.FINALIZADA, Status.CANCELADA)
+
+    # AS TRANSIÇÕES SÃO EXPLÍCITAS. Sem elas o status vira enfeite: alguém
+    # marca "Finalizada" numa viagem que nunca saiu, e a prestação de contas
+    # deixa de significar coisa alguma.
+    TRANSICOES = {
+        Status.RASCUNHO: (Status.EM_PREPARACAO, Status.CANCELADA),
+        Status.EM_PREPARACAO: (Status.RASCUNHO, Status.AGUARDANDO_DOCUMENTOS, Status.CANCELADA),
+        Status.AGUARDANDO_DOCUMENTOS: (Status.DOCUMENTOS_EMITIDOS, Status.CANCELADA),
+        # Nem toda carga precisa de MDF-e: quando não precisa, sai direto.
+        Status.DOCUMENTOS_EMITIDOS: (
+            Status.MDFE_AUTORIZADO, Status.EM_TRANSITO, Status.CANCELADA,
+        ),
+        Status.MDFE_AUTORIZADO: (Status.EM_TRANSITO, Status.CANCELADA),
+        # Em trânsito e em vendas alternam: o veículo roda, para, vende, roda.
+        Status.EM_TRANSITO: (Status.EM_VENDAS, Status.RETORNANDO),
+        Status.EM_VENDAS: (Status.EM_TRANSITO, Status.RETORNANDO),
+        Status.RETORNANDO: (Status.AGUARDANDO_CONFERENCIA,),
+        Status.AGUARDANDO_CONFERENCIA: (Status.FINALIZADA,),
+        Status.FINALIZADA: (),
+        Status.CANCELADA: (),
+    }
 
     numero = models.PositiveIntegerField(db_index=True)
     data_saida = models.DateField(default=timezone.localdate, db_index=True)
-    data_retorno = models.DateField(null=True, blank=True)
+    hora_saida = models.TimeField(
+        null=True, blank=True,
+        help_text='A hora em que o veículo deixa a empresa.',
+    )
+    # PREVISAO E RETORNO SAO CAMPOS DIFERENTES. Guardar so' um faz a viagem
+    # atrasada parecer no prazo: a data muda quando ela volta, e some a
+    # informacao de que deveria ter voltado antes.
+    previsao_retorno = models.DateField(null=True, blank=True)
+    data_retorno = models.DateField(
+        null=True, blank=True, help_text='Quando o veículo efetivamente voltou.',
+    )
     status = models.CharField(
-        max_length=20, choices=Status.choices,
-        default=Status.PLANEJAMENTO, db_index=True,
+        max_length=30, choices=Status.choices,
+        default=Status.RASCUNHO, db_index=True,
     )
 
     responsavel = models.ForeignKey(
@@ -79,8 +124,20 @@ class Viagem(FilialScopedModel):
         help_text='Quem responde pela mercadoria que sai sem comprador.',
     )
 
+    # O CADASTRO PREENCHE, O TEXTO PERMANECE. Escolher do cadastro evita
+    # digitar nome e placa errados; guardar o texto junto e' o que faz a viagem
+    # de dois anos atras continuar dizendo quem levou, mesmo que o motorista
+    # tenha saido da empresa e o cadastro dele mude.
+    motorista = models.ForeignKey(
+        'cadastros.Motorista', on_delete=models.SET_NULL,
+        null=True, blank=True, related_name='viagens',
+    )
     motorista_nome = models.CharField(max_length=120, blank=True)
     motorista_documento = models.CharField(max_length=30, blank=True)
+    veiculo = models.ForeignKey(
+        'cadastros.Veiculo', on_delete=models.SET_NULL,
+        null=True, blank=True, related_name='viagens',
+    )
     veiculo_placa = models.CharField(max_length=10, blank=True)
     veiculo_descricao = models.CharField(max_length=100, blank=True)
     transportadora = models.ForeignKey(
@@ -122,7 +179,22 @@ class Viagem(FilialScopedModel):
 
     @property
     def aberta(self) -> bool:
-        return self.status in self.STATUS_ABERTOS
+        return self.status not in self.STATUS_ENCERRADOS
+
+    @property
+    def saiu(self) -> bool:
+        """A mercadoria já deixou o estabelecimento."""
+        return self.status not in (
+            self.Status.RASCUNHO, self.Status.EM_PREPARACAO, self.Status.CANCELADA,
+        )
+
+    def proximos_status(self) -> list[tuple[str, str]]:
+        """Para onde esta viagem pode ir a partir de onde está."""
+        rotulos = dict(self.Status.choices)
+        return [(valor, rotulos[valor]) for valor in self.TRANSICOES.get(self.status, ())]
+
+    def pode_ir_para(self, destino: str) -> bool:
+        return destino in self.TRANSICOES.get(self.status, ())
 
 
 class ItemCarga(TimestampedModel):
