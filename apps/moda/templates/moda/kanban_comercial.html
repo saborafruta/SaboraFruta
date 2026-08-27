@@ -180,16 +180,10 @@
     padding-bottom: 9px;
   }
   .kc-raia.vazia .kc-cabecalho {
-    position: relative;
     align-items: flex-start;
     gap: 0;
-    padding-right: 28px;
   }
-  .kc-raia.vazia .kc-contador {
-    position: absolute;
-    top: 0;
-    right: 0;
-  }
+  .kc-raia.vazia .kc-contador { display: none; }
   .kc-raia.vazia .kc-titulo {
     writing-mode: horizontal-tb;
     transform: none;
@@ -218,9 +212,7 @@
     flex-direction: row;
     align-items: baseline;
     gap: 6px;
-    padding-right: 0;
   }
-  .kc-raia.vazia.recebendo .kc-contador { position: static; }
   .kc-raia.vazia.recebendo .kc-titulo { writing-mode: horizontal-tb; transform: none; }
   .kc-raia.vazia.recebendo .kc-lista { min-height: 140px; }
   .kc-raia.vazia.recebendo .kc-lista::after { content: 'Solte o pedido aqui'; color:var(--kc-accent); }
