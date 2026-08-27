@@ -463,10 +463,21 @@ class PosicaoDiariaCaixaTests(TestCase):
         conta.refresh_from_db()
         self.assertEqual(conta.valor_pago, Decimal("100.00"))
         self.assertEqual(conta.valor_saldo, Decimal("0.00"))
-        self.assertFalse(ContaPagar.all_objects.filter(
+        # A TARIFA E' LANCADA COMO DESPESA PROPRIA, para ter plano de contas e
+        # conta contabil -- quem evita a saida em dobro e' a posicao diaria,
+        # que deixa os `taxa_*` de fora das saidas e soma o valor dentro do
+        # pagamento principal. Cobrar que o lancamento nao exista testava um
+        # desenho que o sistema deixou de ter.
+        tarifa = ContaPagar.all_objects.get(
             documento_tipo="taxa_pagamento",
             documento_id=conta.pagamentos.first().pk,
-        ).exists())
+        )
+        self.assertEqual(tarifa.valor_pago, Decimal("0.50"))
+        self.assertFalse(
+            any(mov.registro_id == tarifa.pk and mov.origem_codigo == "pagar"
+                for mov in posicao["saidas"]),
+            "a tarifa entrou como saida propria e dobrou o valor do dia",
+        )
 
         response = self.client.get(reverse("financeiro:posicao_diaria"), {"data": "2026-08-24"})
         self.assertContains(response, "Taxas em pagamentos")
@@ -585,12 +596,21 @@ class PosicaoDiariaCaixaTests(TestCase):
             filial=self.filial, razao_social="Cliente sem conta direta", tipo_pessoa="F",
             cpf_cnpj="12345678908",
         )
+        # A BAIXA E' QUEM PAGA. A posicao diaria e' montada a partir dos
+        # registros de pagamento, e nao do status do titulo -- e' o pagamento
+        # que carrega conta, forma, taxa e data. Marcar a conta como PAGA na
+        # mao monta um estado que o sistema nao produz (a migration 0050 ate'
+        # criou os pagamentos dos titulos antigos justamente por isso).
         conta = ContaReceber.objects.create(
             filial=self.filial, cliente=cliente, valor_original=Decimal("70.00"),
-            valor_final=Decimal("70.00"), valor_pago=Decimal("70.00"),
-            valor_saldo=Decimal("0.00"), data_emissao=date(2026, 8, 24),
-            data_vencimento=date(2026, 8, 24), data_pagamento=date(2026, 8, 24),
-            forma_pagamento=self.forma, status=StatusContaReceber.PAGO,
+            valor_final=Decimal("70.00"), valor_saldo=Decimal("70.00"),
+            data_emissao=date(2026, 8, 24), data_vencimento=date(2026, 8, 24),
+            forma_pagamento=self.forma, status=StatusContaReceber.ABERTO,
+        )
+        # Sem `conta_bancaria`: e' exatamente o caso do teste -- a baixa nao
+        # informa a conta, e a forma tem que emprestar a dela.
+        ContaReceberService.registrar_baixa(
+            conta, date(2026, 8, 24), Decimal("70.00"), self.forma, self.usuario,
         )
 
         posicao = PosicaoDiariaCaixaService(self.filial, date(2026, 8, 24)).gerar()
@@ -606,11 +626,14 @@ class PosicaoDiariaCaixaTests(TestCase):
         )
         conta = ContaReceber.objects.create(
             filial=self.filial, cliente=cliente, valor_original=Decimal("150.00"),
-            valor_final=Decimal("150.00"), valor_pago=Decimal("150.00"),
-            valor_saldo=Decimal("0.00"), data_emissao=date(2026, 8, 24),
-            data_vencimento=date(2026, 8, 24), data_pagamento=date(2026, 8, 24),
+            valor_final=Decimal("150.00"), valor_saldo=Decimal("150.00"),
+            data_emissao=date(2026, 8, 24), data_vencimento=date(2026, 8, 24),
             data_liquidacao_prevista=date(2026, 8, 24), forma_pagamento=self.forma,
-            status=StatusContaReceber.PAGO, documento_tipo="pedido_moda", documento_id=123,
+            status=StatusContaReceber.ABERTO, documento_tipo="pedido_moda", documento_id=123,
+        )
+        ContaReceberService.registrar_baixa(
+            conta, date(2026, 8, 24), Decimal("150.00"), self.forma, self.usuario,
+            conta_bancaria=self.banco,
         )
 
         posicao = PosicaoDiariaCaixaService(self.filial, date(2026, 8, 24)).gerar()

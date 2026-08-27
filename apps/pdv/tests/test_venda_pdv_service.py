@@ -225,6 +225,11 @@ class VendaPDVServiceTests(TestCase):
         produto = self.criar_produto("Produto sem saldo")
         self.abastecer(produto, "1")
 
+        # `forcar_estoque_negativo` e' True por padrao de proposito: no balcao
+        # a mercadoria ja' esta' na mao do cliente, e no fechamento de comanda
+        # a comida ja' foi servida -- recusar a venda por divergencia de saldo
+        # travaria o caixa. Quem NAO forca e' que recebe a recusa, e e' esse
+        # caminho que este teste cobre.
         with self.assertRaises(EstoqueInsuficienteError):
             VendaPDVService.finalizar_venda(
                 sessao=self.sessao,
@@ -232,6 +237,7 @@ class VendaPDVServiceTests(TestCase):
                 usuario=self.usuario,
                 itens=[{"produto_id": produto.pk, "quantidade": "2"}],
                 pagamentos=[{"forma_id": self.forma.pk, "valor": "20.00"}],
+                forcar_estoque_negativo=False,
             )
 
         estoque = Estoque.objects.get(produto=produto, filial=self.filial)
@@ -274,17 +280,29 @@ class VendaPDVServiceTests(TestCase):
                 pagamentos=[{"forma_id": self.forma.pk, "valor": "1.00"}],
             )
 
+    def test_produto_sem_custo_avisa_mas_nao_impede_a_venda(self):
+        """
+        SEM PRECO NAO SE VENDE; SEM CUSTO SE VENDE AVISANDO. Custo em branco
+        so' impede calcular margem e CMV -- travar o caixa por uma lacuna do
+        cadastro pararia a venda por um problema de retaguarda.
+        """
         produto_sem_custo = self.criar_produto("Produto sem custo")
         produto_sem_custo.preco_custo = Decimal("0")
         produto_sem_custo.preco_custo_medio = Decimal("0")
         produto_sem_custo.save(update_fields=["preco_custo", "preco_custo_medio"])
 
-        with self.assertRaises(DadosInvalidosError):
-            ProdutoVendavelService.validar_venda(
-                produto=produto_sem_custo,
-                filial=self.filial,
-                quantidade=Decimal("1"),
-            )
+        contrato = ProdutoVendavelService.validar_venda(
+            produto=produto_sem_custo,
+            filial=self.filial,
+            quantidade=Decimal("1"),
+        )
+
+        self.assertTrue(contrato["pode_vender"])
+        self.assertIn(
+            "custo_atual_invalido",
+            [item["codigo"] for item in contrato["alertas"]],
+            "a venda passou sem nem avisar que o custo esta em branco",
+        )
 
     def test_promocao_com_margem_negativa_bloqueia_venda(self):
         produto = self.criar_produto("Produto margem negativa")

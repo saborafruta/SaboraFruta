@@ -2,6 +2,8 @@
 Entrada de Nota Fiscal — recebimento físico da mercadoria.
 Sempre vinculada (opcionalmente) a um Pedido de Compra.
 """
+from decimal import Decimal
+
 from django.db import models
 
 from apps.core.models.base import FilialScopedModel, TimestampedModel
@@ -207,6 +209,24 @@ class EntradaNF(FilialScopedModel):
         if self.fornecedor_pendente and self.emitente_razao_social_xml:
             return self.emitente_razao_social_xml
         return str(self.fornecedor)
+
+    @property
+    def total_ajustes_financeiros(self):
+        total = Decimal('0')
+        for ajuste in self.ajustes_financeiros.all():
+            total += ajuste.valor_assinado
+        return total.quantize(Decimal('0.01'))
+
+    @property
+    def valor_total_financeiro(self):
+        """
+        O que o financeiro cobra: o valor da NF mais os ajustes.
+
+        E' a referencia contra a qual as parcelas precisam fechar. A
+        propriedade tinha sumido do modelo e o servico continuou a chama-la --
+        gerar contas a pagar de qualquer entrada morria em AttributeError.
+        """
+        return (self.valor_total + self.total_ajustes_financeiros).quantize(Decimal('0.01'))
 
 
 class EntradaNFParcela(TimestampedModel):
@@ -423,6 +443,12 @@ class EntradaNFAjusteFinanceiro(TimestampedModel):
         ]
         verbose_name = 'Ajuste financeiro da entrada'
         verbose_name_plural = 'Ajustes financeiros da entrada'
+
+    @property
+    def valor_assinado(self):
+        """Desconto entra negativo; e' o que deixa a soma dos ajustes fechar."""
+        sinal = Decimal('-1') if self.tipo == self.Tipo.DESCONTO else Decimal('1')
+        return (self.valor or Decimal('0')) * sinal
 
     def __str__(self):
         return f'{self.get_tipo_display()} R${self.valor} - {self.entrada}'

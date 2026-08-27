@@ -21,6 +21,7 @@ from apps.core.services.search import (
 )
 from apps.financeiro.models import FormaPagamento, TaxaParcelamento
 from apps.financeiro.constants.enums import TipoFormaPagamento
+from apps.financeiro.services.formas_pagamento_padrao import garantir_formas_padrao
 from apps.fiscal.integrations.focusnfe.exceptions import FocusNFeNetworkError, FocusNFeServerError
 from apps.pdv.models import (
     Caixa, ItemVendaPDV, MovimentacaoCaixa, PagamentoVendaPDV, SessaoPDV, VendaPDV,
@@ -582,9 +583,16 @@ def api_estado(request):
     cliente = _cliente_precificacao(request)
 
     try:
+        garantir_formas_padrao(request.filial_ativa)
         formas = list(
+            # ESCOPO POR FILIAL. Filtrar so' pela empresa trazia para o caixa
+            # de uma loja as formas cadastradas noutra -- o operador via, e
+            # podia receber por uma forma que nao e' desta unidade. Forma sem
+            # filial e' da empresa toda e continua valendo aqui.
             FormaPagamento.objects.filter(
-                empresa=request.filial_ativa.empresa, ativo=True
+                empresa=request.filial_ativa.empresa, ativo=True,
+            ).filter(
+                Q(filial=request.filial_ativa) | Q(filial__isnull=True)
             ).annotate(maximo_parcelas=Max('taxas_parcelamento__parcelas')).values(
                 'id', 'descricao', 'tipo', 'requer_tef', 'gera_parcelas',
                 'prazo_liquidacao_dias', 'prazo_compensacao_dias_uteis', 'movimenta_caixa',
@@ -705,6 +713,12 @@ def api_caixa_abrir(request):
     if _sessao_aberta(request):
         return JsonResponse({"erro": "Já existe uma sessão aberta para este usuário."}, status=400)
 
+    # SEM CAIXA ESCOLHIDO NAO E' "NAO ENCONTRADO". Cair no lookup com id 0
+    # devolvia 404 "Caixa não encontrado", e quem opera lia que o caixa sumiu
+    # em vez de que faltou escolher.
+    if not caixa_id:
+        return JsonResponse({"erro": "Selecione um caixa."}, status=400)
+
     try:
         caixa = Caixa.objects.for_filial(request.filial_ativa).get(id=caixa_id, ativo=True)
     except Caixa.DoesNotExist:
@@ -747,7 +761,9 @@ def api_caixa_criar(request):
         caixa = Caixa.objects.create(
             filial=request.filial_ativa,
             numero=proximo_numero,
-            descricao=descricao,
+            # NOME PADRAO. Sem descricao o caixa nascia sem nome nenhum e
+            # aparecia em branco na lista de selecao.
+            descricao=descricao or f"Caixa {proximo_numero}",
             ativo=True,
         )
     except Exception as exc:
@@ -756,7 +772,7 @@ def api_caixa_criar(request):
     return JsonResponse({
         "ok": True,
         "caixa": {"id": caixa.id, "numero": caixa.numero, "descricao": caixa.descricao},
-    })
+    }, status=201)
 
 
 # ---------------------------------------------------------------------------

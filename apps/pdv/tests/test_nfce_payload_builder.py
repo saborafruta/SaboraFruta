@@ -91,7 +91,10 @@ class NfePayloadBuilderTests(TestCase):
         produto = self.criar_produto()
         venda = VendaPDV.objects.create(
             filial=self.filial,
-            numero_venda=1,
+            # NUMERA SOZINHO. Fixar 1 fazia a segunda venda do mesmo teste
+            # bater na unique (filial, numero_venda) -- qualquer teste que
+            # precise de duas vendas morria no setup.
+            numero_venda=VendaPDV.objects.filter(filial=self.filial).count() + 1,
             cliente=cliente,
             status="finalizada",
             valor_subtotal=Decimal("4.00"),
@@ -578,13 +581,17 @@ class NfePayloadBuilderTests(TestCase):
             numero=1,
             serie=1,
             emitente_cnpj=self.filial.cnpj,
+            destinatario_snapshot={'nome': 'Consumidor Final'},
+            data_emissao=timezone.now(),
             status=StatusDocumentoFiscal.AUTORIZADA,
             valor_total=Decimal("4.00"),
             usuario=self.usuario,
         )
         focus = Mock()
 
-        def confirmar_cancelamento(doc, justificativa):
+        # O servico real recebe `usuario` -- e' quem assina o cancelamento.
+        # O duble ficou com a assinatura antiga e rejeitava a chamada.
+        def confirmar_cancelamento(doc, justificativa, usuario=None):
             doc.status = StatusDocumentoFiscal.CANCELADA
             doc.save(update_fields=["status"])
             return doc
@@ -615,6 +622,8 @@ class NfePayloadBuilderTests(TestCase):
             numero=1,
             serie=1,
             emitente_cnpj=self.filial.cnpj,
+            destinatario_snapshot={'nome': 'Consumidor Final'},
+            data_emissao=timezone.now(),
             status=StatusDocumentoFiscal.AUTORIZADA,
             valor_total=Decimal("4.00"),
             usuario=self.usuario,
@@ -674,6 +683,8 @@ class NfePayloadBuilderTests(TestCase):
             numero=2,
             serie=1,
             emitente_cnpj=self.filial.cnpj,
+            destinatario_snapshot={'nome': 'Consumidor Final'},
+            data_emissao=timezone.now(),
             status=StatusDocumentoFiscal.PROCESSANDO,
             valor_total=Decimal("4.00"),
             usuario=self.usuario,
@@ -699,6 +710,8 @@ class NfePayloadBuilderTests(TestCase):
             numero=1,
             serie=1,
             emitente_cnpj=self.filial.cnpj,
+            destinatario_snapshot={'nome': 'Consumidor Final'},
+            data_emissao=timezone.now(),
             status=StatusDocumentoFiscal.PROCESSANDO,
             valor_total=Decimal("4.00"),
             usuario=self.usuario,

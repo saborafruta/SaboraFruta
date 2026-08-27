@@ -344,7 +344,16 @@ class EstoqueFormsViewsTests(TestCase):
         self.assertIn('data-estoque-kardex-url', content)
         self.assertIn('data-kardex-more-url', content)
         self.assertIn('estoque-thumb', content)
-        self.assertIn('https://example.com/produto.png', content)
+        # A FOTO VAI PELA ROTA INTERNA, e nao pela URL externa: o produto
+        # guarda o endereco de origem, mas a tela serve a imagem por
+        # `produtos:produto-image-file`. Conferir o endereco cru aqui testava o
+        # que o sistema deliberadamente parou de fazer.
+        self.assertIn(
+            reverse('produtos:produto-image-file', kwargs={'pk': produto.pk}),
+            content,
+        )
+        self.assertNotIn('https://example.com/produto.png', content,
+                         'o endereco de origem vazou para o navegador')
         self.assertNotIn('>Reservado<', content)
         self.assertNotIn('>Disponivel<', content)
         self.assertNotIn('>Status<', content)

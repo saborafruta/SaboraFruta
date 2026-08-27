@@ -92,6 +92,13 @@ def _estilos():
             'sec', parent=base['Normal'], fontSize=9, leading=12,
             textColor=VERMELHO_TABELA, fontName='Helvetica-Bold',
         ),
+        # O orcamento reusa a grade do PDF do pedido, e `_barra_secao` desenha
+        # o numero da secao em branco sobre a tarja. Sem esta chave o PDF do
+        # orcamento morria em KeyError -- nao saia orcamento nenhum.
+        'secao_numero': ParagraphStyle(
+            'sec_num', parent=base['Normal'], fontName='Helvetica-Bold',
+            fontSize=9, leading=10, textColor=colors.white, alignment=1,
+        ),
         'campo': ParagraphStyle(
             'cam', parent=base['Normal'], fontSize=9, leading=14, textColor=TEXTO,
         ),

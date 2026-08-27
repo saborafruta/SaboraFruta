@@ -9,6 +9,8 @@ pode depender de quem contou onde ele está.
 from __future__ import annotations
 
 from django.db import transaction
+from django.db.models import F, Window
+from django.db.models.functions import RowNumber
 from django.utils import timezone
 
 from apps.mapas.services.otimizacao import distancia_haversine_m
@@ -82,13 +84,22 @@ class GeofenceService:
         if not ids:
             return {}
 
-        # O último evento de cada cerca para este motorista. `distinct on`
-        # resolve no banco o que seria um loop de N queries.
+        # O último evento de cada cerca para este motorista, numa query só --
+        # o que seria um loop de N queries.
+        #
+        # NUMERA E PEGA O PRIMEIRO, em vez de `distinct on`: aquilo só existe no
+        # PostgreSQL, e derrubava os testes inteiros deste módulo com
+        # "DISTINCT ON fields is not supported by this database backend". A
+        # janela resolve no banco do mesmo jeito e roda nos dois.
         ultimos = (
             EventoGeofence.objects
             .filter(motorista=motorista, geofence_id__in=ids)
-            .order_by('geofence_id', '-momento', '-id')
-            .distinct('geofence_id')
+            .annotate(_ordem=Window(
+                expression=RowNumber(),
+                partition_by=[F('geofence_id')],
+                order_by=[F('momento').desc(), F('id').desc()],
+            ))
+            .filter(_ordem=1)
             .values_list('geofence_id', 'tipo')
         )
         return {

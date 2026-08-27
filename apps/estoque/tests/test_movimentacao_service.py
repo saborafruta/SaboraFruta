@@ -236,7 +236,9 @@ class MovimentacaoServiceTests(TestCase):
         )
         alerta = AlertaVencimento.objects.get(lote=lote, resolvido=False)
         self.assertEqual(alerta.quantidade_em_risco, Decimal('5.000'))
-        self.assertEqual(alerta.nivel_risco, AlertaVencimento.NivelRisco.ALTO)
+        # A escala virou faixa de dias (d1/d7/d30...); `alto` ficou como
+        # legado, para os registros gravados antes. Cinco dias cai em d7.
+        self.assertEqual(alerta.nivel_risco, AlertaVencimento.NivelRisco.D7)
 
         MovimentacaoService.registrar_movimentacao(
             produto_id=produto.pk,

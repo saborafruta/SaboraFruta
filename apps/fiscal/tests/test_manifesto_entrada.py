@@ -288,7 +288,11 @@ class ManifestoEntradaTests(TestCase):
         chave = self.chave(numero='000000211')
         self.criar_manifesto(chave=chave, xml_completo=self.xml_nfe(chave))
 
-        request = self.request('get', reverse('fiscal:manifesto-list'))
+        # A TELA GANHOU ABAS e abre em "saidas". As notas recebidas -- e as
+        # acoes delas -- moraram para a aba `recebidos`; pedir a pagina sem aba
+        # caia na de saidas, onde nada disso aparece.
+        request = self.request('get', reverse('fiscal:manifesto-list'),
+                               {'aba': 'recebidos'})
         response = ManifestoFiscalListView.as_view()(request)
 
         self.assertEqual(response.status_code, 200)
@@ -298,7 +302,8 @@ class ManifestoEntradaTests(TestCase):
     def test_lista_manifesto_sem_xml_mostra_anexar_xml(self):
         self.criar_manifesto(chave=self.chave(numero='000000212'))
 
-        request = self.request('get', reverse('fiscal:manifesto-list'))
+        request = self.request('get', reverse('fiscal:manifesto-list'),
+                               {'aba': 'recebidos'})
         response = ManifestoFiscalListView.as_view()(request)
 
         self.assertEqual(response.status_code, 200)
