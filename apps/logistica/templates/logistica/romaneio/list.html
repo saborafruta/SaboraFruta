@@ -7,7 +7,7 @@
   <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
     <div>
       <h2 class="text-2xl font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">Romaneio de Carga</h2>
-      <p class="text-sm mt-0.5" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Controle de cargas, entregas, motorista, veiculo e rota.</p>
+      <p class="text-sm mt-0.5" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Controle de cargas, entregas, motorista, veículo e rota.</p>
     </div>
     <a href="{% url 'logistica:romaneio-create' %}" class="btn-primary">+ Novo Romaneio</a>
   </div>
@@ -66,16 +66,37 @@
 
   <!-- Filtros -->
   <form method="get" class="card p-4 grid grid-cols-1 md:grid-cols-12 gap-3">
-    <div class="md:col-span-4"><input name="q" value="{{ q }}" placeholder="Numero, rota, placa, transportadora..." class="form-input"></div>
+    <div class="md:col-span-4">
+      <label for="q" class="block text-[11px] font-semibold uppercase tracking-wide mb-1"
+             :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Buscar</label>
+      <input id="q" name="q" value="{{ q }}" class="form-input"
+             placeholder="Número, rota, placa, transportadora...">
+    </div>
     <div class="md:col-span-2">
-      <select name="status" class="form-input">
+      <label for="status" class="block text-[11px] font-semibold uppercase tracking-wide mb-1"
+             :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Status</label>
+      <select id="status" name="status" class="form-input">
         <option value="">Todos os status</option>
         {% for v,l in status_choices %}<option value="{{ v }}" {% if v == status_filtro %}selected{% endif %}>{{ l }}</option>{% endfor %}
       </select>
     </div>
-    <div class="md:col-span-2"><input type="date" name="data_ini" value="{{ data_ini }}" class="form-input" title="Data de"></div>
-    <div class="md:col-span-2"><input type="date" name="data_fim" value="{{ data_fim }}" class="form-input" title="Data ate"></div>
-    <div class="md:col-span-2 flex gap-2">
+    {% comment %}
+      OS DOIS CAMPOS DE DATA ERAM IDENTICOS -- ambos "Selecionar data", so' com
+      `title` no hover. Nao dava para saber qual era o inicio sem passar o mouse
+      e esperar, e filtrar pelo periodo trocado devolve a lista errada em
+      silencio.
+    {% endcomment %}
+    <div class="md:col-span-2">
+      <label for="data_ini" class="block text-[11px] font-semibold uppercase tracking-wide mb-1"
+             :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">De</label>
+      <input type="date" id="data_ini" name="data_ini" value="{{ data_ini }}" class="form-input">
+    </div>
+    <div class="md:col-span-2">
+      <label for="data_fim" class="block text-[11px] font-semibold uppercase tracking-wide mb-1"
+             :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Até</label>
+      <input type="date" id="data_fim" name="data_fim" value="{{ data_fim }}" class="form-input">
+    </div>
+    <div class="md:col-span-2 flex gap-2 md:items-end md:pb-px">
       <button type="submit" class="btn-secondary w-full justify-center">Filtrar</button>
       <a href="{% url 'logistica:romaneio-list' %}" class="btn-secondary px-3 flex items-center justify-center" title="Limpar">
         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
@@ -114,7 +135,7 @@
       <table class="w-full text-sm">
         <thead>
           <tr :style="temaClaro ? 'border-bottom:1px solid #e5e7eb; background:#f8fafc;' : 'border-bottom:1px solid #2a2a2e; background:#1e1e20;'">
-            <th class="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wide" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Numero</th>
+            <th class="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wide" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Número</th>
             <th class="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wide" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Data</th>
             <th class="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wide" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Status</th>
             <th class="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wide" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Rota</th>
@@ -134,9 +155,14 @@
 
             <!-- Status com dropdown para alterar -->
             <td class="px-4 py-3">
-              <div class="relative inline-block" x-data="{ open: false }" @click.outside="open = false">
-                <button type="button" @click="open = !open"
+              <div class="relative inline-block" x-data="menuDeStatus()"
+                   @click.outside="fechar()"
+                   @keydown.escape.window="fechar()"
+                   @scroll.window="fechar()"
+                   @resize.window="fechar()">
+                <button type="button" x-ref="gatilho" @click="alternar()"
                         class="flex items-center gap-1 group"
+                        :aria-expanded="aberto ? 'true' : 'false'"
                         title="Clique para alterar o status">
                   {% if romaneio.status == 'rascunho' %}<span class="soft-pill is-slate">{{ romaneio.get_status_display }}</span>
                   {% elif romaneio.status == 'em_carregamento' %}<span class="soft-pill is-amber">{{ romaneio.get_status_display }}</span>
@@ -147,10 +173,16 @@
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
                   </svg>
                 </button>
-                <!-- Dropdown de status -->
-                <div x-show="open" x-cloak
-                     class="absolute left-0 top-full mt-1 z-50 rounded-xl shadow-xl border min-w-44 py-1 overflow-hidden"
-                     :style="temaClaro ? 'background:#fff; border-color:#e2e8f0;' : 'background:#1e1e22; border-color:#2a2a2e;'">
+                {% comment %}
+                  MENU EM POSICAO FIXA, e nao absoluta. A tabela mora dentro de
+                  um `card overflow-hidden`, e um menu absoluto e' recortado por
+                  ele: na ultima linha o menu abria para baixo e o card cortava
+                  tudo -- sobrava uma faixa escura vazia, e parecia que o status
+                  nao tinha para onde ir. `fixed` escapa do recorte.
+                {% endcomment %}
+                <div x-show="aberto" x-cloak x-ref="menu"
+                     class="fixed z-50 rounded-xl shadow-xl border min-w-44 py-1 overflow-hidden"
+                     :style="(estilo || 'visibility:hidden;') + (temaClaro ? 'background:#fff; border-color:#e2e8f0;' : 'background:#1e1e22; border-color:#2a2a2e;')">
                   <p class="px-3 py-1.5 text-xs font-semibold uppercase tracking-wide" :style="temaClaro ? 'color:#94a3b8;' : 'color:#64748b;'">Alterar para</p>
                   {% if romaneio.status != 'em_carregamento' and romaneio.status != 'entregue' %}
                   <form method="post" action="{% url 'logistica:romaneio-alterar-status' romaneio.pk %}">
@@ -253,14 +285,56 @@
     </div>
     {% if page_obj.paginator.num_pages > 1 %}
     <div class="flex items-center justify-between gap-3 px-5 py-3 text-sm border-t" :style="temaClaro ? 'border-color:#e2e8f0;' : 'border-color:#2a2a2e;'">
-      <span :style="temaClaro ? 'color:#6b7280;' : 'color:#94a3b8;'">Pagina {{ page_obj.number }} de {{ page_obj.paginator.num_pages }} ({{ page_obj.paginator.count }} registros)</span>
+      <span :style="temaClaro ? 'color:#6b7280;' : 'color:#94a3b8;'">Página {{ page_obj.number }} de {{ page_obj.paginator.num_pages }} ({{ page_obj.paginator.count }} registros)</span>
       <div class="flex gap-2">
         {% if page_obj.has_previous %}<a href="?q={{ q }}&status={{ status_filtro }}&data_ini={{ data_ini }}&data_fim={{ data_fim }}&page={{ page_obj.previous_page_number }}" class="btn-secondary">← Anterior</a>{% endif %}
-        {% if page_obj.has_next %}<a href="?q={{ q }}&status={{ status_filtro }}&data_ini={{ data_ini }}&data_fim={{ data_fim }}&page={{ page_obj.next_page_number }}" class="btn-secondary">Proxima →</a>{% endif %}
+        {% if page_obj.has_next %}<a href="?q={{ q }}&status={{ status_filtro }}&data_ini={{ data_ini }}&data_fim={{ data_fim }}&page={{ page_obj.next_page_number }}" class="btn-secondary">Próxima →</a>{% endif %}
       </div>
     </div>
     {% endif %}
   </div>
 
 </div>
+
+<script>
+  function menuDeStatus() {
+    return {
+      aberto: false,
+      estilo: '',
+
+      alternar() {
+        this.aberto = !this.aberto;
+        if (this.aberto) {
+          /* Mede DEPOIS de aparecer: a altura muda conforme o status atual --
+             de onde ele esta' saem opcoes diferentes -- e chutar um valor faria
+             o menu subir de menos e sair da tela na ultima linha. */
+          this.$nextTick(() => this.posicionar());
+        }
+      },
+
+      posicionar() {
+        const b = this.$refs.gatilho.getBoundingClientRect();
+        const menu = this.$refs.menu;
+        const altura = menu.offsetHeight;
+        const largura = menu.offsetWidth;
+
+        /* Abre para baixo quando cabe; senao sobe. Na ultima linha da tabela
+           nao ha' espaco embaixo, e e' justamente onde o menu vivia cortado. */
+        const cabeEmbaixo = window.innerHeight - b.bottom - 8 > altura;
+        const topo = cabeEmbaixo ? b.bottom + 4 : Math.max(8, b.top - altura - 4);
+        /* Nao deixa passar da borda direita em tela estreita. */
+        const esquerda = Math.max(8, Math.min(b.left, window.innerWidth - largura - 8));
+        this.estilo = 'left:' + Math.round(esquerda) + 'px;top:' + Math.round(topo) + 'px;';
+      },
+
+      fechar() {
+        this.aberto = false;
+        /* Zera para o proximo abrir medir de novo: a linha pode ter mudado de
+           lugar, e reaproveitar a posicao antiga soltaria o menu longe do
+           status a que ele pertence. */
+        this.estilo = '';
+      },
+    };
+  }
+</script>
 {% endblock %}

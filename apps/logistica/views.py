@@ -144,6 +144,11 @@ class RomaneioCargaListView(PermissaoRequiredMixin, View):
             RomaneioCarga.objects.for_filial(filial)
             .select_related("transportadora", "responsavel")
             .annotate(qtd_itens=Count("itens"))
+            # ORDEM EXPLICITA. `annotate` derruba a ordenacao padrao do Meta, e
+            # paginar sem ordem deixa o banco livre para devolver as linhas em
+            # ordem diferente a cada consulta -- a mesma carga aparece duas
+            # vezes, ou some, conforme a pagina.
+            .order_by("-data", "-numero")
         )
 
         status = request.GET.get("status", "")
