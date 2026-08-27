@@ -21,6 +21,7 @@ from apps.fiscal.services.natureza_operacao_service import NaturezaOperacaoServi
 from apps.produtos.models import Produto
 from apps.logistica.models import ItemCarga, Viagem
 from apps.vendas.models.pedido import PedidoVenda
+from apps.logistica.services.estoque_transito import EstoqueEmTransitoService
 from apps.logistica.services.remessa_nfe import RemessaVendaForaService
 from apps.logistica.services.vendas_para_carga import (
     CARREGAVEIS, VendasParaCargaService,
@@ -475,3 +476,25 @@ class ViagemEmitirRemessaView(PermissaoRequiredMixin, View):
             'de transmissão à SEFAZ.',
         )
         return volta
+
+
+class EstoqueEmTransitoView(PermissaoRequiredMixin, View):
+    """
+    O que saiu por remessa e ainda está na rua.
+
+    Sem esta tela a mercadoria "some" do sistema entre a saída e o retorno, e a
+    única forma de saber onde ela está é abrir viagem por viagem.
+    """
+
+    permissao_modulo = 'logistica'
+    template_name = 'logistica/viagem/estoque_transito.html'
+
+    def get(self, request):
+        filial = _filial(request)
+        busca = (request.GET.get('q') or '').strip()
+        return render(request, self.template_name, {
+            'title': EstoqueEmTransitoService.NOME,
+            'linhas': EstoqueEmTransitoService.por_produto(filial, busca=busca),
+            'resumo': EstoqueEmTransitoService.resumo(filial),
+            'busca': busca,
+        })

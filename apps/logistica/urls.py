@@ -21,6 +21,7 @@ urlpatterns = [
     path("ordens-coleta/<int:pk>/itens/<int:item_pk>/remover/", views.ItemOrdemColetaDeleteView.as_view(), name="ordem-coleta-item-delete"),
     # ── Viagem e carga ───────────────────────────────────────────────
     path("viagens/", views_viagem.ViagemListView.as_view(), name="viagem-list"),
+    path("estoque-em-transito/", views_viagem.EstoqueEmTransitoView.as_view(), name="estoque-transito"),
     path("viagens/nova/", views_viagem.ViagemCreateView.as_view(), name="viagem-create"),
     path("viagens/<int:pk>/", views_viagem.ViagemDetailView.as_view(), name="viagem-detail"),
     path("viagens/<int:pk>/editar/", views_viagem.ViagemUpdateView.as_view(), name="viagem-update"),

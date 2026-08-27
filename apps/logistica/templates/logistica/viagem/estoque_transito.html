@@ -1,0 +1,113 @@
+{% extends "_base.html" %}
+{% block title %}Estoque em trânsito{% endblock %}
+{% block page_title %}Estoque em trânsito{% endblock %}
+{% block content %}
+<div class="space-y-5">
+
+  <div>
+    <h2 class="text-2xl font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
+      Estoque em trânsito
+    </h2>
+    {% comment %}
+      E' UMA LOCALIZACAO LOGICA, e nao uma conta paralela. A mercadoria saiu do
+      estoque da filial de verdade -- amparada pela nota de remessa -- e nao
+      esta' disponivel para venda no estabelecimento. Mas continua sendo da
+      empresa, e sem esta tela ela "sumiria" entre a saida e o retorno.
+    {% endcomment %}
+    <p class="text-sm mt-0.5" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+      Venda fora do estabelecimento. Esta mercadoria saiu do estoque da filial
+      e não está disponível para venda aqui — ela continua sendo da empresa,
+      em poder de quem viaja, até ser vendida, bonificada ou devolvida.
+    </p>
+  </div>
+
+  <div class="grid grid-cols-2 lg:grid-cols-3 gap-4">
+    <div class="card p-4">
+      <p class="text-xs font-medium uppercase tracking-wide" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Em trânsito</p>
+      <p class="text-lg font-bold mt-0.5" :style="temaClaro ? 'color:#b45309;' : 'color:#fcd34d;'">
+        {{ resumo.unidades|floatformat:"-3" }}
+      </p>
+    </div>
+    <div class="card p-4">
+      <p class="text-xs font-medium uppercase tracking-wide" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Produtos</p>
+      <p class="text-lg font-bold mt-0.5" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">{{ resumo.produtos }}</p>
+    </div>
+    <div class="card p-4">
+      <p class="text-xs font-medium uppercase tracking-wide" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Viagens na rua</p>
+      <p class="text-lg font-bold mt-0.5" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">{{ resumo.viagens }}</p>
+    </div>
+  </div>
+
+  <form method="get" class="card p-4 grid grid-cols-1 md:grid-cols-12 gap-3">
+    <div class="md:col-span-10">
+      <label for="q" class="block text-[11px] font-semibold uppercase tracking-wide mb-1"
+             :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Buscar produto</label>
+      <input id="q" name="q" value="{{ busca }}" class="form-input" placeholder="Nome do produto...">
+    </div>
+    <div class="md:col-span-2 flex gap-2 md:items-end md:pb-px">
+      <button type="submit" class="btn-secondary w-full justify-center">Filtrar</button>
+    </div>
+  </form>
+
+  <div class="card overflow-hidden">
+    <div class="overflow-x-auto">
+      <table class="w-full text-sm">
+        <thead>
+          <tr :style="temaClaro ? 'border-bottom:1px solid #e5e7eb;background:#f8fafc;' : 'border-bottom:1px solid #2a2a2e;background:#1e1e20;'">
+            <th class="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wide" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Produto</th>
+            <th class="text-right px-4 py-3 text-xs font-semibold uppercase tracking-wide" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Estoque físico</th>
+            <th class="text-right px-4 py-3 text-xs font-semibold uppercase tracking-wide" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Em trânsito</th>
+            <th class="text-right px-4 py-3 text-xs font-semibold uppercase tracking-wide" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Total da empresa</th>
+            <th class="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wide" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Com quem está</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for linha in linhas %}
+            <tr class="border-b" :style="temaClaro ? 'border-color:#f1f5f9;' : 'border-color:#2a2a2e;'">
+              <td class="px-4 py-3" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">{{ linha.produto }}</td>
+              <td class="px-4 py-3 text-right" :style="temaClaro ? 'color:#374151;' : 'color:#d1d5db;'">
+                {{ linha.fisico|floatformat:"-3" }}
+              </td>
+              <td class="px-4 py-3 text-right font-semibold" :style="temaClaro ? 'color:#b45309;' : 'color:#fcd34d;'">
+                {{ linha.em_transito|floatformat:"-3" }}
+              </td>
+              {% comment %}
+                O TOTAL E' A LEITURA QUE A PESSOA FAZ DE VERDADE -- "tenho 700
+                aqui e 300 na rua" -- e e' a soma que o inventario precisa
+                fechar.
+              {% endcomment %}
+              <td class="px-4 py-3 text-right font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
+                {{ linha.total|floatformat:"-3" }}
+              </td>
+              <td class="px-4 py-3 text-xs" :style="temaClaro ? 'color:#374151;' : 'color:#d1d5db;'">
+                {% for parcela in linha.viagens %}
+                  <a href="{% url 'logistica:viagem-detail' parcela.viagem.pk %}"
+                     class="hover:underline" :style="temaClaro ? 'color:#1d4ed8;' : 'color:#93c5fd;'">
+                    #{{ parcela.viagem.numero|stringformat:"06d" }}
+                  </a>
+                  <span :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+                    {{ parcela.quantidade|floatformat:"-3" }}{% if parcela.lote %} · lote {{ parcela.lote.numero_lote }}{% endif %}
+                  </span>
+                  {% if not forloop.last %}<br>{% endif %}
+                {% endfor %}
+              </td>
+            </tr>
+          {% empty %}
+            <tr>
+              <td colspan="5" class="px-4 py-12 text-center" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+                {% if busca %}
+                  Nenhum produto em trânsito com esse filtro.
+                {% else %}
+                  Nada em trânsito. Aparece aqui o que sai por remessa para venda
+                  fora do estabelecimento, até voltar ou ser vendido.
+                {% endif %}
+              </td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+</div>
+{% endblock %}
