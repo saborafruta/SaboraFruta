@@ -48,6 +48,7 @@ def _candidate_rank(
     name_fields: Sequence[str],
     code_fields: Sequence[str],
     identifier_field: str,
+    single_char_prefix: bool = False,
 ) -> tuple[int, str, int] | None:
     normalized_query = normalize_search_text(query)
     if not normalized_query:
@@ -74,7 +75,14 @@ def _candidate_rank(
         if not name:
             continue
         words = name.split()
-        if any(len(term) == 1 for term in query_terms):
+        # UMA LETRA E' TAMANHO DE ROUPA, nao inicial: "polo p" precisa achar
+        # "CAMISA POLO TAM P" e nao "polo pink". Por isso o termo de uma letra
+        # exige a palavra inteira.
+        #
+        # Quem digita num typeahead de produto quer o contrario -- "a" deve
+        # trazer tudo que comeca com a. Essas duas leituras nao convivem numa
+        # regra so', entao quem busca escolhe: `single_char_prefix`.
+        if not single_char_prefix and any(len(term) == 1 for term in query_terms):
             matches = all(
                 term in words if len(term) == 1
                 else any(word.startswith(term) for word in words)
@@ -105,6 +113,7 @@ def ranked_search_ids(
     code_fields: Sequence[str] = (),
     identifier_field: str = 'pk',
     limit: int = 20,
+    single_char_prefix: bool = False,
 ) -> list[Any]:
     """Retorna IDs ordenados por relevancia, sem casamento no meio da palavra."""
 
@@ -116,6 +125,7 @@ def ranked_search_ids(
             name_fields=name_fields,
             code_fields=code_fields,
             identifier_field=identifier_field,
+            single_char_prefix=single_char_prefix,
         )
         if rank is not None:
             ranked.append((rank, candidate.get(identifier_field)))

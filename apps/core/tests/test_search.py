@@ -40,6 +40,29 @@ class SearchNormalizationTests(SimpleTestCase):
         self.products.append({'pk': 8, 'name': 'CAMISA POLO TAM P', 'code': '80'})
         self.assertEqual(self.search('polo p'), [8])
 
+    def test_single_char_prefix_opt_in_treats_the_letter_as_a_start(self):
+        """
+        Num typeahead de produto, "a" deve trazer tudo que comeca com a --
+        leitura oposta a do tamanho de roupa, e por isso e' opcional.
+        """
+        self.products.append({'pk': 8, 'name': 'CAMISA POLO TAM P', 'code': '80'})
+
+        self.assertEqual(self.search('polo p'), [8])
+        self.assertIn(8, ranked_search_ids(
+            self.products, 'polo p', name_fields=('name',), code_fields=('code',),
+            limit=20, single_char_prefix=True,
+        ))
+
+    def test_single_char_prefix_does_not_leak_into_the_default(self):
+        """A busca por tamanho e' a padrao; quem quiser inicial precisa pedir."""
+        self.products.append({'pk': 9, 'name': 'CAMISA POLO PINK', 'code': '90'})
+
+        self.assertNotIn(9, self.search('polo p'))
+        self.assertIn(9, ranked_search_ids(
+            self.products, 'polo p', name_fields=('name',), code_fields=('code',),
+            limit=20, single_char_prefix=True,
+        ))
+
     def test_complete_term_can_match_later_word(self):
         self.assertEqual(self.search('amarela'), [7])
 

@@ -378,6 +378,10 @@ class ProdutoEstoqueSearchJsonView(PermissaoRequiredMixin, View):
         q = request.GET.get('q', '').strip()
         scope = request.GET.get('scope', 'filial')
         browse = request.GET.get('browse') == '1'
+        # `prefixo=1`: quem digita num typeahead de produto espera que "a" traga
+        # tudo que comeca com a. O padrao trata uma letra como palavra inteira,
+        # porque na moda uma letra e' tamanho (P, M, G).
+        prefixo = request.GET.get('prefixo') == '1'
         filial = request.filial_ativa
         if scope == 'empresa':
             empresa = request.user.empresa
@@ -390,7 +394,7 @@ class ProdutoEstoqueSearchJsonView(PermissaoRequiredMixin, View):
         else:
             qs = Produto.objects.filter(ativo=True)
         ranked_ids = None
-        if len(q) >= 2 or q.isdigit() or (browse and q):
+        if len(q) >= 2 or q.isdigit() or (browse and q) or (prefixo and q):
             for term in normalize_search_text(q).split():
                 term_filter = (
                     db_models.Q(descricao__icontains=term)
@@ -407,6 +411,7 @@ class ProdutoEstoqueSearchJsonView(PermissaoRequiredMixin, View):
                 name_fields=('descricao',),
                 code_fields=('codigo', 'codigo_barras'),
                 limit=40,
+                single_char_prefix=prefixo,
             )
             qs = qs.filter(pk__in=ranked_ids)
         elif not browse:

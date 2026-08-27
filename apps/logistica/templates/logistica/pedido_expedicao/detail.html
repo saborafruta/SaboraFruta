@@ -245,15 +245,31 @@
                    :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Produto *</label>
             {{ item_form.produto_nome }}
 
+            {% comment %}
+              A LISTA SOBE QUANDO NAO CABE EMBAIXO. Este formulário fica no pé
+              da página: abrindo sempre para baixo, o rodapé cortava os
+              resultados e quem via um só concluía que só existia um produto.
+            {% endcomment %}
             <div x-show="aberto" x-cloak
-                 class="absolute z-30 left-0 right-0 mt-1 rounded-lg border shadow-lg overflow-hidden"
+                 class="absolute z-30 left-0 right-0 rounded-lg border shadow-lg overflow-hidden"
+                 :class="paraCima ? 'bottom-full mb-1' : 'top-full mt-1'"
                  :style="temaClaro
                    ? 'background:#fff;border-color:#e2e8f0;'
                    : 'background:#242426;border-color:#303038;'">
               <p x-show="carregando" class="px-3 py-2 text-xs"
                  :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Procurando…</p>
 
-              <ul class="max-h-64 overflow-y-auto" role="listbox">
+              {# Dizer QUANTOS vieram: lista rolável sem contagem parece lista curta. #}
+              <p x-show="!carregando && resultados.length" class="px-3 py-2 text-[11px] border-b"
+                 :style="temaClaro
+                   ? 'color:#64748b;border-color:#f1f5f9;'
+                   : 'color:#94a3b8;border-color:#2a2a2e;'">
+                <span x-text="resultados.length + (resultados.length === 1 ? ' produto' : ' produtos')"></span>
+                <span x-show="resultados.length >= 40"> — mostrando os primeiros; digite mais letras para afinar</span>
+                <span x-show="resultados.length > 6"> · role para ver o resto</span>
+              </p>
+
+              <ul class="max-h-80 overflow-y-auto" role="listbox">
                 <template x-for="(p, i) in resultados" :key="p.id">
                   <li>
                     <button type="button" class="w-full text-left px-3 py-2 text-sm"
@@ -346,6 +362,7 @@
       aberto: false,
       carregando: false,
       semPermissao: false,
+      paraCima: false,
       resultados: [],
       foco: 0,
       _timer: null,
@@ -364,7 +381,7 @@
       digitou(valor) {
         clearTimeout(this._timer);
         const q = (valor || '').trim();
-        if (q.length < 2) {
+        if (!q) {
           this.resultados = [];
           this.aberto = false;
           return;
@@ -374,10 +391,15 @@
 
       async procurar(q) {
         this.carregando = true;
+        this.medirEspaco();
         this.aberto = true;
         this.foco = 0;
         try {
-          const url = '{% url "estoque:produto-estoque-search-json" %}?q=' + encodeURIComponent(q);
+          /* prefixo=1 destrava a busca de UMA letra: sem ele o servidor so'
+             responde a partir de duas, e quem digita "a" nao ve nada
+             acontecer -- parece que a busca nao existe. */
+          const url = '{% url "estoque:produto-estoque-search-json" %}'
+                    + '?prefixo=1&q=' + encodeURIComponent(q);
           const res = await fetch(url, {headers: {'X-Requested-With': 'XMLHttpRequest'}});
           /* SEM ACESSO NÃO É "NÃO ACHEI". O catálogo mora no Estoque, e quem
              tem só Logística leva 403 aqui. Tratar isso como lista vazia diria
@@ -398,6 +420,13 @@
         } finally {
           this.carregando = false;
         }
+      },
+
+      /* Decidido na hora de abrir, e nao no carregamento da pagina: a
+         posicao do campo muda conforme o pedido ganha itens. */
+      medirEspaco() {
+        const r = this.campo.getBoundingClientRect();
+        this.paraCima = (window.innerHeight - r.bottom) < 300 && r.top > 300;
       },
 
       tecla(e) {

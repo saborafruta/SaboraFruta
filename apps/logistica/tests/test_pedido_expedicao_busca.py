@@ -86,6 +86,27 @@ class BuscaDeProdutoNoItemTests(TestCase):
         for campo in ('produto_nome', 'produto_codigo', 'unidade', 'peso_kg'):
             self.assertIn(f'id="id_{campo}"', html, f'o campo {campo} mudou de id')
 
+    def test_a_lista_sobe_quando_nao_cabe_embaixo(self):
+        """
+        Este formulário fica no pé da página. Abrindo sempre para baixo, o
+        rodapé cortava os resultados — e quem via um só concluía que só existia
+        um produto.
+        """
+        html = self.client.get(self.url).content.decode()
+
+        self.assertIn("paraCima ? 'bottom-full mb-1' : 'top-full mt-1'", html)
+
+    def test_a_lista_diz_quantos_produtos_vieram(self):
+        """Lista rolável sem contagem parece lista curta."""
+        html = self.client.get(self.url).content.decode()
+
+        self.assertIn("resultados.length + (resultados.length === 1", html)
+
+    def test_a_busca_comeca_na_primeira_letra(self):
+        html = self.client.get(self.url).content.decode()
+
+        self.assertNotIn('q.length < 2', html, 'a tela voltou a esperar duas letras')
+
     def test_a_tela_nao_vaza_sintaxe_de_template(self):
         html = self.client.get(self.url).content.decode()
 
@@ -122,11 +143,45 @@ class BuscaDeProdutoNoItemTests(TestCase):
 
         self.assertEqual(len(dados['results']), 1)
 
-    def test_uma_letra_nao_varre_o_catalogo(self):
-        """Buscar com uma letra devolveria o catálogo inteiro a cada tecla."""
-        dados = self.client.get(self.busca, {'q': 'm'}).json()
+    def test_uma_letra_sozinha_o_servidor_ignora(self):
+        """Sem pedir, o endpoint só responde a partir de duas letras."""
+        dados = self.client.get(self.busca, {'q': 'p'}).json()
 
         self.assertEqual(dados['results'], [])
+
+    def test_com_prefixo_uma_letra_ja_traz_produto(self):
+        """
+        A TELA DEPENDE DISSO. Quem digita "p" e não vê nada acontecer conclui
+        que a busca não existe; `prefixo=1` é o que destrava a primeira letra.
+        """
+        dados = self.client.get(self.busca, {'q': 'p', 'prefixo': '1'}).json()
+
+        achados = [r['label'] for r in dados['results']]
+        self.assertIn('Polpa de Manga 1kg', achados)
+
+    def test_a_tela_pede_a_busca_de_uma_letra(self):
+        html = self.client.get(self.url).content.decode()
+
+        # A URL MONTADA, e nao a palavra solta: "prefixo=1" tambem aparece no
+        # comentario do script, e procura-la no HTML passaria sem a busca usar.
+        self.assertIn("'?prefixo=1&q=' + encodeURIComponent(q)", html,
+                      'a tela voltou a exigir duas letras')
+
+    def test_a_letra_filtra_e_nao_traz_o_catalogo_inteiro(self):
+        """Uma letra abre a busca; não desliga o filtro."""
+        outro = Produto.objects.create(
+            filial=self.filial, unidade_medida=self.unidade,
+            descricao='Caixa de papelao', codigo='CX1', ncm='48191000',
+        )
+        ProdutoFilial.objects.create(produto=outro, filial=self.filial)
+
+        dados = self.client.get(self.busca, {'q': 'p', 'prefixo': '1'}).json()
+
+        achados = [r['label'] for r in dados['results']]
+        self.assertIn('Polpa de Manga 1kg', achados)
+        self.assertIn('Caixa de papelao', achados)  # "papelao" tem p
+        dados = self.client.get(self.busca, {'q': 'pol', 'browse': '1'}).json()
+        self.assertEqual([r['label'] for r in dados['results']], ['Polpa de Manga 1kg'])
 
     # ── O que a tela precisa ajustar ─────────────────────────────────────
 
