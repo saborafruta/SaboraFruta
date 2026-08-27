@@ -344,5 +344,7 @@ class AlertaNaTelaTests(RespostaBase):
         resposta = self._quadro()
 
         self.assertContains(resposta, "content: 'Sem pedidos'")
+        self.assertContains(resposta, '.kc-raia.vazia .kc-contador')
+        self.assertContains(resposta, 'position: absolute;')
         self.assertContains(resposta, '.kc-raia.vazia.recebendo')
         self.assertContains(resposta, "content: 'Solte o pedido aqui'")
