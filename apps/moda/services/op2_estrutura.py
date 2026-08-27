@@ -5,6 +5,12 @@ Esses campos ainda não têm colunas próprias no banco; por enquanto entram
 como resumo textual nas observações do item para não perder a informação.
 """
 
+TIPOS_IMPRESSAO_PADRAO = [
+    'SUBLIMAÇÃO', 'SILK', 'BORDADO', 'DTF', 'DTG', 'TRANSFER', 'PATCH',
+    'SEM IMPRESSÃO', 'OUTRO',
+]
+
+
 OP2_ESTRUTURA_OPCOES = {
     'camisa': {
         'label': 'Camisa',
@@ -93,6 +99,15 @@ OP2_ESTRUTURA_OPCOES = {
     'ecobag': {'label': 'Ecobag', 'campos': {'malha': ['ALGODAO CRU', 'ALGODAO CRU SINTETICO', 'OXFORD', 'GABARDINE', 'TACTEL', 'TNT'], 'acabamentos': ['SILK', 'SUBLIMADO', 'ALÇA PERSONALIZADA', 'ALÇA FAB.']}},
 }
 
+# O tipo de impressão pertence à estrutura de qualquer peça e deve aparecer
+# antes das características físicas. Mantê-lo no padrão também faz com que a
+# tela de gestão permita editar/inativar suas opções por tipo de peça.
+for _grupo in OP2_ESTRUTURA_OPCOES.values():
+    _grupo['campos'] = {
+        'tipo_impressao': list(TIPOS_IMPRESSAO_PADRAO),
+        **_grupo.get('campos', {}),
+    }
+
 
 def _normalizar_slug(texto: str) -> str:
     return (texto or '').strip().lower().replace(' ', '_')
@@ -104,23 +119,27 @@ def sincronizar_opcoes_padrao(filial):
         return
     from apps.moda.models import OpcaoEstruturaOP2
 
-    if OpcaoEstruturaOP2.objects.for_filial(filial).exists():
-        return
-
+    existentes = set(
+        OpcaoEstruturaOP2.objects.for_filial(filial).values_list(
+            'tipo_peca', 'campo', 'valor',
+        )
+    )
+    novas = []
     for tipo_peca, grupo in OP2_ESTRUTURA_OPCOES.items():
         tipo_label = grupo.get('label') or tipo_peca.title()
         for campo, valores in grupo.get('campos', {}).items():
             for ordem, valor in enumerate(valores, start=1):
                 valor = (valor or '').strip()
-                if not valor:
+                chave = (tipo_peca, campo, valor)
+                if not valor or chave in existentes:
                     continue
-                OpcaoEstruturaOP2.objects.get_or_create(
-                    filial=filial,
-                    tipo_peca=tipo_peca,
-                    campo=campo,
-                    valor=valor,
-                    defaults={'tipo_label': tipo_label, 'ordem': ordem, 'ativo': True},
-                )
+                existentes.add(chave)
+                novas.append(OpcaoEstruturaOP2(
+                    filial=filial, tipo_peca=tipo_peca, tipo_label=tipo_label,
+                    campo=campo, valor=valor, ordem=ordem, ativo=True,
+                ))
+    if novas:
+        OpcaoEstruturaOP2.objects.bulk_create(novas, ignore_conflicts=True)
 
 
 def opcoes_estrutura_filial(filial, incluir_inativas=False):
@@ -129,6 +148,7 @@ def opcoes_estrutura_filial(filial, incluir_inativas=False):
         return OP2_ESTRUTURA_OPCOES
     from apps.moda.models import OpcaoEstruturaOP2
 
+    sincronizar_opcoes_padrao(filial)
     todas = OpcaoEstruturaOP2.objects.for_filial(filial)
     if not todas.exists():
         return OP2_ESTRUTURA_OPCOES
@@ -143,6 +163,11 @@ def opcoes_estrutura_filial(filial, incluir_inativas=False):
             'campos': {},
         })
         grupo['campos'].setdefault(opcao.campo, []).append(opcao.valor)
+    for grupo in grupos.values():
+        campos = grupo['campos']
+        if 'tipo_impressao' in campos:
+            tipo_impressao = campos.pop('tipo_impressao')
+            grupo['campos'] = {'tipo_impressao': tipo_impressao, **campos}
     return grupos
 
 

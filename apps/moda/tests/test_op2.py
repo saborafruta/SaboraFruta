@@ -18,7 +18,9 @@ from apps.moda.models import (
     PersonalizacaoIndividual, ProdutoModa, Tamanho, VisualItemPedido,
 )
 from apps.moda.forms_cliente import ClienteRapidoForm
-from apps.moda.services.op2_estrutura import juntar_observacoes_item
+from apps.moda.services.op2_estrutura import (
+    OP2_ESTRUTURA_OPCOES, juntar_observacoes_item, opcoes_estrutura_filial,
+)
 from apps.moda.services.kanban_comercial import COLUNAS
 from apps.moda.views_op2 import Op2CreateView, _sincronizar_status
 
@@ -305,7 +307,7 @@ class Op2Tests(TestCase):
         self.assertContains(resposta, 'this.draft.nome=nome')
         self.assertNotContains(resposta, 'const escolherProduto=estado.escolherProduto.bind')
 
-    def test_nova_op_mostra_previa_de_anexos_e_mockups(self):
+    def test_nova_op_mostra_previa_de_anexos_e_imagens_por_produto(self):
         self.client.force_login(self._usuario())
         session = self.client.session
         session['filial_id'] = self.filial.pk
@@ -314,9 +316,10 @@ class Op2Tests(TestCase):
         resposta = self.client.get(reverse('moda:op2-create'))
 
         self.assertContains(resposta, 'previewAnexos($event)')
-        self.assertContains(resposta, "previewMockup('frente',$event)")
         self.assertContains(resposta, 'anexosPreview')
-        self.assertContains(resposta, 'mockupsPreview.frente')
+        self.assertContains(resposta, '+ Adicionar imagens')
+        self.assertNotContains(resposta, '+ Frente')
+        self.assertNotContains(resposta, '+ Costas')
 
     def test_nova_op_salva_anexo_e_mockup_e_exibe_na_op(self):
         self.client.force_login(self._usuario())
@@ -392,7 +395,7 @@ class Op2Tests(TestCase):
         self.assertContains(resposta, 'rel="noopener"')
         self.assertContains(resposta, 'op2-order-header')
 
-    def test_nova_op_abre_orcamento_em_nova_aba(self):
+    def test_nova_op_exibe_acoes_solicitadas(self):
         self.client.force_login(self._usuario())
         session = self.client.session
         session['filial_id'] = self.filial.pk
@@ -400,7 +403,10 @@ class Op2Tests(TestCase):
 
         resposta = self.client.get(reverse('moda:op2-create'))
 
-        self.assertContains(resposta, 'formtarget="_blank"')
+        self.assertContains(resposta, '>Salvar</button>')
+        self.assertContains(resposta, 'Salvar e enviar para cliente')
+        self.assertContains(resposta, 'Cancelar OP')
+        self.assertNotContains(resposta, 'Salvar e abrir orçamento PDF')
 
     def test_modelo_carrega_tipo_de_impressao_no_editor(self):
         self.produto.tipo_impressao = ProdutoModa.TipoImpressao.SILK
@@ -631,6 +637,105 @@ class Op2Tests(TestCase):
             tipo_peca='agasalho',
         ).values_list('tipo_label', flat=True))
         self.assertEqual(labels, {'Agasalho esportivo'})
+
+    def test_sincronizacao_completa_banco_parcial_com_todas_as_variaveis(self):
+        OpcaoEstruturaOP2.objects.create(
+            filial=self.filial, tipo_peca='camisa', tipo_label='Camisa',
+            campo='malha', valor='OPÇÃO PERSONALIZADA', ordem=999,
+        )
+
+        grupos = opcoes_estrutura_filial(self.filial)
+
+        self.assertEqual(set(grupos), set(OP2_ESTRUTURA_OPCOES))
+        for tipo, padrao in OP2_ESTRUTURA_OPCOES.items():
+            self.assertEqual(
+                set(padrao['campos']), set(grupos[tipo]['campos']),
+                msg=f'Campos incompletos em {tipo}',
+            )
+            self.assertEqual(
+                grupos[tipo]['campos']['tipo_impressao'],
+                padrao['campos']['tipo_impressao'],
+            )
+        self.assertIn('OPÇÃO PERSONALIZADA', grupos['camisa']['campos']['malha'])
+
+    def test_nova_op_salva_grade_de_personalizacao_do_orcamento(self):
+        tamanho = Tamanho.objects.create(filial=self.filial, sigla='M', ordem=10)
+        grade = Grade.objects.create(filial=self.filial, nome='Adulto')
+        ItemGrade.objects.create(grade=grade, tamanho=tamanho, ordem=10)
+        self.produto.grade = grade
+        self.produto.save(update_fields=['grade'])
+        self.client.force_login(self._usuario())
+        session = self.client.session
+        session['filial_id'] = self.filial.pk
+        session.save()
+
+        resposta = self.client.post(reverse('moda:op2-create'), {
+            'cliente': str(self.cliente.pk),
+            'item_0_produto_id': str(self.produto.pk),
+            'item_0_grade_id': str(grade.pk),
+            f'item_0_grade_{tamanho.pk}': '1',
+            'item_0_quantidade': '1',
+            'item_0_valor_unitario': '25',
+            'individual_0_item_idx': '0',
+            'individual_0_tamanho_id': str(tamanho.pk),
+            'individual_0_nome': 'DIEGO',
+            'individual_0_numero': '10',
+        })
+
+        criado = PedidoProducao.objects.exclude(pk=self.pedido.pk).get()
+        self.assertRedirects(resposta, reverse('moda:op2-detail', args=[criado.pk]))
+        pessoa = PersonalizacaoIndividual.objects.get(pedido=criado)
+        self.assertEqual((pessoa.tamanho, pessoa.nome, pessoa.numero), (tamanho, 'DIEGO', '10'))
+        pdf = self.client.get(reverse('moda:pedido-orcamento-pdf', args=[criado.pk]))
+        self.assertEqual(pdf.status_code, 200)
+        self.assertTrue(pdf.content.startswith(b'%PDF-'))
+
+    def test_cancelamento_permanece_mesmo_apos_sincronizar_itens(self):
+        self._item(status=ItemPedidoProducao.StatusFluxo.ENTREGUE, entregue=10)
+        self.pedido.status = PedidoProducao.Status.ENTREGUE
+        self.pedido.save(update_fields=['status'])
+        self.client.force_login(self._usuario())
+        session = self.client.session
+        session['filial_id'] = self.filial.pk
+        session.save()
+
+        resposta = self.client.post(
+            reverse('moda:op2-action', args=[self.pedido.pk]), {'acao': 'cancelar'},
+        )
+
+        self.assertRedirects(resposta, reverse('moda:op2-detail', args=[self.pedido.pk]))
+        self.pedido.refresh_from_db()
+        self.assertEqual(self.pedido.status, PedidoProducao.Status.CANCELADO)
+        _sincronizar_status(self.pedido)
+        self.pedido.refresh_from_db()
+        self.assertEqual(self.pedido.status, PedidoProducao.Status.CANCELADO)
+
+    def test_galeria_separa_produtos_e_permite_remover_imagem(self):
+        item = self._item(quantidade=1)
+        self.client.force_login(self._usuario())
+        session = self.client.session
+        session['filial_id'] = self.filial.pk
+        session.save()
+        imagem = b'\x89PNG\r\n\x1a\nconteudo-de-teste'
+        self.client.post(reverse('moda:op2-action', args=[self.pedido.pk]), {
+            'acao': 'visual_item', 'item_id': str(item.pk),
+            'imagens': SimpleUploadedFile('produto.png', imagem, content_type='image/png'),
+        })
+        visual = VisualItemPedido.objects.get(item=item)
+
+        detalhe = self.client.get(reverse('moda:op2-detail', args=[self.pedido.pk]))
+        self.assertContains(detalhe, 'Imagens separadas por produto')
+        self.assertContains(detalhe, 'name="imagens"')
+        self.assertContains(detalhe, 'value="remover_visual"')
+        self.assertNotContains(detalhe, '+ Frente da camisa')
+        self.assertNotContains(detalhe, '+ Costas da camisa')
+
+        resposta = self.client.post(reverse('moda:op2-action', args=[self.pedido.pk]), {
+            'acao': 'remover_visual', 'visual_id': str(visual.pk),
+        })
+        self.assertRedirects(resposta, reverse('moda:op2-detail', args=[self.pedido.pk]))
+        self.assertFalse(VisualItemPedido.objects.filter(pk=visual.pk).exists())
+        self.assertFalse(ArquivoPedido.objects.filter(pedido=self.pedido).exists())
 
     def _usuario(self):
         user, _ = Usuario.objects.get_or_create(

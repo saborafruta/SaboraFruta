@@ -2,6 +2,7 @@
 from copy import copy
 from datetime import date
 from io import BytesIO
+from urllib.parse import quote
 from zipfile import ZIP_DEFLATED, ZipFile
 
 from django.contrib import messages
@@ -62,6 +63,16 @@ def _mensagem_op2(pedido, link):
         f'Olá, {cliente}!\n\nA arte e os dados da OP #{pedido.numero:06d} estão prontos para aprovação.\n'
         f'Confira e responda pelo link:\n{link}\n\nPrazo previsto: {entrega}.'
     )
+
+
+def _normalizar_tipo_impressao(valor):
+    """Converte o rótulo editável da estrutura no valor interno conhecido."""
+    texto = (valor or '').strip()
+    comparado = texto.casefold()
+    for chave, rotulo in ProdutoModa.TipoImpressao.choices:
+        if comparado in (str(chave).casefold(), str(rotulo).casefold()):
+            return chave
+    return texto
 
 
 def _cliente_json(cliente):
@@ -142,7 +153,10 @@ def _dados_modal_item(item, estrutura_opcoes):
         'quantidade': item.quantidade,
         'valor_unitario': str(item.valor_unitario),
         'tipo_impressao': (
-            arte.tecnica if arte else getattr(item.produto, 'tipo_impressao', '')
+            (
+                arte.get_tecnica_display() if arte else
+                getattr(item.produto, 'get_tipo_impressao_display', lambda: '')()
+            ).upper()
         ),
         'estrutura_tipo': estrutura_tipo,
         'estrutura': estrutura,
@@ -154,6 +168,8 @@ def _dados_modal_item(item, estrutura_opcoes):
 
 def _sincronizar_status(pedido):
     """A OP acompanha o item pendente menos avançado, sem esconder atrasos."""
+    if pedido.status == PedidoProducao.Status.CANCELADO:
+        return
     itens = list(pedido.itens.all())
     if not itens:
         novo = PedidoProducao.Status.ORCAMENTO
@@ -222,6 +238,11 @@ class Op2CreateView(ModaBaseView):
         except ValueError as erro:
             messages.error(request, str(erro))
             return render(request, 'moda/op2_create.html', self._context(request))
+        try:
+            individuais = self._dados_individuais(request, indices)
+        except ValueError as erro:
+            messages.error(request, str(erro))
+            return render(request, 'moda/op2_create.html', self._context(request))
 
         with transaction.atomic():
             pedido = PedidoProducao.objects.create(
@@ -238,6 +259,7 @@ class Op2CreateView(ModaBaseView):
                 observacoes=_observacoes_pedido(request),
             )
             primeiro_item = None
+            itens_por_indice = {}
             for ordem, (indice, form) in enumerate(formularios, start=1):
                 item = form.save(commit=False)
                 item.pedido = pedido
@@ -251,6 +273,7 @@ class Op2CreateView(ModaBaseView):
                 )
                 item.save()
                 primeiro_item = primeiro_item or item
+                itens_por_indice[indice] = item
 
                 self._copiar_grade_do_modelo(item)
                 quantidades = self._quantidades_grade(
@@ -271,8 +294,23 @@ class Op2CreateView(ModaBaseView):
                     Personalizacao.objects.create(
                         item=item,
                         tipo=Personalizacao.Tipo.ARTE,
-                        tecnica=tipo_impressao,
+                        tecnica=_normalizar_tipo_impressao(tipo_impressao),
                     )
+
+                self._salvar_mockups_do_item(
+                    request, pedido, item, campo_generico=f'item_{indice}_imagens',
+                    incluir_legado=False,
+                )
+
+            for ordem, pessoa in enumerate(individuais, start=1):
+                PersonalizacaoIndividual.objects.create(
+                    pedido=pedido,
+                    item=itens_por_indice[pessoa['item_idx']],
+                    tamanho_id=pessoa['tamanho_id'],
+                    nome=pessoa['nome'],
+                    numero=pessoa['numero'],
+                    ordem=ordem * 10,
+                )
 
             arquivos = request.FILES.getlist('arquivo')
             for upload in arquivos:
@@ -285,9 +323,27 @@ class Op2CreateView(ModaBaseView):
             if primeiro_item:
                 self._salvar_mockups_do_item(request, pedido, primeiro_item)
 
+            destino = request.POST.get('destino') or 'salvar'
+            if destino == 'enviar':
+                aprovacao, _ = AprovacaoPedido.objects.get_or_create(pedido=pedido)
+                aprovacao.liberar(
+                    request.user, 'Orçamento salvo e enviado ao cliente pela OP 2.0.',
+                )
+
         messages.success(request, f'Rascunho #{pedido.numero:06d} criado.')
-        if request.POST.get('destino') == 'pdf':
-            return redirect(reverse('moda:pedido-orcamento-pdf', args=[pedido.pk]))
+        if destino == 'enviar':
+            link = request.build_absolute_uri(
+                reverse('moda_publico:pedido', args=[pedido.token_publico])
+            )
+            numero = whatsapp_numero(pedido)
+            if numero:
+                return redirect(
+                    f'https://wa.me/{numero}?text={quote(_mensagem_op2(pedido, link))}'
+                )
+            messages.warning(request, 'OP salva. Informe o WhatsApp para enviar ao cliente.')
+            return redirect(reverse('moda:op2-detail', args=[pedido.pk]) + '?whatsapp=1')
+        if destino == 'pdf':
+            return redirect('moda:pedido-orcamento-pdf', pk=pedido.pk)
         return _voltar(pedido)
 
     @staticmethod
@@ -321,7 +377,7 @@ class Op2CreateView(ModaBaseView):
                     'grade_id': str(produto.grade_id or ''),
                     'grade': produto.grade.nome if produto.grade_id else '',
                     'tipo_impressao': produto.tipo_impressao,
-                    'tipo_impressao_label': produto.get_tipo_impressao_display(),
+                    'tipo_impressao_label': produto.get_tipo_impressao_display().upper(),
                     'tamanhos': [
                         str(i.tamanho_id) for i in produto.grade.itens.all()
                     ] if produto.grade_id else [],
@@ -395,6 +451,45 @@ class Op2CreateView(ModaBaseView):
         return total
 
     @staticmethod
+    def _dados_individuais(request, indices):
+        """Valida a lista de nomes/números ainda no orçamento."""
+        linhas = []
+        ocupadas = {}
+        indice = 0
+        permitidos = set(indices)
+        while f'individual_{indice}_item_idx' in request.POST:
+            item_idx_texto = request.POST.get(f'individual_{indice}_item_idx') or ''
+            tamanho_texto = request.POST.get(f'individual_{indice}_tamanho_id') or ''
+            nome = (request.POST.get(f'individual_{indice}_nome') or '').strip()
+            numero = (request.POST.get(f'individual_{indice}_numero') or '').strip()
+            if not item_idx_texto.isdigit() or int(item_idx_texto) not in permitidos:
+                raise ValueError('Personalização: selecione um produto válido.')
+            if not tamanho_texto.isdigit():
+                raise ValueError('Personalização: selecione um tamanho válido.')
+            if not nome and not numero:
+                raise ValueError('Personalização: informe o nome ou o número.')
+            item_idx = int(item_idx_texto)
+            tamanho_id = int(tamanho_texto)
+            try:
+                limite = int(request.POST.get(
+                    f'item_{item_idx}_grade_{tamanho_id}', '0',
+                ) or 0)
+            except (TypeError, ValueError):
+                limite = 0
+            chave = (item_idx, tamanho_id)
+            ocupadas[chave] = ocupadas.get(chave, 0) + 1
+            if limite < ocupadas[chave]:
+                raise ValueError(
+                    'Personalização: esse tamanho já atingiu a quantidade da grade.'
+                )
+            linhas.append({
+                'item_idx': item_idx, 'tamanho_id': tamanho_id,
+                'nome': nome[:80], 'numero': numero[:10],
+            })
+            indice += 1
+        return linhas
+
+    @staticmethod
     def _copiar_grade_do_modelo(item):
         try:
             GradePedidoService.aplicar_grade_do_produto(item)
@@ -434,7 +529,19 @@ class Op2CreateView(ModaBaseView):
             raise ValueError('Data de entrega inválida.')
 
     @staticmethod
-    def _salvar_mockups_do_item(request, pedido, item):
+    def _salvar_mockups_do_item(
+        request, pedido, item, campo_generico='imagens', incluir_legado=True,
+    ):
+        for upload in request.FILES.getlist(campo_generico):
+            visual = VisualItemPedido.objects.create(
+                item=item, posicao=Posicao.FRENTE_CAMISA, imagem=upload,
+            )
+            ArquivoPedido.objects.create(
+                pedido=pedido, arquivo=visual.imagem, tipo=ArquivoPedido.Tipo.ARTE,
+                descricao=f'Imagem · {item.nome_exibicao}', enviado_por=request.user,
+            )
+        if not incluir_legado:
+            return
         campos = {
             'mockup_frente_camisa': Posicao.FRENTE_CAMISA,
             'mockup_costas_camisa': Posicao.COSTAS_CAMISA,
@@ -443,10 +550,8 @@ class Op2CreateView(ModaBaseView):
             upload = request.FILES.get(campo)
             if not upload:
                 continue
-            visual, _ = VisualItemPedido.objects.update_or_create(
-                item=item,
-                posicao=posicao,
-                defaults={'imagem': upload},
+            visual = VisualItemPedido.objects.create(
+                item=item, posicao=posicao, imagem=upload,
             )
             ArquivoPedido.objects.create(
                 pedido=pedido,
@@ -497,7 +602,7 @@ class Op2DetailView(ModaBaseView):
                     'grade_id': str(produto.grade_id or ''),
                     'grade': produto.grade.nome if produto.grade_id else '',
                     'tipo_impressao': produto.tipo_impressao,
-                    'tipo_impressao_label': produto.get_tipo_impressao_display(),
+                    'tipo_impressao_label': produto.get_tipo_impressao_display().upper(),
                     'tamanhos': [
                         str(i.tamanho_id) for i in produto.grade.itens.all()
                     ] if produto.grade_id else [],
@@ -544,6 +649,7 @@ class Op2DetailView(ModaBaseView):
             'total_entregue': sum(i.quantidade_entregue for i in itens),
             'total_pendente': sum(i.quantidade_pendente for i in itens),
             'vagas_individuais': IndividualService.vagas(pedido),
+            'abrir_whatsapp': request.GET.get('whatsapp') == '1',
             'posicoes_mockup': [
                 (Posicao.FRENTE_CAMISA, Posicao.FRENTE_CAMISA.label),
                 (Posicao.COSTAS_CAMISA, Posicao.COSTAS_CAMISA.label),
@@ -589,7 +695,7 @@ class Op2AnexosZipView(ModaBaseView):
                         visual.mockup.imagem if visual.mockup_id else None
                     )
                     extensao = campo.name.rsplit('.', 1)[-1] if campo and '.' in campo.name else 'png'
-                    nome = f'{item.nome_exibicao}-{visual.get_posicao_display()}-{indice}.{extensao}'
+                    nome = f'{item.nome_exibicao}-imagem-{indice}.{extensao}'
                     adicionar(pacote, campo, 'fotos', nome)
 
         resposta = HttpResponse(buffer.getvalue(), content_type='application/zip')
@@ -671,25 +777,41 @@ class Op2ActionView(ModaBaseView):
 
     def _acao_visual_item(self, request, pedido):
         item = get_object_or_404(pedido.itens, pk=request.POST.get('item_id'))
-        posicao = request.POST.get('posicao')
-        if posicao not in Posicao.values:
-            raise ValueError('Posição do mockup inválida.')
-        upload = request.FILES.get('imagem')
-        if not upload:
-            raise ValueError('Selecione uma imagem para o mockup.')
-        visual = VisualItemPedido.objects.create(
-            item=item,
-            posicao=posicao,
-            imagem=upload,
+        uploads = request.FILES.getlist('imagens') or request.FILES.getlist('imagem')
+        if not uploads:
+            raise ValueError('Selecione ao menos uma imagem.')
+        for upload in uploads:
+            visual = VisualItemPedido.objects.create(
+                item=item, posicao=Posicao.FRENTE_CAMISA, imagem=upload,
+            )
+            ArquivoPedido.objects.create(
+                pedido=pedido, arquivo=visual.imagem,
+                tipo=ArquivoPedido.Tipo.ARTE,
+                descricao=f'Imagem · {item.nome_exibicao}', enviado_por=request.user,
+            )
+        messages.success(request, f'{len(uploads)} imagem(ns) adicionada(s) ao produto.')
+
+    def _acao_remover_visual(self, request, pedido):
+        visual = get_object_or_404(
+            VisualItemPedido.objects.filter(item__pedido=pedido),
+            pk=request.POST.get('visual_id'),
         )
-        ArquivoPedido.objects.create(
-            pedido=pedido,
-            arquivo=visual.imagem,
-            tipo=ArquivoPedido.Tipo.ARTE,
-            descricao=f'Mockup · {item.nome_exibicao} · {visual.get_posicao_display()}',
-            enviado_por=request.user,
-        )
-        messages.success(request, 'Mockup salvo junto aos anexos da OP.')
+        nome = visual.imagem.name if visual.imagem else ''
+        storage = visual.imagem.storage if visual.imagem else None
+        if nome:
+            pedido.arquivos.filter(arquivo=nome).delete()
+        visual.delete()
+        if nome and storage:
+            storage.delete(nome)
+        messages.success(request, 'Imagem removida da OP.')
+
+    def _acao_cancelar(self, request, pedido):
+        if pedido.status == PedidoProducao.Status.CANCELADO:
+            messages.info(request, 'Esta OP já está cancelada.')
+            return
+        pedido.status = PedidoProducao.Status.CANCELADO
+        pedido.save(update_fields=['status', 'updated_at'])
+        messages.success(request, 'OP cancelada.')
 
     def _acao_grade_item(self, request, pedido):
         item = get_object_or_404(pedido.itens, pk=request.POST.get('item_id'))
@@ -768,7 +890,7 @@ class Op2ActionView(ModaBaseView):
             return
         arte = arte or Personalizacao(item=item)
         arte.tipo = Personalizacao.Tipo.ARTE
-        arte.tecnica = tipo_impressao
+        arte.tecnica = _normalizar_tipo_impressao(tipo_impressao)
         arte.local = ''
         arte.observacoes = ''
         arte.save()
@@ -1068,6 +1190,11 @@ class Op2EstruturaOpcaoView(ModaBaseView):
             tipo['campos'].setdefault(opcao.campo, []).append(opcao)
             tipo['total'] += 1
             tipo['ativos'] += int(opcao.ativo)
+        for tipo in tipos.values():
+            campos = tipo['campos']
+            if 'tipo_impressao' in campos:
+                impressoes = campos.pop('tipo_impressao')
+                tipo['campos'] = {'tipo_impressao': impressoes, **campos}
         lista_tipos = list(tipos.values())
         slug_selecionado = (request.GET.get('tipo') or '').strip()
         tipo_selecionado = next(

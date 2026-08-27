@@ -1,0 +1,15 @@
+<section class="op2-gallery-product">
+  <header class="flex items-center justify-between gap-3 mb-3">
+    <div class="min-w-0"><span class="op2-label block">Imagens do produto</span><h3 class="font-bold truncate">{{ item.nome_exibicao }}{% if item.grade_tamanho %} · {{ item.grade_tamanho.nome }}{% endif %}</h3></div>
+    <span class="op2-chip">{{ item.visuais.all|length }} imagem(ns)</span>
+  </header>
+  <div class="op2-gallery-grid">
+    {% for visual in item.visuais.all %}{% if visual.tem_imagem %}
+      <figure class="op2-gallery-image">
+        <a href="{{ visual.url_imagem }}" target="_blank" rel="noopener"><img src="{{ visual.url_imagem }}" alt="Imagem de {{ item.nome_exibicao }}"></a>
+        <form method="post" action="{% url 'moda:op2-action' pedido.pk %}" onsubmit="return confirm('Remover esta imagem da OP?')">{% csrf_token %}<input type="hidden" name="acao" value="remover_visual"><input type="hidden" name="visual_id" value="{{ visual.pk }}"><button title="Remover imagem" aria-label="Remover imagem">×</button></form>
+      </figure>
+    {% endif %}{% endfor %}
+    <form method="post" enctype="multipart/form-data" action="{% url 'moda:op2-action' pedido.pk %}">{% csrf_token %}<input type="hidden" name="acao" value="visual_item"><input type="hidden" name="item_id" value="{{ item.pk }}"><label class="op2-plus op2-gallery-add"><input type="file" name="imagens" accept="image/*" multiple class="hidden" onchange="this.form.submit()"><strong aria-hidden="true">+</strong><small>Adicionar imagens</small></label></form>
+  </div>
+</section>

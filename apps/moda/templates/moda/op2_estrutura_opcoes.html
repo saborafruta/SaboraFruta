@@ -27,7 +27,7 @@
       <span class="mx-1">›</span> Tipos de peça
     </p>
     <h2 class="text-2xl font-semibold">Tipos de peça</h2>
-    <p class="text-sm mt-1 opacity-70">Escolha um tipo à esquerda e gerencie somente os campos e opções dele. As opções ativas aparecem imediatamente ao adicionar um modelo na OP.</p>
+    <p class="text-sm mt-1 opacity-70">Escolha um tipo à esquerda e gerencie somente os campos e opções dele. Todas as variáveis padrão são sincronizadas automaticamente e as opções ativas aparecem imediatamente na OP.</p>
   </header>
 
   <div class="tipos-layout">
@@ -81,7 +81,7 @@
 
         {% for campo, opcoes in tipo_selecionado.campos.items %}
           <section class="tipo-field">
-            <div class="tipo-field-head"><div><h3 class="font-bold">{{ campo|cut:"_"|title }}</h3><p class="text-xs opacity-60">Campo: {{ campo }}</p></div><span class="tipo-count">{{ opcoes|length }} opções</span></div>
+            <div class="tipo-field-head"><div><h3 class="font-bold">{% if campo == 'tipo_impressao' %}Tipo de impressão{% else %}{{ campo|cut:"_"|title }}{% endif %}</h3><p class="text-xs opacity-60">Campo: {{ campo }}</p></div><span class="tipo-count">{{ opcoes|length }} opções</span></div>
             {% for opcao in opcoes %}
               <form method="post" class="tipo-option-row">
                 {% csrf_token %}<input type="hidden" name="opcao_id" value="{{ opcao.pk }}"><input type="hidden" name="tipo_label" value="{{ tipo_selecionado.label }}"><input type="hidden" name="tipo_atual" value="{{ tipo_selecionado.slug }}">

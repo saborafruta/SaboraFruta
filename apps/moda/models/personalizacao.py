@@ -58,7 +58,7 @@ class Personalizacao(models.Model):
         verbose_name='Tipo de impressão',
     )
     tecnica = models.CharField(
-        max_length=20, choices=Tecnica.choices, default=Tecnica.SUBLIMACAO,
+        max_length=120, choices=Tecnica.choices, default=Tecnica.SUBLIMACAO,
     )
     local = models.CharField(
         max_length=80, blank=True,

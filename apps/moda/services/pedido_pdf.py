@@ -397,34 +397,31 @@ class PedidoPdfService:
         if not personalizacoes and not visuais:
             return []
 
-        blocos = [Paragraph('ARTE', e['secao'])]
+        blocos = [Paragraph(f'IMAGENS E IMPRESSÃO — {esc(item.nome_exibicao)}', e['secao'])]
 
-        # Sem limite fixo: cada nova frente/costas vira mais uma célula e,
+        # Sem limite fixo: cada nova imagem vira mais uma célula e,
         # quando necessário, uma nova linha no PDF.
         por_linha = 3
         largura = LARGURA_UTIL / por_linha
         for inicio in range(0, len(visuais), por_linha):
             faixa = visuais[inicio:inicio + por_linha]
-            celulas, rotulos = [], []
+            celulas = []
             for visual in faixa:
                 campo = visual.imagem or (
                     getattr(visual.mockup, 'imagem', None) if visual.mockup_id else None
                 )
                 imagem = _imagem(campo, largura - 6 * mm, 42 * mm)
                 celulas.append(imagem or Paragraph('—', e['pequeno']))
-                rotulos.append(Paragraph(visual.get_posicao_display(), e['pequeno']))
             while len(celulas) < por_linha:
                 celulas.append('')
-                rotulos.append('')
-            grade = Table([celulas, rotulos], colWidths=[largura] * por_linha)
+            grade = Table([celulas], colWidths=[largura] * por_linha)
             grade.setStyle(TableStyle([
                 ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
                 ('VALIGN', (0, 0), (-1, 0), 'MIDDLE'),
-                ('TOPPADDING', (0, 1), (-1, 1), 2),
-                ('BOTTOMPADDING', (0, 1), (-1, 1), 5),
+                ('BOTTOMPADDING', (0, 0), (-1, 0), 5),
             ]))
-            # Imagem e legenda viajam juntas; a linha inteira desce para a
-            # página seguinte se não houver espaço suficiente.
+            # A linha inteira desce para a página seguinte se não houver
+            # espaço suficiente.
             blocos.append(KeepTogether([grade]))
 
         for p in personalizacoes:
@@ -542,7 +539,7 @@ class PedidoPdfService:
             pagamento.append(f'Condição: {pedido.condicao_pagamento}')
 
         blocos = [
-            PageBreak() if pedido.individuais.exists() else Spacer(1, 6),
+            Spacer(1, 10),
             Paragraph('FINANCEIRO', e['secao']),
             _tabela(dados, [LARGURA_UTIL - 45 * mm, 45 * mm], cabecalho=False),
         ]
