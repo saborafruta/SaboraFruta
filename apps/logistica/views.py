@@ -1239,7 +1239,15 @@ class ItemPedidoExpedicaoCreateView(PermissaoRequiredMixin, View):
             pedido.recalcular_totais()
             messages.success(request, "Item adicionado ao pedido.")
         else:
-            messages.error(request, "Revise os dados do item.")
+            # DIZER QUAL CAMPO. O aviso generico escondeu por muito tempo um
+            # campo obrigatorio que a tela nem desenhava: a pessoa via "revise"
+            # e nao tinha o que revisar.
+            detalhe = "; ".join(
+                f"{form.fields[campo].label or campo}: {erros[0]}"
+                for campo, erros in form.errors.items()
+                if campo in form.fields
+            )
+            messages.error(request, f"Revise os dados do item. {detalhe}".strip())
         return redirect("logistica:pedido-expedicao-detail", pk=pedido.pk)
 
 

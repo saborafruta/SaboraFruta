@@ -227,19 +227,73 @@
     </div>
 
     <!-- Formulário de adição de item -->
-    <div class="border-t p-4 space-y-3" :style="temaClaro ? 'border-color:#e2e8f0;' : 'border-color:#2a2a2e;'">
+    <div class="border-t p-4 space-y-3" :style="temaClaro ? 'border-color:#e2e8f0;' : 'border-color:#2a2a2e;'"
+         x-data="buscaProdutoItem()">
       <h4 class="text-xs font-semibold uppercase tracking-wide" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Adicionar Item</h4>
       <form method="post" action="{% url 'logistica:pedido-expedicao-item-create' pedido.pk %}">
         {% csrf_token %}
-        <div class="grid gap-3 md:grid-cols-8">
+        <div class="grid gap-3 md:grid-cols-9">
           <div class="md:col-span-1">
             <label class="text-xs font-semibold uppercase tracking-wide block mb-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Código</label>
             {{ item_form.produto_codigo }}
           </div>
-          <div class="md:col-span-3">
-            <label class="text-xs font-semibold uppercase tracking-wide block mb-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Produto *</label>
+
+          {# O campo de produto vira caixa de busca; a lista aparece ancorada nele. #}
+          <div class="md:col-span-3 relative" @click.outside="fechar()">
+            <label class="text-xs font-semibold uppercase tracking-wide block mb-1"
+                   for="{{ item_form.produto_nome.id_for_label }}"
+                   :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Produto *</label>
             {{ item_form.produto_nome }}
+
+            <div x-show="aberto" x-cloak
+                 class="absolute z-30 left-0 right-0 mt-1 rounded-lg border shadow-lg overflow-hidden"
+                 :style="temaClaro
+                   ? 'background:#fff;border-color:#e2e8f0;'
+                   : 'background:#242426;border-color:#303038;'">
+              <p x-show="carregando" class="px-3 py-2 text-xs"
+                 :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Procurando…</p>
+
+              <ul class="max-h-64 overflow-y-auto" role="listbox">
+                <template x-for="(p, i) in resultados" :key="p.id">
+                  <li>
+                    <button type="button" class="w-full text-left px-3 py-2 text-sm"
+                            role="option" :aria-selected="i === foco"
+                            @mouseenter="foco = i" @click="escolher(p)"
+                            :style="i === foco
+                              ? (temaClaro ? 'background:#eff6ff;' : 'background:#1e3a5f;')
+                              : ''">
+                      <span class="block font-medium"
+                            :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'"
+                            x-text="p.label"></span>
+                      <span class="block text-xs"
+                            :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+                        <span x-show="p.detalhe" x-text="p.detalhe"></span>
+                        <span x-show="p.detalhe && p.unidade"> · </span>
+                        <span x-show="p.unidade" x-text="p.unidade"></span>
+                        {% comment %}
+                          O SALDO APARECE NA LISTA porque quem monta o pedido
+                          precisa saber se tem — descobrir que faltou só na
+                          separação é o pedido voltando.
+                        {% endcomment %}
+                        <span> · </span>
+                        <span :style="p.estoque > 0 ? 'color:#059669;' : 'color:#d97706;'"
+                              x-text="p.estoque > 0 ? p.estoque + ' em estoque' : 'sem estoque'"></span>
+                      </span>
+                    </button>
+                  </li>
+                </template>
+              </ul>
+
+              <p x-show="!carregando && !resultados.length && !semPermissao" class="px-3 py-2 text-xs"
+                 :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+                Nenhum produto com esse termo. Você pode digitar o nome à mão.
+              </p>
+              <p x-show="semPermissao" class="px-3 py-2 text-xs" style="color:#d97706;">
+                Sem acesso ao catálogo do Estoque para buscar. Digite o produto à mão.
+              </p>
+            </div>
           </div>
+
           <div>
             <label class="text-xs font-semibold uppercase tracking-wide block mb-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Qtd</label>
             {{ item_form.quantidade }}
@@ -247,6 +301,18 @@
           <div>
             <label class="text-xs font-semibold uppercase tracking-wide block mb-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Un</label>
             {{ item_form.unidade }}
+          </div>
+          {% comment %}
+            VOLUMES ERA OBRIGATÓRIO E NÃO APARECIA. O formulário exigia o campo,
+            a tela nunca o desenhava, e todo "Adicionar Item" voltava com um
+            "Revise os dados do item" que não dizia o que revisar — o item
+            simplesmente não entrava no pedido.
+          {% endcomment %}
+          <div>
+            <label class="text-xs font-semibold uppercase tracking-wide block mb-1"
+                   for="{{ item_form.volumes.id_for_label }}"
+                   :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Volumes</label>
+            {{ item_form.volumes }}
           </div>
           <div>
             <label class="text-xs font-semibold uppercase tracking-wide block mb-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Peso kg</label>
@@ -263,6 +329,129 @@
       </form>
     </div>
   </div>
+
+{% comment %}
+  BUSCA NO SERVIDOR, e não uma lista inteira jogada na página: o catálogo tem
+  milhares de itens, e mandá-los todos para o navegador só para filtrar no
+  cliente é a página levando segundos para abrir.
+
+  O ITEM DO PEDIDO GUARDA TEXTO, e não uma chave para o produto. Escolher da
+  lista preenche código, unidade e peso, mas quem precisar digitar um nome que
+  não está no catálogo continua podendo — é pedido de expedição, e às vezes o
+  que sobe no caminhão não é item cadastrado.
+{% endcomment %}
+<script>
+  function buscaProdutoItem() {
+    return {
+      aberto: false,
+      carregando: false,
+      semPermissao: false,
+      resultados: [],
+      foco: 0,
+      _timer: null,
+
+      init() {
+        this.campo = this.$el.querySelector('#{{ item_form.produto_nome.id_for_label }}');
+        if (!this.campo) return;
+        this.campo.setAttribute('autocomplete', 'off');
+        this.campo.addEventListener('input', () => this.digitou(this.campo.value));
+        this.campo.addEventListener('keydown', (e) => this.tecla(e));
+      },
+
+      /* ESPERA A DIGITAÇÃO PARAR. Uma consulta por tecla castiga o servidor e
+         devolve resultado de termo que a pessoa já abandonou — a última
+         resposta a chegar venceria, e nem sempre é a do que está na tela. */
+      digitou(valor) {
+        clearTimeout(this._timer);
+        const q = (valor || '').trim();
+        if (q.length < 2) {
+          this.resultados = [];
+          this.aberto = false;
+          return;
+        }
+        this._timer = setTimeout(() => this.procurar(q), 220);
+      },
+
+      async procurar(q) {
+        this.carregando = true;
+        this.aberto = true;
+        this.foco = 0;
+        try {
+          const url = '{% url "estoque:produto-estoque-search-json" %}?q=' + encodeURIComponent(q);
+          const res = await fetch(url, {headers: {'X-Requested-With': 'XMLHttpRequest'}});
+          /* SEM ACESSO NÃO É "NÃO ACHEI". O catálogo mora no Estoque, e quem
+             tem só Logística leva 403 aqui. Tratar isso como lista vazia diria
+             que o produto não existe — e a pessoa procuraria um cadastro que
+             está lá. */
+          if (res.status === 403 || res.status === 401) {
+            this.semPermissao = true;
+            this.resultados = [];
+            return;
+          }
+          this.semPermissao = false;
+          const dados = await res.json();
+          this.resultados = dados.results || [];
+        } catch (e) {
+          /* Sem rede a busca some, e o campo continua digitável — travar o
+             pedido porque o autocomplete falhou seria pior que não tê-lo. */
+          this.resultados = [];
+        } finally {
+          this.carregando = false;
+        }
+      },
+
+      tecla(e) {
+        if (!this.aberto || !this.resultados.length) return;
+        if (e.key === 'ArrowDown') {
+          e.preventDefault();
+          this.foco = (this.foco + 1) % this.resultados.length;
+        } else if (e.key === 'ArrowUp') {
+          e.preventDefault();
+          this.foco = (this.foco - 1 + this.resultados.length) % this.resultados.length;
+        } else if (e.key === 'Enter') {
+          /* Enter escolhe da lista em vez de enviar o formulário — enviar com
+             a lista aberta gravaria o texto parcial que a pessoa digitou. */
+          e.preventDefault();
+          this.escolher(this.resultados[this.foco]);
+        } else if (e.key === 'Escape') {
+          this.fechar();
+        }
+      },
+
+      escolher(p) {
+        if (!p) return;
+        this.preencher('{{ item_form.produto_nome.id_for_label }}', p.label);
+        this.preencher('{{ item_form.produto_codigo.id_for_label }}', p.detalhe);
+        /* SÓ A SIGLA. O endpoint devolve "KG (Quilograma)" e o campo do item
+           guarda 10 caracteres: mandar o rótulo inteiro faria o formulário
+           recusar o item por tamanho — o autocomplete quebrando justamente o
+           que veio facilitar. */
+        this.preencher(
+          '{{ item_form.unidade.id_for_label }}',
+          (p.unidade || '').split(' ')[0].slice(0, 10),
+        );
+        /* O peso vem RESOLVIDO pelo servidor (bruto → líquido → unidade em
+           peso). Recalcular aqui daria um total na tela e outro na validação. */
+        if (p.peso_bruto) {
+          this.preencher('{{ item_form.peso_kg.id_for_label }}', p.peso_bruto);
+        }
+        this.fechar();
+      },
+
+      preencher(id, valor) {
+        const campo = document.getElementById(id);
+        if (!campo || valor === undefined || valor === null || valor === '') return;
+        campo.value = valor;
+        campo.dispatchEvent(new Event('input', {bubbles: true}));
+      },
+
+      fechar() {
+        this.aberto = false;
+        this.resultados = [];
+      },
+    };
+  }
+</script>
 
 </div>
 {% endblock %}
