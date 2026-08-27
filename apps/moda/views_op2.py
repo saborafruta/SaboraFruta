@@ -3,11 +3,12 @@ from copy import copy
 from datetime import date
 from io import BytesIO
 from urllib.parse import quote
+from uuid import uuid4
 from zipfile import ZIP_DEFLATED, ZipFile
 
 from django.contrib import messages
 from django.db import IntegrityError, transaction
-from django.http import HttpResponse
+from django.http import HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.utils import timezone
@@ -337,11 +338,16 @@ class Op2CreateView(ModaBaseView):
             )
             numero = whatsapp_numero(pedido)
             if numero:
-                return redirect(
-                    f'https://wa.me/{numero}?text={quote(_mensagem_op2(pedido, link))}'
-                )
-            messages.warning(request, 'OP salva. Informe o WhatsApp para enviar ao cliente.')
-            return redirect(reverse('moda:op2-detail', args=[pedido.pk]) + '?whatsapp=1')
+                return render(request, 'moda/op2_enviar_whatsapp.html', {
+                    'op_url': reverse('moda:op2-detail', args=[pedido.pk]),
+                    'whatsapp_url': (
+                        f'https://wa.me/{numero}?text={quote(_mensagem_op2(pedido, link))}'
+                    ),
+                })
+            return render(request, 'moda/op2_enviar_whatsapp.html', {
+                'op_url': reverse('moda:op2-detail', args=[pedido.pk]) + '?whatsapp=1',
+                'whatsapp_url': '',
+            })
         if destino == 'pdf':
             return redirect('moda:pedido-orcamento-pdf', pk=pedido.pk)
         return _voltar(pedido)
@@ -560,6 +566,34 @@ class Op2CreateView(ModaBaseView):
                 descricao=visual.get_posicao_display(),
                 enviado_por=request.user,
             )
+
+
+class Op2ModeloRapidoView(ModaBaseView):
+    """Cria o modelo mínimo sem tirar o usuário do orçamento em edição."""
+
+    area = 'comercial'
+    permissao_acao = 'criar'
+
+    def post(self, request):
+        nome = (request.POST.get('nome') or '').strip()
+        if not nome:
+            return JsonResponse(
+                {'ok': False, 'erro': 'Informe o nome do modelo.'}, status=400,
+            )
+        produto = ProdutoModa.objects.create(
+            filial=_filial(request),
+            codigo=f'OP2-{uuid4().hex[:10].upper()}',
+            nome=nome,
+            status=ProdutoModa.Status.ATIVO,
+            ativo=True,
+        )
+        return JsonResponse({
+            'ok': True,
+            'modelo': {
+                'id': str(produto.pk), 'nome': produto.nome,
+                'codigo': produto.codigo, 'info': produto.codigo,
+            },
+        })
 
 
 class Op2DetailView(ModaBaseView):

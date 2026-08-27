@@ -203,11 +203,10 @@ class ArteNoPdfTests(TestCase):
 
     # ── Produtos um abaixo do outro ──────────────────────────────────────
 
-    def test_varios_produtos_ocupam_a_mesma_folha(self):
+    def test_cada_produto_ocupa_uma_folha_propria(self):
         """
-        Antes cada produto abria página nova a partir do segundo, e um
-        pedido de tres camisas virava tres folhas quase vazias. Agora o
-        seguinte ocupa o espaco que sobrou.
+        A ficha de produção é destacável: cada produto precisa trazer todas
+        as próprias informações em uma folha exclusiva.
         """
         from apps.moda.models import ItemPedidoProducao
 
@@ -217,7 +216,7 @@ class ArteNoPdfTests(TestCase):
                 pedido=pedido, descricao=nome, quantidade=5,
             )
 
-        self.assertEqual(_paginas(PedidoPdfService.gerar(pedido)), 1)
+        self.assertEqual(_paginas(PedidoPdfService.gerar(pedido)), 3)
 
     def test_um_produto_so_continua_numa_folha(self):
         from apps.moda.models import ItemPedidoProducao

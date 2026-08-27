@@ -119,6 +119,30 @@ def sincronizar_opcoes_padrao(filial):
         return
     from apps.moda.models import OpcaoEstruturaOP2
 
+    # Versões antigas chegaram a criar linhas compostas apenas por espaços.
+    # Na gestão elas pareciam nove inputs vazios, embora campo/ordem estivessem
+    # preenchidos. Repara essas linhas pelo valor padrão da mesma posição.
+    for opcao in OpcaoEstruturaOP2.objects.for_filial(filial):
+        if (opcao.valor or '').strip():
+            continue
+        valores = (
+            OP2_ESTRUTURA_OPCOES.get(opcao.tipo_peca, {})
+            .get('campos', {}).get(opcao.campo, [])
+        )
+        indice = max(int(opcao.ordem or 1) - 1, 0)
+        valor = valores[indice] if indice < len(valores) else ''
+        if not valor:
+            opcao.delete()
+            continue
+        conflito = OpcaoEstruturaOP2.objects.for_filial(filial).filter(
+            tipo_peca=opcao.tipo_peca, campo=opcao.campo, valor=valor,
+        ).exclude(pk=opcao.pk).exists()
+        if conflito:
+            opcao.delete()
+        else:
+            opcao.valor = valor
+            opcao.save(update_fields=['valor', 'updated_at'])
+
     existentes = set(
         OpcaoEstruturaOP2.objects.for_filial(filial).values_list(
             'tipo_peca', 'campo', 'valor',
@@ -158,6 +182,8 @@ def opcoes_estrutura_filial(filial, incluir_inativas=False):
 
     grupos = {}
     for opcao in qs.order_by('tipo_label', 'campo', 'ordem', 'valor'):
+        if not (opcao.valor or '').strip():
+            continue
         grupo = grupos.setdefault(opcao.tipo_peca, {
             'label': opcao.tipo_label or opcao.tipo_peca.title(),
             'campos': {},

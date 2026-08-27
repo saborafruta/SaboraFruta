@@ -925,7 +925,8 @@ class PedidoPdfView(ModaBaseView):
             .prefetch_related(
                 'itens__produto', 'itens__modelo', 'itens__cor', 'itens__tecido',
                 'itens__grade__tamanho', 'itens__personalizacoes',
-                'itens__visuais__mockup', 'individuais__tamanho', 'individuais__item',
+                'itens__visuais__mockup', 'itens__individuais__tamanho',
+                'individuais__tamanho', 'individuais__item',
                 # A arte do pedido entra no PDF: sem o prefetch seria mais
                 # uma consulta por documento gerado.
                 'arquivos',
@@ -973,7 +974,8 @@ class OrcamentoPdfView(ModaBaseView):
             .prefetch_related(
                 'itens__produto', 'itens__cor', 'itens__tecido',
                 'itens__grade__tamanho', 'itens__personalizacoes',
-                'itens__visuais__mockup', 'individuais__tamanho',
+                'itens__visuais__mockup', 'itens__individuais__tamanho',
+                'individuais__tamanho',
                 'individuais__item', 'arquivos',
             ),
             pk=pk,

@@ -25,7 +25,7 @@ from reportlab.lib.units import mm
 from reportlab.lib.utils import ImageReader
 from reportlab.platypus import (
     HRFlowable, Image, KeepInFrame, KeepTogether, Paragraph, SimpleDocTemplate,
-    Spacer, Table, TableStyle,
+    PageBreak, Spacer, Table, TableStyle,
 )
 
 from .pdf_marca import (
@@ -104,6 +104,24 @@ def _imagem(campo, largura, altura):
         return None
 
 
+def _estrutura_item(item):
+    """Separa observação livre dos campos preenchidos da estrutura da peça."""
+    texto = (item.observacoes or '').strip()
+    marcador = 'Estrutura da peça:'
+    if marcador not in texto:
+        return texto, []
+    livre, bloco = texto.split(marcador, 1)
+    campos = []
+    for linha in bloco.splitlines():
+        linha = linha.strip()
+        if not linha or ':' not in linha:
+            continue
+        rotulo, valor = (parte.strip() for parte in linha.split(':', 1))
+        if valor:
+            campos.append((rotulo, valor))
+    return livre.strip(), campos
+
+
 def whatsapp_numero(pedido) -> str:
     """
     Número do cliente em formato aceito pelo wa.me: só dígitos, com DDI.
@@ -169,70 +187,43 @@ class PedidoPdfService:
         doc = SimpleDocTemplate(
             buffer, pagesize=PAGINA,
             leftMargin=MARGEM, rightMargin=MARGEM,
-            # O topo abre ABAIXO da tarja, que é desenhada no canvas e não
-            # participa do fluxo -- senão o texto entraria por baixo dela.
-            topMargin=ALTURA_TARJA + 5 * mm, bottomMargin=18 * mm,
+            # A ficha segue o modelo operacional: quase toda a A4 pertence
+            # ao produto, sem uma tarja alta consumindo a área de trabalho.
+            topMargin=8 * mm, bottomMargin=28 * mm,
             title=f'Pedido {pedido.numero:06d}',
             author=str(pedido.filial),
         )
         e = _estilos()
         elementos = []
-
-        elementos += cls._cabecalho(pedido, e)
-        elementos += cls._cliente(pedido, e)
-        elementos += cls._artes_do_pedido(pedido, e)
-
-        for indice, item in enumerate(pedido.itens.all()):
-            elementos += cls._item(pedido, item, e, indice)
-
-        personalizacao = cls._personalizacao(pedido, e, LARGURA_UTIL * 0.59)
-        financeiro = cls._financeiro(pedido, e, LARGURA_UTIL * 0.39)
-        # Até oito pessoas cabem ao lado do financeiro e deixam a ficha de
-        # uma OP comum em uma só folha. Listas maiores continuam em largura
-        # total para não encolher nomes e números até ficarem ilegíveis.
-        if personalizacao and pedido.individuais.count() <= 8:
-            fechamento = Table(
-                [[
-                    KeepInFrame(
-                        LARGURA_UTIL * 0.59, 60 * mm,
-                        personalizacao, mode='shrink',
-                    ),
-                    '',
-                    KeepInFrame(
-                        LARGURA_UTIL * 0.39, 60 * mm,
-                        financeiro, mode='shrink',
-                    ),
-                ]],
-                colWidths=[
-                    LARGURA_UTIL * 0.59,
-                    LARGURA_UTIL * 0.02,
-                    LARGURA_UTIL * 0.39,
-                ],
-            )
-            fechamento.setStyle(TableStyle([
-                ('VALIGN', (0, 0), (-1, -1), 'TOP'),
-                ('LEFTPADDING', (0, 0), (-1, -1), 0),
-                ('RIGHTPADDING', (0, 0), (-1, -1), 0),
-                ('TOPPADDING', (0, 0), (-1, -1), 0),
-                ('BOTTOMPADDING', (0, 0), (-1, -1), 0),
-            ]))
-            elementos.append(fechamento)
-        elif personalizacao:
-            elementos += cls._personalizacao(pedido, e, LARGURA_UTIL)
-            elementos += cls._financeiro(pedido, e, LARGURA_UTIL)
+        itens = list(pedido.itens.all())
+        altura_util = PAGINA[1] - doc.topMargin - doc.bottomMargin
+        if not itens:
+            blocos = cls._cliente(pedido, e)
+            blocos += cls._artes_do_pedido(pedido, e)
+            blocos += cls._financeiro(pedido, e, LARGURA_UTIL)
+            elementos += blocos
         else:
-            elementos += cls._financeiro(pedido, e, LARGURA_UTIL)
+            for indice, item in enumerate(itens):
+                blocos = cls._cliente(pedido, e)
+                if indice == 0:
+                    blocos += cls._artes_do_pedido(pedido, e)
+                blocos += cls._item(pedido, item, e, 0)
+                blocos += cls._personalizacao_item(item, e, LARGURA_UTIL)
+                if indice == len(itens) - 1:
+                    blocos += cls._financeiro(pedido, e, LARGURA_UTIL)
+                # A ficha de cada produto é uma unidade indivisível. O modo
+                # shrink preserva uma única A4 mesmo com até 30 nomes.
+                elementos.append(KeepInFrame(
+                    LARGURA_UTIL, altura_util, blocos, mode='shrink',
+                ))
+                if indice < len(itens) - 1:
+                    elementos.append(PageBreak())
 
         # A tarja e o rodapé são os dois desenhos de canvas da folha, e os
         # dois valem em TODA página: a marca no topo e a identificação com
         # QR embaixo. Uma função só chama os dois, na ordem em que se lê.
         rodape = cls._rodape(pedido, base_url, e)
-        tarja = desenhar_tarja(
-            pedido.filial, 'PEDIDO DE PRODUÇÃO', f'#{pedido.numero:06d}',
-        )
-
         def moldura(canvas, doc_):
-            tarja(canvas, doc_)
             rodape(canvas, doc_)
 
         doc.build(elementos, onFirstPage=moldura, onLaterPages=moldura)
@@ -299,14 +290,14 @@ class PedidoPdfService:
         larguras = [22 * mm, LARGURA_UTIL / 2 - 22 * mm, 22 * mm, LARGURA_UTIL / 2 - 22 * mm]
 
         return [
-            Paragraph('CLIENTE', e['secao']),
+            Paragraph(f'INFORMAÇÕES DO CLIENTE — PEDIDO #{pedido.numero:06d}', e['secao']),
             _tabela(dados, larguras, cabecalho=False),
         ]
 
     # ── Arte do pedido ───────────────────────────────────────────────────
 
     @staticmethod
-    def _artes_do_pedido(pedido, e) -> list:
+    def _artes_do_pedido(pedido, e, largura_util=LARGURA_UTIL) -> list:
         """
         A ARTE, desenhada — logo depois do cliente, ainda na primeira página.
 
@@ -335,7 +326,7 @@ class PedidoPdfService:
         # Três por linha: menor que isso desperdiça a folha, maior que isso
         # deixa a arte pequena demais para conferir escudo e numeração.
         por_linha = 3
-        largura = LARGURA_UTIL / por_linha
+        largura = largura_util / por_linha
         blocos = [Paragraph('ANEXOS E ARTES', e['secao'])]
 
         for inicio in range(0, len(artes), por_linha):
@@ -400,24 +391,38 @@ class PedidoPdfService:
 
         blocos.append(Paragraph(f'PRODUTO — {esc(item.nome_exibicao)}', e['secao']))
 
-        dados = [
-            ['Produto', 'Modelo', 'Cor', 'Tecido / Malha', 'Gola', 'Manga'],
-            [
-                Paragraph(esc(item.nome_exibicao), e['celula']),
-                Paragraph(esc(item.modelo) if item.modelo_id else '—', e['celula']),
-                Paragraph(esc(item.cor) if item.cor_id else '—', e['celula']),
-                Paragraph(esc(item.tecido_exibicao) or '—', e['celula']),
-                Paragraph(item.get_gola_display() or '—', e['celula']),
-                Paragraph(item.get_manga_display() or '—', e['celula']),
-            ],
+        observacao, estrutura = _estrutura_item(item)
+        campos = [('Produto', item.nome_exibicao)]
+        campos += [
+            (rotulo, valor) for rotulo, valor in (
+                ('Modelo', str(item.modelo) if item.modelo_id else ''),
+                ('Cor', str(item.cor) if item.cor_id else ''),
+                ('Tecido / Malha', item.tecido_exibicao),
+                ('Gola', item.get_gola_display() if item.gola else ''),
+                ('Manga', item.get_manga_display() if item.manga else ''),
+                ('Acabamento', item.acabamento),
+            ) if valor
         ]
-        largura = LARGURA_UTIL / 6
-        blocos.append(_tabela(dados, [largura] * 6))
+        existentes = {rotulo.casefold() for rotulo, _ in campos}
+        campos += [par for par in estrutura if par[0].casefold() not in existentes]
+        dados = []
+        for inicio in range(0, len(campos), 2):
+            linha = []
+            for rotulo, valor in campos[inicio:inicio + 2]:
+                linha += [Paragraph(f'<b>{esc(rotulo)}</b>', e['pequeno']),
+                          Paragraph(esc(valor), e['celula'])]
+            while len(linha) < 4:
+                linha += ['', '']
+            dados.append(linha)
+        blocos.append(_tabela(
+            dados,
+            [24 * mm, LARGURA_UTIL / 2 - 24 * mm] * 2,
+            cabecalho=False,
+        ))
 
-        if item.acabamento or item.observacoes:
-            texto = ' · '.join(esc(x) for x in (item.acabamento, item.observacoes) if x)
+        if observacao:
             blocos.append(Spacer(1, 3))
-            blocos.append(Paragraph(texto, e['pequeno']))
+            blocos.append(Paragraph(esc(observacao), e['pequeno']))
 
         blocos += cls._arte(item, e)
         blocos += cls._grade(item, e)
@@ -427,7 +432,7 @@ class PedidoPdfService:
         return blocos
 
     @staticmethod
-    def _arte(item, e) -> list:
+    def _arte(item, e, largura_util=LARGURA_UTIL) -> list:
         personalizacoes = list(item.personalizacoes.all())
         visuais = list(item.visuais.all())
         if not personalizacoes and not visuais:
@@ -437,8 +442,8 @@ class PedidoPdfService:
 
         # Sem limite fixo: cada nova imagem vira mais uma célula e,
         # quando necessário, uma nova linha no PDF.
-        por_linha = 3
-        largura = LARGURA_UTIL / por_linha
+        por_linha = min(3, max(1, len(visuais)))
+        largura = largura_util / por_linha
         for inicio in range(0, len(visuais), por_linha):
             faixa = visuais[inicio:inicio + por_linha]
             celulas = []
@@ -458,7 +463,7 @@ class PedidoPdfService:
             ]))
             # A linha inteira desce para a página seguinte se não houver
             # espaço suficiente.
-            blocos.append(KeepTogether([grade]))
+            blocos.append(grade)
 
         for p in personalizacoes:
             partes = [getattr(p, 'get_tecnica_display', lambda: '')() or str(p)]
@@ -479,7 +484,7 @@ class PedidoPdfService:
                 continue
 
             linha = Table(
-                [[arte, texto]], colWidths=[28 * mm, LARGURA_UTIL - 28 * mm],
+                [[arte, texto]], colWidths=[28 * mm, largura_util - 28 * mm],
             )
             linha.setStyle(TableStyle([
                 ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
@@ -539,6 +544,26 @@ class PedidoPdfService:
         ]
         return [
             Spacer(1, 8),
+            Paragraph(f'PERSONALIZAÇÃO POR PESSOA — {len(pessoas)}', e['secao']),
+            _tabela(dados, larguras),
+        ]
+
+    @staticmethod
+    def _personalizacao_item(item, e, largura_util=LARGURA_UTIL) -> list:
+        """Lista compacta e exclusiva do produto, sem repetir o nome dele."""
+        pessoas = list(item.individuais.all())
+        if not pessoas:
+            return []
+        dados = [['#', 'Nome', 'Número', 'Tamanho']]
+        for indice, pessoa in enumerate(pessoas, start=1):
+            dados.append([
+                str(indice), Paragraph(esc(pessoa.nome) or '—', e['celula']),
+                pessoa.numero or '—',
+                pessoa.tamanho.sigla if pessoa.tamanho_id else '—',
+            ])
+        larguras = [8 * mm, largura_util - 43 * mm, 17 * mm, 18 * mm]
+        return [
+            Spacer(1, 4),
             Paragraph(f'PERSONALIZAÇÃO POR PESSOA — {len(pessoas)}', e['secao']),
             _tabela(dados, larguras),
         ]

@@ -26,7 +26,7 @@ from reportlab.lib.pagesizes import A4
 from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
 from reportlab.lib.units import mm
 from reportlab.platypus import (
-    KeepTogether, PageBreak, Paragraph, SimpleDocTemplate, Spacer, Table,
+    KeepTogether, Paragraph, SimpleDocTemplate, Spacer, Table,
     TableStyle,
 )
 
@@ -159,19 +159,17 @@ class OrcamentoPdfService:
         # da aprovação: anexos/fotos e a lista de nomes por tamanho.
         from .pedido_pdf import PedidoPdfService
         itens = list(pedido.itens.all())
-        tem_midia = pedido.arquivos.exists() or any(
-            item.visuais.exists() or item.personalizacoes.exists()
-            for item in itens
-        )
-        # Fotos são altas e não devem tentar ocupar o pouco espaço que sobra
-        # depois da tabela comercial. Uma folha nova evita imagens cortadas e
-        # legendas órfãs quando há várias frentes/costas.
-        if tem_midia:
-            elementos.append(PageBreak())
-        elementos += PedidoPdfService._artes_do_pedido(pedido, e)
+        elementos += PedidoPdfService._artes_do_pedido(pedido, e, LARGURA_UTIL)
         for item in itens:
-            elementos += PedidoPdfService._arte(item, e)
-        elementos += PedidoPdfService._personalizacao(pedido, e, LARGURA_UTIL)
+            bloco = []
+            bloco += PedidoPdfService._arte(item, e, LARGURA_UTIL)
+            bloco += PedidoPdfService._personalizacao_item(item, e, LARGURA_UTIL)
+            if bloco:
+                elementos += bloco
+                elementos.append(Spacer(1, 6))
+        # O valor fecha a proposta somente depois de o cliente conferir
+        # imagens, tamanhos e nomes de cada produto.
+        elementos += [Spacer(1, 6), cls._totais(pedido, e), Spacer(1, 10)]
         elementos += cls._observacoes(pedido, e)
         elementos += cls._assinatura(pedido, e)
 
@@ -294,9 +292,7 @@ class OrcamentoPdfService:
             cls._titulo('ITENS SOLICITADOS', e),
             Spacer(1, 2),
             tabela,
-            Spacer(1, 10),
-            cls._totais(pedido, e),
-            Spacer(1, 16),
+            Spacer(1, 8),
         ]
 
     @staticmethod
@@ -388,4 +384,4 @@ class OrcamentoPdfService:
         # Inteira ou na página seguinte: num orçamento longo a data ficava
         # sozinha no pé de uma página e o nome da empresa aparecia na outra,
         # o que faz a assinatura parecer de outro documento.
-        return [Spacer(1, 22 * mm), KeepTogether(blocos)]
+        return [Spacer(1, 8 * mm), KeepTogether(blocos)]

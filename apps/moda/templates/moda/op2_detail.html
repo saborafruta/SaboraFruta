@@ -142,13 +142,14 @@
         <aside>
           <input type="search" x-model="buscaProduto" class="form-input w-full mb-2" placeholder="Buscar modelo, código, referência, tecido ou grade">
           <div class="op2-model-list space-y-2">
+            <template x-for="modelo in modelosRapidos" :key="modelo.id"><button type="button" class="op2-item text-left w-full" :class="draft.produto_id===modelo.id?'ring-2 ring-blue-500':''" x-show="combinaProduto(modelo.nome+' '+modelo.codigo)" @click.prevent="selecionarModelo(modelo.id,modelo.nome,modelo.codigo,modelo.info)"><strong x-text="modelo.nome"></strong><small class="block mt-1 opacity-70" x-text="modelo.codigo"></small></button></template>
             {% for modelo in modelos %}
               <button type="button" class="op2-item text-left w-full" :class="draft.produto_id==='{{ modelo.pk }}'?'ring-2 ring-blue-500':''" x-show="combinaProduto('{{ modelo.nome|escapejs }} {{ modelo.codigo|escapejs }} {{ modelo.referencia|escapejs }} {{ modelo.tecido|escapejs }} {% if modelo.grade %}{{ modelo.grade.nome|escapejs }} {{ modelo.grade.resumo|escapejs }}{% endif %}')" @click.prevent="selecionarModelo('{{ modelo.pk }}','{{ modelo.nome|escapejs }}','{{ modelo.codigo|escapejs }}','{{ modelo.codigo|escapejs }}{% if modelo.referencia %} · {{ modelo.referencia|escapejs }}{% endif %}{% if modelo.tecido %} · {{ modelo.tecido|escapejs }}{% endif %}')"><strong>{{ modelo.nome }}</strong><small class="block mt-1 opacity-70">{{ modelo.codigo }}{% if modelo.referencia %} · {{ modelo.referencia }}{% endif %}{% if modelo.grade %} · {{ modelo.grade.nome }}{% endif %}</small></button>
             {% endfor %}
           </div>
         </aside>
         <main class="space-y-3">
-          <section class="op2-editor-card"><div class="grid md:grid-cols-4 gap-2"><div class="md:col-span-2"><span class="op2-label block">Modelo escolhido</span><strong x-text="draft.nome||'Nenhum modelo selecionado'"></strong><p class="text-xs opacity-60" x-text="draft.info||'Selecione um modelo à esquerda.'"></p></div><label><span class="op2-label block">Quantidade total</span><input name="quantidade" type="number" min="1" x-model.number="draft.quantidade" :readonly="draft.grades.length>0" class="form-input w-full"></label><label><span class="op2-label block">Valor unitário</span><input name="valor_unitario" type="number" min="0" step=".01" x-model="draft.valor_unitario" class="form-input w-full"></label></div></section>
+          <section class="op2-editor-card"><div class="grid md:grid-cols-4 gap-2"><div class="md:col-span-2"><span class="op2-label block">Modelo escolhido</span><strong x-text="draft.nome||'Nenhum modelo selecionado'"></strong><p class="text-xs opacity-60" x-text="draft.info||'Selecione um modelo à esquerda ou cadastre somente o nome abaixo.'"></p><div class="flex gap-2 mt-2"><input x-model="novoModeloNome" class="form-input flex-1" placeholder="Nome do novo modelo" @keydown.enter.prevent="salvarModeloRapido()"><button type="button" class="btn-secondary" :disabled="criandoModelo" @click="salvarModeloRapido()" x-text="criandoModelo?'Salvando...':'+ Novo modelo'"></button></div><small class="block mt-1" style="color:#ef4444" x-text="erroModelo"></small></div><label><span class="op2-label block">Quantidade total</span><input name="quantidade" type="number" min="1" x-model.number="draft.quantidade" :readonly="draft.grades.length>0" class="form-input w-full"></label><label><span class="op2-label block">Valor unitário</span><input name="valor_unitario" type="number" min="0" step=".01" x-model="draft.valor_unitario" class="form-input w-full"></label></div></section>
 
           <section class="op2-editor-card">
             <div class="flex flex-wrap items-center justify-between gap-2 mb-2"><div><h3 class="font-bold text-sm">Estrutura da peça</h3><p class="text-xs opacity-60">As mesmas opções usadas na criação da OP.</p></div><label class="w-full sm:w-60"><span class="op2-label block">Tipo de peça</span><select name="estrutura_tipo" x-model="draft.estrutura_tipo" class="form-input w-full">{% for tipo,grupo in estrutura_opcoes.items %}<option value="{{ tipo }}">{{ grupo.label }}</option>{% endfor %}</select></label></div>
@@ -178,6 +179,10 @@ function op2WorkspaceCompleto(){
   const estado=op2Workspace();
   estado.modalItem=false;
   estado.modoItem='novo';
+  estado.modelosRapidos=[];
+  estado.novoModeloNome='';
+  estado.criandoModelo=false;
+  estado.erroModelo='';
   estado.gradeMap=JSON.parse(document.getElementById('op2-modelos-grade').textContent);
   estado.grades=JSON.parse(document.getElementById('op2-detail-grades').textContent);
   estado.tamanhoLabels=JSON.parse(document.getElementById('op2-detail-tamanhos').textContent);
@@ -187,6 +192,7 @@ function op2WorkspaceCompleto(){
   estado.individualTamanho='';
   estado.novoDraftItem=function(){return{item_id:'',produto_id:'',nome:'',codigo:'',info:'',quantidade:1,valor_unitario:'0',tipo_impressao:'',estrutura_tipo:'{{ estrutura_tipo_padrao|escapejs }}',estrutura:{},item_observacoes:'',grades:[],gradePorGrade:{}}};
   estado.draft=estado.novoDraftItem();
+  estado.salvarModeloRapido=async function(){const nome=(this.novoModeloNome||'').trim();if(!nome){this.erroModelo='Informe o nome do modelo.';return}this.criandoModelo=true;this.erroModelo='';const body=new FormData();body.append('nome',nome);body.append('csrfmiddlewaretoken',(document.cookie.match(/(?:^|;\s*)csrftoken=([^;]+)/)||[])[1]||'');try{const resposta=await fetch('{% url "moda:op2-modelo-rapido" %}',{method:'POST',headers:{'X-Requested-With':'XMLHttpRequest'},body});const dados=await resposta.json();if(!resposta.ok||!dados.ok){this.erroModelo=dados.erro||'Não foi possível cadastrar.';return}this.modelosRapidos.unshift(dados.modelo);this.gradeMap[dados.modelo.id]={};this.selecionarModelo(dados.modelo.id,dados.modelo.nome,dados.modelo.codigo,dados.modelo.info);this.novoModeloNome=''}catch(e){this.erroModelo='Não foi possível cadastrar agora.'}finally{this.criandoModelo=false}};
   estado.abrirNovoProduto=function(){this.modoItem='novo';this.draft=this.novoDraftItem();this.buscaProduto='';this.modalItem=true};
   estado.abrirEditarProduto=function(itemId){const item=this.itensModal[String(itemId)];if(!item){alert('Produto não encontrado.');return}this.modoItem='editar';this.draft=JSON.parse(JSON.stringify(item));this.draft.gradePorGrade=this.draft.gradePorGrade||{};this.draft.grades=(this.draft.grades||[]).map(String);this.buscaProduto='';this.modalItem=true};
   estado.garantirGradeModal=function(gradeId){gradeId=String(gradeId);if(this.draft.gradePorGrade[gradeId])return;const grade=this.grades.find(item=>item.id===gradeId);this.draft.gradePorGrade={...this.draft.gradePorGrade,[gradeId]:Object.fromEntries((grade?.tamanhos||[]).map(id=>[String(id),0]))}};

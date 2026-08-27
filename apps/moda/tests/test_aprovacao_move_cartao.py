@@ -137,33 +137,21 @@ class AprovacaoAvancaTests(RespostaBase):
         pedido.refresh_from_db()
         self.assertEqual(pedido.status, S.CONFIRMADO)
 
-    def test_orcamento_fecha_pelo_servico_de_orcamento(self):
-        """
-        E não por atribuição de status. Quem sabe o que falta para uma
-        proposta virar compromisso é aquele serviço; trocar o status na mão
-        aqui abriria a porta dos fundos que o quadro fecha do outro lado.
-        """
-        from unittest.mock import patch
-
-        from apps.moda.services.kanban_comercial import avancar_por_resposta
-
-        pedido, aprovacao = self._pedido(status=S.ORCAMENTO)
+    def test_orcamento_aprovado_pelo_cliente_vira_pedido_aprovado(self):
+        """O aceite público tem o mesmo resultado do aceite interno."""
+        pedido, _ = self._pedido(status=S.ORCAMENTO)
         self._completar(pedido)
-        aprovacao.responder(resposta=R.APROVADO, nome='Henry')
+        item = pedido.itens.get()
 
-        with patch(
-            'apps.moda.services.orcamentos.OrcamentoService.fechar'
-        ) as fechar:
-            avancar_por_resposta(pedido, aprovacao)
+        self._responder(pedido, R.APROVADO)
 
-        fechar.assert_called_once_with(pedido)
+        pedido.refresh_from_db()
+        item.refresh_from_db()
+        self.assertEqual(pedido.status, S.CONFIRMADO)
+        self.assertEqual(item.status_fluxo, 'aprovado')
 
-    def test_orcamento_incompleto_nao_fecha_e_nao_estoura(self):
-        """
-        O sim do cliente JÁ ESTÁ GRAVADO — e não pode virar tela de erro na
-        cara de quem está do lado de fora por causa de um campo que falta
-        aqui dentro. Fica na mesma coluna, com a resposta registrada.
-        """
+    def test_orcamento_incompleto_aprovado_tambem_avanca_sem_estourar(self):
+        """O aceite do cliente não fica preso em validações da tela interna."""
         pedido, aprovacao = self._pedido(status=S.ORCAMENTO)  # sem item, sem data
 
         resposta = self._responder(pedido, R.APROVADO)
@@ -171,7 +159,7 @@ class AprovacaoAvancaTests(RespostaBase):
         self.assertEqual(resposta.status_code, 302)
         pedido.refresh_from_db()
         aprovacao.refresh_from_db()
-        self.assertEqual(pedido.status, S.ORCAMENTO)
+        self.assertEqual(pedido.status, S.CONFIRMADO)
         self.assertEqual(aprovacao.resposta, R.APROVADO)
 
 

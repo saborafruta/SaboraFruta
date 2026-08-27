@@ -373,6 +373,29 @@ class Op2Tests(TestCase):
         self.assertEqual(pdf['Content-Type'], 'application/pdf')
         self.assertTrue(pdf.content.startswith(b'%PDF-'))
 
+    def test_salvar_e_enviar_persiste_op_e_abre_whatsapp_na_nova_guia(self):
+        self.cliente.telefone = '84999990000'
+        self.cliente.save(update_fields=['telefone'])
+        self.client.force_login(self._usuario())
+        session = self.client.session
+        session['filial_id'] = self.filial.pk
+        session.save()
+
+        resposta = self.client.post(reverse('moda:op2-create'), {
+            'cliente': str(self.cliente.pk),
+            'item_0_produto_id': str(self.produto.pk),
+            'item_0_quantidade': '2',
+            'item_0_valor_unitario': '25.50',
+            'destino': 'enviar',
+        })
+
+        criado = PedidoProducao.objects.exclude(pk=self.pedido.pk).get()
+        self.assertEqual(resposta.status_code, 200)
+        self.assertContains(resposta, 'https://wa.me/5584999990000')
+        self.assertContains(resposta, reverse('moda:op2-detail', args=[criado.pk]))
+        self.assertContains(resposta, 'window.opener.location.assign')
+        self.assertEqual(criado.itens.count(), 1)
+
     def test_detalhe_da_op_exibe_produto_compacto_e_total_no_cabecalho(self):
         self._item(quantidade=4)
         self.client.force_login(self._usuario())
@@ -743,6 +766,36 @@ class Op2Tests(TestCase):
         self.assertRedirects(resposta, reverse('moda:op2-detail', args=[self.pedido.pk]))
         self.assertFalse(VisualItemPedido.objects.filter(pk=visual.pk).exists())
         self.assertFalse(ArquivoPedido.objects.filter(pedido=self.pedido).exists())
+
+    def test_cadastro_rapido_cria_modelo_ativo_so_com_nome(self):
+        self.client.force_login(self._usuario())
+        session = self.client.session
+        session['filial_id'] = self.filial.pk
+        session.save()
+
+        resposta = self.client.post(
+            reverse('moda:op2-modelo-rapido'), {'nome': 'Camisa especial'},
+            HTTP_X_REQUESTED_WITH='XMLHttpRequest',
+        )
+
+        self.assertEqual(resposta.status_code, 200)
+        dados = resposta.json()['modelo']
+        produto = ProdutoModa.objects.get(pk=dados['id'])
+        self.assertEqual(produto.nome, 'Camisa especial')
+        self.assertEqual(produto.status, ProdutoModa.Status.ATIVO)
+        self.assertTrue(produto.ativo)
+
+    def test_sincronizacao_repara_valor_em_branco_do_tipo_de_peca(self):
+        opcao = OpcaoEstruturaOP2.objects.create(
+            filial=self.filial, tipo_peca='camisa', tipo_label='Camisa',
+            campo='tipo_impressao', valor='   ', ordem=1,
+        )
+
+        grupos = opcoes_estrutura_filial(self.filial)
+
+        opcao.refresh_from_db()
+        self.assertEqual(opcao.valor, 'SUBLIMAÇÃO')
+        self.assertIn('SUBLIMAÇÃO', grupos['camisa']['campos']['tipo_impressao'])
 
     def _usuario(self):
         user, _ = Usuario.objects.get_or_create(
