@@ -120,8 +120,7 @@
             <tr>
               <td colspan="5" class="px-4 py-10 text-center">
                 <p class="text-sm" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
-                  Nenhuma carga na doca. O carregamento começa quando um
-                  romaneio de carga é montado na Logística.
+                  Nenhuma carga na doca. Monte uma escolhendo as vendas abaixo.
                 </p>
               </td>
             </tr>
@@ -130,6 +129,141 @@
       </table>
     </div>
   </div>
+
+  {% comment %}
+    A CARGA COMEÇA AQUI, e não na Logística. Quem está na doca com o caminhão
+    encostado não vai a outro módulo pedir que montem o romaneio — ele carrega
+    e anota depois, que é como a expedição deixa de ter registro.
+
+    Um caminhão leva VÁRIOS pedidos, e por isso a escolha é múltipla: motorista,
+    placa e temperatura do baú são da viagem, não de cada cliente.
+  {% endcomment %}
+  <form method="post" class="card overflow-hidden"
+        x-data="{ marcados: 0, contar() { this.marcados = this.$el.querySelectorAll('input[name=pedidos]:checked').length; } }"
+        @change="contar()">
+    {% csrf_token %}
+
+    <div class="p-4 pb-3 flex flex-wrap items-start justify-between gap-3">
+      <div>
+        <h3 class="text-sm font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
+          Vendas esperando caminhão
+        </h3>
+        <p class="text-xs mt-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+          {{ resumo.a_carregar }} pedido(s) confirmado(s) ainda sem carga.
+          Venda que já está num romaneio não aparece aqui.
+        </p>
+      </div>
+      <span class="text-xs" x-show="marcados" x-cloak
+            :style="temaClaro ? 'color:#2563eb;' : 'color:#60a5fa;'"
+            x-text="marcados + ' selecionado(s)'"></span>
+    </div>
+
+    <div class="overflow-x-auto">
+      <table class="w-full text-sm">
+        <thead>
+          <tr class="border-b" :style="temaClaro ? 'border-color:#e2e8f0;' : 'border-color:#2a2a2e;'">
+            <th class="px-4 py-3 w-10"></th>
+            <th class="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wide"
+                :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Pedido</th>
+            <th class="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wide"
+                :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Cliente</th>
+            <th class="text-right px-4 py-3 text-xs font-semibold uppercase tracking-wide"
+                :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Itens</th>
+            <th class="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wide"
+                :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Entrega</th>
+            <th class="text-right px-4 py-3 text-xs font-semibold uppercase tracking-wide"
+                :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Valor</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for v in vendas %}
+            <tr class="border-b" :style="temaClaro ? 'border-color:#f1f5f9;' : 'border-color:#1e1e22;'">
+              <td class="px-4 py-3">
+                {% if pode_agir %}
+                  <input type="checkbox" name="pedidos" value="{{ v.pedido.pk }}"
+                         id="pedido-{{ v.pedido.pk }}" class="cursor-pointer">
+                  <label for="pedido-{{ v.pedido.pk }}" class="sr-only">
+                    Carregar pedido {{ v.pedido.numero_pedido }}
+                  </label>
+                {% endif %}
+              </td>
+              <td class="px-4 py-3 font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
+                {{ v.pedido.numero_pedido }}
+              </td>
+              <td class="px-4 py-3" :style="temaClaro ? 'color:#374151;' : 'color:#cbd5e1;'">
+                {{ v.pedido.cliente|default:"Sem cliente" }}
+              </td>
+              <td class="px-4 py-3 text-right" :style="temaClaro ? 'color:#374151;' : 'color:#cbd5e1;'">
+                {{ v.itens }}
+                <span class="block text-[11px]" :style="temaClaro ? 'color:#94a3b8;' : 'color:#71717a;'">
+                  {{ v.volumes|floatformat:"-3" }} un.
+                </span>
+              </td>
+              {% comment %}
+                A ENTREGA MANDA NA ORDEM da lista: quem carrega trabalha contra
+                a data em que o caminhão precisa sair. Pedido sem data vai para
+                o fim e não some — sumir é como ele atrasa.
+              {% endcomment %}
+              <td class="px-4 py-3">
+                {% if v.entrega %}
+                  <span :style="temaClaro ? 'color:#374151;' : 'color:#cbd5e1;'">{{ v.entrega|date:"d/m/Y" }}</span>
+                {% else %}
+                  <span class="text-xs" style="color:#d97706;">sem data</span>
+                {% endif %}
+              </td>
+              <td class="px-4 py-3 text-right" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
+                R$ {{ v.valor|floatformat:2 }}
+              </td>
+            </tr>
+          {% empty %}
+            <tr>
+              <td colspan="6" class="px-4 py-10 text-center">
+                <p class="text-sm max-w-md mx-auto" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+                  {% if filtros.busca_venda %}
+                    Nenhuma venda com esse filtro.
+                  {% else %}
+                    Nenhuma venda esperando caminhão. Só entram aqui os pedidos
+                    confirmados que levam produto desta fábrica e ainda não
+                    estão em nenhuma carga.
+                  {% endif %}
+                </p>
+              </td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+
+    {% if vendas and pode_agir %}
+      <div class="p-4 border-t" :style="temaClaro ? 'border-color:#e2e8f0;' : 'border-color:#2a2a2e;'">
+        <div class="grid sm:grid-cols-3 gap-3">
+          <div>
+            <label class="form-label" for="motorista_nome">Motorista</label>
+            <input type="text" name="motorista_nome" id="motorista_nome"
+                   class="form-input w-full" autocomplete="off" placeholder="Nome de quem leva">
+          </div>
+          <div>
+            <label class="form-label" for="veiculo_placa">Placa</label>
+            <input type="text" name="veiculo_placa" id="veiculo_placa"
+                   class="form-input w-full" autocomplete="off" placeholder="ABC1D23">
+          </div>
+          <div>
+            <label class="form-label" for="destino_rota">Rota</label>
+            <input type="text" name="destino_rota" id="destino_rota"
+                   class="form-input w-full" autocomplete="off" placeholder="Zona Norte">
+          </div>
+        </div>
+        <div class="flex flex-wrap items-center gap-3 mt-3">
+          <button type="submit" class="btn-primary text-sm" :disabled="!marcados">
+            Montar carga
+          </button>
+          <p class="text-xs" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+            Motorista ou placa — sem um dos dois a carga sai sem dizer quem levou.
+          </p>
+        </div>
+      </div>
+    {% endif %}
+  </form>
 
 </div>
 {% endblock %}

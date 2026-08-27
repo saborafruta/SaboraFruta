@@ -392,3 +392,204 @@ class TelaTests(CarregamentoBase):
         romaneio.refresh_from_db()
         self.assertEqual(romaneio.status, RomaneioCarga.Status.EM_CARREGAMENTO)
         self.assertContains(resposta, 'Informe a temperatura')
+
+
+class MontarCargaPelasVendasTests(CarregamentoBase):
+    """
+    A carga começa na doca, e não na Logística.
+
+    Quem está com o caminhão encostado não vai a outro módulo pedir que montem
+    o romaneio — ele carrega e anota depois, que é como a expedição deixa de
+    ter registro.
+    """
+
+    def setUp(self):
+        super().setUp()
+        self.url = reverse('polpa:carregamento')
+        self.acabado = self._produto('PM1')
+        # Materia-prima existe so' para provar que ela NAO entra na doca: o
+        # vertical carrega o que fabrica, e fruta in natura nao sai da camara
+        # como produto.
+        self.materia_prima = CatalogoService.salvar(self.filial, {
+            'tipo': T.FRUTA, 'descricao': 'Manga in natura', 'codigo': 'MP1',
+            'unidade_medida': self.unidade,
+        }).produto
+
+    # ── A lista de vendas ────────────────────────────────────────────────
+
+    def test_pedido_confirmado_aparece_para_carregar(self):
+        self._pedido(self.acabado)
+
+        resposta = self.client.get(self.url)
+
+        self.assertEqual(resposta.status_code, 200)
+        self.assertEqual(len(resposta.context['vendas']), 1)
+
+    def test_pedido_ja_em_carga_nao_aparece_de_novo(self):
+        """
+        E a regra que impede a mesma mercadoria de ser carregada em dois
+        caminhoes.
+        """
+        pedido = self._pedido(self.acabado)
+        self._romaneio(pedidos=[pedido])
+
+        resposta = self.client.get(self.url)
+
+        self.assertEqual(len(resposta.context['vendas']), 0)
+
+    def test_carga_cancelada_devolve_o_pedido_para_a_lista(self):
+        """Aquela carga deixou de existir; a mercadoria voltou a esperar."""
+        pedido = self._pedido(self.acabado)
+        self._romaneio(pedidos=[pedido], status=RomaneioCarga.Status.CANCELADO)
+
+        resposta = self.client.get(self.url)
+
+        self.assertEqual(len(resposta.context['vendas']), 1)
+
+    def test_pedido_de_produto_que_a_fabrica_nao_faz_fica_de_fora(self):
+        """
+        Pedido de item que este vertical nao fabrica nao sai desta camara, e
+        enfileira-lo aqui faria a doca prometer o que ela nao tem.
+        """
+        self._pedido(self.materia_prima)
+
+        resposta = self.client.get(self.url)
+
+        self.assertEqual(len(resposta.context['vendas']), 0)
+
+    def test_a_lista_vem_pela_data_de_entrega(self):
+        """
+        Quem carrega trabalha contra a data em que o caminhao precisa sair.
+        Pedido sem data vai para o fim e nao some -- sumir e como ele atrasa.
+        """
+        sem_data = self._pedido(self.acabado)
+        urgente = self._pedido(self.acabado)
+        urgente.data_entrega_prevista = timezone.localdate()
+        urgente.save(update_fields=['data_entrega_prevista'])
+
+        vendas = self.client.get(self.url).context['vendas']
+
+        self.assertEqual(vendas[0]['pedido'].pk, urgente.pk)
+        self.assertEqual(vendas[-1]['pedido'].pk, sem_data.pk)
+
+    # ── Montar ───────────────────────────────────────────────────────────
+
+    def test_montar_carga_cria_o_romaneio_com_os_pedidos(self):
+        primeiro = self._pedido(self.acabado)
+        segundo = self._pedido(self.acabado)
+
+        resposta = self.client.post(self.url, {
+            'pedidos': [primeiro.pk, segundo.pk],
+            'motorista_nome': 'Seu Zé', 'veiculo_placa': 'abc1d23',
+            'destino_rota': 'Zona Norte',
+        })
+
+        romaneio = RomaneioCarga.objects.latest('id')
+        self.assertEqual(resposta.status_code, 302)
+        self.assertEqual(romaneio.itens.count(), 2)
+        self.assertEqual(romaneio.status, RomaneioCarga.Status.EM_CARREGAMENTO)
+
+    def test_a_placa_vai_em_maiuscula(self):
+        pedido = self._pedido(self.acabado)
+
+        self.client.post(self.url, {
+            'pedidos': [pedido.pk], 'veiculo_placa': 'abc1d23',
+        })
+
+        self.assertEqual(RomaneioCarga.objects.latest('id').veiculo_placa, 'ABC1D23')
+
+    def test_o_numero_e_gerado_e_nao_pedido(self):
+        """
+        Na doca, pedir um numero inventado e atrito puro -- e numero repetido
+        bate na `unique_together` depois de a pessoa ja ter escolhido tudo.
+        """
+        self._romaneio()
+        pedido = self._pedido(self.acabado)
+
+        self.client.post(self.url, {
+            'pedidos': [pedido.pk], 'veiculo_placa': 'XYZ1A23',
+        })
+
+        numeros = list(RomaneioCarga.objects.order_by('numero').values_list('numero', flat=True))
+        self.assertEqual(len(numeros), len(set(numeros)))
+
+    def test_sem_pedido_escolhido_nao_monta(self):
+        resposta = self.client.post(self.url, {
+            'pedidos': [], 'veiculo_placa': 'ABC1D23',
+        }, follow=True)
+
+        self.assertEqual(RomaneioCarga.objects.count(), 0)
+        self.assertContains(resposta, 'ao menos uma venda')
+
+    def test_sem_motorista_nem_placa_nao_monta(self):
+        """A carga sairia sem dizer quem levou."""
+        pedido = self._pedido(self.acabado)
+
+        resposta = self.client.post(self.url, {
+            'pedidos': [pedido.pk], 'motorista_nome': '', 'veiculo_placa': '  ',
+        }, follow=True)
+
+        self.assertEqual(RomaneioCarga.objects.count(), 0)
+        self.assertContains(resposta, 'quem levou')
+
+    def test_montar_leva_direto_para_a_conferencia(self):
+        """
+        Quem acabou de escolher os pedidos esta com o caminhao encostado, e o
+        proximo passo e conferir a carga -- nao olhar a doca de novo.
+        """
+        pedido = self._pedido(self.acabado)
+
+        resposta = self.client.post(self.url, {
+            'pedidos': [pedido.pk], 'veiculo_placa': 'ABC1D23',
+        })
+
+        romaneio = RomaneioCarga.objects.latest('id')
+        self.assertRedirects(
+            resposta,
+            reverse('polpa:carregamento-carga', args=[romaneio.pk]),
+        )
+
+    def test_o_endereco_e_copiado_e_nao_apontado(self):
+        """
+        E para onde o caminhao foi naquele dia. Cliente que muda de endereco
+        depois nao pode reescrever o historico de uma entrega ja feita.
+        """
+        pedido = self._pedido(self.acabado)
+
+        self.client.post(self.url, {
+            'pedidos': [pedido.pk], 'veiculo_placa': 'ABC1D23',
+        })
+
+        item = RomaneioCarga.objects.latest('id').itens.first()
+        self.assertIsInstance(item.endereco_entrega, dict)
+        self.assertIn('cidade', item.endereco_entrega)
+
+    def test_pedido_de_outra_filial_nao_entra_na_carga(self):
+        """
+        Id colado a mao montaria carga com pedido de outra unidade, e o
+        caminhao sairia com mercadoria que nao e desta casa.
+        """
+        from apps.core.models import Filial
+
+        outra = Filial.objects.create(
+            empresa=self.empresa, razao_social='Segunda',
+            cnpj='31345678000677', uf='RN', cidade='Mossoro',
+        )
+        alheio = self._pedido(self.acabado)
+        alheio.filial = outra
+        alheio.save(update_fields=['filial'])
+
+        resposta = self.client.post(self.url, {
+            'pedidos': [alheio.pk], 'veiculo_placa': 'ABC1D23',
+        }, follow=True)
+
+        self.assertEqual(RomaneioCarga.objects.count(), 0)
+        self.assertContains(resposta, 'ao menos uma venda')
+
+    def test_a_tela_nao_vaza_sintaxe_de_template(self):
+        self._pedido(self.acabado)
+
+        html = self.client.get(self.url).content.decode()
+
+        for resto in ('{#', '#}', '{%', '%}'):
+            self.assertNotIn(resto, html, 'vazou sintaxe de template no HTML')

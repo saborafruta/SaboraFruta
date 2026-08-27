@@ -99,11 +99,17 @@ class CarregamentoListView(PolpaBaseView):
     area = 'expedicao'
 
     def get(self, request):
-        filtros = {'busca': (request.GET.get('busca') or '').strip()}
-        linhas = CarregamentoService.cargas(_filial(request), filtros)
+        filial = _filial(request)
+        filtros = {
+            'busca': (request.GET.get('busca') or '').strip(),
+            'busca_venda': (request.GET.get('busca_venda') or '').strip(),
+        }
+        linhas = CarregamentoService.cargas(filial, filtros)
+        vendas = CarregamentoService.vendas_para_carregar(filial, filtros)
         return render(request, 'polpa/carregamento_list.html', {
             'title': 'Carregamento',
             'linhas': linhas,
+            'vendas': vendas,
             'filtros': filtros,
             'resumo': {
                 'na_doca': sum(1 for l in linhas if l['na_doca']),
@@ -111,8 +117,50 @@ class CarregamentoListView(PolpaBaseView):
                     1 for l in linhas if l['na_doca'] and l['sem_medicao']
                 ),
                 'sairam': sum(1 for l in linhas if not l['na_doca']),
+                'a_carregar': len(vendas),
             },
+            'pode_agir': request.user.tem_permissao('polpa_expedicao', 'editar'),
         })
+
+    def post(self, request):
+        """
+        Monta a carga com as vendas marcadas e abre a conferencia dela.
+
+        VAI DIRETO PARA A CONFERENCIA, e nao volta para a lista: quem acabou de
+        escolher os pedidos esta' com o caminhao encostado, e o proximo passo e'
+        conferir a carga e medir o bau -- nao olhar a doca de novo.
+        """
+        from apps.vendas.models.pedido import PedidoVenda
+
+        filial = _filial(request)
+        volta = redirect(reverse('polpa:carregamento'))
+
+        if not request.user.tem_permissao('polpa_expedicao', 'editar'):
+            messages.error(request, 'Você pode ver a doca, mas não montar carga.')
+            return volta
+
+        # OS PEDIDOS SAO BUSCADOS PELA FILIAL, e nao so' pelos ids do
+        # formulario: id colado a mao montaria carga com pedido de outra
+        # unidade, e o caminhao sairia com mercadoria que nao e' desta casa.
+        ids = [i for i in request.POST.getlist('pedidos') if i.isdigit()]
+        pedidos = list(
+            PedidoVenda.objects.filter(filial=filial, pk__in=ids)
+            .select_related('cliente')
+        )
+
+        try:
+            romaneio = CarregamentoService.montar_carga(
+                filial, pedidos, request.POST, request.user,
+            )
+        except DomainError as erro:
+            messages.error(request, str(erro))
+            return volta
+
+        messages.success(
+            request,
+            f'Carga {romaneio.numero} montada com {len(pedidos)} pedido(s).',
+        )
+        return redirect(reverse('polpa:carregamento-carga', args=[romaneio.pk]))
 
 
 class CarregamentoView(PolpaBaseView):
