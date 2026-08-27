@@ -1,11 +1,43 @@
-# Instrucoes obrigatorias para agentes de IA
+# Instruções obrigatórias para agentes de IA
 
-## Nao sobrescrever trabalho recente
+Este arquivo fica na raiz do repositório para ser lido automaticamente por
+agentes de IA que trabalham neste projeto. Estas regras valem desde o início de
+cada nova conversa ou tarefa.
 
-Antes de alterar, commitar ou subir qualquer arquivo, o agente deve sincronizar
-com o GitHub e conferir se esta partindo da versao mais nova.
+## Fonte da verdade: GitHub
 
-Fluxo obrigatorio antes de qualquer commit/push:
+A `origin/main` do GitHub é a fonte da verdade para todo trabalho novo. Nunca
+comece uma alteração usando apenas o estado que já estava aberto no computador.
+
+Antes de ler código para implementar uma tarefa, editar arquivos ou propor uma
+correção, execute:
+
+```bash
+git fetch origin main
+git status --short
+git rev-list --left-right --count HEAD...origin/main
+```
+
+Depois aplique obrigatoriamente uma destas opções:
+
+- Se o diretório principal estiver limpo e apenas atrás da `origin/main`,
+  atualize-o com `git pull --ff-only origin main`.
+- Se houver alterações locais, divergência ou outro trabalho em andamento, não
+  edite esse checkout antigo. Crie um worktree limpo e uma branch nova a partir
+  da `origin/main` e faça a tarefa lá.
+- Nunca crie uma branch de tarefa a partir de uma branch local antiga.
+- Nunca descarte alterações locais sem autorização explícita do usuário. A
+  existência de alterações locais não justifica trabalhar sobre código antigo.
+
+Exemplo de worktree seguro:
+
+```bash
+git worktree add -b codex/nome-da-tarefa ../Saborafruta-nome-da-tarefa origin/main
+```
+
+## Antes de commit e push
+
+Sincronize novamente, pois a `main` pode ter avançado durante a tarefa:
 
 ```bash
 git fetch origin main
@@ -14,32 +46,48 @@ git status --short
 git diff
 ```
 
-Se `origin/main` tiver commits que nao estao no checkout local, nao faca push.
-Primeiro atualize com `git pull --rebase origin main` ou crie um worktree limpo
-baseado em `origin/main`.
+Se a `origin/main` tiver commits novos, integre-os antes do push, normalmente
+com `git rebase origin/main`, e repita as validações relevantes.
 
-Nunca faca push contendo arquivo antigo por cima de arquivo mais recente do
-GitHub. Se aparecer alteracao em arquivo que voce nao alterou intencionalmente,
-pare e investigue antes de continuar.
+Nunca faça push contendo arquivo antigo por cima de arquivo mais recente do
+GitHub. Cada linha do `git diff` deve ser uma mudança consciente da tarefa
+atual. Se aparecer alteração não intencional, pare e investigue.
 
-Regra pratica: cada linha no `git diff` precisa ser uma mudanca consciente da
-tarefa atual. Se nao for, nao suba.
+Ao concluir e publicar uma tarefa feita em worktree, confirme que o commit está
+na `origin/main`. Se o diretório principal estiver limpo, atualize-o também com
+`git pull --ff-only origin main`, para que a próxima conversa encontre a versão
+mais recente.
 
 ## Proibido
 
-- `git push --force` ou `git push --force-with-lease` sem autorizacao explicita.
-- Commitar arquivos gerados, temporarios ou alteracoes fora do escopo.
-- Resolver conflito escolhendo tudo de um lado sem entender o que esta sendo
-  perdido.
-- Subir branch local antiga direto para `main`.
+- Usar `git push --force` ou `git push --force-with-lease` sem autorização
+  explícita.
+- Commitar arquivos gerados, temporários ou alterações fora do escopo.
+- Resolver conflitos escolhendo tudo de um lado sem entender o que será perdido.
+- Subir uma branch local antiga diretamente para a `main`.
+- Reutilizar um worktree antigo como base de uma tarefa nova sem antes confirmar
+  que ele contém a `origin/main` atual.
 
-## Validacao minima
+## Validação mínima
 
-Antes do push, rode pelo menos:
+Antes do push, execute pelo menos:
 
 ```bash
 python manage.py check
 git diff --check
 ```
 
-Quando alterar uma area especifica, rode tambem os testes daquela area.
+Ao alterar uma área específica, rode também os testes correspondentes. Depois de
+um deploy, acompanhe o serviço até um estado terminal de sucesso antes de dizer
+ao usuário que a publicação terminou.
+
+## Eficiência
+
+Trabalhar com arquivos locais não é, por si só, mais lento nem consome mais
+tokens. Em geral, leitura, busca e testes locais são o caminho mais rápido. Para
+manter eficiência:
+
+- atualize primeiro apenas as referências Git necessárias;
+- use `rg` e diffs direcionados em vez de ler o repositório inteiro;
+- trabalhe sempre sobre a versão mais recente da `origin/main`;
+- preserve alterações alheias usando worktrees limpos quando necessário.
