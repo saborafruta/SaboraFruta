@@ -1182,6 +1182,7 @@
     (function() {
       function isDecimalInput(input) {
         if (!input || input.type === 'hidden' || input.type === 'date' || input.type === 'checkbox' || input.type === 'radio') return false;
+        if ((input.dataset.numericKind || '').toLowerCase() === 'text') return false;
         var name = ((input.name || '') + ' ' + (input.id || '') + ' ' + (input.dataset.numericKind || '')).toLowerCase();
         if (input.dataset.decimalPlaces) return true;
         if (input.type === 'number' || input.inputMode === 'decimal') return true;

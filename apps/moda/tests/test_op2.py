@@ -642,6 +642,7 @@ class Op2Tests(TestCase):
         self.assertContains(resposta, 'Adicionar opção em Agasalho')
         self.assertContains(resposta, 'class="tipo-option-row"')
         self.assertContains(resposta, 'Opções ativas / total')
+        self.assertContains(resposta, 'name="valor" data-numeric-kind="text"')
 
     def test_edicao_do_tipo_atualiza_nome_de_todas_as_opcoes(self):
         self.client.force_login(self._usuario())
