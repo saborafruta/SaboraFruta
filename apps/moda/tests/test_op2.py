@@ -419,6 +419,31 @@ class Op2Tests(TestCase):
         self.assertContains(resposta, 'op2-order-header')
         self.assertContains(resposta, '<h2 class="font-bold">Fotos e mockups</h2>')
         self.assertContains(resposta, 'op2-aside .op2-gallery-grid')
+        self.assertContains(resposta, 'Todos os produtos acompanham o status geral da OP.')
+        self.assertNotContains(resposta, 'Quantidade entregue')
+        self.assertNotContains(resposta, 'Atualizar entrega')
+        self.assertNotContains(resposta, 'name="acao" value="item_fluxo"')
+
+    def test_status_entregue_confirma_entrega_da_op_inteira(self):
+        primeiro = self._item(quantidade=4, entregue=0)
+        segundo = self._item(quantidade=3, entregue=1)
+        self.client.force_login(self._usuario())
+        session = self.client.session
+        session['filial_id'] = self.filial.pk
+        session.save()
+
+        resposta = self.client.post(reverse('moda:op2-action', args=[self.pedido.pk]), {
+            'acao': 'status',
+            'status': PedidoProducao.Status.ENTREGUE,
+        })
+
+        self.assertRedirects(resposta, reverse('moda:op2-detail', args=[self.pedido.pk]))
+        primeiro.refresh_from_db()
+        segundo.refresh_from_db()
+        self.pedido.refresh_from_db()
+        self.assertEqual(self.pedido.status, PedidoProducao.Status.ENTREGUE)
+        self.assertEqual(primeiro.quantidade_entregue, primeiro.quantidade)
+        self.assertEqual(segundo.quantidade_entregue, segundo.quantidade)
 
     def test_nova_op_exibe_acoes_solicitadas(self):
         self.client.force_login(self._usuario())

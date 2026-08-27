@@ -1105,28 +1105,12 @@ class Op2ActionView(ModaBaseView):
             pedido.itens.exclude(status_fluxo=ItemPedidoProducao.StatusFluxo.ENTREGUE).update(
                 status_fluxo=mapa[novo],
             )
+        if novo == PedidoProducao.Status.ENTREGUE:
+            for item in pedido.itens.only('pk', 'quantidade', 'quantidade_entregue'):
+                if item.quantidade_entregue != item.quantidade:
+                    item.quantidade_entregue = item.quantidade
+                    item.save(update_fields=['quantidade_entregue'])
         messages.success(request, f'Status alterado para {permitidos[novo]}.')
-
-    def _acao_item_fluxo(self, request, pedido):
-        item = get_object_or_404(pedido.itens, pk=request.POST.get('item_id'))
-        entregue = int(request.POST.get('quantidade_entregue') or 0)
-        if entregue < 0 or entregue > item.quantidade:
-            raise ValueError('A quantidade entregue deve ficar entre zero e o total do produto.')
-        item.quantidade_entregue = entregue
-        item.status_fluxo = (
-            ItemPedidoProducao.StatusFluxo.ENTREGUE
-            if entregue == item.quantidade else {
-                PedidoProducao.Status.ORCAMENTO: ItemPedidoProducao.StatusFluxo.ORCAMENTO,
-                PedidoProducao.Status.CONFIRMADO: ItemPedidoProducao.StatusFluxo.APROVADO,
-                PedidoProducao.Status.AGUARDANDO_APROVACAO: ItemPedidoProducao.StatusFluxo.APROVADO,
-                PedidoProducao.Status.LIBERADO_PRODUCAO: ItemPedidoProducao.StatusFluxo.PRODUCAO,
-                PedidoProducao.Status.EM_PRODUCAO: ItemPedidoProducao.StatusFluxo.PRODUCAO,
-                PedidoProducao.Status.PRONTO: ItemPedidoProducao.StatusFluxo.PRONTO,
-            }.get(pedido.status, item.status_fluxo)
-        )
-        item.save(update_fields=['quantidade_entregue', 'status_fluxo'])
-        _sincronizar_status(pedido)
-        messages.success(request, f'Conferência de {item.nome_exibicao} atualizada.')
 
     def _acao_aprovar(self, request, pedido):
         pedido.status = PedidoProducao.Status.CONFIRMADO
