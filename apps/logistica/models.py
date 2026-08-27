@@ -37,6 +37,14 @@ class RomaneioCarga(FilialScopedModel):
     motorista_documento = models.CharField(max_length=30, blank=True)
     veiculo_placa = models.CharField(max_length=10, blank=True)
     veiculo_descricao = models.CharField(max_length=100, blank=True)
+    # A VIAGEM E' A CAMADA DE CIMA. O romaneio responde por ENTREGA -- cada
+    # item dele e' um cliente com endereco. Mercadoria que sai sem comprador
+    # nao cabe aqui, e por isso a carga fisica passou a ser da viagem. Fica
+    # opcional: romaneio antigo, e romaneio de entrega pura, seguem sem ela.
+    viagem = models.ForeignKey(
+        'logistica.Viagem', on_delete=models.SET_NULL,
+        null=True, blank=True, related_name='romaneios',
+    )
     origem = models.CharField(max_length=160, blank=True)
     destino_rota = models.CharField(max_length=160, blank=True)
     observacao = models.TextField(blank=True)
@@ -640,6 +648,11 @@ class MDFe(FilialScopedModel):
         blank=True,
         related_name="mdfes",
     )
+    viagem = models.ForeignKey(
+        'logistica.Viagem', on_delete=models.SET_NULL,
+        null=True, blank=True, related_name='mdfes',
+        help_text='A viagem que este manifesto ampara. Um MDF-e por viagem.',
+    )
     romaneio = models.ForeignKey(
         RomaneioCarga,
         on_delete=models.SET_NULL,
@@ -793,3 +806,11 @@ class DocumentoManifestoCarga(TimestampedModel):
 
     def __str__(self):
         return f"{self.get_tipo_documento_display()} {self.numero_documento}"
+
+
+# Registrados aqui para o Django encontra-los; o codigo deles mora em
+# `models_viagem.py`, que e' um assunto proprio e grande demais para este
+# arquivo.
+from apps.logistica.models_viagem import (  # noqa: E402,F401
+    ItemCarga, SaldoCarga, Viagem,
+)
