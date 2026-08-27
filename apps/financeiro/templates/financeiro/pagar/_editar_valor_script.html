@@ -48,7 +48,7 @@
     (raiz || document).querySelectorAll('[data-recorrencia-pagar-edicao]').forEach(function (bloco) {
       if (bloco.dataset.inicializado === '1') return;
       bloco.dataset.inicializado = '1';
-      const ativar = bloco.querySelector('[name="editar_recorrencia"]');
+      const escopos = bloco.querySelectorAll('[name="escopo_edicao"]');
       const campos = bloco.querySelector('[data-recorrencia-campos]');
       const frequencia = bloco.querySelector('[name="frequencia_recorrencia"]');
       const regra = bloco.querySelector('[name="regra_vencimento_mensal"]');
@@ -56,16 +56,17 @@
       const dias = bloco.querySelector('[data-dias-recorrencia-edicao]');
       const regraBloco = bloco.querySelector('[data-regra-mensal-edicao]');
       const dia = bloco.querySelector('[data-dia-mensal-edicao]');
-      if (!ativar || !campos || !frequencia) return;
+      if (!escopos.length || !campos || !frequencia) return;
       const atualizar = function () {
-        campos.hidden = !ativar.checked;
+        const escopo = bloco.querySelector('[name="escopo_edicao"]:checked')?.value;
+        campos.hidden = escopo !== 'restantes';
         intervalo.hidden = frequencia.value !== 'personalizada';
         dias.hidden = frequencia.value !== 'semanal';
         const mensal = ['mensal', 'trimestral', 'semestral', 'anual'].includes(frequencia.value);
         regraBloco.hidden = !mensal;
         dia.hidden = !mensal || regra.value !== 'dia_fixo';
       };
-      ativar.addEventListener('change', atualizar);
+      escopos.forEach(function (escopo) { escopo.addEventListener('change', atualizar); });
       frequencia.addEventListener('change', atualizar);
       regra.addEventListener('change', atualizar);
       atualizar();

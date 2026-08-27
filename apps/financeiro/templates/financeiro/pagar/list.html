@@ -187,16 +187,21 @@
     <div class="border-b px-4 py-3" :style="temaClaro ? 'border-color:#e2e8f0;background:#f8fafc' : 'border-color:#303038;background:#1e1e20'">
       <div>
         <h3 class="text-sm font-semibold">Filtros da listagem</h3>
-        <p class="text-xs opacity-60">Refine por vencimento, status, fornecedor e classificação financeira.</p>
+        <p class="text-xs opacity-60">Refine por vencimento, status, fornecedor ou funcionário e classificação financeira.</p>
       </div>
     </div>
     <div class="space-y-4 p-4">
       <div class="grid grid-cols-1 gap-3 md:grid-cols-12">
-        <div class="md:col-span-4">
+        <div class="md:col-span-3">
           <label class="mb-1 block text-xs font-semibold opacity-70">Buscar</label>
           <input type="text" name="q" value="{{ q }}"
-                 placeholder="Beneficiario, CPF/CNPJ ou documento..."
+                 placeholder="Descrição ou documento..."
                  class="form-input">
+        </div>
+        <div class="md:col-span-3">
+          <label class="mb-1 block text-xs font-semibold opacity-70">Fornecedor ou funcionário</label>
+          <input type="text" name="beneficiario" value="{{ beneficiario_filtro }}"
+                 placeholder="Nome, CPF ou CNPJ..." class="form-input">
         </div>
         <div class="md:col-span-2">
           <label class="mb-1 block text-xs font-semibold opacity-70">Status</label>
@@ -216,18 +221,6 @@
           <label class="mb-1 block text-xs font-semibold opacity-70">Vencimento até</label>
           <input type="date" name="data_fim" value="{{ data_fim }}" class="form-input" title="Vencimento até">
         </div>
-        <div class="md:col-span-2">
-          <label class="mb-1 block text-xs font-semibold opacity-70">Relatório</label>
-          <a href="{% url 'financeiro:pagar_relatorio' %}{% if page_querystring %}?{{ page_querystring }}{% endif %}"
-             target="_blank"
-             class="btn-secondary flex min-h-10 items-center justify-center gap-2 px-3 py-1.5">
-            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                    d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"/>
-            </svg>
-            Imprimir
-          </a>
-        </div>
       </div>
       <div class="flex flex-col gap-2 lg:flex-row lg:items-center">
         <span class="text-xs font-semibold uppercase tracking-wide opacity-60">Período rápido</span>
@@ -244,6 +237,7 @@
         {% include "financeiro/pagar/_filtro_categoria_financeira.html" with filtro_id="contas-abertas" %}
       </div>
       <div class="flex flex-col-reverse gap-2 border-t pt-4 sm:flex-row sm:items-center sm:justify-end" :style="temaClaro ? 'border-color:#e2e8f0;' : 'border-color:#303038;'">
+        <a href="{% url 'financeiro:pagar_relatorio' %}{% if page_querystring %}?{{ page_querystring }}{% endif %}" target="_blank" class="btn-secondary min-w-28 justify-center">Imprimir</a>
         <a href="{% url 'financeiro:pagar_list' %}" class="btn-secondary min-w-28 justify-center">
           Limpar
         </a>
@@ -282,6 +276,7 @@
     <input type="hidden" name="acao_lote" :value="loteAcao">
     <input type="hidden" name="page_querystring" value="{{ page_querystring }}">
     <input type="hidden" name="q" value="{{ q }}">
+    <input type="hidden" name="beneficiario" value="{{ beneficiario_filtro }}">
     <input type="hidden" name="status" value="{{ status_filtro }}">
     <input type="hidden" name="data_ini" value="{{ data_ini }}">
     <input type="hidden" name="data_fim" value="{{ data_fim }}">
@@ -410,7 +405,7 @@
               {{ c.documento_numero|default:"—" }}
             </td>
             <td class="px-4 py-3 text-center text-xs font-mono" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
-              {{ c.parcela }}/{{ c.total_parcelas }}{% if c.grupo_recorrencia %}<span class="block text-[10px] opacity-70">{{ c.get_frequencia_recorrencia_display }}</span>{% endif %}
+              {{ c.parcela }}/{{ c.total_parcelas }}{% if c.grupo_recorrencia %}<span class="block text-[10px] opacity-70">{{ c.recorrencia_exibicao }}</span>{% endif %}
             </td>
             <td class="px-4 py-3 text-sm whitespace-nowrap">
               {% if c.data_vencimento < today and c.status != 'pago' and c.status != 'cancelado' %}

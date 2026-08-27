@@ -563,9 +563,15 @@ class ContaPagarEdicaoAdminForm(forms.Form):
         label='Categoria financeira',
         help_text='A conta contabil vinculada sera atualizada automaticamente.',
     )
-    editar_recorrencia = forms.BooleanField(
+    escopo_edicao = forms.ChoiceField(
+        choices=(
+            ('somente', 'Somente este título'),
+            ('restantes', 'Este título e todos os próximos'),
+        ),
+        initial='somente',
         required=False,
-        label='Reprogramar este título e os próximos da recorrência',
+        widget=forms.RadioSelect,
+        label='Aplicar alterações',
     )
     frequencia_recorrencia = forms.ChoiceField(
         choices=ContaPagar.FrequenciaRecorrencia.choices,
@@ -646,6 +652,7 @@ class ContaPagarEdicaoAdminForm(forms.Form):
                 'data_competencia': conta.data_competencia,
                 'forma_pagamento_prevista': conta.forma_pagamento_prevista_id,
                 'plano_contas': conta.plano_contas_id,
+                'escopo_edicao': 'somente',
                 'frequencia_recorrencia': (
                     conta.frequencia_recorrencia or ContaPagar.FrequenciaRecorrencia.MENSAL
                 ),
@@ -722,7 +729,7 @@ class ContaPagarEdicaoAdminForm(forms.Form):
 
     def clean(self):
         cleaned = super().clean()
-        if cleaned.get('editar_recorrencia'):
+        if cleaned.get('escopo_edicao') == 'restantes':
             frequencia = cleaned.get('frequencia_recorrencia')
             if not frequencia:
                 self.add_error('frequencia_recorrencia', 'Informe a periodicidade.')

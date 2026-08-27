@@ -231,6 +231,7 @@ def _filtrar_contas_pagar_abertas(request, manager=None, params=None):
     )
     status = params.get('status', 'pendentes')
     q = params.get('q', '').strip()
+    beneficiario = params.get('beneficiario', '').strip()
     data_ini = params.get('data_ini', '')
     data_fim = params.get('data_fim', '')
     if not params and status == 'pendentes':
@@ -264,6 +265,14 @@ def _filtrar_contas_pagar_abertas(request, manager=None, params=None):
             | Q(documento_numero__icontains=q)
             | Q(nota_fiscal_fornecedor__icontains=q)
         )
+    if beneficiario:
+        qs = qs.filter(
+            Q(fornecedor__razao_social__icontains=beneficiario)
+            | Q(fornecedor__nome_fantasia__icontains=beneficiario)
+            | Q(fornecedor__cpf_cnpj__icontains=beneficiario)
+            | Q(funcionario__nome__icontains=beneficiario)
+            | Q(funcionario__cpf__icontains=beneficiario)
+        )
     if data_ini:
         qs = qs.filter(data_vencimento__gte=data_ini)
     if data_fim:
@@ -272,6 +281,7 @@ def _filtrar_contas_pagar_abertas(request, manager=None, params=None):
     return qs, categoria_contexto, {
         'status': status,
         'q': q,
+        'beneficiario': beneficiario,
         'data_ini': data_ini,
         'data_fim': data_fim,
     }
@@ -380,6 +390,7 @@ class ContaPagarListView(PermissaoRequiredMixin, View):
             'status_choices': STATUS_CHOICES,
             'status_filtro': filtros['status'],
             'q': filtros['q'],
+            'beneficiario_filtro': filtros['beneficiario'],
             'data_ini': filtros['data_ini'],
             'data_fim': filtros['data_fim'],
             'periodos_datas': _periodos_datas_contas_pagar(request, filtros['data_ini'], filtros['data_fim']),
@@ -1313,6 +1324,17 @@ class ContaPagarDetailView(PermissaoRequiredMixin, View):
                 filial=filial, conta=conta, pagamento=pagamento_selecionado,
             ),
             'logs_edicao_lancamento': _logs_edicao_lancamento(conta),
+            'tem_proximos_recorrencia': bool(
+                conta.grupo_recorrencia
+                and conta.valor_pago == Decimal('0')
+                and ContaPagar.objects.for_filial(filial).filter(
+                    grupo_recorrencia=conta.grupo_recorrencia,
+                    parcela__gt=conta.parcela,
+                    valor_pago=Decimal('0'),
+                ).exclude(
+                    status=StatusContaPagar.CANCELADO,
+                ).exists()
+            ),
         }
         if request.GET.get('modal') == '1':
             return render(request, 'financeiro/_detalhes_conta_modal.html', context)
@@ -1403,7 +1425,7 @@ class ContaPagarEditarValorView(PermissaoRequiredMixin, View):
             )
         conta.save()
         recorrencia_atualizada = []
-        if dados.get('editar_recorrencia'):
+        if dados.get('escopo_edicao') == 'restantes':
             try:
                 recorrencia_atualizada = ContaPagarService.reprogramar_recorrencia(
                     conta=conta,
@@ -1438,6 +1460,7 @@ class ContaPagarEditarValorView(PermissaoRequiredMixin, View):
                 'contas_envolvidas': sorted(contas_envolvidas),
                 'recorrencia_reprogramada': bool(recorrencia_atualizada),
                 'quantidade_recorrencias': len(recorrencia_atualizada),
+                'escopo_edicao': dados.get('escopo_edicao') or 'somente',
             },
         )
         if contas_envolvidas:
@@ -1618,24 +1641,49 @@ class ContaPagarExcluirView(PermissaoRequiredMixin, View):
         motivo = request.POST.get('motivo', '').strip()
         if not motivo:
             return JsonResponse({'ok': False, 'erro': 'Informe o motivo da exclusão.'}, status=400)
-        campos = ['excluido_em', 'excluido_por', 'motivo_exclusao']
-        antes = snapshot_modelo(conta, campos)
-        conta.excluido_em = timezone.now()
-        conta.excluido_por = request.user
-        conta.motivo_exclusao = motivo
-        conta.save(update_fields=[*campos, 'updated_at'])
-        registrar_auditoria(
-            request=request,
-            modulo=RegistroAuditoria.Modulo.FINANCEIRO,
-            acao=RegistroAuditoria.Acao.EXCLUIR,
-            objeto=conta,
-            descricao=f'Título a pagar #{conta.pk} excluído',
-            justificativa=motivo,
-            antes=antes,
-            depois=snapshot_modelo(conta, campos),
-            metadados={'contas_envolvidas': [conta.conta_bancaria_id] if conta.conta_bancaria_id else []},
+        escopo = request.POST.get('escopo_recorrencia', 'somente')
+        contas = ContaPagar.all_objects.for_filial(_filial(request)).select_for_update().filter(
+            pk=conta.pk,
+            excluido_em__isnull=True,
         )
-        return JsonResponse({'ok': True, 'mensagem': 'Título excluído e registrado no log.'})
+        if escopo == 'restantes' and conta.grupo_recorrencia:
+            contas = ContaPagar.all_objects.for_filial(_filial(request)).select_for_update().filter(
+                grupo_recorrencia=conta.grupo_recorrencia,
+                parcela__gte=conta.parcela,
+                excluido_em__isnull=True,
+                valor_pago=Decimal('0'),
+            ).exclude(
+                status=StatusContaPagar.CANCELADO,
+            ).order_by('parcela', 'pk')
+        contas = list(contas)
+        campos = ['excluido_em', 'excluido_por', 'motivo_exclusao']
+        excluido_em = timezone.now()
+        for titulo in contas:
+            antes = snapshot_modelo(titulo, campos)
+            titulo.excluido_em = excluido_em
+            titulo.excluido_por = request.user
+            titulo.motivo_exclusao = motivo
+            titulo.save(update_fields=[*campos, 'updated_at'])
+            registrar_auditoria(
+                request=request,
+                modulo=RegistroAuditoria.Modulo.FINANCEIRO,
+                acao=RegistroAuditoria.Acao.EXCLUIR,
+                objeto=titulo,
+                descricao=f'Título a pagar #{titulo.pk} excluído',
+                justificativa=motivo,
+                antes=antes,
+                depois=snapshot_modelo(titulo, campos),
+                metadados={
+                    'escopo_recorrencia': escopo,
+                    'titulo_origem_id': conta.pk,
+                    'contas_envolvidas': [titulo.conta_bancaria_id] if titulo.conta_bancaria_id else [],
+                },
+            )
+        return JsonResponse({
+            'ok': True,
+            'mensagem': f'{len(contas)} título(s) excluído(s) e registrado(s) no log.',
+            'quantidade': len(contas),
+        })
 
 
 class ContaPagarRestaurarView(PermissaoRequiredMixin, View):

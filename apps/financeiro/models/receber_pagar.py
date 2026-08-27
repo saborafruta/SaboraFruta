@@ -287,6 +287,34 @@ class ContaPagar(TimestampedModel):
         return "Sem beneficiario"
 
     @property
+    def recorrencia_exibicao(self):
+        if self.frequencia_recorrencia != self.FrequenciaRecorrencia.SEMANAL:
+            return self.get_frequencia_recorrencia_display()
+
+        nomes = {
+            0: "Seg",
+            1: "Ter",
+            2: "Qua",
+            3: "Qui",
+            4: "Sex",
+            5: "Sábado",
+            6: "Domingo",
+        }
+        try:
+            dias = sorted({
+                int(dia)
+                for dia in self.dias_semana_recorrencia.split(",")
+                if dia != ""
+            })
+        except (TypeError, ValueError):
+            dias = []
+        if dias == [0, 1, 2, 3, 4]:
+            return "Segunda a sexta"
+        if dias:
+            return " · ".join(nomes[dia] for dia in dias if dia in nomes)
+        return self.get_frequencia_recorrencia_display()
+
+    @property
     def beneficiario_documento(self):
         if self.funcionario_id:
             return self.funcionario.cpf

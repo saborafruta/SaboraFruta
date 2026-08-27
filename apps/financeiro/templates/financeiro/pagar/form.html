@@ -267,6 +267,8 @@
         <div><dt class="text-xs uppercase opacity-60">Primeiro vencimento</dt><dd x-text="conferenciaResumo.vencimento"></dd></div>
         <div><dt class="text-xs uppercase opacity-60">Tipo</dt><dd x-text="conferenciaResumo.tipo"></dd></div>
         <div class="sm:col-span-2" x-show="recorrente"><dt class="text-xs uppercase opacity-60">Recorrência</dt><dd x-text="conferenciaResumo.recorrencia"></dd></div>
+        <div x-show="recorrente"><dt class="text-xs uppercase opacity-60">Considera dias úteis?</dt><dd x-text="conferenciaResumo.diasUteis"></dd></div>
+        <div x-show="recorrente"><dt class="text-xs uppercase opacity-60">Antecipação</dt><dd x-text="conferenciaResumo.antecipacao"></dd></div>
       </dl>
       <div class="mt-5 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
         <button type="button" class="btn-secondary" @click="conferenciaAberta=false">Voltar e ajustar</button>
@@ -446,6 +448,10 @@ function abrirConferenciaLancamento(state, form) {
     recorrencia:state.recorrente
       ?`${quantidade} ocorrências — ${frequencia}${state.frequenciaRecorrencia==='semanal'&&dias.length?' — '+dias.join(', '):''}`
       :'',
+    diasUteis:state.ajustarDiaUtil?'Sim':'Não',
+    antecipacao:!state.ajustarDiaUtil
+      ?'Não se aplica'
+      :(state.anteciparDiaUtil?'Sim, para o dia útil anterior':'Não, usa o próximo dia útil'),
   };
   state.conferenciaAberta=true;
 }

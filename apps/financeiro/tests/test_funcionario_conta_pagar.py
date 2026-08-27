@@ -41,9 +41,11 @@ from apps.financeiro.views.pagar import (
     ContaPagarCreateView,
     DespesaPagaCreateView,
     ContaPagarEditarValorView,
+    ContaPagarExcluirView,
     ContaPagarListView,
     ContaPagarNotaFiscalLookupView,
     ContaPagarPagamentoView,
+    _filtrar_contas_pagar_abertas,
 )
 from apps.financeiro.views.plano_contas import PlanoContasQuickCreateView
 
@@ -1234,3 +1236,132 @@ class FuncionarioContaPagarTests(TestCase):
         self.assertEqual(log.dados_novos["fornecedor"], "Fornecedor novo")
         self.assertEqual(log.dados_anteriores["plano_contas"], "Salarios e Ordenados")
         self.assertEqual(log.dados_novos["plano_contas"], "Servicos Administrativos")
+
+    def test_recorrencia_semanal_exibe_os_dias_em_vez_de_rotulo_generico(self):
+        conta = ContaPagarService.criar_recorrencia(
+            filial=self.filial,
+            funcionario=self.funcionario,
+            tipo_lancamento="funcionario",
+            valor_original=Decimal("100.00"),
+            data_emissao=date(2026, 8, 20),
+            data_vencimento=date(2026, 8, 24),
+            plano_contas=self.categoria,
+            frequencia="semanal",
+            quantidade=5,
+            dias_semana=["0", "1", "2", "3", "4"],
+        )[0]
+        self.assertEqual(conta.recorrencia_exibicao, "Segunda a sexta")
+
+        conta.dias_semana_recorrencia = "5"
+        self.assertEqual(conta.recorrencia_exibicao, "Sábado")
+
+    def test_filtro_beneficiario_separa_funcionario_da_descricao(self):
+        outra = Funcionario.objects.create(
+            filial=self.filial, nome="Joana Souza", cpf="98765432100",
+            cargo="Costureira", salario_base=Decimal("1800.00"),
+        )
+        for funcionario in (self.funcionario, outra):
+            ContaPagarService.criar(
+                filial=self.filial, funcionario=funcionario,
+                tipo_lancamento="funcionario", descricao_despesa="DIÁRIA",
+                valor_original=Decimal("100.00"), data_emissao=date(2026, 8, 20),
+                data_vencimento=date(2026, 9, 1), plano_contas=self.categoria,
+            )
+        request = RequestFactory().get("/financeiro/pagar/", {
+            "status": "todos", "beneficiario": "Joana Souza",
+        })
+        request.filial_ativa = self.filial
+
+        contas, _, filtros = _filtrar_contas_pagar_abertas(request)
+
+        self.assertEqual(list(contas.values_list("funcionario__nome", flat=True)), ["Joana Souza"])
+        self.assertEqual(filtros["beneficiario"], "Joana Souza")
+
+    def test_admin_escolhe_editar_somente_um_ou_todos_os_restantes(self):
+        perfil = PerfilAcesso.objects.create(
+            empresa=self.empresa, nome="Admin recorrências", is_admin=True,
+        )
+        usuario = Usuario.objects.create_user(
+            email="admin-recorrencias@eureka.com", nome="Admin recorrências",
+            password="teste1234", empresa=self.empresa, filial=self.filial, perfil=perfil,
+        )
+        contas = ContaPagarService.criar_recorrencia(
+            filial=self.filial, funcionario=self.funcionario,
+            tipo_lancamento="funcionario", descricao_despesa="DIÁRIA",
+            valor_original=Decimal("100.00"), data_emissao=date(2026, 8, 20),
+            data_vencimento=date(2026, 8, 24), plano_contas=self.categoria,
+            frequencia="semanal", quantidade=3, dias_semana=["0"],
+        )
+        dados_base = {
+            "descricao_despesa": "DIÁRIA AJUSTADA",
+            "valor_original": "120.00",
+            "data_vencimento": "2026-08-24",
+            "plano_contas": self.categoria.pk,
+            "motivo": "Correção da recorrência.",
+        }
+        request = RequestFactory().post(
+            f"/financeiro/pagar/{contas[0].pk}/editar-valor/",
+            {**dados_base, "escopo_edicao": "somente"},
+        )
+        request.user = usuario
+        request.filial_ativa = self.filial
+        response = ContaPagarEditarValorView.as_view()(request, pk=contas[0].pk)
+        self.assertEqual(response.status_code, 200, response.content)
+        contas[0].refresh_from_db()
+        contas[1].refresh_from_db()
+        self.assertEqual(contas[0].valor_original, Decimal("120.00"))
+        self.assertEqual(contas[1].valor_original, Decimal("100.00"))
+
+        request = RequestFactory().post(
+            f"/financeiro/pagar/{contas[1].pk}/editar-valor/",
+            {
+                **dados_base,
+                "data_vencimento": "2026-08-31",
+                "escopo_edicao": "restantes",
+                "frequencia_recorrencia": "semanal",
+                "quantidade_recorrencias": "2",
+                "dias_semana_recorrencia": ["0"],
+                "regra_vencimento_mensal": "data_informada",
+            },
+        )
+        request.user = usuario
+        request.filial_ativa = self.filial
+        response = ContaPagarEditarValorView.as_view()(request, pk=contas[1].pk)
+        self.assertEqual(response.status_code, 200, response.content)
+        contas[0].refresh_from_db()
+        contas[1].refresh_from_db()
+        contas[2].refresh_from_db()
+        self.assertEqual(contas[0].valor_original, Decimal("120.00"))
+        self.assertEqual(contas[1].valor_original, Decimal("120.00"))
+        self.assertEqual(contas[2].valor_original, Decimal("120.00"))
+
+    def test_admin_exclui_este_titulo_e_todos_os_proximos(self):
+        perfil = PerfilAcesso.objects.create(
+            empresa=self.empresa, nome="Admin exclusão recorrência", is_admin=True,
+        )
+        usuario = Usuario.objects.create_user(
+            email="admin-exclusao-recorrencia@eureka.com", nome="Admin exclusão",
+            password="teste1234", empresa=self.empresa, filial=self.filial, perfil=perfil,
+        )
+        contas = ContaPagarService.criar_recorrencia(
+            filial=self.filial, funcionario=self.funcionario,
+            tipo_lancamento="funcionario", descricao_despesa="DIÁRIA",
+            valor_original=Decimal("100.00"), data_emissao=date(2026, 8, 20),
+            data_vencimento=date(2026, 8, 24), plano_contas=self.categoria,
+            frequencia="semanal", quantidade=3, dias_semana=["0"],
+        )
+        request = RequestFactory().post(
+            f"/financeiro/pagar/{contas[1].pk}/excluir/",
+            {"motivo": "Série lançada incorretamente.", "escopo_recorrencia": "restantes"},
+        )
+        request.user = usuario
+        request.filial_ativa = self.filial
+
+        response = ContaPagarExcluirView.as_view()(request, pk=contas[1].pk)
+
+        self.assertEqual(response.status_code, 200, response.content)
+        for conta in contas:
+            conta.refresh_from_db()
+        self.assertIsNone(contas[0].excluido_em)
+        self.assertIsNotNone(contas[1].excluido_em)
+        self.assertIsNotNone(contas[2].excluido_em)

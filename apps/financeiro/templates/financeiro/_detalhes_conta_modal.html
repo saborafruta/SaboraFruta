@@ -22,7 +22,15 @@
     </div>
   </div>
 
-  {% if tipo_conta == 'pagar' and user_is_admin and not conta.excluido %}<form x-show="exclusaoAberta" x-cloak action="{% url 'financeiro:pagar_excluir' conta.pk %}" onsubmit="return alterarExclusaoLancamento(event,this)" class="grid gap-3 rounded-lg border border-rose-300 bg-rose-50 p-4 text-slate-900 dark:border-rose-900/60 dark:bg-rose-950/20 dark:text-slate-100 sm:grid-cols-[1fr_auto]">{% csrf_token %}<label class="text-xs font-semibold">Motivo da exclusão <span class="text-rose-500">*</span><input name="motivo" required maxlength="300" class="form-input mt-1" placeholder="Informe o motivo para manter a auditoria completa"></label><button type="submit" class="btn-primary self-end bg-rose-600">Excluir título</button></form>{% endif %}
+  {% if tipo_conta == 'pagar' and user_is_admin and not conta.excluido %}
+  <form x-show="exclusaoAberta" x-cloak action="{% url 'financeiro:pagar_excluir' conta.pk %}" onsubmit="return alterarExclusaoLancamento(event,this)" class="space-y-3 rounded-lg border border-rose-300 bg-rose-50 p-4 text-slate-900 dark:border-rose-900/60 dark:bg-rose-950/20 dark:text-slate-100">
+    {% csrf_token %}
+    {% if tem_proximos_recorrencia %}
+    <fieldset><legend class="text-xs font-semibold">Excluir</legend><div class="mt-2 grid gap-2 sm:grid-cols-2"><label class="flex cursor-pointer gap-2 rounded-md border border-rose-300 p-3 text-sm"><input type="radio" name="escopo_recorrencia" value="somente" checked class="mt-0.5 accent-rose-600"><span><strong class="block">Somente este título</strong><span class="text-xs opacity-65">Os demais vencimentos permanecem.</span></span></label><label class="flex cursor-pointer gap-2 rounded-md border border-rose-300 p-3 text-sm"><input type="radio" name="escopo_recorrencia" value="restantes" class="mt-0.5 accent-rose-600"><span><strong class="block">Este e todos os próximos</strong><span class="text-xs opacity-65">Os títulos anteriores ficam preservados.</span></span></label></div></fieldset>
+    {% else %}<input type="hidden" name="escopo_recorrencia" value="somente">{% endif %}
+    <div class="grid gap-3 sm:grid-cols-[1fr_auto]"><label class="text-xs font-semibold">Motivo da exclusão <span class="text-rose-500">*</span><input name="motivo" required maxlength="300" class="form-input mt-1" placeholder="Informe o motivo para manter a auditoria completa"></label><button type="submit" class="btn-primary self-end bg-rose-600">Excluir título</button></div>
+  </form>
+  {% endif %}
   {% if conta.excluido %}<div class="rounded-lg border border-rose-300 bg-rose-50 p-4 text-sm text-rose-800 dark:border-rose-900/60 dark:bg-rose-950/20 dark:text-rose-200"><strong>Título excluído em {{ conta.excluido_em|date:"d/m/Y H:i" }}</strong>{% if conta.excluido_por %} por {{ conta.excluido_por.nome|default:conta.excluido_por }}{% endif %}.<br>{{ conta.motivo_exclusao }}</div>{% endif %}
 
   <section class="grid grid-cols-2 gap-3 sm:grid-cols-4 {% if tipo_conta == 'receber' and conta.taxa_calculada_em and conta.valor_taxa_recebimento > 0 %}lg:grid-cols-6{% endif %}">
@@ -69,10 +77,7 @@
       </div>
       {% if conta.valor_pago <= 0 %}
       <div class="border-t pt-4" style="border-color:rgba(148,163,184,.24)" data-recorrencia-pagar-edicao>
-        <label class="flex cursor-pointer items-start gap-3 rounded-md border border-violet-500/30 bg-violet-500/5 p-3 text-sm">
-          {{ edicao_lancamento_form.editar_recorrencia|add_class:"mt-0.5 h-4 w-4 accent-violet-600" }}
-          <span><strong class="block">Reprogramar recorrência</strong><span class="mt-1 block text-xs opacity-65">Atualiza este título e os próximos em aberto. Também permite transformar um título único em recorrente.</span></span>
-        </label>
+        <fieldset><legend class="text-xs font-semibold uppercase tracking-wide text-violet-500">Aplicar alterações</legend><div class="mt-2 grid gap-2 sm:grid-cols-2"><label class="flex cursor-pointer gap-2 rounded-md border border-violet-500/30 p-3 text-sm"><input type="radio" name="escopo_edicao" value="somente" checked class="mt-0.5 accent-violet-600"><span><strong class="block">Somente este título</strong><span class="text-xs opacity-65">Não altera os demais vencimentos.</span></span></label><label class="flex cursor-pointer gap-2 rounded-md border border-violet-500/30 bg-violet-500/5 p-3 text-sm"><input type="radio" name="escopo_edicao" value="restantes" class="mt-0.5 accent-violet-600"><span><strong class="block">{% if conta.grupo_recorrencia %}Este e todos os próximos{% else %}Transformar em recorrência{% endif %}</strong><span class="text-xs opacity-65">{% if conta.grupo_recorrencia %}Reprograma os vencimentos restantes em aberto.{% else %}Cria os próximos vencimentos a partir deste título.{% endif %}</span></span></label></div></fieldset>
         <div hidden data-recorrencia-campos class="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
           <label class="text-xs font-medium">Periodicidade{{ edicao_lancamento_form.frequencia_recorrencia|add_class:"form-input mt-1 w-full" }}</label>
           <label class="text-xs font-medium">Ocorrências a partir deste título{{ edicao_lancamento_form.quantidade_recorrencias|add_class:"form-input mt-1 w-full" }}</label>
