@@ -12,13 +12,155 @@
 
 {% block extra_head %}
 {{ block.super }}
+<script>
+  // O quadro ganha a largura da barra lateral assim que abre. A preferência
+  // continua editável pelo botão do menu, mas cada nova entrada no Kanban
+  // começa com o espaço de trabalho priorizado.
+  localStorage.setItem('sidebar-collapsed', 'true');
+</script>
 <style>
   /* A raia que vai receber o cartão precisa se anunciar durante o arrasto —
      sem isso o usuário solta no lugar errado e culpa o sistema. */
   .kc-raia.recebendo { outline: 2px dashed #3b82f6; outline-offset: -4px; }
-  .kc-card.arrastando { opacity: .4; }
-  .kc-card { cursor: grab; }
+  .kc-card.arrastando { opacity: .4; transform: scale(.98); }
+  .kc-card {
+    cursor: grab;
+    border: 1px solid rgba(var(--kc-rgb), .24);
+    border-left: 3px solid var(--kc-accent);
+    background: rgba(255, 255, 255, .92);
+    box-shadow: 0 5px 16px rgba(15, 23, 42, .055);
+    transition: transform .15s ease, border-color .15s ease, box-shadow .15s ease;
+  }
+  .kc-card:hover, .kc-card:focus-visible {
+    transform: translateY(-1px);
+    border-color: rgba(var(--kc-rgb), .48);
+    box-shadow: 0 9px 22px rgba(15, 23, 42, .10);
+    outline: none;
+  }
   .kc-card:active { cursor: grabbing; }
+
+  /* Cada etapa tem uma cor de leitura, mantendo o laranja nas ações do
+     tema claro e o azul nas ações do escuro. As cores abaixo identificam
+     processo; não competem com a identidade principal do sistema. */
+  .kc-raia[data-coluna="orcamento"] { --kc-accent:#2563eb; --kc-rgb:37,99,235; }
+  .kc-raia[data-coluna="aprovacao"] { --kc-accent:#9333ea; --kc-rgb:147,51,234; }
+  .kc-raia[data-coluna="confirmado"] { --kc-accent:#16a34a; --kc-rgb:22,163,74; }
+  .kc-raia[data-coluna="producao"] { --kc-accent:#d97706; --kc-rgb:217,119,6; }
+  .kc-raia[data-coluna="pronto"] { --kc-accent:#0891b2; --kc-rgb:8,145,178; }
+  .kc-raia[data-coluna="entregue"] { --kc-accent:#dc2626; --kc-rgb:220,38,38; }
+
+  .kc-raia {
+    position: relative;
+    overflow: visible;
+    border: 1px solid rgba(var(--kc-rgb), .26);
+    border-top: 3px solid var(--kc-accent);
+    border-radius: 13px;
+    background: linear-gradient(180deg, rgba(var(--kc-rgb), .075), rgba(var(--kc-rgb), .025));
+    box-shadow: 0 5px 16px rgba(15, 23, 42, .045);
+  }
+  .kc-cabecalho { border-color: rgba(var(--kc-rgb), .22) !important; }
+  .kc-titulo { color: var(--kc-accent) !important; }
+  .kc-contador {
+    min-width: 22px;
+    height: 22px;
+    padding: 0 6px;
+    display: inline-grid;
+    place-items: center;
+    border-radius: 7px;
+    color: var(--kc-accent) !important;
+    background: rgba(var(--kc-rgb), .14);
+  }
+  body:not(.tema-claro) .kc-raia {
+    background: linear-gradient(180deg, rgba(var(--kc-rgb), .12), rgba(24,24,27,.58));
+    border-color: rgba(var(--kc-rgb), .38);
+    box-shadow: 0 8px 24px rgba(0, 0, 0, .22);
+  }
+  body:not(.tema-claro) .kc-card {
+    background: rgba(24, 24, 27, .92);
+    border-color: rgba(var(--kc-rgb), .35);
+    border-left-color: var(--kc-accent);
+    box-shadow: 0 7px 18px rgba(0, 0, 0, .24);
+  }
+
+  .kc-meta-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 6px;
+    margin-top: 9px;
+  }
+  .kc-meta-item {
+    min-width: 0;
+    padding: 6px 7px;
+    border-radius: 8px;
+    background: rgba(var(--kc-rgb), .065);
+  }
+  .kc-meta-label {
+    display: block;
+    color: #64748b;
+    font-size: 9px;
+    font-weight: 700;
+    line-height: 1.1;
+    text-transform: uppercase;
+    letter-spacing: .035em;
+  }
+  .kc-meta-valor {
+    display: block;
+    margin-top: 2px;
+    overflow: hidden;
+    color: #111827;
+    font-size: 11px;
+    font-weight: 750;
+    line-height: 1.25;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  body:not(.tema-claro) .kc-meta-label { color:#94a3b8; }
+  body:not(.tema-claro) .kc-meta-valor { color:#f8fafc; }
+
+  .kc-prazo {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-top: 7px;
+    padding-top: 7px;
+    border-top: 1px solid rgba(var(--kc-rgb), .16);
+    color: #64748b;
+    font-size: 10px;
+    font-weight: 650;
+  }
+  .kc-prazo svg { width: 13px; height: 13px; flex: 0 0 auto; }
+  .kc-prazo-atrasado { color:#dc2626; font-weight:800; }
+  .kc-prazo-atencao, .kc-prazo-sem-data { color:#d97706; font-weight:750; }
+  body:not(.tema-claro) .kc-prazo:not(.kc-prazo-atrasado):not(.kc-prazo-atencao):not(.kc-prazo-sem-data) { color:#94a3b8; }
+
+  /* O select nativo ocupa apenas um botão de 30 px. No celular ele abre o
+     seletor do próprio sistema; no desktop continua como alternativa ao
+     arrasto, sem consumir uma linha inteira do cartão. */
+  .kc-mover-wrap { position: relative; width: 30px; height: 30px; flex: 0 0 30px; }
+  .kc-mover-trigger {
+    width: 30px;
+    height: 30px;
+    display: grid;
+    place-items: center;
+    border: 1px solid rgba(var(--kc-rgb), .24);
+    border-radius: 8px;
+    color: var(--kc-accent);
+    background: rgba(var(--kc-rgb), .09);
+  }
+  .kc-mover-trigger svg { width: 15px; height: 15px; }
+  .kc-mover {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    cursor: pointer;
+    opacity: 0;
+  }
+  .kc-mover-wrap:hover .kc-mover-trigger,
+  .kc-mover-wrap:focus-within .kc-mover-trigger {
+    color: #fff;
+    background: var(--kc-accent);
+  }
 
   /* RAIA VAZIA ENCOLHE. São nove colunas, e numa confecção metade delas
      costuma estar vazia a qualquer momento. Vazias com a largura das cheias
@@ -181,8 +323,8 @@
 
   {% if pode_mover %}
     <p class="text-xs" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
-      Arraste o cartão para mudar o status do pedido. No celular, use o seletor
-      dentro do cartão. Soltar em <strong>Produção</strong> não é barrado: o
+      Arraste o cartão para mudar o status do pedido. No celular, use a seta
+      no canto do cartão. Soltar em <strong>Produção</strong> não é barrado: o
       pedido anda e o quadro avisa o que ficou pendente. A conferência com
       cancela é a emissão da ordem, que é o que corta tecido.
     </p>
@@ -199,9 +341,9 @@
     direita era justamente Produção e Pronto, o fim do fluxo.
   {% endcomment %}
   <div class="overflow-x-auto pb-3">
-    <div class="flex gap-3 items-start">
+    <div class="kc-board flex gap-3 items-start">
       {% for r in raias %}
-        <div class="kc-raia card p-3 space-y-2 {% if not r.total %}vazia{% endif %}"
+        <div class="kc-raia p-3 space-y-2 {% if not r.total %}vazia{% endif %}"
              data-coluna="{{ r.coluna.chave }}">
           <div class="kc-cabecalho flex items-baseline justify-between gap-2 pb-2 border-b"
                :style="temaClaro ? 'border-color:#e5e7eb;' : 'border-color:#303036;'">
@@ -236,73 +378,88 @@
                 até alguém recarregar — um quadro que mente logo depois de
                 obedecer é pior que um quadro sem contador.
               {% endcomment %}
-              <div class="kc-card rounded-lg p-2.5{% if c.pediu_ajuste %} kc-alerta{% endif %}" data-pedido="{{ c.pedido.pk }}"
+              <div class="kc-card rounded-xl p-3{% if c.pediu_ajuste %} kc-alerta{% endif %}" data-pedido="{{ c.pedido.pk }}"
                    data-url="{% url 'moda:op2-detail' c.pedido.pk %}" tabindex="0" role="link"
                    data-pecas="{{ c.pedido.quantidade_total }}"
                    data-valor="{{ c.pedido.valor_total|stringformat:'.2f' }}"
                    data-atrasado="{% if c.atrasado %}1{% else %}0{% endif %}"
                    data-busca="{{ c.pedido.cliente }} {{ c.pedido.numero|stringformat:'06d' }} {{ c.pedido.numero }} {{ c.pedido.contato_nome }}"
-                   {% if pode_mover %}draggable="true"{% endif %}
-                   :style="temaClaro ? 'background:#f8fafc; border:1px solid #e5e7eb;' : 'background:#18181b; border:1px solid #303036;'">
-                <div class="flex items-start justify-between gap-1">
-                  <a href="{% url 'moda:op2-detail' c.pedido.pk %}" class="font-mono text-xs font-bold"
-                     :style="temaClaro ? 'color:#3b82f6;' : 'color:#60a5fa;'">#{{ c.pedido.numero|stringformat:"06d" }}</a>
-                  {% if c.pedido.entrega_parcial %}
-                    <span class="text-[9px] font-bold px-1.5 py-0.5 rounded-full shrink-0" style="background:rgba(249,115,22,.14);color:#f97316">PARCIAL</span>
-                  {% endif %}
-                  {% if c.pedido.prioridade != 'normal' %}
-                    <span class="text-[9px] font-bold px-1.5 py-0.5 rounded-full shrink-0"
-                          {% if c.pedido.prioridade == 'urgente' %}style="background:rgba(220,38,38,.14); color:#dc2626;"
-                          {% else %}style="background:rgba(245,158,11,.16); color:#d97706;"{% endif %}>
-                      {{ c.pedido.get_prioridade_display|upper }}
-                    </span>
+                   {% if pode_mover %}draggable="true"{% endif %}>
+                <div class="flex items-start justify-between gap-2">
+                  <div class="min-w-0">
+                    <div class="flex flex-wrap items-center gap-1.5">
+                      <a href="{% url 'moda:op2-detail' c.pedido.pk %}" class="font-mono text-xs font-bold"
+                         style="color:var(--kc-accent);">#{{ c.pedido.numero|stringformat:"06d" }}</a>
+                      {% if c.pedido.entrega_parcial %}
+                        <span class="text-[9px] font-bold px-1.5 py-0.5 rounded-full shrink-0" style="background:rgba(249,115,22,.14);color:#f97316">PARCIAL</span>
+                      {% endif %}
+                      {% if c.pedido.prioridade != 'normal' %}
+                        <span class="text-[9px] font-bold px-1.5 py-0.5 rounded-full shrink-0"
+                              {% if c.pedido.prioridade == 'urgente' %}style="background:rgba(220,38,38,.14); color:#dc2626;"
+                              {% else %}style="background:rgba(245,158,11,.16); color:#d97706;"{% endif %}>
+                          {{ c.pedido.get_prioridade_display|upper }}
+                        </span>
+                      {% endif %}
+                    </div>
+                    <p class="text-xs font-semibold mt-1 truncate" :style="temaClaro ? 'color:#111827;' : 'color:#e5e7eb;'"
+                       title="{{ c.pedido.cliente }}">{{ c.pedido.cliente }}</p>
+                    {% if c.pedido.contato_nome %}
+                      <p class="text-[10px] truncate mt-0.5" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+                        Contato: {{ c.pedido.contato_nome }}
+                      </p>
+                    {% endif %}
+                  </div>
+
+                  {% if pode_mover %}
+                    <label class="kc-mover-wrap" title="Mover pedido para outra etapa">
+                      <span class="kc-mover-trigger" aria-hidden="true">
+                        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 7h11m0 0-3-3m3 3-3 3M17 17H6m0 0 3 3m-3-3 3-3"/>
+                        </svg>
+                      </span>
+                      <select class="kc-mover" aria-label="Mover pedido para outra etapa">
+                        <option value="">Mover para…</option>
+                        {% for col in colunas %}
+                          {% if col.chave != r.coluna.chave %}
+                            <option value="{{ col.chave }}">{{ col.label }}</option>
+                          {% endif %}
+                        {% endfor %}
+                      </select>
+                    </label>
                   {% endif %}
                 </div>
 
-                <p class="text-xs font-semibold mt-1 truncate" :style="temaClaro ? 'color:#111827;' : 'color:#e5e7eb;'"
-                   title="{{ c.pedido.cliente }}">{{ c.pedido.cliente }}</p>
-                {% if c.pedido.contato_nome %}
-                  <p class="text-[11px] truncate" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
-                    {{ c.pedido.contato_nome }}
-                  </p>
-                {% endif %}
-
-                <div class="flex items-center justify-between gap-1 mt-1.5 text-[11px]">
-                  <span class="font-bold tabular-nums" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
-                    {{ c.pedido.quantidade_total }} pç
-                  </span>
-                  {% comment %}
-                    Pedido SEM data não vira "no prazo": vira "sem prazo", em
-                    laranja. São situações diferentes, e pintar as duas de
-                    cinza esconderia justamente o que ninguém combinou.
-                  {% endcomment %}
-                  {% if not c.pedido.data_prevista_entrega %}
-                    <span class="tabular-nums" style="color:#d97706;">sem prazo</span>
-                  {% elif c.atrasado %}
-                    <span class="tabular-nums" style="color:#dc2626; font-weight:700;">
-                      {{ c.pedido.data_prevista_entrega|date:"d/m" }}
+                <div class="kc-meta-grid">
+                  <div class="kc-meta-item">
+                    <span class="kc-meta-label">Quantidade</span>
+                    <span class="kc-meta-valor tabular-nums">{{ c.pedido.quantidade_total }} pç</span>
+                  </div>
+                  <div class="kc-meta-item">
+                    <span class="kc-meta-label">Valor</span>
+                    <span class="kc-meta-valor tabular-nums">
+                      {% if c.pedido.valor_total %}R$ {{ c.pedido.valor_total|floatformat:2 }}{% else %}Não informado{% endif %}
                     </span>
-                  {% elif c.apertado %}
-                    <span class="tabular-nums" style="color:#d97706; font-weight:700;">
-                      {{ c.pedido.data_prevista_entrega|date:"d/m" }}
-                    </span>
-                  {% else %}
-                    <span class="tabular-nums" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
-                      {{ c.pedido.data_prevista_entrega|date:"d/m" }}
-                    </span>
-                  {% endif %}
+                  </div>
                 </div>
 
                 {% comment %}
-                  "R$ 0,00" ocupava uma linha em todo orçamento ainda não
-                  valorado — que é a maioria da primeira coluna — sem dizer
-                  nada. Sem valor, a linha some.
+                  A data agora tem rótulo e contexto. Antes era apenas "10/08"
+                  solto à direita, sem dizer ao usuário que era a entrega.
                 {% endcomment %}
-                {% if c.pedido.valor_total %}
-                  <p class="text-[11px] tabular-nums mt-0.5" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
-                    R$ {{ c.pedido.valor_total|floatformat:2 }}
-                  </p>
-                {% endif %}
+                <div class="kc-prazo{% if not c.pedido.data_prevista_entrega %} kc-prazo-sem-data{% elif c.atrasado %} kc-prazo-atrasado{% elif c.apertado %} kc-prazo-atencao{% endif %}">
+                  <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3M5 11h14M5 5h14a2 2 0 012 2v12a2 2 0 01-2 2H5a2 2 0 01-2-2V7a2 2 0 012-2z"/>
+                  </svg>
+                  {% if not c.pedido.data_prevista_entrega %}
+                    Prazo não definido
+                  {% elif c.atrasado %}
+                    Atrasado · entrega {{ c.pedido.data_prevista_entrega|date:"d/m" }}
+                  {% elif c.apertado %}
+                    Entrega próxima · {{ c.pedido.data_prevista_entrega|date:"d/m" }}
+                  {% else %}
+                    Entrega · {{ c.pedido.data_prevista_entrega|date:"d/m" }}
+                  {% endif %}
+                </div>
 
                 {% if c.pediu_ajuste %}
                   <p class="text-[10px] mt-1 font-semibold" style="color:#dc2626;">
@@ -314,21 +471,6 @@
                   {% endif %}
                 {% endif %}
 
-                {% if pode_mover %}
-                  {% comment %}
-                    Arrastar não existe no toque. Sem este seletor, o quadro
-                    seria somente leitura no celular — que é onde o vendedor
-                    está quando o cliente responde.
-                  {% endcomment %}
-                  <select class="kc-mover form-input w-full mt-2 text-[11px] py-1 sm:hidden">
-                    <option value="">mover para…</option>
-                    {% for col in colunas %}
-                      {% if col.chave != r.coluna.chave %}
-                        <option value="{{ col.chave }}">{{ col.label }}</option>
-                      {% endif %}
-                    {% endfor %}
-                  </select>
-                {% endif %}
               </div>
             {% endfor %}
           </div>

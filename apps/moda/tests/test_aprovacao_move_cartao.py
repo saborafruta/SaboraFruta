@@ -287,7 +287,7 @@ class AlertaNaTelaTests(RespostaBase):
 
         resposta = self._quadro()
 
-        self.assertContains(resposta, 'kc-card rounded-lg p-2.5 kc-alerta')
+        self.assertContains(resposta, 'kc-card rounded-xl p-3 kc-alerta')
 
     def test_cartao_sem_ajuste_nao_pisca(self):
         """
@@ -296,7 +296,7 @@ class AlertaNaTelaTests(RespostaBase):
         """
         self._pedido()
 
-        self.assertNotContains(self._quadro(), 'kc-card rounded-lg p-2.5 kc-alerta')
+        self.assertNotContains(self._quadro(), 'kc-card rounded-xl p-3 kc-alerta')
 
     def test_a_animacao_existe_na_folha(self):
         """A classe sozinha não pisca nada."""
@@ -316,3 +316,26 @@ class AlertaNaTelaTests(RespostaBase):
         trecho = resposta.content.decode().split('prefers-reduced-motion', 1)[1][:400]
         self.assertIn('animation: none', trecho)
         self.assertIn('box-shadow', trecho)
+
+    def test_quadro_abre_com_barra_lateral_retraida(self):
+        resposta = self._quadro()
+
+        self.assertContains(
+            resposta, "localStorage.setItem('sidebar-collapsed', 'true')",
+        )
+
+    def test_cartao_usa_movimento_compacto_e_data_identificada(self):
+        self._pedido()
+
+        resposta = self._quadro()
+
+        self.assertContains(resposta, 'class="kc-mover"')
+        self.assertContains(resposta, 'Mover pedido para outra etapa')
+        self.assertContains(resposta, 'Prazo não definido')
+        self.assertNotContains(resposta, 'kc-mover form-input w-full')
+
+    def test_colunas_recebem_cores_por_etapa(self):
+        resposta = self._quadro()
+
+        for coluna in ('orcamento', 'aprovacao', 'confirmado', 'producao', 'pronto', 'entregue'):
+            self.assertContains(resposta, f'.kc-raia[data-coluna="{coluna}"]')
