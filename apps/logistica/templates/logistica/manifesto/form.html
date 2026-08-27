@@ -15,154 +15,227 @@
       <span class="mx-1">›</span> {{ title }}
     </p>
     <h2 class="text-2xl font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">{{ title }}</h2>
-    <p class="text-sm mt-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Informe rota, modal, transportadora, motorista e dados do veiculo.</p>
+    <p class="text-sm mt-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Informe rota, modal, transportadora, motorista e dados do veículo.</p>
   </div>
 
-  <form method="post" class="card p-6 space-y-5">
+  <form method="post" class="card p-6 space-y-6">
     {% csrf_token %}
     {% if form.non_field_errors %}
       <div class="rounded-lg border border-red-500/30 bg-red-500/10 p-3 text-sm text-red-500">{{ form.non_field_errors }}</div>
     {% endif %}
 
-    <!-- Cabeçalho -->
-    <div class="grid gap-4 md:grid-cols-5">
-      <label class="space-y-1.5">
-        <span class="text-xs font-semibold uppercase tracking-wide" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Numero</span>
-        {{ form.numero }}{% if form.numero.errors %}<p class="text-xs text-red-500 mt-0.5">{{ form.numero.errors.0 }}</p>{% endif %}
-      </label>
-      <label class="space-y-1.5">
-        <span class="text-xs font-semibold uppercase tracking-wide" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Emissao</span>
-        {{ form.data_emissao }}{% if form.data_emissao.errors %}<p class="text-xs text-red-500 mt-0.5">{{ form.data_emissao.errors.0 }}</p>{% endif %}
-      </label>
-      <label class="space-y-1.5">
-        <span class="text-xs font-semibold uppercase tracking-wide" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Saida</span>
-        {{ form.data_saida }}
-      </label>
-      <label class="space-y-1.5">
-        <span class="text-xs font-semibold uppercase tracking-wide" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Status</span>
-        {{ form.status }}{% if form.status.errors %}<p class="text-xs text-red-500 mt-0.5">{{ form.status.errors.0 }}</p>{% endif %}
-      </label>
-      <label class="space-y-1.5">
-        <span class="text-xs font-semibold uppercase tracking-wide" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Modal</span>
-        {{ form.modal }}
-      </label>
-    </div>
+    {% comment %}
+      O FORMULARIO GANHOU SECOES. Eram dezessete campos numa lista unica, e
+      quem preenche precisava reler tudo para achar onde tinha parado. Cada
+      bloco agora responde uma pergunta: que documento e' este, quem leva, e
+      por onde passa.
+    {% endcomment %}
 
-    <!-- Romaneio + Transportadora + Motorista + Documento -->
-    <div class="grid gap-4 md:grid-cols-4">
-      <label class="space-y-1.5">
-        <span class="text-xs font-semibold uppercase tracking-wide" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Romaneio</span>
-        {{ form.romaneio }}
-      </label>
-      <label class="space-y-1.5">
-        <span class="text-xs font-semibold uppercase tracking-wide" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Transportadora</span>
-        {{ form.transportadora }}
-      </label>
+    <section class="space-y-4">
+      <h3 class="text-xs font-bold uppercase tracking-wider pb-2 border-b"
+          :style="temaClaro ? 'color:#475569;border-color:#e2e8f0;' : 'color:#cbd5e1;border-color:#2a2a2e;'">
+        Identificação
+      </h3>
+      <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
+        <label class="space-y-1.5">
+          <span class="text-xs font-semibold uppercase tracking-wide block" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Número *</span>
+          {{ form.numero }}{% if form.numero.errors %}<p class="text-xs text-red-500 mt-0.5">{{ form.numero.errors.0 }}</p>{% endif %}
+        </label>
+        <label class="space-y-1.5">
+          <span class="text-xs font-semibold uppercase tracking-wide block" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Emissão *</span>
+          {{ form.data_emissao }}{% if form.data_emissao.errors %}<p class="text-xs text-red-500 mt-0.5">{{ form.data_emissao.errors.0 }}</p>{% endif %}
+        </label>
+        <label class="space-y-1.5">
+          <span class="text-xs font-semibold uppercase tracking-wide block" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Saída</span>
+          {{ form.data_saida }}
+        </label>
+        <label class="space-y-1.5">
+          <span class="text-xs font-semibold uppercase tracking-wide block" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Status</span>
+          {{ form.status }}{% if form.status.errors %}<p class="text-xs text-red-500 mt-0.5">{{ form.status.errors.0 }}</p>{% endif %}
+        </label>
+        <label class="space-y-1.5">
+          <span class="text-xs font-semibold uppercase tracking-wide block" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Modal</span>
+          {{ form.modal }}
+        </label>
+      </div>
+      <div class="grid gap-4 sm:grid-cols-2">
+        <label class="space-y-1.5">
+          <span class="text-xs font-semibold uppercase tracking-wide block" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Romaneio</span>
+          {{ form.romaneio }}
+          <span class="text-[11px] block" :style="temaClaro ? 'color:#94a3b8;' : 'color:#71717a;'">
+            A carga que este manifesto acompanha.
+          </span>
+        </label>
+        <label class="space-y-1.5">
+          <span class="text-xs font-semibold uppercase tracking-wide block" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Transportadora</span>
+          {{ form.transportadora }}
+          <span class="text-[11px] block" :style="temaClaro ? 'color:#94a3b8;' : 'color:#71717a;'">
+            Deixe vazio quando o veículo é da casa.
+          </span>
+        </label>
+      </div>
+    </section>
 
-      <!-- Motorista com select de cadastrados -->
-      <div class="space-y-1.5">
-        <div class="flex items-center justify-between">
-          <span class="text-xs font-semibold uppercase tracking-wide" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Motorista</span>
-          <a href="{% url 'cadastros:motorista-create' %}" target="_blank"
-             class="text-xs font-semibold flex items-center gap-1"
-             :style="temaClaro ? 'color:#2563eb;' : 'color:#60a5fa;'">
-            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
-            </svg>
-            Novo
-          </a>
+    <section class="space-y-4">
+      <h3 class="text-xs font-bold uppercase tracking-wider pb-2 border-b"
+          :style="temaClaro ? 'color:#475569;border-color:#e2e8f0;' : 'color:#cbd5e1;border-color:#2a2a2e;'">
+        Quem leva
+      </h3>
+
+      {% comment %}
+        MOTORISTA E VEICULO EM BLOCOS PROPRIOS. Antes o motorista dividia uma
+        grade de quatro colunas com romaneio e transportadora: como ele tem
+        duas linhas (escolher e o nome), as colunas vizinhas ficavam penduradas
+        no topo com um buraco embaixo -- era a grade torta da tela.
+
+        E OS CAMPOS DE TEXTO GANHARAM ROTULO. Ficavam soltos logo abaixo do
+        seletor, sem dizer o que eram: duas caixas vazias no meio do
+        formulario, e ninguem sabia se precisava preencher.
+      {% endcomment %}
+      <div class="grid gap-5 lg:grid-cols-2">
+
+        <div class="space-y-3 rounded-xl p-4"
+             :style="temaClaro ? 'background:#f8fafc;' : 'background:rgba(255,255,255,0.02);'">
+          <div class="flex items-center justify-between">
+            <span class="text-xs font-semibold uppercase tracking-wide" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Motorista</span>
+            <a href="{% url 'cadastros:motorista-create' %}" target="_blank"
+               class="text-xs font-semibold flex items-center gap-1"
+               :style="temaClaro ? 'color:#2563eb;' : 'color:#60a5fa;'">
+              <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
+              </svg>
+              Cadastrar
+            </a>
+          </div>
+
+          <template x-if="motoristas.length > 0">
+            <div class="space-y-1.5">
+              <label class="text-[11px] block" for="escolher-motorista"
+                     :style="temaClaro ? 'color:#94a3b8;' : 'color:#71717a;'">
+                Escolher um cadastrado preenche nome e documento
+              </label>
+              <select id="escolher-motorista" class="form-input w-full"
+                      @change="selecionarMotorista($event.target.value)">
+                <option value="">— selecionar —</option>
+                <template x-for="m in motoristas" :key="m.id">
+                  <option :value="m.id" x-text="m.nome + (m.cpf ? ' · ' + m.cpf : '')"></option>
+                </template>
+              </select>
+            </div>
+          </template>
+
+          <div class="grid gap-3 sm:grid-cols-2">
+            <label class="space-y-1.5">
+              <span class="text-[11px] font-semibold uppercase tracking-wide block" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Nome</span>
+              {{ form.motorista_nome }}
+              {% if form.motorista_nome.errors %}<p class="text-xs text-red-500 mt-0.5">{{ form.motorista_nome.errors.0 }}</p>{% endif %}
+            </label>
+            <label class="space-y-1.5">
+              <span class="text-[11px] font-semibold uppercase tracking-wide block" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Documento</span>
+              {{ form.motorista_documento }}
+            </label>
+          </div>
         </div>
 
-        <!-- Select quando há motoristas cadastrados -->
-        <template x-if="motoristas.length > 0">
-          <select class="form-input w-full" @change="selecionarMotorista($event.target.value)">
-            <option value="">— selecionar —</option>
-            <template x-for="m in motoristas" :key="m.id">
-              <option :value="m.id" x-text="m.nome + (m.cpf ? ' · ' + m.cpf : '')"></option>
-            </template>
-          </select>
-        </template>
+        <div class="space-y-3 rounded-xl p-4"
+             :style="temaClaro ? 'background:#f8fafc;' : 'background:rgba(255,255,255,0.02);'">
+          <div class="flex items-center justify-between">
+            <span class="text-xs font-semibold uppercase tracking-wide" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Veículo</span>
+            <a href="{% url 'cadastros:veiculo-create' %}" target="_blank"
+               class="text-xs font-semibold flex items-center gap-1"
+               :style="temaClaro ? 'color:#2563eb;' : 'color:#60a5fa;'">
+              <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
+              </svg>
+              Cadastrar
+            </a>
+          </div>
 
-        <!-- Campo de texto (preenchido ao selecionar ou manualmente) -->
-        {{ form.motorista_nome }}
-      </div>
+          <template x-if="veiculos.length > 0">
+            <div class="space-y-1.5">
+              <label class="text-[11px] block" for="escolher-veiculo"
+                     :style="temaClaro ? 'color:#94a3b8;' : 'color:#71717a;'">
+                Escolher um cadastrado preenche placa e descrição
+              </label>
+              <select id="escolher-veiculo" class="form-input w-full"
+                      @change="selecionarVeiculo($event.target.value)">
+                <option value="">— selecionar —</option>
+                <template x-for="v in veiculos" :key="v.id">
+                  <option :value="v.id"
+                          x-text="v.placa + (v.marca || v.modelo ? ' · ' + [v.marca, v.modelo].filter(Boolean).join(' ') : '')">
+                  </option>
+                </template>
+              </select>
+            </div>
+          </template>
 
-      <label class="space-y-1.5">
-        <span class="text-xs font-semibold uppercase tracking-wide" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Documento motorista</span>
-        {{ form.motorista_documento }}
-      </label>
-    </div>
-
-    <!-- Placa + Veículo -->
-    <div class="grid gap-4 md:grid-cols-3">
-      <label class="space-y-1.5">
-        <span class="text-xs font-semibold uppercase tracking-wide" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Placa</span>
-        {{ form.veiculo_placa }}
-      </label>
-
-      <!-- Veículo com select de cadastrados -->
-      <div class="space-y-1.5 md:col-span-2">
-        <div class="flex items-center justify-between">
-          <span class="text-xs font-semibold uppercase tracking-wide" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Veiculo</span>
-          <a href="{% url 'cadastros:veiculo-create' %}" target="_blank"
-             class="text-xs font-semibold flex items-center gap-1"
-             :style="temaClaro ? 'color:#2563eb;' : 'color:#60a5fa;'">
-            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
-            </svg>
-            Novo
-          </a>
+          {% comment %}
+            A PLACA MORA COM O VEICULO. Ficava numa grade separada, longe do
+            seletor que a preenche -- escolher o veiculo mexia num campo que
+            estava noutro canto da tela, e parecia que nada tinha acontecido.
+          {% endcomment %}
+          <div class="grid gap-3 sm:grid-cols-3">
+            <label class="space-y-1.5">
+              <span class="text-[11px] font-semibold uppercase tracking-wide block" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Placa</span>
+              {{ form.veiculo_placa }}
+            </label>
+            <label class="space-y-1.5 sm:col-span-2">
+              <span class="text-[11px] font-semibold uppercase tracking-wide block" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Descrição</span>
+              {{ form.veiculo_descricao }}
+            </label>
+          </div>
         </div>
-
-        <!-- Select quando há veículos cadastrados -->
-        <template x-if="veiculos.length > 0">
-          <select class="form-input w-full" @change="selecionarVeiculo($event.target.value)">
-            <option value="">— selecionar —</option>
-            <template x-for="v in veiculos" :key="v.id">
-              <option :value="v.id"
-                      x-text="v.placa + (v.marca || v.modelo ? ' · ' + [v.marca, v.modelo].filter(Boolean).join(' ') : '')">
-              </option>
-            </template>
-          </select>
-        </template>
-
-        {{ form.veiculo_descricao }}
       </div>
-    </div>
+    </section>
 
-    <!-- Rota -->
-    <div class="grid gap-4 md:grid-cols-4">
-      <label class="space-y-1.5">
-        <span class="text-xs font-semibold uppercase tracking-wide" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Cidade origem</span>
-        {{ form.cidade_origem }}
+    <section class="space-y-4">
+      <h3 class="text-xs font-bold uppercase tracking-wider pb-2 border-b"
+          :style="temaClaro ? 'color:#475569;border-color:#e2e8f0;' : 'color:#cbd5e1;border-color:#2a2a2e;'">
+        Por onde passa
+      </h3>
+      {% comment %}
+        UF OCUPAVA A MESMA LARGURA DA CIDADE. Campo largo para duas letras
+        convida a digitar "Rio Grande do Norte", e o banco corta em duas.
+      {% endcomment %}
+      <div class="grid gap-4 grid-cols-1 sm:grid-cols-4 lg:grid-cols-8">
+        <label class="space-y-1.5 sm:col-span-3 lg:col-span-3">
+          <span class="text-xs font-semibold uppercase tracking-wide block" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Cidade de origem</span>
+          {{ form.cidade_origem }}
+        </label>
+        <label class="space-y-1.5">
+          <span class="text-xs font-semibold uppercase tracking-wide block" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">UF</span>
+          {{ form.uf_origem }}
+        </label>
+        <label class="space-y-1.5 sm:col-span-3 lg:col-span-3">
+          <span class="text-xs font-semibold uppercase tracking-wide block" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Cidade de destino</span>
+          {{ form.cidade_destino }}
+        </label>
+        <label class="space-y-1.5">
+          <span class="text-xs font-semibold uppercase tracking-wide block" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">UF</span>
+          {{ form.uf_destino }}
+        </label>
+      </div>
+      <label class="block space-y-1.5">
+        <span class="text-xs font-semibold uppercase tracking-wide block" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Percurso</span>
+        {{ form.percurso }}
       </label>
-      <label class="space-y-1.5">
-        <span class="text-xs font-semibold uppercase tracking-wide" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">UF origem</span>
-        {{ form.uf_origem }}
-      </label>
-      <label class="space-y-1.5">
-        <span class="text-xs font-semibold uppercase tracking-wide" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Cidade destino</span>
-        {{ form.cidade_destino }}
-      </label>
-      <label class="space-y-1.5">
-        <span class="text-xs font-semibold uppercase tracking-wide" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">UF destino</span>
-        {{ form.uf_destino }}
-      </label>
-    </div>
+    </section>
 
-    <label class="block space-y-1.5">
-      <span class="text-xs font-semibold uppercase tracking-wide" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Percurso</span>
-      {{ form.percurso }}
-    </label>
+    <section class="space-y-4">
+      <h3 class="text-xs font-bold uppercase tracking-wider pb-2 border-b"
+          :style="temaClaro ? 'color:#475569;border-color:#e2e8f0;' : 'color:#cbd5e1;border-color:#2a2a2e;'">
+        Observações
+      </h3>
+      <label class="block space-y-1.5">
+        <span class="sr-only">Observação</span>
+        {{ form.observacao }}
+      </label>
+    </section>
 
-    <label class="block space-y-1.5">
-      <span class="text-xs font-semibold uppercase tracking-wide" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Observacao</span>
-      {{ form.observacao }}
-    </label>
-
-    <div class="flex flex-wrap justify-end gap-3 pt-2">
+    <div class="flex flex-wrap items-center justify-end gap-3 pt-4 border-t"
+         :style="temaClaro ? 'border-color:#e2e8f0;' : 'border-color:#2a2a2e;'">
       <a href="{{ cancel_url }}" class="btn-secondary">Cancelar</a>
-      <button type="submit" class="btn-primary">Salvar</button>
+      <button type="submit" class="btn-primary">Salvar manifesto</button>
     </div>
   </form>
 

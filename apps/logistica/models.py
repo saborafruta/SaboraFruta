@@ -249,15 +249,15 @@ class ManifestoCarga(FilialScopedModel):
     class Status(models.TextChoices):
         RASCUNHO = "rascunho", "Rascunho"
         EMITIDO = "emitido", "Emitido"
-        EM_TRANSITO = "em_transito", "Em transito"
+        EM_TRANSITO = "em_transito", "Em trânsito"
         ENCERRADO = "encerrado", "Encerrado"
         CANCELADO = "cancelado", "Cancelado"
 
     class Modal(models.TextChoices):
-        RODOVIARIO = "rodoviario", "Rodoviario"
-        AEREO = "aereo", "Aereo"
-        AQUAVIARIO = "aquaviario", "Aquaviario"
-        FERROVIARIO = "ferroviario", "Ferroviario"
+        RODOVIARIO = "rodoviario", "Rodoviário"
+        AEREO = "aereo", "Aéreo"
+        AQUAVIARIO = "aquaviario", "Aquaviário"
+        FERROVIARIO = "ferroviario", "Ferroviário"
 
     numero = models.PositiveIntegerField(db_index=True)
     data_emissao = models.DateField(default=timezone.localdate, db_index=True)

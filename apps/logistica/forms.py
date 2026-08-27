@@ -237,11 +237,30 @@ class ManifestoCargaForm(forms.ModelForm):
             "observacao",
         ]
         widgets = {
-            "data_emissao": forms.DateInput(attrs={"type": "date"}),
-            "data_saida": forms.DateInput(attrs={"type": "date"}),
+            # `format` EXPLICITO. Com `pt-br`, o Django renderiza a data como
+            # 27/08/2026 -- e `<input type="date">` so' aceita o formato ISO e
+            # descarta o resto, mostrando o campo VAZIO. A emissao nasce com a
+            # data de hoje e chegava em branco na tela; quem nao reparasse
+            # levava erro de campo obrigatorio ao salvar.
+            "data_emissao": forms.DateInput(attrs={"type": "date"}, format="%Y-%m-%d"),
+            "data_saida": forms.DateInput(attrs={"type": "date"}, format="%Y-%m-%d"),
             "percurso": forms.Textarea(attrs={"rows": 2}),
             "observacao": forms.Textarea(attrs={"rows": 3}),
         }
+
+    # Dica do que entra em cada campo, para quem nunca preencheu um manifesto.
+    PLACEHOLDERS = {
+        "motorista_nome": "Nome de quem dirige",
+        "motorista_documento": "CPF ou CNH",
+        "veiculo_placa": "ABC1D23",
+        "veiculo_descricao": "Marca e modelo, ou o que identifica o veiculo",
+        "cidade_origem": "De onde a carga sai",
+        "cidade_destino": "Para onde a carga vai",
+        "uf_origem": "RN",
+        "uf_destino": "RN",
+        "percurso": "UFs por onde o caminhao passa, na ordem",
+        "observacao": "O que mais precisa constar no manifesto",
+    }
 
     def __init__(self, *args, filial=None, **kwargs):
         super().__init__(*args, **kwargs)
@@ -251,8 +270,32 @@ class ManifestoCargaForm(forms.ModelForm):
         self.fields["transportadora"].queryset = Transportadora.objects.for_filial(filial).filter(ativo=True)
         self.fields["romaneio"].required = False
         self.fields["transportadora"].required = False
-        for field in self.fields.values():
+        # "---------" nao diz nada. O resto da tela ja' usa "— selecionar —".
+        self.fields["romaneio"].empty_label = "— sem romaneio —"
+        self.fields["transportadora"].empty_label = "— sem transportadora —"
+        for nome, field in self.fields.items():
             field.widget.attrs["class"] = BASE_INPUT_CLASS
+            if nome in self.PLACEHOLDERS:
+                field.widget.attrs["placeholder"] = self.PLACEHOLDERS[nome]
+        # UF e placa vao em maiuscula no documento fiscal. O `maxlength` o
+        # Django ja' emite sozinho, a partir do `max_length` do modelo.
+        for nome in ("uf_origem", "uf_destino", "veiculo_placa"):
+            self.fields[nome].widget.attrs["style"] = "text-transform:uppercase;"
+
+    # `text-transform` e' so' pintura: mostra "RN" e envia "rn". Sem estas
+    # limpezas o documento fiscal sairia com a sigla em minuscula, e a mesma
+    # placa gravada de dois jeitos nao casaria numa busca.
+    def _maiuscula(self, campo):
+        return (self.cleaned_data.get(campo) or "").strip().upper()
+
+    def clean_uf_origem(self):
+        return self._maiuscula("uf_origem")
+
+    def clean_uf_destino(self):
+        return self._maiuscula("uf_destino")
+
+    def clean_veiculo_placa(self):
+        return self._maiuscula("veiculo_placa")
 
 
 class CTeForm(forms.ModelForm):
