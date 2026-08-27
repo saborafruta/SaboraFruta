@@ -45,7 +45,13 @@ ZERO = Decimal('0')
 
 # Os mesmos estados que a separacao considera abertos -- a carga e' o passo
 # seguinte dela, e duas definicoes de "pedido em aberto" divergiriam.
+from apps.vendas.models.pedido import PedidoVenda  # noqa: E402
 from apps.polpa.services.separacao import ABERTOS  # noqa: E402
+
+# A REGUA DA DOCA NAO E' A DA SEPARACAO. Separar acontece antes de faturar;
+# carregar acontece depois. Como nada neste sistema marca um pedido como
+# ENTREGUE, o faturado fica parado esperando quem o leve -- e precisa aparecer.
+CARREGAVEIS = ABERTOS + (PedidoVenda.Status.FATURADO,)
 
 NA_DOCA = (
     RomaneioCarga.Status.RASCUNHO,
@@ -272,14 +278,19 @@ class CarregamentoService:
     # ── Montar a carga a partir das vendas ───────────────────────────────
 
     @staticmethod
-    def _acabados(filial) -> set[int]:
-        """Os produtos que este vertical fabrica — o resto não sai da câmara."""
-        from apps.polpa.models import FichaProduto
+    def _ja_em_carga(filial) -> set[int]:
+        """
+        Os pedidos que já estão num romaneio de pé.
 
+        É a regra que impede a mesma mercadoria de ser carregada em dois
+        caminhões. Romaneio cancelado não conta: aquela carga deixou de existir
+        e o pedido volta a esperar.
+        """
         return set(
-            FichaProduto.objects.for_filial(filial)
-            .filter(classe=FichaProduto.Classe.ACABADO)
-            .values_list('produto_id', flat=True)
+            ItemRomaneioCarga.objects
+            .filter(pedido_venda__isnull=False, romaneio__filial=filial)
+            .exclude(romaneio__status=RomaneioCarga.Status.CANCELADO)
+            .values_list('pedido_venda_id', flat=True)
         )
 
     @classmethod
@@ -292,38 +303,32 @@ class CarregamentoService:
         outro módulo pedir que montem a carga — ele carrega e anota depois, que
         é como a expedição deixa de ter registro.
 
+        VENDA FATURADA TAMBÉM ESPERA CAMINHÃO. Nada neste sistema marca um
+        pedido como ENTREGUE: faturar é o fim da linha do lado comercial, e o
+        pedido fica ali parado esperando quem o leve. Listar só CONFIRMADO e
+        EM_SEPARACAO — que é a régua da separação — escondia da doca justamente
+        a venda mais pronta para sair.
+
         VENDA JÁ EM CARGA NÃO APARECE. É a regra que impede a mesma mercadoria
         de ser carregada em dois caminhões: basta ela estar num romaneio que
         não foi cancelado. Cancelado volta para a lista, porque aquela carga
         deixou de existir.
 
-        SÓ O QUE A FÁBRICA PRODUZ. Pedido de item que este vertical não fabrica
-        não sai desta câmara, e enfileirá-lo aqui faria a doca prometer o que
-        ela não tem.
+        NÃO SE FILTRA POR FICHA DE PRODUÇÃO. A doca já filtrava por ficha, para
+        mostrar "só o que a fábrica produz" — e quem não tinha o catálogo de
+        polpa preenchido via a tela zerada, sem nenhuma pista do motivo. O que
+        a doca despacha é a venda desta filial; o que ela não fabricou também
+        sobe no caminhão.
         """
         from django.db.models import Q
 
         from apps.vendas.models.pedido import PedidoVenda
 
         filtros = filtros or {}
-        acabados = cls._acabados(filial)
-        if not acabados:
-            return []
-
-        ja_em_carga = set(
-            ItemRomaneioCarga.objects
-            .filter(
-                pedido_venda__isnull=False,
-                romaneio__filial=filial,
-            )
-            .exclude(romaneio__status=RomaneioCarga.Status.CANCELADO)
-            .values_list('pedido_venda_id', flat=True)
-        )
 
         qs = (
-            PedidoVenda.objects.filter(filial=filial, status__in=ABERTOS)
-            .filter(itens__produto_id__in=acabados)
-            .exclude(pk__in=ja_em_carga)
+            PedidoVenda.objects.filter(filial=filial, status__in=CARREGAVEIS)
+            .exclude(pk__in=cls._ja_em_carga(filial))
             .select_related('cliente')
             .prefetch_related('itens__produto')
             .distinct()
@@ -338,7 +343,7 @@ class CarregamentoService:
 
         linhas = []
         for pedido in qs:
-            itens = [i for i in pedido.itens.all() if i.produto_id in acabados]
+            itens = list(pedido.itens.all())
             linhas.append({
                 'pedido': pedido,
                 'itens': len(itens),
@@ -356,6 +361,57 @@ class CarregamentoService:
             l['entrega'] is None, l['entrega'] or timezone.localdate(),
         ))
         return linhas
+
+
+    @classmethod
+    def porque_sem_vendas(cls, filial) -> str:
+        """
+        Por que a lista de vendas está vazia.
+
+        VAZIO SEM MOTIVO É UM BECO. A doca dizia "nenhuma venda esperando
+        caminhão" tanto para quem não vendeu nada quanto para quem tinha dez
+        pedidos parados em rascunho — e não havia como saber qual dos dois era
+        sem abrir o banco. Quem está com o caminhão encostado não vai depurar
+        filtro: ele conclui que o sistema perdeu a venda.
+
+        Devolve texto vazio quando não há nada a explicar.
+        """
+        from apps.vendas.models.pedido import PedidoVenda
+
+        pedidos = PedidoVenda.objects.filter(filial=filial)
+        total = pedidos.count()
+        if not total:
+            return (
+                'Nenhuma venda cadastrada nesta filial ainda. A doca lista o '
+                'que o comercial vendeu.'
+            )
+
+        em_carga = len(cls._ja_em_carga(filial))
+        aguardando = pedidos.filter(status__in=(
+            PedidoVenda.Status.RASCUNHO,
+            PedidoVenda.Status.AGUARDANDO_APROVACAO,
+            PedidoVenda.Status.APROVADO,
+        )).count()
+        encerrados = pedidos.filter(status__in=(
+            PedidoVenda.Status.CANCELADO,
+            PedidoVenda.Status.DEVOLVIDO,
+            PedidoVenda.Status.ENTREGUE,
+        )).count()
+
+        motivos = []
+        if aguardando:
+            motivos.append(
+                f'{aguardando} ainda não confirmada(s) — confirme o pedido em '
+                'Vendas para ele chegar à doca'
+            )
+        if em_carga:
+            motivos.append(f'{em_carga} já em romaneio')
+        if encerrados:
+            motivos.append(f'{encerrados} cancelada(s), devolvida(s) ou entregue(s)')
+
+        if not motivos:
+            return ''
+        return f'Esta filial tem {total} venda(s): ' + '; '.join(motivos) + '.'
 
     @classmethod
     @transaction.atomic

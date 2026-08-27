@@ -149,8 +149,9 @@
           Vendas esperando caminhão
         </h3>
         <p class="text-xs mt-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
-          {{ resumo.a_carregar }} pedido(s) confirmado(s) ainda sem carga.
-          Venda que já está num romaneio não aparece aqui.
+          {{ resumo.a_carregar }} venda(s) esperando caminhão — confirmadas,
+          em separação ou já faturadas. Venda que está num romaneio não
+          aparece aqui.
         </p>
       </div>
       <span class="text-xs" x-show="marcados" x-cloak
@@ -222,11 +223,24 @@
                   {% if filtros.busca_venda %}
                     Nenhuma venda com esse filtro.
                   {% else %}
-                    Nenhuma venda esperando caminhão. Só entram aqui os pedidos
-                    confirmados que levam produto desta fábrica e ainda não
-                    estão em nenhuma carga.
+                    Nenhuma venda esperando caminhão. Entram aqui os pedidos
+                    confirmados ou faturados que ainda não estão em carga.
                   {% endif %}
                 </p>
+                {% comment %}
+                  O MOTIVO, e não só o vazio. A doca dizia "nenhuma venda"
+                  tanto para quem não vendeu nada quanto para quem tinha dez
+                  pedidos parados em rascunho — e quem está com o caminhão
+                  encostado conclui que o sistema perdeu a venda.
+                {% endcomment %}
+                {% if sem_vendas_porque %}
+                  <p class="text-sm max-w-md mx-auto mt-3 px-3 py-2 rounded-lg"
+                     :style="temaClaro
+                       ? 'color:#92400e;background:#fef3c7;'
+                       : 'color:#fbbf24;background:#2a2210;'">
+                    {{ sem_vendas_porque }}
+                  </p>
+                {% endif %}
               </td>
             </tr>
           {% endfor %}

@@ -18,7 +18,7 @@ from apps.logistica.models import ItemRomaneioCarga, RomaneioCarga
 from apps.polpa.models import EntregaFria
 from apps.vendas.models import PedidoVenda
 
-from .services.carregamento import CarregamentoService
+from .services.carregamento import CARREGAVEIS, CarregamentoService
 from .services.entrega import EntregaService
 from .services.separacao import SeparacaoPolpaService
 from .views import PolpaBaseView
@@ -110,6 +110,12 @@ class CarregamentoListView(PolpaBaseView):
             'title': 'Carregamento',
             'linhas': linhas,
             'vendas': vendas,
+            # So' custa uma consulta quando nao ha' o que mostrar, e e' o
+            # unico momento em que alguem precisa da explicacao.
+            'sem_vendas_porque': (
+                '' if vendas or filtros['busca_venda']
+                else CarregamentoService.porque_sem_vendas(filial)
+            ),
             'filtros': filtros,
             'resumo': {
                 'na_doca': sum(1 for l in linhas if l['na_doca']),
@@ -144,7 +150,9 @@ class CarregamentoListView(PolpaBaseView):
         # unidade, e o caminhao sairia com mercadoria que nao e' desta casa.
         ids = [i for i in request.POST.getlist('pedidos') if i.isdigit()]
         pedidos = list(
-            PedidoVenda.objects.filter(filial=filial, pk__in=ids)
+            PedidoVenda.objects.filter(
+                filial=filial, pk__in=ids, status__in=CARREGAVEIS,
+            )
             .select_related('cliente')
         )
 

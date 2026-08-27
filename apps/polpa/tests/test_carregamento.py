@@ -88,12 +88,12 @@ class CarregamentoBase(TestCase):
         produto.save(update_fields=['temperatura_maxima'])
         return produto
 
-    def _pedido(self, produto):
+    def _pedido(self, produto, status=None):
         pedido = PedidoVenda.objects.create(
             filial=self.filial,
             numero_pedido=f'PV{PedidoVenda.objects.count() + 1}',
             cliente=self.cliente, usuario=self.usuario,
-            status=PedidoVenda.Status.CONFIRMADO,
+            status=status or PedidoVenda.Status.CONFIRMADO,
             data_emissao=timezone.now(),
         )
         ItemPedidoVenda.objects.create(
@@ -446,16 +446,90 @@ class MontarCargaPelasVendasTests(CarregamentoBase):
 
         self.assertEqual(len(resposta.context['vendas']), 1)
 
-    def test_pedido_de_produto_que_a_fabrica_nao_faz_fica_de_fora(self):
+    def test_venda_sem_ficha_de_producao_tambem_espera_caminhao(self):
         """
-        Pedido de item que este vertical nao fabrica nao sai desta camara, e
-        enfileira-lo aqui faria a doca prometer o que ela nao tem.
+        A doca filtrava por ficha, para mostrar "so' o que a fabrica produz" --
+        e quem nao tinha o catalogo de polpa preenchido via a tela zerada, sem
+        nenhuma pista do motivo. O que a doca despacha e' a venda desta filial.
         """
         self._pedido(self.materia_prima)
 
         resposta = self.client.get(self.url)
 
+        self.assertEqual(len(resposta.context['vendas']), 1)
+
+    def test_venda_faturada_ainda_espera_caminhao(self):
+        """
+        Nada neste sistema marca um pedido como ENTREGUE: faturar e' o fim da
+        linha do lado comercial, e o pedido fica parado esperando quem o leve.
+        A regua da separacao escondia da doca a venda mais pronta para sair.
+        """
+        self._pedido(self.acabado, status=PedidoVenda.Status.FATURADO)
+
+        resposta = self.client.get(self.url)
+
+        self.assertEqual(len(resposta.context['vendas']), 1)
+
+    def test_venda_em_rascunho_nao_vai_para_a_doca(self):
+        """Pedido que o comercial nem confirmou nao e' promessa de entrega."""
+        self._pedido(self.acabado, status=PedidoVenda.Status.RASCUNHO)
+
+        resposta = self.client.get(self.url)
+
         self.assertEqual(len(resposta.context['vendas']), 0)
+
+    def test_venda_cancelada_nao_vai_para_a_doca(self):
+        self._pedido(self.acabado, status=PedidoVenda.Status.CANCELADO)
+
+        resposta = self.client.get(self.url)
+
+        self.assertEqual(len(resposta.context['vendas']), 0)
+
+    # ── O vazio explica-se ───────────────────────────────────────────────
+
+    def test_sem_venda_nenhuma_a_tela_diz_isso(self):
+        resposta = self.client.get(self.url)
+
+        self.assertContains(resposta, 'Nenhuma venda cadastrada nesta filial')
+
+    def test_venda_em_rascunho_a_tela_manda_confirmar(self):
+        """
+        VAZIO SEM MOTIVO E' UM BECO. Dez pedidos parados em rascunho davam a
+        mesma tela de quem nunca vendeu, e quem esta' com o caminhao encostado
+        conclui que o sistema perdeu a venda.
+        """
+        self._pedido(self.acabado, status=PedidoVenda.Status.RASCUNHO)
+
+        resposta = self.client.get(self.url)
+
+        self.assertContains(resposta, 'ainda não confirmada')
+        self.assertContains(resposta, 'confirme o pedido em Vendas')
+
+    def test_venda_ja_em_carga_a_tela_diz_que_ela_esta_em_romaneio(self):
+        pedido = self._pedido(self.acabado)
+        self._romaneio(pedidos=[pedido])
+
+        resposta = self.client.get(self.url)
+
+        self.assertContains(resposta, 'já em romaneio')
+
+    def test_com_venda_na_lista_a_tela_nao_explica_nada(self):
+        """A explicacao e' para o beco, nao ruido em cima da lista cheia."""
+        self._pedido(self.acabado)
+
+        resposta = self.client.get(self.url)
+
+        self.assertEqual(resposta.context['sem_vendas_porque'], '')
+
+    def test_rascunho_nao_monta_carga_nem_com_id_colado_a_mao(self):
+        rascunho = self._pedido(self.acabado, status=PedidoVenda.Status.RASCUNHO)
+
+        resposta = self.client.post(self.url, {
+            'pedidos': [rascunho.pk], 'veiculo_placa': 'ABC1D23',
+        }, follow=True)
+
+        self.assertEqual(RomaneioCarga.objects.count(), 0)
+        self.assertContains(resposta, 'ao menos uma venda')
 
     def test_a_lista_vem_pela_data_de_entrega(self):
         """
