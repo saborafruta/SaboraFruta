@@ -9,6 +9,8 @@ from apps.financeiro.services.taxas_transacao_service import (
     sincronizar_taxa_transacao,
 )
 from apps.financeiro.services.conta_bancaria_resolver import vincular_conta_bancaria
+from apps.core.models import Filial
+from apps.financeiro.services.formas_pagamento_padrao import garantir_formas_padrao
 from apps.pdv.models import PagamentoVendaPDV
 
 
@@ -59,3 +61,22 @@ def sincronizar_taxa_venda(sender, instance, **kwargs):
 @receiver(post_save, sender=PagamentoContaPagar)
 def sincronizar_tarifa_saida(sender, instance, **kwargs):
     sincronizar_tarifa_pagamento(instance)
+
+
+@receiver(post_save, sender=Filial)
+def semear_formas_de_pagamento(sender, instance, created, **kwargs):
+    """
+    Filial nova ja' nasce podendo receber.
+
+    SEM FORMA DE PAGAMENTO O CAIXA NAO FECHA VENDA: a tela de finalizacao
+    fica sem botao, e o erro nao diz isso -- aparece uma lista vazia na hora
+    de receber. Exigir que alguem cadastre "Dinheiro" a mao antes da primeira
+    venda e' atrito puro.
+
+    NA CRIACAO, e nao a cada consulta: isto morava no `api_estado`, um GET,
+    que semeava na primeira visita ao PDV. Escrever num GET fazia a consulta
+    de estado depender de gravar, e a mesma verificacao rodava em toda
+    abertura de tela.
+    """
+    if created:
+        garantir_formas_padrao(instance)

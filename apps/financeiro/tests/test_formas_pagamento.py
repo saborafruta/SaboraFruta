@@ -59,11 +59,15 @@ class FormasPagamentoFinanceiroTests(TestCase):
         session.save()
 
     def test_salva_forma_de_pagamento_na_filial_ativa(self):
+        # NAO USA "PIX": a filial ja' nasce com as seis formas padrao, e o
+        # formulario recusa descricao repetida na mesma filial -- o que esta
+        # certo, quem quer mexer no PIX edita o que ja' existe. Aqui o que se
+        # testa e' que salvar prende a forma a' filial ativa.
         response = self.client.post(reverse("financeiro:formas_pagamento"), {
             "acao": "salvar",
-            "descricao": "PIX",
-            "tipo": TipoFormaPagamento.PIX,
-            "codigo_sefaz": "17",
+            "descricao": "Vale Refeição",
+            "tipo": TipoFormaPagamento.VALE,
+            "codigo_sefaz": "10",
             "prazo_liquidacao_dias": "0",
             "taxa_administrativa": "0.00",
             "taxa_fixa": "0.35",
@@ -71,7 +75,7 @@ class FormasPagamentoFinanceiroTests(TestCase):
         })
 
         self.assertEqual(response.status_code, 302)
-        forma = FormaPagamento.objects.get(descricao="PIX")
+        forma = FormaPagamento.objects.get(descricao="Vale Refeição")
         self.assertEqual(forma.filial, self.filial)
         self.assertEqual(forma.empresa, self.empresa)
         self.assertEqual(forma.taxa_fixa, Decimal("0.35"))

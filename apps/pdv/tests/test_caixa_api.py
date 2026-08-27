@@ -103,7 +103,12 @@ class CaixaPDVApiTests(TestCase):
         self.assertEqual(sessao.caixa_id, caixa_id)
         self.assertEqual(sessao.valor_abertura, Decimal("12.50"))
 
-    def test_estado_cria_formas_de_pagamento_padrao_por_filial(self):
+    def test_estado_lista_as_formas_padrao_da_filial(self):
+        """
+        Quem cria as formas e' a criacao da filial, nao esta consulta -- ver
+        `financeiro/tests/test_formas_pagamento_padrao.py`. Aqui interessa que
+        o caixa as enxergue.
+        """
         response = self.client.get(reverse("pdv:api_estado"))
 
         self.assertEqual(response.status_code, 200)

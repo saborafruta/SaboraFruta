@@ -21,7 +21,6 @@ from apps.core.services.search import (
 )
 from apps.financeiro.models import FormaPagamento, TaxaParcelamento
 from apps.financeiro.constants.enums import TipoFormaPagamento
-from apps.financeiro.services.formas_pagamento_padrao import garantir_formas_padrao
 from apps.fiscal.integrations.focusnfe.exceptions import FocusNFeNetworkError, FocusNFeServerError
 from apps.pdv.models import (
     Caixa, ItemVendaPDV, MovimentacaoCaixa, PagamentoVendaPDV, SessaoPDV, VendaPDV,
@@ -583,7 +582,6 @@ def api_estado(request):
     cliente = _cliente_precificacao(request)
 
     try:
-        garantir_formas_padrao(request.filial_ativa)
         formas = list(
             # ESCOPO POR FILIAL. Filtrar so' pela empresa trazia para o caixa
             # de uma loja as formas cadastradas noutra -- o operador via, e
