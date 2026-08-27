@@ -26,7 +26,7 @@ from reportlab.lib.pagesizes import A4
 from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
 from reportlab.lib.units import mm
 from reportlab.platypus import (
-    KeepTogether, Paragraph, SimpleDocTemplate, Spacer, Table,
+    HRFlowable, KeepTogether, Paragraph, SimpleDocTemplate, Spacer, Table,
     TableStyle,
 )
 
@@ -160,12 +160,21 @@ class OrcamentoPdfService:
         from .pedido_pdf import PedidoPdfService
         itens = list(pedido.itens.all())
         elementos += PedidoPdfService._artes_do_pedido(pedido, e, LARGURA_UTIL)
-        for item in itens:
-            bloco = []
-            bloco += PedidoPdfService._arte(item, e, LARGURA_UTIL)
+        for indice, item in enumerate(itens):
+            bloco = [
+                Spacer(1, 7),
+                HRFlowable(width='100%', thickness=1.2, color=VERMELHO_TABELA),
+                Paragraph(f'<b>{esc(item.nome_exibicao)}</b>', e['campo']),
+            ]
+            bloco += PedidoPdfService._grade(item, e, LARGURA_UTIL)
+            bloco += PedidoPdfService._arte(
+                item, e, LARGURA_UTIL, altura_imagem=46 * mm,
+            )
             bloco += PedidoPdfService._personalizacao_item(item, e, LARGURA_UTIL)
             if bloco:
-                elementos += bloco
+                # Evita título/grade/imagem separados por uma quebra quando
+                # o conjunto cabe inteiro na página seguinte.
+                elementos.append(KeepTogether(bloco))
                 elementos.append(Spacer(1, 6))
         # O valor fecha a proposta somente depois de o cliente conferir
         # imagens, tamanhos e nomes de cada produto.

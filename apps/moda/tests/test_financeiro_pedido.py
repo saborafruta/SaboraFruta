@@ -149,3 +149,22 @@ class FinanceiroPedidoEntradaTests(TestCase):
         pedido.forma_pagamento = self.forma
         with self.assertRaisesMessage(DomainError, "conta bancária da entrada"):
             FinanceiroPedidoService.gerar(pedido)
+
+    def test_saldo_usa_vencimento_e_parcelas_confirmados_no_modal(self):
+        pedido = self._pedido(entrada=Decimal("500.00"), forma=self.forma)
+
+        contas = FinanceiroPedidoService.gerar(
+            pedido, vencimento_saldo=date(2026, 10, 10), parcelas_saldo=2,
+        )
+
+        self.assertEqual(len(contas), 3)
+        saldos = list(ContaReceber.objects.filter(
+            status=StatusContaReceber.ABERTO,
+        ).order_by('parcela'))
+        self.assertEqual([c.valor_original for c in saldos], [
+            Decimal('250.00'), Decimal('250.00'),
+        ])
+        self.assertEqual([c.data_vencimento for c in saldos], [
+            date(2026, 10, 10), date(2026, 11, 9),
+        ])
+        self.assertTrue(all(c.conta_bancaria == self.conta for c in saldos))

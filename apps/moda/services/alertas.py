@@ -183,7 +183,7 @@ class AlertaService:
                 f'{p.cliente} · entrega era {p.data_prevista_entrega:%d/%m/%Y} '
                 f'({(hoje - p.data_prevista_entrega).days} dias) · '
                 f'{p.get_status_display()}',
-                reverse('moda:pedido-detail', args=[p.pk]),
+                reverse('moda:op2-detail', args=[p.pk]) + '#ajustes-cliente',
                 f'pedido:{p.pk}',
             )
             for p in pedidos

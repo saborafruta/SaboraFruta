@@ -120,8 +120,9 @@ def sincronizar_opcoes_padrao(filial):
     from apps.moda.models import OpcaoEstruturaOP2
 
     # Versões antigas chegaram a criar linhas compostas apenas por espaços.
-    # Na gestão elas pareciam nove inputs vazios, embora campo/ordem estivessem
-    # preenchidos. Repara essas linhas pelo valor padrão da mesma posição.
+    # Repara a própria linha quando a posição ainda corresponde ao padrão,
+    # preservando o identificador usado por formulários que já estavam
+    # abertos. Se o valor real já existe, a linha vazia é apenas duplicata.
     for opcao in OpcaoEstruturaOP2.objects.for_filial(filial):
         if (opcao.valor or '').strip():
             continue

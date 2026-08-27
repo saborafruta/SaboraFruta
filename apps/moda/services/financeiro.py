@@ -60,7 +60,7 @@ class FinanceiroPedidoService:
     # ── Plano de pagamento ───────────────────────────────────────────────
 
     @classmethod
-    def planejar(cls, pedido) -> list[Parcela]:
+    def planejar(cls, pedido, *, vencimento_saldo=None, parcelas_saldo=None) -> list[Parcela]:
         """
         Monta o plano sem gravar nada -- é o que a tela mostra na prévia e
         o que o teste consegue conferir sem banco.
@@ -82,18 +82,30 @@ class FinanceiroPedidoService:
             ))
 
         if saldo > 0:
-            parcelas.extend(cls._parcelar_saldo(pedido, saldo, inicio=len(parcelas)))
+            parcelas.extend(cls._parcelar_saldo(
+                pedido, saldo, inicio=len(parcelas),
+                vencimento=vencimento_saldo, quantidade=parcelas_saldo,
+            ))
 
         return parcelas
 
     @classmethod
-    def _parcelar_saldo(cls, pedido, saldo: Decimal, inicio: int) -> list[Parcela]:
+    def _parcelar_saldo(
+        cls, pedido, saldo: Decimal, inicio: int, *, vencimento=None, quantidade=None,
+    ) -> list[Parcela]:
         cond = pedido.condicao_pagamento
-        quantidade = max(1, cond.numero_parcelas) if cond else 1
-        intervalo = cond.intervalo_dias if cond else 0
+        quantidade_informada = quantidade is not None
+        quantidade = max(1, int(quantidade or (cond.numero_parcelas if cond else 1)))
+        intervalo = cond.intervalo_dias if cond else 30
+        # Ao alterar manualmente a quantidade no modal, uma condição "à
+        # vista" (intervalo zero) não pode fazer todas vencerem no mesmo dia.
+        if quantidade_informada and quantidade > 1 and intervalo <= 0:
+            intervalo = 30
         primeira = cond.dias_primeira_parcela if cond else 0
 
-        base_data = cls._data_base_saldo(pedido)
+        base_data = vencimento or cls._data_base_saldo(pedido)
+        if vencimento:
+            primeira = 0
 
         # Arredondamento para baixo em todas menos a última: assim a soma
         # nunca ultrapassa o saldo, e a diferença de centavos fica visível
@@ -128,10 +140,15 @@ class FinanceiroPedidoService:
 
     @classmethod
     @transaction.atomic
-    def gerar(cls, pedido, usuario=None) -> list[ContaReceber]:
+    def gerar(
+        cls, pedido, usuario=None, *, vencimento_saldo=None, parcelas_saldo=None,
+    ) -> list[ContaReceber]:
         cls._validar(pedido)
 
-        plano = cls.planejar(pedido)
+        plano = cls.planejar(
+            pedido, vencimento_saldo=vencimento_saldo,
+            parcelas_saldo=parcelas_saldo,
+        )
         if not plano:
             raise DomainError('Não há valor a receber neste pedido.')
 
@@ -152,6 +169,13 @@ class FinanceiroPedidoService:
                 data_emissao=pedido.data_pedido,
                 data_vencimento=p.vencimento,
                 forma_pagamento=pedido.forma_pagamento,
+                conta_bancaria=(
+                    pedido.conta_bancaria_entrada
+                    or (
+                        pedido.forma_pagamento.conta_bancaria_padrao
+                        if pedido.forma_pagamento_id else None
+                    )
+                ),
                 status=StatusContaReceber.ABERTO,
                 observacao=f'Pedido de produção #{pedido.numero:06d} — {p.rotulo}',
                 usuario=usuario,

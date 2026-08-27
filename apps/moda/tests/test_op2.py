@@ -687,6 +687,22 @@ class Op2Tests(TestCase):
             )
         self.assertIn('OPÇÃO PERSONALIZADA', grupos['camisa']['campos']['malha'])
 
+    def test_sincronizacao_remove_opcoes_vazias_e_recria_valores_reais(self):
+        OpcaoEstruturaOP2.objects.create(
+            filial=self.filial, tipo_peca='agasalho', tipo_label='Agasalho',
+            campo='tipo_impressao', valor='   ', ordem=1,
+        )
+
+        grupos = opcoes_estrutura_filial(self.filial)
+
+        self.assertFalse(OpcaoEstruturaOP2.objects.filter(
+            filial=self.filial, valor__regex=r'^\s*$',
+        ).exists())
+        self.assertEqual(
+            grupos['agasalho']['campos']['tipo_impressao'],
+            OP2_ESTRUTURA_OPCOES['agasalho']['campos']['tipo_impressao'],
+        )
+
     def test_nova_op_salva_grade_de_personalizacao_do_orcamento(self):
         tamanho = Tamanho.objects.create(filial=self.filial, sigla='M', ordem=10)
         grade = Grade.objects.create(filial=self.filial, nome='Adulto')

@@ -237,6 +237,7 @@
                 obedecer é pior que um quadro sem contador.
               {% endcomment %}
               <div class="kc-card rounded-lg p-2.5{% if c.pediu_ajuste %} kc-alerta{% endif %}" data-pedido="{{ c.pedido.pk }}"
+                   data-url="{% url 'moda:op2-detail' c.pedido.pk %}" tabindex="0" role="link"
                    data-pecas="{{ c.pedido.quantidade_total }}"
                    data-valor="{{ c.pedido.valor_total|stringformat:'.2f' }}"
                    data-atrasado="{% if c.atrasado %}1{% else %}0{% endif %}"
@@ -461,6 +462,7 @@
 
   document.querySelectorAll('.kc-card[draggable=true]').forEach((card) => {
     card.addEventListener('dragstart', (e) => {
+      card.dataset.foiArrastado = '1';
       arrastando = card;
       origem = card.closest('.kc-raia');
       card.classList.add('arrastando');
@@ -472,6 +474,24 @@
       card.classList.remove('arrastando');
       document.querySelectorAll('.kc-raia').forEach(
         (r) => r.classList.remove('recebendo'));
+      window.setTimeout(() => { delete card.dataset.foiArrastado; }, 120);
+    });
+  });
+
+  // O cartão inteiro abre a OP. Botões, links e o seletor continuam com a
+  // própria ação, e terminar um arrasto não vira um clique acidental.
+  document.querySelectorAll('.kc-card[data-url]').forEach((card) => {
+    const abrir = (evento) => {
+      if (card.dataset.foiArrastado === '1') return;
+      if (evento.target.closest('a, button, select, input, textarea, label')) return;
+      window.location.href = card.dataset.url;
+    };
+    card.addEventListener('click', abrir);
+    card.addEventListener('keydown', (evento) => {
+      if ((evento.key === 'Enter' || evento.key === ' ') && evento.target === card) {
+        evento.preventDefault();
+        abrir(evento);
+      }
     });
   });
 

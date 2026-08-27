@@ -8,6 +8,7 @@
   <script>
     const opUrl=JSON.parse(document.getElementById('op-url').textContent);
     const whatsappUrl=JSON.parse(document.getElementById('whatsapp-url').textContent);
+    try{const canal=new BroadcastChannel('op2-salvo');canal.postMessage({opUrl});setTimeout(()=>canal.close(),1200)}catch(e){}
     if(window.opener&&!window.opener.closed){window.opener.location.assign(opUrl)}
     if(whatsappUrl){window.location.replace(whatsappUrl)}else{window.location.replace(opUrl)}
   </script>

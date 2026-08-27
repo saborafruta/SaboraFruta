@@ -1,6 +1,7 @@
 """Workspace da OP 2.0. A tela antiga continua disponível sem alterações."""
 from copy import copy
 from datetime import date
+from decimal import Decimal, InvalidOperation
 from io import BytesIO
 from urllib.parse import quote
 from uuid import uuid4
@@ -8,13 +9,15 @@ from zipfile import ZIP_DEFLATED, ZipFile
 
 from django.contrib import messages
 from django.db import IntegrityError, transaction
+from django.db.models import Q
 from django.http import HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.utils import timezone
 
 from apps.cadastros.models import Cliente
-from apps.core.services.exceptions import DadosInvalidosError
+from apps.core.services.exceptions import DadosInvalidosError, DomainError
+from apps.financeiro.models import ContaBancaria, FormaPagamento
 
 from .forms import ItemPedidoProducaoForm, PersonalizacaoIndividualForm
 from .forms_arquivo import ArquivoPedidoForm
@@ -25,6 +28,7 @@ from .models import (
     Posicao, ProdutoModa, Tamanho, VisualItemPedido,
 )
 from .services.historico import HistoricoService
+from .services.financeiro import FinanceiroPedidoService
 from .services.grade_pedido import GradePedidoService
 from .services.individual import IndividualService
 from .services.kanban_comercial import status_choices_kanban, status_destino_kanban
@@ -225,8 +229,12 @@ class Op2CreateView(ModaBaseView):
             except ValueError as erro:
                 messages.error(request, str(erro))
                 return render(request, 'moda/op2_create.html', self._context(request))
-            if grade_total:
-                dados['quantidade'] = str(grade_total)
+            if grade_total and int(dados.get('quantidade') or 0) != grade_total:
+                messages.error(
+                    request,
+                    f'Item {indice + 1}: a quantidade total deve ser igual à soma da grade ({grade_total}).',
+                )
+                return render(request, 'moda/op2_create.html', self._context(request))
             form = ItemPedidoProducaoForm(dados, filial=_filial(request))
             if not form.is_valid():
                 messages.error(request, f'Item {indice + 1}: ' + '; '.join(
@@ -236,6 +244,7 @@ class Op2CreateView(ModaBaseView):
             formularios.append((indice, form))
         try:
             data_prevista_entrega = self._data_entrega(request)
+            data_pedido = self._data_pedido(request)
         except ValueError as erro:
             messages.error(request, str(erro))
             return render(request, 'moda/op2_create.html', self._context(request))
@@ -254,7 +263,7 @@ class Op2CreateView(ModaBaseView):
                     request.POST.get('contato_telefone')
                     or cliente.celular or cliente.telefone or ''
                 ),
-                data_pedido=timezone.localdate(),
+                data_pedido=data_pedido,
                 data_prevista_entrega=data_prevista_entrega,
                 prioridade=request.POST.get('prioridade') or PedidoProducao.Prioridade.NORMAL,
                 observacoes=_observacoes_pedido(request),
@@ -410,6 +419,7 @@ class Op2CreateView(ModaBaseView):
             'tipos_impressao': ProdutoModa.TipoImpressao.choices,
             'tipos_arquivo': ArquivoPedido.Tipo.choices,
             'prioridades': PedidoProducao.Prioridade.choices,
+            'hoje': timezone.localdate(),
         }
 
     @staticmethod
@@ -446,6 +456,8 @@ class Op2CreateView(ModaBaseView):
         prefixo = f'item_{indice}_grade_'
         for chave, valor in request.POST.items():
             if not chave.startswith(prefixo):
+                continue
+            if not chave.removeprefix(prefixo).isdigit():
                 continue
             try:
                 qtd = int(valor or 0)
@@ -533,6 +545,16 @@ class Op2CreateView(ModaBaseView):
             return date.fromisoformat(entrega)
         except ValueError:
             raise ValueError('Data de entrega inválida.')
+
+    @staticmethod
+    def _data_pedido(request):
+        valor = (request.POST.get('data_pedido') or '').strip()
+        if not valor:
+            return timezone.localdate()
+        try:
+            return date.fromisoformat(valor)
+        except ValueError:
+            raise ValueError('Data do pedido inválida.')
 
     @staticmethod
     def _salvar_mockups_do_item(
@@ -626,6 +648,21 @@ class Op2DetailView(ModaBaseView):
             Tamanho.objects.for_filial(_filial(request)).filter(ativo=True)
             .order_by('tipo', 'ordem', 'sigla')
         )
+        formas = list(
+            FormaPagamento.objects.filter(
+                Q(filial=_filial(request)) | Q(filial__isnull=True),
+                empresa=_filial(request).empresa, ativo=True,
+            ).select_related('conta_bancaria_padrao').order_by('descricao')
+        )
+        contas_bancarias = list(
+            ContaBancaria.objects.for_filial(_filial(request)).filter(ativo=True)
+            .order_by('descricao', 'banco_nome')
+        )
+        aprovacao = getattr(pedido, 'aprovacao', None)
+        vencimento_financeiro = (
+            pedido.data_prevista_entrega
+            or pedido.data_pedido
+        )
         return render(request, 'moda/op2_detail.html', {
             'title': f'OP 2.0 #{pedido.numero:06d}',
             'pedido': pedido,
@@ -664,7 +701,6 @@ class Op2DetailView(ModaBaseView):
             'estrutura_tipo_padrao': next(iter(estrutura_opcoes), 'camisa'),
             'status_choices': status_choices_kanban(),
             'status_atual': status_destino_kanban(pedido.status),
-            'item_status_choices': ItemPedidoProducao.StatusFluxo.choices,
             'tipos_impressao': ProdutoModa.TipoImpressao.choices,
             'form_item': ItemPedidoProducaoForm(filial=_filial(request)),
             'form_individual': PersonalizacaoIndividualForm(
@@ -684,6 +720,15 @@ class Op2DetailView(ModaBaseView):
             'total_pendente': sum(i.quantidade_pendente for i in itens),
             'vagas_individuais': IndividualService.vagas(pedido),
             'abrir_whatsapp': request.GET.get('whatsapp') == '1',
+            'aprovacao': aprovacao,
+            'formas_pagamento': formas,
+            'contas_bancarias': contas_bancarias,
+            'contas_por_forma_pagamento': {
+                str(forma.pk): str(forma.conta_bancaria_padrao_id or '')
+                for forma in formas
+            },
+            'contas_financeiras': FinanceiroPedidoService.contas_do_pedido(pedido),
+            'vencimento_financeiro': vencimento_financeiro,
             'posicoes_mockup': [
                 (Posicao.FRENTE_CAMISA, Posicao.FRENTE_CAMISA.label),
                 (Posicao.COSTAS_CAMISA, Posicao.COSTAS_CAMISA.label),
@@ -753,12 +798,13 @@ class Op2ActionView(ModaBaseView):
         try:
             with transaction.atomic():
                 resposta = handler(request, pedido)
-        except (TypeError, ValueError) as erro:
+        except (TypeError, ValueError, DomainError) as erro:
             messages.error(request, str(erro) or 'Confira os valores informados.')
             return _voltar(pedido)
         return resposta or _voltar(pedido)
 
     def _acao_cabecalho(self, request, pedido):
+        pedido.data_pedido = date.fromisoformat(request.POST.get('data_pedido'))
         entrega = (request.POST.get('data_prevista_entrega') or '').strip()
         pedido.data_prevista_entrega = date.fromisoformat(entrega) if entrega else None
         pedido.prioridade = request.POST.get('prioridade') or pedido.prioridade
@@ -768,8 +814,70 @@ class Op2ActionView(ModaBaseView):
         pedido.save()
         messages.success(request, 'Rascunho salvo.')
 
+    def _acao_financeiro(self, request, pedido):
+        def dinheiro(nome):
+            texto = (request.POST.get(nome) or '0').strip().replace(' ', '')
+            if ',' in texto:
+                texto = texto.replace('.', '').replace(',', '.')
+            try:
+                return Decimal(texto).quantize(Decimal('0.01'))
+            except (InvalidOperation, ValueError):
+                raise ValueError('Confira os valores financeiros informados.')
+
+        valor_total = dinheiro('valor_total')
+        entrada = dinheiro('entrada')
+        if valor_total <= 0:
+            raise ValueError('O valor total precisa ser maior que zero.')
+        if entrada < 0 or entrada > valor_total:
+            raise ValueError('O adiantamento deve ficar entre zero e o valor total.')
+        forma = get_object_or_404(
+            FormaPagamento.objects.filter(
+                Q(filial=_filial(request)) | Q(filial__isnull=True),
+                empresa=_filial(request).empresa, ativo=True,
+            ), pk=request.POST.get('forma_pagamento'),
+        )
+        conta = get_object_or_404(
+            ContaBancaria.objects.for_filial(_filial(request)).filter(ativo=True),
+            pk=request.POST.get('conta_bancaria'),
+        )
+        vencimento_texto = request.POST.get('data_vencimento') or ''
+        vencimento = date.fromisoformat(vencimento_texto)
+        parcelas = int(request.POST.get('parcelas') or 1)
+        if parcelas < 1 or parcelas > 120:
+            raise ValueError('A quantidade de parcelas deve ficar entre 1 e 120.')
+
+        base = pedido.subtotal + (pedido.frete or Decimal('0'))
+        pedido.desconto = max(base - valor_total, Decimal('0'))
+        pedido.acrescimo = max(valor_total - base, Decimal('0'))
+        pedido.entrada = entrada
+        pedido.forma_pagamento = forma
+        pedido.conta_bancaria_entrada = conta
+        pedido.save(update_fields=[
+            'desconto', 'acrescimo', 'entrada', 'forma_pagamento',
+            'conta_bancaria_entrada', 'updated_at',
+        ])
+        contas = FinanceiroPedidoService.gerar(
+            pedido, request.user, vencimento_saldo=vencimento,
+            parcelas_saldo=parcelas,
+        )
+        messages.success(
+            request,
+            f'Financeiro gerado: {len(contas)} lançamento(s), com R$ {entrada:.2f} recebido.',
+        )
+
     def _acao_adicionar_item(self, request, pedido):
         grades = self._grades_selecionadas(request)
+        quantidades_por_grade = {
+            grade.pk: self._quantidades_grade_modal(request, grade)
+            for grade in grades
+        }
+        total_geral = sum(
+            sum(quantidades.values()) for quantidades in quantidades_por_grade.values()
+        )
+        if grades and request.POST.get('quantidade') and int(request.POST['quantidade']) != total_geral:
+            raise ValueError(
+                f'A quantidade total deve ser igual à soma das grades ({total_geral}).'
+            )
         alvos = grades or [None]
         criados = []
         for grade in alvos:
@@ -777,9 +885,10 @@ class Op2ActionView(ModaBaseView):
             produto_id = dados.get('produto_id')
             dados['produto'] = f'moda:{produto_id}' if produto_id else ''
             dados['observacoes'] = request.POST.get('item_observacoes') or ''
-            quantidades = self._quantidades_grade_modal(request, grade) if grade else {}
+            quantidades = quantidades_por_grade.get(grade.pk, {}) if grade else {}
             if grade:
-                dados['quantidade'] = str(sum(quantidades.values()))
+                total_grade = sum(quantidades.values())
+                dados['quantidade'] = str(total_grade)
             form = ItemPedidoProducaoForm(dados, filial=_filial(request))
             if not form.is_valid():
                 raise ValueError('Produto: ' + '; '.join(
@@ -880,6 +989,10 @@ class Op2ActionView(ModaBaseView):
             sum(quantidades.values()) if grade
             else int(request.POST.get('quantidade') or item.quantidade or 1)
         )
+        if grade and request.POST.get('quantidade') and int(request.POST['quantidade']) != quantidade:
+            raise ValueError(
+                f'A quantidade total deve ser igual à soma da grade ({quantidade}).'
+            )
         if quantidade < 1:
             raise ValueError('A quantidade precisa ser pelo menos 1.')
         entregue = min(item.quantidade_entregue, quantidade)
@@ -996,16 +1109,20 @@ class Op2ActionView(ModaBaseView):
 
     def _acao_item_fluxo(self, request, pedido):
         item = get_object_or_404(pedido.itens, pk=request.POST.get('item_id'))
-        status = request.POST.get('status_fluxo')
-        if status not in ItemPedidoProducao.StatusFluxo.values:
-            raise ValueError('Status do produto inválido.')
         entregue = int(request.POST.get('quantidade_entregue') or 0)
         if entregue < 0 or entregue > item.quantidade:
             raise ValueError('A quantidade entregue deve ficar entre zero e o total do produto.')
         item.quantidade_entregue = entregue
         item.status_fluxo = (
             ItemPedidoProducao.StatusFluxo.ENTREGUE
-            if entregue == item.quantidade else status
+            if entregue == item.quantidade else {
+                PedidoProducao.Status.ORCAMENTO: ItemPedidoProducao.StatusFluxo.ORCAMENTO,
+                PedidoProducao.Status.CONFIRMADO: ItemPedidoProducao.StatusFluxo.APROVADO,
+                PedidoProducao.Status.AGUARDANDO_APROVACAO: ItemPedidoProducao.StatusFluxo.APROVADO,
+                PedidoProducao.Status.LIBERADO_PRODUCAO: ItemPedidoProducao.StatusFluxo.PRODUCAO,
+                PedidoProducao.Status.EM_PRODUCAO: ItemPedidoProducao.StatusFluxo.PRODUCAO,
+                PedidoProducao.Status.PRONTO: ItemPedidoProducao.StatusFluxo.PRONTO,
+            }.get(pedido.status, item.status_fluxo)
         )
         item.save(update_fields=['quantidade_entregue', 'status_fluxo'])
         _sincronizar_status(pedido)

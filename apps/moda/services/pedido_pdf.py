@@ -196,7 +196,8 @@ class PedidoPdfService:
         e = _estilos()
         elementos = []
         itens = list(pedido.itens.all())
-        altura_util = PAGINA[1] - doc.topMargin - doc.bottomMargin
+        # O frame do ReportLab desconta 6 pt em cada borda além das margens.
+        altura_util = PAGINA[1] - doc.topMargin - doc.bottomMargin - 14
         if not itens:
             blocos = cls._cliente(pedido, e)
             blocos += cls._artes_do_pedido(pedido, e)
@@ -204,18 +205,31 @@ class PedidoPdfService:
             elementos += blocos
         else:
             for indice, item in enumerate(itens):
-                blocos = cls._cliente(pedido, e)
-                if indice == 0:
-                    blocos += cls._artes_do_pedido(pedido, e)
-                blocos += cls._item(pedido, item, e, 0)
-                blocos += cls._personalizacao_item(item, e, LARGURA_UTIL)
+                meia = (LARGURA_UTIL - 8 * mm) / 2
+                esquerda = cls._cliente(pedido, e, meia)
+                esquerda += cls._item(pedido, item, e, 0, largura_util=meia)
+                esquerda += cls._personalizacao_item(item, e, meia)
                 if indice == len(itens) - 1:
-                    blocos += cls._financeiro(pedido, e, LARGURA_UTIL)
-                # A ficha de cada produto é uma unidade indivisível. O modo
-                # shrink preserva uma única A4 mesmo com até 30 nomes.
-                elementos.append(KeepInFrame(
-                    LARGURA_UTIL, altura_util, blocos, mode='shrink',
-                ))
+                    esquerda += cls._financeiro(pedido, e, meia)
+                direita = []
+                if indice == 0:
+                    direita += cls._artes_do_pedido(pedido, e, meia)
+                direita += cls._arte(item, e, meia, altura_imagem=52 * mm)
+                if not direita:
+                    direita = [Paragraph('SEM IMAGENS ANEXADAS', e['pequeno'])]
+                pagina = Table([[
+                    KeepInFrame(meia, altura_util, esquerda, mode='shrink'),
+                    KeepInFrame(meia, altura_util, direita, mode='shrink'),
+                ]], colWidths=[meia, meia], rowHeights=[altura_util])
+                pagina.setStyle(TableStyle([
+                    ('VALIGN', (0, 0), (-1, -1), 'TOP'),
+                    ('LEFTPADDING', (0, 0), (0, 0), 0),
+                    ('RIGHTPADDING', (0, 0), (0, 0), 4 * mm),
+                    ('LEFTPADDING', (1, 0), (1, 0), 4 * mm),
+                    ('RIGHTPADDING', (1, 0), (1, 0), 0),
+                    ('LINEBEFORE', (1, 0), (1, 0), .5, BORDA),
+                ]))
+                elementos.append(pagina)
                 if indice < len(itens) - 1:
                     elementos.append(PageBreak())
 
@@ -264,7 +278,7 @@ class PedidoPdfService:
     # ── Cliente ──────────────────────────────────────────────────────────
 
     @staticmethod
-    def _cliente(pedido, e) -> list:
+    def _cliente(pedido, e, largura_util=LARGURA_UTIL) -> list:
         c = pedido.cliente
         # WhatsApp: o cadastro guarda celular, e é dele que sai o contato de
         # WhatsApp na prática. Um campo próprio não existe — dizer "celular"
@@ -287,7 +301,9 @@ class PedidoPdfService:
              Paragraph('<b>E-mail</b>', e['celula']),
              Paragraph(esc(getattr(c, 'email', '')) or '—', e['celula'])],
         ]
-        larguras = [22 * mm, LARGURA_UTIL / 2 - 22 * mm, 22 * mm, LARGURA_UTIL / 2 - 22 * mm]
+        largura_rotulo = min(22 * mm, largura_util * .22)
+        largura_valor = largura_util / 2 - largura_rotulo
+        larguras = [largura_rotulo, largura_valor] * 2
 
         return [
             Paragraph(f'INFORMAÇÕES DO CLIENTE — PEDIDO #{pedido.numero:06d}', e['secao']),
@@ -364,7 +380,7 @@ class PedidoPdfService:
     # ── Produto, arte e grade ────────────────────────────────────────────
 
     @classmethod
-    def _item(cls, pedido, item, e, indice) -> list:
+    def _item(cls, pedido, item, e, indice, largura_util=LARGURA_UTIL) -> list:
         """
         Um produto: identificação, arte e grade.
 
@@ -416,7 +432,7 @@ class PedidoPdfService:
             dados.append(linha)
         blocos.append(_tabela(
             dados,
-            [24 * mm, LARGURA_UTIL / 2 - 24 * mm] * 2,
+            [22 * mm, largura_util / 2 - 22 * mm] * 2,
             cabecalho=False,
         ))
 
@@ -424,15 +440,14 @@ class PedidoPdfService:
             blocos.append(Spacer(1, 3))
             blocos.append(Paragraph(esc(observacao), e['pequeno']))
 
-        blocos += cls._arte(item, e)
-        blocos += cls._grade(item, e)
+        blocos += cls._grade(item, e, largura_util)
         # Na ficha horizontal, deixar os sub-blocos fluírem aproveita o
         # restante da página. O KeepTogether empurrava o produto inteiro
         # para outra folha mesmo quando ainda havia bastante espaço.
         return blocos
 
     @staticmethod
-    def _arte(item, e, largura_util=LARGURA_UTIL) -> list:
+    def _arte(item, e, largura_util=LARGURA_UTIL, altura_imagem=27 * mm) -> list:
         personalizacoes = list(item.personalizacoes.all())
         visuais = list(item.visuais.all())
         if not personalizacoes and not visuais:
@@ -451,7 +466,7 @@ class PedidoPdfService:
                 campo = visual.imagem or (
                     getattr(visual.mockup, 'imagem', None) if visual.mockup_id else None
                 )
-                imagem = _imagem(campo, largura - 6 * mm, 27 * mm)
+                imagem = _imagem(campo, largura - 6 * mm, altura_imagem)
                 celulas.append(imagem or Paragraph('—', e['pequeno']))
             while len(celulas) < por_linha:
                 celulas.append('')
@@ -497,7 +512,7 @@ class PedidoPdfService:
         return blocos
 
     @staticmethod
-    def _grade(item, e) -> list:
+    def _grade(item, e, largura_util=LARGURA_UTIL) -> list:
         celulas = list(item.grade.all())
         if not celulas:
             return []
@@ -510,7 +525,7 @@ class PedidoPdfService:
         total = sum(c.quantidade for c in celulas)
         valores.append(str(total))
 
-        largura = min(LARGURA_UTIL / len(cabecalho), 22 * mm)
+        largura = min(largura_util / len(cabecalho), 22 * mm)
         tabela = _tabela([cabecalho, valores], [largura] * len(cabecalho))
         tabela.setStyle(TableStyle([
             ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
@@ -639,7 +654,10 @@ class PedidoPdfService:
         import qrcode
 
         empresa = pedido.filial.empresa
-        destino = f'{base_url}/moda/comercial/pedidos/{pedido.pk}/' if base_url else str(pedido.numero)
+        destino = (
+            f'{base_url}/pedido/{pedido.token_publico}/'
+            if base_url else str(pedido.numero)
+        )
 
         imagem = qrcode.make(destino)
         qr_buffer = BytesIO()
