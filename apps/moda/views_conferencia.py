@@ -427,13 +427,17 @@ class PedidoConferenciaView(ModaBaseView):
         from .models import PedidoProducao
 
         pedido = get_object_or_404(
-            PedidoProducao.objects.for_filial(_filial(request)), pk=pk,
+            PedidoProducao.objects.for_filial(_filial(request))
+            .select_related('cliente'),
+            pk=pk,
         )
         expedicoes = list(
             Expedicao.objects.for_filial(_filial(request))
             .filter(ordem__pedido=pedido)
             .exclude(status=Expedicao.Status.CANCELADA)
-            .select_related('ordem__item')
+            .select_related(
+                'ordem__item__produto', 'ordem__item__grade_tamanho',
+            )
             .order_by('numero')
         )
 

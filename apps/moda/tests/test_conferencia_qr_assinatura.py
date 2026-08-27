@@ -139,6 +139,9 @@ class BotaoAbreOQrTests(ConferenciaBase):
         self.assertContains(
             resposta, reverse('moda:conferencia-qr', args=[expedicao.pk])
         )
+        self.assertContains(resposta, 'DIEGO MACEDO')
+        self.assertContains(resposta, 'Produto desta caixa')
+        self.assertContains(resposta, 'Camisa')
 
     def test_o_qr_traz_o_caminho_para_conferir_na_propria_tela(self):
         """
@@ -181,6 +184,8 @@ class BotaoAbreOQrTests(ConferenciaBase):
 
         self.assertContains(resposta, primeira.codigo)
         self.assertContains(resposta, segunda.codigo)
+        self.assertContains(resposta, 'Camisa')
+        self.assertContains(resposta, 'Short')
 
     def test_sem_expedicao_continua_perguntando(self):
         """O desvio das pendências não pode ter sumido junto."""
