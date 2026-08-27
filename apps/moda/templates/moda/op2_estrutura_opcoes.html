@@ -49,7 +49,7 @@
           <label class="block text-xs font-bold uppercase tracking-wide">Chave interna<input name="tipo_peca" class="form-input w-full mt-1" placeholder="ex.: mochila" required></label>
           <label class="block text-xs font-bold uppercase tracking-wide">Nome do tipo<input name="tipo_label" class="form-input w-full mt-1" placeholder="Ex.: Mochila" required></label>
           <label class="block text-xs font-bold uppercase tracking-wide">Primeiro campo<input name="campo" class="form-input w-full mt-1" placeholder="ex.: material" required></label>
-          <label class="block text-xs font-bold uppercase tracking-wide">Primeira opção<input name="valor" data-numeric-kind="text" class="form-input w-full mt-1" placeholder="Ex.: Nylon" required></label>
+          <label class="block text-xs font-bold uppercase tracking-wide">Primeira opção<input name="opcao_texto" class="form-input w-full mt-1" placeholder="Ex.: Nylon" required></label>
           <input type="hidden" name="ordem" value="1"><button class="btn-primary w-full">Criar tipo</button>
         </form>
       </details>
@@ -73,7 +73,7 @@
           <form method="post" class="grid gap-3 md:grid-cols-[minmax(150px,.65fr)_minmax(220px,1fr)_90px_auto] items-end">
             {% csrf_token %}<input type="hidden" name="acao" value="criar"><input type="hidden" name="tipo_peca" value="{{ tipo_selecionado.slug }}"><input type="hidden" name="tipo_label" value="{{ tipo_selecionado.label }}"><input type="hidden" name="tipo_atual" value="{{ tipo_selecionado.slug }}">
             <label class="text-xs font-bold uppercase tracking-wide">Campo<input name="campo" list="campos-{{ tipo_selecionado.slug }}" class="form-input w-full mt-1" placeholder="ex.: malha" required><datalist id="campos-{{ tipo_selecionado.slug }}">{% for campo in campos_disponiveis %}<option value="{{ campo }}">{% endfor %}</datalist></label>
-            <label class="text-xs font-bold uppercase tracking-wide">Nova opção<input name="valor" data-numeric-kind="text" class="form-input w-full mt-1" placeholder="Ex.: DRY" required></label>
+            <label class="text-xs font-bold uppercase tracking-wide">Nova opção<input name="opcao_texto" class="form-input w-full mt-1" placeholder="Ex.: DRY" required></label>
             <label class="text-xs font-bold uppercase tracking-wide">Ordem<input name="ordem" type="number" min="0" class="form-input w-full mt-1" value="0"></label>
             <button class="btn-primary">Adicionar</button>
           </form>
@@ -85,7 +85,7 @@
             {% for opcao in opcoes %}
               <form method="post" class="tipo-option-row">
                 {% csrf_token %}<input type="hidden" name="opcao_id" value="{{ opcao.pk }}"><input type="hidden" name="tipo_label" value="{{ tipo_selecionado.label }}"><input type="hidden" name="tipo_atual" value="{{ tipo_selecionado.slug }}">
-                <label class="text-xs font-bold uppercase tracking-wide">Opção<input name="valor" data-numeric-kind="text" class="form-input w-full mt-1" value="{{ opcao.valor }}" required></label>
+                <label class="text-xs font-bold uppercase tracking-wide">Opção<input name="opcao_texto" class="form-input w-full mt-1" value="{{ opcao.valor }}" required></label>
                 <label class="text-xs font-bold uppercase tracking-wide">Campo<input name="campo" class="form-input w-full mt-1" value="{{ opcao.campo }}" required></label>
                 <label class="text-xs font-bold uppercase tracking-wide">Ordem<input name="ordem" type="number" min="0" class="form-input w-full mt-1" value="{{ opcao.ordem }}"></label>
                 <div class="tipo-actions">

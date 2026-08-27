@@ -1266,7 +1266,11 @@ class Op2EstruturaOpcaoView(ModaBaseView):
         tipo_peca = (request.POST.get('tipo_peca') or '').strip()
         tipo_label = (request.POST.get('tipo_label') or '').strip()
         campo = self._normalizar_campo(request.POST.get('campo'))
-        valor = (request.POST.get('valor') or '').strip()
+        valor = (
+            request.POST.get('opcao_texto')
+            or request.POST.get('valor')
+            or ''
+        ).strip()
         if not tipo_peca or not tipo_label or not campo or not valor:
             raise ValueError('Informe tipo, nome do tipo, campo e opção.')
         try:
@@ -1293,7 +1297,11 @@ class Op2EstruturaOpcaoView(ModaBaseView):
 
     def _editar(self, request):
         opcao = self._opcao(request)
-        valor = (request.POST.get('valor') or '').strip()
+        valor = (
+            request.POST.get('opcao_texto')
+            or request.POST.get('valor')
+            or ''
+        ).strip()
         if not valor:
             raise ValueError('A opção não pode ficar vazia.')
         opcao.tipo_label = (request.POST.get('tipo_label') or opcao.tipo_label).strip()
