@@ -677,6 +677,52 @@ class PosicaoDiariaCaixaTests(TestCase):
         self.assertContains(response, "Ver título")
         self.assertContains(response, reverse("financeiro:receber_detail", args=[conta.pk]))
 
+    def test_baixa_parcial_nao_antecipa_taxa_sobre_saldo_a_receber(self):
+        self.forma.tipo = TipoFormaPagamento.BOLETO
+        self.forma.taxa_fixa = Decimal("4.50")
+        self.forma.save(update_fields=["tipo", "taxa_fixa"])
+        cliente = Cliente.objects.create(
+            filial=self.filial, razao_social="Cliente OP parcial", tipo_pessoa="F",
+            cpf_cnpj="12345678903",
+        )
+        conta_recebida = ContaReceber.objects.create(
+            filial=self.filial, cliente=cliente, valor_original=Decimal("100.00"),
+            valor_final=Decimal("100.00"), valor_saldo=Decimal("100.00"),
+            data_emissao=date(2026, 8, 27), data_vencimento=date(2026, 8, 27),
+            forma_pagamento=self.forma, status=StatusContaReceber.ABERTO,
+            documento_tipo="pedido_moda", documento_id=321, parcela=1, total_parcelas=2,
+        )
+        conta_restante = ContaReceber.objects.create(
+            filial=self.filial, cliente=cliente, valor_original=Decimal("100.00"),
+            valor_final=Decimal("100.00"), valor_saldo=Decimal("100.00"),
+            data_emissao=date(2026, 8, 27), data_vencimento=date(2026, 8, 31),
+            forma_pagamento=self.forma, status=StatusContaReceber.ABERTO,
+            documento_tipo="pedido_moda", documento_id=321, parcela=2, total_parcelas=2,
+        )
+        ContaReceberService.registrar_baixa(
+            conta_recebida, date(2026, 8, 27), Decimal("100.00"), self.forma, self.usuario,
+            conta_bancaria=self.banco,
+        )
+        conta_recebida.refresh_from_db()
+
+        posicao = PosicaoDiariaCaixaService(self.filial, date(2026, 8, 27)).gerar(
+            incluir_previstos=True,
+            previsao_inicio=date(2026, 8, 31),
+            previsao_fim=date(2026, 8, 31),
+        )
+        previsao = next(
+            item for item in posicao["previsoes"]
+            if item["registro_id"] == conta_restante.pk
+        )
+
+        self.assertEqual(conta_recebida.valor_taxa_recebimento, Decimal("4.50"))
+        self.assertEqual(conta_recebida.valor_liquido_recebido, Decimal("95.50"))
+        self.assertEqual(conta_restante.valor_saldo, Decimal("100.00"))
+        self.assertEqual(previsao["valor_bruto"], Decimal("100.00"))
+        self.assertEqual(previsao["valor_taxa"], Decimal("0.00"))
+        self.assertEqual(previsao["valor_liquido"], Decimal("100.00"))
+        self.assertEqual(posicao["total_previsto"], Decimal("100.00"))
+
     def test_baixa_parcial_receber_cria_status_historico_e_conta_padrao(self):
         cliente = Cliente.objects.create(
             filial=self.filial, razao_social="Cliente parcial", tipo_pessoa="F", cpf_cnpj="12345678902",

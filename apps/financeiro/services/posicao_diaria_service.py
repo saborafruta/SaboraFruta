@@ -689,9 +689,6 @@ class PosicaoDiariaCaixaService:
                 data_prevista = item.data_vencimento
             elif not data_inicio <= data_prevista <= data_fim:
                 continue
-            calculo = forma.calcular_taxa_recebimento(item.valor_saldo, item.total_parcelas) if forma else {
-                "percentual": ZERO, "fixa": ZERO, "taxa": ZERO, "liquido": item.valor_saldo,
-            }
             itens.append({
                 "data": data_prevista,
                 "descricao": f"Conta a receber - {item.cliente}",
@@ -702,10 +699,14 @@ class PosicaoDiariaCaixaService:
                 "bandeira": "",
                 "parcelas": item.total_parcelas,
                 "valor_bruto": item.valor_saldo,
-                "valor_taxa": calculo["taxa"],
-                "taxa_percentual": calculo["percentual"],
-                "taxa_fixa": calculo["fixa"],
-                "valor_liquido": calculo["liquido"],
+                # A forma vinculada ao título é apenas uma previsão enquanto não
+                # houver baixa. A taxa pertence ao recebimento efetivo e pode até
+                # mudar no momento da baixa; portanto, o saldo aberto deve ser
+                # projetado integralmente.
+                "valor_taxa": ZERO,
+                "taxa_percentual": ZERO,
+                "taxa_fixa": ZERO,
+                "valor_liquido": item.valor_saldo,
                 "origem_codigo": "receber",
                 "registro_id": item.pk,
                 "referencia_url": reverse("financeiro:receber_detail", args=[item.pk]),
