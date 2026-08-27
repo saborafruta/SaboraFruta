@@ -402,3 +402,174 @@ class PrestacaoDeContasTests(ViagemBase):
         self.assertEqual(linha['vendida'], Decimal('12.000'))
         self.assertEqual(linha['em_poder'], Decimal('8.000'))
         self.assertFalse(linha['fechado'])
+
+
+class ViagemDoExemploTests(ViagemBase):
+    """
+    A viagem #000125, como ela foi descrita.
+
+    É o caso que o módulo existe para atender: um caminhão, três naturezas,
+    e o sistema tendo que responder as duas perguntas ao mesmo tempo — quantas
+    caixas sobem (360) e quanto é de cada operação (150 / 200 / 10).
+    """
+
+    def setUp(self):
+        self.viagem = ViagemService.criar(self.filial, {
+            'motorista_nome': 'João',
+            'veiculo_placa': 'ABC-1234',
+        }, usuario=self.usuario)
+        # O numero e' gerado pela filial; o do exemplo e' o rotulo que a tela
+        # mostra, e nao um numero que alguem digita.
+        self.viagem.numero = 125
+        self.viagem.vendedor = self.usuario
+        self.viagem.save(update_fields=['numero', 'vendedor'])
+
+        self.caixa = self._produto('CX', saldo='1000')
+        self.cliente_a = self.cliente
+        self.cliente_b = Cliente.objects.create(
+            filial=self.filial, razao_social='Cliente B',
+            cpf_cnpj='12345678902', uf='RN',
+        )
+        ClienteFilial.objects.create(cliente=self.cliente_b, filial=self.filial)
+        self.cliente_c = Cliente.objects.create(
+            filial=self.filial, razao_social='Cliente C',
+            cpf_cnpj='12345678903', uf='RN',
+        )
+        ClienteFilial.objects.create(cliente=self.cliente_c, filial=self.filial)
+
+        # Vendas já realizadas
+        ViagemService.adicionar_item(self.viagem, {
+            'natureza': self.venda, 'produto': self.caixa, 'quantidade': '100',
+            'cliente': self.cliente_a, 'valor_unitario': '10',
+        })
+        ViagemService.adicionar_item(self.viagem, {
+            'natureza': self.venda, 'produto': self.caixa, 'quantidade': '50',
+            'cliente': self.cliente_b, 'valor_unitario': '10',
+        })
+        # Venda fora do estabelecimento — sem comprador
+        ViagemService.adicionar_item(self.viagem, {
+            'natureza': self.remessa, 'produto': self.caixa, 'quantidade': '200',
+            'valor_unitario': '10',
+        })
+        # Bonificação
+        ViagemService.adicionar_item(self.viagem, {
+            'natureza': self.bonificacao, 'produto': self.caixa, 'quantidade': '10',
+            'cliente': self.cliente_c, 'valor_unitario': '10',
+        })
+
+    # ── Os quatro números ────────────────────────────────────────────────
+
+    def test_o_total_fisico_e_a_carga_inteira(self):
+        """360 caixas: é o número que a conferência de doca compara."""
+        resumo = ViagemService.resumo(self.viagem)
+
+        self.assertEqual(resumo['total_fisico'], Decimal('360.000'))
+
+    def test_cento_e_cinquenta_sao_vendas_ja_realizadas(self):
+        total = ViagemService.quantidade_por_especie(
+            self.viagem, NaturezaOperacao.Especie.VENDA,
+        )
+
+        self.assertEqual(total, Decimal('150.000'))
+
+    def test_duzentas_sao_para_venda_fora_do_estabelecimento(self):
+        total = ViagemService.quantidade_por_especie(
+            self.viagem, NaturezaOperacao.Especie.REMESSA_VENDA_FORA,
+        )
+
+        self.assertEqual(total, Decimal('200.000'))
+
+    def test_dez_sao_bonificacao(self):
+        total = ViagemService.quantidade_por_especie(
+            self.viagem, NaturezaOperacao.Especie.BONIFICACAO,
+        )
+
+        self.assertEqual(total, Decimal('10.000'))
+
+    def test_as_partes_somam_o_total_fisico(self):
+        """
+        A conta tem que fechar por construção. Se um dia uma natureza nova
+        entrar sem aparecer no resumo, a carga física passa a discordar da
+        soma das operações — e ninguém percebe até a conferência na doca.
+        """
+        resumo = ViagemService.resumo(self.viagem)
+
+        soma = sum(
+            (linha['quantidade'] for linha in resumo['por_especie'].values()),
+            Decimal('0'),
+        )
+        self.assertEqual(soma, resumo['total_fisico'])
+
+    # ── A leitura por natureza ───────────────────────────────────────────
+
+    def test_o_resumo_separa_as_tres_naturezas(self):
+        resumo = ViagemService.resumo(self.viagem)
+
+        self.assertEqual(
+            {
+                especie: linha['quantidade']
+                for especie, linha in resumo['por_especie'].items()
+            },
+            {
+                NaturezaOperacao.Especie.VENDA: Decimal('150.000'),
+                NaturezaOperacao.Especie.REMESSA_VENDA_FORA: Decimal('200.000'),
+                NaturezaOperacao.Especie.BONIFICACAO: Decimal('10.000'),
+            },
+        )
+
+    def test_quem_recebe_o_que_aparece_por_cliente(self):
+        """Cliente A leva 100, Cliente B leva 50, Cliente C leva 10 de brinde."""
+        entregas = {
+            (linha['cliente'].razao_social, linha['especie']): linha['quantidade']
+            for linha in ViagemService.entregas_por_cliente(self.viagem)
+        }
+
+        self.assertEqual(
+            entregas[('Mercado Central', NaturezaOperacao.Especie.VENDA)],
+            Decimal('100.000'),
+        )
+        self.assertEqual(
+            entregas[('Cliente B', NaturezaOperacao.Especie.VENDA)],
+            Decimal('50.000'),
+        )
+        self.assertEqual(
+            entregas[('Cliente C', NaturezaOperacao.Especie.BONIFICACAO)],
+            Decimal('10.000'),
+        )
+
+    def test_a_mercadoria_sem_comprador_nao_aparece_como_entrega(self):
+        """
+        As 200 caixas não têm a quem ser entregues ainda — é justamente essa a
+        diferença delas. Listá-las junto faria a doca prometer entrega que não
+        existe.
+        """
+        entregas = ViagemService.entregas_por_cliente(self.viagem)
+
+        self.assertNotIn(
+            NaturezaOperacao.Especie.REMESSA_VENDA_FORA,
+            {linha['especie'] for linha in entregas},
+        )
+        self.assertEqual(
+            sum((linha['quantidade'] for linha in entregas), Decimal('0')),
+            Decimal('160.000'),
+        )
+
+    # ── Fechando a carga do exemplo ──────────────────────────────────────
+
+    def test_ao_fechar_saem_as_360_do_estoque(self):
+        ViagemService.fechar_carga(self.viagem, usuario=self.usuario)
+
+        self.assertEqual(self._saldo(self.caixa), Decimal('640.000'))
+
+    def test_so_as_200_ficam_em_poder_da_viagem(self):
+        """
+        Venda e bonificação têm dono e saem entregues. Só o que não tem
+        comprador continua sendo da empresa, na rua.
+        """
+        ViagemService.fechar_carga(self.viagem, usuario=self.usuario)
+
+        saldo = SaldoCarga.objects.get(viagem=self.viagem, produto=self.caixa)
+        self.assertEqual(saldo.quantidade_remetida, Decimal('200.000'))
+        self.assertEqual(
+            ViagemService.resumo(self.viagem)['em_poder'], Decimal('200.000'),
+        )

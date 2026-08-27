@@ -333,26 +333,80 @@ class ViagemService:
 
     @staticmethod
     def resumo(viagem: Viagem) -> dict:
+        """
+        A carga em números, separada por natureza e somada no físico.
+
+        SÃO DUAS PERGUNTAS DIFERENTES, e a tela precisa das duas. Quem carrega
+        quer saber quantas caixas sobem no caminhão — o total físico. Quem
+        responde pelo fiscal quer saber quanto de cada natureza, porque cada
+        uma vira documento próprio. Uma carga de 360 caixas que são 150 de
+        venda, 200 de venda fora e 10 de bonificação é conferida por fora pelo
+        360 e por dentro pelos três números.
+        """
         agregado = viagem.itens.aggregate(
             valor=Sum('valor_total'), peso=Sum('peso_kg'),
+            quantidade=Sum('quantidade'),
         )
-        por_natureza = {}
+        por_especie = {}
         for item in viagem.itens.select_related('natureza'):
-            chave = item.natureza.especie
-            atual = por_natureza.setdefault(
-                chave, {'rotulo': item.natureza.get_especie_display(), 'itens': 0, 'valor': ZERO},
-            )
+            atual = por_especie.setdefault(item.natureza.especie, {
+                'rotulo': item.natureza.get_especie_display(),
+                'itens': 0, 'quantidade': ZERO, 'valor': ZERO, 'peso': ZERO,
+            })
             atual['itens'] += 1
+            atual['quantidade'] += item.quantidade or ZERO
             atual['valor'] += item.valor_total or ZERO
+            atual['peso'] += item.peso_kg or ZERO
         return {
             'itens': viagem.itens.count(),
+            # O que sobe no caminhão, sem separar por natureza: é o número que
+            # a conferência de doca compara com a contagem física.
+            'total_fisico': agregado['quantidade'] or ZERO,
             'valor': agregado['valor'] or ZERO,
             'peso': agregado['peso'] or ZERO,
-            'por_natureza': por_natureza,
+            'por_especie': por_especie,
             'em_poder': sum(
                 (s.quantidade_em_poder for s in viagem.saldos.all()), ZERO,
             ),
         }
+
+    @staticmethod
+    def quantidade_por_especie(viagem: Viagem, especie: str) -> Decimal:
+        """Quantas unidades a viagem leva sob uma natureza."""
+        total = (
+            viagem.itens.filter(natureza__especie=especie)
+            .aggregate(total=Sum('quantidade'))['total']
+        )
+        return total or ZERO
+
+    @staticmethod
+    def entregas_por_cliente(viagem: Viagem) -> list[dict]:
+        """
+        Quem recebe o quê, para as naturezas que têm destinatário.
+
+        A mercadoria que sai sem comprador não aparece aqui — ela não tem a
+        quem ser entregue ainda, e é justamente essa a diferença dela.
+        """
+        por_cliente = {}
+        itens = (
+            viagem.itens.select_related('cliente', 'natureza', 'produto')
+            .filter(cliente__isnull=False)
+        )
+        for item in itens:
+            chave = (item.cliente_id, item.natureza.especie)
+            atual = por_cliente.setdefault(chave, {
+                'cliente': item.cliente,
+                'especie': item.natureza.especie,
+                'rotulo': item.natureza.get_especie_display(),
+                'quantidade': ZERO, 'valor': ZERO, 'itens': 0,
+            })
+            atual['quantidade'] += item.quantidade or ZERO
+            atual['valor'] += item.valor_total or ZERO
+            atual['itens'] += 1
+        return sorted(
+            por_cliente.values(),
+            key=lambda linha: (linha['rotulo'], str(linha['cliente'])),
+        )
 
     # ── Guardas ──────────────────────────────────────────────────────────
 
