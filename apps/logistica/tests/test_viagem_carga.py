@@ -101,17 +101,30 @@ class ComporACargaTests(TestCase):
         html = self.client.get(self.url_detalhe).content.decode()
 
         self.assertIn('Adicionar venda', html)
-        self.assertIn('Adicionar venda fora do estabelecimento', html)
-        self.assertIn('Adicionar bonificação', html)
+        self.assertIn('Venda fora do estabelecimento', html)
+        self.assertIn('Bonificação', html)
 
-    def test_cada_botao_posta_para_a_sua_natureza(self):
+    def test_venda_fora_e_bonificacao_postam_para_a_sua_natureza(self):
         html = self.client.get(self.url_detalhe).content.decode()
 
-        for especie in (VENDA, VENDA_FORA, BONIFICACAO):
+        for especie in (VENDA_FORA, BONIFICACAO):
             self.assertIn(
                 reverse('logistica:viagem-item-create', args=[self.viagem.pk, especie]),
                 html,
             )
+
+    def test_o_botao_de_venda_leva_ao_seletor_de_pedidos(self):
+        """
+        Redigitar produto e quantidade para mercadoria que já foi vendida é uma
+        chance de a carga sair diferente do que o cliente comprou.
+        """
+        html = self.client.get(self.url_detalhe).content.decode()
+
+        self.assertIn(reverse('logistica:viagem-vendas', args=[self.viagem.pk]), html)
+        self.assertNotIn(
+            reverse('logistica:viagem-item-create', args=[self.viagem.pk, VENDA]),
+            html,
+        )
 
     def test_a_opcao_vazia_diz_o_que_fazer(self):
         """"---------" não informa nada a quem está montando a carga."""
@@ -144,10 +157,11 @@ class ComporACargaTests(TestCase):
 
         self.assertTrue(form.fields['cliente'].required)
 
-    def test_so_a_venda_oferece_vinculo_com_pedido(self):
+    def test_venda_fora_e_bonificacao_nao_pedem_pedido(self):
+        """O vínculo com pedido vem do seletor de vendas, não daqui."""
         html = self.client.get(self.url_detalhe).content.decode()
 
-        self.assertEqual(html.count('name="pedido_venda"'), 1)
+        self.assertNotIn('name="pedido_venda"', html)
 
     def test_com_uma_natureza_so_o_campo_nao_e_perguntado(self):
         """Escolher entre uma opção só é um clique que não decide nada."""

@@ -230,6 +230,15 @@ class ItemCarga(TimestampedModel):
         null=True, blank=True, related_name='itens_carga',
         help_text='O pedido que esta linha atende, quando a venda já existia.',
     )
+    # O ELO ATE' O DOCUMENTO. Viagem → carga → documento fiscal → cliente: e' a
+    # corrente que responde "que nota amparava esta mercadoria neste caminhao?"
+    # -- pergunta de fiscalizacao, e que sem este campo so' se responde
+    # cruzando planilha com o portal da SEFAZ.
+    documento_fiscal = models.ForeignKey(
+        'financeiro.DocumentoFiscal', on_delete=models.SET_NULL,
+        null=True, blank=True, related_name='itens_carga',
+        help_text='A nota que ampara esta linha, quando já emitida.',
+    )
 
     quantidade = models.DecimalField(max_digits=12, decimal_places=3)
     valor_unitario = models.DecimalField(max_digits=14, decimal_places=4, default=0)
@@ -244,6 +253,8 @@ class ItemCarga(TimestampedModel):
         indexes = [
             models.Index(fields=['viagem', 'natureza']),
             models.Index(fields=['viagem', 'produto']),
+            models.Index(fields=['pedido_venda']),
+            models.Index(fields=['documento_fiscal']),
         ]
         verbose_name = 'Item da carga'
         verbose_name_plural = 'Itens da carga'

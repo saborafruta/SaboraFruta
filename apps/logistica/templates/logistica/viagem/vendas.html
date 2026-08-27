@@ -1,0 +1,174 @@
+{% extends "_base.html" %}
+{% block title %}{{ title }}{% endblock %}
+{% block page_title %}{{ title }}{% endblock %}
+{% block content %}
+<div class="space-y-5">
+
+  <div>
+    <p class="text-sm mb-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+      <a href="{% url 'logistica:viagem-list' %}" :style="temaClaro ? 'color:#3b82f6;' : 'color:#60a5fa;'">Viagens</a>
+      <span class="mx-1">›</span>
+      <a href="{{ cancel_url }}" :style="temaClaro ? 'color:#3b82f6;' : 'color:#60a5fa;'">#{{ viagem.numero|stringformat:"06d" }}</a>
+      <span class="mx-1">›</span> Adicionar vendas
+    </p>
+    <h2 class="text-2xl font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
+      Adicionar vendas já realizadas
+    </h2>
+    {% comment %}
+      ESCOLHE-SE A VENDA, NAO O PRODUTO. Redigitar produto e quantidade para
+      mercadoria que ja' foi vendida e' uma chance de a carga sair diferente do
+      que o cliente comprou.
+    {% endcomment %}
+    <p class="text-sm mt-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+      Marque as vendas que sobem neste caminhão. Os itens entram como estão no pedido.
+    </p>
+  </div>
+
+  <form method="get" class="card p-4 grid grid-cols-1 md:grid-cols-12 gap-3">
+    <div class="md:col-span-10">
+      <label for="q" class="block text-[11px] font-semibold uppercase tracking-wide mb-1"
+             :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Buscar</label>
+      <input id="q" name="q" value="{{ busca }}" class="form-input"
+             placeholder="Número do pedido ou cliente...">
+    </div>
+    <div class="md:col-span-2 flex gap-2 md:items-end md:pb-px">
+      <button type="submit" class="btn-secondary w-full justify-center">Filtrar</button>
+    </div>
+  </form>
+
+  <form method="post" action="{% url 'logistica:viagem-vendas' viagem.pk %}"
+        x-data="{ marcados: 0, contar() { this.marcados = this.$el.querySelectorAll('input[name=pedidos]:checked').length; } }"
+        @change="contar()">
+    {% csrf_token %}
+
+    <div class="card overflow-hidden">
+      <div class="p-4 pb-3 flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <h3 class="text-sm font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
+            Vendas disponíveis
+          </h3>
+          {% comment %}
+            VENDA JA' CARREGADA NAO APARECE: e' a regra que impede a mesma
+            mercadoria de subir em dois caminhoes.
+          {% endcomment %}
+          <p class="text-xs mt-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+            Pedidos confirmados ou faturados que ainda não estão em nenhuma viagem.
+          </p>
+        </div>
+        <span class="text-xs" x-show="marcados" x-cloak
+              :style="temaClaro ? 'color:#2563eb;' : 'color:#60a5fa;'"
+              x-text="marcados + ' venda(s) marcada(s)'"></span>
+      </div>
+
+      <div class="overflow-x-auto">
+        <table class="w-full text-sm">
+          <thead>
+            <tr :style="temaClaro ? 'border-bottom:1px solid #e5e7eb;background:#f8fafc;' : 'border-bottom:1px solid #2a2a2e;background:#1e1e20;'">
+              <th class="px-4 py-3 w-10"></th>
+              <th class="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wide" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Venda</th>
+              <th class="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wide" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Cliente</th>
+              <th class="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wide" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">NF-e</th>
+              <th class="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wide" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Produto</th>
+              <th class="text-right px-4 py-3 text-xs font-semibold uppercase tracking-wide" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Quantidade</th>
+              <th class="text-right px-4 py-3 text-xs font-semibold uppercase tracking-wide" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Peso</th>
+              <th class="text-right px-4 py-3 text-xs font-semibold uppercase tracking-wide" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Volume</th>
+              <th class="text-right px-4 py-3 text-xs font-semibold uppercase tracking-wide" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Valor</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for venda in vendas %}
+              <tr class="border-b" :style="temaClaro ? 'border-color:#f1f5f9;background:#f8fafc;' : 'border-color:#2a2a2e;background:rgba(255,255,255,0.02);'">
+                <td class="px-4 py-3 align-top">
+                  <input type="checkbox" name="pedidos" value="{{ venda.pedido.pk }}"
+                         id="pedido-{{ venda.pedido.pk }}" class="cursor-pointer">
+                  <label for="pedido-{{ venda.pedido.pk }}" class="sr-only">
+                    Carregar venda {{ venda.pedido.numero_pedido }}
+                  </label>
+                </td>
+                <td class="px-4 py-3 font-semibold align-top" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
+                  {{ venda.pedido.numero_pedido }}
+                  {% if venda.entrega %}
+                    <span class="block text-[11px] font-normal" :style="temaClaro ? 'color:#94a3b8;' : 'color:#71717a;'">
+                      entrega {{ venda.entrega|date:"d/m/Y" }}
+                    </span>
+                  {% endif %}
+                </td>
+                <td class="px-4 py-3 align-top" :style="temaClaro ? 'color:#374151;' : 'color:#d1d5db;'">
+                  {{ venda.cliente|default:"Sem cliente" }}
+                </td>
+                <td class="px-4 py-3 align-top">
+                  {% if venda.nota %}
+                    <span class="font-mono text-xs" :style="temaClaro ? 'color:#374151;' : 'color:#d1d5db;'">
+                      {{ venda.nota.numero }}/{{ venda.nota.serie }}
+                    </span>
+                  {% else %}
+                    {% comment %}
+                      HOJE NORMALMENTE NAO HA': nada neste sistema emite NF-e a
+                      partir de pedido de venda ainda. Mostrar em branco e'
+                      honesto; inventar um numero, nao.
+                    {% endcomment %}
+                    <span class="text-xs" :style="temaClaro ? 'color:#94a3b8;' : 'color:#71717a;'">
+                      sem NF-e
+                    </span>
+                  {% endif %}
+                </td>
+                <td class="px-4 py-3 align-top" colspan="5"></td>
+              </tr>
+              {% for item in venda.itens %}
+                <tr class="border-b" :style="temaClaro ? 'border-color:#f1f5f9;' : 'border-color:#1e1e22;'">
+                  <td colspan="4"></td>
+                  <td class="px-4 py-2 text-xs" :style="temaClaro ? 'color:#374151;' : 'color:#d1d5db;'">
+                    {{ item.produto }}
+                  </td>
+                  <td class="px-4 py-2 text-right text-xs" :style="temaClaro ? 'color:#374151;' : 'color:#d1d5db;'">
+                    {{ item.quantidade|floatformat:"-3" }}
+                  </td>
+                  <td class="px-4 py-2 text-right text-xs" :style="temaClaro ? 'color:#374151;' : 'color:#d1d5db;'">
+                    {{ item.peso|floatformat:"-3" }}
+                  </td>
+                  <td class="px-4 py-2 text-right text-xs" :style="temaClaro ? 'color:#374151;' : 'color:#d1d5db;'">
+                    {{ item.volume|floatformat:"-4" }}
+                  </td>
+                  <td class="px-4 py-2 text-right text-xs" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
+                    R$ {{ item.valor|floatformat:2 }}
+                  </td>
+                </tr>
+              {% endfor %}
+              <tr class="border-b" :style="temaClaro ? 'border-color:#e2e8f0;' : 'border-color:#2a2a2e;'">
+                <td colspan="5" class="px-4 py-2 text-right text-xs font-semibold"
+                    :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Total da venda</td>
+                <td class="px-4 py-2 text-right text-xs font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">{{ venda.quantidade|floatformat:"-3" }}</td>
+                <td class="px-4 py-2 text-right text-xs font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">{{ venda.peso|floatformat:"-3" }}</td>
+                <td class="px-4 py-2 text-right text-xs font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">{{ venda.volume|floatformat:"-4" }}</td>
+                <td class="px-4 py-2 text-right text-xs font-semibold" :style="temaClaro ? 'color:#15803d;' : 'color:#86efac;'">R$ {{ venda.valor|floatformat:2 }}</td>
+              </tr>
+            {% empty %}
+              <tr>
+                <td colspan="9" class="px-4 py-12 text-center" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+                  {% if busca %}
+                    Nenhuma venda com esse filtro.
+                  {% else %}
+                    Nenhuma venda esperando caminhão. Entram aqui os pedidos
+                    confirmados ou faturados que ainda não estão em nenhuma viagem.
+                  {% endif %}
+                </td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+
+      {% if vendas %}
+        <div class="p-4 border-t flex flex-wrap items-center justify-end gap-3"
+             :style="temaClaro ? 'border-color:#e2e8f0;' : 'border-color:#2a2a2e;'">
+          <a href="{{ cancel_url }}" class="btn-secondary">Voltar</a>
+          <button type="submit" class="btn-primary" :disabled="!marcados">
+            Adicionar à carga
+          </button>
+        </div>
+      {% endif %}
+    </div>
+  </form>
+
+</div>
+{% endblock %}

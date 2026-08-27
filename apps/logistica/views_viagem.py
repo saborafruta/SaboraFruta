@@ -14,6 +14,10 @@ from apps.logistica.forms_carga import PERFIS, ItemCargaForm
 from apps.logistica.forms_viagem import ViagemForm
 from apps.fiscal.models import NaturezaOperacao
 from apps.logistica.models import ItemCarga, Viagem
+from apps.vendas.models.pedido import PedidoVenda
+from apps.logistica.services.vendas_para_carga import (
+    CARREGAVEIS, VendasParaCargaService,
+)
 from apps.logistica.services.viagem import ViagemService
 
 
@@ -310,4 +314,58 @@ class ViagemItemDeleteView(PermissaoRequiredMixin, View):
             messages.error(request, str(erro))
             return volta
         messages.success(request, 'Item removido da carga.')
+        return volta
+
+
+class ViagemVendasView(PermissaoRequiredMixin, View):
+    """
+    O seletor de vendas já realizadas.
+
+    ESCOLHE-SE A VENDA, NÃO O PRODUTO. Redigitar produto e quantidade para
+    mercadoria que já foi vendida é uma chance de a carga sair diferente do que
+    o cliente comprou.
+    """
+
+    permissao_modulo = 'logistica'
+    permissao_acao = 'editar'
+    template_name = 'logistica/viagem/vendas.html'
+
+    def _viagem(self, request, pk):
+        return get_object_or_404(Viagem.objects.for_filial(_filial(request)), pk=pk)
+
+    def get(self, request, pk):
+        viagem = self._viagem(request, pk)
+        busca = (request.GET.get('q') or '').strip()
+        return render(request, self.template_name, {
+            'title': f'Adicionar vendas — Viagem #{viagem.numero:06d}',
+            'viagem': viagem,
+            'vendas': VendasParaCargaService.disponiveis(
+                _filial(request), busca=busca, viagem=viagem,
+            ),
+            'busca': busca,
+            'cancel_url': reverse('logistica:viagem-detail', args=[viagem.pk]),
+        })
+
+    def post(self, request, pk):
+        viagem = self._viagem(request, pk)
+        volta = redirect('logistica:viagem-detail', pk=viagem.pk)
+
+        # OS PEDIDOS SAO BUSCADOS PELA FILIAL, e nao so' pelos ids do
+        # formulario: id colado a mao carregaria venda de outra unidade, e o
+        # caminhao sairia com mercadoria que nao e' desta casa.
+        ids = [i for i in request.POST.getlist('pedidos') if i.isdigit()]
+        pedidos = list(
+            PedidoVenda.objects
+            .filter(filial=_filial(request), pk__in=ids, status__in=CARREGAVEIS)
+            .select_related('cliente').prefetch_related('itens__produto')
+        )
+        try:
+            criados = VendasParaCargaService.adicionar_vendas(viagem, pedidos)
+        except (DadosInvalidosError, ValidationError) as erro:
+            messages.error(request, str(getattr(erro, 'message', erro)))
+            return volta
+        messages.success(
+            request,
+            f'{len(pedidos)} venda(s) na carga — {criados} item(ns) incluído(s).',
+        )
         return volta

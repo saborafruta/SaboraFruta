@@ -92,7 +92,17 @@
     {% endcomment %}
     <div class="card p-4 space-y-4" x-data="{ aberto: '' }">
       <div class="flex flex-wrap gap-2">
+        {% comment %}
+          A VENDA COMECA PELO PEDIDO. Redigitar produto e quantidade para
+          mercadoria que ja' foi vendida e' uma chance de a carga sair
+          diferente do que o cliente comprou -- por isso o botao de venda leva
+          ao seletor de pedidos, e nao a um formulario em branco.
+        {% endcomment %}
+        <a href="{% url 'logistica:viagem-vendas' viagem.pk %}" class="btn-primary text-sm">
+          + Adicionar venda
+        </a>
         {% for bloco in formularios_carga %}
+          {% if bloco.especie != 'venda' %}
           <button type="button"
                   @click="aberto = aberto === '{{ bloco.especie }}' ? '' : '{{ bloco.especie }}'"
                   class="btn-secondary text-sm"
@@ -101,10 +111,12 @@
                     : ''">
             + {{ bloco.perfil.titulo|cut:"Adicionar "|capfirst }}
           </button>
+          {% endif %}
         {% endfor %}
       </div>
 
       {% for bloco in formularios_carga %}
+        {% if bloco.especie != 'venda' %}
         <div x-show="aberto === '{{ bloco.especie }}'" x-cloak
              class="rounded-xl p-4 space-y-3 border"
              :style="temaClaro
@@ -188,6 +200,7 @@
             </div>
           </form>
         </div>
+        {% endif %}
       {% endfor %}
     </div>
   {% endif %}
