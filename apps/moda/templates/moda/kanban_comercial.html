@@ -169,33 +169,50 @@
      existe. Encolhida, a coluna continua no lugar (a régua do processo não
      muda) e devolve a largura para quem tem cartão. */
   .kc-raia {
-    flex: 1 1 190px;
-    min-width: 190px;
+    flex: 1 1 214px;
+    min-width: 214px;
     transition: flex-basis .18s ease, min-width .18s ease;
   }
-  .kc-raia.vazia { flex: 0 0 54px; min-width: 54px; }
-  .kc-raia.vazia .kc-cabecalho { flex-direction: column; align-items: center; gap: 6px; }
+  .kc-raia.vazia {
+    flex: 0 0 126px;
+    min-width: 126px;
+    align-self: flex-start;
+    padding-bottom: 9px;
+  }
+  .kc-raia.vazia .kc-cabecalho { align-items: flex-start; gap: 6px; }
   .kc-raia.vazia .kc-titulo {
-    writing-mode: vertical-rl;
-    transform: rotate(180deg);
-    white-space: nowrap;
-    max-height: 200px;
-    overflow: hidden;
+    writing-mode: horizontal-tb;
+    transform: none;
+    white-space: normal;
+    line-height: 1.25;
   }
   .kc-raia.vazia .kc-resumo { display: none; }
+  .kc-raia.vazia .kc-lista {
+    min-height: 42px;
+    display: grid;
+    place-items: center;
+  }
+  .kc-raia.vazia .kc-lista::after {
+    content: 'Sem pedidos';
+    color: #94a3b8;
+    font-size: 9px;
+    font-weight: 700;
+    letter-spacing: .025em;
+  }
 
   /* Ela ABRE para receber o cartão: um alvo de 54 px é difícil de acertar
      com o mouse, e errar o alvo num quadro que muda status de pedido é o
      tipo de erro que ninguém consegue explicar depois. */
-  .kc-raia.vazia.recebendo { flex: 0 0 190px; min-width: 190px; }
+  .kc-raia.vazia.recebendo { flex: 0 0 214px; min-width: 214px; }
   .kc-raia.vazia.recebendo .kc-cabecalho { flex-direction: row; align-items: baseline; }
   .kc-raia.vazia.recebendo .kc-titulo { writing-mode: horizontal-tb; transform: none; }
+  .kc-raia.vazia.recebendo .kc-lista { min-height: 140px; }
+  .kc-raia.vazia.recebendo .kc-lista::after { content: 'Solte o pedido aqui'; color:var(--kc-accent); }
 
   /* A coluna cheia rolava a PÁGINA inteira, e aí o cabeçalho das outras
      saía de vista: no meio da rolagem não dava para saber em que raia se
      está. Com o teto, a lista rola por dentro e os títulos ficam. */
   .kc-lista { max-height: calc(100vh - 340px); overflow-y: auto; }
-  .kc-raia.vazia .kc-lista { min-height: 140px; }
 
   /* Cartão escondido pela busca ao vivo. `display:none` e não opacidade:
      ele precisa sair do fluxo para a coluna encolher junto — o quadro se

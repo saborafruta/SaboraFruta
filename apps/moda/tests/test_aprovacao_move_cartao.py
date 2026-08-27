@@ -339,3 +339,10 @@ class AlertaNaTelaTests(RespostaBase):
 
         for coluna in ('orcamento', 'aprovacao', 'confirmado', 'producao', 'pronto', 'entregue'):
             self.assertContains(resposta, f'.kc-raia[data-coluna="{coluna}"]')
+
+    def test_coluna_vazia_e_compacta_e_expande_para_receber_cartao(self):
+        resposta = self._quadro()
+
+        self.assertContains(resposta, "content: 'Sem pedidos'")
+        self.assertContains(resposta, '.kc-raia.vazia.recebendo')
+        self.assertContains(resposta, "content: 'Solte o pedido aqui'")
