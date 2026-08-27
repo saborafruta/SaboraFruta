@@ -18,7 +18,7 @@ do mesmo orçamento.
 """
 from __future__ import annotations
 
-from decimal import Decimal
+from decimal import Decimal, InvalidOperation
 from io import BytesIO
 
 from reportlab.lib import colors
@@ -38,6 +38,8 @@ from .pdf_marca import (
 )
 
 CINZA = colors.HexColor('#6b7280')
+VERMELHO_CLARO = colors.HexColor('#fff1f2')
+BORDA_VERMELHA = colors.HexColor('#fecdd3')
 
 MESES = (
     'janeiro', 'fevereiro', 'março', 'abril', 'maio', 'junho',
@@ -80,7 +82,7 @@ def _estrutura_resumo_item(item, limite=220) -> str:
         partes.append(linha)
     resumo = '; '.join(partes)
     if len(resumo) > limite:
-        resumo = resumo[:limite - 1].rstrip() + '…'
+        resumo = resumo[:limite - 3].rstrip() + '...'
     return resumo
 
 
@@ -161,31 +163,21 @@ class OrcamentoPdfService:
         elementos = []
         elementos += cls._empresa(pedido, e)
         elementos += cls._cliente(pedido, e)
-        elementos += cls._itens(pedido, e)
-        # O orçamento também precisa permitir a conferência completa antes
-        # da aprovação: anexos/fotos e a lista de nomes por tamanho.
         from .pedido_pdf import PedidoPdfService
         itens = list(pedido.itens.all())
-        elementos += PedidoPdfService._artes_do_pedido(pedido, e, LARGURA_UTIL)
-        for indice, item in enumerate(itens):
-            bloco = [
-                Spacer(1, 7),
-                HRFlowable(width='100%', thickness=1.2, color=VERMELHO_TABELA),
-                Paragraph(f'<b>{esc(item.nome_exibicao)}</b>', e['campo']),
-            ]
-            bloco += PedidoPdfService._grade(item, e, LARGURA_UTIL)
-            bloco += PedidoPdfService._arte(
-                item, e, LARGURA_UTIL, altura_imagem=46 * mm,
-            )
-            bloco += PedidoPdfService._personalizacao_item(item, e, LARGURA_UTIL)
-            if bloco:
-                # Evita título/grade/imagem separados por uma quebra quando
-                # o conjunto cabe inteiro na página seguinte.
-                elementos.append(KeepTogether(bloco))
-                elementos.append(Spacer(1, 6))
+        for indice, item in enumerate(itens, start=1):
+            elementos += cls._produto(item, indice, e)
+        # Arquivos sem produto específico continuam visíveis, mas somente
+        # depois dos cartões dos produtos para não se misturarem com eles.
+        elementos += PedidoPdfService._artes_do_pedido(
+            pedido, e, LARGURA_UTIL, cor=VERMELHO_TABELA,
+            cor_clara=VERMELHO_CLARO, arredondada=True,
+        )
         # O valor fecha a proposta somente depois de o cliente conferir
         # imagens, tamanhos e nomes de cada produto.
-        elementos += [Spacer(1, 6), cls._totais(pedido, e), Spacer(1, 10)]
+        elementos += [Spacer(1, 6), cls._totais(pedido, e), Spacer(1, 6)]
+        elementos += cls._pagamento_previsto(pedido, e)
+        elementos += [Spacer(1, 6)]
         elementos += cls._observacoes(pedido, e)
         elementos += cls._assinatura(pedido, e)
 
@@ -211,7 +203,10 @@ class OrcamentoPdfService:
         Solicitados", mas NÃO em "Observações e Pagamento" -- `faixa=False`
         reproduz isso.
         """
-        celula = Table([[Paragraph(texto, e['secao'])]], colWidths=[LARGURA_UTIL])
+        celula = Table(
+            [[Paragraph(texto, e['secao'])]], colWidths=[LARGURA_UTIL],
+            cornerRadii=[7, 7, 7, 7],
+        )
         estilo = [
             ('LEFTPADDING', (0, 0), (-1, -1), 8 if faixa else 0),
             ('RIGHTPADDING', (0, 0), (-1, -1), 8),
@@ -243,6 +238,75 @@ class OrcamentoPdfService:
         ]
 
     # ── Itens e totais ───────────────────────────────────────────────────
+
+    @classmethod
+    def _produto(cls, item, indice, e) -> list:
+        """Cartão comercial completo: tudo que pertence ao item fica junto."""
+        from .pedido_pdf import PedidoPdfService
+
+        unitario = item.valor_unitario or Decimal('0')
+        cabecalho = [[
+            Paragraph(f'ITEM {indice}', e['th']),
+            Paragraph('PRODUTO', e['th']),
+            Paragraph('QTD', e['th']),
+            Paragraph('UNITÁRIO', e['th']),
+            Paragraph('SUBTOTAL', e['th']),
+        ], [
+            Paragraph(str(indice), e['td_centro']),
+            Paragraph(f'<b>{esc(item.nome_exibicao)}</b>', e['td']),
+            Paragraph(str(item.quantidade), e['td_centro']),
+            Paragraph(brl(unitario), e['td_centro']),
+            Paragraph(brl(unitario * item.quantidade), e['td_centro']),
+        ]]
+        larguras = [15 * mm, LARGURA_UTIL - 88 * mm, 15 * mm, 28 * mm, 30 * mm]
+        tabela = Table(
+            cabecalho, colWidths=larguras, cornerRadii=[8, 8, 8, 8],
+        )
+        tabela.setStyle(TableStyle([
+            ('BACKGROUND', (0, 0), (-1, 0), VERMELHO_TABELA),
+            ('BACKGROUND', (0, 1), (-1, 1), colors.white),
+            ('BOX', (0, 0), (-1, -1), .7, BORDA_VERMELHA),
+            ('INNERGRID', (0, 0), (-1, -1), .35, BORDA_VERMELHA),
+            ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+            ('LEFTPADDING', (0, 0), (-1, -1), 7),
+            ('RIGHTPADDING', (0, 0), (-1, -1), 7),
+            ('TOPPADDING', (0, 0), (-1, -1), 7),
+            ('BOTTOMPADDING', (0, 0), (-1, -1), 7),
+        ]))
+
+        detalhes = [
+            str(valor) for valor in (
+                getattr(item, 'tecido', None), getattr(item, 'cor', None),
+                item.get_gola_display() if item.gola else None,
+                item.get_manga_display() if item.manga else None,
+                item.acabamento or None, _estrutura_resumo_item(item),
+            ) if valor
+        ]
+        identificacao = [Spacer(1, 8), tabela]
+        if detalhes:
+            identificacao += [
+                Spacer(1, 4),
+                Paragraph('<b>Detalhes:</b> ' + esc(' - '.join(detalhes)), e['normal']),
+            ]
+        identificacao += PedidoPdfService._grade(
+            item, e, LARGURA_UTIL, cor=VERMELHO_TABELA,
+            cor_clara=VERMELHO_CLARO, arredondada=True,
+        )
+
+        blocos = [KeepTogether(identificacao)]
+        blocos += PedidoPdfService._arte(
+            item, e, LARGURA_UTIL, altura_imagem=30 * mm,
+            cor=VERMELHO_TABELA, cor_clara=VERMELHO_CLARO,
+            arredondada=True,
+        )
+        blocos += PedidoPdfService._personalizacao_item(
+            item, e, LARGURA_UTIL, cor=VERMELHO_TABELA,
+            cor_clara=VERMELHO_CLARO, arredondada=True,
+        )
+        blocos += [Spacer(1, 6), HRFlowable(
+            width='100%', thickness=.7, color=BORDA_VERMELHA,
+        )]
+        return blocos
 
     @classmethod
     def _itens(cls, pedido, e) -> list:
@@ -278,7 +342,7 @@ class OrcamentoPdfService:
                 extras.append(f'<font size="7"><b>Grade:</b> {esc(grade)}</font>')
             if estrutura:
                 extras.append(f'<font size="7"><b>Estrutura:</b> {esc(estrutura)}</font>')
-            descricao = ' — '.join(partes)
+            descricao = ' - '.join(partes)
             if extras:
                 descricao += '<br/>' + '<br/>'.join(extras)
             linhas.append([
@@ -320,7 +384,7 @@ class OrcamentoPdfService:
 
         linhas = [[Paragraph('Subtotal:', rotulo), Paragraph(brl(pedido.subtotal), e['td_dir'])]]
         for nome, valor, sinal in (
-            ('Desconto:', pedido.desconto, '− '),
+            ('Desconto:', pedido.desconto, '- '),
             ('Acréscimo:', pedido.acrescimo, '+ '),
             ('Frete:', pedido.frete, '+ '),
         ):
@@ -330,7 +394,7 @@ class OrcamentoPdfService:
         linhas.append([Paragraph('Total:', forte), Paragraph(brl(pedido.valor_total), forte)])
         if pedido.entrada:
             linhas.append([Paragraph('Entrada:', rotulo),
-                           Paragraph(f'− {brl(pedido.entrada)}', e['td_dir'])])
+                           Paragraph(f'- {brl(pedido.entrada)}', e['td_dir'])])
             linhas.append([Paragraph('Saldo:', rotulo), Paragraph(brl(pedido.saldo), e['td_dir'])])
 
         # Empurrado para a direita por uma coluna vazia, que é o que alinha
@@ -346,11 +410,47 @@ class OrcamentoPdfService:
         ]))
         return tabela
 
+    @classmethod
+    def _pagamento_previsto(cls, pedido, e) -> list:
+        linhas = list(pedido.previsao_pagamento or [])
+        if not linhas:
+            return []
+        rotulos = dict(pedido.FormaPagamentoPrevista.choices)
+        dados = [[Paragraph('FORMA PREVISTA', e['th']), Paragraph('VALOR', e['th'])]]
+        for linha in linhas:
+            try:
+                valor = Decimal(str(linha.get('valor') or '0'))
+            except (InvalidOperation, ValueError):
+                valor = Decimal('0')
+            dados.append([
+                Paragraph(esc(rotulos.get(linha.get('forma'), linha.get('forma'))), e['td']),
+                Paragraph(brl(valor), e['td_dir']),
+            ])
+        tabela = Table(
+            dados, colWidths=[LARGURA_UTIL - 38 * mm, 38 * mm],
+            repeatRows=1, cornerRadii=[8, 8, 8, 8],
+        )
+        tabela.setStyle(TableStyle([
+            ('BACKGROUND', (0, 0), (-1, 0), VERMELHO_TABELA),
+            ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, VERMELHO_CLARO]),
+            ('BOX', (0, 0), (-1, -1), .7, BORDA_VERMELHA),
+            ('INNERGRID', (0, 0), (-1, -1), .35, BORDA_VERMELHA),
+            ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+            ('LEFTPADDING', (0, 0), (-1, -1), 7),
+            ('RIGHTPADDING', (0, 0), (-1, -1), 7),
+            ('TOPPADDING', (0, 0), (-1, -1), 4),
+            ('BOTTOMPADDING', (0, 0), (-1, -1), 4),
+        ]))
+        return [cls._titulo('PREVISÃO DE PAGAMENTO', e), Spacer(1, 3), tabela]
+
     # ── Observações ──────────────────────────────────────────────────────
 
     @classmethod
     def _observacoes(cls, pedido, e) -> list:
-        itens = []
+        itens = [
+            'Este orçamento é válido por 5 dias a partir da data de emissão.',
+            'A previsão de entrega é de até 30 dias úteis após a aprovação do orçamento.',
+        ]
         if pedido.data_prevista_entrega:
             itens.append(f'Prazo de entrega: {pedido.data_prevista_entrega:%d/%m/%Y}')
         if pedido.forma_pagamento_id:
@@ -365,9 +465,19 @@ class OrcamentoPdfService:
         if not itens:
             return []
 
-        blocos = [cls._titulo('OBSERVAÇÕES E PAGAMENTO', e, faixa=False), Spacer(1, 2)]
-        blocos += [Paragraph(texto, e['obs'], bulletText='•') for texto in itens]
-        return blocos
+        linhas = [[Paragraph(f'- {texto}', e['normal'])] for texto in itens]
+        quadro = Table(
+            linhas, colWidths=[LARGURA_UTIL], cornerRadii=[7, 7, 7, 7],
+        )
+        quadro.setStyle(TableStyle([
+            ('BACKGROUND', (0, 0), (-1, -1), VERMELHO_CLARO),
+            ('BOX', (0, 0), (-1, -1), .6, BORDA_VERMELHA),
+            ('LEFTPADDING', (0, 0), (-1, -1), 8),
+            ('RIGHTPADDING', (0, 0), (-1, -1), 8),
+            ('TOPPADDING', (0, 0), (-1, -1), 3),
+            ('BOTTOMPADDING', (0, 0), (-1, -1), 3),
+        ]))
+        return [cls._titulo('OBSERVAÇÕES E PRAZOS', e), Spacer(1, 3), quadro]
 
     # ── Assinatura ───────────────────────────────────────────────────────
 
@@ -380,7 +490,7 @@ class OrcamentoPdfService:
 
         blocos = [
             Paragraph(f'<b>{esc(local)}</b>', e['pe']),
-            Spacer(1, 10),
+            Spacer(1, 4),
         ]
         if filial.nome_fantasia:
             blocos.append(Paragraph(
@@ -400,4 +510,4 @@ class OrcamentoPdfService:
         # Inteira ou na página seguinte: num orçamento longo a data ficava
         # sozinha no pé de uma página e o nome da empresa aparecia na outra,
         # o que faz a assinatura parecer de outro documento.
-        return [Spacer(1, 8 * mm), KeepTogether(blocos)]
+        return [KeepTogether(blocos)]

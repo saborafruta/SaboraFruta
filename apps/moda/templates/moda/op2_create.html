@@ -37,6 +37,9 @@
     <template x-for="(pessoa,idx) in personalizacoes" :key="pessoa.uid">
       <div><input type="hidden" :name="`individual_${idx}_item_idx`" :value="indiceItem(pessoa.itemUid)"><input type="hidden" :name="`individual_${idx}_tamanho_id`" :value="pessoa.tamanhoId"><input type="hidden" :name="`individual_${idx}_nome`" :value="pessoa.nome"><input type="hidden" :name="`individual_${idx}_numero`" :value="pessoa.numero"></div>
     </template>
+    <template x-for="(pagamento,idx) in pagamentos" :key="pagamento.uid">
+      <div><input type="hidden" :name="`pagamento_${idx}_forma`" :value="pagamento.forma"><input type="hidden" :name="`pagamento_${idx}_valor`" :value="pagamento.valor"></div>
+    </template>
     <header class="card p-3 flex flex-wrap items-center justify-between gap-2 sticky top-0 z-30">
       <div class="min-w-0"><a href="{% url 'moda:comercial' %}" class="text-xs font-bold" style="color:#3b82f6">← Comercial</a><h1 class="text-lg md:text-xl font-bold truncate">Nova OP 2.0</h1><p class="text-xs" :style="temaClaro?'color:#64748b':'color:#94a3b8'">Cliente, modelos, impressão, grades, anexos e observações em uma tela limpa.</p></div>
       <div class="flex flex-wrap items-center justify-end gap-2"><button type="submit" name="destino" value="salvar" class="btn-secondary">Salvar</button><button type="submit" name="destino" value="enviar" formtarget="_blank" class="btn-primary">Salvar e enviar para cliente</button><a href="{% url 'moda:comercial' %}" class="btn-secondary" style="color:#ef4444" onclick="return confirm('Cancelar esta nova OP e descartar os dados preenchidos?')">Cancelar OP</a></div>
@@ -79,7 +82,14 @@
           <div class="mt-3 space-y-2"><template x-for="(pessoa,idx) in personalizacoes" :key="pessoa.uid"><article class="op2-card flex items-center justify-between gap-3"><div><strong x-text="pessoa.nome || `#${pessoa.numero}`"></strong><small class="block opacity-65" x-text="`${nomeItem(pessoa.itemUid)} · ${tamanhoLabels[pessoa.tamanhoId]||pessoa.tamanhoId}${pessoa.numero?' · #'+pessoa.numero:''}`"></small></div><button type="button" class="btn-secondary text-sm" style="color:#ef4444" @click="personalizacoes.splice(idx,1)">Remover</button></article></template><p x-show="!personalizacoes.length" class="text-sm opacity-60">Nenhuma personalização individual informada.</p></div>
         </section>
         <section class="op2-band">
-          <h2 class="font-bold mb-2">5 e 6. Anexos e observações gerais</h2>
+          <div class="flex flex-wrap items-start justify-between gap-2 mb-3"><div><h2 class="font-bold">5. Previsão de pagamento</h2><p class="text-xs opacity-70">É somente a combinação prevista para o orçamento; não gera lançamentos no financeiro.</p></div><button type="button" class="btn-secondary text-sm" @click="adicionarPagamento()">+ Outra forma</button></div>
+          <div class="space-y-2">
+            <template x-for="(pagamento,idx) in pagamentos" :key="pagamento.uid"><div class="grid md:grid-cols-[minmax(190px,1fr)_minmax(150px,.7fr)_auto] gap-2 items-end op2-grid-compact"><label><span class="op2-label">Forma</span><select x-model="pagamento.forma" class="form-input w-full"><option value="">Selecione</option>{% for valor,rotulo in formas_pagamento_previstas %}<option value="{{ valor }}">{{ rotulo }}</option>{% endfor %}</select></label><label><span class="op2-label">Valor</span><input type="number" min="0.01" step=".01" x-model.number="pagamento.valor" class="form-input w-full" placeholder="0,00"></label><button type="button" class="btn-secondary" style="color:#ef4444" x-show="pagamentos.length>1" @click="pagamentos.splice(idx,1)">Remover</button></div></template>
+          </div>
+          <div class="flex flex-wrap justify-between gap-2 mt-3 p-3 rounded-lg text-sm" :style="Math.abs(totalPagamentos()-totalValor())<0.01?'background:rgba(22,163,74,.10);color:#16a34a':'background:rgba(245,158,11,.12);color:#d97706'"><span>Soma prevista: <strong x-text="moeda(totalPagamentos())"></strong></span><span>Total do orçamento: <strong x-text="moeda(totalValor())"></strong></span></div>
+        </section>
+        <section class="op2-band">
+          <h2 class="font-bold mb-2">6. Anexos e observações gerais</h2>
           <div class="grid md:grid-cols-4 gap-2 op2-grid-compact"><input type="file" name="arquivo" multiple class="form-input md:col-span-2" @change="previewAnexos($event)"><select name="tipo_arquivo" class="form-input">{% for v,l in tipos_arquivo %}<option value="{{ v }}">{{ l }}</option>{% endfor %}</select><input name="descricao_arquivo" class="form-input" placeholder="Descrição dos arquivos"><textarea name="observacoes" rows="3" class="form-input md:col-span-4" placeholder="Observações gerais da OP"></textarea></div>
           <div class="op2-file-previews mt-3" x-show="anexosPreview.length" x-cloak><template x-for="arquivo in anexosPreview" :key="arquivo.chave"><figure class="op2-file-preview"><img x-show="arquivo.imagem" :src="arquivo.url" :alt="arquivo.nome"><div x-show="!arquivo.imagem" class="h-[90px] flex items-center justify-center text-2xl">📎</div><figcaption class="text-xs truncate" x-text="arquivo.nome"></figcaption><small class="block opacity-60" x-text="arquivo.tamanho"></small></figure></template></div>
         </section>
@@ -145,13 +155,11 @@ function op2NovaMelhorada(){
     iniciar();
     try{const canal=new BroadcastChannel('op2-salvo');canal.onmessage=e=>{if(e.data?.opUrl)window.location.assign(e.data.opUrl)}}catch(e){}
   };
-  const validarOriginal=estado.validarAntesDeSalvar.bind(estado);
-  estado.validarAntesDeSalvar=function(event){
-    validarOriginal(event);
-    if(!event.defaultPrevented)this.enviandoFormulario=true;
-  };
   estado.personalizacoes=[];
   estado.individualDraft={itemUid:'',tamanhoId:'',nome:'',numero:''};
+  estado.pagamentos=[{uid:Date.now()+Math.random(),forma:'',valor:''}];
+  estado.adicionarPagamento=function(){this.pagamentos.push({uid:Date.now()+Math.random(),forma:'',valor:''})};
+  estado.totalPagamentos=function(){return this.pagamentos.reduce((s,p)=>s+Number(p.valor||0),0)};
   const criarDraft=estado.novoDraft.bind(estado);
   estado.novoDraft=function(){
     const draft=criarDraft();
@@ -311,6 +319,19 @@ function op2NovaMelhorada(){
     const uid=this.itens[idx]?.uid;
     this.itens.splice(idx,1);
     this.personalizacoes=this.personalizacoes.filter(p=>String(p.itemUid)!==String(uid));
+  };
+  const validarFormulario=estado.validarAntesDeSalvar.bind(estado);
+  estado.validarAntesDeSalvar=function(event){
+    validarFormulario(event);
+    if(event.defaultPrevented)return;
+    const preenchidas=this.pagamentos.filter(p=>p.forma||Number(p.valor||0)>0);
+    if(preenchidas.some(p=>!p.forma||Number(p.valor||0)<=0)){
+      event.preventDefault();alert('Complete a forma e o valor de cada pagamento previsto.');return;
+    }
+    if(preenchidas.length&&Math.abs(this.totalPagamentos()-this.totalValor())>=0.01){
+      event.preventDefault();alert('A soma das formas de pagamento deve ser igual ao total do orçamento.');return;
+    }
+    this.enviandoFormulario=true;
   };
   estado.anexosPreview=[];
   estado.arquivoPreview=function(arquivo){

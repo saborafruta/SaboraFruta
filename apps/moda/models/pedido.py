@@ -55,6 +55,16 @@ class PedidoProducao(ComCodigoQr, FilialScopedModel):
         ALTA = 'alta', 'Alta'
         URGENTE = 'urgente', 'Urgente'
 
+    class FormaPagamentoPrevista(models.TextChoices):
+        """Previsão comercial, sem vínculo com cadastros ou lançamentos financeiros."""
+
+        DINHEIRO = 'dinheiro', 'Dinheiro'
+        BOLETO = 'boleto', 'Boleto'
+        PIX = 'pix', 'PIX'
+        DEBITO = 'debito', 'Cartão de débito'
+        CREDITO_PARCELADO = 'credito_parcelado', 'Crédito parcelado'
+        CREDITO_AVISTA = 'credito_avista', 'Crédito à vista'
+
     numero = models.PositiveIntegerField(db_index=True)
 
     # Token do link público do PDF — o que vai no WhatsApp do cliente.
@@ -106,6 +116,14 @@ class PedidoProducao(ComCodigoQr, FilialScopedModel):
     entrada = models.DecimalField(
         max_digits=12, decimal_places=2, default=Decimal('0'),
         help_text='Sinal combinado. Vira a primeira conta a receber, com vencimento na data do pedido.',
+    )
+
+    previsao_pagamento = models.JSONField(
+        default=list, blank=True,
+        help_text=(
+            'Combinação comercial prevista no orçamento. Não gera nem se vincula '
+            'a lançamentos financeiros.'
+        ),
     )
 
     forma_pagamento = models.ForeignKey(

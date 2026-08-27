@@ -116,6 +116,50 @@ def _observacoes_pedido(request):
     return observacoes
 
 
+def _previsao_pagamento(request, total_esperado=None):
+    """Lê a divisão prevista do orçamento sem consultar o módulo financeiro."""
+    rotulos = dict(PedidoProducao.FormaPagamentoPrevista.choices)
+    linhas = []
+    indices = sorted({
+        int(chave.split('_')[1])
+        for chave in request.POST
+        if chave.startswith('pagamento_')
+        and len(chave.split('_')) >= 3
+        and chave.split('_')[1].isdigit()
+    })
+    for indice in indices:
+        forma = (request.POST.get(f'pagamento_{indice}_forma') or '').strip()
+        valor_texto = (
+            request.POST.get(f'pagamento_{indice}_valor') or ''
+        ).strip().replace(' ', '')
+        if not forma and not valor_texto:
+            continue
+        if forma not in rotulos:
+            raise ValueError('Pagamento previsto: escolha uma forma válida.')
+        try:
+            valor = (
+                Decimal(valor_texto.replace('.', '').replace(',', '.'))
+                if ',' in valor_texto
+                else Decimal(valor_texto)
+            )
+            valor = valor.quantize(Decimal('0.01'))
+        except (InvalidOperation, ValueError):
+            raise ValueError('Pagamento previsto: confira os valores informados.')
+        if valor <= 0:
+            raise ValueError('Pagamento previsto: cada valor deve ser maior que zero.')
+        linhas.append({'forma': forma, 'valor': f'{valor:.2f}'})
+
+    if linhas and total_esperado is not None:
+        total = sum((Decimal(linha['valor']) for linha in linhas), Decimal('0'))
+        esperado = Decimal(total_esperado).quantize(Decimal('0.01'))
+        if total != esperado:
+            raise ValueError(
+                'Pagamento previsto: a soma das formas deve ser igual ao total '
+                f'do orçamento (R$ {esperado:.2f}).'
+            )
+    return linhas
+
+
 def _dados_modal_item(item, estrutura_opcoes):
     """Serializa um item para o mesmo editor completo usado ao adicioná-lo."""
     texto = (item.observacoes or '').strip()
@@ -254,6 +298,18 @@ class Op2CreateView(ModaBaseView):
         except ValueError as erro:
             messages.error(request, str(erro))
             return render(request, 'moda/op2_create.html', self._context(request))
+        total_orcamento = sum(
+            (
+                form.cleaned_data['quantidade']
+                * (form.cleaned_data.get('valor_unitario') or Decimal('0'))
+            )
+            for _, form in formularios
+        )
+        try:
+            previsao_pagamento = _previsao_pagamento(request, total_orcamento)
+        except ValueError as erro:
+            messages.error(request, str(erro))
+            return render(request, 'moda/op2_create.html', self._context(request))
 
         with transaction.atomic():
             pedido = PedidoProducao.objects.create(
@@ -268,6 +324,7 @@ class Op2CreateView(ModaBaseView):
                 data_prevista_entrega=data_prevista_entrega,
                 prioridade=request.POST.get('prioridade') or PedidoProducao.Prioridade.NORMAL,
                 observacoes=_observacoes_pedido(request),
+                previsao_pagamento=previsao_pagamento,
             )
             primeiro_item = None
             itens_por_indice = {}
@@ -420,6 +477,7 @@ class Op2CreateView(ModaBaseView):
             'tipos_impressao': ProdutoModa.TipoImpressao.choices,
             'tipos_arquivo': ArquivoPedido.Tipo.choices,
             'prioridades': PedidoProducao.Prioridade.choices,
+            'formas_pagamento_previstas': PedidoProducao.FormaPagamentoPrevista.choices,
             'hoje': timezone.localdate(),
         }
 
@@ -751,6 +809,7 @@ class Op2DetailView(ModaBaseView):
             'abrir_whatsapp': request.GET.get('whatsapp') == '1',
             'aprovacao': aprovacao,
             'formas_pagamento': formas,
+            'formas_pagamento_previstas': PedidoProducao.FormaPagamentoPrevista.choices,
             'contas_bancarias': contas_bancarias,
             'contas_por_forma_pagamento': {
                 str(forma.pk): str(forma.conta_bancaria_padrao_id or '')
@@ -1236,6 +1295,48 @@ class Op2ActionView(ModaBaseView):
         individual.save()
         messages.success(request, 'Tamanho e personalização adicionados.')
 
+    def _acao_individuais(self, request, pedido):
+        item = get_object_or_404(pedido.itens, pk=request.POST.get('item'))
+        indices = sorted({
+            int(chave.split('_')[1])
+            for chave in request.POST
+            if chave.startswith('individual_')
+            and len(chave.split('_')) >= 3
+            and chave.split('_')[1].isdigit()
+        })
+        if not indices:
+            raise ValueError('Adicione ao menos um nome ou número.')
+        proxima_ordem = pedido.individuais.count() * 10
+        salvos = 0
+        for indice in indices:
+            dados = {
+                'item': item.pk,
+                'tamanho': request.POST.get(f'individual_{indice}_tamanho'),
+                'nome': request.POST.get(f'individual_{indice}_nome'),
+                'numero': request.POST.get(f'individual_{indice}_numero'),
+            }
+            form = PersonalizacaoIndividualForm(
+                dados, filial=_filial(request), pedido=pedido,
+            )
+            if not form.is_valid():
+                raise ValueError(f'Linha {indice + 1}: ' + '; '.join(
+                    erro for erros in form.errors.values() for erro in erros
+                ))
+            individual = form.save(commit=False)
+            individual.pedido = pedido
+            proxima_ordem += 10
+            individual.ordem = proxima_ordem
+            individual.save()
+            salvos += 1
+        messages.success(request, f'{salvos} personalização(ões) adicionada(s).')
+
+    def _acao_previsao_pagamento(self, request, pedido):
+        pedido.previsao_pagamento = _previsao_pagamento(
+            request, pedido.valor_total,
+        )
+        pedido.save(update_fields=['previsao_pagamento', 'updated_at'])
+        messages.success(request, 'Previsão de pagamento atualizada no orçamento.')
+
     def _acao_telefone(self, request, pedido):
         telefone = ''.join(c for c in request.POST.get('telefone', '') if c.isdigit())
         if not telefone:
@@ -1255,6 +1356,7 @@ class Op2ActionView(ModaBaseView):
             prioridade=pedido.prioridade, status=PedidoProducao.Status.ORCAMENTO,
             observacoes=pedido.observacoes, desconto=pedido.desconto,
             acrescimo=pedido.acrescimo, frete=pedido.frete,
+            previsao_pagamento=pedido.previsao_pagamento,
         )
         mapa = {}
         for original in pedido.itens.all():

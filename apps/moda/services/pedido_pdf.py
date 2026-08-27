@@ -76,7 +76,10 @@ def _estilos():
     }
 
 
-def _tabela(dados, larguras, cabecalho=True):
+def _tabela(
+    dados, larguras, cabecalho=True, cor_cabecalho=AZUL,
+    fundo_linha=FUNDO, arredondada=False,
+):
     """Tabela no padrão já usado nos outros PDFs do sistema."""
     estilo = [
         ('GRID', (0, 0), (-1, -1), 0.35, BORDA),
@@ -89,10 +92,10 @@ def _tabela(dados, larguras, cabecalho=True):
     ]
     if cabecalho:
         estilo += [
-            ('BACKGROUND', (0, 0), (-1, 0), AZUL),
+            ('BACKGROUND', (0, 0), (-1, 0), cor_cabecalho),
             ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
             ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
-            ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, FUNDO]),
+            ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, fundo_linha]),
         ]
     elif dados and len(dados[0]) == 4:
         estilo += [
@@ -101,18 +104,27 @@ def _tabela(dados, larguras, cabecalho=True):
             ('FONTNAME', (0, 0), (0, -1), 'Helvetica-Bold'),
             ('FONTNAME', (2, 0), (2, -1), 'Helvetica-Bold'),
         ]
-    tabela = Table(dados, colWidths=larguras, repeatRows=1 if cabecalho else 0)
+    tabela = Table(
+        dados, colWidths=larguras, repeatRows=1 if cabecalho else 0,
+        cornerRadii=[7, 7, 7, 7] if arredondada else None,
+    )
     tabela.setStyle(TableStyle(estilo))
     return tabela
 
 
-def _barra_secao(numero, titulo, e, largura_util):
+def _barra_secao(
+    numero, titulo, e, largura_util, cor=AZUL, cor_clara=AZUL_CLARO,
+    arredondada=False,
+):
     """Faixa compacta usada como hierarquia visual em cada bloco da OP."""
     titulo = Paragraph(esc(titulo), e['secao'])
     if numero is None:
-        tabela = Table([[titulo]], colWidths=[largura_util], rowHeights=[9 * mm])
+        tabela = Table(
+            [[titulo]], colWidths=[largura_util], rowHeights=[9 * mm],
+            cornerRadii=[7, 7, 7, 7] if arredondada else None,
+        )
         estilo = [
-            ('BACKGROUND', (0, 0), (-1, -1), AZUL_CLARO),
+            ('BACKGROUND', (0, 0), (-1, -1), cor_clara),
             ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
             ('LEFTPADDING', (0, 0), (-1, -1), 5),
             ('RIGHTPADDING', (0, 0), (-1, -1), 4),
@@ -121,10 +133,11 @@ def _barra_secao(numero, titulo, e, largura_util):
         tabela = Table(
             [[Paragraph(f'{int(numero):02d}', e['secao_numero']), titulo]],
             colWidths=[10 * mm, largura_util - 10 * mm], rowHeights=[9 * mm],
+            cornerRadii=[7, 7, 7, 7] if arredondada else None,
         )
         estilo = [
-            ('BACKGROUND', (0, 0), (0, 0), AZUL),
-            ('BACKGROUND', (1, 0), (1, 0), AZUL_CLARO),
+            ('BACKGROUND', (0, 0), (0, 0), cor),
+            ('BACKGROUND', (1, 0), (1, 0), cor_clara),
             ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
             ('LEFTPADDING', (0, 0), (0, 0), 0),
             ('RIGHTPADDING', (0, 0), (0, 0), 0),
@@ -406,7 +419,10 @@ class PedidoPdfService:
     # ── Arte do pedido ───────────────────────────────────────────────────
 
     @staticmethod
-    def _artes_do_pedido(pedido, e, largura_util=LARGURA_UTIL) -> list:
+    def _artes_do_pedido(
+        pedido, e, largura_util=LARGURA_UTIL, cor=AZUL,
+        cor_clara=AZUL_CLARO, arredondada=False,
+    ) -> list:
         """
         A ARTE, desenhada — logo depois do cliente, ainda na primeira página.
 
@@ -438,7 +454,10 @@ class PedidoPdfService:
         largura = largura_util / por_linha
         blocos = [
             Spacer(1, 4),
-            _barra_secao(None, 'ANEXOS COMPLEMENTARES', e, largura_util),
+            _barra_secao(
+                None, 'ANEXOS COMPLEMENTARES', e, largura_util,
+                cor=cor, cor_clara=cor_clara, arredondada=arredondada,
+            ),
             Spacer(1, 3),
         ]
 
@@ -545,14 +564,20 @@ class PedidoPdfService:
         return blocos
 
     @staticmethod
-    def _arte(item, e, largura_util=LARGURA_UTIL, altura_imagem=27 * mm) -> list:
+    def _arte(
+        item, e, largura_util=LARGURA_UTIL, altura_imagem=27 * mm,
+        cor=AZUL, cor_clara=AZUL_CLARO, arredondada=False,
+    ) -> list:
         personalizacoes = list(item.personalizacoes.all())
         visuais = list(item.visuais.all())
         if not personalizacoes and not visuais:
             return []
 
         blocos = [
-            _barra_secao(4, f'IMAGENS E IMPRESSÃO - {item.nome_exibicao}', e, largura_util),
+            _barra_secao(
+                4, f'IMAGENS E IMPRESSÃO - {item.nome_exibicao}', e, largura_util,
+                cor=cor, cor_clara=cor_clara, arredondada=arredondada,
+            ),
             Spacer(1, 4),
         ]
 
@@ -622,7 +647,10 @@ class PedidoPdfService:
         return blocos
 
     @staticmethod
-    def _grade(item, e, largura_util=LARGURA_UTIL) -> list:
+    def _grade(
+        item, e, largura_util=LARGURA_UTIL, cor=AZUL,
+        cor_clara=AZUL_CLARO, arredondada=False,
+    ) -> list:
         celulas = list(item.grade.all())
         if not celulas:
             return []
@@ -636,14 +664,20 @@ class PedidoPdfService:
         valores.append(str(total))
 
         largura = min(largura_util / len(cabecalho), 22 * mm)
-        tabela = _tabela([cabecalho, valores], [largura] * len(cabecalho))
+        tabela = _tabela(
+            [cabecalho, valores], [largura] * len(cabecalho),
+            cor_cabecalho=cor, fundo_linha=cor_clara, arredondada=arredondada,
+        )
         tabela.setStyle(TableStyle([
             ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
             ('FONTNAME', (-1, 1), (-1, 1), 'Helvetica-Bold'),
             ('BACKGROUND', (-1, 1), (-1, 1), FUNDO),
         ]))
 
-        return [Spacer(1, 4), _barra_secao(3, 'GRADE', e, largura_util), Spacer(1, 3), tabela]
+        return [Spacer(1, 4), _barra_secao(
+            3, 'GRADE', e, largura_util, cor=cor, cor_clara=cor_clara,
+            arredondada=arredondada,
+        ), Spacer(1, 3), tabela]
 
     # ── Personalização individual ────────────────────────────────────────
 
@@ -674,7 +708,10 @@ class PedidoPdfService:
         ]
 
     @staticmethod
-    def _personalizacao_item(item, e, largura_util=LARGURA_UTIL) -> list:
+    def _personalizacao_item(
+        item, e, largura_util=LARGURA_UTIL, cor=AZUL,
+        cor_clara=AZUL_CLARO, arredondada=False,
+    ) -> list:
         """Lista compacta e exclusiva do produto, sem repetir o nome dele."""
         pessoas = list(item.individuais.all())
         if not pessoas:
@@ -691,9 +728,13 @@ class PedidoPdfService:
             Spacer(1, 5),
             _barra_secao(
                 None, f'PERSONALIZAÇÃO POR PESSOA - {len(pessoas)}', e, largura_util,
+                cor=cor, cor_clara=cor_clara, arredondada=arredondada,
             ),
             Spacer(1, 3),
-            _tabela(dados, larguras),
+            _tabela(
+                dados, larguras, cor_cabecalho=cor, fundo_linha=cor_clara,
+                arredondada=arredondada,
+            ),
         ]
 
     # ── Financeiro ───────────────────────────────────────────────────────

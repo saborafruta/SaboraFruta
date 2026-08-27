@@ -146,6 +146,39 @@ class ArteNoPdfTests(TestCase):
 
         self.assertEqual(_imagens(OrcamentoPdfService.gerar(pedido)), antes + 1)
 
+    def test_orcamento_exibe_pagamento_previsto_validade_e_prazo_padrao(self):
+        from reportlab.platypus import Paragraph, Table
+
+        from apps.moda.services.orcamento_pdf import _estilos
+
+        pedido = self._pedido()
+        pedido.previsao_pagamento = [
+            {'forma': 'pix', 'valor': '40.00'},
+            {'forma': 'credito_parcelado', 'valor': '60.00'},
+        ]
+        pedido.save(update_fields=['previsao_pagamento'])
+        estilos = _estilos()
+
+        pagamento = OrcamentoPdfService._pagamento_previsto(pedido, estilos)
+        tabela = [bloco for bloco in pagamento if isinstance(bloco, Table)][-1]
+        texto_pagamento = ' '.join(
+            celula.getPlainText() if isinstance(celula, Paragraph) else str(celula)
+            for linha in tabela._cellvalues for celula in linha
+        )
+        quadro_observacoes = [
+            bloco for bloco in OrcamentoPdfService._observacoes(pedido, estilos)
+            if isinstance(bloco, Table)
+        ][-1]
+        observacoes = ' '.join(
+            celula.getPlainText() if isinstance(celula, Paragraph) else str(celula)
+            for linha in quadro_observacoes._cellvalues for celula in linha
+        )
+
+        self.assertIn('PIX', texto_pagamento)
+        self.assertIn('Crédito parcelado', texto_pagamento)
+        self.assertIn('válido por 5 dias', observacoes)
+        self.assertIn('até 30 dias úteis', observacoes)
+
     # ── O que NÃO pode ir ────────────────────────────────────────────────
 
     def test_documento_anexado_tambem_entra_no_pdf(self):

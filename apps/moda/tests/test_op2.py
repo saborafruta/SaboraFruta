@@ -353,7 +353,9 @@ class Op2Tests(TestCase):
 
         self.assertContains(resposta, 'op2-item-personalizacao')
         self.assertContains(resposta, f'name="item" value="{item.pk}"')
-        self.assertContains(resposta, 'Adicionar nome / número')
+        self.assertContains(resposta, 'Adicionar nomes / números')
+        self.assertContains(resposta, '+ Outro nome / número')
+        self.assertContains(resposta, 'Salvar todos')
         self.assertNotContains(resposta, '4. Grade e personalização individual')
 
     def test_financeiro_inicia_com_total_da_op_e_permite_edicao(self):
@@ -407,6 +409,65 @@ class Op2Tests(TestCase):
         self.assertContains(resposta, reverse('financeiro:receber_detail', args=[conta.pk]))
         self.assertContains(resposta, reverse('financeiro:receber_baixar', args=[conta.pk]))
         self.assertContains(resposta, 'Quitar saldo')
+
+    def test_nova_op_oferece_multiplas_formas_de_pagamento_previsto(self):
+        self.client.force_login(self._usuario())
+        session = self.client.session
+        session['filial_id'] = self.filial.pk
+        session.save()
+
+        resposta = self.client.get(reverse('moda:op2-create'))
+
+        for rotulo in (
+            'Dinheiro', 'Boleto', 'PIX', 'Cartão de débito',
+            'Crédito parcelado', 'Crédito à vista',
+        ):
+            self.assertContains(resposta, rotulo)
+        self.assertContains(resposta, '+ Outra forma')
+        self.assertContains(resposta, 'não gera lançamentos no financeiro')
+
+    def test_nova_op_salva_divisao_do_pagamento_previsto(self):
+        self.client.force_login(self._usuario())
+        session = self.client.session
+        session['filial_id'] = self.filial.pk
+        session.save()
+
+        resposta = self.client.post(reverse('moda:op2-create'), {
+            'cliente': str(self.cliente.pk),
+            'item_0_produto_id': str(self.produto.pk),
+            'item_0_quantidade': '2',
+            'item_0_valor_unitario': '50',
+            'pagamento_0_forma': 'pix',
+            'pagamento_0_valor': '40.00',
+            'pagamento_1_forma': 'credito_parcelado',
+            'pagamento_1_valor': '60.00',
+        })
+
+        criado = PedidoProducao.objects.exclude(pk=self.pedido.pk).get()
+        self.assertRedirects(resposta, reverse('moda:op2-detail', args=[criado.pk]))
+        self.assertEqual(criado.previsao_pagamento, [
+            {'forma': 'pix', 'valor': '40.00'},
+            {'forma': 'credito_parcelado', 'valor': '60.00'},
+        ])
+
+    def test_pagamento_previsto_precisa_fechar_o_total_do_orcamento(self):
+        self.client.force_login(self._usuario())
+        session = self.client.session
+        session['filial_id'] = self.filial.pk
+        session.save()
+
+        resposta = self.client.post(reverse('moda:op2-create'), {
+            'cliente': str(self.cliente.pk),
+            'item_0_produto_id': str(self.produto.pk),
+            'item_0_quantidade': '2',
+            'item_0_valor_unitario': '50',
+            'pagamento_0_forma': 'pix',
+            'pagamento_0_valor': '80.00',
+        })
+
+        self.assertEqual(resposta.status_code, 200)
+        self.assertContains(resposta, 'a soma das formas deve ser igual ao total')
+        self.assertFalse(PedidoProducao.objects.exclude(pk=self.pedido.pk).exists())
 
     def test_clique_no_modelo_atualiza_draft_sem_chamada_indireta(self):
         self.client.force_login(self._usuario())
@@ -523,10 +584,7 @@ class Op2Tests(TestCase):
         self.assertContains(resposta, 'class="op2-item-tools"')
         self.assertContains(resposta, 'Detalhes técnicos')
         self.assertContains(resposta, 'x-show="gradeEdit"')
-        self.assertContains(
-            resposta,
-            'x-data="{detalhes:false,gradeEdit:false,personalizar:false,tamanhoIndividual:\'\'}"',
-        )
+        self.assertContains(resposta, 'personalizar:false,pessoas:[')
         self.assertContains(resposta, 'op2-detail-itens')
         self.assertContains(resposta, 'op2WorkspaceCompleto()')
         self.assertContains(resposta, "abrirEditarProduto('")
@@ -638,7 +696,56 @@ class Op2Tests(TestCase):
 
         self.assertContains(resposta, '.op2-vaga.is-esgotada')
         self.assertContains(resposta, '"restam": 0')
-        self.assertContains(resposta, ':disabled="vaga.restam<=0"')
+        self.assertContains(
+            resposta,
+            'String(pessoa.tamanhoId)!==String(vaga.id)',
+        )
+
+    def test_op_existente_salva_varios_nomes_em_um_unico_envio(self):
+        tamanho = Tamanho.objects.create(filial=self.filial, sigla='M', ordem=10)
+        item = self._item(quantidade=2)
+        ItemGradePedido.objects.create(item=item, tamanho=tamanho, quantidade=2)
+        self.client.force_login(self._usuario())
+        session = self.client.session
+        session['filial_id'] = self.filial.pk
+        session.save()
+
+        resposta = self.client.post(reverse('moda:op2-action', args=[self.pedido.pk]), {
+            'acao': 'individuais',
+            'item': str(item.pk),
+            'individual_0_tamanho': str(tamanho.pk),
+            'individual_0_nome': 'ANA',
+            'individual_0_numero': '7',
+            'individual_1_tamanho': str(tamanho.pk),
+            'individual_1_nome': 'BIA',
+            'individual_1_numero': '10',
+        })
+
+        self.assertRedirects(resposta, reverse('moda:op2-detail', args=[self.pedido.pk]))
+        self.assertEqual(
+            list(item.individuais.order_by('ordem').values_list('nome', 'numero')),
+            [('ANA', '7'), ('BIA', '10')],
+        )
+
+    def test_op_existente_atualiza_pagamento_previsto_sem_gerar_financeiro(self):
+        self._item(quantidade=2)
+        self.client.force_login(self._usuario())
+        session = self.client.session
+        session['filial_id'] = self.filial.pk
+        session.save()
+
+        resposta = self.client.post(reverse('moda:op2-action', args=[self.pedido.pk]), {
+            'acao': 'previsao_pagamento',
+            'pagamento_0_forma': 'dinheiro',
+            'pagamento_0_valor': '25.00',
+            'pagamento_1_forma': 'pix',
+            'pagamento_1_valor': '75.00',
+        })
+
+        self.assertRedirects(resposta, reverse('moda:op2-detail', args=[self.pedido.pk]))
+        self.pedido.refresh_from_db()
+        self.assertEqual(len(self.pedido.previsao_pagamento), 2)
+        self.assertIsNone(self.pedido.financeiro_gerado_em)
 
     def test_editor_completo_atualiza_estrutura_impressao_e_grade(self):
         tamanho_p = Tamanho.objects.create(filial=self.filial, sigla='P', ordem=10)
