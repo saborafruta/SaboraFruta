@@ -6,10 +6,14 @@ from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.views import View
 
+from django.core.exceptions import ValidationError
+
 from apps.core.services.exceptions import DadosInvalidosError
 from apps.core.services.permissions import PermissaoRequiredMixin
+from apps.logistica.forms_carga import PERFIS, ItemCargaForm
 from apps.logistica.forms_viagem import ViagemForm
-from apps.logistica.models import Viagem
+from apps.fiscal.models import NaturezaOperacao
+from apps.logistica.models import ItemCarga, Viagem
 from apps.logistica.services.viagem import ViagemService
 
 
@@ -169,6 +173,21 @@ class ViagemDetailView(PermissaoRequiredMixin, View):
             'entregas': ViagemService.entregas_por_cliente(viagem),
             'conciliacao': ViagemService.conciliacao(viagem),
             'proximos_status': viagem.proximos_status(),
+            # UM FORMULARIO POR BOTAO. Cada operacao pergunta coisas
+            # diferentes; um so' com seletor de natureza obrigaria quem monta a
+            # carga a pensar em CFOP no meio do carregamento.
+            'formularios_carga': [
+                {
+                    'especie': especie,
+                    'perfil': PERFIS[especie],
+                    'form': ItemCargaForm(viagem=viagem, especie=especie),
+                }
+                for especie in (
+                    NaturezaOperacao.Especie.VENDA,
+                    NaturezaOperacao.Especie.REMESSA_VENDA_FORA,
+                    NaturezaOperacao.Especie.BONIFICACAO,
+                )
+            ] if viagem.editavel else [],
             'pendencias': (
                 ViagemService.conferir_antes_de_fechar(viagem)
                 if viagem.editavel else []
@@ -228,4 +247,67 @@ class ViagemCancelarView(PermissaoRequiredMixin, View):
             messages.error(request, str(erro))
             return volta
         messages.success(request, 'Viagem cancelada.')
+        return volta
+
+
+class ViagemItemCreateView(PermissaoRequiredMixin, View):
+    """Põe uma linha na carga, com a natureza que o botão escolheu."""
+
+    permissao_modulo = 'logistica'
+    permissao_acao = 'editar'
+
+    def post(self, request, pk, especie):
+        viagem = get_object_or_404(Viagem.objects.for_filial(_filial(request)), pk=pk)
+        volta = redirect('logistica:viagem-detail', pk=viagem.pk)
+        if especie not in PERFIS:
+            messages.error(request, 'Operação desconhecida para a carga.')
+            return volta
+
+        form = ItemCargaForm(request.POST, viagem=viagem, especie=especie)
+        if not form.is_valid():
+            # O ERRO PRECISA DIZER QUAL CAMPO. "Revise os dados" manda a pessoa
+            # procurar sozinha no formulario que ela nem tem mais na tela.
+            detalhe = '; '.join(
+                f'{form.fields[campo].label or campo}: {erros[0]}'
+                for campo, erros in form.errors.items() if campo in form.fields
+            ) or ' '.join(form.non_field_errors())
+            messages.error(request, f'Item não adicionado. {detalhe}'.strip())
+            return volta
+
+        try:
+            ViagemService.adicionar_item(viagem, {
+                'natureza': form.cleaned_data['natureza'],
+                'produto': form.cleaned_data['produto'],
+                'lote': form.cleaned_data.get('lote'),
+                'cliente': form.cleaned_data.get('cliente'),
+                'pedido_venda': form.cleaned_data.get('pedido_venda'),
+                'quantidade': form.cleaned_data['quantidade'],
+                'valor_unitario': form.cleaned_data.get('valor_unitario') or 0,
+                'peso_kg': form.cleaned_data.get('peso_kg') or 0,
+                'observacao': form.cleaned_data.get('observacao') or '',
+            })
+        except (DadosInvalidosError, ValidationError) as erro:
+            messages.error(request, str(getattr(erro, 'message', erro)))
+            return volta
+
+        messages.success(
+            request, f'{PERFIS[especie]["titulo"]}: item incluído na carga.',
+        )
+        return volta
+
+
+class ViagemItemDeleteView(PermissaoRequiredMixin, View):
+    permissao_modulo = 'logistica'
+    permissao_acao = 'editar'
+
+    def post(self, request, pk, item_pk):
+        viagem = get_object_or_404(Viagem.objects.for_filial(_filial(request)), pk=pk)
+        item = get_object_or_404(ItemCarga.objects.filter(viagem=viagem), pk=item_pk)
+        volta = redirect('logistica:viagem-detail', pk=viagem.pk)
+        try:
+            ViagemService.remover_item(viagem, item)
+        except DadosInvalidosError as erro:
+            messages.error(request, str(erro))
+            return volta
+        messages.success(request, 'Item removido da carga.')
         return volta

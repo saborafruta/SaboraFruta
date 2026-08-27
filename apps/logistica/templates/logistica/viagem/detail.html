@@ -82,6 +82,116 @@
     </div>
   {% endif %}
 
+  {% if formularios_carga %}
+    {% comment %}
+      TRES BOTOES, TRES FORMULARIOS. Um so' com seletor de natureza obrigaria
+      quem monta a carga a escolher CFOP no meio do carregamento. O botao ja'
+      sabe o que esta' sendo carregado, e o formulario so' pergunta o que
+      aquela operacao precisa: venda tem comprador, venda fora nao tem, e
+      bonificacao tem destinatario mas nao cobra dele.
+    {% endcomment %}
+    <div class="card p-4 space-y-4" x-data="{ aberto: '' }">
+      <div class="flex flex-wrap gap-2">
+        {% for bloco in formularios_carga %}
+          <button type="button"
+                  @click="aberto = aberto === '{{ bloco.especie }}' ? '' : '{{ bloco.especie }}'"
+                  class="btn-secondary text-sm"
+                  :style="aberto === '{{ bloco.especie }}'
+                    ? (temaClaro ? 'background:#dbeafe;color:#1d4ed8;' : 'background:#1e3a5f;color:#93c5fd;')
+                    : ''">
+            + {{ bloco.perfil.titulo|cut:"Adicionar "|capfirst }}
+          </button>
+        {% endfor %}
+      </div>
+
+      {% for bloco in formularios_carga %}
+        <div x-show="aberto === '{{ bloco.especie }}'" x-cloak
+             class="rounded-xl p-4 space-y-3 border"
+             :style="temaClaro
+               ? 'background:#f8fafc;border-color:#e2e8f0;'
+               : 'background:rgba(255,255,255,0.02);border-color:#2a2a2e;'">
+          <div>
+            <h4 class="text-sm font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
+              {{ bloco.perfil.titulo }}
+            </h4>
+            <p class="text-xs mt-0.5" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+              {{ bloco.perfil.ajuda }}
+            </p>
+          </div>
+
+          <form method="post"
+                action="{% url 'logistica:viagem-item-create' viagem.pk bloco.especie %}"
+                class="space-y-3">
+            {% csrf_token %}
+            {{ bloco.form.natureza }}
+
+            <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+              <label class="space-y-1.5 lg:col-span-2">
+                <span class="text-[11px] font-semibold uppercase tracking-wide block"
+                      :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Produto *</span>
+                {{ bloco.form.produto }}
+              </label>
+              <label class="space-y-1.5">
+                <span class="text-[11px] font-semibold uppercase tracking-wide block"
+                      :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Quantidade *</span>
+                {{ bloco.form.quantidade }}
+              </label>
+              <label class="space-y-1.5">
+                <span class="text-[11px] font-semibold uppercase tracking-wide block"
+                      :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">{{ bloco.perfil.rotulo_valor }}</span>
+                {{ bloco.form.valor_unitario }}
+              </label>
+            </div>
+
+            <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+              {% if bloco.perfil.exige_cliente %}
+                <label class="space-y-1.5 lg:col-span-2">
+                  <span class="text-[11px] font-semibold uppercase tracking-wide block"
+                        :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Destinatário *</span>
+                  {{ bloco.form.cliente }}
+                </label>
+              {% else %}
+                {% comment %}
+                  SEM CAMPO DE CLIENTE. A mercadoria sai justamente porque ainda
+                  nao tem comprador; oferecer o campo convidaria a preencher, e
+                  a nota de remessa sairia contra alguem que nao comprou nada.
+                {% endcomment %}
+                <div class="lg:col-span-2 flex items-end">
+                  <p class="text-xs pb-2" :style="temaClaro ? 'color:#94a3b8;' : 'color:#71717a;'">
+                    Sem destinatário: o comprador aparece durante a rota.
+                  </p>
+                </div>
+              {% endif %}
+
+              {% if bloco.perfil.mostra_pedido %}
+                <label class="space-y-1.5">
+                  <span class="text-[11px] font-semibold uppercase tracking-wide block"
+                        :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Pedido</span>
+                  {{ bloco.form.pedido_venda }}
+                </label>
+              {% endif %}
+
+              <label class="space-y-1.5">
+                <span class="text-[11px] font-semibold uppercase tracking-wide block"
+                      :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Peso (kg)</span>
+                {{ bloco.form.peso_kg }}
+              </label>
+            </div>
+
+            <div class="flex flex-wrap items-end gap-3">
+              <label class="space-y-1.5 flex-1 min-w-48">
+                <span class="text-[11px] font-semibold uppercase tracking-wide block"
+                      :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Observação</span>
+                {{ bloco.form.observacao }}
+              </label>
+              <button type="submit" class="btn-primary text-sm">Incluir na carga</button>
+            </div>
+          </form>
+        </div>
+      {% endfor %}
+    </div>
+  {% endif %}
+
   <div class="card overflow-hidden">
     <div class="p-4 pb-3 flex flex-wrap items-center justify-between gap-3">
       <h3 class="text-sm font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">Carga</h3>
@@ -95,6 +205,7 @@
             <th class="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wide" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Destinatário</th>
             <th class="text-right px-4 py-3 text-xs font-semibold uppercase tracking-wide" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Qtd</th>
             <th class="text-right px-4 py-3 text-xs font-semibold uppercase tracking-wide" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Valor</th>
+            {% if pode_agir and viagem.editavel %}<th class="px-4 py-3" style="width:60px;"></th>{% endif %}
           </tr>
         </thead>
         <tbody>
@@ -109,10 +220,18 @@
               </td>
               <td class="px-4 py-3 text-right" :style="temaClaro ? 'color:#374151;' : 'color:#d1d5db;'">{{ item.quantidade|floatformat:"-3" }}</td>
               <td class="px-4 py-3 text-right" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">R$ {{ item.valor_total|floatformat:2 }}</td>
+              {% if pode_agir and viagem.editavel %}
+                <td class="px-4 py-3 text-right">
+                  <form method="post" action="{% url 'logistica:viagem-item-delete' viagem.pk item.pk %}">
+                    {% csrf_token %}
+                    <button type="submit" class="p-1.5 rounded text-xs" style="color:#ef4444;" title="Remover da carga">✕</button>
+                  </form>
+                </td>
+              {% endif %}
             </tr>
           {% empty %}
             <tr>
-              <td colspan="5" class="px-4 py-10 text-center" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+              <td colspan="6" class="px-4 py-10 text-center" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
                 A carga ainda está vazia.
               </td>
             </tr>
