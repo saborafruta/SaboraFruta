@@ -43,6 +43,11 @@ PERFIS = {
         'mostra_pedido': False,
         # O valor existe mesmo sem venda: e' o que a nota de remessa declara.
         'rotulo_valor': 'Valor para a remessa',
+        # LOTE IMPORTA AQUI. A mercadoria vai passar dias na rua e voltar em
+        # parte; sem saber qual lote saiu, o que retorna nao tem como voltar
+        # para o lote certo, e a rastreabilidade se perde na estrada.
+        'mostra_lote': True,
+        'etiqueta': 'Mercadoria em venda fora do estabelecimento',
     },
     NaturezaOperacao.Especie.BONIFICACAO: {
         'titulo': 'Adicionar bonificação',
@@ -95,6 +100,13 @@ class ItemCargaForm(forms.ModelForm):
         # "---------" nao diz o que fazer. O resto da tela ja' usa "escolher".
         self.fields['produto'].empty_label = '— escolher produto —'
         self.fields['lote'].empty_label = '— sem lote —'
+        # SO' LOTE COM SALDO: oferecer lote zerado convida a carregar o que nao
+        # existe, e o erro so' aparece na baixa de estoque, ja' no fechamento.
+        from apps.estoque.models import LoteProduto
+        self.fields['lote'].queryset = (
+            LoteProduto.objects.filter(filial=filial, quantidade_atual__gt=0)
+            .select_related('produto').order_by('data_validade', 'numero_lote')
+        )
         self.fields['cliente'].queryset = Cliente.objects.for_filial(filial).filter(ativo=True)
         self.fields['pedido_venda'].queryset = PedidoVenda.objects.filter(filial=filial)
 

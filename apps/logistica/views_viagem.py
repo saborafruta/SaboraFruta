@@ -2,6 +2,7 @@
 from django.contrib import messages
 from django.core.paginator import Paginator
 from django.db.models import Count, Q, Sum
+from django.http import JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.views import View
@@ -12,7 +13,10 @@ from apps.core.services.exceptions import DadosInvalidosError
 from apps.core.services.permissions import PermissaoRequiredMixin
 from apps.logistica.forms_carga import PERFIS, ItemCargaForm
 from apps.logistica.forms_viagem import ViagemForm
+from apps.cadastros.models import Cliente
 from apps.fiscal.models import NaturezaOperacao
+from apps.fiscal.services.natureza_operacao_service import NaturezaOperacaoService
+from apps.produtos.models import Produto
 from apps.logistica.models import ItemCarga, Viagem
 from apps.vendas.models.pedido import PedidoVenda
 from apps.logistica.services.vendas_para_carga import (
@@ -369,3 +373,73 @@ class ViagemVendasView(PermissaoRequiredMixin, View):
             f'{len(pedidos)} venda(s) na carga — {criados} item(ns) incluído(s).',
         )
         return volta
+
+
+class ViagemTratamentoFiscalJsonView(PermissaoRequiredMixin, View):
+    """
+    O que vai sair na nota deste item, antes de ele entrar na carga.
+
+    MOSTRAR ANTES, E NÃO DEPOIS. O CFOP não é digitado — vem da parametrização
+    da natureza — mas quem monta a carga precisa VER qual saiu, e com que CST.
+    Descobrir que a regra estava errada na hora de transmitir é tarde: a
+    mercadoria já saiu do estoque e o caminhão está esperando.
+
+    Também é aqui que a falta de regra aparece cedo, com o texto que diz onde
+    cadastrar.
+    """
+
+    permissao_modulo = 'logistica'
+
+    def get(self, request, pk):
+        filial = _filial(request)
+        viagem = get_object_or_404(Viagem.objects.for_filial(filial), pk=pk)
+
+        produto = (
+            Produto.objects.for_filial(filial)
+            .filter(pk=request.GET.get('produto') or 0).first()
+        )
+        natureza = (
+            NaturezaOperacao.objects.for_filial(filial)
+            .filter(pk=request.GET.get('natureza') or 0).first()
+        )
+        if produto is None or natureza is None:
+            return JsonResponse({'ok': False, 'erro': 'Escolha o produto.'})
+
+        cliente = (
+            Cliente.objects.for_filial(filial)
+            .filter(pk=request.GET.get('cliente') or 0).first()
+        )
+        try:
+            fiscal = NaturezaOperacaoService.para_item(
+                natureza=natureza, filial=filial, produto=produto,
+                cliente=cliente, data=viagem.data_saida,
+            )
+        except DadosInvalidosError as erro:
+            return JsonResponse({'ok': False, 'erro': str(erro)})
+
+        return JsonResponse({
+            'ok': True,
+            'produto': {
+                'descricao': produto.descricao,
+                'ncm': produto.ncm or '',
+                'cest': produto.cest or '',
+                'unidade': (
+                    produto.unidade_medida.sigla if produto.unidade_medida_id else ''
+                ),
+                'preco_venda': str(produto.preco_venda or 0),
+            },
+            'fiscal': {
+                'natureza': fiscal.natureza_operacao,
+                'cfop': fiscal.cfop,
+                'cst_icms': fiscal.cst_icms,
+                'csosn': fiscal.csosn,
+                'cst_pis': fiscal.cst_pis,
+                'cst_cofins': fiscal.cst_cofins,
+                'aliquota_icms': (
+                    str(fiscal.aliquota_icms) if fiscal.aliquota_icms is not None else ''
+                ),
+                # A TRILHA DE POR QUE ESTA REGRA. Sem isso, "por que saiu 6910
+                # nesta nota?" vira arqueologia de banco seis meses depois.
+                'justificativa': fiscal.justificativa,
+            },
+        })

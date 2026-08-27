@@ -118,6 +118,7 @@
       {% for bloco in formularios_carga %}
         {% if bloco.especie != 'venda' %}
         <div x-show="aberto === '{{ bloco.especie }}'" x-cloak
+             x-data="tratamentoFiscal({{ viagem.pk }})"
              class="rounded-xl p-4 space-y-3 border"
              :style="temaClaro
                ? 'background:#f8fafc;border-color:#e2e8f0;'
@@ -141,17 +142,17 @@
               <label class="space-y-1.5 lg:col-span-2">
                 <span class="text-[11px] font-semibold uppercase tracking-wide block"
                       :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Produto *</span>
-                {{ bloco.form.produto }}
+                <div @change="consultar()">{{ bloco.form.produto }}</div>
               </label>
               <label class="space-y-1.5">
                 <span class="text-[11px] font-semibold uppercase tracking-wide block"
                       :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Quantidade *</span>
-                {{ bloco.form.quantidade }}
+                <div @input="quantidade = $event.target.value">{{ bloco.form.quantidade }}</div>
               </label>
               <label class="space-y-1.5">
                 <span class="text-[11px] font-semibold uppercase tracking-wide block"
                       :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">{{ bloco.perfil.rotulo_valor }}</span>
-                {{ bloco.form.valor_unitario }}
+                <div @input="valorUnitario = $event.target.value">{{ bloco.form.valor_unitario }}</div>
               </label>
             </div>
 
@@ -160,7 +161,7 @@
                 <label class="space-y-1.5 lg:col-span-2">
                   <span class="text-[11px] font-semibold uppercase tracking-wide block"
                         :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Destinatário *</span>
-                  {{ bloco.form.cliente }}
+                  <div @change="consultar()">{{ bloco.form.cliente }}</div>
                 </label>
               {% else %}
                 {% comment %}
@@ -188,6 +189,82 @@
                       :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Peso (kg)</span>
                 {{ bloco.form.peso_kg }}
               </label>
+            </div>
+
+            {% if bloco.perfil.mostra_lote %}
+              {% comment %}
+                LOTE IMPORTA NA VENDA FORA. A mercadoria passa dias na rua e
+                volta em parte; sem saber qual lote saiu, o que retorna nao tem
+                como voltar para o lote certo, e a rastreabilidade se perde na
+                estrada.
+              {% endcomment %}
+              <div class="grid gap-3 sm:grid-cols-2">
+                <label class="space-y-1.5">
+                  <span class="text-[11px] font-semibold uppercase tracking-wide block"
+                        :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Lote</span>
+                  {{ bloco.form.lote }}
+                </label>
+              </div>
+            {% endif %}
+
+            {% comment %}
+              O QUE VAI SAIR NA NOTA, ANTES DE INCLUIR. O CFOP nao e' digitado
+              -- vem da parametrizacao da natureza -- mas quem monta a carga
+              precisa VER qual saiu, e com que CST. Descobrir que a regra estava
+              errada na hora de transmitir e' tarde: a mercadoria ja' saiu do
+              estoque e o caminhao esta' esperando.
+            {% endcomment %}
+            <div x-show="fiscal.carregado" x-cloak
+                 class="rounded-lg p-3 text-xs space-y-2 border"
+                 :style="fiscal.erro
+                   ? (temaClaro ? 'background:#fef3c7;border-color:#f59e0b;' : 'background:#2a2210;border-color:#b45309;')
+                   : (temaClaro ? 'background:#eff6ff;border-color:#bfdbfe;' : 'background:#141c2a;border-color:#1e3a5f;')">
+
+              <p x-show="fiscal.erro" x-text="fiscal.erro" style="color:#d97706;"></p>
+
+              <div x-show="!fiscal.erro" class="grid gap-2 sm:grid-cols-3 lg:grid-cols-6">
+                <div>
+                  <span class="block text-[10px] uppercase tracking-wide"
+                        :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Unidade</span>
+                  <span class="font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'"
+                        x-text="fiscal.produto.unidade || '—'"></span>
+                </div>
+                <div>
+                  <span class="block text-[10px] uppercase tracking-wide"
+                        :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">NCM</span>
+                  <span class="font-mono font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'"
+                        x-text="fiscal.produto.ncm || '—'"></span>
+                </div>
+                <div>
+                  <span class="block text-[10px] uppercase tracking-wide"
+                        :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">CFOP</span>
+                  <span class="font-mono font-semibold" :style="temaClaro ? 'color:#1d4ed8;' : 'color:#93c5fd;'"
+                        x-text="fiscal.fiscal.cfop"></span>
+                </div>
+                <div>
+                  <span class="block text-[10px] uppercase tracking-wide"
+                        :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">CST / CSOSN</span>
+                  <span class="font-mono font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'"
+                        x-text="fiscal.fiscal.csosn || fiscal.fiscal.cst_icms || '—'"></span>
+                </div>
+                <div>
+                  <span class="block text-[10px] uppercase tracking-wide"
+                        :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">PIS / COFINS</span>
+                  <span class="font-mono font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'"
+                        x-text="(fiscal.fiscal.cst_pis || '—') + ' / ' + (fiscal.fiscal.cst_cofins || '—')"></span>
+                </div>
+                <div>
+                  <span class="block text-[10px] uppercase tracking-wide"
+                        :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Valor total</span>
+                  <span class="font-semibold" :style="temaClaro ? 'color:#15803d;' : 'color:#86efac;'"
+                        x-text="'R$ ' + valorTotal()"></span>
+                </div>
+              </div>
+
+              <p x-show="!fiscal.erro" class="text-[10px]"
+                 :style="temaClaro ? 'color:#94a3b8;' : 'color:#71717a;'"
+                 x-text="'Natureza: ' + fiscal.fiscal.natureza
+                         + ' · ' + (fiscal.fiscal.justificativa.interestadual ? 'interestadual' : 'interna')"></p>
             </div>
 
             <div class="flex flex-wrap items-end gap-3">
@@ -224,8 +301,30 @@
         <tbody>
           {% for item in itens %}
             <tr class="border-b" :style="temaClaro ? 'border-color:#f1f5f9;' : 'border-color:#2a2a2e;'">
-              <td class="px-4 py-3" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">{{ item.produto }}</td>
-              <td class="px-4 py-3" :style="temaClaro ? 'color:#374151;' : 'color:#d1d5db;'">{{ item.natureza.descricao }}</td>
+              <td class="px-4 py-3" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
+                {{ item.produto }}
+                {% if item.lote %}
+                  <span class="block text-[11px] font-mono" :style="temaClaro ? 'color:#94a3b8;' : 'color:#71717a;'">
+                    lote {{ item.lote.numero_lote }}
+                  </span>
+                {% endif %}
+              </td>
+              <td class="px-4 py-3" :style="temaClaro ? 'color:#374151;' : 'color:#d1d5db;'">
+                {{ item.natureza.descricao }}
+                {% comment %}
+                  A ETIQUETA IDENTIFICA A MERCADORIA NA CARGA. Ela sai da
+                  empresa mas continua sendo da empresa, e vai ter que voltar ou
+                  ser vendida -- quem olha a lista precisa distinguir isso de
+                  uma venda comum sem ler o CFOP.
+                {% endcomment %}
+                {% if item.natureza.especie == 'remessa_venda_fora' %}
+                  <span class="soft-pill is-amber block mt-1 w-fit text-[10px]">
+                    Mercadoria em venda fora do estabelecimento
+                  </span>
+                {% elif item.natureza.especie == 'bonificacao' %}
+                  <span class="soft-pill is-slate block mt-1 w-fit text-[10px]">Bonificação</span>
+                {% endif %}
+              </td>
               <td class="px-4 py-3" :style="temaClaro ? 'color:#374151;' : 'color:#d1d5db;'">
                 {% if item.cliente %}{{ item.cliente }}{% else %}
                   <span class="text-xs" :style="temaClaro ? 'color:#94a3b8;' : 'color:#71717a;'">sem comprador ainda</span>
@@ -329,4 +428,50 @@
   {% endif %}
 
 </div>
+<script>
+  function tratamentoFiscal(viagemId) {
+    return {
+      viagemId: viagemId,
+      quantidade: '',
+      valorUnitario: '',
+      fiscal: { carregado: false, erro: '', produto: {}, fiscal: {} },
+
+      consultar() {
+        const raiz = this.$el;
+        const valor = (nome) => {
+          const campo = raiz.querySelector('[name="' + nome + '"]');
+          return campo ? campo.value : '';
+        };
+        const produto = valor('produto');
+        if (!produto) { this.fiscal = { carregado: false, erro: '', produto: {}, fiscal: {} }; return; }
+
+        const params = new URLSearchParams({
+          produto: produto,
+          natureza: valor('natureza'),
+          cliente: valor('cliente') || '',
+        });
+        fetch('/logistica/viagens/' + this.viagemId + '/tratamento-fiscal/?' + params,
+              { headers: { 'X-Requested-With': 'XMLHttpRequest' } })
+          .then((r) => r.json())
+          .then((d) => {
+            this.fiscal = {
+              carregado: true,
+              erro: d.ok ? '' : (d.erro || 'Não foi possível resolver o fiscal.'),
+              produto: d.produto || {},
+              fiscal: d.fiscal || {},
+            };
+          })
+          /* Falha de rede nao pode travar o carregamento: o fechamento da carga
+             confere a regra fiscal de novo, e la' o erro para de verdade. */
+          .catch(() => { this.fiscal = { carregado: false, erro: '', produto: {}, fiscal: {} }; });
+      },
+
+      valorTotal() {
+        const q = parseFloat((this.quantidade || '0').replace(',', '.')) || 0;
+        const v = parseFloat((this.valorUnitario || '0').replace(',', '.')) || 0;
+        return (q * v).toFixed(2).replace('.', ',');
+      },
+    };
+  }
+</script>
 {% endblock %}
