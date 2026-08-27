@@ -295,6 +295,35 @@ class Op2Tests(TestCase):
         self.assertContains(resposta, 'quantidadeDraftGrade(grade.id,tamanhoId)')
         self.assertContains(resposta, 'Cada grade selecionada possui suas próprias quantidades')
 
+    def test_quantidade_total_da_nova_op_acompanha_soma_das_grades(self):
+        self.client.force_login(self._usuario())
+        session = self.client.session
+        session['filial_id'] = self.filial.pk
+        session.save()
+
+        resposta = self.client.get(reverse('moda:op2-create'))
+
+        self.assertContains(resposta, ':readonly="draft.grades.length>0"')
+        self.assertContains(
+            resposta,
+            'if(this.draft.grades.length)this.draft.quantidade=total;',
+        )
+
+    def test_quantidade_total_ao_editar_op_acompanha_soma_das_grades(self):
+        self._item(quantidade=5)
+        self.client.force_login(self._usuario())
+        session = self.client.session
+        session['filial_id'] = self.filial.pk
+        session.save()
+
+        resposta = self.client.get(reverse('moda:op2-detail', args=[self.pedido.pk]))
+
+        self.assertContains(resposta, 'this.sincronizarQuantidadeModal()')
+        self.assertContains(
+            resposta,
+            'if(this.draft.grades.length)this.draft.quantidade=this.totalGrades()',
+        )
+
     def test_clique_no_modelo_atualiza_draft_sem_chamada_indireta(self):
         self.client.force_login(self._usuario())
         session = self.client.session
