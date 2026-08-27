@@ -19,17 +19,17 @@ from io import BytesIO
 
 from django.utils import timezone
 from reportlab.lib import colors
-from reportlab.lib.pagesizes import A4
+from reportlab.lib.pagesizes import A4, landscape
 from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
 from reportlab.lib.units import mm
 from reportlab.lib.utils import ImageReader
 from reportlab.platypus import (
-    HRFlowable, Image, KeepTogether, PageBreak, Paragraph, SimpleDocTemplate,
+    HRFlowable, Image, KeepInFrame, KeepTogether, Paragraph, SimpleDocTemplate,
     Spacer, Table, TableStyle,
 )
 
 from .pdf_marca import (
-    ALTURA_TARJA, LARGURA_UTIL, MARGEM, bloco_empresa, desenhar_tarja, esc,
+    ALTURA_TARJA, MARGEM, bloco_empresa, desenhar_tarja, esc,
     estilos_empresa,
 )
 
@@ -37,6 +37,8 @@ AZUL = colors.HexColor('#2563eb')
 CINZA = colors.HexColor('#64748b')
 BORDA = colors.HexColor('#d1d5db')
 FUNDO = colors.HexColor('#f8fafc')
+PAGINA = landscape(A4)
+LARGURA_UTIL = PAGINA[0] - 2 * MARGEM
 
 # O QUE O PDF CONSEGUE DESENHAR. Não é a mesma lista de `pode_pre_visualizar`,
 # que é do NAVEGADOR: o SVG entra lá e não aqui, porque o `Image` do reportlab
@@ -52,7 +54,7 @@ def _estilos():
         'titulo': ParagraphStyle('t', parent=base['Title'], fontSize=16, spaceAfter=2),
         'secao': ParagraphStyle(
             's', parent=base['Heading2'], fontSize=10.5, textColor=AZUL,
-            spaceBefore=10, spaceAfter=4,
+            spaceBefore=5, spaceAfter=2,
         ),
         'normal': ParagraphStyle('n', parent=base['Normal'], fontSize=8.5, leading=11),
         'pequeno': ParagraphStyle(
@@ -68,8 +70,8 @@ def _tabela(dados, larguras, cabecalho=True):
         ('GRID', (0, 0), (-1, -1), 0.25, BORDA),
         ('FONTSIZE', (0, 0), (-1, -1), 8),
         ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
-        ('TOPPADDING', (0, 0), (-1, -1), 3),
-        ('BOTTOMPADDING', (0, 0), (-1, -1), 3),
+        ('TOPPADDING', (0, 0), (-1, -1), 2),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 2),
     ]
     if cabecalho:
         estilo += [
@@ -165,11 +167,11 @@ class PedidoPdfService:
     def gerar(cls, pedido, base_url: str = '') -> bytes:
         buffer = BytesIO()
         doc = SimpleDocTemplate(
-            buffer, pagesize=A4,
+            buffer, pagesize=PAGINA,
             leftMargin=MARGEM, rightMargin=MARGEM,
             # O topo abre ABAIXO da tarja, que é desenhada no canvas e não
             # participa do fluxo -- senão o texto entraria por baixo dela.
-            topMargin=ALTURA_TARJA + 10 * mm, bottomMargin=18 * mm,
+            topMargin=ALTURA_TARJA + 5 * mm, bottomMargin=18 * mm,
             title=f'Pedido {pedido.numero:06d}',
             author=str(pedido.filial),
         )
@@ -183,8 +185,43 @@ class PedidoPdfService:
         for indice, item in enumerate(pedido.itens.all()):
             elementos += cls._item(pedido, item, e, indice)
 
-        elementos += cls._personalizacao(pedido, e)
-        elementos += cls._financeiro(pedido, e)
+        personalizacao = cls._personalizacao(pedido, e, LARGURA_UTIL * 0.59)
+        financeiro = cls._financeiro(pedido, e, LARGURA_UTIL * 0.39)
+        # Até oito pessoas cabem ao lado do financeiro e deixam a ficha de
+        # uma OP comum em uma só folha. Listas maiores continuam em largura
+        # total para não encolher nomes e números até ficarem ilegíveis.
+        if personalizacao and pedido.individuais.count() <= 8:
+            fechamento = Table(
+                [[
+                    KeepInFrame(
+                        LARGURA_UTIL * 0.59, 60 * mm,
+                        personalizacao, mode='shrink',
+                    ),
+                    '',
+                    KeepInFrame(
+                        LARGURA_UTIL * 0.39, 60 * mm,
+                        financeiro, mode='shrink',
+                    ),
+                ]],
+                colWidths=[
+                    LARGURA_UTIL * 0.59,
+                    LARGURA_UTIL * 0.02,
+                    LARGURA_UTIL * 0.39,
+                ],
+            )
+            fechamento.setStyle(TableStyle([
+                ('VALIGN', (0, 0), (-1, -1), 'TOP'),
+                ('LEFTPADDING', (0, 0), (-1, -1), 0),
+                ('RIGHTPADDING', (0, 0), (-1, -1), 0),
+                ('TOPPADDING', (0, 0), (-1, -1), 0),
+                ('BOTTOMPADDING', (0, 0), (-1, -1), 0),
+            ]))
+            elementos.append(fechamento)
+        elif personalizacao:
+            elementos += cls._personalizacao(pedido, e, LARGURA_UTIL)
+            elementos += cls._financeiro(pedido, e, LARGURA_UTIL)
+        else:
+            elementos += cls._financeiro(pedido, e, LARGURA_UTIL)
 
         # A tarja e o rodapé são os dois desenhos de canvas da folha, e os
         # dois valem em TODA página: a marca no topo e a identificação com
@@ -229,7 +266,7 @@ class PedidoPdfService:
         largura = LARGURA_UTIL / 4
 
         return [
-            bloco_empresa(pedido.filial, e), Spacer(1, 12),
+            bloco_empresa(pedido.filial, e, LARGURA_UTIL), Spacer(1, 6),
             _tabela(dados, [largura] * 4, cabecalho=False), Spacer(1, 4),
         ]
 
@@ -306,7 +343,7 @@ class PedidoPdfService:
             imagens, rotulos = [], []
             for arte in faixa:
                 imagem = (
-                    _imagem(arte.arquivo, largura - 6 * mm, 45 * mm)
+                    _imagem(arte.arquivo, largura - 6 * mm, 34 * mm)
                     if arte.extensao in DESENHAVEIS else None
                 )
                 # Arquivo que não abre vira o NOME, e não um buraco: o
@@ -356,7 +393,7 @@ class PedidoPdfService:
         if indice:
             # Uma régua fina separa um produto do outro, já que a quebra de
             # página deixou de fazer esse papel.
-            blocos.append(Spacer(1, 10))
+            blocos.append(Spacer(1, 5))
             blocos.append(HRFlowable(
                 width='100%', thickness=0.5, color=BORDA, spaceAfter=6,
             ))
@@ -382,13 +419,12 @@ class PedidoPdfService:
             blocos.append(Spacer(1, 3))
             blocos.append(Paragraph(texto, e['pequeno']))
 
-        quantidade_visuais = len(item.visuais.all())
         blocos += cls._arte(item, e)
         blocos += cls._grade(item, e)
-        # Um item pode ter quantas fotos forem necessárias. Não tente manter
-        # um item inteiro numa única página quando a galeria já tem mais de
-        # uma linha, pois isso ultrapassa a altura útil do PDF.
-        return blocos if quantidade_visuais > 3 else [KeepTogether(blocos)]
+        # Na ficha horizontal, deixar os sub-blocos fluírem aproveita o
+        # restante da página. O KeepTogether empurrava o produto inteiro
+        # para outra folha mesmo quando ainda havia bastante espaço.
+        return blocos
 
     @staticmethod
     def _arte(item, e) -> list:
@@ -410,7 +446,7 @@ class PedidoPdfService:
                 campo = visual.imagem or (
                     getattr(visual.mockup, 'imagem', None) if visual.mockup_id else None
                 )
-                imagem = _imagem(campo, largura - 6 * mm, 42 * mm)
+                imagem = _imagem(campo, largura - 6 * mm, 27 * mm)
                 celulas.append(imagem or Paragraph('—', e['pequeno']))
             while len(celulas) < por_linha:
                 celulas.append('')
@@ -482,7 +518,7 @@ class PedidoPdfService:
     # ── Personalização individual ────────────────────────────────────────
 
     @staticmethod
-    def _personalizacao(pedido, e) -> list:
+    def _personalizacao(pedido, e, largura_util=LARGURA_UTIL) -> list:
         pessoas = list(pedido.individuais.all())
         if not pessoas:
             return []
@@ -497,9 +533,12 @@ class PedidoPdfService:
                 Paragraph(esc(p.item.nome_exibicao) if p.item_id else '—', e['celula']),
             ])
 
-        larguras = [10 * mm, LARGURA_UTIL - 78 * mm, 18 * mm, 20 * mm, 30 * mm]
+        larguras = [
+            8 * mm, largura_util * 0.28, 15 * mm, 18 * mm,
+            largura_util - (41 * mm + largura_util * 0.28),
+        ]
         return [
-            PageBreak(),
+            Spacer(1, 8),
             Paragraph(f'PERSONALIZAÇÃO POR PESSOA — {len(pessoas)}', e['secao']),
             _tabela(dados, larguras),
         ]
@@ -507,7 +546,7 @@ class PedidoPdfService:
     # ── Financeiro ───────────────────────────────────────────────────────
 
     @staticmethod
-    def _financeiro(pedido, e) -> list:
+    def _financeiro(pedido, e, largura_util=LARGURA_UTIL) -> list:
         def brl(valor):
             return f'R$ {valor:,.2f}'.replace(',', '_').replace('.', ',').replace('_', '.')
 
@@ -525,11 +564,17 @@ class PedidoPdfService:
                 ('Saldo', brl(pedido.saldo)),
             ]
 
+        rotulos_compactos = {
+            'Quantidade': 'Peças', 'Desconto': 'Desc.', 'Acréscimo': 'Acrésc.',
+        }
         dados = [
-            [Paragraph(f'<b>{rotulo}</b>' if rotulo == 'TOTAL' else rotulo, e['celula']),
-             Paragraph(f'<b>{valor}</b>' if rotulo == 'TOTAL' else valor,
-                       ParagraphStyle('v', parent=e['celula'], alignment=2))]
-            for rotulo, valor in linhas
+            [Paragraph(
+                f'<b>{rotulos_compactos.get(rotulo, rotulo)}</b>', e['celula'],
+            ) for rotulo, _ in linhas],
+            [Paragraph(
+                f'<b>{valor}</b>' if rotulo == 'TOTAL' else valor,
+                ParagraphStyle(f'v-{indice}', parent=e['celula'], alignment=2),
+            ) for indice, (rotulo, valor) in enumerate(linhas)],
         ]
 
         pagamento = []
@@ -539,9 +584,9 @@ class PedidoPdfService:
             pagamento.append(f'Condição: {pedido.condicao_pagamento}')
 
         blocos = [
-            Spacer(1, 10),
+            Spacer(1, 5),
             Paragraph('FINANCEIRO', e['secao']),
-            _tabela(dados, [LARGURA_UTIL - 45 * mm, 45 * mm], cabecalho=False),
+            _tabela(dados, [largura_util / len(linhas)] * len(linhas), cabecalho=False),
         ]
         if pagamento:
             blocos += [Spacer(1, 3), Paragraph(' · '.join(pagamento), e['normal'])]
@@ -553,7 +598,7 @@ class PedidoPdfService:
                 # <br/>: na ordem inversa o escape comeria a própria tag.
                 Paragraph(esc(pedido.observacoes).replace('\n', '<br/>'), e['normal']),
             ]
-        return [KeepTogether(blocos)] if len(blocos) < 6 else blocos
+        return blocos
 
     # ── Rodapé ───────────────────────────────────────────────────────────
 
@@ -605,11 +650,15 @@ class PedidoPdfService:
             canvas.drawString(MARGEM + 19 * mm, y + 5.5 * mm, f'Gerado em {gerado}')
             canvas.drawString(MARGEM + 19 * mm, y + 2.5 * mm, rodape_empresa[:110])
             canvas.drawRightString(
-                A4[0] - MARGEM, y + 2.5 * mm, f'Página {canvas.getPageNumber()}',
+                canvas._pagesize[0] - MARGEM, y + 2.5 * mm,
+                f'Página {canvas.getPageNumber()}',
             )
 
             canvas.setStrokeColor(BORDA)
-            canvas.line(MARGEM, y + 18 * mm, A4[0] - MARGEM, y + 18 * mm)
+            canvas.line(
+                MARGEM, y + 18 * mm,
+                canvas._pagesize[0] - MARGEM, y + 18 * mm,
+            )
             canvas.restoreState()
 
         return desenhar

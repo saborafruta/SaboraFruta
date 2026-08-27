@@ -943,6 +943,9 @@ class PedidoPdfView(ModaBaseView):
         resposta['Content-Disposition'] = (
             f'inline; filename="pedido-{pedido.numero:06d}.pdf"'
         )
+        resposta['Cache-Control'] = 'private, no-store, no-cache, must-revalidate, max-age=0'
+        resposta['Pragma'] = 'no-cache'
+        resposta['Expires'] = '0'
         return resposta
 
 
@@ -981,6 +984,12 @@ class OrcamentoPdfView(ModaBaseView):
         resposta['Content-Disposition'] = (
             f'inline; filename="orcamento-{pedido.numero:06d}.pdf"'
         )
+        # A URL do PDF é estável, mas seu conteúdo muda com cada imagem,
+        # grade e personalização. Sem isso o navegador reaproveita a versão
+        # anterior e parece que o que acabou de ser salvo não entrou.
+        resposta['Cache-Control'] = 'private, no-store, no-cache, must-revalidate, max-age=0'
+        resposta['Pragma'] = 'no-cache'
+        resposta['Expires'] = '0'
         return resposta
 
 

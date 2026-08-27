@@ -227,7 +227,12 @@ class ArteNoPdfTests(TestCase):
             pedido=pedido, descricao='Camisa Adulto', quantidade=5,
         )
 
-        self.assertEqual(_paginas(PedidoPdfService.gerar(pedido)), 1)
+        pdf = PedidoPdfService.gerar(pedido)
+        self.assertEqual(_paginas(pdf), 1)
+        self.assertRegex(
+            pdf,
+            rb'/MediaBox\s*\[\s*0\s+0\s+841\.\d+\s+595\.\d+\s*\]',
+        )
 
     # ── Cabeçalho ────────────────────────────────────────────────────────
 

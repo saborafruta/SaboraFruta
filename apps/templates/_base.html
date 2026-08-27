@@ -543,7 +543,7 @@
     }
 
     /* === TEMA CLARO — Header da página === */
-    body.tema-claro header {
+    body.tema-claro .app-topbar {
       background:
         radial-gradient(circle at 22% -60%, rgba(255,255,255,0.22), transparent 42%),
         linear-gradient(90deg, #f15a24 0%, #e8824a 50%, #c75a22 76%, #542412 100%) !important;
@@ -551,23 +551,23 @@
       box-shadow: 0 12px 30px rgba(241,90,36,0.16) !important;
     }
     /* Header — textos brancos no tema claro */
-    body.tema-claro header h1 { color: #fff !important; }
-    body.tema-claro header > div > div > button > span { color: #fff !important; }
-    body.tema-claro header > div > button > span { color: #fff !important; }
+    body.tema-claro .app-topbar h1 { color: #fff !important; }
+    body.tema-claro .app-topbar > div > div > button > span { color: #fff !important; }
+    body.tema-claro .app-topbar > div > button > span { color: #fff !important; }
     /* Dropdowns do header — preservar cores internas */
-    body.tema-claro header [x-show] .font-medium { color: #111827 !important; }
-    body.tema-claro header [x-show] .text-xs { color: #6b7280 !important; }
-    body.tema-claro header [x-show] a[href*="logout"],
-    body.tema-claro header [x-show] a[style*="f87171"] { color: #f87171 !important; }
-    body.tema-claro header [x-show] button span { color: #374151 !important; }
-    body.tema-claro header .trocar-empresa-action,
-    body.tema-claro header .trocar-empresa-action span,
-    body.tema-claro header .trocar-empresa-action svg {
+    body.tema-claro .app-topbar [x-show] .font-medium { color: #111827 !important; }
+    body.tema-claro .app-topbar [x-show] .text-xs { color: #6b7280 !important; }
+    body.tema-claro .app-topbar [x-show] a[href*="logout"],
+    body.tema-claro .app-topbar [x-show] a[style*="f87171"] { color: #f87171 !important; }
+    body.tema-claro .app-topbar [x-show] button span { color: #374151 !important; }
+    body.tema-claro .app-topbar .trocar-empresa-action,
+    body.tema-claro .app-topbar .trocar-empresa-action span,
+    body.tema-claro .app-topbar .trocar-empresa-action svg {
       color: #fff !important;
       stroke: currentColor !important;
     }
     /* Caixa dos dropdowns — fundo branco, sem sobreposição */
-    body.tema-claro header div[x-show] { background: #fff !important; color: #111827 !important; }
+    body.tema-claro .app-topbar div[x-show] { background: #fff !important; color: #111827 !important; }
     .header-location-button {
       flex: 0 1 440px;
       min-width: 320px;
@@ -624,7 +624,7 @@
     <div class="flex min-h-screen h-full" style="min-height:100vh;">
       {% include 'core/_sidebar.html' %}
       <div class="app-shell-content flex-1 flex flex-col min-w-0 w-full">
-<header class="relative z-40 h-14 flex items-center justify-between px-4 sm:px-6 flex-shrink-0"
+<header class="app-topbar relative z-40 h-14 flex items-center justify-between px-4 sm:px-6 flex-shrink-0"
         :style="temaClaro
           ? 'background:radial-gradient(circle at 22% -60%, rgba(255,255,255,0.22), transparent 42%), linear-gradient(90deg, #f15a24 0%, #e8824a 50%, #c75a22 76%, #542412 100%); border-bottom:1px solid rgba(255,255,255,0.16); border-radius:0 0 16px 0; box-shadow:0 12px 30px rgba(241,90,36,0.16);'
           : 'background:radial-gradient(circle at 44% -80%, rgba(59,130,246,0.22), transparent 42%), linear-gradient(90deg,#0f172a 0%,#172554 42%,#1e3a8a 58%,#0f172a 100%); border-bottom:1px solid rgba(59,130,246,0.20); box-shadow:0 12px 30px rgba(15,23,42,0.36);'">

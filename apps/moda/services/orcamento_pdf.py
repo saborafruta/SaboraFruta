@@ -171,7 +171,7 @@ class OrcamentoPdfService:
         elementos += PedidoPdfService._artes_do_pedido(pedido, e)
         for item in itens:
             elementos += PedidoPdfService._arte(item, e)
-        elementos += PedidoPdfService._personalizacao(pedido, e)
+        elementos += PedidoPdfService._personalizacao(pedido, e, LARGURA_UTIL)
         elementos += cls._observacoes(pedido, e)
         elementos += cls._assinatura(pedido, e)
 

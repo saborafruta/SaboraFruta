@@ -95,7 +95,9 @@ def desenhar_tarja(filial, titulo: str, subtitulo: str = ''):
     """
     def desenhar(canvas, doc):
         canvas.saveState()
-        largura, altura = A4
+        # Respeita a orientação escolhida pelo documento. O orçamento usa
+        # A4 retrato e a ficha de produção usa A4 paisagem.
+        largura, altura = canvas._pagesize
         canvas.setFillColor(VERMELHO)
         canvas.rect(0, altura - ALTURA_TARJA, largura, ALTURA_TARJA, stroke=0, fill=1)
 
@@ -136,7 +138,7 @@ def _campo(filial, empresa, nome: str) -> str:
     return (getattr(filial, nome, '') or getattr(empresa, nome, '') or '').strip()
 
 
-def bloco_empresa(filial, e) -> Table:
+def bloco_empresa(filial, e, largura_util=LARGURA_UTIL) -> Table:
     """
     Os dados da casa em duas colunas: identificação à esquerda, contato à
     direita.
@@ -191,7 +193,7 @@ def bloco_empresa(filial, e) -> Table:
     bloco = Table(
         [[Paragraph('<br/>'.join(esquerda), e['empresa']),
           Paragraph('<br/>'.join(direita), e['empresa_dir'])]],
-        colWidths=[LARGURA_UTIL * 0.55, LARGURA_UTIL * 0.45],
+        colWidths=[largura_util * 0.55, largura_util * 0.45],
     )
     bloco.setStyle(TableStyle([
         ('VALIGN', (0, 0), (-1, -1), 'TOP'),

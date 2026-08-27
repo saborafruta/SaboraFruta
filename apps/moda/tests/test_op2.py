@@ -394,6 +394,8 @@ class Op2Tests(TestCase):
         self.assertContains(resposta, 'abrirNovoProduto()')
         self.assertContains(resposta, 'rel="noopener"')
         self.assertContains(resposta, 'op2-order-header')
+        self.assertContains(resposta, '<h2 class="font-bold">Fotos e mockups</h2>')
+        self.assertContains(resposta, 'op2-aside .op2-gallery-grid')
 
     def test_nova_op_exibe_acoes_solicitadas(self):
         self.client.force_login(self._usuario())
@@ -405,8 +407,12 @@ class Op2Tests(TestCase):
 
         self.assertContains(resposta, '>Salvar</button>')
         self.assertContains(resposta, 'Salvar e enviar para cliente')
+        self.assertContains(resposta, 'value="enviar" formtarget="_blank"')
         self.assertContains(resposta, 'Cancelar OP')
         self.assertNotContains(resposta, 'Salvar e abrir orçamento PDF')
+        self.assertContains(resposta, 'body.tema-claro .app-topbar')
+        self.assertNotContains(resposta, 'body.tema-claro header {')
+        self.assertContains(resposta, '<div x-cloak class="grid sm:grid-cols-2')
 
     def test_modelo_carrega_tipo_de_impressao_no_editor(self):
         self.produto.tipo_impressao = ProdutoModa.TipoImpressao.SILK
@@ -689,6 +695,7 @@ class Op2Tests(TestCase):
         pdf = self.client.get(reverse('moda:pedido-orcamento-pdf', args=[criado.pk]))
         self.assertEqual(pdf.status_code, 200)
         self.assertTrue(pdf.content.startswith(b'%PDF-'))
+        self.assertIn('no-store', pdf['Cache-Control'])
 
     def test_cancelamento_permanece_mesmo_apos_sincronizar_itens(self):
         self._item(status=ItemPedidoProducao.StatusFluxo.ENTREGUE, entregue=10)
