@@ -61,6 +61,9 @@ class ResultadoFiscal:
     cst_ipi: str = ''
     aliquota_icms: Decimal | None = None
     reducao_base_icms: Decimal | None = None
+    aliquota_ipi: Decimal | None = None
+    aliquota_pis: Decimal | None = None
+    aliquota_cofins: Decimal | None = None
     finalidade_nfe: int = 1
     informacoes_complementares: str = ''
     regra_id: int | None = None
@@ -111,6 +114,9 @@ class NaturezaOperacaoService:
             cst_ipi=regra.cst_ipi,
             aliquota_icms=regra.aliquota_icms,
             reducao_base_icms=regra.reducao_base_icms,
+            aliquota_ipi=regra.aliquota_ipi,
+            aliquota_pis=regra.aliquota_pis,
+            aliquota_cofins=regra.aliquota_cofins,
             finalidade_nfe=regra.finalidade_nfe,
             informacoes_complementares=regra.informacoes_complementares,
             regra_id=regra.pk,

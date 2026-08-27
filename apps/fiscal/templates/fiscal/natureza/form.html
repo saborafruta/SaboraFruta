@@ -1,0 +1,210 @@
+{% extends "_base.html" %}
+{% block title %}{{ title }}{% endblock %}
+{% block page_title %}{{ title }}{% endblock %}
+{% block content %}
+<div class="max-w-6xl mx-auto space-y-5">
+
+  <div>
+    <p class="text-sm mb-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+      <a href="{% url 'fiscal:natureza-list' %}" :style="temaClaro ? 'color:#3b82f6;' : 'color:#60a5fa;'">Naturezas de operação</a>
+      <span class="mx-1">›</span> {{ title }}
+    </p>
+    <h2 class="text-2xl font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">{{ title }}</h2>
+  </div>
+
+  <form method="post" class="card p-6 space-y-6">
+    {% csrf_token %}
+    {% if form.non_field_errors %}
+      <div class="rounded-lg border border-red-500/30 bg-red-500/10 p-3 text-sm text-red-500">{{ form.non_field_errors }}</div>
+    {% endif %}
+
+    <section class="space-y-4">
+      <h3 class="text-xs font-bold uppercase tracking-wider pb-2 border-b"
+          :style="temaClaro ? 'color:#475569;border-color:#e2e8f0;' : 'color:#cbd5e1;border-color:#2a2a2e;'">
+        A operação
+      </h3>
+      <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        <label class="space-y-1.5">
+          <span class="text-xs font-semibold uppercase tracking-wide block" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Código *</span>
+          {{ form.codigo }}
+          {% if form.codigo.errors %}<p class="text-xs text-red-500 mt-0.5">{{ form.codigo.errors.0 }}</p>{% endif %}
+        </label>
+        <label class="space-y-1.5">
+          <span class="text-xs font-semibold uppercase tracking-wide block" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Natureza da operação *</span>
+          {{ form.descricao }}
+          <span class="text-[11px] block" :style="temaClaro ? 'color:#94a3b8;' : 'color:#71717a;'">
+            É o texto que vai no campo da nota.
+          </span>
+        </label>
+        <label class="space-y-1.5">
+          <span class="text-xs font-semibold uppercase tracking-wide block" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Comportamento *</span>
+          {{ form.especie }}
+          {% comment %}
+            A ESPECIE E' O QUE O CODIGO EXECUTA -- baixa estoque, concilia,
+            gera financeiro. E' conjunto fechado de proposito: acrescentar
+            especie e' mudar comportamento, nao configuracao.
+          {% endcomment %}
+          <span class="text-[11px] block" :style="temaClaro ? 'color:#94a3b8;' : 'color:#71717a;'">
+            Define o que o sistema faz além de emitir a nota.
+          </span>
+        </label>
+      </div>
+
+      <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
+        <label class="flex items-center gap-2 text-sm" :style="temaClaro ? 'color:#374151;' : 'color:#d1d5db;'">
+          {{ form.movimenta_estoque }} Baixa estoque
+        </label>
+        <label class="flex items-center gap-2 text-sm" :style="temaClaro ? 'color:#374151;' : 'color:#d1d5db;'">
+          {{ form.gera_financeiro }} Gera cobrança
+        </label>
+        <label class="flex items-center gap-2 text-sm" :style="temaClaro ? 'color:#374151;' : 'color:#d1d5db;'">
+          {{ form.exige_destinatario }} Exige destinatário
+        </label>
+        <label class="flex items-center gap-2 text-sm" :style="temaClaro ? 'color:#374151;' : 'color:#d1d5db;'">
+          {{ form.entra_no_mdfe }} Entra no MDF-e
+        </label>
+        <label class="flex items-center gap-2 text-sm" :style="temaClaro ? 'color:#374151;' : 'color:#d1d5db;'">
+          {{ form.ativo }} Ativa
+        </label>
+      </div>
+
+      <label class="block space-y-1.5">
+        <span class="text-xs font-semibold uppercase tracking-wide block" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Observação</span>
+        {{ form.observacao }}
+      </label>
+    </section>
+
+    <div class="flex flex-wrap items-center justify-end gap-3 pt-4 border-t"
+         :style="temaClaro ? 'border-color:#e2e8f0;' : 'border-color:#2a2a2e;'">
+      <a href="{{ cancel_url }}" class="btn-secondary">Cancelar</a>
+      <button type="submit" class="btn-primary">Salvar natureza</button>
+    </div>
+  </form>
+
+  {% if natureza %}
+    <div class="card overflow-hidden">
+      <div class="p-4 pb-3">
+        <h3 class="text-sm font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">Regras</h3>
+        {% comment %}
+          A REGRA MAIS ESPECIFICA GANHA. Campo vazio significa "qualquer", e e'
+          o que permite cadastrar o geral uma vez e tratar so' as excecoes.
+        {% endcomment %}
+        <p class="text-xs mt-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+          Campo vazio vale para qualquer valor. Quando duas regras servem, vence
+          a mais específica — produto, depois NCM, depois UF.
+        </p>
+      </div>
+      <div class="overflow-x-auto">
+        <table class="w-full text-sm">
+          <thead>
+            <tr :style="temaClaro ? 'border-bottom:1px solid #e5e7eb;background:#f8fafc;' : 'border-bottom:1px solid #2a2a2e;background:#1e1e20;'">
+              <th class="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wide" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Alvo</th>
+              <th class="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wide" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">CFOP</th>
+              <th class="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wide" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">CST / CSOSN</th>
+              <th class="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wide" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">PIS / COFINS / IPI</th>
+              <th class="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wide" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Vigência</th>
+              {% if pode_agir %}<th class="px-4 py-3" style="width:60px;"></th>{% endif %}
+            </tr>
+          </thead>
+          <tbody>
+            {% for regra in regras %}
+              <tr class="border-b" :style="temaClaro ? 'border-color:#f1f5f9;' : 'border-color:#2a2a2e;'">
+                <td class="px-4 py-3 text-xs" :style="temaClaro ? 'color:#374151;' : 'color:#d1d5db;'">
+                  {% if regra.produto %}{{ regra.produto }}{% endif %}
+                  {% if regra.ncm %}<span class="font-mono">NCM {{ regra.ncm }}</span>{% endif %}
+                  {% if regra.uf_destino %}→ {{ regra.uf_destino }}{% endif %}
+                  {% if regra.somente_interestadual %}interestadual{% endif %}
+                  {% if regra.regime_tributario %}· {{ regra.regime_tributario }}{% endif %}
+                  {% if not regra.produto and not regra.ncm and not regra.uf_destino and not regra.somente_interestadual and not regra.regime_tributario %}
+                    <span :style="temaClaro ? 'color:#94a3b8;' : 'color:#71717a;'">padrão da natureza</span>
+                  {% endif %}
+                </td>
+                <td class="px-4 py-3 font-mono font-semibold" :style="temaClaro ? 'color:#1d4ed8;' : 'color:#93c5fd;'">{{ regra.cfop }}</td>
+                <td class="px-4 py-3 font-mono text-xs" :style="temaClaro ? 'color:#374151;' : 'color:#d1d5db;'">
+                  {{ regra.csosn|default:regra.cst_icms|default:"—" }}
+                  {% if regra.aliquota_icms %}<span class="block">{{ regra.aliquota_icms }}%</span>{% endif %}
+                </td>
+                <td class="px-4 py-3 font-mono text-xs" :style="temaClaro ? 'color:#374151;' : 'color:#d1d5db;'">
+                  {{ regra.cst_pis|default:"—" }} / {{ regra.cst_cofins|default:"—" }} / {{ regra.cst_ipi|default:"—" }}
+                </td>
+                <td class="px-4 py-3 text-xs" :style="temaClaro ? 'color:#374151;' : 'color:#d1d5db;'">
+                  {% if regra.vigencia_inicio %}de {{ regra.vigencia_inicio|date:"d/m/Y" }}{% endif %}
+                  {% if regra.vigencia_fim %} até {{ regra.vigencia_fim|date:"d/m/Y" }}{% endif %}
+                  {% if not regra.vigencia_inicio and not regra.vigencia_fim %}sempre{% endif %}
+                  {% if not regra.ativo %}<span class="soft-pill is-slate ml-1 text-[10px]">inativa</span>{% endif %}
+                </td>
+                {% if pode_agir %}
+                  <td class="px-4 py-3 text-right">
+                    <form method="post" action="{% url 'fiscal:natureza-regra-delete' natureza.pk regra.pk %}">
+                      {% csrf_token %}
+                      <button type="submit" class="p-1.5 rounded text-xs" style="color:#ef4444;" title="Remover regra">✕</button>
+                    </form>
+                  </td>
+                {% endif %}
+              </tr>
+            {% empty %}
+              <tr>
+                <td colspan="6" class="px-4 py-8 text-center text-sm" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+                  Sem regra, esta natureza não emite nota nenhuma — o sistema
+                  recusa em vez de chutar um CFOP.
+                </td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+
+      {% if pode_agir and form_regra %}
+        <div class="border-t p-4 space-y-3" :style="temaClaro ? 'border-color:#e2e8f0;' : 'border-color:#2a2a2e;'">
+          <h4 class="text-xs font-semibold uppercase tracking-wide" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Nova regra</h4>
+          <form method="post" action="{% url 'fiscal:natureza-regra-create' natureza.pk %}" class="space-y-3">
+            {% csrf_token %}
+
+            <p class="text-[11px] font-semibold uppercase tracking-wide" :style="temaClaro ? 'color:#94a3b8;' : 'color:#71717a;'">Para quem vale</p>
+            <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-6">
+              <label class="space-y-1"><span class="text-[11px] block" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">UF origem</span>{{ form_regra.uf_origem }}</label>
+              <label class="space-y-1"><span class="text-[11px] block" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">UF destino</span>{{ form_regra.uf_destino }}</label>
+              <label class="space-y-1 flex flex-col justify-end"><span class="flex items-center gap-2 text-xs" :style="temaClaro ? 'color:#374151;' : 'color:#d1d5db;'">{{ form_regra.somente_interestadual }} Interestadual</span></label>
+              <label class="space-y-1"><span class="text-[11px] block" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Regime</span>{{ form_regra.regime_tributario }}</label>
+              <label class="space-y-1"><span class="text-[11px] block" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">NCM</span>{{ form_regra.ncm }}</label>
+              <label class="space-y-1"><span class="text-[11px] block" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Produto</span>{{ form_regra.produto }}</label>
+            </div>
+
+            <p class="text-[11px] font-semibold uppercase tracking-wide pt-2" :style="temaClaro ? 'color:#94a3b8;' : 'color:#71717a;'">O que ela devolve</p>
+            <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-6">
+              <label class="space-y-1"><span class="text-[11px] block" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">CFOP *</span>{{ form_regra.cfop }}</label>
+              <label class="space-y-1"><span class="text-[11px] block" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">CST ICMS</span>{{ form_regra.cst_icms }}</label>
+              <label class="space-y-1"><span class="text-[11px] block" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">CSOSN</span>{{ form_regra.csosn }}</label>
+              <label class="space-y-1"><span class="text-[11px] block" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">ICMS %</span>{{ form_regra.aliquota_icms }}</label>
+              <label class="space-y-1"><span class="text-[11px] block" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Red. base %</span>{{ form_regra.reducao_base_icms }}</label>
+              <label class="space-y-1"><span class="text-[11px] block" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Finalidade</span>{{ form_regra.finalidade_nfe }}</label>
+            </div>
+            <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-6">
+              <label class="space-y-1"><span class="text-[11px] block" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">CST PIS</span>{{ form_regra.cst_pis }}</label>
+              <label class="space-y-1"><span class="text-[11px] block" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">PIS %</span>{{ form_regra.aliquota_pis }}</label>
+              <label class="space-y-1"><span class="text-[11px] block" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">CST COFINS</span>{{ form_regra.cst_cofins }}</label>
+              <label class="space-y-1"><span class="text-[11px] block" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">COFINS %</span>{{ form_regra.aliquota_cofins }}</label>
+              <label class="space-y-1"><span class="text-[11px] block" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">CST IPI</span>{{ form_regra.cst_ipi }}</label>
+              <label class="space-y-1"><span class="text-[11px] block" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">IPI %</span>{{ form_regra.aliquota_ipi }}</label>
+            </div>
+            <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+              <label class="space-y-1"><span class="text-[11px] block" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Vigência de</span>{{ form_regra.vigencia_inicio }}</label>
+              <label class="space-y-1"><span class="text-[11px] block" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Vigência até</span>{{ form_regra.vigencia_fim }}</label>
+              <label class="space-y-1 sm:col-span-2"><span class="text-[11px] block" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Natureza (sobrescreve)</span>{{ form_regra.natureza_operacao_texto }}</label>
+            </div>
+            <label class="block space-y-1">
+              <span class="text-[11px] block" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Informações complementares</span>
+              {{ form_regra.informacoes_complementares }}
+            </label>
+
+            <div class="flex justify-end">
+              <button type="submit" class="btn-primary text-sm">Incluir regra</button>
+            </div>
+          </form>
+        </div>
+      {% endif %}
+    </div>
+  {% endif %}
+
+</div>
+{% endblock %}

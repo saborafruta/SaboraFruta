@@ -1,0 +1,99 @@
+{% extends "_base.html" %}
+{% block title %}Naturezas de operação{% endblock %}
+{% block page_title %}Naturezas de operação{% endblock %}
+{% block content %}
+<div class="space-y-5">
+
+  <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+    <div>
+      <h2 class="text-2xl font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
+        Naturezas de operação
+      </h2>
+      {% comment %}
+        E' A TELA QUE TIRA O FISCAL DO CODIGO. Sem ela a parametrizacao existe
+        so' no banco, e mudar um CFOP volta a ser tarefa de quem tem acesso ao
+        servidor -- que e' exatamente o que a tabela veio evitar.
+      {% endcomment %}
+      <p class="text-sm mt-0.5" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+        CFOP, CST/CSOSN e tributação de cada operação. O sistema consulta daqui
+        na hora de emitir — nada fica fixo no código.
+      </p>
+    </div>
+    {% if pode_agir %}
+      <a href="{% url 'fiscal:natureza-create' %}" class="btn-primary">+ Nova natureza</a>
+    {% endif %}
+  </div>
+
+  <form method="get" class="card p-4 grid grid-cols-1 md:grid-cols-12 gap-3">
+    <div class="md:col-span-10">
+      <label for="especie" class="block text-[11px] font-semibold uppercase tracking-wide mb-1"
+             :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Operação</label>
+      <select id="especie" name="especie" class="form-input">
+        <option value="">Todas as operações</option>
+        {% for valor, rotulo in especie_choices %}
+          <option value="{{ valor }}" {% if valor == especie_filtro %}selected{% endif %}>{{ rotulo }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="md:col-span-2 flex gap-2 md:items-end md:pb-px">
+      <button type="submit" class="btn-secondary w-full justify-center">Filtrar</button>
+    </div>
+  </form>
+
+  <div class="card overflow-hidden">
+    <div class="overflow-x-auto">
+      <table class="w-full text-sm">
+        <thead>
+          <tr :style="temaClaro ? 'border-bottom:1px solid #e5e7eb;background:#f8fafc;' : 'border-bottom:1px solid #2a2a2e;background:#1e1e20;'">
+            <th class="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wide" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Natureza</th>
+            <th class="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wide" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Operação</th>
+            <th class="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wide" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Comportamento</th>
+            <th class="text-right px-4 py-3 text-xs font-semibold uppercase tracking-wide" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Regras</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for natureza in naturezas %}
+            <tr class="table-row-hover border-b" :style="temaClaro ? 'border-color:#f1f5f9;' : 'border-color:#2a2a2e;'">
+              <td class="px-4 py-3">
+                <a class="font-semibold hover:underline" :style="temaClaro ? 'color:#1d4ed8;' : 'color:#93c5fd;'"
+                   href="{% url 'fiscal:natureza-edit' natureza.pk %}">{{ natureza.descricao }}</a>
+                <span class="block text-[11px] font-mono" :style="temaClaro ? 'color:#94a3b8;' : 'color:#71717a;'">{{ natureza.codigo }}</span>
+              </td>
+              <td class="px-4 py-3" :style="temaClaro ? 'color:#374151;' : 'color:#d1d5db;'">
+                {{ natureza.get_especie_display }}
+                {% if not natureza.ativo %}
+                  <span class="soft-pill is-slate ml-1 text-[10px]">inativa</span>
+                {% endif %}
+              </td>
+              <td class="px-4 py-3 text-xs" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+                {% if natureza.movimenta_estoque %}baixa estoque{% else %}só documento{% endif %}
+                {% if natureza.gera_financeiro %} · cobra{% else %} · sem cobrança{% endif %}
+                {% if not natureza.exige_destinatario %} · sem destinatário{% endif %}
+              </td>
+              <td class="px-4 py-3 text-right">
+                {% comment %}
+                  NATUREZA SEM REGRA NAO EMITE NADA: o resolvedor recusa em vez
+                  de chutar um CFOP, e o lugar de descobrir isso e' aqui.
+                {% endcomment %}
+                {% if natureza.qtd_regras %}
+                  <span :style="temaClaro ? 'color:#374151;' : 'color:#d1d5db;'">{{ natureza.qtd_regras }}</span>
+                {% else %}
+                  <span class="soft-pill is-amber text-[10px]">sem regra</span>
+                {% endif %}
+              </td>
+            </tr>
+          {% empty %}
+            <tr>
+              <td colspan="4" class="px-4 py-12 text-center" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+                Nenhuma natureza cadastrada. Sem elas o sistema não emite nota —
+                ele recusa em vez de chutar um CFOP.
+              </td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+</div>
+{% endblock %}

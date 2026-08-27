@@ -14,11 +14,14 @@ from apps.core.services.permissions import PermissaoRequiredMixin
 from apps.logistica.forms_carga import PERFIS, ItemCargaForm
 from apps.logistica.forms_viagem import ViagemForm
 from apps.cadastros.models import Cliente
+from apps.financeiro.constants.enums import StatusDocumentoFiscal
+from apps.financeiro.models.fiscal import DocumentoFiscal
 from apps.fiscal.models import NaturezaOperacao
 from apps.fiscal.services.natureza_operacao_service import NaturezaOperacaoService
 from apps.produtos.models import Produto
 from apps.logistica.models import ItemCarga, Viagem
 from apps.vendas.models.pedido import PedidoVenda
+from apps.logistica.services.remessa_nfe import RemessaVendaForaService
 from apps.logistica.services.vendas_para_carga import (
     CARREGAVEIS, VendasParaCargaService,
 )
@@ -181,6 +184,13 @@ class ViagemDetailView(PermissaoRequiredMixin, View):
             'entregas': ViagemService.entregas_por_cliente(viagem),
             'conciliacao': ViagemService.conciliacao(viagem),
             'proximos_status': viagem.proximos_status(),
+            'remessa': DocumentoFiscal.objects.filter(
+                origem_tipo='viagem_remessa', origem_id=viagem.pk,
+            ).exclude(status=StatusDocumentoFiscal.CANCELADA).first(),
+            'pendencias_remessa': (
+                RemessaVendaForaService.conferir(viagem)
+                if RemessaVendaForaService.itens_da_viagem(viagem) else []
+            ),
             # UM FORMULARIO POR BOTAO. Cada operacao pergunta coisas
             # diferentes; um so' com seletor de natureza obrigaria quem monta a
             # carga a pensar em CFOP no meio do carregamento.
@@ -443,3 +453,25 @@ class ViagemTratamentoFiscalJsonView(PermissaoRequiredMixin, View):
                 'justificativa': fiscal.justificativa,
             },
         })
+
+
+class ViagemEmitirRemessaView(PermissaoRequiredMixin, View):
+    """Emite a NF-e de remessa para venda fora do estabelecimento."""
+
+    permissao_modulo = 'logistica'
+    permissao_acao = 'editar'
+
+    def post(self, request, pk):
+        viagem = get_object_or_404(Viagem.objects.for_filial(_filial(request)), pk=pk)
+        volta = redirect('logistica:viagem-detail', pk=viagem.pk)
+        try:
+            documento = RemessaVendaForaService.emitir(viagem, usuario=request.user)
+        except DadosInvalidosError as erro:
+            messages.error(request, str(erro))
+            return volta
+        messages.success(
+            request,
+            f'Remessa {documento.numero}/{documento.serie} gerada e pendente '
+            'de transmissão à SEFAZ.',
+        )
+        return volta

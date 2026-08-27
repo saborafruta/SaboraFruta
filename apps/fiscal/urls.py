@@ -1,10 +1,17 @@
 from django.urls import path
 
-from apps.fiscal import views
+from apps.fiscal import views, views_natureza
 
 app_name = 'fiscal'
 
 urlpatterns = [
+    # Configurações Fiscais → Naturezas de operação
+    path('naturezas/', views_natureza.NaturezaOperacaoListView.as_view(), name='natureza-list'),
+    path('naturezas/nova/', views_natureza.NaturezaOperacaoFormView.as_view(), name='natureza-create'),
+    path('naturezas/<int:pk>/', views_natureza.NaturezaOperacaoFormView.as_view(), name='natureza-edit'),
+    path('naturezas/<int:pk>/regras/', views_natureza.RegraNaturezaCreateView.as_view(), name='natureza-regra-create'),
+    path('naturezas/<int:pk>/regras/<int:regra_pk>/remover/', views_natureza.RegraNaturezaDeleteView.as_view(), name='natureza-regra-delete'),
+
     path('manifesto/', views.ManifestoFiscalListView.as_view(), name='manifesto-list'),
     path(
         'manifesto/saidas/<int:pk>/consultar/',

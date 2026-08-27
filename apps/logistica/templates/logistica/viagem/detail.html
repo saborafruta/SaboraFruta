@@ -393,6 +393,36 @@
     </div>
   {% endif %}
 
+  {% if remessa or pendencias_remessa %}
+    {% comment %}
+      A REMESSA E' O DOCUMENTO QUE AMPARA A MERCADORIA SEM COMPRADOR. Ela e'
+      emitida pela empresa contra ela mesma -- e sem ela a carga sai
+      desacompanhada de documento.
+    {% endcomment %}
+    <div class="card p-4 space-y-3">
+      <h3 class="text-sm font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
+        Remessa para venda fora do estabelecimento
+      </h3>
+      {% if remessa %}
+        <p class="text-sm" :style="temaClaro ? 'color:#374151;' : 'color:#d1d5db;'">
+          NF-e <span class="font-mono font-semibold">{{ remessa.numero }}/{{ remessa.serie }}</span>
+          · {{ remessa.get_status_display }}
+        </p>
+      {% elif pendencias_remessa %}
+        <ul class="text-sm space-y-1" :style="temaClaro ? 'color:#374151;' : 'color:#d1d5db;'">
+          {% for pendencia in pendencias_remessa %}<li>· {{ pendencia }}</li>{% endfor %}
+        </ul>
+      {% else %}
+        {% if pode_agir %}
+          <form method="post" action="{% url 'logistica:viagem-emitir-remessa' viagem.pk %}">
+            {% csrf_token %}
+            <button type="submit" class="btn-primary text-sm">Gerar NF-e de remessa</button>
+          </form>
+        {% endif %}
+      {% endif %}
+    </div>
+  {% endif %}
+
   {% if pode_agir %}
     <div class="card p-4 flex flex-wrap items-center gap-3">
       {% if viagem.editavel and itens %}

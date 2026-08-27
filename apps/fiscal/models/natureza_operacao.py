@@ -197,6 +197,9 @@ class RegraNaturezaOperacao(TimestampedModel):
     cst_ipi = models.CharField(max_length=2, blank=True)
     aliquota_icms = models.DecimalField(max_digits=7, decimal_places=4, null=True, blank=True)
     reducao_base_icms = models.DecimalField(max_digits=7, decimal_places=4, null=True, blank=True)
+    aliquota_ipi = models.DecimalField(max_digits=7, decimal_places=4, null=True, blank=True)
+    aliquota_pis = models.DecimalField(max_digits=7, decimal_places=4, null=True, blank=True)
+    aliquota_cofins = models.DecimalField(max_digits=7, decimal_places=4, null=True, blank=True)
     finalidade_nfe = models.PositiveSmallIntegerField(
         default=1,
         help_text='1 normal, 2 complementar, 3 ajuste, 4 devolução.',
