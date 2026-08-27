@@ -67,6 +67,15 @@
         <p style="font-size:16px; line-height:1.25; margin:2px 0 9px; font-weight:800;">
           {{ pedido.cliente }}
         </p>
+        {% firstof pedido.cliente.celular pedido.cliente.telefone as telefone_cliente %}
+        <p style="font-size:11px; line-height:1.35; margin:-5px 0 9px; color:#4b5563;">
+          <strong>Contato:</strong>
+          {% if pedido.cliente.contato_nome %}{{ pedido.cliente.contato_nome }}{% endif %}
+          {% if pedido.cliente.contato_nome and telefone_cliente %} · {% endif %}
+          {% if telefone_cliente %}{{ telefone_cliente }}{% endif %}
+          {% if pedido.cliente.email %}{% if pedido.cliente.contato_nome or telefone_cliente %} · {% endif %}{{ pedido.cliente.email }}{% endif %}
+          {% if not pedido.cliente.contato_nome and not telefone_cliente and not pedido.cliente.email %}Não informado{% endif %}
+        </p>
         <p style="font-size:10px; line-height:1.2; margin:0; color:#6b7280;
                   font-weight:700; text-transform:uppercase; letter-spacing:.06em;">
           Produto desta caixa

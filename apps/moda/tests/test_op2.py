@@ -375,6 +375,39 @@ class Op2Tests(TestCase):
         self.assertContains(resposta, 'O valor atual da OP já vem preenchido e pode ser editado.')
         self.assertContains(resposta, 'name="valor_total"')
 
+    def test_op_mostra_extrato_e_atalho_para_quitar_titulo(self):
+        from datetime import date
+
+        from apps.financeiro.constants.enums import StatusContaReceber
+        from apps.financeiro.models import ContaReceber, PagamentoContaReceber
+
+        conta = ContaReceber.objects.create(
+            filial=self.filial, cliente=self.cliente,
+            documento_tipo='pedido_moda', documento_id=self.pedido.pk,
+            documento_numero=str(self.pedido.numero), parcela=1, total_parcelas=1,
+            valor_original=Decimal('500.00'), valor_final=Decimal('500.00'),
+            valor_pago=Decimal('200.00'), valor_saldo=Decimal('300.00'),
+            data_emissao=date.today(), data_vencimento=date.today(),
+            status=StatusContaReceber.PAGO_PARCIAL,
+        )
+        PagamentoContaReceber.objects.create(
+            filial=self.filial, conta_receber=conta,
+            data_pagamento=date.today(), valor_pago=Decimal('200.00'),
+        )
+        self.client.force_login(self._usuario())
+        session = self.client.session
+        session['filial_id'] = self.filial.pk
+        session.save()
+
+        resposta = self.client.get(reverse('moda:op2-detail', args=[self.pedido.pk]))
+
+        self.assertContains(resposta, 'Extrato de pagamentos')
+        self.assertContains(resposta, 'R$ 200,00')
+        self.assertContains(resposta, 'R$ 300,00')
+        self.assertContains(resposta, reverse('financeiro:receber_detail', args=[conta.pk]))
+        self.assertContains(resposta, reverse('financeiro:receber_baixar', args=[conta.pk]))
+        self.assertContains(resposta, 'Quitar saldo')
+
     def test_clique_no_modelo_atualiza_draft_sem_chamada_indireta(self):
         self.client.force_login(self._usuario())
         session = self.client.session

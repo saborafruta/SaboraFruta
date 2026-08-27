@@ -665,6 +665,33 @@ class Op2DetailView(ModaBaseView):
             pedido.data_prevista_entrega
             or pedido.data_pedido
         )
+        pode_ver_financeiro = request.user.tem_permissao('financeiro', 'ver')
+        pode_quitar_financeiro = (
+            pode_ver_financeiro
+            and request.user.tem_permissao('financeiro', 'editar')
+        )
+        contas_financeiras = []
+        if pode_ver_financeiro:
+            contas_financeiras = list(
+                FinanceiroPedidoService.contas_do_pedido(pedido)
+                .select_related('forma_pagamento', 'conta_bancaria')
+                .prefetch_related(
+                    'pagamentos__forma_pagamento',
+                    'pagamentos__conta_bancaria',
+                    'pagamentos__usuario',
+                )
+            )
+        resumo_financeiro = {
+            'valor_titulos': sum(
+                (conta.valor_final for conta in contas_financeiras), Decimal('0')
+            ),
+            'valor_recebido': sum(
+                (conta.valor_pago for conta in contas_financeiras), Decimal('0')
+            ),
+            'valor_aberto': sum(
+                (conta.valor_saldo for conta in contas_financeiras), Decimal('0')
+            ),
+        }
         return render(request, 'moda/op2_detail.html', {
             'title': f'OP 2.0 #{pedido.numero:06d}',
             'pedido': pedido,
@@ -729,7 +756,10 @@ class Op2DetailView(ModaBaseView):
                 str(forma.pk): str(forma.conta_bancaria_padrao_id or '')
                 for forma in formas
             },
-            'contas_financeiras': FinanceiroPedidoService.contas_do_pedido(pedido),
+            'contas_financeiras': contas_financeiras,
+            'resumo_financeiro': resumo_financeiro,
+            'pode_ver_financeiro': pode_ver_financeiro,
+            'pode_quitar_financeiro': pode_quitar_financeiro,
             'vencimento_financeiro': vencimento_financeiro,
             'posicoes_mockup': [
                 (Posicao.FRENTE_CAMISA, Posicao.FRENTE_CAMISA.label),

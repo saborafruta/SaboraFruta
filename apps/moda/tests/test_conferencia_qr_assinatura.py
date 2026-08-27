@@ -140,6 +140,7 @@ class BotaoAbreOQrTests(ConferenciaBase):
             resposta, reverse('moda:conferencia-qr', args=[expedicao.pk])
         )
         self.assertContains(resposta, 'DIEGO MACEDO')
+        self.assertContains(resposta, '<strong>Contato:</strong>', html=True)
         self.assertContains(resposta, 'Produto desta caixa')
         self.assertContains(resposta, 'Camisa')
 
