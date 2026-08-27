@@ -17,6 +17,7 @@ from __future__ import annotations
 from decimal import Decimal
 from io import BytesIO
 
+from django.urls import reverse
 from django.utils import timezone
 from reportlab.lib import colors
 from reportlab.lib.pagesizes import A4, landscape
@@ -29,15 +30,18 @@ from reportlab.platypus import (
 )
 
 from .pdf_marca import (
-    ALTURA_TARJA, MARGEM, bloco_empresa, desenhar_tarja, esc,
-    estilos_empresa,
+    ALTURA_TARJA, bloco_empresa, desenhar_tarja, esc, estilos_empresa, logo,
 )
 
-AZUL = colors.HexColor('#2563eb')
+AZUL = colors.HexColor('#0f4aa1')
+AZUL_ESCURO = colors.HexColor('#173f7f')
+AZUL_CLARO = colors.HexColor('#eef3f8')
 CINZA = colors.HexColor('#64748b')
-BORDA = colors.HexColor('#d1d5db')
+BORDA = colors.HexColor('#cbd5e1')
 FUNDO = colors.HexColor('#f8fafc')
+TEXTO = colors.HexColor('#111827')
 PAGINA = landscape(A4)
+MARGEM = 9 * mm
 LARGURA_UTIL = PAGINA[0] - 2 * MARGEM
 
 # O QUE O PDF CONSEGUE DESENHAR. Não é a mesma lista de `pode_pre_visualizar`,
@@ -51,27 +55,37 @@ def _estilos():
     base = getSampleStyleSheet()
     return {
         **estilos_empresa(),
-        'titulo': ParagraphStyle('t', parent=base['Title'], fontSize=16, spaceAfter=2),
+        'titulo': ParagraphStyle('t', parent=base['Title'], fontSize=15, spaceAfter=2),
         'secao': ParagraphStyle(
-            's', parent=base['Heading2'], fontSize=10.5, textColor=AZUL,
-            spaceBefore=5, spaceAfter=2,
+            's', parent=base['Heading2'], fontName='Helvetica-Bold',
+            fontSize=8.4, leading=10, textColor=AZUL_ESCURO,
         ),
-        'normal': ParagraphStyle('n', parent=base['Normal'], fontSize=8.5, leading=11),
+        'secao_numero': ParagraphStyle(
+            'sn', parent=base['Normal'], fontName='Helvetica-Bold',
+            fontSize=9, leading=10, textColor=colors.white, alignment=1,
+        ),
+        'normal': ParagraphStyle(
+            'n', parent=base['Normal'], fontSize=7.2, leading=9, textColor=TEXTO,
+        ),
         'pequeno': ParagraphStyle(
-            'p', parent=base['Normal'], fontSize=7, leading=9, textColor=CINZA,
+            'p', parent=base['Normal'], fontSize=6.5, leading=8, textColor=CINZA,
         ),
-        'celula': ParagraphStyle('c', parent=base['Normal'], fontSize=8, leading=10),
+        'celula': ParagraphStyle(
+            'c', parent=base['Normal'], fontSize=7.1, leading=8.6, textColor=TEXTO,
+        ),
     }
 
 
 def _tabela(dados, larguras, cabecalho=True):
     """Tabela no padrão já usado nos outros PDFs do sistema."""
     estilo = [
-        ('GRID', (0, 0), (-1, -1), 0.25, BORDA),
-        ('FONTSIZE', (0, 0), (-1, -1), 8),
+        ('GRID', (0, 0), (-1, -1), 0.35, BORDA),
+        ('FONTSIZE', (0, 0), (-1, -1), 7.1),
         ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
-        ('TOPPADDING', (0, 0), (-1, -1), 2),
-        ('BOTTOMPADDING', (0, 0), (-1, -1), 2),
+        ('LEFTPADDING', (0, 0), (-1, -1), 4),
+        ('RIGHTPADDING', (0, 0), (-1, -1), 4),
+        ('TOPPADDING', (0, 0), (-1, -1), 3),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 3),
     ]
     if cabecalho:
         estilo += [
@@ -80,8 +94,47 @@ def _tabela(dados, larguras, cabecalho=True):
             ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
             ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, FUNDO]),
         ]
+    elif dados and len(dados[0]) == 4:
+        estilo += [
+            ('BACKGROUND', (0, 0), (0, -1), FUNDO),
+            ('BACKGROUND', (2, 0), (2, -1), FUNDO),
+            ('FONTNAME', (0, 0), (0, -1), 'Helvetica-Bold'),
+            ('FONTNAME', (2, 0), (2, -1), 'Helvetica-Bold'),
+        ]
     tabela = Table(dados, colWidths=larguras, repeatRows=1 if cabecalho else 0)
     tabela.setStyle(TableStyle(estilo))
+    return tabela
+
+
+def _barra_secao(numero, titulo, e, largura_util):
+    """Faixa compacta usada como hierarquia visual em cada bloco da OP."""
+    titulo = Paragraph(esc(titulo), e['secao'])
+    if numero is None:
+        tabela = Table([[titulo]], colWidths=[largura_util], rowHeights=[9 * mm])
+        estilo = [
+            ('BACKGROUND', (0, 0), (-1, -1), AZUL_CLARO),
+            ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+            ('LEFTPADDING', (0, 0), (-1, -1), 5),
+            ('RIGHTPADDING', (0, 0), (-1, -1), 4),
+        ]
+    else:
+        tabela = Table(
+            [[Paragraph(f'{int(numero):02d}', e['secao_numero']), titulo]],
+            colWidths=[10 * mm, largura_util - 10 * mm], rowHeights=[9 * mm],
+        )
+        estilo = [
+            ('BACKGROUND', (0, 0), (0, 0), AZUL),
+            ('BACKGROUND', (1, 0), (1, 0), AZUL_CLARO),
+            ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+            ('LEFTPADDING', (0, 0), (0, 0), 0),
+            ('RIGHTPADDING', (0, 0), (0, 0), 0),
+            ('LEFTPADDING', (1, 0), (1, 0), 5),
+            ('RIGHTPADDING', (1, 0), (1, 0), 4),
+        ]
+    tabela.setStyle(TableStyle(estilo + [
+        ('TOPPADDING', (0, 0), (-1, -1), 0),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 0),
+    ]))
     return tabela
 
 
@@ -179,6 +232,12 @@ def mensagem_whatsapp(pedido, link: str) -> str:
     )
 
 
+def _destino_qr(pedido, base_url: str = '') -> str:
+    """A folha impressa leva a equipe para a conferência de entrega da OP."""
+    caminho = reverse('moda:pedido-conferencia', args=[pedido.pk])
+    return f'{base_url.rstrip("/")}{caminho}' if base_url else caminho
+
+
 class PedidoPdfService:
 
     @classmethod
@@ -187,9 +246,7 @@ class PedidoPdfService:
         doc = SimpleDocTemplate(
             buffer, pagesize=PAGINA,
             leftMargin=MARGEM, rightMargin=MARGEM,
-            # A ficha segue o modelo operacional: quase toda a A4 pertence
-            # ao produto, sem uma tarja alta consumindo a área de trabalho.
-            topMargin=8 * mm, bottomMargin=28 * mm,
+            topMargin=31 * mm, bottomMargin=28 * mm,
             title=f'Pedido {pedido.numero:06d}',
             author=str(pedido.filial),
         )
@@ -205,18 +262,21 @@ class PedidoPdfService:
             elementos += blocos
         else:
             for indice, item in enumerate(itens):
-                meia = (LARGURA_UTIL - 8 * mm) / 2
+                meia = (LARGURA_UTIL - 6 * mm) / 2
                 esquerda = cls._cliente(pedido, e, meia)
                 esquerda += cls._item(pedido, item, e, 0, largura_util=meia)
-                esquerda += cls._personalizacao_item(item, e, meia)
-                if indice == len(itens) - 1:
-                    esquerda += cls._financeiro(pedido, e, meia)
-                direita = []
+                esquerda += cls._financeiro(pedido, e, meia, item=item)
+
+                direita = cls._arte(item, e, meia)
+                direita += cls._personalizacao_item(item, e, meia)
                 if indice == 0:
                     direita += cls._artes_do_pedido(pedido, e, meia)
-                direita += cls._arte(item, e, meia, altura_imagem=52 * mm)
                 if not direita:
-                    direita = [Paragraph('SEM IMAGENS ANEXADAS', e['pequeno'])]
+                    direita = [
+                        _barra_secao(4, f'IMAGENS E IMPRESSÃO - {item.nome_exibicao}', e, meia),
+                        Spacer(1, 4),
+                        Paragraph('Nenhuma imagem anexada.', e['pequeno']),
+                    ]
                 pagina = Table([[
                     KeepInFrame(meia, altura_util, esquerda, mode='shrink'),
                     KeepInFrame(meia, altura_util, direita, mode='shrink'),
@@ -224,8 +284,8 @@ class PedidoPdfService:
                 pagina.setStyle(TableStyle([
                     ('VALIGN', (0, 0), (-1, -1), 'TOP'),
                     ('LEFTPADDING', (0, 0), (0, 0), 0),
-                    ('RIGHTPADDING', (0, 0), (0, 0), 4 * mm),
-                    ('LEFTPADDING', (1, 0), (1, 0), 4 * mm),
+                    ('RIGHTPADDING', (0, 0), (0, 0), 3 * mm),
+                    ('LEFTPADDING', (1, 0), (1, 0), 3 * mm),
                     ('RIGHTPADDING', (1, 0), (1, 0), 0),
                     ('LINEBEFORE', (1, 0), (1, 0), .5, BORDA),
                 ]))
@@ -233,17 +293,49 @@ class PedidoPdfService:
                 if indice < len(itens) - 1:
                     elementos.append(PageBreak())
 
-        # A tarja e o rodapé são os dois desenhos de canvas da folha, e os
-        # dois valem em TODA página: a marca no topo e a identificação com
-        # QR embaixo. Uma função só chama os dois, na ordem em que se lê.
         rodape = cls._rodape(pedido, base_url, e)
+        cabecalho = cls._cabecalho_folha(pedido)
         def moldura(canvas, doc_):
+            cabecalho(canvas, doc_)
             rodape(canvas, doc_)
 
         doc.build(elementos, onFirstPage=moldura, onLaterPages=moldura)
         return buffer.getvalue()
 
     # ── Cabeçalho ────────────────────────────────────────────────────────
+
+    @staticmethod
+    def _cabecalho_folha(pedido):
+        """Cabeçalho azul, baixo e repetido em todas as folhas da OP."""
+        def desenhar(canvas, doc):
+            canvas.saveState()
+            largura, altura = canvas._pagesize
+            x = MARGEM
+
+            canvas.setFillColor(AZUL_ESCURO)
+            canvas.setFont('Helvetica-Bold', 17)
+            canvas.drawString(x, altura - 13 * mm, 'ORDEM DE PRODUÇÃO')
+
+            canvas.setFont('Helvetica-Bold', 9.5)
+            canvas.setFillColor(TEXTO)
+            canvas.drawString(x, altura - 20 * mm, 'PEDIDO')
+            canvas.setFillColor(AZUL)
+            canvas.drawString(x + 17 * mm, altura - 20 * mm, f'#{pedido.numero:06d}')
+
+            marca = logo(pedido.filial, 30 * mm, 12 * mm)
+            if marca is not None:
+                l, a = marca.wrapOn(canvas, 30 * mm, 12 * mm)
+                marca.drawOn(
+                    canvas, largura - MARGEM - l,
+                    altura - 8 * mm - a,
+                )
+
+            canvas.setStrokeColor(AZUL)
+            canvas.setLineWidth(1.1)
+            canvas.line(MARGEM, altura - 25 * mm, largura - MARGEM, altura - 25 * mm)
+            canvas.restoreState()
+
+        return desenhar
 
     @staticmethod
     def _cabecalho(pedido, e) -> list:
@@ -306,8 +398,9 @@ class PedidoPdfService:
         larguras = [largura_rotulo, largura_valor] * 2
 
         return [
-            Paragraph(f'INFORMAÇÕES DO CLIENTE — PEDIDO #{pedido.numero:06d}', e['secao']),
-            _tabela(dados, larguras, cabecalho=False),
+            _barra_secao(1, 'INFORMAÇÕES DO CLIENTE', e, largura_util),
+            Spacer(1, 3), _tabela(dados, larguras, cabecalho=False),
+            Spacer(1, 4),
         ]
 
     # ── Arte do pedido ───────────────────────────────────────────────────
@@ -343,7 +436,11 @@ class PedidoPdfService:
         # deixa a arte pequena demais para conferir escudo e numeração.
         por_linha = 3
         largura = largura_util / por_linha
-        blocos = [Paragraph('ANEXOS E ARTES', e['secao'])]
+        blocos = [
+            Spacer(1, 4),
+            _barra_secao(None, 'ANEXOS COMPLEMENTARES', e, largura_util),
+            Spacer(1, 3),
+        ]
 
         for inicio in range(0, len(artes), por_linha):
             faixa = artes[inicio:inicio + por_linha]
@@ -405,7 +502,8 @@ class PedidoPdfService:
                 width='100%', thickness=0.5, color=BORDA, spaceAfter=6,
             ))
 
-        blocos.append(Paragraph(f'PRODUTO — {esc(item.nome_exibicao)}', e['secao']))
+        blocos.append(_barra_secao(2, f'PRODUTO - {item.nome_exibicao}', e, largura_util))
+        blocos.append(Spacer(1, 3))
 
         observacao, estrutura = _estrutura_item(item)
         campos = [('Produto', item.nome_exibicao)]
@@ -453,11 +551,14 @@ class PedidoPdfService:
         if not personalizacoes and not visuais:
             return []
 
-        blocos = [Paragraph(f'IMAGENS E IMPRESSÃO — {esc(item.nome_exibicao)}', e['secao'])]
+        blocos = [
+            _barra_secao(4, f'IMAGENS E IMPRESSÃO - {item.nome_exibicao}', e, largura_util),
+            Spacer(1, 4),
+        ]
 
-        # Sem limite fixo: cada nova imagem vira mais uma célula e,
-        # quando necessário, uma nova linha no PDF.
-        por_linha = min(3, max(1, len(visuais)))
+        if altura_imagem == 27 * mm:
+            altura_imagem = (68 if len(visuais) <= 2 else 41) * mm
+        por_linha = min(2, max(1, len(visuais)))
         largura = largura_util / por_linha
         for inicio in range(0, len(visuais), por_linha):
             faixa = visuais[inicio:inicio + por_linha]
@@ -470,11 +571,20 @@ class PedidoPdfService:
                 celulas.append(imagem or Paragraph('—', e['pequeno']))
             while len(celulas) < por_linha:
                 celulas.append('')
-            grade = Table([celulas], colWidths=[largura] * por_linha)
+            grade = Table(
+                [celulas], colWidths=[largura] * por_linha,
+                rowHeights=[altura_imagem + 5 * mm],
+            )
             grade.setStyle(TableStyle([
+                ('BOX', (0, 0), (-1, -1), .5, BORDA),
+                ('INNERGRID', (0, 0), (-1, -1), .5, BORDA),
+                ('BACKGROUND', (0, 0), (-1, -1), colors.white),
                 ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
                 ('VALIGN', (0, 0), (-1, 0), 'MIDDLE'),
-                ('BOTTOMPADDING', (0, 0), (-1, 0), 5),
+                ('LEFTPADDING', (0, 0), (-1, -1), 3),
+                ('RIGHTPADDING', (0, 0), (-1, -1), 3),
+                ('TOPPADDING', (0, 0), (-1, -1), 3),
+                ('BOTTOMPADDING', (0, 0), (-1, -1), 3),
             ]))
             # A linha inteira desce para a página seguinte se não houver
             # espaço suficiente.
@@ -533,7 +643,7 @@ class PedidoPdfService:
             ('BACKGROUND', (-1, 1), (-1, 1), FUNDO),
         ]))
 
-        return [Paragraph('GRADE', e['secao']), tabela]
+        return [Spacer(1, 4), _barra_secao(3, 'GRADE', e, largura_util), Spacer(1, 3), tabela]
 
     # ── Personalização individual ────────────────────────────────────────
 
@@ -578,41 +688,40 @@ class PedidoPdfService:
             ])
         larguras = [8 * mm, largura_util - 43 * mm, 17 * mm, 18 * mm]
         return [
-            Spacer(1, 4),
-            Paragraph(f'PERSONALIZAÇÃO POR PESSOA — {len(pessoas)}', e['secao']),
+            Spacer(1, 5),
+            _barra_secao(
+                None, f'PERSONALIZAÇÃO POR PESSOA - {len(pessoas)}', e, largura_util,
+            ),
+            Spacer(1, 3),
             _tabela(dados, larguras),
         ]
 
     # ── Financeiro ───────────────────────────────────────────────────────
 
     @staticmethod
-    def _financeiro(pedido, e, largura_util=LARGURA_UTIL) -> list:
+    def _financeiro(pedido, e, largura_util=LARGURA_UTIL, item=None) -> list:
         def brl(valor):
             return f'R$ {valor:,.2f}'.replace(',', '_').replace('.', ',').replace('_', '.')
 
         linhas = [
-            ('Quantidade', f'{pedido.quantidade_total} peça(s)'),
-            ('Subtotal', brl(pedido.subtotal)),
+            ('Peças', f'{item.quantidade if item else pedido.quantidade_total}'),
+            ('Unitário', brl(item.valor_unitario or Decimal('0')) if item else brl(pedido.valor_unitario_medio)),
+            ('Produto', brl(item.subtotal) if item else brl(pedido.subtotal)),
             ('Desconto', f'− {brl(pedido.desconto or Decimal("0"))}'),
             ('Acréscimo', f'+ {brl(pedido.acrescimo or Decimal("0"))}'),
             ('Frete', f'+ {brl(pedido.frete or Decimal("0"))}'),
-            ('TOTAL', brl(pedido.valor_total)),
+            ('TOTAL OP', brl(pedido.valor_total)),
         ]
-        if pedido.entrada:
-            linhas += [
-                ('Entrada', f'− {brl(pedido.entrada)}'),
-                ('Saldo', brl(pedido.saldo)),
-            ]
 
         rotulos_compactos = {
-            'Quantidade': 'Peças', 'Desconto': 'Desc.', 'Acréscimo': 'Acrésc.',
+            'Desconto': 'Desc.', 'Acréscimo': 'Acrésc.',
         }
         dados = [
             [Paragraph(
                 f'<b>{rotulos_compactos.get(rotulo, rotulo)}</b>', e['celula'],
             ) for rotulo, _ in linhas],
             [Paragraph(
-                f'<b>{valor}</b>' if rotulo == 'TOTAL' else valor,
+                f'<b>{valor}</b>' if rotulo == 'TOTAL OP' else valor,
                 ParagraphStyle(f'v-{indice}', parent=e['celula'], alignment=2),
             ) for indice, (rotulo, valor) in enumerate(linhas)],
         ]
@@ -622,18 +731,22 @@ class PedidoPdfService:
             pagamento.append(f'Forma: {pedido.forma_pagamento}')
         if pedido.condicao_pagamento_id:
             pagamento.append(f'Condição: {pedido.condicao_pagamento}')
+        if pedido.entrada:
+            pagamento += [f'Entrada: {brl(pedido.entrada)}', f'Saldo: {brl(pedido.saldo)}']
 
         blocos = [
             Spacer(1, 5),
-            Paragraph('FINANCEIRO', e['secao']),
+            _barra_secao(None, 'FINANCEIRO', e, largura_util),
+            Spacer(1, 3),
             _tabela(dados, [largura_util / len(linhas)] * len(linhas), cabecalho=False),
         ]
         if pagamento:
             blocos += [Spacer(1, 3), Paragraph(' · '.join(pagamento), e['normal'])]
         if pedido.observacoes:
             blocos += [
-                Spacer(1, 6),
-                Paragraph('OBSERVAÇÕES', e['secao']),
+                Spacer(1, 5),
+                _barra_secao(None, 'OBSERVAÇÕES DA OP', e, largura_util),
+                Spacer(1, 3),
                 # Escapa PRIMEIRO e só então troca a quebra de linha pelo
                 # <br/>: na ordem inversa o escape comeria a própria tag.
                 Paragraph(esc(pedido.observacoes).replace('\n', '<br/>'), e['normal']),
@@ -647,17 +760,14 @@ class PedidoPdfService:
         """
         Devolve o desenhador do rodapé — chamado em toda página.
 
-        O QR aponta para a tela do pedido no sistema. Quem recebe a folha
-        impressa chega à versão viva do documento pelo celular, que é o que
-        resolve o problema de o papel envelhecer.
+        O QR aponta para o atalho de conferência de entrega do pedido. Ele
+        abre a conferência existente (ou a seleção das expedições), nunca a
+        aprovação comercial do cliente.
         """
         import qrcode
 
         empresa = pedido.filial.empresa
-        destino = (
-            f'{base_url}/pedido/{pedido.token_publico}/'
-            if base_url else str(pedido.numero)
-        )
+        destino = _destino_qr(pedido, base_url)
 
         imagem = qrcode.make(destino)
         qr_buffer = BytesIO()

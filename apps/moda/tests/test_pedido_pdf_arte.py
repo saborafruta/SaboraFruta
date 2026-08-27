@@ -9,9 +9,12 @@ porque o PDF abre normalmente.
 """
 import io
 import re
+from decimal import Decimal
+from unittest.mock import patch
 
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import TestCase
+from django.urls import reverse
 
 from apps.cadastros.models import Cliente
 from apps.core.models import Empresa, Filial
@@ -19,7 +22,9 @@ from apps.moda.models import (
     ArquivoPedido, ItemPedidoProducao, PedidoProducao, VisualItemPedido,
 )
 from apps.moda.services.orcamento_pdf import OrcamentoPdfService
-from apps.moda.services.pedido_pdf import PedidoPdfService
+from apps.moda.services.pedido_pdf import (
+    PedidoPdfService, _destino_qr, mensagem_whatsapp,
+)
 
 
 def _png(cor=(220, 40, 30)) -> bytes:
@@ -232,6 +237,51 @@ class ArteNoPdfTests(TestCase):
             pdf,
             rb'/MediaBox\s*\[\s*0\s+0\s+841\.\d+\s+595\.\d+\s*\]',
         )
+
+    def test_financeiro_e_observacoes_sao_montados_em_todas_as_paginas(self):
+        pedido = self._pedido()
+        pedido.observacoes = 'Conferir nomes antes da entrega.'
+        pedido.save(update_fields=['observacoes'])
+        itens = [
+            ItemPedidoProducao.objects.create(
+                pedido=pedido, descricao='Camisa', quantidade=3,
+                valor_unitario=Decimal('20.00'),
+            ),
+            ItemPedidoProducao.objects.create(
+                pedido=pedido, descricao='Calção', quantidade=2,
+                valor_unitario=Decimal('15.00'),
+            ),
+        ]
+
+        financeiro_original = PedidoPdfService._financeiro
+        with patch.object(
+            PedidoPdfService, '_financeiro', wraps=financeiro_original,
+        ) as financeiro:
+            PedidoPdfService.gerar(pedido)
+
+        self.assertEqual(financeiro.call_count, 2)
+        self.assertEqual(
+            [chamada.kwargs['item'].pk for chamada in financeiro.call_args_list],
+            [item.pk for item in itens],
+        )
+
+    def test_qr_do_pdf_aponta_para_conferencia_de_entrega(self):
+        pedido = self._pedido()
+
+        self.assertEqual(
+            _destino_qr(pedido, 'https://ited.app.br/'),
+            'https://ited.app.br' + reverse(
+                'moda:pedido-conferencia', args=[pedido.pk],
+            ),
+        )
+
+    def test_destino_do_qr_nao_interrompe_mensagem_do_whatsapp(self):
+        pedido = self._pedido()
+
+        mensagem = mensagem_whatsapp(pedido, 'https://ited.app.br/pedido/exemplo/')
+
+        self.assertIn('Diego Macedo', mensagem)
+        self.assertIn('https://ited.app.br/pedido/exemplo/', mensagem)
 
     # ── Cabeçalho ────────────────────────────────────────────────────────
 
