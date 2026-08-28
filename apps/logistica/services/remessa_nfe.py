@@ -315,10 +315,40 @@ class RemessaVendaForaService:
 
         # O ELO ATE' A CARGA: cada linha da remessa passa a apontar para a nota
         # que a ampara -- viagem → carga → documento fiscal.
-        viagem.itens.filter(
+        itens = viagem.itens.filter(
             natureza__especie=NaturezaOperacao.Especie.REMESSA_VENDA_FORA,
-        ).update(documento_fiscal=documento)
+        )
+        itens.update(documento_fiscal=documento)
+        cls._ligar_movimentacoes(viagem, list(itens), documento)
         return documento
+
+    @staticmethod
+    def _ligar_movimentacoes(viagem, itens, documento) -> None:
+        """
+        Liga a nota aos movimentos de estoque que ela ampara.
+
+        A BAIXA ACONTECE ANTES DA NOTA — a carga fecha, o estoque sai, e o
+        documento é emitido depois. Sem este passo, o extrato do produto
+        mostra a saída para sempre sem dizer sob qual nota ela foi.
+
+        SÓ LIGA O QUE É INEQUÍVOCO: se a viagem levar o mesmo produto e lote
+        em duas linhas de naturezas diferentes, os movimentos ficam
+        indistinguíveis e o vínculo é deixado VAZIO. Chutar qual movimento é
+        de qual linha poria a nota de remessa amparando uma venda.
+        """
+        from apps.estoque.models import MovimentacaoEstoque
+
+        for item in itens:
+            irmaos = viagem.itens.filter(
+                produto_id=item.produto_id, lote_id=item.lote_id,
+            ).count()
+            if irmaos != 1:
+                continue
+            MovimentacaoEstoque.objects.filter(
+                documento_tipo='viagem', documento_id=viagem.pk,
+                produto_id=item.produto_id, lote_id=item.lote_id,
+                documento_fiscal__isnull=True,
+            ).update(documento_fiscal=documento)
 
     @staticmethod
     def _reservar_numero(filial) -> tuple[int, int]:

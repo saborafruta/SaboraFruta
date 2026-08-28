@@ -128,6 +128,8 @@ class MovimentacaoService:
         filial_destino_id: int | None = None,
         forcar_estoque_negativo: bool = False,
         permitir_sem_lote: bool = False,
+        cliente_id: int | None = None,
+        documento_fiscal_id: int | None = None,
     ) -> MovimentacaoEstoque:
         """
         Registra UMA movimentação de estoque atomicamente.
@@ -259,6 +261,11 @@ class MovimentacaoService:
             custo_medio_posterior=novo_custo,
             usuario_id=usuario_id,
             filial_destino_id=filial_destino_id,
+            # PARA QUEM SAIU e SOB QUE NOTA: sem os dois, o razao responde
+            # "o que" e "quando" e cala justamente no que a auditoria de uma
+            # bonificacao pergunta.
+            cliente_id=cliente_id,
+            documento_fiscal_id=documento_fiscal_id,
             observacao=observacao,
             data_movimentacao=timezone.now(),
         )

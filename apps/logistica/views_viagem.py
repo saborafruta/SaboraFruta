@@ -29,6 +29,9 @@ from apps.logistica.services.vendas_para_carga import (
     CARREGAVEIS, VendasParaCargaService,
 )
 from apps.logistica.services.bonificacao_nfe import BonificacaoNFeService
+from apps.logistica.services.historico_bonificacao import (
+    HistoricoBonificacaoService,
+)
 from apps.logistica.services.retorno_nfe import RetornoVendaForaService
 from apps.logistica.services.venda_fora_nfe import VendaForaNFeService
 from apps.logistica.services.vinculo_remessa import VinculoRemessaService
@@ -187,6 +190,7 @@ class ViagemDetailView(PermissaoRequiredMixin, View):
             pk=pk,
         )
         vinculos = VinculoRemessaService.linhas(viagem)
+        bonificacoes = HistoricoBonificacaoService.linhas(viagem)
         return render(request, self.template_name, {
             'title': f'Viagem #{viagem.numero:06d}',
             'viagem': viagem,
@@ -205,6 +209,11 @@ class ViagemDetailView(PermissaoRequiredMixin, View):
             # venda -> nota da venda. Cada elo ja' existia guardado em
             # algum lugar; o que faltava era le-los juntos.
             'vinculos': vinculos,
+            # O HISTORICO DA CORTESIA: o que saiu de graca, para quem, sob
+            # que nota -- e ONDE a baixa de estoque aconteceu, que e'
+            # diferente entre a bonificacao da carga e a da rua.
+            'bonificacoes': bonificacoes,
+            'resumo_bonificacoes': HistoricoBonificacaoService.resumo(bonificacoes),
             'resumo_vinculos': VinculoRemessaService.resumo(vinculos),
             # OS BOTOES DA RUA so' aparecem enquanto o caminhao esta' fora:
             # antes de sair nao ha' saldo, e depois de encerrar a viagem

@@ -144,6 +144,18 @@ class MovimentacaoEstoque(FilialScopedModel):
         related_name='+',
         help_text='Para transferências',
     )
+    # PARA QUEM A MERCADORIA SAIU, quando a saída tem um destinatário.
+    #
+    # O razão sabia o QUE saiu, QUANDO e POR QUAL documento — não sabia PARA
+    # QUEM. Na venda isso se descobre pelo pedido; na bonificação não havia
+    # como: uma viagem que entrega cortesia a dois clientes gerava dois
+    # movimentos indistinguíveis, e "para quem demos as 20 caixas?" só se
+    # respondia por conferência manual.
+    cliente = models.ForeignKey(
+        'cadastros.Cliente', on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='movimentacoes_estoque',
+        help_text='Destinatário da saída, quando existe.',
+    )
     observacao = models.TextField(blank=True)
     data_movimentacao = models.DateTimeField(db_index=True)
 

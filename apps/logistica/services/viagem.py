@@ -244,7 +244,13 @@ class ViagemService:
                 documento_tipo='viagem',
                 documento_id=viagem.pk,
                 documento_numero=str(viagem.numero),
-                observacao=f'Carga da viagem #{viagem.numero:06d} — {item.natureza.descricao}',
+                # PARA QUEM E SOB QUE NOTA. Sem o destinatario, duas
+                # bonificacoes na mesma viagem viram dois movimentos
+                # indistinguiveis, e "para quem demos as 20 caixas?" so' se
+                # responde por conferencia manual.
+                cliente_id=item.cliente_id,
+                documento_fiscal_id=item.documento_fiscal_id,
+                observacao=cls._historico(viagem, item),
                 permitir_sem_lote=True,
             )
             # O que sai sem comprador vira saldo em poder de quem viaja: e' o
@@ -264,6 +270,31 @@ class ViagemService:
         viagem.status = Viagem.Status.AGUARDANDO_DOCUMENTOS
         viagem.save(update_fields=['status', 'updated_at'])
         return viagem
+
+    @staticmethod
+    def _historico(viagem, item) -> str:
+        """
+        A frase que fica no razão.
+
+        O RÓTULO DIZ A OPERAÇÃO, e não "carga da viagem": quem abre o extrato
+        do produto precisa ler "Saída por Bonificação" e entender o que
+        aconteceu sem abrir a viagem. Movimento que só se explica em outra
+        tela é movimento que ninguém confere.
+        """
+        rotulos = {
+            NaturezaOperacao.Especie.BONIFICACAO: 'Saída por Bonificação',
+            NaturezaOperacao.Especie.VENDA: 'Saída por Venda',
+            NaturezaOperacao.Especie.REMESSA_VENDA_FORA: (
+                'Saída por Remessa para venda fora do estabelecimento'
+            ),
+        }
+        titulo = rotulos.get(item.natureza.especie) or item.natureza.descricao
+        partes = [f'{titulo} — viagem #{viagem.numero:06d}']
+        if item.cliente_id:
+            partes.append(str(item.cliente))
+        if item.lote_id:
+            partes.append(f'lote {item.lote.numero_lote}')
+        return ' · '.join(partes)
 
     # ── Na rua ───────────────────────────────────────────────────────────
 
