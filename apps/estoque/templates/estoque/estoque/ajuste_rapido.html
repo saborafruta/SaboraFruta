@@ -364,7 +364,7 @@
       </div>
     </form>
     <div class="stock-count-help">
-      Ao tocar em <strong>+</strong> ou <strong>-</strong>, ou digitar uma quantidade e sair do campo, o ajuste salva automaticamente. O botao <strong>Conferir</strong> marca o item quando a quantidade ja esta correta.
+      Digite a <strong>quantidade final do estoque</strong> (ex.: havia 3 e você digitou 10, o saldo será 10). Os botões <strong>+</strong> e <strong>-</strong> alteram essa quantidade em uma unidade. Ao sair do campo, o ajuste salva automaticamente. <strong>Conferir</strong> confirma quando a quantidade já está correta.
     </div>
   </div>
 
@@ -502,10 +502,10 @@
     const barcodeAtual = '{{ barcode|escapejs }}';
 
     function parseQty(value) {
-      const raw = String(value || '0').trim();
+      const raw = String(value ?? '').trim();
       const normalized = raw.includes(',') ? raw.replace(/\./g, '').replace(',', '.') : raw;
       const parsed = Number(normalized);
-      return Number.isFinite(parsed) && parsed >= 0 ? parsed : 0;
+      return raw && Number.isFinite(parsed) && parsed >= 0 && parsed <= 999999999.999 ? parsed : null;
     }
     function formatQty(value) {
       const fixed = Number(value || 0).toFixed(3).replace(/\.?0+$/, '');
@@ -545,13 +545,27 @@
       return { response, data };
     }
     function saveRow(row, markChecked) {
+      window.clearTimeout(row._stockSaveTimer);
+      if (row._stockSaving) return row._stockSaving;
       const qty = row.querySelector('[data-qty]');
+      const value = parseQty(qty.value.trim());
+      if (!qty.value.trim() || value === null) {
+        setStatus(row, 'Informe uma quantidade final válida, maior ou igual a zero.', true);
+        return Promise.resolve();
+      }
+      if (value === Number(row.dataset.current) && row.classList.contains('is-saved')) {
+        return Promise.resolve();
+      }
       const form = new FormData();
       form.append('produto_id', row.dataset.productId);
       form.append('quantidade', qty.value);
+      form.append('saldo_exibido', row.dataset.current);
+      form.append('interacao', row._stockInteraction || 'conferencia');
       form.append('conferido', markChecked ? '1' : '0');
       setStatus(row, 'Salvando...');
-      return fetch(row.dataset.updateUrl, {
+      // Uma única requisição por produto. Não permitir que Enter, blur e
+      // o debounce dos botões disputem o mesmo saldo ou percam uma edição.
+      row._stockSaving = Promise.resolve().then(() => fetch(row.dataset.updateUrl, {
         method: 'POST',
         credentials: 'same-origin',
         headers: {
@@ -560,11 +574,13 @@
           'X-Requested-With': 'XMLHttpRequest',
         },
         body: form,
-      })
+      }))
         .then(readJsonResponse)
         .then(({ response, data }) => {
           if (!response.ok || !data.ok) throw new Error(data.error || data.erro || 'Nao foi possivel salvar.');
           row.dataset.current = data.quantidade_atual;
+          qty.value = data.quantidade_atual;
+          row._stockInteraction = null;
           const current = row.querySelector('[data-current-display]');
           if (current) current.textContent = data.quantidade_atual_display;
           row.classList.add('is-saved');
@@ -577,8 +593,18 @@
           setStatus(row, data.movimento_id ? `Salvo automaticamente. Movimento #${data.movimento_id}.` : 'Conferido sem diferenca de estoque.');
         })
         .catch((error) => {
+          row.classList.remove('is-saved');
+          const check = row.querySelector('[data-check]');
+          check?.classList.remove('is-on');
+          if (check) check.textContent = 'Conferir';
           setStatus(row, error.message, true);
+        })
+        .finally(() => {
+          row._stockSaving = null;
+          row.querySelectorAll('[data-qty], [data-step], [data-check]').forEach((control) => { control.disabled = false; });
         });
+      row.querySelectorAll('[data-qty], [data-step], [data-check]').forEach((control) => { control.disabled = true; });
+      return row._stockSaving;
     }
     function scheduleSave(row) {
       window.clearTimeout(row._stockSaveTimer);
@@ -586,6 +612,13 @@
     }
     document.querySelectorAll('[data-product-row]').forEach((row) => {
       const qty = row.querySelector('[data-qty]');
+      function recordInteraction(kind) {
+        row._stockInteraction = row._stockInteraction && row._stockInteraction !== kind ? 'mista' : kind;
+      }
+      qty.addEventListener('input', () => {
+        window.clearTimeout(row._stockSaveTimer);
+        recordInteraction('digitacao');
+      });
       row.querySelectorAll('[data-step]').forEach((button) => {
         button.addEventListener('dblclick', (event) => event.preventDefault());
         button.addEventListener('touchend', (event) => {
@@ -596,19 +629,26 @@
           button._lastTouchEnd = now;
         }, { passive: false });
         button.addEventListener('click', () => {
-          const next = Math.max(0, parseQty(qty.value) + Number(button.dataset.step || 0));
+          if (row._stockSaving) return;
+          const current = parseQty(qty.value);
+          if (current === null) {
+            setStatus(row, 'Informe uma quantidade final válida antes de usar os botões.', true);
+            return;
+          }
+          const next = Math.max(0, current + Number(button.dataset.step || 0));
           qty.value = formatQty(next);
+          recordInteraction('botoes');
           scheduleSave(row);
         });
       });
       qty.addEventListener('keydown', (event) => {
         if (event.key === 'Enter') {
           event.preventDefault();
-          saveRow(row, true);
           qty.blur();
+          saveRow(row, true);
         }
       });
-      qty.addEventListener('blur', () => saveRow(row, true));
+      qty.addEventListener('blur', () => { if (!row._stockSaving) scheduleSave(row); });
       row.querySelector('[data-check]')?.addEventListener('click', () => saveRow(row, true));
       row.querySelector('[data-log]')?.addEventListener('click', () => openLog(row));
     });

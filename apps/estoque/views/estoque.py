@@ -1884,10 +1884,12 @@ class AjusteRapidoEstoqueView(PermissaoRequiredMixin, View):
         text = str(value or '').strip()
         text = text.replace('.', '').replace(',', '.') if ',' in text else text
         if not text:
-            return Decimal('0')
+            raise DomainError('Informe a quantidade final do estoque.')
         try:
             quantidade = Decimal(text)
         except (InvalidOperation, ValueError):
+            raise DomainError('Quantidade invalida.')
+        if not quantidade.is_finite() or abs(quantidade) > Decimal('999999999.999'):
             raise DomainError('Quantidade invalida.')
         if quantidade < 0:
             raise DomainError('Quantidade nao pode ser negativa.')
@@ -1984,9 +1986,12 @@ class AjusteRapidoEstoqueView(PermissaoRequiredMixin, View):
         sessao = self._session_items(request)
         for produto in page_obj.object_list:
             item = sessao.get(str(produto.pk), {})
-            produto.ajuste_rapido_conferido = bool(item.get('conferido'))
+            produto.ajuste_rapido_conferido = bool(item.get('conferido')) and (
+                item.get('saldo_final') == self._decimal_to_value(produto.estoque_quantidade_atual)
+            )
             produto.ajuste_rapido_editado = str(produto.pk) in sessao
-            produto.ajuste_rapido_contado = item.get('contado', self._decimal_to_value(produto.estoque_quantidade_atual))
+            # A sessão guarda o relatório, não é a fonte do saldo atual.
+            produto.ajuste_rapido_contado = self._decimal_to_value(produto.estoque_quantidade_atual)
             produto.estoque_quantidade_atual_value = self._decimal_to_value(produto.estoque_quantidade_atual)
             produto.estoque_quantidade_atual_display = EstoqueListView._formatar_quantidade(produto.estoque_quantidade_atual)
             produto.ajuste_rapido_foto_url = self._foto_url_segura(request, produto)
@@ -2027,10 +2032,31 @@ class AjusteRapidoEstoqueAtualizarView(AjusteRapidoEstoqueView):
         )
         try:
             quantidade_contada = self._decimal_from_text(request.POST.get('quantidade'))
+            saldo_exibido = request.POST.get('saldo_exibido')
+            if saldo_exibido is not None:
+                # Saldos legados podem ser negativos; contagens novas, não.
+                saldo_exibido = Decimal(saldo_exibido)
+                if not saldo_exibido.is_finite():
+                    raise DomainError('Saldo exibido invalido. Recarregue a pagina.')
+        except InvalidOperation:
+            return JsonResponse({'ok': False, 'error': 'Saldo exibido invalido.'}, status=400)
         except DomainError as exc:
             return JsonResponse({'ok': False, 'error': str(exc)}, status=400)
-        estoque = Estoque.objects.filter(produto=produto, filial=request.filial_ativa).first()
-        quantidade_atual = estoque.quantidade_atual if estoque else Decimal('0')
+        # O bloqueio precisa vir ANTES do cálculo da diferença, inclusive
+        # quando o saldo ainda não existe. O service mantém o mesmo lock.
+        estoque, _ = Estoque.objects.select_for_update().get_or_create(
+            produto=produto, filial=request.filial_ativa,
+            defaults={'quantidade_atual': 0, 'quantidade_reservada': 0, 'quantidade_disponivel': 0},
+        )
+        quantidade_atual = estoque.quantidade_atual
+        if saldo_exibido is not None and saldo_exibido != quantidade_atual:
+            return JsonResponse({
+                'ok': False,
+                'error': 'O estoque mudou desde a abertura desta tela. Recarregue e confira antes de ajustar.',
+            }, status=409)
+        interacao = request.POST.get('interacao', 'nao_informada')
+        if interacao not in {'digitacao', 'botoes', 'mista', 'conferencia'}:
+            interacao = 'nao_informada'
         delta = quantidade_contada - quantidade_atual
         movimento = None
         if delta:
@@ -2051,6 +2077,7 @@ class AjusteRapidoEstoqueAtualizarView(AjusteRapidoEstoqueView):
                         'Ajuste rapido de conferencia. '
                         f'Contado: {self._decimal_to_value(quantidade_contada)}; '
                         f'anterior: {self._decimal_to_value(quantidade_atual)}.'
+                        f' Interacao: {interacao}; valor final informado: {request.POST.get("quantidade")}.'
                     ),
                     permitir_sem_lote=True,
                 )
@@ -2069,6 +2096,8 @@ class AjusteRapidoEstoqueAtualizarView(AjusteRapidoEstoqueView):
                     'saldo_anterior': str(quantidade_atual),
                     'saldo_posterior': str(movimento.quantidade_posterior),
                     'origem': 'ajuste_rapido',
+                    'interacao': interacao,
+                    'quantidade_informada': request.POST.get('quantidade'),
                 },
             )
             saldo_final = movimento.quantidade_posterior
