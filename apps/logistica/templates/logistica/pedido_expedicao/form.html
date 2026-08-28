@@ -4,6 +4,7 @@
 {% block content %}
 
 <script id="clientes-data" type="application/json">{{ clientes_json|safe }}</script>
+<script id="vendas-data" type="application/json">{{ vendas_json|default:"[]"|safe }}</script>
 
 <div class="max-w-4xl mx-auto space-y-5">
 
@@ -13,15 +14,33 @@
       <span class="mx-1">›</span> {{ title }}
     </p>
     <h2 class="text-2xl font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">{{ title }}</h2>
+    <p class="text-sm mt-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+      O que sai para entrega: de qual venda veio, para quem vai e por onde.
+      Os produtos entram depois, na tela do pedido.
+    </p>
   </div>
 
-  <form method="post" class="card p-6 space-y-5">
+  <form method="post" class="space-y-4">
     {% csrf_token %}
     {% if form.non_field_errors %}
       <div class="rounded-lg border border-red-500/30 bg-red-500/10 p-3 text-sm text-red-500">{{ form.non_field_errors }}</div>
     {% endif %}
 
-    <!-- Identificação -->
+    {% comment %}
+      SEÇÕES EM VEZ DE UM MURO DE CAMPOS. O formulário pedia quinze coisas
+      seguidas, sem dizer quais andavam juntas — e quem preenche descobre a
+      ordem por tentativa. Cada bloco agora responde a uma pergunta: o que é
+      este pedido, para quem, para onde, com quem.
+    {% endcomment %}
+
+    <!-- ── Identificação ─────────────────────────────────────────── -->
+    <section class="card p-5 space-y-4">
+      <div>
+        <h3 class="text-sm font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">Identificação</h3>
+        <p class="text-xs mt-0.5" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+          O número já vem sugerido pelo próximo livre da filial.
+        </p>
+      </div>
     <div class="grid gap-4 md:grid-cols-4">
       <label class="space-y-1.5">
         <span class="text-xs font-semibold uppercase tracking-wide" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Número</span>
@@ -39,10 +58,6 @@
         <span class="text-xs font-semibold uppercase tracking-wide" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Data de Expedição</span>
         {{ form.data_expedicao }}
       </label>
-    </div>
-
-    <!-- Status + Prioridade + Cliente -->
-    <div class="grid gap-4 md:grid-cols-4">
       <label class="space-y-1.5">
         <span class="text-xs font-semibold uppercase tracking-wide" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Status</span>
         {{ form.status }}
@@ -51,21 +66,98 @@
         <span class="text-xs font-semibold uppercase tracking-wide" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Prioridade</span>
         {{ form.prioridade }}
       </label>
+    </div>
+    </section>
+
+    <!-- ── De qual venda, para quem ──────────────────────────────── -->
+    <section class="card p-5 space-y-4"
+             x-data="vendaDaExpedicao(vendasData, {{ form.pedido_venda.value|default:'null' }})">
+      <div>
+        <h3 class="text-sm font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
+          Venda e cliente
+        </h3>
+        {% comment %}
+          O CLIENTE DA EXPEDIÇÃO É O CLIENTE DA VENDA. Deixar os dois soltos
+          permitiria expedir a mercadoria de alguém para outra pessoa, e o
+          pedido continuaria parecendo certo em todo relatório.
+        {% endcomment %}
+        <p class="text-xs mt-0.5" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+          Escolha o pedido de venda e o cliente vem dele. Carga avulsa — amostra,
+          reposição, brinde — não tem venda: escolha o cliente direto.
+        </p>
+      </div>
+
+      <div class="grid gap-4 md:grid-cols-2">
+        <!-- Combobox Pedido de venda -->
+        <div class="space-y-1.5">
+          <span class="text-xs font-semibold uppercase tracking-wide" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+            Pedido de venda
+          </span>
+          <div class="relative">
+            <input type="hidden" name="pedido_venda" :value="vendaId">
+            <input type="text" class="form-input w-full" placeholder="Buscar pedido ou cliente..."
+                   autocomplete="off" x-model="busca"
+                   @focus="aberto = true" @input="aberto = true; vendaId = null"
+                   @keydown.escape="aberto = false"
+                   @blur="aoSair()">
+            <button type="button" x-show="vendaId || busca" @click="limpar()" x-cloak
+                    class="absolute right-2 top-1/2 -translate-y-1/2 opacity-50 hover:opacity-100"
+                    :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'"
+                    aria-label="Limpar pedido de venda">
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+              </svg>
+            </button>
+            <div x-show="aberto && filtradas.length > 0" x-cloak @mousedown.prevent
+                 class="absolute z-40 left-0 right-0 mt-1 rounded-lg shadow-xl border max-h-56 overflow-y-auto"
+                 :style="temaClaro ? 'background:#fff; border-color:#e2e8f0;' : 'background:#1e1e20; border-color:#2a2a2e;'">
+              <template x-for="venda in filtradas" :key="venda.id">
+                <div @click="escolher(venda)" class="px-3 py-2 cursor-pointer text-sm"
+                     :style="temaClaro ? 'color:#111827;' : 'color:#f1f5f9;'">
+                  <span class="font-medium" x-text="'#' + venda.numero"></span>
+                  <span class="ml-2" x-text="venda.cliente"></span>
+                  <span class="block text-xs opacity-60"
+                        x-text="venda.data + ' · ' + venda.status + ' · R$ ' + venda.valor.toFixed(2)"></span>
+                </div>
+              </template>
+            </div>
+            <div x-show="aberto && busca.length >= 2 && filtradas.length === 0" x-cloak
+                 class="absolute z-40 left-0 right-0 mt-1 rounded-lg shadow-xl border px-3 py-2 text-sm"
+                 :style="temaClaro ? 'background:#fff; border-color:#e2e8f0; color:#94a3b8;' : 'background:#1e1e20; border-color:#2a2a2e; color:#64748b;'">
+              Nenhum pedido de venda encontrado.
+            </div>
+          </div>
+          {% if form.pedido_venda.errors %}<p class="text-xs text-red-500 mt-0.5">{{ form.pedido_venda.errors.0 }}</p>{% endif %}
+          <p class="text-[11px]" :style="temaClaro ? 'color:#94a3b8;' : 'color:#71717a;'">
+            Pedidos cancelados não aparecem.
+          </p>
+        </div>
 
       <!-- Combobox Cliente -->
-      <div class="space-y-1.5 md:col-span-2" x-data="combobox('cliente', clientesData, {{ form.cliente.value|default:'null' }})">
-        <span class="text-xs font-semibold uppercase tracking-wide" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Cliente *</span>
+      <div class="space-y-1.5" x-data="combobox('cliente', clientesData, {{ form.cliente.value|default:'null' }})"
+           x-effect="if (clienteDaVenda) { selectedId = clienteDaVenda.id; query = clienteDaVenda.nome; }">
+        <span class="text-xs font-semibold uppercase tracking-wide" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+          Cliente <span x-show="!clienteDaVenda">*</span>
+        </span>
         <div class="relative">
           <input type="hidden" name="cliente" :value="selectedId">
+          {% comment %}
+            COM VENDA ESCOLHIDA O CAMPO FICA TRAVADO, e não escondido: quem
+            confere precisa ver para quem a carga vai sem abrir a venda. Para
+            trocar de cliente, tira-se a venda — que é a decisão real.
+          {% endcomment %}
           <input type="text" class="form-input w-full" placeholder="Buscar cliente..."
                  autocomplete="off" x-model="query"
-                 @focus="open = true" @input="open = true; selectedId = null"
+                 :readonly="!!clienteDaVenda"
+                 :style="clienteDaVenda ? 'opacity:.75; cursor:not-allowed;' : ''"
+                 @focus="if (!clienteDaVenda) open = true"
+                 @input="open = true; selectedId = null"
                  @keydown.escape="open = false"
                  @keydown.arrow-down.prevent="moveDown()"
                  @keydown.arrow-up.prevent="moveUp()"
                  @keydown.enter.prevent="selectHighlighted()"
                  @blur="onBlur()">
-          <button type="button" x-show="selectedId || query" @click="clear()"
+          <button type="button" x-show="!clienteDaVenda && (selectedId || query)" @click="clear()"
                   class="absolute right-2 top-1/2 -translate-y-1/2 opacity-50 hover:opacity-100"
                   :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -91,10 +183,22 @@
           </div>
         </div>
         {% if form.cliente.errors %}<p class="text-xs text-red-500 mt-0.5">{{ form.cliente.errors.0 }}</p>{% endif %}
+        <p class="text-[11px]" x-show="clienteDaVenda" x-cloak style="color:#059669;">
+          Vem do pedido de venda escolhido.
+        </p>
       </div>
-    </div>
+      </div>
+    </section>
 
-    <!-- Contato + Transportadora + Romaneio -->
+    <!-- ── Contato e transporte ──────────────────────────────────── -->
+    <section class="card p-5 space-y-4">
+      <div>
+        <h3 class="text-sm font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">Contato e transporte</h3>
+        <p class="text-xs mt-0.5" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+          Quem recebe do outro lado e quem leva. Tudo opcional aqui — dá para
+          completar depois, quando a carga tiver veículo.
+        </p>
+      </div>
     <div class="grid gap-4 md:grid-cols-4">
       <label class="space-y-1.5">
         <span class="text-xs font-semibold uppercase tracking-wide" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Contato</span>
@@ -114,7 +218,6 @@
       </label>
     </div>
 
-    <!-- Motorista / Placa -->
     <div class="grid gap-4 md:grid-cols-2">
       <label class="space-y-1.5">
         <span class="text-xs font-semibold uppercase tracking-wide" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Motorista</span>
@@ -125,10 +228,16 @@
         {{ form.veiculo_placa }}
       </label>
     </div>
+    </section>
 
-    <!-- Endereço de entrega -->
-    <div x-data="pedidoCep()" class="card p-4 space-y-3" :style="temaClaro ? 'background:#f8fafc;' : 'background:#1a1a1e;'">
-      <h3 class="text-xs font-semibold uppercase tracking-wide" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Endereço de Entrega</h3>
+    <!-- ── Endereço de entrega ───────────────────────────────────── -->
+    <section x-data="pedidoCep()" class="card p-5 space-y-3">
+      <div>
+        <h3 class="text-sm font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">Endereço de entrega</h3>
+        <p class="text-xs mt-0.5" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+          O CEP preenche o resto. Confira o número — é o que o motorista procura.
+        </p>
+      </div>
       <label class="block space-y-1.5">
         <span class="text-xs font-semibold uppercase tracking-wide" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">CEP</span>
         <div class="flex gap-2">
@@ -162,16 +271,33 @@
         <label class="space-y-1.5"><span class="text-xs font-semibold uppercase tracking-wide" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Cidade</span>{{ form.entrega_cidade }}</label>
         <label class="space-y-1.5"><span class="text-xs font-semibold uppercase tracking-wide" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">UF</span>{{ form.entrega_uf }}</label>
       </div>
-    </div>
+    </section>
 
-    <label class="block space-y-1.5">
-      <span class="text-xs font-semibold uppercase tracking-wide" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Observação</span>
-      {{ form.observacao }}
-    </label>
+    <section class="card p-5">
+      <label class="block space-y-1.5">
+        <span class="text-xs font-semibold uppercase tracking-wide" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Observação</span>
+        {{ form.observacao }}
+        <span class="block text-[11px]" :style="temaClaro ? 'color:#94a3b8;' : 'color:#71717a;'">
+          O que quem recebe a carga precisa saber: horário de entrega, portaria, contato alternativo.
+        </span>
+      </label>
+    </section>
 
-    <div class="flex flex-wrap justify-end gap-3 pt-2">
-      <a href="{{ cancel_url }}" class="btn-secondary">Cancelar</a>
-      <button type="submit" class="btn-primary">Salvar</button>
+    {% comment %}
+      A BARRA FICA GRUDADA NO PÉ porque o formulário é longo: sem isso, salvar
+      exige rolar até o fim para descobrir onde está o botão.
+    {% endcomment %}
+    <div class="sticky bottom-0 z-30 -mx-1 px-1 py-3"
+         :style="temaClaro ? 'background:linear-gradient(to top, #f8fafc 70%, transparent);' : 'background:linear-gradient(to top, #0f0f11 70%, transparent);'">
+      <div class="card p-3 flex flex-wrap items-center justify-between gap-3">
+        <p class="text-xs" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+          Depois de salvar, os produtos entram na tela do pedido.
+        </p>
+        <div class="flex flex-wrap gap-3">
+          <a href="{{ cancel_url }}" class="btn-secondary">Cancelar</a>
+          <button type="submit" class="btn-primary">Salvar</button>
+        </div>
+      </div>
     </div>
   </form>
 
@@ -215,6 +341,51 @@ function combobox(fieldName, items, initialId) {
     moveUp() { if(this.highlighted > 0) this.highlighted--; },
     selectHighlighted() { if(this.highlighted >= 0 && this.filtered[this.highlighted]) this.select(this.filtered[this.highlighted]); },
     onBlur() { setTimeout(() => { this.open = false; if(!this.selectedId) this.query = ''; }, 200); },
+  };
+}
+
+const vendasData = JSON.parse(document.getElementById('vendas-data').textContent || '[]');
+
+/**
+ * O pedido de venda que originou a expedição.
+ *
+ * ESCOLHER A VENDA PREENCHE O CLIENTE, e por isso o cliente da venda fica
+ * publicado no escopo (`clienteDaVenda`): o campo de cliente le' dali e se
+ * trava, em vez de a pessoa ter de procurar de novo quem ja' esta' na venda.
+ */
+function vendaDaExpedicao(vendas, vendaInicial) {
+  const inicial = vendas.find(v => v.id === vendaInicial) || null;
+  return {
+    vendas,
+    vendaId: inicial ? inicial.id : null,
+    busca: inicial ? '#' + inicial.numero + ' — ' + inicial.cliente : '',
+    aberto: false,
+    clienteDaVenda: inicial ? { id: inicial.cliente_id, nome: inicial.cliente } : null,
+    get filtradas() {
+      const q = semAcento(this.busca).replace(/^#/, '');
+      if (!q) return this.vendas.slice(0, 30);
+      return this.vendas.filter(v =>
+        semAcento(v.numero).includes(q) || semAcento(v.cliente).includes(q)
+      ).slice(0, 30);
+    },
+    escolher(venda) {
+      this.vendaId = venda.id;
+      this.busca = '#' + venda.numero + ' — ' + venda.cliente;
+      this.clienteDaVenda = { id: venda.cliente_id, nome: venda.cliente };
+      this.aberto = false;
+    },
+    limpar() {
+      this.vendaId = null;
+      this.busca = '';
+      this.clienteDaVenda = null;
+      this.aberto = false;
+    },
+    aoSair() {
+      setTimeout(() => {
+        this.aberto = false;
+        if (!this.vendaId) { this.busca = ''; this.clienteDaVenda = null; }
+      }, 200);
+    },
   };
 }
 

@@ -513,6 +513,23 @@ class PedidoExpedicao(FilialScopedModel):
         on_delete=models.PROTECT,
         related_name="pedidos_expedicao",
     )
+    # A VENDA QUE ORIGINOU ESTA EXPEDIÇÃO, quando existe.
+    #
+    # Sem ela, quem monta o pedido redigita cliente, endereço e itens que já
+    # estão na venda — e cada redigitação é uma chance de entregar para o
+    # cliente errado. Com ela, a pergunta "esta carga é de qual venda?" tem
+    # resposta no sistema, e não na memória de quem carregou.
+    #
+    # OPCIONAL DE PROPÓSITO: carga avulsa, amostra e reposição existem e não
+    # nascem de pedido nenhum. Exigir a venda faria essas cargas saírem por
+    # fora do sistema, que é o oposto do que se quer.
+    pedido_venda = models.ForeignKey(
+        "vendas.PedidoVenda",
+        on_delete=models.SET_NULL,
+        null=True, blank=True,
+        related_name="pedidos_expedicao",
+        help_text="Pedido de venda que originou esta expedição, quando houver.",
+    )
     transportadora = models.ForeignKey(
         "cadastros.Transportadora",
         on_delete=models.SET_NULL,

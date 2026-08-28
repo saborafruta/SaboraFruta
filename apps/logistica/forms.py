@@ -4,6 +4,7 @@ from django import forms
 from django.utils import timezone
 
 from apps.cadastros.models import Cliente, Fornecedor, Motorista, Transportadora, Veiculo
+from apps.vendas.models import PedidoVenda
 from apps.logistica.models import (
     CTe,
     DocumentoCTe,
@@ -423,6 +424,7 @@ class PedidoExpedicaoForm(forms.ModelForm):
             "data_expedicao",
             "status",
             "prioridade",
+            "pedido_venda",
             "cliente",
             "transportadora",
             "romaneio",
@@ -458,13 +460,55 @@ class PedidoExpedicaoForm(forms.ModelForm):
         self.fields["romaneio"].queryset = RomaneioCarga.objects.for_filial(filial).exclude(
             status__in=[RomaneioCarga.Status.ENTREGUE, RomaneioCarga.Status.CANCELADO]
         )
-        for nome in ("transportadora", "romaneio", "data_expedicao", "data_previsao_entrega"):
+        # A VENDA QUE ORIGINOU A EXPEDIÇÃO. Pedido cancelado não entra: expedir
+        # o que foi cancelado é entregar mercadoria que ninguém mais comprou.
+        self.fields["pedido_venda"].queryset = (
+            PedidoVenda.objects
+            .filter(filial=filial)
+            .exclude(status=PedidoVenda.Status.CANCELADO)
+            .select_related("cliente")
+            .order_by("-data_emissao")
+        )
+        for nome in ("transportadora", "romaneio", "data_expedicao",
+                     "data_previsao_entrega", "pedido_venda"):
             self.fields[nome].required = False
+        # O CLIENTE PODE VIR DA VENDA. Exigir os dois faria a pessoa digitar
+        # de novo o que a venda já sabe -- e digitar de novo é onde nasce o
+        # pedido entregue ao cliente errado.
+        self.fields["cliente"].required = False
         for field in self.fields.values():
             field.widget.attrs["class"] = BASE_INPUT_CLASS
 
+    def clean(self):
+        """
+        O cliente da expedição é o cliente da venda.
+
+        NÃO É PREENCHIMENTO DE TELA, É REGRA: expedir para um cliente
+        diferente do que comprou seria entregar a mercadoria de alguém a
+        outra pessoa, e o pedido continuaria parecendo certo em todo
+        relatório. Por isso a venda escolhida manda, e não a caixa de busca.
+
+        SEM VENDA, O CLIENTE VOLTA A SER OBRIGATÓRIO: carga avulsa também
+        precisa de destinatário.
+        """
+        dados = super().clean()
+        venda = dados.get("pedido_venda")
+        if venda is not None:
+            dados["cliente"] = venda.cliente
+            self.errors.pop("cliente", None)
+        elif not dados.get("cliente"):
+            self.add_error(
+                "cliente",
+                "Escolha o cliente ou o pedido de venda que originou a expedição.",
+            )
+        return dados
+
     def save(self, commit=True):
         pedido = super().save(commit=False)
+        # O CLIENTE VEM DA VENDA ATE' NO SALVAMENTO: um POST montado por fora
+        # da tela nao pode escapar da regra que a tela mostra.
+        if pedido.pedido_venda_id:
+            pedido.cliente = pedido.pedido_venda.cliente
         pedido.endereco_entrega = {
             "cep":      self.cleaned_data.get("entrega_cep", ""),
             "endereco": self.cleaned_data.get("entrega_endereco", ""),

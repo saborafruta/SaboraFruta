@@ -77,6 +77,41 @@ def _clientes_fornecedores_json(filial):
     return json.dumps(clientes, ensure_ascii=False), json.dumps(fornecedores, ensure_ascii=False)
 
 
+def _vendas_para_expedicao_json(filial, limite=300):
+    """
+    As vendas que podem originar uma expedição, para o campo de busca.
+
+    PEDIDO CANCELADO FICA DE FORA: expedir o que foi cancelado é entregar
+    mercadoria que ninguém mais comprou.
+
+    O CLIENTE VIAJA JUNTO no JSON porque é ele que a tela preenche ao
+    escolher a venda — sem isso, a pessoa escolheria a venda e ainda teria de
+    procurar o cliente, que é exatamente a digitação que este campo veio
+    evitar.
+    """
+    from apps.vendas.models import PedidoVenda
+
+    pedidos = (
+        PedidoVenda.objects
+        .filter(filial=filial)
+        .exclude(status=PedidoVenda.Status.CANCELADO)
+        .select_related("cliente")
+        .order_by("-data_emissao")[:limite]
+    )
+    return json.dumps([
+        {
+            "id": p.pk,
+            "numero": p.numero_pedido,
+            "cliente_id": p.cliente_id,
+            "cliente": str(p.cliente) if p.cliente_id else "",
+            "status": p.get_status_display(),
+            "data": p.data_emissao.strftime("%d/%m/%Y") if p.data_emissao else "",
+            "valor": float(p.valor_total or 0),
+        }
+        for p in pedidos
+    ], ensure_ascii=False)
+
+
 def _motoristas_veiculos_json(filial):
     """Retorna JSON com motoristas e veículos ativos da filial para os forms."""
     motoristas = list(
@@ -1049,6 +1084,7 @@ class PedidoExpedicaoCreateView(PermissaoRequiredMixin, View):
             "form": form,
             "cancel_url": reverse("logistica:pedido-expedicao-list"),
             "clientes_json": clientes_json,
+            "vendas_json": _vendas_para_expedicao_json(filial),
         })
 
     def post(self, request):
@@ -1067,6 +1103,7 @@ class PedidoExpedicaoCreateView(PermissaoRequiredMixin, View):
             "form": form,
             "cancel_url": reverse("logistica:pedido-expedicao-list"),
             "clientes_json": clientes_json,
+            "vendas_json": _vendas_para_expedicao_json(filial),
         })
 
 
@@ -1086,6 +1123,7 @@ class PedidoExpedicaoUpdateView(PermissaoRequiredMixin, View):
             "pedido": pedido,
             "cancel_url": reverse("logistica:pedido-expedicao-detail", kwargs={"pk": pedido.pk}),
             "clientes_json": clientes_json,
+            "vendas_json": _vendas_para_expedicao_json(filial),
         })
 
     def post(self, request, pk):
@@ -1103,6 +1141,7 @@ class PedidoExpedicaoUpdateView(PermissaoRequiredMixin, View):
             "pedido": pedido,
             "cancel_url": reverse("logistica:pedido-expedicao-detail", kwargs={"pk": pedido.pk}),
             "clientes_json": clientes_json,
+            "vendas_json": _vendas_para_expedicao_json(filial),
         })
 
 
