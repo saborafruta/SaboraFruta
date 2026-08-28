@@ -40,6 +40,7 @@ from apps.logistica.services.entrega_bonificacao import (
 )
 from apps.logistica.services.log_viagem import LogViagemService
 from apps.logistica.services.mdfe_viagem import MDFeViagemService
+from apps.logistica.services.onboarding_viagem import OnboardingViagemService
 from apps.logistica.services.historico_bonificacao import (
     HistoricoBonificacaoService,
 )
@@ -96,6 +97,11 @@ class ViagemListView(PermissaoRequiredMixin, View):
             'status_choices': Viagem.Status.choices,
             'kpis': cls_kpis(filial),
             'pode_agir': request.user.tem_permissao('logistica', 'criar'),
+            # O CONVITE SO' APARECE PARA QUEM PRECISA DELE: filial sem viagem
+            # nenhuma, ou com cadastro faltando. Depois que a operacao roda e
+            # o essencial esta' pronto, o checklist vira ruido -- e ruido
+            # ensina a ignorar o aviso que importa.
+            'onboarding': OnboardingViagemService.resumo(filial),
         })
 
 
@@ -1266,3 +1272,41 @@ class ViagemNFeTransmitirView(PermissaoRequiredMixin, View):
             + ('' if consultar else ' A autorização chega em seguida.'),
         )
         return volta
+
+
+class ViagemPrimeirosPassosView(PermissaoRequiredMixin, View):
+    """
+    O que precisa estar pronto antes do primeiro caminhão.
+
+    O ERRO SEMPRE APARECE NA PIOR HORA. Falta de natureza cadastrada não
+    atrapalha ninguém enquanto a carga é montada: ela aparece na doca, com o
+    caminhão encostado e a mercadoria já baixada do estoque, no clique de
+    emitir a nota. Esta tela antecipa esse encontro para um momento em que
+    ele custa cinco minutos.
+
+    É TELA DE LEITURA E DE ATALHO. Ela não cadastra nada — cada pendência
+    leva ao módulo que é dono daquele cadastro, com a permissão daquele
+    módulo. Resolver fiscal por dentro da logística seria criar uma segunda
+    porta para o mesmo dado.
+    """
+
+    permissao_modulo = 'logistica'
+    template_name = 'logistica/viagem/primeiros_passos.html'
+
+    def get(self, request):
+        filial = _filial(request)
+        checagens = OnboardingViagemService.checagens(filial)
+        resumo = OnboardingViagemService.resumo(filial, checagens)
+
+        grupos = []
+        for checagem in checagens:
+            if not grupos or grupos[-1]['nome'] != checagem['grupo']:
+                grupos.append({'nome': checagem['grupo'], 'itens': []})
+            grupos[-1]['itens'].append(checagem)
+
+        return render(request, self.template_name, {
+            'title': 'Primeiros passos da viagem',
+            'grupos': grupos,
+            'resumo': resumo,
+            'pode_criar': request.user.tem_permissao('logistica', 'criar'),
+        })

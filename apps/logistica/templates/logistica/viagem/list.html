@@ -12,12 +12,48 @@
       </p>
     </div>
     <div class="flex flex-wrap gap-2">
+      <a href="{% url 'logistica:viagem-primeiros-passos' %}" class="btn-secondary">Primeiros passos</a>
       <a href="{% url 'logistica:rastreabilidade' %}" class="btn-secondary">Rastreabilidade</a>
       {% if pode_agir %}
         <a href="{% url 'logistica:viagem-create' %}" class="btn-primary">+ Nova Viagem</a>
       {% endif %}
     </div>
+
   </div>
+
+  {# ── convite dos primeiros passos ── #}
+  {% if onboarding.mostrar_convite %}
+    {% comment %}
+      O CONVITE E' PARA QUEM AINDA NAO RODOU, ou para quem tem cadastro
+      faltando. Falta de natureza nao atrapalha a montagem da carga: ela
+      aparece na doca, com a mercadoria ja' baixada, no clique de emitir a
+      nota. Aqui custa cinco minutos.
+    {% endcomment %}
+    <a href="{% url 'logistica:viagem-primeiros-passos' %}"
+       class="card p-4 flex flex-wrap items-center justify-between gap-3 block"
+       style="border:1px solid {% if onboarding.pronto %}#3b82f6{% else %}#d97706{% endif %};">
+      <div>
+        <p class="text-sm font-semibold"
+           style="color:{% if onboarding.pronto %}#3b82f6{% else %}#d97706{% endif %};">
+          {% if onboarding.pronto %}
+            Primeira viagem desta filial
+          {% else %}
+            Faltam {{ onboarding.faltando|length }} cadastro(s) para a viagem emitir documento
+          {% endif %}
+        </p>
+        <p class="text-xs mt-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+          {% if onboarding.pronto %}
+            O essencial já está cadastrado — veja como a carga, as notas e o
+            acerto se encadeiam antes de carregar.
+          {% else %}
+            {{ onboarding.faltando.0.titulo }}{% if onboarding.faltando|length > 1 %} e mais {{ onboarding.faltando|length|add:"-1" }}{% endif %}.
+            Resolver agora custa cinco minutos; na doca, custa o caminhão parado.
+          {% endif %}
+        </p>
+      </div>
+      <span class="btn-secondary text-sm">Ver primeiros passos</span>
+    </a>
+  {% endif %}
 
   <div class="grid grid-cols-2 lg:grid-cols-4 gap-4">
     <div class="card p-4">

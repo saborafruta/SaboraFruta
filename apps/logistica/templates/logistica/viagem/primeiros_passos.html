@@ -1,0 +1,175 @@
+{% extends "_base.html" %}
+{% block title %}{{ title }} — Logística{% endblock %}
+{% block page_title %}{{ title }}{% endblock %}
+{% block content %}
+
+{% comment %}
+  O ERRO SEMPRE APARECE NA PIOR HORA.
+
+  Falta de natureza cadastrada não atrapalha ninguém enquanto a carga é
+  montada. Ela aparece na doca, com o caminhão encostado e a mercadoria já
+  baixada do estoque, no clique de emitir a nota — e aí a correção passa por
+  outro módulo, outro usuário e outra permissão. Esta tela antecipa esse
+  encontro para um momento em que ele custa cinco minutos.
+
+  OBRIGATÓRIO E RECOMENDADO SÃO SEPARADOS. Sem natureza de venda fora a nota
+  não sai; sem motorista cadastrado ela sai igual, só dá mais trabalho.
+  Misturar os dois ensinaria a ignorar a lista inteira.
+
+  CADA PENDÊNCIA LEVA AO DONO DELA. Esta tela não cadastra nada: resolver
+  fiscal por dentro da logística seria criar uma segunda porta para o mesmo
+  dado, com outra permissão.
+{% endcomment %}
+<div class="space-y-4">
+
+  <div class="flex flex-wrap items-start justify-between gap-3">
+    <div>
+      <p class="text-sm mb-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+        <a href="{% url 'logistica:viagem-list' %}"
+           :style="temaClaro ? 'color:#3b82f6;' : 'color:#60a5fa;'">Viagens</a>
+        <span class="mx-1">›</span> Primeiros passos
+      </p>
+      <h2 class="text-2xl font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
+        Antes do primeiro caminhão
+      </h2>
+      <p class="text-sm mt-1 max-w-2xl" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+        A viagem leva mercadoria já vendida, mercadoria para vender na rua e
+        bonificação no mesmo caminhão. Cada uma vira um documento diferente — e é
+        o cadastro abaixo que decide o que sai em cada um.
+      </p>
+    </div>
+    <div class="card p-4 text-center" style="min-width:170px;">
+      <p class="text-[11px] uppercase tracking-wide" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+        Essenciais prontos
+      </p>
+      <p class="text-3xl font-bold mt-1"
+         style="color:{% if resumo.pronto %}#059669{% else %}#d97706{% endif %};">
+        {{ resumo.prontas }}/{{ resumo.total }}
+      </p>
+      <p class="text-[11px] mt-1" :style="temaClaro ? 'color:#94a3b8;' : 'color:#71717a;'">
+        {% if resumo.pronto %}pode carregar{% else %}faltam {{ resumo.faltando|length }}{% endif %}
+      </p>
+    </div>
+  </div>
+
+  {# ── O convite, quando já dá para começar ───────────────────────── #}
+  {% if resumo.pronto %}
+    <div class="card p-4 flex flex-wrap items-center justify-between gap-3"
+         style="border:1px solid #059669;">
+      <div>
+        <p class="text-sm font-semibold" style="color:#059669;">
+          O essencial está pronto.
+        </p>
+        <p class="text-xs mt-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+          {% if resumo.primeira_viagem %}
+            Esta filial ainda não fez nenhuma viagem — a próxima tela monta a
+            carga com as três operações.
+          {% else %}
+            Nada impede a emissão das notas desta filial.
+          {% endif %}
+        </p>
+      </div>
+      {% if pode_criar %}
+        <a href="{% url 'logistica:viagem-create' %}" class="btn-primary text-sm">
+          {% if resumo.primeira_viagem %}Criar a primeira viagem{% else %}Nova viagem{% endif %}
+        </a>
+      {% endif %}
+    </div>
+  {% else %}
+    <div class="card p-4" style="border:1px solid #d97706;">
+      <p class="text-sm font-semibold" style="color:#d97706;">
+        Falta cadastro para a viagem emitir documento.
+      </p>
+      <p class="text-xs mt-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+        Dá para montar a carga assim mesmo — o que vai parar é a emissão da nota,
+        já com a mercadoria baixada do estoque e o caminhão na doca.
+      </p>
+    </div>
+  {% endif %}
+
+  {# ── A conferência ──────────────────────────────────────────────── #}
+  {% for grupo in grupos %}
+    <div class="card overflow-hidden">
+      <div class="px-4 py-3" :style="temaClaro ? 'border-bottom:1px solid #e5e7eb;background:#f8fafc;' : 'border-bottom:1px solid #2a2a2e;background:#1e1e20;'">
+        <h3 class="text-xs font-semibold uppercase tracking-wide" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+          {{ grupo.nome }}
+        </h3>
+      </div>
+      <div>
+        {% for item in grupo.itens %}
+          <div class="px-4 py-3 flex flex-wrap items-start gap-3 border-b"
+               :style="temaClaro ? 'border-color:#f1f5f9;' : 'border-color:#2a2a2e;'">
+            <span class="mt-0.5 text-lg leading-none"
+                  style="color:{% if item.pronto %}#059669{% elif item.peso == 'obrigatorio' %}#dc2626{% else %}#d97706{% endif %};">
+              {% if item.pronto %}✓{% else %}!{% endif %}
+            </span>
+            <div class="flex-1 min-w-[220px]">
+              <p class="text-sm font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
+                {{ item.titulo }}
+                {% if item.peso == 'recomendado' %}
+                  <span class="soft-pill is-slate text-[10px] ml-1">recomendado</span>
+                {% endif %}
+              </p>
+              <p class="text-xs mt-0.5" :style="temaClaro ? 'color:#94a3b8;' : 'color:#71717a;'">
+                {{ item.para_que }}
+              </p>
+              {% comment %}
+                O DETALHE É A MENSAGEM QUE A EMISSÃO DARIA. Reescrevê-la aqui em
+                outras palavras faria a pessoa procurar dois problemas onde há um.
+              {% endcomment %}
+              <p class="text-xs mt-1"
+                 style="color:{% if item.pronto %}#059669{% else %}#d97706{% endif %};">
+                {{ item.detalhe }}
+              </p>
+            </div>
+            {% if not item.pronto %}
+              <a href="{% url item.rota %}" class="btn-secondary text-xs">{{ item.acao }}</a>
+            {% endif %}
+          </div>
+        {% endfor %}
+      </div>
+    </div>
+  {% endfor %}
+
+  {# ── O que vem depois ───────────────────────────────────────────── #}
+  <div class="card p-4">
+    <h3 class="text-sm font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
+      Como a viagem anda depois disso
+    </h3>
+    <p class="text-xs mt-1 mb-3" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+      A ordem é a da operação. Dentro da viagem, o bloco <strong>Fluxo da viagem</strong>
+      mostra em que ponto você está e qual é o próximo passo.
+    </p>
+    <div class="grid gap-2 sm:grid-cols-2 lg:grid-cols-3 text-xs">
+      <div class="rounded-lg p-3" :style="temaClaro ? 'background:#f8fafc;' : 'background:#18181b;'">
+        <p class="font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">📦 Montar e fechar a carga</p>
+        <p class="mt-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Uma linha por produto, com a natureza de cada operação. Fechar tira do estoque.</p>
+      </div>
+      <div class="rounded-lg p-3" :style="temaClaro ? 'background:#f8fafc;' : 'background:#18181b;'">
+        <p class="font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">🧾 Remessa e MDF-e</p>
+        <p class="mt-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">A nota do que sai sem comprador, transmitida à SEFAZ, e o manifesto da carga.</p>
+      </div>
+      <div class="rounded-lg p-3" :style="temaClaro ? 'background:#f8fafc;' : 'background:#18181b;'">
+        <p class="font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">🛣️ Vendas e bonificações na rua</p>
+        <p class="mt-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">O saldo do caminhão é o limite. Venda a prazo abre cobrança na hora.</p>
+      </div>
+      <div class="rounded-lg p-3" :style="temaClaro ? 'background:#f8fafc;' : 'background:#18181b;'">
+        <p class="font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">↩️ Retorno conferido</p>
+        <p class="mt-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">O sistema calcula o previsto; a contagem física corrige. Divergência vira aviso.</p>
+      </div>
+      <div class="rounded-lg p-3" :style="temaClaro ? 'background:#f8fafc;' : 'background:#18181b;'">
+        <p class="font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">🏁 Acerto e encerramento</p>
+        <p class="mt-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Carga inicial = vendas + bonificações + retornos. Sem fechar, não encerra.</p>
+      </div>
+      <div class="rounded-lg p-3" :style="temaClaro ? 'background:#f8fafc;' : 'background:#18181b;'">
+        <p class="font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">🔎 Depois</p>
+        <p class="mt-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+          <a href="{% url 'logistica:rastreabilidade' %}" :style="temaClaro ? 'color:#3b82f6;' : 'color:#60a5fa;'">Rastreabilidade</a>
+          mostra por onde cada produto passou, viagem a viagem.
+        </p>
+      </div>
+    </div>
+  </div>
+
+</div>
+{% endblock %}

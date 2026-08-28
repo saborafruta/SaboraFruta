@@ -117,21 +117,39 @@ class VendaForaNFeService:
     }
 
     NOME_DA_ESPECIE = {
+        NaturezaOperacao.Especie.VENDA: 'venda',
         NaturezaOperacao.Especie.VENDA_FORA: 'venda fora do estabelecimento',
         NaturezaOperacao.Especie.BONIFICACAO: 'bonificação',
+        NaturezaOperacao.Especie.REMESSA_VENDA_FORA:
+            'remessa para venda fora do estabelecimento',
+        NaturezaOperacao.Especie.RETORNO_VENDA_FORA:
+            'retorno de venda fora do estabelecimento',
+        NaturezaOperacao.Especie.REMESSA_SIMPLES: 'remessa simples',
+        NaturezaOperacao.Especie.RETORNO_SIMPLES: 'retorno simples',
     }
 
     @classmethod
     def natureza(cls, filial, tipo=VendaViagem.Tipo.VENDA):
+        """A natureza cadastrada para este tipo de entrega."""
+        especie = cls.ESPECIE_POR_TIPO.get(tipo, NaturezaOperacao.Especie.VENDA_FORA)
+        return cls.natureza_da_especie(filial, especie)
+
+    @classmethod
+    def natureza_da_especie(cls, filial, especie):
         """
-        A natureza cadastrada para este tipo de entrega.
+        A natureza cadastrada para uma espécie fiscal.
 
         UMA SÓ, E ATIVA. Duas naturezas da mesma espécie deixariam a nota
         depender de qual delas o código pegasse primeiro — e o CFOP mudaria
         sem ninguém ter escolhido nada.
+
+        A PERGUNTA É A MESMA EM TODA PARTE. A emissão faz esta pergunta com o
+        caminhão carregado; os primeiros passos fazem antes, para a resposta
+        não chegar na doca. Duas versões dela divergiriam no dia em que a
+        regra mudasse, e a conferência diria "tudo pronto" sobre uma emissão
+        que vai parar.
         """
-        especie = cls.ESPECIE_POR_TIPO.get(tipo, NaturezaOperacao.Especie.VENDA_FORA)
-        nome = cls.NOME_DA_ESPECIE[especie]
+        nome = cls.NOME_DA_ESPECIE.get(especie, especie)
         naturezas = list(
             NaturezaOperacao.objects.for_filial(filial).filter(
                 especie=especie, ativo=True,
