@@ -243,8 +243,10 @@ class ArteNoPdfTests(TestCase):
 
     @staticmethod
     def _texto_layout(bloco):
-        from reportlab.platypus import Paragraph, Table
+        from reportlab.platypus import KeepInFrame, Paragraph, Table
 
+        if isinstance(bloco, KeepInFrame):
+            return ArteNoPdfTests._texto_layout(bloco._content)
         if isinstance(bloco, Paragraph):
             return bloco.getPlainText()
         if isinstance(bloco, Table):
@@ -538,10 +540,11 @@ class ArteNoPdfTests(TestCase):
             [str(numero) for numero in range(17, 23)] + ['', ''],
         )
 
-    def test_muitos_nomes_ficam_na_mesma_folha_com_arte_reduzida(self):
+    def test_muitos_nomes_ficam_a_esquerda_sem_reduzir_a_arte(self):
         from reportlab.platypus import KeepInFrame
 
         pedido = self._pedido()
+        pedido.observacoes = 'Observacao geral da OP na direita.'
         item = ItemPedidoProducao.objects.create(pedido=pedido, descricao='Camisa', quantidade=180)
         tamanho = Tamanho.objects.create(filial=self.filial, sigla='XGG')
         visual = VisualItemPedido.objects.create(
@@ -556,9 +559,9 @@ class ArteNoPdfTests(TestCase):
             frames.append(frame)
             return frame
 
-        with patch('apps.moda.services.pedido_pdf.KeepInFrame', side_effect=registrar_frame):
+        with patch.object(PedidoPdfService, '_arte', wraps=PedidoPdfService._arte) as arte:
             PedidoPdfService.gerar(pedido)
-        altura_sem_nomes = frames[0].maxHeight
+        altura_sem_nomes = arte.call_args.kwargs['altura_maxima']
         PersonalizacaoIndividual.objects.bulk_create([
             PersonalizacaoIndividual(
                 pedido=pedido, item=item, tamanho=tamanho,
@@ -566,14 +569,24 @@ class ArteNoPdfTests(TestCase):
             ) for n in range(180)
         ])
         frames.clear()
-        with patch('apps.moda.services.pedido_pdf.KeepInFrame', side_effect=registrar_frame):
+        with (
+            patch('apps.moda.services.pedido_pdf.KeepInFrame', side_effect=registrar_frame),
+            patch.object(PedidoPdfService, '_arte', wraps=PedidoPdfService._arte) as arte,
+        ):
             pdf = PedidoPdfService.gerar(pedido)
         self.assertEqual(_paginas(pdf), 1)
-        self.assertLess(frames[1].maxHeight, altura_sem_nomes)
+        self.assertEqual(arte.call_args.kwargs['altura_maxima'], altura_sem_nomes)
         self.assertEqual(frames[-1].mode, 'error')
-        texto = self._texto_layout(frames[0]._content)
+        self.assertEqual(frames[-2].mode, 'error')
+        texto = self._texto_layout(frames[-2])
         for n in range(180):
             self.assertIn(f'Nome completo de teste da pessoa {n}', texto)
+        self.assertNotIn('FINANCEIRO', texto)
+        self.assertNotIn('OBSERVAÇÕES DA OP', texto)
+        direita = self._texto_layout(frames[-1])
+        self.assertIn('FINANCEIRO', direita)
+        self.assertIn('Observacao geral da OP na direita.', direita)
+        self.assertNotIn('PERSONALIZAÇÃO POR PESSOA', direita)
 
     def test_sete_nomes_e_imagem_grande_nao_geram_continuacao(self):
         from reportlab.platypus import KeepInFrame
@@ -607,9 +620,71 @@ class ArteNoPdfTests(TestCase):
             pdf = PedidoPdfService.gerar(pedido)
         self.assertEqual(_paginas(pdf), 1)
         self.assertEqual(getattr(frames[0], '_scale', 1), 1)
-        self.assertIn('Jose', self._texto_layout(frames[0]._content))
+        self.assertIn('Jose', self._texto_layout(frames[-2]))
         ItemPedidoProducao.objects.create(pedido=pedido, descricao='Outro produto')
         self.assertEqual(_paginas(PedidoPdfService.gerar(pedido)), 2)
+
+    def test_estrutura_longa_e_22_pessoas_mantem_lista_na_largura_da_esquerda(self):
+        from reportlab.pdfgen.canvas import Canvas
+        from apps.moda.models import ItemGradePedido
+        from apps.moda.services.pedido_pdf import LARGURA_UTIL, PAGINA, _estilos
+        from reportlab.lib.units import mm
+
+        pedido = self._pedido()
+        item = ItemPedidoProducao.objects.create(
+            pedido=pedido, descricao='Abada Baby Look', quantidade=22,
+            observacoes='Avisar quando a primeira peca estiver pronta.\nEstrutura da peça:\n'
+            + '\n'.join(f'Campo {n}: Acabamento da peca' for n in range(18)),
+        )
+        tamanho = Tamanho.objects.create(filial=self.filial, sigla='PP')
+        ItemGradePedido.objects.create(item=item, tamanho=tamanho, quantidade=22)
+        PersonalizacaoIndividual.objects.bulk_create([
+            PersonalizacaoIndividual(pedido=pedido, item=item, tamanho=tamanho,
+                                      nome=f'Pessoa {n}', numero=str(n))
+            for n in range(1, 23)
+        ])
+        largura = (LARGURA_UTIL - 6 * mm) / 2
+        altura = PAGINA[1] - 40 * mm - 14
+        esquerda = PedidoPdfService._coluna_producao(
+            pedido, item, _estilos(), largura, altura, Canvas(io.BytesIO()),
+        )
+        self.assertEqual(getattr(esquerda[-1], '_scale', 1), 1)
+        self.assertAlmostEqual(esquerda[-1]._content[-1]._width, largura)
+        for n in range(1, 23):
+            self.assertIn(f'Pessoa {n}', self._texto_layout(esquerda))
+        self.assertEqual(_paginas(PedidoPdfService.gerar(pedido)), 1)
+
+    def test_arte_ocupa_altura_disponivel_com_uma_duas_ou_cinco_imagens(self):
+        from reportlab.pdfgen.canvas import Canvas
+        from reportlab.lib.units import mm
+        from apps.moda.services.pedido_pdf import LARGURA_UTIL, _estilos
+
+        pedido = self._pedido()
+        item = ItemPedidoProducao.objects.create(pedido=pedido, descricao='Camisa')
+        for n in range(1, 6):
+            visual = VisualItemPedido.objects.create(
+                item=item, posicao='frente_camisa',
+                imagem=SimpleUploadedFile(f'altura-{n}.png', _png((n * 40, 10, 20))),
+            )
+            self.addCleanup(visual.imagem.delete, save=False)
+            if n not in (1, 2, 5):
+                continue
+            with self.subTest(imagens=n):
+                altura = 135 * mm
+                largura = LARGURA_UTIL / 2
+                blocos = PedidoPdfService._arte(
+                    item, _estilos(), largura, altura_maxima=altura,
+                )
+                medidor = Canvas(io.BytesIO())
+                altura_real = sum(b.wrapOn(medidor, largura, altura)[1] for b in blocos)
+                self.assertAlmostEqual(altura_real, altura)
+                self.assertEqual(_paginas(PedidoPdfService.gerar(pedido)), 1)
+
+    def test_observacoes_longas_da_op_nao_geram_segunda_folha(self):
+        pedido = self._pedido()
+        pedido.observacoes = '\n'.join(f'Instrucao completa da OP {n}' for n in range(100))
+        ItemPedidoProducao.objects.create(pedido=pedido, descricao='Camisa')
+        self.assertEqual(_paginas(PedidoPdfService.gerar(pedido)), 1)
 
     def test_coluna_direita_pode_ocupar_toda_altura_util_da_pagina(self):
         """O contêiner externo não pode descontar padding da altura já medida."""

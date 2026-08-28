@@ -281,30 +281,19 @@ class PedidoPdfService:
         else:
             for indice, item in enumerate(itens):
                 meia = (LARGURA_UTIL - 6 * mm) / 2
-                esquerda = cls._cliente(pedido, e, meia)
-                esquerda += cls._item(pedido, item, e, 0, largura_util=meia)
-                esquerda += cls._financeiro(pedido, e, meia, item=item)
-
-                pessoas = list(item.individuais.all())
-                colunas = 3 if len(pessoas) > 16 else (2 if len(pessoas) > 8 else 1)
-                lista = cls._personalizacao_item(
-                    item, e, meia, pessoas=pessoas, colunas=colunas,
+                esquerda = cls._coluna_producao(
+                    pedido, item, e, meia, altura_util, medidor,
                 )
-                # Uma folha por produto é obrigatória. Reservamos primeiro
-                # a lista COMPLETA; a arte só usa o espaço restante.
-                # Listas excepcionalmente longas são compactadas, nunca
-                # cortadas nem enviadas para uma folha de continuação.
-                altura_lista = 0
-                lista_frame = None
-                if lista:
-                    lista_frame = KeepInFrame(
-                        meia, altura_util * .70, lista, mode='shrink',
-                    )
-                    _, altura_lista = lista_frame.wrapOn(medidor, meia, altura_util)
-                altura_arte = altura_util - altura_lista - 4
+                # A imagem depende apenas do conteúdo da DIREITA. A lista
+                # de pessoas não disputa mais altura com a arte.
+                complemento = cls._artes_do_pedido(pedido, e, meia) if indice == 0 else []
+                complemento += cls._financeiro(pedido, e, meia, item=item)
+                complemento_frame = KeepInFrame(
+                    meia, altura_util * .70, complemento, mode='shrink',
+                )
+                _, altura_complemento = complemento_frame.wrapOn(medidor, meia, altura_util)
+                altura_arte = altura_util - altura_complemento - 4
                 direita = cls._arte(item, e, meia, altura_maxima=altura_arte)
-                if indice == 0:
-                    direita += cls._artes_do_pedido(pedido, e, meia)
                 if not direita:
                     direita = [
                         _barra_secao(4, f'IMAGENS E IMPRESSÃO - {item.nome_exibicao}', e, meia),
@@ -314,11 +303,9 @@ class PedidoPdfService:
                 arte = KeepInFrame(
                     meia, altura_arte, direita, mode='shrink',
                 )
-                direita = [arte]
-                if lista_frame is not None:
-                    direita.append(lista_frame)
+                direita = [arte, complemento_frame]
                 pagina = Table([[
-                    KeepInFrame(meia, altura_util, esquerda, mode='shrink'),
+                    KeepInFrame(meia, altura_util, esquerda, mode='error'),
                     KeepInFrame(meia, altura_util, direita, mode='error'),
                 ]], colWidths=[meia, meia], rowHeights=[altura_util])
                 pagina.setStyle(TableStyle([
@@ -342,6 +329,54 @@ class PedidoPdfService:
         cabecalho = cls._cabecalho_folha(pedido, base_url)
         doc.build(elementos, onFirstPage=cabecalho, onLaterPages=cabecalho)
         return buffer.getvalue()
+
+    @classmethod
+    def _coluna_producao(cls, pedido, item, e, largura, altura, medidor):
+        """Reserva espaço para todos os nomes, sem encolher a coluna da arte."""
+        pessoas = list(item.individuais.all())
+        produto = cls._cliente(pedido, e, largura)
+        produto += cls._item(pedido, item, e, 0, largura_util=largura)
+        produto_frame = KeepInFrame(
+            largura, altura * .70 if pessoas else altura, produto, mode='shrink',
+        )
+        _, altura_produto = produto_frame.wrapOn(medidor, largura, altura)
+        if not pessoas:
+            return [produto_frame]
+
+        altura_lista = altura - altura_produto - 2
+        candidatos = []
+        for colunas in range(1, min(3, len(pessoas)) + 1):
+            def montar(fator):
+                lista = cls._personalizacao_item(
+                    item, e, largura, pessoas=pessoas, colunas=colunas,
+                    fator_fonte=fator,
+                )
+                frame = KeepInFrame(largura, altura_lista, lista, mode='shrink')
+                frame.wrapOn(medidor, largura, altura_lista)
+                return frame
+
+            fator = 1
+            frame = montar(fator)
+            if getattr(frame, '_scale', 1) > 1:
+                # Compactar texto/padding antes de reduzir o bloco inteiro
+                # mantém a tabela alinhada à largura da coluna esquerda.
+                baixo, alto = .25, 1
+                fator, frame = baixo, montar(baixo)
+                for _ in range(7):
+                    meio = (baixo + alto) / 2
+                    tentativa = montar(meio)
+                    if getattr(tentativa, '_scale', 1) <= 1:
+                        baixo = meio
+                        fator, frame = meio, tentativa
+                    else:
+                        alto = meio
+            fonte = e['celula'].fontSize if colunas == 1 else 6.3
+            # Nomes longos podem ficar melhores em duas colunas que em
+            # três. Escolhemos pela fonte efetiva depois da medição real,
+            # não só pela quantidade de pessoas. Empate: menos colunas.
+            legibilidade = fonte * fator / getattr(frame, '_scale', 1)
+            candidatos.append((legibilidade, -colunas, frame))
+        return [produto_frame, max(candidatos, key=lambda c: c[:2])[2]]
 
     # ── Cabeçalho ────────────────────────────────────────────────────────
 
@@ -650,10 +685,10 @@ class PedidoPdfService:
         por_linha = min(2, len(campos_imagem))
         if altura_maxima is not None:
             linhas = (len(campos_imagem) + por_linha - 1) // por_linha
-            # Reduz só a caixa das imagens: título e largura das colunas
-            # mantêm alinhamento e fonte, mesmo quando a lista é maior.
+            # Na OP, usa todo o espaço medido acima do financeiro. Não
+            # limita a imagem pela presença de nomes na outra coluna.
             limite = (altura_maxima - 9 * mm - 4) / linhas - 5 * mm
-            altura_imagem = min(altura_imagem, max(1, limite))
+            altura_imagem = max(1, limite)
         largura = largura_util / por_linha
         for inicio in range(0, len(campos_imagem), por_linha):
             faixa = campos_imagem[inicio:inicio + por_linha]
@@ -749,7 +784,7 @@ class PedidoPdfService:
     def _personalizacao_item(
         item, e, largura_util=LARGURA_UTIL, cor=AZUL,
         cor_clara=AZUL_CLARO, arredondada=False,
-        *, pessoas=None, inicio=0, colunas=1,
+        *, pessoas=None, inicio=0, colunas=1, fator_fonte=1,
     ) -> list:
         """Lista compacta e exclusiva do produto, sem repetir o nome dele."""
         pessoas = list(item.individuais.all()) if pessoas is None else pessoas
@@ -760,7 +795,8 @@ class PedidoPdfService:
             # continua no alto da coluna seguinte. Cada bloco repete seu
             # cabeçalho e mantém nome/número/tamanho juntos.
             estilo = ParagraphStyle(
-                'pessoa_compacta', parent=e['celula'], fontSize=6.3, leading=7.5,
+                'pessoa_compacta', parent=e['celula'],
+                fontSize=6.3 * fator_fonte, leading=7.5 * fator_fonte,
             )
             largura_bloco = (largura_util - (colunas - 1) * 2 * mm) / colunas
             larguras = []
@@ -792,12 +828,12 @@ class PedidoPdfService:
                 dados.append(celulas)
             tabela = _tabela(dados, larguras, cor_cabecalho=cor, fundo_linha=cor_clara)
             tabela.setStyle(TableStyle([
-                ('FONTSIZE', (0, 0), (-1, -1), 6.3),
-                ('LEADING', (0, 0), (-1, -1), 7.5),
+                ('FONTSIZE', (0, 0), (-1, -1), 6.3 * fator_fonte),
+                ('LEADING', (0, 0), (-1, -1), 7.5 * fator_fonte),
                 ('LEFTPADDING', (0, 0), (-1, -1), 2),
                 ('RIGHTPADDING', (0, 0), (-1, -1), 2),
-                ('TOPPADDING', (0, 0), (-1, -1), 1.5),
-                ('BOTTOMPADDING', (0, 0), (-1, -1), 1.5),
+                ('TOPPADDING', (0, 0), (-1, -1), 1.5 * fator_fonte),
+                ('BOTTOMPADDING', (0, 0), (-1, -1), 1.5 * fator_fonte),
             ] + [
                 ('BACKGROUND', (coluna * 5 - 1, 0), (coluna * 5 - 1, -1), colors.white)
                 for coluna in range(1, colunas)
@@ -811,13 +847,28 @@ class PedidoPdfService:
                 Spacer(1, 3), tabela,
             ]
         dados = [['#', 'Nome', 'Número', 'Tamanho']]
+        estilo = ParagraphStyle(
+            'pessoa_coluna', parent=e['celula'],
+            fontSize=e['celula'].fontSize * fator_fonte,
+            leading=e['celula'].leading * fator_fonte,
+        )
         for indice, pessoa in enumerate(pessoas, start=inicio + 1):
             dados.append([
-                str(indice), Paragraph(esc(pessoa.nome) or '—', e['celula']),
-                pessoa.numero or '—',
-                pessoa.tamanho.sigla if pessoa.tamanho_id else '—',
+                str(indice), Paragraph(esc(pessoa.nome) or '—', estilo),
+                Paragraph(esc(pessoa.numero) or '—', estilo),
+                Paragraph(esc(pessoa.tamanho.sigla) if pessoa.tamanho_id else '—', estilo),
             ])
         larguras = [8 * mm, largura_util - 43 * mm, 17 * mm, 18 * mm]
+        tabela = _tabela(
+            dados, larguras, cor_cabecalho=cor, fundo_linha=cor_clara,
+            arredondada=arredondada,
+        )
+        tabela.setStyle(TableStyle([
+            ('FONTSIZE', (0, 0), (-1, -1), estilo.fontSize),
+            ('LEADING', (0, 0), (-1, -1), estilo.leading),
+            ('TOPPADDING', (0, 0), (-1, -1), 3 * fator_fonte),
+            ('BOTTOMPADDING', (0, 0), (-1, -1), 3 * fator_fonte),
+        ]))
         return [
             Spacer(1, 5),
             _barra_secao(
@@ -825,10 +876,7 @@ class PedidoPdfService:
                 cor=cor, cor_clara=cor_clara, arredondada=arredondada,
             ),
             Spacer(1, 3),
-            _tabela(
-                dados, larguras, cor_cabecalho=cor, fundo_linha=cor_clara,
-                arredondada=arredondada,
-            ),
+            tabela,
         ]
 
     # ── Financeiro ───────────────────────────────────────────────────────
