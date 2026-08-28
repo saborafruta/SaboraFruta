@@ -30,6 +30,7 @@ from apps.logistica.services.vendas_para_carga import (
 )
 from apps.logistica.services.retorno_nfe import RetornoVendaForaService
 from apps.logistica.services.venda_fora_nfe import VendaForaNFeService
+from apps.logistica.services.vinculo_remessa import VinculoRemessaService
 from apps.logistica.services.venda_viagem import (
     VIAGENS_QUE_VENDEM as VIAGENS_QUE_ENTREGAM, VendaViagemService,
 )
@@ -184,6 +185,7 @@ class ViagemDetailView(PermissaoRequiredMixin, View):
             .select_related('motorista', 'veiculo', 'responsavel', 'vendedor'),
             pk=pk,
         )
+        vinculos = VinculoRemessaService.linhas(viagem)
         return render(request, self.template_name, {
             'title': f'Viagem #{viagem.numero:06d}',
             'viagem': viagem,
@@ -198,6 +200,11 @@ class ViagemDetailView(PermissaoRequiredMixin, View):
             'vendas_viagem': viagem.vendas.select_related('cliente')
                 .prefetch_related('itens__produto'),
             'resumo_vendas': VendaViagemService.resumo(viagem),
+            # A CADEIA INTEIRA NUMA TABELA: remessa -> viagem -> produto ->
+            # venda -> nota da venda. Cada elo ja' existia guardado em
+            # algum lugar; o que faltava era le-los juntos.
+            'vinculos': vinculos,
+            'resumo_vinculos': VinculoRemessaService.resumo(vinculos),
             # OS BOTOES DA RUA so' aparecem enquanto o caminhao esta' fora:
             # antes de sair nao ha' saldo, e depois de encerrar a viagem
             # ja' prestou contas.

@@ -552,6 +552,119 @@
     </div>
   {% endif %}
 
+  {% if vinculos %}
+    {% comment %}
+      A CADEIA INTEIRA NUMA TABELA:
+      NF-e de remessa → viagem → produto → venda → NF-e da venda.
+
+      Cada elo ja' existia guardado em algum lugar. O que faltava era le-los
+      JUNTOS -- um vinculo que so' se monta abrindo quatro telas nao serve
+      para o que ele existe: responder, com a fiscalizacao na mesa, de qual
+      remessa saiu a mercadoria de uma venda especifica.
+    {% endcomment %}
+    <div class="card overflow-hidden">
+      <div class="p-4 pb-3">
+        <h3 class="text-sm font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
+          Vínculo entre venda e remessa
+        </h3>
+        <p class="text-xs mt-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+          De qual nota de remessa saiu cada mercadoria vendida — com o que foi
+          remetido, o que saiu e o que ainda está no caminhão.
+        </p>
+        {% if resumo_vinculos.sem_vinculo or resumo_vinculos.sem_chave %}
+          <p class="text-xs mt-2" style="color:#d97706;">
+            {% if resumo_vinculos.sem_vinculo %}
+              {{ resumo_vinculos.sem_vinculo }} entrega(s) sem remessa — foram
+              registradas antes de a nota existir.
+            {% endif %}
+            {% if resumo_vinculos.sem_chave %}
+              A remessa ainda não foi transmitida, então não tem chave.
+            {% endif %}
+          </p>
+        {% endif %}
+      </div>
+      <div class="overflow-x-auto">
+        <table class="w-full text-sm">
+          <thead>
+            <tr :style="temaClaro ? 'border-bottom:1px solid #e5e7eb;background:#f8fafc;' : 'border-bottom:1px solid #2a2a2e;background:#1e1e20;'">
+              <th class="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wide" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">NF-e de remessa</th>
+              <th class="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wide" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Produto / lote</th>
+              <th class="text-right px-4 py-3 text-xs font-semibold uppercase tracking-wide" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Remetido</th>
+              <th class="text-right px-4 py-3 text-xs font-semibold uppercase tracking-wide" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Saiu na venda</th>
+              <th class="text-right px-4 py-3 text-xs font-semibold uppercase tracking-wide" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Saldo</th>
+              <th class="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wide" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Venda / NF-e</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for linha in vinculos %}
+              <tr class="border-b align-top" :style="temaClaro ? 'border-color:#f1f5f9;' : 'border-color:#2a2a2e;'">
+                <td class="px-4 py-3">
+                  {% if linha.remessa %}
+                    <span class="font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
+                      {{ linha.numero }}/{{ linha.serie }}
+                    </span>
+                    <span class="block text-[11px]" :style="temaClaro ? 'color:#94a3b8;' : 'color:#71717a;'">
+                      {{ linha.data|date:"d/m/Y H:i" }}
+                    </span>
+                    {% if linha.chave %}
+                      <span class="block font-mono text-[10px] break-all"
+                            :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">{{ linha.chave }}</span>
+                    {% else %}
+                      <span class="block text-[11px]" style="color:#d97706;">sem chave — não transmitida</span>
+                    {% endif %}
+                  {% else %}
+                    <span class="text-xs" style="color:#d97706;">sem remessa vinculada</span>
+                  {% endif %}
+                </td>
+                <td class="px-4 py-3" :style="temaClaro ? 'color:#374151;' : 'color:#d1d5db;'">
+                  {{ linha.produto }}
+                  {% if linha.lote %}
+                    <span class="block text-[11px]" :style="temaClaro ? 'color:#94a3b8;' : 'color:#71717a;'">
+                      lote {{ linha.lote.numero_lote }}
+                    </span>
+                  {% endif %}
+                  {% if linha.bonificacao %}
+                    <span class="soft-pill is-amber text-[11px] mt-1">bonificação</span>
+                  {% endif %}
+                </td>
+                <td class="px-4 py-3 text-right" :style="temaClaro ? 'color:#374151;' : 'color:#d1d5db;'">
+                  {% if linha.remetida is not None %}
+                    {{ linha.remetida|floatformat:"-3" }}
+                  {% else %}
+                    <span class="text-xs" style="color:#d97706;">—</span>
+                  {% endif %}
+                </td>
+                <td class="px-4 py-3 text-right font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
+                  {{ linha.vendida|floatformat:"-3" }}
+                </td>
+                <td class="px-4 py-3 text-right" :style="temaClaro ? 'color:#374151;' : 'color:#d1d5db;'">
+                  {% if linha.saldo is not None %}
+                    {{ linha.saldo|floatformat:"-3" }}
+                  {% else %}
+                    <span class="text-xs" style="color:#d97706;">—</span>
+                  {% endif %}
+                </td>
+                <td class="px-4 py-3">
+                  <span :style="temaClaro ? 'color:#374151;' : 'color:#d1d5db;'">
+                    #{{ linha.venda.numero }} · {{ linha.venda.cliente_nome }}
+                  </span>
+                  {% if linha.nota_venda %}
+                    <span class="block font-mono text-[11px]"
+                          :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+                      NF-e {{ linha.nota_venda.numero }}/{{ linha.nota_venda.serie }}
+                    </span>
+                  {% else %}
+                    <span class="block text-[11px]" style="color:#d97706;">venda sem NF-e</span>
+                  {% endif %}
+                </td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  {% endif %}
+
   {% if remessa or pendencias_remessa %}
     {% comment %}
       A REMESSA E' O DOCUMENTO QUE AMPARA A MERCADORIA SEM COMPRADOR. Ela e'

@@ -143,6 +143,11 @@ class VendaViagemService:
             venda=venda, produto=produto, lote=lote,
             quantidade=quantidade,
             valor_unitario=Decimal(str(dados.get('valor_unitario') or 0)),
+            # O VINCULO COM A REMESSA E' GRAVADO AGORA, e nao descoberto
+            # depois: se a remessa for cancelada e reemitida, a busca
+            # passaria a apontar a nota nova para mercadoria que saiu sob a
+            # antiga.
+            remessa=cls._remessa(viagem),
         )
         venda.recalcular_total()
 
@@ -178,6 +183,7 @@ class VendaViagemService:
         item = ItemVendaViagem.objects.create(
             venda=venda, produto=produto, lote=lote, quantidade=quantidade,
             valor_unitario=Decimal(str(dados.get('valor_unitario') or 0)),
+            remessa=cls._remessa(venda.viagem),
         )
         venda.recalcular_total()
         ViagemService.registrar_saida_do_saldo(
@@ -227,6 +233,20 @@ class VendaViagemService:
         return venda
 
     # ── Apoio ────────────────────────────────────────────────────────────
+
+    @staticmethod
+    def _remessa(viagem):
+        """
+        A remessa viva da viagem — ou `None` quando ainda não há uma.
+
+        NÃO TRAVA A ENTREGA. Uma venda pode acontecer antes de a nota de
+        remessa ser emitida (o caminhão sai de madrugada, a nota sai às 8h),
+        e recusar a venda por isso pararia a rua por causa de um documento
+        que chega depois. O vínculo fica vazio e a tela diz isso.
+        """
+        from apps.logistica.services.remessa_nfe import RemessaVendaForaService
+
+        return RemessaVendaForaService.nota_da_viagem(viagem)
 
     @staticmethod
     def proximo_numero(viagem) -> int:

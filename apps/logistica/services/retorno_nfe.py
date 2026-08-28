@@ -120,14 +120,15 @@ class RetornoVendaForaService:
 
     @classmethod
     def remessa_da_viagem(cls, viagem):
-        """A nota que tirou a mercadoria — é a ela que o retorno responde."""
-        return (
-            DocumentoFiscal.objects
-            .filter(origem_tipo=ORIGEM_REMESSA, origem_id=viagem.pk)
-            .exclude(status__in=STATUS_MORTOS)
-            .order_by('-id')
-            .first()
-        )
+        """
+        A nota que tirou a mercadoria — é a ela que o retorno responde.
+
+        Pergunta feita a quem emite a remessa, e não repetida aqui: duas
+        consultas discordariam no dia em que "viva" mudasse de significado.
+        """
+        from apps.logistica.services.remessa_nfe import RemessaVendaForaService
+
+        return RemessaVendaForaService.nota_da_viagem(viagem)
 
     @classmethod
     def nota_da_viagem(cls, viagem):

@@ -479,6 +479,20 @@ class ItemVendaViagem(TimestampedModel):
     valor_unitario = models.DecimalField(max_digits=14, decimal_places=4, default=0)
     valor_total = models.DecimalField(max_digits=14, decimal_places=2, default=0)
 
+    # A REMESSA QUE AMPAROU ESTA MERCADORIA, gravada no momento da entrega.
+    #
+    # Ela é descobrível pela viagem — mas descobrir não é a mesma coisa que
+    # registrar. Se a remessa for cancelada e reemitida depois de vendas
+    # feitas, a busca passaria a apontar a nota NOVA para vendas que saíram
+    # sob a ANTIGA, e o vínculo mudaria sozinho no dia em que ele mais
+    # importa. Guardado aqui, ele responde pelo que era verdade quando a
+    # mercadoria saiu do caminhão.
+    remessa = models.ForeignKey(
+        'financeiro.DocumentoFiscal', on_delete=models.SET_NULL,
+        null=True, blank=True, related_name='itens_venda_viagem',
+        help_text='NF-e de remessa sob a qual esta mercadoria saiu.',
+    )
+
     class Meta:
         db_table = 'logistica_itens_venda_viagem'
         ordering = ['venda', 'pk']

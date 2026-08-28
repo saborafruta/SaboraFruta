@@ -235,6 +235,28 @@ class RemessaVendaForaService:
             'pais_destinatario': 'Brasil',
         })
 
+    @staticmethod
+    def nota_da_viagem(viagem):
+        """
+        A remessa que ampara esta viagem, se houver uma viva.
+
+        UM LUGAR SÓ PARA ESSA PERGUNTA. Ela é feita pela emissão (para não
+        emitir duas), pelo retorno (que responde a ela) e pela venda na rua
+        (que precisa dizer de qual remessa a mercadoria saiu). Três consultas
+        soltas discordariam no dia em que "viva" mudasse de significado.
+        """
+        return (
+            DocumentoFiscal.objects
+            .filter(origem_tipo='viagem_remessa', origem_id=viagem.pk)
+            .exclude(status__in=(
+                StatusDocumentoFiscal.CANCELADA,
+                StatusDocumentoFiscal.REJEITADA,
+                StatusDocumentoFiscal.DENEGADA,
+            ))
+            .order_by('-id')
+            .first()
+        )
+
     # ── Emitir ───────────────────────────────────────────────────────────
 
     @classmethod
@@ -251,13 +273,7 @@ class RemessaVendaForaService:
         if problemas:
             raise DadosInvalidosError(' '.join(problemas))
 
-        ja_emitida = DocumentoFiscal.objects.filter(
-            origem_tipo='viagem_remessa', origem_id=viagem.pk,
-        ).exclude(status__in=(
-            StatusDocumentoFiscal.CANCELADA,
-            StatusDocumentoFiscal.REJEITADA,
-            StatusDocumentoFiscal.DENEGADA,
-        )).first()
+        ja_emitida = cls.nota_da_viagem(viagem)
         if ja_emitida is not None:
             raise DadosInvalidosError(
                 f'Esta viagem já tem a remessa {ja_emitida.numero}/{ja_emitida.serie}. '
