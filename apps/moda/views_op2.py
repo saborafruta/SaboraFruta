@@ -750,6 +750,11 @@ class Op2DetailView(ModaBaseView):
                 (conta.valor_saldo for conta in contas_financeiras), Decimal('0')
             ),
         }
+        status_pagamento = None
+        if pode_ver_financeiro and pedido.financeiro_gerado:
+            status_pagamento = FinanceiroPedidoService.situacao_pagamento(
+                **resumo_financeiro,
+            )
         return render(request, 'moda/op2_detail.html', {
             'title': f'OP 2.0 #{pedido.numero:06d}',
             'pedido': pedido,
@@ -817,6 +822,7 @@ class Op2DetailView(ModaBaseView):
             },
             'contas_financeiras': contas_financeiras,
             'resumo_financeiro': resumo_financeiro,
+            'status_pagamento': status_pagamento,
             'pode_ver_financeiro': pode_ver_financeiro,
             'pode_quitar_financeiro': pode_quitar_financeiro,
             'vencimento_financeiro': vencimento_financeiro,

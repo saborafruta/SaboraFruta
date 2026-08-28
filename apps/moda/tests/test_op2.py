@@ -9,6 +9,7 @@ from django.template.loader import get_template
 from django.test import TestCase
 from django.http import QueryDict
 from django.urls import reverse
+from django.utils import timezone
 
 from apps.cadastros.models import Cliente
 from apps.core.models import Empresa, Filial, PerfilAcesso, Usuario
@@ -396,6 +397,8 @@ class Op2Tests(TestCase):
             filial=self.filial, conta_receber=conta,
             data_pagamento=date.today(), valor_pago=Decimal('200.00'),
         )
+        self.pedido.financeiro_gerado_em = timezone.now()
+        self.pedido.save(update_fields=['financeiro_gerado_em'])
         self.client.force_login(self._usuario())
         session = self.client.session
         session['filial_id'] = self.filial.pk
@@ -404,11 +407,118 @@ class Op2Tests(TestCase):
         resposta = self.client.get(reverse('moda:op2-detail', args=[self.pedido.pk]))
 
         self.assertContains(resposta, 'Extrato de pagamentos')
+        self.assertContains(resposta, 'data-payment-status="parcial"')
+        self.assertContains(resposta, 'Pagamento parcial')
+        self.assertContains(resposta, '@click="extratoFinanceiro=true"')
+        self.assertContains(resposta, 'x-show="extratoFinanceiro"')
+        self.assertNotContains(resposta, 'data-pane="financeiro"')
         self.assertContains(resposta, 'R$ 200,00')
         self.assertContains(resposta, 'R$ 300,00')
         self.assertContains(resposta, reverse('financeiro:receber_detail', args=[conta.pk]))
         self.assertContains(resposta, reverse('financeiro:receber_baixar', args=[conta.pk]))
         self.assertContains(resposta, 'Quitar saldo')
+        self.assertContains(
+            self.client.get(reverse('moda:comercial')),
+            'data-payment-status="parcial"',
+        )
+
+    def test_op_mostra_tag_de_pagamento_pendente(self):
+        from datetime import date
+
+        from apps.financeiro.constants.enums import StatusContaReceber
+        from apps.financeiro.models import ContaReceber
+
+        ContaReceber.objects.create(
+            filial=self.filial, cliente=self.cliente,
+            documento_tipo='pedido_moda', documento_id=self.pedido.pk,
+            documento_numero=str(self.pedido.numero), parcela=1, total_parcelas=1,
+            valor_original=Decimal('500.00'), valor_final=Decimal('500.00'),
+            valor_pago=Decimal('0.00'), valor_saldo=Decimal('500.00'),
+            data_emissao=date.today(), data_vencimento=date.today(),
+            status=StatusContaReceber.ABERTO,
+        )
+        self.pedido.financeiro_gerado_em = timezone.now()
+        self.pedido.save(update_fields=['financeiro_gerado_em'])
+        self.client.force_login(self._usuario())
+        session = self.client.session
+        session['filial_id'] = self.filial.pk
+        session.save()
+
+        resposta = self.client.get(reverse('moda:op2-detail', args=[self.pedido.pk]))
+
+        self.assertContains(resposta, 'data-payment-status="pendente"')
+        self.assertContains(resposta, 'Pagamento pendente')
+        self.assertContains(
+            self.client.get(reverse('moda:comercial')),
+            'data-payment-status="pendente"',
+        )
+
+    def test_op_mostra_tag_de_pagamento_pago(self):
+        from datetime import date
+
+        from apps.financeiro.constants.enums import StatusContaReceber
+        from apps.financeiro.models import ContaReceber
+
+        ContaReceber.objects.create(
+            filial=self.filial, cliente=self.cliente,
+            documento_tipo='pedido_moda', documento_id=self.pedido.pk,
+            documento_numero=str(self.pedido.numero), parcela=1, total_parcelas=1,
+            valor_original=Decimal('500.00'), valor_final=Decimal('500.00'),
+            valor_pago=Decimal('500.00'), valor_saldo=Decimal('0.00'),
+            data_emissao=date.today(), data_vencimento=date.today(),
+            status=StatusContaReceber.PAGO,
+        )
+        self.pedido.financeiro_gerado_em = timezone.now()
+        self.pedido.save(update_fields=['financeiro_gerado_em'])
+        self.client.force_login(self._usuario())
+        session = self.client.session
+        session['filial_id'] = self.filial.pk
+        session.save()
+
+        resposta = self.client.get(reverse('moda:op2-detail', args=[self.pedido.pk]))
+
+        self.assertContains(resposta, 'data-payment-status="pago"')
+        self.assertContains(resposta, '>Pago</span>')
+        self.assertContains(
+            self.client.get(reverse('moda:comercial')),
+            'data-payment-status="pago"',
+        )
+
+    def test_tag_pagamento_ignora_titulos_cancelados_e_soma_parcelas(self):
+        from datetime import date
+
+        from apps.financeiro.constants.enums import StatusContaReceber
+        from apps.financeiro.models import ContaReceber
+        from apps.moda.services.financeiro import FinanceiroPedidoService
+
+        for parcela, (pago, saldo, status) in enumerate([
+            ('100', '0', StatusContaReceber.PAGO),
+            ('0', '100', StatusContaReceber.ABERTO),
+            ('0', '100', StatusContaReceber.CANCELADO),
+        ], start=1):
+            ContaReceber.objects.create(
+                filial=self.filial, cliente=self.cliente,
+                documento_tipo='pedido_moda', documento_id=self.pedido.pk,
+                parcela=parcela, total_parcelas=3,
+                valor_original=Decimal('100'), valor_final=Decimal('100'),
+                valor_pago=Decimal(pago), valor_saldo=Decimal(saldo),
+                data_emissao=date.today(), data_vencimento=date.today(),
+                status=status,
+            )
+        with self.assertNumQueries(1):
+            situacoes = FinanceiroPedidoService.situacoes_dos_pedidos(
+                [self.pedido], filial=self.filial,
+            )
+        self.assertEqual(situacoes[self.pedido.pk]['chave'], 'parcial')
+
+        ContaReceber.objects.filter(
+            documento_tipo='pedido_moda', documento_id=self.pedido.pk, parcela=2,
+        ).update(valor_pago=Decimal('100'), valor_saldo=Decimal('0'),
+                 status=StatusContaReceber.PAGO)
+        situacoes = FinanceiroPedidoService.situacoes_dos_pedidos(
+            [self.pedido], filial=self.filial,
+        )
+        self.assertEqual(situacoes[self.pedido.pk]['chave'], 'pago')
 
     def test_nova_op_oferece_multiplas_formas_de_pagamento_previsto(self):
         self.client.force_login(self._usuario())

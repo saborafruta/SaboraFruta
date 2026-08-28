@@ -18,6 +18,7 @@ from datetime import date, timedelta
 from decimal import ROUND_DOWN, Decimal
 
 from django.db import transaction
+from django.db.models import Sum
 from django.utils import timezone
 
 from apps.core.services.exceptions import DomainError
@@ -56,6 +57,36 @@ class FinanceiroPedidoService:
             .exclude(status=StatusContaReceber.CANCELADO)
             .order_by('parcela')
         )
+
+    @staticmethod
+    def situacao_pagamento(valor_titulos=0, valor_recebido=0, valor_aberto=0):
+        """Situação dos títulos válidos, sem descontar taxas do valor recebido."""
+        if valor_titulos > 0 and valor_aberto <= 0:
+            return {'chave': 'pago', 'rotulo': 'Pago'}
+        if valor_recebido > 0:
+            return {'chave': 'parcial', 'rotulo': 'Pagamento parcial'}
+        return {'chave': 'pendente', 'rotulo': 'Pagamento pendente'}
+
+    @classmethod
+    def situacoes_dos_pedidos(cls, pedidos, *, filial):
+        """Carrega as tags do quadro em uma consulta, sem uma busca por cartão."""
+        resumos = (
+            ContaReceber.objects.for_filial(filial)
+            .filter(documento_tipo=cls.DOCUMENTO_TIPO,
+                    documento_id__in=[pedido.pk for pedido in pedidos])
+            .exclude(status=StatusContaReceber.CANCELADO)
+            .order_by().values('documento_id')
+            .annotate(valor_titulos=Sum('valor_final'),
+                      valor_recebido=Sum('valor_pago'),
+                      valor_aberto=Sum('valor_saldo'))
+        )
+        return {
+            resumo['documento_id']: cls.situacao_pagamento(
+                resumo['valor_titulos'], resumo['valor_recebido'],
+                resumo['valor_aberto'],
+            )
+            for resumo in resumos
+        }
 
     # ── Plano de pagamento ───────────────────────────────────────────────
 

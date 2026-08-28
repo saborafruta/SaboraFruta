@@ -43,6 +43,7 @@ from django.utils import timezone
 
 from apps.core.services.exceptions import DomainError
 from apps.moda.models import PedidoProducao
+from apps.moda.services.financeiro import FinanceiroPedidoService
 
 S = PedidoProducao.Status
 ZERO = Decimal('0')
@@ -105,6 +106,7 @@ class Cartao:
     dias: int | None
     tem_arte: bool
     resposta_cliente: str = ''
+    status_pagamento: dict = field(default_factory=dict)
 
     @property
     def atrasado(self) -> bool:
@@ -158,7 +160,10 @@ class KanbanComercialService:
         filtros = filtros or {}
         hoje = hoje or timezone.localdate()
 
-        pedidos = cls._filtrar(cls.base(filial), filtros)
+        pedidos = list(cls._filtrar(cls.base(filial), filtros))
+        situacoes = FinanceiroPedidoService.situacoes_dos_pedidos(
+            pedidos, filial=filial,
+        )
         raias = {c.chave: Raia(coluna=c) for c in COLUNAS}
         cancelados = 0
 
@@ -185,6 +190,9 @@ class KanbanComercialService:
                     i.personalizacoes.all() for i in pedido.itens.all()
                 ),
                 resposta_cliente=getattr(aprovacao, 'resposta', '') or '',
+                status_pagamento=situacoes.get(
+                    pedido.pk, FinanceiroPedidoService.situacao_pagamento(),
+                ),
             ))
 
         # Dentro da raia: o mais urgente em cima. Pedido sem data vai para o
