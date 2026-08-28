@@ -454,6 +454,14 @@ class ProdutoEstoqueSearchJsonView(PermissaoRequiredMixin, View):
                 # exatamente o mesmo que o backend valida, senao o usuario ve
                 # um total e recebe outro erro.
                 'peso_bruto': _peso_unitario_para_json(p),
+                # QUANTOS CABEM EM UM VOLUME. E' o que transforma quantidade
+                # em caixas na expedicao -- sem isso, quem monta o pedido
+                # divide de cabeca e a conferencia da doca acha outro numero.
+                'quantidade_por_embalagem': float(p.quantidade_por_embalagem or 0),
+                # O PRECO DE CADASTRO, para a tela nao pedir de novo o que o
+                # produto ja' sabe. E' sugestao: quem lanca pode trocar, que
+                # e' o que acontece em negociacao fechada por fora.
+                'preco_venda': float(p.preco_venda or 0),
             }
             for p in produtos
         ]

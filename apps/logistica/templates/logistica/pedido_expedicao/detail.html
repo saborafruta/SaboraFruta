@@ -414,6 +414,11 @@
       resultados: [],
       foco: 0,
       _timer: null,
+      /* O produto escolhido fica guardado porque a conta do peso e do volume
+         acontece DEPOIS, quando a quantidade e' digitada -- e ai' o resultado
+         da busca ja' saiu da tela. */
+      escolhido: null,
+      _preenchendo: false,
 
       init() {
         this.campo = this.$el.querySelector('#{{ item_form.produto_nome.id_for_label }}');
@@ -421,6 +426,20 @@
         this.campo.setAttribute('autocomplete', 'off');
         this.campo.addEventListener('input', () => this.digitou(this.campo.value));
         this.campo.addEventListener('keydown', (e) => this.tecla(e));
+
+        /* A QUANTIDADE MANDA NO PESO E NO VOLUME. Recalcular a cada tecla
+           deixa o total a' vista enquanto a pessoa ainda decide -- e nao so'
+           quando ela sai do campo, que e' quando ninguem mais olha. */
+        const qtd = this.$el.querySelector('#{{ item_form.quantidade.id_for_label }}');
+        if (qtd) qtd.addEventListener('input', () => this.recalcular());
+
+        /* PRODUTO TROCADO A' MAO DEIXA DE MANDAR NA CONTA: se a pessoa
+           reescreve o nome, o cadastro que estava escolhido nao vale mais, e
+           continuar somando pelo peso dele daria um total de outro produto. */
+        this.campo.addEventListener('input', () => {
+          if (this._preenchendo) return;   // o proprio escolher() disparou
+          this.escolhido = null;
+        });
       },
 
       /* ESPERA A DIGITAÇÃO PARAR. Uma consulta por tecla castiga o servidor e
@@ -497,6 +516,11 @@
 
       escolher(p) {
         if (!p) return;
+        this.escolhido = p;
+        /* `preencher` dispara 'input' para o resto da tela reagir -- inclusive
+           o ouvinte que esquece o produto quando o nome e' reescrito a' mao.
+           Sem esta trava, escolher da lista apagaria a propria escolha. */
+        this._preenchendo = true;
         this.preencher('{{ item_form.produto_nome.id_for_label }}', p.label);
         this.preencher('{{ item_form.produto_codigo.id_for_label }}', p.detalhe);
         /* SÓ A SIGLA. O endpoint devolve "KG (Quilograma)" e o campo do item
@@ -507,12 +531,55 @@
           '{{ item_form.unidade.id_for_label }}',
           (p.unidade || '').split(' ')[0].slice(0, 10),
         );
-        /* O peso vem RESOLVIDO pelo servidor (bruto → líquido → unidade em
-           peso). Recalcular aqui daria um total na tela e outro na validação. */
-        if (p.peso_bruto) {
-          this.preencher('{{ item_form.peso_kg.id_for_label }}', p.peso_bruto);
+        /* O VALOR UNITÁRIO VEM DO CADASTRO. Quem lança pode trocar — venda
+           negociada existe —, mas digitar de novo o preço que o produto já
+           sabe é onde nasce o pedido com valor errado. */
+        if (p.preco_venda) {
+          this.preencher('{{ item_form.valor_unitario.id_for_label }}', p.preco_venda);
         }
+        this._preenchendo = false;
+        this.recalcular();
         this.fechar();
+      },
+
+      /* PESO E VOLUME SÃO CONTA, E NÃO DIGITAÇÃO.
+       *
+       * O peso unitário vem RESOLVIDO pelo servidor (bruto → líquido →
+       * unidade em peso) e é multiplicado pela quantidade; o volume sai da
+       * quantidade por embalagem do cadastro, arredondado para cima, porque
+       * caixa pela metade ocupa uma caixa no caminhão.
+       *
+       * SEM CADASTRO NÃO SE INVENTA: produto sem peso ou sem embalagem deixa
+       * o campo como está, para quem lança preencher à mão — número
+       * inventado aqui vira divergência na balança da doca.
+       */
+      recalcular() {
+        const p = this.escolhido;
+        if (!p) return;
+        const qtd = this.quantidadeDigitada();
+        if (!(qtd > 0)) return;
+
+        if (p.peso_bruto) {
+          this.preencher(
+            '{{ item_form.peso_kg.id_for_label }}',
+            +(p.peso_bruto * qtd).toFixed(3),
+          );
+        }
+        const porVolume = p.quantidade_por_embalagem || 0;
+        if (porVolume > 0) {
+          this.preencher(
+            '{{ item_form.volumes.id_for_label }}',
+            Math.ceil(qtd / porVolume),
+          );
+        }
+      },
+
+      quantidadeDigitada() {
+        const campo = document.getElementById('{{ item_form.quantidade.id_for_label }}');
+        if (!campo) return 0;
+        /* Vírgula é o separador que a pessoa digita; o Number() só entende
+           ponto, e sem esta troca "2,5" viraria zero e o peso, zero também. */
+        return parseFloat(String(campo.value).replace(',', '.')) || 0;
       },
 
       preencher(id, valor) {

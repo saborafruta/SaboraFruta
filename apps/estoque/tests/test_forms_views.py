@@ -218,6 +218,35 @@ class EstoqueFormsViewsTests(TestCase):
         self.assertEqual(resultado['label'], 'Polpa para transferencia')
         self.assertEqual(resultado['estoque'], 12.5)
 
+    def test_a_busca_devolve_o_que_a_tela_precisa_para_calcular(self):
+        """
+        PESO, EMBALAGEM E PREÇO VÊM JUNTOS porque a tela de expedição calcula
+        com eles: peso da linha é peso unitário × quantidade, e volume é a
+        quantidade dividida pelo que cabe na caixa. Sem esses campos, quem
+        monta o pedido faz a conta de cabeça — e a doca encontra outro
+        número.
+        """
+        self.conceder(pode_ver=True)
+        produto = self.criar_produto(descricao='Caja 1kg polpa')
+        produto.peso_bruto = Decimal('1.200')
+        produto.quantidade_por_embalagem = Decimal('12')
+        produto.preco_venda = Decimal('9.90')
+        produto.save(update_fields=[
+            'peso_bruto', 'quantidade_por_embalagem', 'preco_venda',
+        ])
+
+        response = self.client.get(
+            reverse('estoque:produto-estoque-search-json'),
+            {'scope': 'empresa', 'browse': '1'},
+        )
+
+        resultado = next(
+            item for item in response.json()['results'] if item['id'] == produto.pk
+        )
+        self.assertEqual(resultado['peso_bruto'], 1.2)
+        self.assertEqual(resultado['quantidade_por_embalagem'], 12.0)
+        self.assertEqual(resultado['preco_venda'], 9.9)
+
     def test_exportacao_estoque_exige_permissao_exportar(self):
         self.conceder(pode_ver=True)
 
