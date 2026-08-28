@@ -233,7 +233,7 @@ class ArteNoPdfTests(TestCase):
         self.assertIn('válido por 5 dias', observacoes)
         self.assertIn('até 30 dias úteis', observacoes)
         self.assertIn(
-            '* O pagamento de 50% do valor total deverá ser realizado na aprovação '
+            'O pagamento de 50% do valor total deverá ser realizado na aprovação '
             'do pedido, para início da produção. Os 50% restantes deverão ser pagos '
             'no ato da entrega.',
             observacoes,
@@ -288,7 +288,7 @@ class ArteNoPdfTests(TestCase):
             self.assertIn('Grade:', texto)
             self.assertIn('R$70,00', texto)
             self.assertTrue(linha[0])
-        self.assertEqual(_paginas(OrcamentoPdfService.gerar(pedido)), 1)
+        self.assertLessEqual(_paginas(OrcamentoPdfService.gerar(pedido)), 2)
 
     def test_orcamento_nao_trunca_estrutura_e_escapa_textos(self):
         from apps.moda.services.orcamento_pdf import _estilos
@@ -339,11 +339,12 @@ class ArteNoPdfTests(TestCase):
         blocos = OrcamentoPdfService._resumo_comercial(pedido, _estilos())
         self.assertIsInstance(blocos[0], KeepTogether)
         texto_financeiro = self._texto_layout(blocos[0]._content)
-        texto_fechamento = self._texto_layout(blocos[2]._content)
-        self.assertIn('Total:', texto_financeiro)
-        self.assertIn('FORMA DE PAGAMENTO PREVISTA', texto_financeiro)
-        self.assertIn('Observações e prazos:', texto_fechamento)
-        self.assertIn('Previsão de entrega:', texto_fechamento)
+        self.assertEqual(len(blocos), 1)
+        self.assertIn('TOTAL DO ORÇAMENTO', texto_financeiro)
+        self.assertIn('Forma de pagamento prevista', texto_financeiro)
+        self.assertIn('Observações e prazos', texto_financeiro)
+        self.assertIn('Previsão de entrega:', texto_financeiro)
+        self.assertIn('DATA DO ORÇAMENTO', texto_financeiro)
 
     def test_orcamento_usa_previsao_de_entrega_e_mantem_prazo_maximo(self):
         from datetime import date
@@ -385,6 +386,49 @@ class ArteNoPdfTests(TestCase):
         texto = self._texto_layout(OrcamentoPdfService._produto(item, _estilos()))
         for i in range(150):
             self.assertIn(f'ATLETA-{i:03d}', texto)
+        self.assertGreater(_paginas(OrcamentoPdfService.gerar(pedido)), 1)
+
+    def test_orcamento_curto_continua_em_uma_pagina(self):
+        pedido = self._pedido()
+        ItemPedidoProducao.objects.create(pedido=pedido, descricao='Camisa simples', quantidade=1)
+        self.assertEqual(_paginas(OrcamentoPdfService.gerar(pedido)), 1)
+
+    def test_orcamento_move_ultimo_produto_para_junto_do_fechamento(self):
+        from reportlab.pdfgen.canvas import Canvas
+        from reportlab.platypus import PageBreak, Paragraph, Spacer, Table
+        from apps.moda.services.orcamento_pdf import _estilos
+
+        e = _estilos()
+        dados = [['Produto', '', 'Qtd', 'Unitario', 'Subtotal']]
+        for nome in ('Produto primeiro', 'Produto ultimo'):
+            dados.append(['', [Paragraph(nome, e['nome']), Spacer(1, 100)], '', '', ''])
+        tabela = OrcamentoPdfService._tabela_produtos(dados)
+        blocos = OrcamentoPdfService._paginar_produtos(tabela, 310, 300, Canvas(io.BytesIO()))
+        self.assertEqual(sum(isinstance(b, PageBreak) for b in blocos), 1)
+        tabelas = [b for b in blocos if isinstance(b, Table)]
+        self.assertEqual(len(tabelas), 2)
+        self.assertIn('Produto primeiro', self._texto_layout(tabelas[0]))
+        self.assertNotIn('Produto ultimo', self._texto_layout(tabelas[0]))
+        self.assertIn('Produto ultimo', self._texto_layout(tabelas[1]))
+        self.assertEqual(tabelas[1].repeatRows, 1)
+
+    def test_orcamento_nao_divide_produto_que_cabe_na_pagina_seguinte(self):
+        from reportlab.pdfgen.canvas import Canvas
+        from reportlab.platypus import Spacer
+        from apps.moda.services.orcamento_pdf import LARGURA_UTIL
+
+        tabela = OrcamentoPdfService._tabela_produtos([
+            ['Produto', '', 'Qtd', 'Unitario', 'Subtotal'],
+            ['', [Spacer(1, 300)], '', '', ''],
+        ])
+        medidor = Canvas(io.BytesIO())
+        self.assertEqual(tabela.splitOn(medidor, LARGURA_UTIL, 200), [])
+        self.assertTrue(tabela.splitOn(medidor, LARGURA_UTIL, 500))
+
+    def test_orcamento_observacoes_extensas_continuam_sem_erro(self):
+        pedido = self._pedido()
+        pedido.observacoes = '\n'.join(f'Observacao detalhada numero {n}' for n in range(90))
+        ItemPedidoProducao.objects.create(pedido=pedido, descricao='Camisa simples')
         self.assertGreater(_paginas(OrcamentoPdfService.gerar(pedido)), 1)
 
     def test_orcamento_mostra_todas_as_imagens_do_produto(self):

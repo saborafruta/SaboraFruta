@@ -12,9 +12,10 @@ from reportlab.lib import colors
 from reportlab.lib.pagesizes import A4
 from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
 from reportlab.lib.units import mm
+from reportlab.pdfgen.canvas import Canvas
 from reportlab.platypus import (
-    HRFlowable, KeepTogether, Paragraph, SimpleDocTemplate, Spacer, Table,
-    TableStyle,
+    BaseDocTemplate, Flowable, Frame, HRFlowable, KeepTogether, PageTemplate,
+    PageBreak, Paragraph, Spacer, Table, TableStyle,
 )
 
 from .pdf_marca import LARGURA_UTIL, MARGEM, cnpj, esc, logo
@@ -34,6 +35,42 @@ MESES = (
     'janeiro', 'fevereiro', 'março', 'abril', 'maio', 'junho',
     'julho', 'agosto', 'setembro', 'outubro', 'novembro', 'dezembro',
 )
+TOPO_CONTINUACAO = 21 * mm
+MARGEM_INFERIOR = 22 * mm
+ALTURA_CONTINUACAO = A4[1] - TOPO_CONTINUACAO - MARGEM_INFERIOR - 12
+
+
+class _TabelaProdutos(Table):
+    """Só divide um produto se ele exceder uma página inteira de continuação."""
+
+    def split(self, availWidth, availHeight):
+        self.splitInRow = 0
+        partes = super().split(availWidth, availHeight)
+        if partes:
+            return partes
+        cabecalhos = self.repeatRows or 0
+        if sum(self._rowHeights[:cabecalhos + 1]) <= ALTURA_CONTINUACAO:
+            return []  # O produto inteiro começa na próxima página.
+        self.splitInRow = 1
+        try:
+            return super().split(availWidth, availHeight)
+        finally:
+            self.splitInRow = 0
+
+
+class _NumeroObservacao(Flowable):
+    def __init__(self, numero):
+        super().__init__()
+        self.numero = numero
+        self.width = 18
+        self.height = 17
+
+    def draw(self):
+        self.canv.setFillColor(MARINHO)
+        self.canv.circle(8, 9, 8, fill=1, stroke=0)
+        self.canv.setFillColor(colors.white)
+        self.canv.setFont('Helvetica-Bold', 7)
+        self.canv.drawCentredString(8, 6.5, str(self.numero))
 
 
 def brl(valor):
@@ -110,21 +147,99 @@ class OrcamentoPdfService:
     @classmethod
     def gerar(cls, pedido):
         buffer = BytesIO()
-        doc = SimpleDocTemplate(
+        doc = BaseDocTemplate(
             buffer, pagesize=A4, leftMargin=MARGEM, rightMargin=MARGEM,
-            topMargin=10 * mm, bottomMargin=22 * mm,
+            topMargin=10 * mm, bottomMargin=MARGEM_INFERIOR,
             title=f'Orçamento {pedido.numero:06d}', author=str(pedido.filial),
         )
+        def frame(topo):
+            return Frame(
+                MARGEM, MARGEM_INFERIOR, LARGURA_UTIL,
+                A4[1] - topo - MARGEM_INFERIOR,
+                leftPadding=0, rightPadding=0,
+            )
+
+        doc.addPageTemplates([
+            PageTemplate(
+                id='primeira', frames=[frame(10 * mm)], onPage=cls._rodape,
+                autoNextPageTemplate='continuacao',
+            ),
+            PageTemplate(
+                id='continuacao', frames=[frame(TOPO_CONTINUACAO)],
+                onPage=cls._pagina_continuacao(pedido),
+            ),
+        ])
         e = _estilos()
         elementos = cls._empresa(pedido, e) + cls._cliente(pedido, e)
-        elementos += cls._itens(pedido, e)
-        elementos += PedidoPdfService._artes_do_pedido(
+        anexos = PedidoPdfService._artes_do_pedido(
             pedido, e, LARGURA_UTIL, cor=MARINHO, cor_clara=FUNDO,
             arredondada=True,
         )
-        elementos += [Spacer(1, 9)] + cls._resumo_comercial(pedido, e)
-        doc.build(elementos, onFirstPage=cls._rodape, onLaterPages=cls._rodape)
+        fechamento = cls._resumo_comercial(pedido, e)
+        medidor = Canvas(BytesIO())
+        altura = lambda blocos: sum(b.wrapOn(medidor, LARGURA_UTIL, 100000)[1] for b in blocos)
+        disponivel = A4[1] - 10 * mm - MARGEM_INFERIOR - 12 - altura(elementos)
+        itens = cls._itens(pedido, e)
+        if itens:
+            elementos += cls._paginar_produtos(
+                itens[0], disponivel,
+                altura(fechamento[0]._content) + 9 if not anexos else 0, medidor,
+            )
+        elementos += anexos + [Spacer(1, 9)] + fechamento
+        doc.build(elementos)
         return buffer.getvalue()
+
+    @classmethod
+    def _paginar_produtos(cls, tabela, disponivel, altura_fechamento, medidor):
+        """Leva o último produto ao fechamento, evitando uma página só de totais."""
+        blocos = []
+        while tabela is not None:
+            _, altura = tabela.wrapOn(medidor, LARGURA_UTIL, disponivel)
+            if altura <= disponivel:
+                altura_ultimo = tabela._rowHeights[0] + tabela._rowHeights[-1]
+                if (altura + altura_fechamento > disponivel
+                        and altura_ultimo + altura_fechamento <= ALTURA_CONTINUACAO):
+                    if len(tabela._cellvalues) > 2:
+                        blocos.append(cls._tabela_produtos(tabela._cellvalues[:-1]))
+                        blocos.append(PageBreak())
+                        tabela = cls._tabela_produtos([
+                            tabela._cellvalues[0], tabela._cellvalues[-1],
+                        ])
+                blocos.append(tabela)
+                break
+            partes = tabela.splitOn(medidor, LARGURA_UTIL, disponivel)
+            if not partes:
+                if disponivel >= ALTURA_CONTINUACAO:
+                    raise ValueError('Produto não pôde ser paginado no orçamento.')
+                blocos.append(PageBreak())
+            else:
+                blocos += [partes[0], PageBreak()]
+                tabela = partes[1]
+            disponivel = ALTURA_CONTINUACAO
+        return blocos
+
+    @classmethod
+    def _pagina_continuacao(cls, pedido):
+        def desenhar(canvas, doc):
+            cls._rodape(canvas, doc)
+            e = _estilos()
+            estilo = ParagraphStyle('orc_continuacao', parent=e['pequeno'], fontSize=7, leading=9)
+            direita = ParagraphStyle('orc_cont_cliente', parent=estilo, alignment=2)
+            cabecalho = Table([[
+                Paragraph('<b>ORÇAMENTO - CONTINUAÇÃO</b>', estilo),
+                Paragraph(
+                    f'Cliente: {_texto(pedido.cliente.razao_social)} - '
+                    f'Emissão: {pedido.data_pedido:%d/%m/%Y}', direita,
+                ),
+            ]], colWidths=[LARGURA_UTIL * .40, LARGURA_UTIL * .60])
+            cabecalho.setStyle(TableStyle(_estilo_tabela(0)))
+            cabecalho.wrapOn(canvas, LARGURA_UTIL, 30)
+            cabecalho.drawOn(canvas, MARGEM, A4[1] - 18 * mm)
+            canvas.saveState()
+            canvas.setStrokeColor(BORDA)
+            canvas.line(MARGEM, A4[1] - 19 * mm, A4[0] - MARGEM, A4[1] - 19 * mm)
+            canvas.restoreState()
+        return desenhar
 
     @staticmethod
     def _rodape(canvas, doc):
@@ -346,10 +461,14 @@ class OrcamentoPdfService:
         dados = [cabecalho] + [cls._produto(item, e) for item in pedido.itens.all()]
         if len(dados) == 1:
             return []
+        return [cls._tabela_produtos(dados)]
+
+    @classmethod
+    def _tabela_produtos(cls, dados):
         # Divide dentro da linha apenas quando um produto excede uma página.
-        tabela = Table(
+        tabela = _TabelaProdutos(
             dados, colWidths=cls.LARGURAS, repeatRows=1,
-            splitByRow=1, splitInRow=1, cornerRadii=[5] * 4,
+            splitByRow=1, splitInRow=0, cornerRadii=[5] * 4,
         )
         tabela.setStyle(TableStyle(_estilo_tabela(6) + [
             ('SPAN', (0, 0), (1, 0)),
@@ -359,57 +478,88 @@ class OrcamentoPdfService:
             ('TOPPADDING', (0, 1), (-1, -1), 6),
             ('BOTTOMPADDING', (0, 1), (-1, -1), 6),
         ]))
-        return [tabela]
+        return tabela
 
     @staticmethod
-    def _totais(pedido, e):
-        linhas = [[
-            Paragraph('Subtotal:', e['nome']),
-            Paragraph(brl(pedido.subtotal), e['td_dir']),
-        ]]
+    def _par_cartoes(esquerda, direita, largura_esquerda, altura_minima=0,
+                     fundo_esquerda=FUNDO, fundo_direita=colors.white):
+        """Cartões de mesma altura, com respiro e bordas independentes."""
+        intervalo = 10
+        larguras = [largura_esquerda, LARGURA_UTIL - largura_esquerda - intervalo]
+        medidor = Canvas(BytesIO())
+
+        def cartao(conteudo, largura, fundo, altura=None):
+            tabela = Table([[conteudo]], colWidths=[largura],
+                           rowHeights=[altura] if altura else None, cornerRadii=[7] * 4)
+            tabela.setStyle(TableStyle(_estilo_tabela(14) + [
+                ('BACKGROUND', (0, 0), (-1, -1), fundo),
+                ('BOX', (0, 0), (-1, -1), .6, fundo if fundo == MARINHO else BORDA),
+            ]))
+            return tabela
+
+        conteudos = [esquerda, direita]
+        fundos = [fundo_esquerda, fundo_direita]
+        altura = max([altura_minima] + [
+            cartao(c, l, f).wrapOn(medidor, l, 10000)[1]
+            for c, l, f in zip(conteudos, larguras, fundos)
+        ])
+        if altura > ALTURA_CONTINUACAO:
+            # Conteúdo excepcional não cabe em cartões lado a lado:
+            # permite continuar o texto integral sem fonte minúscula.
+            tabela = Table([[esquerda], [direita]], colWidths=[LARGURA_UTIL], splitInRow=1)
+            tabela.setStyle(TableStyle(_estilo_tabela(14) + [
+                ('BACKGROUND', (0, 0), (0, 0), fundo_esquerda),
+                ('BACKGROUND', (0, 1), (0, 1), fundo_direita),
+                ('BOX', (0, 0), (-1, -1), .6, BORDA),
+            ]))
+            return tabela
+        tabela = Table([[
+            cartao(esquerda, larguras[0], fundos[0], altura), '',
+            cartao(direita, larguras[1], fundos[1], altura),
+        ]], colWidths=[larguras[0], intervalo, larguras[1]])
+        tabela.setStyle(TableStyle(_estilo_tabela(0)))
+        return tabela
+
+    @classmethod
+    def _totais(cls, pedido, e):
+        destaque = ParagraphStyle(
+            'orc_subtotal', parent=e['nome'], fontSize=17, leading=21,
+        )
+        esquerda = [Paragraph('Subtotal', e['pequeno']), Spacer(1, 8),
+                    Paragraph(brl(pedido.subtotal), destaque)]
         for rotulo, valor in (
             ('Desconto', pedido.desconto), ('Acréscimo', pedido.acrescimo),
             ('Frete', pedido.frete),
         ):
             if valor:
-                linhas.append([
-                    Paragraph(f'{rotulo}:', e['normal']),
-                    Paragraph(brl(valor), e['td_dir']),
-                ])
-        total = len(linhas)
-        destaque = ParagraphStyle(
-            'orc_total', parent=e['td_dir'], fontName='Helvetica-Bold',
-            fontSize=17, leading=21, textColor=colors.white,
+                esquerda += [Spacer(1, 4), Paragraph(f'{rotulo}: {brl(valor)}', e['normal'])]
+        total_estilo = ParagraphStyle(
+            'orc_total', parent=destaque, fontSize=24, leading=29,
+            textColor=colors.white, alignment=2,
         )
-        linhas.append([
-            Paragraph('<font color="white"><b>Total:</b></font>', e['normal']),
-            Paragraph(brl(pedido.valor_total), destaque),
-        ])
+        direita = [
+            Paragraph('<font color="white"><b>TOTAL DO ORÇAMENTO</b></font>', e['normal']),
+            Spacer(1, 9), Paragraph(brl(pedido.valor_total), total_estilo),
+        ]
         if pedido.entrada:
-            linhas += [
-                [Paragraph('Entrada:', e['normal']), Paragraph(brl(pedido.entrada), e['td_dir'])],
-                [Paragraph('Saldo:', e['normal']), Paragraph(brl(pedido.saldo), e['td_dir'])],
+            direita += [
+                Spacer(1, 5),
+                Paragraph(f'<font color="white">Entrada: {brl(pedido.entrada)} - '
+                          f'Saldo: {brl(pedido.saldo)}</font>', e['normal']),
             ]
-        tabela = Table(
-            linhas, colWidths=[33 * mm, 43 * mm],
-            hAlign='RIGHT', cornerRadii=[5] * 4,
-        )
-        tabela.setStyle(TableStyle(_estilo_tabela(7) + [
-            ('BACKGROUND', (0, 0), (-1, -1), FUNDO),
-            ('BACKGROUND', (0, total), (-1, total), MARINHO),
-            ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
-        ]))
-        return tabela
+        return cls._par_cartoes(esquerda, direita, LARGURA_UTIL * .365,
+                                altura_minima=72, fundo_direita=MARINHO)
 
     @classmethod
-    def _pagamento_previsto(cls, pedido, e):
+    def _pagamento_previsto(cls, pedido, e, largura=LARGURA_UTIL, compacto=False):
         linhas = list(pedido.previsao_pagamento or [])
         if not linhas:
             return [Paragraph(
+                'Não informada.' if compacto else
                 '<b>Forma de pagamento prevista:</b> Não informada.', e['normal'],
             )]
         rotulos = dict(pedido.FormaPagamentoPrevista.choices)
-        dados = [[
+        dados = [] if compacto else [[
             Paragraph('FORMA DE PAGAMENTO PREVISTA', e['th']),
             Paragraph('VALOR', e['th']),
         ]]
@@ -425,57 +575,70 @@ class OrcamentoPdfService:
                 Paragraph(brl(valor), e['td_dir']),
             ])
         tabela = Table(
-            dados, colWidths=[LARGURA_UTIL - 38 * mm, 38 * mm],
-            repeatRows=1, cornerRadii=[5] * 4,
+            dados, colWidths=[largura * .65, largura * .35],
+            repeatRows=0 if compacto else 1, cornerRadii=[5] * 4,
         )
-        tabela.setStyle(TableStyle(_estilo_tabela(5) + [
+        tabela.setStyle(TableStyle(_estilo_tabela(0 if compacto else 5) + ([] if compacto else [
             ('BACKGROUND', (0, 0), (-1, 0), MARINHO),
             ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, FUNDO]),
             ('BOX', (0, 0), (-1, -1), .5, BORDA),
-        ]))
+        ])))
         return [tabela]
 
     @classmethod
     def _resumo_comercial(cls, pedido, e):
-        """Não separa o total das formas de pagamento entre páginas."""
-        valores = [cls._totais(pedido, e), Spacer(1, 9)]
-        valores += cls._pagamento_previsto(pedido, e)
-        return [KeepTogether(valores), Spacer(1, 6)] + cls._fechamento(pedido, e)
+        """Fechamento unido; se for excepcionalmente longo, divide entre cartões."""
+        titulo = ParagraphStyle('orc_fechamento', parent=e['nome'], fontSize=11, leading=14)
+        largura_pagamento = LARGURA_UTIL * .63
+        pagamento = [Paragraph('Forma de pagamento prevista', e['secao']), Spacer(1, 12)]
+        pagamento += cls._pagamento_previsto(pedido, e, largura_pagamento - 28, compacto=True)
+        blocos = [
+            Paragraph('FECHAMENTO DO ORÇAMENTO', titulo), Spacer(1, 4),
+            HRFlowable(width='100%', color=MARINHO, thickness=1), Spacer(1, 14),
+            cls._totais(pedido, e), Spacer(1, 12),
+            cls._par_cartoes(pagamento, cls._previsao_entrega(pedido, e),
+                            largura_pagamento, altura_minima=62,
+                            fundo_esquerda=colors.white, fundo_direita=FUNDO),
+            Spacer(1, 12),
+        ] + cls._fechamento(pedido, e)
+        return [KeepTogether(blocos)]
 
     @staticmethod
     def _observacoes(pedido, e, largura=LARGURA_UTIL):
         textos = observacoes_orcamento(pedido)
-        dados = [[Paragraph('Observações e prazos:', e['secao'])]]
-        dados += [[Paragraph(f'- {_texto(texto)}', e['normal'])] for texto in textos]
-        dados.append([Paragraph(
-            f'* {_texto(OBSERVACAO_PAGAMENTO_ORCAMENTO)}',
-            e['normal'],
-        )])
-        tabela = Table(dados, colWidths=[largura], cornerRadii=[5] * 4)
-        tabela.setStyle(TableStyle(_estilo_tabela(3) + [
-            ('BOX', (0, 0), (-1, -1), .5, BORDA),
-            ('BACKGROUND', (0, 0), (-1, -1), colors.HexColor('#fafbfc')),
+        textos.append(OBSERVACAO_PAGAMENTO_ORCAMENTO)
+        dados = [[_NumeroObservacao(i), Paragraph(_texto(texto), e['normal'])]
+                 for i, texto in enumerate(textos, 1)]
+        tabela = Table(dados, colWidths=[25, largura - 25], splitInRow=1)
+        tabela.setStyle(TableStyle(_estilo_tabela(0) + [
+            ('BOTTOMPADDING', (0, 0), (-1, -1), 8),
         ]))
-        return [tabela]
+        return [Paragraph('Observações e prazos', e['secao']), Spacer(1, 12), tabela]
 
     @staticmethod
     def _previsao_entrega(pedido, e):
         data = pedido.data_prevista_entrega
         return [
             Paragraph('Previsão de entrega:', e['secao']), Spacer(1, 5),
-            Paragraph(f'<b>{data:%d/%m/%Y}</b>' if data else 'A combinar', e['normal']),
-            Spacer(1, 10),
-            HRFlowable(width='100%', thickness=.5, color=BORDA),
-            Spacer(1, 10),
-            Paragraph(_por_extenso(pedido.data_pedido), e['normal']),
+            Paragraph(f'<b>{data:%d/%m/%Y}</b>' if data else 'A combinar',
+                      ParagraphStyle('orc_entrega', parent=e['normal'], fontSize=12, leading=16)),
         ]
 
     @classmethod
     def _fechamento(cls, pedido, e):
-        largura_obs = LARGURA_UTIL * .62
-        tabela = Table([[
-            cls._observacoes(pedido, e, largura_obs - 10),
-            cls._previsao_entrega(pedido, e),
-        ]], colWidths=[largura_obs, LARGURA_UTIL - largura_obs], splitInRow=1)
-        tabela.setStyle(TableStyle(_estilo_tabela(5)))
-        return [KeepTogether([tabela])]
+        largura_obs = LARGURA_UTIL * .73
+        filial = pedido.filial
+        marca = logo(filial, LARGURA_UTIL - largura_obs - 38, 20 * mm)
+        data = [
+            Paragraph('<b>DATA DO ORÇAMENTO</b>', e['pequeno']), Spacer(1, 14),
+            Paragraph(f'<b>{_por_extenso(pedido.data_pedido)}</b>',
+                      ParagraphStyle('orc_data', parent=e['normal'], fontSize=10, leading=14)),
+            Spacer(1, 16), HRFlowable(width='100%', color=BORDA, thickness=.5), Spacer(1, 10),
+        ]
+        if marca is not None:
+            data += [marca, Spacer(1, 8)]
+        data.append(Paragraph(_texto(filial.nome_fantasia or filial.razao_social), e['pequeno']))
+        if filial.cnpj:
+            data += [Spacer(1, 5), Paragraph(f'CNPJ: {esc(cnpj(filial.cnpj))}', e['pequeno'])]
+        return [cls._par_cartoes(cls._observacoes(pedido, e, largura_obs - 28), data,
+                                largura_obs, altura_minima=180)]
