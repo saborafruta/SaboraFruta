@@ -2680,20 +2680,30 @@ class PedidoExpedicaoCobrarView(PermissaoRequiredMixin, View):
         # titulo existiria e ninguem saberia por qual acerto ele saiu.
         self._guardar_pagamento(request, pedido, filial)
 
+        # ANTECIPADO E' OUTRA COISA, e nao um detalhe do mesmo botao: o
+        # dinheiro entrou antes de a carga sair, e o titulo nasce recebido.
+        antecipado = request.POST.get('quando') == 'antecipado'
         try:
             titulos = FinanceiroExpedicaoService.gerar_titulos(
-                pedido, usuario=request.user,
+                pedido, usuario=request.user, antecipado=antecipado,
             )
         except DadosInvalidosError as erro:
             messages.error(request, str(erro))
             return redirect("logistica:pedido-expedicao-detail", pk=pedido.pk)
 
         total = sum((t.valor_final for t in titulos), Decimal("0"))
-        messages.success(
-            request,
-            f'{len(titulos)} parcela(s) no contas a receber, R$ {total:.2f} '
-            f'para {pedido.cliente}.',
-        )
+        if antecipado:
+            messages.success(
+                request,
+                f'Pagamento antecipado de R$ {total:.2f} registrado como '
+                f'recebido de {pedido.cliente}.',
+            )
+        else:
+            messages.success(
+                request,
+                f'{len(titulos)} parcela(s) no contas a receber, R$ {total:.2f} '
+                f'para {pedido.cliente}.',
+            )
         return redirect("logistica:pedido-expedicao-detail", pk=pedido.pk)
 
     @staticmethod

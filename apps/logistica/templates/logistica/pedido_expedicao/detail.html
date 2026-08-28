@@ -240,14 +240,26 @@
               </select>
             </div>
 
-            <p class="text-[11px] mt-2" x-show="forma && !aPrazo" x-cloak style="color:#059669;">
-              Recebimento na entrega — não abre conta a receber.
-            </p>
-
-            <button type="submit" class="btn-primary text-xs w-full justify-center mt-2"
-                    x-show="forma && aPrazo" x-cloak>
-              Gerar cobrança de R$ {{ pedido.valor_total|floatformat:2 }}
-            </button>
+            {% comment %}
+              QUANDO O DINHEIRO ENTRA É A OUTRA PERGUNTA, e ela não depende da
+              forma: pix, dinheiro ou cartão, o cliente pode ter pago antes de
+              a carga sair. Antecipado nasce recebido — título em aberto faria
+              a cobrança perseguir quem já pagou.
+            {% endcomment %}
+            <div class="mt-3 space-y-2" x-show="forma" x-cloak>
+              <button type="submit" name="quando" value="antecipado"
+                      class="btn-secondary text-xs w-full justify-center">
+                Já recebi — pagamento antecipado
+              </button>
+              <button type="submit" name="quando" value="a_prazo"
+                      class="btn-primary text-xs w-full justify-center"
+                      x-show="aPrazo" x-cloak>
+                A receber — gerar cobrança de R$ {{ pedido.valor_total|floatformat:2 }}
+              </button>
+              <p class="text-[11px]" x-show="!aPrazo" x-cloak style="color:#059669;">
+                Recebimento na entrega — só abre título se for antecipado.
+              </p>
+            </div>
             <p class="text-[11px] mt-2" x-show="!forma" x-cloak
                :style="temaClaro ? 'color:#94a3b8;' : 'color:#71717a;'">
               Escolha como esta carga é paga.

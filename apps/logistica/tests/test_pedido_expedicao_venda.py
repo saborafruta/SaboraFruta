@@ -29,6 +29,7 @@ from django.utils import timezone
 
 from apps.cadastros.models import Cliente, ClienteFilial
 from apps.core.models import Empresa, Filial, PerfilAcesso, Usuario
+from apps.financeiro.constants.enums import StatusContaReceber
 from apps.financeiro.models.formas_pagamento import (
     CondicaoPagamento, FormaPagamento,
 )
@@ -832,7 +833,7 @@ class CobrancaDaExpedicaoTests(ItensDaVendaBase):
         ).content.decode()
 
         self.assertIn('Cobrada pelo pedido de venda', html)
-        self.assertNotIn('Gerar cobrança', html)
+        self.assertNotIn('gerar cobrança', html)
 
     def test_a_tela_oferece_a_cobranca_da_carga_avulsa(self):
         pedido = self._carga_avulsa()
@@ -841,7 +842,10 @@ class CobrancaDaExpedicaoTests(ItensDaVendaBase):
             reverse('logistica:pedido-expedicao-detail', args=[pedido.pk]),
         ).content.decode()
 
-        self.assertIn('Gerar cobrança', html)
+        # AS DUAS PERGUNTAS NA MESMA TELA: quanto se cobra e quando o
+        # dinheiro entra.
+        self.assertIn('gerar cobrança', html)
+        self.assertIn('pagamento antecipado', html)
 
 
 class EscolhaDaFormaNaTelaTests(CobrancaDaExpedicaoTests):
@@ -964,3 +968,122 @@ class EscolhaDaFormaNaTelaTests(CobrancaDaExpedicaoTests):
         ).content.decode()
 
         self.assertIn('Recebimento na entrega', html)
+
+
+class PagamentoAntecipadoTests(CobrancaDaExpedicaoTests):
+    """
+    O cliente pagou antes de a carga sair.
+
+    UM TÍTULO EM ABERTO FARIA A COBRANÇA PERSEGUIR QUEM JÁ PAGOU — e o
+    dinheiro que entrou não apareceria em lugar nenhum. Antecipado nasce
+    recebido.
+    """
+
+    def test_antecipado_nasce_recebido(self):
+        pedido = self._carga_avulsa()
+
+        titulos = FinanceiroExpedicaoService.gerar_titulos(
+            pedido, self.usuario, antecipado=True,
+        )
+
+        self.assertEqual(len(titulos), 1)
+        titulo = titulos[0]
+        titulo.refresh_from_db()
+        self.assertEqual(titulo.status, StatusContaReceber.PAGO)
+        self.assertEqual(titulo.valor_pago, Decimal('34.00'))
+        self.assertEqual(titulo.valor_saldo, Decimal('0.00'))
+        self.assertEqual(titulo.data_pagamento, timezone.localdate())
+
+    def test_o_adiantamento_nao_se_parcela(self):
+        """Adiantamento parcelado é contradição: ou entrou, ou não entrou."""
+        pedido = self._carga_avulsa()
+
+        titulos = FinanceiroExpedicaoService.gerar_titulos(
+            pedido, self.usuario, antecipado=True,
+        )
+
+        self.assertEqual(len(titulos), 1)
+        self.assertEqual(titulos[0].valor_final, pedido.valor_total)
+
+    def test_o_vencimento_e_hoje(self):
+        """
+        Data futura num título já recebido faria o fluxo de caixa esperar
+        dinheiro que já entrou.
+        """
+        pedido = self._carga_avulsa()
+
+        titulo = FinanceiroExpedicaoService.gerar_titulos(
+            pedido, self.usuario, antecipado=True,
+        )[0]
+
+        self.assertEqual(titulo.data_vencimento, timezone.localdate())
+
+    def test_forma_a_vista_tambem_aceita_antecipado(self):
+        """
+        Pix, dinheiro e cartão recebem adiantado o tempo todo — a forma não
+        gerar parcelas não diz nada sobre quando o dinheiro entrou.
+        """
+        pedido = self._carga_avulsa(forma=self.a_vista, condicao=None)
+
+        titulos = FinanceiroExpedicaoService.gerar_titulos(
+            pedido, self.usuario, antecipado=True,
+        )
+
+        self.assertEqual(len(titulos), 1)
+        titulos[0].refresh_from_db()
+        self.assertEqual(titulos[0].status, StatusContaReceber.PAGO)
+
+    def test_o_dinheiro_recebido_aparece_no_resumo(self):
+        pedido = self._carga_avulsa()
+        FinanceiroExpedicaoService.gerar_titulos(
+            pedido, self.usuario, antecipado=True,
+        )
+
+        resumo = FinanceiroExpedicaoService.resumo(pedido)
+
+        self.assertEqual(resumo['valor'], Decimal('34.00'))
+        self.assertEqual(resumo['aberto'], Decimal('0.00'))
+
+    def test_expedicao_de_venda_nao_recebe_adiantamento_aqui(self):
+        """Quem cobra continua sendo a venda."""
+        venda = self._venda_com_itens('10')
+        pedido = self._carga_avulsa()
+        pedido.pedido_venda = venda
+        pedido.save(update_fields=['pedido_venda'])
+
+        with self.assertRaises(DadosInvalidosError):
+            FinanceiroExpedicaoService.gerar_titulos(
+                pedido, self.usuario, antecipado=True,
+            )
+
+    def test_registrar_antecipado_pela_tela(self):
+        pedido = self._carga_avulsa(forma=self.a_vista, condicao=None)
+
+        self.client.post(
+            reverse('logistica:pedido-expedicao-cobrar', args=[pedido.pk]),
+            {'forma_pagamento': self.a_vista.pk, 'quando': 'antecipado'},
+            follow=True,
+        )
+
+        titulo = FinanceiroExpedicaoService.titulos(pedido).get()
+        self.assertEqual(titulo.status, StatusContaReceber.PAGO)
+
+    def test_a_tela_oferece_o_antecipado_mesmo_na_forma_a_vista(self):
+        pedido = self._carga_avulsa(forma=self.a_vista, condicao=None)
+
+        html = self.client.get(
+            reverse('logistica:pedido-expedicao-detail', args=[pedido.pk]),
+        ).content.decode()
+
+        self.assertIn('pagamento antecipado', html)
+
+    def test_carga_ja_paga_nao_cobra_de_novo(self):
+        pedido = self._carga_avulsa()
+        FinanceiroExpedicaoService.gerar_titulos(
+            pedido, self.usuario, antecipado=True,
+        )
+
+        with self.assertRaises(DadosInvalidosError) as erro:
+            FinanceiroExpedicaoService.gerar_titulos(pedido, self.usuario)
+
+        self.assertIn('já tem cobrança lançada', str(erro.exception))

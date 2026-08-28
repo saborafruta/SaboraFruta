@@ -89,6 +89,10 @@ class FinanceiroExpedicaoService:
             'cobrada_pela_venda': bool(pedido.pedido_venda_id),
             'impedimento': impedimento,
             'pode_cobrar': not impedimento,
+            # ANTECIPADO É OUTRA PERGUNTA: "o cliente já pagou?" não depende
+            # de a forma gerar parcelas, e a tela precisa saber oferecer as
+            # duas coisas para a mesma carga.
+            'pode_antecipar': not cls.pode_cobrar(pedido, antecipado=True),
             'a_vista': (
                 not pedido.pedido_venda_id
                 and pedido.forma_pagamento_id is not None
@@ -97,8 +101,15 @@ class FinanceiroExpedicaoService:
         }
 
     @classmethod
-    def pode_cobrar(cls, pedido) -> str:
-        """Por que esta carga não gera título — vazio quando gera."""
+    def pode_cobrar(cls, pedido, antecipado: bool = False) -> str:
+        """
+        Por que esta carga não gera título — vazio quando gera.
+
+        ANTECIPADO NÃO DEPENDE DA FORMA GERAR PARCELAS. Pagamento adiantado é
+        dinheiro que entrou antes de a carga sair, e entra por qualquer forma:
+        pix, dinheiro, cartão. O que muda é que o título nasce já recebido, em
+        vez de nascer em aberto.
+        """
         if pedido.pedido_venda_id:
             return (
                 f'Esta carga é do pedido de venda '
@@ -111,10 +122,10 @@ class FinanceiroExpedicaoService:
         forma = pedido.forma_pagamento
         if forma is None:
             return 'Escolha a forma de pagamento no pedido para gerar a cobrança.'
-        if not forma.gera_parcelas:
+        if not antecipado and not forma.gera_parcelas:
             return (
                 f'{forma.descricao} é recebimento na entrega — não abre conta '
-                'a receber.'
+                'a receber. Se o cliente já pagou, registre como antecipado.'
             )
         return ''
 
@@ -122,22 +133,36 @@ class FinanceiroExpedicaoService:
 
     @classmethod
     @transaction.atomic
-    def gerar_titulos(cls, pedido, usuario=None) -> list:
-        """Abre as contas a receber desta carga avulsa."""
-        impedimento = cls.pode_cobrar(pedido)
+    def gerar_titulos(cls, pedido, usuario=None, antecipado: bool = False) -> list:
+        """
+        Abre as contas a receber desta carga avulsa.
+
+        ANTECIPADO NASCE RECEBIDO, e não em aberto: o dinheiro entrou antes de
+        a carga sair, e um título em aberto faria a cobrança perseguir um
+        cliente que já pagou. É uma parcela só — adiantamento parcelado é
+        contradição.
+        """
+        impedimento = cls.pode_cobrar(pedido, antecipado=antecipado)
         if impedimento:
             raise DadosInvalidosError(impedimento)
 
         valor = (pedido.valor_total or ZERO).quantize(CENTAVOS)
         emissao = pedido.data_pedido or timezone.localdate()
-        parcelas = ParcelamentoService.parcelas(
-            valor, emissao,
-            condicao=pedido.condicao_pagamento,
-            forma=pedido.forma_pagamento,
-        )
+        if antecipado:
+            # O VENCIMENTO E' HOJE porque o pagamento e' hoje: data futura
+            # num titulo ja' recebido faria o fluxo de caixa esperar dinheiro
+            # que ja' entrou.
+            hoje = timezone.localdate()
+            parcelas = [(hoje, valor)]
+        else:
+            parcelas = ParcelamentoService.parcelas(
+                valor, emissao,
+                condicao=pedido.condicao_pagamento,
+                forma=pedido.forma_pagamento,
+            )
         total = len(parcelas)
 
-        return [
+        titulos = [
             ContaReceber.objects.create(
                 filial=pedido.filial,
                 cliente=pedido.cliente,
@@ -161,6 +186,36 @@ class FinanceiroExpedicaoService:
             )
             for numero, (vencimento, parcela) in enumerate(parcelas, start=1)
         ]
+
+        if antecipado:
+            cls._baixar(titulos, pedido, usuario)
+        return titulos
+
+    @staticmethod
+    def _baixar(titulos, pedido, usuario) -> None:
+        """
+        Registra o recebimento pela mesma rotina do financeiro.
+
+        NÃO SE ESCREVE "PAGO" NO CAMPO. A baixa do contas a receber calcula
+        taxa da forma, prazo de compensação e o movimento que o extrato vai
+        mostrar — marcar o status à mão daria um título pago sem nada disso,
+        e a conciliação bancária não acharia o dinheiro.
+        """
+        from apps.financeiro.services.receber_service import ContaReceberService
+
+        hoje = timezone.localdate()
+        for titulo in titulos:
+            ContaReceberService.registrar_baixa(
+                conta=titulo,
+                data_pagamento=hoje,
+                valor_pago=titulo.valor_final,
+                forma_pagamento=pedido.forma_pagamento,
+                usuario=usuario,
+                observacao=(
+                    f'Pagamento antecipado do pedido de expedição '
+                    f'#{pedido.numero:06d}.'
+                ),
+            )
 
     @classmethod
     def cancelar_titulos(cls, pedido) -> int:
