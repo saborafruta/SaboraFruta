@@ -318,6 +318,12 @@ class PedidoPdfService:
                 ]], colWidths=[meia, meia], rowHeights=[altura_util])
                 pagina.setStyle(TableStyle([
                     ('VALIGN', (0, 0), (-1, -1), 'TOP'),
+                    # A altura dos dois lados já foi calculada contra
+                    # ``altura_util``. O padding vertical padrão da Table (3 pt
+                    # em cima e embaixo) reduzia a célula depois dessa medição e
+                    # fazia OPs quase cheias estourarem com LayoutError.
+                    ('TOPPADDING', (0, 0), (-1, -1), 0),
+                    ('BOTTOMPADDING', (0, 0), (-1, -1), 0),
                     ('LEFTPADDING', (0, 0), (0, 0), 0),
                     ('RIGHTPADDING', (0, 0), (0, 0), 3 * mm),
                     ('LEFTPADDING', (1, 0), (1, 0), 3 * mm),

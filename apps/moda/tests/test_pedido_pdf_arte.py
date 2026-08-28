@@ -447,6 +447,33 @@ class ArteNoPdfTests(TestCase):
         self.assertEqual(getattr(frames[0], '_scale', 1), escala_sem_nomes)
         self.assertEqual(frames[2].mode, 'error')
 
+    def test_coluna_direita_pode_ocupar_toda_altura_util_da_pagina(self):
+        """O contêiner externo não pode descontar padding da altura já medida."""
+        from reportlab.lib.units import mm
+        from reportlab.platypus import Spacer, Table
+
+        from apps.moda.services.pedido_pdf import PAGINA
+
+        pedido = self._pedido()
+        ItemPedidoProducao.objects.create(
+            pedido=pedido, descricao='Camisa com personalização', quantidade=1,
+        )
+        altura_util = PAGINA[1] - 31 * mm - 28 * mm - 14
+        arte = [Spacer(1, altura_util - 15)]
+        personalizacao = [Table([['Nome']], rowHeights=[10])]
+
+        with (
+            patch.object(PedidoPdfService, '_arte', return_value=arte),
+            patch.object(
+                PedidoPdfService, '_personalizacao_item',
+                return_value=personalizacao,
+            ),
+        ):
+            pdf = PedidoPdfService.gerar(pedido)
+
+        self.assertTrue(pdf.startswith(b'%PDF'))
+        self.assertEqual(_paginas(pdf), 1)
+
     def test_financeiro_e_observacoes_sao_montados_em_todas_as_paginas(self):
         pedido = self._pedido()
         pedido.observacoes = 'Conferir nomes antes da entrega.'
