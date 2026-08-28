@@ -36,7 +36,10 @@ class PersonalizacaoIndividual(models.Model):
 
     class Meta:
         db_table = 'moda_personalizacao_individual'
-        ordering = ['ordem', 'id']
+        # A lista acompanha a grade em toda saída: OP, orçamento, PDFs e
+        # conferência. A ordem de lançamento não pode produzir XGG antes de
+        # PP quando a peça chega à produção.
+        ordering = ['tamanho__ordem', 'tamanho__sigla', 'ordem', 'id']
         indexes = [models.Index(fields=['pedido', 'item', 'tamanho'])]
         verbose_name = 'Personalização individual'
         verbose_name_plural = 'Personalizações individuais'

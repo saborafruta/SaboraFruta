@@ -253,7 +253,14 @@
             {% endif %}
 
             <div class="overflow-x-auto">
-              <table class="w-full text-sm">
+              <table class="w-full text-sm" style="min-width:640px; table-layout:fixed;">
+                <colgroup>
+                  <col style="width:24%;">
+                  <col style="width:18%;">
+                  <col style="width:18%;">
+                  <col style="width:32%;">
+                  <col style="width:8%;">
+                </colgroup>
                 <thead>
                   <tr class="border-b" :style="temaClaro ? 'border-color:#e2e8f0;' : 'border-color:#2a2a2e;'">
                     <th class="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wide"
@@ -278,28 +285,36 @@
                     <tr class="border-b"
                         x-show="mostra('{{ l.pessoa.nome|escapejs }} {{ l.pessoa.numero|escapejs }}')"
                         :style="temaClaro ? 'border-color:#f1f5f9;' : 'border-color:#1e1e22;'">
-                      <td colspan="5" class="p-0">
-                        <label class="flex items-center gap-3 px-4 py-3 cursor-pointer w-full">
-                          <span class="flex-1 min-w-0 grid grid-cols-2 sm:grid-cols-4 gap-2 items-center">
-                            <span class="font-medium truncate" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
-                              {{ l.pessoa.nome|default:"—" }}
-                            </span>
-                            <span class="font-mono" :style="temaClaro ? 'color:#374151;' : 'color:#cbd5e1;'">
-                              {{ l.pessoa.numero|default:"—" }}
-                            </span>
-                            <span class="font-mono font-semibold" :style="temaClaro ? 'color:#374151;' : 'color:#cbd5e1;'">
-                              {{ l.pessoa.tamanho.sigla }}
-                            </span>
-                            <span class="truncate text-xs sm:text-sm" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
-                              {{ l.pessoa.item.nome_exibicao|default:"—" }}
-                            </span>
-                          </span>
-                          <input type="checkbox" name="pessoa" value="{{ l.pessoa.pk }}"
-                                 class="w-6 h-6 shrink-0 pessoa-check"
-                                 {% if l.conferido %}checked{% endif %}
-                                 {% if travada or not pode_agir %}disabled{% endif %}
-                                 @change="pessoas += $event.target.checked ? 1 : -1">
+                      <td class="px-4 py-3">
+                        <label for="pessoa-{{ l.pessoa.pk }}" class="block cursor-pointer font-medium truncate"
+                               :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
+                          {{ l.pessoa.nome|default:"—" }}
                         </label>
+                      </td>
+                      <td class="px-4 py-3">
+                        <label for="pessoa-{{ l.pessoa.pk }}" class="block cursor-pointer font-mono truncate"
+                               :style="temaClaro ? 'color:#374151;' : 'color:#cbd5e1;'">
+                          {{ l.pessoa.numero|default:"—" }}
+                        </label>
+                      </td>
+                      <td class="px-4 py-3">
+                        <label for="pessoa-{{ l.pessoa.pk }}" class="block cursor-pointer font-mono font-semibold"
+                               :style="temaClaro ? 'color:#374151;' : 'color:#cbd5e1;'">
+                          {{ l.pessoa.tamanho.sigla }}
+                        </label>
+                      </td>
+                      <td class="px-4 py-3">
+                        <label for="pessoa-{{ l.pessoa.pk }}" class="block cursor-pointer truncate text-xs sm:text-sm"
+                               :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+                          {{ l.pessoa.item.nome_exibicao|default:"—" }}
+                        </label>
+                      </td>
+                      <td class="px-4 py-3 text-center">
+                        <input id="pessoa-{{ l.pessoa.pk }}" type="checkbox" name="pessoa" value="{{ l.pessoa.pk }}"
+                               class="w-6 h-6 pessoa-check"
+                               {% if l.conferido %}checked{% endif %}
+                               {% if travada or not pode_agir %}disabled{% endif %}
+                               @change="pessoas += $event.target.checked ? 1 : -1">
                       </td>
                     </tr>
                   {% endfor %}

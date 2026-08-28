@@ -37,7 +37,7 @@ from apps.core.models import Empresa, Filial, PerfilAcesso, Usuario
 from apps.core.services.exceptions import DomainError
 from apps.moda.models import (
     Expedicao, ItemGradePedido, ItemPedidoProducao, OrdemProducao,
-    PedidoProducao, ProdutoModa, Tamanho,
+    PedidoProducao, PersonalizacaoIndividual, ProdutoModa, Tamanho,
 )
 from apps.moda.services import ExpedicaoService, OrdemProducaoService
 
@@ -317,6 +317,75 @@ class ConferirPorQuantidadeTests(ConferenciaBase):
         self.assertNotIn(intruso.pk, gravados)
 
 
+class PersonalizacaoDaCaixaTests(ConferenciaBase):
+    """Cada expedição mostra somente as peças nominais do próprio produto."""
+
+    def test_conferencia_nao_mistura_personalizacoes_de_outro_produto(self):
+        pedido = self._pedido_com_grade()
+        outro_item = ItemPedidoProducao.objects.create(
+            pedido=pedido, descricao='Short', quantidade=1,
+            valor_unitario=Decimal('30'), ordem=2,
+        )
+        PersonalizacaoIndividual.objects.create(
+            pedido=pedido, item=self.item, tamanho=self.tamanhos['M'],
+            nome='SOMENTE CAMISA', numero='10',
+        )
+        PersonalizacaoIndividual.objects.create(
+            pedido=pedido, item=outro_item, tamanho=self.tamanhos['M'],
+            nome='SOMENTE SHORT', numero='20',
+        )
+        expedicao = self._expedicao(pedido, self.item)
+
+        resposta = self.client.get(
+            reverse('moda:conferencia-pessoas', args=[expedicao.pk])
+        )
+
+        self.assertContains(resposta, 'SOMENTE CAMISA')
+        self.assertNotContains(resposta, 'SOMENTE SHORT')
+        self.assertEqual(resposta.context['total'], 1)
+
+    def test_personalizacoes_saem_do_menor_tamanho_para_o_maior(self):
+        pedido = self._pedido_com_grade()
+        pp = Tamanho.objects.create(
+            filial=self.filial, sigla='PP', ordem=0,
+        )
+        xgg = Tamanho.objects.create(
+            filial=self.filial, sigla='XGG', ordem=9,
+        )
+        for tamanho, nome in (
+            (xgg, 'PESSOA XGG'),
+            (self.tamanhos['G'], 'PESSOA G'),
+            (self.tamanhos['P'], 'PESSOA P'),
+            (pp, 'PESSOA PP'),
+        ):
+            PersonalizacaoIndividual.objects.create(
+                pedido=pedido, item=self.item, tamanho=tamanho, nome=nome,
+            )
+        expedicao = self._expedicao(pedido)
+
+        resposta = self.client.get(
+            reverse('moda:conferencia-pessoas', args=[expedicao.pk])
+        )
+
+        tamanhos = [linha['pessoa'].tamanho.sigla for linha in resposta.context['linhas']]
+        self.assertEqual(tamanhos, ['PP', 'P', 'G', 'XGG'])
+
+    def test_tabela_usa_as_mesmas_colunas_no_cabecalho_e_no_corpo(self):
+        pedido = self._pedido_com_grade()
+        PersonalizacaoIndividual.objects.create(
+            pedido=pedido, item=self.item, tamanho=self.tamanhos['M'], nome='ALINHADA',
+        )
+        expedicao = self._expedicao(pedido)
+
+        resposta = self.client.get(
+            reverse('moda:conferencia-pessoas', args=[expedicao.pk])
+        )
+
+        self.assertContains(resposta, '<colgroup>')
+        self.assertNotContains(resposta, '<td colspan="5" class="p-0">')
+        self.assertContains(resposta, f'id="pessoa-{pedido.individuais.get().pk}"')
+
+
 class ArteNaConferenciaTests(ConferenciaBase):
     """
     A arte ao lado da contagem.
@@ -378,6 +447,39 @@ class ArteNaConferenciaTests(ConferenciaBase):
         )
 
         self.assertContains(resposta, 'aplicada')
+
+    def test_arte_aplicada_em_outro_produto_nao_aparece(self):
+        from django.core.files.uploadedfile import SimpleUploadedFile
+
+        from apps.moda.models import Personalizacao
+
+        pedido = self._pedido_com_grade()
+        outro_item = ItemPedidoProducao.objects.create(
+            pedido=pedido, descricao='Short', quantidade=1,
+            valor_unitario=Decimal('30'), ordem=2,
+        )
+        arte_da_camisa = Personalizacao.objects.create(
+            item=self.item, tecnica=Personalizacao.Tecnica.SILK, local='Peito',
+            arquivo=SimpleUploadedFile(
+                'somente-camisa.png', base64.b64decode(PNG.split(',', 1)[1]),
+                content_type='image/png',
+            ),
+        )
+        arte_do_short = Personalizacao.objects.create(
+            item=outro_item, tecnica=Personalizacao.Tecnica.DTF, local='Perna',
+            arquivo=SimpleUploadedFile(
+                'somente-short.png', base64.b64decode(PNG.split(',', 1)[1]),
+                content_type='image/png',
+            ),
+        )
+        expedicao = self._expedicao(pedido, self.item)
+
+        resposta = self.client.get(
+            reverse('moda:conferencia-pessoas', args=[expedicao.pk])
+        )
+
+        self.assertContains(resposta, arte_da_camisa.arquivo.url)
+        self.assertNotContains(resposta, arte_do_short.arquivo.url)
 
     def test_sem_arte_a_tela_diz_que_nao_ha(self):
         """

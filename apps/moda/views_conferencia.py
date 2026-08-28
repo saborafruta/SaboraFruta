@@ -108,17 +108,20 @@ def _artes(expedicao) -> list[dict]:
             'tamanho': arquivo.tamanho_legivel,
         })
 
-    for item in pedido.itens.all():
-        for personalizacao in item.personalizacoes.all():
-            if not personalizacao.arquivo:
-                continue
-            artes.append({
-                'url': personalizacao.arquivo.url,
-                'titulo': personalizacao.nome_arquivo,
-                'detalhe': f'{item.nome_exibicao} · {personalizacao}',
-                'imagem': personalizacao.pode_pre_visualizar,
-                'tamanho': '',
-            })
+    # A expedição é de UMA ordem, e a ordem é de UM item. Misturar aqui as
+    # artes aplicadas aos outros produtos do mesmo pedido fazia a pessoa
+    # comparar a peça desta caixa com a personalização de outra caixa.
+    item = expedicao.ordem.item
+    for personalizacao in item.personalizacoes.all():
+        if not personalizacao.arquivo:
+            continue
+        artes.append({
+            'url': personalizacao.arquivo.url,
+            'titulo': personalizacao.nome_arquivo,
+            'detalhe': f'{item.nome_exibicao} · {personalizacao}',
+            'imagem': personalizacao.pode_pre_visualizar,
+            'tamanho': '',
+        })
 
     # Imagem primeiro: a miniatura é o que serve para comparar, e empurrar
     # os links para o fim deixa a comparação visível sem rolar.
@@ -128,7 +131,7 @@ def _artes(expedicao) -> list[dict]:
 
 def _pessoas(expedicao):
     """
-    As pessoas do PEDIDO desta expedição, na ordem em que foram lançadas.
+    As pessoas do PRODUTO desta expedição, do menor tamanho para o maior.
 
     Sem pedido não há pessoas: expedição de ordem avulsa existe e a tela
     precisa dizer isso, em vez de mostrar uma lista vazia que parece defeito.
@@ -138,9 +141,9 @@ def _pessoas(expedicao):
         return PersonalizacaoIndividual.objects.none()
     return (
         PersonalizacaoIndividual.objects
-        .filter(pedido=pedido)
+        .filter(pedido=pedido, item=expedicao.ordem.item)
         .select_related('item', 'tamanho')
-        .order_by('ordem', 'id')
+        .order_by('tamanho__ordem', 'tamanho__sigla', 'ordem', 'id')
     )
 
 
