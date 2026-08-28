@@ -179,6 +179,12 @@ class ArteNoPdfTests(TestCase):
         self.assertIn('Crédito parcelado', texto_pagamento)
         self.assertIn('válido por 5 dias', observacoes)
         self.assertIn('até 30 dias úteis', observacoes)
+        self.assertIn(
+            '* O pagamento de 50% do valor total deverá ser realizado na aprovação '
+            'do pedido, para início da produção. Os 50% restantes deverão ser pagos '
+            'no ato da entrega.',
+            observacoes,
+        )
 
     # ── O que NÃO pode ir ────────────────────────────────────────────────
 

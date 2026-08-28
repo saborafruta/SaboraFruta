@@ -418,6 +418,12 @@ class OrcamentoPdfService:
         ]
         dados = [[Paragraph('Observações e prazos:', e['secao'])]]
         dados += [[Paragraph(f'- {texto}', e['normal'])] for texto in textos]
+        dados.append([Paragraph(
+            '* O pagamento de 50% do valor total deverá ser realizado na aprovação '
+            'do pedido, para início da produção. Os 50% restantes deverão ser pagos '
+            'no ato da entrega.',
+            e['normal'],
+        )])
         tabela = Table(dados, colWidths=[largura], cornerRadii=[5] * 4)
         tabela.setStyle(TableStyle(_estilo_tabela(3) + [
             ('BOX', (0, 0), (-1, -1), .5, BORDA),
