@@ -47,11 +47,13 @@ class RelatorioAcertoService:
 
         quadro = EstoqueViagemService.quadro(viagem)
         valores = cls.valores(viagem, quadro)
+        quantidades = cls.quantidades(quadro)
         return {
             'viagem': viagem,
             'identificacao': cls.identificacao(viagem),
-            'quantidades': cls.quantidades(quadro),
+            'quantidades': quantidades,
             'valores': valores,
+            'indicadores': cls.indicadores(quadro, valores, quantidades),
             'clientes': cls.clientes_atendidos(viagem),
             'documentos': cls.documentos(viagem),
             'quadro': quadro,
@@ -182,6 +184,75 @@ class RelatorioAcertoService:
             unitario = unitarios.get(saldo.produto_id, saldo.custo_unitario or ZERO)
             total += devolvido * unitario
         return total.quantize(Decimal('0.01'))
+
+    # ── Indicadores ──────────────────────────────────────────────────────
+
+    @classmethod
+    def indicadores(cls, quadro: dict, valores: dict, quantidades: dict) -> dict:
+        """
+        Os números que resumem a viagem.
+
+        DUAS LEITURAS DE APROVEITAMENTO, e não uma
+        =========================================
+
+        Sobre a carga inteira o número é o que a especificação pede, mas ele
+        engana: a mercadoria que já subiu vendida sempre "aproveita", e a de
+        bonificação nunca — então uma viagem com muita venda prévia mostra 90%
+        mesmo que o vendedor não tenha vendido nada na rua.
+
+        Sobre a remessa, o número diz o que se quer saber de fato: do que saiu
+        SEM comprador, quanto virou venda. É esse que mede a rota e o vendedor,
+        e por isso ele aparece ao lado do outro em vez de ficar escondido.
+
+        PERCENTUAL DE RETORNO é sobre o que foi remetido, e não sobre a carga:
+        só a mercadoria sem comprador podia voltar. Dividir pela carga inteira
+        diluiria o número justamente com a parte que nunca teve chance de
+        retornar, e uma rota ruim pareceria aceitável.
+        """
+        carga_valor = valores['carga']
+        carga_qtd = quantidades['carregada']
+        remetido = quadro['remetido']
+
+        return {
+            # ── Valores ──────────────────────────────────────────────────
+            'valor_carregado': carga_valor,
+            'valor_vendido': valores['vendido'],
+            'valor_bonificado': valores['bonificado'],
+            'valor_retornado': valores['retornado'],
+            # ── Quantidades ──────────────────────────────────────────────
+            'quantidade_carregada': carga_qtd,
+            'quantidade_vendida': quantidades['vendida'],
+            'quantidade_bonificada': quantidades['bonificada'],
+            'quantidade_retornada': quantidades['retornada'],
+            # ── Percentuais ──────────────────────────────────────────────
+            'aproveitamento': cls._percentual(quantidades['vendida'], carga_qtd),
+            'aproveitamento_valor': cls._percentual(valores['vendido'], carga_valor),
+            # O que mede a rota: do que saiu sem comprador, quanto vendeu.
+            'aproveitamento_remessa': cls._percentual(
+                quadro['venda_na_rua'], remetido,
+            ),
+            'percentual_retorno': cls._percentual(
+                quantidades['retornada'], remetido,
+            ),
+            'remetido': remetido,
+            'tem_remessa': remetido > ZERO,
+        }
+
+    @staticmethod
+    def _percentual(parte, total) -> Decimal | None:
+        """
+        A fração, em pontos percentuais.
+
+        DEVOLVE `None` QUANDO NÃO HÁ BASE, e não zero: viagem sem remessa não
+        teve 0% de aproveitamento na rua — ela não teve rua. Mostrar zero faria
+        a média de várias viagens despencar por causa das que nem tentaram.
+        """
+        total = Decimal(str(total or 0))
+        if total <= ZERO:
+            return None
+        return (Decimal(str(parte or 0)) / total * Decimal('100')).quantize(
+            Decimal('0.1')
+        )
 
     # ── Clientes atendidos ───────────────────────────────────────────────
 

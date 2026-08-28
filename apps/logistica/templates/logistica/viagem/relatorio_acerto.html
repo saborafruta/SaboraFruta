@@ -25,6 +25,82 @@
     </span>
   </div>
 
+  <!-- ── Indicadores ───────────────────────────────────────────── -->
+  <div class="grid grid-cols-2 lg:grid-cols-4 gap-4">
+    <div class="card p-4">
+      <p class="text-xs font-medium uppercase tracking-wide" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Valor carregado</p>
+      <p class="text-xl font-bold mt-0.5" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">R$ {{ indicadores.valor_carregado|floatformat:2 }}</p>
+    </div>
+    <div class="card p-4">
+      <p class="text-xs font-medium uppercase tracking-wide" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Valor vendido</p>
+      <p class="text-xl font-bold mt-0.5" :style="temaClaro ? 'color:#15803d;' : 'color:#86efac;'">R$ {{ indicadores.valor_vendido|floatformat:2 }}</p>
+      <p class="text-[11px] mt-0.5" :style="temaClaro ? 'color:#94a3b8;' : 'color:#71717a;'">{{ indicadores.quantidade_vendida|floatformat:"-3" }} un.</p>
+    </div>
+    <div class="card p-4">
+      <p class="text-xs font-medium uppercase tracking-wide" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Valor bonificado</p>
+      <p class="text-xl font-bold mt-0.5" :style="temaClaro ? 'color:#b45309;' : 'color:#fcd34d;'">R$ {{ indicadores.valor_bonificado|floatformat:2 }}</p>
+      <p class="text-[11px] mt-0.5" :style="temaClaro ? 'color:#94a3b8;' : 'color:#71717a;'">{{ indicadores.quantidade_bonificada|floatformat:"-3" }} un.</p>
+    </div>
+    <div class="card p-4">
+      <p class="text-xs font-medium uppercase tracking-wide" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Valor retornado</p>
+      <p class="text-xl font-bold mt-0.5" :style="temaClaro ? 'color:#374151;' : 'color:#d1d5db;'">R$ {{ indicadores.valor_retornado|floatformat:2 }}</p>
+      <p class="text-[11px] mt-0.5" :style="temaClaro ? 'color:#94a3b8;' : 'color:#71717a;'">{{ indicadores.quantidade_retornada|floatformat:"-3" }} un.</p>
+    </div>
+  </div>
+
+  {% comment %}
+    DUAS LEITURAS DE APROVEITAMENTO. Sobre a carga inteira o numero engana: a
+    mercadoria que ja' subiu vendida sempre "aproveita" e a de bonificacao
+    nunca, entao uma viagem com muita venda previa mostra 90% mesmo que o
+    vendedor nao tenha vendido nada na rua. Sobre a remessa e' o numero que
+    mede a rota -- e por isso ele fica ao lado, e nao escondido.
+  {% endcomment %}
+  <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+    <div class="card p-4">
+      <p class="text-xs font-medium uppercase tracking-wide" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Aproveitamento da carga</p>
+      <p class="text-2xl font-bold mt-0.5" :style="temaClaro ? 'color:#1d4ed8;' : 'color:#93c5fd;'">
+        {% if indicadores.aproveitamento is not None %}{{ indicadores.aproveitamento|floatformat:1 }}%{% else %}—{% endif %}
+      </p>
+      <p class="text-[11px] mt-1" :style="temaClaro ? 'color:#94a3b8;' : 'color:#71717a;'">
+        {{ indicadores.quantidade_vendida|floatformat:"-3" }} de {{ indicadores.quantidade_carregada|floatformat:"-3" }} vendidas
+      </p>
+    </div>
+
+    <div class="card p-4">
+      <p class="text-xs font-medium uppercase tracking-wide" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Aproveitamento da rota</p>
+      <p class="text-2xl font-bold mt-0.5" :style="temaClaro ? 'color:#1d4ed8;' : 'color:#93c5fd;'">
+        {% if indicadores.aproveitamento_remessa is not None %}{{ indicadores.aproveitamento_remessa|floatformat:1 }}%{% else %}—{% endif %}
+      </p>
+      <p class="text-[11px] mt-1" :style="temaClaro ? 'color:#94a3b8;' : 'color:#71717a;'">
+        {% if indicadores.tem_remessa %}
+          Do que saiu sem comprador
+        {% else %}
+          Esta viagem não levou mercadoria sem comprador
+        {% endif %}
+      </p>
+    </div>
+
+    <div class="card p-4">
+      <p class="text-xs font-medium uppercase tracking-wide" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Percentual de retorno</p>
+      <p class="text-2xl font-bold mt-0.5"
+         :style="temaClaro ? 'color:#b45309;' : 'color:#fcd34d;'">
+        {% if indicadores.percentual_retorno is not None %}{{ indicadores.percentual_retorno|floatformat:1 }}%{% else %}—{% endif %}
+      </p>
+      {% comment %}
+        SOBRE O QUE FOI REMETIDO, e nao sobre a carga: so' a mercadoria sem
+        comprador podia voltar, e dividir pela carga inteira diluiria o numero
+        com a parte que nunca teve chance de retornar.
+      {% endcomment %}
+      <p class="text-[11px] mt-1" :style="temaClaro ? 'color:#94a3b8;' : 'color:#71717a;'">
+        {% if indicadores.tem_remessa %}
+          {{ indicadores.quantidade_retornada|floatformat:"-3" }} de {{ indicadores.remetido|floatformat:"-3" }} remetidas
+        {% else %}
+          Sem remessa não há retorno a medir
+        {% endif %}
+      </p>
+    </div>
+  </div>
+
   <!-- ── Identificação ─────────────────────────────────────────── -->
   <div class="card p-5">
     <h3 class="text-xs font-bold uppercase tracking-wider pb-2 mb-3 border-b"

@@ -27,7 +27,15 @@ from apps.produtos.models.unidade import UnidadeMedida, UnidadeMedidaFilial
 E = NaturezaOperacao.Especie
 
 
-class RelatorioAcertoTests(TestCase):
+class AcertoBase(TestCase):
+    """
+    Só as fixtures.
+
+    Separada das classes de teste porque herdar uma classe QUE TEM TESTES faz
+    a subclasse rodar todos eles de novo -- o dobro do tempo, e uma contagem
+    de testes que engana quem lê o resultado.
+    """
+
 
     @classmethod
     def setUpTestData(cls):
@@ -124,6 +132,9 @@ class RelatorioAcertoTests(TestCase):
 
     def _relatorio(self):
         return RelatorioAcertoService.relatorio(self.viagem)
+
+
+class RelatorioAcertoTests(AcertoBase):
 
     # ── Identificação ────────────────────────────────────────────────────
 
@@ -398,3 +409,158 @@ class RelatorioAcertoTests(TestCase):
 
         for resto in ('{#', '#}', '{%', '%}'):
             self.assertNotIn(resto, html, 'vazou sintaxe de template no HTML')
+
+
+class IndicadoresTests(AcertoBase):
+    """
+    Os números que resumem a viagem.
+
+    O QUE DECIDE A UTILIDADE DELES É A BASE DA DIVISÃO, e não a conta. Dividir
+    pelo denominador errado produz um número que sempre parece bom.
+    """
+
+    def _indicadores(self):
+        return self._relatorio()['indicadores']
+
+    # ── Os valores e as quantidades ──────────────────────────────────────
+
+    def test_os_quatro_valores_aparecem(self):
+        self._carregar(E.VENDA, '150', valor='10', cliente=self.cliente)
+        self._carregar(E.REMESSA_VENDA_FORA, '200', valor='8')
+        self._carregar(E.BONIFICACAO, '10', valor='10', cliente=self.cliente)
+        self._na_rua()
+        self._entregar('120', valor='12')
+        ViagemService.registrar_retorno(
+            self.viagem, self.produto, Decimal('80'), usuario=self.usuario,
+        )
+
+        ind = self._indicadores()
+
+        self.assertEqual(ind['valor_carregado'], Decimal('3200.00'))
+        self.assertEqual(ind['valor_vendido'], Decimal('2940.00'))
+        self.assertEqual(ind['valor_bonificado'], Decimal('100.00'))
+        self.assertEqual(ind['valor_retornado'], Decimal('640.00'))
+
+    def test_as_tres_quantidades_aparecem(self):
+        self._carregar(E.REMESSA_VENDA_FORA, '200', valor='10')
+        self._carregar(E.BONIFICACAO, '10', valor='10', cliente=self.cliente)
+        self._na_rua()
+        self._entregar('120')
+        ViagemService.registrar_retorno(
+            self.viagem, self.produto, Decimal('80'), usuario=self.usuario,
+        )
+
+        ind = self._indicadores()
+
+        self.assertEqual(ind['quantidade_vendida'], Decimal('120.000'))
+        self.assertEqual(ind['quantidade_bonificada'], Decimal('10.000'))
+        self.assertEqual(ind['quantidade_retornada'], Decimal('80.000'))
+
+    # ── Aproveitamento ───────────────────────────────────────────────────
+
+    def test_aproveitamento_da_carga_e_sobre_a_carga_inteira(self):
+        self._carregar(E.REMESSA_VENDA_FORA, '200', valor='10')
+        self._na_rua()
+        self._entregar('150')
+
+        self.assertEqual(self._indicadores()['aproveitamento'], Decimal('75.0'))
+
+    def test_aproveitamento_da_rota_e_so_sobre_a_remessa(self):
+        """
+        Sobre a carga inteira o número engana: a mercadoria que já subiu
+        vendida sempre "aproveita", então uma viagem com muita venda prévia
+        mostra um número alto mesmo que o vendedor não tenha vendido na rua.
+        """
+        self._carregar(E.VENDA, '300', valor='10', cliente=self.cliente)
+        self._carregar(E.REMESSA_VENDA_FORA, '100', valor='10')
+        self._na_rua()
+        self._entregar('20')
+
+        ind = self._indicadores()
+
+        # 320 de 400 na carga inteira -- parece otimo.
+        self.assertEqual(ind['aproveitamento'], Decimal('80.0'))
+        # Mas do que saiu sem comprador, so' 20 de 100 venderam.
+        self.assertEqual(ind['aproveitamento_remessa'], Decimal('20.0'))
+
+    def test_viagem_sem_remessa_nao_tem_aproveitamento_de_rota(self):
+        """
+        Ela não teve 0% de aproveitamento na rua — ela não teve rua. Mostrar
+        zero faria a média de várias viagens despencar por causa das que nem
+        tentaram.
+        """
+        self._carregar(E.VENDA, '150', valor='10', cliente=self.cliente)
+
+        ind = self._indicadores()
+
+        self.assertIsNone(ind['aproveitamento_remessa'])
+        self.assertFalse(ind['tem_remessa'])
+
+    def test_o_aproveitamento_por_valor_tambem_e_calculado(self):
+        self._carregar(E.REMESSA_VENDA_FORA, '200', valor='10')
+        self._na_rua()
+        self._entregar('100', valor='10')
+
+        self.assertEqual(
+            self._indicadores()['aproveitamento_valor'], Decimal('50.0'),
+        )
+
+    # ── Percentual de retorno ────────────────────────────────────────────
+
+    def test_o_retorno_e_medido_sobre_o_que_foi_remetido(self):
+        """
+        Só a mercadoria sem comprador podia voltar. Dividir pela carga inteira
+        diluiria o número justamente com a parte que nunca teve chance de
+        retornar, e uma rota ruim pareceria aceitável.
+        """
+        self._carregar(E.VENDA, '300', valor='10', cliente=self.cliente)
+        self._carregar(E.REMESSA_VENDA_FORA, '100', valor='10')
+        self._na_rua()
+        self._entregar('20')
+        ViagemService.registrar_retorno(
+            self.viagem, self.produto, Decimal('80'), usuario=self.usuario,
+        )
+
+        # 80 de 100 remetidas = 80%. Sobre a carga de 400 daria 20%, e uma
+        # rota que voltou com quase tudo pareceria aceitavel.
+        self.assertEqual(self._indicadores()['percentual_retorno'], Decimal('80.0'))
+
+    def test_viagem_sem_remessa_nao_tem_percentual_de_retorno(self):
+        self._carregar(E.VENDA, '150', valor='10', cliente=self.cliente)
+
+        self.assertIsNone(self._indicadores()['percentual_retorno'])
+
+    def test_carga_vazia_nao_divide_por_zero(self):
+        ind = self._indicadores()
+
+        self.assertIsNone(ind['aproveitamento'])
+        self.assertIsNone(ind['percentual_retorno'])
+
+    # ── A tela ───────────────────────────────────────────────────────────
+
+    def test_a_tela_mostra_os_indicadores(self):
+        self._carregar(E.REMESSA_VENDA_FORA, '200', valor='10')
+        self._na_rua()
+        self._entregar('150')
+
+        html = self.client.get(
+            reverse('logistica:viagem-relatorio-acerto', args=[self.viagem.pk]),
+        ).content.decode()
+
+        for rotulo in (
+            'Valor carregado', 'Valor vendido', 'Valor bonificado',
+            'Valor retornado', 'Aproveitamento da carga',
+            'Aproveitamento da rota', 'Percentual de retorno',
+        ):
+            self.assertIn(rotulo, html, f'"{rotulo}" sumiu dos indicadores')
+        self.assertIn('75,0%', html)
+
+    def test_sem_remessa_a_tela_explica_o_traco(self):
+        self._carregar(E.VENDA, '150', valor='10', cliente=self.cliente)
+
+        html = self.client.get(
+            reverse('logistica:viagem-relatorio-acerto', args=[self.viagem.pk]),
+        ).content.decode()
+
+        self.assertIn('não levou mercadoria sem comprador', html)
+        self.assertIn('Sem remessa não há retorno a medir', html)
