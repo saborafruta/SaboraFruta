@@ -814,3 +814,6 @@ class DocumentoManifestoCarga(TimestampedModel):
 from apps.logistica.models_viagem import (  # noqa: E402,F401
     ItemCarga, ItemVendaViagem, SaldoCarga, Viagem, VendaViagem,
 )
+from apps.logistica.models_bonificacao import (  # noqa: E402,F401
+    ComprovanteBonificacao, EntregaBonificacao,
+)

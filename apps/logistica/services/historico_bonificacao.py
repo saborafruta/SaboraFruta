@@ -36,6 +36,9 @@ from decimal import Decimal
 from apps.estoque.models import MovimentacaoEstoque
 from apps.fiscal.models import NaturezaOperacao
 from apps.logistica.models import ItemCarga, VendaViagem
+from apps.logistica.services.entrega_bonificacao import (
+    EntregaBonificacaoService,
+)
 
 ZERO = Decimal('0')
 
@@ -79,7 +82,11 @@ class HistoricoBonificacaoService:
         linhas = []
         for movimento in movimentos:
             item = itens.get((movimento.produto_id, movimento.lote_id))
+            acompanhamento = (
+                EntregaBonificacaoService.para_item(item) if item else None
+            )
             linhas.append({
+                'acompanhamento': acompanhamento,
                 'origem': NA_CARGA,
                 'viagem': viagem,
                 'produto': movimento.produto,
@@ -119,8 +126,10 @@ class HistoricoBonificacaoService:
 
         linhas = []
         for entrega in entregas:
+            acompanhamento = EntregaBonificacaoService.para_entrega_da_rua(entrega)
             for item in entrega.itens.all():
                 linhas.append({
+                    'acompanhamento': acompanhamento,
                     'origem': NA_REMESSA,
                     'viagem': viagem,
                     'produto': item.produto,
@@ -151,6 +160,17 @@ class HistoricoBonificacaoService:
             'linhas': len(linhas),
             'quantidade': sum((l['quantidade'] or ZERO for l in linhas), ZERO),
             'sem_nota': sum(1 for l in linhas if l['nota'] is None),
+            # A CORTESIA QUE NAO SE SABE SE CHEGOU. E' a pergunta que a
+            # bonificacao nao faz sozinha: ninguem pagou, ninguem reclama.
+            'sem_entrega': sum(
+                1 for l in linhas
+                if l['acompanhamento'] and l['acompanhamento'].aberta
+            ),
+            'sem_prova': sum(
+                1 for l in linhas
+                if l['acompanhamento'] and l['acompanhamento'].entregue
+                and not l['acompanhamento'].tem_prova
+            ),
             'da_carga': sum(1 for l in linhas if l['origem'] == NA_CARGA),
             'da_rua': sum(1 for l in linhas if l['origem'] == NA_REMESSA),
         }

@@ -21,7 +21,9 @@ from apps.fiscal.services.natureza_operacao_service import NaturezaOperacaoServi
 from apps.produtos.models import Produto
 from apps.estoque.models import LoteProduto
 from apps.financeiro.models import CondicaoPagamento, FormaPagamento
-from apps.logistica.models import ItemCarga, VendaViagem, Viagem
+from apps.logistica.models import (
+    EntregaBonificacao, ItemCarga, VendaViagem, Viagem,
+)
 from apps.vendas.models.pedido import PedidoVenda
 from apps.logistica.services.estoque_transito import EstoqueEmTransitoService
 from apps.logistica.services.remessa_nfe import RemessaVendaForaService
@@ -29,6 +31,9 @@ from apps.logistica.services.vendas_para_carga import (
     CARREGAVEIS, VendasParaCargaService,
 )
 from apps.logistica.services.bonificacao_nfe import BonificacaoNFeService
+from apps.logistica.services.entrega_bonificacao import (
+    EntregaBonificacaoService,
+)
 from apps.logistica.services.historico_bonificacao import (
     HistoricoBonificacaoService,
 )
@@ -745,3 +750,69 @@ def _natureza_do_tipo(filial, tipo):
         return VendaForaNFeService.natureza(filial, tipo)
     except DadosInvalidosError:
         return None
+
+
+class BonificacaoEntregaView(PermissaoRequiredMixin, View):
+    """
+    Move a entrega da bonificação e recebe a prova de que ela chegou.
+
+    O CONTROLE VIVE JUNTO DA BONIFICAÇÃO, e não numa tela de entregas à
+    parte: quem acompanha a cortesia está olhando a viagem que a levou.
+    """
+
+    permissao_modulo = 'logistica'
+    permissao_acao = 'editar'
+
+    def post(self, request, pk, entrega_pk):
+        viagem = get_object_or_404(Viagem.objects.for_filial(_filial(request)), pk=pk)
+        entrega = get_object_or_404(
+            EntregaBonificacao.objects.select_related(
+                'item_carga__viagem', 'entrega_rua__viagem',
+            ),
+            pk=entrega_pk,
+        )
+        volta = redirect('logistica:viagem-detail', pk=viagem.pk)
+
+        # A ENTREGA E' BUSCADA PELA VIAGEM DA URL, e nao so' pelo id: id
+        # colado a mao mexeria na bonificacao de outra viagem, e talvez de
+        # outra filial.
+        if entrega.viagem != viagem:
+            messages.error(request, 'Esta bonificação não é desta viagem.')
+            return volta
+
+        acao = request.POST.get('acao')
+        try:
+            if acao == 'anexar':
+                comprovante = EntregaBonificacaoService.anexar(
+                    entrega,
+                    tipo=request.POST.get('tipo') or '',
+                    arquivo=request.FILES.get('arquivo'),
+                    descricao=request.POST.get('descricao') or '',
+                    usuario=request.user,
+                )
+                messages.success(
+                    request,
+                    f'{comprovante.get_tipo_display()} anexado à bonificação.',
+                )
+            elif acao == 'entregar':
+                EntregaBonificacaoService.entregar(entrega, {
+                    'destinatario_nome': request.POST.get('destinatario_nome'),
+                    'destinatario_documento': request.POST.get('destinatario_documento'),
+                    'quantidade_entregue': request.POST.get('quantidade_entregue'),
+                    'observacao': request.POST.get('observacao'),
+                }, usuario=request.user)
+                messages.success(request, 'Entrega da bonificação registrada.')
+            else:
+                entrega = EntregaBonificacaoService.mover(
+                    entrega, acao or '',
+                    {'observacao': request.POST.get('observacao')},
+                    usuario=request.user,
+                )
+                messages.success(
+                    request,
+                    f'Bonificação marcada como {entrega.get_status_display().lower()}.',
+                )
+        except DadosInvalidosError as erro:
+            messages.error(request, str(erro))
+
+        return volta
