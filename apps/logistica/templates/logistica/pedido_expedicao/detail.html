@@ -142,8 +142,56 @@
   <div class="card overflow-hidden">
     <div class="flex items-center justify-between px-4 py-3 border-b"
          :style="temaClaro ? 'border-color:#e2e8f0;' : 'border-color:#2a2a2e;'">
-      <h3 class="font-semibold text-sm" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">Itens do Pedido</h3>
+      <div>
+        <h3 class="font-semibold text-sm" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">Itens do Pedido</h3>
+        {% if venda.venda %}
+          <p class="text-xs mt-0.5" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+            Pedido de venda
+            <a href="{% url 'vendas:pedido-detail' venda.venda.pk %}"
+               :style="temaClaro ? 'color:#3b82f6;' : 'color:#60a5fa;'">{{ venda.venda.numero_pedido }}</a>
+            {% if venda.tem_pendencia %}
+              · {{ venda.a_trazer|length }} item(ns) da venda ainda fora desta carga
+            {% else %}
+              · tudo que a venda tem já está em expedição
+            {% endif %}
+          </p>
+        {% endif %}
+      </div>
+      {% comment %}
+        O BOTÃO SÓ EXISTE COM SALDO A TRAZER. Oferecer "trazer itens" numa
+        venda já inteira expedida convidaria a duplicar a carga — e é a
+        segunda expedição que o cliente recebe sem ter comprado.
+      {% endcomment %}
+      {% if venda.tem_pendencia %}
+        <form method="post" action="{% url 'logistica:pedido-expedicao-itens-da-venda' pedido.pk %}">
+          {% csrf_token %}
+          <button type="submit" class="btn-secondary text-sm">
+            Trazer {{ venda.a_trazer|length }} item(ns) da venda
+          </button>
+        </form>
+      {% endif %}
     </div>
+
+    {% if venda.venda and venda.tem_pendencia %}
+      {% comment %}
+        O QUE VIRIA, ANTES DE VIR. Um botão que despeja linhas sem dizer
+        quais obriga a pessoa a conferir depois — e conferir depois é
+        apagar linha por linha.
+      {% endcomment %}
+      <div class="px-4 py-3 text-xs border-b"
+           :style="temaClaro ? 'border-color:#e2e8f0;background:#f8fafc;' : 'border-color:#2a2a2e;background:#18181b;'">
+        {% for linha in venda.a_trazer %}
+          <p :style="temaClaro ? 'color:#374151;' : 'color:#d1d5db;'">
+            · {{ linha.produto }} — <strong>{{ linha.saldo|floatformat:"-3" }}</strong>
+            {% if linha.expedida %}
+              <span :style="temaClaro ? 'color:#94a3b8;' : 'color:#71717a;'">
+                (de {{ linha.vendida|floatformat:"-3" }} vendidas, {{ linha.expedida|floatformat:"-3" }} já em expedição)
+              </span>
+            {% endif %}
+          </p>
+        {% endfor %}
+      </div>
+    {% endif %}
 
     <!-- Tabela -->
     <table class="w-full text-sm hidden md:table">

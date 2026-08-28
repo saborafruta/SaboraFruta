@@ -590,6 +590,19 @@ class ItemPedidoExpedicao(TimestampedModel):
         CANCELADO = "cancelado", "Cancelado"
 
     pedido = models.ForeignKey(PedidoExpedicao, on_delete=models.CASCADE, related_name="itens")
+    # A LINHA DA VENDA QUE ORIGINOU ESTA, quando ela veio de uma.
+    #
+    # O ITEM GUARDA TEXTO de propósito — é o que permite lançar carga avulsa
+    # de algo que não está em pedido nenhum. Mas o que vem da venda precisa
+    # saber de onde veio: sem esse vínculo, trazer os itens duas vezes
+    # duplicaria a carga, e ninguém saberia dizer quanto de cada linha da
+    # venda já foi expedido.
+    item_venda = models.ForeignKey(
+        "vendas.ItemPedidoVenda",
+        on_delete=models.SET_NULL,
+        null=True, blank=True,
+        related_name="itens_expedicao",
+    )
     ordem = models.PositiveIntegerField(default=0)
     produto_codigo = models.CharField(max_length=60, blank=True)
     produto_nome = models.CharField(max_length=220)

@@ -31,7 +31,12 @@ from apps.cadastros.models import Cliente, ClienteFilial
 from apps.core.models import Empresa, Filial, PerfilAcesso, Usuario
 from apps.logistica.forms import PedidoExpedicaoForm
 from apps.logistica.models import PedidoExpedicao
-from apps.vendas.models import PedidoVenda
+from apps.core.services.exceptions import DadosInvalidosError
+from apps.estoque.models import MovimentacaoEstoque
+from apps.logistica.services.itens_da_venda import ItensDaVendaService
+from apps.produtos.models import Produto, ProdutoFilial
+from apps.produtos.models.unidade import UnidadeMedida, UnidadeMedidaFilial
+from apps.vendas.models import ItemPedidoVenda, PedidoVenda
 
 
 class ExpedicaoDaVendaBase(TestCase):
@@ -211,3 +216,247 @@ class TelaTests(ExpedicaoDaVendaBase):
         pedido = PedidoExpedicao.objects.get(filial=self.filial)
         self.assertEqual(pedido.pedido_venda, venda)
         self.assertEqual(pedido.cliente, self.cliente)
+
+
+class ItensDaVendaBase(ExpedicaoDaVendaBase):
+
+    @classmethod
+    def setUpTestData(cls):
+        super().setUpTestData()
+        cls.unidade = UnidadeMedida.objects.create(
+            empresa=cls.empresa, sigla='CX', descricao='Caixa',
+            tipo=UnidadeMedida.Tipo.UNIDADE,
+        )
+        UnidadeMedidaFilial.objects.create(unidade=cls.unidade, filial=cls.filial)
+        cls.produto = Produto.objects.create(
+            filial=cls.filial, unidade_medida=cls.unidade, descricao='Polpa de Caju',
+            codigo='P-100', ncm='20079900', controla_lote=False,
+            preco_venda=Decimal('10'), peso_bruto=Decimal('1.200'),
+        )
+        ProdutoFilial.objects.create(produto=cls.produto, filial=cls.filial)
+        cls.outro_produto = Produto.objects.create(
+            filial=cls.filial, unidade_medida=cls.unidade, descricao='Polpa de Manga',
+            codigo='P-200', ncm='20079900', controla_lote=False,
+            preco_venda=Decimal('8'),
+        )
+        ProdutoFilial.objects.create(produto=cls.outro_produto, filial=cls.filial)
+
+    # ── Fixtures ─────────────────────────────────────────────────────────
+
+    def _venda_com_itens(self, *quantidades, numero='1001'):
+        """Uma venda com uma linha por quantidade informada."""
+        venda = self._venda(numero=numero)
+        produtos = (self.produto, self.outro_produto)
+        for indice, quantidade in enumerate(quantidades):
+            produto = produtos[indice % len(produtos)]
+            ItemPedidoVenda.objects.create(
+                pedido=venda, produto=produto, numero_item=indice + 1,
+                quantidade=Decimal(quantidade),
+                valor_unitario=Decimal('10'),
+                valor_bruto=Decimal(quantidade) * 10,
+                valor_total=Decimal(quantidade) * 10,
+            )
+        return venda
+
+    def _expedicao(self, venda=None, numero=1):
+        return PedidoExpedicao.objects.create(
+            filial=self.filial, numero=numero, cliente=self.cliente,
+            pedido_venda=venda, responsavel=self.usuario,
+        )
+
+
+class TrazerItensTests(ItensDaVendaBase):
+    """O que vem da venda."""
+
+    def test_traz_as_linhas_da_venda_com_produto_quantidade_e_preco(self):
+        venda = self._venda_com_itens('100', '50')
+        pedido = self._expedicao(venda)
+
+        resultado = ItensDaVendaService.trazer(pedido, usuario=self.usuario)
+
+        self.assertEqual(len(resultado['criadas']), 2)
+        linhas = list(pedido.itens.order_by('ordem'))
+        self.assertEqual(linhas[0].produto_nome, 'Polpa de Caju')
+        self.assertEqual(linhas[0].produto_codigo, 'P-100')
+        self.assertEqual(linhas[0].quantidade, Decimal('100'))
+        self.assertEqual(linhas[0].unidade, 'CX')
+        self.assertEqual(linhas[0].valor_unitario, Decimal('10'))
+        self.assertEqual(linhas[1].quantidade, Decimal('50'))
+
+    def test_cada_linha_sabe_de_qual_linha_da_venda_veio(self):
+        venda = self._venda_com_itens('100')
+        pedido = self._expedicao(venda)
+
+        ItensDaVendaService.trazer(pedido, usuario=self.usuario)
+
+        item = pedido.itens.get()
+        self.assertEqual(item.item_venda, venda.itens.get())
+
+    def test_o_peso_vem_do_cadastro_do_produto(self):
+        """É o que a balança e o MDF-e vão cobrar depois."""
+        venda = self._venda_com_itens('10')
+        pedido = self._expedicao(venda)
+
+        ItensDaVendaService.trazer(pedido, usuario=self.usuario)
+
+        self.assertEqual(pedido.itens.get().peso_kg, Decimal('12.000'))
+
+    def test_os_totais_do_pedido_sao_recalculados(self):
+        venda = self._venda_com_itens('100', '50')
+        pedido = self._expedicao(venda)
+
+        ItensDaVendaService.trazer(pedido, usuario=self.usuario)
+
+        pedido.refresh_from_db()
+        self.assertEqual(pedido.valor_total, Decimal('1500.00'))
+
+    def test_clicar_duas_vezes_nao_duplica_a_carga(self):
+        venda = self._venda_com_itens('100')
+        pedido = self._expedicao(venda)
+        ItensDaVendaService.trazer(pedido, usuario=self.usuario)
+
+        with self.assertRaises(DadosInvalidosError) as erro:
+            ItensDaVendaService.trazer(pedido, usuario=self.usuario)
+
+        self.assertIn('já estão em pedidos de expedição', str(erro.exception))
+        self.assertEqual(pedido.itens.count(), 1)
+
+
+class SaldoDaVendaTests(ItensDaVendaBase):
+    """Uma venda pode sair em duas viagens."""
+
+    def test_a_segunda_expedicao_traz_so_o_que_falta(self):
+        """
+        Repetir a quantidade cheia faria o cliente receber o dobro do que
+        comprou.
+        """
+        venda = self._venda_com_itens('100')
+        primeira = self._expedicao(venda, numero=1)
+        item = primeira.itens.create(
+            item_venda=venda.itens.get(), ordem=1,
+            produto_nome='Polpa de Caju', quantidade=Decimal('60'),
+        )
+        segunda = self._expedicao(venda, numero=2)
+
+        ItensDaVendaService.trazer(segunda, usuario=self.usuario)
+
+        self.assertEqual(segunda.itens.get().quantidade, Decimal('40'))
+        self.assertEqual(item.quantidade, Decimal('60'))
+
+    def test_expedicao_cancelada_devolve_o_saldo(self):
+        """O que estava nela voltou a ser saldo da venda."""
+        venda = self._venda_com_itens('100')
+        cancelada = self._expedicao(venda, numero=1)
+        cancelada.itens.create(
+            item_venda=venda.itens.get(), ordem=1,
+            produto_nome='Polpa de Caju', quantidade=Decimal('100'),
+        )
+        cancelada.status = PedidoExpedicao.Status.CANCELADO
+        cancelada.save(update_fields=['status'])
+        nova = self._expedicao(venda, numero=2)
+
+        ItensDaVendaService.trazer(nova, usuario=self.usuario)
+
+        self.assertEqual(nova.itens.get().quantidade, Decimal('100'))
+
+    def test_o_resumo_mostra_o_que_ja_foi_e_o_que_falta(self):
+        venda = self._venda_com_itens('100')
+        primeira = self._expedicao(venda, numero=1)
+        primeira.itens.create(
+            item_venda=venda.itens.get(), ordem=1,
+            produto_nome='Polpa de Caju', quantidade=Decimal('30'),
+        )
+        segunda = self._expedicao(venda, numero=2)
+
+        resumo = ItensDaVendaService.resumo(segunda)
+
+        linha = resumo['linhas'][0]
+        self.assertEqual(linha['vendida'], Decimal('100'))
+        self.assertEqual(linha['expedida'], Decimal('30'))
+        self.assertEqual(linha['saldo'], Decimal('70'))
+        self.assertTrue(resumo['tem_pendencia'])
+
+
+class RecusaTests(ItensDaVendaBase):
+    """Quando trazer não faz sentido."""
+
+    def test_pedido_sem_venda_nao_tem_o_que_trazer(self):
+        pedido = self._expedicao()
+
+        with self.assertRaises(DadosInvalidosError) as erro:
+            ItensDaVendaService.trazer(pedido, usuario=self.usuario)
+
+        self.assertIn('não veio de um pedido de venda', str(erro.exception))
+
+    def test_pedido_ja_expedido_nao_recebe_item_novo(self):
+        """Acrescentar linha depois seria reescrever o que o caminhão levou."""
+        venda = self._venda_com_itens('100')
+        pedido = self._expedicao(venda)
+        pedido.status = PedidoExpedicao.Status.EXPEDIDO
+        pedido.save(update_fields=['status'])
+
+        with self.assertRaises(DadosInvalidosError) as erro:
+            ItensDaVendaService.trazer(pedido, usuario=self.usuario)
+
+        self.assertIn('não recebe', str(erro.exception))
+        self.assertEqual(pedido.itens.count(), 0)
+
+    def test_o_servico_nao_mexe_no_estoque(self):
+        """
+        Trazer item para a expedição é planejamento: quem tira mercadoria do
+        estoque é a viagem ou o faturamento.
+        """
+        venda = self._venda_com_itens('100')
+        pedido = self._expedicao(venda)
+        antes = MovimentacaoEstoque.objects.count()
+
+        ItensDaVendaService.trazer(pedido, usuario=self.usuario)
+
+        self.assertEqual(MovimentacaoEstoque.objects.count(), antes)
+
+
+class TelaDosItensTests(ItensDaVendaBase):
+    """O botão e a prévia do que viria."""
+
+    def _detalhe(self, pedido):
+        return self.client.get(
+            reverse('logistica:pedido-expedicao-detail', args=[pedido.pk]),
+        ).content.decode()
+
+    def test_a_tela_mostra_o_que_viria_antes_de_vir(self):
+        venda = self._venda_com_itens('100', '50')
+        pedido = self._expedicao(venda)
+
+        html = self._detalhe(pedido)
+
+        self.assertIn('Trazer 2 item(ns) da venda', html)
+        self.assertIn('Polpa de Caju', html)
+        self.assertIn('Polpa de Manga', html)
+
+    def test_trazer_pela_tela(self):
+        venda = self._venda_com_itens('100')
+        pedido = self._expedicao(venda)
+
+        self.client.post(
+            reverse('logistica:pedido-expedicao-itens-da-venda', args=[pedido.pk]),
+            follow=True,
+        )
+
+        self.assertEqual(pedido.itens.count(), 1)
+
+    def test_sem_saldo_o_botao_some(self):
+        venda = self._venda_com_itens('100')
+        pedido = self._expedicao(venda)
+        ItensDaVendaService.trazer(pedido, usuario=self.usuario)
+
+        html = self._detalhe(pedido)
+
+        self.assertNotIn('Trazer 1 item(ns) da venda', html)
+        self.assertIn('já está em expedição', html)
+
+    def test_pedido_sem_venda_nao_oferece_o_botao(self):
+        pedido = self._expedicao()
+
+        html = self._detalhe(pedido)
+
+        self.assertNotIn('da venda', html)

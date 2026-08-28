@@ -23,6 +23,7 @@ from apps.financeiro.models.fiscal import DocumentoFiscal
 from apps.logistica.models_viagem import Viagem
 from apps.logistica.services.log_viagem import LogViagemService
 from apps.logistica.services.mdfe_viagem import MDFeViagemService
+from apps.logistica.services.itens_da_venda import ItensDaVendaService
 from apps.logistica.services.viagem import ViagemService
 from apps.estoque.models import MovimentacaoEstoque
 from apps.logistica.forms import (
@@ -1262,13 +1263,16 @@ class PedidoExpedicaoDetailView(PermissaoRequiredMixin, View):
             .select_related("cliente", "transportadora", "romaneio", "responsavel"),
             pk=pk,
         )
-        itens = pedido.itens.all()
+        itens = pedido.itens.select_related("item_venda")
         item_form = ItemPedidoExpedicaoForm(initial={"quantidade": 1, "unidade": "UN"})
         return render(request, self.template_name, {
             "title": f"Pedido #{pedido.numero:06d}",
             "pedido": pedido,
             "itens": itens,
             "item_form": item_form,
+            # O QUE A VENDA TEM E A EXPEDIÇÃO AINDA NÃO: é o que decide se o
+            # botão de trazer aparece, e quantas linhas ele traria.
+            "venda": ItensDaVendaService.resumo(pedido),
         })
 
 
@@ -2524,3 +2528,35 @@ class MDFeAlterarStatusView(PermissaoRequiredMixin, View):
             "consultar, cancelar ou encerrar na Focus NFe.",
         )
         return redirect("logistica:mdfe-detail", pk=mdfe.pk)
+
+
+class PedidoExpedicaoTrazerItensView(PermissaoRequiredMixin, View):
+    """
+    Traz para a expedição os itens que a venda já tem.
+
+    O SALDO É QUE VEM, e não a quantidade cheia: uma venda pode ser expedida
+    em duas viagens, e repetir a quantidade faria o cliente receber o dobro
+    do que comprou.
+    """
+
+    permissao_modulo = "logistica"
+    permissao_acao = "editar"
+
+    def post(self, request, pk):
+        pedido = get_object_or_404(
+            PedidoExpedicao.objects.for_filial(_filial(request)), pk=pk,
+        )
+        try:
+            resultado = ItensDaVendaService.trazer(pedido, usuario=request.user)
+        except DadosInvalidosError as erro:
+            messages.error(request, str(erro))
+            return redirect("logistica:pedido-expedicao-detail", pk=pedido.pk)
+
+        criadas = len(resultado["criadas"])
+        messages.success(
+            request,
+            f'{criadas} item(ns) trazido(s) do pedido de venda '
+            f'{pedido.pedido_venda.numero_pedido} — '
+            f'{resultado["quantidade"]} unidade(s).',
+        )
+        return redirect("logistica:pedido-expedicao-detail", pk=pedido.pk)
