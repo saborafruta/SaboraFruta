@@ -1,5 +1,5 @@
 {% extends "_list_base.html" %}
-{% load erp_extras %}
+{% load erp_extras static %}
 
 {% block list_title %}Produtos{% endblock %}
 {% block page_title %}Produtos{% endblock %}
@@ -20,9 +20,16 @@
 <style>
   .produto-list-page { min-width: 0; padding-inline: 1rem !important; }
   .produto-list-compact { overflow: hidden !important; }
-  .produto-list-compact .overflow-x-auto { overflow-x: auto !important; overflow-y: visible !important; scrollbar-width: thin; }
-  .produto-list-compact .overflow-x-auto::-webkit-scrollbar { height: 10px; }
-  .produto-list-compact .overflow-x-auto::-webkit-scrollbar-thumb { border-radius: 999px; background: rgba(148,163,184,.55); }
+  .produto-list-compact .overflow-x-auto { overflow-x: auto !important; overflow-y: visible !important; scrollbar-width: auto; }
+  html:has(.produto-list-page)::-webkit-scrollbar,
+  body:has(.produto-list-page)::-webkit-scrollbar { width: 12px; }
+  .produto-list-compact .overflow-x-auto::-webkit-scrollbar { height: 14px; }
+  html:has(.produto-list-page)::-webkit-scrollbar-thumb,
+  body:has(.produto-list-page)::-webkit-scrollbar-thumb,
+  .produto-list-compact .overflow-x-auto::-webkit-scrollbar-thumb { border-radius: 999px; border: 2px solid transparent; background-clip: padding-box; }
+  .produto-list-compact .overflow-x-auto::-webkit-scrollbar-thumb { background-color: #94a3b8; }
+  .produto-list-compact .overflow-x-auto::-webkit-scrollbar-thumb:hover { background-color: #64748b; }
+  .produto-list-compact .overflow-x-auto::-webkit-scrollbar-track { border-radius: 999px; }
   .produto-list-compact table { table-layout: fixed; min-width: 1320px; width: max(100%, 1320px); border-collapse: separate; border-spacing: 0; }
   .produto-list-compact th,
   .produto-list-compact td { padding: .56rem .48rem !important; overflow: hidden; text-overflow: ellipsis; vertical-align: middle; }
@@ -206,6 +213,7 @@
   });
 </script>
 <form method="get" id="produto-list-filters" class="card p-4 grid grid-cols-1 md:grid-cols-12 gap-3 produto-filter-card">
+  {% if ver_todos %}<input type="hidden" name="ver" value="todos">{% endif %}
   <div class="md:col-span-3 produto-filter-search">
     <input type="text" name="q" value="{{ busca }}" placeholder="Buscar por ID, referencia, codigo de barras, descricao..."
            class="form-input">
@@ -794,4 +802,22 @@
   {% empty %}
     <tr><td colspan="13" class="text-center py-12" :style="temaClaro ? 'color:#666;' : 'color:#555;'">Nenhum produto encontrado.</td></tr>
   {% endfor %}
+{% endblock %}
+
+{% block pagination %}
+  <div id="produto-pagination" class="pagination-bar flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 px-5 py-3 text-sm"
+       :style="temaClaro ? 'border-top:1px solid #e2e8f0;' : 'border-top:1px solid #2a2a2e;'">
+    <div>
+      {% if ver_todos %}Todos os {{ page_obj.paginator.count }} produtos{% else %}Página {{ page_obj.number }} de {{ page_obj.paginator.num_pages }} ({{ page_obj.paginator.count }} registros){% endif %}
+      <span id="produto-load-status" role="status" aria-live="polite"></span>
+    </div>
+    <div class="flex gap-2 flex-wrap">
+      {% if not ver_todos and page_obj.paginator.num_pages > 1 %}
+        <button type="button" class="btn-secondary" id="produto-ver-todos">Ver todos</button>
+      {% endif %}
+      {% if page_obj.has_previous %}<a href="?{% if page_querystring %}{{ page_querystring }}&{% endif %}page={{ page_obj.previous_page_number }}" class="btn-secondary">← Anterior</a>{% endif %}
+      {% if page_obj.has_next %}<a href="?{% if page_querystring %}{{ page_querystring }}&{% endif %}page={{ page_obj.next_page_number }}" class="btn-secondary">Próxima →</a>{% endif %}
+    </div>
+  </div>
+  <script src="{% static 'js/produtos-lista.js' %}" defer></script>
 {% endblock %}

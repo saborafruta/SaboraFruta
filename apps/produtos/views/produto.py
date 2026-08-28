@@ -1277,7 +1277,10 @@ class ProdutoListView(PermissaoRequiredMixin, View):
         status = request.GET.get('status') or 'todos'
         somente_com_estoque = request.GET.get('com_estoque') == '1'
         ordem = request.GET.get('ordem', 'id')
-        page_obj = Paginator(qs, 50).get_page(request.GET.get('page'))
+        ver_todos = request.GET.get('ver') == 'todos'
+        page_obj = Paginator(qs, max(qs.count(), 1) if ver_todos else 50).get_page(
+            1 if ver_todos else request.GET.get('page')
+        )
         produtos_pagina = list(page_obj.object_list)
         produto_ids = [produto.pk for produto in produtos_pagina]
         filiais_para_inativar = {}
@@ -1330,6 +1333,7 @@ class ProdutoListView(PermissaoRequiredMixin, View):
             sort_urls[key] = params.urlencode()
 
         return render(request, self.template_name, {
+            'ver_todos': ver_todos,
             'page_obj': page_obj,
             'page_querystring': query_params.urlencode(),
             'sort_urls': sort_urls,

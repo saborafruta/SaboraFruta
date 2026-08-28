@@ -95,6 +95,56 @@ class ProdutoToggleEstoqueTests(TestCase):
                 },
             )
 
+    def list_request(self, params):
+        request = self.factory.get('/produtos/', params)
+        request.user = self.usuario
+        request.filial_ativa = self.filial
+        request.session = {}
+        return request
+
+    def test_ver_todos_mantem_filtros_ordenacao_e_escopo(self):
+        from unittest.mock import patch
+        for index in range(53):
+            produto = self.criar_produto()
+            produto.descricao = f'Camisa {index:03d}'
+            produto.save(update_fields=['descricao'])
+        inativo = self.criar_produto(ativo_filial=False)
+        zerado = self.criar_produto()
+        Estoque.objects.filter(produto=zerado).update(quantidade_atual=0, quantidade_disponivel=0)
+        estrangeiro = Produto.objects.create(filial=self.outra_filial, unidade_medida=self.unidade, descricao='Camisa externa')
+        ProdutoFilial.objects.create(produto=estrangeiro, filial=self.outra_filial)
+        params = {'q': 'Camisa', 'status': 'ativo', 'com_estoque': '1', 'ordem': 'za'}
+        with patch('apps.produtos.views.produto.render') as render_mock:
+            ProdutoListView.as_view()(self.list_request(params))
+            normal = render_mock.call_args.args[2]
+            self.assertEqual(len(normal['produtos']), 50)
+            self.assertFalse(normal['ver_todos'])
+            ProdutoListView.as_view()(self.list_request({**params, 'ver': 'todos', 'page': '2'}))
+            all_context = render_mock.call_args.args[2]
+        self.assertEqual(len(all_context['produtos']), 53)
+        self.assertTrue(all_context['ver_todos'])
+        self.assertEqual(all_context['page_obj'].number, 1)
+        self.assertEqual(all_context['produtos'][0].descricao, 'Camisa 052')
+        self.assertEqual(all_context['produtos'][-1].descricao, 'Camisa 000')
+        self.assertFalse({inativo.pk, zerado.pk, estrangeiro.pk} & {p.pk for p in all_context['produtos']})
+
+    def test_ver_todos_vazio_renderiza_sem_erro(self):
+        response = ProdutoListView.as_view()(self.list_request({'ver': 'todos', 'q': 'inexistente'}))
+        self.assertContains(response, 'Todos os 0 produtos')
+        self.assertContains(response, 'Nenhum produto encontrado')
+        self.assertNotContains(response, 'id="produto-ver-todos"')
+
+    def test_ver_todos_so_aparece_quando_existe_outra_pagina(self):
+        for _ in range(51):
+            self.criar_produto()
+        response = ProdutoListView.as_view()(self.list_request({}))
+        self.assertContains(response, 'id="produto-ver-todos"')
+        self.assertContains(response, 'produtos-lista.js')
+        response = ProdutoListView.as_view()(self.list_request({'ver': 'todos'}))
+        self.assertContains(response, 'Todos os 51 produtos')
+        self.assertContains(response, 'name="ver" value="todos"')
+        self.assertNotContains(response, 'id="produto-ver-todos"')
+
     def test_inativar_produto_zera_estoque_quando_solicitado(self):
         produto = self.criar_produto()
 
