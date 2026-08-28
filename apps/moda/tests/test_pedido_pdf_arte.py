@@ -137,6 +137,59 @@ class ArteNoPdfTests(TestCase):
         for visual in visuais:
             visual.imagem.delete(save=False)
 
+    def test_pdf_nao_imprime_nome_da_tecnica_abaixo_das_imagens(self):
+        from apps.moda.models import Personalizacao
+        from apps.moda.services.pedido_pdf import LARGURA_UTIL, _estilos
+
+        pedido = self._pedido()
+        item = ItemPedidoProducao.objects.create(
+            pedido=pedido, descricao='Camisa', quantidade=1,
+        )
+        Personalizacao.objects.create(
+            item=item, tecnica=Personalizacao.Tecnica.DTF,
+        )
+        visual = VisualItemPedido.objects.create(
+            item=item, posicao='frente_camisa',
+            imagem=SimpleUploadedFile('sem-legenda.png', _png()),
+        )
+        self.addCleanup(visual.imagem.delete, save=False)
+
+        texto = self._texto_layout(
+            PedidoPdfService._arte(item, _estilos(), LARGURA_UTIL / 2),
+        )
+
+        self.assertNotIn('DTF', texto)
+
+    def test_imagem_unica_cresce_quando_nao_ha_lista_de_nomes(self):
+        from reportlab.lib.units import mm
+
+        from apps.moda.services.pedido_pdf import LARGURA_UTIL, _estilos
+
+        pedido = self._pedido()
+        item = ItemPedidoProducao.objects.create(
+            pedido=pedido, descricao='Camisa', quantidade=1,
+        )
+        visual = VisualItemPedido.objects.create(
+            item=item, posicao='frente_camisa',
+            imagem=SimpleUploadedFile('imagem-grande.png', _png()),
+        )
+        self.addCleanup(visual.imagem.delete, save=False)
+
+        altura_sem_nomes = PedidoPdfService._arte(
+            item, _estilos(), LARGURA_UTIL / 2,
+        )[2]._argH[0]
+        tamanho = Tamanho.objects.create(filial=self.filial, sigla='P')
+        PersonalizacaoIndividual.objects.create(
+            pedido=pedido, item=item, tamanho=tamanho, nome='Pessoa 1',
+        )
+        altura_com_nomes = PedidoPdfService._arte(
+            item, _estilos(), LARGURA_UTIL / 2,
+        )[2]._argH[0]
+
+        self.assertEqual(altura_sem_nomes, 137 * mm)
+        self.assertEqual(altura_com_nomes, 105 * mm)
+        self.assertGreater(altura_sem_nomes, altura_com_nomes)
+
     def test_orcamento_tambem_exibe_todos_os_anexos(self):
         pedido = self._pedido()
         antes = _imagens(OrcamentoPdfService.gerar(pedido))

@@ -634,7 +634,19 @@ class PedidoPdfService:
     ) -> list:
         personalizacoes = list(item.personalizacoes.all())
         visuais = list(item.visuais.all())
-        if not personalizacoes and not visuais:
+        campos_imagem = [
+            visual.imagem or (
+                getattr(visual.mockup, 'imagem', None) if visual.mockup_id else None
+            )
+            for visual in visuais
+        ]
+        campos_imagem += [
+            personalizacao.arquivo
+            for personalizacao in personalizacoes
+            if getattr(personalizacao, 'extensao', '') in DESENHAVEIS
+        ]
+        campos_imagem = [campo for campo in campos_imagem if campo]
+        if not campos_imagem:
             return []
 
         blocos = [
@@ -646,16 +658,19 @@ class PedidoPdfService:
         ]
 
         if altura_imagem == 27 * mm:
-            altura_imagem = (68 if len(visuais) <= 2 else 41) * mm
-        por_linha = min(2, max(1, len(visuais)))
+            tem_nomes = item.individuais.exists()
+            if len(campos_imagem) == 1:
+                altura_imagem = (100 if tem_nomes else 132) * mm
+            elif len(campos_imagem) == 2:
+                altura_imagem = (86 if tem_nomes else 120) * mm
+            else:
+                altura_imagem = 41 * mm
+        por_linha = min(2, len(campos_imagem))
         largura = largura_util / por_linha
-        for inicio in range(0, len(visuais), por_linha):
-            faixa = visuais[inicio:inicio + por_linha]
+        for inicio in range(0, len(campos_imagem), por_linha):
+            faixa = campos_imagem[inicio:inicio + por_linha]
             celulas = []
-            for visual in faixa:
-                campo = visual.imagem or (
-                    getattr(visual.mockup, 'imagem', None) if visual.mockup_id else None
-                )
+            for campo in faixa:
                 imagem = _imagem(campo, largura - 6 * mm, altura_imagem)
                 celulas.append(imagem or Paragraph('—', e['pequeno']))
             while len(celulas) < por_linha:
@@ -678,35 +693,6 @@ class PedidoPdfService:
             # A linha inteira desce para a página seguinte se não houver
             # espaço suficiente.
             blocos.append(grade)
-
-        for p in personalizacoes:
-            partes = [getattr(p, 'get_tecnica_display', lambda: '')() or str(p)]
-            if getattr(p, 'observacoes', ''):
-                partes.append(p.observacoes)
-            texto = Paragraph(' - '.join(esc(x) for x in partes if x), e['normal'])
-
-            # A ARTE APLICADA, desenhada ao lado do texto. Antes saía só
-            # "Arte / estampa — peito esquerdo": o chão de fábrica lia ONDE
-            # aplicar sem ver O QUE aplicar, e ia procurar a imagem no
-            # WhatsApp de quem atendeu.
-            arte = (
-                _imagem(p.arquivo, 26 * mm, 26 * mm)
-                if getattr(p, 'extensao', '') in DESENHAVEIS else None
-            )
-            if arte is None:
-                blocos.append(texto)
-                continue
-
-            linha = Table(
-                [[arte, texto]], colWidths=[28 * mm, largura_util - 28 * mm],
-            )
-            linha.setStyle(TableStyle([
-                ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
-                ('LEFTPADDING', (0, 0), (0, 0), 0),
-                ('TOPPADDING', (0, 0), (-1, -1), 3),
-                ('BOTTOMPADDING', (0, 0), (-1, -1), 3),
-            ]))
-            blocos.append(linha)
 
         return blocos
 
