@@ -1,0 +1,43 @@
+const { test } = require('node:test');
+const assert = require('node:assert/strict');
+const { validarModeloOp2 } = require('../../../../static/js/op2_modelo_validacao.js');
+
+const grupos = {
+  camisa: { label: 'Camisa', campos: { tipo_impressao: ['SILK', 'N/A'], malha: ['PP', 'N/A'], gola: ['POLO', 'N/A'] } },
+  colete: { label: 'Colete', campos: { tipo_impressao: ['N/A'], malha: ['N/A'] } },
+};
+const completo = () => ({ valor_unitario: '59.90', estrutura_tipo: 'camisa', tipo_impressao: 'N/A', estrutura: { malha: 'N/A', gola: 'N/A' } });
+
+test('N/A é uma escolha válida, não um campo vazio', () => {
+  assert.equal(validarModeloOp2(completo(), grupos), '');
+});
+test('valor vazio, zero, negativo e inválido são recusados', () => {
+  for (const valor of ['', null, 0, '0', '-1', 'NaN', 'Infinity', 'abc', '1.001', '10000000000']) {
+    assert.match(validarModeloOp2({ ...completo(), valor_unitario: valor }, grupos), /Valor unitário/);
+  }
+});
+test('preço positivo e centavos são aceitos', () => {
+  for (const valor of ['0.01', '10', 20.9]) assert.equal(validarModeloOp2({ ...completo(), valor_unitario: valor }, grupos), '');
+});
+test('todos os campos visíveis são obrigatórios', () => {
+  for (const campo of ['malha', 'gola']) {
+    const draft = completo();
+    draft.estrutura[campo] = '';
+    assert.match(validarModeloOp2(draft, grupos), /obrigatório/);
+  }
+  assert.match(validarModeloOp2({ ...completo(), tipo_impressao: '' }, grupos), /obrigatório/);
+});
+test('valores desconhecidos não substituem N/A', () => {
+  const draft = completo();
+  draft.estrutura.gola = 'INVENTADO';
+  assert.match(validarModeloOp2(draft, grupos), /opção válida/);
+});
+test('campos de outro tipo não bloqueiam o tipo atual', () => {
+  const draft = completo();
+  draft.estrutura_tipo = 'colete';
+  delete draft.estrutura.gola;
+  assert.equal(validarModeloOp2(draft, grupos), '');
+});
+test('tipo de peça desconhecido é recusado', () => {
+  assert.match(validarModeloOp2({ ...completo(), estrutura_tipo: '' }, grupos), /tipo de peça válido/);
+});

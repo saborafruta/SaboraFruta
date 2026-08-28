@@ -107,6 +107,8 @@ for _grupo in OP2_ESTRUTURA_OPCOES.values():
         'tipo_impressao': list(TIPOS_IMPRESSAO_PADRAO),
         **_grupo.get('campos', {}),
     }
+    for _valores in _grupo['campos'].values():
+        _valores.append('N/A')
 
 
 def _normalizar_slug(texto: str) -> str:
@@ -165,6 +167,54 @@ def sincronizar_opcoes_padrao(filial):
                 ))
     if novas:
         OpcaoEstruturaOP2.objects.bulk_create(novas, ignore_conflicts=True)
+
+    # Campos criados pela gestão também precisam de uma escolha explícita
+    # para quando a característica não se aplica ao produto.
+    campos = OpcaoEstruturaOP2.objects.for_filial(filial).values(
+        'tipo_peca', 'tipo_label', 'campo',
+    ).distinct()
+    sem_aplicacao = []
+    for campo in campos:
+        chave = (campo['tipo_peca'], campo['campo'], 'N/A')
+        if chave not in existentes:
+            existentes.add(chave)
+            sem_aplicacao.append(OpcaoEstruturaOP2(
+                filial=filial, **campo, valor='N/A', ordem=999, ativo=True,
+            ))
+    if sem_aplicacao:
+        OpcaoEstruturaOP2.objects.bulk_create(sem_aplicacao, ignore_conflicts=True)
+
+
+def validar_estrutura_item(post, grupos):
+    """Todos os campos do tipo escolhido exigem uma opção válida, inclusive N/A."""
+    tipo = (post.get('estrutura_tipo') or '').strip()
+    grupo = grupos.get(tipo)
+    if not grupo:
+        raise ValueError('Selecione um tipo de peça válido.')
+    for campo, opcoes in grupo['campos'].items():
+        valor = (post.get(f'estrutura_{campo}') or '').strip()
+        rotulo = campo.replace('_', ' ').capitalize()
+        if not valor:
+            raise ValueError(f'{rotulo}: preenchimento obrigatório. Se não se aplica, selecione N/A.')
+        if valor not in opcoes:
+            raise ValueError(f'{rotulo}: selecione uma opção válida para {grupo["label"]}.')
+
+
+def validar_valor_unitario(valor):
+    """Valida preço também nas requisições diretas e nas edições."""
+    from decimal import Decimal
+    from django.core.exceptions import ValidationError
+    from django.forms import DecimalField
+
+    texto = str(valor or '').strip()
+    if ',' in texto:
+        texto = texto.replace('.', '').replace(',', '.')
+    try:
+        return DecimalField(
+            required=True, min_value=Decimal('0.01'), max_digits=12, decimal_places=2,
+        ).clean(texto)
+    except ValidationError:
+        raise ValueError('Valor unitário: informe um valor maior que zero, com até duas casas decimais.')
 
 
 def opcoes_estrutura_filial(filial, incluir_inativas=False):

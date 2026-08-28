@@ -27,6 +27,13 @@ from apps.moda.views_op2 import Op2CreateView, _sincronizar_status
 
 
 class Op2Tests(TestCase):
+    @staticmethod
+    def _modelo_completo(prefixo=''):
+        """Escolhas explícitas obrigatórias, inclusive quando não se aplicam."""
+        dados = {'estrutura_tipo': 'camisa', 'valor_unitario': '10.00'}
+        dados.update({f'estrutura_{campo}': 'N/A' for campo in OP2_ESTRUTURA_OPCOES['camisa']['campos']})
+        return {prefixo + chave: valor for chave, valor in dados.items()}
+
     @classmethod
     def setUpTestData(cls):
         empresa = Empresa.objects.create(
@@ -44,6 +51,114 @@ class Op2Tests(TestCase):
         cls.cliente = Cliente.objects.create(
             filial=cls.filial, tipo_pessoa='J', razao_social='Cliente OP 2', ativo=True,
         )
+
+    def _login_op2(self):
+        self.client.force_login(self._usuario())
+        session = self.client.session
+        session['filial_id'] = self.filial.pk
+        session.save()
+
+    def test_na_cadastrado_em_todos_os_campos_inclusive_personalizados(self):
+        OpcaoEstruturaOP2.objects.create(
+            filial=self.filial, tipo_peca='especial', tipo_label='Especial',
+            campo='detalhe_extra', valor='Opção própria',
+        )
+        grupos = opcoes_estrutura_filial(self.filial)
+        for tipo, grupo in grupos.items():
+            for campo, opcoes in grupo['campos'].items():
+                self.assertIn('N/A', opcoes)
+                self.assertEqual(OpcaoEstruturaOP2.objects.for_filial(self.filial).filter(
+                    tipo_peca=tipo, campo=campo, valor='N/A', ativo=True,
+                ).count(), 1)
+        quantidade = OpcaoEstruturaOP2.objects.for_filial(self.filial).count()
+        opcoes_estrutura_filial(self.filial)
+        self.assertEqual(OpcaoEstruturaOP2.objects.for_filial(self.filial).count(), quantidade)
+        self._login_op2()
+        resposta = self.client.get(reverse('moda:op2-tipos-peca') + '?tipo=especial')
+        self.assertContains(resposta, 'N/A')
+
+    def test_todos_os_campos_da_estrutura_sao_obrigatorios(self):
+        from apps.moda.services.op2_estrutura import validar_estrutura_item
+
+        grupos = opcoes_estrutura_filial(self.filial)
+        for tipo, grupo in grupos.items():
+            dados = {'estrutura_tipo': tipo}
+            dados.update({f'estrutura_{campo}': 'N/A' for campo in grupo['campos']})
+            validar_estrutura_item(dados, grupos)
+            for campo in grupo['campos']:
+                with self.subTest(tipo=tipo, campo=campo):
+                    incompletos = {**dados, f'estrutura_{campo}': ''}
+                    with self.assertRaisesMessage(ValueError, 'preenchimento obrigatório'):
+                        validar_estrutura_item(incompletos, grupos)
+                    invalidos = {**dados, f'estrutura_{campo}': 'OPÇÃO INEXISTENTE'}
+                    with self.assertRaisesMessage(ValueError, 'opção válida'):
+                        validar_estrutura_item(invalidos, grupos)
+
+    def test_valor_unitario_obrigatorio_positivo_e_decimal_valido(self):
+        from apps.moda.services.op2_estrutura import validar_valor_unitario
+
+        for valor in ('', None, '0', '-1', 'NaN', 'Infinity', '1.001', '10000000000', 'abc'):
+            with self.subTest(valor=valor), self.assertRaises(ValueError):
+                validar_valor_unitario(valor)
+        self.assertEqual(validar_valor_unitario('59,90'), Decimal('59.90'))
+        self.assertEqual(validar_valor_unitario('0.01'), Decimal('0.01'))
+
+    def test_nova_op_incompleta_nao_persiste_pedido(self):
+        self._login_op2()
+        base = {
+            **self._modelo_completo('item_0_'), 'cliente': self.cliente.pk,
+            'item_0_produto_id': self.produto.pk, 'item_0_quantidade': 1,
+        }
+        for campo in ('estrutura_tipo', 'estrutura_tipo_impressao', 'estrutura_malha', 'valor_unitario'):
+            with self.subTest(campo=campo):
+                resposta = self.client.post(reverse('moda:op2-create'), {**base, f'item_0_{campo}': ''})
+                self.assertEqual(resposta.status_code, 200)
+                self.assertFalse(PedidoProducao.objects.exclude(pk=self.pedido.pk).exists())
+
+    def test_adicao_e_edicao_incompletas_preservam_o_item(self):
+        self._login_op2()
+        item = self._item(quantidade=2)
+        item.valor_unitario = Decimal('20')
+        item.observacoes = 'Dados anteriores'
+        item.save()
+        for acao in ('adicionar_item', 'editar_item'):
+            for campo, valor in (
+                ('estrutura_gola', ''), ('estrutura_tipo_impressao', ''),
+                ('valor_unitario', ''), ('valor_unitario', '0'), ('valor_unitario', 'NaN'),
+            ):
+                with self.subTest(acao=acao, campo=campo, valor=valor):
+                    dados = {**self._modelo_completo(), 'acao': acao, 'item_id': item.pk,
+                             'produto_id': self.produto.pk, 'quantidade': '10', campo: valor}
+                    resposta = self.client.post(reverse('moda:op2-action', args=[self.pedido.pk]), dados)
+                    self.assertEqual(resposta.status_code, 302)
+                    item.refresh_from_db()
+                    self.assertEqual(item.quantidade, 2)
+                    self.assertEqual(item.valor_unitario, Decimal('20'))
+                    self.assertEqual(item.observacoes, 'Dados anteriores')
+                    self.assertEqual(self.pedido.itens.count(), 1)
+
+    def test_nova_op_com_na_preserva_escolhas_e_preco(self):
+        self._login_op2()
+        dados = {**self._modelo_completo('item_0_'), 'cliente': self.cliente.pk,
+                 'item_0_produto_id': self.produto.pk, 'item_0_quantidade': 1,
+                 'item_0_valor_unitario': '59,90'}
+        resposta = self.client.post(reverse('moda:op2-create'), dados)
+        self.assertEqual(resposta.status_code, 302)
+        novo = PedidoProducao.objects.exclude(pk=self.pedido.pk).get().itens.get()
+        self.assertEqual(novo.valor_unitario, Decimal('59.90'))
+        self.assertIn('Tipo impressao: N/A', novo.observacoes)
+        self.assertIn('Malha: N/A', novo.observacoes)
+        self.assertFalse(novo.personalizacoes.exists())
+
+    def test_editores_exigem_campos_e_iniciam_valor_vazio(self):
+        self._login_op2()
+        for url in (reverse('moda:op2-create'), reverse('moda:op2-detail', args=[self.pedido.pk])):
+            resposta = self.client.get(url)
+            self.assertContains(resposta, 'js/op2_modelo_validacao.js')
+            self.assertContains(resposta, 'validarModeloOp2(this.draft,')
+            self.assertContains(resposta, "valor_unitario:''")
+            self.assertContains(resposta, 'required placeholder="Informe o valor"')
+            self.assertContains(resposta, '<option value="N/A">N/A</option>')
 
     def setUp(self):
         self.pedido = PedidoProducao.objects.create(
@@ -132,6 +247,7 @@ class Op2Tests(TestCase):
     def test_nova_op_aceita_itens_indexados_com_mais_de_um_modelo(self):
         post = QueryDict('', mutable=True)
         post.update({
+            **self._modelo_completo('item_0_'),
             'item_0_produto_id': str(self.produto.pk),
             'item_0_quantidade': '2',
             'item_1_produto_id': str(self.produto.pk),
@@ -544,6 +660,7 @@ class Op2Tests(TestCase):
 
         resposta = self.client.post(reverse('moda:op2-create'), {
             'cliente': str(self.cliente.pk),
+            **self._modelo_completo('item_0_'),
             'item_0_produto_id': str(self.produto.pk),
             'item_0_quantidade': '2',
             'item_0_valor_unitario': '50',
@@ -568,6 +685,7 @@ class Op2Tests(TestCase):
 
         resposta = self.client.post(reverse('moda:op2-create'), {
             'cliente': str(self.cliente.pk),
+            **self._modelo_completo('item_0_'),
             'item_0_produto_id': str(self.produto.pk),
             'item_0_quantidade': '2',
             'item_0_valor_unitario': '50',
@@ -614,6 +732,7 @@ class Op2Tests(TestCase):
 
         resposta = self.client.post(reverse('moda:op2-create'), {
             'cliente': str(self.cliente.pk),
+            **self._modelo_completo('item_0_'),
             'item_0_produto_id': str(self.produto.pk),
             'item_0_quantidade': '2',
             'item_0_valor_unitario': '10',
@@ -642,6 +761,7 @@ class Op2Tests(TestCase):
 
         resposta = self.client.post(reverse('moda:op2-create'), {
             'cliente': str(self.cliente.pk),
+            **self._modelo_completo('item_0_'),
             'item_0_produto_id': str(self.produto.pk),
             'item_0_quantidade': '2',
             'item_0_valor_unitario': '25.50',
@@ -667,6 +787,7 @@ class Op2Tests(TestCase):
 
         resposta = self.client.post(reverse('moda:op2-create'), {
             'cliente': str(self.cliente.pk),
+            **self._modelo_completo('item_0_'),
             'item_0_produto_id': str(self.produto.pk),
             'item_0_quantidade': '2',
             'item_0_valor_unitario': '25.50',
@@ -872,6 +993,7 @@ class Op2Tests(TestCase):
         session.save()
 
         resposta = self.client.post(reverse('moda:op2-action', args=[self.pedido.pk]), {
+            **self._modelo_completo(),
             'acao': 'editar_item',
             'item_id': str(item.pk),
             'produto_id': str(self.produto.pk),
@@ -886,6 +1008,7 @@ class Op2Tests(TestCase):
             'estrutura_gola': 'POLO',
             'arte_tipo': 'arte',
             'arte_tecnica': 'silk',
+            'estrutura_tipo_impressao': 'SILK',
             'arte_local': 'Peito',
             'arte_observacoes': 'Duas cores',
             'item_observacoes': 'Observação livre',
@@ -916,6 +1039,7 @@ class Op2Tests(TestCase):
         session.save()
 
         resposta = self.client.post(reverse('moda:op2-action', args=[self.pedido.pk]), {
+            **self._modelo_completo(),
             'acao': 'adicionar_item',
             'produto_id': str(self.produto.pk),
             'grades': [str(adulto.pk), str(oversized.pk)],
@@ -950,6 +1074,7 @@ class Op2Tests(TestCase):
         session.save()
 
         resposta = self.client.post(reverse('moda:op2-action', args=[self.pedido.pk]), {
+            **self._modelo_completo(),
             'acao': 'editar_item',
             'item_id': str(item.pk),
             'produto_id': str(self.produto.pk),
@@ -1001,6 +1126,7 @@ class Op2Tests(TestCase):
         session.save()
 
         resposta = self.client.post(reverse('moda:op2-action', args=[self.pedido.pk]), {
+            **self._modelo_completo(),
             'acao': 'adicionar_item',
             'produto_id': str(self.produto.pk),
             'quantidade': '7',
@@ -1014,7 +1140,7 @@ class Op2Tests(TestCase):
         self.assertIsNone(item.grade_tamanho)
         self.assertFalse(item.grade.exists())
 
-    def test_editor_completo_remove_personalizacao_ao_limpar_os_campos(self):
+    def test_editor_completo_registra_na_sem_apagar_arte_anterior(self):
         item = self._item(quantidade=2)
         Personalizacao.objects.create(
             item=item,
@@ -1029,6 +1155,7 @@ class Op2Tests(TestCase):
         session.save()
 
         resposta = self.client.post(reverse('moda:op2-action', args=[self.pedido.pk]), {
+            **self._modelo_completo(),
             'acao': 'editar_item',
             'item_id': str(item.pk),
             'produto_id': str(self.produto.pk),
@@ -1042,7 +1169,9 @@ class Op2Tests(TestCase):
         })
 
         self.assertRedirects(resposta, reverse('moda:op2-detail', args=[self.pedido.pk]))
-        self.assertFalse(Personalizacao.objects.filter(item=item).exists())
+        arte = Personalizacao.objects.get(item=item)
+        self.assertEqual(arte.tecnica, 'N/A')
+        self.assertEqual(arte.observacoes, 'Arte antiga')
 
     def test_tipos_de_peca_abre_um_tipo_por_vez(self):
         self.client.force_login(self._usuario())
@@ -1148,6 +1277,7 @@ class Op2Tests(TestCase):
         session.save()
         dados = {'cliente': str(self.cliente.pk)}
         for idx, nome in enumerate(['ANA', 'BIA']):
+            dados.update(self._modelo_completo(f'item_{idx}_'))
             dados.update({
                 f'item_{idx}_produto_id': str(self.produto.pk),
                 f'item_{idx}_grade_id': str(grade.pk),
@@ -1182,6 +1312,7 @@ class Op2Tests(TestCase):
 
         resposta = self.client.post(reverse('moda:op2-create'), {
             'cliente': str(self.cliente.pk),
+            **self._modelo_completo('item_0_'),
             'item_0_produto_id': str(self.produto.pk),
             'item_0_grade_id': str(grade.pk),
             f'item_0_grade_{tamanho.pk}': '1',

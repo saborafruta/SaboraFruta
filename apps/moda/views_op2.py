@@ -35,7 +35,7 @@ from .services.individual import IndividualService
 from .services.kanban_comercial import status_choices_kanban, status_destino_kanban
 from .services.op2_estrutura import (
     OP2_ESTRUTURA_OPCOES, juntar_observacoes_item, opcoes_estrutura_filial,
-    sincronizar_opcoes_padrao,
+    sincronizar_opcoes_padrao, validar_estrutura_item, validar_valor_unitario,
 )
 from .services.pedido_pdf import whatsapp_numero
 from .views import ModaBaseView
@@ -201,7 +201,7 @@ def _dados_modal_item(item, estrutura_opcoes):
             item.grade_tamanho.nome if item.grade_tamanho_id else '',
         ])),
         'quantidade': item.quantidade,
-        'valor_unitario': str(item.valor_unitario),
+        'valor_unitario': str(item.valor_unitario) if item.valor_unitario else '',
         'tipo_impressao': (
             (
                 arte.get_tecnica_display() if arte else
@@ -267,9 +267,12 @@ class Op2CreateView(ModaBaseView):
             return render(request, 'moda/op2_create.html', self._context(request))
 
         formularios = []
+        estrutura_opcoes = opcoes_estrutura_filial(_filial(request))
         for indice in indices:
             dados = self._dados_item(request, indice)
             try:
+                validar_estrutura_item(dados, estrutura_opcoes)
+                dados['valor_unitario'] = str(validar_valor_unitario(dados.get('valor_unitario')))
                 grade_total = self._total_grade(request, indice)
             except ValueError as erro:
                 messages.error(request, str(erro))
@@ -358,7 +361,8 @@ class Op2CreateView(ModaBaseView):
                         or getattr(item.produto, 'tipo_impressao', '')
                     )
                 )
-                if tipo_impressao:
+                tipo_impressao = request.POST.get(f'item_{indice}_estrutura_tipo_impressao') or tipo_impressao
+                if tipo_impressao and tipo_impressao != 'N/A':
                     Personalizacao.objects.create(
                         item=item,
                         tipo=Personalizacao.Tipo.ARTE,
@@ -963,6 +967,8 @@ class Op2ActionView(ModaBaseView):
         )
 
     def _acao_adicionar_item(self, request, pedido):
+        validar_estrutura_item(request.POST, opcoes_estrutura_filial(_filial(request)))
+        valor_unitario = validar_valor_unitario(request.POST.get('valor_unitario'))
         grades = self._grades_selecionadas(request)
         quantidades_por_grade = {
             grade.pk: self._quantidades_grade_modal(request, grade)
@@ -979,6 +985,7 @@ class Op2ActionView(ModaBaseView):
         criados = []
         for grade in alvos:
             dados = request.POST.copy()
+            dados['valor_unitario'] = str(valor_unitario)
             produto_id = dados.get('produto_id')
             dados['produto'] = f'moda:{produto_id}' if produto_id else ''
             dados['observacoes'] = request.POST.get('item_observacoes') or ''
@@ -1084,6 +1091,8 @@ class Op2ActionView(ModaBaseView):
         messages.success(request, 'Produto removido.')
 
     def _acao_editar_item(self, request, pedido):
+        validar_estrutura_item(request.POST, opcoes_estrutura_filial(_filial(request)))
+        valor_unitario = validar_valor_unitario(request.POST.get('valor_unitario'))
         item = get_object_or_404(pedido.itens, pk=request.POST.get('item_id'))
         produto_id = request.POST.get('produto_id')
         if produto_id:
@@ -1117,7 +1126,7 @@ class Op2ActionView(ModaBaseView):
         entregue = min(item.quantidade_entregue, quantidade)
         item.quantidade = quantidade
         item.quantidade_entregue = entregue
-        item.valor_unitario = request.POST.get('valor_unitario') or 0
+        item.valor_unitario = valor_unitario
         if 'referencia' in request.POST:
             item.referencia = (request.POST.get('referencia') or '').strip()
         if 'acabamento' in request.POST:
@@ -1175,6 +1184,13 @@ class Op2ActionView(ModaBaseView):
                 or getattr(item.produto, 'tipo_impressao', '')
             )
         )
+        tipo_impressao = request.POST.get('estrutura_tipo_impressao') or tipo_impressao
+        if tipo_impressao == 'N/A':
+            # Uma escolha de tipo não deve apagar arte ou observações já anexadas.
+            if arte:
+                arte.tecnica = 'N/A'
+                arte.save(update_fields=['tecnica'])
+            return
         if not tipo_impressao:
             if arte:
                 arte.delete()

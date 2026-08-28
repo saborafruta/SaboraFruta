@@ -5,6 +5,9 @@ import vm from 'node:vm';
 
 const template = readFileSync(new URL('../templates/moda/op2_create.html', import.meta.url), 'utf8');
 const script = template.match(/<script>([\s\S]*?)<\/script>/)[1];
+const modeloValidation = readFileSync(
+  new URL('../../../static/js/op2_modelo_validacao.js', import.meta.url), 'utf8',
+);
 
 function workspace() {
   const alerts = [];
@@ -12,8 +15,11 @@ function workspace() {
     'op2-clientes': [], 'op2-modelos-grade': {},
     'op2-grades': [{ id: 'adulto', nome: 'Adulto', tamanhos: ['M'] }],
     'op2-tamanhos-labels': { M: 'M' },
+    'op2-estrutura-opcoes': {
+      camisa: { label: 'Camisa', campos: { tipo_impressao: ['N/A'], malha: ['N/A'] } },
+    },
   };
-  const state = vm.runInNewContext(`${script};op2NovaMelhorada()`, {
+  const state = vm.runInNewContext(`${modeloValidation};${script};op2NovaMelhorada()`, {
     document: { getElementById: id => ({ textContent: JSON.stringify(json[id]) }) },
     alert: message => alerts.push(message),
   });
@@ -22,6 +28,7 @@ function workspace() {
   state.itens = ['primeiro', 'segundo'].map(uid => ({
     uid, nome: uid, produto_id: 'mesmo-modelo', grade_id: 'adulto',
     grade_nome: 'Adulto', grades: ['adulto'], quantidade: 2, valor_unitario: 10,
+    estrutura_tipo: 'camisa', tipo_impressao: 'N/A', estrutura: { malha: 'N/A' },
     gradeQuantidades: [{ tamanho_id: 'M', quantidade: 2 }],
     gradePorGrade: { adulto: { M: 2 } },
   }));
