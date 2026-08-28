@@ -23,6 +23,13 @@
       <span class="soft-pill {% if viagem.status == 'finalizada' %}is-green{% elif viagem.status == 'cancelada' %}is-red{% elif viagem.status == 'aguardando_documentos' %}is-amber{% elif viagem.saiu %}is-blue{% else %}is-slate{% endif %}">
         {{ viagem.get_status_display }}
       </span>
+      {% comment %}
+        O MANIFESTO E' DE TODA A VIAGEM, e nao so' de quando a carga esta'
+        aberta: ele e' consultado justamente depois que o caminhao saiu.
+      {% endcomment %}
+      <a href="{% url 'logistica:viagem-mdfe' viagem.pk %}" class="btn-secondary">
+        MDF-e da viagem
+      </a>
       {% if pode_agir and viagem.editavel %}
         <a href="{% url 'logistica:viagem-update' viagem.pk %}" class="btn-secondary">Editar</a>
       {% endif %}

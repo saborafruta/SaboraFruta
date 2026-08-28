@@ -34,6 +34,7 @@ from apps.logistica.services.bonificacao_nfe import BonificacaoNFeService
 from apps.logistica.services.entrega_bonificacao import (
     EntregaBonificacaoService,
 )
+from apps.logistica.services.mdfe_viagem import MDFeViagemService
 from apps.logistica.services.historico_bonificacao import (
     HistoricoBonificacaoService,
 )
@@ -823,6 +824,69 @@ class BonificacaoEntregaView(PermissaoRequiredMixin, View):
                     f'Bonificação marcada como {entrega.get_status_display().lower()}.',
                 )
         except DadosInvalidosError as erro:
+            messages.error(request, str(erro))
+
+        return volta
+
+
+class ViagemMDFeView(PermissaoRequiredMixin, View):
+    """
+    Os documentos fiscais da viagem, e o manifesto que os consolida.
+
+    A TELA MOSTRA, QUEM MANIFESTA DECIDE. "Quando permitido pela legislação
+    aplicável" depende de UF, de regime e da orientação da contabilidade —
+    não de código. Vincular tudo sozinho ao abrir a tela seria decidir, em
+    silêncio, uma questão que não é do software.
+    """
+
+    permissao_modulo = 'logistica'
+    template_name = 'logistica/viagem/mdfe.html'
+
+    def _viagem(self, request, pk):
+        return get_object_or_404(
+            Viagem.objects.for_filial(_filial(request))
+            .select_related('transportadora'),
+            pk=pk,
+        )
+
+    def get(self, request, pk):
+        viagem = self._viagem(request, pk)
+        documentos = MDFeViagemService.documentos(viagem)
+        return render(request, self.template_name, {
+            'title': f'MDF-e da viagem #{viagem.numero:06d}',
+            'viagem': viagem,
+            'mdfe': MDFeViagemService.mdfe_da_viagem(viagem),
+            'documentos': documentos,
+            'resumo': MDFeViagemService.resumo(documentos),
+        })
+
+    def post(self, request, pk):
+        viagem = self._viagem(request, pk)
+        volta = redirect('logistica:viagem-mdfe', pk=viagem.pk)
+
+        if not request.user.tem_permissao('logistica', 'editar'):
+            messages.error(request, 'Sem permissão para mexer no manifesto.')
+            return volta
+
+        try:
+            if request.POST.get('acao') == 'desvincular':
+                tirou = MDFeViagemService.desvincular(
+                    viagem, request.POST.get('documento'),
+                )
+                messages.success(
+                    request,
+                    'Documento retirado do manifesto.' if tirou
+                    else 'Este documento não estava no manifesto.',
+                )
+            else:
+                quantos = MDFeViagemService.vincular(
+                    viagem, request.POST.getlist('documentos'), request.user,
+                )
+                messages.success(
+                    request,
+                    f'{quantos} documento(s) vinculado(s) ao MDF-e da viagem.',
+                )
+        except (DadosInvalidosError, ValueError) as erro:
             messages.error(request, str(erro))
 
         return volta

@@ -1,0 +1,188 @@
+{% extends "_base.html" %}
+{% block title %}{{ title }} — Logística{% endblock %}
+{% block page_title %}{{ title }}{% endblock %}
+{% block content %}
+
+{% comment %}
+  UM CAMINHÃO, VÁRIAS NATUREZAS, UM MANIFESTO.
+
+  A mesma viagem leva mercadoria vendida, mercadoria sem comprador e
+  cortesia — cada uma com sua nota, seu CFOP e seu destinatário. O MDF-e não
+  muda nada disso: ele é documento de TRANSPORTE, e descreve a carga física
+  para a fiscalização de estrada.
+
+  A CONSOLIDAÇÃO É ESCOLHIDA, E NÃO AUTOMÁTICA. "Quando permitido pela
+  legislação aplicável" depende de UF, de regime e da orientação da
+  contabilidade — não de código. A tela mostra tudo que a viagem produziu e
+  deixa a decisão com quem manifesta.
+{% endcomment %}
+<div class="space-y-4">
+
+  <div class="flex flex-wrap items-start justify-between gap-3">
+    <div>
+      <p class="text-sm mb-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+        <a href="{% url 'logistica:viagem-detail' viagem.pk %}"
+           :style="temaClaro ? 'color:#3b82f6;' : 'color:#60a5fa;'">
+          Viagem #{{ viagem.numero|stringformat:"06d" }}</a>
+        <span class="mx-1">›</span> MDF-e da viagem
+      </p>
+      <h2 class="text-2xl font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
+        MDF-e da viagem
+      </h2>
+      <p class="text-sm mt-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+        {{ viagem.motorista_nome }} · {{ viagem.veiculo_placa }} ·
+        {{ viagem.get_status_display }}
+      </p>
+    </div>
+
+    {% if mdfe %}
+      <div class="card p-3 text-sm text-right">
+        <p class="font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
+          <a href="{% url 'logistica:mdfe-detail' mdfe.pk %}" class="underline"
+             :style="temaClaro ? 'color:#2563eb;' : 'color:#60a5fa;'">
+            MDF-e {{ mdfe.numero }}/{{ mdfe.serie }}
+          </a>
+        </p>
+        <p class="text-xs mt-0.5" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+          {{ mdfe.get_status_display }} · {{ resumo.vinculados }} documento(s)
+        </p>
+      </div>
+    {% else %}
+      {% comment %}
+        SEM MANIFESTO NAO SE INVENTA UM: a tela oferece criar, com a viagem
+        ja' escolhida, em vez de abrir um MDF-e vazio que ninguem pediu.
+      {% endcomment %}
+      <a href="{% url 'logistica:mdfe-create' %}?viagem={{ viagem.pk }}"
+         class="btn-primary text-sm">Criar MDF-e desta viagem</a>
+    {% endif %}
+  </div>
+
+  {# ── Os números ─────────────────────────────────────────────────── #}
+  <div class="grid grid-cols-2 lg:grid-cols-4 gap-3">
+    <div class="card p-4">
+      <p class="text-[11px] uppercase tracking-wide" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Documentos</p>
+      <p class="text-3xl font-bold mt-1" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">{{ resumo.documentos }}</p>
+    </div>
+    <div class="card p-4">
+      <p class="text-[11px] uppercase tracking-wide" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Valor da carga</p>
+      <p class="text-2xl font-bold mt-1" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
+        <span class="text-base font-normal">R$ </span>{{ resumo.valor|floatformat:2 }}
+      </p>
+    </div>
+    <div class="card p-4">
+      <p class="text-[11px] uppercase tracking-wide" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">No manifesto</p>
+      <p class="text-3xl font-bold mt-1" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">{{ resumo.vinculados }}</p>
+    </div>
+    <div class="card p-4" style="{% if resumo.impedidos %}border:1px solid #d97706;{% endif %}">
+      <p class="text-[11px] uppercase tracking-wide" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Impedidos</p>
+      <p class="text-3xl font-bold mt-1"
+         style="color:{% if resumo.impedidos %}#d97706{% else %}#059669{% endif %};">{{ resumo.impedidos }}</p>
+    </div>
+  </div>
+
+  {# ── A tabela ───────────────────────────────────────────────────── #}
+  <form method="post" action="{% url 'logistica:viagem-mdfe' viagem.pk %}">
+    {% csrf_token %}
+    <input type="hidden" name="acao" value="vincular">
+    <div class="card overflow-hidden">
+      <div class="p-4 pb-3 flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <h3 class="text-sm font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
+            Documentos fiscais desta viagem
+          </h3>
+          <p class="text-xs mt-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+            O manifesto consolida a carga física — a natureza fiscal de cada
+            nota continua sendo a dela.
+          </p>
+        </div>
+        {% if mdfe and resumo.disponiveis %}
+          <button type="submit" class="btn-primary text-sm">
+            Vincular ao MDF-e
+          </button>
+        {% endif %}
+      </div>
+      <div class="overflow-x-auto">
+        <table class="w-full text-sm">
+          <thead>
+            <tr :style="temaClaro ? 'border-bottom:1px solid #e5e7eb;background:#f8fafc;' : 'border-bottom:1px solid #2a2a2e;background:#1e1e20;'">
+              <th class="px-4 py-3 w-10"></th>
+              <th class="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wide" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Tipo</th>
+              <th class="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wide" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Documento</th>
+              <th class="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wide" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Cliente / destinatário</th>
+              <th class="text-right px-4 py-3 text-xs font-semibold uppercase tracking-wide" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Valor</th>
+              <th class="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wide" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">No manifesto</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for linha in documentos %}
+              <tr class="border-b align-top" :style="temaClaro ? 'border-color:#f1f5f9;' : 'border-color:#2a2a2e;'">
+                <td class="px-4 py-3">
+                  {% if mdfe and not linha.vinculado and not linha.impedimento %}
+                    <input type="checkbox" name="documentos" value="{{ linha.documento.pk }}"
+                           id="doc-{{ linha.documento.pk }}" class="cursor-pointer" checked>
+                    <label for="doc-{{ linha.documento.pk }}" class="sr-only">
+                      Vincular {{ linha.documento.numero }}
+                    </label>
+                  {% endif %}
+                </td>
+                <td class="px-4 py-3" :style="temaClaro ? 'color:#374151;' : 'color:#d1d5db;'">
+                  {{ linha.tipo }}
+                </td>
+                <td class="px-4 py-3">
+                  <span class="font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
+                    NF-e {{ linha.documento.numero }}/{{ linha.documento.serie }}
+                  </span>
+                  {% if linha.chave %}
+                    <span class="block font-mono text-[10px] break-all"
+                          :style="temaClaro ? 'color:#94a3b8;' : 'color:#71717a;'">{{ linha.chave }}</span>
+                  {% endif %}
+                </td>
+                <td class="px-4 py-3" :style="temaClaro ? 'color:#374151;' : 'color:#d1d5db;'">
+                  {{ linha.destinatario }}
+                </td>
+                <td class="px-4 py-3 text-right font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
+                  R$ {{ linha.valor|floatformat:2 }}
+                </td>
+                <td class="px-4 py-3 text-xs">
+                  {% if linha.vinculado %}
+                    <span class="soft-pill is-green text-[11px]">no MDF-e</span>
+                    {% if mdfe.status != 'autorizado' %}
+                      <form method="post" action="{% url 'logistica:viagem-mdfe' viagem.pk %}"
+                            class="inline">
+                        {% csrf_token %}
+                        <input type="hidden" name="acao" value="desvincular">
+                        <input type="hidden" name="documento" value="{{ linha.documento.pk }}">
+                        <button type="submit" class="underline text-[11px] ml-2"
+                                :style="temaClaro ? 'color:#2563eb;' : 'color:#60a5fa;'">tirar</button>
+                      </form>
+                    {% endif %}
+                  {% elif linha.impedimento %}
+                    {% comment %}
+                      O MOTIVO FICA NA LINHA. Sumir com ela faria a pessoa
+                      procurar a nota que ela sabe que existe.
+                    {% endcomment %}
+                    <span style="color:#d97706;">{{ linha.impedimento }}</span>
+                  {% else %}
+                    <span :style="temaClaro ? 'color:#94a3b8;' : 'color:#71717a;'">disponível</span>
+                  {% endif %}
+                </td>
+              </tr>
+            {% empty %}
+              <tr>
+                <td colspan="6" class="px-4 py-10 text-center">
+                  <p class="text-sm" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+                    Esta viagem ainda não gerou documento fiscal. A remessa, as
+                    vendas da rua e as bonificações aparecem aqui quando suas
+                    notas são emitidas.
+                  </p>
+                </td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </form>
+
+</div>
+{% endblock %}
