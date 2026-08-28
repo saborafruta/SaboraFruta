@@ -23,7 +23,11 @@ from apps.financeiro.models.fiscal import DocumentoFiscal
 from apps.logistica.models_viagem import Viagem
 from apps.logistica.services.log_viagem import LogViagemService
 from apps.logistica.services.mdfe_viagem import MDFeViagemService
+from apps.logistica.services.financeiro_expedicao import (
+    FinanceiroExpedicaoService,
+)
 from apps.logistica.services.itens_da_venda import ItensDaVendaService
+from apps.logistica.services.romaneio_do_pedido import RomaneioDoPedidoService
 from apps.logistica.services.viagem import ViagemService
 from apps.estoque.models import MovimentacaoEstoque
 from apps.logistica.forms import (
@@ -1096,6 +1100,10 @@ class PedidoExpedicaoCreateView(PermissaoRequiredMixin, View):
             pedido.filial = filial
             pedido.responsavel = request.user
             pedido.save()
+            # A ENTREGA ACOMPANHA O PEDIDO. Vincular romaneio e ainda ter de
+            # digitar a entrega la' e' como o papel do motorista acaba
+            # divergindo do pedido.
+            RomaneioDoPedidoService.sincronizar(pedido)
             messages.success(request, f"Pedido #{pedido.numero:06d} criado.")
             return redirect("logistica:pedido-expedicao-detail", pk=pedido.pk)
         clientes_json, _ = _clientes_fornecedores_json(filial)
@@ -1133,7 +1141,18 @@ class PedidoExpedicaoUpdateView(PermissaoRequiredMixin, View):
         form = PedidoExpedicaoForm(request.POST, instance=pedido, filial=filial)
         if form.is_valid():
             form.save()
+            resultado = RomaneioDoPedidoService.sincronizar(pedido)
             messages.success(request, f"Pedido #{pedido.numero:06d} atualizado.")
+            # DIZER O QUE ACONTECEU COM A ENTREGA: mudanca silenciosa no
+            # romaneio e' a que ninguem confere.
+            recado = {
+                'criada': 'Entrega criada no romaneio.',
+                'movida': 'Entrega movida para o novo romaneio.',
+                'removida': 'Entrega retirada do romaneio.',
+                'soltada': 'A entrega já feita ficou no romaneio, sem vínculo.',
+            }.get(resultado['acao'])
+            if recado:
+                messages.info(request, recado)
             return redirect("logistica:pedido-expedicao-detail", pk=pedido.pk)
         clientes_json, _ = _clientes_fornecedores_json(filial)
         return render(request, self.template_name, {
@@ -1273,6 +1292,9 @@ class PedidoExpedicaoDetailView(PermissaoRequiredMixin, View):
             # O QUE A VENDA TEM E A EXPEDIÇÃO AINDA NÃO: é o que decide se o
             # botão de trazer aparece, e quantas linhas ele traria.
             "venda": ItensDaVendaService.resumo(pedido),
+            # QUEM COBRA ESTA CARGA: a venda, esta tela, ou ninguém ainda.
+            "cobranca": FinanceiroExpedicaoService.resumo(pedido),
+            "entrega": RomaneioDoPedidoService.entrega_do_pedido(pedido),
         })
 
 
@@ -2620,3 +2642,36 @@ class ClienteEntregaSearchJsonView(PermissaoRequiredMixin, View):
             }
             for c in clientes
         ]})
+
+
+class PedidoExpedicaoCobrarView(PermissaoRequiredMixin, View):
+    """
+    Abre a cobrança de uma carga que não veio de venda.
+
+    QUEM TEM VENDA NÃO COBRA AQUI: um segundo título sobre a mesma
+    mercadoria é o cliente pagando duas vezes, e o erro só aparece na
+    conciliação bancária, semanas depois.
+    """
+
+    permissao_modulo = "logistica"
+    permissao_acao = "editar"
+
+    def post(self, request, pk):
+        pedido = get_object_or_404(
+            PedidoExpedicao.objects.for_filial(_filial(request)), pk=pk,
+        )
+        try:
+            titulos = FinanceiroExpedicaoService.gerar_titulos(
+                pedido, usuario=request.user,
+            )
+        except DadosInvalidosError as erro:
+            messages.error(request, str(erro))
+            return redirect("logistica:pedido-expedicao-detail", pk=pedido.pk)
+
+        total = sum((t.valor_final for t in titulos), Decimal("0"))
+        messages.success(
+            request,
+            f'{len(titulos)} parcela(s) no contas a receber, R$ {total:.2f} '
+            f'para {pedido.cliente}.',
+        )
+        return redirect("logistica:pedido-expedicao-detail", pk=pedido.pk)

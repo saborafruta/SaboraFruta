@@ -73,6 +73,7 @@ urlpatterns = [
     path("pedidos/<int:pk>/excluir/", views.PedidoExpedicaoDeleteView.as_view(), name="pedido-expedicao-delete"),
     path("pedidos/<int:pk>/cancelar/", views.PedidoExpedicaoCancelarView.as_view(), name="pedido-expedicao-cancelar"),
     path("pedidos/<int:pk>/itens/da-venda/", views.PedidoExpedicaoTrazerItensView.as_view(), name="pedido-expedicao-itens-da-venda"),
+    path("pedidos/<int:pk>/cobrar/", views.PedidoExpedicaoCobrarView.as_view(), name="pedido-expedicao-cobrar"),
     path("pedidos/<int:pk>/itens/novo/", views.ItemPedidoExpedicaoCreateView.as_view(), name="pedido-expedicao-item-create"),
     path("pedidos/<int:pk>/itens/<int:item_pk>/remover/", views.ItemPedidoExpedicaoDeleteView.as_view(), name="pedido-expedicao-item-delete"),
     path("pedidos/<int:pk>/itens/<int:item_pk>/toggle-status/", views.ItemPedidoExpedicaoToggleStatusView.as_view(), name="pedido-expedicao-item-toggle"),

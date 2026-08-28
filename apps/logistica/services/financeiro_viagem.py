@@ -235,33 +235,24 @@ class FinanceiroViagemService:
 
     @staticmethod
     def _numero_de_parcelas(venda) -> int:
-        condicao = venda.condicao_pagamento
-        return max(1, int(getattr(condicao, 'numero_parcelas', 1) or 1))
+        from apps.financeiro.services.parcelamento import ParcelamentoService
 
-    @classmethod
-    def _parcelas(cls, venda, emissao, valor) -> list[tuple]:
+        return ParcelamentoService.numero_de_parcelas(venda.condicao_pagamento)
+
+    @staticmethod
+    def _parcelas(venda, emissao, valor) -> list[tuple]:
         """
-        As parcelas, com o resto de centavos na primeira.
+        As parcelas, pela conta que o resto do sistema usa.
 
-        A SOBRA VAI PARA A PRIMEIRA, e não some: três parcelas de R$ 33,33
-        somam R$ 99,99, e o centavo que falta é o que faz o cliente ficar
-        devendo um centavo para sempre.
+        A ARITMÉTICA VIVE NO FINANCEIRO, e não aqui: venda na rua, expedição
+        avulsa e PDV a prazo quebram valor do mesmo jeito, e cada módulo com
+        a sua cópia é garantir que um arredonde diferente do outro no dia em
+        que alguém corrigir só um.
         """
-        condicao = venda.condicao_pagamento
-        quantidade = cls._numero_de_parcelas(venda)
-        intervalo = int(getattr(condicao, 'intervalo_dias', 30) or 0)
-        primeira = int(getattr(condicao, 'dias_primeira_parcela', 0) or 0)
-        if condicao is None:
-            primeira = int(
-                getattr(venda.forma_pagamento, 'prazo_liquidacao_dias', 0) or 0
-            )
+        from apps.financeiro.services.parcelamento import ParcelamentoService
 
-        base = (valor / quantidade).quantize(CENTAVOS, rounding=ROUND_HALF_UP)
-        parcelas = []
-        for indice in range(quantidade):
-            parcela = base if indice else valor - base * (quantidade - 1)
-            parcelas.append((
-                emissao + timedelta(days=primeira + intervalo * indice),
-                parcela.quantize(CENTAVOS),
-            ))
-        return parcelas
+        return ParcelamentoService.parcelas(
+            valor, emissao,
+            condicao=venda.condicao_pagamento,
+            forma=venda.forma_pagamento,
+        )

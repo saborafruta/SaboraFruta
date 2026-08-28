@@ -101,6 +101,20 @@ class ItemRomaneioCarga(TimestampedModel):
         blank=True,
         related_name="itens_romaneio",
     )
+    # O PEDIDO DE EXPEDIÇÃO QUE GEROU ESTA ENTREGA, quando ela não foi
+    # digitada à mão.
+    #
+    # Sem o vínculo, vincular o mesmo pedido de novo criaria uma segunda
+    # entrega para o mesmo cliente — e o motorista sairia com a carga
+    # dobrada no papel. É ele também que permite tirar a entrega do romaneio
+    # quando o pedido sai.
+    pedido_expedicao = models.ForeignKey(
+        "logistica.PedidoExpedicao",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="entregas_romaneio",
+    )
     ordem = models.PositiveIntegerField(default=0)
     cliente_nome = models.CharField(max_length=180)
     documento = models.CharField(max_length=60, blank=True)
@@ -538,6 +552,24 @@ class PedidoExpedicao(FilialScopedModel):
     )
     romaneio = models.ForeignKey(
         RomaneioCarga,
+        on_delete=models.SET_NULL,
+        null=True, blank=True,
+        related_name="pedidos_expedicao",
+    )
+    # COMO ESTA CARGA SERÁ COBRADA, quando ela não nasce de uma venda.
+    #
+    # Expedição de venda já vendida não se cobra aqui: quem cobra é a venda,
+    # e um segundo título seria o cliente pagando duas vezes. Estes campos
+    # existem para a carga avulsa — a que sai sem pedido de venda e mesmo
+    # assim é faturada.
+    forma_pagamento = models.ForeignKey(
+        "financeiro.FormaPagamento",
+        on_delete=models.SET_NULL,
+        null=True, blank=True,
+        related_name="pedidos_expedicao",
+    )
+    condicao_pagamento = models.ForeignKey(
+        "financeiro.CondicaoPagamento",
         on_delete=models.SET_NULL,
         null=True, blank=True,
         related_name="pedidos_expedicao",

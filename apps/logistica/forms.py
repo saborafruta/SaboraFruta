@@ -3,9 +3,13 @@ from datetime import timedelta
 from decimal import Decimal
 
 from django import forms
+from django.db.models import Q
 from django.utils import timezone
 
 from apps.cadastros.models import Cliente, Fornecedor, Motorista, Transportadora, Veiculo
+from apps.financeiro.models.formas_pagamento import (
+    CondicaoPagamento, FormaPagamento,
+)
 from apps.vendas.models import PedidoVenda
 from apps.logistica.models import (
     CTe,
@@ -449,6 +453,8 @@ class PedidoExpedicaoForm(forms.ModelForm):
             "prioridade",
             "pedido_venda",
             "cliente",
+            "forma_pagamento",
+            "condicao_pagamento",
             "transportadora",
             "romaneio",
             "contato_nome",
@@ -492,8 +498,18 @@ class PedidoExpedicaoForm(forms.ModelForm):
             .select_related("cliente")
             .order_by("-data_emissao")
         )
+        # A COBRANÇA SÓ EXISTE PARA CARGA AVULSA: expedição de venda já
+        # vendida é cobrada pela venda, e pedir forma de pagamento nela
+        # sugeriria um segundo título que não deve existir.
+        self.fields["forma_pagamento"].queryset = FormaPagamento.objects.filter(
+            empresa=filial.empresa, ativo=True,
+        ).filter(Q(filial=filial) | Q(filial__isnull=True))
+        self.fields["condicao_pagamento"].queryset = CondicaoPagamento.objects.filter(
+            empresa=filial.empresa, ativo=True,
+        )
         for nome in ("transportadora", "romaneio", "data_expedicao",
-                     "data_previsao_entrega", "pedido_venda"):
+                     "data_previsao_entrega", "pedido_venda",
+                     "forma_pagamento", "condicao_pagamento"):
             self.fields[nome].required = False
         # O CLIENTE PODE VIR DA VENDA. Exigir os dois faria a pessoa digitar
         # de novo o que a venda já sabe -- e digitar de novo é onde nasce o

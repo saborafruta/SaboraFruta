@@ -139,8 +139,58 @@
            class="text-sm font-semibold" :style="temaClaro ? 'color:#2563eb;' : 'color:#60a5fa;'">
           #{{ pedido.romaneio.numero|stringformat:"06d" }}
         </a>
+        {% comment %}
+          A ENTREGA É O QUE O MOTORISTA LEVA. Dizer que o pedido está num
+          romaneio sem dizer se a parada existe lá deixaria a carga sair sem
+          endereço — que é o que acontecia quando o vínculo era só um
+          ponteiro.
+        {% endcomment %}
+        {% if entrega %}
+          <p class="text-xs mt-1" style="color:#059669;">
+            Entrega #{{ entrega.ordem }} criada · {{ entrega.get_status_entrega_display }}
+          </p>
+        {% else %}
+          <p class="text-xs mt-1" style="color:#d97706;">
+            Sem entrega no romaneio — salve o pedido para criá-la.
+          </p>
+        {% endif %}
       </div>
       {% endif %}
+
+      {# ── A cobrança desta carga ─────────────────────────────────── #}
+      <div class="pt-2 border-t" :style="temaClaro ? 'border-color:#e2e8f0;' : 'border-color:#2a2a2e;'">
+        <p class="text-xs font-semibold uppercase tracking-wide mb-1" :style="temaClaro ? 'color:#94a3b8;' : 'color:#64748b;'">Cobrança</p>
+        {% comment %}
+          AS TRÊS SITUAÇÕES SÃO DIFERENTES e parecem iguais numa tela
+          silenciosa: cobrada pela venda, cobrada aqui, ou não cobrada por
+          ninguém. A terceira é a que faz mercadoria sair sem nunca virar
+          dinheiro.
+        {% endcomment %}
+        {% if cobranca.quantidade %}
+          <p class="text-sm font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
+            {{ cobranca.quantidade }} parcela(s) · R$ {{ cobranca.valor|floatformat:2 }}
+          </p>
+          <p class="text-xs mt-0.5"
+             style="color:{% if cobranca.aberto %}#d97706{% else %}#059669{% endif %};">
+            R$ {{ cobranca.aberto|floatformat:2 }} em aberto
+          </p>
+        {% elif cobranca.cobrada_pela_venda %}
+          <p class="text-xs" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+            Cobrada pelo pedido de venda
+            <a href="{% url 'vendas:pedido-detail' pedido.pedido_venda.pk %}"
+               :style="temaClaro ? 'color:#2563eb;' : 'color:#60a5fa;'">{{ pedido.pedido_venda.numero_pedido }}</a>.
+          </p>
+        {% elif cobranca.pode_cobrar %}
+          <form method="post" action="{% url 'logistica:pedido-expedicao-cobrar' pedido.pk %}">
+            {% csrf_token %}
+            <button type="submit" class="btn-primary text-xs w-full justify-center">
+              Gerar cobrança de R$ {{ pedido.valor_total|floatformat:2 }}
+            </button>
+          </form>
+        {% else %}
+          <p class="text-xs" style="color:#d97706;">{{ cobranca.impedimento }}</p>
+        {% endif %}
+      </div>
     </div>
   </div>
 

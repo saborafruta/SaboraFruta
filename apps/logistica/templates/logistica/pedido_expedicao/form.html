@@ -188,6 +188,34 @@
         </p>
       </div>
       </div>
+
+      {% comment %}
+        A COBRANÇA SÓ EXISTE PARA CARGA AVULSA. Expedição de venda já vendida
+        é cobrada pela venda; um segundo título seria o cliente pagando duas
+        vezes. Por isso estes campos somem quando há venda escolhida — e não
+        ficam desabilitados pedindo para serem entendidos.
+      {% endcomment %}
+      <div class="grid gap-4 md:grid-cols-2" x-show="!clienteDaVenda" x-cloak>
+        <label class="space-y-1.5">
+          <span class="text-xs font-semibold uppercase tracking-wide" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+            Forma de pagamento
+          </span>
+          {{ form.forma_pagamento }}
+          <span class="block text-[11px]" :style="temaClaro ? 'color:#94a3b8;' : 'color:#71717a;'">
+            Só para carga sem venda. Forma a prazo abre contas a receber; à
+            vista é recebimento na entrega.
+          </span>
+        </label>
+        <label class="space-y-1.5">
+          <span class="text-xs font-semibold uppercase tracking-wide" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+            Condição de pagamento
+          </span>
+          {{ form.condicao_pagamento }}
+          <span class="block text-[11px]" :style="temaClaro ? 'color:#94a3b8;' : 'color:#71717a;'">
+            Em quantas parcelas e em que prazo.
+          </span>
+        </label>
+      </div>
     </section>
 
     <!-- ── Contato e transporte ──────────────────────────────────── -->

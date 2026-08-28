@@ -29,13 +29,24 @@ from django.utils import timezone
 
 from apps.cadastros.models import Cliente, ClienteFilial
 from apps.core.models import Empresa, Filial, PerfilAcesso, Usuario
+from apps.financeiro.models.formas_pagamento import (
+    CondicaoPagamento, FormaPagamento,
+)
 from apps.logistica.forms import (
     ItemPedidoExpedicaoForm, PedidoExpedicaoForm,
 )
-from apps.logistica.models import PedidoExpedicao
+from apps.logistica.models import (
+    ItemRomaneioCarga, PedidoExpedicao, RomaneioCarga,
+)
 from apps.core.services.exceptions import DadosInvalidosError
 from apps.estoque.models import MovimentacaoEstoque
+from apps.logistica.services.financeiro_expedicao import (
+    FinanceiroExpedicaoService,
+)
 from apps.logistica.services.itens_da_venda import ItensDaVendaService
+from apps.logistica.services.romaneio_do_pedido import (
+    RomaneioDoPedidoService,
+)
 from apps.produtos.models import Produto, ProdutoFilial
 from apps.produtos.models.unidade import UnidadeMedida, UnidadeMedidaFilial
 from apps.vendas.models import ItemPedidoVenda, PedidoVenda
@@ -566,3 +577,268 @@ class PesoEmGramasTests(ItensDaVendaBase):
         ).content.decode()
 
         self.assertIn('0,400', html)
+
+
+class EntregaNoRomaneioTests(ItensDaVendaBase):
+    """
+    O pedido vinculado ao romaneio vira entrega.
+
+    VINCULAR SEM CRIAR A ENTREGA deixava o motorista sair sem endereço — o
+    ponteiro dizia "esta carga vai nesse romaneio" e a parada não existia lá.
+    """
+
+    def _romaneio(self, numero=1):
+        return RomaneioCarga.objects.create(
+            filial=self.filial, numero=numero, responsavel=self.usuario,
+        )
+
+    def _pedido_com_carga(self, romaneio=None):
+        pedido = self._expedicao()
+        pedido.romaneio = romaneio
+        pedido.endereco_entrega = {
+            'endereco': 'Rua Áustria', 'numero': '115',
+            'bairro': 'Passagem de Areia', 'cidade': 'Parnamirim', 'uf': 'RN',
+        }
+        pedido.save()
+        pedido.itens.create(
+            ordem=1, produto_nome='Tangerina 400 g', quantidade=Decimal('1'),
+            volumes=Decimal('5'), peso_kg=Decimal('2.000'),
+            valor_unitario=Decimal('6.80'),
+        )
+        pedido.recalcular_totais()
+        pedido.refresh_from_db()
+        return pedido
+
+    def test_vincular_cria_a_entrega_com_cliente_endereco_e_totais(self):
+        romaneio = self._romaneio()
+        pedido = self._pedido_com_carga(romaneio)
+
+        RomaneioDoPedidoService.sincronizar(pedido)
+
+        entrega = romaneio.itens.get()
+        self.assertEqual(entrega.pedido_expedicao, pedido)
+        self.assertEqual(entrega.cliente_nome, str(self.cliente))
+        self.assertEqual(entrega.endereco_entrega['endereco'], 'Rua Áustria')
+        self.assertEqual(entrega.volumes, Decimal('5'))
+        self.assertEqual(entrega.peso_kg, Decimal('2.000'))
+        self.assertEqual(entrega.valor, Decimal('34.00'))
+
+    def test_sincronizar_duas_vezes_nao_duplica_a_parada(self):
+        """O motorista sairia com a carga dobrada no papel."""
+        romaneio = self._romaneio()
+        pedido = self._pedido_com_carga(romaneio)
+
+        RomaneioDoPedidoService.sincronizar(pedido)
+        RomaneioDoPedidoService.sincronizar(pedido)
+
+        self.assertEqual(romaneio.itens.count(), 1)
+
+    def test_o_romaneio_soma_a_carga_do_pedido(self):
+        romaneio = self._romaneio()
+        pedido = self._pedido_com_carga(romaneio)
+
+        RomaneioDoPedidoService.sincronizar(pedido)
+
+        romaneio.refresh_from_db()
+        self.assertEqual(romaneio.valor_total, Decimal('34.00'))
+        self.assertEqual(romaneio.peso_total_kg, Decimal('2.000'))
+
+    def test_tirar_do_romaneio_tira_a_entrega(self):
+        """
+        Entrega órfã é carga que o motorista leva sem ter o que entregar — e
+        o romaneio somando peso que não está no caminhão.
+        """
+        romaneio = self._romaneio()
+        pedido = self._pedido_com_carga(romaneio)
+        RomaneioDoPedidoService.sincronizar(pedido)
+
+        pedido.romaneio = None
+        pedido.save(update_fields=['romaneio'])
+        RomaneioDoPedidoService.sincronizar(pedido)
+
+        self.assertEqual(romaneio.itens.count(), 0)
+        romaneio.refresh_from_db()
+        self.assertEqual(romaneio.valor_total, Decimal('0'))
+
+    def test_trocar_de_romaneio_move_a_entrega(self):
+        primeiro = self._romaneio(numero=1)
+        segundo = self._romaneio(numero=2)
+        pedido = self._pedido_com_carga(primeiro)
+        RomaneioDoPedidoService.sincronizar(pedido)
+
+        pedido.romaneio = segundo
+        pedido.save(update_fields=['romaneio'])
+        RomaneioDoPedidoService.sincronizar(pedido)
+
+        self.assertEqual(primeiro.itens.count(), 0)
+        self.assertEqual(segundo.itens.count(), 1)
+
+    def test_entrega_ja_feita_nao_e_apagada(self):
+        """
+        Apagar o registro de uma entrega feita é apagar a prova de que ela
+        aconteceu. O vínculo se desfaz; a linha fica.
+        """
+        romaneio = self._romaneio()
+        pedido = self._pedido_com_carga(romaneio)
+        RomaneioDoPedidoService.sincronizar(pedido)
+        entrega = romaneio.itens.get()
+        entrega.status_entrega = ItemRomaneioCarga.StatusEntrega.ENTREGUE
+        entrega.save(update_fields=['status_entrega'])
+
+        pedido.romaneio = None
+        pedido.save(update_fields=['romaneio'])
+        RomaneioDoPedidoService.sincronizar(pedido)
+
+        entrega.refresh_from_db()
+        self.assertEqual(romaneio.itens.count(), 1)
+        self.assertIsNone(entrega.pedido_expedicao)
+
+    def test_salvar_o_pedido_pela_tela_cria_a_entrega(self):
+        romaneio = self._romaneio()
+        pedido = self._pedido_com_carga()
+
+        self.client.post(
+            reverse('logistica:pedido-expedicao-update', args=[pedido.pk]),
+            {
+                'numero': pedido.numero,
+                'data_pedido': pedido.data_pedido.isoformat(),
+                'status': pedido.status,
+                'prioridade': pedido.prioridade,
+                'cliente': self.cliente.pk,
+                'romaneio': romaneio.pk,
+            },
+            follow=True,
+        )
+
+        self.assertEqual(romaneio.itens.count(), 1)
+
+
+class CobrancaDaExpedicaoTests(ItensDaVendaBase):
+    """A carga que não nasce de venda também precisa virar dinheiro."""
+
+    @classmethod
+    def setUpTestData(cls):
+        super().setUpTestData()
+        # A prazo abre titulo; dinheiro na entrega, nao.
+        cls.a_prazo = FormaPagamento.objects.create(
+            empresa=cls.empresa, descricao='Boleto 30 dias', tipo='boleto',
+            gera_parcelas=True, prazo_liquidacao_dias=30,
+        )
+        cls.a_vista = FormaPagamento.objects.create(
+            empresa=cls.empresa, descricao='Dinheiro na entrega',
+            tipo='dinheiro', gera_parcelas=False,
+        )
+        cls.condicao = CondicaoPagamento.objects.create(
+            empresa=cls.empresa, descricao='3x 30/60/90',
+            numero_parcelas=3, intervalo_dias=30, dias_primeira_parcela=30,
+        )
+
+    def _carga_avulsa(self, forma=None, condicao=None):
+        pedido = self._expedicao()
+        pedido.forma_pagamento = forma if forma is not None else self.a_prazo
+        pedido.condicao_pagamento = condicao if condicao is not None else self.condicao
+        pedido.save()
+        pedido.itens.create(
+            ordem=1, produto_nome='Tangerina 400 g', quantidade=Decimal('1'),
+            volumes=Decimal('5'), valor_unitario=Decimal('6.80'),
+        )
+        pedido.recalcular_totais()
+        pedido.refresh_from_db()
+        return pedido
+
+    def test_carga_avulsa_a_prazo_abre_contas_a_receber(self):
+        pedido = self._carga_avulsa()
+
+        titulos = FinanceiroExpedicaoService.gerar_titulos(pedido, self.usuario)
+
+        self.assertEqual(len(titulos), 3)
+        self.assertEqual(
+            sum(t.valor_final for t in titulos), Decimal('34.00'),
+        )
+        self.assertEqual(titulos[0].cliente, self.cliente)
+        self.assertEqual(titulos[0].documento_tipo, 'pedido_expedicao')
+        self.assertEqual(titulos[0].filial, self.filial)
+
+    def test_expedicao_de_venda_nao_cobra_de_novo(self):
+        """
+        Um segundo título sobre a mesma mercadoria é o cliente pagando duas
+        vezes — e o erro aparece na conciliação, semanas depois.
+        """
+        venda = self._venda_com_itens('10')
+        pedido = self._carga_avulsa()
+        pedido.pedido_venda = venda
+        pedido.save(update_fields=['pedido_venda'])
+
+        with self.assertRaises(DadosInvalidosError) as erro:
+            FinanceiroExpedicaoService.gerar_titulos(pedido, self.usuario)
+
+        self.assertIn('quem cobra é a venda', str(erro.exception))
+
+    def test_cobrar_duas_vezes_nao_duplica(self):
+        pedido = self._carga_avulsa()
+        FinanceiroExpedicaoService.gerar_titulos(pedido, self.usuario)
+
+        with self.assertRaises(DadosInvalidosError):
+            FinanceiroExpedicaoService.gerar_titulos(pedido, self.usuario)
+
+        self.assertEqual(FinanceiroExpedicaoService.titulos(pedido).count(), 3)
+
+    def test_dinheiro_na_entrega_nao_abre_titulo(self):
+        pedido = self._carga_avulsa(forma=self.a_vista, condicao=None)
+
+        with self.assertRaises(DadosInvalidosError) as erro:
+            FinanceiroExpedicaoService.gerar_titulos(pedido, self.usuario)
+
+        self.assertIn('recebimento na entrega', str(erro.exception))
+
+    def test_carga_sem_valor_nao_cobra(self):
+        pedido = self._expedicao()
+        pedido.forma_pagamento = self.a_prazo
+        pedido.save(update_fields=['forma_pagamento'])
+
+        with self.assertRaises(DadosInvalidosError) as erro:
+            FinanceiroExpedicaoService.gerar_titulos(pedido, self.usuario)
+
+        self.assertIn('sem valor', str(erro.exception))
+
+    def test_sem_forma_escolhida_a_tela_diz_o_que_falta(self):
+        pedido = self._carga_avulsa(forma=None, condicao=None)
+        pedido.forma_pagamento = None
+        pedido.save(update_fields=['forma_pagamento'])
+
+        resumo = FinanceiroExpedicaoService.resumo(pedido)
+
+        self.assertFalse(resumo['pode_cobrar'])
+        self.assertIn('forma de pagamento', resumo['impedimento'])
+
+    def test_cobrar_pela_tela(self):
+        pedido = self._carga_avulsa()
+
+        self.client.post(
+            reverse('logistica:pedido-expedicao-cobrar', args=[pedido.pk]),
+            follow=True,
+        )
+
+        self.assertEqual(FinanceiroExpedicaoService.titulos(pedido).count(), 3)
+
+    def test_a_tela_diz_quando_quem_cobra_e_a_venda(self):
+        venda = self._venda_com_itens('10')
+        pedido = self._carga_avulsa()
+        pedido.pedido_venda = venda
+        pedido.save(update_fields=['pedido_venda'])
+
+        html = self.client.get(
+            reverse('logistica:pedido-expedicao-detail', args=[pedido.pk]),
+        ).content.decode()
+
+        self.assertIn('Cobrada pelo pedido de venda', html)
+        self.assertNotIn('Gerar cobrança', html)
+
+    def test_a_tela_oferece_a_cobranca_da_carga_avulsa(self):
+        pedido = self._carga_avulsa()
+
+        html = self.client.get(
+            reverse('logistica:pedido-expedicao-detail', args=[pedido.pk]),
+        ).content.decode()
+
+        self.assertIn('Gerar cobrança', html)
