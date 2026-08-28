@@ -31,6 +31,7 @@ from apps.logistica.services.vendas_para_carga import (
     CARREGAVEIS, VendasParaCargaService,
 )
 from apps.logistica.services.bonificacao_nfe import BonificacaoNFeService
+from apps.logistica.services.estoque_viagem import EstoqueViagemService
 from apps.logistica.services.entrega_bonificacao import (
     EntregaBonificacaoService,
 )
@@ -196,6 +197,7 @@ class ViagemDetailView(PermissaoRequiredMixin, View):
             pk=pk,
         )
         vinculos = VinculoRemessaService.linhas(viagem)
+        quadro = EstoqueViagemService.quadro(viagem)
         bonificacoes = HistoricoBonificacaoService.linhas(viagem)
         return render(request, self.template_name, {
             'title': f'Viagem #{viagem.numero:06d}',
@@ -214,6 +216,10 @@ class ViagemDetailView(PermissaoRequiredMixin, View):
             # A CADEIA INTEIRA NUMA TABELA: remessa -> viagem -> produto ->
             # venda -> nota da venda. Cada elo ja' existia guardado em
             # algum lugar; o que faltava era le-los juntos.
+            # ONDE FOI PARAR CADA UNIDADE que subiu no caminhao -- a
+            # pergunta que so' existe depois que a viagem anda.
+            'quadro': quadro,
+            'pendencias_quadro': EstoqueViagemService.pendencias(quadro),
             'vinculos': vinculos,
             # O HISTORICO DA CORTESIA: o que saiu de graca, para quem, sob
             # que nota -- e ONDE a baixa de estoque aconteceu, que e'

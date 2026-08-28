@@ -491,6 +491,107 @@
     </div>
   {% endif %}
 
+  {% if quadro.carga_inicial %}
+    {% comment %}
+      AS QUATRO COLUNAS SAO DE NATUREZAS DIFERENTES, e por isso ficam
+      separadas: venda ja' realizada saiu endereçada; venda fora saiu sem
+      comprador e o que importa e' quanto ainda da' para vender; bonificacao
+      saiu de graca; retorno e' o que voltou. Somar tudo num total so'
+      esconderia exatamente o que a operacao precisa ver.
+
+      E A CONTA PRECISA FECHAR: enquanto ela nao fecha, ha' mercadoria da
+      empresa sem destino registrado -- e o buraco nao e' de relatorio, e' de
+      mercadoria.
+    {% endcomment %}
+    <div class="card p-4 space-y-4">
+      <div class="flex flex-wrap items-baseline justify-between gap-2">
+        <div>
+          <h3 class="text-sm font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
+            Estoque durante a viagem
+          </h3>
+          <p class="text-xs mt-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+            Onde foi parar cada unidade que subiu no caminhão.
+          </p>
+        </div>
+        <span class="soft-pill text-xs {% if quadro.fecha %}is-green{% else %}is-amber{% endif %}">
+          {% if quadro.fecha %}a carga fecha{% else %}faltam {{ quadro.diferenca|floatformat:"-3" }}{% endif %}
+        </span>
+      </div>
+
+      <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-5 text-sm">
+        <div class="rounded-lg p-3" :style="temaClaro ? 'background:#f8fafc;' : 'background:#18181b;'">
+          <p class="text-[11px] uppercase tracking-wide" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Carga inicial</p>
+          <p class="text-2xl font-bold mt-1" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
+            {{ quadro.carga_inicial|floatformat:"-3" }}
+          </p>
+        </div>
+        <div class="rounded-lg p-3" :style="temaClaro ? 'background:#f8fafc;' : 'background:#18181b;'">
+          <p class="text-[11px] uppercase tracking-wide" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Vendas já realizadas</p>
+          <p class="text-2xl font-bold mt-1" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
+            {{ quadro.vendas_realizadas|floatformat:"-3" }}
+          </p>
+          <p class="text-[11px]" :style="temaClaro ? 'color:#94a3b8;' : 'color:#71717a;'">
+            saíram endereçadas
+          </p>
+        </div>
+        <div class="rounded-lg p-3" :style="temaClaro ? 'background:#f8fafc;' : 'background:#18181b;'">
+          <p class="text-[11px] uppercase tracking-wide" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Venda na rua</p>
+          <p class="text-2xl font-bold mt-1" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
+            {{ quadro.venda_na_rua|floatformat:"-3" }}
+          </p>
+          <p class="text-[11px]" :style="temaClaro ? 'color:#94a3b8;' : 'color:#71717a;'">
+            de {{ quadro.remetido|floatformat:"-3" }} remetidos
+          </p>
+        </div>
+        <div class="rounded-lg p-3" :style="temaClaro ? 'background:#f8fafc;' : 'background:#18181b;'">
+          <p class="text-[11px] uppercase tracking-wide" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Bonificação</p>
+          <p class="text-2xl font-bold mt-1" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
+            {{ quadro.bonificacao|floatformat:"-3" }}
+          </p>
+          {% if quadro.bonificacao_voltou %}
+            <p class="text-[11px]" style="color:#d97706;">
+              {{ quadro.bonificacao_voltou|floatformat:"-3" }} voltaram
+            </p>
+          {% endif %}
+        </div>
+        <div class="rounded-lg p-3" :style="temaClaro ? 'background:#f8fafc;' : 'background:#18181b;'">
+          <p class="text-[11px] uppercase tracking-wide" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Retorno</p>
+          <p class="text-2xl font-bold mt-1" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
+            {{ quadro.retorno|floatformat:"-3" }}
+          </p>
+          <p class="text-[11px]" :style="temaClaro ? 'color:#94a3b8;' : 'color:#71717a;'">
+            não vendido / não entregue
+          </p>
+        </div>
+      </div>
+
+      {% if quadro.em_poder or quadro.baixado or quadro.outras_remessas %}
+        <div class="flex flex-wrap gap-6 text-xs" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+          {% if quadro.em_poder %}
+            <span>Ainda no caminhão: <strong>{{ quadro.em_poder|floatformat:"-3" }}</strong>
+              — disponível para novas vendas</span>
+          {% endif %}
+          {% if quadro.baixado %}
+            <span>Baixado: <strong>{{ quadro.baixado|floatformat:"-3" }}</strong></span>
+          {% endif %}
+          {% if quadro.outras_remessas %}
+            <span>Outras remessas: <strong>{{ quadro.outras_remessas|floatformat:"-3" }}</strong></span>
+          {% endif %}
+        </div>
+      {% endif %}
+
+      {% if pendencias_quadro %}
+        {% comment %}
+          O NUMERO SOZINHO NAO DIZ O QUE FAZER: "faltam 30" e' o comeco da
+          pergunta; a frase abaixo e' a resposta.
+        {% endcomment %}
+        <div class="rounded-lg p-3 text-xs" style="background:rgba(217,119,6,0.12);color:#d97706;">
+          {% for pendencia in pendencias_quadro %}<p>· {{ pendencia }}</p>{% endfor %}
+        </div>
+      {% endif %}
+    </div>
+  {% endif %}
+
   {% if conciliacao %}
     <div class="card overflow-hidden">
       <div class="p-4 pb-3">
