@@ -16,10 +16,13 @@ from django.views import View
 
 from apps.cadastros.models import Cliente, Fornecedor, Motorista, Veiculo
 from apps.core.models.empresa import Filial
-from apps.core.services.exceptions import DomainError
+from apps.core.services.exceptions import DadosInvalidosError, DomainError
 from apps.core.services.permissions import PermissaoRequiredMixin
 from apps.fiscal.integrations.focusnfe.exceptions import FocusNFeError
 from apps.financeiro.models.fiscal import DocumentoFiscal
+from apps.logistica.models_viagem import Viagem
+from apps.logistica.services.log_viagem import LogViagemService
+from apps.logistica.services.mdfe_viagem import MDFeViagemService
 from apps.estoque.models import MovimentacaoEstoque
 from apps.logistica.forms import (
     CTeForm,
@@ -1853,8 +1856,24 @@ class MDFeCreateView(PermissaoRequiredMixin, View):
     permissao_acao = "criar"
     template_name = "logistica/mdfe/form.html"
 
+    @staticmethod
+    def _viagem(request, filial):
+        """
+        A viagem que este manifesto vai amparar, quando veio de uma.
+
+        SEM ISSO O BOTAO DA VIAGEM MENTE: ele cria um MDF-e solto, a viagem
+        continua "sem manifesto" na tela, e o proximo clique cria mais um.
+        """
+        viagem_id = (
+            request.POST.get("viagem") or request.GET.get("viagem") or ""
+        ).strip()
+        if not viagem_id:
+            return None
+        return Viagem.objects.for_filial(filial).filter(pk=viagem_id).first()
+
     def get(self, request):
         filial = _filial(request)
+        viagem = self._viagem(request, filial)
         nfe_documento_id = request.GET.get("nfe_documento_id", "").strip()
         nfe_documento = None
         if nfe_documento_id:
@@ -1913,6 +1932,7 @@ class MDFeCreateView(PermissaoRequiredMixin, View):
             "veiculos_json": veiculos_json,
             "nfe_documento_inicial_json": nfe_documento_inicial_json,
             "nfe_documento_id": nfe_documento.pk if nfe_documento else "",
+            "viagem": viagem,
             "rota_automatica": rota_automatica,
             "produtos_sem_peso": produtos_sem_peso,
             "endereco_origem": _endereco_filial(nfe_documento.filial)
@@ -1924,6 +1944,13 @@ class MDFeCreateView(PermissaoRequiredMixin, View):
 
     def post(self, request):
         filial = _filial(request)
+        viagem = self._viagem(request, filial)
+        if viagem is not None:
+            try:
+                MDFeViagemService.exigir_sem_mdfe(viagem)
+            except DadosInvalidosError as erro:
+                messages.error(request, str(erro))
+                return redirect("logistica:viagem-mdfe", pk=viagem.pk)
         nfe_documento_id = (
             request.POST.get("nfe_documento_id")
             or request.GET.get("nfe_documento_id")
@@ -1986,6 +2013,7 @@ class MDFeCreateView(PermissaoRequiredMixin, View):
                 )
                 mdfe = form.save(commit=False)
                 mdfe.filial = filial
+                mdfe.viagem = viagem
                 mdfe.responsavel = request.user
                 mdfe.numero = max(configuracao.proximo_numero, ultimo_numero + 1)
                 mdfe.serie = str(configuracao.serie or 1)
@@ -1997,6 +2025,12 @@ class MDFeCreateView(PermissaoRequiredMixin, View):
                 if nfe_documento:
                     _vincular_nfe_ao_mdfe(mdfe, nfe_documento)
 
+            if viagem is not None:
+                LogViagemService.registrar(
+                    viagem, LogViagemService.DOCUMENTO_EMITIDO,
+                    usuario=request.user, documento=mdfe,
+                    motivo=f"MDF-e {mdfe.numero}/{mdfe.serie}",
+                )
             messages.success(request, f"MDF-e #{mdfe.numero:06d} criado.")
             return redirect("logistica:mdfe-detail", pk=mdfe.pk)
         motoristas_json, veiculos_json = _motoristas_veiculos_json(filial)

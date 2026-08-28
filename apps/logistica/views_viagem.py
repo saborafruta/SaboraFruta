@@ -36,6 +36,7 @@ from apps.logistica.services.estoque_viagem import EstoqueViagemService
 from apps.logistica.services.entrega_bonificacao import (
     EntregaBonificacaoService,
 )
+from apps.logistica.services.log_viagem import LogViagemService
 from apps.logistica.services.mdfe_viagem import MDFeViagemService
 from apps.logistica.services.historico_bonificacao import (
     HistoricoBonificacaoService,
@@ -1161,4 +1162,25 @@ class RelatorioAcertoView(PermissaoRequiredMixin, View):
         return render(request, self.template_name, {
             'title': f'Acerto da viagem #{viagem.numero:06d}',
             **relatorio,
+        })
+
+
+class HistoricoViagemView(PermissaoRequiredMixin, View):
+    """
+    O que aconteceu nesta viagem, na ordem.
+
+    As travas impedem o impossível; este histórico explica o possível. É o que
+    responde "quem baixou essas 30 caixas, e quando?" -- pergunta que, sem
+    registro, só a memória de quem estava lá responde.
+    """
+
+    permissao_modulo = 'logistica'
+    template_name = 'logistica/viagem/historico.html'
+
+    def get(self, request, pk):
+        viagem = get_object_or_404(Viagem.objects.for_filial(_filial(request)), pk=pk)
+        return render(request, self.template_name, {
+            'title': f'Histórico da viagem #{viagem.numero:06d}',
+            'viagem': viagem,
+            'linhas': LogViagemService.linhas(viagem),
         })

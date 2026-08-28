@@ -79,6 +79,26 @@ class MDFeViagemService:
             .first()
         )
 
+
+    @classmethod
+    def exigir_sem_mdfe(cls, viagem) -> None:
+        """
+        Recusa um segundo MDF-e para a mesma viagem.
+
+        UM MANIFESTO POR VIAGEM. Dois manifestos vivos para a mesma carga
+        declaram a mesma mercadoria duas vezes à SEFAZ, e desfazer isso é
+        encerramento e cancelamento -- muito mais trabalho do que recusar aqui.
+        """
+        from apps.core.services.exceptions import DadosInvalidosError
+
+        existente = cls.mdfe_da_viagem(viagem)
+        if existente is not None:
+            raise DadosInvalidosError(
+                f'A viagem #{viagem.numero:06d} já tem o MDF-e '
+                f'{existente.numero}/{existente.serie}. Cancele-o antes de '
+                'emitir outro.'
+            )
+
     @classmethod
     def painel(cls, viagem, mdfe=None) -> dict:
         """

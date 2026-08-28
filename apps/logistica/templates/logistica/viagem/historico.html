@@ -1,0 +1,67 @@
+{% extends "_base.html" %}
+{% block title %}{{ title }}{% endblock %}
+{% block page_title %}{{ title }}{% endblock %}
+{% block content %}
+<div class="max-w-6xl mx-auto space-y-5">
+
+  <div>
+    <p class="text-sm mb-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+      <a href="{% url 'logistica:viagem-list' %}" :style="temaClaro ? 'color:#3b82f6;' : 'color:#60a5fa;'">Viagens</a>
+      <span class="mx-1">›</span>
+      <a href="{% url 'logistica:viagem-detail' viagem.pk %}" :style="temaClaro ? 'color:#3b82f6;' : 'color:#60a5fa;'">#{{ viagem.numero|stringformat:"06d" }}</a>
+      <span class="mx-1">›</span> Histórico
+    </p>
+    <h2 class="text-2xl font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
+      Histórico da viagem
+    </h2>
+    {% comment %}
+      AS TRAVAS IMPEDEM O IMPOSSIVEL; O HISTORICO EXPLICA O POSSIVEL. Uma
+      viagem que sai com 300 e volta com 170 esta' certa pela conta e pode
+      estar errada pela historia.
+    {% endcomment %}
+    <p class="text-sm mt-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+      Cada operação que mexeu em quantidade ou documento, na ordem em que aconteceu.
+    </p>
+  </div>
+
+  <div class="card overflow-hidden">
+    <div class="overflow-x-auto">
+      <table class="w-full text-sm">
+        <thead>
+          <tr :style="temaClaro ? 'border-bottom:1px solid #e5e7eb;background:#f8fafc;' : 'border-bottom:1px solid #2a2a2e;background:#1e1e20;'">
+            <th class="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wide" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Quando</th>
+            <th class="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wide" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Usuário</th>
+            <th class="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wide" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Operação</th>
+            <th class="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wide" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Produto</th>
+            <th class="text-right px-4 py-3 text-xs font-semibold uppercase tracking-wide" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Antes</th>
+            <th class="text-right px-4 py-3 text-xs font-semibold uppercase tracking-wide" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Depois</th>
+            <th class="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wide" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Documento</th>
+            <th class="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wide" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Motivo</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for linha in linhas %}
+            <tr class="border-b" :style="temaClaro ? 'border-color:#f1f5f9;' : 'border-color:#2a2a2e;'">
+              <td class="px-4 py-3 text-xs whitespace-nowrap" :style="temaClaro ? 'color:#374151;' : 'color:#d1d5db;'">{{ linha.quando|date:"d/m/Y H:i" }}</td>
+              <td class="px-4 py-3 text-xs" :style="temaClaro ? 'color:#374151;' : 'color:#d1d5db;'">{{ linha.usuario|default:"—" }}</td>
+              <td class="px-4 py-3" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">{{ linha.operacao }}</td>
+              <td class="px-4 py-3 text-xs" :style="temaClaro ? 'color:#374151;' : 'color:#d1d5db;'">{{ linha.produto|default:"—" }}</td>
+              <td class="px-4 py-3 text-right" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">{{ linha.quantidade_anterior|default:"—" }}</td>
+              <td class="px-4 py-3 text-right font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">{{ linha.quantidade_nova|default:"—" }}</td>
+              <td class="px-4 py-3 font-mono text-xs" :style="temaClaro ? 'color:#374151;' : 'color:#d1d5db;'">{{ linha.documento|default:"—" }}</td>
+              <td class="px-4 py-3 text-xs" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">{{ linha.motivo|default:"—" }}</td>
+            </tr>
+          {% empty %}
+            <tr>
+              <td colspan="8" class="px-4 py-12 text-center" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+                Nada aconteceu nesta viagem ainda.
+              </td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+</div>
+{% endblock %}

@@ -4,7 +4,12 @@ from apps.core.models import Empresa, Filial, Usuario
 from apps.cadastros.models import Transportadora
 from apps.core.models.base import TimestampedModel, ActiveModel
 from apps.core.models.base import FilialManager as FilialAwareManager
+from apps.core.services.exceptions import DadosInvalidosError
 from ..constants.enums import TipoDocumentoFiscal, StatusDocumentoFiscal
+
+
+class DocumentoFiscalProtegidoError(DadosInvalidosError):
+    """Tentaram apagar um documento que já existe fora deste sistema."""
 
 
 class ClasseFiscal(ActiveModel):
@@ -94,6 +99,45 @@ class NaturezaOperacao(ActiveModel):
         return f"{self.descricao} ({self.cfop_dentro_estado})"
 
 
+# Documentos que já existem fora deste sistema. Apagar a linha local não
+# desfaz nada na SEFAZ -- só faz o ERP discordar do Fisco, e ainda libera o
+# número para ser reusado, que é exatamente o que "inutilizada" e "cancelada"
+# existem para impedir.
+STATUS_IRREVERSIVEIS_NA_SEFAZ = (
+    StatusDocumentoFiscal.AUTORIZADA,
+    StatusDocumentoFiscal.CANCELADA,
+    StatusDocumentoFiscal.DENEGADA,
+    StatusDocumentoFiscal.INUTILIZADA,
+)
+
+
+class DocumentoFiscalQuerySet(models.QuerySet):
+    """
+    Recusa apagar em massa o que já chegou à SEFAZ.
+
+    O GUARDA PRECISA ESTAR AQUI, e não só no `delete()` do model: o Django não
+    chama `Model.delete()` num `queryset.delete()`, então um
+    `.filter(...).delete()` passaria por cima da regra sem nem tocá-la.
+    """
+
+    def delete(self, *args, **kwargs):
+        protegidos = self.filter(status__in=STATUS_IRREVERSIVEIS_NA_SEFAZ)
+        primeiro = protegidos.first()
+        if primeiro is not None:
+            raise DocumentoFiscalProtegidoError(
+                f'{protegidos.count()} documento(s) fiscal(is) deste conjunto '
+                f'já existem na SEFAZ (o primeiro é {primeiro}). Cancele na '
+                'SEFAZ; as linhas aqui ficam como histórico.'
+            )
+        return super().delete(*args, **kwargs)
+
+
+class DocumentoFiscalManager(
+    FilialAwareManager.from_queryset(DocumentoFiscalQuerySet)
+):
+    """O manager de filial, agora também com o guarda de exclusão."""
+
+
 class DocumentoFiscal(TimestampedModel):
     filial = models.ForeignKey(Filial, on_delete=models.PROTECT, related_name="documentos_fiscais")
     tipo_documento = models.CharField(max_length=10, choices=TipoDocumentoFiscal.choices)
@@ -165,7 +209,7 @@ class DocumentoFiscal(TimestampedModel):
 
     usuario = models.ForeignKey(Usuario, on_delete=models.PROTECT, related_name="documentos_fiscais")
 
-    objects = FilialAwareManager()
+    objects = DocumentoFiscalManager()
 
     class Meta:
         db_table = "documentos_fiscais"
@@ -180,6 +224,23 @@ class DocumentoFiscal(TimestampedModel):
 
     def __str__(self):
         return f"{self.tipo_documento.upper()} {self.numero}/{self.serie}"
+
+    def delete(self, *args, **kwargs):
+        """
+        Documento que chegou à SEFAZ não se apaga.
+
+        Uma NF-e autorizada existe nos registros do Fisco. Apagar a linha daqui
+        não a desfaz lá -- só faz o ERP contar uma história diferente da que o
+        Fisco tem. O caminho para desfazer é o cancelamento ou a carta de
+        correção, e os dois preservam o documento.
+        """
+        if self.status in STATUS_IRREVERSIVEIS_NA_SEFAZ:
+            raise DocumentoFiscalProtegidoError(
+                f'{self} está {self.get_status_display().lower()} na SEFAZ e '
+                'não pode ser excluído. Cancele na SEFAZ; a linha aqui fica '
+                'como histórico.'
+            )
+        return super().delete(*args, **kwargs)
 
 
 class ItemDocumentoFiscal(models.Model):

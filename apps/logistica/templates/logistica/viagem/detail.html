@@ -55,6 +55,9 @@
       <a href="{% url 'logistica:viagem-mdfe' viagem.pk %}" class="btn-secondary">
         MDF-e da viagem
       </a>
+      <a href="{% url 'logistica:viagem-historico' viagem.pk %}" class="btn-secondary">
+        Histórico
+      </a>
       {% if pode_agir and viagem.editavel %}
         <a href="{% url 'logistica:viagem-update' viagem.pk %}" class="btn-secondary">Editar</a>
       {% endif %}

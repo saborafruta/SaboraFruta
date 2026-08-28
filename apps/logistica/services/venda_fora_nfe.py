@@ -62,6 +62,7 @@ from apps.financeiro.constants.enums import (
 from apps.financeiro.models.fiscal import DocumentoFiscal
 from apps.fiscal.models import NaturezaOperacao
 from apps.fiscal.services.natureza_operacao_service import NaturezaOperacaoService
+from apps.logistica.services.log_viagem import LogViagemService
 from apps.logistica.models import VendaViagem
 
 ZERO = Decimal('0')
@@ -440,4 +441,9 @@ class VendaForaNFeService:
 
         venda.documento_fiscal = documento
         venda.save(update_fields=['documento_fiscal', 'updated_at'])
+        LogViagemService.registrar(
+            venda.viagem, LogViagemService.DOCUMENTO_EMITIDO, usuario=usuario,
+            documento=documento,
+            motivo=f'NF-e de {venda.get_tipo_display().lower()} — {venda.cliente_nome}',
+        )
         return documento

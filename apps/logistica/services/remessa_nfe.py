@@ -29,6 +29,7 @@ from django.utils import timezone
 from apps.core.services.exceptions import DadosInvalidosError
 from apps.fiscal.models import NaturezaOperacao
 from apps.fiscal.services.natureza_operacao_service import NaturezaOperacaoService
+from apps.logistica.services.log_viagem import LogViagemService
 from apps.financeiro.constants.enums import (
     StatusDocumentoFiscal, TipoDocumentoFiscal,
 )
@@ -320,6 +321,10 @@ class RemessaVendaForaService:
         )
         itens.update(documento_fiscal=documento)
         cls._ligar_movimentacoes(viagem, list(itens), documento)
+        LogViagemService.registrar(
+            viagem, LogViagemService.DOCUMENTO_EMITIDO, usuario=usuario,
+            documento=documento, motivo='NF-e de remessa para venda fora',
+        )
         return documento
 
     @staticmethod

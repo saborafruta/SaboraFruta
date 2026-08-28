@@ -51,6 +51,7 @@ from apps.financeiro.constants.enums import (
 from apps.financeiro.models.fiscal import DocumentoFiscal
 from apps.fiscal.models import NaturezaOperacao
 from apps.fiscal.services.natureza_operacao_service import NaturezaOperacaoService
+from apps.logistica.services.log_viagem import LogViagemService
 
 ZERO = Decimal('0')
 CENTAVOS = Decimal('0.01')
@@ -398,7 +399,7 @@ class RetornoVendaForaService:
         payload = cls.construir_payload(viagem, numero, serie)
         filial = viagem.filial
 
-        return DocumentoFiscal.objects.create(
+        documento = DocumentoFiscal.objects.create(
             filial=filial,
             tipo_documento=TipoDocumentoFiscal.NFE,
             origem_tipo=ORIGEM,
@@ -430,3 +431,8 @@ class RetornoVendaForaService:
             data_emissao=timezone.now(),
             usuario=usuario,
         )
+        LogViagemService.registrar(
+            viagem, LogViagemService.DOCUMENTO_EMITIDO, usuario=usuario,
+            documento=documento, motivo='NF-e de retorno de venda fora',
+        )
+        return documento

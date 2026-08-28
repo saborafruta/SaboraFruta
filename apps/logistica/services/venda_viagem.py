@@ -28,6 +28,7 @@ from apps.core.services.exceptions import DadosInvalidosError
 from apps.logistica.models import (
     ItemVendaViagem, SaldoCarga, VendaViagem, Viagem,
 )
+from apps.logistica.services.log_viagem import LogViagemService
 from apps.logistica.services.viagem import ViagemService
 
 ZERO = Decimal('0')
@@ -178,6 +179,8 @@ class VendaViagemService:
         # faturado o que foi dado.
         ViagemService.registrar_saida_do_saldo(
             viagem, produto, quantidade, venda.campo_do_saldo, lote=lote,
+            usuario=usuario or viagem.vendedor,
+            motivo=motivo or f'{venda.get_tipo_display()} {venda.numero} — {nome}',
         )
         return venda
 
@@ -244,6 +247,13 @@ class VendaViagemService:
             ))
             saldo.save(update_fields=[campo, 'updated_at'])
 
+        LogViagemService.registrar(
+            venda.viagem, LogViagemService.VENDA_CANCELADA,
+            usuario=getattr(venda, 'vendedor', None),
+            motivo=motivo or 'sem motivo informado',
+            descricao=f'{venda.get_tipo_display()} {venda.numero} — {venda.cliente_nome}',
+            extras={'valor': str(venda.valor_total or 0)},
+        )
         venda.status = VendaViagem.Status.CANCELADA
         if motivo:
             quebra = chr(10)

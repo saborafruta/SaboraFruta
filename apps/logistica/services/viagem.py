@@ -34,6 +34,7 @@ from apps.estoque.services.movimentacao_service import MovimentacaoService
 from apps.fiscal.models import NaturezaOperacao
 from apps.fiscal.services.natureza_operacao_service import NaturezaOperacaoService
 from apps.logistica.models import ItemCarga, SaldoCarga, Viagem
+from apps.logistica.services.log_viagem import LogViagemService
 from apps.logistica.services.saida_unica import SaidaUnicaService
 
 ZERO = Decimal('0')
@@ -47,6 +48,15 @@ DESTINOS_DO_SALDO = (
     'quantidade_retornada',
     'quantidade_baixada',
 )
+
+# Cada destino do saldo tem nome proprio no historico: "baixa" sem dizer se
+# foi venda, bonificacao ou perda obriga a abrir outra tela para saber.
+OPERACAO_POR_CAMPO = {
+    'quantidade_vendida': LogViagemService.VENDA_REGISTRADA,
+    'quantidade_bonificada': LogViagemService.BONIFICACAO_REGISTRADA,
+    'quantidade_retornada': LogViagemService.RETORNO_REGISTRADO,
+    'quantidade_baixada': LogViagemService.BAIXA_REGISTRADA,
+}
 
 # Como cada espécie mexe no estoque da filial quando a carga fecha. A natureza
 # pode sobrescrever pelo campo `tipo_operacao_estoque`; isto é o padrão.
@@ -127,7 +137,7 @@ class ViagemService:
 
     @classmethod
     @transaction.atomic
-    def adicionar_item(cls, viagem: Viagem, dados: dict) -> ItemCarga:
+    def adicionar_item(cls, viagem: Viagem, dados: dict, usuario=None) -> ItemCarga:
         """Põe um produto na carga, com a natureza fiscal dele."""
         cls._exigir_editavel(viagem)
         item = ItemCarga(
@@ -146,12 +156,26 @@ class ViagemService:
         # obrigatório e quantidade positiva não podem depender de a tela lembrar.
         item.full_clean(exclude=['valor_total'])
         item.save()
+        LogViagemService.registrar(
+            viagem, LogViagemService.CARGA_ITEM_INCLUIDO, usuario=usuario,
+            produto=item.produto, quantidade_anterior=ZERO,
+            quantidade_nova=item.quantidade,
+            motivo=item.natureza.descricao if item.natureza_id else '',
+        )
         return item
 
     @classmethod
     @transaction.atomic
-    def remover_item(cls, viagem: Viagem, item: ItemCarga) -> None:
+    def remover_item(cls, viagem: Viagem, item: ItemCarga, usuario=None) -> None:
         cls._exigir_editavel(viagem)
+        # Antes do delete porque a linha descreve o item que ainda existe.
+        # (O Django mantem os campos em memoria depois de apagar, entao a
+        # ordem inversa tambem funcionaria -- esta so' e' a que se le melhor.)
+        LogViagemService.registrar(
+            viagem, LogViagemService.CARGA_ITEM_REMOVIDO, usuario=usuario,
+            produto=item.produto, quantidade_anterior=item.quantidade,
+            quantidade_nova=ZERO,
+        )
         item.delete()
 
     # ── Fechar ───────────────────────────────────────────────────────────
@@ -269,6 +293,10 @@ class ViagemService:
         # "carga pronta" com "pode sair".
         viagem.status = Viagem.Status.AGUARDANDO_DOCUMENTOS
         viagem.save(update_fields=['status', 'updated_at'])
+        LogViagemService.registrar(
+            viagem, LogViagemService.CARGA_FECHADA, usuario=usuario,
+            descricao=f'Carga fechada — viagem #{viagem.numero:06d}',
+        )
         return viagem
 
     @staticmethod
@@ -302,6 +330,7 @@ class ViagemService:
     @transaction.atomic
     def registrar_saida_do_saldo(
         cls, viagem: Viagem, produto, quantidade: Decimal, campo: str, lote=None,
+        usuario=None, motivo: str = '',
     ) -> SaldoCarga:
         """
         Dá baixa no saldo que viaja — venda, bonificação ou perda na estrada.
@@ -328,8 +357,20 @@ class ViagemService:
                 f'{produto}: só há {saldo.quantidade_em_poder} em poder da viagem, '
                 f'e a baixa é de {quantidade}.'
             )
+        # OS DOIS LADOS, e nao so' a movimentacao: guardar apenas o quanto
+        # obriga quem le' a somar tudo desde o comeco para saber onde o saldo
+        # estava, e esconde buraco -- se o "depois" de uma linha nao bate com o
+        # "antes" da seguinte, alguem mexeu por fora.
+        antes = saldo.quantidade_em_poder
         setattr(saldo, campo, (getattr(saldo, campo) or ZERO) + quantidade)
         saldo.save(update_fields=[campo, 'updated_at'])
+        LogViagemService.registrar(
+            viagem, OPERACAO_POR_CAMPO.get(campo, LogViagemService.BAIXA_REGISTRADA),
+            usuario=usuario, produto=produto,
+            quantidade_anterior=antes, quantidade_nova=saldo.quantidade_em_poder,
+            motivo=motivo,
+            extras={'movimentou': str(quantidade), 'campo': campo},
+        )
         return saldo
 
     @classmethod
@@ -339,6 +380,7 @@ class ViagemService:
         """O que não vendeu volta para o estoque da filial."""
         saldo = cls.registrar_saida_do_saldo(
             viagem, produto, quantidade, 'quantidade_retornada', lote=lote,
+            usuario=usuario,
         )
         MovimentacaoService.registrar_movimentacao(
             produto_id=produto.pk,
@@ -416,7 +458,7 @@ class ViagemService:
 
     @classmethod
     @transaction.atomic
-    def encerrar(cls, viagem: Viagem) -> Viagem:
+    def encerrar(cls, viagem: Viagem, usuario=None) -> Viagem:
         """
         Fecha a viagem.
 
@@ -435,9 +477,14 @@ class ViagemService:
                 cls.NAO_CONCILIADA + ' ' + ' '.join(pendencias)
                 + ' Registre venda, bonificação, retorno ou baixa.'
             )
+        anterior = viagem.get_status_display()
         viagem.status = Viagem.Status.FINALIZADA
         viagem.data_retorno = viagem.data_retorno or timezone.localdate()
         viagem.save(update_fields=['status', 'data_retorno', 'updated_at'])
+        LogViagemService.registrar(
+            viagem, LogViagemService.VIAGEM_ENCERRADA, usuario=usuario,
+            motivo=f'de "{anterior}" para "{viagem.get_status_display()}"',
+        )
         return viagem
 
     # ── Resumo para a tela ───────────────────────────────────────────────
@@ -542,19 +589,24 @@ class ViagemService:
             )
         # Finalizar tem regra propria -- e' onde o saldo da rua e' cobrado.
         if destino == Viagem.Status.FINALIZADA:
-            return cls.encerrar(viagem)
+            return cls.encerrar(viagem, usuario=usuario)
 
         campos = ['status', 'updated_at']
+        anterior = viagem.get_status_display()
         viagem.status = destino
         if destino == Viagem.Status.AGUARDANDO_CONFERENCIA and not viagem.data_retorno:
             viagem.data_retorno = timezone.localdate()
             campos.append('data_retorno')
         viagem.save(update_fields=campos)
+        LogViagemService.registrar(
+            viagem, LogViagemService.STATUS_ALTERADO, usuario=usuario,
+            motivo=f'de "{anterior}" para "{viagem.get_status_display()}"',
+        )
         return viagem
 
     @classmethod
     @transaction.atomic
-    def cancelar(cls, viagem: Viagem, motivo: str = '') -> Viagem:
+    def cancelar(cls, viagem: Viagem, motivo: str = '', usuario=None) -> Viagem:
         """
         Cancela a viagem.
 
@@ -576,6 +628,11 @@ class ViagemService:
                 f'{viagem.observacao}{quebra}[Cancelamento] {motivo}'.strip()
             )
         viagem.save(update_fields=['status', 'observacao', 'updated_at'])
+        LogViagemService.registrar(
+            viagem, LogViagemService.STATUS_ALTERADO, usuario=usuario,
+            motivo=motivo or 'sem motivo informado',
+            descricao=f'Viagem #{viagem.numero:06d} cancelada',
+        )
         return viagem
 
     # ── Guardas ──────────────────────────────────────────────────────────
