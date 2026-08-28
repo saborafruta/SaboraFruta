@@ -269,8 +269,7 @@ def _produto_queryset_filtrado(request, incluir_inativos_por_padrao=False):
                 busca,
                 fields=(
                     'codigo', 'codigo_barras', 'descricao', 'descricao_curta',
-                    'descricao_pdv', 'ncm', 'categoria__nome',
-                    'subcategoria__nome', 'marca__nome',
+                    'descricao_pdv', 'ncm', 'marca__nome',
                     'fornecedor__nome_fantasia', 'fornecedor__razao_social',
                 ),
             )

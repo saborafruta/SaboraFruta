@@ -1955,8 +1955,7 @@ class AjusteRapidoEstoqueView(PermissaoRequiredMixin, View):
                 busca,
                 fields=(
                     'descricao', 'descricao_curta', 'descricao_pdv', 'codigo',
-                    'codigo_barras', 'ncm', 'categoria__nome',
-                    'subcategoria__nome', 'fornecedor__nome_fantasia',
+                    'codigo_barras', 'ncm', 'fornecedor__nome_fantasia',
                     'fornecedor__razao_social',
                 ),
             )
