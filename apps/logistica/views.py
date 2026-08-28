@@ -23,6 +23,7 @@ from apps.financeiro.models.fiscal import DocumentoFiscal
 from apps.logistica.models_viagem import Viagem
 from apps.logistica.services.log_viagem import LogViagemService
 from apps.logistica.services.mdfe_viagem import MDFeViagemService
+from apps.logistica.services.viagem import ViagemService
 from apps.estoque.models import MovimentacaoEstoque
 from apps.logistica.forms import (
     CTeForm,
@@ -1914,12 +1915,50 @@ class MDFeCreateView(PermissaoRequiredMixin, View):
                 _nfe_inicial(nfe_documento), ensure_ascii=False
             )
 
+        if viagem is not None:
+            # A VIAGEM JA' SABE QUEM DIRIGE E EM QUE CARRO.
+            #
+            # Pedir de novo motorista, placa e destino nao e' so' trabalho
+            # repetido: e' a chance de o manifesto sair com placa diferente
+            # da que esta' no patio. Divergencia entre viagem e MDF-e nao da'
+            # erro em lugar nenhum -- ela aparece na fiscalizacao de estrada,
+            # com o caminhao parado.
+            #
+            # E' PREENCHIMENTO, E NAO TRAVA: quem precisar trocar o motorista
+            # no manifesto continua podendo, porque a troca de ultima hora
+            # existe e o sistema nao pode ser o motivo de o caminhao nao sair.
+            initial.update({
+                campo: valor
+                for campo, valor in {
+                    "motorista_cadastro": viagem.motorista_id,
+                    "motorista_nome": viagem.motorista_nome,
+                    "motorista_cpf": viagem.motorista_documento,
+                    "veiculo_cadastro": viagem.veiculo_id,
+                    "veiculo_placa": viagem.veiculo_placa,
+                    "veiculo_descricao": viagem.veiculo_descricao,
+                    "transportadora": viagem.transportadora_id,
+                    "uf_carregamento": viagem.uf_origem,
+                    "uf_descarregamento": viagem.uf_destino,
+                    "percurso_ufs": viagem.percurso_ufs,
+                }.items()
+                if valor
+            })
+            peso = ViagemService.resumo(viagem)["peso"]
+            if peso:
+                initial["peso_carga_kg"] = peso
+
         motoristas = Motorista.objects.for_filial(filial).filter(ativo=True)
         veiculos = Veiculo.objects.for_filial(filial).filter(ativo=True)
         if motoristas.count() == 1:
-            initial["motorista_cadastro"] = motoristas.values_list("pk", flat=True).first()
+            initial.setdefault(
+                "motorista_cadastro",
+                motoristas.values_list("pk", flat=True).first(),
+            )
         if veiculos.count() == 1:
-            initial["veiculo_cadastro"] = veiculos.values_list("pk", flat=True).first()
+            initial.setdefault(
+                "veiculo_cadastro",
+                veiculos.values_list("pk", flat=True).first(),
+            )
         form = MDFeForm(filial=filial, initial=initial)
         if nfe_documento:
             form.fields["peso_carga_kg"].widget.attrs["readonly"] = True
