@@ -219,6 +219,9 @@ class ViagemDetailView(PermissaoRequiredMixin, View):
             # diferente entre a bonificacao da carga e a da rua.
             'bonificacoes': bonificacoes,
             'resumo_bonificacoes': HistoricoBonificacaoService.resumo(bonificacoes),
+            # Os motivos ficam no MESMO formulario do botao que recusa: pedi-los
+            # depois faria metade das recusas ficar sem explicacao.
+            'motivos_nao_entrega': EntregaBonificacao.MotivoNaoEntrega.choices,
             'resumo_vinculos': VinculoRemessaService.resumo(vinculos),
             # OS BOTOES DA RUA so' aparecem enquanto o caminhao esta' fora:
             # antes de sair nao ha' saldo, e depois de encerrar a viagem
@@ -805,7 +808,14 @@ class BonificacaoEntregaView(PermissaoRequiredMixin, View):
             else:
                 entrega = EntregaBonificacaoService.mover(
                     entrega, acao or '',
-                    {'observacao': request.POST.get('observacao')},
+                    {
+                        'observacao': request.POST.get('observacao'),
+                        # O MOTIVO VEM DO MESMO FORMULARIO DO BOTAO: sem
+                        # repassa-lo aqui, o servico recusava a recusa e a
+                        # tela pedia o motivo que o usuario tinha acabado de
+                        # escolher.
+                        'motivo_nao_entrega': request.POST.get('motivo_nao_entrega'),
+                    },
                     usuario=request.user,
                 )
                 messages.success(

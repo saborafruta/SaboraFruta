@@ -26,13 +26,13 @@ A PROVA É ANEXO, E NÃO CAMPO DE TEXTO
 comprovante — é isso que responde a "quem recebeu as 20 caixas?" seis meses
 depois. Vários por entrega, porque a doca fotografa mais de uma coisa.
 
-O QUE ESTE REGISTRO NÃO FAZ
+A CORTESIA QUE NÃO CHEGOU FICA IDENTIFICADA
 
-Ele não mexe em estoque. Marcar RETORNADA diz que a mercadoria voltou
-fisicamente; devolvê-la ao saldo é o caminho que já existe (cancelar a
-entrega da rua, ou registrar o retorno da viagem). Fazer a devolução aqui
-TAMBÉM significaria a mesma caixa voltando duas vezes — que é como um
-controle de bonificação começa a inventar estoque.
+Entre a recusa e o retorno tratado, a mercadoria está fora de qualquer
+saldo: saiu do estoque, não virou entrega e ainda não voltou. Nesse
+intervalo ela carrega o rótulo BONIFICAÇÃO NÃO ENTREGUE, com o motivo ao
+lado — e é o serviço de entrega que faz a devolução acontecer, cada origem
+para onde ela saiu.
 """
 from django.conf import settings
 from django.core.exceptions import ValidationError
@@ -84,7 +84,34 @@ class EntregaBonificacao(TimestampedModel):
         Status.CANCELADA: (),
     }
 
+    class MotivoNaoEntrega(models.TextChoices):
+        """
+        Por que a cortesia não chegou.
+
+        LISTA FECHADA, PELA MESMA RAZÃO DO MOTIVO DA BONIFICAÇÃO: "por que
+        não entregamos?" é pergunta que se responde por cliente e por rota,
+        e frase digitada à mão não agrupa. A diferença entre "cliente
+        ausente" (o roteiro está errado) e "produto danificado" (o
+        carregamento está errado) é a diferença entre dois problemas que se
+        resolvem em lugares diferentes.
+        """
+
+        AUSENTE = 'ausente', 'Cliente ausente'
+        RECUSOU = 'recusou', 'Cliente recusou'
+        DANIFICADO = 'danificado', 'Produto danificado'
+        QUANTIDADE = 'quantidade', 'Erro de quantidade'
+        CANCELAMENTO = 'cancelamento', 'Cancelamento'
+        OUTRO = 'outro', 'Outro'
+
     ABERTAS = (Status.PENDENTE, Status.EM_TRANSPORTE, Status.RETORNO_PENDENTE)
+
+    # A MERCADORIA QUE NAO CHEGOU E CONTINUA NO CAMINHAO. Enquanto ela esta'
+    # nestes estados, e' "BONIFICACAO NAO ENTREGUE": saiu do estoque, nao
+    # virou entrega e ainda nao voltou.
+    NAO_ENTREGUES = (Status.RECUSADA, Status.RETORNO_PENDENTE)
+
+    # Situacoes que exigem dizer POR QUE a cortesia nao chegou.
+    EXIGEM_MOTIVO = (Status.RECUSADA, Status.CANCELADA)
 
     # ── De onde veio a cortesia ──────────────────────────────────────────
     item_carga = models.OneToOneField(
@@ -118,6 +145,18 @@ class EntregaBonificacao(TimestampedModel):
         help_text='Quem recebeu — é ele que responde por ter recebido.',
     )
     destinatario_documento = models.CharField(max_length=30, blank=True)
+
+    # ── Quando ela não chega ─────────────────────────────────────────────
+    motivo_nao_entrega = models.CharField(
+        max_length=20, choices=MotivoNaoEntrega.choices, blank=True,
+        db_index=True,
+        help_text='Por que a bonificação não foi entregue.',
+    )
+    nao_entregue_em = models.DateTimeField(null=True, blank=True)
+    retorno_tratado_em = models.DateTimeField(
+        null=True, blank=True,
+        help_text='Quando a mercadoria voltou de fato ao estoque ou ao saldo.',
+    )
     observacao = models.TextField(blank=True)
 
     class Meta:
@@ -165,6 +204,27 @@ class EntregaBonificacao(TimestampedModel):
     @property
     def entregue(self) -> bool:
         return self.status == self.Status.ENTREGUE
+
+    @property
+    def nao_entregue(self) -> bool:
+        """
+        Mercadoria que saiu, não virou entrega e ainda não voltou.
+
+        É este o estado que precisa ficar identificado: a caixa está no
+        caminhão, fora do estoque e sem dono. Enquanto ele durar, a
+        bonificação aparece marcada como NÃO ENTREGUE.
+        """
+        return self.status in self.NAO_ENTREGUES
+
+    @property
+    def rotulo_nao_entregue(self) -> str:
+        """O que a etiqueta diz — vazio quando não é o caso."""
+        if not self.nao_entregue:
+            return ''
+        motivo = self.get_motivo_nao_entrega_display() if self.motivo_nao_entrega else ''
+        return f'BONIFICAÇÃO NÃO ENTREGUE — {motivo}' if motivo else (
+            'BONIFICAÇÃO NÃO ENTREGUE'
+        )
 
     @property
     def tem_prova(self) -> bool:

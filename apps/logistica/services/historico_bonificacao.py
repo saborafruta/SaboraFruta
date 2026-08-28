@@ -166,6 +166,12 @@ class HistoricoBonificacaoService:
                 1 for l in linhas
                 if l['acompanhamento'] and l['acompanhamento'].aberta
             ),
+            # A CORTESIA QUE SAIU E NAO VOLTOU: fora de qualquer saldo
+            # ate' alguem tratar o retorno.
+            'nao_entregues': sum(
+                1 for l in linhas
+                if l['acompanhamento'] and l['acompanhamento'].nao_entregue
+            ),
             'sem_prova': sum(
                 1 for l in linhas
                 if l['acompanhamento'] and l['acompanhamento'].entregue

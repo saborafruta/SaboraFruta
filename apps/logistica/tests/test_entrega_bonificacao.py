@@ -193,7 +193,9 @@ class CicloTests(EntregaBonificacaoBase):
         """A mercadoria está no caminhão: ela precisa voltar."""
         _, entrega = self._bonificacao_na_carga()
         EntregaBonificacaoService.mover(entrega, S.EM_TRANSPORTE)
-        EntregaBonificacaoService.mover(entrega, S.RECUSADA)
+        EntregaBonificacaoService.mover(entrega, S.RECUSADA, {
+            'motivo_nao_entrega': EntregaBonificacao.MotivoNaoEntrega.AUSENTE,
+        })
 
         self.assertEqual(
             [v for v, _ in entrega.proximos], [S.RETORNO_PENDENTE],
@@ -221,9 +223,11 @@ class CicloTests(EntregaBonificacaoBase):
     def test_uma_bonificacao_retornada_nao_e_entregue_depois(self):
         _, entrega = self._bonificacao_na_carga()
         EntregaBonificacaoService.mover(entrega, S.EM_TRANSPORTE)
-        EntregaBonificacaoService.mover(entrega, S.RECUSADA)
+        EntregaBonificacaoService.mover(entrega, S.RECUSADA, {
+            'motivo_nao_entrega': EntregaBonificacao.MotivoNaoEntrega.RECUSOU,
+        })
         EntregaBonificacaoService.mover(entrega, S.RETORNO_PENDENTE)
-        EntregaBonificacaoService.mover(entrega, S.RETORNADA)
+        EntregaBonificacaoService.mover(entrega, S.RETORNADA, usuario=self.usuario)
 
         with self.assertRaises(DadosInvalidosError):
             EntregaBonificacaoService.entregar(entrega, {
@@ -374,13 +378,16 @@ class ComprovanteTests(EntregaBonificacaoBase):
 
 
 class EstoqueTests(EntregaBonificacaoBase):
-    """O acompanhamento não mexe em estoque."""
+    """
+    O retorno devolve — e devolve no lugar certo.
 
-    def test_marcar_retornada_nao_devolve_ao_estoque(self):
-        """
-        Devolver aqui TAMBÉM seria a mesma caixa voltando duas vezes — o
-        caminho é o retorno da viagem.
-        """
+    Antes de a seção do retorno existir, marcar RETORNADA não mexia em nada:
+    o status dizia que a mercadoria voltou e ela seguia fora de qualquer
+    saldo. Agora ela volta de verdade, e o que precisa ser cercado é o
+    LUGAR: devolver no errado somaria estoque que nunca saiu de lá.
+    """
+
+    def test_o_estoque_so_muda_quando_o_retorno_e_tratado(self):
         from apps.estoque.models import Estoque
 
         _, entrega = self._bonificacao_na_carga('20')
@@ -389,14 +396,24 @@ class EstoqueTests(EntregaBonificacaoBase):
         ).quantidade_atual
 
         EntregaBonificacaoService.mover(entrega, S.EM_TRANSPORTE)
-        EntregaBonificacaoService.mover(entrega, S.RECUSADA)
+        EntregaBonificacaoService.mover(entrega, S.RECUSADA, {
+            'motivo_nao_entrega': EntregaBonificacao.MotivoNaoEntrega.AUSENTE,
+        })
         EntregaBonificacaoService.mover(entrega, S.RETORNO_PENDENTE)
-        EntregaBonificacaoService.mover(entrega, S.RETORNADA)
 
+        # Recusada e aguardando retorno: a caixa esta' no caminhao, fora de
+        # qualquer saldo -- e o estoque ainda nao mudou.
         atual = Estoque.objects.get(
             produto=self.produto, filial=self.filial,
         ).quantidade_atual
         self.assertEqual(atual, saldo)
+
+        EntregaBonificacaoService.tratar_retorno(entrega, usuario=self.usuario)
+
+        atual = Estoque.objects.get(
+            produto=self.produto, filial=self.filial,
+        ).quantidade_atual
+        self.assertEqual(atual, saldo + Decimal('20'))
 
 
 class TelaTests(EntregaBonificacaoBase):
@@ -473,3 +490,256 @@ class TelaTests(EntregaBonificacaoBase):
         html = self._detalhe(viagem)
 
         self.assertIn('sem confirmação de entrega', html)
+
+
+class NaoEntregueTests(EntregaBonificacaoBase):
+    """
+    A cortesia que não chegou.
+
+    SEM MOTIVO, "não entregue" é um número em relatório. Com ele, é um
+    problema com dono: "cliente ausente" é roteiro errado; "produto
+    danificado" é carregamento errado — e os dois se resolvem em lugares
+    diferentes.
+    """
+
+    def _ate_recusa(self, motivo=None):
+        viagem, entrega = self._bonificacao_na_carga('20')
+        EntregaBonificacaoService.mover(entrega, S.EM_TRANSPORTE)
+        EntregaBonificacaoService.mover(entrega, S.RECUSADA, {
+            'motivo_nao_entrega': (
+                motivo or EntregaBonificacao.MotivoNaoEntrega.AUSENTE
+            ),
+        })
+        return viagem, entrega
+
+    def test_os_seis_motivos_da_especificacao_existem(self):
+        self.assertEqual(
+            [v for v, _ in EntregaBonificacao.MotivoNaoEntrega.choices],
+            [
+                'ausente', 'recusou', 'danificado', 'quantidade',
+                'cancelamento', 'outro',
+            ],
+        )
+
+    def test_recusar_sem_motivo_e_impedido(self):
+        _, entrega = self._bonificacao_na_carga()
+        EntregaBonificacaoService.mover(entrega, S.EM_TRANSPORTE)
+
+        with self.assertRaises(DadosInvalidosError) as erro:
+            EntregaBonificacaoService.mover(entrega, S.RECUSADA)
+
+        self.assertIn('por que', str(erro.exception).lower())
+        entrega.refresh_from_db()
+        self.assertEqual(entrega.status, S.EM_TRANSPORTE)
+
+    def test_cancelar_tambem_pede_motivo(self):
+        _, entrega = self._bonificacao_na_carga()
+
+        with self.assertRaises(DadosInvalidosError):
+            EntregaBonificacaoService.mover(entrega, S.CANCELADA)
+
+    def test_motivo_desconhecido_e_recusado(self):
+        _, entrega = self._bonificacao_na_carga()
+        EntregaBonificacaoService.mover(entrega, S.EM_TRANSPORTE)
+
+        with self.assertRaises(DadosInvalidosError):
+            EntregaBonificacaoService.mover(entrega, S.RECUSADA, {
+                'motivo_nao_entrega': 'chuva',
+            })
+
+    def test_a_recusa_guarda_motivo_e_hora(self):
+        _, entrega = self._ate_recusa(
+            EntregaBonificacao.MotivoNaoEntrega.DANIFICADO,
+        )
+
+        entrega.refresh_from_db()
+        self.assertEqual(
+            entrega.motivo_nao_entrega,
+            EntregaBonificacao.MotivoNaoEntrega.DANIFICADO,
+        )
+        self.assertIsNotNone(entrega.nao_entregue_em)
+
+    def test_a_mercadoria_fica_identificada_ate_o_retorno(self):
+        """
+        Entre a recusa e o retorno tratado ela está fora de qualquer saldo:
+        saiu do estoque, não virou entrega e ainda não voltou.
+        """
+        _, entrega = self._ate_recusa()
+
+        self.assertTrue(entrega.nao_entregue)
+        self.assertIn('BONIFICAÇÃO NÃO ENTREGUE', entrega.rotulo_nao_entregue)
+        self.assertIn('Cliente ausente', entrega.rotulo_nao_entregue)
+        self.assertTrue(any(
+            'NÃO ENTREGUE' in p
+            for p in EntregaBonificacaoService.pendencias(entrega)
+        ))
+
+    def test_depois_de_tratado_o_rotulo_sai(self):
+        _, entrega = self._ate_recusa()
+        EntregaBonificacaoService.mover(entrega, S.RETORNO_PENDENTE)
+
+        self.assertTrue(entrega.nao_entregue)
+
+        EntregaBonificacaoService.tratar_retorno(entrega, usuario=self.usuario)
+
+        entrega.refresh_from_db()
+        self.assertFalse(entrega.nao_entregue)
+        self.assertEqual(entrega.rotulo_nao_entregue, '')
+
+
+class TratamentoDoRetornoTests(EntregaBonificacaoBase):
+    """A mercadoria volta de verdade — cada uma para onde saiu."""
+
+    def _saldo_estoque(self):
+        from apps.estoque.models import Estoque
+
+        return Estoque.objects.get(
+            produto=self.produto, filial=self.filial,
+        ).quantidade_atual
+
+    def _ate_retorno_pendente(self, entrega, motivo):
+        EntregaBonificacaoService.mover(entrega, S.EM_TRANSPORTE)
+        EntregaBonificacaoService.mover(entrega, S.RECUSADA, {
+            'motivo_nao_entrega': motivo,
+        })
+        EntregaBonificacaoService.mover(entrega, S.RETORNO_PENDENTE)
+
+    def test_a_bonificacao_da_carga_volta_para_o_estoque(self):
+        """
+        Ela saiu do estoque da filial quando o caminhão fechou: é para lá
+        que ela volta.
+        """
+        _, entrega = self._bonificacao_na_carga('20')
+        depois_da_saida = self._saldo_estoque()
+
+        self._ate_retorno_pendente(
+            entrega, EntregaBonificacao.MotivoNaoEntrega.RECUSOU,
+        )
+        EntregaBonificacaoService.tratar_retorno(entrega, usuario=self.usuario)
+
+        self.assertEqual(self._saldo_estoque(), depois_da_saida + Decimal('20'))
+
+    def test_o_retorno_deixa_rastro_no_razao(self):
+        _, entrega = self._bonificacao_na_carga('20')
+
+        self._ate_retorno_pendente(
+            entrega, EntregaBonificacao.MotivoNaoEntrega.DANIFICADO,
+        )
+        EntregaBonificacaoService.tratar_retorno(entrega, usuario=self.usuario)
+
+        movimento = MovimentacaoEstoque.objects.filter(
+            produto=self.produto,
+            tipo_operacao=MovimentacaoEstoque.TipoOperacao.DEVOLUCAO_CLIENTE,
+        ).first()
+        self.assertIsNotNone(movimento)
+        self.assertIn('Retorno de Bonificação não entregue', movimento.observacao)
+        self.assertIn('danificado', movimento.observacao.lower())
+        self.assertEqual(movimento.cliente, self.cliente)
+
+    def test_a_bonificacao_da_rua_volta_para_o_saldo_da_viagem(self):
+        """
+        Aquela mercadoria saiu na remessa: devolvê-la ao estoque da filial
+        somaria estoque que nunca saiu de lá.
+        """
+        from apps.logistica.models import SaldoCarga
+
+        viagem, entrega = self._bonificacao_na_rua('20')
+        antes_estoque = self._saldo_estoque()
+        saldo = SaldoCarga.objects.get(viagem=viagem, produto=self.produto)
+        self.assertEqual(saldo.quantidade_bonificada, Decimal('20.000'))
+
+        # A entrega da rua nasce ENTREGUE; para devolver, ela volta ao
+        # comeco e passa pelo mesmo caminho de recusa das outras.
+        entrega.status = S.PENDENTE
+        entrega.save(update_fields=['status'])
+        self._ate_retorno_pendente(
+            entrega, EntregaBonificacao.MotivoNaoEntrega.QUANTIDADE,
+        )
+        EntregaBonificacaoService.tratar_retorno(entrega, usuario=self.usuario)
+
+        saldo.refresh_from_db()
+        self.assertEqual(saldo.quantidade_bonificada, ZERO)
+        self.assertEqual(saldo.quantidade_em_poder, Decimal('300.000'))
+        # O estoque da filial não é tocado.
+        self.assertEqual(self._saldo_estoque(), antes_estoque)
+
+    def test_nao_se_trata_retorno_de_quem_ainda_nao_recusou(self):
+        _, entrega = self._bonificacao_na_carga()
+
+        with self.assertRaises(DadosInvalidosError):
+            EntregaBonificacaoService.tratar_retorno(entrega, usuario=self.usuario)
+
+    def test_o_tratamento_marca_quando_aconteceu(self):
+        _, entrega = self._bonificacao_na_carga('20')
+
+        self._ate_retorno_pendente(
+            entrega, EntregaBonificacao.MotivoNaoEntrega.OUTRO,
+        )
+        EntregaBonificacaoService.tratar_retorno(entrega, usuario=self.usuario)
+
+        entrega.refresh_from_db()
+        self.assertEqual(entrega.status, S.RETORNADA)
+        self.assertIsNotNone(entrega.retorno_tratado_em)
+
+    def test_marcar_retornada_passa_pelo_tratamento(self):
+        """
+        Marcar RETORNADA sem devolver deixaria o status dizendo que voltou
+        enquanto a mercadoria segue fora de qualquer saldo.
+        """
+        _, entrega = self._bonificacao_na_carga('20')
+        depois_da_saida = self._saldo_estoque()
+
+        self._ate_retorno_pendente(
+            entrega, EntregaBonificacao.MotivoNaoEntrega.AUSENTE,
+        )
+        EntregaBonificacaoService.mover(entrega, S.RETORNADA, usuario=self.usuario)
+
+        self.assertEqual(self._saldo_estoque(), depois_da_saida + Decimal('20'))
+
+
+class TelaNaoEntregueTests(EntregaBonificacaoBase):
+    """O motivo e a etiqueta na tela."""
+
+    def test_a_tela_oferece_os_motivos_junto_do_botao(self):
+        """
+        Pedi-los numa tela seguinte faria metade das recusas ficar sem
+        explicação: quem está na porta do cliente responde agora ou não
+        responde mais.
+        """
+        viagem, entrega = self._bonificacao_na_carga()
+        EntregaBonificacaoService.mover(entrega, S.EM_TRANSPORTE)
+
+        html = self.client.get(
+            reverse('logistica:viagem-detail', args=[viagem.pk]),
+        ).content.decode()
+
+        self.assertIn('name="motivo_nao_entrega"', html)
+        self.assertIn('Cliente ausente', html)
+        self.assertIn('Produto danificado', html)
+
+    def test_recusar_pela_tela_com_motivo(self):
+        viagem, entrega = self._bonificacao_na_carga()
+        EntregaBonificacaoService.mover(entrega, S.EM_TRANSPORTE)
+
+        self.client.post(
+            reverse('logistica:bonificacao-entrega', args=[viagem.pk, entrega.pk]),
+            {'acao': 'recusada', 'motivo_nao_entrega': 'recusou'},
+        )
+
+        entrega.refresh_from_db()
+        self.assertEqual(entrega.status, S.RECUSADA)
+        self.assertEqual(entrega.motivo_nao_entrega, 'recusou')
+
+    def test_a_etiqueta_aparece_na_viagem(self):
+        viagem, entrega = self._bonificacao_na_carga()
+        EntregaBonificacaoService.mover(entrega, S.EM_TRANSPORTE)
+        EntregaBonificacaoService.mover(entrega, S.RECUSADA, {
+            'motivo_nao_entrega': 'ausente',
+        })
+
+        html = self.client.get(
+            reverse('logistica:viagem-detail', args=[viagem.pk]),
+        ).content.decode()
+
+        self.assertIn('BONIFICAÇÃO NÃO ENTREGUE', html)
+        self.assertIn('aguardando retorno', html)

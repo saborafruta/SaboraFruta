@@ -585,13 +585,16 @@
           <span class="text-sm font-semibold block" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
             {{ resumo_bonificacoes.quantidade|floatformat:"-3" }} un
           </span>
-          {% if resumo_bonificacoes.sem_entrega or resumo_bonificacoes.sem_prova %}
+          {% if resumo_bonificacoes.sem_entrega or resumo_bonificacoes.sem_prova or resumo_bonificacoes.nao_entregues %}
             <span class="text-[11px] block mt-1" style="color:#d97706;">
               {% if resumo_bonificacoes.sem_entrega %}
                 {{ resumo_bonificacoes.sem_entrega }} sem confirmação de entrega.
               {% endif %}
               {% if resumo_bonificacoes.sem_prova %}
                 {{ resumo_bonificacoes.sem_prova }} entregue(s) sem comprovante.
+              {% endif %}
+              {% if resumo_bonificacoes.nao_entregues %}
+                {{ resumo_bonificacoes.nao_entregues }} não entregue(s) aguardando retorno.
               {% endif %}
             </span>
           {% endif %}
@@ -688,6 +691,18 @@
                         {% else %}is-slate{% endif %}">
                         {{ acomp.get_status_display }}
                       </span>
+                      {% if acomp.nao_entregue %}
+                        {% comment %}
+                          A ETIQUETA DA MERCADORIA QUE VOLTOU NO CAMINHAO.
+                          Enquanto o retorno nao e' tratado, ela esta' fora de
+                          qualquer saldo -- e precisa ser reconhecivel de
+                          longe, com o motivo ao lado.
+                        {% endcomment %}
+                        <span class="block text-[11px] mt-1 font-semibold"
+                              style="color:#dc2626;">
+                          {{ acomp.rotulo_nao_entregue }}
+                        </span>
+                      {% endif %}
                       {% if acomp.entregue %}
                         <span class="block text-[11px] mt-1"
                               :style="temaClaro ? 'color:#94a3b8;' : 'color:#71717a;'">
@@ -729,13 +744,30 @@
                             <button type="submit" class="btn-primary text-xs">Entregue</button>
                           </form>
                         {% endif %}
-                        <div class="flex flex-wrap gap-2">
+                        <div class="flex flex-wrap gap-2 items-end">
                           {% for valor, rotulo in acomp.proximos %}
                             {% if valor != 'entregue' %}
                               <form method="post"
-                                    action="{% url 'logistica:bonificacao-entrega' viagem.pk acomp.pk %}">
+                                    action="{% url 'logistica:bonificacao-entrega' viagem.pk acomp.pk %}"
+                                    class="flex items-end gap-1">
                                 {% csrf_token %}
                                 <input type="hidden" name="acao" value="{{ valor }}">
+                                {% if valor == 'recusada' or valor == 'cancelada' %}
+                                  {% comment %}
+                                    O MOTIVO VAI JUNTO COM O BOTAO. Pedi-lo
+                                    numa tela seguinte faria a metade das
+                                    recusas ficar sem explicacao -- quem esta'
+                                    na porta do cliente responde agora ou nao
+                                    responde mais.
+                                  {% endcomment %}
+                                  <select name="motivo_nao_entrega" class="form-input"
+                                          style="width:145px;">
+                                    <option value="">— motivo —</option>
+                                    {% for m_valor, m_rotulo in motivos_nao_entrega %}
+                                      <option value="{{ m_valor }}">{{ m_rotulo }}</option>
+                                    {% endfor %}
+                                  </select>
+                                {% endif %}
                                 <button type="submit" class="btn-secondary text-xs">{{ rotulo }}</button>
                               </form>
                             {% endif %}
