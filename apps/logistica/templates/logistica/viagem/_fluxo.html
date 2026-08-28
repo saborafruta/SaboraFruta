@@ -1,0 +1,68 @@
+{% comment %}
+  A VIAGEM INTEIRA EM UMA LINHA.
+
+    carga → MDF-e → transporte → rota → retorno → nota → conferência
+          → conciliação → encerramento
+
+  Cada etapa já tinha a sua tela; o que faltava era o lugar onde alguém vê a
+  ORDEM. Quem abre uma viagem pela primeira vez não sabe se o próximo passo é
+  emitir o MDF-e, conferir o retorno ou encerrar — e descobre clicando. Uma
+  operação aprendida por tentativa é uma operação em que a etapa esquecida só
+  aparece na fiscalização.
+
+  UMA SÓ ETAPA FICA EM DESTAQUE, porque existe uma fila e não sete cobranças
+  simultâneas: quem opera precisa do PRÓXIMO passo.
+
+  ETAPA QUE NÃO SE APLICA APARECE APAGADA, e com o motivo escrito — marcar de
+  pendente o que a viagem nunca vai fazer ensina a ignorar o pendente.
+{% endcomment %}
+<div class="card p-4">
+  <div class="flex flex-wrap items-baseline justify-between gap-2 mb-3">
+    <h3 class="text-sm font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
+      Fluxo da viagem
+    </h3>
+    <p class="text-xs" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+      {% if fluxo.terminada %}
+        todas as etapas cumpridas
+      {% else %}
+        {{ fluxo.concluidas }} de {{ fluxo.total }} etapas ·
+        agora: <strong>{{ fluxo.atual.titulo }}</strong>
+      {% endif %}
+    </p>
+  </div>
+
+  <div class="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+    {% for etapa in etapas %}
+      <a href="{% url etapa.rota viagem.pk %}"
+         class="rounded-lg p-3 block"
+         style="{% if etapa.estado == 'atual' %}border:1px solid #3b82f6;background:rgba(59,130,246,0.08);{% elif etapa.estado == 'concluida' %}border:1px solid rgba(5,150,105,0.35);{% else %}border:1px solid rgba(148,163,184,0.25);{% endif %}{% if etapa.estado == 'dispensada' %}opacity:.55;{% endif %}">
+        <div class="flex items-center justify-between gap-2">
+          <p class="text-sm font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
+            <span class="mr-1">{{ etapa.icone }}</span>{{ etapa.titulo }}
+          </p>
+          <span class="text-[11px] font-semibold"
+                style="color:{% if etapa.estado == 'concluida' %}#059669{% elif etapa.estado == 'atual' %}#3b82f6{% elif etapa.estado == 'dispensada' %}#94a3b8{% else %}#d97706{% endif %};">
+            {% if etapa.estado == 'concluida' %}✓ feito
+            {% elif etapa.estado == 'atual' %}agora
+            {% elif etapa.estado == 'dispensada' %}não se aplica
+            {% else %}pendente{% endif %}
+          </span>
+        </div>
+        <p class="text-xs mt-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+          {{ etapa.detalhe }}
+        </p>
+        {% if etapa.linhas %}
+          <div class="mt-2 space-y-0.5">
+            {% for linha in etapa.linhas %}
+              <p class="text-[11px] flex justify-between gap-2"
+                 :style="temaClaro ? 'color:#374151;' : 'color:#d1d5db;'">
+                <span>{{ linha.icone }} {{ linha.rotulo }}</span>
+                <span class="font-semibold">{{ linha.quantidade|floatformat:"-3" }}</span>
+              </p>
+            {% endfor %}
+          </div>
+        {% endif %}
+      </a>
+    {% endfor %}
+  </div>
+</div>

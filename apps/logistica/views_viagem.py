@@ -34,6 +34,7 @@ from apps.logistica.services.vendas_para_carga import (
 from apps.logistica.services.bonificacao_nfe import BonificacaoNFeService
 from apps.logistica.services.estoque_viagem import EstoqueViagemService
 from apps.logistica.services.financeiro_viagem import FinanceiroViagemService
+from apps.logistica.services.fluxo_viagem import FluxoViagemService
 from apps.logistica.services.entrega_bonificacao import (
     EntregaBonificacaoService,
 )
@@ -203,6 +204,7 @@ class ViagemDetailView(PermissaoRequiredMixin, View):
         )
         vinculos = VinculoRemessaService.linhas(viagem)
         quadro = EstoqueViagemService.quadro(viagem)
+        etapas = FluxoViagemService.etapas(viagem)
         bonificacoes = HistoricoBonificacaoService.linhas(viagem)
         return render(request, self.template_name, {
             'title': f'Viagem #{viagem.numero:06d}',
@@ -212,6 +214,10 @@ class ViagemDetailView(PermissaoRequiredMixin, View):
             'entregas': ViagemService.entregas_por_cliente(viagem),
             'conciliacao': ViagemService.conciliacao(viagem),
             'proximos_status': viagem.proximos_status(),
+            # A VIAGEM INTEIRA EM UMA LINHA: cada etapa ja' tinha a sua tela,
+            # o que faltava era o lugar onde alguem ve' a ORDEM.
+            'etapas': etapas,
+            'fluxo': FluxoViagemService.resumo(etapas),
             'remessa': DocumentoFiscal.objects.filter(
                 origem_tipo='viagem_remessa', origem_id=viagem.pk,
             ).exclude(status=StatusDocumentoFiscal.CANCELADA).first(),
