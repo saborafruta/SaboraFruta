@@ -33,6 +33,7 @@ from apps.logistica.services.vendas_para_carga import (
 )
 from apps.logistica.services.bonificacao_nfe import BonificacaoNFeService
 from apps.logistica.services.estoque_viagem import EstoqueViagemService
+from apps.logistica.services.financeiro_viagem import FinanceiroViagemService
 from apps.logistica.services.entrega_bonificacao import (
     EntregaBonificacaoService,
 )
@@ -214,8 +215,10 @@ class ViagemDetailView(PermissaoRequiredMixin, View):
             'remessa': DocumentoFiscal.objects.filter(
                 origem_tipo='viagem_remessa', origem_id=viagem.pk,
             ).exclude(status=StatusDocumentoFiscal.CANCELADA).first(),
-            'vendas_viagem': viagem.vendas.select_related('cliente', 'pedido_venda')
-                .prefetch_related('itens__produto'),
+            'vendas_viagem': _com_financeiro(
+                viagem.vendas.select_related('cliente', 'pedido_venda')
+                .prefetch_related('itens__produto')
+            ),
             'resumo_vendas': VendaViagemService.resumo(viagem),
             # A CADEIA INTEIRA NUMA TABELA: remessa -> viagem -> produto ->
             # venda -> nota da venda. Cada elo ja' existia guardado em
@@ -272,6 +275,20 @@ class ViagemDetailView(PermissaoRequiredMixin, View):
             ),
             'pode_agir': request.user.tem_permissao('logistica', 'editar'),
         })
+
+
+def _com_financeiro(vendas):
+    """
+    Cada venda da rua carrega o seu dinheiro para a tela.
+
+    A COBRANCA E' PARTE DA VENDA, e nao um relatorio separado: quem olha a
+    viagem precisa ver ali mesmo quem ficou devendo. Procurar isso no contas
+    a receber, viagem por viagem, e' o mesmo que nao ter a informacao.
+    """
+    lista = list(vendas)
+    for venda in lista:
+        venda.financeiro = FinanceiroViagemService.resumo(venda)
+    return lista
 
 
 class ViagemMudarStatusView(PermissaoRequiredMixin, View):

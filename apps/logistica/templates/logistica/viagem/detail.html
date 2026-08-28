@@ -444,6 +444,7 @@
               <th class="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wide" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Itens</th>
               <th class="text-right px-4 py-3 text-xs font-semibold uppercase tracking-wide" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Valor</th>
               <th class="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wide" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">NF-e</th>
+              <th class="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wide" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Cobrança</th>
             </tr>
           </thead>
           <tbody>
@@ -509,6 +510,28 @@
                     </form>
                   {% else %}
                     <span class="text-xs" :style="temaClaro ? 'color:#94a3b8;' : 'color:#71717a;'">—</span>
+                  {% endif %}
+                </td>
+                <td class="px-4 py-3 text-xs">
+                  {% comment %}
+                    AS DUAS AUSENCIAS SAO DIFERENTES: "recebido na entrega" e
+                    "sem titulo" parecem iguais numa coluna vazia e sao coisas
+                    opostas no caixa. A coluna diz qual das duas e'.
+                  {% endcomment %}
+                  {% if venda.financeiro.quantidade %}
+                    <span :style="temaClaro ? 'color:#374151;' : 'color:#d1d5db;'">
+                      {{ venda.financeiro.quantidade }}x a receber
+                    </span>
+                    <span class="block text-[11px]"
+                          style="color:{% if venda.financeiro.aberto %}#d97706{% else %}#059669{% endif %};">
+                      R$ {{ venda.financeiro.aberto|floatformat:2 }} em aberto
+                    </span>
+                  {% elif venda.bonificacao %}
+                    <span :style="temaClaro ? 'color:#94a3b8;' : 'color:#71717a;'">sem cobrança</span>
+                  {% elif venda.status == 'cancelada' %}
+                    <span :style="temaClaro ? 'color:#94a3b8;' : 'color:#71717a;'">—</span>
+                  {% else %}
+                    <span style="color:#059669;">recebido na entrega</span>
                   {% endif %}
                 </td>
               </tr>

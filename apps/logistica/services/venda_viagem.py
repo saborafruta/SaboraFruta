@@ -28,6 +28,7 @@ from apps.core.services.exceptions import DadosInvalidosError
 from apps.logistica.models import (
     ItemVendaViagem, SaldoCarga, VendaViagem, Viagem,
 )
+from apps.logistica.services.financeiro_viagem import FinanceiroViagemService
 from apps.logistica.services.log_viagem import LogViagemService
 from apps.logistica.services.viagem import ViagemService
 
@@ -182,6 +183,11 @@ class VendaViagemService:
             usuario=usuario or viagem.vendedor,
             motivo=motivo or f'{venda.get_tipo_display()} {venda.numero} — {nome}',
         )
+        # A COBRANCA NASCE COM A VENDA, e nao numa rotina noturna: titulo que
+        # nasce depois e' titulo que alguem pode esquecer de criar, e a falta
+        # aparece como cliente que levou mercadoria e nunca foi cobrado. Quem
+        # decide se ha' titulo e' a forma de pagamento, nao esta linha.
+        FinanceiroViagemService.gerar_titulos(venda, usuario=usuario)
         return venda
 
     @classmethod
@@ -213,6 +219,7 @@ class VendaViagemService:
         ViagemService.registrar_saida_do_saldo(
             venda.viagem, produto, quantidade, venda.campo_do_saldo, lote=lote,
         )
+        FinanceiroViagemService.ajustar_titulos(venda)
         return item
 
     @classmethod
@@ -231,6 +238,10 @@ class VendaViagemService:
             raise DadosInvalidosError(
                 'Esta venda já tem nota emitida. Cancele o documento fiscal antes.'
             )
+        # O DINHEIRO E' CONFERIDO ANTES DE QUALQUER COISA VOLTAR: cancelar por
+        # cima de um titulo pago apagaria a cobranca e deixaria o recebimento
+        # orfao. O servico recusa, e a venda continua de pe'.
+        FinanceiroViagemService.cancelar_titulos(venda)
 
         for item in venda.itens.select_related('produto', 'lote'):
             saldo = SaldoCarga.objects.select_for_update().filter(
