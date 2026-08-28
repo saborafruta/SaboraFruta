@@ -122,10 +122,7 @@ class OrcamentoPdfService:
             pedido, e, LARGURA_UTIL, cor=MARINHO, cor_clara=FUNDO,
             arredondada=True,
         )
-        elementos += [Spacer(1, 9), cls._totais(pedido, e), Spacer(1, 9)]
-        elementos += cls._pagamento_previsto(pedido, e)
-        elementos += [Spacer(1, 6)]
-        elementos += cls._fechamento(pedido, e)
+        elementos += [Spacer(1, 9)] + cls._resumo_comercial(pedido, e)
         doc.build(elementos, onFirstPage=cls._rodape, onLaterPages=cls._rodape)
         return buffer.getvalue()
 
@@ -296,14 +293,28 @@ class OrcamentoPdfService:
     def _produto(cls, item, e):
         largura = cls.LARGURAS[1] - 12
         conteudo = [
-            Paragraph(_texto(item.nome_exibicao), e['nome']), Spacer(1, 7),
+            Paragraph(_texto(item.nome_exibicao), e['nome']), Spacer(1, 5),
         ]
         especificacoes = cls._especificacoes(item)
-        for rotulo, valor in especificacoes:
-            conteudo += [
-                Paragraph(f'<b>{_texto(rotulo)}:</b> {_texto(valor)}', e['celula']),
-                Spacer(1, 2),
+        if especificacoes:
+            celulas = [
+                Paragraph(f'<b>{_texto(rotulo)}:</b> {_texto(valor)}', e['celula'])
+                for rotulo, valor in especificacoes
             ]
+            linhas = [celulas[indice:indice + 2] for indice in range(0, len(celulas), 2)]
+            if len(linhas[-1]) == 1:
+                linhas[-1].append('')
+            tabela_especificacoes = Table(
+                linhas, colWidths=[largura / 2] * 2, hAlign='LEFT',
+            )
+            tabela_especificacoes.setStyle(TableStyle([
+                ('VALIGN', (0, 0), (-1, -1), 'TOP'),
+                ('LEFTPADDING', (0, 0), (-1, -1), 0),
+                ('RIGHTPADDING', (0, 0), (-1, -1), 4),
+                ('TOPPADDING', (0, 0), (-1, -1), 0),
+                ('BOTTOMPADDING', (0, 0), (-1, -1), 2),
+            ]))
+            conteudo.append(tabela_especificacoes)
         grade = [g for g in item.grade.all() if g.quantidade]
         if grade:
             resumo = ' | '.join(f'{g.tamanho.sigla} {g.quantidade}' for g in grade)
@@ -423,6 +434,13 @@ class OrcamentoPdfService:
             ('BOX', (0, 0), (-1, -1), .5, BORDA),
         ]))
         return [tabela]
+
+    @classmethod
+    def _resumo_comercial(cls, pedido, e):
+        """Não separa o total das formas de pagamento entre páginas."""
+        valores = [cls._totais(pedido, e), Spacer(1, 9)]
+        valores += cls._pagamento_previsto(pedido, e)
+        return [KeepTogether(valores), Spacer(1, 6)] + cls._fechamento(pedido, e)
 
     @staticmethod
     def _observacoes(pedido, e, largura=LARGURA_UTIL):

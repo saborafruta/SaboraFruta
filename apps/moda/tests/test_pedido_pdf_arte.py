@@ -250,6 +250,46 @@ class ArteNoPdfTests(TestCase):
         self.assertIn('Camisa <A> & B', texto)
         self.assertTrue(OrcamentoPdfService.gerar(pedido).startswith(b'%PDF'))
 
+    def test_orcamento_organiza_especificacoes_em_duas_colunas_sem_reduzir_imagem(self):
+        from reportlab.platypus import Table
+        from apps.moda.services.orcamento_pdf import _estilos
+
+        pedido = self._pedido()
+        item = ItemPedidoProducao.objects.create(
+            pedido=pedido, descricao='Agasalho',
+            observacoes='Estrutura da peça:\n' + '\n'.join(
+                f'Tipo {indice}: VALOR-{indice}' for indice in range(10)
+            ),
+        )
+
+        linha = OrcamentoPdfService._produto(item, _estilos())
+        conteudo = linha[1]
+        tabela = next(bloco for bloco in conteudo if isinstance(bloco, Table))
+        self.assertEqual(len(tabela._cellvalues), 5)
+        self.assertEqual(len(tabela._cellvalues[0]), 2)
+        self.assertAlmostEqual(OrcamentoPdfService.LARGURAS[0], 27 * 72 / 25.4)
+        self.assertAlmostEqual(OrcamentoPdfService.LARGURAS[1], 76 * 72 / 25.4)
+
+    def test_resumo_comercial_e_um_bloco_unico_para_nao_quebrar_total(self):
+        from reportlab.platypus import KeepTogether
+        from apps.moda.services.orcamento_pdf import _estilos
+
+        pedido = self._pedido()
+        pedido.previsao_pagamento = [
+            {'forma': 'boleto', 'valor': '500.00'},
+            {'forma': 'dinheiro', 'valor': '500.00'},
+        ]
+        pedido.save(update_fields=['previsao_pagamento'])
+
+        blocos = OrcamentoPdfService._resumo_comercial(pedido, _estilos())
+        self.assertIsInstance(blocos[0], KeepTogether)
+        texto_financeiro = self._texto_layout(blocos[0]._content)
+        texto_fechamento = self._texto_layout(blocos[2]._content)
+        self.assertIn('Total:', texto_financeiro)
+        self.assertIn('FORMA DE PAGAMENTO PREVISTA', texto_financeiro)
+        self.assertIn('Observações e prazos:', texto_fechamento)
+        self.assertIn('Previsão de entrega:', texto_fechamento)
+
     def test_orcamento_usa_previsao_de_entrega_e_mantem_prazo_maximo(self):
         from datetime import date
         from apps.moda.services.orcamento_pdf import _estilos
