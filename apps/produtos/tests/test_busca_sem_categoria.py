@@ -77,6 +77,14 @@ class BuscaProdutoSemCategoriaTests(TestCase):
     def test_subcategoria_nao_completa_termo_do_nome(self):
         self.assert_buscas('oscar regata', set())
 
+    def test_descricoes_internas_antigas_nao_ampliam_busca(self):
+        # Cadastros reaproveitados podem manter o nome anterior no PDV/resumo.
+        self.basqueteira.descricao_curta = 'Regata antiga'
+        self.basqueteira.descricao_pdv = 'Regata antiga'
+        self.basqueteira.save(update_fields=['descricao_curta', 'descricao_pdv'])
+        self.assert_buscas('regata', {self.regata.pk, self.regata_gg.pk})
+        self.assert_buscas('antiga', set())
+
     def test_nome_e_tamanho_continuam_pesquisaveis(self):
         self.assert_buscas('g oscar', {self.basqueteira.pk})
         self.assert_buscas('p regata', {self.regata.pk})
