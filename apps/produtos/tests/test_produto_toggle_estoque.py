@@ -111,6 +111,26 @@ class ProdutoToggleEstoqueTests(TestCase):
         self.assertEqual(movimento.tipo_operacao, MovimentacaoEstoque.TipoOperacao.AJUSTE_MENOS)
         self.assertEqual(movimento.quantidade, Decimal('5.000'))
 
+    def test_filtro_com_estoque_exclui_saldos_zerados_e_negativos(self):
+        produto_positivo = self.criar_produto()
+        produto_zerado = self.criar_produto()
+        produto_negativo = self.criar_produto()
+        Estoque.objects.filter(produto=produto_zerado).update(
+            quantidade_atual=Decimal('0'),
+            quantidade_disponivel=Decimal('0'),
+        )
+        Estoque.objects.filter(produto=produto_negativo).update(
+            quantidade_atual=Decimal('-2'),
+            quantidade_disponivel=Decimal('-2'),
+        )
+        request = self.factory.get('/produtos/', {'com_estoque': '1', 'status': 'todos'})
+        request.user = self.usuario
+        request.filial_ativa = self.filial
+
+        produtos = list(_produto_queryset_filtrado(request, incluir_inativos_por_padrao=True))
+
+        self.assertEqual([produto.pk for produto in produtos], [produto_positivo.pk])
+
     def test_inativar_produto_sem_confirmar_mantem_estoque(self):
         produto = self.criar_produto()
 

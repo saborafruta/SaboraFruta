@@ -371,6 +371,11 @@
         <div class="text-xs font-semibold" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Preco de custo</div>
         <div class="mt-1 text-xl font-semibold estoque-value-amount" :style="temaClaro ? 'color:#1d4ed8;' : 'color:#93c5fd;'">{{ resumo.valor_custo_total|moeda }}</div>
       </div>
+      <div class="estoque-value-box" style="grid-column:1 / -1; min-height:72px;">
+        <div class="text-xs font-semibold" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Quantidade total filtrada</div>
+        <div class="mt-1 text-xl font-semibold" :style="temaClaro ? 'color:#7c3aed;' : 'color:#c4b5fd;'">{{ resumo.quantidade_total_filtrada|quantidade:3 }}</div>
+        <div class="mt-1 text-xs" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Soma do estoque atual de {{ resumo.produtos_total_filtrado }} produto{{ resumo.produtos_total_filtrado|pluralize }}</div>
+      </div>
     </div>
   </div>
 </div>
@@ -437,6 +442,12 @@
       <option value="pendente_custo" {% if status == 'pendente_custo' %}selected{% endif %}>Pendente custo</option>
     </select>
   </div>
+  <label class="md:col-span-2 flex items-center gap-2 px-3 min-h-10 rounded-lg cursor-pointer"
+         :style="temaClaro ? 'background:#f8fafc; border:1px solid #e2e8f0; color:#334155;' : 'background:#18181b; border:1px solid #3f3f46; color:#e2e8f0;'">
+    <input type="checkbox" name="com_estoque" value="1" {% if somente_com_estoque %}checked{% endif %}
+           class="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500">
+    <span class="text-sm font-semibold">Somente com estoque</span>
+  </label>
   <div class="md:col-span-1 estoque-filter-submit">
     <button type="submit" class="btn-secondary estoque-filter-button">Filtrar</button>
   </div>

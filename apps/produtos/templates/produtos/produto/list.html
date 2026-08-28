@@ -261,6 +261,12 @@
       <option value="todos" {% if status == 'todos' %}selected{% endif %}>Todos</option>
     </select>
   </div>
+  <label class="md:col-span-2 flex items-center gap-2 px-3 min-h-10 rounded-lg cursor-pointer"
+         :style="temaClaro ? 'background:#f8fafc; border:1px solid #e2e8f0; color:#334155;' : 'background:#18181b; border:1px solid #3f3f46; color:#e2e8f0;'">
+    <input type="checkbox" name="com_estoque" value="1" {% if somente_com_estoque %}checked{% endif %}
+           class="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500">
+    <span class="text-sm font-semibold">Somente com estoque</span>
+  </label>
   <div class="md:col-span-1 produto-filter-submit">
     <button type="submit" class="btn-secondary justify-center produto-filter-button">Filtrar</button>
   </div>

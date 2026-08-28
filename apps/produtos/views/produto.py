@@ -224,6 +224,7 @@ def _produto_queryset_filtrado(request, incluir_inativos_por_padrao=False):
     marca_id = request.GET.get('marca', '')
     fornecedor_id = request.GET.get('fornecedor', '')
     status = request.GET.get('status') or ('todos' if incluir_inativos_por_padrao else 'ativo')
+    somente_com_estoque = request.GET.get('com_estoque') == '1'
     ordem = request.GET.get('ordem', 'id')
     estoque_atual = Estoque.objects.filter(
         produto=OuterRef('pk'),
@@ -332,6 +333,8 @@ def _produto_queryset_filtrado(request, incluir_inativos_por_padrao=False):
         qs = qs.filter(vinculo_filial__ativo=True)
     elif status == 'inativo':
         qs = qs.filter(vinculo_filial__ativo=False)
+    if somente_com_estoque:
+        qs = qs.filter(estoque_atual_lista__gt=0)
     if marca_id:
         marca = MarcaProduto.objects.for_filial(request.filial_ativa).filter(
             pk=marca_id,
@@ -1274,6 +1277,7 @@ class ProdutoListView(PermissaoRequiredMixin, View):
         marca_id = request.GET.get('marca', '')
         fornecedor_id = request.GET.get('fornecedor', '')
         status = request.GET.get('status') or 'todos'
+        somente_com_estoque = request.GET.get('com_estoque') == '1'
         ordem = request.GET.get('ordem', 'id')
         page_obj = Paginator(qs, 50).get_page(request.GET.get('page'))
         produtos_pagina = list(page_obj.object_list)
@@ -1339,6 +1343,7 @@ class ProdutoListView(PermissaoRequiredMixin, View):
             'marca_id': marca_id,
             'fornecedor_id': fornecedor_id,
             'status': status,
+            'somente_com_estoque': somente_com_estoque,
             'ordem': ordem,
             'categorias': CategoriaProduto.objects.for_filial(request.filial_ativa).filter(
                 empresa=request.user.empresa,

@@ -182,6 +182,7 @@ class EstoqueListView(PermissaoRequiredMixin, View):
         marca_id = request.GET.get('marca', '')
         fornecedor_id = request.GET.get('fornecedor', '')
         status = request.GET.get('status') or 'todos'
+        somente_com_estoque = request.GET.get('com_estoque') == '1'
         ordem = request.GET.get('ordem', 'id')
 
         if busca:
@@ -276,6 +277,9 @@ class EstoqueListView(PermissaoRequiredMixin, View):
                     filtro_fornecedor |= Q(fornecedor__grupo_replicacao=fornecedor.grupo_replicacao)
                 qs = qs.filter(filtro_fornecedor)
 
+        if somente_com_estoque:
+            qs = qs.filter(estoque_quantidade_atual__gt=0)
+
         if status == 'critico':
             qs = qs.filter(
                 estoque_minimo__gt=0,
@@ -318,6 +322,18 @@ class EstoqueListView(PermissaoRequiredMixin, View):
             valor_custo_total=Sum(valor_custo_expr),
             valor_venda_total=Sum(valor_venda_expr),
         )
+        resumo_filtrado = qs.aggregate(
+            quantidade_total=Coalesce(
+                Sum('estoque_quantidade_atual'),
+                Value(Decimal('0'), output_field=DecimalField(max_digits=18, decimal_places=3)),
+                output_field=DecimalField(max_digits=18, decimal_places=3),
+            ),
+            produtos_total=Count('id'),
+        )
+        resumo.update({
+            'quantidade_total_filtrada': resumo_filtrado['quantidade_total'],
+            'produtos_total_filtrado': resumo_filtrado['produtos_total'],
+        })
         resumo.update({
             'abaixo_minimo': base_qs.filter(
                 estoque_minimo__gt=0,
@@ -375,6 +391,7 @@ class EstoqueListView(PermissaoRequiredMixin, View):
             'marca_id': marca_id,
             'fornecedor_id': fornecedor_id,
             'status': status,
+            'somente_com_estoque': somente_com_estoque,
             'ordem': ordem,
             'sort_urls': sort_urls,
             'categorias': CategoriaProduto.objects.for_filial(request.filial_ativa).filter(

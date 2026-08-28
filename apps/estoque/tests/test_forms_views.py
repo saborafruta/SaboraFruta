@@ -363,6 +363,35 @@ class EstoqueFormsViewsTests(TestCase):
         self.assertIn('R$ 4,00', content)
         self.assertIn('R$ 8,00', content)
 
+    def test_lista_estoque_filtra_saldo_positivo_e_totaliza_quantidade(self):
+        self.conceder(pode_ver=True)
+        positivo_a = self.criar_produto(descricao='Produto positivo A')
+        positivo_b = self.criar_produto(descricao='Produto positivo B')
+        zerado = self.criar_produto(descricao='Produto zerado')
+        negativo = self.criar_produto(descricao='Produto negativo')
+        for produto, quantidade in (
+            (positivo_a, Decimal('5.500')),
+            (positivo_b, Decimal('2.000')),
+            (zerado, Decimal('0')),
+            (negativo, Decimal('-3.000')),
+        ):
+            Estoque.objects.create(
+                produto=produto,
+                filial=self.filial,
+                quantidade_atual=quantidade,
+                quantidade_disponivel=quantidade,
+            )
+
+        response = self.client.get(reverse('estoque:estoque-list'), {'com_estoque': '1'})
+
+        self.assertEqual(response.status_code, 200)
+        produtos = list(response.context['produtos_estoque'])
+        self.assertEqual({produto.pk for produto in produtos}, {positivo_a.pk, positivo_b.pk})
+        self.assertEqual(response.context['resumo']['quantidade_total_filtrada'], Decimal('7.500'))
+        self.assertEqual(response.context['resumo']['produtos_total_filtrado'], 2)
+        self.assertContains(response, 'Somente com estoque')
+        self.assertContains(response, 'Quantidade total filtrada')
+
     def test_extrato_kardex_produto_retorna_resumo_operacional(self):
         self.conceder(pode_ver=True)
         produto = self.criar_produto(descricao='Produto Kardex', controla_lote=True, fornecedor=self.fornecedor)
