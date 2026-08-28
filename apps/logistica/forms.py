@@ -1,5 +1,7 @@
 from datetime import timedelta
 
+from decimal import Decimal
+
 from django import forms
 from django.utils import timezone
 
@@ -213,6 +215,27 @@ class ItemOrdemColetaForm(forms.ModelForm):
         super().__init__(*args, **kwargs)
         for field in self.fields.values():
             field.widget.attrs["class"] = BASE_INPUT_CLASS
+        # GRAMA É PESO DE VERDADE NESTA OPERAÇÃO: uma polpa de 400 g pesa
+        # 0,400 kg, e um campo que só aceita duas casas transformaria isso em
+        # 0,40 — 400 gramas viram 400 gramas, mas 0,125 viraria 0,13, e o
+        # erro só aparece na balança da doca, multiplicado pela carga.
+        for nome in ("quantidade", "volumes", "peso_kg"):
+            self.fields[nome].widget.attrs.update({
+                "step": "0.001", "min": "0", "inputmode": "decimal",
+            })
+        self.fields["valor_unitario"].widget.attrs.update({
+            "step": "0.01", "min": "0", "inputmode": "decimal",
+        })
+
+    def clean(self):
+        # CAMPO VAZIO É ZERO, e não nulo: a coluna não aceita nulo, e deixar
+        # o item ser recusado por um campo que a pessoa deliberadamente não
+        # preencheu seria transformar opcional em obrigatório.
+        dados = super().clean()
+        for nome in ("volumes", "peso_kg", "valor_unitario"):
+            if dados.get(nome) is None:
+                dados[nome] = Decimal("0")
+        return dados
 
 
 class ManifestoCargaForm(forms.ModelForm):
@@ -522,7 +545,40 @@ class PedidoExpedicaoForm(forms.ModelForm):
         return pedido
 
 
+class DecimalComVirgula(forms.DecimalField):
+    """
+    Número que aceita a vírgula que a pessoa digita.
+
+    O TECLADO DAQUI TEM VÍRGULA. Quem lança peso escreve "0,400" — é assim
+    que 400 gramas se escrevem em português — e o campo respondia "Informe um
+    número", sem dizer que o problema era o separador. O erro parecia do
+    dado, e era da tela.
+
+    O PONTO CONTINUA VALENDO: importação, integração e quem digita no teclado
+    numérico mandam "0.400", e recusar isso quebraria o que já funciona.
+    """
+
+    def to_python(self, value):
+        if isinstance(value, str):
+            value = value.strip().replace(' ', '')
+            # MILHAR SÓ SAI QUANDO HÁ DECIMAL DEPOIS: em "1.200" o ponto pode
+            # ser milhar (1200) ou decimal (1,2). Aqui "1.200" com três casas
+            # é peso em quilos — e trocar por 1200 poria uma tonelada na
+            # carga. Só se limpa o ponto quando a vírgula deixa claro quem é
+            # quem: "1.200,5".
+            if ',' in value:
+                value = value.replace('.', '').replace(',', '.')
+        return super().to_python(value)
+
+
 class ItemPedidoExpedicaoForm(forms.ModelForm):
+    quantidade = DecimalComVirgula(label="Quantidade", max_digits=12, decimal_places=3)
+    volumes = DecimalComVirgula(label="Volumes", max_digits=12, decimal_places=3, required=False)
+    peso_kg = DecimalComVirgula(label="Peso kg", max_digits=12, decimal_places=3, required=False)
+    valor_unitario = DecimalComVirgula(
+        label="Valor unitário", max_digits=14, decimal_places=2, required=False,
+    )
+
     class Meta:
         model = ItemPedidoExpedicao
         fields = [

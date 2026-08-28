@@ -631,9 +631,26 @@ class ItemPedidoExpedicao(TimestampedModel):
         return f"{self.produto_nome} - {self.pedido}"
 
     def save(self, *args, **kwargs):
-        # Recalcula valor_total do item automaticamente
+        """
+        O valor da linha é o preço vezes o que se cobra dela.
+
+        NA EXPEDIÇÃO, O QUE SE COBRA É O VOLUME. A quantidade descreve o
+        conteúdo — "tangerina 400 g", 1 unidade — e o que sai no caminhão são
+        as caixas: cinco volumes a R$ 6,80 são R$ 34,00, e não R$ 6,80. Foi
+        assim que a operação preencheu a tela desde o começo; o cálculo é que
+        estava contando a coisa errada.
+
+        SEM VOLUME INFORMADO, A QUANTIDADE MANDA. Linha lançada antes deste
+        campo existir, ou carga que não se conta em caixas, continua valendo
+        preço × quantidade — trocar o multiplicador para zero zeraria pedido
+        que já estava certo.
+        """
         from decimal import Decimal as D
-        self.valor_total = (self.valor_unitario or D("0")) * (self.quantidade or D("0"))
+
+        cobravel = self.volumes or D("0")
+        if cobravel <= D("0"):
+            cobravel = self.quantidade or D("0")
+        self.valor_total = (self.valor_unitario or D("0")) * cobravel
         super().save(*args, **kwargs)
 
 

@@ -220,9 +220,9 @@ class BuscaDeProdutoNoItemTests(TestCase):
 
     def test_a_tela_desenha_todo_campo_que_o_formulario_exige(self):
         """
-        VOLUMES ERA OBRIGATÓRIO E NÃO APARECIA na tela: todo "Adicionar Item"
-        voltava com "Revise os dados do item" e o item não entrava no pedido.
-        Campo exigido que ninguém desenha não tem como ser preenchido.
+        CAMPO EXIGIDO QUE NINGUÉM DESENHA não tem como ser preenchido — foi
+        assim que volumes, obrigatório e invisível, fez todo "Adicionar Item"
+        voltar com "Revise os dados do item".
         """
         html = self.client.get(self.url).content.decode()
         obrigatorios = [
@@ -230,24 +230,54 @@ class BuscaDeProdutoNoItemTests(TestCase):
             if campo.required
         ]
 
-        self.assertIn('volumes', obrigatorios, 'premissa mudou: volumes deixou de ser exigido')
+        self.assertTrue(obrigatorios, 'premissa mudou: o formulario nao exige nada')
         for nome in obrigatorios:
             self.assertIn(f'id="id_{nome}"', html, f'{nome} e exigido mas nao aparece na tela')
 
+    def test_volume_e_peso_aparecem_mesmo_sendo_opcionais(self):
+        """
+        DEIXARAM DE SER EXIGIDOS, E NEM POR ISSO SOMEM: o volume multiplica o
+        preço para dar o valor da linha, e o peso é o que a balança da doca e
+        o MDF-e vão cobrar. Escondê-los porque o formulário aceita vazio
+        empurraria a conta para depois, quando o caminhão já está carregado.
+        """
+        html = self.client.get(self.url).content.decode()
+
+        for nome in ('volumes', 'peso_kg', 'valor_unitario'):
+            self.assertFalse(ItemPedidoExpedicaoForm().fields[nome].required)
+            self.assertIn(f'id="id_{nome}"', html)
+
     def test_o_erro_diz_qual_campo_faltou(self):
-        """"Revise os dados" sem dizer o quê é o que escondeu o volumes."""
+        """"Revise os dados" sem dizer o quê manda a pessoa procurar sozinha."""
         resposta = self.client.post(
             reverse('logistica:pedido-expedicao-item-create', args=[self.pedido.pk]),
-            {'produto_nome': 'Sem volumes', 'quantidade': '1', 'unidade': 'UN',
-             'peso_kg': '0', 'valor_unitario': '0'},
+            {'produto_nome': 'Sem quantidade', 'unidade': 'UN', 'volumes': '1'},
             follow=True,
         )
 
         self.assertEqual(self.pedido.itens.count(), 0)
-        # Olhar a MENSAGEM, e nao a pagina: "Volumes" tambem e o rotulo do
-        # campo, e procura-lo no HTML passaria mesmo sem aviso nenhum.
+        # Olhar a MENSAGEM, e nao a pagina: o rotulo do campo tambem esta' no
+        # HTML, e procura-lo la' passaria mesmo sem aviso nenhum.
         avisos = [str(m) for m in resposta.context['messages']]
         self.assertTrue(
-            any('Volumes' in a for a in avisos),
+            any('Quantidade' in a for a in avisos),
             f'o aviso nao disse qual campo faltou: {avisos}',
         )
+
+    def test_item_sem_volume_entra_como_carga_avulsa(self):
+        """
+        VOLUME OPCIONAL É DECISÃO: granel e devolução de vasilhame não se
+        contam em caixas, e exigir o campo faria a pessoa inventar um número
+        para o item entrar.
+        """
+        self.client.post(
+            reverse('logistica:pedido-expedicao-item-create', args=[self.pedido.pk]),
+            {'produto_nome': 'Polpa a granel', 'quantidade': '12', 'unidade': 'KG',
+             'valor_unitario': '2,50'},
+            follow=True,
+        )
+
+        item = self.pedido.itens.latest('id')
+        self.assertEqual(item.volumes, Decimal('0'))
+        # Sem volume, a quantidade manda na conta do valor.
+        self.assertEqual(item.valor_total, Decimal('30.00'))

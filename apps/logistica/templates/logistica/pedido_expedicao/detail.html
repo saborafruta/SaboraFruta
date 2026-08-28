@@ -2,7 +2,13 @@
 {% block title %}{{ title }}{% endblock %}
 {% block page_title %}{{ title }}{% endblock %}
 {% block content %}
-<div class="max-w-5xl mx-auto space-y-5">
+{% comment %}
+  A TELA OCUPA A LARGURA QUE TEM. A tabela de itens tem dez colunas — código,
+  produto, quantidade, unidade, volumes, peso, dois valores, status e ações —
+  e num container estreito ela vive rolando de lado, com o valor total, que é
+  o que se confere, sempre fora de vista.
+{% endcomment %}
+<div class="w-full space-y-5">
 
   <!-- Breadcrumb -->
   <div class="flex items-center justify-between flex-wrap gap-3">
@@ -119,7 +125,7 @@
         </div>
         <div class="flex justify-between">
           <span :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Peso (kg)</span>
-          <span class="font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">{{ pedido.peso_total_kg|floatformat:2 }}</span>
+          <span class="font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">{{ pedido.peso_total_kg|floatformat:3 }}</span>
         </div>
         <div class="flex justify-between pt-2 border-t" :style="temaClaro ? 'border-color:#e2e8f0;' : 'border-color:#2a2a2e;'">
           <span class="font-semibold" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Valor Total</span>
@@ -223,7 +229,7 @@
           <td class="px-3 py-2.5" :style="temaClaro ? 'color:#374151;' : 'color:#d1d5db;'">{{ item.quantidade|floatformat:"-2" }}</td>
           <td class="px-3 py-2.5 text-xs" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">{{ item.unidade }}</td>
           <td class="px-3 py-2.5" :style="temaClaro ? 'color:#374151;' : 'color:#d1d5db;'">{{ item.volumes|floatformat:"-2" }}</td>
-          <td class="px-3 py-2.5" :style="temaClaro ? 'color:#374151;' : 'color:#d1d5db;'">{{ item.peso_kg|floatformat:2 }}</td>
+          <td class="px-3 py-2.5 tabular-nums" :style="temaClaro ? 'color:#374151;' : 'color:#d1d5db;'">{{ item.peso_kg|floatformat:3 }}</td>
           <td class="px-3 py-2.5" :style="temaClaro ? 'color:#374151;' : 'color:#d1d5db;'">{{ item.valor_unitario|floatformat:2 }}</td>
           <td class="px-3 py-2.5 font-medium" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">{{ item.valor_total|floatformat:2 }}</td>
           <td class="px-3 py-2.5">
@@ -387,7 +393,20 @@
             {{ item_form.valor_unitario }}
           </div>
         </div>
-        <div class="mt-3 flex justify-end">
+        {% comment %}
+          O TOTAL DA LINHA APARECE ANTES DE ENTRAR. Volume vezes valor
+          unitário é a conta que o item vai gravar — mostrá-la só depois de
+          salvar obriga a pessoa a remover a linha para corrigir um preço
+          que ela já podia ter visto errado aqui.
+        {% endcomment %}
+        <div class="mt-3 flex flex-wrap items-center justify-end gap-4">
+          <p class="text-sm" x-show="totalDaLinha > 0" x-cloak
+             :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+            <span x-text="baseDoTotal"></span> ×
+            <span x-text="'R$ ' + precoDigitado.toFixed(2)"></span> =
+            <strong :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'"
+                    x-text="'R$ ' + totalDaLinha.toFixed(2)"></strong>
+          </p>
           <button type="submit" class="btn-primary text-sm">+ Adicionar Item</button>
         </div>
       </form>
@@ -419,6 +438,11 @@
          da busca ja' saiu da tela. */
       escolhido: null,
       _preenchendo: false,
+      /* O total da linha, para a tela mostrar a conta que o item vai gravar:
+         volume × preço, ou quantidade × preço quando não há volume. */
+      volumeDigitado: 0,
+      quantidadeAtual: 0,
+      precoDigitado: 0,
 
       init() {
         this.campo = this.$el.querySelector('#{{ item_form.produto_nome.id_for_label }}');
@@ -432,6 +456,15 @@
            quando ela sai do campo, que e' quando ninguem mais olha. */
         const qtd = this.$el.querySelector('#{{ item_form.quantidade.id_for_label }}');
         if (qtd) qtd.addEventListener('input', () => this.recalcular());
+
+        /* O TOTAL SEGUE OS TRÊS CAMPOS que o compõem — volume, quantidade e
+           preço —, porque qualquer um deles muda a conta e quem digita
+           precisa ver o resultado sem salvar para descobrir. */
+        for (const campo of ['volumes', 'quantidade', 'valor_unitario']) {
+          const el = this.$el.querySelector('#id_' + campo);
+          if (el) el.addEventListener('input', () => this.lerTotal());
+        }
+        this.lerTotal();
 
         /* PRODUTO TROCADO A' MAO DEIXA DE MANDAR NA CONTA: se a pessoa
            reescreve o nome, o cadastro que estava escolhido nao vale mais, e
@@ -572,6 +605,30 @@
             Math.ceil(qtd / porVolume),
           );
         }
+      },
+
+      /* A CONTA DA LINHA, lida dos campos como eles estão agora. */
+      lerTotal() {
+        this.volumeDigitado = this.numeroDoCampo('{{ item_form.volumes.id_for_label }}');
+        this.quantidadeAtual = this.quantidadeDigitada();
+        this.precoDigitado = this.numeroDoCampo('{{ item_form.valor_unitario.id_for_label }}');
+      },
+
+      get baseDoTotal() {
+        /* SEM VOLUME, A QUANTIDADE MANDA — a mesma regra que o item aplica
+           ao salvar. Duas contas diferentes fariam a tela prometer um valor
+           e o pedido gravar outro. */
+        return this.volumeDigitado > 0 ? this.volumeDigitado : this.quantidadeAtual;
+      },
+
+      get totalDaLinha() {
+        return this.baseDoTotal * this.precoDigitado;
+      },
+
+      numeroDoCampo(id) {
+        const campo = document.getElementById(id);
+        if (!campo) return 0;
+        return parseFloat(String(campo.value).replace(',', '.')) || 0;
       },
 
       quantidadeDigitada() {

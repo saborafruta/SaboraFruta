@@ -29,7 +29,9 @@ from django.utils import timezone
 
 from apps.cadastros.models import Cliente, ClienteFilial
 from apps.core.models import Empresa, Filial, PerfilAcesso, Usuario
-from apps.logistica.forms import PedidoExpedicaoForm
+from apps.logistica.forms import (
+    ItemPedidoExpedicaoForm, PedidoExpedicaoForm,
+)
 from apps.logistica.models import PedidoExpedicao
 from apps.core.services.exceptions import DadosInvalidosError
 from apps.estoque.models import MovimentacaoEstoque
@@ -460,3 +462,107 @@ class TelaDosItensTests(ItensDaVendaBase):
         html = self._detalhe(pedido)
 
         self.assertNotIn('da venda', html)
+
+
+class ValorDaLinhaTests(ItensDaVendaBase):
+    """
+    O valor da linha é o preço vezes o que se cobra dela.
+
+    NA EXPEDIÇÃO, O QUE SE COBRA É O VOLUME. A quantidade descreve o conteúdo
+    — "tangerina 400 g", 1 unidade — e o que sai no caminhão são as caixas.
+    """
+
+    def test_volume_vezes_preco(self):
+        pedido = self._expedicao()
+
+        item = pedido.itens.create(
+            ordem=1, produto_nome='Tangerina 400 g',
+            quantidade=Decimal('1'), unidade='G',
+            volumes=Decimal('5'), valor_unitario=Decimal('6.80'),
+        )
+
+        self.assertEqual(item.valor_total, Decimal('34.00'))
+
+    def test_sem_volume_a_quantidade_manda(self):
+        """
+        Linha lançada antes deste campo existir, ou carga que não se conta em
+        caixas, continua valendo preço × quantidade — trocar o multiplicador
+        para zero zeraria pedido que já estava certo.
+        """
+        pedido = self._expedicao()
+
+        item = pedido.itens.create(
+            ordem=1, produto_nome='Polpa a granel',
+            quantidade=Decimal('12'), volumes=Decimal('0'),
+            valor_unitario=Decimal('2.50'),
+        )
+
+        self.assertEqual(item.valor_total, Decimal('30.00'))
+
+    def test_o_total_do_pedido_soma_as_linhas(self):
+        pedido = self._expedicao()
+        pedido.itens.create(
+            ordem=1, produto_nome='Tangerina 400 g', quantidade=Decimal('1'),
+            volumes=Decimal('5'), valor_unitario=Decimal('6.80'),
+        )
+        pedido.itens.create(
+            ordem=2, produto_nome='Caju 1 kg', quantidade=Decimal('1'),
+            volumes=Decimal('2'), valor_unitario=Decimal('10.00'),
+        )
+
+        pedido.recalcular_totais()
+
+        pedido.refresh_from_db()
+        self.assertEqual(pedido.valor_total, Decimal('54.00'))
+        self.assertEqual(pedido.volumes, Decimal('7'))
+
+
+class PesoEmGramasTests(ItensDaVendaBase):
+    """400 gramas são 0,400 kg — e o campo precisa aceitar isso."""
+
+    def test_o_peso_guarda_as_tres_casas(self):
+        pedido = self._expedicao()
+
+        item = pedido.itens.create(
+            ordem=1, produto_nome='Tangerina 400 g', quantidade=Decimal('1'),
+            volumes=Decimal('1'), peso_kg=Decimal('0.400'),
+        )
+
+        item.refresh_from_db()
+        self.assertEqual(item.peso_kg, Decimal('0.400'))
+
+    def test_o_formulario_aceita_gramas(self):
+        form = ItemPedidoExpedicaoForm({
+            'produto_nome': 'Tangerina 400 g',
+            'quantidade': '1',
+            'unidade': 'UN',
+            'volumes': '5',
+            'peso_kg': '0,400',
+            'valor_unitario': '6,80',
+        })
+
+        self.assertTrue(form.is_valid(), form.errors)
+        self.assertEqual(form.cleaned_data['peso_kg'], Decimal('0.400'))
+
+    def test_o_campo_de_peso_pede_tres_casas(self):
+        """
+        Um `step` de duas casas faria o navegador recusar 0,400 — e a recusa
+        aparece como campo vermelho sem explicação.
+        """
+        form = ItemPedidoExpedicaoForm()
+
+        self.assertEqual(form.fields['peso_kg'].widget.attrs['step'], '0.001')
+
+    def test_a_tela_mostra_o_peso_em_tres_casas(self):
+        pedido = self._expedicao()
+        pedido.itens.create(
+            ordem=1, produto_nome='Tangerina 400 g', quantidade=Decimal('1'),
+            volumes=Decimal('1'), peso_kg=Decimal('0.400'),
+        )
+        pedido.recalcular_totais()
+
+        html = self.client.get(
+            reverse('logistica:pedido-expedicao-detail', args=[pedido.pk]),
+        ).content.decode()
+
+        self.assertIn('0,400', html)
