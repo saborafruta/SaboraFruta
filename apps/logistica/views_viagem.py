@@ -26,6 +26,7 @@ from apps.logistica.models import (
 )
 from apps.vendas.models.pedido import PedidoVenda
 from apps.logistica.services.estoque_transito import EstoqueEmTransitoService
+from apps.logistica.services.relatorio_acerto import RelatorioAcertoService
 from apps.logistica.services.remessa_nfe import RemessaVendaForaService
 from apps.logistica.services.vendas_para_carga import (
     CARREGAVEIS, VendasParaCargaService,
@@ -1135,4 +1136,29 @@ class RastreabilidadeView(PermissaoRequiredMixin, View):
                 RastreabilidadeService.do_produto(produto, filial)
                 if produto is not None else []
             ),
+        })
+
+
+class RelatorioAcertoView(PermissaoRequiredMixin, View):
+    """
+    O relatório de acerto da viagem.
+
+    É o documento que o escritório e quem viajou olham juntos no fim: o que
+    saiu, o que virou dinheiro, o que foi dado, o que voltou -- e quais notas
+    amparam cada uma dessas coisas.
+    """
+
+    permissao_modulo = 'logistica'
+    template_name = 'logistica/viagem/relatorio_acerto.html'
+
+    def get(self, request, pk):
+        viagem = get_object_or_404(
+            Viagem.objects.for_filial(_filial(request))
+            .select_related('motorista', 'veiculo', 'responsavel', 'vendedor'),
+            pk=pk,
+        )
+        relatorio = RelatorioAcertoService.relatorio(viagem)
+        return render(request, self.template_name, {
+            'title': f'Acerto da viagem #{viagem.numero:06d}',
+            **relatorio,
         })

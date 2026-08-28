@@ -1,0 +1,336 @@
+{% extends "_base.html" %}
+{% block title %}{{ title }}{% endblock %}
+{% block page_title %}{{ title }}{% endblock %}
+{% block content %}
+<div class="max-w-6xl mx-auto space-y-5">
+
+  <div class="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
+    <div>
+      <p class="text-sm mb-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+        <a href="{% url 'logistica:viagem-list' %}" :style="temaClaro ? 'color:#3b82f6;' : 'color:#60a5fa;'">Viagens</a>
+        <span class="mx-1">›</span>
+        <a href="{% url 'logistica:viagem-detail' viagem.pk %}" :style="temaClaro ? 'color:#3b82f6;' : 'color:#60a5fa;'">#{{ viagem.numero|stringformat:"06d" }}</a>
+        <span class="mx-1">›</span> Relatório de acerto
+      </p>
+      <h2 class="text-2xl font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
+        Relatório de acerto — Viagem #{{ identificacao.numero|stringformat:"06d" }}
+      </h2>
+    </div>
+    {% comment %}
+      O ESTADO DA CONTA VEM PRIMEIRO. Quem abre este relatorio quer saber, em
+      um olhar, se a viagem fechou -- o resto e' o detalhe de como.
+    {% endcomment %}
+    <span class="soft-pill {% if fecha %}is-green{% else %}is-amber{% endif %}">
+      {% if fecha %}Conta fechada{% else %}Diferença de {{ diferenca|floatformat:"-3" }}{% endif %}
+    </span>
+  </div>
+
+  <!-- ── Identificação ─────────────────────────────────────────── -->
+  <div class="card p-5">
+    <h3 class="text-xs font-bold uppercase tracking-wider pb-2 mb-3 border-b"
+        :style="temaClaro ? 'color:#475569;border-color:#e2e8f0;' : 'color:#cbd5e1;border-color:#2a2a2e;'">
+      A viagem
+    </h3>
+    <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-4 text-sm">
+      <div>
+        <span class="block text-[11px] uppercase tracking-wide" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Motorista</span>
+        <span :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">{{ identificacao.motorista }}</span>
+        {% if identificacao.documento_motorista %}
+          <span class="block text-xs font-mono" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">{{ identificacao.documento_motorista }}</span>
+        {% endif %}
+      </div>
+      <div>
+        <span class="block text-[11px] uppercase tracking-wide" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Veículo</span>
+        <span :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">{{ identificacao.veiculo }}</span>
+        <span class="block text-xs font-mono" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">{{ identificacao.placa }}</span>
+      </div>
+      <div>
+        <span class="block text-[11px] uppercase tracking-wide" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Saída</span>
+        <span :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
+          {{ identificacao.data_saida|date:"d/m/Y" }}{% if identificacao.hora_saida %} · {{ identificacao.hora_saida|time:"H:i" }}{% endif %}
+        </span>
+      </div>
+      <div>
+        <span class="block text-[11px] uppercase tracking-wide" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Retorno</span>
+        {% comment %}
+          PREVISAO E RETORNO LADO A LADO: e' assim que se ve' se a viagem
+          atrasou, e guardar so' um numero apagaria essa informacao.
+        {% endcomment %}
+        <span :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
+          {{ identificacao.data_retorno|date:"d/m/Y"|default:"— ainda na rua" }}
+        </span>
+        {% if identificacao.previsao_retorno %}
+          <span class="block text-xs" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+            previsto {{ identificacao.previsao_retorno|date:"d/m/Y" }}
+          </span>
+        {% endif %}
+      </div>
+      <div>
+        <span class="block text-[11px] uppercase tracking-wide" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Rota</span>
+        <span :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">{{ identificacao.rota }}</span>
+      </div>
+      <div>
+        <span class="block text-[11px] uppercase tracking-wide" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Vendedor</span>
+        <span :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">{{ identificacao.vendedor|default:"—" }}</span>
+      </div>
+      <div>
+        <span class="block text-[11px] uppercase tracking-wide" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Responsável</span>
+        <span :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">{{ identificacao.responsavel|default:"—" }}</span>
+      </div>
+      <div>
+        <span class="block text-[11px] uppercase tracking-wide" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Etapa</span>
+        <span :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">{{ identificacao.status }}</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── A conta ───────────────────────────────────────────────── -->
+  <div class="card overflow-hidden">
+    <div class="p-5 pb-3">
+      <h3 class="text-xs font-bold uppercase tracking-wider" :style="temaClaro ? 'color:#475569;' : 'color:#cbd5e1;'">
+        Quantidades e valores
+      </h3>
+      {% comment %}
+        VALOR RETORNADO E' PELO VALOR DE SAIDA: a mercadoria voltou como saiu.
+        Avalia-la por preco de venda faria a viagem parecer ter perdido
+        dinheiro so' por ter voltado com carga.
+      {% endcomment %}
+      <p class="text-xs mt-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+        O retorno é avaliado pelo valor com que a mercadoria saiu.
+      </p>
+    </div>
+    <div class="overflow-x-auto">
+      <table class="w-full text-sm">
+        <thead>
+          <tr :style="temaClaro ? 'border-bottom:1px solid #e5e7eb;background:#f8fafc;' : 'border-bottom:1px solid #2a2a2e;background:#1e1e20;'">
+            <th class="text-left px-5 py-3 text-xs font-semibold uppercase tracking-wide" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Linha</th>
+            <th class="text-right px-5 py-3 text-xs font-semibold uppercase tracking-wide" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Quantidade</th>
+            <th class="text-right px-5 py-3 text-xs font-semibold uppercase tracking-wide" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Valor</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr class="border-b" :style="temaClaro ? 'border-color:#e2e8f0;background:#f8fafc;' : 'border-color:#2a2a2e;background:rgba(255,255,255,0.02);'">
+            <td class="px-5 py-3 font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">Carga</td>
+            <td class="px-5 py-3 text-right font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">{{ quantidades.carregada|floatformat:"-3" }}</td>
+            <td class="px-5 py-3 text-right font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">R$ {{ valores.carga|floatformat:2 }}</td>
+          </tr>
+          <tr class="border-b" :style="temaClaro ? 'border-color:#f1f5f9;' : 'border-color:#2a2a2e;'">
+            <td class="px-5 py-3" :style="temaClaro ? 'color:#374151;' : 'color:#d1d5db;'">
+              Vendido
+              <span class="block text-[11px]" :style="temaClaro ? 'color:#94a3b8;' : 'color:#71717a;'">
+                {{ quantidades.vendida_previa|floatformat:"-3" }} já vendida + {{ quantidades.vendida_na_rua|floatformat:"-3" }} na rota
+              </span>
+            </td>
+            <td class="px-5 py-3 text-right" :style="temaClaro ? 'color:#374151;' : 'color:#d1d5db;'">{{ quantidades.vendida|floatformat:"-3" }}</td>
+            <td class="px-5 py-3 text-right font-semibold" :style="temaClaro ? 'color:#15803d;' : 'color:#86efac;'">R$ {{ valores.vendido|floatformat:2 }}</td>
+          </tr>
+          <tr class="border-b" :style="temaClaro ? 'border-color:#f1f5f9;' : 'border-color:#2a2a2e;'">
+            <td class="px-5 py-3" :style="temaClaro ? 'color:#374151;' : 'color:#d1d5db;'">Bonificado</td>
+            <td class="px-5 py-3 text-right" :style="temaClaro ? 'color:#374151;' : 'color:#d1d5db;'">{{ quantidades.bonificada|floatformat:"-3" }}</td>
+            <td class="px-5 py-3 text-right" :style="temaClaro ? 'color:#b45309;' : 'color:#fcd34d;'">R$ {{ valores.bonificado|floatformat:2 }}</td>
+          </tr>
+          <tr class="border-b" :style="temaClaro ? 'border-color:#f1f5f9;' : 'border-color:#2a2a2e;'">
+            <td class="px-5 py-3" :style="temaClaro ? 'color:#374151;' : 'color:#d1d5db;'">Retornado</td>
+            <td class="px-5 py-3 text-right" :style="temaClaro ? 'color:#374151;' : 'color:#d1d5db;'">{{ quantidades.retornada|floatformat:"-3" }}</td>
+            <td class="px-5 py-3 text-right" :style="temaClaro ? 'color:#374151;' : 'color:#d1d5db;'">R$ {{ valores.retornado|floatformat:2 }}</td>
+          </tr>
+          {% if quantidades.baixada %}
+            <tr class="border-b" :style="temaClaro ? 'border-color:#f1f5f9;' : 'border-color:#2a2a2e;'">
+              <td class="px-5 py-3" style="color:#ef4444;">Baixado (quebra, perda)</td>
+              <td class="px-5 py-3 text-right" style="color:#ef4444;">{{ quantidades.baixada|floatformat:"-3" }}</td>
+              <td class="px-5 py-3 text-right">—</td>
+            </tr>
+          {% endif %}
+          {% if quantidades.em_poder %}
+            <tr class="border-b" :style="temaClaro ? 'border-color:#f1f5f9;' : 'border-color:#2a2a2e;'">
+              <td class="px-5 py-3" style="color:#d97706;">Ainda no caminhão</td>
+              <td class="px-5 py-3 text-right font-semibold" style="color:#d97706;">{{ quantidades.em_poder|floatformat:"-3" }}</td>
+              <td class="px-5 py-3 text-right">—</td>
+            </tr>
+          {% endif %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- ── Clientes atendidos ────────────────────────────────────── -->
+  <div class="card overflow-hidden">
+    <div class="p-5 pb-3">
+      <h3 class="text-xs font-bold uppercase tracking-wider" :style="temaClaro ? 'color:#475569;' : 'color:#cbd5e1;'">
+        Clientes atendidos — {{ clientes.total }}
+      </h3>
+      {% comment %}
+        CONTA POR PESSOA, e nao por entrega: o mesmo cliente pode ter comprado
+        duas vezes na mesma rota, e dizer que a viagem atendeu dois seria
+        inflar o numero que o comercial usa para medir a rota.
+      {% endcomment %}
+    </div>
+    <div class="overflow-x-auto">
+      <table class="w-full text-sm">
+        <thead>
+          <tr :style="temaClaro ? 'border-bottom:1px solid #e5e7eb;background:#f8fafc;' : 'border-bottom:1px solid #2a2a2e;background:#1e1e20;'">
+            <th class="text-left px-5 py-3 text-xs font-semibold uppercase tracking-wide" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Cliente</th>
+            <th class="text-left px-5 py-3 text-xs font-semibold uppercase tracking-wide" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">CPF / CNPJ</th>
+            <th class="text-right px-5 py-3 text-xs font-semibold uppercase tracking-wide" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Vendido</th>
+            <th class="text-right px-5 py-3 text-xs font-semibold uppercase tracking-wide" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Bonificado</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for linha in clientes.lista %}
+            <tr class="border-b" :style="temaClaro ? 'border-color:#f1f5f9;' : 'border-color:#2a2a2e;'">
+              <td class="px-5 py-3" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
+                {{ linha.nome }}
+                {% if not linha.cliente %}
+                  <span class="soft-pill is-slate ml-1 text-[10px]">sem cadastro</span>
+                {% endif %}
+              </td>
+              <td class="px-5 py-3 font-mono text-xs" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">{{ linha.documento|default:"—" }}</td>
+              <td class="px-5 py-3 text-right" :style="temaClaro ? 'color:#15803d;' : 'color:#86efac;'">R$ {{ linha.valor_vendido|floatformat:2 }}</td>
+              <td class="px-5 py-3 text-right" :style="temaClaro ? 'color:#b45309;' : 'color:#fcd34d;'">R$ {{ linha.valor_bonificado|floatformat:2 }}</td>
+            </tr>
+          {% empty %}
+            <tr>
+              <td colspan="4" class="px-5 py-8 text-center" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+                Nenhum cliente atendido nesta viagem.
+              </td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- ── Documentos fiscais ────────────────────────────────────── -->
+  <div class="card overflow-hidden">
+    <div class="p-5 pb-3">
+      <h3 class="text-xs font-bold uppercase tracking-wider" :style="temaClaro ? 'color:#475569;' : 'color:#cbd5e1;'">
+        Documentos fiscais — {{ documentos.total }}
+      </h3>
+      {% if documentos.pendentes %}
+        {% comment %}
+          A NOTA AUSENTE APARECE COMO AUSENTE. Viagem com remessa nao emitida e'
+          diferente de viagem que nao precisava de remessa, e o acerto nao pode
+          passar em branco por cima da pendencia fiscal.
+        {% endcomment %}
+        <ul class="text-sm mt-2 space-y-1" style="color:#d97706;">
+          {% for pendencia in documentos.pendentes %}<li>· {{ pendencia }}</li>{% endfor %}
+        </ul>
+      {% endif %}
+    </div>
+    <div class="overflow-x-auto">
+      <table class="w-full text-sm">
+        <thead>
+          <tr :style="temaClaro ? 'border-bottom:1px solid #e5e7eb;background:#f8fafc;' : 'border-bottom:1px solid #2a2a2e;background:#1e1e20;'">
+            <th class="text-left px-5 py-3 text-xs font-semibold uppercase tracking-wide" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Documento</th>
+            <th class="text-left px-5 py-3 text-xs font-semibold uppercase tracking-wide" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Número</th>
+            <th class="text-left px-5 py-3 text-xs font-semibold uppercase tracking-wide" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Situação</th>
+            <th class="text-left px-5 py-3 text-xs font-semibold uppercase tracking-wide" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Referente a</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr class="border-b" :style="temaClaro ? 'border-color:#f1f5f9;' : 'border-color:#2a2a2e;'">
+            <td class="px-5 py-3" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">NF-e de remessa</td>
+            <td class="px-5 py-3 font-mono" :style="temaClaro ? 'color:#374151;' : 'color:#d1d5db;'">
+              {% if documentos.remessa %}{{ documentos.remessa.numero }}/{{ documentos.remessa.serie }}{% else %}—{% endif %}
+            </td>
+            <td class="px-5 py-3 text-xs" :style="temaClaro ? 'color:#374151;' : 'color:#d1d5db;'">
+              {% if documentos.remessa %}{{ documentos.remessa.get_status_display }}{% else %}
+                <span style="color:#d97706;">não emitida</span>
+              {% endif %}
+            </td>
+            <td class="px-5 py-3 text-xs" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Mercadoria para venda fora</td>
+          </tr>
+
+          {% comment %}
+            AS CINCO LINHAS APARECEM SEMPRE, mesmo vazias. Um relatorio que
+            omite a linha da nota inexistente deixa quem le' sem saber se ela
+            nao era necessaria ou se ninguem emitiu.
+          {% endcomment %}
+          {% if not documentos.vendas %}
+            <tr class="border-b" :style="temaClaro ? 'border-color:#f1f5f9;' : 'border-color:#2a2a2e;'">
+              <td class="px-5 py-3" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">NF-e de venda</td>
+              <td class="px-5 py-3 font-mono" :style="temaClaro ? 'color:#374151;' : 'color:#d1d5db;'">—</td>
+              <td class="px-5 py-3 text-xs" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">sem venda na rota</td>
+              <td class="px-5 py-3 text-xs" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Vendas durante a viagem</td>
+            </tr>
+          {% endif %}
+          {% for linha in documentos.vendas %}
+            <tr class="border-b" :style="temaClaro ? 'border-color:#f1f5f9;' : 'border-color:#2a2a2e;'">
+              <td class="px-5 py-3" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">NF-e de venda</td>
+              <td class="px-5 py-3 font-mono" :style="temaClaro ? 'color:#374151;' : 'color:#d1d5db;'">
+                {% if linha.nota %}{{ linha.nota.numero }}/{{ linha.nota.serie }}{% else %}—{% endif %}
+              </td>
+              <td class="px-5 py-3 text-xs" :style="temaClaro ? 'color:#374151;' : 'color:#d1d5db;'">
+                {% if linha.nota %}{{ linha.nota.get_status_display }}{% else %}
+                  <span style="color:#d97706;">não emitida</span>
+                {% endif %}
+              </td>
+              <td class="px-5 py-3 text-xs" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+                Venda {{ linha.entrega.numero }} · {{ linha.entrega.cliente_nome }}
+              </td>
+            </tr>
+          {% endfor %}
+
+          {% if not documentos.bonificacoes %}
+            <tr class="border-b" :style="temaClaro ? 'border-color:#f1f5f9;' : 'border-color:#2a2a2e;'">
+              <td class="px-5 py-3" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">NF-e de bonificação</td>
+              <td class="px-5 py-3 font-mono" :style="temaClaro ? 'color:#374151;' : 'color:#d1d5db;'">—</td>
+              <td class="px-5 py-3 text-xs" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">sem bonificação na rota</td>
+              <td class="px-5 py-3 text-xs" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Entregas sem cobrança</td>
+            </tr>
+          {% endif %}
+          {% for linha in documentos.bonificacoes %}
+            <tr class="border-b" :style="temaClaro ? 'border-color:#f1f5f9;' : 'border-color:#2a2a2e;'">
+              <td class="px-5 py-3" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">NF-e de bonificação</td>
+              <td class="px-5 py-3 font-mono" :style="temaClaro ? 'color:#374151;' : 'color:#d1d5db;'">
+                {% if linha.nota %}{{ linha.nota.numero }}/{{ linha.nota.serie }}{% else %}—{% endif %}
+              </td>
+              <td class="px-5 py-3 text-xs" :style="temaClaro ? 'color:#374151;' : 'color:#d1d5db;'">
+                {% if linha.nota %}{{ linha.nota.get_status_display }}{% else %}
+                  <span style="color:#d97706;">não emitida</span>
+                {% endif %}
+              </td>
+              <td class="px-5 py-3 text-xs" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+                Entrega {{ linha.entrega.numero }} · {{ linha.entrega.cliente_nome }}
+              </td>
+            </tr>
+          {% endfor %}
+
+          <tr class="border-b" :style="temaClaro ? 'border-color:#f1f5f9;' : 'border-color:#2a2a2e;'">
+            <td class="px-5 py-3" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">NF-e de retorno</td>
+            <td class="px-5 py-3 font-mono" :style="temaClaro ? 'color:#374151;' : 'color:#d1d5db;'">
+              {% if documentos.retorno %}{{ documentos.retorno.numero }}/{{ documentos.retorno.serie }}{% else %}—{% endif %}
+            </td>
+            <td class="px-5 py-3 text-xs" :style="temaClaro ? 'color:#374151;' : 'color:#d1d5db;'">
+              {% if documentos.retorno %}{{ documentos.retorno.get_status_display }}{% else %}não emitida{% endif %}
+            </td>
+            <td class="px-5 py-3 text-xs" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Mercadoria que voltou</td>
+          </tr>
+
+          <tr :style="temaClaro ? '' : ''">
+            <td class="px-5 py-3" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">MDF-e</td>
+            <td class="px-5 py-3 font-mono" :style="temaClaro ? 'color:#374151;' : 'color:#d1d5db;'">
+              {% if documentos.mdfe %}{{ documentos.mdfe.numero }}/{{ documentos.mdfe.serie }}{% else %}—{% endif %}
+            </td>
+            <td class="px-5 py-3 text-xs" :style="temaClaro ? 'color:#374151;' : 'color:#d1d5db;'">
+              {% if documentos.mdfe %}{{ documentos.mdfe.get_status_display }}{% else %}não emitido{% endif %}
+            </td>
+            <td class="px-5 py-3 text-xs" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">A carga inteira</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  {% if identificacao.observacoes %}
+    <div class="card p-5">
+      <h3 class="text-xs font-bold uppercase tracking-wider pb-2 mb-3 border-b"
+          :style="temaClaro ? 'color:#475569;border-color:#e2e8f0;' : 'color:#cbd5e1;border-color:#2a2a2e;'">
+        Observações
+      </h3>
+      <p class="text-sm whitespace-pre-line" :style="temaClaro ? 'color:#374151;' : 'color:#d1d5db;'">{{ identificacao.observacoes }}</p>
+    </div>
+  {% endif %}
+
+</div>
+{% endblock %}

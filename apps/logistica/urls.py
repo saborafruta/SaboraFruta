@@ -24,6 +24,7 @@ urlpatterns = [
     path("estoque-em-transito/", views_viagem.EstoqueEmTransitoView.as_view(), name="estoque-transito"),
     path("viagens/nova/", views_viagem.ViagemCreateView.as_view(), name="viagem-create"),
     path("viagens/<int:pk>/", views_viagem.ViagemDetailView.as_view(), name="viagem-detail"),
+    path("viagens/<int:pk>/acerto/relatorio/", views_viagem.RelatorioAcertoView.as_view(), name="viagem-relatorio-acerto"),
     path("viagens/<int:pk>/editar/", views_viagem.ViagemUpdateView.as_view(), name="viagem-update"),
     path("viagens/<int:pk>/status/", views_viagem.ViagemMudarStatusView.as_view(), name="viagem-status"),
     path("viagens/<int:pk>/fechar-carga/", views_viagem.ViagemFecharCargaView.as_view(), name="viagem-fechar-carga"),
