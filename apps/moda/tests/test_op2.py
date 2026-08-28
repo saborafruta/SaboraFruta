@@ -1123,6 +1123,52 @@ class Op2Tests(TestCase):
             OP2_ESTRUTURA_OPCOES['agasalho']['campos']['tipo_impressao'],
         )
 
+    def test_orcamento_personalizacao_fica_dentro_de_cada_produto(self):
+        self.client.force_login(self._usuario())
+        session = self.client.session
+        session['filial_id'] = self.filial.pk
+        session.save()
+
+        resposta = self.client.get(reverse('moda:op2-create'))
+
+        self.assertContains(resposta, 'op2-item-personalizacao')
+        self.assertContains(resposta, 'Personalizações deste produto')
+        self.assertContains(resposta, 'personalizacoesDoItem(item.uid)')
+        self.assertContains(resposta, '+ Outro nome / número')
+        self.assertNotContains(resposta, 'individualDraft')
+        self.assertNotContains(resposta, '4. Grade de personalização')
+
+    def test_orcamento_vincula_personalizacoes_a_itens_distintos_do_mesmo_modelo(self):
+        tamanho = Tamanho.objects.create(filial=self.filial, sigla='M', ordem=10)
+        grade = Grade.objects.create(filial=self.filial, nome='Adulto')
+        ItemGrade.objects.create(grade=grade, tamanho=tamanho, ordem=10)
+        self.client.force_login(self._usuario())
+        session = self.client.session
+        session['filial_id'] = self.filial.pk
+        session.save()
+        dados = {'cliente': str(self.cliente.pk)}
+        for idx, nome in enumerate(['ANA', 'BIA']):
+            dados.update({
+                f'item_{idx}_produto_id': str(self.produto.pk),
+                f'item_{idx}_grade_id': str(grade.pk),
+                f'item_{idx}_grade_{tamanho.pk}': '1',
+                f'item_{idx}_quantidade': '1',
+                f'item_{idx}_valor_unitario': '25',
+                f'individual_{idx}_item_idx': str(idx),
+                f'individual_{idx}_tamanho_id': str(tamanho.pk),
+                f'individual_{idx}_nome': nome,
+                f'individual_{idx}_numero': str(idx + 1),
+            })
+
+        resposta = self.client.post(reverse('moda:op2-create'), dados)
+
+        criado = PedidoProducao.objects.exclude(pk=self.pedido.pk).get()
+        self.assertRedirects(resposta, reverse('moda:op2-detail', args=[criado.pk]))
+        itens = list(criado.itens.order_by('pk'))
+        self.assertEqual(len(itens), 2)
+        self.assertEqual(itens[0].individuais.get().nome, 'ANA')
+        self.assertEqual(itens[1].individuais.get().nome, 'BIA')
+
     def test_nova_op_salva_grade_de_personalizacao_do_orcamento(self):
         tamanho = Tamanho.objects.create(filial=self.filial, sigla='M', ordem=10)
         grade = Grade.objects.create(filial=self.filial, nome='Adulto')

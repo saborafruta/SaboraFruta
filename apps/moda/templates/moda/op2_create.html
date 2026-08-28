@@ -10,6 +10,8 @@
 <style>
 .op2-shell{margin:-.75rem}.op2-work{display:grid;grid-template-columns:minmax(0,1fr) 300px;gap:12px}.op2-band{border:1px solid rgba(148,163,184,.22);border-radius:10px;padding:12px}.op2-label{display:block;margin-bottom:4px;font-size:10px;text-transform:uppercase;letter-spacing:.06em;color:#64748b;font-weight:800}.op2-card{border:1px solid rgba(148,163,184,.22);border-radius:10px;padding:10px}.op2-results{position:absolute;left:0;right:0;top:100%;z-index:40;max-height:240px;overflow:auto;border:1px solid rgba(148,163,184,.35);border-radius:10px;margin-top:4px;background:var(--card-bg,#18181b)}.op2-plus{min-height:78px;border:1px dashed rgba(148,163,184,.45);border-radius:10px;display:flex;align-items:center;justify-content:center;text-align:center;cursor:pointer;overflow:hidden}.op2-plus img{width:100%;height:110px;object-fit:cover}.op2-modal-grid{display:grid;grid-template-columns:330px minmax(0,1fr);gap:12px}.op2-model-list{max-height:58vh;overflow:auto}.op2-grade-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:8px}.op2-grade-chip{border:1px solid rgba(148,163,184,.28);border-radius:10px;padding:10px;text-align:left;min-height:60px}.op2-grade-chip.is-on{border-color:#3b82f6;background:rgba(59,130,246,.13);box-shadow:inset 3px 0 #3b82f6}.op2-grade-panel{border:1px solid rgba(59,130,246,.38);border-radius:12px;padding:11px;background:rgba(59,130,246,.06)}.op2-size-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(145px,1fr));gap:8px}.op2-size-card{border:1px solid rgba(148,163,184,.24);border-radius:10px;padding:9px;background:rgba(148,163,184,.05)}.op2-size-name{display:block;text-align:center;font-size:12px;font-weight:900;margin-bottom:7px}.op2-stepper{display:grid;grid-template-columns:40px minmax(56px,1fr) 40px;gap:5px;align-items:center}.op2-qty-btn{height:40px;border:1px solid rgba(148,163,184,.3);border-radius:8px;font-size:20px;font-weight:800}.op2-qty-input{height:40px;min-width:0;text-align:center;font-size:18px;font-weight:800}.op2-qty-input::-webkit-inner-spin-button,.op2-qty-input::-webkit-outer-spin-button{-webkit-appearance:none;margin:0}.op2-file-previews{display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:8px}.op2-file-preview{border:1px solid rgba(148,163,184,.22);border-radius:9px;padding:7px;min-width:0}.op2-file-preview img{width:100%;height:90px;object-fit:cover;border-radius:6px;margin-bottom:5px}
 .op2-results{background:#18181b!important;color:#f8fafc!important}.op2-results button,.op2-results strong,.op2-results small{color:inherit!important}.op2-qty-error{border-color:#ef4444!important;box-shadow:0 0 0 2px rgba(239,68,68,.18)}
+.op2-item-personalizacao{margin-top:10px;padding:12px;border:1px solid rgba(59,130,246,.28);border-radius:10px;background:rgba(59,130,246,.055)}.op2-personalizacao-grid{display:grid;grid-template-columns:minmax(115px,.7fr) minmax(150px,1fr) minmax(110px,.65fr) auto;gap:8px;align-items:end}.op2-chip{display:inline-flex;padding:3px 7px;border-radius:999px;font-size:11px;background:rgba(59,130,246,.12)}
+@media(max-width:767px){.op2-personalizacao-grid{grid-template-columns:1fr}.op2-personalizacao-grid button{width:100%}}
 @media(max-width:1023px){.op2-work{grid-template-columns:minmax(0,1fr)}.op2-aside{display:grid;grid-template-columns:1fr 1fr;gap:12px}.op2-modal-grid{grid-template-columns:1fr}input,select,textarea{font-size:16px!important}}
 @media(max-width:767px){.op2-aside{display:block}.op2-grid-compact{grid-template-columns:1fr!important}.op2-model-list{max-height:240px}}
 </style>
@@ -34,7 +36,7 @@
         </template>
       </div>
     </template>
-    <template x-for="(pessoa,idx) in personalizacoes" :key="pessoa.uid">
+    <template x-for="(pessoa,idx) in personalizacoesPreenchidas()" :key="pessoa.uid">
       <div><input type="hidden" :name="`individual_${idx}_item_idx`" :value="indiceItem(pessoa.itemUid)"><input type="hidden" :name="`individual_${idx}_tamanho_id`" :value="pessoa.tamanhoId"><input type="hidden" :name="`individual_${idx}_nome`" :value="pessoa.nome"><input type="hidden" :name="`individual_${idx}_numero`" :value="pessoa.numero"></div>
     </template>
     <template x-for="(pagamento,idx) in pagamentos" :key="pagamento.uid">
@@ -61,35 +63,42 @@
           <div class="flex items-center justify-between gap-2 mb-2"><div><h2 class="font-bold">2 e 3. Modelos, personalização e impressão</h2><p class="text-xs opacity-70">A estrutura da peça e os detalhes aparecem só na sobreposição de adicionar modelo.</p></div><button type="button" class="btn-primary" @click="abrirModalItem()">+ Adicionar modelo</button></div>
           <div class="space-y-2">
             <template x-for="(item,idx) in itens" :key="item.uid">
-              <article class="op2-card">
+              <article class="op2-card" x-data="{personalizar:false}">
                 <div class="grid lg:grid-cols-[minmax(0,1.2fr)_minmax(0,.9fr)_auto] gap-3 items-center">
                 <div class="min-w-0"><div class="flex flex-wrap items-center gap-2"><strong class="truncate" x-text="item.nome"></strong><span class="px-2 py-1 rounded-full text-xs font-bold" style="color:#d97706;background:rgba(245,158,11,.14)">Orçamento</span></div><p class="text-xs opacity-70 mt-1" x-text="[item.codigo, item.tipo_impressao_label, item.gradeResumo || item.grade_nome].filter(Boolean).join(' · ')"></p></div>
                 <div class="grid grid-cols-3 gap-2 text-sm"><div><span class="op2-label">Peças</span><strong x-text="item.quantidade"></strong></div><div><span class="op2-label">Unitário</span><strong x-text="moeda(item.valor_unitario)"></strong></div><div><span class="op2-label">Total</span><strong x-text="moeda(item.quantidade * item.valor_unitario)"></strong></div></div>
                 <div class="flex gap-2 justify-end"><button type="button" class="btn-secondary text-sm" @click="editarItem(idx)">Editar</button><button type="button" class="btn-secondary text-sm" style="color:#ef4444" @click="removerItem(idx)">Excluir</button></div></div>
-                <div class="flex items-center gap-2 pt-2 mt-2" style="border-top:1px solid rgba(148,163,184,.14)"><label class="btn-secondary cursor-pointer"><input type="file" :name="`item_${idx}_imagens`" accept="image/*" multiple class="hidden" @change="item.imagensNomes=Array.from($event.target.files||[]).map(f=>f.name)">+ Adicionar imagens</label><small class="opacity-60" x-text="item.imagensNomes?.length?`${item.imagensNomes.length} imagem(ns) selecionada(s)`:'As imagens ficarão ligadas somente a este produto.'"></small></div>
+                <div class="flex flex-wrap items-center gap-2 pt-2 mt-2" style="border-top:1px solid rgba(148,163,184,.14)"><label class="btn-secondary cursor-pointer"><input type="file" :name="`item_${idx}_imagens`" accept="image/*" multiple class="hidden" @change="item.imagensNomes=Array.from($event.target.files||[]).map(f=>f.name)">+ Adicionar imagens</label><button type="button" class="btn-secondary text-sm" :aria-expanded="personalizar" @click="personalizar=!personalizar; if(personalizar && !personalizacoesDoItem(item.uid).length) adicionarLinhaPersonalizacao(item.uid)">Adicionar nomes / números</button><small class="opacity-60" x-text="item.imagensNomes?.length?`${item.imagensNomes.length} imagem(ns) selecionada(s)`:'As imagens ficarão ligadas somente a este produto.'"></small></div>
+                <div class="flex flex-wrap items-center gap-1 mt-2" x-show="personalizacoesDoItem(item.uid).some(p=>p.nome || p.numero)">
+                  <span class="op2-label mb-0">Nomes / números</span><template x-for="pessoa in personalizacoesDoItem(item.uid).filter(p=>p.nome || p.numero)" :key="pessoa.uid"><span class="op2-chip" x-text="[tamanhoLabels[pessoa.tamanhoId],pessoa.nome,pessoa.numero?'#'+pessoa.numero:''].filter(Boolean).join(' · ')"></span></template>
+                </div>
+                <div x-show="personalizar" x-cloak class="op2-item-personalizacao">
+                  <div class="flex items-start justify-between gap-2 mb-3"><div><h3 class="font-bold">Personalizações deste produto</h3><p class="text-xs opacity-70">Preencha os nomes, números e tamanhos. Tudo será salvo junto com o orçamento.</p></div><button type="button" class="text-xs font-bold" @click="personalizar=false">Fechar</button></div>
+                  <p x-show="!item.gradeQuantidades.length" class="text-sm mb-2" style="color:#d97706">Use “Editar” para definir a grade deste produto antes de personalizar.</p>
+                  <div class="space-y-2"><template x-for="pessoa in personalizacoesDoItem(item.uid)" :key="pessoa.uid">
+                    <div class="op2-personalizacao-grid">
+                      <label><span class="op2-label">Tamanho</span><select x-model="pessoa.tamanhoId" class="form-input w-full"><option value="">Selecione</option><template x-for="vaga in vagasOrcamento(item.uid,pessoa.uid)" :key="vaga.id"><option :value="vaga.id" :disabled="vaga.restam<=0 && String(pessoa.tamanhoId)!==vaga.id" x-text="`${vaga.sigla} · ${vaga.restam} livre(s)`"></option></template></select></label>
+                      <label><span class="op2-label">Nome</span><input x-model="pessoa.nome" maxlength="80" class="form-input w-full" placeholder="Ex.: SILVA"></label>
+                      <label><span class="op2-label">Número</span><input x-model="pessoa.numero" maxlength="10" class="form-input w-full" placeholder="Ex.: 10"></label>
+                      <button type="button" class="btn-secondary" style="color:#ef4444" @click="removerPersonalizacao(pessoa.uid)">Remover</button>
+                    </div>
+                  </template></div>
+                  <button type="button" class="btn-secondary text-sm mt-3" @click="adicionarLinhaPersonalizacao(item.uid)">+ Outro nome / número</button>
+                </div>
               </article>
             </template>
             <div x-show="!itens.length" class="text-center p-8 rounded-lg" style="border:1px dashed #64748b"><p class="font-bold">Nenhum modelo ainda</p><p class="text-sm opacity-70 mt-1">Clique em “Adicionar modelo” para escolher o modelo, estrutura, impressão e grade.</p><button type="button" class="btn-primary mt-3" @click="abrirModalItem()">Adicionar modelo</button></div>
           </div>
         </section>
         <section class="op2-band">
-          <div class="mb-3"><h2 class="font-bold">4. Grade de personalização</h2><p class="text-xs opacity-70">Inclua nomes, números e tamanhos ainda no orçamento. A lista também sairá no PDF.</p></div>
-          <div class="grid md:grid-cols-[minmax(180px,1.2fr)_minmax(110px,.6fr)_minmax(150px,1fr)_100px_auto] gap-2 items-end op2-grid-compact">
-            <label><span class="op2-label">Produto</span><select x-model="individualDraft.itemUid" @change="individualDraft.tamanhoId=''" class="form-input w-full"><option value="">Selecione</option><template x-for="item in itens" :key="item.uid"><option :value="String(item.uid)" x-text="[item.nome,item.grade_nome].filter(Boolean).join(' · ')"></option></template></select></label>
-            <label><span class="op2-label">Tamanho</span><select x-model="individualDraft.tamanhoId" class="form-input w-full"><option value="">Selecione</option><template x-for="vaga in vagasOrcamento(individualDraft.itemUid)" :key="vaga.id"><option :value="vaga.id" :disabled="vaga.restam<=0" x-text="`${vaga.sigla}${vaga.restam<=0?' · esgotado':` · ${vaga.restam} livre(s)`}`"></option></template></select></label>
-            <label><span class="op2-label">Nome</span><input x-model="individualDraft.nome" class="form-input w-full" placeholder="Ex.: SILVA"></label><label><span class="op2-label">Número</span><input x-model="individualDraft.numero" class="form-input w-full" placeholder="Ex.: 10"></label><button type="button" class="btn-primary" @click="adicionarPersonalizacao()">Adicionar</button>
-          </div>
-          <div class="mt-3 space-y-2"><template x-for="(pessoa,idx) in personalizacoes" :key="pessoa.uid"><article class="op2-card flex items-center justify-between gap-3"><div><strong x-text="pessoa.nome || `#${pessoa.numero}`"></strong><small class="block opacity-65" x-text="`${nomeItem(pessoa.itemUid)} · ${tamanhoLabels[pessoa.tamanhoId]||pessoa.tamanhoId}${pessoa.numero?' · #'+pessoa.numero:''}`"></small></div><button type="button" class="btn-secondary text-sm" style="color:#ef4444" @click="personalizacoes.splice(idx,1)">Remover</button></article></template><p x-show="!personalizacoes.length" class="text-sm opacity-60">Nenhuma personalização individual informada.</p></div>
-        </section>
-        <section class="op2-band">
-          <div class="flex flex-wrap items-start justify-between gap-2 mb-3"><div><h2 class="font-bold">5. Previsão de pagamento</h2><p class="text-xs opacity-70">É somente a combinação prevista para o orçamento; não gera lançamentos no financeiro.</p></div><button type="button" class="btn-secondary text-sm" @click="adicionarPagamento()">+ Outra forma</button></div>
+          <div class="flex flex-wrap items-start justify-between gap-2 mb-3"><div><h2 class="font-bold">4. Previsão de pagamento</h2><p class="text-xs opacity-70">É somente a combinação prevista para o orçamento; não gera lançamentos no financeiro.</p></div><button type="button" class="btn-secondary text-sm" @click="adicionarPagamento()">+ Outra forma</button></div>
           <div class="space-y-2">
             <template x-for="(pagamento,idx) in pagamentos" :key="pagamento.uid"><div class="grid md:grid-cols-[minmax(190px,1fr)_minmax(150px,.7fr)_auto] gap-2 items-end op2-grid-compact"><label><span class="op2-label">Forma</span><select x-model="pagamento.forma" class="form-input w-full"><option value="">Selecione</option>{% for valor,rotulo in formas_pagamento_previstas %}<option value="{{ valor }}">{{ rotulo }}</option>{% endfor %}</select></label><label><span class="op2-label">Valor</span><input type="number" min="0.01" step=".01" x-model.number="pagamento.valor" class="form-input w-full" placeholder="0,00"></label><button type="button" class="btn-secondary" style="color:#ef4444" x-show="pagamentos.length>1" @click="pagamentos.splice(idx,1)">Remover</button></div></template>
           </div>
           <div class="flex flex-wrap justify-between gap-2 mt-3 p-3 rounded-lg text-sm" :style="Math.abs(totalPagamentos()-totalValor())<0.01?'background:rgba(22,163,74,.10);color:#16a34a':'background:rgba(245,158,11,.12);color:#d97706'"><span>Soma prevista: <strong x-text="moeda(totalPagamentos())"></strong></span><span>Total do orçamento: <strong x-text="moeda(totalValor())"></strong></span></div>
         </section>
         <section class="op2-band">
-          <h2 class="font-bold mb-2">6. Anexos e observações gerais</h2>
+          <h2 class="font-bold mb-2">5. Anexos e observações gerais</h2>
           <div class="grid md:grid-cols-4 gap-2 op2-grid-compact"><input type="file" name="arquivo" multiple class="form-input md:col-span-2" @change="previewAnexos($event)"><select name="tipo_arquivo" class="form-input">{% for v,l in tipos_arquivo %}<option value="{{ v }}">{{ l }}</option>{% endfor %}</select><input name="descricao_arquivo" class="form-input" placeholder="Descrição dos arquivos"><textarea name="observacoes" rows="3" class="form-input md:col-span-4" placeholder="Observações gerais da OP"></textarea></div>
           <div class="op2-file-previews mt-3" x-show="anexosPreview.length" x-cloak><template x-for="arquivo in anexosPreview" :key="arquivo.chave"><figure class="op2-file-preview"><img x-show="arquivo.imagem" :src="arquivo.url" :alt="arquivo.nome"><div x-show="!arquivo.imagem" class="h-[90px] flex items-center justify-center text-2xl">📎</div><figcaption class="text-xs truncate" x-text="arquivo.nome"></figcaption><small class="block opacity-60" x-text="arquivo.tamanho"></small></figure></template></div>
         </section>
@@ -156,7 +165,6 @@ function op2NovaMelhorada(){
     try{const canal=new BroadcastChannel('op2-salvo');canal.onmessage=e=>{if(e.data?.opUrl)window.location.assign(e.data.opUrl)}}catch(e){}
   };
   estado.personalizacoes=[];
-  estado.individualDraft={itemUid:'',tamanhoId:'',nome:'',numero:''};
   estado.pagamentos=[{uid:Date.now()+Math.random(),forma:'',valor:''}];
   estado.adicionarPagamento=function(){this.pagamentos.push({uid:Date.now()+Math.random(),forma:'',valor:''})};
   estado.totalPagamentos=function(){return this.pagamentos.reduce((s,p)=>s+Number(p.valor||0),0)};
@@ -166,6 +174,7 @@ function op2NovaMelhorada(){
     draft.gradePorGrade={};
     return draft;
   };
+  estado.draft=estado.novoDraft();
   estado.garantirGrade=function(gradeId){
     gradeId=String(gradeId);
     if(this.draft.gradePorGrade[gradeId])return;
@@ -292,28 +301,30 @@ function op2NovaMelhorada(){
     else{
       const uidAnterior=this.itens[this.editandoIdx].uid;
       if(novos.length)novos[0].uid=uidAnterior;
+      if(this.personalizacoesDoItem(uidAnterior).some(p=>p.tamanhoId &&
+        this.personalizacoesDoItem(uidAnterior).filter(outro=>String(outro.tamanhoId)===String(p.tamanhoId)).length>
+        Number(novos[0].gradeQuantidades.find(l=>String(l.tamanho_id)===String(p.tamanhoId))?.quantidade||0))){
+        alert('A nova grade não comporta as personalizações deste produto. Ajuste os nomes / números antes de reduzir ou trocar os tamanhos.');return;
+      }
       this.itens.splice(this.editandoIdx,1,...novos);
     }
     this.modalProduto=false;
   };
   estado.indiceItem=function(uid){return this.itens.findIndex(item=>String(item.uid)===String(uid))};
   estado.nomeItem=function(uid){return this.itens.find(item=>String(item.uid)===String(uid))?.nome||'Produto removido'};
-  estado.vagasOrcamento=function(uid){
+  estado.personalizacoesDoItem=function(uid){return this.personalizacoes.filter(p=>String(p.itemUid)===String(uid))};
+  estado.personalizacoesPreenchidas=function(){return this.personalizacoes.filter(p=>p.tamanhoId||p.nome.trim()||p.numero.trim())};
+  estado.adicionarLinhaPersonalizacao=function(uid){
+    this.personalizacoes.push({uid:Date.now()+Math.random(),itemUid:String(uid),tamanhoId:'',nome:'',numero:''});
+  };
+  estado.removerPersonalizacao=function(uid){this.personalizacoes=this.personalizacoes.filter(p=>p.uid!==uid)};
+  estado.vagasOrcamento=function(uid,pessoaUid=null){
     const item=this.itens.find(linha=>String(linha.uid)===String(uid));
     if(!item)return[];
     return(item.gradeQuantidades||[]).map(linha=>{
-      const usadas=this.personalizacoes.filter(p=>String(p.itemUid)===String(uid)&&String(p.tamanhoId)===String(linha.tamanho_id)).length;
+      const usadas=this.personalizacoesDoItem(uid).filter(p=>p.uid!==pessoaUid&&String(p.tamanhoId)===String(linha.tamanho_id)).length;
       return{id:String(linha.tamanho_id),sigla:this.tamanhoLabels[String(linha.tamanho_id)]||String(linha.tamanho_id),restam:Math.max(Number(linha.quantidade||0)-usadas,0)};
     });
-  };
-  estado.adicionarPersonalizacao=function(){
-    const p=this.individualDraft;
-    const vaga=this.vagasOrcamento(p.itemUid).find(v=>String(v.id)===String(p.tamanhoId));
-    if(!p.itemUid||!p.tamanhoId){alert('Selecione o produto e o tamanho.');return}
-    if(!p.nome.trim()&&!p.numero.trim()){alert('Informe o nome ou o número.');return}
-    if(!vaga||vaga.restam<=0){alert('Esse tamanho já atingiu o limite da grade.');return}
-    this.personalizacoes.push({uid:Date.now()+Math.random(),itemUid:String(p.itemUid),tamanhoId:String(p.tamanhoId),nome:p.nome.trim(),numero:p.numero.trim()});
-    this.individualDraft={itemUid:String(p.itemUid),tamanhoId:'',nome:'',numero:''};
   };
   estado.removerItem=function(idx){
     const uid=this.itens[idx]?.uid;
@@ -324,6 +335,16 @@ function op2NovaMelhorada(){
   estado.validarAntesDeSalvar=function(event){
     validarFormulario(event);
     if(event.defaultPrevented)return;
+    for(const pessoa of this.personalizacoesPreenchidas()){
+      const produto=this.nomeItem(pessoa.itemUid);
+      if(!pessoa.tamanhoId || (!pessoa.nome.trim()&&!pessoa.numero.trim())){
+        event.preventDefault();alert(`Complete o tamanho e o nome ou número da personalização de ${produto}.`);return;
+      }
+      const vaga=this.vagasOrcamento(pessoa.itemUid,pessoa.uid).find(v=>v.id===String(pessoa.tamanhoId));
+      if(!vaga||vaga.restam<=0){
+        event.preventDefault();alert(`As personalizações de ${produto} ultrapassam a quantidade disponível na grade.`);return;
+      }
+    }
     const preenchidas=this.pagamentos.filter(p=>p.forma||Number(p.valor||0)>0);
     if(preenchidas.some(p=>!p.forma||Number(p.valor||0)<=0)){
       event.preventDefault();alert('Complete a forma e o valor de cada pagamento previsto.');return;
