@@ -353,6 +353,100 @@
     </div>
   </div>
 
+  {% if vendas_viagem %}
+    {% comment %}
+      AS VENDAS FEITAS NA RUA, uma a uma. A prestação de contas abaixo mostra
+      o total por produto; aqui está QUEM comprou — e é aqui que a nota de
+      cada uma é emitida, porque quem emite é quem acabou de vender, com o
+      cliente esperando o documento na mão.
+    {% endcomment %}
+    <div class="card overflow-hidden">
+      <div class="p-4 pb-3 flex flex-wrap items-baseline justify-between gap-2">
+        <div>
+          <h3 class="text-sm font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">Vendas na rota</h3>
+          <p class="text-xs mt-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+            Cada venda contra o saldo que viajou, com a nota que a acompanha.
+          </p>
+        </div>
+        {% if resumo_vendas.valor %}
+          <span class="text-sm font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
+            R$ {{ resumo_vendas.valor|floatformat:2 }}
+          </span>
+        {% endif %}
+      </div>
+      <div class="overflow-x-auto">
+        <table class="w-full text-sm">
+          <thead>
+            <tr :style="temaClaro ? 'border-bottom:1px solid #e5e7eb;background:#f8fafc;' : 'border-bottom:1px solid #2a2a2e;background:#1e1e20;'">
+              <th class="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wide" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Venda</th>
+              <th class="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wide" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Cliente</th>
+              <th class="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wide" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Itens</th>
+              <th class="text-right px-4 py-3 text-xs font-semibold uppercase tracking-wide" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Valor</th>
+              <th class="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wide" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">NF-e</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for venda in vendas_viagem %}
+              <tr class="border-b align-top" :style="temaClaro ? 'border-color:#f1f5f9;' : 'border-color:#2a2a2e;'">
+                <td class="px-4 py-3 font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
+                  #{{ venda.numero }}
+                  <span class="block text-[11px] font-normal" :style="temaClaro ? 'color:#94a3b8;' : 'color:#71717a;'">
+                    {{ venda.data|date:"d/m H:i" }}
+                  </span>
+                  {% if venda.status == 'cancelada' %}
+                    <span class="soft-pill is-red text-[11px] mt-1">cancelada</span>
+                  {% endif %}
+                </td>
+                <td class="px-4 py-3" :style="temaClaro ? 'color:#374151;' : 'color:#d1d5db;'">
+                  {{ venda.cliente_nome }}
+                  {% if venda.cliente_documento %}
+                    <span class="block text-[11px]" :style="temaClaro ? 'color:#94a3b8;' : 'color:#71717a;'">
+                      {{ venda.cliente_documento }}
+                    </span>
+                  {% else %}
+                    {% comment %}
+                      SEM DOCUMENTO NAO HA' NF-e -- e o vendedor precisa
+                      descobrir isso aqui, nao na hora de transmitir.
+                    {% endcomment %}
+                    <span class="block text-[11px]" style="color:#d97706;">sem CPF/CNPJ</span>
+                  {% endif %}
+                </td>
+                <td class="px-4 py-3 text-xs" :style="temaClaro ? 'color:#374151;' : 'color:#d1d5db;'">
+                  {% for item in venda.itens.all %}
+                    <span class="block">
+                      {{ item.produto }} × {{ item.quantidade|floatformat:"-3" }}
+                      {% if item.lote %}<span class="opacity-70">· lote {{ item.lote.numero_lote }}</span>{% endif %}
+                    </span>
+                  {% endfor %}
+                </td>
+                <td class="px-4 py-3 text-right font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
+                  R$ {{ venda.valor_total|floatformat:2 }}
+                </td>
+                <td class="px-4 py-3">
+                  {% if venda.documento_fiscal %}
+                    <span class="font-mono text-xs" :style="temaClaro ? 'color:#374151;' : 'color:#d1d5db;'">
+                      {{ venda.documento_fiscal.numero }}/{{ venda.documento_fiscal.serie }}
+                    </span>
+                    <span class="block text-[11px]" :style="temaClaro ? 'color:#94a3b8;' : 'color:#71717a;'">
+                      {{ venda.documento_fiscal.get_status_display }}
+                    </span>
+                  {% elif venda.status != 'cancelada' %}
+                    <form method="post" action="{% url 'logistica:viagem-venda-nfe' viagem.pk venda.pk %}">
+                      {% csrf_token %}
+                      <button type="submit" class="btn-secondary text-xs">Emitir NF-e</button>
+                    </form>
+                  {% else %}
+                    <span class="text-xs" :style="temaClaro ? 'color:#94a3b8;' : 'color:#71717a;'">—</span>
+                  {% endif %}
+                </td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  {% endif %}
+
   {% if conciliacao %}
     <div class="card overflow-hidden">
       <div class="p-4 pb-3">

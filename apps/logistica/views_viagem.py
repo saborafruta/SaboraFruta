@@ -28,6 +28,7 @@ from apps.logistica.services.remessa_nfe import RemessaVendaForaService
 from apps.logistica.services.vendas_para_carga import (
     CARREGAVEIS, VendasParaCargaService,
 )
+from apps.logistica.services.venda_fora_nfe import VendaForaNFeService
 from apps.logistica.services.venda_viagem import VendaViagemService
 from apps.logistica.services.viagem import ViagemService
 
@@ -595,4 +596,33 @@ class ViagemVendaCancelarView(PermissaoRequiredMixin, View):
             messages.error(request, str(erro))
             return volta
         messages.success(request, 'Venda cancelada e mercadoria devolvida ao saldo.')
+        return volta
+
+
+class ViagemVendaEmitirNFeView(PermissaoRequiredMixin, View):
+    """
+    Emite a NF-e da venda feita na rua.
+
+    O BOTÃO FICA NA LINHA DA VENDA, e não numa tela fiscal separada: quem
+    emite é quem acabou de vender, com o cliente esperando o documento na
+    mão. Mandá-lo procurar a nota em outro lugar é como a venda sai sem nota.
+    """
+
+    permissao_modulo = 'logistica'
+    permissao_acao = 'editar'
+
+    def post(self, request, pk, venda_pk):
+        viagem = get_object_or_404(Viagem.objects.for_filial(_filial(request)), pk=pk)
+        venda = get_object_or_404(VendaViagem.objects.filter(viagem=viagem), pk=venda_pk)
+        volta = redirect('logistica:viagem-detail', pk=viagem.pk)
+        try:
+            documento = VendaForaNFeService.emitir(venda, usuario=request.user)
+        except DadosInvalidosError as erro:
+            messages.error(request, str(erro))
+            return volta
+        messages.success(
+            request,
+            f'NF-e {documento.numero}/{documento.serie} da venda '
+            f'{venda.numero} gerada e pendente de transmissão à SEFAZ.',
+        )
         return volta
