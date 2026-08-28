@@ -67,7 +67,21 @@ from apps.logistica.models import VendaViagem
 ZERO = Decimal('0')
 CENTAVOS = Decimal('0.01')
 
-ORIGEM = 'viagem_venda_fora'
+# A ORIGEM DIZ QUE OPERACAO O DOCUMENTO E'. Bonificacao gravada como
+# "venda fora" ficaria REGISTRADA COMO VENDA nos proprios registros do
+# sistema: quem consultasse documentos por origem veria a cortesia dentro
+# das vendas, e o relatorio de vendas do mes contaria mercadoria que ninguem
+# pagou.
+ORIGEM_VENDA = 'viagem_venda_fora'
+ORIGEM_BONIFICACAO = 'viagem_bonificacao'
+
+ORIGEM_POR_TIPO = {
+    VendaViagem.Tipo.VENDA: ORIGEM_VENDA,
+    VendaViagem.Tipo.BONIFICACAO: ORIGEM_BONIFICACAO,
+}
+
+# Mantido para quem importa o nome antigo.
+ORIGEM = ORIGEM_VENDA
 
 # Nota já emitida que continua valendo — as outras não amparam nada.
 STATUS_MORTOS = (
@@ -184,11 +198,16 @@ class VendaForaNFeService:
         return problemas
 
     @staticmethod
-    def nota_da_venda(venda: VendaViagem):
-        """A NF-e que ampara esta venda, se já houver uma viva."""
+    def origem(venda: VendaViagem) -> str:
+        """Sob que operação este documento é arquivado."""
+        return ORIGEM_POR_TIPO.get(venda.tipo, ORIGEM_VENDA)
+
+    @classmethod
+    def nota_da_venda(cls, venda: VendaViagem):
+        """A NF-e que ampara esta entrega, se já houver uma viva."""
         return (
             DocumentoFiscal.objects
-            .filter(origem_tipo=ORIGEM, origem_id=venda.pk)
+            .filter(origem_tipo=cls.origem(venda), origem_id=venda.pk)
             .exclude(status__in=STATUS_MORTOS)
             .order_by('-id')
             .first()
@@ -389,7 +408,7 @@ class VendaForaNFeService:
         documento = DocumentoFiscal.objects.create(
             filial=filial,
             tipo_documento=TipoDocumentoFiscal.NFE,
-            origem_tipo=ORIGEM,
+            origem_tipo=cls.origem(venda),
             origem_id=venda.pk,
             numero=numero,
             serie=serie,
