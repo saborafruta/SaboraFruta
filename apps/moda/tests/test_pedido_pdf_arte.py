@@ -182,6 +182,122 @@ class ArteNoPdfTests(TestCase):
 
     # ── O que NÃO pode ir ────────────────────────────────────────────────
 
+    @staticmethod
+    def _texto_layout(bloco):
+        from reportlab.platypus import Paragraph, Table
+
+        if isinstance(bloco, Paragraph):
+            return bloco.getPlainText()
+        if isinstance(bloco, Table):
+            return ArteNoPdfTests._texto_layout(bloco._cellvalues)
+        if isinstance(bloco, (list, tuple)):
+            return ' '.join(ArteNoPdfTests._texto_layout(b) for b in bloco)
+        return ''
+
+    def test_orcamento_reune_foto_estrutura_grade_e_nomes_por_produto(self):
+        from apps.moda.models import ItemGradePedido, PersonalizacaoIndividual, Tamanho
+        from apps.moda.services.orcamento_pdf import _estilos
+
+        pedido = self._pedido()
+        tamanho = Tamanho.objects.create(filial=self.filial, sigla='M')
+        for indice, nome in enumerate(('Camisa Adulto', 'Camisa Oversized')):
+            item = ItemPedidoProducao.objects.create(
+                pedido=pedido, descricao=nome, quantidade=1,
+                valor_unitario=Decimal('70'),
+                observacoes=f'Estrutura da peça:\nMalha: TECIDO-{indice}\nAbertura: ZIPER 10 CM',
+            )
+            ItemGradePedido.objects.create(item=item, tamanho=tamanho, quantidade=1)
+            PersonalizacaoIndividual.objects.create(
+                pedido=pedido, item=item, tamanho=tamanho, nome=f'PESSOA-{indice}',
+            )
+            visual = VisualItemPedido.objects.create(
+                item=item, posicao='frente_camisa',
+                imagem=SimpleUploadedFile(f'agrupamento-{indice}.png', _png()),
+            )
+            self.addCleanup(visual.imagem.delete, save=False)
+
+        tabela = OrcamentoPdfService._itens(pedido, _estilos())[0]
+        self.assertEqual(tabela.repeatRows, 1)
+        self.assertEqual(len(tabela._cellvalues), 3)
+        for indice, linha in enumerate(tabela._cellvalues[1:]):
+            texto = self._texto_layout(linha)
+            self.assertIn(f'TECIDO-{indice}', texto)
+            self.assertIn(f'PESSOA-{indice}', texto)
+            self.assertNotIn(f'PESSOA-{1 - indice}', texto)
+            self.assertIn('Grade:', texto)
+            self.assertIn('R$70,00', texto)
+            self.assertTrue(linha[0])
+        self.assertEqual(_paginas(OrcamentoPdfService.gerar(pedido)), 1)
+
+    def test_orcamento_nao_trunca_estrutura_e_escapa_textos(self):
+        from apps.moda.services.orcamento_pdf import _estilos
+
+        pedido = self._pedido()
+        item = ItemPedidoProducao.objects.create(
+            pedido=pedido, descricao='Camisa <A> & B',
+            observacoes='Estrutura da peça:\n' + '\n'.join(
+                f'Opção {i}: VALOR-{i} & detalhe' for i in range(25)
+            ),
+        )
+        texto = self._texto_layout(OrcamentoPdfService._produto(item, _estilos()))
+        self.assertIn('VALOR-24 & detalhe', texto)
+        self.assertIn('Camisa <A> & B', texto)
+        self.assertTrue(OrcamentoPdfService.gerar(pedido).startswith(b'%PDF'))
+
+    def test_orcamento_usa_previsao_de_entrega_e_mantem_prazo_maximo(self):
+        from datetime import date
+        from apps.moda.services.orcamento_pdf import _estilos
+
+        pedido = self._pedido()
+        pedido.data_prevista_entrega = date(2026, 8, 31)
+        texto = self._texto_layout(OrcamentoPdfService._previsao_entrega(pedido, _estilos()))
+        self.assertIn('Previsão de entrega:', texto)
+        self.assertIn('31/08/2026', texto)
+        self.assertNotIn('Prazo de entrega:', texto)
+        observacoes = self._texto_layout(OrcamentoPdfService._observacoes(pedido, _estilos()))
+        self.assertIn('válido por 5 dias', observacoes)
+        self.assertIn('prazo máximo de entrega é de até 30 dias úteis', observacoes)
+
+    def test_orcamento_sem_data_e_pagamento_nao_inventa_informacoes(self):
+        from apps.moda.services.orcamento_pdf import _estilos
+
+        pedido = self._pedido()
+        self.assertIn('Não informada', self._texto_layout(
+            OrcamentoPdfService._pagamento_previsto(pedido, _estilos()),
+        ))
+        self.assertIn('A combinar', self._texto_layout(
+            OrcamentoPdfService._previsao_entrega(pedido, _estilos()),
+        ))
+
+    def test_orcamento_lista_grande_de_pessoas_pagina_sem_perder_nomes(self):
+        from apps.moda.models import ItemGradePedido, PersonalizacaoIndividual, Tamanho
+        from apps.moda.services.orcamento_pdf import _estilos
+
+        pedido = self._pedido()
+        tamanho = Tamanho.objects.create(filial=self.filial, sigla='M')
+        item = ItemPedidoProducao.objects.create(pedido=pedido, descricao='Time completo', quantidade=150)
+        ItemGradePedido.objects.create(item=item, tamanho=tamanho, quantidade=150)
+        PersonalizacaoIndividual.objects.bulk_create([
+            PersonalizacaoIndividual(pedido=pedido, item=item, tamanho=tamanho, nome=f'ATLETA-{i:03d}')
+            for i in range(150)
+        ])
+        texto = self._texto_layout(OrcamentoPdfService._produto(item, _estilos()))
+        for i in range(150):
+            self.assertIn(f'ATLETA-{i:03d}', texto)
+        self.assertGreater(_paginas(OrcamentoPdfService.gerar(pedido)), 1)
+
+    def test_orcamento_mostra_todas_as_imagens_do_produto(self):
+        pedido = self._pedido()
+        item = ItemPedidoProducao.objects.create(pedido=pedido, descricao='Camisa')
+        antes = _imagens(OrcamentoPdfService.gerar(pedido))
+        for indice in range(5):
+            visual = VisualItemPedido.objects.create(
+                item=item, posicao='frente_camisa',
+                imagem=SimpleUploadedFile(f'orc-foto-{indice}.png', _png((indice * 30, 50, 100))),
+            )
+            self.addCleanup(visual.imagem.delete, save=False)
+        self.assertEqual(_imagens(OrcamentoPdfService.gerar(pedido)), antes + 5)
+
     def test_documento_anexado_tambem_entra_no_pdf(self):
         pedido = self._pedido()
         antes = _imagens(PedidoPdfService.gerar(pedido))
@@ -372,20 +488,16 @@ class ArteNoPdfTests(TestCase):
 
     # ── Cabeçalho ────────────────────────────────────────────────────────
 
-    def test_pedido_e_orcamento_desenham_o_MESMO_cabecalho(self):
-        """
-        Os dois documentos são da mesma casa e têm de parecer da mesma casa.
-
-        Enquanto a tarja era código do orçamento, dar o mesmo cabeçalho ao
-        pedido significava copiar — e duas cópias divergem na primeira
-        mudança de cor. Isto quebra se alguém reintroduzir a segunda.
-        """
+    def test_novo_layout_do_orcamento_nao_altera_cabecalho_da_producao(self):
+        """O orçamento tem desenho próprio, mas usa a marca cadastrada."""
         from apps.moda.services import orcamento_pdf, pdf_marca, pedido_pdf
 
         self.assertIs(pedido_pdf.desenhar_tarja, pdf_marca.desenhar_tarja)
-        self.assertIs(orcamento_pdf.desenhar_tarja, pdf_marca.desenhar_tarja)
         self.assertIs(pedido_pdf.bloco_empresa, pdf_marca.bloco_empresa)
-        self.assertIs(orcamento_pdf.bloco_empresa, pdf_marca.bloco_empresa)
+        self.assertIs(orcamento_pdf.logo, pdf_marca.logo)
+        with patch.object(orcamento_pdf, 'logo', return_value=None) as marca:
+            OrcamentoPdfService.gerar(self._pedido())
+        self.assertEqual(marca.call_args.args[0], self.filial)
 
     def test_endereco_nao_sai_com_parenteses_vazio(self):
         """
