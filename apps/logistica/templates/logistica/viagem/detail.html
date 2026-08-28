@@ -30,6 +30,15 @@
       <a href="{% url 'logistica:viagem-painel' viagem.pk %}" class="btn-secondary">
         Painel
       </a>
+      {% if resumo.em_poder %}
+        {% comment %}
+          O BOTAO SO' APARECE COM MERCADORIA NA RUA: viagem sem saldo nao tem
+          o que conferir, e oferecer a tela vazia ensina a ignorar o botao.
+        {% endcomment %}
+        <a href="{% url 'logistica:viagem-retorno' viagem.pk %}" class="btn-secondary">
+          Conferir retorno
+        </a>
+      {% endif %}
       <a href="{% url 'logistica:viagem-mdfe' viagem.pk %}" class="btn-secondary">
         MDF-e da viagem
       </a>

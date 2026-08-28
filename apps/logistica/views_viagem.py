@@ -40,6 +40,7 @@ from apps.logistica.services.historico_bonificacao import (
     HistoricoBonificacaoService,
 )
 from apps.logistica.services.retorno_nfe import RetornoVendaForaService
+from apps.logistica.services.retorno_viagem import RetornoViagemService
 from apps.logistica.services.venda_fora_nfe import VendaForaNFeService
 from apps.logistica.services.vinculo_remessa import VinculoRemessaService
 from apps.logistica.services.venda_viagem import (
@@ -932,3 +933,96 @@ class ViagemPainelView(PermissaoRequiredMixin, View):
             'pendencias': EstoqueViagemService.pendencias(quadro),
             'mdfe': MDFeViagemService.painel(viagem),
         })
+
+
+class ViagemRetornoView(PermissaoRequiredMixin, View):
+    """
+    A conferência do retorno: o sistema calcula, a pessoa confere.
+
+    O PREVISTO É O QUE A CONTA DIZ; o retorno é o que a contagem física
+    encontra. Eles quase sempre coincidem — e é por isso que a diferença
+    importa quando aparece: ela é quebra, furto ou erro de apontamento, e
+    some se o sistema aceitar o previsto como se fosse fato.
+    """
+
+    permissao_modulo = 'logistica'
+    template_name = 'logistica/viagem/retorno.html'
+
+    def _viagem(self, request, pk):
+        return get_object_or_404(
+            Viagem.objects.for_filial(_filial(request)), pk=pk,
+        )
+
+    def get(self, request, pk):
+        viagem = self._viagem(request, pk)
+        linhas = RetornoViagemService.previsto(viagem)
+        return render(request, self.template_name, {
+            'title': f'Retorno — Viagem #{viagem.numero:06d}',
+            'viagem': viagem,
+            'linhas': linhas,
+            'resumo': RetornoViagemService.resumo(linhas),
+            'pendencias': RetornoViagemService.pode_encerrar(viagem),
+        })
+
+    def post(self, request, pk):
+        viagem = self._viagem(request, pk)
+        volta = redirect('logistica:viagem-retorno', pk=viagem.pk)
+
+        if not request.user.tem_permissao('logistica', 'editar'):
+            messages.error(request, 'Sem permissão para registrar retorno.')
+            return volta
+
+        try:
+            if request.POST.get('acao') == 'tudo':
+                resultado = RetornoViagemService.registrar_tudo(
+                    viagem, usuario=request.user,
+                )
+            else:
+                resultado = RetornoViagemService.registrar(
+                    viagem, self._quantidades(request), usuario=request.user,
+                )
+        except DadosInvalidosError as erro:
+            messages.error(request, str(erro))
+            return volta
+
+        messages.success(
+            request,
+            f'Retorno de {resultado["registrado"]} registrado e devolvido ao '
+            'estoque.',
+        )
+        # A DIVERGENCIA VOLTA COMO AVISO, e nao como baixa automatica: baixa
+        # e' declaracao de perda, com responsavel, e um sistema que a emite
+        # sozinho ensina a fabrica a nao olhar.
+        for divergencia in resultado['divergencias']:
+            messages.warning(
+                request,
+                f'{divergencia["produto"]}: previstos '
+                f'{divergencia["previsto"]}, conferidos '
+                f'{divergencia["conferido"]} — faltam '
+                f'{divergencia["diferenca"]}. Registre baixa ou corrija a '
+                'contagem.',
+            )
+        return volta
+
+    @staticmethod
+    def _quantidades(request) -> dict:
+        """
+        Lê os campos `retorno-<produto>-<lote>` do formulário.
+
+        O LOTE VIAJA NO NOME DO CAMPO porque o saldo é por produto E lote: um
+        produto que saiu em dois lotes volta em duas linhas, e somá-las
+        perderia de qual produção veio o que voltou.
+        """
+        quantidades = {}
+        for campo, valor in request.POST.items():
+            if not campo.startswith('retorno-'):
+                continue
+            partes = campo.split('-')
+            if len(partes) != 3 or not partes[1].isdigit():
+                continue
+            produto_id = int(partes[1])
+            lote_id = int(partes[2]) if partes[2].isdigit() else 0
+            quantidades[(produto_id, lote_id or None)] = (
+                (valor or '').replace(',', '.')
+            )
+        return quantidades

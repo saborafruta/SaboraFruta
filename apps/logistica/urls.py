@@ -34,6 +34,7 @@ urlpatterns = [
     path("viagens/<int:pk>/retorno/", views_viagem.ViagemEmitirRetornoView.as_view(), name="viagem-emitir-retorno"),
     path("viagens/<int:pk>/mdfe/", views_viagem.ViagemMDFeView.as_view(), name="viagem-mdfe"),
     path("viagens/<int:pk>/painel/", views_viagem.ViagemPainelView.as_view(), name="viagem-painel"),
+    path("viagens/<int:pk>/conferencia-retorno/", views_viagem.ViagemRetornoView.as_view(), name="viagem-retorno"),
     path("viagens/<int:pk>/bonificacoes/<int:entrega_pk>/", views_viagem.BonificacaoEntregaView.as_view(), name="bonificacao-entrega"),
     path("viagens/<int:pk>/vendas-na-rota/nova/", views_viagem.ViagemVendaCreateView.as_view(), name="viagem-venda-create"),
     path("viagens/<int:pk>/vendas-na-rota/<int:venda_pk>/nfe/", views_viagem.ViagemVendaEmitirNFeView.as_view(), name="viagem-venda-nfe"),

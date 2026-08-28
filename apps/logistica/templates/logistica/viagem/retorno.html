@@ -1,0 +1,171 @@
+{% extends "_base.html" %}
+{% block title %}{{ title }} — Logística{% endblock %}
+{% block page_title %}{{ title }}{% endblock %}
+{% block content %}
+
+{% comment %}
+  O SISTEMA CALCULA, A PESSOA CONFERE.
+
+  O previsto é o que a conta diz; o retorno é o que a contagem física
+  encontra. Eles quase sempre coincidem — e é por isso que a diferença
+  importa quando aparece: ela é quebra, furto ou erro de apontamento, e some
+  se o sistema aceitar o previsto como se fosse fato.
+
+  A LINHA MOSTRA A CONTA INTEIRA, e não só o resultado: quem confere precisa
+  poder verificar de onde saiu o 120. Número que não se confere vira ordem,
+  e ordem ninguém contesta quando está errada.
+{% endcomment %}
+<div class="space-y-4">
+
+  <div class="flex flex-wrap items-start justify-between gap-3">
+    <div>
+      <p class="text-sm mb-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+        <a href="{% url 'logistica:viagem-detail' viagem.pk %}"
+           :style="temaClaro ? 'color:#3b82f6;' : 'color:#60a5fa;'">
+          Viagem #{{ viagem.numero|stringformat:"06d" }}</a>
+        <span class="mx-1">›</span> Conferência de retorno
+      </p>
+      <h2 class="text-2xl font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
+        Conferência de retorno
+      </h2>
+      <p class="text-sm mt-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+        {{ viagem.motorista_nome }} · {{ viagem.veiculo_placa }} ·
+        {{ viagem.get_status_display }}
+      </p>
+    </div>
+    {% if resumo.a_retornar %}
+      <form method="post" action="{% url 'logistica:viagem-retorno' viagem.pk %}"
+            onsubmit="return confirm('Registrar o retorno de tudo que está em poder da viagem?');">
+        {% csrf_token %}
+        <input type="hidden" name="acao" value="tudo">
+        <button type="submit" class="btn-primary text-sm">
+          Tudo voltou ({{ resumo.a_retornar|floatformat:"-3" }})
+        </button>
+      </form>
+    {% endif %}
+  </div>
+
+  {# ── A conta ────────────────────────────────────────────────────── #}
+  <div class="grid grid-cols-2 lg:grid-cols-4 gap-3">
+    <div class="card p-4">
+      <p class="text-[11px] uppercase tracking-wide" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Enviado sem comprador</p>
+      <p class="text-3xl font-bold mt-1" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
+        {{ resumo.remetida|floatformat:"-3" }}
+      </p>
+    </div>
+    <div class="card p-4">
+      <p class="text-[11px] uppercase tracking-wide" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Vendido na viagem</p>
+      <p class="text-3xl font-bold mt-1" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
+        {{ resumo.vendida|floatformat:"-3" }}
+      </p>
+    </div>
+    <div class="card p-4">
+      <p class="text-[11px] uppercase tracking-wide" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Bonificado</p>
+      <p class="text-3xl font-bold mt-1" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
+        {{ resumo.bonificada|floatformat:"-3" }}
+      </p>
+    </div>
+    <div class="card p-4" style="{% if resumo.a_retornar %}border:1px solid #d97706;{% endif %}">
+      <p class="text-[11px] uppercase tracking-wide" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Deve retornar</p>
+      <p class="text-3xl font-bold mt-1"
+         style="color:{% if resumo.a_retornar %}#d97706{% else %}#059669{% endif %};">
+        {{ resumo.a_retornar|floatformat:"-3" }}
+      </p>
+    </div>
+  </div>
+
+  {# ── A conferência ──────────────────────────────────────────────── #}
+  <form method="post" action="{% url 'logistica:viagem-retorno' viagem.pk %}">
+    {% csrf_token %}
+    <input type="hidden" name="acao" value="conferir">
+    <div class="card overflow-hidden">
+      <div class="p-4 pb-3 flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <h3 class="text-sm font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
+            Produto a produto
+          </h3>
+          <p class="text-xs mt-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+            O campo vem preenchido com o previsto. Conte e corrija onde a
+            contagem divergir.
+          </p>
+        </div>
+        {% if resumo.a_retornar %}
+          <button type="submit" class="btn-secondary text-sm">Registrar retorno conferido</button>
+        {% endif %}
+      </div>
+      <div class="overflow-x-auto">
+        <table class="w-full text-sm">
+          <thead>
+            <tr :style="temaClaro ? 'border-bottom:1px solid #e5e7eb;background:#f8fafc;' : 'border-bottom:1px solid #2a2a2e;background:#1e1e20;'">
+              <th class="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wide" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Produto</th>
+              <th class="text-right px-4 py-3 text-xs font-semibold uppercase tracking-wide" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Enviado</th>
+              <th class="text-right px-4 py-3 text-xs font-semibold uppercase tracking-wide" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Vendido</th>
+              <th class="text-right px-4 py-3 text-xs font-semibold uppercase tracking-wide" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Bonificado</th>
+              <th class="text-right px-4 py-3 text-xs font-semibold uppercase tracking-wide" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Já retornado</th>
+              <th class="text-right px-4 py-3 text-xs font-semibold uppercase tracking-wide" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Deve retornar</th>
+              <th class="text-right px-4 py-3 text-xs font-semibold uppercase tracking-wide" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Conferido</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for linha in linhas %}
+              <tr class="border-b" :style="temaClaro ? 'border-color:#f1f5f9;' : 'border-color:#2a2a2e;'">
+                <td class="px-4 py-3">
+                  <span class="font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">{{ linha.produto }}</span>
+                  {% if linha.lote %}
+                    <span class="block text-[11px]" :style="temaClaro ? 'color:#94a3b8;' : 'color:#71717a;'">
+                      lote {{ linha.lote.numero_lote }}
+                    </span>
+                  {% endif %}
+                </td>
+                <td class="px-4 py-3 text-right" :style="temaClaro ? 'color:#374151;' : 'color:#d1d5db;'">{{ linha.remetida|floatformat:"-3" }}</td>
+                <td class="px-4 py-3 text-right" :style="temaClaro ? 'color:#374151;' : 'color:#d1d5db;'">{{ linha.vendida|floatformat:"-3" }}</td>
+                <td class="px-4 py-3 text-right" :style="temaClaro ? 'color:#374151;' : 'color:#d1d5db;'">{{ linha.bonificada|floatformat:"-3" }}</td>
+                <td class="px-4 py-3 text-right" :style="temaClaro ? 'color:#374151;' : 'color:#d1d5db;'">{{ linha.retornada|floatformat:"-3" }}</td>
+                <td class="px-4 py-3 text-right font-semibold"
+                    style="color:{% if linha.a_retornar %}#d97706{% else %}#059669{% endif %};">
+                  {{ linha.a_retornar|floatformat:"-3" }}
+                </td>
+                <td class="px-4 py-3 text-right">
+                  {% if linha.a_retornar %}
+                    <input type="text" inputmode="decimal"
+                           name="retorno-{{ linha.saldo.produto_id }}-{{ linha.saldo.lote_id|default:0 }}"
+                           value="{{ linha.a_retornar|floatformat:'-3' }}"
+                           class="form-input text-right" style="width:110px;">
+                  {% else %}
+                    <span class="text-xs" :style="temaClaro ? 'color:#94a3b8;' : 'color:#71717a;'">nada a voltar</span>
+                  {% endif %}
+                </td>
+              </tr>
+            {% empty %}
+              <tr>
+                <td colspan="7" class="px-4 py-10 text-center">
+                  <p class="text-sm" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+                    Esta viagem não levou mercadoria sem comprador — não há o
+                    que retornar por aqui.
+                  </p>
+                </td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </form>
+
+  {% if pendencias %}
+    {% comment %}
+      A MESMA REGRA DO ENCERRAMENTO, mostrada onde a pessoa esta' resolvendo
+      o que falta -- e nao so' quando ela tenta encerrar e leva um nao.
+    {% endcomment %}
+    <div class="card p-4" style="border:1px solid #d97706;">
+      <p class="text-sm font-semibold mb-2" style="color:#d97706;">
+        Antes de encerrar a viagem
+      </p>
+      <ul class="text-xs space-y-1" :style="temaClaro ? 'color:#374151;' : 'color:#cbd5e1;'">
+        {% for pendencia in pendencias %}<li>· {{ pendencia }}</li>{% endfor %}
+      </ul>
+    </div>
+  {% endif %}
+
+</div>
+{% endblock %}
