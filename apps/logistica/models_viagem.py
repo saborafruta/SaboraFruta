@@ -340,3 +340,119 @@ class SaldoCarga(TimestampedModel):
     @property
     def fechado(self) -> bool:
         return self.quantidade_em_poder == ZERO
+
+
+class VendaViagem(TimestampedModel):
+    """
+    Uma venda feita na rua, contra o saldo que a viagem carrega.
+
+    A VENDA PRECISA EXISTIR COMO REGISTRO, e não apenas baixar o saldo. Sem
+    ela o sistema sabe que 50 unidades saíram do caminhão, mas não para quem,
+    por quanto nem em que condição — e a prestação de contas do retorno vira
+    a palavra do vendedor contra a diferença de estoque.
+
+    O CLIENTE PODE NÃO ESTAR CADASTRADO. Venda de rua acontece com quem
+    aparece, e exigir cadastro prévio pararia a venda na calçada. Por isso há
+    FK opcional e, junto, os dados copiados: é o que faz a venda de dois anos
+    atrás continuar dizendo para quem foi, mesmo que o cadastro mude depois.
+    """
+
+    class Status(models.TextChoices):
+        REGISTRADA = 'registrada', 'Registrada'
+        CANCELADA = 'cancelada', 'Cancelada'
+
+    viagem = models.ForeignKey(Viagem, on_delete=models.CASCADE, related_name='vendas')
+    numero = models.PositiveIntegerField(db_index=True)
+    data = models.DateTimeField(default=timezone.now, db_index=True)
+    status = models.CharField(
+        max_length=20, choices=Status.choices,
+        default=Status.REGISTRADA, db_index=True,
+    )
+
+    cliente = models.ForeignKey(
+        'cadastros.Cliente', on_delete=models.SET_NULL,
+        null=True, blank=True, related_name='vendas_viagem',
+    )
+    cliente_nome = models.CharField(max_length=180)
+    cliente_documento = models.CharField(max_length=20, blank=True)
+    # Copiado, e nao apontado: e' para onde a mercadoria foi naquele dia.
+    endereco = models.JSONField(default=dict, blank=True)
+
+    condicao_pagamento = models.ForeignKey(
+        'financeiro.CondicaoPagamento', on_delete=models.SET_NULL,
+        null=True, blank=True, related_name='vendas_viagem',
+    )
+    forma_pagamento = models.ForeignKey(
+        'financeiro.FormaPagamento', on_delete=models.SET_NULL,
+        null=True, blank=True, related_name='vendas_viagem',
+    )
+
+    valor_total = models.DecimalField(max_digits=14, decimal_places=2, default=0)
+    observacao = models.TextField(blank=True)
+    vendedor = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.SET_NULL,
+        null=True, blank=True, related_name='vendas_viagem',
+    )
+    documento_fiscal = models.ForeignKey(
+        'financeiro.DocumentoFiscal', on_delete=models.SET_NULL,
+        null=True, blank=True, related_name='vendas_viagem',
+    )
+
+    class Meta:
+        db_table = 'logistica_vendas_viagem'
+        ordering = ['-data', '-numero']
+        constraints = [
+            models.UniqueConstraint(
+                fields=['viagem', 'numero'], name='venda_viagem_numero_por_viagem',
+            ),
+        ]
+        indexes = [
+            models.Index(fields=['viagem', 'status']),
+            models.Index(fields=['cliente']),
+        ]
+        verbose_name = 'Venda durante a viagem'
+        verbose_name_plural = 'Vendas durante a viagem'
+
+    def __str__(self):
+        return f'Venda {self.numero} — {self.cliente_nome}'
+
+    def recalcular_total(self):
+        total = sum(
+            (item.valor_total or ZERO for item in self.itens.all()), ZERO,
+        )
+        self.valor_total = total
+        self.save(update_fields=['valor_total', 'updated_at'])
+        return total
+
+
+class ItemVendaViagem(TimestampedModel):
+    """Um produto vendido na rua, com o lote de onde ele saiu."""
+
+    venda = models.ForeignKey(VendaViagem, on_delete=models.CASCADE, related_name='itens')
+    produto = models.ForeignKey(
+        'produtos.Produto', on_delete=models.PROTECT, related_name='itens_venda_viagem',
+    )
+    # O LOTE VEM DO SALDO, e nao de escolha livre: e' o que saiu no caminhao.
+    # Vender de um lote que nao viajou quebraria a rastreabilidade justamente
+    # no ponto em que ela mais importa.
+    lote = models.ForeignKey(
+        'estoque.LoteProduto', on_delete=models.SET_NULL,
+        null=True, blank=True, related_name='itens_venda_viagem',
+    )
+    quantidade = models.DecimalField(max_digits=12, decimal_places=3)
+    valor_unitario = models.DecimalField(max_digits=14, decimal_places=4, default=0)
+    valor_total = models.DecimalField(max_digits=14, decimal_places=2, default=0)
+
+    class Meta:
+        db_table = 'logistica_itens_venda_viagem'
+        ordering = ['venda', 'pk']
+        indexes = [models.Index(fields=['venda', 'produto'])]
+        verbose_name = 'Item da venda em viagem'
+        verbose_name_plural = 'Itens da venda em viagem'
+
+    def __str__(self):
+        return f'{self.produto} × {self.quantidade}'
+
+    def save(self, *args, **kwargs):
+        self.valor_total = (self.quantidade or ZERO) * (self.valor_unitario or ZERO)
+        super().save(*args, **kwargs)

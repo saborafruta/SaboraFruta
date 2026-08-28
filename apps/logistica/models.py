@@ -812,5 +812,5 @@ class DocumentoManifestoCarga(TimestampedModel):
 # `models_viagem.py`, que e' um assunto proprio e grande demais para este
 # arquivo.
 from apps.logistica.models_viagem import (  # noqa: E402,F401
-    ItemCarga, SaldoCarga, Viagem,
+    ItemCarga, ItemVendaViagem, SaldoCarga, Viagem, VendaViagem,
 )

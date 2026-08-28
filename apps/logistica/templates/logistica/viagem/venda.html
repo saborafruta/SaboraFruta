@@ -1,0 +1,242 @@
+{% extends "_base.html" %}
+{% block title %}{{ title }}{% endblock %}
+{% block page_title %}{{ title }}{% endblock %}
+{% block content %}
+
+<script id="saldo-carga" type="application/json">[
+  {% for linha in disponivel %}
+    {"produto": {{ linha.produto.pk }},
+     "lote": {% if linha.lote %}{{ linha.lote.pk }}{% else %}null{% endif %},
+     "disponivel": "{{ linha.disponivel|floatformat:'-3' }}",
+     "preco": "{{ linha.produto.preco_venda|default:0 }}"}{% if not forloop.last %},{% endif %}
+  {% endfor %}
+]</script>
+
+<div class="max-w-5xl mx-auto space-y-5" x-data="vendaNaRota()">
+
+  <div>
+    <p class="text-sm mb-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+      <a href="{{ cancel_url }}" :style="temaClaro ? 'color:#3b82f6;' : 'color:#60a5fa;'">
+        Viagem #{{ viagem.numero|stringformat:"06d" }}</a>
+      <span class="mx-1">›</span> Nova venda
+    </p>
+    <h2 class="text-2xl font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
+      Nova venda durante a viagem
+    </h2>
+    <p class="text-sm mt-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+      {{ viagem.motorista_nome }} · {{ viagem.veiculo_placa }} · {{ viagem.get_status_display }}
+    </p>
+  </div>
+
+  {% if not disponivel %}
+    <div class="card p-6 text-center" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+      A carga não tem mais mercadoria para vender. Tudo já foi vendido,
+      bonificado, devolvido ou baixado.
+    </div>
+  {% else %}
+    <form method="post" action="{% url 'logistica:viagem-venda-create' viagem.pk %}"
+          class="card p-6 space-y-6">
+      {% csrf_token %}
+
+      <section class="space-y-4">
+        <h3 class="text-xs font-bold uppercase tracking-wider pb-2 border-b"
+            :style="temaClaro ? 'color:#475569;border-color:#e2e8f0;' : 'color:#cbd5e1;border-color:#2a2a2e;'">
+          Para quem
+        </h3>
+        {% comment %}
+          O CLIENTE PODE NAO ESTAR CADASTRADO. Venda de rua acontece com quem
+          aparece, e exigir cadastro previo pararia a venda na calcada. Escolher
+          um cadastrado preenche o resto; quem nao esta' na lista se digita.
+        {% endcomment %}
+        <div class="grid gap-4 sm:grid-cols-2">
+          <label class="space-y-1.5">
+            <span class="text-xs font-semibold uppercase tracking-wide block"
+                  :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Cliente cadastrado</span>
+            <select name="cliente" class="form-input w-full" @change="escolherCliente($event)">
+              <option value="">— cliente novo, digitar abaixo —</option>
+              {% for cliente in clientes %}
+                <option value="{{ cliente.pk }}"
+                        data-nome="{{ cliente }}"
+                        data-documento="{{ cliente.cpf_cnpj }}"
+                        data-endereco="{{ cliente.endereco }}{% if cliente.numero %}, {{ cliente.numero }}{% endif %}{% if cliente.cidade %} — {{ cliente.cidade }}{% endif %}">
+                  {{ cliente }}
+                </option>
+              {% endfor %}
+            </select>
+          </label>
+          <label class="space-y-1.5">
+            <span class="text-xs font-semibold uppercase tracking-wide block"
+                  :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Nome *</span>
+            <input type="text" name="cliente_nome" x-model="nome" class="form-input w-full"
+                   placeholder="Para quem foi a venda">
+          </label>
+        </div>
+        <div class="grid gap-4 sm:grid-cols-3">
+          <label class="space-y-1.5">
+            <span class="text-xs font-semibold uppercase tracking-wide block"
+                  :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">CPF / CNPJ</span>
+            <input type="text" name="cliente_documento" x-model="documento"
+                   class="form-input w-full" placeholder="Só números">
+          </label>
+          <label class="space-y-1.5 sm:col-span-2">
+            <span class="text-xs font-semibold uppercase tracking-wide block"
+                  :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Endereço</span>
+            <input type="text" name="endereco" x-model="endereco"
+                   class="form-input w-full" placeholder="Para onde a mercadoria foi">
+          </label>
+        </div>
+      </section>
+
+      <section class="space-y-4">
+        <h3 class="text-xs font-bold uppercase tracking-wider pb-2 border-b"
+            :style="temaClaro ? 'color:#475569;border-color:#e2e8f0;' : 'color:#cbd5e1;border-color:#2a2a2e;'">
+          O que foi vendido
+        </h3>
+        {% comment %}
+          SO' O QUE ESTA' NO CAMINHAO E' OFERECIDO. Vender de um produto que
+          nao viajou nao e' engano de digitacao, e' impossibilidade -- e a lista
+          ja' sai limitada ao saldo da carga.
+        {% endcomment %}
+        <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          <label class="space-y-1.5 lg:col-span-2">
+            <span class="text-xs font-semibold uppercase tracking-wide block"
+                  :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Produto *</span>
+            <select name="produto" class="form-input w-full" @change="escolherProduto($event)">
+              <option value="">— escolher —</option>
+              {% for linha in disponivel %}
+                <option value="{{ linha.produto.pk }}"
+                        data-lote="{% if linha.lote %}{{ linha.lote.pk }}{% endif %}">
+                  {{ linha.produto }}{% if linha.lote %} · lote {{ linha.lote.numero_lote }}{% endif %}
+                  ({{ linha.disponivel|floatformat:"-3" }} na carga)
+                </option>
+              {% endfor %}
+            </select>
+            <input type="hidden" name="lote" :value="lote">
+          </label>
+          <label class="space-y-1.5">
+            <span class="text-xs font-semibold uppercase tracking-wide block"
+                  :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Quantidade *</span>
+            <input type="number" name="quantidade" step="0.001" min="0.001"
+                   x-model="quantidade" class="form-input w-full">
+          </label>
+          <label class="space-y-1.5">
+            <span class="text-xs font-semibold uppercase tracking-wide block"
+                  :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Preço unitário *</span>
+            <input type="number" name="valor_unitario" step="0.0001" min="0"
+                   x-model="preco" class="form-input w-full">
+          </label>
+        </div>
+
+        {% comment %}
+          O SALDO APARECE ENQUANTO SE DIGITA. O servidor recusa de qualquer
+          jeito, mas descobrir que passou do saldo depois de preencher tudo e'
+          trabalho jogado fora -- e na rua, com o cliente esperando.
+        {% endcomment %}
+        <div x-show="produtoEscolhido" x-cloak
+             class="rounded-lg p-3 text-sm flex flex-wrap items-center gap-4"
+             :style="excedeu
+               ? (temaClaro ? 'background:#fef2f2;color:#b91c1c;' : 'background:#2a1414;color:#fca5a5;')
+               : (temaClaro ? 'background:#eff6ff;color:#1d4ed8;' : 'background:#141c2a;color:#93c5fd;')">
+          <span>Na carga: <strong x-text="disponivel"></strong></span>
+          <span>Vendendo: <strong x-text="quantidade || '0'"></strong></span>
+          <span>Fica: <strong x-text="restante()"></strong></span>
+          <span x-show="excedeu" class="font-semibold">
+            Nunca se vende mais do que está no caminhão.
+          </span>
+          <span class="ml-auto">Total: <strong x-text="'R$ ' + total()"></strong></span>
+        </div>
+      </section>
+
+      <section class="space-y-4">
+        <h3 class="text-xs font-bold uppercase tracking-wider pb-2 border-b"
+            :style="temaClaro ? 'color:#475569;border-color:#e2e8f0;' : 'color:#cbd5e1;border-color:#2a2a2e;'">
+          Pagamento
+        </h3>
+        <div class="grid gap-4 sm:grid-cols-2">
+          <label class="space-y-1.5">
+            <span class="text-xs font-semibold uppercase tracking-wide block"
+                  :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Condição</span>
+            <select name="condicao_pagamento" class="form-input w-full">
+              <option value="">— à vista —</option>
+              {% for condicao in condicoes %}
+                <option value="{{ condicao.pk }}">{{ condicao.descricao }}</option>
+              {% endfor %}
+            </select>
+          </label>
+          <label class="space-y-1.5">
+            <span class="text-xs font-semibold uppercase tracking-wide block"
+                  :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Forma</span>
+            <select name="forma_pagamento" class="form-input w-full">
+              <option value="">— não informada —</option>
+              {% for forma in formas %}
+                <option value="{{ forma.pk }}">{{ forma.descricao }}</option>
+              {% endfor %}
+            </select>
+          </label>
+        </div>
+        <label class="block space-y-1.5">
+          <span class="text-xs font-semibold uppercase tracking-wide block"
+                :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Observação</span>
+          <input type="text" name="observacao" class="form-input w-full" placeholder="Opcional">
+        </label>
+      </section>
+
+      <div class="flex flex-wrap items-center justify-end gap-3 pt-4 border-t"
+           :style="temaClaro ? 'border-color:#e2e8f0;' : 'border-color:#2a2a2e;'">
+        <a href="{{ cancel_url }}" class="btn-secondary">Cancelar</a>
+        <button type="submit" class="btn-primary" :disabled="excedeu">Registrar venda</button>
+      </div>
+    </form>
+  {% endif %}
+
+</div>
+
+<script>
+  function vendaNaRota() {
+    return {
+      saldos: JSON.parse(document.getElementById('saldo-carga').textContent || '[]'),
+      nome: '', documento: '', endereco: '',
+      produtoEscolhido: null, lote: '', disponivel: '0',
+      quantidade: '', preco: '',
+
+      escolherCliente(evento) {
+        const opcao = evento.target.selectedOptions[0];
+        /* O cadastro preenche, mas quem digitar por cima vence: na rua o
+           endereco de entrega as vezes nao e' o do cadastro. */
+        if (!opcao || !opcao.value) { return; }
+        this.nome = opcao.dataset.nome || '';
+        this.documento = opcao.dataset.documento || '';
+        this.endereco = opcao.dataset.endereco || '';
+      },
+
+      escolherProduto(evento) {
+        const opcao = evento.target.selectedOptions[0];
+        const id = opcao ? parseInt(opcao.value, 10) : null;
+        this.produtoEscolhido = id || null;
+        this.lote = (opcao && opcao.dataset.lote) || '';
+        const saldo = this.saldos.find((s) => s.produto === id);
+        this.disponivel = saldo ? saldo.disponivel : '0';
+        if (saldo && !this.preco) { this.preco = saldo.preco; }
+      },
+
+      get excedeu() {
+        const q = parseFloat((this.quantidade || '0').replace(',', '.')) || 0;
+        const d = parseFloat((this.disponivel || '0').replace(',', '.')) || 0;
+        return this.produtoEscolhido !== null && q > d;
+      },
+
+      restante() {
+        const q = parseFloat((this.quantidade || '0').replace(',', '.')) || 0;
+        const d = parseFloat((this.disponivel || '0').replace(',', '.')) || 0;
+        return (d - q).toFixed(3).replace('.', ',');
+      },
+
+      total() {
+        const q = parseFloat((this.quantidade || '0').replace(',', '.')) || 0;
+        const p = parseFloat((this.preco || '0').replace(',', '.')) || 0;
+        return (q * p).toFixed(2).replace('.', ',');
+      },
+    };
+  }
+</script>
+{% endblock %}

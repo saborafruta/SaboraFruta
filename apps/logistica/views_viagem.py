@@ -19,13 +19,16 @@ from apps.financeiro.models.fiscal import DocumentoFiscal
 from apps.fiscal.models import NaturezaOperacao
 from apps.fiscal.services.natureza_operacao_service import NaturezaOperacaoService
 from apps.produtos.models import Produto
-from apps.logistica.models import ItemCarga, Viagem
+from apps.estoque.models import LoteProduto
+from apps.financeiro.models import CondicaoPagamento, FormaPagamento
+from apps.logistica.models import ItemCarga, VendaViagem, Viagem
 from apps.vendas.models.pedido import PedidoVenda
 from apps.logistica.services.estoque_transito import EstoqueEmTransitoService
 from apps.logistica.services.remessa_nfe import RemessaVendaForaService
 from apps.logistica.services.vendas_para_carga import (
     CARREGAVEIS, VendasParaCargaService,
 )
+from apps.logistica.services.venda_viagem import VendaViagemService
 from apps.logistica.services.viagem import ViagemService
 
 
@@ -188,6 +191,9 @@ class ViagemDetailView(PermissaoRequiredMixin, View):
             'remessa': DocumentoFiscal.objects.filter(
                 origem_tipo='viagem_remessa', origem_id=viagem.pk,
             ).exclude(status=StatusDocumentoFiscal.CANCELADA).first(),
+            'vendas_viagem': viagem.vendas.select_related('cliente')
+                .prefetch_related('itens__produto'),
+            'resumo_vendas': VendaViagemService.resumo(viagem),
             'pendencias_remessa': (
                 RemessaVendaForaService.conferir(viagem)
                 if RemessaVendaForaService.itens_da_viagem(viagem) else []
@@ -498,3 +504,95 @@ class EstoqueEmTransitoView(PermissaoRequiredMixin, View):
             'resumo': EstoqueEmTransitoService.resumo(filial),
             'busca': busca,
         })
+
+
+class ViagemVendaCreateView(PermissaoRequiredMixin, View):
+    """
+    Nova venda durante a viagem.
+
+    O SALDO DA CARGA É O LIMITE, e quem cobra isso é o serviço -- a venda
+    também pode chegar por outro caminho, e a regra tem que valer em todos.
+    """
+
+    permissao_modulo = 'logistica'
+    permissao_acao = 'editar'
+    template_name = 'logistica/viagem/venda.html'
+
+    def _viagem(self, request, pk):
+        return get_object_or_404(Viagem.objects.for_filial(_filial(request)), pk=pk)
+
+    def get(self, request, pk):
+        viagem = self._viagem(request, pk)
+        filial = _filial(request)
+        return render(request, self.template_name, {
+            'title': f'Nova venda — Viagem #{viagem.numero:06d}',
+            'viagem': viagem,
+            'disponivel': VendaViagemService.disponivel_para_venda(viagem),
+            'clientes': Cliente.objects.for_filial(filial).filter(ativo=True),
+            'condicoes': CondicaoPagamento.objects.filter(
+                empresa=filial.empresa, ativo=True,
+            ),
+            'formas': FormaPagamento.objects.filter(
+                empresa=filial.empresa, ativo=True,
+            ).filter(Q(filial=filial) | Q(filial__isnull=True)),
+            'cancel_url': reverse('logistica:viagem-detail', args=[viagem.pk]),
+        })
+
+    def post(self, request, pk):
+        viagem = self._viagem(request, pk)
+        filial = _filial(request)
+        volta = redirect('logistica:viagem-detail', pk=viagem.pk)
+
+        def _um(modelo, campo, **extra):
+            valor = (request.POST.get(campo) or '').strip()
+            if not valor.isdigit():
+                return None
+            return modelo.objects.filter(pk=int(valor), **extra).first()
+
+        try:
+            venda = VendaViagemService.registrar(viagem, {
+                'produto': _um(Produto, 'produto', filial=filial),
+                'lote': _um(LoteProduto, 'lote', filial=filial),
+                'cliente': _um(Cliente, 'cliente', filial=filial),
+                'cliente_nome': request.POST.get('cliente_nome'),
+                'cliente_documento': request.POST.get('cliente_documento'),
+                'endereco': request.POST.get('endereco'),
+                'quantidade': request.POST.get('quantidade'),
+                'valor_unitario': request.POST.get('valor_unitario'),
+                'condicao_pagamento': _um(
+                    CondicaoPagamento, 'condicao_pagamento', empresa=filial.empresa,
+                ),
+                'forma_pagamento': _um(
+                    FormaPagamento, 'forma_pagamento', empresa=filial.empresa,
+                ),
+                'observacao': request.POST.get('observacao'),
+            }, usuario=request.user)
+        except DadosInvalidosError as erro:
+            messages.error(request, str(erro))
+            return redirect('logistica:viagem-venda-create', pk=viagem.pk)
+
+        messages.success(
+            request,
+            f'Venda {venda.numero} registrada para {venda.cliente_nome}. '
+            f'Saldo da carga atualizado.',
+        )
+        return volta
+
+
+class ViagemVendaCancelarView(PermissaoRequiredMixin, View):
+    permissao_modulo = 'logistica'
+    permissao_acao = 'editar'
+
+    def post(self, request, pk, venda_pk):
+        viagem = get_object_or_404(Viagem.objects.for_filial(_filial(request)), pk=pk)
+        venda = get_object_or_404(VendaViagem.objects.filter(viagem=viagem), pk=venda_pk)
+        volta = redirect('logistica:viagem-detail', pk=viagem.pk)
+        try:
+            VendaViagemService.cancelar(
+                venda, motivo=(request.POST.get('motivo') or '').strip(),
+            )
+        except DadosInvalidosError as erro:
+            messages.error(request, str(erro))
+            return volta
+        messages.success(request, 'Venda cancelada e mercadoria devolvida ao saldo.')
+        return volta
