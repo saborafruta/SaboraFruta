@@ -900,3 +900,35 @@ class ViagemMDFeView(PermissaoRequiredMixin, View):
             messages.error(request, str(erro))
 
         return volta
+
+
+class ViagemPainelView(PermissaoRequiredMixin, View):
+    """
+    O painel da viagem, para ser lido de longe.
+
+    QUEM ABRE ESTA TELA ESTÁ CONFERINDO UM CAMINHÃO — de pé, com prancheta,
+    às vezes no celular na doca. Por isso poucos números, grandes, e um
+    semáforo que responde a única pergunta que importa ali: a carga fecha?
+
+    É TELA DE LEITURA. Nenhuma ação: quem confere não deve poder mexer na
+    carga a partir de um número agregado, sem ver o registro que ele resume.
+    """
+
+    permissao_modulo = 'logistica'
+    template_name = 'logistica/viagem/painel.html'
+
+    def get(self, request, pk):
+        viagem = get_object_or_404(
+            Viagem.objects.for_filial(_filial(request))
+            .select_related('motorista', 'veiculo', 'transportadora'),
+            pk=pk,
+        )
+        quadro = EstoqueViagemService.quadro(viagem)
+        return render(request, self.template_name, {
+            'title': f'Painel — Viagem #{viagem.numero:06d}',
+            'viagem': viagem,
+            'quadro': quadro,
+            'conciliacao': EstoqueViagemService.conciliacao(quadro),
+            'pendencias': EstoqueViagemService.pendencias(quadro),
+            'mdfe': MDFeViagemService.painel(viagem),
+        })

@@ -27,6 +27,9 @@
         O MANIFESTO E' DE TODA A VIAGEM, e nao so' de quando a carga esta'
         aberta: ele e' consultado justamente depois que o caminhao saiu.
       {% endcomment %}
+      <a href="{% url 'logistica:viagem-painel' viagem.pk %}" class="btn-secondary">
+        Painel
+      </a>
       <a href="{% url 'logistica:viagem-mdfe' viagem.pk %}" class="btn-secondary">
         MDF-e da viagem
       </a>

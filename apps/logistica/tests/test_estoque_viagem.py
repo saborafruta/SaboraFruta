@@ -309,3 +309,124 @@ class TelaTests(EstoqueViagemBase):
 
         self.assertIn('ainda em poder da viagem', html)
         self.assertIn('disponível para novas vendas', html)
+
+
+class SemaforoTests(EstoqueViagemBase):
+    """
+    O semáforo tem três estados, e não dois.
+
+    Viagem com mercadoria no caminhão NÃO está errada — está andando.
+    Marcá-la de vermelho ensinaria a ignorar o vermelho, que é o pior efeito
+    que um indicador pode ter.
+    """
+
+    def test_verde_quando_tudo_tem_destino(self):
+        viagem = self._viagem(venda='150')
+
+        conciliacao = EstoqueViagemService.conciliacao(
+            EstoqueViagemService.quadro(viagem),
+        )
+
+        self.assertEqual(conciliacao['cor'], 'verde')
+        self.assertEqual(conciliacao['rotulo'], 'Carga conciliada')
+
+    def test_amarelo_enquanto_ha_saldo_no_caminhao(self):
+        """É o estado normal do meio da rota."""
+        viagem = self._viagem(remessa='200')
+        self._entregar_na_rua(viagem, '50')
+
+        conciliacao = EstoqueViagemService.conciliacao(
+            EstoqueViagemService.quadro(viagem),
+        )
+
+        self.assertEqual(conciliacao['cor'], 'amarelo')
+        self.assertEqual(conciliacao['rotulo'], 'Em rota')
+        self.assertIn('150', conciliacao['descricao'])
+
+    def test_o_exemplo_da_especificacao_fica_verde(self):
+        viagem = self._viagem(venda='150', remessa='210')
+        self._entregar_na_rua(viagem, '180')
+        self._entregar_na_rua(viagem, '10', tipo=T.BONIFICACAO)
+        ViagemService.registrar_retorno(
+            viagem, self.produto, Decimal('20'), usuario=self.usuario,
+        )
+
+        quadro = EstoqueViagemService.quadro(viagem)
+        conciliacao = EstoqueViagemService.conciliacao(quadro)
+
+        self.assertEqual(quadro['destinos'], Decimal('360'))
+        self.assertEqual(conciliacao['sinal'], '🟢')
+
+
+class PainelDaViagemTests(EstoqueViagemBase):
+    """O dashboard da especificação."""
+
+    def _abrir(self, viagem):
+        return self.client.get(
+            reverse('logistica:viagem-painel', args=[viagem.pk]),
+        ).content.decode()
+
+    def test_o_painel_mostra_veiculo_e_motorista(self):
+        viagem = self._viagem(venda='150')
+
+        html = self._abrir(viagem)
+
+        self.assertIn('VIAGEM #', html)
+        self.assertIn('ABC1D23', html)
+        self.assertIn('Seu Zé', html)
+
+    def test_o_painel_mostra_os_cinco_numeros(self):
+        viagem = self._viagem(venda='150', remessa='210')
+        self._entregar_na_rua(viagem, '180')
+        self._entregar_na_rua(viagem, '10', tipo=T.BONIFICACAO)
+        ViagemService.registrar_retorno(
+            viagem, self.produto, Decimal('20'), usuario=self.usuario,
+        )
+
+        html = self._abrir(viagem)
+
+        for bloco in (
+            'Carga', 'Vendas já realizadas', 'Venda durante a rota',
+            'Bonificações', 'Retorno', 'Conciliação',
+        ):
+            self.assertIn(bloco, html, f'o bloco {bloco} sumiu do painel')
+
+    def test_o_painel_mostra_a_conciliacao_e_o_sinal(self):
+        viagem = self._viagem(venda='150', remessa='210')
+        self._entregar_na_rua(viagem, '180')
+        self._entregar_na_rua(viagem, '10', tipo=T.BONIFICACAO)
+        ViagemService.registrar_retorno(
+            viagem, self.produto, Decimal('20'), usuario=self.usuario,
+        )
+
+        html = self._abrir(viagem)
+
+        self.assertIn('Carga conciliada', html)
+        self.assertIn('🟢', html)
+
+    def test_em_rota_o_painel_mostra_o_amarelo(self):
+        viagem = self._viagem(remessa='200')
+
+        html = self._abrir(viagem)
+
+        self.assertIn('Em rota', html)
+        self.assertIn('🟡', html)
+
+    def test_o_painel_diz_quando_falta_manifesto(self):
+        viagem = self._viagem(venda='150')
+
+        html = self._abrir(viagem)
+
+        self.assertIn('MDF-e', html)
+        self.assertIn('sem manifesto', html)
+
+    def test_a_viagem_leva_ate_o_painel(self):
+        viagem = self._viagem(venda='100')
+
+        html = self.client.get(
+            reverse('logistica:viagem-detail', args=[viagem.pk]),
+        ).content.decode()
+
+        self.assertIn(
+            reverse('logistica:viagem-painel', args=[viagem.pk]), html,
+        )

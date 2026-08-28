@@ -146,6 +146,49 @@ class EstoqueViagemService:
         }
 
     @classmethod
+    def conciliacao(cls, quadro: dict) -> dict:
+        """
+        O semáforo da carga, em três estados — e não em dois.
+
+        "Fecha ou não fecha" seria uma leitura errada durante a rota: uma
+        viagem que ainda tem mercadoria no caminhão NÃO está errada, está
+        andando. Marcá-la de vermelho ensinaria a ignorar o vermelho, que é
+        o pior efeito que um indicador pode ter.
+
+        VERDE só quando não há nada em poder e a conta fecha: aí a carga
+        prestou contas. AMARELO enquanto a viagem tem saldo — é o estado
+        normal do meio da rota. VERMELHO só quando a soma dos destinos não
+        bate com a carga inicial, que é o único caso em que alguém precisa
+        olhar o registro.
+        """
+        if not quadro['fecha']:
+            return {
+                'cor': 'vermelho',
+                'sinal': '🔴',
+                'rotulo': 'Carga não confere',
+                'descricao': (
+                    f'A carga saiu com {quadro["carga_inicial"]} e os destinos '
+                    f'somam {quadro["destinos"]}.'
+                ),
+            }
+        if quadro['em_poder'] > ZERO:
+            return {
+                'cor': 'amarelo',
+                'sinal': '🟡',
+                'rotulo': 'Em rota',
+                'descricao': (
+                    f'{quadro["em_poder"]} ainda em poder da viagem, '
+                    'disponíveis para novas vendas.'
+                ),
+            }
+        return {
+            'cor': 'verde',
+            'sinal': '🟢',
+            'rotulo': 'Carga conciliada',
+            'descricao': 'Tudo que saiu tem destino registrado.',
+        }
+
+    @classmethod
     def pendencias(cls, quadro: dict) -> list[str]:
         """
         O que impede a carga de fechar, em português.
