@@ -28,6 +28,7 @@ from apps.logistica.services.remessa_nfe import RemessaVendaForaService
 from apps.logistica.services.vendas_para_carga import (
     CARREGAVEIS, VendasParaCargaService,
 )
+from apps.logistica.services.retorno_nfe import RetornoVendaForaService
 from apps.logistica.services.venda_fora_nfe import VendaForaNFeService
 from apps.logistica.services.venda_viagem import VendaViagemService
 from apps.logistica.services.viagem import ViagemService
@@ -195,6 +196,15 @@ class ViagemDetailView(PermissaoRequiredMixin, View):
             'vendas_viagem': viagem.vendas.select_related('cliente')
                 .prefetch_related('itens__produto'),
             'resumo_vendas': VendaViagemService.resumo(viagem),
+            # O RETORNO E' O OUTRO LADO DA REMESSA: enquanto ele nao tem
+            # nota, existe um documento dizendo que a mercadoria saiu e nada
+            # dizendo que ela voltou.
+            'retorno': RetornoVendaForaService.nota_da_viagem(viagem),
+            'itens_retornados': RetornoVendaForaService.itens_do_retorno(viagem),
+            'pendencias_retorno': (
+                RetornoVendaForaService.conferir(viagem)
+                if RetornoVendaForaService.itens_do_retorno(viagem) else []
+            ),
             'pendencias_remessa': (
                 RemessaVendaForaService.conferir(viagem)
                 if RemessaVendaForaService.itens_da_viagem(viagem) else []
@@ -624,5 +634,32 @@ class ViagemVendaEmitirNFeView(PermissaoRequiredMixin, View):
             request,
             f'NF-e {documento.numero}/{documento.serie} da venda '
             f'{venda.numero} gerada e pendente de transmissão à SEFAZ.',
+        )
+        return volta
+
+
+class ViagemEmitirRetornoView(PermissaoRequiredMixin, View):
+    """
+    Emite a NF-e de retorno do que não foi vendido.
+
+    UMA POR VIAGEM, e por isso o botão fica na prestação de contas: é lá que
+    se vê o que voltou, e é depois de conferir que a nota faz sentido.
+    """
+
+    permissao_modulo = 'logistica'
+    permissao_acao = 'editar'
+
+    def post(self, request, pk):
+        viagem = get_object_or_404(Viagem.objects.for_filial(_filial(request)), pk=pk)
+        volta = redirect('logistica:viagem-detail', pk=viagem.pk)
+        try:
+            documento = RetornoVendaForaService.emitir(viagem, usuario=request.user)
+        except DadosInvalidosError as erro:
+            messages.error(request, str(erro))
+            return volta
+        messages.success(
+            request,
+            f'Nota de retorno {documento.numero}/{documento.serie} gerada e '
+            'pendente de transmissão à SEFAZ.',
         )
         return volta

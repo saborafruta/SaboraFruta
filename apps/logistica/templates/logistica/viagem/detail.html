@@ -484,6 +484,42 @@
           </tbody>
         </table>
       </div>
+
+      {% if itens_retornados %}
+        {% comment %}
+          O RETORNO E' O OUTRO LADO DA REMESSA. Sem esta nota existe um
+          documento dizendo que a mercadoria saiu e nada dizendo que ela
+          voltou -- e a diferenca entre os dois e' exatamente o que a
+          fiscalizacao pede para explicar.
+        {% endcomment %}
+        <div class="px-4 py-3 border-t flex flex-wrap items-center justify-between gap-3"
+             :style="temaClaro ? 'border-color:#e5e7eb;' : 'border-color:#2a2a2e;'">
+          <div>
+            <p class="text-sm font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
+              Nota de retorno
+            </p>
+            {% if retorno %}
+              <p class="text-xs mt-0.5" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+                {{ retorno.numero }}/{{ retorno.serie }} · {{ retorno.get_status_display }}
+              </p>
+            {% elif pendencias_retorno %}
+              <ul class="text-xs mt-0.5" style="color:#d97706;">
+                {% for pendencia in pendencias_retorno %}<li>· {{ pendencia }}</li>{% endfor %}
+              </ul>
+            {% else %}
+              <p class="text-xs mt-0.5" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+                {{ itens_retornados|length }} produto(s) voltaram e ainda não têm documento.
+              </p>
+            {% endif %}
+          </div>
+          {% if not retorno and not pendencias_retorno %}
+            <form method="post" action="{% url 'logistica:viagem-emitir-retorno' viagem.pk %}">
+              {% csrf_token %}
+              <button type="submit" class="btn-primary text-sm">Emitir NF-e de retorno</button>
+            </form>
+          {% endif %}
+        </div>
+      {% endif %}
     </div>
   {% endif %}
 
