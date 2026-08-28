@@ -962,6 +962,11 @@ class ViagemRetornoView(PermissaoRequiredMixin, View):
             'linhas': linhas,
             'resumo': RetornoViagemService.resumo(linhas),
             'pendencias': RetornoViagemService.pode_encerrar(viagem),
+            # A NOTA DE RETORNO VIVE AQUI porque e' aqui que a pessoa acaba
+            # de conferir o que voltou: mandar procurar a emissao em outra
+            # tela e' como a mercadoria volta e a nota nao sai.
+            'vinculo': RetornoVendaForaService.vinculo(viagem),
+            'pendencias_nota': RetornoVendaForaService.conferir(viagem),
         })
 
     def post(self, request, pk):

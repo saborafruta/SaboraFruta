@@ -152,6 +152,118 @@
     </div>
   </form>
 
+  {# ── A nota que fecha o ciclo ───────────────────────────────────── #}
+  {% if vinculo.linhas %}
+    {% comment %}
+      O VINCULO PRECISA SER LEGIVEL ANTES DA EMISSAO, e nao so' depois: e'
+      conferindo a nota de origem -- chave, numero, serie, data -- contra o
+      que se esta' devolvendo que alguem percebe que esta' emitindo o retorno
+      da viagem errada. Depois de transmitida, corrigir custa cancelamento.
+    {% endcomment %}
+    <div class="card overflow-hidden">
+      <div class="p-4 pb-3 flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h3 class="text-sm font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
+            NF-e de retorno
+          </h3>
+          <p class="text-xs mt-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+            Retorno de remessa para venda fora do estabelecimento — o CFOP vem
+            da natureza cadastrada.
+          </p>
+        </div>
+        {% if vinculo.nota %}
+          <div class="text-right text-sm">
+            <p class="font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
+              NF-e {{ vinculo.nota.numero }}/{{ vinculo.nota.serie }}
+            </p>
+            <p class="text-xs" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+              {{ vinculo.nota.get_status_display }}
+            </p>
+          </div>
+        {% elif not pendencias_nota %}
+          <form method="post" action="{% url 'logistica:viagem-emitir-retorno' viagem.pk %}">
+            {% csrf_token %}
+            <button type="submit" class="btn-primary text-sm">Emitir NF-e de retorno</button>
+          </form>
+        {% endif %}
+      </div>
+
+      {# ── A remessa que este retorno responde ───────────────────── #}
+      <div class="px-4 pb-3">
+        {% if vinculo.sem_remessa %}
+          <p class="text-xs" style="color:#d97706;">
+            Esta viagem não tem NF-e de remessa emitida — o retorno sai sem
+            documento de origem para referenciar.
+          </p>
+        {% else %}
+          <div class="rounded-lg p-3 text-sm grid gap-3 sm:grid-cols-4"
+               :style="temaClaro ? 'background:#f8fafc;' : 'background:#18181b;'">
+            <div>
+              <p class="text-[11px] uppercase tracking-wide" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Remessa</p>
+              <p class="font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
+                {{ vinculo.numero }}/{{ vinculo.serie }}
+              </p>
+            </div>
+            <div>
+              <p class="text-[11px] uppercase tracking-wide" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Data</p>
+              <p :style="temaClaro ? 'color:#374151;' : 'color:#d1d5db;'">
+                {{ vinculo.data|date:"d/m/Y" }}
+              </p>
+            </div>
+            <div class="sm:col-span-2">
+              <p class="text-[11px] uppercase tracking-wide" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Chave</p>
+              {% if vinculo.chave %}
+                <p class="font-mono text-[10px] break-all" :style="temaClaro ? 'color:#374151;' : 'color:#d1d5db;'">
+                  {{ vinculo.chave }}
+                </p>
+              {% else %}
+                <p class="text-xs" style="color:#d97706;">
+                  sem chave — a remessa ainda não foi transmitida
+                </p>
+              {% endif %}
+            </div>
+          </div>
+        {% endif %}
+      </div>
+
+      <table class="w-full text-sm">
+        <thead>
+          <tr :style="temaClaro ? 'border-bottom:1px solid #e5e7eb;background:#f8fafc;' : 'border-bottom:1px solid #2a2a2e;background:#1e1e20;'">
+            <th class="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wide" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Produto</th>
+            <th class="text-right px-4 py-3 text-xs font-semibold uppercase tracking-wide" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Quantidade</th>
+            <th class="text-right px-4 py-3 text-xs font-semibold uppercase tracking-wide" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Valor</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for linha in vinculo.linhas %}
+            <tr class="border-b" :style="temaClaro ? 'border-color:#f1f5f9;' : 'border-color:#2a2a2e;'">
+              <td class="px-4 py-2.5" :style="temaClaro ? 'color:#374151;' : 'color:#d1d5db;'">
+                {{ linha.produto }}
+                {% if linha.lote %}
+                  <span class="block text-[11px]" :style="temaClaro ? 'color:#94a3b8;' : 'color:#71717a;'">
+                    lote {{ linha.lote.numero_lote }}
+                  </span>
+                {% endif %}
+              </td>
+              <td class="px-4 py-2.5 text-right font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
+                {{ linha.quantidade|floatformat:"-3" }}
+              </td>
+              <td class="px-4 py-2.5 text-right" :style="temaClaro ? 'color:#374151;' : 'color:#d1d5db;'">
+                R$ {{ linha.valor|floatformat:2 }}
+              </td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+
+      {% if pendencias_nota and not vinculo.nota %}
+        <div class="px-4 py-3 text-xs" style="color:#d97706;">
+          {% for pendencia in pendencias_nota %}<p>· {{ pendencia }}</p>{% endfor %}
+        </div>
+      {% endif %}
+    </div>
+  {% endif %}
+
   {% if pendencias %}
     {% comment %}
       A MESMA REGRA DO ENCERRAMENTO, mostrada onde a pessoa esta' resolvendo

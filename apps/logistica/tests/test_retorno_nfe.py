@@ -29,6 +29,7 @@ from decimal import Decimal
 
 from django.test import TestCase
 from django.urls import reverse
+from django.utils import timezone
 
 from apps.cadastros.models import Cliente, ClienteFilial
 from apps.core.models import Empresa, Filial, PerfilAcesso, Usuario
@@ -405,3 +406,114 @@ class TelaTests(RetornoNFeBase):
         html = self._detalhe()
 
         self.assertIn(f'{documento.numero}/{documento.serie}', html)
+
+
+class VinculoTests(RetornoNFeBase):
+    """
+    A remessa que este retorno responde, legível ANTES da emissão.
+
+    É conferindo a nota de origem — chave, número, série, data — contra o que
+    se está devolvendo que alguém percebe que está emitindo o retorno da
+    viagem errada. Depois de transmitida, corrigir custa cancelamento.
+    """
+
+    def _retorno(self):
+        return self.client.get(
+            reverse('logistica:viagem-retorno', args=[self.viagem.pk]),
+        ).content.decode()
+
+    def test_o_vinculo_traz_a_nota_de_origem(self):
+        remessa = RemessaVendaForaService.emitir(self.viagem, self.usuario)
+        remessa.chave = '7' * 44
+        remessa.save(update_fields=['chave'])
+        self._fechar_a_conta()
+
+        vinculo = RetornoVendaForaService.vinculo(self.viagem)
+
+        self.assertEqual(vinculo['chave'], '7' * 44)
+        self.assertEqual(vinculo['numero'], remessa.numero)
+        self.assertEqual(vinculo['serie'], remessa.serie)
+        self.assertEqual(vinculo['data'], remessa.data_emissao)
+        self.assertFalse(vinculo['sem_remessa'])
+        self.assertFalse(vinculo['sem_chave'])
+
+    def test_o_vinculo_traz_produtos_e_quantidades(self):
+        RemessaVendaForaService.emitir(self.viagem, self.usuario)
+        self._fechar_a_conta()
+
+        vinculo = RetornoVendaForaService.vinculo(self.viagem)
+
+        self.assertEqual(len(vinculo['linhas']), 1)
+        linha = vinculo['linhas'][0]
+        self.assertEqual(linha['produto'], self.produto)
+        self.assertEqual(linha['quantidade'], Decimal('250'))
+        self.assertEqual(linha['valor'], Decimal('2500.00'))
+        self.assertEqual(vinculo['quantidade'], Decimal('250'))
+        self.assertEqual(vinculo['valor'], Decimal('2500.00'))
+
+    def test_remessa_sem_chave_e_dita_e_nao_escondida(self):
+        """
+        Chave vazia e' caso real -- a remessa pode nao ter sido transmitida
+        ainda. Esconder o retorno por isso deixaria a mercadoria de volta sem
+        documento por causa de um dado que chega depois.
+        """
+        RemessaVendaForaService.emitir(self.viagem, self.usuario)
+        self._fechar_a_conta()
+
+        vinculo = RetornoVendaForaService.vinculo(self.viagem)
+
+        self.assertEqual(vinculo['chave'], '')
+        self.assertTrue(vinculo['sem_chave'])
+        self.assertFalse(vinculo['sem_remessa'])
+        self.assertTrue(vinculo['linhas'])
+
+    def test_viagem_sem_remessa_diz_que_nao_ha_origem(self):
+        """`None` na remessa e' caso real e nao erro."""
+        self._fechar_a_conta()
+
+        vinculo = RetornoVendaForaService.vinculo(self.viagem)
+
+        self.assertTrue(vinculo['sem_remessa'])
+        self.assertIsNone(vinculo['numero'])
+        self.assertTrue(vinculo['linhas'])
+
+    def test_a_data_da_remessa_vai_no_texto_da_nota(self):
+        remessa = RemessaVendaForaService.emitir(self.viagem, self.usuario)
+        self._fechar_a_conta()
+
+        payload = RetornoVendaForaService.construir_payload(self.viagem, 2, 1)
+
+        self.assertIn(
+            timezone.localtime(remessa.data_emissao).strftime('%d/%m/%Y'),
+            payload['informacoes_adicionais_contribuinte'],
+        )
+
+    # ── A tela ───────────────────────────────────────────────────────────
+
+    def test_a_tela_de_retorno_mostra_a_remessa_e_o_que_volta(self):
+        remessa = RemessaVendaForaService.emitir(self.viagem, self.usuario)
+        remessa.chave = '9' * 44
+        remessa.save(update_fields=['chave'])
+        self._fechar_a_conta()
+
+        html = self._retorno()
+
+        self.assertIn('9' * 44, html)
+        self.assertIn(f'{remessa.numero}/{remessa.serie}', html)
+        self.assertIn('Emitir NF-e de retorno', html)
+
+    def test_sem_nada_conferido_a_tela_nao_oferece_a_nota(self):
+        """Nota de retorno sem retorno declararia entrada do que nao voltou."""
+        self._vender('50')
+
+        html = self._retorno()
+
+        self.assertNotIn('Emitir NF-e de retorno', html)
+
+    def test_emitida_a_tela_de_retorno_mostra_o_numero(self):
+        self._fechar_a_conta()
+        documento = RetornoVendaForaService.emitir(self.viagem, self.usuario)
+
+        html = self._retorno()
+
+        self.assertIn(f'NF-e {documento.numero}/{documento.serie}', html)

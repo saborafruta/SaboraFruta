@@ -141,6 +141,48 @@ class RetornoVendaForaService:
             .first()
         )
 
+    @classmethod
+    def vinculo(cls, viagem) -> dict:
+        """
+        A remessa que este retorno responde, e o que vai voltar nela.
+
+        O VÍNCULO PRECISA SER LEGÍVEL ANTES DA EMISSÃO, e não só depois: é
+        conferindo a nota de origem — chave, número, série, data — contra o
+        que se está devolvendo que alguém percebe que está emitindo o
+        retorno da viagem errada. Depois de transmitida, corrigir custa
+        cancelamento.
+
+        `None` na remessa é caso real e não erro: a nota pode não ter sido
+        emitida, e a tela diz isso em vez de esconder o retorno.
+        """
+        remessa = cls.remessa_da_viagem(viagem)
+        linhas = [
+            {
+                'produto': saldo.produto,
+                'lote': saldo.lote,
+                'quantidade': saldo.quantidade_retornada or ZERO,
+                'valor_unitario': saldo.custo_unitario or ZERO,
+                'valor': (
+                    (saldo.quantidade_retornada or ZERO)
+                    * (saldo.custo_unitario or ZERO)
+                ).quantize(CENTAVOS),
+            }
+            for saldo in cls.itens_do_retorno(viagem)
+        ]
+        return {
+            'remessa': remessa,
+            'chave': getattr(remessa, 'chave', '') or '',
+            'numero': getattr(remessa, 'numero', None),
+            'serie': getattr(remessa, 'serie', None),
+            'data': getattr(remessa, 'data_emissao', None),
+            'sem_remessa': remessa is None,
+            'sem_chave': remessa is not None and not remessa.chave,
+            'linhas': linhas,
+            'quantidade': sum((l['quantidade'] for l in linhas), ZERO),
+            'valor': sum((l['valor'] for l in linhas), ZERO),
+            'nota': cls.nota_da_viagem(viagem),
+        }
+
     # ── Conferência ──────────────────────────────────────────────────────
 
     @classmethod
@@ -296,7 +338,10 @@ class RetornoVendaForaService:
             'Retorno de mercadoria nao vendida em venda fora do estabelecimento.',
             f'Viagem {viagem.numero:06d}.',
             (
-                f'Remessa {remessa.numero}/{remessa.serie}.'
+                (
+                    f'Remessa {remessa.numero}/{remessa.serie} de '
+                    f'{timezone.localtime(remessa.data_emissao):%d/%m/%Y}.'
+                )
                 if remessa is not None else ''
             ),
             f'Veiculo {viagem.veiculo_placa}.' if viagem.veiculo_placa else '',
