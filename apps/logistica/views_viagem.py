@@ -30,7 +30,9 @@ from apps.logistica.services.vendas_para_carga import (
 )
 from apps.logistica.services.retorno_nfe import RetornoVendaForaService
 from apps.logistica.services.venda_fora_nfe import VendaForaNFeService
-from apps.logistica.services.venda_viagem import VendaViagemService
+from apps.logistica.services.venda_viagem import (
+    VIAGENS_QUE_VENDEM as VIAGENS_QUE_ENTREGAM, VendaViagemService,
+)
 from apps.logistica.services.viagem import ViagemService
 
 
@@ -196,6 +198,10 @@ class ViagemDetailView(PermissaoRequiredMixin, View):
             'vendas_viagem': viagem.vendas.select_related('cliente')
                 .prefetch_related('itens__produto'),
             'resumo_vendas': VendaViagemService.resumo(viagem),
+            # OS BOTOES DA RUA so' aparecem enquanto o caminhao esta' fora:
+            # antes de sair nao ha' saldo, e depois de encerrar a viagem
+            # ja' prestou contas.
+            'pode_entregar': viagem.status in VIAGENS_QUE_ENTREGAM,
             # O RETORNO E' O OUTRO LADO DA REMESSA: enquanto ele nao tem
             # nota, existe um documento dizendo que a mercadoria saiu e nada
             # dizendo que ela voltou.
@@ -519,10 +525,14 @@ class EstoqueEmTransitoView(PermissaoRequiredMixin, View):
 
 class ViagemVendaCreateView(PermissaoRequiredMixin, View):
     """
-    Nova venda durante a viagem.
+    Nova entrega durante a viagem: venda ou bonificação.
 
     O SALDO DA CARGA É O LIMITE, e quem cobra isso é o serviço -- a venda
     também pode chegar por outro caminho, e a regra tem que valer em todos.
+
+    BONIFICAÇÃO ENTRA PELA MESMA TELA porque é a mesma entrega: mesmo
+    cliente, mesmo saldo, mesmos itens. Uma tela separada obrigaria quem está
+    na rua a decidir por qual porta entrar antes de saber o que vai fazer.
     """
 
     permissao_modulo = 'logistica'
@@ -535,8 +545,17 @@ class ViagemVendaCreateView(PermissaoRequiredMixin, View):
     def get(self, request, pk):
         viagem = self._viagem(request, pk)
         filial = _filial(request)
+        tipo = request.GET.get('tipo') or VendaViagem.Tipo.VENDA
+        if tipo not in VendaViagem.Tipo.values:
+            tipo = VendaViagem.Tipo.VENDA
+        bonificacao = tipo == VendaViagem.Tipo.BONIFICACAO
         return render(request, self.template_name, {
-            'title': f'Nova venda — Viagem #{viagem.numero:06d}',
+            'title': (
+                f'Nova bonificação — Viagem #{viagem.numero:06d}' if bonificacao
+                else f'Nova venda — Viagem #{viagem.numero:06d}'
+            ),
+            'tipo': tipo,
+            'bonificacao': bonificacao,
             'viagem': viagem,
             'disponivel': VendaViagemService.disponivel_para_venda(viagem),
             'clientes': Cliente.objects.for_filial(filial).filter(ativo=True),
@@ -562,6 +581,7 @@ class ViagemVendaCreateView(PermissaoRequiredMixin, View):
 
         try:
             venda = VendaViagemService.registrar(viagem, {
+                'tipo': request.POST.get('tipo'),
                 'produto': _um(Produto, 'produto', filial=filial),
                 'lote': _um(LoteProduto, 'lote', filial=filial),
                 'cliente': _um(Cliente, 'cliente', filial=filial),
@@ -580,12 +600,18 @@ class ViagemVendaCreateView(PermissaoRequiredMixin, View):
             }, usuario=request.user)
         except DadosInvalidosError as erro:
             messages.error(request, str(erro))
-            return redirect('logistica:viagem-venda-create', pk=viagem.pk)
+            # VOLTA PARA O MESMO FORMULARIO: perder o tipo faria quem
+            # registrava bonificacao reabrir a tela como venda.
+            destino = reverse('logistica:viagem-venda-create', args=[viagem.pk])
+            tipo = (request.POST.get('tipo') or '').strip()
+            if tipo in VendaViagem.Tipo.values:
+                destino = f'{destino}?tipo={tipo}'
+            return redirect(destino)
 
         messages.success(
             request,
-            f'Venda {venda.numero} registrada para {venda.cliente_nome}. '
-            f'Saldo da carga atualizado.',
+            f'{venda.get_tipo_display()} {venda.numero} registrada para '
+            f'{venda.cliente_nome}. Saldo da carga atualizado.',
         )
         return volta
 

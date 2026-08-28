@@ -240,7 +240,10 @@ class VendaDuranteAViagemTests(TestCase):
         with self.assertRaises(DadosInvalidosError) as erro:
             self._vender('10', cliente=None, cliente_nome='')
 
-        self.assertIn('para quem foi a venda', str(erro.exception))
+        # A MENSAGEM PASSOU A SERVIR AOS DOIS TIPOS DE ENTREGA (venda e
+        # bonificação) — dizer "venda" nela deixaria a bonificação com um
+        # aviso que fala de outra coisa.
+        self.assertIn('para quem foi a entrega', str(erro.exception))
 
     def test_a_venda_numera_dentro_da_viagem(self):
         primeira = self._vender('10')

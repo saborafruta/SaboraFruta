@@ -353,6 +353,32 @@
     </div>
   </div>
 
+  {% if pode_entregar %}
+    {% comment %}
+      OS DOIS BOTOES DA RUA. A tela de registrar entrega existia e NADA
+      levava ate' ela -- quem estava na rota so' chegava la' digitando o
+      endereco. Venda e bonificacao entram pela mesma tela porque sao a mesma
+      entrega: muda que uma cobra e a outra nao.
+    {% endcomment %}
+    <div class="card p-4 flex flex-wrap items-center justify-between gap-3">
+      <div>
+        <p class="text-sm font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
+          Entregas na rota
+        </p>
+        <p class="text-xs mt-0.5" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+          Contra o saldo que viajou — a carga tem
+          {{ resumo_vendas.disponivel|floatformat:"-3" }} disponível.
+        </p>
+      </div>
+      <div class="flex flex-wrap gap-2">
+        <a href="{% url 'logistica:viagem-venda-create' viagem.pk %}"
+           class="btn-primary text-sm">Registrar venda</a>
+        <a href="{% url 'logistica:viagem-venda-create' viagem.pk %}?tipo=bonificacao"
+           class="btn-secondary text-sm">Registrar bonificação</a>
+      </div>
+    </div>
+  {% endif %}
+
   {% if vendas_viagem %}
     {% comment %}
       AS VENDAS FEITAS NA RUA, uma a uma. A prestação de contas abaixo mostra
@@ -363,7 +389,7 @@
     <div class="card overflow-hidden">
       <div class="p-4 pb-3 flex flex-wrap items-baseline justify-between gap-2">
         <div>
-          <h3 class="text-sm font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">Vendas na rota</h3>
+          <h3 class="text-sm font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">Entregas na rota</h3>
           <p class="text-xs mt-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
             Cada venda contra o saldo que viajou, com a nota que a acompanha.
           </p>
@@ -390,6 +416,9 @@
               <tr class="border-b align-top" :style="temaClaro ? 'border-color:#f1f5f9;' : 'border-color:#2a2a2e;'">
                 <td class="px-4 py-3 font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
                   #{{ venda.numero }}
+                  {% if venda.bonificacao %}
+                    <span class="soft-pill is-amber text-[11px] ml-1">bonificação</span>
+                  {% endif %}
                   <span class="block text-[11px] font-normal" :style="temaClaro ? 'color:#94a3b8;' : 'color:#71717a;'">
                     {{ venda.data|date:"d/m H:i" }}
                   </span>

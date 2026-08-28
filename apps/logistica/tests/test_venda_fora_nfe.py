@@ -374,7 +374,7 @@ class TelaTests(VendaForaNFeBase):
 
         html = self.client.get(self.url).content.decode()
 
-        self.assertIn('Vendas na rota', html)
+        self.assertIn('Entregas na rota', html)
         self.assertIn('Mercado da Esquina', html)
         self.assertIn(f'#{venda.numero}', html)
 

@@ -361,7 +361,25 @@ class VendaViagem(TimestampedModel):
         REGISTRADA = 'registrada', 'Registrada'
         CANCELADA = 'cancelada', 'Cancelada'
 
+    class Tipo(models.TextChoices):
+        """
+        O que saiu do caminhão para o cliente.
+
+        A BONIFICAÇÃO É A MESMA ENTREGA COM OUTRA NATUREZA. Ela tem cliente,
+        itens, lote e nota — muda que ninguém paga e que o CFOP é outro.
+        Um modelo próprio ao lado repetiria tudo isso para trocar duas
+        coisas, e as duas listas de entregas feitas na rua acabariam
+        discordando sobre o que saiu do caminhão.
+        """
+
+        VENDA = 'venda', 'Venda'
+        BONIFICACAO = 'bonificacao', 'Bonificação'
+
     viagem = models.ForeignKey(Viagem, on_delete=models.CASCADE, related_name='vendas')
+    tipo = models.CharField(
+        max_length=15, choices=Tipo.choices, default=Tipo.VENDA, db_index=True,
+        help_text='Venda cobra; bonificação entrega sem cobrar.',
+    )
     numero = models.PositiveIntegerField(db_index=True)
     data = models.DateTimeField(default=timezone.now, db_index=True)
     status = models.CharField(
@@ -414,7 +432,25 @@ class VendaViagem(TimestampedModel):
         verbose_name_plural = 'Vendas durante a viagem'
 
     def __str__(self):
-        return f'Venda {self.numero} — {self.cliente_nome}'
+        return f'{self.get_tipo_display()} {self.numero} — {self.cliente_nome}'
+
+    @property
+    def campo_do_saldo(self) -> str:
+        """
+        Em qual coluna do saldo da carga esta entrega baixa.
+
+        A CONCILIAÇÃO SEPARA OS DOIS de propósito: remetido = vendido +
+        bonificado + retornado + baixado. Somar bonificação em "vendido"
+        faria a viagem parecer ter faturado o que foi dado.
+        """
+        return (
+            'quantidade_bonificada' if self.tipo == self.Tipo.BONIFICACAO
+            else 'quantidade_vendida'
+        )
+
+    @property
+    def bonificacao(self) -> bool:
+        return self.tipo == self.Tipo.BONIFICACAO
 
     def recalcular_total(self):
         total = sum(

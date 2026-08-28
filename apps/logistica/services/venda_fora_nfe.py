@@ -1,5 +1,5 @@
 """
-A NF-e da venda feita na rua.
+A NF-e da entrega feita na rua: venda ou bonificação.
 
 O ELO QUE FALTAVA
 =================
@@ -22,10 +22,16 @@ CFOP, CST, CSOSN, alíquotas e o texto da natureza vêm de
 por UF, regime e produto. Este módulo monta o documento; ele não sabe que
 5103 ou 5104 existem, e nem deve saber.
 
-A NATUREZA É A DA ESPÉCIE `VENDA_FORA`, procurada no cadastro da filial. Sem
-ela a emissão para e diz o que cadastrar. Escolher uma natureza de venda
-comum "porque parece igual" produziria uma nota com o CFOP errado — e o erro
-só apareceria na apuração, meses depois.
+A NATUREZA VEM DA ESPÉCIE DO QUE FOI ENTREGUE — `venda_fora` para venda,
+`bonificacao` para bonificação — procurada no cadastro da filial. Sem ela a
+emissão para e diz o que cadastrar. Escolher uma natureza de venda comum
+"porque parece igual" produziria uma nota com o CFOP errado, e o erro só
+apareceria na apuração, meses depois.
+
+BONIFICAÇÃO É A MESMA ENTREGA COM OUTRA NATUREZA: mesmo cliente, mesmos
+itens, mesmo saldo. Muda o CFOP e o fato de que ninguém paga — e por isso
+ela sai sem meio de pagamento declarado, que é o que diria à SEFAZ que houve
+recebimento.
 
 QUEM COMPRA PRECISA TER NOME E DOCUMENTO
 ========================================
@@ -87,31 +93,45 @@ class VendaForaNFeService:
 
     # ── A natureza ───────────────────────────────────────────────────────
 
-    @staticmethod
-    def natureza(filial):
+    # A ESPÉCIE FISCAL DE CADA TIPO DE ENTREGA. Bonificação e venda são a
+    # mesma entrega no caminhão e documentos diferentes na SEFAZ -- e é a
+    # natureza cadastrada que carrega essa diferença, não o código.
+    ESPECIE_POR_TIPO = {
+        VendaViagem.Tipo.VENDA: NaturezaOperacao.Especie.VENDA_FORA,
+        VendaViagem.Tipo.BONIFICACAO: NaturezaOperacao.Especie.BONIFICACAO,
+    }
+
+    NOME_DA_ESPECIE = {
+        NaturezaOperacao.Especie.VENDA_FORA: 'venda fora do estabelecimento',
+        NaturezaOperacao.Especie.BONIFICACAO: 'bonificação',
+    }
+
+    @classmethod
+    def natureza(cls, filial, tipo=VendaViagem.Tipo.VENDA):
         """
-        A natureza cadastrada para venda fora do estabelecimento.
+        A natureza cadastrada para este tipo de entrega.
 
         UMA SÓ, E ATIVA. Duas naturezas da mesma espécie deixariam a nota
         depender de qual delas o código pegasse primeiro — e o CFOP mudaria
         sem ninguém ter escolhido nada.
         """
+        especie = cls.ESPECIE_POR_TIPO.get(tipo, NaturezaOperacao.Especie.VENDA_FORA)
+        nome = cls.NOME_DA_ESPECIE[especie]
         naturezas = list(
             NaturezaOperacao.objects.for_filial(filial).filter(
-                especie=NaturezaOperacao.Especie.VENDA_FORA, ativo=True,
+                especie=especie, ativo=True,
             )
         )
         if not naturezas:
             raise DadosInvalidosError(
-                'Nenhuma natureza de operação cadastrada para venda fora do '
-                'estabelecimento. Cadastre-a em Fiscal › Naturezas de operação '
-                'antes de emitir a nota.'
+                f'Nenhuma natureza de operação cadastrada para {nome}. '
+                'Cadastre-a em Fiscal › Naturezas de operação antes de emitir '
+                'a nota.'
             )
         if len(naturezas) > 1:
             raise DadosInvalidosError(
-                'Há mais de uma natureza ativa para venda fora do '
-                'estabelecimento: deixe apenas uma ativa, senão a nota sai com '
-                'o CFOP de qualquer uma delas.'
+                f'Há mais de uma natureza ativa para {nome}: deixe apenas uma '
+                'ativa, senão a nota sai com o CFOP de qualquer uma delas.'
             )
         return naturezas[0]
 
@@ -143,7 +163,7 @@ class VendaForaNFeService:
             )
 
         try:
-            natureza = cls.natureza(venda.viagem.filial)
+            natureza = cls.natureza(venda.viagem.filial, venda.tipo)
         except DadosInvalidosError as erro:
             problemas.append(str(erro))
             natureza = None
@@ -184,7 +204,7 @@ class VendaForaNFeService:
 
         viagem = venda.viagem
         filial = viagem.filial
-        natureza = cls.natureza(filial)
+        natureza = cls.natureza(filial, venda.tipo)
         momento = timezone.localtime(venda.data or timezone.now()).strftime(
             '%Y-%m-%dT%H:%M:%S-03:00'
         )
@@ -281,7 +301,10 @@ class VendaForaNFeService:
         # na barreira precisa entender que a mercadoria saiu antes, com outra
         # nota, na mesma viagem.
         texto = ' '.join([
-            'Venda fora do estabelecimento.',
+            (
+                'Bonificacao entregue fora do estabelecimento.'
+                if venda.bonificacao else 'Venda fora do estabelecimento.'
+            ),
             f'Viagem {viagem.numero:06d}.',
             f'Veiculo {viagem.veiculo_placa}.' if viagem.veiculo_placa else '',
             *informacoes,
@@ -299,6 +322,10 @@ class VendaForaNFeService:
         usa. Sem forma informada, vai `99` (outros) — que é honesto, e não um
         palpite de dinheiro ou cartão.
         """
+        # 90 = SEM PAGAMENTO. Bonificação entrega sem cobrar, e declarar um
+        # meio de pagamento nela diria à SEFAZ que houve recebimento.
+        if venda.bonificacao:
+            return [{'forma_pagamento': '90', 'valor_pagamento': 0.0}]
         codigo = getattr(venda.forma_pagamento, 'codigo_sefaz', '') or '99'
         return [{'forma_pagamento': codigo, 'valor_pagamento': _float(total)}]
 
@@ -380,7 +407,10 @@ class VendaForaNFeService:
                 'cpf_cnpj': _digitos(venda.cliente_documento),
                 'cidade': (venda.endereco or {}).get('cidade', ''),
                 'uf': (venda.endereco or {}).get('uf', ''),
-                'observacao': f'Venda fora do estabelecimento — viagem {venda.viagem.numero:06d}',
+                'observacao': (
+                    f'{venda.get_tipo_display()} fora do estabelecimento — '
+                    f'viagem {venda.viagem.numero:06d}'
+                ),
             },
             valor_produtos=_dinheiro(payload['valor_produtos']),
             valor_total=_dinheiro(payload['valor_total']),

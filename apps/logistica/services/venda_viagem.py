@@ -116,10 +116,18 @@ class VendaViagemService:
         if cliente and not nome:
             nome = str(cliente)
         if not nome:
-            raise DadosInvalidosError('Informe para quem foi a venda.')
+            raise DadosInvalidosError('Informe para quem foi a entrega.')
+
+        # BONIFICAÇÃO É A MESMA ENTREGA COM OUTRA NATUREZA: mesmo cliente,
+        # mesmos itens, mesmo saldo — muda que ninguém paga e que ela baixa
+        # em outra coluna da conciliação.
+        tipo = dados.get('tipo') or VendaViagem.Tipo.VENDA
+        if tipo not in VendaViagem.Tipo.values:
+            raise DadosInvalidosError('Tipo de entrega desconhecido.')
 
         venda = VendaViagem.objects.create(
             viagem=viagem,
+            tipo=tipo,
             numero=cls.proximo_numero(viagem),
             data=dados.get('data') or timezone.now(),
             cliente=cliente,
@@ -139,9 +147,11 @@ class VendaViagemService:
         venda.recalcular_total()
 
         # A BAIXA E' NO SALDO DA VIAGEM, nao no estoque da filial: aquela
-        # mercadoria ja' saiu de la' quando a carga fechou.
+        # mercadoria ja' saiu de la' quando a carga fechou. A COLUNA DEPENDE
+        # DO TIPO -- somar bonificacao em "vendido" faria a viagem parecer ter
+        # faturado o que foi dado.
         ViagemService.registrar_saida_do_saldo(
-            viagem, produto, quantidade, 'quantidade_vendida', lote=lote,
+            viagem, produto, quantidade, venda.campo_do_saldo, lote=lote,
         )
         return venda
 
@@ -171,7 +181,7 @@ class VendaViagemService:
         )
         venda.recalcular_total()
         ViagemService.registrar_saida_do_saldo(
-            venda.viagem, produto, quantidade, 'quantidade_vendida', lote=lote,
+            venda.viagem, produto, quantidade, venda.campo_do_saldo, lote=lote,
         )
         return item
 
@@ -198,10 +208,14 @@ class VendaViagemService:
             ).first()
             if saldo is None:
                 continue
-            saldo.quantidade_vendida = max(
-                ZERO, (saldo.quantidade_vendida or ZERO) - (item.quantidade or ZERO),
-            )
-            saldo.save(update_fields=['quantidade_vendida', 'updated_at'])
+            # DEVOLVE NA COLUNA DE ONDE SAIU: cancelar uma bonificacao
+            # descontando de "vendido" criaria venda negativa e bonificacao
+            # fantasma na mesma linha.
+            campo = venda.campo_do_saldo
+            setattr(saldo, campo, max(
+                ZERO, (getattr(saldo, campo) or ZERO) - (item.quantidade or ZERO),
+            ))
+            saldo.save(update_fields=[campo, 'updated_at'])
 
         venda.status = VendaViagem.Status.CANCELADA
         if motivo:

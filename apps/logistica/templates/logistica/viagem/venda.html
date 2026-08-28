@@ -18,11 +18,21 @@
     <p class="text-sm mb-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
       <a href="{{ cancel_url }}" :style="temaClaro ? 'color:#3b82f6;' : 'color:#60a5fa;'">
         Viagem #{{ viagem.numero|stringformat:"06d" }}</a>
-      <span class="mx-1">›</span> Nova venda
+      <span class="mx-1">›</span> {% if bonificacao %}Nova bonificação{% else %}Nova venda{% endif %}
     </p>
     <h2 class="text-2xl font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
-      Nova venda durante a viagem
+      {% if bonificacao %}Nova bonificação durante a viagem{% else %}Nova venda durante a viagem{% endif %}
     </h2>
+    {% if bonificacao %}
+      {% comment %}
+        A BONIFICACAO SAI DO MESMO SALDO da carga e nao cobra ninguem. O
+        valor continua sendo pedido porque a NF-e precisa dele -- mercadoria
+        entregue sem valor declarado nao existe para a SEFAZ.
+      {% endcomment %}
+      <p class="text-xs mt-1" style="color:#d97706;">
+        Sai do mesmo saldo da carga, sem cobrança — o valor serve para a nota.
+      </p>
+    {% endif %}
     <p class="text-sm mt-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
       {{ viagem.motorista_nome }} · {{ viagem.veiculo_placa }} · {{ viagem.get_status_display }}
     </p>
@@ -30,13 +40,14 @@
 
   {% if not disponivel %}
     <div class="card p-6 text-center" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
-      A carga não tem mais mercadoria para vender. Tudo já foi vendido,
-      bonificado, devolvido ou baixado.
+      A carga não tem mais mercadoria. Tudo já foi vendido, bonificado,
+      devolvido ou baixado.
     </div>
   {% else %}
     <form method="post" action="{% url 'logistica:viagem-venda-create' viagem.pk %}"
           class="card p-6 space-y-6">
       {% csrf_token %}
+      <input type="hidden" name="tipo" value="{{ tipo }}">
 
       <section class="space-y-4">
         <h3 class="text-xs font-bold uppercase tracking-wider pb-2 border-b"
@@ -121,7 +132,9 @@
           </label>
           <label class="space-y-1.5">
             <span class="text-xs font-semibold uppercase tracking-wide block"
-                  :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Preço unitário *</span>
+                  :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+              {% if bonificacao %}Valor unitário (para a nota) *{% else %}Preço unitário *{% endif %}
+            </span>
             <input type="number" name="valor_unitario" step="0.0001" min="0"
                    x-model="preco" class="form-input w-full">
           </label>
@@ -147,6 +160,7 @@
         </div>
       </section>
 
+      {% if not bonificacao %}
       <section class="space-y-4">
         <h3 class="text-xs font-bold uppercase tracking-wider pb-2 border-b"
             :style="temaClaro ? 'color:#475569;border-color:#e2e8f0;' : 'color:#cbd5e1;border-color:#2a2a2e;'">
@@ -180,11 +194,23 @@
           <input type="text" name="observacao" class="form-input w-full" placeholder="Opcional">
         </label>
       </section>
+      {% else %}
+        <label class="block space-y-1.5">
+          <span class="text-xs font-semibold uppercase tracking-wide block"
+                :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+            Motivo da bonificação
+          </span>
+          <input type="text" name="observacao" class="form-input w-full"
+                 placeholder="Ex.: acerto de avaria, degustação, campanha">
+        </label>
+      {% endif %}
 
       <div class="flex flex-wrap items-center justify-end gap-3 pt-4 border-t"
            :style="temaClaro ? 'border-color:#e2e8f0;' : 'border-color:#2a2a2e;'">
         <a href="{{ cancel_url }}" class="btn-secondary">Cancelar</a>
-        <button type="submit" class="btn-primary" :disabled="excedeu">Registrar venda</button>
+        <button type="submit" class="btn-primary" :disabled="excedeu">
+          {% if bonificacao %}Registrar bonificação{% else %}Registrar venda{% endif %}
+        </button>
       </div>
     </form>
   {% endif %}
