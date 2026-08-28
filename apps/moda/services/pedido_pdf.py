@@ -277,7 +277,7 @@ class PedidoPdfService:
             blocos = cls._cliente(pedido, e)
             blocos += cls._artes_do_pedido(pedido, e)
             blocos += cls._financeiro(pedido, e, LARGURA_UTIL)
-            elementos += blocos
+            elementos.append(KeepInFrame(LARGURA_UTIL - 12, altura_util, blocos, mode='shrink'))
         else:
             for indice, item in enumerate(itens):
                 meia = (LARGURA_UTIL - 6 * mm) / 2
@@ -285,7 +285,24 @@ class PedidoPdfService:
                 esquerda += cls._item(pedido, item, e, 0, largura_util=meia)
                 esquerda += cls._financeiro(pedido, e, meia, item=item)
 
-                direita = cls._arte(item, e, meia)
+                pessoas = list(item.individuais.all())
+                colunas = 3 if len(pessoas) > 16 else (2 if len(pessoas) > 8 else 1)
+                lista = cls._personalizacao_item(
+                    item, e, meia, pessoas=pessoas, colunas=colunas,
+                )
+                # Uma folha por produto é obrigatória. Reservamos primeiro
+                # a lista COMPLETA; a arte só usa o espaço restante.
+                # Listas excepcionalmente longas são compactadas, nunca
+                # cortadas nem enviadas para uma folha de continuação.
+                altura_lista = 0
+                lista_frame = None
+                if lista:
+                    lista_frame = KeepInFrame(
+                        meia, altura_util * .70, lista, mode='shrink',
+                    )
+                    _, altura_lista = lista_frame.wrapOn(medidor, meia, altura_util)
+                altura_arte = altura_util - altura_lista - 4
+                direita = cls._arte(item, e, meia, altura_maxima=altura_arte)
                 if indice == 0:
                     direita += cls._artes_do_pedido(pedido, e, meia)
                 if not direita:
@@ -294,39 +311,12 @@ class PedidoPdfService:
                         Spacer(1, 4),
                         Paragraph('Nenhuma imagem anexada.', e['pequeno']),
                     ]
-                # A lista de nomes nunca participa da redução das imagens.
-                arte = KeepInFrame(meia, altura_util - 8, direita, mode='shrink')
-                _, altura_arte = arte.wrapOn(medidor, meia, altura_util)
-                direita = [arte]
-                pessoas = list(item.individuais.all())
-                colunas = 3 if len(pessoas) > 16 else (2 if len(pessoas) > 8 else 1)
-                lista = cls._personalizacao_item(
-                    item, e, meia, pessoas=pessoas, colunas=colunas,
+                arte = KeepInFrame(
+                    meia, altura_arte, direita, mode='shrink',
                 )
-                consumidas = 0
-                if lista:
-                    altura_titulo = sum(
-                        bloco.wrapOn(medidor, meia, altura_util)[1]
-                        for bloco in lista[:-1]
-                    )
-                    espaco = altura_util - altura_arte - altura_titulo - 2
-                    tabela = lista[-1]
-                    partes = tabela.splitOn(medidor, meia, max(0, espaco))
-                    if partes:
-                        linhas_disponiveis = len(partes[0]._cellvalues) - 1
-                        consumidas = min(
-                            len(pessoas), linhas_disponiveis * colunas,
-                        )
-                        # O `split` mede quantas linhas cabem. A tabela é
-                        # reconstruída com a primeira faixa contínua para
-                        # manter a leitura vertical 1, 2, 3... sem pular
-                        # pessoas entre esta página e a continuação.
-                        if consumidas:
-                            primeira_tabela = cls._personalizacao_item(
-                                item, e, meia,
-                                pessoas=pessoas[:consumidas], colunas=colunas,
-                            )[-1]
-                            direita += lista[:-1] + [primeira_tabela]
+                direita = [arte]
+                if lista_frame is not None:
+                    direita.append(lista_frame)
                 pagina = Table([[
                     KeepInFrame(meia, altura_util, esquerda, mode='shrink'),
                     KeepInFrame(meia, altura_util, direita, mode='error'),
@@ -346,15 +336,6 @@ class PedidoPdfService:
                     ('LINEBEFORE', (1, 0), (1, 0), .5, BORDA),
                 ]))
                 elementos.append(pagina)
-                if consumidas < len(pessoas):
-                    elementos.append(PageBreak())
-                    elementos.append(Paragraph(
-                        f'PERSONALIZAÇÕES - {esc(item.nome_exibicao)} (continuação)', e['secao'],
-                    ))
-                    elementos += cls._personalizacao_item(
-                        item, e, LARGURA_UTIL - 12, pessoas=pessoas[consumidas:],
-                        inicio=consumidas, colunas=3,
-                    )
                 if indice < len(itens) - 1:
                     elementos.append(PageBreak())
 
@@ -631,6 +612,7 @@ class PedidoPdfService:
     def _arte(
         item, e, largura_util=LARGURA_UTIL, altura_imagem=27 * mm,
         cor=AZUL, cor_clara=AZUL_CLARO, arredondada=False,
+        *, altura_maxima=None,
     ) -> list:
         personalizacoes = list(item.personalizacoes.all())
         visuais = list(item.visuais.all())
@@ -666,6 +648,12 @@ class PedidoPdfService:
             else:
                 altura_imagem = 41 * mm
         por_linha = min(2, len(campos_imagem))
+        if altura_maxima is not None:
+            linhas = (len(campos_imagem) + por_linha - 1) // por_linha
+            # Reduz só a caixa das imagens: título e largura das colunas
+            # mantêm alinhamento e fonte, mesmo quando a lista é maior.
+            limite = (altura_maxima - 9 * mm - 4) / linhas - 5 * mm
+            altura_imagem = min(altura_imagem, max(1, limite))
         largura = largura_util / por_linha
         for inicio in range(0, len(campos_imagem), por_linha):
             faixa = campos_imagem[inicio:inicio + por_linha]

@@ -538,7 +538,7 @@ class ArteNoPdfTests(TestCase):
             [str(numero) for numero in range(17, 23)] + ['', ''],
         )
 
-    def test_muitos_nomes_continuam_em_outra_pagina_sem_reduzir_arte(self):
+    def test_muitos_nomes_ficam_na_mesma_folha_com_arte_reduzida(self):
         from reportlab.platypus import KeepInFrame
 
         pedido = self._pedido()
@@ -558,7 +558,7 @@ class ArteNoPdfTests(TestCase):
 
         with patch('apps.moda.services.pedido_pdf.KeepInFrame', side_effect=registrar_frame):
             PedidoPdfService.gerar(pedido)
-        escala_sem_nomes = getattr(frames[0], '_scale', 1)
+        altura_sem_nomes = frames[0].maxHeight
         PersonalizacaoIndividual.objects.bulk_create([
             PersonalizacaoIndividual(
                 pedido=pedido, item=item, tamanho=tamanho,
@@ -568,9 +568,48 @@ class ArteNoPdfTests(TestCase):
         frames.clear()
         with patch('apps.moda.services.pedido_pdf.KeepInFrame', side_effect=registrar_frame):
             pdf = PedidoPdfService.gerar(pedido)
-        self.assertGreater(_paginas(pdf), 1)
-        self.assertEqual(getattr(frames[0], '_scale', 1), escala_sem_nomes)
-        self.assertEqual(frames[2].mode, 'error')
+        self.assertEqual(_paginas(pdf), 1)
+        self.assertLess(frames[1].maxHeight, altura_sem_nomes)
+        self.assertEqual(frames[-1].mode, 'error')
+        texto = self._texto_layout(frames[0]._content)
+        for n in range(180):
+            self.assertIn(f'Nome completo de teste da pessoa {n}', texto)
+
+    def test_sete_nomes_e_imagem_grande_nao_geram_continuacao(self):
+        from reportlab.platypus import KeepInFrame
+
+        pedido = self._pedido()
+        item = ItemPedidoProducao.objects.create(
+            pedido=pedido, descricao='Camisa bandinha', quantidade=7,
+        )
+        tamanho = Tamanho.objects.create(filial=self.filial, sigla='M')
+        visual = VisualItemPedido.objects.create(
+            item=item, posicao='frente_camisa',
+            imagem=SimpleUploadedFile('sete-nomes.png', _png()),
+        )
+        self.addCleanup(visual.imagem.delete, save=False)
+        PersonalizacaoIndividual.objects.bulk_create([
+            PersonalizacaoIndividual(
+                pedido=pedido, item=item, tamanho=tamanho,
+                nome=nome, numero=str(n),
+            ) for n, nome in enumerate([
+                'Eduardo', 'Edu', 'Carlos', 'Diego', 'Thiago', 'Paulo', 'Jose',
+            ])
+        ])
+        frames = []
+
+        def registrar(*args, **kwargs):
+            frame = KeepInFrame(*args, **kwargs)
+            frames.append(frame)
+            return frame
+
+        with patch('apps.moda.services.pedido_pdf.KeepInFrame', side_effect=registrar):
+            pdf = PedidoPdfService.gerar(pedido)
+        self.assertEqual(_paginas(pdf), 1)
+        self.assertEqual(getattr(frames[0], '_scale', 1), 1)
+        self.assertIn('Jose', self._texto_layout(frames[0]._content))
+        ItemPedidoProducao.objects.create(pedido=pedido, descricao='Outro produto')
+        self.assertEqual(_paginas(PedidoPdfService.gerar(pedido)), 2)
 
     def test_coluna_direita_pode_ocupar_toda_altura_util_da_pagina(self):
         """O contêiner externo não pode descontar padding da altura já medida."""
