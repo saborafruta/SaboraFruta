@@ -180,12 +180,78 @@
             <a href="{% url 'vendas:pedido-detail' pedido.pedido_venda.pk %}"
                :style="temaClaro ? 'color:#2563eb;' : 'color:#60a5fa;'">{{ pedido.pedido_venda.numero_pedido }}</a>.
           </p>
-        {% elif cobranca.pode_cobrar %}
-          <form method="post" action="{% url 'logistica:pedido-expedicao-cobrar' pedido.pk %}">
+        {% elif pedido.valor_total > 0 %}
+          {% comment %}
+            A FORMA SE ESCOLHE AQUI, como no PDV. Antes ela vivia no
+            formulário de edição: quem terminava o pedido teria de voltar
+            para outra tela só para dizer como cobrar — e não voltava. A
+            carga saía sem cobrança nenhuma.
+
+            AS FORMAS SÃO AS DO CADASTRO. Nenhuma lista fixa aqui: forma
+            nova cadastrada aparece sozinha, e desativada some.
+          {% endcomment %}
+          <form method="post" action="{% url 'logistica:pedido-expedicao-cobrar' pedido.pk %}"
+                x-data="{
+                  forma: {{ pedido.forma_pagamento_id|default:'null' }},
+                  parcela: {{ pedido.condicao_pagamento_id|default:'null' }},
+                  aPrazo: {% if pedido.forma_pagamento.gera_parcelas %}true{% else %}false{% endif %},
+                  escolher(id, prazo) { this.forma = id; this.aPrazo = prazo; },
+                }">
             {% csrf_token %}
-            <button type="submit" class="btn-primary text-xs w-full justify-center">
+            <input type="hidden" name="forma_pagamento" :value="forma">
+
+            <div class="grid grid-cols-2 gap-2 mt-1">
+              {% for forma in formas %}
+                <button type="button"
+                        @click="escolher({{ forma.pk }}, {% if forma.gera_parcelas %}true{% else %}false{% endif %})"
+                        class="rounded-lg px-2 py-2 text-xs text-left"
+                        :style="forma === {{ forma.pk }}
+                          ? 'border:1px solid #3b82f6;background:rgba(59,130,246,.12);'
+                          : (temaClaro ? 'border:1px solid #e2e8f0;' : 'border:1px solid #2a2a2e;')">
+                  <span class="block font-semibold"
+                        :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">{{ forma.descricao }}</span>
+                  <span class="block text-[10px]"
+                        :style="temaClaro ? 'color:#94a3b8;' : 'color:#71717a;'">
+                    {% if forma.gera_parcelas %}a prazo{% else %}na entrega{% endif %}
+                  </span>
+                </button>
+              {% empty %}
+                <p class="col-span-2 text-xs" style="color:#d97706;">
+                  Nenhuma forma de pagamento ativa nesta empresa.
+                </p>
+              {% endfor %}
+            </div>
+
+            {% comment %}
+              A CONDIÇÃO SÓ APARECE QUANDO HÁ PARCELA PARA DIVIDIR: pedir
+              parcelamento de dinheiro na entrega é perguntar o que não tem
+              resposta.
+            {% endcomment %}
+            <div class="mt-2" x-show="aPrazo" x-cloak>
+              <label class="block text-[11px] mb-1"
+                     :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Parcelamento</label>
+              <select name="condicao_pagamento" x-model="parcela" class="form-input w-full text-xs">
+                <option value="">À vista, no prazo da forma</option>
+                {% for condicao in condicoes %}
+                  <option value="{{ condicao.pk }}">
+                    {{ condicao.descricao }} ({{ condicao.numero_parcelas }}x)
+                  </option>
+                {% endfor %}
+              </select>
+            </div>
+
+            <p class="text-[11px] mt-2" x-show="forma && !aPrazo" x-cloak style="color:#059669;">
+              Recebimento na entrega — não abre conta a receber.
+            </p>
+
+            <button type="submit" class="btn-primary text-xs w-full justify-center mt-2"
+                    x-show="forma && aPrazo" x-cloak>
               Gerar cobrança de R$ {{ pedido.valor_total|floatformat:2 }}
             </button>
+            <p class="text-[11px] mt-2" x-show="!forma" x-cloak
+               :style="temaClaro ? 'color:#94a3b8;' : 'color:#71717a;'">
+              Escolha como esta carga é paga.
+            </p>
           </form>
         {% else %}
           <p class="text-xs" style="color:#d97706;">{{ cobranca.impedimento }}</p>

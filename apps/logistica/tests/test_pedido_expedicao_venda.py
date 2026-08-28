@@ -842,3 +842,125 @@ class CobrancaDaExpedicaoTests(ItensDaVendaBase):
         ).content.decode()
 
         self.assertIn('Gerar cobrança', html)
+
+
+class EscolhaDaFormaNaTelaTests(CobrancaDaExpedicaoTests):
+    """
+    A forma se escolhe na própria tela do pedido, como no PDV.
+
+    ELA VIVIA NO FORMULÁRIO DE EDIÇÃO, e quem terminava o pedido teria de
+    voltar para outra tela só para dizer como cobrar — e não voltava. A carga
+    saía sem cobrança nenhuma.
+    """
+
+    def test_a_tela_lista_as_formas_do_cadastro(self):
+        pedido = self._carga_avulsa(forma=None, condicao=None)
+        pedido.forma_pagamento = None
+        pedido.save(update_fields=['forma_pagamento'])
+
+        html = self.client.get(
+            reverse('logistica:pedido-expedicao-detail', args=[pedido.pk]),
+        ).content.decode()
+
+        self.assertIn('Boleto 30 dias', html)
+        self.assertIn('Dinheiro na entrega', html)
+        self.assertIn('Escolha como esta carga é paga', html)
+
+    def test_forma_nova_no_cadastro_aparece_sozinha(self):
+        """Nenhuma lista fixa na tela: o cadastro manda."""
+        FormaPagamento.objects.create(
+            empresa=self.empresa, descricao='Pix 7 dias', tipo='pix',
+            gera_parcelas=True, prazo_liquidacao_dias=7,
+        )
+        pedido = self._carga_avulsa()
+
+        html = self.client.get(
+            reverse('logistica:pedido-expedicao-detail', args=[pedido.pk]),
+        ).content.decode()
+
+        self.assertIn('Pix 7 dias', html)
+
+    def test_forma_desativada_some_da_tela(self):
+        self.a_vista.ativo = False
+        self.a_vista.save(update_fields=['ativo'])
+        pedido = self._carga_avulsa()
+
+        html = self.client.get(
+            reverse('logistica:pedido-expedicao-detail', args=[pedido.pk]),
+        ).content.decode()
+
+        self.assertNotIn('Dinheiro na entrega', html)
+
+    def test_escolher_a_forma_na_tela_cobra_e_fica_registrado(self):
+        pedido = self._carga_avulsa(forma=None, condicao=None)
+        pedido.forma_pagamento = None
+        pedido.condicao_pagamento = None
+        pedido.save(update_fields=['forma_pagamento', 'condicao_pagamento'])
+
+        self.client.post(
+            reverse('logistica:pedido-expedicao-cobrar', args=[pedido.pk]),
+            {
+                'forma_pagamento': self.a_prazo.pk,
+                'condicao_pagamento': self.condicao.pk,
+            },
+            follow=True,
+        )
+
+        pedido.refresh_from_db()
+        # COMO A CARGA FOI COBRADA fica no pedido: sem isso o titulo existiria
+        # e ninguem saberia por qual acerto ele saiu.
+        self.assertEqual(pedido.forma_pagamento, self.a_prazo)
+        self.assertEqual(pedido.condicao_pagamento, self.condicao)
+        self.assertEqual(FinanceiroExpedicaoService.titulos(pedido).count(), 3)
+
+    def test_sem_condicao_escolhida_sai_em_uma_parcela(self):
+        pedido = self._carga_avulsa(forma=None, condicao=None)
+        pedido.forma_pagamento = None
+        pedido.condicao_pagamento = None
+        pedido.save(update_fields=['forma_pagamento', 'condicao_pagamento'])
+
+        self.client.post(
+            reverse('logistica:pedido-expedicao-cobrar', args=[pedido.pk]),
+            {'forma_pagamento': self.a_prazo.pk, 'condicao_pagamento': ''},
+            follow=True,
+        )
+
+        titulos = list(FinanceiroExpedicaoService.titulos(pedido))
+        self.assertEqual(len(titulos), 1)
+        self.assertEqual(titulos[0].valor_final, Decimal('34.00'))
+
+    def test_forma_de_outra_empresa_e_ignorada(self):
+        """
+        Um id vindo do POST pode ser de qualquer lugar, e cobrar com a forma
+        de outra empresa poria o título na conta errada.
+        """
+        outra_empresa = Empresa.objects.create(
+            razao_social='Alheia LTDA', nome_fantasia='Alheia',
+            cnpj='55345678000191',
+            regime_tributario=Empresa.RegimeTributario.SIMPLES_NACIONAL,
+            codigo_regime_tributario=1,
+        )
+        alheia = FormaPagamento.objects.create(
+            empresa=outra_empresa, descricao='Boleto alheio', tipo='boleto',
+            gera_parcelas=True,
+        )
+        pedido = self._carga_avulsa()
+
+        self.client.post(
+            reverse('logistica:pedido-expedicao-cobrar', args=[pedido.pk]),
+            {'forma_pagamento': alheia.pk},
+            follow=True,
+        )
+
+        pedido.refresh_from_db()
+        self.assertEqual(pedido.forma_pagamento, self.a_prazo)
+
+    def test_dinheiro_na_entrega_nao_oferece_o_botao(self):
+        """Recebimento na entrega não abre conta a receber — e a tela diz."""
+        pedido = self._carga_avulsa(forma=self.a_vista, condicao=None)
+
+        html = self.client.get(
+            reverse('logistica:pedido-expedicao-detail', args=[pedido.pk]),
+        ).content.decode()
+
+        self.assertIn('Recebimento na entrega', html)

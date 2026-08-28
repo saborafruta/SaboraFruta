@@ -15,6 +15,9 @@ from django.utils import timezone
 from django.views import View
 
 from apps.cadastros.models import Cliente, Fornecedor, Motorista, Veiculo
+from apps.financeiro.models.formas_pagamento import (
+    CondicaoPagamento, FormaPagamento,
+)
 from apps.core.models.empresa import Filial
 from apps.core.services.exceptions import DadosInvalidosError, DomainError
 from apps.core.services.permissions import PermissaoRequiredMixin
@@ -1277,9 +1280,11 @@ class PedidoExpedicaoDetailView(PermissaoRequiredMixin, View):
     template_name = "logistica/pedido_expedicao/detail.html"
 
     def get(self, request, pk):
+        filial = _filial(request)
         pedido = get_object_or_404(
-            PedidoExpedicao.objects.for_filial(_filial(request))
-            .select_related("cliente", "transportadora", "romaneio", "responsavel"),
+            PedidoExpedicao.objects.for_filial(filial)
+            .select_related("cliente", "transportadora", "romaneio", "responsavel",
+                            "forma_pagamento", "condicao_pagamento", "pedido_venda"),
             pk=pk,
         )
         itens = pedido.itens.select_related("item_venda")
@@ -1295,6 +1300,15 @@ class PedidoExpedicaoDetailView(PermissaoRequiredMixin, View):
             # QUEM COBRA ESTA CARGA: a venda, esta tela, ou ninguém ainda.
             "cobranca": FinanceiroExpedicaoService.resumo(pedido),
             "entrega": RomaneioDoPedidoService.entrega_do_pedido(pedido),
+            # AS FORMAS SAEM DO CADASTRO, como no PDV. Escolher a forma numa
+            # tela e cobrar em outra e' o que fazia a carga sair sem cobranca:
+            # quem termina o pedido nao volta ao formulario so' para isso.
+            "formas": FormaPagamento.objects.filter(
+                empresa=filial.empresa, ativo=True,
+            ).filter(Q(filial=filial) | Q(filial__isnull=True)).order_by("descricao"),
+            "condicoes": CondicaoPagamento.objects.filter(
+                empresa=filial.empresa, ativo=True,
+            ).order_by("numero_parcelas", "descricao"),
         })
 
 
@@ -2657,9 +2671,15 @@ class PedidoExpedicaoCobrarView(PermissaoRequiredMixin, View):
     permissao_acao = "editar"
 
     def post(self, request, pk):
+        filial = _filial(request)
         pedido = get_object_or_404(
-            PedidoExpedicao.objects.for_filial(_filial(request)), pk=pk,
+            PedidoExpedicao.objects.for_filial(filial), pk=pk,
         )
+        # A ESCOLHA VEM DA PROPRIA TELA. Guardar a forma no pedido antes de
+        # cobrar deixa registrado COMO a carga foi cobrada -- sem isso, o
+        # titulo existiria e ninguem saberia por qual acerto ele saiu.
+        self._guardar_pagamento(request, pedido, filial)
+
         try:
             titulos = FinanceiroExpedicaoService.gerar_titulos(
                 pedido, usuario=request.user,
@@ -2675,3 +2695,48 @@ class PedidoExpedicaoCobrarView(PermissaoRequiredMixin, View):
             f'para {pedido.cliente}.',
         )
         return redirect("logistica:pedido-expedicao-detail", pk=pedido.pk)
+
+    @staticmethod
+    def _guardar_pagamento(request, pedido, filial) -> None:
+        """
+        Grava no pedido a forma e a condição escolhidas na tela.
+
+        SÓ O QUE É DA EMPRESA: um id vindo do POST pode ser de qualquer
+        lugar, e cobrar com a forma de outra empresa poria o título na
+        conta errada.
+        """
+        campos = []
+        forma_id = (request.POST.get("forma_pagamento") or "").strip()
+        if forma_id.isdigit():
+            forma = FormaPagamento.objects.filter(
+                pk=forma_id, empresa=filial.empresa, ativo=True,
+            ).filter(Q(filial=filial) | Q(filial__isnull=True)).first()
+            if forma is not None:
+                pedido.forma_pagamento = forma
+                campos.append("forma_pagamento")
+
+        # NAO MANDOU E' DIFERENTE DE MANDOU VAZIO: quem envia o formulario da
+        # tela sempre manda o campo, e vazio ali significa "sem parcelamento".
+        # Um POST que nem cita o campo -- outro caminho, outra tela -- nao
+        # pode apagar o parcelamento que ja' estava escolhido.
+        if "condicao_pagamento" not in request.POST:
+            if campos:
+                pedido.save(update_fields=campos + ["updated_at"])
+            return
+
+        condicao_id = (request.POST.get("condicao_pagamento") or "").strip()
+        if condicao_id.isdigit():
+            condicao = CondicaoPagamento.objects.filter(
+                pk=condicao_id, empresa=filial.empresa, ativo=True,
+            ).first()
+            if condicao is not None:
+                pedido.condicao_pagamento = condicao
+                campos.append("condicao_pagamento")
+        else:
+            # VAZIO E' A VISTA da forma escolhida: quem tirou o parcelamento
+            # quis tirar.
+            pedido.condicao_pagamento = None
+            campos.append("condicao_pagamento")
+
+        if campos:
+            pedido.save(update_fields=campos + ["updated_at"])
