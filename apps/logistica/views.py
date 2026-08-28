@@ -2560,3 +2560,63 @@ class PedidoExpedicaoTrazerItensView(PermissaoRequiredMixin, View):
             f'{resultado["quantidade"]} unidade(s).',
         )
         return redirect("logistica:pedido-expedicao-detail", pk=pedido.pk)
+
+
+class ClienteEntregaSearchJsonView(PermissaoRequiredMixin, View):
+    """
+    Clientes da filial para o campo de entrega, buscados enquanto se digita.
+
+    O ENDEREÇO VIAJA JUNTO porque é ele que a entrega precisa. Escolher o
+    cliente e ainda ter de copiar rua, número, bairro e cidade de outra tela
+    é a digitação que faz o motorista rodar para o endereço errado — e o
+    romaneio impresso não avisa.
+
+    A BUSCA É NO SERVIDOR, e não uma lista inteira mandada ao navegador: um
+    cadastro com milhares de clientes pesaria em cada abertura da tela para
+    filtrar três letras.
+
+    PERMISSÃO DE LOGÍSTICA, e não de cadastros: quem monta romaneio precisa
+    achar o cliente da entrega sem ganhar acesso ao cadastro inteiro.
+    """
+
+    permissao_modulo = "logistica"
+    permissao_acao = "ver"
+
+    LIMITE = 20
+
+    def get(self, request):
+        filial = _filial(request)
+        termo = (request.GET.get("q") or "").strip()
+        if len(termo) < 2:
+            # DUAS LETRAS NO MINIMO: uma letra devolve o cadastro inteiro
+            # fatiado, que nao ajuda ninguem e ainda parece lento.
+            return JsonResponse({"results": []})
+
+        digitos = "".join(c for c in termo if c.isdigit())
+        filtro = (
+            Q(razao_social__icontains=termo)
+            | Q(nome_fantasia__icontains=termo)
+        )
+        if digitos:
+            filtro |= Q(cpf_cnpj__icontains=digitos)
+
+        clientes = (
+            Cliente.objects.for_filial(filial)
+            .filter(ativo=True)
+            .filter(filtro)
+            .order_by("razao_social")[:self.LIMITE]
+        )
+        return JsonResponse({"results": [
+            {
+                "id": c.pk,
+                "nome": c.nome_fantasia or c.razao_social,
+                "razao_social": c.razao_social,
+                "documento": c.cpf_cnpj or "",
+                "endereco": c.endereco or "",
+                "numero": c.numero or "",
+                "bairro": c.bairro or "",
+                "cidade": c.cidade or "",
+                "uf": c.uf or "",
+            }
+            for c in clientes
+        ]})

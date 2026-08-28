@@ -165,9 +165,53 @@
       <label class="block space-y-1.5">
         <span class="text-xs font-semibold uppercase tracking-wide" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Ordem</span>{{ item_form.ordem }}
       </label>
-      <label class="block space-y-1.5">
-        <span class="text-xs font-semibold uppercase tracking-wide" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Cliente</span>{{ item_form.cliente_nome }}
-      </label>
+      {% comment %}
+        O CLIENTE VEM DO CADASTRO, e o endereço vem com ele. Digitar o nome à
+        mão e depois copiar rua, número, bairro e cidade de outra tela é a
+        digitação que faz o motorista rodar para o endereço errado — e o
+        romaneio impresso não avisa.
+
+        O CAMPO CONTINUA ACEITANDO TEXTO LIVRE: entrega para quem ainda não
+        está cadastrado acontece, e travar o campo faria a carga sair do
+        sistema para caber na tela.
+      {% endcomment %}
+      <div class="space-y-1.5" x-data="buscaClienteEntrega()">
+        <span class="text-xs font-semibold uppercase tracking-wide block"
+              :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Cliente</span>
+        <div class="relative">
+          {{ item_form.cliente_nome }}
+          <div x-show="aberto && (carregando || resultados.length || vazio)" x-cloak
+               @mousedown.prevent
+               class="absolute z-40 left-0 right-0 mt-1 rounded-lg border shadow-xl max-h-64 overflow-y-auto"
+               :style="temaClaro
+                 ? 'background:#fff;border-color:#e2e8f0;'
+                 : 'background:#242426;border-color:#303038;'">
+            <p x-show="carregando" class="px-3 py-2 text-xs"
+               :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Procurando…</p>
+            <template x-for="(c, i) in resultados" :key="c.id">
+              <button type="button" class="w-full text-left px-3 py-2 text-sm"
+                      @mouseenter="foco = i" @click="escolher(c)"
+                      :style="i === foco
+                        ? (temaClaro ? 'background:#eff6ff;' : 'background:#1e3a5f;')
+                        : ''">
+                <span class="block font-medium"
+                      :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'"
+                      x-text="c.nome"></span>
+                <span class="block text-xs"
+                      :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+                  <span x-show="c.documento" x-text="c.documento"></span>
+                  <span x-show="c.documento && c.cidade"> · </span>
+                  <span x-text="[c.bairro, c.cidade, c.uf].filter(Boolean).join(', ')"></span>
+                </span>
+              </button>
+            </template>
+            <p x-show="vazio" class="px-3 py-2 text-xs"
+               :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+              Nenhum cliente com esse termo. Você pode digitar o nome à mão.
+            </p>
+          </div>
+        </div>
+      </div>
       <label class="block space-y-1.5">
         <span class="text-xs font-semibold uppercase tracking-wide" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Documento</span>{{ item_form.documento }}
       </label>
@@ -200,4 +244,115 @@
   </div>
 
 </div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+/**
+ * Busca de cliente na entrega do romaneio.
+ *
+ * ESCOLHER O CLIENTE TRAZ O ENDEREÇO. É o endereço que a entrega precisa, e
+ * copiá-lo de outra tela é onde o motorista ganha uma rua errada.
+ *
+ * O CAMPO CONTINUA LIVRE: se ninguém for escolhido, vale o que foi digitado —
+ * entrega para quem ainda não está cadastrado acontece todo dia.
+ */
+function buscaClienteEntrega() {
+  return {
+    aberto: false,
+    carregando: false,
+    vazio: false,
+    resultados: [],
+    foco: 0,
+    _timer: null,
+
+    init() {
+      this.campo = this.$el.querySelector('#{{ item_form.cliente_nome.id_for_label }}');
+      if (!this.campo) return;
+      this.campo.setAttribute('autocomplete', 'off');
+      this.campo.setAttribute('placeholder', 'Digite o nome ou o CPF/CNPJ…');
+      this.campo.addEventListener('input', () => this.digitou());
+      this.campo.addEventListener('keydown', (e) => this.tecla(e));
+      this.campo.addEventListener('blur', () => setTimeout(() => this.fechar(), 200));
+    },
+
+    digitou() {
+      const termo = this.campo.value.trim();
+      clearTimeout(this._timer);
+      if (termo.length < 2) { this.fechar(); return; }
+      /* ESPERAR A PESSOA PARAR DE DIGITAR: uma consulta por tecla enche a
+         rede de respostas que chegam fora de ordem, e a lista pisca com o
+         resultado de um termo que ja' nao esta' mais no campo. */
+      this._timer = setTimeout(() => this.buscar(termo), 250);
+    },
+
+    async buscar(termo) {
+      this.aberto = true;
+      this.carregando = true;
+      this.vazio = false;
+      try {
+        const url = '{% url "logistica:cliente-entrega-search" %}?q=' + encodeURIComponent(termo);
+        const resposta = await fetch(url, {headers: {'X-Requested-With': 'XMLHttpRequest'}});
+        if (!resposta.ok) throw new Error(resposta.status);
+        const dados = await resposta.json();
+        this.resultados = dados.results || [];
+        this.vazio = this.resultados.length === 0;
+        this.foco = 0;
+      } catch (e) {
+        /* SEM BUSCA, O CAMPO CONTINUA SERVINDO: a lista some e quem lanca
+           digita o nome, que e' o que ele fazia antes desta tela existir. */
+        this.resultados = [];
+        this.vazio = false;
+        this.aberto = false;
+      } finally {
+        this.carregando = false;
+      }
+    },
+
+    tecla(e) {
+      if (!this.aberto || !this.resultados.length) return;
+      if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        this.foco = Math.min(this.foco + 1, this.resultados.length - 1);
+      } else if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        this.foco = Math.max(this.foco - 1, 0);
+      } else if (e.key === 'Enter') {
+        e.preventDefault();
+        this.escolher(this.resultados[this.foco]);
+      } else if (e.key === 'Escape') {
+        this.fechar();
+      }
+    },
+
+    escolher(cliente) {
+      if (!cliente) return;
+      this.campo.value = cliente.nome;
+      this.preencher('{{ item_form.documento.id_for_label }}', cliente.documento);
+      this.preencher('{{ item_form.endereco.id_for_label }}', cliente.endereco);
+      this.preencher('{{ item_form.numero_endereco.id_for_label }}', cliente.numero);
+      this.preencher('{{ item_form.bairro.id_for_label }}', cliente.bairro);
+      this.preencher('{{ item_form.cidade.id_for_label }}', cliente.cidade);
+      this.preencher('{{ item_form.uf.id_for_label }}', cliente.uf);
+      this.fechar();
+    },
+
+    preencher(id, valor) {
+      const campo = document.getElementById(id);
+      /* SÓ PREENCHE O QUE ESTÁ VAZIO OU VEIO DAQUI: sobrescrever um endereço
+         que a pessoa corrigiu à mão apagaria justamente a correção — que
+         costuma ser o galpão dos fundos, e não o cadastro. */
+      if (!campo || campo.value.trim() !== '') return;
+      campo.value = valor || '';
+      campo.dispatchEvent(new Event('input', {bubbles: true}));
+    },
+
+    fechar() {
+      this.aberto = false;
+      this.resultados = [];
+      this.vazio = false;
+    },
+  };
+}
+</script>
 {% endblock %}

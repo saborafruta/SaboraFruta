@@ -12,6 +12,7 @@ urlpatterns = [
     path("romaneios/<int:pk>/editar/", views.RomaneioCargaUpdateView.as_view(), name="romaneio-update"),
     path("romaneios/<int:pk>/alterar-status/", views.RomaneioAlterarStatusView.as_view(), name="romaneio-alterar-status"),
     path("romaneios/<int:pk>/itens/novo/", views.ItemRomaneioCreateView.as_view(), name="romaneio-item-create"),
+    path("api/clientes-entrega/", views.ClienteEntregaSearchJsonView.as_view(), name="cliente-entrega-search"),
     path("romaneios/<int:pk>/itens/<int:item_pk>/remover/", views.ItemRomaneioDeleteView.as_view(), name="romaneio-item-delete"),
     path("ordens-coleta/", views.OrdemColetaListView.as_view(), name="ordem-coleta-list"),
     path("ordens-coleta/nova/", views.OrdemColetaCreateView.as_view(), name="ordem-coleta-create"),
