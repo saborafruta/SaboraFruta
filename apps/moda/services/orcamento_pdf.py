@@ -25,6 +25,11 @@ TEXTO = colors.HexColor('#172033')
 CINZA = colors.HexColor('#667085')
 FUNDO = colors.HexColor('#f4f5f7')
 BORDA = colors.HexColor('#d9dde3')
+OBSERVACAO_PAGAMENTO_ORCAMENTO = (
+    'O pagamento de 50% do valor total deverá ser realizado na aprovação '
+    'do pedido, para início da produção. Os 50% restantes deverão ser pagos '
+    'no ato da entrega.'
+)
 MESES = (
     'janeiro', 'fevereiro', 'março', 'abril', 'maio', 'junho',
     'julho', 'agosto', 'setembro', 'outubro', 'novembro', 'dezembro',
@@ -41,6 +46,21 @@ def _por_extenso(data):
 
 def _texto(valor):
     return esc(str(valor or '').replace('—', '-').replace('–', '-'))
+
+
+def observacoes_orcamento(pedido):
+    """Textos comerciais compartilhados pelo PDF e pelo link do WhatsApp."""
+    textos = [
+        'Este orçamento é válido por 5 dias a partir da data de emissão.',
+        'O prazo máximo de entrega é de até 30 dias úteis após a aprovação do orçamento.',
+    ]
+    if pedido.condicao_pagamento_id:
+        textos.append(f'Condição: {pedido.condicao_pagamento}')
+    textos += [
+        linha.strip() for linha in (pedido.observacoes or '').splitlines()
+        if linha.strip()
+    ]
+    return textos
 
 
 def _estilos():
@@ -406,22 +426,11 @@ class OrcamentoPdfService:
 
     @staticmethod
     def _observacoes(pedido, e, largura=LARGURA_UTIL):
-        textos = [
-            'Este orçamento é válido por 5 dias a partir da data de emissão.',
-            'O prazo máximo de entrega é de até 30 dias úteis após a aprovação do orçamento.',
-        ]
-        if pedido.condicao_pagamento_id:
-            textos.append(f'Condição: {esc(pedido.condicao_pagamento)}')
-        textos += [
-            _texto(l.strip()) for l in (pedido.observacoes or '').splitlines()
-            if l.strip()
-        ]
+        textos = observacoes_orcamento(pedido)
         dados = [[Paragraph('Observações e prazos:', e['secao'])]]
-        dados += [[Paragraph(f'- {texto}', e['normal'])] for texto in textos]
+        dados += [[Paragraph(f'- {_texto(texto)}', e['normal'])] for texto in textos]
         dados.append([Paragraph(
-            '* O pagamento de 50% do valor total deverá ser realizado na aprovação '
-            'do pedido, para início da produção. Os 50% restantes deverão ser pagos '
-            'no ato da entrega.',
+            f'* {_texto(OBSERVACAO_PAGAMENTO_ORCAMENTO)}',
             e['normal'],
         )])
         tabela = Table(dados, colWidths=[largura], cornerRadii=[5] * 4)

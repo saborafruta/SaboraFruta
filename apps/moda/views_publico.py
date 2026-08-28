@@ -16,10 +16,12 @@ O QUE IMPEDE CHEGAR A OUTRO PEDIDO, concretamente:
      resposta não distingue "não existe" de "existe e você não pode".
 
 O que a página mostra é o combinado com o cliente: pedido, produtos,
-quantidade, grade, arte, prazo e status. Observação interna do pedido e do
-item ficam de fora — são recado entre a equipe, e o cliente não é o
-destinatário delas.
+quantidade, grade, arte, prazo e status. Enquanto orçamento, mostra também
+preços, pagamentos e as mesmas observações comerciais do PDF. Observações
+internas dos itens continuam fora — são recado entre a equipe.
 """
+from decimal import Decimal, InvalidOperation
+
 from django.http import Http404, HttpResponse
 from django.shortcuts import redirect, render
 from django.urls import reverse
@@ -33,6 +35,10 @@ from .models import AprovacaoPedido, ArquivoPedido, PedidoProducao
 from .services.alertas import AlertaService
 from .services.kanban_comercial import avancar_por_resposta
 from .services.pedido_pdf import PedidoPdfService
+from .services.orcamento_pdf import (
+    OBSERVACAO_PAGAMENTO_ORCAMENTO,
+    observacoes_orcamento,
+)
 
 # Status internos que não fazem sentido para quem está do lado de fora.
 # Cancelado aparece; orçamento não — pedido que ainda é proposta não deveria
@@ -99,7 +105,10 @@ def _buscar(token: str) -> PedidoProducao:
 
     pedido = (
         PedidoProducao.all_objects
-        .select_related('cliente', 'filial', 'filial__empresa', 'aprovacao')
+        .select_related(
+            'cliente', 'filial', 'filial__empresa', 'aprovacao',
+            'condicao_pagamento', 'forma_pagamento',
+        )
         .prefetch_related(
             'itens__produto', 'itens__modelo', 'itens__cor', 'itens__tecido',
             'itens__grade__tamanho', 'itens__personalizacoes',
@@ -136,6 +145,23 @@ def _prazo(pedido) -> str:
     return f'{atraso} dia' + ('s' if atraso > 1 else '') + ' em atraso'
 
 
+def _pagamentos_previstos(pedido):
+    rotulos = dict(PedidoProducao.FormaPagamentoPrevista.choices)
+    pagamentos = []
+    for linha in pedido.previsao_pagamento or []:
+        try:
+            valor = Decimal(str(linha.get('valor') or '0'))
+            if not valor.is_finite():
+                raise InvalidOperation
+        except (InvalidOperation, TypeError, ValueError):
+            valor = Decimal('0')
+        pagamentos.append({
+            'forma': rotulos.get(linha.get('forma'), linha.get('forma')) or 'Não informada',
+            'valor': valor,
+        })
+    return pagamentos
+
+
 @method_decorator(ensure_csrf_cookie, name="dispatch")
 class PedidoOnlineView(View):
     """
@@ -167,6 +193,10 @@ class PedidoOnlineView(View):
             ],
             'cancelado': pedido.status == 'cancelado',
             'prazo': _prazo(pedido),
+            'modo_orcamento': pedido.status == PedidoProducao.Status.ORCAMENTO,
+            'observacoes_orcamento': observacoes_orcamento(pedido),
+            'observacao_pagamento_orcamento': OBSERVACAO_PAGAMENTO_ORCAMENTO,
+            'pagamentos_previstos': _pagamentos_previstos(pedido),
             # A aprovação só aparece depois que a casa liberou o pedido: até
             # lá o cliente estaria aprovando um documento que ainda pode
             # mudar de preço.

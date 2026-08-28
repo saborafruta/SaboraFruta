@@ -11,6 +11,8 @@ uma página com essa política, manda `Origin: null`; o Django compara o
 `Origin` com o host, não bate, e recusa. O teste `test_origin_null...`
 reproduz exatamente esse envio.
 """
+from decimal import Decimal
+
 from django.test import Client, TestCase
 from django.urls import reverse
 
@@ -74,6 +76,38 @@ class AprovacaoPublicaTests(TestCase):
 
         self.assertEqual(resposta['Cache-Control'], 'private, no-store')
         self.assertIn('noindex', resposta['X-Robots-Tag'])
+
+    def test_link_do_orcamento_mostra_valores_pagamento_e_observacoes_do_pdf(self):
+        from apps.moda.models import ItemPedidoProducao
+
+        ItemPedidoProducao.objects.create(
+            pedido=self.pedido, descricao='Camisa de jogo', quantidade=3,
+            valor_unitario=Decimal('100.00'),
+        )
+        self.pedido.desconto = Decimal('20.00')
+        self.pedido.frete = Decimal('15.00')
+        self.pedido.previsao_pagamento = [
+            {'forma': 'pix', 'valor': '150.00'},
+            {'forma': 'credito_parcelado', 'valor': '145.00'},
+        ]
+        self.pedido.observacoes = 'Conferir a arte antes da produção.'
+        self.pedido.save(update_fields=[
+            'desconto', 'frete', 'previsao_pagamento', 'observacoes',
+        ])
+
+        resposta = self.client.get(self._url_pagina())
+
+        self.assertContains(resposta, 'Valor unitário')
+        self.assertContains(resposta, 'Subtotal do produto')
+        self.assertContains(resposta, 'R$ 100,00')
+        self.assertContains(resposta, 'R$ 300,00')
+        self.assertContains(resposta, 'R$ 295,00')
+        self.assertContains(resposta, 'Forma de pagamento prevista')
+        self.assertContains(resposta, 'PIX')
+        self.assertContains(resposta, 'Crédito parcelado')
+        self.assertContains(resposta, 'Conferir a arte antes da produção.')
+        self.assertContains(resposta, 'Este orçamento é válido por 5 dias')
+        self.assertContains(resposta, 'O pagamento de 50% do valor total')
 
     # ── A aprovação em si ────────────────────────────────────────────────
 

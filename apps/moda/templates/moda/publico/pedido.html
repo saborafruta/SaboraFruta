@@ -134,6 +134,19 @@
           </div>
         </div>
 
+        {% if modo_orcamento %}
+          <div class="grid grid-cols-2 gap-3 rounded-xl p-3" style="background:#f8fafc; border:1px solid #eef2f7;">
+            <div>
+              <p class="text-xs uppercase tracking-wider" style="color:#64748b;">Valor unitário</p>
+              <p class="text-base font-bold" style="color:#0f172a;">R$ {{ item.valor_unitario|floatformat:2 }}</p>
+            </div>
+            <div class="text-right">
+              <p class="text-xs uppercase tracking-wider" style="color:#64748b;">Subtotal do produto</p>
+              <p class="text-base font-bold" style="color:#0f172a;">R$ {{ item.subtotal|floatformat:2 }}</p>
+            </div>
+          </div>
+        {% endif %}
+
         {# ── Grade ──────────────────────────────────────────────────── #}
         {% if item.grade.all %}
           <div>
@@ -305,6 +318,45 @@
         </p>
       </div>
     {% endfor %}
+
+    {% if modo_orcamento %}
+      <div class="bg-white rounded-2xl p-6 space-y-5" style="box-shadow:0 4px 16px rgba(15,23,42,.06);">
+        <div>
+          <p class="text-xs font-bold uppercase tracking-wider mb-3" style="color:#64748b;">Valores do orçamento</p>
+          <div class="space-y-2 text-sm">
+            <div class="flex justify-between gap-4"><span style="color:#64748b;">Subtotal</span><strong style="color:#0f172a;">R$ {{ pedido.subtotal|floatformat:2 }}</strong></div>
+            {% if pedido.desconto %}<div class="flex justify-between gap-4"><span style="color:#64748b;">Desconto</span><strong style="color:#059669;">- R$ {{ pedido.desconto|floatformat:2 }}</strong></div>{% endif %}
+            {% if pedido.acrescimo %}<div class="flex justify-between gap-4"><span style="color:#64748b;">Acréscimo</span><strong style="color:#0f172a;">+ R$ {{ pedido.acrescimo|floatformat:2 }}</strong></div>{% endif %}
+            {% if pedido.frete %}<div class="flex justify-between gap-4"><span style="color:#64748b;">Frete</span><strong style="color:#0f172a;">+ R$ {{ pedido.frete|floatformat:2 }}</strong></div>{% endif %}
+            <div class="flex justify-between gap-4 border-t pt-3 mt-3" style="border-color:#e2e8f0;"><span class="font-bold" style="color:#0f172a;">Total</span><strong class="text-xl" style="color:#2563eb;">R$ {{ pedido.valor_total|floatformat:2 }}</strong></div>
+          </div>
+        </div>
+
+        <div class="border-t pt-5" style="border-color:#e2e8f0;">
+          <p class="text-xs font-bold uppercase tracking-wider mb-3" style="color:#64748b;">Forma de pagamento prevista</p>
+          {% if pagamentos_previstos %}
+            <div class="space-y-2">
+              {% for pagamento in pagamentos_previstos %}
+                <div class="flex justify-between gap-4 rounded-xl px-3 py-2" style="background:#f8fafc;">
+                  <span class="text-sm" style="color:#334155;">{{ pagamento.forma }}</span>
+                  <strong class="text-sm" style="color:#0f172a;">R$ {{ pagamento.valor|floatformat:2 }}</strong>
+                </div>
+              {% endfor %}
+            </div>
+          {% else %}
+            <p class="text-sm" style="color:#64748b;">Não informada.</p>
+          {% endif %}
+        </div>
+
+        <div class="border-t pt-5" style="border-color:#e2e8f0;">
+          <p class="text-xs font-bold uppercase tracking-wider mb-3" style="color:#64748b;">Observações e prazos</p>
+          <ul class="space-y-2">
+            {% for observacao in observacoes_orcamento %}<li class="text-sm" style="color:#334155;">- {{ observacao }}</li>{% endfor %}
+            <li class="text-sm font-semibold" style="color:#0f172a;">* {{ observacao_pagamento_orcamento }}</li>
+          </ul>
+        </div>
+      </div>
+    {% endif %}
 
     {# ── Aprovação do cliente ─────────────────────────────────────────── #}
     {% if aprovacao and aprovacao.liberado and not cancelado %}
