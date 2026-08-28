@@ -240,6 +240,21 @@ class ItemCarga(TimestampedModel):
         help_text='A nota que ampara esta linha, quando já emitida.',
     )
 
+    # O MOVIMENTO DE ESTOQUE DESTA LINHA, e não o da viagem inteira.
+    #
+    # A CARGA É UMA SÓ FISICAMENTE, E VÁRIAS FISCALMENTE. Quando o mesmo
+    # produto e lote sobem no caminhão em duas linhas de naturezas
+    # diferentes — parte vendida, parte em remessa —, o razão registra dois
+    # movimentos idênticos em tudo menos na natureza. Sem este ponteiro não
+    # há como dizer qual movimento pertence a qual operação, e o vínculo com
+    # a nota tinha de ser deixado vazio para não amparar uma venda com nota
+    # de remessa.
+    movimentacao = models.ForeignKey(
+        'estoque.MovimentacaoEstoque', on_delete=models.SET_NULL,
+        null=True, blank=True, related_name='itens_carga',
+        help_text='A baixa de estoque que esta linha gerou.',
+    )
+
     quantidade = models.DecimalField(max_digits=12, decimal_places=3)
     valor_unitario = models.DecimalField(max_digits=14, decimal_places=4, default=0)
     valor_total = models.DecimalField(max_digits=14, decimal_places=2, default=0)

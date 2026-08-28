@@ -32,7 +32,7 @@ from apps.core.models import Empresa, Filial, PerfilAcesso, Usuario
 from apps.estoque.models import Estoque, MovimentacaoEstoque
 from apps.estoque.services.movimentacao_service import MovimentacaoService
 from apps.fiscal.models import NaturezaOperacao, RegraNaturezaOperacao
-from apps.logistica.models import VendaViagem, Viagem
+from apps.logistica.models import ItemCarga, VendaViagem, Viagem
 from apps.logistica.services.historico_bonificacao import (
     HistoricoBonificacaoService,
 )
@@ -250,11 +250,19 @@ class HistoricoTests(EstoqueBonificacaoBase):
         ).first()
         self.assertEqual(movimento.documento_fiscal, documento)
 
-    def test_o_vinculo_ambiguo_fica_vazio_em_vez_de_chutado(self):
+    def test_o_mesmo_produto_em_duas_naturezas_nao_confunde_a_nota(self):
         """
+        A CARGA É UMA SÓ FISICAMENTE, E VÁRIAS FISCALMENTE.
+
         Duas linhas do mesmo produto e lote em naturezas diferentes geram
-        movimentos indistinguíveis — chutar poria a remessa amparando uma
+        movimentos idênticos em tudo menos na natureza. Procurá-los por
+        produto e lote obrigava a desistir justamente aqui, e os dois ficavam
+        sem nota — chutar seria pior, poria a remessa amparando uma
         bonificação.
+
+        Cada linha guarda o movimento que ela gerou, e a dúvida deixa de
+        existir: a remessa ampara o movimento da remessa, e o da bonificação
+        continua sem nota porque a nota dela ainda não foi emitida.
         """
         viagem = self._viagem()
         ViagemService.adicionar_item(viagem, {
@@ -267,13 +275,19 @@ class HistoricoTests(EstoqueBonificacaoBase):
         })
         ViagemService.fechar_carga(viagem, usuario=self.usuario)
 
-        RemessaVendaForaService.emitir(viagem, self.usuario)
+        documento = RemessaVendaForaService.emitir(viagem, self.usuario)
 
-        semvinculo = MovimentacaoEstoque.objects.filter(
-            documento_tipo='viagem', documento_id=viagem.pk,
-            documento_fiscal__isnull=True,
-        )
-        self.assertEqual(semvinculo.count(), 2)
+        da_remessa = ItemCarga.objects.get(
+            viagem=viagem, natureza=self.remessa,
+        ).movimentacao
+        da_bonificacao = ItemCarga.objects.get(
+            viagem=viagem, natureza=self.bonificacao,
+        ).movimentacao
+        da_remessa.refresh_from_db()
+        da_bonificacao.refresh_from_db()
+
+        self.assertEqual(da_remessa.documento_fiscal, documento)
+        self.assertIsNone(da_bonificacao.documento_fiscal)
 
 
 class LeituraTests(EstoqueBonificacaoBase):

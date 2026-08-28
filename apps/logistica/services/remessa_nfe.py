@@ -336,14 +336,27 @@ class RemessaVendaForaService:
         documento é emitido depois. Sem este passo, o extrato do produto
         mostra a saída para sempre sem dizer sob qual nota ela foi.
 
-        SÓ LIGA O QUE É INEQUÍVOCO: se a viagem levar o mesmo produto e lote
-        em duas linhas de naturezas diferentes, os movimentos ficam
-        indistinguíveis e o vínculo é deixado VAZIO. Chutar qual movimento é
-        de qual linha poria a nota de remessa amparando uma venda.
+        CADA LINHA SABE QUAL MOVIMENTO É O SEU. A carga é uma só fisicamente
+        e várias fiscalmente: o mesmo produto e lote podem subir no caminhão
+        em duas linhas de naturezas diferentes, e os dois movimentos ficam
+        idênticos em tudo menos na natureza. Procurá-los por produto e lote
+        obrigava a desistir justamente nesse caso — e o extrato ficava sem
+        nota. O ponteiro gravado quando a carga fechou resolve sem chutar.
         """
         from apps.estoque.models import MovimentacaoEstoque
 
+        movimentos = [i.movimentacao_id for i in itens if i.movimentacao_id]
+        if movimentos:
+            MovimentacaoEstoque.objects.filter(
+                pk__in=movimentos, documento_fiscal__isnull=True,
+            ).update(documento_fiscal=documento)
+
+        # CARGA FECHADA ANTES DESTE CAMPO EXISTIR não tem o ponteiro. Para
+        # ela vale a regra antiga: só liga o que é inequívoco, porque chutar
+        # qual movimento é de qual linha poria a remessa amparando uma venda.
         for item in itens:
+            if item.movimentacao_id:
+                continue
             irmaos = viagem.itens.filter(
                 produto_id=item.produto_id, lote_id=item.lote_id,
             ).count()

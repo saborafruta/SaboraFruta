@@ -257,7 +257,7 @@ class ViagemService:
                 if quantidade <= ZERO:
                     continue
 
-            MovimentacaoService.registrar_movimentacao(
+            movimento = MovimentacaoService.registrar_movimentacao(
                 produto_id=item.produto_id,
                 filial_id=viagem.filial_id,
                 tipo_operacao=tipo,
@@ -276,6 +276,13 @@ class ViagemService:
                 documento_fiscal_id=item.documento_fiscal_id,
                 observacao=cls._historico(viagem, item),
                 permitir_sem_lote=True,
+            )
+            # A LINHA GUARDA O SEU MOVIMENTO. Duas linhas do mesmo produto e
+            # lote com naturezas diferentes geram movimentos identicos em
+            # tudo menos na natureza -- e' este ponteiro que permite dizer
+            # depois qual nota ampara qual saida, sem chutar.
+            ItemCarga.objects.filter(pk=item.pk).update(
+                movimentacao=movimento,
             )
             # O que sai sem comprador vira saldo em poder de quem viaja: e' o
             # livro que a prestacao de contas do retorno vai fechar.
