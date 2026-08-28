@@ -24,6 +24,7 @@ from reportlab.lib.pagesizes import A4, landscape
 from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
 from reportlab.lib.units import mm
 from reportlab.lib.utils import ImageReader
+from reportlab.pdfgen.canvas import Canvas
 from reportlab.platypus import (
     HRFlowable, Image, KeepInFrame, KeepTogether, Paragraph, SimpleDocTemplate,
     PageBreak, Spacer, Table, TableStyle,
@@ -268,6 +269,7 @@ class PedidoPdfService:
         itens = list(pedido.itens.all())
         # O frame do ReportLab desconta 6 pt em cada borda além das margens.
         altura_util = PAGINA[1] - doc.topMargin - doc.bottomMargin - 14
+        medidor = Canvas(BytesIO())
         if not itens:
             blocos = cls._cliente(pedido, e)
             blocos += cls._artes_do_pedido(pedido, e)
@@ -281,7 +283,6 @@ class PedidoPdfService:
                 esquerda += cls._financeiro(pedido, e, meia, item=item)
 
                 direita = cls._arte(item, e, meia)
-                direita += cls._personalizacao_item(item, e, meia)
                 if indice == 0:
                     direita += cls._artes_do_pedido(pedido, e, meia)
                 if not direita:
@@ -290,9 +291,30 @@ class PedidoPdfService:
                         Spacer(1, 4),
                         Paragraph('Nenhuma imagem anexada.', e['pequeno']),
                     ]
+                # A lista de nomes nunca participa da redução das imagens.
+                arte = KeepInFrame(meia, altura_util - 8, direita, mode='shrink')
+                _, altura_arte = arte.wrapOn(medidor, meia, altura_util)
+                direita = [arte]
+                pessoas = list(item.individuais.all())
+                colunas = 3 if len(pessoas) > 16 else (2 if len(pessoas) > 8 else 1)
+                lista = cls._personalizacao_item(
+                    item, e, meia, pessoas=pessoas, colunas=colunas,
+                )
+                consumidas = 0
+                if lista:
+                    altura_titulo = sum(
+                        bloco.wrapOn(medidor, meia, altura_util)[1]
+                        for bloco in lista[:-1]
+                    )
+                    espaco = altura_util - altura_arte - altura_titulo - 2
+                    tabela = lista[-1]
+                    partes = tabela.splitOn(medidor, meia, max(0, espaco))
+                    if partes:
+                        direita += lista[:-1] + [partes[0]]
+                        consumidas = min(len(pessoas), (len(partes[0]._cellvalues) - 1) * colunas)
                 pagina = Table([[
                     KeepInFrame(meia, altura_util, esquerda, mode='shrink'),
-                    KeepInFrame(meia, altura_util, direita, mode='shrink'),
+                    KeepInFrame(meia, altura_util, direita, mode='error'),
                 ]], colWidths=[meia, meia], rowHeights=[altura_util])
                 pagina.setStyle(TableStyle([
                     ('VALIGN', (0, 0), (-1, -1), 'TOP'),
@@ -303,6 +325,15 @@ class PedidoPdfService:
                     ('LINEBEFORE', (1, 0), (1, 0), .5, BORDA),
                 ]))
                 elementos.append(pagina)
+                if consumidas < len(pessoas):
+                    elementos.append(PageBreak())
+                    elementos.append(Paragraph(
+                        f'PERSONALIZAÇÕES - {esc(item.nome_exibicao)} (continuação)', e['secao'],
+                    ))
+                    elementos += cls._personalizacao_item(
+                        item, e, LARGURA_UTIL - 12, pessoas=pessoas[consumidas:],
+                        inicio=consumidas, colunas=3,
+                    )
                 if indice < len(itens) - 1:
                     elementos.append(PageBreak())
 
@@ -711,13 +742,67 @@ class PedidoPdfService:
     def _personalizacao_item(
         item, e, largura_util=LARGURA_UTIL, cor=AZUL,
         cor_clara=AZUL_CLARO, arredondada=False,
+        *, pessoas=None, inicio=0, colunas=1,
     ) -> list:
         """Lista compacta e exclusiva do produto, sem repetir o nome dele."""
-        pessoas = list(item.individuais.all())
+        pessoas = list(item.individuais.all()) if pessoas is None else pessoas
         if not pessoas:
             return []
+        if colunas > 1:
+            # Leitura horizontal: 1, 2, 3; depois 4, 5, 6. Cada bloco
+            # repete seu cabeçalho e mantém nome/número/tamanho juntos.
+            estilo = ParagraphStyle(
+                'pessoa_compacta', parent=e['celula'], fontSize=6.3, leading=7.5,
+            )
+            largura_bloco = (largura_util - (colunas - 1) * 2 * mm) / colunas
+            larguras = []
+            cabecalho = []
+            for coluna in range(colunas):
+                if coluna:
+                    larguras.append(2 * mm)
+                    cabecalho.append('')
+                larguras += [5 * mm, largura_bloco - 23 * mm, 9 * mm, 9 * mm]
+                cabecalho += ['#', 'Nome', 'Nº', 'Tam.']
+            dados = [cabecalho]
+            for linha in range(0, len(pessoas), colunas):
+                celulas = []
+                for coluna in range(colunas):
+                    if coluna:
+                        celulas.append('')
+                    posicao = linha + coluna
+                    if posicao >= len(pessoas):
+                        celulas += ['', '', '', '']
+                        continue
+                    pessoa = pessoas[posicao]
+                    celulas += [
+                        str(inicio + posicao + 1),
+                        Paragraph(esc(pessoa.nome) or '—', estilo),
+                        Paragraph(esc(pessoa.numero) or '—', estilo),
+                        Paragraph(esc(pessoa.tamanho.sigla) if pessoa.tamanho_id else '—', estilo),
+                    ]
+                dados.append(celulas)
+            tabela = _tabela(dados, larguras, cor_cabecalho=cor, fundo_linha=cor_clara)
+            tabela.setStyle(TableStyle([
+                ('FONTSIZE', (0, 0), (-1, -1), 6.3),
+                ('LEADING', (0, 0), (-1, -1), 7.5),
+                ('LEFTPADDING', (0, 0), (-1, -1), 2),
+                ('RIGHTPADDING', (0, 0), (-1, -1), 2),
+                ('TOPPADDING', (0, 0), (-1, -1), 1.5),
+                ('BOTTOMPADDING', (0, 0), (-1, -1), 1.5),
+            ] + [
+                ('BACKGROUND', (coluna * 5 - 1, 0), (coluna * 5 - 1, -1), colors.white)
+                for coluna in range(1, colunas)
+            ]))
+            return [
+                Spacer(1, 5),
+                _barra_secao(
+                    None, f'PERSONALIZAÇÃO POR PESSOA - {len(pessoas)}', e, largura_util,
+                    cor=cor, cor_clara=cor_clara, arredondada=arredondada,
+                ),
+                Spacer(1, 3), tabela,
+            ]
         dados = [['#', 'Nome', 'Número', 'Tamanho']]
-        for indice, pessoa in enumerate(pessoas, start=1):
+        for indice, pessoa in enumerate(pessoas, start=inicio + 1):
             dados.append([
                 str(indice), Paragraph(esc(pessoa.nome) or '—', e['celula']),
                 pessoa.numero or '—',

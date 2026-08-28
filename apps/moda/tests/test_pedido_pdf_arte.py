@@ -20,6 +20,7 @@ from apps.cadastros.models import Cliente
 from apps.core.models import Empresa, Filial
 from apps.moda.models import (
     ArquivoPedido, ItemPedidoProducao, PedidoProducao, VisualItemPedido,
+    PersonalizacaoIndividual, Tamanho,
 )
 from apps.moda.services.orcamento_pdf import OrcamentoPdfService
 from apps.moda.services.pedido_pdf import (
@@ -270,6 +271,59 @@ class ArteNoPdfTests(TestCase):
             pdf,
             rb'/MediaBox\s*\[\s*0\s+0\s+841\.\d+\s+595\.\d+\s*\]',
         )
+
+    def test_personalizacoes_em_colunas_preservam_ordem_e_todos_os_campos(self):
+        from apps.moda.services.pedido_pdf import _estilos, LARGURA_UTIL
+
+        pedido = self._pedido()
+        item = ItemPedidoProducao.objects.create(pedido=pedido, descricao='Camisa', quantidade=22)
+        tamanho = Tamanho.objects.create(filial=self.filial, sigla='XGG')
+        pessoas = [PersonalizacaoIndividual(
+            pedido=pedido, item=item, tamanho=tamanho, nome=f'Pessoa {n}', numero=str(n),
+        ) for n in range(1, 23)]
+        tabela = PedidoPdfService._personalizacao_item(
+            item, _estilos(), LARGURA_UTIL / 2, pessoas=pessoas, colunas=2,
+        )[-1]
+        self.assertEqual(len(tabela._cellvalues), 12)  # 11 linhas + cabeçalho
+        self.assertEqual(tabela._cellvalues[1][1].getPlainText(), 'Pessoa 1')
+        self.assertEqual(tabela._cellvalues[1][6].getPlainText(), 'Pessoa 2')
+        self.assertEqual(tabela._cellvalues[-1][6].getPlainText(), 'Pessoa 22')
+        self.assertEqual(tabela._cellvalues[-1][7].getPlainText(), '22')
+        self.assertEqual(tabela._cellvalues[-1][8].getPlainText(), 'XGG')
+
+    def test_muitos_nomes_continuam_em_outra_pagina_sem_reduzir_arte(self):
+        from reportlab.platypus import KeepInFrame
+
+        pedido = self._pedido()
+        item = ItemPedidoProducao.objects.create(pedido=pedido, descricao='Camisa', quantidade=180)
+        tamanho = Tamanho.objects.create(filial=self.filial, sigla='XGG')
+        visual = VisualItemPedido.objects.create(
+            item=item, posicao='frente_camisa',
+            imagem=SimpleUploadedFile('teste-colunas.png', _png(), content_type='image/png'),
+        )
+        self.addCleanup(visual.imagem.delete, save=False)
+        frames = []
+
+        def registrar_frame(*args, **kwargs):
+            frame = KeepInFrame(*args, **kwargs)
+            frames.append(frame)
+            return frame
+
+        with patch('apps.moda.services.pedido_pdf.KeepInFrame', side_effect=registrar_frame):
+            PedidoPdfService.gerar(pedido)
+        escala_sem_nomes = getattr(frames[0], '_scale', 1)
+        PersonalizacaoIndividual.objects.bulk_create([
+            PersonalizacaoIndividual(
+                pedido=pedido, item=item, tamanho=tamanho,
+                nome=f'Nome completo de teste da pessoa {n}', numero=str(n),
+            ) for n in range(180)
+        ])
+        frames.clear()
+        with patch('apps.moda.services.pedido_pdf.KeepInFrame', side_effect=registrar_frame):
+            pdf = PedidoPdfService.gerar(pedido)
+        self.assertGreater(_paginas(pdf), 1)
+        self.assertEqual(getattr(frames[0], '_scale', 1), escala_sem_nomes)
+        self.assertEqual(frames[2].mode, 'error')
 
     def test_financeiro_e_observacoes_sao_montados_em_todas_as_paginas(self):
         pedido = self._pedido()
