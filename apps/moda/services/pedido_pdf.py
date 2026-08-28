@@ -18,7 +18,6 @@ from decimal import Decimal
 from io import BytesIO
 
 from django.urls import reverse
-from django.utils import timezone
 from reportlab.lib import colors
 from reportlab.lib.pagesizes import A4, landscape
 from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
@@ -260,7 +259,7 @@ class PedidoPdfService:
         doc = SimpleDocTemplate(
             buffer, pagesize=PAGINA,
             leftMargin=MARGEM, rightMargin=MARGEM,
-            topMargin=31 * mm, bottomMargin=28 * mm,
+            topMargin=31 * mm, bottomMargin=9 * mm,
             title=f'Pedido {pedido.numero:06d}',
             author=str(pedido.filial),
         )
@@ -343,24 +342,33 @@ class PedidoPdfService:
                 if indice < len(itens) - 1:
                     elementos.append(PageBreak())
 
-        rodape = cls._rodape(pedido, base_url, e)
-        cabecalho = cls._cabecalho_folha(pedido)
-        def moldura(canvas, doc_):
-            cabecalho(canvas, doc_)
-            rodape(canvas, doc_)
-
-        doc.build(elementos, onFirstPage=moldura, onLaterPages=moldura)
+        cabecalho = cls._cabecalho_folha(pedido, base_url)
+        doc.build(elementos, onFirstPage=cabecalho, onLaterPages=cabecalho)
         return buffer.getvalue()
 
     # ── Cabeçalho ────────────────────────────────────────────────────────
 
     @staticmethod
-    def _cabecalho_folha(pedido):
-        """Cabeçalho azul, baixo e repetido em todas as folhas da OP."""
+    def _cabecalho_folha(pedido, base_url=''):
+        """Cabeçalho da OP com o QR da conferência repetido em cada folha."""
+        import qrcode
+
+        imagem = qrcode.make(_destino_qr(pedido, base_url))
+        qr_buffer = BytesIO()
+        imagem.save(qr_buffer, 'PNG')
+        qr_buffer.seek(0)
+        qr = ImageReader(qr_buffer)
+
         def desenhar(canvas, doc):
             canvas.saveState()
             largura, altura = canvas._pagesize
-            x = MARGEM
+            x = MARGEM + 20 * mm
+
+            canvas.drawImage(
+                qr, MARGEM, altura - 23 * mm,
+                width=16 * mm, height=16 * mm,
+                preserveAspectRatio=True, mask='auto',
+            )
 
             canvas.setFillColor(AZUL_ESCURO)
             canvas.setFont('Helvetica-Bold', 17)
@@ -592,7 +600,10 @@ class PedidoPdfService:
 
         if observacao:
             blocos.append(Spacer(1, 3))
-            blocos.append(Paragraph(esc(observacao), e['pequeno']))
+            blocos.append(Paragraph(
+                f'<b>Obs do produto:</b> <b>{esc(observacao)}</b>',
+                e['pequeno'],
+            ))
 
         blocos += cls._grade(item, e, largura_util)
         # Na ficha horizontal, deixar os sub-blocos fluírem aproveita o
@@ -839,18 +850,12 @@ class PedidoPdfService:
             ('Peças', f'{item.quantidade if item else pedido.quantidade_total}'),
             ('Unitário', brl(item.valor_unitario or Decimal('0')) if item else brl(pedido.valor_unitario_medio)),
             ('Produto', brl(item.subtotal) if item else brl(pedido.subtotal)),
-            ('Desconto', f'− {brl(pedido.desconto or Decimal("0"))}'),
-            ('Acréscimo', f'+ {brl(pedido.acrescimo or Decimal("0"))}'),
-            ('Frete', f'+ {brl(pedido.frete or Decimal("0"))}'),
             ('TOTAL OP', brl(pedido.valor_total)),
         ]
 
-        rotulos_compactos = {
-            'Desconto': 'Desc.', 'Acréscimo': 'Acrésc.',
-        }
         dados = [
             [Paragraph(
-                f'<b>{rotulos_compactos.get(rotulo, rotulo)}</b>', e['celula'],
+                f'<b>{rotulo}</b>', e['celula'],
             ) for rotulo, _ in linhas],
             [Paragraph(
                 f'<b>{valor}</b>' if rotulo == 'TOTAL OP' else valor,
@@ -884,66 +889,3 @@ class PedidoPdfService:
                 Paragraph(esc(pedido.observacoes).replace('\n', '<br/>'), e['normal']),
             ]
         return blocos
-
-    # ── Rodapé ───────────────────────────────────────────────────────────
-
-    @staticmethod
-    def _rodape(pedido, base_url, e):
-        """
-        Devolve o desenhador do rodapé — chamado em toda página.
-
-        O QR aponta para o atalho de conferência de entrega do pedido. Ele
-        abre a conferência existente (ou a seleção das expedições), nunca a
-        aprovação comercial do cliente.
-        """
-        import qrcode
-
-        empresa = pedido.filial.empresa
-        destino = _destino_qr(pedido, base_url)
-
-        imagem = qrcode.make(destino)
-        qr_buffer = BytesIO()
-        imagem.save(qr_buffer, 'PNG')
-        qr_buffer.seek(0)
-        # `ImageReader` e não o BytesIO cru: `drawImage` espera caminho ou
-        # leitor, e um buffer se esgota na primeira página — o rodapé é
-        # desenhado em todas.
-        qr = ImageReader(qr_buffer)
-
-        gerado = timezone.localtime().strftime('%d/%m/%Y %H:%M')
-        rodape_empresa = ' · '.join(x for x in (
-            empresa.razao_social,
-            f'CNPJ {empresa.cnpj}' if empresa.cnpj else '',
-            getattr(empresa, 'telefone', '') or '',
-            getattr(empresa, 'email', '') or '',
-        ) if x)
-
-        def desenhar(canvas, doc):
-            canvas.saveState()
-            y = 10 * mm
-
-            canvas.drawImage(
-                qr, MARGEM, y - 2 * mm, width=16 * mm, height=16 * mm,
-                preserveAspectRatio=True, mask='auto',
-            )
-            canvas.setFont('Helvetica-Bold', 8)
-            canvas.setFillColor(colors.black)
-            canvas.drawString(MARGEM + 19 * mm, y + 9 * mm, f'Pedido #{pedido.numero:06d}')
-
-            canvas.setFont('Helvetica', 6.5)
-            canvas.setFillColor(CINZA)
-            canvas.drawString(MARGEM + 19 * mm, y + 5.5 * mm, f'Gerado em {gerado}')
-            canvas.drawString(MARGEM + 19 * mm, y + 2.5 * mm, rodape_empresa[:110])
-            canvas.drawRightString(
-                canvas._pagesize[0] - MARGEM, y + 2.5 * mm,
-                f'Página {canvas.getPageNumber()}',
-            )
-
-            canvas.setStrokeColor(BORDA)
-            canvas.line(
-                MARGEM, y + 18 * mm,
-                canvas._pagesize[0] - MARGEM, y + 18 * mm,
-            )
-            canvas.restoreState()
-
-        return desenhar

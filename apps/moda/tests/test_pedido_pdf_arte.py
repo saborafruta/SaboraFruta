@@ -498,7 +498,7 @@ class ArteNoPdfTests(TestCase):
         ItemPedidoProducao.objects.create(
             pedido=pedido, descricao='Camisa com personalização', quantidade=1,
         )
-        altura_util = PAGINA[1] - 31 * mm - 28 * mm - 14
+        altura_util = PAGINA[1] - 31 * mm - 9 * mm - 14
         arte = [Spacer(1, altura_util - 15)]
         personalizacao = [Table([['Nome']], rowHeights=[10])]
 
@@ -540,6 +540,62 @@ class ArteNoPdfTests(TestCase):
             [chamada.kwargs['item'].pk for chamada in financeiro.call_args_list],
             [item.pk for item in itens],
         )
+
+    def test_financeiro_da_op_nao_exibe_desconto_acrescimo_e_frete(self):
+        from apps.moda.services.pedido_pdf import LARGURA_UTIL, _estilos
+
+        pedido = self._pedido()
+        item = ItemPedidoProducao.objects.create(
+            pedido=pedido, descricao='Camisa', quantidade=3,
+            valor_unitario=Decimal('20.00'),
+        )
+
+        tabela = PedidoPdfService._financeiro(
+            pedido, _estilos(), LARGURA_UTIL / 2, item=item,
+        )[3]
+        cabecalhos = [celula.getPlainText() for celula in tabela._cellvalues[0]]
+
+        self.assertEqual(cabecalhos, ['Peças', 'Unitário', 'Produto', 'TOTAL OP'])
+
+    def test_observacao_do_produto_tem_rotulo_e_texto_em_negrito(self):
+        from reportlab.platypus import Paragraph
+
+        from apps.moda.services.pedido_pdf import LARGURA_UTIL, _estilos
+
+        pedido = self._pedido()
+        item = ItemPedidoProducao.objects.create(
+            pedido=pedido, descricao='Camisa', quantidade=1,
+            observacoes='Conferir gola antes de cortar.',
+        )
+
+        paragrafos = [
+            bloco for bloco in PedidoPdfService._item(
+                pedido, item, _estilos(), 0, largura_util=LARGURA_UTIL / 2,
+            ) if isinstance(bloco, Paragraph)
+        ]
+        observacao = next(
+            bloco for bloco in paragrafos
+            if bloco.getPlainText().startswith('Obs do produto:')
+        )
+
+        self.assertEqual(
+            observacao.getPlainText(),
+            'Obs do produto: Conferir gola antes de cortar.',
+        )
+        self.assertEqual(observacao.text.count('<b>'), 2)
+
+    def test_pdf_nao_reserva_rodape_e_qr_fica_no_cabecalho(self):
+        pedido = self._pedido()
+
+        with patch.object(
+            PedidoPdfService, '_cabecalho_folha',
+            wraps=PedidoPdfService._cabecalho_folha,
+        ) as cabecalho:
+            pdf = PedidoPdfService.gerar(pedido, 'https://ited.app.br/')
+
+        self.assertTrue(pdf.startswith(b'%PDF'))
+        cabecalho.assert_called_once_with(pedido, 'https://ited.app.br/')
+        self.assertFalse(hasattr(PedidoPdfService, '_rodape'))
 
     def test_qr_do_pdf_aponta_para_conferencia_de_entrega(self):
         pedido = self._pedido()
