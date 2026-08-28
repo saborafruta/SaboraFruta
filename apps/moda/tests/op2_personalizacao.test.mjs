@@ -48,6 +48,12 @@ function submit(state) {
   return event;
 }
 
+function pagamento(state) {
+  Object.assign(state.pagamentos[0], {
+    forma: 'nao_informado', valor: state.totalValor(), valorEditado: false,
+  });
+}
+
 test('o rascunho já tem estrutura e grades ao iniciar a tela', () => {
   const { state } = workspace();
   assert.equal(state.draft.grades.length, 0);
@@ -88,12 +94,29 @@ test('excluir um produto remove só suas pessoas e recalcula o índice de envio'
 
 test('as linhas preenchidas vão direto no salvar, sem uma etapa extra', () => {
   const { state, alerts } = workspace();
+  pagamento(state);
   pessoa(state, 'primeiro');
   pessoa(state, 'segundo');
   state.adicionarLinhaPersonalizacao('segundo');
   assert.equal(state.personalizacoesPreenchidas().length, 2);
   assert.equal(submit(state).defaultPrevented, false);
   assert.equal(alerts.length, 0);
+});
+
+test('pagamento começa sem forma e o total dos itens alimenta o primeiro valor', () => {
+  const { state } = workspace();
+  assert.equal(state.pagamentos[0].forma, '');
+  assert.equal(state.pagamentos[0].valorEditado, false);
+  assert.equal(state.totalValor(), 40);
+  assert.match(template, /pagamento\.valor=totalValor\(\)/);
+  assert.match(template, /required><option value="">Selecione a forma de pagamento/);
+});
+
+test('forma de pagamento vazia bloqueia o orçamento', () => {
+  const { state, alerts } = workspace();
+  state.pagamentos[0].valor = state.totalValor();
+  assert.equal(submit(state).defaultPrevented, true);
+  assert.match(alerts.at(-1), /forma de pagamento/);
 });
 
 test('linhas incompletas e excesso de personalizações bloqueiam o envio', () => {

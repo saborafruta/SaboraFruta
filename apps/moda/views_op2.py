@@ -116,7 +116,7 @@ def _observacoes_pedido(request):
     return observacoes
 
 
-def _previsao_pagamento(request, total_esperado=None):
+def _previsao_pagamento(request, total_esperado=None, *, obrigatoria=False):
     """Lê a divisão prevista do orçamento sem consultar o módulo financeiro."""
     rotulos = dict(PedidoProducao.FormaPagamentoPrevista.choices)
     linhas = []
@@ -134,6 +134,10 @@ def _previsao_pagamento(request, total_esperado=None):
         ).strip().replace(' ', '')
         if not forma and not valor_texto:
             continue
+        if not forma:
+            raise ValueError(
+                'Pagamento previsto: selecione a forma de pagamento do orçamento.'
+            )
         if forma not in rotulos:
             raise ValueError('Pagamento previsto: escolha uma forma válida.')
         try:
@@ -148,6 +152,11 @@ def _previsao_pagamento(request, total_esperado=None):
         if valor <= 0:
             raise ValueError('Pagamento previsto: cada valor deve ser maior que zero.')
         linhas.append({'forma': forma, 'valor': f'{valor:.2f}'})
+
+    if obrigatoria and not linhas:
+        raise ValueError(
+            'Pagamento previsto: selecione a forma de pagamento do orçamento.'
+        )
 
     if linhas and total_esperado is not None:
         total = sum((Decimal(linha['valor']) for linha in linhas), Decimal('0'))
@@ -309,7 +318,9 @@ class Op2CreateView(ModaBaseView):
             for _, form in formularios
         )
         try:
-            previsao_pagamento = _previsao_pagamento(request, total_orcamento)
+            previsao_pagamento = _previsao_pagamento(
+                request, total_orcamento, obrigatoria=True,
+            )
         except ValueError as erro:
             messages.error(request, str(erro))
             return render(request, 'moda/op2_create.html', self._context(request))

@@ -141,7 +141,9 @@ class Op2Tests(TestCase):
         self._login_op2()
         dados = {**self._modelo_completo('item_0_'), 'cliente': self.cliente.pk,
                  'item_0_produto_id': self.produto.pk, 'item_0_quantidade': 1,
-                 'item_0_valor_unitario': '59,90'}
+                 'item_0_valor_unitario': '59,90',
+                 'pagamento_0_forma': 'nao_informado',
+                 'pagamento_0_valor': '59.90'}
         resposta = self.client.post(reverse('moda:op2-create'), dados)
         self.assertEqual(resposta.status_code, 302)
         novo = PedidoProducao.objects.exclude(pk=self.pedido.pk).get().itens.get()
@@ -645,12 +647,57 @@ class Op2Tests(TestCase):
         resposta = self.client.get(reverse('moda:op2-create'))
 
         for rotulo in (
-            'Dinheiro', 'Boleto', 'PIX', 'Cartão de débito',
+            'Não informado', 'Dinheiro', 'Boleto', 'PIX', 'Cartão de débito',
             'Crédito parcelado', 'Crédito à vista',
         ):
             self.assertContains(resposta, rotulo)
         self.assertContains(resposta, '+ Outra forma')
         self.assertContains(resposta, 'não gera lançamentos no financeiro')
+        self.assertContains(resposta, 'op2-payment-required')
+        self.assertContains(resposta, 'Selecione a forma de pagamento')
+        self.assertContains(resposta, 'pagamento.valor=totalValor()')
+
+    def test_nova_op_exige_escolha_explicita_da_forma_de_pagamento(self):
+        self._login_op2()
+
+        resposta = self.client.post(reverse('moda:op2-create'), {
+            'cliente': str(self.cliente.pk),
+            **self._modelo_completo('item_0_'),
+            'item_0_produto_id': str(self.produto.pk),
+            'item_0_quantidade': '1',
+            'item_0_valor_unitario': '25',
+            'pagamento_0_forma': '',
+            'pagamento_0_valor': '25.00',
+        })
+
+        self.assertEqual(resposta.status_code, 200)
+        self.assertContains(resposta, 'selecione a forma de pagamento')
+        self.assertFalse(PedidoProducao.objects.exclude(pk=self.pedido.pk).exists())
+
+    def test_previsao_de_entrega_aparece_vazia_e_e_opcional(self):
+        self._login_op2()
+
+        resposta = self.client.get(reverse('moda:op2-create'))
+
+        self.assertContains(resposta, 'Previsão de entrega')
+        self.assertContains(
+            resposta,
+            '<input type="date" name="data_prevista_entrega" value="" class="form-input w-full">',
+            html=True,
+        )
+
+        resposta = self.client.post(reverse('moda:op2-create'), {
+            'cliente': str(self.cliente.pk),
+            **self._modelo_completo('item_0_'),
+            'item_0_produto_id': str(self.produto.pk),
+            'item_0_quantidade': '1',
+            'item_0_valor_unitario': '25',
+            'pagamento_0_forma': 'nao_informado',
+            'pagamento_0_valor': '25.00',
+        })
+        criado = PedidoProducao.objects.exclude(pk=self.pedido.pk).get()
+        self.assertEqual(resposta.status_code, 302)
+        self.assertIsNone(criado.data_prevista_entrega)
 
     def test_nova_op_salva_divisao_do_pagamento_previsto(self):
         self.client.force_login(self._usuario())
@@ -736,6 +783,8 @@ class Op2Tests(TestCase):
             'item_0_produto_id': str(self.produto.pk),
             'item_0_quantidade': '2',
             'item_0_valor_unitario': '10',
+            'pagamento_0_forma': 'nao_informado',
+            'pagamento_0_valor': '20.00',
             'arquivo': SimpleUploadedFile('arte.png', imagem, content_type='image/png'),
             'mockup_frente_camisa': SimpleUploadedFile(
                 'frente.png', imagem, content_type='image/png',
@@ -765,6 +814,8 @@ class Op2Tests(TestCase):
             'item_0_produto_id': str(self.produto.pk),
             'item_0_quantidade': '2',
             'item_0_valor_unitario': '25.50',
+            'pagamento_0_forma': 'nao_informado',
+            'pagamento_0_valor': '51.00',
             'destino': 'pdf',
         })
 
@@ -791,6 +842,8 @@ class Op2Tests(TestCase):
             'item_0_produto_id': str(self.produto.pk),
             'item_0_quantidade': '2',
             'item_0_valor_unitario': '25.50',
+            'pagamento_0_forma': 'nao_informado',
+            'pagamento_0_valor': '51.00',
             'destino': 'enviar',
         })
 
@@ -1290,6 +1343,10 @@ class Op2Tests(TestCase):
                 f'individual_{idx}_numero': str(idx + 1),
             })
 
+        dados.update({
+            'pagamento_0_forma': 'nao_informado',
+            'pagamento_0_valor': '50.00',
+        })
         resposta = self.client.post(reverse('moda:op2-create'), dados)
 
         criado = PedidoProducao.objects.exclude(pk=self.pedido.pk).get()
@@ -1322,6 +1379,8 @@ class Op2Tests(TestCase):
             'individual_0_tamanho_id': str(tamanho.pk),
             'individual_0_nome': 'DIEGO',
             'individual_0_numero': '10',
+            'pagamento_0_forma': 'nao_informado',
+            'pagamento_0_valor': '25.00',
         })
 
         criado = PedidoProducao.objects.exclude(pk=self.pedido.pk).get()

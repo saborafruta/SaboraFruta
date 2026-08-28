@@ -58,6 +58,7 @@ class PedidoProducao(ComCodigoQr, FilialScopedModel):
     class FormaPagamentoPrevista(models.TextChoices):
         """Previsão comercial, sem vínculo com cadastros ou lançamentos financeiros."""
 
+        NAO_INFORMADO = 'nao_informado', 'Não informado'
         DINHEIRO = 'dinheiro', 'Dinheiro'
         BOLETO = 'boleto', 'Boleto'
         PIX = 'pix', 'PIX'

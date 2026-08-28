@@ -14,6 +14,7 @@
 .op2-shell{margin:-.75rem}.op2-work{display:grid;grid-template-columns:minmax(0,1fr) 300px;gap:12px}.op2-band{border:1px solid rgba(148,163,184,.22);border-radius:10px;padding:12px}.op2-label{display:block;margin-bottom:4px;font-size:10px;text-transform:uppercase;letter-spacing:.06em;color:#64748b;font-weight:800}.op2-card{border:1px solid rgba(148,163,184,.22);border-radius:10px;padding:10px}.op2-results{position:absolute;left:0;right:0;top:100%;z-index:40;max-height:240px;overflow:auto;border:1px solid rgba(148,163,184,.35);border-radius:10px;margin-top:4px;background:var(--card-bg,#18181b)}.op2-plus{min-height:78px;border:1px dashed rgba(148,163,184,.45);border-radius:10px;display:flex;align-items:center;justify-content:center;text-align:center;cursor:pointer;overflow:hidden}.op2-plus img{width:100%;height:110px;object-fit:cover}.op2-modal-grid{display:grid;grid-template-columns:330px minmax(0,1fr);gap:12px}.op2-model-list{max-height:58vh;overflow:auto}.op2-grade-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:8px}.op2-grade-chip{border:1px solid rgba(148,163,184,.28);border-radius:10px;padding:10px;text-align:left;min-height:60px}.op2-grade-chip.is-on{border-color:#3b82f6;background:rgba(59,130,246,.13);box-shadow:inset 3px 0 #3b82f6}.op2-grade-panel{border:1px solid rgba(59,130,246,.38);border-radius:12px;padding:11px;background:rgba(59,130,246,.06)}.op2-size-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(145px,1fr));gap:8px}.op2-size-card{border:1px solid rgba(148,163,184,.24);border-radius:10px;padding:9px;background:rgba(148,163,184,.05)}.op2-size-name{display:block;text-align:center;font-size:12px;font-weight:900;margin-bottom:7px}.op2-stepper{display:grid;grid-template-columns:40px minmax(56px,1fr) 40px;gap:5px;align-items:center}.op2-qty-btn{height:40px;border:1px solid rgba(148,163,184,.3);border-radius:8px;font-size:20px;font-weight:800}.op2-qty-input{height:40px;min-width:0;text-align:center;font-size:18px;font-weight:800}.op2-qty-input::-webkit-inner-spin-button,.op2-qty-input::-webkit-outer-spin-button{-webkit-appearance:none;margin:0}.op2-file-previews{display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:8px}.op2-file-preview{border:1px solid rgba(148,163,184,.22);border-radius:9px;padding:7px;min-width:0}.op2-file-preview img{width:100%;height:90px;object-fit:cover;border-radius:6px;margin-bottom:5px}
 .op2-results{background:#18181b!important;color:#f8fafc!important}.op2-results button,.op2-results strong,.op2-results small{color:inherit!important}.op2-qty-error{border-color:#ef4444!important;box-shadow:0 0 0 2px rgba(239,68,68,.18)}
 .op2-item-personalizacao{margin-top:10px;padding:12px;border:1px solid rgba(59,130,246,.28);border-radius:10px;background:rgba(59,130,246,.055)}.op2-personalizacao-grid{display:grid;grid-template-columns:minmax(115px,.7fr) minmax(150px,1fr) minmax(110px,.65fr) auto;gap:8px;align-items:end}.op2-chip{display:inline-flex;padding:3px 7px;border-radius:999px;font-size:11px;background:rgba(59,130,246,.12)}
+.op2-payment-required{border-color:rgba(245,158,11,.72);background:rgba(245,158,11,.07);box-shadow:inset 4px 0 #f59e0b}.op2-payment-required .op2-payment-title{color:#f59e0b}.op2-payment-select:invalid{border-color:#f59e0b;box-shadow:0 0 0 2px rgba(245,158,11,.12)}
 @media(max-width:767px){.op2-personalizacao-grid{grid-template-columns:1fr}.op2-personalizacao-grid button{width:100%}}
 @media(max-width:1023px){.op2-work{grid-template-columns:minmax(0,1fr)}.op2-aside{display:grid;grid-template-columns:1fr 1fr;gap:12px}.op2-modal-grid{grid-template-columns:1fr}input,select,textarea{font-size:16px!important}}
 @media(max-width:767px){.op2-aside{display:block}.op2-grid-compact{grid-template-columns:1fr!important}.op2-model-list{max-height:240px}}
@@ -59,6 +60,7 @@
             <label><span class="op2-label">Contato</span><input name="contato_nome" x-model="contatoNome" class="form-input w-full" placeholder="Pessoa de contato"></label>
             <label><span class="op2-label">WhatsApp</span><input name="contato_telefone" x-model="contatoTelefone" class="form-input w-full" placeholder="55 84 99999-0000"></label>
             <label><span class="op2-label">Data do pedido</span><input type="date" name="data_pedido" value="{{ hoje|date:'Y-m-d' }}" class="form-input w-full" required></label>
+            <label><span class="op2-label">Previsão de entrega <span class="normal-case opacity-60">(opcional)</span></span><input type="date" name="data_prevista_entrega" value="" class="form-input w-full"><small class="block mt-1 opacity-60">Deixe vazio quando a data ainda não estiver combinada.</small></label>
             <div class="md:col-span-4 space-y-2"><div class="flex items-center justify-between"><span class="op2-label">Outros contatos</span><button type="button" class="btn-secondary text-xs" @click="contatos.push({nome:'',telefone:''})">+ Contato</button></div><template x-for="(contato,idx) in contatos" :key="idx"><div class="grid md:grid-cols-[1fr_1fr_auto] gap-2"><input name="contato_extra_nome" x-model="contato.nome" class="form-input" placeholder="Nome do contato extra"><input name="contato_extra_telefone" x-model="contato.telefone" class="form-input" placeholder="WhatsApp / telefone extra"><button type="button" class="btn-secondary" @click="contatos.splice(idx,1)">Remover</button></div></template></div>
           </div>
         </section>
@@ -93,10 +95,10 @@
             <div x-show="!itens.length" class="text-center p-8 rounded-lg" style="border:1px dashed #64748b"><p class="font-bold">Nenhum modelo ainda</p><p class="text-sm opacity-70 mt-1">Clique em “Adicionar modelo” para escolher o modelo, estrutura, impressão e grade.</p><button type="button" class="btn-primary mt-3" @click="abrirModalItem()">Adicionar modelo</button></div>
           </div>
         </section>
-        <section class="op2-band">
-          <div class="flex flex-wrap items-start justify-between gap-2 mb-3"><div><h2 class="font-bold">4. Previsão de pagamento</h2><p class="text-xs opacity-70">É somente a combinação prevista para o orçamento; não gera lançamentos no financeiro.</p></div><button type="button" class="btn-secondary text-sm" @click="adicionarPagamento()">+ Outra forma</button></div>
+        <section class="op2-band op2-payment-required">
+          <div class="flex flex-wrap items-start justify-between gap-2 mb-3"><div><div class="flex flex-wrap items-center gap-2"><h2 class="font-bold op2-payment-title">4. Previsão de pagamento</h2><span class="soft-pill is-amber text-xs">Obrigatório</span></div><p class="text-xs opacity-80 mt-1">Selecione uma forma. O valor é preenchido automaticamente pelo total dos produtos e esta previsão não gera lançamentos no financeiro.</p></div><button type="button" class="btn-secondary text-sm" @click="adicionarPagamento()">+ Outra forma</button></div>
           <div class="space-y-2">
-            <template x-for="(pagamento,idx) in pagamentos" :key="pagamento.uid"><div class="grid md:grid-cols-[minmax(190px,1fr)_minmax(150px,.7fr)_auto] gap-2 items-end op2-grid-compact"><label><span class="op2-label">Forma</span><select x-model="pagamento.forma" class="form-input w-full"><option value="">Selecione</option>{% for valor,rotulo in formas_pagamento_previstas %}<option value="{{ valor }}">{{ rotulo }}</option>{% endfor %}</select></label><label><span class="op2-label">Valor</span><input type="number" min="0.01" step=".01" x-model.number="pagamento.valor" class="form-input w-full" placeholder="0,00"></label><button type="button" class="btn-secondary" style="color:#ef4444" x-show="pagamentos.length>1" @click="pagamentos.splice(idx,1)">Remover</button></div></template>
+            <template x-for="(pagamento,idx) in pagamentos" :key="pagamento.uid"><div class="grid md:grid-cols-[minmax(190px,1fr)_minmax(150px,.7fr)_auto] gap-2 items-end op2-grid-compact"><label><span class="op2-label">Forma <strong style="color:#f59e0b">*</strong></span><select x-model="pagamento.forma" class="form-input w-full op2-payment-select" required><option value="">Selecione a forma de pagamento</option>{% for valor,rotulo in formas_pagamento_previstas %}<option value="{{ valor }}">{{ rotulo }}</option>{% endfor %}</select></label><label><span class="op2-label">Valor</span><input type="number" min="0.01" step=".01" x-model.number="pagamento.valor" x-effect="if(idx===0 && !pagamento.valorEditado) pagamento.valor=totalValor()||''" @input="pagamento.valorEditado=true" class="form-input w-full" placeholder="Calculado pelos produtos" required><small class="block mt-1 opacity-70" x-show="idx===0 && !pagamento.valorEditado">Atualizado automaticamente pelos itens.</small></label><button type="button" class="btn-secondary" style="color:#ef4444" x-show="pagamentos.length>1" @click="pagamentos.splice(idx,1)">Remover</button></div></template>
           </div>
           <div class="flex flex-wrap justify-between gap-2 mt-3 p-3 rounded-lg text-sm" :style="Math.abs(totalPagamentos()-totalValor())<0.01?'background:rgba(22,163,74,.10);color:#16a34a':'background:rgba(245,158,11,.12);color:#d97706'"><span>Soma prevista: <strong x-text="moeda(totalPagamentos())"></strong></span><span>Total do orçamento: <strong x-text="moeda(totalValor())"></strong></span></div>
         </section>
@@ -168,8 +170,8 @@ function op2NovaMelhorada(){
     try{const canal=new BroadcastChannel('op2-salvo');canal.onmessage=e=>{if(e.data?.opUrl)window.location.assign(e.data.opUrl)}}catch(e){}
   };
   estado.personalizacoes=[];
-  estado.pagamentos=[{uid:Date.now()+Math.random(),forma:'',valor:''}];
-  estado.adicionarPagamento=function(){this.pagamentos.push({uid:Date.now()+Math.random(),forma:'',valor:''})};
+  estado.pagamentos=[{uid:Date.now()+Math.random(),forma:'',valor:'',valorEditado:false}];
+  estado.adicionarPagamento=function(){this.pagamentos.push({uid:Date.now()+Math.random(),forma:'',valor:'',valorEditado:true})};
   estado.totalPagamentos=function(){return this.pagamentos.reduce((s,p)=>s+Number(p.valor||0),0)};
   const criarDraft=estado.novoDraft.bind(estado);
   estado.novoDraft=function(){
@@ -355,7 +357,13 @@ function op2NovaMelhorada(){
       }
     }
     const preenchidas=this.pagamentos.filter(p=>p.forma||Number(p.valor||0)>0);
-    if(preenchidas.some(p=>!p.forma||Number(p.valor||0)<=0)){
+    if(!preenchidas.length){
+      event.preventDefault();alert('Selecione a forma de pagamento do orçamento.');return;
+    }
+    if(preenchidas.some(p=>!p.forma)){
+      event.preventDefault();alert('Selecione a forma de pagamento do orçamento.');return;
+    }
+    if(preenchidas.some(p=>Number(p.valor||0)<=0)){
       event.preventDefault();alert('Complete a forma e o valor de cada pagamento previsto.');return;
     }
     if(preenchidas.length&&Math.abs(this.totalPagamentos()-this.totalValor())>=0.01){
