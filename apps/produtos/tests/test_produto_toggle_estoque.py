@@ -6,7 +6,7 @@ from django.test import RequestFactory, TestCase
 from apps.core.models import Empresa, Filial, PerfilAcesso, PoliticaReplicacaoFilial, Usuario
 from apps.estoque.models import Estoque, MovimentacaoEstoque
 from apps.produtos.models import Produto, ProdutoFilial, UnidadeMedida, UnidadeMedidaFilial
-from apps.produtos.views.produto import ProdutoToggleAtivoView, _produto_queryset_filtrado
+from apps.produtos.views.produto import ProdutoListView, ProdutoToggleAtivoView, _produto_queryset_filtrado
 
 
 class ProdutoToggleEstoqueTests(TestCase):
@@ -240,3 +240,17 @@ class ProdutoToggleEstoqueTests(TestCase):
 
         produto_listado = next(item for item in produtos if item.pk == produto.pk)
         self.assertFalse(produto_listado.ativo_filial)
+
+    def test_listagem_usa_largura_total_sem_remover_colunas(self):
+        self.criar_produto()
+        request = self.factory.get('/produtos/')
+        request.user = self.usuario
+        request.filial_ativa = self.filial
+        request.session = {}
+
+        response = ProdutoListView.as_view()(request)
+
+        self.assertContains(response, 'produto-list-page w-full max-w-none mx-auto')
+        for coluna in ('Cod. de Barras', 'Categoria', 'Sub categoria', 'Estoque', 'Custo', 'Preco venda', 'Markup', 'Margem', 'Acoes'):
+            with self.subTest(coluna=coluna):
+                self.assertContains(response, coluna)

@@ -3,6 +3,7 @@
 
 {% block list_title %}Produtos{% endblock %}
 {% block page_title %}Produtos{% endblock %}
+{% block largura_conteudo %}produto-list-page w-full max-w-none{% endblock %}
 
 {% block list_actions %}
   <a href="{% url 'produtos:categoria-list' %}?tipo=categorias" class="btn-secondary">Categorias</a>
@@ -17,6 +18,7 @@
 
 {% block list_filters %}
 <style>
+  .produto-list-page { min-width: 0; padding-inline: 1rem !important; }
   .produto-list-compact { overflow: hidden !important; }
   .produto-list-compact .overflow-x-auto { overflow-x: auto !important; overflow-y: visible !important; scrollbar-width: thin; }
   .produto-list-compact .overflow-x-auto::-webkit-scrollbar { height: 10px; }
@@ -42,7 +44,7 @@
   .produto-list-compact th:nth-child(12) { width: 82px; }
   .produto-list-compact th:nth-child(13) { width: 90px; }
   .produto-list-compact td:not(:nth-child(2)) .inline-display { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .produto-name-truncate { max-width: 100%; white-space: nowrap; }
+  .produto-name-truncate { max-width: 100%; text-overflow: ellipsis; white-space: nowrap; }
   .produto-id-badge { min-width: 40px !important; padding-left: .35rem !important; padding-right: .35rem !important; }
   .produto-row-actions { gap: .28rem !important; min-width: 58px; justify-content: flex-end; }
   .produto-row-actions a,
@@ -61,7 +63,7 @@
   .produto-inactive-row .produto-thumb-trigger,
   .produto-inactive-row .produto-name-truncate { opacity: .5; }
   .produto-name-status { display: flex; flex-wrap: nowrap; align-items: center; gap: .24rem .42rem; min-width: 0; flex: 1 1 auto; position: relative; overflow: visible; }
-  .produto-name-status .produto-name-truncate { flex: 1 1 150px; min-width: 0; }
+  .produto-name-status .produto-name-truncate { flex: 1 1 150px; min-width: 0; overflow: hidden !important; }
   .produto-name-more { width: 24px; height: 24px; border-radius: 7px; display: inline-grid; place-items: center; flex: 0 0 auto; border: 1px solid rgba(96,165,250,.28); background: rgba(59,130,246,.12); color: #93c5fd; font-size: 12px; font-weight: 900; cursor: pointer; }
   .produto-name-more svg { width: 14px; height: 14px; }
   body.tema-claro .produto-name-more { background: #eff6ff; border-color: #bfdbfe; color: #1d4ed8; }
