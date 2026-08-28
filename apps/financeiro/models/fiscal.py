@@ -192,6 +192,16 @@ class DocumentoFiscal(TimestampedModel):
     mensagem_sefaz = models.TextField(blank=True)
     protocolo = models.CharField(max_length=20, blank=True)
 
+    # O QUE ESTE DOCUMENTO VAI TRANSMITIR, guardado quando ele foi conferido
+    # e numerado.
+    #
+    # A EMISSAO E A TRANSMISSAO SAO DOIS MOMENTOS, e entre eles a operacao
+    # continua andando: a venda ganha um item, o retorno e' recontado, a
+    # carga muda. Remontar o payload na hora de transmitir mandaria para a
+    # SEFAZ numeros diferentes dos que o ERP registrou nesta nota -- e a
+    # divergencia so' apareceria no XML autorizado.
+    payload_envio = models.JSONField(default=dict, blank=True)
+
     xml_enviado = models.TextField(blank=True)
     xml_assinado = models.TextField(blank=True)
     xml_retorno = models.TextField(blank=True)

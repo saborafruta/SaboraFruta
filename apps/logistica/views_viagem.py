@@ -45,6 +45,7 @@ from apps.logistica.services.historico_bonificacao import (
 )
 from apps.logistica.services.rastreabilidade import RastreabilidadeService
 from apps.logistica.services.retorno_nfe import RetornoVendaForaService
+from apps.logistica.services.transmissao_nfe import TransmissaoNFeViagemService
 from apps.logistica.services.retorno_viagem import RetornoViagemService
 from apps.logistica.services.venda_fora_nfe import VendaForaNFeService
 from apps.logistica.services.vinculo_remessa import VinculoRemessaService
@@ -1207,3 +1208,61 @@ class HistoricoViagemView(PermissaoRequiredMixin, View):
             'viagem': viagem,
             'linhas': LogViagemService.linhas(viagem),
         })
+
+
+class ViagemNFeTransmitirView(PermissaoRequiredMixin, View):
+    """
+    Manda para a SEFAZ uma das notas da viagem — ou pergunta como ela está.
+
+    UMA PORTA SÓ PARA AS QUATRO NATUREZAS. Remessa, venda na rua, bonificação
+    e retorno são operações diferentes e documentos diferentes, mas a
+    conversa com a SEFAZ é a mesma: token da filial, envio, retorno. Quatro
+    rotas iguais divergiriam na primeira correção que alguém fizesse em só
+    uma delas.
+
+    A NOTA MANDA NA PERMISSÃO, e não a tela: quem chegar por outro caminho
+    encontra a mesma recusa.
+    """
+
+    permissao_modulo = 'logistica'
+    permissao_acao = 'editar'
+
+    def post(self, request, pk, documento_pk):
+        viagem = get_object_or_404(
+            Viagem.objects.for_filial(_filial(request)), pk=pk,
+        )
+        documento = get_object_or_404(
+            DocumentoFiscal, pk=documento_pk, filial=viagem.filial,
+        )
+        volta = redirect(
+            request.POST.get('voltar') or 'logistica:viagem-detail', pk=viagem.pk,
+        )
+
+        consultar = request.POST.get('acao') == 'consultar'
+        try:
+            if consultar:
+                TransmissaoNFeViagemService.consultar(documento)
+            else:
+                TransmissaoNFeViagemService.transmitir(documento, request.user)
+        except DadosInvalidosError as erro:
+            messages.error(request, str(erro))
+            return volta
+        except Exception as erro:  # noqa: BLE001 - a SEFAZ recusa de muitas formas
+            # A RECUSA DA SEFAZ É INFORMAÇÃO, e não erro de sistema: o motivo
+            # já foi gravado no documento e é ele que diz o que corrigir.
+            documento.refresh_from_db()
+            messages.error(
+                request,
+                documento.mensagem_sefaz
+                or f'A SEFAZ não aceitou a nota: {erro}',
+            )
+            return volta
+
+        documento.refresh_from_db()
+        messages.success(
+            request,
+            f'NF-e {documento.numero}/{documento.serie}: '
+            f'{documento.get_status_display().lower()}.'
+            + ('' if consultar else ' A autorização chega em seguida.'),
+        )
+        return volta

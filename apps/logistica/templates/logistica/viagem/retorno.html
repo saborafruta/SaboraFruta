@@ -179,6 +179,9 @@
             <p class="text-xs" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
               {{ vinculo.nota.get_status_display }}
             </p>
+            <div class="mt-2 flex justify-end">
+              {% include "logistica/viagem/_transmitir.html" with documento=vinculo.nota voltar="logistica:viagem-retorno" %}
+            </div>
           </div>
         {% elif not pendencias_nota %}
           <form method="post" action="{% url 'logistica:viagem-emitir-retorno' viagem.pk %}">

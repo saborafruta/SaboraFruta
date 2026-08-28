@@ -428,6 +428,11 @@ class RetornoVendaForaService:
             valor_produtos=_dinheiro(payload['valor_produtos']),
             valor_total=_dinheiro(payload['valor_total']),
             status=StatusDocumentoFiscal.PENDENTE,
+            # O QUE VAI PARA A SEFAZ E' O QUE FOI CONFERIDO AQUI. Entre a
+            # emissao e a transmissao a operacao continua andando, e
+            # remontar depois mandaria numeros diferentes dos que esta
+            # nota registrou.
+            payload_envio=payload,
             data_emissao=timezone.now(),
             usuario=usuario,
         )

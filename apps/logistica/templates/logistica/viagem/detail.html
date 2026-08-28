@@ -505,6 +505,11 @@
                     <span class="block text-[11px]" :style="temaClaro ? 'color:#94a3b8;' : 'color:#71717a;'">
                       {{ venda.documento_fiscal.get_status_display }}
                     </span>
+                    {% if pode_agir %}
+                      <div class="mt-1">
+                        {% include "logistica/viagem/_transmitir.html" with documento=venda.documento_fiscal %}
+                      </div>
+                    {% endif %}
                   {% elif venda.status != 'cancelada' %}
                     <form method="post" action="{% url 'logistica:viagem-venda-nfe' viagem.pk venda.pk %}">
                       {% csrf_token %}
@@ -1088,6 +1093,9 @@
           NF-e <span class="font-mono font-semibold">{{ remessa.numero }}/{{ remessa.serie }}</span>
           · {{ remessa.get_status_display }}
         </p>
+        {% if pode_agir %}
+          {% include "logistica/viagem/_transmitir.html" with documento=remessa %}
+        {% endif %}
       {% elif pendencias_remessa %}
         <ul class="text-sm space-y-1" :style="temaClaro ? 'color:#374151;' : 'color:#d1d5db;'">
           {% for pendencia in pendencias_remessa %}<li>· {{ pendencia }}</li>{% endfor %}

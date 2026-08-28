@@ -1,0 +1,51 @@
+{% comment %}
+  O BOTÃO QUE FECHA O CICLO: a nota vai para a SEFAZ.
+
+  Uma nota que o ERP considera emitida e a SEFAZ nunca viu é pior do que nota
+  nenhuma — o estoque baixou, o cliente levou a mercadoria, o número foi
+  consumido, e não há documento amparando nada disso.
+
+  O ESTADO É DITO COMO ELE É. A autorização é assíncrona: enquanto a resposta
+  não volta, a nota fica "enviando", e não "autorizada". Mostrar o otimismo
+  faria alguém imprimir DANFE de nota que a SEFAZ ainda vai rejeitar.
+
+  REJEIÇÃO NÃO QUEIMA A NOTA: o motivo aparece e o botão volta, com o mesmo
+  número. Reservar outro a cada tentativa encheria a numeração de buracos.
+
+  Espera `documento`, `viagem` e (opcional) `voltar` no contexto.
+{% endcomment %}
+{% if documento %}
+  <div class="flex flex-wrap items-center gap-2">
+    {% if documento.status == 'autorizada' %}
+      <span class="soft-pill is-green text-[11px]">✓ autorizada na SEFAZ</span>
+      {% if documento.chave %}
+        <span class="font-mono text-[10px] break-all" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+          {{ documento.chave }}
+        </span>
+      {% endif %}
+    {% elif documento.status == 'processando' %}
+      <span class="soft-pill is-blue text-[11px]">enviando — aguardando a SEFAZ</span>
+      <form method="post" action="{% url 'logistica:viagem-nfe-transmitir' viagem.pk documento.pk %}">
+        {% csrf_token %}
+        <input type="hidden" name="acao" value="consultar">
+        {% if voltar %}<input type="hidden" name="voltar" value="{{ voltar }}">{% endif %}
+        <button type="submit" class="btn-secondary text-xs">Consultar SEFAZ</button>
+      </form>
+    {% elif documento.status == 'pendente' or documento.status == 'rejeitada' %}
+      <form method="post" action="{% url 'logistica:viagem-nfe-transmitir' viagem.pk documento.pk %}">
+        {% csrf_token %}
+        {% if voltar %}<input type="hidden" name="voltar" value="{{ voltar }}">{% endif %}
+        <button type="submit" class="btn-primary text-xs">
+          {% if documento.status == 'rejeitada' %}Transmitir de novo{% else %}Transmitir à SEFAZ{% endif %}
+        </button>
+      </form>
+      {% if documento.mensagem_sefaz %}
+        <span class="text-[11px]" style="color:#dc2626;">{{ documento.mensagem_sefaz }}</span>
+      {% endif %}
+    {% else %}
+      <span class="text-[11px]" :style="temaClaro ? 'color:#94a3b8;' : 'color:#71717a;'">
+        {{ documento.get_status_display }}
+      </span>
+    {% endif %}
+  </div>
+{% endif %}
