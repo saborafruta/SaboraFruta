@@ -270,15 +270,36 @@ class VendaService:
                 quantidade=item.quantidade,
             )
 
+            # A MERCADORIA JA' EMBARCADA NAO BAIXA DE NOVO. Quando o pedido foi
+            # carregado numa viagem que ja' fechou a carga, o estoque saiu la'
+            # -- faturar depois tirava a mesma caixa uma segunda vez. A reserva
+            # continua sendo liberada acima: ela e' do pedido, nao do
+            # movimento. Ver `SaidaUnicaService`.
+            from apps.logistica.services.saida_unica import SaidaUnicaService
+
+            embarcado = SaidaUnicaService.embarcado_em_viagem(
+                pedido.pk, item.produto_id,
+            )
+            restante = (item.quantidade or Decimal('0')) - embarcado
+            if restante <= Decimal('0'):
+                continue
+
             # Executar saída real
             if separacao and item.produto.controla_lote:
                 itens_sep = separacao.itens.filter(item_pedido=item)
+                # A PARTE JA' EMBARCADA SAI DA CONTA LOTE A LOTE: metade
+                # carregada e metade faturada precisa somar UMA saida, e nao
+                # uma e meia.
+                falta = restante
                 for sep in itens_sep:
+                    if falta <= Decimal('0'):
+                        break
+                    quantidade_lote = min(sep.quantidade_separada, falta)
                     MovimentacaoService.registrar_movimentacao(
                         produto_id=item.produto_id,
                         filial_id=pedido.filial_id,
                         tipo_operacao=MovimentacaoEstoque.TipoOperacao.SAIDA,
-                        quantidade=sep.quantidade_separada,
+                        quantidade=quantidade_lote,
                         usuario_id=usuario.pk,
                         lote_id=sep.lote_id,
                         valor_unitario=item.valor_unitario,
@@ -286,12 +307,13 @@ class VendaService:
                         documento_id=pedido.pk,
                         documento_numero=pedido.numero_pedido,
                     )
+                    falta -= quantidade_lote
             else:
                 # Produto sem controle de lote ou sem separação prévia → FEFO direto
                 MovimentacaoService.registrar_saida_fefo(
                     produto_id=item.produto_id,
                     filial_id=pedido.filial_id,
-                    quantidade=item.quantidade,
+                    quantidade=restante,
                     usuario_id=usuario.pk,
                     tipo_operacao=MovimentacaoEstoque.TipoOperacao.SAIDA,
                     documento_tipo=MovimentacaoEstoque.DocumentoTipo.PEDIDO_VENDA,

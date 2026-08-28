@@ -34,6 +34,7 @@ from apps.estoque.services.movimentacao_service import MovimentacaoService
 from apps.fiscal.models import NaturezaOperacao
 from apps.fiscal.services.natureza_operacao_service import NaturezaOperacaoService
 from apps.logistica.models import ItemCarga, SaldoCarga, Viagem
+from apps.logistica.services.saida_unica import SaidaUnicaService
 
 ZERO = Decimal('0')
 
@@ -219,11 +220,24 @@ class ViagemService:
             )
             if not tipo:
                 continue
+
+            # A MERCADORIA DE UM PEDIDO SAI UMA VEZ. Pedido faturado antes de
+            # ser carregado já baixou o estoque no faturamento; baixar de novo
+            # aqui tirava a mesma caixa duas vezes -- ver `SaidaUnicaService`.
+            quantidade = item.quantidade
+            if item.pedido_venda_id:
+                quantidade = SaidaUnicaService.a_baixar(
+                    viagem.filial_id, item.pedido_venda_id, item.produto_id,
+                    item.quantidade, ignorar_viagem=viagem,
+                )
+                if quantidade <= ZERO:
+                    continue
+
             MovimentacaoService.registrar_movimentacao(
                 produto_id=item.produto_id,
                 filial_id=viagem.filial_id,
                 tipo_operacao=tipo,
-                quantidade=item.quantidade,
+                quantidade=quantidade,
                 usuario_id=getattr(usuario, 'pk', None) or viagem.responsavel_id,
                 lote_id=item.lote_id,
                 valor_unitario=item.valor_unitario or None,
