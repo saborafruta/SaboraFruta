@@ -40,6 +40,9 @@
           Acerto
         </a>
       {% endif %}
+      <a href="{% url 'logistica:rastreabilidade' %}" class="btn-secondary">
+        Rastreabilidade
+      </a>
       {% if resumo.em_poder %}
         {% comment %}
           O BOTAO SO' APARECE COM MERCADORIA NA RUA: viagem sem saldo nao tem

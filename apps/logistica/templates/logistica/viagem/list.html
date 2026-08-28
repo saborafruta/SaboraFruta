@@ -11,9 +11,12 @@
         Venda já fechada, venda fora do estabelecimento e bonificação no mesmo caminhão.
       </p>
     </div>
-    {% if pode_agir %}
-      <a href="{% url 'logistica:viagem-create' %}" class="btn-primary">+ Nova Viagem</a>
-    {% endif %}
+    <div class="flex flex-wrap gap-2">
+      <a href="{% url 'logistica:rastreabilidade' %}" class="btn-secondary">Rastreabilidade</a>
+      {% if pode_agir %}
+        <a href="{% url 'logistica:viagem-create' %}" class="btn-primary">+ Nova Viagem</a>
+      {% endif %}
+    </div>
   </div>
 
   <div class="grid grid-cols-2 lg:grid-cols-4 gap-4">

@@ -1,0 +1,161 @@
+{% extends "_base.html" %}
+{% block title %}{{ title }} — Logística{% endblock %}
+{% block page_title %}{{ title }}{% endblock %}
+{% block content %}
+
+{% comment %}
+  A LINHA INTEIRA, E NÃO TRÊS TELAS NA CABEÇA.
+
+      estoque → remessa → viagem → venda / bonificação / retorno
+
+  A ORDEM É A DOS FATOS, e não a das tabelas: o estoque baixa, a remessa
+  ampara, a viagem sai, e só então há venda, bonificação e retorno. Ler fora
+  dessa ordem é o que faz alguém concluir que a mercadoria voltou antes de
+  sair.
+
+  UMA CADEIA POR VIAGEM. Um produto que viajou cinco vezes tem cinco cadeias;
+  somá-las daria um total sem significado, porque "quanto voltou?" só existe
+  dentro de uma viagem.
+
+  ETAPA SEM REGISTRO É DITA, e não escondida — remessa sem NF-e aparece como
+  remessa sem NF-e. É a etapa que falta que alguém precisa ver.
+{% endcomment %}
+<div class="space-y-4">
+
+  <div>
+    <h2 class="text-2xl font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
+      Rastreabilidade
+    </h2>
+    <p class="text-sm mt-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+      Estoque → remessa → viagem → venda / bonificação / retorno.
+    </p>
+  </div>
+
+  {# ── A escolha ──────────────────────────────────────────────────── #}
+  <form method="get" class="card p-4 flex flex-wrap items-end gap-3">
+    <div class="flex-1 min-w-[240px]">
+      <label class="block text-xs font-medium mb-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+        Produto
+      </label>
+      <select name="produto" class="form-input w-full">
+        <option value="">Selecione um produto…</option>
+        {% for opcao in produtos %}
+          <option value="{{ opcao.pk }}" {% if produto and opcao.pk == produto.pk %}selected{% endif %}>
+            {{ opcao.codigo }} — {{ opcao.descricao }}
+          </option>
+        {% endfor %}
+      </select>
+      <p class="text-[11px] mt-1" :style="temaClaro ? 'color:#94a3b8;' : 'color:#71717a;'">
+        Só produtos que já subiram em alguma viagem — os outros não têm cadeia
+        para mostrar.
+      </p>
+    </div>
+    <button type="submit" class="btn-primary text-sm">Rastrear</button>
+  </form>
+
+  {% if not produto %}
+    <div class="card p-6 text-center">
+      <p class="text-sm" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+        Escolha um produto para ver por onde ele passou.
+      </p>
+    </div>
+  {% elif not cadeias %}
+    <div class="card p-6 text-center">
+      <p class="text-sm" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+        {{ produto }} não viajou nesta filial.
+      </p>
+    </div>
+  {% endif %}
+
+  {% for cadeia in cadeias %}
+    <div class="card overflow-hidden">
+      {# ── O cabeçalho da cadeia ────────────────────────────────── #}
+      <div class="p-4 pb-3 flex flex-wrap items-start justify-between gap-3"
+           :style="temaClaro ? 'border-bottom:1px solid #e5e7eb;' : 'border-bottom:1px solid #2a2a2e;'">
+        <div>
+          <h3 class="text-sm font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
+            {{ cadeia.produto }}
+          </h3>
+          <p class="text-xs mt-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+            <a href="{% url 'logistica:viagem-detail' cadeia.viagem.pk %}"
+               :style="temaClaro ? 'color:#3b82f6;' : 'color:#60a5fa;'">
+              Viagem #{{ cadeia.viagem.numero|stringformat:"06d" }}</a>
+            · {{ cadeia.viagem.data_saida|date:"d/m/Y"|default:"sem data de saída" }}
+            · {{ cadeia.viagem.get_status_display }}
+            {% for lote in cadeia.lotes %} · lote {{ lote.numero_lote }}{% endfor %}
+          </p>
+        </div>
+        <div class="text-right">
+          <p class="text-2xl font-bold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
+            {{ cadeia.carga|floatformat:"-3" }}
+          </p>
+          <p class="text-[11px]" :style="temaClaro ? 'color:#94a3b8;' : 'color:#71717a;'">
+            unidades embarcadas
+          </p>
+        </div>
+      </div>
+
+      {# ── A linha do tempo ─────────────────────────────────────── #}
+      <div class="p-4 space-y-3">
+        {% for evento in cadeia.eventos %}
+          <div class="flex items-start gap-3">
+            <div class="mt-1 flex flex-col items-center">
+              <span class="inline-block rounded-full"
+                    style="width:10px;height:10px;background:{% if evento.etapa == 'estoque' %}#6366f1{% elif evento.etapa == 'remessa' %}#0ea5e9{% elif evento.etapa == 'viagem' %}#8b5cf6{% elif evento.etapa == 'venda' %}#059669{% elif evento.etapa == 'bonificacao' %}#d97706{% elif evento.etapa == 'retorno' %}#3b82f6{% else %}#dc2626{% endif %};"></span>
+              {% if not forloop.last %}
+                <span class="flex-1" style="width:2px;min-height:22px;background:rgba(148,163,184,0.35);"></span>
+              {% endif %}
+            </div>
+            <div class="flex-1 pb-1">
+              <div class="flex flex-wrap items-baseline justify-between gap-2">
+                <p class="text-sm font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
+                  {{ evento.titulo }}
+                </p>
+                <p class="text-sm font-semibold" :style="temaClaro ? 'color:#374151;' : 'color:#d1d5db;'">
+                  {{ evento.quantidade|floatformat:"-3" }}
+                </p>
+              </div>
+              <p class="text-xs" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+                {{ evento.detalhe }}
+                {% if evento.lote %} · lote {{ evento.lote.numero_lote }}{% endif %}
+                {% if evento.quando %} · {{ evento.quando|date:"d/m/Y" }}{% if evento.hora %} {{ evento.quando|date:"H:i" }}{% endif %}{% endif %}
+              </p>
+            </div>
+          </div>
+        {% endfor %}
+      </div>
+
+      {# ── O fechamento da cadeia ───────────────────────────────── #}
+      <div class="px-4 py-3 grid grid-cols-2 sm:grid-cols-5 gap-3 text-sm"
+           :style="temaClaro ? 'border-top:1px solid #e5e7eb;background:#f8fafc;' : 'border-top:1px solid #2a2a2e;background:#18181b;'">
+        <div>
+          <p class="text-[11px] uppercase tracking-wide" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Vendas na doca</p>
+          <p class="font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">{{ cadeia.vendas_realizadas|floatformat:"-3" }}</p>
+        </div>
+        <div>
+          <p class="text-[11px] uppercase tracking-wide" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Vendido na rua</p>
+          <p class="font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">{{ cadeia.vendido|floatformat:"-3" }}</p>
+        </div>
+        <div>
+          <p class="text-[11px] uppercase tracking-wide" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Bonificado</p>
+          <p class="font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
+            {{ cadeia.bonificacao_da_carga|add:cadeia.bonificado_na_rua|floatformat:"-3" }}
+          </p>
+        </div>
+        <div>
+          <p class="text-[11px] uppercase tracking-wide" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Retornado</p>
+          <p class="font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">{{ cadeia.retornado|floatformat:"-3" }}</p>
+        </div>
+        <div>
+          <p class="text-[11px] uppercase tracking-wide" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Ainda na rua</p>
+          <p class="font-semibold"
+             style="color:{% if cadeia.em_poder %}#d97706{% else %}#059669{% endif %};">
+            {{ cadeia.em_poder|floatformat:"-3" }}
+          </p>
+        </div>
+      </div>
+    </div>
+  {% endfor %}
+
+</div>
+{% endblock %}

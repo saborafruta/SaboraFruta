@@ -39,6 +39,7 @@ from apps.logistica.services.mdfe_viagem import MDFeViagemService
 from apps.logistica.services.historico_bonificacao import (
     HistoricoBonificacaoService,
 )
+from apps.logistica.services.rastreabilidade import RastreabilidadeService
 from apps.logistica.services.retorno_nfe import RetornoVendaForaService
 from apps.logistica.services.retorno_viagem import RetornoViagemService
 from apps.logistica.services.venda_fora_nfe import VendaForaNFeService
@@ -1098,3 +1099,40 @@ class ViagemAcertoView(PermissaoRequiredMixin, View):
             request, f'Viagem #{viagem.numero:06d} encerrada com a carga conciliada.',
         )
         return redirect('logistica:viagem-detail', pk=viagem.pk)
+
+
+class RastreabilidadeView(PermissaoRequiredMixin, View):
+    """
+    Onde cada caixa esteve: estoque → remessa → viagem → venda/bonificação/retorno.
+
+    A PERGUNTA É SEMPRE FEITA NO PIOR MOMENTO — o fiscal pede a justificativa
+    da remessa, o cliente reclama de um lote, o dono quer saber por que sobrou
+    mercadoria no caminhão. Cada registro sabia um pedaço; esta tela é a linha
+    inteira.
+
+    É TELA DE LEITURA, e nada aqui é gravado: um histórico de rastreabilidade
+    guardado à parte seria uma segunda verdade sobre a mesma caixa, e no dia
+    em que divergisse do razão ninguém saberia qual acreditar.
+    """
+
+    permissao_modulo = 'logistica'
+    template_name = 'logistica/rastreabilidade.html'
+
+    def get(self, request):
+        filial = _filial(request)
+        produtos = RastreabilidadeService.produtos_rastreaveis(filial)
+
+        escolhido = (request.GET.get('produto') or '').strip()
+        produto = produtos.filter(pk=escolhido).first() if escolhido.isdigit() else None
+
+        return render(request, self.template_name, {
+            'title': 'Rastreabilidade',
+            'produtos': produtos,
+            'produto': produto,
+            # SEM PRODUTO NAO HA' CADEIA, e nao uma cadeia vazia: a tela pede
+            # a escolha em vez de fingir que respondeu.
+            'cadeias': (
+                RastreabilidadeService.do_produto(produto, filial)
+                if produto is not None else []
+            ),
+        })
