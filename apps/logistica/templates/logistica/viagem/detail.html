@@ -417,7 +417,15 @@
                 <td class="px-4 py-3 font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
                   #{{ venda.numero }}
                   {% if venda.bonificacao %}
-                    <span class="soft-pill is-amber text-[11px] ml-1">bonificação</span>
+                    <span class="soft-pill is-amber text-[11px] ml-1">
+                      {{ venda.get_motivo_display|default:"bonificação" }}
+                    </span>
+                    {% if venda.pedido_venda %}
+                      <span class="block text-[11px] font-normal"
+                            :style="temaClaro ? 'color:#94a3b8;' : 'color:#71717a;'">
+                        ref. pedido {{ venda.pedido_venda.numero_pedido }}
+                      </span>
+                    {% endif %}
                   {% endif %}
                   <span class="block text-[11px] font-normal" :style="temaClaro ? 'color:#94a3b8;' : 'color:#71717a;'">
                     {{ venda.data|date:"d/m H:i" }}

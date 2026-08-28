@@ -375,10 +375,43 @@ class VendaViagem(TimestampedModel):
         VENDA = 'venda', 'Venda'
         BONIFICACAO = 'bonificacao', 'Bonificação'
 
+    class Motivo(models.TextChoices):
+        """
+        Por que a mercadoria saiu sem cobrança.
+
+        LISTA FECHADA, E NÃO TEXTO LIVRE. "Por que demos 20 caixas?" é a
+        pergunta que a auditoria faz e que o comercial precisa responder por
+        cliente e por período — e isso não se faz agrupando frases digitadas
+        à mão. `OUTRO` existe para o caso que a lista não previu, e é ele que
+        evita que a lista vire mentira: sem essa saída, quem não se encaixa
+        escolhe qualquer uma.
+        """
+
+        COMERCIAL = 'comercial', 'Bonificação comercial'
+        BRINDE = 'brinde', 'Brinde'
+        CAMPANHA = 'campanha', 'Campanha promocional'
+        ACAO = 'acao', 'Ação comercial'
+        RELACIONAMENTO = 'relacionamento', 'Relacionamento'
+        COMPENSACAO = 'compensacao', 'Compensação'
+        OUTRO = 'outro', 'Outro'
+
     viagem = models.ForeignKey(Viagem, on_delete=models.CASCADE, related_name='vendas')
     tipo = models.CharField(
         max_length=15, choices=Tipo.choices, default=Tipo.VENDA, db_index=True,
         help_text='Venda cobra; bonificação entrega sem cobrar.',
+    )
+    motivo = models.CharField(
+        max_length=20, choices=Motivo.choices, blank=True, db_index=True,
+        help_text='Por que a bonificação foi dada. Vazio em venda.',
+    )
+    # O PEDIDO QUE ORIGINOU A CORTESIA, quando existe. Bonificação de
+    # compensação e de campanha quase sempre respondem a uma venda anterior,
+    # e sem o vínculo a pergunta "esta cortesia foi por causa de quê?" não
+    # tem resposta no sistema.
+    pedido_venda = models.ForeignKey(
+        'vendas.PedidoVenda', on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='entregas_viagem',
+        help_text='Pedido relacionado, quando a entrega responde a um.',
     )
     numero = models.PositiveIntegerField(db_index=True)
     data = models.DateTimeField(default=timezone.now, db_index=True)

@@ -125,9 +125,30 @@ class VendaViagemService:
         if tipo not in VendaViagem.Tipo.values:
             raise DadosInvalidosError('Tipo de entrega desconhecido.')
 
+        # BONIFICACAO SEM MOTIVO NAO SE REGISTRA. E' a pergunta que a
+        # auditoria faz primeiro -- "por que demos 20 caixas?" -- e que o
+        # comercial precisa responder por cliente e por periodo. Deixar
+        # opcional daria uma lista de cortesias sem explicacao nenhuma, que e'
+        # o mesmo que nao ter a lista.
+        motivo = (dados.get('motivo') or '').strip()
+        if tipo == VendaViagem.Tipo.BONIFICACAO:
+            if not motivo:
+                raise DadosInvalidosError(
+                    'Escolha o motivo da bonificação — é ele que explica a '
+                    'mercadoria que saiu sem cobrança.'
+                )
+            if motivo not in VendaViagem.Motivo.values:
+                raise DadosInvalidosError('Motivo de bonificação desconhecido.')
+        else:
+            # VENDA NAO TEM MOTIVO: guardar um aqui faria o relatorio de
+            # bonificacoes contar venda como cortesia.
+            motivo = ''
+
         venda = VendaViagem.objects.create(
             viagem=viagem,
             tipo=tipo,
+            motivo=motivo,
+            pedido_venda=dados.get('pedido_venda'),
             numero=cls.proximo_numero(viagem),
             data=dados.get('data') or timezone.now(),
             cliente=cliente,

@@ -144,6 +144,11 @@ class VinculoBase(TestCase):
         return VendaViagemService.registrar(self.viagem, {
             'tipo': tipo, 'produto': self.produto, 'quantidade': quantidade,
             'valor_unitario': '10', 'cliente': self.cliente,
+            # Bonificação exige motivo — é ele que explica a mercadoria que
+            # saiu sem cobrança.
+            'motivo': (
+                VendaViagem.Motivo.COMERCIAL if tipo == T.BONIFICACAO else ''
+            ),
         }, usuario=self.usuario)
 
     def _linha(self):

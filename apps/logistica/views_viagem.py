@@ -197,7 +197,7 @@ class ViagemDetailView(PermissaoRequiredMixin, View):
             'remessa': DocumentoFiscal.objects.filter(
                 origem_tipo='viagem_remessa', origem_id=viagem.pk,
             ).exclude(status=StatusDocumentoFiscal.CANCELADA).first(),
-            'vendas_viagem': viagem.vendas.select_related('cliente')
+            'vendas_viagem': viagem.vendas.select_related('cliente', 'pedido_venda')
                 .prefetch_related('itens__produto'),
             'resumo_vendas': VendaViagemService.resumo(viagem),
             # A CADEIA INTEIRA NUMA TABELA: remessa -> viagem -> produto ->
@@ -563,6 +563,19 @@ class ViagemVendaCreateView(PermissaoRequiredMixin, View):
             ),
             'tipo': tipo,
             'bonificacao': bonificacao,
+            'motivos': VendaViagem.Motivo.choices,
+            # A NATUREZA DO TIPO, para a tela poder MOSTRAR o CFOP e o CST
+            # que vao sair na nota antes de a entrega ser registrada.
+            # Descobrir a regra errada depois e' descobrir com a mercadoria
+            # ja' na mao do cliente.
+            'natureza_fiscal': _natureza_do_tipo(filial, tipo),
+            # PEDIDO RELACIONADO, quando existe: bonificacao de compensacao e
+            # de campanha quase sempre respondem a uma venda anterior.
+            'pedidos': (
+                PedidoVenda.objects.filter(filial=filial)
+                .select_related('cliente')
+                .order_by('-data_emissao', '-numero_pedido')[:200]
+            ),
             'viagem': viagem,
             'disponivel': VendaViagemService.disponivel_para_venda(viagem),
             'clientes': Cliente.objects.for_filial(filial).filter(ativo=True),
@@ -589,6 +602,8 @@ class ViagemVendaCreateView(PermissaoRequiredMixin, View):
         try:
             venda = VendaViagemService.registrar(viagem, {
                 'tipo': request.POST.get('tipo'),
+                'motivo': request.POST.get('motivo'),
+                'pedido_venda': _um(PedidoVenda, 'pedido_venda', filial=filial),
                 'produto': _um(Produto, 'produto', filial=filial),
                 'lote': _um(LoteProduto, 'lote', filial=filial),
                 'cliente': _um(Cliente, 'cliente', filial=filial),
@@ -696,3 +711,20 @@ class ViagemEmitirRetornoView(PermissaoRequiredMixin, View):
             'pendente de transmissão à SEFAZ.',
         )
         return volta
+
+
+def _natureza_do_tipo(filial, tipo):
+    """
+    A natureza cadastrada para este tipo de entrega, se houver uma.
+
+    DEVOLVE `None` EM VEZ DE ESTOURAR: a tela do vendedor nao pode recusar
+    abrir porque falta cadastro fiscal -- ela mostra o aviso e deixa
+    registrar a entrega; quem recusa e' a emissao da nota, mais tarde e com
+    a mensagem certa.
+    """
+    from apps.logistica.services.venda_fora_nfe import VendaForaNFeService
+
+    try:
+        return VendaForaNFeService.natureza(filial, tipo)
+    except DadosInvalidosError:
+        return None

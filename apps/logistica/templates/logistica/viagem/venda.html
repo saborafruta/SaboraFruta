@@ -96,12 +96,51 @@
                    class="form-input w-full" placeholder="Para onde a mercadoria foi">
           </label>
         </div>
+
+        {% if bonificacao %}
+          {% comment %}
+            O MOTIVO E' LISTA FECHADA. "Por que demos 20 caixas?" e' a
+            pergunta da auditoria e do comercial, e ela nao se responde
+            agrupando frases digitadas a' mao. "Outro" existe para o caso que
+            a lista nao previu -- sem essa saida, quem nao se encaixa escolhe
+            qualquer uma e a lista vira mentira.
+          {% endcomment %}
+          <div class="grid gap-4 sm:grid-cols-2">
+            <label class="space-y-1.5">
+              <span class="text-xs font-semibold uppercase tracking-wide block"
+                    :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Motivo *</span>
+              <select name="motivo" class="form-input w-full" required>
+                <option value="">— escolher —</option>
+                {% for valor, rotulo in motivos %}
+                  <option value="{{ valor }}">{{ rotulo }}</option>
+                {% endfor %}
+              </select>
+            </label>
+            <label class="space-y-1.5">
+              <span class="text-xs font-semibold uppercase tracking-wide block"
+                    :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+                Pedido relacionado
+              </span>
+              <select name="pedido_venda" class="form-input w-full">
+                <option value="">— nenhum —</option>
+                {% for pedido in pedidos %}
+                  <option value="{{ pedido.pk }}">
+                    {{ pedido.numero_pedido }} · {{ pedido.cliente }}
+                  </option>
+                {% endfor %}
+              </select>
+              <span class="text-[11px] block" :style="temaClaro ? 'color:#94a3b8;' : 'color:#71717a;'">
+                Compensação e campanha quase sempre respondem a uma venda.
+              </span>
+            </label>
+          </div>
+        {% endif %}
       </section>
 
       <section class="space-y-4">
         <h3 class="text-xs font-bold uppercase tracking-wider pb-2 border-b"
             :style="temaClaro ? 'color:#475569;border-color:#e2e8f0;' : 'color:#cbd5e1;border-color:#2a2a2e;'">
-          O que foi vendido
+          {% if bonificacao %}O que foi entregue{% else %}O que foi vendido{% endif %}
         </h3>
         {% comment %}
           SO' O QUE ESTA' NO CAMINHAO E' OFERECIDO. Vender de um produto que
@@ -156,8 +195,50 @@
           <span x-show="excedeu" class="font-semibold">
             Nunca se vende mais do que está no caminhão.
           </span>
+          <span x-show="unidade" x-cloak>Unidade: <strong x-text="unidade"></strong></span>
           <span class="ml-auto">Total: <strong x-text="'R$ ' + total()"></strong></span>
         </div>
+
+        {% if natureza_fiscal %}
+          {% comment %}
+            O TRATAMENTO FISCAL A' VISTA, ANTES DE REGISTRAR. O CFOP nao e'
+            digitado -- vem da parametrizacao -- mas quem entrega precisa VER
+            qual vai sair, e com que CST. Descobrir a regra errada depois e'
+            descobrir com a mercadoria ja' na mao do cliente.
+          {% endcomment %}
+          <div x-show="produtoEscolhido" x-cloak
+               class="rounded-lg p-3 text-sm space-y-1"
+               :style="temaClaro ? 'background:#f8fafc;color:#334155;' : 'background:#18181b;color:#cbd5e1;'">
+            <template x-if="fiscal.erro">
+              <p style="color:#d97706;" x-text="fiscal.erro"></p>
+            </template>
+            <template x-if="fiscal.cfop">
+              <div class="flex flex-wrap gap-4">
+                <span>CFOP <strong x-text="fiscal.cfop"></strong></span>
+                <span x-show="fiscal.cst_icms || fiscal.csosn">
+                  <span x-text="fiscal.csosn ? 'CSOSN' : 'CST'"></span>
+                  <strong x-text="fiscal.csosn || fiscal.cst_icms"></strong>
+                </span>
+                <span x-show="fiscal.aliquota_icms">ICMS <strong x-text="fiscal.aliquota_icms + '%'"></strong></span>
+                <span x-show="fiscal.cst_pis">PIS <strong x-text="fiscal.cst_pis"></strong></span>
+                <span x-show="fiscal.cst_cofins">COFINS <strong x-text="fiscal.cst_cofins"></strong></span>
+                <span class="w-full text-[11px]" x-show="fiscal.justificativa"
+                      x-text="fiscal.justificativa"></span>
+              </div>
+            </template>
+          </div>
+        {% else %}
+          <p class="text-xs" style="color:#d97706;">
+            {% if bonificacao %}
+              Sem natureza de operação cadastrada para bonificação, a entrega
+              é registrada mas a nota não sai. Cadastre-a em Fiscal ›
+              Naturezas de operação.
+            {% else %}
+              Sem natureza de operação cadastrada para venda fora do
+              estabelecimento, a venda é registrada mas a nota não sai.
+            {% endif %}
+          </p>
+        {% endif %}
       </section>
 
       {% if not bonificacao %}
@@ -223,7 +304,13 @@
       saldos: JSON.parse(document.getElementById('saldo-carga').textContent || '[]'),
       nome: '', documento: '', endereco: '',
       produtoEscolhido: null, lote: '', disponivel: '0',
-      quantidade: '', preco: '',
+      quantidade: '', preco: '', unidade: '',
+      /* O TRATAMENTO FISCAL vem do servidor, e nao de uma tabela no
+         navegador: a regra e' a mesma que a nota vai usar, e duas copias
+         dela discordariam no dia em que a contabilidade mudasse uma. */
+      fiscal: {},
+      viagemId: {{ viagem.pk }},
+      naturezaFiscal: {% if natureza_fiscal %}{{ natureza_fiscal.pk }}{% else %}null{% endif %},
 
       escolherCliente(evento) {
         const opcao = evento.target.selectedOptions[0];
@@ -243,6 +330,29 @@
         const saldo = this.saldos.find((s) => s.produto === id);
         this.disponivel = saldo ? saldo.disponivel : '0';
         if (saldo && !this.preco) { this.preco = saldo.preco; }
+        this.carregarFiscal();
+      },
+
+      carregarFiscal() {
+        this.fiscal = {};
+        if (!this.produtoEscolhido || !this.naturezaFiscal) { return; }
+        const params = new URLSearchParams({
+          produto: this.produtoEscolhido,
+          natureza: this.naturezaFiscal,
+        });
+        const cliente = document.querySelector('select[name=cliente]');
+        if (cliente && cliente.value) { params.set('cliente', cliente.value); }
+        fetch('/logistica/viagens/' + this.viagemId + '/tratamento-fiscal/?' + params,
+              {headers: {'X-Requested-With': 'XMLHttpRequest'}})
+          .then((r) => r.json())
+          .then((dados) => {
+            if (!dados.ok) { this.fiscal = {erro: dados.erro}; return; }
+            this.fiscal = dados.fiscal;
+            this.unidade = (dados.produto && dados.produto.unidade) || '';
+          })
+          /* A TELA NAO PARA POR CAUSA DO PAINEL: ele e' informacao, e a
+             entrega precisa poder ser registrada mesmo sem ele. */
+          .catch(() => { this.fiscal = {}; });
       },
 
       get excedeu() {

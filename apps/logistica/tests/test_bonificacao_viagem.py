@@ -130,10 +130,18 @@ class BonificacaoBase(TestCase):
         viagem.save(update_fields=['status'])
         return viagem
 
-    def _entregar(self, quantidade='20', tipo=T.BONIFICACAO):
+    def _entregar(self, quantidade='20', tipo=T.BONIFICACAO, motivo=None):
+        """
+        Uma entrega na rua. Bonificação leva motivo por padrão porque ele
+        passou a ser obrigatório — é ele que explica a mercadoria que saiu
+        sem cobrança.
+        """
         return VendaViagemService.registrar(self.viagem, {
             'tipo': tipo, 'produto': self.produto, 'quantidade': quantidade,
             'valor_unitario': '10', 'cliente': self.cliente,
+            'motivo': motivo or (
+                VendaViagem.Motivo.COMERCIAL if tipo == T.BONIFICACAO else ''
+            ),
         }, usuario=self.usuario)
 
     def _saldo(self) -> SaldoCarga:
@@ -346,7 +354,7 @@ class TelaTests(BonificacaoBase):
             {
                 'tipo': 'bonificacao', 'produto': self.produto.pk,
                 'cliente': self.cliente.pk, 'quantidade': '20',
-                'valor_unitario': '10',
+                'valor_unitario': '10', 'motivo': 'brinde',
             },
         )
 
@@ -356,3 +364,179 @@ class TelaTests(BonificacaoBase):
         self._entregar('20')
 
         self.assertIn('bonificação', self._detalhe())
+
+
+class MotivoTests(BonificacaoBase):
+    """
+    Por que a mercadoria saiu sem cobrança.
+
+    LISTA FECHADA, E NÃO TEXTO LIVRE: "por que demos 20 caixas?" é a pergunta
+    que a auditoria faz e que o comercial precisa responder por cliente e por
+    período — e isso não se faz agrupando frases digitadas à mão.
+    """
+
+    def _com_motivo(self, motivo, quantidade='20', **extras):
+        dados = {
+            'tipo': T.BONIFICACAO, 'produto': self.produto,
+            'quantidade': quantidade, 'valor_unitario': '10',
+            'cliente': self.cliente, 'motivo': motivo,
+        }
+        dados.update(extras)
+        return VendaViagemService.registrar(
+            self.viagem, dados, usuario=self.usuario,
+        )
+
+    def test_a_bonificacao_guarda_o_motivo(self):
+        bonificacao = self._com_motivo(VendaViagem.Motivo.CAMPANHA)
+
+        self.assertEqual(bonificacao.motivo, VendaViagem.Motivo.CAMPANHA)
+
+    def test_bonificacao_sem_motivo_e_recusada(self):
+        """Uma lista de cortesias sem explicação é o mesmo que não ter lista."""
+        with self.assertRaises(DadosInvalidosError) as erro:
+            self._com_motivo('')
+
+        self.assertIn('motivo', str(erro.exception).lower())
+
+    def test_motivo_desconhecido_e_recusado(self):
+        with self.assertRaises(DadosInvalidosError):
+            self._com_motivo('porque sim')
+
+    def test_os_sete_motivos_da_especificacao_existem(self):
+        self.assertEqual(
+            [v for v, _ in VendaViagem.Motivo.choices],
+            [
+                'comercial', 'brinde', 'campanha', 'acao',
+                'relacionamento', 'compensacao', 'outro',
+            ],
+        )
+
+    def test_venda_nao_guarda_motivo(self):
+        """
+        Guardar um aqui faria o relatório de bonificações contar venda como
+        cortesia.
+        """
+        venda = VendaViagemService.registrar(self.viagem, {
+            'tipo': T.VENDA, 'produto': self.produto, 'quantidade': '10',
+            'valor_unitario': '10', 'cliente': self.cliente,
+            'motivo': VendaViagem.Motivo.BRINDE,
+        }, usuario=self.usuario)
+
+        self.assertEqual(venda.motivo, '')
+
+    def test_o_pedido_relacionado_e_gravado_quando_existe(self):
+        """
+        "Esta cortesia foi por causa de quê?" não tem resposta no sistema sem
+        o vínculo.
+        """
+        from django.utils import timezone
+
+        from apps.vendas.models.pedido import PedidoVenda
+
+        pedido = PedidoVenda.objects.create(
+            filial=self.filial, numero_pedido='PV9', cliente=self.cliente,
+            usuario=self.usuario, status=PedidoVenda.Status.CONFIRMADO,
+            data_emissao=timezone.now(),
+        )
+
+        bonificacao = self._com_motivo(
+            VendaViagem.Motivo.COMPENSACAO, pedido_venda=pedido,
+        )
+
+        self.assertEqual(bonificacao.pedido_venda, pedido)
+
+    def test_o_pedido_e_opcional(self):
+        bonificacao = self._com_motivo(VendaViagem.Motivo.BRINDE)
+
+        self.assertIsNone(bonificacao.pedido_venda)
+
+
+class FormularioTests(BonificacaoBase):
+    """O formulário com o que a especificação pede."""
+
+    def _abrir(self):
+        return self.client.get(
+            reverse('logistica:viagem-venda-create', args=[self.viagem.pk]),
+            {'tipo': 'bonificacao'},
+        ).content.decode()
+
+    def test_o_formulario_oferece_os_sete_motivos(self):
+        html = self._abrir()
+
+        for rotulo in (
+            'Bonificação comercial', 'Brinde', 'Campanha promocional',
+            'Ação comercial', 'Relacionamento', 'Compensação', 'Outro',
+        ):
+            self.assertIn(rotulo, html, f'o motivo {rotulo} sumiu')
+
+    def test_o_formulario_oferece_o_pedido_relacionado(self):
+        html = self._abrir()
+
+        self.assertIn('name="pedido_venda"', html)
+        self.assertIn('Pedido relacionado', html)
+
+    def test_o_formulario_mostra_o_tratamento_fiscal_parametrizado(self):
+        """
+        O CFOP não é digitado — vem da parametrização — mas quem entrega
+        precisa VER qual vai sair antes de a mercadoria trocar de mão.
+        """
+        html = self._abrir()
+
+        self.assertIn('CFOP', html)
+        self.assertIn('tratamento-fiscal', html)
+
+    def test_sem_natureza_cadastrada_o_formulario_avisa_e_nao_quebra(self):
+        """
+        A tela do vendedor não pode recusar abrir porque falta cadastro
+        fiscal: quem recusa é a emissão da nota, mais tarde e com a mensagem
+        certa.
+        """
+        self.natureza_bonificacao.delete()
+
+        resposta = self.client.get(
+            reverse('logistica:viagem-venda-create', args=[self.viagem.pk]),
+            {'tipo': 'bonificacao'},
+        )
+
+        self.assertEqual(resposta.status_code, 200)
+        self.assertIn('Sem natureza de operação', resposta.content.decode())
+
+    def test_registrar_com_motivo_pela_tela(self):
+        self.client.post(
+            reverse('logistica:viagem-venda-create', args=[self.viagem.pk]),
+            {
+                'tipo': 'bonificacao', 'produto': self.produto.pk,
+                'cliente': self.cliente.pk, 'quantidade': '20',
+                'valor_unitario': '10', 'motivo': 'campanha',
+            },
+        )
+
+        bonificacao = VendaViagem.objects.get(viagem=self.viagem)
+        self.assertEqual(bonificacao.motivo, 'campanha')
+
+    def test_sem_motivo_a_tela_devolve_o_aviso_e_nao_registra(self):
+        resposta = self.client.post(
+            reverse('logistica:viagem-venda-create', args=[self.viagem.pk]),
+            {
+                'tipo': 'bonificacao', 'produto': self.produto.pk,
+                'cliente': self.cliente.pk, 'quantidade': '20',
+                'valor_unitario': '10', 'motivo': '',
+            },
+            follow=True,
+        )
+
+        self.assertIn('motivo', resposta.content.decode().lower())
+        self.assertFalse(VendaViagem.objects.filter(viagem=self.viagem).exists())
+
+    def test_a_viagem_mostra_o_motivo_da_bonificacao(self):
+        VendaViagemService.registrar(self.viagem, {
+            'tipo': T.BONIFICACAO, 'produto': self.produto, 'quantidade': '20',
+            'valor_unitario': '10', 'cliente': self.cliente,
+            'motivo': VendaViagem.Motivo.RELACIONAMENTO,
+        }, usuario=self.usuario)
+
+        html = self.client.get(
+            reverse('logistica:viagem-detail', args=[self.viagem.pk]),
+        ).content.decode()
+
+        self.assertIn('Relacionamento', html)
