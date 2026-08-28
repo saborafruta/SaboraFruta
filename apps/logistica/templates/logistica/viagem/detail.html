@@ -30,6 +30,16 @@
       <a href="{% url 'logistica:viagem-painel' viagem.pk %}" class="btn-secondary">
         Painel
       </a>
+      {% if viagem.saiu %}
+        {% comment %}
+          O ACERTO SO' EXISTE DEPOIS QUE A VIAGEM SAI: antes disso nao ha'
+          destino nenhum para conferir, e a conta seria a carga contra ela
+          mesma.
+        {% endcomment %}
+        <a href="{% url 'logistica:viagem-acerto' viagem.pk %}" class="btn-secondary">
+          Acerto
+        </a>
+      {% endif %}
       {% if resumo.em_poder %}
         {% comment %}
           O BOTAO SO' APARECE COM MERCADORIA NA RUA: viagem sem saldo nao tem

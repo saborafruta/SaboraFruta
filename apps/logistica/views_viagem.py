@@ -1031,3 +1031,70 @@ class ViagemRetornoView(PermissaoRequiredMixin, View):
                 (valor or '').replace(',', '.')
             )
         return quantidades
+
+
+class ViagemAcertoView(PermissaoRequiredMixin, View):
+    """
+    O acerto da viagem: a conta que precisa fechar antes de encerrar.
+
+        carga inicial = vendas + bonificações + retornos
+                        + demais saídas justificadas
+
+    POR QUE NÃO É O PAINEL. O painel é leitura de longe, na doca, enquanto a
+    viagem anda: ele responde "como estamos?". Esta tela é o ato de fechar —
+    é aqui que a viagem encerra, e por isso é aqui que a recusa precisa
+    aparecer com a conta inteira ao lado, e não como um erro solto numa
+    lista.
+
+    OS NÚMEROS SÃO OS MESMOS, LIDOS DO MESMO LUGAR. Recalcular a conta aqui
+    criaria uma segunda verdade sobre a mesma carga — e quando as duas
+    divergissem ninguém saberia qual olhar.
+
+    QUEM RECUSA O ENCERRAMENTO É O SERVIÇO, não esta tela. A tela mostra a
+    recusa antes de a pessoa tentar, para não fazê-la clicar para descobrir;
+    mas quem insistir pela URL leva a mesma resposta.
+    """
+
+    permissao_modulo = 'logistica'
+    template_name = 'logistica/viagem/acerto.html'
+
+    def _viagem(self, request, pk):
+        return get_object_or_404(
+            Viagem.objects.for_filial(_filial(request)), pk=pk,
+        )
+
+    def get(self, request, pk):
+        viagem = self._viagem(request, pk)
+        quadro = EstoqueViagemService.quadro(viagem)
+        return render(request, self.template_name, {
+            'title': f'Acerto — Viagem #{viagem.numero:06d}',
+            'viagem': viagem,
+            'quadro': quadro,
+            'linhas': EstoqueViagemService.acerto(quadro),
+            'conciliacao': EstoqueViagemService.conciliacao(quadro),
+            'pendencias': ViagemService.pendencias_de_encerramento(viagem),
+            'mensagem_bloqueio': ViagemService.NAO_CONCILIADA,
+            'encerrada': viagem.status in (
+                Viagem.Status.FINALIZADA, Viagem.Status.CANCELADA,
+            ),
+            'pode_agir': request.user.tem_permissao('logistica', 'editar'),
+        })
+
+    def post(self, request, pk):
+        viagem = self._viagem(request, pk)
+        volta = redirect('logistica:viagem-acerto', pk=viagem.pk)
+
+        if not request.user.tem_permissao('logistica', 'editar'):
+            messages.error(request, 'Sem permissão para encerrar a viagem.')
+            return volta
+
+        try:
+            ViagemService.encerrar(viagem)
+        except DadosInvalidosError as erro:
+            messages.error(request, str(erro))
+            return volta
+
+        messages.success(
+            request, f'Viagem #{viagem.numero:06d} encerrada com a carga conciliada.',
+        )
+        return redirect('logistica:viagem-detail', pk=viagem.pk)

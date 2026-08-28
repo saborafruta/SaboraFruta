@@ -376,12 +376,43 @@ class ViagemService:
             })
         return linhas
 
+    # A MENSAGEM DO BLOQUEIO E' UMA SO', e vive aqui: a tela de acerto mostra
+    # a mesma frase que o encerramento devolve quando alguem insiste. Duas
+    # redacoes para a mesma recusa ensinariam que sao dois problemas.
+    NAO_CONCILIADA = (
+        'A quantidade da carga não foi totalmente conciliada. Verifique as '
+        'vendas, bonificações e produtos retornados.'
+    )
+
     @classmethod
     def pendencias_de_encerramento(cls, viagem: Viagem) -> list[str]:
-        return [
+        """
+        Tudo que impede a carga de fechar — por produto E no total.
+
+        O SALDO POR PRODUTO NAO VE A CARGA INTEIRA. Ele responde pela
+        mercadoria remetida sem comprador; venda ja' faturada, bonificacao
+        endereçada e remessa simples nao passam por ele. Uma carga alterada
+        por fora, ou uma bonificacao que sumiu do acompanhamento, fecha
+        produto a produto e mesmo assim nao bate com o que subiu no caminhao.
+
+        Por isso a conta agregada entra aqui: e' a mesma regra da
+        especificacao -- carga inicial = vendas + bonificacoes + retornos +
+        demais saidas justificadas -- e ela e' verificada onde a viagem
+        encerra, nao so' onde alguem resolve olhar o painel.
+        """
+        from apps.logistica.services.estoque_viagem import EstoqueViagemService
+
+        pendencias = [
             f'{linha["produto"]}: {linha["em_poder"]} ainda sem destino registrado.'
             for linha in cls.conciliacao(viagem) if not linha['fechado']
         ]
+        quadro = EstoqueViagemService.quadro(viagem)
+        if not quadro['fecha'] and quadro['diferenca'] != quadro['em_poder']:
+            pendencias.append(
+                f'A carga saiu com {quadro["carga_inicial"]} e os destinos '
+                f'somam {quadro["destinos"]}.'
+            )
+        return pendencias
 
     @classmethod
     @transaction.atomic
@@ -401,7 +432,7 @@ class ViagemService:
         pendencias = cls.pendencias_de_encerramento(viagem)
         if pendencias:
             raise DadosInvalidosError(
-                'A carga não fecha: ' + ' '.join(pendencias)
+                cls.NAO_CONCILIADA + ' ' + ' '.join(pendencias)
                 + ' Registre venda, bonificação, retorno ou baixa.'
             )
         viagem.status = Viagem.Status.FINALIZADA

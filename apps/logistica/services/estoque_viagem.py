@@ -146,6 +146,43 @@ class EstoqueViagemService:
         }
 
     @classmethod
+    def acerto(cls, quadro: dict) -> list[dict]:
+        """
+        A conta do acerto, linha a linha, na ordem em que se lê.
+
+            carga inicial = vendas + bonificações + retornos
+                            + demais saídas justificadas
+
+        AS LINHAS VAZIAS SOMEM, e a conta continua verdadeira: uma viagem que
+        não bonificou nada não precisa de uma linha de zero para provar isso,
+        e cinco zeros na tela escondem o número que importa. As que a conta
+        não espera — mercadoria ainda no caminhão, baixa declarada, remessa
+        simples — só aparecem quando existem, porque é exatamente ali que
+        elas explicam por que o total ainda não fecha.
+        """
+        linhas = [
+            ('Vendas já realizadas', quadro['vendas_realizadas'],
+             'saíram endereçadas, com nota da venda'),
+            ('Vendas durante a viagem', quadro['venda_na_rua'],
+             f'de {quadro["remetido"]} remetidos sem comprador'),
+            ('Bonificações', quadro['bonificacao'],
+             'cortesia entregue, sem venda'),
+            ('Retorno', quadro['retorno'],
+             'voltou para a prateleira'),
+            ('Ainda no caminhão', quadro['em_poder'],
+             'sem destino registrado — é o que falta acertar'),
+            ('Baixas declaradas', quadro['baixado'],
+             'quebra ou perda, com responsável'),
+            ('Outras remessas', quadro['outras_remessas'],
+             'saídas de remessa simples'),
+        ]
+        return [
+            {'rotulo': rotulo, 'quantidade': quantidade, 'detalhe': detalhe}
+            for rotulo, quantidade, detalhe in linhas
+            if quantidade
+        ]
+
+    @classmethod
     def conciliacao(cls, quadro: dict) -> dict:
         """
         O semáforo da carga, em três estados — e não em dois.
