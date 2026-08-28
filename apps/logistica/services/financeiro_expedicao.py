@@ -87,6 +87,15 @@ class FinanceiroExpedicaoService:
                 ZERO,
             ),
             'cobrada_pela_venda': bool(pedido.pedido_venda_id),
+            # O QUE AINDA DÁ PARA FAZER com a cobrança que já existe: receber
+            # o que está aberto, ou refazer o lançamento inteiro.
+            'em_aberto': [
+                t for t in titulos
+                if t.status not in (
+                    StatusContaReceber.PAGO, StatusContaReceber.CANCELADO,
+                )
+            ],
+            'tem_dinheiro': any(t.status in COM_DINHEIRO for t in titulos),
             'impedimento': impedimento,
             'pode_cobrar': not impedimento,
             # ANTECIPADO É OUTRA PERGUNTA: "o cliente já pagou?" não depende
@@ -192,7 +201,7 @@ class FinanceiroExpedicaoService:
         return titulos
 
     @staticmethod
-    def _baixar(titulos, pedido, usuario) -> None:
+    def _baixar(titulos, pedido, usuario, forma=None) -> None:
         """
         Registra o recebimento pela mesma rotina do financeiro.
 
@@ -204,18 +213,61 @@ class FinanceiroExpedicaoService:
         from apps.financeiro.services.receber_service import ContaReceberService
 
         hoje = timezone.localdate()
+        recebida = forma or pedido.forma_pagamento
         for titulo in titulos:
             ContaReceberService.registrar_baixa(
                 conta=titulo,
                 data_pagamento=hoje,
-                valor_pago=titulo.valor_final,
-                forma_pagamento=pedido.forma_pagamento,
+                valor_pago=titulo.valor_saldo or titulo.valor_final,
+                forma_pagamento=recebida,
                 usuario=usuario,
                 observacao=(
-                    f'Pagamento antecipado do pedido de expedição '
+                    f'Recebimento do pedido de expedição '
                     f'#{pedido.numero:06d}.'
                 ),
             )
+
+    @classmethod
+    @transaction.atomic
+    def receber(cls, pedido, forma=None, usuario=None) -> list:
+        """
+        Registra o recebimento dos títulos em aberto desta carga.
+
+        A FORMA DO RECEBIMENTO PODE NÃO SER A DA COBRANÇA. Cobrou-se em
+        boleto e o cliente pagou em pix: quem concilia o banco precisa ver
+        por onde o dinheiro entrou, e não por onde foi pedido. Sem forma
+        informada, vale a da cobrança.
+
+        SÓ O QUE ESTÁ EM ABERTO. Receber de novo um título já pago somaria
+        dinheiro que não entrou — e o excedente aparece como crédito do
+        cliente que ninguém sabe explicar.
+        """
+        abertos = [
+            t for t in cls.titulos(pedido)
+            if t.status not in (StatusContaReceber.PAGO, StatusContaReceber.CANCELADO)
+        ]
+        if not abertos:
+            raise DadosInvalidosError(
+                'Não há parcela em aberto nesta carga para receber.'
+            )
+        cls._baixar(abertos, pedido, usuario, forma=forma)
+        return abertos
+
+    @classmethod
+    @transaction.atomic
+    def refazer(cls, pedido) -> int:
+        """
+        Desfaz a cobrança para ela ser lançada de novo.
+
+        ERRAR A FORMA OU O PARCELAMENTO ACONTECE, e sem esta porta a correção
+        seria cancelar o título por dentro do financeiro — outro módulo,
+        outra permissão, e a expedição continuando a dizer que está cobrada.
+
+        COM DINHEIRO RECEBIDO, NÃO. Refazer por cima de um título pago
+        apagaria a cobrança e deixaria o recebimento órfão: o caminho é
+        estornar o pagamento, com quem recebeu respondendo por isso.
+        """
+        return cls.cancelar_titulos(pedido)
 
     @classmethod
     def cancelar_titulos(cls, pedido) -> int:

@@ -2675,6 +2675,16 @@ class PedidoExpedicaoCobrarView(PermissaoRequiredMixin, View):
         pedido = get_object_or_404(
             PedidoExpedicao.objects.for_filial(filial), pk=pk,
         )
+        volta = redirect("logistica:pedido-expedicao-detail", pk=pedido.pk)
+        acao = request.POST.get("acao") or "cobrar"
+
+        # RECEBER E REFAZER SAO SOBRE A COBRANCA QUE JA' EXISTE, e por isso
+        # nao passam por escolher forma nem gerar titulo.
+        if acao == "receber":
+            return self._receber(request, pedido, filial, volta)
+        if acao == "refazer":
+            return self._refazer(request, pedido, volta)
+
         # A ESCOLHA VEM DA PROPRIA TELA. Guardar a forma no pedido antes de
         # cobrar deixa registrado COMO a carga foi cobrada -- sem isso, o
         # titulo existiria e ninguem saberia por qual acerto ele saiu.
@@ -2689,7 +2699,7 @@ class PedidoExpedicaoCobrarView(PermissaoRequiredMixin, View):
             )
         except DadosInvalidosError as erro:
             messages.error(request, str(erro))
-            return redirect("logistica:pedido-expedicao-detail", pk=pedido.pk)
+            return volta
 
         total = sum((t.valor_final for t in titulos), Decimal("0"))
         if antecipado:
@@ -2705,6 +2715,54 @@ class PedidoExpedicaoCobrarView(PermissaoRequiredMixin, View):
                 f'para {pedido.cliente}.',
             )
         return redirect("logistica:pedido-expedicao-detail", pk=pedido.pk)
+
+    # ── As ações sobre a cobrança que já existe ──────────────────────────
+
+    def _receber(self, request, pedido, filial, volta):
+        """
+        Baixa as parcelas em aberto.
+
+        A FORMA DO RECEBIMENTO PODE NÃO SER A DA COBRANÇA: cobrou-se em
+        boleto e o cliente pagou em pix. Quem concilia o banco precisa ver
+        por onde o dinheiro entrou.
+        """
+        forma = None
+        forma_id = (request.POST.get("forma_recebida") or "").strip()
+        if forma_id.isdigit():
+            forma = FormaPagamento.objects.filter(
+                pk=forma_id, empresa=filial.empresa, ativo=True,
+            ).filter(Q(filial=filial) | Q(filial__isnull=True)).first()
+
+        try:
+            recebidos = FinanceiroExpedicaoService.receber(
+                pedido, forma=forma, usuario=request.user,
+            )
+        except (DadosInvalidosError, DomainError) as erro:
+            messages.error(request, str(erro))
+            return volta
+
+        total = sum((t.valor_final for t in recebidos), Decimal("0"))
+        messages.success(
+            request,
+            f'Recebimento de R$ {total:.2f} registrado em '
+            f'{len(recebidos)} parcela(s).',
+        )
+        return volta
+
+    def _refazer(self, request, pedido, volta):
+        """Cancela a cobrança para ela ser lançada de novo."""
+        try:
+            quantas = FinanceiroExpedicaoService.refazer(pedido)
+        except DadosInvalidosError as erro:
+            messages.error(request, str(erro))
+            return volta
+
+        messages.success(
+            request,
+            f'{quantas} parcela(s) cancelada(s). Escolha a forma e lance a '
+            'cobrança de novo.',
+        )
+        return volta
 
     @staticmethod
     def _guardar_pagamento(request, pedido, filial) -> None:

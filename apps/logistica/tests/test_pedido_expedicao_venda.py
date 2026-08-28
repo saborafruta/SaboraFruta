@@ -1087,3 +1087,168 @@ class PagamentoAntecipadoTests(CobrancaDaExpedicaoTests):
             FinanceiroExpedicaoService.gerar_titulos(pedido, self.usuario)
 
         self.assertIn('já tem cobrança lançada', str(erro.exception))
+
+
+class RecebimentoEEdicaoTests(CobrancaDaExpedicaoTests):
+    """Receber o que está em aberto, e refazer o que saiu errado."""
+
+    def _cobrada(self):
+        pedido = self._carga_avulsa()
+        FinanceiroExpedicaoService.gerar_titulos(pedido, self.usuario)
+        return pedido
+
+    # ── Receber ──────────────────────────────────────────────────────────
+
+    def test_receber_baixa_as_parcelas_em_aberto(self):
+        pedido = self._cobrada()
+
+        FinanceiroExpedicaoService.receber(pedido, usuario=self.usuario)
+
+        for titulo in FinanceiroExpedicaoService.titulos(pedido):
+            self.assertEqual(titulo.status, StatusContaReceber.PAGO)
+        self.assertEqual(
+            FinanceiroExpedicaoService.resumo(pedido)['aberto'], Decimal('0.00'),
+        )
+
+    def test_o_recebimento_pode_vir_por_outra_forma(self):
+        """
+        Cobrou-se em boleto e o cliente pagou em pix: quem concilia o banco
+        precisa ver por onde o dinheiro entrou, e não por onde foi pedido.
+        """
+        pedido = self._cobrada()
+
+        FinanceiroExpedicaoService.receber(
+            pedido, forma=self.a_vista, usuario=self.usuario,
+        )
+
+        titulo = FinanceiroExpedicaoService.titulos(pedido).first()
+        self.assertEqual(titulo.pagamentos.first().forma_pagamento, self.a_vista)
+
+    def test_receber_duas_vezes_nao_soma_dinheiro_que_nao_entrou(self):
+        pedido = self._cobrada()
+        FinanceiroExpedicaoService.receber(pedido, usuario=self.usuario)
+
+        with self.assertRaises(DadosInvalidosError) as erro:
+            FinanceiroExpedicaoService.receber(pedido, usuario=self.usuario)
+
+        self.assertIn('Não há parcela em aberto', str(erro.exception))
+
+    def test_receber_pela_tela(self):
+        pedido = self._cobrada()
+
+        self.client.post(
+            reverse('logistica:pedido-expedicao-cobrar', args=[pedido.pk]),
+            {'acao': 'receber', 'forma_recebida': self.a_vista.pk},
+            follow=True,
+        )
+
+        self.assertEqual(
+            FinanceiroExpedicaoService.resumo(pedido)['aberto'], Decimal('0.00'),
+        )
+
+    # ── Editar ───────────────────────────────────────────────────────────
+
+    def test_refazer_cancela_e_libera_para_lancar_de_novo(self):
+        """
+        Errar a forma ou o parcelamento acontece — e sem esta porta a
+        correção seria por dentro do financeiro, com a expedição continuando
+        a dizer que está cobrada.
+        """
+        pedido = self._cobrada()
+
+        FinanceiroExpedicaoService.refazer(pedido)
+
+        self.assertEqual(
+            set(
+                FinanceiroExpedicaoService.titulos(pedido)
+                .values_list('status', flat=True)
+            ),
+            {StatusContaReceber.CANCELADO},
+        )
+        self.assertTrue(FinanceiroExpedicaoService.resumo(pedido)['pode_cobrar'])
+
+    def test_depois_de_refazer_a_cobranca_sai_com_a_forma_nova(self):
+        pedido = self._cobrada()
+        FinanceiroExpedicaoService.refazer(pedido)
+
+        pedido.condicao_pagamento = None
+        pedido.save(update_fields=['condicao_pagamento'])
+        titulos = FinanceiroExpedicaoService.gerar_titulos(pedido, self.usuario)
+
+        self.assertEqual(len(titulos), 1)
+        self.assertEqual(titulos[0].valor_final, Decimal('34.00'))
+
+    def test_com_dinheiro_recebido_nao_se_refaz(self):
+        pedido = self._cobrada()
+        FinanceiroExpedicaoService.receber(pedido, usuario=self.usuario)
+
+        with self.assertRaises(DadosInvalidosError) as erro:
+            FinanceiroExpedicaoService.refazer(pedido)
+
+        self.assertIn('Estorne o pagamento', str(erro.exception))
+
+    def test_refazer_pela_tela(self):
+        pedido = self._cobrada()
+
+        self.client.post(
+            reverse('logistica:pedido-expedicao-cobrar', args=[pedido.pk]),
+            {'acao': 'refazer'},
+            follow=True,
+        )
+
+        self.assertTrue(FinanceiroExpedicaoService.resumo(pedido)['pode_cobrar'])
+
+    # ── A tela ───────────────────────────────────────────────────────────
+
+    def test_a_tela_mostra_as_parcelas_e_as_duas_acoes(self):
+        pedido = self._cobrada()
+
+        html = self.client.get(
+            reverse('logistica:pedido-expedicao-detail', args=[pedido.pk]),
+        ).content.decode()
+
+        self.assertIn('Registrar recebimento', html)
+        self.assertIn('Editar cobrança', html)
+        self.assertIn('Recebido por', html)
+
+    def test_recebida_a_tela_nao_oferece_mais_editar(self):
+        pedido = self._cobrada()
+        FinanceiroExpedicaoService.receber(pedido, usuario=self.usuario)
+
+        html = self.client.get(
+            reverse('logistica:pedido-expedicao-detail', args=[pedido.pk]),
+        ).content.decode()
+
+        self.assertNotIn('Editar cobrança', html)
+        self.assertIn('estorno no contas a receber', html)
+
+
+class FormasAPrazoTests(CobrancaDaExpedicaoTests):
+    """Boleto e cartão de crédito são a prazo por definição."""
+
+    def test_boleto_e_cartao_de_credito_geram_parcelas(self):
+        """
+        Com `gera_parcelas` desmarcado neles, venda a prazo não abria conta a
+        receber em lugar nenhum: nem PDV, nem viagem, nem expedição.
+        """
+        formas = {
+            f.tipo: f.gera_parcelas
+            for f in FormaPagamento.objects.filter(empresa=self.empresa)
+        }
+
+        self.assertTrue(formas.get('boleto'), 'boleto deveria ser a prazo')
+        self.assertTrue(
+            formas.get('cartao_credito'), 'cartão de crédito deveria ser a prazo',
+        )
+
+    def test_debito_e_pix_continuam_a_vista(self):
+        """Liquidação imediata: marcá-los encheria o contas a receber de
+        títulos que nascem quitados."""
+        formas = {
+            f.tipo: f.gera_parcelas
+            for f in FormaPagamento.objects.filter(empresa=self.empresa)
+        }
+
+        self.assertFalse(formas.get('cartao_debito', False))
+        self.assertFalse(formas.get('pix', False))
+        self.assertFalse(formas.get('dinheiro', False))
