@@ -442,3 +442,211 @@ class TelaTests(MDFeViagemBase):
         ).content.decode()
 
         self.assertIn('MDF-e da viagem', html)
+
+
+class PainelTests(MDFeViagemBase):
+    """
+    O quadro que a fiscalização pede na estrada.
+
+    TUDO LIDO DE ONDE JÁ É VERDADE: veículo e motorista saem do MANIFESTO,
+    porque a viagem pode ter trocado de motorista depois de o documento
+    sair — e o que vale na estrada é o que está no papel.
+    """
+
+    def test_os_sete_status_da_especificacao_existem(self):
+        self.assertEqual(
+            [rotulo for _, rotulo in MDFe.Status.choices],
+            [
+                'Não emitido', 'Aguardando emissão', 'Enviando',
+                'Autorizado', 'Rejeitado', 'Encerrado', 'Cancelado',
+            ],
+        )
+
+    def test_sem_manifesto_o_painel_diz_nao_emitido(self):
+        """
+        Tela vazia faria parecer que a viagem não tem o que manifestar,
+        quando o que ela não tem é o documento.
+        """
+        painel = MDFeViagemService.painel(self.viagem)
+
+        self.assertFalse(painel['emitido'])
+        self.assertEqual(painel['status'], 'Não emitido')
+        self.assertEqual(painel['documentos'], 0)
+        self.assertIsNone(painel['valor'])
+
+    def test_o_painel_traz_identificacao_transporte_e_rota(self):
+        mdfe = self._mdfe()
+        mdfe.chave_acesso = '3' * 44
+        mdfe.veiculo_placa = 'MDF1A23'
+        mdfe.veiculo_descricao = 'Truck baú'
+        mdfe.motorista_nome = 'Seu Zé'
+        mdfe.uf_carregamento = 'RN'
+        mdfe.uf_descarregamento = 'PB'
+        mdfe.save()
+
+        painel = MDFeViagemService.painel(self.viagem)
+
+        self.assertEqual(painel['numero'], mdfe.numero)
+        self.assertEqual(painel['serie'], mdfe.serie)
+        self.assertEqual(painel['chave'], '3' * 44)
+        self.assertEqual(painel['placa'], 'MDF1A23')
+        self.assertEqual(painel['veiculo'], 'Truck baú')
+        self.assertEqual(painel['motorista'], 'Seu Zé')
+        self.assertEqual(painel['uf_origem'], 'RN')
+        self.assertEqual(painel['uf_destino'], 'PB')
+
+    def test_o_transporte_do_manifesto_vence_o_da_viagem(self):
+        """
+        A viagem pode ter trocado de motorista depois de o documento sair; o
+        que vale para a fiscalização é o que está no manifesto.
+        """
+        mdfe = self._mdfe()
+        mdfe.veiculo_placa = 'OUT2B34'
+        mdfe.motorista_nome = 'Outro motorista'
+        mdfe.save(update_fields=['veiculo_placa', 'motorista_nome'])
+
+        painel = MDFeViagemService.painel(self.viagem)
+
+        self.assertEqual(painel['placa'], 'OUT2B34')
+        self.assertNotEqual(painel['placa'], self.viagem.veiculo_placa)
+
+    def test_sem_dado_no_manifesto_o_painel_usa_o_da_viagem(self):
+        """Campo vazio no documento não apaga o que a viagem já sabe."""
+        self._mdfe()
+
+        painel = MDFeViagemService.painel(self.viagem)
+
+        self.assertEqual(painel['placa'], self.viagem.veiculo_placa)
+        self.assertEqual(painel['motorista'], self.viagem.motorista_nome)
+
+    def test_os_totais_vem_do_manifesto(self):
+        venda = self._nota_de_venda()
+        self._mdfe()
+        MDFeViagemService.vincular(self.viagem, [venda.pk], self.usuario)
+
+        painel = MDFeViagemService.painel(self.viagem)
+
+        self.assertEqual(painel['documentos'], 1)
+        self.assertEqual(painel['valor'], Decimal('500.00'))
+
+    def test_volumes_sem_romaneio_e_nao_informado(self):
+        """
+        Somar quantidade de itens como se fossem volumes daria um número
+        errado, e número errado aqui vira divergência na balança.
+        """
+        self._mdfe()
+
+        self.assertIsNone(MDFeViagemService.painel(self.viagem)['volumes'])
+
+    def test_volumes_vem_do_romaneio_quando_existe(self):
+        from apps.logistica.models import RomaneioCarga
+
+        romaneio = RomaneioCarga.objects.create(
+            filial=self.filial, numero=1, volume_total=Decimal('12'),
+        )
+        mdfe = self._mdfe()
+        mdfe.romaneio = romaneio
+        mdfe.save(update_fields=['romaneio'])
+
+        self.assertEqual(
+            MDFeViagemService.painel(self.viagem)['volumes'], Decimal('12.000'),
+        )
+
+    def test_as_datas_de_emissao_e_autorizacao(self):
+        mdfe = self._mdfe()
+        mdfe.status = MDFe.Status.AUTORIZADO
+        mdfe.data_autorizacao = timezone.now()
+        mdfe.protocolo_autorizacao = '135240000123456'
+        mdfe.save()
+
+        painel = MDFeViagemService.painel(self.viagem)
+
+        self.assertIsNotNone(painel['emitido_em'])
+        self.assertIsNotNone(painel['autorizado_em'])
+        self.assertEqual(painel['protocolo'], '135240000123456')
+        self.assertEqual(painel['status'], 'Autorizado')
+
+
+class PendenciasDoPainelTests(MDFeViagemBase):
+    """
+    O que falta para transmitir, na tela.
+
+    Descobrir que falta placa na hora de transmitir é descobrir com o
+    caminhão esperando — e a SEFAZ recusa por dado que o sistema já tinha
+    como conferir antes.
+    """
+
+    def test_sem_manifesto_a_pendencia_e_o_proprio_manifesto(self):
+        pendencias = MDFeViagemService.pendencias_do_painel(
+            MDFeViagemService.painel(self.viagem),
+        )
+
+        self.assertEqual(len(pendencias), 1)
+        self.assertIn('não tem MDF-e', pendencias[0])
+
+    def test_manifesto_sem_placa_e_sem_documento_acusa(self):
+        mdfe = self._mdfe()
+        self.viagem.veiculo_placa = ''
+        self.viagem.save(update_fields=['veiculo_placa'])
+        mdfe.veiculo_placa = ''
+        mdfe.save(update_fields=['veiculo_placa'])
+
+        pendencias = MDFeViagemService.pendencias_do_painel(
+            MDFeViagemService.painel(self.viagem),
+        )
+
+        self.assertTrue(any('placa' in p for p in pendencias))
+        self.assertTrue(any('Nenhum documento' in p for p in pendencias))
+
+    def test_manifesto_completo_so_acusa_os_volumes(self):
+        """
+        Volumes não vêm do MDF-e: sem romaneio, a contagem não existe — e
+        dizer isso é melhor do que inventá-la.
+        """
+        venda = self._nota_de_venda()
+        mdfe = self._mdfe()
+        mdfe.uf_carregamento = 'RN'
+        mdfe.uf_descarregamento = 'PB'
+        mdfe.save(update_fields=['uf_carregamento', 'uf_descarregamento'])
+        MDFeViagemService.vincular(self.viagem, [venda.pk], self.usuario)
+
+        pendencias = MDFeViagemService.pendencias_do_painel(
+            MDFeViagemService.painel(self.viagem),
+        )
+
+        self.assertEqual(len(pendencias), 1)
+        self.assertIn('volumes', pendencias[0])
+
+
+class TelaDoPainelTests(MDFeViagemBase):
+    """O painel na tela."""
+
+    def _abrir(self):
+        return self.client.get(
+            reverse('logistica:viagem-mdfe', args=[self.viagem.pk]),
+        ).content.decode()
+
+    def test_a_tela_mostra_todos_os_campos_pedidos(self):
+        mdfe = self._mdfe()
+        mdfe.chave_acesso = '3' * 44
+        mdfe.save(update_fields=['chave_acesso'])
+
+        html = self._abrir()
+
+        for campo in (
+            'Painel do MDF-e', 'Número / série', 'Chave', 'Veículo', 'Placa',
+            'Motorista', 'Rota', 'Documentos vinculados', 'Peso total',
+            'Volumes', 'Valor dos documentos', 'Emissão', 'Autorização',
+        ):
+            self.assertIn(campo, html, f'o campo {campo} sumiu do painel')
+
+    def test_a_tela_mostra_o_status_no_vocabulario_da_operacao(self):
+        self._mdfe()
+
+        self.assertIn('Não emitido', self._abrir())
+
+    def test_sem_manifesto_o_painel_aparece_assim_mesmo(self):
+        html = self._abrir()
+
+        self.assertIn('Painel do MDF-e', html)
+        self.assertIn('Não emitido', html)

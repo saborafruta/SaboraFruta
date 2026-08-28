@@ -79,6 +79,110 @@ class MDFeViagemService:
             .first()
         )
 
+    @classmethod
+    def painel(cls, viagem, mdfe=None) -> dict:
+        """
+        O manifesto num quadro só: identificação, transporte, rota e totais.
+
+        TUDO LIDO DE ONDE JÁ É VERDADE. Número, série, chave, status, peso e
+        valor são do próprio MDF-e; veículo e motorista também, porque é o
+        manifesto que responde por quem levou — a viagem pode ter trocado de
+        motorista depois de o documento sair, e o que vale para a
+        fiscalização é o que está no papel.
+
+        SEM MANIFESTO O PAINEL EXISTE ASSIM MESMO, e diz "Não emitido". Uma
+        tela vazia faria parecer que a viagem não tem nada a manifestar,
+        quando o que ela não tem é o documento.
+
+        VOLUMES: o MDF-e não guarda essa contagem, e ela só existe quando a
+        carga passou por um romaneio. Onde não existe, o painel diz "não
+        informado" em vez de somar quantidade de itens como se fossem
+        volumes — caixa e unidade não são a mesma coisa, e um número errado
+        aqui vira divergência na balança.
+        """
+        mdfe = mdfe if mdfe is not None else cls.mdfe_da_viagem(viagem)
+        if mdfe is None:
+            return {
+                'mdfe': None,
+                'status': 'Não emitido',
+                'status_valor': MDFe.Status.RASCUNHO,
+                'emitido': False,
+                'viagem': viagem,
+                'motorista': viagem.motorista_nome,
+                'placa': viagem.veiculo_placa,
+                'veiculo': viagem.veiculo_descricao,
+                'uf_origem': viagem.uf_origem,
+                'uf_destino': viagem.uf_destino,
+                'documentos': 0,
+                'peso': None,
+                'volumes': None,
+                'valor': None,
+                'chave': '',
+                'emitido_em': None,
+                'autorizado_em': None,
+            }
+
+        romaneio = getattr(mdfe, 'romaneio', None)
+        return {
+            'mdfe': mdfe,
+            # ── Identificação ────────────────────────────────────────────
+            'numero': mdfe.numero,
+            'serie': mdfe.serie,
+            'chave': mdfe.chave_acesso or '',
+            'status': mdfe.get_status_display(),
+            'status_valor': mdfe.status,
+            'emitido': True,
+            # ── Transporte ───────────────────────────────────────────────
+            'veiculo': mdfe.veiculo_descricao or viagem.veiculo_descricao,
+            'placa': mdfe.veiculo_placa or viagem.veiculo_placa,
+            'motorista': mdfe.motorista_nome or viagem.motorista_nome,
+            # ── Rota ─────────────────────────────────────────────────────
+            'uf_origem': mdfe.uf_carregamento or viagem.uf_origem,
+            'uf_destino': mdfe.uf_descarregamento or viagem.uf_destino,
+            'percurso': mdfe.percurso_ufs or viagem.percurso_ufs,
+            # ── Carga ────────────────────────────────────────────────────
+            'documentos': mdfe.documentos.count(),
+            'peso': mdfe.peso_total_kg,
+            'volumes': (
+                romaneio.volume_total if romaneio is not None else None
+            ),
+            'valor': mdfe.valor_total,
+            # ── Datas ────────────────────────────────────────────────────
+            'emitido_em': mdfe.data_emissao,
+            'autorizado_em': mdfe.data_autorizacao,
+            'protocolo': mdfe.protocolo_autorizacao,
+            'mensagem_sefaz': mdfe.mensagem_sefaz,
+            'viagem': viagem,
+        }
+
+    @staticmethod
+    def pendencias_do_painel(painel: dict) -> list[str]:
+        """
+        O que falta para este manifesto poder ser transmitido.
+
+        EM TEXTO, E NA TELA. Descobrir que falta placa na hora de transmitir
+        é descobrir com o caminhão esperando -- e a SEFAZ recusa por dados
+        que o sistema já tinha como conferir antes.
+        """
+        if not painel['emitido']:
+            return ['Esta viagem ainda não tem MDF-e.']
+
+        faltando = []
+        if not painel['placa']:
+            faltando.append('Sem placa do veículo.')
+        if not painel['motorista']:
+            faltando.append('Sem motorista.')
+        if not painel['uf_origem'] or not painel['uf_destino']:
+            faltando.append('Rota incompleta — falta UF de origem ou destino.')
+        if not painel['documentos']:
+            faltando.append('Nenhum documento vinculado ao manifesto.')
+        if painel['volumes'] is None:
+            faltando.append(
+                'Quantidade de volumes não informada — ela não vem do MDF-e, '
+                'e sim do romaneio da carga.'
+            )
+        return faltando
+
     # ── Os documentos ────────────────────────────────────────────────────
 
     @staticmethod

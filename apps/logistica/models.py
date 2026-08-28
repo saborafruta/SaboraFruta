@@ -611,9 +611,20 @@ class MDFe(FilialScopedModel):
     """MDF-e — Manifesto Eletrônico de Documentos Fiscais."""
 
     class Status(models.TextChoices):
-        RASCUNHO = "rascunho", "Rascunho"
-        AGUARDANDO_NFE = "aguardando_nfe", "Aguardando autorização da NF-e"
-        PROCESSANDO = "processando", "Processando autorização"
+        """
+        O ciclo do manifesto, no vocabulário de quem opera.
+
+        OS VALORES NÃO MUDAM — só os rótulos. Trocar o valor exigiria migrar
+        dado e reescrever consulta em meia dúzia de lugares para ganhar
+        nada: quem lê a tela lê o rótulo.
+
+        "Aguardando emissão" é o manifesto que espera a autorização das
+        NF-e que ele ampara — o MDF-e não pode ser transmitido antes delas.
+        """
+
+        RASCUNHO = "rascunho", "Não emitido"
+        AGUARDANDO_NFE = "aguardando_nfe", "Aguardando emissão"
+        PROCESSANDO = "processando", "Enviando"
         AUTORIZADO = "autorizado", "Autorizado"
         REJEITADO = "rejeitado", "Rejeitado"
         ENCERRADO = "encerrado", "Encerrado"

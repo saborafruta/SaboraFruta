@@ -57,6 +57,138 @@
     {% endif %}
   </div>
 
+  {# ── O painel do manifesto ──────────────────────────────────────── #}
+  {% comment %}
+    O QUADRO QUE A FISCALIZACAO PEDE NA ESTRADA: identificacao, transporte,
+    rota e totais. Sem manifesto ele existe assim mesmo e diz "Nao emitido"
+    -- uma tela vazia faria parecer que a viagem nao tem o que manifestar,
+    quando o que ela nao tem e' o documento.
+  {% endcomment %}
+  <div class="card p-4 space-y-4">
+    <div class="flex flex-wrap items-baseline justify-between gap-2">
+      <h3 class="text-sm font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
+        Painel do MDF-e
+      </h3>
+      <span class="soft-pill text-xs
+        {% if painel.status_valor == 'autorizado' %}is-green
+        {% elif painel.status_valor == 'rejeitado' or painel.status_valor == 'cancelado' %}is-red
+        {% elif painel.status_valor == 'processando' or painel.status_valor == 'aguardando_nfe' %}is-amber
+        {% else %}is-slate{% endif %}">
+        {{ painel.status }}
+      </span>
+    </div>
+
+    <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-4 text-sm">
+      <div>
+        <p class="text-[11px] uppercase tracking-wide" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Número / série</p>
+        <p class="font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
+          {% if painel.emitido %}{{ painel.numero }}/{{ painel.serie }}{% else %}—{% endif %}
+        </p>
+      </div>
+      <div class="lg:col-span-3">
+        <p class="text-[11px] uppercase tracking-wide" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Chave</p>
+        {% if painel.chave %}
+          <p class="font-mono text-xs break-all" :style="temaClaro ? 'color:#374151;' : 'color:#d1d5db;'">{{ painel.chave }}</p>
+        {% else %}
+          <p class="text-xs" style="color:#d97706;">sem chave — ainda não transmitido</p>
+        {% endif %}
+      </div>
+
+      <div>
+        <p class="text-[11px] uppercase tracking-wide" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Veículo</p>
+        <p :style="temaClaro ? 'color:#374151;' : 'color:#d1d5db;'">{{ painel.veiculo|default:"—" }}</p>
+      </div>
+      <div>
+        <p class="text-[11px] uppercase tracking-wide" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Placa</p>
+        <p :style="temaClaro ? 'color:#374151;' : 'color:#d1d5db;'">{{ painel.placa|default:"—" }}</p>
+      </div>
+      <div>
+        <p class="text-[11px] uppercase tracking-wide" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Motorista</p>
+        <p :style="temaClaro ? 'color:#374151;' : 'color:#d1d5db;'">{{ painel.motorista|default:"—" }}</p>
+      </div>
+      <div>
+        <p class="text-[11px] uppercase tracking-wide" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Rota</p>
+        <p :style="temaClaro ? 'color:#374151;' : 'color:#d1d5db;'">
+          {{ painel.uf_origem|default:"?" }} → {{ painel.uf_destino|default:"?" }}
+          {% if painel.percurso %}
+            <span class="block text-[11px]" :style="temaClaro ? 'color:#94a3b8;' : 'color:#71717a;'">
+              via {{ painel.percurso }}
+            </span>
+          {% endif %}
+        </p>
+      </div>
+
+      <div>
+        <p class="text-[11px] uppercase tracking-wide" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Documentos vinculados</p>
+        <p class="font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">{{ painel.documentos }}</p>
+      </div>
+      <div>
+        <p class="text-[11px] uppercase tracking-wide" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Peso total</p>
+        <p :style="temaClaro ? 'color:#374151;' : 'color:#d1d5db;'">
+          {% if painel.peso is not None %}{{ painel.peso|floatformat:"-3" }} kg{% else %}—{% endif %}
+        </p>
+      </div>
+      <div>
+        <p class="text-[11px] uppercase tracking-wide" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Volumes</p>
+        {% if painel.volumes is not None %}
+          <p :style="temaClaro ? 'color:#374151;' : 'color:#d1d5db;'">{{ painel.volumes|floatformat:"-0" }}</p>
+        {% else %}
+          {% comment %}
+            O MDF-e nao guarda essa contagem, e ela so' existe quando a carga
+            passou por um romaneio. Somar quantidade de itens como se fossem
+            volumes daria um numero errado que vira divergencia na balanca.
+          {% endcomment %}
+          <p class="text-xs" style="color:#d97706;">não informado</p>
+        {% endif %}
+      </div>
+      <div>
+        <p class="text-[11px] uppercase tracking-wide" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Valor dos documentos</p>
+        <p class="font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
+          {% if painel.valor is not None %}R$ {{ painel.valor|floatformat:2 }}{% else %}—{% endif %}
+        </p>
+      </div>
+
+      <div>
+        <p class="text-[11px] uppercase tracking-wide" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Emissão</p>
+        <p :style="temaClaro ? 'color:#374151;' : 'color:#d1d5db;'">
+          {{ painel.emitido_em|date:"d/m/Y"|default:"—" }}
+        </p>
+      </div>
+      <div>
+        <p class="text-[11px] uppercase tracking-wide" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Autorização</p>
+        {% if painel.autorizado_em %}
+          <p :style="temaClaro ? 'color:#374151;' : 'color:#d1d5db;'">
+            {{ painel.autorizado_em|date:"d/m/Y H:i" }}
+            {% if painel.protocolo %}
+              <span class="block text-[11px]" :style="temaClaro ? 'color:#94a3b8;' : 'color:#71717a;'">
+                protocolo {{ painel.protocolo }}
+              </span>
+            {% endif %}
+          </p>
+        {% else %}
+          <p class="text-xs" :style="temaClaro ? 'color:#94a3b8;' : 'color:#71717a;'">não autorizado</p>
+        {% endif %}
+      </div>
+    </div>
+
+    {% if pendencias %}
+      {% comment %}
+        Descobrir que falta placa na hora de transmitir e' descobrir com o
+        caminhao esperando -- e a SEFAZ recusa por dado que o sistema ja'
+        tinha como conferir antes.
+      {% endcomment %}
+      <div class="rounded-lg p-3 text-xs" style="background:rgba(217,119,6,0.12);color:#d97706;">
+        {% for pendencia in pendencias %}<p>· {{ pendencia }}</p>{% endfor %}
+      </div>
+    {% endif %}
+
+    {% if painel.mensagem_sefaz %}
+      <p class="text-xs" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+        SEFAZ: {{ painel.mensagem_sefaz }}
+      </p>
+    {% endif %}
+  </div>
+
   {# ── Os números ─────────────────────────────────────────────────── #}
   <div class="grid grid-cols-2 lg:grid-cols-4 gap-3">
     <div class="card p-4">

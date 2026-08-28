@@ -852,10 +852,14 @@ class ViagemMDFeView(PermissaoRequiredMixin, View):
     def get(self, request, pk):
         viagem = self._viagem(request, pk)
         documentos = MDFeViagemService.documentos(viagem)
+        mdfe = MDFeViagemService.mdfe_da_viagem(viagem)
+        painel = MDFeViagemService.painel(viagem, mdfe)
         return render(request, self.template_name, {
             'title': f'MDF-e da viagem #{viagem.numero:06d}',
             'viagem': viagem,
-            'mdfe': MDFeViagemService.mdfe_da_viagem(viagem),
+            'mdfe': mdfe,
+            'painel': painel,
+            'pendencias': MDFeViagemService.pendencias_do_painel(painel),
             'documentos': documentos,
             'resumo': MDFeViagemService.resumo(documentos),
         })
