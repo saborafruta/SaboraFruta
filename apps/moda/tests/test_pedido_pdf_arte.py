@@ -448,10 +448,42 @@ class ArteNoPdfTests(TestCase):
         )[-1]
         self.assertEqual(len(tabela._cellvalues), 12)  # 11 linhas + cabeçalho
         self.assertEqual(tabela._cellvalues[1][1].getPlainText(), 'Pessoa 1')
-        self.assertEqual(tabela._cellvalues[1][6].getPlainText(), 'Pessoa 2')
+        self.assertEqual(tabela._cellvalues[2][1].getPlainText(), 'Pessoa 2')
+        self.assertEqual(tabela._cellvalues[1][6].getPlainText(), 'Pessoa 12')
         self.assertEqual(tabela._cellvalues[-1][6].getPlainText(), 'Pessoa 22')
         self.assertEqual(tabela._cellvalues[-1][7].getPlainText(), '22')
         self.assertEqual(tabela._cellvalues[-1][8].getPlainText(), 'XGG')
+
+    def test_tres_colunas_sao_preenchidas_de_cima_para_baixo(self):
+        from apps.moda.services.pedido_pdf import LARGURA_UTIL, _estilos
+
+        pedido = self._pedido()
+        item = ItemPedidoProducao.objects.create(
+            pedido=pedido, descricao='Camisa', quantidade=22,
+        )
+        tamanho = Tamanho.objects.create(filial=self.filial, sigla='P')
+        pessoas = [PersonalizacaoIndividual(
+            pedido=pedido, item=item, tamanho=tamanho,
+            nome=f'Pessoa {numero}', numero=str(numero),
+        ) for numero in range(1, 23)]
+
+        tabela = PedidoPdfService._personalizacao_item(
+            item, _estilos(), LARGURA_UTIL / 2,
+            pessoas=pessoas, colunas=3,
+        )[-1]
+
+        self.assertEqual(
+            [linha[0] for linha in tabela._cellvalues[1:]],
+            [str(numero) for numero in range(1, 9)],
+        )
+        self.assertEqual(
+            [linha[5] for linha in tabela._cellvalues[1:]],
+            [str(numero) for numero in range(9, 17)],
+        )
+        self.assertEqual(
+            [linha[10] for linha in tabela._cellvalues[1:]],
+            [str(numero) for numero in range(17, 23)] + ['', ''],
+        )
 
     def test_muitos_nomes_continuam_em_outra_pagina_sem_reduzir_arte(self):
         from reportlab.platypus import KeepInFrame
@@ -558,6 +590,7 @@ class ArteNoPdfTests(TestCase):
         self.assertEqual(cabecalhos, ['Peças', 'Unitário', 'Produto', 'TOTAL OP'])
 
     def test_observacao_do_produto_tem_rotulo_e_texto_em_negrito(self):
+        from reportlab.lib import colors
         from reportlab.platypus import Paragraph
 
         from apps.moda.services.pedido_pdf import LARGURA_UTIL, _estilos
@@ -582,7 +615,9 @@ class ArteNoPdfTests(TestCase):
             observacao.getPlainText(),
             'Obs do produto: Conferir gola antes de cortar.',
         )
-        self.assertEqual(observacao.text.count('<b>'), 2)
+        self.assertEqual(observacao.style.fontName, 'Helvetica-Bold')
+        self.assertEqual(observacao.style.textColor, colors.black)
+        self.assertGreater(observacao.style.fontSize, _estilos()['pequeno'].fontSize)
 
     def test_pdf_nao_reserva_rodape_e_qr_fica_no_cabecalho(self):
         pedido = self._pedido()

@@ -70,6 +70,10 @@ def _estilos():
         'pequeno': ParagraphStyle(
             'p', parent=base['Normal'], fontSize=6.5, leading=8, textColor=CINZA,
         ),
+        'observacao_produto': ParagraphStyle(
+            'op', parent=base['Normal'], fontName='Helvetica-Bold',
+            fontSize=7.8, leading=9.5, textColor=colors.black,
+        ),
         'celula': ParagraphStyle(
             'c', parent=base['Normal'], fontSize=7.1, leading=8.6, textColor=TEXTO,
         ),
@@ -309,8 +313,20 @@ class PedidoPdfService:
                     tabela = lista[-1]
                     partes = tabela.splitOn(medidor, meia, max(0, espaco))
                     if partes:
-                        direita += lista[:-1] + [partes[0]]
-                        consumidas = min(len(pessoas), (len(partes[0]._cellvalues) - 1) * colunas)
+                        linhas_disponiveis = len(partes[0]._cellvalues) - 1
+                        consumidas = min(
+                            len(pessoas), linhas_disponiveis * colunas,
+                        )
+                        # O `split` mede quantas linhas cabem. A tabela é
+                        # reconstruída com a primeira faixa contínua para
+                        # manter a leitura vertical 1, 2, 3... sem pular
+                        # pessoas entre esta página e a continuação.
+                        if consumidas:
+                            primeira_tabela = cls._personalizacao_item(
+                                item, e, meia,
+                                pessoas=pessoas[:consumidas], colunas=colunas,
+                            )[-1]
+                            direita += lista[:-1] + [primeira_tabela]
                 pagina = Table([[
                     KeepInFrame(meia, altura_util, esquerda, mode='shrink'),
                     KeepInFrame(meia, altura_util, direita, mode='error'),
@@ -601,8 +617,8 @@ class PedidoPdfService:
         if observacao:
             blocos.append(Spacer(1, 3))
             blocos.append(Paragraph(
-                f'<b>Obs do produto:</b> <b>{esc(observacao)}</b>',
-                e['pequeno'],
+                f'Obs do produto: {esc(observacao)}',
+                e['observacao_produto'],
             ))
 
         blocos += cls._grade(item, e, largura_util)
@@ -766,8 +782,9 @@ class PedidoPdfService:
         if not pessoas:
             return []
         if colunas > 1:
-            # Leitura horizontal: 1, 2, 3; depois 4, 5, 6. Cada bloco
-            # repete seu cabeçalho e mantém nome/número/tamanho juntos.
+            # Leitura vertical: 1, 2, 3... de cima para baixo; depois
+            # continua no alto da coluna seguinte. Cada bloco repete seu
+            # cabeçalho e mantém nome/número/tamanho juntos.
             estilo = ParagraphStyle(
                 'pessoa_compacta', parent=e['celula'], fontSize=6.3, leading=7.5,
             )
@@ -781,12 +798,13 @@ class PedidoPdfService:
                 larguras += [5 * mm, largura_bloco - 23 * mm, 9 * mm, 9 * mm]
                 cabecalho += ['#', 'Nome', 'Nº', 'Tam.']
             dados = [cabecalho]
-            for linha in range(0, len(pessoas), colunas):
+            total_linhas = (len(pessoas) + colunas - 1) // colunas
+            for linha in range(total_linhas):
                 celulas = []
                 for coluna in range(colunas):
                     if coluna:
                         celulas.append('')
-                    posicao = linha + coluna
+                    posicao = linha + coluna * total_linhas
                     if posicao >= len(pessoas):
                         celulas += ['', '', '', '']
                         continue
