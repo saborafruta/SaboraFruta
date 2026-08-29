@@ -6,6 +6,34 @@
 {% block largura_conteudo %}produto-list-page w-full max-w-none{% endblock %}
 
 {% block list_actions %}
+  <div class="produto-column-picker" data-product-column-picker>
+    <button type="button" class="btn-secondary produto-column-picker-trigger" aria-expanded="false" aria-controls="produto-column-picker-panel" data-product-column-picker-trigger>
+      <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16M8 4v4m7 2v4m-5 2v4"/></svg>
+      Colunas
+    </button>
+    <div id="produto-column-picker-panel" class="produto-column-picker-panel" hidden data-product-column-picker-panel>
+      <div class="produto-column-picker-head">
+        <strong>Colunas visíveis</strong>
+        <span>Arraste a borda do cabeçalho para ajustar a largura.</span>
+      </div>
+      <div class="produto-column-picker-options">
+        <label><input type="checkbox" data-product-column-toggle="id" checked> ID</label>
+        <label title="O nome permanece visível para identificar os produtos."><input type="checkbox" data-product-column-toggle="nome" checked disabled> Nome <small>fixo</small></label>
+        <label><input type="checkbox" data-product-column-toggle="codigo_barras" checked> Cód. de barras</label>
+        <label><input type="checkbox" data-product-column-toggle="referencia" checked> Referência</label>
+        <label><input type="checkbox" data-product-column-toggle="categoria" checked> Categoria</label>
+        <label><input type="checkbox" data-product-column-toggle="subcategoria" checked> Subcategoria</label>
+        <label><input type="checkbox" data-product-column-toggle="unidade" checked> Unidade</label>
+        <label><input type="checkbox" data-product-column-toggle="estoque" checked> Estoque</label>
+        <label><input type="checkbox" data-product-column-toggle="custo" checked> Custo</label>
+        <label><input type="checkbox" data-product-column-toggle="preco" checked> Preço de venda</label>
+        <label><input type="checkbox" data-product-column-toggle="markup" checked> Markup</label>
+        <label><input type="checkbox" data-product-column-toggle="margem" checked> Margem</label>
+        <label><input type="checkbox" data-product-column-toggle="acoes" checked> Ações</label>
+      </div>
+      <button type="button" class="produto-column-picker-reset" data-product-column-reset>Restaurar padrão</button>
+    </div>
+  </div>
   <a href="{% url 'produtos:categoria-list' %}?tipo=categorias" class="btn-secondary">Categorias</a>
   <a href="{% url 'produtos:categoria-list' %}?tipo=subcategorias" class="btn-secondary">Subcategorias</a>
   <a href="{% url 'produtos:marca-list' %}" class="btn-secondary">Marcas</a>
@@ -36,6 +64,12 @@
   .produto-list-compact td:nth-child(2) { overflow: visible; }
   .produto-list-compact td.produto-inline-cell:not(:nth-child(2)) { overflow: hidden !important; }
   .produto-list-compact th { font-size: 11px !important; }
+  .produto-list-compact th[data-product-column] { position: relative; }
+  .produto-column-resizer { position: absolute; z-index: 3; top: 4px; right: -5px; width: 11px; height: calc(100% - 8px); cursor: col-resize; touch-action: none; }
+  .produto-column-resizer::after { content: ""; position: absolute; top: 18%; bottom: 18%; left: 5px; width: 2px; border-radius: 999px; background: transparent; transition: background .15s; }
+  .produto-list-compact th:hover .produto-column-resizer::after,
+  .produto-column-resizer.is-resizing::after { background: #60a5fa; }
+  body.produto-column-resizing { cursor: col-resize !important; user-select: none !important; }
   .produto-list-compact td { font-size: 12px; }
   .produto-list-compact th:nth-child(1) { width: 64px; }
   .produto-list-compact th:nth-child(2) { width: 330px; }
@@ -73,6 +107,7 @@
   .produto-name-status .produto-name-truncate { flex: 1 1 150px; min-width: 0; overflow: hidden !important; }
   .produto-name-more { width: 24px; height: 24px; border-radius: 7px; display: inline-grid; place-items: center; flex: 0 0 auto; border: 1px solid rgba(96,165,250,.28); background: rgba(59,130,246,.12); color: #93c5fd; font-size: 12px; font-weight: 900; cursor: pointer; }
   .produto-name-more svg { width: 14px; height: 14px; }
+  .produto-name-info-wrap { position: relative; flex: 0 0 auto; }
   body.tema-claro .produto-name-more { background: #eff6ff; border-color: #bfdbfe; color: #1d4ed8; }
   .produto-name-status:hover::after { content: attr(data-full-name); position: absolute; left: 0; top: calc(100% + 8px); z-index: 94; width: min(440px, calc(100vw - 2rem)); max-width: 440px; border-radius: 10px; padding: .72rem .82rem; background: #111827; border: 1px solid rgba(96,165,250,.34); color: #f8fafc; box-shadow: 0 18px 45px rgba(0,0,0,.34); font-size: .86rem; line-height: 1.35; white-space: normal; overflow-wrap: anywhere; pointer-events: none; }
   body.tema-claro .produto-name-status:hover::after { background: #fff; border-color: #bfdbfe; color: #0f172a; box-shadow: 0 18px 40px rgba(15,23,42,.16); }
@@ -145,6 +180,20 @@
   .produto-stock-button.is-primary { border-color: #fb6b2f; background: #fb6b2f; color: #fff; box-shadow: 0 12px 24px rgba(251,107,47,.20); }
   .produto-stock-button.is-muted { border-color: rgba(59,130,246,.30); background: rgba(59,130,246,.14); color: #bfdbfe; }
   body.tema-claro .produto-stock-button.is-muted { background: #eff6ff; color: #1d4ed8; border-color: #bfdbfe; }
+  .produto-column-picker { position: relative; }
+  .produto-column-picker-trigger { display: inline-flex; align-items: center; gap: .42rem; }
+  .produto-column-picker-panel { position: absolute; z-index: 110; top: calc(100% + 8px); left: 0; width: min(340px, calc(100vw - 2rem)); padding: .85rem; border-radius: 14px; border: 1px solid rgba(96,165,250,.28); background: #18181b; color: #e5e7eb; box-shadow: 0 20px 55px rgba(0,0,0,.35); }
+  .produto-column-picker-panel[hidden] { display: none !important; }
+  body.tema-claro .produto-column-picker-panel { background: #fff; color: #0f172a; border-color: #bfdbfe; box-shadow: 0 20px 45px rgba(15,23,42,.18); }
+  .produto-column-picker-head { display: grid; gap: .14rem; padding-bottom: .65rem; border-bottom: 1px solid rgba(148,163,184,.2); }
+  .produto-column-picker-head strong { font-size: .9rem; }
+  .produto-column-picker-head span { color: #94a3b8; font-size: .72rem; line-height: 1.35; }
+  .produto-column-picker-options { display: grid; grid-template-columns: 1fr 1fr; gap: .22rem .6rem; padding: .62rem 0; }
+  .produto-column-picker-options label { display: flex; align-items: center; gap: .42rem; min-height: 30px; font-size: .78rem; font-weight: 750; cursor: pointer; }
+  .produto-column-picker-options input { width: 16px; height: 16px; accent-color: #2563eb; }
+  .produto-column-picker-options small { color: #94a3b8; font-size: .63rem; }
+  .produto-column-picker-reset { width: 100%; min-height: 34px; border-radius: 9px; border: 1px solid rgba(96,165,250,.25); background: rgba(37,99,235,.13); color: #bfdbfe; font-size: .76rem; font-weight: 850; cursor: pointer; }
+  body.tema-claro .produto-column-picker-reset { background: #eff6ff; color: #1d4ed8; border-color: #bfdbfe; }
   .produto-filter-card { align-items: center; }
   .produto-filter-button,
   .produto-filter-create { min-height: 40px; white-space: nowrap; }
@@ -666,40 +715,55 @@
 {% endblock %}
 
 {% block table_head %}
-  <th class="text-left px-4 py-3 font-medium" :style="temaClaro ? 'color:#444; font-size:12px; text-transform:uppercase; letter-spacing:0.05em;' : 'color:#f8fafc; font-size:12px; text-transform:uppercase; letter-spacing:0.05em;'">
+  <th data-product-column="id" class="text-left px-4 py-3 font-medium" :style="temaClaro ? 'color:#444; font-size:12px; text-transform:uppercase; letter-spacing:0.05em;' : 'color:#f8fafc; font-size:12px; text-transform:uppercase; letter-spacing:0.05em;'">
     <a href="?{{ sort_urls.id }}" class="inline-flex items-center gap-1 hover:underline">ID<span>{% if ordem == 'id' %}&uarr;{% elif ordem == 'id_desc' %}&darr;{% endif %}</span></a>
   </th>
-  <th class="text-left px-4 py-3 font-medium" :style="temaClaro ? 'color:#444; font-size:12px; text-transform:uppercase; letter-spacing:0.05em;' : 'color:#f8fafc; font-size:12px; text-transform:uppercase; letter-spacing:0.05em;'">
+  <th data-product-column="nome" class="text-left px-4 py-3 font-medium" :style="temaClaro ? 'color:#444; font-size:12px; text-transform:uppercase; letter-spacing:0.05em;' : 'color:#f8fafc; font-size:12px; text-transform:uppercase; letter-spacing:0.05em;'">
     <a href="?{{ sort_urls.nome }}" class="inline-flex items-center gap-1 hover:underline">Nome<span>{% if ordem == 'az' %}&uarr;{% elif ordem == 'za' %}&darr;{% endif %}</span></a>
   </th>
-  <th class="text-left px-4 py-3 font-medium" :style="temaClaro ? 'color:#444; font-size:12px; text-transform:uppercase; letter-spacing:0.05em;' : 'color:#f8fafc; font-size:12px; text-transform:uppercase; letter-spacing:0.05em;'">Cod. de Barras</th>
-  <th class="text-left px-4 py-3 font-medium" :style="temaClaro ? 'color:#444; font-size:12px; text-transform:uppercase; letter-spacing:0.05em;' : 'color:#f8fafc; font-size:12px; text-transform:uppercase; letter-spacing:0.05em;'">
+  <th data-product-column="codigo_barras" class="text-left px-4 py-3 font-medium" :style="temaClaro ? 'color:#444; font-size:12px; text-transform:uppercase; letter-spacing:0.05em;' : 'color:#f8fafc; font-size:12px; text-transform:uppercase; letter-spacing:0.05em;'">Cod. de Barras</th>
+  <th data-product-column="referencia" class="text-left px-4 py-3 font-medium" :style="temaClaro ? 'color:#444; font-size:12px; text-transform:uppercase; letter-spacing:0.05em;' : 'color:#f8fafc; font-size:12px; text-transform:uppercase; letter-spacing:0.05em;'">
     <a href="?{{ sort_urls.referencia }}" class="inline-flex items-center gap-1 hover:underline">Ref.<span>{% if ordem == 'referencia' %}&uarr;{% elif ordem == 'referencia_desc' %}&darr;{% endif %}</span></a>
   </th>
-  <th class="text-left px-4 py-3 font-medium" :style="temaClaro ? 'color:#444; font-size:12px; text-transform:uppercase; letter-spacing:0.05em;' : 'color:#f8fafc; font-size:12px; text-transform:uppercase; letter-spacing:0.05em;'">Categoria</th>
-  <th class="text-left px-4 py-3 font-medium" :style="temaClaro ? 'color:#444; font-size:12px; text-transform:uppercase; letter-spacing:0.05em;' : 'color:#f8fafc; font-size:12px; text-transform:uppercase; letter-spacing:0.05em;'">Sub categoria</th>
-  <th class="text-left px-4 py-3 font-medium" :style="temaClaro ? 'color:#444; font-size:12px; text-transform:uppercase; letter-spacing:0.05em;' : 'color:#f8fafc; font-size:12px; text-transform:uppercase; letter-spacing:0.05em;'">Un.</th>
-  <th class="text-right px-4 py-3 font-medium" :style="temaClaro ? 'color:#444; font-size:12px; text-transform:uppercase; letter-spacing:0.05em;' : 'color:#f8fafc; font-size:12px; text-transform:uppercase; letter-spacing:0.05em;'">Estoque</th>
-  <th class="text-right px-4 py-3 font-medium" :style="temaClaro ? 'color:#444; font-size:12px; text-transform:uppercase; letter-spacing:0.05em;' : 'color:#f8fafc; font-size:12px; text-transform:uppercase; letter-spacing:0.05em;'">
+  <th data-product-column="categoria" class="text-left px-4 py-3 font-medium" :style="temaClaro ? 'color:#444; font-size:12px; text-transform:uppercase; letter-spacing:0.05em;' : 'color:#f8fafc; font-size:12px; text-transform:uppercase; letter-spacing:0.05em;'">Categoria</th>
+  <th data-product-column="subcategoria" class="text-left px-4 py-3 font-medium" :style="temaClaro ? 'color:#444; font-size:12px; text-transform:uppercase; letter-spacing:0.05em;' : 'color:#f8fafc; font-size:12px; text-transform:uppercase; letter-spacing:0.05em;'">Sub categoria</th>
+  <th data-product-column="unidade" class="text-left px-4 py-3 font-medium" :style="temaClaro ? 'color:#444; font-size:12px; text-transform:uppercase; letter-spacing:0.05em;' : 'color:#f8fafc; font-size:12px; text-transform:uppercase; letter-spacing:0.05em;'">Un.</th>
+  <th data-product-column="estoque" class="text-right px-4 py-3 font-medium" :style="temaClaro ? 'color:#444; font-size:12px; text-transform:uppercase; letter-spacing:0.05em;' : 'color:#f8fafc; font-size:12px; text-transform:uppercase; letter-spacing:0.05em;'">Estoque</th>
+  <th data-product-column="custo" class="text-right px-4 py-3 font-medium" :style="temaClaro ? 'color:#444; font-size:12px; text-transform:uppercase; letter-spacing:0.05em;' : 'color:#f8fafc; font-size:12px; text-transform:uppercase; letter-spacing:0.05em;'">
     <a href="?{{ sort_urls.custo }}" class="inline-flex items-center gap-1 hover:underline">Custo<span>{% if ordem == 'custo' %}&uarr;{% elif ordem == 'custo_desc' %}&darr;{% endif %}</span></a>
   </th>
-  <th class="text-right px-4 py-3 font-medium" :style="temaClaro ? 'color:#444; font-size:12px; text-transform:uppercase; letter-spacing:0.05em;' : 'color:#f8fafc; font-size:12px; text-transform:uppercase; letter-spacing:0.05em;'">
+  <th data-product-column="preco" class="text-right px-4 py-3 font-medium" :style="temaClaro ? 'color:#444; font-size:12px; text-transform:uppercase; letter-spacing:0.05em;' : 'color:#f8fafc; font-size:12px; text-transform:uppercase; letter-spacing:0.05em;'">
     <a href="?{{ sort_urls.preco }}" class="inline-flex items-center gap-1 hover:underline">Preco venda<span>{% if ordem == 'preco' %}&uarr;{% elif ordem == 'preco_desc' %}&darr;{% endif %}</span></a>
   </th>
-  <th class="text-right px-4 py-3 font-medium" :style="temaClaro ? 'color:#444; font-size:12px; text-transform:uppercase; letter-spacing:0.05em;' : 'color:#f8fafc; font-size:12px; text-transform:uppercase; letter-spacing:0.05em;'">Markup</th>
-  <th class="text-right px-4 py-3 font-medium" :style="temaClaro ? 'color:#444; font-size:12px; text-transform:uppercase; letter-spacing:0.05em;' : 'color:#f8fafc; font-size:12px; text-transform:uppercase; letter-spacing:0.05em;'">Margem</th>
-  <th class="text-right px-4 py-3 font-medium" :style="temaClaro ? 'color:#444; font-size:12px; text-transform:uppercase; letter-spacing:0.05em;' : 'color:#f8fafc; font-size:12px; text-transform:uppercase; letter-spacing:0.05em;'">Acoes</th>
+  <th data-product-column="markup" class="text-right px-4 py-3 font-medium" :style="temaClaro ? 'color:#444; font-size:12px; text-transform:uppercase; letter-spacing:0.05em;' : 'color:#f8fafc; font-size:12px; text-transform:uppercase; letter-spacing:0.05em;'">Markup</th>
+  <th data-product-column="margem" class="text-right px-4 py-3 font-medium" :style="temaClaro ? 'color:#444; font-size:12px; text-transform:uppercase; letter-spacing:0.05em;' : 'color:#f8fafc; font-size:12px; text-transform:uppercase; letter-spacing:0.05em;'">Margem</th>
+  <th data-product-column="acoes" class="text-right px-4 py-3 font-medium" :style="temaClaro ? 'color:#444; font-size:12px; text-transform:uppercase; letter-spacing:0.05em;' : 'color:#f8fafc; font-size:12px; text-transform:uppercase; letter-spacing:0.05em;'">Acoes</th>
 {% endblock %}
 
 {% block table_body %}
   {% for p in produtos %}
     <tr class="table-row-hover {% if not p.ativo_filial %}produto-inactive-row{% endif %}" data-product-id="{{ p.pk }}" data-inline-url="{% url 'produtos:produto-inline-edit' p.pk %}" data-category-id="{{ p.categoria_id|default:'' }}">
-      <td class="px-4 py-3">
+      <td data-product-column="id" class="px-4 py-3">
         <span class="produto-id-badge inline-flex justify-center rounded-md px-2 py-1 text-xs font-semibold"
               :style="temaClaro ? 'background:#f1f5f9; color:#475569;' : 'background:rgba(148,163,184,0.10); color:#cbd5e1;'">{{ p.codigo_replicacao|stringformat:"02d" }}</span>
       </td>
-      <td class="px-4 py-3">
+      <td data-product-column="nome" class="px-4 py-3">
         <div class="flex items-center gap-2 min-w-0">
+          <div class="produto-name-info-wrap">
+            <button type="button"
+                    class="produto-name-more"
+                    title="Ver nome completo"
+                    aria-label="Ver nome completo de {{ p.descricao }}"
+                    aria-controls="produto-name-full-{{ p.pk }}"
+                    aria-expanded="false"
+                    data-product-name-toggle>
+              <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 17v-6m0-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+            </button>
+            <span id="produto-name-full-{{ p.pk }}"
+                  class="produto-name-popover"
+                  data-product-name-popover
+                  hidden>{{ p.descricao }}</span>
+          </div>
           {% if p.foto_url_resolvida %}
             <button type="button" class="produto-thumb-trigger" data-action="{% url 'produtos:produto-image-update' p.pk %}" data-image="{% url 'produtos:produto-image-file' p.pk %}" data-name="{{ p.descricao }}">
               <img src="{% url 'produtos:produto-image-file' p.pk %}?v=thumb" alt="{{ p.descricao }}" class="produto-thumb">
@@ -716,44 +780,31 @@
                   data-type="text"
                   data-value="{{ p.descricao }}"
                   :style="temaClaro ? 'color:#1a1a1a;' : 'color:#f0f0f0;'"><span class="inline-display">{{ p.descricao }}</span></span>
-            <button type="button"
-                    class="produto-name-more"
-                    title="Ver nome completo"
-                    aria-label="Ver nome completo de {{ p.descricao }}"
-                    aria-controls="produto-name-full-{{ p.pk }}"
-                    aria-expanded="false"
-                    data-product-name-toggle>
-              <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 17v-6m0-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
-            </button>
-            <span id="produto-name-full-{{ p.pk }}"
-                  class="produto-name-popover"
-                  data-product-name-popover
-                  hidden>{{ p.descricao }}</span>
             {% if not p.ativo_filial %}
               <span class="produto-status-inactive">Inativo</span>
             {% endif %}
           </div>
         </div>
       </td>
-      <td class="px-4 py-3">
+      <td data-product-column="codigo_barras" class="px-4 py-3">
         {% if p.codigo_barras %}
           <span class="font-mono text-xs produto-inline-cell" data-field="codigo_barras" data-type="text" data-value="{{ p.codigo_barras }}" :style="temaClaro ? 'color:#475569;' : 'color:#cbd5e1;'"><span class="inline-display">{{ p.codigo_barras }}</span></span>
         {% else %}
           <span class="text-xs produto-inline-cell" data-field="codigo_barras" data-type="text" data-value="" :style="temaClaro ? 'color:#94a3b8;' : 'color:#64748b;'"><span class="inline-display">-</span></span>
         {% endif %}
       </td>
-      <td class="px-4 py-3">
+      <td data-product-column="referencia" class="px-4 py-3">
         <span class="font-mono text-xs produto-inline-cell" data-field="codigo" data-type="text" data-value="{{ p.codigo }}" :style="temaClaro ? 'color:#475569;' : 'color:#cbd5e1;'"><span class="inline-display">{{ p.codigo|default:"-" }}</span></span>
       </td>
-      <td class="px-4 py-3 text-sm produto-inline-cell" data-field="categoria" data-type="select" data-value="{{ p.categoria_id|default:'' }}" :style="temaClaro ? 'color:#444;' : 'color:#aaa;'"><span class="inline-display">{{ p.categoria.nome|default:"-" }}</span></td>
-      <td class="px-4 py-3 text-sm produto-inline-cell" data-field="subcategoria" data-type="select" data-value="{{ p.subcategoria_id|default:'' }}" :style="temaClaro ? 'color:#444;' : 'color:#aaa;'"><span class="inline-display">{{ p.subcategoria.nome|default:"-" }}</span></td>
-      <td class="px-4 py-3 text-sm produto-inline-cell" data-field="unidade_medida" data-type="select" data-value="{{ p.unidade_medida_id }}" :style="temaClaro ? 'color:#444;' : 'color:#aaa;'"><span class="inline-display">{{ p.unidade_medida.sigla|default:"-" }}</span></td>
-      <td class="px-4 py-3 text-right produto-inline-cell" data-field="estoque_atual" data-type="decimal" data-value="{{ p.estoque_atual_lista }}">
+      <td data-product-column="categoria" class="px-4 py-3 text-sm produto-inline-cell" data-field="categoria" data-type="select" data-value="{{ p.categoria_id|default:'' }}" :style="temaClaro ? 'color:#444;' : 'color:#aaa;'"><span class="inline-display">{{ p.categoria.nome|default:"-" }}</span></td>
+      <td data-product-column="subcategoria" class="px-4 py-3 text-sm produto-inline-cell" data-field="subcategoria" data-type="select" data-value="{{ p.subcategoria_id|default:'' }}" :style="temaClaro ? 'color:#444;' : 'color:#aaa;'"><span class="inline-display">{{ p.subcategoria.nome|default:"-" }}</span></td>
+      <td data-product-column="unidade" class="px-4 py-3 text-sm produto-inline-cell" data-field="unidade_medida" data-type="select" data-value="{{ p.unidade_medida_id }}" :style="temaClaro ? 'color:#444;' : 'color:#aaa;'"><span class="inline-display">{{ p.unidade_medida.sigla|default:"-" }}</span></td>
+      <td data-product-column="estoque" class="px-4 py-3 text-right produto-inline-cell" data-field="estoque_atual" data-type="decimal" data-value="{{ p.estoque_atual_lista }}">
         <span class="inline-flex justify-end min-w-[64px] rounded-md px-2 py-1 text-xs font-semibold"
               :style="temaClaro ? 'background:#eff6ff; color:#1d4ed8;' : 'background:rgba(59,130,246,0.16); color:#93c5fd;'"><span class="inline-display">{{ p.estoque_atual_lista|quantidade_produto:p }}</span></span>
       </td>
-      <td class="px-4 py-3 text-right text-sm produto-inline-cell" data-field="preco_custo" data-type="decimal" data-value="{{ p.preco_custo }}" data-price-cell="{{ p.pk }}-preco_custo" :style="temaClaro ? 'color:#444;' : 'color:#aaa;'"><span class="inline-display">{{ p.preco_custo|moeda }}</span></td>
-      <td class="px-4 py-3 text-right font-medium produto-inline-cell" data-field="preco_venda" data-type="decimal" data-value="{{ p.preco_venda }}" data-price-cell="{{ p.pk }}-preco_venda" :style="temaClaro ? 'color:#1a1a1a;' : 'color:#f0f0f0;'">
+      <td data-product-column="custo" class="px-4 py-3 text-right text-sm produto-inline-cell" data-field="preco_custo" data-type="decimal" data-value="{{ p.preco_custo }}" data-price-cell="{{ p.pk }}-preco_custo" :style="temaClaro ? 'color:#444;' : 'color:#aaa;'"><span class="inline-display">{{ p.preco_custo|moeda }}</span></td>
+      <td data-product-column="preco" class="px-4 py-3 text-right font-medium produto-inline-cell" data-field="preco_venda" data-type="decimal" data-value="{{ p.preco_venda }}" data-price-cell="{{ p.pk }}-preco_venda" :style="temaClaro ? 'color:#1a1a1a;' : 'color:#f0f0f0;'">
         {% if p.promocao_ativa %}
           <span class="inline-display produto-price-active" title="Promocao ativa{% if p.promocao_fim %} ate {{ p.promocao_fim|date:'d/m/Y' }}{% endif %}. Depois retorna para {{ p.preco_retorno_promocao|moeda }}.">{{ p.preco_atual|moeda }}</span>
           <span class="produto-price-old">{{ p.preco_retorno_promocao|moeda }}</span>
@@ -761,17 +812,17 @@
           <span class="inline-display produto-price-base">{{ p.preco_atual|moeda }}</span>
         {% endif %}
       </td>
-      <td class="px-4 py-3 text-right text-sm">
+      <td data-product-column="markup" class="px-4 py-3 text-right text-sm">
         <span data-markup-cell class="{% if p.markup_atual < 10 %}text-red-500{% elif p.markup_atual < 25 %}text-blue-500{% else %}text-emerald-500{% endif %}" title="{% if p.promocao_ativa %}Markup calculado sobre o preco promocional{% else %}Markup calculado sobre o preco de venda{% endif %}">
           {{ p.markup_atual|floatformat:2 }}%
         </span>
       </td>
-      <td class="px-4 py-3 text-right text-sm">
+      <td data-product-column="margem" class="px-4 py-3 text-right text-sm">
         <span data-margin-cell class="{% if p.margem_atual < 10 %}text-red-500{% elif p.margem_atual < 25 %}text-blue-500{% else %}text-emerald-500{% endif %}" title="{% if p.promocao_ativa %}Margem calculada sobre o preco promocional{% else %}Margem calculada sobre o preco de venda{% endif %}">
           {{ p.margem_atual|floatformat:2 }}%
         </span>
       </td>
-      <td class="px-4 py-3 text-right">
+      <td data-product-column="acoes" class="px-4 py-3 text-right">
         <div class="produto-row-actions flex items-center justify-end gap-1">
           {% if pode_editar %}
             <a href="{% url 'produtos:produto-update' p.pk %}"

@@ -292,7 +292,7 @@ class ProdutoToggleEstoqueTests(TestCase):
         self.assertFalse(produto_listado.ativo_filial)
 
     def test_listagem_usa_largura_total_sem_remover_colunas(self):
-        self.criar_produto()
+        produto = self.criar_produto()
         request = self.factory.get('/produtos/')
         request.user = self.usuario
         request.filial_ativa = self.filial
@@ -304,3 +304,13 @@ class ProdutoToggleEstoqueTests(TestCase):
         for coluna in ('Cod. de Barras', 'Categoria', 'Sub categoria', 'Estoque', 'Custo', 'Preco venda', 'Markup', 'Margem', 'Acoes'):
             with self.subTest(coluna=coluna):
                 self.assertContains(response, coluna)
+        self.assertContains(response, 'data-product-column-picker-trigger')
+        self.assertContains(response, 'data-product-column-reset')
+        self.assertContains(response, 'data-product-column="nome"', count=2)
+        self.assertContains(response, 'data-product-column-toggle="nome" checked disabled')
+        self.assertContains(response, 'static/js/produtos-lista.js')
+        html = response.content.decode()
+        row_start = html.index(f'data-product-id="{produto.pk}"')
+        row_end = html.index('</tr>', row_start)
+        product_row = html[row_start:row_end]
+        self.assertLess(product_row.index('data-product-name-toggle'), product_row.index('produto-thumb-trigger'))
