@@ -12,9 +12,13 @@ from django.views.decorators.http import require_POST
 from django.utils import timezone
 from apps.core.models import Filial
 from apps.core.services.permissions import requer_permissao
-from apps.financeiro.forms import CentroCustoForm, FormaPagamentoForm, PlanoContasDespesaForm
+from apps.financeiro.forms import (
+    CentroCustoForm, CondicaoPagamentoForm, FormaPagamentoForm,
+    PlanoContasDespesaForm,
+)
 from apps.financeiro.models import (
-    CentroCusto, ContaReceber, ContaPagar, DocumentoFiscal, DREConsolidado,
+    CentroCusto, CondicaoPagamento, ContaReceber, ContaPagar, DocumentoFiscal,
+    DREConsolidado,
     FormaPagamento, PlanoContas, TaxaParcelamento,
 )
 
@@ -402,4 +406,72 @@ def dre_view(request):
         # aconteceu não tem resultado a mostrar.
         "tem_seguinte": dre_proximo_mes(competencia) <= primeiro_dia(hoje),
         **dados,
+    })
+
+
+@requer_permissao('financeiro', 'ver')
+def condicoes_pagamento(request):
+    """
+    Onde se criam os parcelamentos.
+
+    ELES SÓ EXISTIAM NO ADMIN DO DJANGO — quer dizer, para quem tem acesso de
+    superusuário e sabe que aquilo existe. Na prática, quem monta uma venda a
+    prazo escolhia entre as condições que alguém tinha criado uma vez, e não
+    tinha como criar a que faltava.
+    """
+    empresa = _empresa_ativa(request)
+    instance = None
+    editar_id = request.GET.get("editar")
+    if editar_id:
+        instance = get_object_or_404(
+            CondicaoPagamento.objects.filter(empresa=empresa), pk=editar_id,
+        )
+
+    form = CondicaoPagamentoForm(instance=instance)
+    if request.method == "POST":
+        if not _pode_alterar_cadastros_financeiros(request):
+            messages.error(request, "Usuário sem permissão para alterar cadastros financeiros.")
+            return redirect("financeiro:condicoes_pagamento")
+
+        acao = request.POST.get("acao")
+        if acao == "inativar":
+            # INATIVAR, E NAO EXCLUIR: a condicao esta' escrita nos titulos
+            # que ela gerou, e apaga-la deixaria pedido antigo sem saber em
+            # quantas vezes foi cobrado.
+            obj = get_object_or_404(
+                CondicaoPagamento.objects.filter(empresa=empresa),
+                pk=request.POST.get("id"),
+            )
+            obj.ativo = not obj.ativo
+            obj.save(update_fields=["ativo"])
+            messages.success(
+                request,
+                f'Condição {"reativada" if obj.ativo else "inativada"}.',
+            )
+            return redirect("financeiro:condicoes_pagamento")
+
+        obj = None
+        if request.POST.get("id"):
+            obj = get_object_or_404(
+                CondicaoPagamento.objects.filter(empresa=empresa),
+                pk=request.POST.get("id"),
+            )
+        form = CondicaoPagamentoForm(request.POST, instance=obj)
+        if form.is_valid():
+            condicao = form.save(commit=False)
+            condicao.empresa = empresa
+            condicao.save()
+            messages.success(request, "Condição de pagamento salva.")
+            return redirect("financeiro:condicoes_pagamento")
+        instance = obj
+
+    condicoes = CondicaoPagamento.objects.filter(empresa=empresa).order_by(
+        "numero_parcelas", "descricao",
+    )
+    return render(request, "financeiro/condicoes_pagamento.html", {
+        "title": "Condições de pagamento",
+        "form": form,
+        "condicoes": condicoes,
+        "instance": instance,
+        "mostrar_form": bool(instance or request.GET.get("novo") or request.method == "POST"),
     })

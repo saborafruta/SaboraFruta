@@ -1,7 +1,9 @@
 from django import forms
 from django.db.models import Q
 
-from apps.financeiro.models import CentroCusto, ContaBancaria, FormaPagamento, PlanoContas
+from apps.financeiro.models import (
+    CentroCusto, CondicaoPagamento, ContaBancaria, FormaPagamento, PlanoContas,
+)
 from apps.financeiro.forms.plano_contas import CategoriaFinanceiraChoiceField
 from apps.financeiro.forms.cartao import campo_parcelas, configurar_forma_pagamento, limpar_dados_cartao
 
@@ -473,3 +475,49 @@ class FormaPagamentoForm(forms.ModelForm):
             instance.save()
             self.save_m2m()
         return instance
+
+
+class CondicaoPagamentoForm(forms.ModelForm):
+    """
+    O parcelamento, em três números.
+
+    QUANTAS, DE QUANTO EM QUANTO, E QUANDO A PRIMEIRA. É disso que sai o
+    vencimento de cada parcela em todo o ERP — venda, PDV, viagem e expedição
+    calculam pela mesma condição, e é por isso que ela vive no cadastro e não
+    dentro de cada tela.
+    """
+
+    class Meta:
+        model = CondicaoPagamento
+        fields = [
+            "descricao",
+            "numero_parcelas",
+            "intervalo_dias",
+            "dias_primeira_parcela",
+            "desconto_avista",
+            "acrescimo",
+            "ativo",
+        ]
+        labels = {
+            "descricao": "Descrição",
+            "numero_parcelas": "Parcelas",
+            "intervalo_dias": "Intervalo entre parcelas (dias)",
+            "dias_primeira_parcela": "Primeira parcela em (dias)",
+            "desconto_avista": "Desconto à vista (%)",
+            "acrescimo": "Acréscimo (%)",
+            "ativo": "Ativa",
+        }
+        help_texts = {
+            "descricao": 'Como a operação chama isso: "30/60/90", "à vista", "entrada + 2x".',
+            "numero_parcelas": "Uma parcela é pagamento único no prazo abaixo.",
+            "intervalo_dias": "Dias entre uma parcela e a seguinte.",
+            "dias_primeira_parcela": "Zero é hoje; 30 é a clássica “para trinta dias”.",
+        }
+
+    def clean_numero_parcelas(self):
+        quantidade = self.cleaned_data.get("numero_parcelas") or 0
+        if quantidade < 1:
+            # ZERO PARCELA NAO E' CONDICAO NENHUMA: o valor teria de sumir em
+            # algum lugar, e some no lugar errado -- na cobranca que nunca sai.
+            raise forms.ValidationError("A condição precisa de ao menos uma parcela.")
+        return quantidade

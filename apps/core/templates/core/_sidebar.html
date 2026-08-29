@@ -1014,6 +1014,23 @@
         <span x-show="!collapsed">Plano Contábil</span>
       </a>
 
+      {% comment %}
+        CONDIÇÕES FICAM AO LADO DAS FORMAS porque a pergunta é a mesma, em
+        dois passos: a forma diz se a venda é a prazo, a condição diz como
+        esse prazo se divide. Só no admin do Django, elas eram invisíveis
+        para quem monta a venda.
+      {% endcomment %}
+      {% url 'financeiro:condicoes_pagamento' as condicoes_pagamento_url %}
+      <a href="{{ condicoes_pagamento_url }}"
+         class="finance-order-5 flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-all duration-150"
+         :class="collapsed ? 'justify-center' : ''"
+         :style="{% if '/financeiro/condicoes-pagamento' in request.path %}temaClaro ? 'background:#dbeafe; color:#1d4ed8; font-weight:600;' : 'background:#1e2a3a; color:#f8fafc;'{% else %}temaClaro ? 'color:#6b7280;' : 'color:#f8fafc;'{% endif %}"
+         {% if '/financeiro/condicoes-pagamento' not in request.path %}onmouseover="this.style.background=temaClaro?'#eff6ff':'#242426'; this.style.color=temaClaro?'#1d4ed8':'#d4d4d4';" onmouseout="this.style.background='transparent'; this.style.color=temaClaro?'#6b7280':'#f8fafc'; this.style.fontWeight='';"{% endif %}
+         title="Condições de Pagamento">
+        <svg class="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M8 7V3m8 4V3M3 11h18M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
+        <span x-show="!collapsed">Condições de Pagamento</span>
+      </a>
+
       <!-- Formas de Pagamento -->
       <a href="{{ formas_pagamento_url }}"
          class="finance-order-5 flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-all duration-150"
@@ -1859,6 +1876,15 @@
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M4 5h16M4 9h16M4 13h16M4 17h10M4 21h7"/>
         </svg>
         Plano Contábil
+      </a>
+
+      {% url 'financeiro:condicoes_pagamento' as condicoes_pagamento_url %}
+      <a href="{{ condicoes_pagamento_url }}" @click="mobileOpen = false"
+         class="finance-order-5 flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-all duration-150"
+         :style="{% if '/financeiro/condicoes-pagamento' in request.path %}temaClaro ? 'background:#dbeafe; color:#1d4ed8; font-weight:600;' : 'background:#1e2a3a; color:#f8fafc;'{% else %}temaClaro ? 'color:#6b7280;' : 'color:#f8fafc;'{% endif %}"
+         {% if '/financeiro/condicoes-pagamento' not in request.path %}onmouseover="this.style.background=temaClaro?'#eff6ff':'#242426'; this.style.color=temaClaro?'#1d4ed8':'#d4d4d4';" onmouseout="this.style.background='transparent'; this.style.color=temaClaro?'#6b7280':'#f8fafc'; this.style.fontWeight='';"{% endif %}>
+        <svg class="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M8 7V3m8 4V3M3 11h18M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
+        Condições de Pagamento
       </a>
 
       <!-- Formas de Pagamento (mobile) -->

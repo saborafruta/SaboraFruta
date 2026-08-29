@@ -6,7 +6,13 @@
 <script id="clientes-data" type="application/json">{{ clientes_json|safe }}</script>
 <script id="vendas-data" type="application/json">{{ vendas_json|default:"[]"|safe }}</script>
 
-<div class="max-w-4xl mx-auto space-y-5">
+{% comment %}
+  A TELA OCUPA A LARGURA QUE TEM, como as outras do módulo. Num container
+  estreito, as seções viram uma coluna só de campos altos: quem preenche
+  rola a página inteira para achar o que já respondeu, e a barra de ação
+  fica longe do último campo.
+{% endcomment %}
+<div class="w-full space-y-4">
 
   <div>
     <p class="text-sm mb-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
@@ -213,6 +219,8 @@
           {{ form.condicao_pagamento }}
           <span class="block text-[11px]" :style="temaClaro ? 'color:#94a3b8;' : 'color:#71717a;'">
             Em quantas parcelas e em que prazo.
+            <a href="{% url 'financeiro:condicoes_pagamento' %}" target="_blank"
+               :style="temaClaro ? 'color:#3b82f6;' : 'color:#60a5fa;'">Cadastrar condições</a>.
           </span>
         </label>
       </div>

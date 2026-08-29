@@ -4,6 +4,7 @@ from .cadastros import (
     DirecionarContaBancariaForm,
     EditarMovimentoBancarioForm,
     EditarEntradaFinanceiraForm,
+    CondicaoPagamentoForm,
     FormaPagamentoForm,
     MovimentoContaBancariaForm,
     PlanoContasDespesaForm,

@@ -82,5 +82,6 @@ urlpatterns = [
     path("documentos/",       financeiro.documentos_fiscais_list, name="documentos"),
     path("dre/",              financeiro.dre_view,               name="dre"),
     path("formas-pagamento/", financeiro.formas_pagamento,       name="formas_pagamento"),
+    path("condicoes-pagamento/", financeiro.condicoes_pagamento, name="condicoes_pagamento"),
     path("api/formas-pagamento/<int:pk>/taxas/", financeiro.api_taxas_forma_pagamento, name="api_taxas_forma"),
 ]
