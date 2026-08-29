@@ -469,20 +469,26 @@ class PedidoPdfService:
         responsavel = (pedido.contato_nome or '').strip()
         telefone = pedido.contato_telefone or getattr(c, 'telefone', '') or ''
 
-        dados = [
-            [Paragraph('<b>Cliente</b>', e['celula']),
-             Paragraph(esc(c.razao_social), e['celula']),
-             Paragraph('<b>CPF/CNPJ</b>', e['celula']),
-             Paragraph(esc(getattr(c, 'cpf_cnpj', '')) or '—', e['celula'])],
-        ]
         if responsavel:
-            dados.append([
+            dados = [[
+                Paragraph('<b>Cliente</b>', e['celula']),
+                Paragraph(esc(c.razao_social), e['celula']),
                 Paragraph('<b>Responsável</b>', e['celula']),
                 Paragraph(esc(responsavel), e['celula']),
+            ], [
+                Paragraph('<b>CPF/CNPJ</b>', e['celula']),
+                Paragraph(esc(getattr(c, 'cpf_cnpj', '')) or '—', e['celula']),
                 Paragraph('<b>Telefone</b>', e['celula']),
                 Paragraph(esc(telefone) or '—', e['celula']),
-            ])
-        elif telefone:
+            ]]
+        else:
+            dados = [[
+                Paragraph('<b>Cliente</b>', e['celula']),
+                Paragraph(esc(c.razao_social), e['celula']),
+                Paragraph('<b>CPF/CNPJ</b>', e['celula']),
+                Paragraph(esc(getattr(c, 'cpf_cnpj', '')) or '—', e['celula']),
+            ]]
+        if not responsavel and telefone:
             dados.append([
                 Paragraph('<b>Telefone</b>', e['celula']),
                 Paragraph(esc(telefone), e['celula']), '', '',

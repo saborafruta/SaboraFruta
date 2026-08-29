@@ -284,17 +284,21 @@ class OrcamentoPdfService:
         nome = getattr(cliente, 'razao_social', None) or str(cliente)
         documento = _texto(getattr(cliente, 'cpf_cnpj', '')) or 'Não informado'
         responsavel = (pedido.contato_nome or '').strip()
-        cliente_texto = f'<b>Cliente:</b><br/>{_texto(nome)}'
+        celulas = [Paragraph(f'<b>Cliente:</b><br/>{_texto(nome)}', e['normal'])]
         if responsavel:
-            cliente_texto += f'<br/><b>Responsável:</b><br/>{_texto(responsavel)}'
-        celulas = [
-            Paragraph(cliente_texto, e['normal']),
+            celulas.append(Paragraph(
+                f'<b>Responsável:</b><br/>{_texto(responsavel)}', e['normal'],
+            ))
+            larguras = [.30, .25, .23, .22]
+        else:
+            larguras = [.43, .30, .27]
+        celulas += [
             Paragraph(f'<b>CNPJ/CPF:</b><br/>{documento}', e['normal']),
             Paragraph(f'<b>Data de Emissão:</b><br/>{pedido.data_pedido:%d/%m/%Y}', e['normal']),
         ]
         tabela = Table(
             [celulas],
-            colWidths=[LARGURA_UTIL * .43, LARGURA_UTIL * .3, LARGURA_UTIL * .27],
+            colWidths=[LARGURA_UTIL * largura for largura in larguras],
             cornerRadii=[6] * 4,
         )
         tabela.setStyle(TableStyle(_estilo_tabela(6) + [

@@ -247,25 +247,28 @@ class ArteNoPdfTests(TestCase):
         pedido.contato_nome = 'Kaylne'
         pedido.save(update_fields=['contato_nome'])
 
-        texto_orcamento = self._texto_layout(
-            OrcamentoPdfService._cliente(pedido, estilos_orcamento()),
-        )
-        texto_op = self._texto_layout(
-            PedidoPdfService._cliente(pedido, estilos_op()),
-        )
+        layout_orcamento = OrcamentoPdfService._cliente(pedido, estilos_orcamento())
+        layout_op = PedidoPdfService._cliente(pedido, estilos_op())
+        texto_orcamento = self._texto_layout(layout_orcamento)
+        texto_op = self._texto_layout(layout_op)
         self.assertIn('Responsável:', texto_orcamento)
         self.assertIn('Kaylne', texto_orcamento)
         self.assertIn('Responsável', texto_op)
         self.assertIn('Kaylne', texto_op)
+        self.assertEqual(len(layout_orcamento[0]._cellvalues[0]), 4)
+        self.assertIn('Cliente:', self._texto_layout(layout_orcamento[0]._cellvalues[0][0]))
+        self.assertIn('Responsável:', self._texto_layout(layout_orcamento[0]._cellvalues[0][1]))
+        self.assertIn('Cliente', self._texto_layout(layout_op[2]._cellvalues[0][0]))
+        self.assertIn('Responsável', self._texto_layout(layout_op[2]._cellvalues[0][2]))
 
         pedido.contato_nome = ''
         pedido.save(update_fields=['contato_nome'])
-        self.assertNotIn('Responsável', self._texto_layout(
-            OrcamentoPdfService._cliente(pedido, estilos_orcamento()),
-        ))
-        self.assertNotIn('Responsável', self._texto_layout(
-            PedidoPdfService._cliente(pedido, estilos_op()),
-        ))
+        layout_orcamento = OrcamentoPdfService._cliente(pedido, estilos_orcamento())
+        layout_op = PedidoPdfService._cliente(pedido, estilos_op())
+        self.assertNotIn('Responsável', self._texto_layout(layout_orcamento))
+        self.assertNotIn('Responsável', self._texto_layout(layout_op))
+        self.assertEqual(len(layout_orcamento[0]._cellvalues[0]), 3)
+        self.assertIn('CPF/CNPJ', self._texto_layout(layout_op[2]._cellvalues[0][2]))
 
     def test_pagamento_nao_informado_nao_repete_valor_ao_lado(self):
         from apps.moda.services.orcamento_pdf import _estilos
