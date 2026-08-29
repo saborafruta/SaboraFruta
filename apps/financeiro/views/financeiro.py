@@ -1,6 +1,7 @@
 import json
 from datetime import date
 from decimal import Decimal, InvalidOperation
+from types import SimpleNamespace
 
 from django.contrib import messages
 from django.http import JsonResponse
@@ -12,6 +13,7 @@ from django.views.decorators.http import require_POST
 from django.utils import timezone
 from apps.core.models import Filial
 from apps.core.services.permissions import requer_permissao
+from apps.core.services.numeros import decimal_ptbr
 from apps.financeiro.forms import (
     CentroCustoForm, CondicaoPagamentoForm, FormaPagamentoForm,
     PlanoContasDespesaForm,
@@ -465,13 +467,78 @@ def condicoes_pagamento(request):
             return redirect("financeiro:condicoes_pagamento")
         instance = obj
 
-    condicoes = CondicaoPagamento.objects.filter(empresa=empresa).order_by(
+    from apps.financeiro.services.parcelamento import ParcelamentoService
+
+    condicoes = list(CondicaoPagamento.objects.filter(empresa=empresa).order_by(
         "numero_parcelas", "descricao",
-    )
+    ))
+    # O CRONOGRAMA EM DIAS, e não três campos soltos: "30 · 60 · 90" é o que a
+    # pessoa reconhece; somar intervalo com a primeira de cabeça, a cada linha,
+    # é o que faz ninguém conferir a tabela.
+    hoje = timezone.localdate()
+    for condicao in condicoes:
+        parcelas = ParcelamentoService.parcelas(100, hoje, condicao=condicao)
+        condicao.cronograma = [(v - hoje).days for v, _ in parcelas[:6]]
+        condicao.cronograma_resto = max(0, len(parcelas) - 6)
+
     return render(request, "financeiro/condicoes_pagamento.html", {
         "title": "Condições de pagamento",
         "form": form,
         "condicoes": condicoes,
+        "ativas": sum(1 for c in condicoes if c.ativo),
+        "inativas": sum(1 for c in condicoes if not c.ativo),
         "instance": instance,
         "mostrar_form": bool(instance or request.GET.get("novo") or request.method == "POST"),
     })
+
+
+# Para a prévia dizer em que dia da semana a parcela cai: vencimento em
+# sábado ou domingo atrasa a compensação, e é melhor descobrir no cadastro
+# do que no extrato.
+_DIAS_DA_SEMANA = ("seg", "ter", "qua", "qui", "sex", "sáb", "dom")
+
+
+@requer_permissao('financeiro', 'ver')
+def condicoes_pagamento_previa(request):
+    """
+    Os vencimentos que a condição produz, para um valor de referência.
+
+    TRÊS NÚMEROS NÃO SE IMAGINAM. "3 parcelas, 30 dias de intervalo, primeira
+    em 30" é abstrato até alguém escrever as datas num papel — e é escrevendo
+    que se percebe que a primeira caiu num domingo, ou que o parcelamento
+    dobrou o prazo que o cliente pediu.
+
+    A CONTA É A DO SISTEMA, e não uma simulação parecida. A prévia chama o
+    mesmo `ParcelamentoService` que vai gerar os títulos: uma segunda
+    aritmética aqui mostraria uma coisa na tela e cobraria outra.
+    """
+    from apps.financeiro.services.parcelamento import ParcelamentoService
+
+    def _inteiro(nome, padrao=0):
+        try:
+            return max(0, int(request.GET.get(nome) or padrao))
+        except (TypeError, ValueError):
+            return padrao
+
+    # A VIRGULA E' O SEPARADOR QUE A PESSOA DIGITA, e a regra de le-la vive
+    # num lugar so' -- aqui e no formulario que grava o mesmo numero.
+    valor = decimal_ptbr(request.GET.get("valor"), padrao=Decimal("1000"))
+
+    condicao = SimpleNamespace(
+        numero_parcelas=_inteiro("numero_parcelas", 1) or 1,
+        intervalo_dias=_inteiro("intervalo_dias", 30),
+        dias_primeira_parcela=_inteiro("dias_primeira_parcela", 0),
+    )
+    parcelas = ParcelamentoService.parcelas(
+        valor, timezone.localdate(), condicao=condicao,
+    )
+    return JsonResponse({"parcelas": [
+        {
+            "numero": indice,
+            "vencimento": vencimento.strftime("%d/%m/%Y"),
+            "dia_semana": _DIAS_DA_SEMANA[vencimento.weekday()],
+            "fim_de_semana": vencimento.weekday() >= 5,
+            "valor": f"{parcela:.2f}".replace(".", ","),
+        }
+        for indice, (vencimento, parcela) in enumerate(parcelas, start=1)
+    ]})

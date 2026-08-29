@@ -575,15 +575,15 @@ class DecimalComVirgula(forms.DecimalField):
     """
 
     def to_python(self, value):
-        if isinstance(value, str):
-            value = value.strip().replace(' ', '')
-            # MILHAR SÓ SAI QUANDO HÁ DECIMAL DEPOIS: em "1.200" o ponto pode
-            # ser milhar (1200) ou decimal (1,2). Aqui "1.200" com três casas
-            # é peso em quilos — e trocar por 1200 poria uma tonelada na
-            # carga. Só se limpa o ponto quando a vírgula deixa claro quem é
-            # quem: "1.200,5".
-            if ',' in value:
-                value = value.replace('.', '').replace(',', '.')
+        # A REGRA DE LER O NUMERO VIVE NO CORE: peso na expedicao, valor na
+        # previa do parcelamento e o que vier depois leem igual. Duas copias
+        # divergiriam no dia em que alguem corrigisse so' uma.
+        from apps.core.services.numeros import decimal_ptbr
+
+        if isinstance(value, str) and value.strip():
+            convertido = decimal_ptbr(value)
+            if convertido is not None:
+                return super().to_python(convertido)
         return super().to_python(value)
 
 

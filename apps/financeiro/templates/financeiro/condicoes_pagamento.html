@@ -4,119 +4,248 @@
 {% block content %}
 
 {% comment %}
-  ONDE SE CRIAM OS PARCELAMENTOS.
+  TRÊS NÚMEROS NÃO SE IMAGINAM.
 
-  Eles só existiam no admin do Django — quer dizer, para quem tem acesso de
-  superusuário e sabe que aquilo existe. Na prática, quem monta uma venda a
-  prazo escolhia entre as condições que alguém criou uma vez, e não tinha como
-  criar a que faltava.
+  "3 parcelas, intervalo 30, primeira em 30" é abstrato até alguém escrever as
+  datas num papel — e é escrevendo que se percebe que o parcelamento dobrou o
+  prazo que o cliente pediu, ou que a parcela cai num sábado. Por isso a tela
+  mostra o RESULTADO: os vencimentos, com valor, enquanto se digita.
 
-  TRÊS NÚMEROS DESCREVEM QUALQUER PARCELAMENTO: quantas parcelas, de quantos
-  em quantos dias, e em quantos dias cai a primeira. É deles que sai o
-  vencimento de cada parcela — na venda, no PDV, na viagem e na expedição.
+  A CONTA É A DO SISTEMA. A prévia chama o mesmo serviço que vai gerar os
+  títulos — uma aritmética parecida aqui mostraria uma coisa na tela e
+  cobraria outra.
 
-  INATIVA, E NÃO EXCLUI: a condição está escrita nos títulos que ela gerou, e
-  apagá-la deixaria pedido antigo sem saber em quantas vezes foi cobrado.
+  OS ATALHOS EXISTEM PORQUE O CADASTRO É RARO. Quem entra aqui uma vez por
+  semestre não lembra que "à vista" é uma parcela com zero dia; três botões
+  resolvem os casos que respondem por quase tudo, e o resto continua editável.
 {% endcomment %}
 <div class="w-full space-y-4">
 
+  {# ── Cabeçalho ──────────────────────────────────────────────────── #}
   <div class="flex flex-wrap items-start justify-between gap-3">
     <div>
+      <p class="text-sm mb-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+        <a href="{% url 'financeiro:formas_pagamento' %}"
+           :style="temaClaro ? 'color:#3b82f6;' : 'color:#60a5fa;'">Formas de pagamento</a>
+        <span class="mx-1">›</span> Condições
+      </p>
       <h2 class="text-2xl font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
         Condições de pagamento
       </h2>
       <p class="text-sm mt-1 max-w-2xl" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
-        Em quantas parcelas e em que prazo. A
-        <a href="{% url 'financeiro:formas_pagamento' %}"
-           :style="temaClaro ? 'color:#3b82f6;' : 'color:#60a5fa;'">forma de pagamento</a>
-        diz se a venda é a prazo; a condição diz como esse prazo se divide.
+        A <strong>forma</strong> diz se a venda é a prazo; a <strong>condição</strong>
+        diz como esse prazo se divide. Vale para venda, PDV, viagem e expedição.
       </p>
     </div>
-    <a href="?novo=1" class="btn-primary">+ Nova condição</a>
+    <div class="flex items-center gap-3">
+      {% if condicoes %}
+        <div class="text-right">
+          <p class="text-2xl font-bold leading-none" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
+            {{ ativas }}
+          </p>
+          <p class="text-[11px] uppercase tracking-wide" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+            ativa(s){% if inativas %} · {{ inativas }} inativa(s){% endif %}
+          </p>
+        </div>
+      {% endif %}
+      <a href="?novo=1" class="btn-primary">+ Nova condição</a>
+    </div>
   </div>
 
+  {# ── O formulário, com o resultado ao lado ──────────────────────── #}
   {% if mostrar_form %}
-    <form method="post" class="card p-5 space-y-4">
+    <form method="post" class="card p-5"
+          x-data="condicaoParcelamento({
+            parcelas: {{ form.numero_parcelas.value|default:1 }},
+            intervalo: {{ form.intervalo_dias.value|default:30 }},
+            primeira: {{ form.dias_primeira_parcela.value|default:0 }},
+          })">
       {% csrf_token %}
       {% if instance %}<input type="hidden" name="id" value="{{ instance.pk }}">{% endif %}
 
-      <h3 class="text-sm font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
-        {% if instance %}Editar “{{ instance.descricao }}”{% else %}Nova condição{% endif %}
-      </h3>
+      <div class="flex flex-wrap items-baseline justify-between gap-2 mb-4">
+        <h3 class="text-sm font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
+          {% if instance %}Editar “{{ instance.descricao }}”{% else %}Nova condição{% endif %}
+        </h3>
+        {# ── Atalhos para os casos de sempre ── #}
+        <div class="flex flex-wrap gap-2">
+          <span class="text-[11px] self-center" :style="temaClaro ? 'color:#94a3b8;' : 'color:#71717a;'">Começar de:</span>
+          <button type="button" class="btn-secondary text-xs" @click="preset('À vista', 1, 0, 0)">à vista</button>
+          <button type="button" class="btn-secondary text-xs" @click="preset('30 dias', 1, 0, 30)">30 dias</button>
+          <button type="button" class="btn-secondary text-xs" @click="preset('30/60/90', 3, 30, 30)">30/60/90</button>
+        </div>
+      </div>
 
       {% if form.non_field_errors %}
-        <div class="rounded-lg border border-red-500/30 bg-red-500/10 p-3 text-sm text-red-500">
+        <div class="rounded-lg border border-red-500/30 bg-red-500/10 p-3 text-sm text-red-500 mb-4">
           {{ form.non_field_errors }}
         </div>
       {% endif %}
 
-      <div class="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-        {% for campo in form %}
-          <label class="space-y-1.5 {% if campo.name == 'descricao' %}md:col-span-2{% endif %}">
-            <span class="text-xs font-semibold uppercase tracking-wide"
-                  :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">{{ campo.label }}</span>
-            {{ campo }}
-            {% if campo.help_text %}
-              <span class="block text-[11px]" :style="temaClaro ? 'color:#94a3b8;' : 'color:#71717a;'">
-                {{ campo.help_text }}
-              </span>
-            {% endif %}
-            {% if campo.errors %}
-              <span class="block text-xs text-red-500">{{ campo.errors.0 }}</span>
-            {% endif %}
+      <div class="grid gap-5 lg:grid-cols-[1fr_320px]">
+        {# ── Os campos ── #}
+        <div class="grid gap-4 sm:grid-cols-2">
+          <label class="space-y-1.5 sm:col-span-2">
+            <span class="text-xs font-semibold uppercase tracking-wide" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+              {{ form.descricao.label }}
+            </span>
+            {{ form.descricao }}
+            <span class="block text-[11px]" :style="temaClaro ? 'color:#94a3b8;' : 'color:#71717a;'">
+              {{ form.descricao.help_text }}
+            </span>
+            {% if form.descricao.errors %}<span class="block text-xs text-red-500">{{ form.descricao.errors.0 }}</span>{% endif %}
           </label>
-        {% endfor %}
+
+          <label class="space-y-1.5">
+            <span class="text-xs font-semibold uppercase tracking-wide" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Parcelas</span>
+            <input type="number" name="numero_parcelas" min="1" step="1" inputmode="numeric"
+                   class="form-input w-full" x-model.number="parcelas" @input="simular()">
+            {% if form.numero_parcelas.errors %}<span class="block text-xs text-red-500">{{ form.numero_parcelas.errors.0 }}</span>{% endif %}
+          </label>
+
+          <label class="space-y-1.5">
+            <span class="text-xs font-semibold uppercase tracking-wide" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+              Primeira parcela em (dias)
+            </span>
+            <input type="number" name="dias_primeira_parcela" min="0" step="1" inputmode="numeric"
+                   class="form-input w-full" x-model.number="primeira" @input="simular()">
+            <span class="block text-[11px]" :style="temaClaro ? 'color:#94a3b8;' : 'color:#71717a;'">
+              Zero é hoje.
+            </span>
+          </label>
+
+          {% comment %}
+            O INTERVALO SÓ EXISTE COM MAIS DE UMA PARCELA: perguntar "de quantos
+            em quantos dias" para pagamento único é perguntar o que não tem
+            resposta — e o campo respondido à toa vira número que ninguém
+            entende depois.
+          {% endcomment %}
+          <label class="space-y-1.5" x-show="parcelas > 1" x-cloak>
+            <span class="text-xs font-semibold uppercase tracking-wide" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+              Intervalo entre parcelas (dias)
+            </span>
+            <input type="number" name="intervalo_dias" min="0" step="1" inputmode="numeric"
+                   class="form-input w-full" x-model.number="intervalo" @input="simular()">
+          </label>
+          <input type="hidden" name="intervalo_dias" :value="intervalo" x-show="parcelas <= 1" x-cloak>
+
+          <label class="space-y-1.5">
+            <span class="text-xs font-semibold uppercase tracking-wide" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Desconto à vista (%)</span>
+            {{ form.desconto_avista }}
+          </label>
+          <label class="space-y-1.5">
+            <span class="text-xs font-semibold uppercase tracking-wide" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Acréscimo (%)</span>
+            {{ form.acrescimo }}
+          </label>
+
+          <label class="flex items-center gap-2 sm:col-span-2">
+            {{ form.ativo }}
+            <span class="text-sm" :style="temaClaro ? 'color:#374151;' : 'color:#d1d5db;'">
+              Ativa — aparece para quem lança venda a prazo
+            </span>
+          </label>
+        </div>
+
+        {# ── A prévia: o que essa condição produz ── #}
+        <div class="rounded-lg p-4" :style="temaClaro ? 'background:#f8fafc;' : 'background:#18181b;'">
+          <div class="flex items-center justify-between gap-2 mb-3">
+            <p class="text-xs font-semibold uppercase tracking-wide" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+              Como fica
+            </p>
+            <div class="flex items-center gap-1">
+              <span class="text-xs" :style="temaClaro ? 'color:#94a3b8;' : 'color:#71717a;'">R$</span>
+              <input type="text" inputmode="decimal" class="form-input text-xs text-right"
+                     style="width:90px;" x-model="valor" @input="simular()">
+            </div>
+          </div>
+
+          <div class="space-y-1.5">
+            <template x-for="p in previa" :key="p.numero">
+              <div class="flex items-baseline justify-between gap-2 text-sm">
+                <span :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+                  <span x-text="p.numero + '/' + previa.length"></span>
+                  <span class="ml-1" x-text="p.vencimento"></span>
+                  {% comment %}
+                    FIM DE SEMANA MARCADO: vencimento em sábado ou domingo
+                    atrasa a compensação, e é melhor descobrir aqui do que no
+                    extrato.
+                  {% endcomment %}
+                  <span class="text-[10px] ml-1"
+                        :style="p.fim_de_semana ? 'color:#d97706;' : (temaClaro ? 'color:#cbd5e1;' : 'color:#52525b;')"
+                        x-text="p.dia_semana"></span>
+                </span>
+                <span class="font-semibold tabular-nums" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'"
+                      x-text="'R$ ' + p.valor"></span>
+              </div>
+            </template>
+            <p x-show="!previa.length" class="text-xs" :style="temaClaro ? 'color:#94a3b8;' : 'color:#71717a;'">
+              Informe as parcelas para ver os vencimentos.
+            </p>
+          </div>
+
+          <p class="text-[11px] mt-3 pt-3 border-t"
+             :style="temaClaro ? 'color:#94a3b8;border-color:#e2e8f0;' : 'color:#71717a;border-color:#2a2a2e;'">
+            Contado a partir de hoje. O centavo que sobra vai para a primeira parcela.
+          </p>
+        </div>
       </div>
 
-      <div class="flex flex-wrap justify-end gap-3">
+      <div class="flex flex-wrap justify-end gap-3 mt-5 pt-4 border-t"
+           :style="temaClaro ? 'border-color:#e2e8f0;' : 'border-color:#2a2a2e;'">
         <a href="{% url 'financeiro:condicoes_pagamento' %}" class="btn-secondary">Cancelar</a>
         <button type="submit" class="btn-primary">Salvar condição</button>
       </div>
     </form>
   {% endif %}
 
+  {# ── A lista ────────────────────────────────────────────────────── #}
   <div class="card overflow-hidden">
     <div class="overflow-x-auto">
-      <table class="w-full text-sm">
+      <table class="w-full text-sm hidden md:table">
         <thead>
           <tr :style="temaClaro ? 'border-bottom:1px solid #e5e7eb;background:#f8fafc;' : 'border-bottom:1px solid #2a2a2e;background:#1e1e20;'">
             <th class="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wide" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Condição</th>
-            <th class="text-right px-4 py-3 text-xs font-semibold uppercase tracking-wide" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Parcelas</th>
-            <th class="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wide" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Vencimentos</th>
-            <th class="text-right px-4 py-3 text-xs font-semibold uppercase tracking-wide" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Desconto / acréscimo</th>
-            <th class="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wide" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Status</th>
+            <th class="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wide" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Vencimentos (dias)</th>
+            <th class="text-right px-4 py-3 text-xs font-semibold uppercase tracking-wide" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Desc. / acrésc.</th>
             <th class="text-right px-4 py-3 text-xs font-semibold uppercase tracking-wide" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Ações</th>
           </tr>
         </thead>
         <tbody>
           {% for condicao in condicoes %}
-            <tr class="border-b" :style="temaClaro ? 'border-color:#f1f5f9;' : 'border-color:#2a2a2e;'">
-              <td class="px-4 py-3 font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
-                {{ condicao.descricao }}
-              </td>
-              <td class="px-4 py-3 text-right tabular-nums" :style="temaClaro ? 'color:#374151;' : 'color:#d1d5db;'">
-                {{ condicao.numero_parcelas }}x
+            <tr class="border-b" :style="temaClaro ? 'border-color:#f1f5f9;' : 'border-color:#2a2a2e;'"
+                style="{% if not condicao.ativo %}opacity:.55;{% endif %}">
+              <td class="px-4 py-3">
+                <span class="font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
+                  {{ condicao.descricao }}
+                </span>
+                <span class="block text-[11px]" :style="temaClaro ? 'color:#94a3b8;' : 'color:#71717a;'">
+                  {{ condicao.numero_parcelas }}x
+                  {% if not condicao.ativo %} · inativa{% endif %}
+                </span>
               </td>
               {% comment %}
-                O VENCIMENTO ESCRITO POR EXTENSO: "3x · 30/60/90" é o que a
-                pessoa confere. Mostrar só os três campos soltos obrigaria a
-                somá-los de cabeça para saber quando cada parcela cai.
+                O CRONOGRAMA EM CHIPS: "30 · 60 · 90" é o que a pessoa
+                reconhece de imediato. Três campos soltos obrigam a somar de
+                cabeça, linha a linha — e ninguém confere uma tabela assim.
               {% endcomment %}
-              <td class="px-4 py-3 text-xs" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
-                primeira em {{ condicao.dias_primeira_parcela }} dia(s)
-                {% if condicao.numero_parcelas > 1 %}
-                  · demais a cada {{ condicao.intervalo_dias }} dia(s)
-                {% endif %}
+              <td class="px-4 py-3">
+                <div class="flex flex-wrap items-center gap-1">
+                  {% for dia in condicao.cronograma %}
+                    <span class="soft-pill is-slate text-[11px] tabular-nums">
+                      {% if dia == 0 %}hoje{% else %}{{ dia }}{% endif %}
+                    </span>
+                  {% endfor %}
+                  {% if condicao.cronograma_resto %}
+                    <span class="text-[11px]" :style="temaClaro ? 'color:#94a3b8;' : 'color:#71717a;'">
+                      +{{ condicao.cronograma_resto }}
+                    </span>
+                  {% endif %}
+                </div>
               </td>
               <td class="px-4 py-3 text-right text-xs tabular-nums" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
                 {% if condicao.desconto_avista %}−{{ condicao.desconto_avista|floatformat:2 }}%{% endif %}
                 {% if condicao.acrescimo %}+{{ condicao.acrescimo|floatformat:2 }}%{% endif %}
                 {% if not condicao.desconto_avista and not condicao.acrescimo %}—{% endif %}
-              </td>
-              <td class="px-4 py-3">
-                <span class="soft-pill {% if condicao.ativo %}is-green{% else %}is-slate{% endif %} text-[11px]">
-                  {% if condicao.ativo %}ativa{% else %}inativa{% endif %}
-                </span>
               </td>
               <td class="px-4 py-3">
                 <div class="flex justify-end gap-2">
@@ -134,16 +263,117 @@
             </tr>
           {% empty %}
             <tr>
-              <td colspan="6" class="px-4 py-8 text-center text-sm" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
-                Nenhuma condição cadastrada. Sem elas, toda venda a prazo sai
-                em uma parcela só, no prazo da forma de pagamento.
+              <td colspan="4" class="px-4 py-10 text-center">
+                <p class="text-sm" :style="temaClaro ? 'color:#374151;' : 'color:#d1d5db;'">
+                  Nenhuma condição cadastrada.
+                </p>
+                <p class="text-xs mt-1 mb-4" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+                  Sem elas, toda venda a prazo sai em uma parcela só, no prazo da forma de pagamento.
+                </p>
+                <a href="?novo=1" class="btn-primary text-sm">Criar a primeira</a>
               </td>
             </tr>
           {% endfor %}
         </tbody>
       </table>
+
+      {# ── No celular, cada condição vira um cartão ── #}
+      <div class="md:hidden divide-y" :style="temaClaro ? 'border-color:#f1f5f9;' : 'border-color:#2a2a2e;'">
+        {% for condicao in condicoes %}
+          <div class="p-4" style="{% if not condicao.ativo %}opacity:.55;{% endif %}">
+            <div class="flex items-baseline justify-between gap-2">
+              <span class="font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
+                {{ condicao.descricao }}
+              </span>
+              <span class="text-xs" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+                {{ condicao.numero_parcelas }}x
+              </span>
+            </div>
+            <div class="flex flex-wrap items-center gap-1 mt-2">
+              {% for dia in condicao.cronograma %}
+                <span class="soft-pill is-slate text-[11px]">{% if dia == 0 %}hoje{% else %}{{ dia }}{% endif %}</span>
+              {% endfor %}
+            </div>
+            <div class="flex gap-2 mt-3">
+              <a href="?editar={{ condicao.pk }}" class="btn-secondary text-xs">Editar</a>
+              <form method="post">
+                {% csrf_token %}
+                <input type="hidden" name="acao" value="inativar">
+                <input type="hidden" name="id" value="{{ condicao.pk }}">
+                <button type="submit" class="btn-secondary text-xs">
+                  {% if condicao.ativo %}Inativar{% else %}Reativar{% endif %}
+                </button>
+              </form>
+            </div>
+          </div>
+        {% endfor %}
+      </div>
     </div>
   </div>
 
 </div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+/**
+ * A prévia do parcelamento.
+ *
+ * A CONTA VEM DO SERVIDOR de propósito: é o mesmo `ParcelamentoService` que
+ * vai gerar os títulos. Repetir a aritmética aqui mostraria uma coisa na tela
+ * e cobraria outra — e a diferença apareceria no boleto do cliente.
+ */
+function condicaoParcelamento(inicial) {
+  return {
+    parcelas: inicial.parcelas || 1,
+    intervalo: inicial.intervalo || 30,
+    primeira: inicial.primeira || 0,
+    valor: '1000,00',
+    previa: [],
+    _timer: null,
+
+    init() { this.simular(); },
+
+    preset(nome, parcelas, intervalo, primeira) {
+      this.parcelas = parcelas;
+      this.intervalo = intervalo;
+      this.primeira = primeira;
+      const descricao = document.getElementById('{{ form.descricao.id_for_label }}');
+      /* SÓ PREENCHE A DESCRIÇÃO VAZIA: o atalho é ponto de partida, e
+         sobrescrever um nome que a pessoa escolheu seria decidir por ela. */
+      if (descricao && !descricao.value.trim()) descricao.value = nome;
+      this.simular();
+    },
+
+    simular() {
+      clearTimeout(this._timer);
+      /* Esperar a digitação parar: uma consulta por tecla enche a rede de
+         respostas que chegam fora de ordem, e a prévia pisca com o resultado
+         de um número que já não está no campo. */
+      this._timer = setTimeout(() => this.buscar(), 200);
+    },
+
+    async buscar() {
+      const parametros = new URLSearchParams({
+        numero_parcelas: this.parcelas || 1,
+        intervalo_dias: this.intervalo || 0,
+        dias_primeira_parcela: this.primeira || 0,
+        valor: String(this.valor || '0').replace(/\\./g, '').replace(',', '.'),
+      });
+      try {
+        const resposta = await fetch(
+          '{% url "financeiro:condicoes_pagamento_previa" %}?' + parametros,
+          {headers: {'X-Requested-With': 'XMLHttpRequest'}},
+        );
+        if (!resposta.ok) throw new Error(resposta.status);
+        this.previa = (await resposta.json()).parcelas || [];
+      } catch (e) {
+        /* SEM PRÉVIA, O CADASTRO CONTINUA FUNCIONANDO: ela ajuda a conferir,
+           não é condição para salvar. */
+        this.previa = [];
+      }
+    },
+  };
+}
+</script>
 {% endblock %}
