@@ -138,7 +138,7 @@ class ProdutoToggleEstoqueTests(TestCase):
         Estoque.objects.filter(produto=zerado).update(quantidade_atual=0, quantidade_disponivel=0)
         estrangeiro = Produto.objects.create(filial=self.outra_filial, unidade_medida=self.unidade, descricao='Camisa externa')
         ProdutoFilial.objects.create(produto=estrangeiro, filial=self.outra_filial)
-        params = {'q': 'Camisa', 'status': 'ativo', 'com_estoque': '1', 'ordem': 'za'}
+        params = {'q': 'Camisa', 'com_estoque': '1', 'ordem': 'za'}
         with patch('apps.produtos.views.produto.render') as render_mock:
             ProdutoListView.as_view()(self.list_request(params))
             normal = render_mock.call_args.args[2]
@@ -375,6 +375,37 @@ class ProdutoToggleEstoqueTests(TestCase):
 
         produto_listado = next(item for item in produtos if item.pk == produto.pk)
         self.assertFalse(produto_listado.ativo_filial)
+
+    def test_listagem_oculta_inativos_por_padrao_e_flag_os_inclui(self):
+        ativo = self.criar_produto()
+        inativo = self.criar_produto(ativo_filial=False)
+
+        request = self.factory.get('/produtos/')
+        request.user = self.usuario
+        request.filial_ativa = self.filial
+        produtos = list(_produto_queryset_filtrado(request, usar_flag_mostrar_inativos=True))
+        self.assertIn(ativo.pk, {produto.pk for produto in produtos})
+        self.assertNotIn(inativo.pk, {produto.pk for produto in produtos})
+
+        request = self.factory.get('/produtos/', {'mostrar_inativos': '1'})
+        request.user = self.usuario
+        request.filial_ativa = self.filial
+        produtos = list(_produto_queryset_filtrado(request, usar_flag_mostrar_inativos=True))
+        self.assertTrue({ativo.pk, inativo.pk}.issubset({produto.pk for produto in produtos}))
+
+    def test_flag_mostrar_inativos_vem_desmarcada_na_tela(self):
+        self.criar_produto()
+        request = self.factory.get('/produtos/')
+        request.user = self.usuario
+        request.filial_ativa = self.filial
+        request.session = {}
+
+        response = ProdutoListView.as_view()(request)
+
+        self.assertContains(response, 'name="mostrar_inativos"')
+        self.assertContains(response, 'Mostrar inativos')
+        self.assertNotContains(response, 'name="status"')
+        self.assertNotContains(response, 'name="mostrar_inativos" value="1" checked')
 
     def test_listagem_usa_largura_total_sem_remover_colunas(self):
         produto = self.criar_produto()

@@ -181,8 +181,7 @@
   .produto-filter-controls { flex-wrap: wrap; }
   .produto-filter-actions { justify-content: flex-end; flex-wrap: wrap; }
   .produto-filter-controls { gap: .5rem; }
-  .produto-filter-order,
-  .produto-filter-status { flex: 1 1 105px; min-width: 0; }
+  .produto-filter-order { flex: 1 1 105px; min-width: 0; }
   .produto-filter-stock,
   .produto-filter-controls .produto-filter-submit { flex: 0 0 auto; }
   .produto-filter-stock { white-space: nowrap; }
@@ -297,13 +296,12 @@
       <option value="criado_asc" {% if ordem == 'criado_asc' %}selected{% endif %}>Mais antigos</option>
       </select>
     </div>
-    <div class="produto-filter-status">
-      <select name="status" class="form-input flex-1">
-      <option value="ativo" {% if status == 'ativo' %}selected{% endif %}>Ativos</option>
-      <option value="inativo" {% if status == 'inativo' %}selected{% endif %}>Inativos</option>
-      <option value="todos" {% if status == 'todos' %}selected{% endif %}>Todos</option>
-      </select>
-    </div>
+    <label class="produto-filter-stock flex items-center gap-2 px-3 min-h-10 rounded-lg cursor-pointer"
+           :style="temaClaro ? 'background:#f8fafc; border:1px solid #e2e8f0; color:#334155;' : 'background:#18181b; border:1px solid #3f3f46; color:#e2e8f0;'">
+      <input type="checkbox" name="mostrar_inativos" value="1" {% if mostrar_inativos %}checked{% endif %}
+             class="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500">
+      <span class="text-sm font-semibold">Mostrar inativos</span>
+    </label>
     <label class="produto-filter-stock flex items-center gap-2 px-3 min-h-10 rounded-lg cursor-pointer"
            :style="temaClaro ? 'background:#f8fafc; border:1px solid #e2e8f0; color:#334155;' : 'background:#18181b; border:1px solid #3f3f46; color:#e2e8f0;'">
       <input type="checkbox" name="com_estoque" value="1" {% if somente_com_estoque %}checked{% endif %}

@@ -219,13 +219,21 @@ def _proximo_codigo_produto():
     return max(maior_codigo, maior_pk_sem_replicacao) + 1
 
 
-def _produto_queryset_filtrado(request, incluir_inativos_por_padrao=False):
+def _produto_queryset_filtrado(
+    request,
+    incluir_inativos_por_padrao=False,
+    usar_flag_mostrar_inativos=False,
+):
     busca = request.GET.get('q', '').strip()
     categoria_id = request.GET.get('categoria', '')
     subcategoria_id = request.GET.get('subcategoria', '')
     marca_id = request.GET.get('marca', '')
     fornecedor_id = request.GET.get('fornecedor', '')
-    status = request.GET.get('status') or ('todos' if incluir_inativos_por_padrao else 'ativo')
+    if usar_flag_mostrar_inativos:
+        mostrar_inativos = request.GET.get('mostrar_inativos') == '1'
+        status = 'todos' if mostrar_inativos else 'ativo'
+    else:
+        status = request.GET.get('status') or ('todos' if incluir_inativos_por_padrao else 'ativo')
     somente_com_estoque = request.GET.get('com_estoque') == '1'
     ordem = request.GET.get('ordem', 'id')
     estoque_atual = Estoque.objects.filter(
@@ -1271,13 +1279,13 @@ class ProdutoListView(PermissaoRequiredMixin, View):
     template_name = 'produtos/produto/list.html'
 
     def get(self, request):
-        qs = _produto_queryset_filtrado(request, incluir_inativos_por_padrao=True)
+        qs = _produto_queryset_filtrado(request, usar_flag_mostrar_inativos=True)
         busca = request.GET.get('q', '').strip()
         categoria_id = request.GET.get('categoria', '')
         subcategoria_id = request.GET.get('subcategoria', '')
         marca_id = request.GET.get('marca', '')
         fornecedor_id = request.GET.get('fornecedor', '')
-        status = request.GET.get('status') or 'todos'
+        mostrar_inativos = request.GET.get('mostrar_inativos') == '1'
         somente_com_estoque = request.GET.get('com_estoque') == '1'
         ordem = request.GET.get('ordem', 'id')
         ver_todos = request.GET.get('ver') == 'todos'
@@ -1341,7 +1349,7 @@ class ProdutoListView(PermissaoRequiredMixin, View):
                 'subcategoria_id': subcategoria_id,
                 'marca_id': marca_id,
                 'fornecedor_id': fornecedor_id,
-                'status': status,
+                'mostrar_inativos': mostrar_inativos,
                 'somente_com_estoque': somente_com_estoque,
                 'ordem': ordem,
                 'categorias': (),
@@ -1386,7 +1394,7 @@ class ProdutoListView(PermissaoRequiredMixin, View):
             'subcategoria_id': subcategoria_id,
             'marca_id': marca_id,
             'fornecedor_id': fornecedor_id,
-            'status': status,
+            'mostrar_inativos': mostrar_inativos,
             'somente_com_estoque': somente_com_estoque,
             'ordem': ordem,
             'categorias': CategoriaProduto.objects.for_filial(request.filial_ativa).filter(
@@ -2443,7 +2451,7 @@ class ProdutoExportCsvView(PermissaoRequiredMixin, View):
             messages.error(request, 'Apenas administradores podem exportar produtos.')
             return redirect('produtos:produto-list')
         return _produto_csv_response(
-            _produto_queryset_filtrado(request),
+            _produto_queryset_filtrado(request, usar_flag_mostrar_inativos=True),
             'produtos_filtrados.csv',
             empresa=request.user.empresa,
         )
@@ -2473,7 +2481,10 @@ class ProdutoExportPdfView(PermissaoRequiredMixin, View):
         if not _usuario_pode_exportar(request):
             messages.error(request, 'Apenas administradores podem exportar produtos.')
             return redirect('produtos:produto-list')
-        return _produto_pdf_response(_produto_queryset_filtrado(request), request.user.empresa)
+        return _produto_pdf_response(
+            _produto_queryset_filtrado(request, usar_flag_mostrar_inativos=True),
+            request.user.empresa,
+        )
 
 
 # Entradas em que o vínculo do item ainda pode ser desfeito. É O MESMO
