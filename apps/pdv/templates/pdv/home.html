@@ -455,7 +455,7 @@
 
   /* ── Modal Seleção de Preço ───────────────────── */
   .preco-modal-box {
-    width:100%; max-width:440px;
+    width:100%; max-width:620px;
     background:var(--pdv-modal); border:1px solid var(--pdv-bd3); border-radius:18px;
     overflow:hidden;
     box-shadow:0 32px 80px rgba(0,0,0,.3), 0 0 0 1px rgba(16,185,129,.06);
@@ -471,7 +471,7 @@
     display:flex; align-items:center; justify-content:center;
   }
   .preco-modal-icon svg { width:17px; height:17px; color:#fff; }
-  .preco-list { display:flex; flex-direction:column; gap:2px; padding:10px 12px; max-height:360px; overflow-y:auto; }
+  .preco-list { display:flex; flex-direction:column; gap:7px; padding:10px 12px; max-height:min(520px,65vh); overflow-y:auto; }
   .preco-row {
     display:flex; align-items:center; gap:12px;
     padding:12px 14px; border-radius:10px;
@@ -482,7 +482,7 @@
   .preco-row:hover { background:var(--pdv-hover); border-color:var(--pdv-bd); }
   .preco-row.melhor { border-color:rgba(16,185,129,.3); background:rgba(16,185,129,.05); }
   .preco-row.melhor:hover { background:rgba(16,185,129,.1); border-color:rgba(16,185,129,.5); }
-  .preco-badge-wrap { display:flex; flex-direction:column; align-items:flex-start; flex-shrink:0; min-width:90px; }
+  .preco-badge-wrap { display:flex; flex-direction:column; align-items:flex-start; flex-shrink:0; min-width:118px; }
   .preco-valor { font-size:16px; font-weight:800; color:var(--pdv-t1); letter-spacing:-.01em; line-height:1.2; }
   .preco-row.melhor .preco-valor { color:#10b981; }
   .preco-tag-melhor {
@@ -492,7 +492,11 @@
   }
   .preco-info { flex:1; min-width:0; }
   .preco-origem { font-size:12px; font-weight:600; color:var(--pdv-t9); }
-  .preco-detalhe { font-size:10.5px; color:var(--pdv-tdim); margin-top:2px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .preco-tags { display:flex;align-items:center;gap:5px;flex-wrap:wrap;margin-bottom:4px; }
+  .preco-detalhe { font-size:10.5px; color:var(--pdv-tdim); margin-top:2px; line-height:1.35; }
+  .preco-validade { font-size:10px;color:#f59e0b;margin-top:4px;display:flex;align-items:center;gap:4px; }
+  .preco-resumo { font-size:10px;color:var(--pdv-t6);margin-top:3px; }
+  .preco-campanha-badge { font-size:9px;font-weight:700;padding:2px 6px;border-radius:4px;background:rgba(16,185,129,.10);color:#10b981;border:1px solid rgba(16,185,129,.22);letter-spacing:.02em; }
   .preco-arrow { width:14px; height:14px; color:var(--pdv-tdim); flex-shrink:0; }
   .preco-row:hover .preco-arrow, .preco-row.melhor .preco-arrow { color:var(--pdv-t3); }
   .preco-footer {
@@ -512,7 +516,11 @@
   .badge-promocional { background:rgba(168,85,247,.15); color:#a855f7; border:1px solid rgba(168,85,247,.2); }
   .badge-categoria { background:rgba(59,130,246,.12); color:#60a5fa; border:1px solid rgba(59,130,246,.2); }
   .badge-combo { background:rgba(251,146,60,.12); color:#fb923c; border:1px solid rgba(251,146,60,.2); }
+  .badge-kit { background:rgba(14,165,233,.12); color:#38bdf8; border:1px solid rgba(14,165,233,.22); }
+  .badge-brinde { background:rgba(236,72,153,.12); color:#f472b6; border:1px solid rgba(236,72,153,.22); }
   .badge-normal { background:rgba(100,116,139,.12); color:#94a3b8; border:1px solid rgba(100,116,139,.2); }
+  .cart-offer-meta { display:flex;align-items:center;gap:5px;flex-wrap:wrap;margin-top:5px; }
+  .cart-offer-validade { font-size:9.5px;color:#f59e0b; }
 
   /* ── Overrides light mode para inline styles ─── */
   html.tema-claro *[style*="background:#0a0a12"] { background: var(--pdv-bg) !important; }
@@ -1266,6 +1274,15 @@
                           x-text="'− R$ ' + fmt(item.desconto_valor)"></span>
                   </template>
                 </div>
+                <div class="cart-offer-meta" x-show="item.oferta_tag" x-cloak>
+                  <span class="preco-tipo-badge"
+                        :class="{'badge-promocional':item.oferta_tipo==='promocional','badge-categoria':item.oferta_tipo==='categoria','badge-combo':item.oferta_tipo==='combo','badge-kit':item.oferta_tipo==='kit','badge-brinde':item.oferta_tipo==='brinde','badge-normal':['normal','tabela_cliente'].includes(item.oferta_tipo)}"
+                        x-text="item.oferta_tag"></span>
+                  <span class="preco-campanha-badge" x-show="item.oferta_nome" x-text="item.oferta_nome"></span>
+                  <span class="cart-offer-validade" x-show="item.oferta_validade" x-text="'Válida: '+item.oferta_validade"></span>
+                </div>
+                <div x-show="item.oferta_brindes?.length" x-cloak style="font-size:10px;color:#f472b6;margin-top:4px;"
+                     x-text="'Brinde incluído: '+item.oferta_brindes.join(', ')"></div>
                 <div class="cart-item-controls" style="display:flex;align-items:center;gap:8px;margin-top:8px;flex-wrap:wrap;">
                   <div class="qty-ctrl">
                     <button @click="alterarQuantidade(item,-quantidadePasso(item))">−</button>
@@ -1733,7 +1750,7 @@
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
           </div>
           <div>
-            <div style="font-size:13px;font-weight:700;color:#e8e8f8;line-height:1.2;">Escolher Preço</div>
+            <div style="font-size:13px;font-weight:700;color:#e8e8f8;line-height:1.2;">Escolher condição comercial</div>
             <div style="font-size:11px;color:#3a3a52;margin-top:1px;max-width:260px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;" x-text="modalPreco.descricao"></div>
           </div>
         </div>
@@ -1742,7 +1759,7 @@
 
       <!-- Subtítulo -->
       <div style="padding:10px 20px 4px;font-size:11px;color:#3a3a52;">
-        Este produto possui <strong style="color:#6a6a8a;" x-text="modalPreco.precos.length"></strong> opções de preço disponíveis — selecione o mais adequado para esta venda.
+        As opções estão ordenadas pela maior economia. A quantidade necessária será adicionada automaticamente ao carrinho.
       </div>
 
       <!-- Lista de preços -->
@@ -1751,18 +1768,23 @@
           <button @click="confirmarPreco(p)" class="preco-row" :class="p.melhor ? 'melhor' : ''">
             <!-- Valor -->
             <div class="preco-badge-wrap">
-              <div class="preco-valor" x-text="'R$ '+p.preco.toFixed(2).replace('.',',')"></div>
-              <span x-show="p.melhor" class="preco-tag-melhor">Menor preço</span>
+              <div class="preco-valor" x-text="'R$ '+fmt(p.total)"></div>
+              <div class="preco-resumo" x-show="parseFloat(p.quantidade||1) > 1" x-text="fmtQtd(p.quantidade)+' un. · R$ '+fmt(p.preco)+'/un.'"></div>
+              <span x-show="p.melhor" class="preco-tag-melhor">Mais atrativa</span>
+              <span x-show="parseFloat(p.economia||0) > 0" class="preco-resumo" style="color:#10b981;font-weight:700;" x-text="'Economize R$ '+fmt(p.economia)"></span>
             </div>
             <!-- Info -->
             <div class="preco-info">
               <div class="preco-origem">
-                <span x-text="p.origem"></span>
+                <div class="preco-tags">
                 <span class="preco-tipo-badge"
-                      :class="{'badge-promocional':p.tipo==='promocional','badge-categoria':p.tipo==='categoria','badge-combo':p.tipo==='combo','badge-normal':p.tipo==='normal'}"
-                      x-text="p.tipo"></span>
+                      :class="{'badge-promocional':p.tipo==='promocional','badge-categoria':p.tipo==='categoria','badge-combo':p.tipo==='combo','badge-kit':p.tipo==='kit','badge-brinde':p.tipo==='brinde','badge-normal':['normal','tabela_cliente'].includes(p.tipo)}"
+                      x-text="p.tag || p.tipo"></span>
+                  <span class="preco-campanha-badge" x-text="p.origem"></span>
+                </div>
               </div>
               <div class="preco-detalhe" x-show="p.detalhe" x-text="p.detalhe"></div>
+              <div class="preco-validade" x-show="p.validade"><span>◷</span><span x-text="p.validade"></span></div>
             </div>
             <!-- Arrow -->
             <svg class="preco-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
@@ -3052,6 +3074,7 @@ function pdv() {
     },
 
     labelOrigemPreco(item) {
+      if (item?.oferta_nome) return item.oferta_nome;
       return item?.preco_origem_tipo === 'tabela_cliente'
         ? (item.preco_origem || this.venda.cliente.tabela_preco_nome || 'Preço especial')
         : 'Preço padrão';
@@ -3062,8 +3085,9 @@ function pdv() {
     },
 
     qtdProdutoNoCarrinho(produtoId) {
-      const item = this.itemNoCarrinho(produtoId);
-      return item ? parseFloat(item.quantidade || 0) : 0;
+      return this.venda.itens
+        .filter(i => String(i.produto_id) === String(produtoId))
+        .reduce((total, item) => total + parseFloat(item.quantidade || 0), 0);
     },
 
     produtoAceitaDecimal(produto) {
@@ -3075,7 +3099,8 @@ function pdv() {
     },
 
     quantidadeMinima(item) {
-      return this.produtoAceitaDecimal(item) ? 0.001 : 1;
+      const base = this.produtoAceitaDecimal(item) ? 0.001 : 1;
+      return Math.max(base, parseFloat(item?._quantidadeMinOferta || 0));
     },
 
     normalizarQuantidade(valor, item) {
@@ -3321,23 +3346,22 @@ function pdv() {
     },
 
     adicionarItem(produto) {
-      // Se já está no carrinho: só incrementa quantidade
-      const ex = this.venda.itens.find(i=>i.produto_id===produto.id);
-      if (ex) {
-        this.alterarQuantidade(ex, this.quantidadePasso(ex));
-        this.toast_('Quantidade atualizada','ok');
-        return;
-      }
-
-      // Se possui múltiplos preços: abre seletor antes de adicionar
-      const precos = produto.todos_precos || [];
+      const precos = produto.ofertas || produto.todos_precos || [];
       if (precos.length > 1) {
         this.modalPreco = { show: true, produto: produto, precos: precos, descricao: produto.descricao };
         return;
       }
 
-      // Apenas 1 preço ou sem tabela: adiciona direto
-      this._pushItem(produto, parseFloat(produto.preco) || 0);
+      const opcao = precos[0] || {
+        preco: parseFloat(produto.preco) || 0,
+        total: parseFloat(produto.preco) || 0,
+        quantidade: 1,
+        tipo: produto.preco_origem_tipo || 'normal',
+        oferta_tipo: produto.preco_origem_tipo || 'normal',
+        tag: produto.preco_origem_tipo === 'tabela_cliente' ? 'TABELA DO CLIENTE' : 'PREÇO NORMAL',
+        origem: produto.preco_origem || 'Preço normal',
+      };
+      this._pushItem(produto, opcao);
     },
 
     alterarProdutoCatalogo(produto, delta) {
@@ -3355,9 +3379,30 @@ function pdv() {
       if (item) this.removerItem(item);
     },
 
-    _pushItem(produto, preco) {
+    chaveOferta(produto, opcao) {
+      return [produto.id, opcao.oferta_tipo || opcao.tipo || 'normal', opcao.kit_id || '',
+        opcao.promocao_id || '', opcao.faixa_id || '', opcao.kit_categoria_id || '',
+        opcao.regra_id || '', opcao.brinde_id || ''].join(':');
+    },
+
+    _pushItem(produto, opcao, selecionadaNoModal=false) {
+      const oferta = opcao || {};
+      const ehKit = oferta.oferta_tipo === 'kit';
+      const quantidadeBase = this.produtoAceitaDecimal(produto) ? 0.001 : 1;
+      const quantidade = ehKit ? 1 : Math.max(quantidadeBase, parseFloat(oferta.quantidade || 1));
+      const exigeQuantidadeMinima = ['categoria', 'combo', 'brinde'].includes(oferta.oferta_tipo);
+      const preco = parseFloat(ehKit ? oferta.total : oferta.preco) || 0;
+      const chave = this.chaveOferta(produto, oferta);
+      const existente = this.venda.itens.find(i => i._chaveOferta === chave && !i._quantidadeExata);
+      if (existente) {
+        existente._ofertaSelecionada = existente._ofertaSelecionada || !!selecionadaNoModal;
+        this.alterarQuantidade(existente, quantidade);
+        this.toast_('Quantidade da mesma condição atualizada', 'ok');
+        return;
+      }
       this.venda.itens.push({
         _id: Date.now()+Math.random(), produto_id: produto.id,
+        _chaveOferta: chave,
         descricao: produto.descricao, codigo_barras: produto.codigo_barras||'',
         icone: produto.icone||'📦', cor: produto.cor||null, linha: produto.linha||null,
         tem_foto: !!produto.tem_foto,
@@ -3368,11 +3413,21 @@ function pdv() {
         fracionavel: this.produtoAceitaDecimal(produto),
         quantidade_step: this.quantidadePasso(produto),
         quantidade_decimais: this.produtoAceitaDecimal(produto) ? 3 : 0,
-        quantidade: 1, valor_unitario: preco, _precoOriginal: preco, _precoManual: false,
-        preco_origem: produto.preco_origem || 'Preço de venda',
-        preco_origem_tipo: produto.preco_origem_tipo || 'normal',
-        preco_origem_detalhe: produto.preco_origem_detalhe || '',
-        desconto_percentual: 0, desconto_valor: 0, valor_total: preco,
+        quantidade: quantidade, valor_unitario: preco, _precoOriginal: preco, _precoManual: false,
+        _quantidadeMinOferta: ehKit ? 1 : (exigeQuantidadeMinima ? quantidade : null),
+        _quantidadeExata: !!oferta.quantidade_exata,
+        _ofertaSelecionada: !!selecionadaNoModal,
+        preco_origem: oferta.origem || produto.preco_origem || 'Preço de venda',
+        preco_origem_tipo: oferta.tipo || produto.preco_origem_tipo || 'normal',
+        preco_origem_detalhe: oferta.detalhe || produto.preco_origem_detalhe || '',
+        oferta_tipo: oferta.oferta_tipo || oferta.tipo || 'normal',
+        oferta_tag: oferta.tag || '', oferta_nome: oferta.origem || '',
+        oferta_validade: oferta.validade || '', oferta_brindes: oferta.brindes || [],
+        promocao_id: oferta.promocao_id || null, faixa_id: oferta.faixa_id || null,
+        kit_categoria_id: oferta.kit_categoria_id || null, regra_id: oferta.regra_id || null,
+        brinde_id: oferta.brinde_id || null,
+        tipo_venda: ehKit ? 'kit' : 'unitario', kit_id: oferta.kit_id || null,
+        desconto_percentual: 0, desconto_valor: 0, valor_total: quantidade * preco,
         obs: '', _showObs: false,
       });
       this.recalcularTotais();
@@ -3382,8 +3437,8 @@ function pdv() {
       const produto = this.modalPreco.produto;
       this.modalPreco.show = false;
       if (!produto) return;
-      this._pushItem(produto, parseFloat(opcao.preco) || 0);
-      this.toast_('✓ Adicionado com preço: R$ '+parseFloat(opcao.preco).toFixed(2).replace('.',','), 'ok');
+      this._pushItem(produto, opcao, true);
+      this.toast_('✓ '+(opcao.tag || 'Condição')+': '+(opcao.origem || 'selecionada'), 'ok');
     },
 
     abrirFotoProduto(produto) {
@@ -3403,6 +3458,10 @@ function pdv() {
     },
 
     alterarQuantidade(item, delta) {
+      if (item._quantidadeExata && Math.abs(delta) > 0) {
+        this.toast_('Esta promoção exige a quantidade exata informada na campanha.', 'erro');
+        return;
+      }
       const bruto = parseFloat(item.quantidade || 0) + delta;
       if (bruto<=0) { this.removerItem(item); return; }
       const n = this.normalizarQuantidade(bruto, item);
@@ -3411,9 +3470,10 @@ function pdv() {
     },
 
     atualizarQuantidadeItem(item) {
+      if (item._quantidadeExata) item.quantidade = item._quantidadeMinOferta;
       item.quantidade = this.normalizarQuantidade(item.quantidade, item);
       this.recalcularItem(item);
-      if (!item._precoManual) this.aplicarPrecosCliente(false);
+      if (!item._precoManual && !item._ofertaSelecionada && ['normal', 'tabela_cliente'].includes(item.oferta_tipo || 'normal')) this.aplicarPrecosCliente(false);
     },
 
     recalcularItem(item) {
@@ -5134,7 +5194,7 @@ ${pgtoHtml ? `<hr class="sep">${pgtoHtml}` : ''}
           if (!r.ok) throw new Error(d.erro||'Falha ao consultar precos');
           const porProduto = new Map((d.precos||[]).map(p=>[p.id,p]));
           for (const item of this.venda.itens) {
-            if (item._precoManual) continue;
+            if (item._precoManual || item._ofertaSelecionada || !['normal', 'tabela_cliente'].includes(item.oferta_tipo || 'normal')) continue;
             const preco = porProduto.get(item.produto_id);
             if (!preco) continue;
             item.valor_unitario=parseFloat(preco.preco)||0;

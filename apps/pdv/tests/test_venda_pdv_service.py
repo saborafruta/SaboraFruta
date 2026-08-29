@@ -149,6 +149,28 @@ class VendaPDVServiceTests(TestCase):
         self.assertEqual(movimento.documento_tipo, MovimentacaoEstoque.DocumentoTipo.NFCE)
         self.assertEqual(movimento.documento_id, venda.pk)
 
+    def test_finalizar_venda_respeita_preco_normal_escolhido_no_modal(self):
+        produto = self.criar_produto("Produto com escolha")
+        self.abastecer(produto, "5")
+        self.aplicar_promocoes(produto)
+
+        venda = VendaPDVService.finalizar_venda(
+            sessao=self.sessao,
+            filial=self.filial,
+            usuario=self.usuario,
+            itens=[{
+                "produto_id": produto.pk,
+                "quantidade": "2",
+                "oferta_tipo": "normal",
+            }],
+            pagamentos=[{"forma_id": self.forma.pk, "valor": "20.00"}],
+        )
+
+        item = ItemVendaPDV.objects.get(venda_pdv=venda)
+        self.assertEqual(item.valor_unitario, Decimal("10.0000"))
+        self.assertEqual(item.preco_origem, "normal")
+        self.assertEqual(venda.valor_total, Decimal("20.00"))
+
     def test_tabela_do_cliente_precifica_item_e_faz_fallback_no_ausente(self):
         produto_tabela = self.criar_produto("Produto na tabela")
         produto_padrao = self.criar_produto("Produto fora da tabela")
@@ -333,7 +355,7 @@ class VendaPDVServiceTests(TestCase):
             nome="Leve 3",
             usar_preco_promocional=False,
         )
-        PromocaoQuantidadeFaixa.objects.create(
+        faixa = PromocaoQuantidadeFaixa.objects.create(
             promocao=combo,
             condicao_quantidade=CondicaoQuantidade.A_PARTIR_DE,
             quantidade_minima=Decimal("3"),
@@ -345,7 +367,13 @@ class VendaPDVServiceTests(TestCase):
             sessao=self.sessao,
             filial=self.filial,
             usuario=self.usuario,
-            itens=[{"produto_id": produto.pk, "quantidade": "3"}],
+            itens=[{
+                "produto_id": produto.pk,
+                "quantidade": "3",
+                "oferta_tipo": "combo",
+                "promocao_id": combo.pk,
+                "faixa_id": faixa.pk,
+            }],
             pagamentos=[{"forma_id": self.forma.pk, "valor": "18.00"}],
         )
 
@@ -406,7 +434,12 @@ class VendaPDVServiceTests(TestCase):
             sessao=self.sessao,
             filial=self.filial,
             usuario=self.usuario,
-            itens=[{"produto_id": gatilho.pk, "quantidade": "2"}],
+            itens=[{
+                "produto_id": gatilho.pk,
+                "quantidade": "2",
+                "oferta_tipo": "brinde",
+                "brinde_id": brinde.pk,
+            }],
             pagamentos=[{"forma_id": self.forma.pk, "valor": "20.00"}],
         )
 
@@ -420,3 +453,27 @@ class VendaPDVServiceTests(TestCase):
         self.assertEqual(itens[1].valor_total, Decimal("0.00"))
         self.assertEqual(mov_brinde.tipo_operacao, MovimentacaoEstoque.TipoOperacao.BRINDE)
         self.assertEqual(estoque_brinde.quantidade_atual, Decimal("9.000"))
+
+    def test_brinde_nao_entra_sem_selecao_da_campanha(self):
+        gatilho = self.criar_produto("Gatilho sem selecao")
+        presente = self.criar_produto("Presente nao selecionado")
+        self.abastecer(gatilho, "5")
+        self.abastecer(presente, "5")
+        brinde = BrindeProduto.objects.create(
+            filial=self.filial,
+            nome="Escolha o brinde",
+            produto_gatilho=gatilho,
+            quantidade_gatilho=Decimal("1"),
+        )
+        BrindeProdutoItem.objects.create(brinde=brinde, produto=presente, quantidade=Decimal("1"))
+
+        venda = VendaPDVService.finalizar_venda(
+            sessao=self.sessao,
+            filial=self.filial,
+            usuario=self.usuario,
+            itens=[{"produto_id": gatilho.pk, "quantidade": "1", "oferta_tipo": "normal"}],
+            pagamentos=[{"forma_id": self.forma.pk, "valor": "10.00"}],
+        )
+
+        self.assertEqual(ItemVendaPDV.objects.filter(venda_pdv=venda).count(), 1)
+        self.assertFalse(ItemVendaPDV.objects.filter(venda_pdv=venda, tipo_venda="brinde").exists())

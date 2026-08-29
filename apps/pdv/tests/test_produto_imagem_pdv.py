@@ -3,7 +3,7 @@ from types import SimpleNamespace
 
 from django.test import SimpleTestCase
 
-from apps.pdv.views.pdv import _produto_imagem_payload
+from apps.pdv.views.pdv import _finalizar_ofertas, _produto_imagem_payload
 
 
 class ProdutoImagemPDVTests(SimpleTestCase):
@@ -40,3 +40,24 @@ class ProdutoImagemPDVTests(SimpleTestCase):
         self.assertIn('?v=zoom', _produto_imagem_payload(
             SimpleNamespace(pk=1, foto_url='foto.jpg'),
         )['foto_url'])
+
+    def test_modal_identifica_tipo_campanha_validade_e_brinde(self):
+        template = (
+            Path(__file__).resolve().parents[1] / 'templates' / 'pdv' / 'home.html'
+        ).read_text(encoding='utf-8')
+
+        self.assertIn('x-text="p.tag || p.tipo"', template)
+        self.assertIn('class="preco-campanha-badge"', template)
+        self.assertIn('x-text="p.validade"', template)
+        self.assertIn("'Brinde incluído: '+item.oferta_brindes.join(', ')", template)
+
+    def test_ofertas_sao_ordenadas_pela_maior_economia(self):
+        ofertas = _finalizar_ofertas([
+            {'tipo': 'normal', 'preco': 10, 'total': 10, 'preco_referencia': 10, 'quantidade': 1},
+            {'tipo': 'combo', 'preco': 8, 'total': 24, 'preco_referencia': 30, 'quantidade': 3},
+            {'tipo': 'brinde', 'preco': 10, 'total': 20, 'preco_referencia': 30, 'quantidade': 2},
+        ])
+
+        self.assertEqual([item['tipo'] for item in ofertas], ['brinde', 'combo', 'normal'])
+        self.assertTrue(ofertas[0]['melhor'])
+        self.assertEqual(ofertas[0]['economia'], 10.0)

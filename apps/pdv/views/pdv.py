@@ -34,7 +34,14 @@ from apps.pdv.services.cancelamento_fiscal_service import (
 )
 from apps.pdv.services.edicao_venda_service import estornar_venda_para_edicao, validar_venda_editavel
 from apps.pdv.services.fiscal_readiness_service import verificar_prontidao_fiscal
-from apps.produtos.models import LinhaProducao, Produto
+from apps.produtos.models import (
+    BrindeProduto,
+    KitCategoria,
+    KitProduto,
+    LinhaProducao,
+    Produto,
+)
+from apps.produtos.services.preco_service import PrecoService
 
 
 # ---------------------------------------------------------------------------
@@ -291,17 +298,7 @@ def buscar_produto(request):
             quantidade=Decimal("1"),
             cliente=cliente,
         )
-        # Coleta TODOS os preços candidatos para permitir escolha do vendedor
-        if contrato["preco_origem_tipo"] == "tabela_cliente":
-            todos_precos = [{
-                "preco": float(contrato["preco_aplicado"]),
-                "tipo": contrato["preco_origem_tipo"],
-                "origem": contrato["preco_origem"],
-                "detalhe": contrato["preco_origem_detalhe"],
-                "melhor": True,
-            }]
-        else:
-            todos_precos = _todos_precos_produto(p, filial, hoje)
+        ofertas = _ofertas_produto(p, filial, hoje, cliente=cliente)
 
         data.append({
             "id": p.id, "descricao": p.descricao_pdv or p.descricao,
@@ -330,84 +327,210 @@ def buscar_produto(request):
             "icone": p.linha_producao.icone if p.linha_producao else None,
             "cor": p.linha_producao.cor_identificacao if p.linha_producao else None,
             **_produto_imagem_payload(p),
-            # Lista completa de preços: se len > 1, PDV mostra seletor ao vendedor
-            "todos_precos": todos_precos,
+            "ofertas": ofertas,
+            # Compatibilidade com clientes ainda esperando o nome antigo.
+            "todos_precos": ofertas,
         })
     return JsonResponse({"produtos": data})
 
 
-def _todos_precos_produto(produto, filial, hoje=None):
-    """Retorna lista de todos os preços candidatos vigentes para o produto."""
+def _validade_oferta(inicio=None, fim=None, dias_semana=None):
+    if inicio and fim:
+        periodo = f"{inicio.strftime('%d/%m/%Y')} a {fim.strftime('%d/%m/%Y')}"
+    elif fim:
+        periodo = f"Até {fim.strftime('%d/%m/%Y')}"
+    elif inicio:
+        periodo = f"A partir de {inicio.strftime('%d/%m/%Y')}"
+    else:
+        periodo = "Sem data final"
+    dias = PrecoService._dias_semana_set(dias_semana)
+    if len(dias) < 7:
+        nomes = ['seg', 'ter', 'qua', 'qui', 'sex', 'sáb', 'dom']
+        periodo += ' · ' + ', '.join(nomes[int(dia)] for dia in sorted(dias))
+    return periodo
+
+
+def _oferta_temporal_vigente(regra, hoje):
+    return PrecoService.combo_quantidade_vigente(regra, data=hoje)
+
+
+def _finalizar_ofertas(ofertas):
+    for oferta in ofertas:
+        referencia = Decimal(str(oferta.get('preco_referencia') or oferta.get('total') or 0))
+        total = Decimal(str(oferta.get('total') or 0))
+        economia = max(Decimal('0'), referencia - total)
+        percentual = (economia / referencia * Decimal('100')) if referencia > 0 else Decimal('0')
+        oferta['economia'] = float(economia.quantize(Decimal('0.01')))
+        oferta['economia_percentual'] = float(percentual.quantize(Decimal('0.01')))
+        oferta['preco'] = float(Decimal(str(oferta.get('preco') or 0)))
+        oferta['total'] = float(total)
+        oferta['quantidade'] = float(Decimal(str(oferta.get('quantidade') or 1)))
+    ofertas.sort(key=lambda item: (
+        -item.get('economia_percentual', 0),
+        -item.get('economia', 0),
+        item.get('total', 0),
+        item.get('tipo') == 'normal',
+    ))
+    if ofertas:
+        ofertas[0]['melhor'] = True
+    return ofertas
+
+
+def _ofertas_produto(produto, filial, hoje=None, cliente=None):
+    """Monta todas as escolhas comerciais vigentes da tela de Promoções."""
     from apps.produtos.services.preco_service import PrecoService
     from django.utils import timezone as tz
     hoje = hoje or tz.localdate()
 
-    candidatos = []
-
-    # 1) Preço normal de venda
-    preco_normal = float(produto.preco_venda or 0)
+    ofertas = []
+    preco_normal = Decimal(str(produto.preco_venda or 0))
+    contrato = ProdutoVendavelService.consultar(
+        produto=produto, filial=filial, quantidade=Decimal('1'), cliente=cliente,
+    )
+    preco_padrao = Decimal(str(contrato['preco_aplicado'] or preco_normal))
     if preco_normal > 0:
-        candidatos.append({
-            'preco': preco_normal,
-            'tipo': 'normal',
-            'origem': 'Preço de venda',
+        ofertas.append({
+            'preco': preco_normal, 'total': preco_normal,
+            'preco_referencia': preco_normal, 'tipo': 'normal', 'oferta_tipo': 'normal',
+            'tag': 'PREÇO NORMAL', 'origem': 'Preço normal',
             'detalhe': 'Preço padrão cadastrado no produto.',
+            'validade': 'Preço vigente do cadastro',
+            'quantidade': 1,
+        })
+    if contrato['preco_origem_tipo'] == 'tabela_cliente' and preco_padrao > 0:
+        ofertas.append({
+            'preco': preco_padrao, 'total': preco_padrao,
+            'preco_referencia': preco_normal or preco_padrao,
+            'tipo': 'tabela_cliente', 'oferta_tipo': 'tabela_cliente',
+            'tag': 'TABELA DO CLIENTE', 'origem': contrato['preco_origem'],
+            'detalhe': contrato['preco_origem_detalhe'],
+            'validade': 'Enquanto a tabela estiver vinculada ao cliente',
+            'quantidade': 1,
         })
 
-    # 2) Promoção individual
-    try:
-        preco_promo = PrecoService.preco_promocional_vigente(produto, filial=filial, data=hoje)
-        if preco_promo is not None:
-            candidatos.append({
-                'preco': float(preco_promo),
-                'tipo': 'promocional',
-                'origem': 'Promoção individual',
-                'detalhe': 'Promoção ativa neste produto.',
+    promocao = PrecoService.promocao_produto_contexto(produto, filial)
+    preco_promo = PrecoService.preco_promocional_vigente(produto, filial=filial, data=hoje)
+    if preco_promo is not None:
+        ofertas.append({
+            'preco': preco_promo, 'total': preco_promo,
+            'preco_referencia': preco_normal, 'quantidade': 1,
+            'tipo': 'promocional', 'oferta_tipo': 'promocional',
+            'tag': 'PROMOÇÃO INDIVIDUAL', 'origem': 'Promoção individual',
+            'detalhe': f'Preço promocional de {produto.descricao_pdv or produto.descricao}.',
+            'validade': _validade_oferta(
+                promocao.promocao_inicio, promocao.promocao_fim,
+                promocao.promocao_dias_semana,
+            ),
+        })
+
+    descontos = (
+        KitCategoria.objects.for_filial(filial).filter(ativo=True)
+        .prefetch_related('regras__categoria__categoria_pai', 'regras__subcategoria__categoria_pai')
+    )
+    for desconto in descontos:
+        if not PrecoService.desconto_categoria_vigente(desconto, data=hoje):
+            continue
+        preco_base, _ = PrecoService._preco_base_categoria(produto, desconto=desconto, filial=filial, data=hoje)
+        for regra in desconto.regras.all():
+            quantidade = regra.quantidade_minima or Decimal('1')
+            if not PrecoService.regra_categoria_aplica(regra, produto, quantidade):
+                continue
+            preco = PrecoService.aplicar_regra_desconto(preco_base, regra.tipo_desconto, regra.valor_desconto)
+            ofertas.append({
+                'preco': preco, 'total': preco * quantidade,
+                'preco_referencia': preco_normal * quantidade, 'quantidade': quantidade,
+                'tipo': 'categoria', 'oferta_tipo': 'categoria', 'tag': 'DESCONTO POR CATEGORIA',
+                'origem': desconto.nome, 'detalhe': desconto.descricao or 'Regra promocional por categoria.',
+                'validade': _validade_oferta(desconto.data_inicio, desconto.data_fim, desconto.dias_semana),
+                'kit_categoria_id': desconto.pk, 'regra_id': regra.pk,
             })
-    except Exception:
-        pass
 
-    # 3) Descontos por categoria
-    try:
-        for c in PrecoService.precos_categoria_vigentes_detalhados(produto, filial=filial, data=hoje):
-            candidatos.append({
-                'preco': float(c['preco']),
-                'tipo': c.get('tipo', 'categoria'),
-                'origem': c.get('origem', 'Desconto por categoria'),
-                'detalhe': c.get('detalhe', ''),
+    combos = (
+        produto.promocoes_quantidade.filter(filial=filial, ativo=True)
+        .prefetch_related('faixas')
+    )
+    for combo in combos:
+        if not _oferta_temporal_vigente(combo, hoje):
+            continue
+        for faixa in combo.faixas.all():
+            quantidade = faixa.quantidade_minima
+            detalhes = PrecoService.precos_combo_quantidade_vigentes_detalhados(
+                produto, filial=filial, quantidade=quantidade, data=hoje,
+            )
+            candidato = next((item for item in detalhes if item.get('faixa_id') == faixa.pk), None)
+            if not candidato:
+                continue
+            preco = candidato['preco']
+            ofertas.append({
+                'preco': preco, 'total': preco * quantidade,
+                'preco_referencia': preco_normal * quantidade, 'quantidade': quantidade,
+                'tipo': 'combo', 'oferta_tipo': 'combo', 'tag': 'COMBO POR QUANTIDADE',
+                'origem': combo.nome, 'detalhe': candidato['detalhe'],
+                'validade': _validade_oferta(combo.data_inicio, combo.data_fim, combo.dias_semana),
+                'promocao_id': combo.pk, 'faixa_id': faixa.pk,
+                'quantidade_exata': faixa.condicao_quantidade == 'igual',
             })
-    except Exception:
-        pass
 
-    # 4) Combos por quantidade
-    try:
-        for c in PrecoService.precos_combo_quantidade_vigentes_detalhados(produto, filial=filial, data=hoje):
-            candidatos.append({
-                'preco': float(c['preco']),
-                'tipo': c.get('tipo', 'combo'),
-                'origem': c.get('origem', 'Combo por quantidade'),
-                'detalhe': c.get('detalhe', ''),
-            })
-    except Exception:
-        pass
+    kits = (
+        KitProduto.objects.for_filial(filial).filter(ativo=True, itens__produto=produto)
+        .prefetch_related('itens__produto').distinct()
+    )
+    for kit in kits:
+        if not _oferta_temporal_vigente(kit, hoje):
+            continue
+        base = Decimal('0')
+        componentes = []
+        for componente in kit.itens.all():
+            unitario = componente.produto.preco_venda or Decimal('0')
+            if cliente and cliente.tabela_preco_id:
+                unitario = ProdutoVendavelService.consultar(
+                    produto=componente.produto, filial=filial,
+                    quantidade=componente.quantidade, cliente=cliente,
+                )['preco_aplicado']
+            elif kit.permite_preco_promocional:
+                unitario = PrecoService.preco_vivo_produto(componente.produto, filial=filial, quantidade=componente.quantidade)
+            base += unitario * componente.quantidade
+            componentes.append(f'{componente.quantidade:g}x {componente.produto.descricao_pdv or componente.produto.descricao}')
+        total = PrecoService.aplicar_regra_desconto(base, kit.tipo_desconto, kit.valor_desconto)
+        ofertas.append({
+            'preco': total, 'total': total, 'preco_referencia': base, 'quantidade': 1,
+            'tipo': 'kit', 'oferta_tipo': 'kit', 'tag': 'KIT DE PRODUTOS',
+            'origem': kit.nome, 'detalhe': kit.descricao or ' + '.join(componentes),
+            'componentes': componentes,
+            'validade': _validade_oferta(kit.data_inicio, kit.data_fim, kit.dias_semana),
+            'kit_id': kit.pk,
+        })
 
-    # Remove duplicatas (mesmo preço) e ordena do menor ao maior
-    vistos = set()
-    unicos = []
-    for item in candidatos:
-        chave = round(item['preco'], 4)
-        if chave not in vistos and item['preco'] > 0:
-            vistos.add(chave)
-            unicos.append(item)
-    unicos.sort(key=lambda x: x['preco'])
+    brindes = (
+        BrindeProduto.objects.for_filial(filial).filter(ativo=True, produto_gatilho=produto)
+        .prefetch_related('itens__produto')
+    )
+    for brinde in brindes:
+        if not _oferta_temporal_vigente(brinde, hoje):
+            continue
+        quantidade = brinde.quantidade_gatilho
+        unitario = preco_normal
+        if brinde.permite_preco_promocional:
+            unitario = ProdutoVendavelService.consultar(
+                produto=produto, filial=filial, quantidade=quantidade, cliente=cliente,
+            )['preco_aplicado']
+        presentes = []
+        valor_presentes = Decimal('0')
+        for item in brinde.itens.all():
+            presentes.append(f'{item.quantidade:g}x {item.produto.descricao_pdv or item.produto.descricao}')
+            valor_presentes += (item.produto.preco_venda or Decimal('0')) * item.quantidade
+        total = unitario * quantidade
+        ofertas.append({
+            'preco': unitario, 'total': total,
+            'preco_referencia': total + valor_presentes, 'quantidade': quantidade,
+            'tipo': 'brinde', 'oferta_tipo': 'brinde', 'tag': 'COMPRE E GANHE',
+            'origem': brinde.nome, 'detalhe': brinde.descricao or 'Ganhe ' + ', '.join(presentes),
+            'brindes': presentes,
+            'validade': _validade_oferta(brinde.data_inicio, brinde.data_fim, brinde.dias_semana),
+            'brinde_id': brinde.pk,
+        })
 
-    # Marca o menor como recomendado
-    if unicos:
-        menor = unicos[0]['preco']
-        for item in unicos:
-            item['melhor'] = abs(item['preco'] - menor) < 0.0001
-
-    return unicos
+    return _finalizar_ofertas(ofertas)
 
 
 def _serializar_cliente(c):
@@ -561,6 +684,7 @@ def _serializa_produto(p, filial, cliente=None, quantidade=Decimal("1")):
         cliente=cliente,
     )
     aceita_decimal = _produto_aceita_quantidade_decimal(p)
+    ofertas = _ofertas_produto(p, filial, cliente=cliente)
     return {
         "id": p.id,
         "descricao": p.descricao_pdv or p.descricao,
@@ -588,6 +712,8 @@ def _serializa_produto(p, filial, cliente=None, quantidade=Decimal("1")):
         "icone": p.linha_producao.icone if p.linha_producao else None,
         "cor": p.linha_producao.cor_identificacao if p.linha_producao else None,
         **_produto_imagem_payload(p),
+        "ofertas": ofertas,
+        "todos_precos": ofertas,
     }
 
 

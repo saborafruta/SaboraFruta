@@ -596,6 +596,9 @@ class PrecoService:
                         f'Desconto por categoria "{desconto.nome}" para {alvo}. '
                         f'{PrecoService._vigencia_texto(desconto.data_inicio, desconto.data_fim)}'
                     ),
+                    'kit_categoria_id': desconto.pk,
+                    'regra_id': regra.pk,
+                    'quantidade_minima': regra.quantidade_minima,
                 })
         return candidatos
 

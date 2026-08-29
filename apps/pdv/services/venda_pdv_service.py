@@ -15,7 +15,7 @@ from apps.financeiro.models import ContaReceber, FormaPagamento
 from apps.pdv.models import ItemVendaPDV, PagamentoVendaPDV, VendaPDV
 from apps.pdv.services.produto_vendavel_service import ProdutoVendavelService
 from apps.produtos.models import Produto
-from apps.produtos.models import BrindeProduto, KitProduto
+from apps.produtos.models import BrindeProduto, KitCategoria, KitProduto, PromocaoQuantidade
 from apps.produtos.services.preco_service import PrecoService
 
 
@@ -184,6 +184,76 @@ class VendaPDVService:
         }
 
     @classmethod
+    def resolver_oferta_selecionada(
+        cls, *, produto, filial, quantidade, cliente, item_dados, preco_automatico,
+    ) -> dict:
+        """Valida no servidor a escolha feita no modal comercial do PDV."""
+        tipo = (item_dados.get("oferta_tipo") or "").strip()
+        if not tipo:
+            return preco_automatico
+        hoje = timezone.localdate()
+
+        if tipo == "tabela_cliente":
+            if preco_automatico["tipo"] != "tabela_cliente":
+                raise DadosInvalidosError("A tabela de preço escolhida não está vigente para este cliente.")
+            return preco_automatico
+        if tipo == "normal":
+            preco = cls._decimal(produto.preco_venda, cls.UNIT)
+            if preco <= 0:
+                raise DadosInvalidosError("O preço normal escolhido não é válido.")
+            return {"preco": preco, "tipo": "normal", "origem": "Preço normal", "detalhe": "Preço padrão cadastrado no produto."}
+        if tipo == "promocional":
+            preco = PrecoService.preco_promocional_vigente(produto, filial=filial, data=hoje)
+            if preco is None:
+                raise DadosInvalidosError("A promoção individual escolhida não está mais vigente.")
+            return {"preco": cls._decimal(preco, cls.UNIT), "tipo": tipo, "origem": "Promoção individual", "detalhe": "Promoção selecionada no PDV."}
+        if tipo == "categoria":
+            try:
+                kit = (
+                    KitCategoria.objects.for_filial(filial).filter(ativo=True)
+                    .prefetch_related("regras__categoria__categoria_pai", "regras__subcategoria__categoria_pai")
+                    .get(pk=int(item_dados.get("kit_categoria_id")))
+                )
+                regra = next(regra for regra in kit.regras.all() if regra.pk == int(item_dados.get("regra_id")))
+            except (KitCategoria.DoesNotExist, StopIteration, TypeError, ValueError):
+                raise DadosInvalidosError("O desconto por categoria escolhido não foi encontrado.")
+            if not PrecoService.desconto_categoria_vigente(kit, data=hoje) or not PrecoService.regra_categoria_aplica(regra, produto, quantidade):
+                raise DadosInvalidosError("O desconto por categoria escolhido não se aplica mais a este item.")
+            base, _ = PrecoService._preco_base_categoria(produto, desconto=kit, filial=filial, data=hoje)
+            preco = PrecoService.aplicar_regra_desconto(base, regra.tipo_desconto, regra.valor_desconto)
+            return {"preco": cls._decimal(preco, cls.UNIT), "tipo": tipo, "origem": kit.nome, "detalhe": f'Desconto por categoria "{kit.nome}".'}
+        if tipo == "combo":
+            try:
+                promocao = (
+                    PromocaoQuantidade.objects.for_filial(filial).filter(produto=produto, ativo=True)
+                    .prefetch_related("faixas").get(pk=int(item_dados.get("promocao_id")))
+                )
+                faixa = next(faixa for faixa in promocao.faixas.all() if faixa.pk == int(item_dados.get("faixa_id")))
+            except (PromocaoQuantidade.DoesNotExist, StopIteration, TypeError, ValueError):
+                raise DadosInvalidosError("O combo escolhido não foi encontrado.")
+            if not PrecoService.combo_quantidade_vigente(promocao, data=hoje) or not faixa.aplica_para_quantidade(quantidade):
+                raise DadosInvalidosError("A quantidade ou a validade do combo escolhido não é mais válida.")
+            candidatos = PrecoService.precos_combo_quantidade_vigentes_detalhados(
+                produto, filial=filial, quantidade=quantidade, data=hoje,
+            )
+            escolhido = next((item for item in candidatos if item.get("faixa_id") == faixa.pk), None)
+            if not escolhido:
+                raise DadosInvalidosError("Não foi possível calcular o combo escolhido.")
+            return {"preco": cls._decimal(escolhido["preco"], cls.UNIT), "tipo": tipo, "origem": promocao.nome, "detalhe": escolhido["detalhe"]}
+        if tipo == "brinde":
+            try:
+                brinde = BrindeProduto.objects.for_filial(filial).get(
+                    pk=int(item_dados.get("brinde_id")), produto_gatilho=produto, ativo=True,
+                )
+            except (BrindeProduto.DoesNotExist, TypeError, ValueError):
+                raise DadosInvalidosError("A promoção de brinde escolhida não foi encontrada.")
+            if not PrecoService.combo_quantidade_vigente(brinde, data=hoje) or quantidade < brinde.quantidade_gatilho:
+                raise DadosInvalidosError("A quantidade ou a validade do brinde escolhido não é mais válida.")
+            preco = preco_automatico["preco"] if brinde.permite_preco_promocional else produto.preco_venda
+            return {"preco": cls._decimal(preco, cls.UNIT), "tipo": tipo, "origem": brinde.nome, "detalhe": f'Promoção com brinde "{brinde.nome}".'}
+        raise DadosInvalidosError("A opção comercial escolhida não é reconhecida.")
+
+    @classmethod
     def _criar_item_e_baixar_estoque(
         cls,
         *,
@@ -221,21 +291,40 @@ class VendaPDVService:
         except Produto.DoesNotExist:
             raise DadosInvalidosError("Produto nao encontrado ou nao vinculado a filial ativa.")
 
-        contrato = ProdutoVendavelService.validar_venda(
+        contrato = ProdutoVendavelService.consultar(
             produto=produto,
             filial=filial,
             quantidade=quantidade,
             cliente=venda.cliente,
         )
+        bloqueios_cadastro = [
+            item for item in contrato["bloqueios"]
+            if item.get("codigo") not in {"preco_aplicado_invalido", "margem_negativa"}
+        ]
+        if bloqueios_cadastro:
+            labels = "; ".join(item["label"] for item in bloqueios_cadastro)
+            raise DadosInvalidosError(f'Produto "{produto.descricao}" nao pode ser vendido: {labels}')
         preco_info = cls.resolver_preco_produto(
             produto,
             filial,
             quantidade,
             cliente=venda.cliente,
         )
+        preco_info = cls.resolver_oferta_selecionada(
+            produto=produto,
+            filial=filial,
+            quantidade=quantidade,
+            cliente=venda.cliente,
+            item_dados=item_dados,
+            preco_automatico=preco_info,
+        )
         valor_unitario = preco_info["preco"]
         preco_origem_tipo = preco_info["tipo"]
         preco_origem_detalhe = preco_info["detalhe"] or preco_info["origem"]
+        if valor_unitario <= 0:
+            raise DadosInvalidosError("O preço da condição escolhida deve ser maior que zero.")
+        if contrato["custo_atual"] > 0 and valor_unitario < contrato["custo_atual"]:
+            raise DadosInvalidosError("O preço da condição escolhida está abaixo do custo atual.")
 
         preco_manual = item_dados.get("preco_manual")
         if preco_manual not in (None, ""):
@@ -315,6 +404,7 @@ class VendaPDVService:
             produto_gatilho=produto,
             quantidade_gatilho=quantidade,
             numero_item_inicial=numero_item,
+            brinde_id=item_dados.get("brinde_id") if item_dados.get("oferta_tipo") == "brinde" else None,
         ))
         return itens
 
@@ -341,21 +431,31 @@ class VendaPDVService:
             )
         except KitProduto.DoesNotExist:
             raise DadosInvalidosError("Kit nao encontrado ou nao vinculado a filial ativa.")
+        if not PrecoService.combo_quantidade_vigente(kit, data=timezone.localdate()):
+            raise DadosInvalidosError("O kit escolhido não está mais vigente.")
         componentes = list(kit.itens.all())
         if not componentes:
             raise DadosInvalidosError("Kit sem itens nao pode ser vendido.")
 
         itens = []
         subtotal_sem_desconto = Decimal("0.00")
+        custo_total_kit = Decimal("0.00")
         precos_componentes = []
         for comp in componentes:
             qtd_componente = cls._decimal(comp.quantidade * quantidade_kit, Decimal("0.001"))
-            contrato = ProdutoVendavelService.validar_venda(
+            contrato = ProdutoVendavelService.consultar(
                 produto=comp.produto,
                 filial=filial,
                 quantidade=qtd_componente,
                 cliente=venda.cliente,
             )
+            bloqueios_cadastro = [
+                item for item in contrato["bloqueios"]
+                if item.get("codigo") not in {"preco_aplicado_invalido", "margem_negativa"}
+            ]
+            if bloqueios_cadastro:
+                labels = "; ".join(item["label"] for item in bloqueios_cadastro)
+                raise DadosInvalidosError(f'Produto "{comp.produto.descricao}" nao pode ser vendido: {labels}')
             if venda.cliente and venda.cliente.tabela_preco_id:
                 preco_unitario = contrato["preco_aplicado"]
             else:
@@ -365,11 +465,18 @@ class VendaPDVService:
                     else comp.produto.preco_venda
                 )
             preco_unitario = cls._decimal(preco_unitario, cls.UNIT)
+            if preco_unitario <= 0:
+                raise DadosInvalidosError(f'O componente "{comp.produto.descricao}" está sem preço válido no kit.')
             total = cls._decimal(qtd_componente * preco_unitario, cls.MONEY)
             subtotal_sem_desconto += total
+            custo_total_kit += cls._decimal(qtd_componente * contrato["custo_atual"], cls.MONEY)
             precos_componentes.append((comp, qtd_componente, contrato, preco_unitario, total))
 
         total_kit = cls._aplicar_desconto_kit(subtotal_sem_desconto, kit.tipo_desconto, kit.valor_desconto)
+        if total_kit <= 0:
+            raise DadosInvalidosError("O preço do kit deve ser maior que zero.")
+        if custo_total_kit > 0 and total_kit < custo_total_kit:
+            raise DadosInvalidosError("O preço do kit escolhido está abaixo do custo atual dos componentes.")
         fator = (total_kit / subtotal_sem_desconto) if subtotal_sem_desconto > 0 else Decimal("0")
         for offset, (comp, qtd_componente, contrato, preco_unitario, total) in enumerate(precos_componentes):
             valor_total_item = cls._decimal(total * fator, cls.MONEY)
@@ -417,10 +524,13 @@ class VendaPDVService:
         produto_gatilho: Produto,
         quantidade_gatilho: Decimal,
         numero_item_inicial: int,
+        brinde_id=None,
     ) -> list[ItemVendaPDV]:
+        if not brinde_id:
+            return []
         brindes = (
             BrindeProduto.objects.for_filial(filial)
-            .filter(ativo=True, produto_gatilho=produto_gatilho, quantidade_gatilho__lte=quantidade_gatilho)
+            .filter(pk=brinde_id, ativo=True, produto_gatilho=produto_gatilho, quantidade_gatilho__lte=quantidade_gatilho)
             .prefetch_related("itens__produto__unidade_medida")
         )
         itens = []
