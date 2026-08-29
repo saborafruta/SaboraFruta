@@ -31,10 +31,6 @@ OBSERVACAO_PAGAMENTO_ORCAMENTO = (
     'do pedido, para início da produção. Os 50% restantes deverão ser pagos '
     'no ato da entrega.'
 )
-MESES = (
-    'janeiro', 'fevereiro', 'março', 'abril', 'maio', 'junho',
-    'julho', 'agosto', 'setembro', 'outubro', 'novembro', 'dezembro',
-)
 TOPO_CONTINUACAO = 21 * mm
 MARGEM_INFERIOR = 22 * mm
 ALTURA_CONTINUACAO = A4[1] - TOPO_CONTINUACAO - MARGEM_INFERIOR - 12
@@ -77,10 +73,6 @@ def brl(valor):
     return f'R${valor or Decimal("0"):,.2f}'.replace(',', '_').replace('.', ',').replace('_', '.')
 
 
-def _por_extenso(data):
-    return f'{data.day} de {MESES[data.month - 1]} de {data.year}'
-
-
 def _texto(valor):
     return esc(str(valor or '').replace('—', '-').replace('–', '-'))
 
@@ -103,7 +95,7 @@ def observacoes_orcamento(pedido):
 def _estilos():
     normal = ParagraphStyle(
         'orc_normal', parent=getSampleStyleSheet()['Normal'],
-        fontName='Helvetica', fontSize=8, leading=11, textColor=TEXTO,
+        fontName='Helvetica', fontSize=7.4, leading=9.2, textColor=TEXTO,
     )
     return {
         'normal': normal,
@@ -112,20 +104,20 @@ def _estilos():
         'centro': ParagraphStyle('orc_centro', parent=normal, alignment=1),
         'nome': ParagraphStyle('orc_nome', parent=normal, fontName='Helvetica-Bold'),
         'th': ParagraphStyle(
-            'orc_th', parent=normal, fontSize=6, leading=8,
+            'orc_th', parent=normal, fontSize=5.6, leading=7,
             fontName='Helvetica-Bold', textColor=colors.white,
         ),
         'pequeno': ParagraphStyle(
-            'orc_pequeno', parent=normal, fontSize=7, leading=9, textColor=CINZA,
+            'orc_pequeno', parent=normal, fontSize=6.5, leading=8, textColor=CINZA,
         ),
-        'celula': ParagraphStyle('orc_celula', parent=normal, fontSize=7, leading=9),
+        'celula': ParagraphStyle('orc_celula', parent=normal, fontSize=6.5, leading=8),
         'secao': ParagraphStyle(
             'orc_secao', parent=normal, fontName='Helvetica-Bold', textColor=MARINHO,
         ),
         'secao_numero': ParagraphStyle('orc_numero', parent=normal),
         'titulo': ParagraphStyle(
             'orc_titulo', parent=normal, fontName='Helvetica-Bold',
-            fontSize=29, leading=34, alignment=2, textColor=MARINHO,
+            fontSize=25, leading=29, alignment=2, textColor=MARINHO,
         ),
     }
 
@@ -262,11 +254,11 @@ class OrcamentoPdfService:
     @staticmethod
     def _empresa(pedido, e):
         filial = pedido.filial
-        marca = logo(filial, 43 * mm, 25 * mm)
+        marca = logo(filial, 38 * mm, 21 * mm)
         direita = [
-            Paragraph('ORÇAMENTO', e['titulo']), Spacer(1, 5),
+            Paragraph('ORÇAMENTO', e['titulo']), Spacer(1, 3),
             HRFlowable(width='100%', color=MARINHO, thickness=1.2),
-            Spacer(1, 8),
+            Spacer(1, 5),
             Paragraph(f'<b>{_texto(filial.nome_fantasia or filial.razao_social)}</b>', e['td_dir']),
         ]
         if filial.cnpj:
@@ -284,7 +276,7 @@ class OrcamentoPdfService:
             colWidths=[LARGURA_UTIL * .42, LARGURA_UTIL * .58],
         )
         tabela.setStyle(TableStyle(_estilo_tabela(0)))
-        return [tabela, Spacer(1, 10)]
+        return [tabela, Spacer(1, 6)]
 
     @staticmethod
     def _cliente(pedido, e):
@@ -301,10 +293,10 @@ class OrcamentoPdfService:
             colWidths=[LARGURA_UTIL * .43, LARGURA_UTIL * .3, LARGURA_UTIL * .27],
             cornerRadii=[6] * 4,
         )
-        tabela.setStyle(TableStyle(_estilo_tabela(9) + [
+        tabela.setStyle(TableStyle(_estilo_tabela(6) + [
             ('BACKGROUND', (0, 0), (-1, -1), FUNDO),
         ]))
-        return [tabela, Spacer(1, 10)]
+        return [tabela, Spacer(1, 6)]
 
     @staticmethod
     def _especificacoes(item):
@@ -338,7 +330,7 @@ class OrcamentoPdfService:
         return list(dict.fromkeys(pares))
 
     @staticmethod
-    def _fotos(item, e, altura=29 * mm):
+    def _fotos(item, e, altura=22 * mm):
         fotos = []
         for visual in item.visuais.all():
             campo = visual.imagem or (
@@ -346,15 +338,15 @@ class OrcamentoPdfService:
             )
             imagem = _imagem(campo, 23 * mm, altura)
             if imagem is not None:
-                fotos += [imagem, Spacer(1, 5)]
+                fotos += [imagem, Spacer(1, 3)]
             elif campo:
                 fotos.append(Paragraph('Imagem indisponível', e['pequeno']))
         for p in item.personalizacoes.all():
             if p.arquivo and p.extensao in DESENHAVEIS:
-                imagem = _imagem(p.arquivo, 23 * mm, 25 * mm)
+                imagem = _imagem(p.arquivo, 23 * mm, 20 * mm)
                 fotos += [
                     imagem or Paragraph('Arte indisponível', e['pequeno']),
-                    Spacer(1, 5),
+                    Spacer(1, 3),
                 ]
         return fotos or ''
 
@@ -397,18 +389,18 @@ class OrcamentoPdfService:
         if cabecalhos == 2:
             tabela.setStyle(TableStyle([('SPAN', (0, 0), (-1, 0))]))
         return [
-            Spacer(1, 7),
+            Spacer(1, 3),
             HRFlowable(width='100%', thickness=.5, color=BORDA),
-            Spacer(1, 6),
+            Spacer(1, 3),
             Paragraph(f'<b>Personalização por pessoa - {len(pessoas)}:</b>', e['celula']),
-            Spacer(1, 5), tabela,
+            Spacer(1, 3), tabela,
         ]
 
     @classmethod
     def _produto(cls, item, e):
         largura = cls.LARGURAS[1] - 12
         conteudo = [
-            Paragraph(_texto(item.nome_exibicao), e['nome']), Spacer(1, 5),
+            Paragraph(_texto(item.nome_exibicao), e['nome']), Spacer(1, 3),
         ]
         especificacoes = cls._especificacoes(item)
         if especificacoes:
@@ -416,16 +408,16 @@ class OrcamentoPdfService:
                 Paragraph(f'<b>{_texto(rotulo)}:</b> {_texto(valor)}', e['celula'])
                 for rotulo, valor in especificacoes
             ]
-            linhas = [celulas[indice:indice + 2] for indice in range(0, len(celulas), 2)]
-            if len(linhas[-1]) == 1:
+            linhas = [celulas[indice:indice + 3] for indice in range(0, len(celulas), 3)]
+            while len(linhas[-1]) < 3:
                 linhas[-1].append('')
             tabela_especificacoes = Table(
-                linhas, colWidths=[largura / 2] * 2, hAlign='LEFT',
+                linhas, colWidths=[largura / 3] * 3, hAlign='LEFT',
             )
             tabela_especificacoes.setStyle(TableStyle([
                 ('VALIGN', (0, 0), (-1, -1), 'TOP'),
                 ('LEFTPADDING', (0, 0), (-1, -1), 0),
-                ('RIGHTPADDING', (0, 0), (-1, -1), 4),
+                ('RIGHTPADDING', (0, 0), (-1, -1), 3),
                 ('TOPPADDING', (0, 0), (-1, -1), 0),
                 ('BOTTOMPADDING', (0, 0), (-1, -1), 2),
             ]))
@@ -434,9 +426,9 @@ class OrcamentoPdfService:
         if grade:
             resumo = ' | '.join(f'{g.tamanho.sigla} {g.quantidade}' for g in grade)
             conteudo += [
-                Spacer(1, 6),
+                Spacer(1, 3),
                 HRFlowable(width='100%', thickness=.5, color=BORDA),
-                Spacer(1, 6),
+                Spacer(1, 3),
                 Paragraph(
                     f'<b>Grade:</b> {_texto(resumo)} | '
                     f'<b>Total {sum(g.quantidade for g in grade)}</b>', e['celula'],
@@ -444,7 +436,7 @@ class OrcamentoPdfService:
             ]
         conteudo += cls._pessoas(item, e, largura)
         return [
-            cls._fotos(item, e, (29 if especificacoes or grade else 13) * mm), conteudo,
+            cls._fotos(item, e, (22 if especificacoes or grade else 12) * mm), conteudo,
             Paragraph(str(item.quantidade), e['centro']),
             Paragraph(brl(item.valor_unitario), e['td_dir']),
             Paragraph(brl(item.subtotal), e['td_dir']),
@@ -470,28 +462,28 @@ class OrcamentoPdfService:
             dados, colWidths=cls.LARGURAS, repeatRows=1,
             splitByRow=1, splitInRow=0, cornerRadii=[5] * 4,
         )
-        tabela.setStyle(TableStyle(_estilo_tabela(6) + [
+        tabela.setStyle(TableStyle(_estilo_tabela(4) + [
             ('SPAN', (0, 0), (1, 0)),
             ('BACKGROUND', (0, 0), (-1, 0), MARINHO),
             ('BOX', (0, 0), (-1, -1), .5, BORDA),
             ('LINEBELOW', (0, 1), (-1, -1), .5, BORDA),
-            ('TOPPADDING', (0, 1), (-1, -1), 6),
-            ('BOTTOMPADDING', (0, 1), (-1, -1), 6),
+            ('TOPPADDING', (0, 1), (-1, -1), 4),
+            ('BOTTOMPADDING', (0, 1), (-1, -1), 4),
         ]))
         return tabela
 
     @staticmethod
     def _par_cartoes(esquerda, direita, largura_esquerda, altura_minima=0,
-                     fundo_esquerda=FUNDO, fundo_direita=colors.white):
+                     fundo_esquerda=FUNDO, fundo_direita=colors.white,
+                     padding=8, intervalo=8):
         """Cartões de mesma altura, com respiro e bordas independentes."""
-        intervalo = 10
         larguras = [largura_esquerda, LARGURA_UTIL - largura_esquerda - intervalo]
         medidor = Canvas(BytesIO())
 
         def cartao(conteudo, largura, fundo, altura=None):
             tabela = Table([[conteudo]], colWidths=[largura],
                            rowHeights=[altura] if altura else None, cornerRadii=[7] * 4)
-            tabela.setStyle(TableStyle(_estilo_tabela(14) + [
+            tabela.setStyle(TableStyle(_estilo_tabela(padding) + [
                 ('BACKGROUND', (0, 0), (-1, -1), fundo),
                 ('BOX', (0, 0), (-1, -1), .6, fundo if fundo == MARINHO else BORDA),
             ]))
@@ -507,7 +499,7 @@ class OrcamentoPdfService:
             # Conteúdo excepcional não cabe em cartões lado a lado:
             # permite continuar o texto integral sem fonte minúscula.
             tabela = Table([[esquerda], [direita]], colWidths=[LARGURA_UTIL], splitInRow=1)
-            tabela.setStyle(TableStyle(_estilo_tabela(14) + [
+            tabela.setStyle(TableStyle(_estilo_tabela(padding) + [
                 ('BACKGROUND', (0, 0), (0, 0), fundo_esquerda),
                 ('BACKGROUND', (0, 1), (0, 1), fundo_direita),
                 ('BOX', (0, 0), (-1, -1), .6, BORDA),
@@ -522,33 +514,33 @@ class OrcamentoPdfService:
 
     @classmethod
     def _totais(cls, pedido, e):
-        destaque = ParagraphStyle(
-            'orc_subtotal', parent=e['nome'], fontSize=17, leading=21,
-        )
-        esquerda = [Paragraph('Subtotal', e['pequeno']), Spacer(1, 8),
-                    Paragraph(brl(pedido.subtotal), destaque)]
+        detalhes = []
         for rotulo, valor in (
             ('Desconto', pedido.desconto), ('Acréscimo', pedido.acrescimo),
             ('Frete', pedido.frete),
         ):
             if valor:
-                esquerda += [Spacer(1, 4), Paragraph(f'{rotulo}: {brl(valor)}', e['normal'])]
+                detalhes.append(f'{rotulo}: {brl(valor)}')
         total_estilo = ParagraphStyle(
-            'orc_total', parent=destaque, fontSize=24, leading=29,
+            'orc_total', parent=e['nome'], fontSize=22, leading=25,
             textColor=colors.white, alignment=2,
         )
-        direita = [
-            Paragraph('<font color="white"><b>TOTAL DO ORÇAMENTO</b></font>', e['normal']),
-            Spacer(1, 9), Paragraph(brl(pedido.valor_total), total_estilo),
+        conteudo = [
+            Paragraph('<font color="white"><b>TOTAL DO ORÇAMENTO</b></font>', e['pequeno']),
+            Spacer(1, 5), Paragraph(brl(pedido.valor_total), total_estilo),
         ]
+        if detalhes:
+            conteudo += [Spacer(1, 3), Paragraph(
+                f'<font color="white">Subtotal: {brl(pedido.subtotal)} · '
+                f'{_texto(" · ".join(detalhes))}</font>', e['pequeno'],
+            )]
         if pedido.entrada:
-            direita += [
-                Spacer(1, 5),
+            conteudo += [
+                Spacer(1, 3),
                 Paragraph(f'<font color="white">Entrada: {brl(pedido.entrada)} - '
-                          f'Saldo: {brl(pedido.saldo)}</font>', e['normal']),
+                          f'Saldo: {brl(pedido.saldo)}</font>', e['pequeno']),
             ]
-        return cls._par_cartoes(esquerda, direita, LARGURA_UTIL * .365,
-                                altura_minima=72, fundo_direita=MARINHO)
+        return conteudo
 
     @classmethod
     def _pagamento_previsto(cls, pedido, e, largura=LARGURA_UTIL, compacto=False):
@@ -587,19 +579,23 @@ class OrcamentoPdfService:
 
     @classmethod
     def _resumo_comercial(cls, pedido, e):
-        """Fechamento unido; se for excepcionalmente longo, divide entre cartões."""
-        titulo = ParagraphStyle('orc_fechamento', parent=e['nome'], fontSize=11, leading=14)
-        largura_pagamento = LARGURA_UTIL * .63
-        pagamento = [Paragraph('Forma de pagamento prevista', e['secao']), Spacer(1, 12)]
-        pagamento += cls._pagamento_previsto(pedido, e, largura_pagamento - 28, compacto=True)
+        """Fechamento compacto como no modelo comercial de uma página."""
+        titulo = ParagraphStyle('orc_fechamento', parent=e['nome'], fontSize=9, leading=11)
+        largura_pagamento = LARGURA_UTIL * .56
+        pagamento = [Paragraph('Forma de pagamento prevista', e['secao']), Spacer(1, 4)]
+        pagamento += cls._pagamento_previsto(
+            pedido, e, largura_pagamento - 16, compacto=True,
+        )
+        pagamento += [Spacer(1, 5)] + cls._previsao_entrega(pedido, e)
         blocos = [
-            Paragraph('FECHAMENTO DO ORÇAMENTO', titulo), Spacer(1, 4),
-            HRFlowable(width='100%', color=MARINHO, thickness=1), Spacer(1, 14),
-            cls._totais(pedido, e), Spacer(1, 12),
-            cls._par_cartoes(pagamento, cls._previsao_entrega(pedido, e),
-                            largura_pagamento, altura_minima=62,
-                            fundo_esquerda=colors.white, fundo_direita=FUNDO),
-            Spacer(1, 12),
+            Paragraph('FECHAMENTO DO ORÇAMENTO', titulo), Spacer(1, 3),
+            HRFlowable(width='100%', color=MARINHO, thickness=1), Spacer(1, 6),
+            cls._par_cartoes(
+                pagamento, cls._totais(pedido, e), largura_pagamento,
+                fundo_esquerda=colors.white, fundo_direita=MARINHO,
+                padding=7, intervalo=7,
+            ),
+            Spacer(1, 6),
         ] + cls._fechamento(pedido, e)
         return [KeepTogether(blocos)]
 
@@ -611,9 +607,9 @@ class OrcamentoPdfService:
                  for i, texto in enumerate(textos, 1)]
         tabela = Table(dados, colWidths=[25, largura - 25], splitInRow=1)
         tabela.setStyle(TableStyle(_estilo_tabela(0) + [
-            ('BOTTOMPADDING', (0, 0), (-1, -1), 8),
+            ('BOTTOMPADDING', (0, 0), (-1, -1), 4),
         ]))
-        return [Paragraph('Observações e prazos', e['secao']), Spacer(1, 12), tabela]
+        return [Paragraph('Observações e prazos', e['secao']), Spacer(1, 5), tabela]
 
     @staticmethod
     def _previsao_entrega(pedido, e):
@@ -626,19 +622,14 @@ class OrcamentoPdfService:
 
     @classmethod
     def _fechamento(cls, pedido, e):
-        largura_obs = LARGURA_UTIL * .73
-        filial = pedido.filial
-        marca = logo(filial, LARGURA_UTIL - largura_obs - 38, 20 * mm)
-        data = [
-            Paragraph('<b>DATA DO ORÇAMENTO</b>', e['pequeno']), Spacer(1, 14),
-            Paragraph(f'<b>{_por_extenso(pedido.data_pedido)}</b>',
-                      ParagraphStyle('orc_data', parent=e['normal'], fontSize=10, leading=14)),
-            Spacer(1, 16), HRFlowable(width='100%', color=BORDA, thickness=.5), Spacer(1, 10),
-        ]
-        if marca is not None:
-            data += [marca, Spacer(1, 8)]
-        data.append(Paragraph(_texto(filial.nome_fantasia or filial.razao_social), e['pequeno']))
-        if filial.cnpj:
-            data += [Spacer(1, 5), Paragraph(f'CNPJ: {esc(cnpj(filial.cnpj))}', e['pequeno'])]
-        return [cls._par_cartoes(cls._observacoes(pedido, e, largura_obs - 28), data,
-                                largura_obs, altura_minima=180)]
+        observacoes = cls._observacoes(pedido, e, LARGURA_UTIL - 16)
+        quadro = Table([[observacoes]], colWidths=[LARGURA_UTIL], cornerRadii=[5] * 4)
+        quadro.setStyle(TableStyle(_estilo_tabela(8) + [
+            ('BACKGROUND', (0, 0), (-1, -1), FUNDO),
+            ('BOX', (0, 0), (-1, -1), .5, BORDA),
+        ]))
+        if quadro.wrapOn(Canvas(BytesIO()), LARGURA_UTIL, 100000)[1] > ALTURA_CONTINUACAO:
+            # Observações excepcionais precisam continuar em outras páginas.
+            # Sem o cartão externo, a tabela interna consegue se dividir por linha.
+            return observacoes
+        return [quadro]

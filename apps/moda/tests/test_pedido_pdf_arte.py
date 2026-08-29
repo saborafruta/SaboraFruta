@@ -305,7 +305,7 @@ class ArteNoPdfTests(TestCase):
         self.assertIn('Camisa <A> & B', texto)
         self.assertTrue(OrcamentoPdfService.gerar(pedido).startswith(b'%PDF'))
 
-    def test_orcamento_organiza_especificacoes_em_duas_colunas_sem_reduzir_imagem(self):
+    def test_orcamento_organiza_especificacoes_em_tres_colunas_com_imagem_compacta(self):
         from reportlab.platypus import Table
         from apps.moda.services.orcamento_pdf import _estilos
 
@@ -320,8 +320,8 @@ class ArteNoPdfTests(TestCase):
         linha = OrcamentoPdfService._produto(item, _estilos())
         conteudo = linha[1]
         tabela = next(bloco for bloco in conteudo if isinstance(bloco, Table))
-        self.assertEqual(len(tabela._cellvalues), 5)
-        self.assertEqual(len(tabela._cellvalues[0]), 2)
+        self.assertEqual(len(tabela._cellvalues), 4)
+        self.assertEqual(len(tabela._cellvalues[0]), 3)
         self.assertAlmostEqual(OrcamentoPdfService.LARGURAS[0], 27 * 72 / 25.4)
         self.assertAlmostEqual(OrcamentoPdfService.LARGURAS[1], 76 * 72 / 25.4)
 
@@ -344,7 +344,7 @@ class ArteNoPdfTests(TestCase):
         self.assertIn('Forma de pagamento prevista', texto_financeiro)
         self.assertIn('Observações e prazos', texto_financeiro)
         self.assertIn('Previsão de entrega:', texto_financeiro)
-        self.assertIn('DATA DO ORÇAMENTO', texto_financeiro)
+        self.assertNotIn('DATA DO ORÇAMENTO', texto_financeiro)
 
     def test_orcamento_usa_previsao_de_entrega_e_mantem_prazo_maximo(self):
         from datetime import date
@@ -391,6 +391,36 @@ class ArteNoPdfTests(TestCase):
     def test_orcamento_curto_continua_em_uma_pagina(self):
         pedido = self._pedido()
         ItemPedidoProducao.objects.create(pedido=pedido, descricao='Camisa simples', quantidade=1)
+        self.assertEqual(_paginas(OrcamentoPdfService.gerar(pedido)), 1)
+
+    def test_orcamento_com_tres_produtos_detalhados_cabe_em_uma_pagina(self):
+        pedido = self._pedido()
+        tamanho = Tamanho.objects.create(filial=self.filial, sigla='M')
+        estrutura = 'Estrutura da peça:\n' + '\n'.join((
+            'Malha: MICROFIBRA UV COM ELASTANO', 'Manga: LONGA',
+            'Punho: N/A', 'Gola: T-SHIRT BASICA', 'Frisos: N/A',
+            'Abertura: N/A', 'Acabamento da gola: REBATIMENTO',
+            'Acabamento da cava: N/A', 'Bordado: N/A',
+        ))
+        for indice in range(3):
+            item = ItemPedidoProducao.objects.create(
+                pedido=pedido, descricao=f'Camisa Manga Longa UV {indice + 1}',
+                quantidade=10, valor_unitario=Decimal('85'), observacoes=estrutura,
+            )
+            visual = VisualItemPedido.objects.create(
+                item=item, posicao='frente_camisa',
+                imagem=SimpleUploadedFile(f'produto-{indice}.png', _png((40 * indice, 80, 140))),
+            )
+            self.addCleanup(visual.imagem.delete, save=False)
+            if indice == 0:
+                PersonalizacaoIndividual.objects.bulk_create([
+                    PersonalizacaoIndividual(
+                        pedido=pedido, item=item, tamanho=tamanho,
+                        nome=f'Pessoa {numero}', numero=str(numero),
+                    )
+                    for numero in range(1, 8)
+                ])
+
         self.assertEqual(_paginas(OrcamentoPdfService.gerar(pedido)), 1)
 
     def test_orcamento_move_ultimo_produto_para_junto_do_fechamento(self):
