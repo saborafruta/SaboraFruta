@@ -1208,20 +1208,48 @@ class PedidoExpedicaoDeleteView(PermissaoRequiredMixin, View):
             )
             return redirect("logistica:pedido-expedicao-list")
 
+        # DINHEIRO RECEBIDO SEGURA A EXCLUSAO. O titulo aponta para o pedido
+        # por tipo e id; apagar o pedido deixaria um recebimento no contas a
+        # receber sem origem -- dinheiro que entrou e nao se sabe do que. O
+        # caminho e' estornar o recebimento primeiro, com quem recebeu
+        # respondendo por isso.
+        cobranca = FinanceiroExpedicaoService.resumo(pedido)
+        if cobranca["tem_dinheiro"]:
+            messages.error(
+                request,
+                f"Pedido #{pedido.numero:06d} tem R$ {cobranca['valor']:.2f} "
+                "recebido no contas a receber. Estorne o recebimento antes de "
+                "excluir — apagar agora deixaria o dinheiro sem origem.",
+            )
+            return redirect("logistica:pedido-expedicao-detail", pk=pedido.pk)
+
         numero = pedido.numero
         # Avisa que a exclusao mexeu num romaneio ja montado -- sem isso o
         # pedido simplesmente sumiria da carga sem ninguem perceber.
         romaneio = pedido.romaneio
-        pedido.delete()
 
+        # A COBRANCA EM ABERTO VAI JUNTO, cancelada: titulo apontando para
+        # pedido que nao existe e' cobranca que ninguem consegue explicar ao
+        # cliente que ligar perguntando.
+        canceladas = FinanceiroExpedicaoService.cancelar_titulos(pedido)
+
+        # A ENTREGA TAMBEM: o vinculo e' SET_NULL, entao ela sobreviveria
+        # solta no romaneio, somando peso e valor de uma carga que nao existe
+        # mais -- e o motorista sairia com uma parada sem pedido.
+        entrega = RomaneioDoPedidoService.entrega_do_pedido(pedido)
+        if entrega is not None:
+            entrega.delete()
+
+        pedido.delete()
         if romaneio:
-            messages.success(
-                request,
-                f"Pedido #{numero:06d} excluído. Ele saiu do romaneio {romaneio}, "
-                f"que agora tem uma carga a menos.",
-            )
-        else:
-            messages.success(request, f"Pedido #{numero:06d} excluído.")
+            romaneio.recalcular_totais()
+
+        recado = f"Pedido #{numero:06d} excluído."
+        if romaneio:
+            recado += f" Saiu do romaneio {romaneio}, que agora tem uma carga a menos."
+        if canceladas:
+            recado += f" {canceladas} parcela(s) da cobrança foram canceladas."
+        messages.success(request, recado)
         return redirect("logistica:pedido-expedicao-list")
 
 

@@ -37,7 +37,7 @@ from apps.logistica.forms import (
     ItemPedidoExpedicaoForm, PedidoExpedicaoForm,
 )
 from apps.logistica.models import (
-    ItemRomaneioCarga, PedidoExpedicao, RomaneioCarga,
+    ItemPedidoExpedicao, ItemRomaneioCarga, PedidoExpedicao, RomaneioCarga,
 )
 from apps.core.services.exceptions import DadosInvalidosError
 from apps.estoque.models import MovimentacaoEstoque
@@ -1252,3 +1252,90 @@ class FormasAPrazoTests(CobrancaDaExpedicaoTests):
         self.assertFalse(formas.get('cartao_debito', False))
         self.assertFalse(formas.get('pix', False))
         self.assertFalse(formas.get('dinheiro', False))
+
+
+class ExclusaoDoPedidoTests(CobrancaDaExpedicaoTests):
+    """
+    O que sai junto com o pedido — e o que segura a exclusão.
+
+    APAGAR UM PEDIDO NÃO É APAGAR SÓ A LINHA DELE: há a cobrança apontando
+    para ele por tipo e id, e a entrega dele no romaneio. Nenhuma das duas
+    tem cascata, e as duas sobreviveriam soltas.
+    """
+
+    def _romaneio(self):
+        return RomaneioCarga.objects.create(
+            filial=self.filial, numero=1, responsavel=self.usuario,
+        )
+
+    def test_dinheiro_recebido_segura_a_exclusao(self):
+        """
+        Apagar deixaria um recebimento no contas a receber sem origem —
+        dinheiro que entrou e não se sabe do quê.
+        """
+        pedido = self._carga_avulsa()
+        FinanceiroExpedicaoService.gerar_titulos(
+            pedido, self.usuario, antecipado=True,
+        )
+
+        resposta = self.client.post(
+            reverse('logistica:pedido-expedicao-delete', args=[pedido.pk]),
+            follow=True,
+        )
+
+        self.assertTrue(PedidoExpedicao.objects.filter(pk=pedido.pk).exists())
+        avisos = [str(m) for m in resposta.context['messages']]
+        self.assertTrue(
+            any('Estorne o recebimento' in a for a in avisos), avisos,
+        )
+
+    def test_cobranca_em_aberto_e_cancelada_junto(self):
+        """
+        Título apontando para pedido que não existe é cobrança que ninguém
+        consegue explicar ao cliente que ligar perguntando.
+        """
+        pedido = self._carga_avulsa()
+        FinanceiroExpedicaoService.gerar_titulos(pedido, self.usuario)
+        titulos = list(FinanceiroExpedicaoService.titulos(pedido))
+
+        self.client.post(
+            reverse('logistica:pedido-expedicao-delete', args=[pedido.pk]),
+            follow=True,
+        )
+
+        self.assertFalse(PedidoExpedicao.objects.filter(pk=pedido.pk).exists())
+        for titulo in titulos:
+            titulo.refresh_from_db()
+            self.assertEqual(titulo.status, StatusContaReceber.CANCELADO)
+
+    def test_a_entrega_sai_do_romaneio_junto(self):
+        """
+        O vínculo é SET_NULL: sem apagar, a entrega sobreviveria solta no
+        romaneio, somando peso e valor de uma carga que não existe mais.
+        """
+        romaneio = self._romaneio()
+        pedido = self._carga_avulsa()
+        pedido.romaneio = romaneio
+        pedido.save(update_fields=['romaneio'])
+        RomaneioDoPedidoService.sincronizar(pedido)
+        self.assertEqual(romaneio.itens.count(), 1)
+
+        self.client.post(
+            reverse('logistica:pedido-expedicao-delete', args=[pedido.pk]),
+            follow=True,
+        )
+
+        self.assertEqual(romaneio.itens.count(), 0)
+        romaneio.refresh_from_db()
+        self.assertEqual(romaneio.valor_total, Decimal('0'))
+
+    def test_pedido_sem_cobranca_e_sem_romaneio_sai_limpo(self):
+        pedido = self._carga_avulsa()
+
+        self.client.post(
+            reverse('logistica:pedido-expedicao-delete', args=[pedido.pk]),
+            follow=True,
+        )
+
+        self.assertFalse(PedidoExpedicao.objects.filter(pk=pedido.pk).exists())
+        self.assertEqual(ItemPedidoExpedicao.objects.count(), 0)
