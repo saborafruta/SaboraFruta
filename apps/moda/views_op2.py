@@ -773,6 +773,8 @@ class Op2DetailView(ModaBaseView):
         return render(request, 'moda/op2_detail.html', {
             'title': f'OP 2.0 #{pedido.numero:06d}',
             'pedido': pedido,
+            'cliente_atual_json': _cliente_json(pedido.cliente),
+            'pode_editar_cliente': request.user.tem_permissao('cadastros', 'editar'),
             'itens': itens,
             'modelos': modelos,
             'modelos_grade': {
@@ -916,6 +918,17 @@ class Op2ActionView(ModaBaseView):
         return resposta or _voltar(pedido)
 
     def _acao_cabecalho(self, request, pedido):
+        cliente_id = request.POST.get('cliente')
+        if not cliente_id:
+            raise ValueError('Selecione o cliente da OP.')
+        cliente = get_object_or_404(
+            Cliente.objects.for_filial(_filial(request)).filter(
+                Q(ativo=True) | Q(pk=pedido.cliente_id),
+            ),
+            pk=cliente_id,
+        )
+        cliente_anterior_id = pedido.cliente_id
+        pedido.cliente = cliente
         pedido.data_pedido = date.fromisoformat(request.POST.get('data_pedido'))
         entrega = (request.POST.get('data_prevista_entrega') or '').strip()
         pedido.data_prevista_entrega = date.fromisoformat(entrega) if entrega else None
@@ -924,7 +937,10 @@ class Op2ActionView(ModaBaseView):
         pedido.contato_nome = (request.POST.get('contato_nome') or '').strip()
         pedido.contato_telefone = (request.POST.get('contato_telefone') or '').strip()
         pedido.save()
-        messages.success(request, 'Rascunho salvo.')
+        if cliente.pk != cliente_anterior_id:
+            messages.success(request, f'Cliente alterado para "{cliente.nome_display}".')
+        else:
+            messages.success(request, 'Rascunho salvo.')
 
     def _acao_financeiro(self, request, pedido):
         def dinheiro(nome):

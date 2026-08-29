@@ -878,9 +878,49 @@ class Op2Tests(TestCase):
         self.assertContains(resposta, '<h2 class="font-bold">Fotos e mockups</h2>')
         self.assertContains(resposta, 'op2-aside .op2-gallery-grid')
         self.assertContains(resposta, 'Todos os produtos acompanham o status geral da OP.')
+        self.assertContains(resposta, 'name="cliente" :value="clienteId"')
+        self.assertContains(resposta, 'Editar cadastro do cliente atual')
+        self.assertContains(
+            resposta,
+            reverse('cadastros:cliente-update', args=[self.cliente.pk]),
+        )
+        self.assertContains(resposta, 'buscarClientes()')
         self.assertNotContains(resposta, 'Quantidade entregue')
         self.assertNotContains(resposta, 'Atualizar entrega')
         self.assertNotContains(resposta, 'name="acao" value="item_fluxo"')
+
+    def test_cliente_da_op_pode_ser_trocado_em_qualquer_etapa(self):
+        novo_cliente = Cliente.objects.create(
+            filial=self.filial, tipo_pessoa='J',
+            razao_social='Cliente corrigido', contato_nome='Novo contato',
+            celular='84999990000', ativo=True,
+        )
+        self.pedido.status = PedidoProducao.Status.EM_PRODUCAO
+        self.pedido.save(update_fields=['status'])
+        self._login_op2()
+
+        resposta = self.client.post(
+            reverse('moda:op2-action', args=[self.pedido.pk]),
+            {
+                'acao': 'cabecalho',
+                'cliente': novo_cliente.pk,
+                'data_pedido': self.pedido.data_pedido.isoformat(),
+                'data_prevista_entrega': '',
+                'prioridade': self.pedido.prioridade,
+                'contato_nome': novo_cliente.contato_nome,
+                'contato_telefone': novo_cliente.celular,
+                'observacoes': self.pedido.observacoes,
+            },
+        )
+
+        self.assertRedirects(
+            resposta, reverse('moda:op2-detail', args=[self.pedido.pk]),
+        )
+        self.pedido.refresh_from_db()
+        self.assertEqual(self.pedido.cliente, novo_cliente)
+        self.assertEqual(self.pedido.status, PedidoProducao.Status.EM_PRODUCAO)
+        self.assertEqual(self.pedido.contato_nome, 'Novo contato')
+        self.assertEqual(self.pedido.contato_telefone, '84999990000')
 
     def test_status_entregue_confirma_entrega_da_op_inteira(self):
         primeiro = self._item(quantidade=4, entregue=0)
