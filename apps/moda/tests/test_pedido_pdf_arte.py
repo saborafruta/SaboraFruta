@@ -231,7 +231,8 @@ class ArteNoPdfTests(TestCase):
         self.assertIn('PIX', texto_pagamento)
         self.assertIn('Crédito parcelado', texto_pagamento)
         self.assertIn('válido por 5 dias', observacoes)
-        self.assertIn('até 30 dias úteis', observacoes)
+        self.assertIn('até 30 dias após', observacoes)
+        self.assertNotIn('dias úteis', observacoes)
         self.assertIn(
             'O pagamento de 50% do valor total deverá ser realizado na aprovação '
             'do pedido, para início da produção. Os 50% restantes deverão ser pagos '
@@ -269,6 +270,29 @@ class ArteNoPdfTests(TestCase):
         self.assertNotIn('Responsável', self._texto_layout(layout_op))
         self.assertEqual(len(layout_orcamento[0]._cellvalues[0]), 3)
         self.assertIn('CPF/CNPJ', self._texto_layout(layout_op[2]._cellvalues[0][2]))
+
+    def test_clientes_adicionais_aparecem_no_orcamento_e_na_op_no_plural(self):
+        from apps.moda.services.orcamento_pdf import _estilos as estilos_orcamento
+        from apps.moda.services.pedido_pdf import _estilos as estilos_op
+
+        pedido = self._pedido()
+        adicional = Cliente.objects.create(
+            filial=pedido.filial,
+            razao_social='Cliente adicional LTDA',
+            cpf_cnpj='98765432000155',
+            ativo=True,
+        )
+        pedido.clientes_adicionais.add(adicional)
+
+        texto_orcamento = self._texto_layout(
+            OrcamentoPdfService._cliente(pedido, estilos_orcamento())
+        )
+        texto_op = self._texto_layout(PedidoPdfService._cliente(pedido, estilos_op()))
+
+        self.assertIn('Clientes:', texto_orcamento)
+        self.assertIn('Cliente adicional LTDA', texto_orcamento)
+        self.assertIn('INFORMAÇÕES DOS CLIENTES', texto_op)
+        self.assertIn('Cliente adicional LTDA', texto_op)
 
     def test_pagamento_nao_informado_nao_repete_valor_ao_lado(self):
         from apps.moda.services.orcamento_pdf import _estilos
@@ -406,7 +430,8 @@ class ArteNoPdfTests(TestCase):
         self.assertNotIn('Prazo de entrega:', texto)
         observacoes = self._texto_layout(OrcamentoPdfService._observacoes(pedido, _estilos()))
         self.assertIn('válido por 5 dias', observacoes)
-        self.assertIn('prazo máximo de entrega é de até 30 dias úteis', observacoes)
+        self.assertIn('prazo máximo de entrega é de até 30 dias após', observacoes)
+        self.assertNotIn('dias úteis', observacoes)
 
     def test_orcamento_sem_data_e_pagamento_nao_inventa_informacoes(self):
         from apps.moda.services.orcamento_pdf import _estilos
@@ -706,7 +731,7 @@ class ArteNoPdfTests(TestCase):
         self.assertNotIn('FINANCEIRO', texto)
         self.assertNotIn('OBSERVAÇÕES DA OP', texto)
         direita = self._texto_layout(frames[-1])
-        self.assertIn('FINANCEIRO', direita)
+        self.assertNotIn('FINANCEIRO', direita)
         self.assertIn('Observacao geral da OP na direita.', direita)
         self.assertNotIn('PERSONALIZAÇÃO POR PESSOA', direita)
 
@@ -835,11 +860,11 @@ class ArteNoPdfTests(TestCase):
         self.assertTrue(pdf.startswith(b'%PDF'))
         self.assertEqual(_paginas(pdf), 1)
 
-    def test_financeiro_e_observacoes_sao_montados_em_todas_as_paginas(self):
+    def test_observacoes_sao_montadas_uma_vez_e_financeiro_nao_e_usado(self):
         pedido = self._pedido()
         pedido.observacoes = 'Conferir nomes antes da entrega.'
         pedido.save(update_fields=['observacoes'])
-        itens = [
+        _itens = [
             ItemPedidoProducao.objects.create(
                 pedido=pedido, descricao='Camisa', quantidade=3,
                 valor_unitario=Decimal('20.00'),
@@ -850,17 +875,14 @@ class ArteNoPdfTests(TestCase):
             ),
         ]
 
-        financeiro_original = PedidoPdfService._financeiro
+        observacoes_original = PedidoPdfService._observacoes_op
         with patch.object(
-            PedidoPdfService, '_financeiro', wraps=financeiro_original,
-        ) as financeiro:
+            PedidoPdfService, '_observacoes_op', wraps=observacoes_original,
+        ) as observacoes, patch.object(PedidoPdfService, '_financeiro') as financeiro:
             PedidoPdfService.gerar(pedido)
 
-        self.assertEqual(financeiro.call_count, 2)
-        self.assertEqual(
-            [chamada.kwargs['item'].pk for chamada in financeiro.call_args_list],
-            [item.pk for item in itens],
-        )
+        self.assertEqual(observacoes.call_count, 1)
+        financeiro.assert_not_called()
 
     def test_financeiro_da_op_nao_exibe_desconto_acrescimo_e_frete(self):
         from apps.moda.services.pedido_pdf import LARGURA_UTIL, _estilos

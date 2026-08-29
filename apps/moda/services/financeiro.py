@@ -173,6 +173,7 @@ class FinanceiroPedidoService:
     @transaction.atomic
     def gerar(
         cls, pedido, usuario=None, *, vencimento_saldo=None, parcelas_saldo=None,
+        pagadores_entrada=None, devedores_saldo=None,
     ) -> list[ContaReceber]:
         cls._validar(pedido)
 
@@ -183,20 +184,32 @@ class FinanceiroPedidoService:
         if not plano:
             raise DomainError('Não há valor a receber neste pedido.')
 
-        total = len(plano)
+        pagadores_entrada = list(pagadores_entrada or [pedido.cliente])
+        devedores_saldo = list(devedores_saldo or [pedido.cliente])
+        expandidas = []
+        for parcela in plano:
+            entrada = cls._eh_entrada(pedido, parcela)
+            responsaveis = pagadores_entrada if entrada else devedores_saldo
+            valores = cls._dividir_valor(parcela.valor, len(responsaveis))
+            expandidas.extend(
+                (parcela, cliente, valor, entrada)
+                for cliente, valor in zip(responsaveis, valores)
+            )
+
+        total = len(expandidas)
         contas = []
-        for p in plano:
+        for numero, (p, cliente, valor, entrada) in enumerate(expandidas, start=1):
             conta = ContaReceber(
                 filial=pedido.filial,
-                cliente=pedido.cliente,
+                cliente=cliente,
                 documento_tipo=cls.DOCUMENTO_TIPO,
                 documento_id=pedido.pk,
                 documento_numero=str(pedido.numero),
-                parcela=p.numero,
+                parcela=numero,
                 total_parcelas=total,
-                valor_original=p.valor,
-                valor_final=p.valor,
-                valor_saldo=p.valor,
+                valor_original=valor,
+                valor_final=valor,
+                valor_saldo=valor,
                 data_emissao=pedido.data_pedido,
                 data_vencimento=p.vencimento,
                 forma_pagamento=pedido.forma_pagamento,
@@ -208,15 +221,18 @@ class FinanceiroPedidoService:
                     )
                 ),
                 status=StatusContaReceber.ABERTO,
-                observacao=f'Pedido de produção #{pedido.numero:06d} — {p.rotulo}',
+                observacao=(
+                    f'Pedido de produção #{pedido.numero:06d} — {p.rotulo} — '
+                    f'Responsável: {cliente.nome_display}'
+                ),
                 usuario=usuario,
             )
             conta.save()
-            if cls._eh_entrada(pedido, p):
+            if entrada:
                 ContaReceberService.registrar_baixa(
                     conta,
                     pedido.data_pedido,
-                    p.valor,
+                    valor,
                     pedido.forma_pagamento,
                     usuario,
                     conta_bancaria=cls._conta_entrada(pedido),
@@ -228,6 +244,16 @@ class FinanceiroPedidoService:
         pedido.financeiro_gerado_em = timezone.now()
         pedido.save(update_fields=['financeiro_gerado_em', 'updated_at'])
         return contas
+
+    @staticmethod
+    def _dividir_valor(valor: Decimal, quantidade: int) -> list[Decimal]:
+        """Divide em centavos e deixa a diferença apenas na última pessoa."""
+        if quantidade < 1:
+            raise DomainError('Informe ao menos um responsável financeiro.')
+        base = (valor / quantidade).quantize(CENTAVO, rounding=ROUND_DOWN)
+        valores = [base] * (quantidade - 1)
+        valores.append(valor - sum(valores, Decimal('0')))
+        return valores
 
     @classmethod
     def _eh_entrada(cls, pedido, parcela: Parcela) -> bool:

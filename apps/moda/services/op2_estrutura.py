@@ -10,6 +10,12 @@ TIPOS_IMPRESSAO_PADRAO = [
     'SEM IMPRESSÃO', 'OUTRO',
 ]
 
+CORES_PRINCIPAIS = [
+    'PRETO', 'BRANCO', 'AZUL MARINHO', 'AZUL ROYAL', 'VERMELHO', 'VERDE',
+    'AMARELO', 'CINZA', 'LARANJA', 'ROSA', 'ROXO', 'BEGE', 'MARROM',
+    'COR PERSONALIZADA',
+]
+
 
 OP2_ESTRUTURA_OPCOES = {
     'camisa': {
@@ -105,6 +111,7 @@ OP2_ESTRUTURA_OPCOES = {
 for _grupo in OP2_ESTRUTURA_OPCOES.values():
     _grupo['campos'] = {
         'tipo_impressao': list(TIPOS_IMPRESSAO_PADRAO),
+        'cor': list(CORES_PRINCIPAIS),
         **_grupo.get('campos', {}),
     }
     for _valores in _grupo['campos'].values():
@@ -198,6 +205,10 @@ def validar_estrutura_item(post, grupos):
             raise ValueError(f'{rotulo}: preenchimento obrigatório. Se não se aplica, selecione N/A.')
         if valor not in opcoes:
             raise ValueError(f'{rotulo}: selecione uma opção válida para {grupo["label"]}.')
+        if campo == 'cor' and valor == 'COR PERSONALIZADA':
+            personalizada = (post.get('estrutura_cor_personalizada') or '').strip()
+            if not personalizada:
+                raise ValueError('Cor personalizada: informe a cor desejada.')
 
 
 def validar_valor_unitario(valor):
@@ -260,6 +271,8 @@ def estrutura_resumo(post, grupos=None) -> str:
         valor = (post.get(f'estrutura_{chave}') or '').strip()
         if valor:
             rotulo = chave.replace('_', ' ').capitalize()
+            if chave == 'cor' and valor == 'COR PERSONALIZADA':
+                valor = (post.get('estrutura_cor_personalizada') or '').strip()
             linhas.append(f'{rotulo}: {valor}')
     return '\n'.join(linhas) if len(linhas) > 1 else ''
 

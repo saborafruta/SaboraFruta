@@ -100,6 +100,26 @@ def _cliente_json(cliente):
     }
 
 
+def _clientes_adicionais(request, cliente_principal):
+    """Resolve os clientes extras no mesmo escopo da OP e elimina duplicatas."""
+    ids = []
+    vistos = {str(cliente_principal.pk)}
+    for valor in request.POST.getlist('clientes_adicionais'):
+        valor = (valor or '').strip()
+        if valor and valor not in vistos:
+            vistos.add(valor)
+            ids.append(valor)
+    clientes = list(
+        Cliente.objects.for_filial(_filial(request)).filter(
+            ativo=True, pk__in=ids,
+        )
+    )
+    if len(clientes) != len(ids):
+        raise ValueError('Um dos clientes adicionais não está disponível nesta filial.')
+    por_id = {str(cliente.pk): cliente for cliente in clientes}
+    return [por_id[pk] for pk in ids]
+
+
 def _observacoes_pedido(request):
     observacoes = (request.POST.get('observacoes') or '').strip()
     extras = []
@@ -176,6 +196,7 @@ def _dados_modal_item(item, estrutura_opcoes):
     observacoes = texto
     estrutura_tipo = next(iter(estrutura_opcoes), 'camisa')
     estrutura = {}
+    cor_personalizada = ''
     if marcador in texto:
         observacoes, bloco = texto.split(marcador, 1)
         observacoes = observacoes.strip()
@@ -193,6 +214,12 @@ def _dados_modal_item(item, estrutura_opcoes):
                 continue
             campo = '_'.join(chave.casefold().split())
             estrutura[campo] = valor
+
+        cores = estrutura_opcoes.get(estrutura_tipo, {}).get('campos', {}).get('cor', [])
+        cor = estrutura.get('cor', '')
+        if cor and cor not in cores:
+            cor_personalizada = cor
+            estrutura['cor'] = 'COR PERSONALIZADA'
 
     arte = item.personalizacoes.first()
     grade_id = str(item.grade_tamanho_id or '')
@@ -219,6 +246,7 @@ def _dados_modal_item(item, estrutura_opcoes):
         ),
         'estrutura_tipo': estrutura_tipo,
         'estrutura': estrutura,
+        'cor_personalizada': cor_personalizada,
         'item_observacoes': observacoes,
         'grades': [grade_id] if grade_id else [],
         'gradePorGrade': {grade_id: quantidades} if grade_id else {},
@@ -270,6 +298,11 @@ class Op2CreateView(ModaBaseView):
             Cliente.objects.for_filial(_filial(request)).filter(ativo=True),
             pk=cliente_id,
         )
+        try:
+            clientes_adicionais = _clientes_adicionais(request, cliente)
+        except ValueError as erro:
+            messages.error(request, str(erro))
+            return render(request, 'moda/op2_create.html', self._context(request))
         indices = self._indices_itens(request)
         if not indices:
             messages.error(request, 'Adicione ao menos um modelo de produção à OP.')
@@ -340,6 +373,7 @@ class Op2CreateView(ModaBaseView):
                 observacoes=_observacoes_pedido(request),
                 previsao_pagamento=previsao_pagamento,
             )
+            pedido.clientes_adicionais.set(clientes_adicionais)
             primeiro_item = None
             itens_por_indice = {}
             for ordem, (indice, form) in enumerate(formularios, start=1):
@@ -774,6 +808,14 @@ class Op2DetailView(ModaBaseView):
             'title': f'OP 2.0 #{pedido.numero:06d}',
             'pedido': pedido,
             'cliente_atual_json': _cliente_json(pedido.cliente),
+            'clientes_adicionais_json': [
+                _cliente_json(cliente) for cliente in pedido.clientes_adicionais.all()
+            ],
+            'clientes_pedido': [pedido.cliente, *pedido.clientes_adicionais.all()],
+            'clientes_pedido_json': [
+                _cliente_json(cliente)
+                for cliente in [pedido.cliente, *pedido.clientes_adicionais.all()]
+            ],
             'pode_editar_cliente': request.user.tem_permissao('cadastros', 'editar'),
             'itens': itens,
             'modelos': modelos,
@@ -927,6 +969,7 @@ class Op2ActionView(ModaBaseView):
             ),
             pk=cliente_id,
         )
+        clientes_adicionais = _clientes_adicionais(request, cliente)
         cliente_anterior_id = pedido.cliente_id
         pedido.cliente = cliente
         pedido.data_pedido = date.fromisoformat(request.POST.get('data_pedido'))
@@ -937,6 +980,7 @@ class Op2ActionView(ModaBaseView):
         pedido.contato_nome = (request.POST.get('contato_nome') or '').strip()
         pedido.contato_telefone = (request.POST.get('contato_telefone') or '').strip()
         pedido.save()
+        pedido.clientes_adicionais.set(clientes_adicionais)
         if cliente.pk != cliente_anterior_id:
             messages.success(request, f'Cliente alterado para "{cliente.nome_display}".')
         else:
@@ -974,6 +1018,21 @@ class Op2ActionView(ModaBaseView):
         if parcelas < 1 or parcelas > 120:
             raise ValueError('A quantidade de parcelas deve ficar entre 1 e 120.')
 
+        clientes_pedido = [pedido.cliente, *pedido.clientes_adicionais.all()]
+        clientes_por_id = {str(cliente.pk): cliente for cliente in clientes_pedido}
+
+        def responsaveis(campo, rotulo):
+            valor = (request.POST.get(campo) or '').strip()
+            if valor == 'todos':
+                return clientes_pedido
+            cliente = clientes_por_id.get(valor)
+            if cliente is None:
+                raise ValueError(f'{rotulo}: selecione um cliente da OP ou divida entre todos.')
+            return [cliente]
+
+        pagadores_entrada = responsaveis('responsavel_entrada', 'Pagamento recebido')
+        devedores_saldo = responsaveis('responsavel_saldo', 'Valor fiado')
+
         base = pedido.subtotal + (pedido.frete or Decimal('0'))
         pedido.desconto = max(base - valor_total, Decimal('0'))
         pedido.acrescimo = max(valor_total - base, Decimal('0'))
@@ -986,7 +1045,8 @@ class Op2ActionView(ModaBaseView):
         ])
         contas = FinanceiroPedidoService.gerar(
             pedido, request.user, vencimento_saldo=vencimento,
-            parcelas_saldo=parcelas,
+            parcelas_saldo=parcelas, pagadores_entrada=pagadores_entrada,
+            devedores_saldo=devedores_saldo,
         )
         messages.success(
             request,

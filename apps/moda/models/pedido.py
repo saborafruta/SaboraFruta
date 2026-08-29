@@ -79,6 +79,11 @@ class PedidoProducao(ComCodigoQr, FilialScopedModel):
         'cadastros.Cliente', on_delete=models.PROTECT,
         related_name='pedidos_moda',
     )
+    clientes_adicionais = models.ManyToManyField(
+        'cadastros.Cliente', blank=True,
+        related_name='pedidos_moda_compartilhados',
+        help_text='Outros clientes que participam da mesma OP/orçamento.',
+    )
     # A ficha do cliente traz o contato genérico da empresa; o pedido traz
     # quem acompanha ESTE pedido ("INTERFORT (ANDERSON)"). São coisas
     # diferentes, por isso o contato é gravado aqui e não só lido do cadastro.

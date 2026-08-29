@@ -37,6 +37,12 @@ class FinanceiroPedidoEntradaTests(TestCase):
             cpf_cnpj="12345678901",
             ativo=True,
         )
+        cls.cliente_2 = Cliente.objects.create(
+            filial=cls.filial,
+            razao_social="Segundo Cliente Moda",
+            cpf_cnpj="98765432100",
+            ativo=True,
+        )
         cls.conta = ContaBancaria.objects.create(
             filial=cls.filial,
             descricao="Conta PIX",
@@ -168,3 +174,31 @@ class FinanceiroPedidoEntradaTests(TestCase):
             date(2026, 10, 10), date(2026, 11, 9),
         ])
         self.assertTrue(all(c.conta_bancaria == self.conta for c in saldos))
+
+    def test_pagamento_e_fiado_podem_ser_divididos_entre_clientes(self):
+        pedido = self._pedido(entrada=Decimal("200.01"), forma=self.forma)
+        pedido.clientes_adicionais.add(self.cliente_2)
+
+        contas = FinanceiroPedidoService.gerar(
+            pedido,
+            pagadores_entrada=[self.cliente, self.cliente_2],
+            devedores_saldo=[self.cliente, self.cliente_2],
+        )
+
+        self.assertEqual(len(contas), 4)
+        self.assertEqual(
+            sum((conta.valor_original for conta in contas), Decimal('0')),
+            Decimal('1000.00'),
+        )
+        pagas = [conta for conta in contas if conta.status == StatusContaReceber.PAGO]
+        abertas = [conta for conta in contas if conta.status == StatusContaReceber.ABERTO]
+        self.assertEqual({conta.cliente_id for conta in pagas}, {self.cliente.pk, self.cliente_2.pk})
+        self.assertEqual({conta.cliente_id for conta in abertas}, {self.cliente.pk, self.cliente_2.pk})
+        self.assertEqual(
+            sum((conta.valor_pago for conta in pagas), Decimal('0')),
+            Decimal('200.01'),
+        )
+        self.assertEqual(
+            sum((conta.valor_saldo for conta in abertas), Decimal('0')),
+            Decimal('799.99'),
+        )

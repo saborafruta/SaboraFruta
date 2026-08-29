@@ -276,7 +276,7 @@ class PedidoPdfService:
         if not itens:
             blocos = cls._cliente(pedido, e)
             blocos += cls._artes_do_pedido(pedido, e)
-            blocos += cls._financeiro(pedido, e, LARGURA_UTIL)
+            blocos += cls._observacoes_op(pedido, e, LARGURA_UTIL)
             elementos.append(KeepInFrame(LARGURA_UTIL - 12, altura_util, blocos, mode='shrink'))
         else:
             for indice, item in enumerate(itens):
@@ -287,7 +287,8 @@ class PedidoPdfService:
                 # A imagem depende apenas do conteúdo da DIREITA. A lista
                 # de pessoas não disputa mais altura com a arte.
                 complemento = cls._artes_do_pedido(pedido, e, meia) if indice == 0 else []
-                complemento += cls._financeiro(pedido, e, meia, item=item)
+                if indice == 0:
+                    complemento += cls._observacoes_op(pedido, e, meia)
                 complemento_frame = KeepInFrame(
                     meia, altura_util * .70, complemento, mode='shrink',
                 )
@@ -462,6 +463,12 @@ class PedidoPdfService:
     @staticmethod
     def _cliente(pedido, e, largura_util=LARGURA_UTIL) -> list:
         c = pedido.cliente
+        clientes = [c, *pedido.clientes_adicionais.all()]
+        plural = len(clientes) > 1
+        nomes = '<br/>'.join(esc(cliente.razao_social) for cliente in clientes)
+        documentos = '<br/>'.join(
+            esc(getattr(cliente, 'cpf_cnpj', '')) or '—' for cliente in clientes
+        )
         # WhatsApp: o cadastro guarda celular, e é dele que sai o contato de
         # WhatsApp na prática. Um campo próprio não existe — dizer "celular"
         # seria mais honesto, mas o pedido pede WhatsApp e é o mesmo número.
@@ -471,22 +478,22 @@ class PedidoPdfService:
 
         if responsavel:
             dados = [[
-                Paragraph('<b>Cliente</b>', e['celula']),
-                Paragraph(esc(c.razao_social), e['celula']),
+                Paragraph(f'<b>{"Clientes" if plural else "Cliente"}</b>', e['celula']),
+                Paragraph(nomes, e['celula']),
                 Paragraph('<b>Responsável</b>', e['celula']),
                 Paragraph(esc(responsavel), e['celula']),
             ], [
                 Paragraph('<b>CPF/CNPJ</b>', e['celula']),
-                Paragraph(esc(getattr(c, 'cpf_cnpj', '')) or '—', e['celula']),
+                Paragraph(documentos, e['celula']),
                 Paragraph('<b>Telefone</b>', e['celula']),
                 Paragraph(esc(telefone) or '—', e['celula']),
             ]]
         else:
             dados = [[
-                Paragraph('<b>Cliente</b>', e['celula']),
-                Paragraph(esc(c.razao_social), e['celula']),
+                Paragraph(f'<b>{"Clientes" if plural else "Cliente"}</b>', e['celula']),
+                Paragraph(nomes, e['celula']),
                 Paragraph('<b>CPF/CNPJ</b>', e['celula']),
-                Paragraph(esc(getattr(c, 'cpf_cnpj', '')) or '—', e['celula']),
+                Paragraph(documentos, e['celula']),
             ]]
         if not responsavel and telefone:
             dados.append([
@@ -502,7 +509,7 @@ class PedidoPdfService:
         larguras = [largura_rotulo, largura_valor] * 2
 
         return [
-            _barra_secao(1, 'INFORMAÇÕES DO CLIENTE', e, largura_util),
+            _barra_secao(1, 'INFORMAÇÕES DOS CLIENTES' if plural else 'INFORMAÇÕES DO CLIENTE', e, largura_util),
             Spacer(1, 3), _tabela(dados, larguras, cabecalho=False),
             Spacer(1, 4),
         ]
@@ -627,8 +634,16 @@ class PedidoPdfService:
                 ('Acabamento', item.acabamento),
             ) if valor
         ]
-        existentes = {rotulo.casefold() for rotulo, _ in campos}
-        campos += [par for par in estrutura if par[0].casefold() not in existentes]
+        # A estrutura é preenchida especificamente para esta OP e por isso
+        # vence o valor legado do cadastro quando os rótulos coincidem.
+        indices = {rotulo.casefold(): indice for indice, (rotulo, _) in enumerate(campos)}
+        for par in estrutura:
+            chave = par[0].casefold()
+            if chave in indices:
+                campos[indices[chave]] = par
+            else:
+                indices[chave] = len(campos)
+                campos.append(par)
         dados = []
         for inicio in range(0, len(campos), 2):
             linha = []
@@ -893,7 +908,22 @@ class PedidoPdfService:
             tabela,
         ]
 
-    # ── Financeiro ───────────────────────────────────────────────────────
+    # ── Observações operacionais ─────────────────────────────────────────
+
+    @staticmethod
+    def _observacoes_op(pedido, e, largura_util=LARGURA_UTIL) -> list:
+        if not pedido.observacoes:
+            return []
+        return [
+            Spacer(1, 5),
+            _barra_secao(None, 'OBSERVAÇÕES DA OP', e, largura_util),
+            Spacer(1, 3),
+            Paragraph(esc(pedido.observacoes).replace('\n', '<br/>'), e['normal']),
+        ]
+
+    # Mantido apenas como compatibilidade interna para chamadas antigas.
+    # O gerador da OP não usa mais este bloco: valores e pagamentos não
+    # pertencem à folha enviada para produção.
 
     @staticmethod
     def _financeiro(pedido, e, largura_util=LARGURA_UTIL, item=None) -> list:
@@ -933,13 +963,4 @@ class PedidoPdfService:
         ]
         if pagamento:
             blocos += [Spacer(1, 3), Paragraph(' · '.join(pagamento), e['normal'])]
-        if pedido.observacoes:
-            blocos += [
-                Spacer(1, 5),
-                _barra_secao(None, 'OBSERVAÇÕES DA OP', e, largura_util),
-                Spacer(1, 3),
-                # Escapa PRIMEIRO e só então troca a quebra de linha pelo
-                # <br/>: na ordem inversa o escape comeria a própria tag.
-                Paragraph(esc(pedido.observacoes).replace('\n', '<br/>'), e['normal']),
-            ]
         return blocos

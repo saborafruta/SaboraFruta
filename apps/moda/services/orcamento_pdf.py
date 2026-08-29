@@ -81,7 +81,7 @@ def observacoes_orcamento(pedido):
     """Textos comerciais compartilhados pelo PDF e pelo link do WhatsApp."""
     textos = [
         'Este orçamento é válido por 5 dias a partir da data de emissão.',
-        'O prazo máximo de entrega é de até 30 dias úteis após a aprovação do orçamento.',
+        'O prazo máximo de entrega é de até 30 dias após a aprovação do orçamento.',
     ]
     if pedido.condicao_pagamento_id:
         textos.append(f'Condição: {pedido.condicao_pagamento}')
@@ -220,7 +220,10 @@ class OrcamentoPdfService:
             cabecalho = Table([[
                 Paragraph('<b>ORÇAMENTO - CONTINUAÇÃO</b>', estilo),
                 Paragraph(
-                    f'Cliente: {_texto(pedido.cliente.razao_social)} - '
+                    f'Clientes: {_texto(" / ".join(
+                        cliente.razao_social for cliente in
+                        [pedido.cliente, *pedido.clientes_adicionais.all()]
+                    ))} - '
                     f'Emissão: {pedido.data_pedido:%d/%m/%Y}', direita,
                 ),
             ]], colWidths=[LARGURA_UTIL * .40, LARGURA_UTIL * .60])
@@ -280,11 +283,20 @@ class OrcamentoPdfService:
 
     @staticmethod
     def _cliente(pedido, e):
-        cliente = pedido.cliente
-        nome = getattr(cliente, 'razao_social', None) or str(cliente)
-        documento = _texto(getattr(cliente, 'cpf_cnpj', '')) or 'Não informado'
+        clientes = [pedido.cliente, *pedido.clientes_adicionais.all()]
+        plural = len(clientes) > 1
+        nomes = '<br/>'.join(
+            _texto(getattr(cliente, 'razao_social', None) or str(cliente))
+            for cliente in clientes
+        )
+        documentos = '<br/>'.join(
+            _texto(getattr(cliente, 'cpf_cnpj', '')) or 'Não informado'
+            for cliente in clientes
+        )
         responsavel = (pedido.contato_nome or '').strip()
-        celulas = [Paragraph(f'<b>Cliente:</b><br/>{_texto(nome)}', e['normal'])]
+        celulas = [Paragraph(
+            f'<b>{"Clientes" if plural else "Cliente"}:</b><br/>{nomes}', e['normal'],
+        )]
         if responsavel:
             celulas.append(Paragraph(
                 f'<b>Responsável:</b><br/>{_texto(responsavel)}', e['normal'],
@@ -293,7 +305,7 @@ class OrcamentoPdfService:
         else:
             larguras = [.43, .30, .27]
         celulas += [
-            Paragraph(f'<b>CNPJ/CPF:</b><br/>{documento}', e['normal']),
+            Paragraph(f'<b>CNPJ/CPF:</b><br/>{documentos}', e['normal']),
             Paragraph(f'<b>Data de Emissão:</b><br/>{pedido.data_pedido:%d/%m/%Y}', e['normal']),
         ]
         tabela = Table(
@@ -323,10 +335,13 @@ class OrcamentoPdfService:
             if not linha.strip():
                 continue
             rotulo, sep, valor = linha.partition(':')
-            pares.append(
+            par = (
                 (rotulo.strip(), valor.strip()) if sep
                 else ('Observação', linha.strip())
             )
+            chave = par[0].casefold()
+            pares = [existente for existente in pares if existente[0].casefold() != chave]
+            pares.append(par)
         for p in item.personalizacoes.all():
             valores = [
                 str(p), p.nome_personalizado, p.numero_personalizado,

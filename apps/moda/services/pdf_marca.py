@@ -15,6 +15,7 @@ from __future__ import annotations
 from io import BytesIO
 from xml.sax.saxutils import escape
 
+from django.contrib.staticfiles import finders
 from reportlab.lib import colors
 from reportlab.lib.pagesizes import A4
 from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
@@ -61,6 +62,20 @@ def logo(filial, largura, altura):
     Storage fora do ar não pode derrubar o documento inteiro: a folha sai sem
     a marca, que é muito melhor do que não sair.
     """
+    identificacao = ' '.join(filter(None, [
+        getattr(filial, 'razao_social', ''),
+        getattr(filial, 'nome_fantasia', ''),
+        getattr(getattr(filial, 'empresa', None), 'razao_social', ''),
+        getattr(getattr(filial, 'empresa', None), 'nome_fantasia', ''),
+    ])).casefold()
+    if any(nome in identificacao for nome in ('eureka', 'erk', 'ited')):
+        caminho = finders.find('moda/img/logo_erk_preta.png')
+        if caminho:
+            try:
+                return Image(caminho, width=largura, height=altura, kind='proportional')
+            except Exception:
+                pass
+
     campo = getattr(filial, 'imagem', None)
     if not campo:
         return None
