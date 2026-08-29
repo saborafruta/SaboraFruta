@@ -6,34 +6,6 @@
 {% block largura_conteudo %}produto-list-page w-full max-w-none{% endblock %}
 
 {% block list_actions %}
-  <div class="produto-column-picker" data-product-column-picker>
-    <button type="button" class="btn-secondary produto-column-picker-trigger" aria-expanded="false" aria-controls="produto-column-picker-panel" data-product-column-picker-trigger>
-      <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16M8 4v4m7 2v4m-5 2v4"/></svg>
-      Colunas
-    </button>
-    <div id="produto-column-picker-panel" class="produto-column-picker-panel" hidden data-product-column-picker-panel>
-      <div class="produto-column-picker-head">
-        <strong>Colunas visíveis</strong>
-        <span>Arraste a borda do cabeçalho para ajustar a largura.</span>
-      </div>
-      <div class="produto-column-picker-options">
-        <label><input type="checkbox" data-product-column-toggle="id" checked> ID</label>
-        <label title="O nome permanece visível para identificar os produtos."><input type="checkbox" data-product-column-toggle="nome" checked disabled> Nome <small>fixo</small></label>
-        <label><input type="checkbox" data-product-column-toggle="codigo_barras" checked> Cód. de barras</label>
-        <label><input type="checkbox" data-product-column-toggle="referencia" checked> Referência</label>
-        <label><input type="checkbox" data-product-column-toggle="categoria" checked> Categoria</label>
-        <label><input type="checkbox" data-product-column-toggle="subcategoria" checked> Subcategoria</label>
-        <label><input type="checkbox" data-product-column-toggle="unidade" checked> Unidade</label>
-        <label><input type="checkbox" data-product-column-toggle="estoque" checked> Estoque</label>
-        <label><input type="checkbox" data-product-column-toggle="custo" checked> Custo</label>
-        <label><input type="checkbox" data-product-column-toggle="preco" checked> Preço de venda</label>
-        <label><input type="checkbox" data-product-column-toggle="markup" checked> Markup</label>
-        <label><input type="checkbox" data-product-column-toggle="margem" checked> Margem</label>
-        <label><input type="checkbox" data-product-column-toggle="acoes" checked> Ações</label>
-      </div>
-      <button type="button" class="produto-column-picker-reset" data-product-column-reset>Restaurar padrão</button>
-    </div>
-  </div>
   <a href="{% url 'produtos:categoria-list' %}?tipo=categorias" class="btn-secondary">Categorias</a>
   <a href="{% url 'produtos:categoria-list' %}?tipo=subcategorias" class="btn-secondary">Subcategorias</a>
   <a href="{% url 'produtos:marca-list' %}" class="btn-secondary">Marcas</a>
@@ -208,7 +180,10 @@
   .produto-filter-actions { display: flex; align-items: center; gap: .65rem; min-width: 0; }
   .produto-filter-controls { flex-wrap: wrap; }
   .produto-filter-actions { justify-content: flex-end; flex-wrap: wrap; }
-  .produto-filter-controls > * { flex: 1 1 135px; }
+  .produto-filter-controls { gap: .5rem; }
+  .produto-filter-order,
+  .produto-filter-status { flex: 1 1 105px; min-width: 0; }
+  .produto-filter-stock,
   .produto-filter-controls .produto-filter-submit { flex: 0 0 auto; }
   .produto-filter-stock { white-space: nowrap; }
   .produto-filter-actions > * { flex: 0 0 auto; }
@@ -366,6 +341,34 @@
       </a>
     </div>
   {% endif %}
+    <div class="produto-column-picker" data-product-column-picker>
+      <button type="button" class="btn-secondary produto-column-picker-trigger" aria-expanded="false" aria-controls="produto-column-picker-panel" data-product-column-picker-trigger>
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16M8 4v4m7 2v4m-5 2v4"/></svg>
+        Colunas
+      </button>
+      <div id="produto-column-picker-panel" class="produto-column-picker-panel" hidden data-product-column-picker-panel>
+        <div class="produto-column-picker-head">
+          <strong>Colunas visíveis</strong>
+          <span>Arraste a borda do cabeçalho para ajustar a largura.</span>
+        </div>
+        <div class="produto-column-picker-options">
+          <label><input type="checkbox" data-product-column-toggle="id" checked> ID</label>
+          <label title="O nome permanece visível para identificar os produtos."><input type="checkbox" data-product-column-toggle="nome" checked disabled> Nome <small>fixo</small></label>
+          <label><input type="checkbox" data-product-column-toggle="codigo_barras" checked> Cód. de barras</label>
+          <label><input type="checkbox" data-product-column-toggle="referencia" checked> Referência</label>
+          <label><input type="checkbox" data-product-column-toggle="categoria" checked> Categoria</label>
+          <label><input type="checkbox" data-product-column-toggle="subcategoria" checked> Subcategoria</label>
+          <label><input type="checkbox" data-product-column-toggle="unidade" checked> Unidade</label>
+          <label><input type="checkbox" data-product-column-toggle="estoque" checked> Estoque</label>
+          <label><input type="checkbox" data-product-column-toggle="custo" checked> Custo</label>
+          <label><input type="checkbox" data-product-column-toggle="preco" checked> Preço de venda</label>
+          <label><input type="checkbox" data-product-column-toggle="markup" checked> Markup</label>
+          <label><input type="checkbox" data-product-column-toggle="margem" checked> Margem</label>
+          <label><input type="checkbox" data-product-column-toggle="acoes" checked> Ações</label>
+        </div>
+        <button type="button" class="produto-column-picker-reset" data-product-column-reset>Restaurar padrão</button>
+      </div>
+    </div>
   {% if pode_criar %}
     <div class="produto-filter-new">
       <a href="{% url 'produtos:produto-create' %}" class="btn-primary produto-filter-create">
