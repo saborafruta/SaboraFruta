@@ -3,19 +3,19 @@
 
   const STORAGE_KEY = 'ited.produtos.colunas.v1';
   const COLUMNS = [
-    { key: 'id', width: 64, min: 44 },
+    { key: 'id', width: 64, min: 34 },
     { key: 'nome', width: 330, min: 140, fixed: true },
-    { key: 'codigo_barras', width: 132, min: 70 },
-    { key: 'referencia', width: 84, min: 50 },
-    { key: 'categoria', width: 140, min: 65 },
-    { key: 'subcategoria', width: 142, min: 65 },
-    { key: 'unidade', width: 58, min: 40 },
-    { key: 'estoque', width: 96, min: 58 },
-    { key: 'custo', width: 102, min: 62 },
-    { key: 'preco', width: 116, min: 72 },
-    { key: 'markup', width: 82, min: 58 },
-    { key: 'margem', width: 82, min: 58 },
-    { key: 'acoes', width: 90, min: 58 },
+    { key: 'codigo_barras', width: 132, min: 42 },
+    { key: 'referencia', width: 84, min: 36 },
+    { key: 'categoria', width: 140, min: 48 },
+    { key: 'subcategoria', width: 142, min: 48 },
+    { key: 'unidade', width: 58, min: 28 },
+    { key: 'estoque', width: 96, min: 40 },
+    { key: 'custo', width: 102, min: 48 },
+    { key: 'preco', width: 116, min: 54 },
+    { key: 'markup', width: 82, min: 44 },
+    { key: 'margem', width: 82, min: 44 },
+    { key: 'acoes', width: 90, min: 54 },
   ];
   const columnByKey = new Map(COLUMNS.map(column => [column.key, column]));
   let preferences = { hidden: [], widths: {} };
@@ -65,7 +65,7 @@
     const visibleWidth = COLUMNS.reduce((sum, column) => (
       hidden.has(column.key) ? sum : sum + columnWidth(column)
     ), 0);
-    const tableWidth = Math.max(visibleWidth, productScroller ? productScroller.clientWidth : 0);
+    const tableWidth = visibleWidth;
     productTable.style.width = `${tableWidth}px`;
     productTable.style.minWidth = `${tableWidth}px`;
     document.dispatchEvent(new CustomEvent('produto:columns-applied'));
