@@ -102,6 +102,17 @@ class ProdutoToggleEstoqueTests(TestCase):
         request.session = {}
         return request
 
+    def list_ajax_request(self, params):
+        request = self.factory.get(
+            '/produtos/',
+            params,
+            HTTP_X_REQUESTED_WITH='XMLHttpRequest',
+        )
+        request.user = self.usuario
+        request.filial_ativa = self.filial
+        request.session = {}
+        return request
+
     def test_ver_todos_mantem_filtros_ordenacao_e_escopo(self):
         from unittest.mock import patch
         for index in range(53):
@@ -144,6 +155,33 @@ class ProdutoToggleEstoqueTests(TestCase):
         self.assertContains(response, 'Todos os 51 produtos')
         self.assertContains(response, 'name="ver" value="todos"')
         self.assertNotContains(response, 'id="produto-ver-todos"')
+
+    def test_ver_todos_ajax_evitar_contexto_pesado_dos_filtros(self):
+        from unittest.mock import patch
+
+        for _ in range(3):
+            self.criar_produto()
+        with patch('apps.produtos.views.produto.render') as render_mock:
+            ProdutoListView.as_view()(self.list_ajax_request({'ver': 'todos'}))
+
+        context = render_mock.call_args.args[2]
+        self.assertEqual(len(context['produtos']), 3)
+        self.assertEqual(context['categorias'], ())
+        self.assertEqual(context['subcategorias_por_categoria_json'], '{}')
+        self.assertEqual(context['inline_categorias_json'], '[]')
+        self.assertFalse(context['pode_exportar'])
+
+    def test_listagem_comprime_resposta_quando_navegador_aceita_gzip(self):
+        self.criar_produto()
+        request = self.factory.get('/produtos/', HTTP_ACCEPT_ENCODING='gzip, deflate')
+        request.user = self.usuario
+        request.filial_ativa = self.filial
+        request.session = {}
+
+        response = ProdutoListView.as_view()(request)
+
+        self.assertEqual(response.headers.get('Content-Encoding'), 'gzip')
+        self.assertIn('Accept-Encoding', response.headers.get('Vary', ''))
 
     def test_inativar_produto_zera_estoque_quando_solicitado(self):
         produto = self.criar_produto()
@@ -293,6 +331,8 @@ class ProdutoToggleEstoqueTests(TestCase):
 
     def test_listagem_usa_largura_total_sem_remover_colunas(self):
         produto = self.criar_produto()
+        produto.foto_url = 'https://example.com/produto.jpg'
+        produto.save(update_fields=['foto_url'])
         request = self.factory.get('/produtos/')
         request.user = self.usuario
         request.filial_ativa = self.filial
@@ -308,7 +348,9 @@ class ProdutoToggleEstoqueTests(TestCase):
         self.assertContains(response, 'data-product-column-reset')
         self.assertContains(response, 'data-product-column="nome"', count=2)
         self.assertContains(response, 'data-product-column-toggle="nome" checked disabled')
-        self.assertContains(response, 'static/js/produtos-lista.js')
+        self.assertContains(response, 'static/js/produtos-lista.js?v=20260829-2')
+        self.assertContains(response, 'loading="lazy"')
+        self.assertContains(response, 'decoding="async"')
         html = response.content.decode()
         row_start = html.index(f'data-product-id="{produto.pk}"')
         row_end = html.index('</tr>', row_start)

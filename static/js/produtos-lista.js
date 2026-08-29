@@ -183,8 +183,8 @@
       const controller = new AbortController();
       const timeout = setTimeout(() => controller.abort(), 60000);
       button.disabled = true;
-      button.textContent = 'Carregando…';
-      status.textContent = '';
+      button.textContent = 'Carregando produtos…';
+      status.textContent = ' — Buscando a lista completa, sem carregar fotos fora da tela.';
       container.setAttribute('aria-busy', 'true');
       try {
         const response = await fetch(url, {

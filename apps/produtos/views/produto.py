@@ -20,7 +20,9 @@ from django.shortcuts import get_object_or_404, redirect, render
 from django.template.loader import render_to_string
 from django.urls import reverse, reverse_lazy
 from django.utils import timezone
+from django.utils.decorators import method_decorator
 from django.views import View
+from django.views.decorators.gzip import gzip_page
 from PIL import Image, ImageOps
 from reportlab.lib import colors
 from reportlab.lib.pagesizes import A4, landscape
@@ -1262,6 +1264,7 @@ def _produto_form_feedback(form):
     return error_fields, json.dumps(sorted(error_steps))
 
 
+@method_decorator(gzip_page, name='dispatch')
 class ProdutoListView(PermissaoRequiredMixin, View):
     permissao_modulo = 'produtos'
     permissao_acao = 'ver'
@@ -1278,9 +1281,14 @@ class ProdutoListView(PermissaoRequiredMixin, View):
         somente_com_estoque = request.GET.get('com_estoque') == '1'
         ordem = request.GET.get('ordem', 'id')
         ver_todos = request.GET.get('ver') == 'todos'
-        page_obj = Paginator(qs, max(qs.count(), 1) if ver_todos else 50).get_page(
-            1 if ver_todos else request.GET.get('page')
-        )
+        if ver_todos:
+            produtos_completos = list(qs)
+            page_obj = Paginator(
+                produtos_completos,
+                max(len(produtos_completos), 1),
+            ).get_page(1)
+        else:
+            page_obj = Paginator(qs, 50).get_page(request.GET.get('page'))
         produtos_pagina = list(page_obj.object_list)
         produto_ids = [produto.pk for produto in produtos_pagina]
         filiais_para_inativar = {}
@@ -1316,6 +1324,36 @@ class ProdutoListView(PermissaoRequiredMixin, View):
                 ensure_ascii=False,
             )
         multi_filial = request.user.empresa.filiais.filter(ativo=True).count() > 1
+        if ver_todos and request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+            return render(request, self.template_name, {
+                'ver_todos': True,
+                'page_obj': page_obj,
+                'page_querystring': '',
+                'sort_urls': {},
+                'produtos': produtos_pagina,
+                'multi_filial': multi_filial,
+                'busca': busca,
+                'categoria_id': categoria_id,
+                'subcategoria_id': subcategoria_id,
+                'marca_id': marca_id,
+                'fornecedor_id': fornecedor_id,
+                'status': status,
+                'somente_com_estoque': somente_com_estoque,
+                'ordem': ordem,
+                'categorias': (),
+                'subcategorias': (),
+                'subcategorias_por_categoria_json': '{}',
+                'marcas': (),
+                'fornecedores': (),
+                'pode_exportar': False,
+                'pode_criar': False,
+                'pode_editar': request.user.tem_permissao('produtos', 'editar'),
+                'pode_excluir': request.user.tem_permissao('produtos', 'excluir'),
+                'inline_categorias_json': '[]',
+                'inline_subcategorias_json': '[]',
+                'inline_tipos_produto_json': '[]',
+                'inline_unidades_json': '[]',
+            })
         query_params = request.GET.copy()
         query_params.pop('page', None)
         sort_urls = {}

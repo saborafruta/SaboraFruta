@@ -766,7 +766,7 @@
           </div>
           {% if p.foto_url_resolvida %}
             <button type="button" class="produto-thumb-trigger" data-action="{% url 'produtos:produto-image-update' p.pk %}" data-image="{% url 'produtos:produto-image-file' p.pk %}" data-name="{{ p.descricao }}">
-              <img src="{% url 'produtos:produto-image-file' p.pk %}?v=thumb" alt="{{ p.descricao }}" class="produto-thumb">
+              <img src="{% url 'produtos:produto-image-file' p.pk %}?v=thumb" alt="{{ p.descricao }}" class="produto-thumb" loading="lazy" decoding="async" fetchpriority="low">
             </button>
           {% else %}
             <button type="button" class="produto-thumb-trigger" data-action="{% url 'produtos:produto-image-update' p.pk %}" data-image="" data-name="{{ p.descricao }}">
@@ -870,5 +870,5 @@
       {% if page_obj.has_next %}<a href="?{% if page_querystring %}{{ page_querystring }}&{% endif %}page={{ page_obj.next_page_number }}" class="btn-secondary">Próxima →</a>{% endif %}
     </div>
   </div>
-  <script src="{% static 'js/produtos-lista.js' %}" defer></script>
+  <script src="{% static 'js/produtos-lista.js' %}?v=20260829-2" defer></script>
 {% endblock %}
