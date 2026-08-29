@@ -14,7 +14,8 @@ from django.utils import timezone
 from apps.cadastros.models import Cliente
 from apps.core.models import Empresa, Filial, PerfilAcesso, Usuario
 from apps.moda.models import (
-    ArquivoPedido, Grade, ItemGrade, ItemGradePedido, ItemPedidoProducao,
+    AprovacaoPedido, ArquivoPedido, Grade, ItemGrade, ItemGradePedido,
+    ItemPedidoProducao,
     OpcaoEstruturaOP2, OrdemProducao, PedidoProducao, Personalizacao,
     PersonalizacaoIndividual, ProdutoModa, Tamanho, VisualItemPedido,
 )
@@ -894,6 +895,58 @@ class Op2Tests(TestCase):
         self.assertNotContains(resposta, 'Quantidade entregue')
         self.assertNotContains(resposta, 'Atualizar entrega')
         self.assertNotContains(resposta, 'name="acao" value="item_fluxo"')
+
+    def test_abrir_whatsapp_libera_link_publico_antes_de_exibir_mensagem(self):
+        self._login_op2()
+
+        pagina = self.client.get(
+            reverse('moda:op2-detail', args=[self.pedido.pk]),
+        )
+        self.assertContains(pagina, '@click="prepararWhatsapp"')
+
+        resposta = self.client.post(
+            reverse('moda:op2-action', args=[self.pedido.pk]),
+            {'acao': 'enviar_whatsapp'},
+            HTTP_X_REQUESTED_WITH='XMLHttpRequest',
+        )
+
+        self.assertEqual(resposta.status_code, 302)
+        aprovacao = AprovacaoPedido.objects.get(pedido=self.pedido)
+        self.assertTrue(aprovacao.liberado)
+        link = reverse('moda_publico:pedido', args=[self.pedido.token_publico])
+        self.assertEqual(self.client.get(link).status_code, 200)
+
+    def test_whatsapp_nao_apaga_nome_de_quem_ja_aprovou(self):
+        self._login_op2()
+        self.pedido.status = PedidoProducao.Status.CONFIRMADO
+        self.pedido.save(update_fields=['status'])
+        aprovacao = AprovacaoPedido.objects.create(pedido=self.pedido)
+        aprovacao.liberar(self._usuario())
+        aprovacao.responder(
+            AprovacaoPedido.Resposta.APROVADO,
+            'Maria da Silva',
+            ip='192.0.2.10',
+        )
+        respondido_em = aprovacao.respondido_em
+
+        self.client.post(
+            reverse('moda:op2-action', args=[self.pedido.pk]),
+            {'acao': 'enviar_whatsapp'},
+            HTTP_X_REQUESTED_WITH='XMLHttpRequest',
+        )
+
+        aprovacao.refresh_from_db()
+        self.assertTrue(aprovacao.aprovado_pelo_cliente)
+        self.assertEqual(aprovacao.respondido_por, 'Maria da Silva')
+        self.assertEqual(aprovacao.respondido_em, respondido_em)
+        self.pedido.refresh_from_db()
+        self.assertEqual(self.pedido.status, PedidoProducao.Status.CONFIRMADO)
+
+        pagina = self.client.get(
+            reverse('moda:op2-detail', args=[self.pedido.pk]),
+        )
+        self.assertContains(pagina, 'Orçamento aprovado por Maria da Silva')
+        self.assertContains(pagina, 'data, o horário e o IP')
 
     def test_tipo_de_impressao_aparece_somente_no_campo_identificado(self):
         item = self._item(quantidade=4)

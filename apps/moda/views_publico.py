@@ -15,10 +15,9 @@ O QUE IMPEDE CHEGAR A OUTRO PEDIDO, concretamente:
   4. token inexistente responde 404, igual a token de pedido apagado — a
      resposta não distingue "não existe" de "existe e você não pode".
 
-O que a página mostra é o combinado com o cliente: pedido, produtos,
-quantidade, grade, arte, prazo e status. Enquanto orçamento, mostra também
-preços, pagamentos e as mesmas observações comerciais do PDF. Observações
-internas dos itens continuam fora — são recado entre a equipe.
+O que a página mostra é o combinado com o cliente: pedido, clientes, produtos,
+estrutura da peça, quantidade, grade, arte, prazo e status. Enquanto orçamento,
+mostra também preços, pagamentos e as mesmas observações comerciais do PDF.
 """
 from decimal import Decimal, InvalidOperation
 
@@ -37,6 +36,7 @@ from .services.kanban_comercial import avancar_por_resposta
 from .services.pedido_pdf import PedidoPdfService
 from .services.orcamento_pdf import (
     OBSERVACAO_PAGAMENTO_ORCAMENTO,
+    especificacoes_orcamento_item,
     observacoes_orcamento,
 )
 
@@ -110,6 +110,7 @@ def _buscar(token: str) -> PedidoProducao:
             'condicao_pagamento', 'forma_pagamento',
         )
         .prefetch_related(
+            'clientes_adicionais',
             'itens__produto', 'itens__modelo', 'itens__cor', 'itens__tecido',
             'itens__grade__tamanho', 'itens__personalizacoes',
             # NOME E NUMERO DE CADA PESSOA. E' o que o cliente mais confere
@@ -175,6 +176,9 @@ class PedidoOnlineView(View):
 
     def get(self, request, token):
         pedido = _buscar(token)
+        itens = list(pedido.itens.all())
+        for item in itens:
+            item.especificacoes_orcamento = especificacoes_orcamento_item(item)
 
         etapas = [
             (valor, rotulo) for valor, rotulo in PedidoProducao.Status.choices
@@ -185,7 +189,8 @@ class PedidoOnlineView(View):
 
         resposta = render(request, 'moda/publico/pedido.html', {
             'pedido': pedido,
-            'itens': pedido.itens.all(),
+            'itens': itens,
+            'clientes': [pedido.cliente, *pedido.clientes_adicionais.all()],
             'empresa': pedido.filial.empresa,
             'etapas': [
                 {'label': rotulo, 'passou': i <= atual, 'atual': i == atual}

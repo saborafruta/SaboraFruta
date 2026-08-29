@@ -109,6 +109,42 @@ class AprovacaoPublicaTests(TestCase):
         self.assertContains(resposta, 'Este orçamento é válido por 5 dias')
         self.assertContains(resposta, 'O pagamento de 50% do valor total')
 
+    def test_link_do_orcamento_mostra_clientes_estrutura_cor_e_observacao_individual(self):
+        from apps.moda.models import (
+            ItemPedidoProducao, PersonalizacaoIndividual, Tamanho,
+        )
+
+        cliente_adicional = Cliente.objects.create(
+            filial=self.filial, razao_social='Maria Parceira',
+            cpf_cnpj='98765432100',
+        )
+        self.pedido.clientes_adicionais.add(cliente_adicional)
+        item = ItemPedidoProducao.objects.create(
+            pedido=self.pedido, descricao='Camisa especial', quantidade=1,
+            observacoes=(
+                'Estrutura da peça:\nTipo de peça: Camisa\n'
+                'Cor: Bordô personalizado\nMalha: DRYTECH'
+            ),
+        )
+        tamanho = Tamanho.objects.create(
+            filial=self.filial, sigla='M', ordem=30,
+        )
+        PersonalizacaoIndividual.objects.create(
+            pedido=self.pedido, item=item, tamanho=tamanho,
+            nome='Ana', numero='8', observacoes='Nome com acento no peito',
+        )
+
+        resposta = self.client.get(self._url_pagina())
+
+        self.assertContains(resposta, 'Clientes')
+        self.assertContains(resposta, 'Diego Macedo')
+        self.assertContains(resposta, 'Maria Parceira')
+        self.assertContains(resposta, '98765432100')
+        self.assertContains(resposta, 'Estrutura e especificações')
+        self.assertContains(resposta, 'Bordô personalizado')
+        self.assertContains(resposta, 'DRYTECH')
+        self.assertContains(resposta, 'Nome com acento no peito')
+
     # ── A aprovação em si ────────────────────────────────────────────────
 
     def test_cliente_aprova_pelo_link(self):

@@ -36,6 +36,44 @@ MARGEM_INFERIOR = 22 * mm
 ALTURA_CONTINUACAO = A4[1] - TOPO_CONTINUACAO - MARGEM_INFERIOR - 12
 
 
+def especificacoes_orcamento_item(item):
+    """Dados comerciais da peça, compartilhados pelo PDF e pelo link público."""
+    pares = []
+    for rotulo, valor in (
+        ('Referência', item.referencia), ('Tecido / Malha', item.tecido),
+        ('Cor', item.cor), ('Gola', item.get_gola_display() if item.gola else ''),
+        ('Manga', item.get_manga_display() if item.manga else ''),
+        ('Acabamento', item.acabamento),
+    ):
+        if valor:
+            pares.append((rotulo, str(valor)))
+    texto = (item.observacoes or '').replace('Estrutura da peça:', '').strip()
+    for linha in texto.splitlines():
+        if not linha.strip():
+            continue
+        rotulo, sep, valor = linha.partition(':')
+        par = (
+            (rotulo.strip(), valor.strip()) if sep
+            else ('Observação', linha.strip())
+        )
+        chave = par[0].casefold()
+        pares = [existente for existente in pares if existente[0].casefold() != chave]
+        pares.append(par)
+    for personalizacao in item.personalizacoes.all():
+        valores = [
+            str(personalizacao), personalizacao.nome_personalizado,
+            personalizacao.numero_personalizado, personalizacao.patrocinios,
+            personalizacao.observacoes,
+        ]
+        if personalizacao.arquivo and personalizacao.extensao not in DESENHAVEIS:
+            valores.append(personalizacao.nome_arquivo)
+        pares.append((
+            'Impressão / arte',
+            ' - '.join(str(valor) for valor in valores if valor),
+        ))
+    return list(dict.fromkeys(pares))
+
+
 class _TabelaProdutos(Table):
     """Só divide um produto se ele exceder uma página inteira de continuação."""
 
@@ -321,36 +359,7 @@ class OrcamentoPdfService:
     @staticmethod
     def _especificacoes(item):
         """Não trunca a estrutura: cada opção comercial aparece em sua linha."""
-        pares = []
-        for rotulo, valor in (
-            ('Referência', item.referencia), ('Tecido / Malha', item.tecido),
-            ('Cor', item.cor), ('Gola', item.get_gola_display() if item.gola else ''),
-            ('Manga', item.get_manga_display() if item.manga else ''),
-            ('Acabamento', item.acabamento),
-        ):
-            if valor:
-                pares.append((rotulo, str(valor)))
-        texto = (item.observacoes or '').replace('Estrutura da peça:', '').strip()
-        for linha in texto.splitlines():
-            if not linha.strip():
-                continue
-            rotulo, sep, valor = linha.partition(':')
-            par = (
-                (rotulo.strip(), valor.strip()) if sep
-                else ('Observação', linha.strip())
-            )
-            chave = par[0].casefold()
-            pares = [existente for existente in pares if existente[0].casefold() != chave]
-            pares.append(par)
-        for p in item.personalizacoes.all():
-            valores = [
-                str(p), p.nome_personalizado, p.numero_personalizado,
-                p.patrocinios, p.observacoes,
-            ]
-            if p.arquivo and p.extensao not in DESENHAVEIS:
-                valores.append(p.nome_arquivo)
-            pares.append(('Impressão / arte', ' - '.join(str(v) for v in valores if v)))
-        return list(dict.fromkeys(pares))
+        return especificacoes_orcamento_item(item)
 
     @staticmethod
     def _fotos(item, e, altura=22 * mm):

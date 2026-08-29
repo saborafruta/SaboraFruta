@@ -1,5 +1,5 @@
 {% extends "_base.html" %}
-{% block title %}Pedido #{{ pedido.numero|stringformat:"06d" }}{% endblock %}
+{% block title %}{% if modo_orcamento %}Orçamento{% else %}Pedido{% endif %} #{{ pedido.numero|stringformat:"06d" }}{% endblock %}
 
 {% comment %}
   `full_content` e não `content`: o bloco `content` do `_base.html` vive
@@ -22,12 +22,31 @@
           <p class="text-xs font-bold uppercase tracking-widest" style="color:#2563eb;">
             {{ empresa }}
           </p>
+          {% if empresa.cnpj %}<p class="text-xs mt-0.5" style="color:#64748b;">CNPJ {{ empresa.cnpj }}</p>{% endif %}
           <h1 class="text-2xl font-bold mt-1" style="color:#0f172a;">
-            Pedido #{{ pedido.numero|stringformat:"06d" }}
+            {% if modo_orcamento %}Orçamento{% else %}Pedido{% endif %} #{{ pedido.numero|stringformat:"06d" }}
           </h1>
-          <p class="text-sm mt-1" style="color:#64748b;">{{ pedido.cliente }}</p>
+          <p class="text-xs font-bold uppercase tracking-wider mt-3" style="color:#64748b;">
+            Cliente{{ clientes|pluralize }}
+          </p>
+          <div class="mt-1 space-y-1">
+            {% for cliente in clientes %}
+              <p class="text-sm" style="color:#334155;">
+                <strong>{{ cliente.razao_social }}</strong>
+                {% if cliente.cpf_cnpj %}<span style="color:#64748b;"> · {{ cliente.cpf_cnpj }}</span>{% endif %}
+              </p>
+            {% endfor %}
+          </div>
+          {% if pedido.contato_nome or pedido.contato_telefone %}
+            <p class="text-sm mt-2" style="color:#64748b;">
+              Responsável: {{ pedido.contato_nome|default:"Não informado" }}
+              {% if pedido.contato_telefone %} · {{ pedido.contato_telefone }}{% endif %}
+            </p>
+          {% endif %}
         </div>
         <div class="text-right">
+          <p class="text-xs uppercase tracking-wider" style="color:#64748b;">Data de emissão</p>
+          <p class="text-sm font-semibold mb-3" style="color:#0f172a;">{{ pedido.data_pedido|date:"d/m/Y" }}</p>
           <p class="text-xs uppercase tracking-wider" style="color:#64748b;">Entrega prevista</p>
           <p class="text-xl font-bold" style="color:#0f172a;">
             {% if pedido.data_prevista_entrega %}
@@ -147,6 +166,22 @@
           </div>
         {% endif %}
 
+        {% if item.especificacoes_orcamento %}
+          <div>
+            <p class="text-xs font-bold uppercase tracking-wider mb-2" style="color:#64748b;">
+              Estrutura e especificações
+            </p>
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
+              {% for rotulo, valor in item.especificacoes_orcamento %}
+                <div class="rounded-xl px-3 py-2" style="background:#f8fafc; border:1px solid #eef2f7;">
+                  <span class="block text-xs uppercase tracking-wider" style="color:#64748b;">{{ rotulo }}</span>
+                  <strong class="block text-sm mt-0.5" style="color:#0f172a;">{{ valor }}</strong>
+                </div>
+              {% endfor %}
+            </div>
+          </div>
+        {% endif %}
+
         {# ── Grade ──────────────────────────────────────────────────── #}
         {% if item.grade.all %}
           <div>
@@ -209,6 +244,11 @@
                     <span class="block text-xs" style="color:#64748b;">
                       Tamanho {{ pessoa.tamanho.sigla }}
                     </span>
+                    {% if pessoa.observacoes %}
+                      <span class="block text-xs mt-1" style="color:#475569;">
+                        {{ pessoa.observacoes }}
+                      </span>
+                    {% endif %}
                   </span>
                 </div>
               {% endfor %}
@@ -329,6 +369,7 @@
             {% if pedido.acrescimo %}<div class="flex justify-between gap-4"><span style="color:#64748b;">Acréscimo</span><strong style="color:#0f172a;">+ R$ {{ pedido.acrescimo|floatformat:2 }}</strong></div>{% endif %}
             {% if pedido.frete %}<div class="flex justify-between gap-4"><span style="color:#64748b;">Frete</span><strong style="color:#0f172a;">+ R$ {{ pedido.frete|floatformat:2 }}</strong></div>{% endif %}
             <div class="flex justify-between gap-4 border-t pt-3 mt-3" style="border-color:#e2e8f0;"><span class="font-bold" style="color:#0f172a;">Total</span><strong class="text-xl" style="color:#2563eb;">R$ {{ pedido.valor_total|floatformat:2 }}</strong></div>
+            {% if pedido.entrada %}<div class="flex justify-between gap-4"><span style="color:#64748b;">Entrada</span><strong style="color:#0f172a;">R$ {{ pedido.entrada|floatformat:2 }}</strong></div><div class="flex justify-between gap-4"><span style="color:#64748b;">Saldo</span><strong style="color:#0f172a;">R$ {{ pedido.saldo|floatformat:2 }}</strong></div>{% endif %}
           </div>
         </div>
 
@@ -428,7 +469,7 @@
     <div class="bg-white rounded-2xl p-6 text-center" style="box-shadow:0 4px 16px rgba(15,23,42,.06);">
       <a href="{% url 'moda_publico:pedido-pdf' pedido.token_publico %}" target="_blank" rel="noopener"
          class="inline-block px-6 py-3 rounded-xl font-bold text-white"
-         style="background:#2563eb;">Ver o PDF do pedido</a>
+         style="background:#2563eb;">Ver o PDF do {% if modo_orcamento %}orçamento{% else %}pedido{% endif %}</a>
       <p class="text-xs mt-3" style="color:#64748b;">
         O PDF traz também os valores e a personalização pessoa a pessoa.
       </p>

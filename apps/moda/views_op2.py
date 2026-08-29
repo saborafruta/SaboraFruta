@@ -1369,9 +1369,8 @@ class Op2ActionView(ModaBaseView):
         aprovacao, _ = AprovacaoPedido.objects.get_or_create(pedido=pedido)
         if not aprovacao.liberado:
             aprovacao.liberar(request.user, 'Liberado pela OP 2.0 para envio ao cliente.')
-        elif not aprovacao.aguardando_cliente:
-            aprovacao.reenviar(request.user, 'Nova rodada enviada pela OP 2.0.')
-        if pedido.status != PedidoProducao.Status.ORCAMENTO:
+        if (pedido.status != PedidoProducao.Status.ORCAMENTO
+                and aprovacao.aguardando_cliente):
             pedido.status = PedidoProducao.Status.AGUARDANDO_APROVACAO
             pedido.save(update_fields=['status', 'updated_at'])
 
