@@ -12,10 +12,9 @@ olho.
 """
 from __future__ import annotations
 
-from io import BytesIO
+from pathlib import Path
 from xml.sax.saxutils import escape
 
-from django.contrib.staticfiles import finders
 from reportlab.lib import colors
 from reportlab.lib.pagesizes import A4
 from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
@@ -30,6 +29,7 @@ TEXTO = colors.HexColor('#333333')
 MARGEM = 18 * mm
 ALTURA_TARJA = 26 * mm
 LARGURA_UTIL = A4[0] - 2 * MARGEM
+LOGO_PRETA_ERK = Path(__file__).resolve().parent.parent / 'static' / 'moda' / 'img' / 'logo_erk_preta.png'
 
 
 def esc(valor) -> str:
@@ -57,33 +57,15 @@ def cnpj(valor: str) -> str:
 
 def logo(filial, largura, altura):
     """
-    A marca da filial, ou None quando o arquivo não abre.
+    A logo preta ERK usada nos PDFs da OP e do orçamento.
 
-    Storage fora do ar não pode derrubar o documento inteiro: a folha sai sem
-    a marca, que é muito melhor do que não sair.
+    O arquivo faz parte do próprio deploy e é aberto pelo caminho do módulo,
+    sem depender de collectstatic nem dos dados cadastrados na filial.
     """
-    identificacao = ' '.join(filter(None, [
-        getattr(filial, 'razao_social', ''),
-        getattr(filial, 'nome_fantasia', ''),
-        getattr(getattr(filial, 'empresa', None), 'razao_social', ''),
-        getattr(getattr(filial, 'empresa', None), 'nome_fantasia', ''),
-    ])).casefold()
-    if any(nome in identificacao for nome in ('eureka', 'erk', 'ited')):
-        caminho = finders.find('moda/img/logo_erk_preta.png')
-        if caminho:
-            try:
-                return Image(caminho, width=largura, height=altura, kind='proportional')
-            except Exception:
-                pass
-
-    campo = getattr(filial, 'imagem', None)
-    if not campo:
-        return None
     try:
-        campo.open('rb')
-        dados = BytesIO(campo.read())
-        campo.close()
-        return Image(dados, width=largura, height=altura, kind='proportional')
+        return Image(
+            str(LOGO_PRETA_ERK), width=largura, height=altura, kind='proportional',
+        )
     except Exception:
         return None
 

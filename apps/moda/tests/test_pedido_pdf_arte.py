@@ -964,7 +964,7 @@ class ArteNoPdfTests(TestCase):
     # ── Cabeçalho ────────────────────────────────────────────────────────
 
     def test_novo_layout_do_orcamento_nao_altera_cabecalho_da_producao(self):
-        """O orçamento tem desenho próprio, mas usa a marca cadastrada."""
+        """O orçamento tem desenho próprio, mas compartilha a marca da OP."""
         from apps.moda.services import orcamento_pdf, pdf_marca, pedido_pdf
 
         self.assertIs(pedido_pdf.desenhar_tarja, pdf_marca.desenhar_tarja)
@@ -973,6 +973,15 @@ class ArteNoPdfTests(TestCase):
         with patch.object(orcamento_pdf, 'logo', return_value=None) as marca:
             OrcamentoPdfService.gerar(self._pedido())
         self.assertEqual(marca.call_args.args[0], self.filial)
+
+    def test_logo_dos_pdfs_e_sempre_o_arquivo_preto_erk(self):
+        """A OP e o orçamento não podem voltar à logo cadastrada na filial."""
+        from apps.moda.services.pdf_marca import LOGO_PRETA_ERK, logo
+
+        marca = logo(self.filial, 100, 50)
+
+        self.assertTrue(LOGO_PRETA_ERK.is_file())
+        self.assertEqual(marca.filename, str(LOGO_PRETA_ERK))
 
     def test_endereco_nao_sai_com_parenteses_vazio(self):
         """
