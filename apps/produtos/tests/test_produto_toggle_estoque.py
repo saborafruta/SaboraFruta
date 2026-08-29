@@ -1,3 +1,4 @@
+import json
 from decimal import Decimal
 
 from django.contrib.messages.storage.fallback import FallbackStorage
@@ -77,6 +78,19 @@ class ProdutoToggleEstoqueTests(TestCase):
 
     def request(self, data):
         request = self.factory.post('/produtos/toggle/', data)
+        request.user = self.usuario
+        request.filial_ativa = self.filial
+        request.session = self.client.session
+        request._messages = FallbackStorage(request)
+        return request
+
+    def ajax_request(self, data):
+        request = self.factory.post(
+            '/produtos/toggle/',
+            data,
+            HTTP_X_REQUESTED_WITH='XMLHttpRequest',
+            HTTP_ACCEPT='application/json',
+        )
         request.user = self.usuario
         request.filial_ativa = self.filial
         request.session = self.client.session
@@ -232,6 +246,22 @@ class ProdutoToggleEstoqueTests(TestCase):
         self.assertEqual(estoque.quantidade_atual, Decimal('5.000'))
         self.assertFalse(MovimentacaoEstoque.objects.filter(produto=produto).exists())
 
+    def test_inativar_produto_ajax_retorna_json_sem_redirecionar(self):
+        produto = self.criar_produto()
+
+        response = ProdutoToggleAtivoView.as_view()(
+            self.ajax_request({'zerar_estoque': '0'}),
+            pk=produto.pk,
+        )
+
+        self.assertEqual(response.status_code, 200)
+        payload = json.loads(response.content)
+        self.assertTrue(payload['ok'])
+        self.assertFalse(payload['active'])
+        self.assertEqual(payload['current_stock'], '5.000')
+        self.assertIn('desativado', payload['message'])
+        self.assertFalse(ProdutoFilial.objects.get(produto=produto, filial=self.filial).ativo)
+
     def test_ativar_produto_nao_zera_estoque_mesmo_com_flag(self):
         produto = self.criar_produto(ativo=False)
 
@@ -348,7 +378,10 @@ class ProdutoToggleEstoqueTests(TestCase):
         self.assertContains(response, 'data-product-column-reset')
         self.assertContains(response, 'data-product-column="nome"', count=2)
         self.assertContains(response, 'data-product-column-toggle="nome" checked disabled')
-        self.assertContains(response, 'static/js/produtos-lista.js?v=20260829-2')
+        self.assertContains(response, 'static/js/produtos-lista.js?v=20260829-3')
+        self.assertContains(response, '>Com estoque<')
+        self.assertNotContains(response, 'Somente com estoque')
+        self.assertContains(response, 'produto-filter-actions')
         self.assertContains(response, 'loading="lazy"')
         self.assertContains(response, 'decoding="async"')
         html = response.content.decode()

@@ -200,16 +200,20 @@
   .produto-filter-create { width: auto; min-width: 150px; justify-content: center; padding-left: .85rem !important; padding-right: .85rem !important; }
   .produto-filter-export { min-height: 40px; width: 100%; justify-content: center; white-space: nowrap; }
   .produto-filter-export-all { width: auto; min-width: 0; padding-left: .85rem !important; padding-right: .85rem !important; }
+  .produto-filter-controls,
+  .produto-filter-actions { display: flex; align-items: center; gap: .65rem; min-width: 0; }
+  .produto-filter-controls { flex-wrap: wrap; }
+  .produto-filter-actions { justify-content: flex-end; flex-wrap: wrap; }
+  .produto-filter-controls > * { flex: 1 1 135px; }
+  .produto-filter-controls .produto-filter-submit { flex: 0 0 auto; }
+  .produto-filter-stock { white-space: nowrap; }
+  .produto-filter-actions > * { flex: 0 0 auto; }
   @media (min-width: 1280px) {
     #produto-list-filters { grid-template-columns: repeat(16, minmax(0, 1fr)); }
     .produto-filter-search { grid-column: span 4 / span 4; }
     .produto-filter-select { grid-column: span 3 / span 3; }
-    .produto-filter-order { grid-column: span 3 / span 3; }
-    .produto-filter-status { grid-column: span 2 / span 2; }
-    .produto-filter-submit { grid-column: span 1 / span 1; }
-    .produto-filter-new { grid-column: span 3 / span 3; justify-self: end; }
-    .produto-filter-export-slot { grid-column: span 2 / span 2; }
-    .produto-filter-export-all-slot { grid-column: span 3 / span 3; }
+    .produto-filter-controls { grid-column: span 6 / span 6; }
+    .produto-filter-actions { grid-column: span 10 / span 10; }
   }
   @media (max-width: 768px) {
     .produto-list-image-modal { align-items: stretch; padding: .5rem; }
@@ -299,8 +303,9 @@
       {% endfor %}
     </select>
   </div>
-  <div class="md:col-span-2 produto-filter-order">
-    <select name="ordem" class="form-input">
+  <div class="md:col-span-12 produto-filter-controls">
+    <div class="produto-filter-order">
+      <select name="ordem" class="form-input">
       <option value="id" {% if ordem == 'id' %}selected{% endif %}>Ordenar</option>
       <option value="id_desc" {% if ordem == 'id_desc' %}selected{% endif %}>ID decrescente</option>
       <option value="referencia" {% if ordem == 'referencia' %}selected{% endif %}>Referencia A-Z</option>
@@ -311,26 +316,28 @@
       <option value="preco_desc" {% if ordem == 'preco_desc' %}selected{% endif %}>Maior preco</option>
       <option value="criado_desc" {% if ordem == 'criado_desc' %}selected{% endif %}>Mais recentes</option>
       <option value="criado_asc" {% if ordem == 'criado_asc' %}selected{% endif %}>Mais antigos</option>
-    </select>
-  </div>
-  <div class="md:col-span-2 produto-filter-status">
-    <select name="status" class="form-input flex-1">
+      </select>
+    </div>
+    <div class="produto-filter-status">
+      <select name="status" class="form-input flex-1">
       <option value="ativo" {% if status == 'ativo' %}selected{% endif %}>Ativos</option>
       <option value="inativo" {% if status == 'inativo' %}selected{% endif %}>Inativos</option>
       <option value="todos" {% if status == 'todos' %}selected{% endif %}>Todos</option>
-    </select>
+      </select>
+    </div>
+    <label class="produto-filter-stock flex items-center gap-2 px-3 min-h-10 rounded-lg cursor-pointer"
+           :style="temaClaro ? 'background:#f8fafc; border:1px solid #e2e8f0; color:#334155;' : 'background:#18181b; border:1px solid #3f3f46; color:#e2e8f0;'">
+      <input type="checkbox" name="com_estoque" value="1" {% if somente_com_estoque %}checked{% endif %}
+             class="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500">
+      <span class="text-sm font-semibold">Com estoque</span>
+    </label>
+    <div class="produto-filter-submit">
+      <button type="submit" class="btn-secondary justify-center produto-filter-button">Filtrar</button>
+    </div>
   </div>
-  <label class="md:col-span-2 flex items-center gap-2 px-3 min-h-10 rounded-lg cursor-pointer"
-         :style="temaClaro ? 'background:#f8fafc; border:1px solid #e2e8f0; color:#334155;' : 'background:#18181b; border:1px solid #3f3f46; color:#e2e8f0;'">
-    <input type="checkbox" name="com_estoque" value="1" {% if somente_com_estoque %}checked{% endif %}
-           class="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500">
-    <span class="text-sm font-semibold">Somente com estoque</span>
-  </label>
-  <div class="md:col-span-1 produto-filter-submit">
-    <button type="submit" class="btn-secondary justify-center produto-filter-button">Filtrar</button>
-  </div>
+  <div class="md:col-span-12 produto-filter-actions">
   {% if pode_exportar %}
-    <div class="md:col-span-2 produto-filter-export-slot">
+    <div class="produto-filter-export-slot">
       <a href="{% url 'produtos:produto-export-csv' %}{% if page_querystring %}?{{ page_querystring }}{% endif %}"
          class="inline-flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-semibold transition-all produto-filter-export"
          :style="temaClaro ? 'background:#dcfce7; color:#15803d; border:1px solid #bbf7d0;' : 'background:rgba(34,197,94,0.16); color:#86efac; border:1px solid rgba(34,197,94,0.28);'">
@@ -338,7 +345,7 @@
         Exportar Excel
       </a>
     </div>
-    <div class="md:col-span-2 produto-filter-export-slot">
+    <div class="produto-filter-export-slot">
       <a href="{% url 'produtos:produto-export-pdf' %}{% if page_querystring %}?{{ page_querystring }}{% endif %}"
          class="inline-flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-semibold transition-all produto-filter-export"
          :style="temaClaro ? 'background:#fee2e2; color:#b91c1c; border:1px solid #fecaca;' : 'background:rgba(239,68,68,0.16); color:#fca5a5; border:1px solid rgba(239,68,68,0.28);'">
@@ -346,7 +353,7 @@
         Exportar PDF
       </a>
     </div>
-    <div class="md:col-span-3 produto-filter-export-all-slot">
+    <div class="produto-filter-export-all-slot">
       <a href="{% url 'produtos:produto-export-todos-csv' %}"
          class="inline-flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-semibold transition-all produto-filter-export produto-filter-export-all"
          :style="temaClaro ? 'background:#dbeafe; color:#1d4ed8; border:1px solid #bfdbfe;' : 'background:rgba(59,130,246,0.16); color:#93c5fd; border:1px solid rgba(59,130,246,0.30);'">
@@ -356,13 +363,14 @@
     </div>
   {% endif %}
   {% if pode_criar %}
-    <div class="md:col-span-2 produto-filter-new">
+    <div class="produto-filter-new">
       <a href="{% url 'produtos:produto-create' %}" class="btn-primary produto-filter-create">
         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
         Novo Produto
       </a>
     </div>
   {% endif %}
+  </div>
 </form>
 <script>
   (function () {
@@ -870,5 +878,5 @@
       {% if page_obj.has_next %}<a href="?{% if page_querystring %}{{ page_querystring }}&{% endif %}page={{ page_obj.next_page_number }}" class="btn-secondary">Próxima →</a>{% endif %}
     </div>
   </div>
-  <script src="{% static 'js/produtos-lista.js' %}?v=20260829-2" defer></script>
+  <script src="{% static 'js/produtos-lista.js' %}?v=20260829-3" defer></script>
 {% endblock %}

@@ -3,19 +3,19 @@
 
   const STORAGE_KEY = 'ited.produtos.colunas.v1';
   const COLUMNS = [
-    { key: 'id', width: 64, min: 52 },
-    { key: 'nome', width: 330, min: 220, fixed: true },
-    { key: 'codigo_barras', width: 132, min: 88 },
-    { key: 'referencia', width: 84, min: 65 },
-    { key: 'categoria', width: 140, min: 90 },
-    { key: 'subcategoria', width: 142, min: 90 },
-    { key: 'unidade', width: 58, min: 48 },
-    { key: 'estoque', width: 96, min: 72 },
-    { key: 'custo', width: 102, min: 76 },
-    { key: 'preco', width: 116, min: 88 },
-    { key: 'markup', width: 82, min: 68 },
-    { key: 'margem', width: 82, min: 68 },
-    { key: 'acoes', width: 90, min: 72 },
+    { key: 'id', width: 64, min: 44 },
+    { key: 'nome', width: 330, min: 140, fixed: true },
+    { key: 'codigo_barras', width: 132, min: 70 },
+    { key: 'referencia', width: 84, min: 50 },
+    { key: 'categoria', width: 140, min: 65 },
+    { key: 'subcategoria', width: 142, min: 65 },
+    { key: 'unidade', width: 58, min: 40 },
+    { key: 'estoque', width: 96, min: 58 },
+    { key: 'custo', width: 102, min: 62 },
+    { key: 'preco', width: 116, min: 72 },
+    { key: 'markup', width: 82, min: 58 },
+    { key: 'margem', width: 82, min: 58 },
+    { key: 'acoes', width: 90, min: 58 },
   ];
   const columnByKey = new Map(COLUMNS.map(column => [column.key, column]));
   let preferences = { hidden: [], widths: {} };
@@ -244,6 +244,77 @@
     });
   }
 
+  const ACTIVE_ICON = '<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>';
+  const INACTIVE_ICON = '<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>';
+
+  function updateToggleRow(form, data) {
+    const row = form.closest('tr[data-product-id]');
+    const statusFilter = document.querySelector('#produto-list-filters [name="status"]')?.value || 'todos';
+    const stockOnly = document.querySelector('#produto-list-filters [name="com_estoque"]')?.checked || false;
+    const mustLeaveList = (statusFilter === 'ativo' && !data.active)
+      || (statusFilter === 'inativo' && data.active)
+      || (stockOnly && Number(data.current_stock) <= 0);
+    if (mustLeaveList) {
+      row?.remove();
+      return;
+    }
+    form.dataset.productActive = data.active ? '1' : '0';
+    form.dataset.currentStock = String(data.current_stock);
+    form.dataset.currentStockDisplay = data.current_stock_display;
+    const button = form.querySelector('button[type="submit"]');
+    if (button) {
+      button.disabled = false;
+      button.style.color = data.active ? '#4ade80' : '#f87171';
+      button.title = data.active ? 'Desativar' : 'Ativar';
+      button.innerHTML = data.active ? ACTIVE_ICON : INACTIVE_ICON;
+    }
+    row?.classList.toggle('produto-inactive-row', !data.active);
+    const nameStatus = row?.querySelector('.produto-name-status');
+    let badge = nameStatus?.querySelector('.produto-status-inactive');
+    if (!data.active && nameStatus && !badge) {
+      badge = document.createElement('span');
+      badge.className = 'produto-status-inactive';
+      badge.textContent = 'Inativo';
+      nameStatus.appendChild(badge);
+    } else if (data.active) {
+      badge?.remove();
+    }
+    const stockCell = row?.querySelector('[data-field="estoque_atual"]');
+    if (stockCell) {
+      stockCell.dataset.value = String(data.current_stock);
+      const display = stockCell.querySelector('.inline-display');
+      if (display) display.textContent = data.current_stock_display;
+    }
+  }
+
+  function setupToggleWithoutReload() {
+    document.addEventListener('submit', async event => {
+      const form = event.target.closest('[data-produto-toggle-form]');
+      if (!form || form.dataset.stockDecision === 'ready') return;
+      event.preventDefault();
+      const button = form.querySelector('button[type="submit"]');
+      if (button?.disabled) return;
+      if (button) button.disabled = true;
+      try {
+        const response = await fetch(form.action, {
+          method: 'POST',
+          credentials: 'same-origin',
+          headers: { 'X-Requested-With': 'XMLHttpRequest', 'Accept': 'application/json' },
+          body: new FormData(form),
+        });
+        const data = await response.json();
+        if (!response.ok || !data.ok) throw new Error(data.error || 'Não foi possível alterar o produto.');
+        updateToggleRow(form, data);
+        const status = document.getElementById('produto-load-status');
+        if (status) status.textContent = ` — ${data.message}`;
+      } catch (error) {
+        if (button) button.disabled = false;
+        window.alert(error.message || 'Não foi possível alterar o produto.');
+      }
+    });
+  }
+
   setupColumns();
   setupViewAll();
+  setupToggleWithoutReload();
 })();

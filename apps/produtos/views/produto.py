@@ -1958,6 +1958,14 @@ class ProdutoToggleAtivoView(PermissaoRequiredMixin, View):
         )
         vinculo = _produto_vinculo_filial(produto, request.filial_ativa)
         estava_ativo = vinculo.ativo
+        resposta_json = request.headers.get('X-Requested-With') == 'XMLHttpRequest'
+        avisos = []
+
+        def notificar(nivel, texto):
+            avisos.append(texto)
+            if not resposta_json:
+                getattr(messages, nivel)(request, texto)
+
         zerar_estoque = request.POST.get('zerar_estoque') == '1'
         filiais_inativar_ids = [
             int(filial_id)
@@ -2015,18 +2023,18 @@ class ProdutoToggleAtivoView(PermissaoRequiredMixin, View):
                         request.user,
                     )
                     if quantidade_zerada:
-                        messages.success(
-                            request,
+                        notificar(
+                            'success',
                             f'Estoque zerado: {_format_quantidade_produto(quantidade_zerada, produto)}.',
                         )
                     if lotes_ignorados:
-                        messages.warning(
-                            request,
+                        notificar(
+                            'warning',
                             'Alguns lotes nao foram zerados por estarem bloqueados ou em quarentena: '
                             + ', '.join(lotes_ignorados),
                         )
                 except Exception as exc:
-                    messages.warning(request, f'Produto inativado, mas o estoque nao foi zerado: {exc}')
+                    notificar('warning', f'Produto inativado, mas o estoque nao foi zerado: {exc}')
         status = 'ativado' if novo_status else 'desativado'
         _registrar_produto_log(
             request,
@@ -2035,16 +2043,30 @@ class ProdutoToggleAtivoView(PermissaoRequiredMixin, View):
             f'Produto {status} pela listagem.',
         )
         if filiais_inativadas:
-            messages.info(
-                request,
+            notificar(
+                'info',
                 'Tambem inativado em: ' + ', '.join(filiais_inativadas) + '.',
             )
         if filiais_ativadas:
-            messages.info(
-                request,
+            notificar(
+                'info',
                 'Tambem ativado em: ' + ', '.join(filiais_ativadas) + '.',
             )
-        messages.success(request, f'Produto "{produto}" {status}.')
+        mensagem_status = f'Produto "{produto}" {status}.'
+        notificar('success', mensagem_status)
+        if resposta_json:
+            estoque_atual = Estoque.objects.filter(
+                produto=produto,
+                filial=request.filial_ativa,
+            ).values_list('quantidade_atual', flat=True).first() or Decimal('0')
+            return JsonResponse({
+                'ok': True,
+                'active': novo_status,
+                'message': mensagem_status,
+                'notices': avisos,
+                'current_stock': str(estoque_atual),
+                'current_stock_display': _format_quantidade_produto(estoque_atual, produto),
+            })
         return redirect(request.META.get('HTTP_REFERER', 'produtos:produto-list'))
 
 
