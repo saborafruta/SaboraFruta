@@ -895,6 +895,27 @@ class Op2Tests(TestCase):
         self.assertNotContains(resposta, 'Atualizar entrega')
         self.assertNotContains(resposta, 'name="acao" value="item_fluxo"')
 
+    def test_tipo_de_impressao_aparece_somente_no_campo_identificado(self):
+        item = self._item(quantidade=4)
+        Personalizacao.objects.create(
+            item=item, tipo=Personalizacao.Tipo.ARTE,
+            tecnica=Personalizacao.Tecnica.SUBLIMACAO,
+        )
+        self._login_op2()
+
+        resposta = self.client.get(reverse('moda:op2-detail', args=[self.pedido.pk]))
+
+        self.assertContains(
+            resposta,
+            '<span class="op2-label block">Tipo de impressão</span>'
+            '<span class="text-xs">Sublimação</span>',
+            html=True,
+        )
+        self.assertNotContains(
+            resposta, '<p class="text-xs opacity-65 mt-1">Sublimação</p>',
+            html=True,
+        )
+
     def test_cliente_da_op_pode_ser_trocado_em_qualquer_etapa(self):
         novo_cliente = Cliente.objects.create(
             filial=self.filial, tipo_pessoa='J',

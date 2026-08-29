@@ -99,7 +99,7 @@
               <header class="op2-item-head">
                 <div class="min-w-0">
                   <div class="flex flex-wrap items-center gap-2"><h3 class="font-bold truncate">{{ item.nome_exibicao }}</h3><span class="op2-status" :style="itemStyle('{{ item.status_fluxo }}')">{{ item.get_status_fluxo_display }}</span></div>
-                  <p class="text-xs opacity-65 mt-1">{% if item.tecido_exibicao %}{{ item.tecido_exibicao }}{% endif %}{% for arte in item.personalizacoes.all %}{% if item.tecido_exibicao %} · {% endif %}{{ arte.get_tecnica_display }}{% empty %}{% if item.produto.tipo_impressao %}{% if item.tecido_exibicao %} · {% endif %}{{ item.produto.get_tipo_impressao_display }}{% endif %}{% endfor %}</p>
+                  {% if item.tecido_exibicao %}<p class="text-xs opacity-65 mt-1">{{ item.tecido_exibicao }}</p>{% endif %}
                 </div>
                 <div class="op2-item-metrics">
                   <div class="op2-item-metric"><span class="op2-label block">Peças</span><strong>{{ item.quantidade }}</strong></div>
