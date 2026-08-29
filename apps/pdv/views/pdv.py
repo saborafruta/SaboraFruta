@@ -8,6 +8,7 @@ from django.db.models.functions import Coalesce
 from django.http import JsonResponse
 from django.shortcuts import render
 from django.core.paginator import Paginator
+from django.urls import reverse
 from django.utils import timezone
 from django.views.decorators.http import require_GET, require_POST
 
@@ -328,6 +329,7 @@ def buscar_produto(request):
             "linha": p.linha_producao.nome if p.linha_producao else None,
             "icone": p.linha_producao.icone if p.linha_producao else None,
             "cor": p.linha_producao.cor_identificacao if p.linha_producao else None,
+            **_produto_imagem_payload(p),
             # Lista completa de preços: se len > 1, PDV mostra seletor ao vendedor
             "todos_precos": todos_precos,
         })
@@ -538,6 +540,19 @@ def _produto_aceita_quantidade_decimal(produto):
     )
 
 
+def _produto_imagem_payload(produto):
+    tem_foto = bool(produto.foto_url)
+    imagem_url = reverse('produtos:produto-image-file', kwargs={'pk': produto.pk})
+    return {
+        "tem_foto": tem_foto,
+        "foto_thumb_url": f"{imagem_url}?v=thumb" if tem_foto else "",
+        "foto_url": f"{imagem_url}?v=zoom" if tem_foto else "",
+        "foto_update_url": reverse(
+            'produtos:produto-image-update', kwargs={'pk': produto.pk},
+        ),
+    }
+
+
 def _serializa_produto(p, filial, cliente=None, quantidade=Decimal("1")):
     contrato = ProdutoVendavelService.consultar(
         produto=p,
@@ -572,6 +587,7 @@ def _serializa_produto(p, filial, cliente=None, quantidade=Decimal("1")):
         "linha": p.linha_producao.nome if p.linha_producao else None,
         "icone": p.linha_producao.icone if p.linha_producao else None,
         "cor": p.linha_producao.cor_identificacao if p.linha_producao else None,
+        **_produto_imagem_payload(p),
     }
 
 

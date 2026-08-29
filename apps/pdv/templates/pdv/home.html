@@ -225,6 +225,15 @@
   }
   .prod-card:hover { border-color:#f15a24; background:var(--pdv-hover); }
   .prod-card-main { display:flex;align-items:center;gap:10px;flex:1;min-width:0;border:0;background:transparent;color:inherit;text-align:left;padding:0;cursor:pointer;font:inherit;touch-action:manipulation; }
+  .prod-card-photo {
+    width:44px;height:44px;flex:0 0 44px;padding:0;overflow:hidden;border-radius:9px;
+    border:1px solid var(--pdv-bd);background:var(--pdv-surface);cursor:pointer;
+    display:grid;place-items:center;color:#f97316;transition:.15s;
+  }
+  .prod-card-photo:hover { border-color:#f15a24;transform:scale(1.04); }
+  .prod-card-photo img { width:100%;height:100%;object-fit:cover;display:block; }
+  .prod-card-photo-empty { display:flex;flex-direction:column;align-items:center;gap:1px;font-size:8px;font-weight:800;line-height:1;color:var(--pdv-t4); }
+  .prod-card-photo-empty strong { color:#f97316;font-size:19px;font-weight:500;line-height:.8; }
   .prod-card-nome { font-size:13px;font-weight:500;color:var(--pdv-t5);white-space:nowrap;overflow:hidden;text-overflow:ellipsis; }
   .prod-card-preco { font-size:13px;font-weight:700;color:#f97316;margin-top:2px; }
   .prod-card-qty { display:none;align-items:center;border:1px solid rgba(241,90,36,.42);border-radius:8px;overflow:hidden;background:rgba(241,90,36,.08);flex-shrink:0; }
@@ -233,6 +242,15 @@
   .prod-card-qty span { min-width:32px;text-align:center;color:var(--pdv-t1);font-size:13px;font-weight:800; }
   .prod-card.in-cart { border-color:#f15a24;background:rgba(241,90,36,.10); }
   .prod-card.in-cart .prod-card-qty { display:flex; }
+  .pdv-photo-modal-box { width:min(92vw,520px);max-height:calc(100vh - 32px);overflow:auto;border-radius:16px;background:var(--pdv-card);border:1px solid var(--pdv-bd);box-shadow:0 30px 90px rgba(0,0,0,.55); }
+  .pdv-photo-modal-head { display:flex;align-items:center;justify-content:space-between;gap:12px;padding:14px 16px;border-bottom:1px solid var(--pdv-bd2); }
+  .pdv-photo-modal-title { min-width:0;color:var(--pdv-t1);font-size:14px;font-weight:800;white-space:nowrap;overflow:hidden;text-overflow:ellipsis; }
+  .pdv-photo-preview { padding:14px; }
+  .pdv-photo-preview img { width:100%;max-height:min(62vh,560px);object-fit:contain;border-radius:12px;background:#08080d;display:block; }
+  .pdv-photo-empty { min-height:220px;border-radius:12px;border:1px dashed var(--pdv-bd);display:grid;place-items:center;padding:24px;text-align:center;color:var(--pdv-t4);background:var(--pdv-surface); }
+  .pdv-photo-actions { display:flex;justify-content:flex-end;gap:8px;padding:0 14px 14px; }
+  .pdv-photo-file { display:none !important; }
+  .pdv-photo-action { display:inline-flex;align-items:center;justify-content:center;min-height:38px;padding:7px 14px;border-radius:9px;border:1px solid rgba(241,90,36,.42);background:rgba(241,90,36,.12);color:#fb923c;font-size:12px;font-weight:800;cursor:pointer; }
   .client-btn-text-mobile { display:none; }
   .client-btn-text-full { display:inline; }
   .preco-origem-tag {
@@ -917,10 +935,18 @@
             <div @mouseenter="produtoFoco = idx"
                  class="prod-card" :class="{'in-cart':qtdProdutoNoCarrinho(p.id)>0}" :id="'prodcard-' + idx"
                  :style="produtoFoco === idx ? 'outline:2px solid #f15a24;outline-offset:-1px;background:rgba(241,90,36,0.10);' : ''">
+              <button type="button" class="prod-card-photo" @click.stop="abrirFotoProduto(p)"
+                      :title="p.tem_foto ? 'Ver foto completa de '+p.descricao : 'Cadastrar foto de '+p.descricao"
+                      :aria-label="p.tem_foto ? 'Ver foto completa de '+p.descricao : 'Cadastrar foto de '+p.descricao">
+                <template x-if="p.foto_thumb_url">
+                  <img :src="p.foto_thumb_url" :alt="p.descricao" loading="lazy" decoding="async"
+                       @error="p.foto_thumb_url=''">
+                </template>
+                <template x-if="!p.foto_thumb_url">
+                  <span class="prod-card-photo-empty"><strong>+</strong>FOTO</span>
+                </template>
+              </button>
               <button type="button" @click="adicionarItem(p)" class="prod-card-main">
-                <div style="width:34px;height:34px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0;"
-                     :style="p.cor ? `background:${p.cor}22;border:1px solid ${p.cor}44` : 'background:#1e1e2a;border:1px solid #2a2a3e;'"
-                     x-text="p.icone || '📦'"></div>
                 <div style="flex:1;min-width:0;">
                   <div class="prod-card-nome" x-text="p.descricao"></div>
                   <div class="prod-card-preco" x-text="'R$ ' + fmt(p.preco)"></div>
@@ -1732,6 +1758,41 @@
       <div class="preco-footer">
         <button @click="modalPreco.show=false" class="preco-cancel">Cancelar</button>
       </div>
+    </div>
+  </div>
+
+  <!-- ══ Modal Foto do Produto ══ -->
+  <div x-cloak
+       :style="modalFoto.show ? 'position:fixed;inset:0;z-index:60;display:flex;align-items:center;justify-content:center;padding:16px;background:rgba(0,0,0,.86);backdrop-filter:blur(4px);' : 'display:none;'"
+       @click.self="fecharFotoProduto()"
+       @keydown.escape.window="fecharFotoProduto()">
+    <div class="pdv-photo-modal-box">
+      <div class="pdv-photo-modal-head">
+        <div class="pdv-photo-modal-title" x-text="modalFoto.produto?.descricao || 'Foto do produto'"></div>
+        <button type="button" @click="fecharFotoProduto()" class="cli-modal-close" aria-label="Fechar">✕</button>
+      </div>
+      <div class="pdv-photo-preview">
+        <template x-if="modalFoto.url">
+          <img :src="modalFoto.url" :alt="modalFoto.produto?.descricao || 'Foto do produto'"
+               @error="modalFoto.url=''">
+        </template>
+        <template x-if="!modalFoto.url">
+          <div class="pdv-photo-empty">
+            <div>
+              <div style="font-size:34px;color:#f97316;margin-bottom:8px;">＋</div>
+              <strong style="display:block;color:var(--pdv-t2);font-size:14px;">Produto sem foto cadastrada</strong>
+              <span style="display:block;font-size:11px;margin-top:5px;">Escolha uma imagem para exibi-la no PDV, Produtos e Estoque.</span>
+            </div>
+          </div>
+        </template>
+      </div>
+      <form method="post" enctype="multipart/form-data" class="pdv-photo-actions" :action="modalFoto.updateUrl">
+        {% csrf_token %}
+        <label for="pdv-photo-input" class="pdv-photo-action"
+               x-text="modalFoto.url ? 'Trocar foto' : 'Cadastrar foto'"></label>
+        <input id="pdv-photo-input" class="pdv-photo-file" type="file" name="imagem_produto"
+               accept="image/png,image/jpeg,image/webp,image/gif" @change="if ($el.files.length) $el.form.submit()">
+      </form>
     </div>
   </div>
 
@@ -2931,6 +2992,7 @@ function pdv() {
     creditoDisponivel: 0, creditoAplicado: 0,
     cashbackDisponivel: 0,
     modalPreco: { show: false, produto: null, precos: [], descricao: '' },
+    modalFoto: { show: false, produto: null, url: '', updateUrl: '' },
 
     caixaRel: null, valorContado: '', obsFechamento: '', dataRelatorioCaixa: new Date().toISOString().slice(0,10),
     movTipo: null, movValor: '', movObs: '', mostrarVendasCaixa: false,
@@ -3301,6 +3363,21 @@ function pdv() {
       if (!produto) return;
       this._pushItem(produto, parseFloat(opcao.preco) || 0);
       this.toast_('✓ Adicionado com preço: R$ '+parseFloat(opcao.preco).toFixed(2).replace('.',','), 'ok');
+    },
+
+    abrirFotoProduto(produto) {
+      this.modalFoto = {
+        show: true,
+        produto: produto,
+        url: produto.foto_url || '',
+        updateUrl: produto.foto_update_url || '',
+      };
+    },
+
+    fecharFotoProduto() {
+      this.modalFoto.show = false;
+      const input = document.getElementById('pdv-photo-input');
+      if (input) input.value = '';
     },
 
     alterarQuantidade(item, delta) {
@@ -4990,7 +5067,8 @@ ${pgtoHtml ? `<hr class="sep">${pgtoHtml}` : ''}
         || this.showModalPendentes || this.showModalOrcamentos || this.showModalConfirmacao
         || this.showModalDescontoItem || this.showModalDesconto || this.showModalPrecoItem
         || this.showModalNovoCliente || this.showModalCaixaRel || this.showModalConfig
-        || this.showModalHistorico || this.showModalImpressao || this.modalPreco.show;
+        || this.showModalHistorico || this.showModalImpressao || this.modalPreco.show
+        || this.modalFoto.show;
     },
 
     alvoEhCampoDigitacao(target) {
