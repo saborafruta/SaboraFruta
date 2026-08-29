@@ -977,11 +977,16 @@ class ArteNoPdfTests(TestCase):
     def test_logo_dos_pdfs_e_sempre_o_arquivo_preto_erk(self):
         """A OP e o orçamento não podem voltar à logo cadastrada na filial."""
         from apps.moda.services.pdf_marca import LOGO_PRETA_ERK, logo
+        from PIL import Image as PillowImage
 
         marca = logo(self.filial, 100, 50)
 
         self.assertTrue(LOGO_PRETA_ERK.is_file())
         self.assertEqual(marca.filename, str(LOGO_PRETA_ERK))
+        with PillowImage.open(LOGO_PRETA_ERK) as imagem:
+            self.assertEqual(imagem.mode, 'RGBA')
+            self.assertEqual(imagem.getpixel((0, 0))[3], 0)
+            self.assertEqual(imagem.getpixel((imagem.width - 1, imagem.height - 1))[3], 0)
 
     def test_endereco_nao_sai_com_parenteses_vazio(self):
         """

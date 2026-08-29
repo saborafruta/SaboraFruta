@@ -1078,6 +1078,40 @@ class Op2Tests(TestCase):
             [('ANA', '7'), ('BIA', '10')],
         )
 
+    def test_op_existente_permite_editar_nome_numero_e_tamanho(self):
+        tamanho_p = Tamanho.objects.create(filial=self.filial, sigla='P', ordem=10)
+        tamanho_m = Tamanho.objects.create(filial=self.filial, sigla='M', ordem=20)
+        item = self._item(quantidade=2)
+        ItemGradePedido.objects.create(item=item, tamanho=tamanho_p, quantidade=1)
+        ItemGradePedido.objects.create(item=item, tamanho=tamanho_m, quantidade=1)
+        pessoa = PersonalizacaoIndividual.objects.create(
+            pedido=self.pedido, item=item, tamanho=tamanho_p,
+            nome='NOME ANTIGO', numero='7',
+        )
+        self.client.force_login(self._usuario())
+        session = self.client.session
+        session['filial_id'] = self.filial.pk
+        session.save()
+
+        resposta = self.client.post(reverse('moda:op2-action', args=[self.pedido.pk]), {
+            'acao': 'editar_individual',
+            'individual_id': str(pessoa.pk),
+            'tamanho': str(tamanho_m.pk),
+            'nome': 'NOME CORRIGIDO',
+            'numero': '12',
+        })
+
+        self.assertRedirects(resposta, reverse('moda:op2-detail', args=[self.pedido.pk]))
+        pessoa.refresh_from_db()
+        self.assertEqual(pessoa.tamanho, tamanho_m)
+        self.assertEqual(pessoa.nome, 'NOME CORRIGIDO')
+        self.assertEqual(pessoa.numero, '12')
+
+        detalhe = self.client.get(reverse('moda:op2-detail', args=[self.pedido.pk]))
+        self.assertContains(detalhe, 'Editar personalizações')
+        self.assertContains(detalhe, 'Salvar alteração')
+        self.assertContains(detalhe, 'value="NOME CORRIGIDO"')
+
     def test_op_existente_atualiza_pagamento_previsto_sem_gerar_financeiro(self):
         self._item(quantidade=2)
         self.client.force_login(self._usuario())

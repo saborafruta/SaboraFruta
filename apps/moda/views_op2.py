@@ -1439,6 +1439,28 @@ class Op2ActionView(ModaBaseView):
             salvos += 1
         messages.success(request, f'{salvos} personalização(ões) adicionada(s).')
 
+    def _acao_editar_individual(self, request, pedido):
+        individual = get_object_or_404(
+            pedido.individuais.select_related('item', 'tamanho'),
+            pk=request.POST.get('individual_id'),
+        )
+        dados = {
+            'item': individual.item_id,
+            'tamanho': request.POST.get('tamanho'),
+            'nome': request.POST.get('nome'),
+            'numero': request.POST.get('numero'),
+            'observacoes': individual.observacoes,
+        }
+        form = PersonalizacaoIndividualForm(
+            dados, instance=individual, filial=_filial(request), pedido=pedido,
+        )
+        if not form.is_valid():
+            raise ValueError('Personalização: ' + '; '.join(
+                erro for erros in form.errors.values() for erro in erros
+            ))
+        form.save()
+        messages.success(request, 'Nome, número e tamanho atualizados.')
+
     def _acao_previsao_pagamento(self, request, pedido):
         pedido.previsao_pagamento = _previsao_pagamento(
             request, pedido.valor_total,
