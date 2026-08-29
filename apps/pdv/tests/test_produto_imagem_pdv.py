@@ -33,6 +33,9 @@ class ProdutoImagemPDVTests(SimpleTestCase):
         ).read_text(encoding='utf-8')
 
         self.assertIn('@click.stop="abrirFotoProduto(p)"', template)
+        self.assertIn('@click.stop="abrirFotoProduto(item)"', template)
+        self.assertIn('class="cart-item-photo"', template)
+        self.assertIn("foto_thumb_url: produto.foto_thumb_url||''", template)
         self.assertIn("x-text=\"modalFoto.url ? 'Trocar foto' : 'Cadastrar foto'\"", template)
         self.assertIn('?v=zoom', _produto_imagem_payload(
             SimpleNamespace(pk=1, foto_url='foto.jpg'),

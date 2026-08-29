@@ -1103,6 +1103,7 @@ def api_pendente_detalhe(request, pk):
             "valor_unitario": float(item.valor_unitario),
             "valor_total": float(item.valor_total),
             "desconto_percentual": float(item.desconto_percentual or 0),
+            **_produto_imagem_payload(p),
         })
 
     # Endereço/contato do cliente também vão no retorno: ao retomar a venda
@@ -1300,6 +1301,7 @@ def api_venda_detalhe(request, pk):
             "fracionavel": aceita_decimal,
             "quantidade_step": 0.001 if aceita_decimal else 1,
             "quantidade_decimais": 3 if aceita_decimal else 0,
+            **_produto_imagem_payload(p),
         })
 
     pagamentos = [
@@ -2764,6 +2766,7 @@ def api_orcamento_detalhe(request, pk):
             "fracionavel": aceita_decimal,
             "quantidade_step": 0.001 if aceita_decimal else 1,
             "quantidade_decimais": 3 if aceita_decimal else 0,
+            **_produto_imagem_payload(p),
         })
 
     return JsonResponse({

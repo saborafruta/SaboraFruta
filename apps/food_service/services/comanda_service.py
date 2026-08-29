@@ -3,6 +3,7 @@ from __future__ import annotations
 from decimal import Decimal
 
 from django.db import transaction
+from django.urls import reverse
 from django.utils import timezone
 
 from apps.core.services.exceptions import DadosInvalidosError
@@ -274,6 +275,8 @@ class ComandaService:
 
     @staticmethod
     def _linha_pdv(produto):
+        tem_foto = bool(produto.foto_url)
+        foto_url = reverse('produtos:produto-image-file', kwargs={'pk': produto.pk})
         return {
             'produto_id': produto.pk,
             'descricao': produto.descricao_pdv or produto.descricao,
@@ -282,6 +285,12 @@ class ComandaService:
             'icone': produto.linha_producao.icone if produto.linha_producao else '📦',
             'cor': produto.linha_producao.cor_identificacao if produto.linha_producao else None,
             'linha': produto.linha_producao.nome if produto.linha_producao else None,
+            'tem_foto': tem_foto,
+            'foto_thumb_url': f'{foto_url}?v=thumb' if tem_foto else '',
+            'foto_url': f'{foto_url}?v=zoom' if tem_foto else '',
+            'foto_update_url': reverse(
+                'produtos:produto-image-update', kwargs={'pk': produto.pk},
+            ),
         }
 
     @classmethod

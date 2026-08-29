@@ -234,6 +234,13 @@
   .prod-card-photo img { width:100%;height:100%;object-fit:cover;display:block; }
   .prod-card-photo-empty { display:flex;flex-direction:column;align-items:center;gap:1px;font-size:8px;font-weight:800;line-height:1;color:var(--pdv-t4); }
   .prod-card-photo-empty strong { color:#f97316;font-size:19px;font-weight:500;line-height:.8; }
+  .cart-item-photo {
+    width:48px;height:48px;flex:0 0 48px;padding:0;overflow:hidden;border-radius:9px;
+    border:1px solid var(--pdv-bd);background:var(--pdv-surface);cursor:pointer;
+    display:grid;place-items:center;color:#f97316;transition:.15s;
+  }
+  .cart-item-photo:hover { border-color:#f15a24;transform:scale(1.03); }
+  .cart-item-photo img { width:100%;height:100%;object-fit:cover;display:block; }
   .prod-card-nome { font-size:13px;font-weight:500;color:var(--pdv-t5);white-space:nowrap;overflow:hidden;text-overflow:ellipsis; }
   .prod-card-preco { font-size:13px;font-weight:700;color:#f97316;margin-top:2px; }
   .prod-card-qty { display:none;align-items:center;border:1px solid rgba(241,90,36,.42);border-radius:8px;overflow:hidden;background:rgba(241,90,36,.08);flex-shrink:0; }
@@ -1228,9 +1235,17 @@
         <template x-for="item in venda.itens" :key="item._id">
           <div class="item-card">
             <div style="display:flex;align-items:flex-start;gap:12px;">
-              <div style="width:36px;height:36px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:20px;flex-shrink:0;"
-                   :style="item.cor ? `background:${item.cor}22;border:1px solid ${item.cor}44` : 'background:#1e1e2a;border:1px solid #2a2a3e;'"
-                   x-text="item.icone||'📦'"></div>
+              <button type="button" class="cart-item-photo" @click.stop="abrirFotoProduto(item)"
+                      :title="item.tem_foto ? 'Ver foto completa de '+item.descricao : 'Cadastrar foto de '+item.descricao"
+                      :aria-label="item.tem_foto ? 'Ver foto completa de '+item.descricao : 'Cadastrar foto de '+item.descricao">
+                <template x-if="item.foto_thumb_url">
+                  <img :src="item.foto_thumb_url" :alt="item.descricao" loading="lazy" decoding="async"
+                       @error="item.foto_thumb_url=''">
+                </template>
+                <template x-if="!item.foto_thumb_url">
+                  <span class="prod-card-photo-empty"><strong>+</strong>FOTO</span>
+                </template>
+              </button>
               <div style="flex:1;min-width:0;">
                 <div style="font-size:13px;font-weight:600;color:#e5e5f0;text-transform:uppercase;letter-spacing:.02em;line-height:1.2;" x-text="item.descricao"></div>
                 <div style="display:flex;align-items:center;gap:8px;margin-top:4px;flex-wrap:wrap;">
@@ -3115,6 +3130,9 @@ function pdv() {
             icone: item.icone||'📦',
             cor: item.cor||null,
             linha: item.linha||null,
+            tem_foto: !!item.tem_foto,
+            foto_thumb_url: item.foto_thumb_url||'', foto_url: item.foto_url||'',
+            foto_update_url: item.foto_update_url||'',
             tipo_produto: item.tipo_produto||'',
             fracionavel: this.produtoAceitaDecimal(item),
             quantidade_step: this.quantidadePasso(item),
@@ -3342,6 +3360,9 @@ function pdv() {
         _id: Date.now()+Math.random(), produto_id: produto.id,
         descricao: produto.descricao, codigo_barras: produto.codigo_barras||'',
         icone: produto.icone||'📦', cor: produto.cor||null, linha: produto.linha||null,
+        tem_foto: !!produto.tem_foto,
+        foto_thumb_url: produto.foto_thumb_url||'', foto_url: produto.foto_url||'',
+        foto_update_url: produto.foto_update_url||'',
         estoque_disponivel: parseFloat(produto.estoque_disponivel == null ? 0 : produto.estoque_disponivel),
         tipo_produto: produto.tipo_produto || '',
         fracionavel: this.produtoAceitaDecimal(produto),
@@ -3366,11 +3387,12 @@ function pdv() {
     },
 
     abrirFotoProduto(produto) {
+      const produtoBaseUrl = `/produtos/${produto.produto_id || produto.id}/`;
       this.modalFoto = {
         show: true,
         produto: produto,
         url: produto.foto_url || '',
-        updateUrl: produto.foto_update_url || '',
+        updateUrl: produto.foto_update_url || `${produtoBaseUrl}imagem/`,
       };
     },
 
@@ -3724,6 +3746,9 @@ function pdv() {
             icone: item.icone||'📦',
             cor: item.cor||null,
             linha: item.linha||null,
+            tem_foto: !!item.tem_foto,
+            foto_thumb_url: item.foto_thumb_url||'', foto_url: item.foto_url||'',
+            foto_update_url: item.foto_update_url||'',
             tipo_produto: item.tipo_produto||'',
             fracionavel: this.produtoAceitaDecimal(item),
             quantidade_step: this.quantidadePasso(item),
@@ -4900,6 +4925,9 @@ ${pgtoHtml ? `<hr class="sep">${pgtoHtml}` : ''}
             icone: item.icone||'📦',
             cor: item.cor||null,
             linha: item.linha||null,
+            tem_foto: !!item.tem_foto,
+            foto_thumb_url: item.foto_thumb_url||'', foto_url: item.foto_url||'',
+            foto_update_url: item.foto_update_url||'',
             tipo_produto: item.tipo_produto||'',
             fracionavel: this.produtoAceitaDecimal(item),
             quantidade_step: this.quantidadePasso(item),
