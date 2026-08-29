@@ -177,53 +177,68 @@
       const tbody = container.querySelector('tbody');
       const scroller = container.querySelector('.overflow-x-auto');
       const status = document.getElementById('produto-load-status');
-      const url = new URL(window.location.href);
-      url.searchParams.delete('page');
-      url.searchParams.set('ver', 'todos');
+      const pagination = document.getElementById('produto-pagination');
+      const currentPage = Number(pagination?.dataset.currentPage || 1);
+      const totalPages = Number(pagination?.dataset.totalPages || 1);
+      const totalCount = Number(pagination?.dataset.totalCount || 0);
+      const pages = Array.from({ length: totalPages }, (_, index) => index + 1)
+        .filter(page => page !== currentPage);
       const controller = new AbortController();
-      const timeout = setTimeout(() => controller.abort(), 60000);
+      const timeout = setTimeout(() => controller.abort(), 120000);
       button.disabled = true;
       button.textContent = 'Carregando produtos…';
-      status.textContent = ' — Buscando a lista completa, sem carregar fotos fora da tela.';
+      status.textContent = ` — Carregando página 1 de ${totalPages}…`;
       container.setAttribute('aria-busy', 'true');
       try {
-        const response = await fetch(url, {
-          credentials: 'same-origin', signal: controller.signal,
-          headers: { 'X-Requested-With': 'XMLHttpRequest' },
-        });
-        if (!response.ok) throw new Error('Falha ao carregar');
-        const doc = new DOMParser().parseFromString(await response.text(), 'text/html');
-        const rows = doc.querySelectorAll('.table-container tbody tr[data-product-id]');
-        const pagination = doc.getElementById('produto-pagination');
-        if (!pagination || doc.getElementById('produto-ver-todos')) throw new Error('Resposta inválida');
         const existing = Array.from(tbody.querySelectorAll('tr[data-product-id]'));
         const anchor = existing.find(row => row.getBoundingClientRect().bottom > 0);
         const anchorTop = anchor ? anchor.getBoundingClientRect().top : 0;
         const scrollX = window.scrollX;
         const scrollY = window.scrollY;
         const horizontal = scroller.scrollLeft;
-        const byId = new Map(existing.map(row => [row.dataset.productId, row]));
+        const rowsByPage = new Map([[currentPage, existing]]);
+        let nextPageIndex = 0;
+        let loadedPages = 1;
+
+        const loadPage = async pageNumber => {
+          const url = new URL(window.location.href);
+          url.searchParams.delete('ver');
+          url.searchParams.set('page', String(pageNumber));
+          url.searchParams.set('carregar_lote', '1');
+          const response = await fetch(url, {
+            credentials: 'same-origin',
+            signal: controller.signal,
+            headers: { 'X-Requested-With': 'XMLHttpRequest' },
+          });
+          if (!response.ok) throw new Error(`Falha ao carregar a página ${pageNumber}`);
+          const doc = new DOMParser().parseFromString(await response.text(), 'text/html');
+          const rows = Array.from(doc.querySelectorAll('.table-container tbody tr[data-product-id]'));
+          if (!rows.length && totalCount) throw new Error(`Resposta inválida na página ${pageNumber}`);
+          rowsByPage.set(pageNumber, rows);
+          loadedPages += 1;
+          status.textContent = ` — Carregando página ${loadedPages} de ${totalPages}…`;
+        };
+
+        const worker = async () => {
+          while (nextPageIndex < pages.length) {
+            const pageNumber = pages[nextPageIndex];
+            nextPageIndex += 1;
+            await loadPage(pageNumber);
+          }
+        };
+        await Promise.all(Array.from({ length: Math.min(2, pages.length) }, () => worker()));
+
         const fragment = document.createDocumentFragment();
-        rows.forEach(row => fragment.appendChild(byId.get(row.dataset.productId) || document.importNode(row, true)));
-        if (!rows.length) {
-          const empty = doc.querySelector('.table-container tbody');
-          fragment.append(...Array.from(empty.children, row => document.importNode(row, true)));
+        for (let pageNumber = 1; pageNumber <= totalPages; pageNumber += 1) {
+          (rowsByPage.get(pageNumber) || []).forEach(row => {
+            fragment.appendChild(row.isConnected ? row : document.importNode(row, true));
+          });
         }
         tbody.replaceChildren(fragment);
-        document.getElementById('produto-pagination').replaceWith(document.importNode(pagination, true));
-        const form = document.getElementById('produto-list-filters');
-        if (!form.querySelector('[name="ver"]')) {
-          const input = document.createElement('input');
-          input.type = 'hidden'; input.name = 'ver'; input.value = 'todos';
-          form.appendChild(input);
-        }
-        container.querySelectorAll('thead a[href]').forEach(link => {
-          const sortUrl = new URL(link.href);
-          sortUrl.searchParams.set('ver', 'todos');
-          link.href = sortUrl.href;
-        });
+        const summary = document.createElement('div');
+        summary.textContent = `Todos os ${totalCount} produtos — Lista completa carregada.`;
+        pagination.replaceChildren(summary);
         applyColumnPreferences();
-        history.replaceState(history.state, '', url);
         const restore = () => {
           scroller.scrollLeft = horizontal;
           const targetY = anchor && anchor.isConnected
@@ -232,9 +247,11 @@
         };
         restore();
         requestAnimationFrame(restore);
-        document.getElementById('produto-load-status').textContent = ' — Lista completa carregada.';
       } catch (error) {
-        status.textContent = ' Não foi possível carregar. Tente novamente.';
+        controller.abort();
+        status.textContent = error.name === 'AbortError'
+          ? ' — O carregamento demorou demais. Tente novamente.'
+          : ' — Não foi possível carregar. Tente novamente.';
         button.disabled = false;
         button.textContent = 'Ver todos';
       } finally {

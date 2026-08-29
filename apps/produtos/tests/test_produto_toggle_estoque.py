@@ -185,6 +185,23 @@ class ProdutoToggleEstoqueTests(TestCase):
         self.assertEqual(context['inline_categorias_json'], '[]')
         self.assertFalse(context['pode_exportar'])
 
+    def test_carregar_lote_ajax_mantem_paginacao_e_evitar_contexto_pesado(self):
+        from unittest.mock import patch
+
+        for _ in range(52):
+            self.criar_produto()
+        with patch('apps.produtos.views.produto.render') as render_mock:
+            ProdutoListView.as_view()(
+                self.list_ajax_request({'carregar_lote': '1', 'page': '2'})
+            )
+
+        context = render_mock.call_args.args[2]
+        self.assertFalse(context['ver_todos'])
+        self.assertEqual(context['page_obj'].number, 2)
+        self.assertEqual(len(context['produtos']), 2)
+        self.assertEqual(context['categorias'], ())
+        self.assertFalse(context['pode_exportar'])
+
     def test_listagem_comprime_resposta_quando_navegador_aceita_gzip(self):
         self.criar_produto()
         request = self.factory.get('/produtos/', HTTP_ACCEPT_ENCODING='gzip, deflate')
@@ -379,7 +396,7 @@ class ProdutoToggleEstoqueTests(TestCase):
         self.assertContains(response, '<th data-product-column="nome"')
         self.assertContains(response, '<td data-product-column="nome"')
         self.assertContains(response, 'data-product-column-toggle="nome" checked disabled')
-        self.assertContains(response, 'static/js/produtos-lista.js?v=20260829-4')
+        self.assertContains(response, 'static/js/produtos-lista.js?v=20260829-5')
         self.assertContains(response, '>Com estoque<')
         self.assertNotContains(response, 'Somente com estoque')
         self.assertContains(response, 'produto-filter-actions')

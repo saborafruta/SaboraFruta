@@ -1281,6 +1281,10 @@ class ProdutoListView(PermissaoRequiredMixin, View):
         somente_com_estoque = request.GET.get('com_estoque') == '1'
         ordem = request.GET.get('ordem', 'id')
         ver_todos = request.GET.get('ver') == 'todos'
+        carregar_lote = (
+            request.GET.get('carregar_lote') == '1'
+            and request.headers.get('X-Requested-With') == 'XMLHttpRequest'
+        )
         if ver_todos:
             produtos_completos = list(qs)
             page_obj = Paginator(
@@ -1324,9 +1328,9 @@ class ProdutoListView(PermissaoRequiredMixin, View):
                 ensure_ascii=False,
             )
         multi_filial = request.user.empresa.filiais.filter(ativo=True).count() > 1
-        if ver_todos and request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+        if (ver_todos or carregar_lote) and request.headers.get('X-Requested-With') == 'XMLHttpRequest':
             return render(request, self.template_name, {
-                'ver_todos': True,
+                'ver_todos': ver_todos,
                 'page_obj': page_obj,
                 'page_querystring': '',
                 'sort_urls': {},

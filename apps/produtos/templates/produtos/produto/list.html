@@ -869,6 +869,9 @@
 
 {% block pagination %}
   <div id="produto-pagination" class="pagination-bar flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 px-5 py-3 text-sm"
+       data-current-page="{{ page_obj.number }}"
+       data-total-pages="{{ page_obj.paginator.num_pages }}"
+       data-total-count="{{ page_obj.paginator.count }}"
        :style="temaClaro ? 'border-top:1px solid #e2e8f0;' : 'border-top:1px solid #2a2a2e;'">
     <div>
       {% if ver_todos %}Todos os {{ page_obj.paginator.count }} produtos{% else %}Página {{ page_obj.number }} de {{ page_obj.paginator.num_pages }} ({{ page_obj.paginator.count }} registros){% endif %}
@@ -882,5 +885,5 @@
       {% if page_obj.has_next %}<a href="?{% if page_querystring %}{{ page_querystring }}&{% endif %}page={{ page_obj.next_page_number }}" class="btn-secondary">Próxima →</a>{% endif %}
     </div>
   </div>
-  <script src="{% static 'js/produtos-lista.js' %}?v=20260829-4" defer></script>
+  <script src="{% static 'js/produtos-lista.js' %}?v=20260829-5" defer></script>
 {% endblock %}
