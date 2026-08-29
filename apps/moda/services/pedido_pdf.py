@@ -466,7 +466,7 @@ class PedidoPdfService:
         # WhatsApp na prática. Um campo próprio não existe — dizer "celular"
         # seria mais honesto, mas o pedido pede WhatsApp e é o mesmo número.
         whatsapp = getattr(c, 'celular', '') or ''
-        contato = pedido.contato_nome or (c.nome_fantasia or '')
+        responsavel = (pedido.contato_nome or '').strip()
         telefone = pedido.contato_telefone or getattr(c, 'telefone', '') or ''
 
         dados = [
@@ -474,15 +474,23 @@ class PedidoPdfService:
              Paragraph(esc(c.razao_social), e['celula']),
              Paragraph('<b>CPF/CNPJ</b>', e['celula']),
              Paragraph(esc(getattr(c, 'cpf_cnpj', '')) or '—', e['celula'])],
-            [Paragraph('<b>Contato</b>', e['celula']),
-             Paragraph(esc(contato) or '—', e['celula']),
-             Paragraph('<b>Telefone</b>', e['celula']),
-             Paragraph(esc(telefone) or '—', e['celula'])],
-            [Paragraph('<b>WhatsApp</b>', e['celula']),
+        ]
+        if responsavel:
+            dados.append([
+                Paragraph('<b>Responsável</b>', e['celula']),
+                Paragraph(esc(responsavel), e['celula']),
+                Paragraph('<b>Telefone</b>', e['celula']),
+                Paragraph(esc(telefone) or '—', e['celula']),
+            ])
+        elif telefone:
+            dados.append([
+                Paragraph('<b>Telefone</b>', e['celula']),
+                Paragraph(esc(telefone), e['celula']), '', '',
+            ])
+        dados.append([Paragraph('<b>WhatsApp</b>', e['celula']),
              Paragraph(esc(whatsapp) or '—', e['celula']),
              Paragraph('<b>E-mail</b>', e['celula']),
-             Paragraph(esc(getattr(c, 'email', '')) or '—', e['celula'])],
-        ]
+             Paragraph(esc(getattr(c, 'email', '')) or '—', e['celula'])])
         largura_rotulo = min(22 * mm, largura_util * .22)
         largura_valor = largura_util / 2 - largura_rotulo
         larguras = [largura_rotulo, largura_valor] * 2

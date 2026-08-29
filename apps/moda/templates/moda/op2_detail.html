@@ -81,7 +81,7 @@
             <small class="block mt-1 opacity-65" x-show="clienteId">Cliente selecionado. Digite outro nome acima para trocar.</small>
             <small class="block mt-1" style="color:#d97706" x-show="clienteBuscaConcluida&&!clienteBuscando&&!clienteId&&buscaCliente.trim().length>=2&&!clienteResultados.length">Nenhum cliente encontrado. Se apenas o nome estiver errado, use “Editar cadastro”.</small>
           </div>
-          <label><span class="op2-label">Contato</span><input name="contato_nome" x-model="contatoNome" class="form-input w-full"></label>
+          <label><span class="op2-label">Responsável</span><input name="contato_nome" x-model="contatoNome" class="form-input w-full"></label>
           <label><span class="op2-label">WhatsApp</span><input name="contato_telefone" x-model="contatoTelefone" class="form-input w-full"></label>
           <label><span class="op2-label">Data do pedido</span><input type="date" name="data_pedido" class="form-input w-full" value="{{ pedido.data_pedido|date:'Y-m-d' }}" required></label>
           <label><span class="op2-label">Entrega prevista</span><input type="date" name="data_prevista_entrega" class="form-input w-full" value="{{ pedido.data_prevista_entrega|date:'Y-m-d' }}"></label>

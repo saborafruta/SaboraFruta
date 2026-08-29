@@ -239,6 +239,51 @@ class ArteNoPdfTests(TestCase):
             observacoes,
         )
 
+    def test_responsavel_so_aparece_quando_preenchido_nos_dois_pdfs(self):
+        from apps.moda.services.orcamento_pdf import _estilos as estilos_orcamento
+        from apps.moda.services.pedido_pdf import _estilos as estilos_op
+
+        pedido = self._pedido()
+        pedido.contato_nome = 'Kaylne'
+        pedido.save(update_fields=['contato_nome'])
+
+        texto_orcamento = self._texto_layout(
+            OrcamentoPdfService._cliente(pedido, estilos_orcamento()),
+        )
+        texto_op = self._texto_layout(
+            PedidoPdfService._cliente(pedido, estilos_op()),
+        )
+        self.assertIn('Responsável:', texto_orcamento)
+        self.assertIn('Kaylne', texto_orcamento)
+        self.assertIn('Responsável', texto_op)
+        self.assertIn('Kaylne', texto_op)
+
+        pedido.contato_nome = ''
+        pedido.save(update_fields=['contato_nome'])
+        self.assertNotIn('Responsável', self._texto_layout(
+            OrcamentoPdfService._cliente(pedido, estilos_orcamento()),
+        ))
+        self.assertNotIn('Responsável', self._texto_layout(
+            PedidoPdfService._cliente(pedido, estilos_op()),
+        ))
+
+    def test_pagamento_nao_informado_nao_repete_valor_ao_lado(self):
+        from apps.moda.services.orcamento_pdf import _estilos
+
+        pedido = self._pedido()
+        pedido.previsao_pagamento = [
+            {'forma': 'nao_informado', 'valor': '1700.00'},
+        ]
+        pedido.save(update_fields=['previsao_pagamento'])
+
+        texto = self._texto_layout(
+            OrcamentoPdfService._pagamento_previsto(
+                pedido, _estilos(), compacto=True,
+            ),
+        )
+        self.assertIn('Não informado', texto)
+        self.assertNotIn('R$1.700,00', texto)
+
     # ── O que NÃO pode ir ────────────────────────────────────────────────
 
     @staticmethod

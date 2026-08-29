@@ -878,6 +878,7 @@ class Op2Tests(TestCase):
         self.assertContains(resposta, '<h2 class="font-bold">Fotos e mockups</h2>')
         self.assertContains(resposta, 'op2-aside .op2-gallery-grid')
         self.assertContains(resposta, 'Todos os produtos acompanham o status geral da OP.')
+        self.assertContains(resposta, '>Responsável</span>')
         self.assertContains(resposta, 'name="cliente" :value="clienteId"')
         self.assertContains(resposta, 'Editar cadastro do cliente atual')
         self.assertContains(

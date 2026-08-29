@@ -283,8 +283,12 @@ class OrcamentoPdfService:
         cliente = pedido.cliente
         nome = getattr(cliente, 'razao_social', None) or str(cliente)
         documento = _texto(getattr(cliente, 'cpf_cnpj', '')) or 'Não informado'
+        responsavel = (pedido.contato_nome or '').strip()
+        cliente_texto = f'<b>Cliente:</b><br/>{_texto(nome)}'
+        if responsavel:
+            cliente_texto += f'<br/><b>Responsável:</b><br/>{_texto(responsavel)}'
         celulas = [
-            Paragraph(f'<b>Cliente:</b><br/>{_texto(nome)}', e['normal']),
+            Paragraph(cliente_texto, e['normal']),
             Paragraph(f'<b>CNPJ/CPF:</b><br/>{documento}', e['normal']),
             Paragraph(f'<b>Data de Emissão:</b><br/>{pedido.data_pedido:%d/%m/%Y}', e['normal']),
         ]
@@ -564,7 +568,10 @@ class OrcamentoPdfService:
                 valor = Decimal('0')
             dados.append([
                 Paragraph(_texto(rotulos.get(linha.get('forma'), linha.get('forma'))), e['normal']),
-                Paragraph(brl(valor), e['td_dir']),
+                Paragraph(
+                    '' if linha.get('forma') == 'nao_informado' else brl(valor),
+                    e['td_dir'],
+                ),
             ])
         tabela = Table(
             dados, colWidths=[largura * .65, largura * .35],
