@@ -495,6 +495,10 @@
   .preco-tags { display:flex;align-items:center;gap:5px;flex-wrap:wrap;margin-bottom:4px; }
   .preco-detalhe { font-size:10.5px; color:var(--pdv-tdim); margin-top:2px; line-height:1.35; }
   .preco-validade { font-size:10px;color:#f59e0b;margin-top:4px;display:flex;align-items:center;gap:4px; }
+  .preco-sem-brinde { font-size:9px;font-weight:700;color:#94a3b8;background:rgba(100,116,139,.10);border:1px solid rgba(100,116,139,.2);border-radius:4px;padding:2px 6px; }
+  .preco-brinde-estoque { margin-top:6px;display:flex;flex-direction:column;gap:3px; }
+  .preco-brinde-item { font-size:10px;color:#f9a8d4;display:flex;gap:6px;justify-content:space-between; }
+  .preco-brinde-item.insuficiente { color:#f87171;font-weight:700; }
   .preco-resumo { font-size:10px;color:var(--pdv-t6);margin-top:3px; }
   .preco-campanha-badge { font-size:9px;font-weight:700;padding:2px 6px;border-radius:4px;background:rgba(16,185,129,.10);color:#10b981;border:1px solid rgba(16,185,129,.22);letter-spacing:.02em; }
   .preco-arrow { width:14px; height:14px; color:var(--pdv-tdim); flex-shrink:0; }
@@ -1283,6 +1287,8 @@
                 </div>
                 <div x-show="item.oferta_brindes?.length" x-cloak style="font-size:10px;color:#f472b6;margin-top:4px;"
                      x-text="'Brinde incluído: '+item.oferta_brindes.join(', ')"></div>
+                <div x-show="item.oferta_brindes_estoque?.length" x-cloak style="font-size:9.5px;color:#94a3b8;margin-top:3px;"
+                     x-text="'Brinde necessário / estoque: '+item.oferta_brindes_estoque.map(b => b.nome+' '+fmtQtd(b.quantidade*Math.max(1,Math.floor(item.quantidade/(item.brinde_quantidade_gatilho||item.quantidade))))+' / '+fmtQtd(b.estoque_disponivel)).join(' · ')"></div>
                 <div class="cart-item-controls" style="display:flex;align-items:center;gap:8px;margin-top:8px;flex-wrap:wrap;">
                   <div class="qty-ctrl">
                     <button @click="alterarQuantidade(item,-quantidadePasso(item))">−</button>
@@ -1781,10 +1787,22 @@
                       :class="{'badge-promocional':p.tipo==='promocional','badge-categoria':p.tipo==='categoria','badge-combo':p.tipo==='combo','badge-kit':p.tipo==='kit','badge-brinde':p.tipo==='brinde','badge-normal':['normal','tabela_cliente'].includes(p.tipo)}"
                       x-text="p.tag || p.tipo"></span>
                   <span class="preco-campanha-badge" x-text="p.origem"></span>
+                  <span class="preco-sem-brinde" x-show="p.sem_brinde">SEM BRINDE</span>
                 </div>
               </div>
               <div class="preco-detalhe" x-show="p.detalhe" x-text="p.detalhe"></div>
               <div class="preco-validade" x-show="p.validade"><span>◷</span><span x-text="p.validade"></span></div>
+              <div class="preco-brinde-estoque" x-show="p.brindes_estoque?.length">
+                <template x-for="brinde in (p.brindes_estoque || [])" :key="brinde.produto_id">
+                  <div class="preco-brinde-item" :class="brinde.estoque_suficiente ? '' : 'insuficiente'">
+                    <span x-text="'🎁 '+fmtQtd(brinde.quantidade)+'x '+brinde.nome"></span>
+                    <span x-text="'Estoque: '+fmtQtd(brinde.estoque_disponivel)"></span>
+                  </div>
+                </template>
+                <div x-show="(p.brindes_estoque || []).some(b => !b.estoque_suficiente)" style="font-size:9.5px;color:#f87171;">
+                  Estoque insuficiente — o operador ainda pode escolher esta campanha.
+                </div>
+              </div>
             </div>
             <!-- Arrow -->
             <svg class="preco-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
@@ -3409,6 +3427,7 @@ function pdv() {
         foto_thumb_url: produto.foto_thumb_url||'', foto_url: produto.foto_url||'',
         foto_update_url: produto.foto_update_url||'',
         estoque_disponivel: parseFloat(produto.estoque_disponivel == null ? 0 : produto.estoque_disponivel),
+        custo_atual: parseFloat(produto.custo_atual || 0),
         tipo_produto: produto.tipo_produto || '',
         fracionavel: this.produtoAceitaDecimal(produto),
         quantidade_step: this.quantidadePasso(produto),
@@ -3423,9 +3442,11 @@ function pdv() {
         oferta_tipo: oferta.oferta_tipo || oferta.tipo || 'normal',
         oferta_tag: oferta.tag || '', oferta_nome: oferta.origem || '',
         oferta_validade: oferta.validade || '', oferta_brindes: oferta.brindes || [],
+        oferta_brindes_estoque: oferta.brindes_estoque || [],
         promocao_id: oferta.promocao_id || null, faixa_id: oferta.faixa_id || null,
         kit_categoria_id: oferta.kit_categoria_id || null, regra_id: oferta.regra_id || null,
         brinde_id: oferta.brinde_id || null,
+        brinde_quantidade_gatilho: oferta.brinde_quantidade_gatilho || null,
         tipo_venda: ehKit ? 'kit' : 'unitario', kit_id: oferta.kit_id || null,
         desconto_percentual: 0, desconto_valor: 0, valor_total: quantidade * preco,
         obs: '', _showObs: false,
@@ -3518,6 +3539,9 @@ function pdv() {
       if(!item)return;
       const novo=parseFloat(String(val).replace(',','.'));
       if(!novo||novo<=0){ this.toast_('Informe um preço válido.','erro'); return; }
+      if(parseFloat(item.custo_atual||0)>0 && novo<parseFloat(item.custo_atual)){
+        this.toast_('O preço manual não pode ficar abaixo do custo atual.','erro'); return;
+      }
       item.valor_unitario=novo;
       item._precoManual=Math.abs(novo-item._precoOriginal)>0.0001;
       item.preco_manual=item._precoManual?novo:null;
@@ -3713,6 +3737,7 @@ function pdv() {
         const r=await fetch('/pdv/api/venda/pendente/',{method:'POST',headers:{'Content-Type':'application/json','X-CSRFToken':csrf()},
           body:JSON.stringify({sessao_id:this.sessao?.id,cliente_id:this.venda.cliente?.id||null,
             itens:this.venda.itens,desconto:this.venda.desconto,
+            acrescimo:this.venda.acrescimo,observacao:this.venda.observacao||'',
             delivery:this.venda.delivery,endereco_entrega:this.venda.endereco_entrega,
             pagamentos:this.venda.pagamentos})});
         const d=await r.json();
@@ -4839,11 +4864,12 @@ ${pgtoHtml ? `<hr class="sep">${pgtoHtml}` : ''}
       try {
         const payload = {
           cliente_id: this.venda.cliente.id,
-          itens: this.venda.itens.map(i => ({ produto_id: i.produto_id, quantidade: i.quantidade, valor_unitario: i.valor_unitario })),
+          itens: this.venda.itens,
           desconto: this.venda.desconto,
           acrescimo: this.venda.acrescimo,
           delivery: this.venda.delivery,
           endereco_entrega: this.venda.endereco_entrega,
+          observacao: this.venda.observacao || '',
         };
         const r = await fetch('/pdv/api/venda/orcamento/', {
           method: 'POST',
@@ -4978,7 +5004,9 @@ ${pgtoHtml ? `<hr class="sep">${pgtoHtml}` : ''}
           const bruto = parseFloat(item.quantidade)*parseFloat(item.valor_unitario);
           const pct = parseFloat(item.desconto_percentual||0);
           this.venda.itens.push({
+            ...item,
             _id: Date.now()+Math.random(),
+            _chaveOferta: this.chaveOferta({id:item.produto_id}, item),
             produto_id: item.produto_id,
             descricao: item.descricao,
             codigo_barras: item.codigo_barras||'',
@@ -4994,8 +5022,13 @@ ${pgtoHtml ? `<hr class="sep">${pgtoHtml}` : ''}
             quantidade_decimais: this.produtoAceitaDecimal(item) ? 3 : 0,
             quantidade: item.quantidade,
             valor_unitario: item.valor_unitario,
+            _precoOriginal: parseFloat(item.preco_original || item.valor_unitario),
+            _precoManual: !!item.preco_manual,
+            _quantidadeMinOferta: item._quantidadeMinOferta || null,
+            _quantidadeExata: !!item._quantidadeExata,
+            _ofertaSelecionada: !!item._ofertaSelecionada,
             desconto_percentual: pct,
-            desconto_valor: bruto*(pct/100),
+            desconto_valor: parseFloat(item.desconto_valor || bruto*(pct/100)),
             valor_total: item.valor_total,
             obs: '', _showObs: false,
           });
@@ -5021,6 +5054,7 @@ ${pgtoHtml ? `<hr class="sep">${pgtoHtml}` : ''}
         this.venda.acrescimo = d.acrescimo || 0;
         this.venda.delivery = d.delivery || false;
         this.venda.endereco_entrega = d.endereco_entrega || {};
+        this.venda.observacao = d.observacao || '';
         // Restaura as formas de pagamento selecionadas antes de salvar como
         // pendente (_id novo pra nao colidir com o :key do Alpine).
         this.venda.pagamentos = (d.pagamentos || []).map(p => ({ ...p, _id: Date.now()+Math.random() }));
@@ -5178,13 +5212,17 @@ ${pgtoHtml ? `<hr class="sep">${pgtoHtml}` : ''}
 
     async aplicarPrecosCliente(atualizarCatalogo=true) {
       try {
-        if (this.venda.itens.length) {
+        const itensPrecificar = this.venda.itens.filter(item =>
+          !item._precoManual && !item._ofertaSelecionada
+          && ['normal', 'tabela_cliente'].includes(item.oferta_tipo || 'normal')
+        );
+        if (itensPrecificar.length) {
           const r = await fetch('/pdv/api/precos-cliente/', {
             method:'POST',
             headers:{'Content-Type':'application/json','X-CSRFToken':csrf()},
             body:JSON.stringify({
               cliente_id:this.venda.cliente.id,
-              itens:this.venda.itens.map(i=>({
+              itens:itensPrecificar.map(i=>({
                 produto_id:i.produto_id,
                 quantidade:i.quantidade,
               })),

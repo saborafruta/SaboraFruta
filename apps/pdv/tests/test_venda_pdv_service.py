@@ -243,6 +243,24 @@ class VendaPDVServiceTests(TestCase):
         self.assertEqual(item.desconto_percentual, Decimal("15.00"))
         self.assertEqual(item.valor_total, Decimal("17.00"))
 
+    def test_preco_manual_abaixo_do_custo_e_bloqueado(self):
+        produto = self.criar_produto("Produto protegido por custo")
+        self.abastecer(produto, "2")
+
+        with self.assertRaisesMessage(DadosInvalidosError, "preço manual está abaixo do custo"):
+            VendaPDVService.finalizar_venda(
+                sessao=self.sessao,
+                filial=self.filial,
+                usuario=self.usuario,
+                itens=[{
+                    "produto_id": produto.pk,
+                    "quantidade": "1",
+                    "oferta_tipo": "normal",
+                    "preco_manual": "3.00",
+                }],
+                pagamentos=[{"forma_id": self.forma.pk, "valor": "3.00"}],
+            )
+
     def test_finalizar_venda_sem_estoque_faz_rollback(self):
         produto = self.criar_produto("Produto sem saldo")
         self.abastecer(produto, "1")
@@ -450,6 +468,8 @@ class VendaPDVServiceTests(TestCase):
         estoque_brinde = Estoque.objects.get(produto=brinde_produto, filial=self.filial)
         self.assertEqual(len(itens), 2)
         self.assertEqual(itens[1].tipo_venda, "brinde")
+        self.assertEqual(itens[0].oferta_contexto["brinde_id"], brinde.pk)
+        self.assertEqual(itens[0].oferta_contexto["oferta_tipo"], "brinde")
         self.assertEqual(itens[1].valor_total, Decimal("0.00"))
         self.assertEqual(mov_brinde.tipo_operacao, MovimentacaoEstoque.TipoOperacao.BRINDE)
         self.assertEqual(estoque_brinde.quantidade_atual, Decimal("9.000"))

@@ -1,5 +1,6 @@
 import datetime
 import json
+from collections import defaultdict
 from decimal import Decimal
 
 from django.db import transaction
@@ -22,11 +23,16 @@ from apps.core.services.search import (
 )
 from apps.financeiro.models import FormaPagamento, TaxaParcelamento
 from apps.financeiro.constants.enums import TipoFormaPagamento
+from apps.estoque.models import Estoque
 from apps.fiscal.integrations.focusnfe.exceptions import FocusNFeNetworkError, FocusNFeServerError
 from apps.pdv.models import (
     Caixa, ItemVendaPDV, MovimentacaoCaixa, PagamentoVendaPDV, SessaoPDV, VendaPDV,
 )
 from apps.pdv.services.produto_vendavel_service import ProdutoVendavelService
+from apps.pdv.services.oferta_contexto_service import (
+    aplicar_contexto_oferta,
+    contexto_oferta_do_payload,
+)
 from apps.pdv.services.venda_pdv_service import VendaPDVService
 from apps.pdv.services.cancelamento_fiscal_service import (
     cancelar_venda_e_documento,
@@ -40,6 +46,8 @@ from apps.produtos.models import (
     KitProduto,
     LinhaProducao,
     Produto,
+    ProdutoFilial,
+    PromocaoQuantidade,
 )
 from apps.produtos.services.preco_service import PrecoService
 
@@ -290,6 +298,7 @@ def buscar_produto(request):
         produtos = list(qs.select_related('linha_producao').order_by('descricao')[:20])
     data = []
     hoje = tz.localdate()
+    contexto_ofertas = _preparar_contexto_ofertas(produtos, filial)
     for p in produtos:
         aceita_decimal = _produto_aceita_quantidade_decimal(p)
         contrato = ProdutoVendavelService.consultar(
@@ -297,8 +306,13 @@ def buscar_produto(request):
             filial=filial,
             quantidade=Decimal("1"),
             cliente=cliente,
+            validar_promocoes=False,
+            incluir_promocoes_aplicaveis=False,
         )
-        ofertas = _ofertas_produto(p, filial, hoje, cliente=cliente)
+        ofertas = _ofertas_produto(
+            p, filial, hoje, cliente=cliente, contrato=contrato,
+            contexto=contexto_ofertas,
+        )
 
         data.append({
             "id": p.id, "descricao": p.descricao_pdv or p.descricao,
@@ -318,7 +332,10 @@ def buscar_produto(request):
             "status_comercial": contrato["status_comercial"],
             "status_comercial_label": contrato["status_comercial_label"],
             "lote_obrigatorio": contrato["lote_obrigatorio"],
-            "promocoes_aplicaveis": contrato["promocoes_aplicaveis"],
+            "promocoes_aplicaveis": [
+                oferta for oferta in ofertas
+                if oferta.get('oferta_tipo') not in {'normal', 'tabela_cliente'}
+            ],
             "bloqueios": contrato["bloqueios"],
             "alertas": contrato["alertas"],
             "pode_vender": contrato["pode_vender"],
@@ -354,6 +371,59 @@ def _oferta_temporal_vigente(regra, hoje):
     return PrecoService.combo_quantidade_vigente(regra, data=hoje)
 
 
+def _preparar_contexto_ofertas(produtos, filial):
+    """Carrega campanhas e estoque de brindes em lote para uma lista do PDV."""
+    produtos = list(produtos)
+    produto_ids = [produto.pk for produto in produtos]
+    contexto = {
+        'descontos': [], 'combos': defaultdict(list), 'kits': defaultdict(list),
+        'brindes': defaultdict(list), 'estoque_brindes': {},
+    }
+    if not produto_ids:
+        return contexto
+
+    vinculos = {
+        vinculo.produto_id: vinculo
+        for vinculo in ProdutoFilial.objects.filter(
+            produto_id__in=produto_ids, filial=filial, ativo=True,
+        )
+    }
+    for produto in produtos:
+        produto._promocao_filial_cache = {filial.pk: vinculos.get(produto.pk)}
+
+    contexto['descontos'] = list(
+        KitCategoria.objects.for_filial(filial).filter(ativo=True)
+        .prefetch_related('regras__categoria__categoria_pai', 'regras__subcategoria__categoria_pai')
+    )
+    for combo in (
+        PromocaoQuantidade.objects.for_filial(filial)
+        .filter(produto_id__in=produto_ids, ativo=True).prefetch_related('faixas')
+    ):
+        contexto['combos'][combo.produto_id].append(combo)
+
+    for kit in (
+        KitProduto.objects.for_filial(filial).filter(ativo=True, itens__produto_id__in=produto_ids)
+        .prefetch_related('itens__produto').distinct()
+    ):
+        for componente in kit.itens.all():
+            if componente.produto_id in produto_ids:
+                contexto['kits'][componente.produto_id].append(kit)
+
+    produto_ids_brinde = set()
+    for brinde in (
+        BrindeProduto.objects.for_filial(filial)
+        .filter(ativo=True, produto_gatilho_id__in=produto_ids)
+        .prefetch_related('itens__produto')
+    ):
+        contexto['brindes'][brinde.produto_gatilho_id].append(brinde)
+        produto_ids_brinde.update(item.produto_id for item in brinde.itens.all())
+    contexto['estoque_brindes'] = {
+        estoque.produto_id: estoque.quantidade_disponivel
+        for estoque in Estoque.objects.filter(filial=filial, produto_id__in=produto_ids_brinde)
+    }
+    return contexto
+
+
 def _finalizar_ofertas(ofertas):
     for oferta in ofertas:
         referencia = Decimal(str(oferta.get('preco_referencia') or oferta.get('total') or 0))
@@ -376,7 +446,7 @@ def _finalizar_ofertas(ofertas):
     return ofertas
 
 
-def _ofertas_produto(produto, filial, hoje=None, cliente=None):
+def _ofertas_produto(produto, filial, hoje=None, cliente=None, contrato=None, contexto=None):
     """Monta todas as escolhas comerciais vigentes da tela de Promoções."""
     from apps.produtos.services.preco_service import PrecoService
     from django.utils import timezone as tz
@@ -384,8 +454,10 @@ def _ofertas_produto(produto, filial, hoje=None, cliente=None):
 
     ofertas = []
     preco_normal = Decimal(str(produto.preco_venda or 0))
-    contrato = ProdutoVendavelService.consultar(
+    contrato = contrato or ProdutoVendavelService.consultar(
         produto=produto, filial=filial, quantidade=Decimal('1'), cliente=cliente,
+        validar_promocoes=False,
+        incluir_promocoes_aplicaveis=False,
     )
     preco_padrao = Decimal(str(contrato['preco_aplicado'] or preco_normal))
     if preco_normal > 0:
@@ -423,7 +495,7 @@ def _ofertas_produto(produto, filial, hoje=None, cliente=None):
             ),
         })
 
-    descontos = (
+    descontos = contexto['descontos'] if contexto is not None else (
         KitCategoria.objects.for_filial(filial).filter(ativo=True)
         .prefetch_related('regras__categoria__categoria_pai', 'regras__subcategoria__categoria_pai')
     )
@@ -445,33 +517,43 @@ def _ofertas_produto(produto, filial, hoje=None, cliente=None):
                 'kit_categoria_id': desconto.pk, 'regra_id': regra.pk,
             })
 
-    combos = (
+    combos = contexto['combos'].get(produto.pk, []) if contexto is not None else (
         produto.promocoes_quantidade.filter(filial=filial, ativo=True)
         .prefetch_related('faixas')
     )
     for combo in combos:
         if not _oferta_temporal_vigente(combo, hoje):
             continue
+        preco_base_combo = preco_normal
+        if combo.usar_preco_promocional:
+            bases = [preco_normal]
+            bases.extend(
+                Decimal(str(oferta['preco'])) for oferta in ofertas
+                if oferta['tipo'] in {'promocional', 'categoria'}
+                and Decimal(str(oferta.get('quantidade') or 1)) == Decimal('1')
+            )
+            preco_base_combo = min(bases)
         for faixa in combo.faixas.all():
             quantidade = faixa.quantidade_minima
-            detalhes = PrecoService.precos_combo_quantidade_vigentes_detalhados(
-                produto, filial=filial, quantidade=quantidade, data=hoje,
+            preco = PrecoService.aplicar_regra_desconto(
+                preco_base_combo, faixa.tipo_desconto, faixa.valor,
             )
-            candidato = next((item for item in detalhes if item.get('faixa_id') == faixa.pk), None)
-            if not candidato:
-                continue
-            preco = candidato['preco']
+            resumo = PrecoService._resumo_desconto(faixa.tipo_desconto, faixa.valor)
+            detalhe = (
+                f'Combo "{combo.nome}" com {resumo} para quantidade '
+                f'{PrecoService._fmt_decimal(faixa.quantidade_minima, 3)}.'
+            )
             ofertas.append({
                 'preco': preco, 'total': preco * quantidade,
                 'preco_referencia': preco_normal * quantidade, 'quantidade': quantidade,
                 'tipo': 'combo', 'oferta_tipo': 'combo', 'tag': 'COMBO POR QUANTIDADE',
-                'origem': combo.nome, 'detalhe': candidato['detalhe'],
+                'origem': combo.nome, 'detalhe': detalhe,
                 'validade': _validade_oferta(combo.data_inicio, combo.data_fim, combo.dias_semana),
                 'promocao_id': combo.pk, 'faixa_id': faixa.pk,
                 'quantidade_exata': faixa.condicao_quantidade == 'igual',
             })
 
-    kits = (
+    kits = contexto['kits'].get(produto.pk, []) if contexto is not None else (
         KitProduto.objects.for_filial(filial).filter(ativo=True, itens__produto=produto)
         .prefetch_related('itens__produto').distinct()
     )
@@ -501,7 +583,7 @@ def _ofertas_produto(produto, filial, hoje=None, cliente=None):
             'kit_id': kit.pk,
         })
 
-    brindes = (
+    brindes = contexto['brindes'].get(produto.pk, []) if contexto is not None else (
         BrindeProduto.objects.for_filial(filial).filter(ativo=True, produto_gatilho=produto)
         .prefetch_related('itens__produto')
     )
@@ -515,9 +597,23 @@ def _ofertas_produto(produto, filial, hoje=None, cliente=None):
                 produto=produto, filial=filial, quantidade=quantidade, cliente=cliente,
             )['preco_aplicado']
         presentes = []
+        presentes_estoque = []
         valor_presentes = Decimal('0')
         for item in brinde.itens.all():
-            presentes.append(f'{item.quantidade:g}x {item.produto.descricao_pdv or item.produto.descricao}')
+            nome_presente = item.produto.descricao_pdv or item.produto.descricao
+            presentes.append(f'{item.quantidade:g}x {nome_presente}')
+            if contexto is not None:
+                saldo = contexto['estoque_brindes'].get(item.produto_id, Decimal('0'))
+            else:
+                saldo = (
+                    Estoque.objects.filter(filial=filial, produto_id=item.produto_id)
+                    .values_list('quantidade_disponivel', flat=True).first() or Decimal('0')
+                )
+            presentes_estoque.append({
+                'produto_id': item.produto_id, 'nome': nome_presente,
+                'quantidade': float(item.quantidade), 'estoque_disponivel': float(saldo),
+                'estoque_suficiente': saldo >= item.quantidade,
+            })
             valor_presentes += (item.produto.preco_venda or Decimal('0')) * item.quantidade
         total = unitario * quantidade
         ofertas.append({
@@ -525,11 +621,16 @@ def _ofertas_produto(produto, filial, hoje=None, cliente=None):
             'preco_referencia': total + valor_presentes, 'quantidade': quantidade,
             'tipo': 'brinde', 'oferta_tipo': 'brinde', 'tag': 'COMPRE E GANHE',
             'origem': brinde.nome, 'detalhe': brinde.descricao or 'Ganhe ' + ', '.join(presentes),
-            'brindes': presentes,
+            'brindes': presentes, 'brindes_estoque': presentes_estoque, 'inclui_brinde': True,
+            'brinde_quantidade_gatilho': float(brinde.quantidade_gatilho),
             'validade': _validade_oferta(brinde.data_inicio, brinde.data_fim, brinde.dias_semana),
             'brinde_id': brinde.pk,
         })
 
+    if any(oferta.get('inclui_brinde') for oferta in ofertas):
+        for oferta in ofertas:
+            if not oferta.get('inclui_brinde'):
+                oferta['sem_brinde'] = True
     return _finalizar_ofertas(ofertas)
 
 
@@ -676,15 +777,75 @@ def _produto_imagem_payload(produto):
     }
 
 
-def _serializa_produto(p, filial, cliente=None, quantidade=Decimal("1")):
+def _criar_item_rascunho(venda, produto, item_dados, numero_item):
+    quantidade = Decimal(str(item_dados['quantidade']))
+    valor_unitario = Decimal(str(item_dados['valor_unitario']))
+    desconto_valor = Decimal(str(item_dados.get('desconto_valor') or 0))
+    valor_bruto = quantidade * valor_unitario
+    desconto_valor = min(max(Decimal('0'), desconto_valor), valor_bruto)
+    desconto_percentual = (
+        desconto_valor / valor_bruto * Decimal('100') if valor_bruto else Decimal('0')
+    )
+    valor_total = valor_bruto - desconto_valor
+    return ItemVendaPDV.objects.create(
+        venda_pdv=venda,
+        produto=produto,
+        numero_item=numero_item,
+        tipo_venda=item_dados.get('tipo_venda') or 'unitario',
+        quantidade=quantidade,
+        unidade_medida=produto.unidade_medida.sigla if produto.unidade_medida_id else 'UN',
+        valor_unitario=valor_unitario,
+        valor_unitario_tabela=produto.preco_venda,
+        preco_origem=item_dados.get('preco_origem_tipo') or item_dados.get('oferta_tipo') or 'normal',
+        preco_origem_detalhe=item_dados.get('preco_origem_detalhe') or item_dados.get('oferta_nome') or '',
+        oferta_contexto=contexto_oferta_do_payload(item_dados),
+        desconto_percentual=desconto_percentual,
+        desconto_valor=desconto_valor,
+        desconto_manual=desconto_valor > 0,
+        valor_total=valor_total,
+    )
+
+
+def _serializar_item_rascunho(item):
+    produto = item.produto
+    aceita_decimal = _produto_aceita_quantidade_decimal(produto)
+    payload = {
+        'produto_id': produto.pk,
+        'descricao': produto.descricao_pdv or produto.descricao,
+        'codigo_barras': produto.codigo_barras or '',
+        'tipo_produto': produto.tipo_produto,
+        'fracionavel': aceita_decimal,
+        'quantidade_step': 0.001 if aceita_decimal else 1,
+        'quantidade_decimais': 3 if aceita_decimal else 0,
+        'icone': produto.linha_producao.icone if produto.linha_producao else '📦',
+        'cor': produto.linha_producao.cor_identificacao if produto.linha_producao else None,
+        'linha': produto.linha_producao.nome if produto.linha_producao else None,
+        'quantidade': float(item.quantidade),
+        'valor_unitario': float(item.valor_unitario),
+        'valor_total': float(item.valor_total),
+        'desconto_percentual': float(item.desconto_percentual or 0),
+        'desconto_valor': float(item.desconto_valor or 0),
+        'unidade_medida': item.unidade_medida,
+        **_produto_imagem_payload(produto),
+    }
+    return aplicar_contexto_oferta(payload, item)
+
+
+def _serializa_produto(
+    p, filial, cliente=None, quantidade=Decimal("1"), contexto_ofertas=None,
+):
     contrato = ProdutoVendavelService.consultar(
         produto=p,
         filial=filial,
         quantidade=quantidade,
         cliente=cliente,
+        validar_promocoes=False,
+        incluir_promocoes_aplicaveis=False,
     )
     aceita_decimal = _produto_aceita_quantidade_decimal(p)
-    ofertas = _ofertas_produto(p, filial, cliente=cliente)
+    ofertas = _ofertas_produto(
+        p, filial, cliente=cliente, contrato=contrato, contexto=contexto_ofertas,
+    )
     return {
         "id": p.id,
         "descricao": p.descricao_pdv or p.descricao,
@@ -704,7 +865,10 @@ def _serializa_produto(p, filial, cliente=None, quantidade=Decimal("1")):
         "status_comercial": contrato["status_comercial"],
         "status_comercial_label": contrato["status_comercial_label"],
         "lote_obrigatorio": contrato["lote_obrigatorio"],
-        "promocoes_aplicaveis": contrato["promocoes_aplicaveis"],
+        "promocoes_aplicaveis": [
+            oferta for oferta in ofertas
+            if oferta.get('oferta_tipo') not in {'normal', 'tabela_cliente'}
+        ],
         "bloqueios": contrato["bloqueios"],
         "alertas": contrato["alertas"],
         "pode_vender": contrato["pode_vender"],
@@ -759,6 +923,7 @@ def api_estado(request):
                 p.id: p for p in Produto.objects.filter(id__in=ids_ordenados)
                 .select_related('linha_producao')
             }
+            contexto_ofertas = _preparar_contexto_ofertas(produtos.values(), request.filial_ativa)
             for pid in ids_ordenados:
                 p = produtos.get(pid)
                 if p and p.ativo:
@@ -766,18 +931,23 @@ def api_estado(request):
                         p,
                         request.filial_ativa,
                         cliente=cliente,
+                        contexto_ofertas=contexto_ofertas,
                     ))
 
         # Sem histórico de vendas: mostra produtos cadastrados
         if not top_produtos:
-            fallback = (
+            fallback = list(
                 Produto.objects.for_filial(request.filial_ativa)
                 .filter(ativo=True)
                 .select_related('linha_producao')
                 .order_by('descricao')[:10]
             )
+            contexto_ofertas = _preparar_contexto_ofertas(fallback, request.filial_ativa)
             top_produtos = [
-                _serializa_produto(p, request.filial_ativa, cliente=cliente)
+                _serializa_produto(
+                    p, request.filial_ativa, cliente=cliente,
+                    contexto_ofertas=contexto_ofertas,
+                )
                 for p in fallback
             ]
     except Exception:
@@ -826,6 +996,7 @@ def api_precos_cliente(request):
         for produto in Produto.objects.for_filial(request.filial_ativa)
         .filter(pk__in=ids, ativo=True)
     }
+    contexto_ofertas = _preparar_contexto_ofertas(produtos.values(), request.filial_ativa)
     precos = []
     for produto_id in ids:
         produto = produtos.get(produto_id)
@@ -836,6 +1007,7 @@ def api_precos_cliente(request):
             request.filial_ativa,
             cliente=cliente,
             quantidade=quantidades[produto_id],
+            contexto_ofertas=contexto_ofertas,
         ))
     return JsonResponse({"precos": precos})
 
@@ -1131,6 +1303,7 @@ def api_venda_pendente(request):
                 delivery=delivery,
                 endereco_entrega=endereco_entrega,
                 pagamentos_rascunho=pagamentos_rascunho,
+                observacao=body.get("observacao", ""),
                 valor_desconto=desconto,
                 valor_acrescimo=acrescimo,
                 usuario=request.user,
@@ -1139,21 +1312,12 @@ def api_venda_pendente(request):
 
             subtotal = Decimal("0")
             for idx, item in enumerate(itens, start=1):
-                produto = Produto.objects.select_related("unidade_medida").get(id=int(item["produto_id"]))
-                quantidade = Decimal(str(item["quantidade"]))
-                valor_unitario = Decimal(str(item["valor_unitario"]))
-                valor_total_item = quantidade * valor_unitario
-                um_sigla = produto.unidade_medida.sigla if produto.unidade_medida_id else "UN"
-                ItemVendaPDV.objects.create(
-                    venda_pdv=venda,
-                    produto=produto,
-                    numero_item=idx,
-                    quantidade=quantidade,
-                    unidade_medida=um_sigla,
-                    valor_unitario=valor_unitario,
-                    valor_total=valor_total_item,
+                produto = (
+                    Produto.objects.for_filial(request.filial_ativa)
+                    .select_related("unidade_medida").get(id=int(item["produto_id"]), ativo=True)
                 )
-                subtotal += valor_total_item
+                item_salvo = _criar_item_rascunho(venda, produto, item, idx)
+                subtotal += item_salvo.valor_total
 
             venda.valor_subtotal = subtotal
             venda.valor_total = subtotal - desconto + acrescimo
@@ -1210,27 +1374,10 @@ def api_pendente_detalhe(request, pk):
     except VendaPDV.DoesNotExist:
         return JsonResponse({"erro": "Venda pendente não encontrada."}, status=404)
 
-    itens = []
-    for item in venda.itens.select_related("produto__linha_producao"):
-        p = item.produto
-        aceita_decimal = _produto_aceita_quantidade_decimal(p)
-        itens.append({
-            "produto_id": p.pk,
-            "descricao": p.descricao_pdv or p.descricao,
-            "codigo_barras": p.codigo_barras or "",
-            "tipo_produto": p.tipo_produto,
-            "fracionavel": aceita_decimal,
-            "quantidade_step": 0.001 if aceita_decimal else 1,
-            "quantidade_decimais": 3 if aceita_decimal else 0,
-            "icone": p.linha_producao.icone if p.linha_producao else "📦",
-            "cor": p.linha_producao.cor_identificacao if p.linha_producao else None,
-            "linha": p.linha_producao.nome if p.linha_producao else None,
-            "quantidade": float(item.quantidade),
-            "valor_unitario": float(item.valor_unitario),
-            "valor_total": float(item.valor_total),
-            "desconto_percentual": float(item.desconto_percentual or 0),
-            **_produto_imagem_payload(p),
-        })
+    itens = [
+        _serializar_item_rascunho(item)
+        for item in venda.itens.select_related("produto__linha_producao")
+    ]
 
     # Endereço/contato do cliente também vão no retorno: ao retomar a venda
     # o PDV remonta o objeto do cliente do zero, e sem isso o comprovante
@@ -1255,6 +1402,7 @@ def api_pendente_detalhe(request, pk):
         "delivery": venda.delivery,
         "endereco_entrega": venda.endereco_entrega or {},
         "pagamentos": venda.pagamentos_rascunho or [],
+        "observacao": venda.observacao or "",
         "itens": itens,
     })
 
@@ -1680,6 +1828,7 @@ def api_venda_orcamento(request):
                 origem="pdv",
                 delivery=delivery,
                 endereco_entrega=endereco_entrega,
+                observacao=body.get("observacao", ""),
                 valor_desconto=desconto,
                 valor_acrescimo=acrescimo,
                 usuario=request.user,
@@ -1688,21 +1837,12 @@ def api_venda_orcamento(request):
 
             subtotal = Decimal("0")
             for idx, item in enumerate(itens, start=1):
-                produto = Produto.objects.select_related("unidade_medida").get(id=int(item["produto_id"]))
-                quantidade = Decimal(str(item["quantidade"]))
-                valor_unitario = Decimal(str(item["valor_unitario"]))
-                valor_total_item = quantidade * valor_unitario
-                um_sigla = produto.unidade_medida.sigla if produto.unidade_medida_id else "UN"
-                ItemVendaPDV.objects.create(
-                    venda_pdv=venda,
-                    produto=produto,
-                    numero_item=idx,
-                    quantidade=quantidade,
-                    unidade_medida=um_sigla,
-                    valor_unitario=valor_unitario,
-                    valor_total=valor_total_item,
+                produto = (
+                    Produto.objects.for_filial(request.filial_ativa)
+                    .select_related("unidade_medida").get(id=int(item["produto_id"]), ativo=True)
                 )
-                subtotal += valor_total_item
+                item_salvo = _criar_item_rascunho(venda, produto, item, idx)
+                subtotal += item_salvo.valor_total
 
             venda.valor_subtotal = subtotal
             venda.valor_total = subtotal - desconto + acrescimo
@@ -2872,28 +3012,10 @@ def api_orcamento_detalhe(request, pk):
     except VendaPDV.DoesNotExist:
         return JsonResponse({"erro": "Orçamento não encontrado."}, status=404)
 
-    itens = []
-    for item in venda.itens.select_related("produto__linha_producao").order_by("numero_item"):
-        p = item.produto
-        aceita_decimal = _produto_aceita_quantidade_decimal(p)
-        itens.append({
-            "produto_id": p.pk,
-            "descricao": p.descricao_pdv or p.descricao,
-            "codigo_barras": p.codigo_barras or "",
-            "icone": p.linha_producao.icone if p.linha_producao else "📦",
-            "cor": p.linha_producao.cor_identificacao if p.linha_producao else None,
-            "linha": p.linha_producao.nome if p.linha_producao else None,
-            "quantidade": float(item.quantidade),
-            "valor_unitario": float(item.valor_unitario),
-            "valor_total": float(item.valor_total),
-            "desconto_percentual": float(item.desconto_percentual or 0),
-            "unidade_medida": item.unidade_medida,
-            "tipo_produto": p.tipo_produto,
-            "fracionavel": aceita_decimal,
-            "quantidade_step": 0.001 if aceita_decimal else 1,
-            "quantidade_decimais": 3 if aceita_decimal else 0,
-            **_produto_imagem_payload(p),
-        })
+    itens = [
+        _serializar_item_rascunho(item)
+        for item in venda.itens.select_related("produto__linha_producao").order_by("numero_item")
+    ]
 
     return JsonResponse({
         "ok": True,
@@ -2910,6 +3032,7 @@ def api_orcamento_detalhe(request, pk):
         "usuario": getattr(venda.usuario, 'nome', None) or getattr(venda.usuario, 'email', '') or str(venda.usuario),
         "delivery": venda.delivery,
         "endereco_entrega": venda.endereco_entrega or {},
+        "observacao": venda.observacao or "",
         "itens": itens,
     })
 
@@ -2960,22 +3083,10 @@ def api_orcamento_retomar(request, pk):
     venda.save(update_fields=["status", "sessao_pdv"])
 
     # Retorna os dados completos para o PDV carregar
-    itens = []
-    for item in venda.itens.select_related("produto__linha_producao").order_by("numero_item"):
-        p = item.produto
-        itens.append({
-            "produto_id": p.pk,
-            "descricao": p.descricao_pdv or p.descricao,
-            "codigo_barras": p.codigo_barras or "",
-            "icone": p.linha_producao.icone if p.linha_producao else "📦",
-            "cor": p.linha_producao.cor_identificacao if p.linha_producao else None,
-            "linha": p.linha_producao.nome if p.linha_producao else None,
-            "quantidade": float(item.quantidade),
-            "valor_unitario": float(item.valor_unitario),
-            "valor_total": float(item.valor_total),
-            "desconto_percentual": float(item.desconto_percentual or 0),
-            "unidade_medida": item.unidade_medida,
-        })
+    itens = [
+        _serializar_item_rascunho(item)
+        for item in venda.itens.select_related("produto__linha_producao").order_by("numero_item")
+    ]
 
     return JsonResponse({
         "ok": True,
@@ -2986,6 +3097,9 @@ def api_orcamento_retomar(request, pk):
         "cliente_cpf_cnpj": venda.cliente.cpf_cnpj if venda.cliente else "",
         "desconto": float(venda.valor_desconto or 0),
         "acrescimo": float(venda.valor_acrescimo or 0),
+        "delivery": venda.delivery,
+        "endereco_entrega": venda.endereco_entrega or {},
+        "observacao": venda.observacao or "",
         "itens": itens,
     })
 

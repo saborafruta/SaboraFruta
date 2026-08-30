@@ -130,6 +130,11 @@ class ItemVendaPDV(models.Model):
     custo_unitario_snapshot = models.DecimalField(max_digits=14, decimal_places=4, default=0)
     preco_origem = models.CharField(max_length=30, blank=True, default="")
     preco_origem_detalhe = models.TextField(blank=True, default="")
+    oferta_contexto = models.JSONField(
+        default=dict,
+        blank=True,
+        help_text="Regra comercial escolhida no PDV para retomar pendentes e orçamentos.",
+    )
     desconto_percentual = models.DecimalField(max_digits=5, decimal_places=2, default=0)
     desconto_valor = models.DecimalField(max_digits=14, decimal_places=2, default=0)
     acrescimo_valor = models.DecimalField(max_digits=14, decimal_places=2, default=0)

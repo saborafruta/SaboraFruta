@@ -14,6 +14,7 @@ from apps.financeiro.constants.enums import StatusContaReceber, TipoFormaPagamen
 from apps.financeiro.models import ContaReceber, FormaPagamento
 from apps.pdv.models import ItemVendaPDV, PagamentoVendaPDV, VendaPDV
 from apps.pdv.services.produto_vendavel_service import ProdutoVendavelService
+from apps.pdv.services.oferta_contexto_service import contexto_oferta_do_payload
 from apps.produtos.models import Produto
 from apps.produtos.models import BrindeProduto, KitCategoria, KitProduto, PromocaoQuantidade
 from apps.produtos.services.preco_service import PrecoService
@@ -337,6 +338,8 @@ class VendaPDVService:
                 f"Preco alterado manualmente pelo operador "
                 f"(preco automatico: R$ {preco_info['preco']})."
             )
+            if contrato["custo_atual"] > 0 and valor_unitario < contrato["custo_atual"]:
+                raise DadosInvalidosError("O preço manual está abaixo do custo atual do produto.")
 
         valor_bruto_item = cls._decimal(quantidade * valor_unitario, cls.MONEY)
         desconto_valor = cls._decimal(item_dados.get("desconto_valor", "0"), cls.MONEY)
@@ -371,6 +374,7 @@ class VendaPDVService:
             custo_unitario_snapshot=custo_snapshot,
             preco_origem=preco_origem_tipo,
             preco_origem_detalhe=preco_origem_detalhe,
+            oferta_contexto=contexto_oferta_do_payload(item_dados),
             desconto_percentual=desconto_percentual,
             desconto_valor=desconto_valor,
             desconto_manual=desconto_valor > 0,
@@ -496,6 +500,7 @@ class VendaPDVService:
                 custo_unitario_snapshot=contrato["custo_atual"],
                 preco_origem="kit",
                 preco_origem_detalhe=f'Kit "{kit.nome}"',
+                oferta_contexto=contexto_oferta_do_payload(item_dados),
                 valor_total=valor_total_item,
             )
             if comp.produto.tipo_produto != Produto.TipoProduto.SERVICO:

@@ -24,6 +24,7 @@ class ProdutoVendavelService:
         filial,
         quantidade=Decimal("1"),
         validar_promocoes: bool = True,
+        incluir_promocoes_aplicaveis: bool = True,
         cliente=None,
         tabela_preco=None,
     ) -> dict:
@@ -88,7 +89,10 @@ class ProdutoVendavelService:
             "status_comercial_label": avaliacao["label"],
             "lote_obrigatorio": lote_obrigatorio,
             "tem_lote_disponivel": cls._tem_lote_disponivel(produto, filial) if lote_obrigatorio else True,
-            "promocoes_aplicaveis": cls.promocoes_aplicaveis(produto, filial, quantidade),
+            "promocoes_aplicaveis": (
+                cls.promocoes_aplicaveis(produto, filial, quantidade)
+                if incluir_promocoes_aplicaveis else []
+            ),
             "bloqueios": bloqueios,
             "alertas": alertas,
             "pode_vender": not bloqueios,
