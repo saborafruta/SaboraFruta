@@ -26,6 +26,7 @@ urlpatterns = [
     path('financeiro/', include('apps.financeiro.urls', namespace='financeiro')),
     path('logistica/', include('apps.logistica.urls', namespace='logistica')),
     path('pdv/', include('apps.pdv.urls', namespace='pdv')),
+    path('comprovante/', include('apps.pdv.urls_publico', namespace='pdv_publico')),
     path('qualidade/', include('apps.qualidade.urls', namespace='qualidade')),
     path('analytics/', include('apps.analytics.urls', namespace='analytics')),
     path('lotes/', include('apps.lotes.urls', namespace='lotes')),

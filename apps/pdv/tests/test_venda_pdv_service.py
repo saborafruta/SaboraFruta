@@ -1,6 +1,8 @@
 from decimal import Decimal
 
-from django.test import TestCase
+from django.test import Client, TestCase
+from django.urls import reverse
+from django.utils import timezone
 
 from apps.cadastros.models import Cliente, ClienteFilial
 from apps.core.models import Empresa, Filial, PerfilAcesso, Usuario
@@ -21,6 +23,57 @@ from apps.produtos.models import (
 
 
 class VendaPDVServiceTests(TestCase):
+    def test_link_publico_com_desconto_e_isolamento(self):
+        from urllib.parse import urlsplit
+
+        produto = self.criar_produto('Açúcar & Café')
+        venda = VendaPDV.objects.create(
+            filial=self.filial, usuario=self.usuario, numero_venda=91,
+            data_venda=timezone.now(), status='finalizada', valor_total=280,
+        )
+        ItemVendaPDV.objects.create(
+            venda_pdv=venda, produto=produto, numero_item=1, unidade_medida='UN',
+            quantidade=4, valor_unitario=100, desconto_valor=120,
+            desconto_percentual=30, valor_total=280,
+        )
+        endpoint = reverse('pdv:api_comprovante_link', args=[venda.pk])
+        anonymous = Client()
+        self.assertNotEqual(anonymous.post(endpoint).status_code, 200)
+        self.client.force_login(self.usuario)
+        self.assertEqual(self.client.get(endpoint).status_code, 405)
+        resposta = self.client.post(endpoint)
+        self.assertEqual(resposta.status_code, 200)
+        url = urlsplit(resposta.json()['url']).path
+        self.assertEqual(resposta.json()['url'], self.client.post(endpoint).json()['url'])
+        venda.refresh_from_db()
+        self.assertEqual(len(venda.comprovante_token), 43)
+        page = anonymous.get(url)
+        self.assertContains(page, 'Desconto 30,00%')
+        self.assertContains(page, '120,00')
+        self.assertContains(page, '400,00')
+        self.assertContains(page, '280,00')
+        self.assertContains(page, 'Açúcar &amp; Café')
+        self.assertNotContains(page, self.usuario.email)
+        self.assertEqual(page['Cache-Control'], 'private, no-store')
+        self.assertEqual(page['Referrer-Policy'], 'no-referrer')
+        pdf = anonymous.get(url + 'pdf/')
+        self.assertEqual(pdf['Content-Type'], 'application/pdf')
+        self.assertTrue(pdf.content.startswith(b'%PDF-'))
+        self.assertGreater(len(pdf.content), 1000)
+        detalhe = self.client.get(reverse('pdv:api_venda_detalhe', args=[venda.pk])).json()
+        self.assertEqual(detalhe['itens'][0]['desconto_valor'], 120)
+        outra = Filial.objects.create(empresa=self.empresa, nome_fantasia='Outra', cnpj='52345678000194', uf='RN')
+        venda.filial = outra
+        venda.save(update_fields=['filial'])
+        self.assertEqual(self.client.post(endpoint).status_code, 404)
+        for status in ['pendente', 'orcamento', 'cancelada', 'aberta']:
+            venda.status = status
+            venda.save(update_fields=['status'])
+            self.assertEqual(anonymous.get(url).status_code, 404)
+            self.assertEqual(anonymous.get(url + 'pdf/').status_code, 404)
+        self.assertEqual(anonymous.get('/comprovante/91/').status_code, 404)
+        self.assertEqual(anonymous.get('/comprovante/' + 'x'*43 + '/').status_code, 404)
+
     def test_forma_oculta_nao_finaliza_venda_de_tela_desatualizada(self):
         produto = self.criar_produto()
         self.abastecer(produto, '10')

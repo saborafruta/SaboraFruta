@@ -1,0 +1,34 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex,nofollow,noarchive"><meta name="referrer" content="no-referrer">
+  <title>Comprovante #{{ cupom.numero }}</title>
+  <style>
+    *{box-sizing:border-box}body{margin:0;background:#f1f5f9;color:#172033;font:14px/1.5 system-ui,sans-serif}
+    nav{display:flex;gap:10px;justify-content:center;padding:18px;flex-wrap:wrap}
+    nav a,nav button{border:1px solid #cbd5e1;border-radius:9px;padding:11px 18px;background:white;color:#172033;font:600 14px system-ui;text-decoration:none;cursor:pointer}
+    nav a{background:#c2410c;border-color:#c2410c;color:white}main{max-width:470px;margin:0 auto 30px;padding:26px;background:white;border:1px solid #e2e8f0;border-radius:12px}
+    header{text-align:center}header img{max-width:150px;max-height:90px;object-fit:contain}h1{font-size:19px;margin:12px 0 20px}
+    .linha{display:flex;gap:16px;justify-content:space-between;margin:7px 0}.linha>span{overflow-wrap:anywhere;min-width:0}.valor{white-space:nowrap;flex-shrink:0}
+    section{border-top:1px dashed #94a3b8;padding-top:14px;margin-top:16px}.item{margin-bottom:16px}.desconto{color:#166534;font-weight:650}.total{font-size:17px;font-weight:750}footer{font-size:12px;text-align:center;margin-top:22px;color:#475569}
+    @media(max-width:500px){main{margin:0 10px 20px;padding:20px}}
+    @media print{body{background:white}nav{display:none}main{border:0;border-radius:0;margin:0 auto;max-width:80mm;padding:4mm;font-size:11px}section,.item{break-inside:avoid}}
+  </style>
+</head>
+<body>
+  <nav aria-label="Ações do comprovante"><a href="{{ pdf_url }}">Baixar PDF</a><button onclick="window.print()">Imprimir</button></nav>
+  <main>
+    <header>{% if cupom.logo_url %}<img src="{{ cupom.logo_url }}" alt="Logo {{ cupom.empresa }}" onerror="this.hidden=true">{% endif %}<h1>{{ cupom.empresa }}</h1></header>
+    <div class="linha"><span>Venda</span><strong>#{{ cupom.numero }}</strong></div>
+    <div class="linha"><span>Data</span><span>{{ cupom.data }}</span></div>
+    <div class="linha"><span>Cliente</span><span>{{ cupom.cliente }}</span></div>
+    <section aria-label="Itens">{% for item in cupom.itens %}<div class="item">
+      <strong>{{ item.nome }}</strong><div class="linha"><span>{{ item.quantidade }} {{ item.unidade }} × R$ {{ item.unitario }}</span><strong class="valor">R$ {{ item.total }}</strong></div>
+      {% if item.tem_desconto %}<div class="desconto">Desconto {{ item.percentual }}%: − R$ {{ item.desconto }}</div>{% endif %}
+    </div>{% endfor %}</section>
+    <section aria-label="Totais">{% for rotulo, valor in cupom.resumo %}<div class="linha {% if rotulo == 'TOTAL' %}total{% endif %}"><span>{{ rotulo }}</span><strong class="valor">{% if valor|slice:':2' == '- ' %}− R$ {{ valor|slice:'2:' }}{% else %}R$ {{ valor }}{% endif %}</strong></div>{% endfor %}</section>
+    <section aria-label="Pagamentos">{% for rotulo, valor in cupom.pagamentos %}<div class="linha"><span>{{ rotulo }}</span><strong class="valor">R$ {{ valor }}</strong></div>{% endfor %}</section>
+    <footer>Este comprovante não é um documento fiscal.</footer>
+  </main>
+</body></html>

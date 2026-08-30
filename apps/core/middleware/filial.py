@@ -20,6 +20,7 @@ class FilialMiddleware:
 
     # URLs que não exigem filial definida (login, logout, troca de filial)
     EXEMPT_URLS = (
+        '/comprovante/',
         '/auth/login/',
         '/auth/logout/',
         '/auth/minha-foto/',

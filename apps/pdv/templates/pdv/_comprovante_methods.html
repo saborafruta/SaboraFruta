@@ -13,6 +13,34 @@
       return Number(valor || 0).toLocaleString('pt-BR', { minimumFractionDigits:2, maximumFractionDigits:2 });
     },
 
+    descontoItemCupom(item) {
+      const bruto = Math.round(Number(item.quantidade || 0) * Number(item.valor_unitario || 0) * 100);
+      const valor = item.desconto_valor != null
+        ? Math.round(Number(item.desconto_valor) * 100)
+        : (item.valor_total != null ? bruto - Math.round(Number(item.valor_total) * 100)
+          : Math.round(bruto * Number(item.desconto_percentual || 0) / 100));
+      const desconto = Math.min(bruto, Math.max(0, valor));
+      return {bruto:bruto/100, valor:desconto/100, percentual:bruto>0?desconto/bruto*100:0};
+    },
+
+    resumoDescontosCupom(venda) {
+      const itens = (venda.itens || []).map(item => this.descontoItemCupom(item));
+      const bruto = itens.reduce((s,item)=>s+Math.round(item.bruto*100),0)/100;
+      const descontoItens = itens.reduce((s,item)=>s+Math.round(item.valor*100),0)/100;
+      const baseGeral = (Math.round(bruto*100)-Math.round(descontoItens*100))/100;
+      const geral = Number(venda.desconto ?? venda.valor_desconto ?? 0);
+      return {bruto,itens:descontoItens,geral,baseGeral,
+        itensPercentual:bruto>0?descontoItens/bruto*100:0,
+        geralPercentual:baseGeral>0?geral/baseGeral*100:0};
+    },
+
+    descontosResumoHtml(venda, fmt) {
+      const r = this.resumoDescontosCupom(venda);
+      return `<div class="cupom-discounts" style="font-size:12px;"><style>.cupom-discounts .line{display:flex;justify-content:space-between;gap:8px;margin:4px 0}.cupom-discounts strong{white-space:nowrap;flex-shrink:0}</style><div class="line"><span>Subtotal bruto</span><strong>R$ ${fmt(r.bruto)}</strong></div>`
+        + (r.itens>0?`<div class="line"><span>Desconto nos itens (${fmt(r.itensPercentual)}%)</span><strong>- R$ ${fmt(r.itens)}</strong></div>`:'')
+        + (r.geral>0?`<div class="line"><span>Desconto geral (${fmt(r.geralPercentual)}%)</span><strong>- R$ ${fmt(r.geral)}</strong></div>`:'') + '</div>';
+    },
+
     async visualizarComprovante(vendaId) {
       const w = window.open('', '_blank', 'width=760,height=820,scrollbars=yes');
       if (!w) { this.erroComprovante('Permita popups para visualizar o comprovante.'); return; }
@@ -55,11 +83,14 @@
       } catch (_) {}
 
       const esc = valor => this.escapeHtml(valor);
-      const itens = (venda.itens || []).map(item => `
+      const itens = (venda.itens || []).map(item => {
+        const desconto = this.descontoItemCupom(item);
+        return `
         <tr>
-          <td><strong>${esc(item.descricao)}</strong><div class="muted">${esc(item.quantidade)} ${esc(item.unidade_medida)} x R$ ${this.dinheiro(item.valor_unitario)}</div></td>
+          <td><strong>${esc(item.descricao)}</strong><div class="muted">${esc(item.quantidade)} ${esc(item.unidade_medida)} x R$ ${this.dinheiro(item.valor_unitario)}</div>${desconto.valor>0?`<div class="muted">Desconto ${this.dinheiro(desconto.percentual)}%: - R$ ${this.dinheiro(desconto.valor)}</div>`:''}</td>
           <td class="right">R$ ${this.dinheiro(item.valor_total)}</td>
-        </tr>`).join('');
+        </tr>`;
+      }).join('');
       const pagamentos = (venda.pagamentos || []).map(pag => `
         <div class="line"><span>${esc(pag.forma_descricao)}</span><strong>R$ ${this.dinheiro(Number(pag.valor) - Number(pag.troco || 0))}</strong></div>`).join('');
       const documento = venda.documento_fiscal
@@ -109,6 +140,7 @@ body.a4 .total{font-size:15px}
 body.a4 .footer{font-size:9px}
 }
 </style>
+<style>.line strong{white-space:nowrap;flex-shrink:0}.line>span{min-width:0;overflow-wrap:anywhere}</style>
 <style id="pagesize">@page{size:80mm auto;margin:2mm 3mm}</style>
 </head><body>
 <div class="actions">
@@ -130,8 +162,7 @@ ${venda.cliente_cpf_cnpj ? `<div class="line"><span>CPF/CNPJ</span><strong>${esc
 ${(() => { const e = venda.cliente_endereco || {}; if (!e.rua) return ''; const l1 = e.rua + (e.numero ? ', ' + e.numero : '') + (e.complemento ? ' - ' + e.complemento : ''); const cidadeUf = [e.cidade, e.uf].filter(Boolean).join('/'); const l2 = [e.bairro, cidadeUf, e.cep].filter(Boolean).join(' - '); return `<div class="muted" style="margin:3px 0 0;overflow-wrap:anywhere"><strong>Endereço:</strong> ${esc(l1)}${l2 ? ' - ' + esc(l2) : ''}</div>`; })()}
 ${documento}<hr class="sep"><table><tbody>${itens}</tbody></table><hr class="sep">
 <div class="line"><span>Qtd total de itens</span><strong>${(() => { const t = (venda.itens || []).reduce((s, i) => s + Number(i.quantidade || 0), 0); return t % 1 === 0 ? t : t.toFixed(2).replace('.', ','); })()}</strong></div>
-<div class="line"><span>Subtotal</span><strong>R$ ${this.dinheiro(Number(venda.valor_total) + Number(venda.desconto) - Number(venda.acrescimo))}</strong></div>
-${Number(venda.desconto) ? `<div class="line"><span>Desconto</span><strong>- R$ ${this.dinheiro(venda.desconto)}</strong></div>` : ''}
+${this.descontosResumoHtml(venda, valor=>this.dinheiro(valor))}
 ${Number(venda.acrescimo) ? `<div class="line"><span>Acréscimo</span><strong>R$ ${this.dinheiro(venda.acrescimo)}</strong></div>` : ''}
 <div class="line total"><span>TOTAL</span><span>R$ ${this.dinheiro(venda.valor_total)}</span></div>
 <hr class="sep">${pagamentos}${cancelamento}

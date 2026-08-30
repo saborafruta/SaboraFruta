@@ -1,9 +1,11 @@
 from django.urls import path
 from apps.pdv.views import pdv
+from apps.pdv.views.comprovante_publico import criar_link
 
 app_name = "pdv"
 
 urlpatterns = [
+    path('api/venda/<int:pk>/comprovante-link/', criar_link, name='api_comprovante_link'),
     path("", pdv.pdv_home, name="home"),
     path("vendas/", pdv.vendas_list, name="vendas_list"),
     path("orcamentos/", pdv.orcamentos_list, name="orcamentos_list"),

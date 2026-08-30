@@ -1706,7 +1706,7 @@
                     <span style="font-size:12px;color:#555;" x-text="'R$ ' + fmt(item.valor_unitario) + ' / un.'"></span>
                   </template>
                   <template x-if="item.desconto_valor>0">
-                    <span style="font-size:11px;padding:1px 6px;background:rgba(34,197,94,.15);color:#4ade80;border-radius:4px;font-weight:600;"
+                    <span class="item-discount-badge"
                           x-text="'− R$ ' + fmt(item.desconto_valor)"></span>
                   </template>
                 </div>
@@ -1731,8 +1731,8 @@
                           :style="item._precoManual?'color:#60a5fa;border-color:rgba(59,130,246,.35);':''">
                     preço <span x-show="item._precoManual" x-cloak>✎</span>
                   </button>
-                  <button @click="abrirDescontoItem(item)" class="btn-action" style="font-size:11px;padding:4px 8px;"
-                          :style="item.desconto_valor>0?'color:#4ade80;border-color:rgba(34,197,94,.3);':''">
+                  <button @click="abrirDescontoItem(item)" class="btn-action item-discount-button" style="font-size:11px;padding:4px 8px;"
+                          :class="{'has-discount':item.desconto_valor>0}">
                     desc <span x-show="item.desconto_valor>0" x-text="'R$'+fmt(item.desconto_valor)" x-cloak></span>
                   </button>
                   <button @click="item._showObs=!item._showObs" class="btn-action item-obs-btn" style="font-size:11px;padding:4px 8px;"
@@ -2494,6 +2494,19 @@
     .discount-apply:focus-visible { outline:2px solid var(--pdv-t1);outline-offset:3px; }
     .dic-field { flex:1; display:flex; align-items:center; gap:7px; background:var(--pdv-hover2); border:1.5px solid var(--pdv-bd); border-radius:10px; padding:0 14px; transition:.13s; }
     .dic-field:focus-within { border-color:#2563eb; }
+    #pdv-app .dic-field:focus-within { border-color:var(--pdv-focus) !important;box-shadow:0 0 0 3px var(--pdv-focus-ring); }
+    #pdv-app .dic-field input:focus, #pdv-app .dic-field input:focus-visible { outline:none !important;box-shadow:none !important; }
+    .item-discount-badge { font-size:11px;padding:2px 6px;background:rgba(34,197,94,.12);color:var(--pdv-paid);border-radius:5px;font-weight:750; }
+    #pdv-app .item-discount-button.has-discount { color:var(--pdv-paid);border-color:var(--pdv-paid);font-weight:700; }
+    .pending-modal { width:min(520px,calc(100vw - 32px));background:var(--pdv-modal);color:var(--pdv-t1);border:1px solid var(--pdv-bd);border-radius:16px;padding:24px; }
+    .pending-heading { display:flex;align-items:center;justify-content:space-between;margin-bottom:16px; }
+    .pending-heading h2 { font-size:15px;font-weight:700;color:var(--pdv-t1);margin:0; }
+    .pending-empty { text-align:center;color:var(--pdv-tmuted);font-size:13px;padding:32px; }
+    .pending-sale { display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px 16px;background:var(--pdv-card);color:var(--pdv-t1);border:1px solid var(--pdv-bd);border-radius:10px;cursor:pointer;text-align:left;width:100%;transition:.15s; }
+    .pending-sale:hover { border-color:var(--pdv-focus);background:var(--pdv-hover); }
+    .pending-sale-name { font-size:13px;font-weight:650; }
+    .pending-sale-date { font-size:11px;color:var(--pdv-tmuted);margin-top:3px; }
+    .pending-sale-total { font-size:15px;font-weight:750;color:var(--pdv-paid);white-space:nowrap; }
     .dic-field > span { font-size:14px; font-weight:800; color:var(--pdv-accent-text); flex-shrink:0; }
     .dic-field input { flex:1; width:100%; padding:12px 0; background:transparent; border:none; outline:none; font-size:16px; font-weight:700; color:var(--pdv-t1); font-family:inherit; }
     .dic-ok { padding:0 26px; border:none; border-radius:10px; background:#22c55e; color:#fff; font-size:14px; font-weight:800; cursor:pointer; box-shadow:0 6px 16px rgba(34,197,94,.28); transition:.13s; font-family:inherit; }
@@ -2671,24 +2684,22 @@
          ? 'position:fixed;inset:0;z-index:50;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,.8);'
          : 'display:none;'"
        @keydown.escape.window="showModalPendentes=false">
-    <div style="width:100%;max-width:520px;background:#13131e;border:1px solid #2a2a3e;border-radius:16px;padding:24px;">
-      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;">
-        <h2 style="font-size:15px;font-weight:700;color:#fff;margin:0;">⏸ Vendas Pendentes</h2>
-        <button @click="showModalPendentes=false" style="background:none;border:none;color:#555;font-size:18px;cursor:pointer;">✕</button>
+    <div class="pending-modal">
+      <div class="pending-heading">
+        <h2>Vendas pendentes</h2>
+        <button @click="showModalPendentes=false" class="dic-close" aria-label="Fechar pendentes">✕</button>
       </div>
       <div style="display:flex;flex-direction:column;gap:6px;max-height:320px;overflow-y:auto;">
         <template x-if="pendentes.length===0">
-          <p style="text-align:center;color:#333;font-size:13px;padding:32px;">Nenhuma venda pendente</p>
+          <p class="pending-empty">Nenhuma venda pendente</p>
         </template>
         <template x-for="p in pendentes" :key="p.id">
-          <button @click="retomarPendente(p)"
-                  style="display:flex;align-items:center;justify-content:space-between;padding:12px 16px;background:#1e1e2a;border:1px solid #2a2a3e;border-radius:10px;cursor:pointer;text-align:left;width:100%;transition:.15s;"
-                  onmouseover="this.style.borderColor='#2563eb'" onmouseout="this.style.borderColor='#2a2a3e'">
+          <button @click="retomarPendente(p)" class="pending-sale">
             <div>
-              <div style="font-size:13px;font-weight:600;color:#e5e5f0;" x-text="'#'+String(p.numero_venda).padStart(6,'0')+' — '+p.cliente"></div>
-              <div style="font-size:11px;color:#555;margin-top:2px;" x-text="new Date(p.data_venda).toLocaleString('pt-BR',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'})"></div>
+              <div class="pending-sale-name" x-text="'#'+String(p.numero_venda).padStart(6,'0')+' — '+p.cliente"></div>
+              <div class="pending-sale-date" x-text="new Date(p.data_venda).toLocaleString('pt-BR',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'})"></div>
             </div>
-            <span style="font-size:15px;font-weight:800;color:#4ade80;" x-text="'R$ '+fmt(p.valor_total)"></span>
+            <span class="pending-sale-total" x-text="'R$ '+fmt(p.valor_total)"></span>
           </button>
         </template>
       </div>
@@ -3214,11 +3225,34 @@
     </div>
   </div>
 
+  {% include "pdv/_toast_styles.html" %}
   <!-- Toast -->
-  <div x-show="toast.show" x-cloak x-transition
-       style="position:fixed;bottom:20px;left:50%;transform:translateX(-50%);z-index:60;padding:12px 20px;border-radius:10px;font-size:13px;font-weight:600;color:#fff;box-shadow:0 8px 32px rgba(0,0,0,.5);"
-       :style="toast.tipo==='erro'?'background:#dc2626;':'background:#16a34a;'"
-       x-text="toast.msg"></div>
+  <div class="pdv-toast-stack" aria-live="polite" aria-atomic="true">
+    <div x-show="toast.show" x-cloak x-transition.opacity.duration.180ms
+         class="pdv-toast"
+         :class="toast.tipo==='erro' ? 'pdv-toast-error' : (toast.tipo==='info' ? 'pdv-toast-info' : 'pdv-toast-success')">
+      <div class="pdv-toast-icon">
+        <template x-if="toast.tipo==='erro'">
+          <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v4m0 4h.01M10.3 4.6 2.8 17.5A2 2 0 004.5 20h15a2 2 0 001.7-2.5L13.7 4.6a2 2 0 00-3.4 0Z"/></svg>
+        </template>
+        <template x-if="toast.tipo==='info'">
+          <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M12 21a9 9 0 100-18 9 9 0 000 18Z"/></svg>
+        </template>
+        <template x-if="toast.tipo!=='erro' && toast.tipo!=='info'">
+          <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.2" d="m5 13 4 4L19 7"/></svg>
+        </template>
+      </div>
+      <div>
+        <div class="pdv-toast-title" x-text="toast.tipo==='erro' ? 'Atenção' : (toast.tipo==='info' ? 'Informação' : 'Tudo certo')"></div>
+        <div class="pdv-toast-message" x-text="toast.msg"></div>
+      </div>
+      <button type="button" class="pdv-toast-close" @click="toast.show=false" aria-label="Fechar mensagem">
+        <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18 18 6M6 6l12 12"/></svg>
+      </button>
+      <template x-for="notificationId in [toast.id]" :key="notificationId"><div class="pdv-toast-progress"></div></template>
+    </div>
+  </div>
+
 
   <!-- ══ Modal Estoque Insuficiente ══ -->
   <div x-cloak
@@ -3555,7 +3589,7 @@ function pdv() {
       bairro: '', cidade: '', uf: '', _showEndereco: false,
     },
 
-    modo: 'venda', horaAtual: '', toast: { show:false, msg:'', tipo:'ok' }, _tt: null,
+    modo: 'venda', horaAtual: '', toast: { id:0, show:false, msg:'', tipo:'ok' }, _tt: null,
     _atalhosRegistrados: false,
     modalEstoque: { show: false, msg: '', itens: [] },
     modalFiscal: { show:false, tipo:'', vendaId:null, carregando:false, pendencias:[], avisos:[], erro:'', permiteContingencia:false },
@@ -4524,7 +4558,7 @@ function pdv() {
           const tot = parseFloat(item.valor_total||0);
           itensHtml += `<tr>
             <td style="padding:4px 6px 4px 0;font-size:12px;text-align:left;white-space:nowrap;">${qtd}</td>
-            <td style="padding:4px 6px;font-size:12px;word-break:break-word;">${desc}</td>
+            <td style="padding:4px 6px;font-size:12px;word-break:break-word;">${this.escapeHtml(desc)}${this.descontoItemCupom(item).valor>0?`<div style="font-size:10px;margin-top:3px;">Desconto ${fmt(this.descontoItemCupom(item).percentual)}%: - R$ ${fmt(this.descontoItemCupom(item).valor)}</div>`:''}</td>
             <td style="padding:4px 0;font-size:12px;text-align:right;">R$&nbsp;${fmt(uni)}</td>
             <td style="padding:4px 0 4px 8px;font-size:12px;text-align:right;font-weight:700;">R$&nbsp;${fmt(tot)}</td>
           </tr>`;
@@ -4607,10 +4641,7 @@ ${(v.observacao && v.observacao.trim()) ? `<div class="sub">Obs: ${v.observacao.
 <div style="display:flex;justify-content:space-between;font-size:11px;color:#555;margin-bottom:4px;">
   <span>Qtd total de itens</span><span>${totalItens % 1 === 0 ? totalItens : totalItens.toFixed(2).replace('.',',')}</span>
 </div>
-<div style="display:flex;justify-content:space-between;font-size:13px;margin-bottom:3px;">
-  <span>Subtotal</span><span>R$&nbsp;${fmt(v.subtotal)}</span>
-</div>
-${parseFloat(v.desconto||0)>0?`<div style="display:flex;justify-content:space-between;font-size:12px;color:#1a7a3a;margin-bottom:3px;"><span>Desconto</span><span>− R$&nbsp;${fmt(v.desconto)}</span></div>`:''}
+${this.descontosResumoHtml(v,fmt)}
 ${parseFloat(v.acrescimo||0)>0?`<div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:3px;"><span>Acréscimo</span><span>+ R$&nbsp;${fmt(v.acrescimo)}</span></div>`:''}
 <div style="display:flex;justify-content:space-between;" class="total-row">
   <span>TOTAL</span><span>R$&nbsp;${fmt(v.total)}</span>
@@ -4685,7 +4716,7 @@ ${pgtoHtml ? `<hr class="sep">${pgtoHtml}` : ''}
         <div class="center"><div class="title">${esc(filial)}</div>${filialLinha1 ? `<div class="sub">${esc(filialLinha1)}</div>` : ''}${filialLinha2 ? `<div class="sub">${esc(filialLinha2)}</div>` : ''}${filialTelefone ? `<div class="sub">Tel: ${esc(filialTelefone)}</div>` : ''}<div class="sub">${esc(agora)}${numero ? ' - '+esc(numero) : ''}</div></div>
         <hr class="sep"><div class="sub">Cliente: <strong>${esc(cliente.nome || 'Consumidor Final')}</strong></div>${cliente.cpf_cnpj ? `<div class="sub">CPF/CNPJ: ${esc(cliente.cpf_cnpj)}</div>` : ''}${endereco1 ? `<div class="sub">${v.delivery ? 'Entrega' : 'Endereco'}: ${esc(endereco1)}</div>` : ''}${endereco2 ? `<div class="sub">${esc(endereco2)}</div>` : ''}${v.observacao ? `<div class="sub">Obs: ${esc(v.observacao)}</div>` : ''}
         <hr class="sep"><table><thead><tr><th>Qtd</th><th>Produto</th><th>Unit.</th><th>Total</th></tr></thead><tbody>${itens}</tbody></table>
-        <hr class="sep"><div class="line muted"><span>Qtd total de itens</span><span>${totalItens % 1 === 0 ? totalItens : totalItens.toFixed(2).replace('.',',')}</span></div><div class="line"><span>Subtotal</span><span>R$ ${fmt(v.subtotal)}</span></div>${parseFloat(v.desconto || 0) > 0 ? `<div class="line"><span>Desconto</span><span>- R$ ${fmt(v.desconto)}</span></div>` : ''}${parseFloat(v.acrescimo || 0) > 0 ? `<div class="line"><span>Acrescimo</span><span>+ R$ ${fmt(v.acrescimo)}</span></div>` : ''}<div class="line total"><span>TOTAL</span><span>R$ ${fmt(v.total)}</span></div>${pagamentos ? `<hr class="sep">${pagamentos}` : ''}
+        <hr class="sep"><div class="line muted"><span>Qtd total de itens</span><span>${totalItens % 1 === 0 ? totalItens : totalItens.toFixed(2).replace('.',',')}</span></div>${this.descontosResumoHtml(v,fmt)}${parseFloat(v.acrescimo || 0) > 0 ? `<div class="line"><span>Acrescimo</span><span>+ R$ ${fmt(v.acrescimo)}</span></div>` : ''}<div class="line total"><span>TOTAL</span><span>R$ ${fmt(v.total)}</span></div>${pagamentos ? `<hr class="sep">${pagamentos}` : ''}
         <hr class="sep"><div class="center footer">Obrigado pela preferencia!<br>Este nao e um documento fiscal.</div>
       </div></body></html>`;
     },
@@ -4751,7 +4782,7 @@ ${pgtoHtml ? `<hr class="sep">${pgtoHtml}` : ''}
       const v = vendaCupom || this.venda;
       const qtdItensEstimado = Math.max(1, (v.itens || []).length);
       const qtdPgtoEstimado = Math.max(0, (v.pagamentos || []).length);
-      const pageH = Math.min(220, Math.max(92, 72 + qtdItensEstimado * 9 + qtdPgtoEstimado * 5 + (v.observacao ? 10 : 0)));
+      const pageH = Math.min(220, Math.max(120, 96 + qtdItensEstimado * 15 + qtdPgtoEstimado * 8 + (v.observacao ? 10 : 0)));
       const doc = new JsPDF({ unit: 'mm', format: [80, pageH], orientation: 'portrait' });
       const pageW = 80;
       const margin = 5;
@@ -4791,12 +4822,14 @@ ${pgtoHtml ? `<hr class="sep">${pgtoHtml}` : ''}
         });
       };
       const pair = (label, value, opts = {}) => {
-        ensure(5);
         doc.setFont('courier', opts.bold ? 'bold' : 'normal');
         doc.setFontSize(opts.size || 9);
-        doc.text(clean(label), margin, y);
+        const lines=doc.splitTextToSize(clean(label),maxW-26);
+        const lineH=opts.lineH || 4.5;
+        ensure(Math.max(1,lines.length)*lineH);
+        lines.forEach((line,index)=>doc.text(line,margin,y+index*lineH));
         doc.text(clean(value), pageW - margin, y, { align: 'right' });
-        y += opts.lineH || 4.5;
+        y += Math.max(1,lines.length)*lineH;
       };
       const sep = () => {
         ensure(4);
@@ -4836,14 +4869,18 @@ ${pgtoHtml ? `<hr class="sep">${pgtoHtml}` : ''}
         const tot = parseFloat(item.valor_total || 0);
         text(item.descricao || item.produto_nome || 'Produto', { size: 9, bold: true });
         pair(`${qtd % 1 === 0 ? qtd : qtd.toFixed(2).replace('.', ',')} x R$ ${fmt(uni)}`, `R$ ${fmt(tot)}`, { size: 9 });
+        const desconto=this.descontoItemCupom(item);
+        if(desconto.valor>0) text(`Desconto ${fmt(desconto.percentual)}%: - R$ ${fmt(desconto.valor)}`, {size:8});
       });
       if (!v.itens || !v.itens.length) text('Carrinho vazio', { align: 'center', size: 9 });
 
       sep();
       const totalItens = (v.itens || []).reduce((s, i) => s + parseFloat(i.quantidade || 0), 0);
       pair('Qtd total de itens', totalItens % 1 === 0 ? String(totalItens) : totalItens.toFixed(2).replace('.', ','), { size: 8 });
-      pair('Subtotal', 'R$ ' + fmt(v.subtotal), { size: 9 });
-      if (parseFloat(v.desconto || 0) > 0) pair('Desconto', '- R$ ' + fmt(v.desconto), { size: 9 });
+      const descontos=this.resumoDescontosCupom(v);
+      pair('Subtotal bruto', 'R$ ' + fmt(descontos.bruto), {size:9});
+      if(descontos.itens>0) pair(`Desconto nos itens (${fmt(descontos.itensPercentual)}%)`, '- R$ '+fmt(descontos.itens), {size:8});
+      if(descontos.geral>0) pair(`Desconto geral (${fmt(descontos.geralPercentual)}%)`, '- R$ '+fmt(descontos.geral), {size:8});
       if (parseFloat(v.acrescimo || 0) > 0) pair('Acrescimo', '+ R$ ' + fmt(v.acrescimo), { size: 9 });
       pair('TOTAL', 'R$ ' + fmt(v.total), { size: 12, bold: true, lineH: 6 });
 
@@ -4886,12 +4923,12 @@ ${pgtoHtml ? `<hr class="sep">${pgtoHtml}` : ''}
       setTimeout(() => URL.revokeObjectURL(url), 10000);
     },
 
-    _mensagemWhatsAppCupom(vendaCupom = null) {
+    _mensagemWhatsAppCupom(vendaCupom = null, link = '') {
       const v = vendaCupom || this.venda;
       const numero = v.numero || this.vendaFinalizadaData.numero;
       const vendaTxt = numero ? ` #${String(numero).padStart(6,'0')}` : '';
       const total = parseFloat(v.total || 0).toFixed(2).replace('.', ',');
-      return `Ola! Segue o comprovante nao fiscal da venda${vendaTxt}, no valor de R$ ${total}.`;
+      return `Olá! Segue o comprovante não fiscal da venda${vendaTxt}, no valor de R$ ${total}.\nVisualize, baixe ou imprima pelo link:\n${link}`;
     },
 
     async compartilharCupomWhatsApp(origem = null) {
@@ -4900,49 +4937,33 @@ ${pgtoHtml ? `<hr class="sep">${pgtoHtml}` : ''}
         || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
       let janela = null;
       let telefone = '';
-      if (!mobile) {
+      {
         const sugerido = origem ? (origem.cliente_celular || origem.cliente_telefone || '') : this._telefoneWhatsAppCliente();
         const digitado = window.prompt('WhatsApp do cliente (opcional, com DDD):', sugerido);
         if (digitado === null) return;
         telefone = this._normalizarWhatsApp(digitado);
-        // Open during the click, before fetching/generating the receipt, to avoid popup blocking.
+        // Open during the click, before fetching the link, to avoid popup blocking.
         janela = window.open('about:blank', '_blank');
-        if (!janela) { this.toast_('Permita popups para abrir o WhatsApp Web.','erro'); return; }
+        if (!janela) { this.toast_('Permita popups para abrir o WhatsApp.','erro'); return; }
         janela.opener = null;
       }
       this.compartilhandoCupom = true;
       try {
         const vendaCupom = await this._dadosCupomVenda(origem);
-        const blob = await this._gerarCupomPdfBlob(vendaCupom);
-        const filename = this._cupomArquivoNome(vendaCupom);
-        const mensagem = this._mensagemWhatsAppCupom(vendaCupom);
-        if (!mobile) {
-          this._baixarBlob(blob, filename);
-          const params = new URLSearchParams({text:mensagem});
-          if (telefone) params.set('phone',telefone);
-          janela.location.replace('https://web.whatsapp.com/send?' + params.toString());
-          this.toast_('WhatsApp Web aberto. Anexe o PDF baixado na conversa.','ok');
-          if (!origem) this.fecharModalImpressao();
-          return;
-        }
-        const file = new File([blob], filename, { type: 'application/pdf' });
-        if (navigator.canShare && navigator.canShare({ files: [file] }) && navigator.share) {
-          await navigator.share({ title: 'Comprovante não fiscal', text: mensagem, files: [file] });
-          this.toast_('Compartilhamento aberto.','ok');
-          if (!origem) this.fecharModalImpressao();
-          return;
-        }
-
-        this._baixarBlob(blob, filename);
-        const sugerido = this._telefoneWhatsAppCliente(vendaCupom);
-        const digitado = window.prompt('WhatsApp do cliente (opcional, com DDD):', sugerido || '');
-        if (digitado === null) return;
-        telefone = this._normalizarWhatsApp(digitado);
-        const extra = 'O PDF foi gerado para anexar nesta conversa.';
-        const url = telefone
-          ? `https://wa.me/${telefone}?text=${encodeURIComponent(mensagem + '\n' + extra)}`
-          : `https://wa.me/?text=${encodeURIComponent(mensagem + '\n' + extra)}`;
-        window.open(url, '_blank');
+        const vendaId = origem ? (origem.venda_id || origem.id) : this.vendaFinalizadaData.id;
+        if (!vendaId) throw new Error('Venda não finalizada');
+        const response = await fetch(`/pdv/api/venda/${vendaId}/comprovante-link/`, {
+          method:'POST', headers:{'X-CSRFToken':csrf()},
+        });
+        const data = await response.json();
+        if (!response.ok || !data.ok || !data.url) throw new Error('comprovante_link');
+        const mensagem = this._mensagemWhatsAppCupom(vendaCupom, data.url);
+        const params = new URLSearchParams({text:mensagem});
+        if (!mobile && telefone) params.set('phone',telefone);
+        const url = mobile ? `https://wa.me/${telefone}?${params.toString()}`
+          : 'https://web.whatsapp.com/send?' + params.toString();
+        janela.location.replace(url);
+        this.toast_('WhatsApp aberto com o link do comprovante. Confira a conversa e envie.','ok');
         if (!origem) this.fecharModalImpressao();
       } catch (e) {
         if (janela && !janela.closed) janela.close();
@@ -4991,7 +5012,7 @@ ${pgtoHtml ? `<hr class="sep">${pgtoHtml}` : ''}
           const tot = parseFloat(item.valor_total||0);
           itensHtml += `<tr>
             <td style="padding:4px 6px 4px 0;font-size:12px;text-align:left;white-space:nowrap;">${qtd}</td>
-            <td style="padding:4px 6px;font-size:12px;word-break:break-word;">${desc}</td>
+            <td style="padding:4px 6px;font-size:12px;word-break:break-word;">${this.escapeHtml(desc)}${this.descontoItemCupom(item).valor>0?`<div style="font-size:10px;margin-top:3px;">Desconto ${fmt(this.descontoItemCupom(item).percentual)}%: - R$ ${fmt(this.descontoItemCupom(item).valor)}</div>`:''}</td>
             <td style="padding:4px 0;font-size:12px;text-align:right;">R$&nbsp;${fmt(uni)}</td>
             <td style="padding:4px 0 4px 8px;font-size:12px;text-align:right;font-weight:700;">R$&nbsp;${fmt(tot)}</td>
           </tr>`;
@@ -5072,6 +5093,7 @@ ${(c.observacao && c.observacao.trim()) ? `<div class="sub">Obs: ${c.observacao.
 <div style="display:flex;justify-content:space-between;font-size:11px;color:#555;margin-bottom:4px;">
   <span>Qtd total de itens</span><span>${totalItensRP % 1 === 0 ? totalItensRP : totalItensRP.toFixed(2).replace('.',',')}</span>
 </div>
+${this.descontosResumoHtml(c,fmt)}
 <div style="display:flex;justify-content:space-between;" class="total-row">
   <span>TOTAL</span><span>R$&nbsp;${fmt(c.valor_total)}</span>
 </div>
@@ -6149,7 +6171,7 @@ ${pgtoHtml ? `<hr class="sep">${pgtoHtml}` : ''}
 
     toast_(msg, tipo='ok') {
       clearTimeout(this._tt);
-      this.toast={show:true,msg,tipo};
+      this.toast={id:this.toast.id+1,show:true,msg,tipo};
       this._tt=setTimeout(()=>{ this.toast.show=false; }, 3500);
     },
 

@@ -17,6 +17,14 @@ class PDVVisualBaseTests(SimpleTestCase):
         self.assertIn('.cart-remove-btn:focus-visible', template)
         self.assertIn('@click.stop="visualizarComprovante(v.id)"', template)
         self.assertIn('{% include "pdv/_comprovante_methods.html" %}', template)
+        self.assertIn('{% include "pdv/_toast_styles.html" %}', template)
+        self.assertIn('#pdv-app .dic-field:focus-within', template)
+        self.assertIn('class="pending-modal"', template)
+        self.assertIn('class="item-discount-badge"', template)
+        toast = (Path(__file__).resolve().parents[1] / 'templates/pdv/_toast_styles.html').read_text(encoding='utf-8')
+        self.assertIn('right: 18px;', toast)
+        self.assertIn('bottom: 18px;', toast)
+        self.assertIn('html:not(.tema-claro) .pdv-toast', toast)
 
     def test_catalogo_mostra_nome_completo_no_hover(self):
         template = (Path(__file__).resolve().parents[1] / 'templates/pdv/home.html').read_text(encoding='utf-8')

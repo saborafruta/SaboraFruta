@@ -13,6 +13,8 @@ class VendaPDV(TimestampedModel):
     sessao_pdv = models.ForeignKey(SessaoPDV, on_delete=models.SET_NULL, null=True, blank=True, related_name="vendas")
     filial = models.ForeignKey(Filial, on_delete=models.PROTECT, related_name="vendas_pdv")
     numero_venda = models.BigIntegerField()
+    # Só é criado ao compartilhar; posse do token permite ler este comprovante.
+    comprovante_token = models.CharField(max_length=64, unique=True, null=True, blank=True)
     cliente = models.ForeignKey(Cliente, on_delete=models.SET_NULL, null=True, blank=True,
                                   related_name="vendas_pdv")
     cpf_nota = models.CharField(max_length=11, blank=True)

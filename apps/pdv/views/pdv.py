@@ -1573,6 +1573,7 @@ def api_venda_detalhe(request, pk):
             "valor_unitario": float(item.valor_unitario),
             "valor_total": float(item.valor_total),
             "desconto_percentual": float(item.desconto_percentual or 0),
+            "desconto_valor": float(item.desconto_valor or 0),
             "unidade_medida": item.unidade_medida or "UN",
             "tipo_produto": p.tipo_produto,
             "fracionavel": aceita_decimal,
