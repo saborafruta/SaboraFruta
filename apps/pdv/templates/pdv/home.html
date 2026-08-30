@@ -4,6 +4,32 @@
 
 {% block extra_head %}
 <style>
+  .payment-confirm { align-self:center;min-height:38px;padding:8px 15px;border:1px solid #15803d;border-radius:7px;background:#15803d;color:#fff;font-size:13px;font-weight:600;cursor:pointer;box-shadow:none; }
+  .payment-confirm:hover { background:#166534;border-color:#166534; }
+  .payment-confirm:focus-visible, .client-name-edit:focus-visible { outline:2px solid var(--pdv-t2);outline-offset:3px; }
+  .client-name-edit { background:none;border:0;padding:0;text-align:left;color:var(--pdv-t1);font:inherit;font-size:14px;font-weight:600;cursor:pointer; }
+  .client-name-edit:hover { text-decoration:underline;text-underline-offset:3px; }
+  .system-nav-drawer .sidebar-branch-logo-frame { height:95px;display:flex;justify-content:center; }
+  .system-nav-drawer .sidebar-branch-logo-img { max-width:100%;max-height:95px;object-fit:contain; }
+  .system-nav-drawer .sidebar-branch-name { text-align:center;font-size:12px;font-weight:600;margin:8px; }
+  html.tema-claro .system-nav-drawer .topbar-icon-btn { color:#475569 !important;background:#f1f5f9 !important; }
+  .system-nav-drawer .sidebar-section-label { color:#475569;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.08em; }
+  .client-editor { margin:auto;width:min(640px,calc(100vw - 28px));max-height:88dvh;overflow:auto;padding:24px;background:var(--pdv-modal);color:var(--pdv-t1);border:1px solid var(--pdv-bd);border-radius:14px;box-shadow:0 20px 65px #0005; }
+  .client-editor::backdrop { background:rgba(15,23,42,.55); }
+  .client-editor h2 { font-size:18px;font-weight:700;margin:0; }
+  .client-editor p { font-size:12px;color:var(--pdv-t2);margin:6px 0 18px; }
+  .client-editor-grid { display:grid;grid-template-columns:1fr 1fr;gap:14px;min-width:0; }
+  .client-editor label { display:flex;flex-direction:column;gap:5px;font-size:12px;font-weight:600;min-width:0; }
+  .client-editor input,.client-editor select { width:100%;min-width:0;padding:9px 10px;border:1px solid var(--pdv-bd);border-radius:7px;background:var(--pdv-card);color:var(--pdv-t1);font-size:13px; }
+  .client-editor input:focus,.client-editor select:focus { outline:2px solid #3b82f6;outline-offset:1px; }
+  .client-editor [aria-invalid="true"] { border-color:#ef4444; }
+  .client-editor-error { color:#dc2626;font-size:12px;font-weight:600; }
+  html.tema-escuro .client-editor-error { color:#fca5a5; }
+  .client-editor footer { display:flex;justify-content:flex-end;gap:10px;margin-top:22px; }
+  .client-editor footer button { padding:9px 16px;border:1px solid var(--pdv-bd);border-radius:7px;font-size:13px;font-weight:600;background:var(--pdv-card);color:var(--pdv-t1);cursor:pointer; }
+  .client-editor footer .client-editor-save { background:#2563eb;border-color:#2563eb;color:white; }
+  .client-editor button:disabled { opacity:.6;cursor:wait; }
+  @media(max-width:480px) { .client-editor-grid { grid-template-columns:1fr; } }
   /* ── Paleta de temas ────────────────────────── */
   :root {
     --pdv-bg:      #0a0a12;
@@ -1102,6 +1128,11 @@
          x-show="showSystemMenu" x-cloak x-transition.opacity.duration.140ms class="system-overlay"
          @click.self="showSystemMenu=false" @keydown.escape.window="showSystemMenu=false">
       <nav class="system-nav-drawer sidebar-favorites-nav"
+           aria-label="Navegação do sistema"
+           x-data="{ collapsed:false, temaClaro:document.documentElement.classList.contains('tema-claro'),
+             secoes:{cadastros:true,operacoes:true,financeiro:true,logistica:true,avancado:true,food_service:true,moda:true,polpa:true},
+             toggleSecao(nome) { this.secoes[nome] = !this.secoes[nome]; } }"
+           x-init="$watch('showSystemMenu', () => temaClaro = document.documentElement.classList.contains('tema-claro'))"
              x-transition:enter="transition ease-out duration-160"
              x-transition:enter-start="-translate-x-full opacity-70"
              x-transition:enter-end="translate-x-0 opacity-100"
@@ -1114,30 +1145,7 @@
             <svg width="17" height="17" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 19l-7-7 7-7m8 14l-7-7 7-7"/></svg>
           </button>
         </div>
-        <a href="{{ dashboard_url }}" class="system-nav-link"><svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M3 12l9-9 9 9M5 10v10h14V10"/></svg>Dashboard</a>
-        <div class="system-nav-section">Cadastros</div>
-        <a href="{{ clientes_url }}" class="system-nav-link"><svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M17 20H7m10 0v-2a5 5 0 00-10 0v2m10-10a3 3 0 11-6 0 3 3 0 016 0z"/></svg>Clientes</a>
-        <a href="{{ fornecedores_url }}" class="system-nav-link"><svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0H5M9 7h1m4 0h1M9 11h1m4 0h1"/></svg>Fornecedores</a>
-        <a href="{{ produtos_url }}" class="system-nav-link"><svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4M4 7v10l8 4"/></svg>Produtos</a>
-        <a href="{{ produtos_precos_url }}" class="system-nav-link"><svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.7" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8V6m0 10v2m8-6a8 8 0 11-16 0 8 8 0 0116 0z"/></svg>Atualização de preços</a>
-        <div class="system-nav-section">Operações</div>
-        <a href="{{ estoque_url }}" class="system-nav-link"><svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M19 11H5m14 0a2 2 0 012 2v6H3v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2H7a2 2 0 00-2 2v2"/></svg>Estoque</a>
-        <a href="{{ lotes_url }}" class="system-nav-link"><svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 12h6m-6 4h6M7 4h10a2 2 0 012 2v12a2 2 0 01-2 2H7a2 2 0 01-2-2V6a2 2 0 012-2z"/></svg>Lotes</a>
-        <a href="{{ compras_url }}" class="system-nav-link"><svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z"/></svg>Compras</a>
-        <a href="{{ sugestao_compras_url }}" class="system-nav-link"><svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 17h6m-8 4h10a2 2 0 002-2V7.5L13.5 2H7a2 2 0 00-2 2v15a2 2 0 002 2z"/></svg>Sugestão de compras</a>
-        <a href="{{ outras_movimentacoes_url }}" class="system-nav-link"><svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M7 7h10M7 12h6m-6 5h10M5 3h14a2 2 0 012 2v14H3V5a2 2 0 012-2z"/></svg>Outras movimentações</a>
-        <a href="{{ producao_url }}" class="system-nav-link"><svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M4 18V8l5 3V8l5 3V4h6v14H4z"/></svg>Produção</a>
-        <div class="system-nav-section">Avançado</div>
-        <a href="{{ financeiro_url }}" class="system-nav-link"><svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8V7m0 9v1m9-5a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>Financeiro</a>
-        <a href="{{ fiscal_consultas_url }}" class="system-nav-link"><svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 7h6m-6 4h6m-6 4h4M5 3h14v18H5V3z"/></svg>Consultas fiscais</a>
-        <a href="{{ pdv_url }}" class="system-nav-link is-current"><svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 7H6a2 2 0 00-2 2v9a2 2 0 002 2h9a2 2 0 002-2v-3M9 7h6m-6 0V5a2 2 0 012-2h2a2 2 0 012 2v2"/></svg>PDV</a>
-        <a href="{{ delivery_url }}" class="system-nav-link"><svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M8 17h8M5 17h.01M19 17h.01M3 7h11v10H3V7zm11 3h3l4 4v3h-7v-7z"/></svg>Delivery</a>
-        <a href="{{ qualidade_url }}" class="system-nav-link"><svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 12l2 2 4-4m5-2.5V12a9 9 0 01-6.2 8.56L12 21l-1.8-.44A9 9 0 014 12V7.5L12 4l8 3.5z"/></svg>Qualidade</a>
-        <a href="{{ analytics_url }}" class="system-nav-link"><svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 19v-6a2 2 0 00-2-2H5v8h4zm0 0V9a2 2 0 012-2h2v12m-4 0h4m0 0V5a2 2 0 012-2h2v16h-4z"/></svg>Analytics</a>
-        {% if user.is_superuser or user.perfil.is_admin %}
-          <div class="system-nav-section">Sistema</div>
-          <a href="{% url 'core:admin_parametros' %}" class="system-nav-link"><svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M12 6V4m0 16v-2m8-6h-2M6 12H4m12.95 4.95l-1.414-1.414M8.464 8.464L7.05 7.05M12 15a3 3 0 100-6 3 3 0 000 6z"/></svg>Parâmetros</a>
-        {% endif %}
+        {% include "core/_sidebar_navigation.html" %}
         <a href="{% url 'core:logout' %}" class="system-nav-link" style="margin-top:8px;color:#f87171;"><svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"/></svg>Sair</a>
       </nav>
     </div>
@@ -1253,7 +1261,6 @@
       </div>
     </div>
 
-    <div style="width:1px;height:28px;background:#1e1e30;margin:0 4px;"></div>
 
     <!-- Filial -->
     <div class="topbar-menu-wrap topbar-branch" @click.outside="showFilialMenu=false">
@@ -1412,13 +1419,6 @@
 
       <!-- Ações inferiores -->
       <div style="border-top:1px solid #1a1a28;">
-        <div class="cat-action-btn" style="justify-content:space-between;border-bottom:1px solid var(--pdv-bd2);cursor:default;">
-          <span style="display:flex;align-items:center;gap:8px;">
-            <svg width="14" height="14" fill="none" stroke="#3b82f6" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17"/></svg>
-            Parcial
-          </span>
-          <strong style="color:#fff;font-size:13px;" x-text="'R$ ' + fmt(venda.total)"></strong>
-        </div>
         <button @click="abrirHistorico()" class="cat-action-btn">
           <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
           Histórico de compras (F7)
@@ -1435,11 +1435,10 @@
           <div class="client-avatar" style="width:38px;height:38px;border-radius:50%;background:linear-gradient(135deg,#2563eb,#1d4ed8);display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;color:#fff;flex-shrink:0;"
                x-text="venda.cliente.nome.substring(0,2).toUpperCase()"></div>
           <div class="client-info" style="flex:1;min-width:0;">
-            <div style="font-size:14px;font-weight:600;color:#e5e5f0;"
-               :style="venda.cliente.id ? 'cursor:pointer;text-decoration:underline;text-underline-offset:3px;text-decoration-color:rgba(229,229,240,0.35);' : ''"
-               :title="venda.cliente.id ? 'Ver / editar cadastro' : ''"
-               @click="venda.cliente.id && window.open('/cadastros/clientes/'+venda.cliente.id+'/?next=/pdv/', '_blank')"
-               x-text="venda.cliente.nome"></div>
+            <button type="button" class="client-name-edit" x-ref="clientNameButton"
+                    @click="abrirEdicaoCliente()"
+                    :title="venda.cliente.id ? 'Editar dados do cliente' : 'Selecionar cliente'"
+                    x-text="venda.cliente.nome"></button>
           <div style="font-size:11px;color:#555;" x-text="venda.cliente.id ? venda.cliente.cpf_cnpj : 'Clique para selecionar'"></div>
           <span class="preco-origem-tag" x-show="venda.cliente.tabela_preco_id" x-cloak
                 :class="venda.cliente.tabela_preco_id ? 'especial' : ''"
@@ -1817,7 +1816,7 @@
                        min="0" step="0.01" placeholder="0,00">
               </div>
               <button @click="confirmarPagamento()"
-                      style="padding:11px 18px;background:linear-gradient(135deg,#16a34a,#22c55e);border:none;border-radius:10px;color:#fff;font-size:14px;font-weight:800;cursor:pointer;white-space:nowrap;box-shadow:0 4px 12px rgba(34,197,94,.3);">↵ OK</button>
+                      class="payment-confirm" title="Confirmar pagamento (Enter)">OK</button>
             </div>
             <div style="display:flex;gap:5px;margin-top:8px;">
               <button @click="valorPgto=fmt2(venda.restante)" class="payment-paid"
@@ -2720,6 +2719,8 @@
   </div>
 
   <!-- Novo Cliente -->
+  {% include "pdv/_cliente_editor.html" %}
+
   <div x-cloak
        :style="showModalNovoCliente
          ? 'position:fixed;inset:0;z-index:55;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,.85);'
@@ -5260,6 +5261,91 @@ ${pgtoHtml ? `<hr class="sep">${pgtoHtml}` : ''}
       }
     },
 
+    showModalEditarCliente: false, clienteEdicao: {}, clienteEdicaoId:null,
+    clienteEdicaoCarregando:false, clienteEdicaoSalvando:false, clienteEdicaoErro:'', clienteEdicaoCampos:{},
+    _clienteEdicaoRequest:0,
+    camposEdicaoCliente: [
+      {nome:'razao_social',label:'Nome / razão social',max:150,obrigatorio:true},
+      {nome:'nome_fantasia',label:'Nome fantasia',max:100},
+      {nome:'cpf_cnpj',label:'CPF / CNPJ',max:18},
+      {nome:'celular',label:'Celular',max:20,tipo:'tel'},
+      {nome:'telefone',label:'Telefone',max:20,tipo:'tel'},
+      {nome:'email',label:'E-mail',max:120,tipo:'email'},
+      {nome:'cep',label:'CEP',max:9},
+      {nome:'endereco',label:'Endereço principal',max:255},
+      {nome:'numero',label:'Número',max:10},
+      {nome:'complemento',label:'Complemento',max:60},
+      {nome:'bairro',label:'Bairro',max:80},
+      {nome:'cidade',label:'Cidade',max:80},
+      {nome:'uf',label:'UF',max:2},
+    ],
+    async abrirEdicaoCliente() {
+      if (!this.venda.cliente.id) {
+        this.clienteQuery=''; this.clienteFoco=-1; this.showModalCliente=true;
+        this.$nextTick(()=>{ this.$refs.inputCliente?.focus();this.buscarClientes(''); });
+        return;
+      }
+      if (this.showModalEditarCliente) return;
+      const requestId=++this._clienteEdicaoRequest;
+      this.clienteEdicaoId=this.venda.cliente.id;
+      this.clienteEdicao={}; this.clienteEdicaoErro=''; this.clienteEdicaoCampos={};
+      this.clienteEdicaoCarregando=true; this.showModalEditarCliente=true;
+      this.$nextTick(()=>this.$refs.clientEditor.showModal());
+      try {
+        const r=await fetch('/pdv/api/cliente/'+this.clienteEdicaoId+'/editar/');
+        const d=await r.json();
+        if (requestId!==this._clienteEdicaoRequest) return;
+        if (!r.ok) throw new Error(d.erro || 'Não foi possível carregar o cliente.');
+        this.clienteEdicao=d.dados;
+        this.$nextTick(()=>this.$refs.clientEditor.querySelector('input')?.focus());
+      } catch(e) {
+        if (requestId===this._clienteEdicaoRequest) this.clienteEdicaoErro=e instanceof SyntaxError ? 'Sessão expirada ou servidor indisponível. Tente novamente.' : (e.message || 'Erro ao carregar cliente.');
+      } finally {
+        if (requestId===this._clienteEdicaoRequest) this.clienteEdicaoCarregando=false;
+      }
+    },
+    fecharEdicaoCliente() {
+      if (this.clienteEdicaoSalvando) return;
+      ++this._clienteEdicaoRequest;
+      this.showModalEditarCliente=false;
+      this.$refs.clientEditor.close();
+      this.$nextTick(()=>this.$refs.clientNameButton?.focus());
+    },
+    teclaEdicaoCliente(e) {
+      e.stopPropagation();
+      if (e.key==='Escape') { e.preventDefault(); this.fecharEdicaoCliente(); return; }
+      if (/^F(2|4|6|7|8|12)$/.test(e.key)) e.preventDefault();
+    },
+    async salvarEdicaoCliente() {
+      if (this.clienteEdicaoSalvando || this.clienteEdicaoCarregando || !this.clienteEdicao.razao_social) return;
+      this.clienteEdicaoSalvando=true; this.clienteEdicaoErro=''; this.clienteEdicaoCampos={};
+      const id=this.clienteEdicaoId;
+      try {
+        const r=await fetch('/pdv/api/cliente/'+id+'/editar/', {
+          method:'POST',headers:{'Content-Type':'application/json','X-CSRFToken':csrf()},
+          body:JSON.stringify(this.clienteEdicao),
+        });
+        const d=await r.json();
+        if (!r.ok) {
+          this.clienteEdicaoCampos=d.campos || {};
+          throw new Error(d.erro || 'Não foi possível salvar o cliente.');
+        }
+        const c=d.cliente;
+        if (this.venda.cliente.id===id) {
+          Object.assign(this.venda.cliente, {
+            nome:c.nome_fantasia || c.razao_social,cpf_cnpj:c.cpf_cnpj,
+            celular:c.celular,telefone:c.telefone,endereco_entrega:c.endereco_entrega,tem_endereco:c.tem_endereco,
+          });
+        }
+        this.clientesResultados=this.clientesResultados.map(item=>item.id===id ? {...item,...c} : item);
+        this.clienteEdicaoSalvando=false;
+        this.fecharEdicaoCliente();
+        this.toast_('Dados do cliente atualizados.','ok');
+      } catch(e) {
+        this.clienteEdicaoErro=e instanceof SyntaxError ? 'Sessão expirada ou servidor indisponível. Os dados não foram confirmados.' : (e.message || 'Erro ao salvar cliente.');
+      } finally { this.clienteEdicaoSalvando=false; }
+    },
+
     abrirNovoCliente() {
       this.novoCliente = { tipo_pessoa:'F', razao_social:'', nome_fantasia:'', cpf_cnpj:'', celular:'', email:'', cep:'', endereco:'', numero:'', complemento:'', bairro:'', cidade:'', uf:'', _showEndereco: !!this.deliveryAguardandoCliente };
       this.showModalNovoCliente = true;
@@ -5605,6 +5691,7 @@ ${pgtoHtml ? `<hr class="sep">${pgtoHtml}` : ''}
       if (this._atalhosRegistrados) return;
       this._atalhosRegistrados = true;
       document.addEventListener('keydown', e => {
+        if (this.showModalEditarCliente) { this.teclaEdicaoCliente(e); return; }
         if (e.key==='F2'&&!e.shiftKey) { e.preventDefault(); document.getElementById('barcode-input')?.focus(); document.getElementById('barcode-input')?.select(); }
         if (e.key==='F2'&&e.shiftKey) { e.preventDefault(); this.buscaAvancada(); }
         if (e.key==='F4') { e.preventDefault(); this.clienteQuery=''; this.clienteFoco=-1; this.showModalCliente=true; this.$nextTick(()=>{ this.$refs.inputCliente?.focus(); this.buscarClientes(''); }); }
@@ -5648,7 +5735,7 @@ ${pgtoHtml ? `<hr class="sep">${pgtoHtml}` : ''}
     },
 
     temModalAberto() {
-      return this.showModalCaixa || this.showModalCliente || this.showModalDelivery
+      return this.showModalEditarCliente || this.showModalCaixa || this.showModalCliente || this.showModalDelivery
         || this.showModalPendentes || this.showModalOrcamentos || this.showModalConfirmacao
         || this.showModalDescontoItem || this.showModalDesconto || this.showModalPrecoItem
         || this.showModalNovoCliente || this.showModalCaixaRel || this.showModalConfig

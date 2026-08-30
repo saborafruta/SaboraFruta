@@ -42,6 +42,7 @@ urlpatterns = [
     path("api/cashback-saldo/", pdv.api_cashback_saldo, name="api_cashback_saldo"),
     # Clientes
     path("api/cliente/criar/", pdv.api_cliente_criar, name="api_cliente_criar"),
+    path("api/cliente/<int:cliente_id>/editar/", pdv.api_cliente_editar, name="api_cliente_editar"),
     path("api/clientes/debug/", pdv.api_clientes_debug, name="api_clientes_debug"),
     # Delivery
     path("delivery/", pdv.delivery_kanban, name="delivery"),

@@ -123,6 +123,7 @@ class MenuFavoritosTemplateTests(SimpleTestCase):
     def test_produtos_principais_nao_ficam_ativos_dentro_de_moda(self):
         raiz = Path(__file__).resolve().parents[1]
         template = (raiz / 'templates' / 'core' / '_sidebar.html').read_text(encoding='utf-8')
+        template += (raiz / 'templates' / 'core' / '_sidebar_navigation.html').read_text(encoding='utf-8')
 
         self.assertNotIn('produtos_url in request.path', template)
         self.assertEqual(

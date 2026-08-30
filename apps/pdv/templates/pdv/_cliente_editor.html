@@ -1,0 +1,39 @@
+<dialog class="client-editor" x-ref="clientEditor" aria-labelledby="client-editor-title"
+        @cancel.prevent="fecharEdicaoCliente()" @keydown="teclaEdicaoCliente($event)">
+  <h2 id="client-editor-title">Editar cliente</h2>
+  <p>Dados principais do cadastro. Sua venda permanece aberta no PDV.</p>
+  <div x-show="clienteEdicaoCarregando" role="status">Carregando cadastro…</div>
+  <form @submit.prevent="salvarEdicaoCliente()">
+    <fieldset :disabled="clienteEdicaoCarregando || clienteEdicaoSalvando" style="border:0;padding:0;margin:0;">
+      <div class="client-editor-grid" x-show="!clienteEdicaoCarregando && clienteEdicao.razao_social !== undefined">
+        <label for="edit-cliente-tipo">Tipo de pessoa
+          <select id="edit-cliente-tipo" x-model="clienteEdicao.tipo_pessoa">
+            <option value="F">Pessoa física</option>
+            <option value="J">Pessoa jurídica</option>
+          </select>
+          <span class="client-editor-error" x-text="(clienteEdicaoCampos.tipo_pessoa || []).join(' ')"></span>
+        </label>
+        <template x-for="campo in camposEdicaoCliente" :key="campo.nome">
+          <label :for="'edit-cliente-'+campo.nome">
+            <span x-text="campo.label + (campo.obrigatorio ? ' *' : '')"></span>
+            <input :id="'edit-cliente-'+campo.nome" :type="campo.tipo || 'text'"
+                   :maxlength="campo.max" :required="!!campo.obrigatorio"
+                   :aria-invalid="!!clienteEdicaoCampos[campo.nome]"
+                   :aria-describedby="'edit-error-'+campo.nome"
+                   x-model="clienteEdicao[campo.nome]"
+                   @blur="if(campo.nome==='uf') clienteEdicao.uf=(clienteEdicao.uf || '').toUpperCase()">
+            <span :id="'edit-error-'+campo.nome" class="client-editor-error"
+                  x-text="(clienteEdicaoCampos[campo.nome] || []).join(' ')"></span>
+          </label>
+        </template>
+      </div>
+    </fieldset>
+    <div class="client-editor-error" role="alert" x-show="clienteEdicaoErro" x-text="clienteEdicaoErro"></div>
+    <footer>
+      <button type="button" @click="fecharEdicaoCliente()" :disabled="clienteEdicaoSalvando">Cancelar</button>
+      <button type="submit" class="client-editor-save"
+              :disabled="clienteEdicaoCarregando || clienteEdicaoSalvando || !clienteEdicao.razao_social"
+              x-text="clienteEdicaoSalvando ? 'Salvando…' : 'Salvar alterações'"></button>
+    </footer>
+  </form>
+</dialog>

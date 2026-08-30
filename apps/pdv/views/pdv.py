@@ -11,7 +11,7 @@ from django.shortcuts import render
 from django.core.paginator import Paginator
 from django.urls import reverse
 from django.utils import timezone
-from django.views.decorators.http import require_GET, require_POST
+from django.views.decorators.http import require_GET, require_POST, require_http_methods
 
 from apps.cadastros.models import Cliente
 from apps.core.services.exceptions import DadosInvalidosError, EstoqueInsuficienteError
@@ -1730,6 +1730,44 @@ def api_formas_pagamento(request):
 
 # API — Criar cliente rápido no PDV
 # ---------------------------------------------------------------------------
+
+@requer_permissao('pdv', 'ver')
+@requer_permissao('cadastros', 'editar')
+@require_http_methods(['GET', 'POST'])
+def api_cliente_editar(request, cliente_id):
+    from apps.cadastros.services.cliente_service import ClienteService
+    from apps.pdv.forms.cliente import ClientePDVForm
+
+    cliente = Cliente.objects.for_filial(request.filial_ativa).filter(
+        pk=cliente_id, ativo=True,
+    ).first()
+    if cliente is None:
+        return JsonResponse({'erro': 'Cliente não encontrado nesta filial.'}, status=404)
+
+    if request.method == 'POST':
+        try:
+            dados = json.loads(request.body)
+        except (ValueError, UnicodeDecodeError):
+            return JsonResponse({'erro': 'JSON inválido.'}, status=400)
+        if not isinstance(dados, dict):
+            return JsonResponse({'erro': 'Dados inválidos.'}, status=400)
+        form = ClientePDVForm(dados, instance=cliente)
+        if not form.is_valid():
+            return JsonResponse({
+                'erro': 'Confira os campos indicados.',
+                'campos': {nome: list(erros) for nome, erros in form.errors.items()},
+            }, status=400)
+        try:
+            cliente = ClienteService.atualizar(cliente, form.cleaned_data)
+        except DadosInvalidosError as exc:
+            return JsonResponse({'erro': str(exc)}, status=400)
+
+    return JsonResponse({
+        'ok': True,
+        'dados': {nome: getattr(cliente, nome) or '' for nome in ClientePDVForm.Meta.fields},
+        'cliente': _serializar_cliente(cliente),
+    })
+
 
 @requer_permissao('pdv', 'ver')
 @require_POST
