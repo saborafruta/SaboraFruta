@@ -720,9 +720,37 @@
     --pdv-accent-text:#93c5fd;
     --pdv-accent-soft:rgba(37,99,235,.16);
     --pdv-accent-border:rgba(96,165,250,.32);
+    --pdv-pgto-boleto-bg:linear-gradient(135deg,var(--pdv-card),var(--pdv-hover));
+    --pdv-warning:#facc15;
+    --pdv-pgto-boleto-fg:var(--pdv-t3);
+    --pdv-pgto-boleto-bd:var(--pdv-bd4);
+    --pdv-pgto-credito-bg:linear-gradient(135deg,#1e3a5f,#1e4a7f);
+    --pdv-pgto-credito-fg:#93c5fd;
+    --pdv-pgto-credito-bd:rgba(96,165,250,.2);
+    --pdv-pgto-debito-bg:linear-gradient(135deg,#0a2e1a,#0a3a22);
+    --pdv-pgto-debito-fg:#6ee7b7;
+    --pdv-pgto-debito-bd:rgba(74,222,128,.2);
+    --pdv-pgto-pix-bg:linear-gradient(135deg,#083b3f,#0f766e);
+    --pdv-pgto-pix-fg:#99f6e4;
+    --pdv-pgto-pix-bd:rgba(45,212,191,.25);
+    --pdv-pgto-dinheiro-bg:linear-gradient(135deg,#0a2e1a,#163a22);
+    --pdv-pgto-dinheiro-fg:#4ade80;
+    --pdv-pgto-dinheiro-bd:rgba(74,222,128,.2);
+    --pdv-pgto-transferencia-bg:linear-gradient(135deg,#0a2040,#0a2e52);
+    --pdv-pgto-transferencia-fg:#7dd3fc;
+    --pdv-pgto-transferencia-bd:rgba(56,189,248,.2);
+    --pdv-pgto-cheque-bg:linear-gradient(135deg,#2e0a0a,#3a1010);
+    --pdv-pgto-cheque-fg:#fca5a5;
+    --pdv-pgto-cheque-bd:rgba(248,113,113,.2);
+    --pdv-pgto-vale-bg:linear-gradient(135deg,var(--pdv-card),var(--pdv-hover));
+    --pdv-pgto-vale-fg:var(--pdv-accent-text);
+    --pdv-pgto-vale-bd:var(--pdv-accent-border);
+    --pdv-pgto-outro-bg:linear-gradient(135deg,var(--pdv-hover),var(--pdv-bd));
+    --pdv-pgto-outro-fg:var(--pdv-t1);
+    --pdv-pgto-outro-bd:var(--pdv-bd4);
   }
   html.tema-claro body {
-    --pdv-bg:#f3f6fb;
+    --pdv-bg:#ffffff;
     --pdv-surface:#ffffff;
     --pdv-card:#ffffff;
     --pdv-pop:#ffffff;
@@ -738,20 +766,20 @@
     --pdv-bd3:#dbe3ef;
     --pdv-bd4:#94a3b8;
     --pdv-t1:#111827;
-    --pdv-t2:#334155;
-    --pdv-t3:#64748b;
-    --pdv-t4:#64748b;
+    --pdv-t2:#0f172a;
+    --pdv-t3:#111827;
+    --pdv-t4:#111827;
     --pdv-t5:#111827;
-    --pdv-t6:#64748b;
+    --pdv-t6:#111827;
     --pdv-t7:#334155;
     --pdv-t8:#111827;
     --pdv-t9:#334155;
     --pdv-tdim:#94a3b8;
     --pdv-tdim2:#cbd5e1;
     --pdv-tdim3:#dbe3ef;
-    --pdv-tfaint:#64748b;
-    --pdv-tmuted:#64748b;
-    --pdv-tmid:#64748b;
+    --pdv-tfaint:#111827;
+    --pdv-tmuted:#111827;
+    --pdv-tmid:#111827;
     --pdv-tanon:#94a3b8;
     --pdv-tavatar:#2563eb;
     --pdv-scroll:#cbd5e1;
@@ -768,6 +796,34 @@
     --pdv-accent-text:#1d4ed8;
     --pdv-accent-soft:rgba(37,99,235,.10);
     --pdv-accent-border:rgba(37,99,235,.28);
+    --pdv-pgto-boleto-bg:#f8fafc;
+    --pdv-warning:#b45309;
+    --pdv-pgto-boleto-fg:#111827;
+    --pdv-pgto-boleto-bd:#cbd5e1;
+    --pdv-pgto-credito-bg:#eff6ff;
+    --pdv-pgto-credito-fg:#1d4ed8;
+    --pdv-pgto-credito-bd:#bfdbfe;
+    --pdv-pgto-debito-bg:#ecfdf5;
+    --pdv-pgto-debito-fg:#047857;
+    --pdv-pgto-debito-bd:#bbf7d0;
+    --pdv-pgto-pix-bg:#ccfbf1;
+    --pdv-pgto-pix-fg:#0f766e;
+    --pdv-pgto-pix-bd:#99f6e4;
+    --pdv-pgto-dinheiro-bg:#dcfce7;
+    --pdv-pgto-dinheiro-fg:#15803d;
+    --pdv-pgto-dinheiro-bd:#bbf7d0;
+    --pdv-pgto-transferencia-bg:#eff6ff;
+    --pdv-pgto-transferencia-fg:#1d4ed8;
+    --pdv-pgto-transferencia-bd:#bfdbfe;
+    --pdv-pgto-cheque-bg:#fee2e2;
+    --pdv-pgto-cheque-fg:#b91c1c;
+    --pdv-pgto-cheque-bd:#fecaca;
+    --pdv-pgto-vale-bg:var(--pdv-accent-soft);
+    --pdv-pgto-vale-fg:var(--pdv-accent-text);
+    --pdv-pgto-vale-bd:var(--pdv-accent-border);
+    --pdv-pgto-outro-bg:#f8fafc;
+    --pdv-pgto-outro-fg:#111827;
+    --pdv-pgto-outro-bd:#cbd5e1;
   }
   #pdv-app { background:var(--pdv-bg) !important; color:var(--pdv-t1); }
   #pdv-app > .pdv-topbar {
@@ -844,6 +900,22 @@
   #pdv-app .client-new-btn { color:#fff !important;border-color:#16a34a !important;background:#16a34a !important; }
   #pdv-app .client-swap-btn { color:#fff !important;border-color:#2563eb !important;background:#2563eb !important; }
   .payment-heading-icon { background:rgba(37,99,235,.14) !important;border-color:rgba(96,165,250,.30) !important;color:#60a5fa !important; }
+  html.tema-claro .payment-heading-icon { background:#eff6ff !important;border-color:#bfdbfe !important;color:#2563eb !important; }
+  html.tema-claro .barcode-icon-wrap svg,html.tema-claro .cart-header > svg { stroke:#2563eb !important; }
+  html.tema-claro #barcode-input + kbd { color:#2563eb !important; }
+  html.tema-claro #pdv-right-panel .totais-bar-total { color:#2563eb; }
+  html.tema-claro #pdv-right-panel .totais-bar-label { color:#4f46e5; }
+  html.tema-claro .payment-empty { color:#94a3b8; }
+  html.tema-claro .payment-empty-icon { color:#94a3b8;background:#fff; }
+  .cart-empty-icon { stroke:#3f3f46; }
+  .cart-empty-title { color:#71717a; }
+  .cart-empty-description { color:#52525b; }
+  html.tema-claro .cart-empty-icon { stroke:#cbd5e1; }
+  html.tema-claro .cart-empty-title { color:#94a3b8; }
+  html.tema-claro .cart-empty-description { color:#94a3b8; }
+  html.tema-claro .prod-card-preco { color:#2563eb; }
+  html.tema-claro .btn-rodape-secondary { background:#fff; }
+  html.tema-claro .pdv-photo-preview img { background:#f8fafc; }
   .payment-method-grid { display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:7px;margin-bottom:6px; }
   .payment-locked { filter:blur(2px);opacity:.34;pointer-events:none;user-select:none; }
   .topbar-menu-wrap { position:relative;flex-shrink:0; }
@@ -949,6 +1021,8 @@
       moon.style.display = 'none';
       sun.style.display  = '';
     }
+    // Sincroniza também o body e os controles nativos (select/data) sem recarregar.
+    window.__erpApplyPdvTheme?.();
   }
   document.addEventListener('DOMContentLoaded', function() {
     var isLight = document.documentElement.classList.contains('tema-claro');
@@ -1398,10 +1472,10 @@
         <!-- Vazio sem cliente -->
         <template x-if="venda.itens.length===0 && !venda.cliente.id">
           <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;gap:12px;">
-            <svg width="56" height="56" fill="none" stroke="#1e1e30" viewBox="0 0 24 24" stroke-width="1"><path stroke-linecap="round" stroke-linejoin="round" d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z"/></svg>
+            <svg class="cart-empty-icon" width="56" height="56" fill="none" viewBox="0 0 24 24" stroke-width="1"><path stroke-linecap="round" stroke-linejoin="round" d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z"/></svg>
             <div style="text-align:center;">
-              <p style="font-size:15px;font-weight:600;color:#2a2a3e;">Carrinho vazio</p>
-              <p style="font-size:12px;color:#1e1e30;margin-top:4px;">Adicione itens do catálogo à esquerda</p>
+              <p class="cart-empty-title" style="font-size:15px;font-weight:600;">Carrinho vazio</p>
+              <p class="cart-empty-description" style="font-size:12px;margin-top:4px;">Adicione itens do catálogo à esquerda</p>
             </div>
           </div>
         </template>
@@ -1714,7 +1788,7 @@
                        @keydown.escape="formaPgtoSelecionada=null"
                        x-ref="inputValorPgto"
                        autocomplete="off"
-                       style="width:100%;padding:11px 10px 11px 34px;background:#13131e!important;border:2px solid #2563eb;border-radius:10px;color:#fff!important;-webkit-text-fill-color:#fff;caret-color:#fff;font-size:16px;font-weight:800;outline:none;letter-spacing:.02em;color-scheme:dark;"
+                       style="width:100%;padding:11px 10px 11px 34px;background:var(--pdv-card);border:2px solid #2563eb;border-radius:10px;color:var(--pdv-t1);-webkit-text-fill-color:var(--pdv-t1);caret-color:var(--pdv-t1);font-size:16px;font-weight:800;outline:none;letter-spacing:.02em;color-scheme:inherit;"
                        min="0" step="0.01" placeholder="0,00">
               </div>
               <button @click="confirmarPagamento()"
@@ -1844,7 +1918,7 @@
               <span x-html="svgFormaPgto({tipo:pgto.forma_tipo,descricao:pgto.forma_descricao})"></span>
             </div>
             <div style="flex:1;min-width:0;">
-              <div style="font-size:13px;font-weight:600;color:#d0d0e0;" x-text="pgto.forma_descricao"></div>
+              <div style="font-size:13px;font-weight:600;color:var(--pdv-t1);" x-text="pgto.forma_descricao"></div>
               <div x-show="pgto.troco>0" style="font-size:11px;color:#f59e0b;margin-top:1px;font-weight:600;"
                    x-text="'Troco: R$ ' + fmt(pgto.troco)" x-cloak></div>
             </div>
@@ -1923,7 +1997,7 @@
           <div class="totais-bar-cell">
             <span class="totais-bar-label">RESTANTE</span>
             <span style="font-size:14px;font-weight:800;"
-                  :style="venda.restante>0.001?'color:#facc15;':'color:#22c55e;'"
+                  :style="venda.restante>0.001?'color:var(--pdv-warning);':'color:#22c55e;'"
                   x-text="'R$ ' + fmt(venda.restante)"></span>
           </div>
         </div>
@@ -5814,17 +5888,9 @@ ${pgtoHtml ? `<hr class="sep">${pgtoHtml}` : ''}
 
     corFormaPgtoIconNovo(forma) {
       const tipo=this.tipoForma(forma);
-      const m={
-        credito:'background:linear-gradient(135deg,#1e3a5f,#1e4a7f);color:#93c5fd;border:1px solid rgba(96,165,250,.2);',
-        debito:'background:linear-gradient(135deg,#0a2e1a,#0a3a22);color:#6ee7b7;border:1px solid rgba(74,222,128,.2);',
-        pix:'background:linear-gradient(135deg,#083b3f,#0f766e);color:#99f6e4;border:1px solid rgba(45,212,191,.25);',
-        boleto:'background:linear-gradient(135deg,#27272a,#3f3f46);color:#d4d4d8;border:1px solid #52525b;',
-        dinheiro:'background:linear-gradient(135deg,#0a2e1a,#163a22);color:#4ade80;border:1px solid rgba(74,222,128,.2);',
-        transferencia:'background:linear-gradient(135deg,#0a2040,#0a2e52);color:#7dd3fc;border:1px solid rgba(56,189,248,.2);',
-        cheque:'background:linear-gradient(135deg,#2e0a0a,#3a1010);color:#fca5a5;border:1px solid rgba(248,113,113,.2);',
-        vale:'background:linear-gradient(135deg,#2a1810,#3a2210);color:#fdba74;border:1px solid rgba(96,165,250,.2);',
-      };
-      return m[tipo]||'background:linear-gradient(135deg,#1e1e2a,#252538);color:#888;border:1px solid #2a2a3e;';
+      const chave=['boleto','credito','debito','pix','dinheiro','transferencia','cheque','vale'].includes(tipo) ? tipo : 'outro';
+      // CSS reage ao tema imediatamente, inclusive nos pagamentos já lançados.
+      return `background:var(--pdv-pgto-${chave}-bg);color:var(--pdv-pgto-${chave}-fg);border:1px solid var(--pdv-pgto-${chave}-bd);`;
     },
 
     svgFormaPgto(f) {

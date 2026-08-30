@@ -5,6 +5,19 @@ from django.test import SimpleTestCase
 
 
 class PDVVisualBaseTests(SimpleTestCase):
+    def test_tema_claro_tem_paleta_de_pagamento_propria(self):
+        template = (Path(__file__).resolve().parents[1] / 'templates/pdv/home.html').read_text(encoding='utf-8')
+        claro = template.split('html.tema-claro body {', 1)[1].split('}', 1)[0]
+        self.assertIn('--pdv-bg:#ffffff;', claro)
+        self.assertIn('--pdv-pgto-pix-bg:#ccfbf1;', claro)
+        self.assertIn('--pdv-pgto-pix-fg:#0f766e;', claro)
+        self.assertIn('--pdv-pgto-credito-fg:#1d4ed8;', claro)
+        self.assertIn('--pdv-pgto-debito-fg:#047857;', claro)
+        self.assertIn('window.__erpApplyPdvTheme?.();', template)
+        self.assertIn('--pdv-warning:#b45309;', claro)
+        self.assertIn('-webkit-text-fill-color:var(--pdv-t1)', template)
+        self.assertIn('html.tema-claro .cart-empty-icon { stroke:#cbd5e1; }', template)
+
     def test_pdv_carrega_sem_flash_e_oculta_tags_normais(self):
         template = (Path(__file__).resolve().parents[1] / 'templates/pdv/home.html').read_text(encoding='utf-8')
         self.assertNotIn('x-init="init()"', template)

@@ -81,6 +81,11 @@ const respond = (payload, ok = true) => {
   }
   assert.equal(app.temPromocao({oferta_tipo: 'normal', preco_origem_tipo: 'promocional'}), false);
   assert.match(app.svgFormaPgto({tipo: 'pix'}), /M4 4h6v6H4z/);
+  for (const tipo of ['boleto', 'credito', 'debito', 'pix', 'dinheiro', 'transferencia', 'cheque', 'vale']) {
+    assert.equal(app.corFormaPgtoIconNovo({tipo}),
+      `background:var(--pdv-pgto-${tipo}-bg);color:var(--pdv-pgto-${tipo}-fg);border:1px solid var(--pdv-pgto-${tipo}-bd);`);
+  }
+  assert.match(app.corFormaPgtoIconNovo({tipo: 'desconhecido'}), /--pdv-pgto-outro-bg/);
   for (const tipo of ['ted', 'doc', 'deposito_em_conta']) {
     assert.equal(app.svgFormaPgto({tipo}), app.svgFormaPgto({tipo: 'transferencia'}));
     assert.equal(app.corFormaPgtoIconNovo({tipo}), app.corFormaPgtoIconNovo({tipo: 'transferencia'}));
