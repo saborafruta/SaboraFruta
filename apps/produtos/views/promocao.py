@@ -283,7 +283,7 @@ def _regra_preco_promocional(linha):
 
 
 def _preco_base_combo(promocao):
-    return PrecoService.preco_vivo_produto(
+    return PrecoService.preco_base_combo(
         promocao.produto,
         usar_preco_promocional=promocao.usar_preco_promocional,
         filial=promocao.filial,
@@ -294,24 +294,10 @@ def _preco_base_combo(promocao):
 
 def _valor_combo(promocao, faixa):
     qtd = faixa.quantidade_minima or Decimal('0')
-    preco = PrecoService.preco_vivo_produto(
-        promocao.produto,
-        usar_preco_promocional=promocao.usar_preco_promocional,
-        filial=promocao.filial,
-        quantidade=qtd,
-        validar_dia_semana=False,
-        minimo_dias_semana=MIN_DIAS_PROMO_AUTOMATICA,
-    )
+    preco = _preco_base_combo(promocao)
     total = preco * qtd
-    if faixa.tipo_desconto == 'percentual':
-        total_combo = total * (Decimal('1') - (faixa.valor or Decimal('0')) / Decimal('100'))
-    elif faixa.tipo_desconto == 'preco_unitario':
-        total_combo = (faixa.valor or Decimal('0')) * qtd
-    else:
-        total_combo = total - (faixa.valor or Decimal('0'))
-    if total_combo < 0:
-        total_combo = Decimal('0')
-    unitario = total_combo / qtd if qtd else Decimal('0')
+    unitario = PrecoService.preco_unitario_combo(preco, faixa)
+    total_combo = (unitario * qtd).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
     return total, total_combo, unitario
 
 

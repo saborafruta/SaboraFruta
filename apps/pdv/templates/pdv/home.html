@@ -556,6 +556,8 @@
   .preco-brinde-item { font-size:10px;color:#f9a8d4;display:flex;gap:6px;justify-content:space-between; }
   .preco-brinde-item.insuficiente { color:#f87171;font-weight:700; }
   .preco-resumo { font-size:10px;color:var(--pdv-t6);margin-top:3px; }
+  .preco-resumo.combo-condicao { font-size:11px;color:var(--pdv-t2); }
+  .preco-resumo.combo-total { font-size:12px;font-weight:600;color:var(--pdv-t1); }
   .preco-campanha-badge { font-size:9px;font-weight:700;padding:2px 6px;border-radius:4px;background:rgba(16,185,129,.10);color:#10b981;border:1px solid rgba(16,185,129,.22);letter-spacing:.02em; }
   .preco-arrow { width:14px; height:14px; color:var(--pdv-tdim); flex-shrink:0; }
   .preco-row:hover .preco-arrow, .preco-row.melhor .preco-arrow { color:var(--pdv-t3); }
@@ -2276,13 +2278,17 @@
                   <span class="preco-sem-brinde" x-show="p.sem_brinde">SEM BRINDE</span>
                 </div>
               </div>
+              <div class="preco-resumo combo-condicao" x-show="p.tipo==='combo'" x-text="condicaoComboOferta(p)"></div>
               <div class="preco-comparacao">
-                <span x-show="Number(p.economia) > 0">De <s x-text="'R$ '+fmt(p.preco_referencia)"></s> por</span>
-                <strong class="preco-valor" x-text="'R$ '+fmt(p.total)"></strong>
+                <span x-show="Number(p.economia) > 0">De <s x-text="'R$ '+fmt(referenciaModalOferta(p))"></s> por</span>
+                <strong class="preco-valor" x-text="'R$ '+fmt(p.tipo==='combo' ? p.preco : p.total)"></strong>
+                <span x-show="p.tipo==='combo'">/un.</span>
               </div>
-              <div class="preco-desconto" x-show="Number(p.economia_percentual) > 0" x-text="percentualOferta(p)+'% de desconto'"></div>
-              <div class="preco-resumo" x-show="Number(p.quantidade || 1) > 1" x-text="fmtQtd(p.quantidade)+' un. · R$ '+fmt(p.preco)+'/un.'"></div>
-              <div class="preco-detalhe" x-show="['kit','combo','categoria','brinde'].includes(p.tipo) && p.detalhe" x-text="p.detalhe"></div>
+              <div class="preco-desconto" x-show="Number(p.economia_percentual) > 0" x-text="percentualOferta(p)+'% de desconto'+(p.tipo==='combo' ? ' sobre o preço normal' : '')"></div>
+              <div class="preco-resumo combo-total" x-show="p.tipo==='combo'" x-text="'Total de '+fmtQtd(p.quantidade)+' un.: R$ '+fmt(p.total)"></div>
+              <div class="preco-resumo" x-show="p.tipo!=='combo' && Number(p.quantidade || 1) > 1" x-text="fmtQtd(p.quantidade)+' un. · R$ '+fmt(p.preco)+'/un.'"></div>
+              <div class="preco-detalhe" x-show="p.tipo==='combo' && p.acumula_promocao" x-text="'Já inclui o preço promocional de R$ '+fmt(p.preco_base_combo)+'/un.'"></div>
+              <div class="preco-detalhe" x-show="['kit','categoria','brinde'].includes(p.tipo) && p.detalhe" x-text="p.detalhe"></div>
               <div class="preco-validade" x-show="validadeModalOferta(p)" x-text="validadeModalOferta(p)"></div>
               <div class="preco-brinde-estoque" x-show="p.brindes_estoque?.length">
                 <template x-for="brinde in (p.brindes_estoque || [])" :key="brinde.produto_id">
@@ -3730,6 +3736,12 @@ function pdv() {
     },
     percentualOferta(oferta) {
       return Number(oferta.economia_percentual || 0).toLocaleString('pt-BR', {maximumFractionDigits:2});
+    },
+    referenciaModalOferta(oferta) {
+      return Number(oferta.preco_referencia || 0) / (oferta.tipo==='combo' ? Math.max(Number(oferta.quantidade || 1),1) : 1);
+    },
+    condicaoComboOferta(oferta) {
+      return (oferta.quantidade_exata ? 'Na compra de ' : 'A partir de ')+this.fmtQtd(oferta.quantidade)+' unidades';
     },
     validadeModalOferta(oferta) {
       if (['normal','tabela_cliente'].includes(oferta.tipo) || !oferta.validade) return '';

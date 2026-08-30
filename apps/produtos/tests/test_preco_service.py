@@ -10,6 +10,14 @@ from apps.produtos.views.promocao import _preco_gatilho_brinde, _status_promocao
 
 
 class PrecoServicePromocaoVivaTests(SimpleTestCase):
+    def test_desconto_combo_no_total_e_outros_tipos_preservados(self):
+        for tipo,valor,esperado in [('valor','20','43.3233'),('percentual','20','39.9920'),
+                                   ('preco_unitario','20','20.0000'),('preco_final','20','20.0000'),
+                                   ('valor','200','0.0000')]:
+            with self.subTest(tipo=tipo,valor=valor):
+                faixa=SimpleNamespace(quantidade_minima=Decimal('3'),tipo_desconto=tipo,valor=Decimal(valor))
+                self.assertEqual(PrecoService.preco_unitario_combo(Decimal('49.99'),faixa),Decimal(esperado))
+
     def produto(self, **overrides):
         dados = {
             'preco_venda': Decimal('10.00'),

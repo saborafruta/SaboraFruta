@@ -19,6 +19,10 @@ const respond = (payload, ok = true) => {
 };
 (async () => {
   const app = create();
+  assert.ok(Math.abs(app.referenciaModalOferta({tipo:'combo',preco_referencia:269.97,quantidade:3})-89.99)<0.000001);
+  assert.equal(app.referenciaModalOferta({tipo:'promocional',preco_referencia:89.99,quantidade:1}),89.99);
+  assert.equal(app.condicaoComboOferta({quantidade:3,quantidade_exata:true}),'Na compra de 3 unidades');
+  assert.equal(app.condicaoComboOferta({quantidade:3,quantidade_exata:false}),'A partir de 3 unidades');
   const cancellation = create();
   cancellation.$nextTick = fn => fn();
   cancellation.$refs = {};

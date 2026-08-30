@@ -593,6 +593,44 @@ class VendaPDVServiceTests(TestCase):
         self.assertEqual(item.preco_origem, "combo")
         self.assertEqual(venda.valor_total, Decimal("18.00"))
 
+    def test_combo_desconto_total_consistente_com_promocao_individual(self):
+        from apps.pdv.views.pdv import _ofertas_produto
+        from apps.produtos.views.promocao import _valor_combo
+        from apps.produtos.services.preco_service import PrecoService
+        produto = self.criar_produto('Basqueteira')
+        produto.preco_venda = Decimal('89.99')
+        produto.save(update_fields=['preco_venda'])
+        ProdutoFilial.objects.filter(produto=produto,filial=self.filial).update(
+            preco_promocional=Decimal('49.99'),preco_promocional_ativo=True,
+            promocao_tipo_desconto='preco_final',promocao_valor_desconto=Decimal('49.99'),
+            promocao_dias_semana='0,1,2,3,4,5,6',
+        )
+        self.abastecer(produto,'10')
+        combo=PromocaoQuantidade.objects.create(filial=self.filial,produto=produto,nome='Saldão',usar_preco_promocional=True)
+        faixa=PromocaoQuantidadeFaixa.objects.create(promocao=combo,quantidade_minima=3,
+            condicao_quantidade=CondicaoQuantidade.A_PARTIR_DE,tipo_desconto=TipoDesconto.VALOR,valor=Decimal('20'))
+        for flag, expected, base in [(True,Decimal('129.97'),Decimal('49.99')),(False,Decimal('249.97'),Decimal('89.99'))]:
+            combo.usar_preco_promocional=flag
+            combo.save(update_fields=['usar_preco_promocional'])
+            with self.subTest(usar_promocional=flag):
+                oferta=next(o for o in _ofertas_produto(produto,self.filial) if o['tipo']=='combo')
+                self.assertEqual(Decimal(str(oferta['total'])),expected)
+                self.assertEqual(oferta['acumula_promocao'],flag)
+                self.assertEqual(Decimal(str(oferta['preco_base_combo'])),base)
+                total_base,total_combo,unitario=_valor_combo(combo,faixa)
+                self.assertEqual(total_base,base*3)
+                self.assertEqual(total_combo,expected,'Cadastro não deve descontar o próprio combo duas vezes')
+                self.assertEqual(Decimal(str(oferta['preco'])),unitario)
+        combo.usar_preco_promocional=True
+        combo.save(update_fields=['usar_preco_promocional'])
+        self.assertEqual(PrecoService.precos_combo_quantidade_vigentes(produto,filial=self.filial,quantidade=2),[])
+        self.assertEqual(PrecoService.precos_combo_quantidade_vigentes(produto,filial=self.filial,quantidade=6),[Decimal('43.3233')])
+        venda=VendaPDVService.finalizar_venda(sessao=self.sessao,filial=self.filial,usuario=self.usuario,
+            itens=[{'produto_id':produto.pk,'quantidade':3,'oferta_tipo':'combo','promocao_id':combo.pk,'faixa_id':faixa.pk}],
+            pagamentos=[{'forma_id':self.forma.pk,'valor':'129.97'}])
+        self.assertEqual(venda.itens.get().valor_unitario,Decimal('43.3233'))
+        self.assertEqual(venda.valor_total,Decimal('129.97'))
+
     def test_kit_baixa_componentes_item_a_item(self):
         produto_a = self.criar_produto("Componente A")
         produto_b = self.criar_produto("Componente B")

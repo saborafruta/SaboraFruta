@@ -135,7 +135,7 @@ class PromocaoQuantidadeFaixaForm(forms.Form):
         required=False,
         choices=[
             (TipoDesconto.PERCENTUAL, 'Desconto em %'),
-            (TipoDesconto.VALOR, 'Desconto em R$'),
+            (TipoDesconto.VALOR, 'Desconto em R$ no total'),
         ],
     )
     valor = DecimalBRField(label='Desconto (% ou R$)', required=False, max_digits=14, decimal_places=2)

@@ -1,7 +1,7 @@
 """Regras de tabela de preço, markup e custo médio."""
 from __future__ import annotations
 
-from decimal import Decimal
+from decimal import Decimal, ROUND_HALF_UP
 import unicodedata
 
 from django.db import transaction
@@ -198,6 +198,39 @@ class PrecoService:
         else:
             preco = valor
         return max(Decimal('0'), preco)
+
+    @staticmethod
+    def preco_unitario_combo(preco_base: Decimal, faixa) -> Decimal:
+        """Desconto em R$ pertence ao total da faixa, não a cada unidade.
+
+        A faixa define o preço unitário inclusive na condição "a partir de".
+        Mantém quatro casas para que 3 × 43,3233 feche em R$ 129,97.
+        """
+        quantidade = Decimal(str(faixa.quantidade_minima or 0))
+        if quantidade <= 0:
+            raise DadosInvalidosError('A quantidade do combo deve ser maior que zero.')
+        valor = faixa.valor or Decimal('0')
+        if faixa.tipo_desconto == 'valor':
+            preco = max(Decimal('0'), preco_base * quantidade - valor) / quantidade
+        else:
+            preco = PrecoService.aplicar_regra_desconto(preco_base, faixa.tipo_desconto, valor)
+        return preco.quantize(Decimal('0.0001'), rounding=ROUND_HALF_UP)
+
+    @staticmethod
+    def preco_base_combo(produto, *, filial=None, usar_preco_promocional=True,
+                         data=None, validar_dia_semana=True, minimo_dias_semana=None):
+        """Base sem outros combos: impede reaplicar o desconto do próprio combo."""
+        base = produto.preco_venda or Decimal('0')
+        if not usar_preco_promocional:
+            return base
+        parametros = dict(filial=filial, data=data, validar_dia_semana=validar_dia_semana,
+                          minimo_dias_semana=minimo_dias_semana)
+        candidatos = [base]
+        promocional = PrecoService.preco_promocional_vigente(produto, **parametros)
+        if promocional is not None:
+            candidatos.append(promocional)
+        candidatos.extend(PrecoService.precos_categoria_vigentes(produto, quantidade=Decimal('1'), **parametros))
+        return min(candidatos)
 
     @staticmethod
     def _preco_base_categoria(
@@ -675,37 +708,15 @@ class PrecoService:
                 minimo_dias_semana=minimo_dias_semana,
             ):
                 continue
-            preco_base = produto.preco_venda or Decimal('0')
-            if promocao.usar_preco_promocional:
-                candidatos_base = [preco_base]
-                preco_promocional = PrecoService.preco_promocional_vigente(
-                    produto,
-                    filial=filial,
-                    data=data,
-                    validar_dia_semana=validar_dia_semana,
-                    minimo_dias_semana=minimo_dias_semana,
-                )
-                if preco_promocional is not None:
-                    candidatos_base.append(preco_promocional)
-                candidatos_base.extend(
-                    PrecoService.precos_categoria_vigentes(
-                        produto,
-                        filial=filial,
-                        quantidade=Decimal('1'),
-                        data=data,
-                        validar_dia_semana=validar_dia_semana,
-                        minimo_dias_semana=minimo_dias_semana,
-                    )
-                )
-                preco_base = min(candidatos_base)
+            preco_base = PrecoService.preco_base_combo(
+                produto, filial=filial, usar_preco_promocional=promocao.usar_preco_promocional,
+                data=data, validar_dia_semana=validar_dia_semana,
+                minimo_dias_semana=minimo_dias_semana,
+            )
             for faixa in promocao.faixas.all():
                 if not faixa.aplica_para_quantidade(quantidade):
                     continue
-                preco = PrecoService.aplicar_regra_desconto(
-                    preco_base,
-                    faixa.tipo_desconto,
-                    faixa.valor,
-                )
+                preco = PrecoService.preco_unitario_combo(preco_base, faixa)
                 resumo = PrecoService._resumo_desconto(faixa.tipo_desconto, faixa.valor)
                 candidatos.append({
                     'preco': preco,

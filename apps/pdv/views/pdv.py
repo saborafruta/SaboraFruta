@@ -1,7 +1,7 @@
 import datetime
 import json
 from collections import defaultdict
-from decimal import Decimal, InvalidOperation
+from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
 
 from django.db import transaction
 from django.db.models import Max, Q, Sum
@@ -557,22 +557,22 @@ def _ofertas_produto(produto, filial, hoje=None, cliente=None, contrato=None, co
             preco_base_combo = min(bases)
         for faixa in combo.faixas.all():
             quantidade = faixa.quantidade_minima
-            preco = PrecoService.aplicar_regra_desconto(
-                preco_base_combo, faixa.tipo_desconto, faixa.valor,
-            )
+            preco = PrecoService.preco_unitario_combo(preco_base_combo, faixa)
             resumo = PrecoService._resumo_desconto(faixa.tipo_desconto, faixa.valor)
             detalhe = (
                 f'Combo "{combo.nome}" com {resumo} para quantidade '
                 f'{PrecoService._fmt_decimal(faixa.quantidade_minima, 3)}.'
             )
             ofertas.append({
-                'preco': preco, 'total': preco * quantidade,
+                'preco': preco, 'total': (preco * quantidade).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP),
                 'preco_referencia': preco_normal * quantidade, 'quantidade': quantidade,
                 'tipo': 'combo', 'oferta_tipo': 'combo', 'tag': 'COMBO POR QUANTIDADE',
                 'origem': combo.nome, 'detalhe': detalhe,
                 'validade': _validade_oferta(combo.data_inicio, combo.data_fim, combo.dias_semana),
                 'promocao_id': combo.pk, 'faixa_id': faixa.pk,
                 'quantidade_exata': faixa.condicao_quantidade == 'igual',
+                'preco_base_combo': float(preco_base_combo),
+                'acumula_promocao': combo.usar_preco_promocional and preco_base_combo < preco_normal,
             })
 
     kits = contexto['kits'].get(produto.pk, []) if contexto is not None else (
