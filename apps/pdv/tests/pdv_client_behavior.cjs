@@ -23,6 +23,43 @@ const respond = (payload, ok = true) => {
   assert.equal(app.referenciaModalOferta({tipo:'promocional',preco_referencia:89.99,quantidade:1}),89.99);
   assert.equal(app.condicaoComboOferta({quantidade:3,quantidade_exata:true}),'Na compra de 3 unidades');
   assert.equal(app.condicaoComboOferta({quantidade:3,quantidade_exata:false}),'A partir de 3 unidades');
+  const comboSummary = app.resumoComboOferta({tipo:'combo',quantidade:3,preco_base_combo:50,preco_referencia:270,total:120});
+  assert.equal(comboSummary.base,150);
+  assert.equal(comboSummary.economia,30);
+  assert.equal(comboSummary.percentual,20);
+  assert.equal(app.resumoComboOferta({tipo:'combo',quantidade:3,preco_base_combo:49.99,total:129.97}).economia,20);
+  assert.equal(app.resumoComboOferta({tipo:'combo',quantidade:3,preco_referencia:150,total:120}).base,150);
+  assert.equal(app.resumoComboOferta({tipo:'combo',quantidade:3,preco_base_combo:0,total:0}).percentual,0);
+  const normal = {tipo:'normal',oferta_tipo:'normal',preco:100,total:100,quantidade:1};
+  for (const tipo of ['promocional','categoria']) {
+    const automatic = create();
+    const promotion = {tipo,oferta_tipo:tipo,preco:80,total:80,quantidade:1,regra_id:12};
+    const product = {id:91,preco:100,preco_base:100,ofertas:[normal,promotion]};
+    automatic.adicionarItem(product);
+    assert.equal(automatic.modalPreco.show,false,'A normal price is not a competing promotion');
+    assert.equal(automatic.venda.itens[0].valor_unitario,80);
+    assert.equal(automatic.venda.itens[0].oferta_tipo,tipo);
+    assert.equal(automatic.venda.itens[0].regra_id,12,'Keep category context for server validation');
+    automatic.adicionarItem(product);
+    assert.equal(automatic.venda.itens.length,1);
+    assert.equal(automatic.venda.itens[0].quantidade,2);
+    assert.equal(automatic.venda.total,160);
+  }
+  for (const promotions of [
+    [{tipo:'combo',oferta_tipo:'combo',quantidade:3}],
+    [{tipo:'kit',oferta_tipo:'kit',quantidade:1}],
+    [{tipo:'categoria',oferta_tipo:'categoria',quantidade:3}],
+    [{tipo:'categoria',quantidade:1},{tipo:'promocional',quantidade:1}],
+  ]) {
+    const choice = create();
+    choice.adicionarItem({id:92,preco:100,ofertas:promotions});
+    assert.equal(choice.modalPreco.show,true,'Conditional or competing promotions require a choice');
+    assert.equal(choice.venda.itens.length,0);
+  }
+  const tableOnly = create();
+  tableOnly.adicionarItem({id:93,ofertas:[normal,{tipo:'tabela_cliente',preco:85,quantidade:1}]});
+  assert.equal(tableOnly.modalPreco.show,false);
+  assert.equal(tableOnly.venda.total,85);
   const cancellation = create();
   cancellation.$nextTick = fn => fn();
   cancellation.$refs = {};
