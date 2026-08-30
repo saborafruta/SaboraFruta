@@ -22,6 +22,10 @@ class PDVVisualBaseTests(SimpleTestCase):
         ).read_text(encoding='utf-8')
 
         self.assertIn('sidebar-favorites-data', template)
+        self.assertIn('data-full-favorites="true"', template)
+        self.assertIn('outline:2px solid var(--pdv-accent)', template)
+        self.assertNotIn('#f15a24', template)
+        self.assertNotIn('#f97316', template)
         self.assertIn("static 'core/js/sidebar_favorites.js'", template)
         self.assertIn("core:trocar-filial", template)
         self.assertIn('fotoPerfilAberta', template)

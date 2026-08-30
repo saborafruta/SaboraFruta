@@ -84,6 +84,22 @@ class MenuFavoritosViewTests(SimpleTestCase):
     def test_modelo_inicia_sem_favoritos(self):
         self.assertEqual(Usuario().menu_favoritos, [])
 
+    def test_get_resolve_submenus_e_preserva_ordem_sem_expor_links_ausentes(self):
+        request = self.factory.get(reverse('core:menu-favoritos'))
+        request.user = SimpleNamespace(is_authenticated=True, menu_favoritos=[
+            '/financeiro/pagar/', '/estoque/ajuste-rapido/', '/restrito/',
+        ])
+        html = ('<a href="/estoque/ajuste-rapido/"><span>Ajuste rápido</span></a>'
+                '<a href="/financeiro/pagar/" title="Contas a pagar">Pagar</a>'
+                '<a href="https://externo.test/restrito/">Externo</a>')
+        with patch('apps.core.views.menu_favoritos.render_to_string', return_value=html) as render:
+            response = MenuFavoritosView.as_view()(request)
+        render.assert_called_once_with('core/_sidebar.html', request=request)
+        self.assertEqual(json.loads(response.content)['itens'], [
+            {'caminho': '/financeiro/pagar/', 'nome': 'Contas a pagar'},
+            {'caminho': '/estoque/ajuste-rapido/', 'nome': 'Ajuste rápido'},
+        ])
+
 
 class MenuFavoritosTemplateTests(SimpleTestCase):
     def test_sidebar_carrega_favoritos_no_desktop_e_celular(self):

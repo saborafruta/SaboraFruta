@@ -87,6 +87,14 @@ class CaixaPDVApiTests(TestCase):
         self.assertEqual(response.json()["erro"], "Selecione um caixa.")
         self.assertFalse(SessaoPDV.objects.exists())
 
+    def test_favoritos_do_pdv_incluem_submenu_do_menu_completo(self):
+        caminho = reverse('estoque:ajuste-rapido')
+        self.usuario.menu_favoritos = [caminho]
+        self.usuario.save(update_fields=['menu_favoritos'])
+        response = self.client.get(reverse('core:menu-favoritos'))
+        self.assertEqual(response.status_code, 200)
+        self.assertIn(caminho, [item['caminho'] for item in response.json()['itens']])
+
     def test_abrir_caixa_rejeita_valor_negativo(self):
         caixa = Caixa.objects.create(filial=self.filial, numero=1, descricao="Caixa 1")
 

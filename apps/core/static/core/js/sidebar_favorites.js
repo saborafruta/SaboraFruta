@@ -65,6 +65,7 @@
     var pending = new Set();
     var navs = Array.prototype.slice.call(root.querySelectorAll('nav.sidebar-favorites-nav'));
     var records = [];
+    var extraRecords = new Map();
 
     navs.forEach(function (nav) {
       Array.prototype.slice.call(nav.querySelectorAll('a[href]')).forEach(function (anchor) {
@@ -185,7 +186,7 @@
         records.forEach(function (record) {
           if (record.nav === nav && !available.has(record.path)) available.set(record.path, record);
         });
-        var visible = favorites.map(function (path) { return available.get(path); }).filter(Boolean);
+        var visible = favorites.map(function (path) { return available.get(path) || extraRecords.get(path); }).filter(Boolean);
         if (!visible.length) return;
 
         var panel = document.createElement('section');
@@ -248,6 +249,19 @@
 
     updateStars();
     renderPanels();
+    if (root.dataset.fullFavorites === 'true') {
+      window.fetch(endpoint, { credentials: 'same-origin', headers: { Accept: 'application/json' } })
+        .then(readJsonResponse).then(function (result) {
+          if (!result.response.ok) throw new Error('Não foi possível carregar todos os favoritos.');
+          (result.data.itens || []).forEach(function (item) {
+            var anchor = document.createElement('a');
+            anchor.href = item.caminho;
+            var path = pathFor(anchor);
+            if (path && favoriteSet.has(path)) extraRecords.set(path, { path: path, label: item.nome, anchor: anchor });
+          });
+          renderPanels();
+        }).catch(function (error) { navs.forEach(function (nav) { showError(nav, error.message); }); });
+    }
   }
 
   if (document.readyState === 'loading') {

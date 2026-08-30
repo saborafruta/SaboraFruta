@@ -1,10 +1,12 @@
 import json
+from html.parser import HTMLParser
 from urllib.parse import urlsplit
 
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.db import transaction
 from django.http import JsonResponse
 from django.views import View
+from django.template.loader import render_to_string
 
 from apps.core.models import Usuario
 
@@ -28,6 +30,17 @@ def normalizar_caminho_favorito(valor):
 
 
 class MenuFavoritosView(LoginRequiredMixin, View):
+    def get(self, request):
+        # Use the full, permission-filtered menu as the label/URL source. The
+        # compact PDV menu intentionally does not contain every submenu link.
+        parser = _MenuLinks()
+        parser.feed(render_to_string('core/_sidebar.html', request=request))
+        favoritos = []
+        for path in request.user.menu_favoritos or []:
+            if path in parser.links:
+                favoritos.append({'caminho': path, 'nome': parser.links[path]})
+        return JsonResponse({'itens': favoritos})
+
     def handle_no_permission(self):
         return JsonResponse(
             {'ok': False, 'erro': 'Sua sessao expirou. Entre novamente.'},
@@ -67,3 +80,27 @@ class MenuFavoritosView(LoginRequiredMixin, View):
             usuario.save(update_fields=['menu_favoritos', 'updated_at'])
 
         return JsonResponse({'ok': True, 'favoritos': favoritos})
+
+
+class _MenuLinks(HTMLParser):
+    def __init__(self):
+        super().__init__()
+        self.links = {}
+        self.current = None
+
+    def handle_starttag(self, tag, attrs):
+        if tag == 'a':
+            attrs = dict(attrs)
+            self.current = [normalizar_caminho_favorito(attrs.get('href')), attrs.get('title'), []]
+
+    def handle_data(self, data):
+        if self.current is not None:
+            self.current[2].append(data)
+
+    def handle_endtag(self, tag):
+        if tag == 'a' and self.current is not None:
+            path, title, parts = self.current
+            label = ' '.join((title or ''.join(parts)).split())
+            if path and label:
+                self.links.setdefault(path, label)
+            self.current = None
