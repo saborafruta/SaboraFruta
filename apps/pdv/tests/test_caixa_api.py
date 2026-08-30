@@ -1,6 +1,10 @@
 import json
 import re
+import shutil
+import subprocess
 from decimal import Decimal
+from pathlib import Path
+from unittest import skipUnless
 
 from django.test import TestCase
 from django.urls import reverse
@@ -12,6 +16,18 @@ from apps.pdv.models import Caixa, SessaoPDV
 
 
 class CaixaPDVApiTests(TestCase):
+    @skipUnless(shutil.which('node'), 'Node.js necessário para testar o JavaScript do PDV')
+    def test_inicializacao_e_tags_no_javascript_renderizado(self):
+        response = self.client.get(reverse('pdv:home'))
+        self.assertEqual(response.status_code, 200)
+        html = response.content.decode('utf-8')
+        script = 'function pdv() {' + html.split('function pdv() {', 1)[1].split('</script>', 1)[0]
+        result = subprocess.run(
+            [shutil.which('node'), str(Path(__file__).with_name('pdv_client_behavior.cjs'))],
+            input=script, text=True, encoding='utf-8', capture_output=True, timeout=20,
+        )
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+
     @classmethod
     def setUpTestData(cls):
         cls.empresa = Empresa.objects.create(

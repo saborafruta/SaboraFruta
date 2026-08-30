@@ -899,6 +899,10 @@
   #pdv-right-panel .btn-fim { min-height:44px;padding:12px 8px;font-size:13px;border-radius:10px;box-shadow:none; }
   #pdv-right-panel .btn-rodape { padding:10px 6px;font-size:11px; }
   @media (min-width:1101px) {
+    #pdv-center-panel { min-width:0; }
+    #pdv-center-panel .client-bar { flex-wrap:wrap; }
+    #pdv-center-panel .client-summary { flex-basis:180px !important; }
+    #pdv-center-panel .cart-header { flex-wrap:wrap; }
     #pdv-right-panel .forma-btn { min-height:60px;padding:8px 5px;gap:5px;border-radius:10px;justify-content:center; }
     #pdv-right-panel .payment-method-grid .forma-icon { width:27px;height:27px;border-radius:8px; }
     #pdv-right-panel .payment-method-grid .forma-icon svg { width:16px;height:16px; }
@@ -907,6 +911,9 @@
   @media (max-width:1100px) {
     .payment-panel-body { flex:1 0 auto;overflow:visible; }
     .payment-panel-footer { max-height:none;overflow:visible; }
+  }
+  @media (min-width:1101px) and (max-width:1500px) {
+    #pdv-center-panel .client-summary { flex:0 0 100% !important; }
   }
   @media (max-width:960px) {
     .brand-switch { padding:6px 8px; }
@@ -955,7 +962,7 @@
 </script>
 {% endblock %}
 {% block body %}
-<div id="pdv-app" x-data="pdv()" x-init="init()" style="display:flex;flex-direction:column;height:100vh;background:#0a0a12;">
+<div id="pdv-app" x-data="pdv()" style="display:flex;flex-direction:column;height:100vh;background:#0a0a12;">
   {% csrf_token %}
   {% url 'core:dashboard' as dashboard_url %}
   {% url 'cadastros:cliente-list' as clientes_url %}
@@ -1077,10 +1084,10 @@
         <!-- Status -->
         <div style="display:flex;align-items:center;gap:7px;padding:7px 11px 9px;border-bottom:1px solid #232336;margin-bottom:4px;">
           <span style="width:8px;height:8px;border-radius:50%;flex-shrink:0;" :style="sessao?'background:#22c55e;box-shadow:0 0 6px #22c55e;':'background:#6b7280;'"></span>
-          <span style="font-size:11px;font-weight:600;color:#888;" x-text="sessao ? 'Caixa aberto' : 'Caixa fechado'"></span>
+          <span style="font-size:11px;font-weight:600;color:#888;" x-text="!sessaoCarregada ? (erroEstado ? 'Caixa não consultado' : 'Consultando caixa...') : (sessao ? 'Caixa aberto' : 'Caixa fechado')"></span>
         </div>
         <!-- Abrir Caixa -->
-        <button class="caixa-mi" :disabled="!!sessao" @click="caixaMenuAcao('abrir')">
+        <button class="caixa-mi" :disabled="!sessaoCarregada || !!sessao" @click="caixaMenuAcao('abrir')">
           <svg width="15" height="15" fill="none" stroke="#22c55e" viewBox="0 0 24 24" style="flex-shrink:0;"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"/></svg>
           Abrir Caixa
         </button>
@@ -1107,12 +1114,6 @@
     <div style="flex:1;"></div>
 
     <!-- Ícones de ação -->
-    <button title="Atalhos de teclado" class="topbar-icon-btn">
-      <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24"><rect x="2" y="6" width="20" height="12" rx="2" stroke-width="1.5"/><path stroke-linecap="round" stroke-width="1.5" d="M6 10h.01M10 10h.01M14 10h.01M18 10h.01M8 14h8"/></svg>
-    </button>
-    <button @click="abrirCaixaRelatorio()" title="Sangria / Caixa" class="topbar-icon-btn">
-      <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24"><rect x="5" y="2" width="14" height="20" rx="2" stroke-width="1.5"/><path stroke-linecap="round" stroke-width="1.5" d="M11 19h2"/></svg>
-    </button>
     <button title="Tela cheia" @click="if(document.fullscreenElement){document.exitFullscreen()}else{document.documentElement.requestFullscreen()}" class="topbar-icon-btn">
       <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4"/></svg>
     </button>
@@ -1150,9 +1151,6 @@
         </button>
       </div>
     </div>
-    <button title="Configurações" @click="abrirConfig()" :style="showModalConfig ? 'background:#1e1e2a;color:#a0a0b8;' : 'background:transparent;color:#555;'" style="width:32px;height:32px;border-radius:8px;border:none;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:.15s;" onmouseover="this.style.background='#1e1e2a';this.style.color='#a0a0b8'" onmouseout="if(!this.closest('[x-data]').__x.$data.showModalConfig){this.style.background='transparent';this.style.color='#555';}">
-      <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M4 6h16M4 12h16M4 18h16"/><circle cx="9" cy="6" r="2" fill="#0d0d16" stroke-width="1.5"/><circle cx="15" cy="12" r="2" fill="#0d0d16" stroke-width="1.5"/><circle cx="8" cy="18" r="2" fill="#0d0d16" stroke-width="1.5"/></svg>
-    </button>
 
     <div style="width:1px;height:28px;background:#1e1e30;margin:0 4px;"></div>
 
@@ -1196,7 +1194,7 @@
   <div class="pdv-layout pdv-workspace" style="display:flex;flex:1;overflow:hidden;">
 
     <!-- ─── PAINEL ESQUERDO ─── -->
-    <aside id="pdv-left-panel" class="pdv-pane" :class="{'mobile-active':mobilePane==='catalogo'}" style="width:300px;flex-shrink:0;background:#0d0d16;border-right:1px solid #1a1a28;display:flex;flex-direction:column;overflow:hidden;">
+    <aside id="pdv-left-panel" class="pdv-pane" :class="{'mobile-active':mobilePane==='catalogo'}" style="width:340px;flex-shrink:0;background:#0d0d16;border-right:1px solid #1a1a28;display:flex;flex-direction:column;overflow:hidden;">
 
       <!-- Ler código de barras -->
       <div style="padding:11px 12px 7px;border-bottom:1px solid #1a1a28;">
@@ -1289,7 +1287,7 @@
                 <div style="flex:1;min-width:0;">
                   <div class="prod-card-nome" x-text="p.descricao"></div>
                   <div class="prod-card-preco" x-text="'R$ ' + fmt(p.preco)"></div>
-                  <span class="preco-origem-tag"
+                  <span class="preco-origem-tag" x-show="temPromocao(p)" x-cloak
                         :class="p.preco_origem_tipo === 'tabela_cliente' ? 'especial' : ''"
                         x-text="labelOrigemPreco(p)"></span>
                 </div>
@@ -1342,7 +1340,7 @@
                @click="venda.cliente.id && window.open('/cadastros/clientes/'+venda.cliente.id+'/?next=/pdv/', '_blank')"
                x-text="venda.cliente.nome"></div>
           <div style="font-size:11px;color:#555;" x-text="venda.cliente.id ? venda.cliente.cpf_cnpj : 'Clique para selecionar'"></div>
-          <span class="preco-origem-tag"
+          <span class="preco-origem-tag" x-show="venda.cliente.tabela_preco_id" x-cloak
                 :class="venda.cliente.tabela_preco_id ? 'especial' : ''"
                 x-text="venda.cliente.tabela_preco_id ? venda.cliente.tabela_preco_nome : 'Preço padrão'"></span>
           </div>
@@ -1590,15 +1588,12 @@
                   <template x-if="!item._precoManual">
                     <span style="font-size:12px;color:#555;" x-text="'R$ ' + fmt(item.valor_unitario) + ' / un.'"></span>
                   </template>
-                  <span class="preco-origem-tag"
-                        :class="item.preco_origem_tipo === 'tabela_cliente' ? 'especial' : ''"
-                        x-text="labelOrigemPreco(item)"></span>
                   <template x-if="item.desconto_valor>0">
                     <span style="font-size:11px;padding:1px 6px;background:rgba(34,197,94,.15);color:#4ade80;border-radius:4px;font-weight:600;"
                           x-text="'− R$ ' + fmt(item.desconto_valor)"></span>
                   </template>
                 </div>
-                <div class="cart-offer-meta" x-show="item.oferta_tag" x-cloak>
+                <div class="cart-offer-meta" x-show="temPromocao(item)" x-cloak>
                   <span class="preco-tipo-badge"
                         :class="{'badge-promocional':item.oferta_tipo==='promocional','badge-categoria':item.oferta_tipo==='categoria','badge-combo':item.oferta_tipo==='combo','badge-kit':item.oferta_tipo==='kit','badge-brinde':item.oferta_tipo==='brinde','badge-normal':['normal','tabela_cliente'].includes(item.oferta_tipo)}"
                         x-text="item.oferta_tag"></span>
@@ -1644,10 +1639,10 @@
     </main>
 
     <!-- ─── PAINEL DIREITO ─── -->
-    <aside id="pdv-right-panel" class="pdv-pane" :class="{'mobile-active':mobilePane==='pagamento'}" style="width:370px;flex-shrink:0;background:#0d0d16;border-left:1px solid #1a1a28;display:flex;flex-direction:column;overflow:hidden;">
+    <aside id="pdv-right-panel" class="pdv-pane" :class="{'mobile-active':mobilePane==='pagamento'}" style="width:410px;flex-shrink:0;background:#0d0d16;border-left:1px solid #1a1a28;display:flex;flex-direction:column;overflow:hidden;">
 
       <!-- Banner: Caixa Fechado -->
-      <div x-show="!sessao" x-cloak
+      <div x-show="sessaoCarregada && !sessao" x-cloak
            style="margin:12px 12px 0;padding:12px 14px;background:linear-gradient(135deg,rgba(245,158,11,.12),rgba(37,99,235,.1));border:1px solid rgba(245,158,11,.3);border-radius:12px;flex-shrink:0;">
         <div style="display:flex;align-items:center;gap:10px;">
           <div style="width:36px;height:36px;background:rgba(245,158,11,.15);border-radius:10px;display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:18px;">🔒</div>
@@ -1660,6 +1655,11 @@
             Abrir Caixa
           </button>
         </div>
+      </div>
+
+      <div x-show="erroEstado" x-cloak role="alert" style="padding:12px;color:var(--pdv-t1);">
+        <span x-text="erroEstado"></span>
+        <button type="button" class="btn-action" @click="carregarEstado()">Tentar novamente</button>
       </div>
 
       <!-- Título Forma de Pagamento -->
@@ -2026,7 +2026,7 @@
           </div>
           <div x-show="erroCaixa" x-text="erroCaixa" style="padding:8px 12px;background:rgba(239,68,68,.1);border:1px solid rgba(239,68,68,.3);border-radius:8px;color:#f87171;font-size:12px;margin-bottom:12px;"></div>
           <div style="display:flex;gap:10px;">
-            <button @click="if(sessao)showModalCaixa=false;else window.location.href='/'"
+            <button @click="showModalCaixa=false;$nextTick(()=>focarBuscaProduto())"
                     style="flex:1;padding:10px;background:#1e1e2a;border:none;border-radius:8px;color:#666;font-size:13px;cursor:pointer;">Cancelar</button>
             <button @click="abrirCaixa()" :disabled="!caixaSelecionada || caixaAbrindo"
                     :style="!caixaSelecionada?'opacity:.4;cursor:not-allowed;':''"
@@ -3348,7 +3348,8 @@ function pdv() {
     vendaEdicaoOrigemId: null, vendaEdicaoOrigemNumero: null,
     get hojeISO() { return new Date().toISOString().slice(0,10); },
 
-    sessao: null, erroCaixa: '', caixaSelecionada: '', valorAberturaCaixa: '0', caixaAbrindo: false,
+    sessao: null, sessaoCarregada: false, erroEstado: '', _inicializado: false,
+    erroCaixa: '', caixaSelecionada: '', valorAberturaCaixa: '0', caixaAbrindo: false,
     criandoCaixa: false, novoCaixaDescricao: '', criandoCaixaLoading: false,
 
     venda: {
@@ -3433,8 +3434,15 @@ function pdv() {
       return this.venda.delivery ? 'FINALIZAR DELIVERY (F12)' : 'FINALIZAR VENDA (F12)';
     },
 
+    temPromocao(item) {
+      return ['promocional', 'categoria', 'combo', 'kit', 'brinde'].includes(
+        item?.oferta_tipo || item?.preco_origem_tipo
+      );
+    },
+
     labelOrigemPreco(item) {
       if (item?.oferta_nome) return item.oferta_nome;
+      if (this.temPromocao(item)) return item.preco_origem || 'Promoção';
       return item?.preco_origem_tipo === 'tabela_cliente'
         ? (item.preco_origem || this.venda.cliente.tabela_preco_nome || 'Preço especial')
         : 'Preço padrão';
@@ -3484,14 +3492,16 @@ function pdv() {
     },
 
     async init() {
+      if (this._inicializado) return;
+      this._inicializado = true;
       this.horaAtual = this._hora();
       setInterval(()=>{ this.horaAtual=this._hora(); }, 1000);
+      this.registrarAtalhos();
+      this.$nextTick(()=>this.focarBuscaProduto());
       await this.carregarEstado();
       await this.atualizarListasTopo();
       await this.aplicarClienteInicial();
       await this.aplicarComandaInicial();
-      this.registrarAtalhos();
-      if (!this.showModalCaixa) this.$nextTick(()=>this.focarBuscaProduto());
     },
 
     // Itens vindos de ?comanda_id=<id> (botao "Ir para o PDV e fechar a
@@ -3562,17 +3572,24 @@ function pdv() {
     },
 
     async carregarEstado() {
+      this.erroEstado = '';
       try {
         const clienteId = this.venda?.cliente?.id;
         const url = clienteId
           ? '/pdv/api/estado/?cliente_id='+encodeURIComponent(clienteId)
           : '/pdv/api/estado/';
-        const d = await (await fetch(url)).json();
+        const response = await fetch(url);
+        if (!response.ok) throw new Error('Falha ao consultar o estado do PDV');
+        const d = await response.json();
+        if (!Object.prototype.hasOwnProperty.call(d, 'sessao')) throw new Error('Estado inválido');
         this.sessao = d.sessao;
         this.formasPagamento = d.formas_pagamento || [];
         this.topProdutos = d.top_produtos || [];
-        if (!this.sessao) this.showModalCaixa = true;
-      } catch { this.toast_('Erro ao carregar estado do PDV','erro'); }
+        this.sessaoCarregada = true;
+      } catch {
+        this.erroEstado = 'Não foi possível consultar o caixa. Tente novamente.';
+        this.toast_('Erro ao carregar estado do PDV','erro');
+      }
     },
 
     async buscarProdutos(q) {
@@ -3689,6 +3706,7 @@ function pdv() {
     async caixaMenuAcao(acao) {
       this.showCaixaMenu = false;
       if (acao === 'abrir') {
+        if (!this.sessaoCarregada) { this.toast_('Aguarde a consulta do caixa ou tente novamente.', 'erro'); return; }
         if (this.sessao) { this.toast_('O caixa já está aberto', 'erro'); return; }
         this.caixaSelecionada = ''; this.valorAberturaCaixa = '0'; this.erroCaixa = '';
         this.criandoCaixa = false; this.novoCaixaDescricao = '';
@@ -5787,9 +5805,15 @@ ${pgtoHtml ? `<hr class="sep">${pgtoHtml}` : ''}
       return m[(forma.tipo||'').toLowerCase()]||'background:#1e1e2a;color:#888;';
     },
 
+    tipoForma(forma) {
+      const tipo = (forma?.tipo || '').toLowerCase();
+      const aliases = {cartao_credito:'credito', cartao_debito:'debito', ted:'transferencia',
+        doc:'transferencia', deposito_em_conta:'transferencia', crediario:'vale', convenio:'vale'};
+      return aliases[tipo] || tipo;
+    },
+
     corFormaPgtoIconNovo(forma) {
-      const tipoBruto=(forma.tipo||'').toLowerCase();
-      const tipo=tipoBruto.replace('cartao_','').replace('deposito_em_conta','transferencia');
+      const tipo=this.tipoForma(forma);
       const m={
         credito:'background:linear-gradient(135deg,#1e3a5f,#1e4a7f);color:#93c5fd;border:1px solid rgba(96,165,250,.2);',
         debito:'background:linear-gradient(135deg,#0a2e1a,#0a3a22);color:#6ee7b7;border:1px solid rgba(74,222,128,.2);',
@@ -5804,11 +5828,11 @@ ${pgtoHtml ? `<hr class="sep">${pgtoHtml}` : ''}
     },
 
     svgFormaPgto(f) {
-      const t=(f.tipo||'').toLowerCase().replace('cartao_','').replace('deposito_em_conta','transferencia');
+      const t=this.tipoForma(f);
       const icons={
         credito:`<svg width="18" height="18" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z"/></svg>`,
         debito:`<svg width="18" height="18" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z"/></svg>`,
-        pix:`<svg width="18" height="18" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>`,
+        pix:`<svg width="18" height="18" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M4 4h6v6H4zM14 4h6v6h-6zM4 14h6v6H4zM14 14h2v2h-2zM18 14h2v6h-4v-2h2zM14 18h2v2h-2z"/></svg>`,
         dinheiro:`<svg width="18" height="18" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>`,
         transferencia:`<svg width="18" height="18" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4"/></svg>`,
         cheque:`<svg width="18" height="18" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>`,

@@ -5,6 +5,20 @@ from django.test import SimpleTestCase
 
 
 class PDVVisualBaseTests(SimpleTestCase):
+    def test_pdv_carrega_sem_flash_e_oculta_tags_normais(self):
+        template = (Path(__file__).resolve().parents[1] / 'templates/pdv/home.html').read_text(encoding='utf-8')
+        self.assertNotIn('x-init="init()"', template)
+        self.assertIn('x-show="sessaoCarregada && !sessao"', template)
+        self.assertIn('x-show="temPromocao(item)"', template)
+        self.assertIn('x-show="temPromocao(p)"', template)
+        self.assertIn('width:340px;flex-shrink:0;', template)
+        self.assertIn('width:410px;flex-shrink:0;', template)
+        header = template.split('<header class="pdv-topbar"', 1)[1].split('</header>', 1)[0]
+        for title in ['Atalhos de teclado', 'Sangria / Caixa', 'Configurações']:
+            self.assertNotIn(f'title="{title}"', header)
+        for title in ['Tela cheia', 'Imprimir']:
+            self.assertIn(f'title="{title}"', header)
+
     def test_template_compila_com_navegacao_lateral(self):
         get_template('pdv/home.html')
         template = (
