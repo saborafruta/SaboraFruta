@@ -1,4 +1,5 @@
 {% extends "pdv_base.html" %}
+{% load static %}
 {% block title %}PDV{% endblock %}
 
 {% block extra_head %}
@@ -752,21 +753,21 @@
     --pdv-tmuted:#64748b;
     --pdv-tmid:#64748b;
     --pdv-tanon:#94a3b8;
-    --pdv-tavatar:#c2410c;
+    --pdv-tavatar:#2563eb;
     --pdv-scroll:#cbd5e1;
-    --pdv-focus:#f15a24;
-    --pdv-focus-ring:rgba(241,90,36,.20);
-    --pdv-header-bg:radial-gradient(circle at 22% -60%,rgba(255,255,255,.22),transparent 42%),linear-gradient(90deg,#f15a24 0%,#e8824a 50%,#c75a22 76%,#542412 100%);
+    --pdv-focus:#2563eb;
+    --pdv-focus-ring:rgba(37,99,235,.20);
+    --pdv-header-bg:radial-gradient(circle at 22% -60%,rgba(255,255,255,.18),transparent 42%),linear-gradient(90deg,#1e3a8a 0%,#2563eb 52%,#1e40af 78%,#172554 100%);
     --pdv-header-border:rgba(255,255,255,.16);
     --pdv-header-control-bg:rgba(255,255,255,.16);
     --pdv-header-control-border:rgba(255,255,255,.30);
     --pdv-header-control-hover:rgba(255,255,255,.23);
     --pdv-header-text:#ffffff;
     --pdv-header-muted:rgba(255,255,255,.90);
-    --pdv-accent:#f15a24;
-    --pdv-accent-text:#c2410c;
-    --pdv-accent-soft:rgba(241,90,36,.10);
-    --pdv-accent-border:rgba(241,90,36,.28);
+    --pdv-accent:#2563eb;
+    --pdv-accent-text:#1d4ed8;
+    --pdv-accent-soft:rgba(37,99,235,.10);
+    --pdv-accent-border:rgba(37,99,235,.28);
   }
   #pdv-app { background:var(--pdv-bg) !important; color:var(--pdv-t1); }
   #pdv-app > .pdv-topbar {
@@ -795,7 +796,7 @@
   }
   html.tema-claro .pdv-topbar .mode-btn.act-venda,
   html.tema-claro .pdv-topbar .mode-btn.act-delivery,
-  html.tema-claro .pdv-topbar .mode-btn.act-orcamento { background:#fff3e8;color:#c2410c; }
+  html.tema-claro .pdv-topbar .mode-btn.act-orcamento { background:#fff;color:#1d4ed8; }
   .brand-switch {
     display:flex;align-items:center;gap:12px;min-width:0;padding:6px 10px 6px 9px;
     border:1px solid var(--pdv-header-control-border);border-radius:12px;
@@ -806,7 +807,7 @@
   .brand-wordmark-accent { color:#60a5fa; }
   html.tema-claro .brand-switch { background:#fff;border-color:rgba(255,255,255,.68);color:#101010; }
   html.tema-claro .brand-wordmark-neutral { color:#101010; }
-  html.tema-claro .brand-wordmark-accent { color:#f97316; }
+  html.tema-claro .brand-wordmark-accent { color:#2563eb; }
   .system-overlay { position:fixed;inset:0;z-index:80;display:flex;align-items:stretch;background:rgba(15,23,42,.34);backdrop-filter:blur(2px); }
   .system-nav-drawer { width:min(310px,calc(100vw - 26px));height:100dvh;background:#161618;border-right:1px solid #2a2a2e;box-shadow:18px 0 48px rgba(0,0,0,.42);padding:10px;overflow-y:auto; }
   html.tema-claro .system-nav-drawer { background:#fff;border-right-color:#e5e7eb;box-shadow:14px 0 34px rgba(15,23,42,.18); }
@@ -819,8 +820,8 @@
   .system-nav-link svg { width:18px;height:18px;flex-shrink:0; }
   html.tema-claro .system-nav-section { color:#6b7280; }
   html.tema-claro .system-nav-link { color:#4b5563; }
-  html.tema-claro .system-nav-link:hover { background:#fff7ed;color:#c2410c; }
-  html.tema-claro .system-nav-link.is-current { background:#ffedd5;color:#c2410c; }
+  html.tema-claro .system-nav-link:hover { background:#eff6ff;color:#1d4ed8; }
+  html.tema-claro .system-nav-link.is-current { background:#dbeafe;color:#1d4ed8; }
   .prod-card,.item-card,.forma-btn { background:var(--pdv-card);border-color:var(--pdv-bd) !important; }
   .prod-card:hover,.prod-card.in-cart { border-color:var(--pdv-accent) !important;background:var(--pdv-accent-soft); }
   .prod-card-preco { color:var(--pdv-accent-text); }
@@ -837,8 +838,43 @@
   .totais-bar { background:var(--pdv-surface);border-color:var(--pdv-bd2); }
   .totais-bar-cell { border-color:var(--pdv-bd2); }
   .btn-fim { background:linear-gradient(135deg,#2563eb,#3b82f6) !important;box-shadow:0 9px 24px rgba(37,99,235,.24); }
-  html.tema-claro .btn-fim { background:linear-gradient(135deg,#f15a24,#f97316) !important;box-shadow:0 9px 24px rgba(241,90,36,.20); }
+  html.tema-claro .btn-fim { background:linear-gradient(135deg,#2563eb,#3b82f6) !important;box-shadow:0 9px 24px rgba(37,99,235,.20); }
   .caixa-menu,.print-menu { background:var(--pdv-pop) !important;border-color:var(--pdv-bd) !important; }
+  .client-avatar,.header-avatar { background:linear-gradient(135deg,#2563eb,#3b82f6) !important; }
+  .client-new-btn,.client-swap-btn { color:#bfdbfe !important;border-color:rgba(59,130,246,.35) !important;background:rgba(37,99,235,.10) !important; }
+  html.tema-claro .client-new-btn,html.tema-claro .client-swap-btn { color:#1d4ed8 !important;background:#eff6ff !important; }
+  .payment-heading-icon { background:rgba(37,99,235,.14) !important;border-color:rgba(96,165,250,.30) !important;color:#60a5fa !important; }
+  .payment-method-grid { display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:7px;margin-bottom:6px; }
+  .payment-locked { filter:blur(2px);opacity:.34;pointer-events:none;user-select:none; }
+  .topbar-menu-wrap { position:relative;flex-shrink:0; }
+  .pdv-popover { position:absolute;top:calc(100% + 8px);z-index:95;width:240px;padding:6px;background:var(--pdv-pop);border:1px solid var(--pdv-bd);border-radius:12px;box-shadow:0 18px 42px rgba(0,0,0,.36); }
+  .pdv-popover.right { right:0; }
+  .pdv-menu-item { width:100%;display:flex;align-items:center;gap:10px;padding:9px 10px;border:0;border-radius:8px;background:transparent;color:var(--pdv-t2);font:600 12px/1.25 inherit;text-align:left;text-decoration:none;cursor:pointer; }
+  .pdv-menu-item:hover { background:var(--pdv-hover);color:var(--pdv-t1); }
+  .header-avatar { width:26px;height:26px;border-radius:50%;display:flex;align-items:center;justify-content:center;overflow:hidden;color:#fff;font-size:11px;font-weight:800;flex-shrink:0; }
+  .header-avatar img { width:100%;height:100%;object-fit:cover; }
+  .sidebar-favorites-nav .sidebar-favoritable-link { position:relative;padding-right:34px; }
+  .sidebar-favorite-toggle { position:absolute;right:10px;color:#71717a;font-size:17px;line-height:1;cursor:pointer; }
+  .sidebar-favorite-toggle.is-favorite { color:#facc15; }
+  .sidebar-favorites-panel { margin:5px 0 8px;padding:7px;border:1px solid #34343a;border-radius:10px;background:#202024; }
+  .sidebar-favorites-heading { display:flex;gap:7px;padding:4px 5px 7px;color:#facc15;font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.08em; }
+  .sidebar-favorite-row { position:relative;display:flex;align-items:center; }
+  .sidebar-favorite-link { flex:1;padding:7px 28px 7px 8px;border-radius:7px;color:#dbeafe;font-size:12px;font-weight:650;text-decoration:none;white-space:nowrap;overflow:hidden;text-overflow:ellipsis; }
+  .sidebar-favorite-link:hover { background:#27272c; }
+  .sidebar-favorite-row .sidebar-favorite-toggle { right:7px; }
+  html.tema-claro .sidebar-favorites-panel { background:#eff6ff;border-color:#bfdbfe; }
+  html.tema-claro .sidebar-favorite-link { color:#1e3a8a; }
+  html.tema-claro .sidebar-favorite-link:hover { background:#dbeafe; }
+  .profile-photo-modal { width:min(420px,calc(100vw - 28px));padding:22px;background:var(--pdv-modal);border:1px solid var(--pdv-bd);border-radius:16px;box-shadow:0 24px 70px rgba(0,0,0,.48); }
+  .cash-open-shell { width:min(390px,calc(100vw - 28px));background:var(--pdv-modal);border:1px solid var(--pdv-bd4);border-radius:16px;padding:20px;box-shadow:0 24px 70px rgba(0,0,0,.5); }
+  .cash-open-control { width:100%;padding:11px 12px;background:var(--pdv-bg);border:1px solid var(--pdv-bd4);border-radius:9px;color:var(--pdv-t1);font-size:13px;outline:none; }
+  .cash-open-btn { padding:11px 14px;background:#2563eb;border:1px solid rgba(96,165,250,.38);border-radius:9px;color:#fff;font-size:13px;font-weight:800;cursor:pointer; }
+  .barcode-icon-wrap svg,.cart-header > svg { stroke:#60a5fa !important; }
+  #barcode-input + kbd { color:#60a5fa !important; }
+  .camera-scan-btn { color:#60a5fa !important;border-color:rgba(96,165,250,.40) !important;background:rgba(37,99,235,.10) !important; }
+  .cat-tab.active { background:#2563eb !important;color:#fff !important; }
+  .mobile-pdv-nav button.active { color:#60a5fa !important;background:rgba(37,99,235,.12) !important; }
+  @media (max-width:1200px) { .payment-method-grid { grid-template-columns:repeat(2,minmax(0,1fr)); } }
   @media (max-width:960px) {
     .brand-switch { padding:6px 8px; }
     .brand-switch .brand-clock { display:none; }
@@ -921,16 +957,17 @@
       </button>
     </div>
 
-    <div x-show="showSystemMenu" x-cloak x-transition.opacity.duration.140ms class="system-overlay"
+    <div id="sidebar-root" data-favorites-url="{% url 'core:menu-favoritos' %}" data-csrf-token="{{ csrf_token }}"
+         x-show="showSystemMenu" x-cloak x-transition.opacity.duration.140ms class="system-overlay"
          @click.self="showSystemMenu=false" @keydown.escape.window="showSystemMenu=false">
-      <aside class="system-nav-drawer"
+      <nav class="system-nav-drawer sidebar-favorites-nav"
              x-transition:enter="transition ease-out duration-160"
              x-transition:enter-start="-translate-x-full opacity-70"
              x-transition:enter-end="translate-x-0 opacity-100"
              x-transition:leave="transition ease-in duration-120"
              x-transition:leave-start="translate-x-0 opacity-100"
              x-transition:leave-end="-translate-x-full opacity-70">
-        <div class="system-nav-head">
+        <div class="system-nav-head sidebar-branch-logo-card">
           <span class="brand-mark"><span class="brand-wordmark-neutral">iNoova</span><span class="brand-wordmark-accent">Ted</span></span>
           <button type="button" class="topbar-icon-btn" @click="showSystemMenu=false" title="Recolher menu">
             <svg width="17" height="17" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 19l-7-7 7-7m8 14l-7-7 7-7"/></svg>
@@ -961,7 +998,7 @@
           <a href="{% url 'core:admin_parametros' %}" class="system-nav-link"><svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M12 6V4m0 16v-2m8-6h-2M6 12H4m12.95 4.95l-1.414-1.414M8.464 8.464L7.05 7.05M12 15a3 3 0 100-6 3 3 0 000 6z"/></svg>Parâmetros</a>
         {% endif %}
         <a href="{% url 'core:logout' %}" class="system-nav-link" style="margin-top:8px;color:#f87171;"><svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"/></svg>Sair</a>
-      </aside>
+      </nav>
     </div>
 
     <!-- Modos (seletor segmentado) -->
@@ -1037,9 +1074,20 @@
     <div style="flex:1;"></div>
 
     <!-- Usuário -->
-    <div class="topbar-chip">
-      <div style="width:24px;height:24px;border-radius:50%;background:linear-gradient(135deg,#f15a24,#ea580c);display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;color:#fff;" x-text="nomeUsuario.charAt(0).toUpperCase()"></div>
-      <span style="font-size:12px;font-weight:500;color:var(--pdv-t2);" x-text="nomeUsuario"></span>
+    <div class="topbar-menu-wrap" @click.outside="showUserMenu=false">
+      <button type="button" class="topbar-chip" @click="showUserMenu=!showUserMenu" style="cursor:pointer;">
+        <div class="header-avatar">{% if request.user.foto %}<img src="{{ request.user.foto.url }}" alt="Foto do usuário">{% else %}<span x-text="nomeUsuario.charAt(0).toUpperCase()"></span>{% endif %}</div>
+        <span style="font-size:12px;font-weight:600;color:var(--pdv-header-text);" x-text="nomeUsuario"></span>
+        <svg width="11" height="11" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.3" d="M19 9l-7 7-7-7"/></svg>
+      </button>
+      <div x-show="showUserMenu" x-cloak x-transition.opacity.duration.120ms class="pdv-popover">
+        <div style="padding:8px 10px 10px;border-bottom:1px solid var(--pdv-bd2);margin-bottom:5px;"><strong style="display:block;font-size:13px;color:var(--pdv-t1);" x-text="nomeUsuario"></strong><span style="font-size:11px;color:var(--pdv-t3);">{{ request.user.email }}</span></div>
+        <a class="pdv-menu-item" href="{{ dashboard_url }}">Tela inicial</a>
+        <button type="button" class="pdv-menu-item" @click="showUserMenu=false;fotoPerfilAberta=true">Minha foto</button>
+        {% if user.is_superuser or user.perfil.is_admin %}<a class="pdv-menu-item" href="{% url 'core:admin_usuario_list' %}">Usuários</a><a class="pdv-menu-item" href="{% url 'core:admin_perfil_list' %}">Perfis e permissões</a>{% endif %}
+        <button type="button" class="pdv-menu-item" @click="showUserMenu=false;pdvToggleTheme()">Mudar tema</button>
+        <a class="pdv-menu-item" href="{% url 'core:logout' %}" style="color:#f87171;">Sair</a>
+      </div>
     </div>
 
     <!-- Ícones de ação -->
@@ -1093,9 +1141,15 @@
     <div style="width:1px;height:28px;background:#1e1e30;margin:0 4px;"></div>
 
     <!-- Filial -->
-    <div class="topbar-chip" style="cursor:pointer;">
-      <span style="font-size:12px;font-weight:500;color:var(--pdv-t2);max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">{{ filial_ativa.nome_fantasia|default:filial_ativa.razao_social }}</span>
+    <div class="topbar-menu-wrap" @click.outside="showFilialMenu=false">
+      <button type="button" class="topbar-chip" @click="showFilialMenu=!showFilialMenu" style="cursor:pointer;">
+      <span style="font-size:12px;font-weight:600;color:var(--pdv-header-text);max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">{{ filial_ativa.nome_fantasia|default:filial_ativa.razao_social }}</span>
       <svg width="12" height="12" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
+      </button>
+      <div x-show="showFilialMenu" x-cloak x-transition.opacity.duration.120ms class="pdv-popover right">
+        {% for filial in filiais_disponiveis %}<a class="pdv-menu-item" href="{% url 'core:trocar-filial' filial.pk %}"><span style="width:8px;height:8px;border-radius:50%;background:{% if filial_ativa and filial.pk == filial_ativa.pk %}#22c55e{% else %}#71717a{% endif %};"></span>{{ filial.nome_fantasia|default:filial.razao_social }}</a>{% empty %}<span class="pdv-menu-item">Nenhuma filial disponível</span>{% endfor %}
+        {% if user.is_superuser %}<a class="pdv-menu-item" href="{% url 'core:selecionar-filial' %}">Trocar empresa</a>{% endif %}
+      </div>
     </div>
 
     <!-- Theme toggle -->
@@ -1578,8 +1632,8 @@
       <!-- Título Forma de Pagamento -->
       <div style="display:flex;align-items:center;justify-content:space-between;padding:12px 16px;border-bottom:1px solid #1a1a28;flex-shrink:0;margin-top:8px;">
         <div style="display:flex;align-items:center;gap:8px;">
-          <div style="width:28px;height:28px;border-radius:8px;background:rgba(241,90,36,.15);border:1px solid rgba(241,90,36,.25);display:flex;align-items:center;justify-content:center;">
-            <svg width="14" height="14" fill="none" stroke="#f97316" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z"/></svg>
+          <div class="payment-heading-icon" style="width:28px;height:28px;border-radius:8px;border:1px solid;display:flex;align-items:center;justify-content:center;">
+            <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z"/></svg>
           </div>
           <span style="font-size:13px;font-weight:700;color:#e5e5f0;">Forma de Pagamento</span>
         </div>
@@ -1589,8 +1643,8 @@
       </div>
 
       <!-- Grid de formas -->
-      <div style="padding:10px 12px;flex-shrink:0;border-bottom:1px solid #1a1a28;">
-        <div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:7px;margin-bottom:6px;">
+      <div :class="!sessao ? 'payment-locked' : ''" style="padding:10px 12px;flex-shrink:0;border-bottom:1px solid #1a1a28;">
+        <div class="payment-method-grid">
           <template x-for="forma in formasPagamentoVisiveis" :key="forma.id">
             <button @click="selecionarFormaPgto(forma)" class="forma-btn"
                     :title="forma.descricao"
@@ -1902,13 +1956,12 @@
        :style="showModalCaixa
          ? 'position:fixed;inset:0;z-index:50;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,.8);'
          : 'display:none;'">
-    <div style="width:100%;max-width:400px;background:#13131e;border:1px solid #2a2a3e;border-radius:16px;padding:24px;">
+    <div class="cash-open-shell">
 
       <!-- ── Tela: selecionar caixa ── -->
       <template x-if="!criandoCaixa">
         <div>
-          <h2 style="font-size:16px;font-weight:700;color:#fff;margin:0 0 4px;">🏧 Abertura do Caixa</h2>
-          <p style="font-size:12px;color:#555;margin:0 0 20px;">Informe o valor inicial em caixa</p>
+          <div style="display:flex;align-items:center;gap:11px;margin-bottom:18px;"><div class="payment-heading-icon" style="width:36px;height:36px;border:1px solid;border-radius:10px;display:flex;align-items:center;justify-content:center;">▣</div><div><h2 style="font-size:16px;font-weight:800;color:var(--pdv-t1);margin:0 0 3px;">Abertura do Caixa</h2><p style="font-size:11px;color:var(--pdv-t3);margin:0;">Selecione o caixa e informe o valor inicial.</p></div></div>
           <div style="display:flex;flex-direction:column;gap:12px;margin-bottom:20px;">
             <div>
               <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;">
@@ -1918,7 +1971,7 @@
                   + Novo caixa
                 </button>
               </div>
-              <select x-model="caixaSelecionada" style="width:100%;padding:10px 12px;background:#0a0a12;border:1px solid #2a2a3e;border-radius:8px;color:#e5e5f0;font-size:13px;outline:none;">
+              <select x-model="caixaSelecionada" class="cash-open-control">
                 <option value="">— Selecione —</option>
                 <template x-for="c in caixasDisponiveis" :key="c.id">
                   <option :value="c.id" x-text="'Caixa ' + c.numero + (c.descricao?' — '+c.descricao:'')"></option>
@@ -1927,17 +1980,16 @@
             </div>
             <div>
               <label style="font-size:12px;font-weight:600;color:#888;display:block;margin-bottom:6px;">Valor de Abertura (R$)</label>
-              <input type="number" x-model="valorAberturaCaixa" placeholder="0,00" min="0" step="0.01"
-                     style="width:100%;padding:10px 12px;background:#0a0a12;border:1px solid #2a2a3e;border-radius:8px;color:#fff;font-size:14px;font-weight:600;outline:none;">
+              <input type="number" x-model="valorAberturaCaixa" placeholder="0,00" min="0" step="0.01" class="cash-open-control" style="font-weight:700;">
             </div>
           </div>
           <div x-show="erroCaixa" x-text="erroCaixa" style="padding:8px 12px;background:rgba(239,68,68,.1);border:1px solid rgba(239,68,68,.3);border-radius:8px;color:#f87171;font-size:12px;margin-bottom:12px;"></div>
           <div style="display:flex;gap:10px;">
             <button @click="if(sessao)showModalCaixa=false;else window.location.href='/'"
                     style="flex:1;padding:10px;background:#1e1e2a;border:none;border-radius:8px;color:#666;font-size:13px;cursor:pointer;">Cancelar</button>
-            <button @click="abrirCaixa()" :disabled="!caixaSelecionada"
+            <button @click="abrirCaixa()" :disabled="!caixaSelecionada || caixaAbrindo"
                     :style="!caixaSelecionada?'opacity:.4;cursor:not-allowed;':''"
-                    style="flex:1;padding:10px;background:linear-gradient(135deg,#f15a24,#f97316);border:none;border-radius:8px;color:#fff;font-size:13px;font-weight:700;cursor:pointer;">Abrir Caixa</button>
+                    class="cash-open-btn" style="flex:1;" x-text="caixaAbrindo ? 'Abrindo...' : 'Abrir Caixa'"></button>
           </div>
         </div>
       </template>
@@ -1974,6 +2026,17 @@
         </div>
       </template>
 
+    </div>
+  </div>
+
+  <!-- Foto do perfil -->
+  <div x-show="fotoPerfilAberta" x-cloak @click.self="fotoPerfilAberta=false" @keydown.escape.window="fotoPerfilAberta=false"
+       style="position:fixed;inset:0;z-index:100;display:flex;align-items:center;justify-content:center;background:rgba(2,6,23,.82);backdrop-filter:blur(4px);">
+    <div class="profile-photo-modal">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:18px;"><div><h2 style="margin:0;color:var(--pdv-t1);font-size:16px;">Minha foto</h2><p style="margin:4px 0 0;color:var(--pdv-t3);font-size:11px;">Use JPG, PNG ou WebP de até 5 MB.</p></div><button type="button" class="topbar-icon-btn" @click="fotoPerfilAberta=false">✕</button></div>
+      <div style="display:flex;justify-content:center;margin-bottom:18px;"><div class="header-avatar" style="width:112px;height:112px;font-size:36px;">{% if request.user.foto %}<img src="{{ request.user.foto.url }}" alt="Foto atual">{% else %}<span x-text="nomeUsuario.charAt(0).toUpperCase()"></span>{% endif %}</div></div>
+      <form method="post" enctype="multipart/form-data" action="{% url 'core:atualizar_minha_foto' %}" style="display:flex;flex-direction:column;gap:10px;">{% csrf_token %}<input type="file" name="foto" accept="image/*" class="cash-open-control"><button type="submit" class="cash-open-btn">Salvar nova foto</button></form>
+      {% if request.user.foto %}<form method="post" action="{% url 'core:atualizar_minha_foto' %}" style="margin-top:9px;">{% csrf_token %}<input type="hidden" name="remover_foto" value="1"><button type="submit" class="pdv-menu-item" style="justify-content:center;color:#f87171;border:1px solid rgba(248,113,113,.25);">Remover foto</button></form>{% endif %}
     </div>
   </div>
 
@@ -3229,6 +3292,8 @@
 {% endblock %}
 
 {% block extra_scripts %}
+{{ request.user.menu_favoritos|default_if_none:''|json_script:"sidebar-favorites-data" }}
+<script src="{% static 'core/js/sidebar_favorites.js' %}"></script>
 <script>
 function pdv() {
   return {
@@ -3240,7 +3305,7 @@ function pdv() {
     vendaEdicaoOrigemId: null, vendaEdicaoOrigemNumero: null,
     get hojeISO() { return new Date().toISOString().slice(0,10); },
 
-    sessao: null, erroCaixa: '', caixaSelecionada: '', valorAberturaCaixa: '0',
+    sessao: null, erroCaixa: '', caixaSelecionada: '', valorAberturaCaixa: '0', caixaAbrindo: false,
     criandoCaixa: false, novoCaixaDescricao: '', criandoCaixaLoading: false,
 
     venda: {
@@ -3270,7 +3335,7 @@ function pdv() {
     showModalPendentes: false, showModalOrcamentos: false, showModalConfirmacao: false,
     showModalDescontoItem: false, showModalDesconto: false, showModalPrecoItem: false,
     showModalNovoCliente: false, showModalCaixaRel: false, showCaixaMenu: false, showImprimirMenu: false,
-    showSystemMenu: false,
+    showSystemMenu: false, showUserMenu: false, showFilialMenu: false, fotoPerfilAberta: false,
     showModalImpressao: false, vendaFinalizadaData: { id: null, numero: null }, _finalizando: false, compartilhandoCupom: false,
     showModalHistorico: false, historicoVendas: [],
     historicoCliente: [], produtosFrequentes: [], historicoClienteTotal: 0, historicoClienteCarregando: false, historicoClienteAberto: null,
@@ -4904,25 +4969,33 @@ ${pgtoHtml ? `<hr class="sep">${pgtoHtml}` : ''}
     async abrirCaixa() {
       this.erroCaixa='';
       if (!this.caixaSelecionada) { this.erroCaixa='Selecione um caixa.'; return; }
+      this.caixaAbrindo=true;
       try {
-        const d=await (await fetch('/pdv/api/caixa/abrir/',{method:'POST',headers:{'Content-Type':'application/json','X-CSRFToken':csrf()},
-          body:JSON.stringify({caixa_id:parseInt(this.caixaSelecionada),valor_abertura:parseFloat(this.valorAberturaCaixa)||0})})).json();
+        const r=await fetch('/pdv/api/caixa/abrir/',{method:'POST',credentials:'same-origin',headers:{'Accept':'application/json','Content-Type':'application/json','X-Requested-With':'XMLHttpRequest','X-CSRFToken':csrf()},
+          body:JSON.stringify({caixa_id:parseInt(this.caixaSelecionada),valor_abertura:parseFloat(this.valorAberturaCaixa)||0})});
+        const contentType=r.headers.get('content-type')||'';
+        if (!contentType.includes('application/json')) throw new Error(r.status===401||r.status===403?'Sua sessão expirou ou você não tem permissão. Recarregue a página.':`O servidor não conseguiu abrir o caixa (HTTP ${r.status}).`);
+        const d=await r.json();
         if (d.ok) {
           this.sessao={id:d.sessao_id,caixa_id:d.caixa?.id};
           this.showModalCaixa=false;
           this.toast_('Caixa aberto!','ok');
           this.$nextTick(()=>this.focarBuscaProduto());
         }
-        else this.erroCaixa=d.erro||'Erro ao abrir caixa';
-      } catch { this.erroCaixa='Erro de comunicação'; }
+        else this.erroCaixa=d.erro||'Não foi possível abrir o caixa.';
+      } catch (erro) { this.erroCaixa=erro.message||'Sem comunicação com o servidor. Verifique a conexão e tente novamente.'; }
+      finally { this.caixaAbrindo=false; }
     },
 
     async criarCaixa() {
       this.erroCaixa='';
       this.criandoCaixaLoading=true;
       try {
-        const d=await (await fetch('/pdv/api/caixa/criar/',{method:'POST',headers:{'Content-Type':'application/json','X-CSRFToken':csrf()},
-          body:JSON.stringify({descricao:this.novoCaixaDescricao.trim()})})).json();
+        const r=await fetch('/pdv/api/caixa/criar/',{method:'POST',credentials:'same-origin',headers:{'Accept':'application/json','Content-Type':'application/json','X-Requested-With':'XMLHttpRequest','X-CSRFToken':csrf()},
+          body:JSON.stringify({descricao:this.novoCaixaDescricao.trim()})});
+        const contentType=r.headers.get('content-type')||'';
+        if (!contentType.includes('application/json')) throw new Error(r.status===401||r.status===403?'Sua sessão expirou ou você não tem permissão. Recarregue a página.':`O servidor não conseguiu criar o caixa (HTTP ${r.status}).`);
+        const d=await r.json();
         if (d.ok) {
           this.caixasDisponiveis.push(d.caixa);
           this.caixaSelecionada=String(d.caixa.id);
@@ -4930,7 +5003,7 @@ ${pgtoHtml ? `<hr class="sep">${pgtoHtml}` : ''}
           this.novoCaixaDescricao='';
           this.toast_('Caixa '+d.caixa.numero+' criado e selecionado!','ok');
         } else { this.erroCaixa=d.erro||'Erro ao criar caixa'; }
-      } catch { this.erroCaixa='Erro de comunicação'; }
+      } catch (erro) { this.erroCaixa=erro.message||'Sem comunicação com o servidor. Verifique a conexão e tente novamente.'; }
       finally { this.criandoCaixaLoading=false; }
     },
 
@@ -5672,20 +5745,23 @@ ${pgtoHtml ? `<hr class="sep">${pgtoHtml}` : ''}
     },
 
     corFormaPgtoIconNovo(forma) {
+      const tipoBruto=(forma.tipo||'').toLowerCase();
+      const tipo=tipoBruto.replace('cartao_','').replace('deposito_em_conta','transferencia');
       const m={
         credito:'background:linear-gradient(135deg,#1e3a5f,#1e4a7f);color:#93c5fd;border:1px solid rgba(96,165,250,.2);',
         debito:'background:linear-gradient(135deg,#0a2e1a,#0a3a22);color:#6ee7b7;border:1px solid rgba(74,222,128,.2);',
-        pix:'background:linear-gradient(135deg,#1e0a4e,#2d1060);color:#c4b5fd;border:1px solid rgba(167,139,250,.25);',
+        pix:'background:linear-gradient(135deg,#083b3f,#0f766e);color:#99f6e4;border:1px solid rgba(45,212,191,.25);',
+        boleto:'background:linear-gradient(135deg,#27272a,#3f3f46);color:#d4d4d8;border:1px solid #52525b;',
         dinheiro:'background:linear-gradient(135deg,#0a2e1a,#163a22);color:#4ade80;border:1px solid rgba(74,222,128,.2);',
         transferencia:'background:linear-gradient(135deg,#0a2040,#0a2e52);color:#7dd3fc;border:1px solid rgba(56,189,248,.2);',
         cheque:'background:linear-gradient(135deg,#2e0a0a,#3a1010);color:#fca5a5;border:1px solid rgba(248,113,113,.2);',
         vale:'background:linear-gradient(135deg,#2a1810,#3a2210);color:#fdba74;border:1px solid rgba(251,146,60,.2);',
       };
-      return m[(forma.tipo||'').toLowerCase()]||'background:linear-gradient(135deg,#1e1e2a,#252538);color:#888;border:1px solid #2a2a3e;';
+      return m[tipo]||'background:linear-gradient(135deg,#1e1e2a,#252538);color:#888;border:1px solid #2a2a3e;';
     },
 
     svgFormaPgto(f) {
-      const t=(f.tipo||'').toLowerCase();
+      const t=(f.tipo||'').toLowerCase().replace('cartao_','').replace('deposito_em_conta','transferencia');
       const icons={
         credito:`<svg width="18" height="18" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z"/></svg>`,
         debito:`<svg width="18" height="18" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z"/></svg>`,

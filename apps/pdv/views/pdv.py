@@ -1,7 +1,7 @@
 import datetime
 import json
 from collections import defaultdict
-from decimal import Decimal
+from decimal import Decimal, InvalidOperation
 
 from django.db import transaction
 from django.db.models import Max, Q, Sum
@@ -1019,8 +1019,11 @@ def api_caixa_abrir(request):
         body = json.loads(request.body)
         caixa_id = int(body.get("caixa_id", 0))
         valor_abertura = Decimal(str(body.get("valor_abertura", "0")))
-    except (ValueError, KeyError):
+    except (ValueError, TypeError, KeyError, InvalidOperation):
         return JsonResponse({"erro": "Dados inválidos."}, status=400)
+
+    if not valor_abertura.is_finite() or valor_abertura < 0:
+        return JsonResponse({"erro": "Informe um valor de abertura válido."}, status=400)
 
     if _sessao_aberta(request):
         return JsonResponse({"erro": "Já existe uma sessão aberta para este usuário."}, status=400)

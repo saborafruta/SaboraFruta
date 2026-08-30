@@ -12,9 +12,22 @@ class PDVVisualBaseTests(SimpleTestCase):
         ).read_text(encoding='utf-8')
 
         self.assertIn('showSystemMenu', template)
-        self.assertIn('class="system-nav-drawer"', template)
+        self.assertIn('system-nav-drawer sidebar-favorites-nav', template)
         self.assertIn('brand-wordmark-neutral', template)
         self.assertIn("{% url 'core:dashboard' as dashboard_url %}", template)
+
+    def test_pdv_integra_favoritos_filial_perfil_e_pagamentos(self):
+        template = (
+            Path(__file__).resolve().parents[1] / 'templates' / 'pdv' / 'home.html'
+        ).read_text(encoding='utf-8')
+
+        self.assertIn('sidebar-favorites-data', template)
+        self.assertIn("static 'core/js/sidebar_favorites.js'", template)
+        self.assertIn("core:trocar-filial", template)
+        self.assertIn('fotoPerfilAberta', template)
+        self.assertIn('payment-method-grid', template)
+        self.assertIn("!sessao ? 'payment-locked'", template)
+        self.assertIn('Sua sessão expirou ou você não tem permissão', template)
 
     def test_base_hidrata_tema_antes_da_tela_aparecer(self):
         get_template('pdv_base.html')

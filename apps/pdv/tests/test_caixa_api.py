@@ -87,6 +87,18 @@ class CaixaPDVApiTests(TestCase):
         self.assertEqual(response.json()["erro"], "Selecione um caixa.")
         self.assertFalse(SessaoPDV.objects.exists())
 
+    def test_abrir_caixa_rejeita_valor_negativo(self):
+        caixa = Caixa.objects.create(filial=self.filial, numero=1, descricao="Caixa 1")
+
+        response = self.post_json(
+            "pdv:api_caixa_abrir",
+            {"caixa_id": caixa.pk, "valor_abertura": "-1"},
+        )
+
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.json()["erro"], "Informe um valor de abertura válido.")
+        self.assertFalse(SessaoPDV.objects.exists())
+
     def test_abre_caixa_recém_criado(self):
         criar = self.post_json("pdv:api_caixa_criar", {}).json()
         caixa_id = criar["caixa"]["id"]
