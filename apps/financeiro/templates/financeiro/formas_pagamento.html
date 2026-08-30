@@ -36,6 +36,12 @@
         <label class="block text-xs font-medium">Descrição {{ form.descricao|add_class:"form-input mt-1" }}</label>
         <label class="block text-xs font-medium">Tipo {% render_field form.tipo class+="form-input mt-1" x-model="tipo" %}</label>
       </div>
+      <div class="rounded border border-gray-200 p-3 dark:border-zinc-700">
+        <label class="inline-flex items-center gap-2 text-sm font-semibold" for="{{ form.exibir_no_pdv.id_for_label }}">
+          {{ form.exibir_no_pdv }} Exibir no PDV
+        </label>
+        <p id="id_exibir_no_pdv_helptext" class="mt-1 text-xs text-gray-500">Desmarque para ocultar no caixa. A forma continua disponível no Financeiro e os pagamentos anteriores não são alterados.</p>
+      </div>
       <div class="grid gap-3 md:grid-cols-3">
         <label class="block text-xs font-medium">Taxa ao receber (%) {{ form.taxa_administrativa|add_class:"form-input mt-1" }}</label>
         <label class="block text-xs font-medium">Taxa fixa ao receber (R$) {{ form.taxa_fixa|add_class:"form-input mt-1" }}</label>
@@ -119,6 +125,7 @@
             <th class="px-3 py-2 font-semibold">Tarifas</th>
             <th class="px-3 py-2 font-semibold">Crédito</th>
             <th class="px-3 py-2 font-semibold">Status</th>
+            <th class="px-3 py-2 font-semibold">PDV</th>
             <th class="px-3 py-2 text-right font-semibold">Ações</th>
           </tr>
         </thead>
@@ -131,6 +138,7 @@
             <td class="whitespace-nowrap px-3 py-2"><span class="text-green-700 dark:text-green-300">Receber {{ forma.taxa_administrativa|floatformat:2 }}%{% if forma.taxa_fixa > 0 %} + R$ {{ forma.taxa_fixa|floatformat:2 }}{% endif %}</span><span class="mx-1 text-gray-300">·</span><span class="font-semibold text-red-900 dark:text-red-300">Pagar R$ {{ forma.tarifa_pagamento_fixa|floatformat:2 }}</span></td>
             <td class="whitespace-nowrap px-3 py-2 text-gray-500">{% if forma.prazo_compensacao_dias_uteis %}{{ forma.prazo_compensacao_dias_uteis }}d úteis{% else %}Imediato{% endif %}</td>
             <td class="px-3 py-2">{% if forma.ativo %}<span class="soft-pill is-green">Ativa</span>{% else %}<span class="soft-pill is-amber">Inativa</span>{% endif %}</td>
+            <td class="whitespace-nowrap px-3 py-2">{% if forma.exibir_no_pdv %}Exibir{% else %}<span class="text-gray-500">Oculta</span>{% endif %}</td>
             <td class="px-3 py-1.5">
               <div class="flex justify-end gap-1">
                 <a href="?editar={{ forma.pk }}" class="btn-secondary px-2 py-1" title="Editar forma">Editar</a>
@@ -138,7 +146,7 @@
               </div>
             </td>
           </tr>
-          {% empty %}<tr><td colspan="7" class="px-4 py-8 text-center text-sm text-gray-500">Nenhuma forma cadastrada.</td></tr>{% endfor %}
+          {% empty %}<tr><td colspan="8" class="px-4 py-8 text-center text-sm text-gray-500">Nenhuma forma cadastrada.</td></tr>{% endfor %}
         </tbody>
       </table>
     </div>

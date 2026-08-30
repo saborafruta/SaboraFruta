@@ -661,6 +661,10 @@ class VendaPDVService:
                 )
             except FormaPagamento.DoesNotExist:
                 raise DadosInvalidosError("Forma de pagamento nao encontrada.")
+            if not forma.exibir_no_pdv:
+                raise DadosInvalidosError(
+                    "Esta forma de pagamento está oculta no PDV. Atualize o caixa e escolha outra forma."
+                )
 
             troco = max(Decimal("0.00"), valor_pgto - (valor_total - valor_pago))
             numero_parcelas = int(pgto.get("numero_parcelas") or pgto.get("parcelas") or 1)

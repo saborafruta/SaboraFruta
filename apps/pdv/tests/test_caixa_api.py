@@ -16,6 +16,20 @@ from apps.pdv.models import Caixa, SessaoPDV
 
 
 class CaixaPDVApiTests(TestCase):
+    def test_estado_oculta_formas_financeiras_sem_recriar_padroes(self):
+        FormaPagamento.objects.filter(empresa=self.empresa).update(exibir_no_pdv=False)
+        global_oculta = FormaPagamento.objects.create(
+            empresa=self.empresa, descricao='Financeiro global',
+            tipo=TipoFormaPagamento.TED, exibir_no_pdv=False,
+        )
+        total = FormaPagamento.objects.count()
+        self.assertEqual(self.client.get(reverse('pdv:api_estado')).json()['formas_pagamento'], [])
+        self.assertEqual(FormaPagamento.objects.count(), total)
+        global_oculta.exibir_no_pdv = True
+        global_oculta.save(update_fields=['exibir_no_pdv'])
+        ids = [f['id'] for f in self.client.get(reverse('pdv:api_estado')).json()['formas_pagamento']]
+        self.assertEqual(ids, [global_oculta.pk])
+
     @skipUnless(shutil.which('node'), 'Node.js necessário para testar o JavaScript do PDV')
     def test_inicializacao_e_tags_no_javascript_renderizado(self):
         response = self.client.get(reverse('pdv:home'))

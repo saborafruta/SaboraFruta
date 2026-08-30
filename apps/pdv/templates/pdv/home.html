@@ -1408,7 +1408,7 @@
                   <span class="prod-card-photo-empty"><strong>+</strong>FOTO</span>
                 </template>
               </button>
-              <button type="button" @click="adicionarItem(p)" class="prod-card-main">
+              <button type="button" @click="adicionarItem(p)" class="prod-card-main" :title="p.descricao">
                 <div style="flex:1;min-width:0;">
                   <div class="prod-card-nome" x-text="p.descricao"></div>
                   <div class="prod-card-preco" x-text="'R$ ' + fmt(p.preco)"></div>

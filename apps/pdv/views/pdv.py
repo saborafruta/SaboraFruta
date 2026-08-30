@@ -894,7 +894,7 @@ def api_estado(request):
             # podia receber por uma forma que nao e' desta unidade. Forma sem
             # filial e' da empresa toda e continua valendo aqui.
             FormaPagamento.objects.filter(
-                empresa=request.filial_ativa.empresa, ativo=True,
+                empresa=request.filial_ativa.empresa, ativo=True, exibir_no_pdv=True,
             ).filter(
                 Q(filial=request.filial_ativa) | Q(filial__isnull=True)
             ).annotate(maximo_parcelas=Max('taxas_parcelamento__parcelas')).values(

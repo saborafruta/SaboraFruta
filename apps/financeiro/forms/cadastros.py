@@ -391,6 +391,7 @@ class FormaPagamentoForm(forms.ModelForm):
             "requer_tef",
             "gera_parcelas",
             "movimenta_caixa",
+            "exibir_no_pdv",
             "prazo_liquidacao_dias",
             "prazo_compensacao_dias_uteis",
             "taxa_administrativa",

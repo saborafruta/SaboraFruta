@@ -6,6 +6,10 @@ from django.test import SimpleTestCase
 
 
 class PDVVisualBaseTests(SimpleTestCase):
+    def test_catalogo_mostra_nome_completo_no_hover(self):
+        template = (Path(__file__).resolve().parents[1] / 'templates/pdv/home.html').read_text(encoding='utf-8')
+        self.assertIn('class="prod-card-main" :title="p.descricao"', template)
+
     def test_logo_opcional_preserva_menu_normal(self):
         navigation = get_template('core/_sidebar_navigation.html')
         context = {

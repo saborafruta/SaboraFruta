@@ -21,6 +21,19 @@ from apps.produtos.models import (
 
 
 class VendaPDVServiceTests(TestCase):
+    def test_forma_oculta_nao_finaliza_venda_de_tela_desatualizada(self):
+        produto = self.criar_produto()
+        self.abastecer(produto, '10')
+        self.forma.exibir_no_pdv = False
+        self.forma.save(update_fields=['exibir_no_pdv'])
+        with self.assertRaisesMessage(DadosInvalidosError, 'oculta no PDV'):
+            VendaPDVService.finalizar_venda(
+                sessao=self.sessao, filial=self.filial, usuario=self.usuario,
+                itens=[{'produto_id': produto.pk, 'quantidade': '1', 'valor_unitario': '10.00'}],
+                pagamentos=[{'forma_id': self.forma.pk, 'valor': '10.00'}],
+            )
+        self.assertFalse(VendaPDV.objects.filter(sessao_pdv=self.sessao).exists())
+
     @classmethod
     def setUpTestData(cls):
         cls.empresa = Empresa.objects.create(

@@ -15,6 +15,35 @@ from apps.pdv.models import PagamentoVendaPDV, VendaPDV
 
 
 class FormasPagamentoFinanceiroTests(TestCase):
+    def test_exibir_no_pdv_padrao_e_edicao_sem_inativar(self):
+        forma = FormaPagamento.objects.create(
+            empresa=self.empresa, filial=self.filial,
+            descricao="Exclusiva financeiro", tipo=TipoFormaPagamento.TED,
+        )
+        self.assertTrue(forma.exibir_no_pdv)
+        url = reverse('financeiro:formas_pagamento')
+        self.assertContains(self.client.get(url, {'editar': forma.pk}), 'Exibir no PDV')
+        dados = {
+            'acao': 'salvar', 'id': forma.pk, 'descricao': forma.descricao,
+            'tipo': forma.tipo, 'ativo': 'on', 'movimenta_caixa': 'on',
+            'prazo_liquidacao_dias': '0', 'taxa_administrativa': '0', 'taxa_fixa': '0',
+        }
+        self.assertEqual(self.client.post(url, dados).status_code, 302)
+        forma.refresh_from_db()
+        self.assertFalse(forma.exibir_no_pdv)
+        self.assertTrue(forma.ativo)
+        self.assertTrue(forma.movimenta_caixa)
+        from apps.financeiro.forms.pagar import ContaPagarBulkPagamentoForm
+        financeiro = ContaPagarBulkPagamentoForm(filial=self.filial)
+        self.assertIn(forma, financeiro.fields['forma_pagamento'].queryset)
+        self.assertContains(self.client.get(url), 'Exclusiva financeiro')
+        self.assertNotIn(forma.pk, [f['id'] for f in self.client.get(reverse('pdv:api_estado')).json()['formas_pagamento']])
+        dados['exibir_no_pdv'] = 'on'
+        self.assertEqual(self.client.post(url, dados).status_code, 302)
+        forma.refresh_from_db()
+        self.assertTrue(forma.exibir_no_pdv)
+        self.assertIn(forma.pk, [f['id'] for f in self.client.get(reverse('pdv:api_estado')).json()['formas_pagamento']])
+
     @classmethod
     def setUpTestData(cls):
         cls.empresa = Empresa.objects.create(
@@ -232,6 +261,7 @@ class FormasPagamentoFinanceiroTests(TestCase):
             tipo=TipoFormaPagamento.CARTAO_CREDITO,
             codigo_sefaz="03",
             requer_tef=True,
+            exibir_no_pdv=False,
             taxa_administrativa=Decimal("2.50"),
             taxa_fixa=Decimal("0.40"),
         )
@@ -249,6 +279,7 @@ class FormasPagamentoFinanceiroTests(TestCase):
         )
         self.assertEqual(replica.tipo, TipoFormaPagamento.CARTAO_CREDITO)
         self.assertTrue(replica.requer_tef)
+        self.assertFalse(replica.exibir_no_pdv)
         self.assertEqual(replica.taxa_administrativa, Decimal("2.50"))
         self.assertEqual(replica.taxa_fixa, Decimal("0.40"))
 

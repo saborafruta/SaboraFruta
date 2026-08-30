@@ -21,6 +21,11 @@ class FormaPagamento(ActiveModel):
     codigo_sefaz = models.CharField(max_length=2, blank=True)
     requer_tef = models.BooleanField(default=False)
     gera_parcelas = models.BooleanField(default=False)
+    exibir_no_pdv = models.BooleanField(
+        "Exibir no PDV",
+        default=True,
+        help_text="Desmarque para usar esta forma somente no Financeiro, sem exibi-la no PDV.",
+    )
     movimenta_caixa = models.BooleanField(
         default=True,
         help_text=(

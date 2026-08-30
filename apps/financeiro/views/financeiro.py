@@ -257,6 +257,7 @@ def formas_pagamento(request):
                     "tarifa_pagamento_fixa": origem.tarifa_pagamento_fixa,
                     "conta_bancaria_padrao": origem.conta_bancaria_padrao,
                     "movimenta_caixa": origem.movimenta_caixa,
+                    "exibir_no_pdv": origem.exibir_no_pdv,
                     "ativo": origem.ativo,
                 }
                 if forma:
