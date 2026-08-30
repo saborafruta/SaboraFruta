@@ -3397,10 +3397,10 @@
       </div>
       <div class="dic-body" style="display:flex;flex-direction:column;gap:12px;">
         <p class="discount-help">Confirme com um administrador. O cancelamento estorna a venda e mantém o registro no histórico.</p>
-        <label class="cancel-auth-field">E-mail do administrador
+        <label class="cancel-auth-field">Login
           <input type="email" required autocomplete="off" x-model="cancelamentoHistorico.email" x-ref="cancelAdminEmail" :disabled="cancelamentoHistorico.enviando"></label>
         <label class="cancel-auth-field">Senha do administrador
-          <input type="password" required autocomplete="new-password" x-model="cancelamentoHistorico.senha" :disabled="cancelamentoHistorico.enviando"></label>
+          <input type="password" required autocomplete="new-password" x-ref="cancelAdminSenha" x-model="cancelamentoHistorico.senha" :disabled="cancelamentoHistorico.enviando"></label>
         <label class="cancel-auth-field">Motivo do cancelamento
           <textarea required :minlength="minimoMotivoCancelamento()" maxlength="1000" rows="3" x-model="cancelamentoHistorico.motivo" :placeholder="'Informe o motivo (mínimo '+minimoMotivoCancelamento()+' caracteres)'" :disabled="cancelamentoHistorico.enviando"></textarea></label>
         <p role="alert" class="history-cancel-button" x-show="cancelamentoHistorico.erro" x-text="cancelamentoHistorico.erro"></p>
@@ -3711,6 +3711,7 @@
 function pdv() {
   return {
     nomeUsuario: '{{ request.user.nome|default:request.user.email }}',
+    loginUsuario: '{{ request.user.email|escapejs }}',
     caixasDisponiveis: {{ caixas_json|safe }},
     linhas: {{ linhas_json|safe }},
     usuarioEhAdmin: {{ usuario_e_admin|yesno:"true,false" }},
@@ -4952,10 +4953,11 @@ function pdv() {
      a metade da pagina em vez da folha toda. */
   @page { size: ${a4 ? 'A4 portrait' : '80mm auto'}; margin: ${a4 ? '6mm' : '0'}; }
   @media print { body { margin:0; } }
+{% include "pdv/_thermal_receipt_css.html" %}
 </style>
 </head>
 <body>
-<div class="ticket">
+<div class="ticket${a4 ? '' : ' thermal-receipt'}">
 ${logoUrl ? `<div style="text-align:center;margin-bottom:10px;"><img src="${logoUrl}" alt="Logo ${filial}" style="max-height:${a4 ? '70px' : '130px'};max-width:${a4 ? '180px' : '260px'};object-fit:contain;" /></div>` : ''}
 <h1>${filial}</h1>
 ${filialEndereco ? `<div class="sub">${filialEndereco}${filialNumero ? ', '+filialNumero : ''}${filialBairro ? ' - '+filialBairro : ''}</div>` : ''}
@@ -5398,10 +5400,11 @@ ${pgtoHtml ? `<hr class="sep">${pgtoHtml}` : ''}
   .footer { text-align:center; margin-top:10px; font-size:10px; color:#000; font-weight:700; }
   @page { size: 80mm auto; margin: 0; }
   @media print { body { margin:0; } }
+{% include "pdv/_thermal_receipt_css.html" %}
 </style>
 </head>
 <body>
-<div class="ticket">
+<div class="ticket thermal-receipt">
 ${logoUrlRP ? `<div style="text-align:center;margin-bottom:10px;"><img src="${logoUrlRP}" style="max-height:130px;max-width:260px;object-fit:contain;" /></div>` : ''}
 <h1>${filial}</h1>
 ${filialEndereco ? `<div class="sub">${filialEndereco}${filialNumero ? ', '+filialNumero : ''}${filialBairro ? ' - '+filialBairro : ''}</div>` : ''}
@@ -6108,8 +6111,8 @@ ${pgtoHtml ? `<hr class="sep">${pgtoHtml}` : ''}
 
     abrirCancelamentoHistorico(venda) {
       if(venda.status==='cancelada') return;
-      this.cancelamentoHistorico={venda,email:'',senha:'',motivo:'',erro:'',enviando:false};
-      this.$nextTick(()=>this.$refs.cancelAdminEmail?.focus());
+      this.cancelamentoHistorico={venda,email:this.loginUsuario || '',senha:'',motivo:'',erro:'',enviando:false};
+      this.$nextTick(()=> (this.cancelamentoHistorico.email ? this.$refs.cancelAdminSenha : this.$refs.cancelAdminEmail)?.focus());
     },
     fecharCancelamentoHistorico() {
       if(this.cancelamentoHistorico.enviando) return;

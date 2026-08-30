@@ -65,7 +65,10 @@ const respond = (payload, ok = true) => {
   cancellation.$refs = {};
   cancellation.historicoCliente = [{id:20}];
   cancellation.historicoVendas = [{id:20,status:'finalizada'}];
+  cancellation.loginUsuario = 'operador@example.com';
   cancellation.abrirCancelamentoHistorico(cancellation.historicoVendas[0]);
+  assert.equal(cancellation.cancelamentoHistorico.email,'operador@example.com');
+  assert.equal(cancellation.cancelamentoHistorico.senha,'','Prefill must never authorize or populate a password');
   assert.equal(cancellation.minimoMotivoCancelamento(),5);
   cancellation.cancelamentoHistorico.venda.documento_fiscal_status='autorizada';
   assert.equal(cancellation.minimoMotivoCancelamento(),15);

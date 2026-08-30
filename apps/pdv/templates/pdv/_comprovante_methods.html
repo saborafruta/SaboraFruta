@@ -141,6 +141,7 @@ body.a4 td{font-size:11px;padding:5px 0}
 body.a4 .total{font-size:15px}
 body.a4 .footer{font-size:9px}
 }
+{% include "pdv/_thermal_receipt_css.html" %}
 </style>
 <style>.line strong{white-space:nowrap;flex-shrink:0}.line>span{min-width:0;overflow-wrap:anywhere}</style>
 <style id="pagesize">@page{size:80mm auto;margin:2mm 3mm}</style>
@@ -150,7 +151,7 @@ body.a4 .footer{font-size:9px}
   <button id="btn-a4" onclick="imprimirComo('a4')">Imprimir em A4</button>
   <button class="secondary" onclick="window.close()">Fechar</button>
 </div>
-<main class="receipt">
+<main class="receipt thermal-receipt">
 ${logoUrl ? `<div class="logo"><img src="${esc(logoUrl)}" alt="Logo da empresa" onerror="this.parentElement.remove()"></div>` : ''}
 <h1>${esc(filial)}</h1>
 ${filialEndereco ? `<div class="sub">${esc(filialEndereco)}${filialNumero ? ', '+esc(filialNumero) : ''}${filialBairro ? ' - '+esc(filialBairro) : ''}</div>` : ''}
