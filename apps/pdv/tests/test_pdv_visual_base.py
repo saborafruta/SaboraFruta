@@ -5,6 +5,23 @@ from django.test import SimpleTestCase
 
 
 class PDVVisualBaseTests(SimpleTestCase):
+    def test_pagamento_neutro_troco_e_contraste_claro(self):
+        template = (Path(__file__).resolve().parents[1] / 'templates/pdv/home.html').read_text(encoding='utf-8')
+        self.assertIn('background:var(--pdv-selection-bg)', template)
+        self.assertIn('class="payment-record"', template)
+        self.assertIn('.payment-change { color:var(--pdv-warning);', template)
+        self.assertIn(':aria-pressed="formaPgtoSelecionada?.id===forma.id"', template)
+        self.assertIn('html.tema-claro .btn-fim:disabled { opacity:1 !important;', template)
+        claro = template.split('html.tema-claro body {', 1)[1].split('}', 1)[0]
+        self.assertIn('--pdv-paid:#15803d;', claro)
+        self.assertIn('--pdv-warning:#b45309;', claro)
+        def luminance(hex_color):
+            channels = [int(hex_color[i:i + 2], 16) / 255 for i in (1, 3, 5)]
+            linear = [c / 12.92 if c <= 0.04045 else ((c + 0.055) / 1.055) ** 2.4 for c in channels]
+            return sum(c * w for c, w in zip(linear, (0.2126, 0.7152, 0.0722)))
+        for fg, bg in [('#15803d', '#ffffff'), ('#b45309', '#ffffff'), ('#475569', '#e2e8f0')]:
+            self.assertGreaterEqual((luminance(bg) + .05) / (luminance(fg) + .05), 4.5)
+
     def test_tema_claro_replica_cabecalho_laranja_e_pagamento_sem_cores_fixas(self):
         template = (Path(__file__).resolve().parents[1] / 'templates/pdv/home.html').read_text(encoding='utf-8')
         claro = template.split('html.tema-claro body {', 1)[1].split('}', 1)[0]

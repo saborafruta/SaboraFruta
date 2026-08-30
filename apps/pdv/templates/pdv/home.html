@@ -109,8 +109,7 @@
                 overflow:hidden; line-height:1.2; max-width:100%; width:100%;
                 overflow-wrap:anywhere; text-align:center; }
   .forma-btn:hover { background: var(--pdv-hover); border-color: var(--pdv-bd); color: var(--pdv-t7); }
-  .forma-btn.selected { border-color:#2563eb; background:rgba(37,99,235,.12);
-                        color: var(--pdv-t1); box-shadow:0 0 0 1px rgba(37,99,235,.25),0 4px 16px rgba(37,99,235,.15); }
+  .forma-btn.selected { color:var(--pdv-t1);font-weight:800; }
   .forma-icon { width:38px; height:38px; border-radius:11px; display:flex; align-items:center; justify-content:center; flex-shrink:0; font-size:18px; transition:.2s; }
   .btn-action { display:flex; align-items:center; gap:6px; padding:6px 12px; border-radius:8px;
                 border:1px solid var(--pdv-bd); background:transparent; color: var(--pdv-t2);
@@ -722,6 +721,9 @@
     --pdv-accent-border:rgba(96,165,250,.32);
     --pdv-pgto-boleto-bg:linear-gradient(135deg,var(--pdv-card),var(--pdv-hover));
     --pdv-warning:#facc15;
+    --pdv-paid:#4ade80;
+    --pdv-selection-bg:#303034;
+    --pdv-selection-border:#a1a1aa;
     --pdv-pgto-boleto-fg:var(--pdv-t3);
     --pdv-pgto-boleto-bd:var(--pdv-bd4);
     --pdv-pgto-credito-bg:linear-gradient(135deg,#1e3a5f,#1e4a7f);
@@ -798,6 +800,9 @@
     --pdv-accent-border:rgba(37,99,235,.28);
     --pdv-pgto-boleto-bg:#f8fafc;
     --pdv-warning:#b45309;
+    --pdv-paid:#15803d;
+    --pdv-selection-bg:#f4f4f5;
+    --pdv-selection-border:#52525b;
     --pdv-pgto-boleto-fg:#111827;
     --pdv-pgto-boleto-bd:#cbd5e1;
     --pdv-pgto-credito-bg:#eff6ff;
@@ -895,7 +900,18 @@
   .btn-action:hover { background:var(--pdv-hover);color:var(--pdv-t1); }
   .forma-btn { min-height:74px;border-width:1px;box-shadow:0 1px 2px rgba(15,23,42,.04); }
   .forma-btn:hover { background:var(--pdv-hover);border-color:var(--pdv-bd4) !important; }
-  .forma-btn.selected { border-color:var(--pdv-accent) !important;background:var(--pdv-accent-soft);box-shadow:0 0 0 1px var(--pdv-accent-border),0 4px 16px rgba(37,99,235,.14); }
+  .forma-btn.selected { border-color:var(--pdv-selection-border) !important;background:var(--pdv-selection-bg);box-shadow:inset 0 0 0 1px var(--pdv-selection-border); }
+  .forma-btn:focus-visible { outline:2px solid var(--pdv-selection-border);outline-offset:2px; }
+  .payment-record { display:flex;align-items:center;gap:10px;padding:10px 14px;margin:0 10px 6px;background:var(--pdv-card);border:1px solid var(--pdv-bd);border-radius:10px; }
+  .payment-paid { color:var(--pdv-paid);font-weight:800; }
+  .payment-change { color:var(--pdv-warning);font-weight:700; }
+  .payment-more { width:100%;padding:8px;background:var(--pdv-card);border:1px solid var(--pdv-bd4);border-radius:9px;color:var(--pdv-t3);font-size:11px;font-weight:600;cursor:pointer;text-align:center; }
+  .payment-more:hover { background:var(--pdv-hover);color:var(--pdv-t1); }
+  html.tema-claro .btn-action,html.tema-claro .btn-rodape,html.tema-claro .payment-options summary,html.tema-claro .prod-card-nome { font-weight:600; }
+  html.tema-claro .barcode-input::placeholder,html.tema-claro .input-pdv::placeholder { color:#64748b;opacity:1; }
+  html.tema-claro #pdv-right-panel .totais-bar-label { font-size:10px;font-weight:700;color:#475569; }
+  html.tema-claro .btn-fim:disabled { opacity:1 !important;background:#e2e8f0 !important;color:#475569;border:1px solid #94a3b8;box-shadow:none; }
+  html.tema-claro .btn-rodape-cancel { color:#b91c1c !important;border-color:#fca5a5 !important;font-weight:600; }
   .totais-bar { background:var(--pdv-surface);border-color:var(--pdv-bd2); }
   .totais-bar-cell { border-color:var(--pdv-bd2); }
   .btn-fim { background:linear-gradient(135deg,#2563eb,#3b82f6) !important;box-shadow:0 9px 24px rgba(37,99,235,.24); }
@@ -909,7 +925,6 @@
   html.tema-claro .barcode-icon-wrap svg,html.tema-claro .cart-header > svg { stroke:#2563eb !important; }
   html.tema-claro #barcode-input + kbd { color:#2563eb !important; }
   html.tema-claro #pdv-right-panel .totais-bar-total { color:#2563eb; }
-  html.tema-claro #pdv-right-panel .totais-bar-label { color:#4f46e5; }
   html.tema-claro .payment-empty { color:#94a3b8; }
   html.tema-claro .payment-empty-icon { color:#94a3b8;background:#fff; }
   .cart-empty-icon { stroke:#3f3f46; }
@@ -1756,8 +1771,8 @@
           </div>
           <span style="font-size:13px;font-weight:700;color:#e5e5f0;">Forma de Pagamento</span>
         </div>
-        <span x-show="venda.pagamentos.length>0" x-cloak
-              style="font-size:10px;padding:2px 8px;background:rgba(34,197,94,.12);border:1px solid rgba(34,197,94,.25);border-radius:20px;color:#4ade80;font-weight:700;"
+        <span x-show="venda.pagamentos.length>0" x-cloak class="payment-paid"
+              style="font-size:10px;padding:2px 8px;background:rgba(34,197,94,.12);border:1px solid rgba(34,197,94,.25);border-radius:20px;"
               x-text="venda.pagamentos.length+' lançado(s)'"></span>
       </div>
 
@@ -1767,6 +1782,7 @@
         <div class="payment-method-grid">
           <template x-for="forma in formasPagamentoVisiveis" :key="forma.id">
             <button @click="selecionarFormaPgto(forma)" class="forma-btn"
+                    :aria-pressed="formaPgtoSelecionada?.id===forma.id"
                     :title="forma.descricao"
                     :class="formaPgtoSelecionada?.id===forma.id ? 'selected' : ''">
               <div class="forma-icon" :style="corFormaPgtoIconNovo(forma)">
@@ -1780,10 +1796,7 @@
         <!-- QUANTAS FICARAM DE FORA, e nao so' "mais opcoes": o botao antigo
              nao dizia se escondia uma forma ou oito, e quem procurava o Pix
              nao sabia se valia a pena clicar. -->
-        <button x-show="formasPagamento.length>6" x-cloak @click="mostrarMaisFormas=!mostrarMaisFormas"
-                style="width:100%;padding:7px;background:transparent;border:1px solid #1e1e30;border-radius:9px;color:#8a8aa0;font-size:11px;font-weight:700;cursor:pointer;text-align:center;display:flex;align-items:center;justify-content:center;gap:4px;transition:.15s;"
-                onmouseover="this.style.borderColor='#2563eb';this.style.color='#e5e5f0'"
-                onmouseout="this.style.borderColor='#1e1e30';this.style.color='#8a8aa0'"
+        <button x-show="formasPagamento.length>6" x-cloak @click="mostrarMaisFormas=!mostrarMaisFormas" class="payment-more"
                 x-text="mostrarMaisFormas
                   ? '▲ Menos opções'
                   : ('▾ Mais ' + (formasPagamento.length - 6) + ' forma(s) de pagamento')"></button>
@@ -1807,8 +1820,8 @@
                       style="padding:11px 18px;background:linear-gradient(135deg,#16a34a,#22c55e);border:none;border-radius:10px;color:#fff;font-size:14px;font-weight:800;cursor:pointer;white-space:nowrap;box-shadow:0 4px 12px rgba(34,197,94,.3);">↵ OK</button>
             </div>
             <div style="display:flex;gap:5px;margin-top:8px;">
-              <button @click="valorPgto=fmt2(venda.restante)"
-                      style="flex:1;padding:7px 4px;background:rgba(74,222,128,.08);border:1px solid rgba(74,222,128,.25);border-radius:8px;color:#4ade80;font-size:11px;font-weight:700;cursor:pointer;"
+              <button @click="valorPgto=fmt2(venda.restante)" class="payment-paid"
+                      style="flex:1;padding:7px 4px;background:rgba(74,222,128,.08);border:1px solid rgba(74,222,128,.25);border-radius:8px;font-size:11px;font-weight:700;cursor:pointer;"
                       x-text="'Exato\nR$'+fmt(venda.restante)"></button>
               <template x-for="v in [50,100,200]" :key="v">
                 <button @click="valorPgto=String(v)" class="payment-quick-value"
@@ -1921,16 +1934,16 @@
         </div>
 
         <template x-for="pgto in venda.pagamentos" :key="pgto._id">
-          <div style="display:flex;align-items:center;gap:10px;padding:10px 14px;margin:0 10px 6px;background:#13131e;border:1px solid #1e1e30;border-radius:10px;">
+          <div class="payment-record">
             <div class="forma-icon" :style="corFormaPgtoIconNovo({tipo:pgto.forma_tipo})" style="width:32px;height:32px;border-radius:8px;font-size:14px;">
               <span x-html="svgFormaPgto({tipo:pgto.forma_tipo,descricao:pgto.forma_descricao})"></span>
             </div>
             <div style="flex:1;min-width:0;">
               <div style="font-size:13px;font-weight:600;color:var(--pdv-t1);" x-text="pgto.forma_descricao"></div>
-              <div x-show="pgto.troco>0" style="font-size:11px;color:#f59e0b;margin-top:1px;font-weight:600;"
+              <div x-show="pgto.troco>0" class="payment-change" style="font-size:12px;margin-top:1px;"
                    x-text="'Troco: R$ ' + fmt(pgto.troco)" x-cloak></div>
             </div>
-            <span style="font-size:14px;font-weight:800;color:#4ade80;" x-text="'R$ ' + fmt(pgto.valor)"></span>
+            <span class="payment-paid" style="font-size:14px;" x-text="'R$ ' + fmt(pgto.valor)"></span>
             <button @click="removerPagamento(pgto)"
                     style="width:24px;height:24px;border-radius:6px;background:rgba(239,68,68,.08);border:1px solid rgba(239,68,68,.2);color:#ef4444;cursor:pointer;font-size:12px;display:flex;align-items:center;justify-content:center;flex-shrink:0;transition:.15s;"
                     onmouseover="this.style.background='rgba(239,68,68,.2)'" onmouseout="this.style.background='rgba(239,68,68,.08)'">✕</button>
@@ -1985,7 +1998,7 @@
           </template>
           <!-- Troco destaque -->
           <template x-if="trocoTotal>0">
-            <div style="display:flex;justify-content:space-between;font-size:13px;font-weight:700;color:#f59e0b;margin-top:6px;padding-top:6px;border-top:1px solid var(--pdv-bd2);">
+            <div class="payment-change" style="display:flex;justify-content:space-between;font-size:14px;margin-top:6px;padding-top:6px;border-top:1px solid var(--pdv-bd2);">
               <span>💰 Troco:</span>
               <span x-text="'R$ ' + fmt(trocoTotal)"></span>
             </div>
@@ -2000,12 +2013,12 @@
           </div>
           <div class="totais-bar-cell">
             <span class="totais-bar-label">PAGO</span>
-            <span style="font-size:14px;font-weight:800;color:#22c55e;" x-text="'R$ ' + fmt(venda.valor_pago)"></span>
+            <span class="payment-paid" style="font-size:14px;" x-text="'R$ ' + fmt(venda.valor_pago)"></span>
           </div>
           <div class="totais-bar-cell">
             <span class="totais-bar-label">RESTANTE</span>
             <span style="font-size:14px;font-weight:800;"
-                  :style="venda.restante>0.001?'color:var(--pdv-warning);':'color:#22c55e;'"
+                  :style="venda.restante>0.001?'color:var(--pdv-warning);':'color:var(--pdv-paid);'"
                   x-text="'R$ ' + fmt(venda.restante)"></span>
           </div>
         </div>
@@ -2032,7 +2045,7 @@
               Salvar Pendente (F8)
             </button>
             <button @click="cancelarVenda()"
-                    class="btn-rodape"
+                    class="btn-rodape btn-rodape-cancel"
                     style="background:rgba(239,68,68,.08);border:1px solid rgba(239,68,68,.25);color:#f87171;"
                     onmouseover="this.style.background='rgba(239,68,68,.16)'" onmouseout="this.style.background='rgba(239,68,68,.08)'">
               <svg width="13" height="13" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
@@ -2684,7 +2697,7 @@
         <div style="display:flex;justify-content:space-between;font-size:13px;margin-bottom:8px;"><span style="color:#666;">Itens</span><span style="color:#e5e5f0;font-weight:600;" x-text="venda.itens.length"></span></div>
         <div style="display:flex;justify-content:space-between;font-size:15px;font-weight:800;border-top:1px solid #1e1e30;padding-top:8px;"><span style="color:#666;">Total</span><span style="color:#fff;" x-text="'R$ '+fmt(venda.total)"></span></div>
         <template x-if="trocoTotal>0">
-          <div style="display:flex;justify-content:space-between;font-size:13px;font-weight:700;margin-top:8px;color:#f59e0b;"><span>Troco</span><span x-text="'R$ '+fmt(trocoTotal)"></span></div>
+          <div class="payment-change" style="display:flex;justify-content:space-between;font-size:14px;margin-top:8px;"><span>Troco</span><span x-text="'R$ '+fmt(trocoTotal)"></span></div>
         </template>
       </div>
       <template x-if="venda.observacao && venda.observacao.trim()">
