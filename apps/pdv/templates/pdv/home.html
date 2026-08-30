@@ -669,6 +669,181 @@
     .prod-card-qty span { min-width:28px; }
     #pdv-right-panel .forma-nome { -webkit-line-clamp:3; }
   }
+
+  /* Identidade visual portada do PDV do projeto Dev Edu.
+     Os seletores usam a estrutura atual para manter todos os fluxos novos. */
+  body {
+    --pdv-bg:#161618;
+    --pdv-surface:#18181b;
+    --pdv-card:#202024;
+    --pdv-pop:#202024;
+    --pdv-modal:#18181b;
+    --pdv-row:#202024;
+    --pdv-divider:#2d2d33;
+    --pdv-hover:#27272c;
+    --pdv-hover2:#27272c;
+    --pdv-hover3:#2d2d33;
+    --pdv-hover4:#27272c;
+    --pdv-bd:#34343a;
+    --pdv-bd2:#2d2d33;
+    --pdv-bd3:#34343a;
+    --pdv-bd4:#51515b;
+    --pdv-t1:#f8fafc;
+    --pdv-t2:#e4e4e7;
+    --pdv-t3:#a1a1aa;
+    --pdv-t4:#a1a1aa;
+    --pdv-t5:#f8fafc;
+    --pdv-t6:#71717a;
+    --pdv-t7:#e4e4e7;
+    --pdv-t8:#f8fafc;
+    --pdv-t9:#d4d4d8;
+    --pdv-tdim:#71717a;
+    --pdv-tdim2:#51515b;
+    --pdv-tdim3:#3f3f46;
+    --pdv-tfaint:#71717a;
+    --pdv-tmuted:#a1a1aa;
+    --pdv-tmid:#a1a1aa;
+    --pdv-tanon:#71717a;
+    --pdv-tavatar:#93c5fd;
+    --pdv-scroll:#51515b;
+    --pdv-focus:#3b82f6;
+    --pdv-focus-ring:rgba(37,99,235,.22);
+    --pdv-header-bg:radial-gradient(circle at 44% -80%,rgba(59,130,246,.22),transparent 42%),linear-gradient(90deg,#0f172a 0%,#172554 42%,#1e3a8a 58%,#0f172a 100%);
+    --pdv-header-border:rgba(59,130,246,.20);
+    --pdv-header-control-bg:#242426;
+    --pdv-header-control-border:#34343a;
+    --pdv-header-control-hover:#2e2e30;
+    --pdv-header-text:#f8fafc;
+    --pdv-header-muted:#dbeafe;
+    --pdv-accent:#2563eb;
+    --pdv-accent-text:#93c5fd;
+    --pdv-accent-soft:rgba(37,99,235,.16);
+    --pdv-accent-border:rgba(96,165,250,.32);
+  }
+  html.tema-claro body {
+    --pdv-bg:#f3f6fb;
+    --pdv-surface:#ffffff;
+    --pdv-card:#ffffff;
+    --pdv-pop:#ffffff;
+    --pdv-modal:#ffffff;
+    --pdv-row:#f8fafc;
+    --pdv-divider:#e5e7eb;
+    --pdv-hover:#f6f8fb;
+    --pdv-hover2:#eff6ff;
+    --pdv-hover3:#eff6ff;
+    --pdv-hover4:#f8fafc;
+    --pdv-bd:#cbd5e1;
+    --pdv-bd2:#dbe3ef;
+    --pdv-bd3:#dbe3ef;
+    --pdv-bd4:#94a3b8;
+    --pdv-t1:#111827;
+    --pdv-t2:#334155;
+    --pdv-t3:#64748b;
+    --pdv-t4:#64748b;
+    --pdv-t5:#111827;
+    --pdv-t6:#64748b;
+    --pdv-t7:#334155;
+    --pdv-t8:#111827;
+    --pdv-t9:#334155;
+    --pdv-tdim:#94a3b8;
+    --pdv-tdim2:#cbd5e1;
+    --pdv-tdim3:#dbe3ef;
+    --pdv-tfaint:#64748b;
+    --pdv-tmuted:#64748b;
+    --pdv-tmid:#64748b;
+    --pdv-tanon:#94a3b8;
+    --pdv-tavatar:#c2410c;
+    --pdv-scroll:#cbd5e1;
+    --pdv-focus:#f15a24;
+    --pdv-focus-ring:rgba(241,90,36,.20);
+    --pdv-header-bg:radial-gradient(circle at 22% -60%,rgba(255,255,255,.22),transparent 42%),linear-gradient(90deg,#f15a24 0%,#e8824a 50%,#c75a22 76%,#542412 100%);
+    --pdv-header-border:rgba(255,255,255,.16);
+    --pdv-header-control-bg:rgba(255,255,255,.16);
+    --pdv-header-control-border:rgba(255,255,255,.30);
+    --pdv-header-control-hover:rgba(255,255,255,.23);
+    --pdv-header-text:#ffffff;
+    --pdv-header-muted:rgba(255,255,255,.90);
+    --pdv-accent:#f15a24;
+    --pdv-accent-text:#c2410c;
+    --pdv-accent-soft:rgba(241,90,36,.10);
+    --pdv-accent-border:rgba(241,90,36,.28);
+  }
+  #pdv-app { background:var(--pdv-bg) !important; color:var(--pdv-t1); }
+  #pdv-app > .pdv-topbar {
+    background:var(--pdv-header-bg) !important;
+    border-bottom:1px solid var(--pdv-header-border) !important;
+    box-shadow:0 12px 30px rgba(15,23,42,.28);
+    color:var(--pdv-header-text);
+  }
+  #pdv-left-panel,#pdv-center-panel,#pdv-right-panel { background:var(--pdv-surface) !important; }
+  #pdv-left-panel { border-right-color:var(--pdv-bd2) !important; }
+  #pdv-right-panel { border-left-color:var(--pdv-bd2) !important; }
+  .topbar-icon-btn,.topbar-btn {
+    color:var(--pdv-header-muted) !important;
+    border-color:var(--pdv-header-control-border) !important;
+    background:var(--pdv-header-control-bg) !important;
+  }
+  .topbar-icon-btn:hover,.topbar-btn:hover {
+    color:var(--pdv-header-text) !important;
+    background:var(--pdv-header-control-hover) !important;
+  }
+  .pdv-topbar .mode-seg { background:var(--pdv-header-control-bg);border-color:var(--pdv-header-control-border); }
+  .pdv-topbar .mode-btn { color:var(--pdv-header-muted); }
+  .pdv-topbar .mode-btn:hover { background:var(--pdv-header-control-hover);color:var(--pdv-header-text); }
+  .pdv-topbar .mode-btn.act-venda,.pdv-topbar .mode-btn.act-delivery,.pdv-topbar .mode-btn.act-orcamento {
+    background:#fff;color:#173b8f;box-shadow:none;
+  }
+  html.tema-claro .pdv-topbar .mode-btn.act-venda,
+  html.tema-claro .pdv-topbar .mode-btn.act-delivery,
+  html.tema-claro .pdv-topbar .mode-btn.act-orcamento { background:#fff3e8;color:#c2410c; }
+  .brand-switch {
+    display:flex;align-items:center;gap:12px;min-width:0;padding:6px 10px 6px 9px;
+    border:1px solid var(--pdv-header-control-border);border-radius:12px;
+    background:var(--pdv-header-control-bg);color:var(--pdv-header-text);cursor:pointer;
+  }
+  .brand-mark { display:flex;align-items:baseline;font:700 20px/1 "Space Grotesk",Inter,sans-serif;letter-spacing:-1px; }
+  .brand-wordmark-neutral { color:#f8fafc; }
+  .brand-wordmark-accent { color:#60a5fa; }
+  html.tema-claro .brand-switch { background:#fff;border-color:rgba(255,255,255,.68);color:#101010; }
+  html.tema-claro .brand-wordmark-neutral { color:#101010; }
+  html.tema-claro .brand-wordmark-accent { color:#f97316; }
+  .system-overlay { position:fixed;inset:0;z-index:80;display:flex;align-items:stretch;background:rgba(15,23,42,.34);backdrop-filter:blur(2px); }
+  .system-nav-drawer { width:min(310px,calc(100vw - 26px));height:100dvh;background:#161618;border-right:1px solid #2a2a2e;box-shadow:18px 0 48px rgba(0,0,0,.42);padding:10px;overflow-y:auto; }
+  html.tema-claro .system-nav-drawer { background:#fff;border-right-color:#e5e7eb;box-shadow:14px 0 34px rgba(15,23,42,.18); }
+  .system-nav-head { display:flex;align-items:center;justify-content:space-between;height:48px;padding:0 8px 10px;border-bottom:1px solid #2a2a2e;margin-bottom:8px; }
+  html.tema-claro .system-nav-head { border-bottom-color:#e5e7eb; }
+  .system-nav-section { padding:14px 10px 5px;font-size:10px;font-weight:800;letter-spacing:.10em;text-transform:uppercase;color:#a1a1aa; }
+  .system-nav-link { display:flex;align-items:center;gap:11px;padding:10px 11px;border-radius:9px;color:#f8fafc;font-size:13px;font-weight:600;text-decoration:none;transition:.15s; }
+  .system-nav-link:hover { background:#242426;color:#dbeafe; }
+  .system-nav-link.is-current { background:#1e3a5f;color:#bfdbfe; }
+  .system-nav-link svg { width:18px;height:18px;flex-shrink:0; }
+  html.tema-claro .system-nav-section { color:#6b7280; }
+  html.tema-claro .system-nav-link { color:#4b5563; }
+  html.tema-claro .system-nav-link:hover { background:#fff7ed;color:#c2410c; }
+  html.tema-claro .system-nav-link.is-current { background:#ffedd5;color:#c2410c; }
+  .prod-card,.item-card,.forma-btn { background:var(--pdv-card);border-color:var(--pdv-bd) !important; }
+  .prod-card:hover,.prod-card.in-cart { border-color:var(--pdv-accent) !important;background:var(--pdv-accent-soft); }
+  .prod-card-preco { color:var(--pdv-accent-text); }
+  .prod-card.in-cart .prod-card-preco { color:var(--pdv-accent-text); }
+  .prod-card-qty { border-color:var(--pdv-accent-border);background:var(--pdv-accent-soft); }
+  .prod-card-qty button { color:var(--pdv-accent-text); }
+  .barcode-input,.input-pdv,.qty-ctrl input { background:var(--pdv-bg);border-color:var(--pdv-bd);color:var(--pdv-t1); }
+  .barcode-input:focus,.input-pdv:focus { border-color:var(--pdv-focus); }
+  .btn-action { border-color:var(--pdv-bd);color:var(--pdv-t2); }
+  .btn-action:hover { background:var(--pdv-hover);color:var(--pdv-t1); }
+  .forma-btn { min-height:74px;border-width:1px;box-shadow:0 1px 2px rgba(15,23,42,.04); }
+  .forma-btn:hover { background:var(--pdv-hover);border-color:var(--pdv-bd4) !important; }
+  .forma-btn.selected { border-color:var(--pdv-accent) !important;background:var(--pdv-accent-soft);box-shadow:0 0 0 1px var(--pdv-accent-border),0 4px 16px rgba(37,99,235,.14); }
+  .totais-bar { background:var(--pdv-surface);border-color:var(--pdv-bd2); }
+  .totais-bar-cell { border-color:var(--pdv-bd2); }
+  .btn-fim { background:linear-gradient(135deg,#2563eb,#3b82f6) !important;box-shadow:0 9px 24px rgba(37,99,235,.24); }
+  html.tema-claro .btn-fim { background:linear-gradient(135deg,#f15a24,#f97316) !important;box-shadow:0 9px 24px rgba(241,90,36,.20); }
+  .caixa-menu,.print-menu { background:var(--pdv-pop) !important;border-color:var(--pdv-bd) !important; }
+  @media (max-width:960px) {
+    .brand-switch { padding:6px 8px; }
+    .brand-switch .brand-clock { display:none; }
+    .brand-mark { font-size:17px; }
+  }
 </style>
 <script>
   (function() {
@@ -713,23 +888,81 @@
 {% block body %}
 <div id="pdv-app" x-data="pdv()" x-init="init()" style="display:flex;flex-direction:column;height:100vh;background:#0a0a12;">
   {% csrf_token %}
+  {% url 'core:dashboard' as dashboard_url %}
+  {% url 'cadastros:cliente-list' as clientes_url %}
+  {% url 'cadastros:fornecedor-list' as fornecedores_url %}
+  {% url 'produtos:produto-list' as produtos_url %}
+  {% url 'produtos:atualizacao-precos' as produtos_precos_url %}
+  {% url 'estoque:estoque-list' as estoque_url %}
+  {% url 'estoque:sugestao-compras' as sugestao_compras_url %}
+  {% url 'estoque:outras-mov-hub' as outras_movimentacoes_url %}
+  {% url 'lotes:dashboard' as lotes_url %}
+  {% url 'compras:entrada-list' as compras_url %}
+  {% url 'producao:op-list' as producao_url %}
+  {% url 'financeiro:receber_list' as financeiro_url %}
+  {% url 'pdv:home' as pdv_url %}
+  {% url 'pdv:delivery' as delivery_url %}
+  {% url 'fiscal:consultas-cnpj' as fiscal_consultas_url %}
+  {% url 'qualidade:analise_list' as qualidade_url %}
+  {% url 'analytics:operacional' as analytics_url %}
 
   <!-- ══════════════════ TOPBAR ══════════════════ -->
   <header class="pdv-topbar" style="height:54px;background:#0d0d16;border-bottom:1px solid #1a1a28;display:flex;align-items:center;padding:0 12px;gap:9px;flex-shrink:0;">
 
-    <!-- Voltar + Logo + Info -->
-    <a href="/" class="topbar-icon-btn" style="text-decoration:none;">
+    <!-- Voltar + marca que abre a navegação lateral -->
+    <a href="{{ dashboard_url }}" class="topbar-icon-btn" style="text-decoration:none;" title="Voltar ao dashboard">
       <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/></svg>
     </a>
-    <div class="topbar-brand-mark" style="width:36px;height:36px;border-radius:50%;background:#0a0a12;border:2px solid #2a2a3e;display:flex;align-items:center;justify-content:center;">
-      <span style="color:#a0a0b8;font-size:16px;font-weight:700;">$</span>
-    </div>
-    <div class="pdv-topbar-info">
-      <div style="font-size:15px;font-weight:700;color:#fff;line-height:1;">PDV</div>
-      <div style="font-size:11px;color:#555;line-height:1;margin-top:2px;" x-text="horaAtual"></div>
+    <div style="position:relative;flex-shrink:0;" @click.outside="showSystemMenu=false">
+      <button type="button" class="brand-switch" @click="showSystemMenu=!showSystemMenu" aria-label="Abrir navegação do sistema" :aria-expanded="showSystemMenu">
+        <span class="brand-mark"><span class="brand-wordmark-neutral">iNoova</span><span class="brand-wordmark-accent">Ted</span></span>
+        <span class="brand-clock" style="font-size:10.5px;line-height:1;opacity:.78;" x-text="horaAtual"></span>
+        <svg width="12" height="12" fill="none" stroke="currentColor" viewBox="0 0 24 24" :style="showSystemMenu?'transform:rotate(180deg);':'transform:rotate(0deg);'"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.3" d="M19 9l-7 7-7-7"/></svg>
+      </button>
     </div>
 
-    <div class="pdv-topbar-sep"></div>
+    <div x-show="showSystemMenu" x-cloak x-transition.opacity.duration.140ms class="system-overlay"
+         @click.self="showSystemMenu=false" @keydown.escape.window="showSystemMenu=false">
+      <aside class="system-nav-drawer"
+             x-transition:enter="transition ease-out duration-160"
+             x-transition:enter-start="-translate-x-full opacity-70"
+             x-transition:enter-end="translate-x-0 opacity-100"
+             x-transition:leave="transition ease-in duration-120"
+             x-transition:leave-start="translate-x-0 opacity-100"
+             x-transition:leave-end="-translate-x-full opacity-70">
+        <div class="system-nav-head">
+          <span class="brand-mark"><span class="brand-wordmark-neutral">iNoova</span><span class="brand-wordmark-accent">Ted</span></span>
+          <button type="button" class="topbar-icon-btn" @click="showSystemMenu=false" title="Recolher menu">
+            <svg width="17" height="17" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 19l-7-7 7-7m8 14l-7-7 7-7"/></svg>
+          </button>
+        </div>
+        <a href="{{ dashboard_url }}" class="system-nav-link"><svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M3 12l9-9 9 9M5 10v10h14V10"/></svg>Dashboard</a>
+        <div class="system-nav-section">Cadastros</div>
+        <a href="{{ clientes_url }}" class="system-nav-link"><svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M17 20H7m10 0v-2a5 5 0 00-10 0v2m10-10a3 3 0 11-6 0 3 3 0 016 0z"/></svg>Clientes</a>
+        <a href="{{ fornecedores_url }}" class="system-nav-link"><svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0H5M9 7h1m4 0h1M9 11h1m4 0h1"/></svg>Fornecedores</a>
+        <a href="{{ produtos_url }}" class="system-nav-link"><svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4M4 7v10l8 4"/></svg>Produtos</a>
+        <a href="{{ produtos_precos_url }}" class="system-nav-link"><svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.7" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8V6m0 10v2m8-6a8 8 0 11-16 0 8 8 0 0116 0z"/></svg>Atualização de preços</a>
+        <div class="system-nav-section">Operações</div>
+        <a href="{{ estoque_url }}" class="system-nav-link"><svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M19 11H5m14 0a2 2 0 012 2v6H3v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2H7a2 2 0 00-2 2v2"/></svg>Estoque</a>
+        <a href="{{ lotes_url }}" class="system-nav-link"><svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 12h6m-6 4h6M7 4h10a2 2 0 012 2v12a2 2 0 01-2 2H7a2 2 0 01-2-2V6a2 2 0 012-2z"/></svg>Lotes</a>
+        <a href="{{ compras_url }}" class="system-nav-link"><svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z"/></svg>Compras</a>
+        <a href="{{ sugestao_compras_url }}" class="system-nav-link"><svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 17h6m-8 4h10a2 2 0 002-2V7.5L13.5 2H7a2 2 0 00-2 2v15a2 2 0 002 2z"/></svg>Sugestão de compras</a>
+        <a href="{{ outras_movimentacoes_url }}" class="system-nav-link"><svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M7 7h10M7 12h6m-6 5h10M5 3h14a2 2 0 012 2v14H3V5a2 2 0 012-2z"/></svg>Outras movimentações</a>
+        <a href="{{ producao_url }}" class="system-nav-link"><svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M4 18V8l5 3V8l5 3V4h6v14H4z"/></svg>Produção</a>
+        <div class="system-nav-section">Avançado</div>
+        <a href="{{ financeiro_url }}" class="system-nav-link"><svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8V7m0 9v1m9-5a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>Financeiro</a>
+        <a href="{{ fiscal_consultas_url }}" class="system-nav-link"><svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 7h6m-6 4h6m-6 4h4M5 3h14v18H5V3z"/></svg>Consultas fiscais</a>
+        <a href="{{ pdv_url }}" class="system-nav-link is-current"><svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 7H6a2 2 0 00-2 2v9a2 2 0 002 2h9a2 2 0 002-2v-3M9 7h6m-6 0V5a2 2 0 012-2h2a2 2 0 012 2v2"/></svg>PDV</a>
+        <a href="{{ delivery_url }}" class="system-nav-link"><svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M8 17h8M5 17h.01M19 17h.01M3 7h11v10H3V7zm11 3h3l4 4v3h-7v-7z"/></svg>Delivery</a>
+        <a href="{{ qualidade_url }}" class="system-nav-link"><svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 12l2 2 4-4m5-2.5V12a9 9 0 01-6.2 8.56L12 21l-1.8-.44A9 9 0 014 12V7.5L12 4l8 3.5z"/></svg>Qualidade</a>
+        <a href="{{ analytics_url }}" class="system-nav-link"><svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 19v-6a2 2 0 00-2-2H5v8h4zm0 0V9a2 2 0 012-2h2v12m-4 0h4m0 0V5a2 2 0 012-2h2v16h-4z"/></svg>Analytics</a>
+        {% if user.is_superuser or user.perfil.is_admin %}
+          <div class="system-nav-section">Sistema</div>
+          <a href="{% url 'core:admin_parametros' %}" class="system-nav-link"><svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M12 6V4m0 16v-2m8-6h-2M6 12H4m12.95 4.95l-1.414-1.414M8.464 8.464L7.05 7.05M12 15a3 3 0 100-6 3 3 0 000 6z"/></svg>Parâmetros</a>
+        {% endif %}
+        <a href="{% url 'core:logout' %}" class="system-nav-link" style="margin-top:8px;color:#f87171;"><svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"/></svg>Sair</a>
+      </aside>
+    </div>
 
     <!-- Modos (seletor segmentado) -->
     <div class="mode-seg">
@@ -3037,6 +3270,7 @@ function pdv() {
     showModalPendentes: false, showModalOrcamentos: false, showModalConfirmacao: false,
     showModalDescontoItem: false, showModalDesconto: false, showModalPrecoItem: false,
     showModalNovoCliente: false, showModalCaixaRel: false, showCaixaMenu: false, showImprimirMenu: false,
+    showSystemMenu: false,
     showModalImpressao: false, vendaFinalizadaData: { id: null, numero: null }, _finalizando: false, compartilhandoCupom: false,
     showModalHistorico: false, historicoVendas: [],
     historicoCliente: [], produtosFrequentes: [], historicoClienteTotal: 0, historicoClienteCarregando: false, historicoClienteAberto: null,
