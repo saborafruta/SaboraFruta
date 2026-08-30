@@ -71,3 +71,13 @@ class ProdutoImagemPDVTests(SimpleTestCase):
         self.assertTrue(ofertas[0]['melhor'])
         self.assertEqual(ofertas[0]['economia'], 6.0)
         self.assertEqual(sum(item['melhor'] for item in ofertas), 1)
+
+    def test_catalogo_sinaliza_combo_sem_substituir_preco_avulso(self):
+        template = (
+            Path(__file__).resolve().parents[1] / 'templates' / 'pdv' / 'home.html'
+        ).read_text(encoding='utf-8')
+
+        self.assertIn('x-show="temComboCatalogo(p)"', template)
+        self.assertIn('Clique no produto para escolher a oferta.">Combo</span>', template)
+        self.assertIn("fmt(precoCatalogo(p))", template)
+        self.assertNotIn("' un. · escolha a oferta'", template)

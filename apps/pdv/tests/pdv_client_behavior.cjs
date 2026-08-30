@@ -61,8 +61,34 @@ const respond = (payload, ok = true) => {
     {tipo:'combo',oferta_tipo:'combo',preco:50,quantidade:3,promocao_id:1,faixa_id:2},
     {tipo:'kit',oferta_tipo:'kit',preco:40,total:40,quantidade:1},
   ]};
-  assert.equal(offers.precoCatalogo(product),50,'Catalog shows the lowest comparable unit price');
-  assert.equal(offers.ofertaCatalogo(product).quantidade,3,'Conditional minimum remains visible');
+  const originalOffers=JSON.stringify(product.ofertas);
+  assert.equal(offers.precoCatalogo(product),60,'Catalog shows the standalone promotion, not a conditional combo price');
+  assert.equal(offers.ofertaCatalogo(product).quantidade,1);
+  assert.equal(offers.temComboCatalogo(product),true,'Combo badge is independent of the displayed price');
+  assert.equal(JSON.stringify(product.ofertas),originalOffers,'Catalog must preserve all choices and their order');
+  assert.equal(offers.precoCatalogo({...product,ofertas:product.ofertas.filter(o=>o.tipo!=='promocional')}),100);
+  assert.equal(offers.temComboCatalogo({ofertas:[product.ofertas[1],product.ofertas[3]]}),false);
+  assert.equal(offers.temComboCatalogo({}),false);
+  assert.equal(offers.temComboCatalogo({todos_precos:[product.ofertas[2]]}),true);
+  assert.equal(offers.precoCatalogo({preco:50,preco_base:100,ofertas:[product.ofertas[2]]}),100);
+  assert.equal(offers.precoCatalogo({preco:50,preco_base:0,ofertas:[product.ofertas[2]]}),0);
+  assert.equal(offers.precoCatalogo({todos_precos:product.ofertas}),60);
+  assert.equal(offers.precoCatalogo({...product,ofertas:[...product.ofertas,
+    {tipo:'categoria',preco:30,quantidade:3},{tipo:'brinde',preco:20,quantidade:1}]}),60);
+  assert.equal(offers.precoCatalogo({...product,ofertas:[...product.ofertas,
+    {tipo:'categoria',preco:55,quantidade:1}]}),55,'An unconditional category discount also applies to a single item');
+  const comboChoice=create();
+  const comboProduct={...product,ofertas:[
+    {...product.ofertas[2],preco:43.3233,total:129.97},
+    {...product.ofertas[1],preco:49.99},product.ofertas[0],
+  ]};
+  assert.equal(comboChoice.precoCatalogo(comboProduct),49.99);
+  comboChoice.adicionarItem(comboProduct);
+  assert.equal(comboChoice.modalPreco.show,true);
+  assert.equal(comboChoice.modalPreco.precos[0].tipo,'combo','Click still suggests the cheapest offer first');
+  comboChoice.confirmarPreco(comboProduct.ofertas[0]);
+  assert.equal(comboChoice.venda.itens[0].quantidade,3);
+  assert.equal(Number(comboChoice.venda.itens[0].valor_total.toFixed(2)),129.97);
   offers.adicionarItem(product);
   assert.equal(offers.modalPreco.show,true);
   assert.equal(offers.venda.itens.length,0,'Wait for attendant confirmation before adding a condition');
