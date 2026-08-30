@@ -161,6 +161,7 @@ class ItemVendaPDV(models.Model):
     voucher_pacote = models.BooleanField(default=False)
     desconto_manual = models.BooleanField(default=False)
     motivo_desconto = models.CharField(max_length=100, blank=True, default="")
+    observacao = models.TextField(blank=True, default="")
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:

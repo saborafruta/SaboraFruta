@@ -40,6 +40,7 @@ def dados_comprovante(venda):
             'unidade': item.unidade_medida, 'unitario': moeda(item.valor_unitario),
             'total': moeda(item.valor_total), 'desconto': moeda(desconto),
             'tem_desconto': desconto > 0, 'percentual': moeda(percentual(desconto, base)),
+            'observacao': item.observacao or '',
         })
     resumo = [('Subtotal bruto', moeda(bruto))]
     if desconto_itens:
@@ -70,6 +71,7 @@ def gerar_pdf(venda):
     cupom = dados_comprovante(venda)
     output = BytesIO()
     normal = ParagraphStyle('texto', fontName='Helvetica', fontSize=8, leading=11)
+    negrito = ParagraphStyle('negrito', parent=normal, fontName='Helvetica-Bold')
     titulo = ParagraphStyle('titulo', parent=normal, fontName='Helvetica-Bold', fontSize=11, leading=15, alignment=1)
     direita = ParagraphStyle('valor', parent=normal, alignment=2)
     blocos = []
@@ -105,12 +107,15 @@ def gerar_pdf(venda):
                        par(f"{item['quantidade']} {item['unidade']} × R$ {item['unitario']}", f"R$ {item['total']}")])
         if item['tem_desconto']:
             blocos.append(texto(f"Desconto {item['percentual']}%: - R$ {item['desconto']}"))
+        if item['observacao']:
+            blocos.append(texto(f"Observação: {item['observacao']}", negrito))
         blocos.append(Spacer(1, 3*mm))
     for rotulo, valor in cupom['resumo'] + cupom['pagamentos']:
         exibicao = ('- R$ ' + valor[2:]) if valor.startswith('- ') else ('R$ ' + valor)
         blocos.append(par(rotulo, exibicao))
     blocos.extend([Spacer(1, 4*mm), texto('Este comprovante não é um documento fiscal.')])
-    altura = max(150, min(400, 90 + len(cupom['itens'])*24 + len(cupom['pagamentos'])*10))
+    altura_observacoes = sum(min(50, 8 + len(item['observacao']) / 12 * 3.8) for item in cupom['itens'] if item['observacao'])
+    altura = max(150, min(400, 90 + len(cupom['itens'])*24 + len(cupom['pagamentos'])*10 + altura_observacoes))
     doc = SimpleDocTemplate(output, pagesize=(80*mm, altura*mm),
                            leftMargin=6*mm, rightMargin=6*mm, topMargin=8*mm, bottomMargin=8*mm,
                            title=f"Comprovante #{cupom['numero']}", author=cupom['empresa'])

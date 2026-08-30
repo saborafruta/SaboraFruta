@@ -1630,6 +1630,8 @@
                                 <div style="font-size:11px;font-weight:600;color:#c0c0d8;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;" x-text="item.descricao"></div>
                                 <div style="font-size:10px;color:#555;margin-top:1px;"
                                      x-text="item.quantidade+' '+item.unidade_medida+' × R$ '+item.valor_unitario.toFixed(2).replace('.',',')"></div>
+                                <div x-show="item.observacao" x-text="'Observação: '+item.observacao"
+                                     style="font-size:10px;color:#d97706;font-weight:800;margin-top:3px;white-space:normal;overflow-wrap:anywhere;"></div>
                               </div>
                               <div style="font-size:11px;font-weight:600;color:#7a7a92;white-space:nowrap;"
                                    x-text="'R$ '+item.valor_total.toFixed(2).replace('.',',')"></div>
@@ -1739,8 +1741,8 @@
                           :style="item.obs?'color:#f59e0b;border-color:rgba(245,158,11,.3);':''">💬</button>
                 </div>
                 <div x-show="item._showObs" x-cloak style="margin-top:6px;">
-                  <input type="text" x-model="item.obs" placeholder="Observação do item..."
-                         style="width:100%;padding:6px 10px;background:#0a0a12;border:1px solid #2a2a3e;border-radius:6px;color:#a0a0b8;font-size:12px;outline:none;">
+                  <input type="text" x-model="item.obs" maxlength="500" placeholder="Observação do item..."
+                         style="width:100%;padding:6px 10px;background:var(--pdv-inp);border:1px solid var(--pdv-bd);border-radius:7px;color:var(--pdv-t1);font-size:12px;font-weight:700;outline:none;">
                 </div>
               </div>
               <div style="display:flex;flex-direction:column;align-items:flex-end;gap:6px;flex-shrink:0;">
@@ -3724,7 +3726,7 @@ function pdv() {
             desconto_percentual: 0,
             desconto_valor: 0,
             valor_total: item.valor_total,
-            obs: '', _showObs: false,
+            obs: item.obs || item.observacao || '', _showObs: !!(item.obs || item.observacao),
           });
         }
         if (d.cliente_id) {
@@ -4393,10 +4395,11 @@ function pdv() {
 
       const itensHtml = v.itens.map(item => {
         const desc = item.descricao || item.produto_nome || '';
+        const obs = item.obs || item.observacao || '';
         const qtd = parseFloat(item.quantidade||1);
         const uni = parseFloat(item.valor_unitario||0);
         const tot = parseFloat(item.valor_total||0);
-        return `<tr><td>${desc}</td><td class="c">${qtd}</td><td class="r">R$ ${fmt(uni)}</td><td class="r b">R$ ${fmt(tot)}</td></tr>`;
+        return `<tr><td>${this.escapeHtml(desc)}${obs?`<div style="font-weight:800;margin-top:5px;">Observação: ${this.escapeHtml(obs)}</div>`:''}</td><td class="c">${qtd}</td><td class="r">R$ ${fmt(uni)}</td><td class="r b">R$ ${fmt(tot)}</td></tr>`;
       }).join('');
 
       const html = `<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8"><title>Orcamento PDV</title><style>
@@ -4437,7 +4440,7 @@ function pdv() {
             desconto_valor: bruto*(pct/100),
             valor_total: item.valor_total,
             unidade_medida: item.unidade_medida||'UN',
-            obs: '', _showObs: false,
+            obs: item.obs || item.observacao || '', _showObs: !!(item.obs || item.observacao),
           });
         }
         if (d.cliente_id) {
@@ -4558,7 +4561,7 @@ function pdv() {
           const tot = parseFloat(item.valor_total||0);
           itensHtml += `<tr>
             <td style="padding:4px 6px 4px 0;font-size:12px;text-align:left;white-space:nowrap;">${qtd}</td>
-            <td style="padding:4px 6px;font-size:12px;word-break:break-word;">${this.escapeHtml(desc)}${this.descontoItemCupom(item).valor>0?`<div style="font-size:10px;margin-top:3px;">Desconto ${fmt(this.descontoItemCupom(item).percentual)}%: - R$ ${fmt(this.descontoItemCupom(item).valor)}</div>`:''}</td>
+            <td style="padding:4px 6px;font-size:12px;word-break:break-word;">${this.escapeHtml(desc)}${this.descontoItemCupom(item).valor>0?`<div style="font-size:10px;margin-top:3px;">Desconto ${fmt(this.descontoItemCupom(item).percentual)}%: - R$ ${fmt(this.descontoItemCupom(item).valor)}</div>`:''}${(item.obs||item.observacao)?`<div style="font-size:10px;font-weight:800;margin-top:3px;">Observação: ${this.escapeHtml(item.obs||item.observacao)}</div>`:''}</td>
             <td style="padding:4px 0;font-size:12px;text-align:right;">R$&nbsp;${fmt(uni)}</td>
             <td style="padding:4px 0 4px 8px;font-size:12px;text-align:right;font-weight:700;">R$&nbsp;${fmt(tot)}</td>
           </tr>`;
@@ -4694,7 +4697,7 @@ ${pgtoHtml ? `<hr class="sep">${pgtoHtml}` : ''}
         const qtd = parseFloat(item.quantidade || 1);
         const uni = parseFloat(item.valor_unitario || 0);
         const tot = parseFloat(item.valor_total || 0);
-        return `<tr><td>${qtd % 1 === 0 ? qtd : qtd.toFixed(2).replace('.',',')}</td><td>${esc(item.descricao || item.produto_nome || '')}</td><td>R$ ${fmt(uni)}</td><td>R$ ${fmt(tot)}</td></tr>`;
+        return `<tr><td>${qtd % 1 === 0 ? qtd : qtd.toFixed(2).replace('.',',')}</td><td>${esc(item.descricao || item.produto_nome || '')}${(item.obs||item.observacao)?`<div style="font-weight:800;margin-top:3px;">Observação: ${esc(item.obs||item.observacao)}</div>`:''}</td><td>R$ ${fmt(uni)}</td><td>R$ ${fmt(tot)}</td></tr>`;
       }).join('') || '<tr><td colspan="4" class="empty">Carrinho vazio</td></tr>';
       const pagamentos = (v.pagamentos || []).map(p => {
         const troco = parseFloat(p.troco || 0);
@@ -4871,6 +4874,7 @@ ${pgtoHtml ? `<hr class="sep">${pgtoHtml}` : ''}
         pair(`${qtd % 1 === 0 ? qtd : qtd.toFixed(2).replace('.', ',')} x R$ ${fmt(uni)}`, `R$ ${fmt(tot)}`, { size: 9 });
         const desconto=this.descontoItemCupom(item);
         if(desconto.valor>0) text(`Desconto ${fmt(desconto.percentual)}%: - R$ ${fmt(desconto.valor)}`, {size:8});
+        if(item.obs||item.observacao) text(`Observação: ${item.obs||item.observacao}`, {size:8,bold:true});
       });
       if (!v.itens || !v.itens.length) text('Carrinho vazio', { align: 'center', size: 9 });
 
@@ -5012,7 +5016,7 @@ ${pgtoHtml ? `<hr class="sep">${pgtoHtml}` : ''}
           const tot = parseFloat(item.valor_total||0);
           itensHtml += `<tr>
             <td style="padding:4px 6px 4px 0;font-size:12px;text-align:left;white-space:nowrap;">${qtd}</td>
-            <td style="padding:4px 6px;font-size:12px;word-break:break-word;">${this.escapeHtml(desc)}${this.descontoItemCupom(item).valor>0?`<div style="font-size:10px;margin-top:3px;">Desconto ${fmt(this.descontoItemCupom(item).percentual)}%: - R$ ${fmt(this.descontoItemCupom(item).valor)}</div>`:''}</td>
+            <td style="padding:4px 6px;font-size:12px;word-break:break-word;">${this.escapeHtml(desc)}${this.descontoItemCupom(item).valor>0?`<div style="font-size:10px;margin-top:3px;">Desconto ${fmt(this.descontoItemCupom(item).percentual)}%: - R$ ${fmt(this.descontoItemCupom(item).valor)}</div>`:''}${(item.obs||item.observacao)?`<div style="font-size:10px;font-weight:800;margin-top:3px;">Observação: ${this.escapeHtml(item.obs||item.observacao)}</div>`:''}</td>
             <td style="padding:4px 0;font-size:12px;text-align:right;">R$&nbsp;${fmt(uni)}</td>
             <td style="padding:4px 0 4px 8px;font-size:12px;text-align:right;font-weight:700;">R$&nbsp;${fmt(tot)}</td>
           </tr>`;
@@ -5153,10 +5157,11 @@ ${pgtoHtml ? `<hr class="sep">${pgtoHtml}` : ''}
 
       const itensHtml = c.itens.map(item => {
         const desc = item.descricao || '';
+        const obs = item.obs || item.observacao || '';
         const qtd = parseFloat(item.quantidade||1);
         const uni = parseFloat(item.valor_unitario||0);
         const tot = parseFloat(item.valor_total||0);
-        return `<tr><td>${desc}</td><td class="c">${qtd}</td><td class="r">R$ ${fmt(uni)}</td><td class="r b">R$ ${fmt(tot)}</td></tr>`;
+        return `<tr><td>${this.escapeHtml(desc)}${obs?`<div style="font-weight:800;margin-top:5px;">Observação: ${this.escapeHtml(obs)}</div>`:''}</td><td class="c">${qtd}</td><td class="r">R$ ${fmt(uni)}</td><td class="r b">R$ ${fmt(tot)}</td></tr>`;
       }).join('');
 
       const html = `<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8"><title>Orcamento PDV</title><style>
@@ -5730,7 +5735,7 @@ ${pgtoHtml ? `<hr class="sep">${pgtoHtml}` : ''}
             desconto_percentual: pct,
             desconto_valor: parseFloat(item.desconto_valor || bruto*(pct/100)),
             valor_total: item.valor_total,
-            obs: '', _showObs: false,
+            obs: item.obs || item.observacao || '', _showObs: !!(item.obs || item.observacao),
           });
         }
         // Restaura cliente, desconto, delivery. O objeto precisa ter os

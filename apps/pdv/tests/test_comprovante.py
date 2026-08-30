@@ -25,7 +25,7 @@ class ReceiptParser(HTMLParser):
 
 @skipUnless(shutil.which('node'), 'Node.js necessário para validar o comprovante')
 class ComprovanteTests(SimpleTestCase):
-    def render_receipt(self, image_url='', settings_logo='', company_logo='', desconto=False):
+    def render_receipt(self, image_url='', settings_logo='', company_logo='', desconto=False, observacao=False):
         context = {
             'filial_ativa': SimpleNamespace(
                 nome_fantasia='L&R SPORTS — São José', razao_social='Empresa',
@@ -54,12 +54,18 @@ process.stdout.write(JSON.stringify(html));
         if desconto:
             source = source.replace('quantidade:1,valor_unitario:100,valor_total:100',
                                     'quantidade:4,valor_unitario:100,valor_total:280,desconto_valor:120,desconto_percentual:30')
+        if observacao:
+            source = source.replace("descricao:'Açúcar & Café'", "descricao:'Açúcar & Café',observacao:'Separar <frágil> & urgente'")
         result = subprocess.run(
             [shutil.which('node'), '-e', source], input=methods,
             encoding='utf-8', capture_output=True, timeout=20,
         )
         self.assertEqual(result.returncode, 0, result.stderr)
         return json.loads(result.stdout)
+
+    def test_observacao_do_item_sai_em_negrito_e_escapada(self):
+        html = self.render_receipt(observacao=True)
+        self.assertIn('<strong>Observação: Separar &lt;frágil&gt; &amp; urgente</strong>', html)
 
     def test_desconto_no_item_e_resumo_em_valor_e_percentual(self):
         html = self.render_receipt(desconto=True)

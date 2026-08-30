@@ -21,6 +21,8 @@ class PDVVisualBaseTests(SimpleTestCase):
         self.assertIn('#pdv-app .dic-field:focus-within', template)
         self.assertIn('class="pending-modal"', template)
         self.assertIn('class="item-discount-badge"', template)
+        self.assertIn('maxlength="500" placeholder="Observação do item..."', template)
+        self.assertIn('Observação: ${this.escapeHtml(obs)}', template)
         toast = (Path(__file__).resolve().parents[1] / 'templates/pdv/_toast_styles.html').read_text(encoding='utf-8')
         self.assertIn('right: 18px;', toast)
         self.assertIn('bottom: 18px;', toast)

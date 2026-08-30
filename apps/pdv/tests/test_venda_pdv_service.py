@@ -1,3 +1,4 @@
+import json
 from decimal import Decimal
 
 from django.test import Client, TestCase
@@ -23,6 +24,37 @@ from apps.produtos.models import (
 
 
 class VendaPDVServiceTests(TestCase):
+    def test_observacao_item_persiste_na_venda_e_orcamento(self):
+        produto = self.criar_produto('Produto com observação')
+        self.abastecer(produto, '5')
+        nota = '  Embalar separado — cliente <VIP>  '
+        venda = VendaPDVService.finalizar_venda(
+            sessao=self.sessao, filial=self.filial, usuario=self.usuario,
+            itens=[{'produto_id': produto.pk, 'quantidade': '1', 'obs': nota}],
+            pagamentos=[{'forma_id': self.forma.pk, 'valor': '10'}],
+        )
+        item = venda.itens.get()
+        self.assertEqual(item.observacao, 'Embalar separado — cliente <VIP>')
+
+        self.client.force_login(self.usuario)
+        session = self.client.session
+        session['filial_ativa_id'] = self.filial.pk
+        session.save()
+        detalhe = self.client.get(reverse('pdv:api_venda_detalhe', args=[venda.pk])).json()
+        self.assertEqual(detalhe['itens'][0]['observacao'], item.observacao)
+        resposta = self.client.post(
+            reverse('pdv:api_venda_orcamento'),
+            data=json.dumps({'cliente_id': None, 'itens': [{
+                'produto_id': produto.pk, 'quantidade': 1, 'valor_unitario': 10,
+                'observacao': 'Orçamento em negrito',
+            }]}), content_type='application/json',
+        )
+        self.assertEqual(resposta.status_code, 200, resposta.content)
+        orcamento = VendaPDV.objects.get(pk=resposta.json()['venda_id'])
+        self.assertEqual(orcamento.itens.get().observacao, 'Orçamento em negrito')
+        detalhe_orcamento = self.client.get(reverse('pdv:api_orcamento_detalhe', args=[orcamento.pk])).json()
+        self.assertEqual(detalhe_orcamento['itens'][0]['obs'], 'Orçamento em negrito')
+
     def test_link_publico_com_desconto_e_isolamento(self):
         from urllib.parse import urlsplit
 
@@ -35,6 +67,7 @@ class VendaPDVServiceTests(TestCase):
             venda_pdv=venda, produto=produto, numero_item=1, unidade_medida='UN',
             quantidade=4, valor_unitario=100, desconto_valor=120,
             desconto_percentual=30, valor_total=280,
+            observacao='Separar por tamanho — urgente',
         )
         endpoint = reverse('pdv:api_comprovante_link', args=[venda.pk])
         anonymous = Client()
@@ -53,6 +86,7 @@ class VendaPDVServiceTests(TestCase):
         self.assertContains(page, '400,00')
         self.assertContains(page, '280,00')
         self.assertContains(page, 'Açúcar &amp; Café')
+        self.assertContains(page, '<div class="observacao">Observação: Separar por tamanho — urgente</div>', html=True)
         self.assertNotContains(page, self.usuario.email)
         self.assertEqual(page['Cache-Control'], 'private, no-store')
         self.assertEqual(page['Referrer-Policy'], 'no-referrer')

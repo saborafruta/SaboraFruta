@@ -802,6 +802,7 @@ def _criar_item_rascunho(venda, produto, item_dados, numero_item):
         desconto_percentual=desconto_percentual,
         desconto_valor=desconto_valor,
         desconto_manual=desconto_valor > 0,
+        observacao=str(item_dados.get('observacao') or item_dados.get('obs') or '').strip()[:500],
         valor_total=valor_total,
     )
 
@@ -825,6 +826,8 @@ def _serializar_item_rascunho(item):
         'valor_total': float(item.valor_total),
         'desconto_percentual': float(item.desconto_percentual or 0),
         'desconto_valor': float(item.desconto_valor or 0),
+        'observacao': item.observacao or '',
+        'obs': item.observacao or '',
         'unidade_medida': item.unidade_medida,
         **_produto_imagem_payload(produto),
     }
@@ -1482,6 +1485,8 @@ def api_historico_cliente(request, cliente_id):
                 "unidade_medida": item.unidade_medida or "UN",
                 "valor_unitario": float(item.valor_unitario),
                 "valor_total": float(item.valor_total),
+                "observacao": item.observacao or "",
+                "obs": item.observacao or "",
             })
         pagamentos = [
             {
@@ -1574,6 +1579,8 @@ def api_venda_detalhe(request, pk):
             "valor_total": float(item.valor_total),
             "desconto_percentual": float(item.desconto_percentual or 0),
             "desconto_valor": float(item.desconto_valor or 0),
+            "observacao": item.observacao or "",
+            "obs": item.observacao or "",
             "unidade_medida": item.unidade_medida or "UN",
             "tipo_produto": p.tipo_produto,
             "fracionavel": aceita_decimal,

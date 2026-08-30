@@ -378,6 +378,7 @@ class VendaPDVService:
             desconto_percentual=desconto_percentual,
             desconto_valor=desconto_valor,
             desconto_manual=desconto_valor > 0,
+            observacao=str(item_dados.get("observacao") or item_dados.get("obs") or "").strip()[:500],
             valor_total=valor_total_item,
         )
 
@@ -501,6 +502,10 @@ class VendaPDVService:
                 preco_origem="kit",
                 preco_origem_detalhe=f'Kit "{kit.nome}"',
                 oferta_contexto=contexto_oferta_do_payload(item_dados),
+                observacao=(
+                    str(item_dados.get("observacao") or item_dados.get("obs") or "").strip()[:500]
+                    if offset == 0 else ""
+                ),
                 valor_total=valor_total_item,
             )
             if comp.produto.tipo_produto != Produto.TipoProduto.SERVICO:
