@@ -757,7 +757,7 @@ body.tema-claro .hv-page a, body.tema-claro .hv-page span { background:#eef2f7;b
   <div class="hv-overlay" x-show="modalCancelV.show" x-cloak @keydown.escape.window="modalCancelV.admin_senha='';modalCancelV.show=false" style="display:none;">
     <div class="hv-modal">
       <h3 class="hv-modal-title">Cancelar Venda</h3>
-      <p class="hv-modal-sub">Venda #<strong x-text="modalCancelV.numero"></strong> — Informe o motivo com ao menos 15 caracteres. Se houver nota autorizada, ela será cancelada antes da venda.</p>
+      <p class="hv-modal-sub">Venda #<strong x-text="modalCancelV.numero"></strong> — Informe o motivo com ao menos 5 caracteres. Se houver nota autorizada, são necessários 15 caracteres para cancelar a nota antes da venda.</p>
       <label class="hv-filter-label">E-mail do administrador<input class="hv-input" type="email" x-model="modalCancelV.admin_email" autocomplete="off" style="width:100%;margin-bottom:10px;"></label>
       <label class="hv-filter-label">Senha do administrador<input class="hv-input" type="password" x-model="modalCancelV.admin_senha" autocomplete="new-password" style="width:100%;margin-bottom:10px;"></label>
       <textarea x-model="modalCancelV.justificativa" placeholder="Motivo do cancelamento..."
@@ -768,10 +768,10 @@ body.tema-claro .hv-page a, body.tema-claro .hv-page span { background:#eef2f7;b
       </div>
       <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:14px;">
         <button class="hv-btn-clear" @click="modalCancelV.admin_senha='';modalCancelV.show=false" style="padding:8px 18px;">Voltar</button>
-        <button @click="confirmarCancelarVenda()" :disabled="modalCancelV.loading || modalCancelV.justificativa.trim().length < 15"
+        <button @click="confirmarCancelarVenda()" :disabled="modalCancelV.loading || modalCancelV.justificativa.trim().length < 5"
                 style="padding:8px 20px;border-radius:8px;font-size:13px;font-weight:700;
                        background:#dc2626;border:none;color:#fff;cursor:pointer;"
-                :style="(modalCancelV.loading || modalCancelV.justificativa.trim().length < 15) ? 'opacity:.6;cursor:not-allowed;' : ''">
+                :style="(modalCancelV.loading || modalCancelV.justificativa.trim().length < 5) ? 'opacity:.6;cursor:not-allowed;' : ''">
           <span x-show="!modalCancelV.loading">Confirmar cancelamento</span>
           <span x-show="modalCancelV.loading">Cancelando…</span>
         </button>
@@ -903,8 +903,8 @@ function hvApp() {
     async confirmarCancelarVenda() {
       if(this.modalCancelV.loading) return;
       const justificativa = this.modalCancelV.justificativa.trim();
-      if (justificativa.length < 15) {
-        this.toast('Justificativa deve ter ao menos 15 caracteres.', 'err'); return;
+      if (justificativa.length < 5) {
+        this.toast('Justificativa deve ter ao menos 5 caracteres.', 'err'); return;
       }
       this.modalCancelV.loading = true;
       try {

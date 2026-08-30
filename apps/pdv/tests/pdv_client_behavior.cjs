@@ -29,7 +29,11 @@ const respond = (payload, ok = true) => {
   cancellation.historicoCliente = [{id:20}];
   cancellation.historicoVendas = [{id:20,status:'finalizada'}];
   cancellation.abrirCancelamentoHistorico(cancellation.historicoVendas[0]);
-  Object.assign(cancellation.cancelamentoHistorico,{email:'admin@example.com',senha:'teste',motivo:'Cliente desistiu da compra.'});
+  assert.equal(cancellation.minimoMotivoCancelamento(),5);
+  cancellation.cancelamentoHistorico.venda.documento_fiscal_status='autorizada';
+  assert.equal(cancellation.minimoMotivoCancelamento(),15);
+  cancellation.cancelamentoHistorico.venda.documento_fiscal_status='';
+  Object.assign(cancellation.cancelamentoHistorico,{email:'admin@example.com',senha:'teste',motivo:'teste'});
   context.csrf = () => 'local-test';
   respond({erro:'Senha inválida'},false);
   await cancellation.confirmarCancelamentoHistorico();

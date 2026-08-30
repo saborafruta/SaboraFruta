@@ -107,10 +107,26 @@ class CancelamentoAutorizadoTests(TestCase):
         self.assertEqual(self.post().status_code,404)
 
     def test_csrf_e_justificativa_obrigatorios(self):
-        self.assertEqual(self.post(dict(self.payload,justificativa='curto')).status_code,400)
+        for motivo in ['', '    ', 'erro', ' erro ']:
+            self.assertEqual(self.post(dict(self.payload,justificativa=motivo)).status_code,400)
         cliente=Client(enforce_csrf_checks=True)
         cliente.force_login(self.usuario)
         self.assertEqual(cliente.post(self.url,data=json.dumps(self.payload),content_type='application/json').status_code,403)
+
+    def test_aceita_motivo_com_cinco_caracteres(self):
+        self.assertEqual(self.post(dict(self.payload,justificativa=' teste ')).status_code,200)
+        self.venda.refresh_from_db()
+        self.assertEqual(self.venda.motivo_cancelamento,'teste')
+        self.assertEqual(self.venda.status,'cancelada')
+
+    def test_nota_autorizada_preserva_minimo_fiscal(self):
+        from types import SimpleNamespace
+        with patch('apps.pdv.services.cancelamento_fiscal_service.obter_documento_fiscal',return_value=SimpleNamespace(status='autorizada')):
+            response=self.post(dict(self.payload,justificativa='teste'))
+        self.assertEqual(response.status_code,400)
+        self.assertIn('15 caracteres',response.json()['erro'])
+        self.venda.refresh_from_db()
+        self.assertEqual(self.venda.status,'finalizada')
 
     def test_erro_fiscal_nao_cancela_nem_estorna(self):
         with patch('apps.pdv.views.pdv.cancelar_venda_e_documento',side_effect=RuntimeError('Falha fiscal')):

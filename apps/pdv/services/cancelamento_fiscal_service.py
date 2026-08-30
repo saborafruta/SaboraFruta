@@ -52,9 +52,9 @@ def _focus_service_para_filial(filial) -> FocusNFeService:
 @transaction.atomic
 def cancelar_venda_e_documento(venda, usuario, justificativa: str, *, autorizado_por=None):
     justificativa = (justificativa or "").strip()
-    if len(justificativa) < 15:
+    if len(justificativa) < 5:
         raise DadosInvalidosError(
-            "Informe uma justificativa com ao menos 15 caracteres."
+            "Informe uma justificativa com ao menos 5 caracteres."
         )
 
     # Trave somente a venda. No PostgreSQL, combinar FOR UPDATE com
@@ -68,6 +68,8 @@ def cancelar_venda_e_documento(venda, usuario, justificativa: str, *, autorizado
         raise DadosInvalidosError('Apenas vendas finalizadas podem ser canceladas.')
 
     if documento and documento.status == StatusDocumentoFiscal.AUTORIZADA:
+        if len(justificativa) < 15:
+            raise DadosInvalidosError('O cancelamento da nota fiscal autorizada exige ao menos 15 caracteres.')
         documento = _focus_service_para_filial(venda.filial).cancelar(
             documento, justificativa, usuario=usuario
         )

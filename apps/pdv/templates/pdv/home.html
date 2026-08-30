@@ -3309,7 +3309,7 @@
         <label class="cancel-auth-field">Senha do administrador
           <input type="password" required autocomplete="new-password" x-model="cancelamentoHistorico.senha" :disabled="cancelamentoHistorico.enviando"></label>
         <label class="cancel-auth-field">Motivo do cancelamento
-          <textarea required minlength="15" maxlength="1000" rows="3" x-model="cancelamentoHistorico.motivo" placeholder="Informe o motivo (mínimo 15 caracteres)" :disabled="cancelamentoHistorico.enviando"></textarea></label>
+          <textarea required :minlength="minimoMotivoCancelamento()" maxlength="1000" rows="3" x-model="cancelamentoHistorico.motivo" :placeholder="'Informe o motivo (mínimo '+minimoMotivoCancelamento()+' caracteres)'" :disabled="cancelamentoHistorico.enviando"></textarea></label>
         <p role="alert" class="history-cancel-button" x-show="cancelamentoHistorico.erro" x-text="cancelamentoHistorico.erro"></p>
         <button type="submit" class="btn-action history-cancel-button" :disabled="cancelamentoHistorico.enviando"
                 x-text="cancelamentoHistorico.enviando ? 'Cancelando…' : 'Autorizar e cancelar venda'"></button>
@@ -5960,8 +5960,8 @@ ${pgtoHtml ? `<hr class="sep">${pgtoHtml}` : ''}
     async confirmarCancelamentoHistorico() {
       const form=this.cancelamentoHistorico;
       if(!form.venda || form.enviando) return;
-      if(!form.email.trim() || !form.senha || form.motivo.trim().length<15) {
-        form.erro='Informe o administrador, a senha e um motivo com pelo menos 15 caracteres.'; return;
+      if(!form.email.trim() || !form.senha || form.motivo.trim().length<this.minimoMotivoCancelamento()) {
+        form.erro='Informe o administrador, a senha e um motivo com pelo menos '+this.minimoMotivoCancelamento()+' caracteres.'; return;
       }
       form.enviando=true; form.erro='';
       try {
@@ -5978,6 +5978,9 @@ ${pgtoHtml ? `<hr class="sep">${pgtoHtml}` : ''}
         this.toast_('Venda cancelada. Registro mantido no histórico.','ok');
       } catch { form.erro='Não foi possível confirmar o cancelamento. Atualize o histórico antes de tentar novamente.'; }
       finally { form.senha=''; form.enviando=false; }
+    },
+    minimoMotivoCancelamento() {
+      return this.cancelamentoHistorico.venda?.documento_fiscal_status==='autorizada' ? 15 : 5;
     },
     async abrirHistorico() {
       this.showModalHistorico = true;
