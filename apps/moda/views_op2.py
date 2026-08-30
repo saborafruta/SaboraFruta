@@ -956,6 +956,8 @@ class Op2ActionView(ModaBaseView):
             with transaction.atomic():
                 resposta = handler(request, pedido)
         except (TypeError, ValueError, DomainError) as erro:
+            if acao == 'descricao_visual' and request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+                return JsonResponse({'ok': False, 'erro': str(erro)}, status=400)
             messages.error(request, str(erro) or 'Confira os valores informados.')
             return _voltar(pedido)
         return resposta or _voltar(pedido)
@@ -976,6 +978,8 @@ class Op2ActionView(ModaBaseView):
             raise ValueError(f'A descrição da imagem deve ter até {limite} caracteres.')
         visual.observacoes = descricao
         visual.save(update_fields=['observacoes'])
+        if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+            return JsonResponse({'ok': True, 'descricao': descricao})
         messages.success(request, 'Descrição da imagem salva. Os PDFs já usarão este texto.')
 
     def _acao_cabecalho(self, request, pedido):

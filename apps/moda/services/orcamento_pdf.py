@@ -364,6 +364,10 @@ class OrcamentoPdfService:
     @staticmethod
     def _fotos(item, e, altura=22 * mm):
         fotos = []
+        estilo_descricao = ParagraphStyle(
+            'orc_descricao_imagem', parent=e['pequeno'],
+            fontName='Helvetica-Bold', textColor=colors.black,
+        )
         for visual in item.visuais.all():
             campo = visual.imagem or (
                 visual.mockup.imagem if visual.mockup_id else None
@@ -375,7 +379,7 @@ class OrcamentoPdfService:
                 fotos.append(Paragraph('Imagem indisponível', e['pequeno']))
             descricao = (visual.observacoes or '').strip()
             if campo and descricao:
-                fotos += [Paragraph(_texto(descricao).replace('\n', '<br/>'), e['pequeno']), Spacer(1, 4)]
+                fotos += [Paragraph(_texto(descricao).replace('\n', '<br/>'), estilo_descricao), Spacer(1, 4)]
         for p in item.personalizacoes.all():
             if p.arquivo and p.extensao in DESENHAVEIS:
                 imagem = _imagem(p.arquivo, 23 * mm, 20 * mm)

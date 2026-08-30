@@ -6,6 +6,7 @@
 {% block content %}
 {{ estrutura_opcoes|json_script:"op2-estrutura-opcoes" }}
 <script src="{% static 'js/op2_modelo_validacao.js' %}"></script>
+<script src="{% static 'js/op2_legenda.js' %}"></script>
 {{ mensagem_whatsapp|json_script:"op2-wa-message" }}
 {{ modelos_grade|json_script:"op2-modelos-grade" }}
 {{ grades_json|json_script:"op2-detail-grades" }}

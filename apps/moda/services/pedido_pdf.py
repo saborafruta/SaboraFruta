@@ -715,6 +715,7 @@ class PedidoPdfService:
         largura = largura_util / por_linha
         estilo_descricao = ParagraphStyle(
             'descricao_imagem', parent=e['pequeno'], alignment=1,
+            fontName='Helvetica-Bold', textColor=colors.black,
         )
         descricoes = [
             Paragraph(esc(texto).replace('\n', '<br/>'), estilo_descricao) if texto else ''

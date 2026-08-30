@@ -1617,6 +1617,26 @@ class Op2Tests(TestCase):
         visual.refresh_from_db()
         self.assertEqual(visual.observacoes, 'Original')
 
+    def test_descricao_visual_autosalva_json_sem_redirect_ou_toast(self):
+        self._login_op2()
+        visual = VisualItemPedido.objects.create(item=self._item(), posicao='frente_camisa')
+        url = reverse('moda:op2-action', args=[self.pedido.pk])
+        for texto in ('Frente & verso', ''):
+            resposta = self.client.post(url, {
+                'acao': 'descricao_visual', 'visual_id': visual.pk, 'descricao': texto,
+            }, HTTP_X_REQUESTED_WITH='XMLHttpRequest')
+            self.assertEqual(resposta.status_code, 200)
+            self.assertEqual(resposta.json(), {'ok': True, 'descricao': texto})
+            visual.refresh_from_db()
+            self.assertEqual(visual.observacoes, texto)
+        resposta = self.client.post(url, {
+            'acao': 'descricao_visual', 'visual_id': visual.pk, 'descricao': 'A' * 161,
+        }, HTTP_X_REQUESTED_WITH='XMLHttpRequest')
+        self.assertEqual(resposta.status_code, 400)
+        self.assertFalse(resposta.json()['ok'])
+        visual.refresh_from_db()
+        self.assertEqual(visual.observacoes, '')
+
     def test_criacao_nao_altera_pedido_de_outra_filial(self):
         self._login_op2()
         filial = Filial.objects.create(
@@ -1657,6 +1677,10 @@ class Op2Tests(TestCase):
         self.assertContains(detalhe, 'Imagens separadas por produto')
         self.assertContains(detalhe, 'name="imagens"')
         self.assertContains(detalhe, 'value="remover_visual"')
+        self.assertContains(detalhe, 'op2LegendaAutomatica()')
+        self.assertContains(detalhe, 'placeholder="Texto da imagem"')
+        self.assertNotContains(detalhe, 'Salvar descrição')
+        self.assertNotContains(detalhe, 'Aparece no PDF da OP e do orçamento')
         self.assertNotContains(detalhe, '+ Frente da camisa')
         self.assertNotContains(detalhe, '+ Costas da camisa')
 

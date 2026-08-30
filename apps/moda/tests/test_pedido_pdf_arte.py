@@ -328,7 +328,8 @@ class ArteNoPdfTests(TestCase):
         return ''
 
     def test_descricao_abaixo_da_imagem_nos_dois_pdfs(self):
-        from reportlab.platypus import Table
+        from reportlab.lib import colors
+        from reportlab.platypus import Paragraph, Table
         from apps.moda.services.pedido_pdf import _estilos
         from apps.moda.services.orcamento_pdf import _estilos as estilos_orcamento
 
@@ -353,6 +354,19 @@ class ArteNoPdfTests(TestCase):
                         self.assertIn(linha, conteudo)
                 else:
                     self.assertEqual(conteudo.strip(), '')
+            if texto.strip():
+                def paragrafos(bloco):
+                    if isinstance(bloco, Paragraph):
+                        return [bloco]
+                    if isinstance(bloco, Table):
+                        return paragrafos(bloco._cellvalues)
+                    if isinstance(bloco, (list, tuple)):
+                        return [p for filho in bloco for p in paragrafos(filho)]
+                    return []
+                for layout in (tabela, orc):
+                    legenda = next(p for p in paragrafos(layout) if 'Escudo' in p.getPlainText() or 'Detalhe' in p.getPlainText())
+                    self.assertEqual(legenda.style.fontName, 'Helvetica-Bold')
+                    self.assertEqual(legenda.style.textColor, colors.black)
             for servico in (PedidoPdfService, OrcamentoPdfService):
                 self.assertTrue(servico.gerar(pedido).startswith(b'%PDF'))
 
