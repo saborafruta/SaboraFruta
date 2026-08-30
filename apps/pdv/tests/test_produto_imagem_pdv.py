@@ -48,7 +48,11 @@ class ProdutoImagemPDVTests(SimpleTestCase):
 
         self.assertIn('x-text="p.tag || p.tipo"', template)
         self.assertIn('class="preco-campanha-badge"', template)
-        self.assertIn('x-text="p.validade"', template)
+        self.assertIn('x-text="validadeModalOferta(p)"', template)
+        self.assertIn("percentualOferta(p)+'% de desconto'", template)
+        self.assertNotIn('As opções estão ordenadas pela maior economia.', template)
+        self.assertNotIn('>Menor preço</span>', template)
+        self.assertIn('@click="abrirPrecoItem(item, true)"', template)
         self.assertIn("'Brinde incluído: '+item.oferta_brindes.join(', ')", template)
 
     def test_ofertas_sao_ordenadas_pelo_menor_preco_unitario(self):

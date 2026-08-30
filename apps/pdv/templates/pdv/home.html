@@ -276,6 +276,9 @@
   .pdv-price-before { font-size:11px;color:#94a3b8;font-weight:500;white-space:nowrap; }
   .prod-card-preco { white-space:nowrap; }
   .cart-stock-note { margin-top:6px;font-size:10px;line-height:1.5;color:#94a3b8; }
+  .cart-total-edit { font:inherit;font-size:16px;font-weight:700;color:var(--pdv-t1);background:transparent;border:0;border-radius:6px;padding:4px;cursor:pointer; }
+  .cart-total-edit:hover { background:var(--pdv-hover); }
+  .cart-total-edit:focus-visible { outline:2px solid #3b82f6;outline-offset:2px; }
   html.tema-claro .prod-card-stock, html.tema-claro .cart-stock-note,
   html.tema-claro .pdv-price-before { color:#64748b; }
   .prod-card-qty { display:none;align-items:center;border:1px solid rgba(37,99,235,.42);border-radius:8px;overflow:hidden;background:rgba(37,99,235,.08);flex-shrink:0; }
@@ -506,6 +509,12 @@
     display:flex; align-items:center; justify-content:center;
   }
   .preco-modal-icon svg { width:17px; height:17px; color:#fff; }
+  .preco-modal-title { font-size:14px;font-weight:700;color:var(--pdv-t1); }
+  .preco-modal-product { font-size:12px;color:#94a3b8;margin-top:3px; }
+  .preco-comparacao { display:flex;align-items:baseline;flex-wrap:wrap;gap:5px;margin-top:6px;color:#94a3b8;font-size:12px; }
+  html.tema-claro .preco-modal-product, html.tema-claro .preco-comparacao { color:#475569; }
+  .preco-desconto { font-size:12px;font-weight:700;color:#4ade80;margin-top:4px; }
+  html.tema-claro .preco-desconto, html.tema-claro .preco-row.melhor .preco-valor { color:#15803d; }
   .preco-list { display:flex; flex-direction:column; gap:7px; padding:10px 12px; max-height:min(520px,65vh); overflow-y:auto; }
   .preco-row {
     display:flex; align-items:center; gap:12px;
@@ -1769,7 +1778,9 @@
                 </div>
               </div>
               <div style="display:flex;flex-direction:column;align-items:flex-end;gap:6px;flex-shrink:0;">
-                <span style="font-size:16px;font-weight:700;color:#fff;" x-text="'R$ ' + fmt(item.valor_total)"></span>
+                <button type="button" class="cart-total-edit" @click="abrirPrecoItem(item, true)"
+                        :aria-label="'Editar valor final de ' + item.descricao" title="Editar valor final do item"
+                        x-text="'R$ ' + fmt(item.valor_total)"></button>
                 <button @click="removerItem(item)" class="cart-remove-btn"
                         :aria-label="'Remover ' + item.descricao" title="Remover item">✕</button>
               </div>
@@ -2228,29 +2239,17 @@
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
           </div>
           <div>
-            <div style="font-size:13px;font-weight:700;color:#e8e8f8;line-height:1.2;">Escolher condição comercial</div>
-            <div style="font-size:11px;color:#3a3a52;margin-top:1px;max-width:260px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;" x-text="modalPreco.descricao"></div>
+            <div class="preco-modal-title">Escolher preço</div>
+            <div class="preco-modal-product" x-text="modalPreco.descricao"></div>
           </div>
         </div>
         <button @click="modalPreco.show=false" class="cli-modal-close">✕</button>
-      </div>
-
-      <!-- Subtítulo -->
-      <div style="padding:10px 20px 4px;font-size:11px;color:#3a3a52;">
-        As opções estão ordenadas pela maior economia. A quantidade necessária será adicionada automaticamente ao carrinho.
       </div>
 
       <!-- Lista de preços -->
       <div class="preco-list">
         <template x-for="(p, idx) in modalPreco.precos" :key="idx">
           <button @click="confirmarPreco(p)" class="preco-row" :class="p.melhor ? 'melhor' : ''">
-            <!-- Valor -->
-            <div class="preco-badge-wrap">
-              <div class="preco-valor" x-text="'R$ '+fmt(p.total)"></div>
-              <div class="preco-resumo" x-show="parseFloat(p.quantidade||1) > 1" x-text="fmtQtd(p.quantidade)+' un. · R$ '+fmt(p.preco)+'/un.'"></div>
-              <span x-show="p.melhor" class="preco-tag-melhor">Menor preço</span>
-              <span x-show="parseFloat(p.economia||0) > 0" class="preco-resumo" style="color:#10b981;font-weight:700;" x-text="'Economize R$ '+fmt(p.economia)"></span>
-            </div>
             <!-- Info -->
             <div class="preco-info">
               <div class="preco-origem">
@@ -2262,8 +2261,14 @@
                   <span class="preco-sem-brinde" x-show="p.sem_brinde">SEM BRINDE</span>
                 </div>
               </div>
-              <div class="preco-detalhe" x-show="p.detalhe" x-text="p.detalhe"></div>
-              <div class="preco-validade" x-show="p.validade"><span>◷</span><span x-text="p.validade"></span></div>
+              <div class="preco-comparacao">
+                <span x-show="Number(p.economia) > 0">De <s x-text="'R$ '+fmt(p.preco_referencia)"></s> por</span>
+                <strong class="preco-valor" x-text="'R$ '+fmt(p.total)"></strong>
+              </div>
+              <div class="preco-desconto" x-show="Number(p.economia_percentual) > 0" x-text="percentualOferta(p)+'% de desconto'"></div>
+              <div class="preco-resumo" x-show="Number(p.quantidade || 1) > 1" x-text="fmtQtd(p.quantidade)+' un. · R$ '+fmt(p.preco)+'/un.'"></div>
+              <div class="preco-detalhe" x-show="['kit','combo','categoria','brinde'].includes(p.tipo) && p.detalhe" x-text="p.detalhe"></div>
+              <div class="preco-validade" x-show="validadeModalOferta(p)" x-text="validadeModalOferta(p)"></div>
               <div class="preco-brinde-estoque" x-show="p.brindes_estoque?.length">
                 <template x-for="brinde in (p.brindes_estoque || [])" :key="brinde.produto_id">
                   <div class="preco-brinde-item" :class="brinde.estoque_suficiente ? '' : 'insuficiente'">
@@ -2631,17 +2636,17 @@
         <!-- Resumo -->
         <div class="dic-summary" x-show="itemEditandoPreco">
           <div class="dic-row">
-            <span class="dic-row-lbl">Preço de tabela</span>
-            <span class="dic-row-val" x-text="'R$ ' + fmt(itemEditandoPreco?._precoOriginal||0)"></span>
+            <span class="dic-row-lbl">Preço de tabela / un.</span>
+            <span class="dic-row-val" x-text="'R$ ' + fmt(itemEditandoPreco ? precoReferenciaItem(itemEditandoPreco) : 0)"></span>
           </div>
           <div class="dic-row total">
-            <span class="dic-row-lbl">Preço atual</span>
-            <span class="dic-row-val" style="color:#60a5fa;" x-text="'R$ ' + fmt(itemEditandoPreco?.valor_unitario||0)"></span>
+            <span class="dic-row-lbl" x-text="editandoTotalItem ? 'Total atual do item' : 'Preço unitário atual'"></span>
+            <span class="dic-row-val" style="color:#60a5fa;" x-text="'R$ ' + fmt((editandoTotalItem ? itemEditandoPreco?.valor_total : itemEditandoPreco?.valor_unitario)||0)"></span>
           </div>
         </div>
 
         <!-- Valor manual -->
-        <p class="dic-seclabel">Novo preço unitário (R$)</p>
+        <p class="dic-seclabel" x-text="editandoTotalItem ? 'Novo valor final do item (R$)' : 'Novo preço unitário (R$)'"></p>
         <div class="dic-manual">
           <div class="dic-field" style="border-color:var(--pdv-bd);">
             <span style="color:#2563eb;">R$</span>
@@ -2654,7 +2659,7 @@
 
         <button x-show="itemEditandoPreco?._precoManual" x-cloak
                 class="dic-chip" style="width:100%;margin-top:10px;"
-                @click="restaurarPrecoItem(itemEditandoPreco)">↺ Restaurar preço de tabela</button>
+                @click="restaurarPrecoItem(itemEditandoPreco)">↺ Restaurar preço da oferta</button>
       </div>
     </div>
   </div>
@@ -3603,7 +3608,7 @@ function pdv() {
     showModalHistorico: false, historicoVendas: [],
     historicoCliente: [], produtosFrequentes: [], historicoClienteTotal: 0, historicoClienteCarregando: false, historicoClienteAberto: null,
     showModalConfig: false, configFormas: [], configTipos: [], configNovaDesc: '', configNovoTipo: 'dinheiro', configSalvando: false, configErro: '',
-    itemEditando: null, itemEditandoPreco: null,
+    itemEditando: null, itemEditandoPreco: null, editandoTotalItem: false,
     descontoItemRascunho: {percentual:'0,00',valor:'0,00'},
     descontoGeralRascunho: {percentual:'0,00',valor:'0,00',totalFinal:'0,00'},
     pendentes: [], orcamentos: [], orcamentosCliente: [], clienteQuery: '', clientesResultados: [], clienteBuscando: false, clienteFoco: -1,
@@ -3674,6 +3679,15 @@ function pdv() {
       const normalizar = texto => String(texto || '').trim().toLocaleLowerCase('pt-BR');
       return !!nome && normalizar(tag) !== normalizar(nome);
     },
+    percentualOferta(oferta) {
+      return Number(oferta.economia_percentual || 0).toLocaleString('pt-BR', {maximumFractionDigits:2});
+    },
+    validadeModalOferta(oferta) {
+      if (['normal','tabela_cliente'].includes(oferta.tipo) || !oferta.validade) return '';
+      const periodo = String(oferta.validade);
+      if (periodo.startsWith('Sem data final')) return periodo.replace('Sem data final', 'Promoção sem prazo final');
+      return 'Promoção válida ' + periodo.replace(/^(\d{2}\/\d{2}\/\d{4}) a /, 'a partir de $1 até ').replace(/^[A-ZÁ]/, letra => letra.toLowerCase());
+    },
     resumoEstoqueCarrinho(item) {
       if (item.tipo_venda === 'kit') return 'Estoque dos componentes será baixado ao finalizar a venda.';
       const produtoId = item.produto_id;
@@ -3693,9 +3707,8 @@ function pdv() {
         }
       }
       const apos = Math.round((Number(saldo)-noCarrinho)*1000)/1000;
-      return 'Estoque atual: '+this.fmtQtd(saldo,item)+' · Nesta venda: '+this.fmtQtd(noCarrinho,item)
-        +' · Após finalizar: '+this.fmtQtd(apos,item)+(apos<0?' (faltam '+this.fmtQtd(-apos,item)+')':'')
-        +' · Ainda não baixado';
+      return 'Em estoque: '+this.fmtQtd(saldo,item)
+        +(apos<0?' · Faltam para esta venda: '+this.fmtQtd(-apos,item):' · Restam após esta venda: '+this.fmtQtd(apos,item));
     },
 
     labelOrigemPreco(item) {
@@ -4235,17 +4248,19 @@ function pdv() {
       this.recalcularTotais(); this.showModalDesconto=false;
     },
 
-    abrirPrecoItem(item) {
+    abrirPrecoItem(item, total = false) {
+      this.editandoTotalItem=total;
       this.itemEditandoPreco=item; this.showModalPrecoItem=true;
-      this.$nextTick(()=>{ try{ const el=this.$refs.inputPrecoValor; if(el){ el.value=String(item.valor_unitario).replace('.',','); el.focus(); el.select(); } }catch(e){} });
+      this.$nextTick(()=>{ try{ const el=this.$refs.inputPrecoValor; if(el){ el.value=String(total?item.valor_total:item.valor_unitario).replace('.',','); el.focus(); el.select(); } }catch(e){} });
     },
     aplicarPrecoItem(item,val) {
       if(!item)return;
-      const novo=parseFloat(String(val).replace(',','.'));
-      if(!novo||novo<=0){ this.toast_('Informe um preço válido.','erro'); return; }
-      if(parseFloat(item.custo_atual||0)>0 && novo<parseFloat(item.custo_atual)){
-        this.toast_('O preço manual não pode ficar abaixo do custo atual.','erro'); return;
-      }
+      const entrada=this.numeroDesconto(val);
+      if(!Number.isFinite(entrada)||entrada<=0){ this.toast_('Informe um preço válido.','erro'); return; }
+      if(this.editandoTotalItem && !(Number(item.quantidade)>0)) return;
+      // Keep existing item discount in reais when converting a final total to unit price.
+      const novo=this.editandoTotalItem
+        ? Math.round((entrada+Number(item.desconto_valor||0))/Number(item.quantidade)*10000)/10000 : entrada;
       item.valor_unitario=novo;
       item._precoManual=Math.abs(novo-item._precoOriginal)>0.0001;
       item.preco_manual=item._precoManual?novo:null;

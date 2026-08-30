@@ -369,23 +369,30 @@ class VendaPDVServiceTests(TestCase):
         self.assertEqual(item.desconto_percentual, Decimal("15.00"))
         self.assertEqual(item.valor_total, Decimal("17.00"))
 
-    def test_preco_manual_abaixo_do_custo_e_bloqueado(self):
+    def test_preco_manual_abaixo_do_custo_e_permitido(self):
         produto = self.criar_produto("Produto protegido por custo")
         self.abastecer(produto, "2")
 
-        with self.assertRaisesMessage(DadosInvalidosError, "preço manual está abaixo do custo"):
-            VendaPDVService.finalizar_venda(
-                sessao=self.sessao,
-                filial=self.filial,
-                usuario=self.usuario,
-                itens=[{
-                    "produto_id": produto.pk,
-                    "quantidade": "1",
-                    "oferta_tipo": "normal",
-                    "preco_manual": "3.00",
-                }],
-                pagamentos=[{"forma_id": self.forma.pk, "valor": "3.00"}],
-            )
+        venda = VendaPDVService.finalizar_venda(
+            sessao=self.sessao, filial=self.filial, usuario=self.usuario,
+            itens=[{"produto_id": produto.pk, "quantidade": "1", "oferta_tipo": "normal", "preco_manual": "3.00"}],
+            pagamentos=[{"forma_id": self.forma.pk, "valor": "3.00"}],
+        )
+        item = venda.itens.get()
+        self.assertEqual(item.valor_unitario, Decimal("3.00"))
+        self.assertEqual(item.custo_unitario_snapshot, Decimal("4.00"))
+        self.assertEqual(venda.valor_total, Decimal("3.00"))
+
+    def test_preco_manual_zero_e_negativo_continuam_bloqueados(self):
+        produto = self.criar_produto()
+        self.abastecer(produto, "2")
+        for preco in ("0", "-1"):
+            with self.subTest(preco=preco), self.assertRaisesMessage(DadosInvalidosError, "Preco manual deve ser maior que zero"):
+                VendaPDVService.finalizar_venda(
+                    sessao=self.sessao, filial=self.filial, usuario=self.usuario,
+                    itens=[{"produto_id": produto.pk, "quantidade": "1", "preco_manual": preco}],
+                    pagamentos=[{"forma_id": self.forma.pk, "valor": "3.00"}],
+                )
 
     def test_finalizar_venda_sem_estoque_faz_rollback(self):
         produto = self.criar_produto("Produto sem saldo")
@@ -470,7 +477,7 @@ class VendaPDVServiceTests(TestCase):
             "a venda passou sem nem avisar que o custo esta em branco",
         )
 
-    def test_promocao_com_margem_negativa_bloqueia_venda(self):
+    def test_promocao_com_margem_negativa_permite_venda(self):
         produto = self.criar_produto("Produto margem negativa")
         self.abastecer(produto, "5")
         ProdutoFilial.objects.filter(produto=produto, filial=self.filial).update(
@@ -481,14 +488,15 @@ class VendaPDVServiceTests(TestCase):
             promocao_dias_semana="0,1,2,3,4,5,6",
         )
 
-        with self.assertRaises(DadosInvalidosError):
-            VendaPDVService.finalizar_venda(
-                sessao=self.sessao,
-                filial=self.filial,
-                usuario=self.usuario,
-                itens=[{"produto_id": produto.pk, "quantidade": "1"}],
-                pagamentos=[{"forma_id": self.forma.pk, "valor": "3.00"}],
-            )
+        contrato = ProdutoVendavelService.consultar(produto=produto, filial=self.filial)
+        self.assertTrue(contrato['pode_vender'])
+        self.assertIn('margem_negativa', {alerta['codigo'] for alerta in contrato['alertas']})
+        venda = VendaPDVService.finalizar_venda(
+            sessao=self.sessao, filial=self.filial, usuario=self.usuario,
+            itens=[{"produto_id": produto.pk, "quantidade": "1"}],
+            pagamentos=[{"forma_id": self.forma.pk, "valor": "3.00"}],
+        )
+        self.assertEqual(venda.valor_total, Decimal("3.00"))
 
     def test_combo_quantidade_entra_no_preco_vivo_do_pdv(self):
         produto = self.criar_produto("Produto combo")
@@ -556,6 +564,22 @@ class VendaPDVServiceTests(TestCase):
         self.assertEqual(venda.valor_total, Decimal("27.00"))
         self.assertEqual(estoque_a.quantidade_atual, Decimal("8.000"))
         self.assertEqual(estoque_b.quantidade_atual, Decimal("9.000"))
+
+    def test_kit_abaixo_do_custo_permite_venda(self):
+        produto = self.criar_produto("Kit em liquidação")
+        self.abastecer(produto, "3")
+        kit = KitProduto.objects.create(
+            filial=self.filial, nome="Liquidação",
+            tipo_desconto=TipoDesconto.PERCENTUAL, valor_desconto=Decimal("80"),
+        )
+        KitProdutoItem.objects.create(kit=kit, produto=produto, quantidade=Decimal("2"))
+        venda = VendaPDVService.finalizar_venda(
+            sessao=self.sessao, filial=self.filial, usuario=self.usuario,
+            itens=[{"tipo_venda": "kit", "kit_id": kit.pk, "quantidade": "1"}],
+            pagamentos=[{"forma_id": self.forma.pk, "valor": "4.00"}],
+        )
+        self.assertEqual(venda.valor_total, Decimal("4.00"))
+        self.assertEqual(venda.itens.get().custo_unitario_snapshot, Decimal("4.00"))
 
     def test_brinde_baixa_produto_gratis_com_movimento_de_brinde(self):
         gatilho = self.criar_produto("Produto gatilho")

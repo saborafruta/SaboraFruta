@@ -324,8 +324,6 @@ class VendaPDVService:
         preco_origem_detalhe = preco_info["detalhe"] or preco_info["origem"]
         if valor_unitario <= 0:
             raise DadosInvalidosError("O preço da condição escolhida deve ser maior que zero.")
-        if contrato["custo_atual"] > 0 and valor_unitario < contrato["custo_atual"]:
-            raise DadosInvalidosError("O preço da condição escolhida está abaixo do custo atual.")
 
         preco_manual = item_dados.get("preco_manual")
         if preco_manual not in (None, ""):
@@ -338,8 +336,6 @@ class VendaPDVService:
                 f"Preco alterado manualmente pelo operador "
                 f"(preco automatico: R$ {preco_info['preco']})."
             )
-            if contrato["custo_atual"] > 0 and valor_unitario < contrato["custo_atual"]:
-                raise DadosInvalidosError("O preço manual está abaixo do custo atual do produto.")
 
         valor_bruto_item = cls._decimal(quantidade * valor_unitario, cls.MONEY)
         desconto_valor = cls._decimal(item_dados.get("desconto_valor", "0"), cls.MONEY)
@@ -444,7 +440,6 @@ class VendaPDVService:
 
         itens = []
         subtotal_sem_desconto = Decimal("0.00")
-        custo_total_kit = Decimal("0.00")
         precos_componentes = []
         for comp in componentes:
             qtd_componente = cls._decimal(comp.quantidade * quantidade_kit, Decimal("0.001"))
@@ -474,14 +469,11 @@ class VendaPDVService:
                 raise DadosInvalidosError(f'O componente "{comp.produto.descricao}" está sem preço válido no kit.')
             total = cls._decimal(qtd_componente * preco_unitario, cls.MONEY)
             subtotal_sem_desconto += total
-            custo_total_kit += cls._decimal(qtd_componente * contrato["custo_atual"], cls.MONEY)
             precos_componentes.append((comp, qtd_componente, contrato, preco_unitario, total))
 
         total_kit = cls._aplicar_desconto_kit(subtotal_sem_desconto, kit.tipo_desconto, kit.valor_desconto)
         if total_kit <= 0:
             raise DadosInvalidosError("O preço do kit deve ser maior que zero.")
-        if custo_total_kit > 0 and total_kit < custo_total_kit:
-            raise DadosInvalidosError("O preço do kit escolhido está abaixo do custo atual dos componentes.")
         fator = (total_kit / subtotal_sem_desconto) if subtotal_sem_desconto > 0 else Decimal("0")
         for offset, (comp, qtd_componente, contrato, preco_unitario, total) in enumerate(precos_componentes):
             valor_total_item = cls._decimal(total * fator, cls.MONEY)

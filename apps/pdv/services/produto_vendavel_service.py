@@ -45,12 +45,16 @@ class ProdutoVendavelService:
         avaliacao = avaliar_produto_para_venda(produto, filial=filial)
         bloqueios = [
             item for item in avaliacao["pendencias"]
-            if item.get("severidade") == "bloqueio"
+            if item.get("severidade") == "bloqueio" and item.get("codigo") != "promocao_margem_negativa"
         ]
         alertas = [
             item for item in avaliacao["pendencias"]
             if item.get("severidade") != "bloqueio"
         ]
+        alertas.extend(
+            dict(item, severidade="aviso") for item in avaliacao["pendencias"]
+            if item.get("codigo") == "promocao_margem_negativa"
+        )
         if preco_aplicado <= 0:
             bloqueios.append({
                 "codigo": "preco_aplicado_invalido",
@@ -66,11 +70,11 @@ class ProdutoVendavelService:
                 "severidade": "aviso",
             })
         if custo_atual > 0 and preco_aplicado < custo_atual:
-            bloqueios.append({
+            alertas.append({
                 "codigo": "margem_negativa",
                 "label": "Preco aplicado abaixo do custo atual.",
                 "status": avaliacao["status"],
-                "severidade": "bloqueio",
+                "severidade": "aviso",
             })
 
         lote_obrigatorio = bool(produto.controla_lote or produto.controla_validade)
