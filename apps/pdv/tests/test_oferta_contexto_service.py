@@ -24,6 +24,8 @@ class OfertaContextoServiceTests(SimpleTestCase):
             '_quantidadeMinOferta': 2,
             '_ofertaSelecionada': True,
             '_precoOriginal': 10,
+            '_precoTabela': 15,
+            'oferta_componentes_estoque': [{'produto_id': 9, 'quantidade': 2}],
         })
 
         self.assertEqual(contexto['brinde_id'], 17)
@@ -39,6 +41,9 @@ class OfertaContextoServiceTests(SimpleTestCase):
         self.assertEqual(payload['oferta_nome'], 'Campanha de aniversário')
         self.assertEqual(payload['_quantidadeMinOferta'], 2)
         self.assertTrue(payload['_ofertaSelecionada'])
+        self.assertEqual(payload['preco_tabela'], 15)
+        self.assertEqual(payload['preco_original'], 10)
+        self.assertEqual(payload['oferta_componentes_estoque'], [{'produto_id': 9, 'quantidade': 2}])
 
     def test_template_exibe_escolha_sem_brinde_e_saldo_do_presente(self):
         template = (

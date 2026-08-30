@@ -456,13 +456,15 @@ def _finalizar_ofertas(ofertas):
         oferta['total'] = float(total)
         oferta['quantidade'] = float(Decimal(str(oferta.get('quantidade') or 1)))
     ofertas.sort(key=lambda item: (
+        item.get('tipo') == 'kit',  # Full bundles are not comparable to a single product unit.
+        item.get('preco', 0),
         -item.get('economia_percentual', 0),
         -item.get('economia', 0),
         item.get('total', 0),
         item.get('tipo') == 'normal',
     ))
-    if ofertas:
-        ofertas[0]['melhor'] = True
+    for indice, oferta in enumerate(ofertas):
+        oferta['melhor'] = indice == 0
     return ofertas
 
 
@@ -582,6 +584,7 @@ def _ofertas_produto(produto, filial, hoje=None, cliente=None, contrato=None, co
             continue
         base = Decimal('0')
         componentes = []
+        componentes_estoque = []
         for componente in kit.itens.all():
             unitario = componente.produto.preco_venda or Decimal('0')
             if cliente and cliente.tabela_preco_id:
@@ -593,12 +596,14 @@ def _ofertas_produto(produto, filial, hoje=None, cliente=None, contrato=None, co
                 unitario = PrecoService.preco_vivo_produto(componente.produto, filial=filial, quantidade=componente.quantidade)
             base += unitario * componente.quantidade
             componentes.append(f'{componente.quantidade:g}x {componente.produto.descricao_pdv or componente.produto.descricao}')
+            componentes_estoque.append({'produto_id': componente.produto_id, 'quantidade': float(componente.quantidade)})
         total = PrecoService.aplicar_regra_desconto(base, kit.tipo_desconto, kit.valor_desconto)
         ofertas.append({
             'preco': total, 'total': total, 'preco_referencia': base, 'quantidade': 1,
             'tipo': 'kit', 'oferta_tipo': 'kit', 'tag': 'KIT DE PRODUTOS',
             'origem': kit.nome, 'detalhe': kit.descricao or ' + '.join(componentes),
             'componentes': componentes,
+            'componentes_estoque': componentes_estoque,
             'validade': _validade_oferta(kit.data_inicio, kit.data_fim, kit.dias_semana),
             'kit_id': kit.pk,
         })
@@ -843,6 +848,7 @@ def _serializar_item_rascunho(item):
         'linha': produto.linha_producao.nome if produto.linha_producao else None,
         'quantidade': float(item.quantidade),
         'valor_unitario': float(item.valor_unitario),
+        'preco_tabela': float(item.valor_unitario_tabela or produto.preco_venda),
         'valor_total': float(item.valor_total),
         'desconto_percentual': float(item.desconto_percentual or 0),
         'desconto_valor': float(item.desconto_valor or 0),
@@ -852,6 +858,14 @@ def _serializar_item_rascunho(item):
         **_produto_imagem_payload(produto),
     }
     return aplicar_contexto_oferta(payload, item)
+
+
+def _serializar_itens_rascunho(venda):
+    itens = list(venda.itens.select_related('produto__linha_producao').order_by('numero_item'))
+    saldos = dict(Estoque.objects.filter(
+        filial_id=venda.filial_id, produto_id__in=[item.produto_id for item in itens],
+    ).values_list('produto_id', 'quantidade_disponivel'))
+    return [dict(_serializar_item_rascunho(item), estoque_disponivel=float(saldos.get(item.produto_id, 0))) for item in itens]
 
 
 def _serializa_produto(
@@ -1400,10 +1414,7 @@ def api_pendente_detalhe(request, pk):
     except VendaPDV.DoesNotExist:
         return JsonResponse({"erro": "Venda pendente não encontrada."}, status=404)
 
-    itens = [
-        _serializar_item_rascunho(item)
-        for item in venda.itens.select_related("produto__linha_producao")
-    ]
+    itens = _serializar_itens_rascunho(venda)
 
     # Endereço/contato do cliente também vão no retorno: ao retomar a venda
     # o PDV remonta o objeto do cliente do zero, e sem isso o comprovante
@@ -3081,10 +3092,7 @@ def api_orcamento_detalhe(request, pk):
     except VendaPDV.DoesNotExist:
         return JsonResponse({"erro": "Orçamento não encontrado."}, status=404)
 
-    itens = [
-        _serializar_item_rascunho(item)
-        for item in venda.itens.select_related("produto__linha_producao").order_by("numero_item")
-    ]
+    itens = _serializar_itens_rascunho(venda)
 
     return JsonResponse({
         "ok": True,
@@ -3152,10 +3160,7 @@ def api_orcamento_retomar(request, pk):
     venda.save(update_fields=["status", "sessao_pdv"])
 
     # Retorna os dados completos para o PDV carregar
-    itens = [
-        _serializar_item_rascunho(item)
-        for item in venda.itens.select_related("produto__linha_producao").order_by("numero_item")
-    ]
+    itens = _serializar_itens_rascunho(venda)
 
     return JsonResponse({
         "ok": True,

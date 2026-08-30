@@ -19,6 +19,64 @@ const respond = (payload, ok = true) => {
 };
 (async () => {
   const app = create();
+  const offers = create();
+  const product = {id:9, descricao:'Camisa', preco:100, preco_base:100, estoque_disponivel:5, tipo_produto:'unitario', ofertas:[
+    {tipo:'normal',oferta_tipo:'normal',preco:100,quantidade:1},
+    {tipo:'promocional',oferta_tipo:'promocional',preco:60,quantidade:1,tag:'PROMOÇÃO INDIVIDUAL',origem:'Promoção individual'},
+    {tipo:'combo',oferta_tipo:'combo',preco:50,quantidade:3,promocao_id:1,faixa_id:2},
+    {tipo:'kit',oferta_tipo:'kit',preco:40,total:40,quantidade:1},
+  ]};
+  assert.equal(offers.precoCatalogo(product),50,'Catalog shows the lowest comparable unit price');
+  assert.equal(offers.ofertaCatalogo(product).quantidade,3,'Conditional minimum remains visible');
+  offers.adicionarItem(product);
+  assert.equal(offers.modalPreco.show,true);
+  assert.equal(offers.venda.itens.length,0,'Wait for attendant confirmation before adding a condition');
+  offers.confirmarPreco(product.ofertas[1]);
+  assert.equal(offers.venda.itens[0].valor_unitario,60);
+  assert.equal(offers.precoReferenciaItem(offers.venda.itens[0]),100);
+  assert.equal(offers.venda.itens[0]._precoOriginal,60,'Manual price restore must keep the selected promotion');
+  assert.equal(offers.campanhaDistinta('PROMOÇÃO INDIVIDUAL','Promoção individual'),false);
+  assert.equal(offers.campanhaDistinta('COMBO','Saldão'),true);
+  offers._pushItem(product,product.ofertas[2],true);
+  const stockText=offers.resumoEstoqueCarrinho(offers.venda.itens[0]);
+  assert.match(stockText,/Estoque atual: 5/);
+  assert.match(stockText,/Nesta venda: 4/,'Sum separate offer lines of the same product');
+  assert.match(stockText,/Após finalizar: 1/);
+  assert.match(stockText,/Ainda não baixado/);
+  offers.venda.itens[1].quantidade=6;
+  assert.match(offers.resumoEstoqueCarrinho(offers.venda.itens[0]),/Após finalizar: -2/);
+  assert.equal(product.estoque_disponivel,5,'Cart preview must not mutate real stock');
+  offers.venda.itens.push({produto_id:10,quantidade:2,oferta_brindes_estoque:[{produto_id:9,quantidade:1}],brinde_quantidade_gatilho:2});
+  assert.match(offers.resumoEstoqueCarrinho(offers.venda.itens[0]),/Nesta venda: 8/,'Include gifts using the same stock');
+  offers.venda.itens.push({tipo_venda:'kit',quantidade:2,oferta_componentes_estoque:[{produto_id:9,quantidade:3}]});
+  assert.match(offers.resumoEstoqueCarrinho(offers.venda.itens[0]),/Nesta venda: 14/);
+  assert.match(offers.resumoEstoqueCarrinho({produto_id:99}),/não consultado/);
+  assert.equal(offers.precoCatalogo({preco:12}),12);
+  assert.equal(offers.precoCatalogo({preco:12,ofertas:[{tipo:'promocional',preco:0}]}),0);
+
+  const finalDiscount=create();
+  finalDiscount.$nextTick=fn=>fn(); finalDiscount.$refs={};
+  finalDiscount.venda.itens=[{quantidade:3,valor_total:209.97}];
+  finalDiscount.recalcularTotais(); finalDiscount.abrirDescontoGeral();
+  finalDiscount.sincronizarTotalFinal('200,00');
+  assert.equal(finalDiscount.descontoGeralRascunho.valor,'9,97');
+  assert.equal(finalDiscount.descontoGeralRascunho.percentual,'4,75');
+  assert.equal(finalDiscount.venda.total,209.97,'Do not mutate sale while editing final total');
+  finalDiscount.aplicarDescontoGeralValor();
+  assert.equal(finalDiscount.venda.total,200);
+  finalDiscount.sincronizarDesconto(finalDiscount.descontoGeralRascunho,'valor','10',209.97);
+  assert.equal(finalDiscount.descontoGeralRascunho.totalFinal,'199,97');
+  finalDiscount.venda.acrescimo=5;
+  finalDiscount.sincronizarTotalFinal('200,');
+  assert.equal(finalDiscount.descontoGeralRascunho.totalFinal,'200,');
+  assert.equal(finalDiscount.descontoGeralRascunho.valor,'14,97');
+  finalDiscount.sincronizarTotalFinal('-10');
+  assert.equal(finalDiscount.descontoGeralRascunho.totalFinal,'5,00','Do not discount a surcharge');
+  finalDiscount.sincronizarTotalFinal('900');
+  assert.equal(finalDiscount.descontoGeralRascunho.totalFinal,'214,97');
+  finalDiscount.venda.subtotal=0; finalDiscount.venda.acrescimo=0;
+  finalDiscount.sincronizarTotalFinal('10');
+  assert.equal(finalDiscount.descontoGeralRascunho.percentual,'0,00');
   const discount = create();
   discount.$nextTick = fn => fn();
   discount.$refs = {};

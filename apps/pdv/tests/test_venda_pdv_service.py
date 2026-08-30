@@ -54,6 +54,12 @@ class VendaPDVServiceTests(TestCase):
         self.assertEqual(orcamento.itens.get().observacao, 'Orçamento em negrito')
         detalhe_orcamento = self.client.get(reverse('pdv:api_orcamento_detalhe', args=[orcamento.pk])).json()
         self.assertEqual(detalhe_orcamento['itens'][0]['obs'], 'Orçamento em negrito')
+        self.assertEqual(detalhe_orcamento['itens'][0]['estoque_disponivel'], 4)
+        self.assertEqual(detalhe_orcamento['itens'][0]['preco_tabela'], 10)
+        # The cart projection must start from the current stock, never a persisted snapshot.
+        self.abastecer(produto, '2')
+        atualizado = self.client.get(reverse('pdv:api_orcamento_detalhe', args=[orcamento.pk])).json()
+        self.assertEqual(atualizado['itens'][0]['estoque_disponivel'], 6)
 
     def test_link_publico_com_desconto_e_isolamento(self):
         from urllib.parse import urlsplit

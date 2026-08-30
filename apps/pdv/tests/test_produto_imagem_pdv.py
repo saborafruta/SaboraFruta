@@ -51,13 +51,14 @@ class ProdutoImagemPDVTests(SimpleTestCase):
         self.assertIn('x-text="p.validade"', template)
         self.assertIn("'Brinde incluído: '+item.oferta_brindes.join(', ')", template)
 
-    def test_ofertas_sao_ordenadas_pela_maior_economia(self):
+    def test_ofertas_sao_ordenadas_pelo_menor_preco_unitario(self):
         ofertas = _finalizar_ofertas([
             {'tipo': 'normal', 'preco': 10, 'total': 10, 'preco_referencia': 10, 'quantidade': 1},
             {'tipo': 'combo', 'preco': 8, 'total': 24, 'preco_referencia': 30, 'quantidade': 3},
             {'tipo': 'brinde', 'preco': 10, 'total': 20, 'preco_referencia': 30, 'quantidade': 2},
         ])
 
-        self.assertEqual([item['tipo'] for item in ofertas], ['brinde', 'combo', 'normal'])
+        self.assertEqual([item['tipo'] for item in ofertas], ['combo', 'brinde', 'normal'])
         self.assertTrue(ofertas[0]['melhor'])
-        self.assertEqual(ofertas[0]['economia'], 10.0)
+        self.assertEqual(ofertas[0]['economia'], 6.0)
+        self.assertEqual(sum(item['melhor'] for item in ofertas), 1)

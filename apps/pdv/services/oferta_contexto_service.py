@@ -6,6 +6,7 @@ _CAMPOS_DIRETOS = (
     'oferta_brindes', 'oferta_brindes_estoque', 'promocao_id', 'faixa_id',
     'kit_categoria_id', 'regra_id', 'brinde_id', 'kit_id', 'tipo_venda',
     'preco_manual', 'brinde_quantidade_gatilho',
+    'oferta_componentes_estoque',
 )
 
 
@@ -20,6 +21,7 @@ def contexto_oferta_do_payload(item_dados: dict) -> dict:
         'quantidade_exata': item_dados.get('_quantidadeExata'),
         'oferta_selecionada': item_dados.get('_ofertaSelecionada'),
         'preco_original': item_dados.get('_precoOriginal'),
+        'preco_tabela': item_dados.get('_precoTabela'),
     }
     contexto.update({chave: valor for chave, valor in mapeados.items() if valor not in (None, '')})
     return contexto

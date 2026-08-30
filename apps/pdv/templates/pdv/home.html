@@ -270,13 +270,14 @@
   .prod-card-nome { font-size:13px;font-weight:500;color:var(--pdv-t5);white-space:nowrap;overflow:hidden;text-overflow:ellipsis; }
   .prod-card-info { display:flex;align-items:center;justify-content:space-between;gap:8px;margin-top:3px; }
   .prod-card-preco { font-size:13px;font-weight:700;color:#3b82f6; }
-  .prod-card-stock { flex-shrink:0;padding:2px 6px;border-radius:999px;font-size:9px;font-weight:800;line-height:1.25;border:1px solid transparent; }
-  .prod-card-stock.stock-ok { color:#15803d;background:#dcfce7;border-color:#86efac; }
-  .prod-card-stock.stock-low { color:#a16207;background:#fef9c3;border-color:#fde047; }
-  .prod-card-stock.stock-zero { color:#b91c1c;background:#fee2e2;border-color:#fca5a5; }
-  html:not(.tema-claro) .prod-card-stock.stock-ok { color:#4ade80;background:rgba(34,197,94,.13);border-color:rgba(74,222,128,.28); }
-  html:not(.tema-claro) .prod-card-stock.stock-low { color:#facc15;background:rgba(250,204,21,.12);border-color:rgba(250,204,21,.28); }
-  html:not(.tema-claro) .prod-card-stock.stock-zero { color:#f87171;background:rgba(248,113,113,.12);border-color:rgba(248,113,113,.28); }
+  .prod-card-stock { font-size:10px;font-weight:500;line-height:1.35;color:#94a3b8; }
+  .prod-card-info { flex-wrap:wrap; }
+  .prod-card-prices { display:flex;align-items:baseline;gap:5px;flex-wrap:wrap; }
+  .pdv-price-before { font-size:11px;color:#94a3b8;font-weight:500;white-space:nowrap; }
+  .prod-card-preco { white-space:nowrap; }
+  .cart-stock-note { margin-top:6px;font-size:10px;line-height:1.5;color:#94a3b8; }
+  html.tema-claro .prod-card-stock, html.tema-claro .cart-stock-note,
+  html.tema-claro .pdv-price-before { color:#64748b; }
   .prod-card-qty { display:none;align-items:center;border:1px solid rgba(37,99,235,.42);border-radius:8px;overflow:hidden;background:rgba(37,99,235,.08);flex-shrink:0; }
   .prod-card-qty button { width:34px;height:34px;border:0;background:transparent;color:#2563eb;font-size:16px;font-weight:800;cursor:pointer;touch-action:manipulation; }
   .prod-card-remove { color:#f87171 !important;border-left:1px solid rgba(248,113,113,.22) !important;background:rgba(248,113,113,.06) !important; }
@@ -1421,14 +1422,18 @@
                 <div style="flex:1;min-width:0;">
                   <div class="prod-card-nome" x-text="p.descricao"></div>
                   <div class="prod-card-info">
-                    <div class="prod-card-preco" x-text="'R$ ' + fmt(p.preco)"></div>
+                    <div class="prod-card-prices">
+                      <s class="pdv-price-before" x-show="precoCatalogo(p) < Number(p.preco_base || p.preco)" x-cloak x-text="'R$ ' + fmt(p.preco_base || p.preco)"></s>
+                      <div class="prod-card-preco" x-text="'R$ ' + fmt(precoCatalogo(p))"></div>
+                    </div>
                     <span x-show="p.tipo_produto !== 'servico'" class="prod-card-stock"
-                          :class="Number(p.estoque_disponivel||0) <= 0 ? 'stock-zero' : (Number(p.estoque_disponivel||0) <= 3 ? 'stock-low' : 'stock-ok')"
+                          title="Saldo atual no sistema, antes de finalizar esta venda."
                           x-text="'Estoque: ' + fmtQtd(p.estoque_disponivel, p)"></span>
                   </div>
-                  <span class="preco-origem-tag" x-show="temPromocao(p)" x-cloak
-                        :class="p.preco_origem_tipo === 'tabela_cliente' ? 'especial' : ''"
-                        x-text="labelOrigemPreco(p)"></span>
+                  <span class="preco-origem-tag" x-show="temPromocao(ofertaCatalogo(p))" x-cloak
+                        x-text="ofertaCatalogo(p).origem || 'Promoção'"></span>
+                  <span class="prod-card-stock" x-show="Number(ofertaCatalogo(p).quantidade || 1) > 1" x-cloak
+                        x-text="'A partir de ' + fmtQtd(ofertaCatalogo(p).quantidade, p) + ' un. · escolha a oferta'"></span>
                 </div>
               </button>
               <div class="prod-card-qty" x-show="qtdProdutoNoCarrinho(p.id)>0" x-cloak>
@@ -1715,13 +1720,13 @@
               <div style="flex:1;min-width:0;">
                 <div style="font-size:13px;font-weight:600;color:#e5e5f0;text-transform:uppercase;letter-spacing:.02em;line-height:1.2;" x-text="item.descricao"></div>
                 <div style="display:flex;align-items:center;gap:8px;margin-top:4px;flex-wrap:wrap;">
-                  <template x-if="item._precoManual">
+                  <template x-if="item._precoManual || precoReferenciaItem(item) > Number(item.valor_unitario)">
                     <span style="font-size:12px;color:#555;">
-                      <s style="opacity:.55;" x-text="'R$ ' + fmt(item._precoOriginal)"></s>
+                      <s class="pdv-price-before" x-text="'R$ ' + fmt(precoReferenciaItem(item))"></s>
                       → <span style="color:#60a5fa;font-weight:700;" x-text="'R$ ' + fmt(item.valor_unitario)"></span> / un.
                     </span>
                   </template>
-                  <template x-if="!item._precoManual">
+                  <template x-if="!item._precoManual && precoReferenciaItem(item) <= Number(item.valor_unitario)">
                     <span style="font-size:12px;color:#555;" x-text="'R$ ' + fmt(item.valor_unitario) + ' / un.'"></span>
                   </template>
                   <template x-if="item.desconto_valor>0">
@@ -1733,9 +1738,10 @@
                   <span class="preco-tipo-badge"
                         :class="{'badge-promocional':item.oferta_tipo==='promocional','badge-categoria':item.oferta_tipo==='categoria','badge-combo':item.oferta_tipo==='combo','badge-kit':item.oferta_tipo==='kit','badge-brinde':item.oferta_tipo==='brinde','badge-normal':['normal','tabela_cliente'].includes(item.oferta_tipo)}"
                         x-text="item.oferta_tag"></span>
-                  <span class="preco-campanha-badge" x-show="item.oferta_nome" x-text="item.oferta_nome"></span>
+                  <span class="preco-campanha-badge" x-show="campanhaDistinta(item.oferta_tag, item.oferta_nome)" x-text="item.oferta_nome"></span>
                   <span class="cart-offer-validade" x-show="item.oferta_validade" x-text="'Válida: '+item.oferta_validade"></span>
                 </div>
+                <div class="cart-stock-note" x-show="item.tipo_produto !== 'servico'" x-text="resumoEstoqueCarrinho(item)"></div>
                 <div x-show="item.oferta_brindes?.length" x-cloak style="font-size:10px;color:#f472b6;margin-top:4px;"
                      x-text="'Brinde incluído: '+item.oferta_brindes.join(', ')"></div>
                 <div x-show="item.oferta_brindes_estoque?.length" x-cloak style="font-size:9.5px;color:#94a3b8;margin-top:3px;"
@@ -2242,7 +2248,7 @@
             <div class="preco-badge-wrap">
               <div class="preco-valor" x-text="'R$ '+fmt(p.total)"></div>
               <div class="preco-resumo" x-show="parseFloat(p.quantidade||1) > 1" x-text="fmtQtd(p.quantidade)+' un. · R$ '+fmt(p.preco)+'/un.'"></div>
-              <span x-show="p.melhor" class="preco-tag-melhor">Mais atrativa</span>
+              <span x-show="p.melhor" class="preco-tag-melhor">Menor preço</span>
               <span x-show="parseFloat(p.economia||0) > 0" class="preco-resumo" style="color:#10b981;font-weight:700;" x-text="'Economize R$ '+fmt(p.economia)"></span>
             </div>
             <!-- Info -->
@@ -2252,7 +2258,7 @@
                 <span class="preco-tipo-badge"
                       :class="{'badge-promocional':p.tipo==='promocional','badge-categoria':p.tipo==='categoria','badge-combo':p.tipo==='combo','badge-kit':p.tipo==='kit','badge-brinde':p.tipo==='brinde','badge-normal':['normal','tabela_cliente'].includes(p.tipo)}"
                       x-text="p.tag || p.tipo"></span>
-                  <span class="preco-campanha-badge" x-text="p.origem"></span>
+                  <span class="preco-campanha-badge" x-show="campanhaDistinta(p.tag, p.origem)" x-text="p.origem"></span>
                   <span class="preco-sem-brinde" x-show="p.sem_brinde">SEM BRINDE</span>
                 </div>
               </div>
@@ -2691,7 +2697,15 @@
           </div>
         </label>
       </div>
+      <label class="discount-help" for="pdv-total-final-desconto">Valor final da venda (R$)</label>
+      <div class="dic-field">
+        <span>R$</span>
+        <input id="pdv-total-final-desconto" type="text" inputmode="decimal" :value="descontoGeralRascunho.totalFinal"
+               @input="sincronizarTotalFinal($event.target.value)" @keydown.enter.prevent="aplicarDescontoGeralValor()"
+               aria-label="Valor final da venda com desconto">
+      </div>
       <p class="discount-help">Calculado sobre o subtotal, após os descontos dos itens.</p>
+      <p class="discount-help" x-show="Number(venda.acrescimo || 0) > 0">O total final inclui o acréscimo, que não é descontado.</p>
       <button class="discount-apply" @click="aplicarDescontoGeralValor()">Aplicar desconto</button>
       </div>
     </div>
@@ -3591,7 +3605,7 @@ function pdv() {
     showModalConfig: false, configFormas: [], configTipos: [], configNovaDesc: '', configNovoTipo: 'dinheiro', configSalvando: false, configErro: '',
     itemEditando: null, itemEditandoPreco: null,
     descontoItemRascunho: {percentual:'0,00',valor:'0,00'},
-    descontoGeralRascunho: {percentual:'0,00',valor:'0,00'},
+    descontoGeralRascunho: {percentual:'0,00',valor:'0,00',totalFinal:'0,00'},
     pendentes: [], orcamentos: [], orcamentosCliente: [], clienteQuery: '', clientesResultados: [], clienteBuscando: false, clienteFoco: -1,
     deliveryAguardandoCliente: false,
     creditoDisponivel: 0, creditoAplicado: 0,
@@ -3645,6 +3659,43 @@ function pdv() {
       return ['promocional', 'categoria', 'combo', 'kit', 'brinde'].includes(
         item?.oferta_tipo || item?.preco_origem_tipo
       );
+    },
+
+    ofertaCatalogo(produto) {
+      // Kits contain different products: their full price is not a unit price for this card.
+      const ofertas = (produto.ofertas || produto.todos_precos || [])
+        .filter(o => (o.oferta_tipo || o.tipo) !== 'kit' && Number.isFinite(Number(o.preco)));
+      return ofertas.reduce((menor, o) => !menor || Number(o.preco) < Number(menor.preco) ? o : menor, null)
+        || {preco:produto.preco, oferta_tipo:produto.preco_origem_tipo, origem:produto.preco_origem};
+    },
+    precoCatalogo(produto) { return Number(this.ofertaCatalogo(produto).preco || 0); },
+    precoReferenciaItem(item) { return Number(item._precoTabela ?? item._precoOriginal ?? item.valor_unitario); },
+    campanhaDistinta(tag, nome) {
+      const normalizar = texto => String(texto || '').trim().toLocaleLowerCase('pt-BR');
+      return !!nome && normalizar(tag) !== normalizar(nome);
+    },
+    resumoEstoqueCarrinho(item) {
+      if (item.tipo_venda === 'kit') return 'Estoque dos componentes será baixado ao finalizar a venda.';
+      const produtoId = item.produto_id;
+      const atual = [...this.produtos, ...this.topProdutos].find(p => String(p.id) === String(produtoId));
+      const saldo = atual?.estoque_disponivel ?? item.estoque_disponivel;
+      if (saldo == null) return 'Estoque não consultado · baixa somente ao finalizar.';
+      let noCarrinho = 0;
+      for (const linha of this.venda.itens) {
+        if (linha.tipo_venda === 'kit') {
+          if (!linha.oferta_componentes_estoque?.length) return 'Estoque atual: '+this.fmtQtd(saldo,item)+' · saldo após kits a confirmar.';
+          for (const c of linha.oferta_componentes_estoque) {
+            if (String(c.produto_id) === String(produtoId)) noCarrinho += Number(c.quantidade)*Number(linha.quantidade);
+          }
+        } else if (String(linha.produto_id) === String(produtoId)) noCarrinho += Number(linha.quantidade);
+        for (const b of linha.oferta_brindes_estoque || []) {
+          if (String(b.produto_id) === String(produtoId)) noCarrinho += Number(b.quantidade)*Math.floor(Number(linha.quantidade)/Number(linha.brinde_quantidade_gatilho || linha.quantidade));
+        }
+      }
+      const apos = Math.round((Number(saldo)-noCarrinho)*1000)/1000;
+      return 'Estoque atual: '+this.fmtQtd(saldo,item)+' · Nesta venda: '+this.fmtQtd(noCarrinho,item)
+        +' · Após finalizar: '+this.fmtQtd(apos,item)+(apos<0?' (faltam '+this.fmtQtd(-apos,item)+')':'')
+        +' · Ainda não baixado';
     },
 
     labelOrigemPreco(item) {
@@ -4027,6 +4078,7 @@ function pdv() {
         quantidade_step: this.quantidadePasso(produto),
         quantidade_decimais: this.produtoAceitaDecimal(produto) ? 3 : 0,
         quantidade: quantidade, valor_unitario: preco, _precoOriginal: preco, _precoManual: false,
+        _precoTabela: Number(ehKit ? oferta.preco_referencia : (produto.preco_base ?? produto.preco ?? preco)),
         _quantidadeMinOferta: ehKit ? 1 : (exigeQuantidadeMinima ? quantidade : null),
         _quantidadeExata: !!oferta.quantidade_exata,
         _ofertaSelecionada: !!selecionadaNoModal,
@@ -4037,6 +4089,7 @@ function pdv() {
         oferta_tag: oferta.tag || '', oferta_nome: oferta.origem || '',
         oferta_validade: oferta.validade || '', oferta_brindes: oferta.brindes || [],
         oferta_brindes_estoque: oferta.brindes_estoque || [],
+        oferta_componentes_estoque: oferta.componentes_estoque || [],
         promocao_id: oferta.promocao_id || null, faixa_id: oferta.faixa_id || null,
         kit_categoria_id: oferta.kit_categoria_id || null, regra_id: oferta.regra_id || null,
         brinde_id: oferta.brinde_id || null,
@@ -4140,6 +4193,17 @@ function pdv() {
         const valor=this.limitarDesconto(limitado,base);
         rascunho.percentual=(base>0?valor/base*100:0).toFixed(2).replace('.',',');
       }
+      if (rascunho === this.descontoGeralRascunho) {
+        rascunho.totalFinal=this.arredondarDesconto(base-this.numeroDesconto(rascunho.valor)+Number(this.venda.acrescimo||0)).toFixed(2).replace('.',',');
+      }
+    },
+    sincronizarTotalFinal(entrada) {
+      const base=this.arredondarDesconto(this.venda.subtotal);
+      const acrescimo=Number(this.venda.acrescimo||0);
+      const numero=this.numeroDesconto(entrada);
+      const total=Math.min(base+acrescimo,Math.max(acrescimo,numero));
+      this.sincronizarDesconto(this.descontoGeralRascunho,'valor',this.arredondarDesconto(base+acrescimo-total).toFixed(2).replace('.',','),base);
+      this.descontoGeralRascunho.totalFinal=numero===total?String(entrada):total.toFixed(2).replace('.',',');
     },
     abrirDescontoItem(item) {
       this.itemEditando=item;
@@ -5777,6 +5841,7 @@ ${pgtoHtml ? `<hr class="sep">${pgtoHtml}` : ''}
             quantidade: item.quantidade,
             valor_unitario: item.valor_unitario,
             _precoOriginal: parseFloat(item.preco_original || item.valor_unitario),
+            _precoTabela: Number(item.preco_tabela ?? item.preco_original ?? item.valor_unitario),
             _precoManual: !!item.preco_manual,
             _quantidadeMinOferta: item._quantidadeMinOferta || null,
             _quantidadeExata: !!item._quantidadeExata,
