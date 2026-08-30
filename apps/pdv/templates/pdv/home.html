@@ -326,18 +326,20 @@
   .cart-header { display:grid;gap:10px;padding:12px 20px;border-bottom:1px solid var(--pdv-bd);flex-shrink:0; }
   .cart-heading,.cart-summary { display:flex;align-items:center;gap:10px;min-width:0; }
   .cart-heading .cart-clear-btn { margin-left:auto; }
-  .cart-summary { justify-content:space-between;padding-top:10px;border-top:1px solid var(--pdv-bd); }
-  .cart-total-editor { flex:0 1 320px;min-width:0; }
-  .cart-total-values { display:flex;align-items:center;gap:8px; }
+  .cart-summary { justify-content:space-between;align-items:flex-end;padding-top:10px;border-top:1px solid var(--pdv-bd); }
+  .cart-summary .cart-discount-btn { flex-shrink:0; }
+  .cart-total-editor { flex:1;min-width:0; }
+  .cart-total-values { display:flex;align-items:center;flex-wrap:wrap;gap:8px 14px; }
+  .cart-total-details { display:flex;align-items:center;gap:6px;white-space:nowrap; }
   .cart-total-values .cart-sale-before { flex-shrink:0;white-space:nowrap; }
-  .cart-total-values .cart-total-field { flex:1;min-width:0; }
+  .cart-total-values .cart-total-field { flex:1 1 120px;min-width:120px;max-width:260px; }
   .cart-total-label { display:block;margin-bottom:4px;font-size:10px;font-weight:700;letter-spacing:.04em;color:var(--pdv-t2); }
   .cart-total-field { display:flex;align-items:center;gap:5px;padding:3px 7px;border:1px solid var(--pdv-bd);border-radius:8px;background:var(--pdv-card);color:var(--pdv-t1); }
   .cart-total-field:focus-within { border-color:var(--pdv-focus);box-shadow:0 0 0 2px var(--pdv-focus-ring); }
   .cart-total-field > span { font-size:12px;font-weight:700; }
   .cart-total-field input { width:100%;min-width:0;padding:0;border:0!important;outline:none!important;box-shadow:none!important;background:transparent!important;color:var(--pdv-t1)!important;font-size:17px;font-weight:800; }
   .cart-total-field svg { flex-shrink:0;color:var(--pdv-t2); }
-  .cart-total-discount { display:block;font-size:10px;color:var(--pdv-t2);margin-top:2px; }
+  .cart-total-discount { font-size:10px;color:var(--pdv-t2); }
   .cart-sale-before { display:block;font-size:11px;font-weight:500;color:var(--pdv-t2); }
   .cart-sale-impact { white-space:nowrap;font-size:10px;line-height:1.35;text-align:right;color:var(--pdv-paid); }
   .cart-combo-count { font-size:11px;color:var(--pdv-accent-text);white-space:nowrap; }
@@ -1613,8 +1615,6 @@
           <div class="cart-total-editor">
             <label class="cart-total-label" for="pdv-total-carrinho">TOTAL DA VENDA</label>
             <div class="cart-total-values">
-              <s class="cart-sale-before" x-show="venda.desconto>0" x-cloak
-                 x-text="'R$ '+fmt(Number(venda.subtotal)+Number(venda.acrescimo||0))"></s>
               <div class="cart-total-field" title="Edite o total para dar desconto. Enter ou sair do campo aplica; Esc cancela.">
                 <span>R$</span>
                 <input id="pdv-total-carrinho" type="text" inputmode="decimal" aria-label="Total da venda no carrinho"
@@ -1625,9 +1625,12 @@
                        @keydown.escape.prevent.stop="editandoTotalCarrinho=false; $event.target.blur()">
                 <svg aria-hidden="true" width="12" height="12" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 3l5 5M3 21l5-1L21 7a2 2 0 00-4-4L4 16z"/></svg>
               </div>
+              <div class="cart-total-details" x-show="venda.desconto>0" x-cloak>
+                <s class="cart-sale-before" x-text="'R$ '+fmt(Number(venda.subtotal)+Number(venda.acrescimo||0))"></s>
+                <span class="cart-total-discount"
+                      x-text="'− R$ '+fmt(venda.desconto)+' ('+fmt(venda.subtotal>0?venda.desconto/venda.subtotal*100:0)+'%)'"></span>
+              </div>
             </div>
-            <span class="cart-total-discount" x-show="venda.desconto>0" x-cloak
-                  x-text="'− R$ '+fmt(venda.desconto)+' ('+fmt(venda.subtotal>0?venda.desconto/venda.subtotal*100:0)+'%)'"></span>
           </div>
           <button @click="abrirDescontoGeral()" class="btn-action cart-discount-btn">
             <span style="font-size:13px;font-weight:600;">%</span>
