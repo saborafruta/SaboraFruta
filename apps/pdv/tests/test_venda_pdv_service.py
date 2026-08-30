@@ -133,6 +133,7 @@ class VendaPDVServiceTests(TestCase):
         segunda = self.client.get(reverse('pdv:api_produtos'), {'q': 'Polo', 'pagina': 2}).json()
 
         self.assertEqual(len(primeira['produtos']), 20)
+        self.assertIn('estoque_disponivel', primeira['produtos'][0])
         self.assertTrue(primeira['tem_mais'])
         self.assertEqual(primeira['pagina'], 1)
         self.assertEqual(len(segunda['produtos']), 1)

@@ -268,7 +268,15 @@
   .cart-item-photo:hover { border-color:#2563eb;transform:scale(1.03); }
   .cart-item-photo img { width:100%;height:100%;object-fit:cover;display:block; }
   .prod-card-nome { font-size:13px;font-weight:500;color:var(--pdv-t5);white-space:nowrap;overflow:hidden;text-overflow:ellipsis; }
-  .prod-card-preco { font-size:13px;font-weight:700;color:#3b82f6;margin-top:2px; }
+  .prod-card-info { display:flex;align-items:center;justify-content:space-between;gap:8px;margin-top:3px; }
+  .prod-card-preco { font-size:13px;font-weight:700;color:#3b82f6; }
+  .prod-card-stock { flex-shrink:0;padding:2px 6px;border-radius:999px;font-size:9px;font-weight:800;line-height:1.25;border:1px solid transparent; }
+  .prod-card-stock.stock-ok { color:#15803d;background:#dcfce7;border-color:#86efac; }
+  .prod-card-stock.stock-low { color:#a16207;background:#fef9c3;border-color:#fde047; }
+  .prod-card-stock.stock-zero { color:#b91c1c;background:#fee2e2;border-color:#fca5a5; }
+  html:not(.tema-claro) .prod-card-stock.stock-ok { color:#4ade80;background:rgba(34,197,94,.13);border-color:rgba(74,222,128,.28); }
+  html:not(.tema-claro) .prod-card-stock.stock-low { color:#facc15;background:rgba(250,204,21,.12);border-color:rgba(250,204,21,.28); }
+  html:not(.tema-claro) .prod-card-stock.stock-zero { color:#f87171;background:rgba(248,113,113,.12);border-color:rgba(248,113,113,.28); }
   .prod-card-qty { display:none;align-items:center;border:1px solid rgba(37,99,235,.42);border-radius:8px;overflow:hidden;background:rgba(37,99,235,.08);flex-shrink:0; }
   .prod-card-qty button { width:34px;height:34px;border:0;background:transparent;color:#2563eb;font-size:16px;font-weight:800;cursor:pointer;touch-action:manipulation; }
   .prod-card-remove { color:#f87171 !important;border-left:1px solid rgba(248,113,113,.22) !important;background:rgba(248,113,113,.06) !important; }
@@ -1369,7 +1377,8 @@
       </div>
 
       <!-- Lista de produtos -->
-      <div style="flex:1;overflow-y:auto;padding:0 8px;">
+      <div x-ref="produtosScroll" @scroll.passive="aoRolarProdutos($event)"
+           style="flex:1;overflow-y:auto;padding:0 8px;">
 
         <!-- Label -->
         <div x-show="!buscandoProdutos" style="display:flex;align-items:center;gap:6px;padding:8px 4px 6px;font-size:11px;font-weight:600;color:#444;text-transform:uppercase;letter-spacing:.08em;">
@@ -1411,7 +1420,12 @@
               <button type="button" @click="adicionarItem(p)" class="prod-card-main" :title="p.descricao">
                 <div style="flex:1;min-width:0;">
                   <div class="prod-card-nome" x-text="p.descricao"></div>
-                  <div class="prod-card-preco" x-text="'R$ ' + fmt(p.preco)"></div>
+                  <div class="prod-card-info">
+                    <div class="prod-card-preco" x-text="'R$ ' + fmt(p.preco)"></div>
+                    <span x-show="p.tipo_produto !== 'servico'" class="prod-card-stock"
+                          :class="Number(p.estoque_disponivel||0) <= 0 ? 'stock-zero' : (Number(p.estoque_disponivel||0) <= 3 ? 'stock-low' : 'stock-ok')"
+                          x-text="'Estoque: ' + fmtQtd(p.estoque_disponivel, p)"></span>
+                  </div>
                   <span class="preco-origem-tag" x-show="temPromocao(p)" x-cloak
                         :class="p.preco_origem_tipo === 'tabela_cliente' ? 'especial' : ''"
                         x-text="labelOrigemPreco(p)"></span>
@@ -1425,16 +1439,14 @@
               </div>
             </div>
           </template>
-          <button type="button" x-show="buscaQuery.trim() && produtosTemMais" x-cloak
-                  @click="carregarMaisProdutos()" :disabled="buscandoProdutos"
-                  style="width:100%;margin:6px 0 2px;padding:9px 12px;border:1px solid var(--pdv-bd3);border-radius:8px;background:var(--pdv-surface);color:var(--pdv-accent);font-size:12px;font-weight:800;cursor:pointer;">
-            Carregar mais resultados
-          </button>
         </div>
 
         <!-- Buscando -->
         <div x-show="buscandoProdutos" style="display:flex;justify-content:center;padding:32px;">
           <div style="width:18px;height:18px;border:2px solid #2563eb;border-top-color:transparent;border-radius:50%;animation:spin 0.6s linear infinite;"></div>
+        </div>
+        <div x-show="carregandoMaisProdutos" x-cloak style="display:flex;justify-content:center;padding:10px;">
+          <div style="width:16px;height:16px;border:2px solid #2563eb;border-top-color:transparent;border-radius:50%;animation:spin 0.6s linear infinite;"></div>
         </div>
         <style>@keyframes spin{to{transform:rotate(360deg)}}</style>
       </div>
@@ -3554,8 +3566,8 @@ function pdv() {
       observacao: '', comanda_id_origem: null,
     },
 
-    produtos: [], topProdutos: [], buscaQuery: '', buscandoProdutos: false, produtoFoco: -1,
-    produtosPagina: 1, produtosTemMais: false,
+    produtos: [], topProdutos: [], buscaQuery: '', buscandoProdutos: false, carregandoMaisProdutos: false, produtoFoco: -1,
+    produtosPagina: 1, produtosTemMais: false, _buscaProdutosSeq: 0,
     barcodeQuery: '',
     mobilePane: 'catalogo',
     showScanner: false,
@@ -3790,18 +3802,21 @@ function pdv() {
     async buscarProdutos(q, carregarMais=false) {
       this.produtoFoco = -1;
       if (!q||!q.trim()) {
+        this._buscaProdutosSeq++;
         this.produtos=[]; this.produtosPagina=1; this.produtosTemMais=false;
-        this.buscandoProdutos=false; return;
+        this.buscandoProdutos=false; this.carregandoMaisProdutos=false; return;
       }
       const termo = q.trim();
       const pagina = carregarMais ? this.produtosPagina + 1 : 1;
-      this.buscandoProdutos = true;
+      const sequencia = ++this._buscaProdutosSeq;
+      if (carregarMais) this.carregandoMaisProdutos = true;
+      else { this.carregandoMaisProdutos = false; this.buscandoProdutos = true; }
       try {
         const params = new URLSearchParams({q:termo,pagina:String(pagina)});
         if (this.linhaAtiva) params.set('linha',this.linhaAtiva);
         if (this.venda.cliente.id) params.set('cliente_id',this.venda.cliente.id);
         const d = await (await fetch('/pdv/api/produtos/?'+params)).json();
-        if (this.buscaQuery.trim() !== termo) return;
+        if (sequencia !== this._buscaProdutosSeq || this.buscaQuery.trim() !== termo) return;
         const recebidos = d.produtos || [];
         this.produtos = carregarMais ? [...this.produtos, ...recebidos] : recebidos;
         this.produtosPagina = d.pagina || pagina;
@@ -3810,12 +3825,22 @@ function pdv() {
           this.adicionarItem(this.produtos[0]); this.buscaQuery=''; this.produtos=[];
         }
       } catch { if (!carregarMais) this.produtos=[]; }
-      finally { this.buscandoProdutos=false; }
+      finally {
+        if (sequencia === this._buscaProdutosSeq) {
+          this.buscandoProdutos=false; this.carregandoMaisProdutos=false;
+        }
+      }
     },
 
     carregarMaisProdutos() {
-      if (!this.produtosTemMais || this.buscandoProdutos) return;
+      if (!this.produtosTemMais || this.buscandoProdutos || this.carregandoMaisProdutos) return;
       this.buscarProdutos(this.buscaQuery, true);
+    },
+
+    aoRolarProdutos(evento) {
+      const lista = evento.currentTarget;
+      const distanciaDoFim = lista.scrollHeight - lista.scrollTop - lista.clientHeight;
+      if (distanciaDoFim <= 140) this.carregarMaisProdutos();
     },
 
     moverFocoProduto(dir) {
