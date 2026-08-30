@@ -1,5 +1,6 @@
 import json
 import re
+from datetime import timedelta
 from decimal import Decimal
 from io import BytesIO
 from zipfile import ZipFile
@@ -17,7 +18,8 @@ from apps.moda.models import (
     AprovacaoPedido, ArquivoPedido, Grade, ItemGrade, ItemGradePedido,
     ItemPedidoProducao,
     OpcaoEstruturaOP2, OrdemProducao, PedidoProducao, Personalizacao,
-    PersonalizacaoIndividual, ProdutoModa, Tamanho, VisualItemPedido,
+    PersonalizacaoIndividual, ProdutoModa, RegistroCriacaoArte, Tamanho,
+    VisualItemPedido,
 )
 from apps.moda.forms_cliente import ClienteRapidoForm
 from apps.moda.services.op2_estrutura import (
@@ -152,6 +154,26 @@ class Op2Tests(TestCase):
         self.assertIn('Tipo impressao: N/A', novo.observacoes)
         self.assertIn('Malha: N/A', novo.observacoes)
         self.assertFalse(novo.personalizacoes.exists())
+
+    def test_nova_op_cria_primeiro_registro_da_linha_do_tempo(self):
+        self._login_op2()
+        usuario = self._usuario()
+        dados = {
+            **self._modelo_completo('item_0_'), 'cliente': self.cliente.pk,
+            'item_0_produto_id': self.produto.pk, 'item_0_quantidade': 1,
+            'item_0_valor_unitario': '59,90',
+            'pagamento_0_forma': 'nao_informado',
+            'pagamento_0_valor': '59.90',
+            'informacoes_criacao': 'Cliente pediu a logo centralizada.',
+        }
+
+        resposta = self.client.post(reverse('moda:op2-create'), dados)
+
+        self.assertEqual(resposta.status_code, 302)
+        novo = PedidoProducao.objects.exclude(pk=self.pedido.pk).get()
+        registro = novo.historico_criacao.get()
+        self.assertEqual(registro.texto, 'Cliente pediu a logo centralizada.')
+        self.assertEqual(registro.criado_por, usuario)
 
     def test_editores_exigem_campos_e_iniciam_valor_vazio(self):
         self._login_op2()
@@ -1568,23 +1590,33 @@ class Op2Tests(TestCase):
 
     def test_informacoes_criacao_salvam_sem_alterar_dados_comerciais(self):
         self._login_op2()
+        usuario = self._usuario()
         self.pedido.observacoes = 'Observações comerciais'
         self.pedido.save()
         url = reverse('moda:op2-action', args=[self.pedido.pk])
         for status in ('orcamento', 'aguardando_arte'):
             self.pedido.status = status
             self.pedido.save()
-            for texto in ('Conferir cores\nAlinhar escudo & nome', ''):
-                resposta = self.client.post(url, {
-                    'acao': 'criacao', 'informacoes_criacao': texto,
-                })
-                self.assertEqual(resposta.status_code, 302)
-                self.pedido.refresh_from_db()
-                self.assertEqual(self.pedido.informacoes_criacao, texto)
-                self.assertEqual(self.pedido.observacoes, 'Observações comerciais')
-                self.assertEqual(self.pedido.status, status)
-                self.assertContains(self.client.get(reverse('moda:op2-detail', args=[self.pedido.pk])),
-                                    'name="informacoes_criacao"')
+            texto = f'Conferir cores\nAlinhar escudo & nome — {status}'
+            resposta = self.client.post(url, {
+                'acao': 'criacao', 'informacoes_criacao': texto,
+            })
+            self.assertEqual(resposta.status_code, 302)
+            registro = self.pedido.historico_criacao.get(texto=texto)
+            self.assertEqual(registro.criado_por, usuario)
+            self.assertIsNotNone(registro.criado_em)
+            self.pedido.refresh_from_db()
+            self.assertEqual(self.pedido.observacoes, 'Observações comerciais')
+            self.assertEqual(self.pedido.status, status)
+        quantidade = self.pedido.historico_criacao.count()
+        self.client.post(url, {'acao': 'criacao', 'informacoes_criacao': '   '})
+        self.assertEqual(self.pedido.historico_criacao.count(), quantidade)
+        detalhe = self.client.get(reverse('moda:op2-detail', args=[self.pedido.pk]))
+        self.assertContains(detalhe, 'Linha do tempo da criação de artes')
+        self.assertContains(detalhe, 'Usuario OP 2')
+        html = detalhe.content.decode()
+        self.assertLess(html.index('4. Anexos do cliente e artes'),
+                        html.index('Linha do tempo da criação de artes'))
 
     def test_descricao_visual_edita_limpa_e_valida_sem_mudar_imagem(self):
         self._login_op2()
@@ -1647,18 +1679,65 @@ class Op2Tests(TestCase):
             'acao': 'criacao', 'informacoes_criacao': 'Não autorizado',
         })
         self.assertEqual(resposta.status_code, 404)
-        outro.refresh_from_db()
-        self.assertEqual(outro.informacoes_criacao, '')
+        self.assertFalse(outro.historico_criacao.exists())
 
     def test_duplicar_preserva_criacao_e_descricao_da_imagem(self):
         self._login_op2()
-        self.pedido.informacoes_criacao = 'Briefing da criação'
-        self.pedido.save()
+        usuario = self._usuario()
+        primeiro = RegistroCriacaoArte.objects.create(
+            pedido=self.pedido, texto='Briefing da criação', criado_por=usuario,
+            criado_em=timezone.now() - timedelta(hours=2),
+        )
+        segundo = RegistroCriacaoArte.objects.create(
+            pedido=self.pedido, texto='Cliente aprovou a alteração', criado_por=usuario,
+        )
         VisualItemPedido.objects.create(item=self._item(), posicao='frente_camisa', observacoes='Escudo azul')
         self.client.post(reverse('moda:op2-action', args=[self.pedido.pk]), {'acao': 'duplicar'})
         novo = PedidoProducao.objects.exclude(pk=self.pedido.pk).get()
-        self.assertEqual(novo.informacoes_criacao, 'Briefing da criação')
+        copias = list(novo.historico_criacao.order_by('criado_em'))
+        self.assertEqual([r.texto for r in copias], [primeiro.texto, segundo.texto])
+        self.assertEqual([r.criado_por for r in copias], [usuario, usuario])
+        self.assertEqual([r.criado_em for r in copias], [primeiro.criado_em, segundo.criado_em])
         self.assertEqual(novo.itens.get().visuais.get().observacoes, 'Escudo azul')
+
+    def test_anexo_permite_baixar_editar_observacao_e_remover_individualmente(self):
+        self._login_op2()
+        anexo = ArquivoPedido.objects.create(
+            pedido=self.pedido, arquivo='moda/pedidos/teste/imagem.png',
+            tipo=ArquivoPedido.Tipo.ARTE, descricao='Observação antiga',
+        )
+        url = reverse('moda:op2-action', args=[self.pedido.pk])
+        detalhe = self.client.get(reverse('moda:op2-detail', args=[self.pedido.pk]))
+        self.assertContains(detalhe, 'download')
+        self.assertContains(detalhe, 'value="editar_anexo"')
+        self.assertContains(detalhe, 'value="remover_anexo"')
+        resposta = self.client.post(url, {
+            'acao': 'editar_anexo', 'arquivo_id': anexo.pk,
+            'descricao': 'Aprovada pelo cliente',
+        })
+        self.assertEqual(resposta.status_code, 302)
+        anexo.refresh_from_db()
+        self.assertEqual(anexo.descricao, 'Aprovada pelo cliente')
+        resposta = self.client.post(url, {
+            'acao': 'remover_anexo', 'arquivo_id': anexo.pk,
+        })
+        self.assertEqual(resposta.status_code, 302)
+        self.assertFalse(ArquivoPedido.objects.filter(pk=anexo.pk).exists())
+
+    def test_anexo_de_outro_pedido_nao_pode_ser_editado_ou_removido(self):
+        self._login_op2()
+        outro = PedidoProducao.objects.create(filial=self.filial, cliente=self.cliente)
+        anexo = ArquivoPedido.objects.create(
+            pedido=outro, arquivo='moda/pedidos/teste/outro.png', descricao='Original',
+        )
+        url = reverse('moda:op2-action', args=[self.pedido.pk])
+        for acao in ('editar_anexo', 'remover_anexo'):
+            resposta = self.client.post(url, {
+                'acao': acao, 'arquivo_id': anexo.pk, 'descricao': 'Inválida',
+            })
+            self.assertEqual(resposta.status_code, 404)
+        anexo.refresh_from_db()
+        self.assertEqual(anexo.descricao, 'Original')
 
     def test_galeria_separa_produtos_e_permite_remover_imagem(self):
         item = self._item(quantidade=1)

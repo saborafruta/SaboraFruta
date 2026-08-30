@@ -26,7 +26,7 @@ from .forms_cliente import ClienteRapidoForm
 from .models import (
     AprovacaoPedido, ArquivoPedido, Grade, ItemGradePedido, ItemPedidoProducao,
     OpcaoEstruturaOP2, PedidoProducao, Personalizacao, PersonalizacaoIndividual,
-    Posicao, ProdutoModa, Tamanho, VisualItemPedido,
+    Posicao, ProdutoModa, RegistroCriacaoArte, Tamanho, VisualItemPedido,
 )
 from .services.historico import HistoricoService
 from .services.financeiro import FinanceiroPedidoService
@@ -371,9 +371,13 @@ class Op2CreateView(ModaBaseView):
                 data_prevista_entrega=data_prevista_entrega,
                 prioridade=request.POST.get('prioridade') or PedidoProducao.Prioridade.NORMAL,
                 observacoes=_observacoes_pedido(request),
-                informacoes_criacao=(request.POST.get('informacoes_criacao') or '').strip(),
                 previsao_pagamento=previsao_pagamento,
             )
+            texto_criacao = (request.POST.get('informacoes_criacao') or '').strip()
+            if texto_criacao:
+                RegistroCriacaoArte.objects.create(
+                    pedido=pedido, texto=texto_criacao, criado_por=request.user,
+                )
             pedido.clientes_adicionais.set(clientes_adicionais)
             primeiro_item = None
             itens_por_indice = {}
@@ -860,6 +864,7 @@ class Op2DetailView(ModaBaseView):
             ),
             'form_arquivo': ArquivoPedidoForm(),
             'arquivos': pedido.arquivos.select_related('enviado_por'),
+            'historico_criacao': pedido.historico_criacao.select_related('criado_por'),
             'eventos': list(reversed(eventos[-50:])),
             'link_publico': link,
             'whatsapp_numero': whatsapp_numero(pedido),
@@ -963,9 +968,13 @@ class Op2ActionView(ModaBaseView):
         return resposta or _voltar(pedido)
 
     def _acao_criacao(self, request, pedido):
-        pedido.informacoes_criacao = (request.POST.get('informacoes_criacao') or '').strip()
-        pedido.save(update_fields=['informacoes_criacao', 'updated_at'])
-        messages.success(request, 'Informações da criação salvas.')
+        texto = (request.POST.get('informacoes_criacao') or '').strip()
+        if not texto:
+            raise ValueError('Escreva uma informação sobre a criação da arte.')
+        RegistroCriacaoArte.objects.create(
+            pedido=pedido, texto=texto, criado_por=request.user,
+        )
+        messages.success(request, 'Informação adicionada à linha do tempo da criação.')
 
     def _acao_descricao_visual(self, request, pedido):
         visual = get_object_or_404(
@@ -1411,6 +1420,26 @@ class Op2ActionView(ModaBaseView):
             )
         messages.success(request, f'{len(arquivos)} arquivo(s) anexado(s).')
 
+    def _acao_editar_anexo(self, request, pedido):
+        anexo = get_object_or_404(
+            pedido.arquivos, pk=request.POST.get('arquivo_id'),
+        )
+        descricao = (request.POST.get('descricao') or '').strip()
+        limite = ArquivoPedido._meta.get_field('descricao').max_length
+        if len(descricao) > limite:
+            raise ValueError(f'A observação do anexo deve ter até {limite} caracteres.')
+        anexo.descricao = descricao
+        anexo.save(update_fields=['descricao'])
+        messages.success(request, 'Observação do anexo atualizada.')
+
+    def _acao_remover_anexo(self, request, pedido):
+        anexo = get_object_or_404(
+            pedido.arquivos, pk=request.POST.get('arquivo_id'),
+        )
+        nome = anexo.descricao or anexo.nome_arquivo
+        anexo.delete()
+        messages.success(request, f'“{nome}” removido dos anexos da OP.')
+
 
     def _acao_individual(self, request, pedido):
         form = PersonalizacaoIndividualForm(
@@ -1508,7 +1537,6 @@ class Op2ActionView(ModaBaseView):
             data_pedido=timezone.localdate(), data_prevista_entrega=None,
             prioridade=pedido.prioridade, status=PedidoProducao.Status.ORCAMENTO,
             observacoes=pedido.observacoes, desconto=pedido.desconto,
-            informacoes_criacao=pedido.informacoes_criacao,
             acrescimo=pedido.acrescimo, frete=pedido.frete,
             previsao_pagamento=pedido.previsao_pagamento,
         )
@@ -1532,6 +1560,13 @@ class Op2ActionView(ModaBaseView):
         for pessoa in pedido.individuais.all():
             copia = copy(pessoa)
             copia.pk = None; copia.pedido = novo; copia.item = mapa[pessoa.item_id]; copia.save()
+        RegistroCriacaoArte.objects.bulk_create([
+            RegistroCriacaoArte(
+                pedido=novo, texto=registro.texto,
+                criado_por_id=registro.criado_por_id, criado_em=registro.criado_em,
+            )
+            for registro in pedido.historico_criacao.all()
+        ])
         messages.success(request, f'OP duplicada como rascunho #{novo.numero:06d}.')
         return _voltar(novo)
 

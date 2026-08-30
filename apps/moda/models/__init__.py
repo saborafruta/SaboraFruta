@@ -2,6 +2,7 @@ from .aprovacao import AprovacaoPedido
 from .arquivo import ArquivoPedido
 from .cadastros import Categoria, Colecao, Cor, Linha, Marca, Modelo, Tecido
 from .corte import ItemCorte, RegistroCorte
+from .criacao_arte import RegistroCriacaoArte
 from .encaixe import Encaixe
 from .estrutura import EstruturaProduto
 from .expedicao import ConferenciaPessoa, Expedicao, ItemConferencia, Volume
@@ -64,6 +65,7 @@ __all__ = [
     'ProdutoCor',
     'ProdutoModa',
     'RegistroCorte',
+    'RegistroCriacaoArte',
     'RequisicaoMaterial',
     'ReservaMaterial',
     'ConsumoLoteCorte',
