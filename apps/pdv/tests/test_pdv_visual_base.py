@@ -5,6 +5,18 @@ from django.test import SimpleTestCase
 
 
 class PDVVisualBaseTests(SimpleTestCase):
+    def test_tema_claro_replica_cabecalho_laranja_e_pagamento_sem_cores_fixas(self):
+        template = (Path(__file__).resolve().parents[1] / 'templates/pdv/home.html').read_text(encoding='utf-8')
+        claro = template.split('html.tema-claro body {', 1)[1].split('}', 1)[0]
+        self.assertIn('#f15a24', claro)
+        self.assertIn('html.tema-claro .cat-tab.active { background:#ff8a4c', template)
+        entrada = template.split('<!-- Input valor quando forma selecionada -->', 1)[1].split('<!-- Crédito do cliente', 1)[0]
+        self.assertIn('class="payment-entry"', entrada)
+        self.assertIn('class="payment-quick-value"', entrada)
+        self.assertNotIn('background:#', entrada)
+        self.assertNotIn('onmouseover=', entrada)
+        self.assertIn('<select x-model="bandeiraPgto">', entrada)
+
     def test_tema_claro_tem_paleta_de_pagamento_propria(self):
         template = (Path(__file__).resolve().parents[1] / 'templates/pdv/home.html').read_text(encoding='utf-8')
         claro = template.split('html.tema-claro body {', 1)[1].split('}', 1)[0]
@@ -51,7 +63,7 @@ class PDVVisualBaseTests(SimpleTestCase):
         self.assertIn('sidebar-favorites-data', template)
         self.assertIn('data-full-favorites="true"', template)
         self.assertIn('outline:2px solid var(--pdv-accent)', template)
-        self.assertNotIn('#f15a24', template)
+        self.assertIn('linear-gradient(90deg,#f15a24 0%,#e8824a 50%,#c75a22 76%,#542412 100%)', template)
         self.assertNotIn('#f97316', template)
         self.assertIn("static 'core/js/sidebar_favorites.js'", template)
         self.assertIn("core:trocar-filial", template)
