@@ -19,6 +19,33 @@ const respond = (payload, ok = true) => {
 };
 (async () => {
   const app = create();
+  const cancellation = create();
+  cancellation.$nextTick = fn => fn();
+  cancellation.$refs = {};
+  cancellation.historicoCliente = [{id:20}];
+  cancellation.historicoVendas = [{id:20,status:'finalizada'}];
+  cancellation.abrirCancelamentoHistorico(cancellation.historicoVendas[0]);
+  Object.assign(cancellation.cancelamentoHistorico,{email:'admin@example.com',senha:'teste',motivo:'Cliente desistiu da compra.'});
+  context.csrf = () => 'local-test';
+  respond({erro:'Senha inválida'},false);
+  await cancellation.confirmarCancelamentoHistorico();
+  assert.equal(cancellation.cancelamentoHistorico.senha,'');
+  assert.equal(cancellation.cancelamentoHistorico.erro,'Senha inválida');
+  assert.equal(cancellation.historicoVendas.length,1);
+  cancellation.cancelamentoHistorico.senha='teste';
+  let cancellationBody;
+  context.fetch = async (url,options) => {
+    if(options) { cancellationBody=JSON.parse(options.body); return {ok:true,json:async()=>({ok:true})}; }
+    return {ok:true,json:async()=>({vendas:[{id:20,status:'cancelada',cancelado_por:'Operador',autorizado_por:'Admin'}]})};
+  };
+  await cancellation.confirmarCancelamentoHistorico();
+  assert.equal(cancellationBody.admin_senha,'teste');
+  assert.equal(cancellation.cancelamentoHistorico.venda,null);
+  assert.equal(cancellation.cancelamentoHistorico.senha,'');
+  assert.equal(cancellation.historicoVendas[0].status,'cancelada');
+  assert.equal(cancellation.historicoVendas[0].cancelado_por,'Operador');
+  cancellation.abrirCancelamentoHistorico(cancellation.historicoVendas[0]);
+  assert.equal(cancellation.cancelamentoHistorico.venda,null,'Cannot cancel twice');
   const offers = create();
   const product = {id:9, descricao:'Camisa', preco:100, preco_base:100, estoque_disponivel:5, tipo_produto:'unitario', ofertas:[
     {tipo:'normal',oferta_tipo:'normal',preco:100,quantidade:1},
@@ -41,12 +68,13 @@ const respond = (payload, ok = true) => {
   const stockText=offers.resumoEstoqueCarrinho(offers.venda.itens[0]);
   assert.equal(stockText,'Em estoque: 5 · Restam após esta venda: 1','Sum separate offer lines without repeating quantity');
   offers.venda.itens[1].quantidade=6;
-  assert.match(offers.resumoEstoqueCarrinho(offers.venda.itens[0]),/Faltam para esta venda: 2/);
+  assert.match(offers.resumoEstoqueCarrinho(offers.venda.itens[0]),/Estoque ficará negativo: −2/);
+  assert.equal(offers.infoEstoqueCarrinho(offers.venda.itens[0]).negativo,true);
   assert.equal(product.estoque_disponivel,5,'Cart preview must not mutate real stock');
   offers.venda.itens.push({produto_id:10,quantidade:2,oferta_brindes_estoque:[{produto_id:9,quantidade:1}],brinde_quantidade_gatilho:2});
-  assert.match(offers.resumoEstoqueCarrinho(offers.venda.itens[0]),/Faltam para esta venda: 3/,'Include gifts using the same stock');
+  assert.match(offers.resumoEstoqueCarrinho(offers.venda.itens[0]),/Estoque ficará negativo: −3/,'Include gifts using the same stock');
   offers.venda.itens.push({tipo_venda:'kit',quantidade:2,oferta_componentes_estoque:[{produto_id:9,quantidade:3}]});
-  assert.match(offers.resumoEstoqueCarrinho(offers.venda.itens[0]),/Faltam para esta venda: 9/);
+  assert.match(offers.resumoEstoqueCarrinho(offers.venda.itens[0]),/Estoque ficará negativo: −9/);
   assert.match(offers.resumoEstoqueCarrinho({produto_id:99}),/não consultado/);
   assert.equal(offers.precoCatalogo({preco:12}),12);
   assert.equal(offers.precoCatalogo({preco:12,ofertas:[{tipo:'promocional',preco:0}]}),0);
@@ -74,6 +102,48 @@ const respond = (payload, ok = true) => {
   priceEdit.toast_=()=>{};
   priceEdit.aplicarPrecoItem(priceItem,'-1');
   assert.equal(priceItem.valor_unitario,20,'Negative price remains invalid');
+  for (const invalid of ['', ' ', 'abc', 'NaN', 'Infinity', '-0,01']) {
+    priceEdit.aplicarPrecoItem(priceItem,invalid);
+    assert.equal(priceItem.valor_unitario,20,'Invalid input must not accidentally make an item free');
+  }
+  priceEdit.abrirPrecoItem(priceItem,true);
+  priceEdit.aplicarPrecoItem(priceItem,'0,00');
+  assert.equal(priceItem.valor_total,0);
+  assert.equal(priceEdit.itemGratis(priceItem),true,'100% discounted total is free');
+  priceEdit.abrirPrecoItem(priceItem);
+  priceEdit.aplicarPrecoItem(priceItem,'0');
+  assert.equal(priceItem.valor_unitario,0);
+  assert.equal(priceItem.preco_manual,0);
+  assert.equal(priceItem._precoManual,true);
+  priceEdit.sessao={id:1};
+  assert.equal(!!priceEdit.podeFinalizar,true,'Free sale does not need a payment');
+  priceEdit.restaurarPrecoItem(priceItem);
+  assert.equal(priceEdit.itemGratis(priceItem),false,'Tag disappears when price is restored');
+  assert.equal(priceEdit.itemGratis({}),false);
+  const stockApp=create();
+  const stockItem={produto_id:1,quantidade:8,estoque_disponivel:8};
+  stockApp.venda.itens=[stockItem];
+  assert.equal(stockApp.infoEstoqueCarrinho(stockItem).negativo,false);
+  stockItem.quantidade=9;
+  assert.equal(stockApp.resumoEstoqueCarrinho(stockItem),'Em estoque: 8 · Estoque ficará negativo: −1');
+  stockItem.quantidade=7;
+  assert.equal(stockApp.infoEstoqueCarrinho(stockItem).negativo,false);
+  const resumeFree=create();
+  resumeFree.novaVenda=()=>{resumeFree.venda.itens=[];};
+  resumeFree.carregarPendentes=async()=>{};
+  resumeFree.buscarProdutos=async()=>{};
+  resumeFree.carregarTopProdutos=async()=>{};
+  context.csrf=()=>'';
+  const resumeRequests=[];
+  context.fetch=async url=>{
+    resumeRequests.push(url);
+    return {ok:true,json:async()=>({ok:true,itens:[{produto_id:1,quantidade:1,valor_unitario:0,valor_total:0,preco_manual:0,preco_original:10}]})};
+  };
+  await resumeFree.retomarPendente({id:1,numero_venda:1});
+  assert.equal(resumeFree.venda.itens[0]._precoManual,true,'Numeric zero must remain manual after resuming');
+  assert.equal(resumeFree.venda.itens[0].preco_manual,0);
+  assert.equal(resumeFree.itemGratis(resumeFree.venda.itens[0]),true);
+  assert.equal(resumeRequests.includes('/pdv/api/precos-cliente/'),false,'Do not reprice free items');
 
   const finalDiscount=create();
   finalDiscount.$nextTick=fn=>fn(); finalDiscount.$refs={};

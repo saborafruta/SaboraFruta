@@ -276,9 +276,21 @@
   .pdv-price-before { font-size:11px;color:#94a3b8;font-weight:500;white-space:nowrap; }
   .prod-card-preco { white-space:nowrap; }
   .cart-stock-note { margin-top:6px;font-size:10px;line-height:1.5;color:#94a3b8; }
+  .cart-stock-note.stock-negative { color:#fbbf24;font-weight:600; }
+  html.tema-claro .cart-stock-note.stock-negative { color:#b45309; }
+  .cart-free-tag { padding:2px 7px;border-radius:5px;font-size:11px;font-weight:700;color:#86efac;background:rgba(34,197,94,.12);border:1px solid rgba(34,197,94,.3); }
+  html.tema-claro .cart-free-tag { color:#15803d;background:#f0fdf4;border-color:#bbf7d0; }
   .cart-total-edit { font:inherit;font-size:16px;font-weight:700;color:var(--pdv-t1);background:transparent;border:0;border-radius:6px;padding:4px;cursor:pointer; }
   .cart-total-edit:hover { background:var(--pdv-hover); }
   .cart-total-edit:focus-visible { outline:2px solid #3b82f6;outline-offset:2px; }
+  .history-cancelled .history-sale-value { text-decoration:line-through;opacity:.65; }
+  .history-cancel-info { flex-basis:100%;font-size:11px;line-height:1.5;color:var(--pdv-t2); }
+  .history-cancel-info strong { color:#f87171; }
+  html.tema-claro .history-cancel-info strong { color:#b91c1c; }
+  .history-cancel-button, .btn-action.history-cancel-button { color:#f87171;border-color:rgba(248,113,113,.4); }
+  html.tema-claro .history-cancel-button, html.tema-claro .btn-action.history-cancel-button { color:#b91c1c; }
+  .cancel-auth-field { display:flex;flex-direction:column;gap:5px;font-size:12px;color:var(--pdv-t1); }
+  .cancel-auth-field input, .cancel-auth-field textarea { padding:10px;border:1px solid var(--pdv-bd);border-radius:8px;background:var(--pdv-inp);color:var(--pdv-t1);font:inherit; }
   html.tema-claro .prod-card-stock, html.tema-claro .cart-stock-note,
   html.tema-claro .pdv-price-before { color:#64748b; }
   .prod-card-qty { display:none;align-items:center;border:1px solid rgba(37,99,235,.42);border-radius:8px;overflow:hidden;background:rgba(37,99,235,.08);flex-shrink:0; }
@@ -1750,7 +1762,9 @@
                   <span class="preco-campanha-badge" x-show="campanhaDistinta(item.oferta_tag, item.oferta_nome)" x-text="item.oferta_nome"></span>
                   <span class="cart-offer-validade" x-show="item.oferta_validade" x-text="'Válida: '+item.oferta_validade"></span>
                 </div>
-                <div class="cart-stock-note" x-show="item.tipo_produto !== 'servico'" x-text="resumoEstoqueCarrinho(item)"></div>
+                <div class="cart-stock-note" x-show="item.tipo_produto !== 'servico'"
+                     :class="{'stock-negative':infoEstoqueCarrinho(item).negativo}" aria-live="polite"
+                     x-text="resumoEstoqueCarrinho(item)"></div>
                 <div x-show="item.oferta_brindes?.length" x-cloak style="font-size:10px;color:#f472b6;margin-top:4px;"
                      x-text="'Brinde incluído: '+item.oferta_brindes.join(', ')"></div>
                 <div x-show="item.oferta_brindes_estoque?.length" x-cloak style="font-size:9.5px;color:#94a3b8;margin-top:3px;"
@@ -1778,6 +1792,7 @@
                 </div>
               </div>
               <div style="display:flex;flex-direction:column;align-items:flex-end;gap:6px;flex-shrink:0;">
+                <span class="cart-free-tag" x-show="itemGratis(item)" x-cloak>Grátis</span>
                 <button type="button" class="cart-total-edit" @click="abrirPrecoItem(item, true)"
                         :aria-label="'Editar valor final de ' + item.descricao" title="Editar valor final do item"
                         x-text="'R$ ' + fmt(item.valor_total)"></button>
@@ -3210,14 +3225,14 @@
        :style="showModalHistorico
          ? 'position:fixed;inset:0;z-index:55;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,.85);'
          : 'display:none;'"
-       @keydown.escape.window="showModalHistorico=false">
-    <div style="width:100%;max-width:680px;max-height:88vh;background:#13131e;border:1px solid #2a2a3e;border-radius:16px;overflow:hidden;display:flex;flex-direction:column;">
+       @keydown.escape.window="if (!cancelamentoHistorico.venda) showModalHistorico=false">
+    <div style="width:100%;max-width:820px;max-height:88vh;background:#13131e;border:1px solid #2a2a3e;border-radius:16px;overflow:hidden;display:flex;flex-direction:column;">
       <div style="display:flex;align-items:center;justify-content:space-between;padding:18px 22px;border-bottom:1px solid #1e1e30;flex-shrink:0;">
         <div style="display:flex;align-items:center;gap:12px;">
           <div style="width:36px;height:36px;border-radius:9px;background:rgba(37,99,235,.15);border:1px solid rgba(37,99,235,.3);display:flex;align-items:center;justify-content:center;font-size:17px;">🕘</div>
           <div>
-            <h2 style="font-size:15px;font-weight:700;color:#fff;margin:0;">Histórico de Compras</h2>
-            <p style="font-size:11px;color:#555;margin:3px 0 0;">Últimas vendas finalizadas</p>
+            <h2 style="font-size:15px;font-weight:700;color:var(--pdv-t1);margin:0;">Histórico de Compras</h2>
+            <p style="font-size:11px;color:#555;margin:3px 0 0;">Últimas vendas e cancelamentos</p>
           </div>
         </div>
         <button @click="showModalHistorico=false" style="background:none;border:none;color:#555;font-size:20px;cursor:pointer;line-height:1;">✕</button>
@@ -3230,16 +3245,16 @@
           </div>
         </template>
         <template x-for="v in historicoVendas" :key="v.id">
-          <div style="display:flex;flex-wrap:wrap;align-items:center;gap:12px;padding:11px 14px;background:#0a0a12;border:1px solid #1e1e30;border-radius:10px;">
-            <span style="font-size:13px;font-weight:700;color:#666;min-width:54px;" x-text="'#'+String(v.numero_venda).padStart(6,'0')"></span>
+          <div :class="{'history-cancelled':v.status==='cancelada'}" style="display:flex;flex-wrap:wrap;align-items:center;gap:12px;padding:11px 14px;background:#0a0a12;border:1px solid #1e1e30;border-radius:10px;">
+            <span class="history-sale-value" style="font-size:13px;font-weight:700;color:#666;min-width:54px;" x-text="'#'+String(v.numero_venda).padStart(6,'0')"></span>
             <span style="font-size:10px;font-weight:700;padding:2px 7px;border-radius:5px;flex-shrink:0;"
                   :style="v.delivery?'background:rgba(59,130,246,.15);color:#60a5fa;':'background:rgba(37,99,235,.15);color:#3b82f6;'"
                   x-text="v.delivery?'Delivery':'Balcão'"></span>
             <div style="flex:1;min-width:0;">
-              <div style="font-size:13px;font-weight:600;color:#e5e5f0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" x-text="v.cliente"></div>
+              <div class="history-sale-value" style="font-size:13px;font-weight:600;color:#e5e5f0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" x-text="v.cliente"></div>
               <div style="font-size:11px;color:#555;margin-top:1px;" x-text="new Date(v.data_venda).toLocaleString('pt-BR',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'})+' · '+v.qtd_itens+' itens'"></div>
             </div>
-            <span style="font-size:15px;font-weight:800;color:#4ade80;" x-text="'R$ '+fmt(v.valor_total)"></span>
+            <span class="history-sale-value" style="font-size:15px;font-weight:800;color:#4ade80;" x-text="'R$ '+fmt(v.valor_total)"></span>
             <button type="button"
                     @click.stop="visualizarComprovante(v.id)" class="btn-action" style="font-size:11px;white-space:nowrap;">Comprovante</button>
             <button type="button"
@@ -3247,7 +3262,7 @@
                     style="display:flex;align-items:center;gap:5px;padding:7px 9px;background:#0d0d16;border:1px solid #14532d;border-radius:8px;color:#4ade80;font-size:11px;font-weight:700;cursor:pointer;white-space:nowrap;">
               WhatsApp
             </button>
-            <button type="button"
+            <button type="button" x-show="v.status!=='cancelada'"
                     @click.stop="['autorizada','processando'].includes(v.documento_fiscal_status)
                       ? toast_('A nota fiscal precisa ser cancelada ou concluir o processamento antes de trocar o cliente.','erro')
                       : editarVendaHistorico(v, true)"
@@ -3257,10 +3272,43 @@
                     style="display:flex;align-items:center;gap:5px;padding:7px 9px;background:#0d0d16;border:1px solid #2563eb;border-radius:8px;color:#60a5fa;font-size:11px;font-weight:700;cursor:pointer;white-space:nowrap;">
               Trocar cliente
             </button>
+            <button type="button" x-show="v.status!=='cancelada'" @click.stop="abrirCancelamentoHistorico(v)"
+                    class="btn-action history-cancel-button" style="font-size:11px;white-space:nowrap;">Cancelar venda</button>
+            <div class="history-cancel-info" x-show="v.status==='cancelada'">
+              <strong>Cancelada</strong>
+              <span x-text="' por '+(v.cancelado_por || 'usuário não informado')"></span>
+              <span x-show="v.autorizado_por" x-text="' · Autorizada por '+v.autorizado_por"></span>
+              <span x-show="v.cancelado_em" x-text="' · '+new Date(v.cancelado_em).toLocaleString('pt-BR')"></span>
+              <div x-text="v.motivo_cancelamento"></div>
+            </div>
           </div>
         </template>
       </div>
     </div>
+  </div>
+
+  <div class="dic-overlay" x-cloak :style="cancelamentoHistorico.venda ? 'z-index:80;' : 'display:none;'"
+       @keydown.escape.window="fecharCancelamentoHistorico()">
+    <form class="dic-box" role="dialog" aria-modal="true" aria-label="Autorizar cancelamento da venda"
+          @submit.prevent="confirmarCancelamentoHistorico()">
+      <div class="dic-head">
+        <div style="flex:1;"><p class="dic-title">Cancelar venda</p>
+          <span class="discount-help" x-text="'Venda #'+String(cancelamentoHistorico.venda?.numero_venda || '').padStart(6,'0')"></span></div>
+        <button type="button" class="dic-close" @click="fecharCancelamentoHistorico()" :disabled="cancelamentoHistorico.enviando">✕</button>
+      </div>
+      <div class="dic-body" style="display:flex;flex-direction:column;gap:12px;">
+        <p class="discount-help">Confirme com um administrador. O cancelamento estorna a venda e mantém o registro no histórico.</p>
+        <label class="cancel-auth-field">E-mail do administrador
+          <input type="email" required autocomplete="off" x-model="cancelamentoHistorico.email" x-ref="cancelAdminEmail" :disabled="cancelamentoHistorico.enviando"></label>
+        <label class="cancel-auth-field">Senha do administrador
+          <input type="password" required autocomplete="new-password" x-model="cancelamentoHistorico.senha" :disabled="cancelamentoHistorico.enviando"></label>
+        <label class="cancel-auth-field">Motivo do cancelamento
+          <textarea required minlength="15" maxlength="1000" rows="3" x-model="cancelamentoHistorico.motivo" placeholder="Informe o motivo (mínimo 15 caracteres)" :disabled="cancelamentoHistorico.enviando"></textarea></label>
+        <p role="alert" class="history-cancel-button" x-show="cancelamentoHistorico.erro" x-text="cancelamentoHistorico.erro"></p>
+        <button type="submit" class="btn-action history-cancel-button" :disabled="cancelamentoHistorico.enviando"
+                x-text="cancelamentoHistorico.enviando ? 'Cancelando…' : 'Autorizar e cancelar venda'"></button>
+      </div>
+    </form>
   </div>
 
   {% include "pdv/_toast_styles.html" %}
@@ -3606,6 +3654,7 @@ function pdv() {
     showSystemMenu: false, showUserMenu: false, showFilialMenu: false, fotoPerfilAberta: false,
     showModalImpressao: false, vendaFinalizadaData: { id: null, numero: null }, _finalizando: false, compartilhandoCupom: false,
     showModalHistorico: false, historicoVendas: [],
+    cancelamentoHistorico: {venda:null,email:'',senha:'',motivo:'',erro:'',enviando:false},
     historicoCliente: [], produtosFrequentes: [], historicoClienteTotal: 0, historicoClienteCarregando: false, historicoClienteAberto: null,
     showModalConfig: false, configFormas: [], configTipos: [], configNovaDesc: '', configNovoTipo: 'dinheiro', configSalvando: false, configErro: '',
     itemEditando: null, itemEditandoPreco: null, editandoTotalItem: false,
@@ -3688,16 +3737,19 @@ function pdv() {
       if (periodo.startsWith('Sem data final')) return periodo.replace('Sem data final', 'Promoção sem prazo final');
       return 'Promoção válida ' + periodo.replace(/^(\d{2}\/\d{2}\/\d{4}) a /, 'a partir de $1 até ').replace(/^[A-ZÁ]/, letra => letra.toLowerCase());
     },
-    resumoEstoqueCarrinho(item) {
-      if (item.tipo_venda === 'kit') return 'Estoque dos componentes será baixado ao finalizar a venda.';
+    itemGratis(item) { return item.valor_total != null && Number(item.valor_total) === 0; },
+    resumoEstoqueCarrinho(item) { return this.infoEstoqueCarrinho(item).texto; },
+    infoEstoqueCarrinho(item) {
+      const informacao = (texto, negativo = false) => ({texto, negativo});
+      if (item.tipo_venda === 'kit') return informacao('Estoque dos componentes será baixado ao finalizar a venda.');
       const produtoId = item.produto_id;
       const atual = [...this.produtos, ...this.topProdutos].find(p => String(p.id) === String(produtoId));
       const saldo = atual?.estoque_disponivel ?? item.estoque_disponivel;
-      if (saldo == null) return 'Estoque não consultado · baixa somente ao finalizar.';
+      if (saldo == null) return informacao('Estoque não consultado · baixa somente ao finalizar.');
       let noCarrinho = 0;
       for (const linha of this.venda.itens) {
         if (linha.tipo_venda === 'kit') {
-          if (!linha.oferta_componentes_estoque?.length) return 'Estoque atual: '+this.fmtQtd(saldo,item)+' · saldo após kits a confirmar.';
+          if (!linha.oferta_componentes_estoque?.length) return informacao('Estoque atual: '+this.fmtQtd(saldo,item)+' · saldo após kits a confirmar.');
           for (const c of linha.oferta_componentes_estoque) {
             if (String(c.produto_id) === String(produtoId)) noCarrinho += Number(c.quantidade)*Number(linha.quantidade);
           }
@@ -3707,8 +3759,8 @@ function pdv() {
         }
       }
       const apos = Math.round((Number(saldo)-noCarrinho)*1000)/1000;
-      return 'Em estoque: '+this.fmtQtd(saldo,item)
-        +(apos<0?' · Faltam para esta venda: '+this.fmtQtd(-apos,item):' · Restam após esta venda: '+this.fmtQtd(apos,item));
+      return informacao('Em estoque: '+this.fmtQtd(saldo,item)
+        +(apos<0?' · Estoque ficará negativo: −'+this.fmtQtd(-apos,item):' · Restam após esta venda: '+this.fmtQtd(apos,item)), apos<0);
     },
 
     labelOrigemPreco(item) {
@@ -4255,8 +4307,10 @@ function pdv() {
     },
     aplicarPrecoItem(item,val) {
       if(!item)return;
-      const entrada=this.numeroDesconto(val);
-      if(!Number.isFinite(entrada)||entrada<=0){ this.toast_('Informe um preço válido.','erro'); return; }
+      let texto=String(val ?? '').trim();
+      if(texto.includes(',')) texto=texto.replace(/\./g,'').replace(',','.');
+      const entrada=Number(texto);
+      if(!/^-?\d+(\.\d*)?$/.test(texto)||!Number.isFinite(entrada)||entrada<0){ this.toast_('Informe um preço válido, igual ou maior que zero.','erro'); return; }
       if(this.editandoTotalItem && !(Number(item.quantidade)>0)) return;
       // Keep existing item discount in reais when converting a final total to unit price.
       const novo=this.editandoTotalItem
@@ -4600,30 +4654,7 @@ function pdv() {
     },
 
     async cancelarVendaHistorico(c) {
-      const temNota = c.documento_fiscal_status === 'autorizada';
-      const documento = c.documento_fiscal_tipo === 'nfe' ? 'NF-e' : 'NFC-e';
-      const aviso = temNota
-        ? `A ${documento} sera cancelada na SEFAZ antes da venda. Para NFC-e, faca isso dentro do prazo de 30 minutos.`
-        : 'A venda sera cancelada no sistema.';
-      const justificativa = prompt(
-        `Cancelar a venda #${String(c.numero_venda).padStart(6,'0')}?\n\n${aviso}\n\nInforme o motivo (minimo 15 caracteres):`
-      );
-      if (justificativa === null) return;
-      if (justificativa.trim().length < 15) {
-        this.toast_('Informe um motivo com pelo menos 15 caracteres.', 'erro');
-        return;
-      }
-      try {
-        const r = await fetch('/pdv/api/venda/'+c.id+'/cancelar/', {
-          method: 'POST',
-          headers: {'Content-Type':'application/json','X-CSRFToken': csrf()},
-          body: JSON.stringify({justificativa: justificativa.trim()})
-        });
-        const d = await r.json();
-        if (!d.ok) { this.toast_('Erro: '+(d.erro||''), 'erro'); return; }
-        this.historicoCliente = this.historicoCliente.filter(v => v.id !== c.id);
-        this.toast_(temNota ? `${documento} e venda canceladas` : 'Venda cancelada', 'ok');
-      } catch { this.toast_('Erro ao cancelar venda', 'erro'); }
+      this.abrirCancelamentoHistorico(c);
     },
 
     async imprimirRelatorioCaixaData() {
@@ -5855,9 +5886,9 @@ ${pgtoHtml ? `<hr class="sep">${pgtoHtml}` : ''}
             quantidade_decimais: this.produtoAceitaDecimal(item) ? 3 : 0,
             quantidade: item.quantidade,
             valor_unitario: item.valor_unitario,
-            _precoOriginal: parseFloat(item.preco_original || item.valor_unitario),
+            _precoOriginal: parseFloat(item.preco_original ?? item.valor_unitario),
             _precoTabela: Number(item.preco_tabela ?? item.preco_original ?? item.valor_unitario),
-            _precoManual: !!item.preco_manual,
+            _precoManual: item.preco_manual != null && item.preco_manual !== '',
             _quantidadeMinOferta: item._quantidadeMinOferta || null,
             _quantidadeExata: !!item._quantidadeExata,
             _ofertaSelecionada: !!item._ofertaSelecionada,
@@ -5905,6 +5936,37 @@ ${pgtoHtml ? `<hr class="sep">${pgtoHtml}` : ''}
       this.toast_('Digite nome, código ou código de barras', 'ok');
     },
 
+    abrirCancelamentoHistorico(venda) {
+      if(venda.status==='cancelada') return;
+      this.cancelamentoHistorico={venda,email:'',senha:'',motivo:'',erro:'',enviando:false};
+      this.$nextTick(()=>this.$refs.cancelAdminEmail?.focus());
+    },
+    fecharCancelamentoHistorico() {
+      if(this.cancelamentoHistorico.enviando) return;
+      this.cancelamentoHistorico={venda:null,email:'',senha:'',motivo:'',erro:'',enviando:false};
+    },
+    async confirmarCancelamentoHistorico() {
+      const form=this.cancelamentoHistorico;
+      if(!form.venda || form.enviando) return;
+      if(!form.email.trim() || !form.senha || form.motivo.trim().length<15) {
+        form.erro='Informe o administrador, a senha e um motivo com pelo menos 15 caracteres.'; return;
+      }
+      form.enviando=true; form.erro='';
+      try {
+        const resposta=await fetch('/pdv/api/venda/'+form.venda.id+'/cancelar-venda/', {
+          method:'POST',headers:{'Content-Type':'application/json','X-CSRFToken':csrf()},
+          body:JSON.stringify({admin_email:form.email.trim(),admin_senha:form.senha,justificativa:form.motivo.trim()}),
+        });
+        form.senha='';
+        const dados=await resposta.json();
+        if(!resposta.ok || !dados.ok) { form.erro=dados.erro || 'Não foi possível cancelar a venda.'; return; }
+        this.historicoCliente=this.historicoCliente.filter(v=>v.id!==form.venda.id);
+        form.enviando=false; this.fecharCancelamentoHistorico();
+        await this.abrirHistorico();
+        this.toast_('Venda cancelada. Registro mantido no histórico.','ok');
+      } catch { form.erro='Não foi possível confirmar o cancelamento. Atualize o histórico antes de tentar novamente.'; }
+      finally { form.senha=''; form.enviando=false; }
+    },
     async abrirHistorico() {
       this.showModalHistorico = true;
       try {
@@ -6025,7 +6087,7 @@ ${pgtoHtml ? `<hr class="sep">${pgtoHtml}` : ''}
         || this.showModalDescontoItem || this.showModalDesconto || this.showModalPrecoItem
         || this.showModalNovoCliente || this.showModalCaixaRel || this.showModalConfig
         || this.showModalHistorico || this.showModalImpressao || this.modalPreco.show
-        || this.modalFoto.show;
+        || this.modalFoto.show || !!this.cancelamentoHistorico.venda;
     },
 
     alvoEhCampoDigitacao(target) {

@@ -53,6 +53,8 @@ class ProdutoImagemPDVTests(SimpleTestCase):
         self.assertNotIn('As opções estão ordenadas pela maior economia.', template)
         self.assertNotIn('>Menor preço</span>', template)
         self.assertIn('@click="abrirPrecoItem(item, true)"', template)
+        self.assertIn('x-show="itemGratis(item)" x-cloak>Grátis</span>', template)
+        self.assertIn("'stock-negative':infoEstoqueCarrinho(item).negativo", template)
         self.assertIn("'Brinde incluído: '+item.oferta_brindes.join(', ')", template)
 
     def test_ofertas_sao_ordenadas_pelo_menor_preco_unitario(self):

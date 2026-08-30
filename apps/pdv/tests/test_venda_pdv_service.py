@@ -383,16 +383,75 @@ class VendaPDVServiceTests(TestCase):
         self.assertEqual(item.custo_unitario_snapshot, Decimal("4.00"))
         self.assertEqual(venda.valor_total, Decimal("3.00"))
 
-    def test_preco_manual_zero_e_negativo_continuam_bloqueados(self):
+    def test_preco_manual_negativo_continua_bloqueado(self):
         produto = self.criar_produto()
         self.abastecer(produto, "2")
-        for preco in ("0", "-1"):
-            with self.subTest(preco=preco), self.assertRaisesMessage(DadosInvalidosError, "Preco manual deve ser maior que zero"):
+        for preco in ("-0.01", "-1"):
+            with self.subTest(preco=preco), self.assertRaisesMessage(DadosInvalidosError, "Preco manual nao pode ser negativo"):
                 VendaPDVService.finalizar_venda(
                     sessao=self.sessao, filial=self.filial, usuario=self.usuario,
                     itens=[{"produto_id": produto.pk, "quantidade": "1", "preco_manual": preco}],
                     pagamentos=[{"forma_id": self.forma.pk, "valor": "3.00"}],
                 )
+
+    def test_item_gratis_finaliza_sem_pagamento_e_baixa_estoque(self):
+        produto = self.criar_produto('Produto grátis')
+        self.abastecer(produto, '3')
+        venda = VendaPDVService.finalizar_venda(
+            sessao=self.sessao, filial=self.filial, usuario=self.usuario,
+            itens=[{'produto_id': produto.pk, 'quantidade': '2', 'preco_manual': 0}],
+            pagamentos=[],
+        )
+        item = venda.itens.get()
+        self.assertEqual(item.valor_unitario, 0)
+        self.assertEqual(item.valor_total, 0)
+        self.assertEqual(item.oferta_contexto['preco_manual'], 0)
+        self.assertEqual(item.custo_unitario_snapshot, Decimal('4'))
+        self.assertEqual(venda.valor_total, 0)
+        self.assertFalse(venda.pagamentos.exists())
+        self.assertEqual(Estoque.objects.get(produto=produto, filial=self.filial).quantidade_atual, 1)
+
+    def test_venda_mista_cobra_apenas_itens_pagos(self):
+        produto = self.criar_produto()
+        self.abastecer(produto, '3')
+        venda = VendaPDVService.finalizar_venda(
+            sessao=self.sessao, filial=self.filial, usuario=self.usuario,
+            itens=[{'produto_id': produto.pk, 'quantidade': 1, 'preco_manual': 0},
+                   {'produto_id': produto.pk, 'quantidade': 1}],
+            pagamentos=[{'forma_id': self.forma.pk, 'valor': '10'}],
+        )
+        self.assertEqual(venda.valor_total, 10)
+        self.assertEqual(venda.itens.filter(valor_total=0).count(), 1)
+
+    def test_venda_positiva_sem_pagamento_continua_bloqueada(self):
+        produto = self.criar_produto()
+        self.abastecer(produto, '2')
+        with self.assertRaisesMessage(DadosInvalidosError, 'Informe ao menos uma forma de pagamento'):
+            VendaPDVService.finalizar_venda(
+                sessao=self.sessao, filial=self.filial, usuario=self.usuario,
+                itens=[{'produto_id': produto.pk, 'quantidade': 1}], pagamentos=[],
+            )
+        self.assertEqual(Estoque.objects.get(produto=produto, filial=self.filial).quantidade_atual, 2)
+
+    def test_zero_manual_persiste_no_orcamento_e_pendente(self):
+        produto = self.criar_produto()
+        self.client.force_login(self.usuario)
+        session = self.client.session
+        session['filial_ativa_id'] = self.filial.pk
+        session.save()
+        for endpoint, detalhe in (('api_venda_orcamento', 'api_orcamento_detalhe'), ('api_venda_pendente', 'api_pendente_detalhe')):
+            with self.subTest(endpoint=endpoint):
+                response = self.client.post(reverse('pdv:' + endpoint), data=json.dumps({'itens': [{
+                    'produto_id': produto.pk, 'quantidade': 1, 'valor_unitario': 0,
+                    'preco_manual': 0, '_precoOriginal': 10,
+                }]}), content_type='application/json')
+                self.assertEqual(response.status_code, 200, response.content)
+                venda = VendaPDV.objects.get(pk=response.json()['venda_id'])
+                item = self.client.get(reverse('pdv:' + detalhe, args=[venda.pk])).json()['itens'][0]
+                self.assertEqual(item['valor_total'], 0)
+                self.assertEqual(item['valor_unitario'], 0)
+                self.assertEqual(item['preco_manual'], 0)
+                self.assertEqual(item['preco_original'], 10)
 
     def test_finalizar_venda_sem_estoque_faz_rollback(self):
         produto = self.criar_produto("Produto sem saldo")
@@ -580,6 +639,21 @@ class VendaPDVServiceTests(TestCase):
         )
         self.assertEqual(venda.valor_total, Decimal("4.00"))
         self.assertEqual(venda.itens.get().custo_unitario_snapshot, Decimal("4.00"))
+
+    def test_kit_com_preco_manual_zero_baixa_componentes_sem_pagamento(self):
+        produto = self.criar_produto('Componente grátis')
+        self.abastecer(produto, '4')
+        kit = KitProduto.objects.create(filial=self.filial, nome='Kit grátis',
+            tipo_desconto=TipoDesconto.PERCENTUAL, valor_desconto=Decimal('10'))
+        KitProdutoItem.objects.create(kit=kit, produto=produto, quantidade=Decimal('2'))
+        venda = VendaPDVService.finalizar_venda(
+            sessao=self.sessao, filial=self.filial, usuario=self.usuario,
+            itens=[{'tipo_venda': 'kit', 'kit_id': kit.pk, 'quantidade': 1, 'preco_manual': 0}],
+            pagamentos=[],
+        )
+        self.assertEqual(venda.valor_total, 0)
+        self.assertEqual(venda.itens.get().valor_unitario, 0)
+        self.assertEqual(Estoque.objects.get(produto=produto, filial=self.filial).quantidade_atual, 2)
 
     def test_brinde_baixa_produto_gratis_com_movimento_de_brinde(self):
         gatilho = self.criar_produto("Produto gatilho")

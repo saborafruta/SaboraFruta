@@ -50,7 +50,7 @@ def _focus_service_para_filial(filial) -> FocusNFeService:
 
 
 @transaction.atomic
-def cancelar_venda_e_documento(venda, usuario, justificativa: str):
+def cancelar_venda_e_documento(venda, usuario, justificativa: str, *, autorizado_por=None):
     justificativa = (justificativa or "").strip()
     if len(justificativa) < 15:
         raise DadosInvalidosError(
@@ -62,6 +62,10 @@ def cancelar_venda_e_documento(venda, usuario, justificativa: str):
     # OUTER JOIN e aborta o cancelamento antes mesmo da chamada a Focus.
     venda = type(venda).objects.select_for_update().get(pk=venda.pk)
     documento = obter_documento_fiscal(venda)
+    if venda.status == 'cancelada':
+        return documento
+    if venda.status != 'finalizada':
+        raise DadosInvalidosError('Apenas vendas finalizadas podem ser canceladas.')
 
     if documento and documento.status == StatusDocumentoFiscal.AUTORIZADA:
         documento = _focus_service_para_filial(venda.filial).cancelar(
@@ -75,21 +79,22 @@ def cancelar_venda_e_documento(venda, usuario, justificativa: str):
     if documento and venda.documento_fiscal_id != documento.pk:
         venda.documento_fiscal = documento
 
-    try:
-        from apps.cashback.services.wallet_service import CashbackWalletService
-        CashbackWalletService.estornar_venda(venda, usuario, justificativa)
-    except Exception:
-        logger.exception("Falha ao estornar cashback da venda #%s no cancelamento", venda.pk)
+    from apps.pdv.services.edicao_venda_service import estornar_venda_para_edicao
+    estornar_venda_para_edicao(venda, usuario, justificativa=justificativa)
 
     venda.status = "cancelada"
     venda.motivo_cancelamento = justificativa
     venda.cancelado_em = timezone.now()
     venda.cancelado_por = usuario
+    venda.cancelamento_autorizado_por = autorizado_por
+    venda.requer_autorizacao_cancelamento = autorizado_por is not None
     venda.save(update_fields=[
         "status",
         "motivo_cancelamento",
         "cancelado_em",
         "cancelado_por",
         "documento_fiscal",
+        "cancelamento_autorizado_por",
+        "requer_autorizacao_cancelamento",
     ])
     return documento

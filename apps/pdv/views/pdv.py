@@ -1469,8 +1469,8 @@ def api_pendente_cancelar(request, pk):
 def api_historico(request):
     qs = (
         VendaPDV.objects.for_filial(request.filial_ativa)
-        .filter(status="finalizada")
-        .select_related("cliente", "documento_fiscal", "filial")
+        .filter(Q(status="finalizada") | Q(status="cancelada", cancelado_em__isnull=False))
+        .select_related("cliente", "documento_fiscal", "filial", "cancelado_por", "cancelamento_autorizado_por")
         .prefetch_related("itens")
         .order_by("-data_venda")[:30]
     )
@@ -1483,6 +1483,11 @@ def api_historico(request):
             "cliente": v.cliente.razao_social if v.cliente else "Consumidor Final",
             "valor_total": float(v.valor_total),
             "data_venda": v.data_venda.isoformat(),
+            "status": v.status,
+            "cancelado_por": v.cancelado_por.nome if v.cancelado_por else '',
+            "autorizado_por": v.cancelamento_autorizado_por.nome if v.cancelamento_autorizado_por else '',
+            "cancelado_em": v.cancelado_em.isoformat() if v.cancelado_em else None,
+            "motivo_cancelamento": v.motivo_cancelamento,
             "delivery": v.delivery,
             "qtd_itens": v.itens.count(),
             "documento_fiscal_status": documento.status if documento else "",
@@ -1675,35 +1680,7 @@ def api_venda_detalhe(request, pk):
 @requer_permissao('pdv', 'ver')
 @require_POST
 def api_venda_cancelar(request, pk):
-    try:
-        venda = (
-            VendaPDV.objects.for_filial(request.filial_ativa)
-            .select_related("documento_fiscal", "filial")
-            .get(pk=pk, status="finalizada")
-        )
-    except VendaPDV.DoesNotExist:
-        return JsonResponse({"erro": "Venda não encontrada ou já cancelada."}, status=404)
-
-    try:
-        body = json.loads(request.body or b"{}")
-    except json.JSONDecodeError:
-        body = {}
-
-    try:
-        documento = cancelar_venda_e_documento(
-            venda, request.user, body.get("justificativa", "")
-        )
-    except DadosInvalidosError as exc:
-        return JsonResponse({"erro": str(exc)}, status=400)
-    except Exception as exc:
-        return JsonResponse(
-            {"erro": f"Cancelamento fiscal nao confirmado: {exc}"}, status=502
-        )
-
-    return JsonResponse({
-        "ok": True,
-        "documento_status": documento.status if documento else "sem_documento",
-    })
+    return api_cancelar_venda_historico(request, pk)
 
 
 # ---------------------------------------------------------------------------
@@ -2978,7 +2955,9 @@ def api_cancelar_nfce(request, pk):
         )
 
     try:
-        doc = cancelar_venda_e_documento(venda, request.user, justificativa)
+        from apps.pdv.services.autorizacao_cancelamento_service import validar_administrador
+        admin = validar_administrador(request, body.get('admin_email'), body.get('admin_senha'))
+        doc = cancelar_venda_e_documento(venda, request.user, justificativa, autorizado_por=admin)
     except DadosInvalidosError as exc:
         return JsonResponse({"erro": str(exc)}, status=400)
     except Exception as exc:
@@ -3320,7 +3299,7 @@ def api_emitir_nfe(request, pk):
 @requer_permissao('pdv', 'ver')
 @require_POST
 def api_cancelar_venda_historico(request, pk):
-    """Rota legada que usa o mesmo fluxo fiscal seguro do PDV."""
+    """Cancelamento no histórico com reautenticação de administrador."""
     try:
         venda = (
             VendaPDV.objects.for_filial(request.filial_ativa)
@@ -3334,9 +3313,16 @@ def api_cancelar_venda_historico(request, pk):
         body = json.loads(request.body or b"{}")
     except json.JSONDecodeError:
         body = {}
+    if not isinstance(body, dict):
+        return JsonResponse({'erro': 'Dados inválidos.'}, status=400)
+    from apps.pdv.services.autorizacao_cancelamento_service import validar_administrador
+    try:
+        admin = validar_administrador(request, body.get('admin_email'), body.get('admin_senha'))
+    except DadosInvalidosError as exc:
+        return JsonResponse({'erro': str(exc)}, status=403)
     try:
         documento = cancelar_venda_e_documento(
-            venda, request.user, body.get("justificativa", "")
+            venda, request.user, body.get("justificativa", ""), autorizado_por=admin
         )
     except DadosInvalidosError as exc:
         return JsonResponse({"erro": str(exc)}, status=400)
@@ -3347,4 +3333,5 @@ def api_cancelar_venda_historico(request, pk):
     return JsonResponse({
         "ok": True,
         "status": documento.status if documento else "sem_documento",
+        "documento_status": documento.status if documento else "sem_documento",
     })

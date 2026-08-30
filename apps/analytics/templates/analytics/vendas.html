@@ -728,10 +728,12 @@ body.tema-claro .hv-page a, body.tema-claro .hv-page span { background:#eef2f7;b
   </div>
 
   <!-- Modal Cancelar NFC-e -->
-  <div class="hv-overlay" x-show="modal.show" x-cloak @keydown.escape.window="modal.show=false" style="display:none;">
+  <div class="hv-overlay" x-show="modal.show" x-cloak @keydown.escape.window="modal.admin_senha='';modal.show=false" style="display:none;">
     <div class="hv-modal">
       <h3 class="hv-modal-title">Cancelar <span x-text="modal.tipo.toUpperCase()"></span></h3>
       <p class="hv-modal-sub">Venda #<strong x-text="modal.numero"></strong> — A justificativa deve ter ao menos 15 caracteres.</p>
+      <label class="hv-filter-label">E-mail do administrador<input class="hv-input" type="email" x-model="modal.admin_email" autocomplete="off" style="width:100%;margin-bottom:10px;"></label>
+      <label class="hv-filter-label">Senha do administrador<input class="hv-input" type="password" x-model="modal.admin_senha" autocomplete="new-password" style="width:100%;margin-bottom:10px;"></label>
       <textarea x-model="modal.justificativa" placeholder="Motivo do cancelamento..."
                 class="hv-modal-textarea" maxlength="255"
                 @focus="$el.style.borderColor='#f15a24'" @blur="$el.style.borderColor='#2a2a3e'"></textarea>
@@ -739,7 +741,7 @@ body.tema-claro .hv-page a, body.tema-claro .hv-page span { background:#eef2f7;b
         <span x-text="modal.justificativa.trim().length"></span>/255 caracteres
       </div>
       <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:14px;">
-        <button class="hv-btn-clear" @click="modal.show=false" style="padding:8px 18px;">Voltar</button>
+        <button class="hv-btn-clear" @click="modal.admin_senha='';modal.show=false" style="padding:8px 18px;">Voltar</button>
         <button @click="confirmarCancelar()" :disabled="modal.loading || modal.justificativa.trim().length < 15"
                 style="padding:8px 20px;border-radius:8px;font-size:13px;font-weight:700;
                        background:#dc2626;border:none;color:#fff;cursor:pointer;"
@@ -752,10 +754,12 @@ body.tema-claro .hv-page a, body.tema-claro .hv-page span { background:#eef2f7;b
   </div>
 
   <!-- Modal Cancelar Venda -->
-  <div class="hv-overlay" x-show="modalCancelV.show" x-cloak @keydown.escape.window="modalCancelV.show=false" style="display:none;">
+  <div class="hv-overlay" x-show="modalCancelV.show" x-cloak @keydown.escape.window="modalCancelV.admin_senha='';modalCancelV.show=false" style="display:none;">
     <div class="hv-modal">
       <h3 class="hv-modal-title">Cancelar Venda</h3>
       <p class="hv-modal-sub">Venda #<strong x-text="modalCancelV.numero"></strong> — Informe o motivo com ao menos 15 caracteres. Se houver nota autorizada, ela será cancelada antes da venda.</p>
+      <label class="hv-filter-label">E-mail do administrador<input class="hv-input" type="email" x-model="modalCancelV.admin_email" autocomplete="off" style="width:100%;margin-bottom:10px;"></label>
+      <label class="hv-filter-label">Senha do administrador<input class="hv-input" type="password" x-model="modalCancelV.admin_senha" autocomplete="new-password" style="width:100%;margin-bottom:10px;"></label>
       <textarea x-model="modalCancelV.justificativa" placeholder="Motivo do cancelamento..."
                 class="hv-modal-textarea" maxlength="255"
                 @focus="$el.style.borderColor='#f15a24'" @blur="$el.style.borderColor='#2a2a3e'"></textarea>
@@ -763,7 +767,7 @@ body.tema-claro .hv-page a, body.tema-claro .hv-page span { background:#eef2f7;b
         <span x-text="modalCancelV.justificativa.trim().length"></span>/255 caracteres
       </div>
       <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:14px;">
-        <button class="hv-btn-clear" @click="modalCancelV.show=false" style="padding:8px 18px;">Voltar</button>
+        <button class="hv-btn-clear" @click="modalCancelV.admin_senha='';modalCancelV.show=false" style="padding:8px 18px;">Voltar</button>
         <button @click="confirmarCancelarVenda()" :disabled="modalCancelV.loading || modalCancelV.justificativa.trim().length < 15"
                 style="padding:8px 20px;border-radius:8px;font-size:13px;font-weight:700;
                        background:#dc2626;border:none;color:#fff;cursor:pointer;"
@@ -804,10 +808,10 @@ body.tema-claro .hv-page a, body.tema-claro .hv-page span { background:#eef2f7;b
 <script>
 function hvApp() {
   return {
-    modal:        { show:false, vendaId:null, numero:'', tipo:'nfce', justificativa:'', loading:false },
+    modal:        { show:false, vendaId:null, numero:'', tipo:'nfce', justificativa:'', loading:false, admin_email:'', admin_senha:'' },
     modalInut:    { show:false, tipo:'nfce', serie:1, numero_ini:'', numero_fim:'', justificativa:'', loading:false },
     modalEmail:   { show:false, vendaId:null, numero:'', emails:'', loading:false },
-    modalCancelV: { show:false, vendaId:null, numero:'', justificativa:'', loading:false },
+    modalCancelV: { show:false, vendaId:null, numero:'', justificativa:'', loading:false, admin_email:'', admin_senha:'' },
     modalFiscal:  { show:false, tipo:'nfce', vendaId:null, informacoes:'', pendencias:[], loading:false },
 
     init() {
@@ -893,10 +897,11 @@ function hvApp() {
     },
 
     abrirCancelarVenda(vendaId, numero) {
-      this.modalCancelV = { show:true, vendaId, numero, justificativa:'', loading:false };
+      this.modalCancelV = { show:true, vendaId, numero, justificativa:'', loading:false, admin_email:'', admin_senha:'' };
     },
 
     async confirmarCancelarVenda() {
+      if(this.modalCancelV.loading) return;
       const justificativa = this.modalCancelV.justificativa.trim();
       if (justificativa.length < 15) {
         this.toast('Justificativa deve ter ao menos 15 caracteres.', 'err'); return;
@@ -906,7 +911,7 @@ function hvApp() {
         const r = await fetch(`/pdv/api/venda/${this.modalCancelV.vendaId}/cancelar-venda/`, {
           method:'POST',
           headers:{'Content-Type':'application/json','X-CSRFToken':this.csrf()},
-          body: JSON.stringify({ justificativa }),
+          body: JSON.stringify({ justificativa, admin_email:this.modalCancelV.admin_email, admin_senha:this.modalCancelV.admin_senha }),
         });
         const d = await r.json();
         if (d.ok) {
@@ -920,14 +925,16 @@ function hvApp() {
         this.toast('Erro de comunicação ao cancelar venda.', 'err');
       } finally {
         this.modalCancelV.loading = false;
+        this.modalCancelV.admin_senha = '';
       }
     },
 
     abrirCancelar(vendaId, numero, tipo) {
-      this.modal = { show:true, vendaId, numero, tipo, justificativa:'', loading:false };
+      this.modal = { show:true, vendaId, numero, tipo, justificativa:'', loading:false, admin_email:'', admin_senha:'' };
     },
 
     async confirmarCancelar() {
+      if(this.modal.loading) return;
       if (this.modal.justificativa.trim().length < 15) {
         this.toast('Justificativa deve ter ao menos 15 caracteres.', 'err'); return;
       }
@@ -936,7 +943,7 @@ function hvApp() {
         const r = await fetch(`/pdv/api/venda/${this.modal.vendaId}/cancelar-nfce/`, {
           method:'POST',
           headers:{'Content-Type':'application/json','X-CSRFToken':this.csrf()},
-          body: JSON.stringify({ justificativa: this.modal.justificativa }),
+          body: JSON.stringify({ justificativa: this.modal.justificativa, admin_email:this.modal.admin_email, admin_senha:this.modal.admin_senha }),
         });
         const d = await r.json();
         if (d.ok) {
@@ -950,6 +957,7 @@ function hvApp() {
         this.toast('Erro de comunicação ao cancelar.', 'err');
       } finally {
         this.modal.loading = false;
+        this.modal.admin_senha = '';
       }
     },
 

@@ -52,8 +52,6 @@ class VendaPDVService:
         if not itens:
             raise DadosInvalidosError("Carrinho vazio.")
         credito_valor = cls._decimal(credito_valor, cls.MONEY)
-        if not pagamentos and credito_valor <= 0:
-            raise DadosInvalidosError("Informe ao menos uma forma de pagamento.")
 
         desconto = cls._decimal(desconto, cls.MONEY)
         acrescimo = cls._decimal(acrescimo, cls.MONEY)
@@ -119,6 +117,8 @@ class VendaPDVService:
         valor_total = cls._decimal(subtotal - desconto + acrescimo, cls.MONEY)
         if valor_total < 0:
             raise DadosInvalidosError("Total da venda nao pode ficar negativo.")
+        if valor_total > 0 and not pagamentos and credito_valor <= 0:
+            raise DadosInvalidosError("Informe ao menos uma forma de pagamento.")
 
         valor_pago, troco_total, valor_nao_contabilizado = cls._registrar_pagamentos(
             venda=venda,
@@ -322,20 +322,19 @@ class VendaPDVService:
         valor_unitario = preco_info["preco"]
         preco_origem_tipo = preco_info["tipo"]
         preco_origem_detalhe = preco_info["detalhe"] or preco_info["origem"]
-        if valor_unitario <= 0:
-            raise DadosInvalidosError("O preço da condição escolhida deve ser maior que zero.")
-
         preco_manual = item_dados.get("preco_manual")
         if preco_manual not in (None, ""):
             valor_manual = cls._decimal(preco_manual, cls.UNIT)
-            if valor_manual <= 0:
-                raise DadosInvalidosError("Preco manual deve ser maior que zero.")
+            if valor_manual < 0:
+                raise DadosInvalidosError("Preco manual nao pode ser negativo.")
             valor_unitario = valor_manual
             preco_origem_tipo = "manual"
             preco_origem_detalhe = (
                 f"Preco alterado manualmente pelo operador "
                 f"(preco automatico: R$ {preco_info['preco']})."
             )
+        elif valor_unitario <= 0:
+            raise DadosInvalidosError("O preço da condição escolhida deve ser maior que zero.")
 
         valor_bruto_item = cls._decimal(quantidade * valor_unitario, cls.MONEY)
         desconto_valor = cls._decimal(item_dados.get("desconto_valor", "0"), cls.MONEY)
@@ -472,7 +471,13 @@ class VendaPDVService:
             precos_componentes.append((comp, qtd_componente, contrato, preco_unitario, total))
 
         total_kit = cls._aplicar_desconto_kit(subtotal_sem_desconto, kit.tipo_desconto, kit.valor_desconto)
-        if total_kit <= 0:
+        preco_manual = item_dados.get("preco_manual")
+        if preco_manual not in (None, ""):
+            valor_manual = cls._decimal(preco_manual, cls.UNIT)
+            if valor_manual < 0:
+                raise DadosInvalidosError("Preco manual nao pode ser negativo.")
+            total_kit = cls._decimal(valor_manual * quantidade_kit, cls.MONEY)
+        elif total_kit <= 0:
             raise DadosInvalidosError("O preço do kit deve ser maior que zero.")
         fator = (total_kit / subtotal_sem_desconto) if subtotal_sem_desconto > 0 else Decimal("0")
         for offset, (comp, qtd_componente, contrato, preco_unitario, total) in enumerate(precos_componentes):

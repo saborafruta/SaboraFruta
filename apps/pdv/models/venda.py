@@ -66,6 +66,10 @@ class VendaPDV(TimestampedModel):
         Usuario, on_delete=models.SET_NULL, null=True, blank=True, related_name="vendas_canceladas",
     )
     cancelado_em = models.DateTimeField(null=True, blank=True)
+    cancelamento_autorizado_por = models.ForeignKey(
+        Usuario, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='cancelamentos_pdv_autorizados',
+    )
     requer_autorizacao_cancelamento = models.BooleanField(default=False)
 
     locked_by_device_serial = models.CharField(max_length=255, blank=True)

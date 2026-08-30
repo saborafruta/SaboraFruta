@@ -42,7 +42,7 @@ def validar_venda_editavel(venda: VendaPDV) -> None:
 
 
 @transaction.atomic
-def estornar_venda_para_edicao(venda: VendaPDV, usuario) -> None:
+def estornar_venda_para_edicao(venda: VendaPDV, usuario, *, justificativa=None) -> None:
     """
     Reverte por completo uma venda (estoque + conta a receber vinculada)
     e a marca como cancelada. Chamado antes de recriar a versão editada,
@@ -51,6 +51,7 @@ def estornar_venda_para_edicao(venda: VendaPDV, usuario) -> None:
     venda = VendaPDV.objects.select_for_update().get(pk=venda.pk)
     if venda.status != "finalizada":
         return  # já tratada (corrida ou clique duplo)
+    motivo = justificativa or "Venda editada pelo operador (substituída por uma nova versão)."
 
     for item in venda.itens.all():
         if not item.estoque_baixado or not item.movimentacoes_estoque_ids:
@@ -67,7 +68,7 @@ def estornar_venda_para_edicao(venda: VendaPDV, usuario) -> None:
                 documento_tipo=MovimentacaoEstoque.DocumentoTipo.OUTRAS,
                 documento_id=venda.pk,
                 documento_numero=str(venda.numero_venda),
-                observacao=f"Estorno automático: venda #{venda.numero_venda} foi editada pelo operador.",
+                observacao=f"Estorno da venda #{venda.numero_venda}: {motivo}",
                 permitir_sem_lote=True,
             )
 
@@ -83,7 +84,7 @@ def estornar_venda_para_edicao(venda: VendaPDV, usuario) -> None:
     )
     for conta in contas:
         conta.status = StatusContaReceber.CANCELADO
-        nota = f"Cancelada automaticamente: venda #{venda.numero_venda} foi editada."
+        nota = f"Estorno da venda #{venda.numero_venda}: {motivo}"
         conta.observacao = f"{conta.observacao} {nota}".strip() if conta.observacao else nota
         conta.save(update_fields=["status", "observacao", "updated_at"])
 
@@ -103,13 +104,15 @@ def estornar_venda_para_edicao(venda: VendaPDV, usuario) -> None:
     try:
         from apps.cashback.services.wallet_service import CashbackWalletService
         CashbackWalletService.estornar_venda(
-            venda, usuario, "Venda editada pelo operador (substituída por uma nova versão)."
+            venda, usuario, motivo
         )
     except Exception:
         logger.exception("Falha ao estornar cashback da venda #%s na edição", venda.pk)
+        if justificativa is not None:
+            raise DadosInvalidosError('Não foi possível estornar o cashback. O cancelamento da venda não foi concluído.')
 
     venda.status = "cancelada"
-    venda.motivo_cancelamento = "Venda editada pelo operador (substituída por uma nova versão)."
+    venda.motivo_cancelamento = motivo
     venda.cancelado_em = timezone.now()
     venda.cancelado_por = usuario
     venda.save(update_fields=[
