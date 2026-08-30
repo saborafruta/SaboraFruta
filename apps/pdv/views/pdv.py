@@ -256,6 +256,13 @@ def buscar_produto(request):
 
     q = request.GET.get("q", "").strip()
     linha_id = request.GET.get("linha")
+    try:
+        pagina = max(1, int(request.GET.get("pagina", 1)))
+    except (TypeError, ValueError):
+        pagina = 1
+    tamanho_pagina = 20
+    inicio = (pagina - 1) * tamanho_pagina
+    fim = inicio + tamanho_pagina
     filial = request.filial_ativa
     cliente = _cliente_precificacao(request)
     qs = Produto.objects.for_filial(filial).filter(ativo=True)
@@ -287,15 +294,24 @@ def buscar_produto(request):
             q,
             name_fields=('nome_visivel',),
             code_fields=('codigo', 'codigo_barras'),
-            limit=20,
+            limit=fim + 1,
         )
+        tem_mais = len(ranked_ids) > fim
+        ranked_ids = ranked_ids[inicio:fim]
         products_by_id = {
             produto.pk: produto
             for produto in qs.filter(pk__in=ranked_ids).select_related('linha_producao')
         }
         produtos = [products_by_id[pk] for pk in ranked_ids if pk in products_by_id]
     else:
-        produtos = list(qs.select_related('linha_producao').order_by('descricao')[:20])
+        ids_paginados = list(qs.order_by('descricao').values_list('pk', flat=True)[inicio:fim + 1])
+        tem_mais = len(ids_paginados) > tamanho_pagina
+        ids_paginados = ids_paginados[:tamanho_pagina]
+        products_by_id = {
+            produto.pk: produto
+            for produto in qs.filter(pk__in=ids_paginados).select_related('linha_producao')
+        }
+        produtos = [products_by_id[pk] for pk in ids_paginados if pk in products_by_id]
     data = []
     hoje = tz.localdate()
     contexto_ofertas = _preparar_contexto_ofertas(produtos, filial)
@@ -348,7 +364,11 @@ def buscar_produto(request):
             # Compatibilidade com clientes ainda esperando o nome antigo.
             "todos_precos": ofertas,
         })
-    return JsonResponse({"produtos": data})
+    return JsonResponse({
+        "produtos": data,
+        "pagina": pagina,
+        "tem_mais": tem_mais,
+    })
 
 
 def _validade_oferta(inicio=None, fim=None, dias_semana=None):

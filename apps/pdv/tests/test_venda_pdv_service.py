@@ -121,6 +121,25 @@ class VendaPDVServiceTests(TestCase):
             )
         self.assertFalse(VendaPDV.objects.filter(sessao_pdv=self.sessao).exists())
 
+    def test_busca_produtos_permite_carregar_resultados_apos_os_primeiros_vinte(self):
+        for indice in range(21):
+            self.criar_produto(f'Polo paginação {indice:02d}')
+        self.client.force_login(self.usuario)
+        session = self.client.session
+        session['filial_ativa_id'] = self.filial.pk
+        session.save()
+
+        primeira = self.client.get(reverse('pdv:api_produtos'), {'q': 'Polo'}).json()
+        segunda = self.client.get(reverse('pdv:api_produtos'), {'q': 'Polo', 'pagina': 2}).json()
+
+        self.assertEqual(len(primeira['produtos']), 20)
+        self.assertTrue(primeira['tem_mais'])
+        self.assertEqual(primeira['pagina'], 1)
+        self.assertEqual(len(segunda['produtos']), 1)
+        self.assertFalse(segunda['tem_mais'])
+        self.assertEqual(segunda['pagina'], 2)
+        self.assertFalse({item['id'] for item in primeira['produtos']} & {item['id'] for item in segunda['produtos']})
+
     @classmethod
     def setUpTestData(cls):
         cls.empresa = Empresa.objects.create(

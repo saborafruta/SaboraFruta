@@ -36,7 +36,9 @@
 
     descontosResumoHtml(venda, fmt) {
       const r = this.resumoDescontosCupom(venda);
-      return `<div class="cupom-discounts" style="font-size:12px;"><style>.cupom-discounts .line{display:flex;justify-content:space-between;gap:8px;margin:4px 0}.cupom-discounts strong{white-space:nowrap;flex-shrink:0}</style><div class="line"><span>Subtotal bruto</span><strong>R$ ${fmt(r.bruto)}</strong></div>`
+      const temDesconto = r.itens > 0 || r.geral > 0;
+      return `<div class="cupom-discounts" style="font-size:12px;"><style>.cupom-discounts .line{display:flex;justify-content:space-between;gap:8px;margin:4px 0}.cupom-discounts strong{white-space:nowrap;flex-shrink:0}</style>`
+        + (temDesconto?`<div class="line"><span>Subtotal bruto</span><strong>R$ ${fmt(r.bruto)}</strong></div>`:'')
         + (r.itens>0?`<div class="line"><span>Desconto nos itens (${fmt(r.itensPercentual)}%)</span><strong>- R$ ${fmt(r.itens)}</strong></div>`:'')
         + (r.geral>0?`<div class="line"><span>Desconto geral (${fmt(r.geralPercentual)}%)</span><strong>- R$ ${fmt(r.geral)}</strong></div>`:'') + '</div>';
     },

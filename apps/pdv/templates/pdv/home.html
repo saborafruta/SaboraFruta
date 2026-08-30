@@ -1347,7 +1347,7 @@
           <input x-ref="buscaInput" id="busca-produto" type="text" x-model="buscaQuery"
                  @input.debounce.200ms="buscarProdutos($event.target.value)"
                  @keydown.enter.prevent="selecionarProdutoFocado()"
-                 @keydown.escape="buscaQuery='';produtos=[];produtoFoco=-1;"
+                 @keydown.escape="buscaQuery='';produtos=[];produtoFoco=-1;produtosPagina=1;produtosTemMais=false;"
                  placeholder="Buscar produto ou serviço..."
                  autocomplete="off"
                  class="input-pdv" style="padding:8px 10px 8px 32px;">
@@ -1382,7 +1382,7 @@
           <template x-if="buscaQuery.trim()">
             <span style="display:flex;align-items:center;gap:6px;">
               <svg width="12" height="12" fill="none" stroke="#2563eb" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
-              <span style="color:#2563eb;" x-text="produtosVisiveis.length + ' resultado(s) para \'' + buscaQuery.trim() + '\''"></span>
+              <span style="color:#2563eb;" x-text="produtosVisiveis.length + (produtosTemMais ? '+ resultado(s)' : ' resultado(s)') + ' para \'' + buscaQuery.trim() + '\''"></span>
             </span>
           </template>
         </div>
@@ -1425,6 +1425,11 @@
               </div>
             </div>
           </template>
+          <button type="button" x-show="buscaQuery.trim() && produtosTemMais" x-cloak
+                  @click="carregarMaisProdutos()" :disabled="buscandoProdutos"
+                  style="width:100%;margin:6px 0 2px;padding:9px 12px;border:1px solid var(--pdv-bd3);border-radius:8px;background:var(--pdv-surface);color:var(--pdv-accent);font-size:12px;font-weight:800;cursor:pointer;">
+            Carregar mais resultados
+          </button>
         </div>
 
         <!-- Buscando -->
@@ -3550,6 +3555,7 @@ function pdv() {
     },
 
     produtos: [], topProdutos: [], buscaQuery: '', buscandoProdutos: false, produtoFoco: -1,
+    produtosPagina: 1, produtosTemMais: false,
     barcodeQuery: '',
     mobilePane: 'catalogo',
     showScanner: false,
@@ -3781,21 +3787,35 @@ function pdv() {
       }
     },
 
-    async buscarProdutos(q) {
+    async buscarProdutos(q, carregarMais=false) {
       this.produtoFoco = -1;
-      if (!q||!q.trim()) { this.produtos=[]; this.buscandoProdutos=false; return; }
+      if (!q||!q.trim()) {
+        this.produtos=[]; this.produtosPagina=1; this.produtosTemMais=false;
+        this.buscandoProdutos=false; return;
+      }
+      const termo = q.trim();
+      const pagina = carregarMais ? this.produtosPagina + 1 : 1;
       this.buscandoProdutos = true;
       try {
-        const params = new URLSearchParams({q:q.trim()});
+        const params = new URLSearchParams({q:termo,pagina:String(pagina)});
         if (this.linhaAtiva) params.set('linha',this.linhaAtiva);
         if (this.venda.cliente.id) params.set('cliente_id',this.venda.cliente.id);
         const d = await (await fetch('/pdv/api/produtos/?'+params)).json();
-        this.produtos = d.produtos || [];
-        if (this.produtos.length===1 && /^\d{8,}$/.test(q.trim())) {
+        if (this.buscaQuery.trim() !== termo) return;
+        const recebidos = d.produtos || [];
+        this.produtos = carregarMais ? [...this.produtos, ...recebidos] : recebidos;
+        this.produtosPagina = d.pagina || pagina;
+        this.produtosTemMais = !!d.tem_mais;
+        if (!carregarMais && this.produtos.length===1 && /^\d{8,}$/.test(termo)) {
           this.adicionarItem(this.produtos[0]); this.buscaQuery=''; this.produtos=[];
         }
-      } catch { this.produtos=[]; }
+      } catch { if (!carregarMais) this.produtos=[]; }
       finally { this.buscandoProdutos=false; }
+    },
+
+    carregarMaisProdutos() {
+      if (!this.produtosTemMais || this.buscandoProdutos) return;
+      this.buscarProdutos(this.buscaQuery, true);
     },
 
     moverFocoProduto(dir) {
@@ -4557,17 +4577,22 @@ function pdv() {
         v.itens.forEach(item => {
           const desc = item.descricao || item.produto_nome || '';
           const qtd = parseFloat(item.quantidade||1);
+          const qtdTexto = qtd % 1 === 0 ? String(qtd) : qtd.toFixed(2).replace('.',',');
+          const unidade = item.unidade_medida || 'UN';
           const uni = parseFloat(item.valor_unitario||0);
           const tot = parseFloat(item.valor_total||0);
-          itensHtml += `<tr>
-            <td style="padding:4px 6px 4px 0;font-size:12px;text-align:left;white-space:nowrap;">${qtd}</td>
-            <td style="padding:4px 6px;font-size:12px;word-break:break-word;">${this.escapeHtml(desc)}${this.descontoItemCupom(item).valor>0?`<div style="font-size:10px;margin-top:3px;">Desconto ${fmt(this.descontoItemCupom(item).percentual)}%: - R$ ${fmt(this.descontoItemCupom(item).valor)}</div>`:''}${(item.obs||item.observacao)?`<div style="font-size:10px;font-weight:800;margin-top:3px;">Observação: ${this.escapeHtml(item.obs||item.observacao)}</div>`:''}</td>
-            <td style="padding:4px 0;font-size:12px;text-align:right;">R$&nbsp;${fmt(uni)}</td>
-            <td style="padding:4px 0 4px 8px;font-size:12px;text-align:right;font-weight:700;">R$&nbsp;${fmt(tot)}</td>
-          </tr>`;
+          const detalhes = qtd === 1
+            ? `${qtdTexto} ${this.escapeHtml(unidade)}`
+            : `${qtdTexto} ${this.escapeHtml(unidade)} × R$ ${fmt(uni)}`;
+          itensHtml += `<div class="item-block">
+            <div class="item-main"><strong class="item-name">${this.escapeHtml(desc)}</strong><strong class="item-total">R$&nbsp;${fmt(tot)}</strong></div>
+            <div class="item-meta">${detalhes}</div>
+            ${this.descontoItemCupom(item).valor>0?`<div class="item-discount">Desconto ${fmt(this.descontoItemCupom(item).percentual)}%: - R$ ${fmt(this.descontoItemCupom(item).valor)}</div>`:''}
+            ${(item.obs||item.observacao)?`<div class="item-note">Observação: ${this.escapeHtml(item.obs||item.observacao)}</div>`:''}
+          </div>`;
         });
       } else {
-        itensHtml = '<tr><td colspan="4" style="text-align:center;color:#888;padding:8px;font-size:12px;">Carrinho vazio</td></tr>';
+        itensHtml = '<div style="text-align:center;color:#888;padding:8px;font-size:12px;">Carrinho vazio</div>';
       }
       const totalItens = v.itens ? v.itens.reduce((s, i) => s + parseFloat(i.quantidade||0), 0) : 0;
 
@@ -4606,6 +4631,13 @@ function pdv() {
   table { width:100%; border-collapse:collapse; }
   th { font-size:${a4 ? '11px' : '10px'}; text-transform:uppercase; color:#000; padding-bottom:4px; border-bottom:1px solid #000; font-weight:800; }
   td { color:#000; font-weight:700; }
+  .item-block { padding:6px 0; border-bottom:1px dotted #777; }
+  .item-main { display:flex; align-items:flex-start; justify-content:space-between; gap:10px; }
+  .item-name { min-width:0; overflow-wrap:anywhere; line-height:1.3; }
+  .item-total { white-space:nowrap; flex-shrink:0; }
+  .item-meta { margin-top:3px; font-size:11px; color:#333; }
+  .item-discount { margin-top:3px; font-size:10px; color:#333; }
+  .item-note { display:block; width:100%; margin-top:5px; font-size:10px; line-height:1.35; font-weight:800; overflow-wrap:anywhere; }
   .total-row { font-size:${a4 ? '16px' : '14px'}; font-weight:800; }
   .footer { text-align:center; margin-top:10px; font-size:${a4 ? '11px' : '10px'}; color:#000; font-weight:700; }
   /* Sem isto o navegador imprime no tamanho padrao do driver (geralmente A4)
@@ -4631,15 +4663,7 @@ ${v.cliente && v.cliente.cpf_cnpj ? `<div class="sub">CPF/CNPJ: ${v.cliente.cpf_
 ${(() => { const e = v.delivery ? (v.endereco_entrega || {}) : (v.cliente?.endereco_entrega || {}); if (!e || !e.rua) return ''; const l1 = e.rua + (e.numero ? ', '+e.numero : '') + (e.complemento ? ' - '+e.complemento : ''); const cidadeUf = [e.cidade, e.uf].filter(Boolean).join('/'); const l2 = [e.bairro, cidadeUf, e.cep].filter(Boolean).join(' - '); const obs = e.observacao || ''; return '<div class="sub">'+(v.delivery ? 'Entrega: ' : 'End: ')+l1+'</div>'+(l2 ? '<div class="sub">'+l2+'</div>' : '')+(obs ? '<div class="sub">Obs: '+obs+'</div>' : ''); })()}
 ${(v.observacao && v.observacao.trim()) ? `<div class="sub">Obs: ${v.observacao.trim()}</div>` : ''}
 <hr class="sep">
-<table>
-  <thead><tr>
-    <th style="text-align:left;">Qtd</th>
-    <th style="text-align:left;">Produto</th>
-    <th style="text-align:right;">Unit.</th>
-    <th style="text-align:right;padding-left:8px;">Total</th>
-  </tr></thead>
-  <tbody>${itensHtml}</tbody>
-</table>
+<div class="item-list">${itensHtml}</div>
 <hr class="sep">
 <div style="display:flex;justify-content:space-between;font-size:11px;color:#555;margin-bottom:4px;">
   <span>Qtd total de itens</span><span>${totalItens % 1 === 0 ? totalItens : totalItens.toFixed(2).replace('.',',')}</span>

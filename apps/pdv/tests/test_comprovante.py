@@ -81,6 +81,7 @@ process.stdout.write(JSON.stringify(html));
         self.assertIn('Imprimir térmica (80mm)', html)
         self.assertIn('Imprimir em A4', html)
         self.assertIn('img.decode()', html)
+        self.assertNotIn('Subtotal bruto', html)
 
     def test_logo_absoluta_relativa_e_fallback(self):
         for image, settings, company, expected in [
