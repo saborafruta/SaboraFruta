@@ -631,6 +631,44 @@ class VendaPDVServiceTests(TestCase):
         self.assertEqual(venda.itens.get().valor_unitario,Decimal('43.3233'))
         self.assertEqual(venda.valor_total,Decimal('129.97'))
 
+    def test_combo_exato_permite_multiplos_completos_e_rejeita_fracoes(self):
+        produto = self.criar_produto('Combo exato')
+        produto.preco_venda = Decimal('49.99')
+        produto.save(update_fields=['preco_venda'])
+        self.abastecer(produto, '8')
+        combo = PromocaoQuantidade.objects.create(
+            filial=self.filial, produto=produto, nome='Trio', usar_preco_promocional=False,
+        )
+        faixa = PromocaoQuantidadeFaixa.objects.create(
+            promocao=combo, quantidade_minima=3, condicao_quantidade=CondicaoQuantidade.IGUAL,
+            tipo_desconto=TipoDesconto.VALOR, valor=Decimal('20'),
+        )
+        oferta = {'produto_id': produto.pk, 'oferta_tipo': 'combo',
+                  'promocao_id': combo.pk, 'faixa_id': faixa.pk,
+                  '_quantidadeMinOferta': 3, '_quantidadeExata': True, '_ofertaSelecionada': True}
+        for quantidade in [2, 4, 5, Decimal('6.5')]:
+            with self.subTest(quantidade=quantidade), self.assertRaises(DadosInvalidosError):
+                VendaPDVService.finalizar_venda(
+                    sessao=self.sessao, filial=self.filial, usuario=self.usuario,
+                    itens=[{**oferta, 'quantidade': quantidade}],
+                    pagamentos=[{'forma_id': self.forma.pk, 'valor': '500'}],
+                )
+        venda = VendaPDVService.finalizar_venda(
+            sessao=self.sessao, filial=self.filial, usuario=self.usuario,
+            itens=[{**oferta, 'quantidade': 6}],
+            pagamentos=[{'forma_id': self.forma.pk, 'valor': '259.94'}],
+        )
+        self.assertEqual(venda.itens.get().quantidade, Decimal('6'))
+        self.assertEqual(venda.valor_total, Decimal('259.94'))
+        self.assertEqual(Estoque.objects.get(produto=produto, filial=self.filial).quantidade_atual, 2)
+        combo.ativo = False
+        combo.save(update_fields=['ativo'])
+        with self.assertRaises(DadosInvalidosError):
+            VendaPDVService.resolver_oferta_selecionada(
+                produto=produto, filial=self.filial, quantidade=Decimal('6'), cliente=None,
+                item_dados=oferta, preco_automatico={},
+            )
+
     def test_kit_baixa_componentes_item_a_item(self):
         produto_a = self.criar_produto("Componente A")
         produto_b = self.criar_produto("Componente B")

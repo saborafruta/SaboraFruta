@@ -323,12 +323,15 @@
   .history-launch:hover { border-color:var(--pdv-accent-text);background:var(--pdv-hover2); }
   .history-launch:focus-visible { outline:2px solid var(--pdv-focus);outline-offset:2px; }
   .history-launch kbd { margin-left:auto;padding:2px 5px;border:1px solid var(--pdv-accent-border);border-radius:4px;font:inherit;font-size:10px; }
-  .cart-header { flex-wrap:wrap; }
-  .cart-total-editor { flex:0 1 230px;min-width:150px; }
+  .cart-header { display:grid;gap:10px;padding:12px 20px;border-bottom:1px solid var(--pdv-bd);flex-shrink:0; }
+  .cart-heading,.cart-summary { display:flex;align-items:center;gap:10px;min-width:0; }
+  .cart-heading .cart-clear-btn { margin-left:auto; }
+  .cart-summary { justify-content:space-between;padding-top:10px;border-top:1px solid var(--pdv-bd); }
+  .cart-total-editor { flex:0 1 320px;min-width:0; }
   .cart-total-values { display:flex;align-items:center;gap:8px; }
   .cart-total-values .cart-sale-before { flex-shrink:0;white-space:nowrap; }
   .cart-total-values .cart-total-field { flex:1;min-width:0; }
-  .cart-total-label { display:block;font-size:9px;font-weight:700;letter-spacing:.04em;color:var(--pdv-t2); }
+  .cart-total-label { display:block;margin-bottom:4px;font-size:10px;font-weight:700;letter-spacing:.04em;color:var(--pdv-t2); }
   .cart-total-field { display:flex;align-items:center;gap:5px;padding:3px 7px;border:1px solid var(--pdv-bd);border-radius:8px;background:var(--pdv-card);color:var(--pdv-t1); }
   .cart-total-field:focus-within { border-color:var(--pdv-focus);box-shadow:0 0 0 2px var(--pdv-focus-ring); }
   .cart-total-field > span { font-size:12px;font-weight:700; }
@@ -336,7 +339,8 @@
   .cart-total-field svg { flex-shrink:0;color:var(--pdv-t2); }
   .cart-total-discount { display:block;font-size:10px;color:var(--pdv-t2);margin-top:2px; }
   .cart-sale-before { display:block;font-size:11px;font-weight:500;color:var(--pdv-t2); }
-  .cart-sale-impact { max-width:145px;font-size:10px;line-height:1.35;text-align:right;color:var(--pdv-paid); }
+  .cart-sale-impact { white-space:nowrap;font-size:10px;line-height:1.35;text-align:right;color:var(--pdv-paid); }
+  .cart-combo-count { font-size:11px;color:var(--pdv-accent-text);white-space:nowrap; }
 
   /* Tabs do catálogo */
   .cat-tabs { display:flex; gap:3px; background:var(--pdv-bg); border:1px solid var(--pdv-hover); border-radius:10px; padding:4px; }
@@ -737,9 +741,9 @@
     .client-btn-text-full { display:none; }
     #pdv-center-panel .cart-header { padding:9px 12px !important;gap:8px !important;flex-wrap:wrap; }
     #pdv-center-panel .cart-header .btn-action { padding:7px 8px;font-size:11px; }
-    #pdv-center-panel .cart-header-spacer { display:none !important; }
+    #pdv-center-panel .cart-heading { gap:6px;flex-wrap:wrap; }
     #pdv-center-panel .cart-header .cart-discount-btn,
-    #pdv-center-panel .cart-header .cart-clear-btn { flex:1 1 0;justify-content:center; }
+    #pdv-center-panel .cart-header .cart-clear-btn { flex-shrink:0;justify-content:center; }
     .cart-mobile-totals { display:grid !important; }
     #pdv-center-panel .item-card { padding:10px; }
     #pdv-center-panel .item-card > div { gap:9px !important; }
@@ -1027,7 +1031,7 @@
   #pdv-app .client-swap-btn { color:#fff !important;border-color:#2563eb !important;background:#2563eb !important; }
   .payment-heading-icon { background:rgba(37,99,235,.14) !important;border-color:rgba(96,165,250,.30) !important;color:#60a5fa !important; }
   html.tema-claro .payment-heading-icon { background:#eff6ff !important;border-color:#bfdbfe !important;color:#2563eb !important; }
-  html.tema-claro .barcode-icon-wrap svg,html.tema-claro .cart-header > svg { stroke:#2563eb !important; }
+  html.tema-claro .barcode-icon-wrap svg,html.tema-claro .cart-heading > svg { stroke:#2563eb !important; }
   html.tema-claro #barcode-input + kbd { color:#2563eb !important; }
   html.tema-claro #pdv-right-panel .totais-bar-total { color:#2563eb; }
   html.tema-claro .payment-empty { color:#94a3b8; }
@@ -1071,7 +1075,7 @@
   .cash-open-shell { width:min(390px,calc(100vw - 28px));background:var(--pdv-modal);border:1px solid var(--pdv-bd4);border-radius:16px;padding:20px;box-shadow:0 24px 70px rgba(0,0,0,.5); }
   .cash-open-control { width:100%;padding:11px 12px;background:var(--pdv-bg);border:1px solid var(--pdv-bd4);border-radius:9px;color:var(--pdv-t1);font-size:13px;outline:none; }
   .cash-open-btn { padding:11px 14px;background:#2563eb;border:1px solid rgba(96,165,250,.38);border-radius:9px;color:#fff;font-size:13px;font-weight:800;cursor:pointer; }
-  .barcode-icon-wrap svg,.cart-header > svg { stroke:#60a5fa !important; }
+  .barcode-icon-wrap svg,.cart-heading > svg { stroke:#60a5fa !important; }
   #barcode-input + kbd { color:#60a5fa !important; }
   .camera-scan-btn { color:#60a5fa !important;border-color:rgba(96,165,250,.40) !important;background:rgba(37,99,235,.10) !important; }
   .cat-tab.active { background:#2563eb !important;color:#fff !important; }
@@ -1593,40 +1597,43 @@
       </div>
 
       <!-- Cabeçalho carrinho -->
-      <div class="cart-header" style="display:flex;align-items:center;padding:10px 20px;border-bottom:1px solid #1a1a28;flex-shrink:0;gap:10px;">
-        <svg width="16" height="16" fill="none" stroke="#3b82f6" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z"/></svg>
-        <span style="font-size:14px;font-weight:600;color:#e5e5f0;">Carrinho</span>
-        <span style="font-size:12px;padding:2px 8px;background:#1e1e2a;border-radius:12px;color:#888;border:1px solid #2a2a3e;"
-              x-text="venda.itens.length + ' ' + (venda.itens.length===1?'item':'itens')"></span>
-        <span style="font-size:12px;color:#555;" x-text="'• ' + fmtQtd(totalUnidades) + ' un.'"></span>
-        <div class="cart-header-spacer" style="flex:1;"></div>
-        <div class="cart-total-editor">
-          <label class="cart-total-label" for="pdv-total-carrinho">TOTAL DA VENDA</label>
-          <div class="cart-total-values">
-            <s class="cart-sale-before" x-show="venda.desconto>0" x-cloak
-               x-text="'R$ '+fmt(Number(venda.subtotal)+Number(venda.acrescimo||0))"></s>
-            <div class="cart-total-field" title="Edite o total para dar desconto. Enter ou sair do campo aplica; Esc cancela.">
-              <span>R$</span>
-              <input id="pdv-total-carrinho" type="text" inputmode="decimal" aria-label="Total da venda no carrinho"
-                     :disabled="!venda.itens.length" :value="editandoTotalCarrinho ? totalCarrinhoRascunho : fmt(venda.total)"
-                     @focus="iniciarTotalCarrinho(); $nextTick(() => $el.select())"
-                     @input="totalCarrinhoRascunho=$event.target.value" @blur="aplicarTotalCarrinho()"
-                     @keydown.enter.prevent.stop="$event.target.blur()"
-                     @keydown.escape.prevent.stop="editandoTotalCarrinho=false; $event.target.blur()">
-              <svg aria-hidden="true" width="12" height="12" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 3l5 5M3 21l5-1L21 7a2 2 0 00-4-4L4 16z"/></svg>
-            </div>
-          </div>
-          <span class="cart-total-discount" x-show="venda.desconto>0" x-cloak
-                x-text="'− R$ '+fmt(venda.desconto)+' ('+fmt(venda.subtotal>0?venda.desconto/venda.subtotal*100:0)+'%)'"></span>
+      <div class="cart-header">
+        <div class="cart-heading">
+          <svg width="16" height="16" fill="none" stroke="#3b82f6" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z"/></svg>
+          <span style="font-size:14px;font-weight:600;color:#e5e5f0;">Carrinho</span>
+          <span style="font-size:12px;padding:2px 8px;background:#1e1e2a;border-radius:12px;color:#888;border:1px solid #2a2a3e;"
+                x-text="venda.itens.length + ' ' + (venda.itens.length===1?'item':'itens')"></span>
+          <span style="font-size:12px;color:var(--pdv-t2);" x-text="'• ' + fmtQtd(totalUnidades) + ' un.'"></span>
+          <button @click="confirmarLimpar()" class="btn-action cart-clear-btn" x-show="venda.itens.length>0" x-cloak>
+            <svg width="13" height="13" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6M4 7h16"/></svg>
+            Limpar Carrinho
+          </button>
         </div>
-        <button @click="abrirDescontoGeral()" class="btn-action cart-discount-btn">
-          <span style="font-size:13px;font-weight:600;">%</span>
-          Desconto (F6)
-        </button>
-        <button @click="confirmarLimpar()" class="btn-action cart-clear-btn" x-show="venda.itens.length>0" x-cloak>
-          <svg width="13" height="13" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6M4 7h16"/></svg>
-          Limpar Carrinho
-        </button>
+        <div class="cart-summary">
+          <div class="cart-total-editor">
+            <label class="cart-total-label" for="pdv-total-carrinho">TOTAL DA VENDA</label>
+            <div class="cart-total-values">
+              <s class="cart-sale-before" x-show="venda.desconto>0" x-cloak
+                 x-text="'R$ '+fmt(Number(venda.subtotal)+Number(venda.acrescimo||0))"></s>
+              <div class="cart-total-field" title="Edite o total para dar desconto. Enter ou sair do campo aplica; Esc cancela.">
+                <span>R$</span>
+                <input id="pdv-total-carrinho" type="text" inputmode="decimal" aria-label="Total da venda no carrinho"
+                       :disabled="!venda.itens.length" :value="editandoTotalCarrinho ? totalCarrinhoRascunho : fmt(venda.total)"
+                       @focus="iniciarTotalCarrinho(); $nextTick(() => $el.select())"
+                       @input="totalCarrinhoRascunho=$event.target.value" @blur="aplicarTotalCarrinho()"
+                       @keydown.enter.prevent.stop="$event.target.blur()"
+                       @keydown.escape.prevent.stop="editandoTotalCarrinho=false; $event.target.blur()">
+                <svg aria-hidden="true" width="12" height="12" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 3l5 5M3 21l5-1L21 7a2 2 0 00-4-4L4 16z"/></svg>
+              </div>
+            </div>
+            <span class="cart-total-discount" x-show="venda.desconto>0" x-cloak
+                  x-text="'− R$ '+fmt(venda.desconto)+' ('+fmt(venda.subtotal>0?venda.desconto/venda.subtotal*100:0)+'%)'"></span>
+          </div>
+          <button @click="abrirDescontoGeral()" class="btn-action cart-discount-btn">
+            <span style="font-size:13px;font-weight:600;">%</span>
+            Desconto (F6)
+          </button>
+        </div>
       </div>
 
       <div class="cart-mobile-totals" style="display:none;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;padding:10px 12px;border-bottom:1px solid #1a1a28;background:#0d0d16;flex-shrink:0;">
@@ -1878,6 +1885,8 @@
                   <button @click="item._showObs=!item._showObs" class="btn-action item-obs-btn" style="font-size:11px;padding:4px 8px;"
                           :style="item.obs?'color:#f59e0b;border-color:rgba(245,158,11,.3);':''">💬</button>
                 </div>
+                <div class="cart-combo-count" x-show="comboExato(item)" x-cloak style="margin-top:5px;"
+                     x-text="fmtQtd(item.quantidade / quantidadeMinima(item)) + (item.quantidade === quantidadeMinima(item) ? ' combo de ' : ' combos de ') + fmtQtd(quantidadeMinima(item)) + ' un.'"></div>
                 <div x-show="item._showObs" x-cloak style="margin-top:6px;">
                   <input type="text" x-model="item.obs" maxlength="500" placeholder="Observação do item..."
                          style="width:100%;padding:6px 10px;background:var(--pdv-inp);border:1px solid var(--pdv-bd);border-radius:7px;color:var(--pdv-t1);font-size:12px;font-weight:700;outline:none;">
@@ -3891,7 +3900,12 @@ function pdv() {
     },
 
     quantidadePasso(item) {
+      if (this.comboExato(item)) return Number(item._quantidadeMinOferta);
       return this.produtoAceitaDecimal(item) ? 0.001 : 1;
+    },
+
+    comboExato(item) {
+      return item?.oferta_tipo === 'combo' && item?._quantidadeExata && Number(item?._quantidadeMinOferta) > 0;
     },
 
     quantidadeMinima(item) {
@@ -3903,6 +3917,7 @@ function pdv() {
       const n = parseFloat(String(valor ?? '').replace(',', '.'));
       const minimo = this.quantidadeMinima(item);
       if (!Number.isFinite(n) || n < minimo) return minimo;
+      if (this.comboExato(item)) return Math.round(Math.max(1, Math.round(n / minimo)) * minimo * 1000) / 1000;
       return this.produtoAceitaDecimal(item) ? Math.round(n * 1000) / 1000 : Math.round(n);
     },
 
@@ -4230,7 +4245,7 @@ function pdv() {
       const exigeQuantidadeMinima = ['categoria', 'combo', 'brinde'].includes(oferta.oferta_tipo);
       const preco = parseFloat(ehKit ? oferta.total : oferta.preco) || 0;
       const chave = this.chaveOferta(produto, oferta);
-      const existente = this.venda.itens.find(i => i._chaveOferta === chave && !i._quantidadeExata);
+      const existente = this.venda.itens.find(i => i._chaveOferta === chave && (!i._quantidadeExata || this.comboExato(i)));
       if (existente) {
         existente._ofertaSelecionada = existente._ofertaSelecionada || !!selecionadaNoModal;
         this.alterarQuantidade(existente, quantidade);
@@ -4300,7 +4315,7 @@ function pdv() {
     },
 
     alterarQuantidade(item, delta) {
-      if (item._quantidadeExata && Math.abs(delta) > 0) {
+      if (item._quantidadeExata && !this.comboExato(item) && Math.abs(delta) > 0) {
         this.toast_('Esta promoção exige a quantidade exata informada na campanha.', 'erro');
         return;
       }
@@ -4312,7 +4327,7 @@ function pdv() {
     },
 
     atualizarQuantidadeItem(item) {
-      if (item._quantidadeExata) item.quantidade = item._quantidadeMinOferta;
+      if (item._quantidadeExata && !this.comboExato(item)) item.quantidade = item._quantidadeMinOferta;
       item.quantidade = this.normalizarQuantidade(item.quantidade, item);
       this.recalcularItem(item);
       if (!item._precoManual && !item._ofertaSelecionada && ['normal', 'tabela_cliente'].includes(item.oferta_tipo || 'normal')) this.aplicarPrecosCliente(false);

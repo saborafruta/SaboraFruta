@@ -16,7 +16,7 @@ from apps.pdv.models import ItemVendaPDV, PagamentoVendaPDV, VendaPDV
 from apps.pdv.services.produto_vendavel_service import ProdutoVendavelService
 from apps.pdv.services.oferta_contexto_service import contexto_oferta_do_payload
 from apps.produtos.models import Produto
-from apps.produtos.models import BrindeProduto, KitCategoria, KitProduto, PromocaoQuantidade
+from apps.produtos.models import BrindeProduto, CondicaoQuantidade, KitCategoria, KitProduto, PromocaoQuantidade
 from apps.produtos.services.preco_service import PrecoService
 
 
@@ -232,10 +232,17 @@ class VendaPDVService:
                 faixa = next(faixa for faixa in promocao.faixas.all() if faixa.pk == int(item_dados.get("faixa_id")))
             except (PromocaoQuantidade.DoesNotExist, StopIteration, TypeError, ValueError):
                 raise DadosInvalidosError("O combo escolhido não foi encontrado.")
-            if not PrecoService.combo_quantidade_vigente(promocao, data=hoje) or not faixa.aplica_para_quantidade(quantidade):
+            # Uma escolha explícita pode repetir o combo, sempre em grupos completos.
+            quantidade_calculo = quantidade
+            if faixa.condicao_quantidade == CondicaoQuantidade.IGUAL:
+                tamanho_combo = faixa.quantidade_minima
+                if tamanho_combo <= 0 or quantidade <= 0 or quantidade % tamanho_combo != 0:
+                    raise DadosInvalidosError("Informe uma quantidade de combos completos.")
+                quantidade_calculo = tamanho_combo
+            if not PrecoService.combo_quantidade_vigente(promocao, data=hoje) or not faixa.aplica_para_quantidade(quantidade_calculo):
                 raise DadosInvalidosError("A quantidade ou a validade do combo escolhido não é mais válida.")
             candidatos = PrecoService.precos_combo_quantidade_vigentes_detalhados(
-                produto, filial=filial, quantidade=quantidade, data=hoje,
+                produto, filial=filial, quantidade=quantidade_calculo, data=hoje,
             )
             escolhido = next((item for item in candidatos if item.get("faixa_id") == faixa.pk), None)
             if not escolhido:
