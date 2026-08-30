@@ -12,6 +12,7 @@
       {% url 'estoque:outras-mov-hub' as outras_mov_url %}
       {% url 'lotes:dashboard' as lotes_url %}
 
+      {% if not hide_sidebar_logo %}
       {% if filial_ativa and filial_ativa.imagem %}
         <div x-show="!collapsed" class="sidebar-branch-logo-card {{ filial_ativa.imagem|logo_sidebar_classe }} mx-2 mb-3">
           <div class="sidebar-branch-logo-frame">
@@ -37,6 +38,8 @@
             <div class="sidebar-branch-name" title="{{ filial_ativa.nome_fantasia|default:filial_ativa.razao_social }}">{{ filial_ativa.nome_fantasia|default:filial_ativa.razao_social }}</div>
           </div>
         </div>
+      {% endif %}
+
       {% endif %}
 
       <!-- Dashboard -->

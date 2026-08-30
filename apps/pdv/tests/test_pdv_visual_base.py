@@ -1,10 +1,25 @@
 from pathlib import Path
+from types import SimpleNamespace
 
 from django.template.loader import get_template
 from django.test import SimpleTestCase
 
 
 class PDVVisualBaseTests(SimpleTestCase):
+    def test_logo_opcional_preserva_menu_normal(self):
+        navigation = get_template('core/_sidebar_navigation.html')
+        context = {
+            'filial_ativa': SimpleNamespace(imagem=None, nome_fantasia='Empresa teste', razao_social='Empresa teste LTDA'),
+            'empresa_logo_url': '/media/logo-empresa-teste.png',
+            'request': SimpleNamespace(path='/pdv/'),
+        }
+        self.assertIn('/media/logo-empresa-teste.png', navigation.render(context))
+        context['hide_sidebar_logo'] = True
+        pdv_navigation = navigation.render(context)
+        self.assertNotIn('/media/logo-empresa-teste.png', pdv_navigation)
+        self.assertNotIn('sidebar-branch-logo-frame', pdv_navigation)
+        self.assertIn('Dashboard', pdv_navigation)
+
     def test_favoritos_aparecem_selecionados_hover_ou_foco(self):
         template = (Path(__file__).resolve().parents[1] / 'templates/pdv/home.html').read_text(encoding='utf-8')
         selector = '.system-nav-drawer .sidebar-favoritable-link'
@@ -17,17 +32,21 @@ class PDVVisualBaseTests(SimpleTestCase):
         self.assertNotIn('onmouseover=', navigation)
         self.assertIn('@mouseenter="$el.style.background=temaClaro?', navigation)
 
-    def test_mobile_tem_barra_em_linhas_e_menus_acessiveis(self):
+    def test_mobile_tem_barra_arrastavel_e_menu_fora_da_rolagem(self):
         template = (Path(__file__).resolve().parents[1] / 'templates/pdv/home.html').read_text(encoding='utf-8')
         self.assertNotIn('#pdv-app > header .topbar-chip { display:none', template)
         self.assertNotIn('header.pdv-topbar::after', template)
-        self.assertIn('grid-template-rows:44px 44px 44px;', template)
+        self.assertNotIn('grid-template-rows:44px 44px 44px;', template)
+        self.assertIn('overflow-x:auto;overflow-y:hidden;scrollbar-width:none;', template)
         self.assertIn('padding:calc(6px + env(safe-area-inset-top))', template)
         self.assertIn('height:calc(68px + env(safe-area-inset-bottom))', template)
         header = template.split('<header class="pdv-topbar"', 1)[1].split('</header>', 1)[0]
         for hook in ['topbar-brand', 'topbar-sales-actions', 'topbar-print', 'topbar-branch', 'topbar-user']:
             self.assertIn(hook, header)
         self.assertIn('aria-label="Menu do usuário"', header)
+        self.assertNotIn('id="sidebar-root"', header)
+        self.assertNotIn('@click.outside="showSystemMenu=false"', header)
+        self.assertIn('{% include "core/_sidebar_navigation.html" with hide_sidebar_logo=True %}', template)
 
     def test_pagamento_neutro_troco_e_contraste_claro(self):
         template = (Path(__file__).resolve().parents[1] / 'templates/pdv/home.html').read_text(encoding='utf-8')
