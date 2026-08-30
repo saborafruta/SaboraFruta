@@ -3,7 +3,7 @@
 body:not(.a4) .thermal-receipt {
   font-family:Arial,Helvetica,sans-serif;
   font-size:12px;
-  font-weight:700;
+  font-weight:400;
   line-height:1.35;
   color:#000;
   background:#fff;
@@ -12,6 +12,9 @@ body:not(.a4) .thermal-receipt {
 body:not(.a4) .thermal-receipt * { color:#000 !important;border-color:#000 !important; }
 body:not(.a4) .thermal-receipt :is(.sub,.muted,.item-meta,.item-discount,.item-note,.footer,th) {
   font-size:11px;
-  font-weight:700;
+  font-weight:400;
 }
+body:not(.a4) .thermal-receipt td { font-weight:400; }
+body:not(.a4) .thermal-receipt :is(strong,h1,th,.total,.total-row,.total-row td) { font-weight:700; }
+body:not(.a4) .thermal-receipt :is(.item-note strong,.line:not(.total) strong) { font-weight:400; }
 body:not(.a4) .thermal-receipt :is(.item-block,tr,.line) { break-inside:avoid; }

@@ -601,6 +601,8 @@
   .history-modal-head p { margin:5px 0 0;font-size:12px;color:var(--pdv-t2); }
   .history-list { overflow-y:auto;padding:10px 12px;display:grid;gap:7px; }
   .history-card { display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;column-gap:12px;row-gap:5px;padding:9px 12px;background:var(--pdv-card);border:1px solid var(--pdv-bd);border-radius:9px; }
+  .history-card.history-cancelled { background:#2b1d22;border-color:#7f3544; }
+  html.tema-claro .history-card.history-cancelled { background:#fff1f2;border-color:#f3b6bd; }
   .history-card-top,.history-card-client { display:contents; }
   .history-card-client > .history-sale-value { grid-row:1;grid-column:1;font-size:13px;font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap; }
   .history-meta { grid-row:2;grid-column:1;display:flex;flex-wrap:wrap;align-items:center;gap:6px;font-size:11px;color:var(--pdv-t2); }
@@ -614,6 +616,7 @@
   .history-actions .history-cancel-button {color:#fca5a5;border-color:#f87171; }
   html.tema-claro .history-actions .history-cancel-button { color:#b91c1c;border-color:#b91c1c; }
   .history-card .history-cancel-info { grid-row:3;grid-column:1 / -1;padding:4px 8px;background:var(--pdv-row);border-left:3px solid #b91c1c;border-radius:3px;font-size:11px;line-height:1.4;overflow-wrap:anywhere; }
+  .history-card.history-cancelled .history-cancel-info { background:transparent; }
   .history-card .history-cancel-info > div { display:inline; }
   .history-card .history-cancel-info > div::before { content:' · '; }
   .history-modal button:focus-visible,.sale-confirm button:focus-visible { outline:2px solid var(--pdv-focus);outline-offset:3px; }
