@@ -48,6 +48,7 @@ class MovimentoDiario:
     numero_parcelas: int | None = None
     data_credito: date | None = None
     op_url: str = ""
+    venda_pdv_id: int | None = None
 
     @property
     def valor(self):
@@ -496,6 +497,7 @@ class PosicaoDiariaCaixaService:
                     data=item.data_liquidacao_prevista or timezone.localtime(item.venda_pdv.data_venda).date(), conta=conta,
                     descricao=f"Venda #{item.venda_pdv.numero_venda} - {cliente}", contraparte=cliente,
                     origem="Venda PDV", origem_codigo="venda", registro_id=item.pk,
+                    venda_pdv_id=item.venda_pdv_id,
                     documento=str(item.venda_pdv.numero_venda), forma_pagamento=item.forma_pagamento.descricao,
                     entrada=valor, valor_bruto=item.valor_bruto_recebido,
                     valor_taxa=item.valor_taxa if item.taxa_calculada_em else ZERO,

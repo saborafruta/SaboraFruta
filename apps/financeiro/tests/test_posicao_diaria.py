@@ -112,6 +112,32 @@ class PosicaoDiariaCaixaTests(TestCase):
             {item["nome"] for item in posicao["totais_forma_saida"]},
         )
 
+    def test_comprovante_usa_venda_de_origem_e_nao_id_do_pagamento(self):
+        self._criar_cenario()
+        venda = VendaPDV.objects.get(filial=self.filial)
+        pagamento = PagamentoVendaPDV.objects.create(
+            venda_pdv=venda, forma_pagamento=self.forma, conta_bancaria=self.banco,
+            valor=Decimal("20.00"),
+        )
+        self.assertNotEqual(pagamento.pk, venda.pk)
+        response = self.client.get(reverse("financeiro:posicao_diaria"), {
+            "data": "2026-08-21", "origem": "venda", "movimento": pagamento.pk,
+        })
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.context["detalhe"].venda_pdv_id, venda.pk)
+        self.assertContains(response, "Comprovante da venda")
+        self.assertContains(response, f"visualizarComprovante({venda.pk})")
+        self.assertNotContains(response, f"visualizarComprovante({pagamento.pk})")
+
+    def test_movimento_manual_nao_oferece_comprovante_de_venda(self):
+        self._criar_cenario()
+        movimento = ExtratoBancario.objects.get(historico="Transferencia para caixa")
+        response = self.client.get(reverse("financeiro:posicao_diaria"), {
+            "data": "2026-08-21", "origem": "manual", "movimento": movimento.pk,
+        })
+        self.assertIsNone(response.context["detalhe"].venda_pdv_id)
+        self.assertNotContains(response, "Comprovante da venda")
+
     def test_tela_exibe_entradas_saidas_e_atalhos(self):
         self._criar_cenario()
         response = self.client.get(reverse("financeiro:posicao_diaria"), {"data": "2026-08-21"})
