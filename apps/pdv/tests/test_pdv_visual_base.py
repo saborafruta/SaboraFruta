@@ -6,6 +6,18 @@ from django.test import SimpleTestCase
 
 
 class PDVVisualBaseTests(SimpleTestCase):
+    def test_descontos_sincronizados_e_botao_remover_com_temas(self):
+        template = (Path(__file__).resolve().parents[1] / 'templates/pdv/home.html').read_text(encoding='utf-8')
+        for field in ['Desconto do item em percentual', 'Desconto do item em reais', 'Desconto geral em percentual', 'Desconto geral em reais']:
+            self.assertIn('aria-label="' + field + '"', template)
+        self.assertIn('@click="abrirDescontoGeral()"', template)
+        self.assertIn('this.abrirDescontoGeral();', template)
+        self.assertIn('class="cart-remove-btn"', template)
+        self.assertIn('html.tema-claro .cart-remove-btn', template)
+        self.assertIn('.cart-remove-btn:focus-visible', template)
+        self.assertIn('@click.stop="visualizarComprovante(v.id)"', template)
+        self.assertIn('{% include "pdv/_comprovante_methods.html" %}', template)
+
     def test_catalogo_mostra_nome_completo_no_hover(self):
         template = (Path(__file__).resolve().parents[1] / 'templates/pdv/home.html').read_text(encoding='utf-8')
         self.assertIn('class="prod-card-main" :title="p.descricao"', template)
