@@ -371,6 +371,7 @@ class Op2CreateView(ModaBaseView):
                 data_prevista_entrega=data_prevista_entrega,
                 prioridade=request.POST.get('prioridade') or PedidoProducao.Prioridade.NORMAL,
                 observacoes=_observacoes_pedido(request),
+                informacoes_criacao=(request.POST.get('informacoes_criacao') or '').strip(),
                 previsao_pagamento=previsao_pagamento,
             )
             pedido.clientes_adicionais.set(clientes_adicionais)
@@ -959,6 +960,24 @@ class Op2ActionView(ModaBaseView):
             return _voltar(pedido)
         return resposta or _voltar(pedido)
 
+    def _acao_criacao(self, request, pedido):
+        pedido.informacoes_criacao = (request.POST.get('informacoes_criacao') or '').strip()
+        pedido.save(update_fields=['informacoes_criacao', 'updated_at'])
+        messages.success(request, 'Informações da criação salvas.')
+
+    def _acao_descricao_visual(self, request, pedido):
+        visual = get_object_or_404(
+            VisualItemPedido.objects.filter(item__pedido=pedido),
+            pk=request.POST.get('visual_id'),
+        )
+        descricao = (request.POST.get('descricao') or '').strip()
+        limite = VisualItemPedido._meta.get_field('observacoes').max_length
+        if len(descricao) > limite:
+            raise ValueError(f'A descrição da imagem deve ter até {limite} caracteres.')
+        visual.observacoes = descricao
+        visual.save(update_fields=['observacoes'])
+        messages.success(request, 'Descrição da imagem salva. Os PDFs já usarão este texto.')
+
     def _acao_cabecalho(self, request, pedido):
         cliente_id = request.POST.get('cliente')
         if not cliente_id:
@@ -1485,6 +1504,7 @@ class Op2ActionView(ModaBaseView):
             data_pedido=timezone.localdate(), data_prevista_entrega=None,
             prioridade=pedido.prioridade, status=PedidoProducao.Status.ORCAMENTO,
             observacoes=pedido.observacoes, desconto=pedido.desconto,
+            informacoes_criacao=pedido.informacoes_criacao,
             acrescimo=pedido.acrescimo, frete=pedido.frete,
             previsao_pagamento=pedido.previsao_pagamento,
         )

@@ -1566,6 +1566,80 @@ class Op2Tests(TestCase):
         self.pedido.refresh_from_db()
         self.assertEqual(self.pedido.status, PedidoProducao.Status.CANCELADO)
 
+    def test_informacoes_criacao_salvam_sem_alterar_dados_comerciais(self):
+        self._login_op2()
+        self.pedido.observacoes = 'Observações comerciais'
+        self.pedido.save()
+        url = reverse('moda:op2-action', args=[self.pedido.pk])
+        for status in ('orcamento', 'aguardando_arte'):
+            self.pedido.status = status
+            self.pedido.save()
+            for texto in ('Conferir cores\nAlinhar escudo & nome', ''):
+                resposta = self.client.post(url, {
+                    'acao': 'criacao', 'informacoes_criacao': texto,
+                })
+                self.assertEqual(resposta.status_code, 302)
+                self.pedido.refresh_from_db()
+                self.assertEqual(self.pedido.informacoes_criacao, texto)
+                self.assertEqual(self.pedido.observacoes, 'Observações comerciais')
+                self.assertEqual(self.pedido.status, status)
+                self.assertContains(self.client.get(reverse('moda:op2-detail', args=[self.pedido.pk])),
+                                    'name="informacoes_criacao"')
+
+    def test_descricao_visual_edita_limpa_e_valida_sem_mudar_imagem(self):
+        self._login_op2()
+        visual = VisualItemPedido.objects.create(
+            item=self._item(), posicao='frente_camisa', imagem='moda/visuais/teste.png',
+        )
+        url = reverse('moda:op2-action', args=[self.pedido.pk])
+        for texto in ('Frente <azul> & branca\nEscudo central', '', 'A' * 160):
+            self.assertEqual(self.client.post(url, {
+                'acao': 'descricao_visual', 'visual_id': visual.pk, 'descricao': texto,
+            }).status_code, 302)
+            visual.refresh_from_db()
+            self.assertEqual(visual.observacoes, texto)
+            self.assertEqual(visual.imagem.name, 'moda/visuais/teste.png')
+        self.client.post(url, {
+            'acao': 'descricao_visual', 'visual_id': visual.pk, 'descricao': 'B' * 161,
+        })
+        visual.refresh_from_db()
+        self.assertEqual(visual.observacoes, 'A' * 160)
+
+    def test_descricao_nao_altera_imagem_de_outro_pedido(self):
+        self._login_op2()
+        outro = PedidoProducao.objects.create(filial=self.filial, cliente=self.cliente)
+        item = ItemPedidoProducao.objects.create(pedido=outro, quantidade=1)
+        visual = VisualItemPedido.objects.create(item=item, posicao='frente_camisa', observacoes='Original')
+        resposta = self.client.post(reverse('moda:op2-action', args=[self.pedido.pk]), {
+            'acao': 'descricao_visual', 'visual_id': visual.pk, 'descricao': 'Inválido',
+        })
+        self.assertEqual(resposta.status_code, 404)
+        visual.refresh_from_db()
+        self.assertEqual(visual.observacoes, 'Original')
+
+    def test_criacao_nao_altera_pedido_de_outra_filial(self):
+        self._login_op2()
+        filial = Filial.objects.create(
+            empresa=self.filial.empresa, razao_social='Outra', cnpj='53345678000353',
+        )
+        outro = PedidoProducao.objects.create(filial=filial, cliente=self.cliente)
+        resposta = self.client.post(reverse('moda:op2-action', args=[outro.pk]), {
+            'acao': 'criacao', 'informacoes_criacao': 'Não autorizado',
+        })
+        self.assertEqual(resposta.status_code, 404)
+        outro.refresh_from_db()
+        self.assertEqual(outro.informacoes_criacao, '')
+
+    def test_duplicar_preserva_criacao_e_descricao_da_imagem(self):
+        self._login_op2()
+        self.pedido.informacoes_criacao = 'Briefing da criação'
+        self.pedido.save()
+        VisualItemPedido.objects.create(item=self._item(), posicao='frente_camisa', observacoes='Escudo azul')
+        self.client.post(reverse('moda:op2-action', args=[self.pedido.pk]), {'acao': 'duplicar'})
+        novo = PedidoProducao.objects.exclude(pk=self.pedido.pk).get()
+        self.assertEqual(novo.informacoes_criacao, 'Briefing da criação')
+        self.assertEqual(novo.itens.get().visuais.get().observacoes, 'Escudo azul')
+
     def test_galeria_separa_produtos_e_permite_remover_imagem(self):
         item = self._item(quantidade=1)
         self.client.force_login(self._usuario())

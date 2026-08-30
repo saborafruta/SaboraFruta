@@ -327,6 +327,35 @@ class ArteNoPdfTests(TestCase):
             return ' '.join(ArteNoPdfTests._texto_layout(b) for b in bloco)
         return ''
 
+    def test_descricao_abaixo_da_imagem_nos_dois_pdfs(self):
+        from reportlab.platypus import Table
+        from apps.moda.services.pedido_pdf import _estilos
+        from apps.moda.services.orcamento_pdf import _estilos as estilos_orcamento
+
+        pedido = self._pedido()
+        item = ItemPedidoProducao.objects.create(pedido=pedido, descricao='Camisa', quantidade=1)
+        visual = VisualItemPedido.objects.create(
+            item=item, posicao='frente_camisa',
+            imagem=SimpleUploadedFile('legenda.png', _png(), content_type='image/png'),
+            observacoes='Escudo <azul> & branco\nCentralizar na frente',
+        )
+        for texto in (visual.observacoes, '', '   ', 'Detalhe ' * 20):
+            visual.observacoes = texto
+            visual.save()
+            op = PedidoPdfService._arte(item, _estilos())
+            orc = OrcamentoPdfService._fotos(item, estilos_orcamento())
+            tabela = [bloco for bloco in op if isinstance(bloco, Table)][-1]
+            self.assertEqual(isinstance(tabela._cellvalues[0][0], list), bool(texto.strip()))
+            for layout in (tabela, orc):
+                conteudo = self._texto_layout(layout)
+                if texto.strip():
+                    for linha in texto.strip().splitlines():
+                        self.assertIn(linha, conteudo)
+                else:
+                    self.assertEqual(conteudo.strip(), '')
+            for servico in (PedidoPdfService, OrcamentoPdfService):
+                self.assertTrue(servico.gerar(pedido).startswith(b'%PDF'))
+
     def test_orcamento_reune_foto_estrutura_grade_e_nomes_por_produto(self):
         from apps.moda.models import ItemGradePedido, PersonalizacaoIndividual, Tamanho
         from apps.moda.services.orcamento_pdf import _estilos

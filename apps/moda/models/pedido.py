@@ -110,6 +110,10 @@ class PedidoProducao(ComCodigoQr, FilialScopedModel):
     )
 
     observacoes = models.TextField(blank=True)
+    informacoes_criacao = models.TextField(
+        'Informações para criação de artes', blank=True,
+        help_text='Anotações internas da equipe de criação; não aparecem nos PDFs.',
+    )
 
     # ── Valores ──────────────────────────────────────────────────────────
     # O subtotal NÃO é campo: é a soma dos itens, calculada na leitura. Um

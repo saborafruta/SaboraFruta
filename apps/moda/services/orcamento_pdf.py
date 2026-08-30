@@ -373,6 +373,9 @@ class OrcamentoPdfService:
                 fotos += [imagem, Spacer(1, 3)]
             elif campo:
                 fotos.append(Paragraph('Imagem indisponível', e['pequeno']))
+            descricao = (visual.observacoes or '').strip()
+            if campo and descricao:
+                fotos += [Paragraph(_texto(descricao).replace('\n', '<br/>'), e['pequeno']), Spacer(1, 4)]
         for p in item.personalizacoes.all():
             if p.arquivo and p.extensao in DESENHAVEIS:
                 imagem = _imagem(p.arquivo, 23 * mm, 20 * mm)

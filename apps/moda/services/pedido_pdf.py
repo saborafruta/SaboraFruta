@@ -680,19 +680,19 @@ class PedidoPdfService:
     ) -> list:
         personalizacoes = list(item.personalizacoes.all())
         visuais = list(item.visuais.all())
-        campos_imagem = [
-            visual.imagem or (
+        imagens_descritas = [
+            (visual.imagem or (
                 getattr(visual.mockup, 'imagem', None) if visual.mockup_id else None
-            )
+            ), (visual.observacoes or '').strip())
             for visual in visuais
         ]
-        campos_imagem += [
-            personalizacao.arquivo
+        imagens_descritas += [
+            (personalizacao.arquivo, '')
             for personalizacao in personalizacoes
             if getattr(personalizacao, 'extensao', '') in DESENHAVEIS
         ]
-        campos_imagem = [campo for campo in campos_imagem if campo]
-        if not campos_imagem:
+        imagens_descritas = [(campo, texto) for campo, texto in imagens_descritas if campo]
+        if not imagens_descritas:
             return []
 
         blocos = [
@@ -705,31 +705,47 @@ class PedidoPdfService:
 
         if altura_imagem == 27 * mm:
             tem_nomes = item.individuais.exists()
-            if len(campos_imagem) == 1:
+            if len(imagens_descritas) == 1:
                 altura_imagem = (100 if tem_nomes else 132) * mm
-            elif len(campos_imagem) == 2:
+            elif len(imagens_descritas) == 2:
                 altura_imagem = (86 if tem_nomes else 120) * mm
             else:
                 altura_imagem = 41 * mm
-        por_linha = min(2, len(campos_imagem))
+        por_linha = min(2, len(imagens_descritas))
+        largura = largura_util / por_linha
+        estilo_descricao = ParagraphStyle(
+            'descricao_imagem', parent=e['pequeno'], alignment=1,
+        )
+        descricoes = [
+            Paragraph(esc(texto).replace('\n', '<br/>'), estilo_descricao) if texto else ''
+            for _, texto in imagens_descritas
+        ]
+        alturas_descricoes = [
+            max((descricao.wrap(largura - 6, 10000)[1] + 6
+                 for descricao in descricoes[inicio:inicio + por_linha] if descricao), default=0)
+            for inicio in range(0, len(descricoes), por_linha)
+        ]
         if altura_maxima is not None:
-            linhas = (len(campos_imagem) + por_linha - 1) // por_linha
+            linhas = len(alturas_descricoes)
             # Na OP, usa todo o espaço medido acima do financeiro. Não
             # limita a imagem pela presença de nomes na outra coluna.
-            limite = (altura_maxima - 9 * mm - 4) / linhas - 5 * mm
+            limite = (altura_maxima - 9 * mm - 4 - sum(alturas_descricoes)) / linhas - 5 * mm
             altura_imagem = max(1, limite)
-        largura = largura_util / por_linha
-        for inicio in range(0, len(campos_imagem), por_linha):
-            faixa = campos_imagem[inicio:inicio + por_linha]
+        for inicio in range(0, len(imagens_descritas), por_linha):
+            faixa = imagens_descritas[inicio:inicio + por_linha]
             celulas = []
-            for campo in faixa:
+            for deslocamento, (campo, _) in enumerate(faixa):
                 imagem = _imagem(campo, largura - 6 * mm, altura_imagem)
-                celulas.append(imagem or Paragraph('—', e['pequeno']))
+                conteudo = imagem or Paragraph('—', e['pequeno'])
+                legenda = descricoes[inicio + deslocamento]
+                if legenda:
+                    conteudo = [conteudo, Spacer(1, 3), legenda]
+                celulas.append(conteudo)
             while len(celulas) < por_linha:
                 celulas.append('')
             grade = Table(
                 [celulas], colWidths=[largura] * por_linha,
-                rowHeights=[altura_imagem + 5 * mm],
+                rowHeights=[altura_imagem + 5 * mm + alturas_descricoes[inicio // por_linha]],
             )
             grade.setStyle(TableStyle([
                 ('BOX', (0, 0), (-1, -1), .5, BORDA),

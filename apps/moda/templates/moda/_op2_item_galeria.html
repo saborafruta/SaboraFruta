@@ -7,7 +7,17 @@
     {% for visual in item.visuais.all %}{% if visual.tem_imagem %}
       <figure class="op2-gallery-image">
         <a href="{{ visual.url_imagem }}" target="_blank" rel="noopener"><img src="{{ visual.url_imagem }}" alt="Imagem de {{ item.nome_exibicao }}"></a>
-        <form method="post" action="{% url 'moda:op2-action' pedido.pk %}" onsubmit="return confirm('Remover esta imagem da OP?')">{% csrf_token %}<input type="hidden" name="acao" value="remover_visual"><input type="hidden" name="visual_id" value="{{ visual.pk }}"><button title="Remover imagem" aria-label="Remover imagem">×</button></form>
+        <form class="op2-gallery-remove" method="post" action="{% url 'moda:op2-action' pedido.pk %}" onsubmit="return confirm('Remover esta imagem da OP?')">{% csrf_token %}<input type="hidden" name="acao" value="remover_visual"><input type="hidden" name="visual_id" value="{{ visual.pk }}"><button title="Remover imagem" aria-label="Remover imagem">×</button></form>
+        <figcaption>
+          <form method="post" action="{% url 'moda:op2-action' pedido.pk %}" class="mt-2">
+            {% csrf_token %}
+            <input type="hidden" name="acao" value="descricao_visual">
+            <input type="hidden" name="visual_id" value="{{ visual.pk }}">
+            <label><span class="op2-label block">Descrição da imagem</span><textarea name="descricao" rows="3" maxlength="160" class="form-input w-full" placeholder="Detalhes desta imagem (até 160 caracteres)">{{ visual.observacoes }}</textarea></label>
+            <small class="block text-xs opacity-60">Aparece no PDF da OP e do orçamento quando preenchida.</small>
+            <button class="btn-secondary text-xs mt-2" type="submit">Salvar descrição</button>
+          </form>
+        </figcaption>
       </figure>
     {% endif %}{% endfor %}
     <form method="post" enctype="multipart/form-data" action="{% url 'moda:op2-action' pedido.pk %}">{% csrf_token %}<input type="hidden" name="acao" value="visual_item"><input type="hidden" name="item_id" value="{{ item.pk }}"><label class="op2-plus op2-gallery-add"><input type="file" name="imagens" accept="image/*" multiple class="hidden" onchange="this.form.submit()"><strong aria-hidden="true">+</strong><small>Adicionar imagens</small></label></form>
