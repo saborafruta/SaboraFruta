@@ -1203,7 +1203,7 @@
          :class="collapsed ? 'justify-center' : ''"
          :style="{% if '/pdv/' in request.path %}temaClaro ? 'background:#dbeafe; color:#1d4ed8; font-weight:600;' : 'background:#1e2a3a; color:#f8fafc;'{% else %}temaClaro ? 'color:#6b7280;' : 'color:#f8fafc;'{% endif %}"
          {% if '/pdv/' not in request.path %}onmouseover="this.style.background=temaClaro?'#eff6ff':'#242426'; this.style.color=temaClaro?'#1d4ed8':'#d4d4d4';" onmouseout="this.style.background='transparent'; this.style.color=temaClaro?'#6b7280':'#f8fafc'; this.style.fontWeight='';"{% endif %}
-         title="PDV â€” Ponto de Venda">
+         title="PDV — Ponto de Venda">
         <svg class="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 7H6a2 2 0 00-2 2v9a2 2 0 002 2h9a2 2 0 002-2v-3M9 7h6m-6 0V5a2 2 0 012-2h2a2 2 0 012 2v2m-6 0h6"/>
         </svg>
@@ -2228,4 +2228,4 @@
 </div>
 
 {{ request.user.menu_favoritos|default_if_none:''|json_script:"sidebar-favorites-data" }}
-<script src="{% static 'core/js/sidebar_favorites.js' %}" defer></script>
+<script src="{% static 'core/js/sidebar_favorites.js' %}?v=20260830-1" defer></script>

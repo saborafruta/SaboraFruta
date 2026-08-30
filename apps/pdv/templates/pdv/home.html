@@ -1,5 +1,5 @@
 {% extends "pdv_base.html" %}
-{% load static %}
+{% load static menu_favoritos %}
 {% block title %}PDV{% endblock %}
 
 {% block extra_head %}
@@ -874,7 +874,40 @@
   .camera-scan-btn { color:#60a5fa !important;border-color:rgba(96,165,250,.40) !important;background:rgba(37,99,235,.10) !important; }
   .cat-tab.active { background:#2563eb !important;color:#fff !important; }
   .mobile-pdv-nav button.active { color:#60a5fa !important;background:rgba(37,99,235,.12) !important; }
-  @media (max-width:1200px) { .payment-method-grid { grid-template-columns:repeat(2,minmax(0,1fr)); } }
+  .topbar-user-name { max-width:145px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:12px;font-weight:600;color:var(--pdv-header-text); }
+  .topbar-branch .topbar-chip,.topbar-user .topbar-chip { height:34px;padding:5px 10px;gap:8px; }
+  #pdv-app .pdv-topbar .topbar-chip { background:var(--pdv-header-control-bg);border-color:var(--pdv-header-control-border);color:var(--pdv-header-text); }
+  .pdv-topbar > .topbar-icon-btn { flex-shrink:0; }
+  @media (min-width:1101px) and (max-width:1500px) {
+    #pdv-app > .pdv-topbar { gap:6px !important;padding:0 8px !important; }
+    .brand-switch .brand-clock { display:none; }
+    .pdv-topbar .mode-btn,.pdv-topbar .topbar-btn { padding:7px 8px;font-size:11px; }
+    .topbar-user-name { max-width:100px; }
+    .topbar-branch .topbar-chip > span { max-width:100px !important; }
+  }
+  .payment-panel-body { flex:1;min-height:0;overflow-y:auto;display:flex;flex-direction:column; }
+  .payment-records { flex:1;min-height:130px;padding:8px 0; }
+  .payment-empty { display:flex;flex-direction:column;align-items:center;gap:9px;padding:18px 10px;color:var(--pdv-t3);font-size:11px;text-align:center; }
+  .payment-empty-icon { display:flex;align-items:center;justify-content:center;width:40px;height:40px;border-radius:11px;background:var(--pdv-card);border:1px solid var(--pdv-bd2); }
+  .payment-panel-footer { margin-top:auto;max-height:60%;overflow-y:auto; }
+  .payment-options summary { display:flex;align-items:center;justify-content:space-between;list-style:none;padding:11px 16px;border-bottom:1px solid var(--pdv-bd2);font-size:11px;color:var(--pdv-t3);cursor:pointer; }
+  .payment-options summary::-webkit-details-marker { display:none; }
+  .payment-options[open] summary { color:var(--pdv-accent); }
+  #pdv-right-panel .totais-bar { margin:0 12px 8px;padding:9px;gap:7px;border:1px solid var(--pdv-bd2);border-radius:13px; }
+  #pdv-right-panel .totais-bar-cell { min-width:0;padding:10px 3px;border:1px solid var(--pdv-bd2);border-radius:10px;background:var(--pdv-bg); }
+  #pdv-right-panel .totais-bar-label { font-size:8px;letter-spacing:.02em; }
+  #pdv-right-panel .btn-fim { min-height:44px;padding:12px 8px;font-size:13px;border-radius:10px;box-shadow:none; }
+  #pdv-right-panel .btn-rodape { padding:10px 6px;font-size:11px; }
+  @media (min-width:1101px) {
+    #pdv-right-panel .forma-btn { min-height:60px;padding:8px 5px;gap:5px;border-radius:10px;justify-content:center; }
+    #pdv-right-panel .payment-method-grid .forma-icon { width:27px;height:27px;border-radius:8px; }
+    #pdv-right-panel .payment-method-grid .forma-icon svg { width:16px;height:16px; }
+    #pdv-right-panel .forma-nome { font-size:10px; }
+  }
+  @media (max-width:1100px) {
+    .payment-panel-body { flex:1 0 auto;overflow:visible; }
+    .payment-panel-footer { max-height:none;overflow:visible; }
+  }
   @media (max-width:960px) {
     .brand-switch { padding:6px 8px; }
     .brand-switch .brand-clock { display:none; }
@@ -1073,23 +1106,6 @@
     <!-- Spacer -->
     <div style="flex:1;"></div>
 
-    <!-- Usuário -->
-    <div class="topbar-menu-wrap" @click.outside="showUserMenu=false">
-      <button type="button" class="topbar-chip" @click="showUserMenu=!showUserMenu" style="cursor:pointer;">
-        <div class="header-avatar">{% if request.user.foto %}<img src="{{ request.user.foto.url }}" alt="Foto do usuário">{% else %}<span x-text="nomeUsuario.charAt(0).toUpperCase()"></span>{% endif %}</div>
-        <span style="font-size:12px;font-weight:600;color:var(--pdv-header-text);" x-text="nomeUsuario"></span>
-        <svg width="11" height="11" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.3" d="M19 9l-7 7-7-7"/></svg>
-      </button>
-      <div x-show="showUserMenu" x-cloak x-transition.opacity.duration.120ms class="pdv-popover">
-        <div style="padding:8px 10px 10px;border-bottom:1px solid var(--pdv-bd2);margin-bottom:5px;"><strong style="display:block;font-size:13px;color:var(--pdv-t1);" x-text="nomeUsuario"></strong><span style="font-size:11px;color:var(--pdv-t3);">{{ request.user.email }}</span></div>
-        <a class="pdv-menu-item" href="{{ dashboard_url }}">Tela inicial</a>
-        <button type="button" class="pdv-menu-item" @click="showUserMenu=false;fotoPerfilAberta=true">Minha foto</button>
-        {% if user.is_superuser or user.perfil.is_admin %}<a class="pdv-menu-item" href="{% url 'core:admin_usuario_list' %}">Usuários</a><a class="pdv-menu-item" href="{% url 'core:admin_perfil_list' %}">Perfis e permissões</a>{% endif %}
-        <button type="button" class="pdv-menu-item" @click="showUserMenu=false;pdvToggleTheme()">Mudar tema</button>
-        <a class="pdv-menu-item" href="{% url 'core:logout' %}" style="color:#f87171;">Sair</a>
-      </div>
-    </div>
-
     <!-- Ícones de ação -->
     <button title="Atalhos de teclado" class="topbar-icon-btn">
       <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24"><rect x="2" y="6" width="20" height="12" rx="2" stroke-width="1.5"/><path stroke-linecap="round" stroke-width="1.5" d="M6 10h.01M10 10h.01M14 10h.01M18 10h.01M8 14h8"/></svg>
@@ -1141,14 +1157,31 @@
     <div style="width:1px;height:28px;background:#1e1e30;margin:0 4px;"></div>
 
     <!-- Filial -->
-    <div class="topbar-menu-wrap" @click.outside="showFilialMenu=false">
-      <button type="button" class="topbar-chip" @click="showFilialMenu=!showFilialMenu" style="cursor:pointer;">
+    <div class="topbar-menu-wrap topbar-branch" @click.outside="showFilialMenu=false">
+      <button type="button" class="topbar-chip" title="Trocar filial/empresa" @click="showUserMenu=false;showFilialMenu=!showFilialMenu" :aria-expanded="showFilialMenu" style="cursor:pointer;">
       <span style="font-size:12px;font-weight:600;color:var(--pdv-header-text);max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">{{ filial_ativa.nome_fantasia|default:filial_ativa.razao_social }}</span>
       <svg width="12" height="12" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
       </button>
       <div x-show="showFilialMenu" x-cloak x-transition.opacity.duration.120ms class="pdv-popover right">
         {% for filial in filiais_disponiveis %}<a class="pdv-menu-item" href="{% url 'core:trocar-filial' filial.pk %}"><span style="width:8px;height:8px;border-radius:50%;background:{% if filial_ativa and filial.pk == filial_ativa.pk %}#22c55e{% else %}#71717a{% endif %};"></span>{{ filial.nome_fantasia|default:filial.razao_social }}</a>{% empty %}<span class="pdv-menu-item">Nenhuma filial disponível</span>{% endfor %}
         {% if user.is_superuser %}<a class="pdv-menu-item" href="{% url 'core:selecionar-filial' %}">Trocar empresa</a>{% endif %}
+      </div>
+    </div>
+
+    <!-- Usuário: após a filial, como no PDV de referência -->
+    <div class="topbar-menu-wrap topbar-user" @click.outside="showUserMenu=false">
+      <button type="button" class="topbar-chip" title="Menu do usuário" @click="showFilialMenu=false;showUserMenu=!showUserMenu" :aria-expanded="showUserMenu" style="cursor:pointer;">
+        <div class="header-avatar">{% if request.user.foto %}<img src="{{ request.user.foto.url }}" alt="Foto do usuário">{% else %}<span x-text="nomeUsuario.charAt(0).toUpperCase()"></span>{% endif %}</div>
+        <span class="topbar-user-name" x-text="nomeUsuario"></span>
+        <svg width="11" height="11" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.3" d="M19 9l-7 7-7-7"/></svg>
+      </button>
+      <div x-show="showUserMenu" x-cloak x-transition.opacity.duration.120ms class="pdv-popover right">
+        <div style="padding:8px 10px 10px;border-bottom:1px solid var(--pdv-bd2);margin-bottom:5px;"><strong style="display:block;font-size:13px;color:var(--pdv-t1);" x-text="nomeUsuario"></strong><span style="font-size:11px;color:var(--pdv-t3);">{{ request.user.email }}</span></div>
+        <a class="pdv-menu-item" href="{{ dashboard_url }}">Tela inicial</a>
+        <button type="button" class="pdv-menu-item" @click="showUserMenu=false;fotoPerfilAberta=true">Minha foto</button>
+        {% if user.is_superuser or user.perfil.is_admin %}<a class="pdv-menu-item" href="{% url 'core:admin_usuario_list' %}">Usuários</a><a class="pdv-menu-item" href="{% url 'core:admin_perfil_list' %}">Perfis e permissões</a>{% endif %}
+        <button type="button" class="pdv-menu-item" @click="showUserMenu=false;pdvToggleTheme()">Mudar tema</button>
+        <a class="pdv-menu-item" href="{% url 'core:logout' %}" style="color:#f87171;">Sair</a>
       </div>
     </div>
 
@@ -1611,7 +1644,7 @@
     </main>
 
     <!-- ─── PAINEL DIREITO ─── -->
-    <aside id="pdv-right-panel" class="pdv-pane" :class="{'mobile-active':mobilePane==='pagamento'}" style="width:340px;flex-shrink:0;background:#0d0d16;border-left:1px solid #1a1a28;display:flex;flex-direction:column;overflow:hidden;">
+    <aside id="pdv-right-panel" class="pdv-pane" :class="{'mobile-active':mobilePane==='pagamento'}" style="width:370px;flex-shrink:0;background:#0d0d16;border-left:1px solid #1a1a28;display:flex;flex-direction:column;overflow:hidden;">
 
       <!-- Banner: Caixa Fechado -->
       <div x-show="!sessao" x-cloak
@@ -1623,14 +1656,14 @@
             <div style="font-size:11px;color:#92400e;margin-top:1px;">Abra o caixa para iniciar as vendas</div>
           </div>
           <button @click="caixaMenuAcao('abrir')"
-                  style="padding:8px 14px;background:linear-gradient(135deg,#d97706,#f59e0b);border:none;border-radius:9px;color:#fff;font-size:12px;font-weight:700;cursor:pointer;white-space:nowrap;flex-shrink:0;">
+                  class="cash-open-btn">
             Abrir Caixa
           </button>
         </div>
       </div>
 
       <!-- Título Forma de Pagamento -->
-      <div style="display:flex;align-items:center;justify-content:space-between;padding:12px 16px;border-bottom:1px solid #1a1a28;flex-shrink:0;margin-top:8px;">
+      <div class="payment-panel-heading" style="display:flex;align-items:center;justify-content:space-between;padding:12px 16px;border-bottom:1px solid var(--pdv-bd2);flex-shrink:0;">
         <div style="display:flex;align-items:center;gap:8px;">
           <div class="payment-heading-icon" style="width:28px;height:28px;border-radius:8px;border:1px solid;display:flex;align-items:center;justify-content:center;">
             <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z"/></svg>
@@ -1642,6 +1675,7 @@
               x-text="venda.pagamentos.length+' lançado(s)'"></span>
       </div>
 
+      <div class="payment-panel-body">
       <!-- Grid de formas -->
       <div :class="!sessao ? 'payment-locked' : ''" style="padding:10px 12px;flex-shrink:0;border-bottom:1px solid #1a1a28;">
         <div class="payment-method-grid">
@@ -1798,8 +1832,11 @@
       </div>
 
       <!-- Pagamentos registrados -->
-      <div x-show="venda.pagamentos.length>0" x-cloak
-           style="flex-shrink:0;max-height:170px;overflow-y:auto;padding:8px 0 0;">
+      <div class="payment-records">
+        <div x-show="venda.pagamentos.length===0" class="payment-empty" x-cloak>
+          <span class="payment-empty-icon"><svg width="18" height="18" fill="none" stroke="currentColor" viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14" rx="3"/><path d="M3 10h18M7 15h4"/></svg></span>
+          <span>Nenhum pagamento registrado</span>
+        </div>
 
         <template x-for="pgto in venda.pagamentos" :key="pgto._id">
           <div style="display:flex;align-items:center;gap:10px;padding:10px 14px;margin:0 10px 6px;background:#13131e;border:1px solid #1e1e30;border-radius:10px;">
@@ -1818,9 +1855,10 @@
           </div>
         </template>
       </div>
+      </div><!-- /payment-panel-body: rola sem esconder a finalização -->
 
       <!-- Rodapé -->
-      <div style="flex-shrink:0;border-top:1px solid var(--pdv-bd2);">
+      <div class="payment-panel-footer" style="flex-shrink:0;border-top:1px solid var(--pdv-bd2);">
 
         <!-- Aviso de edição de venda -->
         <div x-show="vendaEdicaoOrigemId" x-cloak
@@ -1832,8 +1870,10 @@
                   style="flex-shrink:0;padding:3px 8px;background:none;border:1px solid rgba(245,158,11,.4);border-radius:6px;color:#fbbf24;font-size:10.5px;cursor:pointer;">Cancelar edição</button>
         </div>
 
+        <details class="payment-options">
+          <summary><span>☰ &nbsp;+ Opções</span><span aria-hidden="true">›</span></summary>
         <!-- Observação da venda -->
-        <div x-show="venda.itens.length>0" x-cloak style="padding:10px 16px;border-bottom:1px solid var(--pdv-bd2);">
+        <div style="padding:10px 16px;border-bottom:1px solid var(--pdv-bd2);">
           <input type="text" x-model="venda.observacao" maxlength="500"
                  placeholder="📝 Observação da venda (ex.: entregar após meio-dia)"
                  style="width:100%;padding:9px 11px;background:var(--pdv-bg);border:1px solid var(--pdv-bd2);border-radius:8px;color:var(--pdv-t1);font-size:12.5px;font-family:inherit;">
@@ -1847,12 +1887,13 @@
             </div>
           </template>
         </div>
+        </details>
 
         <!-- Subtotal -->
         <div style="padding:10px 16px;border-bottom:1px solid var(--pdv-bd2);">
           <div style="display:flex;justify-content:space-between;font-size:14px;color:var(--pdv-tmid);">
             <span>Subtotal:</span>
-            <span style="font-weight:600;color:var(--pdv-t1);" x-text="'R$ ' + fmt(venda.subtotal)"></span>
+            <span style="font-weight:700;color:var(--pdv-accent);" x-text="'R$ ' + fmt(venda.subtotal)"></span>
           </div>
           <template x-if="venda.desconto>0">
             <div style="display:flex;justify-content:space-between;font-size:12px;color:#4ade80;margin-top:4px;">
@@ -3293,7 +3334,9 @@
 
 {% block extra_scripts %}
 {{ request.user.menu_favoritos|default_if_none:''|json_script:"sidebar-favorites-data" }}
-<script src="{% static 'core/js/sidebar_favorites.js' %}"></script>
+{% favoritos_menu_completo as favoritos_completos %}
+{{ favoritos_completos|json_script:"sidebar-favorites-records" }}
+<script src="{% static 'core/js/sidebar_favorites.js' %}?v=20260830-1"></script>
 <script>
 function pdv() {
   return {

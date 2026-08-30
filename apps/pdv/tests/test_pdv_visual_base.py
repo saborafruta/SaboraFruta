@@ -30,6 +30,11 @@ class PDVVisualBaseTests(SimpleTestCase):
         self.assertIn("core:trocar-filial", template)
         self.assertIn('fotoPerfilAberta', template)
         self.assertIn('payment-method-grid', template)
+        self.assertIn('sidebar-favorites-records', template)
+        self.assertIn('payment-panel-body', template)
+        self.assertIn('payment-panel-footer', template)
+        header = template.split('<header class="pdv-topbar"', 1)[1].split('</header>', 1)[0]
+        self.assertLess(header.index('topbar-branch'), header.index('topbar-user'))
         self.assertIn("!sessao ? 'payment-locked'", template)
         self.assertIn('Sua sessão expirou ou você não tem permissão', template)
 

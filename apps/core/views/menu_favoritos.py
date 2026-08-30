@@ -33,13 +33,13 @@ class MenuFavoritosView(LoginRequiredMixin, View):
     def get(self, request):
         # Use the full, permission-filtered menu as the label/URL source. The
         # compact PDV menu intentionally does not contain every submenu link.
-        parser = _MenuLinks()
-        parser.feed(render_to_string('core/_sidebar.html', request=request))
-        favoritos = []
-        for path in request.user.menu_favoritos or []:
-            if path in parser.links:
-                favoritos.append({'caminho': path, 'nome': parser.links[path]})
-        return JsonResponse({'itens': favoritos})
+        itens = resolver_favoritos(
+            request.user.menu_favoritos,
+            render_to_string('core/_sidebar.html', request=request),
+        )
+        response = JsonResponse({'itens': itens, 'favoritos': request.user.menu_favoritos or []})
+        response['Cache-Control'] = 'private, no-store'
+        return response
 
     def handle_no_permission(self):
         return JsonResponse(
@@ -80,6 +80,15 @@ class MenuFavoritosView(LoginRequiredMixin, View):
             usuario.save(update_fields=['menu_favoritos', 'updated_at'])
 
         return JsonResponse({'ok': True, 'favoritos': favoritos})
+
+
+def resolver_favoritos(caminhos, html):
+    parser = _MenuLinks()
+    parser.feed(html)
+    return [
+        {'caminho': path, 'nome': parser.links[path]}
+        for path in dict.fromkeys(caminhos or []) if path in parser.links
+    ]
 
 
 class _MenuLinks(HTMLParser):

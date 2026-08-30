@@ -1,4 +1,5 @@
 import json
+import re
 from decimal import Decimal
 
 from django.test import TestCase
@@ -94,6 +95,48 @@ class CaixaPDVApiTests(TestCase):
         response = self.client.get(reverse('core:menu-favoritos'))
         self.assertEqual(response.status_code, 200)
         self.assertIn(caminho, [item['caminho'] for item in response.json()['itens']])
+
+    def test_pdv_embute_os_nove_favoritos_com_nomes_e_ordem_do_dashboard(self):
+        self.empresa.modulos_extras = ['moda']
+        self.empresa.save(update_fields=['modulos_extras'])
+        caminhos = [
+            '/financeiro/posicao-diaria/', '/financeiro/pagar/',
+            '/financeiro/receber/', '/financeiro/pagar/pagas/',
+            '/financeiro/formas-pagamento/', '/moda/comercial/',
+            '/produtos/', '/estoque/ajuste-rapido/', '/pdv/',
+        ]
+        self.usuario.menu_favoritos = caminhos
+        self.usuario.save(update_fields=['menu_favoritos'])
+        response = self.client.get(reverse('pdv:home'))
+        self.assertEqual(response.status_code, 200)
+        itens = json.loads(re.search(
+            r'<script id="sidebar-favorites-records" type="application/json">(.*?)</script>',
+            response.content.decode(), re.S,
+        ).group(1))
+        self.assertEqual([item['caminho'] for item in itens], caminhos)
+        self.assertEqual([item['nome'] for item in itens], [
+            'Posição Diária de Caixa', 'Contas a Pagar', 'Contas a Receber',
+            'Contas Pagas', 'Formas de Pagamento', 'Comercial', 'Produtos',
+            'Ajuste de Estoque', 'PDV — Ponto de Venda',
+        ])
+        api = self.client.get(reverse('core:menu-favoritos'))
+        self.assertEqual(api.json()['itens'], itens)
+        self.assertEqual(api.json()['favoritos'], caminhos)
+        self.assertEqual(api['Cache-Control'], 'private, no-store')
+
+    def test_favorito_de_modulo_desativado_nao_e_exposto_no_pdv(self):
+        self.filial.modulos_desativados = ['moda']
+        self.filial.save(update_fields=['modulos_desativados'])
+        self.usuario.menu_favoritos = ['/moda/comercial/', '/produtos/']
+        self.usuario.save(update_fields=['menu_favoritos'])
+        response = self.client.get(reverse('pdv:home'))
+        itens = json.loads(re.search(
+            r'<script id="sidebar-favorites-records" type="application/json">(.*?)</script>',
+            response.content.decode(), re.S,
+        ).group(1))
+        self.assertEqual([item['caminho'] for item in itens], ['/produtos/'])
+        self.usuario.refresh_from_db()
+        self.assertEqual(self.usuario.menu_favoritos, ['/moda/comercial/', '/produtos/'])
 
     def test_abrir_caixa_rejeita_valor_negativo(self):
         caixa = Caixa.objects.create(filial=self.filial, numero=1, descricao="Caixa 1")
