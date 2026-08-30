@@ -596,31 +596,10 @@
 
   @media (max-width:1100px) {
     #pdv-app { position:relative;height:100dvh !important;min-height:100dvh;overflow:hidden; }
-    #pdv-app > header { position:relative;height:52px !important;min-height:52px;padding:0 8px !important;gap:6px !important;overflow-x:auto;overflow-y:hidden;scrollbar-width:none; }
-    #pdv-app > header.pdv-topbar::after {
-      content:"›";
-      position:sticky;
-      right:-8px;
-      align-self:stretch;
-      width:24px;
-      min-width:24px;
-      display:flex;
-      align-items:center;
-      justify-content:center;
-      color:#3b82f6;
-      font-size:24px;
-      font-weight:700;
-      background:linear-gradient(90deg,rgba(13,13,22,0),#0d0d16 62%);
-      pointer-events:none;
-      z-index:2;
-    }
-    #pdv-app > header::-webkit-scrollbar { display:none; }
-    #pdv-app > header .topbar-chip { display:none !important; }
     #pdv-app > header .topbar-brand-mark { display:none !important; }
     #pdv-app > header .pdv-topbar-info,
     #pdv-app > header .pdv-topbar-sep { display:none !important; }
     #pdv-app > header .topbar-btn { padding:7px 10px !important;font-size:12px !important; }
-    .caixa-menu { position:fixed !important;top:50px !important;left:auto !important;right:8px !important;z-index:120 !important;max-width:calc(100vw - 16px); }
     .mode-seg { gap:3px;padding:3px;border-radius:9px; }
     .mode-btn { gap:5px;padding:7px 9px;font-size:12px; }
     #pdv-app input,
@@ -632,9 +611,9 @@
     #pdv-app input::placeholder,
     #pdv-app textarea::placeholder { font-size:16px !important; }
     .pdv-workspace { display:block !important;position:relative;overflow:hidden !important; }
-    .pdv-pane { display:none !important;position:absolute;inset:0 0 68px 0;width:100% !important;height:auto !important;min-width:0 !important;max-width:none !important;border:0 !important; }
+    .pdv-pane { display:none !important;position:absolute;inset:0 0 calc(68px + env(safe-area-inset-bottom)) 0;width:100% !important;height:auto !important;min-width:0 !important;max-width:none !important;border:0 !important; }
     .pdv-pane.mobile-active { display:flex !important; }
-    .mobile-pdv-nav { display:grid;grid-template-columns:repeat(3,minmax(0,1fr));position:absolute;left:0;right:0;bottom:0;z-index:45;height:68px;padding:6px max(8px,env(safe-area-inset-right)) calc(6px + env(safe-area-inset-bottom)) max(8px,env(safe-area-inset-left));background:var(--pdv-surface);border-top:1px solid var(--pdv-bd2);box-shadow:0 -8px 24px rgba(0,0,0,.18); }
+    .mobile-pdv-nav { display:grid;grid-template-columns:repeat(3,minmax(0,1fr));position:absolute;left:0;right:0;bottom:0;z-index:45;height:calc(68px + env(safe-area-inset-bottom));padding:6px max(8px,env(safe-area-inset-right)) calc(6px + env(safe-area-inset-bottom)) max(8px,env(safe-area-inset-left));background:var(--pdv-surface);border-top:1px solid var(--pdv-bd2);box-shadow:0 -8px 24px rgba(0,0,0,.18); }
     .mobile-pdv-nav button { position:relative;min-width:0;border:0;border-radius:6px;background:transparent;color:var(--pdv-t3);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;font:600 11px/1.15 Inter, ui-sans-serif, sans-serif;cursor:pointer; }
     .mobile-pdv-nav button.active { color:#2563eb;background:rgba(37,99,235,.10); }
     .mobile-pdv-nav svg { width:20px;height:20px; }
@@ -974,6 +953,11 @@
   .sidebar-favorites-nav .sidebar-favoritable-link { position:relative;padding-right:34px; }
   .sidebar-favorite-toggle { position:absolute;right:10px;color:#71717a;font-size:17px;line-height:1;cursor:pointer; }
   .sidebar-favorite-toggle.is-favorite { color:#facc15; }
+  .system-nav-drawer .sidebar-favoritable-link > .sidebar-favorite-toggle:not(.is-favorite) { visibility:hidden;opacity:0;pointer-events:none; }
+  .system-nav-drawer .sidebar-favoritable-link:focus-within > .sidebar-favorite-toggle:not(.is-favorite) { visibility:visible;opacity:1;pointer-events:auto; }
+  @media (hover:hover) and (pointer:fine) {
+    .system-nav-drawer .sidebar-favoritable-link:hover > .sidebar-favorite-toggle:not(.is-favorite) { visibility:visible;opacity:1;pointer-events:auto; }
+  }
   .sidebar-favorites-panel { margin:5px 0 8px;padding:7px;border:1px solid #34343a;border-radius:10px;background:#202024; }
   .sidebar-favorites-heading { display:flex;gap:7px;padding:4px 5px 7px;color:#facc15;font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.08em; }
   .sidebar-favorite-row { position:relative;display:flex;align-items:center; }
@@ -1003,6 +987,41 @@
   .topbar-branch .topbar-chip,.topbar-user .topbar-chip { height:34px;padding:5px 10px;gap:8px; }
   #pdv-app .pdv-topbar .topbar-chip { background:var(--pdv-header-control-bg);border-color:var(--pdv-header-control-border);color:var(--pdv-header-text); }
   .pdv-topbar > .topbar-icon-btn { flex-shrink:0; }
+  .topbar-sales-actions { display:contents; }
+  @media (max-width:1100px) {
+    /* Three rows keep every menu reachable without horizontal scrolling. */
+    #pdv-app > .pdv-topbar {
+      position:relative;display:grid !important;grid-template-columns:minmax(110px,1fr) minmax(0,1fr) 44px 44px;
+      grid-template-rows:44px 44px 44px;height:auto !important;min-height:0;
+      padding:calc(6px + env(safe-area-inset-top)) max(8px,env(safe-area-inset-right)) 6px max(8px,env(safe-area-inset-left)) !important;
+      gap:6px !important;overflow:visible;
+    }
+    .pdv-topbar .topbar-back,.pdv-topbar .topbar-spacer,.pdv-topbar > button[title="Tela cheia"] { display:none !important; }
+    .pdv-topbar .topbar-brand { grid-area:1 / 1;min-width:0; }
+    .pdv-topbar .brand-switch { width:100%;height:44px;padding:6px;gap:5px;justify-content:space-between; }
+    .pdv-topbar .brand-mark { font-size:16px;white-space:nowrap; }
+    .pdv-topbar .brand-clock { display:none; }
+    .pdv-topbar .topbar-branch { grid-area:1 / 2;min-width:0; }
+    .pdv-topbar .topbar-user { grid-area:1 / 3;min-width:0; }
+    #pdv-app .pdv-topbar .topbar-chip { display:flex;width:100%;height:44px;padding:6px;gap:4px;justify-content:center;min-width:0; }
+    .pdv-topbar .topbar-branch .topbar-chip > span { min-width:0;max-width:100% !important;font-size:11px !important; }
+    .pdv-topbar .topbar-chip > svg { flex-shrink:0; }
+    .pdv-topbar .topbar-user-name,.pdv-topbar .topbar-user .topbar-chip > svg { display:none; }
+    #pdv-theme-btn { grid-area:1 / 4;width:44px !important;height:44px !important; }
+    .pdv-topbar > .mode-seg { grid-area:2 / 1 / 3 / -1;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));height:44px;min-width:0; }
+    .pdv-topbar .mode-btn { min-width:0;justify-content:center;font-size:12px;padding:7px 5px; }
+    .pdv-topbar .topbar-sales-actions { grid-area:3 / 1 / 4 / 4;display:grid;grid-template-columns:1fr 1.15fr .85fr;gap:6px;min-width:0; }
+    #pdv-app > .pdv-topbar .topbar-sales-actions .topbar-btn { position:relative;width:100%;height:44px;min-width:0;padding:6px 4px !important;gap:4px;font-size:11px !important;justify-content:center; }
+    .topbar-sales-actions > .topbar-btn > svg { display:none; }
+    .topbar-sales-actions > .topbar-btn > span { position:absolute;top:-4px;right:-2px; }
+    .pdv-topbar .topbar-print { grid-area:3 / 4; }
+    .pdv-topbar .topbar-print > button { width:44px;height:44px; }
+    .pdv-topbar .pdv-popover,.pdv-topbar .caixa-menu {
+      position:fixed;top:calc(156px + env(safe-area-inset-top));right:max(8px,env(safe-area-inset-right));left:auto;
+      width:min(300px,calc(100vw - 16px));max-height:calc(100dvh - 172px - env(safe-area-inset-top) - env(safe-area-inset-bottom));overflow-y:auto;z-index:120;
+    }
+    .system-nav-drawer { padding-top:calc(10px + env(safe-area-inset-top));padding-bottom:calc(10px + env(safe-area-inset-bottom)); }
+  }
   @media (min-width:1101px) and (max-width:1500px) {
     #pdv-app > .pdv-topbar { gap:6px !important;padding:0 8px !important; }
     .brand-switch .brand-clock { display:none; }
@@ -1113,10 +1132,10 @@
   <header class="pdv-topbar" style="height:54px;background:#0d0d16;border-bottom:1px solid #1a1a28;display:flex;align-items:center;padding:0 12px;gap:9px;flex-shrink:0;">
 
     <!-- Voltar + marca que abre a navegação lateral -->
-    <a href="{{ dashboard_url }}" class="topbar-icon-btn" style="text-decoration:none;" title="Voltar ao dashboard">
+    <a href="{{ dashboard_url }}" class="topbar-icon-btn topbar-back" style="text-decoration:none;" title="Voltar ao dashboard">
       <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/></svg>
     </a>
-    <div style="position:relative;flex-shrink:0;" @click.outside="showSystemMenu=false">
+    <div class="topbar-brand" style="position:relative;flex-shrink:0;" @click.outside="showSystemMenu=false">
       <button type="button" class="brand-switch" @click="showSystemMenu=!showSystemMenu" aria-label="Abrir navegação do sistema" :aria-expanded="showSystemMenu">
         <span class="brand-mark"><span class="brand-wordmark-neutral">iNoova</span><span class="brand-wordmark-accent">Ted</span></span>
         <span class="brand-clock" style="font-size:10.5px;line-height:1;opacity:.78;" x-text="horaAtual"></span>
@@ -1168,6 +1187,7 @@
       </button>
     </div>
 
+    <div class="topbar-sales-actions">
     <button @click="abrirPendentes()" class="topbar-btn">
       <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24" style="flex-shrink:0;"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
       Pendentes
@@ -1219,15 +1239,16 @@
       </div>
     </div>
 
+    </div>
     <!-- Spacer -->
-    <div style="flex:1;"></div>
+    <div class="topbar-spacer" style="flex:1;"></div>
 
     <!-- Ícones de ação -->
     <button title="Tela cheia" @click="if(document.fullscreenElement){document.exitFullscreen()}else{document.documentElement.requestFullscreen()}" class="topbar-icon-btn">
       <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4"/></svg>
     </button>
     <!-- Imprimir (dropdown) -->
-    <div style="position:relative;flex-shrink:0;" @click.outside="showImprimirMenu=false">
+    <div class="topbar-print" style="position:relative;flex-shrink:0;" @click.outside="showImprimirMenu=false">
       <button title="Imprimir" @click="showImprimirMenu=!showImprimirMenu"
               :class="showImprimirMenu ? 'topbar-icon-btn topbar-icon-btn--active' : 'topbar-icon-btn'">
         <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"/></svg>
@@ -1276,7 +1297,7 @@
 
     <!-- Usuário: após a filial, como no PDV de referência -->
     <div class="topbar-menu-wrap topbar-user" @click.outside="showUserMenu=false">
-      <button type="button" class="topbar-chip" title="Menu do usuário" @click="showFilialMenu=false;showUserMenu=!showUserMenu" :aria-expanded="showUserMenu" style="cursor:pointer;">
+      <button type="button" class="topbar-chip" title="Menu do usuário" aria-label="Menu do usuário" @click="showFilialMenu=false;showUserMenu=!showUserMenu" :aria-expanded="showUserMenu" style="cursor:pointer;">
         <div class="header-avatar">{% if request.user.foto %}<img src="{{ request.user.foto.url }}" alt="Foto do usuário">{% else %}<span x-text="nomeUsuario.charAt(0).toUpperCase()"></span>{% endif %}</div>
         <span class="topbar-user-name" x-text="nomeUsuario"></span>
         <svg width="11" height="11" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.3" d="M19 9l-7 7-7-7"/></svg>

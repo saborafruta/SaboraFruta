@@ -5,6 +5,30 @@ from django.test import SimpleTestCase
 
 
 class PDVVisualBaseTests(SimpleTestCase):
+    def test_favoritos_aparecem_selecionados_hover_ou_foco(self):
+        template = (Path(__file__).resolve().parents[1] / 'templates/pdv/home.html').read_text(encoding='utf-8')
+        selector = '.system-nav-drawer .sidebar-favoritable-link'
+        self.assertIn(selector + ' > .sidebar-favorite-toggle:not(.is-favorite) { visibility:hidden;opacity:0;pointer-events:none; }', template)
+        self.assertIn(selector + ':focus-within > .sidebar-favorite-toggle:not(.is-favorite) { visibility:visible;opacity:1;pointer-events:auto; }', template)
+        self.assertIn('@media (hover:hover) and (pointer:fine)', template)
+        self.assertIn(selector + ':hover > .sidebar-favorite-toggle:not(.is-favorite) { visibility:visible;opacity:1;pointer-events:auto; }', template)
+        self.assertIn('.sidebar-favorite-toggle.is-favorite { color:#facc15; }', template)
+        navigation = (Path(__file__).resolve().parents[2] / 'core/templates/core/_sidebar_navigation.html').read_text(encoding='utf-8')
+        self.assertNotIn('onmouseover=', navigation)
+        self.assertIn('@mouseenter="$el.style.background=temaClaro?', navigation)
+
+    def test_mobile_tem_barra_em_linhas_e_menus_acessiveis(self):
+        template = (Path(__file__).resolve().parents[1] / 'templates/pdv/home.html').read_text(encoding='utf-8')
+        self.assertNotIn('#pdv-app > header .topbar-chip { display:none', template)
+        self.assertNotIn('header.pdv-topbar::after', template)
+        self.assertIn('grid-template-rows:44px 44px 44px;', template)
+        self.assertIn('padding:calc(6px + env(safe-area-inset-top))', template)
+        self.assertIn('height:calc(68px + env(safe-area-inset-bottom))', template)
+        header = template.split('<header class="pdv-topbar"', 1)[1].split('</header>', 1)[0]
+        for hook in ['topbar-brand', 'topbar-sales-actions', 'topbar-print', 'topbar-branch', 'topbar-user']:
+            self.assertIn(hook, header)
+        self.assertIn('aria-label="Menu do usuário"', header)
+
     def test_pagamento_neutro_troco_e_contraste_claro(self):
         template = (Path(__file__).resolve().parents[1] / 'templates/pdv/home.html').read_text(encoding='utf-8')
         self.assertIn('background:var(--pdv-selection-bg)', template)
