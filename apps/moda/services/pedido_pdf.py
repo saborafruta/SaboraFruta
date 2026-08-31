@@ -394,55 +394,53 @@ class PedidoPdfService:
     def _pagina_grupo(
         cls, pedido, grupo, e, largura, altura, *, incluir_observacoes=False,
     ):
-        """Produto compartilhado no topo; grade e personalização por variante."""
+        """Informações à esquerda e imagens ocupando toda a coluna direita."""
         base = grupo.itens[0]
-        blocos = cls._cliente(pedido, e, largura)
-        blocos += cls._item(
-            pedido, base, e, 0, largura_util=largura,
+        largura_esquerda = largura * .49
+        largura_artes = largura - largura_esquerda - 5 * mm
+        informacoes = cls._cliente(pedido, e, largura_esquerda)
+        informacoes += cls._item(
+            pedido, base, e, 0, largura_util=largura_esquerda,
             titulo=f'PRODUTO - {grupo.nome}', incluir_grade=False,
+            excluir_campos=('tipo impressão', 'tipo impressao', 'tipo de impressão'),
         )
-        largura_variantes = largura * .44
-        largura_artes = largura - largura_variantes - 5 * mm
-        variantes = []
+        informacoes += cls._grades_grupo(grupo, e, largura_esquerda)
         for item in grupo.itens:
             cor = colors.HexColor(item.grade_cor)
             cor_clara = colors.HexColor(item.grade_fundo)
-            variantes += [
-                Spacer(1, 4),
-                _barra_secao(
-                    None, f'VARIANTE - {item.grade_rotulo}', e,
-                    largura_variantes, cor=cor, cor_clara=cor_clara,
-                ),
-            ]
             tecnicas = [
                 personalizacao.get_tecnica_display()
                 for personalizacao in item.personalizacoes.all()
                 if personalizacao.tecnica
             ]
             if tecnicas:
-                variantes += [Spacer(1, 3), Paragraph(
-                    f'<b>Personalização:</b> {esc(" / ".join(tecnicas))}',
-                    e['celula'],
-                )]
-            variantes += cls._grade(
-                item, e, largura_variantes, cor=cor, cor_clara=cor_clara,
-                titulo='DISTRIBUIÇÃO DA GRADE',
-            )
+                estilo_variante = ParagraphStyle(
+                    f'variante_personalizacao_{item.pk}', parent=e['celula'],
+                    textColor=cor, backColor=cor_clara,
+                    borderColor=cor, borderWidth=.4, borderPadding=3,
+                    spaceBefore=3, spaceAfter=2,
+                )
+                informacoes.append(Paragraph(
+                    f'<b>{esc(item.grade_rotulo)}</b> - Personalização: '
+                    f'{esc(" / ".join(tecnicas))}', estilo_variante,
+                ))
             pessoas = list(item.individuais.all())
             if pessoas:
-                variantes += cls._personalizacao_item(
-                    item, e, largura_variantes, cor=cor, cor_clara=cor_clara,
+                informacoes += cls._personalizacao_item(
+                    item, e, largura_esquerda, cor=cor, cor_clara=cor_clara,
                     pessoas=pessoas, colunas=min(2, len(pessoas)),
                     fator_fonte=.86,
                 )
-        artes = cls._artes_grupo(grupo, e, largura_artes, altura * .52)
+        if incluir_observacoes:
+            informacoes += cls._observacoes_op(pedido, e, largura_esquerda)
+        artes = cls._artes_grupo(grupo, e, largura_artes, altura)
         if not artes:
             artes = [Paragraph('Nenhuma imagem anexada ao produto.', e['pequeno'])]
-        miolo = Table([[
-            KeepInFrame(largura_variantes, altura, variantes, mode='shrink'),
+        pagina = Table([[
+            KeepInFrame(largura_esquerda, altura, informacoes, mode='shrink'),
             KeepInFrame(largura_artes, altura, artes, mode='shrink'),
-        ]], colWidths=[largura_variantes, largura_artes])
-        miolo.setStyle(TableStyle([
+        ]], colWidths=[largura_esquerda, largura_artes])
+        pagina.setStyle(TableStyle([
             ('VALIGN', (0, 0), (-1, -1), 'TOP'),
             ('LEFTPADDING', (0, 0), (0, 0), 0),
             ('RIGHTPADDING', (0, 0), (0, 0), 5 * mm),
@@ -451,20 +449,76 @@ class PedidoPdfService:
             ('TOPPADDING', (0, 0), (-1, -1), 0),
             ('BOTTOMPADDING', (0, 0), (-1, -1), 0),
         ]))
-        blocos += [Spacer(1, 3), miolo]
-        if incluir_observacoes:
-            blocos += cls._observacoes_op(pedido, e, largura)
-        return KeepInFrame(largura, altura, blocos, mode='shrink')
+        return KeepInFrame(largura, altura, [pagina], mode='shrink')
+
+    @staticmethod
+    def _grades_grupo(grupo, e, largura):
+        """Uma única matriz compacta para comparar todas as grades."""
+        tamanhos = []
+        vistos = set()
+        for item in grupo.itens:
+            for celula in item.grade.all():
+                if celula.tamanho_id not in vistos:
+                    vistos.add(celula.tamanho_id)
+                    tamanhos.append(celula.tamanho)
+        tamanhos.sort(key=lambda tamanho: (tamanho.ordem, tamanho.sigla))
+        if not tamanhos:
+            return []
+        estilo_nome = ParagraphStyle(
+            'nome_variante_grade', parent=e['celula'],
+            fontName='Helvetica-Bold', fontSize=6.4, leading=7.5,
+        )
+        estilo_cabecalho = ParagraphStyle(
+            'cabecalho_grade_grupo', parent=e['pequeno'],
+            fontName='Helvetica-Bold', fontSize=6, leading=7,
+            textColor=colors.white,
+        )
+        dados = [[Paragraph('VARIANTE / GRADE', estilo_cabecalho)]
+                 + [Paragraph(esc(t.sigla), estilo_cabecalho) for t in tamanhos]
+                 + [Paragraph('TOTAL', estilo_cabecalho)]]
+        estilos = [
+            ('BACKGROUND', (0, 0), (-1, 0), AZUL),
+            ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
+            ('ALIGN', (1, 0), (-1, -1), 'CENTER'),
+            ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+            ('GRID', (0, 0), (-1, -1), .35, BORDA),
+            ('LEFTPADDING', (0, 0), (-1, -1), 3),
+            ('RIGHTPADDING', (0, 0), (-1, -1), 3),
+            ('TOPPADDING', (0, 0), (-1, -1), 3),
+            ('BOTTOMPADDING', (0, 0), (-1, -1), 3),
+        ]
+        for linha, item in enumerate(grupo.itens, start=1):
+            quantidades = {celula.tamanho_id: celula.quantidade for celula in item.grade.all()}
+            dados.append([
+                Paragraph(f'<b>{esc(item.grade_rotulo)}</b>', estilo_nome),
+                *[str(quantidades.get(tamanho.pk, 0)) for tamanho in tamanhos],
+                str(sum(quantidades.values())),
+            ])
+            estilos += [
+                ('BACKGROUND', (0, linha), (-1, linha), colors.HexColor(item.grade_fundo)),
+                ('TEXTCOLOR', (0, linha), (0, linha), colors.HexColor(item.grade_cor)),
+                ('FONTNAME', (-1, linha), (-1, linha), 'Helvetica-Bold'),
+            ]
+        largura_nome = min(35 * mm, largura * .30)
+        largura_numero = (largura - largura_nome) / (len(tamanhos) + 1)
+        tabela = Table(
+            dados, colWidths=[largura_nome] + [largura_numero] * (len(tamanhos) + 1),
+            repeatRows=1,
+        )
+        tabela.setStyle(TableStyle(estilos))
+        return [Spacer(1, 4), _barra_secao(
+            3, 'GRADES', e, largura,
+        ), Spacer(1, 3), tabela]
 
     @classmethod
     def _artes_grupo(cls, grupo, e, largura, altura):
         blocos = []
-        altura_item = max(24 * mm, altura / max(1, len(grupo.itens)) - 9 * mm)
+        altura_item = max(24 * mm, altura / max(1, len(grupo.itens)))
         for item in grupo.itens:
             cor = colors.HexColor(item.grade_cor)
             cor_clara = colors.HexColor(item.grade_fundo)
             blocos += cls._arte(
-                item, e, largura, altura_imagem=min(55 * mm, altura_item),
+                item, e, largura, altura_maxima=altura_item,
                 cor=cor, cor_clara=cor_clara,
                 titulo=f'IMAGENS · {item.grade_rotulo}',
             )
@@ -688,6 +742,7 @@ class PedidoPdfService:
     def _item(
         cls, pedido, item, e, indice, largura_util=LARGURA_UTIL, *,
         titulo=None, cor=AZUL, cor_clara=AZUL_CLARO, incluir_grade=True,
+        excluir_campos=(),
     ) -> list:
         """
         Um produto: identificação, arte e grade.
@@ -735,8 +790,11 @@ class PedidoPdfService:
         # A estrutura é preenchida especificamente para esta OP e por isso
         # vence o valor legado do cadastro quando os rótulos coincidem.
         indices = {rotulo.casefold(): indice for indice, (rotulo, _) in enumerate(campos)}
+        excluir = {rotulo.casefold() for rotulo in excluir_campos}
         for par in estrutura:
             chave = par[0].casefold()
+            if chave in excluir:
+                continue
             if chave in indices:
                 campos[indices[chave]] = par
             else:

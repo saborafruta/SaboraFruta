@@ -93,6 +93,16 @@ class _TabelaProdutos(Table):
             self.splitInRow = 0
 
 
+class _MarcadorDetalheGrupo(Flowable):
+    """Célula técnica invisível para manter juntas as duas linhas do produto."""
+
+    def wrap(self, availWidth, availHeight):
+        return 0, 0
+
+    def draw(self):
+        return None
+
+
 class _NumeroObservacao(Flowable):
     def __init__(self, numero):
         super().__init__()
@@ -223,14 +233,20 @@ class OrcamentoPdfService:
         while tabela is not None:
             _, altura = tabela.wrapOn(medidor, LARGURA_UTIL, disponivel)
             if altura <= disponivel:
-                altura_ultimo = tabela._rowHeights[0] + tabela._rowHeights[-1]
+                linhas_ultimo = 2 if cls._linha_detalhe_grupo(tabela._cellvalues[-1]) else 1
+                altura_ultimo = tabela._rowHeights[0] + sum(
+                    tabela._rowHeights[-linhas_ultimo:]
+                )
                 if (altura + altura_fechamento > disponivel
                         and altura_ultimo + altura_fechamento <= ALTURA_CONTINUACAO):
-                    if len(tabela._cellvalues) > 2:
-                        blocos.append(cls._tabela_produtos(tabela._cellvalues[:-1]))
+                    if len(tabela._cellvalues) > 1 + linhas_ultimo:
+                        blocos.append(cls._tabela_produtos(
+                            tabela._cellvalues[:-linhas_ultimo],
+                        ))
                         blocos.append(PageBreak())
                         tabela = cls._tabela_produtos([
-                            tabela._cellvalues[0], tabela._cellvalues[-1],
+                            tabela._cellvalues[0],
+                            *tabela._cellvalues[-linhas_ultimo:],
                         ])
                 blocos.append(tabela)
                 break
@@ -488,7 +504,10 @@ class OrcamentoPdfService:
         conteudo = [Paragraph(_texto(grupo.nome), e['nome']), Spacer(1, 4)]
         compartilhadas = [
             par for par in cls._especificacoes(grupo.itens[0])
-            if par[0] != 'Impressão / arte'
+            if par[0].casefold() not in (
+                'impressão / arte', 'tipo impressão', 'tipo impressao',
+                'tipo de impressão',
+            )
         ]
         if compartilhadas:
             celulas = [
@@ -509,6 +528,9 @@ class OrcamentoPdfService:
                 ('BOTTOMPADDING', (0, 0), (-1, -1), 2),
             ]))
             conteudo += [especificacoes, Spacer(1, 3)]
+        detalhes = cls._quadro_grades_grupo(
+            grupo, e, sum(cls.LARGURAS[1:]) - 12,
+        )
         for item in grupo.itens:
             fotos_item = cls._fotos(item, e, 22 * mm)
             if fotos_item:
@@ -516,46 +538,92 @@ class OrcamentoPdfService:
                     fotos.extend(fotos_item)
                 else:
                     fotos.append(fotos_item)
-            estilo_grade = ParagraphStyle(
-                f'orc_grade_{item.pk}', parent=e['celula'],
-                fontName='Helvetica-Bold', textColor=colors.HexColor(item.grade_cor),
-                backColor=colors.HexColor(item.grade_fundo),
-                borderColor=colors.HexColor(item.grade_cor), borderWidth=.5,
-                borderPadding=3, spaceBefore=3, spaceAfter=3,
-            )
-            conteudo.append(Paragraph(
-                f'{_texto(item.grade_rotulo)} · {item.quantidade} peça(s) · '
-                f'{brl(item.valor_unitario)} por peça', estilo_grade,
-            ))
-            personalizacoes = [
-                valor for rotulo, valor in cls._especificacoes(item)
-                if rotulo == 'Impressão / arte'
-            ]
-            if personalizacoes:
-                conteudo.append(Paragraph(
-                    f'<b>Personalização:</b> {_texto(" / ".join(personalizacoes))}',
-                    e['celula'],
-                ))
-            grade = [g for g in item.grade.all() if g.quantidade]
-            if grade:
-                resumo = ' | '.join(
-                    f'{g.tamanho.sigla} {g.quantidade}' for g in grade
-                )
-                conteudo += [Spacer(1, 2), Paragraph(
-                    f'<b>Grade:</b> {_texto(resumo)} | '
-                    f'<b>Total {sum(g.quantidade for g in grade)}</b>', e['celula'],
-                )]
-            conteudo += cls._pessoas(item, e, largura)
+            detalhes += cls._pessoas(item, e, sum(cls.LARGURAS[1:]) - 12)
         valor = (
             Paragraph(brl(grupo.valor_unitario_unico), e['td_dir'])
             if grupo.valor_unitario_unico is not None
             else Paragraph('Por grade', e['td_dir'])
         )
-        return [
+        return [[
             fotos or '', conteudo,
             Paragraph(str(grupo.quantidade), e['centro']),
             valor,
             Paragraph(brl(grupo.subtotal), e['td_dir']),
+        ], [_MarcadorDetalheGrupo(), detalhes, '', '', '']]
+
+    @classmethod
+    def _quadro_grades_grupo(cls, grupo, e, largura):
+        """Compara as grades em linhas, sem repetir cada sequência em parágrafos."""
+        tamanhos = []
+        vistos = set()
+        for item in grupo.itens:
+            for celula in item.grade.all():
+                if celula.tamanho_id not in vistos:
+                    vistos.add(celula.tamanho_id)
+                    tamanhos.append(celula.tamanho)
+        tamanhos.sort(key=lambda tamanho: (tamanho.ordem, tamanho.sigla))
+        if not tamanhos:
+            return []
+        estilo_cabecalho = ParagraphStyle(
+            'orc_cabecalho_grade', parent=e['pequeno'],
+            fontName='Helvetica-Bold', fontSize=5.6, leading=6.4,
+            textColor=colors.white,
+        )
+        cabecalho = [Paragraph('VARIANTE / GRADE', estilo_cabecalho)]
+        cabecalho += [Paragraph(_texto(t.sigla), estilo_cabecalho) for t in tamanhos]
+        cabecalho += [Paragraph('TOTAL', estilo_cabecalho)]
+        dados = [cabecalho]
+        estilo_nome = ParagraphStyle(
+            'orc_nome_variante_grade', parent=e['celula'],
+            fontName='Helvetica-Bold', fontSize=5.8, leading=6.8,
+        )
+        estilos = [
+            ('BACKGROUND', (0, 0), (-1, 0), MARINHO),
+            ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
+            ('GRID', (0, 0), (-1, -1), .35, BORDA),
+            ('ALIGN', (1, 0), (-1, -1), 'CENTER'),
+            ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+            ('LEFTPADDING', (0, 0), (-1, -1), 2),
+            ('RIGHTPADDING', (0, 0), (-1, -1), 2),
+            ('TOPPADDING', (0, 0), (-1, -1), 2),
+            ('BOTTOMPADDING', (0, 0), (-1, -1), 2),
+        ]
+        resumo_valores = []
+        for linha, item in enumerate(grupo.itens, start=1):
+            quantidades = {celula.tamanho_id: celula.quantidade for celula in item.grade.all()}
+            personalizacoes = [
+                valor for rotulo, valor in cls._especificacoes(item)
+                if rotulo == 'Impressão / arte'
+            ]
+            complemento = (
+                f'<br/><font size="5">{_texto(" / ".join(personalizacoes))}</font>'
+                if personalizacoes else ''
+            )
+            dados.append([
+                Paragraph(f'<b>{_texto(item.grade_rotulo)}</b>{complemento}', estilo_nome),
+                *[str(quantidades.get(tamanho.pk, 0)) for tamanho in tamanhos],
+                str(sum(quantidades.values())),
+            ])
+            estilos += [
+                ('BACKGROUND', (0, linha), (-1, linha), colors.HexColor(item.grade_fundo)),
+                ('TEXTCOLOR', (0, linha), (0, linha), colors.HexColor(item.grade_cor)),
+                ('FONTNAME', (-1, linha), (-1, linha), 'Helvetica-Bold'),
+            ]
+            resumo_valores.append(
+                f'<b>{_texto(item.grade_rotulo)}:</b> {item.quantidade} peça(s) · '
+                f'{brl(item.valor_unitario)} por peça'
+            )
+        largura_nome = min(35 * mm, largura * .27)
+        largura_numero = (largura - largura_nome) / (len(tamanhos) + 1)
+        tabela = Table(
+            dados, colWidths=[largura_nome] + [largura_numero] * (len(tamanhos) + 1),
+            repeatRows=1,
+        )
+        tabela.setStyle(TableStyle(estilos))
+        return [
+            tabela, Spacer(1, 2),
+            Paragraph(' &nbsp; | &nbsp; '.join(resumo_valores), e['pequeno']),
+            Spacer(1, 2),
         ]
 
     @classmethod
@@ -567,7 +635,13 @@ class OrcamentoPdfService:
             'orc_th_quantidade', parent=e['th'], fontSize=5.3,
         ))
         grupos = agrupar_itens_op(list(pedido.itens.all()))
-        dados = [cabecalho] + [cls._produto_grupo(grupo, e) for grupo in grupos]
+        dados = [cabecalho]
+        for grupo in grupos:
+            linhas = cls._produto_grupo(grupo, e)
+            if grupo.multiplas_grades:
+                dados.extend(linhas)
+            else:
+                dados.append(linhas)
         if len(dados) == 1:
             return []
         return [cls._tabela_produtos(dados)]
@@ -579,15 +653,31 @@ class OrcamentoPdfService:
             dados, colWidths=cls.LARGURAS, repeatRows=1,
             splitByRow=1, splitInRow=0, cornerRadii=[5] * 4,
         )
-        tabela.setStyle(TableStyle(_estilo_tabela(4) + [
+        estilo = _estilo_tabela(4) + [
             ('SPAN', (0, 0), (1, 0)),
             ('BACKGROUND', (0, 0), (-1, 0), MARINHO),
             ('BOX', (0, 0), (-1, -1), .5, BORDA),
             ('LINEBELOW', (0, 1), (-1, -1), .5, BORDA),
             ('TOPPADDING', (0, 1), (-1, -1), 4),
             ('BOTTOMPADDING', (0, 1), (-1, -1), 4),
-        ]))
+        ]
+        for indice, linha in enumerate(dados[1:], start=1):
+            if cls._linha_detalhe_grupo(linha):
+                estilo += [
+                    ('SPAN', (1, indice), (4, indice)),
+                    ('SPAN', (0, indice - 1), (0, indice)),
+                    ('NOSPLIT', (0, indice - 1), (-1, indice)),
+                    ('TOPPADDING', (1, indice), (4, indice), 0),
+                ]
+        tabela.setStyle(TableStyle(estilo))
         return tabela
+
+    @staticmethod
+    def _linha_detalhe_grupo(linha):
+        return (
+            len(linha) == 5 and isinstance(linha[0], _MarcadorDetalheGrupo)
+            and linha[2] == linha[3] == linha[4] == ''
+        )
 
     @staticmethod
     def _par_cartoes(esquerda, direita, largura_esquerda, altura_minima=0,

@@ -101,7 +101,10 @@ class ArteNoPdfTests(TestCase):
             item = ItemPedidoProducao.objects.create(
                 pedido=pedido, produto=produto, grade_tamanho=grade,
                 quantidade=quantidade, valor_unitario=Decimal(valor),
-                observacoes=f'Estrutura da peça:\nMalha: DRY-{indice}',
+                observacoes=(
+                    f'Estrutura da peça:\nTipo impressao: TÉCNICA-{indice}'
+                    f'\nMalha: DRY-{indice}'
+                ),
             )
             itens.append(item)
             Personalizacao.objects.create(item=item, tecnica=tecnica)
@@ -121,6 +124,7 @@ class ArteNoPdfTests(TestCase):
         self.assertEqual(_paginas(pdf), 1)
         self.assertIn('DRY-0', texto)
         self.assertNotIn('DRY-1', texto)
+        self.assertNotIn('Tipo impressao', texto)
         self.assertIn('Sublimação', texto)
         self.assertIn('Silk', texto)
 
@@ -141,7 +145,10 @@ class ArteNoPdfTests(TestCase):
             item = ItemPedidoProducao.objects.create(
                 pedido=pedido, produto=produto, grade_tamanho=grade,
                 quantidade=quantidade, valor_unitario=Decimal(valor),
-                observacoes=f'Estrutura da peça:\nMalha: DRY-{indice}',
+                observacoes=(
+                    f'Estrutura da peça:\nTipo impressao: TÉCNICA-{indice}'
+                    f'\nMalha: DRY-{indice}'
+                ),
             )
             Personalizacao.objects.create(item=item, tecnica=tecnica)
             ItemGradePedido.objects.create(
@@ -149,14 +156,16 @@ class ArteNoPdfTests(TestCase):
             )
 
         tabela = OrcamentoPdfService._itens(pedido, _estilos())[0]
-        texto = self._texto_layout(tabela._cellvalues[1])
+        texto = self._texto_layout(tabela)
 
-        self.assertEqual(len(tabela._cellvalues), 2)
-        self.assertIn('Adulto · 2 peça(s) · R$70,00 por peça', texto)
-        self.assertIn('Oversized · 3 peça(s) · R$75,00 por peça', texto)
+        # Cabeçalho + dados comuns + quadro de grades em largura ampliada.
+        self.assertEqual(len(tabela._cellvalues), 3)
+        self.assertIn('Adulto: 2 peça(s) · R$70,00 por peça', texto)
+        self.assertIn('Oversized: 3 peça(s) · R$75,00 por peça', texto)
         self.assertIn('Por grade', texto)
         self.assertIn('DRY-0', texto)
         self.assertNotIn('DRY-1', texto)
+        self.assertNotIn('Tipo impressao', texto)
         self.assertIn('Sublimação', texto)
         self.assertIn('Silk', texto)
 
