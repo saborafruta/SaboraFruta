@@ -1023,9 +1023,9 @@ class ArteNoPdfTests(TestCase):
 
         self.assertEqual(cabecalhos, ['Peças', 'Unitário', 'Produto', 'TOTAL OP'])
 
-    def test_observacao_do_produto_tem_rotulo_e_texto_em_negrito(self):
+    def test_observacao_do_produto_tem_quadro_alinhado_e_texto_em_negrito(self):
         from reportlab.lib import colors
-        from reportlab.platypus import Paragraph
+        from reportlab.platypus import Table
 
         from apps.moda.services.pedido_pdf import LARGURA_UTIL, _estilos
 
@@ -1035,23 +1035,46 @@ class ArteNoPdfTests(TestCase):
             observacoes='Conferir gola antes de cortar.',
         )
 
-        paragrafos = [
+        quadros = [
             bloco for bloco in PedidoPdfService._item(
                 pedido, item, _estilos(), 0, largura_util=LARGURA_UTIL / 2,
-            ) if isinstance(bloco, Paragraph)
+            ) if isinstance(bloco, Table)
         ]
-        observacao = next(
-            bloco for bloco in paragrafos
-            if bloco.getPlainText().startswith('Obs do produto:')
+        quadro = next(
+            bloco for bloco in quadros
+            if 'OBSERVAÇÕES DO PRODUTO' in self._texto_layout(bloco)
         )
+        observacao = quadro._cellvalues[1][0]
 
         self.assertEqual(
             observacao.getPlainText(),
-            'Obs do produto: Conferir gola antes de cortar.',
+            'Conferir gola antes de cortar.',
         )
+        self.assertEqual(quadro._colWidths, [LARGURA_UTIL / 2])
+        self.assertEqual(quadro.hAlign, 'CENTER')
+        self.assertEqual(quadro._cellStyles[0][0].leftPadding, quadro._cellStyles[1][0].leftPadding)
         self.assertEqual(observacao.style.fontName, 'Helvetica-Bold')
         self.assertEqual(observacao.style.textColor, colors.black)
         self.assertGreater(observacao.style.fontSize, _estilos()['pequeno'].fontSize)
+
+    def test_quadros_de_observacoes_preservam_quebras_e_escapam_texto(self):
+        from apps.moda.services.pedido_pdf import _estilos
+
+        texto = 'Conferir <gola> & manga.\r\n\r\nAvisar antes da entrega.'
+        pedido = self._pedido()
+        pedido.observacoes = texto
+        quadros = [
+            PedidoPdfService._quadro_observacoes('OBSERVAÇÕES DO PRODUTO', texto, _estilos(), 300)[1],
+            PedidoPdfService._observacoes_op(pedido, _estilos(), 300)[1],
+        ]
+        for quadro in quadros:
+            self.assertEqual(quadro._colWidths, [300])
+            self.assertEqual(quadro.hAlign, 'CENTER')
+            corpo = quadro._cellvalues[1][0]
+            self.assertIn('&lt;gola&gt; &amp; manga.<br/><br/>Avisar', corpo.text)
+        for texto_vazio in ('', ' \n ', None):
+            pedido.observacoes = texto_vazio
+            self.assertEqual(PedidoPdfService._observacoes_op(pedido, _estilos()), [])
 
     def test_pdf_nao_reserva_rodape_e_qr_fica_no_cabecalho(self):
         pedido = self._pedido()

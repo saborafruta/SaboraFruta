@@ -803,11 +803,10 @@ class PedidoPdfService:
         ))
 
         if observacao:
-            blocos.append(Spacer(1, 3))
-            blocos.append(Paragraph(
-                f'Obs do produto: {esc(observacao)}',
-                e['observacao_produto'],
-            ))
+            blocos += cls._quadro_observacoes(
+                'OBSERVAÇÕES DO PRODUTO', observacao, e, largura_util,
+                estilo_texto=e['observacao_produto'],
+            )
 
         if incluir_grade:
             blocos += cls._grade(
@@ -1074,15 +1073,41 @@ class PedidoPdfService:
     # ── Observações operacionais ─────────────────────────────────────────
 
     @staticmethod
-    def _observacoes_op(pedido, e, largura_util=LARGURA_UTIL) -> list:
-        if not pedido.observacoes:
+    def _quadro_observacoes(titulo, texto, e, largura_util, *, estilo_texto=None):
+        """Título e conteúdo no mesmo quadro, alinhado às tabelas da coluna."""
+        texto = (texto or '').strip()
+        if not texto:
             return []
-        return [
-            Spacer(1, 5),
-            _barra_secao(None, 'OBSERVAÇÕES DA OP', e, largura_util),
-            Spacer(1, 3),
-            Paragraph(esc(pedido.observacoes).replace('\n', '<br/>'), e['normal']),
-        ]
+        texto = texto.replace('\r\n', '\n').replace('\r', '\n')
+        estilo_titulo = ParagraphStyle(
+            'titulo_observacoes', parent=e['secao'], fontSize=7.5, leading=9,
+        )
+        estilo_corpo = ParagraphStyle(
+            'corpo_observacoes', parent=estilo_texto or e['normal'],
+            textColor=colors.black, spaceBefore=0, spaceAfter=0,
+        )
+        quadro = Table([
+            [Paragraph(esc(titulo), estilo_titulo)],
+            [Paragraph(esc(texto).replace('\n', '<br/>'), estilo_corpo)],
+        ], colWidths=[largura_util], hAlign='CENTER')
+        quadro.setStyle(TableStyle([
+            ('BOX', (0, 0), (-1, -1), .5, BORDA),
+            ('BACKGROUND', (0, 0), (-1, 0), AZUL_CLARO),
+            ('BACKGROUND', (0, 1), (-1, 1), FUNDO),
+            ('LINEBELOW', (0, 0), (-1, 0), .35, BORDA),
+            ('VALIGN', (0, 0), (-1, -1), 'TOP'),
+            ('LEFTPADDING', (0, 0), (-1, -1), 6),
+            ('RIGHTPADDING', (0, 0), (-1, -1), 6),
+            ('TOPPADDING', (0, 0), (-1, -1), 4),
+            ('BOTTOMPADDING', (0, 0), (-1, -1), 4),
+        ]))
+        return [Spacer(1, 5), quadro]
+
+    @classmethod
+    def _observacoes_op(cls, pedido, e, largura_util=LARGURA_UTIL) -> list:
+        return cls._quadro_observacoes(
+            'OBSERVAÇÕES DA OP', pedido.observacoes, e, largura_util,
+        )
 
     # Mantido apenas como compatibilidade interna para chamadas antigas.
     # O gerador da OP não usa mais este bloco: valores e pagamentos não
