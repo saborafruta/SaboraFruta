@@ -981,6 +981,8 @@ class PedidoPdfService:
         pessoas = list(item.individuais.all()) if pessoas is None else pessoas
         if not pessoas:
             return []
+        grade = item.grade_tamanho.nome if item.grade_tamanho_id else 'Sem grade'
+        titulo = f'PERSONALIZAÇÃO POR PESSOA - {len(pessoas)} | GRADE: {grade}'
         if colunas > 1:
             # Leitura vertical: 1, 2, 3... de cima para baixo; depois
             # continua no alto da coluna seguinte. Cada bloco repete seu
@@ -1032,7 +1034,7 @@ class PedidoPdfService:
             return [
                 Spacer(1, 5),
                 _barra_secao(
-                    None, f'PERSONALIZAÇÃO POR PESSOA - {len(pessoas)}', e, largura_util,
+                    None, titulo, e, largura_util,
                     cor=cor, cor_clara=cor_clara, arredondada=arredondada,
                 ),
                 Spacer(1, 3), tabela,
@@ -1063,7 +1065,7 @@ class PedidoPdfService:
         return [
             Spacer(1, 5),
             _barra_secao(
-                None, f'PERSONALIZAÇÃO POR PESSOA - {len(pessoas)}', e, largura_util,
+                None, titulo, e, largura_util,
                 cor=cor, cor_clara=cor_clara, arredondada=arredondada,
             ),
             Spacer(1, 3),

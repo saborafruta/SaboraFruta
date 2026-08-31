@@ -983,6 +983,28 @@ class ArteNoPdfTests(TestCase):
         self.assertTrue(pdf.startswith(b'%PDF'))
         self.assertEqual(_paginas(pdf), 1)
 
+    def test_personalizacao_identifica_grade_em_uma_e_duas_colunas(self):
+        from apps.moda.services.pedido_pdf import _estilos
+
+        pedido = self._pedido()
+        tamanho = Tamanho.objects.create(filial=self.filial, sigla='M')
+        for nome in ('Adulto', 'OverSized', None):
+            grade = Grade.objects.create(filial=self.filial, nome=nome) if nome else None
+            item = ItemPedidoProducao.objects.create(
+                pedido=pedido, descricao='Camisa', grade_tamanho=grade, quantidade=2,
+            )
+            for pessoa_nome in ('Ana', 'João'):
+                PersonalizacaoIndividual.objects.create(
+                    pedido=pedido, item=item, tamanho=tamanho, nome=pessoa_nome,
+                )
+            for colunas in (1, 2):
+                texto = self._texto_layout(PedidoPdfService._personalizacao_item(
+                    item, _estilos(), 380, colunas=colunas,
+                ))
+                self.assertIn(f'GRADE: {nome or "Sem grade"}', texto)
+                self.assertIn('Ana', texto)
+                self.assertIn('João', texto)
+
     def test_observacoes_sao_montadas_uma_vez_e_financeiro_nao_e_usado(self):
         pedido = self._pedido()
         pedido.observacoes = 'Conferir nomes antes da entrega.'

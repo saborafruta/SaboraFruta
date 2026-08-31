@@ -112,7 +112,7 @@
             <article class="op2-item op2-item-variant" style="border-color:{{ item.grade_cor }}" x-data="{detalhes:false,gradeEdit:false,personalizar:false,pessoas:[{uid:Date.now()+Math.random(),tamanhoId:'',nome:'',numero:''}]}" @click="if(!$event.target.closest('button,a,input,select,textarea,form')) abrirEditarProduto('{{ item.pk }}')" role="button" tabindex="0" @keydown.enter="abrirEditarProduto('{{ item.pk }}')">
               <header class="op2-item-head">
                 <div class="min-w-0">
-                  <div class="flex flex-wrap items-center gap-2"><span class="op2-grade-tag" style="color:{{ item.grade_cor }};background:{{ item.grade_fundo }}">{{ item.grade_rotulo }}</span><span class="op2-status" :style="itemStyle('{{ item.status_fluxo }}')">{{ item.get_status_fluxo_display }}</span></div>
+                  <div class="flex flex-wrap items-center gap-2"><span class="op2-grade-tag" style="color:{{ item.grade_cor }};background:{{ item.grade_fundo }}">{{ item.grade_rotulo }}</span></div>
                   {% if item.tecido_exibicao %}<p class="text-xs opacity-65 mt-1">{{ item.tecido_exibicao }}</p>{% endif %}
                 </div>
                 <div class="op2-item-metrics">

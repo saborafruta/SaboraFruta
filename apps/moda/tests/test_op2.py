@@ -970,6 +970,21 @@ class Op2Tests(TestCase):
         self.assertContains(pagina, 'Orçamento aprovado por Maria da Silva')
         self.assertContains(pagina, 'data, o horário e o IP')
 
+    def test_status_aparece_no_cabecalho_mas_nao_nas_tags_das_variantes(self):
+        item = self._item(quantidade=4)
+        grade = Grade.objects.create(filial=self.filial, nome='Adulto')
+        item.grade_tamanho = grade
+        item.save(update_fields=['grade_tamanho'])
+        self._login_op2()
+        resposta = self.client.get(reverse('moda:op2-detail', args=[self.pedido.pk]))
+        html = resposta.content.decode()
+        cartao = re.search(r'<article class="op2-item op2-item-variant".*?</article>', html, re.S).group()
+        self.assertIn('op2-grade-tag', cartao)
+        self.assertIn('Adulto', cartao)
+        self.assertNotIn('op2-status', cartao)
+        self.assertIn('class="op2-status"', html)
+        self.assertIn('Alterar etapa da OP', html)
+
     def test_tipo_de_impressao_nao_aparece_no_resumo_da_variante(self):
         item = self._item(quantidade=4)
         Personalizacao.objects.create(
