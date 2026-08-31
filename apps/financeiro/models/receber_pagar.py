@@ -30,11 +30,21 @@ def caminho_comprovante_pagamento(instancia, nome_original):
 
 
 class ContaReceber(TimestampedModel):
+    class StatusEntrega(models.TextChoices):
+        SEM_PREVISAO = 'sem_previsao', 'Sem previsão'
+        PREVISTA = 'prevista', 'Prevista'
+        ENTREGUE = 'entregue', 'Entregue'
+
     filial = models.ForeignKey(Filial, on_delete=models.PROTECT, related_name="contas_receber")
     cliente = models.ForeignKey(Cliente, on_delete=models.PROTECT, related_name="contas_receber")
     documento_tipo = models.CharField(max_length=30, blank=True)
     documento_id = models.BigIntegerField(null=True, blank=True)
-    documento_numero = models.CharField(max_length=20, blank=True)
+    documento_numero = models.CharField(max_length=200, blank=True)
+    status_entrega = models.CharField(
+        max_length=20, choices=StatusEntrega.choices, default=StatusEntrega.SEM_PREVISAO,
+    )
+    data_entrega_prevista = models.DateField(null=True, blank=True)
+    previsao_entrega_complemento = models.CharField(max_length=100, blank=True)
     parcela = models.PositiveSmallIntegerField(default=1)
     total_parcelas = models.PositiveSmallIntegerField(default=1)
 
@@ -106,6 +116,17 @@ class ContaReceber(TimestampedModel):
 
     def __str__(self):
         return f"CR {self.documento_numero}/{self.parcela} – {self.cliente}"
+
+    @property
+    def entrega_resumo(self):
+        if self.status_entrega == self.StatusEntrega.PREVISTA:
+            if self.data_entrega_prevista:
+                resumo = f'Prevista para {self.data_entrega_prevista:%d/%m/%Y}'
+                if self.previsao_entrega_complemento:
+                    resumo += f' · {self.previsao_entrega_complemento}'
+                return resumo
+            return f'Previsão: {self.previsao_entrega_complemento}'
+        return self.get_status_entrega_display()
 
     @property
     def valor_entrada_liquida(self):

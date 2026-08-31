@@ -56,7 +56,7 @@
         <span class="block text-xs font-medium mb-0.5"
               :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Documento</span>
         <span class="font-mono" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
-          {{ conta.documento_numero|default:"—" }}
+          <span style="overflow-wrap:anywhere">{{ conta.documento_numero|default:"—" }}</span>
         </span>
       </div>
 
@@ -114,6 +114,9 @@
       {% endif %}
 
     </div>
+
+    {% if entrega_habilitada %}<div>Entrega: {% include "financeiro/receber/_entrega_resumo.html" %}</div>{% endif %}
+    {% if pode_editar_referencia %}<a href="{% url 'financeiro:receber_editar_referencia' conta.pk %}" class="btn-secondary inline-flex">Editar documento{% if entrega_habilitada %} e entrega{% endif %}</a>{% endif %}
 
     {% if conta.observacao %}
     <div class="pt-3 border-t" :style="temaClaro ? 'border-color:#f1f5f9;' : 'border-color:#2a2a2e;'">

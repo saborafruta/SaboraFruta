@@ -329,6 +329,15 @@
     </div>
 
     <div class="param-card">
+      <div class="param-card-title">Contas a receber</div>
+      <label class="mt-4 flex items-start gap-3">
+        {{ form_params.controlar_entrega_contas_receber }}
+        <span><strong class="block text-sm">{{ form_params.controlar_entrega_contas_receber.label }}</strong><span class="param-card-sub">{{ form_params.controlar_entrega_contas_receber.help_text }}</span></span>
+      </label>
+      {{ form_params.controlar_entrega_contas_receber.errors }}
+    </div>
+
+    <div class="param-card">
       <div class="param-card-title">Endereco</div>
       <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mt-4">
         <div>

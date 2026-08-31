@@ -87,6 +87,7 @@ class ParametrosSistemaForm(forms.ModelForm):
         model = ParametrosSistema
         fields = [
             'email_secundario',
+            'controlar_entrega_contas_receber',
             'logo_url',
             'certificado_digital', 'senha_certificado',
             'focusnfe_token_principal',

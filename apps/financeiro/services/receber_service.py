@@ -5,15 +5,56 @@ from datetime import date
 from decimal import Decimal
 
 from django.db import transaction
+from django.core.exceptions import ValidationError
 from django.utils import timezone
 
 from apps.core.services.exceptions import DomainError
 from apps.core.services.calendario import adicionar_dias_uteis_bancarios
 from apps.financeiro.constants.enums import StatusContaReceber
 from apps.financeiro.models.receber_pagar import ContaReceber, PagamentoContaReceber
+from apps.financeiro.services.entrega_receber import entrega_receber_habilitada, validar_entrega_receber
+from apps.core.services.auditoria import registrar_auditoria, snapshot_modelo
 
 
 class ContaReceberService:
+
+    CAMPOS_REFERENCIA = (
+        'documento_numero', 'status_entrega', 'data_entrega_prevista',
+        'previsao_entrega_complemento',
+    )
+
+    @staticmethod
+    def _validar_referencia(conta):
+        try:
+            for nome in ContaReceberService.CAMPOS_REFERENCIA:
+                campo = ContaReceber._meta.get_field(nome)
+                setattr(conta, nome, campo.clean(getattr(conta, nome), conta))
+        except ValidationError as exc:
+            raise DomainError(' '.join(exc.messages)) from exc
+        validar_entrega_receber(conta.status_entrega, conta.data_entrega_prevista,
+                               conta.previsao_entrega_complemento)
+
+    @staticmethod
+    @transaction.atomic
+    def editar_referencia(*, conta, dados, usuario):
+        conta = ContaReceber.objects.select_for_update().get(pk=conta.pk)
+        if conta.status == StatusContaReceber.CANCELADO:
+            raise DomainError('Não é possível editar uma conta cancelada.')
+        campos = ['documento_numero']
+        if entrega_receber_habilitada(conta.filial):
+            campos = list(ContaReceberService.CAMPOS_REFERENCIA)
+        antes = snapshot_modelo(conta, campos=campos)
+        for nome in campos:
+            if nome in dados:
+                setattr(conta, nome, dados[nome])
+        ContaReceberService._validar_referencia(conta)
+        conta.save(update_fields=[*campos, 'updated_at'])
+        registrar_auditoria(
+            usuario=usuario, filial=conta.filial, modulo='financeiro', acao='editar',
+            objeto=conta, descricao='Documento e entrega da conta a receber',
+            antes=antes, depois=snapshot_modelo(conta, campos=campos),
+        )
+        return conta
 
     @staticmethod
     @transaction.atomic
@@ -30,15 +71,25 @@ class ContaReceberService:
         plano_contas=None,
         observacao: str = '',
         usuario=None,
+        status_entrega: str = ContaReceber.StatusEntrega.SEM_PREVISAO,
+        data_entrega_prevista: date | None = None,
+        previsao_entrega_complemento: str = '',
     ) -> ContaReceber:
         """Cria um lançamento manual de conta a receber."""
         conta_contabil = plano_contas.conta_contabil if plano_contas else None
         if plano_contas and not conta_contabil:
             raise DomainError('A categoria financeira não possui conta contábil vinculada.')
+        if (status_entrega != ContaReceber.StatusEntrega.SEM_PREVISAO
+                or data_entrega_prevista or previsao_entrega_complemento):
+            if not entrega_receber_habilitada(filial):
+                raise DomainError('O acompanhamento de entrega está desativado nesta filial.')
         conta = ContaReceber(
             filial=filial,
             cliente=cliente,
             documento_numero=documento_numero,
+            status_entrega=status_entrega,
+            data_entrega_prevista=data_entrega_prevista,
+            previsao_entrega_complemento=previsao_entrega_complemento,
             parcela=parcela,
             total_parcelas=total_parcelas,
             valor_original=valor_original,
@@ -57,6 +108,7 @@ class ContaReceberService:
             status=StatusContaReceber.ABERTO,
             usuario=usuario,
         )
+        ContaReceberService._validar_referencia(conta)
         conta.save()
         return conta
 

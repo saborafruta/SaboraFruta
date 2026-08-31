@@ -55,11 +55,13 @@
         <div class="sm:col-span-2">
           <label class="mb-1 block text-sm font-medium">{{ form.documento_numero.label }}</label>
           {{ form.documento_numero|add_class:"form-input"|attr:"placeholder:NF, boleto, pedido ou referência interna" }}
-          <p class="mt-1 text-xs opacity-60">Use algo curto que ajude na conferência.</p>
+          <p class="mt-1 text-xs opacity-60">{{ form.documento_numero.help_text }}</p>
           {% if form.documento_numero.errors %}<p class="mt-1 text-xs text-red-500">{{ form.documento_numero.errors|join:", " }}</p>{% endif %}
         </div>
       </div>
     </section>
+
+    {% if form.entrega_habilitada %}<div class="px-5 pb-5 sm:px-6">{% include "financeiro/receber/_entrega_campos.html" %}</div>{% endif %}
 
     <section class="border-t p-5 sm:p-6" :style="temaClaro ? 'border-color:#e5e7eb' : 'border-color:#303038'">
       <div class="mb-4 flex items-center gap-3">

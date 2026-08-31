@@ -1,0 +1,26 @@
+{% extends "_base.html" %}
+{% load widget_tweaks %}
+{% block title %}{{ title }}{% endblock %}
+{% block page_title %}{{ title }}{% endblock %}
+{% block content %}
+<div class="mx-auto max-w-3xl space-y-4">
+  <a href="{% url 'financeiro:receber_detail' conta.pk %}" class="text-sm text-blue-500">Voltar para a conta #{{ conta.pk }}</a>
+  <h2 class="text-xl font-semibold">Editar documento{% if form.entrega_habilitada %} e entrega{% endif %}</h2>
+  <p class="text-sm opacity-65">{{ conta.cliente.razao_social }} · Esta edição mantém valores, pagamentos e vencimento.</p>
+  <form method="post" class="card p-5 space-y-5">
+    {% csrf_token %}
+    {% if form.non_field_errors %}<div role="alert" class="rounded-md border border-red-300 bg-red-50 p-3 text-sm text-red-700">{{ form.non_field_errors }}</div>{% endif %}
+    <div>
+      <label for="{{ form.documento_numero.id_for_label }}" class="mb-1 block text-sm">Documento</label>
+      {{ form.documento_numero|add_class:"form-input"|attr:"placeholder:Pedido - nome do pedido" }}
+      <p class="mt-1 text-xs opacity-65">{{ form.documento_numero.help_text }}</p>
+      {{ form.documento_numero.errors }}
+    </div>
+    {% include "financeiro/receber/_entrega_campos.html" %}
+    <div class="flex justify-end gap-3">
+      <a class="btn-secondary" href="{% url 'financeiro:receber_detail' conta.pk %}">Cancelar</a>
+      <button class="btn-primary" type="submit">Salvar alterações</button>
+    </div>
+  </form>
+</div>
+{% endblock %}

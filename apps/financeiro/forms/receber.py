@@ -9,6 +9,9 @@ from apps.financeiro.models.conta_bancaria import ContaBancaria, PlanoContas
 from apps.financeiro.models.formas_pagamento import FormaPagamento
 from apps.financeiro.forms.plano_contas import CategoriaFinanceiraChoiceField
 from apps.financeiro.forms.cartao import campo_parcelas, configurar_forma_pagamento, limpar_dados_cartao
+from apps.financeiro.models.receber_pagar import ContaReceber
+from apps.financeiro.services.entrega_receber import entrega_receber_habilitada, validar_entrega_receber
+from apps.core.services.exceptions import DomainError
 
 VALOR_WIDGET = forms.NumberInput(attrs={
     'step': '0.01',
@@ -26,18 +29,54 @@ BANDEIRAS_CARTAO = [
 ]
 
 
-class ContaReceberForm(forms.Form):
+class ReferenciaContaReceberForm(forms.Form):
+    """Documento e entrega, sem permitir alterações financeiras."""
+    documento_numero = forms.CharField(
+        max_length=200,
+        required=False,
+        label='Documento',
+        help_text='Número ou descrição do pedido, NF ou boleto. Até 200 caracteres.',
+    )
+    status_entrega = forms.ChoiceField(
+        choices=ContaReceber.StatusEntrega.choices,
+        initial=ContaReceber.StatusEntrega.SEM_PREVISAO,
+        label='Situação da entrega', required=False,
+    )
+    data_entrega_prevista = forms.DateField(
+        required=False, label='Data prevista de entrega',
+        widget=forms.DateInput(format='%Y-%m-%d', attrs={'type': 'date'}),
+    )
+    previsao_entrega_complemento = forms.CharField(
+        max_length=100, required=False, label='Complemento da previsão',
+        help_text='Ex.: Outubro/2026, quando ainda não houver dia definido.',
+    )
+
+    def __init__(self, *args, filial=None, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.entrega_habilitada = entrega_receber_habilitada(filial)
+        if not self.entrega_habilitada:
+            for campo in ('status_entrega', 'data_entrega_prevista', 'previsao_entrega_complemento'):
+                self.fields.pop(campo)
+
+    def clean(self):
+        cleaned = super().clean()
+        if self.entrega_habilitada:
+            status = cleaned.get('status_entrega') or ContaReceber.StatusEntrega.SEM_PREVISAO
+            cleaned['status_entrega'] = status
+            try:
+                validar_entrega_receber(status, cleaned.get('data_entrega_prevista'),
+                                       cleaned.get('previsao_entrega_complemento', ''))
+            except DomainError as exc:
+                raise forms.ValidationError(str(exc)) from exc
+        return cleaned
+
+
+class ContaReceberForm(ReferenciaContaReceberForm):
     """Lançamento manual de conta a receber."""
 
     cliente = forms.ModelChoiceField(
         queryset=Cliente.objects.none(),
         label='Cliente',
-    )
-    documento_numero = forms.CharField(
-        max_length=20,
-        required=False,
-        label='Nº do documento',
-        help_text='Número da NF, boleto ou outro documento de referência.',
     )
     parcela = forms.IntegerField(
         min_value=1,
@@ -124,7 +163,7 @@ class ContaReceberForm(forms.Form):
     )
 
     def __init__(self, *args, filial=None, **kwargs):
-        super().__init__(*args, **kwargs)
+        super().__init__(*args, filial=filial, **kwargs)
         if filial:
             self.fields['cliente'].queryset = (
                 Cliente.objects.for_filial(filial)

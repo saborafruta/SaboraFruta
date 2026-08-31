@@ -18,7 +18,8 @@ from django.views.decorators.clickjacking import xframe_options_sameorigin
 from apps.core.services.exceptions import DomainError
 from apps.core.services.permissions import PermissaoRequiredMixin
 from apps.financeiro.constants.enums import StatusContaReceber
-from apps.financeiro.forms.receber import BaixaContaReceberForm, ContaReceberForm
+from apps.financeiro.forms.receber import BaixaContaReceberForm, ContaReceberForm, ReferenciaContaReceberForm
+from apps.financeiro.services.entrega_receber import entrega_receber_habilitada
 from apps.financeiro.models.receber_pagar import ContaReceber, PagamentoContaReceber
 from apps.financeiro.services.receber_service import ContaReceberService
 from apps.financeiro.services.dashboard_contas_service import DashboardContasService
@@ -38,6 +39,18 @@ PILL_STATUS = {
 
 def _filial(request):
     return request.filial_ativa
+
+
+def _contexto_entrega(request, filial):
+    habilitada = entrega_receber_habilitada(filial)
+    filtro = request.GET.get('entrega', '') if habilitada else ''
+    if filtro not in ContaReceber.StatusEntrega.values:
+        filtro = ''
+    return {
+        'entrega_habilitada': habilitada,
+        'entrega_filtro': filtro,
+        'entrega_choices': ContaReceber.StatusEntrega.choices,
+    }
 
 
 def _vincular_vendas(titulos, filial):
@@ -143,6 +156,9 @@ class ContaReceberListView(PermissaoRequiredMixin, View):
             qs = qs.filter(data_vencimento__lte=data_fim)
 
         # Totais da seleção filtrada
+        entrega = _contexto_entrega(request, filial)
+        if entrega['entrega_filtro']:
+            qs = qs.filter(status_entrega=entrega['entrega_filtro'])
         totais_filtro = qs.aggregate(
             total_valor=Sum('valor_final'),
             total_saldo=Sum('valor_saldo'),
@@ -164,6 +180,7 @@ class ContaReceberListView(PermissaoRequiredMixin, View):
 
         return render(request, 'financeiro/receber/list.html', {
             'title': 'Contas a Receber',
+            **entrega,
             'page_obj': page_obj,
             'contas': page_obj,
             'status_choices': STATUS_CHOICES,
@@ -222,6 +239,9 @@ class ContaReceberRelatorioView(PermissaoRequiredMixin, View):
         if data_fim:
             qs = qs.filter(data_vencimento__lte=data_fim)
 
+        entrega = _contexto_entrega(request, filial)
+        if entrega['entrega_filtro']:
+            qs = qs.filter(status_entrega=entrega['entrega_filtro'])
         titulos = list(qs)
         _vincular_vendas(titulos, filial)
 
@@ -258,6 +278,7 @@ class ContaReceberRelatorioView(PermissaoRequiredMixin, View):
 
         return render(request, 'financeiro/receber/relatorio.html', {
             'title': 'Relatório de Contas a Receber',
+            **entrega,
             'clientes': clientes,
             'filial': filial,
             'q': q,
@@ -311,6 +332,9 @@ class ContaReceberCreateView(PermissaoRequiredMixin, View):
                 plano_contas=d.get('plano_contas'),
                 observacao=d.get('observacao', ''),
                 usuario=request.user,
+                **{campo: d[campo] for campo in (
+                    'status_entrega', 'data_entrega_prevista', 'previsao_entrega_complemento',
+                ) if campo in d},
             )
             if d.get('quitar_ao_lancar'):
                 ContaReceberService.registrar_baixa(
@@ -377,6 +401,8 @@ class ContaReceberDetailView(PermissaoRequiredMixin, View):
             'pode_cancelar': pode_cancelar,
             'pode_editar_prazo': pode_editar_prazo,
             'pode_gerenciar_recebimentos': pode_gerenciar_recebimentos,
+            'pode_editar_referencia': pode_gerenciar_recebimentos,
+            'entrega_habilitada': entrega_receber_habilitada(filial),
             'pill': pill,
             'tipo_conta': 'receber',
             'prazo_retorno_url': prazo_retorno_url,
@@ -384,6 +410,44 @@ class ContaReceberDetailView(PermissaoRequiredMixin, View):
         if request.GET.get('modal') == '1':
             return render(request, 'financeiro/_detalhes_conta_modal.html', context)
         return render(request, 'financeiro/receber/detail.html', context)
+
+
+class ContaReceberReferenciaView(PermissaoRequiredMixin, View):
+    permissao_modulo = 'financeiro'
+    permissao_acao = 'editar'
+
+    def _conta(self, request, pk):
+        return get_object_or_404(ContaReceber.objects.for_filial(_filial(request)), pk=pk)
+
+    def _render(self, request, conta, form):
+        return render(request, 'financeiro/receber/referencia_form.html', {
+            'title': f'Editar documento — Conta #{conta.pk}',
+            'conta': conta, 'form': form,
+        })
+
+    def get(self, request, pk):
+        conta = self._conta(request, pk)
+        form = ReferenciaContaReceberForm(
+            filial=_filial(request), initial={
+                campo: getattr(conta, campo) for campo in ContaReceberService.CAMPOS_REFERENCIA
+            },
+        )
+        return self._render(request, conta, form)
+
+    def post(self, request, pk):
+        conta = self._conta(request, pk)
+        form = ReferenciaContaReceberForm(request.POST, filial=_filial(request))
+        if form.is_valid():
+            try:
+                ContaReceberService.editar_referencia(
+                    conta=conta, dados=form.cleaned_data, usuario=request.user,
+                )
+            except DomainError as exc:
+                form.add_error(None, str(exc))
+            else:
+                messages.success(request, 'Referência atualizada. Valores e vencimento foram mantidos.')
+                return redirect('financeiro:receber_detail', pk=conta.pk)
+        return self._render(request, conta, form)
 
 
 class ContaReceberBaixaView(PermissaoRequiredMixin, View):

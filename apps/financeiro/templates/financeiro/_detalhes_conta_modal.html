@@ -8,9 +8,11 @@
         {% if tipo_conta == 'pagar' %}<p class="mt-1 text-sm opacity-65">Pago a {{ conta.beneficiario_nome }}</p>{% endif %}
         {% if conta.excluido %}<span class="soft-pill is-red">Excluído</span>{% else %}<span class="soft-pill {% if conta.status == 'pago' %}is-green{% elif conta.status == 'vencido' %}is-red{% elif conta.status == 'aberto' %}is-blue{% elif conta.status == 'pago_parcial' or conta.status == 'agendado' or conta.status == 'negociado' %}is-amber{% else %}is-slate{% endif %}" data-conta-status>{{ conta.get_status_display }}</span>{% endif %}
       </div>
-      <p class="mt-1 text-sm opacity-60">Título #{{ conta.pk }}{% if conta.documento_numero %} · Documento {{ conta.documento_numero }}{% endif %}</p>
+      <p class="mt-1 text-sm opacity-60" style="overflow-wrap:anywhere">Título #{{ conta.pk }}{% if conta.documento_numero %} · Documento {{ conta.documento_numero }}{% endif %}</p>
+      {% if tipo_conta == 'receber' and entrega_habilitada %}<p class="mt-2">Entrega: {% include "financeiro/receber/_entrega_resumo.html" %}</p>{% endif %}
     </div>
     <div class="flex flex-wrap gap-2">
+    {% if tipo_conta == 'receber' and pode_editar_referencia %}<a href="{% url 'financeiro:receber_editar_referencia' conta.pk %}" class="btn-secondary">Editar documento{% if entrega_habilitada %} e entrega{% endif %}</a>{% endif %}
     {% if tipo_conta == 'pagar' and pode_editar_lancamento %}
       <button type="button" class="btn-primary inline-flex items-center gap-2" onclick="toggleEditarLancamento(this)" aria-label="Editar lançamento">
         <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536M9 11l6-6 4 4-6 6H9v-4zM5 19h14"/></svg>

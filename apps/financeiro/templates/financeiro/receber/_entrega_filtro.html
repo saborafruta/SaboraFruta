@@ -1,0 +1,9 @@
+{% if entrega_habilitada %}
+<div class="md:col-span-3">
+  <label for="entrega-filtro" class="block text-xs mb-1" :style="temaClaro ? 'color:#64748b' : 'color:#94a3b8'">Entrega</label>
+  <select id="entrega-filtro" name="entrega" class="form-input">
+    <option value="">Todas as entregas</option>
+    {% for value, label in entrega_choices %}<option value="{{ value }}" {% if entrega_filtro == value %}selected{% endif %}>{{ label }}</option>{% endfor %}
+  </select>
+</div>
+{% endif %}

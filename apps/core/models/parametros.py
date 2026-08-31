@@ -31,6 +31,11 @@ class ParametrosSistema(TimestampedModel):
         help_text='URL externa da logo (alternativa ao upload). Não desaparece em redeploys.',
     )
     email_secundario = models.EmailField(max_length=120, blank=True)
+    controlar_entrega_contas_receber = models.BooleanField(
+        default=False,
+        verbose_name='Acompanhar entrega no contas a receber',
+        help_text='Exibe situação e previsão de entrega somente nesta filial. Não altera pagamentos.',
+    )
     certificado_digital = models.FileField(
         upload_to='sistema/certificados/',
         blank=True,

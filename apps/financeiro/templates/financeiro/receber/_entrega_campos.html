@@ -1,0 +1,27 @@
+{% load widget_tweaks %}
+{% if form.entrega_habilitada %}
+<section class="rounded-lg border border-blue-500/25 p-4 space-y-4" data-entrega-campos>
+  <div>
+    <h3 class="text-sm font-semibold">Entrega do pedido</h3>
+    <p class="mt-1 text-xs opacity-65">Acompanhamento opcional desta filial. Marcar como entregue não registra recebimento nem altera o vencimento.</p>
+  </div>
+  <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
+    <div>
+      <label for="{{ form.status_entrega.id_for_label }}" class="mb-1 block text-sm">{{ form.status_entrega.label }}</label>
+      {{ form.status_entrega|add_class:"form-input" }}
+      {{ form.status_entrega.errors }}
+    </div>
+    <div>
+      <label for="{{ form.data_entrega_prevista.id_for_label }}" class="mb-1 block text-sm">{{ form.data_entrega_prevista.label }}</label>
+      {{ form.data_entrega_prevista|add_class:"form-input" }}
+      {{ form.data_entrega_prevista.errors }}
+    </div>
+    <div class="sm:col-span-2">
+      <label for="{{ form.previsao_entrega_complemento.id_for_label }}" class="mb-1 block text-sm">{{ form.previsao_entrega_complemento.label }}</label>
+      {{ form.previsao_entrega_complemento|add_class:"form-input"|attr:"placeholder:Ex.: Outubro/2026 — sem dia definido" }}
+      <p class="mt-1 text-xs opacity-65">{{ form.previsao_entrega_complemento.help_text }} Para “Sem previsão”, deixe a data e o complemento vazios.</p>
+      {{ form.previsao_entrega_complemento.errors }}
+    </div>
+  </div>
+</section>
+{% endif %}

@@ -171,7 +171,7 @@
     <div class="md:col-span-4">
       <label for="receber-busca" class="block text-xs mb-1">Cliente ou documento</label>
       <input id="receber-busca" type="text" name="q" value="{{ q }}"
-             placeholder="Cliente ou nº do documento..."
+             placeholder="Cliente, documento ou pedido..."
              class="form-input">
     </div>
     <div class="md:col-span-2">
@@ -192,6 +192,7 @@
       <label for="receber-vencimento-ate" class="block text-xs mb-1">Vencimento até</label>
       <input id="receber-vencimento-ate" type="date" name="data_fim" value="{{ data_fim }}" class="form-input" title="Vencimento até">
     </div>
+    {% include "financeiro/receber/_entrega_filtro.html" %}
     <div class="md:col-span-2 flex gap-2">
       <button type="submit" class="btn-secondary w-full justify-center">Filtrar</button>
       <a href="{% url 'financeiro:receber_list' %}" class="btn-secondary px-3 flex items-center justify-center" title="Limpar filtros">
@@ -248,7 +249,7 @@
           </div>
           <div class="text-xs mt-0.5" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
             Nº da conta #{{ c.pk }} ·
-            {% if c.documento_numero %}Doc. {{ c.documento_numero }} — {% endif %}
+            {% if c.documento_numero %}<span style="overflow-wrap:anywhere">Doc. {{ c.documento_numero }}</span> — {% endif %}
             Parc. {{ c.parcela }}/{{ c.total_parcelas }}
           </div>
           {% if c.forma_pagamento or c.plano_contas %}<div class="mt-1 text-xs opacity-60">{{ c.forma_pagamento.descricao_com_conta|default:"Forma não definida" }}{% if c.plano_contas %} · {{ c.plano_contas.descricao }}{% endif %}</div>{% endif %}
@@ -257,6 +258,7 @@
           {{ c.get_status_display }}
         </span>
       </div>
+      {% if entrega_habilitada %}<div>Entrega: {% include "financeiro/receber/_entrega_resumo.html" with conta=c %}</div>{% endif %}
       <div class="grid grid-cols-2 gap-2 text-xs">
         <div>
           <span :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Nº da venda</span>
@@ -315,6 +317,7 @@
             <th class="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wide" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Nº da conta</th>
             <th class="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wide" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Cliente</th>
             <th class="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wide" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Documento</th>
+            {% if entrega_habilitada %}<th class="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wide">Entrega</th>{% endif %}
             <th class="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wide" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Nº da venda</th>
             <th class="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wide" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Data da venda</th>
             <th class="text-center px-4 py-3 text-xs font-semibold uppercase tracking-wide" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Parcela</th>
@@ -338,8 +341,9 @@
               {% if c.plano_contas %}<span class="mt-1 inline-flex rounded bg-emerald-100 px-2 py-0.5 text-[10px] font-semibold text-emerald-800 dark:bg-emerald-950/50 dark:text-emerald-200">{{ c.plano_contas.descricao }}</span>{% endif %}
             </td>
             <td class="px-4 py-3 text-xs font-mono" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
-              {{ c.documento_numero|default:"—" }}
+              <div style="min-width:10rem;max-width:18rem;white-space:normal;overflow-wrap:anywhere">{{ c.documento_numero|default:"—" }}</div>
             </td>
+            {% if entrega_habilitada %}<td class="px-4 py-3" style="min-width:10rem;max-width:16rem">{% include "financeiro/receber/_entrega_resumo.html" with conta=c %}</td>{% endif %}
             <td class="px-4 py-3 text-xs font-mono whitespace-nowrap">
               {% if c.venda_vinculada %}#{{ c.venda_vinculada.numero_venda|stringformat:"06d" }}{% else %}—{% endif %}
             </td>
@@ -409,7 +413,7 @@
           </tr>
           {% empty %}
           <tr>
-            <td colspan="11" class="px-4 py-12 text-center" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+            <td colspan="{% if entrega_habilitada %}12{% else %}11{% endif %}" class="px-4 py-12 text-center" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
               <svg class="w-10 h-10 mx-auto mb-3 opacity-30" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"
                       d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
