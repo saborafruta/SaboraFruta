@@ -1,0 +1,62 @@
+{% extends "_base.html" %}
+{% block title %}Posição Diária de Caixa — Histórico importado{% endblock %}
+{% block page_title %}Posição Diária de Caixa{% endblock %}
+{% block content %}
+<style>
+  .hist-grid { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:1rem; }
+  .hist-ledgers { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:1rem; }
+  .hist-row { display:flex; justify-content:space-between; align-items:start; gap:1rem; padding:.7rem 1rem; border-bottom:1px solid #94a3b833; }
+  .hist-value { white-space:nowrap; font-variant-numeric:tabular-nums; }
+  .hist-description { overflow-wrap:anywhere; }
+  .hist-in { color:#059669; } .hist-out { color:#e11d48; }
+  @media(max-width:700px) { .hist-grid,.hist-ledgers { grid-template-columns:1fr; } }
+</style>
+<div class="space-y-5">
+  <div class="flex flex-wrap items-center justify-between gap-3">
+    <div><h2 class="text-2xl font-semibold">Posição Diária de Caixa</h2><p class="mt-1 text-sm text-gray-500">Histórico importado da planilha · somente consulta</p></div>
+    <a href="{{ url_operacional }}" class="btn-secondary">Ver movimentos operacionais</a>
+  </div>
+  <div class="card p-4 text-sm">Esta visualização contém apenas os registros importados. Não altera saldos atuais e não participa de movimentações bancárias, contas a pagar ou a receber. O saldo final é o informado na planilha.</div>
+  <section class="card p-4">
+    <form method="get" class="flex flex-wrap items-end gap-3">
+      <input type="hidden" name="fonte" value="historico">
+      <label class="text-sm">Data<input type="date" name="data" value="{{ data_referencia|date:'Y-m-d' }}" class="form-input mt-1 block" required></label>
+      <label class="text-sm">Período<select name="periodo" class="form-input mt-1 block"><option value="hoje" {% if periodo == 'hoje' %}selected{% endif %}>Dia selecionado</option><option value="mes" {% if periodo == 'mes' %}selected{% endif %}>Mês selecionado</option><option value="personalizado" {% if periodo == 'personalizado' %}selected{% endif %}>Personalizado</option></select></label>
+      <label class="text-sm">De (personalizado)<input type="date" name="data_inicio" value="{{ data_inicio|date:'Y-m-d' }}" class="form-input mt-1 block"></label>
+      <label class="text-sm">Até (personalizado)<input type="date" name="data_fim" value="{{ data_fim|date:'Y-m-d' }}" class="form-input mt-1 block"></label>
+      <button type="submit" class="btn-primary">Consultar</button>
+    </form>
+    <div class="mt-3 flex items-center gap-2 overflow-x-auto">
+      <a class="btn-secondary" href="?fonte=historico&data={{ data_anterior|date:'Y-m-d' }}">Anterior</a>
+      {% for dia in dias_mes %}<a href="?fonte=historico&data={{ dia.data|date:'Y-m-d' }}" class="shrink-0 rounded-md border px-3 py-2 text-xs {% if dia.selecionado %}bg-blue-600 text-white{% endif %}">{{ dia.data|date:'d/m' }}</a>{% endfor %}
+      <a class="btn-secondary" href="?fonte=historico&data={{ data_seguinte|date:'Y-m-d' }}">Seguinte</a>
+    </div>
+  </section>
+  {% if historico.dias %}
+  <p class="text-sm text-gray-500">{{ historico.quantidade_dias }} dia(s) importado(s) entre {{ data_inicio|date:'d/m/Y' }} e {{ data_fim|date:'d/m/Y' }}. Datas sem registro não são consideradas dias de movimento zero.</p>
+  <section class="hist-grid">
+    <div class="card p-4"><span class="text-sm">Entradas do período</span><strong class="hist-in mt-2 block text-2xl hist-value">R$ {{ historico.total_entradas|floatformat:2 }}</strong></div>
+    <div class="card p-4"><span class="text-sm">Saídas do período</span><strong class="hist-out mt-2 block text-2xl hist-value">R$ {{ historico.total_saidas|floatformat:2 }}</strong></div>
+    <div class="card p-4"><span class="text-sm">Saldo final informado · {{ historico.ultimo_dia.data|date:'d/m/Y' }}</span><strong class="mt-2 block text-2xl hist-value">R$ {{ historico.ultimo_dia.saldo_final_informado|floatformat:2 }}</strong><span class="text-xs text-gray-500">Último dia importado no período; não é a soma dos saldos.</span></div>
+  </section>
+  {% for dia in historico.dias %}
+  <section class="space-y-3">
+    <div class="card flex flex-wrap justify-between gap-3 p-4"><h3 class="text-lg font-semibold">{{ dia.data|date:'d/m/Y' }}</h3><strong class="hist-value">Saldo final: R$ {{ dia.saldo_final_informado|floatformat:2 }}</strong></div>
+    <div class="hist-ledgers">
+      <div class="card overflow-hidden"><div class="hist-row hist-in"><h4 class="font-semibold">Entradas</h4><strong class="hist-value">R$ {{ dia.total_entradas|floatformat:2 }}</strong></div>
+        {% for item in dia.entradas %}<div class="hist-row"><span class="hist-description">{{ item.descricao|default:'Importação — sem descrição na planilha' }}</span><span class="hist-value hist-in">R$ {{ item.valor|floatformat:2 }}</span></div>{% empty %}<p class="p-4 text-sm text-gray-500">Sem entradas registradas.</p>{% endfor %}
+      </div>
+      <div class="card overflow-hidden"><div class="hist-row hist-out"><h4 class="font-semibold">Saídas</h4><strong class="hist-value">R$ {{ dia.total_saidas|floatformat:2 }}</strong></div>
+        {% for item in dia.saidas %}<div class="hist-row"><span class="hist-description">{{ item.descricao|default:'Importação — sem descrição na planilha' }}</span><span class="hist-value hist-out">R$ {{ item.valor|floatformat:2 }}</span></div>{% empty %}<p class="p-4 text-sm text-gray-500">Sem saídas registradas.</p>{% endfor %}
+      </div>
+    </div>
+  </section>
+  {% endfor %}
+  {% if historico.pagina.has_other_pages %}<nav class="flex items-center justify-between gap-3 card p-4" aria-label="Paginação do histórico">
+    {% if historico.pagina.has_previous %}<a class="btn-secondary" href="?{{ paginacao_query }}&pagina={{ historico.pagina.previous_page_number }}">Dias anteriores</a>{% endif %}
+    <span>Página {{ historico.pagina.number }} de {{ historico.pagina.paginator.num_pages }}</span>
+    {% if historico.pagina.has_next %}<a class="btn-secondary" href="?{{ paginacao_query }}&pagina={{ historico.pagina.next_page_number }}">Próximos dias</a>{% endif %}
+  </nav>{% endif %}
+  {% else %}<section class="card p-6"><h3 class="font-semibold">Nenhum histórico importado neste período.</h3><p class="mt-2 text-sm text-gray-500">Isso não indica saldo zero. Escolha outra data ou consulte os movimentos operacionais.</p></section>{% endif %}
+</div>
+{% endblock %}

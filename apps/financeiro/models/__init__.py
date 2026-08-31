@@ -15,8 +15,10 @@ from .tef import TEFConfiguracao, TEFTransacao
 from .dre import DREConsolidado, DRECentroCusto
 from .credito_cliente import CreditoCliente
 from .plano_contabil import PlanoContabil
+from .caixa_historico import LoteCaixaHistorico, DiaCaixaHistorico, MovimentoCaixaHistorico
 
 __all__ = [
+    "LoteCaixaHistorico", "DiaCaixaHistorico", "MovimentoCaixaHistorico",
     "ClasseFiscal","ClasseFiscalAliquota","NaturezaOperacao",
     "DocumentoFiscal","ItemDocumentoFiscal",
     "NFEDadosExportacao","NFEDadosImportacao","NFSEConfiguracaoMunicipio",

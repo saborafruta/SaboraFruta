@@ -350,6 +350,7 @@
       <p class="mt-1 text-sm text-gray-500">Confira o que entrou, o que saiu e onde o dinheiro terminou no dia.</p>
     </div>
     <div class="flex flex-wrap items-center gap-2">
+      {% if historico_disponivel %}<a href="?fonte=historico&data={{ data_referencia|date:'Y-m-d' }}&periodo={{ periodo }}&data_inicio={{ data_inicio|date:'Y-m-d' }}&data_fim={{ data_fim|date:'Y-m-d' }}" class="btn-secondary">Histórico importado</a>{% endif %}
       <a href="{% url 'financeiro:pagar_pagas' %}" class="btn-secondary">Contas Pagas</a>
       <a href="{% url 'financeiro:pagar_list' %}" class="btn-secondary">Contas a pagar</a>
       <a href="{% url 'financeiro:receber_list' %}" class="btn-secondary">Contas a receber</a>

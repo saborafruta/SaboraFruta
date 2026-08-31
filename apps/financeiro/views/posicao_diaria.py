@@ -22,6 +22,8 @@ from apps.financeiro.forms import (
 from apps.financeiro.constants.enums import StatusContaPagar
 from apps.financeiro.models import ContaPagar, PlanoContas
 from apps.financeiro.models.extrato import ExtratoBancario
+from apps.financeiro.models.caixa_historico import DiaCaixaHistorico
+from apps.financeiro.services.caixa_historico_service import consultar_historico
 from apps.financeiro.services.posicao_diaria_service import PosicaoDiariaCaixaService
 from apps.financeiro.views.contas_bancarias import ContaBancariaListView, _usuario_admin
 from apps.financeiro.views.pagar import _contexto_meta_despesa_pessoal
@@ -132,6 +134,31 @@ class PosicaoDiariaCaixaView(PermissaoRequiredMixin, View):
         data_inicio, data_fim = self._resolver_periodo(
             periodo, data_referencia, request.GET.get("data_inicio"), request.GET.get("data_fim"),
         )
+        historico = DiaCaixaHistorico.objects.for_filial(request.filial_ativa)
+        fonte = request.GET.get("fonte", "")
+        if fonte == "historico" or (
+            request.method == "GET" and fonte != "operacional"
+            and data_inicio == data_fim and historico.filter(data=data_inicio).exists()
+        ):
+            if periodo == "mes":
+                data_fim = data_referencia.replace(day=monthrange(data_referencia.year, data_referencia.month)[1])
+            contexto = consultar_historico(request.filial_ativa, data_inicio, data_fim, request.GET.get("pagina", "1"))
+            parametros = request.GET.copy()
+            parametros["fonte"] = "historico"
+            parametros.pop("pagina", None)
+            return render(request, "financeiro/posicao_diaria_historico.html", {
+                "title": "Posição Diária de Caixa — Histórico importado",
+                "historico": contexto, "data_referencia": data_referencia,
+                "paginacao_query": parametros.urlencode(),
+                "data_inicio": data_inicio, "data_fim": data_fim, "periodo": periodo,
+                "dias_mes": self._dias_mes(data_referencia),
+                "data_anterior": data_referencia - timedelta(days=1),
+                "data_seguinte": data_referencia + timedelta(days=1),
+                "url_operacional": reverse("financeiro:posicao_diaria") + "?" + urlencode({
+                    "fonte": "operacional", "data": data_referencia.isoformat(), "periodo": periodo,
+                    "data_inicio": data_inicio.isoformat(), "data_fim": data_fim.isoformat(),
+                }),
+            })
         previsao_periodo = request.GET.get("previsao", "hoje")
         previsao_inicio, previsao_fim = self._resolver_previsao(
             previsao_periodo, data_referencia,
@@ -286,6 +313,7 @@ class PosicaoDiariaCaixaView(PermissaoRequiredMixin, View):
             empresa=request.filial_ativa.empresa, tipo='D', nivel=1, despesa_pessoal=True, ativo=True,
         ).order_by('codigo', 'pk').first()
         context = {
+            "historico_disponivel": historico.exists(),
             "title": "Posicao Diaria de Caixa", "data_referencia": data_referencia, "posicao": posicao,
             "hoje": timezone.localdate(),
             "movimento_form": movimento_form, "movimento_modal": movimento_modal,
