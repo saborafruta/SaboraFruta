@@ -976,6 +976,24 @@ class Op2ActionView(ModaBaseView):
         )
         messages.success(request, 'Informação adicionada à linha do tempo da criação.')
 
+    def _acao_editar_criacao(self, request, pedido):
+        registro = get_object_or_404(
+            pedido.historico_criacao, pk=request.POST.get('registro_id'),
+        )
+        texto = (request.POST.get('informacoes_criacao') or '').strip()
+        if not texto:
+            raise ValueError('A informação da criação não pode ficar vazia.')
+        registro.texto = texto
+        registro.save(update_fields=['texto'])
+        messages.success(request, 'Informação da criação atualizada.')
+
+    def _acao_remover_criacao(self, request, pedido):
+        registro = get_object_or_404(
+            pedido.historico_criacao, pk=request.POST.get('registro_id'),
+        )
+        registro.delete()
+        messages.success(request, 'Informação removida da linha do tempo.')
+
     def _acao_descricao_visual(self, request, pedido):
         visual = get_object_or_404(
             VisualItemPedido.objects.filter(item__pedido=pedido),

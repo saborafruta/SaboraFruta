@@ -1611,12 +1611,58 @@ class Op2Tests(TestCase):
         quantidade = self.pedido.historico_criacao.count()
         self.client.post(url, {'acao': 'criacao', 'informacoes_criacao': '   '})
         self.assertEqual(self.pedido.historico_criacao.count(), quantidade)
+        recente = RegistroCriacaoArte.objects.create(
+            pedido=self.pedido, texto='Informação mais recente', criado_por=usuario,
+        )
         detalhe = self.client.get(reverse('moda:op2-detail', args=[self.pedido.pk]))
-        self.assertContains(detalhe, 'Linha do tempo da criação de artes')
+        self.assertContains(detalhe, 'Criação de artes', count=2)
         self.assertContains(detalhe, 'Usuario OP 2')
+        self.assertContains(detalhe, 'Ver mais (1)', count=2)
+        self.assertContains(detalhe, 'value="editar_criacao"')
+        self.assertContains(detalhe, 'value="remover_criacao"')
         html = detalhe.content.decode()
-        self.assertLess(html.index('4. Anexos do cliente e artes'),
-                        html.index('Linha do tempo da criação de artes'))
+        self.assertLess(html.index('Informação mais recente'),
+                        html.index('Conferir cores'))
+        self.assertLess(html.index('Fotos e mockups'), html.rindex('Criação de artes'))
+        self.assertLess(html.rindex('Criação de artes'), html.index('Resumo de conferência'))
+        self.assertEqual(recente, self.pedido.historico_criacao.first())
+
+    def test_criacao_permite_editar_apagar_e_isola_outro_pedido(self):
+        self._login_op2()
+        registro = RegistroCriacaoArte.objects.create(
+            pedido=self.pedido, texto='Texto original', criado_por=self._usuario(),
+        )
+        outro = PedidoProducao.objects.create(filial=self.filial, cliente=self.cliente)
+        registro_outro = RegistroCriacaoArte.objects.create(
+            pedido=outro, texto='Não alterar', criado_por=self._usuario(),
+        )
+        url = reverse('moda:op2-action', args=[self.pedido.pk])
+
+        resposta = self.client.post(url, {
+            'acao': 'editar_criacao', 'registro_id': registro.pk,
+            'informacoes_criacao': 'Texto corrigido',
+        })
+        self.assertEqual(resposta.status_code, 302)
+        registro.refresh_from_db()
+        self.assertEqual(registro.texto, 'Texto corrigido')
+        self.client.post(url, {
+            'acao': 'editar_criacao', 'registro_id': registro.pk,
+            'informacoes_criacao': '   ',
+        })
+        registro.refresh_from_db()
+        self.assertEqual(registro.texto, 'Texto corrigido')
+        for acao in ('editar_criacao', 'remover_criacao'):
+            resposta = self.client.post(url, {
+                'acao': acao, 'registro_id': registro_outro.pk,
+                'informacoes_criacao': 'Inválido',
+            })
+            self.assertEqual(resposta.status_code, 404)
+        registro_outro.refresh_from_db()
+        self.assertEqual(registro_outro.texto, 'Não alterar')
+        self.client.post(url, {
+            'acao': 'remover_criacao', 'registro_id': registro.pk,
+        })
+        self.assertFalse(RegistroCriacaoArte.objects.filter(pk=registro.pk).exists())
 
     def test_descricao_visual_edita_limpa_e_valida_sem_mudar_imagem(self):
         self._login_op2()

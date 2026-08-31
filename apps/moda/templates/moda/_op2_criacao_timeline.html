@@ -1,0 +1,18 @@
+<section class="card p-3 op2-art-card" x-data="{aberto:false,editando:null}">
+  <div class="flex items-start justify-between gap-2">
+    <div><h2 class="font-bold text-sm">Criação de artes</h2><p class="text-xs opacity-60">Informações combinadas com o cliente.</p></div>
+    {% if historico_criacao|length %}<span class="op2-chip">{{ historico_criacao|length }}</span>{% endif %}
+  </div>
+  <form method="post" action="{% url 'moda:op2-action' pedido.pk %}" class="mt-2">{% csrf_token %}<input type="hidden" name="acao" value="criacao"><textarea name="informacoes_criacao" rows="2" class="form-input w-full text-xs" required placeholder="Escreva uma nova informação..."></textarea><div class="text-right mt-1"><button class="btn-primary text-xs">Registrar</button></div></form>
+  <div class="op2-art-history op2-art-history-compact">
+    {% for registro in historico_criacao %}
+      <article class="op2-art-event op2-art-event-compact" x-show="aberto || {{ forloop.counter }} <= 2" x-cloak>
+        <div class="flex items-center justify-between gap-2"><strong class="text-xs truncate">{% if registro.criado_por %}{{ registro.criado_por.nome|default:registro.criado_por.email }}{% else %}Registro anterior{% endif %}</strong><time class="text-xs opacity-60 shrink-0" datetime="{{ registro.criado_em|date:'c' }}">{{ registro.criado_em|date:"d/m H:i" }}</time></div>
+        <p class="text-xs whitespace-pre-line mt-1" x-show="editando!=={{ registro.pk }}">{{ registro.texto }}</p>
+        <div class="flex gap-2 mt-2" x-show="editando!=={{ registro.pk }}"><button type="button" class="text-xs font-bold" style="color:#3b82f6" @click="editando={{ registro.pk }}">Editar</button><form method="post" action="{% url 'moda:op2-action' pedido.pk %}" onsubmit="return confirm('Apagar esta informação da linha do tempo?')">{% csrf_token %}<input type="hidden" name="acao" value="remover_criacao"><input type="hidden" name="registro_id" value="{{ registro.pk }}"><button class="text-xs font-bold" style="color:#ef4444">Apagar</button></form></div>
+        <form x-show="editando==={{ registro.pk }}" x-cloak method="post" action="{% url 'moda:op2-action' pedido.pk %}" class="mt-2">{% csrf_token %}<input type="hidden" name="acao" value="editar_criacao"><input type="hidden" name="registro_id" value="{{ registro.pk }}"><textarea name="informacoes_criacao" rows="2" class="form-input w-full text-xs" required>{{ registro.texto }}</textarea><div class="flex justify-end gap-2 mt-1"><button type="button" class="btn-secondary text-xs" @click="editando=null">Cancelar</button><button class="btn-primary text-xs">Salvar</button></div></form>
+      </article>
+    {% empty %}<p class="text-xs opacity-60">Nenhuma informação registrada.</p>{% endfor %}
+  </div>
+  {% if historico_criacao|length > 2 %}<button type="button" class="op2-art-more" @click="aberto=!aberto" x-text="aberto?'Ver menos':'Ver mais ({{ historico_criacao|length|add:'-2' }})'"></button>{% endif %}
+</section>
