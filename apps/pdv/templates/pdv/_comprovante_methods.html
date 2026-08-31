@@ -13,6 +13,10 @@
       return Number(valor || 0).toLocaleString('pt-BR', { minimumFractionDigits:2, maximumFractionDigits:2 });
     },
 
+    telefoneClienteCupom(cliente = {}) {
+      return [cliente?.celular, cliente?.telefone].map(valor => String(valor || '').trim()).find(Boolean) || '';
+    },
+
     descontoItemCupom(item) {
       const bruto = Math.round(Number(item.quantidade || 0) * Number(item.valor_unitario || 0) * 100);
       const valor = item.desconto_valor != null
@@ -161,6 +165,7 @@ ${filialTelefone ? `<div class="sub">Tel: ${esc(filialTelefone)}</div>` : ''}
 <div class="line"><span>Data</span><strong>${esc(venda.data_venda)}</strong></div>
 <div class="line"><span>Operador</span><strong>${esc(venda.operador)}</strong></div>
 <div class="line"><span>Cliente</span><strong>${esc(venda.cliente_nome)}</strong></div>
+${this.telefoneClienteCupom({celular:venda.cliente_celular,telefone:venda.cliente_telefone}) ? `<div class="muted" style="overflow-wrap:anywhere"><strong>Telefone:</strong> ${esc(this.telefoneClienteCupom({celular:venda.cliente_celular,telefone:venda.cliente_telefone}))}</div>` : ''}
 ${venda.cliente_cpf_cnpj ? `<div class="line"><span>CPF/CNPJ</span><strong>${esc(venda.cliente_cpf_cnpj)}</strong></div>` : ''}
 ${(() => { const e = venda.cliente_endereco || {}; if (!e.rua) return ''; const l1 = e.rua + (e.numero ? ', ' + e.numero : '') + (e.complemento ? ' - ' + e.complemento : ''); const cidadeUf = [e.cidade, e.uf].filter(Boolean).join('/'); const l2 = [e.bairro, cidadeUf, e.cep].filter(Boolean).join(' - '); return `<div class="muted" style="margin:3px 0 0;overflow-wrap:anywhere"><strong>Endereço:</strong> ${esc(l1)}${l2 ? ' - ' + esc(l2) : ''}</div>`; })()}
 ${documento}<hr class="sep"><table><tbody>${itens}</tbody></table><hr class="sep">

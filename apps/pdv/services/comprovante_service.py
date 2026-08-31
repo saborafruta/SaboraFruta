@@ -59,6 +59,7 @@ def dados_comprovante(venda):
         'numero': f'{venda.numero_venda:06d}',
         'data': timezone.localtime(venda.data_venda).strftime('%d/%m/%Y %H:%M'),
         'cliente': venda.cliente.razao_social if venda.cliente else 'Consumidor Final',
+        'cliente_telefone': ((venda.cliente.celular or '').strip() or (venda.cliente.telefone or '').strip()) if venda.cliente else '',
         'itens': itens, 'resumo': resumo, 'pagamentos': pagamentos,
     }
 
@@ -101,7 +102,10 @@ def gerar_pdf(venda):
 
     blocos.extend([texto(cupom['empresa'], titulo), Spacer(1, 4*mm),
                    par('Venda', '#' + cupom['numero']), par('Data', cupom['data']),
-                   par('Cliente', cupom['cliente']), Spacer(1, 3*mm)])
+                   par('Cliente', cupom['cliente'])])
+    if cupom['cliente_telefone']:
+        blocos.append(texto('Telefone: ' + cupom['cliente_telefone']))
+    blocos.append(Spacer(1, 3*mm))
     for item in cupom['itens']:
         blocos.extend([texto(item['nome']),
                        par(f"{item['quantidade']} {item['unidade']} × R$ {item['unitario']}", f"R$ {item['total']}")])
@@ -115,7 +119,7 @@ def gerar_pdf(venda):
         blocos.append(par(rotulo, exibicao))
     blocos.extend([Spacer(1, 4*mm), texto('Este comprovante não é um documento fiscal.')])
     altura_observacoes = sum(min(50, 8 + len(item['observacao']) / 12 * 3.8) for item in cupom['itens'] if item['observacao'])
-    altura = max(150, min(400, 90 + len(cupom['itens'])*24 + len(cupom['pagamentos'])*10 + altura_observacoes))
+    altura = max(150, min(400, 90 + len(cupom['itens'])*24 + len(cupom['pagamentos'])*10 + altura_observacoes + (8 if cupom['cliente_telefone'] else 0)))
     doc = SimpleDocTemplate(output, pagesize=(80*mm, altura*mm),
                            leftMargin=6*mm, rightMargin=6*mm, topMargin=8*mm, bottomMargin=8*mm,
                            title=f"Comprovante #{cupom['numero']}", author=cupom['empresa'])

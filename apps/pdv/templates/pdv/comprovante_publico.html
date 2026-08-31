@@ -23,6 +23,7 @@
     <div class="linha"><span>Venda</span><strong>#{{ cupom.numero }}</strong></div>
     <div class="linha"><span>Data</span><span>{{ cupom.data }}</span></div>
     <div class="linha"><span>Cliente</span><span>{{ cupom.cliente }}</span></div>
+    {% if cupom.cliente_telefone %}<div class="linha"><span>Telefone</span><span>{{ cupom.cliente_telefone }}</span></div>{% endif %}
     <section aria-label="Itens">{% for item in cupom.itens %}<div class="item">
       <strong>{{ item.nome }}</strong><div class="linha"><span>{{ item.quantidade }} {{ item.unidade }} × R$ {{ item.unitario }}</span><strong class="valor">R$ {{ item.total }}</strong></div>
       {% if item.tem_desconto %}<div class="desconto">Desconto {{ item.percentual }}%: − R$ {{ item.desconto }}</div>{% endif %}

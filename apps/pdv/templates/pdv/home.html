@@ -4803,6 +4803,8 @@ function pdv() {
             id: d.cliente_id,
             nome: d.cliente_nome,
             cpf_cnpj: d.cliente_cpf_cnpj,
+            celular: d.cliente_celular || '',
+            telefone: d.cliente_telefone || '',
             endereco_entrega: endCli,
             tem_endereco: !!(endCli.rua && endCli.bairro),
           };
@@ -4968,7 +4970,7 @@ ${filialCidade ? `<div class="sub">${filialCidade}${filialUf ? ' - '+filialUf : 
 ${filialTelefone ? `<div class="sub">Tel: ${filialTelefone}</div>` : ''}
 <div class="sub">${agora} &bull; ${numero}</div>
 <div class="sub">Cliente: <strong>${v.cliente ? v.cliente.nome : 'Consumidor Final'}</strong></div>
-${v.cliente && (v.cliente.celular || v.cliente.telefone) ? `<div class="sub">Tel: ${v.cliente.celular || v.cliente.telefone}</div>` : ''}
+${this.telefoneClienteCupom(v.cliente) ? `<div class="sub">Telefone: ${this.escapeHtml(this.telefoneClienteCupom(v.cliente))}</div>` : ''}
 ${v.cliente && v.cliente.cpf_cnpj ? `<div class="sub">CPF/CNPJ: ${v.cliente.cpf_cnpj}</div>` : ''}
 ${(() => { const e = v.delivery ? (v.endereco_entrega || {}) : (v.cliente?.endereco_entrega || {}); if (!e || !e.rua) return ''; const l1 = e.rua + (e.numero ? ', '+e.numero : '') + (e.complemento ? ' - '+e.complemento : ''); const cidadeUf = [e.cidade, e.uf].filter(Boolean).join('/'); const l2 = [e.bairro, cidadeUf, e.cep].filter(Boolean).join(' - '); const obs = e.observacao || ''; return '<div class="sub">'+(v.delivery ? 'Entrega: ' : 'End: ')+l1+'</div>'+(l2 ? '<div class="sub">'+l2+'</div>' : '')+(obs ? '<div class="sub">Obs: '+obs+'</div>' : ''); })()}
 ${(v.observacao && v.observacao.trim()) ? `<div class="sub">Obs: ${v.observacao.trim()}</div>` : ''}
@@ -5052,6 +5054,7 @@ ${pgtoHtml ? `<hr class="sep">${pgtoHtml}` : ''}
       </style></head><body><div class="receipt">
         <div class="center"><div class="title">${esc(filial)}</div>${filialLinha1 ? `<div class="sub">${esc(filialLinha1)}</div>` : ''}${filialLinha2 ? `<div class="sub">${esc(filialLinha2)}</div>` : ''}${filialTelefone ? `<div class="sub">Tel: ${esc(filialTelefone)}</div>` : ''}<div class="sub">${esc(agora)}${numero ? ' - '+esc(numero) : ''}</div></div>
         <hr class="sep"><div class="sub">Cliente: <strong>${esc(cliente.nome || 'Consumidor Final')}</strong></div>${cliente.cpf_cnpj ? `<div class="sub">CPF/CNPJ: ${esc(cliente.cpf_cnpj)}</div>` : ''}${endereco1 ? `<div class="sub">${v.delivery ? 'Entrega' : 'Endereco'}: ${esc(endereco1)}</div>` : ''}${endereco2 ? `<div class="sub">${esc(endereco2)}</div>` : ''}${v.observacao ? `<div class="sub">Obs: ${esc(v.observacao)}</div>` : ''}
+        ${this.telefoneClienteCupom(cliente) ? `<div class="sub" style="overflow-wrap:anywhere">Telefone: ${esc(this.telefoneClienteCupom(cliente))}</div>` : ''}
         <hr class="sep"><table><thead><tr><th>Qtd</th><th>Produto</th><th>Unit.</th><th>Total</th></tr></thead><tbody>${itens}</tbody></table>
         <hr class="sep"><div class="line muted"><span>Qtd total de itens</span><span>${totalItens % 1 === 0 ? totalItens : totalItens.toFixed(2).replace('.',',')}</span></div>${this.descontosResumoHtml(v,fmt)}${parseFloat(v.acrescimo || 0) > 0 ? `<div class="line"><span>Acrescimo</span><span>+ R$ ${fmt(v.acrescimo)}</span></div>` : ''}<div class="line total"><span>TOTAL</span><span>R$ ${fmt(v.total)}</span></div>${pagamentos ? `<hr class="sep">${pagamentos}` : ''}
         <hr class="sep"><div class="center footer">Obrigado pela preferencia!<br>Este nao e um documento fiscal.</div>
@@ -5188,6 +5191,8 @@ ${pgtoHtml ? `<hr class="sep">${pgtoHtml}` : ''}
       sep();
       const cliente = v.cliente || {};
       text('Cliente: ' + (cliente.nome || 'Consumidor Final'), { size: 9, bold: true });
+      const telefoneCliente = this.telefoneClienteCupom(cliente);
+      if (telefoneCliente) text('Telefone: ' + telefoneCliente, { size: 9 });
       if (cliente.cpf_cnpj) text('CPF/CNPJ: ' + cliente.cpf_cnpj, { size: 8 });
       const end = v.delivery ? (v.endereco_entrega || {}) : (cliente.endereco_entrega || {});
       if (end && end.rua) {
