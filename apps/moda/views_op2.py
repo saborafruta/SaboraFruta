@@ -121,6 +121,21 @@ def _clientes_adicionais(request, cliente_principal):
     return [por_id[pk] for pk in ids]
 
 
+def _separar_contatos_observacoes(texto):
+    """Recupera o bloco de contatos já usado pela OP, sem mudar o banco."""
+    texto = (texto or '').strip()
+    livre, separador, bloco = texto.rpartition('Contatos extras:\n')
+    if not separador:
+        return texto, []
+    contatos = []
+    for linha in bloco.splitlines():
+        if not linha.startswith('- ') or ':' not in linha:
+            return texto, []
+        nome, _, telefone = linha[2:].partition(':')
+        contatos.append({'nome': nome.strip(), 'telefone': telefone.strip()})
+    return livre.rstrip(), contatos
+
+
 def _observacoes_pedido(request):
     observacoes = (request.POST.get('observacoes') or '').strip()
     extras = []
@@ -812,10 +827,13 @@ class Op2DetailView(ModaBaseView):
             status_pagamento = FinanceiroPedidoService.situacao_pagamento(
                 **resumo_financeiro,
             )
+        observacoes_livres, contatos = _separar_contatos_observacoes(pedido.observacoes)
         return render(request, 'moda/op2_detail.html', {
             'title': f'OP 2.0 #{pedido.numero:06d}',
             'pedido': pedido,
             'cliente_atual_json': _cliente_json(pedido.cliente),
+            'observacoes_livres': observacoes_livres,
+            'contatos_json': contatos,
             'clientes_adicionais_json': [
                 _cliente_json(cliente) for cliente in pedido.clientes_adicionais.all()
             ],

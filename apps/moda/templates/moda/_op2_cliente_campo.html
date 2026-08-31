@@ -1,5 +1,6 @@
 <input type="hidden" name="cliente" :value="clienteId">
 <template x-for="cliente in clientesAdicionais" :key="cliente.id"><input type="hidden" name="clientes_adicionais" :value="cliente.id"></template>
+<div class="mb-2" x-show="adicionandoCliente && clienteId && clienteAtual" x-cloak><span class="op2-chip"><strong>Cliente principal:&nbsp;</strong><span x-text="clienteAtual?.nome || ''"></span></span></div>
 <label class="block"><span class="op2-label" x-text="adicionandoCliente?'Pesquisar cliente adicional':'Pesquisar cliente principal'"></span>
   <input x-ref="buscaCliente" type="search" x-model="buscaCliente" @input="digitarCliente()" @focus="if(!clienteId || adicionandoCliente) buscarClientes()" class="form-input w-full" autocomplete="off" placeholder="Digite nome, documento ou telefone">
 </label>

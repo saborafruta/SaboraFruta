@@ -83,7 +83,7 @@ def _estilos():
 
 def _tabela(
     dados, larguras, cabecalho=True, cor_cabecalho=AZUL,
-    fundo_linha=FUNDO, arredondada=False,
+    fundo_linha=FUNDO, arredondada=False, padding_vertical=3,
 ):
     """Tabela no padrão já usado nos outros PDFs do sistema."""
     estilo = [
@@ -92,8 +92,8 @@ def _tabela(
         ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
         ('LEFTPADDING', (0, 0), (-1, -1), 4),
         ('RIGHTPADDING', (0, 0), (-1, -1), 4),
-        ('TOPPADDING', (0, 0), (-1, -1), 3),
-        ('BOTTOMPADDING', (0, 0), (-1, -1), 3),
+        ('TOPPADDING', (0, 0), (-1, -1), padding_vertical),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), padding_vertical),
     ]
     if cabecalho:
         estilo += [
@@ -117,15 +117,36 @@ def _tabela(
     return tabela
 
 
+def _estilos_leitura(e, fator=1):
+    """Fonte de leitura primeiro; compactação só depois de medir a página."""
+    resultado = dict(e)
+    for chave, fonte in (
+        ('normal', 9.5), ('celula', 9.5), ('pequeno', 8.5),
+        ('observacao_produto', 9.5),
+    ):
+        resultado[chave] = ParagraphStyle(
+            f'{chave}_leitura_{fator}', parent=e[chave],
+            fontSize=fonte * fator, leading=fonte * 1.22 * fator,
+        )
+    resultado['pessoa_compacta'] = resultado['celula']
+    # Faixas menores deixam a altura útil para os dados, não para títulos.
+    resultado['altura_secao'] = 5 * mm
+    resultado['padding_tabela'] = 1.2
+    resultado['padding_observacao'] = 2
+    return resultado
+
+
 def _barra_secao(
     numero, titulo, e, largura_util, cor=AZUL, cor_clara=AZUL_CLARO,
     arredondada=False,
 ):
     """Faixa compacta usada como hierarquia visual em cada bloco da OP."""
     titulo = Paragraph(esc(titulo), e['secao'])
+    largura_titulo = largura_util - (10 * mm if numero is not None else 0) - 9
+    altura_titulo = max(e.get('altura_secao', 9 * mm), titulo.wrap(largura_titulo, 1000)[1] + 2)
     if numero is None:
         tabela = Table(
-            [[titulo]], colWidths=[largura_util], rowHeights=[9 * mm],
+            [[titulo]], colWidths=[largura_util], rowHeights=[altura_titulo],
             cornerRadii=[7, 7, 7, 7] if arredondada else None,
         )
         estilo = [
@@ -137,7 +158,7 @@ def _barra_secao(
     else:
         tabela = Table(
             [[Paragraph(f'{int(numero):02d}', e['secao_numero']), titulo]],
-            colWidths=[10 * mm, largura_util - 10 * mm], rowHeights=[9 * mm],
+            colWidths=[10 * mm, largura_util - 10 * mm], rowHeights=[altura_titulo],
             cornerRadii=[7, 7, 7, 7] if arredondada else None,
         )
         estilo = [
@@ -283,7 +304,7 @@ class PedidoPdfService:
             for indice, grupo in enumerate(grupos):
                 if len(grupo.itens) > 1:
                     elementos.append(cls._pagina_grupo(
-                        pedido, grupo, e, LARGURA_UTIL, altura_util,
+                        pedido, grupo, e, LARGURA_UTIL - 12, altura_util,
                         incluir_observacoes=indice == 0,
                     ))
                     if indice < len(grupos) - 1:
@@ -346,10 +367,18 @@ class PedidoPdfService:
     def _coluna_producao(cls, pedido, item, e, largura, altura, medidor):
         """Reserva espaço para todos os nomes, sem encolher a coluna da arte."""
         pessoas = list(item.individuais.all())
+        e = _estilos_leitura(e)
         produto = cls._cliente(pedido, e, largura)
         produto += cls._item(pedido, item, e, 0, largura_util=largura)
+        altura_produto_maxima = altura
+        if pessoas:
+            alturas_listas = []
+            for colunas in range(1, min(3, len(pessoas)) + 1):
+                lista = cls._personalizacao_item(item, e, largura, pessoas=pessoas, colunas=colunas)
+                alturas_listas.append(sum(bloco.wrapOn(medidor, largura, altura)[1] for bloco in lista))
+            altura_produto_maxima = max(altura * .35, altura - min(alturas_listas) - 2)
         produto_frame = KeepInFrame(
-            largura, altura * .70 if pessoas else altura, produto, mode='shrink',
+            largura, altura_produto_maxima, produto, mode='shrink',
         )
         _, altura_produto = produto_frame.wrapOn(medidor, largura, altura)
         if not pessoas:
@@ -382,7 +411,7 @@ class PedidoPdfService:
                         fator, frame = meio, tentativa
                     else:
                         alto = meio
-            fonte = e['celula'].fontSize if colunas == 1 else 6.3
+            fonte = e['celula'].fontSize
             # Nomes longos podem ficar melhores em duas colunas que em
             # três. Escolhemos pela fonte efetiva depois da medição real,
             # não só pela quantidade de pessoas. Empate: menos colunas.
@@ -391,39 +420,72 @@ class PedidoPdfService:
         return [produto_frame, max(candidatos, key=lambda c: c[:2])[2]]
 
     @classmethod
+    def _informacoes_grupo(cls, pedido, grupo, e, largura, altura, incluir_observacoes):
+        """Compara uma, duas e três colunas sem encolher a largura da ficha."""
+        pessoas_por_item = [(item, list(item.individuais.all())) for item in grupo.itens]
+        medidor = Canvas(BytesIO())
+
+        def montar(colunas, fator):
+            leitura = _estilos_leitura(e, fator)
+            blocos = cls._cliente(pedido, leitura, largura)
+            blocos += cls._item(
+                pedido, grupo.itens[0], leitura, 0, largura_util=largura,
+                titulo=f'PRODUTO - {grupo.nome}', incluir_grade=False,
+                excluir_campos=('tipo impressão', 'tipo impressao', 'tipo de impressão'),
+            )
+            blocos += cls._grades_grupo(grupo, leitura, largura)
+            for item, pessoas in pessoas_por_item:
+                if pessoas:
+                    blocos += cls._personalizacao_item(
+                        item, leitura, largura, pessoas=pessoas,
+                        cor=colors.HexColor(item.grade_cor),
+                        cor_clara=colors.HexColor(item.grade_fundo),
+                        colunas=min(colunas, len(pessoas)),
+                    )
+            if incluir_observacoes:
+                blocos += cls._observacoes_op(pedido, leitura, largura)
+            frame = KeepInFrame(largura, altura, blocos, mode='shrink', hAlign='LEFT')
+            frame.wrapOn(medidor, largura, altura)
+            return frame
+
+        candidatos = []
+        for colunas in (1, 2, 3):
+            fator = 1
+            frame = montar(colunas, fator)
+            if getattr(frame, '_scale', 1) > 1:
+                baixo, alto = .35, 1
+                fator, frame = baixo, montar(colunas, baixo)
+                for _ in range(8):
+                    meio = (baixo + alto) / 2
+                    tentativa = montar(colunas, meio)
+                    if getattr(tentativa, '_scale', 1) <= 1:
+                        baixo = meio
+                        fator, frame = meio, tentativa
+                    else:
+                        alto = meio
+            candidatos.append((fator / getattr(frame, '_scale', 1), -colunas, frame))
+            if fator == 1:
+                break  # Já cabe com a fonte máxima e o menor número de colunas.
+        return max(candidatos, key=lambda candidato: candidato[:2])[2]
+
+    @classmethod
     def _pagina_grupo(
         cls, pedido, grupo, e, largura, altura, *, incluir_observacoes=False,
     ):
         """Informações à esquerda e imagens ocupando toda a coluna direita."""
-        base = grupo.itens[0]
-        largura_esquerda = largura * .49
-        largura_artes = largura - largura_esquerda - 5 * mm
-        informacoes = cls._cliente(pedido, e, largura_esquerda)
-        informacoes += cls._item(
-            pedido, base, e, 0, largura_util=largura_esquerda,
-            titulo=f'PRODUTO - {grupo.nome}', incluir_grade=False,
-            excluir_campos=('tipo impressão', 'tipo impressao', 'tipo de impressão'),
+        intervalo = 5 * mm
+        largura_esquerda = (largura - intervalo) / 2
+        largura_artes = largura_esquerda
+        informacoes = cls._informacoes_grupo(
+            pedido, grupo, e, largura_esquerda, altura, incluir_observacoes,
         )
-        informacoes += cls._grades_grupo(grupo, e, largura_esquerda)
-        for item in grupo.itens:
-            cor = colors.HexColor(item.grade_cor)
-            cor_clara = colors.HexColor(item.grade_fundo)
-            pessoas = list(item.individuais.all())
-            if pessoas:
-                informacoes += cls._personalizacao_item(
-                    item, e, largura_esquerda, cor=cor, cor_clara=cor_clara,
-                    pessoas=pessoas, colunas=min(2, len(pessoas)),
-                    fator_fonte=.86,
-                )
-        if incluir_observacoes:
-            informacoes += cls._observacoes_op(pedido, e, largura_esquerda)
         artes = cls._artes_grupo(grupo, e, largura_artes, altura)
         if not artes:
             artes = [Paragraph('Nenhuma imagem anexada ao produto.', e['pequeno'])]
         pagina = Table([[
-            KeepInFrame(largura_esquerda, altura, informacoes, mode='shrink'),
+            informacoes,
             KeepInFrame(largura_artes, altura, artes, mode='shrink'),
-        ]], colWidths=[largura_esquerda, largura_artes])
+        ]], colWidths=[largura_esquerda + intervalo, largura_artes])
         pagina.setStyle(TableStyle([
             ('VALIGN', (0, 0), (-1, -1), 'TOP'),
             ('LEFTPADDING', (0, 0), (0, 0), 0),
@@ -433,7 +495,7 @@ class PedidoPdfService:
             ('TOPPADDING', (0, 0), (-1, -1), 0),
             ('BOTTOMPADDING', (0, 0), (-1, -1), 0),
         ]))
-        return KeepInFrame(largura, altura, [pagina], mode='shrink')
+        return KeepInFrame(largura, altura, [pagina], mode='shrink', hAlign='LEFT')
 
     @staticmethod
     def _grades_grupo(grupo, e, largura):
@@ -468,8 +530,8 @@ class PedidoPdfService:
             ('GRID', (0, 0), (-1, -1), .35, BORDA),
             ('LEFTPADDING', (0, 0), (-1, -1), 3),
             ('RIGHTPADDING', (0, 0), (-1, -1), 3),
-            ('TOPPADDING', (0, 0), (-1, -1), 3),
-            ('BOTTOMPADDING', (0, 0), (-1, -1), 3),
+            ('TOPPADDING', (0, 0), (-1, -1), e.get('padding_tabela', 3)),
+            ('BOTTOMPADDING', (0, 0), (-1, -1), e.get('padding_tabela', 3)),
         ]
         for linha, item in enumerate(grupo.itens, start=1):
             quantidades = {celula.tamanho_id: celula.quantidade for celula in item.grade.all()}
@@ -633,13 +695,13 @@ class PedidoPdfService:
              Paragraph(esc(whatsapp) or '—', e['celula']),
              Paragraph('<b>E-mail</b>', e['celula']),
              Paragraph(esc(getattr(c, 'email', '')) or '—', e['celula'])])
-        largura_rotulo = min(22 * mm, largura_util * .22)
+        largura_rotulo = min((26 if 'padding_tabela' in e else 22) * mm, largura_util * .22)
         largura_valor = largura_util / 2 - largura_rotulo
         larguras = [largura_rotulo, largura_valor] * 2
 
         return [
             _barra_secao(1, 'INFORMAÇÕES DOS CLIENTES' if plural else 'INFORMAÇÕES DO CLIENTE', e, largura_util),
-            Spacer(1, 3), _tabela(dados, larguras, cabecalho=False),
+            Spacer(1, 3), _tabela(dados, larguras, cabecalho=False, padding_vertical=e.get('padding_tabela', 3)),
             Spacer(1, 4),
         ]
 
@@ -794,12 +856,13 @@ class PedidoPdfService:
             while len(linha) < pares_por_linha * 2:
                 linha += ['', '']
             dados.append(linha)
-        largura_rotulo = 22 * mm
+        largura_rotulo = (26 if 'padding_tabela' in e else 22) * mm
         blocos.append(_tabela(
             dados,
             [largura_rotulo, largura_util / pares_por_linha - largura_rotulo]
             * pares_por_linha,
             cabecalho=False,
+            padding_vertical=e.get('padding_tabela', 3),
         ))
 
         if observacao:
@@ -987,9 +1050,12 @@ class PedidoPdfService:
             # Leitura vertical: 1, 2, 3... de cima para baixo; depois
             # continua no alto da coluna seguinte. Cada bloco repete seu
             # cabeçalho e mantém nome/número/tamanho juntos.
+            base_pessoa = e.get('pessoa_compacta')
+            fonte = base_pessoa.fontSize if base_pessoa else 6.3
+            entrelinha = base_pessoa.leading if base_pessoa else 7.5
             estilo = ParagraphStyle(
                 'pessoa_compacta', parent=e['celula'],
-                fontSize=6.3 * fator_fonte, leading=7.5 * fator_fonte,
+                fontSize=fonte * fator_fonte, leading=entrelinha * fator_fonte,
             )
             largura_bloco = (largura_util - (colunas - 1) * 2 * mm) / colunas
             larguras = []
@@ -1021,12 +1087,12 @@ class PedidoPdfService:
                 dados.append(celulas)
             tabela = _tabela(dados, larguras, cor_cabecalho=cor, fundo_linha=cor_clara)
             tabela.setStyle(TableStyle([
-                ('FONTSIZE', (0, 0), (-1, -1), 6.3 * fator_fonte),
-                ('LEADING', (0, 0), (-1, -1), 7.5 * fator_fonte),
+                ('FONTSIZE', (0, 0), (-1, -1), fonte * fator_fonte),
+                ('LEADING', (0, 0), (-1, -1), entrelinha * fator_fonte),
                 ('LEFTPADDING', (0, 0), (-1, -1), 2),
                 ('RIGHTPADDING', (0, 0), (-1, -1), 2),
-                ('TOPPADDING', (0, 0), (-1, -1), 1.5 * fator_fonte),
-                ('BOTTOMPADDING', (0, 0), (-1, -1), 1.5 * fator_fonte),
+                ('TOPPADDING', (0, 0), (-1, -1), e.get('padding_tabela', 1.5) * fator_fonte),
+                ('BOTTOMPADDING', (0, 0), (-1, -1), e.get('padding_tabela', 1.5) * fator_fonte),
             ] + [
                 ('BACKGROUND', (coluna * 5 - 1, 0), (coluna * 5 - 1, -1), colors.white)
                 for coluna in range(1, colunas)
@@ -1059,8 +1125,8 @@ class PedidoPdfService:
         tabela.setStyle(TableStyle([
             ('FONTSIZE', (0, 0), (-1, -1), estilo.fontSize),
             ('LEADING', (0, 0), (-1, -1), estilo.leading),
-            ('TOPPADDING', (0, 0), (-1, -1), 3 * fator_fonte),
-            ('BOTTOMPADDING', (0, 0), (-1, -1), 3 * fator_fonte),
+            ('TOPPADDING', (0, 0), (-1, -1), e.get('padding_tabela', 3) * fator_fonte),
+            ('BOTTOMPADDING', (0, 0), (-1, -1), e.get('padding_tabela', 3) * fator_fonte),
         ]))
         return [
             Spacer(1, 5),
@@ -1100,8 +1166,8 @@ class PedidoPdfService:
             ('VALIGN', (0, 0), (-1, -1), 'TOP'),
             ('LEFTPADDING', (0, 0), (-1, -1), 6),
             ('RIGHTPADDING', (0, 0), (-1, -1), 6),
-            ('TOPPADDING', (0, 0), (-1, -1), 4),
-            ('BOTTOMPADDING', (0, 0), (-1, -1), 4),
+            ('TOPPADDING', (0, 0), (-1, -1), e.get('padding_observacao', 4)),
+            ('BOTTOMPADDING', (0, 0), (-1, -1), e.get('padding_observacao', 4)),
         ]))
         return [Spacer(1, 5), quadro]
 

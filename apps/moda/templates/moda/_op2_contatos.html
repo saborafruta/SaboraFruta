@@ -1,0 +1,16 @@
+<div class="md:col-span-2 min-w-0">
+  <div class="grid grid-cols-2 gap-3 mb-2"><div></div><button type="button" class="btn-secondary text-xs justify-self-start" @click="contatos.push({nome:'',telefone:''})">+ Contato</button></div>
+  <div class="grid grid-cols-2 gap-3">
+    <label class="min-w-0"><span class="op2-label block">Responsável</span><input name="contato_nome" x-model="contatoNome" class="form-input w-full" placeholder="Nome do responsável"></label>
+    <label class="min-w-0"><span class="op2-label block">WhatsApp</span><input name="contato_telefone" x-model="contatoTelefone" class="form-input w-full" placeholder="WhatsApp / telefone"></label>
+  </div>
+  <template x-for="(contato,idx) in contatos" :key="idx">
+    <div class="mt-3">
+      <div class="grid grid-cols-2 gap-3">
+        <label class="min-w-0"><span class="op2-label block">Responsável</span><input name="contato_extra_nome" x-model="contato.nome" class="form-input w-full" placeholder="Nome do responsável"></label>
+        <label class="min-w-0"><span class="op2-label block">WhatsApp / telefone</span><input name="contato_extra_telefone" x-model="contato.telefone" class="form-input w-full" placeholder="WhatsApp / telefone"></label>
+      </div>
+      <button type="button" class="text-xs mt-1" style="color:#ef4444" @click="contatos.splice(idx,1)">Remover contato</button>
+    </div>
+  </template>
+</div>

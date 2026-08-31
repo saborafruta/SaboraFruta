@@ -57,11 +57,9 @@
           <h2 class="font-bold mb-2">1. Clientes</h2>
           <div class="grid md:grid-cols-4 gap-2 op2-grid-compact">
             <div class="md:col-span-2">{% include "moda/_op2_cliente_campo.html" %}</div>
-            <label><span class="op2-label">Responsável</span><input name="contato_nome" x-model="contatoNome" class="form-input w-full" placeholder="Nome do responsável"></label>
-            <label><span class="op2-label">WhatsApp</span><input name="contato_telefone" x-model="contatoTelefone" class="form-input w-full" placeholder="55 84 99999-0000"></label>
+            {% include "moda/_op2_contatos.html" %}
             <label><span class="op2-label">Data do pedido</span><input type="date" name="data_pedido" value="{{ hoje|date:'Y-m-d' }}" class="form-input w-full" required></label>
             <label><span class="op2-label">Previsão de entrega <span class="normal-case opacity-60">(opcional)</span></span><input type="date" name="data_prevista_entrega" value="" class="form-input w-full"><small class="block mt-1 opacity-60">Deixe vazio quando a data ainda não estiver combinada.</small></label>
-            <div class="md:col-span-4 space-y-2"><div class="flex items-center justify-between"><span class="op2-label">Outros contatos</span><button type="button" class="btn-secondary text-xs" @click="contatos.push({nome:'',telefone:''})">+ Contato</button></div><template x-for="(contato,idx) in contatos" :key="idx"><div class="grid md:grid-cols-[1fr_1fr_auto] gap-2"><input name="contato_extra_nome" x-model="contato.nome" class="form-input" placeholder="Nome do contato extra"><input name="contato_extra_telefone" x-model="contato.telefone" class="form-input" placeholder="WhatsApp / telefone extra"><button type="button" class="btn-secondary" @click="contatos.splice(idx,1)">Remover</button></div></template></div>
           </div>
         </section>
         <section class="op2-band">

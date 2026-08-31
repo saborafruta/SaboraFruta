@@ -45,6 +45,34 @@ class Op2ClientesTests(TestCase):
         self.assertEqual(resposta.json()['campos']['razao_social'], 'Cliente inicial')
         self.assertEqual(resposta.json()['campos']['cidade'], 'Natal')
 
+    def test_cliente_principal_permanece_visivel_durante_adicao(self):
+        for url in (reverse('moda:op2-create'), reverse('moda:op2-detail', args=[self.pedido.pk])):
+            resposta = self.client.get(url)
+            self.assertContains(resposta, 'x-show="adicionandoCliente && clienteId && clienteAtual"')
+            self.assertContains(resposta, 'Cliente principal:')
+            self.assertContains(resposta, 'contatos.push({nome:\'\',telefone:\'\'})')
+            self.assertContains(resposta, 'name="contato_extra_nome"')
+            self.assertContains(resposta, 'name="contato_extra_telefone"')
+
+    def test_contatos_extras_reabrem_separados_e_nao_duplicam_ao_salvar(self):
+        self.pedido.observacoes = 'Conferir gola.\n\nContatos extras:\n- Maria: 84999990000'
+        self.pedido.save()
+        url = reverse('moda:op2-detail', args=[self.pedido.pk])
+        resposta = self.client.get(url)
+        self.assertEqual(resposta.context['observacoes_livres'], 'Conferir gola.')
+        self.assertEqual(resposta.context['contatos_json'], [{'nome': 'Maria', 'telefone': '84999990000'}])
+        dados = {'acao': 'cabecalho', 'cliente': self.cliente.pk, 'data_pedido': '2026-08-31', 'observacoes': 'Conferir gola.', 'contato_extra_nome': ['Maria', 'João'], 'contato_extra_telefone': ['84999990000', '84888880000']}
+        resposta = self.client.post(reverse('moda:op2-action', args=[self.pedido.pk]), dados)
+        self.assertEqual(resposta.status_code, 302)
+        self.pedido.refresh_from_db()
+        self.assertEqual(self.pedido.observacoes.count('Contatos extras:'), 1)
+        self.assertIn('- João: 84888880000', self.pedido.observacoes)
+        dados.pop('contato_extra_nome')
+        dados.pop('contato_extra_telefone')
+        self.client.post(reverse('moda:op2-action', args=[self.pedido.pk]), dados)
+        self.pedido.refresh_from_db()
+        self.assertEqual(self.pedido.observacoes, 'Conferir gola.')
+
     @skipUnless(shutil.which('node'), 'Node necessário para integração JavaScript')
     def test_scripts_renderizados_inicializam_e_selecionam_pelo_estado_reativo(self):
         for rota, funcao in ((reverse('moda:op2-create'), 'op2NovaMelhorada'), (reverse('moda:op2-detail', args=[self.pedido.pk]), 'op2WorkspaceCompleto')):

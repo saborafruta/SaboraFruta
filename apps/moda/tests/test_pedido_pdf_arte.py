@@ -85,6 +85,59 @@ class ArteNoPdfTests(TestCase):
         self.base = _imagens(pdf)
         self.assertTrue(pdf.startswith(b'%PDF'))
 
+    def test_grupo_usa_fonte_de_leitura_quando_ha_espaco(self):
+        from reportlab.platypus import Paragraph
+        from apps.moda.services.item_groups import agrupar_itens_op
+        from apps.moda.services.pedido_pdf import _estilos
+
+        pedido = self._pedido()
+        produto = ProdutoModa.objects.create(filial=self.filial, codigo='LEG', nome='Camisa legível')
+        tamanho = Tamanho.objects.create(filial=self.filial, sigla='G')
+        for nome in ('Adulto', 'Infantil'):
+            grade = Grade.objects.create(filial=self.filial, nome=nome)
+            item = ItemPedidoProducao.objects.create(pedido=pedido, produto=produto, grade_tamanho=grade, quantidade=1)
+            ItemGradePedido.objects.create(item=item, tamanho=tamanho, quantidade=1)
+            PersonalizacaoIndividual.objects.create(pedido=pedido, item=item, tamanho=tamanho, nome='Pessoa legível', numero='10')
+        grupo = agrupar_itens_op(list(pedido.itens.all()))[0]
+
+        def fontes(elemento):
+            if isinstance(elemento, Paragraph) and elemento.getPlainText() == 'Pessoa legível':
+                yield elemento.style.fontSize
+            elif isinstance(elemento, (list, tuple)):
+                for filho in elemento:
+                    yield from fontes(filho)
+            else:
+                for atributo in ('_content', '_cellvalues'):
+                    if hasattr(elemento, atributo):
+                        yield from fontes(getattr(elemento, atributo))
+
+        frame = PedidoPdfService._informacoes_grupo(pedido, grupo, _estilos(), 380, 470, False)
+        self.assertEqual(getattr(frame, '_scale', 1), 1)
+        self.assertEqual(list(fontes(frame)), [9.5, 9.5])
+        self.assertEqual(_paginas(PedidoPdfService.gerar(pedido)), 1)
+
+    def test_grupo_so_reduz_fonte_quando_lista_cresce(self):
+        from apps.moda.services.item_groups import agrupar_itens_op
+        from apps.moda.services.pedido_pdf import _estilos
+
+        pedido = self._pedido()
+        produto = ProdutoModa.objects.create(filial=self.filial, codigo='DENSO', nome='Camisa com nomes')
+        tamanho = Tamanho.objects.create(filial=self.filial, sigla='M')
+        for nome in ('Adulto', 'OverSized'):
+            grade = Grade.objects.create(filial=self.filial, nome=nome)
+            item = ItemPedidoProducao.objects.create(pedido=pedido, produto=produto, grade_tamanho=grade, quantidade=60)
+            PersonalizacaoIndividual.objects.bulk_create([
+                PersonalizacaoIndividual(pedido=pedido, item=item, tamanho=tamanho, nome=f'Pessoa {nome} {n}', numero=str(n))
+                for n in range(60)
+            ])
+        grupo = agrupar_itens_op(list(pedido.itens.all()))[0]
+        frame = PedidoPdfService._informacoes_grupo(pedido, grupo, _estilos(), 380, 470, False)
+        texto = self._texto_layout(frame)
+        for nome in ('Adulto', 'OverSized'):
+            for n in range(60):
+                self.assertIn(f'Pessoa {nome} {n}', texto)
+        self.assertEqual(getattr(frame, '_scale', 1), 1)
+
     def test_mesmo_produto_com_duas_grades_ocupa_uma_folha_da_op(self):
         pedido = self._pedido()
         produto = ProdutoModa.objects.create(

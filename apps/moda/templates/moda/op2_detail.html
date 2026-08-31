@@ -18,6 +18,7 @@
 {{ pedido.valor_total|json_script:"op2-valor-total" }}
 {{ pedido.previsao_pagamento|json_script:"op2-previsao-pagamento" }}
 {{ cliente_atual_json|json_script:"op2-cliente-atual" }}
+{{ contatos_json|json_script:"op2-contatos" }}
 {{ clientes_adicionais_json|json_script:"op2-clientes-adicionais" }}
 {{ clientes_pedido_json|json_script:"op2-clientes-financeiro" }}
 <style>
@@ -81,12 +82,11 @@
         <h2 class="font-bold mb-3">1. Clientes e informações</h2>
         <form method="post" action="{% url 'moda:op2-action' pedido.pk %}" class="grid md:grid-cols-4 gap-3">{% csrf_token %}<input type="hidden" name="acao" value="cabecalho">
           <div class="md:col-span-2">{% include "moda/_op2_cliente_campo.html" %}</div>
-          <label><span class="op2-label">Responsável</span><input name="contato_nome" x-model="contatoNome" class="form-input w-full"></label>
-          <label><span class="op2-label">WhatsApp</span><input name="contato_telefone" x-model="contatoTelefone" class="form-input w-full"></label>
+            {% include "moda/_op2_contatos.html" %}
           <label><span class="op2-label">Data do pedido</span><input type="date" name="data_pedido" class="form-input w-full" value="{{ pedido.data_pedido|date:'Y-m-d' }}" required></label>
           <label><span class="op2-label">Entrega prevista</span><input type="date" name="data_prevista_entrega" class="form-input w-full" value="{{ pedido.data_prevista_entrega|date:'Y-m-d' }}"></label>
           <label><span class="op2-label">Prioridade</span><select name="prioridade" class="form-input w-full">{% for v,l in pedido.Prioridade.choices %}<option value="{{ v }}" {% if pedido.prioridade == v %}selected{% endif %}>{{ l }}</option>{% endfor %}</select></label>
-          <label class="md:col-span-2"><span class="op2-label">Observações</span><textarea name="observacoes" rows="2" class="form-input w-full">{{ pedido.observacoes }}</textarea></label>
+          <label class="md:col-span-2"><span class="op2-label">Observações</span><textarea name="observacoes" rows="2" class="form-input w-full">{{ observacoes_livres }}</textarea></label>
           <div class="md:col-span-4 text-right"><button class="btn-secondary">Salvar rascunho</button></div>
         </form>
       </section>
@@ -263,6 +263,7 @@ function op2WorkspaceCompleto(){
   estado.extratoFinanceiro=false;
   estado.pagamentoPrevisto=false;
   estado.clienteAtual=JSON.parse(document.getElementById('op2-cliente-atual').textContent);
+  estado.contatos=JSON.parse(document.getElementById('op2-contatos').textContent);
   estado.clientesAdicionais=JSON.parse(document.getElementById('op2-clientes-adicionais').textContent);
   estado.adicionandoCliente=false;
   estado.clienteId=String(estado.clienteAtual.id||'');
